@@ -188,7 +188,7 @@ $p_{\ell,k}$ is fitted on the same retrospective nowcasts, on the raw counts, wh
 For each error, the net fall $B_{p,r}(w)$ is how far the raw count of $w$ on days up to $c_r$ fell from release $r$ to $o$, and 0 if it rose.
 $p_{\ell,k} = \sum B_{p,r}(w) / \sum Y_{p,r}(w)$, summed over the errors at $k$ of every place at level $\ell$, the Binomial maximum likelihood estimate.
 It never enters $\phi_{p,k}$, so the removals do not widen the new reports.
-[#PRNUM](https://github.com/seabbs/BDBVHubRenewal/pull/PRNUM) compares this with removals at the gross rate preprocessing takes back, per place, and with the size fitted on raw counts.
+[#179](https://github.com/seabbs/BDBVHubRenewal/pull/179) compares this with removals at the gross rate preprocessing takes back, per place, and with the size fitted on raw counts.
 
 ## Own or pooled estimates
 
