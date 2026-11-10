@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import os
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Any, Final, Literal
@@ -337,6 +338,12 @@ def _pooled(
     )
 
 
+# Experiment (depth-exp): anchor the Rt and missing-fraction walks at
+# their mean level rather than their first knot.
+_ANCHOR = os.environ.get("BDBV_WALK_ANCHOR", "first")
+_ANCHORED = ("rt_sd", "rt_dev_sd", "pi_sd", "pi_dev_sd")
+
+
 def _named_walk(
     name: str,
     sd: float,
@@ -365,6 +372,7 @@ def _named_walk(
         n_fit=frozen + n_weeks,
         half_life_rv=half_life,
         forecast_half_life=forecast_half_life,
+        anchor=_ANCHOR if name in _ANCHORED else "first",
     )
     return WeeklyTemporalProcess(inner, start_dow=SUNDAY)
 

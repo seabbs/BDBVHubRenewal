@@ -60,6 +60,7 @@ class NonCentredRandomWalk(TemporalProcess):
         n_fit: int | None = None,
         half_life_rv: RandomVariable | None = None,
         forecast_half_life: float | None = None,
+        anchor: str = "first",
     ) -> None:
         r"""Initialize the process.
 
@@ -93,6 +94,7 @@ class NonCentredRandomWalk(TemporalProcess):
         self.n_fit = n_fit
         self.half_life_rv = half_life_rv
         self.forecast_half_life = forecast_half_life
+        self.anchor = anchor
 
     def __repr__(self) -> str:
         """Return string representation."""
@@ -158,6 +160,9 @@ class NonCentredRandomWalk(TemporalProcess):
         past = jnp.vstack(
             [jnp.repeat(x0[None, :], frozen + 1, axis=0), decay * x0 + free]
         )
+        if self.anchor == "mean":
+            # The starting value is the mean level over the fit axis.
+            past = past - past.mean(axis=0) + x0
         n_future = n_timepoints - n_past
         if n_future == 0:
             return past
