@@ -415,13 +415,36 @@ def _interval(
     return out / ndtr(z_d)
 
 
-def model(tree: Tree, tri: Triangle, max_delay: int) -> None:
+AGE_BANDS = (7, 21)
+"""Upper ages of the dispersion bands of `dispersion="age"`."""
+
+
+def age_band(age: Any) -> Any:
+    """Return the dispersion band of each age, 0 for ages below 0."""
+    return sum((age > b) * 1 for b in AGE_BANDS)
+
+
+def model(
+    tree: Tree, tri: Triangle, max_delay: int, dispersion: str = "shared"
+) -> None:
     """Sample the walk, the delay and the new reports of the leaves."""
     leaves = tri.leaves
     mu = tree.sample("delay_mu", 1.6, 1.0)[leaves]
     sd = jnp.exp(numpyro.sample("delay_sd", dist.Normal(np.log(0.7), 0.5)))
     sigma = jnp.exp(tree.sample("sigma", np.log(0.2), 1.0))[leaves]
-    phi = jnp.exp(numpyro.sample("phi", dist.Normal(np.log(10.0), 1.5)))
+    if dispersion == "place":
+        phi_l = jnp.exp(tree.sample("phi", np.log(10.0), 1.5))[leaves]
+    elif dispersion == "age":
+        phi_k = jnp.exp(
+            numpyro.sample(
+                "phi",
+                dist.Normal(np.log(10.0), 1.5)
+                .expand((len(AGE_BANDS) + 1,))
+                .to_event(),
+            )
+        )
+    else:
+        phi_s = jnp.exp(numpyro.sample("phi", dist.Normal(np.log(10.0), 1.5)))
     n_p = leaves.size
     init = numpyro.sample(
         "init", dist.Normal(2.0, 3.0).expand((n_p,)).to_event()
@@ -444,6 +467,12 @@ def model(tree: Tree, tri: Triangle, max_delay: int) -> None:
     p = tri.place
     mass = _interval(mu[p], sd, tri.lo, tri.hi, max_delay)
     mean = jnp.exp(log_lam[p, tri.week]) / 7.0 * mass
+    if dispersion == "place":
+        phi = phi_l[p]
+    elif dispersion == "age":
+        phi = phi_k[age_band(tri.hi)]
+    else:
+        phi = phi_s
     numpyro.sample("obs", dist.NegativeBinomial2(mean, phi), obs=tri.count)
 
 
@@ -478,6 +507,7 @@ def fit_posterior(
     sampler: Sampler,
     key: jax.Array,
     max_delay: int,
+    dispersion: str = "shared",
 ) -> Posterior:
     """Fit the joint model with NUTS and check that it converged.
 
@@ -523,6 +553,7 @@ def fit_posterior(
         tree=tree,
         tri=tri,
         max_delay=max_delay,
+        dispersion=dispersion,
         extra_fields=("diverging", "num_steps", "adapt_state.step_size"),
     )
     seconds = time.perf_counter() - tic
@@ -555,10 +586,25 @@ def fit_posterior(
         mu=tree.rebuild(draws, "delay_mu"),
         sd=np.exp(draws["delay_sd"]),
         sigma=np.exp(tree.rebuild(draws, "sigma")),
-        phi=np.exp(draws["phi"]),
+        phi=_dispersion(tree, draws, dispersion),
         log_lam=draws["log_lam"],
         info=info,
     )
+
+
+def _dispersion(
+    tree: Tree, draws: dict[str, np.ndarray], dispersion: str
+) -> np.ndarray:
+    """Return the dispersion draws as `[N, L, K]`, K age bands."""
+    n, n_loc = draws["delay_mu_root"].shape[0], tree.level.size
+    if dispersion == "place":
+        return np.exp(tree.rebuild(draws, "phi"))[:, :, None]
+    if dispersion == "age":
+        phi = np.exp(draws["phi"])[:, None, :]
+        return np.broadcast_to(phi, (n, n_loc, phi.shape[-1])).copy()
+    return np.broadcast_to(
+        np.exp(draws["phi"])[:, None, None], (n, n_loc, 1)
+    ).copy()
 
 
 def _neg_binomial(
@@ -595,6 +641,7 @@ class PPRandomWalkNowcast(RandomWalkNowcast):
     name: str = "pprandomwalknowcast"
     sampler: Sampler = field(default_factory=Sampler)
     fit_weeks: int = FIT_WEEKS
+    dispersion: str = "shared"
 
     def forecast(self, task: ForecastTask) -> pd.DataFrame:
         """Return posterior predictive trajectories for a task.
@@ -646,7 +693,7 @@ class PPRandomWalkNowcast(RandomWalkNowcast):
             )
         tri = triangle(snap, o, self.settings, self.fit_weeks, live)
         key = jax.random.key(int(task.rng().integers(0, 2**31 - 1)))
-        post = fit_posterior(tri, tree, self.sampler, key, d)
+        post = fit_posterior(tri, tree, self.sampler, key, d, self.dispersion)
         ages = np.arange(d + 1)
         share = np.median(
             np.asarray(
@@ -718,7 +765,7 @@ class PPRandomWalkNowcast(RandomWalkNowcast):
         pick = np.resize(rng.permutation(post.mu.shape[0]), n)
         mu = post.mu[pick][:, live, None]
         sd = post.sd[pick][:, None, None]
-        phi = post.phi[pick][:, None, None]
+        phi = post.phi[pick][:, live]  # [S, P, K]
         sigma = post.sigma[pick][:, live, None]
         log_lam = post.log_lam[pick]  # [S, P, W]
         # Days of the fitted weeks: reported count plus the rest to come.
@@ -731,7 +778,10 @@ class PPRandomWalkNowcast(RandomWalkNowcast):
         wk = snap.week[day] - tri.first
         # The clip only undoes float32 rounding of a share at 1.
         mean = np.exp(log_lam[:, :, wk]) / 7.0 * np.clip(rest, 0.0, 1.0)
-        draw = _neg_binomial(rng, mean, np.broadcast_to(phi, mean.shape))
+        band = np.minimum(age_band(np.maximum(age, 0)), phi.shape[-1] - 1)
+        draw = _neg_binomial(
+            rng, mean, np.broadcast_to(phi[..., band], mean.shape)
+        )
         known = np.where(seen, snap.counts[live][:, o, day], 0.0)
         onehot = np.zeros((day.size, tri.n_weeks))
         onehot[np.arange(day.size), wk] = 1.0
@@ -742,7 +792,7 @@ class PPRandomWalkNowcast(RandomWalkNowcast):
         values[:, live, : tri.first] = reported[live, : tri.first][None]
         values[:, live, tri.first : n_data] = (draw + known[None]) @ onehot
         values[:, live, n_data:] = _neg_binomial(
-            rng, ahead, np.broadcast_to(7.0 * phi, ahead.shape)
+            rng, ahead, np.broadcast_to(7.0 * phi[..., :1], ahead.shape)
         )
         return values, weeks
 
