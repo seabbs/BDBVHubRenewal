@@ -221,16 +221,13 @@ def _quiet(origin: Origin) -> np.ndarray:
 def _start_weeks(origin: Origin) -> np.ndarray:
     """Return the week each place's walk starts from, `[L]`.
 
-    It is the latest week a walk can start from (`_start_ok`). A silent
-    place starts at its latest complete week, after which its
-    introductions are drawn. A quiet place with recent cases keeps its
-    nowcast to the cut-off week and draws introductions after it.
+    It is the latest week a walk can start from (`_start_ok`). A quiet
+    place (`_quiet`) starts at its latest complete week, after which its
+    introductions are drawn.
     """
     ok = _start_ok(origin)
     latest = origin.start_nowcast - np.argmax(ok[:, ::-1], 1)
-    cw = origin.snap.cut_week(origin.o)
-    out = np.where(_quiet(origin), cw, latest)
-    return np.where(origin.silent, origin.start, out)
+    return np.where(_quiet(origin), origin.start, latest)
 
 
 def frame(
@@ -552,20 +549,14 @@ class RandomWalkNowcast(RandomWalk):
         values = np.zeros((n, n_loc, n_all))
         for loc in range(n_loc):
             s = int(w0[loc])
-            if origin.silent[loc]:
-                # A silent place is its reported counts, then its
+            if quiet[loc]:
+                # A quiet place is its reported counts, then its
                 # introductions, floored at the counts reported.
                 values[:, loc, : s + 1] = origin.reported[loc, : s + 1]
                 values[:, loc, s + 1 :] = y[loc, :, : n_all - s - 1]
                 values[:, loc, :n_data] = np.maximum(
                     values[:, loc, :n_data], origin.reported[loc]
                 )
-                continue
-            if quiet[loc]:
-                # A quiet place with recent cases keeps its nowcast to the
-                # cut-off week and draws introductions after it.
-                values[:, loc, : cw + 1] = nowcast[:, loc, : cw + 1]
-                values[:, loc, cw + 1 :] = y[loc, :, : n_all - cw - 1]
                 continue
             values[:, loc, :cw] = nowcast[:, loc, :cw]
             values[:, loc, cw] = done[loc]

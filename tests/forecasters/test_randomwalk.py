@@ -368,7 +368,7 @@ def test_the_start_week_search_reaches_back_over_the_nowcast_window(
     assert start_window(Settings()) == 9
     # Kilo's last week with 5 cases is 07-11, 17 weeks before the 11-07
     # cut-off week, so it has no start week in the window and draws
-    # introductions after the cut-off week.
+    # introductions after its latest complete week.
     snap = snapshot_arrays(
         pd.concat([daily, daily_zones]), "2026-11-08", ("CD-IT-17",)
     )
@@ -376,10 +376,10 @@ def test_the_start_week_search_reaches_back_over_the_nowcast_window(
     i = snap.locations.index("CD-IT-17")
     assert _quiet(origin)[i]
     assert not origin.silent[i]
-    assert _start_weeks(origin)[i] == snap.cut_week(origin.o)
+    assert _start_weeks(origin)[i] == origin.start[i]
 
 
-def test_a_quiet_place_with_recent_cases_keeps_its_nowcast(
+def test_a_quiet_place_with_recent_cases_draws_introductions(
     target: pd.DataFrame,
     delays: pd.DataFrame,
     daily: pd.DataFrame,
@@ -396,11 +396,8 @@ def test_a_quiet_place_with_recent_cases_keeps_its_nowcast(
     values, _ = model.trajectories(origin, task, origin.point)
     i = origin.snap.locations.index("CD-IT-17")
     cw = origin.snap.cut_week(origin.o)
-    # Kilo is quiet but not silent. Its weeks up to the cut-off week are
-    # nowcast draws, not reported counts, so the youngest spread above what
-    # is reported, and the weeks after are introductions.
-    young = values[:, i, cw - 1 : cw + 1]
-    assert (young >= origin.reported[i, cw - 1 : cw + 1] - 1e-9).all()
-    assert young.std(axis=0).max() > 0
-    # Most samples have no introduction yet in the week after.
+    # Kilo is quiet but not silent. Weeks with data keep at least what is
+    # reported, and most samples have no introduction yet the week after.
+    seen = values[:, i, : cw + 1]
+    assert (seen >= origin.reported[i, : cw + 1] - 1e-9).all()
     assert (values[:, i, cw + 1] == 0).mean() > 0.5
