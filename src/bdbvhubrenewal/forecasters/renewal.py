@@ -223,10 +223,8 @@ VARIANTS: Final[dict[str, Variant]] = {
     for v in (
         Variant(
             "renewal",
-            "Zone renewal (PyRenew): Rt pooled zone to province to country, "
-            "gravity importation, depletion, modelled delays and imputation; "
-            "provinces are the sums of their zones.",
-            zones=True,
+            "Province renewal (PyRenew): pooled Rt, gravity importation, "
+            "depletion, modelled delays and imputation.",
         ),
         Variant(
             "renewalsp",
@@ -238,14 +236,86 @@ VARIANTS: Final[dict[str, Variant]] = {
         ),
         Variant(
             "renewalbvd",
-            "Zone renewal informed by BVDOutbreakSize Rt, as a tempered "
+            "Province renewal informed by BVDOutbreakSize Rt, as a tempered "
             "pseudo-observation.",
             base="BVD",
-            zones=True,
         ),
     )
 }
 """Model variants, by name."""
+
+ZONE_VARIANTS: Final = ("renewal", "renewalbvd")
+"""The variants that fit health zones when `zone_fits` says so."""
+
+ZONES_ENV: Final = "BDBV_RENEWAL_ZONES"
+"""Environment variable that overrides `[renewal] zones` in
+`config/hub.toml`: `1` or `true` for zone fits, `0` or `false` for
+province fits."""
+
+HUB_CONFIG: Final = Path("config/hub.toml")
+
+
+def zone_fits(path: Path | str = HUB_CONFIG) -> bool:
+    """Return whether `renewal` and `renewalbvd` fit health zones.
+
+    `ZONES_ENV` if set, else `[renewal] zones` in `config/hub.toml`,
+    else False: the province fits stay the default until the setting is
+    flipped.
+
+    Parameters
+    ----------
+    path : pathlib.Path or str
+        The hub config.
+
+    Returns
+    -------
+    bool
+        True for zone fits.
+
+    Raises
+    ------
+    ValueError
+        If `ZONES_ENV` is not a boolean word.
+    """
+    env = os.environ.get(ZONES_ENV)
+    if env:
+        words = {"1": True, "true": True, "0": False, "false": False}
+        if env.lower() not in words:
+            raise ValueError(f"{ZONES_ENV} must be 1, 0, true or false.")
+        return words[env.lower()]
+    config = Path(path)
+    if not config.exists():
+        return False
+    import tomllib
+
+    return bool(
+        tomllib.loads(config.read_text()).get("renewal", {}).get("zones")
+    )
+
+
+def resolve_variant(variant: Variant) -> Variant:
+    """Return a variant with the zone setting applied.
+
+    Parameters
+    ----------
+    variant : Variant
+        A variant of `VARIANTS`.
+
+    Returns
+    -------
+    Variant
+        For `ZONE_VARIANTS` with `zone_fits` true, the variant fitted on
+        health zones, else the variant as it is.
+    """
+    if variant.name not in ZONE_VARIANTS or not zone_fits():
+        return variant
+    return replace(
+        variant,
+        description=variant.description.replace("Province", "Zone", 1)
+        + " Health zones nested in provinces; provinces are zone sums.",
+        zones=True,
+    )
+
 
 FIT_VARIANTS: Final[dict[str, str]] = {
     "main": "renewal",
@@ -1623,7 +1693,9 @@ def fit_renewal(
     out.mkdir(parents=True, exist_ok=True)
     settings = sampler_settings(sampler)
     task = replace(task, seed=int(settings.get("seed", task.seed)))
-    model = RenewalModel(VARIANTS[variant], settings, out / "progress.log")
+    model = RenewalModel(
+        resolve_variant(VARIANTS[variant]), settings, out / "progress.log"
+    )
     fit = model.forecast_fit(task)
     return write_fit_dir(
         fit, task, settings, out, variant=variant, config_name=config_name
@@ -1794,7 +1866,7 @@ def forecast_renewal(task: ForecastTask, fit_dir: Path | str) -> Forecast:
 
 
 def _factory(variant: Variant) -> RenewalModel:
-    return RenewalModel(variant)
+    return RenewalModel(resolve_variant(variant))
 
 
 for _variant in VARIANTS.values():

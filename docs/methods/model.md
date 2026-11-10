@@ -9,6 +9,7 @@ How the models are built in code and sampled is on the [Implementation](implemen
 ## Overview
 
 `renewal` fits the health zones with recent cases together, nests them in their provinces, pools them and links them by importation.
+The zone fits are opt-in: with `[renewal] zones = false` in `config/hub.toml`, the default, `renewal` and `renewalbvd` fit the provinces as places instead, with the province deviations, delays and importation of the zone model and the zones split from the provinces ([Health zones](#health-zones)).
 `renewalsp` fits the place model to each province on its own, with no pooling or importation.
 `renewalbvd` is `renewal` with a down-weighted likelihood term on the Rt of BVDOutbreakSize.
 `seabbs-renewal` submits the first of `renewalbvd`, `renewalsp`, `renewal`, `randomwalknowcast` and `randomwalk`, in that order, to pass its checks ([Submission workflow](../submission/workflow.md#renewal-chain)).

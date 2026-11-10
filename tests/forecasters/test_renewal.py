@@ -24,7 +24,7 @@ from bdbvhubrenewal.submission.hub import model_abbr_for
 
 pytest.importorskip("pyrenew")
 
-DATA = Path(__file__).resolve().parents[2] / "data"
+DATA = Path(__file__).resolve().parents[1] / "fixtures" / "data"
 
 
 @pytest.fixture
@@ -740,6 +740,7 @@ def quiet_zones(
         return walk(t)
 
     monkeypatch.setattr(rn, "_silent_walk", fake)
+    monkeypatch.setenv(rn.ZONES_ENV, "1")
     assert {province_of(z) for z in busy} <= set(task.locations)
     return silent
 
@@ -815,3 +816,29 @@ def test_zone_inputs_take_the_zone_counts_and_province_delays(
         check_names=False,
         check_dtype=False,
     )
+
+
+def test_zone_fits_are_opt_in(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv(rn.ZONES_ENV, raising=False)
+    # The shipped config keeps the province fits.
+    root = Path(__file__).resolve().parents[2]
+    assert rn.zone_fits(root / "config" / "hub.toml") is False
+    assert rn.zone_fits(tmp_path / "missing.toml") is False
+    on = tmp_path / "hub.toml"
+    on.write_text("[renewal]\nzones = true\n")
+    assert rn.zone_fits(on) is True
+    monkeypatch.setenv(rn.ZONES_ENV, "0")
+    assert rn.zone_fits(on) is False
+    monkeypatch.setenv(rn.ZONES_ENV, "1")
+    model = get_model("renewalbvd")
+    assert isinstance(model, rn.RenewalModel)
+    assert model.variant.zones
+    assert not get_model("renewalsp").variant.zones
+    monkeypatch.setenv(rn.ZONES_ENV, "0")
+    plain = get_model("renewal")
+    assert isinstance(plain, rn.RenewalModel)
+    assert not plain.variant.zones
+    # The setting is in the representation, so it keys a stored fit.
+    assert repr(plain) != repr(model)
