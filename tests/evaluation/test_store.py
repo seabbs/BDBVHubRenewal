@@ -161,6 +161,38 @@ def in_root(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.chdir(ROOT)
 
 
+@pytest.mark.usefixtures("in_root")
+def test_the_submission_task_has_the_stored_key(
+    target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
+) -> None:
+    """Same code and data give the submission the stored fit's key."""
+    import argparse
+
+    from bdbvhubrenewal import cli
+    from bdbvhubrenewal.evaluation.backtest import load_config
+
+    config = load_config("config/backtest.toml")
+    tasks = store.origin_tasks(target, delays, config, daily)
+    sampler = store.samplers()
+    models = {m: store.build_model(m, sampler) for m in sampler}
+    # Every real vintage, including 2026-08-18, which has no delays of
+    # its own.
+    for vintage in real_vintages(target):
+        args = argparse.Namespace(
+            vintage=vintage,
+            reference_date=None,
+            data=str(ROOT / "data"),
+            backtest_config="config/backtest.toml",
+        )
+        task, _ = cli._task(args)
+        stored = tasks[vintage]
+        assert task.target_end_dates == stored.target_end_dates
+        for name, model in models.items():
+            assert store.fit_key(model, task, "c") == store.fit_key(
+                model, tasks[vintage], "c"
+            ), (name, vintage)
+
+
 def test_plan_fit_and_load(
     fitted_flat: str,
     tasks: dict[str, ForecastTask],
