@@ -13,7 +13,7 @@ In brief, `randomwalknowcast`:
 
 1. follows baselinenowcast, through a JAX port of the R package with one named extension for release snapshots ([Delay](#delay));
 2. has an observation model for the nowcast as in baselinenowcast, negative binomial new reports on the count still to come, fitted from retrospective nowcasts ([Nowcast](#nowcast));
-3. nowcasts every week up to the cut-off and completes a partial cut-off week from a walk that starts at the latest full week at least 5% reported with at least 5 cases ([Start from the nowcast](#start-from-the-nowcast));
+3. nowcasts every week up to the cut-off and completes a partial cut-off week from a walk that starts at the latest full week in the 9 weeks to the cut-off at least 5% reported with at least 5 cases ([Start from the nowcast](#start-from-the-nowcast));
 4. continues each nowcast trajectory with a random walk on $\log(1 + y)$ ([Forecast](#forecast));
 5. takes the walk's variance net of Poisson noise ([Forecast](#forecast));
 6. shares the delay, size and walk variance with a parent where a place has fewer than 10 cases a week ([Own or pooled estimates](#own-or-pooled-estimates)).
@@ -268,8 +268,9 @@ Where no week reaches 0.95, `randomwalknowcast` takes the first week as the late
 2. If the week holding $c_o$ is full, its value in sample $i$ is its nowcast draw.
 3. If it is partial, its nowcast covers its days up to $c_o$, and its later days add $\text{Poisson}(\lambda_i \cdot m / 7)$, with $m$ the missing days.
    $\lambda_i$ is the walk's rate for that week, walked by sample $i$ from its nowcast $X_{p,i}(w_0)$ of the start week $w_0$, the latest full week that is at least 5% reported and has at least 5 cases.
+   The start week is looked for only in the 9 weeks to $c_o$, $1.5 D$ and the nowcast's own window, counting the week holding $c_o$.
 4. The weeks after it are the walk's draws from the sample's completed value of that week, $\log(1 + y)$ plus the walk's steps.
-5. A place with no case in the 9 weeks to $c_o$, or with no start week, starts at the latest complete week instead.
+5. A place with no case in the 9 weeks to $c_o$, or with no start week in those 9 weeks, starts at the latest complete week instead.
    After it the place stays at 0 until an introduction, as above, floored at the counts reported.
 
 ## Health zones
