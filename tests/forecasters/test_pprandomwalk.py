@@ -16,7 +16,7 @@ from bdbvhubrenewal.forecasters import (
     list_models,
 )
 from bdbvhubrenewal.forecasters.chain import Origin
-from bdbvhubrenewal.forecasters.pprandomwalk import Sampler, Tree
+from bdbvhubrenewal.forecasters.pprandomwalk import Sampler, Tree, delay_keep
 
 SMALL = Sampler(num_warmup=40, num_samples=40, num_chains=1)
 
@@ -96,14 +96,29 @@ def test_pooled_delay_is_close_to_the_chain_ladder_for_a_large_place(
     assert 0.8 < ratio < 1.25
 
 
-def test_pooled_delay_fits_own_data_where_randomwalknowcast_does(
+def test_only_the_places_forecast_enter_the_delay_likelihood() -> None:
+    # Country, two provinces, and two zones in the first province.
+    tree = Tree.of(np.array([-1, 0, 0, 1, 1]))
+    den = np.array(
+        [[50.0, 0.0], [30.0, 5.0], [20.0, 0.0], [1.0, 0.0], [29.0, 5.0]]
+    )
+    keep = delay_keep(tree, den)
+    # A parent's counts are its children's summed, so only the leaves
+    # enter, each where it has a denominator, however small.
+    assert keep.tolist() == [
+        [False, False],
+        [False, False],
+        [True, False],
+        [True, False],
+        [True, True],
+    ]
+
+
+def test_the_country_nowcast_is_close_to_the_chain_ladder(
     origins: tuple[Origin, Origin],
 ) -> None:
     pooled, own = origins
-    np.testing.assert_array_equal(pooled.fit.own, own.fit.own)
-    # The country fits every age, so its newest full week, which leans
-    # on the young ages, is nowcast as the chain ladder does.
-    week = own.start_nowcast
+    week = own.snap.n_weeks - 2
     ratio = pooled.point[0, week] / own.point[0, week]
     assert 0.85 < ratio < 1.15
 
