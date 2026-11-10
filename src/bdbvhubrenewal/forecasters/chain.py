@@ -35,7 +35,8 @@ baselinenowcast's `apply_delay` fills the row from the week's reported
 count (`week_nowcast`), with its $+1$, so a week with nothing reported yet
 still expects some cases.
 
-**Uncertainty.** A release $r < o$ with an in-window pair at $r$ nowcasts
+**Uncertainty.** A release $r < o$ with an in-window pair at $r$, and a
+cut-off at most `Settings.retro_delay` (63) days before $c_o$, nowcasts
 the count expected at $o$ for days up to $c_r$, with the same weekly fill
 from $c_r$ to $c_o$ and the $g$ of $r$.
 Its new reports and removals by weeks back fit the observation model
@@ -166,6 +167,17 @@ class Settings:
         """
         n_used = round(3 * self.max_delay)
         return max(n_used // 2, self.max_delay + 1)
+
+    @property
+    def retro_delay(self) -> int:
+        """Days back from the origin's cut-off for retrospective nowcasts.
+
+        R gives the `round(3 * D)` reference times left after
+        `history_delay` to its retrospective nowcasts, so a release whose
+        cut-off is more than this many days before the origin's gives
+        none.
+        """
+        return round(3 * self.max_delay) - self.history_delay
 
 
 @dataclass
@@ -535,6 +547,8 @@ def retro_errors(
     cells: list[tuple[np.ndarray, ...]] = []
     releases: list[str] = []
     for r in range(1, o):
+        if snap.cut[o] - snap.cut[r] > settings.retro_delay:
+            continue
         fit = delay(snap, r, settings)
         if fit is None:
             continue

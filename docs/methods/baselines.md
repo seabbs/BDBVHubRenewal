@@ -154,7 +154,7 @@ Sample $i$ is one draw of $X_{p,i}(w)$ per week.
 
 $\phi_{p,k}$ and $b_{p,k}$ are fitted as follows.
 
-1. Take each earlier release $r < o$ with an in-window pair among the releases up to $r$.
+1. Take each earlier release $r < o$ with an in-window pair among the releases up to $r$, and a cut-off at most $3D - 1.5D = 63$ days before $c_o$, the reference times baselinenowcast leaves for its retrospective nowcasts.
 2. Nowcast from the data up to $r$ with the delay of $r$, $\hat y_p(w)$.
    It is the same weekly fill from $c_r$, with the shares taken relative to the count at $c_o$, so its last column is at $c_o$.
 3. For weeks back $k$ with a day younger than $D$ at $r$, and where $Y_{p,r}(w) > 0$ or $\hat y_p(w) > 0$, compare the count of $w$ on days up to $c_r$ between releases $r$ and $o$.
