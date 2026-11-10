@@ -1,8 +1,8 @@
 # Comparison with hub forecasts. Read by
 # `bdbvhubrenewal.evaluation.hubcompare.load_comparison_config`.
 # `bdbvhubrenewal compare-hub --fetch` downloads every team's metadata and
-# weekly-round forecasts. Files under CC0-1.0 or CC-BY-4.0 are committed in
-# data/hub-submissions/; others are cached in data/raw/hub-submissions/.
+# weekly-round forecasts into data/hub-submissions/ (CC0-1.0 or CC-BY-4.0)
+# and data/raw/hub-submissions/ (other licences). Neither is committed.
 # The scores and plotted quantiles go to results/hub-comparison/.
 
 [comparison]

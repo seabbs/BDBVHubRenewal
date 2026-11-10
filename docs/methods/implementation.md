@@ -53,7 +53,7 @@ The observation model is in `forecasters.obs`, and fits and draws its new report
 | Snapshots as arrays `[location, release, day]` | `data.snapshots` |
 | Pair sums, the daily delay fit and growth | `baselinenowcast.snapshots`, pair sums `jit` with locations on the leading axis |
 | Own or pooled source of each estimate | `forecasters.pooling` |
-| New reports minus removals | `forecasters.obs` |
+| New reports on the count to come | `forecasters.obs` |
 | One random walk for both models | `forecasters.walk` |
 | Backtest on real releases | `evaluation.nowcast` |
 

@@ -48,6 +48,7 @@ from bdbvhubrenewal.data.simulate import (
     release_dates,
     simulate_outbreak,
 )
+from bdbvhubrenewal.data.tidy import delays_for_vintage
 from bdbvhubrenewal.evaluation.scoring import energy_scores, score_forecasts
 from bdbvhubrenewal.forecasters.base import (
     NATIONAL,
@@ -88,6 +89,7 @@ __all__ = [
     "score_tasks",
     "truth_changes",
     "truth_from_vintage",
+    "vintage_task",
 ]
 
 log = logging.getLogger(__name__)
@@ -355,6 +357,58 @@ def make_tasks(
             )
         )
     return tasks
+
+
+TASK_MIN_HORIZON = -6
+"""First week of a vintage's task, in weeks from the reference date: 7
+weeks up to it, which the submission CI's `observed` and `coverage`
+checks need. The backtest scores from `[forecast] min_horizon`."""
+
+
+def vintage_task(
+    target: pd.DataFrame,
+    delays: pd.DataFrame,
+    config: BacktestConfig,
+    vintage: str,
+    daily: pd.DataFrame | None = None,
+    extra_weeks: int = 0,
+) -> tuple[ForecastTask, str]:
+    """Build the task of one real vintage, as the submission fits it.
+
+    The fit store fits the same task (`store.origin_tasks`), so the
+    submission and the store give a fit the same key. The weeks run from
+    `TASK_MIN_HORIZON`. A vintage with no delays of its own uses the
+    latest earlier ones (`delays_for_vintage`).
+
+    Parameters
+    ----------
+    target, delays : pandas.DataFrame
+        The tidy target and delay tables.
+    config : BacktestConfig
+        Horizons, samples and seed (`[forecast]`).
+    vintage : str
+        A real vintage.
+    daily : pandas.DataFrame, optional
+        Daily onsets by release.
+    extra_weeks : int
+        Weeks to forecast past `[forecast] max_horizon`. The store adds
+        one, so its fit also covers the next round's weeks.
+
+    Returns
+    -------
+    tuple of ForecastTask and str
+        The task, and a note of the delays that stood in (empty if none).
+    """
+    config = replace(
+        config,
+        min_horizon=TASK_MIN_HORIZON,
+        max_horizon=config.max_horizon + extra_weeks,
+    )
+    real = target.loc[target["kind"] == "real"]
+    rows = real.loc[real["vintage"] == vintage]
+    used, note = delays_for_vintage(delays, vintage)
+    task = make_tasks(rows, used, config, history=real, daily=daily)[0]
+    return task, note
 
 
 def _fit_rows(model: ForecastModel, task: ForecastTask) -> pd.DataFrame:

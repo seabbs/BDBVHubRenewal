@@ -10,7 +10,6 @@ from bdbvhubrenewal.evaluation.backtest import (
     BacktestConfig,
     check_distinct,
     make_tasks,
-    real_vintages,
     run_forecasts,
 )
 from bdbvhubrenewal.evaluation.nowcast import (
@@ -40,10 +39,6 @@ def result(target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame):  # 
     return release_backtest(tasks, daily, target)
 
 
-def _vintages(target: pd.DataFrame) -> list[str]:
-    return real_vintages(target.loc[target["kind"] == "real"])
-
-
 def test_a_model_that_cannot_forecast_is_listed_with_no_forecasts(
     result,  # type: ignore[no-untyped-def]
 ) -> None:
@@ -61,10 +56,9 @@ def test_a_model_that_cannot_forecast_is_listed_with_no_forecasts(
 
 def test_every_model_is_scored_on_each_later_release(
     result,  # type: ignore[no-untyped-def]
-    target: pd.DataFrame,
+    vintages: list[str],
 ) -> None:
     s = result.scores
-    vintages = _vintages(target)
     # Every release from the first forecast up to the latest is scored.
     later = vintages[vintages.index("2026-10-17") :]
     assert set(s["target"]) == {"reported", "complete"}
@@ -133,9 +127,10 @@ def test_complete_target_only_has_complete_weeks(
     result,  # type: ignore[no-untyped-def]
     target: pd.DataFrame,
     daily: pd.DataFrame,
+    vintages: list[str],
 ) -> None:
     s = result.scores.loc[result.scores["target"] == "complete"]
-    done = complete_weeks(target, daily, _vintages(target)[-1])
+    done = complete_weeks(target, daily, vintages[-1])
     ok = set(
         zip(
             done.loc[done["complete"], "location"],

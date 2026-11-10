@@ -7,7 +7,6 @@ import pytest
 
 from bdbvhubrenewal.data import load_daily, load_daily_zones
 from bdbvhubrenewal.data.zones import hub_zones
-from bdbvhubrenewal.evaluation.backtest import real_vintages
 from bdbvhubrenewal.evaluation.zones import (
     SUMMED,
     ZONE_BASELINE,
@@ -15,7 +14,7 @@ from bdbvhubrenewal.evaluation.zones import (
     zone_relative_skill,
 )
 
-DATA = Path(__file__).resolve().parents[2] / "data"
+DATA = Path(__file__).resolve().parents[1] / "fixtures" / "data"
 
 
 @pytest.fixture(scope="module")
@@ -52,14 +51,13 @@ def test_energy_scores_every_zone_and_week_as_one_vector(
 
 
 def test_both_baselines_are_scored_at_zone_level(
-    scores: pd.DataFrame, target: pd.DataFrame
+    scores: pd.DataFrame, vintages: list[str]
 ) -> None:
     names = {"randomwalk", "randomwalknowcast"}
     assert set(scores["model"]) == names | {n + SUMMED for n in names}
     assert (scores["location"].str.count("-") == 2).all()
     # Each origin is scored on what every later release reported, and on
     # the latest release's complete weeks.
-    vintages = real_vintages(target.loc[target["kind"] == "real"])
     later = vintages[vintages.index("2026-10-17") :]
     latest = pd.Timestamp(later[-1])
     assert set(scores["target"]) == {"reported", "complete"}
@@ -117,12 +115,11 @@ def test_zone_backtest_by_origin_chunk_matches_one_run(
     target: pd.DataFrame,
     delays: pd.DataFrame,
     result: tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame],
+    vintages: list[str],
 ) -> None:
     from bdbvhubrenewal.cli import chunk
-    from bdbvhubrenewal.evaluation.backtest import real_vintages
 
-    real = target.loc[target["kind"] == "real"]
-    origins = real_vintages(real)[:-1]
+    origins = vintages[:-1]
     parts = [
         zone_backtest(
             target,

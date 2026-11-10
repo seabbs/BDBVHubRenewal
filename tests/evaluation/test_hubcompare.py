@@ -34,8 +34,9 @@ ROOT = Path(__file__).resolve().parents[2]
 
 pytestmark = pytest.mark.usefixtures("flat_model")
 WEEKS = ["2026-09-19", "2026-09-26", "2026-10-03", "2026-10-10"]
-DAILY_ZONES = load_daily_zones(ROOT / "data")
-ZONES = hub_zones(ROOT / "data" / "hub-config" / "tasks.json")
+DATA = ROOT / "tests" / "fixtures" / "data"
+DAILY_ZONES = load_daily_zones(DATA)
+ZONES = hub_zones(DATA / "hub-config" / "tasks.json")
 NO_ZONES = pd.DataFrame(
     {
         **{c: pd.Series(dtype=str) for c in ("kind", "vintage", "location")},

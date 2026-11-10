@@ -40,7 +40,7 @@ tasks:
       - uv run ruff check --fix src tests
 
   data:
-    desc: Download every hub data vintage and rebuild the tidy tables in data/
+    desc: Download every hub data vintage and rebuild the tidy tables in data/ (not committed; the tests read tests/fixtures/data/)
     cmds:
       - uv run bdbvhubrenewal data
 

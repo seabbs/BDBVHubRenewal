@@ -140,7 +140,7 @@ MODEL_METADATA = {
         "model_name": "RandomWalk on a nowcast",
         "methods": (
             "Baselinenowcast chain ladder on daily release snapshots, "
-            "negative binomial new reports minus Poisson removals, then a "
+            "negative binomial new reports on the count to come, then a "
             "log-scale random walk. Health zones and provinces, national "
             "the sum of provinces."
         ),
@@ -157,16 +157,54 @@ MODEL_METADATA = {
             "weeks. "
             # The uncertainty. Edit here if the observation model changes.
             "The observation model is baselinenowcast's negative binomial on "
-            "the remaining count minus Poisson removals of the count "
-            "reported, both fitted per horizon from retrospective nowcasts, "
-            "so counts can be revised down. "
-            "Each nowcast draw is carried forward from its latest week as a "
+            "the remaining count, fitted per horizon from retrospective "
+            "nowcasts with downward revisions moved onto earlier releases. "
+            "Each sample's completed latest week is carried forward as a "
             "random walk on the log scale with Poisson noise. A place under "
             "10 cases a week uses the delay, nowcast size and walk spread "
-            "pooled over its parent (zone, then province, then national), "
-            "and each place its own removal rate. The "
+            "pooled over its parent (zone, then province, then national). "
+            "The "
             "national value is the sum of provinces. See "
             "https://samabbott.co.uk/BDBVHubRenewal/methods/baselines/."
+        ),
+        "data_inputs": (
+            "Hub daily onsets by release (observed plus imputed) for "
+            "provinces and health zones, and the hub's weekly target data."
+        ),
+    },
+    # Not submitted. Kept so `metadata --model pprandomwalknowcast` can
+    # describe it.
+    "pprandomwalknowcast": {
+        "model_name": "Generative random walk nowcast, partially pooled",
+        "methods": (
+            "Epinowcast-style joint model of weekly expected counts, a log "
+            "random walk, and a log-normal reporting delay, fitted by NUTS "
+            "to the daily release snapshots with partial pooling over "
+            "zones, provinces and country; national the sum of provinces."
+        ),
+        "methods_long": (
+            "One generative model in the style of epinowcast (Abbott et al., "
+            "https://github.com/epinowcast/epinowcast/), fitted with NUTS "
+            "(NumPyro) to each vintage. Each place's weekly expected final "
+            "count is a random walk on the log scale over the last 16 "
+            "weeks, with each onset day expecting a seventh of it. Cases are "
+            "reported after a log-normal delay cut to whole days and capped "
+            "at 42 days. The new reports of each onset day between "
+            "consecutive releases are negative binomial on the expected "
+            "count times the share of the delay between the two ages, so "
+            "the data are right truncated by construction. Downward "
+            "revisions are first moved onto earlier releases, as "
+            "baselinenowcast does. The delay location and scale, the walk "
+            "spread, its starting level and the dispersion are all "
+            "partially pooled over zones, provinces and the country. "
+            "Each sample is "
+            "one posterior draw: reported counts plus negative binomial "
+            "draws of the cases still to come, and the walk continued over "
+            "the forecast weeks. Places with no case in nine weeks are not "
+            "fitted and take randomwalknowcast's draws, 0 until an "
+            "introduction, as renewalsp does. The national value is the "
+            "sum of provinces. "
+            "See https://samabbott.co.uk/BDBVHubRenewal/methods/baselines/."
         ),
         "data_inputs": (
             "Hub daily onsets by release (observed plus imputed) for "

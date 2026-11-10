@@ -147,7 +147,19 @@ def test_samplers_come_from_the_policy() -> None:
     assert table["renewalbvd"]["num_samples"] == 750
 
 
-@pytest.mark.usefixtures("in_root")
+@pytest.fixture
+def offline_bvd(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Choose no BVDOutbreakSize release, rather than list them online.
+
+    The fixture data hold no release cache, so the choice would list the
+    releases from GitHub.
+    """
+    monkeypatch.setattr(
+        "bdbvhubrenewal.forecasters.renewal.bvd_release", lambda *_: None
+    )
+
+
+@pytest.mark.usefixtures("in_root", "offline_bvd")
 def test_keys_follow_the_task_settings_and_bvd_release(
     target: pd.DataFrame,
     delays: pd.DataFrame,
@@ -209,9 +221,58 @@ def in_root(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.chdir(ROOT)
 
 
+@pytest.mark.usefixtures("in_root", "offline_bvd")
+def test_the_stored_task_covers_the_submissions_rounds(
+    target: pd.DataFrame,
+    delays: pd.DataFrame,
+    daily: pd.DataFrame,
+    tasks_json: Path,
+) -> None:
+    """The submission forecasts from the stored fit at its vintage.
+
+    Its task, for the vintage's own round or the next one (a round with
+    no new release), is the stored task but for the weeks, which the
+    stored task covers. So the stored fit of the same code and data is
+    the submission's fit.
+    """
+    import argparse
+    import dataclasses
+    import datetime as dt
+
+    from bdbvhubrenewal import cli
+    from bdbvhubrenewal.evaluation.backtest import load_config
+
+    config = load_config("config/backtest.toml")
+    tasks = store.origin_tasks(target, delays, config, daily)
+    sampler = store.samplers()
+    models = {m: store.build_model(m, sampler) for m in sampler}
+    assert tasks
+    for vintage, stored in tasks.items():
+        for later in (0, 1):
+            ref = stored.reference_date + dt.timedelta(weeks=later)
+            args = argparse.Namespace(
+                vintage=vintage,
+                reference_date=ref.isoformat(),
+                data=str(tasks_json.parents[1]),
+                backtest_config="config/backtest.toml",
+            )
+            task, _ = cli._task(args)
+            assert set(task.target_end_dates) <= set(stored.target_end_dates)
+            same = dataclasses.replace(
+                task,
+                reference_date=stored.reference_date,
+                target_end_dates=stored.target_end_dates,
+            )
+            for name, model in models.items():
+                assert store.fit_key(model, same, "c") == store.fit_key(
+                    model, stored, "c"
+                ), (name, vintage, later)
+
+
 def test_plan_fit_and_load(
     fitted_flat: str,
     tasks: dict[str, ForecastTask],
+    config: BacktestConfig,
     tmp_path: Path,
 ) -> None:
     root = tmp_path / "store"
@@ -248,7 +309,9 @@ def test_plan_fit_and_load(
     assert again == left | {broken}
 
     results = tmp_path / "results"
-    status = store.load(root, keys, results)
+    status = store.load(
+        root, keys, results, config.min_horizon, config.max_horizon
+    )
     by_origin = {s.origin: s for s in status}
     assert by_origin[newest].current
     assert by_origin[oldest].current
@@ -258,8 +321,12 @@ def test_plan_fit_and_load(
     assert by_origin[broken].used is not None
     assert by_origin[origins[3]].used is None
     dev = pd.read_csv(results / "forecasts.csv.gz")
-    # Every loaded origin is backtested.
+    # Every loaded origin is backtested, from the backtest's first week.
     assert set(dev["vintage"]) == {oldest, stale, broken, newest}
+    assert stored.forecasts["horizon"].min() < config.min_horizon
+    assert stored.forecasts["horizon"].max() > config.max_horizon
+    assert dev["horizon"].min() == config.min_horizon
+    assert dev["horizon"].max() == config.max_horizon
     recorded = json.loads((results / store.STATUS_FILE).read_text())
     assert len(recorded) == len(tasks)
 
@@ -319,3 +386,100 @@ def test_zone_samples_a_model_forecasts_are_stored_and_loaded(
     store.load(root, keys, tmp_path / "results")
     zones = pd.read_csv(tmp_path / "results" / store.ZONE_FORECASTS_FILE)
     assert set(zones["vintage"]) == {origin}
+
+
+@pytest.fixture
+def candidate_flat(fitted_flat: str, monkeypatch: pytest.MonkeyPatch) -> str:
+    """Make the stand-in a submission candidate, config `flatcfg`."""
+    from bdbvhubrenewal.forecasters import base, renewal
+    from bdbvhubrenewal.submission import fitting
+
+    spec = base._REGISTRY[fitted_flat]
+    make = spec.factory
+
+    def write_fit_dir(
+        task: ForecastTask, fit_dir: Path, config_name: str
+    ) -> dict[str, object]:
+        del task
+        (Path(fit_dir) / "samples.csv.gz").write_bytes(b"draws")
+        return {"sampler": "nuts", "config": config_name, "worst_rhat": 1.0}
+
+    def candidate() -> object:
+        model = make()
+        model.write_fit_dir = write_fit_dir
+        return model
+
+    monkeypatch.setitem(
+        base._REGISTRY,
+        fitted_flat,
+        base.ModelSpec(fitted_flat, candidate, "Fitted.", fitted=True),
+    )
+    monkeypatch.setitem(renewal.FIT_VARIANTS, "flatcfg", fitted_flat)
+    monkeypatch.setitem(
+        fitting._CONFIGS,
+        "flatcfg",
+        fitting.FitConfig(
+            "flatcfg", "Stand-in.", lambda *_: {}, lambda *_: None
+        ),
+    )
+    return fitted_flat
+
+
+def test_a_candidate_fit_carries_what_the_submission_reads(
+    candidate_flat: str,
+    tasks: dict[str, ForecastTask],
+    tmp_path: Path,
+) -> None:
+    from bdbvhubrenewal.submission.fitting import read_fit as read_record
+
+    root = tmp_path / "store"
+    keys = store.current_keys(tasks, [candidate_flat], {}, "c")
+    newest, older, broken = (
+        sorted(tasks)[-1],
+        sorted(tasks)[-2],
+        sorted(tasks)[0],
+    )
+    stored = store.fit(candidate_flat, tasks[newest], {}, "c")
+    assert set(stored.files) == {
+        "diagnostics.json",
+        "fit.json",
+        "samples.csv.gz",
+    }
+    store.write_fit(root, stored)
+    meta = {
+        **stored.meta,
+        "origin": broken,
+        "key": keys[(candidate_flat, broken)],
+    }
+    store.write_fit(root, store.failed(meta, RuntimeError("x")))
+    (root / ".commit").write_text("abc123\n")
+
+    out = tmp_path / "fit"
+    state, found = store.unpack(root, keys, candidate_flat, newest, out)
+    assert state == "ok"
+    assert found is not None
+    assert found.meta["key"] == keys[(candidate_flat, newest)]
+    assert (out / "samples.csv.gz").read_bytes() == b"draws"
+    record = read_record(out)
+    assert record["config"] == "flatcfg"
+    assert record["vintage"] == newest
+    diag = json.loads((out / "diagnostics.json").read_text())
+    assert diag["worst_rhat"] == 1.0
+    where = json.loads((out / store.UNPACKED_FILE).read_text())
+    assert where["key"] == keys[(candidate_flat, newest)]
+    assert where["store_commit"] == "abc123"
+    assert where["commit"] == stored.meta["commit"]
+    # No fit at the current key, or one that failed.
+    assert store.unpack(root, keys, candidate_flat, older, tmp_path / "a")[
+        0
+    ] == ("missing")
+    assert store.unpack(root, keys, candidate_flat, broken, tmp_path / "b")[
+        0
+    ] == ("failed")
+
+
+def test_a_model_with_no_config_stores_no_files(
+    fitted_flat: str, tasks: dict[str, ForecastTask]
+) -> None:
+    stored = store.fit(fitted_flat, tasks[sorted(tasks)[-1]], {}, "c")
+    assert stored.files == {}

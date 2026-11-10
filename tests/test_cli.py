@@ -16,6 +16,7 @@ from bdbvhubrenewal.reporting import plots
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = ROOT / "tests" / "reporting" / "fixtures"
+DATA = ROOT / "tests" / "fixtures" / "data"
 
 
 @pytest.fixture
@@ -68,7 +69,7 @@ def test_cli_nowcast_writes_coherent_zones(tmp_path: Path) -> None:
 def test_cli_nowcast_without_zone_data_skips_zones(tmp_path: Path) -> None:
     data = tmp_path / "data"
     data.mkdir()
-    for f in (ROOT / "data").iterdir():
+    for f in DATA.iterdir():
         if f.name != "daily_zones.csv.gz":
             (data / f.name).symlink_to(f)
     out = tmp_path / "sub"
@@ -122,6 +123,8 @@ def test_cli_lopo_writes_scores_for_mask_aware_models(tmp_path: Path) -> None:
     try:
         args = [
             "backtest",
+            "--data",
+            str(DATA),
             "--lopo",
             "--results",
             str(tmp_path / "res"),
@@ -186,7 +189,7 @@ def test_cli_fit_task_carries_the_delay_files_for_the_lag() -> None:
     args = argparse.Namespace(
         vintage="latest",
         reference_date=None,
-        data="data",
+        data=str(DATA),
         backtest_config="config/backtest.toml",
     )
     task, _ = _task(args)
@@ -212,17 +215,32 @@ def test_stored_samples_keep_numeric_values_without_our_forecasts(
     from bdbvhubrenewal.evaluation.scoring import energy_scores
     from bdbvhubrenewal.forecasters.renewal import DELAY_SUMMARY_FILE
 
-    args = argparse.Namespace(data="data", results=str(tmp_path))
-    # With no fits loaded there are no stored delays.
-    _, none = _stored(args, load_target("data"), run_forecasts([], []))
+    args = argparse.Namespace(data=str(DATA), results=str(tmp_path))
+    # With no fits loaded and no hub files there are no stored samples or
+    # delays, and the empty samples are still numeric.
+    empty, none = _stored(args, load_target(DATA), run_forecasts([], []))
     assert none.empty
+    assert empty.empty
+    assert empty["value"].dtype == np.float64
+    # Hub files in the data directory: our 2026-11-07 submission.
+    data = tmp_path / "data"
+    data.mkdir()
+    for f in DATA.iterdir():
+        (data / f.name).symlink_to(f)
+    sub = ROOT / "data" / "our-submissions" / "model-output" / "seabbs-renewal"
+    hub = data / "hub-submissions" / "model-output" / "seabbs-renewal"
+    hub.mkdir(parents=True)
+    for f in sub.iterdir():
+        (hub / f.name).symlink_to(f)
+    args.data = str(data)
     learnt = pd.DataFrame(
         {"model": ["renewal", "randomwalknowcast"], "vintage": "2026-10-24"}
     )
     learnt.to_csv(tmp_path / DELAY_SUMMARY_FILE, index=False)
-    stored, delays = _stored(args, load_target("data"), run_forecasts([], []))
+    stored, delays = _stored(args, load_target(DATA), run_forecasts([], []))
     # Only the fitted models' delays are stored ones.
     assert set(delays["model"]) == {"renewal"}
+    assert not stored.empty
     assert stored["value"].dtype == np.float64
     one = stored.loc[stored["vintage"] == stored["vintage"].max()]
     truth = one[["location", "target_end_date"]].drop_duplicates()
@@ -236,7 +254,7 @@ def test_stored_samples_keep_numeric_values_without_our_forecasts(
 def test_backtest_of_fitted_models_only_points_to_the_fit_store(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    args = ["backtest", "--models", "pprandomwalknowcast"]
+    args = ["backtest", "--data", str(DATA), "--models", "pprandomwalknowcast"]
     out = ["--results", str(tmp_path), "--output", str(tmp_path)]
     assert main([*args, *out]) == 1
     assert "task fit-store" in capsys.readouterr().err
@@ -316,7 +334,14 @@ def test_backtest_runs_only_the_named_scenarios(
 
     monkeypatch.setattr("bdbvhubrenewal.evaluation.backtest.run_scenarios", run)
     out = ["--results", str(tmp_path), "--output", str(tmp_path)]
-    args = ["backtest", "--scenarios-only", "--models", "randomwalk"]
+    args = [
+        "backtest",
+        "--data",
+        str(DATA),
+        "--scenarios-only",
+        "--models",
+        "randomwalk",
+    ]
     assert main([*args, "--scenarios", "flat", *out]) == 0
     assert seen["names"] == ["flat"]
     with pytest.raises(SystemExit):
@@ -390,7 +415,15 @@ def test_backtest_runs_recovery_apart_by_chunk(
     monkeypatch.setattr(bt, "run_recovery", recovery)
     monkeypatch.setattr(bt, "run_development", development)
     out = ["--results", str(tmp_path), "--output", str(tmp_path)]
-    args = ["backtest", "--recovery-only", "--models", "randomwalk", *out]
+    args = [
+        "backtest",
+        "--data",
+        str(DATA),
+        "--recovery-only",
+        "--models",
+        "randomwalk",
+        *out,
+    ]
     assert main([*args, "--chunk", "1/2"]) == 0
     everything = bt.load_config("config/backtest.toml").simulated_dates
     assert dates == [tuple(chunk_of(everything, 1, 2))]
@@ -426,7 +459,15 @@ def test_backtest_without_recovery_never_runs_it(
     monkeypatch.setattr(bt, "run_development", development)
     monkeypatch.setattr(cli, "_release_backtest", release)
     out = ["--results", str(tmp_path), "--output", str(tmp_path)]
-    args = ["backtest", "--no-recovery", "--models", "randomwalk", *out]
+    args = [
+        "backtest",
+        "--data",
+        str(DATA),
+        "--no-recovery",
+        "--models",
+        "randomwalk",
+        *out,
+    ]
     assert main(args) == 0
 
 
@@ -489,3 +530,44 @@ def test_digest_of_one_model(capsys: pytest.CaptureFixture[str]) -> None:
     key = capsys.readouterr().out.strip()
     assert key == model_digest("randomwalk", ROOT)
     assert key != model_digest("pprandomwalknowcast", ROOT)
+
+
+def test_fit_store_plan_takes_origins(tmp_path: Path) -> None:
+    from bdbvhubrenewal.cli import main
+
+    out, keys = tmp_path / "matrix.json", tmp_path / "keys.json"
+    rc = main(
+        [
+            "fit-store",
+            "plan",
+            "--store",
+            str(tmp_path / "store"),
+            "--models",
+            "renewal",
+            "--origins",
+            "2026-11-08",
+            "--out",
+            str(out),
+            "--keys",
+            str(keys),
+        ]
+    )
+    assert rc == 0
+    planned = json.loads(out.read_text())["include"]
+    assert [(p["model"], p["origin"]) for p in planned] == [
+        ("renewal", "2026-11-08")
+    ]
+    assert [k.rsplit("/", 1)[0] for k in json.loads(keys.read_text())] == [
+        "renewal/2026-11-08"
+    ]
+
+
+def test_fit_store_unpack_says_when_the_store_has_no_fit(
+    tmp_path: Path,
+) -> None:
+    from bdbvhubrenewal.cli import main
+
+    args = ["fit-store", "unpack", "--store", str(tmp_path / "store")]
+    args += ["--model", "renewal", "--origin", "2026-11-08"]
+    assert main([*args, "--out", str(tmp_path / "fit")]) == 3
+    assert not (tmp_path / "fit").exists()

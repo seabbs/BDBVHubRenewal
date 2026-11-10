@@ -118,7 +118,7 @@ def test_model_code_covers_what_its_forecasts_run(
     from bdbvhubrenewal.evaluation.zones import zone_forecasts
     from bdbvhubrenewal.forecasters import get_model
 
-    data = ROOT / "data"
+    data = ROOT / "tests" / "fixtures" / "data"
     real = target.loc[target["kind"] == "real"]
     tasks = bt.make_tasks(real, delays.assign(kind="real"), config, daily=daily)
     one = [

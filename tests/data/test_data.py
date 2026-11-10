@@ -23,7 +23,7 @@ from bdbvhubrenewal.data import (
     write_csv,
 )
 
-DATA = Path(__file__).resolve().parents[2] / "data"
+DATA = Path(__file__).resolve().parents[1] / "fixtures" / "data"
 
 
 def _write(path: Path, rows: list[dict[str, object]]) -> Path:
@@ -390,3 +390,11 @@ def test_write_csv_writes_the_same_bytes_for_the_same_table(
     write_csv(table, path)
     assert path.read_bytes() == first
     pd.testing.assert_frame_equal(pd.read_csv(path), table)
+
+
+def test_fixture_holds_the_pinned_vintages(
+    target: pd.DataFrame, vintages: list[str]
+) -> None:
+    # The fixture is frozen, so the tests pin its vintages.
+    real = target.loc[target["kind"] == "real", "vintage"].astype(str)
+    assert sorted(set(real)) == vintages

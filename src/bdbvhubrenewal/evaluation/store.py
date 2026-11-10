@@ -23,6 +23,9 @@ models that run it, and no other.
 
 `plan` lists the fits the store lacks, `fit` makes one, and `load`
 writes the stored forecasts where the backtest and the docs read them.
+A submission candidate's fit also holds its fit directory (`fit_files`),
+which `unpack` writes out for the submission to forecast from, so the
+submission uses the stored fit rather than fitting again.
 Where the store has no fit for the current key, `load` uses the newest
 stored fit of that pair and says so (`StoreStatus`).
 `command` runs `bdbvhubrenewal fit-store`.
@@ -32,6 +35,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+import base64
 import datetime as dt
 import functools
 import gzip
@@ -42,7 +46,9 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
 import textwrap
+import time
 import tomllib
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, fields, is_dataclass
@@ -57,9 +63,10 @@ from bdbvhubrenewal.evaluation.backtest import (
     BacktestConfig,
     _fit_rows,
     load_config,
-    make_tasks,
     merge_by_model,
+    real_vintages,
     run_forecasts,
+    vintage_task,
 )
 from bdbvhubrenewal.forecasters import (
     ForecastModel,
@@ -72,6 +79,7 @@ __all__ = [
     "STATUS_FILE",
     "STORE_ENTRIES",
     "STORE_SKIP",
+    "UNPACKED_FILE",
     "ZONE_FORECASTS_FILE",
     "StoreStatus",
     "StoredFit",
@@ -82,6 +90,7 @@ __all__ = [
     "failed",
     "fit",
     "fit_code",
+    "fit_files",
     "fit_key",
     "load",
     "origin_tasks",
@@ -90,6 +99,7 @@ __all__ = [
     "samplers",
     "store_path",
     "stored_models",
+    "unpack",
     "write_fit",
 ]
 
@@ -113,6 +123,16 @@ ZONE_FORECASTS_FILE: Final = "zone-forecasts.csv.gz"
 
 STATUS_FILE: Final = "fit-store.json"
 """What `load` used, written beside the results for the docs."""
+
+UNPACKED_FILE: Final = "store.json"
+"""Which stored fit `unpack` wrote, in the fit directory."""
+
+NEXT_ROUND_WEEKS: Final = 1
+"""Weeks a stored fit forecasts past `[forecast] max_horizon`, so a round
+with no new release is forecast from the last release's stored fit."""
+
+COMMIT_FILE: Final = ".commit"
+"""The store branch commit, written by `scripts/fit-store.sh fetch`."""
 
 
 def stored_models() -> list[str]:
@@ -299,8 +319,12 @@ def origin_tasks(
 ) -> dict[str, ForecastTask]:
     """Build the task of every real origin, as the store fits it.
 
-    A stored task is asked for final counts only (no `report_by`), so it
-    holds no release after its origin. Releases in `config.skip_origins`
+    Each is the task the submission fits at that vintage
+    (`vintage_task`), with `NEXT_ROUND_WEEKS` more weeks, so the
+    submission forecasts its vintage's own round, or the next round when
+    no new release came, from the stored fit. A stored task is asked for
+    final counts only (no `report_by`), so it holds no release after its
+    origin. Releases in `config.skip_origins`
     are not origins, but stay in the later tasks' histories.
 
     Parameters
@@ -315,9 +339,11 @@ def origin_tasks(
     dict
         Task by origin (the vintage date), in date order.
     """
-    real = target.loc[target["kind"] == "real"]
-    tasks = make_tasks(real, delays.assign(kind="real"), config, daily=daily)
-    return {t.vintage: t for t in tasks if t.vintage not in config.skip_origins}
+    return {
+        v: vintage_task(target, delays, config, v, daily, NEXT_ROUND_WEEKS)[0]
+        for v in real_vintages(target)
+        if v not in config.skip_origins
+    }
 
 
 def _bvd_tag(model: ForecastModel, task: ForecastTask) -> str | None:
@@ -450,6 +476,9 @@ class StoredFit:
     zones : pandas.DataFrame
         The model's own zone samples (`run_forecasts`' `zones`), empty if
         its zones are split from its provinces.
+    files : dict
+        A submission candidate's fit directory (`fit_files`): file name
+        to base64 contents. Empty for other models.
     """
 
     meta: dict[str, Any]
@@ -457,6 +486,7 @@ class StoredFit:
     fits: pd.DataFrame
     delays: pd.DataFrame
     zones: pd.DataFrame = field(default_factory=pd.DataFrame)
+    files: dict[str, str] = field(default_factory=dict)
 
 
 _TABLES: Final = ("forecasts", "fits", "delays", "zones")
@@ -488,6 +518,7 @@ def write_fit(store: Path | str, stored: StoredFit) -> Path:
             )
             for name in _TABLES
         },
+        "files": stored.files,
     }
     # No timestamp in the gzip header, so the bytes depend on the content.
     with gzip.GzipFile(path, "wb", mtime=0) as fh:
@@ -520,7 +551,10 @@ def read_fit(path: Path | str) -> StoredFit:
             dtype=False,
         )
 
-    return StoredFit(body["meta"], *(table(n) for n in _TABLES))
+    forecasts, fits, delays, zones = (table(n) for n in _TABLES)
+    return StoredFit(
+        body["meta"], forecasts, fits, delays, zones, body.get("files", {})
+    )
 
 
 def _commit() -> str:
@@ -610,8 +644,10 @@ def fit(
     fits: list[pd.DataFrame] = []
     learnt: list[pd.DataFrame] = []
     zones: list[pd.DataFrame] = []
+    start = time.monotonic()
     try:
         forecasts = run_forecasts([model], [task], fits, learnt, zones)
+        files = fit_files(model, task, sampler, time.monotonic() - start)
     except Exception as err:
         return failed(meta, err)
     return StoredFit(
@@ -620,7 +656,64 @@ def fit(
         pd.concat(fits, ignore_index=True) if fits else pd.DataFrame(),
         pd.concat(learnt, ignore_index=True) if learnt else pd.DataFrame(),
         pd.concat(zones, ignore_index=True) if zones else pd.DataFrame(),
+        files,
     )
+
+
+def fit_files(
+    model: ForecastModel,
+    task: ForecastTask,
+    sampler: Mapping[str, Any],
+    seconds: float = 0.0,
+) -> dict[str, str]:
+    """Return a submission candidate's fit directory, after its forecast.
+
+    The directory `bdbvhubrenewal fit --config` would write: the model's
+    `write_fit_dir` (samples, the unassigned national part,
+    `ppc.json`), with `diagnostics.json` and `fit.json`
+    (`write_records`). A model that is no candidate's
+    (`renewal.FIT_VARIANTS`) has none.
+
+    Parameters
+    ----------
+    model : ForecastModel
+        The model, after it forecast `task`.
+    task : ForecastTask
+        The task.
+    sampler : mapping
+        `samplers`.
+    seconds : float
+        How long the fit took.
+
+    Returns
+    -------
+    dict
+        File name to base64 contents, or empty.
+    """
+    from bdbvhubrenewal.forecasters.renewal import FIT_VARIANTS
+    from bdbvhubrenewal.submission.fitting import get_config, write_records
+
+    write = getattr(model, "write_fit_dir", None)
+    names = [c for c, v in FIT_VARIANTS.items() if v == model.name]
+    if write is None or not names:
+        return {}
+    with tempfile.TemporaryDirectory() as tmp:
+        out = Path(tmp)
+        diag = write(task, out, config_name=names[0])
+        write_records(
+            get_config(names[0]),
+            task,
+            sampler.get(model.name, {}),
+            out,
+            model=model.name,
+            diagnostics=diag,
+            seconds=seconds,
+        )
+        return {
+            p.name: base64.b64encode(p.read_bytes()).decode()
+            for p in sorted(out.iterdir())
+            if p.is_file() and p.name != "progress.log"
+        }
 
 
 def failed(meta: Mapping[str, Any], error: BaseException) -> StoredFit:
@@ -641,6 +734,64 @@ def failed(meta: Mapping[str, Any], error: BaseException) -> StoredFit:
     empty = pd.DataFrame()
     record = {**meta, "status": "failed", "error": repr(error)}
     return StoredFit(record, empty, empty, empty)
+
+
+def unpack(
+    store: Path | str,
+    keys: Keys,
+    model: str,
+    origin: str,
+    out: Path | str,
+) -> tuple[str, StoredFit | None]:
+    """Write a stored candidate fit's directory for the submission.
+
+    Only the fit of the current key is used: same code and data, same
+    fit. Writes the fit's files and `UNPACKED_FILE`, which says which
+    fit they came from and at which store commit.
+
+    Parameters
+    ----------
+    store : pathlib.Path or str
+        The store root.
+    keys : dict
+        `current_keys`.
+    model, origin : str
+        The fit.
+    out : pathlib.Path or str
+        The fit directory to write.
+
+    Returns
+    -------
+    tuple
+        `"ok"`, `"missing"` (no fit, or one with no fit directory) or
+        `"failed"`, and the stored fit if there is one.
+    """
+    key = keys[(model, origin)]
+    path = store_path(store, model, origin, key)
+    if not path.exists():
+        return "missing", None
+    stored = read_fit(path)
+    if stored.meta["status"] != "ok":
+        return "failed", stored
+    if not stored.files:
+        return "missing", stored
+    target = Path(out)
+    target.mkdir(parents=True, exist_ok=True)
+    for name, body in stored.files.items():
+        (target / name).write_bytes(base64.b64decode(body))
+    commit = Path(store) / COMMIT_FILE
+    record = {
+        "model": model,
+        "origin": origin,
+        "key": key,
+        "commit": stored.meta["commit"],
+        "fitted_at": stored.meta["fitted_at"],
+        "store_commit": (
+            commit.read_text().strip() if commit.exists() else None
+        ),
+    }
+    (target / UNPACKED_FILE).write_text(json.dumps(record, indent=1) + "\n")
+    return "ok", stored
 
 
 @dataclass(frozen=True)
@@ -697,10 +848,14 @@ def load(
     store: Path | str,
     keys: Keys,
     results: Path | str = "results",
+    min_horizon: int | None = None,
+    max_horizon: int | None = None,
 ) -> list[StoreStatus]:
     """Write the stored fits where the backtest and the docs read them.
 
-    Every origin goes to `forecasts.csv.gz`.
+    Every origin goes to `forecasts.csv.gz`, from `min_horizon` to
+    `max_horizon`: a stored fit holds the submission's weeks, which start
+    earlier and end later.
     Fit summaries go to `backtest-fits.csv`, learnt delays to
     `delay-summary.csv` and a model's own zone samples to
     `ZONE_FORECASTS_FILE`. Each file keeps the rows of models not stored.
@@ -714,6 +869,8 @@ def load(
         `current_keys`.
     results : pathlib.Path or str
         The results directory.
+    min_horizon, max_horizon : int, optional
+        The backtest's weeks (`[forecast]`). None keeps every week.
 
     Returns
     -------
@@ -743,8 +900,15 @@ def load(
                 failed,
             )
         )
+    forecasts = [f.forecasts for f in loaded]
+    low = -(10**6) if min_horizon is None else min_horizon
+    high = 10**6 if max_horizon is None else max_horizon
+    forecasts = [
+        f.loc[f["horizon"].between(low, high)] if "horizon" in f else f
+        for f in forecasts
+    ]
     for name, frames in (
-        ("forecasts.csv.gz", [f.forecasts for f in loaded]),
+        ("forecasts.csv.gz", forecasts),
         ("backtest-fits.csv", [f.fits for f in loaded]),
         (DELAY_SUMMARY_FILE, [f.delays for f in loaded]),
         (ZONE_FORECASTS_FILE, [f.zones for f in loaded]),
@@ -765,12 +929,15 @@ def _merge(path: Path, frames: Iterable[pd.DataFrame]) -> None:
 
 
 def command(args: argparse.Namespace) -> int:
-    """Run `bdbvhubrenewal fit-store plan|fit|load`.
+    """Run `bdbvhubrenewal fit-store plan|fit|load|unpack`.
 
     `plan` prints the fits to make and writes them as a GitHub Actions
-    matrix (`--out`), with every current key (`--keys`) for pruning.
+    matrix (`--out`), with every current key (`--keys`) for pruning;
+    `--origins` keeps only those origins.
     `fit` fits one model at one origin and writes it to `--store`.
     `load` writes the stored fits into `--results`.
+    `unpack` writes the stored fit of `--model` at `--origin` into the
+    fit directory `--out`, for the submission.
 
     Parameters
     ----------
@@ -781,6 +948,8 @@ def command(args: argparse.Namespace) -> int:
     -------
     int
         0 on success, 1 if the fit failed or the arguments are wrong.
+        `unpack` returns 3 if the store has no fit at the current key
+        and 4 if that fit failed.
     """
     sampler = samplers(args.policy)
     if args.action == "fit":
@@ -797,7 +966,8 @@ def command(args: argparse.Namespace) -> int:
         load_daily(args.data),
     )
     models = args.models or stored_models()
-    names = [args.model] if args.action == "fit" else models
+    one = args.action in ("fit", "unpack")
+    names = [args.model] if one else models
     unknown = sorted(set(names) - set(stored_models()))
     if unknown:
         print(
@@ -820,6 +990,26 @@ def command(args: argparse.Namespace) -> int:
             print(f"ERROR: {stored.meta['error']}", file=sys.stderr)
             return 1
         return 0
+    if args.action == "unpack":
+        if args.origin not in tasks or not args.out:
+            print(
+                f"ERROR: unpack needs --out and --origin in {list(tasks)}.",
+                file=sys.stderr,
+            )
+            return 1
+        keys = current_keys(
+            {args.origin: tasks[args.origin]}, names, sampler, code
+        )
+        state, found = unpack(
+            args.store, keys, args.model, args.origin, args.out
+        )
+        key = keys[(args.model, args.origin)]
+        print(f"{args.model} at {args.origin} ({key}): {state}.")
+        if state == "failed" and found is not None:
+            print(f"ERROR: {found.meta.get('error')}", file=sys.stderr)
+        return {"ok": 0, "missing": 3, "failed": 4}[state]
+    if args.origins:
+        tasks = {o: t for o, t in tasks.items() if o in set(args.origins)}
     keys = current_keys(tasks, models, sampler, code)
     if args.action == "plan":
         to_fit = plan(keys, args.store, args.retry_failed)
@@ -833,7 +1023,9 @@ def command(args: argparse.Namespace) -> int:
                 json.dumps([f"{m}/{o}/{k}" for (m, o), k in keys.items()])
             )
         return 0
-    for s in load(args.store, keys, args.results):
+    for s in load(
+        args.store, keys, args.results, config.min_horizon, config.max_horizon
+    ):
         state = "current" if s.current else "not fitted for this code"
         if s.used and not s.current:
             state += f", older fit {s.used} used"
