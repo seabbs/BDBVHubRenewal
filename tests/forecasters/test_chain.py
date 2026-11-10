@@ -108,6 +108,20 @@ def test_every_day_with_data_is_nowcast(origin24) -> None:
     assert counts[newest] >= 0
 
 
+def test_a_week_nowcast_counts_its_unobserved_days_as_unreported(
+    daily: pd.DataFrame,
+) -> None:
+    provinces = tuple(sorted(set(daily["location"]) - {"CD"}))
+    # Cut-off 10-16 is a Friday, so the week of 10-17 misses a day.
+    snap = snapshot_arrays(daily, "2026-10-17", provinces)
+    origin = build_origin(snap, Settings(), errors=False)
+    seen = origin.complete >= 0.05
+    # The nowcast of a week is at least its reported count over its share
+    # reported, the share over all 7 days.
+    low = origin.reported / np.where(seen, origin.complete, 1.0)
+    assert (origin.point[seen] >= low[seen] - 1e-6).all()
+
+
 def test_every_release_with_a_pair_gives_a_retrospective(
     daily: pd.DataFrame,
 ) -> None:

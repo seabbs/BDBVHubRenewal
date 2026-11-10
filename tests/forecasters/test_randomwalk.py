@@ -122,49 +122,43 @@ def test_randomwalk_returns_complete_weeks_as_reported(
     assert late["value"].nunique() > 5
 
 
-def test_nowcast_starts_from_the_latest_full_week_with_enough_reported(
+def test_nowcast_runs_to_the_latest_week_at_least_5_per_cent_reported(
     target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
 ) -> None:
+    assert not hasattr(Settings(), "start_count")
     model = RandomWalkNowcast()
     model.forecast(_task(target, delays, daily, "2026-10-24"))
     start = {r["location"]: r["start_week"] for r in model.fit_diagnostics}
-    # Cut-off 10-24 is a Saturday, so its week is full, and Ituri has more
-    # than 5 cases in it.
+    # Cut-off 10-24 is a Saturday, and its week is at least 5% reported.
     assert start["CD-IT"] == "2026-10-24"
     assert max(start.values()) == "2026-10-24"
-    # Cut-off 10-16 is a Friday, so the week of 10-17 is partial.
-    model.forecast(_task(target, delays, daily, "2026-10-17"))
+    # Cut-off 10-16 is a Friday, so the week of 10-17 is partial. Its
+    # missing Saturday counts as unreported, and the week is still at least
+    # 5% reported, so it is nowcast and the walk starts from it.
+    task = _task(target, delays, daily, "2026-10-17")
+    model.forecast(task)
     start = {r["location"]: r["start_week"] for r in model.fit_diagnostics}
-    assert start["CD-IT"] == "2026-10-10"
+    assert start["CD-IT"] == "2026-10-17"
+    origin = model.origin_at(task, errors=False)
+    i = origin.snap.locations.index("CD-IT")
+    assert origin.complete[i, -1] >= 0.05
 
 
-def test_the_partial_week_adds_walk_draws_to_its_nowcast(
+def test_the_partial_week_is_nowcast_whole(
     target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
 ) -> None:
     task = _task(target, delays, daily, "2026-10-17")
-    samples = RandomWalkNowcast().forecast(task)
-    wk = "2026-10-17"
+    model = RandomWalkNowcast()
+    samples = model.forecast(task)
+    origin = model.origin_at(task, errors=True)
+    i = origin.snap.locations.index("CD-IT")
     mine = samples.loc[
-        (samples["location"] == "CD-IT") & (samples["target_end_date"] == wk)
+        (samples["location"] == "CD-IT")
+        & (samples["target_end_date"] == "2026-10-17")
     ]["value"]
-    reported = task.daily_history
-    # The week holding the cut-off is its nowcast plus walk draws for its
-    # days after the cut-off, so every draw is at least the count reported
-    # and the draws vary.
-    seen = (
-        reported.loc[
-            (reported["location"] == "CD-IT")
-            & (reported["vintage"] == reported["vintage"].max())
-            & (
-                pd.to_datetime(reported["onset_date"])
-                > pd.Timestamp("2026-10-10")
-            )
-            & (pd.to_datetime(reported["onset_date"]) <= pd.Timestamp(wk))
-        ][["observed", "imputed"]]
-        .sum()
-        .sum()
-    )
-    assert mine.min() >= seen
+    # The draws of the week holding the cut-off are its nowcast, with no
+    # walk draws added for the days after the cut-off.
+    assert mine.mean() == pytest.approx(origin.point[i, -1], rel=0.1)
     assert mine.nunique() > 10
 
 
@@ -270,23 +264,19 @@ def test_a_silent_place_is_not_nowcast(runs) -> None:
     assert (sk.loc[sk["target_end_date"] <= start["CD-SK"], "value"] == 0).all()
 
 
-def test_a_place_with_no_week_to_start_from_draws_introductions(
+def test_a_small_place_walks_only_over_the_forecast_weeks(
     task: ForecastTask,
 ) -> None:
-    # Sud Ubangi has 2 cases ever, in the week of 10-03, so no week has
-    # enough cases to start a walk from. It takes the silent places' path
-    # from its latest complete week, so even a wide walk spread, as
-    # pprandomwalknowcast fits it, keeps its draws small.
+    # Sud Ubangi has 2 cases ever, in the week of 10-03. Its walk starts
+    # from its nowcast of the latest week at least 5% reported, so even a
+    # wide walk spread, as
+    # pprandomwalknowcast fits it, compounds over a few weeks only.
     model = RandomWalkNowcast()
     origin = model.origin_at(task, errors=True)
     i = list(origin.snap.locations).index("CD-SU")
     origin.sigma[i] = 0.9
     values, _ = model.trajectories(origin, task, origin.point)
-    su = values[:, i, :]
-    assert su.max() < 100
-    # Weeks with data keep at least the count reported.
-    n_data = origin.reported.shape[1]
-    assert (su[:, :n_data] >= origin.reported[i]).all()
+    assert np.quantile(values[:, i, :], 0.9) < 30
 
 
 def test_the_walk_forecasts_on_from_each_samples_nowcast(
