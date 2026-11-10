@@ -14,6 +14,15 @@ ROOT = Path(__file__).resolve().parents[1]
 DATA = ROOT / "data"
 
 
+@pytest.fixture(autouse=True)
+def _one_province_at_a_time(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Fit per-province variants in this process, where stand-ins reach.
+
+    Tests that check the worker processes set the variable themselves.
+    """
+    monkeypatch.setenv("BDBV_PROVINCE_WORKERS", "1")
+
+
 @pytest.fixture(scope="session")
 def target() -> pd.DataFrame:
     return load_target(DATA)
