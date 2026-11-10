@@ -123,6 +123,8 @@ def test_cli_lopo_writes_scores_for_mask_aware_models(tmp_path: Path) -> None:
     try:
         args = [
             "backtest",
+            "--data",
+            str(DATA),
             "--lopo",
             "--results",
             str(tmp_path / "res"),
@@ -237,7 +239,7 @@ def test_stored_samples_keep_numeric_values_without_our_forecasts(
 def test_backtest_of_fitted_models_only_points_to_the_fit_store(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    args = ["backtest", "--models", "pprandomwalknowcast"]
+    args = ["backtest", "--data", str(DATA), "--models", "pprandomwalknowcast"]
     out = ["--results", str(tmp_path), "--output", str(tmp_path)]
     assert main([*args, *out]) == 1
     assert "task fit-store" in capsys.readouterr().err
@@ -317,7 +319,14 @@ def test_backtest_runs_only_the_named_scenarios(
 
     monkeypatch.setattr("bdbvhubrenewal.evaluation.backtest.run_scenarios", run)
     out = ["--results", str(tmp_path), "--output", str(tmp_path)]
-    args = ["backtest", "--scenarios-only", "--models", "randomwalk"]
+    args = [
+        "backtest",
+        "--data",
+        str(DATA),
+        "--scenarios-only",
+        "--models",
+        "randomwalk",
+    ]
     assert main([*args, "--scenarios", "flat", *out]) == 0
     assert seen["names"] == ["flat"]
     with pytest.raises(SystemExit):
@@ -391,7 +400,15 @@ def test_backtest_runs_recovery_apart_by_chunk(
     monkeypatch.setattr(bt, "run_recovery", recovery)
     monkeypatch.setattr(bt, "run_development", development)
     out = ["--results", str(tmp_path), "--output", str(tmp_path)]
-    args = ["backtest", "--recovery-only", "--models", "randomwalk", *out]
+    args = [
+        "backtest",
+        "--data",
+        str(DATA),
+        "--recovery-only",
+        "--models",
+        "randomwalk",
+        *out,
+    ]
     assert main([*args, "--chunk", "1/2"]) == 0
     everything = bt.load_config("config/backtest.toml").simulated_dates
     assert dates == [tuple(chunk_of(everything, 1, 2))]
@@ -427,7 +444,15 @@ def test_backtest_without_recovery_never_runs_it(
     monkeypatch.setattr(bt, "run_development", development)
     monkeypatch.setattr(cli, "_release_backtest", release)
     out = ["--results", str(tmp_path), "--output", str(tmp_path)]
-    args = ["backtest", "--no-recovery", "--models", "randomwalk", *out]
+    args = [
+        "backtest",
+        "--data",
+        str(DATA),
+        "--no-recovery",
+        "--models",
+        "randomwalk",
+        *out,
+    ]
     assert main(args) == 0
 
 
