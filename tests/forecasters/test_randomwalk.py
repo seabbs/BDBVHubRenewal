@@ -127,6 +127,7 @@ def test_nowcast_runs_to_the_latest_week_at_least_5_per_cent_reported(
     target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
 ) -> None:
     assert Settings().start_count == 5
+    assert Settings().start_share == 0.03
     model = RandomWalkNowcast()
     model.forecast(_task(target, delays, daily, "2026-10-24"))
     start = {r["location"]: r["start_week"] for r in model.fit_diagnostics}
