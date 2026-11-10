@@ -76,15 +76,6 @@ printf '#!/usr/bin/env bash\necho "$*" >> "${GH_LOG:?}"\nexit 1\n' \
 chmod +x "$ROOT/bin/gh"
 export PATH="$ROOT/bin:$PATH"
 
-# A stand-in main repo tree for the fit cache key (policy [cache] inputs).
-# Exported: prepare.sh hashes it too, from any working directory (the
-# GitHub job runs this script from ci/).
-export SRC_ROOT="$ROOT/main-repo"
-mkdir -p "$SRC_ROOT/src" "$SRC_ROOT/config"
-echo "model = 1" > "$SRC_ROOT/src/model.py"
-echo "x = 1" > "$SRC_ROOT/config/model.toml"
-touch "$SRC_ROOT/pyproject.toml" "$SRC_ROOT/uv.lock"
-
 run_scenario() {
   local name=$1 scenarios=$2 expect=$3 extra=${4:-} want=${5:-}
   # A scenario may move the clock; the next one gets it back.
@@ -125,7 +116,7 @@ run_scenario() {
   # 3. Primary matrix legs (`fit` job), one after another here.
   run_stage() {
     sci python -m submission_ci.policy --policy "$CI_DIR/policy.toml" \
-      --stage "$1" --hub-ref "$HUB_REF" --root "$SRC_ROOT" --model "$model" \
+      --stage "$1" --model "$model" \
       --reference-date "$REFERENCE_DATE" --now "$NOW" > "$WORK/matrix-$1.json"
     python3 - "$WORK/matrix-$1.json" << 'EOF' > "$WORK/legs-$1.txt"
 import json, sys
