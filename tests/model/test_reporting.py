@@ -1,3 +1,5 @@
+import datetime as dt
+
 import numpy as np
 import pytest
 from jax import random
@@ -76,7 +78,10 @@ def test_expected_reported_by_matches_the_model(sim_vintage, fitted, later):
 
 @pytest.mark.parametrize("later", [4, 17])
 def test_post_hoc_draws_match_the_model_as_reported(sim_vintage, fitted, later):
-    from bdbvhubrenewal.forecasters.reporting import draw_reported
+    from bdbvhubrenewal.forecasters.reporting import (
+        as_reported_samples,
+        encode,
+    )
 
     model, prior = fitted
     n, n_weeks = 2000, sim_vintage.n_weeks
@@ -92,9 +97,21 @@ def test_post_hoc_draws_match_the_model_as_reported(sim_vintage, fitted, later):
         report_days=30,
     )
     model_view = draws["as_reported"][cut]["province"][:, weeks].sum(-1)
-    post_hoc = draw_reported(
-        draws["reporting"], later, np.random.default_rng(1)
-    ).sum(-1)
+    # Through the stored path: encoded, then drawn for a release date.
+    block = {
+        "start_date": sim_vintage.start_date.isoformat(),
+        "places": list(sim_vintage.names),
+        "weeks": [f"w{w:03d}" for w in weeks],
+        "curves": encode(draws["reporting"]),
+    }
+    release = sim_vintage.start_date + dt.timedelta(days=cut)
+    rows = as_reported_samples(block, release, np.random.default_rng(1))
+    post_hoc = (
+        rows.groupby(["sample", "target_end_date"])["value"]
+        .sum()
+        .unstack()
+        .to_numpy()
+    )
     assert post_hoc.shape == model_view.shape
     # The data weeks share their expectations across the two passes, so
     # only the reporting noise differs; the forecast weeks also redraw
