@@ -2099,7 +2099,7 @@ It submits only the hub models opted in (<a href="../opting-in/">Opting in</a>),
 </ol>
 <p><code>[submission] model</code> in <code>config/hub.toml</code> says where the chain starts.
 Every fit is 2 chains of 500 warm-up, run in parallel, with no refit.
-<code>renewalbvd</code> takes 1000 draws at target acceptance 0.95, and the others 500 at 0.9.
+Each takes 750 draws, <code>renewalbvd</code> at target acceptance 0.95 and the others at 0.9.
 Fit timeouts are set against the window's close (<code>[timing]</code> in <code>ci/policy.toml</code>).</p>
 <h2 id="checks">Checks<a class="headerlink" href="#checks" title="Permanent link">&para;</a></h2>
 <p>An invalid file, a fit past the convergence failure thresholds or a forecast far from the recent data rules a candidate out.

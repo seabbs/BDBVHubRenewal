@@ -2370,8 +2370,9 @@ Where no week reaches 0.95, <code>randomwalknowcast</code> takes the first week 
 <h2 id="start-from-the-nowcast">Start from the nowcast<a class="headerlink" href="#start-from-the-nowcast" title="Permanent link">&para;</a></h2>
 <p><code>randomwalknowcast</code> walks on from each sample's own nowcast.</p>
 <ol>
-<li>The start week <span class="arithmatex">\(w_0\)</span> is the latest full week that is at least 5% reported and has at least 5 cases, else the first week.
-   A place with no case in the 9 weeks to <span class="arithmatex">\(c_o\)</span> starts at the latest complete week instead.</li>
+<li>The start week <span class="arithmatex">\(w_0\)</span> is the latest full week that is at least 5% reported and has at least 5 cases.
+   A place with no case in the 9 weeks to <span class="arithmatex">\(c_o\)</span>, or with no such week, starts at the latest complete week instead.
+   After it the place stays at 0 until an introduction, as above, floored at the counts reported.</li>
 <li>Weeks up to the week holding <span class="arithmatex">\(c_o\)</span> are the nowcast draws <span class="arithmatex">\(X_{p,i}(w)\)</span>.</li>
 <li>In sample <span class="arithmatex">\(i\)</span> the walk starts from <span class="arithmatex">\(X_{p,i}(w_0)\)</span>.</li>
 <li>If the week holding <span class="arithmatex">\(c_o\)</span> is partial, its nowcast covers only its days up to <span class="arithmatex">\(c_o\)</span>.
