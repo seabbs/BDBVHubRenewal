@@ -17,8 +17,7 @@ Weeks up to the start are returned as reported.
 Later weeks are walk draws, floored at the count reported.
 
 `RandomWalkNowcast` (`randomwalknowcast`) nowcasts each hub week, with
-negative binomial new reports on the remaining count minus Poisson
-removals of the count reported (`obs`).
+negative binomial new reports on the remaining count (`obs`).
 Weeks with data keep their nowcast draws. If the week holding the cut-off
 is partial, its days after the cut-off add a Poisson draw from that week's
 walk rate, walked by each sample from its own nowcast of the latest full
@@ -484,15 +483,13 @@ class RandomWalkNowcast(RandomWalk):
         """
         snap = origin.snap
         assert origin.size is not None
-        assert origin.removal is not None
         weeks = _timeline(origin, task)
         n_data, n_all, n = snap.n_weeks, len(weeks), task.n_samples
         n_loc = len(snap.locations)
         k_n = origin.size.shape[1]
         back = snap.cut_week(origin.o) - np.arange(n_data)
+        # Weeks older than the fitted ones have nothing to come.
         k = np.clip(back, 0, k_n - 1)
-        # Weeks older than the fitted ones are final, with no removals.
-        b = np.where(back < k_n, origin.removal[:, k], 0.0)
         key_x, key_walk, key_part, key_ahead = jax.random.split(_key(task), 4)
         shape = (n, *point.shape)
         reported = jnp.broadcast_to(
@@ -506,7 +503,6 @@ class RandomWalkNowcast(RandomWalk):
                 jnp.broadcast_to(
                     jnp.asarray(origin.size[:, k], jnp.float32), shape
                 ),
-                jnp.broadcast_to(jnp.asarray(b, jnp.float32), shape),
             ),
             np.float64,
         )

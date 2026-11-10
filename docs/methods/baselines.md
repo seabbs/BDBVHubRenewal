@@ -34,8 +34,8 @@ flowchart TD
     G["Growth to final Γ<sub>p</sub>(a)<br/>share reported 1 / Γ<sub>p</sub>(a)"]
     MU["Nowcast mean μ<sub>p</sub>(w)<br/>weekly fill<br/>shares F<sub>p,j</sub>(w) from Γ<sub>p</sub>"]
     RETRO["Earlier releases r &lt; o<br/>nowcast to release o"]
-    OBS["Observation model<br/>by weeks back k<br/>size φ<sub>p,k</sub>, removal b<sub>p,k</sub>"]
-    X["Nowcast draw X<sub>p,i</sub>(w)<br/>max(0, Y<sub>p,o</sub> + A − B)<br/>A ~ NB(μ<sub>p</sub> − Y<sub>p,o</sub>, φ<sub>p,k</sub>)<br/>B ~ Poisson(b<sub>p,k</sub> Y<sub>p,o</sub>)"]
+    OBS["Observation model<br/>by weeks back k<br/>size φ<sub>p,k</sub>"]
+    X["Nowcast draw X<sub>p,i</sub>(w)<br/>Y<sub>p,o</sub> + A<br/>A ~ NB(μ<sub>p</sub> − Y<sub>p,o</sub>, φ<sub>p,k</sub>)"]
     SIG["Walk spread σ<sub>p</sub><br/>changes in log(1 + Y<sub>p,o</sub>)"]
     W["Walk on log(1 + λ<sub>i</sub>)<br/>from each sample's completed<br/>cut-off week<br/>places with no recent case 0<br/>until an introduction<br/>Poisson counts"]
     NAT["National = sum of provinces<br/>sample by sample"]
@@ -117,7 +117,7 @@ The parent of a province is the country, whose counts are the sum of its provinc
 A place takes its own or a pooled $\Delta_p$ by the [own-or-pooled rule](#own-or-pooled-estimates).
 Only onset days less than $1.5 D = 63$ days before the cut-off of the latest release used contribute to the sums, as in baselinenowcast's default, and a retrospective fit uses the cut-off of its own release.
 Before the sums, each day's increments between its releases go through baselinenowcast's handling of negative values, so a downward revision is set to zero and taken from the earlier increments of that day and no ratio falls below 1.
-This applies to the delay only, because the removals below still allow negative revisions.
+The [observation model](#nowcast) is fitted on the same preprocessed counts.
 The preprocessing runs along releases for each onset day, where baselinenowcast runs it along the delay columns of a reporting triangle.
 
 The growth of a day's count from age $a$ to final is
@@ -148,43 +148,39 @@ x_j = x_{j-1} + \frac{x_{j-1} + 1 - F_{p,j-1}(w)}{F_{p,j-1}(w)} \big(F_{p,j}(w) 
 $$
 
 and the last column is the nowcast mean $\mu_p(w)$.
-With $\text{rem} = \mu_p(w) - Y_{p,o}(w) \ge 0$ the count still to come, the final count is new reports minus removals, as in epinowcast,
+With $\text{rem} = \mu_p(w) - Y_{p,o}(w) \ge 0$ the count still to come, the final count is the count reported plus new reports, as in baselinenowcast,
 
 $$
-X_{p,i}(w) = \max\big\{0,\ Y_{p,o}(w) + A - B\big\},
+X_{p,i}(w) = Y_{p,o}(w) + A,
 \qquad
 A \sim \text{NB}\big(\text{rem},\ \phi_{p,k}\big),
-\qquad
-B \sim \text{Poisson}\big(b_{p,k}\, Y_{p,o}(w)\big).
 $$
 
-$A$ is baselinenowcast's negative binomial on the remaining count, with mean $\text{rem}$ and size $\phi_{p,k}$.
-$B$ removes a share $b_{p,k}$ of the count reported, so counts can be revised down.
-Before the floor the mean is $\mu_p(w) - b_{p,k} Y_{p,o}(w)$.
-Weeks with no day younger than $D$ at $o$ have $\text{rem} = 0$ and $b_{p,k} = 0$, so they keep their reported count.
+with mean $\text{rem}$ and size $\phi_{p,k}$.
+Weeks with no day younger than $D$ at $o$ have $\text{rem} = 0$, so they keep their reported count.
 Sample $i$ is one draw of $X_{p,i}(w)$ per week.
 
-$\phi_{p,k}$ and $b_{p,k}$ are fitted as follows.
+$\phi_{p,k}$ is fitted as follows.
 
 1. Take each earlier release $r < o$ with an in-window pair among the releases up to $r$, and a cut-off at most $3D - 1.5D = 63$ days before $c_o$, the reference times baselinenowcast leaves for its retrospective nowcasts.
+   All counts are first preprocessed as for the [delay](#delay), so a downward revision is taken from the earlier releases and no week's count falls.
 2. Nowcast from the data up to $r$ with the delay of $r$, $\hat y_p(w)$.
    It is the same weekly fill from $c_r$, with the shares taken relative to the count at $c_o$, so its last column is at $c_o$.
 3. For weeks back $k$ with a day younger than $D$ at $r$, and where $Y_{p,r}(w) > 0$ or $\hat y_p(w) > 0$, compare the count of $w$ on days up to $c_r$ between releases $r$ and $o$.
-   A rise is the new reports $A_{p,r}(w)$ and a fall the removals $B_{p,r}(w)$.
+   The rise is the new reports $A_{p,r}(w)$.
 4. With $\widehat{\text{rem}} = \hat y_p(w) - Y_{p,r}(w)$, fit
 
     $$
     \phi_{p,k} = \arg\max_\phi \sum \log \text{NB}\big(A_{p,r}(w);\ \widehat{\text{rem}},\ \phi\big),
-    \qquad
-    b_{p,k} = \frac{\sum B_{p,r}(w)}{\sum Y_{p,r}(w)},
     $$
 
 summed over the kept releases.
 $\phi_{p,k}$ is fitted by maximum likelihood on $[0.1, 1000]$, one size per $k$, as baselinenowcast does.
 A week with $\widehat{\text{rem}} = 0$ says nothing about $\phi$, so it is left out of that fit.
 The weeks in the fit of $\phi_{p,k}$ are the errors at $k$.
-$b_{p,k}$ is the Poisson maximum likelihood estimate of the removals.
 Where the estimate chosen by the [pooling rule](#own-or-pooled-estimates) has no errors at $k$, $\phi_{p,k} \approx 2.2$, the median of epinowcast's prior $1 / \sqrt{\phi} \sim \mathcal{N}^+(0, 1)$.
+The release backtest in [#152](https://github.com/seabbs/BDBVHubRenewal/pull/152) compared this default with Poisson removals of the reported count, new reports clipped at 0 with no preprocessing, a delay fitted without preprocessing, and baselinenowcast's proposed rounded normal and Skellam models of the signed change.
+The negative binomial options scored the same within sampling noise, and the signed models were too narrow, so the default is kept.
 
 ## Own or pooled estimates
 
@@ -196,7 +192,6 @@ Each estimate is chosen by one rule.
    The walk spread also needs an own $\sigma_p^2 > 0$ ([below](#forecast)).
 3. **Fallback.** Otherwise it uses the pooled estimate of its nearest parent that meets the same rule, and otherwise the country's.
    A pooled estimate uses together the pair sums, errors and weekly changes of the parent's children with $\ell \ge 10$, or the parent's own where none has.
-6. **Removals.** The removal rate $b_{p,k}$ is always the place's own.
 
 ## Forecast
 
@@ -393,10 +388,10 @@ A fit whose worst split $\hat R$ is above 1.05, or with more than 1% of its draw
 | | `randomwalknowcast` | `pprandomwalknowcast` |
 |---|---|---|
 | Delay | Chain ladder, non-parametric by age, own or parent's | Log-normal, $\mu_p$ pooled, $s$ shared |
-| Nowcast | Chain-ladder fill, with NB new reports and Poisson removals fitted to retrospective nowcasts | NB new reports of the same model that fits the delay and the walk |
+| Nowcast | Chain-ladder fill, with NB new reports fitted to retrospective nowcasts | NB new reports of the same model that fits the delay and the walk |
 | Walk | On $\log(1 + y)$ from a nowcast draw, spread from 8 changes net of Poisson noise | On $\log \lambda$ over all 16 weeks, spread pooled, fitted jointly |
 | Uncertainty in the estimates | None, point estimates | Each sample is a posterior draw |
-| Removals | Poisson, counts can fall | None, the forecast is at least the count reported |
+| Removals | None, falls are preprocessed out, so a draw is at least the count reported | None, the forecast is at least the count reported |
 | Silent places | Introductions | `randomwalknowcast`'s draws, as in `renewalsp` |
 
 ## Limitations

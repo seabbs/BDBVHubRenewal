@@ -140,7 +140,7 @@ MODEL_METADATA = {
         "model_name": "RandomWalk on a nowcast",
         "methods": (
             "Baselinenowcast chain ladder on daily release snapshots, "
-            "negative binomial new reports minus Poisson removals, then a "
+            "negative binomial new reports on the count to come, then a "
             "log-scale random walk. Health zones and provinces, national "
             "the sum of provinces."
         ),
@@ -157,14 +157,13 @@ MODEL_METADATA = {
             "weeks. "
             # The uncertainty. Edit here if the observation model changes.
             "The observation model is baselinenowcast's negative binomial on "
-            "the remaining count minus Poisson removals of the count "
-            "reported, both fitted per horizon from retrospective nowcasts, "
-            "so counts can be revised down. "
+            "the remaining count, fitted per horizon from retrospective "
+            "nowcasts with downward revisions moved onto earlier releases. "
             "Each sample's completed latest week is carried forward as a "
             "random walk on the log scale with Poisson noise. A place under "
             "10 cases a week uses the delay, nowcast size and walk spread "
-            "pooled over its parent (zone, then province, then national), "
-            "and each place its own removal rate. The "
+            "pooled over its parent (zone, then province, then national). "
+            "The "
             "national value is the sum of provinces. See "
             "https://samabbott.co.uk/BDBVHubRenewal/methods/baselines/."
         ),

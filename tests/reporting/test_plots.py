@@ -88,15 +88,14 @@ def test_backtest_panels_are_titled_by_origin() -> None:
     plt.close(fig)
 
 
-def test_delay_check_draws_growth_dispersion_and_removals(
+def test_delay_check_draws_growth_and_dispersion(
     daily: pd.DataFrame,
 ) -> None:
     fig = plots.plot_delay_check(daily, "2026-10-24", ["CD", "CD-NK"])
-    left, mid, right = fig.axes
+    left, mid = fig.axes
     assert left.get_yscale() == "log"
     assert len(left.get_lines()) >= 2
     assert len(mid.get_lines()) >= 1
-    assert len(right.get_lines()) >= 1
     plt.close(fig)
 
 
