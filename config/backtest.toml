@@ -14,6 +14,12 @@ seed = 20261027
 # A truth week counts as complete if it ended at least this many weeks
 # before the truth vintage.
 complete_after_weeks = 3
+# Real releases that are not backtest origins: they are neither fitted
+# nor scored, but stay in the data of later origins. The 2026-08-18
+# release has no delay file, is 50 days before the next and its old weeks
+# are short by up to 12% of their latest counts, so its forecasts say
+# little about how the models do now.
+skip_origins = ["2026-08-18"]
 
 [sampler]
 # NUTS settings of leave-one-province-out fits only. Stored backtest
