@@ -203,6 +203,11 @@ class Variant:
     per_province : bool
         Fit each province on its own series, in a loop, with the same
         model code and no pooling or coupling across provinces.
+    zones : bool
+        Fit the health zones with a case in the random walks' walk
+        window as the places, nested in their provinces, and give the
+        silent zones `randomwalknowcast`'s introduction layer. Provinces
+        are the sums of their zones.
     """
 
     name: str
@@ -210,6 +215,7 @@ class Variant:
     base: str = "MAIN"
     overrides: Mapping[str, Any] = field(default_factory=dict)
     per_province: bool = False
+    zones: bool = False
 
 
 VARIANTS: Final[dict[str, Variant]] = {
@@ -217,8 +223,10 @@ VARIANTS: Final[dict[str, Variant]] = {
     for v in (
         Variant(
             "renewal",
-            "Province renewal (PyRenew): pooled Rt, gravity importation, "
-            "depletion, modelled delays and imputation.",
+            "Zone renewal (PyRenew): Rt pooled zone to province to country, "
+            "gravity importation, depletion, modelled delays and imputation; "
+            "provinces are the sums of their zones.",
+            zones=True,
         ),
         Variant(
             "renewalsp",
@@ -230,9 +238,10 @@ VARIANTS: Final[dict[str, Variant]] = {
         ),
         Variant(
             "renewalbvd",
-            "Province renewal informed by BVDOutbreakSize Rt, as a tempered "
+            "Zone renewal informed by BVDOutbreakSize Rt, as a tempered "
             "pseudo-observation.",
             base="BVD",
+            zones=True,
         ),
     )
 }
@@ -498,23 +507,142 @@ def vintage_inputs(
     """
     from bdbvhubrenewal.data import load_locations
     from bdbvhubrenewal.data.releases import release_pairs
-    from bdbvhubrenewal.model.inputs import vintage_from_tables
+    from bdbvhubrenewal.data.zones import province_of
+    from bdbvhubrenewal.model.inputs import vintage_from_tables, zone_table
 
     pairs = None
     if task.delay_history is not None:
         pairs = release_pairs(task.delay_history, task.vintage)
+    zoned = any(_is_zone(loc) for loc in task.locations)
+    if table is None:
+        table = zone_table(tuple(task.locations)) if zoned else load_locations()
     return vintage_from_tables(
         task.target,
         task.delays,
         task.vintage,
         tuple(task.locations),
-        load_locations() if table is None else table,
+        table,
         config,
         horizon_weeks(task),
         tuple(task.mask),
         bvd=bvd,
         release_pairs=pairs,
+        parents={z: province_of(z) for z in task.locations} if zoned else None,
     )
+
+
+def _is_zone(location: str) -> bool:
+    """Return whether a location code is a health zone, `CD-XX-NN`."""
+    return len(str(location).split("-")) == 3
+
+
+def _data_dir() -> Path:
+    return Path(os.environ.get("BDBV_DATA_DIR") or "data")
+
+
+def _daily_zones() -> pd.DataFrame:
+    from bdbvhubrenewal.data import load_daily_zones
+
+    return load_daily_zones(_data_dir())
+
+
+def task_zones(task: ForecastTask) -> tuple[str, ...]:
+    """Return the health zones of a task's provinces.
+
+    The hub's zone codes (`hub-config/tasks.json` in the data directory),
+    or the zones in the daily zone table if there is no hub config.
+
+    Parameters
+    ----------
+    task : ForecastTask
+        A province task.
+
+    Returns
+    -------
+    tuple of str
+        Zone codes, sorted.
+    """
+    from bdbvhubrenewal.data.zones import hub_zones, province_of
+
+    tasks_json = _data_dir() / "hub-config" / "tasks.json"
+    if tasks_json.exists():
+        codes = hub_zones(tasks_json)
+    else:
+        codes = tuple(sorted(set(_daily_zones()["location"])))
+    return tuple(z for z in codes if province_of(z) in task.locations)
+
+
+def zone_target(task: ForecastTask) -> pd.DataFrame:
+    """Weekly known and imputed onsets of each zone at a task's vintage.
+
+    Summed by epi week from the daily zone table, as the province target
+    is from the daily province table.
+
+    Parameters
+    ----------
+    task : ForecastTask
+        A province task.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Columns `vintage`, `location`, `target_end_date`, `observed`,
+        `imputed`, `total` and `cutoff`, for zone weeks with an onset.
+    """
+    daily = _daily_zones()
+    rows = daily.loc[daily["vintage"].astype(str) == task.vintage]
+    onset = pd.to_datetime(rows["onset_date"])
+    end = onset + pd.to_timedelta((5 - onset.dt.day_of_week) % 7, unit="D")
+    out = (
+        rows.assign(target_end_date=end.dt.date.astype(str))
+        .groupby(["location", "target_end_date"], as_index=False)[
+            ["observed", "imputed"]
+        ]
+        .sum()
+    )
+    out["total"] = out["observed"] + out["imputed"]
+    out["vintage"] = task.vintage
+    out["cutoff"] = str(rows["cutoff"].iloc[0]) if len(rows) else task.cutoff
+    return out.loc[out["total"] > 0].reset_index(drop=True)
+
+
+def _zone_walk_task(task: ForecastTask) -> ForecastTask:
+    """Return the random walks' zone task, which finds the silent zones."""
+    from bdbvhubrenewal.data.zones import weekly_zone_counts
+    from bdbvhubrenewal.forecasters.zones import zone_task
+
+    daily = _daily_zones()
+    counts = weekly_zone_counts(daily, task.vintage)
+    history = (
+        daily
+        if task.daily_history is None
+        else pd.concat([task.daily_history, daily], ignore_index=True)
+    )
+    return zone_task(task, counts, task_zones(task), history)
+
+
+def sum_zones(samples: pd.DataFrame) -> pd.DataFrame:
+    """Sum zone samples to their provinces, sample by sample.
+
+    Parameters
+    ----------
+    samples : pandas.DataFrame
+        Zone samples (`SAMPLE_COLUMNS`), optionally with `as_of`.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Province samples with the same columns.
+    """
+    from bdbvhubrenewal.data.zones import province_of
+
+    keys = [c for c in samples.columns if c not in ("location", "value")]
+    out = (
+        samples.assign(location=samples["location"].map(province_of))
+        .groupby(["location", *keys], as_index=False, dropna=False)["value"]
+        .sum()
+    )
+    return pd.DataFrame(out).loc[:, list(samples.columns)]
 
 
 def samples_table(
@@ -1091,12 +1219,16 @@ class RenewalFit:
     as_reported : pandas.DataFrame or None
         Samples of the counts reported by each date in `task.report_by`
         (`SAMPLE_COLUMNS` and `as_of`), for the weeks up to that date.
+    zones : pandas.DataFrame or None
+        Final-count samples of every zone of the task's provinces
+        (`SAMPLE_COLUMNS`), for a zone variant. They sum to `samples`.
     """
 
     runs: Mapping[str, RenewalRun]
     samples: pd.DataFrame
     unassigned: pd.DataFrame | None = None
     as_reported: pd.DataFrame | None = None
+    zones: pd.DataFrame | None = None
 
 
 @dataclass
@@ -1117,6 +1249,9 @@ class RenewalModel:
         The variant name.
     delay_summary : pandas.DataFrame or None
         `fit_delays` of the last `forecast`.
+    zone_samples : pandas.DataFrame or None
+        Zone samples of the last `forecast` of a zone variant, which sum
+        to its province samples.
     """
 
     variant: Variant
@@ -1128,6 +1263,7 @@ class RenewalModel:
         init=False, default_factory=list
     )
     delay_summary: pd.DataFrame | None = field(init=False, default=None)
+    zone_samples: pd.DataFrame | None = field(init=False, default=None)
 
     def __post_init__(self) -> None:
         """Name the model after its variant and say if it takes a mask."""
@@ -1207,7 +1343,7 @@ class RenewalModel:
         # when a fit has more than one.
         shifts = {
             name: np.asarray(posterior["delay_shift"])[..., p]
-            for p, name in enumerate(data.names)
+            for p, name in enumerate(data.parent_names or data.names)
         }
         if len(shifts) > 1:
             shifts["shared"] = np.asarray(posterior["delay_shared_shift"])[
@@ -1258,6 +1394,8 @@ class RenewalModel:
         RenewalFit
             The runs, province samples and national or unassigned parts.
         """
+        if self.variant.zones:
+            return self._zone_fit(task)
         frames: list[pd.DataFrame] = []
         later: list[pd.DataFrame] = []
         tasks = {"all": task}
@@ -1283,6 +1421,41 @@ class RenewalModel:
             samples,
             data_gap(task, samples),
             as_reported=pd.concat(later, ignore_index=True) if later else None,
+        )
+
+    def _zone_fit(self, task: ForecastTask) -> RenewalFit:
+        """Fit the zones together and sum them to the provinces.
+
+        The zones with a case in the random walks' walk window are
+        fitted in one model, nested in their provinces. The rest take
+        `randomwalknowcast`'s introduction layer (`_silent_walk`), so a
+        zone with no recent case is exactly 0 until an introduction.
+        Each province sample is the sum of its zones' samples of the same
+        id, and national adds the data gap (`data_gap`).
+        """
+        walk, silent = _silent_walk(_zone_walk_task(task))
+        fitted = tuple(z for z in task_zones(task) if z not in silent)
+        zones = [walk]
+        later = [
+            walk.loc[walk["target_end_date"] <= d].assign(as_of=d)
+            for d in task.report_by
+        ]
+        runs: dict[str, RenewalRun] = {}
+        if fitted:
+            zt = replace(task, target=zone_target(task), locations=fitted)
+            runs = self._run_all({"all": zt})
+            zones.append(samples_table(zt, runs["all"].data, runs["all"].draws))
+            later.extend(_as_reported(zt, runs["all"]))
+        zone_samples = pd.concat(zones, ignore_index=True)
+        samples = sum_zones(zone_samples)
+        return RenewalFit(
+            runs,
+            samples,
+            data_gap(task, samples),
+            as_reported=sum_zones(pd.concat(later, ignore_index=True))
+            if later
+            else None,
+            zones=zone_samples,
         )
 
     def _run_all(self, tasks: Mapping[str, ForecastTask]) -> dict[str, Any]:
@@ -1343,6 +1516,7 @@ class RenewalModel:
         """
         fit = self.forecast_fit(task)
         self.delay_summary = fit_delays(fit, task)
+        self.zone_samples = fit.zones
         self.fit_diagnostics = [
             {"fit": key, **fit_summary(run, self.sampler)}
             for key, run in fit.runs.items()
@@ -1358,6 +1532,8 @@ class RenewalModel:
 
 SAMPLES_FILE: Final = "samples.csv.gz"
 UNASSIGNED_FILE: Final = "unassigned.csv.gz"
+ZONES_FILE: Final = "zones.csv.gz"
+"""Zone samples of a zone variant, which sum to its province samples."""
 TRAJECTORY_DRAW_FILE: Final = "trajectory_draw.csv"
 """The posterior draw behind each trajectory, by fit, so a later stage
 (health zones) can pair trajectories with posterior draws."""
@@ -1408,6 +1584,8 @@ def fit_renewal(
     model = RenewalModel(VARIANTS[variant], settings, out / "progress.log")
     fit = model.forecast_fit(task)
     write_csv(fit.samples, out / SAMPLES_FILE)
+    if fit.zones is not None:
+        write_csv(fit.zones, out / ZONES_FILE)
     write_csv(fit_delays(fit, task), out / DELAY_SUMMARY_FILE)
     if fit.unassigned is not None:
         write_csv(fit.unassigned, out / UNASSIGNED_FILE)
@@ -1509,11 +1687,18 @@ def forecast_renewal(task: ForecastTask, fit_dir: Path | str) -> Forecast:
         unassigned = unassigned.loc[
             unassigned["target_end_date"].isin(task.target_end_dates)
         ].reset_index(drop=True)
+    zones = None
+    if (path / ZONES_FILE).exists():
+        zones = pd.read_csv(path / ZONES_FILE, dtype={"target_end_date": str})
+        zones = zones.loc[
+            zones["target_end_date"].isin(task.target_end_dates)
+        ].reset_index(drop=True)
     meta = json.loads((path / TRAJECTORIES_FILE).read_text())
     return Forecast(
         samples=samples.reset_index(drop=True),
         unassigned=unassigned,
         modelled=tuple(meta["modelled"]),
+        zones=zones,
     )
 
 

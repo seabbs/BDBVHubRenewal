@@ -1069,11 +1069,17 @@ def _zones(
     task: ForecastTask,
     samples: pd.DataFrame,
     hub_config: Path,
+    own: pd.DataFrame | None = None,
 ) -> tuple[pd.DataFrame | None, str]:
     """Forecast the zones to sum to the provinces, or say why not.
 
-    The zones come from `zones_for_model`.
+    A model that forecast the zones itself (`own`, the zone renewal
+    variants) gives its zone samples, for the hub's zones. Otherwise the
+    zones come from `zones_for_model`.
     """
+    if own is not None:
+        codes = set(hub_zones(hub_config))
+        return own.loc[own["location"].isin(codes)].reset_index(drop=True), ""
     try:
         daily = load_daily_zones(args.data)
     except OSError:
@@ -1100,10 +1106,15 @@ def _nowcast(args: argparse.Namespace) -> int:
             config = get_config(args.config)
             result = run_forecast(config, task, args.fit)
         else:
-            samples = get_model(args.model).forecast(task)
+            model = get_model(args.model)
+            samples = model.forecast(task)
             check_samples(samples, task)
-            result = Forecast(samples)
-        zones, zone_note = _zones(args, task, result.samples, hub_config)
+            result = Forecast(
+                samples, zones=getattr(model, "zone_samples", None)
+            )
+        zones, zone_note = _zones(
+            args, task, result.samples, hub_config, result.zones
+        )
         if zone_note:
             handled.append(zone_note)
         table = to_hub_table(

@@ -54,36 +54,48 @@ def province_centres() -> pd.DataFrame:
     return pd.read_csv(CENTRES, comment="#")
 
 
-def zone_table() -> pd.DataFrame:
+def zone_table(locations: tuple[str, ...] | None = None) -> pd.DataFrame:
     """Health zone populations and centres, as a locations table.
 
     The hub zones the map lacks (19 of 519, none with a case so far) take
     their province's centre and the mean WorldPop count of its mapped
-    zones.
+    zones, or the median zone's where none of its zones are mapped.
+
+    Parameters
+    ----------
+    locations : tuple of str, optional
+        Zones to return, in order. Defaults to every zone in the file.
 
     Returns
     -------
     pandas.DataFrame
-        Columns `location`, `population`, `latitude` and `longitude`, one
-        row per hub zone in the file or in `province_centres()`'s
-        provinces.
+        Columns `location`, `population`, `latitude` and `longitude`.
     """
     zones = pd.read_csv(ZONE_CENTRES, comment="#").rename(
         columns={"worldpop": "population"}
     )
-    return zones.loc[:, ["location", "population", "latitude", "longitude"]]
+    zones = zones.loc[:, ["location", "population", "latitude", "longitude"]]
+    if locations is None:
+        return zones
+    return _zone_rows(tuple(locations), zones.set_index("location"))
 
 
-def _zone_rows(locations: tuple[str, ...]) -> pd.DataFrame:
+def _zone_rows(
+    locations: tuple[str, ...], zones: pd.DataFrame | None = None
+) -> pd.DataFrame:
     """Zone table rows for some zones, with the province fallback."""
-    zones = zone_table().set_index("location")
+    if zones is None:
+        zones = zone_table().set_index("location")
     missing = [z for z in locations if z not in zones.index]
     if missing:
         provinces = province_centres().set_index("location")
         by_province = zones.groupby(zones.index.str[:5])["population"].mean()
         extra = pd.DataFrame(
             {
-                "population": [by_province.get(z[:5], np.nan) for z in missing],
+                "population": [
+                    by_province.get(z[:5], zones["population"].median())
+                    for z in missing
+                ],
                 "latitude": [provinces.loc[z[:5], "latitude"] for z in missing],
                 "longitude": [
                     provinces.loc[z[:5], "longitude"] for z in missing
@@ -92,7 +104,7 @@ def _zone_rows(locations: tuple[str, ...]) -> pd.DataFrame:
             index=pd.Index(missing, name="location"),
         )
         zones = pd.concat([zones, extra])
-    return zones.reindex(list(locations))
+    return zones.reindex(list(locations)).reset_index()
 
 
 def place_distances(centres: pd.DataFrame) -> np.ndarray:
