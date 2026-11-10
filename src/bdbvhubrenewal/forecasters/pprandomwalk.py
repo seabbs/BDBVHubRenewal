@@ -42,9 +42,12 @@ the likelihood and their ancestors are latent centres.
   It is fitted at the origin and at each earlier release, whose nowcasts
   give the errors of the observation model.
 - **Walk spread.** $\log \sigma_n$ pooled, with the weekly changes of
-  $\log(1 + y)$ up to the start week normal with that spread.
-  A change between two weeks with no cases is at the walk's floor and
-  says nothing about its spread, so it is left out.
+  $\log(1 + y)$ up to the start week normal with variance
+  $\sigma_n^2 + v(y_{t-1}) + v(y_t)$, the walk's step plus the
+  delta-method Poisson noise of `walk.walk_noise`, as in
+  `randomwalknowcast`, whose walk draws Poisson counts on top.
+  A change between two weeks with no cases has no noise, so its density
+  is unbounded as the spread falls to 0, and it is left out.
 - **Nowcast uncertainty.** $\log \phi_{n,k}$ and $\log b_{n,k}$ pooled by
   weeks back $k$, with the new reports negative binomial on the count
   nowcast to come and the removals Poisson on the count reported, as
@@ -86,8 +89,9 @@ from bdbvhubrenewal.forecasters.chain import (
 )
 from bdbvhubrenewal.forecasters.obs import MAX_SIZE
 from bdbvhubrenewal.forecasters.randomwalk import RandomWalkNowcast
+from bdbvhubrenewal.forecasters.walk import walk_noise
 
-__all__ = ["PPRandomWalkNowcast", "Sampler", "Tree"]
+__all__ = ["PPRandomWalkNowcast", "Sampler", "Tree", "walk_data"]
 
 MIN_SIZE = 0.1
 """Lower bound of `fit_nb`'s size, kept for the plugged-in sizes."""
@@ -249,6 +253,7 @@ def delay_model(
 def spread_model(
     tree: Tree,
     changes: np.ndarray,
+    noise: np.ndarray,
     seen: np.ndarray,
     added: np.ndarray,
     remaining: np.ndarray,
@@ -265,7 +270,7 @@ def spread_model(
     with numpyro.handlers.mask(mask=leaf[:, None] & seen):
         numpyro.sample(
             "walk_obs",
-            dist.Normal(0.0, jnp.exp(log_sigma)[:, None]),
+            dist.Normal(0.0, jnp.sqrt(jnp.exp(2 * log_sigma)[:, None] + noise)),
             obs=changes,
         )
     fit = leaf[None, :, None] & valid & (remaining > 0)
@@ -325,6 +330,40 @@ def _run(
             for i, t in enumerate(np.median(np.asarray(value), axis=0)):
                 info[f"{name}_{i + 1}"] = float(t)
     return {k: np.asarray(v) for k, v in flat.items()}, info
+
+
+def walk_data(origin: Origin) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Return the walk spread's data, padded to one width.
+
+    Parameters
+    ----------
+    origin : Origin
+        The fit, for the reported counts and start weeks.
+
+    Returns
+    -------
+    tuple of numpy.ndarray
+        The weekly changes of log(1 + y) (`chain.walk_changes`), their
+        Poisson noise variances (`walk.walk_noise`) and where each place
+        has a change that enters the fit, each `[L, N]`. A change between
+        two weeks with no cases has no Poisson noise, so its density is
+        unbounded as the spread falls to 0, and it is left out.
+    """
+    settings = origin.settings
+    diffs = walk_changes(origin.reported, origin.start, settings)
+    width = max(max(d.size for d in diffs), 1)
+    changes = np.zeros((len(diffs), width))
+    noise = np.zeros((len(diffs), width))
+    seen = np.zeros((len(diffs), width), bool)
+    for n, d in enumerate(diffs):
+        lo = max(int(origin.start[n]) - settings.walk_weeks + 1, 0)
+        y = origin.reported[n, lo : int(origin.start[n]) + 1]
+        changes[n, : d.size] = d
+        noise[n, : d.size] = walk_noise(y)
+        # A change from 0 to 0 has no Poisson noise, so its normal density
+        # is unbounded as the spread falls to 0. It is left out.
+        seen[n, : d.size] = (y[1:] > 0) | (y[:-1] > 0)
+    return changes, noise, seen
 
 
 def _median_of(tree: Tree, draws: dict[str, np.ndarray], name: str) -> Any:
@@ -426,15 +465,7 @@ class PPRandomWalkNowcast(RandomWalkNowcast):
         the walk spread is fitted.
         """
         snap, settings = origin.snap, origin.settings
-        diffs = walk_changes(origin.reported, origin.start, settings)
-        width = max(max(d.size for d in diffs), 1)
-        changes = np.zeros((len(diffs), width))
-        seen = np.zeros((len(diffs), width), bool)
-        for n, d in enumerate(diffs):
-            lo = max(int(origin.start[n]) - settings.walk_weeks + 1, 0)
-            y = origin.reported[n, lo : int(origin.start[n]) + 1]
-            changes[n, : d.size] = d
-            seen[n, : d.size] = (y[1:] > 0) | (y[:-1] > 0)
+        changes, noise, seen = walk_data(origin)
         if delay is None:
             n_k = weeks_back(snap, origin.o, settings.max_delay)
             empty = np.zeros((0, len(snap.locations), n_k))
@@ -447,6 +478,7 @@ class PPRandomWalkNowcast(RandomWalkNowcast):
             self.sampler,
             tree=tree,
             changes=changes,
+            noise=noise,
             seen=seen,
             added=err.added,
             remaining=err.remaining,
