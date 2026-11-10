@@ -116,6 +116,8 @@ def test_a_week_nowcast_counts_its_unobserved_days_as_unreported(
     snap = snapshot_arrays(daily, "2026-10-17", provinces)
     origin = build_origin(snap, Settings(), errors=False)
     seen = origin.complete >= 0.05
+    # The first week starts with the data, so it has fewer than 7 days.
+    seen[:, 0] = False
     # The nowcast of a week is at least its reported count over its share
     # reported, the share over all 7 days.
     low = origin.reported / np.where(seen, origin.complete, 1.0)
@@ -135,7 +137,7 @@ def test_every_release_with_a_pair_gives_a_retrospective(
 
 def test_new_reports_minus_removals_is_the_realised_change(snap24) -> None:
     errors = retro_errors(snap24, 3, Settings())
-    later = weekly_sums(snap24, 3, upto=int(snap24.cut[2]))
+    later = weekly_sums(snap24, 3)
     cols = snap24.cut_week(2) - np.arange(errors.valid.shape[2])
     net = errors.added[0] - errors.removed[0]
     want = later[:, cols] - errors.reported[0]

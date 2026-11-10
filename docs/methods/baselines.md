@@ -37,7 +37,7 @@ flowchart TD
     OBS["Observation model<br/>by weeks back k<br/>size φ<sub>p,k</sub>, removal b<sub>p,k</sub>"]
     X["Nowcast draw X<sub>p,i</sub>(w)<br/>max(0, Y<sub>p,o</sub> + A − B)<br/>A ~ NB(μ<sub>p</sub> − Y<sub>p,o</sub>, φ<sub>p,k</sub>)<br/>B ~ Poisson(b<sub>p,k</sub> Y<sub>p,o</sub>)"]
     SIG["Walk spread σ<sub>p</sub><br/>changes in log(1 + Y<sub>p,o</sub>)"]
-    W["Local level on log(1 + λ<sub>i</sub>)<br/>from X<sub>p,i</sub>(w<sub>0</sub>), updated by<br/>the reported counts after w<sub>0</sub><br/>places with no recent case 0<br/>until an introduction<br/>Poisson counts"]
+    W["Walk on log(1 + λ<sub>i</sub>)<br/>from X<sub>p,i</sub>(w<sub>0</sub>), the latest week<br/>at least 5% reported<br/>places with no recent case 0<br/>until an introduction<br/>Poisson counts"]
     NAT["National = sum of provinces<br/>sample by sample"]
 
     SNAP --> PAIR
@@ -215,7 +215,7 @@ $$
 
 Steps are summed within a sample, so each sample is one trajectory.
 `randomwalk` starts from the latest complete week ([below](#start-from-the-latest-complete-week)).
-`randomwalknowcast` starts from the week holding $c_o$ ([below](#start-from-the-nowcast)).
+`randomwalknowcast` starts from its latest nowcast week ([below](#start-from-the-nowcast)).
 
 $\sigma_p$ comes from the weekly changes $\Delta_w = \log\{1 + Y_{p,o}(w)\} - \log\{1 + Y_{p,o}(w - 1)\}$ over the 9 weeks ending at the latest complete week, so up to 8 changes.
 Each change carries Poisson noise, and the walk draws Poisson counts on top, so the noise is taken out of the spread:
@@ -253,20 +253,16 @@ If any place has no such week, `randomwalk` gives no forecast for the vintage.
 $x_i = Y_{p,o}(w_0)$ for every sample.
 Weeks up to $w_0$ are the reported counts.
 Later weeks with data are walk draws, floored at the reported count.
-Where no week reaches 0.95, `randomwalknowcast` takes the first week as the latest complete week.
 
 ## Start from the nowcast
 
 `randomwalknowcast` walks on from each sample's own nowcast.
 
-1. The start week $w_0$ is the latest full week that is at least 5% reported and has at least 5 cases.
-   A place with no case in the 9 weeks to $c_o$, or with no such week, starts at the latest complete week instead.
-   After it the place stays at 0 until an introduction, as above, floored at the counts reported.
-2. Weeks up to the week holding $c_o$ are the nowcast draws $X_{p,i}(w)$.
-3. In sample $i$ the walk starts from $X_{p,i}(w_0)$.
-4. If the week holding $c_o$ is partial, its nowcast covers only its days up to $c_o$.
-   Its later days add a Poisson draw with the walk's rate that week times the share of the week they make up.
-5. Weeks after the one holding $c_o$ are the walk's draws.
+1. A week is nowcast when its share reported $\pi_p(w)$ ([above](#start-from-the-latest-complete-week)) is at least 5%.
+   Days of the week not yet observed count as unreported, so a partial week is nowcast whole.
+2. Weeks up to the latest nowcast week $w_0$ are the nowcast draws $X_{p,i}(w)$.
+3. In sample $i$ the walk starts from $X_{p,i}(w_0)$, and later weeks are the walk's draws.
+4. A place with no case in the 9 weeks to $c_o$, or with no week at least 5% reported, starts at the latest complete week instead and draws introductions.
 
 ## Health zones
 
