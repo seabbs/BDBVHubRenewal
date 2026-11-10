@@ -135,3 +135,60 @@ Compare four forecasts on the same backtest origins: pure bottom-up, current `re
 - WIS, and 50% and 90% coverage, per level (zone, province, national) and per week horizon.
 - ESS per province and origin for method 1.
 - A coherence check (`check_zone_coherence`) on every output.
+
+## Prototype on randomwalknowcast
+
+Scripts: `draws.py` draws the samples and `buis.py` reconciles and scores them.
+Tables are in `results/`.
+Origins are 2026-10-17, 10-24 and 11-01, scored on later releases in the release backtest, and 11-08 for intervals only.
+The direct province forecast has 100 draws.
+The zone forecast runs on the zone task with a pool of 2000 draws, and 100 zone blocks are resampled per province.
+Only 8 provinces have zones with cases (BU, HU, IT, NK, NU, SK, SU, TO).
+The other 18 keep their direct forecast in every method.
+In this model zones are independent across provinces, as are the direct provinces, so per-province weighting is the exact joint weighting.
+National is the sum.
+
+Methods compared:
+- `direct`, the direct province forecast, which is also the province margin of the current `reconcile_zones`.
+- `zonesum`, the plain sum of zone draws.
+- `buis_joint_t{τ}`, weighting on all 8 weeks with a product of weekly NB pmfs, tempered by τ.
+- `buis_summary`, weighting on two summaries, the reference week and the total of the 3 forecast weeks.
+- `buis_ess`, the largest τ in {1, 0.5, 0.25, 0.1} with ESS ≥ 200.
+
+**ESS (of 2000)** at τ = 1 for the provinces with cases ranged from 20 (TO, 11-01) to 1549 (HU, 11-08), and was mostly 100–700.
+At 100 draws these would be about 1–35, so the larger zone pool matters.
+Weighting on the summary or at τ = 0.5 roughly doubles ESS (`results/ess.csv`).
+
+**Scores**, reported target, mean over the 3 scored origins (n = 884 province and 34 national cells):
+
+| Model | Province WIS | Province log WIS | Province 90% | National WIS | National log WIS | National 50% / 90% |
+|---|---|---|---|---|---|---|
+| direct | 1.93 | 0.033 | 0.96 (90%) | 30.2 | 0.098 | 0.41 / 0.74 |
+| zonesum | 3.18 | 0.042 | 0.94 (90%) | 46.7 | 0.153 | 0.32 / 0.62 |
+| buis_joint_t1 | 2.49 | 0.039 | 0.93 (90%) | 37.4 | 0.123 | 0.24 / 0.50 |
+| buis_joint_t0.5 | 2.47 | 0.038 | 0.93 (90%) | 34.8 | 0.117 | 0.35 / 0.62 |
+| buis_summary | 2.59 | 0.038 | 0.93 (90%) | 33.4 | 0.115 | 0.44 / 0.68 |
+| buis_ess | 2.57 | 0.039 | 0.93 (90%) | 35.1 | 0.117 | 0.32 / 0.65 |
+
+Log energy and log variogram scores (provinces by weeks, reported target) follow the same order: direct 1.46 / 412, BUIS 1.63–1.71 / 418–437, zonesum 1.84 / 474.
+On the complete-week target BUIS and direct are within 2% of each other on both.
+
+**11-08 intervals** (`results/intervals_2026-11-08.csv`), 90% for the week ending 2026-11-28:
+
+| | direct | zonesum | buis_joint_t1 | buis_summary |
+|---|---|---|---|---|
+| CD-IT | 178–345 | 272–688 | 212–339 | 227–371 |
+| CD-NK | 89–974 | 205–888 | 143–392 | 170–486 |
+| CD (national) | 361–1279 | 641–1404 | 436–726 | 504–819 |
+
+**What this shows.**
+Trajectory BUIS is easy to run, coherent and path-preserving, and it improves on plain zone sums by about 20% in WIS at both levels.
+It does not beat the direct province forecast here.
+The zone sums run well above the direct forecasts in the forecast weeks, so the two densities overlap only in the zone sums' lower tail.
+Conditioning then gives intervals narrower than either input, and national 90% coverage falls to 0.50 at τ = 1.
+Tempering and summary weighting recover some width and coverage but not the direct forecast's.
+So conditioning cannot fix a biased bottom level.
+It is worth using only when the zone model is about as good as the province model on its own.
+For randomwalknowcast, keeping the province forecast and allocating down (`reconcile_zones`) is the better choice.
+The test to rerun is the same comparison with the zone-level renewal or generative models once they exist.
+Three origins and 34 national cells are few, so treat these as indicative.
