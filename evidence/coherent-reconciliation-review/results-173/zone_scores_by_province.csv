@@ -1,0 +1,13 @@
+location,model,wis,log_wis,coverage_50,coverage_90
+CD-HU,buis_joint_t1,0.54,0.144,0.79,0.89
+CD-HU,ranked,0.582,0.148,0.794,0.912
+CD-HU,samplek,0.576,0.148,0.794,0.915
+CD-IT,buis_joint_t1,1.371,0.174,0.725,0.892
+CD-IT,ranked,1.388,0.174,0.77,0.922
+CD-IT,samplek,1.372,0.174,0.766,0.92
+CD-NK,buis_joint_t1,2.706,0.279,0.61,0.748
+CD-NK,ranked,2.529,0.277,0.627,0.776
+CD-NK,samplek,2.559,0.275,0.632,0.778
+CD-TO,buis_joint_t1,0.539,0.188,0.718,0.798
+CD-TO,ranked,0.535,0.181,0.752,0.849
+CD-TO,samplek,0.518,0.177,0.756,0.857

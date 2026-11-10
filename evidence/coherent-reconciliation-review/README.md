@@ -202,3 +202,87 @@ It is worth using only when the zone model is about as good as the province mode
 For randomwalknowcast, keeping the province forecast and allocating down (`reconcile_zones`) is the better choice.
 The test to rerun is the same comparison with the zone-level renewal or generative models once they exist.
 Three origins and 34 national cells are few, so treat these as indicative.
+
+## Which levels each method reconciles
+
+| Method | Zones to provinces | Provinces to national | Script |
+|---|---|---|---|
+| `direct` (main) | Top down, `reconcile_zones` with sample-k pairing | Sum of provinces | `buis.py` |
+| `zonesum` | Bottom up, plain sum | Sum | `buis.py` |
+| `buis_*` | BUIS: zone sums weighted by the direct province density | Sum | `buis.py` |
+| `ranked` | Top down, `reconcile_zones` with rank pairing | Sum | `pairing.py` |
+| `sum` | Not scored (zones follow by `reconcile_zones`) | Sum of direct provinces | `national.py` |
+| `direct_national` | Not scored | None: national is its own forecast, not coherent | `national.py` |
+| `natbuis_*` | Not scored (zones would follow resampled provinces) | BUIS: province sums weighted by the direct national density | `national.py` |
+
+## Rerun with zone draws from #173
+
+`draws.py`, `buis.py` and `pairing.py` rerun on #173's branch (`start-window`, 4c9bc44f), with direct provinces from the same branch (`results-173/`).
+The start-week fix removes most of the zone-sum bias.
+Reported target, mean over 3 origins:
+
+| Model | Province WIS | Province log WIS | Province 50% / 90% | National WIS | National log WIS | National 50% / 90% |
+|---|---|---|---|---|---|---|
+| direct | 1.88 | 0.030 | 0.92 / 0.97 | 31.7 | 0.109 | 0.38 / 0.77 |
+| zonesum | 1.98 | 0.032 | 0.90 / 0.95 | 28.2 | 0.091 | 0.38 / 0.62 |
+| buis_joint_t1 | 2.24 | 0.034 | 0.89 / 0.93 | 41.6 | 0.146 | 0.12 / 0.41 |
+| buis_joint_t0.1 | 2.02 | 0.031 | 0.90 / 0.95 | 30.4 | 0.099 | 0.35 / 0.56 |
+| buis_summary | 2.10 | 0.032 | 0.89 / 0.95 | 34.3 | 0.117 | 0.29 / 0.53 |
+
+Log energy / log variogram, provinces by weeks: direct 1.31 / 350, zonesum 1.36 / 390, BUIS 1.33–1.44 / 348–362.
+National: zonesum 0.29 / 0.60, direct 0.34 / 0.82, BUIS 0.31–0.44 / 0.61–0.83.
+ESS for the provinces with cases rose to mostly 500–1300 of 2000 at τ = 1.
+The zone sum now gives the best national forecast, but its national 90% coverage is 0.62.
+BUIS still makes things worse at every τ, and more so the more weight the province density gets.
+With the bias gone the remaining effect is the narrowing: multiplying two densities fitted to the same counts gives intervals narrower than either (national 90% interval for 11-28 at 11-08 is 449–718 with BUIS against 352–1011 direct and 583–1262 zone sum).
+
+## Method 2: rank pairing (zones, #173 draws)
+
+Zone scores on the reported target over 2226 zone-week cells (`results-173/zone_*.csv`):
+
+| Model | Zone WIS | Zone log WIS | Zone 50% / 90% | Log energy within province (mean) | Log variogram within province (mean) |
+|---|---|---|---|---|---|
+| samplek (current) | 1.340 | 0.180 | 0.76 / 0.88 | 1.755 | 734 |
+| ranked | 1.342 | 0.180 | 0.76 / 0.88 | 1.755 | 730 |
+| buis_joint_t1 | 1.373 | 0.181 | 0.73 / 0.86 | 1.753 | 720 |
+
+Rank pairing makes no material difference.
+Variogram scores improve by under 1%, and only in IT and HU.
+Shares within a province vary little across zone draws, so which zone draw a province draw is paired with hardly changes the split.
+
+## BUIS at the top level: national
+
+`national.py` on the `national-direct` branch (2463095c), randomwalknowcast (`results-national/`).
+Provinces are drawn independently, so 20000 joint province draws are made from a 2000-draw pool.
+Their sums are weighted by the direct national density and 100 joint draws are resampled.
+ESS was 860–13000 of 20000 at τ = 1, so weight collapse is not the issue.
+Reported target, mean over 3 origins:
+
+| Model | Province WIS | Province log WIS | Province 90% | National WIS | National log WIS | National 50% / 90% |
+|---|---|---|---|---|---|---|
+| sum | 1.97 | 0.035 | 0.96 | 30.9 | 0.100 | 0.38 / 0.74 |
+| direct_national | (as sum) | | | 34.8 | 0.120 | 0.50 / 0.68 |
+| natbuis_t1 | 1.99 | 0.034 | 0.96 | 36.9 | 0.117 | 0.24 / 0.65 |
+| natbuis_t0.5 | 2.08 | 0.036 | 0.96 | 35.1 | 0.114 | 0.24 / 0.62 |
+| natbuis_t0.1 | 1.99 | 0.034 | 0.96 | 33.5 | 0.108 | 0.29 / 0.68 |
+| natbuis_summary | 2.09 | 0.035 | 0.95 | 35.5 | 0.118 | 0.29 / 0.65 |
+
+`natbuis_ess` chose τ = 1 at every origin, so it repeats `natbuis_t1`.
+Log energy / log variogram, national weeks: sum 0.33 / 0.84, direct 0.37 / 0.86, natbuis 0.35–0.37 / 0.75–0.87.
+Provinces by weeks: sum 1.52 / 439, natbuis 1.51–1.57 / 410–440.
+90% intervals for CD at 11-08, week ending 11-28: sum 392–1262, direct national 392–948, natbuis_t1 455–725, natbuis_t0.1 391–884, natbuis_summary 433–852.
+
+Conditioning the province sum on the direct national does not combine the best of both.
+National WIS sits between the two inputs at best (τ = 0.1) and is worse than the sum, and coverage falls.
+The variogram score improves at both levels, so the weighting does pick province-sum paths whose week-to-week shape matches the direct national better.
+The upper tail of the sum, which the direct national cuts off, is where the later releases landed often enough that dropping it costs more than the sharper centre gains.
+
+## Overall
+
+With randomwalknowcast, conditioning by BUIS at either level gave worse WIS and coverage than the better of its inputs, on both the main and #173 draws.
+Its consistent gain is in the variogram score, that is the joint shape over weeks.
+The likely cause is that both inputs come from the same counts and similar models, so conditioning counts the same information twice and over-sharpens.
+Tempering towards τ = 0 recovers the bottom-up input, so the best τ here is near 0.
+For this model the simple sums (zones to provinces on #173, provinces to national) are the better coherent forecasts.
+BUIS may still help where the two levels carry different information, such as a renewal province model against random-walk zones.
+Three origins and 34 national cells are few, so treat all of this as indicative.
