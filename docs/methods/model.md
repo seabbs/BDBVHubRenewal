@@ -368,10 +368,11 @@ $$
 $r_z$ is the zone's onsets over the 2 weeks before the vintage and $l_z$ those over the 16 weeks before it.
 Recent shares are shrunk towards longer-run shares by $n_0 = 100$ pseudo-cases.
 The floor $\chi_0 = 1/2$ gives a zone with no recent cases a small share, if the zone has had a case.
-A zone with no case at the vintage has $\chi_0 = 0$, and so gets no cases.
+A zone with no case at the vintage has a tenth of the floor, $\chi_0 = 1/20$.
 The models have no zone-level transmission: importation through $W$ and the introduction layer act between provinces.
-So a province sample holds no information on which new zones its cases reach, and its cases stay in the zones that have had them.
-New zones are seeded only in a province with no case in any zone, where every zone has $\chi_0 = 1/2$ and the zones share equally.
+So a province sample holds no information on which new zones its cases reach.
+New zones in a province with cases are still reached, 6 in the 8 weeks to 10-03, and the small floor lets a province's cases reach them at about that rate.
+In a province with no case in any zone, every zone has $\chi_0 = 1/2$ and the zones share equally.
 Province samples are rounded.
 Each zone keeps its published count and the rest of the province sample $Y^{(i)}(w)$ is split,
 

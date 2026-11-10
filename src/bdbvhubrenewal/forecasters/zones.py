@@ -20,9 +20,11 @@ vintage and $l_z$ those in the `longer_weeks` weeks before it.
 So recent shares are shrunk towards the longer run with strength
 $\kappa$ (`prior_strength`), and the floor $a$ (`floor`) gives a zone
 with no recent cases a small share, so it gets near-zero draws.
-The floor is $a$ for a zone with a case at the vintage and 0 for one
-with none, which so gets no cases: the province samples hold no
-information on which new zones a case may reach.
+The floor is $a$ for a zone with a case at the vintage and $b$
+(`unseen_floor`), a tenth of it, for one with none.
+The models act between provinces, so a province sample says nothing on
+which new zones its cases reach, but new zones in a province with cases
+do get them, and the small floor lets them.
 In a province with no case in any zone, every zone has the floor $a$,
 so the zones share equally.
 A province sample $Y^{(k)}(w)$ keeps what each zone has published and
@@ -122,12 +124,16 @@ class ZoneAllocator:
     floor : float
         Pseudo-cases $a$ added to the longer-run count of every zone with
         a case at the vintage, or of every zone in a province with none.
+    unseen_floor : float
+        Pseudo-cases $b$ added to the longer-run count of a zone with no
+        case at the vintage, in a province with some.
     """
 
     recent_weeks: int = 2
     longer_weeks: int = 16
     prior_strength: float = 100.0
     floor: float = 0.5
+    unseen_floor: float = 0.05
 
     def alpha(
         self, counts: pd.DataFrame, zones: tuple[str, ...], vintage: str
@@ -155,7 +161,9 @@ class ZoneAllocator:
         end = pd.Timestamp(as_date(vintage))
         past = counts.loc[pd.to_datetime(counts["target_end_date"]) <= end]
         seen = np.isin(zones, past.loc[past["total"] > 0, "location"])
-        floor = self.floor * (seen if seen.any() else np.ones_like(seen))
+        floor = np.where(
+            seen | ~seen.any(), self.floor, self.unseen_floor
+        ).astype(float)
         prior = (lw + floor) / (lw + floor).sum()
         return np.asarray(r + self.prior_strength * prior)
 
