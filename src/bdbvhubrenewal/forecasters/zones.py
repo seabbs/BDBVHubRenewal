@@ -376,6 +376,16 @@ def reconcile_zones(
                     .fillna(0.0)
                     .to_numpy()
                 )
+        # Experiment: pair each province path with the joint zone draw
+        # whose summed path is closest (one-to-one), then split as before.
+        from scipy.optimize import linear_sum_assignment
+
+        zsum = np.log1p(weight.sum(axis=-1))  # [S, W]
+        cost = np.abs(np.log1p(totals)[:, None, :] - zsum[None, :, :]).sum(
+            axis=-1
+        )
+        _, pick = linear_sum_assignment(cost)
+        weight = weight[pick]
         fallback = allocator.alpha(counts, mine, task.vintage)
         empty = weight.sum(axis=-1) <= 0
         weight[empty] = fallback
