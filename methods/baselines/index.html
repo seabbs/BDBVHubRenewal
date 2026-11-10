@@ -2179,7 +2179,7 @@ Both run at province and zone level (<a href="#health-zones">Health zones</a>), 
 <ol>
 <li>follows baselinenowcast, through a JAX port of the R package with one named extension for release snapshots (<a href="#delay">Delay</a>);</li>
 <li>has an observation model for the nowcast as in baselinenowcast, negative binomial new reports on the count still to come, fitted from retrospective nowcasts (<a href="#nowcast">Nowcast</a>);</li>
-<li>nowcasts every week at least 5% reported, and forecasts the later weeks (<a href="#start-from-the-nowcast">Start from the nowcast</a>);</li>
+<li>nowcasts every week up to the cut-off and completes a partial cut-off week from a walk that starts at the latest full week at least 5% reported with at least 5 cases (<a href="#start-from-the-nowcast">Start from the nowcast</a>);</li>
 <li>continues each nowcast trajectory with a random walk on <span class="arithmatex">\(\log(1 + y)\)</span> (<a href="#forecast">Forecast</a>);</li>
 <li>takes the walk's variance net of Poisson noise (<a href="#forecast">Forecast</a>);</li>
 <li>shares the delay, size and walk variance with a parent where a place has fewer than 10 cases a week (<a href="#own-or-pooled-estimates">Own or pooled estimates</a>).</li>
@@ -2199,7 +2199,7 @@ Both run at province and zone level (<a href="#health-zones">Health zones</a>), 
     OBS["Observation model&lt;br/&gt;by weeks back k&lt;br/&gt;size φ&lt;sub&gt;p,k&lt;/sub&gt;, removal b&lt;sub&gt;p,k&lt;/sub&gt;"]
     X["Nowcast draw X&lt;sub&gt;p,i&lt;/sub&gt;(w)&lt;br/&gt;max(0, Y&lt;sub&gt;p,o&lt;/sub&gt; + A − B)&lt;br/&gt;A ~ NB(μ&lt;sub&gt;p&lt;/sub&gt; − Y&lt;sub&gt;p,o&lt;/sub&gt;, φ&lt;sub&gt;p,k&lt;/sub&gt;)&lt;br/&gt;B ~ Poisson(b&lt;sub&gt;p,k&lt;/sub&gt; Y&lt;sub&gt;p,o&lt;/sub&gt;)"]
     SIG["Walk spread σ&lt;sub&gt;p&lt;/sub&gt;&lt;br/&gt;changes in log(1 + Y&lt;sub&gt;p,o&lt;/sub&gt;)"]
-    W["Local level on log(1 + λ&lt;sub&gt;i&lt;/sub&gt;)&lt;br/&gt;from X&lt;sub&gt;p,i&lt;/sub&gt;(w&lt;sub&gt;0&lt;/sub&gt;), updated by&lt;br/&gt;the reported counts after w&lt;sub&gt;0&lt;/sub&gt;&lt;br/&gt;places with no recent case 0&lt;br/&gt;until an introduction&lt;br/&gt;Poisson counts"]
+    W["Walk on log(1 + λ&lt;sub&gt;i&lt;/sub&gt;)&lt;br/&gt;from each sample's completed&lt;br/&gt;cut-off week&lt;br/&gt;places with no recent case 0&lt;br/&gt;until an introduction&lt;br/&gt;Poisson counts"]
     NAT["National = sum of provinces&lt;br/&gt;sample by sample"]
 
     SNAP --&gt; PAIR
@@ -2347,7 +2347,7 @@ z_{i,j} \sim \mathcal{N}(0, 1),
 \]</div>
 <p>Steps are summed within a sample, so each sample is one trajectory.
 <code>randomwalk</code> starts from the latest complete week (<a href="#start-from-the-latest-complete-week">below</a>).
-<code>randomwalknowcast</code> starts from the week holding <span class="arithmatex">\(c_o\)</span> (<a href="#start-from-the-nowcast">below</a>).</p>
+<code>randomwalknowcast</code> starts from each sample's completed week holding <span class="arithmatex">\(c_o\)</span> (<a href="#start-from-the-nowcast">below</a>).</p>
 <p><span class="arithmatex">\(\sigma_p\)</span> comes from the weekly changes <span class="arithmatex">\(\Delta_w = \log\{1 + Y_{p,o}(w)\} - \log\{1 + Y_{p,o}(w - 1)\}\)</span> over the 9 weeks ending at the latest complete week, so up to 8 changes.
 Each change carries Poisson noise, and the walk draws Poisson counts on top, so the noise is taken out of the spread:</p>
 <div class="arithmatex">\[
@@ -2383,16 +2383,15 @@ Weeks up to <span class="arithmatex">\(w_0\)</span> are the reported counts.
 Later weeks with data are walk draws, floored at the reported count.
 Where no week reaches 0.95, <code>randomwalknowcast</code> takes the first week as the latest complete week.</p>
 <h2 id="start-from-the-nowcast">Start from the nowcast<a class="headerlink" href="#start-from-the-nowcast" title="Permanent link">&para;</a></h2>
-<p><code>randomwalknowcast</code> walks on from each sample's own nowcast.</p>
+<p><code>randomwalknowcast</code> walks on from each sample's own completed week holding <span class="arithmatex">\(c_o\)</span>.</p>
 <ol>
-<li>The start week <span class="arithmatex">\(w_0\)</span> is the latest full week that is at least 5% reported and has at least 5 cases.
-   A place with no case in the 9 weeks to <span class="arithmatex">\(c_o\)</span>, or with no such week, starts at the latest complete week instead.
+<li>Weeks before the one holding <span class="arithmatex">\(c_o\)</span> are the nowcast draws <span class="arithmatex">\(X_{p,i}(w)\)</span>.</li>
+<li>If the week holding <span class="arithmatex">\(c_o\)</span> is full, its value in sample <span class="arithmatex">\(i\)</span> is its nowcast draw.</li>
+<li>If it is partial, its nowcast covers its days up to <span class="arithmatex">\(c_o\)</span>, and its later days add <span class="arithmatex">\(\text{Poisson}(\lambda_i \cdot m / 7)\)</span>, with <span class="arithmatex">\(m\)</span> the missing days.
+   <span class="arithmatex">\(\lambda_i\)</span> is the walk's rate for that week, walked by sample <span class="arithmatex">\(i\)</span> from its nowcast <span class="arithmatex">\(X_{p,i}(w_0)\)</span> of the start week <span class="arithmatex">\(w_0\)</span>, the latest full week that is at least 5% reported and has at least 5 cases.</li>
+<li>The weeks after it are the walk's draws from the sample's completed value of that week, <span class="arithmatex">\(\log(1 + y)\)</span> plus the walk's steps.</li>
+<li>A place with no case in the 9 weeks to <span class="arithmatex">\(c_o\)</span>, or with no start week, starts at the latest complete week instead.
    After it the place stays at 0 until an introduction, as above, floored at the counts reported.</li>
-<li>Weeks up to the week holding <span class="arithmatex">\(c_o\)</span> are the nowcast draws <span class="arithmatex">\(X_{p,i}(w)\)</span>.</li>
-<li>In sample <span class="arithmatex">\(i\)</span> the walk starts from <span class="arithmatex">\(X_{p,i}(w_0)\)</span>.</li>
-<li>If the week holding <span class="arithmatex">\(c_o\)</span> is partial, its nowcast covers only its days up to <span class="arithmatex">\(c_o\)</span>.
-   Its later days add a Poisson draw with the walk's rate that week times the share of the week they make up.</li>
-<li>Weeks after the one holding <span class="arithmatex">\(c_o\)</span> are the walk's draws.</li>
 </ol>
 <h2 id="health-zones">Health zones<a class="headerlink" href="#health-zones" title="Permanent link">&para;</a></h2>
 <p><code>randomwalk</code> and <code>randomwalknowcast</code> run on each zone's own release snapshots in the same way as for provinces.
