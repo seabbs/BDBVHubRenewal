@@ -18,3 +18,4 @@ Scripts (each takes the scratch dir `S` first):
 - `diag_start.py` writes `stale-starts.csv`: zones whose walk starts 4 or more weeks before the cut-off.
 - `then_now.py` writes `then_now.csv` and `then_now.md`; `figs_then_now.py` draws `then-now.png`.
 - `figs3.py` draws one grid per model (`<model>.png`); `table.py` prints the flagged places of a model.
+- `*_fa04ff08.*`: the renewal models rechecked on the newer stored 11-08 fits (`fit-store` b12df214, fitted at fa04ff08).
