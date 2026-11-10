@@ -1,64 +1,89 @@
 # Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
-r"""`randomwalknowcast` with partially pooled estimates.
+r"""A generative random walk nowcast with partial pooling.
 
-`PPRandomWalkNowcast` (`pprandomwalknowcast`) is `randomwalknowcast`
-with its three estimates, the delay, the walk spread and the nowcast
-uncertainty, fitted in numpyro with partial pooling over the place
-hierarchy (country, province, zone) in place of the own-or-pooled rule
-of `pooling`.
-The nowcast draws, the walk and the zone reconciliation are those of
-`randomwalknowcast`.
+`PPRandomWalkNowcast` (`pprandomwalknowcast`) is one joint model of the
+expected final counts and the reporting delay, in the style of
+epinowcast, fitted with NUTS in numpyro to the hub's release snapshots.
+It is `randomwalknowcast`'s random walk on the log scale, with the
+nowcast made by the same model rather than by a chain ladder, and with
+the delay and the walk spread partially pooled over zones, provinces and
+the country.
 
-Each parameter $\theta$ of a place $n$ is its parent's plus a level
-offset,
+Each place $p$ the task forecasts is a leaf of the place hierarchy.
+A leaf with no case in the latest `walk_weeks` weeks is silent: it is
+not fitted and, as in `renewalsp`, takes `randomwalknowcast`'s draws,
+exactly 0 until an introduction and then its walk.
+Every other leaf is fitted.
+Its expected final count in hub week $w$ is $\lambda_{p,w}$, a random
+walk on the log scale from the first fitted week,
+
+$$
+\log \lambda_{p,w} = \log \lambda_{p,w-1} + \delta_{p,w},
+\qquad \delta_{p,w} \sim \mathcal{N}(0, \sigma_p^2),
+$$
+
+with the steps half centred (`CENTRING`).
+
+Each onset day $t$ of week $w(t)$ expects $\lambda_{p,w(t)} / 7$ cases.
+A case is reported $d$ days after onset, with $d$ a log-normal delay
+($\mu_p$, $s$) cut to whole days and capped at $D$, so the share of a
+day's final count reported by age $a$ is
+
+$$
+\pi_p(a) = \frac{F_p(a + 1)}{F_p(D + 1)}, \quad 0 \le a \le D,
+$$
+
+with $F_p$ the log-normal CDF, $\pi_p(a) = 1$ for $a \ge D$ and
+$\pi_p(-1) = 0$.
+Release $r$ has cut-off $c_r$, and day $t$ is $a_r(t) = c_r - t$ days old
+there.
+The new reports of day $t$ between the previous release that observes it
+and release $r$, or all reports by $r$ for the first release that does,
+are
+
+$$
+n_{p,r}(t) \sim \text{NB}\Big(
+  \tfrac{\lambda_{p,w(t)}}{7}\,
+  \big\{\pi_p(a_r(t)) - \pi_p(a_{r-1}(t))\big\},\ \phi
+\Big),
+$$
+
+so the data are right truncated by construction (`triangle`).
+Counts first go through `chain`'s preprocessing of downward revisions,
+baselinenowcast's `preprocess_negative_values`, so no increment is
+negative.
+Reports of a day after it was $D$ days old at an earlier release have no
+probability under the model and are left out, as the chain ladder of
+`randomwalknowcast` leaves out growth after $D$.
+
+$\mu$ and $\log \sigma$ of a place are its parent's plus a level offset
+(`Tree.sample`),
 
 $$
 \theta_n = \theta_{\mathrm{pa}(n)} + \tau_{\ell(n)} z_n,
 \qquad z_n \sim \mathcal{N}(0, 1),
-\qquad \tau_\ell \sim \mathcal{N}^+(0, 0.5^2),
+\qquad \tau_\ell \sim \mathcal{N}^+(0, 0.5^2).
 $$
 
-with $\ell(n)$ the level of $n$ (province or zone) and one $\tau$ per
-level for each parameter.
-A parent's counts are the sum of its children's, so for the walk spread
-and the nowcast uncertainty only the task's places, the leaves, enter
-the likelihood and their ancestors are latent centres.
+The delay scale $s$ and the dispersion $\phi$ are shared by all places.
+A parent's counts are the sum of its children's, so only the leaves
+enter the likelihood and their ancestors are latent centres.
 
-- **Delay.** $g_n(j) = \exp \eta_n(j)$ with $\eta$ pooled by age $j$.
-  The increment of each gap and age between the releases of a pair,
-  as `chain.delay_sums` gives it, is Poisson with mean
-  $\mathrm{den} \cdot (\exp \sum_{j \in \text{span}} g_n(j) - 1)$, the
-  model whose maximum likelihood estimate is the chain ladder.
-  As in `randomwalknowcast` (`chain.own_ages`), a place's own increments
-  at an age enter only where its denominator there, summed over the
-  pairs, is at least `Settings.min_level` cases, and the country's
-  always do.
-  Below that a day often has no cases at one release and some at the
-  next, which a factor cannot give, so the place's few days with cases
-  would speak for all of them and give too fast a delay.
-  Those ages take their parent's value, through the pooling.
-  A parent's increments are its children's summed, so a case at an age
-  where both fit their own enters the likelihood once for each level.
-  It is fitted at the origin and at each earlier release, whose nowcasts
-  give the errors of the observation model.
-- **Walk spread.** $\log \sigma_n$ pooled, with the weekly changes of
-  $\log(1 + y)$ up to the start week normal with variance
-  $\sigma_n^2 + v(y_{t-1}) + v(y_t)$, the walk's step plus the
-  delta-method Poisson noise of `walk.walk_noise`, as in
-  `randomwalknowcast`, whose walk draws Poisson counts on top.
-  A change between two weeks with no cases has no noise, so its density
-  is unbounded as the spread falls to 0, and it is left out.
-- **Nowcast uncertainty.** $\log \phi_{n,k}$ pooled by weeks back $k$,
-  with the new reports negative binomial on the count nowcast to come,
-  as in `obs`.
-
-Posterior medians are plugged into `randomwalknowcast`'s draws, so the
-posterior spread of the estimates does not reach the forecasts.
+The forecast takes one posterior draw for each sample.
+A week's final count is, for each of its days up to the cut-off, the
+count reported plus an NB draw of the rest, with mean
+$\lambda/7 \cdot \{1 - \pi(a_o)\}$, and for each later day an NB draw with
+mean $\lambda/7$.
+Weeks after the latest data week continue the walk from that draw's
+$\lambda$ with its $\sigma_p$, with counts NB with mean $\lambda$ and size
+$7 \phi$, the sum of seven days.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+import datetime as dt
+import time
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 import jax
@@ -66,69 +91,96 @@ import jax.numpy as jnp
 import numpy as np
 import numpyro
 import numpyro.distributions as dist
+import pandas as pd
+from jax.scipy.special import ndtr
 from numpyro.diagnostics import summary
+from numpyro.handlers import reparam
 from numpyro.infer import MCMC, NUTS, init_to_median
+from numpyro.infer.reparam import LocScaleReparam
 
-from bdbvhubrenewal.data.snapshots import SnapshotArrays, snapshot_arrays
+from bdbvhubrenewal.data.dates import as_date
+from bdbvhubrenewal.data.snapshots import (
+    SnapshotArrays,
+    snapshot_arrays,
+    weekly_sums,
+)
 from bdbvhubrenewal.forecasters.base import (
     ForecastTask,
     ModelUnavailableError,
     register_model,
 )
 from bdbvhubrenewal.forecasters.chain import (
-    DelayFit,
-    DelayFn,
-    Errors,
     MissingSnapshots,
-    Origin,
+    NoDelayPair,
     Settings,
-    build_origin,
-    delay_sums,
-    levels,
-    own_ages,
-    retro_errors,
-    walk_changes,
-    weeks_back,
+    _delay_counts,
+    _pairs_at,
 )
-from bdbvhubrenewal.forecasters.obs import MAX_SIZE
-from bdbvhubrenewal.forecasters.randomwalk import RandomWalkNowcast
-from bdbvhubrenewal.forecasters.walk import walk_noise
+from bdbvhubrenewal.forecasters.introductions import silent_places
+from bdbvhubrenewal.forecasters.randomwalk import (
+    RandomWalkNowcast,
+    _clear_caches,
+    frame,
+)
 
 __all__ = [
+    "NoRecentCases",
     "NotConverged",
     "PPRandomWalkNowcast",
+    "Posterior",
     "Sampler",
     "Tree",
-    "walk_data",
+    "Triangle",
+    "fit_posterior",
+    "reported_share",
+    "triangle",
 ]
+
+FIT_WEEKS = 16
+"""Hub weeks, ending at the cut-off week, that the walk is fitted over.
+
+These cover `randomwalknowcast`'s nine-week spread window and the six
+weeks a delay of 42 days reaches back.
+"""
+
+
+CENTRING = 0.5
+"""Centring of the walk steps, between 0 (non-centred) and 1 (centred).
+
+A large place's weekly counts pin its walk, which suits centred steps,
+and a place with few cases leaves it to the prior, which suits
+non-centred ones.
+In a trial at 11-08, with the dispersion then pooled, halfway gave 1
+divergent draw in 1500 where non-centred steps gave 12.
+"""
 
 
 class NotConverged(ModelUnavailableError):  # noqa: N818
-    """A pooled NUTS fit did not converge."""
+    """The NUTS fit did not converge."""
 
 
-MIN_SIZE = 0.1
-"""Lower bound of `fit_nb`'s size, kept for the plugged-in sizes."""
+class NoRecentCases(ModelUnavailableError):  # noqa: N818
+    """No place has a case in the latest `walk_weeks` weeks."""
 
 
 @dataclass(frozen=True)
 class Sampler:
-    """NUTS settings for the pooled fits.
+    """NUTS settings and the convergence check.
 
     Attributes
     ----------
     num_warmup, num_samples, num_chains : int
-        Warm-up and kept draws per chain, and chains.
+        Warm-up and kept draws per chain, and chains, run in sequence.
     target_accept : float
         Target acceptance.
     max_rhat : float
-        Largest split R-hat of any parameter a fit may have.
+        Largest split R-hat over parameters before the fit raises.
     max_divergent : float
-        Largest share of divergent draws a fit may have.
+        Largest share of divergent draws before the fit raises.
     """
 
     num_warmup: int = 500
-    num_samples: int = 500
+    num_samples: int = 750
     num_chains: int = 2
     target_accept: float = 0.9
     max_rhat: float = 1.05
@@ -184,9 +236,7 @@ class Tree:
         leaf = ~np.isin(np.arange(n), parent)
         return cls(parent, level, path, leaf)
 
-    def sample(
-        self, name: str, loc: float, scale: float, shape: tuple[int, ...] = ()
-    ) -> jax.Array:
+    def sample(self, name: str, loc: float, scale: float) -> jax.Array:
         r"""Sample a pooled parameter for every place, non-centred.
 
         Parameters
@@ -195,127 +245,269 @@ class Tree:
             Site prefix.
         loc, scale : float
             Normal prior of the country's value.
-        shape : tuple of int
-            Shape of the parameter of one place.
 
         Returns
         -------
         jax.Array
-            `[L, *shape]`.
+            `[L]`.
         """
-        root = numpyro.sample(
-            f"{name}_root", dist.Normal(loc, scale).expand(shape).to_event()
-        )
-        n_lvl = int(self.level.max())
+        root = numpyro.sample(f"{name}_root", dist.Normal(loc, scale))
+        n_lvl = max(int(self.level.max()), 1)
         tau = numpyro.sample(
             f"{name}_tau", dist.HalfNormal(0.5).expand((n_lvl,)).to_event()
         )
         z = numpyro.sample(
             f"{name}_z",
-            dist.Normal(0.0, 1.0).expand((self.level.size, *shape)).to_event(),
+            dist.Normal(0.0, 1.0).expand((self.level.size,)).to_event(),
         )
-        scale_n = tau[jnp.maximum(self.level - 1, 0)] * (self.level > 0)
-        step = scale_n.reshape(-1, *([1] * len(shape))) * z
-        out: jax.Array = root + jnp.tensordot(
-            jnp.asarray(self.path), step, axes=1
-        )
+        step = tau[jnp.maximum(self.level - 1, 0)] * (self.level > 0) * z
+        out: jax.Array = root + jnp.asarray(self.path) @ step
         return out
 
+    def rebuild(self, draws: dict[str, np.ndarray], name: str) -> np.ndarray:
+        """Return a pooled parameter of every place from its draws.
 
-def _gap_sums(
-    num: np.ndarray, den: np.ndarray, gaps: np.ndarray
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Sum the pairs of each gap by age, as `log_factors` does.
+        Parameters
+        ----------
+        draws : dict of numpy.ndarray
+            Posterior draws by site, flat over chains.
+        name : str
+            Site prefix, as for `sample`.
+
+        Returns
+        -------
+        numpy.ndarray
+            `[N, L]`, one row per draw.
+        """
+        root, tau, z = (draws[f"{name}_{p}"] for p in ("root", "tau", "z"))
+        lvl = np.maximum(self.level - 1, 0)
+        step = tau[:, lvl] * (self.level > 0) * z
+        return np.asarray(root[:, None] + step @ self.path.T)
+
+
+@dataclass(frozen=True)
+class Triangle:
+    """The reporting triangle by release of the leaves, as flat cells.
+
+    Attributes
+    ----------
+    leaves : numpy.ndarray
+        Snapshot index of each leaf, `[P]`.
+    first : int
+        Hub week index of the first fitted week.
+    n_weeks : int
+        Fitted weeks, from `first` to the origin's cut-off week.
+    place, week : numpy.ndarray
+        Leaf position and fitted week of each cell, `[C]`.
+    lo, hi : numpy.ndarray
+        Age of the cell's day at the previous release that observes it,
+        -1 for none, and at the cell's release, capped at $D$, `[C]`.
+    count : numpy.ndarray
+        New reports in the cell, `[C]`.
+    """
+
+    leaves: np.ndarray
+    first: int
+    n_weeks: int
+    place: np.ndarray
+    week: np.ndarray
+    lo: np.ndarray
+    hi: np.ndarray
+    count: np.ndarray
+
+
+def triangle(
+    snap: SnapshotArrays,
+    o: int,
+    settings: Settings,
+    fit_weeks: int,
+    leaves: np.ndarray | None = None,
+) -> Triangle:
+    """Return the new reports of each leaf, day and release up to `o`.
+
+    Parameters
+    ----------
+    snap : SnapshotArrays
+        The arrays.
+    o : int
+        The origin release. Later releases are not read.
+    settings : Settings
+        Settings, for $D$ (`max_delay`).
+    fit_weeks : int
+        Hub weeks fitted, ending at the cut-off week of `o`.
+    leaves : numpy.ndarray, optional
+        Snapshot index of each place fitted. Defaults to every leaf.
 
     Returns
     -------
-    tuple of numpy.ndarray
-        Increments and denominators `[L, S * D]` and the 0/1 matrix of the
-        ages each row spans, `[S * D, D]`.
+    Triangle
+        One cell for each leaf, day in the fitted weeks and release that
+        observes it, except where the day was already $D$ days old at
+        the previous release.
     """
-    uniq = np.unique(gaps)
-    member = (gaps[:, None] == uniq[None, :]).astype(float)
-    n_sum = np.einsum("lpa,ps->lsa", num, member)
-    d_sum = np.einsum("lpa,ps->lsa", den, member)
-    d = num.shape[-1]
-    j = np.arange(d)[None, None, :]
-    lo = np.arange(d)[None, :, None]
-    span = ((j >= lo) & (j < lo + uniq[:, None, None])).reshape(-1, d)
-    n_loc = num.shape[0]
-    return (
-        (n_sum - d_sum).reshape(n_loc, -1),
-        d_sum.reshape(n_loc, -1),
-        span.astype(float),
+    d = settings.max_delay
+    n_day = snap.week.size
+    counts = _delay_counts(snap, o)[:, : o + 1]
+    seen = snap.observed[: o + 1]
+    age = snap.cut[: o + 1, None] - np.arange(n_day)[None, :]
+    before = np.vstack([np.zeros((1, n_day), bool), seen[:-1]])
+    lo = np.where(before, np.vstack([np.full((1, n_day), -1), age[:-1]]), -1)
+    hi = np.minimum(age, d)
+    prev = np.concatenate([np.zeros_like(counts[:, :1]), counts[:, :-1]], 1)
+    inc = counts - prev * before[None]
+    first = max(snap.cut_week(o) - fit_weeks + 1, 0)
+    keep = seen & (lo < d) & (lo < hi) & (snap.week >= first)[None, :]
+    if leaves is None:
+        leaves = np.flatnonzero(Tree.of(snap.parent).leaf)
+    leaves = np.asarray(leaves, dtype=int)
+    r_i, t_i = np.nonzero(keep)
+    n_cell = r_i.size
+    place = np.repeat(np.arange(leaves.size), n_cell)
+    rr, tt = np.tile(r_i, leaves.size), np.tile(t_i, leaves.size)
+    return Triangle(
+        leaves=leaves,
+        first=first,
+        n_weeks=snap.cut_week(o) - first + 1,
+        place=place,
+        week=snap.week[tt] - first,
+        lo=lo[rr, tt],
+        hi=hi[rr, tt],
+        count=np.round(inc[leaves[place], rr, tt]),
     )
 
 
-def _nb(mean: jax.Array, size: jax.Array) -> dist.Distribution:
-    return dist.NegativeBinomial2(jnp.maximum(mean, 1e-8), size)
+def reported_share(mu: Any, sd: Any, age: Any, max_delay: int) -> jax.Array:
+    r"""Return $\pi(a)$, the share of a day's final count reported by age.
+
+    Parameters
+    ----------
+    mu, sd : array_like
+        Log-normal location and scale of the delay in days.
+    age : array_like
+        Ages $a$, broadcast against `mu` and `sd`.
+    max_delay : int
+        $D$.
+
+    Returns
+    -------
+    jax.Array
+        $F(a + 1) / F(D + 1)$, 0 for $a < 0$ and 1 for $a \ge D$.
+    """
+    age = jnp.asarray(age)
+    a = jnp.clip(age, 0, max_delay)
+    z = (jnp.log1p(a) - mu) / sd
+    z_d = (jnp.log1p(max_delay) - mu) / sd
+    pi = ndtr(z) / ndtr(z_d)
+    return jnp.where(age < 0, 0.0, jnp.where(age >= max_delay, 1.0, pi))
 
 
-def delay_model(
+def _interval(
+    mu: jax.Array, sd: jax.Array, lo: Any, hi: Any, max_delay: int
+) -> jax.Array:
+    r"""Return $\pi(\mathrm{hi}) - \pi(\mathrm{lo})$, accurate in both tails."""
+    z_lo = (jnp.log1p(jnp.clip(lo, 0, max_delay)) - mu) / sd
+    z_hi = (jnp.log1p(jnp.minimum(hi, max_delay)) - mu) / sd
+    z_d = (jnp.log1p(max_delay) - mu) / sd
+    mid = jnp.where(
+        z_lo > 0, ndtr(-z_lo) - ndtr(-z_hi), ndtr(z_hi) - ndtr(z_lo)
+    )
+    out: jax.Array = jnp.where(jnp.asarray(lo) < 0, ndtr(z_hi), mid)
+    return out / ndtr(z_d)
+
+
+def model(tree: Tree, tri: Triangle, max_delay: int) -> None:
+    """Sample the walk, the delay and the new reports of the leaves."""
+    leaves = tri.leaves
+    mu = tree.sample("delay_mu", 1.6, 1.0)[leaves]
+    sd = jnp.exp(numpyro.sample("delay_sd", dist.Normal(np.log(0.7), 0.5)))
+    sigma = jnp.exp(tree.sample("sigma", np.log(0.2), 1.0))[leaves]
+    phi = jnp.exp(numpyro.sample("phi", dist.Normal(np.log(10.0), 1.5)))
+    n_p = leaves.size
+    init = numpyro.sample(
+        "init", dist.Normal(2.0, 3.0).expand((n_p,)).to_event()
+    )
+    # Partly centred steps (`fit_posterior`), as the leaves range from
+    # silent to thousands of cases.
+    steps = jnp.cumsum(
+        numpyro.sample(
+            "step",
+            dist.Normal(
+                jnp.zeros((n_p, tri.n_weeks - 1)), sigma[:, None]
+            ).to_event(),
+        ),
+        axis=1,
+    )
+    log_lam = init[:, None] + jnp.concatenate(
+        [jnp.zeros((n_p, 1)), steps], axis=1
+    )
+    numpyro.deterministic("log_lam", log_lam)
+    p = tri.place
+    mass = _interval(mu[p], sd, tri.lo, tri.hi, max_delay)
+    mean = jnp.exp(log_lam[p, tri.week]) / 7.0 * mass
+    numpyro.sample("obs", dist.NegativeBinomial2(mean, phi), obs=tri.count)
+
+
+@dataclass(frozen=True)
+class Posterior:
+    """Posterior draws of the joint model, flat over chains.
+
+    Attributes
+    ----------
+    mu, sigma : numpy.ndarray
+        Delay location and walk spread of every place, `[N, L]`.
+    sd, phi : numpy.ndarray
+        Delay scale and dispersion, shared by the places, `[N]`.
+    log_lam : numpy.ndarray
+        Log expected final count of each leaf and fitted week,
+        `[N, P, W]`.
+    info : dict
+        Convergence and timing summaries.
+    """
+
+    mu: np.ndarray
+    sd: np.ndarray
+    sigma: np.ndarray
+    phi: np.ndarray
+    log_lam: np.ndarray
+    info: dict[str, float]
+
+
+def fit_posterior(
+    tri: Triangle,
     tree: Tree,
-    inc: np.ndarray,
-    den: np.ndarray,
-    span: np.ndarray,
-    keep: np.ndarray,
-) -> None:
-    """Pooled daily delay fitted to the release-pair increments in `keep`."""
-    eta = tree.sample("delay", -3.0, 2.0, (span.shape[1],))
-    g = jnp.exp(eta)
-    mean = den * jnp.expm1(g @ jnp.asarray(span).T)
-    with numpyro.handlers.mask(mask=keep):
-        numpyro.sample(
-            "delay_obs", dist.Poisson(mean + 1e-8), obs=np.round(inc)
-        )
+    sampler: Sampler,
+    key: jax.Array,
+    max_delay: int,
+) -> Posterior:
+    """Fit the joint model with NUTS and check that it converged.
 
+    Parameters
+    ----------
+    tri : Triangle
+        The data.
+    tree : Tree
+        The place hierarchy.
+    sampler : Sampler
+        NUTS settings.
+    key : jax.Array
+        Random key.
+    max_delay : int
+        $D$.
 
-def spread_model(
-    tree: Tree,
-    changes: np.ndarray,
-    noise: np.ndarray,
-    seen: np.ndarray,
-    added: np.ndarray,
-    remaining: np.ndarray,
-    valid: np.ndarray,
-) -> None:
-    """Pooled walk spread and negative binomial size."""
-    k_n = added.shape[-1]
-    log_sigma = tree.sample("sigma", np.log(0.2), 1.0)
-    log_size = tree.sample("size", 0.0, 1.5, (k_n,))
-    leaf = tree.leaf
-    with numpyro.handlers.mask(mask=leaf[:, None] & seen):
-        numpyro.sample(
-            "walk_obs",
-            dist.Normal(0.0, jnp.sqrt(jnp.exp(2 * log_sigma)[:, None] + noise)),
-            obs=changes,
-        )
-    fit = leaf[None, :, None] & valid & (remaining > 0)
-    with numpyro.handlers.mask(mask=fit):
-        numpyro.sample(
-            "added_obs",
-            _nb(jnp.asarray(remaining), jnp.exp(log_size)[None]),
-            obs=np.round(added),
-        )
-
-
-def _run(
-    model: Any, key: jax.Array, sampler: Sampler, **data: Any
-) -> tuple[dict[str, np.ndarray], dict[str, float]]:
-    """Run NUTS and return the draws and a diagnostics summary.
+    Returns
+    -------
+    Posterior
+        The draws.
 
     Raises
     ------
     NotConverged
-        If the worst R-hat is above `Sampler.max_rhat` or the share of
-        divergent draws above `Sampler.max_divergent`, as the medians of
-        such a fit are not estimates.
+        If the worst split R-hat is above `sampler.max_rhat` or more than
+        `sampler.max_divergent` of the draws diverge.
     """
     mcmc = MCMC(
-        # From the prior medians: uniform starts put the delay factors
-        # where their growth over a gap overflows.
         NUTS(
-            model,
+            reparam(model, config={"step": LocScaleReparam(CENTRING)}),
             target_accept_prob=sampler.target_accept,
             init_strategy=init_to_median(),
         ),
@@ -325,90 +517,70 @@ def _run(
         chain_method="sequential",
         progress_bar=False,
     )
+    tic = time.perf_counter()
     mcmc.run(
         key,
-        **data,
+        tree=tree,
+        tri=tri,
+        max_delay=max_delay,
         extra_fields=("diverging", "num_steps", "adapt_state.step_size"),
     )
-    draws = mcmc.get_samples(group_by_chain=True)
+    seconds = time.perf_counter() - tic
+    stats = summary(mcmc.get_samples(group_by_chain=True))
     extra = mcmc.get_extra_fields()
-    stats = summary(draws)
-    rhat = max(float(np.nanmax(s["r_hat"])) for s in stats.values())
-    ess = min(float(np.nanmin(s["n_eff"])) for s in stats.values())
-    info = {
-        "worst_rhat": rhat,
-        "min_ess": ess,
-        "divergences": int(extra["diverging"].sum()),
+    n_div = int(extra["diverging"].sum())
+    info: dict[str, float] = {
+        "worst_rhat": max(float(np.nanmax(s["r_hat"])) for s in stats.values()),
+        "min_ess": min(float(np.nanmin(s["n_eff"])) for s in stats.values()),
+        "divergences": n_div,
         "median_steps": float(np.median(extra["num_steps"])),
         "step_size": float(np.median(extra["adapt_state.step_size"])),
+        "seconds": seconds,
     }
+    draws = {k: np.asarray(v) for k, v in mcmc.get_samples().items()}
+    for name, value in draws.items():
+        if name.endswith("_tau"):
+            for i, t in enumerate(np.median(value, axis=0)):
+                info[f"{name}_{i + 1}"] = float(t)
     n_draws = sampler.num_samples * sampler.num_chains
-    if not (
-        rhat <= sampler.max_rhat
-        and info["divergences"] <= sampler.max_divergent * n_draws
+    if info["worst_rhat"] > sampler.max_rhat or (
+        n_div > sampler.max_divergent * n_draws
     ):
         raise NotConverged(
-            f"The pooled fit did not converge: worst R-hat {rhat:.3g} "
-            f"(at most {sampler.max_rhat}), {info['divergences']} of "
-            f"{n_draws} draws divergent (at most "
-            f"{sampler.max_divergent:.0%})."
+            f"The pooled fit did not converge: worst R-hat "
+            f"{info['worst_rhat']:.3f} (most {sampler.max_rhat}) and "
+            f"{n_div} of {n_draws} draws divergent."
         )
-    flat = mcmc.get_samples()
-    for name, value in flat.items():
-        if name.endswith("_tau"):
-            for i, t in enumerate(np.median(np.asarray(value), axis=0)):
-                info[f"{name}_{i + 1}"] = float(t)
-    return {k: np.asarray(v) for k, v in flat.items()}, info
+    return Posterior(
+        mu=tree.rebuild(draws, "delay_mu"),
+        sd=np.exp(draws["delay_sd"]),
+        sigma=np.exp(tree.rebuild(draws, "sigma")),
+        phi=np.exp(draws["phi"]),
+        log_lam=draws["log_lam"],
+        info=info,
+    )
 
 
-def walk_data(origin: Origin) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Return the walk spread's data, padded to one width.
-
-    Parameters
-    ----------
-    origin : Origin
-        The fit, for the reported counts and start weeks.
-
-    Returns
-    -------
-    tuple of numpy.ndarray
-        The weekly changes of log(1 + y) (`chain.walk_changes`), their
-        Poisson noise variances (`walk.walk_noise`) and where each place
-        has a change that enters the fit, each `[L, N]`. A change between
-        two weeks with no cases has no Poisson noise, so its density is
-        unbounded as the spread falls to 0, and it is left out.
-    """
-    settings = origin.settings
-    diffs = walk_changes(origin.reported, origin.start, settings)
-    width = max(max(d.size for d in diffs), 1)
-    changes = np.zeros((len(diffs), width))
-    noise = np.zeros((len(diffs), width))
-    seen = np.zeros((len(diffs), width), bool)
-    for n, d in enumerate(diffs):
-        lo = max(int(origin.start[n]) - settings.walk_weeks + 1, 0)
-        y = origin.reported[n, lo : int(origin.start[n]) + 1]
-        changes[n, : d.size] = d
-        noise[n, : d.size] = walk_noise(y)
-        # A change from 0 to 0 has no Poisson noise, so its normal density
-        # is unbounded as the spread falls to 0. It is left out.
-        seen[n, : d.size] = (y[1:] > 0) | (y[:-1] > 0)
-    return changes, noise, seen
+def _neg_binomial(
+    rng: np.random.Generator, mean: np.ndarray, size: np.ndarray
+) -> np.ndarray:
+    """Draw NB counts with `mean` and `size` as a gamma-Poisson mixture."""
+    rate = rng.gamma(size, 1.0, mean.shape) * mean / size
+    return np.asarray(rng.poisson(rate), dtype=float)
 
 
-def _median_of(tree: Tree, draws: dict[str, np.ndarray], name: str) -> Any:
-    """Rebuild a pooled parameter from its draws and take the median."""
-    root, tau, z = (draws[f"{name}_{p}"] for p in ("root", "tau", "z"))
-    lvl = np.maximum(tree.level - 1, 0)
-    scale = tau[:, lvl] * (tree.level > 0)
-    extra = z.ndim - 2
-    step = scale.reshape(*scale.shape, *([1] * extra)) * z
-    full = root[:, None] + np.einsum("nm,sm...->sn...", tree.path, step)
-    return np.median(full, axis=0)
+def _weeks(snap: SnapshotArrays, task: ForecastTask) -> list[str]:
+    """Return every hub week from the first data week to the last target."""
+    weeks = list(snap.week_ends)
+    last = as_date(max(task.target_end_dates))
+    while as_date(weeks[-1]) < last:
+        weeks.append((as_date(weeks[-1]) + dt.timedelta(days=7)).isoformat())
+    return weeks
 
 
 @dataclass
 class PPRandomWalkNowcast(RandomWalkNowcast):
-    """`randomwalknowcast` with partially pooled delay, spread and errors.
+    """A generative random walk nowcast with partially pooled parameters.
 
     Attributes
     ----------
@@ -416,34 +588,37 @@ class PPRandomWalkNowcast(RandomWalkNowcast):
         Model name.
     sampler : Sampler
         NUTS settings.
-    fits : list of dict
-        Diagnostics of each NUTS fit of the last forecast.
+    fit_weeks : int
+        Hub weeks fitted, ending at the cut-off week.
     """
 
     name: str = "pprandomwalknowcast"
     sampler: Sampler = field(default_factory=Sampler)
-    fits: list[dict[str, object]] = field(default_factory=list, repr=False)
+    fit_weeks: int = FIT_WEEKS
 
-    def origin_at(self, task: ForecastTask, errors: bool) -> Origin:
-        """Fit the pooled estimates at the task's vintage.
+    def forecast(self, task: ForecastTask) -> pd.DataFrame:
+        """Return posterior predictive trajectories for a task.
 
         Parameters
         ----------
         task : ForecastTask
-            The task. Its `daily_history` holds the release snapshots.
-        errors : bool
-            Also fit the observation model.
+            The data and weeks to forecast. Its `daily_history` holds the
+            release snapshots.
 
         Returns
         -------
-        Origin
-            The fit, with the pooled delay, spread and observation model.
+        pandas.DataFrame
+            Columns `location`, `target_end_date`, `sample`, `value`.
 
         Raises
         ------
-        MissingSnapshots
-            If the task has no release snapshots.
+        ModelUnavailableError
+            If the task has no snapshots (`MissingSnapshots`), no pair of
+            releases within the delay window (`NoDelayPair`), no place
+            with a recent case (`NoRecentCases`), or the fit did not
+            converge (`NotConverged`).
         """
+        _clear_caches(task)
         daily = task.daily_history
         if daily is None or daily.empty:
             raise MissingSnapshots(
@@ -451,95 +626,181 @@ class PPRandomWalkNowcast(RandomWalkNowcast):
                 f"for {task.vintage} has none."
             )
         snap = snapshot_arrays(daily, task.vintage, task.locations)
-        tree = Tree.of(snap.parent)
-        key = jax.random.key(int(task.rng().integers(0, 2**31 - 1)))
-        self.fits = []
-
-        def delay(s: SnapshotArrays, r: int, st: Settings) -> DelayFit | None:
-            sums = delay_sums(s, r, st)
-            if sums is None:
-                return None
-            pairs, num, den, gaps = sums
-            inc, d_sum, span = _gap_sums(num, den, gaps)
-            own = own_ages(den, s.parent, st)
-            rows = np.tile(own, (1, d_sum.shape[1] // own.shape[1]))
-            draws, info = _run(
-                delay_model,
-                jax.random.fold_in(key, r),
-                self.sampler,
-                tree=tree,
-                inc=inc,
-                den=d_sum,
-                span=span,
-                keep=rows & (d_sum > 0),
+        o = len(snap.releases) - 1
+        d = self.settings.max_delay
+        if _pairs_at(snap, o, d).size == 0:
+            raise NoDelayPair(
+                f"No pair of releases up to {snap.releases[o]} has a step "
+                f"of at most {d} days."
             )
-            self.fits.append({"fit": f"delay at {s.releases[r]}", **info})
-            g = np.exp(_median_of(tree, draws, "delay"))
-            n = len(s.locations)
-            return DelayFit(pairs, g, levels(s, r, st), np.arange(n), own)
-
-        origin = build_origin(snap, self.settings, False, delay)
-        self._pool_spreads(
-            origin, tree, delay if errors else None, jax.random.fold_in(key, 0)
+        tree = Tree.of(snap.parent)
+        leaves = np.flatnonzero(tree.leaf)
+        silent = silent_places(
+            weekly_sums(snap, o), snap.cut_week(o), self.settings.walk_weeks
         )
-        return origin
+        live = leaves[~silent[leaves]]
+        if live.size == 0:
+            raise NoRecentCases(
+                f"No place has a case in the {self.settings.walk_weeks} "
+                f"weeks to {snap.releases[o]}."
+            )
+        tri = triangle(snap, o, self.settings, self.fit_weeks, live)
+        key = jax.random.key(int(task.rng().integers(0, 2**31 - 1)))
+        post = fit_posterior(tri, tree, self.sampler, key, d)
+        ages = np.arange(d + 1)
+        share = np.median(
+            np.asarray(
+                reported_share(
+                    post.mu[..., None], post.sd[:, None, None], ages, d
+                )
+            ),
+            axis=0,
+        )  # [L, D + 1]
+        values, weeks = self.predict(post, tri, snap, task)
+        self.delay_summary = self._delay_summary(share, snap, task.vintage)
+        self._describe(post, snap, task, silent)
+        rows = [snap.locations.index(c) for c in task.locations]
+        out = frame(task, weeks, values, rows)
+        quiet = [c for c in task.locations if silent[snap.locations.index(c)]]
+        if not quiet:
+            return out
+        # As renewalsp does, a silent place takes randomwalknowcast's
+        # draws: exactly 0 until an introduction, then its walk.
+        walk = RandomWalkNowcast(settings=self.settings).forecast(
+            replace(task, report_by={})
+        )
+        return pd.concat(
+            [
+                out.loc[~out["location"].isin(quiet)],
+                walk.loc[walk["location"].isin(quiet), list(out.columns)],
+            ],
+            ignore_index=True,
+        )
 
-    def _pool_spreads(
-        self, origin: Origin, tree: Tree, delay: DelayFn | None, key: jax.Array
-    ) -> None:
-        """Replace the walk spread and, with `delay`, fit the errors.
+    def predict(
+        self,
+        post: Posterior,
+        tri: Triangle,
+        snap: SnapshotArrays,
+        task: ForecastTask,
+    ) -> tuple[np.ndarray, list[str]]:
+        """Draw final counts for every place and week from the posterior.
 
-        `delay` fits the delay at each earlier release for the errors of
-        the observation model. Without it there are no errors and only
-        the walk spread is fitted.
+        Parameters
+        ----------
+        post : Posterior
+            The draws.
+        tri : Triangle
+            The data the draws were fitted to.
+        snap : SnapshotArrays
+            The arrays.
+        task : ForecastTask
+            The task, for the number of samples, the weeks and the seed.
+
+        Returns
+        -------
+        tuple
+            Samples `[S, L, H]` for every hub week from the first data
+            week to the last target, and those weeks. Places that are
+            not fitted are 0.
         """
-        snap, settings = origin.snap, origin.settings
-        changes, noise, seen = walk_data(origin)
-        if delay is None:
-            n_k = weeks_back(snap, origin.o, settings.max_delay)
-            empty = np.zeros((0, len(snap.locations), n_k))
-            err = Errors(empty, empty, empty, empty > 0)
-        else:
-            err = retro_errors(snap, origin.o, settings, delay)
-        draws, info = _run(
-            spread_model,
-            key,
-            self.sampler,
-            tree=tree,
-            changes=changes,
-            noise=noise,
-            seen=seen,
-            added=err.added,
-            remaining=err.remaining,
-            valid=err.valid,
+        rng = task.rng("pprandomwalknowcast")
+        o = len(snap.releases) - 1
+        d = self.settings.max_delay
+        live = tri.leaves
+        n = task.n_samples
+        weeks = _weeks(snap, task)
+        n_data, n_all = snap.n_weeks, len(weeks)
+        reported = weekly_sums(snap, o)
+        values = np.zeros((n, len(snap.locations), n_all))
+        # Each sample takes a posterior draw, every draw used once before
+        # any is used again.
+        pick = np.resize(rng.permutation(post.mu.shape[0]), n)
+        mu = post.mu[pick][:, live, None]
+        sd = post.sd[pick][:, None, None]
+        phi = post.phi[pick][:, None, None]
+        sigma = post.sigma[pick][:, live, None]
+        log_lam = post.log_lam[pick]  # [S, P, W]
+        # Days of the fitted weeks: reported count plus the rest to come.
+        day = np.flatnonzero(snap.week >= tri.first)
+        age = snap.cut[o] - day
+        seen = age >= 0
+        rest = np.where(
+            seen, 1.0 - np.asarray(reported_share(mu, sd, age, d)), 1.0
         )
-        self.fits.append({"fit": "spread and errors", **info})
-        origin.sigma = np.exp(_median_of(tree, draws, "sigma"))
-        origin.errors = err
-        origin.size = np.clip(
-            np.exp(_median_of(tree, draws, "size")), MIN_SIZE, MAX_SIZE
+        wk = snap.week[day] - tri.first
+        # The clip only undoes float32 rounding of a share at 1.
+        mean = np.exp(log_lam[:, :, wk]) / 7.0 * np.clip(rest, 0.0, 1.0)
+        draw = _neg_binomial(rng, mean, np.broadcast_to(phi, mean.shape))
+        known = np.where(seen, snap.counts[live][:, o, day], 0.0)
+        onehot = np.zeros((day.size, tri.n_weeks))
+        onehot[np.arange(day.size), wk] = 1.0
+        # Weeks after the data continue the walk.
+        h = n_all - n_data
+        steps = np.cumsum(sigma * rng.standard_normal((n, live.size, h)), 2)
+        ahead = np.exp(log_lam[:, :, -1:] + steps)
+        values[:, live, : tri.first] = reported[live, : tri.first][None]
+        values[:, live, tri.first : n_data] = (draw + known[None]) @ onehot
+        values[:, live, n_data:] = _neg_binomial(
+            rng, ahead, np.broadcast_to(7.0 * phi, ahead.shape)
+        )
+        return values, weeks
+
+    def _delay_summary(
+        self, share: np.ndarray, snap: SnapshotArrays, vintage: str
+    ) -> pd.DataFrame:
+        """Return the posterior median share reported by age of each place.
+
+        In the form of `chain.delay_summary`, so the backtest maps this
+        model's final counts through its own delay.
+        """
+        ages = np.arange(share.shape[1])
+        places = snap.locations
+        return pd.DataFrame(
+            {
+                "model": self.name,
+                "vintage": vintage,
+                "location": np.repeat(places, ages.size),
+                "kind": "cumulative",
+                "x": np.tile(ages, len(places)),
+                "quantity": "reported_share",
+                "q50": share.ravel(),
+            }
         )
 
-    def _diagnostics(
-        self, origin: Origin, task: ForecastTask, start: np.ndarray
+    def _describe(
+        self,
+        post: Posterior,
+        snap: SnapshotArrays,
+        task: ForecastTask,
+        silent: np.ndarray,
     ) -> None:
+        """Record each place's posterior medians and the fit's summary."""
         rows: list[dict[str, object]] = []
-        for loc, i in zip(task.locations, self.rows(origin, task), strict=True):
+        for loc in task.locations:
+            i = snap.locations.index(loc)
             rows.append(
                 {
                     "location": loc,
-                    "start_week": origin.snap.week_ends[int(start[i])],
-                    "sigma": float(origin.sigma[i]),
+                    "silent": bool(silent[i]),
+                    "sigma": float(np.median(post.sigma[:, i])),
+                    "delay_median": float(np.median(np.exp(post.mu[:, i]))),
                 }
             )
-        self.fit_diagnostics = [*rows, *self.fits]
+        shared = {
+            "delay_sd": float(np.median(post.sd)),
+            "phi": float(np.median(post.phi)),
+        }
+        self.fit_diagnostics = [*rows, {"fit": "joint", **shared, **post.info}]
 
 
 register_model(
     "pprandomwalknowcast",
     PPRandomWalkNowcast,
-    "Random walk on a daily nowcast, with the delay, walk spread and "
-    "nowcast uncertainty partially pooled over zones, provinces and "
-    "country (numpyro).",
+    "A generative random walk nowcast (epinowcast style): weekly expected "
+    "counts as a log random walk and a log-normal reporting delay, fitted "
+    "jointly to the release snapshots with negative binomial new reports, "
+    "the delay, walk spread and dispersion partially pooled over zones, "
+    "provinces and country (numpyro).",
     fitted=True,
 )

@@ -18,12 +18,13 @@ Later weeks are walk draws, floored at the count reported.
 
 `RandomWalkNowcast` (`randomwalknowcast`) nowcasts each hub week, with
 negative binomial new reports on the remaining count (`obs`).
-Each sample starts the walk from its own nowcast of the latest full week
-at least `Settings.start_share` reported with at least
-`Settings.start_count` cases (`_start_weeks`). Later weeks with data keep
-their nowcast draws. If the week holding the cut-off is partial, its days
-after the cut-off add Poisson draws from that week's walk rate. Weeks
-after the cut-off are the walk's draws.
+Weeks with data keep their nowcast draws. If the week holding the cut-off
+is partial, its days after the cut-off add a Poisson draw from that week's
+walk rate, walked by each sample from its own nowcast of the latest full
+week at least `Settings.start_share` reported with at least
+`Settings.start_count` cases (`_start_weeks`). Each sample's completed
+cut-off week, its nowcast plus that draw, is the base the walk goes on
+from for the weeks after the cut-off.
 
 The spread of the walk is the standard deviation of the weekly changes of
 $\log(1 + y)$ in reported counts, over the weeks ending at the start of
@@ -167,22 +168,46 @@ def _walks(
     return np.asarray(lam, np.float64), counts
 
 
+def start_window(settings: Settings) -> int:
+    """Return the weeks back from the cut-off week a start week may be.
+
+    It is `Settings.history_delay`, the onset days the nowcast's delay is
+    fitted on (1.5 D), in whole weeks.
+
+    Parameters
+    ----------
+    settings : Settings
+        Settings.
+
+    Returns
+    -------
+    int
+        Weeks, counting the cut-off week.
+    """
+    return -(-settings.history_delay // 7)
+
+
 def _start_ok(origin: Origin) -> np.ndarray:
     """Return the full weeks a walk can start from, `[L, W]`.
 
-    A week can when its share reported is at least `Settings.start_share`
-    and its reported count is at least `Settings.start_count`.
+    A week can when its share reported is at least `Settings.start_share`,
+    its reported count is at least `Settings.start_count`, and it is within
+    `start_window` weeks of the cut-off week.
     """
     settings, full = origin.settings, origin.start_nowcast
-    return (origin.complete[:, : full + 1] >= settings.start_share) & (
+    ok = (origin.complete[:, : full + 1] >= settings.start_share) & (
         origin.reported[:, : full + 1] >= settings.start_count
     )
+    first = origin.snap.cut_week(origin.o) - start_window(settings) + 1
+    ok[:, : max(first, 0)] = False
+    return ok
 
 
 def _quiet(origin: Origin) -> np.ndarray:
     """Return the places that draw introductions instead of a walk, `[L]`.
 
-    These are the silent places and those with no week to start from.
+    These are the silent places and those with no week to start from in
+    the `start_window`.
     """
     return origin.silent | ~_start_ok(origin).any(axis=1)
 
@@ -465,7 +490,7 @@ class RandomWalkNowcast(RandomWalk):
         back = snap.cut_week(origin.o) - np.arange(n_data)
         # Weeks older than the fitted ones have nothing to come.
         k = np.clip(back, 0, k_n - 1)
-        key_x, key_walk, key_part = jax.random.split(_key(task), 3)
+        key_x, key_walk, key_part, key_ahead = jax.random.split(_key(task), 4)
         shape = (n, *point.shape)
         reported = jnp.broadcast_to(
             jnp.asarray(origin.reported, jnp.float32), shape
@@ -490,7 +515,10 @@ class RandomWalkNowcast(RandomWalk):
             key_walk, nowcast[:, rows, w0].T, origin, w0, n_all, quiet
         )
         # Days of the cut-off week after the cut-off are drawn from the
-        # walk's rate that week.
+        # walk's rate that week. A partial cut-off week's start week is the
+        # week before it when that week meets the start rule, so the rate
+        # is one step from each sample's nowcast of the week before, and
+        # otherwise steps on from the latest earlier week that meets it.
         cut = int(snap.cut[origin.o])
         miss = int(np.flatnonzero(snap.week == cw).max()) - cut
         at_cw = np.clip(cw - w0 - 1, 0, n_all - 1)
@@ -501,6 +529,17 @@ class RandomWalkNowcast(RandomWalk):
             ),
             dtype=np.float64,
         )  # [L, S]
+        # Each sample's completed cut-off week is the base for the weeks
+        # after it, from which the walk goes on.
+        done = nowcast[:, rows, cw].T + np.where(miss > 0, part, 0.0)
+        h = n_all - cw - 1
+        _, ahead = random_walks(
+            jax.random.split(key_ahead, n_loc),
+            jnp.asarray(done, jnp.float32),
+            jnp.asarray(origin.sigma, jnp.float32),
+            max(h, 1),
+        )
+        ahead = np.asarray(ahead, np.float64)[:, :, :h]
         values = np.zeros((n, n_loc, n_all))
         for loc in range(n_loc):
             s = int(w0[loc])
@@ -513,10 +552,9 @@ class RandomWalkNowcast(RandomWalk):
                     values[:, loc, :n_data], origin.reported[loc]
                 )
                 continue
-            values[:, loc, : cw + 1] = nowcast[:, loc, : cw + 1]
-            if miss > 0 and cw > s:
-                values[:, loc, cw] += part[loc]
-            values[:, loc, cw + 1 :] = y[loc, :, cw - s : n_all - s - 1]
+            values[:, loc, :cw] = nowcast[:, loc, :cw]
+            values[:, loc, cw] = done[loc]
+            values[:, loc, cw + 1 :] = ahead[loc]
         return values, weeks
 
 

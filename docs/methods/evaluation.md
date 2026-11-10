@@ -89,7 +89,8 @@ Two targets are scored.
 Every other model forecasts the final count $X$ of week $w$, which is mapped to what $o'$ shows by the model's own delay.
 
 1. Day $t$ is $a = c - t$ days old at a cut-off $c$, and $\pi(a)$ is the share of its final count the model expects reported by then.
-   For `randomwalknowcast` and `pprandomwalknowcast`, $\pi(a) = 1 / \Gamma(a)$ under the daily delay each fits at the origin ([Baseline models](baselines.md#delay)).
+   For `randomwalknowcast`, $\pi(a) = 1 / \Gamma(a)$ under the daily delay it fits at the origin ([Baseline models](baselines.md#delay)).
+   For `pprandomwalknowcast` it is the posterior median of each place's $\pi_p(a)$ from its own fit ([Baseline models](baselines.md#partially-pooled-variant)).
    For the renewal models it is the posterior median of each province's cumulative onset-to-report delay of the latest onset week, as the fit stores it.
    Ages past the end of the delay take its last value, and days after the cut-off have $\pi = 0$.
 2. A week's share $\pi_w$ is the mean of $\pi$ over its seven days.
