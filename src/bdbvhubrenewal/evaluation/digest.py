@@ -256,6 +256,7 @@ def model_code(
     root: Path | str = ".",
     entries: Sequence[str] = FORECAST_ENTRIES,
     cli: bool = True,
+    skip: Sequence[str] = (),
 ) -> list[str]:
     """List the source files a forecast-only run of one model reads.
 
@@ -264,7 +265,8 @@ def model_code(
     which stops at the modules that define the other models: the registry
     imports every model, but a model's forecasts do not run the others'
     code. With `cli`, the CLI module is added as a file, without
-    following its imports, which reach every command.
+    following its imports, which reach every command. The modules in
+    `skip` are left out, with what only they import.
 
     Parameters
     ----------
@@ -276,6 +278,8 @@ def model_code(
         The shared modules the run calls.
     cli : bool
         Add the CLI module.
+    skip : sequence of str
+        Modules the run imports but does not call, as paths from `root`.
 
     Returns
     -------
@@ -296,11 +300,12 @@ def model_code(
     # included when it builds on it (pprandomwalknowcast on randomwalk.py).
     # A model defined outside the package (a test's stand-in) has only the
     # shared code.
-    seen = set() if start is None else _closure(src, [start], set(), start)
+    stop = {base / s for s in skip}
+    seen = set() if start is None else _closure(src, [start], stop, start)
     # Then the shared forecasting code, which reaches every model through
     # the registry: there the other models' modules are left out.
     seen = _closure(
-        src, [base / e for e in entries], others - seen, start, seen
+        src, [base / e for e in entries], (others | stop) - seen, start, seen
     )
     if cli:
         seen.add(src / _PACKAGE / "cli.py")
