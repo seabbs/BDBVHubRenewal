@@ -39,6 +39,9 @@ def test_load_config() -> None:
     # A generous convergence gate on BVDOutbreakSize releases.
     assert cfg.bvd_max_rhat == 1.1
     assert BacktestConfig().bvd_max_rhat == 1.1
+    # The first release is not a backtest origin.
+    assert cfg.skip_origins == ("2026-08-18",)
+    assert BacktestConfig().skip_origins == ()
 
 
 def test_forecast_weeks() -> None:
@@ -460,6 +463,21 @@ def test_tasks_carry_the_daily_releases_up_to_their_vintage(
         rows.assign(kind="simulated"), delays, BacktestConfig(), daily=daily
     )[0]
     assert other.daily_history is None
+
+
+def test_skipped_origins_stay_in_the_later_tasks(
+    target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
+) -> None:
+    every = development_tasks(target, delays, BacktestConfig(), daily=daily)
+    skip = BacktestConfig(skip_origins=("2026-08-18",))
+    kept = development_tasks(target, delays, skip, daily=daily)
+    assert [t.vintage for t in kept] == [
+        t.vintage for t in every if t.vintage != "2026-08-18"
+    ]
+    # Its rows are still in the later tasks' histories.
+    later = kept[0]
+    assert "2026-08-18" in set(later.target_history["vintage"])
+    assert "2026-08-18" in set(later.daily_history["vintage"])
 
 
 def test_development_tasks_pass_the_daily_releases(
