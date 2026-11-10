@@ -1,0 +1,8 @@
+group,model,zones_given,zones_q95_ge1,zones_q50_ge1
+baseline,BDBVHub-baseline,453,0,0
+ours,pprandomwalknowcast,453,16,0
+ours,randomwalk,453,48,0
+ours,randomwalknowcast,453,46,0
+ours,renewal,453,31,0
+ours,renewalbvd,453,35,0
+ours,renewalsp,453,18,0

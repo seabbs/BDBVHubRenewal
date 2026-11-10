@@ -1,0 +1,1307 @@
+location,location_name,target_end_date,model,group,reported,q05,q50,q95,in_90,median_over_reported
+CD,DRC,2026-10-17,MOBS-GLEAM_BDBV,hub,420.00,326.00,451.00,584.50,True,1.07
+CD,DRC,2026-10-24,MOBS-GLEAM_BDBV,hub,482.00,348.25,430.00,579.90,True,0.89
+CD-HU,Haut Uele,2026-10-17,MOBS-GLEAM_BDBV,hub,30.00,15.00,25.00,33.05,True,0.84
+CD-HU,Haut Uele,2026-10-24,MOBS-GLEAM_BDBV,hub,21.00,15.95,24.00,34.05,True,1.14
+CD-IT,Ituri,2026-10-17,MOBS-GLEAM_BDBV,hub,190.00,168.80,230.50,318.00,True,1.21
+CD-IT,Ituri,2026-10-24,MOBS-GLEAM_BDBV,hub,234.00,156.80,215.00,301.70,True,0.92
+CD-NK,Nord Kivu,2026-10-17,MOBS-GLEAM_BDBV,hub,189.00,136.95,187.00,237.50,True,0.99
+CD-NK,Nord Kivu,2026-10-24,MOBS-GLEAM_BDBV,hub,214.00,163.95,215.50,261.15,True,1.01
+CD,DRC,2026-10-17,OHTJHU-BM,hub,420.00,420.00,430.00,440.00,True,1.02
+CD,DRC,2026-10-24,OHTJHU-BM,hub,482.00,489.00,504.00,526.00,False,1.05
+CD-BU,Bas Uele,2026-10-17,OHTJHU-BM,hub,0.00,0.00,0.00,0.00,True,1.00
+CD-BU,Bas Uele,2026-10-24,OHTJHU-BM,hub,0.00,0.00,0.00,1.00,True,1.00
+CD-BU-02,Ango,2026-10-17,OHTJHU-BM,hub,0.00,0.00,0.00,0.00,True,1.00
+CD-BU-02,Ango,2026-10-24,OHTJHU-BM,hub,0.00,0.00,0.00,1.00,True,1.00
+CD-BU-06,Ganga,2026-10-17,OHTJHU-BM,hub,0.00,0.00,0.00,0.00,True,1.00
+CD-BU-06,Ganga,2026-10-24,OHTJHU-BM,hub,0.00,0.00,0.00,1.00,True,1.00
+CD-BU-11,Viadana,2026-10-17,OHTJHU-BM,hub,0.00,0.00,0.00,1.00,True,1.00
+CD-BU-11,Viadana,2026-10-24,OHTJHU-BM,hub,0.00,0.00,0.00,2.00,True,1.00
+CD-HU,Haut Uele,2026-10-17,OHTJHU-BM,hub,30.00,30.00,31.00,35.00,True,1.03
+CD-HU,Haut Uele,2026-10-24,OHTJHU-BM,hub,21.00,21.00,24.00,28.00,True,1.14
+CD-HU-02,Boma Mangbetu,2026-10-17,OHTJHU-BM,hub,2.00,2.00,3.00,4.00,True,1.33
+CD-HU-02,Boma Mangbetu,2026-10-24,OHTJHU-BM,hub,4.00,4.00,4.00,5.00,True,1.00
+CD-HU-04,Dungu,2026-10-17,OHTJHU-BM,hub,0.00,0.00,0.00,1.00,True,1.00
+CD-HU-04,Dungu,2026-10-24,OHTJHU-BM,hub,0.00,0.00,1.00,2.00,True,2.00
+CD-HU-07,Isiro,2026-10-17,OHTJHU-BM,hub,5.00,5.00,5.00,6.00,True,1.00
+CD-HU-07,Isiro,2026-10-24,OHTJHU-BM,hub,3.00,3.00,3.00,6.00,True,1.00
+CD-HU-09,Niangara,2026-10-17,OHTJHU-BM,hub,0.00,0.00,0.00,1.00,True,1.00
+CD-HU-09,Niangara,2026-10-24,OHTJHU-BM,hub,0.00,0.00,1.00,2.00,True,2.00
+CD-HU-10,Pawa,2026-10-17,OHTJHU-BM,hub,3.00,3.00,3.00,4.00,True,1.00
+CD-HU-10,Pawa,2026-10-24,OHTJHU-BM,hub,6.00,6.00,7.00,10.00,True,1.14
+CD-HU-11,Rungu,2026-10-17,OHTJHU-BM,hub,1.00,1.00,1.00,2.00,True,1.00
+CD-HU-11,Rungu,2026-10-24,OHTJHU-BM,hub,0.00,0.00,0.00,2.00,True,1.00
+CD-HU-12,Wamba,2026-10-17,OHTJHU-BM,hub,19.00,19.00,20.00,23.00,True,1.05
+CD-HU-12,Wamba,2026-10-24,OHTJHU-BM,hub,8.00,8.00,10.00,13.00,True,1.22
+CD-IT,Ituri,2026-10-17,OHTJHU-BM,hub,190.00,190.00,193.50,201.00,True,1.02
+CD-IT,Ituri,2026-10-24,OHTJHU-BM,hub,234.00,237.00,248.50,261.00,False,1.06
+CD-IT-05,Aru,2026-10-17,OHTJHU-BM,hub,4.00,4.00,4.00,5.00,True,1.00
+CD-IT-05,Aru,2026-10-24,OHTJHU-BM,hub,12.00,12.00,14.00,19.00,True,1.15
+CD-IT-07,Bambu,2026-10-17,OHTJHU-BM,hub,9.00,9.00,9.00,10.00,True,1.00
+CD-IT-07,Bambu,2026-10-24,OHTJHU-BM,hub,2.00,2.00,2.00,4.00,True,1.00
+CD-IT-10,Bunia,2026-10-17,OHTJHU-BM,hub,32.00,32.00,34.00,38.00,True,1.06
+CD-IT-10,Bunia,2026-10-24,OHTJHU-BM,hub,53.00,53.00,59.00,65.00,True,1.11
+CD-IT-11,Damas,2026-10-17,OHTJHU-BM,hub,1.00,1.00,2.00,2.00,True,1.50
+CD-IT-11,Damas,2026-10-24,OHTJHU-BM,hub,0.00,0.00,1.00,2.00,True,2.00
+CD-IT-12,Drodro,2026-10-17,OHTJHU-BM,hub,0.00,0.00,0.00,1.00,True,1.00
+CD-IT-12,Drodro,2026-10-24,OHTJHU-BM,hub,0.00,0.00,1.00,2.00,True,2.00
+CD-IT-13,Fataki,2026-10-17,OHTJHU-BM,hub,0.00,0.00,0.00,1.00,True,1.00
+CD-IT-13,Fataki,2026-10-24,OHTJHU-BM,hub,4.00,4.00,4.00,6.00,True,1.00
+CD-IT-14,Gethy,2026-10-17,OHTJHU-BM,hub,1.00,1.00,1.00,2.00,True,1.00
+CD-IT-14,Gethy,2026-10-24,OHTJHU-BM,hub,0.00,0.00,1.00,3.00,True,2.00
+CD-IT-17,Kilo,2026-10-17,OHTJHU-BM,hub,0.00,0.00,1.00,2.00,True,2.00
+CD-IT-17,Kilo,2026-10-24,OHTJHU-BM,hub,1.00,1.00,2.00,3.00,True,1.50
+CD-IT-18,Komanda,2026-10-17,OHTJHU-BM,hub,4.00,4.00,5.00,6.00,True,1.20
+CD-IT-18,Komanda,2026-10-24,OHTJHU-BM,hub,1.00,1.00,2.00,3.00,True,1.50
+CD-IT-21,Lita,2026-10-17,OHTJHU-BM,hub,7.00,7.00,7.00,9.00,True,1.00
+CD-IT-21,Lita,2026-10-24,OHTJHU-BM,hub,6.00,6.00,7.00,10.00,True,1.14
+CD-IT-22,Logo,2026-10-17,OHTJHU-BM,hub,0.00,0.00,0.00,1.00,True,1.00
+CD-IT-22,Logo,2026-10-24,OHTJHU-BM,hub,0.00,0.00,0.00,1.00,True,1.00
+CD-IT-23,Lolwa,2026-10-17,OHTJHU-BM,hub,2.00,2.00,3.00,5.00,True,1.33
+CD-IT-23,Lolwa,2026-10-24,OHTJHU-BM,hub,0.00,0.00,1.00,2.00,True,2.00
+CD-IT-24,Mahagi,2026-10-17,OHTJHU-BM,hub,0.00,0.00,0.00,2.00,True,1.00
+CD-IT-24,Mahagi,2026-10-24,OHTJHU-BM,hub,0.00,0.00,0.00,1.00,True,1.00
+CD-IT-25,Mambasa,2026-10-17,OHTJHU-BM,hub,17.00,17.00,18.00,20.00,True,1.06
+CD-IT-25,Mambasa,2026-10-24,OHTJHU-BM,hub,16.00,16.00,16.00,20.00,True,1.00
+CD-IT-26,Mandima,2026-10-17,OHTJHU-BM,hub,33.00,33.00,33.00,33.00,True,1.00
+CD-IT-26,Mandima,2026-10-24,OHTJHU-BM,hub,54.00,54.00,58.00,62.00,True,1.07
+CD-IT-27,Mangala,2026-10-17,OHTJHU-BM,hub,12.00,12.00,12.00,13.00,True,1.00
+CD-IT-27,Mangala,2026-10-24,OHTJHU-BM,hub,8.00,8.00,8.00,12.00,True,1.00
+CD-IT-28,Mongbwalu,2026-10-17,OHTJHU-BM,hub,6.00,6.00,6.00,6.00,True,1.00
+CD-IT-28,Mongbwalu,2026-10-24,OHTJHU-BM,hub,3.00,3.00,3.00,5.00,True,1.00
+CD-IT-29,Nia Nia,2026-10-17,OHTJHU-BM,hub,6.00,6.00,7.00,10.00,True,1.14
+CD-IT-29,Nia Nia,2026-10-24,OHTJHU-BM,hub,6.00,6.00,6.00,9.00,True,1.00
+CD-IT-30,Nizi,2026-10-17,OHTJHU-BM,hub,18.00,18.00,19.00,21.00,True,1.05
+CD-IT-30,Nizi,2026-10-24,OHTJHU-BM,hub,20.00,20.00,20.00,24.00,True,1.00
+CD-IT-31,Nyankunde,2026-10-17,OHTJHU-BM,hub,1.00,1.00,1.00,2.00,True,1.00
+CD-IT-31,Nyankunde,2026-10-24,OHTJHU-BM,hub,5.00,5.00,5.00,8.00,True,1.00
+CD-IT-34,Rimba,2026-10-17,OHTJHU-BM,hub,2.00,2.00,3.00,5.00,True,1.33
+CD-IT-34,Rimba,2026-10-24,OHTJHU-BM,hub,1.00,2.00,3.00,5.00,False,2.00
+CD-IT-35,Rwampara,2026-10-17,OHTJHU-BM,hub,32.00,32.00,33.00,35.00,True,1.03
+CD-IT-35,Rwampara,2026-10-24,OHTJHU-BM,hub,42.00,42.00,45.00,50.00,True,1.07
+CD-IT-36,Tchomia,2026-10-17,OHTJHU-BM,hub,3.00,3.00,3.00,4.00,True,1.00
+CD-IT-36,Tchomia,2026-10-24,OHTJHU-BM,hub,0.00,0.00,1.00,2.00,True,2.00
+CD-NK,Nord Kivu,2026-10-17,OHTJHU-BM,hub,189.00,189.00,193.50,202.00,True,1.02
+CD-NK,Nord Kivu,2026-10-24,OHTJHU-BM,hub,214.00,214.00,219.00,232.00,True,1.02
+CD-NK-03,Beni,2026-10-17,OHTJHU-BM,hub,91.00,91.00,91.00,91.00,True,1.00
+CD-NK-03,Beni,2026-10-24,OHTJHU-BM,hub,113.00,113.00,113.00,118.00,True,1.00
+CD-NK-04,Biena,2026-10-17,OHTJHU-BM,hub,0.00,0.00,0.00,0.00,True,1.00
+CD-NK-04,Biena,2026-10-24,OHTJHU-BM,hub,0.00,0.00,0.00,1.00,True,1.00
+CD-NK-07,Butembo,2026-10-17,OHTJHU-BM,hub,4.00,4.00,4.00,4.00,True,1.00
+CD-NK-07,Butembo,2026-10-24,OHTJHU-BM,hub,6.00,6.00,6.00,8.00,True,1.00
+CD-NK-10,Kalunguta,2026-10-17,OHTJHU-BM,hub,0.00,0.00,0.00,1.00,True,1.00
+CD-NK-10,Kalunguta,2026-10-24,OHTJHU-BM,hub,1.00,1.00,1.00,2.00,True,1.00
+CD-NK-14,Katwa,2026-10-17,OHTJHU-BM,hub,22.00,22.00,22.00,25.00,True,1.00
+CD-NK-14,Katwa,2026-10-24,OHTJHU-BM,hub,19.00,19.00,20.00,23.00,True,1.05
+CD-NK-19,Kyondo,2026-10-17,OHTJHU-BM,hub,3.00,3.00,3.00,4.00,True,1.00
+CD-NK-19,Kyondo,2026-10-24,OHTJHU-BM,hub,2.00,2.00,2.00,3.00,True,1.00
+CD-NK-20,Lubero,2026-10-17,OHTJHU-BM,hub,3.00,3.00,3.00,4.00,True,1.00
+CD-NK-20,Lubero,2026-10-24,OHTJHU-BM,hub,5.00,5.00,5.00,7.00,True,1.00
+CD-NK-21,Mabalako,2026-10-17,OHTJHU-BM,hub,14.00,14.00,14.00,16.00,True,1.00
+CD-NK-21,Mabalako,2026-10-24,OHTJHU-BM,hub,17.00,17.00,18.00,21.00,True,1.06
+CD-NK-22,Manguredjipa,2026-10-17,OHTJHU-BM,hub,0.00,0.00,0.50,1.00,True,1.50
+CD-NK-22,Manguredjipa,2026-10-24,OHTJHU-BM,hub,0.00,0.00,0.50,2.00,True,1.50
+CD-NK-23,Masereka,2026-10-17,OHTJHU-BM,hub,2.00,2.00,2.00,4.00,True,1.00
+CD-NK-23,Masereka,2026-10-24,OHTJHU-BM,hub,1.00,1.00,1.00,3.00,True,1.00
+CD-NK-25,Musienene,2026-10-17,OHTJHU-BM,hub,2.00,2.00,2.00,4.00,True,1.00
+CD-NK-25,Musienene,2026-10-24,OHTJHU-BM,hub,4.00,4.00,5.00,7.00,True,1.20
+CD-NK-26,Mutwanga,2026-10-17,OHTJHU-BM,hub,16.00,16.00,16.00,16.00,True,1.00
+CD-NK-26,Mutwanga,2026-10-24,OHTJHU-BM,hub,17.00,17.00,17.00,20.00,True,1.00
+CD-NK-29,Oicha,2026-10-17,OHTJHU-BM,hub,20.00,20.00,20.00,21.00,True,1.00
+CD-NK-29,Oicha,2026-10-24,OHTJHU-BM,hub,24.00,24.00,24.00,27.00,True,1.00
+CD-NK-33,Vuhovi,2026-10-17,OHTJHU-BM,hub,12.00,12.00,12.00,16.00,True,1.00
+CD-NK-33,Vuhovi,2026-10-24,OHTJHU-BM,hub,5.00,5.00,7.00,9.00,True,1.33
+CD-NU,Nord Ubangi,2026-10-17,OHTJHU-BM,hub,0.00,0.00,0.00,2.00,True,1.00
+CD-NU,Nord Ubangi,2026-10-24,OHTJHU-BM,hub,0.00,0.00,1.00,2.00,True,2.00
+CD-NU-09,Wapinda,2026-10-17,OHTJHU-BM,hub,0.00,0.00,0.00,1.00,True,1.00
+CD-NU-09,Wapinda,2026-10-24,OHTJHU-BM,hub,0.00,0.00,1.00,2.00,True,2.00
+CD-SU,Sud Ubangi,2026-10-17,OHTJHU-BM,hub,0.00,0.00,0.50,2.00,True,1.50
+CD-SU,Sud Ubangi,2026-10-24,OHTJHU-BM,hub,0.00,0.00,1.00,1.00,True,2.00
+CD-SU-07,Bulu,2026-10-17,OHTJHU-BM,hub,0.00,0.00,1.00,3.00,True,2.00
+CD-SU-07,Bulu,2026-10-24,OHTJHU-BM,hub,0.00,0.00,1.00,2.00,True,2.00
+CD-TO,Tshopo,2026-10-17,OHTJHU-BM,hub,11.00,11.00,11.50,14.00,True,1.04
+CD-TO,Tshopo,2026-10-24,OHTJHU-BM,hub,13.00,13.00,14.00,17.00,True,1.07
+CD-TO-02,Bafwasende,2026-10-17,OHTJHU-BM,hub,3.00,3.00,4.00,5.00,True,1.25
+CD-TO-02,Bafwasende,2026-10-24,OHTJHU-BM,hub,0.00,0.00,1.00,1.00,True,2.00
+CD-TO-08,Kabondo,2026-10-17,OHTJHU-BM,hub,4.00,4.00,4.00,5.00,True,1.00
+CD-TO-08,Kabondo,2026-10-24,OHTJHU-BM,hub,9.00,9.00,9.00,11.00,True,1.00
+CD-TO-11,Makiso Kisangani,2026-10-17,OHTJHU-BM,hub,2.00,2.00,2.00,3.00,True,1.00
+CD-TO-11,Makiso Kisangani,2026-10-24,OHTJHU-BM,hub,2.00,2.00,2.00,3.00,True,1.00
+CD-TO-12,Mangobo,2026-10-17,OHTJHU-BM,hub,1.00,1.00,1.00,1.00,True,1.00
+CD-TO-12,Mangobo,2026-10-24,OHTJHU-BM,hub,0.00,0.00,0.00,1.00,True,1.00
+CD-TO-15,Tshopo,2026-10-17,OHTJHU-BM,hub,1.00,1.00,1.00,2.00,True,1.00
+CD-TO-15,Tshopo,2026-10-24,OHTJHU-BM,hub,2.00,2.00,2.00,4.00,True,1.00
+CD-TO-17,Wanierukula,2026-10-17,OHTJHU-BM,hub,0.00,0.00,0.00,1.00,True,1.00
+CD-TO-17,Wanierukula,2026-10-24,OHTJHU-BM,hub,0.00,0.00,0.00,2.00,True,1.00
+CD,DRC,2026-10-17,UQPSU-SEIHRD,hub,420.00,448.00,480.00,514.10,False,1.14
+CD,DRC,2026-10-24,UQPSU-SEIHRD,hub,482.00,441.90,471.00,508.05,True,0.98
+CD-HU,Haut Uele,2026-10-17,UQPSU-SEIHRD,hub,30.00,22.00,26.00,30.00,True,0.87
+CD-HU,Haut Uele,2026-10-24,UQPSU-SEIHRD,hub,21.00,21.00,24.00,28.00,True,1.14
+CD-IT,Ituri,2026-10-17,UQPSU-SEIHRD,hub,190.00,231.00,247.00,270.10,False,1.30
+CD-IT,Ituri,2026-10-24,UQPSU-SEIHRD,hub,234.00,220.90,236.00,261.10,True,1.01
+CD-NK,Nord Kivu,2026-10-17,UQPSU-SEIHRD,hub,189.00,171.00,187.50,207.00,True,0.99
+CD-NK,Nord Kivu,2026-10-24,UQPSU-SEIHRD,hub,214.00,176.00,192.00,213.05,False,0.90
+CD-TO,Tshopo,2026-10-17,UQPSU-SEIHRD,hub,11.00,6.00,8.00,11.00,True,0.75
+CD-TO,Tshopo,2026-10-24,UQPSU-SEIHRD,hub,13.00,6.00,8.00,11.00,False,0.64
+CD,DRC,2026-10-17,UQPSU-SEIHRD_CTMC,hub,420.00,445.20,492.00,527.00,False,1.17
+CD,DRC,2026-10-24,UQPSU-SEIHRD_CTMC,hub,482.00,443.80,484.00,523.20,True,1.00
+CD-HU,Haut Uele,2026-10-17,UQPSU-SEIHRD_CTMC,hub,30.00,19.00,26.00,33.00,True,0.87
+CD-HU,Haut Uele,2026-10-24,UQPSU-SEIHRD_CTMC,hub,21.00,18.00,25.00,31.40,True,1.18
+CD-IT,Ituri,2026-10-17,UQPSU-SEIHRD_CTMC,hub,190.00,227.00,252.00,285.80,False,1.32
+CD-IT,Ituri,2026-10-24,UQPSU-SEIHRD_CTMC,hub,234.00,219.60,244.00,283.60,True,1.04
+CD-NK,Nord Kivu,2026-10-17,UQPSU-SEIHRD_CTMC,hub,189.00,163.20,193.00,228.00,True,1.02
+CD-NK,Nord Kivu,2026-10-24,UQPSU-SEIHRD_CTMC,hub,214.00,170.60,197.00,235.00,True,0.92
+CD-TO,Tshopo,2026-10-17,UQPSU-SEIHRD_CTMC,hub,11.00,5.00,8.00,11.00,True,0.75
+CD-TO,Tshopo,2026-10-24,UQPSU-SEIHRD_CTMC,hub,13.00,5.00,8.00,12.00,False,0.64
+CD,DRC,2026-10-17,pedro-zonemix,hub,420.00,420.00,469.50,554.00,True,1.12
+CD,DRC,2026-10-24,pedro-zonemix,hub,482.00,482.00,588.50,729.25,True,1.22
+CD-BU,Bas Uele,2026-10-17,pedro-zonemix,hub,0.00,0.00,0.00,1.00,True,1.00
+CD-BU,Bas Uele,2026-10-24,pedro-zonemix,hub,0.00,0.00,0.00,2.00,True,1.00
+CD-BU-02,Ango,2026-10-17,pedro-zonemix,hub,0.00,0.00,0.00,1.00,True,1.00
+CD-BU-02,Ango,2026-10-24,pedro-zonemix,hub,0.00,0.00,0.00,1.00,True,1.00
+CD-BU-06,Ganga,2026-10-17,pedro-zonemix,hub,0.00,0.00,0.00,1.00,True,1.00
+CD-BU-06,Ganga,2026-10-24,pedro-zonemix,hub,0.00,0.00,0.00,1.00,True,1.00
+CD-BU-11,Viadana,2026-10-17,pedro-zonemix,hub,0.00,0.00,0.00,1.00,True,1.00
+CD-BU-11,Viadana,2026-10-24,pedro-zonemix,hub,0.00,0.00,0.00,1.00,True,1.00
+CD-HU,Haut Uele,2026-10-17,pedro-zonemix,hub,30.00,30.00,32.00,38.00,True,1.06
+CD-HU,Haut Uele,2026-10-24,pedro-zonemix,hub,21.00,21.00,26.00,34.05,True,1.23
+CD-HU-02,Boma Mangbetu,2026-10-17,pedro-zonemix,hub,2.00,2.00,2.00,3.00,True,1.00
+CD-HU-02,Boma Mangbetu,2026-10-24,pedro-zonemix,hub,4.00,4.00,4.00,6.00,True,1.00
+CD-HU-04,Dungu,2026-10-17,pedro-zonemix,hub,0.00,0.00,0.00,0.00,True,1.00
+CD-HU-04,Dungu,2026-10-24,pedro-zonemix,hub,0.00,0.00,0.00,0.00,True,1.00
+CD-HU-07,Isiro,2026-10-17,pedro-zonemix,hub,5.00,5.00,5.00,7.00,True,1.00
+CD-HU-07,Isiro,2026-10-24,pedro-zonemix,hub,3.00,3.00,4.00,6.00,True,1.25
+CD-HU-09,Niangara,2026-10-17,pedro-zonemix,hub,0.00,0.00,0.00,0.00,True,1.00
+CD-HU-09,Niangara,2026-10-24,pedro-zonemix,hub,0.00,0.00,0.00,1.00,True,1.00
+CD-HU-10,Pawa,2026-10-17,pedro-zonemix,hub,3.00,3.00,3.00,6.00,True,1.00
+CD-HU-10,Pawa,2026-10-24,pedro-zonemix,hub,6.00,6.00,7.00,10.00,True,1.14
+CD-HU-11,Rungu,2026-10-17,pedro-zonemix,hub,1.00,1.00,1.00,2.00,True,1.00
+CD-HU-11,Rungu,2026-10-24,pedro-zonemix,hub,0.00,0.00,0.00,1.05,True,1.00
+CD-HU-12,Wamba,2026-10-17,pedro-zonemix,hub,19.00,19.00,19.00,23.05,True,1.00
+CD-HU-12,Wamba,2026-10-24,pedro-zonemix,hub,8.00,8.00,10.00,16.05,True,1.22
+CD-IT,Ituri,2026-10-17,pedro-zonemix,hub,190.00,190.00,211.00,247.25,True,1.11
+CD-IT,Ituri,2026-10-24,pedro-zonemix,hub,234.00,234.00,280.00,342.35,True,1.20
+CD-IT-05,Aru,2026-10-17,pedro-zonemix,hub,4.00,4.00,4.00,5.00,True,1.00
+CD-IT-05,Aru,2026-10-24,pedro-zonemix,hub,12.00,12.00,13.00,16.00,True,1.08
+CD-IT-07,Bambu,2026-10-17,pedro-zonemix,hub,9.00,9.00,9.00,11.00,True,1.00
+CD-IT-07,Bambu,2026-10-24,pedro-zonemix,hub,2.00,2.00,3.00,7.00,True,1.33
+CD-IT-10,Bunia,2026-10-17,pedro-zonemix,hub,32.00,32.00,35.50,43.05,True,1.11
+CD-IT-10,Bunia,2026-10-24,pedro-zonemix,hub,53.00,53.00,63.50,79.05,True,1.19
+CD-IT-11,Damas,2026-10-17,pedro-zonemix,hub,1.00,1.00,1.00,1.00,True,1.00
+CD-IT-11,Damas,2026-10-24,pedro-zonemix,hub,0.00,0.00,0.00,1.00,True,1.00
+CD-IT-12,Drodro,2026-10-17,pedro-zonemix,hub,0.00,0.00,0.00,0.05,True,1.00
+CD-IT-12,Drodro,2026-10-24,pedro-zonemix,hub,0.00,0.00,0.00,1.00,True,1.00
+CD-IT-13,Fataki,2026-10-17,pedro-zonemix,hub,0.00,0.00,0.00,0.05,True,1.00
+CD-IT-13,Fataki,2026-10-24,pedro-zonemix,hub,4.00,4.00,4.00,5.00,True,1.00
+CD-IT-14,Gethy,2026-10-17,pedro-zonemix,hub,1.00,1.00,1.00,2.00,True,1.00
+CD-IT-14,Gethy,2026-10-24,pedro-zonemix,hub,0.00,0.00,0.00,1.00,True,1.00
+CD-IT-17,Kilo,2026-10-17,pedro-zonemix,hub,0.00,0.00,0.00,1.00,True,1.00
+CD-IT-17,Kilo,2026-10-24,pedro-zonemix,hub,1.00,1.00,1.00,2.00,True,1.00
+CD-IT-18,Komanda,2026-10-17,pedro-zonemix,hub,4.00,4.00,4.00,6.00,True,1.00
+CD-IT-18,Komanda,2026-10-24,pedro-zonemix,hub,1.00,1.00,2.00,4.00,True,1.50
+CD-IT-21,Lita,2026-10-17,pedro-zonemix,hub,7.00,7.00,8.00,11.00,True,1.12
+CD-IT-21,Lita,2026-10-24,pedro-zonemix,hub,6.00,6.00,7.00,10.00,True,1.14
+CD-IT-22,Logo,2026-10-17,pedro-zonemix,hub,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-22,Logo,2026-10-24,pedro-zonemix,hub,0.00,0.00,0.00,1.00,True,1.00
+CD-IT-23,Lolwa,2026-10-17,pedro-zonemix,hub,2.00,2.00,2.00,3.00,True,1.00
+CD-IT-23,Lolwa,2026-10-24,pedro-zonemix,hub,0.00,0.00,0.00,1.00,True,1.00
+CD-IT-24,Mahagi,2026-10-17,pedro-zonemix,hub,0.00,0.00,0.00,0.05,True,1.00
+CD-IT-24,Mahagi,2026-10-24,pedro-zonemix,hub,0.00,0.00,0.00,1.00,True,1.00
+CD-IT-25,Mambasa,2026-10-17,pedro-zonemix,hub,17.00,17.00,18.00,22.05,True,1.06
+CD-IT-25,Mambasa,2026-10-24,pedro-zonemix,hub,16.00,16.00,20.00,25.00,True,1.24
+CD-IT-26,Mandima,2026-10-17,pedro-zonemix,hub,33.00,33.00,36.00,46.00,True,1.09
+CD-IT-26,Mandima,2026-10-24,pedro-zonemix,hub,54.00,54.00,64.00,81.00,True,1.18
+CD-IT-27,Mangala,2026-10-17,pedro-zonemix,hub,12.00,12.00,13.00,18.00,True,1.08
+CD-IT-27,Mangala,2026-10-24,pedro-zonemix,hub,8.00,8.00,10.00,14.05,True,1.22
+CD-IT-28,Mongbwalu,2026-10-17,pedro-zonemix,hub,6.00,6.00,6.00,9.00,True,1.00
+CD-IT-28,Mongbwalu,2026-10-24,pedro-zonemix,hub,3.00,3.00,4.00,6.00,True,1.25
+CD-IT-29,Nia Nia,2026-10-17,pedro-zonemix,hub,6.00,6.00,6.00,9.05,True,1.00
+CD-IT-29,Nia Nia,2026-10-24,pedro-zonemix,hub,6.00,6.00,7.00,10.00,True,1.14
+CD-IT-30,Nizi,2026-10-17,pedro-zonemix,hub,18.00,18.00,20.00,26.05,True,1.11
+CD-IT-30,Nizi,2026-10-24,pedro-zonemix,hub,20.00,20.00,24.00,30.05,True,1.19
+CD-IT-31,Nyankunde,2026-10-17,pedro-zonemix,hub,1.00,1.00,1.00,3.00,True,1.00
+CD-IT-31,Nyankunde,2026-10-24,pedro-zonemix,hub,5.00,5.00,5.00,7.00,True,1.00
+CD-IT-34,Rimba,2026-10-17,pedro-zonemix,hub,2.00,2.00,2.00,4.00,True,1.00
+CD-IT-34,Rimba,2026-10-24,pedro-zonemix,hub,1.00,1.00,1.00,3.00,True,1.00
+CD-IT-35,Rwampara,2026-10-17,pedro-zonemix,hub,32.00,32.00,35.00,42.05,True,1.09
+CD-IT-35,Rwampara,2026-10-24,pedro-zonemix,hub,42.00,42.00,50.00,63.00,True,1.19
+CD-IT-36,Tchomia,2026-10-17,pedro-zonemix,hub,3.00,3.00,3.00,4.00,True,1.00
+CD-IT-36,Tchomia,2026-10-24,pedro-zonemix,hub,0.00,0.00,0.00,1.05,True,1.00
+CD-NK,Nord Kivu,2026-10-17,pedro-zonemix,hub,189.00,189.00,212.00,245.25,True,1.12
+CD-NK,Nord Kivu,2026-10-24,pedro-zonemix,hub,214.00,214.00,265.00,325.20,True,1.24
+CD-NK-03,Beni,2026-10-17,pedro-zonemix,hub,91.00,91.00,101.00,120.05,True,1.11
+CD-NK-03,Beni,2026-10-24,pedro-zonemix,hub,113.00,113.00,137.00,171.05,True,1.21
+CD-NK-04,Biena,2026-10-17,pedro-zonemix,hub,0.00,0.00,0.00,1.00,True,1.00
+CD-NK-04,Biena,2026-10-24,pedro-zonemix,hub,0.00,0.00,0.00,1.00,True,1.00
+CD-NK-07,Butembo,2026-10-17,pedro-zonemix,hub,4.00,4.00,4.00,6.05,True,1.00
+CD-NK-07,Butembo,2026-10-24,pedro-zonemix,hub,6.00,6.00,7.00,9.00,True,1.14
+CD-NK-10,Kalunguta,2026-10-17,pedro-zonemix,hub,0.00,0.00,0.00,0.05,True,1.00
+CD-NK-10,Kalunguta,2026-10-24,pedro-zonemix,hub,1.00,1.00,1.00,2.00,True,1.00
+CD-NK-14,Katwa,2026-10-17,pedro-zonemix,hub,22.00,22.00,25.00,31.00,True,1.13
+CD-NK-14,Katwa,2026-10-24,pedro-zonemix,hub,19.00,19.00,23.50,32.00,True,1.23
+CD-NK-19,Kyondo,2026-10-17,pedro-zonemix,hub,3.00,3.00,3.00,4.00,True,1.00
+CD-NK-19,Kyondo,2026-10-24,pedro-zonemix,hub,2.00,2.00,2.00,4.00,True,1.00
+CD-NK-20,Lubero,2026-10-17,pedro-zonemix,hub,3.00,3.00,3.00,6.00,True,1.00
+CD-NK-20,Lubero,2026-10-24,pedro-zonemix,hub,5.00,5.00,5.00,8.00,True,1.00
+CD-NK-21,Mabalako,2026-10-17,pedro-zonemix,hub,14.00,14.00,16.00,21.00,True,1.13
+CD-NK-21,Mabalako,2026-10-24,pedro-zonemix,hub,17.00,17.00,21.00,27.00,True,1.22
+CD-NK-22,Manguredjipa,2026-10-17,pedro-zonemix,hub,0.00,0.00,0.00,1.00,True,1.00
+CD-NK-22,Manguredjipa,2026-10-24,pedro-zonemix,hub,0.00,0.00,0.00,1.00,True,1.00
+CD-NK-23,Masereka,2026-10-17,pedro-zonemix,hub,2.00,2.00,2.00,3.00,True,1.00
+CD-NK-23,Masereka,2026-10-24,pedro-zonemix,hub,1.00,1.00,1.00,3.00,True,1.00
+CD-NK-25,Musienene,2026-10-17,pedro-zonemix,hub,2.00,2.00,2.00,5.00,True,1.00
+CD-NK-25,Musienene,2026-10-24,pedro-zonemix,hub,4.00,4.00,4.00,6.00,True,1.00
+CD-NK-26,Mutwanga,2026-10-17,pedro-zonemix,hub,16.00,16.00,18.00,22.00,True,1.12
+CD-NK-26,Mutwanga,2026-10-24,pedro-zonemix,hub,17.00,17.00,21.00,27.05,True,1.22
+CD-NK-29,Oicha,2026-10-17,pedro-zonemix,hub,20.00,20.00,22.00,27.00,True,1.10
+CD-NK-29,Oicha,2026-10-24,pedro-zonemix,hub,24.00,24.00,29.00,38.00,True,1.20
+CD-NK-33,Vuhovi,2026-10-17,pedro-zonemix,hub,12.00,12.00,12.00,15.00,True,1.00
+CD-NK-33,Vuhovi,2026-10-24,pedro-zonemix,hub,5.00,5.00,6.00,10.00,True,1.17
+CD-NU,Nord Ubangi,2026-10-17,pedro-zonemix,hub,0.00,0.00,0.00,0.00,True,1.00
+CD-NU,Nord Ubangi,2026-10-24,pedro-zonemix,hub,0.00,0.00,0.00,0.05,True,1.00
+CD-NU-09,Wapinda,2026-10-17,pedro-zonemix,hub,0.00,0.00,0.00,0.00,True,1.00
+CD-NU-09,Wapinda,2026-10-24,pedro-zonemix,hub,0.00,0.00,0.00,0.05,True,1.00
+CD-SU,Sud Ubangi,2026-10-17,pedro-zonemix,hub,0.00,0.00,0.00,1.00,True,1.00
+CD-SU,Sud Ubangi,2026-10-24,pedro-zonemix,hub,0.00,0.00,0.00,1.00,True,1.00
+CD-SU-07,Bulu,2026-10-17,pedro-zonemix,hub,0.00,0.00,0.00,1.00,True,1.00
+CD-SU-07,Bulu,2026-10-24,pedro-zonemix,hub,0.00,0.00,0.00,1.00,True,1.00
+CD-TO,Tshopo,2026-10-17,pedro-zonemix,hub,11.00,11.00,13.00,17.00,True,1.17
+CD-TO,Tshopo,2026-10-24,pedro-zonemix,hub,13.00,13.00,15.00,21.00,True,1.14
+CD-TO-02,Bafwasende,2026-10-17,pedro-zonemix,hub,3.00,3.00,3.50,7.00,True,1.12
+CD-TO-02,Bafwasende,2026-10-24,pedro-zonemix,hub,0.00,0.00,0.00,3.00,True,1.00
+CD-TO-08,Kabondo,2026-10-17,pedro-zonemix,hub,4.00,4.00,4.00,5.05,True,1.00
+CD-TO-08,Kabondo,2026-10-24,pedro-zonemix,hub,9.00,9.00,10.00,13.05,True,1.10
+CD-TO-11,Makiso Kisangani,2026-10-17,pedro-zonemix,hub,2.00,2.00,2.00,4.00,True,1.00
+CD-TO-11,Makiso Kisangani,2026-10-24,pedro-zonemix,hub,2.00,2.00,2.00,4.00,True,1.00
+CD-TO-12,Mangobo,2026-10-17,pedro-zonemix,hub,1.00,1.00,1.00,2.00,True,1.00
+CD-TO-12,Mangobo,2026-10-24,pedro-zonemix,hub,0.00,0.00,0.00,1.00,True,1.00
+CD-TO-15,Tshopo,2026-10-17,pedro-zonemix,hub,1.00,1.00,1.00,2.00,True,1.00
+CD-TO-15,Tshopo,2026-10-24,pedro-zonemix,hub,2.00,2.00,2.00,3.00,True,1.00
+CD-TO-17,Wanierukula,2026-10-17,pedro-zonemix,hub,0.00,0.00,0.00,1.00,True,1.00
+CD-TO-17,Wanierukula,2026-10-24,pedro-zonemix,hub,0.00,0.00,0.00,0.00,True,1.00
+CD,DRC,2026-10-17,hub-ensemble,ensemble,420.00,420.00,469.50,527.00,True,1.12
+CD,DRC,2026-10-24,hub-ensemble,ensemble,482.00,443.80,484.00,526.00,True,1.00
+CD-BU,Bas Uele,2026-10-17,hub-ensemble,ensemble,0.00,0.00,0.00,0.50,True,1.00
+CD-BU,Bas Uele,2026-10-24,hub-ensemble,ensemble,0.00,0.00,0.00,1.50,True,1.00
+CD-BU-02,Ango,2026-10-17,hub-ensemble,ensemble,0.00,0.00,0.00,0.50,True,1.00
+CD-BU-02,Ango,2026-10-24,hub-ensemble,ensemble,0.00,0.00,0.00,1.00,True,1.00
+CD-BU-06,Ganga,2026-10-17,hub-ensemble,ensemble,0.00,0.00,0.00,0.50,True,1.00
+CD-BU-06,Ganga,2026-10-24,hub-ensemble,ensemble,0.00,0.00,0.00,1.00,True,1.00
+CD-BU-11,Viadana,2026-10-17,hub-ensemble,ensemble,0.00,0.00,0.00,1.00,True,1.00
+CD-BU-11,Viadana,2026-10-24,hub-ensemble,ensemble,0.00,0.00,0.00,1.50,True,1.00
+CD-HU,Haut Uele,2026-10-17,hub-ensemble,ensemble,30.00,22.00,26.00,33.05,True,0.87
+CD-HU,Haut Uele,2026-10-24,hub-ensemble,ensemble,21.00,21.00,24.00,31.40,True,1.14
+CD-HU-02,Boma Mangbetu,2026-10-17,hub-ensemble,ensemble,2.00,2.00,2.50,3.50,True,1.17
+CD-HU-02,Boma Mangbetu,2026-10-24,hub-ensemble,ensemble,4.00,4.00,4.00,5.50,True,1.00
+CD-HU-04,Dungu,2026-10-17,hub-ensemble,ensemble,0.00,0.00,0.00,0.50,True,1.00
+CD-HU-04,Dungu,2026-10-24,hub-ensemble,ensemble,0.00,0.00,0.50,1.00,True,1.50
+CD-HU-07,Isiro,2026-10-17,hub-ensemble,ensemble,5.00,5.00,5.00,6.50,True,1.00
+CD-HU-07,Isiro,2026-10-24,hub-ensemble,ensemble,3.00,3.00,3.50,6.00,True,1.12
+CD-HU-09,Niangara,2026-10-17,hub-ensemble,ensemble,0.00,0.00,0.00,0.50,True,1.00
+CD-HU-09,Niangara,2026-10-24,hub-ensemble,ensemble,0.00,0.00,0.50,1.50,True,1.50
+CD-HU-10,Pawa,2026-10-17,hub-ensemble,ensemble,3.00,3.00,3.00,5.00,True,1.00
+CD-HU-10,Pawa,2026-10-24,hub-ensemble,ensemble,6.00,6.00,7.00,10.00,True,1.14
+CD-HU-11,Rungu,2026-10-17,hub-ensemble,ensemble,1.00,1.00,1.00,2.00,True,1.00
+CD-HU-11,Rungu,2026-10-24,hub-ensemble,ensemble,0.00,0.00,0.00,1.52,True,1.00
+CD-HU-12,Wamba,2026-10-17,hub-ensemble,ensemble,19.00,19.00,19.50,23.02,True,1.02
+CD-HU-12,Wamba,2026-10-24,hub-ensemble,ensemble,8.00,8.00,10.00,14.52,True,1.22
+CD-IT,Ituri,2026-10-17,hub-ensemble,ensemble,190.00,190.00,230.50,270.10,True,1.21
+CD-IT,Ituri,2026-10-24,hub-ensemble,ensemble,234.00,220.90,244.00,283.60,True,1.04
+CD-IT-05,Aru,2026-10-17,hub-ensemble,ensemble,4.00,4.00,4.00,5.00,True,1.00
+CD-IT-05,Aru,2026-10-24,hub-ensemble,ensemble,12.00,12.00,13.50,17.50,True,1.12
+CD-IT-07,Bambu,2026-10-17,hub-ensemble,ensemble,9.00,9.00,9.00,10.50,True,1.00
+CD-IT-07,Bambu,2026-10-24,hub-ensemble,ensemble,2.00,2.00,2.50,5.50,True,1.17
+CD-IT-10,Bunia,2026-10-17,hub-ensemble,ensemble,32.00,32.00,34.75,40.52,True,1.08
+CD-IT-10,Bunia,2026-10-24,hub-ensemble,ensemble,53.00,53.00,61.25,72.03,True,1.15
+CD-IT-11,Damas,2026-10-17,hub-ensemble,ensemble,1.00,1.00,1.50,1.50,True,1.25
+CD-IT-11,Damas,2026-10-24,hub-ensemble,ensemble,0.00,0.00,0.50,1.50,True,1.50
+CD-IT-12,Drodro,2026-10-17,hub-ensemble,ensemble,0.00,0.00,0.00,0.52,True,1.00
+CD-IT-12,Drodro,2026-10-24,hub-ensemble,ensemble,0.00,0.00,0.50,1.50,True,1.50
+CD-IT-13,Fataki,2026-10-17,hub-ensemble,ensemble,0.00,0.00,0.00,0.52,True,1.00
+CD-IT-13,Fataki,2026-10-24,hub-ensemble,ensemble,4.00,4.00,4.00,5.50,True,1.00
+CD-IT-14,Gethy,2026-10-17,hub-ensemble,ensemble,1.00,1.00,1.00,2.00,True,1.00
+CD-IT-14,Gethy,2026-10-24,hub-ensemble,ensemble,0.00,0.00,0.50,2.00,True,1.50
+CD-IT-17,Kilo,2026-10-17,hub-ensemble,ensemble,0.00,0.00,0.50,1.50,True,1.50
+CD-IT-17,Kilo,2026-10-24,hub-ensemble,ensemble,1.00,1.00,1.50,2.50,True,1.25
+CD-IT-18,Komanda,2026-10-17,hub-ensemble,ensemble,4.00,4.00,4.50,6.00,True,1.10
+CD-IT-18,Komanda,2026-10-24,hub-ensemble,ensemble,1.00,1.00,2.00,3.50,True,1.50
+CD-IT-21,Lita,2026-10-17,hub-ensemble,ensemble,7.00,7.00,7.50,10.00,True,1.06
+CD-IT-21,Lita,2026-10-24,hub-ensemble,ensemble,6.00,6.00,7.00,10.00,True,1.14
+CD-IT-22,Logo,2026-10-17,hub-ensemble,ensemble,0.00,0.00,0.00,0.50,True,1.00
+CD-IT-22,Logo,2026-10-24,hub-ensemble,ensemble,0.00,0.00,0.00,1.00,True,1.00
+CD-IT-23,Lolwa,2026-10-17,hub-ensemble,ensemble,2.00,2.00,2.50,4.00,True,1.17
+CD-IT-23,Lolwa,2026-10-24,hub-ensemble,ensemble,0.00,0.00,0.50,1.50,True,1.50
+CD-IT-24,Mahagi,2026-10-17,hub-ensemble,ensemble,0.00,0.00,0.00,1.02,True,1.00
+CD-IT-24,Mahagi,2026-10-24,hub-ensemble,ensemble,0.00,0.00,0.00,1.00,True,1.00
+CD-IT-25,Mambasa,2026-10-17,hub-ensemble,ensemble,17.00,17.00,18.00,21.02,True,1.06
+CD-IT-25,Mambasa,2026-10-24,hub-ensemble,ensemble,16.00,16.00,18.00,22.50,True,1.12
+CD-IT-26,Mandima,2026-10-17,hub-ensemble,ensemble,33.00,33.00,34.50,39.50,True,1.04
+CD-IT-26,Mandima,2026-10-24,hub-ensemble,ensemble,54.00,54.00,61.00,71.50,True,1.13
+CD-IT-27,Mangala,2026-10-17,hub-ensemble,ensemble,12.00,12.00,12.50,15.50,True,1.04
+CD-IT-27,Mangala,2026-10-24,hub-ensemble,ensemble,8.00,8.00,9.00,13.02,True,1.11
+CD-IT-28,Mongbwalu,2026-10-17,hub-ensemble,ensemble,6.00,6.00,6.00,7.50,True,1.00
+CD-IT-28,Mongbwalu,2026-10-24,hub-ensemble,ensemble,3.00,3.00,3.50,5.50,True,1.12
+CD-IT-29,Nia Nia,2026-10-17,hub-ensemble,ensemble,6.00,6.00,6.50,9.52,True,1.07
+CD-IT-29,Nia Nia,2026-10-24,hub-ensemble,ensemble,6.00,6.00,6.50,9.50,True,1.07
+CD-IT-30,Nizi,2026-10-17,hub-ensemble,ensemble,18.00,18.00,19.50,23.52,True,1.08
+CD-IT-30,Nizi,2026-10-24,hub-ensemble,ensemble,20.00,20.00,22.00,27.02,True,1.10
+CD-IT-31,Nyankunde,2026-10-17,hub-ensemble,ensemble,1.00,1.00,1.00,2.50,True,1.00
+CD-IT-31,Nyankunde,2026-10-24,hub-ensemble,ensemble,5.00,5.00,5.00,7.50,True,1.00
+CD-IT-34,Rimba,2026-10-17,hub-ensemble,ensemble,2.00,2.00,2.50,4.50,True,1.17
+CD-IT-34,Rimba,2026-10-24,hub-ensemble,ensemble,1.00,1.50,2.00,4.00,False,1.50
+CD-IT-35,Rwampara,2026-10-17,hub-ensemble,ensemble,32.00,32.00,34.00,38.52,True,1.06
+CD-IT-35,Rwampara,2026-10-24,hub-ensemble,ensemble,42.00,42.00,47.50,56.50,True,1.13
+CD-IT-36,Tchomia,2026-10-17,hub-ensemble,ensemble,3.00,3.00,3.00,4.00,True,1.00
+CD-IT-36,Tchomia,2026-10-24,hub-ensemble,ensemble,0.00,0.00,0.50,1.52,True,1.50
+CD-NK,Nord Kivu,2026-10-17,hub-ensemble,ensemble,189.00,171.00,193.00,228.00,True,1.02
+CD-NK,Nord Kivu,2026-10-24,hub-ensemble,ensemble,214.00,176.00,215.50,235.00,True,1.01
+CD-NK-03,Beni,2026-10-17,hub-ensemble,ensemble,91.00,91.00,96.00,105.53,True,1.05
+CD-NK-03,Beni,2026-10-24,hub-ensemble,ensemble,113.00,113.00,125.00,144.53,True,1.11
+CD-NK-04,Biena,2026-10-17,hub-ensemble,ensemble,0.00,0.00,0.00,0.50,True,1.00
+CD-NK-04,Biena,2026-10-24,hub-ensemble,ensemble,0.00,0.00,0.00,1.00,True,1.00
+CD-NK-07,Butembo,2026-10-17,hub-ensemble,ensemble,4.00,4.00,4.00,5.02,True,1.00
+CD-NK-07,Butembo,2026-10-24,hub-ensemble,ensemble,6.00,6.00,6.50,8.50,True,1.07
+CD-NK-10,Kalunguta,2026-10-17,hub-ensemble,ensemble,0.00,0.00,0.00,0.52,True,1.00
+CD-NK-10,Kalunguta,2026-10-24,hub-ensemble,ensemble,1.00,1.00,1.00,2.00,True,1.00
+CD-NK-14,Katwa,2026-10-17,hub-ensemble,ensemble,22.00,22.00,23.50,28.00,True,1.07
+CD-NK-14,Katwa,2026-10-24,hub-ensemble,ensemble,19.00,19.00,21.75,27.50,True,1.14
+CD-NK-19,Kyondo,2026-10-17,hub-ensemble,ensemble,3.00,3.00,3.00,4.00,True,1.00
+CD-NK-19,Kyondo,2026-10-24,hub-ensemble,ensemble,2.00,2.00,2.00,3.50,True,1.00
+CD-NK-20,Lubero,2026-10-17,hub-ensemble,ensemble,3.00,3.00,3.00,5.00,True,1.00
+CD-NK-20,Lubero,2026-10-24,hub-ensemble,ensemble,5.00,5.00,5.00,7.50,True,1.00
+CD-NK-21,Mabalako,2026-10-17,hub-ensemble,ensemble,14.00,14.00,15.00,18.50,True,1.07
+CD-NK-21,Mabalako,2026-10-24,hub-ensemble,ensemble,17.00,17.00,19.50,24.00,True,1.14
+CD-NK-22,Manguredjipa,2026-10-17,hub-ensemble,ensemble,0.00,0.00,0.25,1.00,True,1.25
+CD-NK-22,Manguredjipa,2026-10-24,hub-ensemble,ensemble,0.00,0.00,0.25,1.50,True,1.25
+CD-NK-23,Masereka,2026-10-17,hub-ensemble,ensemble,2.00,2.00,2.00,3.50,True,1.00
+CD-NK-23,Masereka,2026-10-24,hub-ensemble,ensemble,1.00,1.00,1.00,3.00,True,1.00
+CD-NK-25,Musienene,2026-10-17,hub-ensemble,ensemble,2.00,2.00,2.00,4.50,True,1.00
+CD-NK-25,Musienene,2026-10-24,hub-ensemble,ensemble,4.00,4.00,4.50,6.50,True,1.10
+CD-NK-26,Mutwanga,2026-10-17,hub-ensemble,ensemble,16.00,16.00,17.00,19.00,True,1.06
+CD-NK-26,Mutwanga,2026-10-24,hub-ensemble,ensemble,17.00,17.00,19.00,23.52,True,1.11
+CD-NK-29,Oicha,2026-10-17,hub-ensemble,ensemble,20.00,20.00,21.00,24.00,True,1.05
+CD-NK-29,Oicha,2026-10-24,hub-ensemble,ensemble,24.00,24.00,26.50,32.50,True,1.10
+CD-NK-33,Vuhovi,2026-10-17,hub-ensemble,ensemble,12.00,12.00,12.00,15.50,True,1.00
+CD-NK-33,Vuhovi,2026-10-24,hub-ensemble,ensemble,5.00,5.00,6.50,9.50,True,1.25
+CD-NU,Nord Ubangi,2026-10-17,hub-ensemble,ensemble,0.00,0.00,0.00,1.00,True,1.00
+CD-NU,Nord Ubangi,2026-10-24,hub-ensemble,ensemble,0.00,0.00,0.50,1.02,True,1.50
+CD-NU-09,Wapinda,2026-10-17,hub-ensemble,ensemble,0.00,0.00,0.00,0.50,True,1.00
+CD-NU-09,Wapinda,2026-10-24,hub-ensemble,ensemble,0.00,0.00,0.50,1.02,True,1.50
+CD-SU,Sud Ubangi,2026-10-17,hub-ensemble,ensemble,0.00,0.00,0.25,1.50,True,1.25
+CD-SU,Sud Ubangi,2026-10-24,hub-ensemble,ensemble,0.00,0.00,0.50,1.00,True,1.50
+CD-SU-07,Bulu,2026-10-17,hub-ensemble,ensemble,0.00,0.00,0.50,2.00,True,1.50
+CD-SU-07,Bulu,2026-10-24,hub-ensemble,ensemble,0.00,0.00,0.50,1.50,True,1.50
+CD-TO,Tshopo,2026-10-17,hub-ensemble,ensemble,11.00,8.50,9.75,12.50,True,0.90
+CD-TO,Tshopo,2026-10-24,hub-ensemble,ensemble,13.00,9.50,11.00,14.50,True,0.86
+CD-TO-02,Bafwasende,2026-10-17,hub-ensemble,ensemble,3.00,3.00,3.75,6.00,True,1.19
+CD-TO-02,Bafwasende,2026-10-24,hub-ensemble,ensemble,0.00,0.00,0.50,2.00,True,1.50
+CD-TO-08,Kabondo,2026-10-17,hub-ensemble,ensemble,4.00,4.00,4.00,5.02,True,1.00
+CD-TO-08,Kabondo,2026-10-24,hub-ensemble,ensemble,9.00,9.00,9.50,12.02,True,1.05
+CD-TO-11,Makiso Kisangani,2026-10-17,hub-ensemble,ensemble,2.00,2.00,2.00,3.50,True,1.00
+CD-TO-11,Makiso Kisangani,2026-10-24,hub-ensemble,ensemble,2.00,2.00,2.00,3.50,True,1.00
+CD-TO-12,Mangobo,2026-10-17,hub-ensemble,ensemble,1.00,1.00,1.00,1.50,True,1.00
+CD-TO-12,Mangobo,2026-10-24,hub-ensemble,ensemble,0.00,0.00,0.00,1.00,True,1.00
+CD-TO-15,Tshopo,2026-10-17,hub-ensemble,ensemble,1.00,1.00,1.00,2.00,True,1.00
+CD-TO-15,Tshopo,2026-10-24,hub-ensemble,ensemble,2.00,2.00,2.00,3.50,True,1.00
+CD-TO-17,Wanierukula,2026-10-17,hub-ensemble,ensemble,0.00,0.00,0.00,1.00,True,1.00
+CD-TO-17,Wanierukula,2026-10-24,hub-ensemble,ensemble,0.00,0.00,0.00,1.00,True,1.00
+CD,DRC,2026-10-17,randomwalknowcast,ours,420.00,438.95,458.50,501.50,False,1.09
+CD,DRC,2026-10-24,randomwalknowcast,ours,482.00,516.85,575.00,723.35,False,1.19
+CD-BU,Bas Uele,2026-10-17,randomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-BU,Bas Uele,2026-10-24,randomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-BU-02,Ango,2026-10-17,randomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-BU-02,Ango,2026-10-24,randomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-BU-05,Buta,2026-10-17,randomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-BU-05,Buta,2026-10-24,randomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-BU-06,Ganga,2026-10-17,randomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-BU-06,Ganga,2026-10-24,randomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-BU-11,Viadana,2026-10-17,randomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-BU-11,Viadana,2026-10-24,randomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-HU,Haut Uele,2026-10-17,randomwalknowcast,ours,30.00,30.00,30.00,40.00,True,1.00
+CD-HU,Haut Uele,2026-10-24,randomwalknowcast,ours,21.00,22.00,24.00,27.00,False,1.14
+CD-HU-02,Boma Mangbetu,2026-10-17,randomwalknowcast,ours,2.00,2.00,2.00,3.00,True,1.00
+CD-HU-02,Boma Mangbetu,2026-10-24,randomwalknowcast,ours,4.00,3.00,4.00,7.00,True,1.00
+CD-HU-04,Dungu,2026-10-17,randomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-HU-04,Dungu,2026-10-24,randomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-HU-06,Gombari,2026-10-17,randomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-HU-06,Gombari,2026-10-24,randomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-HU-07,Isiro,2026-10-17,randomwalknowcast,ours,5.00,4.00,5.00,8.00,True,1.00
+CD-HU-07,Isiro,2026-10-24,randomwalknowcast,ours,3.00,2.00,3.00,5.00,True,1.00
+CD-HU-09,Niangara,2026-10-17,randomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-HU-09,Niangara,2026-10-24,randomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-HU-10,Pawa,2026-10-17,randomwalknowcast,ours,3.00,2.00,3.00,4.05,True,1.00
+CD-HU-10,Pawa,2026-10-24,randomwalknowcast,ours,6.00,5.00,7.00,10.00,True,1.14
+CD-HU-11,Rungu,2026-10-17,randomwalknowcast,ours,1.00,1.00,1.00,1.00,True,1.00
+CD-HU-11,Rungu,2026-10-24,randomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-HU-12,Wamba,2026-10-17,randomwalknowcast,ours,19.00,17.00,19.00,25.05,True,1.00
+CD-HU-12,Wamba,2026-10-24,randomwalknowcast,ours,8.00,7.00,9.00,12.00,True,1.11
+CD-IT,Ituri,2026-10-17,randomwalknowcast,ours,190.00,190.00,197.50,252.20,True,1.04
+CD-IT,Ituri,2026-10-24,randomwalknowcast,ours,234.00,247.85,273.50,339.20,False,1.17
+CD-IT-02,Adja,2026-10-17,randomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-02,Adja,2026-10-24,randomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-04,Ariwara,2026-10-17,randomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-04,Ariwara,2026-10-24,randomwalknowcast,ours,0.00,0.00,0.00,1.00,True,1.00
+CD-IT-05,Aru,2026-10-17,randomwalknowcast,ours,4.00,3.00,4.00,7.00,True,1.00
+CD-IT-05,Aru,2026-10-24,randomwalknowcast,ours,12.00,11.00,14.00,20.00,True,1.15
+CD-IT-06,Aungba,2026-10-17,randomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-06,Aungba,2026-10-24,randomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-07,Bambu,2026-10-17,randomwalknowcast,ours,9.00,6.00,9.00,12.10,True,1.00
+CD-IT-07,Bambu,2026-10-24,randomwalknowcast,ours,2.00,1.00,2.00,4.00,True,1.00
+CD-IT-09,Boga,2026-10-17,randomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-09,Boga,2026-10-24,randomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-10,Bunia,2026-10-17,randomwalknowcast,ours,32.00,24.95,32.00,40.05,True,1.00
+CD-IT-10,Bunia,2026-10-24,randomwalknowcast,ours,53.00,43.95,54.00,72.05,True,1.02
+CD-IT-11,Damas,2026-10-17,randomwalknowcast,ours,1.00,1.00,1.00,2.00,True,1.00
+CD-IT-11,Damas,2026-10-24,randomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-12,Drodro,2026-10-17,randomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-12,Drodro,2026-10-24,randomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-13,Fataki,2026-10-17,randomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-13,Fataki,2026-10-24,randomwalknowcast,ours,4.00,3.00,5.00,7.00,True,1.20
+CD-IT-14,Gethy,2026-10-17,randomwalknowcast,ours,1.00,1.00,1.00,1.00,True,1.00
+CD-IT-14,Gethy,2026-10-24,randomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-16,Kambala,2026-10-17,randomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-16,Kambala,2026-10-24,randomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-17,Kilo,2026-10-17,randomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-17,Kilo,2026-10-24,randomwalknowcast,ours,1.00,1.00,1.00,2.00,True,1.00
+CD-IT-18,Komanda,2026-10-17,randomwalknowcast,ours,4.00,3.00,4.00,6.00,True,1.00
+CD-IT-18,Komanda,2026-10-24,randomwalknowcast,ours,1.00,0.00,1.00,2.00,True,1.00
+CD-IT-21,Lita,2026-10-17,randomwalknowcast,ours,7.00,5.00,7.00,13.00,True,1.00
+CD-IT-21,Lita,2026-10-24,randomwalknowcast,ours,6.00,5.00,7.00,10.00,True,1.14
+CD-IT-22,Logo,2026-10-17,randomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-22,Logo,2026-10-24,randomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-23,Lolwa,2026-10-17,randomwalknowcast,ours,2.00,1.95,2.00,3.00,True,1.00
+CD-IT-23,Lolwa,2026-10-24,randomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-24,Mahagi,2026-10-17,randomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-24,Mahagi,2026-10-24,randomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-25,Mambasa,2026-10-17,randomwalknowcast,ours,17.00,14.95,18.00,23.05,True,1.06
+CD-IT-25,Mambasa,2026-10-24,randomwalknowcast,ours,16.00,14.95,18.00,25.05,True,1.12
+CD-IT-26,Mandima,2026-10-17,randomwalknowcast,ours,33.00,30.00,35.00,73.05,True,1.06
+CD-IT-26,Mandima,2026-10-24,randomwalknowcast,ours,54.00,60.90,84.00,122.05,False,1.55
+CD-IT-27,Mangala,2026-10-17,randomwalknowcast,ours,12.00,9.00,12.00,16.00,True,1.00
+CD-IT-27,Mangala,2026-10-24,randomwalknowcast,ours,8.00,6.00,8.00,11.00,True,1.00
+CD-IT-28,Mongbwalu,2026-10-17,randomwalknowcast,ours,6.00,5.00,6.00,8.05,True,1.00
+CD-IT-28,Mongbwalu,2026-10-24,randomwalknowcast,ours,3.00,2.00,3.00,5.05,True,1.00
+CD-IT-29,Nia Nia,2026-10-17,randomwalknowcast,ours,6.00,5.00,6.00,9.00,True,1.00
+CD-IT-29,Nia Nia,2026-10-24,randomwalknowcast,ours,6.00,5.00,7.00,10.05,True,1.14
+CD-IT-30,Nizi,2026-10-17,randomwalknowcast,ours,18.00,14.00,20.00,26.00,True,1.11
+CD-IT-30,Nizi,2026-10-24,randomwalknowcast,ours,20.00,17.00,21.50,29.05,True,1.07
+CD-IT-31,Nyankunde,2026-10-17,randomwalknowcast,ours,1.00,1.00,1.00,2.00,True,1.00
+CD-IT-31,Nyankunde,2026-10-24,randomwalknowcast,ours,5.00,4.00,6.00,8.05,True,1.17
+CD-IT-34,Rimba,2026-10-17,randomwalknowcast,ours,2.00,1.00,2.00,3.05,True,1.00
+CD-IT-34,Rimba,2026-10-24,randomwalknowcast,ours,1.00,1.00,1.00,2.00,True,1.00
+CD-IT-35,Rwampara,2026-10-17,randomwalknowcast,ours,32.00,24.00,33.00,41.05,True,1.03
+CD-IT-35,Rwampara,2026-10-24,randomwalknowcast,ours,42.00,32.00,41.00,53.10,True,0.98
+CD-IT-36,Tchomia,2026-10-17,randomwalknowcast,ours,3.00,0.00,2.00,5.00,True,0.75
+CD-IT-36,Tchomia,2026-10-24,randomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-NK,Nord Kivu,2026-10-17,randomwalknowcast,ours,189.00,206.00,213.00,221.00,False,1.13
+CD-NK,Nord Kivu,2026-10-24,randomwalknowcast,ours,214.00,215.00,251.50,373.40,False,1.17
+CD-NK-03,Beni,2026-10-17,randomwalknowcast,ours,91.00,89.95,101.00,125.15,True,1.11
+CD-NK-03,Beni,2026-10-24,randomwalknowcast,ours,113.00,103.95,138.00,220.10,True,1.22
+CD-NK-04,Biena,2026-10-17,randomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-NK-04,Biena,2026-10-24,randomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-NK-07,Butembo,2026-10-17,randomwalknowcast,ours,4.00,3.00,4.00,8.00,True,1.00
+CD-NK-07,Butembo,2026-10-24,randomwalknowcast,ours,6.00,4.00,6.00,15.05,True,1.00
+CD-NK-08,Goma,2026-10-17,randomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-NK-08,Goma,2026-10-24,randomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-NK-10,Kalunguta,2026-10-17,randomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-NK-10,Kalunguta,2026-10-24,randomwalknowcast,ours,1.00,1.00,1.00,3.00,True,1.00
+CD-NK-14,Katwa,2026-10-17,randomwalknowcast,ours,22.00,15.95,23.00,27.05,True,1.04
+CD-NK-14,Katwa,2026-10-24,randomwalknowcast,ours,19.00,14.00,20.00,32.00,True,1.05
+CD-NK-15,Kayna,2026-10-17,randomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-NK-15,Kayna,2026-10-24,randomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-NK-19,Kyondo,2026-10-17,randomwalknowcast,ours,3.00,2.00,3.00,7.05,True,1.00
+CD-NK-19,Kyondo,2026-10-24,randomwalknowcast,ours,2.00,1.00,2.00,5.05,True,1.00
+CD-NK-20,Lubero,2026-10-17,randomwalknowcast,ours,3.00,2.00,3.00,5.00,True,1.00
+CD-NK-20,Lubero,2026-10-24,randomwalknowcast,ours,5.00,3.95,6.00,10.00,True,1.17
+CD-NK-21,Mabalako,2026-10-17,randomwalknowcast,ours,14.00,12.00,16.00,20.00,True,1.13
+CD-NK-21,Mabalako,2026-10-24,randomwalknowcast,ours,17.00,11.00,19.50,33.25,True,1.14
+CD-NK-22,Manguredjipa,2026-10-17,randomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-NK-22,Manguredjipa,2026-10-24,randomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-NK-23,Masereka,2026-10-17,randomwalknowcast,ours,2.00,2.00,2.00,4.05,True,1.00
+CD-NK-23,Masereka,2026-10-24,randomwalknowcast,ours,1.00,1.00,1.00,3.00,True,1.00
+CD-NK-25,Musienene,2026-10-17,randomwalknowcast,ours,2.00,2.00,2.00,5.00,True,1.00
+CD-NK-25,Musienene,2026-10-24,randomwalknowcast,ours,4.00,3.00,5.00,8.05,True,1.20
+CD-NK-26,Mutwanga,2026-10-17,randomwalknowcast,ours,16.00,12.95,18.00,22.05,True,1.12
+CD-NK-26,Mutwanga,2026-10-24,randomwalknowcast,ours,17.00,12.00,20.00,34.05,True,1.17
+CD-NK-29,Oicha,2026-10-17,randomwalknowcast,ours,20.00,16.95,22.00,30.05,True,1.10
+CD-NK-29,Oicha,2026-10-24,randomwalknowcast,ours,24.00,18.00,27.00,44.00,True,1.12
+CD-NK-33,Vuhovi,2026-10-17,randomwalknowcast,ours,12.00,9.95,13.00,21.00,True,1.08
+CD-NK-33,Vuhovi,2026-10-24,randomwalknowcast,ours,5.00,4.00,6.00,11.05,True,1.17
+CD-NU,Nord Ubangi,2026-10-17,randomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-NU,Nord Ubangi,2026-10-24,randomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-NU-09,Wapinda,2026-10-17,randomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-NU-09,Wapinda,2026-10-24,randomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-SK,Sud Kivu,2026-10-17,randomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-SK,Sud Kivu,2026-10-24,randomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-SK-23,Miti Murhesa,2026-10-17,randomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-SK-23,Miti Murhesa,2026-10-24,randomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-SU,Sud Ubangi,2026-10-17,randomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-SU,Sud Ubangi,2026-10-24,randomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-SU-07,Bulu,2026-10-17,randomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-SU-07,Bulu,2026-10-24,randomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-TO,Tshopo,2026-10-17,randomwalknowcast,ours,11.00,11.00,11.00,23.05,True,1.00
+CD-TO,Tshopo,2026-10-24,randomwalknowcast,ours,13.00,13.00,16.00,22.00,True,1.21
+CD-TO-02,Bafwasende,2026-10-17,randomwalknowcast,ours,3.00,2.00,4.00,6.00,True,1.25
+CD-TO-02,Bafwasende,2026-10-24,randomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-TO-08,Kabondo,2026-10-17,randomwalknowcast,ours,4.00,2.00,3.00,6.05,True,0.80
+CD-TO-08,Kabondo,2026-10-24,randomwalknowcast,ours,9.00,8.00,11.00,16.00,True,1.20
+CD-TO-10,Lubunga,2026-10-17,randomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-TO-10,Lubunga,2026-10-24,randomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-TO-11,Makiso Kisangani,2026-10-17,randomwalknowcast,ours,2.00,2.00,2.00,5.00,True,1.00
+CD-TO-11,Makiso Kisangani,2026-10-24,randomwalknowcast,ours,2.00,1.00,2.50,4.00,True,1.17
+CD-TO-12,Mangobo,2026-10-17,randomwalknowcast,ours,1.00,1.00,1.00,2.00,True,1.00
+CD-TO-12,Mangobo,2026-10-24,randomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-TO-15,Tshopo,2026-10-17,randomwalknowcast,ours,1.00,1.00,1.00,2.00,True,1.00
+CD-TO-15,Tshopo,2026-10-24,randomwalknowcast,ours,2.00,1.00,2.00,3.05,True,1.00
+CD-TO-17,Wanierukula,2026-10-17,randomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-TO-17,Wanierukula,2026-10-24,randomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD,DRC,2026-10-17,randomwalk,ours,420.00,469.65,546.00,683.40,False,1.30
+CD,DRC,2026-10-24,randomwalk,ours,482.00,493.90,562.00,761.15,False,1.17
+CD-BU,Bas Uele,2026-10-17,randomwalk,ours,0.00,0.00,0.00,1.00,True,1.00
+CD-BU,Bas Uele,2026-10-24,randomwalk,ours,0.00,0.00,0.00,1.00,True,1.00
+CD-BU-02,Ango,2026-10-17,randomwalk,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-BU-02,Ango,2026-10-24,randomwalk,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-BU-05,Buta,2026-10-17,randomwalk,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-BU-05,Buta,2026-10-24,randomwalk,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-BU-06,Ganga,2026-10-17,randomwalk,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-BU-06,Ganga,2026-10-24,randomwalk,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-BU-11,Viadana,2026-10-17,randomwalk,ours,0.00,0.00,0.00,1.00,True,1.00
+CD-BU-11,Viadana,2026-10-24,randomwalk,ours,0.00,0.00,0.00,1.00,True,1.00
+CD-HU,Haut Uele,2026-10-17,randomwalk,ours,30.00,30.00,30.00,37.15,True,1.00
+CD-HU,Haut Uele,2026-10-24,randomwalk,ours,21.00,21.00,24.00,42.00,True,1.14
+CD-HU-02,Boma Mangbetu,2026-10-17,randomwalk,ours,2.00,1.00,2.00,3.00,True,1.00
+CD-HU-02,Boma Mangbetu,2026-10-24,randomwalk,ours,4.00,2.00,3.00,6.05,True,0.80
+CD-HU-04,Dungu,2026-10-17,randomwalk,ours,0.00,0.00,0.00,1.00,True,1.00
+CD-HU-04,Dungu,2026-10-24,randomwalk,ours,0.00,0.00,0.00,1.00,True,1.00
+CD-HU-06,Gombari,2026-10-17,randomwalk,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-HU-06,Gombari,2026-10-24,randomwalk,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-HU-07,Isiro,2026-10-17,randomwalk,ours,5.00,3.00,4.00,6.00,True,0.83
+CD-HU-07,Isiro,2026-10-24,randomwalk,ours,3.00,2.00,4.00,7.10,True,1.25
+CD-HU-09,Niangara,2026-10-17,randomwalk,ours,0.00,0.00,0.00,1.00,True,1.00
+CD-HU-09,Niangara,2026-10-24,randomwalk,ours,0.00,0.00,0.00,1.00,True,1.00
+CD-HU-10,Pawa,2026-10-17,randomwalk,ours,3.00,4.95,9.00,13.00,False,2.50
+CD-HU-10,Pawa,2026-10-24,randomwalk,ours,6.00,5.00,9.00,17.10,True,1.43
+CD-HU-11,Rungu,2026-10-17,randomwalk,ours,1.00,1.00,1.00,2.00,True,1.00
+CD-HU-11,Rungu,2026-10-24,randomwalk,ours,0.00,0.00,1.00,2.00,True,2.00
+CD-HU-12,Wamba,2026-10-17,randomwalk,ours,19.00,12.00,15.00,19.05,True,0.80
+CD-HU-12,Wamba,2026-10-24,randomwalk,ours,8.00,5.00,7.00,14.05,True,0.89
+CD-IT,Ituri,2026-10-17,randomwalk,ours,190.00,213.95,266.50,326.05,False,1.40
+CD-IT,Ituri,2026-10-24,randomwalk,ours,234.00,234.00,268.50,338.85,True,1.15
+CD-IT-02,Adja,2026-10-17,randomwalk,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-02,Adja,2026-10-24,randomwalk,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-04,Ariwara,2026-10-17,randomwalk,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-04,Ariwara,2026-10-24,randomwalk,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-05,Aru,2026-10-17,randomwalk,ours,4.00,3.00,4.00,6.00,True,1.00
+CD-IT-05,Aru,2026-10-24,randomwalk,ours,12.00,7.00,10.00,14.05,True,0.85
+CD-IT-06,Aungba,2026-10-17,randomwalk,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-06,Aungba,2026-10-24,randomwalk,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-07,Bambu,2026-10-17,randomwalk,ours,9.00,7.00,10.00,12.00,True,1.10
+CD-IT-07,Bambu,2026-10-24,randomwalk,ours,2.00,1.00,2.00,5.05,True,1.00
+CD-IT-09,Boga,2026-10-17,randomwalk,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-09,Boga,2026-10-24,randomwalk,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-10,Bunia,2026-10-17,randomwalk,ours,32.00,24.00,33.00,44.00,True,1.03
+CD-IT-10,Bunia,2026-10-24,randomwalk,ours,53.00,31.00,47.00,65.00,True,0.89
+CD-IT-11,Damas,2026-10-17,randomwalk,ours,1.00,1.00,1.00,1.00,True,1.00
+CD-IT-11,Damas,2026-10-24,randomwalk,ours,0.00,0.00,0.00,1.00,True,1.00
+CD-IT-12,Drodro,2026-10-17,randomwalk,ours,0.00,0.00,0.00,1.00,True,1.00
+CD-IT-12,Drodro,2026-10-24,randomwalk,ours,0.00,0.00,0.00,2.00,True,1.00
+CD-IT-13,Fataki,2026-10-17,randomwalk,ours,0.00,0.00,0.00,1.00,True,1.00
+CD-IT-13,Fataki,2026-10-24,randomwalk,ours,4.00,2.00,3.00,5.00,True,0.80
+CD-IT-14,Gethy,2026-10-17,randomwalk,ours,1.00,1.00,1.00,1.00,True,1.00
+CD-IT-14,Gethy,2026-10-24,randomwalk,ours,0.00,0.00,0.00,1.00,True,1.00
+CD-IT-16,Kambala,2026-10-17,randomwalk,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-16,Kambala,2026-10-24,randomwalk,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-17,Kilo,2026-10-17,randomwalk,ours,0.00,0.00,1.00,4.00,True,2.00
+CD-IT-17,Kilo,2026-10-24,randomwalk,ours,1.00,1.00,1.00,3.00,True,1.00
+CD-IT-18,Komanda,2026-10-17,randomwalk,ours,4.00,3.00,5.00,13.05,True,1.20
+CD-IT-18,Komanda,2026-10-24,randomwalk,ours,1.00,1.00,4.00,9.05,True,2.50
+CD-IT-21,Lita,2026-10-17,randomwalk,ours,7.00,6.00,13.00,23.00,True,1.75
+CD-IT-21,Lita,2026-10-24,randomwalk,ours,6.00,5.00,11.00,24.05,True,1.71
+CD-IT-22,Logo,2026-10-17,randomwalk,ours,0.00,0.00,0.00,1.00,True,1.00
+CD-IT-22,Logo,2026-10-24,randomwalk,ours,0.00,0.00,0.00,1.00,True,1.00
+CD-IT-23,Lolwa,2026-10-17,randomwalk,ours,2.00,1.00,2.00,4.00,True,1.00
+CD-IT-23,Lolwa,2026-10-24,randomwalk,ours,0.00,0.00,1.00,4.00,True,2.00
+CD-IT-24,Mahagi,2026-10-17,randomwalk,ours,0.00,0.00,0.00,1.00,True,1.00
+CD-IT-24,Mahagi,2026-10-24,randomwalk,ours,0.00,0.00,0.00,1.00,True,1.00
+CD-IT-25,Mambasa,2026-10-17,randomwalk,ours,17.00,12.00,18.00,23.00,True,1.06
+CD-IT-25,Mambasa,2026-10-24,randomwalk,ours,16.00,9.00,14.00,21.00,True,0.88
+CD-IT-26,Mandima,2026-10-17,randomwalk,ours,33.00,38.00,66.50,134.20,False,1.99
+CD-IT-26,Mandima,2026-10-24,randomwalk,ours,54.00,45.95,60.00,141.75,True,1.11
+CD-IT-27,Mangala,2026-10-17,randomwalk,ours,12.00,9.00,13.00,16.05,True,1.08
+CD-IT-27,Mangala,2026-10-24,randomwalk,ours,8.00,5.95,11.00,19.00,True,1.33
+CD-IT-28,Mongbwalu,2026-10-17,randomwalk,ours,6.00,4.00,7.00,12.05,True,1.14
+CD-IT-28,Mongbwalu,2026-10-24,randomwalk,ours,3.00,2.00,5.00,14.05,True,1.50
+CD-IT-29,Nia Nia,2026-10-17,randomwalk,ours,6.00,6.00,12.00,22.15,True,1.86
+CD-IT-29,Nia Nia,2026-10-24,randomwalk,ours,6.00,5.00,11.00,25.00,True,1.71
+CD-IT-30,Nizi,2026-10-17,randomwalk,ours,18.00,17.00,28.00,49.05,True,1.53
+CD-IT-30,Nizi,2026-10-24,randomwalk,ours,20.00,13.95,24.00,46.05,True,1.19
+CD-IT-31,Nyankunde,2026-10-17,randomwalk,ours,1.00,1.00,4.00,8.00,True,2.50
+CD-IT-31,Nyankunde,2026-10-24,randomwalk,ours,5.00,3.00,5.00,9.00,True,1.00
+CD-IT-34,Rimba,2026-10-17,randomwalk,ours,2.00,2.00,3.00,8.00,True,1.33
+CD-IT-34,Rimba,2026-10-24,randomwalk,ours,1.00,1.00,2.50,8.00,True,1.75
+CD-IT-35,Rwampara,2026-10-17,randomwalk,ours,32.00,23.95,33.00,44.00,True,1.03
+CD-IT-35,Rwampara,2026-10-24,randomwalk,ours,42.00,25.00,37.00,52.05,True,0.88
+CD-IT-36,Tchomia,2026-10-17,randomwalk,ours,3.00,2.00,3.00,4.05,True,1.00
+CD-IT-36,Tchomia,2026-10-24,randomwalk,ours,0.00,0.00,1.00,3.00,True,2.00
+CD-NK,Nord Kivu,2026-10-17,randomwalk,ours,189.00,189.00,220.50,354.05,True,1.17
+CD-NK,Nord Kivu,2026-10-24,randomwalk,ours,214.00,214.00,230.50,451.05,True,1.08
+CD-NK-03,Beni,2026-10-17,randomwalk,ours,91.00,67.00,86.00,141.40,True,0.95
+CD-NK-03,Beni,2026-10-24,randomwalk,ours,113.00,71.85,101.00,176.10,True,0.89
+CD-NK-04,Biena,2026-10-17,randomwalk,ours,0.00,0.00,1.00,4.00,True,2.00
+CD-NK-04,Biena,2026-10-24,randomwalk,ours,0.00,0.00,1.00,4.00,True,2.00
+CD-NK-07,Butembo,2026-10-17,randomwalk,ours,4.00,4.00,15.00,38.05,True,3.20
+CD-NK-07,Butembo,2026-10-24,randomwalk,ours,6.00,5.00,15.00,38.05,True,2.29
+CD-NK-08,Goma,2026-10-17,randomwalk,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-NK-08,Goma,2026-10-24,randomwalk,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-NK-10,Kalunguta,2026-10-17,randomwalk,ours,0.00,0.00,1.00,5.00,True,2.00
+CD-NK-10,Kalunguta,2026-10-24,randomwalk,ours,1.00,1.00,1.00,6.00,True,1.00
+CD-NK-14,Katwa,2026-10-17,randomwalk,ours,22.00,14.95,20.00,34.05,True,0.91
+CD-NK-14,Katwa,2026-10-24,randomwalk,ours,19.00,13.00,21.50,59.00,True,1.12
+CD-NK-15,Kayna,2026-10-17,randomwalk,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-NK-15,Kayna,2026-10-24,randomwalk,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-NK-19,Kyondo,2026-10-17,randomwalk,ours,3.00,2.00,4.00,12.05,True,1.25
+CD-NK-19,Kyondo,2026-10-24,randomwalk,ours,2.00,1.95,4.50,14.10,True,1.83
+CD-NK-20,Lubero,2026-10-17,randomwalk,ours,3.00,2.00,5.50,17.10,True,1.62
+CD-NK-20,Lubero,2026-10-24,randomwalk,ours,5.00,4.00,6.00,17.05,True,1.17
+CD-NK-21,Mabalako,2026-10-17,randomwalk,ours,14.00,10.00,16.00,37.05,True,1.13
+CD-NK-21,Mabalako,2026-10-24,randomwalk,ours,17.00,11.90,18.00,42.30,True,1.06
+CD-NK-22,Manguredjipa,2026-10-17,randomwalk,ours,0.00,0.00,0.00,1.00,True,1.00
+CD-NK-22,Manguredjipa,2026-10-24,randomwalk,ours,0.00,0.00,0.00,1.05,True,1.00
+CD-NK-23,Masereka,2026-10-17,randomwalk,ours,2.00,1.00,3.00,9.00,True,1.33
+CD-NK-23,Masereka,2026-10-24,randomwalk,ours,1.00,1.00,3.00,10.00,True,2.00
+CD-NK-25,Musienene,2026-10-17,randomwalk,ours,2.00,4.95,14.00,35.00,False,5.00
+CD-NK-25,Musienene,2026-10-24,randomwalk,ours,4.00,4.00,15.00,34.05,True,3.20
+CD-NK-26,Mutwanga,2026-10-17,randomwalk,ours,16.00,10.95,15.00,26.05,True,0.94
+CD-NK-26,Mutwanga,2026-10-24,randomwalk,ours,17.00,10.00,15.00,28.05,True,0.89
+CD-NK-29,Oicha,2026-10-17,randomwalk,ours,20.00,14.00,20.00,43.15,True,1.00
+CD-NK-29,Oicha,2026-10-24,randomwalk,ours,24.00,17.00,22.00,63.05,True,0.92
+CD-NK-33,Vuhovi,2026-10-17,randomwalk,ours,12.00,8.00,11.00,19.00,True,0.92
+CD-NK-33,Vuhovi,2026-10-24,randomwalk,ours,5.00,3.00,5.00,14.20,True,1.00
+CD-NU,Nord Ubangi,2026-10-17,randomwalk,ours,0.00,0.00,0.00,1.00,True,1.00
+CD-NU,Nord Ubangi,2026-10-24,randomwalk,ours,0.00,0.00,0.00,1.00,True,1.00
+CD-NU-09,Wapinda,2026-10-17,randomwalk,ours,0.00,0.00,0.00,1.00,True,1.00
+CD-NU-09,Wapinda,2026-10-24,randomwalk,ours,0.00,0.00,0.00,1.00,True,1.00
+CD-SK,Sud Kivu,2026-10-17,randomwalk,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-SK,Sud Kivu,2026-10-24,randomwalk,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-SK-23,Miti Murhesa,2026-10-17,randomwalk,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-SK-23,Miti Murhesa,2026-10-24,randomwalk,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-SU,Sud Ubangi,2026-10-17,randomwalk,ours,0.00,0.00,0.00,1.00,True,1.00
+CD-SU,Sud Ubangi,2026-10-24,randomwalk,ours,0.00,0.00,0.00,1.00,True,1.00
+CD-SU-07,Bulu,2026-10-17,randomwalk,ours,0.00,0.00,0.00,1.00,True,1.00
+CD-SU-07,Bulu,2026-10-24,randomwalk,ours,0.00,0.00,0.00,1.00,True,1.00
+CD-TO,Tshopo,2026-10-17,randomwalk,ours,11.00,11.00,18.00,40.00,True,1.58
+CD-TO,Tshopo,2026-10-24,randomwalk,ours,13.00,13.00,16.00,38.30,True,1.21
+CD-TO-02,Bafwasende,2026-10-17,randomwalk,ours,3.00,1.00,3.00,7.05,True,1.00
+CD-TO-02,Bafwasende,2026-10-24,randomwalk,ours,0.00,0.00,1.00,5.00,True,2.00
+CD-TO-08,Kabondo,2026-10-17,randomwalk,ours,4.00,1.95,3.00,7.05,True,0.80
+CD-TO-08,Kabondo,2026-10-24,randomwalk,ours,9.00,3.00,5.50,14.15,True,0.65
+CD-TO-10,Lubunga,2026-10-17,randomwalk,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-TO-10,Lubunga,2026-10-24,randomwalk,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-TO-11,Makiso Kisangani,2026-10-17,randomwalk,ours,2.00,2.00,5.00,15.00,True,2.00
+CD-TO-11,Makiso Kisangani,2026-10-24,randomwalk,ours,2.00,1.95,4.00,11.00,True,1.67
+CD-TO-12,Mangobo,2026-10-17,randomwalk,ours,1.00,1.00,2.00,8.00,True,1.50
+CD-TO-12,Mangobo,2026-10-24,randomwalk,ours,0.00,0.00,2.00,7.00,True,3.00
+CD-TO-15,Tshopo,2026-10-17,randomwalk,ours,1.00,1.00,3.00,9.00,True,2.00
+CD-TO-15,Tshopo,2026-10-24,randomwalk,ours,2.00,1.00,2.00,6.05,True,1.00
+CD-TO-17,Wanierukula,2026-10-17,randomwalk,ours,0.00,0.00,1.00,3.00,True,2.00
+CD-TO-17,Wanierukula,2026-10-24,randomwalk,ours,0.00,0.00,0.50,4.00,True,1.50
+CD,DRC,2026-10-17,pprandomwalknowcast,ours,420.00,430.90,452.00,498.10,False,1.08
+CD,DRC,2026-10-24,pprandomwalknowcast,ours,482.00,507.95,568.00,715.20,False,1.18
+CD-BU,Bas Uele,2026-10-17,pprandomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-BU,Bas Uele,2026-10-24,pprandomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-BU-02,Ango,2026-10-17,pprandomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-BU-02,Ango,2026-10-24,pprandomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-BU-05,Buta,2026-10-17,pprandomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-BU-05,Buta,2026-10-24,pprandomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-BU-06,Ganga,2026-10-17,pprandomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-BU-06,Ganga,2026-10-24,pprandomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-BU-11,Viadana,2026-10-17,pprandomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-BU-11,Viadana,2026-10-24,pprandomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-HU,Haut Uele,2026-10-17,pprandomwalknowcast,ours,30.00,30.00,31.00,42.05,True,1.03
+CD-HU,Haut Uele,2026-10-24,pprandomwalknowcast,ours,21.00,21.00,24.00,32.00,True,1.14
+CD-HU-02,Boma Mangbetu,2026-10-17,pprandomwalknowcast,ours,2.00,2.00,2.00,4.00,True,1.00
+CD-HU-02,Boma Mangbetu,2026-10-24,pprandomwalknowcast,ours,4.00,4.00,4.00,6.00,True,1.00
+CD-HU-04,Dungu,2026-10-17,pprandomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-HU-04,Dungu,2026-10-24,pprandomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-HU-06,Gombari,2026-10-17,pprandomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-HU-06,Gombari,2026-10-24,pprandomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-HU-07,Isiro,2026-10-17,pprandomwalknowcast,ours,5.00,5.00,5.00,8.00,True,1.00
+CD-HU-07,Isiro,2026-10-24,pprandomwalknowcast,ours,3.00,3.00,4.00,7.00,True,1.25
+CD-HU-09,Niangara,2026-10-17,pprandomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-HU-09,Niangara,2026-10-24,pprandomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-HU-10,Pawa,2026-10-17,pprandomwalknowcast,ours,3.00,3.00,3.00,7.00,True,1.00
+CD-HU-10,Pawa,2026-10-24,pprandomwalknowcast,ours,6.00,6.00,7.00,9.00,True,1.14
+CD-HU-11,Rungu,2026-10-17,pprandomwalknowcast,ours,1.00,1.00,1.00,2.00,True,1.00
+CD-HU-11,Rungu,2026-10-24,pprandomwalknowcast,ours,0.00,0.00,0.00,1.00,True,1.00
+CD-HU-12,Wamba,2026-10-17,pprandomwalknowcast,ours,19.00,19.00,19.00,23.00,True,1.00
+CD-HU-12,Wamba,2026-10-24,pprandomwalknowcast,ours,8.00,8.00,9.00,12.00,True,1.11
+CD-IT,Ituri,2026-10-17,pprandomwalknowcast,ours,190.00,190.00,197.50,248.20,True,1.04
+CD-IT,Ituri,2026-10-24,pprandomwalknowcast,ours,234.00,240.95,268.50,344.40,False,1.15
+CD-IT-02,Adja,2026-10-17,pprandomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-02,Adja,2026-10-24,pprandomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-04,Ariwara,2026-10-17,pprandomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-04,Ariwara,2026-10-24,pprandomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-05,Aru,2026-10-17,pprandomwalknowcast,ours,4.00,4.00,4.00,4.00,True,1.00
+CD-IT-05,Aru,2026-10-24,pprandomwalknowcast,ours,12.00,12.00,12.00,13.00,True,1.00
+CD-IT-06,Aungba,2026-10-17,pprandomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-06,Aungba,2026-10-24,pprandomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-07,Bambu,2026-10-17,pprandomwalknowcast,ours,9.00,9.00,9.00,10.05,True,1.00
+CD-IT-07,Bambu,2026-10-24,pprandomwalknowcast,ours,2.00,2.00,2.00,4.05,True,1.00
+CD-IT-09,Boga,2026-10-17,pprandomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-09,Boga,2026-10-24,pprandomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-10,Bunia,2026-10-17,pprandomwalknowcast,ours,32.00,32.00,33.00,42.05,True,1.03
+CD-IT-10,Bunia,2026-10-24,pprandomwalknowcast,ours,53.00,54.00,61.00,75.20,False,1.15
+CD-IT-11,Damas,2026-10-17,pprandomwalknowcast,ours,1.00,1.00,1.00,1.00,True,1.00
+CD-IT-11,Damas,2026-10-24,pprandomwalknowcast,ours,0.00,0.00,0.00,1.00,True,1.00
+CD-IT-12,Drodro,2026-10-17,pprandomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-12,Drodro,2026-10-24,pprandomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-13,Fataki,2026-10-17,pprandomwalknowcast,ours,0.00,0.00,0.00,1.00,True,1.00
+CD-IT-13,Fataki,2026-10-24,pprandomwalknowcast,ours,4.00,4.00,4.00,5.00,True,1.00
+CD-IT-14,Gethy,2026-10-17,pprandomwalknowcast,ours,1.00,1.00,1.00,1.00,True,1.00
+CD-IT-14,Gethy,2026-10-24,pprandomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-16,Kambala,2026-10-17,pprandomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-16,Kambala,2026-10-24,pprandomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-17,Kilo,2026-10-17,pprandomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-17,Kilo,2026-10-24,pprandomwalknowcast,ours,1.00,1.00,1.00,1.05,True,1.00
+CD-IT-18,Komanda,2026-10-17,pprandomwalknowcast,ours,4.00,4.00,4.00,5.00,True,1.00
+CD-IT-18,Komanda,2026-10-24,pprandomwalknowcast,ours,1.00,1.00,1.00,3.05,True,1.00
+CD-IT-21,Lita,2026-10-17,pprandomwalknowcast,ours,7.00,7.00,7.00,11.00,True,1.00
+CD-IT-21,Lita,2026-10-24,pprandomwalknowcast,ours,6.00,6.00,8.00,13.00,True,1.29
+CD-IT-22,Logo,2026-10-17,pprandomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-22,Logo,2026-10-24,pprandomwalknowcast,ours,0.00,0.00,0.00,1.00,True,1.00
+CD-IT-23,Lolwa,2026-10-17,pprandomwalknowcast,ours,2.00,2.00,2.00,3.00,True,1.00
+CD-IT-23,Lolwa,2026-10-24,pprandomwalknowcast,ours,0.00,0.00,0.00,1.00,True,1.00
+CD-IT-24,Mahagi,2026-10-17,pprandomwalknowcast,ours,0.00,0.00,0.00,1.00,True,1.00
+CD-IT-24,Mahagi,2026-10-24,pprandomwalknowcast,ours,0.00,0.00,0.00,1.00,True,1.00
+CD-IT-25,Mambasa,2026-10-17,pprandomwalknowcast,ours,17.00,17.00,17.00,22.05,True,1.00
+CD-IT-25,Mambasa,2026-10-24,pprandomwalknowcast,ours,16.00,16.00,19.00,29.00,True,1.18
+CD-IT-26,Mandima,2026-10-17,pprandomwalknowcast,ours,33.00,33.00,34.00,43.10,True,1.03
+CD-IT-26,Mandima,2026-10-24,pprandomwalknowcast,ours,54.00,55.00,60.00,74.10,False,1.11
+CD-IT-27,Mangala,2026-10-17,pprandomwalknowcast,ours,12.00,12.00,12.00,15.00,True,1.00
+CD-IT-27,Mangala,2026-10-24,pprandomwalknowcast,ours,8.00,8.00,10.00,15.00,True,1.22
+CD-IT-28,Mongbwalu,2026-10-17,pprandomwalknowcast,ours,6.00,6.00,6.00,9.00,True,1.00
+CD-IT-28,Mongbwalu,2026-10-24,pprandomwalknowcast,ours,3.00,3.00,5.00,7.05,True,1.50
+CD-IT-29,Nia Nia,2026-10-17,pprandomwalknowcast,ours,6.00,6.00,6.00,9.00,True,1.00
+CD-IT-29,Nia Nia,2026-10-24,pprandomwalknowcast,ours,6.00,6.00,7.00,10.00,True,1.14
+CD-IT-30,Nizi,2026-10-17,pprandomwalknowcast,ours,18.00,18.00,19.00,24.05,True,1.05
+CD-IT-30,Nizi,2026-10-24,pprandomwalknowcast,ours,20.00,20.00,24.00,31.10,True,1.19
+CD-IT-31,Nyankunde,2026-10-17,pprandomwalknowcast,ours,1.00,1.00,1.00,2.00,True,1.00
+CD-IT-31,Nyankunde,2026-10-24,pprandomwalknowcast,ours,5.00,5.00,5.00,7.00,True,1.00
+CD-IT-34,Rimba,2026-10-17,pprandomwalknowcast,ours,2.00,2.00,2.00,4.00,True,1.00
+CD-IT-34,Rimba,2026-10-24,pprandomwalknowcast,ours,1.00,1.00,2.00,5.00,True,1.50
+CD-IT-35,Rwampara,2026-10-17,pprandomwalknowcast,ours,32.00,32.00,33.00,41.00,True,1.03
+CD-IT-35,Rwampara,2026-10-24,pprandomwalknowcast,ours,42.00,43.00,46.50,61.00,False,1.10
+CD-IT-36,Tchomia,2026-10-17,pprandomwalknowcast,ours,3.00,3.00,3.00,4.00,True,1.00
+CD-IT-36,Tchomia,2026-10-24,pprandomwalknowcast,ours,0.00,0.00,0.00,1.05,True,1.00
+CD-NK,Nord Kivu,2026-10-17,pprandomwalknowcast,ours,189.00,195.95,205.50,227.25,False,1.09
+CD-NK,Nord Kivu,2026-10-24,pprandomwalknowcast,ours,214.00,215.00,246.00,365.20,False,1.15
+CD-NK-03,Beni,2026-10-17,pprandomwalknowcast,ours,91.00,93.00,98.00,107.05,False,1.08
+CD-NK-03,Beni,2026-10-24,pprandomwalknowcast,ours,113.00,113.00,128.00,176.15,True,1.13
+CD-NK-04,Biena,2026-10-17,pprandomwalknowcast,ours,0.00,0.00,0.00,1.00,True,1.00
+CD-NK-04,Biena,2026-10-24,pprandomwalknowcast,ours,0.00,0.00,0.00,3.00,True,1.00
+CD-NK-07,Butembo,2026-10-17,pprandomwalknowcast,ours,4.00,4.00,5.00,9.00,True,1.20
+CD-NK-07,Butembo,2026-10-24,pprandomwalknowcast,ours,6.00,6.00,9.00,22.00,True,1.43
+CD-NK-08,Goma,2026-10-17,pprandomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-NK-08,Goma,2026-10-24,pprandomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-NK-10,Kalunguta,2026-10-17,pprandomwalknowcast,ours,0.00,0.00,0.00,1.00,True,1.00
+CD-NK-10,Kalunguta,2026-10-24,pprandomwalknowcast,ours,1.00,1.00,1.00,2.05,True,1.00
+CD-NK-14,Katwa,2026-10-17,pprandomwalknowcast,ours,22.00,22.00,25.00,31.05,True,1.13
+CD-NK-14,Katwa,2026-10-24,pprandomwalknowcast,ours,19.00,19.00,24.00,47.00,True,1.25
+CD-NK-15,Kayna,2026-10-17,pprandomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-NK-15,Kayna,2026-10-24,pprandomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-NK-19,Kyondo,2026-10-17,pprandomwalknowcast,ours,3.00,3.00,3.00,4.00,True,1.00
+CD-NK-19,Kyondo,2026-10-24,pprandomwalknowcast,ours,2.00,2.00,2.00,4.00,True,1.00
+CD-NK-20,Lubero,2026-10-17,pprandomwalknowcast,ours,3.00,3.00,3.00,4.00,True,1.00
+CD-NK-20,Lubero,2026-10-24,pprandomwalknowcast,ours,5.00,5.00,5.00,8.00,True,1.00
+CD-NK-21,Mabalako,2026-10-17,pprandomwalknowcast,ours,14.00,14.00,15.00,17.00,True,1.07
+CD-NK-21,Mabalako,2026-10-24,pprandomwalknowcast,ours,17.00,17.00,18.50,26.05,True,1.08
+CD-NK-22,Manguredjipa,2026-10-17,pprandomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-NK-22,Manguredjipa,2026-10-24,pprandomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-NK-23,Masereka,2026-10-17,pprandomwalknowcast,ours,2.00,2.00,2.00,3.00,True,1.00
+CD-NK-23,Masereka,2026-10-24,pprandomwalknowcast,ours,1.00,1.00,1.00,2.00,True,1.00
+CD-NK-25,Musienene,2026-10-17,pprandomwalknowcast,ours,2.00,2.00,2.00,4.00,True,1.00
+CD-NK-25,Musienene,2026-10-24,pprandomwalknowcast,ours,4.00,4.00,5.00,10.05,True,1.20
+CD-NK-26,Mutwanga,2026-10-17,pprandomwalknowcast,ours,16.00,16.00,18.00,21.00,True,1.12
+CD-NK-26,Mutwanga,2026-10-24,pprandomwalknowcast,ours,17.00,17.00,20.00,32.10,True,1.17
+CD-NK-29,Oicha,2026-10-17,pprandomwalknowcast,ours,20.00,20.00,21.00,23.05,True,1.05
+CD-NK-29,Oicha,2026-10-24,pprandomwalknowcast,ours,24.00,24.00,26.00,33.00,True,1.08
+CD-NK-33,Vuhovi,2026-10-17,pprandomwalknowcast,ours,12.00,12.00,12.00,13.00,True,1.00
+CD-NK-33,Vuhovi,2026-10-24,pprandomwalknowcast,ours,5.00,5.00,5.00,8.00,True,1.00
+CD-NU,Nord Ubangi,2026-10-17,pprandomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-NU,Nord Ubangi,2026-10-24,pprandomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-NU-09,Wapinda,2026-10-17,pprandomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-NU-09,Wapinda,2026-10-24,pprandomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-SK,Sud Kivu,2026-10-17,pprandomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-SK,Sud Kivu,2026-10-24,pprandomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-SK-23,Miti Murhesa,2026-10-17,pprandomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-SK-23,Miti Murhesa,2026-10-24,pprandomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-SU,Sud Ubangi,2026-10-17,pprandomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-SU,Sud Ubangi,2026-10-24,pprandomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-SU-07,Bulu,2026-10-17,pprandomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-SU-07,Bulu,2026-10-24,pprandomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-TO,Tshopo,2026-10-17,pprandomwalknowcast,ours,11.00,11.00,11.00,15.05,True,1.00
+CD-TO,Tshopo,2026-10-24,pprandomwalknowcast,ours,13.00,13.00,15.00,21.00,True,1.14
+CD-TO-02,Bafwasende,2026-10-17,pprandomwalknowcast,ours,3.00,3.00,3.00,4.00,True,1.00
+CD-TO-02,Bafwasende,2026-10-24,pprandomwalknowcast,ours,0.00,0.00,0.00,3.00,True,1.00
+CD-TO-08,Kabondo,2026-10-17,pprandomwalknowcast,ours,4.00,4.00,4.00,5.00,True,1.00
+CD-TO-08,Kabondo,2026-10-24,pprandomwalknowcast,ours,9.00,9.00,9.00,11.05,True,1.00
+CD-TO-10,Lubunga,2026-10-17,pprandomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-TO-10,Lubunga,2026-10-24,pprandomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-TO-11,Makiso Kisangani,2026-10-17,pprandomwalknowcast,ours,2.00,2.00,2.00,5.00,True,1.00
+CD-TO-11,Makiso Kisangani,2026-10-24,pprandomwalknowcast,ours,2.00,2.00,3.00,5.00,True,1.33
+CD-TO-12,Mangobo,2026-10-17,pprandomwalknowcast,ours,1.00,1.00,1.00,2.00,True,1.00
+CD-TO-12,Mangobo,2026-10-24,pprandomwalknowcast,ours,0.00,0.00,0.00,1.00,True,1.00
+CD-TO-15,Tshopo,2026-10-17,pprandomwalknowcast,ours,1.00,1.00,1.00,2.00,True,1.00
+CD-TO-15,Tshopo,2026-10-24,pprandomwalknowcast,ours,2.00,2.00,2.00,3.05,True,1.00
+CD-TO-17,Wanierukula,2026-10-17,pprandomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-TO-17,Wanierukula,2026-10-24,pprandomwalknowcast,ours,0.00,0.00,0.00,0.00,True,1.00
+CD,DRC,2026-10-17,renewal,ours,420.00,425.00,458.00,487.00,False,1.09
+CD,DRC,2026-10-24,renewal,ours,482.00,527.85,561.00,603.05,False,1.16
+CD-BU,Bas Uele,2026-10-17,renewal,ours,0.00,0.00,0.00,1.00,True,1.00
+CD-BU,Bas Uele,2026-10-24,renewal,ours,0.00,0.00,0.00,2.00,True,1.00
+CD-BU-02,Ango,2026-10-17,renewal,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-BU-02,Ango,2026-10-24,renewal,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-BU-05,Buta,2026-10-17,renewal,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-BU-05,Buta,2026-10-24,renewal,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-BU-06,Ganga,2026-10-17,renewal,ours,0.00,0.00,0.00,0.05,True,1.00
+CD-BU-06,Ganga,2026-10-24,renewal,ours,0.00,0.00,0.00,1.00,True,1.00
+CD-BU-11,Viadana,2026-10-17,renewal,ours,0.00,0.00,0.00,0.05,True,1.00
+CD-BU-11,Viadana,2026-10-24,renewal,ours,0.00,0.00,0.00,1.00,True,1.00
+CD-HU,Haut Uele,2026-10-17,renewal,ours,30.00,30.00,32.00,36.05,True,1.06
+CD-HU,Haut Uele,2026-10-24,renewal,ours,21.00,21.95,26.00,32.00,False,1.23
+CD-HU-02,Boma Mangbetu,2026-10-17,renewal,ours,2.00,2.00,2.00,3.00,True,1.00
+CD-HU-02,Boma Mangbetu,2026-10-24,renewal,ours,4.00,4.00,5.00,7.00,True,1.20
+CD-HU-04,Dungu,2026-10-17,renewal,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-HU-04,Dungu,2026-10-24,renewal,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-HU-06,Gombari,2026-10-17,renewal,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-HU-06,Gombari,2026-10-24,renewal,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-HU-07,Isiro,2026-10-17,renewal,ours,5.00,5.00,5.00,7.00,True,1.00
+CD-HU-07,Isiro,2026-10-24,renewal,ours,3.00,3.00,4.00,7.05,True,1.25
+CD-HU-09,Niangara,2026-10-17,renewal,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-HU-09,Niangara,2026-10-24,renewal,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-HU-10,Pawa,2026-10-17,renewal,ours,3.00,3.00,3.00,5.00,True,1.00
+CD-HU-10,Pawa,2026-10-24,renewal,ours,6.00,6.00,7.00,9.00,True,1.14
+CD-HU-11,Rungu,2026-10-17,renewal,ours,1.00,1.00,1.00,1.05,True,1.00
+CD-HU-11,Rungu,2026-10-24,renewal,ours,0.00,0.00,0.00,1.00,True,1.00
+CD-HU-12,Wamba,2026-10-17,renewal,ours,19.00,19.00,20.00,21.00,True,1.05
+CD-HU-12,Wamba,2026-10-24,renewal,ours,8.00,8.00,10.00,13.00,True,1.22
+CD-IT,Ituri,2026-10-17,renewal,ours,190.00,194.00,209.00,228.00,False,1.10
+CD-IT,Ituri,2026-10-24,renewal,ours,234.00,258.90,279.00,302.05,False,1.19
+CD-IT-02,Adja,2026-10-17,renewal,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-02,Adja,2026-10-24,renewal,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-04,Ariwara,2026-10-17,renewal,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-04,Ariwara,2026-10-24,renewal,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-05,Aru,2026-10-17,renewal,ours,4.00,4.00,4.00,4.05,True,1.00
+CD-IT-05,Aru,2026-10-24,renewal,ours,12.00,12.00,12.00,12.00,True,1.00
+CD-IT-06,Aungba,2026-10-17,renewal,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-06,Aungba,2026-10-24,renewal,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-07,Bambu,2026-10-17,renewal,ours,9.00,9.00,9.00,10.00,True,1.00
+CD-IT-07,Bambu,2026-10-24,renewal,ours,2.00,2.00,2.00,4.00,True,1.00
+CD-IT-09,Boga,2026-10-17,renewal,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-09,Boga,2026-10-24,renewal,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-10,Bunia,2026-10-17,renewal,ours,32.00,32.00,35.00,42.00,True,1.09
+CD-IT-10,Bunia,2026-10-24,renewal,ours,53.00,56.00,62.00,70.05,False,1.17
+CD-IT-11,Damas,2026-10-17,renewal,ours,1.00,1.00,1.00,1.00,True,1.00
+CD-IT-11,Damas,2026-10-24,renewal,ours,0.00,0.00,0.00,1.00,True,1.00
+CD-IT-12,Drodro,2026-10-17,renewal,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-12,Drodro,2026-10-24,renewal,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-13,Fataki,2026-10-17,renewal,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-13,Fataki,2026-10-24,renewal,ours,4.00,4.00,4.00,5.00,True,1.00
+CD-IT-14,Gethy,2026-10-17,renewal,ours,1.00,1.00,1.00,1.00,True,1.00
+CD-IT-14,Gethy,2026-10-24,renewal,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-16,Kambala,2026-10-17,renewal,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-16,Kambala,2026-10-24,renewal,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-17,Kilo,2026-10-17,renewal,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-17,Kilo,2026-10-24,renewal,ours,1.00,1.00,1.00,1.00,True,1.00
+CD-IT-18,Komanda,2026-10-17,renewal,ours,4.00,4.00,4.00,5.00,True,1.00
+CD-IT-18,Komanda,2026-10-24,renewal,ours,1.00,1.00,1.00,3.00,True,1.00
+CD-IT-21,Lita,2026-10-17,renewal,ours,7.00,7.00,8.00,10.00,True,1.12
+CD-IT-21,Lita,2026-10-24,renewal,ours,6.00,6.00,8.00,12.00,True,1.29
+CD-IT-22,Logo,2026-10-17,renewal,ours,0.00,0.00,0.00,1.00,True,1.00
+CD-IT-22,Logo,2026-10-24,renewal,ours,0.00,0.00,0.00,1.00,True,1.00
+CD-IT-23,Lolwa,2026-10-17,renewal,ours,2.00,2.00,2.00,3.00,True,1.00
+CD-IT-23,Lolwa,2026-10-24,renewal,ours,0.00,0.00,0.00,1.05,True,1.00
+CD-IT-24,Mahagi,2026-10-17,renewal,ours,0.00,0.00,0.00,1.00,True,1.00
+CD-IT-24,Mahagi,2026-10-24,renewal,ours,0.00,0.00,0.00,1.00,True,1.00
+CD-IT-25,Mambasa,2026-10-17,renewal,ours,17.00,17.00,19.00,22.05,True,1.11
+CD-IT-25,Mambasa,2026-10-24,renewal,ours,16.00,17.00,19.50,24.00,False,1.21
+CD-IT-26,Mandima,2026-10-17,renewal,ours,33.00,33.00,36.00,41.00,True,1.09
+CD-IT-26,Mandima,2026-10-24,renewal,ours,54.00,56.00,61.00,68.05,False,1.13
+CD-IT-27,Mangala,2026-10-17,renewal,ours,12.00,12.00,13.00,15.00,True,1.08
+CD-IT-27,Mangala,2026-10-24,renewal,ours,8.00,8.00,10.00,14.05,True,1.22
+CD-IT-28,Mongbwalu,2026-10-17,renewal,ours,6.00,6.00,7.00,8.00,True,1.14
+CD-IT-28,Mongbwalu,2026-10-24,renewal,ours,3.00,3.00,5.00,8.00,True,1.50
+CD-IT-29,Nia Nia,2026-10-17,renewal,ours,6.00,6.00,6.50,8.00,True,1.07
+CD-IT-29,Nia Nia,2026-10-24,renewal,ours,6.00,6.00,7.00,10.00,True,1.14
+CD-IT-30,Nizi,2026-10-17,renewal,ours,18.00,18.00,20.00,23.00,True,1.11
+CD-IT-30,Nizi,2026-10-24,renewal,ours,20.00,21.00,24.00,30.00,False,1.19
+CD-IT-31,Nyankunde,2026-10-17,renewal,ours,1.00,1.00,1.00,2.00,True,1.00
+CD-IT-31,Nyankunde,2026-10-24,renewal,ours,5.00,5.00,5.00,7.00,True,1.00
+CD-IT-34,Rimba,2026-10-17,renewal,ours,2.00,2.00,2.50,4.05,True,1.17
+CD-IT-34,Rimba,2026-10-24,renewal,ours,1.00,1.00,2.00,5.00,True,1.50
+CD-IT-35,Rwampara,2026-10-17,renewal,ours,32.00,32.00,35.00,39.00,True,1.09
+CD-IT-35,Rwampara,2026-10-24,renewal,ours,42.00,44.00,48.00,53.05,False,1.14
+CD-IT-36,Tchomia,2026-10-17,renewal,ours,3.00,3.00,3.00,4.00,True,1.00
+CD-IT-36,Tchomia,2026-10-24,renewal,ours,0.00,0.00,0.00,2.00,True,1.00
+CD-NK,Nord Kivu,2026-10-17,renewal,ours,189.00,181.00,202.00,231.05,True,1.07
+CD-NK,Nord Kivu,2026-10-24,renewal,ours,214.00,213.95,238.50,271.00,True,1.11
+CD-NK-03,Beni,2026-10-17,renewal,ours,91.00,87.00,96.00,111.00,True,1.05
+CD-NK-03,Beni,2026-10-24,renewal,ours,113.00,113.00,122.00,138.00,True,1.08
+CD-NK-04,Biena,2026-10-17,renewal,ours,0.00,0.00,0.00,1.00,True,1.00
+CD-NK-04,Biena,2026-10-24,renewal,ours,0.00,0.00,0.00,1.05,True,1.00
+CD-NK-07,Butembo,2026-10-17,renewal,ours,4.00,4.00,5.00,8.05,True,1.20
+CD-NK-07,Butembo,2026-10-24,renewal,ours,6.00,6.00,8.00,13.05,True,1.29
+CD-NK-08,Goma,2026-10-17,renewal,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-NK-08,Goma,2026-10-24,renewal,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-NK-10,Kalunguta,2026-10-17,renewal,ours,0.00,0.00,0.00,1.00,True,1.00
+CD-NK-10,Kalunguta,2026-10-24,renewal,ours,1.00,1.00,1.00,2.00,True,1.00
+CD-NK-14,Katwa,2026-10-17,renewal,ours,22.00,21.00,24.00,30.00,True,1.09
+CD-NK-14,Katwa,2026-10-24,renewal,ours,19.00,19.00,23.00,29.05,True,1.20
+CD-NK-15,Kayna,2026-10-17,renewal,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-NK-15,Kayna,2026-10-24,renewal,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-NK-19,Kyondo,2026-10-17,renewal,ours,3.00,3.00,3.00,4.00,True,1.00
+CD-NK-19,Kyondo,2026-10-24,renewal,ours,2.00,2.00,2.00,3.00,True,1.00
+CD-NK-20,Lubero,2026-10-17,renewal,ours,3.00,3.00,3.00,4.00,True,1.00
+CD-NK-20,Lubero,2026-10-24,renewal,ours,5.00,5.00,5.00,7.00,True,1.00
+CD-NK-21,Mabalako,2026-10-17,renewal,ours,14.00,13.95,14.00,17.05,True,1.00
+CD-NK-21,Mabalako,2026-10-24,renewal,ours,17.00,17.00,18.00,21.00,True,1.06
+CD-NK-22,Manguredjipa,2026-10-17,renewal,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-NK-22,Manguredjipa,2026-10-24,renewal,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-NK-23,Masereka,2026-10-17,renewal,ours,2.00,2.00,2.00,2.00,True,1.00
+CD-NK-23,Masereka,2026-10-24,renewal,ours,1.00,1.00,1.00,2.00,True,1.00
+CD-NK-25,Musienene,2026-10-17,renewal,ours,2.00,2.00,2.00,4.00,True,1.00
+CD-NK-25,Musienene,2026-10-24,renewal,ours,4.00,4.00,4.00,7.00,True,1.00
+CD-NK-26,Mutwanga,2026-10-17,renewal,ours,16.00,15.95,17.00,22.00,True,1.06
+CD-NK-26,Mutwanga,2026-10-24,renewal,ours,17.00,17.00,19.00,23.10,True,1.11
+CD-NK-29,Oicha,2026-10-17,renewal,ours,20.00,19.00,20.50,23.00,True,1.02
+CD-NK-29,Oicha,2026-10-24,renewal,ours,24.00,24.00,25.00,29.00,True,1.04
+CD-NK-33,Vuhovi,2026-10-17,renewal,ours,12.00,12.00,12.00,13.05,True,1.00
+CD-NK-33,Vuhovi,2026-10-24,renewal,ours,5.00,5.00,5.00,7.00,True,1.00
+CD-NU,Nord Ubangi,2026-10-17,renewal,ours,0.00,0.00,0.00,2.05,True,1.00
+CD-NU,Nord Ubangi,2026-10-24,renewal,ours,0.00,0.00,0.00,2.00,True,1.00
+CD-NU-09,Wapinda,2026-10-17,renewal,ours,0.00,0.00,0.00,1.00,True,1.00
+CD-NU-09,Wapinda,2026-10-24,renewal,ours,0.00,0.00,0.00,1.00,True,1.00
+CD-SK,Sud Kivu,2026-10-17,renewal,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-SK,Sud Kivu,2026-10-24,renewal,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-SK-23,Miti Murhesa,2026-10-17,renewal,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-SK-23,Miti Murhesa,2026-10-24,renewal,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-SU,Sud Ubangi,2026-10-17,renewal,ours,0.00,0.00,0.00,1.00,True,1.00
+CD-SU,Sud Ubangi,2026-10-24,renewal,ours,0.00,0.00,0.00,1.00,True,1.00
+CD-SU-07,Bulu,2026-10-17,renewal,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-SU-07,Bulu,2026-10-24,renewal,ours,0.00,0.00,0.00,0.05,True,1.00
+CD-TO,Tshopo,2026-10-17,renewal,ours,11.00,11.00,12.00,15.00,True,1.08
+CD-TO,Tshopo,2026-10-24,renewal,ours,13.00,13.00,15.00,20.00,True,1.14
+CD-TO-02,Bafwasende,2026-10-17,renewal,ours,3.00,3.00,3.00,4.00,True,1.00
+CD-TO-02,Bafwasende,2026-10-24,renewal,ours,0.00,0.00,0.00,3.00,True,1.00
+CD-TO-08,Kabondo,2026-10-17,renewal,ours,4.00,4.00,4.00,6.00,True,1.00
+CD-TO-08,Kabondo,2026-10-24,renewal,ours,9.00,9.00,9.00,11.00,True,1.00
+CD-TO-10,Lubunga,2026-10-17,renewal,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-TO-10,Lubunga,2026-10-24,renewal,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-TO-11,Makiso Kisangani,2026-10-17,renewal,ours,2.00,2.00,2.00,3.00,True,1.00
+CD-TO-11,Makiso Kisangani,2026-10-24,renewal,ours,2.00,2.00,3.00,5.00,True,1.33
+CD-TO-12,Mangobo,2026-10-17,renewal,ours,1.00,1.00,1.00,2.00,True,1.00
+CD-TO-12,Mangobo,2026-10-24,renewal,ours,0.00,0.00,0.00,1.00,True,1.00
+CD-TO-15,Tshopo,2026-10-17,renewal,ours,1.00,1.00,1.00,2.00,True,1.00
+CD-TO-15,Tshopo,2026-10-24,renewal,ours,2.00,2.00,2.00,3.00,True,1.00
+CD-TO-17,Wanierukula,2026-10-17,renewal,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-TO-17,Wanierukula,2026-10-24,renewal,ours,0.00,0.00,0.00,0.00,True,1.00
+CD,DRC,2026-10-17,renewalsp,ours,420.00,424.95,464.00,505.20,False,1.10
+CD,DRC,2026-10-24,renewalsp,ours,482.00,534.95,580.50,639.15,False,1.20
+CD-BU,Bas Uele,2026-10-17,renewalsp,ours,0.00,0.00,0.00,1.00,True,1.00
+CD-BU,Bas Uele,2026-10-24,renewalsp,ours,0.00,0.00,0.00,1.00,True,1.00
+CD-BU-02,Ango,2026-10-17,renewalsp,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-BU-02,Ango,2026-10-24,renewalsp,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-BU-05,Buta,2026-10-17,renewalsp,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-BU-05,Buta,2026-10-24,renewalsp,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-BU-06,Ganga,2026-10-17,renewalsp,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-BU-06,Ganga,2026-10-24,renewalsp,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-BU-11,Viadana,2026-10-17,renewalsp,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-BU-11,Viadana,2026-10-24,renewalsp,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-HU,Haut Uele,2026-10-17,renewalsp,ours,30.00,30.00,31.00,33.00,True,1.03
+CD-HU,Haut Uele,2026-10-24,renewalsp,ours,21.00,21.00,24.00,29.00,True,1.14
+CD-HU-02,Boma Mangbetu,2026-10-17,renewalsp,ours,2.00,2.00,2.00,3.00,True,1.00
+CD-HU-02,Boma Mangbetu,2026-10-24,renewalsp,ours,4.00,4.00,4.00,6.00,True,1.00
+CD-HU-04,Dungu,2026-10-17,renewalsp,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-HU-04,Dungu,2026-10-24,renewalsp,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-HU-06,Gombari,2026-10-17,renewalsp,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-HU-06,Gombari,2026-10-24,renewalsp,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-HU-07,Isiro,2026-10-17,renewalsp,ours,5.00,5.00,5.00,6.05,True,1.00
+CD-HU-07,Isiro,2026-10-24,renewalsp,ours,3.00,3.00,4.00,6.00,True,1.25
+CD-HU-09,Niangara,2026-10-17,renewalsp,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-HU-09,Niangara,2026-10-24,renewalsp,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-HU-10,Pawa,2026-10-17,renewalsp,ours,3.00,3.00,3.00,4.00,True,1.00
+CD-HU-10,Pawa,2026-10-24,renewalsp,ours,6.00,6.00,6.00,9.05,True,1.00
+CD-HU-11,Rungu,2026-10-17,renewalsp,ours,1.00,1.00,1.00,1.00,True,1.00
+CD-HU-11,Rungu,2026-10-24,renewalsp,ours,0.00,0.00,0.00,1.00,True,1.00
+CD-HU-12,Wamba,2026-10-17,renewalsp,ours,19.00,19.00,19.00,20.00,True,1.00
+CD-HU-12,Wamba,2026-10-24,renewalsp,ours,8.00,8.00,9.00,11.00,True,1.11
+CD-IT,Ituri,2026-10-17,renewalsp,ours,190.00,195.95,207.00,218.05,False,1.09
+CD-IT,Ituri,2026-10-24,renewalsp,ours,234.00,263.00,284.00,308.10,False,1.21
+CD-IT-02,Adja,2026-10-17,renewalsp,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-02,Adja,2026-10-24,renewalsp,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-04,Ariwara,2026-10-17,renewalsp,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-04,Ariwara,2026-10-24,renewalsp,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-05,Aru,2026-10-17,renewalsp,ours,4.00,4.00,4.00,4.00,True,1.00
+CD-IT-05,Aru,2026-10-24,renewalsp,ours,12.00,12.00,12.00,13.00,True,1.00
+CD-IT-06,Aungba,2026-10-17,renewalsp,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-06,Aungba,2026-10-24,renewalsp,ours,0.00,0.00,0.00,1.00,True,1.00
+CD-IT-07,Bambu,2026-10-17,renewalsp,ours,9.00,9.00,9.00,10.00,True,1.00
+CD-IT-07,Bambu,2026-10-24,renewalsp,ours,2.00,2.00,2.00,4.00,True,1.00
+CD-IT-09,Boga,2026-10-17,renewalsp,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-09,Boga,2026-10-24,renewalsp,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-10,Bunia,2026-10-17,renewalsp,ours,32.00,32.00,35.00,39.00,True,1.09
+CD-IT-10,Bunia,2026-10-24,renewalsp,ours,53.00,57.00,63.00,71.00,False,1.19
+CD-IT-11,Damas,2026-10-17,renewalsp,ours,1.00,1.00,1.00,1.00,True,1.00
+CD-IT-11,Damas,2026-10-24,renewalsp,ours,0.00,0.00,0.00,0.05,True,1.00
+CD-IT-12,Drodro,2026-10-17,renewalsp,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-12,Drodro,2026-10-24,renewalsp,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-13,Fataki,2026-10-17,renewalsp,ours,0.00,0.00,0.00,1.00,True,1.00
+CD-IT-13,Fataki,2026-10-24,renewalsp,ours,4.00,4.00,4.00,5.00,True,1.00
+CD-IT-14,Gethy,2026-10-17,renewalsp,ours,1.00,1.00,1.00,1.00,True,1.00
+CD-IT-14,Gethy,2026-10-24,renewalsp,ours,0.00,0.00,0.00,1.00,True,1.00
+CD-IT-16,Kambala,2026-10-17,renewalsp,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-16,Kambala,2026-10-24,renewalsp,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-17,Kilo,2026-10-17,renewalsp,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-17,Kilo,2026-10-24,renewalsp,ours,1.00,1.00,1.00,1.05,True,1.00
+CD-IT-18,Komanda,2026-10-17,renewalsp,ours,4.00,4.00,4.00,5.05,True,1.00
+CD-IT-18,Komanda,2026-10-24,renewalsp,ours,1.00,1.00,1.00,3.00,True,1.00
+CD-IT-21,Lita,2026-10-17,renewalsp,ours,7.00,7.00,7.00,10.05,True,1.00
+CD-IT-21,Lita,2026-10-24,renewalsp,ours,6.00,6.00,9.00,12.00,True,1.43
+CD-IT-22,Logo,2026-10-17,renewalsp,ours,0.00,0.00,0.00,1.00,True,1.00
+CD-IT-22,Logo,2026-10-24,renewalsp,ours,0.00,0.00,0.00,1.00,True,1.00
+CD-IT-23,Lolwa,2026-10-17,renewalsp,ours,2.00,2.00,2.00,2.05,True,1.00
+CD-IT-23,Lolwa,2026-10-24,renewalsp,ours,0.00,0.00,0.00,1.00,True,1.00
+CD-IT-24,Mahagi,2026-10-17,renewalsp,ours,0.00,0.00,0.00,1.00,True,1.00
+CD-IT-24,Mahagi,2026-10-24,renewalsp,ours,0.00,0.00,0.00,1.00,True,1.00
+CD-IT-25,Mambasa,2026-10-17,renewalsp,ours,17.00,17.00,19.00,21.00,True,1.11
+CD-IT-25,Mambasa,2026-10-24,renewalsp,ours,16.00,17.00,20.00,26.00,False,1.24
+CD-IT-26,Mandima,2026-10-17,renewalsp,ours,33.00,33.00,36.00,39.00,True,1.09
+CD-IT-26,Mandima,2026-10-24,renewalsp,ours,54.00,57.00,62.00,69.05,False,1.15
+CD-IT-27,Mangala,2026-10-17,renewalsp,ours,12.00,12.00,13.00,15.00,True,1.08
+CD-IT-27,Mangala,2026-10-24,renewalsp,ours,8.00,8.00,10.00,14.05,True,1.22
+CD-IT-28,Mongbwalu,2026-10-17,renewalsp,ours,6.00,6.00,6.00,8.00,True,1.00
+CD-IT-28,Mongbwalu,2026-10-24,renewalsp,ours,3.00,3.00,5.00,8.00,True,1.50
+CD-IT-29,Nia Nia,2026-10-17,renewalsp,ours,6.00,6.00,6.00,8.00,True,1.00
+CD-IT-29,Nia Nia,2026-10-24,renewalsp,ours,6.00,6.00,7.00,10.05,True,1.14
+CD-IT-30,Nizi,2026-10-17,renewalsp,ours,18.00,18.00,19.00,22.00,True,1.05
+CD-IT-30,Nizi,2026-10-24,renewalsp,ours,20.00,21.00,25.00,31.00,False,1.24
+CD-IT-31,Nyankunde,2026-10-17,renewalsp,ours,1.00,1.00,1.00,2.00,True,1.00
+CD-IT-31,Nyankunde,2026-10-24,renewalsp,ours,5.00,5.00,5.00,7.00,True,1.00
+CD-IT-34,Rimba,2026-10-17,renewalsp,ours,2.00,2.00,2.00,4.00,True,1.00
+CD-IT-34,Rimba,2026-10-24,renewalsp,ours,1.00,1.00,2.00,5.00,True,1.50
+CD-IT-35,Rwampara,2026-10-17,renewalsp,ours,32.00,32.00,34.00,37.05,True,1.06
+CD-IT-35,Rwampara,2026-10-24,renewalsp,ours,42.00,44.00,50.00,56.00,False,1.19
+CD-IT-36,Tchomia,2026-10-17,renewalsp,ours,3.00,3.00,3.00,4.00,True,1.00
+CD-IT-36,Tchomia,2026-10-24,renewalsp,ours,0.00,0.00,0.00,2.00,True,1.00
+CD-NK,Nord Kivu,2026-10-17,renewalsp,ours,189.00,180.95,211.00,256.30,True,1.12
+CD-NK,Nord Kivu,2026-10-24,renewalsp,ours,214.00,217.00,256.00,296.45,False,1.20
+CD-NK-03,Beni,2026-10-17,renewalsp,ours,91.00,87.00,101.00,126.05,True,1.11
+CD-NK-03,Beni,2026-10-24,renewalsp,ours,113.00,114.00,131.00,152.10,False,1.16
+CD-NK-04,Biena,2026-10-17,renewalsp,ours,0.00,0.00,0.00,2.00,True,1.00
+CD-NK-04,Biena,2026-10-24,renewalsp,ours,0.00,0.00,0.00,2.00,True,1.00
+CD-NK-07,Butembo,2026-10-17,renewalsp,ours,4.00,4.00,6.00,11.00,True,1.40
+CD-NK-07,Butembo,2026-10-24,renewalsp,ours,6.00,6.00,10.00,15.05,True,1.57
+CD-NK-08,Goma,2026-10-17,renewalsp,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-NK-08,Goma,2026-10-24,renewalsp,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-NK-10,Kalunguta,2026-10-17,renewalsp,ours,0.00,0.00,0.00,1.00,True,1.00
+CD-NK-10,Kalunguta,2026-10-24,renewalsp,ours,1.00,1.00,1.00,2.05,True,1.00
+CD-NK-14,Katwa,2026-10-17,renewalsp,ours,22.00,20.00,25.00,34.10,True,1.13
+CD-NK-14,Katwa,2026-10-24,renewalsp,ours,19.00,20.00,25.00,36.00,False,1.30
+CD-NK-15,Kayna,2026-10-17,renewalsp,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-NK-15,Kayna,2026-10-24,renewalsp,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-NK-19,Kyondo,2026-10-17,renewalsp,ours,3.00,3.00,3.00,4.00,True,1.00
+CD-NK-19,Kyondo,2026-10-24,renewalsp,ours,2.00,2.00,2.00,4.00,True,1.00
+CD-NK-20,Lubero,2026-10-17,renewalsp,ours,3.00,3.00,3.00,5.00,True,1.00
+CD-NK-20,Lubero,2026-10-24,renewalsp,ours,5.00,5.00,5.00,8.00,True,1.00
+CD-NK-21,Mabalako,2026-10-17,renewalsp,ours,14.00,13.00,15.00,19.00,True,1.07
+CD-NK-21,Mabalako,2026-10-24,renewalsp,ours,17.00,17.00,19.00,23.00,True,1.11
+CD-NK-22,Manguredjipa,2026-10-17,renewalsp,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-NK-22,Manguredjipa,2026-10-24,renewalsp,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-NK-23,Masereka,2026-10-17,renewalsp,ours,2.00,2.00,2.00,3.00,True,1.00
+CD-NK-23,Masereka,2026-10-24,renewalsp,ours,1.00,1.00,1.00,2.00,True,1.00
+CD-NK-25,Musienene,2026-10-17,renewalsp,ours,2.00,2.00,2.00,5.00,True,1.00
+CD-NK-25,Musienene,2026-10-24,renewalsp,ours,4.00,4.00,5.00,8.00,True,1.20
+CD-NK-26,Mutwanga,2026-10-17,renewalsp,ours,16.00,15.00,18.00,24.00,True,1.12
+CD-NK-26,Mutwanga,2026-10-24,renewalsp,ours,17.00,17.00,21.00,27.00,True,1.22
+CD-NK-29,Oicha,2026-10-17,renewalsp,ours,20.00,19.00,21.00,24.00,True,1.05
+CD-NK-29,Oicha,2026-10-24,renewalsp,ours,24.00,24.00,26.00,31.00,True,1.08
+CD-NK-33,Vuhovi,2026-10-17,renewalsp,ours,12.00,11.95,12.00,14.00,True,1.00
+CD-NK-33,Vuhovi,2026-10-24,renewalsp,ours,5.00,5.00,5.00,8.00,True,1.00
+CD-NU,Nord Ubangi,2026-10-17,renewalsp,ours,0.00,0.00,0.00,1.00,True,1.00
+CD-NU,Nord Ubangi,2026-10-24,renewalsp,ours,0.00,0.00,0.00,1.00,True,1.00
+CD-NU-09,Wapinda,2026-10-17,renewalsp,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-NU-09,Wapinda,2026-10-24,renewalsp,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-SK,Sud Kivu,2026-10-17,renewalsp,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-SK,Sud Kivu,2026-10-24,renewalsp,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-SK-23,Miti Murhesa,2026-10-17,renewalsp,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-SK-23,Miti Murhesa,2026-10-24,renewalsp,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-SU,Sud Ubangi,2026-10-17,renewalsp,ours,0.00,0.00,0.00,1.00,True,1.00
+CD-SU,Sud Ubangi,2026-10-24,renewalsp,ours,0.00,0.00,0.00,1.00,True,1.00
+CD-SU-07,Bulu,2026-10-17,renewalsp,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-SU-07,Bulu,2026-10-24,renewalsp,ours,0.00,0.00,0.00,0.05,True,1.00
+CD-TO,Tshopo,2026-10-17,renewalsp,ours,11.00,11.00,12.00,15.00,True,1.08
+CD-TO,Tshopo,2026-10-24,renewalsp,ours,13.00,13.00,15.00,20.10,True,1.14
+CD-TO-02,Bafwasende,2026-10-17,renewalsp,ours,3.00,3.00,3.00,4.00,True,1.00
+CD-TO-02,Bafwasende,2026-10-24,renewalsp,ours,0.00,0.00,0.00,2.00,True,1.00
+CD-TO-08,Kabondo,2026-10-17,renewalsp,ours,4.00,4.00,4.00,5.00,True,1.00
+CD-TO-08,Kabondo,2026-10-24,renewalsp,ours,9.00,9.00,9.00,11.05,True,1.00
+CD-TO-10,Lubunga,2026-10-17,renewalsp,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-TO-10,Lubunga,2026-10-24,renewalsp,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-TO-11,Makiso Kisangani,2026-10-17,renewalsp,ours,2.00,2.00,2.00,4.00,True,1.00
+CD-TO-11,Makiso Kisangani,2026-10-24,renewalsp,ours,2.00,2.00,2.00,5.00,True,1.00
+CD-TO-12,Mangobo,2026-10-17,renewalsp,ours,1.00,1.00,1.00,2.00,True,1.00
+CD-TO-12,Mangobo,2026-10-24,renewalsp,ours,0.00,0.00,0.00,1.00,True,1.00
+CD-TO-15,Tshopo,2026-10-17,renewalsp,ours,1.00,1.00,1.00,2.00,True,1.00
+CD-TO-15,Tshopo,2026-10-24,renewalsp,ours,2.00,2.00,2.00,3.00,True,1.00
+CD-TO-17,Wanierukula,2026-10-17,renewalsp,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-TO-17,Wanierukula,2026-10-24,renewalsp,ours,0.00,0.00,0.00,0.00,True,1.00
+CD,DRC,2026-10-17,renewalbvd,ours,420.00,431.95,455.00,484.10,False,1.08
+CD,DRC,2026-10-24,renewalbvd,ours,482.00,524.95,557.00,601.05,False,1.16
+CD-BU,Bas Uele,2026-10-17,renewalbvd,ours,0.00,0.00,0.00,1.00,True,1.00
+CD-BU,Bas Uele,2026-10-24,renewalbvd,ours,0.00,0.00,0.00,2.00,True,1.00
+CD-BU-02,Ango,2026-10-17,renewalbvd,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-BU-02,Ango,2026-10-24,renewalbvd,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-BU-05,Buta,2026-10-17,renewalbvd,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-BU-05,Buta,2026-10-24,renewalbvd,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-BU-06,Ganga,2026-10-17,renewalbvd,ours,0.00,0.00,0.00,1.00,True,1.00
+CD-BU-06,Ganga,2026-10-24,renewalbvd,ours,0.00,0.00,0.00,1.00,True,1.00
+CD-BU-11,Viadana,2026-10-17,renewalbvd,ours,0.00,0.00,0.00,1.00,True,1.00
+CD-BU-11,Viadana,2026-10-24,renewalbvd,ours,0.00,0.00,0.00,1.00,True,1.00
+CD-HU,Haut Uele,2026-10-17,renewalbvd,ours,30.00,30.00,32.00,35.00,True,1.06
+CD-HU,Haut Uele,2026-10-24,renewalbvd,ours,21.00,22.00,26.00,32.10,False,1.23
+CD-HU-02,Boma Mangbetu,2026-10-17,renewalbvd,ours,2.00,2.00,2.00,3.00,True,1.00
+CD-HU-02,Boma Mangbetu,2026-10-24,renewalbvd,ours,4.00,4.00,4.00,6.00,True,1.00
+CD-HU-04,Dungu,2026-10-17,renewalbvd,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-HU-04,Dungu,2026-10-24,renewalbvd,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-HU-06,Gombari,2026-10-17,renewalbvd,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-HU-06,Gombari,2026-10-24,renewalbvd,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-HU-07,Isiro,2026-10-17,renewalbvd,ours,5.00,5.00,5.00,7.00,True,1.00
+CD-HU-07,Isiro,2026-10-24,renewalbvd,ours,3.00,3.00,4.00,6.00,True,1.25
+CD-HU-09,Niangara,2026-10-17,renewalbvd,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-HU-09,Niangara,2026-10-24,renewalbvd,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-HU-10,Pawa,2026-10-17,renewalbvd,ours,3.00,3.00,3.00,5.05,True,1.00
+CD-HU-10,Pawa,2026-10-24,renewalbvd,ours,6.00,6.00,7.00,10.00,True,1.14
+CD-HU-11,Rungu,2026-10-17,renewalbvd,ours,1.00,1.00,1.00,2.00,True,1.00
+CD-HU-11,Rungu,2026-10-24,renewalbvd,ours,0.00,0.00,0.00,1.00,True,1.00
+CD-HU-12,Wamba,2026-10-17,renewalbvd,ours,19.00,19.00,19.00,21.00,True,1.00
+CD-HU-12,Wamba,2026-10-24,renewalbvd,ours,8.00,8.00,9.00,12.00,True,1.11
+CD-IT,Ituri,2026-10-17,renewalbvd,ours,190.00,195.00,209.00,227.00,False,1.10
+CD-IT,Ituri,2026-10-24,renewalbvd,ours,234.00,254.90,275.50,303.10,False,1.18
+CD-IT-02,Adja,2026-10-17,renewalbvd,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-02,Adja,2026-10-24,renewalbvd,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-04,Ariwara,2026-10-17,renewalbvd,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-04,Ariwara,2026-10-24,renewalbvd,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-05,Aru,2026-10-17,renewalbvd,ours,4.00,4.00,4.00,4.00,True,1.00
+CD-IT-05,Aru,2026-10-24,renewalbvd,ours,12.00,12.00,12.00,13.00,True,1.00
+CD-IT-06,Aungba,2026-10-17,renewalbvd,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-06,Aungba,2026-10-24,renewalbvd,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-07,Bambu,2026-10-17,renewalbvd,ours,9.00,9.00,9.00,10.00,True,1.00
+CD-IT-07,Bambu,2026-10-24,renewalbvd,ours,2.00,2.00,2.00,4.00,True,1.00
+CD-IT-09,Boga,2026-10-17,renewalbvd,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-09,Boga,2026-10-24,renewalbvd,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-10,Bunia,2026-10-17,renewalbvd,ours,32.00,32.00,35.00,41.00,True,1.09
+CD-IT-10,Bunia,2026-10-24,renewalbvd,ours,53.00,56.95,62.00,70.10,False,1.17
+CD-IT-11,Damas,2026-10-17,renewalbvd,ours,1.00,1.00,1.00,2.00,True,1.00
+CD-IT-11,Damas,2026-10-24,renewalbvd,ours,0.00,0.00,0.00,1.00,True,1.00
+CD-IT-12,Drodro,2026-10-17,renewalbvd,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-12,Drodro,2026-10-24,renewalbvd,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-13,Fataki,2026-10-17,renewalbvd,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-13,Fataki,2026-10-24,renewalbvd,ours,4.00,4.00,4.00,5.00,True,1.00
+CD-IT-14,Gethy,2026-10-17,renewalbvd,ours,1.00,1.00,1.00,1.00,True,1.00
+CD-IT-14,Gethy,2026-10-24,renewalbvd,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-16,Kambala,2026-10-17,renewalbvd,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-16,Kambala,2026-10-24,renewalbvd,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-17,Kilo,2026-10-17,renewalbvd,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-IT-17,Kilo,2026-10-24,renewalbvd,ours,1.00,1.00,1.00,1.00,True,1.00
+CD-IT-18,Komanda,2026-10-17,renewalbvd,ours,4.00,4.00,4.00,5.00,True,1.00
+CD-IT-18,Komanda,2026-10-24,renewalbvd,ours,1.00,1.00,1.00,3.00,True,1.00
+CD-IT-21,Lita,2026-10-17,renewalbvd,ours,7.00,7.00,8.00,10.00,True,1.12
+CD-IT-21,Lita,2026-10-24,renewalbvd,ours,6.00,6.00,8.00,12.00,True,1.29
+CD-IT-22,Logo,2026-10-17,renewalbvd,ours,0.00,0.00,0.00,1.00,True,1.00
+CD-IT-22,Logo,2026-10-24,renewalbvd,ours,0.00,0.00,0.00,1.00,True,1.00
+CD-IT-23,Lolwa,2026-10-17,renewalbvd,ours,2.00,2.00,2.00,3.00,True,1.00
+CD-IT-23,Lolwa,2026-10-24,renewalbvd,ours,0.00,0.00,0.00,1.05,True,1.00
+CD-IT-24,Mahagi,2026-10-17,renewalbvd,ours,0.00,0.00,0.00,0.05,True,1.00
+CD-IT-24,Mahagi,2026-10-24,renewalbvd,ours,0.00,0.00,0.00,1.00,True,1.00
+CD-IT-25,Mambasa,2026-10-17,renewalbvd,ours,17.00,17.00,18.50,22.00,True,1.08
+CD-IT-25,Mambasa,2026-10-24,renewalbvd,ours,16.00,16.95,20.00,27.00,False,1.24
+CD-IT-26,Mandima,2026-10-17,renewalbvd,ours,33.00,33.00,35.00,40.00,True,1.06
+CD-IT-26,Mandima,2026-10-24,renewalbvd,ours,54.00,55.95,60.00,68.00,False,1.11
+CD-IT-27,Mangala,2026-10-17,renewalbvd,ours,12.00,12.00,13.00,15.00,True,1.08
+CD-IT-27,Mangala,2026-10-24,renewalbvd,ours,8.00,8.00,10.00,13.00,True,1.22
+CD-IT-28,Mongbwalu,2026-10-17,renewalbvd,ours,6.00,6.00,6.00,9.00,True,1.00
+CD-IT-28,Mongbwalu,2026-10-24,renewalbvd,ours,3.00,3.00,4.00,7.00,True,1.25
+CD-IT-29,Nia Nia,2026-10-17,renewalbvd,ours,6.00,6.00,6.00,9.00,True,1.00
+CD-IT-29,Nia Nia,2026-10-24,renewalbvd,ours,6.00,6.00,7.00,10.00,True,1.14
+CD-IT-30,Nizi,2026-10-17,renewalbvd,ours,18.00,18.00,20.00,23.00,True,1.11
+CD-IT-30,Nizi,2026-10-24,renewalbvd,ours,20.00,21.00,24.00,29.05,False,1.19
+CD-IT-31,Nyankunde,2026-10-17,renewalbvd,ours,1.00,1.00,1.00,2.00,True,1.00
+CD-IT-31,Nyankunde,2026-10-24,renewalbvd,ours,5.00,5.00,5.00,7.00,True,1.00
+CD-IT-34,Rimba,2026-10-17,renewalbvd,ours,2.00,2.00,2.00,4.00,True,1.00
+CD-IT-34,Rimba,2026-10-24,renewalbvd,ours,1.00,1.00,2.00,5.05,True,1.50
+CD-IT-35,Rwampara,2026-10-17,renewalbvd,ours,32.00,32.00,34.00,39.05,True,1.06
+CD-IT-35,Rwampara,2026-10-24,renewalbvd,ours,42.00,44.00,48.00,54.05,False,1.14
+CD-IT-36,Tchomia,2026-10-17,renewalbvd,ours,3.00,3.00,3.00,4.00,True,1.00
+CD-IT-36,Tchomia,2026-10-24,renewalbvd,ours,0.00,0.00,0.00,1.05,True,1.00
+CD-NK,Nord Kivu,2026-10-17,renewalbvd,ours,189.00,183.85,201.00,233.00,True,1.06
+CD-NK,Nord Kivu,2026-10-24,renewalbvd,ours,214.00,211.80,237.00,281.05,True,1.11
+CD-NK-03,Beni,2026-10-17,renewalbvd,ours,91.00,88.95,96.00,108.05,True,1.05
+CD-NK-03,Beni,2026-10-24,renewalbvd,ours,113.00,112.00,122.00,141.10,True,1.08
+CD-NK-04,Biena,2026-10-17,renewalbvd,ours,0.00,0.00,0.00,1.00,True,1.00
+CD-NK-04,Biena,2026-10-24,renewalbvd,ours,0.00,0.00,0.00,2.00,True,1.00
+CD-NK-07,Butembo,2026-10-17,renewalbvd,ours,4.00,4.00,5.00,10.05,True,1.20
+CD-NK-07,Butembo,2026-10-24,renewalbvd,ours,6.00,6.00,8.00,12.05,True,1.29
+CD-NK-08,Goma,2026-10-17,renewalbvd,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-NK-08,Goma,2026-10-24,renewalbvd,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-NK-10,Kalunguta,2026-10-17,renewalbvd,ours,0.00,0.00,0.00,1.00,True,1.00
+CD-NK-10,Kalunguta,2026-10-24,renewalbvd,ours,1.00,1.00,1.00,2.00,True,1.00
+CD-NK-14,Katwa,2026-10-17,renewalbvd,ours,22.00,21.00,24.00,30.05,True,1.09
+CD-NK-14,Katwa,2026-10-24,renewalbvd,ours,19.00,19.00,23.00,31.10,True,1.20
+CD-NK-15,Kayna,2026-10-17,renewalbvd,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-NK-15,Kayna,2026-10-24,renewalbvd,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-NK-19,Kyondo,2026-10-17,renewalbvd,ours,3.00,3.00,3.00,4.00,True,1.00
+CD-NK-19,Kyondo,2026-10-24,renewalbvd,ours,2.00,2.00,2.00,3.00,True,1.00
+CD-NK-20,Lubero,2026-10-17,renewalbvd,ours,3.00,3.00,3.00,4.00,True,1.00
+CD-NK-20,Lubero,2026-10-24,renewalbvd,ours,5.00,5.00,5.00,7.00,True,1.00
+CD-NK-21,Mabalako,2026-10-17,renewalbvd,ours,14.00,14.00,14.00,17.05,True,1.00
+CD-NK-21,Mabalako,2026-10-24,renewalbvd,ours,17.00,17.00,18.00,21.00,True,1.06
+CD-NK-22,Manguredjipa,2026-10-17,renewalbvd,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-NK-22,Manguredjipa,2026-10-24,renewalbvd,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-NK-23,Masereka,2026-10-17,renewalbvd,ours,2.00,2.00,2.00,2.05,True,1.00
+CD-NK-23,Masereka,2026-10-24,renewalbvd,ours,1.00,1.00,1.00,2.00,True,1.00
+CD-NK-25,Musienene,2026-10-17,renewalbvd,ours,2.00,2.00,2.00,4.00,True,1.00
+CD-NK-25,Musienene,2026-10-24,renewalbvd,ours,4.00,4.00,4.00,7.00,True,1.00
+CD-NK-26,Mutwanga,2026-10-17,renewalbvd,ours,16.00,16.00,17.00,21.05,True,1.06
+CD-NK-26,Mutwanga,2026-10-24,renewalbvd,ours,17.00,17.00,19.00,25.00,True,1.11
+CD-NK-29,Oicha,2026-10-17,renewalbvd,ours,20.00,19.00,20.00,23.05,True,1.00
+CD-NK-29,Oicha,2026-10-24,renewalbvd,ours,24.00,24.00,25.00,29.05,True,1.04
+CD-NK-33,Vuhovi,2026-10-17,renewalbvd,ours,12.00,11.95,12.00,13.00,True,1.00
+CD-NK-33,Vuhovi,2026-10-24,renewalbvd,ours,5.00,5.00,5.00,6.05,True,1.00
+CD-NU,Nord Ubangi,2026-10-17,renewalbvd,ours,0.00,0.00,0.00,1.05,True,1.00
+CD-NU,Nord Ubangi,2026-10-24,renewalbvd,ours,0.00,0.00,0.00,2.00,True,1.00
+CD-NU-09,Wapinda,2026-10-17,renewalbvd,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-NU-09,Wapinda,2026-10-24,renewalbvd,ours,0.00,0.00,0.00,1.00,True,1.00
+CD-SK,Sud Kivu,2026-10-17,renewalbvd,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-SK,Sud Kivu,2026-10-24,renewalbvd,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-SK-23,Miti Murhesa,2026-10-17,renewalbvd,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-SK-23,Miti Murhesa,2026-10-24,renewalbvd,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-SU,Sud Ubangi,2026-10-17,renewalbvd,ours,0.00,0.00,0.00,1.05,True,1.00
+CD-SU,Sud Ubangi,2026-10-24,renewalbvd,ours,0.00,0.00,0.00,1.00,True,1.00
+CD-SU-07,Bulu,2026-10-17,renewalbvd,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-SU-07,Bulu,2026-10-24,renewalbvd,ours,0.00,0.00,0.00,1.00,True,1.00
+CD-TO,Tshopo,2026-10-17,renewalbvd,ours,11.00,11.00,12.00,15.00,True,1.08
+CD-TO,Tshopo,2026-10-24,renewalbvd,ours,13.00,13.00,16.00,20.05,True,1.21
+CD-TO-02,Bafwasende,2026-10-17,renewalbvd,ours,3.00,3.00,3.00,4.00,True,1.00
+CD-TO-02,Bafwasende,2026-10-24,renewalbvd,ours,0.00,0.00,0.00,2.00,True,1.00
+CD-TO-08,Kabondo,2026-10-17,renewalbvd,ours,4.00,4.00,4.00,6.00,True,1.00
+CD-TO-08,Kabondo,2026-10-24,renewalbvd,ours,9.00,9.00,10.00,11.00,True,1.10
+CD-TO-10,Lubunga,2026-10-17,renewalbvd,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-TO-10,Lubunga,2026-10-24,renewalbvd,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-TO-11,Makiso Kisangani,2026-10-17,renewalbvd,ours,2.00,2.00,2.00,4.00,True,1.00
+CD-TO-11,Makiso Kisangani,2026-10-24,renewalbvd,ours,2.00,2.00,3.00,5.00,True,1.33
+CD-TO-12,Mangobo,2026-10-17,renewalbvd,ours,1.00,1.00,1.00,2.00,True,1.00
+CD-TO-12,Mangobo,2026-10-24,renewalbvd,ours,0.00,0.00,0.00,1.00,True,1.00
+CD-TO-15,Tshopo,2026-10-17,renewalbvd,ours,1.00,1.00,1.00,2.00,True,1.00
+CD-TO-15,Tshopo,2026-10-24,renewalbvd,ours,2.00,2.00,2.00,3.00,True,1.00
+CD-TO-17,Wanierukula,2026-10-17,renewalbvd,ours,0.00,0.00,0.00,0.00,True,1.00
+CD-TO-17,Wanierukula,2026-10-24,renewalbvd,ours,0.00,0.00,0.00,0.05,True,1.00
