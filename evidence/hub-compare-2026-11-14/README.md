@@ -27,6 +27,7 @@ The UQPSU files write dates day first; `hub_quantiles.py` reads them so.
 
 - randomwalknowcast and randomwalk: the quantiles from the plausibility evidence (`evidence/plausibility-2026-11-14` at dc400fe2, run on main 96ac128d).
   The `src` diff from 96ac128d to main af48b070 touches only `digest.py` and `pprandomwalk.py`, so these are what main gives.
+  Neither `config/`, `data/`, `pyproject.toml` nor `uv.lock` changed between 96ac128d and af48b070, or between fa04ff08 and af48b070.
 - pprandomwalknowcast: run here on main af48b070, `nowcast --model pprandomwalknowcast --vintage 2026-11-08 --reference-date 2026-11-14`.
   It passed the new convergence check (#155) and wrote its file.
 - renewal, renewalsp and renewalbvd: the 11-08 fits on `fit-store` at b12df214 (the branch head when written up), fitted at fa04ff08, which is on main.
@@ -79,7 +80,9 @@ Median [5%, 95%] at the first and last forecast weeks (`summary.md`; every week 
    We sit at the top of that and the hub at the bottom.
    For 10-31 (349 reported, one week back) ours are 528 to 626 and the hub ensemble's 462.
    The hub models then carry the slow fall seen since August (about 600 a week in August, 470 to 500 in early October) forward. Ours stay flat (random walks) or rise (renewal, renewalsp).
-   This bears on how much our nowcasts expect recent weeks to fill (#34, closed, is the nearest; #160 covers the tails).
+   This bears on how much our nowcasts expect recent weeks to fill.
+   The nearest issue is #34, which is closed and was about the opposite (under-predicting Nord Kivu). #160 covers the tails, not the level.
+   renewal also climbs at DRC (median 644 to 732, q95 1365 by 12-05). #52 is about renewalsp in Ituri.
 2. **Ituri: hub models fall, ours stay flat or rise.**
    Reported counts fell from about 420 in mid-August to 240 to 270 in October.
    The hub ensemble goes from 211 at 11-14 to 177 at 12-05. Only OHTJHU-BM stays flat.
@@ -118,7 +121,9 @@ At zones, the 90% intervals of OHTJHU-BM and pedro-zonemix hold 99% and 100% of 
 On those weeks the hub models are closer to the reported counts than ours, which expect more filling.
 Whether the hub or we have the filling right for 10-24 and 10-31 will show in the next releases.
 
-None of this is outside the issues already open (#34, #52, #159, #160, #161, #162), so no new issue was filed.
+The tails, renewalsp in Ituri, stale zone starts and never-seeded zones are covered by #52, #159, #160 and #161.
+Two differences are not clearly covered: the DRC level and nowcast-filling gap (point 1; #34 is the nearest and is closed) and renewal's DRC rise.
+No issue was filed for them. Our 10-24 uplift is inside past revision growth, so whether it is a fault is a judgement call.
 
 ## Files
 
