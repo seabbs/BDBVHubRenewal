@@ -123,7 +123,7 @@ def test_randomwalk_returns_complete_weeks_as_reported(
     assert late["value"].nunique() > 5
 
 
-def test_nowcast_starts_from_the_latest_full_week_with_enough_reported(
+def test_nowcast_starts_from_the_latest_week_with_enough_reported(
     target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
 ) -> None:
     model = RandomWalkNowcast()
@@ -133,10 +133,33 @@ def test_nowcast_starts_from_the_latest_full_week_with_enough_reported(
     # than 5 cases in it.
     assert start["CD-IT"] == "2026-10-24"
     assert max(start.values()) == "2026-10-24"
-    # Cut-off 10-16 is a Friday, so the week of 10-17 is partial.
+    # Cut-off 10-16 is a Friday, so the week of 10-17 is partial. Its six
+    # observed days are over 5% reported with more than 5 cases, so the
+    # walk starts from it.
     model.forecast(_task(target, delays, daily, "2026-10-17"))
     start = {r["location"]: r["start_week"] for r in model.fit_diagnostics}
-    assert start["CD-IT"] == "2026-10-10"
+    assert start["CD-IT"] == "2026-10-17"
+
+
+def test_a_partial_start_week_walks_on_at_a_full_week_level(
+    target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
+) -> None:
+    # With no walk spread the level stays where it starts. The week of
+    # 10-17 has 6 of 7 days observed, so each sample's level is its nowcast
+    # of the 6 days times 7 / 6. That week adds Poisson(level / 7) for its
+    # missing day, and the next week is Poisson(level).
+    task = _task(target, delays, daily, "2026-10-17")
+    model = RandomWalkNowcast()
+    origin = model.origin_at(task, errors=True)
+    origin.sigma[:] = 0.0
+    values, weeks = model.trajectories(origin, task, origin.point)
+    i = origin.snap.locations.index("CD-IT")
+    cw = weeks.index("2026-10-17")
+    nowcast = origin.point[i, cw]
+    assert values[:, i, cw].mean() == pytest.approx(nowcast * 7 / 6, rel=0.05)
+    assert values[:, i, cw + 1].mean() == pytest.approx(
+        values[:, i, cw].mean(), rel=0.05
+    )
 
 
 def test_the_partial_week_adds_walk_draws_to_its_nowcast(
