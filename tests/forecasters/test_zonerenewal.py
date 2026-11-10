@@ -281,3 +281,22 @@ def test_bvd_zone_rt_becomes_one_term_per_fitted_zone(tmp_path: Path) -> None:
         raise OSError("offline")
 
     assert zr.zone_bvd_rows(release, tmp_path / "none", names, fail) is None
+
+
+def test_zone_data_files_key_the_zone_fits(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from bdbvhubrenewal.model import zones
+
+    config = tmp_path / "hub.toml"
+    config.write_text("[renewal]\nzones = true\n")
+    before = zr.zone_inputs_digest(config)
+    config.write_text("[renewal]\nzones = true\nother = 1\n")
+    assert zr.zone_inputs_digest(config) != before
+    centres = tmp_path / "zone_centres.csv"
+    centres.write_bytes(zones.ZONE_CENTRES.read_bytes() + b"\n")
+    monkeypatch.setattr(zones, "ZONE_CENTRES", centres)
+    config.write_text("[renewal]\nzones = true\n")
+    assert zr.zone_inputs_digest(config) != before
+    model = zr.ZoneRenewalModel(rn.VARIANTS["renewal"])
+    assert f"inputs='{model.inputs}'" in repr(model)

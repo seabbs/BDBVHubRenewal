@@ -377,6 +377,40 @@ class ZoneRenewalFit(RenewalFit):
     zones: pd.DataFrame | None = None
 
 
+def zone_inputs_digest(path: Path | str = HUB_CONFIG) -> str:
+    """Hash the data files a zone fit reads that its code does not hold.
+
+    The zone centres and populations (`model.zones.ZONE_CENTRES`) and the
+    `[renewal]` table of the hub config. The fit key hashes code, not
+    data files, so this digest sits in `ZoneRenewalModel`'s
+    representation, which the key does hash: editing either refits.
+
+    Parameters
+    ----------
+    path : pathlib.Path or str
+        The hub config.
+
+    Returns
+    -------
+    str
+        The first 16 hex digits of a SHA-256.
+    """
+    import hashlib
+    import json
+
+    from bdbvhubrenewal.model.zones import ZONE_CENTRES
+
+    digest = hashlib.sha256(Path(ZONE_CENTRES).read_bytes())
+    config = Path(path)
+    table = (
+        tomllib.loads(config.read_text()).get("renewal", {})
+        if config.exists()
+        else {}
+    )
+    digest.update(json.dumps(table, sort_keys=True).encode())
+    return digest.hexdigest()[:16]
+
+
 @dataclass
 class ZoneRenewalModel(RenewalModel):
     """A renewal variant fitted on health zones, as a `ForecastModel`.
@@ -386,12 +420,16 @@ class ZoneRenewalModel(RenewalModel):
     zones : bool
         Always True: in the representation, so it keys a stored fit
         apart from the province model.
+    inputs : str
+        `zone_inputs_digest`, in the representation so the zone data
+        files key a stored fit.
     zone_samples : pandas.DataFrame or None
         Zone samples of the last `forecast`, which sum to its province
         samples.
     """
 
     zones: bool = field(init=False, default=True)
+    inputs: str = field(init=False, default_factory=zone_inputs_digest)
     zone_samples: pd.DataFrame | None = field(
         init=False, default=None, repr=False, compare=False
     )
