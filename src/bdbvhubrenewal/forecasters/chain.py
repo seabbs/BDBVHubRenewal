@@ -39,8 +39,9 @@ still expects some cases.
 cut-off at most `Settings.retro_delay` (63) days before $c_o$, nowcasts
 the count expected at $o$ for days up to $c_r$, with the same weekly fill
 from $c_r$ to $c_o$ and the $g$ of $r$.
-Its new reports and removals by weeks back fit the observation model
-(`obs`).
+Its new reports by weeks back fit the observation model (`obs`), on
+counts whose downward revisions are moved onto earlier releases, as for
+the delay.
 
 **Introductions.** A place with no case in the latest `walk_weeks` weeks
 is silent, and its weekly probability of a first case is pooled over its
@@ -51,7 +52,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 import jax.numpy as jnp
 import numpy as np
@@ -71,7 +72,7 @@ from bdbvhubrenewal.forecasters.introductions import (
     introduction_rates,
     silent_places,
 )
-from bdbvhubrenewal.forecasters.obs import fit_sizes, rate
+from bdbvhubrenewal.forecasters.obs import fit_sizes
 from bdbvhubrenewal.forecasters.pooling import (
     MIN_ERRORS,
     MIN_LEVEL,
@@ -446,9 +447,10 @@ class Errors:
 
     Attributes
     ----------
-    added, removed : numpy.ndarray
-        Rise and fall of each week's count between each release and the
-        origin, `[R, L, K]`.
+    added : numpy.ndarray
+        Rise of each week's count between each release and the origin,
+        `[R, L, K]`, after downward revisions are moved onto earlier
+        releases (`_delay_counts`).
     remaining : numpy.ndarray
         Nowcast of the count still to come, `[R, L, K]`.
     reported : numpy.ndarray
@@ -460,7 +462,6 @@ class Errors:
     """
 
     added: np.ndarray
-    removed: np.ndarray
     remaining: np.ndarray
     reported: np.ndarray
     valid: np.ndarray
@@ -543,6 +544,9 @@ def retro_errors(
     """
     n_loc = len(snap.locations)
     k_n = weeks_back(snap, o, settings.max_delay)
+    # As baselinenowcast preprocesses its triangle, a fall is taken from
+    # the earlier releases' counts, so a week's count never falls.
+    pre = replace(snap, counts=_delay_counts(snap, o))
     cells: list[tuple[np.ndarray, ...]] = []
     releases: list[str] = []
     for r in range(1, o):
@@ -552,21 +556,20 @@ def retro_errors(
         if fit is None:
             continue
         age = snap.cut[r] - np.arange(snap.week.size)
-        ahead = week_nowcast(snap, r, fit.g, age, snap.cut[o] - snap.cut[r])
+        ahead = week_nowcast(pre, r, fit.g, age, snap.cut[o] - snap.cut[r])
         wa, k_r = snap.cut_week(r), weeks_back(snap, r, settings.max_delay)
         cols = wa - np.arange(k_n)
         take = (cols >= 0) & (np.arange(k_n) < k_r)
         safe = np.clip(cols, 0, None)
-        obs = weekly_sums(snap, r)[:, safe]
+        obs = weekly_sums(pre, r)[:, safe]
         pred = ahead[:, safe]
         # The week's change to the origin, on days up to the cut-off of r.
-        change = weekly_sums(snap, o, upto=int(snap.cut[r]))[:, safe] - obs
-        added, removed = np.maximum(change, 0.0), np.maximum(-change, 0.0)
+        added = weekly_sums(pre, o, upto=int(snap.cut[r]))[:, safe] - obs
         valid = take[None, :] & ((obs > 0) | (pred > 0))
-        cells.append((added, removed, pred - obs, obs, valid))
+        cells.append((added, pred - obs, obs, valid))
         releases.append(snap.releases[r])
-    c = np.array(cells, dtype=float).reshape(-1, 5, n_loc, k_n)
-    return Errors(c[:, 0], c[:, 1], c[:, 2], c[:, 3], c[:, 4] > 0, releases)
+    c = np.array(cells, dtype=float).reshape(-1, 4, n_loc, k_n)
+    return Errors(c[:, 0], c[:, 1], c[:, 2], c[:, 3] > 0, releases)
 
 
 @dataclass
@@ -610,8 +613,6 @@ class Origin:
     size : numpy.ndarray or None
         Negative binomial size $\phi_k$ of the new reports of each place
         by weeks back from the cut-off week, `[L, K]`.
-    removal : numpy.ndarray or None
-        Removal rate $b_k$, `[L, K]`.
     obs_n : numpy.ndarray or None
         Errors behind each fit, `[L, K]`.
     obs_source : numpy.ndarray or None
@@ -633,7 +634,6 @@ class Origin:
     intro: np.ndarray
     errors: Errors | None = None
     size: np.ndarray | None = None
-    removal: np.ndarray | None = None
     obs_n: np.ndarray | None = None
     obs_source: np.ndarray | None = None
 
@@ -792,8 +792,6 @@ def _add_spread(origin: Origin) -> None:
     The size follows the one rule. Each place's own estimate uses its
     errors, and its pooled estimate the errors of the places in its
     pool. The size is fitted only for the estimates some place uses.
-    The removal rate is each place's own, so a place with no falls has
-    none.
     """
     snap, settings = origin.snap, origin.settings
     errors = retro_errors(snap, origin.o, settings)
@@ -803,8 +801,6 @@ def _add_spread(origin: Origin) -> None:
     # A cell with nothing nowcast to come says nothing about the size.
     fit = errors.valid & (errors.remaining > 0)
     n = np.einsum("el,rlk->ek", member, fit, dtype=int)
-    removed = (errors.removed * errors.valid).sum(axis=0)
-    reported = (errors.reported * errors.valid).sum(axis=0)
     source = source_index(
         origin.fit.level,
         snap.parent,
@@ -825,5 +821,4 @@ def _add_spread(origin: Origin) -> None:
     k = np.arange(n.shape[1])[None, :]
     origin.errors = errors
     origin.size = size[source, k]
-    origin.removal = rate(removed, reported)
     origin.obs_n, origin.obs_source = n[source, k], source

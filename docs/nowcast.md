@@ -38,8 +38,8 @@ The growth to final of each onset day by its age at the latest release, and the 
 A place using its parent's estimate is labelled with the parent.
 How both are fitted is on the [Baseline models](methods/baselines.md#nowcast) page.
 
-![Growth to final by age, and the dispersion of new reports and the removal rate by weeks back, at the latest release.](figures/delay-check.svg#only-light)
-![Growth to final by age, and the dispersion of new reports and the removal rate by weeks back, at the latest release.](figures/delay-check-dark.svg#only-dark)
+![Growth to final by age, and the dispersion of new reports by weeks back, at the latest release.](figures/delay-check.svg#only-light)
+![Growth to final by age, and the dispersion of new reports by weeks back, at the latest release.](figures/delay-check-dark.svg#only-dark)
 
 The renewal models fit the onset-to-report delay with the cases ([delays](methods/model.md#delays)).
 Each row is one fit at its latest origin, and each model fits one delay for all provinces.

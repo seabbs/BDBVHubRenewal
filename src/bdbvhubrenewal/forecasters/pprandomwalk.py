@@ -45,10 +45,9 @@ the likelihood and their ancestors are latent centres.
   $\log(1 + y)$ up to the start week normal with that spread.
   A change between two weeks with no cases is at the walk's floor and
   says nothing about its spread, so it is left out.
-- **Nowcast uncertainty.** $\log \phi_{n,k}$ and $\log b_{n,k}$ pooled by
-  weeks back $k$, with the new reports negative binomial on the count
-  nowcast to come and the removals Poisson on the count reported, as
-  in `obs`.
+- **Nowcast uncertainty.** $\log \phi_{n,k}$ pooled by weeks back $k$,
+  with the new reports negative binomial on the count nowcast to come,
+  as in `obs`.
 
 Posterior medians are plugged into `randomwalknowcast`'s draws, so the
 posterior spread of the estimates does not reach the forecasts.
@@ -252,15 +251,12 @@ def spread_model(
     seen: np.ndarray,
     added: np.ndarray,
     remaining: np.ndarray,
-    removed: np.ndarray,
-    reported: np.ndarray,
     valid: np.ndarray,
 ) -> None:
-    """Pooled walk spread, negative binomial size and removal rate."""
+    """Pooled walk spread and negative binomial size."""
     k_n = added.shape[-1]
     log_sigma = tree.sample("sigma", np.log(0.2), 1.0)
     log_size = tree.sample("size", 0.0, 1.5, (k_n,))
-    log_b = tree.sample("removal", np.log(0.005), 1.5, (k_n,))
     leaf = tree.leaf
     with numpyro.handlers.mask(mask=leaf[:, None] & seen):
         numpyro.sample(
@@ -274,13 +270,6 @@ def spread_model(
             "added_obs",
             _nb(jnp.asarray(remaining), jnp.exp(log_size)[None]),
             obs=np.round(added),
-        )
-    gone = leaf[None, :, None] & valid & (reported > 0)
-    with numpyro.handlers.mask(mask=gone):
-        numpyro.sample(
-            "removed_obs",
-            dist.Poisson(jnp.exp(log_b)[None] * reported + 1e-8),
-            obs=np.round(removed),
         )
 
 
@@ -438,7 +427,7 @@ class PPRandomWalkNowcast(RandomWalkNowcast):
         if delay is None:
             n_k = weeks_back(snap, origin.o, settings.max_delay)
             empty = np.zeros((0, len(snap.locations), n_k))
-            err = Errors(empty, empty, empty, empty, empty > 0)
+            err = Errors(empty, empty, empty, empty > 0)
         else:
             err = retro_errors(snap, origin.o, settings, delay)
         draws, info = _run(
@@ -450,8 +439,6 @@ class PPRandomWalkNowcast(RandomWalkNowcast):
             seen=seen,
             added=err.added,
             remaining=err.remaining,
-            removed=err.removed,
-            reported=err.reported,
             valid=err.valid,
         )
         self.fits.append({"fit": "spread and errors", **info})
@@ -460,7 +447,6 @@ class PPRandomWalkNowcast(RandomWalkNowcast):
         origin.size = np.clip(
             np.exp(_median_of(tree, draws, "size")), MIN_SIZE, MAX_SIZE
         )
-        origin.removal = np.exp(_median_of(tree, draws, "removal"))
 
     def _diagnostics(
         self, origin: Origin, task: ForecastTask, start: np.ndarray

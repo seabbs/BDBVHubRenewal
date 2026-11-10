@@ -1,37 +1,31 @@
 # Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
-r"""Observation model: new reports minus removals.
+r"""Observation model: new reports on the count still to come.
 
 For a week with count $Y$ reported so far and a nowcast mean $\mu$, the
 count still to come is $\mathrm{rem} = \mu - Y \ge 0$.
 The count at a later release is
 
 $$
-X = \max\big(0,\ Y + A - B\big),
+X = Y + A,
 \qquad
 A \sim \mathrm{NB}(\mathrm{rem}, \phi_k),
-\qquad
-B \sim \mathrm{Poisson}(b_k Y),
 $$
 
-as new reports minus removals in epinowcast.
-$A$ is baselinenowcast's negative binomial on the remaining count, fitted
-and drawn with the port's `fit_nb` and `sample_nb` through
-`fit_by_horizon`, one size $\phi_k$ for each week back $k$.
-$b_k$ is the share of the reported count later removed, the Poisson
-maximum likelihood estimate $\sum B / \sum Y$ from the falls of weekly
-counts between earlier releases and the origin.
+baselinenowcast's negative binomial on the remaining count, fitted and
+drawn with the port's `fit_nb` and `sample_nb` through `fit_by_horizon`,
+one size $\phi_k$ for each week back $k$.
+As in baselinenowcast, downward revisions are moved onto earlier releases
+before the fit (`chain._delay_counts`), so new reports only add.
 """
 
 from __future__ import annotations
 
-import jax
-import jax.numpy as jnp
 import numpy as np
 from jax import Array
 
 from bdbvhubrenewal.baselinenowcast import fit_by_horizon, sample_nb
 
-__all__ = ["MAX_SIZE", "PRIOR_SIZE", "fit_sizes", "rate", "sample_count"]
+__all__ = ["MAX_SIZE", "PRIOR_SIZE", "fit_sizes", "sample_count"]
 
 MAX_SIZE = 1000.0
 """Upper bound of `fit_nb`'s size, the Poisson end of its range."""
@@ -71,24 +65,8 @@ def fit_sizes(
     )
 
 
-def rate(num: np.ndarray, den: np.ndarray) -> np.ndarray:
-    """Return `num / den`, 0 where `den` is 0.
-
-    Parameters
-    ----------
-    num, den : numpy.ndarray
-        Numerator and denominator, broadcast together.
-
-    Returns
-    -------
-    numpy.ndarray
-        The ratio.
-    """
-    return np.where(den > 0, num / np.where(den > 0, den, 1.0), 0.0)
-
-
 def sample_count(
-    key: Array, reported: Array, remaining: Array, size: Array, b: Array
+    key: Array, reported: Array, remaining: Array, size: Array
 ) -> Array:
     r"""Draw the count at the later release.
 
@@ -102,15 +80,10 @@ def sample_count(
         $\mathrm{rem}$, the shape of `reported`.
     size : jax.Array
         $\phi_k$, the shape of `reported`.
-    b : jax.Array
-        $b_k$, the shape of `reported`.
 
     Returns
     -------
     jax.Array
         $X$, the shape of `reported`.
     """
-    k_add, k_rm = jax.random.split(key)
-    added = sample_nb(k_add, remaining, size)
-    removed = jax.random.poisson(k_rm, b * reported, reported.shape)
-    return jnp.maximum(reported + added - removed, 0.0)
+    return reported + sample_nb(key, remaining, size)
