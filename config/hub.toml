@@ -18,7 +18,7 @@ submit = true
 # (true), or on the provinces (false). Read by
 # `bdbvhubrenewal.forecasters.renewal.zone_fits`; BDBV_RENEWAL_ZONES
 # overrides it. Flipping it changes the fit keys of both models.
-zones = false
+zones = true
 
 # Further hub models, each submitted under its own id every round, apart
 # from the chain above. The hub allows no hyphen in an abbreviation and
