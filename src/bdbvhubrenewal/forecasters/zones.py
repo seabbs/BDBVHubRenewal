@@ -39,22 +39,27 @@ release snapshots (`zone_task`), with the zone, then province, then
 national pooling of `pooling`.
 Their zone samples are then made to sum to the province samples
 (`reconcile_zones`).
-As in the allocator, each zone keeps what it has published, and province
-sample $Y^{(k)}(w)$ above the published total is apportioned over the
-zones in proportion to the zone model's own sample beyond what the zone
-has published, $(x^{(k)}_z(w) - o_z(w))^+$, by largest remainders, so the
-values are whole numbers that sum exactly to $Y^{(k)}(w)$:
+Reported counts can fall, mostly through onset imputation, so the split
+does not hold a zone at its published count. It keeps
+$f^{(k)}_z(w) = \min(o_z(w), x^{(k)}_z(w))$, the lower of the published
+count and the zone model's own sample. So the split adds no fall, but a
+fall the zone model drew passes through.
+Province sample $Y^{(k)}(w)$ above $F^{(k)}(w) = \sum_z f^{(k)}_z(w)$ is
+apportioned over the zones in proportion to the zone model's own sample
+beyond that, by largest remainders, so the values are whole numbers that
+sum exactly to $Y^{(k)}(w)$:
 
 $$
-y^{(k)}_z(w) \approx o_z(w) + \big(Y^{(k)}(w) - O(w)\big)\,
-  \frac{(x^{(k)}_z(w) - o_z(w))^+}{\sum_{z'} (x^{(k)}_{z'}(w) - o_{z'}(w))^+}.
+y^{(k)}_z(w) \approx f^{(k)}_z(w) + \big(Y^{(k)}(w) - F^{(k)}(w)\big)\,
+  \frac{x^{(k)}_z(w) - f^{(k)}_z(w)}
+       {\sum_{z'} (x^{(k)}_{z'}(w) - f^{(k)}_{z'}(w))}.
 $$
 
-Where no zone sample is above its published count the rest follows the
-zone samples themselves, and where every zone sample is 0 it uses the
+Where no zone sample is above what it keeps the rest follows the zone
+samples themselves, and where every zone sample is 0 it uses the
 Dirichlet mean shares of the allocator above.
-If a sample is below the published total, it is apportioned in proportion
-to the published counts, so no zone gets more than it has published.
+A sample below $F^{(k)}(w)$ is apportioned in proportion to the $f$, so
+no zone gets more than it keeps.
 After the data weeks $o_z(w) = 0$, so the forecast weeks are unchanged.
 """
 
@@ -304,12 +309,15 @@ def _keep_published(
 ) -> np.ndarray:
     """Split `totals` `[S, W]` over zones, keeping the `published` counts.
 
-    The part of a total above the published total `[W, Z]` goes by the
-    zone weights `[S, W, Z]` beyond each zone's count, then by the weights
-    themselves, then by `fallback` `[Z]`. A total below the published
-    total is split by the published counts.
+    Each zone keeps the lower of its published count `[W, Z]` and its own
+    draw in `weight` `[S, W, Z]`, so the split adds no fall below what a
+    zone has published but keeps a fall the zone model drew. The part of a
+    total above what the zones keep goes by the zone draws beyond it, then
+    by the draws themselves, then by `fallback` `[Z]`. A total below what
+    the zones keep is split in proportion to it.
     """
-    pub = np.broadcast_to(published, weight.shape)
+    # A zone's own draw below its published count is a fall it keeps.
+    pub = np.minimum(np.broadcast_to(published, weight.shape), weight)
     floor = pub.sum(axis=-1)
     extra = np.clip(weight - pub, 0.0, None)
     plain = extra.sum(axis=-1) <= 0
@@ -333,11 +341,11 @@ def reconcile_zones(
 ) -> pd.DataFrame:
     """Make zone samples sum to their province samples.
 
-    Each zone keeps its published count, and the rest of each province
-    sample is apportioned over the province's zones in proportion to the
-    zone model's own sample of the same id and week beyond that count.
-    A province sample below the published total is apportioned by the
-    published counts.
+    Each zone keeps the lower of its published count and its own sample
+    of the same id and week, and the rest of each province sample is
+    apportioned over the province's zones in proportion to the zone
+    samples beyond that. A province sample below what the zones keep is
+    apportioned in proportion to it.
 
     Parameters
     ----------
