@@ -301,3 +301,37 @@ def test_summary_table_sits_above_the_fold(tmp_path: Path) -> None:
     assert any(line.startswith("|  | reported, mean of last") for line in shown)
     assert "**National (`CD`) by week**" in text
     assert not any("| week ending | median |" in line for line in shown)
+
+
+def test_says_which_stored_fit_it_read(tmp_path: Path) -> None:
+    g = gate(tmp_path)
+    prov = read_json(g / "provenance.json")
+    prov["run"].update(
+        kind="main",
+        store={
+            "model": "renewal",
+            "origin": "2026-10-31",
+            "key": "0123456789abcdef",
+            "commit": "c0ffee0" * 5 + "c",
+            "fitted_at": "2026-11-01T08:00:00+00:00",
+            "store_commit": "5707e00" * 5 + "5",
+        },
+    )
+    assert visible(body(g, provenance=prov))[3] == (
+        "Fit: read from the fit store, the `renewal` fit at 2026-10-31 "
+        "(key `0123456789abcdef`, fitted at `c0ffee0`, fit-store commit "
+        "`5707e00`)."
+    )
+
+
+def test_says_when_the_fit_was_made_in_the_run(tmp_path: Path) -> None:
+    g = gate(tmp_path)
+    prov = read_json(g / "provenance.json")
+    prov["run"].update(kind="main", store=None)
+    assert visible(body(g, provenance=prov))[3] == (
+        "Fit: made in this run, as the fit store holds no fit for this round."
+    )
+    prov["run"].update(kind="randomwalk")
+    assert not any(
+        line.startswith("Fit:") for line in visible(body(g, provenance=prov))
+    )
