@@ -4,7 +4,7 @@ S = "/tmp/claude-1000/-home-seabbs-code-seabbs-BDBVHubRenewal/54f1e2de-e074-4f63
 c, name, out = sys.argv[1], sys.argv[2], sys.argv[3]
 z = json.load(open(f"{S}/zcounts.json"))
 w = pd.to_datetime(z["weeks"]); y = z["places"][c]["reported"]
-runs = [("main: full week, 5%, 5 cases", "z_rwnc-base.csv", "#4C72B0"), ("this PR: 5%, 5 cases, cut-off week allowed", "z_b6.csv", "#DD8452"), ("share only: 5%", "z_nowcast-5pct.csv", "#55A868")]
+runs = [("main: full week, 5%, 5 cases", "z_rwnc-base.csv", "#4C72B0"), ("this PR: walk on from the completed cut-off week", "z_b8.csv", "#DD8452"), ("share only: 5%", "z_nowcast-5pct.csv", "#55A868")]
 fig, ax = plt.subplots(figsize=(7, 3.4), layout="constrained")
 keep = w >= pd.Timestamp("2026-06-01")
 ax.bar(w[keep], pd.Series(y)[keep], width=5, color="0.75", label="reported at 11-08")
