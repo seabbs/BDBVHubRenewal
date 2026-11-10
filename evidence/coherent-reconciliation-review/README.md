@@ -248,7 +248,7 @@ Zone scores on the reported target over 2226 zone-week cells (`results-173/zone_
 
 Rank pairing makes no material difference.
 Variogram scores improve by under 1%, and only in IT and HU.
-Shares within a province vary little across zone draws, so which zone draw a province draw is paired with hardly changes the split.
+A likely reason, not checked, is that zone shares within a province vary little across zone draws, so the pairing hardly changes the split.
 
 ## BUIS at the top level: national
 
@@ -275,12 +275,12 @@ Provinces by weeks: sum 1.52 / 439, natbuis 1.51–1.57 / 410–440.
 Conditioning the province sum on the direct national does not combine the best of both.
 National WIS sits between the two inputs at best (τ = 0.1) and is worse than the sum, and coverage falls.
 The variogram score improves at both levels, so the weighting does pick province-sum paths whose week-to-week shape matches the direct national better.
-The upper tail of the sum, which the direct national cuts off, is where the later releases landed often enough that dropping it costs more than the sharper centre gains.
+The direct national cuts off the sum's upper tail. The fall in coverage suggests later releases landed there often enough that losing it costs more than the sharper centre gains.
 
 ## Overall
 
 With randomwalknowcast, conditioning by BUIS at either level gave worse WIS and coverage than the better of its inputs, on both the main and #173 draws.
-Its consistent gain is in the variogram score, that is the joint shape over weeks.
+Its one gain is in the variogram score of national BUIS, that is the joint shape over weeks. Zone-to-province BUIS showed no such gain on the #173 draws.
 The likely cause is that both inputs come from the same counts and similar models, so conditioning counts the same information twice and over-sharpens.
 Tempering towards τ = 0 recovers the bottom-up input, so the best τ here is near 0.
 For this model the simple sums (zones to provinces on #173, provinces to national) are the better coherent forecasts.
