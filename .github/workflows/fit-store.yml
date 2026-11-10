@@ -136,7 +136,7 @@ jobs:
           # Longest fits first, so the short ones fill in behind them and
           # the run takes as long as its longest fit: by model (slowest
           # first, from the last full refit), then newest origin first.
-          jq '.include |= sort_by(
+          jq -c '.include |= sort_by(
             ({"renewalbvd": 0, "renewal": 1, "renewalsp": 2}[.model] // 3),
             (.origin | explode | map(-.)))' matrix.json > sorted.json
           mv sorted.json matrix.json
