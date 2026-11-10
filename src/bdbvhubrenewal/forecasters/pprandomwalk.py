@@ -6,21 +6,29 @@ expected final counts and the reporting delay, in the style of
 epinowcast, fitted with NUTS in numpyro to the hub's release snapshots.
 It is `randomwalknowcast`'s random walk on the log scale, with the
 nowcast made by the same model rather than by a chain ladder, and with
-the delay, the walk spread and the dispersion partially pooled over
-zones, provinces and the country.
+the delay and the walk spread partially pooled over zones, provinces and
+the country.
 
 Each place $p$ the task forecasts is a leaf of the place hierarchy.
+A leaf with no case in the latest `walk_weeks` weeks is silent: it is
+not fitted, and draws introductions as in `randomwalknowcast`
+(`introductions.silent_trajectories`), with its start week and the share
+of each week unreported from this model's posterior median delay and its
+walk spread the posterior median.
+Every other leaf is fitted.
 Its expected final count in hub week $w$ is $\lambda_{p,w}$, a random
 walk on the log scale from the first fitted week,
 
 $$
-\log \lambda_{p,w} = \log \lambda_{p,w-1} + \sigma_p \varepsilon_{p,w},
-\qquad \varepsilon_{p,w} \sim \mathcal{N}(0, 1).
+\log \lambda_{p,w} = \log \lambda_{p,w-1} + \delta_{p,w},
+\qquad \delta_{p,w} \sim \mathcal{N}(0, \sigma_p^2),
 $$
+
+with the steps half centred (`CENTRING`).
 
 Each onset day $t$ of week $w(t)$ expects $\lambda_{p,w(t)} / 7$ cases.
 A case is reported $d$ days after onset, with $d$ a log-normal delay
-($\mu_p$, $s_p$) cut to whole days and capped at $D$, so the share of a
+($\mu_p$, $s$) cut to whole days and capped at $D$, so the share of a
 day's final count reported by age $a$ is
 
 $$
@@ -38,7 +46,7 @@ are
 $$
 n_{p,r}(t) \sim \text{NB}\Big(
   \tfrac{\lambda_{p,w(t)}}{7}\,
-  \big\{\pi_p(a_r(t)) - \pi_p(a_{r-1}(t))\big\},\ \phi_p
+  \big\{\pi_p(a_r(t)) - \pi_p(a_{r-1}(t))\big\},\ \phi
 \Big),
 $$
 
@@ -50,8 +58,8 @@ Reports of a day after it was $D$ days old at an earlier release have no
 probability under the model and are left out, as the chain ladder of
 `randomwalknowcast` leaves out growth after $D$.
 
-Each of $\mu$, $\log s$, $\log \sigma$ and $\log \phi$ of a place is its
-parent's plus a level offset (`Tree.sample`),
+$\mu$ and $\log \sigma$ of a place are its parent's plus a level offset
+(`Tree.sample`),
 
 $$
 \theta_n = \theta_{\mathrm{pa}(n)} + \tau_{\ell(n)} z_n,
@@ -59,6 +67,7 @@ $$
 \qquad \tau_\ell \sim \mathcal{N}^+(0, 0.5^2).
 $$
 
+The delay scale $s$ and the dispersion $\phi$ are shared by all places.
 A parent's counts are the sum of its children's, so only the leaves
 enter the likelihood and their ancestors are latent centres.
 
@@ -69,7 +78,7 @@ $\lambda/7 \cdot \{1 - \pi(a_o)\}$, and for each later day an NB draw with
 mean $\lambda/7$.
 Weeks after the latest data week continue the walk from that draw's
 $\lambda$ with its $\sigma_p$, with counts NB with mean $\lambda$ and size
-$7 \phi_p$, the sum of seven days.
+$7 \phi$, the sum of seven days.
 """
 
 from __future__ import annotations
