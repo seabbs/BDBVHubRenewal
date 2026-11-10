@@ -56,16 +56,18 @@ Reports of a day after it was $D$ days old at an earlier release have no
 probability under the model and are left out, as the chain ladder of
 `randomwalknowcast` leaves out growth after $D$.
 
-$\mu$ and $\log \sigma$ of a place are its parent's plus a level offset
-(`Tree.sample`),
+Every place-level parameter, $\mu$, $\log s$, $\log \sigma$,
+$\log \phi$ and the walk's first $\log \lambda$, is pooled over the
+hierarchy (`Tree.sample`): each tier's places are normal about their
+parents,
 
 $$
-\theta_n = \theta_{\mathrm{pa}(n)} + \tau_{\ell(n)} z_n,
-\qquad z_n \sim \mathcal{N}(0, 1),
-\qquad \tau_\ell \sim \mathcal{N}^+(0, 0.5^2).
+\theta_n \sim \mathcal{N}(\theta_{\mathrm{pa}(n)}, \tau_{\ell(n)}^2),
+\qquad \tau_\ell \sim \mathcal{N}^+(0, c^2),
 $$
 
-The delay scale $s$ and the dispersion $\phi$ are shared by all places.
+with $c$ from `TIER_SCALE`, and centred or not by `OFFSET_CENTRING`.
+The fit's tree holds the fitted leaves and their ancestors only.
 A parent's counts are the sum of its children's, so only the leaves
 enter the likelihood and their ancestors are latent centres.
 
@@ -236,7 +238,13 @@ class Tree:
         leaf = ~np.isin(np.arange(n), parent)
         return cls(parent, level, path, leaf)
 
-    def sample(self, name: str, loc: float, scale: float) -> jax.Array:
+    def sample(
+        self,
+        name: str,
+        loc: float,
+        scale: float | None,
+        tier_scale: float = 0.5,
+    ) -> jax.Array:
         r"""Sample a pooled parameter for every place, non-centred.
 
         Parameters
@@ -244,24 +252,38 @@ class Tree:
         name : str
             Site prefix.
         loc, scale : float
-            Normal prior of the country's value.
+            Normal prior of the country's value. With `scale` None the
+            country's value is `loc`, for an offset from a baseline.
+        tier_scale : float
+            Scale of the half-normal prior of each tier's spread $\tau$.
 
         Returns
         -------
         jax.Array
             `[L]`.
         """
-        root = numpyro.sample(f"{name}_root", dist.Normal(loc, scale))
+        root = (
+            loc
+            if scale is None
+            else numpyro.sample(f"{name}_root", dist.Normal(loc, scale))
+        )
         n_lvl = max(int(self.level.max()), 1)
         tau = numpyro.sample(
-            f"{name}_tau", dist.HalfNormal(0.5).expand((n_lvl,)).to_event()
+            f"{name}_tau",
+            dist.HalfNormal(tier_scale).expand((n_lvl,)).to_event(),
         )
-        z = numpyro.sample(
-            f"{name}_z",
-            dist.Normal(0.0, 1.0).expand((self.level.size,)).to_event(),
-        )
-        step = tau[jnp.maximum(self.level - 1, 0)] * (self.level > 0) * z
-        out: jax.Array = root + jnp.asarray(self.path) @ step
+        # Each tier's places are normal about their parents, with sd the
+        # tier's spread. `fit_posterior` sets how centred each tier is.
+        out = jnp.zeros(self.level.size) + root
+        for k in range(1, int(self.level.max()) + 1):
+            at = np.flatnonzero(self.level == k)
+            value = numpyro.sample(
+                f"{name}_l{k}",
+                dist.Normal(
+                    out[self.parent[at]], tau[k - 1] * jnp.ones(at.size)
+                ).to_event(),
+            )
+            out = out.at[at].set(value)  # noqa: PD008
         return out
 
     def rebuild(self, draws: dict[str, np.ndarray], name: str) -> np.ndarray:
@@ -279,10 +301,12 @@ class Tree:
         numpy.ndarray
             `[N, L]`, one row per draw.
         """
-        root, tau, z = (draws[f"{name}_{p}"] for p in ("root", "tau", "z"))
-        lvl = np.maximum(self.level - 1, 0)
-        step = tau[:, lvl] * (self.level > 0) * z
-        return np.asarray(root[:, None] + step @ self.path.T)
+        n = draws[f"{name}_tau"].shape[0]
+        out = np.zeros((n, self.level.size))
+        out += draws.get(f"{name}_root", np.zeros(n))[:, None]
+        for k in range(1, int(self.level.max()) + 1):
+            out[:, self.level == k] = draws[f"{name}_l{k}"]
+        return out
 
 
 @dataclass(frozen=True)
@@ -415,17 +439,44 @@ def _interval(
     return out / ndtr(z_d)
 
 
+TIER_SCALE = {
+    "delay_mu": 0.5,
+    "delay_sd": 0.1,
+    "sigma": 0.5,
+    "phi": 0.25,
+    "init": 1.5,
+}
+"""Scale of the half-normal prior of each pooled parameter's tier spreads.
+
+The delay scale and the dispersion have tighter tier spreads, as only a
+few large places inform them. The walk's initial level has a wide one,
+as places range from a few cases a week to hundreds.
+"""
+
+
+OFFSET_CENTRING = {"init": 1.0, "delay_sd": 0.5}
+"""Centring of each pooled parameter's tiers, 0 (non-centred) by default.
+
+Each live place's counts pin its initial level, which suits centred
+tiers. The delay scale is half centred: at 11-08, non-centred it gave 7
+divergent draws in 400 on one chain, half centred 1 and centred 2.
+"""
+
+
+def _pooled(tree: Tree, name: str, loc: float, scale: float | None) -> Any:
+    return tree.sample(name, loc, scale, TIER_SCALE[name])
+
+
 def model(tree: Tree, tri: Triangle, max_delay: int) -> None:
-    """Sample the walk, the delay and the new reports of the leaves."""
+    """Sample the walk, the delay and the new reports of the leaves.
+
+    Every place-level parameter is pooled over the hierarchy.
+    """
     leaves = tri.leaves
-    mu = tree.sample("delay_mu", 1.6, 1.0)[leaves]
-    sd = jnp.exp(numpyro.sample("delay_sd", dist.Normal(np.log(0.7), 0.5)))
-    sigma = jnp.exp(tree.sample("sigma", np.log(0.2), 1.0))[leaves]
-    phi = jnp.exp(numpyro.sample("phi", dist.Normal(np.log(10.0), 1.5)))
+    sigma = jnp.exp(_pooled(tree, "sigma", np.log(0.2), 1.0))[leaves]
+    phi = jnp.exp(_pooled(tree, "phi", np.log(10.0), 1.5))[leaves]
+    init = _pooled(tree, "init", 2.0, 3.0)[leaves]
     n_p = leaves.size
-    init = numpyro.sample(
-        "init", dist.Normal(2.0, 3.0).expand((n_p,)).to_event()
-    )
     # Partly centred steps (`fit_posterior`), as the leaves range from
     # silent to thousands of cases.
     steps = jnp.cumsum(
@@ -442,21 +493,26 @@ def model(tree: Tree, tri: Triangle, max_delay: int) -> None:
     )
     numpyro.deterministic("log_lam", log_lam)
     p = tri.place
-    mass = _interval(mu[p], sd, tri.lo, tri.hi, max_delay)
+    mu = _pooled(tree, "delay_mu", 1.6, 1.0)[leaves]
+    sd = jnp.exp(_pooled(tree, "delay_sd", np.log(0.7), 0.5))[leaves]
+    mass = _interval(mu[p], sd[p], tri.lo, tri.hi, max_delay)
     mean = jnp.exp(log_lam[p, tri.week]) / 7.0 * mass
-    numpyro.sample("obs", dist.NegativeBinomial2(mean, phi), obs=tri.count)
+    numpyro.sample("obs", dist.NegativeBinomial2(mean, phi[p]), obs=tri.count)
 
 
 @dataclass(frozen=True)
 class Posterior:
-    """Posterior draws of the joint model, flat over chains.
+    r"""Posterior draws of the joint model, flat over chains.
 
     Attributes
     ----------
-    mu, sigma : numpy.ndarray
-        Delay location and walk spread of every place, `[N, L]`.
-    sd, phi : numpy.ndarray
-        Delay scale and dispersion, shared by the places, `[N]`.
+    share : numpy.ndarray
+        Share of a day's final count reported by each age $0, \dots, D$,
+        of every place, `[N, L, D + 1]`.
+    sigma : numpy.ndarray
+        Walk spread of every place, `[N, L]`.
+    phi : numpy.ndarray
+        Dispersion of every place, `[N, L]`.
     log_lam : numpy.ndarray
         Log expected final count of each leaf and fitted week,
         `[N, P, W]`.
@@ -464,8 +520,7 @@ class Posterior:
         Convergence and timing summaries.
     """
 
-    mu: np.ndarray
-    sd: np.ndarray
+    share: np.ndarray
     sigma: np.ndarray
     phi: np.ndarray
     log_lam: np.ndarray
@@ -507,7 +562,19 @@ def fit_posterior(
     """
     mcmc = MCMC(
         NUTS(
-            reparam(model, config={"step": LocScaleReparam(CENTRING)}),
+            reparam(
+                model,
+                config={
+                    "step": LocScaleReparam(CENTRING),
+                    **{
+                        f"{name}_l{k}": LocScaleReparam(
+                            OFFSET_CENTRING.get(name, 0.0)
+                        )
+                        for name in TIER_SCALE
+                        for k in range(1, int(tree.level.max()) + 1)
+                    },
+                },
+            ),
             target_accept_prob=sampler.target_accept,
             init_strategy=init_to_median(),
         ),
@@ -552,13 +619,54 @@ def fit_posterior(
             f"{n_div} of {n_draws} draws divergent."
         )
     return Posterior(
-        mu=tree.rebuild(draws, "delay_mu"),
-        sd=np.exp(draws["delay_sd"]),
+        share=_shares(tree, draws, max_delay),
         sigma=np.exp(tree.rebuild(draws, "sigma")),
-        phi=np.exp(draws["phi"]),
+        phi=np.exp(tree.rebuild(draws, "phi")),
         log_lam=draws["log_lam"],
         info=info,
     )
+
+
+def _shares(
+    tree: Tree, draws: dict[str, np.ndarray], max_delay: int
+) -> np.ndarray:
+    """Return the share reported by age of every place, `[N, L, D + 1]`."""
+    ages = np.arange(max_delay + 1)
+    mu = tree.rebuild(draws, "delay_mu")[..., None]
+    sd = np.exp(tree.rebuild(draws, "delay_sd"))[..., None]
+    return np.asarray(reported_share(mu, sd, ages, max_delay))
+
+
+def _live_tree(
+    parent: np.ndarray, live: np.ndarray
+) -> tuple[Tree, np.ndarray, np.ndarray]:
+    """Return the tree of the live leaves and their ancestors.
+
+    Returns
+    -------
+    tuple
+        The tree, each place's index in it (-1 for none), and the index
+        in it of each place or, for one not in it, its nearest ancestor
+        that is.
+    """
+    keep = np.zeros(parent.size, bool)
+    for n in live:
+        m = int(n)
+        while m >= 0:
+            keep[m] = True
+            m = int(parent[m])
+    pos = np.full(parent.size, -1)
+    pos[keep] = np.arange(keep.sum())
+    sub = np.array(
+        [pos[parent[n]] if parent[n] >= 0 else -1 for n in np.flatnonzero(keep)]
+    )
+    src = np.empty(parent.size, dtype=int)
+    for n in range(parent.size):
+        m = n
+        while pos[m] < 0:
+            m = int(parent[m])
+        src[n] = pos[m]
+    return Tree.of(sub), pos, src
 
 
 def _neg_binomial(
@@ -646,16 +754,23 @@ class PPRandomWalkNowcast(RandomWalkNowcast):
             )
         tri = triangle(snap, o, self.settings, self.fit_weeks, live)
         key = jax.random.key(int(task.rng().integers(0, 2**31 - 1)))
-        post = fit_posterior(tri, tree, self.sampler, key, d)
-        ages = np.arange(d + 1)
-        share = np.median(
-            np.asarray(
-                reported_share(
-                    post.mu[..., None], post.sd[:, None, None], ages, d
-                )
-            ),
-            axis=0,
-        )  # [L, D + 1]
+        # The fit's tree holds the live leaves and their ancestors only, so
+        # no place without data has offsets left to the prior alone.
+        sub, pos, src = _live_tree(snap.parent, live)
+        post = fit_posterior(
+            replace(tri, leaves=pos[live]),
+            sub,
+            self.sampler,
+            key,
+            d,
+        )
+        post = replace(
+            post,
+            share=post.share[:, src],
+            sigma=post.sigma[:, src],
+            phi=post.phi[:, src],
+        )
+        share = np.median(post.share, axis=0)  # [L, D + 1]
         values, weeks = self.predict(post, tri, snap, task)
         self.delay_summary = self._delay_summary(share, snap, task.vintage)
         self._describe(post, snap, task, silent)
@@ -715,19 +830,16 @@ class PPRandomWalkNowcast(RandomWalkNowcast):
         values = np.zeros((n, len(snap.locations), n_all))
         # Each sample takes a posterior draw, every draw used once before
         # any is used again.
-        pick = np.resize(rng.permutation(post.mu.shape[0]), n)
-        mu = post.mu[pick][:, live, None]
-        sd = post.sd[pick][:, None, None]
-        phi = post.phi[pick][:, None, None]
+        pick = np.resize(rng.permutation(post.share.shape[0]), n)
+        share = post.share[pick][:, live]  # [S, P, D + 1]
+        phi = post.phi[pick][:, live, None]  # [S, P, 1]
         sigma = post.sigma[pick][:, live, None]
         log_lam = post.log_lam[pick]  # [S, P, W]
         # Days of the fitted weeks: reported count plus the rest to come.
         day = np.flatnonzero(snap.week >= tri.first)
         age = snap.cut[o] - day
         seen = age >= 0
-        rest = np.where(
-            seen, 1.0 - np.asarray(reported_share(mu, sd, age, d)), 1.0
-        )
+        rest = np.where(seen, 1.0 - share[..., np.clip(age, 0, d)], 1.0)
         wk = snap.week[day] - tri.first
         # The clip only undoes float32 rounding of a share at 1.
         mean = np.exp(log_lam[:, :, wk]) / 7.0 * np.clip(rest, 0.0, 1.0)
@@ -784,14 +896,13 @@ class PPRandomWalkNowcast(RandomWalkNowcast):
                     "location": loc,
                     "silent": bool(silent[i]),
                     "sigma": float(np.median(post.sigma[:, i])),
-                    "delay_median": float(np.median(np.exp(post.mu[:, i]))),
+                    "delay_median": int(
+                        np.argmax(np.median(post.share[:, i], axis=0) >= 0.5)
+                    ),
+                    "phi": float(np.median(post.phi[:, i])),
                 }
             )
-        shared = {
-            "delay_sd": float(np.median(post.sd)),
-            "phi": float(np.median(post.phi)),
-        }
-        self.fit_diagnostics = [*rows, {"fit": "joint", **shared, **post.info}]
+        self.fit_diagnostics = [*rows, {"fit": "joint", **post.info}]
 
 
 register_model(
