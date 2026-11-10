@@ -235,7 +235,7 @@ def _closure(
     src: Path,
     todo: list[Path],
     stop: set[Path],
-    start: Path,
+    start: Path | None,
     seen: set[Path] | None = None,
 ) -> set[Path]:
     """Return the modules `todo` import, not going into `stop`."""
@@ -292,10 +292,11 @@ def model_code(
         if m != own and (f := _module_file(src, m)) is not None
     }
     start = _module_file(src, own)
-    assert start is not None
     # Everything the model's own module needs, another model's module
     # included when it builds on it (pprandomwalknowcast on randomwalk.py).
-    seen = _closure(src, [start], set(), start)
+    # A model defined outside the package (a test's stand-in) has only the
+    # shared code.
+    seen = set() if start is None else _closure(src, [start], set(), start)
     # Then the shared forecasting code, which reaches every model through
     # the registry: there the other models' modules are left out.
     seen = _closure(

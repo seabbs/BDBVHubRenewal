@@ -3,6 +3,9 @@
 The hashes are of each model's samples at the 2026-10-24 vintage with
 seed 3, from the eager code before the walks were compiled as whole
 programs. Compiling must not change a single draw.
+
+pprandomwalknowcast is not pinned: its NUTS fit is compiled for the CPU it
+runs on, so its draws differ between machines (archie and the CI runners).
 """
 
 from __future__ import annotations
