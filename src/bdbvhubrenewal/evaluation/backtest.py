@@ -371,6 +371,7 @@ def vintage_task(
     config: BacktestConfig,
     vintage: str,
     daily: pd.DataFrame | None = None,
+    extra_weeks: int = 0,
 ) -> tuple[ForecastTask, str]:
     """Build the task of one real vintage, as the submission fits it.
 
@@ -389,13 +390,20 @@ def vintage_task(
         A real vintage.
     daily : pandas.DataFrame, optional
         Daily onsets by release.
+    extra_weeks : int
+        Weeks to forecast past `[forecast] max_horizon`. The store adds
+        one, so its fit also covers the next round's weeks.
 
     Returns
     -------
     tuple of ForecastTask and str
         The task, and a note of the delays that stood in (empty if none).
     """
-    config = replace(config, min_horizon=TASK_MIN_HORIZON)
+    config = replace(
+        config,
+        min_horizon=TASK_MIN_HORIZON,
+        max_horizon=config.max_horizon + extra_weeks,
+    )
     real = target.loc[target["kind"] == "real"]
     rows = real.loc[real["vintage"] == vintage]
     used, note = delays_for_vintage(delays, vintage)

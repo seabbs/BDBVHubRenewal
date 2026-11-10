@@ -293,7 +293,9 @@ def test_plan_fit_and_load(
     assert again == left | {broken}
 
     results = tmp_path / "results"
-    status = store.load(root, keys, results, config.min_horizon)
+    status = store.load(
+        root, keys, results, config.min_horizon, config.max_horizon
+    )
     by_origin = {s.origin: s for s in status}
     assert by_origin[newest].current
     assert by_origin[oldest].current

@@ -124,6 +124,10 @@ STATUS_FILE: Final = "fit-store.json"
 UNPACKED_FILE: Final = "store.json"
 """Which stored fit `unpack` wrote, in the fit directory."""
 
+NEXT_ROUND_WEEKS: Final = 1
+"""Weeks a stored fit forecasts past `[forecast] max_horizon`, so a round
+with no new release is forecast from the last release's stored fit."""
+
 COMMIT_FILE: Final = ".commit"
 """The store branch commit, written by `scripts/fit-store.sh fetch`."""
 
@@ -313,9 +317,11 @@ def origin_tasks(
     """Build the task of every real origin, as the store fits it.
 
     Each is the task the submission fits at that vintage
-    (`vintage_task`), so a submission finds the stored fit by its key. A
-    stored task is asked for final counts only (no `report_by`), so it
-    holds no release after its origin. Releases in `config.skip_origins`
+    (`vintage_task`), with `NEXT_ROUND_WEEKS` more weeks, so the
+    submission forecasts its vintage's own round, or the next round when
+    no new release came, from the stored fit. A stored task is asked for
+    final counts only (no `report_by`), so it holds no release after its
+    origin. Releases in `config.skip_origins`
     are not origins, but stay in the later tasks' histories.
 
     Parameters
@@ -331,7 +337,7 @@ def origin_tasks(
         Task by origin (the vintage date), in date order.
     """
     return {
-        v: vintage_task(target, delays, config, v, daily)[0]
+        v: vintage_task(target, delays, config, v, daily, NEXT_ROUND_WEEKS)[0]
         for v in real_vintages(target)
         if v not in config.skip_origins
     }
@@ -831,11 +837,13 @@ def load(
     keys: Keys,
     results: Path | str = "results",
     min_horizon: int | None = None,
+    max_horizon: int | None = None,
 ) -> list[StoreStatus]:
     """Write the stored fits where the backtest and the docs read them.
 
-    Every origin goes to `forecasts.csv.gz`, from `min_horizon` on: a
-    stored fit holds the submission's weeks, which start earlier.
+    Every origin goes to `forecasts.csv.gz`, from `min_horizon` to
+    `max_horizon`: a stored fit holds the submission's weeks, which start
+    earlier and end later.
     Fit summaries go to `backtest-fits.csv` and learnt delays to
     `delay-summary.csv`. Each file keeps the rows of models not stored.
     What was used is written to `STATUS_FILE`.
@@ -848,9 +856,8 @@ def load(
         `current_keys`.
     results : pathlib.Path or str
         The results directory.
-    min_horizon : int, optional
-        The backtest's first week (`[forecast] min_horizon`). None keeps
-        every week.
+    min_horizon, max_horizon : int, optional
+        The backtest's weeks (`[forecast]`). None keeps every week.
 
     Returns
     -------
@@ -881,11 +888,12 @@ def load(
             )
         )
     forecasts = [f.forecasts for f in loaded]
-    if min_horizon is not None:
-        forecasts = [
-            f.loc[f["horizon"] >= min_horizon] if "horizon" in f else f
-            for f in forecasts
-        ]
+    low = -(10**6) if min_horizon is None else min_horizon
+    high = 10**6 if max_horizon is None else max_horizon
+    forecasts = [
+        f.loc[f["horizon"].between(low, high)] if "horizon" in f else f
+        for f in forecasts
+    ]
     for name, frames in (
         ("forecasts.csv.gz", forecasts),
         ("backtest-fits.csv", [f.fits for f in loaded]),
@@ -1001,7 +1009,9 @@ def command(args: argparse.Namespace) -> int:
                 json.dumps([f"{m}/{o}/{k}" for (m, o), k in keys.items()])
             )
         return 0
-    for s in load(args.store, keys, args.results, config.min_horizon):
+    for s in load(
+        args.store, keys, args.results, config.min_horizon, config.max_horizon
+    ):
         state = "current" if s.current else "not fitted for this code"
         if s.used and not s.current:
             state += f", older fit {s.used} used"
