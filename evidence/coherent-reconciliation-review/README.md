@@ -11,7 +11,9 @@ It takes province sample $k$ and splits it over the zones in proportion to zone 
 This is a top-down conditional allocation.
 Its limit is that zone information never changes the province distribution.
 The province forecast is taken as given and the zones only set the shares.
-Pairing zone sample $k$ with province sample $k$ is also arbitrary, so the shares in a high province draw can come from a low zone draw.
+For the random walks the zone and province samples come from two separate `model.forecast` runs (`zone_forecast`), so sample $k$ of one shares no draw with sample $k$ of the other.
+The pairing is in effect independent (the runs share a seed, so any correlation is incidental).
+So the shares in a high province draw can come from a low zone draw.
 
 ## Methods
 
@@ -39,12 +41,13 @@ Corani, Azzimonti and Rubattu (2024, IJF 40(2):457–469, [doi:10.1016/j.ijforec
 This gives a proper pmf for counts.
 Zambon, Azzimonti and Corani (2024, Stat Comput 34:21, [doi:10.1007/s11222-023-10343-y](https://doi.org/10.1007/s11222-023-10343-y)) make this fast with bottom-up importance sampling (BUIS).
 Draw bottom samples, sum them, weight each draw by the upper base density at its sum, and resample, one upper node at a time.
-Zambon et al. (2024, IJF, [arXiv:2303.15135](https://arxiv.org/abs/2303.15135)) show that for counts the reconciled mean can move outside the range of the base means and the variance can grow, unlike Gaussian MinT.
+Zambon et al. (2024, IJF, [arXiv:2303.15135](https://arxiv.org/abs/2303.15135)) study the reconciled mean and variance for Gaussian and count forecasts.
+That for counts the reconciled variance can exceed the base variance, unlike Gaussian MinT, is *(unverified)*.
 Zambon, Azzimonti, Rubattu and Corani (UAI 2024, PMLR 244) add mixed hierarchies (discrete bottom, Gaussian upper).
 TD-cond reconciles the upper levels first, then pushes them down to the bottom with a probabilistic top-down step.
-As published, BUIS and TD-cond work one time point at a time.
+The published examples reconcile one time point at a time, and the docs do not say how to handle several horizons.
 The papers assume independent base forecasts across series *(unverified for the Stat Comput paper)*.
-Neither limit is essential: the weight can be any density evaluated at a whole bottom-up trajectory.
+Neither limit is essential, because the weight can be any density evaluated at a whole bottom-up trajectory.
 
 **Coherent by construction.**
 Olivares et al. (2024, IJF 40(2):470–489, [doi:10.1016/j.ijforecast.2023.04.007](https://doi.org/10.1016/j.ijforecast.2023.04.007)) model the bottom level as a joint Poisson mixture and get every aggregate by summing.
@@ -56,14 +59,26 @@ Gibson, Moran, Reich and Osthus (2021, PLoS Comput Biol 17(1):e1007623, [doi:10.
 A Sri Lanka dengue study uses MinT over spatial levels ([arXiv:2112.00992](https://arxiv.org/abs/2112.00992)).
 HierarNet (AAAI, [link](https://ojs.aaai.org/index.php/AAAI/article/view/41315/45276)) learns provinces, regions and nations jointly *(not read)*.
 We found no epinowcast or hub work on sample-level coherence across spatial levels for nowcasts.
-The COVID-19 and flu hubs collect state and national forecasts separately and do not enforce coherence.
+We found no coherence enforcement in the COVID-19 or flu hubs, which collect state and national forecasts separately.
+
+## Summary of methods
+
+| Method | Counts | Joint over weeks | Compute | Fit to our setting |
+|---|---|---|---|---|
+| MinT / projection of samples | No (reals, negatives) | Yes if applied per draw | Needs a covariance of 500+ series; cheap once estimated | Poor: breaks counts and zeros |
+| Score-optimised projection (Panagiotelis) | No | Yes | Stochastic gradient over weights | Poor, same reasons |
+| PERMBU / empirical copula (Ben Taieb) | Yes | No, one permutation per step | Sorting, cheap | Partial: aggregation idea is useful, needs residual history we lack |
+| Reordering (Jeon, Schaake, ECC) | Yes | Yes if ranked on whole paths | Sorting, cheap | Good as a pairing fix (method 2) |
+| Conditioning, BUIS (Zambon, Corani) | Yes | Not as published, extends directly | One density evaluation per draw per province | Good: method 1 |
+| TD-cond (mixed hierarchies) | Bottom yes, upper Gaussian | No | Cheap | Partial: Gaussian upper fits provinces with many cases only |
+| Coherent by construction (Olivares; zone models) | Yes | Yes | A zone-level fit | Good, but is model building rather than reconciliation |
 
 ## Packages
 
 | Package | Methods | Takes our sample matrices | Joint over weeks | Counts | Licence, status |
 |---|---|---|---|---|---|
 | Nixtla `hierarchicalforecast` 1.5.3 (Sep 2026) | BottomUp, TopDown, MiddleOut, MinTrace (+ sparse, nonnegative QP), ERM; probabilistic Normality, Bootstrap, PERMBU, Conformal | No. Samplers make their own draws from point forecasts plus residuals or `sigmah` | Bootstrap keeps residual blocks of length h; PERMBU and Normality are per step | No integer handling; nonnegative MinTrace cannot be used with Bootstrap or PERMBU | Apache-2.0, active; numpy, pandas, scikit-learn, narwhals, qpsolvers |
-| `bayesreconpy` ([JOSS 2025](https://doi.org/10.21105/joss.08336)) | `reconc_buis`, `reconc_mix_cond`, `reconc_td_cond`, `reconc_mcmc`, `reconc_gaussian`, `reconc_mint` | Yes, per series as samples or Gaussian, Poisson or NB parameters | No, one time point per call | Yes (discrete samples, Poisson, NB) | Python port of R `bayesRecon`; Python ≥3.12 per docs; version and licence not checked |
+| `bayesreconpy` ([JOSS 2025](https://doi.org/10.21105/joss.08336)) | `reconc_buis`, `reconc_mix_cond`, `reconc_td_cond`, `reconc_mcmc`, `reconc_gaussian`, `reconc_mint` | Yes, per series as samples or Gaussian, Poisson or NB parameters | Not documented. Stacking zone-by-week as bottom nodes and province-by-week as upper nodes in `A` should give the product-of-weekly-pmfs version of method 1 *(untested)* | Yes (discrete samples, Poisson, NB) | Python port of R `bayesRecon`; Python ≥3.12 per docs; version and licence not checked |
 | R `bayesRecon` | Same, plus `reconc_t` | Yes | No | Yes | CRAN, active |
 | darts | BottomUp, TopDown, MinT reconciliators | Yes, stochastic `TimeSeries` | Linear $SG$ on each draw and step, so paths are kept | No, outputs reals | Apache-2.0 per docs |
 | sktime | `Reconciler`, `ReconcilerForecaster` (bu, ols, wls, MinT shrink, td) | No, point forecasts | No | No | Docs v1.2.0 |
@@ -71,8 +86,8 @@ The COVID-19 and flu hubs collect state and national forecasts separately and do
 | `scoringrules` 0.12.0 (Nov 2026) | Energy, variogram, CRPS ensemble, threshold-weighted ES | Yes | Scores any vector | Yes | Apache-2.0; numpy/numba, JAX, PyTorch backends; already a dependency |
 | `properscoring` | CRPS ensemble only | n/a | n/a | n/a | Archived Sep 2026 |
 
-No package reconciles count trajectories jointly over weeks.
-The conditioning step is about 100 lines of numpy, and `bayesreconpy` is useful as a per-week reference to test it against.
+We found no package that reconciles count trajectories jointly over weeks out of the box.
+The conditioning step is about 100 lines of numpy, and `bayesreconpy` is a reference to test it against.
 
 ## Recommendation
 
@@ -80,25 +95,33 @@ The conditioning step is about 100 lines of numpy, and `bayesreconpy` is useful 
 This combines bottom-up zone draws with the province's own direct forecast, and both stay informative.
 
 1. For province $p$ and zone draw $k$, sum the zone trajectories to $u_p^{(k)}(w)$ over all nowcast and forecast weeks.
-2. Fit a density $f_p$ to the province direct draws, jointly over weeks: a negative binomial per week joined by a Gaussian copula on $\log(1+y)$ ranks.
-   A product of weekly pmfs is simpler but drops the direct forecast's dependence over weeks.
+2. Fit a density $f_p$ to the province direct draws.
+   The default is a product of weekly negative binomial pmfs.
+   It drops the direct forecast's dependence over weeks, but the zone draws carry their own.
+   A Gaussian copula with these margins keeps that dependence, but a discrete copula pmf needs rectangle probabilities, $2^W$ terms per trajectory, which is feasible at $W \approx 6$.
+   A multivariate normal on $\log(1+y)$ is a cheaper continuous approximation.
 3. Weight $\omega_k \propto f_p(u_p^{(k)})$ and resample whole zone trajectory blocks with these weights.
    Zones then sum to the province exactly, paths and within-province zone dependence are kept, and the province is the bottom-up sum reweighted towards the direct forecast.
 4. Weight each province on its own.
    Weighting all 26 at once collapses the weights.
    Per-province resampling assumes provinces are conditionally independent given their zones.
    Restore cross-province dependence by reordering the resampled province blocks to the ranks of the original joint draw (ECC).
+   Rank on a scalar summary of each block, such as its total over all weeks, so whole paths move together.
 5. National is the sum of provinces.
    Optionally repeat step 3 at national level with a national direct density (the national-direct question).
-6. Report the effective sample size $1/\sum \omega_k^2$ per province and origin.
+6. Temper the weights, $\omega_k \propto f_p(u_p^{(k)})^\tau$ with $\tau \le 1$, and tune $\tau$ on backtest coverage per level.
+   The zone and province forecasts are fitted to the same counts, so full conditioning counts that data twice and will make intervals too narrow, most where the two agree.
+   $\tau$ is the calibration control.
+7. Report the effective sample size $1/\sum_k \omega_k^2$ (normalised weights) per province and origin.
    With 100–1000 draws rather than BUIS's 20000, it will collapse where bottom-up and direct disagree.
-   Fallbacks are tempering ($\omega^\tau$, $\tau<1$, tuned on backtests) or a mixture with the current top-down allocation.
-   A zone model that can draw many more cheap posterior predictive trajectories than we submit would help most.
+   Lower $\tau$ also helps here, as does a mixture with the current top-down allocation.
+   A zone model that can draw many more cheap trajectories than we submit would help most.
 
 Where a province has no direct forecast the weights are flat and the method is pure bottom-up.
 
 **2. Keep top-down allocation and fix the pairing (cheap fallback).**
-Keep `reconcile_zones` but pair province draw $k$ with the zone block whose bottom-up total ranks the same, rather than with zone draw $k$.
+Keep `reconcile_zones` but pair province draw $k$ with the zone block whose bottom-up total over all weeks ranks the same, rather than with zone draw $k$.
+Ranking on the total, not week by week, keeps the paths.
 This is ECC or Jeon-style ranked reordering.
 It keeps the province marginal as calibrated by its own model and makes the zone shares consistent with the province level.
 It does not let zones inform the province.
