@@ -140,6 +140,36 @@ def zone_mode(path: Path | str = HUB_CONFIG) -> str:
     return mode
 
 
+FIXED_DELAYS_ENV: Final = "BDBV_ZONE_FIXED_DELAYS"
+"""Environment variable that overrides `[renewal] fixed_delays`."""
+
+
+def fixed_delays(path: Path | str = HUB_CONFIG) -> bool:
+    """Return whether the zone fits fix their delays.
+
+    With it, the zone model takes the hub's onset-to-report delay pmf for
+    the release and BVDOutbreakSize's prior mean incubation period as
+    fixed, rather than estimating them (`model.zones.build_zone_model`).
+    `FIXED_DELAYS_ENV` if set, else `[renewal] fixed_delays`, else False.
+
+    Parameters
+    ----------
+    path : pathlib.Path or str
+        The hub config.
+
+    Returns
+    -------
+    bool
+        True to fix the delays.
+    """
+    env = os.environ.get(FIXED_DELAYS_ENV)
+    if env:
+        return env.lower() in ("1", "true")
+    config = Path(path)
+    raw = tomllib.loads(config.read_text()) if config.exists() else {}
+    return bool(raw.get("renewal", {}).get("fixed_delays", False))
+
+
 def zone_fits(path: Path | str = HUB_CONFIG) -> bool:
     """Return whether `renewal` and `renewalbvd` are fitted on zones.
 
@@ -192,6 +222,14 @@ def task_zones(task: ForecastTask) -> tuple[str, ...]:
     else:
         codes = tuple(sorted(set(_daily_zones()["location"])))
     return tuple(z for z in codes if province_of(z) in task.locations)
+
+
+def _logit_hazard(pmf: Any) -> np.ndarray:
+    """Return the logit hazard of a pmf on `0..dmax`, on `0..dmax - 1`."""
+    f = np.asarray(pmf, dtype=float)
+    survive = 1.0 - np.concatenate([[0.0], np.cumsum(f)[:-1]])
+    h = np.clip(f[:-1] / np.maximum(survive[:-1], 1e-12), 1e-9, 1 - 1e-9)
+    return np.asarray(np.log(h / (1 - h)))
 
 
 def zone_target(task: ForecastTask) -> pd.DataFrame:
@@ -461,6 +499,9 @@ class ZoneRenewalModel(RenewalModel):
     zones : bool
         Always True: in the representation, so it keys a stored fit
         apart from the province model.
+    fixed_delays : bool
+        `fixed_delays` when built, in the representation so it keys a
+        stored fit.
     inputs : str
         `zone_inputs_digest`, in the representation so the zone data
         files key a stored fit.
@@ -470,6 +511,7 @@ class ZoneRenewalModel(RenewalModel):
     """
 
     zones: bool = field(init=False, default=True)
+    fixed_delays: bool = field(init=False, default_factory=fixed_delays)
     inputs: str = field(init=False, default_factory=zone_inputs_digest)
     zone_samples: pd.DataFrame | None = field(
         init=False, default=None, repr=False, compare=False
@@ -499,7 +541,7 @@ class ZoneRenewalModel(RenewalModel):
                     used = {**used, "zones": len(zone_rows)}
             self._log(f"variant={self.name} bvd={used['tag'] or 'none'}")
         data = zone_vintage_inputs(task, config, bvd=rows)
-        model = build_zone_model(data, config)
+        model = build_zone_model(data, config, fixed_delays=self.fixed_delays)
         self._log(
             f"variant={self.name} zones={data.n_provinces} sampling start"
         )
@@ -531,13 +573,22 @@ class ZoneRenewalModel(RenewalModel):
         }
         posterior = model.mcmc.get_samples()
         n_init = model.latent.n_initialization_points
-        beta = np.asarray(posterior["delay_beta"])
-        # Each province's delay, which its zones share, and the shared one.
-        shifts = {
-            name: np.asarray(posterior["delay_shift"])[..., p]
-            for p, name in enumerate(data.parent_names)
-        }
-        if len(shifts) > 1:
+        n_draws = next(iter(posterior.values())).shape[0]
+        if "delay_beta" in posterior:
+            beta = np.asarray(posterior["delay_beta"])
+            # Each province's delay, which its zones share, and the shared.
+            shifts = {
+                name: np.asarray(posterior["delay_shift"])[..., p]
+                for p, name in enumerate(data.parent_names)
+            }
+        else:
+            # A fixed delay: its hazard, the same in every draw and place.
+            beta = np.tile(_logit_hazard(data.hub_delay_pmf), (n_draws, 1))
+            days = n_init + 7 * (data.n_weeks + data.horizon_weeks)
+            shifts = {
+                name: np.zeros((n_draws, days)) for name in data.parent_names
+            }
+        if len(shifts) > 1 and "delay_shared_shift" in posterior:
             shifts["shared"] = np.asarray(posterior["delay_shared_shift"])[
                 ..., 0
             ]

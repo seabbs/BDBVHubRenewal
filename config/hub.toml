@@ -21,6 +21,10 @@ submit = true
 # `bdbvhubrenewal.forecasters.zonerenewal.zone_mode`;
 # BDBV_RENEWAL_ZONES overrides it.
 zones = false
+# Zone fits only: fix the onset-to-report delay at the hub's pmf for the
+# release and the incubation period at its prior mean, for speed.
+# BDBV_ZONE_FIXED_DELAYS overrides it.
+fixed_delays = false
 
 # Further hub models, each submitted under its own id every round, apart
 # from the chain above. The hub allows no hyphen in an abbreviation and
