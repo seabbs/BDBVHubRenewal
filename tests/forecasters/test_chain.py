@@ -189,14 +189,14 @@ def test_a_delay_is_own_with_10_cases_a_week_else_the_pooled_parents(
         gaps,
     )
     # The same rule as the walk spread: own with 10 cases a week, else
-    # the pooled estimate of the nearest parent that has them. Zones then
-    # take their province's delay (`test_a_zone_takes_its_provinces_delay`).
+    # the pooled estimate of the nearest parent that has them. Zones take
+    # their province's delay instead (`test_a_zone_takes_its_provinces_delay`).
     src = source_index(level, snap.parent)
-    zone = np.array([c.count("-") == 2 for c in snap.locations])
-    src = np.where(zone, src[snap.parent], src)
-    np.testing.assert_allclose(fit.g, np.concatenate([own_g, pooled_g])[src])
-    assert (src < len(level)).any()
-    assert (src >= len(level)).any()
+    kept = np.array([c.count("-") < 2 for c in snap.locations])
+    want = np.concatenate([own_g, pooled_g])[src]
+    np.testing.assert_allclose(fit.g[kept], want[kept])
+    assert (src[kept] < len(level)).any()
+    assert (src[kept] >= len(level)).any()
 
 
 def test_a_zone_takes_its_provinces_delay(
@@ -213,11 +213,15 @@ def test_a_zone_takes_its_provinces_delay(
     assert fit is not None
     level = levels(snap, 3, Settings())
     zone = np.array([c.count("-") == 2 for c in snap.locations])
-    # Some zones have 10 cases a week, so would have had their own delay.
-    assert (zone & (level >= 10)).any()
+    rule = source_index(level, snap.parent)
+    # A zone with 10 cases a week had its own delay under the rule, and
+    # now takes its province's.
+    big = np.flatnonzero(zone & (level >= 10))
+    assert big.size
+    assert (rule[big] == big).all()
+    np.testing.assert_array_equal(fit.source[big], rule[snap.parent[big]])
     par = snap.parent[zone]
     np.testing.assert_array_equal(fit.source[zone], fit.source[par])
-    np.testing.assert_array_equal(fit.g[zone], fit.g[par])
     assert not fit.own[zone].any()
     # Provinces keep the rule.
     prov = np.array([c.count("-") == 1 for c in snap.locations])
