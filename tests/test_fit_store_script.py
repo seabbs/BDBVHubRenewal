@@ -106,3 +106,25 @@ def test_push_copies_planned_fits_and_prunes(tmp_path: Path) -> None:
         text=True,
     ).stdout.strip()
     assert (got / ".commit").read_text().strip() == tip
+
+
+def test_fetch_leaves_the_store_empty_when_there_is_no_branch(
+    tmp_path: Path,
+) -> None:
+    _git("init", "-q", "--bare", "remote.git", cwd=tmp_path)
+    _git("clone", "-q", "remote.git", "clone", cwd=tmp_path)
+    out = _run("fetch", str(tmp_path / "got"), cwd=tmp_path / "clone")
+    assert out.returncode == 0, out.stderr
+    assert list((tmp_path / "got").iterdir()) == []
+
+
+def test_fetch_fails_when_the_remote_cannot_be_read(tmp_path: Path) -> None:
+    # An empty store would rule out every fitted candidate as "not in the
+    # fit store", so a failed fetch must fail the step instead.
+    _git("init", "-q", "repo", cwd=tmp_path)
+    _git(
+        "remote", "add", "origin", str(tmp_path / "missing.git"),
+        cwd=tmp_path / "repo",
+    )  # fmt: skip
+    out = _run("fetch", str(tmp_path / "got"), cwd=tmp_path / "repo")
+    assert out.returncode != 0
