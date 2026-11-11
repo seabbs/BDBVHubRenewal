@@ -319,9 +319,7 @@ def own_ages(
 ) -> np.ndarray:
     """Return where each place's own data fit its delay, by age.
 
-    Deprecated: unused since the one sharing rule (#153), which picks the
-    own or pooled delay per place (`fit_delay`). It is kept because
-    removing it would change every stored fit's key and refit them all.
+    Unused. `fit_delay` picks own or pooled per place.
 
     Parameters
     ----------

@@ -1,9 +1,12 @@
 # Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
-"""Zone backtest: the random walk models run at zone level.
+"""Zone backtest: models that read release snapshots, run at zone level.
 
-Each real vintage before the truth vintage is forecast by `randomwalk` and
-`randomwalknowcast` on each zone's own release snapshots (`zone_task`),
-for every zone with cases at the vintage.
+Each real vintage before the truth vintage is forecast on each zone's
+own release snapshots (`zone_task`), for every zone with cases at the
+vintage.
+The functions default to the two random walks, and the CLI's
+`zone-backtest` adds `pprandomwalknowcast`, which is fitted at each
+origin.
 The zone delay, observation model and walk spread are each the zone's own
 where it has at least 10 cases a week, else its province's, else
 national (`pooling`).
@@ -135,9 +138,7 @@ def zone_backtest(
         The hub's zone codes (`hub_zones`). Those with cases at a vintage
         are forecast from it.
     models : sequence of str
-        Registered models that read release snapshots. Defaults to the two
-        random walks. The CLI's `zone-backtest` adds
-        `pprandomwalknowcast`, which is fitted here at each origin.
+        Registered models that read release snapshots.
     config : BacktestConfig, optional
         Horizons, samples and seed. Defaults to `BacktestConfig()`.
     origins : collection of str, optional

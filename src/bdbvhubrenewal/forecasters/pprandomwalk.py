@@ -247,7 +247,8 @@ class Tree:
     ) -> jax.Array:
         r"""Sample a pooled parameter for every place.
 
-        `fit_posterior` sets how centred each tier is (`OFFSET_CENTRING`).
+        Each tier is centred by `OFFSET_CENTRING[name]`, default 0
+        (non-centred), as `fit_posterior` sets it.
 
         Parameters
         ----------
