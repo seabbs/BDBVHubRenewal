@@ -24,12 +24,14 @@ with the count reported by then, the layout of epinowcast's
   weeks (`HORIZONS`).
 
 `hub_forecasts` moves the forecasts back and names the places as the hub
-does.
+does, and `hub_target` gives the 7-day sums as each report date gives
+them, the truth they are scored on.
 """
 
 from __future__ import annotations
 
 import datetime as dt
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Final
 
@@ -46,7 +48,9 @@ __all__ = [
     "PLACE_NAMES",
     "STATES",
     "hub_forecasts",
+    "hub_target",
     "hub_triangle",
+    "level",
     "nowcast_tasks",
     "place_code",
     "read_triangle",
@@ -118,14 +122,33 @@ def place_code(location: str, age_group: str = ALL_AGES) -> str:
     return f"{NATIONAL}-{location.removeprefix(f'{GERMANY}-')}"
 
 
-def _hub_place(code: str) -> tuple[str, str]:
-    """Return the hub location and age group of a task location code."""
+def _place(code: str) -> str:
+    """Return the place, as in `PLACE_NAMES`, of a task location code."""
     if code == NATIONAL:
-        return GERMANY, ALL_AGES
+        return GERMANY
     suffix = code.removeprefix(f"{NATIONAL}-")
     if suffix.startswith("A"):
-        return GERMANY, AGE_GROUPS[int(suffix[1:])]
-    return f"{GERMANY}-{suffix}", ALL_AGES
+        return AGE_GROUPS[int(suffix[1:])]
+    return f"{GERMANY}-{suffix}"
+
+
+def level(place: str) -> str:
+    """Return the paper's level of a place.
+
+    Parameters
+    ----------
+    place : str
+        A place in `PLACE_NAMES`.
+
+    Returns
+    -------
+    str
+        `national` for Germany, `age` for an age group and `states` for a
+        state.
+    """
+    if place == GERMANY:
+        return "national"
+    return "age" if place in AGE_GROUPS else "states"
 
 
 def hub_triangle(path: Path | str) -> pd.DataFrame:
@@ -307,9 +330,7 @@ def _weekly(daily: pd.DataFrame) -> pd.DataFrame:
     )
     out["total"] = out["observed"] + out["imputed"]
     out["cutoff"] = out["vintage"]
-    out["location_name"] = [
-        PLACE_NAMES[_label(*_hub_place(c))] for c in out["location"]
-    ]
+    out["location_name"] = [PLACE_NAMES[_place(c)] for c in out["location"]]
     out.insert(0, "kind", "real")
     return out[
         [
@@ -324,11 +345,6 @@ def _weekly(daily: pd.DataFrame) -> pd.DataFrame:
             "cutoff",
         ]
     ]
-
-
-def _label(location: str, age_group: str) -> str:
-    """Return the place of a hub location and age group in `PLACE_NAMES`."""
-    return location if age_group == ALL_AGES else age_group
 
 
 def hub_forecasts(
@@ -351,22 +367,20 @@ def hub_forecasts(
     Returns
     -------
     pandas.DataFrame
-        Columns `model`, `location`, `age_group`, `forecast_date`,
-        `target_end_date`, `horizon` (days, as `HORIZONS`), `sample` and
-        `value`.
+        Columns `model`, `location` (the place, as in `PLACE_NAMES`),
+        `forecast_date`, `target_end_date`, `horizon` (days, as
+        `HORIZONS`), `sample` and `value`.
     """
-    ages = any(_hub_place(c)[1] != ALL_AGES for c in task.locations)
+    ages = any(_place(c) in AGE_GROUPS for c in task.locations)
     rows = samples.loc[samples["as_of"].isna()]
     if ages:
         rows = rows.loc[rows["location"] != NATIONAL]
-    hub = [_hub_place(c) for c in rows["location"]]
     shift = _shift(nowcast_date)
     end = pd.to_datetime(rows["target_end_date"]) - shift
     return pd.DataFrame(
         {
             "model": rows["model"].to_numpy(),
-            "location": [loc for loc, _ in hub],
-            "age_group": [age for _, age in hub],
+            "location": [_place(c) for c in rows["location"]],
             "forecast_date": nowcast_date,
             "target_end_date": end.dt.date.astype(str).to_numpy(),
             "horizon": (end - pd.Timestamp(nowcast_date)).dt.days.to_numpy(),
@@ -374,3 +388,63 @@ def hub_forecasts(
             "value": rows["value"].to_numpy(),
         }
     )
+
+
+def hub_target(triangle: pd.DataFrame, ends: Sequence[str]) -> pd.DataFrame:
+    """Return 7-day sums as each report date gives them, as a target table.
+
+    Parameters
+    ----------
+    triangle : pandas.DataFrame
+        Counts by Meldedatum and report date (`read_triangle`).
+    ends : sequence of str
+        Last days of the 7-day sums.
+
+    Returns
+    -------
+    pandas.DataFrame
+        One row per place in `PLACE_NAMES`, end and report date from the
+        end on: `kind` (`real`), `vintage` and `cutoff` (the report date),
+        `location` (the place), `target_end_date` (the end) and `total`.
+    """
+    places = triangle["location"].where(
+        triangle["age_group"] == ALL_AGES, triangle["age_group"]
+    )
+    keep = places.isin(set(PLACE_NAMES)) & (
+        (triangle["age_group"] == ALL_AGES) | (triangle["location"] == GERMANY)
+    )
+    first = (as_date(min(ends)) - dt.timedelta(days=6)).isoformat()
+    rows = triangle.loc[keep & (triangle["reference_date"] >= first)]
+    reports = sorted(set(rows["report_date"]) | set(ends))
+    days = pd.date_range(first, max(ends), freq="D").date.astype(str)
+    frames = []
+    for place, own in rows.groupby(places.loc[rows.index]):
+        # Count of each Meldedatum (row) by each report date (column).
+        counts = (
+            own.pivot_table(
+                index="reference_date",
+                columns="report_date",
+                values="confirm",
+                aggfunc="last",
+            )
+            .reindex(index=days, columns=reports)
+            .ffill(axis=1)
+            .fillna(0.0)
+        )
+        sums = counts.rolling(7).sum()
+        for end in ends:
+            total = sums.loc[end]
+            total = total.loc[total.index >= end]
+            frames.append(
+                pd.DataFrame(
+                    {
+                        "kind": "real",
+                        "vintage": total.index,
+                        "cutoff": total.index,
+                        "location": place,
+                        "target_end_date": end,
+                        "total": total.to_numpy(),
+                    }
+                )
+            )
+    return pd.concat(frames, ignore_index=True)

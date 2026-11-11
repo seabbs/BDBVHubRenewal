@@ -161,7 +161,7 @@ def test_models_forecast_the_tasks_and_map_back(tasks) -> None:
         "80+",
     }
     # Germany comes from the states task, the sum of its states.
-    assert out.groupby(["location", "age_group", "horizon"]).size().eq(20).all()
+    assert out.groupby(["location", "horizon"]).size().eq(20).all()
 
 
 def test_hub_target_is_each_7_day_sum_as_each_release_reports_it(
