@@ -10,6 +10,7 @@ Hub teams are in grey.
 ## Overall
 
 Mean WIS and coverage of the 50% and 95% intervals at each of the paper's levels.
+The summaries below the table and on the rest of the page are of WIS.
 The national level is Germany at all ages, the states are at all ages and the age groups are for Germany.
 
 --8<-- "germany-scores.md"

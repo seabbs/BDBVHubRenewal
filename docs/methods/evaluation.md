@@ -178,7 +178,7 @@ WIS is the mean quantile score over the hub's seven levels, 0.025, 0.1, 0.25, 0.
 Our quantiles are those of 1000 samples.
 Coverage is of the central 50% and 95% intervals.
 The teams' WIS is the paper's score of each of their quantiles.
-Their coverage is from their published quantiles, so the few forecasts the paper scored with quantiles it filled in from later model versions or corrected are left out.
+Their coverage is from their published quantiles, so forecasts the paper scored with quantiles it filled in from later model versions or corrected have no coverage.
 
 [^wolffram]: Wolffram D, Abbott S, an der Heiden M, Funk S, Günther F, Hailer D, et al. (2023). Collaborative nowcasting of COVID-19 hospitalization incidences in Germany. PLOS Computational Biology 19(8): e1011394. [doi:10.1371/journal.pcbi.1011394](https://doi.org/10.1371/journal.pcbi.1011394).
 
