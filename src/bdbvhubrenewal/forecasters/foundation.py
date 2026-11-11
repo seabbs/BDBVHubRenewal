@@ -91,12 +91,15 @@ class HubTriangle:
         is, `[L, T, D]`.
     last : int
         Index of the step holding the latest release's cut-off.
+    cutoff : str
+        The latest release's cut-off, ISO format.
     """
 
     times: list[str]
     final: np.ndarray
     partial: np.ndarray
     last: int
+    cutoff: str
 
     @property
     def n_context(self) -> int:
@@ -156,7 +159,7 @@ def hub_triangle(
     lags = MAX_LAG[source]
     partial = np.full((len(places), n_times, lags), np.nan)
     final = np.zeros((len(places), n_times))
-    last = 0
+    last, latest = 0, ""
     # The latest release gives the final counts and the last step.
     for release in sorted(set(rows["vintage"])):
         mine = (rows["vintage"] == release).to_numpy()
@@ -172,8 +175,8 @@ def hub_triangle(
         for d in range(lags):
             if 0 <= at - d < n_times:
                 partial[:, at - d, d] = counts[:, at - d]
-        final, last = counts, at
-    return HubTriangle(times, final, partial, last)
+        final, last, latest = counts, at, cutoff
+    return HubTriangle(times, final, partial, last, latest)
 
 
 def lag_shares(
@@ -189,9 +192,14 @@ def lag_shares(
     sum of their final counts, over the steps final at the latest release
     with a count at that lag. Shares are capped at 1 and made
     non-decreasing, and are 1 from lag $D$. `pooled` sums over places, for
-    places with none of their own. A weekly lag $d$ holds its share over
-    ages $7d$ to $7d + 6$ days, so the mean over a week's days, as
-    `evaluation.nowcast.week_shares` takes it, is the share.
+    places with none of their own.
+    The shares are given by a day's age at a cut-off, as
+    `evaluation.nowcast.week_shares` reads them, which averages over a
+    week's days and counts days after the cut-off as unreported. With the
+    cut-off $k$ days before the end of its week, weekly lag $d$ holds its
+    share over ages $7d - k$ to $7d - k + 6$, so a week's mean is its
+    share; lag 0 is scaled by $7 / (7 - k)$ for the days after the
+    cut-off.
 
     Parameters
     ----------
@@ -214,6 +222,8 @@ def lag_shares(
     start = tri.n_context
     lags = tri.partial.shape[2]
     width = 7 if source == "weekly" else 1
+    end = epiweek_end(tri.cutoff) if source == "weekly" else as_date(tri.cutoff)
+    k = (end - as_date(tri.cutoff)).days
     cells = tri.partial[:, :start]
     seen = ~np.isnan(cells)
     final = np.broadcast_to(tri.final[:, :start, None], cells.shape)
@@ -226,15 +236,22 @@ def lag_shares(
         ok = d > 0
         if not ok.any():
             continue
-        share = np.maximum.accumulate(np.minimum(n[ok] / d[ok], 1.0))
-        first = np.arange(lags)[ok] * width
-        ages = np.unique(np.stack([first, first + width - 1], axis=1))
+        share = n[ok] / d[ok]
+        lag = np.arange(lags)[ok]
+        share = np.where(lag == 0, share * width / (width - k), share)
+        share = np.maximum.accumulate(np.minimum(share, 1.0))
+        first = np.maximum(lag * width - k, 0)
+        last = lag * width - k + width - 1
+        ages = np.stack([first, last], axis=1).ravel()
+        values = np.repeat(share, 2)
+        if width == 1:
+            ages, values = ages[::2], values[::2]
         frames.append(
             pd.DataFrame(
                 {
                     "location": place,
-                    "x": [*ages, lags * width],
-                    "q50": [*np.repeat(share, len(ages) // len(share)), 1.0],
+                    "x": [*ages, lags * width - k],
+                    "q50": [*values, 1.0],
                 }
             )
         )
@@ -381,8 +398,7 @@ class FoundationModel:
     delay_summary : pandas.DataFrame or None
         The `ragged` models' share reported by release lag at the last
         forecast (`lag_shares`), which maps their final counts to what
-        later releases show. None for `complete`, which is scored as
-        reported, as `randomwalk` is (`scored_as_reported`).
+        later releases show. None for `complete`, which reads no delay.
     """
 
     name: str
@@ -396,11 +412,6 @@ class FoundationModel:
     @property
     def needs_snapshots(self) -> bool:
         """Whether the model reads release snapshots: `complete` does."""
-        return self.layout == "complete"
-
-    @property
-    def scored_as_reported(self) -> bool:
-        """Whether its samples are scored as they are: `complete`'s are."""
         return self.layout == "complete"
 
     def forecast(self, task: ForecastTask) -> pd.DataFrame:

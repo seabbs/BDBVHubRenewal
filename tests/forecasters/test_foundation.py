@@ -113,6 +113,7 @@ def test_weekly_triangle_puts_each_release_at_its_lag() -> None:
     tri = hub_triangle(_history(), "weekly", ("A",), "2026-10-31")
     assert tri.times == ["2026-10-10", "2026-10-17", "2026-10-24", "2026-10-31"]
     assert tri.last == 2
+    assert tri.cutoff == "2026-10-24"
     assert tri.final[0].tolist() == [7.0, 4.0, 2.0, 0.0]
     partial = tri.partial[0]
     assert partial.shape == (4, MAX_LAG["weekly"])
