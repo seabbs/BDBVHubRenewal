@@ -11,7 +11,7 @@ None is submitted.
 In brief, each model:
 
 1. lays out the hub target of every release by place, step and release lag ([Releases](#releases));
-2. puts every hub target, the country, the provinces and their health zones, in one block of series that Chronos-2 forecasts jointly ([Layouts](#layouts));
+2. puts the country and every province, each as its own hub-target series, in one block that Chronos-2 forecasts jointly ([Layouts](#layouts));
 3. draws 100 trajectories from Chronos-2's quantiles ([Trajectories](#trajectories));
 4. rounds the draws to counts no lower than the count already reported ([Counts](#counts)).
 
@@ -20,7 +20,7 @@ In brief, each model:
 The target is the hub's: confirmed cases by onset week, known and imputed onsets together.
 Two sources give it with its updates.
 
-- **Weekly** (`fm_chronos_weekly_*`): the weekly counts of each release of the target data, for the country, the provinces and the zones.
+- **Weekly** (`fm_chronos_weekly_*`): the weekly counts of each release of the target data.
   A step is an onset week.
 - **Daily** (`fm_chronos_daily_*`): the daily counts of each release, known plus imputed onsets.
   A step is an onset day.
@@ -32,10 +32,10 @@ $X_{p,t}$ is the count of step $t$ at the vintage, with cut-off step $c$.
 
 ## Layouts
 
-Every hub target is a series in one block: the country, all 26 provinces, and every health zone of those provinces.
-Each is the hub target itself, so the country is not the sum of the provinces and the zones are not split from them.
-Zone counts are zero before the zone releases start.
+The country and all 26 provinces are each a series in one block, each the hub target itself, so the country is not the sum of the provinces.
 Chronos-2's group attention reads the block together and forecasts every target series from the same last step of context, $t^*$.
+Health zones are split from the provinces as for the other fitted models ([Health zones](baselines.md#health-zones)).
+This is the one place a forecast is split rather than forecast.
 
 - **Complete** (`*_complete`): the targets $X_{p,t}$ for $t \le t^*$.
   $t^*$ is the week `randomwalk` starts its walk from ([Baseline models](baselines.md#forecast)), the earliest over the places it walks.
@@ -43,7 +43,8 @@ Chronos-2's group attention reads the block together and forecasts every target 
   Lag series $d$ holds $Y_{p,t,d}$, missing where it is not yet reported, and Chronos-2 masks the missing values.
   $t^* = c - D$, the last step with every lag in, with $D = 4$ weeks or $D = 28$ days.
   The lag series run past $t^*$ as values known into the future.
-  Chronos-2 forecasts only after $t^*$ and takes no known future values of a target, so this is how a recent week's count so far reaches its nowcast: as its cell at lag $c - t$.
+  They have to: Chronos-2 outputs only after the block's shared end $t^*$, and it takes no known future values of a target series.
+  So a recent week's count so far reaches its nowcast only as its cell at lag $c - t$ in a lag series; without it the recent weeks would have no nowcast.
 
 A covariate layout, with the lag series as covariates of the target series, is the ragged layout here, so it is not a separate model.
 Chronos-2 standardises each series and takes its arcsinh, so counts go in as they are.
@@ -61,13 +62,14 @@ A draw is rounded to the nearest count and floored at zero.
 A step's draw is no lower than its count at the vintage, and steps up to $t^*$ are their count at the vintage.
 The daily source is summed to weeks, as the hub's target is weekly, and each week is no lower than its reported count.
 Small counts need nothing more: a series of zeros and ones keeps draws near zero, and the floor removes negative draws.
-A hub file needs each zone's samples to sum to its province's, so there the zone samples are scaled to their province, sample by sample, in proportion to the model's own zone samples ([Health zones](baselines.md#health-zones)).
 
 ## Patches and context
 
 Chronos-2 reads a series in patches of 16 steps.
 The weekly source has about 34 weeks of context at the latest vintages, three patches.
 The daily source has about 240 days, 16 patches.
+The weekly ragged block is 27 targets and 108 lag series; the daily one is 27 targets and 756 lag series.
+Chronos-2 runs on a CUDA or Apple GPU when there is one, and on the CPU otherwise.
 
 ## Reported counts
 
@@ -77,7 +79,7 @@ These models use the daily chain ladder delay of `randomwalknowcast` ([Baseline 
 ## Limitations
 
 - The hub target has few releases, so each lag has a handful of values per place, most of them in the last weeks.
-- Chronos-2 is used as pretrained. It has not seen these data or outbreaks like them, and the block is far larger than the groups it was trained on.
+- Chronos-2 is used as pretrained. It has not seen these data or outbreaks like them.
 - Trajectories are independent across steps and places, so sums over weeks or places are too narrow.
 
 [^chronos2]: Ansari A F et al. (2025) Chronos-2: From univariate to universal forecasting. arXiv:2510.15821. Code: <https://github.com/amazon-science/chronos-forecasting>.
