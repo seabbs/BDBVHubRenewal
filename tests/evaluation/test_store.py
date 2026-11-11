@@ -450,11 +450,18 @@ def test_zone_data_keys_only_the_models_that_read_it(
     tasks: dict[str, ForecastTask],
 ) -> None:
     zoned = store.origin_tasks(
-        target, delays, config, daily, health_zones, daily_zones
+        target,
+        delays,
+        config,
+        daily,
+        health_zones,
+        daily_zones,
+        ("CD-IT-01", "CD-NK-01"),
     )
     latest = real_vintages(target)[-1]
     assert zoned[latest].zone_history is not None
     assert zoned[latest].zone_daily_history is not None
+    assert zoned[latest].zone_codes == ("CD-IT-01", "CD-NK-01")
     sampler = store.samplers()
     plain = ["renewal", "pprandomwalknowcast"]
     assert store.current_keys(zoned, plain, sampler, "c") == (
