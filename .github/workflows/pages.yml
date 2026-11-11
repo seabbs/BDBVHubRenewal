@@ -120,32 +120,32 @@ jobs:
             model: randomwalknowcast
             germany: true
             run: >-
-              uv run bdbvhubrenewal germany-forecast --models randomwalknowcast
-              --chunk 0/4 --out output/parts/germany-randomwalknowcast-0.csv.gz
+              uv run bdbvhubrenewal germany-backtest --models randomwalknowcast
+              --chunk 0/4 --out output/parts/germany
           - cell: germany-randomwalknowcast-1
             model: randomwalknowcast
             germany: true
             run: >-
-              uv run bdbvhubrenewal germany-forecast --models randomwalknowcast
-              --chunk 1/4 --out output/parts/germany-randomwalknowcast-1.csv.gz
+              uv run bdbvhubrenewal germany-backtest --models randomwalknowcast
+              --chunk 1/4 --out output/parts/germany
           - cell: germany-randomwalknowcast-2
             model: randomwalknowcast
             germany: true
             run: >-
-              uv run bdbvhubrenewal germany-forecast --models randomwalknowcast
-              --chunk 2/4 --out output/parts/germany-randomwalknowcast-2.csv.gz
+              uv run bdbvhubrenewal germany-backtest --models randomwalknowcast
+              --chunk 2/4 --out output/parts/germany
           - cell: germany-randomwalknowcast-3
             model: randomwalknowcast
             germany: true
             run: >-
-              uv run bdbvhubrenewal germany-forecast --models randomwalknowcast
-              --chunk 3/4 --out output/parts/germany-randomwalknowcast-3.csv.gz
+              uv run bdbvhubrenewal germany-backtest --models randomwalknowcast
+              --chunk 3/4 --out output/parts/germany
           - cell: germany-randomwalk
             model: randomwalk
             germany: true
             run: >-
-              uv run bdbvhubrenewal germany-forecast --models randomwalk
-              --out output/parts/germany-randomwalk.csv.gz
+              uv run bdbvhubrenewal germany-backtest --models randomwalk
+              --out output/parts/germany
           - cell: recovery-randomwalknowcast-0
             model: randomwalknowcast
             run: >-
@@ -243,7 +243,9 @@ jobs:
           WITH: >-
             ${{ matrix.germany && 'src/bdbvhubrenewal/data/germany.py
             src/bdbvhubrenewal/evaluation/germany.py
-            src/bdbvhubrenewal/evaluation/backtest.py' || '' }}
+            src/bdbvhubrenewal/evaluation/backtest.py
+            src/bdbvhubrenewal/evaluation/nowcast.py
+            src/bdbvhubrenewal/evaluation/scoring.py' || '' }}
         run: |
           set -euo pipefail
           # shellcheck disable=SC2086
@@ -340,8 +342,8 @@ jobs:
             --json url -q '.[0].url // ""')
           export FIT_STORE_RUN
           uv run bdbvhubrenewal compare-hub --fetch
-          uv run bdbvhubrenewal germany-fetch
-          uv run bdbvhubrenewal germany-score output/parts/parts-germany-*/*.csv.gz
+          uv run bdbvhubrenewal concat-results --out results/germany \
+            output/parts/parts-germany-*/germany
           uv run bdbvhubrenewal report --ledger output/ledger
       # Scores at each deploy from main, read from the gh-pages branch,
       # with this build's scores last. Only the trees are fetched, and the
