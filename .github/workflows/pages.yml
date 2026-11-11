@@ -113,6 +113,39 @@ jobs:
       matrix:
         # Longest first, so the short ones fill in behind them.
         include:
+          # The German benchmark reads none of the hub data, so its cells
+          # run without the inputs and are keyed on its own code and
+          # config/germany.toml, which pins its data.
+          - cell: germany-randomwalknowcast-0
+            model: randomwalknowcast
+            germany: true
+            run: >-
+              uv run bdbvhubrenewal germany-forecast --models randomwalknowcast
+              --chunk 0/4 --out output/parts/germany-randomwalknowcast-0.csv.gz
+          - cell: germany-randomwalknowcast-1
+            model: randomwalknowcast
+            germany: true
+            run: >-
+              uv run bdbvhubrenewal germany-forecast --models randomwalknowcast
+              --chunk 1/4 --out output/parts/germany-randomwalknowcast-1.csv.gz
+          - cell: germany-randomwalknowcast-2
+            model: randomwalknowcast
+            germany: true
+            run: >-
+              uv run bdbvhubrenewal germany-forecast --models randomwalknowcast
+              --chunk 2/4 --out output/parts/germany-randomwalknowcast-2.csv.gz
+          - cell: germany-randomwalknowcast-3
+            model: randomwalknowcast
+            germany: true
+            run: >-
+              uv run bdbvhubrenewal germany-forecast --models randomwalknowcast
+              --chunk 3/4 --out output/parts/germany-randomwalknowcast-3.csv.gz
+          - cell: germany-randomwalk
+            model: randomwalk
+            germany: true
+            run: >-
+              uv run bdbvhubrenewal germany-forecast --models randomwalk
+              --out output/parts/germany-randomwalk.csv.gz
           - cell: recovery-randomwalknowcast-0
             model: randomwalknowcast
             run: >-
@@ -198,6 +231,7 @@ jobs:
         with:
           jax-scope: pages-${{ matrix.model }}
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        if: ${{ !matrix.germany }}
         with:
           name: inputs
       - name: Hash what this job reads
@@ -206,9 +240,15 @@ jobs:
           CELL: ${{ matrix.cell }}
           MODEL: ${{ matrix.model }}
           RUN: ${{ matrix.run }}
+          WITH: >-
+            ${{ matrix.germany && 'src/bdbvhubrenewal/data/germany.py
+            src/bdbvhubrenewal/evaluation/germany.py
+            src/bdbvhubrenewal/evaluation/backtest.py' || '' }}
         run: |
           set -euo pipefail
-          digest=$(uv run bdbvhubrenewal digest --model "$MODEL" --text "$RUN")
+          # shellcheck disable=SC2086
+          digest=$(uv run bdbvhubrenewal digest --model "$MODEL" --text "$RUN" \
+            --with $WITH)
           if [ -z "$digest" ]; then
             echo "::error::digest printed nothing; refusing to key the cache"
             exit 1
@@ -222,6 +262,9 @@ jobs:
         with:
           path: output/parts
           key: ${{ steps.key.outputs.key }}
+      - name: Fetch the German benchmark data
+        if: matrix.germany && steps.cache.outputs.cache-hit != 'true'
+        run: uv run bdbvhubrenewal germany-fetch
       - name: Run
         if: steps.cache.outputs.cache-hit != 'true'
         run: ${{ matrix.run }}
@@ -297,6 +340,8 @@ jobs:
             --json url -q '.[0].url // ""')
           export FIT_STORE_RUN
           uv run bdbvhubrenewal compare-hub --fetch
+          uv run bdbvhubrenewal germany-fetch
+          uv run bdbvhubrenewal germany-score output/parts/parts-germany-*/*.csv.gz
           uv run bdbvhubrenewal report --ledger output/ledger
       # Scores at each deploy from main, read from the gh-pages branch,
       # with this build's scores last. Only the trees are fetched, and the
