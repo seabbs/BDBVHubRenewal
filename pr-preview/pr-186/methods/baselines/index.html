@@ -2515,7 +2515,7 @@ This is the one part of the model that is not drawn from its posterior.</p>
 On the reported target, the backtest maps its final counts to what a later release shows by the posterior median <span class="arithmatex">\(\pi_p(a)\)</span> of each place (<a href="../evaluation/#real-releases">Evaluation</a>).</p>
 <p><strong>Sampler.</strong>
 NUTS runs 2 chains of 500 warm-up and 750 draws, in sequence, from the prior medians, at target acceptance 0.9.
-Each walk step is sampled as <span class="arithmatex">\(\delta^*_{p,w} \sim \mathcal{N}(0, \sigma_p)\)</span> and set to <span class="arithmatex">\(\delta_{p,w} = \sqrt{\sigma_p}\, \delta^*_{p,w}\)</span>, numpyro's location-scale reparameterisation with centring <span class="arithmatex">\(\tfrac{1}{2}\)</span>.
+Each walk step is sampled as <span class="arithmatex">\(\delta^*_{p,w}\)</span>, normal with mean 0 and scale <span class="arithmatex">\(\sigma_p^{1/2}\)</span>, and set to <span class="arithmatex">\(\delta_{p,w} = \sqrt{\sigma_p}\, \delta^*_{p,w}\)</span>, numpyro's location-scale reparameterisation with centring <span class="arithmatex">\(\tfrac{1}{2}\)</span>.
 A large place's counts pin its walk, which suits centred steps, and a place with few cases leaves it to the prior, which suits non-centred ones.
 The pooled parameters are non-centred, except the first level, whose tiers are centred, and <span class="arithmatex">\(\log s\)</span>, whose tiers are half centred.
 Sampling each tier about its parent's value, not as the country's value plus an offset, cut the median leapfrog steps from 255 to 511 down to 63.
