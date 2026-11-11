@@ -158,6 +158,4 @@ def test_models_forecast_the_tasks_and_map_back(tasks) -> None:
         ),
     }
     # Germany comes from the states task, the sum of its states.
-    assert out.groupby(["location", "age_group", "horizon"]).size().eq(
-        20
-    ).all()
+    assert out.groupby(["location", "age_group", "horizon"]).size().eq(20).all()
