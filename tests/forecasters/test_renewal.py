@@ -370,6 +370,9 @@ def test_bvd_fit_records_the_release_and_its_rhat(
     )
     for tag in ("results-3151", "results-3086"):
         shutil.copytree(fixtures / tag, cache / tag)
+    # BDBV_DATA_DIR is also where the fit reads the populations.
+    data = Path(__file__).resolve().parents[1] / "fixtures" / "data"
+    shutil.copy(data / "locations.csv", tmp_path / "locations.csv")
     monkeypatch.setenv("BDBV_DATA_DIR", str(tmp_path))
     release = rn.bvd_release(task)
     assert release is not None
