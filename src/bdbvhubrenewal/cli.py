@@ -305,6 +305,41 @@ def build_parser() -> argparse.ArgumentParser:
     zb.add_argument("--quantiles-out", default="results/zone-quantiles.csv")
     zb.add_argument("--draws-out", default="results/zone-draws.csv.gz")
 
+    gfe = sub.add_parser(
+        "germany-fetch",
+        help="Download the German hospitalisation benchmark's data.",
+    )
+    gfe.add_argument("--config", default="config/germany.toml")
+    gfe.add_argument("--out", default=f"{data_dir}/raw/germany")
+
+    gfo = sub.add_parser(
+        "germany-forecast",
+        help="Nowcast the German hospitalisation benchmark's dates.",
+    )
+    gfo.add_argument("--config", default="config/germany.toml")
+    gfo.add_argument("--data", default=f"{data_dir}/raw/germany")
+    gfo.add_argument(
+        "--models",
+        nargs="*",
+        default=None,
+        help="Defaults to every model but the renewal variants.",
+    )
+    gfo.add_argument(
+        "--chunk", default=None, help=_CHUNK_HELP.format(what="nowcast dates")
+    )
+    gfo.add_argument("--out", default="output/germany/quantiles.csv.gz")
+
+    gsc = sub.add_parser(
+        "germany-score",
+        help="Score the German benchmark's nowcasts and the hub teams'.",
+    )
+    gsc.add_argument("--config", default="config/germany.toml")
+    gsc.add_argument("--data", default=f"{data_dir}/raw/germany")
+    gsc.add_argument("--out", default="results/germany")
+    gsc.add_argument(
+        "quantiles", nargs="+", help="Files written by `germany-forecast`."
+    )
+
     dig = sub.add_parser(
         "digest",
         help="Print a hash of what a backtest reads, to key its outputs.",
@@ -1462,6 +1497,58 @@ def _compare_hub(args: argparse.Namespace) -> int:
     return 0
 
 
+def _germany_forecast(args: argparse.Namespace) -> int:
+    from bdbvhubrenewal.data.germany import hub_triangle
+    from bdbvhubrenewal.evaluation import germany as de
+
+    config = de.load_germany_config(args.config)
+    data = Path(args.data)
+    dates = de.nowcast_dates(config)
+    if args.chunk:
+        dates = chunk(dates, args.chunk)
+    models = de.portable_models() if args.models is None else args.models
+    quantiles = de.forecast_germany(
+        models,
+        hub_triangle(data / Path(config.triangle).name),
+        dates,
+        config.n_samples,
+        config.seed,
+    )
+    out = Path(args.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    write_csv(quantiles, out)
+    print(f"German nowcasts of {models} for {len(dates)} dates in {out}.")
+    return 0
+
+
+def _germany_score(args: argparse.Namespace) -> int:
+    from bdbvhubrenewal.evaluation import germany as de
+
+    config = de.load_germany_config(args.config)
+    data = Path(args.data)
+    truth = pd.read_csv(data / Path(config.truth).name)
+    ours = de.score_quantiles(
+        pd.concat(pd.read_csv(p) for p in args.quantiles), truth
+    )
+    teams = de.team_scores(
+        pd.read_csv(data / Path(config.scores).name),
+        pd.concat(pd.read_csv(data / Path(p).name) for p in config.submissions),
+        truth,
+    )
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+    write_csv(
+        pd.concat([ours.assign(source="ours"), teams.assign(source="hub")]),
+        out / "scores.csv.gz",
+    )
+    (out / "sources.json").write_bytes((data / "sources.json").read_bytes())
+    print(
+        f"German benchmark: {len(ours)} of our scored nowcasts and "
+        f"{len(teams)} of the hub teams' in {out}."
+    )
+    return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """Run the command line interface.
 
@@ -1526,6 +1613,19 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _nowcast(args)
     if args.command == "zone-backtest":
         return _zone_backtest(args)
+    if args.command == "germany-fetch":  # pragma: no cover - network
+        from bdbvhubrenewal.evaluation.germany import (
+            fetch_germany,
+            load_germany_config,
+        )
+
+        fetch_germany(load_germany_config(args.config), args.out)
+        print(f"German benchmark data written to {args.out}.")
+        return 0
+    if args.command == "germany-forecast":
+        return _germany_forecast(args)
+    if args.command == "germany-score":
+        return _germany_score(args)
     if args.command == "digest":
         from bdbvhubrenewal.evaluation.digest import (
             backtest_digest,
