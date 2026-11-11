@@ -27,17 +27,17 @@ Two sources give it with its updates.
 
 For place $p$, step $t$ and release $r$ with cut-off in step $c_r$, the release lag is $d = c_r - t$.
 $Y_{p,t,d}$ is the count of step $t$ at lag $d$, from the release whose cut-off is $d$ steps after $t$.
-It is missing where no release has that lag, so each lag has at most one value per release.
+Release $r$ gives lag $d$ only at step $c_r - d$, so each lag has at most one value per release and is missing at other steps.
 $X_{p,t}$ is the count of step $t$ at the vintage, with cut-off step $c$.
 
 ## Layouts
 
 The country and all 26 provinces are each a series in one block, each the hub target itself, so the country is not the sum of the provinces.
-Chronos-2's group attention reads the block together and forecasts every target series from one shared last step of context, $t^*$, which each layout sets differently.
+Chronos-2 forecasts every target series in the block jointly, from one shared last step of context, $t^*$, which each layout sets differently.
 Health zones are split from the provinces as for the other fitted models ([Health zones](baselines.md#health-zones)).
 
 - **Complete** (`*_complete`): the targets $X_{p,t}$ for $t \le t^*$.
-  $t^*$ is the week `randomwalk` starts its walk from ([Baseline models](baselines.md#forecast)), the earliest over the places it walks.
+  $t^*$ is the earliest over places of the week `randomwalk` starts its walk from, the latest week 95% complete under its delay ([Baseline models](baselines.md#forecast)).
 - **Ragged** (`*_ragged`): the same targets, with one lag series per place and lag $d < D$, indexed by onset step as in a regression nowcast.
   Lag series $d$ holds $Y_{p,t,d}$, missing where it is not yet reported, and Chronos-2 masks the missing values.
   $t^* = c - D$, the last step whose count is at lag $D$ or more, with $D = 4$ weeks or $D = 28$ days.
@@ -61,7 +61,6 @@ The daily source is summed to weeks, as the hub's target is weekly, and each wee
 
 Chronos-2 reads a series in patches of 16 steps.
 The context is every step from the first onset in the releases to $t^*$.
-Chronos-2 runs on a CUDA or Apple GPU when there is one, and on the CPU otherwise.
 
 ## Scoring
 
@@ -73,7 +72,6 @@ The release backtest scores the reported target and the complete target ([Evalua
 
 ## Limitations
 
-- The hub target has few releases, so each lag series has one to three values in the context. Chronos-2 then sees little of how a lag relates to the final count, and as pretrained the lag series pull the ragged models' medians down and widen their upper tails.
 - Chronos-2 is used as pretrained. It has not seen these data or outbreaks like them.
 - Draws are independent across steps and places, so every weekly value of the daily models, a sum of seven daily draws, is too narrow, as are sums over weeks or places.
 
