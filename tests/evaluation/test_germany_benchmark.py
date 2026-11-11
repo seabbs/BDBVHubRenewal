@@ -32,7 +32,7 @@ def scores(triangle: pd.DataFrame) -> pd.DataFrame:
     return germany_backtest(
         ["randomwalk", "randomwalknowcast"],
         triangle,
-        ["2021-10-05", "2021-10-06"],
+        ["2021-10-04", "2021-10-05"],
         n_samples=30,
         seed=1,
         truth_delay=10,
@@ -55,7 +55,7 @@ def test_scores_are_the_backtest_s_on_the_d_day_truth(
     triangle: pd.DataFrame, scores: pd.DataFrame
 ) -> None:
     assert set(SCORE_COLUMNS) <= set(scores.columns)
-    assert set(scores["origin"]) == {"2021-10-05", "2021-10-06"}
+    assert set(scores["origin"]) == {"2021-10-04", "2021-10-05"}
     assert set(scores["horizon"]) <= set(HORIZONS)
     assert set(scores["pool"]) == {"national", "states", "age"}
     ends = sorted(set(scores["target_end_date"]))

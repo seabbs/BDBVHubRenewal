@@ -574,7 +574,7 @@ def test_fit_store_unpack_says_when_the_store_has_no_fit(
 
 
 def _germany_data(tmp_path: Path) -> tuple[Path, Path]:
-    """The fixture as the hub's triangle, a config and the paper's files."""
+    """The fixture as the hub's triangle, and a config for it."""
     long = pd.read_csv(
         ROOT / "tests" / "fixtures" / "germany" / "germany_covid19_hosp.csv.gz"
     )
@@ -595,50 +595,21 @@ def _germany_data(tmp_path: Path) -> tuple[Path, Path]:
     wide.reset_index().rename(columns={"reference_date": "date"}).to_csv(
         data / "COVID-19_hospitalizations.csv", index=False
     )
-    truth = long.groupby(keys)["confirm"].max().rename("truth").reset_index()
-    truth.rename(columns={"reference_date": "date"}).to_csv(
-        data / "truth_2022-08-08.csv", index=False
-    )
-    paper = pd.DataFrame(
-        {
-            "model": "KIT",
-            "location": "DE",
-            "age_group": "00+",
-            "forecast_date": "2021-10-20",
-            "target_end_date": "2021-10-20",
-            "target": "0 day ahead inc hosp",
-            "type": "quantile",
-            "quantile": [0.025, 0.25, 0.5, 0.75, 0.975],
-            "score": 1.0,
-        }
-    )
-    paper.to_csv(data / "scores.csv.gz", index=False)
-    paper.drop(columns="score").assign(
-        model="KIT-simple_nowcast", value=[1, 2, 3, 4, 5], retrospective=False
-    ).to_csv(data / "submissions.csv.gz", index=False)
-    pd.DataFrame(columns=paper.columns).to_csv(
-        data / "submissions_KIT-frozen_baseline.csv.gz", index=False
-    )
-    (data / "sources.json").write_text("{}\n")
     text = (ROOT / "config" / "germany.toml").read_text()
-    text = text.replace('"2021-11-22"', '"2021-10-19"')
-    text = text.replace('"2022-04-29"', '"2021-10-20"')
-    text = text.replace("n_samples = 1000", "n_samples = 20")
+    text = text.replace('"2021-11-22"', '"2021-10-04"')
+    text = text.replace('"2022-04-29"', '"2021-10-05"')
+    text = text.replace("delay = 40", "delay = 10")
     config = tmp_path / "germany.toml"
     config.write_text(text)
     return data, config
 
 
-def test_cli_germany_forecasts_and_scores(tmp_path: Path) -> None:
+def test_cli_germany_backtest_scores_a_block_of_dates(tmp_path: Path) -> None:
     data, config = _germany_data(tmp_path)
-    parts = tmp_path / "q.csv.gz"
-    args = ["--config", str(config), "--data", str(data)]
-    assert main(["germany-forecast", *args, "--models", "randomwalk",
-                 "--chunk", "1/2", "--out", str(parts)]) == 0  # fmt: skip
-    quantiles = pd.read_csv(parts)
-    assert set(quantiles["forecast_date"]) == {"2021-10-20"}
     out = tmp_path / "results"
-    assert main(["germany-score", *args, "--out", str(out), str(parts)]) == 0
+    assert main(["germany-backtest", "--config", str(config), "--data",
+                 str(data), "--models", "randomwalk", "--chunk", "1/2",
+                 "--out", str(out)]) == 0  # fmt: skip
     scores = pd.read_csv(out / "scores.csv.gz")
-    assert set(scores["source"]) == {"ours", "hub"}
-    assert set(scores["model"]) == {"randomwalk", "KIT"}
+    assert set(scores["origin"]) == {"2021-10-05"}
+    assert set(scores["model"]) == {"randomwalk"}
