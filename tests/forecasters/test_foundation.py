@@ -11,52 +11,46 @@ import pytest
 
 from bdbvhubrenewal.evaluation.backtest import BacktestConfig, make_tasks
 from bdbvhubrenewal.forecasters import (
+    NATIONAL,
     ForecastTask,
     FoundationModel,
     ModelUnavailableError,
     check_samples,
-    foundation,
     get_model,
     list_models,
 )
+from bdbvhubrenewal.forecasters import foundation
 from bdbvhubrenewal.forecasters.foundation import (
-    CACHE_ENV,
-    FT_CONTEXT,
-    FT_HORIZON,
     LAYOUTS,
-    N_DELAYS,
-    View,
+    MAX_LAG,
+    SOURCES,
     chronos_sampler,
-    cov_examples,
-    delay_triangle,
-    fine_tuned_checkpoint,
-    history_examples,
+    hub_triangle,
     quantile_draws,
-    report_series,
 )
 
-MODELS = ("fm_complete", "fm_delay_series", "fm_delay_cov", "fm_delay_cov_ft")
+MODELS = tuple(f"fm_chronos_{s}_{lay}" for s in SOURCES for lay in LAYOUTS)
 
 
 def _constant(value: float):
     """A sampler whose every draw is `value`."""
 
-    def sample(inputs, horizon, n, seed, _checkpoint):
+    def sample(groups, horizon, n, seed):
         assert seed >= 0
         return [
-            np.full((n, np.atleast_2d(x["target"]).shape[0], horizon), value)
-            for x in inputs
+            np.full((n, np.atleast_2d(g["target"]).shape[0], horizon), value)
+            for g in groups
         ]
 
     return sample
 
 
 def _recording(store: list):
-    """A sampler that keeps its inputs and checkpoint and draws zeros."""
+    """A sampler that keeps its inputs and draws zeros."""
 
-    def sample(inputs, horizon, n, seed, checkpoint):
-        store.append((inputs, horizon, checkpoint))
-        return _constant(0.0)(inputs, horizon, n, seed, checkpoint)
+    def sample(groups, horizon, n, seed):
+        store.append((groups, horizon))
+        return _constant(0.0)(groups, horizon, n, seed)
 
     return sample
 
@@ -70,14 +64,6 @@ def task(
     return make_tasks(
         rows, delays, BacktestConfig(seed=3), history=real, daily=daily
     )[0]
-
-
-@pytest.fixture(autouse=True)
-def _no_fine_tuning(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Stand in for the fine-tuned checkpoint of every task."""
-    monkeypatch.setattr(
-        foundation, "fine_tuned_checkpoint", lambda _task, _name: "ckpt"
-    )
 
 
 def _reported(task: ForecastTask, out: pd.DataFrame) -> np.ndarray:
@@ -97,49 +83,68 @@ def test_registered_as_fitted_models() -> None:
         assert not specs[name].baseline
         model = get_model(name)
         assert isinstance(model, FoundationModel)
-        assert model.layout in LAYOUTS
         # The fit store keys a fit on the repr, so it must not hold an
         # address.
         assert "0x" not in repr(model)
 
 
-def test_triangle_classes_and_complete_week() -> None:
-    delays = pd.DataFrame(
+def _history() -> pd.DataFrame:
+    """Two weekly releases of one place, the second a week later."""
+    return pd.DataFrame(
         {
-            "location": ["A", "A", "A", "B", "B", "C"],
-            "onset_week": ["2026-10-03"] * 3 + ["2026-10-10"] * 3,
-            "delay": [-2, 6, 7, 20, 7 * N_DELAYS, 3],
+            "vintage": ["2026-10-17"] * 2 + ["2026-10-24"] * 3,
+            "location": ["A"] * 5,
+            "target_end_date": [
+                "2026-10-10",
+                "2026-10-17",
+                "2026-10-10",
+                "2026-10-17",
+                "2026-10-24",
+            ],
+            "total": [5, 1, 7, 4, 2],
+            "cutoff": ["2026-10-17"] * 2 + ["2026-10-24"] * 3,
         }
     )
-    weeks = ("2026-10-03", "2026-10-10", "2026-10-17")
-    tri = delay_triangle(delays, "2026-10-24", ("A", "B"), weeks)
-    assert tri.counts.shape == (2, 3, N_DELAYS)
-    # -2 and 6 days are class 0 and 7 days class 1; 7K days is dropped
-    # and place C is not asked for.
-    assert tri.counts[0, 0, :2].tolist() == [2.0, 1.0]
-    assert tri.counts[1, 1, 2] == 1.0
-    assert tri.counts.sum() == 4.0
-    # Week ending 10-17 has its last delay-0 report day on 10-23.
-    assert weeks[tri.last] == "2026-10-17"
-    tri = delay_triangle(delays, "2026-10-22", ("A", "B"), weeks)
-    assert weeks[tri.last] == "2026-10-10"
 
 
-def test_report_series_puts_each_class_on_the_report_clock() -> None:
-    delays = pd.DataFrame(
+def test_weekly_triangle_puts_each_release_at_its_lag() -> None:
+    tri = hub_triangle(_history(), "weekly", "2026-10-24", ("A",), "2026-10-31")
+    assert tri.times == ["2026-10-10", "2026-10-17", "2026-10-24", "2026-10-31"]
+    assert tri.last == 2
+    assert tri.final[0].tolist() == [7.0, 4.0, 2.0, 0.0]
+    partial = tri.partial[0]
+    assert partial.shape == (4, MAX_LAG["weekly"])
+    # Week 10-10 was 5 at lag 1 and 7 at lag 2; 10-17 1 then 4.
+    assert partial[0, 1] == 5.0
+    assert partial[0, 2] == 7.0
+    assert partial[1, 0] == 1.0
+    assert partial[1, 1] == 4.0
+    assert partial[2, 0] == 2.0
+    # No release saw week 10-10 at lag 0, or any week after the data.
+    assert np.isnan(partial[0, 0])
+    assert np.isnan(partial[3]).all()
+    assert tri.n_context == tri.last - MAX_LAG["weekly"] + 1
+
+
+def test_daily_triangle_lags_are_days() -> None:
+    daily = pd.DataFrame(
         {
-            "location": ["A", "A", "A"],
-            "onset_week": ["2026-10-03", "2026-10-03", "2026-10-10"],
-            "delay": [0, 8, 1],
+            "vintage": ["2026-10-17", "2026-10-24", "2026-10-24"],
+            "location": ["A"] * 3,
+            "onset_date": ["2026-10-15", "2026-10-15", "2026-10-20"],
+            "observed": [1, 2, 1],
+            "imputed": [0, 1, 0],
+            "cutoff": ["2026-10-16", "2026-10-23", "2026-10-23"],
         }
     )
-    weeks = ("2026-10-03", "2026-10-10", "2026-10-17", "2026-10-24")
-    tri = delay_triangle(delays, "2026-10-31", ("A",), weeks, 2)
-    series = report_series(tri)
-    assert series.shape == (1, 2, tri.last + 1)
-    # Class 0 at its onset week, class 1 one week later.
-    assert series[0, 0].tolist() == [1.0, 1.0, 0.0, 0.0]
-    assert series[0, 1].tolist() == [0.0, 1.0, 0.0, 0.0]
+    tri = hub_triangle(daily, "daily", "2026-10-24", ("A",), "2026-10-24")
+    assert tri.times[0] == "2026-10-15"
+    assert tri.times[-1] == "2026-10-24"
+    assert tri.last == tri.times.index("2026-10-23")
+    # Observed plus imputed, at lag 1 day then 8 days.
+    assert tri.partial[0, 0, 1] == 1.0
+    assert tri.partial[0, 0, 8] == 3.0
+    assert tri.final[0, 0] == 3.0
 
 
 def test_quantile_draws_invert_the_quantile_function() -> None:
@@ -159,27 +164,22 @@ def test_quantile_draws_invert_the_quantile_function() -> None:
 def test_draws_are_counts_at_least_the_reported(
     name: str, task: ForecastTask
 ) -> None:
-    reported = None
     for value in (-50.0, 0.0, 3.0):
         model = dataclasses.replace(get_model(name), sample=_constant(value))
         out = model.forecast(task)
         check_samples(out, task)
+        assert NATIONAL in set(out["location"])
         values = out["value"].to_numpy()
         assert (values >= 0).all()
         assert np.array_equal(values, np.round(values))
         reported = _reported(task, out)
         assert (values >= reported).all()
+        if value < 0:
+            assert np.array_equal(values, reported)
     # Draws above the reported counts raise the forecast past them.
-    assert (values > reported).any()
-
-
-@pytest.mark.parametrize("name", MODELS)
-def test_low_draws_give_the_reported_counts(
-    name: str, task: ForecastTask
-) -> None:
-    model = dataclasses.replace(get_model(name), sample=_constant(-50.0))
-    out = model.forecast(task)
-    assert np.array_equal(out["value"].to_numpy(), _reported(task, out))
+    high = dataclasses.replace(get_model(name), sample=_constant(1e4))
+    out = high.forecast(task)
+    assert (out["value"].to_numpy() > _reported(task, out)).any()
 
 
 @pytest.mark.parametrize("name", MODELS)
@@ -194,61 +194,59 @@ def test_maps_final_counts_through_a_delay(
     assert set(summary["quantity"]) == {"reported_share"}
 
 
-def test_delay_cov_masks_cells_not_yet_reported(task: ForecastTask) -> None:
+@pytest.mark.parametrize("source", SOURCES)
+def test_one_group_holds_every_place(source: str, task: ForecastTask) -> None:
+    lags = MAX_LAG[source]
+    n_places = len(task.locations) + 1
+    sizes = {}
+    for layout in LAYOUTS:
+        seen: list = []
+        model = dataclasses.replace(
+            get_model(f"fm_chronos_{source}_{layout}"),
+            sample=_recording(seen),
+        )
+        model.forecast(task)
+        groups, horizon = seen[0]
+        assert len(groups) == 1
+        group = groups[0]
+        future = group.get("future_covariates", {})
+        sizes[layout] = (group["target"].shape[0], len(future))
+        for values in future.values():
+            assert len(values) == horizon
+    assert sizes["complete"] == (n_places, 0)
+    assert sizes["cov"] == (n_places, n_places * lags)
+    assert sizes["ragged"] == (n_places * (1 + lags), n_places * lags)
+
+
+@pytest.mark.parametrize("source", SOURCES)
+def test_covariates_hold_only_cells_already_reported(
+    source: str, task: ForecastTask
+) -> None:
     seen: list = []
     model = dataclasses.replace(
-        get_model("fm_delay_cov"), sample=_recording(seen)
+        get_model(f"fm_chronos_{source}_cov"), sample=_recording(seen)
     )
     model.forecast(task)
-    inputs, horizon, _ = seen[0]
-    first = inputs[0]
-    past = np.stack(list(first["past_covariates"].values()))
-    future = np.stack(list(first["future_covariates"].values()))
-    assert past.shape == (N_DELAYS, first["target"].shape[-1])
-    assert future.shape == (N_DELAYS, horizon)
-    # The context is complete; the future holds the reported cells of
-    # each delay class, fewer for longer delays, then nothing.
-    assert not np.isnan(past).any()
-    known = (~np.isnan(future)).sum(axis=1)
-    assert (np.diff(known) <= 0).all()
-    assert known[0] == N_DELAYS - 1
-    assert known[-1] == 0
-    assert np.isnan(future[:, N_DELAYS - 1 :]).all()
+    groups, horizon = seen[0]
+    lags = MAX_LAG[source]
+    # Lag d of a time t after the context is known only if t + d is no
+    # later than the vintage's cutoff, the last `lags` steps of context.
+    for name, values in groups[0]["future_covariates"].items():
+        d = int(name.rsplit("_", 1)[1])
+        assert np.isnan(values[lags - d :]).all()
+    assert any(
+        not np.isnan(v).all() for v in groups[0]["future_covariates"].values()
+    )
+    assert horizon > lags
 
 
-def test_complete_forecasts_from_the_last_complete_week(
-    task: ForecastTask,
-) -> None:
-    complete: list = []
-    cov: list = []
-    dataclasses.replace(
-        get_model("fm_complete"), sample=_recording(complete)
-    ).forecast(task)
-    dataclasses.replace(
-        get_model("fm_delay_cov"), sample=_recording(cov)
-    ).forecast(task)
-    (a, h_a, _), (b, h_b, _) = complete[0], cov[0]
-    assert h_a == h_b
-    assert len(a) == len(b) == len(task.locations)
-    assert "past_covariates" not in a[0]
-    assert np.array_equal(a[0]["target"], b[0]["target"])
-
-
-@pytest.mark.parametrize("name", ["fm_delay_series", "fm_delay_cov"])
-def test_no_delay_data_is_unavailable(name: str, task: ForecastTask) -> None:
-    bare = dataclasses.replace(task, delays=None)
-    model = dataclasses.replace(get_model(name), sample=_constant(0.0))
-    with pytest.raises(ModelUnavailableError, match="delay line data"):
+def test_no_daily_releases_is_unavailable(task: ForecastTask) -> None:
+    bare = dataclasses.replace(task, daily_history=None)
+    model = dataclasses.replace(
+        get_model("fm_chronos_daily_complete"), sample=_constant(0.0)
+    )
+    with pytest.raises(ModelUnavailableError):
         model.forecast(bare)
-
-
-@pytest.mark.skipif(
-    importlib.util.find_spec("chronos") is not None,
-    reason="Chronos-2 is installed",
-)
-def test_chronos_missing_is_unavailable() -> None:
-    with pytest.raises(ModelUnavailableError, match="extra chronos"):
-        chronos_sampler([{"target": np.zeros((1, 5))}], 3, 10, 0)
 
 
 class _FakePipeline:
@@ -272,100 +270,24 @@ class _FakePipeline:
 @pytest.mark.skipif(
     importlib.util.find_spec("torch") is None, reason="needs torch"
 )
-def test_trajectories_keep_their_level_across_weeks(
+def test_draws_are_independent_across_series_and_weeks(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(
-        foundation, "_chronos", lambda _checkpoint: _FakePipeline()
-    )
+    monkeypatch.setattr(foundation, "_chronos", lambda: _FakePipeline())
     groups = [{"target": np.zeros((2, 5))}, {"target": np.zeros((1, 5))}]
-    draws = chronos_sampler(groups, 4, 50, 1)
-    assert [d.shape for d in draws] == [(50, 2, 4), (50, 1, 4)]
-    # Each week is the week index plus one level per trajectory.
+    draws = chronos_sampler(groups, 4, 200, 1)
+    assert [d.shape for d in draws] == [(200, 2, 4), (200, 1, 4)]
+    # Each draw is the week index plus a level between 0.1 and 0.9.
     level = draws[0] - np.arange(4)
-    assert np.allclose(level, level[:, :, :1])
     assert ((level > 0.1 - 1e-6) & (level < 0.9 + 1e-6)).all()
-    assert not np.allclose(level[:, 0], level[:, 1])
+    assert abs(np.corrcoef(level[:, 0, 0], level[:, 0, 1])[0, 1]) < 0.2
+    assert abs(np.corrcoef(level[:, 0, 0], level[:, 1, 0])[0, 1]) < 0.2
 
 
-def test_fine_tuned_model_samples_from_its_checkpoint(
-    task: ForecastTask,
-) -> None:
-    for name, want in (("fm_delay_cov", None), ("fm_delay_cov_ft", "ckpt")):
-        seen: list = []
-        model = dataclasses.replace(get_model(name), sample=_recording(seen))
-        model.forecast(task)
-        assert seen[0][2] == want
-
-
-def _view(reported: np.ndarray, first: str, last: int) -> View:
-    weeks = pd.date_range(first, periods=reported.shape[1], freq="7D")
-    counts = np.repeat(reported[:, :, None], N_DELAYS, axis=2)
-    return View(list(weeks.strftime("%Y-%m-%d")), reported, counts, last)
-
-
-def test_cov_examples_split_at_the_vintage() -> None:
-    n_weeks = 60
-    as_of = _view(np.full((2, n_weeks), 1.0), "2026-01-03", 30)
-    as_of.reported[1] = 0.0
-    final = _view(np.full((2, n_weeks + 1), 5.0), "2025-12-27", 50)
-    final.reported[1] = 0.0
-    out = cov_examples(as_of, final)
-    # The second province has no cases in the window.
-    assert len(out) == 1
-    target = out[0]["target"]
-    start = as_of.n_context
-    assert target.shape == (FT_CONTEXT + FT_HORIZON,)
-    # Reported to c, final after it.
-    assert (target[:FT_CONTEXT][-start:] == 1.0).all()
-    assert np.isnan(target[: FT_CONTEXT - start]).all()
-    assert (target[FT_CONTEXT:] == 5.0).all()
-    past = np.stack(list(out[0]["past_covariates"].values()))
-    assert past.shape == (N_DELAYS, FT_CONTEXT + FT_HORIZON)
-    # Class k is reported for k fewer weeks after c, as the vintage shows.
-    known = (~np.isnan(past[:, FT_CONTEXT:])).sum(axis=1)
-    assert known.tolist() == list(range(N_DELAYS - 1, -1, -1))
-    assert set(out[0]["future_covariates"].values()) == {None}
-
-
-def test_cov_examples_leave_final_weeks_not_complete_out() -> None:
-    as_of = _view(np.ones((1, 60)), "2026-01-03", 30)
-    final = _view(np.full((1, 60), 5.0), "2026-01-03", 30 + 3)
-    target = cov_examples(as_of, final)[0]["target"]
-    assert (target[FT_CONTEXT : FT_CONTEXT + 3] == 5.0).all()
-    assert np.isnan(target[FT_CONTEXT + 3 :]).all()
-
-
-def test_history_examples_ignore_later_releases(
-    task: ForecastTask, target: pd.DataFrame, delays: pd.DataFrame
-) -> None:
-    out = history_examples(task)
-    assert out
-    later_target = target.loc[target["vintage"] == "2026-11-01"]
-    later_delays = delays.loc[delays["vintage"] == "2026-11-01"]
-    assert task.target_history is not None
-    assert task.delay_history is not None
-    leaked = dataclasses.replace(
-        task,
-        target_history=pd.concat([task.target_history, later_target]),
-        delay_history=pd.concat([task.delay_history, later_delays]),
-    )
-    again = history_examples(leaked)
-    assert len(again) == len(out)
-    for a, b in zip(out, again, strict=True):
-        assert np.array_equal(a["target"], b["target"], equal_nan=True)
-
-
-def test_fine_tuned_checkpoint_is_reused(
-    task: ForecastTask, tmp_path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.undo()
-    monkeypatch.setenv(CACHE_ENV, str(tmp_path))
-    saved = tmp_path / "fm_delay_cov_ft" / task.vintage / "finetuned-ckpt"
-    saved.mkdir(parents=True)
-
-    def no_model(_checkpoint):
-        raise AssertionError("fine-tuned again")
-
-    monkeypatch.setattr(foundation, "_chronos", no_model)
-    assert fine_tuned_checkpoint(task, "fm_delay_cov_ft") == str(saved)
+@pytest.mark.skipif(
+    importlib.util.find_spec("chronos") is not None,
+    reason="Chronos-2 is installed",
+)
+def test_chronos_missing_is_unavailable() -> None:
+    with pytest.raises(ModelUnavailableError, match="extra chronos"):
+        chronos_sampler([{"target": np.zeros((1, 5))}], 3, 10, 0)
