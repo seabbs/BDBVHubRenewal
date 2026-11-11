@@ -10,3 +10,5 @@ Scoring: `scripts/score.sh` on archie's CPU: `fit-store load` of that store, the
 Lag arms (`scripts/arms.py`, `scripts/score-arm.sh`): the ragged models with lag cells carried forward (`carry`), one reported-so-far covariate per place (`reported`), or weekly D = 6 (`d6`). Summaries in `results/arms/`.
 
 Stores (`stores/`): the scratch fit stores the tables score, `base` for the four models and `arm-*` for the arms' ragged models. Load one with `bdbvhubrenewal fit-store load --store stores/<name> --models ...`.
+
+Data-driven D (`scripts/dmax.py`, `scripts/arm_dmax.py`): D per origin is the age by which 99% of the country's hub target is reported under randomwalknowcast's chain ladder delay (35 to 43 days); weekly D is that in weeks, rounded up. Scores in `results/arms/fm-summary-dmax.csv`, fans in `results/arms/fan-dmax-*.png`, fits in `stores/arm-dmax`.
