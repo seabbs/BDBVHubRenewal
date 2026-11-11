@@ -465,7 +465,7 @@ class FoundationModel:
 
     name: str
     layout: str
-    sample: Sampler = chronos_sampler
+    sample: Sampler = field(default=chronos_sampler, repr=False)
     delay_summary: pd.DataFrame | None = field(
         init=False, default=None, repr=False
     )

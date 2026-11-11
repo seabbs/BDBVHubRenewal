@@ -79,6 +79,9 @@ def test_registered_as_fitted_models() -> None:
         model = get_model(name)
         assert isinstance(model, FoundationModel)
         assert model.layout in LAYOUTS
+        # The fit store keys a fit on the repr, so it must not hold an
+        # address.
+        assert "0x" not in repr(model)
 
 
 def test_triangle_classes_and_complete_week() -> None:
