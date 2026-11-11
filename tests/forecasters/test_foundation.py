@@ -15,25 +15,33 @@ from bdbvhubrenewal.forecasters import (
     FoundationModel,
     ModelUnavailableError,
     check_samples,
+    foundation,
     get_model,
     list_models,
 )
 from bdbvhubrenewal.forecasters.foundation import (
+    CACHE_ENV,
+    FT_CONTEXT,
+    FT_HORIZON,
     LAYOUTS,
     N_DELAYS,
+    View,
     chronos_sampler,
+    cov_examples,
     delay_triangle,
+    fine_tuned_checkpoint,
+    history_examples,
     quantile_draws,
     report_series,
 )
 
-MODELS = ("fm_complete", "fm_delay_series", "fm_delay_cov")
+MODELS = ("fm_complete", "fm_delay_series", "fm_delay_cov", "fm_delay_cov_ft")
 
 
 def _constant(value: float):
     """A sampler whose every draw is `value`."""
 
-    def sample(inputs, horizon, n, seed):
+    def sample(inputs, horizon, n, seed, _checkpoint):
         assert seed >= 0
         return [
             np.full((n, np.atleast_2d(x["target"]).shape[0], horizon), value)
@@ -44,11 +52,11 @@ def _constant(value: float):
 
 
 def _recording(store: list):
-    """A sampler that keeps its inputs and draws zeros."""
+    """A sampler that keeps its inputs and checkpoint and draws zeros."""
 
-    def sample(inputs, horizon, n, seed):
-        store.append((inputs, horizon))
-        return _constant(0.0)(inputs, horizon, n, seed)
+    def sample(inputs, horizon, n, seed, checkpoint):
+        store.append((inputs, horizon, checkpoint))
+        return _constant(0.0)(inputs, horizon, n, seed, checkpoint)
 
     return sample
 
@@ -58,7 +66,18 @@ def task(
     target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
 ) -> ForecastTask:
     rows = target.loc[target["vintage"] == "2026-10-24"]
-    return make_tasks(rows, delays, BacktestConfig(seed=3), daily=daily)[0]
+    real = target.loc[target["kind"] == "real"]
+    return make_tasks(
+        rows, delays, BacktestConfig(seed=3), history=real, daily=daily
+    )[0]
+
+
+@pytest.fixture(autouse=True)
+def _no_fine_tuning(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Stand in for the fine-tuned checkpoint of every task."""
+    monkeypatch.setattr(
+        foundation, "fine_tuned_checkpoint", lambda _task, _name: "ckpt"
+    )
 
 
 def _reported(task: ForecastTask, out: pd.DataFrame) -> np.ndarray:
@@ -181,7 +200,7 @@ def test_delay_cov_masks_cells_not_yet_reported(task: ForecastTask) -> None:
         get_model("fm_delay_cov"), sample=_recording(seen)
     )
     model.forecast(task)
-    inputs, horizon = seen[0]
+    inputs, horizon, _ = seen[0]
     first = inputs[0]
     past = np.stack(list(first["past_covariates"].values()))
     future = np.stack(list(first["future_covariates"].values()))
@@ -208,7 +227,7 @@ def test_complete_forecasts_from_the_last_complete_week(
     dataclasses.replace(
         get_model("fm_delay_cov"), sample=_recording(cov)
     ).forecast(task)
-    (a, h_a), (b, h_b) = complete[0], cov[0]
+    (a, h_a, _), (b, h_b, _) = complete[0], cov[0]
     assert h_a == h_b
     assert len(a) == len(b) == len(task.locations)
     assert "past_covariates" not in a[0]
@@ -256,9 +275,9 @@ class _FakePipeline:
 def test_trajectories_keep_their_level_across_weeks(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from bdbvhubrenewal.forecasters import foundation
-
-    monkeypatch.setattr(foundation, "_chronos", lambda: _FakePipeline())
+    monkeypatch.setattr(
+        foundation, "_chronos", lambda _checkpoint: _FakePipeline()
+    )
     groups = [{"target": np.zeros((2, 5))}, {"target": np.zeros((1, 5))}]
     draws = chronos_sampler(groups, 4, 50, 1)
     assert [d.shape for d in draws] == [(50, 2, 4), (50, 1, 4)]
@@ -267,3 +286,86 @@ def test_trajectories_keep_their_level_across_weeks(
     assert np.allclose(level, level[:, :, :1])
     assert ((level > 0.1 - 1e-6) & (level < 0.9 + 1e-6)).all()
     assert not np.allclose(level[:, 0], level[:, 1])
+
+
+def test_fine_tuned_model_samples_from_its_checkpoint(
+    task: ForecastTask,
+) -> None:
+    for name, want in (("fm_delay_cov", None), ("fm_delay_cov_ft", "ckpt")):
+        seen: list = []
+        model = dataclasses.replace(get_model(name), sample=_recording(seen))
+        model.forecast(task)
+        assert seen[0][2] == want
+
+
+def _view(reported: np.ndarray, first: str, last: int) -> View:
+    weeks = pd.date_range(first, periods=reported.shape[1], freq="7D")
+    counts = np.repeat(reported[:, :, None], N_DELAYS, axis=2)
+    return View(list(weeks.strftime("%Y-%m-%d")), reported, counts, last)
+
+
+def test_cov_examples_split_at_the_vintage() -> None:
+    n_weeks = 60
+    as_of = _view(np.full((2, n_weeks), 1.0), "2026-01-03", 30)
+    as_of.reported[1] = 0.0
+    final = _view(np.full((2, n_weeks + 1), 5.0), "2025-12-27", 50)
+    final.reported[1] = 0.0
+    out = cov_examples(as_of, final)
+    # The second province has no cases in the window.
+    assert len(out) == 1
+    target = out[0]["target"]
+    start = as_of.n_context
+    assert target.shape == (FT_CONTEXT + FT_HORIZON,)
+    # Reported to c, final after it.
+    assert (target[:FT_CONTEXT][-start:] == 1.0).all()
+    assert np.isnan(target[: FT_CONTEXT - start]).all()
+    assert (target[FT_CONTEXT:] == 5.0).all()
+    past = np.stack(list(out[0]["past_covariates"].values()))
+    assert past.shape == (N_DELAYS, FT_CONTEXT + FT_HORIZON)
+    # Class k is reported for k fewer weeks after c, as the vintage shows.
+    known = (~np.isnan(past[:, FT_CONTEXT:])).sum(axis=1)
+    assert known.tolist() == list(range(N_DELAYS - 1, -1, -1))
+    assert set(out[0]["future_covariates"].values()) == {None}
+
+
+def test_cov_examples_leave_final_weeks_not_complete_out() -> None:
+    as_of = _view(np.ones((1, 60)), "2026-01-03", 30)
+    final = _view(np.full((1, 60), 5.0), "2026-01-03", 30 + 3)
+    target = cov_examples(as_of, final)[0]["target"]
+    assert (target[FT_CONTEXT : FT_CONTEXT + 3] == 5.0).all()
+    assert np.isnan(target[FT_CONTEXT + 3 :]).all()
+
+
+def test_history_examples_ignore_later_releases(
+    task: ForecastTask, target: pd.DataFrame, delays: pd.DataFrame
+) -> None:
+    out = history_examples(task)
+    assert out
+    later_target = target.loc[target["vintage"] == "2026-11-01"]
+    later_delays = delays.loc[delays["vintage"] == "2026-11-01"]
+    assert task.target_history is not None
+    assert task.delay_history is not None
+    leaked = dataclasses.replace(
+        task,
+        target_history=pd.concat([task.target_history, later_target]),
+        delay_history=pd.concat([task.delay_history, later_delays]),
+    )
+    again = history_examples(leaked)
+    assert len(again) == len(out)
+    for a, b in zip(out, again, strict=True):
+        assert np.array_equal(a["target"], b["target"], equal_nan=True)
+
+
+def test_fine_tuned_checkpoint_is_reused(
+    task: ForecastTask, tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.undo()
+    monkeypatch.setenv(CACHE_ENV, str(tmp_path))
+    saved = tmp_path / "fm_delay_cov_ft" / task.vintage / "finetuned-ckpt"
+    saved.mkdir(parents=True)
+
+    def no_model(_checkpoint):
+        raise AssertionError("fine-tuned again")
+
+    monkeypatch.setattr(foundation, "_chronos", no_model)
+    assert fine_tuned_checkpoint(task, "fm_delay_cov_ft") == str(saved)
