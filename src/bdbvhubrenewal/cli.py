@@ -1501,8 +1501,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     if argv[:1] == ["validate"]:
         return validate_main(argv[1:])
-    # Code that loads a table with no directory given (the renewal
-    # models' populations, `load_locations()`) reads the same data.
+    # For loaders called with no directory, as inside a renewal fit.
     tidy._DEFAULT_DATA_DIR = _data_root()
     parser = build_parser()
     args = parser.parse_args(argv)

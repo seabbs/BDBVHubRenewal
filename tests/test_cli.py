@@ -574,11 +574,7 @@ def test_fit_store_unpack_says_when_the_store_has_no_fit(
 
 
 def _outside_repo(tmp_path: Path) -> tuple[Path, dict[str, str]]:
-    """A working directory with the config but no `data/`.
-
-    The conftest points this process's loaders at the fixture, so the CLI
-    runs in a new process, as on CI, where `data/` is not committed.
-    """
+    """Return a working directory with the config and no `data/`."""
     import shutil
 
     shutil.copytree(ROOT / "config", tmp_path / "config")
@@ -589,8 +585,7 @@ def _outside_repo(tmp_path: Path) -> tuple[Path, dict[str, str]]:
 def test_loaders_follow_bdbv_data_dir_after_the_cli_starts(
     tmp_path: Path,
 ) -> None:
-    # The renewal models load the populations with `load_locations()`,
-    # no directory given, inside a fit.
+    # A new process: the conftest sets this one's loader default itself.
     cwd, env = _outside_repo(tmp_path)
     code = (
         "from bdbvhubrenewal.cli import main\n"
@@ -612,7 +607,6 @@ def test_loaders_follow_bdbv_data_dir_after_the_cli_starts(
 
 @pytest.mark.slow
 def test_the_smoke_fit_runs_with_no_data_dir(tmp_path: Path) -> None:
-    # The Tests workflow's "Fit and forecast as the submission CI does".
     cwd, env = _outside_repo(tmp_path)
     sampler = '{"num_chains": 1, "num_warmup": 5, "num_samples": 5}'
     out = subprocess.run(
@@ -629,3 +623,21 @@ def test_the_smoke_fit_runs_with_no_data_dir(tmp_path: Path) -> None:
     )  # fmt: skip
     assert out.returncode == 0, out.stderr[-2000:]
     assert (tmp_path / "fit").is_dir()
+
+
+@pytest.mark.parametrize(
+    ("argv", "attr", "path"),
+    [
+        (["backtest"], "data", ""),
+        (["compare-hub"], "data", ""),
+        (["compare-hub"], "hub_dir", "/hub-submissions"),
+    ],
+)
+def test_data_defaults_follow_bdbv_data_dir(
+    monkeypatch: pytest.MonkeyPatch, argv: list[str], attr: str, path: str
+) -> None:
+    from bdbvhubrenewal.cli import build_parser
+
+    monkeypatch.setenv("BDBV_DATA_DIR", "elsewhere")
+    args = build_parser().parse_args(argv)
+    assert getattr(args, attr) == f"elsewhere{path}"
