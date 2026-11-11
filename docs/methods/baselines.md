@@ -380,7 +380,7 @@ On the reported target, the backtest maps its final counts to what a later relea
 
 **Sampler.**
 NUTS runs 2 chains of 500 warm-up and 750 draws, in sequence, from the prior medians, at target acceptance 0.9.
-Each walk step is sampled as $\delta^*_{p,w} \sim \mathcal{N}(0, \sigma_p)$ and set to $\delta_{p,w} = \sqrt{\sigma_p}\, \delta^*_{p,w}$, numpyro's location-scale reparameterisation with centring $\tfrac{1}{2}$.
+Each walk step is sampled as $\delta^*_{p,w}$, normal with mean 0 and scale $\sigma_p^{1/2}$, and set to $\delta_{p,w} = \sqrt{\sigma_p}\, \delta^*_{p,w}$, numpyro's location-scale reparameterisation with centring $\tfrac{1}{2}$.
 A large place's counts pin its walk, which suits centred steps, and a place with few cases leaves it to the prior, which suits non-centred ones.
 The pooled parameters are non-centred, except the first level, whose tiers are centred, and $\log s$, whose tiers are half centred.
 Sampling each tier about its parent's value, not as the country's value plus an offset, cut the median leapfrog steps from 255 to 511 down to 63.
