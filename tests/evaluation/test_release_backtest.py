@@ -18,6 +18,7 @@ from bdbvhubrenewal.evaluation.nowcast import (
     draw_reported,
     relative_wis,
     release_backtest,
+    rolling_truth,
     summarise,
     week_shares,
     weeks_back_from_cutoff,
@@ -416,3 +417,44 @@ def test_release_forecasts_made_apart_by_model_score_as_one_run(
             check_dtype=False,
             obj=field,
         )
+
+
+def test_rolling_truth_is_the_first_release_d_days_after_each_week() -> None:
+    target = pd.DataFrame(
+        {
+            "kind": "real",
+            "vintage": ["2026-10-03", "2026-10-10", "2026-10-17", "2026-10-10"],
+            "cutoff": ["2026-10-02", "2026-10-09", "2026-10-16", "2026-10-09"],
+            "location": "CD",
+            "target_end_date": ["2026-09-26"] * 3 + ["2026-10-03"],
+            "total": [5, 8, 9, 2],
+        }
+    )
+    truth = rolling_truth(target, 10).set_index("target_end_date")
+    # 2026-09-26 + 10 days is 2026-10-06: the 2026-10-10 release, cut off
+    # 2026-10-09, is the first on or after it.
+    assert truth.loc["2026-09-26", "truth"] == 8
+    assert truth.loc["2026-09-26", "truth_vintage"] == "2026-10-10"
+    # No release is 10 days after 2026-10-03, so it has no truth.
+    assert "2026-10-03" not in truth.index
+
+
+def test_complete_target_can_take_the_rolling_truth(
+    target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
+) -> None:
+    real = target.loc[target["kind"] == "real"]
+    tasks = make_tasks(
+        real,
+        delays.assign(kind="real"),
+        BacktestConfig(n_samples=20, seed=2),
+        daily=daily,
+    )
+    out = release_backtest(
+        tasks, daily, target, models=("randomwalk",), truth_delay=14
+    ).scores
+    done = out.loc[out["target"] == "complete"]
+    truth = rolling_truth(real, 14)
+    merged = done.merge(truth, on=["location", "target_end_date"])
+    assert len(merged) == len(done) > 0
+    assert (merged["truth_x"] == merged["truth_y"]).all()
+    assert (merged["truth_vintage_x"] == merged["truth_vintage_y"]).all()
