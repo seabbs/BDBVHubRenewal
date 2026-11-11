@@ -24,7 +24,7 @@ branch=${FIT_STORE_BRANCH:-fit-store}
 scratch_prefix=fit-store-scratch
 
 fetch_tip() {
-  git fetch -q --depth 1 origin "$branch" 2> /dev/null
+  git fetch -q --depth 1 origin "$branch"
 }
 
 case "$action" in
@@ -45,8 +45,7 @@ case "$action" in
   fetch)
     dir=$2
     mkdir -p "$dir"
-    # Only a missing branch (exit 2) leaves the store empty. Any other
-    # failure fails, so a fetch error is not read as "no fit stored".
+    # Exit 2 means the branch does not exist: an empty store, not an error.
     rc=0
     git ls-remote -q --exit-code --heads origin "$branch" > /dev/null || rc=$?
     if [ "$rc" = 2 ]; then

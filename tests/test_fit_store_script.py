@@ -128,3 +128,5 @@ def test_fetch_fails_when_the_remote_cannot_be_read(tmp_path: Path) -> None:
     )  # fmt: skip
     out = _run("fetch", str(tmp_path / "got"), cwd=tmp_path / "repo")
     assert out.returncode != 0
+    assert "could not read" in out.stderr
+    assert not any((tmp_path / "got").iterdir())

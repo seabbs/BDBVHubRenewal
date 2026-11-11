@@ -138,9 +138,7 @@ def test_fit_code_has_the_store_and_no_other_model() -> None:
 
 
 def test_renewal_key_has_every_model_module() -> None:
-    # renewal.py imports the `model` package (`from bdbvhubrenewal import
-    # model`), and the digest does not follow a package's `__init__`
-    # imports. Every module the fit runs must still be in the key.
+    # `fit_code` does not follow a package's `__init__` imports.
     renewal = set(store.fit_code("renewal", ROOT))
     model = {
         p.relative_to(ROOT).as_posix()

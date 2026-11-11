@@ -59,8 +59,7 @@ jobs:
         with:
           name: inputs
           path: ${{ env.WORK }}
-      # Random walk candidates fit nothing, so a failed fetch rules out
-      # only the fitted candidates.
+      # Random walk candidates read no fit, so they need no store.
       - name: Fetch the fit store
         if: matrix.kind != 'randomwalk'
         env:
