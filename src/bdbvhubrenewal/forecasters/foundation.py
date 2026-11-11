@@ -63,6 +63,17 @@ So no sample is below the count already reported.
 National is the sum of provinces by sample, and health zones are split
 from the provinces by `forecasters.zones`.
 
+**Fine-tuning.** `fm_delay_cov_ft` is `delay_cov` with Chronos-2
+fine-tuned for each vintage by LoRA (`fine_tuned_checkpoint`).
+An example is one province forecast from one release: `FT_CONTEXT` weeks
+to $c$, then `FT_HORIZON` weeks whose target is the final count and whose
+delay covariates are as the release shows them (`cov_examples`).
+The examples come from `FT_OUTBREAKS` simulated outbreaks
+(`data.simulate`), each published weekly with its last day as final
+(`synthetic_examples`), and from every earlier real release, with the
+vintage as final (`history_examples`).
+No release after the vintage is used.
+
 **Reported counts.** The release backtest maps a model's final counts to
 what later releases show through the model's delay.
 These models take the daily chain ladder delay fitted at the vintage
@@ -76,9 +87,11 @@ skips them.
 from __future__ import annotations
 
 import datetime as dt
+import os
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from functools import cache, partial
+from pathlib import Path
 from typing import Any, ClassVar, Final
 
 import numpy as np
@@ -96,17 +109,27 @@ from bdbvhubrenewal.forecasters.chain import delay_summary
 from bdbvhubrenewal.forecasters.randomwalk import RandomWalk
 
 __all__ = [
+    "CACHE_ENV",
     "CHRONOS_MODEL",
     "CHRONOS_REVISION",
+    "FT_CONTEXT",
+    "FT_HORIZON",
     "LAYOUTS",
     "N_DELAYS",
     "DelayTriangle",
     "FoundationModel",
     "Sampler",
+    "View",
     "chronos_sampler",
+    "cov_examples",
+    "cov_groups",
     "delay_triangle",
+    "fine_tuned_checkpoint",
+    "history_examples",
     "quantile_draws",
     "report_series",
+    "synthetic_examples",
+    "vintage_view",
 ]
 
 N_DELAYS: Final = DEFAULT_MAX_DELAY // 7 + 1
@@ -126,9 +149,35 @@ Series = Mapping[str, Any]
 optionally `past_covariates` (name to `[S]`) and `future_covariates`
 (name to `[H]`, NaN where unknown)."""
 
-Sampler = Callable[[Sequence[Series], int, int, int], list[np.ndarray]]
-"""Draws trajectories: `(groups, horizon, n, seed)` to one
-`[n, V, horizon]` array per group."""
+Sampler = Callable[
+    [Sequence[Series], int, int, int, str | None], list[np.ndarray]
+]
+"""Draws trajectories: `(groups, horizon, n, seed, checkpoint)` to one
+`[n, V, horizon]` array per group, from a fine-tuned checkpoint
+directory, or the pretrained model when it is None."""
+
+FT_CONTEXT: Final = 40
+"""Weeks of context in a fine-tuning example."""
+
+FT_HORIZON: Final = 14
+"""Weeks after $c$ in a fine-tuning example: the nowcast weeks and the
+forecast weeks."""
+
+FT_OUTBREAKS: Final = 40
+"""Simulated outbreaks in the fine-tuning data."""
+
+FT_STEPS: Final = 1000
+"""Fine-tuning steps."""
+
+FT_LEARNING_RATE: Final = 1e-5
+"""Learning rate of the LoRA fine-tuning."""
+
+FT_BATCH: Final = 320
+"""Series per fine-tuning batch: 32 provinces of a target and $K$
+covariates."""
+
+CACHE_ENV: Final = "BDBV_CHRONOS_CACHE"
+"""Directory of the fine-tuned checkpoints, `output/chronos` if unset."""
 
 _WEEK = dt.timedelta(days=7)
 
@@ -258,18 +307,24 @@ def quantile_draws(
 
 
 @cache
-def _chronos() -> Any:
+def _chronos(checkpoint: str | None = None) -> Any:
     import torch
     from chronos import Chronos2Pipeline
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
+    if checkpoint is not None:
+        return Chronos2Pipeline.from_pretrained(checkpoint, device_map=device)
     return Chronos2Pipeline.from_pretrained(
         CHRONOS_MODEL, revision=CHRONOS_REVISION, device_map=device
     )
 
 
 def chronos_sampler(
-    groups: Sequence[Series], horizon: int, n_samples: int, seed: int
+    groups: Sequence[Series],
+    horizon: int,
+    n_samples: int,
+    seed: int,
+    checkpoint: str | None = None,
 ) -> list[np.ndarray]:
     """Draw trajectories from Chronos-2's quantiles, a level per series.
 
@@ -285,6 +340,9 @@ def chronos_sampler(
         Trajectories.
     seed : int
         Seed for the uniform draws.
+    checkpoint : str or None
+        A fine-tuned checkpoint directory, or None for the pretrained
+        model.
 
     Returns
     -------
@@ -297,7 +355,7 @@ def chronos_sampler(
         If Chronos-2 is not installed.
     """
     try:
-        pipeline = _chronos()
+        pipeline = _chronos(checkpoint)
     except ImportError as err:
         raise ModelUnavailableError(
             "The Chronos-2 models need the extra chronos: "
@@ -448,6 +506,216 @@ def cov_groups(view: View) -> list[Series]:
     ]
 
 
+def cov_examples(as_of: View, final: View) -> list[dict[str, Any]]:
+    """Return `delay_cov` fine-tuning examples from one vintage.
+
+    Each province gives one example of `FT_CONTEXT` + `FT_HORIZON` weeks,
+    split at the vintage's $c$: the reported totals before it, the final
+    totals after it as the target to learn, and each delay class as a
+    covariate as the vintage shows it. Weeks outside the data are NaN, and
+    so are final totals of weeks not complete in `final`. A province with
+    no cases in the window gives none.
+
+    Parameters
+    ----------
+    as_of : View
+        The vintage forecast from, with delay line data.
+    final : View
+        A later vintage whose complete weeks are the target. Its weeks
+        start no later than those of `as_of`.
+
+    Returns
+    -------
+    list of dict
+        Inputs to `Chronos2Pipeline.fit`, the delay classes marked as
+        known into the future.
+    """
+    start = as_of.n_context
+    offset = (as_date(as_of.weeks[0]) - as_date(final.weeks[0])).days // 7
+    idx = np.arange(start - FT_CONTEXT, start + FT_HORIZON)
+    past = (idx >= 0) & (idx < start)
+    later = idx + offset
+    ahead = (idx >= start) & (later < final.n_context)
+    grid = (idx >= 0) & (idx < len(as_of.weeks))
+    if start < 2 or not ahead.any():
+        return []
+    cells = as_of.cells()
+    out = []
+    for p in range(len(as_of.reported)):
+        target = np.full(idx.size, np.nan)
+        target[past] = as_of.reported[p, idx[past]]
+        target[ahead] = final.reported[p, later[ahead]]
+        if not np.nansum(target) > 0:
+            continue
+        covariates = np.full((N_DELAYS, idx.size), np.nan)
+        covariates[:, grid] = cells[p, idx[grid]].T
+        out.append(
+            {
+                "target": target,
+                "past_covariates": {
+                    f"delay_{k}": covariates[k] for k in range(N_DELAYS)
+                },
+                "future_covariates": dict.fromkeys(
+                    (f"delay_{k}" for k in range(N_DELAYS)), None
+                ),
+            }
+        )
+    return out
+
+
+def _simulated_view(outbreak: Any, day: dt.date, last_week: str) -> View:
+    """Lay out what a simulated outbreak publishes at a date."""
+    target, delays = outbreak.vintage(day)
+    return vintage_view(
+        target, delays, day.isoformat(), outbreak.settings.locations, last_week
+    )
+
+
+def synthetic_examples(n_outbreaks: int, seed: int) -> list[dict[str, Any]]:
+    """Return `delay_cov` fine-tuning examples from simulated outbreaks.
+
+    Each outbreak (`data.simulate`) draws its national R before and after
+    the turn, the day of the turn, its delay means and its ascertainment.
+    It is published weekly from day 70 for as long as the final vintage,
+    on its last day, has `FT_HORIZON` weeks after the vintage's $c$.
+
+    Parameters
+    ----------
+    n_outbreaks : int
+        Outbreaks to simulate.
+    seed : int
+        Seed for the settings.
+
+    Returns
+    -------
+    list of dict
+        `cov_examples` of every outbreak and vintage.
+    """
+    from bdbvhubrenewal.data.simulate import (
+        SimulationSettings,
+        simulate_outbreak,
+    )
+
+    rng = np.random.default_rng(seed)
+    out = []
+    for i in range(n_outbreaks):
+        settings = SimulationSettings(
+            name=f"fine_tune_{i}",
+            seed=int(rng.integers(2**31 - 1)),
+            r_start=float(rng.uniform(1.3, 2.0)),
+            r_end=float(rng.uniform(0.6, 1.0)),
+            turn_day=int(rng.integers(60, 180)),
+            delay_mean=(float(rng.uniform(8, 16)), float(rng.uniform(3, 10))),
+            ascertainment=(
+                float(rng.uniform(0.4, 0.8)),
+                float(rng.uniform(0.5, 0.9)),
+            ),
+        )
+        outbreak = simulate_outbreak(settings)
+        end = settings.start + dt.timedelta(days=settings.n_days - 1)
+        last_week = epiweek_end(end).isoformat()
+
+        final = _simulated_view(outbreak, end, last_week)
+        days = range(70, settings.n_days - 7 * (FT_HORIZON + 1), 7)
+        for day in days:
+            vintage = settings.start + dt.timedelta(days=day)
+            out += cov_examples(
+                _simulated_view(outbreak, vintage, last_week), final
+            )
+    return out
+
+
+def history_examples(task: ForecastTask) -> list[dict[str, Any]]:
+    """Return `delay_cov` fine-tuning examples from the task's own releases.
+
+    Each earlier release with delay line data is forecast from, with the
+    task's vintage as the final counts. The task holds no release after
+    its vintage, so neither do the examples.
+
+    Parameters
+    ----------
+    task : ForecastTask
+        The task, with `target_history` and `delay_history`.
+
+    Returns
+    -------
+    list of dict
+        `cov_examples` of every earlier release.
+    """
+    history, delays = task.target_history, task.delay_history
+    if history is None or delays is None or task.delays is None:
+        return []
+    last_week = max(task.target_end_dates)
+    final = vintage_view(
+        task.target, task.delays, task.vintage, task.locations, last_week
+    )
+    out = []
+    for vintage in sorted(set(delays["vintage"]) & set(history["vintage"])):
+        if vintage >= task.vintage:
+            continue
+        as_of = vintage_view(
+            history.loc[history["vintage"] == vintage],
+            delays.loc[delays["vintage"] == vintage],
+            vintage,
+            task.locations,
+            last_week,
+        )
+        out += cov_examples(as_of, final)
+    return out
+
+
+def fine_tuned_checkpoint(task: ForecastTask, name: str) -> str:
+    """Return the checkpoint fine-tuned for the task's vintage.
+
+    Fine-tunes Chronos-2 with LoRA on `synthetic_examples` and
+    `history_examples` the first time, and saves the checkpoint under
+    `CACHE_ENV`, by model and vintage.
+
+    Parameters
+    ----------
+    task : ForecastTask
+        The task.
+    name : str
+        The model name.
+
+    Returns
+    -------
+    str
+        The checkpoint directory.
+
+    Raises
+    ------
+    ModelUnavailableError
+        If Chronos-2 is not installed.
+    """
+    root = Path(os.environ.get(CACHE_ENV, "output/chronos"))
+    out = root / name / task.vintage
+    checkpoint = out / "finetuned-ckpt"
+    if checkpoint.exists():
+        return str(checkpoint)
+    try:
+        pipeline = _chronos(None)
+    except ImportError as err:
+        raise ModelUnavailableError(
+            "The Chronos-2 models need the extra chronos: "
+            "uv sync --extra chronos."
+        ) from err
+    examples = synthetic_examples(FT_OUTBREAKS, 0) + history_examples(task)
+    pipeline.fit(
+        examples,
+        prediction_length=FT_HORIZON,
+        finetune_mode="lora",
+        context_length=FT_CONTEXT,
+        min_past=FT_CONTEXT,
+        learning_rate=FT_LEARNING_RATE,
+        num_steps=FT_STEPS,
+        batch_size=FT_BATCH,
+        output_dir=out,
+        remove_printer_callback=True,
+    )
+    return str(checkpoint)
+
+
 @dataclass
 class FoundationModel:
     """Chronos-2 on one layout of the data.
@@ -460,6 +728,9 @@ class FoundationModel:
         One of `LAYOUTS`.
     sample : Sampler
         Draws the trajectories, Chronos-2 by default.
+    fine_tune : bool
+        Draw from Chronos-2 fine-tuned for the task's vintage
+        (`fine_tuned_checkpoint`), not the pretrained model.
     delay_summary : pandas.DataFrame or None
         The chain ladder delay of the last forecast, which maps its final
         counts to what later releases show.
@@ -468,6 +739,7 @@ class FoundationModel:
     name: str
     layout: str
     sample: Sampler = field(default=chronos_sampler, repr=False)
+    fine_tune: bool = False
     delay_summary: pd.DataFrame | None = field(
         init=False, default=None, repr=False
     )
@@ -512,10 +784,13 @@ class FoundationModel:
             max(task.target_end_dates),
         )
         seed = int(task.rng(self.name).integers(0, 2**31 - 1))
+        checkpoint = (
+            fine_tuned_checkpoint(task, self.name) if self.fine_tune else None
+        )
         if self.layout == "delay_series":
-            values = self._series(view, task.n_samples, seed)
+            values = self._series(view, task.n_samples, seed, checkpoint)
         else:
-            values = self._totals(view, task, seed)
+            values = self._totals(view, task, seed, checkpoint)
         col = {w: i for i, w in enumerate(view.weeks)}
         targets = list(task.target_end_dates)
         picked = values[:, :, [col[w] for w in targets]]  # [S, P, T]
@@ -531,7 +806,13 @@ class FoundationModel:
             }
         )[list(SAMPLE_COLUMNS)]
 
-    def _totals(self, view: View, task: ForecastTask, seed: int) -> np.ndarray:
+    def _totals(
+        self,
+        view: View,
+        task: ForecastTask,
+        seed: int,
+        checkpoint: str | None,
+    ) -> np.ndarray:
         """Trajectories of the `complete` and `delay_cov` layouts."""
         start = view.n_context
         if start < 2:
@@ -545,7 +826,7 @@ class FoundationModel:
             if self.layout == "delay_cov"
             else [{"target": r[None, :start]} for r in view.reported]
         )
-        draws = self.sample(groups, horizon, task.n_samples, seed)
+        draws = self.sample(groups, horizon, task.n_samples, seed, checkpoint)
         drawn = _counts(np.stack([d[:, 0] for d in draws], axis=1))
         reported = view.reported
         values = np.broadcast_to(reported, (task.n_samples, *reported.shape))
@@ -553,14 +834,16 @@ class FoundationModel:
         values[:, :, start:] = np.maximum(drawn, reported[:, start:])
         return values
 
-    def _series(self, view: View, n_samples: int, seed: int) -> np.ndarray:
+    def _series(
+        self, view: View, n_samples: int, seed: int, checkpoint: str | None
+    ) -> np.ndarray:
         """Trajectories of the `delay_series` layout."""
         assert view.counts is not None
         tri = DelayTriangle(view.counts, view.last)
         n_weeks = len(view.weeks)
         horizon = n_weeks + N_DELAYS - 2 - tri.last
         groups: list[Series] = [{"target": s} for s in report_series(tri)]
-        draws = self.sample(groups, horizon, n_samples, seed)
+        draws = self.sample(groups, horizon, n_samples, seed, checkpoint)
         drawn = _counts(np.stack(draws, axis=1))  # [S, P, K, H]
         reported = view.reported
         values = np.broadcast_to(reported, (n_samples, *reported.shape))
@@ -572,22 +855,31 @@ class FoundationModel:
         return values
 
 
-for _name, _layout, _text in (
-    ("fm_complete", "complete", "the reported totals of complete weeks"),
+for _name, _layout, _tuned, _text in (
+    ("fm_complete", "complete", False, "the reported totals of complete weeks"),
     (
         "fm_delay_series",
         "delay_series",
+        False,
         "each delay class on the report clock",
     ),
     (
         "fm_delay_cov",
         "delay_cov",
+        False,
         "the totals, with each delay class as a masked covariate",
+    ),
+    (
+        "fm_delay_cov_ft",
+        "delay_cov",
+        True,
+        "the totals with masked delay covariates, fine-tuned on simulated "
+        "outbreaks and earlier releases",
     ),
 ):
     register_model(
         _name,
-        partial(FoundationModel, _name, _layout),
+        partial(FoundationModel, _name, _layout, fine_tune=_tuned),
         f"Chronos-2 on {_text}, nowcast and forecast from the same "
         "trajectories.",
         fitted=True,
