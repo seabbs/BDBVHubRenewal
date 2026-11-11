@@ -33,7 +33,7 @@ $X_{p,t}$ is the count of step $t$ at the vintage, with cut-off step $c$.
 ## Layouts
 
 The country and all 26 provinces are each a series in one block, each the hub target itself, so the country is not the sum of the provinces.
-Chronos-2's group attention reads the block together and forecasts every target series from the same last step of context, $t^*$.
+Chronos-2's group attention reads the block together and forecasts every target series from one shared last step of context, $t^*$, which each layout sets differently.
 Health zones are split from the provinces as for the other fitted models ([Health zones](baselines.md#health-zones)).
 This is the one place a forecast is split rather than forecast.
 
