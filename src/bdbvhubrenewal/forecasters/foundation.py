@@ -33,7 +33,11 @@ from bdbvhubrenewal.forecasters.base import (
     register_model,
 )
 from bdbvhubrenewal.forecasters.chain import delay_summary
-from bdbvhubrenewal.forecasters.randomwalk import RandomWalk
+from bdbvhubrenewal.forecasters.randomwalk import (
+    RandomWalk,
+    _quiet,
+    _start_weeks,
+)
 
 __all__ = [
     "CHRONOS_MODEL",
@@ -53,7 +57,7 @@ SOURCES: Final = ("weekly", "daily")
 """The hub target's releases by onset week (`target.csv`) or onset day
 (`daily.csv`)."""
 
-LAYOUTS: Final = ("complete", "ragged", "cov")
+LAYOUTS: Final = ("complete", "ragged")
 """The ways the releases are given to Chronos-2."""
 
 MAX_LAG: Final = {"weekly": 4, "daily": 28}
@@ -276,22 +280,35 @@ def chronos_sampler(
     return out
 
 
-def _group(tri: HubTriangle, layout: str, places: Sequence[str]) -> Series:
-    """Return the one group of every place's series, split at the context."""
-    start = tri.n_context
-    lags = tri.partial.shape[2]
+def _group(
+    tri: HubTriangle, layout: str, places: Sequence[str], start: int
+) -> Series:
+    """Return the one block of every place's series, split at `start`."""
     target = tri.final[:, :start]
     if layout == "complete":
         return {"target": target}
+    lags = tri.partial.shape[2]
     names = [f"{p}_lag_{d}" for p in places for d in range(lags)]
     cells = tri.partial.transpose(0, 2, 1).reshape(len(names), -1)
-    if layout == "ragged":
-        target = np.concatenate([target, cells[:, :start]])
     return {
         "target": target,
         "past_covariates": dict(zip(names, cells[:, :start], strict=True)),
         "future_covariates": dict(zip(names, cells[:, start:], strict=True)),
     }
+
+
+def _walk_start(origin: Any) -> str:
+    """Return the earliest week `randomwalk` starts a walk from."""
+    start = _start_weeks(origin)
+    walked = ~_quiet(origin)
+    first = start[walked].min() if walked.any() else start.min()
+    return str(origin.snap.week_ends[int(first)])
+
+
+def _rows(*tables: pd.DataFrame | None) -> pd.DataFrame | None:
+    """Stack the tables that are there, None if none is."""
+    there = [t for t in tables if t is not None and not t.empty]
+    return pd.concat(there, ignore_index=True) if there else None
 
 
 @dataclass
@@ -324,21 +341,22 @@ class FoundationModel:
     reads_zones: ClassVar[bool] = True
 
     def forecast(self, task: ForecastTask) -> pd.DataFrame:
-        """Return trajectories for the country and the task's provinces.
+        """Return trajectories of every hub target in the task.
 
         Parameters
         ----------
         task : ForecastTask
             The data and weeks to forecast. Its `target_history` and
-            `zone_history` hold the weekly releases, and its
-            `daily_history` and `zone_daily_history` the daily ones.
+            `zone_history` hold the weekly releases, its `daily_history`
+            and `zone_daily_history` the daily ones, and its `zone_codes`
+            the zones.
 
         Returns
         -------
         pandas.DataFrame
             Columns `location`, `target_end_date`, `sample`, `value`, for
-            the country and the provinces. The country is its own series,
-            and the zones of the provinces are series in the same group.
+            the country, the provinces and their zones, each its own
+            series.
 
         Raises
         ------
@@ -348,30 +366,25 @@ class FoundationModel:
             not installed.
         """
         weekly = self.source == "weekly"
-        rows = task.target_history if weekly else task.daily_history
-        zone_rows = task.zone_history if weekly else task.zone_daily_history
-        if rows is None or rows.empty:
+        base = task.target_history if weekly else task.daily_history
+        zone = task.zone_history if weekly else task.zone_daily_history
+        rows = _rows(base, zone)
+        if base is None or base.empty or rows is None:
             raise ModelUnavailableError(
                 f"{self.name} needs the {self.source} releases, and the task "
                 f"for {task.vintage} has none."
             )
         origin = RandomWalk().origin_at(task, errors=False)
         self.delay_summary = delay_summary(origin, self.name, task.vintage)
-        outputs = (NATIONAL, *task.locations)
-        zones: tuple[str, ...] = ()
-        if zone_rows is not None:
-            zones = tuple(
-                sorted(
-                    z
-                    for z in set(zone_rows["location"])
-                    if province_of(z) in task.locations
-                )
-            )
-            rows = pd.concat([rows, zone_rows], ignore_index=True)
-        places = (*outputs, *zones)
+        zones = tuple(
+            z for z in task.zone_codes if province_of(z) in task.locations
+        )
+        places = (NATIONAL, *task.locations, *zones)
         weeks = list(task.target_end_dates)
         tri = hub_triangle(rows, self.source, task.vintage, places, weeks[-1])
         start = tri.n_context
+        if self.layout == "complete":
+            start = tri.times.index(_walk_start(origin)) + 1
         if start < 2:
             raise ModelUnavailableError(
                 f"{self.name} needs two steps of context, and the task for "
@@ -379,32 +392,28 @@ class FoundationModel:
             )
         horizon = len(tri.times) - start
         seed = int(task.rng(self.name).integers(0, 2**31 - 1))
-        group = _group(tri, self.layout, places)
+        group = _group(tri, self.layout, places, start)
         draws = self.sample([group], horizon, task.n_samples, seed)[0]
-        final = tri.final[: len(outputs)]
+        final = tri.final
         steps = np.broadcast_to(final, (task.n_samples, *final.shape)).copy()
-        drawn = np.maximum(np.round(draws[:, : len(outputs)]), 0.0)
+        drawn = np.maximum(np.round(draws), 0.0)
         steps[:, :, start:] = np.maximum(drawn, final[:, start:])
+        # The hub's target is weekly, so the daily source is summed to weeks.
         week_of = np.array([_step("weekly", t).isoformat() for t in tri.times])
         values = np.stack(
             [steps[:, :, week_of == w].sum(axis=2) for w in weeks], axis=2
         )
-        reported = (
-            task.target.pivot_table(
-                index="location",
-                columns="target_end_date",
-                values="total",
-                aggfunc="sum",
-            )
-            .reindex(index=list(outputs), columns=weeks)
-            .fillna(0.0)
-            .to_numpy()
+        weekly_rows = _rows(task.target_history, task.zone_history)
+        assert weekly_rows is not None
+        reported = hub_triangle(
+            weekly_rows, "weekly", task.vintage, places, weeks[-1]
         )
-        values = np.maximum(values, reported)  # [S, L, W]
-        n, n_loc = task.n_samples, len(outputs)
+        at = [reported.times.index(w) for w in weeks]
+        values = np.maximum(values, reported.final[:, at])  # [S, L, W]
+        n, n_loc = task.n_samples, len(places)
         return pd.DataFrame(
             {
-                "location": np.repeat(list(outputs), n * len(weeks)),
+                "location": np.repeat(list(places), n * len(weeks)),
                 "target_end_date": np.tile(weeks, n * n_loc),
                 "sample": np.tile(
                     np.repeat(np.arange(1, n + 1), len(weeks)), n_loc
@@ -421,6 +430,6 @@ for _source in SOURCES:
             _name,
             partial(FoundationModel, _name, _source, _layout),
             f"Chronos-2 on the hub target's {_source} releases, {_layout} "
-            "layout, every place in one group.",
+            "layout, every target in one block.",
             fitted=True,
         )

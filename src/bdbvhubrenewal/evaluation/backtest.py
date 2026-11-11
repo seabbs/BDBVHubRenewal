@@ -265,6 +265,7 @@ def make_tasks(
     daily: pd.DataFrame | None = None,
     zones: pd.DataFrame | None = None,
     daily_zones: pd.DataFrame | None = None,
+    zone_codes: tuple[str, ...] = (),
 ) -> list[ForecastTask]:
     """Build one task per vintage in a target table.
 
@@ -294,6 +295,8 @@ def make_tasks(
         Weekly and daily health-zone rows by release. A real task gets the
         rows on or before its vintage as `zone_history` and
         `zone_daily_history`.
+    zone_codes : tuple of str
+        The hub's zone codes, for every task.
 
     Returns
     -------
@@ -355,6 +358,7 @@ def make_tasks(
                 zone_daily_history=_daily_for(
                     daily_zones, str(kind), str(vintage)
                 ),
+                zone_codes=zone_codes,
                 locations=forecast_locations(rows),
                 target_end_dates=forecast_weeks(ref, config),
                 n_samples=config.n_samples,
@@ -385,6 +389,7 @@ def vintage_task(
     *,
     zones: pd.DataFrame | None = None,
     daily_zones: pd.DataFrame | None = None,
+    zone_codes: tuple[str, ...] = (),
 ) -> tuple[ForecastTask, str]:
     """Build the task of one real vintage, as the submission fits it.
 
@@ -408,6 +413,8 @@ def vintage_task(
         one, so its fit also covers the next round's weeks.
     zones, daily_zones : pandas.DataFrame, optional
         Weekly and daily health-zone rows by release (`make_tasks`).
+    zone_codes : tuple of str
+        The hub's zone codes.
 
     Returns
     -------
@@ -430,6 +437,7 @@ def vintage_task(
         daily=daily,
         zones=zones,
         daily_zones=daily_zones,
+        zone_codes=zone_codes,
     )[0]
     return task, note
 

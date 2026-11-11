@@ -20,7 +20,7 @@ import numpy as np
 import pandas as pd
 
 from bdbvhubrenewal.data.tidy import write_csv
-from bdbvhubrenewal.data.zones import weekly_zone_counts
+from bdbvhubrenewal.data.zones import is_zone, weekly_zone_counts
 from bdbvhubrenewal.forecasters import ForecastTask
 from bdbvhubrenewal.forecasters.base import NATIONAL, SAMPLE_COLUMNS
 from bdbvhubrenewal.forecasters.zones import zones_for_model
@@ -76,7 +76,9 @@ def _unassigned(rows: pd.DataFrame) -> pd.DataFrame | None:
     national = rows.loc[rows["location"] == NATIONAL].set_index(keys)["value"]
     if national.empty:
         return None
-    provinces = rows.loc[rows["location"] != NATIONAL].groupby(keys)["value"]
+    provinces = rows.loc[
+        (rows["location"] != NATIONAL) & ~rows["location"].map(is_zone)
+    ].groupby(keys)["value"]
     gap = (national - provinces.sum()).fillna(national).clip(lower=0)
     return gap.rename("value").reset_index()
 
@@ -112,9 +114,10 @@ def hub_tables(
         rows = rows.loc[rows["as_of"].isna()]
     out = {}
     for name, own in rows.groupby("model"):
-        provinces = own.loc[own["location"] != NATIONAL, list(SAMPLE_COLUMNS)]
+        places = own.loc[own["location"] != NATIONAL, list(SAMPLE_COLUMNS)]
+        provinces = places.loc[~places["location"].map(is_zone)]
         split = zones_for_model(
-            str(name), task, provinces, counts, zones, daily_zones
+            str(name), task, places, counts, zones, daily_zones
         )
         out[str(name)] = to_hub_table(
             provinces,

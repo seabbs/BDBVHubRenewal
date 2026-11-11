@@ -65,6 +65,7 @@ from bdbvhubrenewal.data import (
     load_target,
 )
 from bdbvhubrenewal.data.tidy import write_csv
+from bdbvhubrenewal.data.zones import hub_zones
 from bdbvhubrenewal.evaluation.backtest import (
     BacktestConfig,
     _fit_rows,
@@ -134,7 +135,7 @@ NEXT_ROUND_WEEKS: Final = 1
 """Weeks a stored fit forecasts past `[forecast] max_horizon`, so a round
 with no new release is forecast from the last release's stored fit."""
 
-ZONE_FIELDS: Final = ("zone_history", "zone_daily_history")
+ZONE_FIELDS: Final = ("zone_history", "zone_daily_history", "zone_codes")
 """Task fields in the fit key of a model only if it reads zones
 (`reads_zones`), so zone data never refits the others."""
 
@@ -325,6 +326,7 @@ def origin_tasks(
     daily: pd.DataFrame,
     zones: pd.DataFrame | None = None,
     daily_zones: pd.DataFrame | None = None,
+    zone_codes: tuple[str, ...] = (),
 ) -> dict[str, ForecastTask]:
     """Build the task of every real origin, as the store fits it.
 
@@ -343,6 +345,8 @@ def origin_tasks(
     zones, daily_zones : pandas.DataFrame, optional
         The weekly and daily health-zone tables, for the models that read
         zones.
+    zone_codes : tuple of str
+        The hub's zone codes, for the models that read zones.
     config : BacktestConfig
         Horizons, samples and seed (`[forecast]`).
 
@@ -361,6 +365,7 @@ def origin_tasks(
             NEXT_ROUND_WEEKS,
             zones=zones,
             daily_zones=daily_zones,
+            zone_codes=zone_codes,
         )[0]
         for v in real_vintages(target)
         if v not in config.skip_origins
@@ -982,6 +987,7 @@ def command(args: argparse.Namespace) -> int:
         load_daily(args.data),
         load_health_zones(args.data),
         load_daily_zones(args.data),
+        hub_zones(Path(args.data) / "hub-config" / "tasks.json"),
     )
     models = args.models or stored_models()
     one = args.action in ("fit", "unpack")

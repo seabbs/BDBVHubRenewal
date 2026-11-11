@@ -19,6 +19,7 @@ import numpy as np
 import pandas as pd
 
 from bdbvhubrenewal.data.dates import as_date
+from bdbvhubrenewal.data.zones import is_zone, province_of
 
 __all__ = [
     "NATIONAL",
@@ -114,6 +115,9 @@ class ForecastTask:
         Daily health-zone onsets of every release on or before `vintage`,
         as `daily_history`. None if there are none. Keyed as
         `zone_history`.
+    zone_codes : tuple of str
+        The hub's zone codes (`bdbvhubrenewal.data.zones.hub_zones`).
+        Keyed as `zone_history`.
     """
 
     vintage: str
@@ -133,6 +137,7 @@ class ForecastTask:
     daily_history: pd.DataFrame | None = None
     zone_history: pd.DataFrame | None = None
     zone_daily_history: pd.DataFrame | None = None
+    zone_codes: tuple[str, ...] = ()
 
     def rng(self, *keys: str) -> np.random.Generator:
         """Return a random generator seeded from the task.
@@ -182,6 +187,8 @@ class ForecastModel(Protocol):
             Columns `SAMPLE_COLUMNS`: one row per province, week and
             sample, with samples numbered 1 to `task.n_samples`. A sample
             number is one joint trajectory across weeks and provinces.
+            A model may add the country, and the zones of the task's
+            provinces, as their own rows.
             A model that answers `task.report_by` adds an `as_of` column:
             missing for the final counts, and $T$ for the counts it
             predicts are reported by $T$.
@@ -325,7 +332,11 @@ def _check_block(
 ) -> set[str]:
     """Check one set of sample rows against the task and return its places."""
     locs = set(rows["location"])
-    if locs not in (set(task.locations), {*task.locations, NATIONAL}):
+    # Zones beyond the task's own places must be of its provinces.
+    zones = {c for c in locs - set(task.locations) if is_zone(c)}
+    if any(province_of(z) not in task.locations for z in zones):
+        raise ValueError(f"A zone is outside the task's provinces{what}.")
+    if locs - zones not in (set(task.locations), {*task.locations, NATIONAL}):
         raise ValueError(f"Locations do not match the task{what}.")
     if set(rows["target_end_date"]) != weeks:
         raise ValueError(f"Weeks do not match the task{what}.")
@@ -380,13 +391,14 @@ def add_national(samples: pd.DataFrame) -> pd.DataFrame:
     """Add the national total as the sum of provinces by sample.
 
     A model that fits the nation on its own gives national rows, which
-    are kept as they are.
+    are kept as they are. Zone rows are kept and not summed.
 
     Parameters
     ----------
     samples : pandas.DataFrame
-        Province samples with columns `SAMPLE_COLUMNS`, and optionally
-        `as_of`. Each `as_of` is summed on its own.
+        Province samples, and optionally zone samples, with columns
+        `SAMPLE_COLUMNS`, and optionally `as_of`. Each `as_of` is summed
+        on its own.
 
     Returns
     -------
@@ -395,13 +407,13 @@ def add_national(samples: pd.DataFrame) -> pd.DataFrame:
     """
     if (samples["location"] == NATIONAL).any():
         return samples.reset_index(drop=True)
-    provinces = samples.loc[samples["location"] != NATIONAL]
+    provinces = samples.loc[~samples["location"].map(is_zone)]
     columns = [c for c in samples.columns if c != "location"]
     keys = [c for c in columns if c != "value"]
     national = provinces.groupby(keys, as_index=False, dropna=False)[
         "value"
     ].sum()
     national.insert(0, "location", NATIONAL)
-    return pd.concat([provinces, national[list(samples.columns)]]).reset_index(
+    return pd.concat([samples, national[list(samples.columns)]]).reset_index(
         drop=True
     )

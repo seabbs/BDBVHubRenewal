@@ -15,7 +15,23 @@ from pathlib import Path
 
 import pandas as pd
 
-__all__ = ["hub_zones", "province_of", "weekly_zone_counts"]
+__all__ = ["hub_zones", "is_zone", "province_of", "weekly_zone_counts"]
+
+
+def is_zone(location: str) -> bool:
+    """Return whether a location code is a zone, `CD-XX-NN`.
+
+    Parameters
+    ----------
+    location : str
+        A location code.
+
+    Returns
+    -------
+    bool
+        True for a zone, False for the country or a province.
+    """
+    return len(location.split("-")) == 3
 
 
 def province_of(zone: str) -> str:
@@ -54,7 +70,7 @@ def hub_zones(tasks_json: Path | str) -> tuple[str, ...]:
             loc = task["task_ids"].get("location", {})
             for key in ("required", "optional"):
                 codes.update(loc.get(key) or [])
-    return tuple(sorted(c for c in codes if len(c.split("-")) == 3))
+    return tuple(sorted(c for c in codes if is_zone(c)))
 
 
 def weekly_zone_counts(daily_zones: pd.DataFrame, vintage: str) -> pd.DataFrame:
