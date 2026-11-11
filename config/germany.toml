@@ -1,0 +1,32 @@
+# German COVID-19 hospitalisation nowcast benchmark (Wolffram et al. 2023,
+# PLOS Comp Biol, doi:10.1371/journal.pcbi.1011394). Read by
+# `bdbvhubrenewal.evaluation.germany.load_germany_config`.
+# `bdbvhubrenewal germany-fetch` downloads the files below at these commits
+# into data/raw/germany/, which is not committed. The data come from the
+# Robert Koch Institute (CC BY 4.0) through the hub.
+
+[hub]
+# The reporting triangle by Meldedatum, as of the paper's truth date.
+repo = "KITmetricslab/hospitalization-nowcast-hub"
+commit = "11c745322c055cfbd4f0c8f72241642a50aea399"
+triangle = "data-truth/COVID-19/COVID-19_hospitalizations.csv"
+
+[paper]
+# The paper's evaluation repository (MIT): its truth (7-day sums as of
+# 2022-08-08), its score of every quantile of every hub team's nowcast,
+# and the teams' submissions.
+repo = "dwolffram/hospitalization-nowcast-hub-evaluation"
+commit = "0081bad6deca43e19570c37dd91cd405138fab41"
+truth = "data/truth_2022-08-08.csv"
+scores = "data/scores/scores.csv.gz"
+submissions = [
+  "data/submissions.csv.gz",
+  "data/submissions_KIT-frozen_baseline.csv.gz",
+]
+
+[nowcast]
+# The paper's nowcast dates, every day of its evaluation period.
+first_date = "2021-11-22"
+last_date = "2022-04-29"
+n_samples = 1000
+seed = 20211122
