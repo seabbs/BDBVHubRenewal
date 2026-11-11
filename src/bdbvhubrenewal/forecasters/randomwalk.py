@@ -266,16 +266,12 @@ class RandomWalk:
         One row per place from the last forecast: the start week, the
         errors behind the spread and the source of the delay, spread and
         walk.
-    scored_as_reported : bool
-        Scored on its samples as they are, with no delay, as it makes no
-        nowcast. `RandomWalkNowcast` is mapped by its delay.
     """
 
     name: str = "randomwalk"
     settings: Settings = field(default_factory=Settings)
     fit_diagnostics: list[dict[str, object]] = field(default_factory=list)
     needs_snapshots: ClassVar[bool] = True
-    scored_as_reported: ClassVar[bool] = True
 
     def origin_at(self, task: ForecastTask, errors: bool) -> Origin:
         """Fit the delays and the walk at the task's vintage.
@@ -432,7 +428,6 @@ class RandomWalkNowcast(RandomWalk):
     delay_summary: pd.DataFrame | None = field(
         init=False, default=None, repr=False
     )
-    scored_as_reported: ClassVar[bool] = False
 
     def forecast(self, task: ForecastTask) -> pd.DataFrame:
         """Return random walk trajectories from a nowcast for a task.

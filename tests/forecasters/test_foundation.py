@@ -10,11 +10,7 @@ import pandas as pd
 import pytest
 
 from bdbvhubrenewal.evaluation.backtest import BacktestConfig, make_tasks
-from bdbvhubrenewal.evaluation.nowcast import (
-    delay_curves,
-    scored_as_reported,
-    week_shares,
-)
+from bdbvhubrenewal.evaluation.nowcast import delay_curves, week_shares
 from bdbvhubrenewal.forecasters import (
     NATIONAL,
     ForecastTask,
@@ -211,16 +207,13 @@ def test_ragged_maps_final_counts_through_its_own_lags(
 
 
 @pytest.mark.parametrize("source", SOURCES)
-def test_complete_is_scored_as_reported(
-    source: str, task: ForecastTask
-) -> None:
+def test_complete_gives_no_delay(source: str, task: ForecastTask) -> None:
     name = f"fm_chronos_{source}_complete"
     model = dataclasses.replace(get_model(name), sample=_constant(0.0))
     model.forecast(task)
+    # With no delay the release backtest scores it on the complete
+    # target only, as for any model with none.
     assert model.delay_summary is None
-    assert model.scored_as_reported
-    assert scored_as_reported(name)
-    assert not get_model(f"fm_chronos_{source}_ragged").scored_as_reported
 
 
 @pytest.mark.parametrize("source", SOURCES)
@@ -336,7 +329,10 @@ def test_chronos_missing_fails() -> None:
         chronos_sampler([{"target": np.zeros((1, 5))}], 3, 10, 0)
 
 
-def test_weekly_lag_shares_map_back_to_themselves() -> None:
+@pytest.mark.parametrize(
+    "cutoff", ["2026-10-21", "2026-10-22", "2026-10-23", "2026-10-24"]
+)
+def test_weekly_lag_shares_map_back_to_themselves(cutoff: str) -> None:
     lags = MAX_LAG["weekly"]
     weeks = pd.date_range("2026-08-01", periods=20, freq="7D")
     shares = np.array([0.1, 0.4, 0.7, 0.9])[:lags]
@@ -344,13 +340,13 @@ def test_weekly_lag_shares_map_back_to_themselves() -> None:
     partial = np.full((1, len(weeks), lags), np.nan)
     for d in range(lags):
         partial[0, : 10 - d, d] = 100.0 * shares[d]
+    # The cut-off is a Wednesday to Saturday of week 12 (2026-10-24).
     tri = foundation.HubTriangle(
-        list(weeks.strftime("%Y-%m-%d")), final, partial, 19
+        list(weeks.strftime("%Y-%m-%d")), final, partial, 12, cutoff
     )
     summary = foundation.lag_shares(tri, ("CD-IT",), "weekly", "m", "v")
     curves = delay_curves(summary, ["CD-IT"])
-    # A release whose cut-off is the Saturday ending week c.
-    cutoff = weeks[12].date()
     back = [weeks[12 - d].strftime("%Y-%m-%d") for d in range(lags)]
-    got = week_shares(curves, cutoff, back).set_index("target_end_date")
+    got = week_shares(curves, pd.Timestamp(cutoff).date(), back)
+    got = got.set_index("target_end_date")
     np.testing.assert_allclose(got.loc[back, "share"], shares)

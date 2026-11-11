@@ -12,8 +12,7 @@ Two targets are scored.
 
 **Reported.** The count each later release $o'$ shows, for every week
 of the forecast that $o'$ reports.
-A model with `scored_as_reported` set, such as `randomwalk`, is scored
-on its samples as they are, with no delay.
+`randomwalk` is scored on its samples as they are, with no delay.
 Every other model forecasts the final count $X$ of a week and is mapped
 to what $o'$ shows through its own modelled delay, the share
 $\pi$ of a day's final count reported by each age (`delay_curves`,
@@ -78,6 +77,7 @@ from bdbvhubrenewal.forecasters.renewal import DELAY_SUMMARY_FILE
 __all__ = [
     "COMPLETE_GROWTH",
     "COMPLETE_WEEKS",
+    "RANDOM_WALK",
     "ReleaseBacktest",
     "ReleaseForecasts",
     "complete_weeks",
@@ -89,7 +89,6 @@ __all__ = [
     "release_backtest",
     "reported_samples",
     "score_releases",
-    "scored_as_reported",
     "stored_delays",
     "summarise",
     "week_shares",
@@ -98,27 +97,8 @@ __all__ = [
 
 log = logging.getLogger(__name__)
 
-
-def scored_as_reported(name: str) -> bool:
-    """Return whether a model is scored on its samples as they are.
-
-    A registered model that forecasts forward from complete weeks with no
-    nowcast sets `scored_as_reported`. A hub team is not registered.
-
-    Parameters
-    ----------
-    name : str
-        The model name.
-
-    Returns
-    -------
-    bool
-        True if the model sets `scored_as_reported`.
-    """
-    if name not in {s.name for s in list_models()}:
-        return False
-    return bool(getattr(get_model(name), "scored_as_reported", False))
-
+RANDOM_WALK = "randomwalk"
+"""The model scored on its samples as they are, with no delay."""
 
 COMPLETE_WEEKS = 4
 """Weeks a week must be old at the latest release to count as complete."""
@@ -407,8 +387,7 @@ def reported_samples(
 ) -> dict[str, pd.DataFrame]:
     """Return a model's samples of what each later release shows.
 
-    A model that is `scored_as_reported` has its samples returned as they
-    are.
+    `randomwalk`'s samples are returned as they are, with no delay.
     Another model's places are mapped by its delay (`delay_curves`,
     `draw_reported`), a place it has no delay for is returned as it is,
     and the country is the sum of the provinces.
@@ -440,7 +419,7 @@ def reported_samples(
     dict of str to pandas.DataFrame
         Samples by later release.
     """
-    if scored_as_reported(model):
+    if model == RANDOM_WALK:
         return dict.fromkeys(later, samples)
     if summary is None:
         return {}

@@ -112,12 +112,11 @@ def test_the_country_sums_its_provinces_beside_a_shared_delay(
     np.testing.assert_array_equal(wide["CD"], wide["CD-IT"] + wide["CD-NK"])
 
 
-@pytest.mark.parametrize("model", ["randomwalk", "fm_chronos_weekly_complete"])
-def test_walk_models_are_returned_as_they_are_and_a_hub_team_not_at_all(
-    model: str, daily: pd.DataFrame
+def test_randomwalk_is_returned_as_it_is_and_a_hub_team_not_at_all(
+    daily: pd.DataFrame,
 ) -> None:
     samples = _samples({"CD-IT": 3.0})
-    wide = _reported(samples, None, model, daily)
+    wide = _reported(samples, None, "randomwalk", daily)
     assert (wide["CD-IT"] == 3).all()
     none = reported_samples(
         samples, None, "team", "2026-10-17", ["2026-10-24"], daily,
