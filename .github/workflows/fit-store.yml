@@ -21,11 +21,17 @@ on:
   push:
     branches: [main]
     paths:
+      - 'src/bdbvhubrenewal/__init__.py'
+      - 'src/bdbvhubrenewal/devices.py'
       - 'src/bdbvhubrenewal/baselinenowcast/**'
       - 'src/bdbvhubrenewal/data/**'
+      - 'src/bdbvhubrenewal/evaluation/__init__.py'
       - 'src/bdbvhubrenewal/evaluation/backtest.py'
       - 'src/bdbvhubrenewal/evaluation/ppc.py'
+      - 'src/bdbvhubrenewal/evaluation/scoring.py'
       - 'src/bdbvhubrenewal/evaluation/store.py'
+      - 'src/bdbvhubrenewal/reporting/__init__.py'
+      - 'src/bdbvhubrenewal/submission/__init__.py'
       - 'src/bdbvhubrenewal/submission/fitting.py'
       - 'src/bdbvhubrenewal/forecasters/**'
       - 'src/bdbvhubrenewal/model/**'
@@ -39,11 +45,17 @@ on:
   # change will cost on main.
   pull_request:
     paths:
+      - 'src/bdbvhubrenewal/__init__.py'
+      - 'src/bdbvhubrenewal/devices.py'
       - 'src/bdbvhubrenewal/baselinenowcast/**'
       - 'src/bdbvhubrenewal/data/**'
+      - 'src/bdbvhubrenewal/evaluation/__init__.py'
       - 'src/bdbvhubrenewal/evaluation/backtest.py'
       - 'src/bdbvhubrenewal/evaluation/ppc.py'
+      - 'src/bdbvhubrenewal/evaluation/scoring.py'
       - 'src/bdbvhubrenewal/evaluation/store.py'
+      - 'src/bdbvhubrenewal/reporting/__init__.py'
+      - 'src/bdbvhubrenewal/submission/__init__.py'
       - 'src/bdbvhubrenewal/submission/fitting.py'
       - 'src/bdbvhubrenewal/forecasters/**'
       - 'src/bdbvhubrenewal/model/**'
