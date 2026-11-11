@@ -42,6 +42,10 @@ classifiers = [
 model = [
   "pyrenew @ git+https://github.com/CDCgov/PyRenew@2441cb327d6e563eab0495540cb7467a102c234f",
 ]
+# Chronos-2 for the foundation models (`bdbvhubrenewal.forecasters.foundation`),
+# with peft for LoRA fine-tuning. Brings torch, built for CUDA 12.6 on
+# Linux. The package imports without it.
+chronos = ["chronos-forecasting==2.3.2", "peft>=0.18.1,<1", "torch>=2.7"]
 
 [project.urls]
 Homepage = "https://samabbott.co.uk/BDBVHubRenewal/"
@@ -76,6 +80,14 @@ docs = [
 
 [tool.uv]
 default-groups = ["dev"]
+
+[[tool.uv.index]]
+name = "pytorch-cu126"
+url = "https://download.pytorch.org/whl/cu126"
+explicit = true
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cu126", marker = "sys_platform == 'linux'" }]
 
 [tool.uv.build-backend]
 module-name = "bdbvhubrenewal"
@@ -173,6 +185,10 @@ module = [
   "numpyro.*",
   "pyrenew",
   "pyrenew.*",
+  "chronos",
+  "chronos.*",
+  "torch",
+  "torch.*",
 ]
 ignore_missing_imports = true
 

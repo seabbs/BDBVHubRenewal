@@ -11,8 +11,8 @@ import pytest
 
 from bdbvhubrenewal.evaluation.backtest import BacktestConfig, make_tasks
 from bdbvhubrenewal.forecasters import (
-    FoundationModel,
     ForecastTask,
+    FoundationModel,
     ModelUnavailableError,
     check_samples,
     get_model,
@@ -212,7 +212,7 @@ def test_complete_forecasts_from_the_last_complete_week(
     assert np.array_equal(a[0]["target"], b[0]["target"])
 
 
-@pytest.mark.parametrize("name", ("fm_delay_series", "fm_delay_cov"))
+@pytest.mark.parametrize("name", ["fm_delay_series", "fm_delay_cov"])
 def test_no_delay_data_is_unavailable(name: str, task: ForecastTask) -> None:
     bare = dataclasses.replace(task, delays=None)
     model = dataclasses.replace(get_model(name), sample=_constant(0.0))
