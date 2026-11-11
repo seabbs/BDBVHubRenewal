@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
 from bdbvhubrenewal.reporting import report
 
@@ -569,3 +570,12 @@ def test_by_baseline_stacks_a_table_per_baseline() -> None:
     assert list(got.columns) == ["baseline", "model", "rel_wis"]
     assert list(got["baseline"]) == ["b", "b", "a", "a"]
     assert list(got["rel_wis"]) == [0.5, 1.0, 1.0, 2.0]
+
+
+def test_fit_settings_skip_models_with_no_sampler(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.chdir(ROOT)
+    settings = report._fit_settings()
+    assert "pprandomwalknowcast" in settings
+    assert not any(name.startswith("fm_chronos_") for name in settings)

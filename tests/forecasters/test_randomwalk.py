@@ -376,8 +376,8 @@ def test_the_start_week_search_reaches_back_over_the_nowcast_window(
     from bdbvhubrenewal.data.snapshots import snapshot_arrays
     from bdbvhubrenewal.forecasters.chain import build_origin
     from bdbvhubrenewal.forecasters.randomwalk import (
-        _quiet,
-        _start_weeks,
+        quiet_places,
+        start_weeks,
         start_window,
     )
 
@@ -391,9 +391,9 @@ def test_the_start_week_search_reaches_back_over_the_nowcast_window(
     )
     origin = build_origin(snap, Settings(), errors=False)
     i = snap.locations.index("CD-IT-17")
-    assert _quiet(origin)[i]
+    assert quiet_places(origin)[i]
     assert not origin.silent[i]
-    assert _start_weeks(origin)[i] == origin.start[i]
+    assert start_weeks(origin)[i] == origin.start[i]
 
 
 def test_a_quiet_place_with_recent_cases_draws_introductions(

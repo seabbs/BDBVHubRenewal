@@ -10,6 +10,7 @@ import pandas as pd
 import pytest
 
 from bdbvhubrenewal.evaluation.backtest import BacktestConfig, make_tasks
+from bdbvhubrenewal.evaluation.nowcast import AS_REPORTED
 from bdbvhubrenewal.forecasters import (
     NATIONAL,
     ForecastTask,
@@ -30,8 +31,8 @@ from bdbvhubrenewal.forecasters.foundation import (
 )
 from bdbvhubrenewal.forecasters.randomwalk import (
     RandomWalk,
-    _quiet,
-    _start_weeks,
+    quiet_places,
+    start_weeks,
 )
 
 MODELS = tuple(f"fm_chronos_{s}_{lay}" for s in SOURCES for lay in LAYOUTS)
@@ -113,7 +114,7 @@ def _history() -> pd.DataFrame:
 
 
 def test_weekly_triangle_puts_each_release_at_its_lag() -> None:
-    tri = hub_triangle(_history(), "weekly", "2026-10-24", ("A",), "2026-10-31")
+    tri = hub_triangle(_history(), "weekly", ("A",), "2026-10-31")
     assert tri.times == ["2026-10-10", "2026-10-17", "2026-10-24", "2026-10-31"]
     assert tri.last == 2
     assert tri.final[0].tolist() == [7.0, 4.0, 2.0, 0.0]
@@ -142,7 +143,8 @@ def test_daily_triangle_lags_are_days() -> None:
             "cutoff": ["2026-10-16", "2026-10-23", "2026-10-23"],
         }
     )
-    tri = hub_triangle(daily, "daily", "2026-10-24", ("A",), "2026-10-24")
+    tri = hub_triangle(daily, "daily", ("A",), "2026-10-24")
+    # The latest release gives the final counts and the last step.
     assert tri.times[0] == "2026-10-15"
     assert tri.times[-1] == "2026-10-24"
     assert tri.last == tri.times.index("2026-10-23")
@@ -187,16 +189,36 @@ def test_draws_are_counts_at_least_the_reported(
     assert (out["value"].to_numpy() > _reported(task, out)).any()
 
 
-@pytest.mark.parametrize("name", MODELS)
-def test_maps_final_counts_through_a_delay(
-    name: str, task: ForecastTask
+@pytest.mark.parametrize("source", SOURCES)
+def test_ragged_maps_final_counts_through_its_own_lags(
+    source: str, task: ForecastTask
 ) -> None:
+    name = f"fm_chronos_{source}_ragged"
+    # It reads no release snapshots, so it forecasts without them.
+    bare = dataclasses.replace(task, daily_history=None)
     model = dataclasses.replace(get_model(name), sample=_constant(0.0))
-    model.forecast(task)
+    model.forecast(task if source == "daily" else bare)
     summary = model.delay_summary
     assert summary is not None
     assert set(summary["model"]) == {name}
     assert set(summary["quantity"]) == {"reported_share"}
+    assert "pooled" in set(summary["location"])
+    for _, grp in summary.groupby("location"):
+        share = grp.sort_values("x")["q50"].to_numpy()
+        assert ((share >= 0) & (share <= 1)).all()
+        assert (np.diff(share) >= 0).all()
+        assert share[-1] == 1.0
+
+
+@pytest.mark.parametrize("source", SOURCES)
+def test_complete_is_scored_as_reported(
+    source: str, task: ForecastTask
+) -> None:
+    name = f"fm_chronos_{source}_complete"
+    model = dataclasses.replace(get_model(name), sample=_constant(0.0))
+    model.forecast(task)
+    assert model.delay_summary is None
+    assert name in AS_REPORTED
 
 
 @pytest.mark.parametrize("source", SOURCES)
@@ -243,7 +265,7 @@ def test_complete_starts_from_the_random_walk_week(
     )
     model.forecast(task)
     origin = RandomWalk().origin_at(task, errors=False)
-    start = _start_weeks(origin)[~_quiet(origin)].min()
+    start = start_weeks(origin)[~quiet_places(origin)].min()
     week = pd.Timestamp(origin.snap.week_ends[start])
     groups, _ = store[0]
     n_context = groups[0]["target"].shape[1]
