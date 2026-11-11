@@ -9,7 +9,9 @@ How the models are built in code and sampled is on the [Implementation](implemen
 ## Overview
 
 `renewal` fits the health zones with recent cases together, nests them in their provinces, pools them and links them by importation.
-The zone fits are opt-in: with `[renewal] zones = false` in `config/hub.toml`, the default, `renewal` and `renewalbvd` fit the provinces as places instead, with province deviations, province delays and importation between provinces, and their zones are split from the provinces ([Health zones](#health-zones)).
+The zone fits are opt-in: `[renewal] zones = true` in `config/hub.toml` (or `BDBV_RENEWAL_ZONES=1`) registers them in place of the province fits ([`forecasters/zonerenewal.py`](https://github.com/seabbs/BDBVHubRenewal/blob/main/src/bdbvhubrenewal/forecasters/zonerenewal.py), [`model/zones.py`](https://github.com/seabbs/BDBVHubRenewal/blob/main/src/bdbvhubrenewal/model/zones.py)).
+Nothing the province fits run imports that code, so their stored fit keys do not depend on it.
+With `zones = false`, the default, `renewal` and `renewalbvd` fit the provinces as places instead, with province deviations, province delays and importation between provinces, and their zones are split from the provinces ([Health zones](#health-zones)).
 `renewalsp` fits the place model to each province on its own, with no pooling or importation.
 `renewalbvd` is `renewal` with a down-weighted likelihood term on the Rt of BVDOutbreakSize.
 `seabbs-renewal` submits the first of `renewalbvd`, `renewalsp`, `renewal`, `randomwalknowcast` and `randomwalk`, in that order, to pass its checks ([Submission workflow](../submission/workflow.md#renewal-chain)).
@@ -242,6 +244,7 @@ $$
 $Q$ is an orthonormal basis of the deviations that sum to zero over the $P_s$ provinces with a fitted zone.
 $B$ is block diagonal, one block per province, each an orthonormal basis of the deviations that sum to zero over that province's fitted zones.
 A province with one fitted zone has no block, and its zone takes the province deviation.
+As in BVDOutbreakSize's zone model, only zones with at least 30 cases by the cut-off have a deviation of their own; the rest take their province's.
 The $P_s - 1$ coordinates $\xi_j$ and the $\sum_p (Z_p - 1)$ coordinates $\eta_k$ are weekly AR(1) processes that decay towards 0,
 
 $$
@@ -254,7 +257,9 @@ with $\kappa = 2^{-1/t_{1/2}}$, $t_{1/2} \sim \text{LogNormal}(\log 6, 0.6^2)$ w
 The shared spreads and half-lives pool the zones within provinces and the provinces within the country.
 The starting values are $\log R_z(0) = \log R(0) + v_z$, with $v$ summing to zero over the zones, $v \sim \mathcal{N}(0, \sigma_v^2)$ on its basis and $\sigma_v \sim \mathcal{N}^+(0, 0.3^2)$.
 The province part of $v$ starts $\xi$ and the rest starts $\eta$.
-With one zone per province the model is the province model, which a test checks.
+The walks of $\log R(t)$, $\xi$, $\eta$ and the missing-onset share are anchored at their mean over the fit axis rather than at their first week.
+The data fix each walk's level, so a free start and free first steps trade off along a ridge that kept the province fits at maximum tree depth.
+Without the anchoring and with one zone per province the model is the province model, which a test checks.
 
 Because zones share $\log R(t)$, $\delta_p(t)$, the delay, ascertainment and the publication lag within each draw, their trajectories move together where the data say they do.
 Summing zone trajectories within a draw keeps that correlation, so province intervals are not the narrow sum of independent zone noise.
@@ -356,6 +361,7 @@ flowchart TD
 ```
 
 From the release it takes the posterior draws of the national $\log R$ and, where the release has province estimates, each patch's median and 90% interval with the hub provinces the patch covers.
+The zone fit also takes each fitted zone's median and 90% interval from the release's zone model (`zone_estimates.csv`), as a term like a patch's that holds that zone alone.
 Both models date Rt by infection, so the estimates are aligned to the release's data cut-off $t_b$.
 The fit axis extends to the end of the week of $t_b$ when that week is after the data.
 For the nation CD and each patch $k$ with a modelled zone, the model's Rt before depletion, $R_z$, is weighted by infections over the data week that holds $t_b$, over the fitted zones of the patch's provinces,

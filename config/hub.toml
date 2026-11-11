@@ -13,12 +13,18 @@ model = "renewalbvd"
 submit = true
 
 [renewal]
-# Fit renewal and renewalbvd on the health zones with recent cases,
-# nested in their provinces, with provinces as the sums of their zones
-# (true), or on the provinces (false). Read by
-# `bdbvhubrenewal.forecasters.renewal.zone_fits`; BDBV_RENEWAL_ZONES
-# overrides it. Flipping it changes the fit keys of both models.
+# How renewal and renewalbvd forecast health zones. false (or
+# "province"): province fits split by ZoneAllocator. "conditional": the
+# same province fits split by a share model fitted to the zone counts
+# (no refit, no key change). true (or "joint"): zone fits, provinces as
+# zone sums (refits both models). Read by
+# `bdbvhubrenewal.forecasters.zonerenewal.zone_mode`;
+# BDBV_RENEWAL_ZONES overrides it.
 zones = true
+# Zone fits only: fix the onset-to-report delay at the hub's pmf for the
+# release and the incubation period at its prior mean, for speed.
+# BDBV_ZONE_FIXED_DELAYS overrides it.
+fixed_delays = false
 
 # Further hub models, each submitted under its own id every round, apart
 # from the chain above. The hub allows no hyphen in an abbreviation and

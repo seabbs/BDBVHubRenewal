@@ -64,6 +64,7 @@ __all__ = [
     "sum_zones",
     "task_zones",
     "zone_fits",
+    "zone_mode",
     "zone_target",
     "zone_vintage_inputs",
 ]
@@ -82,12 +83,97 @@ ZONES_FILE: Final = "zones.csv.gz"
 """Zone samples in a zone fit's directory, summing to its provinces."""
 
 
-def zone_fits(path: Path | str = HUB_CONFIG) -> bool:
-    """Return whether `renewal` and `renewalbvd` fit health zones.
+ZONE_MODES: Final = ("province", "conditional", "joint")
+"""How `renewal` and `renewalbvd` forecast health zones:
 
-    `ZONES_ENV` if set, else `[renewal] zones` in `config/hub.toml`,
-    else False: the province fits stay the default until the setting is
-    flipped.
+- `province`: province fits, their samples split by `ZoneAllocator`
+  (the default);
+- `conditional`: the same province fits, their samples split by a share
+  model fitted to the zone counts (`zonesplit.ZoneShares`), a second
+  stage as in BVDOutbreakSize's zone model;
+- `joint`: zone fits (`ZoneRenewalModel`), provinces the zone sums.
+"""
+
+
+def zone_mode(path: Path | str = HUB_CONFIG) -> str:
+    """Return how `renewal` and `renewalbvd` forecast zones (`ZONE_MODES`).
+
+    `ZONES_ENV` if set, else `[renewal] zones` in `config/hub.toml`, else
+    `province`. False is `province` and true is `joint`.
+
+    Parameters
+    ----------
+    path : pathlib.Path or str
+        The hub config.
+
+    Returns
+    -------
+    str
+        One of `ZONE_MODES`.
+
+    Raises
+    ------
+    ValueError
+        If the setting is not a mode or a boolean.
+    """
+    words = {
+        "1": "joint",
+        "true": "joint",
+        "0": "province",
+        "false": "province",
+    }
+    env = os.environ.get(ZONES_ENV)
+    if env:
+        value: object = env.lower()
+    else:
+        config = Path(path)
+        raw = tomllib.loads(config.read_text()) if config.exists() else {}
+        value = raw.get("renewal", {}).get("zones", False)
+        if isinstance(value, bool):
+            value = "joint" if value else "province"
+    mode = words.get(str(value), str(value))
+    if mode not in ZONE_MODES:
+        raise ValueError(
+            f"{ZONES_ENV} or [renewal] zones must be one of {ZONE_MODES} "
+            f"or a boolean, got {value!r}."
+        )
+    return mode
+
+
+FIXED_DELAYS_ENV: Final = "BDBV_ZONE_FIXED_DELAYS"
+"""Environment variable that overrides `[renewal] fixed_delays`."""
+
+
+def fixed_delays(path: Path | str = HUB_CONFIG) -> bool:
+    """Return whether the zone fits fix their delays.
+
+    With it, the zone model takes the hub's onset-to-report delay pmf for
+    the release and BVDOutbreakSize's prior mean incubation period as
+    fixed, rather than estimating them (`model.zones.build_zone_model`).
+    `FIXED_DELAYS_ENV` if set, else `[renewal] fixed_delays`, else False.
+
+    Parameters
+    ----------
+    path : pathlib.Path or str
+        The hub config.
+
+    Returns
+    -------
+    bool
+        True to fix the delays.
+    """
+    env = os.environ.get(FIXED_DELAYS_ENV)
+    if env:
+        return env.lower() in ("1", "true")
+    config = Path(path)
+    raw = tomllib.loads(config.read_text()) if config.exists() else {}
+    return bool(raw.get("renewal", {}).get("fixed_delays", False))
+
+
+def zone_fits(path: Path | str = HUB_CONFIG) -> bool:
+    """Return whether `renewal` and `renewalbvd` are fitted on zones.
+
+    True for the `joint` mode of `zone_mode`.
 
     Parameters
     ----------
@@ -98,23 +184,8 @@ def zone_fits(path: Path | str = HUB_CONFIG) -> bool:
     -------
     bool
         True for zone fits.
-
-    Raises
-    ------
-    ValueError
-        If `ZONES_ENV` is not a boolean word.
     """
-    env = os.environ.get(ZONES_ENV)
-    if env:
-        words = {"1": True, "true": True, "0": False, "false": False}
-        if env.lower() not in words:
-            raise ValueError(f"{ZONES_ENV} must be 1, 0, true or false.")
-        return words[env.lower()]
-    config = Path(path)
-    if not config.exists():
-        return False
-    raw = tomllib.loads(config.read_text())
-    return bool(raw.get("renewal", {}).get("zones"))
+    return zone_mode(path) == "joint"
 
 
 def _data_dir() -> Path:
@@ -151,6 +222,14 @@ def task_zones(task: ForecastTask) -> tuple[str, ...]:
     else:
         codes = tuple(sorted(set(_daily_zones()["location"])))
     return tuple(z for z in codes if province_of(z) in task.locations)
+
+
+def _logit_hazard(pmf: Any) -> np.ndarray:
+    """Return the logit hazard of a pmf on `0..dmax`, on `0..dmax - 1`."""
+    f = np.asarray(pmf, dtype=float)
+    survive = 1.0 - np.concatenate([[0.0], np.cumsum(f)[:-1]])
+    h = np.clip(f[:-1] / np.maximum(survive[:-1], 1e-12), 1e-9, 1 - 1e-9)
+    return np.asarray(np.log(h / (1 - h)))
 
 
 def zone_target(task: ForecastTask) -> pd.DataFrame:
@@ -377,6 +456,40 @@ class ZoneRenewalFit(RenewalFit):
     zones: pd.DataFrame | None = None
 
 
+def zone_inputs_digest(path: Path | str = HUB_CONFIG) -> str:
+    """Hash the data files a zone fit reads that its code does not hold.
+
+    The zone centres and populations (`model.zones.ZONE_CENTRES`) and the
+    `[renewal]` table of the hub config. The fit key hashes code, not
+    data files, so this digest sits in `ZoneRenewalModel`'s
+    representation, which the key does hash: editing either refits.
+
+    Parameters
+    ----------
+    path : pathlib.Path or str
+        The hub config.
+
+    Returns
+    -------
+    str
+        The first 16 hex digits of a SHA-256.
+    """
+    import hashlib
+    import json
+
+    from bdbvhubrenewal.model.zones import ZONE_CENTRES
+
+    digest = hashlib.sha256(Path(ZONE_CENTRES).read_bytes())
+    config = Path(path)
+    table = (
+        tomllib.loads(config.read_text()).get("renewal", {})
+        if config.exists()
+        else {}
+    )
+    digest.update(json.dumps(table, sort_keys=True).encode())
+    return digest.hexdigest()[:16]
+
+
 @dataclass
 class ZoneRenewalModel(RenewalModel):
     """A renewal variant fitted on health zones, as a `ForecastModel`.
@@ -386,12 +499,20 @@ class ZoneRenewalModel(RenewalModel):
     zones : bool
         Always True: in the representation, so it keys a stored fit
         apart from the province model.
+    fixed_delays : bool
+        `fixed_delays` when built, in the representation so it keys a
+        stored fit.
+    inputs : str
+        `zone_inputs_digest`, in the representation so the zone data
+        files key a stored fit.
     zone_samples : pandas.DataFrame or None
         Zone samples of the last `forecast`, which sum to its province
         samples.
     """
 
     zones: bool = field(init=False, default=True)
+    fixed_delays: bool = field(init=False, default_factory=fixed_delays)
+    inputs: str = field(init=False, default_factory=zone_inputs_digest)
     zone_samples: pd.DataFrame | None = field(
         init=False, default=None, repr=False, compare=False
     )
@@ -420,7 +541,7 @@ class ZoneRenewalModel(RenewalModel):
                     used = {**used, "zones": len(zone_rows)}
             self._log(f"variant={self.name} bvd={used['tag'] or 'none'}")
         data = zone_vintage_inputs(task, config, bvd=rows)
-        model = build_zone_model(data, config)
+        model = build_zone_model(data, config, fixed_delays=self.fixed_delays)
         self._log(
             f"variant={self.name} zones={data.n_provinces} sampling start"
         )
@@ -452,13 +573,22 @@ class ZoneRenewalModel(RenewalModel):
         }
         posterior = model.mcmc.get_samples()
         n_init = model.latent.n_initialization_points
-        beta = np.asarray(posterior["delay_beta"])
-        # Each province's delay, which its zones share, and the shared one.
-        shifts = {
-            name: np.asarray(posterior["delay_shift"])[..., p]
-            for p, name in enumerate(data.parent_names)
-        }
-        if len(shifts) > 1:
+        n_draws = next(iter(posterior.values())).shape[0]
+        if "delay_beta" in posterior:
+            beta = np.asarray(posterior["delay_beta"])
+            # Each province's delay, which its zones share, and the shared.
+            shifts = {
+                name: np.asarray(posterior["delay_shift"])[..., p]
+                for p, name in enumerate(data.parent_names)
+            }
+        else:
+            # A fixed delay: its hazard, the same in every draw and place.
+            beta = np.tile(_logit_hazard(data.hub_delay_pmf), (n_draws, 1))
+            days = n_init + 7 * (data.n_weeks + data.horizon_weeks)
+            shifts = {
+                name: np.zeros((n_draws, days)) for name in data.parent_names
+            }
+        if len(shifts) > 1 and "delay_shared_shift" in posterior:
             shifts["shared"] = np.asarray(posterior["delay_shared_shift"])[
                 ..., 0
             ]

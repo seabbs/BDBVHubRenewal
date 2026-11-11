@@ -281,3 +281,43 @@ def test_bvd_zone_rt_becomes_one_term_per_fitted_zone(tmp_path: Path) -> None:
         raise OSError("offline")
 
     assert zr.zone_bvd_rows(release, tmp_path / "none", names, fail) is None
+
+
+def test_zone_data_files_key_the_zone_fits(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from bdbvhubrenewal.model import zones
+
+    config = tmp_path / "hub.toml"
+    config.write_text("[renewal]\nzones = true\n")
+    before = zr.zone_inputs_digest(config)
+    config.write_text("[renewal]\nzones = true\nother = 1\n")
+    assert zr.zone_inputs_digest(config) != before
+    centres = tmp_path / "zone_centres.csv"
+    centres.write_bytes(zones.ZONE_CENTRES.read_bytes() + b"\n")
+    monkeypatch.setattr(zones, "ZONE_CENTRES", centres)
+    config.write_text("[renewal]\nzones = true\n")
+    assert zr.zone_inputs_digest(config) != before
+    model = zr.ZoneRenewalModel(rn.VARIANTS["renewal"])
+    assert f"inputs='{model.inputs}'" in repr(model)
+
+
+def test_fixed_delay_hazard_gives_back_the_pmf() -> None:
+    from bdbvhubrenewal.model.hazard_delay import hazard_to_pmf
+
+    pmf = np.array([0.1, 0.3, 0.4, 0.2])
+    back = np.asarray(hazard_to_pmf(zr._logit_hazard(pmf)[None, :]))[0]
+    np.testing.assert_allclose(back, pmf, atol=1e-6)
+
+
+def test_fixed_delays_are_a_setting(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv(zr.FIXED_DELAYS_ENV, raising=False)
+    assert zr.fixed_delays(ROOT / "config" / "hub.toml") is False
+    config = tmp_path / "hub.toml"
+    config.write_text("[renewal]\nfixed_delays = true\n")
+    assert zr.fixed_delays(config) is True
+    monkeypatch.setenv(zr.FIXED_DELAYS_ENV, "1")
+    model = zr.ZoneRenewalModel(rn.VARIANTS["renewalbvd"])
+    assert "fixed_delays=True" in repr(model)

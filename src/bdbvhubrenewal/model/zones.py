@@ -213,11 +213,13 @@ def _nested_walk(
     name_prefix: str,
     first_day_dow: int | None,
     bases: tuple[np.ndarray, np.ndarray],
+    coord_starts: tuple[ArrayLike, ArrayLike] | None = None,
 ) -> tuple[ArrayLike, ArrayLike]:
     """`pooled_walk` with parent and within-parent deviations.
 
     The starting deviations are projected onto each basis by least
-    squares, which for an orthonormal basis is `basis.T @ start`.
+    squares, which for an orthonormal basis is `basis.T @ start`, unless
+    `coord_starts` gives the starting coordinates on each basis.
     """
     baseline = baseline_process.sample(
         n_timepoints=n_timepoints,
@@ -226,18 +228,25 @@ def _nested_walk(
         first_day_dow=first_day_dow,
     )
     out = baseline
-    for basis, process, label in (
-        (bases[0], parent_process, "deviations"),
-        (bases[1], place_process, "zone_deviations"),
+    for i, (basis, process, label) in enumerate(
+        (
+            (bases[0], parent_process, "deviations"),
+            (bases[1], place_process, "zone_deviations"),
+        )
     ):
         if basis.shape[1] == 0:
             continue
         if process is None:
             raise ValueError("Nested deviations need a place process.")
+        start = (
+            jnp.asarray(np.linalg.pinv(basis)) @ dev_start
+            if coord_starts is None
+            else coord_starts[i]
+        )
         coords = process.sample(
             n_timepoints=n_timepoints,
             n_processes=basis.shape[1],
-            initial_value=jnp.asarray(np.linalg.pinv(basis)) @ dev_start,
+            initial_value=start,
             name_prefix=f"{name_prefix}_{label}",
             first_day_dow=first_day_dow,
         )
@@ -477,6 +486,7 @@ class ZoneInfections(MetapopulationInfections):
         parents: ArrayLike,
         place_deviation_process: TemporalProcess,
         own: ArrayLike | None = None,
+        start_sd_rv: RandomVariable | None = None,
         **kwargs: Any,
     ) -> None:
         """Initialize the zone infections process.
@@ -490,6 +500,12 @@ class ZoneInfections(MetapopulationInfections):
         own
             Boolean, one per zone: zones with an Rt deviation of their own
             within their province. `None` is every seeded zone.
+        start_sd_rv
+            Spread of the starting deviations. With it, `log_rt_time_0_rv`
+            gives the pooled start only and the starting deviations are
+            sampled non-centred on the province and zone bases, so no
+            direction lacks a likelihood. Without it, `log_rt_time_0_rv`
+            gives every zone's start, projected onto the bases.
         **kwargs
             Passed to `MetapopulationInfections`.
         """
@@ -497,6 +513,7 @@ class ZoneInfections(MetapopulationInfections):
         self.parents = np.asarray(parents, dtype=int)
         self.place_deviation_process = place_deviation_process
         self.own = None if own is None else np.asarray(own, dtype=bool)
+        self.start_sd_rv = start_sd_rv
 
     def sample(
         self,
@@ -514,18 +531,44 @@ class ZoneInfections(MetapopulationInfections):
 
         pop = self._parse_and_validate_fractions(subpop_fractions)
         n_init = self.n_initialization_points
-        log_rt_baseline, log_rt = zone_pooled_walk(
-            self.baseline_rt_process,
-            self.subpop_rt_deviation_process,
-            self.place_deviation_process,
-            self.log_rt_time_0_rv(),
-            n_init + n_days_post_init,
-            self.parents,
-            "log_rt",
-            first_day_dow,
-            active=self.seeded,
-            own=self.own,
-        )
+        if self.start_sd_rv is None:
+            log_rt_baseline, log_rt = zone_pooled_walk(
+                self.baseline_rt_process,
+                self.subpop_rt_deviation_process,
+                self.place_deviation_process,
+                self.log_rt_time_0_rv(),
+                n_init + n_days_post_init,
+                self.parents,
+                "log_rt",
+                first_day_dow,
+                active=self.seeded,
+                own=self.own,
+            )
+        else:
+            bases = nested_basis(self.parents, self.seeded, self.own)
+            sd = self.start_sd_rv()
+            starts = tuple(
+                sd
+                * numpyro.sample(
+                    f"log_rt0_{label}_z",
+                    dist.Normal(0.0, 1.0).expand([basis.shape[1]]),
+                )
+                for basis, label in zip(
+                    bases, ("province", "zone"), strict=True
+                )
+            )
+            log_rt_baseline, log_rt = _nested_walk(
+                self.baseline_rt_process,
+                self.subpop_rt_deviation_process,
+                self.place_deviation_process,
+                self.log_rt_time_0_rv(),
+                jnp.zeros(self.parents.size),
+                n_init + n_days_post_init,
+                "log_rt",
+                first_day_dow,
+                bases,
+                coord_starts=(starts[0], starts[1]),
+            )
         rt = jnp.exp(log_rt)
         gen_int = self.gen_int_rv()
         I0 = self._validate_and_prepare_I0(jnp.asarray(self.I0_rv()), pop)
@@ -702,6 +745,51 @@ def zone_bvd_inputs(
         for key in ("groups", "values", "scales", "kinds"):
             out[key] = np.concatenate([out[key], part[key]])
     return out
+
+
+class FixedDelay(RandomVariable):
+    """A fixed onset-to-report delay shared by every place.
+
+    Stands in for `HazardDelay` with the hub's delay pmf for the release
+    (`Vintage.hub_delay_pmf`), the point estimate the hub imputes onsets
+    with. It is data, so it adds no sites, and every place shares it.
+    """
+
+    def __init__(self, name: str, pmf: ArrayLike) -> None:
+        """Initialize the delay.
+
+        Parameters
+        ----------
+        name
+            Name of the delay.
+        pmf
+            Delay pmf on days `0..dmax`.
+        """
+        super().__init__(name=name)
+        self.pmf = jnp.asarray(pmf)
+
+    def shared_groups(self, n_groups: int) -> np.ndarray:
+        """Return all places: they share the delay."""
+        return np.ones(n_groups, dtype=bool)
+
+    def sample(
+        self,
+        n_timepoints: int,
+        n_groups: int = 1,
+        first_day_dow: int | None = None,
+        by_week: bool = False,
+        **kwargs: object,
+    ) -> Array:
+        """Return the pmf for each place and day, or week.
+
+        Returns
+        -------
+        Array
+            `(n_groups, rows, dmax + 1)`, with one row per day or per
+            week (`by_week`).
+        """
+        rows = -(-n_timepoints // 7) if by_week else n_timepoints
+        return jnp.broadcast_to(self.pmf, (n_groups, rows, self.pmf.shape[-1]))
 
 
 def zone_kernel(
@@ -884,7 +972,10 @@ def zone_vintage_from_tables(
 
 
 def build_zone_model(
-    data: ZoneVintage, config: ModelConfig = MAIN, anchor: bool = True
+    data: ZoneVintage,
+    config: ModelConfig = MAIN,
+    anchor: bool = True,
+    fixed_delays: bool = False,
 ) -> MultiSignalModel:
     """Build the zone model for one vintage, as `model.build_model`.
 
@@ -894,6 +985,10 @@ def build_zone_model(
         The vintage.
     config : ModelConfig
         Structural choices.
+    fixed_delays : bool
+        Fix the onset-to-report delay at the hub's pmf for the release
+        (`FixedDelay`) and the incubation period at BVDOutbreakSize's prior
+        means, rather than estimating them.
     anchor : bool
         Anchor the `ANCHORED` walks at their mean (`MeanAnchoredWalk`).
         Without it, and with one zone per province, this is the province
@@ -973,9 +1068,16 @@ def build_zone_model(
             ),
             AffineTransform(0.0, 1 / (ALPHA0 * data.populations)),
         ),
-        log_rt_time_0_rv=_pooled(
-            "log_rt0", n_prov, 0.0, 0.5, 0.3, active=active
-        ),
+        # Anchored: the pooled start alone, with the zone starts
+        # non-centred on the province and zone bases (`ZoneInfections`).
+        log_rt_time_0_rv=DistributionalVariable(
+            "log_rt0_mean", dist.Normal(0.0, 0.5)
+        )
+        if anchor
+        else _pooled("log_rt0", n_prov, 0.0, 0.5, 0.3, active=active),
+        start_sd_rv=DistributionalVariable("log_rt0_sd", dist.HalfNormal(0.3))
+        if anchor
+        else None,
         baseline_rt_process=_zone_walk_a(
             "rt_sd",
             0.2,
@@ -1048,7 +1150,9 @@ def build_zone_model(
             active=group_active,
         )
 
-    if missing is not None:
+    if missing is not None and fixed_delays:
+        delay = FixedDelay("delay", data.hub_delay_pmf)
+    elif missing is not None:
         delay = HazardDelay(
             "delay",
             config.dmax,
@@ -1080,13 +1184,17 @@ def build_zone_model(
                 "infection_to_onset",
                 "lognormal",
                 # BVDOutbreakSize's priors (onset_incidence_model).
-                DistributionalVariable(
+                DeterministicVariable("incubation_mean", INCUBATION_MEAN)
+                if fixed_delays
+                else DistributionalVariable(
                     "incubation_mean",
                     dist.TruncatedNormal(
                         INCUBATION_MEAN, INCUBATION_MEAN_SD, low=1.0
                     ),
                 ),
-                DistributionalVariable(
+                DeterministicVariable("incubation_sd", INCUBATION_SD)
+                if fixed_delays
+                else DistributionalVariable(
                     "incubation_sd",
                     dist.TruncatedNormal(
                         INCUBATION_SD, INCUBATION_SD_SD, low=1.0
@@ -1098,7 +1206,7 @@ def build_zone_model(
             missing_fraction_rv=None
             if missing is None
             else by_place(missing, 1),
-            delay_rv=by_place(delay, 0),
+            delay_rv=delay if fixed_delays else by_place(delay, 0),
             delay_groups=parents,
             known_noise=_nb_noise("known"),
             imputed_noise=None if missing is None else _nb_noise("imputed"),
