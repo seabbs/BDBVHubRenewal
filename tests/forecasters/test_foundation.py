@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from bdbvhubrenewal.data.zones import province_of
 from bdbvhubrenewal.evaluation.backtest import BacktestConfig, make_tasks
 from bdbvhubrenewal.forecasters import (
     NATIONAL,
@@ -57,13 +58,31 @@ def _recording(store: list):
 
 @pytest.fixture(scope="module")
 def task(
-    target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
+    target: pd.DataFrame,
+    delays: pd.DataFrame,
+    daily: pd.DataFrame,
+    daily_zones: pd.DataFrame,
 ) -> ForecastTask:
+    from bdbvhubrenewal.data import load_health_zones
+    from tests.conftest import DATA
+
     rows = target.loc[target["vintage"] == "2026-10-24"]
     real = target.loc[target["kind"] == "real"]
     return make_tasks(
-        rows, delays, BacktestConfig(seed=3), history=real, daily=daily
+        rows,
+        delays,
+        BacktestConfig(seed=3),
+        history=real,
+        daily=daily,
+        zones=load_health_zones(DATA),
+        daily_zones=daily_zones,
     )[0]
+
+
+def _zones(task: ForecastTask, source: str) -> set[str]:
+    rows = task.zone_history if source == "weekly" else task.zone_daily_history
+    assert rows is not None
+    return {z for z in rows["location"] if province_of(z) in task.locations}
 
 
 def _reported(task: ForecastTask, out: pd.DataFrame) -> np.ndarray:
@@ -168,7 +187,7 @@ def test_draws_are_counts_at_least_the_reported(
         model = dataclasses.replace(get_model(name), sample=_constant(value))
         out = model.forecast(task)
         check_samples(out, task)
-        assert NATIONAL in set(out["location"])
+        assert set(out["location"]) == {NATIONAL, *task.locations}
         values = out["value"].to_numpy()
         assert (values >= 0).all()
         assert np.array_equal(values, np.round(values))
@@ -197,7 +216,9 @@ def test_maps_final_counts_through_a_delay(
 @pytest.mark.parametrize("source", SOURCES)
 def test_one_group_holds_every_place(source: str, task: ForecastTask) -> None:
     lags = MAX_LAG[source]
-    n_places = len(task.locations) + 1
+    # The country, the provinces and their zones are each a series.
+    n_places = 1 + len(task.locations) + len(_zones(task, source))
+    assert n_places > 1 + len(task.locations)
     sizes = {}
     for layout in LAYOUTS:
         seen: list = []
