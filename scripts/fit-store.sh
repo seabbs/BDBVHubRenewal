@@ -6,7 +6,8 @@
 #       plans, and fail if SCRATCH is not a scratch branch name
 #   scripts/fit-store.sh fetch DIR
 #       copy the branch's files into DIR (empty if there is no branch),
-#       with the commit fetched in DIR/.commit
+#       with the commit fetched in DIR/.commit, and fail if the remote
+#       cannot be read
 #   scripts/fit-store.sh push DIR KEYS PLAN
 #       add DIR's planned fits to the branch, prune it and push
 #
@@ -44,10 +45,22 @@ case "$action" in
   fetch)
     dir=$2
     mkdir -p "$dir"
-    if fetch_tip; then
-      git archive FETCH_HEAD | tar -x -C "$dir"
-      git rev-parse FETCH_HEAD > "$dir/.commit"
+    # Only a missing branch (exit 2) leaves the store empty. Any other
+    # failure fails, so a fetch error is not read as "no fit stored".
+    rc=0
+    git ls-remote -q --exit-code --heads origin "$branch" > /dev/null || rc=$?
+    if [ "$rc" = 2 ]; then
+      exit 0
+    elif [ "$rc" != 0 ]; then
+      echo "::error::could not read $branch from origin" >&2
+      exit 1
     fi
+    if ! fetch_tip; then
+      echo "::error::could not fetch $branch" >&2
+      exit 1
+    fi
+    git archive FETCH_HEAD | tar -x -C "$dir"
+    git rev-parse FETCH_HEAD > "$dir/.commit"
     ;;
   push)
     dir=$(cd "$2" && pwd)
