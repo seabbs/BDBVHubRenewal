@@ -215,6 +215,17 @@ jobs:
         with:
           name: data
           path: data
+      # The Chronos-2 models need their dependency group and the pinned
+      # checkpoint, cached by its revision.
+      - name: Install Chronos-2
+        if: startsWith(matrix.model, 'fm_chronos_')
+        run: uv sync --frozen --group chronos
+      - name: Cache the Chronos-2 checkpoint
+        if: startsWith(matrix.model, 'fm_chronos_')
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/huggingface
+          key: chronos-2-29ec3766d36d6f73f0696f85560a422f50e8498c
       # A fit that raises is stored as failed and is not retried until
       # its inputs change or a dispatch sets retry_failed. One that times
       # out is retried next run.
