@@ -14,7 +14,6 @@ from bdbvhubrenewal.evaluation.scoring import (
     energy_scores,
     relative_skill,
     score_forecasts,
-    wis_quantile,
     wis_sample,
 )
 
@@ -38,19 +37,6 @@ def test_wis_matches_interval_form(obs: float) -> None:
     assert got["wis"] == pytest.approx(_interval_wis(obs, samples))
     parts = got["dispersion"] + got["overprediction"] + got["underprediction"]
     assert parts == pytest.approx(got["wis"])
-
-
-def test_wis_of_quantiles_is_the_mean_quantile_score() -> None:
-    # The German hub's levels, scored as its paper does: the mean over
-    # levels of 2 (1{y < q} - tau) (q - y).
-    tau = np.array([0.025, 0.1, 0.25, 0.5, 0.75, 0.9, 0.975])
-    q = np.array([[2.0, 4.0, 6.0, 9.0, 12.0, 15.0, 20.0]] * 3)
-    obs = np.array([1.0, 10.0, 30.0])
-    want = np.mean(2 * ((obs[:, None] < q) - tau) * (q - obs[:, None]), 1)
-    got = wis_quantile(obs, q, tau)
-    np.testing.assert_allclose(got["wis"], want)
-    parts = got["dispersion"] + got["overprediction"] + got["underprediction"]
-    np.testing.assert_allclose(parts, want)
 
 
 def test_wis_of_point_mass_is_absolute_error() -> None:

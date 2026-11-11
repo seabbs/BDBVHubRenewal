@@ -11,7 +11,6 @@ epiforecasts/BVDOutbreakSize (`src/scoring.jl`).
   \left(\mathbb{1}\{y < q_\tau\} - \tau\right)(q_\tau - y),$$
   which equals the usual interval form.
   It splits into dispersion, overprediction and underprediction.
-  `wis_quantile` gives the same for forecasts made as quantiles.
 - **Log WIS**: WIS of $\log(1 + y)$ against $\log(1 + x)$ for the samples.
   It scores relative error, so large provinces do not dominate.
 - **CRPS** of the empirical sample distribution, for reference.
@@ -54,7 +53,6 @@ __all__ = [
     "score_forecasts",
     "score_sample",
     "summarise_scores",
-    "wis_quantile",
     "wis_sample",
 ]
 
@@ -109,49 +107,23 @@ def wis_sample(
     """
     x = _as_samples(samples)
     tau = np.asarray(quantile_levels, dtype=np.float64)
-    out = wis_quantile(np.array([obs]), np.quantile(x, tau)[None, :], tau)
-    return {k: float(v[0]) for k, v in out.items()}
-
-
-def wis_quantile(
-    obs: ArrayLike, quantiles: ArrayLike, quantile_levels: ArrayLike
-) -> dict[str, NDArray[np.float64]]:
-    """Return the WIS of quantile forecasts and its components.
-
-    Parameters
-    ----------
-    obs : array-like
-        The observed values, `[N]`.
-    quantiles : array-like
-        Each forecast's quantiles at `quantile_levels`, `[N, K]`.
-    quantile_levels : array-like
-        Symmetric quantile levels including 0.5, ascending, `[K]`.
-
-    Returns
-    -------
-    dict
-        `wis`, `dispersion`, `overprediction` and `underprediction`, each
-        `[N]`. The components sum to `wis`.
-    """
-    y = np.asarray(obs, dtype=np.float64)[:, None]
-    q = np.asarray(quantiles, dtype=np.float64)
-    tau = np.asarray(quantile_levels, dtype=np.float64)
+    q = np.quantile(x, tau)
+    k = (tau.size - 1) / 2
     lower = tau < 0.5
+    upper = tau > 0.5
     # Pair each lower level with its upper level.
-    lo, hi = q[:, lower], q[:, tau > 0.5][:, ::-1]
+    lo, hi = q[lower], q[upper][::-1]
     alpha = 2 * tau[lower]
-    med = q[:, np.isclose(tau, 0.5)]
-    disp = np.sum(alpha / 2 * (hi - lo), axis=1)
-    over = np.sum(np.maximum(lo - y, 0), axis=1)
-    over += np.maximum(med - y, 0)[:, 0] / 2
-    under = np.sum(np.maximum(y - hi, 0), axis=1)
-    under += np.maximum(y - med, 0)[:, 0] / 2
-    norm = lower.sum() + 0.5
+    med = float(q[np.isclose(tau, 0.5)][0])
+    disp = np.sum(alpha / 2 * (hi - lo))
+    over = np.sum(np.maximum(lo - obs, 0)) + max(med - obs, 0) / 2
+    under = np.sum(np.maximum(obs - hi, 0)) + max(obs - med, 0) / 2
+    norm = k + 0.5
     return {
-        "wis": (disp + over + under) / norm,
-        "dispersion": disp / norm,
-        "overprediction": over / norm,
-        "underprediction": under / norm,
+        "wis": float((disp + over + under) / norm),
+        "dispersion": float(disp / norm),
+        "overprediction": float(over / norm),
+        "underprediction": float(under / norm),
     }
 
 
