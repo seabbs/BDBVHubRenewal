@@ -11,7 +11,9 @@ import pytest
 from bdbvhubrenewal.data.germany import (
     HORIZONS,
     hub_forecasts,
+    hub_target,
     hub_triangle,
+    level,
     nowcast_tasks,
     place_code,
     read_triangle,
@@ -147,15 +149,47 @@ def test_models_forecast_the_tasks_and_map_back(tasks) -> None:
         pd.to_datetime(out["target_end_date"])
         - pd.to_datetime(out["forecast_date"])
     ).dt.days.equals(out["horizon"])
-    places = set(zip(out["location"], out["age_group"], strict=True))
-    assert places == {
-        ("DE", "00+"),
-        ("DE-BE", "00+"),
-        ("DE-BY", "00+"),
-        *(
-            ("DE", a)
-            for a in ("00-04", "05-14", "15-34", "35-59", "60-79", "80+")
-        ),
+    assert set(out["location"]) == {
+        "DE",
+        "DE-BE",
+        "DE-BY",
+        "00-04",
+        "05-14",
+        "15-34",
+        "35-59",
+        "60-79",
+        "80+",
     }
     # Germany comes from the states task, the sum of its states.
     assert out.groupby(["location", "age_group", "horizon"]).size().eq(20).all()
+
+
+def test_hub_target_is_each_7_day_sum_as_each_release_reports_it(
+    triangle: pd.DataFrame,
+) -> None:
+    out = hub_target(triangle, ["2021-10-01"]).set_index(
+        ["location", "vintage"]
+    )
+    rows = triangle.loc[
+        (triangle["location"] == "DE-BY")
+        & (triangle["reference_date"].between("2021-09-25", "2021-10-01"))
+        & (triangle["report_date"] <= "2021-10-05")
+    ]
+    want = rows.groupby("reference_date")["confirm"].last().sum()
+    got = out.loc[("DE-BY", "2021-10-05")]
+    assert got["total"] == want
+    assert got["cutoff"] == "2021-10-05"
+    assert got["target_end_date"] == "2021-10-01"
+    assert out.index.get_level_values("vintage").min() == "2021-10-01"
+    assert set(out.index.get_level_values("location")) == {
+        "DE", "DE-BE", "DE-BY", "00-04", "05-14", "15-34", "35-59",
+        "60-79", "80+",
+    }  # fmt: skip
+
+
+@pytest.mark.parametrize(
+    ("place", "want"),
+    [("DE", "national"), ("DE-BY", "states"), ("80+", "age")],
+)
+def test_levels_are_the_paper_s(place: str, want: str) -> None:
+    assert level(place) == want
