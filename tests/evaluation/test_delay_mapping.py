@@ -9,7 +9,6 @@ import pandas as pd
 import pytest
 
 from bdbvhubrenewal.evaluation.nowcast import (
-    AS_REPORTED,
     delay_curves,
     reported_samples,
     week_shares,
@@ -113,7 +112,7 @@ def test_the_country_sums_its_provinces_beside_a_shared_delay(
     np.testing.assert_array_equal(wide["CD"], wide["CD-IT"] + wide["CD-NK"])
 
 
-@pytest.mark.parametrize("model", AS_REPORTED)
+@pytest.mark.parametrize("model", ["randomwalk", "fm_chronos_weekly_complete"])
 def test_walk_models_are_returned_as_they_are_and_a_hub_team_not_at_all(
     model: str, daily: pd.DataFrame
 ) -> None:

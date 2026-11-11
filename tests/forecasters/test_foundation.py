@@ -10,7 +10,11 @@ import pandas as pd
 import pytest
 
 from bdbvhubrenewal.evaluation.backtest import BacktestConfig, make_tasks
-from bdbvhubrenewal.evaluation.nowcast import AS_REPORTED
+from bdbvhubrenewal.evaluation.nowcast import (
+    delay_curves,
+    scored_as_reported,
+    week_shares,
+)
 from bdbvhubrenewal.forecasters import (
     NATIONAL,
     ForecastTask,
@@ -29,11 +33,7 @@ from bdbvhubrenewal.forecasters.foundation import (
     hub_triangle,
     quantile_draws,
 )
-from bdbvhubrenewal.forecasters.randomwalk import (
-    RandomWalk,
-    quiet_places,
-    start_weeks,
-)
+from bdbvhubrenewal.forecasters.randomwalk import RandomWalk
 
 MODELS = tuple(f"fm_chronos_{s}_{lay}" for s in SOURCES for lay in LAYOUTS)
 
@@ -218,7 +218,9 @@ def test_complete_is_scored_as_reported(
     model = dataclasses.replace(get_model(name), sample=_constant(0.0))
     model.forecast(task)
     assert model.delay_summary is None
-    assert name in AS_REPORTED
+    assert model.scored_as_reported
+    assert scored_as_reported(name)
+    assert not get_model(f"fm_chronos_{source}_ragged").scored_as_reported
 
 
 @pytest.mark.parametrize("source", SOURCES)
@@ -265,7 +267,9 @@ def test_complete_starts_from_the_random_walk_week(
     )
     model.forecast(task)
     origin = RandomWalk().origin_at(task, errors=False)
-    start = start_weeks(origin)[~quiet_places(origin)].min()
+    # randomwalk's start: the latest week 95% complete, the earliest
+    # over places.
+    start = origin.start.min()
     week = pd.Timestamp(origin.snap.week_ends[start])
     groups, _ = store[0]
     n_context = groups[0]["target"].shape[1]
@@ -325,6 +329,28 @@ def test_draws_are_independent_across_series_and_weeks(
     importlib.util.find_spec("chronos") is not None,
     reason="Chronos-2 is installed",
 )
-def test_chronos_missing_is_unavailable() -> None:
-    with pytest.raises(ModelUnavailableError, match="group chronos"):
+def test_chronos_missing_fails() -> None:
+    # A fit without the chronos group fails, so the store records it as
+    # failed, not as a fit with no forecast.
+    with pytest.raises(ImportError):
         chronos_sampler([{"target": np.zeros((1, 5))}], 3, 10, 0)
+
+
+def test_weekly_lag_shares_map_back_to_themselves() -> None:
+    lags = MAX_LAG["weekly"]
+    weeks = pd.date_range("2026-08-01", periods=20, freq="7D")
+    shares = np.array([0.1, 0.4, 0.7, 0.9])[:lags]
+    final = np.full((1, len(weeks)), 100.0)
+    partial = np.full((1, len(weeks), lags), np.nan)
+    for d in range(lags):
+        partial[0, : 10 - d, d] = 100.0 * shares[d]
+    tri = foundation.HubTriangle(
+        list(weeks.strftime("%Y-%m-%d")), final, partial, 19
+    )
+    summary = foundation.lag_shares(tri, ("CD-IT",), "weekly", "m", "v")
+    curves = delay_curves(summary, ["CD-IT"])
+    # A release whose cut-off is the Saturday ending week c.
+    cutoff = weeks[12].date()
+    back = [weeks[12 - d].strftime("%Y-%m-%d") for d in range(lags)]
+    got = week_shares(curves, cutoff, back).set_index("target_end_date")
+    np.testing.assert_allclose(got.loc[back, "share"], shares)
