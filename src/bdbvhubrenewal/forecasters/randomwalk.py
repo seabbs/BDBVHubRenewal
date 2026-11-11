@@ -34,7 +34,7 @@ A place whose net variance is 0 or below has no own estimate.
 The delay, the observation model and the walk spread each use their own
 estimate where a place has at least 10 cases a week, and otherwise the
 pooled estimate of the nearest parent that does (`pooling`).
-A zone takes its province's delay, whatever its level (`chain.fit_delay`).
+A zone takes its province's delay (`chain.fit_delay`).
 A place with no case in the latest `walk_weeks` weeks is silent. It is
 exactly 0 until its first introduction, which comes each week with its
 pooled probability times the share of the week not yet reported, and then

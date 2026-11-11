@@ -345,7 +345,9 @@ def fit_delay(
     """Estimate the delay factors from the pairs up to release `r`.
 
     Each place takes its delay by the own-or-pooled rule (`pooling`),
-    except a zone, which takes its province's.
+    except a zone, which takes its province's. A zone's own delay rests
+    on few cases, and the nowcast divides by the share reported, so noise
+    in it would inflate the zones' nowcasts.
 
     Parameters
     ----------
@@ -374,11 +376,9 @@ def fit_delay(
         gaps,
     )
     source = source_index(level, snap.parent, min_level=settings.min_level)
-    # A zone takes its province's delay. Its own rests on few cases, and
-    # the nowcast divides by the share reported, so its noise inflates
-    # the zones' nowcasts. Parents come before children in `snap`.
-    zone = np.array([c.count("-") == 2 for c in snap.locations], dtype=bool)
-    source = np.where(zone, source[np.maximum(snap.parent, 0)], source)
+    parent = np.maximum(snap.parent, 0)
+    zone = (snap.parent >= 0) & (snap.parent[parent] >= 0)
+    source = np.where(zone, source[parent], source)
     g = np.concatenate([own_g, pooled_g])[source]
     own = np.broadcast_to((source == np.arange(level.size))[:, None], g.shape)
     return DelayFit(pairs, g, level, source, np.array(own))
