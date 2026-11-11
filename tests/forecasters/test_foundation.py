@@ -31,7 +31,7 @@ MODELS = ("fm_complete", "fm_delay_series", "fm_delay_cov")
 
 
 def _constant(value: float):
-    """A sampler whose every draw is `value` on the log1p scale."""
+    """A sampler whose every draw is `value`."""
 
     def sample(inputs, horizon, n, seed):
         assert seed >= 0

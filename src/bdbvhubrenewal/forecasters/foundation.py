@@ -22,17 +22,19 @@ Week $c = s^* - K + 1$ is the latest week with every cell complete.
 
 **Layouts.** Each province is one group of series, which Chronos-2's group
 attention reads together.
+Counts go in as they are: Chronos-2 standardises each series and takes
+its arcsinh, a log-like transform, itself.
 
-- `complete` (`fm_complete`): the target is $\log(1 + R_{p,w})$ for
+- `complete` (`fm_complete`): the target is $R_{p,w}$ for
   $w \le c$, forecast for every later week.
-- `delay_cov` (`fm_delay_cov`): as `complete`, with $\log(1 + n_{p,w,k})$
-  for each class $k$ as a covariate.
+- `delay_cov` (`fm_delay_cov`): as `complete`, with $n_{p,w,k}$ for each
+  class $k$ as a covariate.
   The covariates are complete up to $c$ and, past it, known for the cells
   already complete and missing for the rest, so Chronos-2 masks the cells
   still to be reported.
 - `delay_series` (`fm_delay_series`): each class on the report clock, as
   $K$ target series: series $k$ at report week $s$ holds
-  $\log(1 + n_{p, s - k, k})$, complete up to $s^*$ and forecast past it.
+  $n_{p, s - k, k}$, complete up to $s^*$ and forecast past it.
   A class is told apart from the others by its own history only, as
   Chronos-2 scales each series to zero mean and unit variance, which
   maps a constant label to zero.
@@ -44,7 +46,7 @@ week's quantile function at that $u$ (linear between the model's 21
 levels, flat beyond them).
 So a trajectory keeps its quantile level across weeks, and is
 independent of the other series' trajectories.
-A draw $z$ is the count $\max(\mathrm{round}(e^{z} - 1), 0)$.
+A draw $z$ is the count $\max(\mathrm{round}(z), 0)$.
 For `complete` and `delay_cov` sample $i$ of week $w > c$ is
 $\max(\hat y^{(i)}_{p,w}, R_{p,w})$; weeks up to $c$ are $R_{p,w}$.
 For `delay_series` it is the reported total plus the new reports of the
@@ -120,13 +122,13 @@ CHRONOS_REVISION: Final = "29ec3766d36d6f73f0696f85560a422f50e8498c"
 """The checkpoint's commit, pinned so runs are reproducible."""
 
 Series = Mapping[str, Any]
-"""One group for Chronos-2: `target` `[V, S]` on the log1p scale, and
+"""One group for Chronos-2: counts `target` `[V, S]`, and
 optionally `past_covariates` (name to `[S]`) and `future_covariates`
 (name to `[H]`, NaN where unknown)."""
 
 Sampler = Callable[[Sequence[Series], int, int, int], list[np.ndarray]]
 """Draws trajectories: `(groups, horizon, n, seed)` to one
-`[n, V, horizon]` array per group, on the log1p scale."""
+`[n, V, horizon]` array per group."""
 
 _WEEK = dt.timedelta(days=7)
 
@@ -323,8 +325,8 @@ def chronos_sampler(
 
 
 def _counts(draws: np.ndarray) -> np.ndarray:
-    """Return the counts of draws on the log1p scale."""
-    return np.maximum(np.round(np.expm1(draws)), 0.0)
+    """Round draws to counts, floored at zero."""
+    return np.maximum(np.round(draws), 0.0)
 
 
 @dataclass(frozen=True)
@@ -355,7 +357,7 @@ class View:
         return self.last - N_DELAYS + 2
 
     def cells(self) -> np.ndarray:
-        r"""Return $\log(1 + n_{p,w,k})$, NaN where not yet complete.
+        """Return $n_{p,w,k}$, NaN where not yet complete.
 
         Returns
         -------
@@ -364,7 +366,7 @@ class View:
         """
         assert self.counts is not None
         ages = np.arange(len(self.weeks))[:, None] + np.arange(N_DELAYS)
-        return np.where(ages <= self.last, np.log1p(self.counts), np.nan)
+        return np.where(ages <= self.last, self.counts, np.nan)
 
 
 def vintage_view(
@@ -434,7 +436,7 @@ def cov_groups(view: View) -> list[Series]:
     cells = view.cells()
     return [
         {
-            "target": np.log1p(r[None, :start]),
+            "target": r[None, :start],
             "past_covariates": {
                 f"delay_{k}": c[:start, k] for k in range(N_DELAYS)
             },
@@ -541,7 +543,7 @@ class FoundationModel:
         groups: list[Series] = (
             cov_groups(view)
             if self.layout == "delay_cov"
-            else [{"target": np.log1p(r[None, :start])} for r in view.reported]
+            else [{"target": r[None, :start]} for r in view.reported]
         )
         draws = self.sample(groups, horizon, task.n_samples, seed)
         drawn = _counts(np.stack([d[:, 0] for d in draws], axis=1))
@@ -557,9 +559,7 @@ class FoundationModel:
         tri = DelayTriangle(view.counts, view.last)
         n_weeks = len(view.weeks)
         horizon = n_weeks + N_DELAYS - 2 - tri.last
-        groups: list[Series] = [
-            {"target": np.log1p(s)} for s in report_series(tri)
-        ]
+        groups: list[Series] = [{"target": s} for s in report_series(tri)]
         draws = self.sample(groups, horizon, n_samples, seed)
         drawn = _counts(np.stack(draws, axis=1))  # [S, P, K, H]
         reported = view.reported
