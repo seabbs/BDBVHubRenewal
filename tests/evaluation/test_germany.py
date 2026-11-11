@@ -54,7 +54,7 @@ def test_forecasts_are_the_paper_s_quantiles_of_each_nowcast() -> None:
         ["randomwalk"], triangle, ["2021-10-19", "2021-10-20"], 50, 1
     )
     per = out.groupby(["model", *KEYS, "horizon"])["quantile"]
-    assert per.apply(tuple).eq(QUANTILE_LEVELS).all()
+    assert per.apply(tuple).map(QUANTILE_LEVELS.__eq__).all()
     assert set(out["horizon"]) == set(HORIZONS)
     assert set(out["forecast_date"]) == {"2021-10-19", "2021-10-20"}
     rising = out.groupby(["model", *KEYS])["value"].apply(
@@ -93,7 +93,7 @@ def test_quantile_scores_match_the_paper_s_formula() -> None:
     q = [2.0, 4.0, 6.0, 9.0, 12.0, 15.0, 20.0]
     out = score_quantiles(_quantiles(q), _truth(13.0)).iloc[0]
     tau = np.array(QUANTILE_LEVELS)
-    want = np.mean(2 * ((13.0 < np.array(q)) - tau) * (np.array(q) - 13.0))
+    want = np.mean(2 * ((np.array(q) > 13.0) - tau) * (np.array(q) - 13.0))
     assert out["wis"] == pytest.approx(want)
     assert out["coverage_50"] == 0.0
     assert out["coverage_95"] == 1.0
