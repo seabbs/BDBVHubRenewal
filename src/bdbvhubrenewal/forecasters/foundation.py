@@ -18,7 +18,7 @@ import datetime as dt
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from functools import cache, partial
-from typing import Any, ClassVar, Final
+from typing import Any, Final
 
 import numpy as np
 import pandas as pd
@@ -31,11 +31,10 @@ from bdbvhubrenewal.forecasters.base import (
     ModelUnavailableError,
     register_model,
 )
-from bdbvhubrenewal.forecasters.chain import delay_summary
 from bdbvhubrenewal.forecasters.randomwalk import (
     RandomWalk,
-    _quiet,
-    _start_weeks,
+    quiet_places,
+    start_weeks,
 )
 
 __all__ = [
@@ -49,6 +48,7 @@ __all__ = [
     "Sampler",
     "chronos_sampler",
     "hub_triangle",
+    "lag_shares",
     "quantile_draws",
 ]
 
@@ -60,7 +60,7 @@ LAYOUTS: Final = ("complete", "ragged")
 """The ways the releases are given to Chronos-2."""
 
 MAX_LAG: Final = {"weekly": 4, "daily": 28}
-"""Release lags $, in the source's steps, after which a count is taken as
+"""Release lag $D$, in the source's steps, from which a count is taken as
 final."""
 
 CHRONOS_MODEL: Final = "amazon/chronos-2"
@@ -88,13 +88,13 @@ class HubTriangle:
     times : list of str
         Consecutive weeks (ISO Saturdays) or days.
     final : numpy.ndarray
-        The count of each place and step at the vintage, `[L, T]`.
+        The count of each place and step at the latest release, `[L, T]`.
     partial : numpy.ndarray
-        The count of each place and step at release lag  < D$, from the
-        release whose cut-off is $ steps after it, NaN where no release
+        The count of each place and step at release lag $d < D$, from the
+        release whose cut-off is $d$ steps after it, NaN where no release
         is, `[L, T, D]`.
     last : int
-        Index of the step holding the vintage's cut-off.
+        Index of the step holding the latest release's cut-off.
     """
 
     times: list[str]
@@ -104,7 +104,7 @@ class HubTriangle:
 
     @property
     def n_context(self) -> int:
-        """Steps whose count at the vintage is at lag $ or more."""
+        """Steps whose count at the latest release is at lag $D$ or more."""
         return self.last - int(self.partial.shape[2]) + 1
 
 
@@ -116,7 +116,6 @@ def _step(source: str, day: str) -> dt.date:
 def hub_triangle(
     rows: pd.DataFrame,
     source: str,
-    vintage: str,
     places: Sequence[str],
     last_time: str,
 ) -> HubTriangle:
@@ -125,14 +124,12 @@ def hub_triangle(
     Parameters
     ----------
     rows : pandas.DataFrame
-        The releases on or before `vintage`. Weekly rows have
+        The releases, the latest last. Weekly rows have
         `target_end_date` and `total`; daily rows have `onset_date`,
         `observed` and `imputed`. Both have `vintage`, `location` and
         `cutoff`.
     source : str
         One of `SOURCES`.
-    vintage : str
-        The vintage.
     places : sequence of str
         Places, in the order of the output.
     last_time : str
@@ -164,6 +161,7 @@ def hub_triangle(
     partial = np.full((len(places), n_times, lags), np.nan)
     final = np.zeros((len(places), n_times))
     last = 0
+    # The latest release gives the final counts and the last step.
     for release in sorted(set(rows["vintage"])):
         mine = (rows["vintage"] == release).to_numpy()
         cutoff = str(rows.loc[mine, "cutoff"].iloc[0])
@@ -178,9 +176,75 @@ def hub_triangle(
         for d in range(lags):
             if 0 <= at - d < n_times:
                 partial[:, at - d, d] = counts[:, at - d]
-        if release == vintage:
-            final, last = counts, at
+        final, last = counts, at
     return HubTriangle(times, final, partial, last)
+
+
+def lag_shares(
+    tri: HubTriangle,
+    places: Sequence[str],
+    source: str,
+    model: str,
+    vintage: str,
+) -> pd.DataFrame:
+    """Return the share of a final count reported by each release lag.
+
+    At lag $d$ a place's share is the sum of its counts at lag $d$ over the
+    sum of their final counts, over the steps final at the latest release
+    with a count at that lag. Shares are capped at 1 and made
+    non-decreasing, and are 1 from lag $D$. `pooled` sums over places, for
+    places with none of their own.
+
+    Parameters
+    ----------
+    tri : HubTriangle
+        The releases.
+    places : sequence of str
+        The places of `tri`, in order.
+    source : str
+        One of `SOURCES`, for the age in days of a lag.
+    model, vintage : str
+        Labels for the rows.
+
+    Returns
+    -------
+    pandas.DataFrame
+        As `forecasters.chain.delay_summary`: columns `model`, `vintage`,
+        `location`, `kind`, `x` (age in days), `quantity`
+        (`"reported_share"`) and `q50`.
+    """
+    start = tri.n_context
+    lags = tri.partial.shape[2]
+    width = 7 if source == "weekly" else 1
+    cells = tri.partial[:, :start]
+    seen = ~np.isnan(cells)
+    final = np.broadcast_to(tri.final[:, :start, None], cells.shape)
+    num = np.where(seen, cells, 0.0).sum(axis=1)  # [L, D]
+    den = np.where(seen, final, 0.0).sum(axis=1)
+    rows = [*zip(places, num, den, strict=True)]
+    rows.append(("pooled", num.sum(axis=0), den.sum(axis=0)))
+    frames = []
+    for place, n, d in rows:
+        ok = d > 0
+        if not ok.any():
+            continue
+        share = np.maximum.accumulate(np.minimum(n[ok] / d[ok], 1.0))
+        ages = np.arange(lags)[ok] * width
+        frames.append(
+            pd.DataFrame(
+                {
+                    "location": place,
+                    "x": [*ages, lags * width],
+                    "q50": [*share, 1.0],
+                }
+            )
+        )
+    out = pd.concat(frames, ignore_index=True)
+    out.insert(0, "model", model)
+    out.insert(1, "vintage", vintage)
+    out.insert(3, "kind", "cumulative")
+    out.insert(5, "quantity", "reported_share")
+    return out
 
 
 def quantile_draws(
@@ -304,8 +368,8 @@ def _group(
 
 def _walk_start(origin: Any) -> str:
     """Return the earliest week `randomwalk` starts a walk from."""
-    start = _start_weeks(origin)
-    walked = ~_quiet(origin)
+    start = start_weeks(origin)
+    walked = ~quiet_places(origin)
     first = start[walked].min() if walked.any() else start.min()
     return str(origin.snap.week_ends[int(first)])
 
@@ -325,8 +389,10 @@ class FoundationModel:
     sample : Sampler
         Draws the trajectories, Chronos-2 by default.
     delay_summary : pandas.DataFrame or None
-        The chain ladder delay of the last forecast, which maps its final
-        counts to what later releases show.
+        The `ragged` models' share reported by release lag at the last
+        forecast (`lag_shares`), which maps their final counts to what
+        later releases show. None for `complete`, which is scored as
+        reported, as `randomwalk` is.
     """
 
     name: str
@@ -336,7 +402,11 @@ class FoundationModel:
     delay_summary: pd.DataFrame | None = field(
         init=False, default=None, repr=False
     )
-    needs_snapshots: ClassVar[bool] = True
+
+    @property
+    def needs_snapshots(self) -> bool:
+        """Whether the model reads release snapshots: `complete` does."""
+        return self.layout == "complete"
 
     def forecast(self, task: ForecastTask) -> pd.DataFrame:
         """Return trajectories of the country and the task's provinces.
@@ -356,9 +426,9 @@ class FoundationModel:
         Raises
         ------
         ModelUnavailableError
-            If the task has no releases of the source, no release
-            snapshots, fewer than two steps of context, or Chronos-2 is
-            not installed.
+            If the task has no releases of the source, fewer than two
+            steps of context, or Chronos-2 is not installed, or, for
+            `complete`, no week `randomwalk` can start from.
         """
         weekly = self.source == "weekly"
         rows = task.target_history if weekly else task.daily_history
@@ -367,14 +437,18 @@ class FoundationModel:
                 f"{self.name} needs the {self.source} releases, and the task "
                 f"for {task.vintage} has none."
             )
-        origin = RandomWalk().origin_at(task, errors=False)
-        self.delay_summary = delay_summary(origin, self.name, task.vintage)
         places = (NATIONAL, *task.locations)
         weeks = list(task.target_end_dates)
-        tri = hub_triangle(rows, self.source, task.vintage, places, weeks[-1])
+        tri = hub_triangle(rows, self.source, places, weeks[-1])
         start = tri.n_context
+        self.delay_summary = None
         if self.layout == "complete":
+            origin = RandomWalk().origin_at(task, errors=False)
             start = tri.times.index(_walk_start(origin)) + 1
+        else:
+            self.delay_summary = lag_shares(
+                tri, places, self.source, self.name, task.vintage
+            )
         if start < 2:
             raise ModelUnavailableError(
                 f"{self.name} needs two steps of context, and the task for "

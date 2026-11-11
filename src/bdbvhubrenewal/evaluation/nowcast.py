@@ -12,7 +12,8 @@ Two targets are scored.
 
 **Reported.** The count each later release $o'$ shows, for every week
 of the forecast that $o'$ reports.
-`randomwalk` is scored on its samples as they are, with no delay.
+The models in `AS_REPORTED` are scored on their samples as they are,
+with no delay.
 Every other model forecasts the final count $X$ of a week and is mapped
 to what $o'$ shows through its own modelled delay, the share
 $\pi$ of a day's final count reported by each age (`delay_curves`,
@@ -75,9 +76,9 @@ from bdbvhubrenewal.forecasters.chain import MissingSnapshots
 from bdbvhubrenewal.forecasters.renewal import DELAY_SUMMARY_FILE
 
 __all__ = [
+    "AS_REPORTED",
     "COMPLETE_GROWTH",
     "COMPLETE_WEEKS",
-    "RANDOM_WALK",
     "ReleaseBacktest",
     "ReleaseForecasts",
     "complete_weeks",
@@ -97,8 +98,13 @@ __all__ = [
 
 log = logging.getLogger(__name__)
 
-RANDOM_WALK = "randomwalk"
-"""The model scored on its samples as they are, with no delay."""
+AS_REPORTED = (
+    "randomwalk",
+    "fm_chronos_weekly_complete",
+    "fm_chronos_daily_complete",
+)
+"""The models scored on their samples as they are, with no delay: they
+forecast forward from the latest complete week and make no nowcast."""
 
 COMPLETE_WEEKS = 4
 """Weeks a week must be old at the latest release to count as complete."""
@@ -387,7 +393,7 @@ def reported_samples(
 ) -> dict[str, pd.DataFrame]:
     """Return a model's samples of what each later release shows.
 
-    `randomwalk`'s samples are returned as they are, with no delay.
+    The samples of a model in `AS_REPORTED` are returned as they are.
     Another model's places are mapped by its delay (`delay_curves`,
     `draw_reported`), a place it has no delay for is returned as it is,
     and the country is the sum of the provinces.
@@ -419,7 +425,7 @@ def reported_samples(
     dict of str to pandas.DataFrame
         Samples by later release.
     """
-    if model == RANDOM_WALK:
+    if model in AS_REPORTED:
         return dict.fromkeys(later, samples)
     if summary is None:
         return {}

@@ -22,7 +22,7 @@ Weeks with data keep their nowcast draws. If the week holding the cut-off
 is partial, its days after the cut-off add a Poisson draw from that week's
 walk rate, walked by each sample from its own nowcast of the latest full
 week at least `Settings.start_share` reported with at least
-`Settings.start_count` cases (`_start_weeks`). Each sample's completed
+`Settings.start_count` cases (`start_weeks`). Each sample's completed
 cut-off week, its nowcast plus that draw, is the base the walk goes on
 from for the weeks after the cut-off.
 
@@ -41,7 +41,7 @@ walks from a count drawn from Poisson(1) given at least 1
 (`introductions.silent_trajectories`).
 In `randomwalknowcast` a place with no week to start from is quiet like
 a silent one: after its latest complete week it draws introductions,
-floored at the counts reported (`_quiet`).
+floored at the counts reported (`quiet_places`).
 National is the sum of provinces by sample.
 Each model raises if the task has no snapshots or no pair of releases
 within the delay window.
@@ -77,7 +77,7 @@ from bdbvhubrenewal.forecasters.introductions import silent_trajectories
 from bdbvhubrenewal.forecasters.obs import sample_count
 from bdbvhubrenewal.forecasters.walk import random_walks
 
-__all__ = ["RandomWalk", "RandomWalkNowcast"]
+__all__ = ["RandomWalk", "RandomWalkNowcast", "quiet_places", "start_weeks"]
 
 
 _KEPT_ORIGINS: Final = 4
@@ -203,7 +203,7 @@ def _start_ok(origin: Origin) -> np.ndarray:
     return ok
 
 
-def _quiet(origin: Origin) -> np.ndarray:
+def quiet_places(origin: Origin) -> np.ndarray:
     """Return the places that draw introductions instead of a walk, `[L]`.
 
     These are the silent places and those with no week to start from in
@@ -212,16 +212,16 @@ def _quiet(origin: Origin) -> np.ndarray:
     return origin.silent | ~_start_ok(origin).any(axis=1)
 
 
-def _start_weeks(origin: Origin) -> np.ndarray:
+def start_weeks(origin: Origin) -> np.ndarray:
     """Return the week each place's walk starts from, `[L]`.
 
     It is the latest week a walk can start from (`_start_ok`). A quiet
-    place (`_quiet`) starts at its latest complete week, after which its
+    place (`quiet_places`) starts at its latest complete week, after which its
     introductions are drawn.
     """
     ok = _start_ok(origin)
     latest = origin.start_nowcast - np.argmax(ok[:, ::-1], 1)
-    return np.where(_quiet(origin), origin.start, latest)
+    return np.where(quiet_places(origin), origin.start, latest)
 
 
 def frame(
@@ -455,7 +455,7 @@ class RandomWalkNowcast(RandomWalk):
         self._diagnostics(
             origin,
             task,
-            _start_weeks(origin),
+            start_weeks(origin),
         )
         return frame(task, weeks, values, self.rows(origin, task))
 
@@ -508,8 +508,8 @@ class RandomWalkNowcast(RandomWalk):
         )
         # Each sample walks on from its own nowcast of the start week.
         cw = snap.cut_week(origin.o)
-        w0 = _start_weeks(origin)
-        quiet = _quiet(origin)
+        w0 = start_weeks(origin)
+        quiet = quiet_places(origin)
         rows = np.arange(n_loc)
         lam, y = _walks(
             key_walk, nowcast[:, rows, w0].T, origin, w0, n_all, quiet

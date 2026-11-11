@@ -1534,9 +1534,11 @@ def _fit_settings() -> dict[str, dict[str, Any]]:
     """
     settings = samplers()
     for name in stored_models():
-        model: Any = get_model(name)
-        if name not in settings and hasattr(model, "sampler"):
-            settings[name] = dataclasses.asdict(model.sampler)
+        if name in settings:
+            continue
+        sampler = getattr(get_model(name), "sampler", None)
+        if sampler is not None:
+            settings[name] = dataclasses.asdict(sampler)
     return settings
 
 
