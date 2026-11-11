@@ -21,7 +21,7 @@ from bdbvhubrenewal.forecasters.chain import (
     retro_errors,
     weeks_back,
 )
-from bdbvhubrenewal.forecasters.obs import MAX_SIZE, PRIOR_SIZE
+from bdbvhubrenewal.forecasters.obs import MAX_SIZE, PRIOR_SIZE, pooled_sizes
 from bdbvhubrenewal.forecasters.pooling import pool_matrix, source_index
 
 PLACES = ("CD-HU", "CD-IT", "CD-NK", "CD-TO")
@@ -202,6 +202,34 @@ def test_one_rule_shares_the_size_by_level_only(origin24) -> None:
     src = source_index(origin24.fit.level, origin24.snap.parent)
     for k in range(origin24.obs_source.shape[1]):
         np.testing.assert_array_equal(origin24.obs_source[:, k], src)
+
+
+def test_places_own_sizes_are_pooled_over_their_siblings(origin24) -> None:
+    # Each place that fits its own size is shrunk towards its siblings in
+    # its parent's pool, by empirical Bayes over their errors.
+    o = origin24
+    assert o.errors is not None
+    assert o.size is not None
+    e = o.errors
+    fit = e.valid & (e.remaining > 0)
+    pool = pool_matrix(o.fit.level, o.snap.parent)
+    src = source_index(o.fit.level, o.snap.parent)
+    n_loc = len(o.snap.locations)
+    checked = 0
+    for p in range(n_loc):
+        members = [m for m in np.flatnonzero(pool[p]) if m != p]
+        if not members:
+            continue
+        idx = np.array(members)
+        want = pooled_sizes(
+            np.where(fit[:, idx], e.added[:, idx], 0.0),
+            np.where(fit[:, idx], e.remaining[:, idx], 0.0),
+        )
+        for j, m in enumerate(members):
+            if src[m] == m:
+                np.testing.assert_allclose(o.size[m], want[j], rtol=1e-6)
+                checked += 1
+    assert checked > 0
 
 
 def test_the_delay_uses_every_in_window_pair(snap24) -> None:
