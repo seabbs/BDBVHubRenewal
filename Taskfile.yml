@@ -98,6 +98,13 @@ tasks:
     cmds:
       - uv run bdbvhubrenewal zone-backtest {{.CLI_ARGS}}
 
+  germany:
+    desc: Run and score the German hospitalisation nowcast benchmark (writes results/germany/)
+    cmds:
+      - uv run bdbvhubrenewal germany-fetch
+      - uv run bdbvhubrenewal germany-forecast {{.CLI_ARGS}}
+      - uv run bdbvhubrenewal germany-score output/germany/quantiles.csv.gz
+
   nowcast:
     desc: Forecast from the latest vintage and write a checked hub file to output/submission/
     cmds:
