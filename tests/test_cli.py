@@ -571,3 +571,61 @@ def test_fit_store_unpack_says_when_the_store_has_no_fit(
     args += ["--model", "renewal", "--origin", "2026-11-08"]
     assert main([*args, "--out", str(tmp_path / "fit")]) == 3
     assert not (tmp_path / "fit").exists()
+
+
+def _outside_repo(tmp_path: Path) -> tuple[Path, dict[str, str]]:
+    """A working directory with the config but no `data/`.
+
+    The conftest points this process's loaders at the fixture, so the CLI
+    runs in a new process, as on CI, where `data/` is not committed.
+    """
+    import shutil
+
+    shutil.copytree(ROOT / "config", tmp_path / "config")
+    env = {**os.environ, "BDBV_DATA_DIR": str(ROOT / "tests/fixtures/data")}
+    return tmp_path, env
+
+
+def test_loaders_follow_bdbv_data_dir_after_the_cli_starts(
+    tmp_path: Path,
+) -> None:
+    # The renewal models load the populations with `load_locations()`,
+    # no directory given, inside a fit.
+    cwd, env = _outside_repo(tmp_path)
+    code = (
+        "from bdbvhubrenewal.cli import main\n"
+        "from bdbvhubrenewal.data import load_locations\n"
+        "main(['--version'])\n"
+        "print(len(load_locations()))\n"
+    )
+    out = subprocess.run(
+        [sys.executable, "-c", code],
+        cwd=cwd,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert out.returncode == 0, out.stderr
+    assert int(out.stdout.split()[-1]) > 0
+
+
+@pytest.mark.slow
+def test_the_smoke_fit_runs_with_no_data_dir(tmp_path: Path) -> None:
+    # The Tests workflow's "Fit and forecast as the submission CI does".
+    cwd, env = _outside_repo(tmp_path)
+    sampler = '{"num_chains": 1, "num_warmup": 5, "num_samples": 5}'
+    out = subprocess.run(
+        [
+            sys.executable, "-m", "bdbvhubrenewal.cli", "fit",
+            "--model", "renewal", "--config", "main",
+            "--sampler-json", sampler, "--out", str(tmp_path / "fit"),
+        ],
+        cwd=cwd,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )  # fmt: skip
+    assert out.returncode == 0, out.stderr[-2000:]
+    assert (tmp_path / "fit").is_dir()
