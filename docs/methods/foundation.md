@@ -11,7 +11,7 @@ None is submitted.
 In brief, each model:
 
 1. lays out the hub target of every release by place, step and release lag ([Releases](#releases));
-2. puts the country and every province, each as its own series, in one group that Chronos-2 forecasts jointly ([Layouts](#layouts));
+2. puts the country, every province and their health zones, each as its own series, in one group that Chronos-2 forecasts jointly ([Layouts](#layouts));
 3. draws 100 trajectories from Chronos-2's quantiles ([Trajectories](#trajectories));
 4. rounds the draws to counts no lower than the count already reported ([Counts](#counts)).
 
@@ -33,8 +33,9 @@ At the vintage, with cut-off step $c$, steps up to $t^* = c - D$ are final, and 
 
 ## Layouts
 
-All places are in one group of series, so Chronos-2's group attention reads them together.
+All places are in one group of series, so Chronos-2's group attention reads them together: the country, the provinces and the health zones of those provinces with zone data.
 The country is its own series and is not the sum of the provinces.
+Zone counts start with the zone releases, and are zero before them.
 The context is the steps up to $t^*$, and every step after it is forecast.
 
 - **Complete** (`*_complete`): the targets are $X_{p,t}$ for $t \le t^*$, one series per place.
@@ -77,6 +78,6 @@ These models use the daily chain ladder delay of `randomwalknowcast` ([Baseline 
 - The hub target has few releases, so each lag has a handful of values per place, most of them in the last weeks.
 - Chronos-2 is used as pretrained. It has not seen these data or outbreaks like them.
 - Trajectories are independent across steps and places, so sums over weeks or places are too narrow.
-- Health zones are split from the provinces as for the other fitted models ([Health zones](baselines.md#health-zones)).
+- The zones' own forecasts are not used yet: zone forecasts are split from the provinces as for the other fitted models ([Health zones](baselines.md#health-zones)).
 
 [^chronos2]: Ansari A F et al. (2025) Chronos-2: From univariate to universal forecasting. arXiv:2510.15821. Code: <https://github.com/amazon-science/chronos-forecasting>.
