@@ -42,9 +42,6 @@ classifiers = [
 model = [
   "pyrenew @ git+https://github.com/CDCgov/PyRenew@2441cb327d6e563eab0495540cb7467a102c234f",
 ]
-# Chronos-2 for the foundation models (`bdbvhubrenewal.forecasters.foundation`).
-# Brings torch, built for CUDA 12.6 on Linux. The package imports without it.
-chronos = ["chronos-forecasting==2.3.2", "torch>=2.7"]
 
 [project.urls]
 Homepage = "https://samabbott.co.uk/BDBVHubRenewal/"
@@ -70,6 +67,10 @@ dev = [
   "scoringrules>=0.7",
   "types-PyYAML",
 ]
+# Chronos-2 for the foundation models (`bdbvhubrenewal.forecasters.foundation`).
+# Brings torch, built for CUDA 12.6 on Linux. A group, not an extra, so the
+# fit store's dependency hash of the other models does not change.
+chronos = ["chronos-forecasting==2.3.2", "torch>=2.7"]
 docs = [
   "jupytext>=1.19.6",
   "mkdocs-jupyter>=0.27.0",

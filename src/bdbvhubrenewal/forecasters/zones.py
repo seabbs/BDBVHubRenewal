@@ -68,7 +68,7 @@ import numpy as np
 import pandas as pd
 
 from bdbvhubrenewal.data.dates import as_date
-from bdbvhubrenewal.data.zones import is_zone, province_of
+from bdbvhubrenewal.data.zones import province_of
 from bdbvhubrenewal.forecasters.base import (
     NATIONAL,
     SAMPLE_COLUMNS,
@@ -547,12 +547,10 @@ def zones_for_model(
 ) -> pd.DataFrame:
     """Return health-zone samples that sum to a model's province samples.
 
-    A model that forecasts the zones itself gives zone rows in `samples`,
-    which are made to sum to its provinces (`reconcile_zones`), as the hub
-    file needs. A random walk model with no fit is run on the zones and
-    summed to the provinces. Any other model's province samples, a fitted
-    model's included, are split across the zones by `ZoneAllocator`, so
-    no model is fitted here.
+    A random walk model with no fit is run on the zones and summed to the
+    provinces. Any other model's province samples, a fitted model's
+    included, are split across the zones by `ZoneAllocator`, so no model
+    is fitted here.
 
     Parameters
     ----------
@@ -561,8 +559,7 @@ def zones_for_model(
     task : ForecastTask
         The province task.
     samples : pandas.DataFrame
-        The model's samples for `task`: provinces, and zones if it
-        forecasts them.
+        The model's province samples for `task`.
     counts : pandas.DataFrame
         Weekly zone counts at the task's vintage (`weekly_zone_counts`).
     zones : tuple of str
@@ -575,11 +572,6 @@ def zones_for_model(
     pandas.DataFrame
         Zone samples with `SAMPLE_COLUMNS`.
     """
-    own = samples["location"].map(is_zone)
-    if own.any():
-        return reconcile_zones(
-            samples.loc[own], samples.loc[~own], task, counts, zones
-        )
     fitted = {s.name for s in list_models() if s.fitted}
     model = None if name is None else get_model(name)
     if isinstance(model, RandomWalk) and name not in fitted:

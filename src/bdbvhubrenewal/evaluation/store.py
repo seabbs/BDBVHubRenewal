@@ -57,15 +57,8 @@ from typing import Any, Final
 
 import pandas as pd
 
-from bdbvhubrenewal.data import (
-    load_daily,
-    load_daily_zones,
-    load_delays,
-    load_health_zones,
-    load_target,
-)
+from bdbvhubrenewal.data import load_daily, load_delays, load_target
 from bdbvhubrenewal.data.tidy import write_csv
-from bdbvhubrenewal.data.zones import hub_zones
 from bdbvhubrenewal.evaluation.backtest import (
     BacktestConfig,
     _fit_rows,
@@ -134,10 +127,6 @@ UNPACKED_FILE: Final = "store.json"
 NEXT_ROUND_WEEKS: Final = 1
 """Weeks a stored fit forecasts past `[forecast] max_horizon`, so a round
 with no new release is forecast from the last release's stored fit."""
-
-ZONE_FIELDS: Final = ("zone_history", "zone_daily_history", "zone_codes")
-"""Task fields in the fit key of a model only if it reads zones
-(`reads_zones`), so zone data never refits the others."""
 
 COMMIT_FILE: Final = ".commit"
 """The store branch commit, written by `scripts/fit-store.sh fetch`."""
@@ -324,9 +313,6 @@ def origin_tasks(
     delays: pd.DataFrame,
     config: BacktestConfig,
     daily: pd.DataFrame,
-    zones: pd.DataFrame | None = None,
-    daily_zones: pd.DataFrame | None = None,
-    zone_codes: tuple[str, ...] = (),
 ) -> dict[str, ForecastTask]:
     """Build the task of every real origin, as the store fits it.
 
@@ -342,11 +328,6 @@ def origin_tasks(
     ----------
     target, delays, daily : pandas.DataFrame
         The tidy tables.
-    zones, daily_zones : pandas.DataFrame, optional
-        The weekly and daily health-zone tables, for the models that read
-        zones.
-    zone_codes : tuple of str
-        The hub's zone codes, for the models that read zones.
     config : BacktestConfig
         Horizons, samples and seed (`[forecast]`).
 
@@ -356,17 +337,7 @@ def origin_tasks(
         Task by origin (the vintage date), in date order.
     """
     return {
-        v: vintage_task(
-            target,
-            delays,
-            config,
-            v,
-            daily,
-            NEXT_ROUND_WEEKS,
-            zones=zones,
-            daily_zones=daily_zones,
-            zone_codes=zone_codes,
-        )[0]
+        v: vintage_task(target, delays, config, v, daily, NEXT_ROUND_WEEKS)[0]
         for v in real_vintages(target)
         if v not in config.skip_origins
     }
@@ -397,9 +368,6 @@ def _settings(model: ForecastModel) -> str:
 def fit_key(model: ForecastModel, task: ForecastTask, code: str) -> str:
     """Hash the inputs of one stored fit.
 
-    The task's zone data (`ZONE_FIELDS`) are hashed only for a model that
-    reads them.
-
     Parameters
     ----------
     model : ForecastModel
@@ -415,7 +383,6 @@ def fit_key(model: ForecastModel, task: ForecastTask, code: str) -> str:
         The first 16 hex digits of a SHA-256 hash.
     """
     digest = hashlib.sha256()
-    zones = getattr(model, "reads_zones", False)
     head = {
         "model": _settings(model),
         "code": code,
@@ -423,8 +390,6 @@ def fit_key(model: ForecastModel, task: ForecastTask, code: str) -> str:
     }
     digest.update(json.dumps(head, sort_keys=True).encode())
     for f in fields(task):
-        if f.name in ZONE_FIELDS and not zones:
-            continue
         value = getattr(task, f.name)
         digest.update(f.name.encode())
         if isinstance(value, pd.DataFrame):
@@ -985,9 +950,6 @@ def command(args: argparse.Namespace) -> int:
         load_delays(args.data),
         config,
         load_daily(args.data),
-        load_health_zones(args.data),
-        load_daily_zones(args.data),
-        hub_zones(Path(args.data) / "hub-config" / "tasks.json"),
     )
     models = args.models or stored_models()
     one = args.action in ("fit", "unpack")

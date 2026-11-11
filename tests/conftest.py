@@ -82,13 +82,6 @@ def config() -> BacktestConfig:
 
 
 @pytest.fixture(scope="session")
-def health_zones() -> pd.DataFrame:
-    from bdbvhubrenewal.data import load_health_zones
-
-    return load_health_zones(DATA)
-
-
-@pytest.fixture(scope="session")
 def daily_zones() -> pd.DataFrame:
     from bdbvhubrenewal.data import load_daily_zones
 

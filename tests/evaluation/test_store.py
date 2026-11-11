@@ -437,37 +437,3 @@ def test_a_model_with_no_config_stores_no_files(
 ) -> None:
     stored = store.fit(fitted_flat, tasks[sorted(tasks)[-1]], {}, "c")
     assert stored.files == {}
-
-
-@pytest.mark.usefixtures("in_root", "offline_bvd")
-def test_zone_data_keys_only_the_models_that_read_it(
-    target: pd.DataFrame,
-    delays: pd.DataFrame,
-    daily: pd.DataFrame,
-    daily_zones: pd.DataFrame,
-    health_zones: pd.DataFrame,
-    config: BacktestConfig,
-    tasks: dict[str, ForecastTask],
-) -> None:
-    zoned = store.origin_tasks(
-        target,
-        delays,
-        config,
-        daily,
-        health_zones,
-        daily_zones,
-        ("CD-IT-01", "CD-NK-01"),
-    )
-    latest = real_vintages(target)[-1]
-    assert zoned[latest].zone_history is not None
-    assert zoned[latest].zone_daily_history is not None
-    assert zoned[latest].zone_codes == ("CD-IT-01", "CD-NK-01")
-    sampler = store.samplers()
-    plain = ["renewal", "pprandomwalknowcast"]
-    assert store.current_keys(zoned, plain, sampler, "c") == (
-        store.current_keys(tasks, plain, sampler, "c")
-    )
-    reads = ["fm_chronos_weekly_complete"]
-    assert store.current_keys(zoned, reads, sampler, "c") != (
-        store.current_keys(tasks, reads, sampler, "c")
-    )

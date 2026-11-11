@@ -196,16 +196,16 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
-chronos = [
-    { name = "chronos-forecasting" },
-    { name = "torch", version = "2.14.1+cu126", source = { registry = "https://download.pytorch.org/whl/cu126" }, marker = "sys_platform == 'linux'" },
-    { name = "torch", version = "2.15.0", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'linux'" },
-]
 model = [
     { name = "pyrenew" },
 ]
 
 [package.dev-dependencies]
+chronos = [
+    { name = "chronos-forecasting" },
+    { name = "torch", version = "2.14.1+cu126", source = { registry = "https://download.pytorch.org/whl/cu126" }, marker = "sys_platform == 'linux'" },
+    { name = "torch", version = "2.15.0", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'linux'" },
+]
 dev = [
     { name = "bdbvhubrenewal", extra = ["model"] },
     { name = "mypy" },
@@ -225,7 +225,6 @@ docs = [
 
 [package.metadata]
 requires-dist = [
-    { name = "chronos-forecasting", marker = "extra == 'chronos'", specifier = "==2.3.2" },
     { name = "jax", specifier = ">=0.12.0" },
     { name = "matplotlib", specifier = ">=3.8,<4" },
     { name = "numpy", specifier = ">=1.26,<3" },
@@ -234,13 +233,16 @@ requires-dist = [
     { name = "pyyaml", specifier = ">=6" },
     { name = "scipy", specifier = ">=1.11,<2" },
     { name = "tabulate", specifier = ">=0.9" },
-    { name = "torch", marker = "sys_platform == 'linux' and extra == 'chronos'", specifier = ">=2.7", index = "https://download.pytorch.org/whl/cu126" },
-    { name = "torch", marker = "sys_platform != 'linux' and extra == 'chronos'", specifier = ">=2.7" },
     { name = "tzdata", specifier = ">=2024.1" },
 ]
-provides-extras = ["model", "chronos"]
+provides-extras = ["model"]
 
 [package.metadata.requires-dev]
+chronos = [
+    { name = "chronos-forecasting", specifier = "==2.3.2" },
+    { name = "torch", marker = "sys_platform != 'linux'", specifier = ">=2.7" },
+    { name = "torch", marker = "sys_platform == 'linux'", specifier = ">=2.7", index = "https://download.pytorch.org/whl/cu126" },
+]
 dev = [
     { name = "bdbvhubrenewal", extras = ["model"] },
     { name = "mypy", specifier = ">=1.11" },

@@ -58,7 +58,7 @@ from bdbvhubrenewal.data.dates import as_date
 from bdbvhubrenewal.data.releases import cutoff_lags
 from bdbvhubrenewal.data.simulate import SCENARIO_RT_SCALE
 from bdbvhubrenewal.data.tidy import write_csv
-from bdbvhubrenewal.data.zones import hub_zones, is_zone, weekly_zone_counts
+from bdbvhubrenewal.data.zones import hub_zones, weekly_zone_counts
 from bdbvhubrenewal.devices import host_devices
 from bdbvhubrenewal.evaluation import backtest as bt
 from bdbvhubrenewal.evaluation import store
@@ -568,14 +568,7 @@ def _task(args: argparse.Namespace) -> tuple[ForecastTask, list[str]]:
     real = target.loc[target["kind"] == "real"]
     vintage = _vintage([str(v) for v in real["vintage"].unique()], args.vintage)
     task, note = bt.vintage_task(
-        target,
-        delays,
-        config,
-        vintage,
-        load_daily(args.data),
-        zones=load_health_zones(args.data),
-        daily_zones=load_daily_zones(args.data),
-        zone_codes=hub_zones(Path(args.data) / "hub-config" / "tasks.json"),
+        target, delays, config, vintage, load_daily(args.data)
     )
     notes = [note] if note else []
     if args.reference_date and as_date(args.reference_date) != (
@@ -1019,7 +1012,6 @@ def _stored(
         forecasts["model"].isin(fitted)
         & (forecasts["kind"] == "real")
         & forecasts["as_of"].isna()
-        & ~forecasts["location"].map(is_zone)
     ]
     data = Path(args.data)
     hub = hc.load_hub_submissions(
@@ -1120,9 +1112,8 @@ def _nowcast(args: argparse.Namespace) -> int:
         zones, zone_note = _zones(args, task, result.samples, hub_config)
         if zone_note:
             handled.append(zone_note)
-        own_zones = result.samples["location"].map(is_zone)
         table = to_hub_table(
-            result.samples.loc[~own_zones],
+            result.samples,
             task.reference_date,
             unassigned=result.unassigned,
             zones=zones,
