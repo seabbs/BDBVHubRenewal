@@ -165,20 +165,17 @@ A round is pending until a later real release exists.
 ## German nowcast benchmark
 
 The German COVID-19 hospitalisation nowcasting hub[^wolffram] collected nowcasts of the 7-day hospitalisation incidence by Meldedatum, the date a case was reported positive, for Germany, its 16 states and six age groups.
-Every model but the renewal models runs on its data unchanged, as follows.
+`randomwalk` and `randomwalknowcast` run on its data unchanged, as follows.
 
 1. Each day's data version is a release whose cut-off is that day, and the Meldedatum is the onset date. A release's count of a day is the count reported by then in the hub's reporting triangle, with the changes after 80 days put at 81 days, as epinowcast's `germany_covid19_hosp` does.
 2. Germany is the country. The states are its provinces in one task and the age groups its provinces in another. Germany's nowcast is the sum of the states.
 3. Hub weeks end on Saturdays, so every date of a nowcast moves forward by the 0 to 6 days to the next Saturday. The 7-day sums ending on the nowcast date and 7, 14, 21 and 28 days before it are then hub weeks, and the nowcasts move back.
 
 The nowcast dates are the paper's, every day from 2021-11-22 to 2022-04-29.
-The paper scores the sums ending 0 to 28 days back. Our models give those ending a whole number of weeks back, so every model is scored on those five.
-The truth is the paper's, the 7-day sums as of 2022-08-08.
-WIS is the mean quantile score over the hub's seven levels, 0.025, 0.1, 0.25, 0.5, 0.75, 0.9 and 0.975, which is the WIS above with $K = 3$.
-Our quantiles are those of 1000 samples.
-Coverage is of the central 50% and 95% intervals.
-The teams' WIS is the paper's score of each of their quantiles.
-Their coverage is from their published quantiles, so forecasts the paper scored with quantiles it filled in from later model versions or corrected have no coverage.
+Nowcasts are scored as in the backtest ([Scores](#scores)), relative to `randomwalk`.
+Each 7-day sum's truth is its count in the data 40 days after it ends, the paper's 40-day truth.
+The backtest can score its complete weeks the same way, on the first release $D$ days after each week, in place of the latest release.
+The hub teams submitted quantiles at seven levels, not samples, so they are not scored here.
 
 [^wolffram]: Wolffram D, Abbott S, an der Heiden M, Funk S, Günther F, Hailer D, et al. (2023). Collaborative nowcasting of COVID-19 hospitalization incidences in Germany. PLOS Computational Biology 19(8): e1011394. [doi:10.1371/journal.pcbi.1011394](https://doi.org/10.1371/journal.pcbi.1011394).
 

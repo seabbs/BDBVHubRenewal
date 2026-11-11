@@ -1,17 +1,14 @@
 # German nowcast benchmark
 
-Our models on the German COVID-19 hospitalisation nowcasting hub's data, beside the hub teams, scored as in Wolffram et al. (2023)[^wolffram].
+Our models on the German COVID-19 hospitalisation nowcasting hub's data, scored as the backtest scores them.
 { .page-subtitle }
 
-Nowcasts of the 7-day hospitalisation incidence by Meldedatum, made each day from 2021-11-22 to 2022-04-29, for the sums ending 0, 7, 14, 21 and 28 days before the nowcast date, scored against the data of 2022-08-08 ([how the benchmark is set up](methods/evaluation.md#german-nowcast-benchmark)).
-The renewal models use the BDBV hub's line list and outbreak estimates, so they are not run.
-Hub teams are in grey.
+Nowcasts of the 7-day hospitalisation incidence by Meldedatum, made each day from 2021-11-22 to 2022-04-29 as in Wolffram et al. (2023)[^wolffram], for the sums ending 0, 7, 14, 21 and 28 days before the nowcast date.
+Each sum is scored on the data reported 40 days after it ends ([how the benchmark is set up](methods/evaluation.md#german-nowcast-benchmark)).
 
 ## Overall
 
-Mean WIS and coverage of the 50% and 95% intervals at each of the paper's levels.
-The summaries below the table and on the rest of the page are of WIS.
-The national level is Germany at all ages, the states are at all ages and the age groups are for Germany.
+Scores at each of the paper's levels: Germany, its states and its age groups.
 
 --8<-- "germany-scores.md"
 
@@ -31,7 +28,7 @@ Pick a place to narrow the table.
 
 ## Data
 
-Data from the Robert Koch Institute (CC BY 4.0), processed by the German COVID-19 hospitalisation nowcasting hub, with the hub teams' nowcasts and the paper's scores from its evaluation repository (MIT), at these commits:
+Data from the Robert Koch Institute (CC BY 4.0), processed by the German COVID-19 hospitalisation nowcasting hub:
 
 --8<-- "germany-sources.md"
 
