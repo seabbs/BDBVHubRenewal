@@ -106,6 +106,14 @@ class ForecastTask:
         columns `vintage` (release date), `location`, `onset_date`,
         `observed`, `imputed` and `cutoff` (the release's cut-off). None
         if there are none.
+    zone_history : pandas.DataFrame or None
+        Health-zone target rows of every release on or before `vintage`
+        (`bdbvhubrenewal.data.load_health_zones`). None if there are none.
+        Only models with `reads_zones` set have it in their fit key.
+    zone_daily_history : pandas.DataFrame or None
+        Daily health-zone onsets of every release on or before `vintage`,
+        as `daily_history`. None if there are none. Keyed as
+        `zone_history`.
     """
 
     vintage: str
@@ -123,6 +131,8 @@ class ForecastTask:
     delay_history: pd.DataFrame | None = None
     target_history: pd.DataFrame | None = None
     daily_history: pd.DataFrame | None = None
+    zone_history: pd.DataFrame | None = None
+    zone_daily_history: pd.DataFrame | None = None
 
     def rng(self, *keys: str) -> np.random.Generator:
         """Return a random generator seeded from the task.

@@ -568,7 +568,13 @@ def _task(args: argparse.Namespace) -> tuple[ForecastTask, list[str]]:
     real = target.loc[target["kind"] == "real"]
     vintage = _vintage([str(v) for v in real["vintage"].unique()], args.vintage)
     task, note = bt.vintage_task(
-        target, delays, config, vintage, load_daily(args.data)
+        target,
+        delays,
+        config,
+        vintage,
+        load_daily(args.data),
+        zones=load_health_zones(args.data),
+        daily_zones=load_daily_zones(args.data),
     )
     notes = [note] if note else []
     if args.reference_date and as_date(args.reference_date) != (

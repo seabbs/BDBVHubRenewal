@@ -263,6 +263,8 @@ def make_tasks(
     report_by: Sequence[str] = (),
     history: pd.DataFrame | None = None,
     daily: pd.DataFrame | None = None,
+    zones: pd.DataFrame | None = None,
+    daily_zones: pd.DataFrame | None = None,
 ) -> list[ForecastTask]:
     """Build one task per vintage in a target table.
 
@@ -288,6 +290,10 @@ def make_tasks(
         `observed` and `imputed` columns, and optionally `kind`. Each task
         gets the rows of its kind on or before its vintage as
         `daily_history`.
+    zones, daily_zones : pandas.DataFrame, optional
+        Weekly and daily health-zone rows by release. A real task gets the
+        rows on or before its vintage as `zone_history` and
+        `zone_daily_history`.
 
     Returns
     -------
@@ -345,6 +351,10 @@ def make_tasks(
                 delay_history=history,
                 target_history=past_target if not past_target.empty else None,
                 daily_history=_daily_for(daily, str(kind), str(vintage)),
+                zone_history=_daily_for(zones, str(kind), str(vintage)),
+                zone_daily_history=_daily_for(
+                    daily_zones, str(kind), str(vintage)
+                ),
                 locations=forecast_locations(rows),
                 target_end_dates=forecast_weeks(ref, config),
                 n_samples=config.n_samples,
@@ -372,6 +382,9 @@ def vintage_task(
     vintage: str,
     daily: pd.DataFrame | None = None,
     extra_weeks: int = 0,
+    *,
+    zones: pd.DataFrame | None = None,
+    daily_zones: pd.DataFrame | None = None,
 ) -> tuple[ForecastTask, str]:
     """Build the task of one real vintage, as the submission fits it.
 
@@ -393,6 +406,8 @@ def vintage_task(
     extra_weeks : int
         Weeks to forecast past `[forecast] max_horizon`. The store adds
         one, so its fit also covers the next round's weeks.
+    zones, daily_zones : pandas.DataFrame, optional
+        Weekly and daily health-zone rows by release (`make_tasks`).
 
     Returns
     -------
@@ -407,7 +422,15 @@ def vintage_task(
     real = target.loc[target["kind"] == "real"]
     rows = real.loc[real["vintage"] == vintage]
     used, note = delays_for_vintage(delays, vintage)
-    task = make_tasks(rows, used, config, history=real, daily=daily)[0]
+    task = make_tasks(
+        rows,
+        used,
+        config,
+        history=real,
+        daily=daily,
+        zones=zones,
+        daily_zones=daily_zones,
+    )[0]
     return task, note
 
 

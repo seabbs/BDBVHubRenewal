@@ -445,14 +445,12 @@ def test_zone_data_keys_only_the_models_that_read_it(
     delays: pd.DataFrame,
     daily: pd.DataFrame,
     daily_zones: pd.DataFrame,
+    health_zones: pd.DataFrame,
     config: BacktestConfig,
     tasks: dict[str, ForecastTask],
 ) -> None:
-    from bdbvhubrenewal.data import load_health_zones
-    from tests.conftest import DATA
-
     zoned = store.origin_tasks(
-        target, delays, config, daily, load_health_zones(DATA), daily_zones
+        target, delays, config, daily, health_zones, daily_zones
     )
     latest = real_vintages(target)[-1]
     assert zoned[latest].zone_history is not None

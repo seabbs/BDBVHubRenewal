@@ -62,10 +62,8 @@ def task(
     delays: pd.DataFrame,
     daily: pd.DataFrame,
     daily_zones: pd.DataFrame,
+    health_zones: pd.DataFrame,
 ) -> ForecastTask:
-    from bdbvhubrenewal.data import load_health_zones
-    from tests.conftest import DATA
-
     rows = target.loc[target["vintage"] == "2026-10-24"]
     real = target.loc[target["kind"] == "real"]
     return make_tasks(
@@ -74,7 +72,7 @@ def task(
         BacktestConfig(seed=3),
         history=real,
         daily=daily,
-        zones=load_health_zones(DATA),
+        zones=health_zones,
         daily_zones=daily_zones,
     )[0]
 

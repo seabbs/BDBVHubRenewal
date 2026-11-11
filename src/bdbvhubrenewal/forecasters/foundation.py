@@ -24,6 +24,7 @@ import numpy as np
 import pandas as pd
 
 from bdbvhubrenewal.data.dates import as_date, epiweek_end
+from bdbvhubrenewal.data.zones import province_of
 from bdbvhubrenewal.forecasters.base import (
     NATIONAL,
     SAMPLE_COLUMNS,
@@ -320,6 +321,7 @@ class FoundationModel:
         init=False, default=None, repr=False
     )
     needs_snapshots: ClassVar[bool] = True
+    reads_zones: ClassVar[bool] = True
 
     def forecast(self, task: ForecastTask) -> pd.DataFrame:
         """Return trajectories for the country and the task's provinces.
@@ -327,14 +329,16 @@ class FoundationModel:
         Parameters
         ----------
         task : ForecastTask
-            The data and weeks to forecast. Its `target_history` holds the
-            weekly releases and its `daily_history` the daily ones.
+            The data and weeks to forecast. Its `target_history` and
+            `zone_history` hold the weekly releases, and its
+            `daily_history` and `zone_daily_history` the daily ones.
 
         Returns
         -------
         pandas.DataFrame
-            Columns `location`, `target_end_date`, `sample`, `value`,
-            with the country as its own series.
+            Columns `location`, `target_end_date`, `sample`, `value`, for
+            the country and the provinces. The country is its own series,
+            and the zones of the provinces are series in the same group.
 
         Raises
         ------
@@ -343,11 +347,9 @@ class FoundationModel:
             snapshots, fewer than two steps of context, or Chronos-2 is
             not installed.
         """
-        rows = (
-            task.target_history
-            if self.source == "weekly"
-            else task.daily_history
-        )
+        weekly = self.source == "weekly"
+        rows = task.target_history if weekly else task.daily_history
+        zone_rows = task.zone_history if weekly else task.zone_daily_history
         if rows is None or rows.empty:
             raise ModelUnavailableError(
                 f"{self.name} needs the {self.source} releases, and the task "
@@ -355,7 +357,18 @@ class FoundationModel:
             )
         origin = RandomWalk().origin_at(task, errors=False)
         self.delay_summary = delay_summary(origin, self.name, task.vintage)
-        places = (NATIONAL, *task.locations)
+        outputs = (NATIONAL, *task.locations)
+        zones: tuple[str, ...] = ()
+        if zone_rows is not None:
+            zones = tuple(
+                sorted(
+                    z
+                    for z in set(zone_rows["location"])
+                    if province_of(z) in task.locations
+                )
+            )
+            rows = pd.concat([rows, zone_rows], ignore_index=True)
+        places = (*outputs, *zones)
         weeks = list(task.target_end_dates)
         tri = hub_triangle(rows, self.source, task.vintage, places, weeks[-1])
         start = tri.n_context
@@ -368,11 +381,10 @@ class FoundationModel:
         seed = int(task.rng(self.name).integers(0, 2**31 - 1))
         group = _group(tri, self.layout, places)
         draws = self.sample([group], horizon, task.n_samples, seed)[0]
-        steps = np.broadcast_to(
-            tri.final, (task.n_samples, *tri.final.shape)
-        ).copy()
-        drawn = np.maximum(np.round(draws[:, : len(places)]), 0.0)
-        steps[:, :, start:] = np.maximum(drawn, tri.final[:, start:])
+        final = tri.final[: len(outputs)]
+        steps = np.broadcast_to(final, (task.n_samples, *final.shape)).copy()
+        drawn = np.maximum(np.round(draws[:, : len(outputs)]), 0.0)
+        steps[:, :, start:] = np.maximum(drawn, final[:, start:])
         week_of = np.array([_step("weekly", t).isoformat() for t in tri.times])
         values = np.stack(
             [steps[:, :, week_of == w].sum(axis=2) for w in weeks], axis=2
@@ -384,15 +396,15 @@ class FoundationModel:
                 values="total",
                 aggfunc="sum",
             )
-            .reindex(index=list(places), columns=weeks)
+            .reindex(index=list(outputs), columns=weeks)
             .fillna(0.0)
             .to_numpy()
         )
         values = np.maximum(values, reported)  # [S, L, W]
-        n, n_loc = task.n_samples, len(places)
+        n, n_loc = task.n_samples, len(outputs)
         return pd.DataFrame(
             {
-                "location": np.repeat(list(places), n * len(weeks)),
+                "location": np.repeat(list(outputs), n * len(weeks)),
                 "target_end_date": np.tile(weeks, n * n_loc),
                 "sample": np.tile(
                     np.repeat(np.arange(1, n + 1), len(weeks)), n_loc
