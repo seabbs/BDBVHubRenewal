@@ -8,3 +8,5 @@ Fits: `scripts/run-mac.sh` on the laptop's Apple GPU (MPS), one model and origin
 Scoring: `scripts/score.sh` on archie's CPU: `fit-store load` of that store, then `backtest --models randomwalk randomwalknowcast --no-recovery`, then `summary.py`.
 
 Lag arms (`scripts/arms.py`, `scripts/score-arm.sh`): the ragged models with lag cells carried forward (`carry`), one reported-so-far covariate per place (`reported`), or weekly D = 6 (`d6`). Summaries in `results/arms/`.
+
+Stores (`stores/`): the scratch fit stores the tables score, `base` for the four models and `arm-*` for the arms' ragged models. Load one with `bdbvhubrenewal fit-store load --store stores/<name> --models ...`.
