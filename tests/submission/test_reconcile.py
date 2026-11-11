@@ -114,6 +114,17 @@ def test_the_same_seed_gives_the_same_order() -> None:
     pd.testing.assert_frame_equal(one, two)
 
 
+def test_copula_refuses_provinces_with_different_sample_ids() -> None:
+    samples = _samples()
+    short = samples.drop(
+        samples.index[
+            (samples["location"] == "CD-NK") & (samples["sample"] == 3)
+        ]
+    )
+    with pytest.raises(ValueError, match="sample ids"):
+        reconcile(short, None, Reconciliation("copula", 0.5), seed=1)
+
+
 @pytest.mark.parametrize(
     "bad",
     [

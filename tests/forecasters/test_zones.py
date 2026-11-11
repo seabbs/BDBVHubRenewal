@@ -496,6 +496,58 @@ def test_reconcile_falls_back_to_the_allocator_shares(
     assert got["value"].sum() > 0
 
 
+def _rank_inputs(
+    task: ForecastTask, zones: tuple[str, ...]
+) -> tuple[ForecastTask, pd.DataFrame, pd.DataFrame, tuple[str, ...]]:
+    """A province's random walk draws and made-up draws of its zones."""
+    rows = task.target.loc[task.target["location"].isin(task.locations)]
+    cases = rows.groupby("location")["total"].sum()
+    first = str(cases.index[cases > 0][0])
+    sub = dataclasses.replace(task, locations=(first,))
+    prov = RandomWalk().forecast(sub)
+    mine = tuple(z for z in zones if z.startswith(first + "-"))
+    rng = np.random.default_rng(3)
+    weeks = list(sub.target_end_dates)
+    frames = [
+        pd.DataFrame(
+            {
+                "location": z,
+                "target_end_date": np.tile(weeks, sub.n_samples),
+                "sample": np.repeat(
+                    np.arange(1, sub.n_samples + 1), len(weeks)
+                ),
+                "value": rng.poisson(
+                    np.repeat(
+                        rng.lognormal(1.0, 1.0, sub.n_samples), len(weeks)
+                    )
+                ).astype(float),
+            }
+        )
+        for z in mine
+    ]
+    return sub, prov, pd.concat(frames, ignore_index=True), mine
+
+
+def test_reconcile_with_rank_pairing_stays_coherent(
+    task: ForecastTask, counts: pd.DataFrame, zones: tuple[str, ...]
+) -> None:
+    sub, prov, raw, mine = _rank_inputs(task, zones)
+    by_id = reconcile_zones(raw, prov, sub, counts, mine)
+    ranked = reconcile_zones(raw, prov, sub, counts, mine, pairing="rank")
+    assert check_zone_coherence(prov, ranked) == []
+    keys = ["location", "target_end_date", "sample"]
+    diff = ranked.set_index(keys)["value"] - by_id.set_index(keys)["value"]
+    assert (diff != 0).any()
+
+
+def test_reconcile_refuses_an_unknown_pairing(
+    task: ForecastTask, counts: pd.DataFrame, zones: tuple[str, ...]
+) -> None:
+    sub, prov, raw, mine = _rank_inputs(task, zones)
+    with pytest.raises(ValueError, match="pairing must be"):
+        reconcile_zones(raw, prov, sub, counts, mine, pairing="random")
+
+
 def test_zone_hub_table_validates_and_sums_up_the_hierarchy(
     open_task: ForecastTask,
     open_counts: pd.DataFrame,

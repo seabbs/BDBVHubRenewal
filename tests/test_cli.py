@@ -66,6 +66,37 @@ def test_cli_nowcast_writes_coherent_zones(tmp_path: Path) -> None:
 
 
 @pytest.mark.usefixtures("in_root")
+def test_cli_nowcast_copula_widens_national_only(tmp_path: Path) -> None:
+    hub_toml = tmp_path / "hub.toml"
+    text = (ROOT / "config" / "hub.toml").read_text()
+    hub_toml.write_text(
+        text.replace('method = "sum"', 'method = "copula"').replace(
+            "rho = 0.2", "rho = 1.0"
+        )
+    )
+    tables = {}
+    for name, extra in (("sum", []), ("copula", ["--hub-toml", str(hub_toml)])):
+        out = tmp_path / name
+        args = ["nowcast", "--out", str(out), "--forecast-date", "2026-07-31"]
+        assert main([*args, *extra]) == 0
+        tables[name] = _written(out)
+    keys = ["location", "target_end_date"]
+
+    def spread(table: pd.DataFrame, level: int) -> pd.Series:
+        rows = table.loc[table["location"].str.count("-") == level]
+        return rows.groupby(keys)["value"].std()
+
+    def sorted_values(table: pd.DataFrame) -> pd.Series:
+        rows = table.loc[table["location"].str.count("-") == 1]
+        return rows.groupby(keys)["value"].apply(lambda v: tuple(sorted(v)))
+
+    # Each province keeps its own draws, and national is wider.
+    assert sorted_values(tables["sum"]).equals(sorted_values(tables["copula"]))
+    assert (spread(tables["copula"], 0) >= spread(tables["sum"], 0)).all()
+    assert (spread(tables["copula"], 0) > spread(tables["sum"], 0)).any()
+
+
+@pytest.mark.usefixtures("in_root")
 def test_cli_nowcast_without_zone_data_skips_zones(tmp_path: Path) -> None:
     data = tmp_path / "data"
     data.mkdir()
