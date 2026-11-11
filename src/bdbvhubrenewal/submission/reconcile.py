@@ -1,28 +1,10 @@
 # Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
-r"""How province samples are paired before national is summed.
+"""Opt-in pairing of province samples before national is summed.
 
-The hub file takes national as the sum of the provinces in each sample,
-and zones as a split of their province (`to_hub_table`). Both are
-coherent in every sample. What the pairing sets is the dependence: which
-draw of one province is summed with which draw of another, and so the
-width of national.
-
-`reconcile` gives two methods, chosen in `config/hub.toml`
-(`[reconciliation]`):
-
-- `sum`, the default: samples are summed as the model gave them.
-- `copula`: each province's whole trajectories are reordered across
-  samples to the ranks of a Gaussian copula with exchangeable
-  correlation `rho`, ranked on each trajectory's mean of
-  $\log(1 + y)$ over the weeks, as in ensemble copula coupling or the
-  Schaake shuffle. Each province keeps its own trajectories, so its
-  forecast is unchanged, and its zones move with it, so they still sum
-  to it. National, the sum, is wider for `rho > 0`.
-
-`zone_pairing` sets how the random walks' zone run is paired with their
-province run before the split (`forecasters.zones.reconcile_zones`):
-`sample` pairs draws of the same id, `rank` pairs whole trajectories by
-rank of their total.
+`sum` (the default) keeps the model's pairing. `copula` reorders each
+province's whole trajectories to a Gaussian rank copula, which widens
+national and leaves each province's forecast and its zones' sums as they
+were. Set in `[reconciliation]` of `config/hub.toml`.
 """
 
 from __future__ import annotations
@@ -36,6 +18,9 @@ import numpy as np
 import pandas as pd
 
 from bdbvhubrenewal.data.zones import province_of
+from bdbvhubrenewal.forecasters.base import NATIONAL
+from bdbvhubrenewal.forecasters.zones import PAIRINGS
+from bdbvhubrenewal.submission.hub import SUBMISSION_CONFIG
 
 __all__ = [
     "METHODS",
@@ -47,9 +32,6 @@ __all__ = [
 
 METHODS: Final = ("sum", "copula")
 """Ways to pair province samples before national is summed."""
-
-PAIRINGS: Final = ("sample", "rank")
-"""Ways to pair the random walks' zone and province runs."""
 
 
 @dataclass(frozen=True)
@@ -81,7 +63,7 @@ class Reconciliation:
 
 
 def reconciliation_settings(
-    path: Path | str = Path("config/hub.toml"),
+    path: Path | str = SUBMISSION_CONFIG,
 ) -> Reconciliation:
     """Read `[reconciliation]` from the hub config.
 
@@ -149,8 +131,11 @@ def reconcile(
     )
     ids = wide.index.to_numpy()
     places = sorted(
-        loc for loc in set(wide.columns.get_level_values(0)) if len(loc) == 5
+        loc for loc in set(wide.columns.get_level_values(0)) if loc != NATIONAL
     )
+    prov = samples.loc[samples["location"] != NATIONAL]
+    if len(set(prov.groupby("location")["sample"].agg(frozenset))) > 1:
+        raise ValueError("Every province needs the same sample ids.")
     summary = {
         loc: np.log1p(wide[loc].clip(lower=0)).mean(axis=1).to_numpy()
         for loc in places

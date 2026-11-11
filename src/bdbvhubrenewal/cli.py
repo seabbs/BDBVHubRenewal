@@ -1079,6 +1079,7 @@ def _zones(
     task: ForecastTask,
     samples: pd.DataFrame,
     hub_config: Path,
+    pairing: str = "sample",
 ) -> tuple[pd.DataFrame | None, str]:
     """Forecast the zones to sum to the provinces, or say why not.
 
@@ -1092,7 +1093,6 @@ def _zones(
     if counts.empty:
         return None, f"no zone data for {task.vintage}, so no health zones"
     name = get_config(args.config).model if args.config else args.model
-    pairing = reconciliation_settings().zone_pairing
     zones = zones_for_model(
         name, task, samples, counts, hub_zones(hub_config), daily, pairing
     )
@@ -1114,16 +1114,14 @@ def _nowcast(args: argparse.Namespace) -> int:
             samples = get_model(args.model).forecast(task)
             check_samples(samples, task)
             result = Forecast(samples)
-        zones, zone_note = _zones(args, task, result.samples, hub_config)
+        settings = reconciliation_settings(args.hub_toml)
+        zones, zone_note = _zones(
+            args, task, result.samples, hub_config, settings.zone_pairing
+        )
         if zone_note:
             handled.append(zone_note)
-        # Opt-in pairing of province samples; "sum" leaves them as they
-        # are (`[reconciliation]` in config/hub.toml).
         samples, zones = reconcile(
-            result.samples,
-            zones,
-            reconciliation_settings(),
-            task.rng("reconcile"),
+            result.samples, zones, settings, task.rng("reconcile")
         )
         table = to_hub_table(
             samples,

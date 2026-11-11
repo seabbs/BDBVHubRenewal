@@ -63,6 +63,7 @@ from __future__ import annotations
 
 import dataclasses
 from dataclasses import dataclass
+from typing import Final
 
 import numpy as np
 import pandas as pd
@@ -308,6 +309,10 @@ def _apportion(total: np.ndarray, weights: np.ndarray) -> np.ndarray:
     return out
 
 
+PAIRINGS: Final = ("sample", "rank")
+"""Ways to pair a random walk's zone run with its province run."""
+
+
 def _pair_by_rank(total: np.ndarray, weights: np.ndarray) -> np.ndarray:
     """Reorder each zone's trajectories to the ranks of the province's.
 
@@ -366,8 +371,8 @@ def reconcile_zones(
         Columns `SAMPLE_COLUMNS`, one row per zone, week and sample, with
         zones summing to their province (`check_zone_coherence`).
     """
-    if pairing not in ("sample", "rank"):
-        raise ValueError("pairing must be 'sample' or 'rank'.")
+    if pairing not in PAIRINGS:
+        raise ValueError(f"pairing must be one of {PAIRINGS}.")
     allocator = allocator or ZoneAllocator()
     final = _final(province_samples)
     final = final.loc[final["location"] != NATIONAL]
