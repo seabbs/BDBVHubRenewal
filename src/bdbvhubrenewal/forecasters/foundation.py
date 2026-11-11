@@ -327,6 +327,125 @@ def _counts(draws: np.ndarray) -> np.ndarray:
     return np.maximum(np.round(np.expm1(draws)), 0.0)
 
 
+@dataclass(frozen=True)
+class View:
+    """What a vintage shows, on a grid of onset weeks.
+
+    Attributes
+    ----------
+    weeks : list of str
+        Consecutive onset weeks, ISO Saturdays.
+    reported : numpy.ndarray
+        Reported totals $R_{p,w}$, `[P, W]`.
+    counts : numpy.ndarray or None
+        Cases by delay class $n_{p,w,k}$, `[P, W, K]`, or None if the
+        vintage has no delay line data.
+    last : int
+        Index of $s^*$, the latest report week whose cells are complete.
+    """
+
+    weeks: list[str]
+    reported: np.ndarray
+    counts: np.ndarray | None
+    last: int
+
+    @property
+    def n_context(self) -> int:
+        """Weeks up to and including $c$, the last with every cell complete."""
+        return self.last - N_DELAYS + 2
+
+    def cells(self) -> np.ndarray:
+        r"""Return $\log(1 + n_{p,w,k})$, NaN where not yet complete.
+
+        Returns
+        -------
+        numpy.ndarray
+            `[P, W, K]`.
+        """
+        assert self.counts is not None
+        ages = np.arange(len(self.weeks))[:, None] + np.arange(N_DELAYS)
+        return np.where(ages <= self.last, np.log1p(self.counts), np.nan)
+
+
+def vintage_view(
+    target: pd.DataFrame,
+    delays: pd.DataFrame | None,
+    vintage: str,
+    locations: Sequence[str],
+    last_week: str,
+) -> View:
+    """Lay out a vintage's totals and delay classes by onset week.
+
+    Parameters
+    ----------
+    target : pandas.DataFrame
+        The vintage's target rows, with `location`, `target_end_date` and
+        `total`.
+    delays : pandas.DataFrame or None
+        The vintage's delay line data.
+    vintage : str
+        The vintage date $T$.
+    locations : sequence of str
+        Provinces, in the order of the output.
+    last_week : str
+        Last onset week of the grid, an ISO Saturday.
+
+    Returns
+    -------
+    View
+        Weeks from the first week of `target` to `last_week`.
+    """
+    provinces = target.loc[target["location"].isin(locations)]
+    first = as_date(str(provinces["target_end_date"].min()))
+    n_weeks = (as_date(last_week) - first).days // 7 + 1
+    weeks = [(first + i * _WEEK).isoformat() for i in range(n_weeks)]
+    reported = (
+        provinces.pivot_table(
+            index="location",
+            columns="target_end_date",
+            values="total",
+            aggfunc="sum",
+        )
+        .reindex(index=list(locations), columns=weeks)
+        .fillna(0.0)
+        .to_numpy()
+    )
+    counts = None
+    if delays is not None and not delays.empty:
+        counts = delay_triangle(delays, vintage, locations, weeks).counts
+    return View(weeks, reported, counts, _last_complete(vintage, weeks))
+
+
+def cov_groups(view: View) -> list[Series]:
+    """Return the `delay_cov` groups of a view, split at $c$.
+
+    Parameters
+    ----------
+    view : View
+        A vintage with delay line data.
+
+    Returns
+    -------
+    list of Series
+        One group per province: the totals to $c$ as target, and each
+        delay class as a covariate, past to $c$ and future after it.
+    """
+    start = view.n_context
+    cells = view.cells()
+    return [
+        {
+            "target": np.log1p(r[None, :start]),
+            "past_covariates": {
+                f"delay_{k}": c[:start, k] for k in range(N_DELAYS)
+            },
+            "future_covariates": {
+                f"delay_{k}": c[start:, k] for k in range(N_DELAYS)
+            },
+        }
+        for r, c in zip(view.reported, cells, strict=True)
+    ]
+
+
 @dataclass
 class FoundationModel:
     """Chronos-2 on one layout of the data.
@@ -371,7 +490,8 @@ class FoundationModel:
         ------
         ModelUnavailableError
             If a delay layout's task has no delay line data, the task has
-            no release snapshots, or Chronos-2 is not installed.
+            no release snapshots, there are fewer than two complete weeks,
+            or Chronos-2 is not installed.
         """
         if self.layout != "complete" and (
             task.delays is None or task.delays.empty
@@ -382,29 +502,19 @@ class FoundationModel:
             )
         origin = RandomWalk().origin_at(task, errors=False)
         self.delay_summary = delay_summary(origin, self.name, task.vintage)
-        provinces = task.target.loc[
-            task.target["location"].isin(task.locations)
-        ]
-        first = as_date(str(provinces["target_end_date"].min()))
-        n_weeks = (as_date(max(task.target_end_dates)) - first).days // 7 + 1
-        weeks = [(first + i * _WEEK).isoformat() for i in range(n_weeks)]
-        reported = (
-            provinces.pivot_table(
-                index="location",
-                columns="target_end_date",
-                values="total",
-                aggfunc="sum",
-            )
-            .reindex(index=list(task.locations), columns=weeks)
-            .fillna(0.0)
-            .to_numpy()
+        view = vintage_view(
+            task.target,
+            task.delays,
+            task.vintage,
+            task.locations,
+            max(task.target_end_dates),
         )
         seed = int(task.rng(self.name).integers(0, 2**31 - 1))
         if self.layout == "delay_series":
-            values = self._series(task, weeks, reported, seed)
+            values = self._series(view, task.n_samples, seed)
         else:
-            values = self._totals(task, weeks, reported, seed)
-        col = {w: i for i, w in enumerate(weeks)}
+            values = self._totals(view, task, seed)
+        col = {w: i for i, w in enumerate(view.weeks)}
         targets = list(task.target_end_dates)
         picked = values[:, :, [col[w] for w in targets]]  # [S, P, T]
         n, n_loc = task.n_samples, len(task.locations)
@@ -419,67 +529,41 @@ class FoundationModel:
             }
         )[list(SAMPLE_COLUMNS)]
 
-    def _totals(
-        self,
-        task: ForecastTask,
-        weeks: list[str],
-        reported: np.ndarray,
-        seed: int,
-    ) -> np.ndarray:
+    def _totals(self, view: View, task: ForecastTask, seed: int) -> np.ndarray:
         """Trajectories of the `complete` and `delay_cov` layouts."""
-        n_context = _last_complete(task.vintage, weeks) - N_DELAYS + 2
-        if n_context < 2:
+        start = view.n_context
+        if start < 2:
             raise ModelUnavailableError(
                 f"{self.name} needs two complete weeks, and the task for "
-                f"{task.vintage} has {max(n_context, 0)}."
+                f"{task.vintage} has {max(start, 0)}."
             )
-        horizon = len(weeks) - n_context
-        target = np.log1p(reported[:, None, :n_context])
-        groups: list[Series] = [{"target": t} for t in target]
-        if self.layout == "delay_cov":
-            assert task.delays is not None
-            tri = delay_triangle(
-                task.delays, task.vintage, task.locations, weeks
-            )
-            ages = np.arange(len(weeks))[:, None] + np.arange(N_DELAYS)
-            cells = np.where(ages <= tri.last, np.log1p(tri.counts), np.nan)
-            groups = [
-                {
-                    "target": t,
-                    "past_covariates": {
-                        f"delay_{k}": c[:n_context, k] for k in range(N_DELAYS)
-                    },
-                    "future_covariates": {
-                        f"delay_{k}": c[n_context:, k] for k in range(N_DELAYS)
-                    },
-                }
-                for t, c in zip(target, cells, strict=True)
-            ]
+        horizon = len(view.weeks) - start
+        groups: list[Series] = (
+            cov_groups(view)
+            if self.layout == "delay_cov"
+            else [{"target": np.log1p(r[None, :start])} for r in view.reported]
+        )
         draws = self.sample(groups, horizon, task.n_samples, seed)
         drawn = _counts(np.stack([d[:, 0] for d in draws], axis=1))
+        reported = view.reported
         values = np.broadcast_to(reported, (task.n_samples, *reported.shape))
         values = values.copy()
-        values[:, :, n_context:] = np.maximum(drawn, reported[:, n_context:])
+        values[:, :, start:] = np.maximum(drawn, reported[:, start:])
         return values
 
-    def _series(
-        self,
-        task: ForecastTask,
-        weeks: list[str],
-        reported: np.ndarray,
-        seed: int,
-    ) -> np.ndarray:
+    def _series(self, view: View, n_samples: int, seed: int) -> np.ndarray:
         """Trajectories of the `delay_series` layout."""
-        assert task.delays is not None
-        tri = delay_triangle(task.delays, task.vintage, task.locations, weeks)
-        n_weeks = len(weeks)
+        assert view.counts is not None
+        tri = DelayTriangle(view.counts, view.last)
+        n_weeks = len(view.weeks)
         horizon = n_weeks + N_DELAYS - 2 - tri.last
         groups: list[Series] = [
             {"target": np.log1p(s)} for s in report_series(tri)
         ]
-        draws = self.sample(groups, horizon, task.n_samples, seed)
+        draws = self.sample(groups, horizon, n_samples, seed)
         drawn = _counts(np.stack(draws, axis=1))  # [S, P, K, H]
-        values = np.broadcast_to(reported, (task.n_samples, *reported.shape))
+        reported = view.reported
+        values = np.broadcast_to(reported, (n_samples, *reported.shape))
         values = values.copy()
         for k in range(N_DELAYS):
             for w in range(max(tri.last - k + 1, 0), n_weeks):
