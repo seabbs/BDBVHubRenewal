@@ -109,6 +109,7 @@ MODEL_COLOURS: Final[dict[str, tuple[str, ...]]] = {
         "#008300",
         "#6250d6",
         "#e34948",
+        "#9c6b30",
     ),
     "dark": (
         "#3987e5",
@@ -119,6 +120,7 @@ MODEL_COLOURS: Final[dict[str, tuple[str, ...]]] = {
         "#008300",
         "#9085e9",
         "#e66767",
+        "#c48a4a",
     ),
 }
 """Categorical colours in fixed order (checked for colour vision deficiency)."""
@@ -138,6 +140,12 @@ MODEL_STYLE: Final[dict[str, tuple[int, str]]] = {
     "renewalbvd": (3, "solid"),
     "renewalsp": (4, "solid"),
     "pprandomwalknowcast": (5, "solid"),
+    "fm_chronos_weekly_complete": (6, "solid"),
+    "fm_chronos_weekly_ragged": (6, "dashed"),
+    "fm_chronos_weekly_cov": (6, "dotted"),
+    "fm_chronos_daily_complete": (7, "solid"),
+    "fm_chronos_daily_ragged": (7, "dashed"),
+    "fm_chronos_daily_cov": (7, "dotted"),
 }
 """Each model's place in `MODEL_COLOURS` and its dash in `DASHES`.
 

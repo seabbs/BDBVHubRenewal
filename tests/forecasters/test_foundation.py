@@ -16,10 +16,10 @@ from bdbvhubrenewal.forecasters import (
     FoundationModel,
     ModelUnavailableError,
     check_samples,
+    foundation,
     get_model,
     list_models,
 )
-from bdbvhubrenewal.forecasters import foundation
 from bdbvhubrenewal.forecasters.foundation import (
     LAYOUTS,
     MAX_LAG,

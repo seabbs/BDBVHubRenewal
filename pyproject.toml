@@ -42,10 +42,9 @@ classifiers = [
 model = [
   "pyrenew @ git+https://github.com/CDCgov/PyRenew@2441cb327d6e563eab0495540cb7467a102c234f",
 ]
-# Chronos-2 for the foundation models (`bdbvhubrenewal.forecasters.foundation`),
-# with peft for LoRA fine-tuning. Brings torch, built for CUDA 12.6 on
-# Linux. The package imports without it.
-chronos = ["chronos-forecasting==2.3.2", "peft>=0.18.1,<1", "torch>=2.7"]
+# Chronos-2 for the foundation models (`bdbvhubrenewal.forecasters.foundation`).
+# Brings torch, built for CUDA 12.6 on Linux. The package imports without it.
+chronos = ["chronos-forecasting==2.3.2", "torch>=2.7"]
 
 [project.urls]
 Homepage = "https://samabbott.co.uk/BDBVHubRenewal/"
