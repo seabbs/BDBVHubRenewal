@@ -193,15 +193,9 @@ def read_triangle(path: Path | str) -> pd.DataFrame:
         `age_group`, `confirm` (the count reported by the report date) and
         `report_date`, dates as ISO strings.
     """
+    text = ("reference_date", "location", "age_group", "report_date")
     return pd.read_csv(
-        path,
-        dtype={
-            "reference_date": str,
-            "location": str,
-            "age_group": str,
-            "confirm": "int64",
-            "report_date": str,
-        },
+        path, dtype={**dict.fromkeys(text, "str"), "confirm": "int64"}
     )
 
 
