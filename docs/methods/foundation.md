@@ -62,13 +62,11 @@ The daily source is summed to weeks, as the hub's target is weekly, and each wee
 Chronos-2 reads a series in patches of 16 steps.
 The context is every step from the first onset in the releases to $t^*$.
 
-## Scoring
+## Delay
 
-The release backtest scores the reported target and the complete target ([Evaluation](evaluation.md)).
-
-- The complete models forecast forward from complete weeks, as `randomwalk` does, so their samples are scored as reported, as `randomwalk`'s are.
-- The ragged models forecast final counts. Their samples are mapped to what later releases show by their own share reported at each release lag $d$: the sum of $Y_{p,t,d}$ over the sum of $X_{p,t}$, over final steps with a count at lag $d$, made non-decreasing and 1 from lag $D$, pooled over places for a place with none.
-- On the reported target the national forecast is the sum of the mapped provinces, as for every model. On the complete target it is the model's own national series.
+The ragged models give the release backtest a delay ([Evaluation](evaluation.md)): their share of a final count reported at each release lag $d$, the sum of $Y_{p,t,d}$ over the sum of $X_{p,t}$ over final steps with a count at lag $d$, made non-decreasing and 1 from lag $D$, pooled over places for a place with none.
+A weekly lag is placed at the day ages it covers at the latest cut-off.
+The complete models give none.
 
 ## Limitations
 
