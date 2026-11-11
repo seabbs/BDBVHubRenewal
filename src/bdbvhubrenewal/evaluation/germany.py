@@ -16,7 +16,7 @@ back (`HORIZONS`), so the teams are scored on the same.
 `team_scores` takes the hub teams' WIS from the paper's own score of each
 quantile, and their coverage from their published quantiles. Forecasts
 the paper scored with quantiles that are not published (filled from
-later model versions or corrected) are left out.
+later model versions or corrected) have no coverage.
 """
 
 from __future__ import annotations
@@ -382,8 +382,9 @@ def team_scores(
     Returns
     -------
     pandas.DataFrame
-        As `score_quantiles`, for the forecasts that the paper scored and
-        whose quantiles are published below `_RKI_ERROR`.
+        As `score_quantiles`, for every forecast the paper scored. The
+        coverage is missing where the quantiles are not published, or are
+        above `_RKI_ERROR`.
     """
     targets = {f"{h} day ahead inc hosp" for h in HORIZONS}
     rows = paper.loc[
@@ -405,7 +406,7 @@ def team_scores(
     sub = sub.loc[retro | ~has_retro]
     sub = sub.loc[sub["value"] < _RKI_ERROR]
     cover = _coverage(_with_truth(sub, truth))
-    scores = cover.merge(wis.reset_index())
+    scores = _with_truth(wis.reset_index(), truth).merge(cover, how="left")
     return _finish(scores)
 
 
@@ -424,9 +425,12 @@ def summarise_germany(
     Returns
     -------
     pandas.DataFrame
-        The group columns, `n` and the mean of each of `SCORE_COLUMNS`.
+        The group columns, `n` and the mean of each of `SCORE_COLUMNS`
+        over the forecasts that have it, with `n_coverage` the number
+        that have coverage.
     """
     grp = scores.groupby(list(by))
     out = grp[list(SCORE_COLUMNS)].mean()
     out.insert(0, "n", grp.size())
+    out["n_coverage"] = grp["coverage_50"].count()
     return out.reset_index()

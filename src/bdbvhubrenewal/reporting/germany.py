@@ -31,12 +31,10 @@ LEVELS: Final = {
 }
 """The paper's levels, in order, and their labels."""
 
-METRICS: Final = (
-    ("wis", "WIS", None, True),
-    ("coverage_50", "50% coverage", 0.5, False),
-    ("coverage_95", "95% coverage", 0.95, False),
-)
-"""Score column, label, reference line and whether it is also relative."""
+METRICS: Final = (("wis", "WIS", None, True),)
+"""Score column, label, reference line and whether it is also relative, of
+the summaries. Coverage is in the table only, as some teams' forecasts
+have none (`team_scores`)."""
 
 BASELINE: Final = "randomwalk"
 """The model relative scores divide by."""
@@ -81,7 +79,14 @@ def _table(scores: pd.DataFrame, models: list[str]) -> str:
     table = pd.DataFrame(cols).reindex(models)
     table = table.sort_values(next(iter(cols)))
     table.index.name = "Model"
-    return table.to_markdown() + "\n"
+    short = summary.loc[summary["n_coverage"] < summary["n"]]
+    notes = [
+        f"{r.model}'s coverage at the {LEVELS[str(r.level)].lower()} level is "
+        f"over the {r.n_coverage} of its {r.n} forecasts with published "
+        "quantiles.\n"
+        for r in short.itertuples(index=False)
+    ]
+    return "\n".join([table.to_markdown() + "\n", *notes])
 
 
 def _sources(sources: Mapping[str, object]) -> str:

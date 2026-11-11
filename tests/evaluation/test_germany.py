@@ -114,13 +114,15 @@ def test_team_scores_take_the_paper_s_wis_and_published_quantiles() -> None:
     paper = sub.drop(columns=["value", "retrospective"]).assign(
         model="KIT", score=[1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0]
     )
-    # The paper scored a forecast with no published quantiles: left out.
+    # The paper scored a forecast with no published quantiles.
     other = paper.assign(location="DE-BY")
+    truth = pd.concat([_truth(6.5), _truth(6.5).assign(location="DE-BY")])
     out = team_scores(
-        pd.concat([paper, other]), pd.concat([sub, retro]), _truth(6.5)
-    )
-    assert len(out) == 1
-    row = out.iloc[0]
+        pd.concat([paper, other]), pd.concat([sub, retro]), truth
+    ).set_index("location")
+    assert out.loc["DE-BY", "wis"] == pytest.approx(4.0)
+    assert np.isnan(out.loc["DE-BY", "coverage_50"])
+    row = out.loc["DE"]
     assert row["model"] == "KIT"
     assert row["wis"] == pytest.approx(4.0)
     assert row["coverage_50"] == 0.0
@@ -140,6 +142,7 @@ def test_summary_is_by_model_and_level() -> None:
     out = summarise_germany(scores).set_index(["level", "model"])
     assert out.loc[("national", "a"), "wis"] == 1.0
     assert out.loc[("states", "a"), "n"] == 1
+    assert out.loc[("states", "a"), "n_coverage"] == 1
 
 
 @pytest.mark.parametrize(
