@@ -143,7 +143,19 @@ def test_samplers_come_from_the_policy() -> None:
     assert table["renewalbvd"]["num_samples"] == 750
 
 
-@pytest.mark.usefixtures("in_root")
+@pytest.fixture
+def offline_bvd(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Choose no BVDOutbreakSize release, rather than list them online.
+
+    The fixture data hold no release cache, so the choice would list the
+    releases from GitHub.
+    """
+    monkeypatch.setattr(
+        "bdbvhubrenewal.forecasters.renewal.bvd_release", lambda *_: None
+    )
+
+
+@pytest.mark.usefixtures("in_root", "offline_bvd")
 def test_keys_follow_the_task_settings_and_bvd_release(
     target: pd.DataFrame,
     delays: pd.DataFrame,
@@ -205,7 +217,7 @@ def in_root(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.chdir(ROOT)
 
 
-@pytest.mark.usefixtures("in_root")
+@pytest.mark.usefixtures("in_root", "offline_bvd")
 def test_the_stored_task_covers_the_submissions_rounds(
     target: pd.DataFrame,
     delays: pd.DataFrame,

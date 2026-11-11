@@ -338,28 +338,28 @@ New reports of a day that was already $D$ days old at $r'$ have no probability u
 At 11-08 these are 412 of 10,878 national cases, 220 of them added by the 11-08 release.
 
 **Pooling.**
-$\mu_p$ and $\log \sigma_p$ of a place are its parent's plus an offset for its tier,
+Every place-level parameter is pooled over the hierarchy: the delay location $\mu_p$ and scale $\log s_p$, the walk spread $\log \sigma_p$, the dispersion $\log \phi_p$ and the walk's first level $\log \lambda_{p,1}$.
+Each tier's places are normal about their parents,
 
 $$
-\theta_p = \theta_{\mathrm{pa}(p)} + \tau_{v(p)}\, z_p,
+\theta_p \sim \mathcal{N}\big(\theta_{\mathrm{pa}(p)},\ \tau_{v(p)}^2\big),
 \qquad
-z_p \sim \mathcal{N}(0, 1),
+\tau_v \sim \mathcal{N}^+(0, c_\theta^2),
 $$
 
 with $v(p)$ the tier of $p$ (province or zone) and one $\tau_v$ for each tier and parameter.
-The delay scale $s$ and the dispersion $\phi$ are shared by all places.
-With $s$ pooled as well, its $\tau$ fell towards 0 where a few large provinces pinned it, and 17% of the draws at 11-08 were divergent.
+The fit's tree holds the fitted leaves and their ancestors only, so no place without data has offsets left to the prior alone.
+A silent place takes the delay of its nearest fitted ancestor.
 
 **Priors.**
 
-| Parameter | Prior | Why |
-|---|---|---|
-| $\mu$ of the country | $\mathcal{N}(1.6, 1)$ | Median delay about 5 days, 2 to 13 within one sd |
-| $\log s$ | $\mathcal{N}(\log 0.7, 0.5^2)$ | |
-| $\log \sigma$ of the country | $\mathcal{N}(\log 0.2, 1)$ | Weekly log changes of about 0.2, 0.07 to 0.54 within one sd |
-| $\log \phi$ | $\mathcal{N}(\log 10, 1.5^2)$ | |
-| $\tau_v$ | $\mathcal{N}^+(0, 0.5^2)$ | A place within a factor of about 1.4 of its parent at the median |
-| $\log \lambda_{p,w}$ in the first week | $\mathcal{N}(2, 3^2)$ | 0.02 to 3000 cases a week within two sd |
+| Parameter | Prior of the country's value | Tier spread scale $c_\theta$ | Why |
+|---|---|---|---|
+| $\mu$ | $\mathcal{N}(1.6, 1)$ | 0.5 | Median delay about 5 days, 2 to 13 within one sd |
+| $\log s$ | $\mathcal{N}(\log 0.7, 0.5^2)$ | 0.1 | Only a few large places inform it |
+| $\log \sigma$ | $\mathcal{N}(\log 0.2, 1)$ | 0.5 | Weekly log changes of about 0.2, 0.07 to 0.54 within one sd |
+| $\log \phi$ | $\mathcal{N}(\log 10, 1.5^2)$ | 0.25 | Only a few large places inform it |
+| $\log \lambda_{p,1}$ | $\mathcal{N}(2, 3^2)$ | 1.5 | Places range from a few cases a week to hundreds |
 
 **Forecast.**
 Each sample takes one posterior draw, and every draw is used once before any is used again.
@@ -380,17 +380,19 @@ On the reported target, the backtest maps its final counts to what a later relea
 
 **Sampler.**
 NUTS runs 2 chains of 500 warm-up and 750 draws, in sequence, from the prior medians, at target acceptance 0.9.
-Each walk step is sampled as $\delta^*_{p,w} \sim \mathcal{N}(0, \sigma_p)$ and set to $\delta_{p,w} = \sqrt{\sigma_p}\, \delta^*_{p,w}$, numpyro's location-scale reparameterisation with centring $\tfrac{1}{2}$, halfway between centred and non-centred steps.
+Each walk step is sampled as $\delta^*_{p,w} \sim \mathcal{N}(0, \sigma_p)$ and set to $\delta_{p,w} = \sqrt{\sigma_p}\, \delta^*_{p,w}$, numpyro's location-scale reparameterisation with centring $\tfrac{1}{2}$.
 A large place's counts pin its walk, which suits centred steps, and a place with few cases leaves it to the prior, which suits non-centred ones.
-In a trial at 11-08, with $\phi$ then pooled, half-centred steps gave 1 divergent draw in 1500, against 12 for non-centred steps, in half the leapfrog steps.
-With $\phi$ shared, the fits at 10-17, 10-24, 11-01 and 11-08 have at most 1 divergent draw and a worst $\hat R$ of 1.013.
+The pooled parameters are non-centred, except the first level, whose tiers are centred, and $\log s$, whose tiers are half centred.
+Sampling each tier about its parent's value, not as the country's value plus an offset, cut the median leapfrog steps from 255 to 511 down to 63.
+With a tier spread scale of 0.25 for $\log s$, 213, 198 and 62 of 1500 draws were divergent at 10-17, 10-24 and 11-01; with 0.1, 14, 9 and 3, and 1 at 11-08.
+So $s$ is pooled only weakly: its tier spread sits near its prior scale.
 A fit whose worst split $\hat R$ is above 1.05, or with more than 1% of its draws divergent, raises, and the model gives no forecast for that origin.
 
 **How it differs from `randomwalknowcast`.**
 
 | | `randomwalknowcast` | `pprandomwalknowcast` |
 |---|---|---|
-| Delay | Chain ladder, non-parametric by age, own or parent's | Log-normal, $\mu_p$ pooled, $s$ shared |
+| Delay | Chain ladder, non-parametric by age, own or parent's | Log-normal, $\mu_p$ and $s_p$ pooled |
 | Nowcast | Chain-ladder fill, with NB new reports fitted to retrospective nowcasts | NB new reports of the same model that fits the delay and the walk |
 | Walk | On $\log(1 + y)$ from a nowcast draw, spread from 8 changes net of Poisson noise | On $\log \lambda$ over all 16 weeks, spread pooled, fitted jointly |
 | Uncertainty in the estimates | None, point estimates | Each sample is a posterior draw |
