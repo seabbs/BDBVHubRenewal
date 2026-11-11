@@ -75,7 +75,7 @@ from bdbvhubrenewal.forecasters.introductions import (
     introduction_rates,
     silent_places,
 )
-from bdbvhubrenewal.forecasters.obs import fit_sizes
+from bdbvhubrenewal.forecasters.obs import fit_sizes, pooled_sizes
 from bdbvhubrenewal.forecasters.pooling import (
     MIN_LEVEL,
     pool_matrix,
@@ -788,8 +788,9 @@ def _add_spread(origin: Origin) -> None:
     """Fit the observation model by weeks back.
 
     The size follows the one rule. Each place's own estimate uses its
-    errors, and its pooled estimate the errors of the places in its
-    pool. The size is fitted only for the estimates some place uses.
+    errors, pooled over its siblings in its parent's pool by empirical
+    Bayes (`obs.pooled_sizes`), and its pooled estimate the errors of
+    the places in its pool.
     """
     snap, settings = origin.snap, origin.settings
     errors = retro_errors(snap, origin.o, settings)
@@ -813,6 +814,18 @@ def _add_spread(origin: Origin) -> None:
         size[e] = fit_sizes(
             np.where(keep, errors.added, 0.0).reshape(-1, k_n),
             np.where(keep, errors.remaining, 0.0).reshape(-1, k_n),
+        )
+    # Each place's own sizes are pooled over its siblings in its parent's
+    # pool (`obs.pooled_sizes`).
+    for p in range(n_loc):
+        members = np.flatnonzero(pool[p] > 0)
+        members = members[members != p]
+        if members.size == 0:
+            continue
+        keep = fit[:, members]
+        size[members] = pooled_sizes(
+            np.where(keep, errors.added[:, members], 0.0),
+            np.where(keep, errors.remaining[:, members], 0.0),
         )
     k = np.arange(n.shape[1])[None, :]
     origin.errors = errors

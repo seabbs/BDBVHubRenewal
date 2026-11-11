@@ -97,7 +97,7 @@ def test_a_place_with_few_errors_is_pooled_towards_its_siblings() -> None:
     assert own < 1.5
     assert got.shape == (3, 1)
     np.testing.assert_allclose(got[:2, 0], 5.0, rtol=0.4)
-    assert got[2, 0] > 2 * own
+    assert own < got[2, 0] < got[:2, 0].min()
 
 
 def test_places_that_differ_with_many_errors_keep_their_own_sizes() -> None:
