@@ -1,7 +1,7 @@
 """Scores of the Chronos-2 models and the random walks on matched cells.
 
 Each target (reported, complete) is scored on the cells every model
-forecasts, split into nowcast weeks (weeks back >= 0) and forecast weeks.
+scored on that target forecasts, split into nowcast weeks (weeks back >= 0) and forecast weeks.
 National is also shown on its own: on the complete target it is each
 model's own national series.
 """
@@ -16,9 +16,11 @@ res = Path(sys.argv[1])
 s = pd.read_csv(res / "nowcast-scores.csv")
 s["weeks"] = s["weeks_back"].map(lambda k: "nowcast" if k >= 0 else "forecast")
 keys = ["target", "origin", "truth_vintage", "location", "target_end_date"]
-models = sorted(s["model"].unique())
-common = s.groupby(keys)["model"].nunique()
-common = common[common == len(models)].reset_index()[keys]
+# Within each target, the cells every model scored on that target has.
+n_models = s.groupby("target")["model"].nunique().rename("n_models")
+common = s.groupby(keys)["model"].nunique().rename("n").reset_index()
+common = common.merge(n_models, on="target")
+common = common.loc[common["n"] == common["n_models"], keys]
 s = s.merge(common, on=keys)
 cols = ["target", "weeks", "model", "n", "rel_wis", "rel_log_wis",
         "coverage_50", "coverage_90", "bias"]
