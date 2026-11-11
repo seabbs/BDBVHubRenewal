@@ -73,7 +73,7 @@ The release backtest scores the reported target and the complete target ([Evalua
 
 ## Limitations
 
-- The hub target has few releases, so each lag has a handful of values per place, most of them in the last weeks.
+- The hub target has few releases, so each lag series has one to three values in the context. Chronos-2 then sees little of how a lag relates to the final count, and as pretrained the lag series pull the ragged models' medians down and widen their upper tails.
 - Chronos-2 is used as pretrained. It has not seen these data or outbreaks like them.
 - Draws are independent across steps and places, so every weekly value of the daily models, a sum of seven daily draws, is too narrow, as are sums over weeks or places.
 
