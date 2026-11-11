@@ -219,7 +219,13 @@ def _chronos() -> Any:
     import torch
     from chronos import Chronos2Pipeline
 
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = (
+        "cuda"
+        if torch.cuda.is_available()
+        else "mps"
+        if torch.backends.mps.is_available()
+        else "cpu"
+    )
     return Chronos2Pipeline.from_pretrained(
         CHRONOS_MODEL, revision=CHRONOS_REVISION, device_map=device
     )
@@ -231,8 +237,8 @@ def chronos_sampler(
     """Draw trajectories from Chronos-2's quantiles.
 
     Every series and step draws its own uniform level, so draws are
-    independent across series and steps. Runs on the GPU when torch sees
-    one.
+    independent across series and steps. Runs on a CUDA or Apple GPU when
+    torch sees one.
 
     Parameters
     ----------
