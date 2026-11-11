@@ -37,11 +37,13 @@ attention reads together.
   Chronos-2 scales each series to zero mean and unit variance, which
   maps a constant label to zero.
 
-**Trajectories.** Chronos-2 gives quantiles, so trajectories are drawn a
-week at a time.
-At each step every trajectory draws a uniform $u$ for each series, reads
-the quantile function at $u$ (linear between the model's 21 levels, flat
-beyond them), and appends the draw to its own context for the next step.
+**Trajectories.** Chronos-2 gives quantiles for every week ahead from one
+call.
+Each trajectory draws one uniform $u$ for each series and reads every
+week's quantile function at that $u$ (linear between the model's 21
+levels, flat beyond them).
+So a trajectory keeps its quantile level across weeks, and is
+independent of the other series' trajectories.
 A draw $z$ is the count $\max(\mathrm{round}(e^{z} - 1), 0)$.
 For `complete` and `delay_cov` sample $i$ of week $w > c$ is
 $\max(\hat y^{(i)}_{p,w}, R_{p,w})$; weeks up to $c$ are $R_{p,w}$.
@@ -267,7 +269,7 @@ def _chronos() -> Any:
 def chronos_sampler(
     groups: Sequence[Series], horizon: int, n_samples: int, seed: int
 ) -> list[np.ndarray]:
-    """Draw trajectories from Chronos-2 a week at a time.
+    """Draw trajectories from Chronos-2's quantiles, a level per series.
 
     Runs on the GPU when torch sees one.
 
@@ -301,42 +303,23 @@ def chronos_sampler(
         ) from err
     levels = np.asarray(pipeline.quantiles, dtype=float)
     rng = np.random.default_rng(seed)
-    paths = [
-        np.repeat(np.atleast_2d(g["target"])[None], n_samples, axis=0)
-        for g in groups
-    ]
-    for h in range(horizon):
-        batch: list[dict[str, Any]] = []
-        for group, path in zip(groups, paths, strict=True):
-            future = group.get("future_covariates", {})
-            covariates = {}
-            if future:
-                covariates = {
-                    "past_covariates": {
-                        name: np.concatenate([past, future[name][:h]])
-                        for name, past in group["past_covariates"].items()
-                    },
-                    "future_covariates": {
-                        name: values[h : h + 1]
-                        for name, values in future.items()
-                    },
-                }
-            batch.extend({"target": p, **covariates} for p in path)
-        quantiles, _ = pipeline.predict_quantiles(
-            batch, prediction_length=1, quantile_levels=levels.tolist()
-        )
-        start = 0
-        for i, path in enumerate(paths):
-            q = np.stack(
-                [
-                    quantiles[start + s][:, 0].float().cpu().numpy()
-                    for s in range(n_samples)
-                ]
+    quantiles, _ = pipeline.predict_quantiles(
+        [dict(g) for g in groups],
+        prediction_length=horizon,
+        quantile_levels=levels.tolist(),
+    )
+    out = []
+    for q in quantiles:
+        q = q.float().cpu().numpy()  # [V, horizon, Q]
+        u = rng.uniform(size=(n_samples, q.shape[0], 1))
+        out.append(
+            quantile_draws(
+                levels,
+                np.broadcast_to(q, (n_samples, *q.shape)),
+                np.broadcast_to(u, (n_samples, *q.shape[:2])),
             )
-            start += n_samples
-            draw = quantile_draws(levels, q, rng.uniform(size=q.shape[:2]))
-            paths[i] = np.concatenate([path, draw[:, :, None]], axis=2)
-    return [p[:, :, -horizon:] for p in paths]
+        )
+    return out
 
 
 def _counts(draws: np.ndarray) -> np.ndarray:

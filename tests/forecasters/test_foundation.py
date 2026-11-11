@@ -227,3 +227,40 @@ def test_no_delay_data_is_unavailable(name: str, task: ForecastTask) -> None:
 def test_chronos_missing_is_unavailable() -> None:
     with pytest.raises(ModelUnavailableError, match="extra chronos"):
         chronos_sampler([{"target": np.zeros((1, 5))}], 3, 10, 0)
+
+
+class _FakePipeline:
+    """Quantiles that grow with the level and the week."""
+
+    quantiles = (0.1, 0.5, 0.9)
+
+    def predict_quantiles(self, groups, prediction_length, quantile_levels):
+        import torch
+
+        out = []
+        for g in groups:
+            n_var = np.atleast_2d(g["target"]).shape[0]
+            week = torch.arange(prediction_length, dtype=torch.float32)
+            level = torch.tensor(quantile_levels, dtype=torch.float32)
+            q = week[:, None] + level[None, :]
+            out.append(q.expand(n_var, -1, -1))
+        return out, None
+
+
+@pytest.mark.skipif(
+    importlib.util.find_spec("torch") is None, reason="needs torch"
+)
+def test_trajectories_keep_their_level_across_weeks(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from bdbvhubrenewal.forecasters import foundation
+
+    monkeypatch.setattr(foundation, "_chronos", lambda: _FakePipeline())
+    groups = [{"target": np.zeros((2, 5))}, {"target": np.zeros((1, 5))}]
+    draws = chronos_sampler(groups, 4, 50, 1)
+    assert [d.shape for d in draws] == [(50, 2, 4), (50, 1, 4)]
+    # Each week is the week index plus one level per trajectory.
+    level = draws[0] - np.arange(4)
+    assert np.allclose(level, level[:, :, :1])
+    assert ((level > 0.1 - 1e-6) & (level < 0.9 + 1e-6)).all()
+    assert not np.allclose(level[:, 0], level[:, 1])
