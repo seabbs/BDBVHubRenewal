@@ -43,7 +43,7 @@ Its new reports by weeks back fit the observation model's size (`obs`),
 on counts whose downward revisions are moved onto earlier releases, as for
 the delay.
 The net falls of each week's raw count give its removal rate, pooled over
-the places of each level.
+the places at each depth of the tree (country, province, zone).
 
 **Introductions.** A place with no case in the latest `walk_weeks` weeks
 is silent.
@@ -628,7 +628,7 @@ class Origin:
         Negative binomial size $\phi_k$ of the new reports of each place
         by weeks back from the cut-off week, `[L, K]`.
     removal : numpy.ndarray or None
-        Removal rate $p_k$ of each place, pooled over its level, `[L, K]`.
+        Removal rate $p_k$ of each place, pooled over its depth, `[L, K]`.
     obs_n : numpy.ndarray or None
         Errors behind each fit, `[L, K]`.
     obs_source : numpy.ndarray or None
@@ -809,7 +809,7 @@ def _add_spread(origin: Origin) -> None:
     The size follows the one rule. Each place's own estimate uses its
     errors, and its pooled estimate the errors of the places in its
     pool. The size is fitted only for the estimates some place uses.
-    The removal rate is pooled over the places of each level, and never
+    The removal rate is pooled over the places at each depth, and never
     enters the size.
     """
     snap, settings = origin.snap, origin.settings

@@ -19,9 +19,9 @@ and drawn with the port's `fit_nb` and `sample_nb` through
 As in baselinenowcast, downward revisions are moved onto earlier releases
 before the size is fitted (`chain._delay_counts`), so the removals never
 enter it.
-$B$ thins the count reported at $p_k$, the share of the reported count
-that fell in the retrospective nowcasts at $k$, pooled over the places of
-one level (`removal_rates`).
+$B$ thins the count reported at $p_k$, the net fall of the raw count as a
+share of the count reported in the retrospective nowcasts at $k$, pooled
+over the places at one depth of the tree (`removal_rates`).
 """
 
 from __future__ import annotations
@@ -71,7 +71,7 @@ def fit_sizes(added: np.ndarray, remaining: np.ndarray) -> np.ndarray:
     return np.where((remaining > 0).any(axis=0), fitted, PRIOR_SIZE)
 
 
-def levels_of(parent: np.ndarray) -> np.ndarray:
+def depths(parent: np.ndarray) -> np.ndarray:
     """Return each node's depth in the tree, 0 for a root.
 
     Parameters
@@ -98,7 +98,7 @@ def removal_rates(
     valid: np.ndarray,
     parent: np.ndarray,
 ) -> np.ndarray:
-    r"""Return the removal rate $p_k$ of each place, pooled by level.
+    r"""Return the removal rate $p_k$ of each place, pooled by depth.
 
     $p_k = \sum B / \sum Y$ over the errors at $k$ of every place at the
     place's depth in the tree (country, province, zone), the Binomial
@@ -119,11 +119,11 @@ def removal_rates(
     Returns
     -------
     numpy.ndarray
-        $p_k$, `[L, K]`, 0 where a level has nothing reported.
+        $p_k$, `[L, K]`, 0 where a depth has nothing reported in its errors.
     """
     fell_sum = np.where(valid, fell, 0.0).sum(axis=0)
     rep_sum = np.where(valid, reported, 0.0).sum(axis=0)
-    depth = levels_of(np.asarray(parent))
+    depth = depths(np.asarray(parent))
     rate = np.zeros(fell_sum.shape)
     for d in np.unique(depth):
         m = depth == d
@@ -157,9 +157,7 @@ def sample_count(
     Returns
     -------
     jax.Array
-        $X$, the shape of `reported`, never below 0. The new reports are
-        drawn from `key` as with no removals, and the removals from a key
-        folded from it.
+        $X$, the shape of `reported`, never below 0.
     """
     removed = jax.random.binomial(
         jax.random.fold_in(key, 1), reported, removal, reported.shape

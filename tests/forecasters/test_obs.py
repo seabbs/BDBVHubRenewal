@@ -108,7 +108,7 @@ def test_removals_leave_the_new_reports_as_they_were() -> None:
     )
 
 
-def test_the_removal_rate_is_pooled_over_each_level() -> None:
+def test_the_removal_rate_is_pooled_over_each_depth() -> None:
     # The country, two provinces and two zones of the first province.
     parent = np.array([-1, 0, 0, 1, 1])
     reported = np.array(
@@ -123,3 +123,8 @@ def test_the_removal_rate_is_pooled_over_each_level() -> None:
     np.testing.assert_allclose(rate[2], rate[1])
     np.testing.assert_allclose(rate[3], [2 / 60, 1 / 25])
     np.testing.assert_allclose(rate[4], rate[3])
+    # A depth with no errors has no removals.
+    valid[0, 3:] = False
+    rate = removal_rates(fell, reported, valid, parent)
+    np.testing.assert_allclose(rate[3:], 0.0)
+    np.testing.assert_allclose(rate[1], [4 / 100, 2 / 50])

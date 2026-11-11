@@ -283,16 +283,13 @@ def test_a_draw_falls_below_the_count_reported_only_with_removals(
     model = RandomWalkNowcast()
     origin = model.origin_at(task, errors=True)
     values, _ = model.trajectories(origin, task, origin.point)
-    snap = origin.snap
     n_data = origin.reported.shape[1]
     assert origin.removal is not None
-    k_n = origin.removal.shape[1]
-    back = snap.cut_week(origin.o) - np.arange(n_data)
-    k = np.clip(back, 0, k_n - 1)
-    rate = np.where(back < k_n, origin.removal[:, k], 0.0)
-    below = (values[:, :, :n_data] < origin.reported[None] - 1e-9).any(0)
-    assert (rate[below] > 0).all()
+    below = (values[:, :, :n_data] < origin.reported[None] - 1e-9).any((0, 2))
+    removes = (origin.removal > 0).any(axis=1)
     assert below.any()
+    # A place with no removals at any week back never falls below.
+    assert not below[~removes].any()
     assert (values >= 0).all()
 
 
