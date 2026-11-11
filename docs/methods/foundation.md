@@ -44,7 +44,8 @@ This is the one place a forecast is split rather than forecast.
   $t^* = c - D$, the last step with every lag in, with $D = 4$ weeks or $D = 28$ days.
   The lag series run past $t^*$ as values known into the future.
   They have to: Chronos-2 outputs only after the block's shared end $t^*$, and it takes no known future values of a target series.
-  So a recent week's count so far reaches its nowcast only as its cell at lag $c - t$ in a lag series; without it the recent weeks would have no nowcast.
+  So a recent week's count so far reaches its nowcast only as its cell at lag $c - t$ in a lag series.
+  Without it the recent weeks would have no nowcast.
 
 A covariate layout, with the lag series as covariates of the target series, is the ragged layout here, so it is not a separate model.
 Chronos-2 standardises each series and takes its arcsinh, so counts go in as they are.
