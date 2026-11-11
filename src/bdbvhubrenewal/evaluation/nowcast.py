@@ -12,8 +12,8 @@ Two targets are scored.
 
 **Reported.** The count each later release $o'$ shows, for every week
 of the forecast that $o'$ reports.
-The models in `AS_REPORTED` are scored on their samples as they are,
-with no delay.
+A model with `scored_as_reported` set, such as `randomwalk`, is scored
+on its samples as they are, with no delay.
 Every other model forecasts the final count $X$ of a week and is mapped
 to what $o'$ shows through its own modelled delay, the share
 $\pi$ of a day's final count reported by each age (`delay_curves`,
@@ -76,7 +76,6 @@ from bdbvhubrenewal.forecasters.chain import MissingSnapshots
 from bdbvhubrenewal.forecasters.renewal import DELAY_SUMMARY_FILE
 
 __all__ = [
-    "AS_REPORTED",
     "COMPLETE_GROWTH",
     "COMPLETE_WEEKS",
     "ReleaseBacktest",
@@ -90,6 +89,7 @@ __all__ = [
     "release_backtest",
     "reported_samples",
     "score_releases",
+    "scored_as_reported",
     "stored_delays",
     "summarise",
     "week_shares",
@@ -98,13 +98,27 @@ __all__ = [
 
 log = logging.getLogger(__name__)
 
-AS_REPORTED = (
-    "randomwalk",
-    "fm_chronos_weekly_complete",
-    "fm_chronos_daily_complete",
-)
-"""The models scored on their samples as they are, with no delay: they
-forecast forward from the latest complete week and make no nowcast."""
+
+def scored_as_reported(name: str) -> bool:
+    """Return whether a model is scored on its samples as they are.
+
+    A registered model that forecasts forward from complete weeks with no
+    nowcast sets `scored_as_reported`. A hub team is not registered.
+
+    Parameters
+    ----------
+    name : str
+        The model name.
+
+    Returns
+    -------
+    bool
+        True if the model sets `scored_as_reported`.
+    """
+    if name not in {s.name for s in list_models()}:
+        return False
+    return bool(getattr(get_model(name), "scored_as_reported", False))
+
 
 COMPLETE_WEEKS = 4
 """Weeks a week must be old at the latest release to count as complete."""
@@ -393,7 +407,8 @@ def reported_samples(
 ) -> dict[str, pd.DataFrame]:
     """Return a model's samples of what each later release shows.
 
-    The samples of a model in `AS_REPORTED` are returned as they are.
+    A model that is `scored_as_reported` has its samples returned as they
+    are.
     Another model's places are mapped by its delay (`delay_curves`,
     `draw_reported`), a place it has no delay for is returned as it is,
     and the country is the sum of the provinces.
@@ -425,7 +440,7 @@ def reported_samples(
     dict of str to pandas.DataFrame
         Samples by later release.
     """
-    if model in AS_REPORTED:
+    if scored_as_reported(model):
         return dict.fromkeys(later, samples)
     if summary is None:
         return {}

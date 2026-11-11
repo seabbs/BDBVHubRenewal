@@ -31,11 +31,7 @@ from bdbvhubrenewal.forecasters.base import (
     ModelUnavailableError,
     register_model,
 )
-from bdbvhubrenewal.forecasters.randomwalk import (
-    RandomWalk,
-    quiet_places,
-    start_weeks,
-)
+from bdbvhubrenewal.forecasters.randomwalk import RandomWalk
 
 __all__ = [
     "CHRONOS_MODEL",
@@ -124,7 +120,7 @@ def hub_triangle(
     Parameters
     ----------
     rows : pandas.DataFrame
-        The releases, the latest last. Weekly rows have
+        The releases. The latest gives the final counts. Weekly rows have
         `target_end_date` and `total`; daily rows have `onset_date`,
         `observed` and `imputed`. Both have `vintage`, `location` and
         `cutoff`.
@@ -193,7 +189,9 @@ def lag_shares(
     sum of their final counts, over the steps final at the latest release
     with a count at that lag. Shares are capped at 1 and made
     non-decreasing, and are 1 from lag $D$. `pooled` sums over places, for
-    places with none of their own.
+    places with none of their own. A weekly lag $d$ holds its share over
+    ages $7d$ to $7d + 6$ days, so the mean over a week's days, as
+    `evaluation.nowcast.week_shares` takes it, is the share.
 
     Parameters
     ----------
@@ -229,13 +227,14 @@ def lag_shares(
         if not ok.any():
             continue
         share = np.maximum.accumulate(np.minimum(n[ok] / d[ok], 1.0))
-        ages = np.arange(lags)[ok] * width
+        first = np.arange(lags)[ok] * width
+        ages = np.unique(np.stack([first, first + width - 1], axis=1))
         frames.append(
             pd.DataFrame(
                 {
                     "location": place,
                     "x": [*ages, lags * width],
-                    "q50": [*share, 1.0],
+                    "q50": [*np.repeat(share, len(ages) // len(share)), 1.0],
                 }
             )
         )
@@ -322,16 +321,10 @@ def chronos_sampler(
 
     Raises
     ------
-    ModelUnavailableError
-        If Chronos-2 is not installed.
+    ImportError
+        If Chronos-2 is not installed (`uv sync --group chronos`).
     """
-    try:
-        pipeline = _chronos()
-    except ImportError as err:
-        raise ModelUnavailableError(
-            "The Chronos-2 models need the group chronos: "
-            "uv sync --group chronos."
-        ) from err
+    pipeline = _chronos()
     levels = np.asarray(pipeline.quantiles, dtype=float)
     rng = np.random.default_rng(seed)
     quantiles, _ = pipeline.predict_quantiles(
@@ -367,11 +360,8 @@ def _group(
 
 
 def _walk_start(origin: Any) -> str:
-    """Return the earliest week `randomwalk` starts a walk from."""
-    start = start_weeks(origin)
-    walked = ~quiet_places(origin)
-    first = start[walked].min() if walked.any() else start.min()
-    return str(origin.snap.week_ends[int(first)])
+    """Return the earliest week `randomwalk` starts its walk from."""
+    return str(origin.snap.week_ends[int(origin.start.min())])
 
 
 @dataclass
@@ -392,7 +382,7 @@ class FoundationModel:
         The `ragged` models' share reported by release lag at the last
         forecast (`lag_shares`), which maps their final counts to what
         later releases show. None for `complete`, which is scored as
-        reported, as `randomwalk` is.
+        reported, as `randomwalk` is (`scored_as_reported`).
     """
 
     name: str
@@ -406,6 +396,11 @@ class FoundationModel:
     @property
     def needs_snapshots(self) -> bool:
         """Whether the model reads release snapshots: `complete` does."""
+        return self.layout == "complete"
+
+    @property
+    def scored_as_reported(self) -> bool:
+        """Whether its samples are scored as they are: `complete`'s are."""
         return self.layout == "complete"
 
     def forecast(self, task: ForecastTask) -> pd.DataFrame:
@@ -426,9 +421,11 @@ class FoundationModel:
         Raises
         ------
         ModelUnavailableError
-            If the task has no releases of the source, fewer than two
-            steps of context, or Chronos-2 is not installed, or, for
-            `complete`, no week `randomwalk` can start from.
+            If the task has no releases of the source or fewer than two
+            steps of context, or, for `complete`, no week `randomwalk`
+            can start from.
+        ImportError
+            If Chronos-2 is not installed.
         """
         weekly = self.source == "weekly"
         rows = task.target_history if weekly else task.daily_history
