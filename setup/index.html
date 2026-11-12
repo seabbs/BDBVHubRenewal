@@ -2021,8 +2021,9 @@
 <a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>uv<span class="w"> </span>sync
 </code></pre></div>
 <p>Run every command below from the <code>BDBVHubRenewal</code> folder.
-The hub data are committed in <code>data/</code>, so nothing needs downloading.
-<code>uv run bdbvhubrenewal data</code> fetches the latest hub data when you want it.</p>
+The hub data are not committed.
+<code>task data</code> (or <code>uv run bdbvhubrenewal data</code>) fetches the latest hub data into <code>data/</code>, and <code>task data-bvd</code> caches the BVDOutbreakSize releases that renewalbvd reads.
+The tests read a frozen copy in <code>tests/fixtures/data/</code>, so they need no download.</p>
 <h2 id="work-interactively">Work interactively<a class="headerlink" href="#work-interactively" title="Permanent link">&para;</a></h2>
 <p><code>uv run</code> runs a command inside the project's environment.</p>
 <table>

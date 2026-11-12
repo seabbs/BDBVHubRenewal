@@ -2179,7 +2179,7 @@ Both run at province and zone level (<a href="#health-zones">Health zones</a>), 
 <ol>
 <li>follows baselinenowcast, through a JAX port of the R package with one named extension for release snapshots (<a href="#delay">Delay</a>);</li>
 <li>has an observation model for the nowcast as in baselinenowcast, negative binomial new reports on the count still to come, fitted from retrospective nowcasts (<a href="#nowcast">Nowcast</a>);</li>
-<li>nowcasts every week up to the cut-off and completes a partial cut-off week from a walk that starts at the latest full week at least 5% reported with at least 5 cases (<a href="#start-from-the-nowcast">Start from the nowcast</a>);</li>
+<li>nowcasts every week up to the cut-off and completes a partial cut-off week from a walk that starts at the latest full week in the 9 weeks to the cut-off at least 5% reported with at least 5 cases (<a href="#start-from-the-nowcast">Start from the nowcast</a>);</li>
 <li>continues each nowcast trajectory with a random walk on <span class="arithmatex">\(\log(1 + y)\)</span> (<a href="#forecast">Forecast</a>);</li>
 <li>takes the walk's variance net of Poisson noise (<a href="#forecast">Forecast</a>);</li>
 <li>shares the delay, size and walk variance with a parent where a place has fewer than 10 cases a week (<a href="#own-or-pooled-estimates">Own or pooled estimates</a>).</li>
@@ -2196,8 +2196,8 @@ Both run at province and zone level (<a href="#health-zones">Health zones</a>), 
     G["Growth to final Γ&lt;sub&gt;p&lt;/sub&gt;(a)&lt;br/&gt;share reported 1 / Γ&lt;sub&gt;p&lt;/sub&gt;(a)"]
     MU["Nowcast mean μ&lt;sub&gt;p&lt;/sub&gt;(w)&lt;br/&gt;weekly fill&lt;br/&gt;shares F&lt;sub&gt;p,j&lt;/sub&gt;(w) from Γ&lt;sub&gt;p&lt;/sub&gt;"]
     RETRO["Earlier releases r &amp;lt; o&lt;br/&gt;nowcast to release o"]
-    OBS["Observation model&lt;br/&gt;by weeks back k&lt;br/&gt;size φ&lt;sub&gt;p,k&lt;/sub&gt;, removal b&lt;sub&gt;p,k&lt;/sub&gt;"]
-    X["Nowcast draw X&lt;sub&gt;p,i&lt;/sub&gt;(w)&lt;br/&gt;max(0, Y&lt;sub&gt;p,o&lt;/sub&gt; + A − B)&lt;br/&gt;A ~ NB(μ&lt;sub&gt;p&lt;/sub&gt; − Y&lt;sub&gt;p,o&lt;/sub&gt;, φ&lt;sub&gt;p,k&lt;/sub&gt;)&lt;br/&gt;B ~ Poisson(b&lt;sub&gt;p,k&lt;/sub&gt; Y&lt;sub&gt;p,o&lt;/sub&gt;)"]
+    OBS["Observation model&lt;br/&gt;by weeks back k&lt;br/&gt;size φ&lt;sub&gt;p,k&lt;/sub&gt;"]
+    X["Nowcast draw X&lt;sub&gt;p,i&lt;/sub&gt;(w)&lt;br/&gt;Y&lt;sub&gt;p,o&lt;/sub&gt; + A&lt;br/&gt;A ~ NB(μ&lt;sub&gt;p&lt;/sub&gt; − Y&lt;sub&gt;p,o&lt;/sub&gt;, φ&lt;sub&gt;p,k&lt;/sub&gt;)"]
     SIG["Walk spread σ&lt;sub&gt;p&lt;/sub&gt;&lt;br/&gt;changes in log(1 + Y&lt;sub&gt;p,o&lt;/sub&gt;)"]
     W["Walk on log(1 + λ&lt;sub&gt;i&lt;/sub&gt;)&lt;br/&gt;from each sample's completed&lt;br/&gt;cut-off week&lt;br/&gt;places with no recent case 0&lt;br/&gt;until an introduction&lt;br/&gt;Poisson counts"]
     NAT["National = sum of provinces&lt;br/&gt;sample by sample"]
@@ -2267,7 +2267,7 @@ The parent of a province is the country, whose counts are the sum of its provinc
 A place takes its own or a pooled <span class="arithmatex">\(\Delta_p\)</span> by the <a href="#own-or-pooled-estimates">own-or-pooled rule</a>.
 Only onset days less than <span class="arithmatex">\(1.5 D = 63\)</span> days before the cut-off of the latest release used contribute to the sums, as in baselinenowcast's default, and a retrospective fit uses the cut-off of its own release.
 Before the sums, each day's increments between its releases go through baselinenowcast's handling of negative values, so a downward revision is set to zero and taken from the earlier increments of that day and no ratio falls below 1.
-This applies to the delay only, because the removals below still allow negative revisions.
+The <a href="#nowcast">observation model</a> is fitted on the same preprocessed counts.
 The preprocessing runs along releases for each onset day, where baselinenowcast runs it along the delay columns of a reporting triangle.</p>
 <p>The growth of a day's count from age <span class="arithmatex">\(a\)</span> to final is</p>
 <div class="arithmatex">\[
@@ -2289,32 +2289,27 @@ baselinenowcast fills the row from <span class="arithmatex">\(x_0 = Y_{p,o}(w)\)
 x_j = x_{j-1} + \frac{x_{j-1} + 1 - F_{p,j-1}(w)}{F_{p,j-1}(w)} \big(F_{p,j}(w) - F_{p,j-1}(w)\big),
 \]</div>
 <p>and the last column is the nowcast mean <span class="arithmatex">\(\mu_p(w)\)</span>.
-With <span class="arithmatex">\(\text{rem} = \mu_p(w) - Y_{p,o}(w) \ge 0\)</span> the count still to come, the final count is new reports minus removals, as in epinowcast,</p>
+With <span class="arithmatex">\(\text{rem} = \mu_p(w) - Y_{p,o}(w) \ge 0\)</span> the count still to come, the final count is the count reported plus new reports, as in baselinenowcast,</p>
 <div class="arithmatex">\[
-X_{p,i}(w) = \max\big\{0,\ Y_{p,o}(w) + A - B\big\},
+X_{p,i}(w) = Y_{p,o}(w) + A,
 \qquad
 A \sim \text{NB}\big(\text{rem},\ \phi_{p,k}\big),
-\qquad
-B \sim \text{Poisson}\big(b_{p,k}\, Y_{p,o}(w)\big).
 \]</div>
-<p><span class="arithmatex">\(A\)</span> is baselinenowcast's negative binomial on the remaining count, with mean <span class="arithmatex">\(\text{rem}\)</span> and size <span class="arithmatex">\(\phi_{p,k}\)</span>.
-<span class="arithmatex">\(B\)</span> removes a share <span class="arithmatex">\(b_{p,k}\)</span> of the count reported, so counts can be revised down.
-Before the floor the mean is <span class="arithmatex">\(\mu_p(w) - b_{p,k} Y_{p,o}(w)\)</span>.
-Weeks with no day younger than <span class="arithmatex">\(D\)</span> at <span class="arithmatex">\(o\)</span> have <span class="arithmatex">\(\text{rem} = 0\)</span> and <span class="arithmatex">\(b_{p,k} = 0\)</span>, so they keep their reported count.
+<p>with mean <span class="arithmatex">\(\text{rem}\)</span> and size <span class="arithmatex">\(\phi_{p,k}\)</span>.
+Weeks with no day younger than <span class="arithmatex">\(D\)</span> at <span class="arithmatex">\(o\)</span> have <span class="arithmatex">\(\text{rem} = 0\)</span>, so they keep their reported count.
 Sample <span class="arithmatex">\(i\)</span> is one draw of <span class="arithmatex">\(X_{p,i}(w)\)</span> per week.</p>
-<p><span class="arithmatex">\(\phi_{p,k}\)</span> and <span class="arithmatex">\(b_{p,k}\)</span> are fitted as follows.</p>
+<p><span class="arithmatex">\(\phi_{p,k}\)</span> is fitted as follows.</p>
 <ol>
-<li>Take each earlier release <span class="arithmatex">\(r &lt; o\)</span> with an in-window pair among the releases up to <span class="arithmatex">\(r\)</span>, and a cut-off at most <span class="arithmatex">\(3D - 1.5D = 63\)</span> days before <span class="arithmatex">\(c_o\)</span>, the reference times baselinenowcast leaves for its retrospective nowcasts.</li>
+<li>Take each earlier release <span class="arithmatex">\(r &lt; o\)</span> with an in-window pair among the releases up to <span class="arithmatex">\(r\)</span>, and a cut-off at most <span class="arithmatex">\(3D - 1.5D = 63\)</span> days before <span class="arithmatex">\(c_o\)</span>, the reference times baselinenowcast leaves for its retrospective nowcasts.
+   All counts are first preprocessed as for the <a href="#delay">delay</a>, so a downward revision is taken from the earlier releases and no week's count falls.</li>
 <li>Nowcast from the data up to <span class="arithmatex">\(r\)</span> with the delay of <span class="arithmatex">\(r\)</span>, <span class="arithmatex">\(\hat y_p(w)\)</span>.
    It is the same weekly fill from <span class="arithmatex">\(c_r\)</span>, with the shares taken relative to the count at <span class="arithmatex">\(c_o\)</span>, so its last column is at <span class="arithmatex">\(c_o\)</span>.</li>
 <li>For weeks back <span class="arithmatex">\(k\)</span> with a day younger than <span class="arithmatex">\(D\)</span> at <span class="arithmatex">\(r\)</span>, and where <span class="arithmatex">\(Y_{p,r}(w) &gt; 0\)</span> or <span class="arithmatex">\(\hat y_p(w) &gt; 0\)</span>, compare the count of <span class="arithmatex">\(w\)</span> on days up to <span class="arithmatex">\(c_r\)</span> between releases <span class="arithmatex">\(r\)</span> and <span class="arithmatex">\(o\)</span>.
-   A rise is the new reports <span class="arithmatex">\(A_{p,r}(w)\)</span> and a fall the removals <span class="arithmatex">\(B_{p,r}(w)\)</span>.</li>
+   The rise is the new reports <span class="arithmatex">\(A_{p,r}(w)\)</span>.</li>
 <li>
 <p>With <span class="arithmatex">\(\widehat{\text{rem}} = \hat y_p(w) - Y_{p,r}(w)\)</span>, fit</p>
 <div class="arithmatex">\[
 \phi_{p,k} = \arg\max_\phi \sum \log \text{NB}\big(A_{p,r}(w);\ \widehat{\text{rem}},\ \phi\big),
-\qquad
-b_{p,k} = \frac{\sum B_{p,r}(w)}{\sum Y_{p,r}(w)},
 \]</div>
 </li>
 </ol>
@@ -2322,8 +2317,9 @@ b_{p,k} = \frac{\sum B_{p,r}(w)}{\sum Y_{p,r}(w)},
 <span class="arithmatex">\(\phi_{p,k}\)</span> is fitted by maximum likelihood on <span class="arithmatex">\([0.1, 1000]\)</span>, one size per <span class="arithmatex">\(k\)</span>, as baselinenowcast does.
 A week with <span class="arithmatex">\(\widehat{\text{rem}} = 0\)</span> says nothing about <span class="arithmatex">\(\phi\)</span>, so it is left out of that fit.
 The weeks in the fit of <span class="arithmatex">\(\phi_{p,k}\)</span> are the errors at <span class="arithmatex">\(k\)</span>.
-<span class="arithmatex">\(b_{p,k}\)</span> is the Poisson maximum likelihood estimate of the removals.
-Where the estimate chosen by the <a href="#own-or-pooled-estimates">pooling rule</a> has no errors at <span class="arithmatex">\(k\)</span>, <span class="arithmatex">\(\phi_{p,k} \approx 2.2\)</span>, the median of epinowcast's prior <span class="arithmatex">\(1 / \sqrt{\phi} \sim \mathcal{N}^+(0, 1)\)</span>.</p>
+Where the estimate chosen by the <a href="#own-or-pooled-estimates">pooling rule</a> has no errors at <span class="arithmatex">\(k\)</span>, <span class="arithmatex">\(\phi_{p,k} \approx 2.2\)</span>, the median of epinowcast's prior <span class="arithmatex">\(1 / \sqrt{\phi} \sim \mathcal{N}^+(0, 1)\)</span>.
+The release backtest in <a href="https://github.com/seabbs/BDBVHubRenewal/pull/152">#152</a> compared this default with Poisson removals of the reported count, new reports clipped at 0 with no preprocessing, a delay fitted without preprocessing, and baselinenowcast's proposed rounded normal and Skellam models of the signed change.
+The negative binomial options scored the same within sampling noise, and the signed models were too narrow, so the default is kept.</p>
 <h2 id="own-or-pooled-estimates">Own or pooled estimates<a class="headerlink" href="#own-or-pooled-estimates" title="Permanent link">&para;</a></h2>
 <p>The places form a hierarchy of zone, province and country.
 Each estimate is chosen by one rule.</p>
@@ -2333,7 +2329,6 @@ Each estimate is chosen by one rule.</p>
    The walk spread also needs an own <span class="arithmatex">\(\sigma_p^2 &gt; 0\)</span> (<a href="#forecast">below</a>).</li>
 <li><strong>Fallback.</strong> Otherwise it uses the pooled estimate of its nearest parent that meets the same rule, and otherwise the country's.
    A pooled estimate uses together the pair sums, errors and weekly changes of the parent's children with <span class="arithmatex">\(\ell \ge 10\)</span>, or the parent's own where none has.</li>
-<li><strong>Removals.</strong> The removal rate <span class="arithmatex">\(b_{p,k}\)</span> is always the place's own.</li>
 </ol>
 <h2 id="forecast">Forecast<a class="headerlink" href="#forecast" title="Permanent link">&para;</a></h2>
 <p>Both models forecast with a random walk on <span class="arithmatex">\(\log(1 + \lambda)\)</span> and Poisson counts.
@@ -2388,9 +2383,10 @@ Where no week reaches 0.95, <code>randomwalknowcast</code> takes the first week 
 <li>Weeks before the one holding <span class="arithmatex">\(c_o\)</span> are the nowcast draws <span class="arithmatex">\(X_{p,i}(w)\)</span>.</li>
 <li>If the week holding <span class="arithmatex">\(c_o\)</span> is full, its value in sample <span class="arithmatex">\(i\)</span> is its nowcast draw.</li>
 <li>If it is partial, its nowcast covers its days up to <span class="arithmatex">\(c_o\)</span>, and its later days add <span class="arithmatex">\(\text{Poisson}(\lambda_i \cdot m / 7)\)</span>, with <span class="arithmatex">\(m\)</span> the missing days.
-   <span class="arithmatex">\(\lambda_i\)</span> is the walk's rate for that week, walked by sample <span class="arithmatex">\(i\)</span> from its nowcast <span class="arithmatex">\(X_{p,i}(w_0)\)</span> of the start week <span class="arithmatex">\(w_0\)</span>, the latest full week that is at least 5% reported and has at least 5 cases.</li>
+   <span class="arithmatex">\(\lambda_i\)</span> is the walk's rate for that week, walked by sample <span class="arithmatex">\(i\)</span> from its nowcast <span class="arithmatex">\(X_{p,i}(w_0)\)</span> of the start week <span class="arithmatex">\(w_0\)</span>, the latest full week that is at least 5% reported and has at least 5 cases.
+   The start week is looked for only in the 9 weeks to <span class="arithmatex">\(c_o\)</span>, <span class="arithmatex">\(1.5 D\)</span> and the nowcast's own window, counting the week holding <span class="arithmatex">\(c_o\)</span>.</li>
 <li>The weeks after it are the walk's draws from the sample's completed value of that week, <span class="arithmatex">\(\log(1 + y)\)</span> plus the walk's steps.</li>
-<li>A place with no case in the 9 weeks to <span class="arithmatex">\(c_o\)</span>, or with no start week, starts at the latest complete week instead.
+<li>A place with no case in the 9 weeks to <span class="arithmatex">\(c_o\)</span>, or with no start week in those 9 weeks, starts at the latest complete week instead.
    After it the place stays at 0 until an introduction, as above, floored at the counts reported.</li>
 </ol>
 <h2 id="health-zones">Health zones<a class="headerlink" href="#health-zones" title="Permanent link">&para;</a></h2>
@@ -2448,54 +2444,56 @@ The counts first go through the <a href="#delay">delay</a>'s handling of negativ
 New reports of a day that was already <span class="arithmatex">\(D\)</span> days old at <span class="arithmatex">\(r'\)</span> have no probability under the model and are left out, as the chain ladder leaves out growth past <span class="arithmatex">\(D\)</span>.
 At 11-08 these are 412 of 10,878 national cases, 220 of them added by the 11-08 release.</p>
 <p><strong>Pooling.</strong>
-<span class="arithmatex">\(\mu_p\)</span> and <span class="arithmatex">\(\log \sigma_p\)</span> of a place are its parent's plus an offset for its tier,</p>
+Every place-level parameter is pooled over the hierarchy: the delay location <span class="arithmatex">\(\mu_p\)</span> and scale <span class="arithmatex">\(\log s_p\)</span>, the walk spread <span class="arithmatex">\(\log \sigma_p\)</span>, the dispersion <span class="arithmatex">\(\log \phi_p\)</span> and the walk's first level <span class="arithmatex">\(\log \lambda_{p,1}\)</span>.
+Each tier's places are normal about their parents,</p>
 <div class="arithmatex">\[
-\theta_p = \theta_{\mathrm{pa}(p)} + \tau_{v(p)}\, z_p,
+\theta_p \sim \mathcal{N}\big(\theta_{\mathrm{pa}(p)},\ \tau_{v(p)}^2\big),
 \qquad
-z_p \sim \mathcal{N}(0, 1),
+\tau_v \sim \mathcal{N}^+(0, c_\theta^2),
 \]</div>
 <p>with <span class="arithmatex">\(v(p)\)</span> the tier of <span class="arithmatex">\(p\)</span> (province or zone) and one <span class="arithmatex">\(\tau_v\)</span> for each tier and parameter.
-The delay scale <span class="arithmatex">\(s\)</span> and the dispersion <span class="arithmatex">\(\phi\)</span> are shared by all places.
-With <span class="arithmatex">\(s\)</span> pooled as well, its <span class="arithmatex">\(\tau\)</span> fell towards 0 where a few large provinces pinned it, and 17% of the draws at 11-08 were divergent.</p>
+The fit's tree holds the fitted leaves and their ancestors only, so no place without data has offsets left to the prior alone.
+A silent place takes the delay of its nearest fitted ancestor.</p>
 <p><strong>Priors.</strong></p>
 <table>
 <thead>
 <tr>
 <th>Parameter</th>
-<th>Prior</th>
+<th>Prior of the country's value</th>
+<th>Tier spread scale <span class="arithmatex">\(c_\theta\)</span></th>
 <th>Why</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td><span class="arithmatex">\(\mu\)</span> of the country</td>
+<td><span class="arithmatex">\(\mu\)</span></td>
 <td><span class="arithmatex">\(\mathcal{N}(1.6, 1)\)</span></td>
+<td>0.5</td>
 <td>Median delay about 5 days, 2 to 13 within one sd</td>
 </tr>
 <tr>
 <td><span class="arithmatex">\(\log s\)</span></td>
 <td><span class="arithmatex">\(\mathcal{N}(\log 0.7, 0.5^2)\)</span></td>
-<td></td>
+<td>0.1</td>
+<td>Only a few large places inform it</td>
 </tr>
 <tr>
-<td><span class="arithmatex">\(\log \sigma\)</span> of the country</td>
+<td><span class="arithmatex">\(\log \sigma\)</span></td>
 <td><span class="arithmatex">\(\mathcal{N}(\log 0.2, 1)\)</span></td>
+<td>0.5</td>
 <td>Weekly log changes of about 0.2, 0.07 to 0.54 within one sd</td>
 </tr>
 <tr>
 <td><span class="arithmatex">\(\log \phi\)</span></td>
 <td><span class="arithmatex">\(\mathcal{N}(\log 10, 1.5^2)\)</span></td>
-<td></td>
+<td>0.25</td>
+<td>Only a few large places inform it</td>
 </tr>
 <tr>
-<td><span class="arithmatex">\(\tau_v\)</span></td>
-<td><span class="arithmatex">\(\mathcal{N}^+(0, 0.5^2)\)</span></td>
-<td>A place within a factor of about 1.4 of its parent at the median</td>
-</tr>
-<tr>
-<td><span class="arithmatex">\(\log \lambda_{p,w}\)</span> in the first week</td>
+<td><span class="arithmatex">\(\log \lambda_{p,1}\)</span></td>
 <td><span class="arithmatex">\(\mathcal{N}(2, 3^2)\)</span></td>
-<td>0.02 to 3000 cases a week within two sd</td>
+<td>1.5</td>
+<td>Places range from a few cases a week to hundreds</td>
 </tr>
 </tbody>
 </table>
@@ -2515,10 +2513,12 @@ This is the one part of the model that is not drawn from its posterior.</p>
 On the reported target, the backtest maps its final counts to what a later release shows by the posterior median <span class="arithmatex">\(\pi_p(a)\)</span> of each place (<a href="../evaluation/#real-releases">Evaluation</a>).</p>
 <p><strong>Sampler.</strong>
 NUTS runs 2 chains of 500 warm-up and 750 draws, in sequence, from the prior medians, at target acceptance 0.9.
-Each walk step is sampled as <span class="arithmatex">\(\delta^*_{p,w} \sim \mathcal{N}(0, \sigma_p)\)</span> and set to <span class="arithmatex">\(\delta_{p,w} = \sqrt{\sigma_p}\, \delta^*_{p,w}\)</span>, numpyro's location-scale reparameterisation with centring <span class="arithmatex">\(\tfrac{1}{2}\)</span>, halfway between centred and non-centred steps.
+Each walk step is sampled as <span class="arithmatex">\(\delta^*_{p,w} \sim \mathcal{N}(0, \sigma_p)\)</span> and set to <span class="arithmatex">\(\delta_{p,w} = \sqrt{\sigma_p}\, \delta^*_{p,w}\)</span>, numpyro's location-scale reparameterisation with centring <span class="arithmatex">\(\tfrac{1}{2}\)</span>.
 A large place's counts pin its walk, which suits centred steps, and a place with few cases leaves it to the prior, which suits non-centred ones.
-In a trial at 11-08, with <span class="arithmatex">\(\phi\)</span> then pooled, half-centred steps gave 1 divergent draw in 1500, against 12 for non-centred steps, in half the leapfrog steps.
-With <span class="arithmatex">\(\phi\)</span> shared, the fits at 10-17, 10-24, 11-01 and 11-08 have at most 1 divergent draw and a worst <span class="arithmatex">\(\hat R\)</span> of 1.013.
+The pooled parameters are non-centred, except the first level, whose tiers are centred, and <span class="arithmatex">\(\log s\)</span>, whose tiers are half centred.
+Sampling each tier about its parent's value, not as the country's value plus an offset, cut the median leapfrog steps from 255 to 511 down to 63.
+With a tier spread scale of 0.25 for <span class="arithmatex">\(\log s\)</span>, 213, 198 and 62 of 1500 draws were divergent at 10-17, 10-24 and 11-01; with 0.1, 14, 9 and 3, and 1 at 11-08.
+So <span class="arithmatex">\(s\)</span> is pooled only weakly: its tier spread sits near its prior scale.
 A fit whose worst split <span class="arithmatex">\(\hat R\)</span> is above 1.05, or with more than 1% of its draws divergent, raises, and the model gives no forecast for that origin.</p>
 <p><strong>How it differs from <code>randomwalknowcast</code>.</strong></p>
 <table>
@@ -2533,11 +2533,11 @@ A fit whose worst split <span class="arithmatex">\(\hat R\)</span> is above 1.05
 <tr>
 <td>Delay</td>
 <td>Chain ladder, non-parametric by age, own or parent's</td>
-<td>Log-normal, <span class="arithmatex">\(\mu_p\)</span> pooled, <span class="arithmatex">\(s\)</span> shared</td>
+<td>Log-normal, <span class="arithmatex">\(\mu_p\)</span> and <span class="arithmatex">\(s_p\)</span> pooled</td>
 </tr>
 <tr>
 <td>Nowcast</td>
-<td>Chain-ladder fill, with NB new reports and Poisson removals fitted to retrospective nowcasts</td>
+<td>Chain-ladder fill, with NB new reports fitted to retrospective nowcasts</td>
 <td>NB new reports of the same model that fits the delay and the walk</td>
 </tr>
 <tr>
@@ -2552,7 +2552,7 @@ A fit whose worst split <span class="arithmatex">\(\hat R\)</span> is above 1.05
 </tr>
 <tr>
 <td>Removals</td>
-<td>Poisson, counts can fall</td>
+<td>None, falls are preprocessed out, so a draw is at least the count reported</td>
 <td>None, the forecast is at least the count reported</td>
 </tr>
 <tr>

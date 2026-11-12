@@ -2338,7 +2338,7 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 </style>
 <div class="jupyter-wrapper">
 <div class="jp-Notebook" data-jp-theme-light="true" data-jp-theme-name="JupyterLab Light">
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=eaf276c8">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=49f28d4b">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -2347,13 +2347,13 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 <h1 id="getting-started">Getting started<a class="anchor-link" href="#getting-started">¶</a></h1><p>Forecast with two baselines, load the renewal model's stored fit at the same origin, then plot and score all three.</p>
 <p>Every figure and table below comes from the Python code shown above it, which calls the package's functions directly.
 <a href="../setup/">Setup</a> installs the package and shows how to run this code in a REPL, a notebook or a script.
-The tidy data in <code>data/</code> are committed, and <code>task fit-store</code> fetches the stored renewal fit.
+<code>task data</code> fetches the tidy data into <code>data/</code>, and <code>task fit-store</code> fetches the stored renewal fit.
 This page is a notebook, and <code>task getting-started</code> runs it again.</p>
 </div>
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=e324f846">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=a81abf2b">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -2367,7 +2367,7 @@ This page is a notebook, and <code>task getting-started</code> runs it again.</p
 </div>
 </div>
 <div class="jp-Cell jp-CodeCell jp-Notebook-cell">
-<div class="jp-Cell jp-CodeCell jp-Notebook-cell" id="cell-id=e7751c5c">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell" id="cell-id=d421e833">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -2445,7 +2445,7 @@ sorted(real["vintage"].unique())</div>
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=43920cd0">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=6a0b3ef5">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -2461,7 +2461,7 @@ Its reference date is the Saturday after the origin, and the forecast weeks run 
 </div>
 </div>
 <div class="jp-Cell jp-CodeCell jp-Notebook-cell">
-<div class="jp-Cell jp-CodeCell jp-Notebook-cell" id="cell-id=6cf7fd68">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell" id="cell-id=818688f0">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -2506,7 +2506,7 @@ print("scored on", LATER)</div>
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
 <div class="jp-RenderedText jp-OutputArea-output" data-mime-type="text/plain" tabindex="0">
 <pre>2026-11-01 2026-11-07 26 provinces
-2026-10-10 to 2026-11-28
+2026-09-26 to 2026-12-05
 scored on 2026-11-08
 </pre>
 </div>
@@ -2515,7 +2515,7 @@ scored on 2026-11-08
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=f8132389">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=8664800b">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -2532,7 +2532,7 @@ scored on 2026-11-08
 </div>
 </div>
 <div class="jp-Cell jp-CodeCell jp-Notebook-cell">
-<div class="jp-Cell jp-CodeCell jp-Notebook-cell" id="cell-id=2e064f55">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell" id="cell-id=3273caa4">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -2580,7 +2580,7 @@ Name: sample, dtype: int64</pre>
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=222d56b2">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=1ee48077">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -2599,7 +2599,7 @@ This is how it is fitted, with the sampler settings of the submission:</p>
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=068a17fe">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=14b9eec1">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -2614,7 +2614,7 @@ Its <code>forecasts</code> table has the same columns as the baselines' forecast
 </div>
 </div>
 <div class="jp-Cell jp-CodeCell jp-Notebook-cell">
-<div class="jp-Cell jp-CodeCell jp-Notebook-cell" id="cell-id=5d986176">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell" id="cell-id=d8bee30f">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -2668,8 +2668,8 @@ forecasts.groupby("model")["sample"].nunique()</div>
 <div class="jp-OutputArea-child">
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
 <div class="jp-RenderedText jp-OutputArea-output" data-mime-type="text/plain" tabindex="0">
-<pre>fitted at commit fbb0d22
-fit of older code
+<pre>fitted at commit 52effa7
+fit of this code
 </pre>
 </div>
 </div>
@@ -2687,7 +2687,7 @@ Name: sample, dtype: int64</pre>
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=12a67104">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=543f0c2c">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -2703,7 +2703,7 @@ The panels are the national total and the three provinces with the most cases.
 </div>
 </div>
 <div class="jp-Cell jp-CodeCell jp-Notebook-cell">
-<div class="jp-Cell jp-CodeCell jp-Notebook-cell" id="cell-id=1d7b5de2">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell" id="cell-id=5d682de8">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -2800,7 +2800,7 @@ panels</div>
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=3e448dab">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=6131bbf8">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -2812,7 +2812,7 @@ panels</div>
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=f88305e3">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=4e2c00e7">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -2825,7 +2825,7 @@ panels</div>
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=37671630">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=302a225d">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -2841,7 +2841,7 @@ The table gives each model's mean WIS relative to <code>randomwalk</code>, for t
 </div>
 </div>
 <div class="jp-Cell jp-CodeCell jp-Notebook-cell">
-<div class="jp-Cell jp-CodeCell jp-Notebook-cell" id="cell-id=a9fc1491">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell" id="cell-id=1e0cc1f9">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -2936,79 +2936,79 @@ relative_wis(scores, by=["level"]).round(2)</div>
 <th>0</th>
 <td>National</td>
 <td>randomwalk</td>
-<td>5</td>
-<td>113.94</td>
-<td>113.94</td>
+<td>7</td>
+<td>88.77</td>
+<td>88.77</td>
 <td>1.00</td>
 <td>1.00</td>
-<td>0.20</td>
-<td>0.40</td>
-<td>0.78</td>
+<td>0.14</td>
+<td>0.29</td>
+<td>0.30</td>
 </tr>
 <tr>
 <th>1</th>
 <td>National</td>
 <td>randomwalknowcast</td>
-<td>5</td>
-<td>10.64</td>
-<td>113.94</td>
+<td>7</td>
+<td>8.27</td>
+<td>88.77</td>
 <td>0.09</td>
 <td>0.08</td>
-<td>0.80</td>
+<td>0.71</td>
 <td>1.00</td>
-<td>0.12</td>
+<td>-0.09</td>
 </tr>
 <tr>
 <th>2</th>
 <td>National</td>
 <td>renewal</td>
-<td>5</td>
-<td>8.27</td>
-<td>113.94</td>
-<td>0.07</td>
+<td>7</td>
+<td>8.26</td>
+<td>88.77</td>
 <td>0.09</td>
-<td>0.40</td>
-<td>0.80</td>
-<td>0.36</td>
+<td>0.10</td>
+<td>0.29</td>
+<td>0.57</td>
+<td>-0.03</td>
 </tr>
 <tr>
 <th>3</th>
 <td>Province</td>
 <td>randomwalk</td>
-<td>130</td>
-<td>4.14</td>
-<td>4.14</td>
+<td>182</td>
+<td>3.14</td>
+<td>3.14</td>
 <td>1.00</td>
 <td>1.00</td>
-<td>0.83</td>
-<td>0.93</td>
-<td>0.17</td>
+<td>0.82</td>
+<td>0.91</td>
+<td>0.09</td>
 </tr>
 <tr>
 <th>4</th>
 <td>Province</td>
 <td>randomwalknowcast</td>
-<td>130</td>
-<td>1.12</td>
-<td>4.14</td>
-<td>0.27</td>
-<td>0.18</td>
-<td>0.92</td>
-<td>0.98</td>
-<td>0.01</td>
+<td>182</td>
+<td>0.97</td>
+<td>3.14</td>
+<td>0.31</td>
+<td>0.25</td>
+<td>0.93</td>
+<td>0.96</td>
+<td>-0.01</td>
 </tr>
 <tr>
 <th>5</th>
 <td>Province</td>
 <td>renewal</td>
-<td>130</td>
-<td>1.10</td>
-<td>4.14</td>
-<td>0.27</td>
-<td>0.13</td>
-<td>0.93</td>
-<td>0.97</td>
-<td>0.05</td>
+<td>182</td>
+<td>0.88</td>
+<td>3.14</td>
+<td>0.28</td>
+<td>0.19</td>
+<td>0.91</td>
+<td>0.96</td>
+<td>0.01</td>
 </tr>
 </tbody>
 </table>
@@ -3019,7 +3019,7 @@ relative_wis(scores, by=["level"]).round(2)</div>
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=7c8e84b1">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=a0cb24ae">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -3032,7 +3032,7 @@ The table gives it and its log version relative to <code>randomwalk</code>, with
 </div>
 </div>
 <div class="jp-Cell jp-CodeCell jp-Notebook-cell">
-<div class="jp-Cell jp-CodeCell jp-Notebook-cell" id="cell-id=22739f55">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell" id="cell-id=376e14f0">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -3131,16 +3131,16 @@ relative_skill(
 <td>randomwalknowcast</td>
 <td>provinces</td>
 <td>1</td>
-<td>0.28</td>
-<td>0.29</td>
+<td>0.32</td>
+<td>0.33</td>
 </tr>
 <tr>
 <th>4</th>
 <td>renewal</td>
 <td>national</td>
 <td>1</td>
-<td>0.07</td>
 <td>0.08</td>
+<td>0.09</td>
 </tr>
 <tr>
 <th>5</th>
@@ -3148,7 +3148,7 @@ relative_skill(
 <td>provinces</td>
 <td>1</td>
 <td>0.28</td>
-<td>0.21</td>
+<td>0.26</td>
 </tr>
 </tbody>
 </table>
@@ -3159,7 +3159,7 @@ relative_skill(
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=9c7086fd">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=74658bca">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>

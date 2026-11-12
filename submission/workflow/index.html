@@ -2070,8 +2070,12 @@ It submits only the hub models opted in (<a href="../opting-in/">Opting in</a>),
 <td>The baseline hub model: checks and submits <code>randomwalknowcast</code>, or skips the round if it is ruled out.</td>
 </tr>
 <tr>
+<td><code>await-fits</code></td>
+<td>Waits for the fit store to hold <code>bvd</code>, <code>renewalsp</code> and <code>main</code> at the round's origin, starting the Fit store workflow if it does not.</td>
+</tr>
+<tr>
 <td><code>fit</code></td>
-<td>The renewal hub model: fits <code>bvd</code>, <code>renewalsp</code> and <code>main</code> in parallel.</td>
+<td>The renewal hub model: forecasts from the stored fits of <code>bvd</code>, <code>renewalsp</code> and <code>main</code> in parallel.</td>
 </tr>
 <tr>
 <td><code>gate</code>, <code>submit</code></td>
@@ -2098,9 +2102,14 @@ It submits only the hub models opted in (<a href="../opting-in/">Opting in</a>),
 <li><code>randomwalk</code>.</li>
 </ol>
 <p><code>[submission] model</code> in <code>config/hub.toml</code> says where the chain starts.
+The submission does not fit a round the fit store can hold.
+Each fitted candidate reads the stored fit of the same code and data (<code>fit-store unpack</code>), so the submitted forecast is the one the docs and the backtest show.
+The Fit store workflow fits a new release's origin first, and runs one at a time, so a release is fitted once.
+A candidate the store lacks when the wait ends, or whose stored fit failed, is ruled out.
+A stored fit forecasts one week past its own round, so a round with no new release is forecast from last week's stored fit.
 Every fit is 2 chains of 500 warm-up, run in parallel, with no refit.
 Each takes 750 draws, <code>renewalbvd</code> at target acceptance 0.95 and the others at 0.9.
-Fit timeouts are set against the window's close (<code>[timing]</code> in <code>ci/policy.toml</code>).</p>
+The wait for the store stops against the window's close (<code>[timing]</code> in <code>ci/policy.toml</code>).</p>
 <h2 id="checks">Checks<a class="headerlink" href="#checks" title="Permanent link">&para;</a></h2>
 <p>An invalid file, a fit past the convergence failure thresholds or a forecast far from the recent data rules a candidate out.
 Thresholds are in <code>ci/policy.toml</code>.</p>
