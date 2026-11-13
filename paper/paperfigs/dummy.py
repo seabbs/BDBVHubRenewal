@@ -26,7 +26,13 @@ from paperfigs.schema import (
     validate_observations,
 )
 
-__all__ = ["QUANTILE_LEVELS", "STUDY_SETUP", "StudySetup", "dummy_study"]
+__all__ = [
+    "QUANTILE_LEVELS",
+    "STUDY_SETUP",
+    "StudySetup",
+    "dummy_factors",
+    "dummy_study",
+]
 
 QUANTILE_LEVELS: Final = np.array(
     [0.025, 0.05, 0.1, 0.25, 0.5, 0.75, 0.9, 0.95, 0.975]
@@ -363,4 +369,37 @@ def dummy_study(
     return (
         validate_forecasts(fc.loc[:, list(FORECAST_COLUMNS)]),
         validate_observations(obs.loc[:, list(OBSERVATION_COLUMNS)]),
+    )
+
+
+def dummy_factors(forecasts: pd.DataFrame, seed: int = 1) -> pd.DataFrame:
+    """Make dummy scenario factor values for each location.
+
+    Parameters
+    ----------
+    forecasts : pandas.DataFrame
+        Forecasts whose locations need factors.
+    seed : int
+        Random seed.
+
+    Returns
+    -------
+    pandas.DataFrame
+        `location` and raw values of `delay_mean`, `gt_mean`, `log_r0`,
+        `n_places` and `report_days`, as the synthetic grid table gives.
+    """
+    rng = np.random.default_rng(seed)
+    locs = sorted(forecasts["location"].unique())
+    n = len(locs)
+    return pd.DataFrame(
+        {
+            "location": locs,
+            "delay_mean": np.round(np.exp(rng.uniform(0.5, 2.5, n)), 2),
+            "gt_mean": np.round(rng.uniform(6, 20, n), 1),
+            "log_r0": np.round(rng.normal(0.2, 0.3, n), 2),
+            "n_places": np.where(
+                rng.uniform(size=n) < 0.4, 1, rng.integers(2, 27, n)
+            ),
+            "report_days": rng.choice([5, 7], n),
+        }
     )

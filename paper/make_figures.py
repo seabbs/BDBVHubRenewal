@@ -13,9 +13,10 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 
-from paperfigs.dummy import dummy_study
+from paperfigs.dummy import dummy_factors, dummy_study
 from paperfigs.plots import (
     results_panel,
+    si_scores_by_factor,
     si_scores_by_location_horizon,
     si_wis_over_time,
 )
@@ -34,14 +35,28 @@ def render(
         for study in studies:
             fc, obs = dummy_study(study, n_samples=n_samples)
             scores = score_forecasts(fc)
-            figures = {
-                "results": results_panel(fc, obs, scores),
-                "si-location-horizon": si_scores_by_location_horizon(scores),
-                "si-location-horizon-log": si_scores_by_location_horizon(
-                    scores, col="rel_log_score"
-                ),
-                "si-wis-over-time": si_wis_over_time(scores),
-            }
+            if study == "synthetic":
+                # Outbreaks are many, so scores break down by scenario
+                # factor rather than by location.
+                factors = dummy_factors(fc)
+                figures = {
+                    "results": results_panel(fc, obs, scores, factors=factors),
+                    "si-factors": si_scores_by_factor(scores, factors),
+                    "si-factors-log": si_scores_by_factor(
+                        scores, factors, col="rel_log_score"
+                    ),
+                }
+            else:
+                figures = {
+                    "results": results_panel(fc, obs, scores),
+                    "si-location-horizon": si_scores_by_location_horizon(
+                        scores
+                    ),
+                    "si-location-horizon-log": si_scores_by_location_horizon(
+                        scores, col="rel_log_score"
+                    ),
+                }
+            figures["si-wis-over-time"] = si_wis_over_time(scores)
             for name, fig in figures.items():
                 path = out / f"{study}-{name}.png"
                 fig.savefig(path, dpi=200)

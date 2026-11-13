@@ -26,8 +26,19 @@ import pandas as pd
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 from matplotlib.lines import Line2D
-from matplotlib.ticker import FixedLocator, FuncFormatter, NullFormatter
+from matplotlib.ticker import (
+    FixedLocator,
+    FuncFormatter,
+    MaxNLocator,
+    NullFormatter,
+)
 
+from paperfigs.factors import (
+    bin_factors,
+    factor_label,
+    relative_by_factor,
+    top_factors,
+)
 from paperfigs.schema import DEFAULT_STRATUM
 from paperfigs.scores import (
     STUDY_BASELINES,
@@ -46,7 +57,9 @@ from paperfigs.style import (
 
 __all__ = [
     "PANEL_LETTERS",
+    "STUDY_HORIZON_BIN",
     "results_panel",
+    "si_scores_by_factor",
     "si_scores_by_location_horizon",
     "si_wis_over_time",
 ]
@@ -62,6 +75,7 @@ _TITLES: Final = {
     "bias": "Bias",
     "coverage": "Coverage",
     "location": "Relative {m} by location",
+    "factor": "Relative {m} by scenario factor",
     "stratum": "Relative {m} by stratum",
     "horizon": "Relative {m} by horizon",
 }
@@ -69,6 +83,14 @@ _TITLES: Final = {
 _RATIO_TICKS: Final = (0.1, 0.25, 0.5, 0.75, 1, 1.5, 2, 3, 5, 10)
 
 _STEP_UNIT: Final = {1: "days", 7: "weeks"}
+
+STUDY_HORIZON_BIN: Final[dict[str, int]] = {"synthetic": 7}
+"""Studies whose horizons, in days, are binned to weeks for the panels.
+
+The synthetic targets are weekly totals with origins on varying weekdays,
+so day horizons are ragged; `horizon // 7` gives weeks from the origin's
+week.
+"""
 
 
 def _label(ax: Axes, letter: str, title: str = "") -> None:
@@ -300,8 +322,13 @@ def _points_by(
     col: str = "rel_score",
     lines: bool = False,
     rotate: bool = False,
+    order: Sequence | None = None,
 ) -> None:
-    cats = sorted(rel[by].unique(), key=lambda v: (str(type(v)), v))
+    cats = (
+        list(order)
+        if order is not None
+        else sorted(rel[by].unique(), key=lambda v: (str(type(v)), v))
+    )
     x = np.arange(len(cats))
     width = 0.7 / max(len(models), 1)
     for j, m in enumerate(models):
@@ -358,6 +385,54 @@ def _legend(fig: Figure, models: Sequence[str]) -> None:
     )
 
 
+def _level_order(levels: Sequence[str]) -> list[str]:
+    """Order levels by their leading number if they have one."""
+
+    def key(v: str) -> tuple[int, float, str]:
+        try:
+            return (0, float(v.split(" to ")[0]), v)
+        except ValueError:
+            return (1, 0.0, v)
+
+    return sorted(levels, key=key)
+
+
+def _factor_points(
+    ax: Axes,
+    scores: pd.DataFrame,
+    factors: pd.DataFrame,
+    baseline: str,
+    models: Sequence[str],
+    n_factors: int,
+) -> None:
+    """Draw relative scores by level for the most spread factors."""
+    rel = relative_by_factor(scores, bin_factors(factors), baseline)
+    keep = top_factors(rel, n_factors)
+    rel = rel.loc[rel["factor"].isin(keep)].copy()
+    cats: list[str] = []
+    groups = []
+    for f in keep:
+        levels = _level_order(rel.loc[rel["factor"] == f, "level"].unique())
+        groups.append((f, len(cats), len(cats) + len(levels) - 1))
+        cats += [f"{f}|{lv}" for lv in levels]
+    rel["cat"] = rel["factor"] + "|" + rel["level"]
+    _points_by(ax, rel, "cat", models, rotate=True, order=cats)
+    ax.set_xticklabels([c.split("|", 1)[1] for c in cats])
+    for i, (f, lo, hi) in enumerate(groups):
+        if i:
+            ax.axvline(lo - 0.5, color=INK["axis"], lw=0.8)
+        ax.text(
+            (lo + hi) / 2,
+            0.98,
+            factor_label(f),
+            transform=ax.get_xaxis_transform(),
+            ha="center",
+            va="top",
+            fontsize=8,
+            color=INK["text"],
+        )
+
+
 def results_panel(
     forecasts: pd.DataFrame,
     observations: pd.DataFrame,
@@ -365,6 +440,8 @@ def results_panel(
     baseline: str | None = None,
     location: str | None = None,
     ribbon_models: Sequence[str] | None = None,
+    factors: pd.DataFrame | None = None,
+    n_factors: int = 4,
 ) -> Figure:
     """Plot the results panel for one study.
 
@@ -388,6 +465,12 @@ def results_panel(
         entry in `STUDY_BASELINES`.
     location : str, optional
         Location for panel A. Defaults to the one with most cases.
+    factors : pandas.DataFrame, optional
+        Scenario factor values by `location` (synthetic study). When
+        given, the panel by location is replaced by one by the `n_factors`
+        factors whose levels spread the relative score most.
+    n_factors : int
+        Factors to show when `factors` is given.
     ribbon_models : sequence of str, optional
         Models with ribbons in panel A. Defaults to the baseline, the
         fine-tuned models and `hub_ensemble` if present.
@@ -412,10 +495,11 @@ def results_panel(
     stratified = len(sc["stratum"].unique()) > 1
     location = location or _largest_location(obs.loc[obs["stratum"] == main])
     ribbons = list(ribbon_models or _ribbon_models(models, baseline))
+    where = "location" if factors is None else "factor"
     if stratified:
-        bottom = ["location"] * 5 + ["stratum"] * 3 + ["horizon"] * 4
+        bottom = [where] * 5 + ["stratum"] * 3 + ["horizon"] * 4
     else:
-        bottom = ["location"] * 6 + ["horizon"] * 6
+        bottom = [where] * 7 + ["horizon"] * 5
     top = [["nowcast"] * 12, ["rel"] * 3 + ["rel_log"] * 3]
     top[1] += ["bias"] * 3 + ["coverage"] * 3
     fig, axd = plt.subplot_mosaic(
@@ -443,12 +527,17 @@ def results_panel(
     for key in ("rel", "rel_log", "bias", "coverage"):
         _model_rows(axd[key], models, show_names=key == "rel")
     # Locations are compared on their main stratum (all ages).
-    _points_by(
-        axd["location"],
-        relative_scores(sc.loc[sc["stratum"] == main], ["location"], baseline),
-        "location",
-        models,
-    )
+    if factors is None:
+        _points_by(
+            axd["location"],
+            relative_scores(
+                sc.loc[sc["stratum"] == main], ["location"], baseline
+            ),
+            "location",
+            models,
+        )
+    else:
+        _factor_points(axd["factor"], sc, factors, baseline, models, n_factors)
     if stratified:
         _points_by(
             axd["stratum"],
@@ -457,16 +546,21 @@ def results_panel(
             models,
             rotate=True,
         )
+    bin_days = STUDY_HORIZON_BIN.get(study)
+    hsc = (
+        sc if bin_days is None else sc.assign(horizon=sc["horizon"] // bin_days)
+    )
     _points_by(
         axd["horizon"],
-        relative_scores(sc, ["horizon"], baseline),
+        relative_scores(hsc, ["horizon"], baseline),
         "horizon",
         models,
         lines=True,
     )
-    unit = _STEP_UNIT.get(_step_days(forecasts), "steps")
+    unit = _STEP_UNIT.get(bin_days or _step_days(forecasts), "steps")
+    axd["horizon"].xaxis.set_major_locator(MaxNLocator(integer=True))
     axd["horizon"].set_xlabel(f"Horizon ({unit})")
-    order = ["nowcast", "rel", "rel_log", "bias", "coverage", "location"]
+    order = ["nowcast", "rel", "rel_log", "bias", "coverage", where]
     order += ["stratum", "horizon"] if stratified else ["horizon"]
     for letter, key in zip(PANEL_LETTERS, order, strict=False):
         _label(axd[key], letter, _TITLES[key].format(m=name))
@@ -507,9 +601,11 @@ def si_scores_by_location_horizon(
         rel["stratum"] == main, rel["location"] + " " + rel["stratum"]
     )
     models = model_order(rel["model"].unique())
-    locs = list(
-        dict.fromkeys(rel.sort_values(["location", "stratum"])["series"])
+    # Each location's main stratum comes before its other strata.
+    order = rel.assign(_sub=rel["stratum"] != main).sort_values(
+        ["location", "_sub", "stratum"]
     )
+    locs = list(dict.fromkeys(order["series"]))
     nrow = int(np.ceil(len(locs) / ncol))
     fig, axes = plt.subplots(
         nrow,
@@ -592,5 +688,60 @@ def si_wis_over_time(scores: pd.DataFrame) -> Figure:
     axes[0].yaxis.set_minor_formatter(FuncFormatter(lambda v, _: f"{v:g}"))
     axes[0].set_ylabel(f"Mean {name}")
     axes[1].set_ylabel(f"Mean {name} of log(x + 1)")
+    _legend_models(fig, models)
+    return fig
+
+
+def si_scores_by_factor(
+    scores: pd.DataFrame,
+    factors: pd.DataFrame,
+    baseline: str | None = None,
+    col: str = "rel_score",
+    ncol: int = 3,
+) -> Figure:
+    """Plot relative scores by level for every scenario factor.
+
+    Parameters
+    ----------
+    scores : pandas.DataFrame
+        `score_forecasts` output for the synthetic study.
+    factors : pandas.DataFrame
+        Scenario factor values by `location`.
+    baseline : str, optional
+        Reference model. Defaults to the study's in `STUDY_BASELINES`.
+    col : str
+        `rel_score` or `rel_log_score`.
+    ncol : int
+        Panels per row.
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+        One panel per factor, sharing the y axis.
+    """
+    name = metric_of(scores).upper()
+    rel = relative_by_factor(scores, bin_factors(factors), baseline)
+    models = model_order(rel["model"].unique())
+    names = list(dict.fromkeys(rel["factor"]))
+    nrow = int(np.ceil(len(names) / ncol))
+    fig, axes = plt.subplots(
+        nrow,
+        ncol,
+        figsize=(3.6 * ncol, 2.8 * nrow + 0.6),
+        sharey=True,
+        squeeze=False,
+        layout="constrained",
+    )
+    flat = list(axes.ravel())
+    for ax in flat[len(names) :]:
+        ax.remove()
+    for ax, f in zip(flat, names, strict=False):
+        one = rel.loc[rel["factor"] == f]
+        order = _level_order(one["level"].unique())
+        _points_by(ax, one, "level", models, col, rotate=True, order=order)
+        ax.set_title(factor_label(f))
+    _pad_log_limits(flat[0], rel[col].to_numpy(dtype=float))
+    scale = "log scale" if col == "rel_log_score" else "natural scale"
+    fig.supylabel(f"Relative {name} ({scale})", fontsize=9)
     _legend_models(fig, models)
     return fig
