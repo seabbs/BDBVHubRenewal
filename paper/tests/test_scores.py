@@ -110,8 +110,8 @@ def test_relative_wis_uses_matched_rows_only() -> None:
 
 def test_relative_wis_by_group_and_named_baseline() -> None:
     df = pd.concat(
-        [_rows("ref", Q, 9.0, location=loc) for loc in "ab"]
-        + [_rows("m", Q * 2, 9.0, location=loc) for loc in "ab"]
+        [_rows("ref", Q, 5.0, location=loc) for loc in "ab"]
+        + [_rows("m", Q * 2, 5.0, location=loc) for loc in "ab"]
     )
     rel = relative_wis(score_forecasts(df), by=["location"], baseline="ref")
     assert set(rel["location"]) == {"a", "b"}
