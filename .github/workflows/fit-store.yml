@@ -30,6 +30,7 @@ on:
       - 'src/bdbvhubrenewal/forecasters/**'
       - 'src/bdbvhubrenewal/model/**'
       - 'config/backtest.toml'
+      - 'config/finetune.toml'
       - 'ci/policy.toml'
       - 'uv.lock'
       - '.python-version'
@@ -48,6 +49,7 @@ on:
       - 'src/bdbvhubrenewal/forecasters/**'
       - 'src/bdbvhubrenewal/model/**'
       - 'config/backtest.toml'
+      - 'config/finetune.toml'
       - 'ci/policy.toml'
       - 'uv.lock'
       - '.python-version'
@@ -226,6 +228,15 @@ jobs:
         with:
           path: ~/.cache/huggingface
           key: chronos-2-29ec3766d36d6f73f0696f85560a422f50e8498c
+      # The fine-tuned models download the LoRA adapter config/finetune.toml
+      # pins from its release, cached by that file. With no release the
+      # fit fails and is stored as failed.
+      - name: Cache the fine-tuned checkpoint
+        if: endsWith(matrix.model, '_ft')
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/bdbvhubrenewal
+          key: chronos-ft-${{ hashFiles('config/finetune.toml') }}
       # A fit that raises is stored as failed and is not retried until
       # its inputs change or a dispatch sets retry_failed. One that times
       # out is retried next run.

@@ -10,6 +10,8 @@
 #   RENEWAL_ID, RENEWAL_ACTION, RENEWAL_PR_URL, RENEWAL_PRODUCED_BY,
 #   RENEWAL_SKIPPED and the same for BASELINE_: each hub model that ran
 #   BASELINE_GATE  baseline's gate folder, when it ran
+#   CHRONOS_GATE and CHRONOS_ID, _ACTION, _PR_URL, _PRODUCED_BY,
+#   _SKIPPED      the same for chronos, archived under chronos/
 # shellcheck source=ci/steps/lib.sh
 source "$(dirname "$0")/lib.sh"
 
@@ -79,6 +81,9 @@ record_model "${RENEWAL_ID:-}" "${RENEWAL_ACTION:-}" "${RENEWAL_PR_URL:-}" \
 record_model "${BASELINE_ID:-}" "${BASELINE_ACTION:-}" \
   "${BASELINE_PR_URL:-}" "${BASELINE_PRODUCED_BY:-}" \
   "${BASELINE_SKIPPED:-}" "$baseline_archive"
+[ -n "${CHRONOS_GATE:-}" ] && archive_gate "$CHRONOS_GATE" "$archive/chronos"
+record_model "${CHRONOS_ID:-}" "${CHRONOS_ACTION:-}" "${CHRONOS_PR_URL:-}" \
+  "${CHRONOS_PRODUCED_BY:-}" "${CHRONOS_SKIPPED:-}" "$archive/chronos"
 
 git -C "$ledger" add -A
 git -C "$ledger" -c user.name="github-actions[bot]" \

@@ -203,6 +203,7 @@ model = [
 [package.dev-dependencies]
 chronos = [
     { name = "chronos-forecasting" },
+    { name = "peft" },
     { name = "torch", version = "2.14.1+cu126", source = { registry = "https://download.pytorch.org/whl/cu126" }, marker = "sys_platform == 'linux'" },
     { name = "torch", version = "2.15.0", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'linux'" },
 ]
@@ -240,6 +241,7 @@ provides-extras = ["model"]
 [package.metadata.requires-dev]
 chronos = [
     { name = "chronos-forecasting", specifier = "==2.3.2" },
+    { name = "peft", specifier = ">=0.17" },
     { name = "torch", marker = "sys_platform != 'linux'", specifier = ">=2.7" },
     { name = "torch", marker = "sys_platform == 'linux'", specifier = ">=2.7", index = "https://download.pytorch.org/whl/cu126" },
 ]
@@ -2322,6 +2324,28 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/5a/82/42f767fc1c1143d6fd36efb827202a2d997a375e160a71eb2888a925aac1/pathspec-1.1.1.tar.gz", hash = "sha256:17db5ecd524104a120e173814c90367a96a98d07c45b2e10c2f3919fff91bf5a", size = 135180, upload-time = "2026-04-27T01:46:08.907Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/f1/d9/7fb5aa316bc299258e68c73ba3bddbc499654a07f151cba08f6153988714/pathspec-1.1.1-py3-none-any.whl", hash = "sha256:a00ce642f577bf7f473932318056212bc4f8bfdf53128c78bbd5af0b9b20b189", size = 57328, upload-time = "2026-04-27T01:46:07.06Z" },
+]
+
+[[package]]
+name = "peft"
+version = "0.21.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "accelerate" },
+    { name = "huggingface-hub" },
+    { name = "numpy" },
+    { name = "packaging" },
+    { name = "psutil" },
+    { name = "pyyaml" },
+    { name = "safetensors" },
+    { name = "torch", version = "2.14.1+cu126", source = { registry = "https://download.pytorch.org/whl/cu126" }, marker = "sys_platform == 'linux'" },
+    { name = "torch", version = "2.15.0", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'linux'" },
+    { name = "tqdm" },
+    { name = "transformers" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/78/06/f0b47d14da0d4b350b224b031b8e819c188414d4aa550dbee4dca601bb67/peft-0.21.3.tar.gz", hash = "sha256:1fb60533dc417aebd39edb648856530c09419a5027ca0c3ce090d82e82a9c41f", size = 982967, upload-time = "2026-11-13T10:04:55.914Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/cb/c5/10580a78a16f3408d5577f402911406264abf29ace10393bb2460ff499fc/peft-0.21.3-py3-none-any.whl", hash = "sha256:b3a578733e2e94b00b50a20c107ed2a10a045b922711f078bfa925bc6e64ea2e", size = 835386, upload-time = "2026-11-13T10:04:53.031Z" },
 ]
 
 [[package]]

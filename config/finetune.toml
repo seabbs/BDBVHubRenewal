@@ -1,0 +1,13 @@
+# The fine-tuned Chronos-2 checkpoint the `fm_chronos_*_ragged_ft` models
+# load (`forecasters.foundation.FINETUNED`). Kept out of the code, so the
+# settings hash `scripts/finetune_chronos.py train` gives does not cover
+# it. A new checkpoint is a new release `chronos-ft-<hash>` and new values
+# here.
+
+# Settings hash of the checkpoint, which names its release.
+hash = "2c2b22a03107"
+
+# SHA-256 of each adapter file of the release.
+[sha256]
+"adapter_config.json" = "a0656925fadc7dc8045fb18217a448a8dec48e11f4622c2c00f3c66059ad9485"
+"adapter_model.safetensors" = "3459d83a885551092542a0194b5b1c8a8c8d8e2b1742038627fab224bab71d73"

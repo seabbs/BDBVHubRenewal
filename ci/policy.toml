@@ -74,6 +74,25 @@ config = "randomwalk"
 stage = "baseline"
 label = "random walk baseline"
 
+# Fine-tuned Chronos-2, the hub model seabbs-chronos2_ft (config/hub.toml)
+# of its own. Each runs in its own job with no fit (`direct`), checked
+# against the random walk, and is never in another model's chain.
+[[candidates]]
+id = "chronos2_ft_daily"
+kind = "direct"
+config = "fm_chronos_daily_ragged_ft"
+model = "fm_chronos_daily_ragged_ft"
+stage = "baseline"
+label = "fine-tuned Chronos-2 on the daily releases"
+
+[[candidates]]
+id = "chronos2_ft_weekly"
+kind = "direct"
+config = "fm_chronos_weekly_ragged_ft"
+model = "fm_chronos_weekly_ragged_ft"
+stage = "baseline"
+label = "fine-tuned Chronos-2 on the weekly releases"
+
 # Convergence thresholds, the same for every candidate. Past `fail`
 # (BVDOutbreakSize's failure threshold, docs/fits/convergence.jl) a fit
 # is ruled out and the chain moves on; past `warn` it is reported only.
