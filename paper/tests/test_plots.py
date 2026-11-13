@@ -101,14 +101,14 @@ def test_synthetic_panel_shows_factors_and_weekly_horizons() -> None:
     fc, obs = dummy_study("synthetic", seed=1, n_samples=20)
     scores = score_forecasts(fc)
     factors = dummy_factors(fc, seed=1)
-    # Rank delay_q99 exactly as delay_mean, so delay_mean is redundant.
-    factors["delay_q99"] = factors["delay_mean"] * 10
+    # Rank delay_q98 exactly as delay_mean, so delay_mean is redundant.
+    factors["delay_q98"] = factors["delay_mean"] * 10
     fig = results_panel(fc, obs, scores, factors=factors)
     titles = " ".join(ax.get_title() for ax in fig.axes)
     assert "by scenario factor" in titles
     assert "by location" not in titles
     groups = {t.get_text() for ax in fig.axes for t in ax.texts}
-    assert "Delay q99" in groups
+    assert "Delay q98" in groups
     assert "Delay mean" not in groups
     labels = " ".join(ax.get_xlabel() for ax in fig.axes)
     assert "Horizon (weeks)" in labels
