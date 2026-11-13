@@ -199,6 +199,16 @@ def test_samplers_refuse_two_candidates_for_one_model(
         store.samplers(policy)
 
 
+def test_renewal_key_has_every_model_module() -> None:
+    # `fit_code` does not follow a package's `__init__` imports.
+    renewal = set(store.fit_code("renewal", ROOT))
+    model = {
+        p.relative_to(ROOT).as_posix()
+        for p in (ROOT / "src/bdbvhubrenewal/model").glob("*.py")
+    }
+    assert model <= renewal, sorted(model - renewal)
+
+
 def test_samplers_come_from_the_policy() -> None:
     table = store.samplers(ROOT / "ci" / "policy.toml")
     assert set(table) == {"renewal", "renewalbvd", "renewalsp"}

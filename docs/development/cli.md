@@ -53,7 +53,7 @@ The Pages build makes the rest with the steps of `task results`, from the code, 
 
 ## Fit store
 
-The backtest and the docs build never fit a model.
+The backtest and the docs build fit no model, apart from the zone backtest, which fits `pprandomwalknowcast` at each origin ([Evaluation](../methods/evaluation.md#health-zones)).
 The Fit store workflow (`.github/workflows/fit-store.yml`) fits each fitted model once at each real origin.
 Each fit is one file on the `fit-store` branch, `<model>/<origin>/<key>.json.gz`.
 The key hashes:
