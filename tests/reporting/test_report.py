@@ -579,3 +579,19 @@ def test_fit_settings_skip_models_with_no_sampler(
     settings = report._fit_settings()
     assert "pprandomwalknowcast" in settings
     assert not any(name.startswith("fm_chronos_") for name in settings)
+
+
+def test_complete_target_text_names_models_with_no_complete_score() -> None:
+    scores = pd.DataFrame(
+        {
+            "model": ["randomwalk", "renewal", "randomwalk"],
+            "target": ["reported", "reported", "complete"],
+        }
+    )
+    zones = pd.DataFrame({"model": ["randomwalk"], "target": ["complete"]})
+    text = report._complete_on(scores, zones, 56)
+    assert "at least 56 days after it ends" in text
+    assert "Forecasts with such a release so far: 1." in text
+    assert "So `renewal` have no complete-week scores yet" in text
+    full = report._complete_on(scores.iloc[[0, 2]], zones, 56)
+    assert "no complete-week scores" not in full

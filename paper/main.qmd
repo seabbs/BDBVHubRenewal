@@ -1,0 +1,227 @@
+---
+title: "Title to be chosen"
+# Candidate titles:
+# 1. Fine-tuning a time series foundation model on synthetic outbreaks for nowcasting and forecasting
+# 2. Teaching a foundation model to nowcast with domain-informed synthetic data
+# 3. Off-the-shelf forecasting models with domain knowledge for real-time infectious disease surveillance
+date: today
+format:
+  html:
+    toc: false
+    number-sections: false
+  pdf:
+    number-sections: false
+bibliography: reference.bib
+---
+
+<!--
+Plan from #206.
+Each top-level bullet is one paragraph, with 2–3 supporting points.
+-->
+
+## Introduction
+
+::: {.callout-note title="Plan"}
+- **The gap.**
+  - Real-time case counts are incomplete because of reporting delays.
+  - Generic forecasting models do not use the reporting structure.
+  - Key references: [@hohle; @Johnson2025; @reichCollaborativeHubsMaking2022].
+- **Context.**
+  - Nowcasting methods model reporting delays directly.
+  - Time series foundation models forecast well with no training on the target data.
+  - Training on domain-specific synthetic data has precedent: KernelSynth for Chronos [@Ansari2024], ForecastPFN [@Dooley2023], prior-fitted networks [@Muller2022; @Hollmann2025], and Mantis for outbreaks [@Dudley2026].
+  - Key references: [@mcgough2020nowcasting; @gunther2021nowcasting; @Wolffram2023; @Ansari2024; @Das2024a; @Woo2024; @Rasul2023; @Garza2023; @Aksu2024; @Shchur2025; @Kalahasti2026; @Dudley2025].
+- **What we did.**
+  - We fine-tuned a foundation model on synthetic outbreak data, following that precedent but fine-tuning a general model rather than training from scratch.
+  - We evaluated it retrospectively and prospectively.
+  - Key references: [@Ansari2025; @Johnson2025].
+:::
+
+## Methods
+
+### Data
+
+::: {.callout-note title="Plan"}
+- The German COVID-19 hospitalisation nowcast hub.
+- The Ebola forecasting hub target and its releases.
+- Key references: [@Wolffram2023; @hospitalization_nowcast_hub_2025; @bdbv_modeling_hub_2026; @MacNeil2010].
+:::
+
+### Baselines
+
+::: {.callout-note title="Plan"}
+- `randomwalk`, a random walk with no delay adjustment, and `randomwalknowcast`, a random walk nowcast.
+- Both in full in the SI.
+- Key references: [@Johnson2025].
+:::
+
+### Foundation model setup and fine-tuning
+
+::: {.callout-note title="Plan"}
+- Chronos-2, given the reporting triangle as series.
+- One fine-tune on synthetic data, run on a laptop.
+- Compared with Chronos-2 given only complete data points, to show what the ragged structure and fine-tuning add.
+- Key references: [@Ansari2025; @Ansari2024; @Hu2021; @Das2024b].
+:::
+
+### Synthetic data generation
+
+::: {.callout-note title="Plan"}
+- Simulated with epinowcast over a grid of outbreak, delay and noise settings.
+- A table in the main text gives the grid of synthetic scenarios.
+- The full process and an overview of the epinowcast model used are in the SI.
+- Key references: [@abbottepinowcast; @lison2024; @Park2024; @Ansari2024; @Dooley2023; @Muller2022; @Hollmann2025].
+:::
+
+::: {#tbl-synthetic-grid}
+| Setting  | Values |
+|----------|--------|
+| Outbreak |        |
+| Delay    |        |
+| Noise    |        |
+
+Placeholder: grid of synthetic scenarios.
+:::
+
+### Evaluation on held-out synthetic data
+
+::: {.callout-note title="Plan"}
+- A held-out set of simulations was not used during development.
+- Sample forecasts scored with CRPS and log-scale CRPS, bias, and coverage, relative to `randomwalknowcast`.
+- Scored against a rolling evaluation set of the data as reported D days later, with D each outbreak's 99% delay.
+- Key references: [@bracherEvaluatingEpidemicForecasts2021; @Bosse2023-sx; @gneitingStrictlyProperScoring2007; @gneitingProbabilisticForecastsCalibration2007; @sherrattPredictivePerformanceMultimodel2023].
+:::
+
+### Case study 1: German nowcast hub
+
+::: {.callout-note title="Plan"}
+- Compared with the hub's models, relative to the hub's own baseline, and evaluated as the hub did.
+- Quantile forecasts scored with WIS and log-scale WIS, bias, and coverage, against a rolling evaluation set of the data as reported D days later [@Wolffram2023].
+- Daily and weekly versions may not both make sense here.
+- The nowcast dates are split in half. We developed our setup on the first half only, and the second half is held out for the results.
+- Key references: [@Wolffram2023; @Johnson2025; @amaralPostprocessingWeightedCombination2025].
+:::
+
+### Case study 2: prospective submission to the Ebola forecasting hub
+
+::: {.callout-note title="Plan"}
+- Compared with the other submissions, relative to the hub's own baseline.
+- Scored as for the held-out synthetic data, with D the empirical 99% point of the hub data's reporting delay.
+- Our models' forecasts are saved prospectively, alongside the main submissions as they were made.
+- Key references: [@bdbv_modeling_hub_2026; @Viboud2018; @funkAssessingPerformanceRealtime2019].
+:::
+
+### Implementation
+
+::: {.callout-note title="Plan"}
+- The tools we used, each cited: Python, PyTorch on the laptop GPU, chronos-forecasting, PEFT for LoRA, R and epinowcast for simulation, and scoringrules for scoring, checked against scoringutils.
+- The evaluation runs as a Snakemake workflow, so every result can be reproduced from the raw data.
+:::
+
+## Results
+
+::: {.callout-note title="Plan"}
+Each section has a figure panel.
+Each panel shows:
+
+- nowcasts over time (ribbons);
+- scores relative to the baseline (`randomwalknowcast` for synthetic data, the hub's baseline for each case study), with natural- and log-scale WIS (or CRPS, MAE where they make sense);
+- bias;
+- 50% and 90% coverage;
+- score variation by location and horizon, supported by SI plots.
+- for Germany, a dotted line marking the split between the development and held-out halves, with scores split by half.
+
+The plots in primarycensored-paper are a model for these.
+Each section has two paragraphs, one on visual performance and one summarising scores.
+
+Key references: the Methods references, with [@bracherEvaluatingEpidemicForecasts2021; @Bosse2023-sx] for the natural- and log-scale panels.
+:::
+
+### Held-out synthetic data
+
+::: {.callout-note title="Plan"}
+- Visual performance of the candidate models against `randomwalk` and `randomwalknowcast`.
+- A summary of score performance.
+:::
+
+::: {#fig-synthetic}
+Figure to come.
+
+Placeholder: held-out synthetic data results panel.
+:::
+
+### German nowcast hub
+
+::: {.callout-note title="Plan"}
+- Visual performance against the other models.
+- A summary of score performance.
+- Key references: [@Wolffram2023; @amaralPostprocessingWeightedCombination2025].
+:::
+
+::: {#fig-germany}
+Figure to come.
+
+Placeholder: German nowcast hub results panel.
+:::
+
+### Ebola hub submissions
+
+::: {.callout-note title="Plan"}
+- Visual performance against the other submissions.
+- A summary of score performance.
+:::
+
+::: {#fig-ebola}
+Figure to come.
+
+Placeholder: Ebola hub submissions results panel.
+:::
+
+## Discussion
+
+::: {.callout-note title="Plan"}
+- **Summary** of what we did.
+- **Strengths and weaknesses.**
+  - Weaknesses: only one foundation model, only one source of synthetic data, and limited case studies.
+  - Weakness: we did not compare against epinowcast, or, for the synthetic study, against the data-generating model itself.
+  - Strengths: both retrospective and real-time case studies, and synthetic data that are easy to tune to a setting.
+  - Strength: fine-tuning ran locally on consumer hardware (a laptop), so it is accessible.
+  - Weakness: fine-tuning used the laptop's GPU, which made it several times faster, and not everyone has one. On a laptop CPU alone it would still run in hours.
+  - Key references: [@Kalahasti2026; @Meyer2025].
+- **Domain knowledge through synthetic data.**
+  - Domain knowledge enters through the synthetic data source.
+  - Fingers crossed it improves results; to fill in from the results.
+  - Key references: [@Dudley2026; @Dudley2025; @Dooley2023; @Hollmann2025; @Ansari2025].
+- **Against the literature.**
+  - Other uses of foundation models in infectious disease modelling.
+    Key references: [@Kalahasti2026; @Cai2026; @Wang2025; @Jafari2026; @Du2025; @Li2025; @Aygun2025; @Martinson2026].
+  - Fine-tuning in other domains.
+    Key references: [@Laglil2026; @Das2024b; @Hu2021].
+  - Other nowcasting approaches.
+    Key references: [@bastos; @Seaman2022; @Bergstrom2022; @Gressani2024; @Schneble2021; @vandeKassteele2019; @Overton2023-dk; @Mellor2025; @Tang2025; @stonerPowerfulModellingFramework2020; @Kamarthi2021; @Koemen2025; @Wilsens2025].
+- **A possible emulator.**
+  - Fine-tuning on epinowcast simulations may give a fast emulator of that package.
+  - We did not compare against epinowcast, so we cannot say how close it is.
+  - This could be useful for other slow, long-running packages.
+- **Further work.**
+  - Other foundation models.
+  - More case studies.
+  - A comparison with custom neural networks.
+  - Testing the fine-tuned model as an emulator of epinowcast.
+  - Fine-tuning with other epidemiological features as covariates, such as distances between locations or mobility.
+  - Key references: [@Das2024a; @Woo2024; @Rasul2023; @Kamarthi2021; @Koemen2025; @respinow_hub_2025].
+- **Conclusions.**
+  - Reuse state-of-the-art generic forecasting models with domain-specific insight.
+  - Fine-tuning on a package's simulations could give a fast emulator of that package, which may help other long-running packages.
+  - It shows promise, and more work is needed.
+:::
+
+## Funding {.appendix}
+
+## Acknowledgements {.appendix}
+
+## Data and software availability {.appendix}
+
+## AI disclosure {.appendix}
+
+## References {.unnumbered}
