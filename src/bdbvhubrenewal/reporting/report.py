@@ -473,7 +473,6 @@ def _release_section(
     }
     scores = _ours(_with_horizon(pd.read_csv(paths["scores"])), names)
     truth = json.loads((res / "nowcast-truth.json").read_text())
-    complete = _complete_on(scores, int(truth["truth_delay"]))
     quantiles = _ours(pd.read_csv(paths["quantiles"]), names)
     origins = _ours(pd.read_csv(paths["origins"]).fillna(""), names)
     national = scores["location"] == NATIONAL
@@ -481,6 +480,7 @@ def _release_section(
     zones = _as_submitted(
         pd.read_csv(res / "zone-scores.csv", low_memory=False)
     )
+    complete = _complete_on(scores, zones, int(truth["truth_delay"]))
     pooled = pd.concat([scores, zones.assign(pool="zones")])
     pooled["target"] = pooled["target"].map(_TARGET_LABELS)
     energy = _ours(
@@ -672,18 +672,31 @@ def _scored_on(reported: pd.DataFrame, baseline: str = "randomwalk") -> str:
     )
 
 
-def _complete_on(scores: pd.DataFrame, delay: int) -> str:
-    """Say what the complete target scores, and how many forecasts it has."""
-    done = scores.loc[
-        (scores["target"] == "complete") & (scores["model"] == "randomwalk")
-    ]
-    return (
+def _complete_on(scores: pd.DataFrame, zones: pd.DataFrame, delay: int) -> str:
+    """Say what the complete target scores, and which models it leaves out.
+
+    `scores` are the national and province scores, `zones` the health
+    zone scores, and `delay` the truth delay they were scored with.
+    """
+    done = scores.loc[scores["target"] == "complete"]
+    text = (
         "Nationally and in the provinces, a complete week is scored on the "
-        f"first release cut off at least {delay} days after it ends, "
-        f"which {len(done)} randomwalk forecasts have so far.\n"
+        f"first release cut off at least {delay} days after it ends.\n"
+        f"Forecasts with such a release so far: {len(done)}.\n"
         "Health zones are scored on the complete weeks of the latest "
         "release.\n"
     )
+    scored = set(done["model"]) | set(
+        zones.loc[zones["target"] == "complete", "model"]
+    )
+    missing = [m for m in pd.unique(scores["model"]) if m not in scored]
+    if missing:
+        listed = ", ".join(f"`{m}`" for m in missing)
+        text += (
+            f"So {listed} have no complete-week scores yet, as they are not "
+            "scored at health zones.\n"
+        )
+    return text
 
 
 ZONE_MAP: Final = "../figures/zone-map.geojson"
@@ -2200,8 +2213,9 @@ def _comparison_summary(
 ) -> dict[str, str]:
     """Write the Overall, By horizon and By place summaries.
 
-    They are the Backtest page's summaries, on the complete weeks of the
-    hub rounds. The hub teams and our series in `on` are ticked at first,
+    They are laid out as the Backtest page's summaries, on the hub
+    rounds' weeks the latest release completes. The hub teams and our
+    series in `on` are ticked at first,
     and randomwalk is the reference for relative scores. Our series come
     in the order of `colours`. Returns each target's score summary URL.
     """

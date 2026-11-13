@@ -505,6 +505,47 @@ def test_backtest_scores_the_complete_target_on_the_truth_delay(
     assert seen["truth_delay"] == resolve_truth_delay(config, target)
 
 
+@pytest.mark.usefixtures("in_root")
+def test_score_scores_the_complete_target_on_the_truth_delay(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    import argparse
+
+    from bdbvhubrenewal import cli
+    from bdbvhubrenewal.data.tidy import load_delays
+    from bdbvhubrenewal.evaluation import backtest as bt
+    from bdbvhubrenewal.evaluation.nowcast import (
+        ReleaseBacktest,
+        ReleaseForecasts,
+        resolve_truth_delay,
+    )
+
+    seen: dict[str, object] = {}
+
+    def scored(*args: object, **kwargs: object) -> ReleaseBacktest:
+        del args
+        seen.update(kwargs)
+        empty = pd.DataFrame()
+        return ReleaseBacktest(empty, empty, empty, empty, empty)
+
+    monkeypatch.setattr(
+        cli, "_stored", lambda *_: (pd.DataFrame(), pd.DataFrame())
+    )
+    monkeypatch.setattr(cli, "score_releases", scored)
+    config = bt.load_config("config/backtest.toml")
+    target = pd.read_csv(DATA / "target.csv")
+    args = argparse.Namespace(data=str(DATA), results=str(tmp_path))
+    empty = ReleaseForecasts(*(pd.DataFrame() for _ in range(4)))
+    delays = load_delays(DATA)
+    cli._release_scores(
+        args, config, target, delays, tmp_path, pd.DataFrame(), empty
+    )
+    delay = resolve_truth_delay(config, target)
+    assert seen["truth_delay"] == delay
+    written = json.loads((tmp_path / "nowcast-truth.json").read_text())
+    assert written == {"truth_delay": delay}
+
+
 def test_concat_results_keeps_one_copy_of_shared_tables(
     tmp_path: Path,
 ) -> None:

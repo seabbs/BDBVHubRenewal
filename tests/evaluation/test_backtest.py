@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
@@ -24,10 +25,7 @@ from bdbvhubrenewal.evaluation.backtest import (
     score_tasks,
     truth_changes,
 )
-from bdbvhubrenewal.evaluation.nowcast import (
-    reporting_delay,
-    resolve_truth_delay,
-)
+from bdbvhubrenewal.evaluation.nowcast import resolve_truth_delay
 from bdbvhubrenewal.forecasters import get_model
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -67,16 +65,37 @@ def test_load_config_takes_a_fixed_truth_delay(tmp_path: Path) -> None:
 
 
 def test_truth_delay_is_fixed_or_estimated_from_the_releases() -> None:
-    target = pd.read_csv(DATA / "target.csv")
-    real = target.loc[target["kind"] == "real"]
-    cfg = BacktestConfig(skip_origins=("2026-08-18",))
-    # 99% of the national count is first reported at 8 weeks old.
-    assert reporting_delay(real, 0.99, skip=("2026-08-18",)) == 56
-    assert resolve_truth_delay(cfg, target) == 56
-    fixed = BacktestConfig(truth_delay=28)
-    assert resolve_truth_delay(fixed, target) == 28
+    def rows(vintage: str, counts: list[int]) -> list[dict[str, object]]:
+        weeks = ["2026-09-05", "2026-09-12"]
+        return [
+            {
+                "kind": "real",
+                "vintage": vintage,
+                "location": "CD",
+                "target_end_date": w,
+                "total": n,
+            }
+            for w, n in zip(weeks, counts, strict=True)
+        ]
+
+    target = pd.DataFrame(
+        [
+            # 7 and 0 days after the weeks end: 90 and 10 of 100.
+            *rows("2026-09-12", [90, 10]),
+            # 14 and 7 days: 100 and 90.
+            *rows("2026-09-19", [100, 90]),
+            # A revision, left out as a skipped origin.
+            *rows("2026-09-15", [1, 1]),
+            *rows("2026-09-26", [100, 100]),
+        ]
+    )
+    cfg = BacktestConfig(skip_origins=("2026-09-15",))
+    # 180 of 200 at 7 days, all 100 at 14 days.
+    assert resolve_truth_delay(cfg, target) == 14
+    assert resolve_truth_delay(replace(cfg, truth_level=0.9), target) == 7
+    assert resolve_truth_delay(replace(cfg, truth_delay=28), target) == 28
     with pytest.raises(ValueError, match="truth_level"):
-        resolve_truth_delay(BacktestConfig(truth_level=2.0), target)
+        resolve_truth_delay(BacktestConfig(), target)
 
 
 def test_forecast_weeks() -> None:
