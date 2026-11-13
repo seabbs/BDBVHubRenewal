@@ -245,3 +245,26 @@ def test_observations_are_every_weekly_release_then_final() -> None:
     ]
     truth = truth.set_index(["location", "target_end_date"])["truth"]
     np.testing.assert_array_equal(final.sort_index(), truth.sort_index())
+
+
+def test_factors_give_each_series_its_outbreak_settings() -> None:
+    counts = _counts(("P01", "P02"))
+    settings = pd.DataFrame(
+        {
+            "outbreak": ["9-0001", "9-0002"],
+            "delay_mean": [5.0, 9.0],
+            "n_places": [2, 1],
+            "gt_mean": [10.0, 12.0],
+            "unused": [0, 0],
+        }
+    )
+    out = synthetic.factor_table(counts, settings)
+    assert list(out.columns) == [
+        "location",
+        *[f for f in synthetic.FACTORS if f in settings],
+    ]
+    assert set(out["location"]) == {
+        synthetic.series_label("9-0001", p) for p in (NATIONAL, "P01", "P02")
+    }
+    assert (out["delay_mean"] == 5.0).all()
+    assert (out["n_places"] == 2).all()
