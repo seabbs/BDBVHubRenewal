@@ -20,6 +20,7 @@
 #                 there, held-out seeds first
 #   REMOTE_SLOTS, REMOTE_MEM_KB   its simulation processes and the
 #                 memory limit of each (ulimit -v), sized by memory
+#   REMOTE_MIN_FREE_GB   free disk below which no new remote batch starts
 #   REMOTE_RETRY, REMOTE_GRACE   seconds between tries of the remote,
 #                 and without an answer before the laptop takes over the
 #                 held-out seeds and FIRST_CHUNK_SEEDS training seeds
@@ -105,11 +106,23 @@ cd "$REMOTE_DIR"
 export PATH=/usr/local/bin:/usr/bin:/bin:\$PATH
 export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
 mkdir -p $SIM_REMOTE/logs
+free_gb() { df -BG --output=avail . | tail -1 | tr -dc 0-9; }
 for s in $list; do
   [ -e $SIM_REMOTE/settings-\$s.csv ] && continue
   pgrep -f "finetune_simulate.R --args 25 \$s " > /dev/null && continue
   while [ "\$(pgrep -fc 'finetune_simulate.R --args')" -ge $REMOTE_SLOTS ]; do sleep 10; done
-  (ulimit -v $REMOTE_MEM_KB; exec Rscript scripts/finetune_simulate.R 25 \$s $SIM_REMOTE > $SIM_REMOTE/logs/\$s.log 2>&1) &
+  # Wait while the disk is short; each batch's R temp files go in its own
+  # directory, removed when the batch ends.
+  while [ "\$(free_gb)" -lt $REMOTE_MIN_FREE_GB ]; do
+    echo "\$(date) waiting: \$(free_gb) GB free"; sleep 60
+  done
+  (
+    export TMPDIR="\$PWD/output/finetune/tmp/\$s"
+    mkdir -p "\$TMPDIR"
+    ulimit -v $REMOTE_MEM_KB
+    Rscript scripts/finetune_simulate.R 25 \$s $SIM_REMOTE > $SIM_REMOTE/logs/\$s.log 2>&1
+    rm -rf "\$TMPDIR"
+  ) &
   sleep 3
 done
 wait
@@ -160,8 +173,13 @@ local_slots() {
     pgrep -f "(finetune_simulate|sim-real).R --args 25 $s " > /dev/null && continue
     running=$(pgrep -f 'finetune_simulate.R --args|sim-real.R --args' | wc -l)
     (( running >= slots )) && return 0
-    nohup Rscript scripts/finetune_simulate.R 25 "$s" "$SIM_DIR" \
-      > "$SIM_DIR/logs/$s.log" 2>&1 < /dev/null &
+    (
+      export TMPDIR="$PWD/output/finetune/tmp/$s"
+      mkdir -p "$TMPDIR"
+      Rscript scripts/finetune_simulate.R 25 "$s" "$SIM_DIR" \
+        > "$SIM_DIR/logs/$s.log" 2>&1 < /dev/null
+      rm -rf "$TMPDIR"
+    ) &
     log "started local batch $s"
     sleep 5
   done
@@ -194,6 +212,10 @@ check_batches() {
   done
 }
 
+# A restarted driver replaces the remote scheduler, whose running batches
+# finish.
+remote "pkill -f '[f]inetune_remote.sh'" > /dev/null 2>&1 \
+  && log "stopped the previous remote scheduler"
 log "starting round from $1: training seeds $TRAIN_FIRST-$TRAIN_LAST, held-out $HELD_FIRST-$HELD_LAST, laptop $LOCAL_FIRST-$LOCAL_LAST"
 trainer_args=("$SIM_DIR" "$OUT" --train-seeds "$TRAIN_FIRST" "$TRAIN_LAST"
   --held-out-seeds "$HELD_FIRST" "$HELD_LAST" --outbreaks "$OUTBREAKS")
