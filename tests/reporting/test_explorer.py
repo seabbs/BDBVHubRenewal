@@ -153,3 +153,48 @@ def test_explorer_marks_models_with_trajectories() -> None:
     )
     assert [m["trajectories"] for m in data["models"]] == [True, False]  # type: ignore[attr-defined]
     assert data["traj"] == [[0, 0, "CD", 0, "2026-10-24", 5.0, 6.0]]
+
+
+def test_explorer_takes_other_places_intervals_and_data() -> None:
+    quantiles, target = _inputs()
+    asof = pd.DataFrame(
+        {
+            "reference_date": "2026-10-31",
+            "location": "CD",
+            "target_end_date": ["2026-10-24", "2026-10-31"],
+            "total": [5, 2],
+        }
+    )
+    levels = {"CD": "Country", "CD-IT": "Region", "CD-IT-01": "Group"}
+    data = explorer.explorer_data(
+        quantiles,
+        target,
+        {},
+        3,
+        COLOURS,
+        level_of=levels.__getitem__,
+        levels=("Country", "Region", "Group"),
+        outer="95%",
+        unit="hospitalisations",
+        complete_through="2026-12-31",
+        data_label="40-day truth",
+        asof=asof,
+    )
+    assert data["levels"] == ["Country", "Region", "Group"]
+    assert {loc["level"] for loc in data["locations"]} == set(levels.values())  # type: ignore[attr-defined]
+    assert (data["outer"], data["unit"]) == ("95%", "hospitalisations")
+    assert data["complete_through"] == "2026-12-31"
+    assert data["data_label"] == "40-day truth"
+    assert data["asof"] == [
+        [0, "CD", "2026-10-24", 5],
+        [0, "CD", "2026-10-31", 2],
+    ]
+
+
+def test_explorer_defaults_are_the_hub_s() -> None:
+    quantiles, target = _inputs()
+    data = explorer.explorer_data(quantiles, target, {}, 3, COLOURS)
+    assert data["levels"] == ["National", "Province", "Zone"]
+    assert (data["outer"], data["unit"]) == ("90%", "cases")
+    assert data["data_label"] == "2026-10-24"
+    assert data["asof"] == []

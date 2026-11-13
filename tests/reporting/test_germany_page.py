@@ -45,8 +45,47 @@ def _rows(models: tuple[tuple[str, float], ...]) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+LEVELS = (0.025, 0.1, 0.25, 0.5, 0.75, 0.9, 0.975)
+
+
+def _forecasts(models: tuple[str, ...]) -> pd.DataFrame:
+    rows = []
+    for model in models:
+        for origin in ("2021-11-22", "2021-11-23", "2022-02-14"):
+            for place in ("DE", "DE-BY", "80+"):
+                for h in (0, -7):
+                    end = pd.Timestamp(origin) + pd.Timedelta(days=h)
+                    for i, q in enumerate(LEVELS):
+                        rows.append(
+                            {
+                                "model": model,
+                                "origin": origin,
+                                "location": place,
+                                "target_end_date": str(end)[:10],
+                                "horizon": h,
+                                "quantile": q,
+                                "value": 10.0 * (i + 1),
+                                "truth": 42.0,
+                                "truth_vintage": "2022-03-01",
+                            }
+                        )
+    return pd.DataFrame(rows)
+
+
 def _scores(path: Path) -> None:
     path.mkdir(parents=True)
+    ours = ("randomwalk", "randomwalknowcast")
+    _forecasts(ours).to_csv(path / "forecasts.csv.gz", index=False)
+    teams = ("KIT", "KIT-frozen_baseline")
+    _forecasts(teams).to_csv(path / "teams-forecasts.csv.gz", index=False)
+    pd.DataFrame(
+        {
+            "origin": "2021-11-22",
+            "location": "DE",
+            "target_end_date": ["2021-11-21", "2021-11-22"],
+            "total": [30, 20],
+        }
+    ).to_csv(path / "asof.csv.gz", index=False)
     ours = _rows((("randomwalk", 10.0), ("randomwalknowcast", 5.0)))
     held = ours.assign(origin="2022-03-01")
     pd.concat([ours, held]).to_csv(path / "scores.csv.gz", index=False)
@@ -78,7 +117,58 @@ def test_page_tables_and_summaries(tmp_path: Path) -> None:
     assert CONFIG.commit[:7] in (gen / "germany-sources.md").read_text()
 
 
+def test_hidden_models_start_switched_off(tmp_path: Path) -> None:
+    res = tmp_path / "germany"
+    _scores(res)
+    fig, gen = tmp_path / "figures", tmp_path / "generated"
+    germany_page(fig, gen, res, CONFIG)
+    assert CONFIG.hidden == ("randomwalk", "KIT-frozen_baseline")
+    data = json.loads((fig / "scoresummary-germany-latest.json").read_text())
+    on = {m["name"]: m["on"] for m in data["models"]}
+    assert not on["randomwalk"]
+    assert on["randomwalknowcast"]
+    assert on["KIT"]
+
+
+def test_nowcast_explorer_shows_development_plot_dates(tmp_path: Path) -> None:
+    res = tmp_path / "germany"
+    _scores(res)
+    fig, gen = tmp_path / "figures", tmp_path / "generated"
+    germany_page(fig, gen, res, CONFIG)
+    assert "explorer-germany.json" in (gen / "germany-nowcasts.md").read_text()
+    data = json.loads((fig / "explorer-germany.json").read_text())
+    # Every 7th development date from the first; later dates are held out.
+    assert data["rounds"] == ["2021-11-22"]
+    on = {m["name"]: m["on"] for m in data["models"]}
+    assert on == {
+        "randomwalk": False,
+        "randomwalknowcast": True,
+        "KIT": True,
+        "KIT-frozen_baseline": False,
+    }
+    assert data["levels"] == ["National", "States", "Age groups"]
+    assert data["outer"] == "95%"
+    # q05 and q95 carry the 2.5% and 97.5% quantiles.
+    assert {(r[4], r[8]) for r in data["q"]} == {(10.0, 70.0)}
+    assert data["data"]["DE"][0][1] == 42
+    assert data["asof"] == [
+        [0, "DE", "2021-11-21", 30],
+        [0, "DE", "2021-11-22", 20],
+    ]
+
+
 def test_page_says_when_not_run(tmp_path: Path) -> None:
     fig, gen = tmp_path / "figures", tmp_path / "generated"
     germany_page(fig, gen, tmp_path / "missing", CONFIG)
     assert "Not run yet" in (gen / "germany-scores.md").read_text()
+
+
+def test_every_model_has_its_own_colour_and_dash() -> None:
+    from bdbvhubrenewal.evaluation.germany import TEAM_NAMES
+    from bdbvhubrenewal.reporting.germany import model_styles
+
+    models = [*CONFIG.models, *TEAM_NAMES.values()]
+    styles = model_styles(models, CONFIG.models)
+    assert set(styles) == set(models)
+    pairs = [(light, dash) for light, _, dash in styles.values()]
+    assert len(set(pairs)) == len(models)

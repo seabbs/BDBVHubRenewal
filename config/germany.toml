@@ -42,6 +42,13 @@ baseline = "randomwalknowcast"
 # Wolffram et al. (2023) compare to it.
 paper_baseline = "KIT-frozen_baseline"
 
+[page]
+# Models switched off on the page until the reader switches them on. Both
+# stay in the scores and in the paper's table.
+hidden = ["randomwalk", "KIT-frozen_baseline"]
+# The nowcast plots show every this many development dates, from the first.
+plot_every = 7
+
 [truth]
 # Each 7-day sum is scored on the data reported this many days after it
 # ends, the paper's 40-day truth.
