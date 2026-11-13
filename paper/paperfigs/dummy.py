@@ -31,6 +31,7 @@ __all__ = [
     "STUDY_SETUP",
     "StudySetup",
     "dummy_factors",
+    "dummy_split",
     "dummy_study",
 ]
 
@@ -414,3 +415,20 @@ def dummy_factors(forecasts: pd.DataFrame, seed: int = 1) -> pd.DataFrame:
             "report_days": rng.choice([5, 7], n),
         }
     )
+
+
+def dummy_split(forecasts: pd.DataFrame) -> pd.Timestamp:
+    """Return the dummy split: the middle origin date.
+
+    Parameters
+    ----------
+    forecasts : pandas.DataFrame
+        Forecasts of one study.
+
+    Returns
+    -------
+    pandas.Timestamp
+        The first origin of the later half.
+    """
+    origins = sorted(forecasts["origin_date"].unique())
+    return pd.Timestamp(origins[len(origins) // 2])

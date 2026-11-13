@@ -95,6 +95,7 @@ def relative_by_factor(
     scores: pd.DataFrame,
     factors: pd.DataFrame,
     baseline: str | None = None,
+    by: Sequence[str] = (),
 ) -> pd.DataFrame:
     """Return relative scores for each level of each factor.
 
@@ -106,19 +107,23 @@ def relative_by_factor(
         Output of `bin_factors`.
     baseline : str, optional
         As for `relative_scores`.
+    by : sequence of str
+        Further columns to split by, such as `period`.
 
     Returns
     -------
     pandas.DataFrame
-        `factor`, `level`, `model`, `rel_score`, `rel_log_score` and `n`.
+        `factor`, `level`, `model`, `by`, `rel_score`, `rel_log_score`
+        and `n`.
     """
     sc = scores.merge(factors, on="location", how="inner")
     parts = []
     for col in factors.columns.drop("location"):
-        rel = relative_scores(sc, [col], baseline)
+        rel = relative_scores(sc, [col, *by], baseline)
         parts.append(rel.rename(columns={col: "level"}).assign(factor=col))
     out = pd.concat(parts, ignore_index=True)
-    first = ["factor", "level", "model", "rel_score", "rel_log_score", "n"]
+    first = ["factor", "level", "model", *by, "rel_score", "rel_log_score"]
+    first.append("n")
     return out.loc[:, first]
 
 

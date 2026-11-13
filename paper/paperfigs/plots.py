@@ -26,6 +26,7 @@ import pandas as pd
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 from matplotlib.lines import Line2D
+from matplotlib.patches import Patch
 from matplotlib.ticker import (
     FixedLocator,
     FuncFormatter,
@@ -41,6 +42,7 @@ from paperfigs.factors import (
     relative_by_factor,
     top_factors,
 )
+from paperfigs.periods import PERIOD_ALPHA, PERIODS, STUDY_SPLITS, add_period
 from paperfigs.schema import DEFAULT_STRATUM
 from paperfigs.scores import (
     STUDY_BASELINES,
@@ -277,22 +279,56 @@ def _model_rows(ax: Axes, models: Sequence[str], show_names: bool) -> None:
     ax.grid(axis="y", visible=False)
 
 
+def _periods(df: pd.DataFrame) -> list[tuple[str | None, float]]:
+    """Return each period in `df` with its shade, or one unsplit entry."""
+    if "period" not in df.columns:
+        return [(None, 1.0)]
+    present = set(df["period"])
+    return [(p, PERIOD_ALPHA[p]) for p in PERIODS if p in present]
+
+
+def _pick(df: pd.DataFrame, period: str | None) -> pd.DataFrame:
+    return df if period is None else df.loc[df["period"] == period]
+
+
+def _rows(n_periods: int, height: float = 0.7) -> tuple[np.ndarray, float]:
+    """Offsets and bar height that split one model row between periods."""
+    h = height / n_periods
+    return (np.arange(n_periods) - (n_periods - 1) / 2) * h, h
+
+
 def _bars_relative(
     ax: Axes, rel: pd.DataFrame, col: str, models: Sequence[str]
 ) -> None:
-    values = rel.set_index("model")[col].reindex(models)
-    for i, m in enumerate(models):
-        ax.barh(i, values[m] - 1, left=1, height=0.7, **bar_style(m, models))
+    periods = _periods(rel)
+    offsets, h = _rows(len(periods))
+    for (period, alpha), dy in zip(periods, offsets, strict=True):
+        values = _pick(rel, period).set_index("model")[col].reindex(models)
+        for i, m in enumerate(models):
+            ax.barh(
+                i + dy,
+                values[m] - 1,
+                left=1,
+                height=h,
+                alpha=alpha,
+                **bar_style(m, models),
+            )
     _log_ratio_axis(ax, "x")
-    _pad_log_limits(ax, values.to_numpy(dtype=float), "x")
+    _pad_log_limits(ax, rel[col].to_numpy(dtype=float), "x")
 
 
 def _bars_bias(ax: Axes, summary: pd.DataFrame, models: Sequence[str]) -> None:
-    values = summary.set_index("model")["bias"].reindex(models)
-    for i, m in enumerate(models):
-        ax.barh(i, values[m], height=0.7, **bar_style(m, models))
+    periods = _periods(summary)
+    offsets, h = _rows(len(periods))
+    for (period, alpha), dy in zip(periods, offsets, strict=True):
+        values = _pick(summary, period).set_index("model")["bias"]
+        values = values.reindex(models)
+        for i, m in enumerate(models):
+            ax.barh(
+                i + dy, values[m], height=h, alpha=alpha, **bar_style(m, models)
+            )
     ax.axvline(0, color=INK["muted"], ls="--", lw=1, zorder=0)
-    lim = max(0.25, float(np.nanmax(np.abs(values))) * 1.15)
+    lim = max(0.25, float(np.nanmax(np.abs(summary["bias"]))) * 1.15)
     ax.set_xlim(-lim, lim)
     ax.set_xlabel("Mean bias")
 
@@ -300,15 +336,33 @@ def _bars_bias(ax: Axes, summary: pd.DataFrame, models: Sequence[str]) -> None:
 def _bars_coverage(
     ax: Axes, summary: pd.DataFrame, models: Sequence[str]
 ) -> None:
-    """Narrowest interval solid, widest light, with lines at nominal."""
+    """Narrowest interval solid, widest light, with lines at nominal.
+
+    Unsplit, the two intervals sit side by side. Split by period, each
+    period gets one row with the wide interval drawn behind the narrow.
+    """
     cols = coverage_columns(summary)
     narrow, wide = cols[0], cols[-1]
     levels = [int(c.split("_")[1]) / 100 for c in (narrow, wide)]
-    s = summary.set_index("model").reindex(models)
-    for i, m in enumerate(models):
-        style = bar_style(m, models)
-        ax.barh(i - 0.18, s.loc[m, wide], height=0.34, alpha=0.45, **style)
-        ax.barh(i + 0.18, s.loc[m, narrow], height=0.34, **style)
+    periods = _periods(summary)
+    for period, alpha in periods:
+        s = _pick(summary, period).set_index("model").reindex(models)
+        for i, m in enumerate(models):
+            style = bar_style(m, models)
+            if period is None:
+                ax.barh(
+                    i - 0.18, s.loc[m, wide], height=0.34, alpha=0.45, **style
+                )
+                ax.barh(i + 0.18, s.loc[m, narrow], height=0.34, **style)
+                continue
+            offsets, h = _rows(len(periods))
+            dy = offsets[[p for p, _ in periods].index(period)]
+            ax.barh(
+                i + dy, s.loc[m, wide], height=h, alpha=0.45 * alpha, **style
+            )
+            ax.barh(
+                i + dy, s.loc[m, narrow], height=h * 0.6, alpha=alpha, **style
+            )
     for level in levels:
         ax.axvline(level, color=INK["muted"], ls="--", lw=1, zorder=0)
     ax.set_xlim(0, 1)
@@ -332,18 +386,29 @@ def _points_by(
         else sorted(rel[by].unique(), key=lambda v: (str(type(v)), v))
     )
     x = np.arange(len(cats))
-    width = 0.7 / max(len(models), 1)
+    periods = _periods(rel)
+    n = max(len(models), 1) * len(periods)
+    width = 0.75 / n
     for j, m in enumerate(models):
-        one = rel.loc[rel["model"] == m].set_index(by)[col].reindex(cats)
-        if lines:
-            ax.plot(cats, one.to_numpy(), lw=1.4, **line_style(m, models))
-        else:
-            offset = (j - (len(models) - 1) / 2) * width
+        for k, (period, alpha) in enumerate(periods):
+            one = _pick(rel, period)
+            one = one.loc[one["model"] == m].set_index(by)[col].reindex(cats)
+            if lines:
+                ax.plot(
+                    cats,
+                    one.to_numpy(),
+                    lw=1.4,
+                    alpha=alpha,
+                    **line_style(m, models),
+                )
+                continue
+            offset = (j * len(periods) + k - (n - 1) / 2) * width
             ax.plot(
                 x + offset,
                 one.to_numpy(),
                 ls="none",
                 ms=4.5,
+                alpha=alpha,
                 **point_style(m, models),
             )
     if not lines:
@@ -357,7 +422,45 @@ def _points_by(
     _pad_log_limits(ax, rel[col].to_numpy(dtype=float), "y")
 
 
-def _legend(fig: Figure, models: Sequence[str]) -> None:
+def _split_line(ax: Axes, split: pd.Timestamp | None) -> None:
+    """Mark the development/held-out split on a date axis."""
+    if split is None:
+        return
+    ax.axvline(split, color=INK["ink"], ls=":", lw=1.3, zorder=6)
+    ax.text(
+        split,
+        0.98,
+        "development | held out",
+        transform=ax.get_xaxis_transform(),
+        ha="center",
+        va="top",
+        fontsize=7,
+        color=INK["ink"],
+        bbox={"facecolor": "white", "edgecolor": "none", "pad": 1.5},
+        zorder=7,
+    )
+
+
+def _period_handles(split: pd.Timestamp | None) -> list[Patch]:
+    if split is None:
+        return []
+    return [
+        Patch(
+            color=INK["muted"],
+            alpha=PERIOD_ALPHA["development"],
+            label="Development half",
+        ),
+        Patch(
+            color=INK["muted"],
+            alpha=PERIOD_ALPHA["held out"],
+            label="Held-out half",
+        ),
+    ]
+
+
+def _legend(
+    fig: Figure, models: Sequence[str], split: pd.Timestamp | None = None
+) -> None:
     handles = [
         Line2D(
             [],
@@ -384,6 +487,7 @@ def _legend(fig: Figure, models: Sequence[str]) -> None:
             label="Final data",
         )
     )
+    handles += _period_handles(split)
     fig.legend(
         handles=handles,
         loc="outside lower center",
@@ -411,6 +515,7 @@ def _factor_points(
     baseline: str,
     models: Sequence[str],
     n_factors: int,
+    halves: Sequence[str] = (),
 ) -> None:
     """Draw relative scores by level for the most spread factors.
 
@@ -418,7 +523,7 @@ def _factor_points(
     out; the SI plot keeps every factor.
     """
     shown = factors.drop(columns=redundant_factors(factors))
-    rel = relative_by_factor(scores, bin_factors(shown), baseline)
+    rel = relative_by_factor(scores, bin_factors(shown), baseline, halves)
     keep = top_factors(rel, n_factors, always=ALWAYS_SHOWN)
     rel = rel.loc[rel["factor"].isin(keep)].copy()
     cats: list[str] = []
@@ -454,6 +559,7 @@ def results_panel(
     ribbon_models: Sequence[str] | None = None,
     factors: pd.DataFrame | None = None,
     n_factors: int = 4,
+    split: pd.Timestamp | None = None,
 ) -> Figure:
     """Plot the results panel for one study.
 
@@ -483,6 +589,11 @@ def results_panel(
         factors whose levels spread the relative score most.
     n_factors : int
         Factors to show when `factors` is given.
+    split : pandas.Timestamp, optional
+        First held-out origin date. Defaults to the study's in
+        `STUDY_SPLITS`. When set, the score panels show the development
+        and held-out halves side by side (development lighter) and the
+        nowcast panel marks the split with a dotted line.
     ribbon_models : sequence of str, optional
         Models with ribbons in panel A. Defaults to the baseline, the
         fine-tuned models and `hub_ensemble` if present.
@@ -499,7 +610,9 @@ def results_panel(
     """
     study = _one_study(forecasts)
     obs = observations.loc[observations["study"] == study]
-    sc = scores.loc[scores["study"] == study]
+    split = split if split is not None else STUDY_SPLITS.get(study)
+    sc = add_period(scores.loc[scores["study"] == study], split)
+    halves = ["period"] if split is not None else []
     baseline = baseline or STUDY_BASELINES[study]
     name = metric_of(sc).upper()
     models = model_order(sc["model"].unique())
@@ -528,8 +641,9 @@ def results_panel(
         location,
         models,
     )
-    rel = relative_scores(sc, baseline=baseline)
-    summary = summarise_scores(sc)
+    _split_line(axd["nowcast"], split)
+    rel = relative_scores(sc, halves, baseline)
+    summary = summarise_scores(sc, halves)
     _bars_relative(axd["rel"], rel, "rel_score", models)
     axd["rel"].set_xlabel(f"Relative to {baseline}")
     _bars_relative(axd["rel_log"], rel, "rel_log_score", models)
@@ -543,17 +657,19 @@ def results_panel(
         _points_by(
             axd["location"],
             relative_scores(
-                sc.loc[sc["stratum"] == main], ["location"], baseline
+                sc.loc[sc["stratum"] == main], ["location", *halves], baseline
             ),
             "location",
             models,
         )
     else:
-        _factor_points(axd["factor"], sc, factors, baseline, models, n_factors)
+        _factor_points(
+            axd["factor"], sc, factors, baseline, models, n_factors, halves
+        )
     if stratified:
         _points_by(
             axd["stratum"],
-            relative_scores(sc, ["stratum"], baseline),
+            relative_scores(sc, ["stratum", *halves], baseline),
             "stratum",
             models,
             rotate=True,
@@ -564,7 +680,7 @@ def results_panel(
     )
     _points_by(
         axd["horizon"],
-        relative_scores(hsc, ["horizon"], baseline),
+        relative_scores(hsc, ["horizon", *halves], baseline),
         "horizon",
         models,
         lines=True,
@@ -578,7 +694,7 @@ def results_panel(
         _label(axd[key], letter, _TITLES[key].format(m=name))
     for key in bottom:
         axd[key].set_ylabel(f"Relative {name}")
-    _legend(fig, models)
+    _legend(fig, models, split)
     return fig
 
 
@@ -587,6 +703,7 @@ def si_scores_by_location_horizon(
     baseline: str | None = None,
     col: str = "rel_score",
     ncol: int = 4,
+    split: pd.Timestamp | None = None,
 ) -> Figure:
     """Plot the relative score by horizon for every location and stratum.
 
@@ -600,6 +717,9 @@ def si_scores_by_location_horizon(
         `rel_score` or `rel_log_score`.
     ncol : int
         Panels per row.
+    split : pandas.Timestamp, optional
+        First held-out origin date; each half then gets its own line,
+        the development half lighter.
 
     Returns
     -------
@@ -607,7 +727,12 @@ def si_scores_by_location_horizon(
         One panel per location, sharing axes.
     """
     name = metric_of(scores).upper()
-    rel = relative_scores(scores, ["location", "stratum", "horizon"], baseline)
+    halves = ["period"] if split is not None else []
+    rel = relative_scores(
+        add_period(scores, split),
+        ["location", "stratum", "horizon", *halves],
+        baseline,
+    )
     main = _main_stratum(rel)
     rel["series"] = rel["location"].where(
         rel["stratum"] == main, rel["location"] + " " + rel["stratum"]
@@ -646,14 +771,17 @@ def si_scores_by_location_horizon(
     fig.supylabel(f"Relative {name} ({scale})", fontsize=9)
     for ax in flat[max(0, len(locs) - ncol) : len(locs)]:
         ax.set_xlabel("Horizon")
-    _legend_models(fig, models)
+    _legend_models(fig, models, split)
     return fig
 
 
-def _legend_models(fig: Figure, models: Sequence[str]) -> None:
-    handles = [
+def _legend_models(
+    fig: Figure, models: Sequence[str], split: pd.Timestamp | None = None
+) -> None:
+    handles: list = [
         Line2D([], [], lw=1.6, label=m, **line_style(m, models)) for m in models
     ]
+    handles += _period_handles(split)
     fig.legend(
         handles=handles,
         loc="outside lower center",
@@ -662,13 +790,17 @@ def _legend_models(fig: Figure, models: Sequence[str]) -> None:
     )
 
 
-def si_wis_over_time(scores: pd.DataFrame) -> Figure:
+def si_wis_over_time(
+    scores: pd.DataFrame, split: pd.Timestamp | None = None
+) -> Figure:
     """Plot the mean score by origin date, natural and log scale.
 
     Parameters
     ----------
     scores : pandas.DataFrame
         `score_forecasts` output for one study.
+    split : pandas.Timestamp, optional
+        First held-out origin date, marked with a dotted line.
 
     Returns
     -------
@@ -695,11 +827,13 @@ def si_wis_over_time(scores: pd.DataFrame) -> Figure:
         ax.xaxis.set_major_locator(locator)
         ax.xaxis.set_major_formatter(mdates.ConciseDateFormatter(locator))
         ax.set_xlabel("Origin date")
+        _split_line(ax, split)
     axes[0].set_yscale("log")
     axes[0].yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:g}"))
     axes[0].yaxis.set_minor_formatter(FuncFormatter(lambda v, _: f"{v:g}"))
     axes[0].set_ylabel(f"Mean {name}")
     axes[1].set_ylabel(f"Mean {name} of log(x + 1)")
+    # Lines are not shaded by half here; the dotted line marks the split.
     _legend_models(fig, models)
     return fig
 
@@ -710,6 +844,7 @@ def si_scores_by_factor(
     baseline: str | None = None,
     col: str = "rel_score",
     ncol: int = 3,
+    split: pd.Timestamp | None = None,
 ) -> Figure:
     """Plot relative scores by level for every scenario factor.
 
@@ -725,6 +860,9 @@ def si_scores_by_factor(
         `rel_score` or `rel_log_score`.
     ncol : int
         Panels per row.
+    split : pandas.Timestamp, optional
+        First held-out origin date; each half then gets its own points,
+        the development half lighter.
 
     Returns
     -------
@@ -732,7 +870,10 @@ def si_scores_by_factor(
         One panel per factor, sharing the y axis.
     """
     name = metric_of(scores).upper()
-    rel = relative_by_factor(scores, bin_factors(factors), baseline)
+    halves = ["period"] if split is not None else []
+    rel = relative_by_factor(
+        add_period(scores, split), bin_factors(factors), baseline, halves
+    )
     models = model_order(rel["model"].unique())
     names = list(dict.fromkeys(rel["factor"]))
     nrow = int(np.ceil(len(names) / ncol))
@@ -755,5 +896,5 @@ def si_scores_by_factor(
     _pad_log_limits(flat[0], rel[col].to_numpy(dtype=float))
     scale = "log scale" if col == "rel_log_score" else "natural scale"
     fig.supylabel(f"Relative {name} ({scale})", fontsize=9)
-    _legend_models(fig, models)
+    _legend_models(fig, models, split)
     return fig

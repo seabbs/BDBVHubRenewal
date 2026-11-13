@@ -13,7 +13,7 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 
-from paperfigs.dummy import dummy_factors, dummy_study
+from paperfigs.dummy import dummy_factors, dummy_split, dummy_study
 from paperfigs.plots import (
     results_panel,
     si_scores_by_factor,
@@ -39,6 +39,7 @@ def render(
                 # Outbreaks are many, so scores break down by scenario
                 # factor rather than by location.
                 factors = dummy_factors(fc)
+                split = None
                 figures = {
                     "results": results_panel(fc, obs, scores, factors=factors),
                     "si-factors": si_scores_by_factor(scores, factors),
@@ -47,16 +48,19 @@ def render(
                     ),
                 }
             else:
+                # Germany is split into a development and a held-out
+                # half; the dummy split is the middle origin.
+                split = dummy_split(fc) if study == "germany" else None
                 figures = {
-                    "results": results_panel(fc, obs, scores),
+                    "results": results_panel(fc, obs, scores, split=split),
                     "si-location-horizon": si_scores_by_location_horizon(
-                        scores
+                        scores, split=split
                     ),
                     "si-location-horizon-log": si_scores_by_location_horizon(
-                        scores, col="rel_log_score"
+                        scores, col="rel_log_score", split=split
                     ),
                 }
-            figures["si-wis-over-time"] = si_wis_over_time(scores)
+            figures["si-wis-over-time"] = si_wis_over_time(scores, split=split)
             for name, fig in figures.items():
                 path = out / f"{study}-{name}.png"
                 fig.savefig(path, dpi=200)
