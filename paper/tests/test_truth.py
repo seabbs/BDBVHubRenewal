@@ -75,3 +75,18 @@ def test_truth_keeps_strata_apart() -> None:
         (t["stratum"] == "b") & (t["target_date"] == pd.Timestamp("2024-01-01"))
     ]
     assert one["truth"].item() == 1.0
+
+
+def test_delay_can_differ_by_location() -> None:
+    obs = pd.concat([_obs(), _obs().assign(location="loc02")])
+    delays = pd.Series({"loc01": 6, "loc02": 11})
+    t = rolling_truth(obs, delay_days=delays)
+    jan1 = t.loc[t["target_date"] == pd.Timestamp("2024-01-01")]
+    got = jan1.set_index("location")["truth"]
+    assert got["loc01"] == 3.0
+    assert got["loc02"] == 5.0
+
+
+def test_per_location_delay_needs_every_location() -> None:
+    with pytest.raises(ValueError, match="loc01"):
+        rolling_truth(_obs(), delay_days=pd.Series({"loc02": 6}))
