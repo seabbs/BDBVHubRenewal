@@ -1,11 +1,12 @@
 # Foundation models
 
-Four experimental candidate models that give the hub target's releases to the pretrained Chronos-2 time series foundation model[^chronos2].
+Six experimental candidate models that give the hub target's releases to the pretrained Chronos-2 time series foundation model[^chronos2].
 { .page-subtitle }
 
 The data and notation are on the [Data methods page](data.md#target-and-notation).
 The models are named `fm_chronos_<source>_<layout>`, with two sources of the hub target and two layouts.
 None is fitted to these data: Chronos-2 forecasts from its pretrained weights, in context.
+The two `fm_chronos_<source>_ragged_ft` models are the ragged models with Chronos-2 fine-tuned on simulated outbreaks ([Fine-tuning](#fine-tuning)).
 None is submitted.
 
 In brief, each model:
@@ -67,9 +68,24 @@ The context is every step from the first onset in the releases to $t^*$.
 The models forecast final counts and model no delay.
 So the release backtest scores them on the complete target only, the weeks the latest release reports in full ([Evaluation](evaluation.md#real-releases)).
 
+## Fine-tuning
+
+The `_ft` models load one LoRA checkpoint of Chronos-2, trained on 2,000 outbreaks simulated with epinowcast's generative model (`scripts/finetune_simulate.R`).
+Each outbreak is a renewal process with a drawn log $R_t$ path, a reporting delay that drifts and differs by place, day-of-week effects and negative binomial noise, in one to 26 places.
+Each gives a daily reporting triangle, and its weekly releases are summed from it.
+A training block cuts an outbreak's releases at one cut-off and lays them out as the ragged layout does, with the target past $t^*$ the outbreak's final counts (`forecasters.finetune.training_block`).
+$D$ is drawn from 2 to 7 weeks, or 14 to 49 days, so the model is not tied to one $D$.
+Each outbreak gives four weekly and four daily blocks, with the country and a random subset of its places.
+Training is 1,000 steps of LoRA at learning rate $10^{-4}$, with 5% of blocks held out (`scripts/finetune_chronos.py`).
+
+A checkpoint is named by its settings hash, of the blocks, the code and the training settings.
+The models load the checkpoint whose hash is `FINETUNED_HASH`, downloaded once from the repository's release `chronos-ft-<hash>`.
+A fit fails if that release is missing or holds a checkpoint with another hash.
+
 ## Limitations
 
-- Chronos-2 is used as pretrained. It has not seen these data or outbreaks like them.
+- The zero-shot models use Chronos-2 as pretrained. It has not seen these data or outbreaks like them.
+- The fine-tuned models have seen only simulated outbreaks, whose delays and dynamics may not match these data.
 - Draws are independent across steps and places, so every weekly value of the daily models, a sum of seven daily draws, is too narrow, as are sums over weeks or places.
 
 [^chronos2]: Ansari A F et al. (2025) Chronos-2: From univariate to universal forecasting. arXiv:2510.15821. Code: <https://github.com/amazon-science/chronos-forecasting>.
