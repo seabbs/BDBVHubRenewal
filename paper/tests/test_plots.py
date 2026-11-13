@@ -6,7 +6,8 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import pytest
 
-from paperfigs.dummy import dummy_factors, dummy_split, dummy_study
+from paperfigs.dummy import dummy_factors, dummy_study
+from paperfigs.periods import STUDY_SPLITS
 from paperfigs.plots import (
     PANEL_LETTERS,
     results_panel,
@@ -34,7 +35,7 @@ def test_model_style_is_fixed_whatever_else_is_shown() -> None:
 def test_baselines_have_their_own_colours() -> None:
     colours = {
         model_style(m, [])[0]
-        for m in ("randomwalk", "randomwalknowcast", "hub_baseline")
+        for m in ("randomwalk", "randomwalknowcast", "KIT-frozen_baseline")
     }
     assert len(colours) == 3
 
@@ -138,7 +139,7 @@ def test_chronos_variants_share_a_colour_with_distinct_styles(family) -> None:
 @pytest.fixture(scope="module")
 def germany():
     fc, obs = dummy_study("germany", seed=1, n_samples=5)
-    return fc, obs, score_forecasts(fc), dummy_split(fc)
+    return fc, obs, score_forecasts(fc), STUDY_SPLITS["germany"]
 
 
 def _texts(fig) -> str:
@@ -160,7 +161,7 @@ def test_split_draws_both_halves_and_the_line(germany) -> None:
 
 def test_no_split_draws_one_bar_per_model(germany) -> None:
     fc, obs, scores, _ = germany
-    fig = results_panel(fc, obs, scores)
+    fig = results_panel(fc, obs, scores, split=False)
     rel_ax = next(ax for ax in fig.axes if ax.get_title() == "Relative WIS")
     assert len(rel_ax.patches) == scores["model"].nunique()
     assert "development | held out" not in _texts(fig)

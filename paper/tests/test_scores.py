@@ -135,7 +135,7 @@ def test_relative_scores_need_the_baseline() -> None:
 
 def test_baselines_differ_by_study() -> None:
     assert STUDY_BASELINES["synthetic"] == "randomwalknowcast"
-    assert STUDY_BASELINES["germany"] != "randomwalknowcast"
+    assert STUDY_BASELINES["germany"] == "KIT-frozen_baseline"
     assert STUDY_BASELINES["ebola"] == "BDBVHub-baseline"
 
 
