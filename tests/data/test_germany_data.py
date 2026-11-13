@@ -89,6 +89,18 @@ def test_states_and_age_groups_are_separate_tasks_summing_to_germany(
         assert places == {NATIONAL, *task.locations}
 
 
+def test_age_groups_are_germany_s_only(triangle: pd.DataFrame) -> None:
+    # The hub's triangle also has age groups for each state, which must
+    # not add to Germany's.
+    state_ages = triangle.loc[
+        (triangle["location"] == "DE") & (triangle["age_group"] != "00+")
+    ].assign(location="DE-BY")
+    both = pd.concat([triangle, state_ages], ignore_index=True)
+    want = nowcast_tasks(triangle, NOWCAST, n_samples=20, seed=1)[1]
+    got = nowcast_tasks(both, NOWCAST, n_samples=20, seed=1)[1]
+    pd.testing.assert_frame_equal(got.daily_history, want.daily_history)
+
+
 def test_dates_move_to_the_next_saturday(tasks) -> None:
     for task in tasks:
         # 2021-10-20 is a Wednesday, three days before a Saturday.
