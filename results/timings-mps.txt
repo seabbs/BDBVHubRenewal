@@ -1,0 +1,6 @@
+fm_chronos_weekly_complete 2026-11-08 zones=True places=546 series=546 load_s=4.2 fit_s=0.8 mps_driver_gb=1.6 max_rss_gb=1.6
+fm_chronos_weekly_ragged 2026-11-08 zones=True places=546 series=846 load_s=11.3 fit_s=0.5 mps_driver_gb=1.6 max_rss_gb=1.5
+fm_chronos_weekly_ragged_ft 2026-11-08 zones=True places=546 series=846 load_s=4.3 fit_s=0.5 mps_driver_gb=1.6 max_rss_gb=1.5
+fm_chronos_daily_complete 2026-11-08 zones=True places=546 series=546 load_s=4.1 fit_s=2.1 mps_driver_gb=2.7 max_rss_gb=2.2
+fm_chronos_daily_ragged 2026-11-08 zones=True places=546 series=2646 load_s=4.2 fit_s=10.4 mps_driver_gb=14.9 max_rss_gb=2.1
+fm_chronos_daily_ragged_ft 2026-11-08 zones=True places=546 series=2646 load_s=5.1 fit_s=9.7 mps_driver_gb=14.9 max_rss_gb=2.1

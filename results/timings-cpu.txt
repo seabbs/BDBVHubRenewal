@@ -1,0 +1,12 @@
+fm_chronos_weekly_complete 2026-11-08 zones=True places=546 series=546 load_s=9.9 fit_s=12.5 max_rss_gb=1.7 wall=0:29.60
+fm_chronos_weekly_complete 2026-11-08 zones=False places=27 series=27 load_s=8.8 fit_s=4.7 max_rss_gb=1.5 wall=0:19.59
+fm_chronos_weekly_ragged 2026-11-08 zones=True places=546 series=846 load_s=9.9 fit_s=16.2 max_rss_gb=1.6 wall=0:33.08
+fm_chronos_weekly_ragged 2026-11-08 zones=False places=27 series=63 load_s=9.6 fit_s=4.5 max_rss_gb=1.5 wall=0:20.76
+fm_chronos_weekly_ragged_ft 2026-11-08 zones=True places=546 series=846 load_s=11.9 fit_s=14.8 max_rss_gb=1.7 wall=0:34.69
+fm_chronos_weekly_ragged_ft 2026-11-08 zones=False places=27 series=63 load_s=12.9 fit_s=3.6 max_rss_gb=1.5 wall=0:23.32
+fm_chronos_daily_complete 2026-11-08 zones=True places=546 series=546 load_s=8.3 fit_s=38.0 max_rss_gb=2.1 wall=0:53.13
+fm_chronos_daily_complete 2026-11-08 zones=False places=27 series=27 load_s=9.9 fit_s=6.4 max_rss_gb=1.6 wall=0:23.91
+fm_chronos_daily_ragged 2026-11-08 zones=True places=546 series=2646 load_s=9.0 fit_s=138.4 max_rss_gb=4.3 wall=2:33.41
+fm_chronos_daily_ragged 2026-11-08 zones=False places=27 series=279 load_s=7.9 fit_s=15.0 max_rss_gb=1.7 wall=0:28.55
+fm_chronos_daily_ragged_ft 2026-11-08 zones=True places=546 series=2646 load_s=9.9 fit_s=180.9 max_rss_gb=4.2 wall=3:20.35
+fm_chronos_daily_ragged_ft 2026-11-08 zones=False places=27 series=279 load_s=40.3 fit_s=683.2 max_rss_gb=1.1 wall=12:15.25
