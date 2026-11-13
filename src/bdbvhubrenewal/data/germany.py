@@ -270,6 +270,7 @@ def nowcast_tasks(
             | (triangle["location"] == GERMANY)
         )
     ]
+    rows = _carried(rows)
     vintage = _moved(rows["report_date"], shift)
     daily = pd.DataFrame(
         {
@@ -323,6 +324,22 @@ def nowcast_tasks(
             )
         )
     return tasks
+
+
+def _carried(rows: pd.DataFrame) -> pd.DataFrame:
+    """Carry each Meldedatum's last count to every later report date.
+
+    The triangle has no row for a Meldedatum after its last change column,
+    81 days on, so without this a release would drop the older dates.
+    """
+    keys = ["location", "age_group", "reference_date"]
+    reports = pd.DataFrame({"report_date": sorted(set(rows["report_date"]))})
+    last = rows.sort_values("report_date").drop_duplicates(keys, keep="last")
+    later = last.rename(columns={"report_date": "last"}).merge(
+        reports, how="cross"
+    )
+    later = later.loc[later["report_date"] > later["last"]]
+    return pd.concat([rows, later[rows.columns]], ignore_index=True)
 
 
 def _weekly(daily: pd.DataFrame) -> pd.DataFrame:
