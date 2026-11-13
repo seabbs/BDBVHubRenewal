@@ -4,7 +4,7 @@ tasks:
   test:
     desc: Run the paper tests
     cmds:
-      - uv run pytest -q tests
+      - uv run --group paper pytest -q tests
   lint:
     desc: Lint and format-check the paper code
     cmds:
@@ -14,3 +14,15 @@ tasks:
     desc: Render every figure from dummy data to figures/
     cmds:
       - uv run python make_figures.py
+  pipeline:dev:
+    desc: Run the evaluation workflow without the held-out data, to results/development/
+    cmds:
+      - uv run --group paper snakemake -s workflow/Snakefile development --cores {{.CORES | default 4}} {{.CLI_ARGS}}
+  pipeline:paper:
+    desc: Run the evaluation workflow with the held-out data, to results/paper/
+    cmds:
+      - uv run --group paper snakemake -s workflow/Snakefile paper --cores {{.CORES | default 4}} {{.CLI_ARGS}}
+  pipeline:dry:
+    desc: Dry-run both workflow targets to check the DAG
+    cmds:
+      - uv run --group paper snakemake -s workflow/Snakefile development paper -n --cores 1
