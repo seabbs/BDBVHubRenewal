@@ -1,0 +1,16 @@
+version: "3"
+
+tasks:
+  test:
+    desc: Run the paper tests
+    cmds:
+      - uv run pytest -q tests
+  lint:
+    desc: Lint and format-check the paper code
+    cmds:
+      - uv run ruff check .
+      - uv run ruff format --check .
+  figures:
+    desc: Render every figure from dummy data to figures/
+    cmds:
+      - uv run python make_figures.py

@@ -1,0 +1,7 @@
+extend = "../pyproject.toml"
+
+[lint.per-file-ignores]
+"tests/**" = ["D", "PD101"]
+
+[lint.isort]
+known-first-party = ["paperfigs"]
