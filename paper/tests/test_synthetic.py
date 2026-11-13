@@ -167,7 +167,12 @@ def test_evaluate_gives_one_long_quantile_table_with_truth() -> None:
         synthetic.series_label("9-0001", p) for p in (NATIONAL, "P01", "P02")
     }
     assert out["origin_date"].nunique() == 2
-    assert set(out["horizon"]) == set(synthetic.HORIZONS)
+    # Horizons are in days from the origin, as `paper/schema.md` has it.
+    days = (
+        pd.to_datetime(out["target_date"]) - pd.to_datetime(out["origin_date"])
+    ).dt.days
+    assert (out["horizon"] == days).all()
+    assert out["horizon"].nunique() > len(synthetic.HORIZONS)
     np.testing.assert_allclose(
         sorted(out["quantile_level"].unique()), HUB_QUANTILE_LEVELS
     )
@@ -203,3 +208,30 @@ def test_the_random_walk_forecasts_a_single_place_as_the_country() -> None:
     chronos = synthetic.model_task(_Constant("flat"), task)
     assert walk.locations == (NATIONAL,)
     assert chronos.locations == ()
+
+
+def test_observations_are_each_release_to_the_last_origin_then_final() -> None:
+    counts = _counts(("P01", "P02"))
+    cutoffs, origins = synthetic.origin_cutoffs(counts, "9-0001", 2)
+    obs = synthetic.observation_table(counts, "9-0001", 2)
+    assert list(obs.columns) == [
+        "study",
+        "location",
+        "target_date",
+        "as_of_date",
+        "value",
+    ]
+    assert set(obs["study"]) == {"synthetic"}
+    end = str(counts["report_date"].max())
+    releases = cutoffs[: cutoffs.index(origins[-1]) + 1]
+    assert set(obs["as_of_date"]) == {*releases, end}
+    # The latest as-of date is the final data, the truth.
+    final = obs.loc[obs["as_of_date"] == end].set_index(
+        ["location", "target_date"]
+    )["value"]
+    truth = synthetic.truth_table(counts)
+    truth["location"] = [
+        synthetic.series_label("9-0001", p) for p in truth["location"]
+    ]
+    truth = truth.set_index(["location", "target_end_date"])["truth"]
+    np.testing.assert_array_equal(final.sort_index(), truth.sort_index())
