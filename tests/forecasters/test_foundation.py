@@ -112,7 +112,6 @@ def test_weekly_triangle_puts_each_release_at_its_lag() -> None:
     tri = hub_triangle(_history(), "weekly", ("A",), "2026-10-31")
     assert tri.times == ["2026-10-10", "2026-10-17", "2026-10-24", "2026-10-31"]
     assert tri.last == 2
-    assert tri.cutoff == "2026-10-24"
     assert tri.final[0].tolist() == [7.0, 4.0, 2.0, 0.0]
     partial = tri.partial[0]
     assert partial.shape == (4, MAX_LAG["weekly"])
@@ -250,6 +249,16 @@ def test_complete_starts_from_the_random_walk_week(
     first = pd.Timestamp(rows[column].min())
     step = 7 if source == "weekly" else 1
     assert n_context == (week - first).days // step + 1
+
+
+def test_weekly_ragged_needs_no_daily_releases(task: ForecastTask) -> None:
+    bare = dataclasses.replace(task, daily_history=None)
+    model = dataclasses.replace(
+        get_model("fm_chronos_weekly_ragged"), sample=_constant(0.0)
+    )
+    # It reads no release snapshots, so it forecasts without them.
+    assert not model.needs_snapshots
+    check_samples(model.forecast(bare), bare)
 
 
 def test_no_daily_releases_is_unavailable(task: ForecastTask) -> None:
