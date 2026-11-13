@@ -551,21 +551,12 @@ class ZoneRenewalModel(RenewalModel):
         return record
 
 
-def zone_variant(variant: Variant) -> Variant:
-    """Return a variant's description for its zone fit."""
-    return replace(
-        variant,
-        description=variant.description.replace("Province", "Zone", 1)
-        + " Health zones nested in provinces; provinces are zone sums.",
-    )
-
-
 def _factory(variant: Variant) -> ZoneRenewalModel:
     return ZoneRenewalModel(variant)
 
 
 for _name in ZONE_VARIANTS:
-    _variant = zone_variant(VARIANTS[_name])
+    _variant = VARIANTS[_name]
     register_model(
         _name,
         partial(_factory, _variant),

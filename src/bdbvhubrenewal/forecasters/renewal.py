@@ -218,8 +218,9 @@ VARIANTS: Final[dict[str, Variant]] = {
     for v in (
         Variant(
             "renewal",
-            "Province renewal (PyRenew): pooled Rt, gravity importation, "
-            "depletion, modelled delays and imputation.",
+            "Zone renewal (PyRenew): health zones nested in provinces, "
+            "pooled Rt, gravity importation, depletion, modelled delays and "
+            "imputation; provinces are zone sums.",
         ),
         Variant(
             "renewalsp",
@@ -231,8 +232,8 @@ VARIANTS: Final[dict[str, Variant]] = {
         ),
         Variant(
             "renewalbvd",
-            "Province renewal informed by BVDOutbreakSize Rt, as a tempered "
-            "pseudo-observation.",
+            "Zone renewal informed by BVDOutbreakSize Rt, as a tempered "
+            "pseudo-observation; provinces are zone sums.",
             base="BVD",
         ),
     )

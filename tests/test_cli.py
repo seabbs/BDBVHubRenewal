@@ -67,6 +67,37 @@ def test_cli_nowcast_writes_coherent_zones(tmp_path: Path) -> None:
 
 
 @pytest.mark.usefixtures("in_root")
+def test_cli_nowcast_takes_a_fit_s_own_zones(tmp_path: Path) -> None:
+    fit = tmp_path / "fit"
+    args = ["--data", str(DATA), "--vintage", "2026-10-17"]
+    assert (
+        main(["fit", "--config", "randomwalk", *args, "--out", str(fit)]) == 0
+    )
+    nowcast = ["nowcast", "--config", "randomwalk", "--fit", str(fit), *args]
+    assert main([*nowcast, "--out", str(tmp_path / "split")]) == 0
+    split = _written(tmp_path / "split")
+    zones = split.loc[split["location"].str.count("-") == 2]
+    # A fit with its own zone samples: each zone gets another zone's
+    # samples in its province, so the sums stay those of the provinces.
+    keys = ["location", "target_end_date", "output_type_id"]
+    own = zones[[*keys, "value"]].rename(columns={"output_type_id": "sample"})
+    own["province"] = own["location"].str.slice(0, 5)
+    own = own.sort_values(["province", "location", "target_end_date", "sample"])
+    own["value"] = own.groupby(["province", "target_end_date", "sample"])[
+        "value"
+    ].transform(lambda v: v.iloc[::-1].to_numpy())
+    own.drop(columns="province").to_csv(fit / "zones.csv.gz", index=False)
+    assert main([*nowcast, "--out", str(tmp_path / "own")]) == 0
+    table = _written(tmp_path / "own")
+    got = table.loc[table["location"].str.count("-") == 2].rename(
+        columns={"output_type_id": "sample"}
+    )
+    merged = got.merge(own, on=["location", "target_end_date", "sample"])
+    assert len(merged) == len(own)
+    assert (merged["value_x"] == merged["value_y"]).all()
+
+
+@pytest.mark.usefixtures("in_root")
 def test_cli_nowcast_without_zone_data_skips_zones(tmp_path: Path) -> None:
     data = tmp_path / "data"
     data.mkdir()

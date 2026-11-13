@@ -195,7 +195,7 @@ $\rho$ is the component's share of the provinces' total over the last 4 data wee
 ## Zone model (`renewal`) { #partially-pooled }
 
 `renewal` fits the health zones in one model, with each zone a place, on the axis set by their summed onsets.
-It fits the zones with a case in the random walks' walk window, about 55 of the hub's 519 zones at 2026-11-08.
+It fits the zones with a case in the random walks' walk window.
 The rest are silent and take the introduction layer of `randomwalknowcast` ([below](#silent-zones)).
 The fitted zones share the trend $\log R(t)$, ascertainment $\alpha$, the publication lag, the trend $\bar m$ of the missing-onset share, the share at risk $\nu$ and the importation share $\varepsilon$.
 Each province has its own Rt deviation $\delta_p$, delay and missing-onset deviation $\omega_p$, which its zones share.
@@ -257,7 +257,7 @@ The shared spreads and half-lives pool the zones within provinces and the provin
 The starting values are $\log R_z(0) = \log R(0) + v_z$, with $v$ summing to zero over the zones, $v \sim \mathcal{N}(0, \sigma_v^2)$ on its basis and $\sigma_v \sim \mathcal{N}^+(0, 0.3^2)$.
 The province part of $v$ starts $\xi$ and the rest starts $\eta$.
 The walks of $\log R(t)$, $\xi$, $\eta$ and the missing-onset share are anchored at their mean over the fit axis rather than at their first week.
-The data fix each walk's level, so a free start and free first steps trade off along a ridge that kept the province fits at maximum tree depth.
+The data fix each walk's level, so a free start and free first steps would trade off along a ridge that the sampler explores slowly.
 Without the anchoring and with one zone per province the model is the province model, which a test checks.
 
 Because zones share $\log R(t)$, $\delta_p(t)$, the delay, ascertainment and the publication lag within each draw, their trajectories move together where the data say they do.
