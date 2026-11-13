@@ -13,7 +13,8 @@ hash. Run from the repo root:
 
 The `_ft` models download the checkpoint from the release
 `chronos-ft-<hash>` (`forecasters.foundation.finetuned_adapter`).
-Publish it, then set `FINETUNED_HASH` to its hash:
+Publish it, then set its hash and adapter SHA-256 in
+`config/finetune.toml`:
 
     gh release create chronos-ft-<hash> -R seabbs/BDBVHubRenewal \
         --latest=false --title "Chronos-2 fine-tuned checkpoint <hash>" \
@@ -67,9 +68,9 @@ CODE = (
 )
 """Files the checkpoint depends on, hashed into its settings."""
 
-FOUNDATION_CODE = (foundation.hub_triangle, foundation._group)
+FOUNDATION_CODE = (foundation.hub_triangle, foundation.layout_block)
 """The functions of `foundation` the blocks are laid out with, hashed into
-the settings. Not the whole module, which pins the hash itself."""
+the settings."""
 
 SIM_DELAY_WEEKS = 8
 """The simulations' longest delay, after which a count is complete."""

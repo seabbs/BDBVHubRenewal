@@ -23,7 +23,7 @@ import pandas as pd
 
 from bdbvhubrenewal.data.dates import as_date, epiweek_end
 from bdbvhubrenewal.forecasters.base import NATIONAL
-from bdbvhubrenewal.forecasters.foundation import _group, hub_triangle
+from bdbvhubrenewal.forecasters.foundation import hub_triangle, layout_block
 
 __all__ = [
     "AHEAD_WEEKS",
@@ -175,7 +175,7 @@ def training_block(
     tri = hub_triangle(rows, source, places, end.isoformat(), max_lag=max_lag)
     start = tri.n_context
     horizon = len(tri.times) - start
-    group = _group(tri, "ragged", places, start)
+    group = layout_block(tri, "ragged", places, start)
     truth = final_counts(counts, source, places, tri.times)
     names = list(group["past_covariates"])
     lagged = np.stack(
