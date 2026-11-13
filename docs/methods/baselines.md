@@ -192,8 +192,9 @@ Each estimate is chosen by one rule.
    The walk spread also needs an own $\sigma_p^2 > 0$ ([below](#forecast)).
 3. **Fallback.** Otherwise it uses the pooled estimate of its nearest parent that meets the same rule, and otherwise the country's.
    A pooled estimate uses together the pair sums, errors and weekly changes of the parent's children with $\ell \ge 10$, or the parent's own where none has.
-4. **Zone delays.** A zone takes its province's delay, whatever its level.
+4. **Zone delays.** A zone with $\ell_z \ge 50$ cases a week uses its own delay, and otherwise its province's.
    A zone's own delay rests on few cases, and the nowcast divides by the share reported, so noise in it inflates the zones' nowcasts.
+   The threshold of 50 is the smallest of 5, 10, 20, 30, 50 and 100 whose zone backtest WIS was within 2% of the best, on both the reported and the complete target ([#178](https://github.com/seabbs/BDBVHubRenewal/pull/178)).
 
 ## Forecast
 
@@ -270,7 +271,7 @@ Where no week reaches 0.95, `randomwalknowcast` takes the first week as the late
 ## Health zones
 
 `randomwalk` and `randomwalknowcast` run on each zone's own release snapshots in the same way as for provinces.
-Each zone takes its size and walk spread by the rules [above](#own-or-pooled-estimates), and its province's delay.
+Each zone takes its delay, size and walk spread by the rules [above](#own-or-pooled-estimates).
 Province sample $Y^{(i)}(w)$ is apportioned over the zones in proportion to the zone model's own sample $x^{(i)}_z(w)$ of the same id and week:
 
 $$
