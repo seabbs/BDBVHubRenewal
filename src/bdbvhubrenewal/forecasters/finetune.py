@@ -4,9 +4,10 @@ r"""Training blocks for fine-tuning Chronos-2 on simulated outbreaks.
 See the Foundation models methods page for the training data.
 `scripts/finetune_simulate.R` simulates each outbreak's reporting
 triangle with epinowcast. `releases` turns a triangle into the hub
-target's weekly releases, and `training_block` cuts those releases at one
-release and lays them out with `foundation.hub_triangle` and the ragged
-layout's block, so lags, $D$ and the cut-off match inference. The block's
+target's weekly or daily releases, and `training_block` cuts those
+releases at one release and lays them out with `foundation.hub_triangle`
+and the ragged layout's block, so lags, $D$ and the cut-off match
+inference. The block's
 target runs past the cut-off with the outbreak's final counts, which is
 what Chronos-2 learns to forecast.
 """

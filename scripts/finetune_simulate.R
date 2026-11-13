@@ -8,14 +8,15 @@
 # observation model. Settings are drawn from a grid of plausible values
 # (`draw_settings`). The output is each outbreak's daily reporting
 # triangle, a count by place, onset day and report date. The weekly
-# training blocks sum it to onset weeks with the hub's weekly releases
-# (`forecasters.finetune.releases`), so they share the daily outbreaks'
-# generation times.
+# training blocks sum the same triangles to onset weeks
+# (`forecasters.finetune.releases`), so weekly and daily blocks come from
+# the same outbreaks.
 #
 # `enw_simulate` is on the feature/829-simulate-forecast branch of
-# epinowcast, pinned below. Install it into a local library first:
+# epinowcast, pinned below. Install it into a local library first, from
+# a clone of epinowcast:
 #
-#   git -C ~/code/epinowcast/epinowcast archive e084b080 | tar -x -C src
+#   git -C <epinowcast clone> archive e084b080 | tar -x -C src
 #   R CMD INSTALL --library=output/finetune/rlib src
 #
 # Run from the repo root:
