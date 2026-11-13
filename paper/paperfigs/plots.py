@@ -1,5 +1,8 @@
 """The results panel used for each study, and the SI score plots.
 
+The score is the WIS for quantile forecasts and the CRPS for samples, and
+the labels follow it.
+
 `results_panel` follows the layout of baselinenowcast-paper's
 `make_fig_hub_validation`: nowcasts over time across the top, then
 summary scores, then scores by location and by horizon. Relative scores
@@ -25,7 +28,12 @@ from matplotlib.figure import Figure
 from matplotlib.lines import Line2D
 from matplotlib.ticker import FixedLocator, FuncFormatter, NullFormatter
 
-from paperfigs.scores import BASELINE, relative_wis, summarise_scores
+from paperfigs.scores import (
+    STUDY_BASELINES,
+    metric_of,
+    relative_scores,
+    summarise_scores,
+)
 from paperfigs.style import (
     INK,
     bar_style,
@@ -52,12 +60,12 @@ _MOSAIC: Final = [
 
 _TITLES: Final = {
     "A": "Nowcasts over time",
-    "B": "Relative WIS",
-    "C": "Relative WIS, log scale",
+    "B": "Relative {m}",
+    "C": "Relative {m}, log scale",
     "D": "Bias",
     "E": "Coverage",
-    "F": "Relative WIS by location",
-    "G": "Relative WIS by horizon",
+    "F": "Relative {m} by location",
+    "G": "Relative {m} by horizon",
 }
 
 _RATIO_TICKS: Final = (0.1, 0.25, 0.5, 0.75, 1, 1.5, 2, 3, 5, 10)
@@ -126,6 +134,16 @@ def _spaced_origins(forecasts: pd.DataFrame, n_max: int = 5) -> list:
     return list(chosen)
 
 
+def _quantile_table(one: pd.DataFrame) -> pd.DataFrame:
+    """Quantiles by target date; sample forecasts use linear quantiles."""
+    if one["quantile_level"].notna().all():
+        return one.pivot_table(
+            index="target_date", columns="quantile_level", values="value"
+        )
+    levels = [0.05, 0.25, 0.5, 0.75, 0.95]
+    return one.groupby("target_date")["value"].quantile(levels).unstack()
+
+
 def _largest_location(observations: pd.DataFrame) -> str:
     final = observations.loc[
         observations["as_of_date"] == observations["as_of_date"].max()
@@ -186,9 +204,7 @@ def plot_nowcasts(
             one = fc.loc[(fc["model"] == model) & (fc["origin_date"] == origin)]
             if one.empty:
                 continue
-            wide = one.pivot_table(
-                index="target_date", columns="quantile_level", values="value"
-            )
+            wide = _quantile_table(one)
             colour = line_style(model, all_models)["color"]
             for lo, hi, alpha in ((0.05, 0.95, 0.15), (0.25, 0.75, 0.3)):
                 if lo in wide.columns and hi in wide.columns:
@@ -275,7 +291,7 @@ def _points_by(
     rel: pd.DataFrame,
     by: str,
     models: Sequence[str],
-    col: str = "rel_wis",
+    col: str = "rel_score",
     lines: bool = False,
 ) -> None:
     cats = sorted(rel[by].unique(), key=lambda v: (str(type(v)), v))
@@ -336,15 +352,16 @@ def results_panel(
     forecasts: pd.DataFrame,
     observations: pd.DataFrame,
     scores: pd.DataFrame,
-    baseline: str = BASELINE,
+    baseline: str | None = None,
     location: str | None = None,
     ribbon_models: Sequence[str] | None = None,
 ) -> Figure:
     """Plot the results panel for one study.
 
-    Panels: A nowcasts over time at spaced origin dates; B relative WIS;
-    C relative WIS on the log scale; D mean bias; E 50% and 90% coverage;
-    F relative WIS by location; G relative WIS by horizon.
+    Panels: A nowcasts over time at spaced origin dates; B relative score;
+    C relative score on the log scale; D mean bias; E 50% and 90%
+    coverage; F relative score by location; G relative score by horizon.
+    The score is the WIS for quantile forecasts and the CRPS for samples.
 
     Parameters
     ----------
@@ -354,8 +371,9 @@ def results_panel(
         Observations for that study.
     scores : pandas.DataFrame
         `score_forecasts` output for the forecasts.
-    baseline : str
-        Model relative scores are divided by.
+    baseline : str, optional
+        Model relative scores are divided by. Defaults to the study's
+        entry in `STUDY_BASELINES`.
     location : str, optional
         Location for panel A. Defaults to the one with most cases.
     ribbon_models : sequence of str, optional
@@ -375,6 +393,8 @@ def results_panel(
     study = _one_study(forecasts)
     obs = observations.loc[observations["study"] == study]
     sc = scores.loc[scores["study"] == study]
+    baseline = baseline or STUDY_BASELINES[study]
+    name = metric_of(sc).upper()
     models = model_order(sc["model"].unique())
     location = location or _largest_location(obs)
     ribbons = list(ribbon_models or _ribbon_models(models, baseline))
@@ -385,52 +405,55 @@ def results_panel(
         layout="constrained",
     )
     plot_nowcasts(axd["A"], forecasts, obs, ribbons, location, models)
-    rel = relative_wis(sc, baseline=baseline)
+    rel = relative_scores(sc, baseline=baseline)
     summary = summarise_scores(sc)
-    _bars_relative(axd["B"], rel, "rel_wis", models)
+    _bars_relative(axd["B"], rel, "rel_score", models)
     axd["B"].set_xlabel(f"Relative to {baseline}")
-    _bars_relative(axd["C"], rel, "rel_log_wis", models)
+    _bars_relative(axd["C"], rel, "rel_log_score", models)
     axd["C"].set_xlabel(f"Relative to {baseline}")
     _bars_bias(axd["D"], summary, models)
     _bars_coverage(axd["E"], summary, models)
     for key in "BCDE":
         _model_rows(axd[key], models, show_names=key == "B")
     _points_by(
-        axd["F"], relative_wis(sc, ["location"], baseline), "location", models
+        axd["F"],
+        relative_scores(sc, ["location"], baseline),
+        "location",
+        models,
     )
-    axd["F"].set_ylabel("Relative WIS")
+    axd["F"].set_ylabel(f"Relative {name}")
     _points_by(
         axd["G"],
-        relative_wis(sc, ["horizon"], baseline),
+        relative_scores(sc, ["horizon"], baseline),
         "horizon",
         models,
         lines=True,
     )
     unit = _STEP_UNIT.get(_step_days(forecasts), "steps")
     axd["G"].set_xlabel(f"Horizon ({unit})")
-    axd["G"].set_ylabel("Relative WIS")
+    axd["G"].set_ylabel(f"Relative {name}")
     for letter in PANEL_LETTERS:
-        _label(axd[letter], letter, _TITLES[letter])
+        _label(axd[letter], letter, _TITLES[letter].format(m=name))
     _legend(fig, models)
     return fig
 
 
 def si_scores_by_location_horizon(
     scores: pd.DataFrame,
-    baseline: str = BASELINE,
-    col: str = "rel_wis",
+    baseline: str | None = None,
+    col: str = "rel_score",
     ncol: int = 4,
 ) -> Figure:
-    """Plot relative WIS by horizon for every location, one panel each.
+    """Plot the relative score by horizon for every location.
 
     Parameters
     ----------
     scores : pandas.DataFrame
         `score_forecasts` output for one study.
-    baseline : str
-        Reference model.
+    baseline : str, optional
+        Reference model. Defaults to the study's in `STUDY_BASELINES`.
     col : str
-        `rel_wis` or `rel_log_wis`.
+        `rel_score` or `rel_log_score`.
     ncol : int
         Panels per row.
 
@@ -439,7 +462,8 @@ def si_scores_by_location_horizon(
     matplotlib.figure.Figure
         One panel per location, sharing axes.
     """
-    rel = relative_wis(scores, ["location", "horizon"], baseline)
+    name = metric_of(scores).upper()
+    rel = relative_scores(scores, ["location", "horizon"], baseline)
     models = model_order(rel["model"].unique())
     locs = sorted(rel["location"].unique())
     nrow = int(np.ceil(len(locs) / ncol))
@@ -466,8 +490,8 @@ def si_scores_by_location_horizon(
         )
         ax.set_title(loc)
     _pad_log_limits(flat[0], rel[col].to_numpy(dtype=float))
-    scale = "log scale" if col == "rel_log_wis" else "natural scale"
-    fig.supylabel(f"Relative WIS ({scale})", fontsize=9)
+    scale = "log scale" if col == "rel_log_score" else "natural scale"
+    fig.supylabel(f"Relative {name} ({scale})", fontsize=9)
     for ax in flat[max(0, len(locs) - ncol) : len(locs)]:
         ax.set_xlabel("Horizon")
     _legend_models(fig, models)
@@ -487,7 +511,7 @@ def _legend_models(fig: Figure, models: Sequence[str]) -> None:
 
 
 def si_wis_over_time(scores: pd.DataFrame) -> Figure:
-    """Plot mean WIS by origin date, natural and log scale.
+    """Plot the mean score by origin date, natural and log scale.
 
     Parameters
     ----------
@@ -497,16 +521,17 @@ def si_wis_over_time(scores: pd.DataFrame) -> Figure:
     Returns
     -------
     matplotlib.figure.Figure
-        Two panels: WIS on a log axis, and log-scale WIS.
+        Two panels: the score on a log axis, and the log-scale score.
     """
+    name = metric_of(scores).upper()
     summary = summarise_scores(scores, ["origin_date"])
     models = model_order(summary["model"].unique())
     fig, axes = plt.subplots(
         1, 2, figsize=(11, 3.8), sharex=True, layout="constrained"
     )
     for ax, col, letter, title in (
-        (axes[0], "wis", "A", "WIS"),
-        (axes[1], "log_wis", "B", "WIS, log scale"),
+        (axes[0], "score", "A", name),
+        (axes[1], "log_score", "B", f"{name}, log scale"),
     ):
         for m in models:
             one = summary.loc[summary["model"] == m]
@@ -521,7 +546,7 @@ def si_wis_over_time(scores: pd.DataFrame) -> Figure:
     axes[0].set_yscale("log")
     axes[0].yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:g}"))
     axes[0].yaxis.set_minor_formatter(FuncFormatter(lambda v, _: f"{v:g}"))
-    axes[0].set_ylabel("Mean WIS")
-    axes[1].set_ylabel("Mean WIS of log(x + 1)")
+    axes[0].set_ylabel(f"Mean {name}")
+    axes[1].set_ylabel(f"Mean {name} of log(x + 1)")
     _legend_models(fig, models)
     return fig

@@ -2,7 +2,7 @@ from make_figures import render
 
 
 def test_render_writes_every_figure(tmp_path) -> None:
-    paths = render(tmp_path, ["ebola"])
+    paths = render(tmp_path, ["ebola"], n_samples=20)
     assert {p.name for p in paths} == {
         "ebola-results.png",
         "ebola-si-location-horizon.png",

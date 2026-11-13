@@ -43,6 +43,7 @@ def test_matches_scoringutils(compared, column, metric) -> None:
         rows[column].reset_index(drop=True),
         rows[f"{column}_su"].reset_index(drop=True),
         check_names=False,
+        check_dtype=False,
         rtol=1e-9,
         atol=1e-12,
     )

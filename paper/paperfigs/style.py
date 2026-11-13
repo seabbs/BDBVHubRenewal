@@ -48,12 +48,15 @@ _PALETTE: Final = (
     "#e34948",
 )
 
-_GREYS: Final = ("#5f5e5a", "#898781", "#b4b2a9")
+_GREYS: Final = ("#3d3c39", "#a3a198", "#c3c2b7")
 
 _DASHES: Final = {"solid": "-", "dashed": (0, (5, 2.5))}
 
 _STYLE: Final[dict[str, tuple[str, str]]] = {
+    "hub_baseline": ("#5f5e5a", "solid"),
+    "BDBVHub-baseline": ("#5f5e5a", "solid"),
     "randomwalknowcast": (_PALETTE[1], "solid"),
+    "randomwalk": (_PALETTE[7], "solid"),
     "fm_chronos_daily_ragged_ft": (_PALETTE[0], "solid"),
     "fm_chronos_daily_ragged": (_PALETTE[0], "dashed"),
     "fm_chronos_weekly_ragged_ft": (_PALETTE[6], "solid"),
@@ -61,12 +64,12 @@ _STYLE: Final[dict[str, tuple[str, str]]] = {
     "epinowcast": (_PALETTE[2], "solid"),
     "hub_ensemble": (_PALETTE[3], "solid"),
     "hub_team_a": (_PALETTE[4], "solid"),
-    "hub_team_b": (_PALETTE[7], "solid"),
-    "hub_team_c": (_PALETTE[5], "solid"),
+    "hub_team_b": (_PALETTE[5], "solid"),
+    "hub_team_c": ("#898781", "solid"),
 }
 
 MODEL_ORDER: Final = tuple(_STYLE)
-"""Order models are listed in: baseline, foundation models, others."""
+"""Order models are listed in: baselines, foundation models, others."""
 
 
 def model_order(models: Sequence[str]) -> list[str]:

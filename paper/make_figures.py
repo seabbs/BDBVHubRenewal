@@ -24,19 +24,21 @@ from paperfigs.scores import score_forecasts
 from paperfigs.style import theme
 
 
-def render(out: Path, studies: Sequence[str] = STUDIES) -> list[Path]:
+def render(
+    out: Path, studies: Sequence[str] = STUDIES, n_samples: int = 100
+) -> list[Path]:
     """Write every figure for `studies` to `out` and return the paths."""
     out.mkdir(parents=True, exist_ok=True)
     written = []
     with theme():
         for study in studies:
-            fc, obs = dummy_study(study)
+            fc, obs = dummy_study(study, n_samples=n_samples)
             scores = score_forecasts(fc)
             figures = {
                 "results": results_panel(fc, obs, scores),
                 "si-location-horizon": si_scores_by_location_horizon(scores),
                 "si-location-horizon-log": si_scores_by_location_horizon(
-                    scores, col="rel_log_wis"
+                    scores, col="rel_log_score"
                 ),
                 "si-wis-over-time": si_wis_over_time(scores),
             }

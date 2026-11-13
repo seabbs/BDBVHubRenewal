@@ -1,5 +1,7 @@
 """Dummy forecasts and observations in the paper schema.
 
+Germany has quantile forecasts; synthetic and Ebola have count samples.
+
 These stand in for the real study outputs while the figures are drafted.
 Each study gets an epidemic wave per location, reporting delays that fill
 in recent counts, and models whose errors grow with the share of counts
@@ -78,6 +80,8 @@ class StudySetup:
         Range of peak counts per step across locations.
     models : dict
         Model name to `ModelSkill`.
+    form : str
+        `quantile` or `sample`, the forecast form the study scores.
     """
 
     locations: tuple[str, ...]
@@ -91,9 +95,12 @@ class StudySetup:
     mean_delay: float
     scale: tuple[float, float]
     models: dict[str, ModelSkill]
+    form: str
 
 
 _BASE = ModelSkill(0.0, 1.0, 1.4)
+_RW = ModelSkill(-0.1, 1.3, 1.2)
+_HUB_BASE = ModelSkill(-0.05, 1.1, 1.3)
 _FM = ModelSkill(0.08, 1.15, 0.7)
 _FM_FT = ModelSkill(0.0, 0.75, 1.0)
 _FM_WEEKLY = ModelSkill(-0.05, 1.25, 0.8)
@@ -112,6 +119,7 @@ STUDY_SETUP: Final[dict[str, StudySetup]] = {
         mean_delay=5.0,
         scale=(40.0, 400.0),
         models={
+            "randomwalk": _RW,
             "randomwalknowcast": _BASE,
             "fm_chronos_daily_ragged": _FM,
             "fm_chronos_daily_ragged_ft": _FM_FT,
@@ -119,6 +127,7 @@ STUDY_SETUP: Final[dict[str, StudySetup]] = {
             "fm_chronos_weekly_ragged_ft": _FM_WEEKLY_FT,
             "epinowcast": ModelSkill(0.0, 0.65, 1.05),
         },
+        form="sample",
     ),
     "germany": StudySetup(
         locations=(
@@ -141,14 +150,17 @@ STUDY_SETUP: Final[dict[str, StudySetup]] = {
         mean_delay=6.0,
         scale=(30.0, 300.0),
         models={
+            "randomwalk": _RW,
             "randomwalknowcast": _BASE,
             "fm_chronos_daily_ragged": _FM,
             "fm_chronos_daily_ragged_ft": _FM_FT,
+            "hub_baseline": _HUB_BASE,
             "hub_ensemble": ModelSkill(0.03, 0.8, 1.1),
             "hub_team_a": ModelSkill(0.15, 0.9, 0.9),
             "hub_team_b": ModelSkill(-0.1, 1.05, 1.3),
             "hub_team_c": ModelSkill(0.05, 1.3, 0.6),
         },
+        form="quantile",
     ),
     "ebola": StudySetup(
         locations=tuple(f"loc{i:02d}" for i in range(1, 7)),
@@ -162,13 +174,16 @@ STUDY_SETUP: Final[dict[str, StudySetup]] = {
         mean_delay=1.2,
         scale=(5.0, 60.0),
         models={
+            "randomwalk": _RW,
             "randomwalknowcast": _BASE,
             "fm_chronos_weekly_ragged": _FM_WEEKLY,
             "fm_chronos_weekly_ragged_ft": _FM_WEEKLY_FT,
+            "BDBVHub-baseline": _HUB_BASE,
             "hub_ensemble": ModelSkill(0.05, 0.85, 1.0),
             "hub_team_a": ModelSkill(0.2, 1.0, 0.8),
             "hub_team_b": ModelSkill(-0.05, 1.2, 1.2),
         },
+        form="sample",
     ),
 }
 """Dummy setup for each study."""
@@ -238,6 +253,7 @@ def _forecasts(
     final: np.ndarray,
     origins: np.ndarray,
     rng: np.random.Generator,
+    n_samples: int,
 ) -> pd.DataFrame:
     h = np.arange(setup.horizons[0], setup.horizons[1] + 1)
     # Error scale grows with the share not yet reported, and past the
@@ -262,28 +278,46 @@ def _forecasts(
             err = rng.normal(skill.bias, sd)
             median = (truth + 1) * np.exp(err) - 1
             sigma = skill.spread * sd
-            q = (median[:, None] + 1) * np.exp(sigma[:, None] * z) - 1
+            if setup.form == "quantile":
+                draws = z[None, :]
+            else:
+                draws = rng.standard_normal((len(truth), n_samples))
+            q = (median[:, None] + 1) * np.exp(sigma[:, None] * draws) - 1
             q = np.maximum(q, 0)
-            n = len(truth)
+            if setup.form == "sample":
+                # Count samples, as a model of case counts gives.
+                q = np.round(q)
+            n, k = q.shape
             parts.append(
                 pd.DataFrame(
                     {
                         "study": study,
                         "model": model,
                         "location": loc,
-                        "origin_date": np.repeat(dates[o_idx], z.size),
-                        "target_date": np.repeat(dates[t_idx], z.size),
-                        "horizon": np.repeat(h_idx, z.size),
-                        "quantile_level": np.tile(QUANTILE_LEVELS, n),
+                        "origin_date": np.repeat(dates[o_idx], k),
+                        "target_date": np.repeat(dates[t_idx], k),
+                        "horizon": np.repeat(h_idx, k),
+                        "quantile_level": (
+                            np.tile(QUANTILE_LEVELS, n)
+                            if setup.form == "quantile"
+                            else np.nan
+                        ),
+                        "sample_id": (
+                            pd.NA
+                            if setup.form == "quantile"
+                            else np.tile(np.arange(k), n)
+                        ),
                         "value": q.ravel(),
-                        "truth": np.repeat(truth, z.size),
+                        "truth": np.repeat(truth, k),
                     }
                 )
             )
     return pd.concat(parts, ignore_index=True)
 
 
-def dummy_study(study: str, seed: int = 1) -> tuple[pd.DataFrame, pd.DataFrame]:
+def dummy_study(
+    study: str, seed: int = 1, n_samples: int = 100
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Make dummy forecasts and observations for one study.
 
     Parameters
@@ -292,6 +326,8 @@ def dummy_study(study: str, seed: int = 1) -> tuple[pd.DataFrame, pd.DataFrame]:
         A key of `STUDY_SETUP`.
     seed : int
         Random seed.
+    n_samples : int
+        Samples per forecast, for studies scored on samples.
 
     Returns
     -------
@@ -308,7 +344,7 @@ def dummy_study(study: str, seed: int = 1) -> tuple[pd.DataFrame, pd.DataFrame]:
     )
     final = _final_counts(setup, rng)
     obs = _observations(setup, study, dates, final, origins, rng)
-    fc = _forecasts(setup, study, dates, final, origins, rng)
+    fc = _forecasts(setup, study, dates, final, origins, rng, n_samples)
     return (
         validate_forecasts(fc.loc[:, list(FORECAST_COLUMNS)]),
         validate_observations(obs.loc[:, list(OBSERVATION_COLUMNS)]),

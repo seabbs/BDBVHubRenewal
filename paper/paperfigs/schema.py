@@ -35,6 +35,7 @@ FORECAST_KEYS: Final = (
 FORECAST_COLUMNS: Final = (
     *FORECAST_KEYS,
     "quantile_level",
+    "sample_id",
     "value",
     "truth",
 )
@@ -76,8 +77,8 @@ def validate_forecasts(df: pd.DataFrame) -> pd.DataFrame:
     Returns
     -------
     pandas.DataFrame
-        The table with columns in schema order, dates as timestamps and
-        `horizon` as an integer.
+        The table with columns in schema order, dates as timestamps,
+        `horizon` as an integer and `sample_id` as a nullable integer.
 
     Raises
     ------
@@ -90,31 +91,52 @@ def validate_forecasts(df: pd.DataFrame) -> pd.DataFrame:
     for col in ("origin_date", "target_date"):
         out[col] = pd.to_datetime(out[col])
     out["horizon"] = out["horizon"].astype(int)
-    lvl = out["quantile_level"].to_numpy(dtype=float)
+    out["quantile_level"] = pd.to_numeric(out["quantile_level"]).astype(float)
+    out["sample_id"] = pd.to_numeric(out["sample_id"]).astype("Int64")
+    out["value"] = out["value"].astype(float)
+    out["truth"] = pd.to_numeric(out["truth"]).astype(float)
+    is_q = out["quantile_level"].notna().to_numpy()
+    is_s = out["sample_id"].notna().to_numpy()
+    if (is_q == is_s).any():
+        raise ValueError(
+            "Each row needs exactly one of quantile_level or sample_id."
+        )
+    keys = list(FORECAST_KEYS)
+    form = pd.Series(is_q, index=out.index).groupby(
+        [out[k] for k in keys], sort=False
+    )
+    if (form.transform("min") != form.transform("max")).any():
+        raise ValueError("Every row of a forecast must use one form.")
+    if (out["value"].to_numpy() < 0).any():
+        raise ValueError("Every value must be at least zero.")
+    truth = out.groupby(keys, sort=False)["truth"]
+    if (truth.transform("max") - truth.transform("min") > 0).any():
+        raise ValueError("truth differs between rows of one forecast.")
+    if out.loc[is_s].duplicated([*keys, "sample_id"]).any():
+        raise ValueError("A forecast has duplicate sample_id values.")
+    _check_quantiles(out.loc[is_q], keys)
+    return out
+
+
+def _check_quantiles(q: pd.DataFrame, keys: list[str]) -> None:
+    if q.empty:
+        return
+    lvl = q["quantile_level"].to_numpy()
     if not ((lvl > 0) & (lvl < 1)).all():
         raise ValueError("Every quantile_level must be in (0, 1).")
-    if (out["value"].to_numpy(dtype=float) < 0).any():
-        raise ValueError("Every value must be at least zero.")
-    keys = list(FORECAST_KEYS)
-    if out.duplicated([*keys, "quantile_level"]).any():
+    if q.duplicated([*keys, "quantile_level"]).any():
         raise ValueError("A forecast has duplicate quantile levels.")
-    groups = out.groupby(keys, sort=False, dropna=False)
-    truth = groups["truth"]
-    spread = truth.transform("max") - truth.transform("min")
-    if (spread > 0).any():
-        raise ValueError("truth differs between rows of one forecast.")
     has_median = (
-        out.assign(_median=np.isclose(lvl, 0.5))
-        .groupby(keys, sort=False, dropna=False)["_median"]
+        q.assign(_median=np.isclose(lvl, 0.5))
+        .groupby(keys, sort=False)["_median"]
         .any()
     )
     if not has_median.all():
-        raise ValueError("Every forecast needs the quantile level 0.5.")
-    ordered = out.sort_values([*keys, "quantile_level"])
-    step = ordered.groupby(keys, sort=False, dropna=False)["value"].diff()
+        raise ValueError("Every quantile forecast needs the level 0.5.")
+    ordered = q.sort_values([*keys, "quantile_level"])
+    step = ordered.groupby(keys, sort=False)["value"].diff()
     if (step < -1e-9).any():
         raise ValueError("Quantiles decrease with level in some forecast.")
-    return out
 
 
 def validate_observations(df: pd.DataFrame) -> pd.DataFrame:
