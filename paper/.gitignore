@@ -1,2 +1,5 @@
 # Rendered by `task figures`.
 figures/
+# Written by the workflow.
+results/
+.snakemake/

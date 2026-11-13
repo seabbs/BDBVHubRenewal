@@ -1,0 +1,210 @@
+"""The paper's evaluation, from each study's data to its figures and tables.
+
+Run from `paper/` with `task pipeline:dev` or `task pipeline:paper`.
+Every step is `python -m paperpipe <step>`. Outputs go to
+`<results>/<mode>/`, so development and paper runs never share a file.
+
+Targets:
+
+- `development`: the development seeds and the German first half only;
+- `paper`: the held-out seeds and both German halves, split by half.
+
+The held-out sets are the `heldout` block of `config.yaml`.
+`paperpipe.config.run_settings` keeps them out of a development run, and
+the `table` rule fails if a development forecast table holds any of them.
+"""
+
+import json
+import shlex
+import sys
+from pathlib import Path
+
+PAPER = Path(workflow.basedir).parent
+sys.path.insert(0, str(PAPER))
+
+from paperpipe.config import MODES, run_settings  # noqa: E402
+from paperpipe.outputs import MAIN_TABLES, SI_TABLES, figure_names  # noqa: E402
+
+
+configfile: str(PAPER / "workflow" / "config.yaml")
+
+
+workdir: str(PAPER)
+
+
+R = config["results"]
+STUDIES = config["studies"]
+
+
+wildcard_constraints:
+    mode="|".join(MODES),
+    study="|".join(STUDIES),
+
+
+def settings(w):
+    return run_settings(config, w.mode)
+
+
+def limits(w):
+    """Data limits of a study's loader, as command line arguments."""
+    s = settings(w)
+    if w.study == "synthetic":
+        return "--seeds " + " ".join(str(x) for x in s.synthetic_seeds)
+    if w.study == "germany" and s.germany_before is not None:
+        return f"--before {s.germany_before:%Y-%m-%d}"
+    return ""
+
+
+def figures(mode, study):
+    return [
+        f"{R}/{mode}/figures/{part}/{study}-{name}.png"
+        for part in ("main", "si")
+        for name in figure_names(study, part)
+    ]
+
+
+def tables(mode, study):
+    main = [*MAIN_TABLES, *(["grid"] if study == "synthetic" else [])]
+    return [f"{R}/{mode}/tables/main/{study}-{n}.csv" for n in main] + [
+        f"{R}/{mode}/tables/si/{study}-{n}.csv" for n in SI_TABLES
+    ]
+
+
+def outputs(mode):
+    return [
+        path
+        for study in STUDIES
+        for path in [*figures(mode, study), *tables(mode, study)]
+    ]
+
+
+rule development:
+    input:
+        outputs("development"),
+
+
+rule paper:
+    input:
+        outputs("paper"),
+
+
+rule data:
+    output:
+        observations=f"{R}/{{mode}}/data/{{study}}-observations.csv.gz",
+        locations=f"{R}/{{mode}}/data/{{study}}-locations.csv",
+    params:
+        limits=limits,
+        delay=lambda w: (
+            f"--delay {config['truth_delay'][w.study]}"
+            if w.study in config.get("truth_delay", {})
+            else ""
+        ),
+    shell:
+        "python -m paperpipe data {wildcards.study} {params.limits} "
+        "{params.delay} --observations {output.observations} "
+        "--locations {output.locations}"
+
+
+rule forecasts:
+    input:
+        rules.data.output.observations,
+    output:
+        f"{R}/{{mode}}/raw/{{study}}.csv.gz",
+    params:
+        limits=limits,
+        n_samples=config["n_samples"],
+    shell:
+        "python -m paperpipe forecasts {wildcards.study} {params.limits} "
+        "--n-samples {params.n_samples} --out {output}"
+
+
+rule table:
+    input:
+        rules.forecasts.output,
+    output:
+        f"{R}/{{mode}}/forecasts/{{study}}.csv.gz",
+    params:
+        config=shlex.quote(json.dumps(config)),
+    shell:
+        "python -m paperpipe table --raw {input} --mode {wildcards.mode} "
+        "--config {params.config} --out {output}"
+
+
+rule truth:
+    input:
+        observations=rules.data.output.observations,
+        locations=rules.data.output.locations,
+    output:
+        f"{R}/{{mode}}/truth/{{study}}.csv.gz",
+    shell:
+        "python -m paperpipe truth --observations {input.observations} "
+        "--locations {input.locations} --out {output}"
+
+
+rule scores:
+    input:
+        forecasts=rules.table.output,
+        truth=rules.truth.output,
+    output:
+        f"{R}/{{mode}}/scores/{{study}}.csv.gz",
+    shell:
+        "python -m paperpipe scores --forecasts {input.forecasts} "
+        "--truth {input.truth} --out {output}"
+
+
+def study_split(mode, study):
+    s = run_settings(config, mode)
+    if study == "germany" and s.germany_split is not None:
+        return f"--split {s.germany_split:%Y-%m-%d}"
+    return ""
+
+
+def study_files(study):
+    """A study's data, forecasts and scores, with `{mode}` left open."""
+    return {
+        "forecasts": f"{R}/{{mode}}/forecasts/{study}.csv.gz",
+        "observations": f"{R}/{{mode}}/data/{study}-observations.csv.gz",
+        "locations": f"{R}/{{mode}}/data/{study}-locations.csv",
+        "scores": f"{R}/{{mode}}/scores/{study}.csv.gz",
+    }
+
+
+# Each study has its own figures and tables, so each gets its own rules.
+for study in STUDIES:
+
+    rule:
+        name:
+            f"figures_{study}"
+        input:
+            **study_files(study),
+        output:
+            figures("{mode}", study),
+        params:
+            study=study,
+            split=lambda w, study=study: study_split(w.mode, study),
+            main=f"{R}/{{mode}}/figures/main",
+            si=f"{R}/{{mode}}/figures/si",
+        shell:
+            "python -m paperpipe figures {params.study} "
+            "--forecasts {input.forecasts} "
+            "--observations {input.observations} "
+            "--scores {input.scores} --locations {input.locations} "
+            "--main-dir {params.main} --si-dir {params.si} {params.split}"
+
+    rule:
+        name:
+            f"score_tables_{study}"
+        input:
+            locations=study_files(study)["locations"],
+            scores=study_files(study)["scores"],
+        output:
+            tables("{mode}", study),
+        params:
+            study=study,
+            split=lambda w, study=study: study_split(w.mode, study),
+            main=f"{R}/{{mode}}/tables/main",
+            si=f"{R}/{{mode}}/tables/si",
+        shell:
+            "python -m paperpipe score-tables {params.study} "
+            "--scores {input.scores} --locations {input.locations} "
+            "--main-dir {params.main} --si-dir {params.si} {params.split}"

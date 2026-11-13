@@ -81,7 +81,9 @@ def test_guard_passes_development_rows() -> None:
     ok = pd.concat(
         [
             _table("germany", "DE", "2022-02-09"),
-            _table("synthetic", synthetic_location(7001, "sim01"), "2024-03-01"),
+            _table(
+                "synthetic", synthetic_location(7001, "sim01"), "2024-03-01"
+            ),
         ]
     )
     check_no_heldout(ok, dev)

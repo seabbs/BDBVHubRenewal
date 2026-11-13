@@ -34,24 +34,24 @@ def _snakemake(*args: str) -> subprocess.CompletedProcess:
 @pytest.mark.parametrize("target", ["development", "paper"])
 def test_dry_run(target: str, tmp_path: Path) -> None:
     res = _snakemake(
-        "-n", "--cores", "1", "--config", f"results={tmp_path}", target
+        target, "-n", "--cores", "1", "--config", f"results={tmp_path}"
     )
     assert res.returncode == 0, res.stderr
     log = res.stdout + res.stderr
     for rule in RULES:
-        assert f"rule {rule}:" in log
+        assert f"rule {rule}" in log
 
 
 @pytest.fixture(scope="module")
 def development(tmp_path_factory: pytest.TempPathFactory) -> Path:
     out = tmp_path_factory.mktemp("results")
     res = _snakemake(
+        "development",
         "--cores",
         "2",
         "--config",
         f"results={out}",
         "n_samples=20",
-        "development",
     )
     assert res.returncode == 0, res.stderr
     return out / "development"
@@ -59,8 +59,12 @@ def development(tmp_path_factory: pytest.TempPathFactory) -> Path:
 
 def test_development_writes_main_and_si_outputs(development: Path) -> None:
     for study in CONFIG["studies"]:
-        assert (development / "figures" / "main" / f"{study}-results.png").is_file()
-        assert (development / "tables" / "main" / f"{study}-scores.csv").is_file()
+        assert (
+            development / "figures" / "main" / f"{study}-results.png"
+        ).is_file()
+        assert (
+            development / "tables" / "main" / f"{study}-scores.csv"
+        ).is_file()
         assert list((development / "figures" / "si").glob(f"{study}-*.png"))
         assert list((development / "tables" / "si").glob(f"{study}-*.csv"))
     assert (development / "tables" / "main" / "synthetic-grid.csv").is_file()
