@@ -46,7 +46,7 @@ def test_load_config() -> None:
     assert BacktestConfig().skip_origins == ()
     # The truth delay is estimated from the data unless fixed.
     assert cfg.truth_delay is None
-    assert cfg.truth_level == 0.99
+    assert cfg.truth_level == 0.98
     assert BacktestConfig().truth_delay is None
 
 
@@ -59,7 +59,7 @@ def test_load_config_takes_a_fixed_truth_delay(tmp_path: Path) -> None:
     path.write_text(text.replace('truth_delay = "auto"', 'truth_delay = "x"'))
     with pytest.raises(ValueError, match="truth_delay"):
         load_config(path)
-    path.write_text(text.replace("truth_level = 0.99", "truth_level = 2"))
+    path.write_text(text.replace("truth_level = 0.98", "truth_level = 2"))
     with pytest.raises(ValueError, match="truth_level"):
         load_config(path)
 
