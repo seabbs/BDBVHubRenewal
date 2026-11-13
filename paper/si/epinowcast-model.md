@@ -2,44 +2,51 @@
 
 We simulated each synthetic outbreak from the generative model of epinowcast @placeholder.
 We used `enw_simulate()`, which runs the epinowcast Stan model with fixed parameters and no likelihood.
-It then draws reported counts from the model's generated quantities, so the simulated data come from the same model epinowcast fits.
+It draws reported counts from the model's generated quantities, so the simulated data come from the same model epinowcast fits.
 `enw_simulate()` is on the `feature/829-simulate-forecast` branch of epinowcast, at commit `e084b08089796ca7def8dac43fd62d29ae34258b`.
-The simulation script is `scripts/finetune_simulate.R`, and the settings drawn for each outbreak are in the synthetic scenario grid table.
-Each outbreak is simulated on a daily time step, by place, with a longest reporting delay of 56 days.
+The simulation script is `scripts/finetune_simulate.R`, with the grid named r2-real, and the settings drawn for each outbreak are in the synthetic scenario grid table.
+Each outbreak first draws its design, the categorical choices below, and then its continuous settings.
+Outbreaks are simulated on a daily time step by stratum, with a longest reporting delay of 8 weeks, or 12 weeks in a quarter of outbreaks.
 A parameter we did not set is drawn from its epinowcast prior.
+
+## Strata
+
+An outbreak has one stratum, 2 to 26 places, 2 to 8 age groups in one place, or 6 to 16 places by 3 to 7 age groups.
+Strata share part of their growth through a weighted sum of a shared path and a path of their own, and places by ages also share a path by place.
+Some places are quiet, seeded with almost no cases.
+The initial latent cases (`expr_lelatent_int`) are a drawn total split over strata by log-normal weights.
 
 ## Expectation model
 
-Expected cases follow a renewal process, set up with `enw_expectation(r = ~1)` and a generation time.
-The expected latent cases on day $t$ are $\lambda_t = R_t \sum_{s=1}^{45} g_s \lambda_{t-s}$, where $g_s$ is the generation time.
-The generation time is a gamma distribution discretised to 1 to 45 days, with its mean and coefficient of variation drawn per outbreak.
-The log of $R_t$ is supplied to `enw_simulate()` as `growth_rate`, one value per place and day.
-Each place's log $R_t$ path is a weighted sum of a path shared by all places and a path of its own.
-A path starts at a drawn initial value, has a Poisson number of step changes at random days and a daily random walk, and is held between -1.2 and 1.2.
-The initial latent cases (`expr_lelatent_int`) are a drawn total split over places by log-normal weights.
-Expected onsets are the latent cases with no latent reporting delay, scaled by the latent-to-observation proportion.
+Expected cases come from `enw_expectation()`, driven by a daily growth path given to `enw_simulate()` as `growth_rate`.
+In the two renewal processes the path is log $R_t$, and expected latent cases are $\lambda_t = R_t \sum_{s=1}^{45} g_s \lambda_{t-s}$ with a discretised gamma generation time $g_s$.
+A log $R_t$ path starts at a drawn value, has a Poisson number of step changes and a daily random walk, and is held between -1.2 and 1.2.
+One renewal process adds an incubation period, a discretised gamma delay from latent cases to onsets (`latent_reporting_delay`).
+The other four processes have no generation time, and the path is the daily growth rate of log incidence.
+It is a weekly random walk, white noise (a random walk on log incidence), one to three step changes, or a smooth sine wave, held between -0.06 and 0.06 a day.
 
 ## Reference date model
 
 The reporting delay of an onset is set by `enw_reference()`.
-The parametric part is a lognormal delay, with a log mean (`refp_mean_int`) and log standard deviation (`refp_sd_int`) drawn per outbreak.
-The log mean changes linearly by week of onset, through a `week` effect.
-In outbreaks with several places, each place has its own random effect on the log mean, with a drawn standard deviation.
-The non-parametric part adds a random effect for each delay, `~ 0 + (1 | delay)`, on the logit hazard of being reported.
-The standard deviation of these delay effects is drawn per outbreak.
+It is a parametric delay alone, a non-parametric hazard alone, or both.
+The parametric delay is a lognormal, gamma or exponential, with a drawn mean and coefficient of variation.
+The non-parametric hazard has random effects by delay, by onset week, or both, on the logit hazard of being reported.
+With no parametric delay, the hazard's intercept gives a geometric delay with the drawn mean.
+Strata have random effects on the delay.
+One outbreak in five has a stable delay.
+In the others the delay may drift linearly in its location and spread, step up to three times at random weeks, and follow a weekly random walk (`rw(week)`).
 
 ## Report date model
 
 Effects of the report date are set by `enw_report()`.
-A random effect for each day of the week of report, `~ 0 + (1 | day_of_week)`, acts on the logit hazard of being reported.
-Their standard deviation is drawn per outbreak.
+They may include random effects by day of the week of report, a `holiday` covariate that lowers reporting on a few dates, and report week effects, `(1 | week)` or `rw(week)`.
 In half the outbreaks reports are made every day.
-In the rest, `enw_dayofweek_structural_reporting()` limits reports to one to three weekdays, drawn from Monday to Friday.
-Cases are then reported only on those days.
+In the rest, a structural table from `enw_structural_reporting_metadata()`, given to `enw_report(structural)`, limits reports to one to three weekdays, drawn from Monday to Friday.
+The report days may change once, at a drawn date.
 
 ## Observation model
 
-The count of cases with onset on day $t$ reported with delay $d$ is negative binomial, set by `enw_obs(family = "negbin")`.
+The count of cases with onset on day $t$ reported with delay $d$ is negative binomial (NB2 or NB1) or Poisson, set by `enw_obs(family)`.
 Its mean is the expected onsets on day $t$ times the probability of a delay of $d$ given the reference and report date models.
-Its overdispersion is set by `sqrt_phi`, drawn per outbreak, with $\phi = 1 / \texttt{sqrt\_phi}^2$ so that larger values give more overdispersion.
-An outbreak is kept if it has between 50 and 30,000 reported cases, and otherwise its settings are drawn again.
+The overdispersion `sqrt_phi` is drawn on the NB2 scale, and the NB1 dispersion is scaled to match it (epinowcast issue 937).
+A draw that fails or gives an outbreak outside its size range is drawn again with the same design, up to five times.
