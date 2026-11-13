@@ -30,8 +30,9 @@ def bin_factors(factors: pd.DataFrame, n_bins: int = 3) -> pd.DataFrame:
 
     Numeric factors with more than four values are cut at their quantiles
     into `n_bins` levels labelled by their range. Other factors become
-    strings. `n_places`, if present, becomes `places`: `single` or
-    `multi`.
+    strings. `n_places`, if present, becomes `places` (`single` or
+    `multi`), and `report_days` becomes `reporting` (`daily` or
+    `weekdays`).
 
     Parameters
     ----------
@@ -49,6 +50,11 @@ def bin_factors(factors: pd.DataFrame, n_bins: int = 3) -> pd.DataFrame:
     if "n_places" in out.columns:
         out["places"] = np.where(out["n_places"] == 1, "single", "multi")
         out = out.drop(columns="n_places")
+    if "report_days" in out.columns:
+        # 7 is daily reporting; fewer is reports on some weekdays only.
+        days = out["report_days"]
+        out["reporting"] = np.where(days == 7, "daily", "weekdays")
+        out = out.drop(columns="report_days")
     for col in out.columns.drop("location"):
         values = out[col]
         numeric = pd.api.types.is_numeric_dtype(values)
