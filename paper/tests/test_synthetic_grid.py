@@ -69,3 +69,26 @@ def test_markdown_has_one_row_per_setting() -> None:
     assert lines[0].startswith("| Factor |")
     # Pipes in formulas are escaped, so each row has its five cells.
     assert all(line.count(" | ") == 4 for line in lines[2:])
+
+
+def _design_settings() -> set[str]:
+    """Return the names `draw_design` sets."""
+    text = SIMULATOR.read_text()
+    body = text[text.index("draw_design <- function") :]
+    body = body[: body.index("\n}\n")]
+    return set(re.findall(r"^    (\w+) = ", body, flags=re.MULTILINE))
+
+
+def test_the_main_table_has_one_row_per_design_branch() -> None:
+    main = synthetic_grid.MAIN
+    covered = {s for row in main["setting"] for s in row.split(";")}
+    # Places and ages follow from the strata.
+    assert (
+        _design_settings() - {"grid", "prob", "n_places", "n_ages"} <= covered
+    )
+    assert len(main) < len(synthetic_grid.GRID) / 3
+    md = synthetic_grid.to_markdown(
+        synthetic_grid.main_table(pd.DataFrame({"outbreak": []})),
+        synthetic_grid.MAIN_HEADERS,
+    )
+    assert md.splitlines()[0].startswith("| Design |")
