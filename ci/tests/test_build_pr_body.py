@@ -331,7 +331,9 @@ def test_says_when_the_fit_was_made_in_the_run(tmp_path: Path) -> None:
     assert visible(body(g, provenance=prov))[3] == (
         "Fit: made in this run, as the fit store holds no fit for this round."
     )
-    prov["run"].update(kind="randomwalk")
-    assert not any(
-        line.startswith("Fit:") for line in visible(body(g, provenance=prov))
-    )
+    for kind in ("randomwalk", "direct"):
+        prov["run"].update(kind=kind)
+        assert not any(
+            line.startswith("Fit:")
+            for line in visible(body(g, provenance=prov))
+        )

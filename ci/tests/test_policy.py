@@ -132,3 +132,17 @@ def test_whole_chain_fits_from_the_last_tuesday_start() -> None:
     assert timeout >= SLOWEST
     # A fit that runs to its timeout still leaves the gate its time.
     assert window - PREPARE - timeout >= pol.timing.reserve_minutes
+
+
+def test_chronos_is_a_hub_model_of_its_own() -> None:
+    pol = load_policy(POLICY_PATH)
+    for model in ("fm_chronos_daily_ragged_ft", "fm_chronos_weekly_ragged_ft"):
+        only = pol.for_model(model, only=True)
+        (c,) = only.chain()
+        assert (c.model, c.kind) == (model, "direct")
+    # Never in another model's chain, and never built in `prepare`.
+    for model in ("renewalbvd", "renewal", "randomwalknowcast", "randomwalk"):
+        chained = pol.for_model(model)
+        assert all(c.kind != "direct" for c in chained.chain())
+        assert all(c.kind != "direct" for c in chained.stage("baseline"))
+        assert all(c.kind != "direct" for c in chained.candidates)

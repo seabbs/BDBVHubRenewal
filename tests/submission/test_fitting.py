@@ -320,6 +320,7 @@ def test_committed_metadata_is_only_for_hub_models() -> None:
     # One file per hub model in config/hub.toml, written as the CLI does.
     names = sorted(p.stem for p in (ROOT / "hub" / "model-metadata").glob("*"))
     assert names == [
+        "seabbs-chronos2_ft",
         "seabbs-renewal",
         "seabbs-rwnowcast",
     ]
@@ -347,3 +348,22 @@ def test_committed_renewal_metadata_is_one_of_the_variants(
         rendered[variant] = (out / "seabbs-renewal.yml").read_text()
     assert path.read_text() in rendered.values()
     assert len(set(rendered.values())) == 3
+
+
+@pytest.mark.usefixtures("in_root")
+def test_chronos_track_metadata_is_the_committed_file(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert main(["hub-id", "--model", "fm_chronos_daily_ragged_ft"]) == 0
+    assert capsys.readouterr().out.strip() == "seabbs-chronos2_ft"
+    committed = ROOT / "hub" / "model-metadata" / "seabbs-chronos2_ft.yml"
+    for model in ("fm_chronos_daily_ragged_ft", "fm_chronos_weekly_ragged_ft"):
+        out = tmp_path / model
+        args = ["--model", model, "--abbr", "chronos2_ft", "--out", str(out)]
+        assert main(["metadata", *args]) == 0
+        text = (out / "seabbs-chronos2_ft.yml").read_text()
+        assert "model_abbr: chronos2_ft" in text
+        assert "chronos-ft-" in text
+        if model == "fm_chronos_daily_ragged_ft":
+            # The committed file is the configured model's.
+            assert committed.read_text() == text
