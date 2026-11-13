@@ -3,7 +3,9 @@ r"""The pretrained Chronos-2 foundation model on the hub target's releases.
 
 See the Foundation models methods page for the model.
 Each pair of a source (`SOURCES`) and a layout (`LAYOUTS`) is one
-registered model, `fm_chronos_<source>_<layout>`.
+registered model, `fm_chronos_<source>_<layout>`, and each source's
+ragged model with the fine-tuned checkpoint (`FINETUNED_HASH`) is
+`fm_chronos_<source>_ragged_ft`.
 `hub_triangle` lays out the hub target by place, time and release lag,
 `FoundationModel` gives it to Chronos-2 as one group of series, and
 `chronos_sampler` draws trajectories from Chronos-2's quantiles.
@@ -15,9 +17,15 @@ them.
 from __future__ import annotations
 
 import datetime as dt
+import json
+import shutil
+import tempfile
+import urllib.error
+import urllib.request
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from functools import cache, partial
+from pathlib import Path
 from typing import Any, Final
 
 import numpy as np
@@ -36,6 +44,10 @@ from bdbvhubrenewal.forecasters.randomwalk import RandomWalk
 __all__ = [
     "CHRONOS_MODEL",
     "CHRONOS_REVISION",
+    "FINETUNED_CACHE",
+    "FINETUNED_FILES",
+    "FINETUNED_HASH",
+    "FINETUNED_URL",
     "LAYOUTS",
     "MAX_LAG",
     "SOURCES",
@@ -43,6 +55,7 @@ __all__ = [
     "HubTriangle",
     "Sampler",
     "chronos_sampler",
+    "finetuned_adapter",
     "hub_triangle",
     "quantile_draws",
 ]
@@ -63,6 +76,28 @@ CHRONOS_MODEL: Final = "amazon/chronos-2"
 
 CHRONOS_REVISION: Final = "29ec3766d36d6f73f0696f85560a422f50e8498c"
 """The checkpoint's commit, pinned so runs are reproducible."""
+
+FINETUNED_HASH: Final = "2c2b22a03107"
+"""Settings hash of the fine-tuned checkpoint the `_ft` models load, from
+`scripts/finetune_chronos.py train`. Its release is
+`chronos-ft-<hash>`."""
+
+FINETUNED_URL: Final = (
+    "https://github.com/seabbs/BDBVHubRenewal/releases/download"
+)
+"""Where the fine-tuned checkpoints' releases are downloaded from."""
+
+FINETUNED_FILES: Final = (
+    "adapter_config.json",
+    "adapter_model.safetensors",
+    "settings.json",
+)
+"""A fine-tuned checkpoint's release assets: the LoRA adapter and its
+settings."""
+
+FINETUNED_CACHE: Final = "~/.cache/bdbvhubrenewal"
+"""Directory each downloaded checkpoint is kept in, as
+`chronos-ft-<hash>`."""
 
 Series = Mapping[str, Any]
 """One group for Chronos-2: `target` `[V, S]`, and optionally
@@ -209,8 +244,67 @@ def quantile_draws(
     return np.asarray(at_lo + weight * (at_hi - at_lo))
 
 
+def finetuned_adapter(checkpoint: str) -> Path:
+    """Return a fine-tuned checkpoint's LoRA adapter, downloading it once.
+
+    The release `chronos-ft-<checkpoint>` at `FINETUNED_URL` holds
+    `FINETUNED_FILES`. They are kept in `FINETUNED_CACHE` only once all
+    are downloaded and the settings hash matches.
+
+    Parameters
+    ----------
+    checkpoint : str
+        The checkpoint's settings hash.
+
+    Returns
+    -------
+    pathlib.Path
+        The adapter directory.
+
+    Raises
+    ------
+    FileNotFoundError
+        If an asset cannot be downloaded.
+    ValueError
+        If the release's settings hash is not `checkpoint`.
+    """
+    tag = f"chronos-ft-{checkpoint}"
+    cache = Path(FINETUNED_CACHE).expanduser()
+    out = cache / tag
+    if out.is_dir():
+        return out
+    cache.mkdir(parents=True, exist_ok=True)
+    tmp = Path(tempfile.mkdtemp(dir=cache, prefix=f".{tag}-"))
+    try:
+        for name in FINETUNED_FILES:
+            url = f"{FINETUNED_URL}/{tag}/{name}"
+            try:
+                with urllib.request.urlopen(url, timeout=60) as response:
+                    (tmp / name).write_bytes(response.read())
+            except urllib.error.URLError as err:
+                raise FileNotFoundError(
+                    f"The release {tag} has no {name} ({url}): {err}"
+                ) from err
+        found = json.loads((tmp / "settings.json").read_text())["hash"]
+        if found != checkpoint:
+            raise ValueError(
+                f"The release {tag} holds the checkpoint with settings "
+                f"hash {found}."
+            )
+        try:
+            tmp.rename(out)
+        except OSError:
+            # Another process cached it first.
+            if not out.is_dir():
+                raise
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    return out
+
+
 @cache
-def _chronos() -> Any:
+def _chronos(checkpoint: str | None = None) -> Any:
+    adapter = None if checkpoint is None else finetuned_adapter(checkpoint)
     import torch
     from chronos import Chronos2Pipeline
 
@@ -221,13 +315,23 @@ def _chronos() -> Any:
         if torch.backends.mps.is_available()
         else "cpu"
     )
-    return Chronos2Pipeline.from_pretrained(
+    pipeline = Chronos2Pipeline.from_pretrained(
         CHRONOS_MODEL, revision=CHRONOS_REVISION, device_map=device
     )
+    if adapter is None:
+        return pipeline
+    from peft import PeftModel
+
+    model = PeftModel.from_pretrained(pipeline.model, adapter)
+    return Chronos2Pipeline(model=model.merge_and_unload())
 
 
 def chronos_sampler(
-    groups: Sequence[Series], horizon: int, n_samples: int, seed: int
+    groups: Sequence[Series],
+    horizon: int,
+    n_samples: int,
+    seed: int,
+    checkpoint: str | None = None,
 ) -> list[np.ndarray]:
     """Draw trajectories from Chronos-2's quantiles.
 
@@ -245,6 +349,9 @@ def chronos_sampler(
         Trajectories.
     seed : int
         Seed for the uniform draws.
+    checkpoint : str, optional
+        Settings hash of the fine-tuned checkpoint (`finetuned_adapter`)
+        to load into Chronos-2. The pretrained model by default.
 
     Returns
     -------
@@ -255,8 +362,10 @@ def chronos_sampler(
     ------
     ImportError
         If Chronos-2 is not installed (`uv sync --group chronos`).
+    FileNotFoundError
+        If the checkpoint's release cannot be downloaded.
     """
-    pipeline = _chronos()
+    pipeline = _chronos(checkpoint)
     levels = np.asarray(pipeline.quantiles, dtype=float)
     rng = np.random.default_rng(seed)
     quantiles, _ = pipeline.predict_quantiles(
@@ -308,14 +417,18 @@ class FoundationModel:
         One of `SOURCES`.
     layout : str
         One of `LAYOUTS`.
-    sample : Sampler
-        Draws the trajectories, Chronos-2 by default.
+    checkpoint : str or None
+        Settings hash of the fine-tuned checkpoint Chronos-2 loads, or
+        None for the pretrained model.
+    sample : Sampler or None
+        Draws the trajectories, Chronos-2 with `checkpoint` by default.
     """
 
     name: str
     source: str
     layout: str
-    sample: Sampler = field(default=chronos_sampler, repr=False)
+    checkpoint: str | None = None
+    sample: Sampler | None = field(default=None, repr=False)
 
     @property
     def needs_snapshots(self) -> bool:
@@ -345,6 +458,8 @@ class FoundationModel:
             can start from.
         ImportError
             If Chronos-2 is not installed.
+        FileNotFoundError
+            If the fine-tuned checkpoint's release cannot be downloaded.
         """
         weekly = self.source == "weekly"
         rows = task.target_history if weekly else task.daily_history
@@ -368,7 +483,10 @@ class FoundationModel:
         horizon = len(tri.times) - start
         seed = int(task.rng(self.name).integers(0, 2**31 - 1))
         group = _group(tri, self.layout, places, start)
-        draws = self.sample([group], horizon, task.n_samples, seed)[0]
+        sample = self.sample or partial(
+            chronos_sampler, checkpoint=self.checkpoint
+        )
+        draws = sample([group], horizon, task.n_samples, seed)[0]
         final = tri.final
         steps = np.broadcast_to(final, (task.n_samples, *final.shape)).copy()
         drawn = np.maximum(np.round(draws), 0.0)
@@ -413,3 +531,16 @@ for _source in SOURCES:
             "layout, the country and provinces in one block.",
             fitted=True,
         )
+    register_model(
+        f"fm_chronos_{_source}_ragged_ft",
+        partial(
+            FoundationModel,
+            f"fm_chronos_{_source}_ragged_ft",
+            _source,
+            "ragged",
+            FINETUNED_HASH,
+        ),
+        f"Chronos-2 fine-tuned on simulated outbreaks, on the hub target's "
+        f"{_source} releases, ragged layout.",
+        fitted=True,
+    )
