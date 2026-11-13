@@ -199,6 +199,17 @@ def test_only_epiforecasts_tenth_percentile_is_filled(
     assert got.loc[got["model"] == "SU", "quantile"].nunique() == 6
 
 
+def test_team_quantiles_are_sorted_within_a_forecast(
+    submissions: pd.DataFrame,
+) -> None:
+    crossed = _levels(100) | {0.1: 50.0}
+    other = pd.DataFrame(_team("SU-hier_bayes", 0, crossed))
+    got = team_forecasts(pd.concat([submissions, other]))
+    su = got.loc[got["model"] == "SU"].sort_values("quantile")
+    assert su["value"].is_monotonic_increasing
+    assert sorted(su["value"]) == sorted(crossed.values())
+
+
 def test_unknown_teams_are_an_error(submissions: pd.DataFrame) -> None:
     other = pd.DataFrame(_team("New-model", 0, _levels(100)))
     with pytest.raises(ValueError, match="New-model"):
