@@ -1,4 +1,4 @@
-"""Tests of the synthetic scenario grid table (`paper.tables.synthetic_grid`)."""
+"""Tests of the synthetic scenario grid (`paper.tables.synthetic_grid`)."""
 
 from __future__ import annotations
 
