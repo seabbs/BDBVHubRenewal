@@ -7,7 +7,7 @@ import pandas as pd
 import pytest
 
 from bdbvhubrenewal.data import load_daily_zones
-from bdbvhubrenewal.data.zones import hub_zones
+from bdbvhubrenewal.data.zones import hub_zones, is_zone, province_of
 from bdbvhubrenewal.evaluation import backtest as bt
 from bdbvhubrenewal.forecasters import get_model
 from bdbvhubrenewal.forecasters.base import NATIONAL
@@ -96,3 +96,57 @@ def test_hub_tables_cover_country_provinces_and_zones(
         "randomwalk-quantiles.csv.gz",
         "randomwalk-samples.csv.gz",
     ]
+
+
+def test_a_models_own_zones_stay_apart_from_its_provinces(
+    target: pd.DataFrame,
+    delays: pd.DataFrame,
+    daily: pd.DataFrame,
+) -> None:
+    real = target.loc[target["kind"] == "real"]
+    latest = real["vintage"].max()
+    task = bt.make_tasks(
+        real.loc[real["vintage"] == latest],
+        delays,
+        bt.load_config(ROOT / "config" / "backtest.toml"),
+        history=real,
+        daily=daily,
+    )[0]
+    walk = bt.run_forecasts([get_model("randomwalk")], [task])
+    zones = hub_zones(DATA / "hub-config" / "tasks.json")
+    mine = tuple(z for z in zones if province_of(z) in task.locations)
+    provinces = walk.loc[walk["location"].isin(set(task.locations))]
+    # A model that forecasts each zone of its provinces as 1.
+    own = pd.concat(
+        [
+            walk,
+            *(
+                provinces.loc[provinces["location"] == province_of(z)].assign(
+                    location=z, value=1.0
+                )
+                for z in mine
+            ),
+        ]
+    ).assign(model="own")
+    tables = hub_tables(
+        pd.concat([walk, own]), task, load_daily_zones(DATA), zones
+    )
+    keys = ["location", "target_end_date", "output_type_id"]
+
+    def places(name: str) -> pd.DataFrame:
+        table = tables[name]
+        rows = table.loc[~table["location"].map(is_zone)]
+        return rows.sort_values(keys).reset_index(drop=True)
+
+    # The country and provinces are as without the zones.
+    pd.testing.assert_frame_equal(places("own"), places("randomwalk"))
+    table = tables["own"]
+    split = table.loc[table["location"].map(is_zone)]
+    assert set(split["location"]) <= set(mine)
+    summed = (
+        split.assign(location=split["location"].map(province_of))
+        .groupby(keys)["value"]
+        .sum()
+    )
+    hub = table.set_index(keys)["value"]
+    assert np.allclose(summed, hub.loc[summed.index])
