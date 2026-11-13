@@ -23,7 +23,7 @@ import pandas as pd
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 from matplotlib.lines import Line2D
-from matplotlib.ticker import FuncFormatter, LogLocator, NullFormatter
+from matplotlib.ticker import FixedLocator, FuncFormatter, NullFormatter
 
 from paperfigs.scores import BASELINE, relative_wis, summarise_scores
 from paperfigs.style import (
@@ -60,6 +60,8 @@ _TITLES: Final = {
     "G": "Relative WIS by horizon",
 }
 
+_RATIO_TICKS: Final = (0.1, 0.25, 0.5, 0.75, 1, 1.5, 2, 3, 5, 10)
+
 _STEP_UNIT: Final = {1: "days", 7: "weeks"}
 
 
@@ -89,7 +91,7 @@ def _log_ratio_axis(ax: Axes, axis: str = "y") -> None:
     """Log axis for ratios with plain tick labels and a line at 1."""
     which = ax.yaxis if axis == "y" else ax.xaxis
     (ax.set_yscale if axis == "y" else ax.set_xscale)("log")
-    which.set_major_locator(LogLocator(base=10, subs=(0.25, 0.5, 1.0)))
+    which.set_major_locator(FixedLocator(_RATIO_TICKS))
     which.set_major_formatter(FuncFormatter(lambda v, _: f"{v:g}"))
     which.set_minor_formatter(NullFormatter())
     line = ax.axhline if axis == "y" else ax.axvline
@@ -165,7 +167,7 @@ def plot_nowcasts(
     step = pd.Timedelta(days=_step_days(fc))
     hmin, hmax = fc["horizon"].min(), fc["horizon"].max()
     start = origins[0] + (hmin - abs(hmin) // 2) * step
-    end = origins[-1] + max(hmax, 0) * step + step
+    end = origins[-1] + (max(hmax, 0) + 3) * step
     window = final.loc[final["target_date"].between(start, end)]
     for origin in origins:
         asof = obs.loc[
@@ -176,8 +178,8 @@ def plot_nowcasts(
             asof["target_date"],
             asof["value"],
             color=INK["asof"],
-            lw=1.2,
-            zorder=2,
+            lw=1.4,
+            zorder=4.5,
         )
         ax.axvline(origin, color=INK["muted"], lw=0.8, ls=":", zorder=1)
         for model in models:
@@ -216,7 +218,8 @@ def plot_nowcasts(
         zorder=5,
     )
     ax.set_xlim(start, end)
-    ax.set_ylim(bottom=0)
+    # Cap the axis so one wide ribbon does not flatten the data.
+    ax.set_ylim(0, 1.6 * float(window["value"].max()))
     ax.set_ylabel(f"Count, {location}")
     locator = mdates.AutoDateLocator(maxticks=10)
     ax.xaxis.set_major_locator(locator)
@@ -294,7 +297,7 @@ def _points_by(
             )
     if not lines:
         ax.set_xticks(x)
-        ax.set_xticklabels([str(c) for c in cats], rotation=45, ha="right")
+        ax.set_xticklabels([str(c) for c in cats])
         ax.grid(axis="x", visible=False)
     _log_ratio_axis(ax, "y")
     _pad_log_limits(ax, rel[col].to_numpy(dtype=float), "y")
@@ -465,7 +468,8 @@ def si_scores_by_location_horizon(
     _pad_log_limits(flat[0], rel[col].to_numpy(dtype=float))
     scale = "log scale" if col == "rel_log_wis" else "natural scale"
     fig.supylabel(f"Relative WIS ({scale})", fontsize=9)
-    fig.supxlabel("Horizon", fontsize=9)
+    for ax in flat[max(0, len(locs) - ncol) : len(locs)]:
+        ax.set_xlabel("Horizon")
     _legend_models(fig, models)
     return fig
 
@@ -515,6 +519,8 @@ def si_wis_over_time(scores: pd.DataFrame) -> Figure:
         ax.xaxis.set_major_formatter(mdates.ConciseDateFormatter(locator))
         ax.set_xlabel("Origin date")
     axes[0].set_yscale("log")
+    axes[0].yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:g}"))
+    axes[0].yaxis.set_minor_formatter(FuncFormatter(lambda v, _: f"{v:g}"))
     axes[0].set_ylabel("Mean WIS")
     axes[1].set_ylabel("Mean WIS of log(x + 1)")
     _legend_models(fig, models)
