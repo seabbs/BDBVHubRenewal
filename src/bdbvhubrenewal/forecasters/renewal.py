@@ -51,6 +51,7 @@ from bdbvhubrenewal.forecasters.base import (
     NATIONAL,
     SAMPLE_COLUMNS,
     ForecastTask,
+    get_model,
     register_model,
 )
 
@@ -1416,6 +1417,9 @@ def fit_renewal(
 ) -> dict[str, Any]:
     """Fit a variant for the CI and write the fit directory.
 
+    The variant is the registered model, so `renewal` and `renewalbvd`
+    fit health zones (`forecasters.zonerenewal`) and also write their
+    zone samples.
     Trajectories are drawn here, so `forecast_renewal` only reads them.
     Writes `samples.csv.gz`, `delay-summary.csv`, `unassigned.csv.gz`
     (if any), `trajectories.json` and `ppc.json`. `run_fit` writes the returned
@@ -1445,11 +1449,11 @@ def fit_renewal(
     out.mkdir(parents=True, exist_ok=True)
     settings = sampler_settings(sampler)
     task = replace(task, seed=int(settings.get("seed", task.seed)))
-    model = RenewalModel(VARIANTS[variant], settings, out / "progress.log")
-    fit = model.forecast_fit(task)
-    return write_fit_dir(
-        fit, task, settings, out, variant=variant, config_name=config_name
+    model = replace(
+        get_model(variant), sampler=settings, progress=out / "progress.log"
     )
+    model.forecast(task)
+    return model.write_fit_dir(task, out, config_name)
 
 
 def write_fit_dir(

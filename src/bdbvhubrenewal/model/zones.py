@@ -747,51 +747,6 @@ def zone_bvd_inputs(
     return out
 
 
-class FixedDelay(RandomVariable):
-    """A fixed onset-to-report delay shared by every place.
-
-    Stands in for `HazardDelay` with the hub's delay pmf for the release
-    (`Vintage.hub_delay_pmf`), the point estimate the hub imputes onsets
-    with. It is data, so it adds no sites, and every place shares it.
-    """
-
-    def __init__(self, name: str, pmf: ArrayLike) -> None:
-        """Initialize the delay.
-
-        Parameters
-        ----------
-        name
-            Name of the delay.
-        pmf
-            Delay pmf on days `0..dmax`.
-        """
-        super().__init__(name=name)
-        self.pmf = jnp.asarray(pmf)
-
-    def shared_groups(self, n_groups: int) -> np.ndarray:
-        """Return all places: they share the delay."""
-        return np.ones(n_groups, dtype=bool)
-
-    def sample(
-        self,
-        n_timepoints: int,
-        n_groups: int = 1,
-        first_day_dow: int | None = None,
-        by_week: bool = False,
-        **kwargs: object,
-    ) -> Array:
-        """Return the pmf for each place and day, or week.
-
-        Returns
-        -------
-        Array
-            `(n_groups, rows, dmax + 1)`, with one row per day or per
-            week (`by_week`).
-        """
-        rows = -(-n_timepoints // 7) if by_week else n_timepoints
-        return jnp.broadcast_to(self.pmf, (n_groups, rows, self.pmf.shape[-1]))
-
-
 def zone_kernel(
     zones: tuple[str, ...], table: pd.DataFrame, decay_km: float = DECAY_KM
 ) -> np.ndarray:
@@ -975,7 +930,6 @@ def build_zone_model(
     data: ZoneVintage,
     config: ModelConfig = MAIN,
     anchor: bool = True,
-    fixed_delays: bool = False,
 ) -> MultiSignalModel:
     """Build the zone model for one vintage, as `model.build_model`.
 
@@ -985,10 +939,6 @@ def build_zone_model(
         The vintage.
     config : ModelConfig
         Structural choices.
-    fixed_delays : bool
-        Fix the onset-to-report delay at the hub's pmf for the release
-        (`FixedDelay`) and the incubation period at BVDOutbreakSize's prior
-        means, rather than estimating them.
     anchor : bool
         Anchor the `ANCHORED` walks at their mean (`MeanAnchoredWalk`).
         Without it, and with one zone per province, this is the province
@@ -1150,9 +1100,7 @@ def build_zone_model(
             active=group_active,
         )
 
-    if missing is not None and fixed_delays:
-        delay = FixedDelay("delay", data.hub_delay_pmf)
-    elif missing is not None:
+    if missing is not None:
         delay = HazardDelay(
             "delay",
             config.dmax,
@@ -1184,17 +1132,13 @@ def build_zone_model(
                 "infection_to_onset",
                 "lognormal",
                 # BVDOutbreakSize's priors (onset_incidence_model).
-                DeterministicVariable("incubation_mean", INCUBATION_MEAN)
-                if fixed_delays
-                else DistributionalVariable(
+                DistributionalVariable(
                     "incubation_mean",
                     dist.TruncatedNormal(
                         INCUBATION_MEAN, INCUBATION_MEAN_SD, low=1.0
                     ),
                 ),
-                DeterministicVariable("incubation_sd", INCUBATION_SD)
-                if fixed_delays
-                else DistributionalVariable(
+                DistributionalVariable(
                     "incubation_sd",
                     dist.TruncatedNormal(
                         INCUBATION_SD, INCUBATION_SD_SD, low=1.0
@@ -1206,7 +1150,7 @@ def build_zone_model(
             missing_fraction_rv=None
             if missing is None
             else by_place(missing, 1),
-            delay_rv=delay if fixed_delays else by_place(delay, 0),
+            delay_rv=by_place(delay, 0),
             delay_groups=parents,
             known_noise=_nb_noise("known"),
             imputed_noise=None if missing is None else _nb_noise("imputed"),

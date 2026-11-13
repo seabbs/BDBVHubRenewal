@@ -10,7 +10,7 @@ import pytest
 
 from bdbvhubrenewal.data.zones import province_of
 from bdbvhubrenewal.evaluation.backtest import BacktestConfig, make_tasks
-from bdbvhubrenewal.forecasters import ForecastTask, base, get_model
+from bdbvhubrenewal.forecasters import ForecastTask, get_model
 from bdbvhubrenewal.forecasters import renewal as rn
 from bdbvhubrenewal.forecasters import zonerenewal as zr
 
@@ -23,14 +23,6 @@ ROOT = Path(__file__).resolve().parents[2]
 def task(target: pd.DataFrame, delays: pd.DataFrame) -> ForecastTask:
     rows = target.loc[target["vintage"] == "2026-10-17"]
     return make_tasks(rows, delays, BacktestConfig(n_samples=20, seed=3))[0]
-
-
-@pytest.fixture
-def zoned(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Register the zone variants for one test."""
-    for name in zr.ZONE_VARIANTS:
-        monkeypatch.setitem(base._REGISTRY, name, base._REGISTRY[name])
-    zr.enable_zones()
 
 
 @pytest.fixture
@@ -97,39 +89,16 @@ def _fake_run(task: ForecastTask, variant: rn.Variant) -> rn.RenewalRun:
     )
 
 
-def test_zone_fits_are_opt_in(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.delenv(zr.ZONES_ENV, raising=False)
-    # The shipped config keeps the province fits.
-    assert zr.zone_fits(ROOT / "config" / "hub.toml") is False
-    assert zr.zone_fits(tmp_path / "missing.toml") is False
-    on = tmp_path / "hub.toml"
-    on.write_text("[renewal]\nzones = true\n")
-    assert zr.zone_fits(on) is True
-    monkeypatch.setenv(zr.ZONES_ENV, "0")
-    assert zr.zone_fits(on) is False
-    monkeypatch.setenv(zr.ZONES_ENV, "maybe")
-    with pytest.raises(ValueError, match=zr.ZONES_ENV):
-        zr.zone_fits(on)
-
-
-def test_province_models_stay_unless_zones_are_enabled(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    assert type(get_model("renewalbvd")) is rn.RenewalModel
-    for name in zr.ZONE_VARIANTS:
-        monkeypatch.setitem(base._REGISTRY, name, base._REGISTRY[name])
-    zr.enable_zones()
+def test_renewal_and_renewalbvd_fit_zones() -> None:
     model = get_model("renewalbvd")
     assert isinstance(model, zr.ZoneRenewalModel)
     assert model.variant.base == "BVD"
+    assert isinstance(get_model("renewal"), zr.ZoneRenewalModel)
     assert type(get_model("renewalsp")) is rn.RenewalModel
     # The zone fit's representation differs, so it keys a stored fit.
     assert repr(model) != repr(rn.RenewalModel(rn.VARIANTS["renewalbvd"]))
 
 
-@pytest.mark.usefixtures("zoned")
 def test_zone_fit_sums_fitted_and_silent_zones_to_provinces(
     task: ForecastTask,
     monkeypatch: pytest.MonkeyPatch,
@@ -211,7 +180,7 @@ def test_zone_inputs_take_the_zone_counts_and_province_delays(
     )
 
 
-def test_zone_code_does_not_key_the_province_fits(tmp_path: Path) -> None:
+def test_zone_code_keys_only_the_zone_fits(tmp_path: Path) -> None:
     import shutil
 
     from bdbvhubrenewal.evaluation import store
@@ -223,12 +192,17 @@ def test_zone_code_does_not_key_the_province_fits(tmp_path: Path) -> None:
         tmp_path / "src",
         ignore=shutil.ignore_patterns("__pycache__"),
     )
-    models = ("renewal", "renewalbvd", "renewalsp", "pprandomwalknowcast")
-    before = {m: store.code_digest(m, tmp_path) for m in models}
+    zoned = ("renewal", "renewalbvd")
+    # renewalsp shares the province module, which finds the zone fits
+    # through the registry only.
+    others = ("renewalsp", "pprandomwalknowcast")
+    before = {m: store.code_digest(m, tmp_path) for m in zoned + others}
     for rel in ("model/zones.py", "forecasters/zonerenewal.py"):
         path = tmp_path / "src/bdbvhubrenewal" / rel
         path.write_text(path.read_text() + "\n_EDITED = 1\n")
-    assert {m: store.code_digest(m, tmp_path) for m in models} == before
+    after = {m: store.code_digest(m, tmp_path) for m in zoned + others}
+    assert all(after[m] != before[m] for m in zoned)
+    assert all(after[m] == before[m] for m in others)
 
 
 def test_bvd_zone_rt_becomes_one_term_per_fitted_zone(tmp_path: Path) -> None:
@@ -288,36 +262,10 @@ def test_zone_data_files_key_the_zone_fits(
 ) -> None:
     from bdbvhubrenewal.model import zones
 
-    config = tmp_path / "hub.toml"
-    config.write_text("[renewal]\nzones = true\n")
-    before = zr.zone_inputs_digest(config)
-    config.write_text("[renewal]\nzones = true\nother = 1\n")
-    assert zr.zone_inputs_digest(config) != before
+    before = zr.zone_inputs_digest()
     centres = tmp_path / "zone_centres.csv"
     centres.write_bytes(zones.ZONE_CENTRES.read_bytes() + b"\n")
     monkeypatch.setattr(zones, "ZONE_CENTRES", centres)
-    config.write_text("[renewal]\nzones = true\n")
-    assert zr.zone_inputs_digest(config) != before
+    assert zr.zone_inputs_digest() != before
     model = zr.ZoneRenewalModel(rn.VARIANTS["renewal"])
     assert f"inputs='{model.inputs}'" in repr(model)
-
-
-def test_fixed_delay_hazard_gives_back_the_pmf() -> None:
-    from bdbvhubrenewal.model.hazard_delay import hazard_to_pmf
-
-    pmf = np.array([0.1, 0.3, 0.4, 0.2])
-    back = np.asarray(hazard_to_pmf(zr._logit_hazard(pmf)[None, :]))[0]
-    np.testing.assert_allclose(back, pmf, atol=1e-6)
-
-
-def test_fixed_delays_are_a_setting(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.delenv(zr.FIXED_DELAYS_ENV, raising=False)
-    assert zr.fixed_delays(ROOT / "config" / "hub.toml") is False
-    config = tmp_path / "hub.toml"
-    config.write_text("[renewal]\nfixed_delays = true\n")
-    assert zr.fixed_delays(config) is True
-    monkeypatch.setenv(zr.FIXED_DELAYS_ENV, "1")
-    model = zr.ZoneRenewalModel(rn.VARIANTS["renewalbvd"])
-    assert "fixed_delays=True" in repr(model)

@@ -81,11 +81,7 @@ from bdbvhubrenewal.forecasters.base import (
     list_models,
 )
 from bdbvhubrenewal.forecasters.renewal import DELAY_SUMMARY_FILE
-from bdbvhubrenewal.forecasters.zonerenewal import (
-    ZONES_FILE,
-    enable_zones,
-    zone_fits,
-)
+from bdbvhubrenewal.forecasters.zonerenewal import ZONES_FILE
 from bdbvhubrenewal.forecasters.zones import zones_for_model
 from bdbvhubrenewal.submission.fitting import (
     Forecast,
@@ -1686,9 +1682,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     tidy._DEFAULT_DATA_DIR = _data_root()
     parser = build_parser()
     args = parser.parse_args(argv)
-    # Zone renewal fits are opt-in (`[renewal] zones` in config/hub.toml).
-    if zone_fits():
-        enable_zones()
     if args.version:
         print(_version())
         return 0

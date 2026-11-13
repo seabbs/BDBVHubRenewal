@@ -9,9 +9,8 @@ How the models are built in code and sampled is on the [Implementation](implemen
 ## Overview
 
 `renewal` fits the health zones with recent cases together, nests them in their provinces, pools them and links them by importation.
-The zone fits are opt-in: `[renewal] zones = true` in `config/hub.toml` (or `BDBV_RENEWAL_ZONES=1`) registers them in place of the province fits ([`forecasters/zonerenewal.py`](https://github.com/seabbs/BDBVHubRenewal/blob/main/src/bdbvhubrenewal/forecasters/zonerenewal.py), [`model/zones.py`](https://github.com/seabbs/BDBVHubRenewal/blob/main/src/bdbvhubrenewal/model/zones.py)).
-Nothing the province fits run imports that code, so their stored fit keys do not depend on it.
-With `zones = false`, the default, `renewal` and `renewalbvd` fit the provinces as places instead, with province deviations, province delays and importation between provinces, and their zones are split from the provinces ([Health zones](#health-zones)).
+`renewalbvd` fits the same zones ([`forecasters/zonerenewal.py`](https://github.com/seabbs/BDBVHubRenewal/blob/main/src/bdbvhubrenewal/forecasters/zonerenewal.py), [`model/zones.py`](https://github.com/seabbs/BDBVHubRenewal/blob/main/src/bdbvhubrenewal/model/zones.py)).
+Their provinces are the sums of their zones, and the country is the sum of the provinces.
 `renewalsp` fits the place model to each province on its own, with no pooling or importation.
 `renewalbvd` is `renewal` with a down-weighted likelihood term on the Rt of BVDOutbreakSize.
 `seabbs-renewal` submits the first of `renewalbvd`, `renewalsp`, `renewal`, `randomwalknowcast` and `randomwalk`, in that order, to pass its checks ([Submission workflow](../submission/workflow.md#renewal-chain)).
@@ -333,7 +332,7 @@ Nothing is pooled or shared between provinces: each has its own Rt walk, delay, 
 One series cannot inform the share at risk, so there is no depletion.
 Every province with a case in the random walks' walk window is fitted, however few its cases.
 A province with none takes the introduction layer of `randomwalknowcast` ([Baseline models](baselines.md)): exactly 0 until an introduction, then its walk.
-National is the sum of the provinces plus the data's national gap, as for `renewal`.
+National is the sum of the provinces plus the data's national gap.
 A province is fitted only on its own data, so `renewalsp` cannot forecast a province left out.
 Its zones are split from its provinces ([Health zones](#health-zones)).
 

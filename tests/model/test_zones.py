@@ -231,13 +231,9 @@ def test_mean_anchored_walk_starts_at_its_mean_level():
     assert np.ptp(np.asarray(x[:10]), axis=0).min() > 0
 
 
-def test_fixed_delays_sample_no_delay_or_incubation(zone_vintage):
-    model = build_zone_model(zone_vintage, fixed_delays=True)
+def test_anchored_starts_are_non_centred(zone_vintage):
+    model = build_zone_model(zone_vintage)
     _, params = _params(model, zone_vintage)
-    assert not any(
-        k.startswith("delay_") and k != "delay_overdispersion" for k in params
-    )
-    assert "incubation_mean" not in params
     assert np.isfinite(_density(model, zone_vintage, params))
     # Anchored starts sample no centred offsets, only non-centred ones.
     assert "log_rt0_offsets" not in params
