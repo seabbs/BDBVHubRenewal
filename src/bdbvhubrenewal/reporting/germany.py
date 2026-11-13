@@ -116,7 +116,11 @@ def germany_page(
     srcs = {"latest": "../figures/scoresummary-germany-latest.json"}
     table = relative_scores(scores, ("pool",))
     table["pool"] = pd.Categorical(table["pool"], list(LEVELS))
-    table = table.sort_values(["pool", "rel_wis"])
+    # The summary above gives the absolute scores, so the table fits the
+    # page with the relative ones.
+    table = table.sort_values(["pool", "rel_wis"]).drop(
+        columns=["wis", "ae_median"]
+    )
     _write(
         gen / "germany-scores.md",
         summary_html(srcs, "Overall scores by level")
