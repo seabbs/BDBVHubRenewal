@@ -54,6 +54,7 @@ __all__ = [
     "MIN_RELEASES",
     "MODELS",
     "OBSERVATION_COLUMNS",
+    "delay_quantile",
     "evaluate",
     "factor_table",
     "model_task",
@@ -87,6 +88,9 @@ weekly models' four-week $D$."""
 COMPLETE_WEEKS: Final = 13
 """Weeks from an origin to the simulation's last report, so its last
 forecast week is final under the longest delay (eight weeks)."""
+
+MAX_DELAY_DAYS: Final = 56
+"""The simulations' longest reporting delay."""
 
 HORIZONS: Final = tuple(range(-4, 4))
 """Forecast weeks from the reference date."""
@@ -446,7 +450,9 @@ def factor_table(counts: pd.DataFrame, settings: pd.DataFrame) -> pd.DataFrame:
     Returns
     -------
     pandas.DataFrame
-        `location` (`series_label`), then the `FACTORS` in `settings`, raw.
+        `location` (`series_label`), then the `FACTORS` in `settings`, raw,
+        and `delay_q99`, the outbreak's 99% reporting delay in days
+        (`delay_quantile`), the $D$ of its rolling truth.
     """
     outbreak = str(counts["outbreak"].iloc[0])
     places = sorted(set(truth_table(counts)["location"]))
@@ -457,4 +463,33 @@ def factor_table(counts: pd.DataFrame, settings: pd.DataFrame) -> pd.DataFrame:
     )
     for f in factors:
         out[f] = row[f]
+    out["delay_q99"] = delay_quantile(counts, 0.99)
     return out
+
+
+def delay_quantile(counts: pd.DataFrame, q: float) -> int:
+    """Return a quantile of an outbreak's reporting delay, in whole days.
+
+    The delay is from onset to report over every simulated case, counting
+    only onsets at least `MAX_DELAY_DAYS` before the last report, so every
+    delay of theirs is seen.
+
+    Parameters
+    ----------
+    counts : pandas.DataFrame
+        One outbreak's triangle.
+    q : float
+        The quantile, in (0, 1].
+
+    Returns
+    -------
+    int
+        The fewest days by which at least `q` of the cases are reported.
+    """
+    ref = pd.to_datetime(counts["reference_date"])
+    rep = pd.to_datetime(counts["report_date"])
+    seen = ref <= rep.max() - pd.Timedelta(days=MAX_DELAY_DAYS)
+    delay = (rep - ref).dt.days[seen]
+    by = counts.loc[seen, "count"].groupby(delay).sum().sort_index()
+    share = by.cumsum() / by.sum()
+    return int(share.index[np.argmax(share.to_numpy() >= q - 1e-12)])
