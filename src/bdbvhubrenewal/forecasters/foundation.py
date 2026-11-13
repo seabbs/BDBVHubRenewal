@@ -113,6 +113,7 @@ def hub_triangle(
     source: str,
     places: Sequence[str],
     last_time: str,
+    max_lag: int | None = None,
 ) -> HubTriangle:
     """Lay out the hub target of every release by place, step and lag.
 
@@ -129,6 +130,8 @@ def hub_triangle(
         Places, in the order of the output.
     last_time : str
         Last step of the grid.
+    max_lag : int, optional
+        Release lag $D$, `MAX_LAG` of the source by default.
 
     Returns
     -------
@@ -152,7 +155,7 @@ def hub_triangle(
     place = rows["location"].map({c: i for i, c in enumerate(places)})
     days = (pd.to_datetime(rows[time_col]) - pd.Timestamp(first)).dt.days
     step = days.to_numpy() // width
-    lags = MAX_LAG[source]
+    lags = MAX_LAG[source] if max_lag is None else max_lag
     partial = np.full((len(places), n_times, lags), np.nan)
     final = np.zeros((len(places), n_times))
     last = 0
