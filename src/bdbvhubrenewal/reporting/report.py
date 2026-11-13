@@ -457,7 +457,11 @@ def _ours(frame: pd.DataFrame, names: Sequence[str]) -> pd.DataFrame:
 
 
 def _release_section(
-    fig: Path, gen: Path, res: Path, real: pd.DataFrame, names: Sequence[str]
+    fig: Path,
+    gen: Path,
+    res: Path,
+    real: pd.DataFrame,
+    names: Sequence[str],
 ) -> dict[str, str]:
     """Write the real-release evaluation tables and figure.
 
@@ -468,6 +472,7 @@ def _release_section(
         n: res / f"nowcast-{n}.csv" for n in ("scores", "quantiles", "origins")
     }
     scores = _ours(_with_horizon(pd.read_csv(paths["scores"])), names)
+    truth = json.loads((res / "nowcast-truth.json").read_text())
     quantiles = _ours(pd.read_csv(paths["quantiles"]), names)
     origins = _ours(pd.read_csv(paths["origins"]).fillna(""), names)
     national = scores["location"] == NATIONAL
@@ -475,6 +480,7 @@ def _release_section(
     zones = _as_submitted(
         pd.read_csv(res / "zone-scores.csv", low_memory=False)
     )
+    complete = _complete_on(scores, zones, int(truth["truth_delay"]))
     pooled = pd.concat([scores, zones.assign(pool="zones")])
     pooled["target"] = pooled["target"].map(_TARGET_LABELS)
     energy = _ours(
@@ -574,24 +580,45 @@ def _release_section(
         ),
         fig / "relative-overall.svg",
     )
-    save_light_dark(
-        partial(
-            plot_release_nowcasts,
-            quantiles,
-            real,
-            _RELEASE_PLACES,
-            _RELEASE_MODELS,
-        ),
-        fig / "release-nowcasts.svg",
+    # The figure shows the complete target's weeks only, as scored.
+    shown = quantiles.loc[
+        (quantiles["target"] == "complete")
+        & quantiles["location"].isin(_RELEASE_PLACES)
+        & quantiles["model"].isin(_RELEASE_MODELS)
+    ]
+    figure = (
+        "![Final forecasts of the recent weeks by origin, with the "
+        "counts each release reports.](figures/release-nowcasts.svg"
+        "#only-light)\n"
+        "![Final forecasts of the recent weeks by origin, with the "
+        "counts each release reports.](figures/release-nowcasts-dark.svg"
+        "#only-dark)\n"
     )
+    if shown.empty:
+        figure = (
+            "No forecast week has a release the truth delay after it yet, "
+            "so there is no complete week to show.\n"
+        )
+    else:
+        save_light_dark(
+            partial(
+                plot_release_nowcasts,
+                quantiles,
+                real,
+                _RELEASE_PLACES,
+                _RELEASE_MODELS,
+            ),
+            fig / "release-nowcasts.svg",
+        )
     _write(
         gen / "release-headline.md",
         "## Overall\n\n"
-        "Scores on the complete weeks of the latest release, or on what "
-        "each later release reported, as picked "
+        "Scores on the complete weeks, or on what each later release "
+        "reported, as picked "
         "([how scoring works](methods/evaluation.md#real-releases), "
         "[metrics](methods/evaluation.md#scores)).\n"
         + _scored_on(rep)
+        + complete
         + "The [energy score](methods/evaluation.md#energy-score) scores each "
         "scale's places and weeks as one forecast per origin and release, "
         "so its $n$ counts those.\n\n"
@@ -618,15 +645,7 @@ def _release_section(
     _write(
         gen / "release-nowcasts.md",
         "## Nowcasts from the real releases\n\n"
-        + _dropdown(
-            "![Final forecasts of the recent weeks by origin, with the "
-            "counts each release reports.](figures/release-nowcasts.svg"
-            "#only-light)\n"
-            "![Final forecasts of the recent weeks by origin, with the "
-            "counts each release reports.](figures/release-nowcasts-dark.svg"
-            "#only-dark)\n",
-            "Figure",
-        )
+        + _dropdown(figure, "Figure")
         + "\n"
         + _dropdown(
             "Scores by target, pool and origin.\n\n"
@@ -663,6 +682,33 @@ def _scored_on(reported: pd.DataFrame, baseline: str = "randomwalk") -> str:
         "with cases.\n"
         "The renewal models are not scored at health zones.\n"
     )
+
+
+def _complete_on(scores: pd.DataFrame, zones: pd.DataFrame, delay: int) -> str:
+    """Say what the complete target scores, and which models it leaves out.
+
+    `scores` are the national and province scores, `zones` the health
+    zone scores, and `delay` the truth delay they were scored with.
+    """
+    done = scores.loc[scores["target"] == "complete"]
+    text = (
+        "Nationally and in the provinces, a complete week is scored on the "
+        f"first release cut off at least {delay} days after it ends.\n"
+        f"Forecasts with such a release so far: {len(done)}.\n"
+        "Health zones are scored on the complete weeks of the latest "
+        "release.\n"
+    )
+    scored = set(done["model"]) | set(
+        zones.loc[zones["target"] == "complete", "model"]
+    )
+    missing = [m for m in pd.unique(scores["model"]) if m not in scored]
+    if missing:
+        listed = ", ".join(f"`{m}`" for m in missing)
+        text += (
+            f"So {listed} have no complete-week scores yet, as they are not "
+            "scored at health zones.\n"
+        )
+    return text
 
 
 ZONE_MAP: Final = "../figures/zone-map.geojson"
@@ -2179,8 +2225,9 @@ def _comparison_summary(
 ) -> dict[str, str]:
     """Write the Overall, By horizon and By place summaries.
 
-    They are the Backtest page's summaries, on the complete weeks of the
-    hub rounds. The hub teams and our series in `on` are ticked at first,
+    They are laid out as the Backtest page's summaries, on the hub
+    rounds' weeks the latest release completes. The hub teams and our
+    series in `on` are ticked at first,
     and randomwalk is the reference for relative scores. Our series come
     in the order of `colours`. Returns each target's score summary URL.
     """

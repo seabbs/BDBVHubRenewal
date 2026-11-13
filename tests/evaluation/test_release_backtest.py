@@ -18,6 +18,7 @@ from bdbvhubrenewal.evaluation.nowcast import (
     draw_reported,
     relative_wis,
     release_backtest,
+    reporting_delay,
     rolling_truth,
     summarise,
     week_shares,
@@ -449,12 +450,75 @@ def test_complete_target_can_take_the_rolling_truth(
         BacktestConfig(n_samples=20, seed=2),
         daily=daily,
     )
-    out = release_backtest(
+    result = release_backtest(
         tasks, daily, target, models=("randomwalk",), truth_delay=14
-    ).scores
+    )
+    out = result.scores
     done = out.loc[out["target"] == "complete"]
     truth = rolling_truth(real, 14)
     merged = done.merge(truth, on=["location", "target_end_date"])
     assert len(merged) == len(done) > 0
     assert (merged["truth_x"] == merged["truth_y"]).all()
     assert (merged["truth_vintage_x"] == merged["truth_vintage_y"]).all()
+    # The quantiles show the same truth, on the scored weeks only.
+    q = result.quantiles
+    q = q.loc[q["target"] == "complete"]
+    keys = ["model", "origin", "location", "target_end_date"]
+    shown = q.merge(done, on=keys)
+    assert len(shown) == len(q) == len(done)
+    assert (shown["truth_x"] == shown["truth_y"]).all()
+    assert (shown["truth_vintage_x"] == shown["truth_vintage_y"]).all()
+
+
+def test_reporting_delay_is_the_first_age_with_the_level_reported() -> None:
+    weeks = ["2026-09-05", "2026-09-12", "2026-09-19"]
+    rows = [
+        # Release 2026-09-19: the weeks are 14, 7 and 0 days old.
+        ("2026-09-19", weeks, [99, 50, 10]),
+        # Release 2026-09-26: 21, 14 and 7 days old.
+        ("2026-09-26", weeks, [100, 99, 60]),
+        # A release left out: its counts would hold the delay back.
+        ("2026-09-22", weeks, [1, 1, 1]),
+        ("2026-10-03", weeks, [100, 100, 100]),
+    ]
+    target = pd.DataFrame(
+        [
+            {
+                "kind": "real",
+                "vintage": v,
+                "location": loc,
+                "target_end_date": w,
+                "total": n if loc == "CD" else n // 2,
+            }
+            for v, ws, ns in rows
+            for w, n in zip(ws, ns, strict=True)
+            for loc in ("CD", "CD-KN")
+        ]
+    )
+    skip = ("2026-09-22",)
+    # Nationally, 50 and 60 of 200 are reported 7 days on, 99 and 99 of
+    # 200 at 14 days and all 100 at 21 days.
+    assert reporting_delay(target, 0.99, skip=skip) == 14
+    assert reporting_delay(target, 0.999, skip=skip) == 21
+    assert reporting_delay(target, 0.99) is None
+    assert (
+        reporting_delay(target.loc[target["vintage"] == "2026-10-03"]) is None
+    )
+
+
+def test_complete_target_has_no_week_before_a_release_d_days_on(
+    target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
+) -> None:
+    real = target.loc[target["kind"] == "real"]
+    tasks = make_tasks(
+        real,
+        delays.assign(kind="real"),
+        BacktestConfig(n_samples=20, seed=2),
+        daily=daily,
+    )
+    out = release_backtest(
+        tasks, daily, target, models=("randomwalk",), truth_delay=1000
+    )
+    assert set(out.scores["target"]) == {"reported"}
+    assert (out.origins["n_complete"] == 0).all()
+    assert (out.origins["n_reported"] > 0).any()

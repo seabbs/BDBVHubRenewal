@@ -5,7 +5,7 @@ Scoring, and the evaluations.
 
 ## What is scored
 
-Forecasts from real releases are scored on the count each later release reports, and on the complete weeks of the latest release ([Real releases](#real-releases)).
+Forecasts from real releases are scored on the count each later release reports, and on each week's count once its reporting is close to complete ([Real releases](#real-releases)).
 Forecasts from simulated vintages are scored against the simulated final counts.
 
 ## Scores
@@ -70,8 +70,8 @@ The other models forecast every task.
 | Development backtest | Real, except the latest real vintage | As for real releases |
 | Recovery check | Simulated | Simulated final counts |
 | Simulated scenarios | The four weekly simulated vintages up to the latest real vintage, from outbreaks calibrated to it with Rt after the data scaled by 0.75, 1 or 1.25 | Complete weeks of the simulated final counts, and the counts as reported two weeks after each vintage |
-| Real releases | Every real release with a later release | The count each later release shows, and the latest release's count for its complete weeks |
-| Comparison with hub forecasts | Real where one serves the round | As for real releases |
+| Real releases | Every real release with a later release | The count each later release shows, and each week's count in the first release cut off the truth delay after it |
+| Comparison with hub forecasts | Real where one serves the round | The count each later release shows, and the latest release's count for its complete weeks |
 
 In the simulated scenarios and leave-one-province-out, a week is complete when it ended at least 3 weeks before the truth vintage.
 
@@ -108,8 +108,16 @@ Every other model forecasts the final count $X$ of week $w$, which is mapped to 
 with the sign carried when $X < R_o$, $q$ kept in $[0, 1]$, and $q = 1$ for a week fully reported at the origin.
 A model with no modelled delay, such as a hub team, is scored on complete weeks only.
 
-**Complete weeks.** The count the latest release shows for the weeks it reports in full.
-A week is complete when it is at least 4 weeks back from the week holding the latest release's cut-off and grew by less than 2% since the release before.
+**Complete weeks.** Each week's count in the first release whose cut-off is at least the truth delay after the week ends.
+The truth delay is `truth_delay` in `config/backtest.toml`.
+By default it is the age by which 98% of the national count is reported (`truth_level`).
+Each earlier release's national count of a week is set against the latest release's, at the week's age in that release rounded up to whole weeks, and the counts are pooled over releases at each age.
+The first age whose pooled share reaches 98% is the truth delay.
+The 2026-08-18 release is left out, as its old weeks were revised rather than late.
+Weeks with no release that far after them are not scored yet.
+The Backtest page gives the truth delay in use and how many forecasts it scores.
+Health zones are scored on the weeks the latest release reports in full.
+There a week is complete when it is at least 4 weeks back from the week holding the latest release's cut-off and grew by less than 2% since the release before.
 
 Scores are WIS, 50% and 90% coverage and bias, by model, origin, weeks back from the week holding the origin's cut-off, and place.
 Relative WIS is against `randomwalk` on the forecasts both made, for national and the provinces pooled, over all origins and by origin, and by origin and place.
@@ -163,7 +171,7 @@ Every scored week of a forecast takes the forecast's place type and flag, and th
 For each hub reference date, our unfitted models forecast from the latest real vintage serving the round.
 Fitted models use their stored backtest forecasts for the same round.
 Where we submitted to a round, our submitted file is a series of its own beside these main-build forecasts.
-Every model is scored on the complete weeks it forecast, as for [real releases](#real-releases), from the vintage serving the round, since hub teams have no modelled delay we can see.
+Every model is scored on the complete weeks it forecast, from the vintage serving the round, since hub teams have no modelled delay we can see.
 WIS is relative to `randomwalk` on the weeks both forecast, on the [comparison page](../comparison.md).
 A round is pending until a later real release exists.
 
@@ -185,7 +193,7 @@ Our models' samples are reduced to their quantiles at these levels, as for a hub
 Our models and the hub teams are then scored the same way, as the paper did.
 The scores are the WIS of the seven quantiles, the absolute error of the median and the coverage of the 50% and 95% intervals.
 Each 7-day sum's truth is its count in the data 40 days after it ends, the paper's 40-day truth.
-The backtest can score its complete weeks the same way, on the first release $D$ days after each week, in place of the latest release.
+The backtest scores its complete weeks the same way, on the first release the truth delay after each week ([Real releases](#real-releases)).
 Relative scores divide a model's mean score by `randomwalknowcast`'s on the nowcasts both made.
 The paper's relative scores divide by the hub's own baseline, `KIT-frozen_baseline`.
 Both baselines are set in `config/germany.toml`.
