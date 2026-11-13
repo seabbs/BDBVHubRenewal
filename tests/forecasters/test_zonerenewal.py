@@ -151,6 +151,39 @@ def test_zone_fit_sums_fitted_and_silent_zones_to_provinces(
     assert set(written["location"]) == set(zones["location"])
 
 
+def test_fit_renewal_fits_zones_and_writes_their_samples(
+    task: ForecastTask,
+    monkeypatch: pytest.MonkeyPatch,
+    quiet_zones: set[str],
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(
+        zr.ZoneRenewalModel, "run", lambda self, t: _fake_run(t, self.variant)
+    )
+    record = rn.fit_renewal(
+        task, {"num_chains": 2}, tmp_path, variant="renewal", config_name="main"
+    )
+    assert record["model"] == "renewal"
+    zones = pd.read_csv(tmp_path / zr.ZONES_FILE)
+    assert quiet_zones < set(zones["location"])
+    samples = pd.read_csv(tmp_path / rn.SAMPLES_FILE)
+    keys = ["location", "target_end_date", "sample"]
+    final = zones.loc[zones["as_of"].isna()] if "as_of" in zones else zones
+    summed = (
+        final.assign(location=final["location"].map(province_of))
+        .groupby(keys)["value"]
+        .sum()
+    )
+    rows = samples.loc[samples["location"].isin(task.locations)]
+    if "as_of" in rows:
+        rows = rows.loc[rows["as_of"].isna()]
+    pd.testing.assert_series_equal(
+        rows.set_index(keys)["value"].sort_index(),
+        summed.sort_index(),
+        check_names=False,
+    )
+
+
 def test_zone_inputs_take_the_zone_counts_and_province_delays(
     task: ForecastTask,
 ) -> None:
