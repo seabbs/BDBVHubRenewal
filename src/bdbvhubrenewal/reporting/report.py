@@ -580,16 +580,36 @@ def _release_section(
         ),
         fig / "relative-overall.svg",
     )
-    save_light_dark(
-        partial(
-            plot_release_nowcasts,
-            quantiles,
-            real,
-            _RELEASE_PLACES,
-            _RELEASE_MODELS,
-        ),
-        fig / "release-nowcasts.svg",
+    # The figure shows the complete target's weeks only, as scored.
+    shown = quantiles.loc[
+        (quantiles["target"] == "complete")
+        & quantiles["location"].isin(_RELEASE_PLACES)
+        & quantiles["model"].isin(_RELEASE_MODELS)
+    ]
+    figure = (
+        "![Final forecasts of the recent weeks by origin, with the "
+        "counts each release reports.](figures/release-nowcasts.svg"
+        "#only-light)\n"
+        "![Final forecasts of the recent weeks by origin, with the "
+        "counts each release reports.](figures/release-nowcasts-dark.svg"
+        "#only-dark)\n"
     )
+    if shown.empty:
+        figure = (
+            "No forecast week has a release the truth delay after it yet, "
+            "so there is no complete week to show.\n"
+        )
+    else:
+        save_light_dark(
+            partial(
+                plot_release_nowcasts,
+                quantiles,
+                real,
+                _RELEASE_PLACES,
+                _RELEASE_MODELS,
+            ),
+            fig / "release-nowcasts.svg",
+        )
     _write(
         gen / "release-headline.md",
         "## Overall\n\n"
@@ -625,15 +645,7 @@ def _release_section(
     _write(
         gen / "release-nowcasts.md",
         "## Nowcasts from the real releases\n\n"
-        + _dropdown(
-            "![Final forecasts of the recent weeks by origin, with the "
-            "counts each release reports.](figures/release-nowcasts.svg"
-            "#only-light)\n"
-            "![Final forecasts of the recent weeks by origin, with the "
-            "counts each release reports.](figures/release-nowcasts-dark.svg"
-            "#only-dark)\n",
-            "Figure",
-        )
+        + _dropdown(figure, "Figure")
         + "\n"
         + _dropdown(
             "Scores by target, pool and origin.\n\n"
