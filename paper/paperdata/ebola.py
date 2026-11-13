@@ -19,7 +19,8 @@ Three sources give samples.
 `rolling_truth` gives each target week's count as reported `delay_days`
 after the week ended, as the German nowcast hub did (Wolffram et al.
 2023). Weeks whose release that far after them is not out yet have no
-truth. `load` joins it to the samples as `truth`, one row per sample.
+truth. `load` joins it to the samples as `truth`, one row per sample,
+with `quantile_level` left empty as the paper's schema has it.
 `score` scores the samples with the repo's sample scores
 (`bdbvhubrenewal.evaluation.scoring`): CRPS on the natural and `log1p`
 scales, bias, and 50% and 90% coverage. `relative_scores` divides each
@@ -74,6 +75,7 @@ COLUMNS: Final = (
     "origin_date",
     "target_date",
     "horizon",
+    "quantile_level",
     "sample_id",
     "value",
     "truth",
@@ -263,6 +265,7 @@ def load(
         (table["target_date"] - table["origin_date"]).dt.days // 7
     ).astype(int)
     table["study"] = "ebola"
+    table["quantile_level"] = np.nan
     return table[list(COLUMNS)].reset_index(drop=True)
 
 
