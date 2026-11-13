@@ -36,6 +36,7 @@ import numpy as np
 import pandas as pd
 
 from bdbvhubrenewal.data.dates import epiweek_end
+from bdbvhubrenewal.data.snapshots import parent_code
 from bdbvhubrenewal.evaluation.backtest import run_forecasts
 from bdbvhubrenewal.forecasters.base import (
     NATIONAL,
@@ -57,6 +58,7 @@ __all__ = [
     "delay_quantile",
     "evaluate",
     "factor_table",
+    "hub_codes",
     "longest_delay_weeks",
     "model_task",
     "models_by_name",
@@ -238,11 +240,14 @@ def outbreak_tasks(
     cutoffs, origins = origin_cutoffs(counts, outbreak, n_origins)
     if not origins:
         return []
-    weekly = releases(counts, "weekly", cutoffs)
-    daily = releases(counts, "daily", cutoffs)
+    weekly = _with_parents(releases(counts, "weekly", cutoffs), ["total"])
+    daily = _with_parents(
+        releases(counts, "daily", cutoffs), ["observed", "imputed"]
+    )
     weekly.insert(0, "kind", "simulated")
     daily.insert(0, "kind", "simulated")
-    provinces = tuple(sorted(set(weekly["location"]) - {NATIONAL}))
+    strata = sorted(set(counts["location"]))
+    provinces = tuple(strata) if len(strata) > 1 else ()
     tasks = []
     for origin in origins:
         ref = epiweek_end(origin)
@@ -270,6 +275,55 @@ def outbreak_tasks(
             )
         )
     return tasks
+
+
+def hub_codes(counts: pd.DataFrame) -> pd.DataFrame:
+    """Return an outbreak with its strata in the hub's location codes.
+
+    The random walks read a stratum's parent from its code
+    (`data.snapshots.parent_code`): a province `CD-XX` sits in the
+    country `CD` and a zone `CD-XX-NN` in its province. So place `P01`
+    becomes `CD-01`, age group `A1` in one place `CD-A1`, and age group
+    `A1` of place `P01` `CD-01-A1`, whose parent is `CD-01`.
+
+    Parameters
+    ----------
+    counts : pandas.DataFrame
+        One or more outbreaks' triangles, as the simulator writes them.
+
+    Returns
+    -------
+    pandas.DataFrame
+        The same rows with `location` recoded.
+    """
+    codes = (
+        counts["location"]
+        .astype(str)
+        .str.replace(r"^P(\d+)-A(\d+)$", r"CD-\1-A\2", regex=True)
+        .str.replace(r"^P(\d+)$", r"CD-\1", regex=True)
+        .str.replace(r"^A(\d+)$", r"CD-A\1", regex=True)
+    )
+    return counts.assign(location=codes)
+
+
+def _with_parents(rows: pd.DataFrame, values: list[str]) -> pd.DataFrame:
+    """Add each missing parent below the country as the sum of its strata.
+
+    Age groups by place have their place as parent, which the simulator
+    does not report on its own, so its rows are the sum over its ages.
+    """
+    parent = rows["location"].map(parent_code)
+    missing = ~parent.isin(set(rows["location"]) | {NATIONAL, None})
+    if not missing.any():
+        return rows
+    keys = [c for c in rows.columns if c not in (*values, "location")]
+    sums = (
+        rows.loc[missing]
+        .assign(location=parent[missing])
+        .groupby([*keys, "location"], as_index=False)[values]
+        .sum()
+    )
+    return pd.concat([rows, sums[list(rows.columns)]], ignore_index=True)
 
 
 def truth_table(counts: pd.DataFrame) -> pd.DataFrame:

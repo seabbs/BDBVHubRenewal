@@ -36,6 +36,7 @@ from paper.synthetic import (
     MODELS,
     evaluate,
     factor_table,
+    hub_codes,
     models_by_name,
     observation_table,
 )
@@ -71,8 +72,13 @@ def main() -> None:
     if args.device == "cpu":
         _cpu(args.threads)
 
-    counts = pd.concat(
-        [pd.read_csv(p) for p in sorted(args.sim_dir.glob("counts-*.csv.gz"))]
+    counts = hub_codes(
+        pd.concat(
+            [
+                pd.read_csv(p)
+                for p in sorted(args.sim_dir.glob("counts-*.csv.gz"))
+            ]
+        )
     )
     ids = sorted(counts["outbreak"].unique())[: args.outbreaks]
     models, skipped = models_by_name(args.models)
