@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
-# Check and submit the baseline hub model (baseline) on its own:
-# random walk on a nowcast under its own id, with health zones required.
-# Run after `prepare`, apart from the renewal chain.
+# Check and submit a hub model of its own, under its own id, with health
+# zones required: random walk on a nowcast (baseline) or fine-tuned
+# Chronos-2 (chronos). Run after `prepare`, apart from the renewal chain.
 #
 # There is no fallback. When the model cannot run, or a check or the hub
 # validation rules it out, the round is skipped for this id and says so.
 # Nothing else is ever submitted under it: not plain random walk, not
 # any other model.
 #
-#   TRACK_MODEL   the model (default randomwalknowcast)
+#   TRACK_MODEL   the model (default randomwalknowcast), with a candidate
+#                 in ci/policy.toml
 #   TRACK_ID      its hub id (default: `bdbvhubrenewal hub-id --model`)
 #   As for select.sh and submit.sh: HUB_PATH, VALIDATE, CHECK_WINDOW,
 #   DRY_RUN, FORK, HUB_REF, DATA_COMMIT, AS_OF, REFERENCE_DATE.
@@ -28,13 +29,23 @@ echo "model_id=$TRACK_ID" >> "${GITHUB_OUTPUT:-/dev/null}"
 # Plain random walk is built only as the reference the model's forecast
 # is checked against. It is a shadow here and is never selected. Neither
 # needs a fit.
-for id in randomwalk "$TRACK_MODEL"; do
-  label="random walk baseline"
-  [ "$id" = randomwalk ] || label="random walk on a nowcast"
-  CAND_ID=$id CAND_KIND=randomwalk CAND_CONFIG=$id CAND_MODEL=$id \
-    CAND_LABEL=$label CAND_SAMPLER='{}' REQUIRE_ZONES=true \
-    "$(dirname "$0")/candidate.sh"
-done
+CAND_ID=randomwalk CAND_KIND=randomwalk CAND_CONFIG=randomwalk \
+  CAND_MODEL=randomwalk CAND_LABEL="random walk baseline" CAND_SAMPLER='{}' \
+  REQUIRE_ZONES=true "$(dirname "$0")/candidate.sh"
+# The model's own candidate in the policy.
+sci python -m submission_ci.policy --policy "$POLICY" --stage baseline \
+  --model "$TRACK_MODEL" --only-model > "$WORK/matrix-track.json"
+leg=$(python3 - "$WORK/matrix-track.json" "$TRACK_MODEL" << 'PY'
+import json, sys
+legs = json.load(open(sys.argv[1]))["include"]
+(e,) = [e for e in legs if (e["model"] or e["id"]) == sys.argv[2]]
+print("\t".join([e["id"], e["kind"], e["config"], e["label"]]))
+PY
+)
+IFS=$'\t' read -r cid ckind cconfig clabel <<< "$leg"
+CAND_ID=$cid CAND_KIND=$ckind CAND_CONFIG=$cconfig CAND_MODEL=$TRACK_MODEL \
+  CAND_LABEL=$clabel CAND_SAMPLER='{}' REQUIRE_ZONES=true \
+  "$(dirname "$0")/candidate.sh"
 
 cli metadata --model "$TRACK_MODEL" --abbr "${TRACK_ID#*-}" \
   --out "$WORK/metadata"

@@ -20,7 +20,7 @@ SLOWEST = 29 + SETUP
 def test_chain_runs_from_most_to_least_complex() -> None:
     # renewalbvd, renewalsp, renewal, then the random walks, with no
     # refit. Each fitted leg names the model it runs.
-    pol = load_policy(POLICY_PATH)
+    pol = load_policy(POLICY_PATH).for_model("renewalbvd")
     assert [(c.id, c.kind, c.model) for c in pol.chain()] == [
         ("bvd", "main", "renewalbvd"),
         ("renewalsp", "fallback", "renewalsp"),
@@ -29,6 +29,8 @@ def test_chain_runs_from_most_to_least_complex() -> None:
         ("randomwalk", "randomwalk", ""),
     ]
     assert pol.for_model("renewalbvd") == pol
+    raw = load_policy(POLICY_PATH)
+    assert pol.candidates == [c for c in raw.candidates if c.kind != "direct"]
     # Both baselines need no fit and are built in `prepare`.
     assert [c.id for c in pol.stage("baseline")] == [
         "randomwalknowcast",

@@ -211,5 +211,75 @@ MODEL_METADATA = {
             "provinces and health zones, and the hub's weekly target data."
         ),
     },
+    # Fine-tuned Chronos-2, the hub model seabbs-chronos2_ft. Its committed
+    # hub/model-metadata/seabbs-chronos2_ft.yml is that of the model in
+    # config/hub.toml (tests/submission/test_fitting.py checks it).
+    "fm_chronos_daily_ragged_ft": {
+        "model_name": "Fine-tuned Chronos-2 (daily releases)",
+        "methods": (
+            "Chronos-2 time series foundation model, LoRA fine-tuned on "
+            "outbreaks simulated with epinowcast, forecasting the hub "
+            "target from its daily releases. Health zones split from "
+            "provinces."
+        ),
+        "methods_long": (
+            "Chronos-2 (Ansari et al. 2025, arXiv:2510.15821) with a LoRA "
+            "adapter fine-tuned on 2,000 outbreaks simulated with "
+            "epinowcast's generative model (renewal process, drifting "
+            "reporting delays, day-of-week effects, negative binomial "
+            "noise). The adapter is the release chronos-ft-<settings hash> "
+            "of https://github.com/seabbs/BDBVHubRenewal. The hub target of "
+            "every daily release is laid out by onset day and release "
+            "lag. The country and each province are target series in one "
+            "block. Each place's counts at release lags under 28 days are "
+            "covariates, known past the last day at that lag, and "
+            "Chronos-2 forecasts the block jointly. Each of 100 samples "
+            "draws its own uniform level per series and day from "
+            "Chronos-2's 21 quantiles, rounded to counts no lower than "
+            "those reported. Not fitted to these data. Each province "
+            "sample is split across its health zones with shares drawn "
+            "from a Dirichlet on published zone counts. See "
+            "https://samabbott.co.uk/BDBVHubRenewal/methods/foundation/."
+        ),
+        "data_inputs": (
+            "The hub's daily onsets by release (observed plus "
+            "imputed) "
+            "for the country and provinces, and published health zone "
+            "counts for the zone split."
+        ),
+    },
+    "fm_chronos_weekly_ragged_ft": {
+        "model_name": "Fine-tuned Chronos-2 (weekly releases)",
+        "methods": (
+            "Chronos-2 time series foundation model, LoRA fine-tuned on "
+            "outbreaks simulated with epinowcast, forecasting the hub "
+            "target from its weekly releases. Health zones split from "
+            "provinces."
+        ),
+        "methods_long": (
+            "Chronos-2 (Ansari et al. 2025, arXiv:2510.15821) with a LoRA "
+            "adapter fine-tuned on 2,000 outbreaks simulated with "
+            "epinowcast's generative model (renewal process, drifting "
+            "reporting delays, day-of-week effects, negative binomial "
+            "noise). The adapter is the release chronos-ft-<settings hash> "
+            "of https://github.com/seabbs/BDBVHubRenewal. The hub target of "
+            "every weekly release is laid out by onset week and release "
+            "lag. The country and each province are target series in one "
+            "block. Each place's counts at release lags under 4 weeks are "
+            "covariates, known past the last week at that lag, and "
+            "Chronos-2 forecasts the block jointly. Each of 100 samples "
+            "draws its own uniform level per series and week from "
+            "Chronos-2's 21 quantiles, rounded to counts no lower than "
+            "those reported. Not fitted to these data. Each province "
+            "sample is split across its health zones with shares drawn "
+            "from a Dirichlet on published zone counts. See "
+            "https://samabbott.co.uk/BDBVHubRenewal/methods/foundation/."
+        ),
+        "data_inputs": (
+            "The hub's weekly target data by release "
+            "for the country and provinces, and published health zone "
+            "counts for the zone split."
+        ),
+    },
 }
 """Metadata text for each model that may be submitted."""

@@ -257,6 +257,10 @@ def cmd_fit_store(args: argparse.Namespace) -> int:
     return status
 
 
+CHRONOS_FT = ("fm_chronos_daily_ragged_ft", "fm_chronos_weekly_ragged_ft")
+"""The fine-tuned Chronos-2 models of seabbs-chronos2_ft."""
+
+
 def cmd_nowcast(args: argparse.Namespace) -> int:
     sc = scenario()
     as_of = args.vintage
@@ -290,10 +294,11 @@ def cmd_nowcast(args: argparse.Namespace) -> int:
                 rows.append([loc, s, w, v])
     for (s, w), v in totals.items():
         rows.append(["CD", s, w, v])
-    # Health zones, as the baselines write them: each province split
-    # evenly over two zones. `nozones` (or FAKE_ZONES=none) leaves them out.
+    # Health zones, as the baselines and the fine-tuned Chronos-2 models
+    # write them: each province split evenly over two zones. `nozones` (or
+    # FAKE_ZONES=none) leaves them out.
     if (
-        args.model in ("randomwalk", "randomwalknowcast")
+        args.model in ("randomwalk", "randomwalknowcast", *CHRONOS_FT)
         and sc != "nozones"
         and os.environ.get("FAKE_ZONES") != "none"
     ):
@@ -523,6 +528,8 @@ def main() -> int:
             print(
                 "seabbs-rwnowcast"
                 if a.model == "randomwalknowcast"
+                else "seabbs-chronos2_ft"
+                if a.model in CHRONOS_FT
                 else "seabbs-renewal"
             )
             or 0

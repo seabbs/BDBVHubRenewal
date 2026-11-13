@@ -30,6 +30,7 @@ from .common import (
     write_text,
 )
 from .hubdata import quantile, read_observed, read_samples
+from .policy import UNFITTED
 
 MAX_BODY = 60000  # GitHub's limit is 65536 characters
 HUB = "InsightNet-US/BDBV-Modeling-Hub"
@@ -307,7 +308,7 @@ def fit_line(provenance: Mapping[str, Any]) -> str:
     run (`candidate.sh` with `FIT_SOURCE=fit`, a local run) says so.
     """
     run = provenance.get("run") or {}
-    if "store" not in run or run.get("kind") == "randomwalk":
+    if "store" not in run or run.get("kind") in UNFITTED:
         return ""
     store = run["store"]
     if not store:

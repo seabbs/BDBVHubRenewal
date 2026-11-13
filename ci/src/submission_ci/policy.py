@@ -28,10 +28,14 @@ from typing import Any
 from .common import set_outputs
 from .window import minutes_left, parse_now
 
-KINDS = ("main", "fallback", "randomwalk", "shadow")
+KINDS = ("main", "fallback", "randomwalk", "shadow", "direct")
 """A `shadow` candidate is fitted and checked with its stage but is never
 part of the chain, so it is never submitted. It lets a variant run weekly
-before it is chosen."""
+before it is chosen. A `direct` candidate is a hub model of its own, run
+in its job with no fit and never in another model's chain."""
+
+UNFITTED = ("randomwalk", "direct")
+"""Kinds that run their model with no fit, so have no diagnostics."""
 STAGES = ("primary", "baseline")
 
 
@@ -87,20 +91,22 @@ class Policy:
         With `only`, the chain is that candidate alone, for a hub model
         that must never be submitted as anything else. The others are
         still built as shadows, as references for the checks, and are
-        never selected.
+        never selected. Without it, `direct` candidates are left out.
         """
-        chain = self.chain()
+        pool = (
+            self.candidates
+            if only
+            else [c for c in self.candidates if c.kind != "direct"]
+        )
+        chain = [c for c in pool if c.kind != "shadow"]
         names = [c.model or c.id for c in chain]
         if model not in names:
             if only:
                 raise ValueError(f"{model!r} has no candidate")
-            return self
+            return replace(self, candidates=pool)
         start = names.index(model)
         kept = {c.id for c in chain[start : start + 1 if only else None]}
-        cands = [
-            c if c.id in kept else replace(c, kind="shadow")
-            for c in self.candidates
-        ]
+        cands = [c if c.id in kept else replace(c, kind="shadow") for c in pool]
         return replace(self, candidates=cands)
 
     def get(self, cid: str) -> Candidate:
