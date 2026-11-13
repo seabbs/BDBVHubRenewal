@@ -89,6 +89,7 @@ Each checkpoint is published as the repository's release `chronos-ft-<hash>`, wi
 The models load the newest such release by publish date, unless `config/finetune.toml` pins a hash.
 The checkpoint's hash and adapter SHA-256 key the stored fits, so a new release refits the `_ft` models, and each stored fit records the checkpoint it used.
 The adapter is downloaded once and checked against `sha256sums.txt` and the settings hash.
+The fit store resolves the release once per run, with the workflow's GitHub token, and passes its hash to every fit in `BDBV_CHRONOS_FT`.
 If GitHub cannot be reached, building a model fails rather than fall back to a checkpoint downloaded before.
 A fit whose adapter cannot be downloaded is stored as failed, and the fit store keeps it until its inputs change.
 Such fits are retried by running the Fit store workflow with `retry_failed` (`gh workflow run fit-store.yml -R seabbs/BDBVHubRenewal -f retry_failed=true -f models="fm_chronos_weekly_ragged_ft fm_chronos_daily_ragged_ft"`).

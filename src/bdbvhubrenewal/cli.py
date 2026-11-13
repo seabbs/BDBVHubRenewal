@@ -21,6 +21,8 @@ Commands:
 - `coherence`: compare the national data with the sum of the provinces.
 - `validate`: run the hub's checks on files (`submission.validate`).
 - `metadata`: write and check a model's metadata YAML.
+- `finetuned-checkpoint`: print the settings hash of the fine-tuned
+  checkpoint the `_ft` models load, resolved once for a run's jobs.
 - `compare-hub`: score our forecasts against the hub's submitted ones.
 - `report`: make the docs figures and tables.
 
@@ -516,6 +518,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Defaults to every real backtest vintage.",
     )
 
+    sub.add_parser(
+        "finetuned-checkpoint",
+        help="Print the fine-tuned checkpoint's settings hash, for "
+        "BDBV_CHRONOS_FT.",
+    )
     hid = sub.add_parser(
         "hub-id", help="Print the hub model id that submissions use."
     )
@@ -1725,6 +1732,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _metadata(args)
     if args.command == "bvd":  # pragma: no cover - network
         return _bvd(args)
+    if args.command == "finetuned-checkpoint":
+        from bdbvhubrenewal.forecasters.foundation import (
+            finetuned_spec,
+            resolve_checkpoint,
+        )
+
+        print(resolve_checkpoint(finetuned_spec()).hash)
+        return 0
     if args.command == "hub-id":
         print(model_id(model_abbr_for(args.model, args.hub_toml)))
         return 0

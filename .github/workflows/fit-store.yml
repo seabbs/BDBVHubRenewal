@@ -106,6 +106,7 @@ jobs:
       rest: ${{ steps.plan.outputs.rest }}
       rest_count: ${{ steps.plan.outputs.rest_count }}
       write: ${{ steps.guard.outputs.write }}
+      chronos_ft: ${{ steps.finetuned.outputs.hash }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -137,14 +138,23 @@ jobs:
           uv run bdbvhubrenewal bvd
       - name: Fetch the store
         run: scripts/fit-store.sh fetch "$STORE"
+      # The fine-tuned models' checkpoint, resolved once for the run so
+      # every fit job keys and loads the same one without listing the
+      # releases again.
+      - name: Resolve the fine-tuned checkpoint
+        id: finetuned
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          hash=$(uv run bdbvhubrenewal finetuned-checkpoint)
+          echo "hash=$hash" >> "$GITHUB_OUTPUT"
+          echo "BDBV_CHRONOS_FT=$hash" >> "$GITHUB_ENV"
       - name: Plan
         id: plan
         env:
           MODELS: ${{ inputs.models }}
           ORIGINS: ${{ inputs.origins }}
           RETRY: ${{ inputs.retry_failed }}
-          # The fine-tuned models list the releases for their checkpoint.
-          GITHUB_TOKEN: ${{ github.token }}
         run: |
           args=(--store "$STORE" --out matrix.json --keys keys.json)
           # shellcheck disable=SC2206
@@ -249,7 +259,7 @@ jobs:
           MODEL: ${{ matrix.model }}
           ORIGIN: ${{ matrix.origin }}
           KEY: ${{ matrix.key }}
-          GITHUB_TOKEN: ${{ github.token }}
+          BDBV_CHRONOS_FT: ${{ needs.plan.outputs.chronos_ft }}
         run: |
           if ! uv run bdbvhubrenewal fit-store fit --model "$MODEL" \
             --origin "$ORIGIN" --store new; then

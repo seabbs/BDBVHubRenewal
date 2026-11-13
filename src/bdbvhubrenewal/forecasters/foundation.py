@@ -52,6 +52,7 @@ __all__ = [
     "CHRONOS_REVISION",
     "FINETUNED_CACHE",
     "FINETUNED_CONFIG",
+    "FINETUNED_ENV",
     "FINETUNED_RELEASES",
     "FINETUNED_URL",
     "LAYOUTS",
@@ -103,6 +104,10 @@ FINETUNED_RELEASES: Final = (
 )
 """The repository's releases, listed to find the latest checkpoint."""
 
+FINETUNED_ENV: Final = "BDBV_CHRONOS_FT"
+"""Environment variable with the settings hash a run resolved once, which
+then overrides `FINETUNED_CONFIG`, so its jobs never list the releases."""
+
 SUMS_FILE: Final = "sha256sums.txt"
 """A checkpoint release's asset with the SHA-256 of its other assets."""
 
@@ -140,6 +145,8 @@ class Checkpoint:
 def finetuned_spec(path: Path | str = FINETUNED_CONFIG) -> str:
     """Return the checkpoint the `_ft` models load: `"latest"` or a hash.
 
+    `FINETUNED_ENV`, when set, overrides the file.
+
     Parameters
     ----------
     path : pathlib.Path or str
@@ -149,6 +156,8 @@ def finetuned_spec(path: Path | str = FINETUNED_CONFIG) -> str:
     -------
     str
     """
+    if os.environ.get(FINETUNED_ENV):
+        return os.environ[FINETUNED_ENV]
     return str(tomllib.loads(Path(path).read_text())["hash"])
 
 
@@ -184,7 +193,9 @@ def finetuned_releases() -> list[dict[str, Any]]:
         except (OSError, http.client.HTTPException) as err:
             raise ConnectionError(
                 f"Cannot list the releases at {url} to find the fine-tuned "
-                f"checkpoint: {err!r}"
+                f"checkpoint: {err!r}. Set GH_TOKEN or GITHUB_TOKEN to a "
+                "GitHub token (anonymous requests are rate limited), or "
+                f"set {FINETUNED_ENV} to a settings hash."
             ) from err
         out += batch
         if len(batch) < 100:
