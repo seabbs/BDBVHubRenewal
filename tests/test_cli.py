@@ -725,3 +725,19 @@ def test_data_defaults_follow_bdbv_data_dir(
     monkeypatch.setenv("BDBV_DATA_DIR", "elsewhere")
     args = build_parser().parse_args(argv)
     assert getattr(args, attr) == f"elsewhere{path}"
+
+
+def test_cli_germany_held_out_half_goes_to_its_own_directory(
+    tmp_path: Path,
+) -> None:
+    data, config = _germany_data(tmp_path)
+    config.write_text(
+        config.read_text().replace('"2021-10-06"', '"2021-10-05"')
+    )
+    out = tmp_path / "results"
+    assert main(["germany-backtest", "--config", str(config), "--data",
+                 str(data), "--models", "randomwalk", "--held-out",
+                 "--out", str(out)]) == 0  # fmt: skip
+    scores = pd.read_csv(out / "held-out" / "scores.csv.gz")
+    assert set(scores["origin"]) == {"2021-10-05"}
+    assert not (out / "scores.csv.gz").exists()
