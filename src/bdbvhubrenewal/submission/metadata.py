@@ -27,13 +27,22 @@ _RENEWAL_OBSERVATION = (
     "weeks the log Rt walk reverts towards Rt of 1 with a half-life of 2 "
     "weeks. Fitted by NUTS (NumPyro) to each data vintage. Each sample is "
     "one joint posterior "
-    "trajectory. The national value is the sum of province samples plus "
-    "the national cases in no province. Health zones are not fitted: "
-    "each province sample is split across its zones with shares drawn "
-    "once per sample from a Dirichlet built on recent and longer-run "
-    "published zone counts, keeping each zone's published count, so zone "
-    "samples sum to the province sample. See "
+    "trajectory. See "
     "https://samabbott.co.uk/BDBVHubRenewal/methods/model/."
+)
+_ZONE_SUMS = (
+    "Health zones are fitted and the national value is the sum of the "
+    "province samples, each the sum of its zone samples. Zone WorldPop "
+    "populations and population-weighted zone centres set the importation "
+    "kernel between zones. "
+)
+_ZONE_SPLIT = (
+    "The national value is the sum of province samples plus the national "
+    "cases in no province. Health zones are not fitted: each province "
+    "sample is split across its zones with shares drawn once per sample "
+    "from a Dirichlet built on recent and longer-run published zone counts, "
+    "keeping each zone's published count, so zone samples sum to the "
+    "province sample. "
 )
 _RENEWAL_INPUTS = (
     "Hub target data (weekly confirmed cases by onset week, observed plus "
@@ -78,18 +87,20 @@ MODEL_METADATA = {
     #   bdbvhubrenewal metadata --model <renewal|renewalsp|renewalbvd>
     # when that changes (tests/submission/test_fitting.py checks it).
     "renewal": {
-        "model_name": "Province renewal model (PyRenew)",
+        "model_name": "Zone renewal model (PyRenew)",
         "methods": (
-            "Province renewal model in PyRenew with pooled Rt, gravity "
+            "Health zone renewal model in PyRenew with pooled Rt, gravity "
             "importation and depletion, fitted to known and imputed onsets "
-            "with modelled delays; national is the sum of provinces."
+            "with modelled delays; provinces are zone sums."
         ),
         "methods_long": (
-            "A renewal process for each province, with a national "
-            "weekly random walk on log Rt plus partially pooled province "
-            "deviations, importation between provinces through a gravity "
-            "kernel, and susceptible depletion. Provinces with no cases yet "
-            "are never seeded and gain infections only by importation. "
+            "A renewal process for each health zone with recent cases, with "
+            "a national weekly random walk on log Rt plus partially pooled "
+            "province and zone deviations, importation between zones "
+            "through a gravity kernel, and susceptible depletion. Zones with "
+            "no recent case take a random walk introduction layer. "
+            "Provinces are the sums of their zones. "
+            + _ZONE_SUMS
             + _RENEWAL_OBSERVATION
         ),
         "data_inputs": _RENEWAL_INPUTS,
@@ -107,27 +118,30 @@ MODEL_METADATA = {
             "with its own weekly random walk on log Rt and no pooling, "
             "importation or depletion. Provinces with no case in the last "
             "nine weeks are zero until an introduction, then a random walk. "
+            + _ZONE_SPLIT
             + _RENEWAL_OBSERVATION
         ),
         "data_inputs": _RENEWAL_INPUTS,
     },
     "renewalbvd": {
-        "model_name": "Province renewal model with BVD Rt (PyRenew)",
+        "model_name": "Zone renewal model with BVD Rt (PyRenew)",
         "methods": (
-            "Province renewal model in PyRenew with pooled Rt, gravity "
+            "Health zone renewal model in PyRenew with pooled Rt, gravity "
             "importation and depletion, with a tempered likelihood on "
-            "BVDOutbreakSize Rt, fitted to known and imputed onsets."
+            "BVDOutbreakSize Rt, fitted to known and imputed onsets; "
+            "provinces are zone sums."
         ),
         "methods_long": (
-            "A renewal process for each province, with a national "
-            "weekly random walk on log Rt plus partially pooled province "
-            "deviations, importation between provinces through a gravity "
-            "kernel, and susceptible depletion. Provinces with no cases yet "
-            "are never seeded and gain infections only by importation. "
-            "The model's national "
-            "and patch Rt in the week of the newest BVDOutbreakSize release "
-            "available at the cut-off are tied to that release's Rt "
+            "A renewal process for each health zone with recent cases, with "
+            "a national weekly random walk on log Rt plus partially pooled "
+            "province and zone deviations, importation between zones "
+            "through a gravity kernel, and susceptible depletion. Zones with "
+            "no recent case take a random walk introduction layer. "
+            "Provinces are the sums of their zones. The model's national, "
+            "province and zone Rt in the week of the newest BVDOutbreakSize "
+            "release available at the cut-off are tied to that release's Rt "
             "estimates, as a likelihood term tempered by 0.5. "
+            + _ZONE_SUMS
             + _RENEWAL_OBSERVATION
         ),
         "data_inputs": (

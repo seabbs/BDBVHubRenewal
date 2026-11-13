@@ -1449,9 +1449,10 @@ def fit_renewal(
     out.mkdir(parents=True, exist_ok=True)
     settings = sampler_settings(sampler)
     task = replace(task, seed=int(settings.get("seed", task.seed)))
-    model = replace(
-        get_model(variant), sampler=settings, progress=out / "progress.log"
-    )
+    registered = get_model(variant)
+    if not isinstance(registered, RenewalModel):
+        raise TypeError(f"{variant} is not a renewal model.")
+    model = replace(registered, sampler=settings, progress=out / "progress.log")
     model.forecast(task)
     return model.write_fit_dir(task, out, config_name)
 
