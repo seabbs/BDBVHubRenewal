@@ -103,6 +103,9 @@ def test_synthetic_panel_shows_factors_and_weekly_horizons() -> None:
     titles = " ".join(ax.get_title() for ax in fig.axes)
     assert "by scenario factor" in titles
     assert "by location" not in titles
+    groups = {t.get_text() for ax in fig.axes for t in ax.texts}
+    assert "Delay q99" in groups
+    assert "Delay mean" not in groups
     labels = " ".join(ax.get_xlabel() for ax in fig.axes)
     assert "Horizon (weeks)" in labels
     plt.close(fig)

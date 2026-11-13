@@ -5,6 +5,7 @@ import pytest
 from paperfigs.dummy import dummy_factors, dummy_study
 from paperfigs.factors import (
     bin_factors,
+    redundant_factors,
     relative_by_factor,
     top_factors,
 )
@@ -75,3 +76,33 @@ def test_report_days_become_daily_or_not() -> None:
         "weekdays",
         "weekdays",
     ]
+
+
+def test_delay_mean_is_redundant_when_ranked_like_delay_q99() -> None:
+    f = pd.DataFrame(
+        {
+            "location": list("abcde"),
+            "delay_mean": [1.0, 2, 3, 4, 5],
+            "delay_q99": [10.0, 20, 30, 40, 55],
+        }
+    )
+    assert redundant_factors(f) == ["delay_mean"]
+    f["delay_q99"] = [30.0, 10, 50, 20, 40]
+    assert redundant_factors(f) == []
+
+
+def test_top_factors_can_always_keep_one() -> None:
+    rel = pd.DataFrame(
+        {
+            "factor": ["a", "a", "b", "b", "c", "c"],
+            "level": ["x", "y"] * 3,
+            "model": "m",
+            "rel_score": [1.0, 1.0, 0.5, 2.0, 0.9, 1.1],
+        }
+    )
+    assert top_factors(rel, n=2, always=("a",)) == ["a", "b"]
+
+
+def test_dummy_factors_include_delay_q99(synthetic) -> None:
+    _, factors = synthetic
+    assert "delay_q99" in factors.columns
