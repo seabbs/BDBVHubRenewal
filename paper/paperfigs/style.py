@@ -63,7 +63,7 @@ _HATCHES: Final = {"dashed": "////", "dotted": "...."}
 _MARKERS: Final = {"solid": "o", "dashed": "o", "dotted": "s"}
 
 _STYLE: Final[dict[str, tuple[str, str]]] = {
-    "hub_baseline": ("#5f5e5a", "solid"),
+    "KIT-frozen_baseline": ("#5f5e5a", "solid"),
     "BDBVHub-baseline": ("#5f5e5a", "solid"),
     "randomwalknowcast": (_PALETTE[1], "solid"),
     "randomwalk": (_PALETTE[7], "solid"),

@@ -31,7 +31,6 @@ __all__ = [
     "STUDY_SETUP",
     "StudySetup",
     "dummy_factors",
-    "dummy_split",
     "dummy_study",
 ]
 
@@ -177,7 +176,7 @@ STUDY_SETUP: Final[dict[str, StudySetup]] = {
             "fm_chronos_daily_complete": _FM_COMPLETE,
             "fm_chronos_daily_ragged": _FM,
             "fm_chronos_daily_ragged_ft": _FM_FT,
-            "hub_baseline": _HUB_BASE,
+            "KIT-frozen_baseline": _HUB_BASE,
             "hub_ensemble": ModelSkill(0.03, 0.8, 1.1),
             "hub_team_a": ModelSkill(0.15, 0.9, 0.9),
             "hub_team_b": ModelSkill(-0.1, 1.05, 1.3),
@@ -415,20 +414,3 @@ def dummy_factors(forecasts: pd.DataFrame, seed: int = 1) -> pd.DataFrame:
             "report_days": rng.choice([5, 7], n),
         }
     )
-
-
-def dummy_split(forecasts: pd.DataFrame) -> pd.Timestamp:
-    """Return the dummy split: the middle origin date.
-
-    Parameters
-    ----------
-    forecasts : pandas.DataFrame
-        Forecasts of one study.
-
-    Returns
-    -------
-    pandas.Timestamp
-        The first origin of the later half.
-    """
-    origins = sorted(forecasts["origin_date"].unique())
-    return pd.Timestamp(origins[len(origins) // 2])

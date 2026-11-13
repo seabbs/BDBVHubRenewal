@@ -74,4 +74,4 @@ The latest `as_of_date` for a study is the final data.
 These match scoringutils 2.2 defaults, checked by `tests/test_scoringutils.py` against `tests/scoringutils_reference.R`.
 
 `paperfigs.scores.relative_scores` divides each model's mean score by the baseline's on the forecasts both made (matched on location, stratum, origin, target and horizon), within each group.
-The baseline is set per study in `STUDY_BASELINES`: `randomwalknowcast` for synthetic, the hub's baseline for germany and `BDBVHub-baseline` for Ebola.
+The baseline is set per study in `STUDY_BASELINES`: `randomwalknowcast` for synthetic, `KIT-frozen_baseline` for germany and `BDBVHub-baseline` for Ebola.

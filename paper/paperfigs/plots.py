@@ -42,7 +42,7 @@ from paperfigs.factors import (
     relative_by_factor,
     top_factors,
 )
-from paperfigs.periods import PERIOD_ALPHA, PERIODS, STUDY_SPLITS, add_period
+from paperfigs.periods import PERIOD_ALPHA, PERIODS, add_period, study_split
 from paperfigs.schema import DEFAULT_STRATUM
 from paperfigs.scores import (
     STUDY_BASELINES,
@@ -559,7 +559,7 @@ def results_panel(
     ribbon_models: Sequence[str] | None = None,
     factors: pd.DataFrame | None = None,
     n_factors: int = 4,
-    split: pd.Timestamp | None = None,
+    split: pd.Timestamp | bool | None = None,
 ) -> Figure:
     """Plot the results panel for one study.
 
@@ -589,9 +589,10 @@ def results_panel(
         factors whose levels spread the relative score most.
     n_factors : int
         Factors to show when `factors` is given.
-    split : pandas.Timestamp, optional
-        First held-out origin date. Defaults to the study's in
-        `STUDY_SPLITS`. When set, the score panels show the development
+    split : pandas.Timestamp or False, optional
+        First held-out origin date. Defaults to `study_split(study)`;
+        pass the sidecar's with `study_split(study, read_sidecar(path))`,
+        or False for no split. When set, the score panels show the development
         and held-out halves side by side (development lighter) and the
         nowcast panel marks the split with a dotted line.
     ribbon_models : sequence of str, optional
@@ -610,7 +611,10 @@ def results_panel(
     """
     study = _one_study(forecasts)
     obs = observations.loc[observations["study"] == study]
-    split = split if split is not None else STUDY_SPLITS.get(study)
+    if split is None:
+        split = study_split(study)
+    elif split is False:
+        split = None
     sc = add_period(scores.loc[scores["study"] == study], split)
     halves = ["period"] if split is not None else []
     baseline = baseline or STUDY_BASELINES[study]

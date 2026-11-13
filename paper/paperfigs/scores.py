@@ -66,7 +66,7 @@ __all__ = [
 
 STUDY_BASELINES: Final[dict[str, str]] = {
     "synthetic": "randomwalknowcast",
-    "germany": "hub_baseline",
+    "germany": "KIT-frozen_baseline",
     "ebola": "BDBVHub-baseline",
 }
 """Reference model for relative scores in each study."""
