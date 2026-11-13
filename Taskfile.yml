@@ -104,6 +104,7 @@ tasks:
       - uv run bdbvhubrenewal germany-fetch
       - uv run bdbvhubrenewal germany-backtest {{.CLI_ARGS}}
       - uv run bdbvhubrenewal germany-teams
+      - uv run bdbvhubrenewal germany-asof
       - uv run bdbvhubrenewal germany-paper
 
   nowcast:

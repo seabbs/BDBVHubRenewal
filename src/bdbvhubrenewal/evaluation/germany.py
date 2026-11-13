@@ -167,6 +167,10 @@ class GermanyConfig:
         The model the page's relative scores divide by.
     paper_baseline : str
         The model the paper's relative scores divide by, the hub's own.
+    hidden : tuple of str
+        Models switched off on the page until the reader switches them on.
+    plot_every : int
+        The nowcast plots show every this many development dates.
     """
 
     repo: str
@@ -184,6 +188,8 @@ class GermanyConfig:
     truth_delay: int
     baseline: str
     paper_baseline: str
+    hidden: tuple[str, ...]
+    plot_every: int
 
 
 def load_germany_config(
@@ -219,6 +225,8 @@ def load_germany_config(
         truth_delay=int(raw["truth"]["delay"]),
         baseline=raw["scoring"]["baseline"],
         paper_baseline=raw["scoring"]["paper_baseline"],
+        hidden=tuple(raw["page"]["hidden"]),
+        plot_every=int(raw["page"]["plot_every"]),
     )
 
 

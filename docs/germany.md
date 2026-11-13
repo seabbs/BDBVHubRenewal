@@ -8,6 +8,14 @@ The paper's later dates, from 2022-02-10, are held out.
 Every nowcast is scored on its quantiles at the hub's seven levels, by WIS and the coverage of the 50% and 95% intervals, on the data reported 40 days after the sum ends ([how the benchmark is set up](methods/evaluation.md#german-nowcast-benchmark)).
 Relative scores are against `randomwalknowcast` on the nowcasts both made.
 
+## Nowcasts
+
+Each model's median and its 50% and 95% intervals at every seventh nowcast date, for Germany, each state and each age group.
+The solid line is the 7-day sum as reported 40 days after it ends, and the dashed line the data on the nowcast date.
+`randomwalk` and `KIT-frozen_baseline` start switched off; tick them to show them.
+
+--8<-- "germany-nowcasts.md"
+
 ## Overall
 
 Scores at each of the paper's levels: Germany, its states and its age groups.
