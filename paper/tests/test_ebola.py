@@ -37,12 +37,12 @@ def _hub_file(path, ref, location, weeks, values, forecast_date):
 def hub(tmp_path):
     """Build a small hub with one weekly round and an old cumulative file."""
     root = tmp_path / "hub"
-    draws = [list(range(1, 101))]
+    draws = [list(range(1, 101)), list(range(1, 101))]
     _hub_file(
         root / "model-output/team-a/2026-10-31-team-a.csv",
         "2026-10-31",
         "CD",
-        ["2026-11-07"],
+        ["2026-10-24", "2026-11-07"],
         draws,
         "2026-10-27",
     )
@@ -58,41 +58,32 @@ def hub(tmp_path):
         }
     ).to_csv(old, index=False)
     (root / "target-data").mkdir(parents=True)
+    releases = [
+        ("2026-10-24", "2026-10-17", 3),
+        ("2026-11-01", "2026-10-17", 8),
+        ("2026-11-01", "2026-10-24", 10),
+        ("2026-11-08", "2026-10-17", 9),
+        ("2026-11-08", "2026-10-24", 30),
+        ("2026-11-08", "2026-11-07", 50),
+    ]
     pd.DataFrame(
         {
-            "as_of": ["2026-11-01", "2026-11-08"],
-            "target_end_date": ["2026-11-07", "2026-11-07"],
-            "target": [TARGET, TARGET],
-            "location": ["CD", "CD"],
-            "location_name": ["DRC", "DRC"],
-            "location_type": ["country", "country"],
-            "observation": [10, 50],
+            "as_of": [r[0] for r in releases],
+            "target_end_date": [r[1] for r in releases],
+            "target": TARGET,
+            "location": "CD",
+            "location_name": "DRC",
+            "location_type": "country",
+            "observation": [r[2] for r in releases],
         }
     ).to_csv(root / "target-data/time-series.csv", index=False)
     return root
 
 
-def test_quantiles_from_samples():
-    samples = pd.DataFrame(
-        {
-            "model": "m",
-            "location": "CD",
-            "origin_date": pd.Timestamp("2026-10-31"),
-            "target_date": pd.Timestamp("2026-11-07"),
-            "sample": np.arange(1, 102),
-            "value": np.arange(0.0, 101.0),
-        }
-    )
-    q = ebola.to_quantiles(samples)
-    assert list(q["quantile_level"]) == list(ebola.QUANTILE_LEVELS)
-    assert q.loc[q["quantile_level"] == 0.5, "value"].item() == 50.0
-    assert q.loc[q["quantile_level"] == 0.025, "value"].item() == 2.5
-
-
 def test_hub_samples_keep_weekly_target_only(hub):
     s = ebola.hub_samples(hub)
     assert set(s["model"]) == {"team-a"}
-    assert len(s) == 100
+    assert len(s) == 200
     assert s["origin_date"].iloc[0] == pd.Timestamp("2026-10-31")
 
 
@@ -102,23 +93,8 @@ def test_hub_samples_keep_latest_forecast_date(hub):
     later = first.assign(forecast_date="2026-10-28", value=first["value"] * 2)
     pd.concat([first, later]).to_csv(path, index=False)
     s = ebola.hub_samples(hub)
-    assert len(s) == 100
+    assert len(s) == 200
     assert s["value"].max() == 200
-
-
-def test_truth_is_latest_vintage(hub):
-    truth = ebola.hub_truth(hub)
-    assert truth["truth"].item() == 50
-    assert truth["as_of"].item() == pd.Timestamp("2026-11-08")
-
-
-def test_load_gives_schema(hub):
-    table = ebola.load(hub)
-    assert list(table.columns) == list(ebola.COLUMNS)
-    assert set(table["study"]) == {"ebola"}
-    assert set(table["horizon"]) == {1}
-    assert (table["truth"] == 50).all()
-    assert len(table) == len(ebola.QUANTILE_LEVELS)
 
 
 def test_load_adds_candidates(hub, tmp_path):
@@ -213,66 +189,6 @@ def test_round_close_is_tuesday_before():
     assert close == pd.Timestamp("2026-11-10 22:59", tz="UTC")
 
 
-def test_wis_of_point_mass_at_truth_is_zero():
-    q = pd.DataFrame(
-        {
-            "model": "m",
-            "location": "CD",
-            "origin_date": pd.Timestamp("2026-10-31"),
-            "target_date": pd.Timestamp("2026-11-07"),
-            "horizon": 1,
-            "quantile_level": ebola.QUANTILE_LEVELS,
-            "value": 7.0,
-            "truth": 7.0,
-        }
-    )
-    scores = ebola.score(q)
-    assert scores["wis"].item() == 0
-    assert scores["ae_median"].item() == 0
-    assert scores["cover_50"].item()
-
-
-def test_wis_matches_interval_definition():
-    levels = np.array(ebola.QUANTILE_LEVELS)
-    values = np.array([0.0, 1, 2, 3, 4, 5, 6])
-    y = 10.0
-    q = pd.DataFrame(
-        {
-            "model": "m",
-            "location": "CD",
-            "origin_date": pd.Timestamp("2026-10-31"),
-            "target_date": pd.Timestamp("2026-11-07"),
-            "horizon": 1,
-            "quantile_level": levels,
-            "value": values,
-            "truth": y,
-        }
-    )
-    # Intervals (alpha): 0.05 [0, 6], 0.2 [1, 5], 0.5 [2, 4].
-    terms = [
-        a / 2 * ((u - lo) + 2 / a * max(y - u, 0))
-        for a, lo, u in [(0.05, 0, 6), (0.2, 1, 5), (0.5, 2, 4)]
-    ]
-    expected = (0.5 * abs(y - 3) + sum(terms)) / 3.5
-    assert ebola.score(q)["wis"].item() == pytest.approx(expected)
-
-
-def test_score_drops_rows_without_truth():
-    q = pd.DataFrame(
-        {
-            "model": "m",
-            "location": "CD",
-            "origin_date": pd.Timestamp("2026-10-31"),
-            "target_date": pd.Timestamp("2026-11-21"),
-            "horizon": 3,
-            "quantile_level": ebola.QUANTILE_LEVELS,
-            "value": 1.0,
-            "truth": np.nan,
-        }
-    )
-    assert ebola.score(q).empty
-
-
 def test_store_skips_fits_with_no_forecasts(store):
     _fit(store, "pp", "2026-10-25", "d", "2026-10-26T09:00:00+00:00", 3)
     _git(store, "add", "-A")
@@ -289,29 +205,98 @@ def test_store_skips_fits_with_no_forecasts(store):
     assert (s.loc[s["model"] == "pp", "value"] == 3).all()
 
 
+def test_hub_samples_keep_trajectory_ids(hub):
+    s = ebola.hub_samples(hub)
+    assert sorted(s["sample_id"].unique()) == list(range(1, 101))
+
+
+def test_rolling_truth_is_release_d_days_after_week(hub):
+    truth = ebola.rolling_truth(hub, delay_days=14).set_index("target_date")
+    # 2026-10-17 + 14 days is 2026-10-31: the 2026-10-24 release.
+    assert truth.loc["2026-10-17", "truth"] == 3
+    # 2026-10-24 + 14 days is 2026-11-07: the 2026-11-01 release.
+    assert truth.loc["2026-10-24", "truth"] == 10
+    # 2026-11-07 + 14 days is not released yet.
+    assert pd.Timestamp("2026-11-07") not in truth.index
+
+
+def test_rolling_truth_needs_a_release_by_d_days(hub):
+    truth = ebola.rolling_truth(hub, delay_days=3)
+    # 2026-10-17 + 3 is before the first release.
+    assert pd.Timestamp("2026-10-17") not in set(truth["target_date"])
+
+
+def test_load_gives_sample_schema(hub):
+    table = ebola.load(hub, delay_days=14)
+    assert list(table.columns) == list(ebola.COLUMNS)
+    assert "sample_id" in table
+    assert set(table["study"]) == {"ebola"}
+    assert set(table["horizon"]) == {-1, 1}
+    assert len(table) == 200
+    week = table.set_index("target_date")["truth"]
+    assert (week.loc["2026-10-24"] == 10).all()
+    assert week.loc["2026-11-07"].isna().all()
+
+
+def _forecast(model, location, values, truth, target="2026-10-24"):
+    return pd.DataFrame(
+        {
+            "study": "ebola",
+            "model": model,
+            "location": location,
+            "origin_date": pd.Timestamp("2026-10-31"),
+            "target_date": pd.Timestamp(target),
+            "horizon": -1,
+            "sample_id": np.arange(1, len(values) + 1),
+            "value": np.asarray(values, dtype=float),
+            "truth": truth,
+        }
+    )
+
+
+def test_score_uses_the_repo_sample_scores():
+    from bdbvhubrenewal.evaluation.scoring import (
+        bias_sample,
+        coverage_sample,
+        crps_sample,
+    )
+
+    x = np.arange(0.0, 20.0)
+    scores = ebola.score(_forecast("m", "CD", x, 7.0))
+    row = scores.iloc[0]
+    assert row["crps"] == pytest.approx(crps_sample(7.0, x))
+    assert row["log_crps"] == pytest.approx(
+        crps_sample(np.log1p(7.0), np.log1p(x))
+    )
+    assert row["bias"] == pytest.approx(bias_sample(7.0, x))
+    assert row["coverage_50"] == coverage_sample(7.0, x, 0.5)
+    assert row["coverage_90"] == coverage_sample(7.0, x, 0.9)
+    assert row["n_samples"] == 20
+
+
+def test_score_drops_forecasts_without_truth():
+    assert ebola.score(_forecast("m", "CD", [1.0, 2.0], np.nan)).empty
+
+
 def test_hub_baseline_is_the_hub_model():
     assert ebola.HUB_BASELINE == "BDBVHub-baseline"
 
 
-def test_relative_wis_uses_shared_forecasts():
-    def rows(model, location, wis):
-        return {
-            "model": model,
-            "location": location,
-            "origin_date": pd.Timestamp("2026-11-07"),
-            "target_date": pd.Timestamp("2026-11-07"),
-            "horizon": 0,
-            "wis": wis,
-        }
-
-    scores = pd.DataFrame(
+def test_relative_scores_use_forecasts_all_models_share():
+    base = ebola.HUB_BASELINE
+    table = pd.concat(
         [
-            rows(ebola.HUB_BASELINE, "CD", 4.0),
-            rows(ebola.HUB_BASELINE, "CD-IT", 100.0),
-            rows("m", "CD", 2.0),
+            _forecast(base, "CD", [4.0, 4.0], 0.0),
+            _forecast(base, "CD-IT", [100.0, 100.0], 0.0),
+            _forecast("a", "CD", [2.0, 2.0], 0.0),
+            _forecast("a", "CD-IT", [1.0, 1.0], 0.0),
+            _forecast("b", "CD", [8.0, 8.0], 0.0),
         ]
     )
-    rel = ebola.relative_wis(scores).set_index("model")
-    assert rel.loc["m", "relative_wis"] == 0.5
-    assert rel.loc["m", "n"] == 1
-    assert rel.loc[ebola.HUB_BASELINE, "relative_wis"] == 1
+    rel = ebola.relative_scores(ebola.score(table)).set_index("model")
+    # Only CD is shared by all three models.
+    assert (rel["n"] == 1).all()
+    assert rel.loc["a", "relative_crps"] == pytest.approx(0.5)
+    assert rel.loc["b", "relative_crps"] == pytest.approx(2.0)
+    assert rel.loc[base, "relative_crps"] == 1
+    assert "relative_log_crps" in rel
