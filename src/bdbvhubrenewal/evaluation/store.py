@@ -13,10 +13,11 @@ branch, one file per fit:
 The key (`fit_key`) hashes only what reaches a fit: the task at the
 origin, which holds only the releases up to the origin; the built model,
 whose representation gives its variant and resolved sampler settings;
-the BVDOutbreakSize release a BVD model uses; the code the model's fit
-can run (`fit_code`, without docstrings or comments, and
-`run_forecasts`), less the zone split, which runs at load; and the
-runtime dependencies locked in `uv.lock`.
+the BVDOutbreakSize release a BVD model uses; data a model reads beside
+the task (`fit_inputs`, the zone fits' zone data up to the origin); the
+code the model's fit can run (`fit_code`, without docstrings or
+comments, and `run_forecasts`), less the zone backtest; the package data
+files; and the runtime dependencies locked in `uv.lock`.
 A new release adds one fit per model and leaves the older ones valid,
 while a change to a model's code or settings refits every origin of the
 models that run it, and no other.
@@ -112,17 +113,14 @@ STORE_ENTRIES: Final = (
 STORE_SKIP: Final = (
     "src/bdbvhubrenewal/evaluation/digest.py",
     "src/bdbvhubrenewal/evaluation/zones.py",
-    "src/bdbvhubrenewal/forecasters/zones.py",
     "src/bdbvhubrenewal/reporting/plots.py",
 )
 """Modules `STORE_ENTRIES` import but a fit does not call.
 
-The zone split, which a fit does not run: the zone fits of `renewal` and
-`renewalbvd` store their own zone samples in their fit directory, and
-other models' zones are split from their provinces at load
-(`forecasters.zones.zones_for_model`). `fit_code`'s own helper
-(`evaluation.digest`), and the plots `evaluation.ppc` imports for
-`plot_ppc`, which a fit does not draw.
+The zone backtest, which a fit does not run (the zone fits of `renewal`
+and `renewalbvd` call `forecasters.zones`, so it is in their keys only),
+`fit_code`'s own helper (`evaluation.digest`), and the plots
+`evaluation.ppc` imports for `plot_ppc`, which a fit does not draw.
 """
 
 STORE_DATA: Final = "src/bdbvhubrenewal/data/*.csv"
@@ -413,6 +411,10 @@ def fit_key(model: ForecastModel, task: ForecastTask, code: str) -> str:
         "code": code,
         "bvd": _bvd_tag(model, task),
     }
+    # Data a model reads beside the task (the zone fits' zone data).
+    inputs = getattr(model, "fit_inputs", None)
+    if inputs is not None:
+        head["inputs"] = inputs(task)
     digest.update(json.dumps(head, sort_keys=True).encode())
     for f in fields(task):
         value = getattr(task, f.name)

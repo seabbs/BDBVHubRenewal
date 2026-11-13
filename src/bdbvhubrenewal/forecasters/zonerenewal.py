@@ -27,6 +27,7 @@ from bdbvhubrenewal.data.tidy import write_csv
 from bdbvhubrenewal.forecasters.base import (
     SAMPLE_COLUMNS,
     ForecastTask,
+    ModelUnavailableError,
     register_model,
 )
 from bdbvhubrenewal.forecasters.renewal import (
@@ -431,6 +432,42 @@ class ZoneRenewalModel(RenewalModel):
             used,
         )
 
+    def fit_inputs(self, task: ForecastTask) -> str:
+        """Hash the zone data a fit of `task` reads beside the task.
+
+        The daily zone onsets of every release up to the task's vintage
+        in its provinces, the zones it forecasts (`task_zones`) and, for
+        a BVD variant, the zone names matched to the release's zone
+        estimates. The fit key holds it (`evaluation.store.fit_key`).
+
+        Parameters
+        ----------
+        task : ForecastTask
+            A province task.
+
+        Returns
+        -------
+        str
+            The first 16 hex digits of a SHA-256.
+        """
+        import hashlib
+
+        from bdbvhubrenewal.data.zones import province_of
+
+        daily = _daily_zones()
+        mine = daily.loc[
+            (daily["vintage"].astype(str) <= task.vintage)
+            & daily["location"].map(province_of).isin(task.locations)
+        ]
+        digest = hashlib.sha256(mine.to_csv(index=False).encode())
+        digest.update(repr(task_zones(task)).encode())
+        if model_config(self.variant).bvd:
+            from bdbvhubrenewal.data import load_health_zones
+
+            names = load_health_zones(_data_dir())
+            digest.update(names.to_csv(index=False).encode())
+        return digest.hexdigest()[:16]
+
     def forecast_fit(self, task: ForecastTask) -> ZoneRenewalFit:
         """Fit the zones together and sum them to the provinces.
 
@@ -446,13 +483,23 @@ class ZoneRenewalModel(RenewalModel):
         Parameters
         ----------
         task : ForecastTask
-            A province task.
+            A province task of a real release.
 
         Returns
         -------
         ZoneRenewalFit
             The run, province samples and zone samples.
+
+        Raises
+        ------
+        ModelUnavailableError
+            For a simulated task, which has no zone data.
         """
+        if task.kind != "real":
+            raise ModelUnavailableError(
+                f"{self.name} fits the hub's zone data, which a "
+                f"{task.kind} task does not have."
+            )
         walk, silent = _silent_walk(_zone_walk_task(task))
         fitted = tuple(z for z in task_zones(task) if z not in silent)
         zones = [walk]

@@ -110,9 +110,9 @@ def test_code_digest_follows_each_models_own_code(tmp_path: Path) -> None:
     assert all(after[m] != before[m] for m in models)
 
 
-def test_the_zone_split_does_not_key_a_fit(tmp_path: Path) -> None:
-    # Zones of the models that do not fit them are split from their
-    # provinces at load (`zones_for_model`), so the split is not fit code.
+def test_zone_code_keys_only_the_zone_fits(tmp_path: Path) -> None:
+    # The zone backtest is not fit code. The zone split module is, for
+    # the zone fits of renewal and renewalbvd, which call its zone_task.
     root = _copy_repo(tmp_path)
     models = ("renewal", "pprandomwalknowcast")
 
@@ -124,23 +124,34 @@ def test_the_zone_split_does_not_key_a_fit(tmp_path: Path) -> None:
         path.write_text(path.read_text() + "\n_EDITED = 1\n")
 
     before = digests()
-    for rel in ("forecasters/zones.py", "evaluation/zones.py"):
-        edit(rel)
-        assert digests() == before, rel
+    edit("evaluation/zones.py")
+    assert digests() == before
+    edit("forecasters/zones.py")
+    after = digests()
+    assert after["renewal"] != before["renewal"]
+    assert after["pprandomwalknowcast"] == before["pprandomwalknowcast"]
+    before = after
     # Introductions are drawn in the fit, for provinces with no recent case.
     edit("forecasters/introductions.py")
     after = digests()
     assert all(after[m] != before[m] for m in models)
 
 
-def test_fit_code_has_the_store_and_no_other_model() -> None:
-    renewal = set(store.fit_code("renewal", ROOT))
-    assert "src/bdbvhubrenewal/evaluation/store.py" in renewal
-    assert "src/bdbvhubrenewal/model/observation.py" in renewal
-    assert "src/bdbvhubrenewal/forecasters/pprandomwalk.py" not in renewal
-    pp = set(store.fit_code("pprandomwalknowcast", ROOT))
-    assert "src/bdbvhubrenewal/forecasters/renewal.py" not in pp
-    assert "src/bdbvhubrenewal/evaluation/store.py" in pp
+def test_zone_data_keys_the_zone_fits(
+    tasks: dict[str, ForecastTask], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from bdbvhubrenewal.forecasters import zonerenewal as zr
+
+    sampler = store.samplers()
+    models = ["renewal", "renewalsp"]
+    keys = store.current_keys(tasks, models, sampler, "c")
+    daily = zr._daily_zones()
+    monkeypatch.setattr(
+        zr, "_daily_zones", lambda: daily.assign(observed=daily["observed"] + 1)
+    )
+    moved = store.current_keys(tasks, models, sampler, "c")
+    for (model, origin), key in keys.items():
+        assert (moved[(model, origin)] != key) == (model == "renewal")
 
 
 def test_fit_time_data_files_key_a_fit(tmp_path: Path) -> None:
