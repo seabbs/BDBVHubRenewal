@@ -13,6 +13,7 @@ Relative scores are against `randomwalknowcast` on the nowcasts both made.
 Each model's median and its 50% and 95% intervals at every seventh nowcast date, for Germany, each state and each age group.
 The solid line is the 7-day sum as reported 40 days after it ends, and the dashed line the data on the nowcast date.
 `randomwalk` and `KIT-frozen_baseline` start switched off; tick them to show them.
+The table under the plot scores the place and dates shown, so with all rounds it covers the plotted dates only.
 
 --8<-- "germany-nowcasts.md"
 

@@ -14,6 +14,7 @@ The configured hidden models start switched off.
 
 from __future__ import annotations
 
+from collections.abc import Collection, Sequence
 from pathlib import Path
 from typing import Final
 
@@ -32,11 +33,22 @@ from bdbvhubrenewal.reporting.explorer import (
     explorer_html,
     write_explorer,
 )
-from bdbvhubrenewal.reporting.plots import model_style
+from bdbvhubrenewal.reporting.plots import (
+    DASHES,
+    MODEL_COLOURS,
+    MODEL_STYLE,
+    model_style,
+)
 from bdbvhubrenewal.reporting.scorechart import write_score_chart
 from bdbvhubrenewal.reporting.scoresummary import summary_html, summary_rows
 
-__all__ = ["LEVELS", "METRICS", "germany_explorer", "germany_page"]
+__all__ = [
+    "LEVELS",
+    "METRICS",
+    "germany_explorer",
+    "germany_page",
+    "model_styles",
+]
 
 LEVELS: Final = {
     "national": "National",
@@ -73,6 +85,42 @@ def _write(path: Path, text: str) -> None:
     path.write_text(text)
 
 
+def model_styles(
+    models: Sequence[str], ours: Collection[str]
+) -> dict[str, tuple[str, str, str]]:
+    """Return each model's light colour, dark colour and dash.
+
+    Our models keep their own (`model_style`). The hub teams take the
+    colours ours leave free in turn, solid and then dashed, so no two
+    models look the same.
+
+    Parameters
+    ----------
+    models : sequence of str
+        Every model shown, in order.
+    ours : collection of str
+        Our models.
+
+    Returns
+    -------
+    dict
+        Model to its light colour, dark colour and dash.
+    """
+    out = {m: model_style(m, models) for m in models if m in ours}
+    used = {MODEL_STYLE[m][0] for m in out if m in MODEL_STYLE}
+    free = [i for i in range(len(MODEL_COLOURS["light"])) if i not in used]
+    dashes = list(DASHES.values())
+    teams = [m for m in models if m not in ours]
+    for k, m in enumerate(teams):
+        slot = free[k % len(free)]
+        out[m] = (
+            MODEL_COLOURS["light"][slot],
+            MODEL_COLOURS["dark"][slot],
+            dashes[(k // len(free)) % len(dashes)],
+        )
+    return {m: out[m] for m in models}
+
+
 def _read(results: Path, names: tuple[str, ...]) -> pd.DataFrame | None:
     """Stack the result files that exist, or None if none does."""
     dtype = {"origin": str, "truth_vintage": str, "target_end_date": str}
@@ -101,7 +149,7 @@ def germany_explorer(
     config : GermanyConfig
         Gives the dates, the plot spacing and the hidden models.
     models : list of str
-        Models in order, which sets their colours.
+        Models in order, which sets their colours (`model_styles`).
 
     Returns
     -------
@@ -123,6 +171,7 @@ def germany_explorer(
         .set_axis(list(_BANDS), axis=1)
         .reset_index()
     )
+    styles = model_styles(models, config.models)
     shown = [m for m in models if m in set(wide["model"])]
     wide["model"] = pd.Categorical(wide["model"], shown)
     wide = wide.sort_values(["model", "origin", "location"])
@@ -144,7 +193,7 @@ def germany_explorer(
         target,
         PLACE_NAMES,
         0,
-        {m: model_style(m, models) for m in shown},
+        {m: styles[m] for m in shown},
         truth_vintage="truth",
         hidden=config.hidden,
         level_of=lambda x: LEVELS[level(x)],
@@ -208,7 +257,7 @@ def germany_page(
         summary_rows(
             scores,
             models,
-            {m: model_style(m, models) for m in models},
+            model_styles(models, config.models),
             PLACE_NAMES,
             baseline=config.baseline,
             metrics=METRICS,
