@@ -167,10 +167,12 @@ def store_samples(
             continue
         table = fit["forecasts"]
         frame = pd.DataFrame(table["data"], columns=table["columns"])
-        first[key] = (meta["fitted_at"], frame)
+        frame = frame[frame["kind"] == "real"]
+        if frame.empty:
+            continue
+        first[key] = (meta["fitted_at"], _samples(frame))
     frames = []
-    for fitted_at, frame in first.values():
-        out = _samples(frame[frame["kind"] == "real"])
+    for fitted_at, out in first.values():
         close = round_close(out["origin_date"].iloc[0])
         if pd.Timestamp(fitted_at) <= close:
             frames.append(out)
