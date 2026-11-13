@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import pytest
 
-from paperfigs.dummy import dummy_factors, dummy_study
+from paperfigs.dummy import dummy_factors, dummy_split, dummy_study
 from paperfigs.plots import (
     PANEL_LETTERS,
     results_panel,
@@ -133,3 +133,47 @@ def test_chronos_variants_share_a_colour_with_distinct_styles(family) -> None:
     points = [tuple(sorted(point_style(n, []).items())) for n in names]
     assert len(set(points)) == 3
     assert model_order(list(reversed(names))) == names
+
+
+@pytest.fixture(scope="module")
+def germany():
+    fc, obs = dummy_study("germany", seed=1, n_samples=5)
+    return fc, obs, score_forecasts(fc), dummy_split(fc)
+
+
+def _texts(fig) -> str:
+    return " ".join(t.get_text() for ax in fig.axes for t in ax.texts)
+
+
+def test_split_draws_both_halves_and_the_line(germany) -> None:
+    fc, obs, scores, split = germany
+    fig = results_panel(fc, obs, scores, split=split)
+    assert "development | held out" in _texts(fig)
+    labels = [t.get_text() for t in fig.legends[0].get_texts()]
+    assert "Development half" in labels
+    assert "Held-out half" in labels
+    rel_ax = next(ax for ax in fig.axes if ax.get_title() == "Relative WIS")
+    n_models = scores["model"].nunique()
+    assert len(rel_ax.patches) == 2 * n_models
+    plt.close(fig)
+
+
+def test_no_split_draws_one_bar_per_model(germany) -> None:
+    fc, obs, scores, _ = germany
+    fig = results_panel(fc, obs, scores)
+    rel_ax = next(ax for ax in fig.axes if ax.get_title() == "Relative WIS")
+    assert len(rel_ax.patches) == scores["model"].nunique()
+    assert "development | held out" not in _texts(fig)
+    plt.close(fig)
+
+
+def test_si_figures_split_by_half(germany) -> None:
+    _, _, scores, split = germany
+    fig = si_wis_over_time(scores, split=split)
+    assert "development | held out" in _texts(fig)
+    plt.close(fig)
+    one = si_scores_by_location_horizon(scores, split=split)
+    none = si_scores_by_location_horizon(scores)
+    assert len(one.axes[0].lines) > len(none.axes[0].lines)
+    plt.close(one)
+    plt.close(none)
