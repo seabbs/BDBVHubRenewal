@@ -161,3 +161,14 @@ def test_page_says_when_not_run(tmp_path: Path) -> None:
     fig, gen = tmp_path / "figures", tmp_path / "generated"
     germany_page(fig, gen, tmp_path / "missing", CONFIG)
     assert "Not run yet" in (gen / "germany-scores.md").read_text()
+
+
+def test_every_model_has_its_own_colour_and_dash() -> None:
+    from bdbvhubrenewal.evaluation.germany import TEAM_NAMES
+    from bdbvhubrenewal.reporting.germany import model_styles
+
+    models = [*CONFIG.models, *TEAM_NAMES.values()]
+    styles = model_styles(models, CONFIG.models)
+    assert set(styles) == set(models)
+    pairs = [(light, dash) for light, _, dash in styles.values()]
+    assert len(set(pairs)) == len(models)
