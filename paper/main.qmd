@@ -105,7 +105,7 @@ Each panel shows:
 - bias;
 - 50% and 90% coverage;
 - score variation by location and horizon, supported by SI plots.
-- for Germany, a dotted line marking the split between the development and held-out halves.
+- for Germany, a dotted line marking the split between the development and held-out halves, with scores split by half.
 
 The plots in primarycensored-paper are a model for these.
 Each section has two paragraphs, one on visual performance and one summarising scores.
