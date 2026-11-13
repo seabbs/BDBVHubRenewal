@@ -26,8 +26,7 @@ as the paper's schema has it.
 `score` scores the samples with the repo's sample scores
 (`bdbvhubrenewal.evaluation.scoring`): CRPS on the natural and `log1p`
 scales, bias, and 50% and 90% coverage. `relative_scores` divides each
-model's mean CRPS by the hub's baseline's on the forecasts every compared
-model made.
+model's mean CRPS by the hub's baseline's on the forecasts the two share.
 """
 
 from __future__ import annotations
@@ -360,16 +359,11 @@ def relative_scores(
 ) -> pd.DataFrame:
     """Return each model's mean CRPS over the baseline's.
 
-    Only forecasts (location, round and target week) that every model in
-    `scores` made are compared, so pass the models to compare. The
-    baseline has 1. Also gives `log_crps`, bias and coverage means.
+    Each model is compared with the baseline on the forecasts (location,
+    round and target week) the two of them made. The baseline has 1.
+    Also gives `log_crps`, bias and coverage means.
     """
     match = ["location", "origin_date", "target_date"]
-    n_models = scores["model"].nunique()
-    shared = (
-        scores.groupby(match)["model"].nunique().loc[lambda n: n == n_models]
-    )
-    scores = scores.merge(shared.index.to_frame(index=False), on=match)
     return relative_skill(
         scores,
         baseline=baseline,
