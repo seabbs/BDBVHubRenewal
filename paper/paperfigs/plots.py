@@ -341,7 +341,6 @@ def _points_by(
                 x + offset,
                 one.to_numpy(),
                 ls="none",
-                marker="o",
                 ms=4.5,
                 **point_style(m, models),
             )
@@ -359,7 +358,13 @@ def _points_by(
 def _legend(fig: Figure, models: Sequence[str]) -> None:
     handles = [
         Line2D(
-            [], [], marker="s", ms=6, lw=1.6, label=m, **line_style(m, models)
+            [],
+            [],
+            ms=5,
+            lw=1.6,
+            label=m,
+            **line_style(m, models),
+            **{k: v for k, v in point_style(m, models).items() if k != "color"},
         )
         for m in models
     ]

@@ -2,9 +2,11 @@
 
 The ink colours and categorical palette are those of BDBVHubRenewal's
 `reporting/plots.py`, copied so the paper does not import the package.
-Each model has a fixed colour and dash. A fine-tuned foundation model is
-solid and its zero-shot version takes the same colour, dashed (hatched in
-bars, hollow as points).
+Each model has a fixed colour and dash. The Chronos variants of one family
+share a colour: fine-tuned on ragged data is solid, zero-shot on ragged
+data dashed (hatched bars, hollow circles), and zero-shot on complete data
+dotted (dotted bars, hollow squares). They are listed complete, ragged,
+fine-tuned so each step reads left to right.
 """
 
 from __future__ import annotations
@@ -50,17 +52,27 @@ _PALETTE: Final = (
 
 _GREYS: Final = ("#3d3c39", "#a3a198", "#c3c2b7")
 
-_DASHES: Final = {"solid": "-", "dashed": (0, (5, 2.5))}
+_DASHES: Final = {
+    "solid": "-",
+    "dashed": (0, (5, 2.5)),
+    "dotted": (0, (1.2, 1.8)),
+}
+
+_HATCHES: Final = {"dashed": "////", "dotted": "...."}
+
+_MARKERS: Final = {"solid": "o", "dashed": "o", "dotted": "s"}
 
 _STYLE: Final[dict[str, tuple[str, str]]] = {
     "hub_baseline": ("#5f5e5a", "solid"),
     "BDBVHub-baseline": ("#5f5e5a", "solid"),
     "randomwalknowcast": (_PALETTE[1], "solid"),
     "randomwalk": (_PALETTE[7], "solid"),
-    "fm_chronos_daily_ragged_ft": (_PALETTE[0], "solid"),
+    "fm_chronos_daily_complete": (_PALETTE[0], "dotted"),
     "fm_chronos_daily_ragged": (_PALETTE[0], "dashed"),
-    "fm_chronos_weekly_ragged_ft": (_PALETTE[6], "solid"),
+    "fm_chronos_daily_ragged_ft": (_PALETTE[0], "solid"),
+    "fm_chronos_weekly_complete": (_PALETTE[6], "dotted"),
     "fm_chronos_weekly_ragged": (_PALETTE[6], "dashed"),
+    "fm_chronos_weekly_ragged_ft": (_PALETTE[6], "solid"),
     "epinowcast": (_PALETTE[2], "solid"),
     "hub_ensemble": (_PALETTE[3], "solid"),
     "hub_team_a": (_PALETTE[4], "solid"),
@@ -90,7 +102,7 @@ def model_order(models: Sequence[str]) -> list[str]:
 
 
 def model_style(name: str, models: Sequence[str]) -> tuple[str, str]:
-    """Return a model's colour and dash name (`solid` or `dashed`).
+    """Return a model's colour and dash name (`solid`, `dashed` or `dotted`).
 
     Known models have a fixed style. Others take greys in their order in
     `models`, solid and then dashed.
@@ -122,18 +134,25 @@ def line_style(name: str, models: Sequence[str]) -> dict[str, Any]:
 
 
 def bar_style(name: str, models: Sequence[str]) -> dict[str, Any]:
-    """Return bar keywords: filled when solid, hatched when dashed."""
+    """Return bar keywords: filled when solid, hatched otherwise.
+
+    Dashed models get diagonal hatching and dotted models dots.
+    """
     colour, dash = model_style(name, models)
     if dash == "solid":
         return {"color": colour}
-    return {"facecolor": "white", "edgecolor": colour, "hatch": "////"}
+    return {"facecolor": "white", "edgecolor": colour, "hatch": _HATCHES[dash]}
 
 
 def point_style(name: str, models: Sequence[str]) -> dict[str, Any]:
-    """Return marker keywords: filled when solid, hollow when dashed."""
+    """Return marker keywords.
+
+    Solid models are filled circles, dashed hollow circles and dotted
+    hollow squares.
+    """
     colour, dash = model_style(name, models)
     face = colour if dash == "solid" else "white"
-    return {"color": colour, "markerfacecolor": face}
+    return {"color": colour, "markerfacecolor": face, "marker": _MARKERS[dash]}
 
 
 @contextmanager

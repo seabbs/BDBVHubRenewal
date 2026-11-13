@@ -119,6 +119,8 @@ _BASE = ModelSkill(0.0, 1.0, 1.4)
 _RW = ModelSkill(-0.1, 1.3, 1.2)
 _HUB_BASE = ModelSkill(-0.05, 1.1, 1.3)
 _FM = ModelSkill(0.08, 1.15, 0.7)
+_FM_COMPLETE = ModelSkill(-0.12, 1.3, 0.9)
+_FM_WEEKLY_COMPLETE = ModelSkill(-0.15, 1.35, 0.95)
 _FM_FT = ModelSkill(0.0, 0.75, 1.0)
 _FM_WEEKLY = ModelSkill(-0.05, 1.25, 0.8)
 _FM_WEEKLY_FT = ModelSkill(0.02, 0.85, 1.05)
@@ -138,8 +140,10 @@ STUDY_SETUP: Final[dict[str, StudySetup]] = {
         models={
             "randomwalk": _RW,
             "randomwalknowcast": _BASE,
+            "fm_chronos_daily_complete": _FM_COMPLETE,
             "fm_chronos_daily_ragged": _FM,
             "fm_chronos_daily_ragged_ft": _FM_FT,
+            "fm_chronos_weekly_complete": _FM_WEEKLY_COMPLETE,
             "fm_chronos_weekly_ragged": _FM_WEEKLY,
             "fm_chronos_weekly_ragged_ft": _FM_WEEKLY_FT,
             "epinowcast": ModelSkill(0.0, 0.65, 1.05),
@@ -169,6 +173,7 @@ STUDY_SETUP: Final[dict[str, StudySetup]] = {
         models={
             "randomwalk": _RW,
             "randomwalknowcast": _BASE,
+            "fm_chronos_daily_complete": _FM_COMPLETE,
             "fm_chronos_daily_ragged": _FM,
             "fm_chronos_daily_ragged_ft": _FM_FT,
             "hub_baseline": _HUB_BASE,
@@ -194,6 +199,7 @@ STUDY_SETUP: Final[dict[str, StudySetup]] = {
         models={
             "randomwalk": _RW,
             "randomwalknowcast": _BASE,
+            "fm_chronos_weekly_complete": _FM_WEEKLY_COMPLETE,
             "fm_chronos_weekly_ragged": _FM_WEEKLY,
             "fm_chronos_weekly_ragged_ft": _FM_WEEKLY_FT,
             "BDBVHub-baseline": _HUB_BASE,
