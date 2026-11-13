@@ -30,7 +30,7 @@ flowchart TD
         SNAP["Daily onsets C<sub>p,r</sub>(t)<br/>by onset day and release r"]
         PAIR["Release pairs (r, r + 1)<br/>gap s ≤ D = 42 days"]
     end
-    DEL["Daily delay Δ<sub>p</sub>(j) ≥ 0<br/>weighted non-negative<br/>least squares<br/><i>own or parent by age</i>"]
+    DEL["Daily delay Δ<sub>p</sub>(j) ≥ 0<br/>weighted non-negative<br/>least squares<br/><i>own or parent's</i>"]
     G["Growth to final Γ<sub>p</sub>(a)<br/>share reported 1 / Γ<sub>p</sub>(a)"]
     MU["Nowcast mean μ<sub>p</sub>(w)<br/>weekly fill<br/>shares F<sub>p,j</sub>(w) from Γ<sub>p</sub>"]
     RETRO["Earlier releases r &lt; o<br/>nowcast to release o"]
@@ -306,11 +306,11 @@ $$
 Each onset day $t$ in week $w(t)$ expects $\lambda_{p,w(t)} / 7$ cases.
 
 **Delay.**
-A case is reported $d$ days after onset, with $d$ log-normal with location $\mu_p$ and scale $s$, cut to whole days and capped at $D = 42$.
+A case is reported $d$ days after onset, with $d$ log-normal with location $\mu_p$ and scale $s_p$, cut to whole days and capped at $D = 42$.
 The share of a day's final count reported by age $a$ is
 
 $$
-\pi_p(a) = \frac{F(a + 1;\ \mu_p, s)}{F(D + 1;\ \mu_p, s)}, \quad 0 \le a < D,
+\pi_p(a) = \frac{F(a + 1;\ \mu_p, s_p)}{F(D + 1;\ \mu_p, s_p)}, \quad 0 \le a < D,
 \qquad
 \pi_p(a) = 1 \text{ for } a \ge D,
 \qquad
@@ -325,7 +325,7 @@ Let $r'$ be the release before $r$, with $a_{r'}(t) = -1$ and $C_{p,r'}(t) = 0$ 
 The new reports between the two are
 
 $$
-C_{p,r}(t) - C_{p,r'}(t) \sim \text{NB}\Big(\frac{\lambda_{p,w(t)}}{7}\,\big\{\pi_p(a_r(t)) - \pi_p(a_{r'}(t))\big\},\ \phi\Big),
+C_{p,r}(t) - C_{p,r'}(t) \sim \text{NB}\Big(\frac{\lambda_{p,w(t)}}{7}\,\big\{\pi_p(a_r(t)) - \pi_p(a_{r'}(t))\big\},\ \phi_p\Big),
 $$
 
 for every onset day in the 16 weeks and every release up to $o$ that observes it.
@@ -362,11 +362,13 @@ A silent place takes the delay of its nearest fitted ancestor.
 **Forecast.**
 Each sample takes one posterior draw, and every draw is used once before any is used again.
 A week's final count is the sum over its days.
-A day up to $c_o$ is its count reported plus an NB draw of the rest, with mean $\lambda_{p,w(t)} / 7 \cdot \{1 - \pi_p(a_o(t))\}$ and size $\phi$.
+A day up to $c_o$ is its count reported plus an NB draw of the rest, with mean $\lambda_{p,w(t)} / 7 \cdot \{1 - \pi_p(a_o(t))\}$ and size $\phi_p$.
 A later day of the week holding $c_o$ is an NB draw with mean $\lambda_{p,w(t)} / 7$.
-Later weeks continue the walk from the draw's last $\lambda$ with its $\sigma_p$, and their counts are NB with mean $\lambda$ and size $7 \phi$, the sum of seven days.
+Later weeks continue the walk from the draw's last $\lambda$ with its $\sigma_p$, and their counts are NB with mean $\lambda$ and size $7 \phi_p$, the sum of seven days.
 Weeks before the 16 fitted weeks are the counts reported.
-National is the sum of the provinces by sample, and zones are reconciled to provinces as for `randomwalknowcast` ([Health zones](#health-zones)).
+National is the sum of the provinces by sample.
+In the zone backtest it also runs on the zones, which are reconciled to its provinces as for `randomwalknowcast` ([Health zones](#health-zones)).
+Elsewhere, as in the hub tables, its province samples are split across the zones as for the renewal models ([Renewal models](model.md#split-of-province-samples)).
 
 **Silent places.**
 A silent leaf has no case to fit, and a walk from a $\lambda$ near 0 gave divergent draws.
@@ -378,7 +380,7 @@ On the reported target, the backtest maps its final counts to what a later relea
 
 **Sampler.**
 NUTS runs 2 chains of 500 warm-up and 750 draws, in sequence, from the prior medians, at target acceptance 0.9.
-Each walk step is sampled as $\delta^*_{p,w} \sim \mathcal{N}(0, \sigma_p)$ and set to $\delta_{p,w} = \sqrt{\sigma_p}\, \delta^*_{p,w}$, numpyro's location-scale reparameterisation with centring $\tfrac{1}{2}$.
+Each walk step is sampled as $\delta^*_{p,w}$, normal with mean 0 and scale $\sigma_p^{1/2}$, and set to $\delta_{p,w} = \sqrt{\sigma_p}\, \delta^*_{p,w}$, numpyro's location-scale reparameterisation with centring $\tfrac{1}{2}$.
 A large place's counts pin its walk, which suits centred steps, and a place with few cases leaves it to the prior, which suits non-centred ones.
 The pooled parameters are non-centred, except the first level, whose tiers are centred, and $\log s$, whose tiers are half centred.
 Sampling each tier about its parent's value, not as the country's value plus an offset, cut the median leapfrog steps from 255 to 511 down to 63.

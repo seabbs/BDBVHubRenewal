@@ -394,8 +394,8 @@ The term adds no parameters, and $\zeta = 0$ gives `renewal`.
 
 Zone samples sum to their province's samples, sample by sample and week by week, and zones do not enter the national value.
 `renewal` and `renewalbvd` forecast the zones themselves, and their provinces are the zone sums ([above](#provinces-and-the-country)).
-The random walk baselines run at zone level and their samples set the zone shares of the province samples ([Baseline models](baselines.md#health-zones)).
-Every other model's province forecast (`renewalsp`, `pprandomwalknowcast`) is split across the zones.
+`randomwalk` and `randomwalknowcast` run at zone level and their samples set the zone shares of the province samples ([Baseline models](baselines.md#health-zones)).
+Every other model's province forecast, `renewalsp`'s and `pprandomwalknowcast`'s included, is split across the zones.
 
 ### Split of province samples
 

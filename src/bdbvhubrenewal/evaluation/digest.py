@@ -34,7 +34,7 @@ __all__ = [
 REPORT_ONLY: Final = tuple(
     f"src/bdbvhubrenewal/reporting/{name}.py"
     for name in (
-        "hubtables",
+        "germany",
         "nowcast_plots",
         "report",
         "scorechart",

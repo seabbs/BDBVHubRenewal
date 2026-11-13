@@ -569,3 +569,19 @@ def test_by_baseline_stacks_a_table_per_baseline() -> None:
     assert list(got.columns) == ["baseline", "model", "rel_wis"]
     assert list(got["baseline"]) == ["b", "b", "a", "a"]
     assert list(got["rel_wis"]) == [0.5, 1.0, 1.0, 2.0]
+
+
+def test_complete_target_text_names_models_with_no_complete_score() -> None:
+    scores = pd.DataFrame(
+        {
+            "model": ["randomwalk", "renewal", "randomwalk"],
+            "target": ["reported", "reported", "complete"],
+        }
+    )
+    zones = pd.DataFrame({"model": ["randomwalk"], "target": ["complete"]})
+    text = report._complete_on(scores, zones, 56)
+    assert "at least 56 days after it ends" in text
+    assert "Forecasts with such a release so far: 1." in text
+    assert "So `renewal` have no complete-week scores yet" in text
+    full = report._complete_on(scores.iloc[[0, 2]], zones, 56)
+    assert "no complete-week scores" not in full
