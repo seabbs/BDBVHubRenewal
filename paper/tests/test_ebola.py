@@ -283,7 +283,7 @@ def test_hub_baseline_is_the_hub_model():
     assert ebola.HUB_BASELINE == "BDBVHub-baseline"
 
 
-def test_relative_scores_use_forecasts_all_models_share():
+def test_relative_scores_pair_each_model_with_the_baseline():
     base = ebola.HUB_BASELINE
     table = pd.concat(
         [
@@ -295,9 +295,10 @@ def test_relative_scores_use_forecasts_all_models_share():
         ]
     )
     rel = ebola.relative_scores(ebola.score(table)).set_index("model")
-    # Only CD is shared by all three models.
-    assert (rel["n"] == 1).all()
-    assert rel.loc["a", "relative_crps"] == pytest.approx(0.5)
+    # a shares CD and CD-IT with the baseline, b only CD.
+    assert rel.loc["a", "n"] == 2
+    assert rel.loc["a", "relative_crps"] == pytest.approx(1.5 / 52)
+    assert rel.loc["b", "n"] == 1
     assert rel.loc["b", "relative_crps"] == pytest.approx(2.0)
     assert rel.loc[base, "relative_crps"] == 1
     assert "relative_log_crps" in rel
