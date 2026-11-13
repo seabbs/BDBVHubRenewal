@@ -202,6 +202,7 @@ def test_models_by_name_skip_unregistered_ones() -> None:
 def test_default_models_include_the_zero_shot_ragged_ones(name: str) -> None:
     assert name in synthetic.MODELS
     assert "randomwalknowcast" in synthetic.MODELS
+    assert "randomwalk" in synthetic.MODELS
     assert f"{name}_ft" in synthetic.MODELS
 
 
@@ -213,9 +214,9 @@ def test_the_random_walk_forecasts_a_single_place_as_the_country() -> None:
     assert chronos.locations == ()
 
 
-def test_observations_are_each_release_to_the_last_origin_then_final() -> None:
+def test_observations_are_every_weekly_release_then_final() -> None:
     counts = _counts(("P01", "P02"))
-    cutoffs, origins = synthetic.origin_cutoffs(counts, "9-0001", 2)
+    cutoffs, _ = synthetic.origin_cutoffs(counts, "9-0001", 2)
     obs = synthetic.observation_table(counts, "9-0001", 2)
     assert list(obs.columns) == [
         "study",
@@ -226,7 +227,13 @@ def test_observations_are_each_release_to_the_last_origin_then_final() -> None:
     ]
     assert set(obs["study"]) == {"synthetic"}
     end = str(counts["report_date"].max())
-    releases = cutoffs[: cutoffs.index(origins[-1]) + 1]
+    # Weekly releases on the origins' weekday run to the last report, so
+    # every target has a release D days after it for the rolling truth.
+    releases = synthetic.release_cutoffs(counts, "9-0001")
+    assert releases[: len(cutoffs)] == cutoffs
+    assert dt.date.fromisoformat(end) - dt.date.fromisoformat(
+        releases[-1]
+    ) < dt.timedelta(weeks=1)
     assert set(obs["as_of_date"]) == {*releases, end}
     # The latest as-of date is the final data, the truth.
     final = obs.loc[obs["as_of_date"] == end].set_index(
