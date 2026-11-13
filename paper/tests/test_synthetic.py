@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from bdbvhubrenewal.data.snapshots import parent_code
 from bdbvhubrenewal.forecasters.base import (
     NATIONAL,
     ModelUnavailableError,
@@ -323,3 +324,32 @@ def test_a_longer_delay_moves_the_last_origin_back() -> None:
         weeks=12 + synthetic.HORIZON_WEEKS
     )
     assert long[-1] < short[-1]
+
+
+@pytest.mark.parametrize(
+    ("strata", "codes"),
+    [
+        (("P01", "P02"), ("CD-01", "CD-02")),
+        (("A1", "A2"), ("CD-A1", "CD-A2")),
+        (("P01-A1", "P01-A2", "P02-A1"), ("CD-01-A1", "CD-01-A2", "CD-02-A1")),
+    ],
+)
+def test_strata_take_hub_codes_whose_parents_are_real_nodes(
+    strata: tuple[str, ...], codes: tuple[str, ...]
+) -> None:
+    counts = synthetic.hub_codes(_counts(strata))
+    assert tuple(sorted(counts["location"].unique())) == codes
+    task = synthetic.outbreak_tasks(counts, "9-0001", 1, 10)[0]
+    assert task.locations == codes
+    assert task.daily_history is not None
+    nodes = set(task.daily_history["location"])
+    for code in codes:
+        parent = parent_code(code)
+        assert parent in nodes
+        # The parent's count is the sum of its children's.
+        rows = task.daily_history.loc[
+            task.daily_history["vintage"] == task.vintage
+        ]
+        total = rows.groupby("location")["observed"].sum()
+        kids = [c for c in nodes if parent_code(c) == parent]
+        assert total[parent] == sum(total[k] for k in kids)
