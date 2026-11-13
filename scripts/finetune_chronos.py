@@ -3,8 +3,9 @@
 
 `blocks` cuts the outbreaks from `scripts/finetune_simulate.R` into
 training blocks (`forecasters.finetune.training_block`), and `train`
-fine-tunes Chronos-2 on them and saves one checkpoint with its settings
-hash. Run from the repo root:
+fine-tunes Chronos-2 on them in one pass, saving a checkpoint with its
+settings hash after each prefix of the outbreaks (`PREFIXES`). Run from
+the repo root:
 
     uv run --group chronos python scripts/finetune_chronos.py blocks \
         output/finetune/blocks.pt output/finetune/sims...
@@ -13,15 +14,15 @@ hash. Run from the repo root:
 
 The `_ft` models download the checkpoint from the release
 `chronos-ft-<hash>` (`forecasters.foundation.finetuned_adapter`).
-Publish it, then set its hash and adapter SHA-256 in
-`config/finetune.toml`:
+Publish a checkpoint (`output/finetune/ckpt/n<N>`), then set its hash and
+adapter SHA-256 in `config/finetune.toml`:
 
     gh release create chronos-ft-<hash> -R seabbs/BDBVHubRenewal \
         --latest=false --title "Chronos-2 fine-tuned checkpoint <hash>" \
         --notes "LoRA adapter of Chronos-2 for the _ft models." \
-        output/finetune/ckpt/finetuned-ckpt/adapter_config.json \
-        output/finetune/ckpt/finetuned-ckpt/adapter_model.safetensors \
-        output/finetune/ckpt/settings.json
+        output/finetune/ckpt/n<N>/finetuned-ckpt/adapter_config.json \
+        output/finetune/ckpt/n<N>/finetuned-ckpt/adapter_model.safetensors \
+        output/finetune/ckpt/n<N>/settings.json
 """
 
 from __future__ import annotations
@@ -80,12 +81,16 @@ FOUNDATION_CODE = (foundation.hub_triangle, foundation.layout_block)
 """The functions of `foundation` the blocks are laid out with, hashed into
 the settings."""
 
-ROUND2_SEED = 3001
-"""First seed of the round 2 grid's simulations."""
+TRAIN_SEEDS = (5001, 5901)
+"""Seeds of the training outbreaks' simulations, from and to (excluded)."""
 
-HELD_OUT_SEED = 3900
-"""First seed of the held-out outbreaks, simulated apart from every
-training set."""
+HELD_OUT_SEED = 5901
+"""First seed of the held-out outbreaks, simulated apart from the
+training outbreaks."""
+
+PREFIXES = (1000, 2000, 4000, 6000, 8000)
+"""Outbreaks seen at each saved checkpoint. The last is every training
+outbreak."""
 
 EVAL_BLOCKS = 100
 """Held-out blocks whose loss is logged during training."""
@@ -93,8 +98,8 @@ EVAL_BLOCKS = 100
 EVAL_EVERY = 100
 """Steps between logged held-out losses."""
 
-SAVE_EVERY = 1000
-"""Steps between saved checkpoints."""
+OUTPUT_PATCH = 16
+"""Chronos-2's output patch length."""
 
 SIM_DELAY_WEEKS = 8
 """The simulations' longest delay in weeks, after which a count is
@@ -117,7 +122,7 @@ def _pad(block: dict, context: int, horizon: int) -> dict:
     out[:, context - keep : context + h] = x[:, start - keep : start + h]
     return {
         "context": torch.from_numpy(out),
-        "future_covariates": torch.from_numpy(out[:, context:].copy()),
+        "future_covariates": torch.from_numpy(out)[:, context:],
         "n_targets": block["n_targets"],
         "n_covariates": block["n_covariates"],
         "n_future_covariates": block["n_future_covariates"],
@@ -253,57 +258,44 @@ def checkpoint_large_batches() -> None:
     Chronos2EncoderBlock.forward = checkpointed
 
 
-def size_buckets(sizes: np.ndarray) -> list[np.ndarray]:
-    """Return the blocks of each size class, by powers of two of series."""
-    classes = np.floor(np.log2(sizes)).astype(int)
-    return [np.flatnonzero(classes == c) for c in np.unique(classes)]
+def size_class(n: int) -> int:
+    """Return a block's size class, by powers of two of its series."""
+    return int(np.floor(np.log2(n)))
 
 
-def bucketed_batches(
+def plan_batches(
     sizes: np.ndarray, batch_size: int, rng: np.random.Generator
-):
-    """Yield the block indices of each training batch, packed by size.
+) -> list[list[int]]:
+    """Return batches of block indices that use every block once.
 
-    A batch's size class is drawn with probability its share of the
-    series, and its blocks are drawn at random from that class until the
-    batch holds `batch_size` series, so batches of small blocks pack
-    tightly, a large block is a batch on its own, and every series is as
-    likely to be seen.
+    Blocks are shuffled and packed in that order into batches of one size
+    class until a batch holds `batch_size` series, so batches of small
+    blocks pack tightly and a large block is a batch on its own. The
+    batches are then shuffled.
     """
-    buckets = size_buckets(sizes)
-    share = np.array([sizes[b].sum() for b in buckets], dtype=float)
-    share /= share.sum()
-    while True:
-        bucket = buckets[rng.choice(len(buckets), p=share)]
-        held, out = 0, []
-        while held < batch_size:
-            i = int(bucket[rng.integers(len(bucket))])
-            out.append(i)
-            held += int(sizes[i])
-        yield out
+    filling: dict[int, list[int]] = {}
+    held: dict[int, int] = {}
+    batches = []
+    for i in rng.permutation(len(sizes)):
+        c = size_class(int(sizes[i]))
+        filling.setdefault(c, []).append(int(i))
+        held[c] = held.get(c, 0) + int(sizes[i])
+        if held[c] >= batch_size:
+            batches.append(filling.pop(c))
+            held[c] = 0
+    batches.extend(b for b in filling.values() if b)
+    return [batches[j] for j in rng.permutation(len(batches))]
 
 
-def use_bucketed_batches(sizes: np.ndarray, seed: int) -> None:
-    """Make Chronos-2's training batches `bucketed_batches`."""
+def use_planned_batches(plan: list[list[int]]) -> None:
+    """Make Chronos-2's training batches the planned ones, in order."""
     from chronos.chronos2.dataset import Chronos2Dataset
 
     def generate(self):
-        rng = np.random.default_rng(seed)
-        for indices in bucketed_batches(sizes, self.batch_size, rng):
+        for indices in plan:
             yield self._build_batch(indices)
 
     Chronos2Dataset._generate_train_batches = generate
-
-
-def steps_for(sizes: np.ndarray, batch_size: int, epochs: float) -> int:
-    """Return the steps that pass over every series `epochs` times.
-
-    The mean series of a `bucketed_batches` batch is estimated from 5,000
-    simulated batches.
-    """
-    batches = bucketed_batches(sizes, batch_size, np.random.default_rng(0))
-    held = [sizes[next(batches)].sum() for _ in range(5000)]
-    return int(np.ceil(epochs * sizes.sum() / np.mean(held)))
 
 
 def _order(outbreak: str) -> tuple[int, int]:
@@ -312,32 +304,32 @@ def _order(outbreak: str) -> tuple[int, int]:
     return int(seed), int(index)
 
 
-def training_sets(
-    outbreaks: list[str], round1: bool, round2: int, held_out: int
+def training_order(
+    outbreaks: list[str], n: int, held_out: int, seed: int
 ) -> tuple[list[str], list[str]]:
-    """Return the training and held-out outbreaks.
+    """Return the training outbreaks in training order, and the held-out.
 
-    Training is every round 1 outbreak (seeds below `ROUND2_SEED`) if
-    `round1`, and the first `round2` round 2 outbreaks in order of seed and
-    index, from seeds `ROUND2_SEED` to `HELD_OUT_SEED`. The held-out
-    outbreaks are the first `held_out` from seeds `HELD_OUT_SEED` on, so
-    nested training sets all hold out the same outbreaks and blocks.
+    Training is the first `n` outbreaks of `TRAIN_SEEDS` in order of seed
+    and index, shuffled once with `seed`, so its first N are the outbreaks
+    of the checkpoint after N. The held-out outbreaks are the first
+    `held_out` from seeds `HELD_OUT_SEED` on.
     """
     ids = sorted(set(outbreaks), key=_order)
-    first = [o for o in ids if _order(o)[0] < ROUND2_SEED]
-    second = [o for o in ids if ROUND2_SEED <= _order(o)[0] < HELD_OUT_SEED]
+    first, last = TRAIN_SEEDS
+    pool = [o for o in ids if first <= _order(o)[0] < last]
     rest = [o for o in ids if _order(o)[0] >= HELD_OUT_SEED]
-    if len(second) < round2 or len(rest) < held_out:
+    if len(pool) < n or len(rest) < held_out:
         raise ValueError(
-            f"{len(second)} round 2 and {len(rest)} held-out outbreaks, "
-            f"fewer than {round2} and {held_out}."
+            f"{len(pool)} training and {len(rest)} held-out outbreaks, "
+            f"fewer than {n} and {held_out}."
         )
-    train = (first if round1 else []) + second[:round2]
-    return train, rest[:held_out]
+    pool = pool[:n]
+    order = np.random.default_rng(seed).permutation(len(pool))
+    return [pool[i] for i in order], rest[:held_out]
 
 
-def held_out_loss(pipeline, blocks: list[dict], batch_size: int) -> float:
-    """Return the mean quantile loss of a pipeline on held-out blocks."""
+def held_out_loss(model, blocks: list[dict], batch_size: int) -> float:
+    """Return the mean quantile loss of a Chronos-2 model on blocks."""
     import torch
     from chronos.chronos2.dataset import Chronos2Dataset, DatasetMode
     from chronos.chronos2.model import Chronos2Model
@@ -347,11 +339,12 @@ def held_out_loss(pipeline, blocks: list[dict], batch_size: int) -> float:
         context_length=CONTEXT,
         prediction_length=HORIZON,
         batch_size=batch_size,
-        output_patch_size=pipeline.model_output_patch_size,
+        output_patch_size=OUTPUT_PATCH,
         mode=DatasetMode.VALIDATION,
     )
-    model = pipeline.model.eval()
     accepted = inspect.signature(Chronos2Model.forward).parameters
+    training = model.training
+    model.eval()
     losses, weights = [], []
     with torch.no_grad():
         for batch in data:
@@ -360,107 +353,94 @@ def held_out_loss(pipeline, blocks: list[dict], batch_size: int) -> float:
                 for k, v in batch.items()
                 if k in accepted
             }
-            loss = model(**batch).loss
-            losses.append(float(loss))
+            losses.append(float(model(**batch).loss))
             weights.append(len(batch["context"]))
+    model.train(training)
     return float(np.average(losses, weights=weights))
+
+
+def _settings_hash(settings: dict) -> str:
+    """Return the first 12 hex digits of the settings' SHA-256."""
+    text = json.dumps(settings, sort_keys=True).encode()
+    return hashlib.sha256(text).hexdigest()[:12]
+
+
+def _plan(
+    saved: dict,
+    rank: dict[str, int],
+    prefixes: list[int],
+    batch_size: int,
+    seed: int,
+) -> tuple[list[dict], list[list[int]], dict[int, int]]:
+    """Return the training blocks, their batches and the prefix steps.
+
+    The blocks of each prefix's new outbreaks are batched apart, so the
+    step that ends a prefix has seen exactly its outbreaks.
+    """
+    rng = np.random.default_rng(seed)
+    fit: list[dict] = []
+    plan: list[list[int]] = []
+    ends: dict[int, int] = {}
+    pairs = list(zip(saved["blocks"], saved["outbreaks"], strict=True))
+    for lo, hi in zip([0, *prefixes[:-1]], prefixes, strict=True):
+        segment = [b for b, o in pairs if lo <= rank.get(o, -1) < hi]
+        sizes = np.array([int(b["context"].shape[0]) for b in segment])
+        for batch in plan_batches(sizes, batch_size, rng):
+            plan.append([len(fit) + i for i in batch])
+        fit.extend(segment)
+        ends[len(plan)] = hi
+    return fit, plan, ends
 
 
 def train(
     blocks_path: Path,
     out: Path,
-    epochs: float,
+    n: int,
     learning_rate: float,
     batch_size: int,
     holdout: int,
     seed: int,
-    round1: bool,
-    round2: int,
 ) -> None:
-    """Fine-tune Chronos-2 with LoRA and save the checkpoint."""
+    """Fine-tune Chronos-2 with LoRA in one pass, saving prefix checkpoints.
+
+    The training outbreaks are seen once, in a fixed shuffled order. The
+    checkpoint after the first N outbreaks, for each N of `PREFIXES`, is
+    saved in `out/n<N>` with its outbreak ids, settings and hash, so each
+    is Chronos-2 fine-tuned on N outbreaks in one pass. The learning rate
+    is constant, so a checkpoint does not depend on how long the run goes
+    on after it.
+    """
     import torch
     from chronos import Chronos2Pipeline
     from transformers import TrainerCallback
 
-    class History(TrainerCallback):
-        """Keeps the trainer's logs."""
-
-        def __init__(self) -> None:
-            self.logs: list[dict] = []
-            self.t0 = time.perf_counter()
-
-        def on_log(self, _args, state, _control, logs=None, **_kwargs):
-            if logs:
-                self.logs.append(
-                    {
-                        "step": state.global_step,
-                        "seconds": time.perf_counter() - self.t0,
-                        **logs,
-                    }
-                )
-                print(self.logs[-1], flush=True)
-
     checkpoint_large_batches()
     torch.manual_seed(seed)
-    # Chronos-2 cuts its training batches with numpy's global generator.
+    # Chronos-2 slices its training windows with numpy's global generator.
     np.random.seed(seed)  # noqa: NPY002
     saved = torch.load(blocks_path, weights_only=False)
-    train_ids, held_ids = training_sets(
-        saved["outbreaks"], round1, round2, holdout
+    order, held_ids = training_order(saved["outbreaks"], n, holdout, seed)
+    rank = {o: i for i, o in enumerate(order)}
+    held = set(held_ids)
+    val = [
+        b
+        for b, o in zip(saved["blocks"], saved["outbreaks"], strict=True)
+        if o in held
+    ]
+    prefixes = [p for p in PREFIXES if p < n] + [n]
+    fit, plan, ends = _plan(saved, rank, prefixes, batch_size, seed)
+    del saved
+    use_planned_batches(plan)
+    series = sum(int(b["context"].shape[0]) for b in fit)
+    print(
+        f"{len(fit)} blocks, {series} series, {len(plan)} steps; "
+        f"checkpoints at steps {sorted(ends)}",
+        flush=True,
     )
     out.mkdir(parents=True, exist_ok=True)
-    (out / "outbreaks-train.txt").write_text("\n".join(train_ids) + "\n")
+    (out / "outbreaks-order.txt").write_text("\n".join(order) + "\n")
     (out / "outbreaks-held-out.txt").write_text("\n".join(held_ids) + "\n")
-    use, held = set(train_ids), set(held_ids)
-    val, fit = [], []
-    for block, outbreak in zip(
-        saved["blocks"], saved["outbreaks"], strict=True
-    ):
-        if outbreak in held:
-            val.append(block)
-        elif outbreak in use:
-            fit.append(block)
-    # The loss logged during training is on a fixed sample of the held-out
-    # blocks, and the whole held-out set is scored at the start and end.
-    monitor = val[:EVAL_BLOCKS]
-    sizes = np.array([int(b["context"].shape[0]) for b in fit])
-    use_bucketed_batches(sizes, seed)
-    steps = steps_for(sizes, batch_size, epochs)
-    print(f"{len(fit)} blocks, {sizes.sum()} series: {steps} steps")
-    device = "mps" if torch.backends.mps.is_available() else "cpu"
-    pipeline = Chronos2Pipeline.from_pretrained(
-        CHRONOS_MODEL, revision=CHRONOS_REVISION, device_map=device
-    )
-    history = History()
-    before = held_out_loss(pipeline, val, batch_size)
-    print({"held_out_loss": before, "step": 0}, flush=True)
-    tuned = pipeline.fit(
-        fit,
-        prediction_length=HORIZON,
-        validation_inputs=monitor or None,
-        finetune_mode="lora",
-        context_length=CONTEXT,
-        min_past=CONTEXT,
-        learning_rate=learning_rate,
-        num_steps=steps,
-        batch_size=batch_size,
-        output_dir=out,
-        callbacks=[history],
-        logging_steps=10,
-        eval_steps=EVAL_EVERY,
-        save_steps=SAVE_EVERY,
-        save_total_limit=None,
-        eval_on_start=bool(val),
-        optim="adamw_torch",
-        seed=seed,
-    )
-    after = held_out_loss(tuned, val, batch_size)
-    print({"held_out_loss": after, "step": steps}, flush=True)
-    history.logs.append(
-        {"held_out_loss_start": before, "held_out_loss_end": after}
-    )
-    (out / "history.json").write_text(json.dumps(history.logs, indent=1))
-    settings = {
+    base = {
         "chronos_revision": CHRONOS_REVISION,
         "blocks_sha256": _sha256(blocks_path),
         "code_sha256": {
@@ -473,32 +453,87 @@ def train(
             },
         },
         "max_lags": {k: [min(v), max(v)] for k, v in MAX_LAGS.items()},
-        "n_fit": len(fit),
+        "held_out_sha256": _sha256(out / "outbreaks-held-out.txt"),
         "n_validation": len(val),
-        "n_round1_outbreaks": sum(
-            _order(o)[0] < ROUND2_SEED for o in train_ids
-        ),
-        "n_round2_outbreaks": round2,
-        "n_held_out_outbreaks": len(held_ids),
-        "outbreaks_sha256": {
-            f: _sha256(out / f)
-            for f in ("outbreaks-train.txt", "outbreaks-held-out.txt")
-        },
-        "epochs": epochs,
-        "steps": steps,
         "learning_rate": learning_rate,
         "batch_size": batch_size,
         "context": CONTEXT,
         "horizon": HORIZON,
         "seed": seed,
     }
-    key = hashlib.sha256(
-        json.dumps(settings, sort_keys=True).encode()
-    ).hexdigest()[:12]
-    settings["hash"] = key
-    settings["device"] = device
-    (out / "settings.json").write_text(json.dumps(settings, indent=1))
-    print(f"settings hash {key}")
+    device = "mps" if torch.backends.mps.is_available() else "cpu"
+    pipeline = Chronos2Pipeline.from_pretrained(
+        CHRONOS_MODEL, revision=CHRONOS_REVISION, device_map=device
+    )
+    start_loss = held_out_loss(pipeline.model, val, batch_size)
+    history: list[dict] = [{"step": 0, "held_out_loss": start_loss}]
+    print(history[-1], flush=True)
+
+    class Checkpoints(TrainerCallback):
+        """Keeps the trainer's logs and saves the prefix checkpoints."""
+
+        def __init__(self) -> None:
+            self.t0 = time.perf_counter()
+
+        def on_log(self, _args, state, _control, logs=None, **_kwargs):
+            if logs:
+                row = {"step": state.global_step, **logs}
+                row["seconds"] = time.perf_counter() - self.t0
+                history.append(row)
+                print(row, flush=True)
+
+        def on_step_end(self, _args, state, _control, model=None, **_kw):
+            if state.global_step not in ends:
+                return
+            m = ends[state.global_step]
+            where = out / f"n{m}"
+            where.mkdir(parents=True, exist_ok=True)
+            (where / "outbreaks.txt").write_text("\n".join(order[:m]) + "\n")
+            model.save_pretrained(where / "finetuned-ckpt")
+            settings = {
+                **base,
+                "n_outbreaks": m,
+                "outbreaks_sha256": _sha256(where / "outbreaks.txt"),
+                "steps": state.global_step,
+            }
+            settings["hash"] = _settings_hash(settings)
+            settings["device"] = device
+            settings["held_out_loss_start"] = start_loss
+            settings["held_out_loss"] = held_out_loss(model, val, batch_size)
+            settings["seconds"] = time.perf_counter() - self.t0
+            (where / "settings.json").write_text(json.dumps(settings, indent=1))
+            history.append(
+                {
+                    "step": state.global_step,
+                    "n_outbreaks": m,
+                    "held_out_loss": settings["held_out_loss"],
+                    "hash": settings["hash"],
+                }
+            )
+            print(history[-1], flush=True)
+            (out / "history.json").write_text(json.dumps(history, indent=1))
+
+    pipeline.fit(
+        fit,
+        prediction_length=HORIZON,
+        validation_inputs=val[:EVAL_BLOCKS] or None,
+        finetune_mode="lora",
+        context_length=CONTEXT,
+        min_past=CONTEXT,
+        learning_rate=learning_rate,
+        num_steps=len(plan),
+        batch_size=batch_size,
+        output_dir=out,
+        callbacks=[Checkpoints()],
+        logging_steps=10,
+        eval_steps=EVAL_EVERY,
+        save_strategy="no",
+        load_best_model_at_end=False,
+        lr_scheduler_type="constant",
+        optim="adamw_torch",
+        seed=seed,
+    )
+    (out / "history.json").write_text(json.dumps(history, indent=1))
 
 
 def main() -> None:
@@ -512,14 +547,10 @@ def main() -> None:
     t = sub.add_parser("train")
     t.add_argument("blocks", type=Path)
     t.add_argument("out", type=Path)
-    t.add_argument("--epochs", type=float, default=1.0)
+    t.add_argument("--outbreaks", type=int, default=PREFIXES[-1])
     t.add_argument("--learning-rate", type=float, default=1e-4)
     t.add_argument("--batch-size", type=int, default=256)
     t.add_argument("--holdout", type=int, default=150)
-    t.add_argument(
-        "--round1", action=argparse.BooleanOptionalAction, default=False
-    )
-    t.add_argument("--round2", type=int, required=True)
     t.add_argument("--seed", type=int, default=1)
     args = parser.parse_args()
     if args.command == "blocks":
@@ -528,13 +559,11 @@ def main() -> None:
         train(
             args.blocks,
             args.out,
-            args.epochs,
+            args.outbreaks,
             args.learning_rate,
             args.batch_size,
             args.holdout,
             args.seed,
-            args.round1,
-            args.round2,
         )
 
 
