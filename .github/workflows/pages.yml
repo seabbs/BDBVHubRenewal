@@ -116,79 +116,43 @@ jobs:
           # The German benchmark reads none of the hub data, so its cells
           # run without the inputs and are keyed on its own code and
           # config/germany.toml, which pins its data. A nowcast date takes
-          # about 1 to 3 minutes, so the 159 dates run in blocks.
+          # about 1 to 3 minutes, so the 80 development dates run in blocks.
           - cell: germany-randomwalknowcast-0
             model: randomwalknowcast
             germany: true
             run: >-
               uv run bdbvhubrenewal germany-backtest --models randomwalknowcast
-              --chunk 0/8 --out output/parts/germany
+              --chunk 0/4 --out output/parts/germany
           - cell: germany-randomwalknowcast-1
             model: randomwalknowcast
             germany: true
             run: >-
               uv run bdbvhubrenewal germany-backtest --models randomwalknowcast
-              --chunk 1/8 --out output/parts/germany
+              --chunk 1/4 --out output/parts/germany
           - cell: germany-randomwalknowcast-2
             model: randomwalknowcast
             germany: true
             run: >-
               uv run bdbvhubrenewal germany-backtest --models randomwalknowcast
-              --chunk 2/8 --out output/parts/germany
+              --chunk 2/4 --out output/parts/germany
           - cell: germany-randomwalknowcast-3
             model: randomwalknowcast
             germany: true
             run: >-
               uv run bdbvhubrenewal germany-backtest --models randomwalknowcast
-              --chunk 3/8 --out output/parts/germany
-          - cell: germany-randomwalknowcast-4
-            model: randomwalknowcast
-            germany: true
-            run: >-
-              uv run bdbvhubrenewal germany-backtest --models randomwalknowcast
-              --chunk 4/8 --out output/parts/germany
-          - cell: germany-randomwalknowcast-5
-            model: randomwalknowcast
-            germany: true
-            run: >-
-              uv run bdbvhubrenewal germany-backtest --models randomwalknowcast
-              --chunk 5/8 --out output/parts/germany
-          - cell: germany-randomwalknowcast-6
-            model: randomwalknowcast
-            germany: true
-            run: >-
-              uv run bdbvhubrenewal germany-backtest --models randomwalknowcast
-              --chunk 6/8 --out output/parts/germany
-          - cell: germany-randomwalknowcast-7
-            model: randomwalknowcast
-            germany: true
-            run: >-
-              uv run bdbvhubrenewal germany-backtest --models randomwalknowcast
-              --chunk 7/8 --out output/parts/germany
+              --chunk 3/4 --out output/parts/germany
           - cell: germany-randomwalk-0
             model: randomwalk
             germany: true
             run: >-
               uv run bdbvhubrenewal germany-backtest --models randomwalk
-              --chunk 0/4 --out output/parts/germany
+              --chunk 0/2 --out output/parts/germany
           - cell: germany-randomwalk-1
             model: randomwalk
             germany: true
             run: >-
               uv run bdbvhubrenewal germany-backtest --models randomwalk
-              --chunk 1/4 --out output/parts/germany
-          - cell: germany-randomwalk-2
-            model: randomwalk
-            germany: true
-            run: >-
-              uv run bdbvhubrenewal germany-backtest --models randomwalk
-              --chunk 2/4 --out output/parts/germany
-          - cell: germany-randomwalk-3
-            model: randomwalk
-            germany: true
-            run: >-
-              uv run bdbvhubrenewal germany-backtest --models randomwalk
-              --chunk 3/4 --out output/parts/germany
+              --chunk 1/2 --out output/parts/germany
           - cell: recovery-randomwalknowcast-0
             model: randomwalknowcast
             run: >-
@@ -288,7 +252,8 @@ jobs:
             src/bdbvhubrenewal/evaluation/germany.py
             src/bdbvhubrenewal/evaluation/backtest.py
             src/bdbvhubrenewal/evaluation/nowcast.py
-            src/bdbvhubrenewal/evaluation/scoring.py' || '' }}
+            src/bdbvhubrenewal/evaluation/scoring.py
+            src/bdbvhubrenewal/reporting/hubtables.py' || '' }}
         run: |
           set -euo pipefail
           # shellcheck disable=SC2086
@@ -391,6 +356,7 @@ jobs:
           # here.
           uv run bdbvhubrenewal germany-fetch
           uv run bdbvhubrenewal germany-teams --out results/germany
+          uv run bdbvhubrenewal germany-paper --results results/germany
           uv run bdbvhubrenewal report --ledger output/ledger
       # Scores at each deploy from main, read from the gh-pages branch,
       # with this build's scores last. Only the trees are fetched, and the

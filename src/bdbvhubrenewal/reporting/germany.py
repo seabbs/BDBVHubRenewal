@@ -4,7 +4,8 @@
 `germany_page` writes the page's table and score summaries from the
 scores of `bdbvhubrenewal germany-backtest` (our models) and
 `bdbvhubrenewal germany-teams` (the hub teams): `relative_scores` by level
-and the `scoresummary` views, relative to `BASELINE`.
+and the `scoresummary` views, relative to the configured baseline.
+Only the development half, nowcast dates before the split date, is shown.
 """
 
 from __future__ import annotations
@@ -16,7 +17,6 @@ import pandas as pd
 
 from bdbvhubrenewal.data.germany import PLACE_NAMES, level
 from bdbvhubrenewal.evaluation.germany import (
-    BASELINE,
     TEAM_NAMES,
     GermanyConfig,
     relative_scores,
@@ -98,6 +98,7 @@ def germany_page(
     if teams.exists():
         frames.append(pd.read_csv(teams, dtype=dtype))
     scores = pd.concat(frames, ignore_index=True)
+    scores = scores.loc[scores["origin"] < config.split_date]
     order = [*config.models, *TEAM_NAMES.values()]
     models = [m for m in order if m in set(scores["model"])]
     write_score_chart(
@@ -107,14 +108,14 @@ def germany_page(
             models,
             {m: model_style(m, models) for m in models},
             PLACE_NAMES,
-            baseline=BASELINE,
+            baseline=config.baseline,
             metrics=METRICS,
             pool_of=level,
             pool_labels=LEVELS,
         ),
     )
     srcs = {"latest": "../figures/scoresummary-germany-latest.json"}
-    table = relative_scores(scores, ("pool",))
+    table = relative_scores(scores, ("pool",), config.baseline)
     table["pool"] = pd.Categorical(table["pool"], list(LEVELS))
     # The summary above gives the absolute scores, so the table fits the
     # page with the relative ones.
@@ -123,7 +124,9 @@ def germany_page(
     )
     _write(
         gen / "germany-scores.md",
-        summary_html(srcs, "Overall scores by level")
+        f"Nowcast dates before {config.split_date} only; the later half "
+        "is held out for the paper.\n\n"
+        + summary_html(srcs, "Overall scores by level")
         + "\n"
         + table.round(3).to_markdown(index=False)
         + "\n",

@@ -25,11 +25,22 @@ submissions = [
 # The paper's nowcast dates, every day of its evaluation period.
 first_date = "2021-11-22"
 last_date = "2022-04-29"
+# The first date of the held-out half, the midpoint of the dates above:
+# 2021-11-22 to 2022-02-09 (80 dates) are for development, 2022-02-10 to
+# 2022-04-29 (79 dates) are held out for the paper and not scored here.
+split_date = "2022-02-10"
 models = ["randomwalk", "randomwalknowcast"]
 # Samples per forecast and seed, as the backtest. The samples' quantiles at
 # the hub's seven levels are scored.
 n_samples = 100
 seed = 20261027
+
+[scoring]
+# Relative scores on the page divide by this model.
+baseline = "randomwalknowcast"
+# The paper's relative scores divide by the hub's own baseline, as
+# Wolffram et al. (2023) compare to it.
+paper_baseline = "KIT-frozen_baseline"
 
 [truth]
 # Each 7-day sum is scored on the data reported this many days after it
