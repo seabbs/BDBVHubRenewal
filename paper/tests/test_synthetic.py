@@ -136,7 +136,7 @@ class _Constant:
 class _Missing:
     name: str = "missing"
 
-    def forecast(self, task):
+    def forecast(self, task):  # noqa: ARG002
         raise FileNotFoundError("no checkpoint")
 
 
@@ -144,7 +144,7 @@ class _Missing:
 class _Unavailable:
     name: str = "unavailable"
 
-    def forecast(self, task):
+    def forecast(self, task):  # noqa: ARG002
         raise ModelUnavailableError("no data")
 
 

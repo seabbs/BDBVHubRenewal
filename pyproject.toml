@@ -129,7 +129,7 @@ convention = "numpy"
 
 [tool.ruff.lint.per-file-ignores]
 # Test functions are named for what they check; docstrings would repeat it.
-"tests/**" = ["D", "PD101"]
+"{tests,paper/tests}/**" = ["D", "PD101"]
 # Ported from the hub validation bundle, whose checks are named after
 # hubValidations' and are documented in docs/submission/hub-spec.md.
 # The small config classes and helpers carry no docstrings.
