@@ -167,12 +167,18 @@ Placeholder: Ebola hub submissions results panel.
   - Other uses of foundation models in infectious disease modelling.
   - Fine-tuning in other domains.
   - Other nowcasting approaches.
+- **A possible emulator.**
+  - Fine-tuning on epinowcast simulations may give a fast emulator of that package.
+  - We did not compare against epinowcast, so we cannot say how close it is.
+  - This could be useful for other slow, long-running packages.
 - **Further work.**
   - Other foundation models.
   - More case studies.
   - A comparison with custom neural networks.
+  - Testing the fine-tuned model as an emulator of epinowcast.
 - **Conclusions.**
   - Reuse state-of-the-art generic forecasting models with domain-specific insight.
+  - Fine-tuning on a package's simulations could give a fast emulator of that package, which may help other long-running packages.
   - It shows promise, and more work is needed.
 :::
 
