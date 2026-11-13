@@ -4,6 +4,7 @@ import pytest
 
 from paperfigs.scores import (
     STUDY_BASELINES,
+    STUDY_COUNTS,
     STUDY_COVERAGE,
     relative_scores,
     score_forecasts,
@@ -239,3 +240,18 @@ def test_relative_scores_match_on_stratum() -> None:
     )
     rel = relative_scores(score_forecasts(df))
     assert "m" not in set(rel["model"])
+
+
+def test_sample_bias_does_not_depend_on_other_models() -> None:
+    alone = score_forecasts(_samples("m", X, 0.0))
+    mixed = pd.concat([_samples("m", X, 0.0), _samples("other", X + 0.5, 0.0)])
+    together = score_forecasts(mixed).set_index("model")
+    assert together.loc["m", "bias"] == pytest.approx(alone["bias"].item())
+    assert alone["bias"].item() == pytest.approx(1 - 0.1)
+
+
+def test_count_bias_is_a_study_setting() -> None:
+    assert all(STUDY_COUNTS.values())
+    s = score_forecasts(_samples("m", X, 3.0), counts=False)
+    # Continuous form: 1 - 2 P(X <= y) = 1 - 2 * 0.7.
+    assert s["bias"].item() == pytest.approx(1 - 1.4)
