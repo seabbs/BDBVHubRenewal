@@ -27,6 +27,10 @@
 #   OUT           checkpoint directory
 #   OUTBREAKS     training outbreaks (8000)
 #   PUBLISH       1 to publish each checkpoint release
+#   NOTE          text recorded in each checkpoint's settings
+#
+# If the training seeds' yield projects fewer than OUTBREAKS outbreaks,
+# the driver adds seeds after TRAIN_LAST (`extend_seeds`).
 #
 # It keeps both hosts' simulation slots busy, copies the remote results
 # back, and runs scripts/finetune_stream.py, which trains on the
@@ -210,6 +214,37 @@ sync_remote() {
     || log "rsync from $REMOTE failed; retrying later"
 }
 
+extend_seeds() {
+  # If the training seeds' yield so far projects fewer than OUTBREAKS
+  # outbreaks with 3% to spare, add seeds after TRAIN_LAST for 5% to
+  # spare, tell the trainer, and restart the remote scheduler with them.
+  local extra
+  extra=$(python3 - "$SIM_DIR" "$TRAIN_FIRST" "$TRAIN_LAST" "$OUTBREAKS" <<'EOF'
+import math, sys
+from pathlib import Path
+sim, first, last, target = Path(sys.argv[1]), *map(int, sys.argv[2:])
+done = [s for s in range(first, last + 1)
+        if (sim / f"settings-{s}.csv").exists()]
+if len(done) < 10:
+    print(0)
+    sys.exit()
+n = sum(len((sim / f"settings-{s}.csv").read_text().splitlines()) - 1
+        for s in done)
+per = n / len(done)
+projected = n + per * (last - first + 1 - len(done))
+need = 0 if projected >= 1.03 * target else 1.05 * target - projected
+print(math.ceil(need / per))
+EOF
+)
+  [ -z "$extra" ] && return 0
+  (( extra > 0 )) || return 0
+  TRAIN_LAST=$(( TRAIN_LAST + extra ))
+  echo "$TRAIN_LAST" > "$OUT/train-last.txt"
+  log "projected short of $OUTBREAKS outbreaks: added $extra training seeds, now to $TRAIN_LAST"
+  remote "pkill -f '[f]inetune_remote.sh'" > /dev/null 2>&1
+  remote_tried=0
+}
+
 check_batches() {
   # A batch whose R process stopped with an error fails the round.
   local f s
@@ -231,7 +266,8 @@ remote "pkill -f '[f]inetune_remote.sh'" > /dev/null 2>&1 \
   && log "stopped the previous remote scheduler"
 log "starting round from $1: training seeds $TRAIN_FIRST-$TRAIN_LAST, held-out $HELD_FIRST-$HELD_LAST, laptop $LOCAL_FIRST-$LOCAL_LAST"
 trainer_args=("$SIM_DIR" "$OUT" --train-seeds "$TRAIN_FIRST" "$TRAIN_LAST"
-  --held-out-seeds "$HELD_FIRST" "$HELD_LAST" --outbreaks "$OUTBREAKS")
+  --held-out-seeds "$HELD_FIRST" "$HELD_LAST" --outbreaks "$OUTBREAKS"
+  --note "${NOTE:-}")
 [ "${PUBLISH:-0}" = 1 ] && trainer_args+=(--publish)
 HF_HOME=output/finetune/hf HF_HUB_OFFLINE=1 MPLCONFIGDIR="${TMPDIR:-/tmp}" \
   nohup .venv/bin/python scripts/finetune_stream.py "${trainer_args[@]}" \
@@ -239,7 +275,9 @@ HF_HOME=output/finetune/hf HF_HUB_OFFLINE=1 MPLCONFIGDIR="${TMPDIR:-/tmp}" \
 trainer=$!
 echo "$trainer" > output/finetune/trainer.pid
 log "started the trainer, pid $trainer"
+[ -e "$OUT/train-last.txt" ] && TRAIN_LAST=$(cat "$OUT/train-last.txt")
 while true; do
+  extend_seeds
   check_remote
   local_slots
   sync_remote

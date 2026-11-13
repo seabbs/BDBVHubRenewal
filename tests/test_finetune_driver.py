@@ -75,3 +75,31 @@ def test_remote_down_for_less_than_the_grace_keeps_its_seeds(tmp_path):
         "check_remote; local_seeds | tr '\\n' ' '",
     )
     assert out.split() == ["5009", "5010"]
+
+
+def test_short_yield_adds_training_seeds(tmp_path):
+    rows = "outbreak\n" + "".join(f"x-{i}\n" for i in range(10))
+    (tmp_path / "sims").mkdir()
+    for s in range(5001, 5011):
+        (tmp_path / "sims" / f"settings-{s}.csv").write_text(rows)
+    env = ENV.replace("TRAIN_LAST=5010", "TRAIN_LAST=5020").replace(
+        "OUTBREAKS=10", "OUTBREAKS=300"
+    )
+    (tmp_path / "round.env").write_text(env)
+    (tmp_path / "output" / "finetune").mkdir(parents=True)
+    (tmp_path / "ckpt").mkdir()
+    out = subprocess.run(
+        [
+            "bash",
+            "-c",
+            f'set -- round.env; source "{DRIVER}"; '
+            "remote() { return 1; }; extend_seeds; echo $TRAIN_LAST",
+        ],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    # 10 per seed, 200 projected: 115 more for 5% to spare is 12 seeds.
+    assert out.stdout.split() == ["5032"]
+    assert (tmp_path / "ckpt" / "train-last.txt").read_text() == "5032\n"

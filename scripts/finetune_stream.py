@@ -169,6 +169,7 @@ def main() -> None:
     parser.add_argument("--learning-rate", type=float, default=1e-4)
     parser.add_argument("--batch-size", type=int, default=256)
     parser.add_argument("--seed", type=int, default=1)
+    parser.add_argument("--note", default="")
     parser.add_argument("--publish", action="store_true")
     args = parser.parse_args()
     out, sim_dir = args.out, args.sim_dir
@@ -181,7 +182,15 @@ def main() -> None:
         status.update(kwargs, time=time.strftime("%Y-%m-%d %H:%M:%S"))
         status_file.write_text(json.dumps(status))
 
-    train_seeds = range(args.train_seeds[0], args.train_seeds[1] + 1)
+    extended = out / "train-last.txt"
+
+    def training_seeds() -> range:
+        # The driver adds seeds by writing the last one to `extended`.
+        last = args.train_seeds[1]
+        if extended.exists():
+            last = max(last, int(extended.read_text()))
+        return range(args.train_seeds[0], last + 1)
+
     held_seeds = range(args.held_out_seeds[0], args.held_out_seeds[1] + 1)
     prefixes = [p for p in ft.PREFIXES if p < args.outbreaks]
     prefixes.append(args.outbreaks)
@@ -247,6 +256,7 @@ def main() -> None:
         "context": ft.CONTEXT,
         "horizon": ft.HORIZON,
         "seed": args.seed,
+        "note": args.note,
     }
     consumed = out / "consumed.txt"
     consumed.write_text("")
@@ -254,8 +264,8 @@ def main() -> None:
     while done < args.outbreaks:
         hi = min(done + CHUNK, args.outbreaks)
         report(stage=f"waiting for outbreaks {done + 1}-{hi}")
-        while len(ready := ready_outbreaks(sim_dir, train_seeds)) < hi:
-            if all(seed_done(sim_dir, s) for s in train_seeds):
+        while len(ready := ready_outbreaks(sim_dir, training_seeds())) < hi:
+            if all(seed_done(sim_dir, s) for s in training_seeds()):
                 raise RuntimeError(
                     f"{len(ready)} training outbreaks, fewer than {hi}"
                 )
