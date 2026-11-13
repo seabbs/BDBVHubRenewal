@@ -45,13 +45,15 @@ HUB_LEVELS = np.array([0.025, 0.1, 0.25, 0.5, 0.75, 0.9, 0.975])
 """The German hub's quantile levels."""
 
 
-def test_wis_of_quantiles_matches_scoringrules() -> None:
+def test_wis_of_quantiles_is_the_mean_quantile_score() -> None:
+    # As the German hub's paper scores its seven levels: the mean over
+    # levels of 2 (1{y < q} - tau) (q - y).
     q = np.array([[2.0, 4.0, 6.0, 9.0, 12.0, 15.0, 20.0]] * 3)
     obs = np.array([1.0, 10.0, 30.0])
-    got = wis_quantile(obs, q, HUB_LEVELS)
-    want = sr.weighted_interval_score(
-        obs, q[:, 3], q[:, :3], q[:, :3:-1], 2 * HUB_LEVELS[:3]
+    want = np.mean(
+        2 * ((obs[:, None] < q) - HUB_LEVELS) * (q - obs[:, None]), axis=1
     )
+    got = wis_quantile(obs, q, HUB_LEVELS)
     np.testing.assert_allclose(got["wis"], want)
     parts = got["dispersion"] + got["overprediction"] + got["underprediction"]
     np.testing.assert_allclose(parts, want)
