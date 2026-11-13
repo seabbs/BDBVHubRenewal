@@ -198,11 +198,14 @@ def test_models_by_name_skip_unregistered_ones() -> None:
     assert skipped == ["no_such_model"]
 
 
-@pytest.mark.parametrize("name", ["fm_chronos_weekly_ragged"])
+@pytest.mark.parametrize(
+    "name", ["fm_chronos_weekly_ragged", "fm_chronos_daily_ragged"]
+)
 def test_default_models_include_the_zero_shot_ragged_ones(name: str) -> None:
     assert name in synthetic.MODELS
     assert "randomwalknowcast" in synthetic.MODELS
     assert "randomwalk" in synthetic.MODELS
+    assert name.replace("ragged", "complete") in synthetic.MODELS
     assert f"{name}_ft" in synthetic.MODELS
 
 
