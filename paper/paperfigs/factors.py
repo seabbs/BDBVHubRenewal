@@ -26,11 +26,11 @@ __all__ = [
     "top_factors",
 ]
 
-ALWAYS_SHOWN: Final = ("delay_q99",)
+ALWAYS_SHOWN: Final = ("delay_q98",)
 """Factors the main panel always shows: long delays should make
-nowcasting harder, so the 99% delay is worth seeing whatever its spread."""
+nowcasting harder, so the 98% delay is worth seeing whatever its spread."""
 
-REDUNDANT_PAIRS: Final = (("delay_q99", "delay_mean"),)
+REDUNDANT_PAIRS: Final = (("delay_q98", "delay_mean"),)
 """(kept, dropped) pairs: the second leaves the main panel when its rank
 correlation with the first is above the threshold."""
 

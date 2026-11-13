@@ -43,7 +43,7 @@ Tables are written as CSV (gzip is fine) with ISO dates.
 Following the German nowcast hub (Wolffram et al. 2023), the truth for a target is the count in the latest release on or before `target_date + D` days.
 It is missing until a release on or after that date exists.
 `paperfigs.truth.rolling_truth(observations, delay_days=D)` builds it from release vintages, and `paperfigs.truth.attach_truth` sets the `truth` column.
-`delay_days` is a number of days, or a series indexed by location for a D per location; the synthetic study uses each outbreak's 99% reporting delay (`delay_q99` in its factors table).
+`delay_days` is a number of days, or a series indexed by location for a D per location; the synthetic study uses each outbreak's 98% reporting delay (`delay_q98` in its factors table).
 
 ## Observations
 

@@ -391,7 +391,7 @@ def dummy_factors(forecasts: pd.DataFrame, seed: int = 1) -> pd.DataFrame:
     Returns
     -------
     pandas.DataFrame
-        `location` and raw values of `delay_mean`, `delay_q99`,
+        `location` and raw values of `delay_mean`, `delay_q98`,
         `gt_mean`, `log_r0`, `n_places` and `report_days`, as the
         synthetic grid table gives.
     """
@@ -404,8 +404,8 @@ def dummy_factors(forecasts: pd.DataFrame, seed: int = 1) -> pd.DataFrame:
         {
             "location": locs,
             "delay_mean": delay_mean,
-            # 99% quantile of a lognormal with median delay_mean.
-            "delay_q99": np.ceil(delay_mean * np.exp(2.326 * delay_sd)),
+            # 98% quantile of a lognormal with median delay_mean.
+            "delay_q98": np.ceil(delay_mean * np.exp(2.054 * delay_sd)),
             "gt_mean": np.round(rng.uniform(6, 20, n), 1),
             "log_r0": np.round(rng.normal(0.2, 0.3, n), 2),
             "n_places": np.where(
