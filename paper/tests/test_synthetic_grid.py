@@ -13,16 +13,20 @@ SIMULATOR = Path(__file__).parents[2] / "scripts" / "finetune_simulate.R"
 
 
 def _drawn_settings() -> set[str]:
-    """Return the names `draw_settings` sets in the simulator."""
+    """Return the names `draw_design` and `draw_values` set."""
     text = SIMULATOR.read_text()
-    body = text[text.index("draw_settings <- function") :]
-    body = body[: body.index("\n}\n")]
-    return set(re.findall(r"^\s+(\w+) = ", body, flags=re.MULTILINE))
+    names: set[str] = set()
+    for fn in ("draw_design", "draw_values"):
+        body = text[text.index(f"{fn} <- function") :]
+        body = body[: body.index("\n}\n")]
+        names |= set(re.findall(r"^\s+(\w+) = ", body, flags=re.MULTILINE))
+    return names
 
 
 def test_the_grid_has_a_row_for_every_drawn_setting() -> None:
-    drawn = _drawn_settings() - {"outbreak", "timestep"}
-    assert drawn <= set(synthetic_grid.GRID["setting"])
+    drawn = _drawn_settings() - {"grid"}
+    rows = {s for row in synthetic_grid.GRID["setting"] for s in row.split(";")}
+    assert drawn <= rows
 
 
 def test_the_table_adds_realised_values_from_the_settings() -> None:
@@ -31,7 +35,9 @@ def test_the_table_adds_realised_values_from_the_settings() -> None:
             "outbreak": ["a", "b", "c"],
             "gt_mean": [6.0, 10.0, 20.0],
             "n_places": [1, 1, 5],
-            "report_days": [7, 2, 7],
+            "report_days": ["all", "Monday", "all"],
+            "family": ["negbin", "poisson", "negbin"],
+            "stable": [True, False, False],
             "cases": [50, 100, 30000],
         }
     )
@@ -43,6 +49,10 @@ def test_the_table_adds_realised_values_from_the_settings() -> None:
     assert places["realised"] == "1 [1, 5]; 67% one place"
     days = table.set_index("setting").loc["report_days"]
     assert days["realised"] == "67% every day"
+    family = table.set_index("setting").loc["family"]
+    assert family["realised"] == "negbin 67%, poisson 33%"
+    stable = table.set_index("setting").loc["stable"]
+    assert stable["realised"] == "33% yes"
     # A setting not in the settings files has no realised value.
     assert table.set_index("setting").loc["max_delay", "realised"] == ""
 
