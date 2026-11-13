@@ -8,9 +8,8 @@ use:
     done
 
 The held-out set is kept for the final evaluation (`paper/si/heldout-set.md`).
-During development, check the pipeline on a few training outbreaks
-(`output/finetune/full`, with `--outbreaks`), which never count as results.
-Then, from the repo root:
+During development, check the pipeline on the validation set instead
+(seed 7001, `output/finetune/validation`). Then, from the repo root:
 
     uv run --group chronos python -m paper.run_synthetic \
         output/finetune/heldout output/paper/synthetic.csv --device cpu
