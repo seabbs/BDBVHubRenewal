@@ -284,3 +284,19 @@ def test_delay_q98_is_the_outbreaks_98th_delay_percentile_in_days() -> None:
     settings = pd.DataFrame({"outbreak": ["9-0001"], "gt_mean": [10.0]})
     out = synthetic.factor_table(counts, settings)
     assert (out["delay_q98"] == 20).all()
+
+
+def test_observations_have_zero_weeks_so_every_target_has_truth() -> None:
+    # P02 has no cases in its first ten weeks.
+    counts = _counts(("P01", "P02"))
+    late = pd.to_datetime(counts["reference_date"]) < pd.Timestamp("2026-03-16")
+    counts = counts.loc[~(late & (counts["location"] == "P02"))]
+    obs = synthetic.observation_table(counts, "9-0001", 2)
+    p02 = obs.loc[obs["location"] == synthetic.series_label("9-0001", "P02")]
+    first = obs["target_date"].min()
+    for _, rows in p02.groupby("as_of_date"):
+        weeks = pd.date_range(first, rows["target_date"].max(), freq="7D")
+        assert list(rows["target_date"]) == list(weeks.strftime("%Y-%m-%d"))
+    early = p02.loc[p02["target_date"] < "2026-03-14", "value"]
+    assert len(early) > 0
+    assert (early == 0).all()
