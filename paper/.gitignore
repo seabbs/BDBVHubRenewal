@@ -4,3 +4,5 @@
 *.pdf
 *.docx
 *.tex
+!figures/*.pdf
+/figures/*.png
