@@ -7,7 +7,9 @@ use:
       Rscript scripts/finetune_simulate.R 25 $s output/finetune/heldout
     done
 
-Then, from the repo root:
+The held-out set is kept for the final evaluation (`paper/si/heldout-set.md`).
+During development, check the pipeline on the validation set instead
+(seed 7001, `output/finetune/validation`). Then, from the repo root:
 
     uv run --group chronos python -m paper.run_synthetic \
         output/finetune/heldout output/paper/synthetic.csv --device cpu
