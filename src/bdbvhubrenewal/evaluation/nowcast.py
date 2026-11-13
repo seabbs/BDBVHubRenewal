@@ -120,7 +120,7 @@ COMPLETE_WEEKS = 4
 COMPLETE_GROWTH = 0.02
 """Most a complete week may grow between the last two releases."""
 
-TRUTH_LEVEL = 0.99
+TRUTH_LEVEL = 0.98
 """Share of the national count reported by the estimated truth delay."""
 
 _LEVELS = (0.05, 0.25, 0.5, 0.75, 0.95)

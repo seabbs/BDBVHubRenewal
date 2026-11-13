@@ -28,7 +28,7 @@ skip_origins = ["2026-08-18"]
 # (`bdbvhubrenewal.evaluation.nowcast.reporting_delay`). A number of days
 # fixes it.
 truth_delay = "auto"
-truth_level = 0.99
+truth_level = 0.98
 
 [sampler]
 # NUTS settings of leave-one-province-out fits only. Stored backtest

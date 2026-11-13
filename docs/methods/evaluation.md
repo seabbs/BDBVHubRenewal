@@ -110,9 +110,9 @@ A model with no modelled delay, such as a hub team, is scored on complete weeks 
 
 **Complete weeks.** Each week's count in the first release whose cut-off is at least the truth delay after the week ends.
 The truth delay is `truth_delay` in `config/backtest.toml`.
-By default it is the age by which 99% of the national count is reported (`truth_level`).
+By default it is the age by which 98% of the national count is reported (`truth_level`).
 Each earlier release's national count of a week is set against the latest release's, at the week's age in that release rounded up to whole weeks, and the counts are pooled over releases at each age.
-The first age whose pooled share reaches 99% is the truth delay.
+The first age whose pooled share reaches 98% is the truth delay.
 The 2026-08-18 release is left out, as its old weeks were revised rather than late.
 Weeks with no release that far after them are not scored yet.
 The Backtest page gives the truth delay in use and how many forecasts it scores.
