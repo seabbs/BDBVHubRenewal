@@ -6,10 +6,11 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import pytest
 
-from paperfigs.dummy import dummy_study
+from paperfigs.dummy import dummy_factors, dummy_study
 from paperfigs.plots import (
     PANEL_LETTERS,
     results_panel,
+    si_scores_by_factor,
     si_scores_by_location_horizon,
     si_wis_over_time,
 )
@@ -92,4 +93,19 @@ def test_coverage_panel_follows_the_study(study) -> None:
     labels = " ".join(ax.get_xlabel() for ax in fig.axes)
     want = "95%" if fc["study"].iloc[0] == "germany" else "90%"
     assert want in labels
+    plt.close(fig)
+
+
+def test_synthetic_panel_shows_factors_and_weekly_horizons() -> None:
+    fc, obs = dummy_study("synthetic", seed=1, n_samples=20)
+    scores = score_forecasts(fc)
+    fig = results_panel(fc, obs, scores, factors=dummy_factors(fc, seed=1))
+    titles = " ".join(ax.get_title() for ax in fig.axes)
+    assert "by scenario factor" in titles
+    assert "by location" not in titles
+    labels = " ".join(ax.get_xlabel() for ax in fig.axes)
+    assert "Horizon (weeks)" in labels
+    plt.close(fig)
+    fig = si_scores_by_factor(scores, dummy_factors(fc, seed=1))
+    assert len([ax for ax in fig.axes if ax.get_title()]) == 5
     plt.close(fig)
