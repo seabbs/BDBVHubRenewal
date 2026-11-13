@@ -58,6 +58,7 @@ __all__ = [
     "STUDY_COVERAGE",
     "coverage_column",
     "coverage_columns",
+    "forecast_share",
     "metric_of",
     "relative_scores",
     "score_forecasts",
@@ -400,3 +401,34 @@ def _relative_one(
         }
     )
     return out.reset_index()
+
+
+def forecast_share(forecasts: pd.DataFrame) -> pd.DataFrame:
+    """Return the share of the study's forecasts each model made.
+
+    A study's expected forecasts are every location, stratum, origin,
+    target and horizon any model forecast. A model that skips some, such
+    as a random walk that skips flat series, scores only on the rest, so
+    its share shows how much of the study its scores cover.
+
+    Parameters
+    ----------
+    forecasts : pandas.DataFrame
+        Forecasts in the schema.
+
+    Returns
+    -------
+    pandas.DataFrame
+        `study`, `model`, `made`, `expected`, `missing` and `share`.
+    """
+    keys = [k for k in FORECAST_KEYS if k != "model"]
+    df = forecasts
+    if "stratum" not in df.columns:
+        df = df.assign(stratum=DEFAULT_STRATUM)
+    made = df.drop_duplicates([*keys, "model"])
+    expected = made.drop_duplicates(keys).groupby("study").size()
+    out = made.groupby(["study", "model"]).size().rename("made").reset_index()
+    out["expected"] = out["study"].map(expected)
+    out["missing"] = out["expected"] - out["made"]
+    out["share"] = out["made"] / out["expected"]
+    return out

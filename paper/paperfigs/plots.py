@@ -47,6 +47,7 @@ from paperfigs.schema import DEFAULT_STRATUM
 from paperfigs.scores import (
     STUDY_BASELINES,
     coverage_columns,
+    forecast_share,
     metric_of,
     relative_scores,
     summarise_scores,
@@ -286,9 +287,11 @@ def plot_nowcasts(
     ax.xaxis.set_major_formatter(mdates.ConciseDateFormatter(locator))
 
 
-def _model_rows(ax: Axes, models: Sequence[str], show_names: bool) -> None:
+def _model_rows(
+    ax: Axes, models: Sequence[str], labels: Sequence[str] | None
+) -> None:
     ax.set_yticks(range(len(models)))
-    ax.set_yticklabels(models if show_names else [])
+    ax.set_yticklabels(list(labels) if labels is not None else [])
     ax.set_ylim(len(models) - 0.5, -0.5)
     ax.grid(axis="y", visible=False)
 
@@ -662,6 +665,12 @@ def results_panel(
     _split_line(axd["nowcast"], split)
     rel = relative_scores(sc, halves, baseline)
     summary = summarise_scores(sc, halves)
+    # A model that skipped forecasts scores only on the rest; say so.
+    share = forecast_share(forecasts).set_index("model")["share"]
+    labels = [
+        m if share.get(m, 1.0) >= 1 else f"{m} ({share[m]:.0%} made)"
+        for m in models
+    ]
     _bars_relative(axd["rel"], rel, "rel_score", models)
     axd["rel"].set_xlabel(f"Relative to {baseline}")
     _bars_relative(axd["rel_log"], rel, "rel_log_score", models)
@@ -669,7 +678,7 @@ def results_panel(
     _bars_bias(axd["bias"], summary, models)
     _bars_coverage(axd["coverage"], summary, models)
     for key in ("rel", "rel_log", "bias", "coverage"):
-        _model_rows(axd[key], models, show_names=key == "rel")
+        _model_rows(axd[key], models, labels if key == "rel" else None)
     # Locations are compared on their main stratum (all ages).
     if factors is None:
         _points_by(
@@ -828,6 +837,7 @@ def si_wis_over_time(
     name = metric_of(scores).upper()
     summary = summarise_scores(scores, ["origin_date"])
     models = model_order(summary["model"].unique())
+    origins = sorted(summary["origin_date"].unique())
     fig, axes = plt.subplots(
         1, 2, figsize=(11, 3.8), sharex=True, layout="constrained"
     )
@@ -836,10 +846,13 @@ def si_wis_over_time(
         (axes[1], "log_score", "B", f"{name}, log scale"),
     ):
         for m in models:
-            one = summary.loc[summary["model"] == m]
-            ax.plot(
-                one["origin_date"], one[col], lw=1.4, **line_style(m, models)
+            # Reindex on every origin so a skipped origin breaks the line.
+            one = (
+                summary.loc[summary["model"] == m]
+                .set_index("origin_date")[col]
+                .reindex(origins)
             )
+            ax.plot(origins, one.to_numpy(), lw=1.4, **line_style(m, models))
         _label(ax, letter, title)
         locator = mdates.AutoDateLocator(maxticks=8)
         ax.xaxis.set_major_locator(locator)

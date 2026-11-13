@@ -212,7 +212,7 @@ def gappy():
 
 def test_missing_forecasts_are_labelled(gappy) -> None:
     fc, obs, scores, _ = gappy
-    fig = results_panel(fc, obs, scores, forecasts_share=fc)
+    fig = results_panel(fc, obs, scores)
     labels = [
         t.get_text()
         for ax in fig.axes
@@ -236,4 +236,16 @@ def test_missing_origins_break_lines_over_time(gappy) -> None:
     line = next(ln for ln in ax.get_lines() if ln.get_color() == "#eb6834")
     y = np.asarray(line.get_ydata(), dtype=float)
     assert np.isnan(y).sum() >= len(dropped)
+    plt.close(fig)
+
+
+def test_nowcast_panel_marks_a_missing_ribbon(gappy) -> None:
+    fc, obs, scores, dropped = gappy
+    fig = results_panel(
+        fc, obs, scores, ribbon_models=["randomwalknowcast"], split=False
+    )
+    ax = next(a for a in fig.axes if a.get_title() == "Nowcasts over time")
+    assert any(ln.get_marker() == "x" for ln in ax.get_lines())
+    labels = [t.get_text() for t in fig.legends[0].get_texts()]
+    assert "No forecast at origin" in labels
     plt.close(fig)
