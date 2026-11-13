@@ -1,9 +1,12 @@
 # Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
-"""Zone backtest: the random walk models run at zone level.
+"""Zone backtest: models that read release snapshots, run at zone level.
 
-Each real vintage before the truth vintage is forecast by `randomwalk` and
-`randomwalknowcast` on each zone's own release snapshots (`zone_task`),
-for every zone with cases at the vintage.
+Each real vintage before the truth vintage is forecast on each zone's
+own release snapshots (`zone_task`), for every zone with cases at the
+vintage.
+The functions default to the two random walks, and the CLI's
+`zone-backtest` adds `pprandomwalknowcast`, which is fitted at each
+origin.
 The zone delay, observation model and walk spread are each the zone's own
 where it has at least 10 cases a week, else its province's, else
 national (`pooling`).
@@ -114,7 +117,7 @@ def zone_backtest(
     config: BacktestConfig | None = None,
     origins: Collection[str] | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    """Score the random walk models run at zone level on later releases.
+    """Score models run at zone level on later releases.
 
     Two targets are scored, as for the provinces (`release_backtest`): what
     each later release reported, and the complete weeks of the latest
