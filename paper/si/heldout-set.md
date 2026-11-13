@@ -8,7 +8,7 @@ The protocol is in `paper/synthetic.py`, and `paper/run_synthetic.py` runs the m
 The held-out set was reserved for the final evaluation.
 No model was scored on it during development, and no forecast or score from it was looked at.
 One early run of the pipeline forecast three held-out outbreaks before this rule was set, and its outputs were deleted unread.
-We checked the pipeline end to end on a separate validation set of five outbreaks with seed 7001, in `output/finetune/validation`.
+We checked the pipeline end to end on a few of the fine-tune's training outbreaks, whose forecasts are not results.
 
 ## Protocol
 
