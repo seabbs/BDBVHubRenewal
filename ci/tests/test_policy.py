@@ -148,3 +148,9 @@ def test_chronos_is_a_hub_model_of_its_own() -> None:
         assert all(c.kind != "direct" for c in chained.chain())
         assert all(c.kind != "direct" for c in chained.stage("baseline"))
         assert all(c.kind != "direct" for c in chained.candidates)
+
+
+def test_the_raw_policy_chain_has_no_direct_candidate() -> None:
+    pol = load_policy(POLICY_PATH)
+    assert all(c.kind != "direct" for c in pol.chain())
+    assert all(c.kind != "direct" for c in pol.stage("baseline"))

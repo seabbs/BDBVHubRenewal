@@ -592,3 +592,13 @@ def test_settings_with_no_hash_fail(releases: Path, write_release) -> None:
     (releases / "chronos-ft-abc" / "settings.json").write_text("{}")
     with pytest.raises(ValueError, match="chronos-ft-abc"):
         foundation.finetuned_adapter(_checkpoint("abc"))
+
+
+def test_a_changed_cached_adapter_is_downloaded_again(
+    releases: Path, write_release
+) -> None:
+    write_release(releases, "abc", _ADAPTER, "abc")
+    adapter = foundation.finetuned_adapter(_checkpoint("abc"))
+    (adapter / "adapter_model.safetensors").write_bytes(b"tampered")
+    assert foundation.finetuned_adapter(_checkpoint("abc")) == adapter
+    assert (adapter / "adapter_model.safetensors").read_bytes() == b"weights"

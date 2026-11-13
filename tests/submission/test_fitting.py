@@ -357,7 +357,6 @@ def test_chronos_track_metadata_is_the_committed_file(
 ) -> None:
     assert main(["hub-id", "--model", "fm_chronos_daily_ragged_ft"]) == 0
     assert capsys.readouterr().out.strip() == "seabbs-chronos2_ft"
-    committed = ROOT / "hub" / "model-metadata" / "seabbs-chronos2_ft.yml"
     for model in ("fm_chronos_daily_ragged_ft", "fm_chronos_weekly_ragged_ft"):
         out = tmp_path / model
         args = ["--model", model, "--abbr", "chronos2_ft", "--out", str(out)]
@@ -365,9 +364,6 @@ def test_chronos_track_metadata_is_the_committed_file(
         text = (out / "seabbs-chronos2_ft.yml").read_text()
         assert "model_abbr: chronos2_ft" in text
         assert "chronos-ft-" in text
-        if model == "fm_chronos_daily_ragged_ft":
-            # The committed file is the configured model's.
-            assert committed.read_text() == text
 
 
 @pytest.mark.usefixtures("in_root")
@@ -390,7 +386,45 @@ def test_nowcast_records_the_checkpoint_it_loaded(
     record = json.loads((out / "checkpoint.json").read_text())
     assert record["tag"] == f"chronos-ft-{fake_checkpoint}"
     assert set(record["sha256"]) == set(foundation.ADAPTER_FILES)
+    # Zones split from the provinces, and the national sidecar.
+    assert json.loads((out / "zones.json").read_text())["zones"]
+    assert (out / "national.json").exists()
+    # With no checkpoint release, the nowcast fails.
+    monkeypatch.setattr(foundation, "finetuned_releases", lambda: [])
+    foundation.resolve_checkpoint.cache_clear()
+    assert main(["nowcast", *args[:2], "--out", str(tmp_path / "x")]) == 1
     # A model with no checkpoint writes none.
     plain = tmp_path / "rw"
     assert main(["nowcast", "--model", "randomwalk", "--out", str(plain)]) == 0
     assert not (plain / "checkpoint.json").exists()
+
+
+@pytest.mark.usefixtures("in_root")
+def test_chronos_metadata_names_the_release(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, write_release
+) -> None:
+    from bdbvhubrenewal.forecasters import foundation
+
+    # The committed file names the release that was latest when written.
+    root = tmp_path / "releases"
+    tag = "2c2b22a03107"
+    adapter = {"adapter_config.json": b"{}", "adapter_model.safetensors": b"w"}
+    write_release(root, tag, adapter, tag)
+    monkeypatch.setattr(foundation, "FINETUNED_URL", root.as_uri())
+    listing = [
+        {
+            "tag_name": f"chronos-ft-{tag}",
+            "published_at": "2026-11-13T00:00:00Z",
+            "draft": False,
+        }
+    ]
+    monkeypatch.setattr(foundation, "finetuned_releases", lambda: listing)
+    foundation.resolve_checkpoint.cache_clear()
+    out = tmp_path / "meta"
+    args = ["--model", "fm_chronos_daily_ragged_ft", "--out", str(out)]
+    assert main(["metadata", *args]) == 0
+    text = (out / "seabbs-chronos2_ft.yml").read_text()
+    assert "release chronos-ft-2c2b22a03107 of" in text
+    assert "<" not in text
+    committed = ROOT / "hub" / "model-metadata" / "seabbs-chronos2_ft.yml"
+    assert committed.read_text() == text
