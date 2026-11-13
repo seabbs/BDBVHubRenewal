@@ -56,7 +56,7 @@ sorted(real["vintage"].unique())
 # The origin is the second newest release.
 # The newest release scores it.
 # The task holds what a model sees at the origin, including the daily onsets of every release up to it, and the weeks to forecast.
-# Its reference date is the Saturday after the origin, and the forecast weeks run from four weeks before it to three weeks after it.
+# Its reference date is the Saturday after the origin, and the forecast weeks run from six weeks before it to four weeks after it.
 # `origin_tasks` builds the task of every real origin as the fit store fits it, so the baselines and the stored renewal fit see the same task.
 
 # %%
