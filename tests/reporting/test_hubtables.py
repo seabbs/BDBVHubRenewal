@@ -96,3 +96,42 @@ def test_hub_tables_cover_country_provinces_and_zones(
         "randomwalk-quantiles.csv.gz",
         "randomwalk-samples.csv.gz",
     ]
+
+
+def test_hub_tables_take_a_zone_fit_s_own_zones(
+    target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
+) -> None:
+    real = target.loc[target["kind"] == "real"]
+    latest = real["vintage"].max()
+    task = bt.make_tasks(
+        real.loc[real["vintage"] == latest],
+        delays,
+        bt.load_config(ROOT / "config" / "backtest.toml"),
+        history=real,
+        daily=daily,
+    )[0]
+    forecasts = bt.run_forecasts([get_model("randomwalk")], [task])
+    forecasts = forecasts.assign(model="renewal")
+    zones = hub_zones(DATA / "hub-config" / "tasks.json")
+    zone = next(z for z in zones if z.startswith(task.locations[0] + "-"))
+    # The zone fit puts all of the first province's cases in one zone.
+    first = forecasts.loc[
+        (forecasts["location"] == task.locations[0]) & forecasts["as_of"].isna()
+        if "as_of" in forecasts
+        else forecasts["location"] == task.locations[0]
+    ]
+    fitted = first.assign(location=zone, vintage=task.vintage)
+    daily_zones = load_daily_zones(DATA)
+    table = hub_tables(forecasts, task, daily_zones, zones, fitted)["renewal"]
+    rows = table.loc[table["location"].isin(set(zones))]
+    assert set(rows["location"]) == {zone}
+    mine = table.loc[table["location"] == task.locations[0]]
+    keys = ["target_end_date", "output_type_id"]
+    pd.testing.assert_series_equal(
+        rows.set_index(keys)["value"].sort_index(),
+        mine.set_index(keys)["value"].sort_index(),
+        check_names=False,
+    )
+    # Without its zone fit, a model's provinces are split.
+    split = hub_tables(forecasts, task, daily_zones, zones)["renewal"]
+    assert len(set(split["location"]) & set(zones)) > 1

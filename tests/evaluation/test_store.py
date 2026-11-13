@@ -526,3 +526,43 @@ def test_a_model_with_no_config_stores_no_files(
 ) -> None:
     stored = store.fit(fitted_flat, tasks[sorted(tasks)[-1]], {}, "c")
     assert stored.files == {}
+
+
+def test_load_writes_the_zone_fits_zone_samples(tmp_path: Path) -> None:
+    import base64
+    import gzip
+
+    zones = pd.DataFrame(
+        {
+            "location": ["CD-IT-01", "CD-IT-01"],
+            "target_end_date": ["2026-10-24", "2026-10-24"],
+            "sample": [1, 1],
+            "value": [3.0, 1.0],
+            "as_of": [None, "2026-10-24"],
+        }
+    )
+    body = base64.b64encode(
+        gzip.compress(zones.to_csv(index=False).encode())
+    ).decode()
+    meta = {
+        "model": "renewal",
+        "origin": "2026-10-17",
+        "key": "k",
+        "commit": "c",
+        "fitted_at": "2026-11-13T00:00:00+00:00",
+        "settings": "",
+        "status": "ok",
+    }
+    empty = pd.DataFrame()
+    fit = store.StoredFit(
+        meta, empty, empty, empty, files={"zones.csv.gz": body}
+    )
+    store.write_fit(tmp_path / "store", fit)
+    store.load(
+        tmp_path / "store", {("renewal", "2026-10-17"): "k"}, tmp_path / "res"
+    )
+    written = pd.read_csv(tmp_path / "res" / store.ZONE_FITS_FILE)
+    # Final counts only, by model and origin.
+    assert written[
+        ["model", "vintage", "location", "value"]
+    ].to_numpy().tolist() == [["renewal", "2026-10-17", "CD-IT-01", 3.0]]
