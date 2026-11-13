@@ -128,6 +128,33 @@ def test_each_release_carries_every_meldedatum_reported_by_then(
     assert got["observed"].to_dict() == moved
 
 
+def test_a_count_corrected_to_zero_is_not_carried(
+    triangle: pd.DataFrame,
+) -> None:
+    rows = triangle.loc[
+        (triangle["location"] == "DE")
+        & (triangle["age_group"] == "00+")
+        & (triangle["reference_date"] == "2021-09-01")
+    ].sort_values("report_date")
+    zero = rows.iloc[[-1]].assign(report_date="2021-10-01", confirm=0)
+    keep = ~(
+        (triangle["location"] == "DE")
+        & (triangle["age_group"] == "00+")
+        & (triangle["reference_date"] == "2021-09-01")
+        & (triangle["report_date"] >= "2021-10-01")
+    )
+    both = pd.concat([triangle.loc[keep], zero], ignore_index=True)
+    daily = nowcast_tasks(both, NOWCAST, n_samples=20, seed=1)[0].daily_history
+    shift = dt.date(2021, 10, 23) - dt.date.fromisoformat(NOWCAST)
+    onset = (dt.date(2021, 9, 1) + shift).isoformat()
+    late = daily.loc[
+        (daily["location"] == NATIONAL)
+        & (daily["onset_date"] == onset)
+        & (daily["vintage"] >= (dt.date(2021, 10, 1) + shift).isoformat())
+    ]
+    assert late.empty
+
+
 def test_dates_move_to_the_next_saturday(tasks) -> None:
     for task in tasks:
         # 2021-10-20 is a Wednesday, three days before a Saturday.
