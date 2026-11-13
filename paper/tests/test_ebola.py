@@ -230,6 +230,7 @@ def test_load_gives_sample_schema(hub):
     table = ebola.load(hub, delay_days=14)
     assert list(table.columns) == list(ebola.COLUMNS)
     assert "sample_id" in table
+    assert table["quantile_level"].isna().all()
     assert set(table["study"]) == {"ebola"}
     assert set(table["horizon"]) == {-1, 1}
     assert len(table) == 200
