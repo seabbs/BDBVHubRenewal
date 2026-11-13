@@ -55,7 +55,7 @@ div.csl-indent {
 <link href="main_files/libs/quarto-html/quarto-syntax-highlighting-587c61ba64f3a5504c4d52d930310e48.css" rel="stylesheet" id="quarto-text-highlighting-styles">
 <script src="main_files/libs/bootstrap/bootstrap.min.js"></script>
 <link href="main_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
-<link href="main_files/libs/bootstrap/bootstrap-d99fc85c7253c7d071cb1f16904a1173.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<link href="main_files/libs/bootstrap/bootstrap-67135126376fdcfdeadaafff27d21302.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
 
 
 </head>
@@ -114,17 +114,20 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
 <ul>
 <li>Real-time case counts are incomplete because of reporting delays.</li>
 <li>Generic forecasting models do not use the reporting structure.</li>
+<li>Key references: <span class="citation" data-cites="hohle Johnson2025 reichCollaborativeHubsMaking2022">(<a href="#ref-hohle" role="doc-biblioref">Höhle and Heiden 2014</a>; <a href="#ref-Johnson2025" role="doc-biblioref">Johnson et al. 2025</a>; <a href="#ref-reichCollaborativeHubsMaking2022" role="doc-biblioref">Reich et al. 2022</a>)</span>.</li>
 </ul></li>
 <li><strong>Context.</strong>
 <ul>
 <li>Nowcasting methods model reporting delays directly.</li>
 <li>Time series foundation models forecast well with no training on the target data.</li>
 <li>Training on domain-specific synthetic data has precedent: KernelSynth for Chronos <span class="citation" data-cites="Ansari2024">(<a href="#ref-Ansari2024" role="doc-biblioref">Ansari et al. 2024</a>)</span>, ForecastPFN <span class="citation" data-cites="Dooley2023">(<a href="#ref-Dooley2023" role="doc-biblioref">Dooley et al. 2023</a>)</span>, prior-fitted networks <span class="citation" data-cites="Muller2022 Hollmann2025">(<a href="#ref-Muller2022" role="doc-biblioref">Müller et al. 2022</a>; <a href="#ref-Hollmann2025" role="doc-biblioref">Hollmann et al. 2025</a>)</span>, and Mantis for outbreaks <span class="citation" data-cites="Dudley2026">(<a href="#ref-Dudley2026" role="doc-biblioref">Dudley et al. 2026</a>)</span>.</li>
+<li>Key references: <span class="citation" data-cites="mcgough2020nowcasting gunther2021nowcasting Wolffram2023 Ansari2024 Das2024a Woo2024 Rasul2023 Garza2023 Aksu2024 Shchur2025 Kalahasti2026 Dudley2025">(<a href="#ref-mcgough2020nowcasting" role="doc-biblioref">McGough et al. 2020</a>; <a href="#ref-gunther2021nowcasting" role="doc-biblioref">Günther et al. 2021</a>; <a href="#ref-Wolffram2023" role="doc-biblioref">Wolffram et al. 2023</a>; <a href="#ref-Ansari2024" role="doc-biblioref">Ansari et al. 2024</a>; <a href="#ref-Das2024a" role="doc-biblioref">Das, Kong, et al. 2024</a>; <a href="#ref-Woo2024" role="doc-biblioref">Woo et al. 2024</a>; <a href="#ref-Rasul2023" role="doc-biblioref">Rasul et al. 2023</a>; <a href="#ref-Garza2023" role="doc-biblioref">Garza, Challu, and Mergenthaler-Canseco 2023</a>; <a href="#ref-Aksu2024" role="doc-biblioref">Aksu et al. 2024</a>; <a href="#ref-Shchur2025" role="doc-biblioref">Shchur et al. 2025</a>; <a href="#ref-Kalahasti2026" role="doc-biblioref">Kalahasti et al. 2026</a>; <a href="#ref-Dudley2025" role="doc-biblioref">Dudley et al. 2025</a>)</span>.</li>
 </ul></li>
 <li><strong>What we did.</strong>
 <ul>
 <li>We fine-tuned a foundation model on synthetic outbreak data, following that precedent but fine-tuning a general model rather than training from scratch.</li>
 <li>We evaluated it retrospectively and prospectively.</li>
+<li>Key references: <span class="citation" data-cites="Ansari2025 Johnson2025">(<a href="#ref-Ansari2025" role="doc-biblioref">Ansari et al. 2025</a>; <a href="#ref-Johnson2025" role="doc-biblioref">Johnson et al. 2025</a>)</span>.</li>
 </ul></li>
 </ul>
 </div>
@@ -147,6 +150,7 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
 <ul>
 <li>The German COVID-19 hospitalisation nowcast hub.</li>
 <li>The Ebola forecasting hub target and its releases.</li>
+<li>Key references: <span class="citation" data-cites="Wolffram2023 hospitalization_nowcast_hub_2025 bdbv_modeling_hub_2026 MacNeil2010">(<a href="#ref-Wolffram2023" role="doc-biblioref">Wolffram et al. 2023</a>; <a href="#ref-hospitalization_nowcast_hub_2025" role="doc-biblioref">KIT Metrics Lab et al. 2025</a>; <a href="#ref-bdbv_modeling_hub_2026" role="doc-biblioref">InsightNet-US 2026</a>; <a href="#ref-MacNeil2010" role="doc-biblioref">MacNeil et al. 2010</a>)</span>.</li>
 </ul>
 </div>
 </div>
@@ -166,6 +170,7 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
 <ul>
 <li><code>randomwalk</code>, a random walk with no delay adjustment, and <code>randomwalknowcast</code>, a random walk nowcast.</li>
 <li>Both in full in the SI.</li>
+<li>Key references: <span class="citation" data-cites="Johnson2025">(<a href="#ref-Johnson2025" role="doc-biblioref">Johnson et al. 2025</a>)</span>.</li>
 </ul>
 </div>
 </div>
@@ -183,11 +188,23 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
 </div>
 <div class="callout-body-container callout-body">
 <ul>
-<li>Chronos-2, given the reporting triangle as series.</li>
-<li>One fine-tune on synthetic data, run on a laptop.</li>
+<li>Chronos-2, given the reporting triangle as series: one series per place and reporting delay, each missing until reported. Introduced alongside the reporting triangle, with Figure 1B.</li>
+<li>Fine-tuned on synthetic data on a laptop, with checkpoints after 1,000, 2,000, 4,000, 6,000 and 8,000 simulated outbreaks. The largest is the main model.</li>
 <li>Compared with Chronos-2 given only complete data points, to show what the ragged structure and fine-tuning add.</li>
+<li>Figure 1, a multi-panel schematic of our pipeline: (A) the assumptions in the epinowcast simulations, (B) the reporting triangle laid out as ragged series for Chronos-2, (C) training blocks and LoRA fine-tuning, and why it is fast, and (D) forecasting with the fine-tuned model.</li>
+<li>Key references: <span class="citation" data-cites="Ansari2025 Ansari2024 Hu2021 Das2024b">(<a href="#ref-Ansari2025" role="doc-biblioref">Ansari et al. 2025</a>, <a href="#ref-Ansari2024" role="doc-biblioref">2024</a>; <a href="#ref-Hu2021" role="doc-biblioref">Hu et al. 2021</a>; <a href="#ref-Das2024b" role="doc-biblioref">Das, Faw, et al. 2024</a>)</span>.</li>
 </ul>
 </div>
+</div>
+<div id="fig-pipeline" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-pipeline-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="figures/fig1-pipeline.svg" class="img-fluid figure-img">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-pipeline-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;1: The fine-tuning pipeline. (A) The assumptions in the epinowcast simulations: a latent process gives expected onsets by stratum, which a reporting delay that may drift or step, report-day effects and count noise turn into a reporting triangle. (B) The reporting triangle laid out as ragged series for Chronos-2: each place has a target complete up to E and one series per lag, missing until reported (daily lag series fill only on release days), and counts reported after E enter as known-future inputs. (C) Training blocks and LoRA fine-tuning, and why it is fast: blocks cut from simulated release histories at random cut-offs are scored against the final counts, and only rank-8 adapters, about 1% of the weights, are trained. (D) Forecasting with the fine-tuned model: one forward pass gives quantiles for each step, and each draw reads them at a uniform level u and is at least the count reported so far.
+</figcaption>
+</figure>
 </div>
 </section>
 <section id="synthetic-data-generation" class="level3">
@@ -206,6 +223,7 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
 <li>Simulated with epinowcast over a grid of outbreak, delay and noise settings.</li>
 <li>A table in the main text gives the grid of synthetic scenarios.</li>
 <li>The full process and an overview of the epinowcast model used are in the SI.</li>
+<li>Key references: <span class="citation" data-cites="abbottepinowcast lison2024 Park2024 Ansari2024 Dooley2023 Muller2022 Hollmann2025">(<a href="#ref-abbottepinowcast" role="doc-biblioref">Abbott et al. 2026</a>; <a href="#ref-lison2024" role="doc-biblioref">Lison et al. 2024</a>; <a href="#ref-Park2024" role="doc-biblioref">Park et al. 2024</a>; <a href="#ref-Ansari2024" role="doc-biblioref">Ansari et al. 2024</a>; <a href="#ref-Dooley2023" role="doc-biblioref">Dooley et al. 2023</a>; <a href="#ref-Muller2022" role="doc-biblioref">Müller et al. 2022</a>; <a href="#ref-Hollmann2025" role="doc-biblioref">Hollmann et al. 2025</a>)</span>.</li>
 </ul>
 </div>
 </div>
@@ -256,7 +274,8 @@ Table&nbsp;1: Placeholder: grid of synthetic scenarios.
 <ul>
 <li>A held-out set of simulations was not used during development.</li>
 <li>Sample forecasts scored with CRPS and log-scale CRPS, bias, and coverage, relative to <code>randomwalknowcast</code>.</li>
-<li>Scored against a rolling evaluation set of the data as reported D days later, with D each outbreak’s 99% delay.</li>
+<li>Scored against a rolling evaluation set of the data as reported D days later, with D each outbreak’s 98% delay.</li>
+<li>Key references: <span class="citation" data-cites="bracherEvaluatingEpidemicForecasts2021 Bosse2023-sx gneitingStrictlyProperScoring2007 gneitingProbabilisticForecastsCalibration2007 sherrattPredictivePerformanceMultimodel2023">(<a href="#ref-bracherEvaluatingEpidemicForecasts2021" role="doc-biblioref">Bracher et al. 2021</a>; <a href="#ref-Bosse2023-sx" role="doc-biblioref">Bosse et al. 2023</a>; <a href="#ref-gneitingStrictlyProperScoring2007" role="doc-biblioref">Gneiting and Raftery 2007</a>; <a href="#ref-gneitingProbabilisticForecastsCalibration2007" role="doc-biblioref">Gneiting, Balabdaoui, and Raftery 2007</a>; <a href="#ref-sherrattPredictivePerformanceMultimodel2023" role="doc-biblioref">Sherratt et al. 2023</a>)</span>.</li>
 </ul>
 </div>
 </div>
@@ -278,6 +297,7 @@ Table&nbsp;1: Placeholder: grid of synthetic scenarios.
 <li>Quantile forecasts scored with WIS and log-scale WIS, bias, and coverage, against a rolling evaluation set of the data as reported D days later <span class="citation" data-cites="Wolffram2023">(<a href="#ref-Wolffram2023" role="doc-biblioref">Wolffram et al. 2023</a>)</span>.</li>
 <li>Daily and weekly versions may not both make sense here.</li>
 <li>The nowcast dates are split in half. We developed our setup on the first half only, and the second half is held out for the results.</li>
+<li>Key references: <span class="citation" data-cites="Wolffram2023 Johnson2025 amaralPostprocessingWeightedCombination2025">(<a href="#ref-Wolffram2023" role="doc-biblioref">Wolffram et al. 2023</a>; <a href="#ref-Johnson2025" role="doc-biblioref">Johnson et al. 2025</a>; <a href="#ref-amaralPostprocessingWeightedCombination2025" role="doc-biblioref">Amaral et al. 2025</a>)</span>.</li>
 </ul>
 </div>
 </div>
@@ -296,8 +316,9 @@ Table&nbsp;1: Placeholder: grid of synthetic scenarios.
 <div class="callout-body-container callout-body">
 <ul>
 <li>Compared with the other submissions, relative to the hub’s own baseline.</li>
-<li>Scored as for the held-out synthetic data, with D the empirical 99% point of the hub data’s reporting delay.</li>
+<li>Scored as for the held-out synthetic data, with D the empirical 98% point of the hub data’s reporting delay.</li>
 <li>Our models’ forecasts are saved prospectively, alongside the main submissions as they were made.</li>
+<li>Key references: <span class="citation" data-cites="bdbv_modeling_hub_2026 Viboud2018 funkAssessingPerformanceRealtime2019">(<a href="#ref-bdbv_modeling_hub_2026" role="doc-biblioref">InsightNet-US 2026</a>; <a href="#ref-Viboud2018" role="doc-biblioref">Viboud et al. 2018</a>; <a href="#ref-funkAssessingPerformanceRealtime2019" role="doc-biblioref">Funk et al. 2019</a>)</span>.</li>
 </ul>
 </div>
 </div>
@@ -344,6 +365,7 @@ Table&nbsp;1: Placeholder: grid of synthetic scenarios.
 <li>for Germany, a dotted line marking the split between the development and held-out halves, with scores split by half.</li>
 </ul>
 <p>The plots in primarycensored-paper are a model for these. Each section has two paragraphs, one on visual performance and one summarising scores.</p>
+<p>Key references: the Methods references, with <span class="citation" data-cites="bracherEvaluatingEpidemicForecasts2021 Bosse2023-sx">(<a href="#ref-bracherEvaluatingEpidemicForecasts2021" role="doc-biblioref">Bracher et al. 2021</a>; <a href="#ref-Bosse2023-sx" role="doc-biblioref">Bosse et al. 2023</a>)</span> for the natural- and log-scale panels.</p>
 </div>
 </div>
 <section id="held-out-synthetic-data" class="level3">
@@ -361,6 +383,7 @@ Table&nbsp;1: Placeholder: grid of synthetic scenarios.
 <ul>
 <li>Visual performance of the candidate models against <code>randomwalk</code> and <code>randomwalknowcast</code>.</li>
 <li>A summary of score performance.</li>
+<li>How scores change with the amount of fine-tuning data (1,000 to 8,000 outbreaks), as an SI figure.</li>
 </ul>
 </div>
 </div>
@@ -370,7 +393,7 @@ Table&nbsp;1: Placeholder: grid of synthetic scenarios.
 <p>Figure to come.</p>
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-synthetic-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;1: Placeholder: held-out synthetic data results panel.
+Figure&nbsp;2: Placeholder: held-out synthetic data results panel.
 </figcaption>
 </figure>
 </div>
@@ -390,6 +413,7 @@ Figure&nbsp;1: Placeholder: held-out synthetic data results panel.
 <ul>
 <li>Visual performance against the other models.</li>
 <li>A summary of score performance.</li>
+<li>Key references: <span class="citation" data-cites="Wolffram2023 amaralPostprocessingWeightedCombination2025">(<a href="#ref-Wolffram2023" role="doc-biblioref">Wolffram et al. 2023</a>; <a href="#ref-amaralPostprocessingWeightedCombination2025" role="doc-biblioref">Amaral et al. 2025</a>)</span>.</li>
 </ul>
 </div>
 </div>
@@ -399,7 +423,7 @@ Figure&nbsp;1: Placeholder: held-out synthetic data results panel.
 <p>Figure to come.</p>
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-germany-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;2: Placeholder: German nowcast hub results panel.
+Figure&nbsp;3: Placeholder: German nowcast hub results panel.
 </figcaption>
 </figure>
 </div>
@@ -428,7 +452,7 @@ Figure&nbsp;2: Placeholder: German nowcast hub results panel.
 <p>Figure to come.</p>
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-ebola-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;3: Placeholder: Ebola hub submissions results panel.
+Figure&nbsp;4: Placeholder: Ebola hub submissions results panel.
 </figcaption>
 </figure>
 </div>
@@ -455,17 +479,19 @@ Figure&nbsp;3: Placeholder: Ebola hub submissions results panel.
 <li>Strengths: both retrospective and real-time case studies, and synthetic data that are easy to tune to a setting.</li>
 <li>Strength: fine-tuning ran locally on consumer hardware (a laptop), so it is accessible.</li>
 <li>Weakness: fine-tuning used the laptop’s GPU, which made it several times faster, and not everyone has one. On a laptop CPU alone it would still run in hours.</li>
+<li>Key references: <span class="citation" data-cites="Kalahasti2026 Meyer2025">(<a href="#ref-Kalahasti2026" role="doc-biblioref">Kalahasti et al. 2026</a>; <a href="#ref-Meyer2025" role="doc-biblioref">Meyer et al. 2025</a>)</span>.</li>
 </ul></li>
 <li><strong>Domain knowledge through synthetic data.</strong>
 <ul>
 <li>Domain knowledge enters through the synthetic data source.</li>
 <li>Fingers crossed it improves results; to fill in from the results.</li>
+<li>Key references: <span class="citation" data-cites="Dudley2026 Dudley2025 Dooley2023 Hollmann2025 Ansari2025">(<a href="#ref-Dudley2026" role="doc-biblioref">Dudley et al. 2026</a>, <a href="#ref-Dudley2025" role="doc-biblioref">2025</a>; <a href="#ref-Dooley2023" role="doc-biblioref">Dooley et al. 2023</a>; <a href="#ref-Hollmann2025" role="doc-biblioref">Hollmann et al. 2025</a>; <a href="#ref-Ansari2025" role="doc-biblioref">Ansari et al. 2025</a>)</span>.</li>
 </ul></li>
 <li><strong>Against the literature.</strong>
 <ul>
-<li>Other uses of foundation models in infectious disease modelling.</li>
-<li>Fine-tuning in other domains.</li>
-<li>Other nowcasting approaches.</li>
+<li>Other uses of foundation models in infectious disease modelling. Key references: <span class="citation" data-cites="Kalahasti2026 Cai2026 Wang2025 Jafari2026 Du2025 Li2025 Aygun2025 Martinson2026">(<a href="#ref-Kalahasti2026" role="doc-biblioref">Kalahasti et al. 2026</a>; <a href="#ref-Cai2026" role="doc-biblioref">Cai, Huang, and Xu 2026</a>; <a href="#ref-Wang2025" role="doc-biblioref">Wang et al. 2025</a>; <a href="#ref-Jafari2026" role="doc-biblioref">Jafari et al. 2026</a>; <a href="#ref-Du2025" role="doc-biblioref">Du et al. 2025</a>; <a href="#ref-Li2025" role="doc-biblioref">Li et al. 2025</a>; <a href="#ref-Aygun2025" role="doc-biblioref">Aygün et al. 2025</a>; <a href="#ref-Martinson2026" role="doc-biblioref">Martinson et al. 2026</a>)</span>.</li>
+<li>Fine-tuning in other domains. Key references: <span class="citation" data-cites="Laglil2026 Das2024b Hu2021">(<a href="#ref-Laglil2026" role="doc-biblioref">Laglil et al. 2026</a>; <a href="#ref-Das2024b" role="doc-biblioref">Das, Faw, et al. 2024</a>; <a href="#ref-Hu2021" role="doc-biblioref">Hu et al. 2021</a>)</span>.</li>
+<li>Other nowcasting approaches. Key references: <span class="citation" data-cites="bastos Seaman2022 Bergstrom2022 Gressani2024 Schneble2021 vandeKassteele2019 Overton2023-dk Mellor2025 Tang2025 stonerPowerfulModellingFramework2020 Kamarthi2021 Koemen2025 Wilsens2025">(<a href="#ref-bastos" role="doc-biblioref">Bastos et al. 2019</a>; <a href="#ref-Seaman2022" role="doc-biblioref">Seaman et al. 2022</a>; <a href="#ref-Bergstrom2022" role="doc-biblioref">Bergström et al. 2022</a>; <a href="#ref-Gressani2024" role="doc-biblioref">Sumalinab et al. 2024</a>; <a href="#ref-Schneble2021" role="doc-biblioref">Schneble et al. 2021</a>; <a href="#ref-vandeKassteele2019" role="doc-biblioref">Kassteele, Eilers, and Wallinga 2019</a>; <a href="#ref-Overton2023-dk" role="doc-biblioref">Overton et al. 2023</a>; <a href="#ref-Mellor2025" role="doc-biblioref">Mellor et al. 2025</a>; <a href="#ref-Tang2025" role="doc-biblioref">Tang et al. 2025</a>; <a href="#ref-stonerPowerfulModellingFramework2020" role="doc-biblioref">Stoner, Economou, and Halliday 2020</a>; <a href="#ref-Kamarthi2021" role="doc-biblioref">Kamarthi, Rodríguez, and Prakash 2021</a>; <a href="#ref-Koemen2025" role="doc-biblioref">Koemen et al. 2025</a>; <a href="#ref-Wilsens2025" role="doc-biblioref">Wilsens, Antonio, and Claeskens 2025</a>)</span>.</li>
 </ul></li>
 <li><strong>A possible emulator.</strong>
 <ul>
@@ -480,6 +506,7 @@ Figure&nbsp;3: Placeholder: Ebola hub submissions results panel.
 <li>A comparison with custom neural networks.</li>
 <li>Testing the fine-tuned model as an emulator of epinowcast.</li>
 <li>Fine-tuning with other epidemiological features as covariates, such as distances between locations or mobility.</li>
+<li>Key references: <span class="citation" data-cites="Das2024a Woo2024 Rasul2023 Kamarthi2021 Koemen2025 respinow_hub_2025">(<a href="#ref-Das2024a" role="doc-biblioref">Das, Kong, et al. 2024</a>; <a href="#ref-Woo2024" role="doc-biblioref">Woo et al. 2024</a>; <a href="#ref-Rasul2023" role="doc-biblioref">Rasul et al. 2023</a>; <a href="#ref-Kamarthi2021" role="doc-biblioref">Kamarthi, Rodríguez, and Prakash 2021</a>; <a href="#ref-Koemen2025" role="doc-biblioref">Koemen et al. 2025</a>; <a href="#ref-respinow_hub_2025" role="doc-biblioref">KIT Metrics Lab, Bracher, and Schienle 2025</a>)</span>.</li>
 </ul></li>
 <li><strong>Conclusions.</strong>
 <ul>
@@ -509,23 +536,182 @@ Figure&nbsp;3: Placeholder: Ebola hub submissions results panel.
 </div></section><section id="ai-disclosure" class="level2 appendix"><h2 class="anchored quarto-appendix-heading">AI disclosure</h2><div class="quarto-appendix-contents">
 
 </div></section><section class="quarto-appendix-contents" role="doc-bibliography" id="quarto-bibliography"><h2 class="anchored quarto-appendix-heading">References</h2><div id="refs" class="references csl-bib-body hanging-indent" data-entry-spacing="0" role="list">
+<div id="ref-abbottepinowcast" class="csl-entry" role="listitem">
+Abbott, Sam, Adrian Lison, Sebastian Funk, Carl Pearson, Hugo Gruson, Felix Guenther, Michael DeWitt, James Mba Azam, and Jessalyn Sebastian. 2026. <em>Epinowcast: A Bayesian Framework for Real-Time Infectious Disease Surveillance</em>. <a href="https://doi.org/10.5281/zenodo.5637165">https://doi.org/10.5281/zenodo.5637165</a>.
+</div>
+<div id="ref-Aksu2024" class="csl-entry" role="listitem">
+Aksu, Taha, Gerald Woo, Juncheng Liu, Xu Liu, Chenghao Liu, Silvio Savarese, Caiming Xiong, and Doyen Sahoo. 2024. <span>“<span>GIFT-Eval</span>: A Benchmark for General Time Series Forecasting Model Evaluation.”</span> arXiv. <a href="https://doi.org/10.48550/arXiv.2410.10393">https://doi.org/10.48550/arXiv.2410.10393</a>.
+</div>
+<div id="ref-amaralPostprocessingWeightedCombination2025" class="csl-entry" role="listitem">
+Amaral, André Victor Ribeiro, Daniel Wolffram, Paula Moraga, and Johannes Bracher. 2025. <span>“Post-Processing and Weighted Combination of Infectious Disease Nowcasts.”</span> <em>PLoS Computational Biology</em> 21 (3): e1012836. <a href="https://doi.org/10.1371/journal.pcbi.1012836">https://doi.org/10.1371/journal.pcbi.1012836</a>.
+</div>
+<div id="ref-Ansari2025" class="csl-entry" role="listitem">
+Ansari, Abdul Fatir, Oleksandr Shchur, Jaris Küken, Andreas Auer, Boran Han, Pedro Mercado, Syama Sundar Rangapuram, et al. 2025. <span>“<span>Chronos-2</span>: From Univariate to Universal Forecasting.”</span> arXiv. <a href="https://doi.org/10.48550/arXiv.2510.15821">https://doi.org/10.48550/arXiv.2510.15821</a>.
+</div>
 <div id="ref-Ansari2024" class="csl-entry" role="listitem">
-Ansari, Abdul Fatir, Lorenzo Stella, Caner Turkmen, Xiyuan Zhang, Pedro Mercado, Huibin Shen, Oleksandr Shchur, et al. 2024. <span>“Chronos: Learning the Language of Time Series.”</span> arXiv. <a href="https://doi.org/10.48550/arXiv.2403.07815">https://doi.org/10.48550/arXiv.2403.07815</a>.
+Ansari, Abdul Fatir, Lorenzo Stella, Caner Turkmen, Xiyuan Zhang, Pedro Mercado, Huibin Shen, Oleksandr Shchur, et al. 2024. <span>“Chronos: Learning the Language of Time Series.”</span> <em>Transactions on Machine Learning Research</em>. <a href="https://doi.org/10.48550/arXiv.2403.07815">https://doi.org/10.48550/arXiv.2403.07815</a>.
+</div>
+<div id="ref-Aygun2025" class="csl-entry" role="listitem">
+Aygün, Eser, Anastasiya Belyaeva, Gheorghe Comanici, Marc Coram, Hao Cui, Jake Garrison, Renee Johnston Anton Kast, et al. 2025. <span>“An <span>AI</span> System to Help Scientists Write Expert-Level Empirical Software.”</span> arXiv. <a href="https://doi.org/10.48550/arXiv.2509.06503">https://doi.org/10.48550/arXiv.2509.06503</a>.
+</div>
+<div id="ref-bastos" class="csl-entry" role="listitem">
+Bastos, Leonardo S, Theodoros Economou, Marcelo F C Gomes, Daniel A M Villela, Flavio C Coelho, Oswaldo G Cruz, Oliver Stoner, Trevor Bailey, and Claudia T Codeço. 2019. <span>“A Modelling Approach for Correcting Reporting Delays in Disease Surveillance Data.”</span> <em>Statistics in Medicine</em> 38 (22): 4363–77. <a href="https://doi.org/10.1002/sim.8303">https://doi.org/10.1002/sim.8303</a>.
+</div>
+<div id="ref-Bergstrom2022" class="csl-entry" role="listitem">
+Bergström, Fanny, Felix Günther, Michael Höhle, and Tom Britton. 2022. <span>“Bayesian Nowcasting with Leading Indicators Applied to <span>COVID</span>-19 Fatalities in <span>Sweden</span>.”</span> <em>PLOS Computational Biology</em> 18 (12): e1010767. <a href="https://doi.org/10.1371/journal.pcbi.1010767">https://doi.org/10.1371/journal.pcbi.1010767</a>.
+</div>
+<div id="ref-Bosse2023-sx" class="csl-entry" role="listitem">
+Bosse, Nikos I., Sam Abbott, Anne Cori, Edwin van Leeuwen, Johannes Bracher, and Sebastian Funk. 2023. <span>“Scoring Epidemiological Forecasts on Transformed Scales.”</span> <em>PLOS Computational Biology</em> 19 (8): e1011393. <a href="https://doi.org/10.1371/journal.pcbi.1011393">https://doi.org/10.1371/journal.pcbi.1011393</a>.
+</div>
+<div id="ref-bracherEvaluatingEpidemicForecasts2021" class="csl-entry" role="listitem">
+Bracher, Johannes, Evan L. Ray, Tilmann Gneiting, and Nicholas G. Reich. 2021. <span>“Evaluating Epidemic Forecasts in an Interval Format.”</span> <em>PLOS Computational Biology</em> 17 (2): e1008618. <a href="https://doi.org/10.1371/journal.pcbi.1008618">https://doi.org/10.1371/journal.pcbi.1008618</a>.
+</div>
+<div id="ref-Cai2026" class="csl-entry" role="listitem">
+Cai, Peng, Guoyu Huang, and Ximing Xu. 2026. <span>“Benchmarking Time Series Foundation Models for Multi-Country Infectious Disease Forecasting: A Retrospective Evaluation Across over 70 Diseases.”</span> <em>BMC Public Health</em>, October. <a href="https://doi.org/10.1186/s12889-026-29918-1">https://doi.org/10.1186/s12889-026-29918-1</a>.
+</div>
+<div id="ref-Das2024b" class="csl-entry" role="listitem">
+Das, Abhimanyu, Matthew Faw, Rajat Sen, and Yichen Zhou. 2024. <span>“In-Context Fine-Tuning for Time-Series Foundation Models.”</span> arXiv. <a href="https://doi.org/10.48550/arXiv.2410.24087">https://doi.org/10.48550/arXiv.2410.24087</a>.
+</div>
+<div id="ref-Das2024a" class="csl-entry" role="listitem">
+Das, Abhimanyu, Weihao Kong, Rajat Sen, and Yichen Zhou. 2024. <span>“A Decoder-Only Foundation Model for Time-Series Forecasting.”</span> In <em>Proceedings of the 41st International Conference on Machine Learning</em>. <a href="https://doi.org/10.48550/arXiv.2310.10688">https://doi.org/10.48550/arXiv.2310.10688</a>.
 </div>
 <div id="ref-Dooley2023" class="csl-entry" role="listitem">
-Dooley, Samuel, Gurnoor Singh Khurana, Chirag Mohapatra, Siddartha Naidu, and Colin White. 2023. <span>“<span>ForecastPFN</span>: Synthetically-Trained Zero-Shot Forecasting.”</span> arXiv. <a href="https://doi.org/10.48550/arXiv.2311.01933">https://doi.org/10.48550/arXiv.2311.01933</a>.
+Dooley, Samuel, Gurnoor Singh Khurana, Chirag Mohapatra, Siddartha Naidu, and Colin White. 2023. <span>“<span>ForecastPFN</span>: Synthetically-Trained Zero-Shot Forecasting.”</span> In <em>Advances in Neural Information Processing Systems</em>. <a href="https://doi.org/10.48550/arXiv.2311.01933">https://doi.org/10.48550/arXiv.2311.01933</a>.
+</div>
+<div id="ref-Du2025" class="csl-entry" role="listitem">
+Du, Hongru, Yang Zhao, Jianan Zhao, Shaochong Xu, Xihong Lin, Yiran Chen, Lauren M. Gardner, and Hao Frank Yang. 2025. <span>“Advancing Real-Time Infectious Disease Forecasting Using Large Language Models.”</span> <em>Nature Computational Science</em> 5 (6): 467–80. <a href="https://doi.org/10.1038/s43588-025-00798-6">https://doi.org/10.1038/s43588-025-00798-6</a>.
+</div>
+<div id="ref-Dudley2025" class="csl-entry" role="listitem">
+Dudley, Carson, Reiden Magdaleno, Christopher Harding, and Marisa Eisenberg. 2025. <span>“Simulation as Supervision: Mechanistic Pretraining for Scientific Discovery.”</span> arXiv. <a href="https://doi.org/10.48550/arXiv.2507.08977">https://doi.org/10.48550/arXiv.2507.08977</a>.
 </div>
 <div id="ref-Dudley2026" class="csl-entry" role="listitem">
 Dudley, Carson, Reiden Magdaleno, Christopher Harding, Ananya Sharma, Emily Martin, and Marisa Eisenberg. 2026. <span>“Mantis: A Foundation Model for Mechanistic Disease Forecasting.”</span> <em>Proceedings of the National Academy of Sciences</em> 123 (40). <a href="https://doi.org/10.1073/pnas.2602542123">https://doi.org/10.1073/pnas.2602542123</a>.
 </div>
+<div id="ref-funkAssessingPerformanceRealtime2019" class="csl-entry" role="listitem">
+Funk, Sebastian, Anton Camacho, Adam J. Kucharski, Rachel Lowe, Rosalind M. Eggo, and W. John Edmunds. 2019. <span>“Assessing the Performance of Real-Time Epidemic Forecasts: <span>A</span> Case Study of <span>Ebola</span> in the <span>Western Area</span> Region of <span>Sierra Leone</span>, 2014-15.”</span> <em>PLOS Computational Biology</em> 15 (2): e1006785. <a href="https://doi.org/10.1371/journal.pcbi.1006785">https://doi.org/10.1371/journal.pcbi.1006785</a>.
+</div>
+<div id="ref-Garza2023" class="csl-entry" role="listitem">
+Garza, Azul, Cristian Challu, and Max Mergenthaler-Canseco. 2023. <span>“<span>TimeGPT-1</span>.”</span> arXiv. <a href="https://doi.org/10.48550/arXiv.2310.03589">https://doi.org/10.48550/arXiv.2310.03589</a>.
+</div>
+<div id="ref-gneitingProbabilisticForecastsCalibration2007" class="csl-entry" role="listitem">
+Gneiting, Tilmann, Fadoua Balabdaoui, and Adrian E. Raftery. 2007. <span>“Probabilistic Forecasts, Calibration and Sharpness.”</span> <em>Journal of the Royal Statistical Society: Series B (Statistical Methodology)</em> 69 (2): 243–68. <a href="https://doi.org/10.1111/j.1467-9868.2007.00587.x">https://doi.org/10.1111/j.1467-9868.2007.00587.x</a>.
+</div>
+<div id="ref-gneitingStrictlyProperScoring2007" class="csl-entry" role="listitem">
+Gneiting, Tilmann, and Adrian E Raftery. 2007. <span>“Strictly <span>Proper Scoring Rules</span>, <span>Prediction</span>, and <span>Estimation</span>.”</span> <em>Journal of the American Statistical Association</em> 102 (477): 359–78. <a href="https://doi.org/10.1198/016214506000001437">https://doi.org/10.1198/016214506000001437</a>.
+</div>
+<div id="ref-gunther2021nowcasting" class="csl-entry" role="listitem">
+Günther, Felix, Andreas Bender, Katharina Katz, Helmut Küchenhoff, and Michael Höhle. 2021. <span>“Nowcasting the <span>COVID</span>-19 Pandemic in Bavaria.”</span> <em>Biom. J.</em> 63 (3): 490–502. <a href="https://doi.org/10.1002/bimj.202000112">https://doi.org/10.1002/bimj.202000112</a>.
+</div>
+<div id="ref-hohle" class="csl-entry" role="listitem">
+Höhle, Michael, and Matthias an der Heiden. 2014. <span>“Bayesian Nowcasting During the <span>STEC O104</span>:H4 Outbreak in <span>Germany</span>, 2011.”</span> <em>Biometrics</em> 70 (4): 993–1002. <a href="https://doi.org/10.1111/biom.12194">https://doi.org/10.1111/biom.12194</a>.
+</div>
 <div id="ref-Hollmann2025" class="csl-entry" role="listitem">
 Hollmann, Noah, Samuel Müller, Lennart Purucker, Arjun Krishnakumar, Max Körfer, Shi Bin Hoo, Robin Tibor Schirrmeister, and Frank Hutter. 2025. <span>“Accurate Predictions on Small Data with a Tabular Foundation Model.”</span> <em>Nature</em> 637 (8045): 319–26. <a href="https://doi.org/10.1038/s41586-024-08328-6">https://doi.org/10.1038/s41586-024-08328-6</a>.
+</div>
+<div id="ref-Hu2021" class="csl-entry" role="listitem">
+Hu, Edward J., Yelong Shen, Phillip Wallis, Zeyuan Allen-Zhu, Yuanzhi Li, Shean Wang, Lu Wang, and Weizhu Chen. 2021. <span>“<span>LoRA</span>: Low-Rank Adaptation of Large Language Models.”</span> arXiv. <a href="https://doi.org/10.48550/arXiv.2106.09685">https://doi.org/10.48550/arXiv.2106.09685</a>.
+</div>
+<div id="ref-bdbv_modeling_hub_2026" class="csl-entry" role="listitem">
+InsightNet-US. 2026. <span>“<span>BDBV Modeling Hub</span>: Modeling Hub for <span>Bundibugyo</span> <span>Ebola</span>.”</span> GitHub. <a href="https://github.com/InsightNet-US/BDBV-Modeling-Hub">https://github.com/InsightNet-US/BDBV-Modeling-Hub</a>.
+</div>
+<div id="ref-Jafari2026" class="csl-entry" role="listitem">
+Jafari, Alireza, Judy Fox, Geoffrey C. Fox, Madhav Marathe, and Aniruddha Adiga. 2026. <span>“Understanding Key Features of Time Series Foundation Models from Epidemic Forecasting.”</span> arXiv. <a href="https://doi.org/10.48550/arXiv.2606.19560">https://doi.org/10.48550/arXiv.2606.19560</a>.
+</div>
+<div id="ref-Johnson2025" class="csl-entry" role="listitem">
+Johnson, Kaitlyn E, Maria L Tang, Emily Tyszka, Laura Jones, Barbora Nemcova, Daniel Wolffram, Rosa Ergas, et al. 2025. <span>“Baseline Nowcasting Methods for Handling Delays in Epidemiological Data.”</span> <em>Wellcome Open Research</em> 10: 614. <a href="https://doi.org/10.12688/wellcomeopenres.25027.2">https://doi.org/10.12688/wellcomeopenres.25027.2</a>.
+</div>
+<div id="ref-Kalahasti2026" class="csl-entry" role="listitem">
+Kalahasti, Suprabhath, Benjamin Faucher, Boxuan Wang, Claudio Ascione, Ricardo Carbajal, Maxime Enault, Christophe Vincent Cassis, et al. 2026. <span>“Foundation Models for Time Series Forecasting and Policy Evaluation in Infectious Disease Epidemics.”</span> <em>Epidemics</em> 55 (June): 100916. <a href="https://doi.org/10.1016/j.epidem.2026.100916">https://doi.org/10.1016/j.epidem.2026.100916</a>.
+</div>
+<div id="ref-Kamarthi2021" class="csl-entry" role="listitem">
+Kamarthi, Harshavardhan, Alexander Rodríguez, and B. Aditya Prakash. 2021. <span>“<span>Back2Future</span>: Leveraging Backfill Dynamics for Improving Real-Time Predictions in Future.”</span> In <em>Advances in Neural Information Processing Systems</em>. <a href="https://doi.org/10.48550/arXiv.2106.04420">https://doi.org/10.48550/arXiv.2106.04420</a>.
+</div>
+<div id="ref-vandeKassteele2019" class="csl-entry" role="listitem">
+Kassteele, Jan van de, Paul H C Eilers, and Jacco Wallinga. 2019. <span>“Nowcasting the Number of New Symptomatic Cases During Infectious Disease Outbreaks Using Constrained <span>P</span>-Spline Smoothing.”</span> <em>Epidemiology</em> 30 (5): 737–45. <a href="https://doi.org/10.1097/EDE.0000000000001050">https://doi.org/10.1097/EDE.0000000000001050</a>.
+</div>
+<div id="ref-respinow_hub_2025" class="csl-entry" role="listitem">
+KIT Metrics Lab, Johannes Bracher, and Melanie Schienle. 2025. <span>“<span class="nocase">RESPINOW-Hub: Nowcasting and Short-term Forecasting Platform for Respiratory Diseases</span>.”</span> Karlsruhe Institute of Technology; GitHub. <a href="https://github.com/KITmetricslab/RESPINOW-Hub">https://github.com/KITmetricslab/RESPINOW-Hub</a>.
+</div>
+<div id="ref-hospitalization_nowcast_hub_2025" class="csl-entry" role="listitem">
+KIT Metrics Lab, Johannes Bracher, Daniel Wolffram, and Melanie Schienle. 2025. <span>“<span>Hospitalization Nowcast Hub</span>: Collecting Nowcasts of the 7-Day Hospitalization Incidence in Germany.”</span> Karlsruhe Institute of Technology; GitHub. <a href="https://github.com/KITmetricslab/hospitalization-nowcast-hub">https://github.com/KITmetricslab/hospitalization-nowcast-hub</a>.
+</div>
+<div id="ref-Koemen2025" class="csl-entry" role="listitem">
+Koemen, Silas, Nuno R. Faria, Leonardo S. Bastos, Oliver Ratmann, and André Victor Ribeiro Amaral. 2025. <span>“Fast and Trustworthy Nowcasting of Dengue Fever: A Case Study Using Attention-Based Probabilistic Neural Networks in <span>São Paulo</span>, <span>Brazil</span>.”</span> medRxiv. <a href="https://doi.org/10.1101/2025.05.05.25326971">https://doi.org/10.1101/2025.05.05.25326971</a>.
+</div>
+<div id="ref-Laglil2026" class="csl-entry" role="listitem">
+Laglil, Morad, Bertrand Pracca, Emilie Devijver, and Eric Gaussier. 2026. <span>“Foundation Models and Fine-Tuning: Toward a New Generation of Models for Time Series Forecasting.”</span> arXiv. <a href="https://doi.org/10.48550/arXiv.2607.23146">https://doi.org/10.48550/arXiv.2607.23146</a>.
+</div>
+<div id="ref-Li2025" class="csl-entry" role="listitem">
+Li, Chenxiang, Qiqiao Zhang, Yue Zhang, Bowen Zhao, Jule Yang, Li Qi, Jun Ding, and Dechao Tian. 2025. <span>“Fine-Tuned Large Language Models Enhance Influenza Forecasting.”</span> medRxiv. <a href="https://doi.org/10.1101/2025.03.27.25324747">https://doi.org/10.1101/2025.03.27.25324747</a>.
+</div>
+<div id="ref-lison2024" class="csl-entry" role="listitem">
+Lison, Adrian, Sam Abbott, Jana Huisman, and Tanja Stadler. 2024. <span>“Generative Bayesian Modeling to Nowcast the Effective Reproduction Number from Line List Data with Missing Symptom Onset Dates.”</span> Edited by Tom Britton. <em>PLOS Computational Biology</em> 20 (4): e1012021. <a href="https://doi.org/10.1371/journal.pcbi.1012021">https://doi.org/10.1371/journal.pcbi.1012021</a>.
+</div>
+<div id="ref-MacNeil2010" class="csl-entry" role="listitem">
+MacNeil, Adam, Eileen C. Farnon, Joseph Wamala, Sam Okware, Deborah L. Cannon, Zachary Reed, Jonathan S. Towner, et al. 2010. <span>“Proportion of Deaths and Clinical Features in <span>Bundibugyo</span> <span>Ebola</span> Virus Infection, <span>Uganda</span>.”</span> <em>Emerging Infectious Diseases</em> 16 (12): 1969–72. <a href="https://doi.org/10.3201/eid1612.100627">https://doi.org/10.3201/eid1612.100627</a>.
+</div>
+<div id="ref-Martinson2026" class="csl-entry" role="listitem">
+Martinson, Sarah, Michael P. Brenner, Martyna Plomecka, Brian P. Williams, Nicholas G. Reich, and Zahra Shamsi. 2026. <span>“Prospective Multi-Pathogen Disease Forecasting Using Autonomous <span>LLM</span>-Guided Tree Search.”</span> arXiv. <a href="https://doi.org/10.48550/arXiv.2605.16238">https://doi.org/10.48550/arXiv.2605.16238</a>.
+</div>
+<div id="ref-mcgough2020nowcasting" class="csl-entry" role="listitem">
+McGough, Sarah F., Michael A. Johansson, Marc Lipsitch, and Nicolas A. Menzies. 2020. <span>“Nowcasting by Bayesian Smoothing: A Flexible, Generalizable Model for Real-Time Epidemic Tracking.”</span> <em>PLoS Computational Biology</em> 16: e1007735. <a href="https://doi.org/10.1371/journal.pcbi.1007735">https://doi.org/10.1371/journal.pcbi.1007735</a>.
+</div>
+<div id="ref-Mellor2025" class="csl-entry" role="listitem">
+Mellor, Jonathon, Maria L Tang, Emilie Finch, Rachel Christie, Oliver Polhill, Christopher E Overton, Ann Hoban, Amy Douglas, Sarah R Deeny, and Thomas Ward. 2025. <span>“An Application of Nowcasting Methods: Cases of Norovirus During the Winter 2023/2024 in <span>England</span>.”</span> <em>PLOS Computational Biology</em> 21 (2): e1012849. <a href="https://doi.org/10.1371/journal.pcbi.1012849">https://doi.org/10.1371/journal.pcbi.1012849</a>.
+</div>
+<div id="ref-Meyer2025" class="csl-entry" role="listitem">
+Meyer, Marcel, Sascha Kaltenpoth, Kevin Zalipski, and Oliver Müller. 2025. <span>“Rethinking Evaluation in the Era of Time Series Foundation Models: (Un)known Information Leakage Challenges.”</span> arXiv. <a href="https://doi.org/10.48550/arXiv.2510.13654">https://doi.org/10.48550/arXiv.2510.13654</a>.
 </div>
 <div id="ref-Muller2022" class="csl-entry" role="listitem">
 Müller, Samuel, Noah Hollmann, Sebastian Pineda Arango, Josif Grabocka, and Frank Hutter. 2022. <span>“Transformers Can Do <span>Bayesian</span> Inference.”</span> In <em>International Conference on Learning Representations</em>. <a href="https://doi.org/10.48550/arXiv.2112.10510">https://doi.org/10.48550/arXiv.2112.10510</a>.
 </div>
+<div id="ref-Overton2023-dk" class="csl-entry" role="listitem">
+Overton, Christopher E, Sam Abbott, Rachel Christie, Fergus Cumming, Julie Day, Owen Jones, Rob Paton, Charlie Turner, and Thomas Ward. 2023. <span>“Nowcasting the 2022 Mpox Outbreak in <span>England</span>.”</span> <em>PLoS Comput. Biol.</em> 19 (9): e1011463. <a href="https://doi.org/10.1371/journal.pcbi.1011463">https://doi.org/10.1371/journal.pcbi.1011463</a>.
+</div>
+<div id="ref-Park2024" class="csl-entry" role="listitem">
+Park, Sang Woo, Andrei R. Akhmetzhanov, Kelly Charniga, Anne Cori, Nicholas G. Davies, Jonathan Dushoff, Sebastian Funk, et al. 2024. <span>“Estimating Epidemiological Delay Distributions for Infectious Diseases.”</span> medRxiv. <a href="https://doi.org/10.1101/2024.01.12.24301247">https://doi.org/10.1101/2024.01.12.24301247</a>.
+</div>
+<div id="ref-Rasul2023" class="csl-entry" role="listitem">
+Rasul, Kashif, Arjun Ashok, Andrew Robert Williams, Hena Ghonia, Rishika Bhagwatkar, Arian Khorasani, Mohammad Javad Darvishi Bayazi, et al. 2023. <span>“<span>Lag-Llama</span>: Towards Foundation Models for Probabilistic Time Series Forecasting.”</span> arXiv. <a href="https://doi.org/10.48550/arXiv.2310.08278">https://doi.org/10.48550/arXiv.2310.08278</a>.
+</div>
+<div id="ref-reichCollaborativeHubsMaking2022" class="csl-entry" role="listitem">
+Reich, Nicholas G., Justin Lessler, Sebastian Funk, Cecile Viboud, Alessandro Vespignani, Ryan J. Tibshirani, Katriona Shea, et al. 2022. <span>“Collaborative <span>Hubs</span>: <span>Making</span> the <span>Most</span> of <span>Predictive Epidemic Modeling</span>.”</span> <em>American Journal of Public Health</em> 112 (6): 839–42. <a href="https://doi.org/10.2105/AJPH.2022.306831">https://doi.org/10.2105/AJPH.2022.306831</a>.
+</div>
+<div id="ref-Schneble2021" class="csl-entry" role="listitem">
+Schneble, Marc, Giacomo De Nicola, Göran Kauermann, and Ursula Berger. 2021. <span>“Nowcasting Fatal <span>COVID</span>-19 Infections on a Regional Level in <span>Germany</span>.”</span> <em>Biometrical Journal</em> 63 (3): 471–89. <a href="https://doi.org/10.1002/bimj.202000143">https://doi.org/10.1002/bimj.202000143</a>.
+</div>
+<div id="ref-Seaman2022" class="csl-entry" role="listitem">
+Seaman, Shaun R, Pantelis Samartsidis, Meaghan Kall, and Daniela De Angelis. 2022. <span>“Nowcasting <span>COVID</span>-19 Deaths in <span>England</span> by Age and Region.”</span> <em>Journal of the Royal Statistical Society: Series C (Applied Statistics)</em> 71 (5): 1266–81. <a href="https://doi.org/10.1111/rssc.12576">https://doi.org/10.1111/rssc.12576</a>.
+</div>
+<div id="ref-Shchur2025" class="csl-entry" role="listitem">
+Shchur, Oleksandr, Abdul Fatir Ansari, Caner Turkmen, Lorenzo Stella, Nick Erickson, Pablo Guerron, Michael Bohlke-Schneider, and Yuyang Wang. 2025. <span>“<span class="nocase">fev-bench</span>: A Realistic Benchmark for Time Series Forecasting.”</span> arXiv. <a href="https://doi.org/10.48550/arXiv.2509.26468">https://doi.org/10.48550/arXiv.2509.26468</a>.
+</div>
+<div id="ref-sherrattPredictivePerformanceMultimodel2023" class="csl-entry" role="listitem">
+Sherratt, Katharine, Hugo Gruson, Rok Grah, Helen Johnson, Rene Niehus, Bastian Prasse, Frank Sandmann, et al. 2023. <span>“Predictive Performance of Multi-Model Ensemble Forecasts of <span>COVID-19</span> Across <span>European</span> Nations.”</span> Edited by Amy Wesolowski, Neil M Ferguson, Jeffrey L Shaman, and Sen Pei. <em>eLife</em> 12 (April): e81916. <a href="https://doi.org/10.7554/eLife.81916">https://doi.org/10.7554/eLife.81916</a>.
+</div>
+<div id="ref-stonerPowerfulModellingFramework2020" class="csl-entry" role="listitem">
+Stoner, Oliver, Theo Economou, and Alba Halliday. 2020. <span>“A <span>Powerful Modelling Framework</span> for <span>Nowcasting</span> and <span>Forecasting COVID-19</span> and <span>Other Diseases</span>.”</span> arXiv. <a href="https://doi.org/10.48550/arXiv.1912.05965">https://doi.org/10.48550/arXiv.1912.05965</a>.
+</div>
+<div id="ref-Gressani2024" class="csl-entry" role="listitem">
+Sumalinab, Bryan, Oswaldo Gressani, Niel Hens, and Christel Faes. 2024. <span>“Bayesian Nowcasting with <span>Laplacian-P</span>-Splines.”</span> <em>Journal of Computational and Graphical Statistics</em> 34 (2): 718–28. <a href="https://doi.org/10.1080/10618600.2024.2395414">https://doi.org/10.1080/10618600.2024.2395414</a>.
+</div>
+<div id="ref-Tang2025" class="csl-entry" role="listitem">
+Tang, Maria L, Ian S McFarlane, Christopher E Overton, Erjola Hani, Vanessa Saliba, Gareth J Hughes, Paul Crook, Thomas Ward, and Jonathon Mellor. 2025. <span>“Nowcasting Cases and Trends During the Measles 2023/24 Outbreak in <span>England</span>.”</span> <em>Journal of Infection</em> 91 (3): 106569. <a href="https://doi.org/10.1016/j.jinf.2025.106569">https://doi.org/10.1016/j.jinf.2025.106569</a>.
+</div>
+<div id="ref-Viboud2018" class="csl-entry" role="listitem">
+Viboud, Cécile, Kaiyuan Sun, Robert Gaffey, Marco Ajelli, Laura Fumanelli, Stefano Merler, Qian Zhang, Gerardo Chowell, Lone Simonsen, and Alessandro Vespignani. 2018. <span>“The <span>RAPIDD</span> <span>Ebola</span> Forecasting Challenge: Synthesis and Lessons Learnt.”</span> <em>Epidemics</em> 22 (March): 13–21. <a href="https://doi.org/10.1016/j.epidem.2017.08.002">https://doi.org/10.1016/j.epidem.2017.08.002</a>.
+</div>
+<div id="ref-Wang2025" class="csl-entry" role="listitem">
+Wang, Yanqin, Guoyu Huang, Ceran Chen, Qiu Li, and Ximing Xu. 2025. <span>“A Comparative Study of Time Series Foundation Models for Hand, Foot, and Mouth Disease Forecasting: <span>TimesFM</span>, <span>Moirai</span>, and Traditional Approaches.”</span> <em>Frontiers in Public Health</em> 13 (September). <a href="https://doi.org/10.3389/fpubh.2025.1634138">https://doi.org/10.3389/fpubh.2025.1634138</a>.
+</div>
+<div id="ref-Wilsens2025" class="csl-entry" role="listitem">
+Wilsens, Paul, Katrien Antonio, and Gerda Claeskens. 2025. <span>“Machine Learning in an Expectation-Maximisation Framework for Nowcasting.”</span> arXiv. <a href="https://doi.org/10.48550/arXiv.2512.07335">https://doi.org/10.48550/arXiv.2512.07335</a>.
+</div>
 <div id="ref-Wolffram2023" class="csl-entry" role="listitem">
 Wolffram, Daniel, Sam Abbott, Matthias an der Heiden, Sebastian Funk, Felix Günther, Davide Hailer, Stefan Heyder, et al. 2023. <span>“Collaborative Nowcasting of COVID-19 Hospitalization Incidences in Germany.”</span> <em>PLOS Computational Biology</em> 19 (8): 1–25. <a href="https://doi.org/10.1371/journal.pcbi.1011394">https://doi.org/10.1371/journal.pcbi.1011394</a>.
+</div>
+<div id="ref-Woo2024" class="csl-entry" role="listitem">
+Woo, Gerald, Chenghao Liu, Akshat Kumar, Caiming Xiong, Silvio Savarese, and Doyen Sahoo. 2024. <span>“Unified Training of Universal Time Series Forecasting Transformers.”</span> In <em>Proceedings of the 41st International Conference on Machine Learning</em>. <a href="https://doi.org/10.48550/arXiv.2402.02592">https://doi.org/10.48550/arXiv.2402.02592</a>.
 </div>
 </div></section></div></main>
 <!-- /main column -->

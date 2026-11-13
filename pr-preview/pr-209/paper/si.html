@@ -21,7 +21,27 @@ ul.task-list li input[type="checkbox"] {
   margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
   vertical-align: middle;
 }
-</style>
+/* CSS for citations */
+div.csl-bib-body { }
+div.csl-entry {
+  clear: both;
+  margin-bottom: 0em;
+}
+.hanging-indent div.csl-entry {
+  margin-left:2em;
+  text-indent:-2em;
+}
+div.csl-left-margin {
+  min-width:2em;
+  float:left;
+}
+div.csl-right-inline {
+  margin-left:2em;
+  padding-left:1em;
+}
+div.csl-indent {
+  margin-left: 2em;
+}</style>
 
 
 <script src="si_files/libs/clipboard/clipboard.min.js"></script>
@@ -35,7 +55,7 @@ ul.task-list li input[type="checkbox"] {
 <link href="si_files/libs/quarto-html/quarto-syntax-highlighting-587c61ba64f3a5504c4d52d930310e48.css" rel="stylesheet" id="quarto-text-highlighting-styles">
 <script src="si_files/libs/bootstrap/bootstrap.min.js"></script>
 <link href="si_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
-<link href="si_files/libs/bootstrap/bootstrap-d99fc85c7253c7d071cb1f16904a1173.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<link href="si_files/libs/bootstrap/bootstrap-67135126376fdcfdeadaafff27d21302.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
 
 
 </head>
@@ -114,6 +134,7 @@ One SI section per paper section.
 <div class="callout-body-container callout-body">
 <ul>
 <li><code>randomwalk</code> and <code>randomwalknowcast</code> in full.</li>
+<li>Key references: <span class="citation" data-cites="Johnson2025">(<a href="#ref-Johnson2025" role="doc-biblioref">Johnson et al. 2025</a>)</span>.</li>
 </ul>
 </div>
 </div>
@@ -131,7 +152,9 @@ One SI section per paper section.
 </div>
 <div class="callout-body-container callout-body">
 <ul>
+<li>How Chronos-2 and LoRA work, in brief, with schematics.</li>
 <li>Foundation model setup and fine-tuning settings.</li>
+<li>Key references: <span class="citation" data-cites="Ansari2025 Hu2021">(<a href="#ref-Ansari2025" role="doc-biblioref">Ansari et al. 2025</a>; <a href="#ref-Hu2021" role="doc-biblioref">Hu et al. 2021</a>)</span>.</li>
 </ul>
 </div>
 </div>
@@ -150,6 +173,7 @@ One SI section per paper section.
 <div class="callout-body-container callout-body">
 <ul>
 <li>Synthetic data generation in full, with an overview of the epinowcast model used.</li>
+<li>Key references: <span class="citation" data-cites="abbottepinowcast lison2024 Park2024 abbottprimarycensored">(<a href="#ref-abbottepinowcast" role="doc-biblioref">Abbott et al. 2026</a>; <a href="#ref-lison2024" role="doc-biblioref">Lison et al. 2024</a>; <a href="#ref-Park2024" role="doc-biblioref">Park et al. 2024</a>; <a href="#ref-abbottprimarycensored" role="doc-biblioref">Abbott 2026</a>)</span>.</li>
 </ul>
 </div>
 </div>
@@ -168,6 +192,7 @@ One SI section per paper section.
 <div class="callout-body-container callout-body">
 <ul>
 <li>Scoring, and its check against scoringutils.</li>
+<li>Key references: <span class="citation" data-cites="bosse2022scoringutils jordanEvaluatingProbabilisticForecasts2019 zanetta_scoringrules_2024">(<a href="#ref-bosse2022scoringutils" role="doc-biblioref">Bosse et al. 2022</a>; <a href="#ref-jordanEvaluatingProbabilisticForecasts2019" role="doc-biblioref">Jordan, Krüger, and Lerch 2019</a>; <a href="#ref-zanetta_scoringrules_2024" role="doc-biblioref">Zanetta and Allen 2024</a>)</span>.</li>
 </ul>
 </div>
 </div>
@@ -207,6 +232,7 @@ One SI section per paper section.
 <ul>
 <li>Score breakdowns by location and horizon for each case study.</li>
 <li>WIS over time for each case study.</li>
+<li>Held-out synthetic scores by number of fine-tuning outbreaks.</li>
 </ul>
 </div>
 </div>
@@ -221,10 +247,42 @@ One SI section per paper section.
 </section>
 </section>
 <section id="references" class="level2 unnumbered">
-<h2 class="unnumbered anchored" data-anchor-id="references">References</h2>
+
+
 </section>
 
-</main>
+<div id="quarto-appendix" class="default"><section class="quarto-appendix-contents" role="doc-bibliography" id="quarto-bibliography"><h2 class="anchored quarto-appendix-heading">References</h2><div id="refs" class="references csl-bib-body hanging-indent" data-entry-spacing="0" role="list">
+<div id="ref-abbottprimarycensored" class="csl-entry" role="listitem">
+Abbott, Sam. 2026. <span>“Primarycensored: Primary Event Censored Distributions in <span>R</span> and <span>Stan</span>.”</span> Zenodo. <a href="https://doi.org/10.5281/zenodo.13632838">https://doi.org/10.5281/zenodo.13632838</a>.
+</div>
+<div id="ref-abbottepinowcast" class="csl-entry" role="listitem">
+Abbott, Sam, Adrian Lison, Sebastian Funk, Carl Pearson, Hugo Gruson, Felix Guenther, Michael DeWitt, James Mba Azam, and Jessalyn Sebastian. 2026. <em>Epinowcast: A Bayesian Framework for Real-Time Infectious Disease Surveillance</em>. <a href="https://doi.org/10.5281/zenodo.5637165">https://doi.org/10.5281/zenodo.5637165</a>.
+</div>
+<div id="ref-Ansari2025" class="csl-entry" role="listitem">
+Ansari, Abdul Fatir, Oleksandr Shchur, Jaris Küken, Andreas Auer, Boran Han, Pedro Mercado, Syama Sundar Rangapuram, et al. 2025. <span>“<span>Chronos-2</span>: From Univariate to Universal Forecasting.”</span> arXiv. <a href="https://doi.org/10.48550/arXiv.2510.15821">https://doi.org/10.48550/arXiv.2510.15821</a>.
+</div>
+<div id="ref-bosse2022scoringutils" class="csl-entry" role="listitem">
+Bosse, Nikos I., Hugo Gruson, Anne Cori, Edwin van Leeuwen, Sebastian Funk, and Sam Abbott. 2022. <span>“Evaluating Forecasts with Scoringutils in <span>R</span>.”</span> arXiv. <a href="https://doi.org/10.48550/arXiv.2205.07090">https://doi.org/10.48550/arXiv.2205.07090</a>.
+</div>
+<div id="ref-Hu2021" class="csl-entry" role="listitem">
+Hu, Edward J., Yelong Shen, Phillip Wallis, Zeyuan Allen-Zhu, Yuanzhi Li, Shean Wang, Lu Wang, and Weizhu Chen. 2021. <span>“<span>LoRA</span>: Low-Rank Adaptation of Large Language Models.”</span> arXiv. <a href="https://doi.org/10.48550/arXiv.2106.09685">https://doi.org/10.48550/arXiv.2106.09685</a>.
+</div>
+<div id="ref-Johnson2025" class="csl-entry" role="listitem">
+Johnson, Kaitlyn E, Maria L Tang, Emily Tyszka, Laura Jones, Barbora Nemcova, Daniel Wolffram, Rosa Ergas, et al. 2025. <span>“Baseline Nowcasting Methods for Handling Delays in Epidemiological Data.”</span> <em>Wellcome Open Research</em> 10: 614. <a href="https://doi.org/10.12688/wellcomeopenres.25027.2">https://doi.org/10.12688/wellcomeopenres.25027.2</a>.
+</div>
+<div id="ref-jordanEvaluatingProbabilisticForecasts2019" class="csl-entry" role="listitem">
+Jordan, Alexander, Fabian Krüger, and Sebastian Lerch. 2019. <span>“Evaluating <span>Probabilistic Forecasts</span> with <span><strong>scoringRules</strong></span>.”</span> <em>Journal of Statistical Software</em> 90 (12). <a href="https://doi.org/10.18637/jss.v090.i12">https://doi.org/10.18637/jss.v090.i12</a>.
+</div>
+<div id="ref-lison2024" class="csl-entry" role="listitem">
+Lison, Adrian, Sam Abbott, Jana Huisman, and Tanja Stadler. 2024. <span>“Generative Bayesian Modeling to Nowcast the Effective Reproduction Number from Line List Data with Missing Symptom Onset Dates.”</span> Edited by Tom Britton. <em>PLOS Computational Biology</em> 20 (4): e1012021. <a href="https://doi.org/10.1371/journal.pcbi.1012021">https://doi.org/10.1371/journal.pcbi.1012021</a>.
+</div>
+<div id="ref-Park2024" class="csl-entry" role="listitem">
+Park, Sang Woo, Andrei R. Akhmetzhanov, Kelly Charniga, Anne Cori, Nicholas G. Davies, Jonathan Dushoff, Sebastian Funk, et al. 2024. <span>“Estimating Epidemiological Delay Distributions for Infectious Diseases.”</span> medRxiv. <a href="https://doi.org/10.1101/2024.01.12.24301247">https://doi.org/10.1101/2024.01.12.24301247</a>.
+</div>
+<div id="ref-zanetta_scoringrules_2024" class="csl-entry" role="listitem">
+Zanetta, Francesco, and Sam Allen. 2024. <span>“Scoringrules: A Python Library for Probabilistic Forecast Evaluation.”</span> <a href="https://github.com/frazane/scoringrules">https://github.com/frazane/scoringrules</a>.
+</div>
+</div></section></div></main>
 <!-- /main column -->
 <script id="quarto-html-after-body" type="application/javascript">
   window.document.addEventListener("DOMContentLoaded", function (event) {
