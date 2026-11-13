@@ -33,8 +33,8 @@ _RENEWAL_OBSERVATION = (
 _ZONE_SUMS = (
     "Health zones are fitted and the national value is the sum of the "
     "province samples, each the sum of its zone samples. Zone WorldPop "
-    "populations and population-weighted zone centres set the importation "
-    "kernel between zones. "
+    "populations and the centroids of each zone's largest polygon set the "
+    "importation kernel between zones. "
 )
 _ZONE_SPLIT = (
     "The national value is the sum of province samples plus the national "
@@ -99,7 +99,6 @@ MODEL_METADATA = {
             "province and zone deviations, importation between zones "
             "through a gravity kernel, and susceptible depletion. Zones with "
             "no recent case take a random walk introduction layer. "
-            "Provinces are the sums of their zones. "
             + _ZONE_SUMS
             + _RENEWAL_OBSERVATION
         ),
@@ -137,7 +136,7 @@ MODEL_METADATA = {
             "province and zone deviations, importation between zones "
             "through a gravity kernel, and susceptible depletion. Zones with "
             "no recent case take a random walk introduction layer. "
-            "Provinces are the sums of their zones. The model's national, "
+            "The model's national, "
             "province and zone Rt in the week of the newest BVDOutbreakSize "
             "release available at the cut-off are tied to that release's Rt "
             "estimates, as a likelihood term tempered by 0.5. "
