@@ -16,7 +16,7 @@ Three sources give samples.
 - `store_samples`: the fit store branch. Each model and origin keeps the
   first fit stored, and only if it was made before its round closed.
 
-`reporting_delay` estimates D, the age by which 99% of the national count
+`reporting_delay` estimates D, the age by which 98% of the national count
 is reported, from the hub's release history. `rolling_truth` gives each
 target week's count as reported D days after the week ended, as the
 German nowcast hub did (Wolffram et al. 2023). Weeks whose release
@@ -67,7 +67,7 @@ __all__ = [
 TARGET: Final = "wk inc confirmed cases"
 """The target of the hub's weekly round."""
 
-DELAY_LEVEL: Final = 0.99
+DELAY_LEVEL: Final = 0.98
 """Share of the national count reported by the truth delay, D."""
 
 SKIP_RELEASES: Final = ("2026-08-18",)
