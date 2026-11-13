@@ -2044,11 +2044,13 @@
 
 <h1 id="german-nowcast-benchmark">German nowcast benchmark<a class="headerlink" href="#german-nowcast-benchmark" title="Permanent link">&para;</a></h1>
 <p class="page-subtitle">Our models and the hub teams on the German COVID-19 hospitalisation nowcasting hub's data, scored as the hub scored them.</p>
-<p>Nowcasts of the 7-day hospitalisation incidence by Meldedatum, made each day from 2021-11-22 to 2022-04-29 as in Wolffram et al. (2023)<sup id="fnref:wolffram"><a class="footnote-ref" href="#fn:wolffram">1</a></sup>, for the sums ending 0, 7, 14, 21 and 28 days before the nowcast date.
+<p>Nowcasts of the 7-day hospitalisation incidence by Meldedatum, made each day from 2021-11-22 to 2022-02-09 as in Wolffram et al. (2023)<sup id="fnref:wolffram"><a class="footnote-ref" href="#fn:wolffram">1</a></sup>, for the sums ending 0, 7, 14, 21 and 28 days before the nowcast date.
+The paper's later dates, from 2022-02-10, are held out.
 Every nowcast is scored on its quantiles at the hub's seven levels, by WIS and the coverage of the 50% and 95% intervals, on the data reported 40 days after the sum ends (<a href="../methods/evaluation/#german-nowcast-benchmark">how the benchmark is set up</a>).
 Relative scores are against <code>randomwalknowcast</code> on the nowcasts both made.</p>
 <h2 id="overall">Overall<a class="headerlink" href="#overall" title="Permanent link">&para;</a></h2>
 <p>Scores at each of the paper's levels: Germany, its states and its age groups.</p>
+<p>Nowcast dates before 2022-02-10 only; the later half is held out for the paper.</p>
 <div class="scoresummary" data-targets='{"latest": "../figures/scoresummary-germany-latest.json"}' data-view="overall" role="group" aria-label="Overall scores by level">
 <noscript>The interactive summary needs JavaScript.</noscript>
 </div>
@@ -2068,336 +2070,336 @@ Relative scores are against <code>randomwalknowcast</code> on the nowcasts both 
 <tbody>
 <tr>
 <td style="text-align: left;">national</td>
-<td style="text-align: left;">MedianEnsemble</td>
-<td style="text-align: right;">794</td>
-<td style="text-align: right;">0.847</td>
-<td style="text-align: right;">0.861</td>
-<td style="text-align: right;">0.39</td>
-<td style="text-align: right;">0.809</td>
+<td style="text-align: left;">MeanEnsemble</td>
+<td style="text-align: right;">399</td>
+<td style="text-align: right;">0.74</td>
+<td style="text-align: right;">0.807</td>
+<td style="text-align: right;">0.361</td>
+<td style="text-align: right;">0.807</td>
 </tr>
 <tr>
 <td style="text-align: left;">national</td>
-<td style="text-align: left;">MeanEnsemble</td>
-<td style="text-align: right;">794</td>
-<td style="text-align: right;">0.882</td>
-<td style="text-align: right;">0.929</td>
-<td style="text-align: right;">0.387</td>
-<td style="text-align: right;">0.82</td>
+<td style="text-align: left;">MedianEnsemble</td>
+<td style="text-align: right;">399</td>
+<td style="text-align: right;">0.773</td>
+<td style="text-align: right;">0.773</td>
+<td style="text-align: right;">0.373</td>
+<td style="text-align: right;">0.797</td>
+</tr>
+<tr>
+<td style="text-align: left;">national</td>
+<td style="text-align: left;">Epiforecasts</td>
+<td style="text-align: right;">400</td>
+<td style="text-align: right;">0.982</td>
+<td style="text-align: right;">0.913</td>
+<td style="text-align: right;">0.215</td>
+<td style="text-align: right;">0.528</td>
 </tr>
 <tr>
 <td style="text-align: left;">national</td>
 <td style="text-align: left;">randomwalknowcast</td>
-<td style="text-align: right;">795</td>
+<td style="text-align: right;">400</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.43</td>
+<td style="text-align: right;">0.34</td>
+<td style="text-align: right;">0.815</td>
+</tr>
+<tr>
+<td style="text-align: left;">national</td>
+<td style="text-align: left;">LMU</td>
+<td style="text-align: right;">400</td>
+<td style="text-align: right;">1.04</td>
+<td style="text-align: right;">0.763</td>
+<td style="text-align: right;">0.102</td>
+<td style="text-align: right;">0.302</td>
+</tr>
+<tr>
+<td style="text-align: left;">national</td>
+<td style="text-align: left;">KIT</td>
+<td style="text-align: right;">400</td>
+<td style="text-align: right;">1.105</td>
+<td style="text-align: right;">1.238</td>
+<td style="text-align: right;">0.56</td>
+<td style="text-align: right;">0.992</td>
+</tr>
+<tr>
+<td style="text-align: left;">national</td>
+<td style="text-align: left;">RIVM</td>
+<td style="text-align: right;">400</td>
+<td style="text-align: right;">1.194</td>
+<td style="text-align: right;">0.959</td>
+<td style="text-align: right;">0.092</td>
+<td style="text-align: right;">0.235</td>
+</tr>
+<tr>
+<td style="text-align: left;">national</td>
+<td style="text-align: left;">SU</td>
+<td style="text-align: right;">400</td>
+<td style="text-align: right;">1.243</td>
+<td style="text-align: right;">1.178</td>
+<td style="text-align: right;">0.208</td>
+<td style="text-align: right;">0.61</td>
+</tr>
+<tr>
+<td style="text-align: left;">national</td>
+<td style="text-align: left;">RKI</td>
+<td style="text-align: right;">400</td>
+<td style="text-align: right;">1.344</td>
+<td style="text-align: right;">1.014</td>
+<td style="text-align: right;">0.11</td>
+<td style="text-align: right;">0.342</td>
+</tr>
+<tr>
+<td style="text-align: left;">national</td>
+<td style="text-align: left;">ILM</td>
+<td style="text-align: right;">388</td>
+<td style="text-align: right;">2.021</td>
+<td style="text-align: right;">1.749</td>
+<td style="text-align: right;">0.219</td>
+<td style="text-align: right;">0.585</td>
+</tr>
+<tr>
+<td style="text-align: left;">national</td>
+<td style="text-align: left;">SZ</td>
+<td style="text-align: right;">397</td>
+<td style="text-align: right;">2.092</td>
+<td style="text-align: right;">1.654</td>
+<td style="text-align: right;">0.101</td>
+<td style="text-align: right;">0.252</td>
+</tr>
+<tr>
+<td style="text-align: left;">national</td>
+<td style="text-align: left;">randomwalk</td>
+<td style="text-align: right;">400</td>
+<td style="text-align: right;">5.465</td>
+<td style="text-align: right;">4.342</td>
+<td style="text-align: right;">0.138</td>
+<td style="text-align: right;">0.315</td>
+</tr>
+<tr>
+<td style="text-align: left;">national</td>
+<td style="text-align: left;">KIT-frozen_baseline</td>
+<td style="text-align: right;">400</td>
+<td style="text-align: right;">8.894</td>
+<td style="text-align: right;">5.221</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td style="text-align: left;">states</td>
+<td style="text-align: left;">MeanEnsemble</td>
+<td style="text-align: right;">6384</td>
+<td style="text-align: right;">0.867</td>
+<td style="text-align: right;">0.849</td>
+<td style="text-align: right;">0.428</td>
+<td style="text-align: right;">0.817</td>
+</tr>
+<tr>
+<td style="text-align: left;">states</td>
+<td style="text-align: left;">MedianEnsemble</td>
+<td style="text-align: right;">6384</td>
+<td style="text-align: right;">0.872</td>
 <td style="text-align: right;">0.839</td>
-</tr>
-<tr>
-<td style="text-align: left;">national</td>
-<td style="text-align: left;">RIVM</td>
-<td style="text-align: right;">795</td>
-<td style="text-align: right;">1.132</td>
-<td style="text-align: right;">0.95</td>
-<td style="text-align: right;">0.156</td>
-<td style="text-align: right;">0.372</td>
-</tr>
-<tr>
-<td style="text-align: left;">national</td>
-<td style="text-align: left;">LMU</td>
-<td style="text-align: right;">795</td>
-<td style="text-align: right;">1.263</td>
-<td style="text-align: right;">0.924</td>
-<td style="text-align: right;">0.096</td>
-<td style="text-align: right;">0.294</td>
-</tr>
-<tr>
-<td style="text-align: left;">national</td>
-<td style="text-align: left;">KIT</td>
-<td style="text-align: right;">795</td>
-<td style="text-align: right;">1.277</td>
-<td style="text-align: right;">1.395</td>
-<td style="text-align: right;">0.613</td>
-<td style="text-align: right;">0.994</td>
-</tr>
-<tr>
-<td style="text-align: left;">national</td>
-<td style="text-align: left;">SU</td>
-<td style="text-align: right;">795</td>
-<td style="text-align: right;">1.357</td>
-<td style="text-align: right;">1.267</td>
-<td style="text-align: right;">0.258</td>
-<td style="text-align: right;">0.66</td>
-</tr>
-<tr>
-<td style="text-align: left;">national</td>
-<td style="text-align: left;">Epiforecasts</td>
-<td style="text-align: right;">795</td>
-<td style="text-align: right;">1.416</td>
-<td style="text-align: right;">1.282</td>
-<td style="text-align: right;">0.205</td>
-<td style="text-align: right;">0.527</td>
-</tr>
-<tr>
-<td style="text-align: left;">national</td>
-<td style="text-align: left;">RKI</td>
-<td style="text-align: right;">795</td>
-<td style="text-align: right;">1.507</td>
-<td style="text-align: right;">1.146</td>
-<td style="text-align: right;">0.158</td>
-<td style="text-align: right;">0.435</td>
-</tr>
-<tr>
-<td style="text-align: left;">national</td>
-<td style="text-align: left;">SZ</td>
-<td style="text-align: right;">792</td>
-<td style="text-align: right;">2.094</td>
-<td style="text-align: right;">1.671</td>
-<td style="text-align: right;">0.149</td>
-<td style="text-align: right;">0.331</td>
-</tr>
-<tr>
-<td style="text-align: left;">national</td>
-<td style="text-align: left;">ILM</td>
-<td style="text-align: right;">783</td>
-<td style="text-align: right;">3.221</td>
-<td style="text-align: right;">2.739</td>
-<td style="text-align: right;">0.142</td>
-<td style="text-align: right;">0.392</td>
-</tr>
-<tr>
-<td style="text-align: left;">national</td>
-<td style="text-align: left;">KIT-frozen_baseline</td>
-<td style="text-align: right;">795</td>
-<td style="text-align: right;">11.266</td>
-<td style="text-align: right;">6.648</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0</td>
-</tr>
-<tr>
-<td style="text-align: left;">national</td>
-<td style="text-align: left;">randomwalk</td>
-<td style="text-align: right;">795</td>
-<td style="text-align: right;">630.319</td>
-<td style="text-align: right;">57.217</td>
-<td style="text-align: right;">0.249</td>
-<td style="text-align: right;">0.611</td>
-</tr>
-<tr>
-<td style="text-align: left;">states</td>
-<td style="text-align: left;">MeanEnsemble</td>
-<td style="text-align: right;">12704</td>
-<td style="text-align: right;">0.886</td>
-<td style="text-align: right;">0.9</td>
-<td style="text-align: right;">0.447</td>
-<td style="text-align: right;">0.838</td>
-</tr>
-<tr>
-<td style="text-align: left;">states</td>
-<td style="text-align: left;">MedianEnsemble</td>
-<td style="text-align: right;">12704</td>
-<td style="text-align: right;">0.887</td>
-<td style="text-align: right;">0.886</td>
-<td style="text-align: right;">0.439</td>
-<td style="text-align: right;">0.828</td>
+<td style="text-align: right;">0.429</td>
+<td style="text-align: right;">0.818</td>
 </tr>
 <tr>
 <td style="text-align: left;">states</td>
 <td style="text-align: left;">randomwalknowcast</td>
-<td style="text-align: right;">12720</td>
+<td style="text-align: right;">6400</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.567</td>
-<td style="text-align: right;">0.912</td>
-</tr>
-<tr>
-<td style="text-align: left;">states</td>
-<td style="text-align: left;">KIT</td>
-<td style="text-align: right;">12720</td>
-<td style="text-align: right;">1.077</td>
-<td style="text-align: right;">1.122</td>
-<td style="text-align: right;">0.548</td>
-<td style="text-align: right;">0.93</td>
-</tr>
-<tr>
-<td style="text-align: left;">states</td>
-<td style="text-align: left;">SU</td>
-<td style="text-align: right;">12720</td>
-<td style="text-align: right;">1.152</td>
-<td style="text-align: right;">1.121</td>
-<td style="text-align: right;">0.389</td>
-<td style="text-align: right;">0.793</td>
-</tr>
-<tr>
-<td style="text-align: left;">states</td>
-<td style="text-align: left;">LMU</td>
-<td style="text-align: right;">11235</td>
-<td style="text-align: right;">1.18</td>
-<td style="text-align: right;">1.021</td>
-<td style="text-align: right;">0.287</td>
-<td style="text-align: right;">0.65</td>
+<td style="text-align: right;">0.53</td>
+<td style="text-align: right;">0.894</td>
 </tr>
 <tr>
 <td style="text-align: left;">states</td>
 <td style="text-align: left;">Epiforecasts</td>
-<td style="text-align: right;">12705</td>
-<td style="text-align: right;">1.188</td>
-<td style="text-align: right;">1.152</td>
+<td style="text-align: right;">6385</td>
+<td style="text-align: right;">1.06</td>
+<td style="text-align: right;">1.011</td>
 <td style="text-align: right;">0.399</td>
-<td style="text-align: right;">0.785</td>
+<td style="text-align: right;">0.781</td>
+</tr>
+<tr>
+<td style="text-align: left;">states</td>
+<td style="text-align: left;">KIT</td>
+<td style="text-align: right;">6400</td>
+<td style="text-align: right;">1.062</td>
+<td style="text-align: right;">1.06</td>
+<td style="text-align: right;">0.517</td>
+<td style="text-align: right;">0.91</td>
+</tr>
+<tr>
+<td style="text-align: left;">states</td>
+<td style="text-align: left;">LMU</td>
+<td style="text-align: right;">5695</td>
+<td style="text-align: right;">1.092</td>
+<td style="text-align: right;">0.899</td>
+<td style="text-align: right;">0.309</td>
+<td style="text-align: right;">0.67</td>
+</tr>
+<tr>
+<td style="text-align: left;">states</td>
+<td style="text-align: left;">SU</td>
+<td style="text-align: right;">6400</td>
+<td style="text-align: right;">1.192</td>
+<td style="text-align: right;">1.122</td>
+<td style="text-align: right;">0.393</td>
+<td style="text-align: right;">0.789</td>
 </tr>
 <tr>
 <td style="text-align: left;">states</td>
 <td style="text-align: left;">RIVM</td>
-<td style="text-align: right;">12720</td>
-<td style="text-align: right;">1.199</td>
-<td style="text-align: right;">1.041</td>
-<td style="text-align: right;">0.285</td>
-<td style="text-align: right;">0.634</td>
+<td style="text-align: right;">6400</td>
+<td style="text-align: right;">1.283</td>
+<td style="text-align: right;">1.038</td>
+<td style="text-align: right;">0.258</td>
+<td style="text-align: right;">0.602</td>
 </tr>
 <tr>
 <td style="text-align: left;">states</td>
 <td style="text-align: left;">RKI</td>
-<td style="text-align: right;">12720</td>
-<td style="text-align: right;">1.426</td>
-<td style="text-align: right;">1.028</td>
-<td style="text-align: right;">0.161</td>
-<td style="text-align: right;">0.307</td>
+<td style="text-align: right;">6400</td>
+<td style="text-align: right;">1.423</td>
+<td style="text-align: right;">0.982</td>
+<td style="text-align: right;">0.167</td>
+<td style="text-align: right;">0.301</td>
 </tr>
 <tr>
 <td style="text-align: left;">states</td>
 <td style="text-align: left;">SZ</td>
-<td style="text-align: right;">12672</td>
-<td style="text-align: right;">1.639</td>
-<td style="text-align: right;">1.38</td>
-<td style="text-align: right;">0.177</td>
-<td style="text-align: right;">0.42</td>
-</tr>
-<tr>
-<td style="text-align: left;">states</td>
-<td style="text-align: left;">KIT-frozen_baseline</td>
-<td style="text-align: right;">12720</td>
-<td style="text-align: right;">6.181</td>
-<td style="text-align: right;">3.625</td>
-<td style="text-align: right;">0.039</td>
-<td style="text-align: right;">0.039</td>
+<td style="text-align: right;">6352</td>
+<td style="text-align: right;">1.734</td>
+<td style="text-align: right;">1.386</td>
+<td style="text-align: right;">0.165</td>
+<td style="text-align: right;">0.397</td>
 </tr>
 <tr>
 <td style="text-align: left;">states</td>
 <td style="text-align: left;">randomwalk</td>
-<td style="text-align: right;">12720</td>
-<td style="text-align: right;">193.892</td>
-<td style="text-align: right;">3.804</td>
-<td style="text-align: right;">0.394</td>
-<td style="text-align: right;">0.593</td>
+<td style="text-align: right;">6400</td>
+<td style="text-align: right;">3.536</td>
+<td style="text-align: right;">3.357</td>
+<td style="text-align: right;">0.23</td>
+<td style="text-align: right;">0.485</td>
 </tr>
 <tr>
-<td style="text-align: left;">age</td>
-<td style="text-align: left;">MedianEnsemble</td>
-<td style="text-align: right;">4764</td>
-<td style="text-align: right;">0.811</td>
-<td style="text-align: right;">0.875</td>
-<td style="text-align: right;">0.422</td>
-<td style="text-align: right;">0.862</td>
+<td style="text-align: left;">states</td>
+<td style="text-align: left;">KIT-frozen_baseline</td>
+<td style="text-align: right;">6400</td>
+<td style="text-align: right;">5.644</td>
+<td style="text-align: right;">3.203</td>
+<td style="text-align: right;">0.048</td>
+<td style="text-align: right;">0.048</td>
 </tr>
 <tr>
 <td style="text-align: left;">age</td>
 <td style="text-align: left;">MeanEnsemble</td>
-<td style="text-align: right;">4764</td>
-<td style="text-align: right;">0.834</td>
-<td style="text-align: right;">0.92</td>
-<td style="text-align: right;">0.41</td>
-<td style="text-align: right;">0.851</td>
+<td style="text-align: right;">2394</td>
+<td style="text-align: right;">0.787</td>
+<td style="text-align: right;">0.811</td>
+<td style="text-align: right;">0.404</td>
+<td style="text-align: right;">0.863</td>
 </tr>
 <tr>
 <td style="text-align: left;">age</td>
-<td style="text-align: left;">randomwalknowcast</td>
-<td style="text-align: right;">4770</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">0.596</td>
-<td style="text-align: right;">0.94</td>
-</tr>
-<tr>
-<td style="text-align: left;">age</td>
-<td style="text-align: left;">SU</td>
-<td style="text-align: right;">4770</td>
-<td style="text-align: right;">1.078</td>
-<td style="text-align: right;">1.091</td>
-<td style="text-align: right;">0.358</td>
-<td style="text-align: right;">0.79</td>
-</tr>
-<tr>
-<td style="text-align: left;">age</td>
-<td style="text-align: left;">RIVM</td>
-<td style="text-align: right;">4770</td>
-<td style="text-align: right;">1.121</td>
-<td style="text-align: right;">1.002</td>
-<td style="text-align: right;">0.211</td>
-<td style="text-align: right;">0.538</td>
-</tr>
-<tr>
-<td style="text-align: left;">age</td>
-<td style="text-align: left;">KIT</td>
-<td style="text-align: right;">4770</td>
-<td style="text-align: right;">1.137</td>
-<td style="text-align: right;">1.27</td>
-<td style="text-align: right;">0.578</td>
-<td style="text-align: right;">0.976</td>
+<td style="text-align: left;">MedianEnsemble</td>
+<td style="text-align: right;">2394</td>
+<td style="text-align: right;">0.807</td>
+<td style="text-align: right;">0.788</td>
+<td style="text-align: right;">0.417</td>
+<td style="text-align: right;">0.861</td>
 </tr>
 <tr>
 <td style="text-align: left;">age</td>
 <td style="text-align: left;">Epiforecasts</td>
-<td style="text-align: right;">4770</td>
-<td style="text-align: right;">1.139</td>
-<td style="text-align: right;">1.15</td>
-<td style="text-align: right;">0.335</td>
-<td style="text-align: right;">0.782</td>
+<td style="text-align: right;">2400</td>
+<td style="text-align: right;">0.928</td>
+<td style="text-align: right;">0.881</td>
+<td style="text-align: right;">0.342</td>
+<td style="text-align: right;">0.783</td>
+</tr>
+<tr>
+<td style="text-align: left;">age</td>
+<td style="text-align: left;">randomwalknowcast</td>
+<td style="text-align: right;">2400</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.545</td>
+<td style="text-align: right;">0.933</td>
+</tr>
+<tr>
+<td style="text-align: left;">age</td>
+<td style="text-align: left;">SU</td>
+<td style="text-align: right;">2400</td>
+<td style="text-align: right;">1.05</td>
+<td style="text-align: right;">0.982</td>
+<td style="text-align: right;">0.36</td>
+<td style="text-align: right;">0.787</td>
+</tr>
+<tr>
+<td style="text-align: left;">age</td>
+<td style="text-align: left;">KIT</td>
+<td style="text-align: right;">2400</td>
+<td style="text-align: right;">1.093</td>
+<td style="text-align: right;">1.133</td>
+<td style="text-align: right;">0.545</td>
+<td style="text-align: right;">0.967</td>
 </tr>
 <tr>
 <td style="text-align: left;">age</td>
 <td style="text-align: left;">LMU</td>
-<td style="text-align: right;">4770</td>
-<td style="text-align: right;">1.289</td>
-<td style="text-align: right;">1.027</td>
-<td style="text-align: right;">0.174</td>
-<td style="text-align: right;">0.47</td>
+<td style="text-align: right;">2400</td>
+<td style="text-align: right;">1.129</td>
+<td style="text-align: right;">0.825</td>
+<td style="text-align: right;">0.201</td>
+<td style="text-align: right;">0.521</td>
 </tr>
 <tr>
 <td style="text-align: left;">age</td>
-<td style="text-align: left;">SZ</td>
-<td style="text-align: right;">4752</td>
-<td style="text-align: right;">1.919</td>
-<td style="text-align: right;">1.604</td>
-<td style="text-align: right;">0.156</td>
-<td style="text-align: right;">0.376</td>
+<td style="text-align: left;">RIVM</td>
+<td style="text-align: right;">2400</td>
+<td style="text-align: right;">1.206</td>
+<td style="text-align: right;">0.948</td>
+<td style="text-align: right;">0.19</td>
+<td style="text-align: right;">0.476</td>
 </tr>
 <tr>
 <td style="text-align: left;">age</td>
 <td style="text-align: left;">ILM</td>
-<td style="text-align: right;">4698</td>
-<td style="text-align: right;">2.584</td>
-<td style="text-align: right;">2.357</td>
-<td style="text-align: right;">0.2</td>
-<td style="text-align: right;">0.497</td>
+<td style="text-align: right;">2328</td>
+<td style="text-align: right;">1.917</td>
+<td style="text-align: right;">1.58</td>
+<td style="text-align: right;">0.291</td>
+<td style="text-align: right;">0.646</td>
 </tr>
 <tr>
 <td style="text-align: left;">age</td>
-<td style="text-align: left;">KIT-frozen_baseline</td>
-<td style="text-align: right;">4770</td>
-<td style="text-align: right;">9.286</td>
-<td style="text-align: right;">5.61</td>
-<td style="text-align: right;">0.009</td>
-<td style="text-align: right;">0.009</td>
+<td style="text-align: left;">SZ</td>
+<td style="text-align: right;">2382</td>
+<td style="text-align: right;">2.108</td>
+<td style="text-align: right;">1.593</td>
+<td style="text-align: right;">0.116</td>
+<td style="text-align: right;">0.317</td>
 </tr>
 <tr>
 <td style="text-align: left;">age</td>
 <td style="text-align: left;">randomwalk</td>
-<td style="text-align: right;">4770</td>
-<td style="text-align: right;">409.926</td>
-<td style="text-align: right;">5.165</td>
-<td style="text-align: right;">0.314</td>
-<td style="text-align: right;">0.555</td>
+<td style="text-align: right;">2400</td>
+<td style="text-align: right;">4.46</td>
+<td style="text-align: right;">4.136</td>
+<td style="text-align: right;">0.177</td>
+<td style="text-align: right;">0.445</td>
+</tr>
+<tr>
+<td style="text-align: left;">age</td>
+<td style="text-align: left;">KIT-frozen_baseline</td>
+<td style="text-align: right;">2400</td>
+<td style="text-align: right;">8.28</td>
+<td style="text-align: right;">4.547</td>
+<td style="text-align: right;">0.016</td>
+<td style="text-align: right;">0.016</td>
 </tr>
 </tbody>
 </table>
