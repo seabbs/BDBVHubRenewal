@@ -112,7 +112,7 @@ def test_load_adds_candidates(hub, tmp_path):
             "as_of": None,
         }
     ).to_csv(cand, index=False)
-    table = ebola.load(hub, candidates=[cand])
+    table = ebola.load(hub, candidates=[cand], delay_days=14)
     assert set(table["model"]) == {"team-a", "renewal"}
 
 

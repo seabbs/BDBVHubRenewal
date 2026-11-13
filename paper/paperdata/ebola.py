@@ -16,9 +16,10 @@ Three sources give samples.
 - `store_samples`: the fit store branch. Each model and origin keeps the
   first fit stored, and only if it was made before its round closed.
 
-`rolling_truth` gives each target week's count as reported `delay_days`
-after the week ended, as the German nowcast hub did (Wolffram et al.
-2023). Weeks whose release that far after them is not out yet have no
+`reporting_delay` estimates D, the age by which 99% of the national count
+is reported, from the hub's release history. `rolling_truth` gives each
+target week's count as reported D days after the week ended, as the
+German nowcast hub did (Wolffram et al. 2023). Weeks whose release that far after them is not out yet have no
 truth. `load` joins it to the samples as `truth`, one row per sample,
 with `quantile_level` left empty as the paper's schema has it.
 `score` scores the samples with the repo's sample scores
@@ -48,7 +49,7 @@ from bdbvhubrenewal.evaluation.scoring import (
 
 __all__ = [
     "COLUMNS",
-    "DELAY_DAYS",
+    "DELAY_LEVEL",
     "HUB_BASELINE",
     "SCORES",
     "TARGET",
@@ -56,6 +57,7 @@ __all__ = [
     "hub_samples",
     "load",
     "relative_scores",
+    "reporting_delay",
     "rolling_truth",
     "round_close",
     "score",
@@ -65,8 +67,16 @@ __all__ = [
 TARGET: Final = "wk inc confirmed cases"
 """The target of the hub's weekly round."""
 
-DELAY_DAYS: Final = 28
-"""Days after a target week ends at which its count is taken as truth."""
+DELAY_LEVEL: Final = 0.99
+"""Share of the national count reported by the truth delay, D."""
+
+SKIP_RELEASES: Final = ("2026-08-18",)
+"""Releases left out of the delay estimate.
+
+The 2026-08-18 release has no delay file, is 50 days before the next and
+its old weeks are short by up to 12% of their latest counts, which is a
+revision rather than a reporting delay (as `config/backtest.toml`).
+"""
 
 COLUMNS: Final = (
     "study",
@@ -204,22 +214,60 @@ def store_samples(
     return pd.concat(frames, ignore_index=True)
 
 
-def rolling_truth(
-    hub: str | Path, delay_days: int = DELAY_DAYS
-) -> pd.DataFrame:
+def _target(hub: str | Path) -> pd.DataFrame:
+    data = pd.read_csv(Path(hub, "target-data", "time-series.csv"))
+    data = data[data["target"] == TARGET]
+    return data.assign(
+        as_of=pd.to_datetime(data["as_of"]),
+        target_date=pd.to_datetime(data["target_end_date"]),
+    )
+
+
+def reporting_delay(
+    hub: str | Path,
+    location: str = "CD",
+    level: float = DELAY_LEVEL,
+    skip: Sequence[str] = SKIP_RELEASES,
+) -> int | None:
+    """Return the age in days by which `level` of the count is reported.
+
+    Each earlier release's count of a week is set against the latest
+    release's count of that week, at the week's age in the release
+    (days from the week's end to the release, rounded up to whole weeks).
+    The counts are pooled over releases at each age. The delay is the
+    first age whose pooled share reaches `level`, or None if none does.
+    """
+    data = _target(hub)
+    data = data[data["location"] == location]
+    latest = data["as_of"].max()
+    final = data.loc[data["as_of"] == latest].set_index("target_date")[
+        "observation"
+    ]
+    early = data[
+        (data["as_of"] < latest)
+        & ~data["as_of"].isin(pd.to_datetime(list(skip)))
+    ]
+    early = early.assign(final=early["target_date"].map(final))
+    days = (early["as_of"] - early["target_date"]).dt.days
+    early = early.assign(age=np.ceil(days / 7).astype(int))
+    pooled = early.groupby("age")[["observation", "final"]].sum()
+    share = pooled["observation"] / pooled["final"]
+    reached = share.index[share >= level]
+    return int(reached.min()) * 7 if len(reached) else None
+
+
+def rolling_truth(hub: str | Path, delay_days: int) -> pd.DataFrame:
     """Return each target week's count as reported `delay_days` after it.
 
     The count is from the latest release on or before the week's end plus
     `delay_days`. A week is left out until a release on or after that
     day exists, so its truth no longer changes.
     """
-    data = pd.read_csv(Path(hub, "target-data", "time-series.csv"))
-    data = data[data["target"] == TARGET]
-    as_of = pd.to_datetime(data["as_of"])
-    week = pd.to_datetime(data["target_end_date"])
-    due = week + pd.Timedelta(days=delay_days)
-    data = data.assign(as_of=as_of, target_date=week, due=due)
-    data = data[(data["as_of"] <= data["due"]) & (data["due"] <= as_of.max())]
+    data = _target(hub)
+    due = data["target_date"] + pd.Timedelta(days=delay_days)
+    data = data.assign(due=due)
+    latest = data["as_of"].max()
+    data = data[(data["as_of"] <= data["due"]) & (data["due"] <= latest)]
     data = (
         data.sort_values("as_of")
         .groupby(["location", "target_date"], as_index=False)
@@ -239,7 +287,7 @@ def load(
     candidates: Iterable[str | Path] = (),
     store: str | Path | None = None,
     store_ref: str = "origin/fit-store",
-    delay_days: int = DELAY_DAYS,
+    delay_days: int | None = None,
 ) -> pd.DataFrame:
     """Return every forecast's samples with the rolling truth.
 
@@ -247,8 +295,14 @@ def load(
     stored forecasts and `store` a clone holding the fit store branch
     `store_ref`. A model and round in more than one source is taken from
     the first of hub, candidates and store. `truth` is missing where the
-    release `delay_days` after the week is not out yet.
+    release `delay_days` after the week is not out yet. `delay_days`
+    defaults to `reporting_delay(hub)`.
     """
+    if delay_days is None:
+        delay_days = reporting_delay(hub)
+        if delay_days is None:
+            msg = f"No age reaches {DELAY_LEVEL:.0%} of the national count."
+            raise ValueError(msg)
     parts = [hub_samples(hub), candidate_samples(candidates)]
     if store is not None:
         parts.append(store_samples(store, store_ref))
