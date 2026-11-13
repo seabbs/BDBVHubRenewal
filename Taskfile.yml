@@ -201,11 +201,13 @@ tasks:
   # keep the two in step.
   paper:render:
     desc: Render the paper's main text and SI (HTML and PDF) and copy them into docs/paper/ for the site
+    # From paper/, as Quarto writes the PDF links relative to where it runs.
+    dir: paper
     cmds:
-      - quarto render paper/main.qmd
-      - quarto render paper/si.qmd
-      - mkdir -p docs/paper
-      - cp -R paper/main.html paper/main.pdf paper/main_files paper/si.html paper/si.pdf paper/si_files docs/paper/
+      - quarto render main.qmd
+      - quarto render si.qmd
+      - mkdir -p ../docs/paper
+      - cp -R main.html main.pdf main_files si.html si.pdf si_files ../docs/paper/
 
   docs:
     desc: Build the docs site into _site/

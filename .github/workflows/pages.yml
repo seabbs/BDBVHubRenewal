@@ -105,12 +105,15 @@ jobs:
         with:
           version: 1.8.26
           tinytex: true
+      # From paper/, as Quarto writes the PDF links relative to where it
+      # runs.
       - name: Render the paper
+        working-directory: paper
         run: |
-          quarto render paper/main.qmd
-          quarto render paper/si.qmd
-          mkdir -p _paper
-          cp -R paper/{main,si}.{html,pdf} paper/{main,si}_files _paper/
+          quarto render main.qmd
+          quarto render si.qmd
+          mkdir -p ../_paper
+          cp -R {main,si}.{html,pdf} {main,si}_files ../_paper/
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: paper
