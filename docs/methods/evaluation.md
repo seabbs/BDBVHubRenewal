@@ -195,6 +195,7 @@ The teams' nowcasts are those the paper gathered, prospective and retrospective,
 Two fixes are the paper's.
 RKI's quantiles above one million are errors, replaced by its -1 day nowcast.
 Epiforecasts' missing 10% quantile is filled from the normal through its 2.5% and 25% quantiles.
+Under 1% of the teams' forecasts have quantiles that cross, and their values are sorted within the forecast.
 The paper also filled some missing ILM and LMU nowcasts from later model versions, and those are not scored here.
 
 [^wolffram]: Wolffram D, Abbott S, an der Heiden M, Funk S, Günther F, Hailer D, et al. (2023). Collaborative nowcasting of COVID-19 hospitalization incidences in Germany. PLOS Computational Biology 19(8): e1011394. [doi:10.1371/journal.pcbi.1011394](https://doi.org/10.1371/journal.pcbi.1011394).

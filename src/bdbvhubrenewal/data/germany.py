@@ -264,13 +264,13 @@ def nowcast_tasks(
     # nowcast.
     rows = triangle.loc[
         (triangle["report_date"] <= nowcast_date)
-        & (triangle["confirm"] != 0)
         & (
             (triangle["age_group"] == ALL_AGES)
             | (triangle["location"] == GERMANY)
         )
     ]
     rows = _carried(rows)
+    rows = rows.loc[rows["confirm"] != 0]
     vintage = _moved(rows["report_date"], shift)
     daily = pd.DataFrame(
         {

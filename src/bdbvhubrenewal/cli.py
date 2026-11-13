@@ -332,7 +332,8 @@ def build_parser() -> argparse.ArgumentParser:
     gbt.add_argument(
         "--held-out",
         action="store_true",
-        help="Run the held-out half of the dates, for the paper.",
+        help="Run the held-out half of the dates, for the paper, into "
+        "OUT/held-out.",
     )
 
     gtm = sub.add_parser(
@@ -345,7 +346,8 @@ def build_parser() -> argparse.ArgumentParser:
     gtm.add_argument(
         "--held-out",
         action="store_true",
-        help="Score the held-out half of the dates, for the paper.",
+        help="Score the held-out half of the dates, for the paper, into "
+        "OUT/held-out.",
     )
 
     gpp = sub.add_parser(
@@ -1530,7 +1532,7 @@ def _germany_backtest(args: argparse.Namespace) -> int:
         config.truth_delay,
     )
     scores = de.score_germany(forecasts, config.truth_delay)
-    out = Path(args.out)
+    out = Path(args.out) / ("held-out" if args.held_out else "")
     out.mkdir(parents=True, exist_ok=True)
     write_csv(forecasts, out / "forecasts.csv.gz")
     write_csv(scores, out / "scores.csv.gz")
@@ -1554,7 +1556,7 @@ def _germany_teams(args: argparse.Namespace) -> int:
         config.truth_delay,
     )
     scores = de.score_germany(forecasts, config.truth_delay)
-    out = Path(args.out)
+    out = Path(args.out) / ("held-out" if args.held_out else "")
     out.mkdir(parents=True, exist_ok=True)
     write_csv(forecasts, out / "teams-forecasts.csv.gz")
     write_csv(scores, out / "teams.csv.gz")
