@@ -28,7 +28,7 @@
     var controls = h("div", { class: "explorer-controls" }, root);
     var lab1 = h("label", {}, controls, "Location ");
     var selLoc = h("select", {}, lab1);
-    ["National", "Province", "Zone"].forEach(function (level) {
+    (d.levels || ["National", "Province", "Zone"]).forEach(function (level) {
       var items = d.locations.filter(function (l) { return l.level === level; });
       if (!items.length) return;
       var g = h("optgroup", { label: level }, selLoc);
@@ -94,6 +94,13 @@
       rows.forEach(function (r) {
         if (Z.visible(zoom, day(r[3]))) ymax = Math.max(ymax, r[8]);
       });
+      // The data as the round saw it, when one round is shown.
+      var seen = rounds.length !== 1 || !d.asof ? [] : d.asof.filter(function (a) {
+        return a[0] === rounds[0] && a[1] === state.loc;
+      });
+      seen.forEach(function (a) {
+        if (Z.visible(zoom, day(a[2]))) ymax = Math.max(ymax, a[3]);
+      });
       var traj = view.value !== "traj" ? [] : d.traj.filter(function (t) {
         return t[2] === state.loc && rounds.indexOf(t[1]) >= 0 && legend.on[t[0]];
       });
@@ -127,8 +134,9 @@
         "aria-label": "Forecasts by week for the selected location" }, figure);
       var plot = Z.clip(svg, { L: L, R: R, T: T, B: B, W: W, H: H });
       var cut = day(d.complete_through);
-      if (cut < x1) {
-        var sx = Math.max(X(cut + 3.5 * DAY), L);
+      // Shade the weeks after the last complete one, if any are shown.
+      var sx = Math.max(X(cut + 3.5 * DAY), L);
+      if (sx < W - R) {
         el("rect", { x: sx, y: T, width: W - R - sx, height: H - T - B,
           class: "explorer-shade" }, plot);
       }
@@ -179,7 +187,7 @@
         var dash = legend.dash(r[0]);
         var op = rounds.length > 1 ? 0.7 : 1;
         var tip = d.models[r[0]].name + ", round " + d.rounds[r[1]] + ", week ending " + r[3] +
-          ": median " + r[6] + ", 50% " + r[5] + " to " + r[7] + ", 90% " + r[4] + " to " + r[8];
+          ": median " + r[6] + ", 50% " + r[5] + " to " + r[7] + ", " + (d.outer || "90%") + " " + r[4] + " to " + r[8];
         var g = el("g", { opacity: op }, plot);
         el("title", {}, g).textContent = tip;
         el("line", { x1: xx, x2: xx, y1: Y(r[4]), y2: Y(r[8]), stroke: c, "stroke-width": 1,
@@ -189,6 +197,11 @@
         // A dashed model's median is hollow, so it differs from its parent.
         el("circle", { cx: xx, cy: Y(r[6]), r: 2.5, fill: dash ? "none" : c, stroke: c }, g);
       });
+      if (seen.length) {
+        var sg = el("polyline", { class: "explorer-asof", fill: "none",
+          points: seen.map(function (a) { return X(day(a[2])) + "," + Y(a[3]); }).join(" ") }, plot);
+        el("title", {}, sg).textContent = "Data as of " + d.rounds[rounds[0]];
+      }
       if (pts.length) {
         el("polyline", { class: "explorer-data", fill: "none",
           points: pts.map(function (p) { return X(day(p[0])) + "," + Y(p[1]); }).join(" ") }, plot);
@@ -196,7 +209,7 @@
           var done = day(p[0]) <= cut;
           var c = el("circle", { cx: X(day(p[0])), cy: Y(p[1]), r: 2.8,
             class: done ? "explorer-point" : "explorer-point hollow" }, plot);
-          el("title", {}, c).textContent = p[0] + ": " + p[1] + " cases (" + d.truth_vintage + ")";
+          el("title", {}, c).textContent = p[0] + ": " + p[1] + " " + (d.unit || "cases") + " (" + (d.data_label || d.truth_vintage) + ")";
         });
       }
       rounds.forEach(function (ri) {

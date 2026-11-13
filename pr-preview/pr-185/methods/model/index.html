@@ -57,7 +57,7 @@
     
       <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
     
-      <link rel="stylesheet" href="../../stylesheets/extra.css?v=1c6923d2">
+      <link rel="stylesheet" href="../../stylesheets/extra.css?v=afdda586">
     
     <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
@@ -1209,6 +1209,34 @@
     
   
     Comparison with hub forecasts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../germany/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    German nowcast benchmark
   
 
     
@@ -2474,9 +2502,8 @@
 How the models are built in code and sampled is on the <a href="../implementation/">Implementation</a> page.</p>
 <h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
 <p><code>renewal</code> fits the health zones with recent cases together, nests them in their provinces, pools them and links them by importation.
-The zone fits are opt-in: <code>[renewal] zones = true</code> in <code>config/hub.toml</code> (or <code>BDBV_RENEWAL_ZONES=1</code>) registers them in place of the province fits (<a href="https://github.com/seabbs/BDBVHubRenewal/blob/main/src/bdbvhubrenewal/forecasters/zonerenewal.py"><code>forecasters/zonerenewal.py</code></a>, <a href="https://github.com/seabbs/BDBVHubRenewal/blob/main/src/bdbvhubrenewal/model/zones.py"><code>model/zones.py</code></a>).
-Nothing the province fits run imports that code, so their stored fit keys do not depend on it.
-With <code>zones = false</code>, the default, <code>renewal</code> and <code>renewalbvd</code> fit the provinces as places instead, with province deviations, province delays and importation between provinces, and their zones are split from the provinces (<a href="#health-zones">Health zones</a>).
+<code>renewalbvd</code> fits the same zones (<a href="https://github.com/seabbs/BDBVHubRenewal/blob/main/src/bdbvhubrenewal/forecasters/zonerenewal.py"><code>forecasters/zonerenewal.py</code></a>, <a href="https://github.com/seabbs/BDBVHubRenewal/blob/main/src/bdbvhubrenewal/model/zones.py"><code>model/zones.py</code></a>).
+Their provinces are the sums of their zones, and the country is the sum of the provinces.
 <code>renewalsp</code> fits the place model to each province on its own, with no pooling or importation.
 <code>renewalbvd</code> is <code>renewal</code> with a down-weighted likelihood term on the Rt of BVDOutbreakSize.
 <code>seabbs-renewal</code> submits the first of <code>renewalbvd</code>, <code>renewalsp</code>, <code>renewal</code>, <code>randomwalknowcast</code> and <code>randomwalk</code>, in that order, to pass its checks (<a href="../../submission/workflow/#renewal-chain">Submission workflow</a>).
@@ -2625,7 +2652,7 @@ The component is <span class="arithmatex">\(\max\{0, Y_{CD}(w) - \sum_p Y_p(w)\}
 <span class="arithmatex">\(\rho\)</span> is the component's share of the provinces' total over the last 4 data weeks.</p>
 <h2 id="partially-pooled">Zone model (<code>renewal</code>)<a class="headerlink" href="#partially-pooled" title="Permanent link">&para;</a></h2>
 <p><code>renewal</code> fits the health zones in one model, with each zone a place, on the axis set by their summed onsets.
-It fits the zones with a case in the random walks' walk window, about 55 of the hub's 519 zones at 2026-11-08.
+It fits the zones with a case in the random walks' walk window.
 The rest are silent and take the introduction layer of <code>randomwalknowcast</code> (<a href="#silent-zones">below</a>).
 The fitted zones share the trend <span class="arithmatex">\(\log R(t)\)</span>, ascertainment <span class="arithmatex">\(\alpha\)</span>, the publication lag, the trend <span class="arithmatex">\(\bar m\)</span> of the missing-onset share, the share at risk <span class="arithmatex">\(\nu\)</span> and the importation share <span class="arithmatex">\(\varepsilon\)</span>.
 Each province has its own Rt deviation <span class="arithmatex">\(\delta_p\)</span>, delay and missing-onset deviation <span class="arithmatex">\(\omega_p\)</span>, which its zones share.
@@ -2677,7 +2704,7 @@ The shared spreads and half-lives pool the zones within provinces and the provin
 The starting values are <span class="arithmatex">\(\log R_z(0) = \log R(0) + v_z\)</span>, with <span class="arithmatex">\(v\)</span> summing to zero over the zones, <span class="arithmatex">\(v \sim \mathcal{N}(0, \sigma_v^2)\)</span> on its basis and <span class="arithmatex">\(\sigma_v \sim \mathcal{N}^+(0, 0.3^2)\)</span>.
 The province part of <span class="arithmatex">\(v\)</span> starts <span class="arithmatex">\(\xi\)</span> and the rest starts <span class="arithmatex">\(\eta\)</span>.
 The walks of <span class="arithmatex">\(\log R(t)\)</span>, <span class="arithmatex">\(\xi\)</span>, <span class="arithmatex">\(\eta\)</span> and the missing-onset share are anchored at their mean over the fit axis rather than at their first week.
-The data fix each walk's level, so a free start and free first steps trade off along a ridge that kept the province fits at maximum tree depth.
+The data fix each walk's level, so a free start and free first steps would trade off along a ridge that the sampler explores slowly.
 Without the anchoring and with one zone per province the model is the province model, which a test checks.</p>
 <p>Because zones share <span class="arithmatex">\(\log R(t)\)</span>, <span class="arithmatex">\(\delta_p(t)\)</span>, the delay, ascertainment and the publication lag within each draw, their trajectories move together where the data say they do.
 Summing zone trajectories within a draw keeps that correlation, so province intervals are not the narrow sum of independent zone noise.</p>
@@ -2734,7 +2761,7 @@ Nothing is pooled or shared between provinces: each has its own Rt walk, delay, 
 One series cannot inform the share at risk, so there is no depletion.
 Every province with a case in the random walks' walk window is fitted, however few its cases.
 A province with none takes the introduction layer of <code>randomwalknowcast</code> (<a href="../baselines/">Baseline models</a>): exactly 0 until an introduction, then its walk.
-National is the sum of the provinces plus the data's national gap, as for <code>renewal</code>.
+National is the sum of the provinces plus the data's national gap.
 A province is fitted only on its own data, so <code>renewalsp</code> cannot forecast a province left out.
 Its zones are split from its provinces (<a href="#health-zones">Health zones</a>).</p>
 <h2 id="bvdoutbreaksize-informed">BVDOutbreakSize-informed (<code>renewalbvd</code>)<a class="headerlink" href="#bvdoutbreaksize-informed" title="Permanent link">&para;</a></h2>
@@ -2783,8 +2810,8 @@ The term adds no parameters, and <span class="arithmatex">\(\zeta = 0\)</span> g
 <h2 id="health-zones">Health zones<a class="headerlink" href="#health-zones" title="Permanent link">&para;</a></h2>
 <p>Zone samples sum to their province's samples, sample by sample and week by week, and zones do not enter the national value.
 <code>renewal</code> and <code>renewalbvd</code> forecast the zones themselves, and their provinces are the zone sums (<a href="#provinces-and-the-country">above</a>).
-The random walk baselines run at zone level and their samples set the zone shares of the province samples (<a href="../baselines/#health-zones">Baseline models</a>).
-Every other model's province forecast (<code>renewalsp</code>, <code>pprandomwalknowcast</code>) is split across the zones.</p>
+<code>randomwalk</code> and <code>randomwalknowcast</code> run at zone level and their samples set the zone shares of the province samples (<a href="../baselines/#health-zones">Baseline models</a>).
+Every other model's province forecast, <code>renewalsp</code>'s and <code>pprandomwalknowcast</code>'s included, is split across the zones.</p>
 <h3 id="split-of-province-samples">Split of province samples<a class="headerlink" href="#split-of-province-samples" title="Permanent link">&para;</a></h3>
 <p>For province <span class="arithmatex">\(p\)</span> with zones <span class="arithmatex">\(z\)</span>, let <span class="arithmatex">\(o_z(w)\)</span> be zone <span class="arithmatex">\(z\)</span>'s published count for week <span class="arithmatex">\(w\)</span> and <span class="arithmatex">\(O(w) = \sum_z o_z(w)\)</span>.
 Each province sample <span class="arithmatex">\(i\)</span> draws its zone shares once, for all weeks,</p>
@@ -2961,7 +2988,7 @@ Each zone keeps its published count and the rest of the province sample <span cl
       
         <script src="../../javascripts/tablefilter.js?v=774f66a6"></script>
       
-        <script src="../../javascripts/explorer.js?v=84b4d7fb"></script>
+        <script src="../../javascripts/explorer.js?v=576e13e2"></script>
       
         <script src="../../javascripts/scorechart.js?v=1c27a70d"></script>
       

@@ -57,7 +57,7 @@
     
       <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
     
-      <link rel="stylesheet" href="../../stylesheets/extra.css?v=1c6923d2">
+      <link rel="stylesheet" href="../../stylesheets/extra.css?v=afdda586">
     
     <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
@@ -831,6 +831,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#german-nowcast-benchmark" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        German nowcast benchmark
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -1054,6 +1065,34 @@
     
   
     Comparison with hub forecasts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../germany/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    German nowcast benchmark
   
 
     
@@ -2133,6 +2172,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#german-nowcast-benchmark" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        German nowcast benchmark
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -2161,7 +2211,7 @@
 <h1 id="evaluation">Evaluation<a class="headerlink" href="#evaluation" title="Permanent link">&para;</a></h1>
 <p class="page-subtitle">Scoring, and the evaluations.</p>
 <h2 id="what-is-scored">What is scored<a class="headerlink" href="#what-is-scored" title="Permanent link">&para;</a></h2>
-<p>Forecasts from real releases are scored on the count each later release reports, and on the complete weeks of the latest release (<a href="#real-releases">Real releases</a>).
+<p>Forecasts from real releases are scored on the count each later release reports, and on each week's count once its reporting is close to complete (<a href="#real-releases">Real releases</a>).
 Forecasts from simulated vintages are scored against the simulated final counts.</p>
 <h2 id="scores">Scores<a class="headerlink" href="#scores" title="Permanent link">&para;</a></h2>
 <p>Scores follow <a href="https://epiforecasts.io/scoringutils/">scoringutils</a> and <a href="https://github.com/epiforecasts/BVDOutbreakSize">BVDOutbreakSize</a>.
@@ -2172,7 +2222,7 @@ With sample quantiles <span class="arithmatex">\(q_\tau\)</span> at 23 levels, <
 <p>It splits into dispersion, overprediction and underprediction.
 WIS on the log scale is the WIS of the transformed target, <span class="arithmatex">\(\text{WIS}(\log(1 + x), \log(1 + y))\)</span>, never the log of WIS.
 WIS on the natural scale is dominated by the places with the most cases.
-On the log scale it approximates a score of the relative error, close to a score of the growth rate, so every place counts on a similar footing<sup id="fnref:bosse"><a class="footnote-ref" href="#fn:bosse">1</a></sup>.</p>
+On the log scale it approximates a score of the relative error, close to a score of the growth rate, so every place counts on a similar footing<sup id="fnref:bosse"><a class="footnote-ref" href="#fn:bosse">2</a></sup>.</p>
 <div class="arithmatex">\[
 \text{Bias} = 1 - \big(P(X \le y) + P(X \le y - 1)\big),
 \qquad
@@ -2197,13 +2247,16 @@ We use the fair form over <span class="arithmatex">\(m\)</span> samples,</p>
 <p>The energy score on the log scale is the energy score of <span class="arithmatex">\(\log(1 + \mathbf{y})\)</span> against <span class="arithmatex">\(\log(1 + \mathbf{X}_i)\)</span>, never the log of the score.
 Relative energy scores are ratios of means against <code>randomwalk</code> over the origins and releases both have, and <span class="arithmatex">\(n\)</span> counts those.
 The score rewards a joint pattern across places only where draws are joint.
-The renewal models' draws are joint across provinces, one posterior draw per sample index.
-Zones split each province draw, so zones are joint within a province for every renewal model.
-The random walk models draw each place independently.
+The draws of <code>renewal</code> and <code>renewalbvd</code> are joint across zones and provinces, one posterior draw per sample index.
+<code>renewalsp</code> fits each province on its own, so its provinces are independent.
+Its zones split each province draw, so they are joint within a province.
+<code>pprandomwalknowcast</code> takes one posterior draw of its pooled parameters per sample index, so its places share that draw.
+<code>randomwalk</code> and <code>randomwalknowcast</code> draw each place independently.
 Hub teams' samples are joint across weeks within a place only, as the hub's sample format sets, so pairing their indices across places scores them as independent across places.</p>
 <h2 id="backtest-design">Backtest design<a class="headerlink" href="#backtest-design" title="Permanent link">&para;</a></h2>
 <p>Each vintage is a forecast task.
 The fitted models (the renewal models and <code>pprandomwalknowcast</code>) forecast real vintages only, from their stored fits (<a href="../../development/cli/#fit-store">fit store</a>).
+The one exception is the <a href="#health-zones">zone backtest</a>, which fits <code>pprandomwalknowcast</code> at each origin.
 The other models forecast every task.</p>
 <table>
 <thead>
@@ -2232,12 +2285,12 @@ The other models forecast every task.</p>
 <tr>
 <td>Real releases</td>
 <td>Every real release with a later release</td>
-<td>The count each later release shows, and the latest release's count for its complete weeks</td>
+<td>The count each later release shows, and each week's count in the first release cut off the truth delay after it</td>
 </tr>
 <tr>
 <td>Comparison with hub forecasts</td>
 <td>Real where one serves the round</td>
-<td>As for real releases</td>
+<td>The count each later release shows, and the latest release's count for its complete weeks</td>
 </tr>
 </tbody>
 </table>
@@ -2273,8 +2326,16 @@ R_o + \text{Binomial}(X - R_o, q), \qquad q = \frac{\pi_w(c_{o'}) - \pi_w(c_o)}{
 </ol>
 <p>with the sign carried when <span class="arithmatex">\(X &lt; R_o\)</span>, <span class="arithmatex">\(q\)</span> kept in <span class="arithmatex">\([0, 1]\)</span>, and <span class="arithmatex">\(q = 1\)</span> for a week fully reported at the origin.
 A model with no modelled delay, such as a hub team, is scored on complete weeks only.</p>
-<p><strong>Complete weeks.</strong> The count the latest release shows for the weeks it reports in full.
-A week is complete when it is at least 4 weeks back from the week holding the latest release's cut-off and grew by less than 2% since the release before.</p>
+<p><strong>Complete weeks.</strong> Each week's count in the first release whose cut-off is at least the truth delay after the week ends.
+The truth delay is <code>truth_delay</code> in <code>config/backtest.toml</code>.
+By default it is the age by which 98% of the national count is reported (<code>truth_level</code>).
+Each earlier release's national count of a week is set against the latest release's, at the week's age in that release rounded up to whole weeks, and the counts are pooled over releases at each age.
+The first age whose pooled share reaches 98% is the truth delay.
+The 2026-08-18 release is left out, as its old weeks were revised rather than late.
+Weeks with no release that far after them are not scored yet.
+The Backtest page gives the truth delay in use and how many forecasts it scores.
+Health zones are scored on the weeks the latest release reports in full.
+There a week is complete when it is at least 4 weeks back from the week holding the latest release's cut-off and grew by less than 2% since the release before.</p>
 <p>Scores are WIS, 50% and 90% coverage and bias, by model, origin, weeks back from the week holding the origin's cut-off, and place.
 Relative WIS is against <code>randomwalk</code> on the forecasts both made, for national and the provinces pooled, over all origins and by origin, and by origin and place.
 Every table counts its forecasts, <span class="arithmatex">\(n\)</span>, so a model with fewer forecasts was scored on fewer weeks or places.
@@ -2298,7 +2359,9 @@ Each model's zone samples are made to sum to its province samples, as in the sub
 Each real vintage before the latest is forecast, and origins with no pair of releases within the delay window are skipped, as for provinces.
 Zones are scored on the reported target as for <a href="#real-releases">real releases</a>, with the zone delays fitted at the origin, so a zone count is never scored against a count still being reported.
 Relative WIS is against <code>randomwalk</code> in the same form.
-On the Nowcast page the fitted models' zone samples at the latest release are those of their stored fits, where they have one.</p>
+<code>pprandomwalknowcast</code> is fitted here on the zones and on the provinces.
+On the Nowcast page only <code>randomwalk</code> and <code>randomwalknowcast</code> are shown at zone level.
+The fitted models are shown at the country and provinces, from their stored forecasts.</p>
 <h2 id="checks">Scores by place type and plausibility<a class="headerlink" href="#checks" title="Permanent link">&para;</a></h2>
 <p>The scores on the reported target, at province and zone level, are also averaged by the type of place and by a plausibility flag of each forecast, both decided from the counts reported at the origin.
 Relative WIS in these averages is against <code>randomwalk</code>.
@@ -2315,14 +2378,45 @@ Every scored week of a forecast takes the forecast's place type and flag, and th
 <p>For each hub reference date, our unfitted models forecast from the latest real vintage serving the round.
 Fitted models use their stored backtest forecasts for the same round.
 Where we submitted to a round, our submitted file is a series of its own beside these main-build forecasts.
-Every model is scored on the complete weeks it forecast, as for <a href="#real-releases">real releases</a>, from the vintage serving the round, since hub teams have no modelled delay we can see.
+Every model is scored on the complete weeks it forecast, from the vintage serving the round, since hub teams have no modelled delay we can see.
 WIS is relative to <code>randomwalk</code> on the weeks both forecast, on the <a href="../../comparison/">comparison page</a>.
 A round is pending until a later real release exists.</p>
+<h2 id="german-nowcast-benchmark">German nowcast benchmark<a class="headerlink" href="#german-nowcast-benchmark" title="Permanent link">&para;</a></h2>
+<p>The German COVID-19 hospitalisation nowcasting hub<sup id="fnref:wolffram"><a class="footnote-ref" href="#fn:wolffram">1</a></sup> collected nowcasts of the 7-day hospitalisation incidence by Meldedatum, the date a case was reported positive, for Germany, its 16 states and six age groups.
+<code>randomwalk</code> and <code>randomwalknowcast</code> run on its data unchanged, as follows.</p>
+<ol>
+<li>Each day's data version is a release whose cut-off is that day, and the Meldedatum is the onset date. A release's count of a day is the count reported by then in the hub's reporting triangle, with the changes after 80 days put at 81 days, as epinowcast's <code>germany_covid19_hosp</code> does. A day's last count is carried to every later release.</li>
+<li>Germany is the country. The states are its provinces in one task and Germany's age groups its provinces in another. Germany's nowcast is the sum of the states.</li>
+<li>Hub weeks end on Saturdays, so every date of a nowcast moves forward by the 0 to 6 days to the next Saturday. The 7-day sums ending on the nowcast date and 7, 14, 21 and 28 days before it are then hub weeks, and the nowcasts move back.</li>
+</ol>
+<p>The nowcast dates are the paper's, every day from 2021-11-22 to 2022-04-29.
+They are split at their midpoint.
+The 80 dates before 2022-02-10 are for developing and checking our setup.
+The 79 dates from 2022-02-10 on are held out for the paper and are not scored here.
+The hub collected nowcasts as quantiles at the levels 2.5%, 10%, 25%, 50%, 75%, 90% and 97.5%.
+Our models' samples are reduced to their quantiles at these levels, as for a hub submission.
+Our models and the hub teams are then scored the same way, as the paper did.
+The scores are the WIS of the seven quantiles, the absolute error of the median and the coverage of the 50% and 95% intervals.
+Each 7-day sum's truth is its count in the data 40 days after it ends, the paper's 40-day truth.
+The backtest scores its complete weeks the same way, on the first release the truth delay after each week (<a href="#real-releases">Real releases</a>).
+Relative scores divide a model's mean score by <code>randomwalknowcast</code>'s on the nowcasts both made.
+The paper's relative scores divide by the hub's own baseline, <code>KIT-frozen_baseline</code>.
+Both baselines are set in <code>config/germany.toml</code>.
+<code>bdbvhubrenewal germany-paper</code> writes every forecast, with its truth, as the paper's long table.</p>
+<p>The teams' nowcasts are those the paper gathered, prospective and retrospective, at the horizons our models give.
+Two fixes are the paper's.
+RKI's quantiles above one million are errors, replaced by its -1 day nowcast.
+Epiforecasts' missing 10% quantile is filled from the normal through its 2.5% and 25% quantiles.
+Under 1% of the teams' forecasts have quantiles that cross, and their values are sorted within the forecast.
+The paper also filled some missing ILM and LMU nowcasts from later model versions, and those are not scored here.</p>
 <div class="footnote">
 <hr />
 <ol>
+<li id="fn:wolffram">
+<p>Wolffram D, Abbott S, an der Heiden M, Funk S, Günther F, Hailer D, et al. (2023). Collaborative nowcasting of COVID-19 hospitalization incidences in Germany. PLOS Computational Biology 19(8): e1011394. <a href="https://doi.org/10.1371/journal.pcbi.1011394">doi:10.1371/journal.pcbi.1011394</a>.&#160;<a class="footnote-backref" href="#fnref:wolffram" title="Jump back to footnote 1 in the text">&#8617;</a></p>
+</li>
 <li id="fn:bosse">
-<p>Bosse NI, Abbott S, Cori A, van Leeuwen E, Bracher J, Funk S (2023). Scoring epidemiological forecasts on transformed scales. PLOS Computational Biology 19(8): e1011393. <a href="https://doi.org/10.1371/journal.pcbi.1011393">doi:10.1371/journal.pcbi.1011393</a>.&#160;<a class="footnote-backref" href="#fnref:bosse" title="Jump back to footnote 1 in the text">&#8617;</a></p>
+<p>Bosse NI, Abbott S, Cori A, van Leeuwen E, Bracher J, Funk S (2023). Scoring epidemiological forecasts on transformed scales. PLOS Computational Biology 19(8): e1011393. <a href="https://doi.org/10.1371/journal.pcbi.1011393">doi:10.1371/journal.pcbi.1011393</a>.&#160;<a class="footnote-backref" href="#fnref:bosse" title="Jump back to footnote 2 in the text">&#8617;</a></p>
 </li>
 </ol>
 </div>
@@ -2467,7 +2561,7 @@ A round is pending until a later real release exists.</p>
       
         <script src="../../javascripts/tablefilter.js?v=774f66a6"></script>
       
-        <script src="../../javascripts/explorer.js?v=84b4d7fb"></script>
+        <script src="../../javascripts/explorer.js?v=576e13e2"></script>
       
         <script src="../../javascripts/scorechart.js?v=1c27a70d"></script>
       

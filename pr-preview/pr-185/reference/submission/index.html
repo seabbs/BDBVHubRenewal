@@ -57,7 +57,7 @@
     
       <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
     
-      <link rel="stylesheet" href="../../stylesheets/extra.css?v=1c6923d2">
+      <link rel="stylesheet" href="../../stylesheets/extra.css?v=afdda586">
     
     <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
@@ -886,6 +886,34 @@
     
   
     Comparison with hub forecasts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../germany/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    German nowcast benchmark
   
 
     
@@ -5398,40 +5426,43 @@ zones do not sum to their provinces.</p>
 <a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>        <span class="s2">"data_inputs"</span><span class="p">:</span> <span class="s2">"Hub daily onsets by release (observed plus imputed) for provinces and health zones, and the hub's weekly target data."</span><span class="p">,</span>
 <a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="p">},</span>
 <a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    <span class="s2">"renewal"</span><span class="p">:</span> <span class="p">{</span>
-<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>        <span class="s2">"model_name"</span><span class="p">:</span> <span class="s2">"Province renewal model (PyRenew)"</span><span class="p">,</span>
-<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>        <span class="s2">"methods"</span><span class="p">:</span> <span class="s2">"Province renewal model in PyRenew with pooled Rt, gravity importation and depletion, fitted to known and imputed onsets with modelled delays; national is the sum of provinces."</span><span class="p">,</span>
-<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>        <span class="s2">"methods_long"</span><span class="p">:</span> <span class="s2">"A renewal process for each province, with a national weekly random walk on log Rt plus partially pooled province deviations, importation between provinces through a gravity kernel, and susceptible depletion. Provinces with no cases yet are never seeded and gain infections only by importation. "</span>
-<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>        <span class="o">+</span> <span class="n">_RENEWAL_OBSERVATION</span><span class="p">,</span>
-<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>        <span class="s2">"data_inputs"</span><span class="p">:</span> <span class="n">_RENEWAL_INPUTS</span><span class="p">,</span>
-<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>    <span class="p">},</span>
-<a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>    <span class="s2">"renewalsp"</span><span class="p">:</span> <span class="p">{</span>
-<a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>        <span class="s2">"model_name"</span><span class="p">:</span> <span class="s2">"Single-patch province renewal models (PyRenew)"</span><span class="p">,</span>
-<a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>        <span class="s2">"methods"</span><span class="p">:</span> <span class="s2">"A renewal model in PyRenew fitted to each province on its own, with no pooling or importation, to known and imputed onsets with modelled delays; silent provinces take a random walk introduction layer."</span><span class="p">,</span>
-<a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>        <span class="s2">"methods_long"</span><span class="p">:</span> <span class="s2">"A renewal process fitted to each province's series on its own, with its own weekly random walk on log Rt and no pooling, importation or depletion. Provinces with no case in the last nine weeks are zero until an introduction, then a random walk. "</span>
-<a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>        <span class="o">+</span> <span class="n">_RENEWAL_OBSERVATION</span><span class="p">,</span>
-<a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a>        <span class="s2">"data_inputs"</span><span class="p">:</span> <span class="n">_RENEWAL_INPUTS</span><span class="p">,</span>
-<a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a>    <span class="p">},</span>
-<a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a>    <span class="s2">"renewalbvd"</span><span class="p">:</span> <span class="p">{</span>
-<a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a>        <span class="s2">"model_name"</span><span class="p">:</span> <span class="s2">"Province renewal model with BVD Rt (PyRenew)"</span><span class="p">,</span>
-<a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a>        <span class="s2">"methods"</span><span class="p">:</span> <span class="s2">"Province renewal model in PyRenew with pooled Rt, gravity importation and depletion, with a tempered likelihood on BVDOutbreakSize Rt, fitted to known and imputed onsets."</span><span class="p">,</span>
-<a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a>        <span class="s2">"methods_long"</span><span class="p">:</span> <span class="s2">"A renewal process for each province, with a national weekly random walk on log Rt plus partially pooled province deviations, importation between provinces through a gravity kernel, and susceptible depletion. Provinces with no cases yet are never seeded and gain infections only by importation. The model's national and patch Rt in the week of the newest BVDOutbreakSize release available at the cut-off are tied to that release's Rt estimates, as a likelihood term tempered by 0.5. "</span>
-<a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a>        <span class="o">+</span> <span class="n">_RENEWAL_OBSERVATION</span><span class="p">,</span>
-<a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a>        <span class="s2">"data_inputs"</span><span class="p">:</span> <span class="n">_RENEWAL_INPUTS</span>
-<a id="__codelineno-0-28" name="__codelineno-0-28" href="#__codelineno-0-28"></a>        <span class="o">+</span> <span class="s2">" The newest BVDOutbreakSize release published by the forecast's cut-off, for its Rt estimates."</span><span class="p">,</span>
-<a id="__codelineno-0-29" name="__codelineno-0-29" href="#__codelineno-0-29"></a>    <span class="p">},</span>
-<a id="__codelineno-0-30" name="__codelineno-0-30" href="#__codelineno-0-30"></a>    <span class="s2">"randomwalknowcast"</span><span class="p">:</span> <span class="p">{</span>
-<a id="__codelineno-0-31" name="__codelineno-0-31" href="#__codelineno-0-31"></a>        <span class="s2">"model_name"</span><span class="p">:</span> <span class="s2">"RandomWalk on a nowcast"</span><span class="p">,</span>
-<a id="__codelineno-0-32" name="__codelineno-0-32" href="#__codelineno-0-32"></a>        <span class="s2">"methods"</span><span class="p">:</span> <span class="s2">"Baselinenowcast chain ladder on daily release snapshots, negative binomial new reports on the count to come, then a log-scale random walk. Health zones and provinces, national the sum of provinces."</span><span class="p">,</span>
-<a id="__codelineno-0-33" name="__codelineno-0-33" href="#__codelineno-0-33"></a>        <span class="s2">"methods_long"</span><span class="p">:</span> <span class="s2">"The baselinenowcast method (Johnson et al. 2025, Wellcome Open Research, doi:10.12688/wellcomeopenres.25027.2; https://github.com/epinowcast/baselinenowcast/), from a JAX port of baselinenowcast 0.2.2, with a random walk on top. Daily onsets in the hub's weekly release snapshots are nowcast with a chain ladder. Unobserved report days are skipped, and every release pair in the 42-day window informs one daily delay, fitted by non-negative least squares on the log scale with releases as batched reports. Daily nowcasts are summed to hub weeks. The observation model is baselinenowcast's negative binomial on the remaining count, fitted per horizon from retrospective nowcasts with downward revisions moved onto earlier releases. Each sample's completed latest week is carried forward as a random walk on the log scale with Poisson noise. A place under 10 cases a week uses the delay, nowcast size and walk spread pooled over its parent (zone, then province, then national). The national value is the sum of provinces. See https://samabbott.co.uk/BDBVHubRenewal/methods/baselines/."</span><span class="p">,</span>
-<a id="__codelineno-0-34" name="__codelineno-0-34" href="#__codelineno-0-34"></a>        <span class="s2">"data_inputs"</span><span class="p">:</span> <span class="s2">"Hub daily onsets by release (observed plus imputed) for provinces and health zones, and the hub's weekly target data."</span><span class="p">,</span>
-<a id="__codelineno-0-35" name="__codelineno-0-35" href="#__codelineno-0-35"></a>    <span class="p">},</span>
-<a id="__codelineno-0-36" name="__codelineno-0-36" href="#__codelineno-0-36"></a>    <span class="s2">"pprandomwalknowcast"</span><span class="p">:</span> <span class="p">{</span>
-<a id="__codelineno-0-37" name="__codelineno-0-37" href="#__codelineno-0-37"></a>        <span class="s2">"model_name"</span><span class="p">:</span> <span class="s2">"Generative random walk nowcast, partially pooled"</span><span class="p">,</span>
-<a id="__codelineno-0-38" name="__codelineno-0-38" href="#__codelineno-0-38"></a>        <span class="s2">"methods"</span><span class="p">:</span> <span class="s2">"Epinowcast-style joint model of weekly expected counts, a log random walk, and a log-normal reporting delay, fitted by NUTS to the daily release snapshots with partial pooling over zones, provinces and country; national the sum of provinces."</span><span class="p">,</span>
-<a id="__codelineno-0-39" name="__codelineno-0-39" href="#__codelineno-0-39"></a>        <span class="s2">"methods_long"</span><span class="p">:</span> <span class="s2">"One generative model in the style of epinowcast (Abbott et al., https://github.com/epinowcast/epinowcast/), fitted with NUTS (NumPyro) to each vintage. Each place's weekly expected final count is a random walk on the log scale over the last 16 weeks, with each onset day expecting a seventh of it. Cases are reported after a log-normal delay cut to whole days and capped at 42 days. The new reports of each onset day between consecutive releases are negative binomial on the expected count times the share of the delay between the two ages, so the data are right truncated by construction. Downward revisions are first moved onto earlier releases, as baselinenowcast does. The delay location and scale, the walk spread, its starting level and the dispersion are all partially pooled over zones, provinces and the country. Each sample is one posterior draw: reported counts plus negative binomial draws of the cases still to come, and the walk continued over the forecast weeks. Places with no case in nine weeks are not fitted and take randomwalknowcast's draws, 0 until an introduction, as renewalsp does. The national value is the sum of provinces. See https://samabbott.co.uk/BDBVHubRenewal/methods/baselines/."</span><span class="p">,</span>
-<a id="__codelineno-0-40" name="__codelineno-0-40" href="#__codelineno-0-40"></a>        <span class="s2">"data_inputs"</span><span class="p">:</span> <span class="s2">"Hub daily onsets by release (observed plus imputed) for provinces and health zones, and the hub's weekly target data."</span><span class="p">,</span>
-<a id="__codelineno-0-41" name="__codelineno-0-41" href="#__codelineno-0-41"></a>    <span class="p">},</span>
-<a id="__codelineno-0-42" name="__codelineno-0-42" href="#__codelineno-0-42"></a><span class="p">}</span>
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>        <span class="s2">"model_name"</span><span class="p">:</span> <span class="s2">"Zone renewal model (PyRenew)"</span><span class="p">,</span>
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>        <span class="s2">"methods"</span><span class="p">:</span> <span class="s2">"Health zone renewal model in PyRenew with pooled Rt, gravity importation and depletion, fitted to known and imputed onsets with modelled delays; provinces are zone sums."</span><span class="p">,</span>
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>        <span class="s2">"methods_long"</span><span class="p">:</span> <span class="s2">"A renewal process for each health zone with recent cases, with a national weekly random walk on log Rt plus partially pooled province and zone deviations, importation between zones through a gravity kernel, and susceptible depletion. Zones with no recent case take a random walk introduction layer. "</span>
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>        <span class="o">+</span> <span class="n">_ZONE_SUMS</span>
+<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>        <span class="o">+</span> <span class="n">_RENEWAL_OBSERVATION</span><span class="p">,</span>
+<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>        <span class="s2">"data_inputs"</span><span class="p">:</span> <span class="n">_RENEWAL_INPUTS</span><span class="p">,</span>
+<a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>    <span class="p">},</span>
+<a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>    <span class="s2">"renewalsp"</span><span class="p">:</span> <span class="p">{</span>
+<a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>        <span class="s2">"model_name"</span><span class="p">:</span> <span class="s2">"Single-patch province renewal models (PyRenew)"</span><span class="p">,</span>
+<a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>        <span class="s2">"methods"</span><span class="p">:</span> <span class="s2">"A renewal model in PyRenew fitted to each province on its own, with no pooling or importation, to known and imputed onsets with modelled delays; silent provinces take a random walk introduction layer."</span><span class="p">,</span>
+<a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>        <span class="s2">"methods_long"</span><span class="p">:</span> <span class="s2">"A renewal process fitted to each province's series on its own, with its own weekly random walk on log Rt and no pooling, importation or depletion. Provinces with no case in the last nine weeks are zero until an introduction, then a random walk. "</span>
+<a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a>        <span class="o">+</span> <span class="n">_ZONE_SPLIT</span>
+<a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a>        <span class="o">+</span> <span class="n">_RENEWAL_OBSERVATION</span><span class="p">,</span>
+<a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a>        <span class="s2">"data_inputs"</span><span class="p">:</span> <span class="n">_RENEWAL_INPUTS</span><span class="p">,</span>
+<a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a>    <span class="p">},</span>
+<a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a>    <span class="s2">"renewalbvd"</span><span class="p">:</span> <span class="p">{</span>
+<a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a>        <span class="s2">"model_name"</span><span class="p">:</span> <span class="s2">"Zone renewal model with BVD Rt (PyRenew)"</span><span class="p">,</span>
+<a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a>        <span class="s2">"methods"</span><span class="p">:</span> <span class="s2">"Health zone renewal model in PyRenew with pooled Rt, gravity importation and depletion, with a tempered likelihood on BVDOutbreakSize Rt, fitted to known and imputed onsets; provinces are zone sums."</span><span class="p">,</span>
+<a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a>        <span class="s2">"methods_long"</span><span class="p">:</span> <span class="s2">"A renewal process for each health zone with recent cases, with a national weekly random walk on log Rt plus partially pooled province and zone deviations, importation between zones through a gravity kernel, and susceptible depletion. Zones with no recent case take a random walk introduction layer. The model's national, province and zone Rt in the week of the newest BVDOutbreakSize release available at the cut-off are tied to that release's Rt estimates, as a likelihood term tempered by 0.5. "</span>
+<a id="__codelineno-0-28" name="__codelineno-0-28" href="#__codelineno-0-28"></a>        <span class="o">+</span> <span class="n">_ZONE_SUMS</span>
+<a id="__codelineno-0-29" name="__codelineno-0-29" href="#__codelineno-0-29"></a>        <span class="o">+</span> <span class="n">_RENEWAL_OBSERVATION</span><span class="p">,</span>
+<a id="__codelineno-0-30" name="__codelineno-0-30" href="#__codelineno-0-30"></a>        <span class="s2">"data_inputs"</span><span class="p">:</span> <span class="n">_RENEWAL_INPUTS</span>
+<a id="__codelineno-0-31" name="__codelineno-0-31" href="#__codelineno-0-31"></a>        <span class="o">+</span> <span class="s2">" The newest BVDOutbreakSize release published by the forecast's cut-off, for its Rt estimates."</span><span class="p">,</span>
+<a id="__codelineno-0-32" name="__codelineno-0-32" href="#__codelineno-0-32"></a>    <span class="p">},</span>
+<a id="__codelineno-0-33" name="__codelineno-0-33" href="#__codelineno-0-33"></a>    <span class="s2">"randomwalknowcast"</span><span class="p">:</span> <span class="p">{</span>
+<a id="__codelineno-0-34" name="__codelineno-0-34" href="#__codelineno-0-34"></a>        <span class="s2">"model_name"</span><span class="p">:</span> <span class="s2">"RandomWalk on a nowcast"</span><span class="p">,</span>
+<a id="__codelineno-0-35" name="__codelineno-0-35" href="#__codelineno-0-35"></a>        <span class="s2">"methods"</span><span class="p">:</span> <span class="s2">"Baselinenowcast chain ladder on daily release snapshots, negative binomial new reports on the count to come, then a log-scale random walk. Health zones and provinces, national the sum of provinces."</span><span class="p">,</span>
+<a id="__codelineno-0-36" name="__codelineno-0-36" href="#__codelineno-0-36"></a>        <span class="s2">"methods_long"</span><span class="p">:</span> <span class="s2">"The baselinenowcast method (Johnson et al. 2025, Wellcome Open Research, doi:10.12688/wellcomeopenres.25027.2; https://github.com/epinowcast/baselinenowcast/), from a JAX port of baselinenowcast 0.2.2, with a random walk on top. Daily onsets in the hub's weekly release snapshots are nowcast with a chain ladder. Unobserved report days are skipped, and every release pair in the 42-day window informs one daily delay, fitted by non-negative least squares on the log scale with releases as batched reports. Daily nowcasts are summed to hub weeks. The observation model is baselinenowcast's negative binomial on the remaining count, fitted per horizon from retrospective nowcasts with downward revisions moved onto earlier releases. Each sample's completed latest week is carried forward as a random walk on the log scale with Poisson noise. A place under 10 cases a week uses the delay, nowcast size and walk spread pooled over its parent (zone, then province, then national). The national value is the sum of provinces. See https://samabbott.co.uk/BDBVHubRenewal/methods/baselines/."</span><span class="p">,</span>
+<a id="__codelineno-0-37" name="__codelineno-0-37" href="#__codelineno-0-37"></a>        <span class="s2">"data_inputs"</span><span class="p">:</span> <span class="s2">"Hub daily onsets by release (observed plus imputed) for provinces and health zones, and the hub's weekly target data."</span><span class="p">,</span>
+<a id="__codelineno-0-38" name="__codelineno-0-38" href="#__codelineno-0-38"></a>    <span class="p">},</span>
+<a id="__codelineno-0-39" name="__codelineno-0-39" href="#__codelineno-0-39"></a>    <span class="s2">"pprandomwalknowcast"</span><span class="p">:</span> <span class="p">{</span>
+<a id="__codelineno-0-40" name="__codelineno-0-40" href="#__codelineno-0-40"></a>        <span class="s2">"model_name"</span><span class="p">:</span> <span class="s2">"Generative random walk nowcast, partially pooled"</span><span class="p">,</span>
+<a id="__codelineno-0-41" name="__codelineno-0-41" href="#__codelineno-0-41"></a>        <span class="s2">"methods"</span><span class="p">:</span> <span class="s2">"Epinowcast-style joint model of weekly expected counts, a log random walk, and a log-normal reporting delay, fitted by NUTS to the daily release snapshots with partial pooling over zones, provinces and country; national the sum of provinces."</span><span class="p">,</span>
+<a id="__codelineno-0-42" name="__codelineno-0-42" href="#__codelineno-0-42"></a>        <span class="s2">"methods_long"</span><span class="p">:</span> <span class="s2">"One generative model in the style of epinowcast (Abbott et al., https://github.com/epinowcast/epinowcast/), fitted with NUTS (NumPyro) to each vintage. Each place's weekly expected final count is a random walk on the log scale over the last 16 weeks, with each onset day expecting a seventh of it. Cases are reported after a log-normal delay cut to whole days and capped at 42 days. The new reports of each onset day between consecutive releases are negative binomial on the expected count times the share of the delay between the two ages, so the data are right truncated by construction. Downward revisions are first moved onto earlier releases, as baselinenowcast does. The delay location and scale, the walk spread, its starting level and the dispersion are all partially pooled over zones, provinces and the country. Each sample is one posterior draw: reported counts plus negative binomial draws of the cases still to come, and the walk continued over the forecast weeks. Places with no case in nine weeks are not fitted and take randomwalknowcast's draws, 0 until an introduction, as renewalsp does. The national value is the sum of provinces. See https://samabbott.co.uk/BDBVHubRenewal/methods/baselines/."</span><span class="p">,</span>
+<a id="__codelineno-0-43" name="__codelineno-0-43" href="#__codelineno-0-43"></a>        <span class="s2">"data_inputs"</span><span class="p">:</span> <span class="s2">"Hub daily onsets by release (observed plus imputed) for provinces and health zones, and the hub's weekly target data."</span><span class="p">,</span>
+<a id="__codelineno-0-44" name="__codelineno-0-44" href="#__codelineno-0-44"></a>    <span class="p">},</span>
+<a id="__codelineno-0-45" name="__codelineno-0-45" href="#__codelineno-0-45"></a><span class="p">}</span>
 </code></pre></div>
 
     <div class="doc doc-contents ">
@@ -11787,7 +11818,7 @@ without <code>state.json</code>, means no round has been submitted.</p>
       
         <script src="../../javascripts/tablefilter.js?v=774f66a6"></script>
       
-        <script src="../../javascripts/explorer.js?v=84b4d7fb"></script>
+        <script src="../../javascripts/explorer.js?v=576e13e2"></script>
       
         <script src="../../javascripts/scorechart.js?v=1c27a70d"></script>
       
