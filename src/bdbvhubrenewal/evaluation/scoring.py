@@ -11,6 +11,9 @@ epiforecasts/BVDOutbreakSize (`src/scoring.jl`).
   \left(\mathbb{1}\{y < q_\tau\} - \tau\right)(q_\tau - y),$$
   which equals the usual interval form.
   It splits into dispersion, overprediction and underprediction.
+  `wis_quantile` gives the same for forecasts made as quantiles, and
+  `score_quantiles` scores those by WIS, the absolute error of the median
+  and the coverage of each central interval.
 - **Log WIS**: WIS of $\log(1 + y)$ against $\log(1 + x)$ for the samples.
   It scores relative error, so large provinces do not dominate.
 - **CRPS** of the empirical sample distribution, for reference.
@@ -51,8 +54,10 @@ __all__ = [
     "relative_skill",
     "scale_of",
     "score_forecasts",
+    "score_quantiles",
     "score_sample",
     "summarise_scores",
+    "wis_quantile",
     "wis_sample",
 ]
 
@@ -107,23 +112,49 @@ def wis_sample(
     """
     x = _as_samples(samples)
     tau = np.asarray(quantile_levels, dtype=np.float64)
-    q = np.quantile(x, tau)
-    k = (tau.size - 1) / 2
+    out = wis_quantile(np.array([obs]), np.quantile(x, tau)[None, :], tau)
+    return {k: float(v[0]) for k, v in out.items()}
+
+
+def wis_quantile(
+    obs: ArrayLike, quantiles: ArrayLike, quantile_levels: ArrayLike
+) -> dict[str, NDArray[np.float64]]:
+    """Return the WIS of quantile forecasts and its components.
+
+    Parameters
+    ----------
+    obs : array-like
+        The observed values, `[N]`.
+    quantiles : array-like
+        Each forecast's quantiles at `quantile_levels`, `[N, K]`.
+    quantile_levels : array-like
+        Symmetric quantile levels including 0.5, ascending, `[K]`.
+
+    Returns
+    -------
+    dict
+        `wis`, `dispersion`, `overprediction` and `underprediction`, each
+        `[N]`. The components sum to `wis`.
+    """
+    y = np.asarray(obs, dtype=np.float64)[:, None]
+    q = np.asarray(quantiles, dtype=np.float64)
+    tau = np.asarray(quantile_levels, dtype=np.float64)
     lower = tau < 0.5
-    upper = tau > 0.5
     # Pair each lower level with its upper level.
-    lo, hi = q[lower], q[upper][::-1]
+    lo, hi = q[:, lower], q[:, tau > 0.5][:, ::-1]
     alpha = 2 * tau[lower]
-    med = float(q[np.isclose(tau, 0.5)][0])
-    disp = np.sum(alpha / 2 * (hi - lo))
-    over = np.sum(np.maximum(lo - obs, 0)) + max(med - obs, 0) / 2
-    under = np.sum(np.maximum(obs - hi, 0)) + max(obs - med, 0) / 2
-    norm = k + 0.5
+    med = q[:, np.isclose(tau, 0.5)]
+    disp = np.sum(alpha / 2 * (hi - lo), axis=1)
+    over = np.sum(np.maximum(lo - y, 0), axis=1)
+    over += np.maximum(med - y, 0)[:, 0] / 2
+    under = np.sum(np.maximum(y - hi, 0), axis=1)
+    under += np.maximum(y - med, 0)[:, 0] / 2
+    norm = lower.sum() + 0.5
     return {
-        "wis": float((disp + over + under) / norm),
-        "dispersion": float(disp / norm),
-        "overprediction": float(over / norm),
-        "underprediction": float(under / norm),
+        "wis": (disp + over + under) / norm,
+        "dispersion": disp / norm,
+        "overprediction": over / norm,
+        "underprediction": under / norm,
     }
 
 
@@ -383,6 +414,66 @@ def score_forecasts(
             }
         )
     return pd.DataFrame(rows)
+
+
+def score_quantiles(
+    forecasts: pd.DataFrame,
+    truth: pd.DataFrame,
+    keys: Sequence[str],
+    quantile_levels: ArrayLike,
+) -> pd.DataFrame:
+    """Score quantile forecasts against observed values.
+
+    Parameters
+    ----------
+    forecasts : pandas.DataFrame
+        One row per quantile, with the `keys` columns, `horizon`,
+        `quantile` and `value`.
+    truth : pandas.DataFrame
+        Columns `location`, `target_end_date` and `truth`, plus any key
+        columns it should be matched on.
+    keys : sequence of str
+        Columns that identify one forecast.
+    quantile_levels : array-like
+        Symmetric quantile levels including 0.5. Every forecast must give
+        each of them.
+
+    Returns
+    -------
+    pandas.DataFrame
+        One row per forecast with a truth value: the keys, `horizon`,
+        `truth`, the `wis_quantile` columns, `ae_median` and
+        `coverage_<w>`, whether the truth is inside the central $w$%
+        interval, bounds included, for each pair of levels.
+
+    Raises
+    ------
+    ValueError
+        If a forecast lacks one of `quantile_levels`.
+    """
+    tau = np.sort(np.asarray(quantile_levels, dtype=np.float64))
+    on = [c for c in truth.columns if c != "truth"]
+    rows = forecasts.merge(truth, on=on, how="inner")
+    rows = rows.assign(quantile=rows["quantile"].round(6))
+    wide = rows.pivot_table(
+        index=[*keys, "horizon", "truth"],
+        columns="quantile",
+        values="value",
+        aggfunc="first",
+    ).reindex(columns=tau.round(6))
+    if wide.isna().to_numpy().any():
+        raise ValueError(
+            f"Each forecast needs the quantile levels {tau.tolist()}."
+        )
+    q = wide.to_numpy()
+    y = wide.index.get_level_values("truth").to_numpy(dtype=np.float64)
+    out = pd.DataFrame(wis_quantile(y, q, tau), index=wide.index)
+    out["ae_median"] = np.abs(q[:, np.isclose(tau, 0.5)][:, 0] - y)
+    for i in np.flatnonzero(tau < 0.5):
+        width = round(100 * (1 - 2 * tau[i]))
+        inside = (q[:, i] <= y) & (y <= q[:, -1 - i])
+        out[f"coverage_{width}"] = inside.astype(float)
+    return out.reset_index()
 
 
 def summarise_scores(

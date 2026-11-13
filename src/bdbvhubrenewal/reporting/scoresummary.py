@@ -11,7 +11,7 @@ baseline's. A new metric is a score column and a label.
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 
 import pandas as pd
 
@@ -64,6 +64,8 @@ def summary_rows(
     metrics: Sequence[tuple[str, str, float | None, bool]] = SUMMARY_METRICS,
     default_on: Sequence[str] | None = None,
     energy: pd.DataFrame | None = None,
+    pool_of: Callable[[str], str] = _pool,
+    pool_labels: Mapping[str, str] = _POOLS,
 ) -> dict[str, object]:
     """Return the per-forecast rows and their labels for one target.
 
@@ -106,10 +108,10 @@ def summary_rows(
     origins = sorted(set(s["origin"].astype(str)))
     releases = sorted(set(s["truth_vintage"].astype(str)))
     weeks = sorted(set(s["target_end_date"].astype(str)))
-    pools = [p for p in _POOLS if p in set(s["location"].map(_pool))]
+    pools = [p for p in pool_labels if p in set(s["location"].map(pool_of))]
     places = sorted(
         set(s["location"]),
-        key=lambda x: (pools.index(_pool(x)), names.get(x, x)),
+        key=lambda x: (pools.index(pool_of(x)), names.get(x, x)),
     )
     on = set(shown if default_on is None else default_on)
     keys = [m[0] for m in metrics]
@@ -148,9 +150,10 @@ def summary_rows(
         "origins": origins,
         "releases": releases,
         "weeks": weeks,
-        "pools": [{"id": p, "label": _POOLS[p]} for p in pools],
+        "pools": [{"id": p, "label": pool_labels[p]} for p in pools],
         "places": [
-            {"id": p, "name": names.get(p, p), "pool": _pool(p)} for p in places
+            {"id": p, "name": names.get(p, p), "pool": pool_of(p)}
+            for p in places
         ],
         "rows": rows,
         "horizons": horizons,

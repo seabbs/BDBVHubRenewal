@@ -12,6 +12,7 @@ import pandas as pd
 import pytest
 
 from bdbvhubrenewal.cli import main
+from bdbvhubrenewal.evaluation.germany import load_germany_config
 from bdbvhubrenewal.reporting import plots
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -471,6 +472,80 @@ def test_backtest_without_recovery_never_runs_it(
     assert main(args) == 0
 
 
+@pytest.mark.usefixtures("in_root")
+def test_backtest_scores_the_complete_target_on_the_truth_delay(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from bdbvhubrenewal import cli
+    from bdbvhubrenewal.evaluation import backtest as bt
+    from bdbvhubrenewal.evaluation.nowcast import resolve_truth_delay
+
+    def development(*args: object, **kwargs: object) -> pd.DataFrame:
+        del args, kwargs
+        return pd.DataFrame({"model": []})
+
+    seen: dict[str, object] = {}
+
+    def release(*args: object, **kwargs: object) -> None:
+        del args
+        seen.update(kwargs)
+        raise SystemExit(0)
+
+    monkeypatch.setattr(bt, "run_development", development)
+    monkeypatch.setattr(
+        cli, "_stored", lambda *_: (pd.DataFrame(), pd.DataFrame())
+    )
+    monkeypatch.setattr(cli, "release_backtest", release)
+    out = ["--results", str(tmp_path), "--output", str(tmp_path)]
+    args = ["backtest", "--data", str(DATA), "--no-recovery"]
+    with pytest.raises(SystemExit):
+        main([*args, "--models", "randomwalk", *out])
+    config = bt.load_config("config/backtest.toml")
+    target = pd.read_csv(DATA / "target.csv")
+    assert seen["truth_delay"] == resolve_truth_delay(config, target)
+
+
+@pytest.mark.usefixtures("in_root")
+def test_score_scores_the_complete_target_on_the_truth_delay(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    import argparse
+
+    from bdbvhubrenewal import cli
+    from bdbvhubrenewal.data.tidy import load_delays
+    from bdbvhubrenewal.evaluation import backtest as bt
+    from bdbvhubrenewal.evaluation.nowcast import (
+        ReleaseBacktest,
+        ReleaseForecasts,
+        resolve_truth_delay,
+    )
+
+    seen: dict[str, object] = {}
+
+    def scored(*args: object, **kwargs: object) -> ReleaseBacktest:
+        del args
+        seen.update(kwargs)
+        empty = pd.DataFrame()
+        return ReleaseBacktest(empty, empty, empty, empty, empty)
+
+    monkeypatch.setattr(
+        cli, "_stored", lambda *_: (pd.DataFrame(), pd.DataFrame())
+    )
+    monkeypatch.setattr(cli, "score_releases", scored)
+    config = bt.load_config("config/backtest.toml")
+    target = pd.read_csv(DATA / "target.csv")
+    args = argparse.Namespace(data=str(DATA), results=str(tmp_path))
+    empty = ReleaseForecasts(*(pd.DataFrame() for _ in range(4)))
+    delays = load_delays(DATA)
+    cli._release_scores(
+        args, config, target, delays, tmp_path, pd.DataFrame(), empty
+    )
+    delay = resolve_truth_delay(config, target)
+    assert seen["truth_delay"] == delay
+    written = json.loads((tmp_path / "nowcast-truth.json").read_text())
+    assert written == {"truth_delay": delay}
+
+
 def test_concat_results_keeps_one_copy_of_shared_tables(
     tmp_path: Path,
 ) -> None:
@@ -573,6 +648,89 @@ def test_fit_store_unpack_says_when_the_store_has_no_fit(
     assert not (tmp_path / "fit").exists()
 
 
+def _germany_data(tmp_path: Path) -> tuple[Path, Path]:
+    """The fixture as the hub's triangle, and a config for it."""
+    long = pd.read_csv(
+        ROOT / "tests" / "fixtures" / "germany" / "germany_covid19_hosp.csv.gz"
+    )
+    keys = ["location", "age_group", "reference_date"]
+    long = long.sort_values([*keys, "report_date"])
+    long["change"] = (
+        long.groupby(keys)["confirm"].diff().fillna(long["confirm"])
+    )
+    long["delay"] = (
+        pd.to_datetime(long["report_date"])
+        - pd.to_datetime(long["reference_date"])
+    ).dt.days
+    wide = long.pivot_table(
+        index=keys, columns="delay", values="change"
+    ).rename(columns=lambda d: f"value_{d}d")
+    data = tmp_path / "germany"
+    data.mkdir()
+    wide.reset_index().rename(columns={"reference_date": "date"}).to_csv(
+        data / "COVID-19_hospitalizations.csv", index=False
+    )
+    text = (ROOT / "config" / "germany.toml").read_text()
+    text = text.replace('"2021-11-22"', '"2021-10-04"')
+    text = text.replace('"2022-04-29"', '"2021-10-05"')
+    text = text.replace("delay = 40", "delay = 10")
+    text = text.replace('"2022-02-10"', '"2021-10-06"')
+    config = tmp_path / "germany.toml"
+    config.write_text(text)
+    return data, config
+
+
+def test_cli_germany_backtest_scores_a_block_of_dates(tmp_path: Path) -> None:
+    data, config = _germany_data(tmp_path)
+    out = tmp_path / "results"
+    assert main(["germany-backtest", "--config", str(config), "--data",
+                 str(data), "--models", "randomwalk", "--chunk", "1/2",
+                 "--out", str(out)]) == 0  # fmt: skip
+    scores = pd.read_csv(out / "scores.csv.gz")
+    assert set(scores["origin"]) == {"2021-10-05"}
+    assert set(scores["model"]) == {"randomwalk"}
+    forecasts = pd.read_csv(out / "forecasts.csv.gz")
+    assert set(forecasts["origin"]) == {"2021-10-05"}
+
+
+def test_cli_germany_teams_scores_the_hub_teams(tmp_path: Path) -> None:
+    data, config = _germany_data(tmp_path)
+    rows = [
+        {
+            "location": "DE",
+            "age_group": "00+",
+            "forecast_date": "2021-10-04",
+            "target_end_date": "2021-10-04",
+            "target": "0 day ahead inc hosp",
+            "type": "quantile",
+            "quantile": q,
+            "value": 100.0 * (i + 1),
+            "pathogen": "COVID-19",
+        }
+        for i, q in enumerate((0.025, 0.1, 0.25, 0.5, 0.75, 0.9, 0.975))
+    ]
+    names = load_germany_config(config).submissions
+    models = ("KIT-simple_nowcast", "KIT-frozen_baseline")
+    for name, model in zip(names, models, strict=True):
+        pd.DataFrame(rows).assign(model=model).to_csv(
+            data / Path(name).name, index=False
+        )
+    out = tmp_path / "results"
+    assert main(["germany-teams", "--config", str(config), "--data",
+                 str(data), "--out", str(out)]) == 0  # fmt: skip
+    teams = pd.read_csv(out / "teams.csv.gz")
+    assert set(teams["model"]) == {"KIT", "KIT-frozen_baseline"}
+    assert len(teams) == 2
+    assert (out / "teams-forecasts.csv.gz").exists()
+    assert main(["germany-paper", "--config", str(config), "--results",
+                 str(out)]) == 0  # fmt: skip
+    paper = pd.read_csv(out / "paper-forecasts.csv.gz")
+    assert set(paper["model"]) == {"KIT", "KIT-frozen_baseline"}
+    meta = json.loads((out / "paper-forecasts.json").read_text())
+    assert meta["split_date"] == "2021-10-06"
+    assert meta["baseline"] == "KIT-frozen_baseline"
+
+
 def _outside_repo(tmp_path: Path) -> tuple[Path, dict[str, str]]:
     """Return a working directory with the config and no `data/`."""
     import shutil
@@ -641,3 +799,30 @@ def test_data_defaults_follow_bdbv_data_dir(
     monkeypatch.setenv("BDBV_DATA_DIR", "elsewhere")
     args = build_parser().parse_args(argv)
     assert getattr(args, attr) == f"elsewhere{path}"
+
+
+def test_cli_germany_held_out_half_goes_to_its_own_directory(
+    tmp_path: Path,
+) -> None:
+    data, config = _germany_data(tmp_path)
+    config.write_text(
+        config.read_text().replace('"2021-10-06"', '"2021-10-05"')
+    )
+    out = tmp_path / "results"
+    assert main(["germany-backtest", "--config", str(config), "--data",
+                 str(data), "--models", "randomwalk", "--held-out",
+                 "--out", str(out)]) == 0  # fmt: skip
+    scores = pd.read_csv(out / "held-out" / "scores.csv.gz")
+    assert set(scores["origin"]) == {"2021-10-05"}
+    assert not (out / "scores.csv.gz").exists()
+
+
+def test_cli_germany_asof_writes_the_data_each_date_saw(
+    tmp_path: Path,
+) -> None:
+    data, config = _germany_data(tmp_path)
+    out = tmp_path / "results"
+    assert main(["germany-asof", "--config", str(config), "--data",
+                 str(data), "--out", str(out)]) == 0  # fmt: skip
+    asof = pd.read_csv(out / "asof.csv.gz")
+    assert set(asof["origin"]) == {"2021-10-04", "2021-10-05"}

@@ -35,6 +35,7 @@ nav:
       - Backtest: backtest.md
       - Simulation checks: simulation.md
       - Comparison with hub forecasts: comparison.md
+      - German nowcast benchmark: germany.md
   - Paper: paper/main.html
   - Submission:
       - Submission log: submission/rounds/index.md

@@ -98,6 +98,15 @@ tasks:
     cmds:
       - uv run bdbvhubrenewal zone-backtest {{.CLI_ARGS}}
 
+  germany:
+    desc: Run and score the German hospitalisation nowcast benchmark and its hub teams (writes results/germany/)
+    cmds:
+      - uv run bdbvhubrenewal germany-fetch
+      - uv run bdbvhubrenewal germany-backtest {{.CLI_ARGS}}
+      - uv run bdbvhubrenewal germany-teams
+      - uv run bdbvhubrenewal germany-asof
+      - uv run bdbvhubrenewal germany-paper
+
   nowcast:
     desc: Forecast from the latest vintage and write a checked hub file to output/submission/
     cmds:
@@ -207,7 +216,8 @@ tasks:
       - quarto render main.qmd
       - quarto render si.qmd
       - mkdir -p ../docs/paper
-      - cp -R main.html main.pdf main_files si.html si.pdf si_files ../docs/paper/
+      - cp -R main.html main.pdf main_files si.html si.pdf si_files figures
+        ../docs/paper/
 
   docs:
     desc: Build the docs site into _site/
