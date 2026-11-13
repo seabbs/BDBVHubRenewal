@@ -28,7 +28,7 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
 - **Context.**
   - Nowcasting methods model reporting delays directly.
   - Time series foundation models forecast well with no training on the target data.
-  - Training on domain-specific synthetic data has precedent: KernelSynth for Chronos [@placeholder], ForecastPFN [@placeholder], prior-fitted networks [@placeholder; @placeholder], and Mantis for outbreaks [@placeholder].
+  - Training on domain-specific synthetic data has precedent: KernelSynth for Chronos [@Ansari2024], ForecastPFN [@Dooley2023], prior-fitted networks [@Muller2022; @Hollmann2025], and Mantis for outbreaks [@Dudley2026].
 - **What we did.**
   - We fine-tuned a foundation model on synthetic outbreak data, following that precedent but fine-tuning a general model rather than training from scratch.
   - We evaluated it retrospectively and prospectively.
