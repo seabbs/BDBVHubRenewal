@@ -90,15 +90,12 @@ class HubTriangle:
         is, `[L, T, D]`.
     last : int
         Index of the step holding the latest release's cut-off.
-    cutoff : str
-        The latest release's cut-off, ISO format.
     """
 
     times: list[str]
     final: np.ndarray
     partial: np.ndarray
     last: int
-    cutoff: str
 
     @property
     def n_context(self) -> int:
@@ -158,7 +155,7 @@ def hub_triangle(
     lags = MAX_LAG[source]
     partial = np.full((len(places), n_times, lags), np.nan)
     final = np.zeros((len(places), n_times))
-    last, latest = 0, ""
+    last = 0
     # The latest release gives the final counts and the last step.
     for release in sorted(set(rows["vintage"])):
         mine = (rows["vintage"] == release).to_numpy()
@@ -174,8 +171,8 @@ def hub_triangle(
         for d in range(lags):
             if 0 <= at - d < n_times:
                 partial[:, at - d, d] = counts[:, at - d]
-        final, last, latest = counts, at, cutoff
-    return HubTriangle(times, final, partial, last, latest)
+        final, last = counts, at
+    return HubTriangle(times, final, partial, last)
 
 
 def quantile_draws(
