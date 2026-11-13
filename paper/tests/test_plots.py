@@ -240,7 +240,7 @@ def test_missing_origins_break_lines_over_time(gappy) -> None:
 
 
 def test_nowcast_panel_marks_a_missing_ribbon(gappy) -> None:
-    fc, obs, scores, dropped = gappy
+    fc, obs, scores, _ = gappy
     fig = results_panel(
         fc, obs, scores, ribbon_models=["randomwalknowcast"], split=False
     )

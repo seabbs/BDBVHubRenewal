@@ -203,10 +203,12 @@ def plot_nowcasts(
     models: Sequence[str],
     location: str,
     all_models: Sequence[str],
-) -> None:
+) -> bool:
     """Draw 50% and 90% ribbons and medians at spaced origin dates.
 
-    Data as of each origin are in light grey, the final data in black.
+    Data as of each origin are in light grey, the final data in black. A
+    model with no forecast at a shown origin gets a cross in its colour at
+    the foot of that origin's line.
 
     Parameters
     ----------
@@ -222,6 +224,11 @@ def plot_nowcasts(
         Location to show.
     all_models : sequence of str
         Every model in the figure, for styles.
+
+    Returns
+    -------
+    bool
+        Whether any ribbon model was missing at a shown origin.
     """
     fc = forecasts.loc[forecasts["location"] == location]
     obs = observations.loc[observations["location"] == location]
@@ -232,6 +239,7 @@ def plot_nowcasts(
     start = origins[0] + (hmin - abs(hmin) // 2) * step
     end = origins[-1] + (max(hmax, 0) + 3) * step
     window = final.loc[final["target_date"].between(start, end)]
+    missing = False
     for origin in origins:
         asof = obs.loc[
             (obs["as_of_date"] == origin)
@@ -248,6 +256,20 @@ def plot_nowcasts(
         for model in models:
             one = fc.loc[(fc["model"] == model) & (fc["origin_date"] == origin)]
             if one.empty:
+                # Mark the gap so it is not read as a good nowcast.
+                ax.plot(
+                    [origin],
+                    [0.04 + 0.05 * list(models).index(model)],
+                    marker="x",
+                    ms=6,
+                    mew=1.6,
+                    ls="none",
+                    color=line_style(model, all_models)["color"],
+                    transform=ax.get_xaxis_transform(),
+                    zorder=8,
+                    clip_on=False,
+                )
+                missing = True
                 continue
             wide = _quantile_table(one)
             colour = line_style(model, all_models)["color"]
@@ -285,6 +307,7 @@ def plot_nowcasts(
     locator = mdates.AutoDateLocator(maxticks=10)
     ax.xaxis.set_major_locator(locator)
     ax.xaxis.set_major_formatter(mdates.ConciseDateFormatter(locator))
+    return missing
 
 
 def _model_rows(
@@ -476,7 +499,10 @@ def _period_handles(split: pd.Timestamp | None) -> list[Patch]:
 
 
 def _legend(
-    fig: Figure, models: Sequence[str], split: pd.Timestamp | None = None
+    fig: Figure,
+    models: Sequence[str],
+    split: pd.Timestamp | None = None,
+    missing: bool = False,
 ) -> None:
     handles = [
         Line2D(
@@ -504,6 +530,18 @@ def _legend(
             label="Final data",
         )
     )
+    if missing:
+        handles.append(
+            Line2D(
+                [],
+                [],
+                color=INK["muted"],
+                marker="x",
+                mew=1.6,
+                ls="none",
+                label="No forecast at origin",
+            )
+        )
     handles += _period_handles(split)
     fig.legend(
         handles=handles,
@@ -654,7 +692,7 @@ def results_panel(
         height_ratios=[1.25, 1, 1],
         layout="constrained",
     )
-    plot_nowcasts(
+    missing = plot_nowcasts(
         axd["nowcast"],
         forecasts.loc[forecasts["stratum"] == main],
         obs.loc[obs["stratum"] == main],
@@ -721,7 +759,7 @@ def results_panel(
         _label(axd[key], letter, _TITLES[key].format(m=name))
     for key in bottom:
         axd[key].set_ylabel(f"Relative {name}")
-    _legend(fig, models, split)
+    _legend(fig, models, split, missing)
     return fig
 
 
