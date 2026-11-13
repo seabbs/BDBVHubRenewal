@@ -80,8 +80,9 @@ A block holds at most 26 provinces when weekly and five when daily, so daily blo
 Training is 1,000 steps of LoRA at learning rate $10^{-4}$, with 5% of blocks held out (`scripts/finetune_chronos.py`).
 
 A checkpoint is named by its settings hash, of the blocks, the code and the training settings.
-The models load the checkpoint whose hash is `FINETUNED_HASH`, downloaded once from the repository's release `chronos-ft-<hash>`.
-A fit fails if that release is missing or holds a checkpoint with another hash.
+The models load the checkpoint pinned in `config/finetune.toml`, by its hash and the SHA-256 of its adapter files.
+It is downloaded once from the repository's release `chronos-ft-<hash>`.
+A fit fails if that release is missing or holds another checkpoint.
 The fit store keeps a failed fit until its inputs change, so a fit that failed before its release was published is retried by running the Fit store workflow with `retry_failed` (`gh workflow run fit-store.yml -R seabbs/BDBVHubRenewal -f retry_failed=true -f models="fm_chronos_weekly_ragged_ft fm_chronos_daily_ragged_ft"`).
 
 ## Limitations
