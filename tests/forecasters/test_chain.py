@@ -222,6 +222,7 @@ def test_a_zone_below_the_threshold_takes_its_provinces_delay(
     assert small.size
     np.testing.assert_array_equal(fit.source[big], big)
     assert fit.own[big].all()
+    assert not fit.own[small].any()
     np.testing.assert_array_equal(
         fit.source[small], fit.source[snap.parent[small]]
     )

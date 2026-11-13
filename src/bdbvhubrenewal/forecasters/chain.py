@@ -201,8 +201,8 @@ class DelayFit:
     level : numpy.ndarray
         Cases a week of each place, `[L]`.
     source : numpy.ndarray
-        Index of the delay each place uses, `[L]`, as for
-        `source_index`.
+        Index of the delay each place uses, `[L]`, encoded as for
+        `source_index` (zones by `fit_delay`).
     own : numpy.ndarray
         Whether each place uses its own factor, `[L, D]`. The choice is
         made per place (`source`), so it is the same at every age.

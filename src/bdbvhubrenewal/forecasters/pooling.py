@@ -27,12 +27,10 @@ __all__ = ["MIN_LEVEL", "ZONE_DELAY_MIN_LEVEL", "pool_matrix", "source_index"]
 MIN_LEVEL = 10.0
 """Cases a week at which a node uses its own estimates."""
 
-ZONE_DELAY_MIN_LEVEL = 50.0
+ZONE_DELAY_MIN_LEVEL = 20.0
 """Cases a week at which a zone uses its own delay, not its province's.
 
-Chosen by the zone backtest of `randomwalknowcast` over 5, 10, 20, 30, 50
-and 100 cases a week: the smallest whose WIS was within 2% of the best on
-both the reported and the complete target (PR #178).
+The choice is in docs/methods/baselines.md.
 """
 
 
