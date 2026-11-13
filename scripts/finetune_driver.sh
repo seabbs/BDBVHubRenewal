@@ -134,14 +134,20 @@ EOF
 }
 
 check_remote() {
-  # Try the remote every REMOTE_RETRY seconds. If it has not answered for
-  # REMOTE_GRACE seconds, the laptop takes over the held-out seeds and
+  # Try the remote every REMOTE_RETRY seconds. If it has not answered, or
+  # has had less than REMOTE_MIN_FREE_GB of disk free, for REMOTE_GRACE
+  # seconds, the laptop takes over the held-out seeds and
   # enough training seeds for the first chunk.
   local now
   now=$(date +%s)
   (( now - remote_tried < REMOTE_RETRY )) && return 0
   remote_tried=$now
-  if remote true > /dev/null 2>&1; then
+  local free
+  free=$(remote "cd $REMOTE_DIR && df -BG --output=avail . | tail -1" 2> /dev/null | tr -dc 0-9)
+  if [ -n "$free" ] && (( free < REMOTE_MIN_FREE_GB )); then
+    log "$REMOTE has $free GB free, under $REMOTE_MIN_FREE_GB GB: counted as down"
+  fi
+  if [ -n "$free" ] && (( free >= REMOTE_MIN_FREE_GB )); then
     remote_ok=$now
     # A scheduler started by hand runs more processes than memory allows.
     if remote "pkill -f '[r]un4.sh'" > /dev/null 2>&1; then
@@ -152,7 +158,7 @@ check_remote() {
       || remote_scheduler || log "could not start the remote scheduler"
     return 0
   fi
-  log "$REMOTE does not answer"
+  [ -z "$free" ] && log "$REMOTE does not answer"
   if (( now - remote_ok >= REMOTE_GRACE )) && [ ! -s "$CLAIMED" ]; then
     { seq "$HELD_FIRST" "$HELD_LAST"; seq "$TRAIN_FIRST" $(( TRAIN_FIRST + FIRST_CHUNK_SEEDS - 1 )); } \
       | while read -r s; do done_seed "$s" || echo "$s"; done > "$CLAIMED"
@@ -192,7 +198,6 @@ sync_remote() {
     excludes+=(--exclude="counts-$s.csv.gz" --exclude="settings-$s.csv"
       --exclude="failures-$s.csv" --exclude="logs/$s.log")
   done
-  (( $(date +%s) - remote_ok > REMOTE_RETRY )) && return 0
   rsync -a -e "ssh -o ConnectTimeout=20 -o BatchMode=yes" "${excludes[@]}" \
     --include='counts-*' --include='settings-*' \
     --include='failures-*' --include='logs/***' --exclude='*' \
