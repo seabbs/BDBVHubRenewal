@@ -20,5 +20,5 @@ The checkpoint is in `checkpoint/`: the adapter (`finetuned-ckpt`), its settings
 1,000 steps at lr 1e-4 with 5% of blocks held out took 53 min on the laptop's Apple GPU; held-out loss fell from 0.197 to 0.157.
 
 Fits: `scripts/ft_fits.py d4|dmax STORE`, zero-shot and fine-tuned, at D = 4 weeks / 28 days and at the data-driven D (as `arm_dmax.py`), into `stores/ft-d4` and `stores/ft-dmax`.
-Scoring: `scripts/score-ft.sh STORE RESULTS` (`fit-store load`, the release backtest with the random walks, `summary.py`), then `scripts/ft_table.py randomwalk RESULTS...`.
-Results in `results/finetune/`: `ft-table.md` (relative WIS against randomwalk, relative log WIS in brackets, all places, matched cells), `fm-summary-<arm>.csv` (against randomwalknowcast, as `summary.py`), and fans of each layout, zero-shot against fine-tuned, at D = 4 w / 28 d (`fan-ft-<source>.png`, `scripts/fan_ft.py`).
+Scoring: `scripts/score-ft.sh STORE RESULTS` (`fit-store load`, the release backtest with the random walks, `summary.py`), then `scripts/ft_table.py randomwalknowcast RESULTS...`.
+Results in `results/finetune/`: `ft-table.md` (relative WIS against randomwalknowcast, relative log WIS in brackets, all places, matched cells), `fm-summary-<arm>.csv` (against randomwalknowcast, as `summary.py`), and fans of each layout, zero-shot against fine-tuned, at D = 4 w / 28 d (`fan-ft-<source>.png`, `scripts/fan_ft.py`).
