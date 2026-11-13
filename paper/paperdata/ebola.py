@@ -18,7 +18,8 @@ Three sources give samples.
 `to_quantiles` turns samples into the seven hubverse quantile levels the
 hub used for its quantile round and its dashboard. `load` joins the
 latest release of the hub's target data as `truth`. `score` gives the
-weighted interval score (WIS) of each forecast on the natural scale.
+weighted interval score (WIS) of each forecast on the natural scale and
+`relative_wis` each model's WIS relative to the hub's baseline.
 """
 
 from __future__ import annotations
@@ -40,7 +41,9 @@ __all__ = [
     "candidate_samples",
     "hub_samples",
     "hub_truth",
+    "HUB_BASELINE",
     "load",
+    "relative_wis",
     "round_close",
     "score",
     "store_samples",
@@ -65,6 +68,9 @@ COLUMNS: Final = (
     "truth",
 )
 """The columns of the long table every study shares."""
+
+HUB_BASELINE: Final = "BDBVHub-baseline"
+"""The hub's own baseline: an additive random walk from horizon -3."""
 
 KEYS: Final = ["model", "location", "origin_date", "target_date"]
 SAMPLE_COLUMNS: Final = [*KEYS, "sample", "value"]
@@ -292,3 +298,23 @@ def score(table: pd.DataFrame) -> pd.DataFrame:
         "cover_50",
     ]
     return pd.DataFrame(rows, columns=columns)
+
+
+def relative_wis(
+    scores: pd.DataFrame, baseline: str = HUB_BASELINE
+) -> pd.DataFrame:
+    """Return each model's mean WIS over the baseline's on shared forecasts.
+
+    A forecast is shared when the baseline forecast the same location,
+    round and target week. `n` is the number of shared forecasts.
+    """
+    keys = ["location", "origin_date", "target_date"]
+    base = scores.loc[scores["model"] == baseline, [*keys, "wis"]]
+    paired = scores.merge(base, on=keys, suffixes=("", "_baseline"))
+    out = paired.groupby("model", as_index=False).agg(
+        n=("wis", "size"),
+        wis=("wis", "mean"),
+        wis_baseline=("wis_baseline", "mean"),
+    )
+    out["relative_wis"] = out["wis"] / out["wis_baseline"]
+    return out
