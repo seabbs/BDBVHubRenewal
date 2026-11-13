@@ -172,7 +172,8 @@ def test_evaluate_gives_one_long_quantile_table_with_truth() -> None:
         pd.to_datetime(out["target_date"]) - pd.to_datetime(out["origin_date"])
     ).dt.days
     assert (out["horizon"] == days).all()
-    assert out["horizon"].nunique() > len(synthetic.HORIZONS)
+    span = out["horizon"].max() - out["horizon"].min()
+    assert span == 7 * (len(synthetic.HORIZONS) - 1)
     np.testing.assert_allclose(
         sorted(out["quantile_level"].unique()), HUB_QUANTILE_LEVELS
     )

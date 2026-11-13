@@ -13,7 +13,8 @@ final in the simulation. `outbreak_tasks` builds a `ForecastTask` at
 each origin, holding the weekly and daily releases up to it. The
 reference date is the Saturday ending the cut-off's week, and the
 forecast weeks are `HORIZONS` weeks from it: four nowcast weeks, the
-cut-off's week and three forecast weeks. The models keep their own
+cut-off's week and three forecast weeks. The table gives each horizon in
+days from the origin, as `paper/schema.md` asks. The models keep their own
 release lag $D$ (`foundation.MAX_LAG`, 4 weeks or 28 days, inside the
 fine-tune's 2 to 7 weeks).
 
@@ -52,9 +53,11 @@ __all__ = [
     "HORIZONS",
     "MIN_RELEASES",
     "MODELS",
+    "OBSERVATION_COLUMNS",
     "evaluate",
     "model_task",
     "models_by_name",
+    "observation_table",
     "origin_cutoffs",
     "outbreak_tasks",
     "quantile_table",
@@ -96,6 +99,15 @@ COLUMNS: Final = (
     "truth",
 )
 """The long table's columns (`paper/schema.md`)."""
+
+OBSERVATION_COLUMNS: Final = (
+    "study",
+    "location",
+    "target_date",
+    "as_of_date",
+    "value",
+)
+"""The observations table's columns (`paper/schema.md`)."""
 
 
 def series_label(outbreak: str, place: str) -> str:
@@ -254,7 +266,49 @@ def quantile_table(
     out = out.rename(
         columns={"vintage": "origin_date", "target_end_date": "target_date"}
     )
+    out["horizon"] = (
+        pd.to_datetime(out["target_date"]) - pd.to_datetime(out["origin_date"])
+    ).dt.days
     return out[list(COLUMNS)]
+
+
+def observation_table(
+    counts: pd.DataFrame, outbreak: str, n_origins: int
+) -> pd.DataFrame:
+    """Return the weekly counts as of each release, and the final counts.
+
+    Parameters
+    ----------
+    counts : pandas.DataFrame
+        One outbreak's triangle.
+    outbreak : str
+        Its id.
+    n_origins : int
+        As `origin_cutoffs`. The releases run to the last origin.
+
+    Returns
+    -------
+    pandas.DataFrame
+        `paper/schema.md`'s observations: `study`, `location`,
+        `target_date`, `as_of_date` and `value`. The last `as_of_date` is
+        the simulation's last report, which gives the truth.
+    """
+    cutoffs, origins = origin_cutoffs(counts, outbreak, n_origins)
+    if not origins:
+        return pd.DataFrame(columns=list(OBSERVATION_COLUMNS))
+    end = str(pd.Timestamp(counts["report_date"].max()).date())
+    kept = cutoffs[: cutoffs.index(origins[-1]) + 1]
+    rows = releases(counts, "weekly", [*kept, end])
+    out = pd.DataFrame(
+        {
+            "study": "synthetic",
+            "location": [series_label(outbreak, p) for p in rows["location"]],
+            "target_date": rows["target_end_date"],
+            "as_of_date": rows["vintage"],
+            "value": rows["total"].astype(float),
+        }
+    )
+    return out[list(OBSERVATION_COLUMNS)]
 
 
 def model_task(model: ForecastModel, task: ForecastTask) -> ForecastTask:

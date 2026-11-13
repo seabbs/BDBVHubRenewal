@@ -12,8 +12,9 @@ Then, from the repo root:
     uv run --group chronos python -m paper.run_synthetic \
         output/finetune/heldout output/paper/synthetic.csv --device cpu
 
-Writes the long quantile table and, beside it, each model's seconds per
-outbreak. Models that are not registered are skipped, and so are the
+Writes the long quantile table and, beside it, the observations as of
+each release (`-observations.csv`) and each model's seconds per outbreak
+(`-timings.csv`). Models that are not registered are skipped, and so are the
 fine-tuned ones until their checkpoint exists.
 """
 
@@ -26,7 +27,13 @@ from pathlib import Path
 
 import pandas as pd
 
-from paper.synthetic import COLUMNS, MODELS, evaluate, models_by_name
+from paper.synthetic import (
+    COLUMNS,
+    MODELS,
+    evaluate,
+    models_by_name,
+    observation_table,
+)
 
 
 def _cpu(threads: int) -> None:
@@ -62,9 +69,10 @@ def main() -> None:
     for name in skipped:
         logging.warning("%s is not registered, so is skipped", name)
 
-    tables, timings = [], []
+    tables, timings, observed = [], [], []
     for outbreak in ids:
         rows = counts.loc[counts["outbreak"] == outbreak]
+        observed.append(observation_table(rows, outbreak, args.origins))
         for model in models:
             t0 = time.perf_counter()
             table = evaluate(
@@ -90,6 +98,9 @@ def main() -> None:
     if out is None or out.empty:
         out = pd.DataFrame(columns=list(COLUMNS))
     out.to_csv(args.out, index=False)
+    pd.concat(observed, ignore_index=True).to_csv(
+        args.out.with_name(args.out.stem + "-observations.csv"), index=False
+    )
     pd.DataFrame(timings).to_csv(
         args.out.with_name(args.out.stem + "-timings.csv"), index=False
     )
