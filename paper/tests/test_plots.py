@@ -20,7 +20,7 @@ from paperfigs.style import model_style
 
 @pytest.fixture(scope="module", params=STUDIES)
 def study(request):
-    fc, obs = dummy_study(request.param, seed=1)
+    fc, obs = dummy_study(request.param, seed=1, n_samples=20)
     return fc, obs, score_forecasts(fc)
 
 
@@ -28,6 +28,14 @@ def test_model_style_is_fixed_whatever_else_is_shown() -> None:
     a = model_style("randomwalknowcast", ["randomwalknowcast", "x"])
     b = model_style("randomwalknowcast", ["hub_team_a", "randomwalknowcast"])
     assert a == b
+
+
+def test_baselines_have_their_own_colours() -> None:
+    colours = {
+        model_style(m, [])[0]
+        for m in ("randomwalk", "randomwalknowcast", "hub_baseline")
+    }
+    assert len(colours) == 3
 
 
 def test_fine_tuned_and_zero_shot_share_a_colour_not_a_dash() -> None:
@@ -49,6 +57,9 @@ def test_results_panel_has_lettered_panels(study) -> None:
         ax.get_title(loc="left") for ax in fig.axes if ax.get_title(loc="left")
     )
     assert letters == list(PANEL_LETTERS)
+    metric = "WIS" if fc["study"].iloc[0] == "germany" else "CRPS"
+    titles = " ".join(ax.get_title() for ax in fig.axes)
+    assert f"Relative {metric}" in titles
     assert fig.legends
     plt.close(fig)
 

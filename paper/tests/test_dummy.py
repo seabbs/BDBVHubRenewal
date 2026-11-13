@@ -7,12 +7,12 @@ from paperfigs.schema import (
     validate_forecasts,
     validate_observations,
 )
-from paperfigs.scores import BASELINE
+from paperfigs.scores import STUDY_BASELINES
 
 
 @pytest.fixture(scope="module", params=STUDIES)
 def study(request):
-    fc, obs = dummy_study(request.param, seed=1)
+    fc, obs = dummy_study(request.param, seed=1, n_samples=20)
     return request.param, fc, obs
 
 
@@ -27,7 +27,8 @@ def test_dummy_tables_follow_the_schema(study) -> None:
 def test_dummy_models_include_baseline_and_foundation_models(study) -> None:
     name, fc, _ = study
     models = set(fc["model"])
-    assert BASELINE in models
+    assert STUDY_BASELINES[name] in models
+    assert {"randomwalk", "randomwalknowcast"} <= models
     assert any(
         m.startswith("fm_chronos_") and m.endswith("_ragged") for m in models
     )
@@ -69,8 +70,24 @@ def test_dummy_truth_matches_final_data(study) -> None:
 
 
 def test_dummy_is_reproducible() -> None:
-    a, _ = dummy_study("ebola", seed=3)
-    b, _ = dummy_study("ebola", seed=3)
-    c, _ = dummy_study("ebola", seed=4)
+    a, _ = dummy_study("ebola", seed=3, n_samples=10)
+    b, _ = dummy_study("ebola", seed=3, n_samples=10)
+    c, _ = dummy_study("ebola", seed=4, n_samples=10)
     pd.testing.assert_frame_equal(a, b)
     assert not a["value"].equals(c["value"])
+
+
+def test_dummy_forms_follow_the_study(study) -> None:
+    name, fc, _ = study
+    if name == "germany":
+        assert fc["sample_id"].isna().all()
+    else:
+        assert fc["quantile_level"].isna().all()
+        assert (
+            fc.groupby(["model", "location", "origin_date", "horizon"])[
+                "sample_id"
+            ]
+            .nunique()
+            .eq(20)
+            .all()
+        )
