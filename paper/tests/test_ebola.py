@@ -287,3 +287,31 @@ def test_store_skips_fits_with_no_forecasts(store):
     s = ebola.store_samples(store, "fit-store")
     assert set(s["model"]) == {"renewal", "pp"}
     assert (s.loc[s["model"] == "pp", "value"] == 3).all()
+
+
+def test_hub_baseline_is_the_hub_model():
+    assert ebola.HUB_BASELINE == "BDBVHub-baseline"
+
+
+def test_relative_wis_uses_shared_forecasts():
+    def rows(model, location, wis):
+        return {
+            "model": model,
+            "location": location,
+            "origin_date": pd.Timestamp("2026-11-07"),
+            "target_date": pd.Timestamp("2026-11-07"),
+            "horizon": 0,
+            "wis": wis,
+        }
+
+    scores = pd.DataFrame(
+        [
+            rows(ebola.HUB_BASELINE, "CD", 4.0),
+            rows(ebola.HUB_BASELINE, "CD-IT", 100.0),
+            rows("m", "CD", 2.0),
+        ]
+    )
+    rel = ebola.relative_wis(scores).set_index("model")
+    assert rel.loc["m", "relative_wis"] == 0.5
+    assert rel.loc["m", "n"] == 1
+    assert rel.loc[ebola.HUB_BASELINE, "relative_wis"] == 1
