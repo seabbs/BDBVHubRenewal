@@ -2213,7 +2213,7 @@ The daily source is summed to weeks, as the hub's target is weekly, and each wee
 The context is every step from the first onset in the releases to <span class="arithmatex">\(t^*\)</span>.</p>
 <h2 id="scoring">Scoring<a class="headerlink" href="#scoring" title="Permanent link">&para;</a></h2>
 <p>The models forecast final counts and model no delay.
-So the release backtest scores them on the complete target only, the weeks the latest release reports in full (<a href="../evaluation/#real-releases">Evaluation</a>).</p>
+So the release backtest scores them on the complete target only, each week against the first release the truth delay after it ends (<a href="../evaluation/#real-releases">Evaluation</a>).</p>
 <h2 id="fine-tuning">Fine-tuning<a class="headerlink" href="#fine-tuning" title="Permanent link">&para;</a></h2>
 <p>The <code>_ft</code> models load one LoRA checkpoint of Chronos-2, trained on 2,000 outbreaks simulated with epinowcast's generative model (<code>scripts/finetune_simulate.R</code>).
 The simulator, <code>enw_simulate</code>, is on epinowcast's <code>feature/829-simulate-forecast</code> branch, pinned at commit <code>e084b080</code>, and is not yet in a release.
@@ -2391,7 +2391,7 @@ Such fits are retried by running the Fit store workflow with <code>retry_failed<
       
         <script src="../../javascripts/tablefilter.js?v=774f66a6"></script>
       
-        <script src="../../javascripts/explorer.js?v=b4440ba7"></script>
+        <script src="../../javascripts/explorer.js?v=576e13e2"></script>
       
         <script src="../../javascripts/scorechart.js?v=1c27a70d"></script>
       
