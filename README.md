@@ -26,3 +26,11 @@ Fits: `scripts/ft_fits.py d4|dmax STORE`, zero-shot and fine-tuned, at D = 4 wee
 Scoring: `scripts/score-ft.sh STORE RESULTS` (`fit-store load`, the release backtest with the random walks, `summary.py`), then `scripts/ft_table.py randomwalknowcast RESULTS...`.
 Results in `results/finetune/`: `ft-table.md` (relative WIS against randomwalknowcast, relative log WIS in brackets, all places, matched cells), `fm-summary-<arm>.csv` (against randomwalknowcast, as `summary.py`), and fans of each layout, zero-shot against fine-tuned, at D = 4 w / 28 d (`fan-ft-<source>.png`, `scripts/fan_ft.py`).
 Overlays of the fine-tuned and zero-shot ragged models, the complete model and randomwalknowcast, per source, at D = 4 w / 28 d: `results/finetune/overlay-<source>.png` (`scripts/overlay.py`, with randomwalknowcast's forecasts from the release backtest `score.sh` runs on `stores/base`).
+
+## Rescore on the rolling complete truth (#211)
+
+`results/rolling/`: all six Chronos-2 models, `randomwalk` and `randomwalknowcast` on main's rolling complete target, each week against the first release 35 days after it ends.
+Fits at fm-chronos 313e5b9 (#192 with main and #211 merged) on archie's GPU, the fine-tuned models with checkpoint `chronos-ft-2c2b22a03107`, in `stores/rolling` (`scripts/rescore.sh`, scoring alone `scripts/score_only.sh`).
+`fm-summary.csv` is relative to `randomwalknowcast` on matched cells (`scripts/summary.py`).
+Only the 2026-10-17 origin has a week 35 days old at the latest release: 27 cells, one week back 3 per place, one national.
+No forecast week is scorable yet.
