@@ -1,10 +1,10 @@
 # Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
 """The German nowcast benchmark page.
 
-`germany_page` writes the page's table and score summaries from
-`bdbvhubrenewal germany-backtest`'s scores, as the Backtest page shows its
-own: `relative_wis` by level and the `scoresummary` views, relative to
-`randomwalk`.
+`germany_page` writes the page's table and score summaries from the
+scores of `bdbvhubrenewal germany-backtest` (our models) and
+`bdbvhubrenewal germany-teams` (the hub teams): `relative_scores` by level
+and the `scoresummary` views, relative to `BASELINE`.
 """
 
 from __future__ import annotations
@@ -15,13 +15,17 @@ from typing import Final
 import pandas as pd
 
 from bdbvhubrenewal.data.germany import PLACE_NAMES, level
-from bdbvhubrenewal.evaluation.germany import GermanyConfig
-from bdbvhubrenewal.evaluation.nowcast import relative_wis
+from bdbvhubrenewal.evaluation.germany import (
+    BASELINE,
+    TEAM_NAMES,
+    GermanyConfig,
+    relative_scores,
+)
 from bdbvhubrenewal.reporting.plots import model_style
 from bdbvhubrenewal.reporting.scorechart import write_score_chart
 from bdbvhubrenewal.reporting.scoresummary import summary_html, summary_rows
 
-__all__ = ["LEVELS", "germany_page"]
+__all__ = ["LEVELS", "METRICS", "germany_page"]
 
 LEVELS: Final = {
     "national": "National",
@@ -30,8 +34,14 @@ LEVELS: Final = {
 }
 """The paper's levels, in order, and their labels."""
 
-BASELINE: Final = "randomwalk"
-"""The model relative scores divide by."""
+METRICS: Final = (
+    ("wis", "WIS", None, True),
+    ("ae_median", "Absolute error of the median", None, True),
+    ("coverage_50", "50% coverage", 0.5, False),
+    ("coverage_95", "95% coverage", 0.95, False),
+)
+"""The summaries' metrics, as `scoresummary.SUMMARY_METRICS`: the
+paper's."""
 
 _PAGES: Final = (
     "germany-scores.md",
@@ -58,24 +68,38 @@ def germany_page(
     gen : pathlib.Path
         Where the Markdown snippets go.
     results : pathlib.Path
-        `germany-backtest` output, `scores.csv.gz`. If missing, the page
-        says it has not been run.
+        `germany-backtest` output, `scores.csv.gz`, and `germany-teams`
+        output, `teams.csv.gz`, if it has been run. If the first is
+        missing, the page says the benchmark has not been run.
     config : GermanyConfig
         The benchmark's source, which the page credits.
     """
     url = f"https://github.com/{config.repo}/blob/{config.commit}"
+    teams_url = (
+        f"https://github.com/{config.teams_repo}/blob/{config.teams_commit}"
+    )
+    files = ", ".join(f"[`{p}`]({teams_url}/{p})" for p in config.submissions)
     _write(
         gen / "germany-sources.md",
-        f"[`{config.triangle}`]({url}/{config.triangle}) in "
-        f"{config.repo} at `{config.commit[:7]}`.\n",
+        f"- The reporting triangle: [`{config.triangle}`]"
+        f"({url}/{config.triangle}) in {config.repo} at "
+        f"`{config.commit[:7]}`.\n"
+        f"- The hub teams' nowcasts: {files} in {config.teams_repo} at "
+        f"`{config.teams_commit[:7]}` (MIT).\n",
     )
     path = results / "scores.csv.gz"
     if not path.exists():
         for name in _PAGES[:-1]:
             _write(gen / name, "Not run yet: `task germany`.\n")
         return
-    scores = pd.read_csv(path, dtype={"origin": str, "truth_vintage": str})
-    models = [m for m in config.models if m in set(scores["model"])]
+    dtype = {"origin": str, "truth_vintage": str}
+    frames = [pd.read_csv(path, dtype=dtype)]
+    teams = results / "teams.csv.gz"
+    if teams.exists():
+        frames.append(pd.read_csv(teams, dtype=dtype))
+    scores = pd.concat(frames, ignore_index=True)
+    order = [*config.models, *TEAM_NAMES.values()]
+    models = [m for m in order if m in set(scores["model"])]
     write_score_chart(
         fig / "scoresummary-germany-latest.json",
         summary_rows(
@@ -84,12 +108,13 @@ def germany_page(
             {m: model_style(m, models) for m in models},
             PLACE_NAMES,
             baseline=BASELINE,
+            metrics=METRICS,
             pool_of=level,
             pool_labels=LEVELS,
         ),
     )
     srcs = {"latest": "../figures/scoresummary-germany-latest.json"}
-    table = relative_wis(scores, ("pool",), baseline=BASELINE)
+    table = relative_scores(scores, ("pool",))
     table["pool"] = pd.Categorical(table["pool"], list(LEVELS))
     table = table.sort_values(["pool", "rel_wis"])
     _write(

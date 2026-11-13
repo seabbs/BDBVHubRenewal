@@ -329,6 +329,14 @@ def build_parser() -> argparse.ArgumentParser:
     )
     gbt.add_argument("--out", default="results/germany")
 
+    gtm = sub.add_parser(
+        "germany-teams",
+        help="Score the German hospitalisation hub teams' nowcasts.",
+    )
+    gtm.add_argument("--config", default="config/germany.toml")
+    gtm.add_argument("--data", default=f"{data_dir}/raw/germany")
+    gtm.add_argument("--out", default="results/germany")
+
     dig = sub.add_parser(
         "digest",
         help="Print a hash of what a backtest reads, to key its outputs.",
@@ -1510,6 +1518,24 @@ def _germany_backtest(args: argparse.Namespace) -> int:
     return 0
 
 
+def _germany_teams(args: argparse.Namespace) -> int:
+    from bdbvhubrenewal.data.germany import hub_triangle
+    from bdbvhubrenewal.evaluation import germany as de
+
+    config = de.load_germany_config(args.config)
+    data = Path(args.data)
+    scores = de.germany_teams(
+        de.read_submissions([data / Path(p).name for p in config.submissions]),
+        hub_triangle(data / Path(config.triangle).name),
+        config.truth_delay,
+    )
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+    write_csv(scores, out / "teams.csv.gz")
+    print(f"German hub teams: {len(scores)} scored nowcasts in {out}.")
+    return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """Run the command line interface.
 
@@ -1585,6 +1611,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
     if args.command == "germany-backtest":
         return _germany_backtest(args)
+    if args.command == "germany-teams":
+        return _germany_teams(args)
     if args.command == "digest":
         from bdbvhubrenewal.evaluation.digest import (
             backtest_digest,
