@@ -601,11 +601,12 @@ jobs:
         with:
           path: ~/.cache/huggingface
           key: chronos-2-29ec3766d36d6f73f0696f85560a422f50e8498c
-      - name: Cache the fine-tuned checkpoint
+      - name: Cache the fine-tuned checkpoints
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/bdbvhubrenewal
-          key: chronos-ft-${{ hashFiles('config/finetune.toml') }}
+          key: chronos-ft-${{ github.run_id }}
+          restore-keys: chronos-ft-
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: inputs

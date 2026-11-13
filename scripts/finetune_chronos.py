@@ -11,17 +11,18 @@ hash. Run from the repo root:
     uv run --group chronos python scripts/finetune_chronos.py train \
         output/finetune/blocks.pt output/finetune/ckpt
 
-The `_ft` models download the checkpoint from the release
-`chronos-ft-<hash>` (`forecasters.foundation.finetuned_adapter`).
-Publish it, then set its hash and adapter SHA-256 in
-`config/finetune.toml`:
+`train` also writes `sha256sums.txt` of the release's assets. The `_ft`
+models load the newest release `chronos-ft-<hash>`
+(`forecasters.foundation.resolve_checkpoint`), so publishing one is all a
+new checkpoint needs:
 
     gh release create chronos-ft-<hash> -R seabbs/BDBVHubRenewal \
         --latest=false --title "Chronos-2 fine-tuned checkpoint <hash>" \
         --notes "LoRA adapter of Chronos-2 for the _ft models." \
         output/finetune/ckpt/finetuned-ckpt/adapter_config.json \
         output/finetune/ckpt/finetuned-ckpt/adapter_model.safetensors \
-        output/finetune/ckpt/settings.json
+        output/finetune/ckpt/settings.json \
+        output/finetune/ckpt/sha256sums.txt
 """
 
 from __future__ import annotations
@@ -251,6 +252,14 @@ def train(
     settings["hash"] = key
     settings["device"] = device
     (out / "settings.json").write_text(json.dumps(settings, indent=1))
+    assets = [
+        out / "finetuned-ckpt" / "adapter_config.json",
+        out / "finetuned-ckpt" / "adapter_model.safetensors",
+        out / "settings.json",
+    ]
+    (out / "sha256sums.txt").write_text(
+        "".join(f"{_sha256(p)}  {p.name}\n" for p in assets)
+    )
     print(f"settings hash {key}")
 
 

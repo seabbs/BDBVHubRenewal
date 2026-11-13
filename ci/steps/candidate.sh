@@ -162,9 +162,14 @@ fi
 
 store="null"
 [ -f "$out/store.json" ] && store=$(cat "$out/store.json")
+# The fine-tuned checkpoint the nowcast loaded, if any.
+checkpoint="null"
+[ -f "$out/submission/checkpoint.json" ] \
+  && checkpoint=$(cat "$out/submission/checkpoint.json")
 cat > "$out/run.json" << EOF
 {"candidate": "$CAND_ID", "kind": "$CAND_KIND", "label": "$CAND_LABEL",
  "store": $store,
+ "checkpoint": $checkpoint,
  "model": "$model",
  "config": "$CAND_CONFIG", "sampler": $CAND_SAMPLER,
  "package_version": "$(cli --version 2> /dev/null || echo unknown)",

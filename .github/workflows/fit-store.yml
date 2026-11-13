@@ -143,6 +143,8 @@ jobs:
           MODELS: ${{ inputs.models }}
           ORIGINS: ${{ inputs.origins }}
           RETRY: ${{ inputs.retry_failed }}
+          # The fine-tuned models list the releases for their checkpoint.
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           args=(--store "$STORE" --out matrix.json --keys keys.json)
           # shellcheck disable=SC2206
@@ -228,15 +230,16 @@ jobs:
         with:
           path: ~/.cache/huggingface
           key: chronos-2-29ec3766d36d6f73f0696f85560a422f50e8498c
-      # The fine-tuned models download the LoRA adapter config/finetune.toml
-      # pins from its release, cached by that file. With no release the
-      # fit fails and is stored as failed.
-      - name: Cache the fine-tuned checkpoint
+      # The fine-tuned models download the LoRA adapter of the newest
+      # chronos-ft-* release (or the one config/finetune.toml pins), kept
+      # by its hash. A missing adapter is stored as failed.
+      - name: Cache the fine-tuned checkpoints
         if: endsWith(matrix.model, '_ft')
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/bdbvhubrenewal
-          key: chronos-ft-${{ hashFiles('config/finetune.toml') }}
+          key: chronos-ft-${{ github.run_id }}
+          restore-keys: chronos-ft-
       # A fit that raises is stored as failed and is not retried until
       # its inputs change or a dispatch sets retry_failed. One that times
       # out is retried next run.
@@ -246,6 +249,7 @@ jobs:
           MODEL: ${{ matrix.model }}
           ORIGIN: ${{ matrix.origin }}
           KEY: ${{ matrix.key }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           if ! uv run bdbvhubrenewal fit-store fit --model "$MODEL" \
             --origin "$ORIGIN" --store new; then

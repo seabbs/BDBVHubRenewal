@@ -82,10 +82,13 @@ A block holds at most 26 provinces when weekly and five when daily, so daily blo
 Training is 1,000 steps of LoRA at learning rate $10^{-4}$, with 5% of blocks held out (`scripts/finetune_chronos.py`).
 
 A checkpoint is named by its settings hash, of the blocks, the code and the training settings.
-The models load the checkpoint pinned in `config/finetune.toml`, by its hash and the SHA-256 of its adapter files.
-It is downloaded once from the repository's release `chronos-ft-<hash>`.
-A fit fails if that release is missing or holds another checkpoint.
-The fit store keeps a failed fit until its inputs change, so a fit that failed before its release was published is retried by running the Fit store workflow with `retry_failed` (`gh workflow run fit-store.yml -R seabbs/BDBVHubRenewal -f retry_failed=true -f models="fm_chronos_weekly_ragged_ft fm_chronos_daily_ragged_ft"`).
+Each checkpoint is published as the repository's release `chronos-ft-<hash>`, with a `sha256sums.txt` of its files.
+The models load the newest such release by publish date, unless `config/finetune.toml` pins a hash.
+The checkpoint's hash and adapter SHA-256 key the stored fits, so a new release refits the `_ft` models, and each stored fit records the checkpoint it used.
+The adapter is downloaded once and checked against `sha256sums.txt` and the settings hash.
+If GitHub cannot be reached, building a model fails rather than fall back to a checkpoint downloaded before.
+A fit whose adapter cannot be downloaded is stored as failed, and the fit store keeps it until its inputs change.
+Such fits are retried by running the Fit store workflow with `retry_failed` (`gh workflow run fit-store.yml -R seabbs/BDBVHubRenewal -f retry_failed=true -f models="fm_chronos_weekly_ragged_ft fm_chronos_daily_ragged_ft"`).
 
 ## Limitations
 

@@ -1101,13 +1101,16 @@ def _nowcast(args: argparse.Namespace) -> int:
     # A renewal model given by --model is fitted here.
     host_devices(int(sampler_settings()["num_chains"]))
     hub_config = Path(args.data) / "hub-config" / "tasks.json"
+    checkpoint = None
     try:
         task, handled = _task(args)
         if args.config:
             config = get_config(args.config)
             result = run_forecast(config, task, args.fit)
         else:
-            samples = get_model(args.model).forecast(task)
+            model = get_model(args.model)
+            checkpoint = getattr(model, "checkpoint", None)
+            samples = model.forecast(task)
             check_samples(samples, task)
             result = Forecast(samples)
         zones, zone_note = _zones(args, task, result.samples, hub_config)
@@ -1131,6 +1134,15 @@ def _nowcast(args: argparse.Namespace) -> int:
     n_zones = 0 if zones is None else int(zones["location"].nunique())
     zone_record = {"zones": n_zones > 0, "n_zones": n_zones, "note": zone_note}
     (Path(args.out) / "zones.json").write_text(json.dumps(zone_record) + "\n")
+    # The fine-tuned checkpoint the model loaded, for the PR body.
+    if checkpoint is not None:
+        record = {
+            "tag": f"chronos-ft-{checkpoint.hash}",
+            "sha256": dict(checkpoint.sha256),
+        }
+        (Path(args.out) / "checkpoint.json").write_text(
+            json.dumps(record) + "\n"
+        )
     for note in handled:
         print(f"Handled: {note}")
     print(f"Wrote {path} ({len(table)} rows, locations incl. {NATIONAL}).")

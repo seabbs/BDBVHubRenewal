@@ -74,6 +74,9 @@ jobs:
       # stored new fits. `load` writes them into results/ with a record of
       # the fits used, which each page with their results states.
       - name: Load the stored fits
+        env:
+          # The fine-tuned models list the releases for their checkpoint.
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           scripts/fit-store.sh fetch output/fit-store
           uv run bdbvhubrenewal fit-store load --store output/fit-store
