@@ -8,18 +8,23 @@ Kinshasa time (22:59 UTC) on the Tuesday four days before it.
 Three sources give samples.
 
 - `hub_samples`: every team's files in a clone of the hub, our
-  submissions included. A file may hold several forecasts; the one with
-  the latest `forecast_date` is kept.
+  submissions and the hub's baseline (`HUB_BASELINE`) included. A file
+  may hold several forecasts; the one with the latest `forecast_date` is
+  kept.
 - `candidate_samples`: files of our models' forecasts in the layout of
   `data/candidate-forecasts.csv.gz`.
 - `store_samples`: the fit store branch. Each model and origin keeps the
   first fit stored, and only if it was made before its round closed.
 
-`to_quantiles` turns samples into the seven hubverse quantile levels the
-hub used for its quantile round and its dashboard. `load` joins the
-latest release of the hub's target data as `truth`. `score` gives the
-weighted interval score (WIS) of each forecast on the natural scale and
-`relative_wis` each model's WIS relative to the hub's baseline.
+`rolling_truth` gives each target week's count as reported `delay_days`
+after the week ended, as the German nowcast hub did (Wolffram et al.
+2023). Weeks whose release that far after them is not out yet have no
+truth. `load` joins it to the samples as `truth`, one row per sample.
+`score` scores the samples with the repo's sample scores
+(`bdbvhubrenewal.evaluation.scoring`): CRPS on the natural and `log1p`
+scales, bias, and 50% and 90% coverage. `relative_scores` divides each
+model's mean CRPS by the hub's baseline's on the forecasts every compared
+model made.
 """
 
 from __future__ import annotations
@@ -27,34 +32,40 @@ from __future__ import annotations
 import gzip
 import json
 import subprocess
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from pathlib import Path
 from typing import Final
 
 import numpy as np
 import pandas as pd
+from bdbvhubrenewal.evaluation.scoring import (
+    bias_sample,
+    coverage_sample,
+    crps_sample,
+    relative_skill,
+)
 
 __all__ = [
     "COLUMNS",
+    "DELAY_DAYS",
     "HUB_BASELINE",
-    "QUANTILE_LEVELS",
+    "SCORES",
     "TARGET",
     "candidate_samples",
     "hub_samples",
-    "hub_truth",
     "load",
-    "relative_wis",
+    "relative_scores",
+    "rolling_truth",
     "round_close",
     "score",
     "store_samples",
-    "to_quantiles",
 ]
 
 TARGET: Final = "wk inc confirmed cases"
 """The target of the hub's weekly round."""
 
-QUANTILE_LEVELS: Final = (0.025, 0.1, 0.25, 0.5, 0.75, 0.9, 0.975)
-"""The hubverse quantile levels of the hub's quantile round."""
+DELAY_DAYS: Final = 28
+"""Days after a target week ends at which its count is taken as truth."""
 
 COLUMNS: Final = (
     "study",
@@ -63,7 +74,7 @@ COLUMNS: Final = (
     "origin_date",
     "target_date",
     "horizon",
-    "quantile_level",
+    "sample_id",
     "value",
     "truth",
 )
@@ -73,7 +84,9 @@ HUB_BASELINE: Final = "BDBVHub-baseline"
 """The hub's own baseline: an additive random walk from horizon -3."""
 
 KEYS: Final = ["model", "location", "origin_date", "target_date"]
-SAMPLE_COLUMNS: Final = [*KEYS, "sample", "value"]
+SAMPLE_COLUMNS: Final = [*KEYS, "sample_id", "value"]
+SCORES: Final = ("crps", "log_crps", "bias", "coverage_50", "coverage_90")
+"""The scores `score` gives for each forecast."""
 
 
 def round_close(origin_date: pd.Timestamp) -> pd.Timestamp:
@@ -88,12 +101,14 @@ def _samples(frame: pd.DataFrame) -> pd.DataFrame:
         columns={
             "reference_date": "origin_date",
             "target_end_date": "target_date",
-            "output_type_id": "sample",
+            "output_type_id": "sample_id",
+            "sample": "sample_id",
         }
     )
     for col in ("origin_date", "target_date"):
         out[col] = pd.to_datetime(out[col])
     out["value"] = out["value"].astype(float)
+    out["sample_id"] = out["sample_id"].astype(int)
     return out[SAMPLE_COLUMNS].reset_index(drop=True)
 
 
@@ -187,35 +202,34 @@ def store_samples(
     return pd.concat(frames, ignore_index=True)
 
 
-def hub_truth(hub: str | Path) -> pd.DataFrame:
-    """Return the latest release of the hub's target data."""
+def rolling_truth(
+    hub: str | Path, delay_days: int = DELAY_DAYS
+) -> pd.DataFrame:
+    """Return each target week's count as reported `delay_days` after it.
+
+    The count is from the latest release on or before the week's end plus
+    `delay_days`. A week is left out until a release on or after that
+    day exists, so its truth no longer changes.
+    """
     data = pd.read_csv(Path(hub, "target-data", "time-series.csv"))
     data = data[data["target"] == TARGET]
-    data = data[data["as_of"] == data["as_of"].max()]
+    as_of = pd.to_datetime(data["as_of"])
+    week = pd.to_datetime(data["target_end_date"])
+    due = week + pd.Timedelta(days=delay_days)
+    data = data.assign(as_of=as_of, target_date=week, due=due)
+    data = data[(data["as_of"] <= data["due"]) & (data["due"] <= as_of.max())]
+    data = (
+        data.sort_values("as_of")
+        .groupby(["location", "target_date"], as_index=False)
+        .last()
+    )
     return pd.DataFrame(
         {
             "location": data["location"],
-            "target_date": pd.to_datetime(data["target_end_date"]),
+            "target_date": data["target_date"],
             "truth": data["observation"].astype(float),
-            "as_of": pd.to_datetime(data["as_of"]),
         }
     ).reset_index(drop=True)
-
-
-def to_quantiles(samples: pd.DataFrame) -> pd.DataFrame:
-    """Return the quantiles of each forecast's samples."""
-    levels = np.asarray(QUANTILE_LEVELS)
-    rows = []
-    for key, group in samples.groupby(KEYS, sort=True):
-        values = np.quantile(group["value"].to_numpy(float), levels)
-        rows.append(
-            pd.DataFrame(
-                dict(zip(KEYS, key, strict=True)), index=levels
-            ).assign(quantile_level=levels, value=values)
-        )
-    if not rows:
-        return pd.DataFrame(columns=[*KEYS, "quantile_level", "value"])
-    return pd.concat(rows, ignore_index=True)
 
 
 def load(
@@ -223,13 +237,15 @@ def load(
     candidates: Iterable[str | Path] = (),
     store: str | Path | None = None,
     store_ref: str = "origin/fit-store",
+    delay_days: int = DELAY_DAYS,
 ) -> pd.DataFrame:
-    """Return every forecast as quantiles with the latest truth.
+    """Return every forecast's samples with the rolling truth.
 
     `hub` is a clone of the hub. `candidates` are files of our models'
     stored forecasts and `store` a clone holding the fit store branch
     `store_ref`. A model and round in more than one source is taken from
-    the first of hub, candidates and store.
+    the first of hub, candidates and store. `truth` is missing where the
+    release `delay_days` after the week is not out yet.
     """
     parts = [hub_samples(hub), candidate_samples(candidates)]
     if store is not None:
@@ -237,16 +253,11 @@ def load(
     seen: set[tuple[str, pd.Timestamp]] = set()
     kept = []
     for part in parts:
-        pairs = set(zip(part["model"], part["origin_date"], strict=True))
-        mask = [
-            (m, o) not in seen
-            for m, o in zip(part["model"], part["origin_date"], strict=True)
-        ]
-        kept.append(part[mask])
-        seen |= pairs
-    samples = pd.concat([k for k in kept if not k.empty], ignore_index=True)
-    table = to_quantiles(samples)
-    truth = hub_truth(hub).drop(columns="as_of")
+        pairs = list(zip(part["model"], part["origin_date"], strict=True))
+        kept.append(part[[p not in seen for p in pairs]])
+        seen |= set(pairs)
+    table = pd.concat([k for k in kept if not k.empty], ignore_index=True)
+    truth = rolling_truth(hub, delay_days)
     table = table.merge(truth, on=["location", "target_date"], how="left")
     table["horizon"] = (
         (table["target_date"] - table["origin_date"]).dt.days // 7
@@ -256,65 +267,56 @@ def load(
 
 
 def score(table: pd.DataFrame) -> pd.DataFrame:
-    """Score each forecast with truth by WIS, its median and coverage.
+    """Score each forecast with truth from its samples.
 
-    WIS follows the hubverse (scoringutils) definition: the absolute
-    error of the median weighted by a half plus each central interval's
-    score weighted by alpha over two, divided by the number of intervals
-    plus a half. Coverage is of the 50%, 80% and 95% intervals.
+    Returns one row per forecast: its keys, `horizon`, `truth`,
+    `n_samples` and `SCORES`. `log_crps` is the CRPS of `log1p` of the
+    samples against `log1p` of the truth. Bias is positive for
+    overprediction.
     """
-    keys = [c for c in (*KEYS, "horizon") if c in table]
+    keys = [*KEYS, "horizon"]
     table = table.dropna(subset=["truth"])
     rows = []
     for key, group in table.groupby(keys, sort=True):
-        q = dict(zip(group["quantile_level"], group["value"], strict=True))
-        y = group["truth"].iloc[0]
-        median = q[0.5]
-        total = 0.5 * abs(y - median)
-        cover = {}
-        lower_levels = [lv for lv in QUANTILE_LEVELS if lv < 0.5]
-        for lower in lower_levels:
-            alpha = 2 * lower
-            lo, hi = q[lower], q[round(1 - lower, 3)]
-            interval = (hi - lo) + 2 / alpha * (max(lo - y, 0) + max(y - hi, 0))
-            total += alpha / 2 * interval
-            cover[f"cover_{round(100 * (1 - alpha))}"] = lo <= y <= hi
+        y = float(group["truth"].iloc[0])
+        x = group["value"].to_numpy(float)
         rows.append(
             {
                 **dict(zip(keys, key, strict=True)),
                 "truth": y,
-                "wis": total / (len(lower_levels) + 0.5),
-                "ae_median": abs(y - median),
-                **cover,
+                "n_samples": x.size,
+                "crps": crps_sample(y, x),
+                "log_crps": crps_sample(float(np.log1p(y)), np.log1p(x)),
+                "bias": bias_sample(y, x),
+                "coverage_50": coverage_sample(y, x, 0.5),
+                "coverage_90": coverage_sample(y, x, 0.9),
             }
         )
-    columns = [
-        *keys,
-        "truth",
-        "wis",
-        "ae_median",
-        "cover_95",
-        "cover_80",
-        "cover_50",
-    ]
-    return pd.DataFrame(rows, columns=columns)
+    return pd.DataFrame(rows, columns=[*keys, "truth", "n_samples", *SCORES])
 
 
-def relative_wis(
-    scores: pd.DataFrame, baseline: str = HUB_BASELINE
+def relative_scores(
+    scores: pd.DataFrame,
+    baseline: str = HUB_BASELINE,
+    by: Sequence[str] = (),
 ) -> pd.DataFrame:
-    """Return each model's mean WIS over the baseline's on shared forecasts.
+    """Return each model's mean CRPS over the baseline's.
 
-    A forecast is shared when the baseline forecast the same location,
-    round and target week. `n` is the number of shared forecasts.
+    Only forecasts (location, round and target week) that every model in
+    `scores` made are compared, so pass the models to compare. The
+    baseline has 1. Also gives `log_crps`, bias and coverage means.
     """
-    keys = ["location", "origin_date", "target_date"]
-    base = scores.loc[scores["model"] == baseline, [*keys, "wis"]]
-    paired = scores.merge(base, on=keys, suffixes=("", "_baseline"))
-    out = paired.groupby("model", as_index=False).agg(
-        n=("wis", "size"),
-        wis=("wis", "mean"),
-        wis_baseline=("wis_baseline", "mean"),
+    match = ["location", "origin_date", "target_date"]
+    n_models = scores["model"].nunique()
+    shared = (
+        scores.groupby(match)["model"].nunique().loc[lambda n: n == n_models]
     )
-    out["relative_wis"] = out["wis"] / out["wis_baseline"]
-    return out
+    scores = scores.merge(shared.index.to_frame(index=False), on=match)
+    return relative_skill(
+        scores,
+        baseline=baseline,
+        by=by,
+        metrics=("crps", "log_crps"),
+        match_on=match,
+        means=("crps", "log_crps", "bias", "coverage_50", "coverage_90"),
+    )
