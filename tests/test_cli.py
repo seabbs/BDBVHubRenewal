@@ -660,13 +660,10 @@ def test_cli_fit_store_archives_a_rounds_fits(
     assert main([*fit, "--origin", "2026-10-24"]) == 0
     out = tmp_path / "archive" / "candidates.csv.gz"
     args = ["fit-store", "archive", "--store", str(store), "--out", str(out)]
-    args += ["--origins", "2026-10-24", "--closes", "2099-01-01T00:00:00+01:00"]
-    assert main(args) == 0
+    assert main([*args, "--origins", "2026-10-24", "--models", "flat"]) == 0
     table = pd.read_csv(out)
     assert set(table["vintage"]) == {"2026-10-24"}
-    assert table["prospective"].all()
     assert table["current"].all()
-    assert main([*args[:-2], "--closes", "2020-01-01T00:00:00+01:00"]) == 0
-    assert not pd.read_csv(out)["prospective"].any()
-    # The round close is needed.
-    assert main(args[:-2]) == 1
+    # An origin that is not a real one, or none, is an error.
+    assert main([*args, "--origins", "2020-01-04"]) == 1
+    assert main(args) == 1

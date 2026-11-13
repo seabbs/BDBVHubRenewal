@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import dataclasses
-import datetime as dt
 import json
 import shutil
 from pathlib import Path
@@ -440,61 +439,77 @@ def test_a_model_with_no_config_stores_no_files(
     assert stored.files == {}
 
 
-def _fitted_at(stored: store.StoredFit, when: str) -> store.StoredFit:
-    """Return the fit as if it were made at `when`."""
-    return dataclasses.replace(stored, meta={**stored.meta, "fitted_at": when})
-
-
-def test_the_archive_keeps_each_models_fit_at_the_round_close(
-    fitted_flat: str, tasks: dict[str, ForecastTask], tmp_path: Path
+def test_the_archive_holds_every_models_forecast_for_a_round(
+    fitted_flat: str,
+    tasks: dict[str, ForecastTask],
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     from bdbvhubrenewal.evaluation import store_archive
+    from bdbvhubrenewal.forecasters import base
 
+    # `plain` is a model the store does not hold, as `randomwalk` is.
+    factory = base._REGISTRY[fitted_flat].factory
+
+    def plain() -> object:
+        model = factory()
+        model.name = "plain"
+        return model
+
+    monkeypatch.setitem(
+        base._REGISTRY, "plain", base.ModelSpec("plain", plain, "Not fitted.")
+    )
     root = tmp_path / "store"
-    keys = store.current_keys(tasks, [fitted_flat], {}, "c")
-    closes = dt.datetime.fromisoformat("2026-11-10T23:00:00+01:00")
-    before, after = "2026-11-10T21:00:00+00:00", "2026-11-10T22:30:00+00:00"
-    origins = sorted(tasks)
-    prospective, refitted, backfilled, broken = origins[-4:]
-    # A fit of this code made before the close.
-    store.write_fit(
-        root,
-        _fitted_at(store.fit(fitted_flat, tasks[prospective], {}, "c"), before),
-    )
-    # A fit of older code before the close and of this code after it.
-    old = _fitted_at(store.fit(fitted_flat, tasks[refitted], {}, "old"), before)
+    models = [fitted_flat, "plain"]
+    code = dict.fromkeys(models, "c")
+    current, stale, broken = sorted(tasks)[-3:]
+    round_tasks = {o: tasks[o] for o in (current, stale, broken)}
+    keys = store.current_keys(round_tasks, models, {}, code)
+    now = store.fit(fitted_flat, tasks[current], {}, "c")
+    store.write_fit(root, now)
+    old = store.fit(fitted_flat, tasks[stale], {}, "old")
     store.write_fit(root, old)
-    store.write_fit(
-        root,
-        _fitted_at(store.fit(fitted_flat, tasks[refitted], {}, "c"), after),
-    )
-    # Only a fit made after the close.
-    late = _fitted_at(store.fit(fitted_flat, tasks[backfilled], {}, "c"), after)
-    store.write_fit(root, late)
-    # A failed fit, and an origin with none, have no rows.
-    meta = {**late.meta, "origin": broken, "key": keys[(fitted_flat, broken)]}
+    meta = {**old.meta, "origin": broken, "key": keys[(fitted_flat, broken)]}
     store.write_fit(root, store.failed(meta, RuntimeError("x")))
 
-    table = store_archive.archive(root, keys, closes)
-    by_origin = table.groupby("vintage").first()
-    assert set(by_origin.index) == {prospective, refitted, backfilled}
-    assert set(table["model"]) == {fitted_flat}
-    got = by_origin.loc[prospective]
-    assert got["fitted_at"] == before
-    assert got["key"] == keys[(fitted_flat, prospective)]
-    assert bool(got["current"])
-    assert bool(got["prospective"])
-    got = by_origin.loc[refitted]
-    assert got["key"] == old.meta["key"]
-    assert got["commit"] == old.meta["commit"]
-    assert not bool(got["current"])
-    assert bool(got["prospective"])
-    got = by_origin.loc[backfilled]
-    assert got["fitted_at"] == after
-    assert bool(got["current"])
-    assert not bool(got["prospective"])
-    # Every week and sample of the stored forecast is kept.
-    rows = table.loc[table["vintage"] == backfilled, late.forecasts.columns]
-    pd.testing.assert_frame_equal(
-        rows.reset_index(drop=True), late.forecasts, check_dtype=False
+    table = store_archive.archive(root, round_tasks, models, {}, code)
+    assert list(table.columns) == list(store_archive.COLUMNS)
+    fits = table.drop_duplicates(["model", "vintage"]).set_index(
+        ["model", "vintage"]
     )
+    # The stored fits as the store holds them; a failed fit has no rows.
+    assert set(fits.loc[fitted_flat].index) == {current, stale}
+    got = fits.loc[(fitted_flat, current)]
+    assert got["key"] == now.meta["key"]
+    assert got["fitted_at"] == now.meta["fitted_at"]
+    assert bool(got["current"])
+    got = fits.loc[(fitted_flat, stale)]
+    assert got["key"] == old.meta["key"]
+    assert not bool(got["current"])
+    rows = table.loc[
+        (table["model"] == fitted_flat) & (table["vintage"] == current),
+        now.forecasts.columns,
+    ]
+    pd.testing.assert_frame_equal(
+        rows.reset_index(drop=True), now.forecasts, check_dtype=False
+    )
+    # The model the store does not hold is forecast at every origin, at
+    # its current key, and nothing is written to the store.
+    assert set(fits.loc["plain"].index) == set(round_tasks)
+    assert fits.loc["plain", "current"].all()
+    assert fits.loc[("plain", current), "key"] == keys[("plain", current)]
+    assert not (root / "plain").exists()
+    # With nothing to archive, the table still has its columns.
+    empty = store_archive.archive(root, round_tasks, [], {}, {})
+    assert empty.empty
+    assert list(empty.columns) == list(store_archive.COLUMNS)
+
+
+def test_the_candidate_models_are_the_stored_and_the_policy_models() -> None:
+    from bdbvhubrenewal.evaluation import store_archive
+
+    models = store_archive.candidate_models(ROOT / "ci/policy.toml")
+    assert "randomwalk" in models
+    assert "randomwalknowcast" in models
+    assert set(store.stored_models()) <= set(models)
+    assert len(models) == len(set(models))

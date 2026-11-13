@@ -10,8 +10,6 @@
 #   RENEWAL_ID, RENEWAL_ACTION, RENEWAL_PR_URL, RENEWAL_PRODUCED_BY,
 #   RENEWAL_SKIPPED and the same for BASELINE_: each hub model that ran
 #   BASELINE_GATE  baseline's gate folder, when it ran
-#   STORE          where to fetch the fit store (default output/fit-store)
-#   SKIP_FETCH=true  use STORE as it is (the dry run)
 # shellcheck source=ci/steps/lib.sh
 source "$(dirname "$0")/lib.sh"
 
@@ -66,25 +64,6 @@ archive_gate "$WORK/gate" "$archive"
 baseline_archive=$archive
 [ -d "$WORK/gate" ] && baseline_archive="$archive/baseline"
 [ -n "${BASELINE_GATE:-}" ] && archive_gate "$BASELINE_GATE" "$baseline_archive"
-
-# Every stored model's forecasts at the round's origin, as the fit store
-# held them when the window closed, with each fit's time
-# (`fit-store archive`), so each candidate can be scored prospectively.
-# A missing archive does not stop the round being recorded.
-if [ -n "${AS_OF:-}" ]; then
-  store=${STORE:-output/fit-store}
-  if [ "${SKIP_FETCH:-false}" != true ]; then
-    rm -rf "$store"
-    "$CI_DIR/../scripts/fit-store.sh" fetch "$store"
-  fi
-  closes=$(sci python -c 'import datetime as dt, sys
-from submission_ci.window import window_for
-ref = dt.date.fromisoformat(sys.argv[1])
-print(window_for(ref).closes.isoformat())' "$REFERENCE_DATE")
-  cli fit-store archive --store "$store" --origins "$AS_OF" \
-    --closes "$closes" --out "$archive/candidates.csv.gz" \
-    || note "The stored forecasts at $AS_OF could not be archived."
-fi
 
 # Each hub model that ran, under its id: status, PR and files.
 #   record_model ID ACTION PR_URL PRODUCED_BY SKIPPED ARCHIVE
