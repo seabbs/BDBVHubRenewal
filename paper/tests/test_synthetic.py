@@ -262,9 +262,22 @@ def test_factors_give_each_series_its_outbreak_settings() -> None:
     assert list(out.columns) == [
         "location",
         *[f for f in synthetic.FACTORS if f in settings],
+        "delay_q99",
     ]
     assert set(out["location"]) == {
         synthetic.series_label("9-0001", p) for p in (NATIONAL, "P01", "P02")
     }
     assert (out["delay_mean"] == 5.0).all()
     assert (out["n_places"] == 2).all()
+
+
+def test_delay_q99_is_the_outbreaks_99th_delay_percentile_in_days() -> None:
+    # Delays of 0, 7 and 20 days hold 3, 2 and 1 of each 6 cases, so the
+    # 99th percentile is 20 days.
+    counts = _counts(("P01", "P02"))
+    assert synthetic.delay_quantile(counts, 0.99) == 20
+    assert synthetic.delay_quantile(counts, 0.5) == 0
+    assert synthetic.delay_quantile(counts, 0.6) == 7
+    settings = pd.DataFrame({"outbreak": ["9-0001"], "gt_mean": [10.0]})
+    out = synthetic.factor_table(counts, settings)
+    assert (out["delay_q99"] == 20).all()
