@@ -301,3 +301,17 @@ def test_relative_scores_use_forecasts_all_models_share():
     assert rel.loc["b", "relative_crps"] == pytest.approx(2.0)
     assert rel.loc[base, "relative_crps"] == 1
     assert "relative_log_crps" in rel
+
+
+def test_reporting_delay_is_first_week_age_reaching_level(hub):
+    # Against the 2026-11-08 release, the 2026-10-24 release has week
+    # 2026-10-17 (age 1 week) at 3 of 9. The 2026-11-01 release has it at
+    # 8 of 9 (age 3 weeks, rounded up) and week 2026-10-24 at 10 of 30
+    # (age 2 weeks, rounded up).
+    assert ebola.reporting_delay(hub, level=0.8) == 21
+    assert ebola.reporting_delay(hub, level=0.95) is None
+
+
+def test_reporting_delay_skips_releases(hub):
+    assert ebola.reporting_delay(hub, level=0.3, skip=("2026-11-01",)) == 7
+    assert ebola.reporting_delay(hub, level=0.8, skip=("2026-11-01",)) is None
