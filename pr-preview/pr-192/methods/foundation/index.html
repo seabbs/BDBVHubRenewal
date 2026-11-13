@@ -57,7 +57,7 @@
     
       <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
     
-      <link rel="stylesheet" href="../../stylesheets/extra.css?v=1c6923d2">
+      <link rel="stylesheet" href="../../stylesheets/extra.css?v=afdda586">
     
     <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
@@ -782,6 +782,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#fine-tuning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fine-tuning
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#limitations" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1043,6 +1054,34 @@
     
   
     Comparison with hub forecasts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../germany/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    German nowcast benchmark
   
 
     
@@ -2073,6 +2112,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#fine-tuning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fine-tuning
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#limitations" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2109,11 +2159,13 @@
 
 
 <h1 id="foundation-models">Foundation models<a class="headerlink" href="#foundation-models" title="Permanent link">&para;</a></h1>
-<p class="page-subtitle">Four experimental candidate models that give the hub target's releases to the pretrained Chronos-2 time series foundation model<sup id="fnref:chronos2"><a class="footnote-ref" href="#fn:chronos2">1</a></sup>.</p>
+<p class="page-subtitle">Six experimental candidate models that give the hub target's releases to the Chronos-2 time series foundation model<sup id="fnref:chronos2"><a class="footnote-ref" href="#fn:chronos2">1</a></sup>.</p>
 <p>The data and notation are on the <a href="../data/#target-and-notation">Data methods page</a>.
 The models are named <code>fm_chronos_&lt;source&gt;_&lt;layout&gt;</code>, with two sources of the hub target and two layouts.
-None is fitted to these data: Chronos-2 forecasts from its pretrained weights, in context.
-None is submitted.</p>
+None is fitted to these data: Chronos-2 forecasts in context, from its pretrained weights or a fine-tuned checkpoint.
+The two <code>fm_chronos_&lt;source&gt;_ragged_ft</code> models are the ragged models with Chronos-2 fine-tuned on simulated outbreaks (<a href="#fine-tuning">Fine-tuning</a>).
+Each is a candidate, not submitted.
+The hub model <code>seabbs-chronos2_ft</code> is set up to submit <code>fm_chronos_daily_ragged_ft</code> and is off until it is opted in (<a href="../../submission/opting-in/">Opting in</a>).</p>
 <p>In brief, each model:</p>
 <ol>
 <li>lays out the hub target of every release by place, step and release lag (<a href="#releases">Releases</a>);</li>
@@ -2140,7 +2192,8 @@ Chronos-2 forecasts every target series in the block jointly, from one shared la
 Health zones are split from the provinces as for the other fitted models (<a href="../baselines/#health-zones">Health zones</a>).</p>
 <ul>
 <li><strong>Complete</strong> (<code>*_complete</code>): the targets <span class="arithmatex">\(X_{p,t}\)</span> for <span class="arithmatex">\(t \le t^*\)</span>.
-  <span class="arithmatex">\(t^*\)</span> is the earliest over places of the week <code>randomwalk</code> starts its walk from, the latest week 95% complete under its delay (<a href="../baselines/#forecast">Baseline models</a>).</li>
+  <span class="arithmatex">\(t^*\)</span> is the earliest over places of the week <code>randomwalk</code> starts its walk from, the latest week 95% complete under its delay (<a href="../baselines/#forecast">Baseline models</a>).
+  It comes from the delay alone, so it needs no walk spread.</li>
 <li><strong>Ragged</strong> (<code>*_ragged</code>): the same targets, with one lag series per place and lag <span class="arithmatex">\(d &lt; D\)</span>, indexed by onset step as in a regression nowcast.
   Lag series <span class="arithmatex">\(d\)</span> holds <span class="arithmatex">\(Y_{p,t,d}\)</span>, missing where it is not yet reported, and Chronos-2 masks the missing values.
   <span class="arithmatex">\(t^* = c - D\)</span>, the last step whose count is at lag <span class="arithmatex">\(D\)</span> or more, with <span class="arithmatex">\(D = 4\)</span> weeks or <span class="arithmatex">\(D = 28\)</span> days.
@@ -2161,9 +2214,32 @@ The context is every step from the first onset in the releases to <span class="a
 <h2 id="scoring">Scoring<a class="headerlink" href="#scoring" title="Permanent link">&para;</a></h2>
 <p>The models forecast final counts and model no delay.
 So the release backtest scores them on the complete target only, the weeks the latest release reports in full (<a href="../evaluation/#real-releases">Evaluation</a>).</p>
+<h2 id="fine-tuning">Fine-tuning<a class="headerlink" href="#fine-tuning" title="Permanent link">&para;</a></h2>
+<p>The <code>_ft</code> models load one LoRA checkpoint of Chronos-2, trained on 2,000 outbreaks simulated with epinowcast's generative model (<code>scripts/finetune_simulate.R</code>).
+The simulator, <code>enw_simulate</code>, is on epinowcast's <code>feature/829-simulate-forecast</code> branch, pinned at commit <code>e084b080</code>, and is not yet in a release.
+Each outbreak is a renewal process with a drawn log <span class="arithmatex">\(R_t\)</span> path, a reporting delay that drifts and differs by place, day-of-week effects and negative binomial noise, in one to 26 places.
+Each gives a daily reporting triangle, and its weekly releases are summed from it.
+A training block cuts an outbreak's releases at one cut-off and lays them out as the ragged layout does, with the target past <span class="arithmatex">\(t^*\)</span> the outbreak's final counts (<code>forecasters.finetune.training_block</code>).
+<span class="arithmatex">\(D\)</span> is drawn from 2 to 7 weeks, or 14 to 49 days, so the model is not tied to one <span class="arithmatex">\(D\)</span>.
+Each outbreak gives up to four weekly and four daily blocks, with the country and a random subset of its places.
+A block holds at most 26 provinces when weekly and five when daily, so daily blocks fit GPU memory.
+Training is 1,000 steps of LoRA at learning rate <span class="arithmatex">\(10^{-4}\)</span>, with 5% of blocks held out (<code>scripts/finetune_chronos.py</code>).</p>
+<p>A checkpoint is named by its settings hash, of the blocks, the code and the training settings.
+The first release, <code>chronos-ft-2c2b22a03107</code>, was trained from earlier code, so its hash cannot be reproduced from this repository.
+Later releases are trained from the code here, so retraining from it gives the same hash.
+Each checkpoint is published as the repository's release <code>chronos-ft-&lt;hash&gt;</code>, with a <code>sha256sums.txt</code> of its files.
+The models load the newest such release by publish date, unless <code>config/finetune.toml</code> pins a hash.
+The checkpoint's hash and adapter SHA-256 key the stored fits, so a new release refits the <code>_ft</code> models, and each stored fit records the checkpoint it used.
+The adapter is downloaded once and checked against <code>sha256sums.txt</code> and the settings hash.
+The fit store resolves the release once per run, with the workflow's GitHub token, and passes its hash to every fit in <code>BDBV_CHRONOS_FT</code>.
+If GitHub cannot be reached, building a model fails rather than fall back to a checkpoint downloaded before.
+A fit whose adapter cannot be downloaded is stored as failed, and the fit store keeps it until its inputs change.
+Such fits are retried by running the Fit store workflow with <code>retry_failed</code> (<code>gh workflow run fit-store.yml -R seabbs/BDBVHubRenewal -f retry_failed=true -f models="fm_chronos_weekly_ragged_ft fm_chronos_daily_ragged_ft"</code>).</p>
 <h2 id="limitations">Limitations<a class="headerlink" href="#limitations" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Chronos-2 is used as pretrained. It has not seen these data or outbreaks like them.</li>
+<li>The zero-shot models use Chronos-2 as pretrained. It has not seen these data or outbreaks like them.</li>
+<li>The fine-tuned models have seen only simulated outbreaks, whose delays and dynamics may not match these data.</li>
+<li>The daily fine-tuned model was trained on blocks of at most five provinces but forecasts all 26 in one block.</li>
 <li>Draws are independent across steps and places, so every weekly value of the daily models, a sum of seven daily draws, is too narrow, as are sums over weeks or places.</li>
 </ul>
 <div class="footnote">
@@ -2315,7 +2391,7 @@ So the release backtest scores them on the complete target only, the weeks the l
       
         <script src="../../javascripts/tablefilter.js?v=774f66a6"></script>
       
-        <script src="../../javascripts/explorer.js?v=84b4d7fb"></script>
+        <script src="../../javascripts/explorer.js?v=b4440ba7"></script>
       
         <script src="../../javascripts/scorechart.js?v=1c27a70d"></script>
       

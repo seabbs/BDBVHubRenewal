@@ -57,7 +57,7 @@
     
       <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
     
-      <link rel="stylesheet" href="../../stylesheets/extra.css?v=1c6923d2">
+      <link rel="stylesheet" href="../../stylesheets/extra.css?v=afdda586">
     
     <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
@@ -914,6 +914,34 @@
     
   
     Comparison with hub forecasts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../germany/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    German nowcast benchmark
   
 
     
@@ -5459,7 +5487,19 @@ zones do not sum to their provinces.</p>
 <a id="__codelineno-0-39" name="__codelineno-0-39" href="#__codelineno-0-39"></a>        <span class="s2">"methods_long"</span><span class="p">:</span> <span class="s2">"One generative model in the style of epinowcast (Abbott et al., https://github.com/epinowcast/epinowcast/), fitted with NUTS (NumPyro) to each vintage. Each place's weekly expected final count is a random walk on the log scale over the last 16 weeks, with each onset day expecting a seventh of it. Cases are reported after a log-normal delay cut to whole days and capped at 42 days. The new reports of each onset day between consecutive releases are negative binomial on the expected count times the share of the delay between the two ages, so the data are right truncated by construction. Downward revisions are first moved onto earlier releases, as baselinenowcast does. The delay location and scale, the walk spread, its starting level and the dispersion are all partially pooled over zones, provinces and the country. Each sample is one posterior draw: reported counts plus negative binomial draws of the cases still to come, and the walk continued over the forecast weeks. Places with no case in nine weeks are not fitted and take randomwalknowcast's draws, 0 until an introduction, as renewalsp does. The national value is the sum of provinces. See https://samabbott.co.uk/BDBVHubRenewal/methods/baselines/."</span><span class="p">,</span>
 <a id="__codelineno-0-40" name="__codelineno-0-40" href="#__codelineno-0-40"></a>        <span class="s2">"data_inputs"</span><span class="p">:</span> <span class="s2">"Hub daily onsets by release (observed plus imputed) for provinces and health zones, and the hub's weekly target data."</span><span class="p">,</span>
 <a id="__codelineno-0-41" name="__codelineno-0-41" href="#__codelineno-0-41"></a>    <span class="p">},</span>
-<a id="__codelineno-0-42" name="__codelineno-0-42" href="#__codelineno-0-42"></a><span class="p">}</span>
+<a id="__codelineno-0-42" name="__codelineno-0-42" href="#__codelineno-0-42"></a>    <span class="s2">"fm_chronos_daily_ragged_ft"</span><span class="p">:</span> <span class="p">{</span>
+<a id="__codelineno-0-43" name="__codelineno-0-43" href="#__codelineno-0-43"></a>        <span class="s2">"model_name"</span><span class="p">:</span> <span class="s2">"Fine-tuned Chronos-2 (daily releases)"</span><span class="p">,</span>
+<a id="__codelineno-0-44" name="__codelineno-0-44" href="#__codelineno-0-44"></a>        <span class="s2">"methods"</span><span class="p">:</span> <span class="s2">"Chronos-2 time series foundation model, LoRA fine-tuned on outbreaks simulated with epinowcast, forecasting the hub target from its daily releases. Health zones split from provinces."</span><span class="p">,</span>
+<a id="__codelineno-0-45" name="__codelineno-0-45" href="#__codelineno-0-45"></a>        <span class="s2">"methods_long"</span><span class="p">:</span> <span class="s2">"Chronos-2 (Ansari et al. 2025, arXiv:2510.15821) with a LoRA adapter fine-tuned on 2,000 outbreaks simulated with epinowcast's generative model (renewal process, drifting reporting delays, day-of-week effects, negative binomial noise). The adapter is the release </span><span class="si">{release}</span><span class="s2"> of https://github.com/seabbs/BDBVHubRenewal, the newest when this was written. The hub target of every daily release is laid out by onset day and release lag. The country and each province are target series in one block. Each place's counts at release lags under 28 days are covariates, known past the last day at that lag, and Chronos-2 forecasts the block jointly. Each of 100 samples draws its own uniform level per series and day from Chronos-2's 21 quantiles, rounded to counts no lower than those reported. Not fitted to these data. Each province sample is split across its health zones with shares drawn from a Dirichlet on published zone counts. See https://samabbott.co.uk/BDBVHubRenewal/methods/foundation/."</span><span class="p">,</span>
+<a id="__codelineno-0-46" name="__codelineno-0-46" href="#__codelineno-0-46"></a>        <span class="s2">"data_inputs"</span><span class="p">:</span> <span class="s2">"The hub's daily onsets by release (observed plus imputed) for the country and provinces, and published health zone counts for the zone split."</span><span class="p">,</span>
+<a id="__codelineno-0-47" name="__codelineno-0-47" href="#__codelineno-0-47"></a>    <span class="p">},</span>
+<a id="__codelineno-0-48" name="__codelineno-0-48" href="#__codelineno-0-48"></a>    <span class="s2">"fm_chronos_weekly_ragged_ft"</span><span class="p">:</span> <span class="p">{</span>
+<a id="__codelineno-0-49" name="__codelineno-0-49" href="#__codelineno-0-49"></a>        <span class="s2">"model_name"</span><span class="p">:</span> <span class="s2">"Fine-tuned Chronos-2 (weekly releases)"</span><span class="p">,</span>
+<a id="__codelineno-0-50" name="__codelineno-0-50" href="#__codelineno-0-50"></a>        <span class="s2">"methods"</span><span class="p">:</span> <span class="s2">"Chronos-2 time series foundation model, LoRA fine-tuned on outbreaks simulated with epinowcast, forecasting the hub target from its weekly releases. Health zones split from provinces."</span><span class="p">,</span>
+<a id="__codelineno-0-51" name="__codelineno-0-51" href="#__codelineno-0-51"></a>        <span class="s2">"methods_long"</span><span class="p">:</span> <span class="s2">"Chronos-2 (Ansari et al. 2025, arXiv:2510.15821) with a LoRA adapter fine-tuned on 2,000 outbreaks simulated with epinowcast's generative model (renewal process, drifting reporting delays, day-of-week effects, negative binomial noise). The adapter is the release </span><span class="si">{release}</span><span class="s2"> of https://github.com/seabbs/BDBVHubRenewal, the newest when this was written. The hub target of every weekly release is laid out by onset week and release lag. The country and each province are target series in one block. Each place's counts at release lags under 4 weeks are covariates, known past the last week at that lag, and Chronos-2 forecasts the block jointly. Each of 100 samples draws its own uniform level per series and week from Chronos-2's 21 quantiles, rounded to counts no lower than those reported. Not fitted to these data. Each province sample is split across its health zones with shares drawn from a Dirichlet on published zone counts. See https://samabbott.co.uk/BDBVHubRenewal/methods/foundation/."</span><span class="p">,</span>
+<a id="__codelineno-0-52" name="__codelineno-0-52" href="#__codelineno-0-52"></a>        <span class="s2">"data_inputs"</span><span class="p">:</span> <span class="s2">"The hub's weekly target data by release for the country and provinces, and published health zone counts for the zone split."</span><span class="p">,</span>
+<a id="__codelineno-0-53" name="__codelineno-0-53" href="#__codelineno-0-53"></a>    <span class="p">},</span>
+<a id="__codelineno-0-54" name="__codelineno-0-54" href="#__codelineno-0-54"></a><span class="p">}</span>
 </code></pre></div>
 
     <div class="doc doc-contents ">
@@ -11815,7 +11855,7 @@ without <code>state.json</code>, means no round has been submitted.</p>
       
         <script src="../../javascripts/tablefilter.js?v=774f66a6"></script>
       
-        <script src="../../javascripts/explorer.js?v=84b4d7fb"></script>
+        <script src="../../javascripts/explorer.js?v=b4440ba7"></script>
       
         <script src="../../javascripts/scorechart.js?v=1c27a70d"></script>
       

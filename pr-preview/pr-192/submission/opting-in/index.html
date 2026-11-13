@@ -57,7 +57,7 @@
     
       <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
     
-      <link rel="stylesheet" href="../../stylesheets/extra.css?v=1c6923d2">
+      <link rel="stylesheet" href="../../stylesheets/extra.css?v=afdda586">
     
     <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
@@ -914,6 +914,34 @@
     
   
     Comparison with hub forecasts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../germany/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    German nowcast benchmark
   
 
     
@@ -2000,7 +2028,7 @@
 
 <h1 id="opting-in">Opting in<a class="headerlink" href="#opting-in" title="Permanent link">&para;</a></h1>
 <p class="page-subtitle">The steps to start submitting a hub model.</p>
-<p>There are three hub models.
+<p>There are four hub models.
 Each is opted in on its own in <code>config/hub.toml</code>.</p>
 <table>
 <thead>
@@ -2022,6 +2050,12 @@ Each is opted in on its own in <code>config/hub.toml</code>.</p>
 <td><code>seabbs-randomwalk</code></td>
 <td>the random walk (<code>randomwalk</code>)</td>
 <td>nothing</td>
+<td>nothing more</td>
+</tr>
+<tr>
+<td><code>seabbs-chronos2_ft</code></td>
+<td>fine-tuned Chronos-2, the model its table in <code>config/hub.toml</code> names (<code>fm_chronos_daily_ragged_ft</code> or <code>fm_chronos_weekly_ragged_ft</code>)</td>
+<td>nothing (round skipped)</td>
 <td>nothing more</td>
 </tr>
 <tr>
@@ -2215,7 +2249,7 @@ Renew the token before it expires (step 5 of Once).</p>
       
         <script src="../../javascripts/tablefilter.js?v=774f66a6"></script>
       
-        <script src="../../javascripts/explorer.js?v=84b4d7fb"></script>
+        <script src="../../javascripts/explorer.js?v=b4440ba7"></script>
       
         <script src="../../javascripts/scorechart.js?v=1c27a70d"></script>
       
