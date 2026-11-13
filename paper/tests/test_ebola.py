@@ -271,3 +271,19 @@ def test_score_drops_rows_without_truth():
         }
     )
     assert ebola.score(q).empty
+
+
+def test_store_skips_fits_with_no_forecasts(store):
+    _fit(store, "pp", "2026-10-25", "d", "2026-10-26T09:00:00+00:00", 3)
+    _git(store, "add", "-A")
+    _git(store, "commit", "-q", "-m", "pp")
+    _fit(store, "pp", "2026-10-25", "e", "2026-10-26T08:00:00+00:00", 0)
+    path = store / "pp/2026-10-25/e.json.gz"
+    fit = json.loads(gzip.decompress(path.read_bytes()))
+    fit["forecasts"]["data"] = []
+    path.write_bytes(gzip.compress(json.dumps(fit).encode()))
+    _git(store, "add", "-A")
+    _git(store, "commit", "-q", "-m", "empty")
+    s = ebola.store_samples(store, "fit-store")
+    assert set(s["model"]) == {"renewal", "pp"}
+    assert (s.loc[s["model"] == "pp", "value"] == 3).all()
