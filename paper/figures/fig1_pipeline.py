@@ -43,6 +43,8 @@ ACCENT_SOFT = "#dde6fa"
 COV = "#9a5b07"
 COV_SOFT = "#f5e5c8"
 HATCH = "#a3aabb"
+TRUTH = "#1b7f5f"
+TRUTH_SOFT = "#d4eee3"
 
 # Body text, small notes and headings, in points.
 BODY = 7.5
@@ -203,7 +205,7 @@ def cell(g: Svg, x: float, y: float, w: float, h: float, kind: str) -> None:
             x, y, w, h, fill=ACCENT_SOFT, stroke=ACCENT, sw=0.6, dash="2 1.2"
         )
     elif kind == "truth":
-        g.rect(x, y, w, h, fill=ACCENT_SOFT, stroke=ACCENT, sw=0.8)
+        g.rect(x, y, w, h, fill=TRUTH_SOFT, stroke=TRUTH, sw=0.8)
     elif kind == "none":
         g.rect(x, y, w, h, fill="url(#hatch)", stroke="white", sw=0.5)
     elif kind == "unseen":
@@ -230,7 +232,7 @@ def panel_a(g: Svg, oy: float) -> float:
                 "smooth growth",
             ],
             "Rt or growth paths, some",
-            ["with drift and steps"],
+            ["with drift and step changes"],
         ),
         (
             "Expected onsets",
@@ -271,7 +273,7 @@ def panel_a(g: Svg, oy: float) -> float:
         ),
     ]
     n_lines = max(sum(o.count("|") + 1 for o in st[1]) for st in stages)
-    note_y = top + 44 + n_lines * BODY * 1.2 + 4
+    note_y = top + 44 + n_lines * BODY * 1.13 + 1
     height = note_y - top + 2 * SMALL * 1.25 + 6
     x = 0.0
     for i, (w, (head, opts, note1, note2)) in enumerate(
@@ -289,7 +291,7 @@ def panel_a(g: Svg, oy: float) -> float:
             for opt in opts
             for k, part in enumerate(opt.split("|"))
         ]
-        g.text(x + 4, top + 44, lines, size=BODY, lead=1.2)
+        g.text(x + 4, top + 44, lines, size=BODY, lead=1.13)
         g.text(
             x + 4,
             note_y,
@@ -303,7 +305,7 @@ def panel_a(g: Svg, oy: float) -> float:
                 x + w + 1.5, top + 17, x + w + gap - 1.5, top + 17, arrow="ah"
             )
         x += w + gap
-    yb = top + height + 10
+    yb = top + height + 9
     g.text(
         0,
         yb,
@@ -313,7 +315,7 @@ def panel_a(g: Svg, oy: float) -> float:
         size=SMALL,
         fill=MUTED,
     )
-    return yb + 6
+    return yb + 4
 
 
 def _glyph(g: Svg, i: int, cx: float, cy: float) -> None:
@@ -462,7 +464,12 @@ def panel_b(g: Svg, oy: float) -> float:
     g.text(
         tx - 20,
         ly,
-        "outlined: lag 0, newest in each release",
+        [
+            "outlined: lag 0, the newest",
+            "count in each release",
+            "daily steps: lag series are",
+            "filled only on release days",
+        ],
         size=SMALL,
         fill=MUTED,
     )
@@ -472,42 +479,55 @@ def panel_b(g: Svg, oy: float) -> float:
     g.text(ax + 15, ty + 33, "by lag", size=SMALL, anchor="middle", fill=MUTED)
     g.line(ax, ty + 38, ax + 30, ty + 38, arrow="ah")
 
-    # The ragged block: rows the target and lag series, columns onset
-    # steps and two forecast steps.
+    # The ragged block: rows each place's target and lag series, columns
+    # onset steps and two forecast steps. The second place is drawn small.
     bx = ax + 72
     by = ty
     cols = n_on + 2
     bw = 15.0
-    rows = ["target (final)", *[f"lag {d}" for d in range(n_lag)]]
-    for k, name in enumerate(rows):
-        y = by + k * (ch + 2) + (3 if k else 0)
-        g.text(
-            bx - 4,
-            y + ch - 3,
-            name,
-            size=SMALL,
-            anchor="end",
-            fill=ACCENT if k == 0 else COV,
-        )
-        for c in range(cols):
-            t = c + 1
-            x = bx + c * bw
-            if k == 0:
-                kind = "final" if t <= e_step else "future"
-            else:
-                d = k - 1
-                kind = "lag" if first_rel - d <= t <= n_on - d else "none"
-            cell(g, x, y, bw, ch, kind)
-            if k == 0 and kind == "future":
+
+    def place_rows(y0: float, rh: float, gap: float, full: bool) -> float:
+        """Draw one place's target and lag series; return their bottom."""
+        for k in range(n_lag + 1):
+            y = y0 + k * (rh + gap) + (gap + 1 if k else 0)
+            if full:
+                name = "place 1 target" if k == 0 else f"lag {k - 1}"
                 g.text(
-                    x + bw / 2,
-                    y + ch - 3,
-                    "?",
+                    bx - 4,
+                    y + rh - 3,
+                    name,
                     size=SMALL,
-                    anchor="middle",
-                    fill=ACCENT,
-                    weight="bold",
+                    anchor="end",
+                    fill=ACCENT if k == 0 else COV,
                 )
+            for c in range(cols):
+                t = c + 1
+                if k == 0:
+                    kind = "final" if t <= e_step else "future"
+                else:
+                    d = k - 1
+                    lo, hi_ = first_rel - d, n_on - d
+                    kind = "lag" if lo <= t <= hi_ else "none"
+                cell(g, bx + c * bw, y, bw, rh, kind)
+                if full and k == 0 and kind == "future":
+                    g.text(
+                        bx + c * bw + bw / 2,
+                        y + rh - 3,
+                        "?",
+                        size=SMALL,
+                        anchor="middle",
+                        fill=ACCENT,
+                        weight="bold",
+                    )
+        return y0 + n_lag * (rh + gap) + gap + 1 + rh
+
+    bottom1 = place_rows(by, ch, 2.0, full=True)
+    p2 = bottom1 + 6
+    bottom = place_rows(p2, 6.5, 1.0, full=False)
+    g.text(
+        bx - 4, p2 + 6, "place 2 target", size=SMALL, anchor="end", fill=ACCENT
+    )
+    g.text(bx - 4, p2 + 23, "lags 0\u20133", size=SMALL, anchor="end", fill=COV)
     # Column headings: context, nowcast and forecast steps.
     hy0 = by - 13
     for lo, hi_, name in [
@@ -533,8 +553,7 @@ def panel_b(g: Svg, oy: float) -> float:
             anchor="middle",
             fill=MUTED,
         )
-    bottom = by + n_lag * (ch + 2) + 3 + ch
-    # E, the end of the target's context, and the latest release.
+    # E, the end of the targets' context, and the latest release.
     exx = bx + e_step * bw
     g.line(exx, by - 4, exx, bottom + 3, stroke=ACCENT, sw=1.1)
     g.text(
@@ -579,9 +598,7 @@ def panel_b(g: Svg, oy: float) -> float:
         size=SMALL,
         fill=COV,
     )
-    # Legend.
-    lx = bx - 30
-    lgy = bottom + 20
+    # Legend, beside the second place.
     items = [
         ("final", "complete count"),
         ("lag", "count reported so far"),
@@ -589,11 +606,10 @@ def panel_b(g: Svg, oy: float) -> float:
         ("none", "no release at that lag"),
     ]
     for k, (kind, name) in enumerate(items):
-        x = lx + (k % 2) * 118
-        y = lgy + (k // 2) * 11
-        cell(g, x, y - 6.5, 9, 7.5, kind)
-        g.text(x + 12, y, name, size=SMALL)
-    return max(ly + 2, lgy + 14)
+        y = p2 + 6 + k * 9.5
+        cell(g, nx, y - 6.5, 9, 7.5, kind)
+        g.text(nx + 12, y, name, size=SMALL)
+    return max(ly + 3 * SMALL * 1.25 + 1, bottom + 12)
 
 
 def panel_c(g: Svg, oy: float) -> float:
@@ -615,7 +631,7 @@ def panel_c(g: Svg, oy: float) -> float:
     by = top + 24
     for lo, hi_, name, col in [
         (0, n_ctx, "context", MUTED),
-        (n_ctx, cols, "future, from the final counts", ACCENT),
+        (n_ctx, cols, "future, from the final counts", TRUTH),
     ]:
         g.text(
             bx + (lo + hi_) / 2 * cw,
@@ -664,14 +680,13 @@ def panel_c(g: Svg, oy: float) -> float:
         bottom + 25,
         [
             "Each outbreak gives several weekly and daily blocks, each with",
-            "a random cut-off, delay D and set of places. Daily blocks keep",
-            "weekly releases, so their lag series have a value once a week.",
-            "Checkpoints are trained on nested sets of simulated outbreaks.",
+            "a random cut-off, delay D and set of places. Checkpoints are",
+            "trained on nested sets of simulated outbreaks.",
         ],
         size=SMALL,
         fill=MUTED,
     )
-    left_bottom = bottom + 25 + 3 * SMALL * 1.25 + 4
+    left_bottom = bottom + 25 + 2 * SMALL * 1.25 + 4
 
     # LoRA: the frozen model with small trained adapters.
     mx = 232.0
@@ -704,7 +719,7 @@ def panel_c(g: Svg, oy: float) -> float:
     g.text(
         mx + mw / 2,
         y0 + 33,
-        ["time and group attention", "q, k, v, o"],
+        ["time and group attention,", "q, k, v, o"],
         size=SMALL,
         anchor="middle",
         lead=1.15,
@@ -734,19 +749,12 @@ def panel_c(g: Svg, oy: float) -> float:
             fill=ACCENT,
             weight="bold",
         )
-    g.text(
-        mx,
-        y0 + 100,
-        "y = Wx + (\u03b1/r) B(Ax), rank r = 8, \u03b1 = 16",
-        size=SMALL,
-        fill=FG,
-    )
     # Legend.
-    lgy = y0 + 112
+    lgy = y0 + 102
     g.rect(mx, lgy - 6.5, 9, 7.5, fill=CELL, rx=1)
     g.text(mx + 12, lgy, "frozen, as pretrained", size=SMALL)
     g.rect(mx, lgy + 4.5, 9, 7.5, fill=ACCENT_SOFT, stroke=ACCENT, sw=0.8, rx=1)
-    g.text(mx + 12, lgy + 11, "trained on the simulations", size=SMALL)
+    g.text(mx + 12, lgy + 11, "trained on the simulations, rank 8", size=SMALL)
     # Why it is fast.
     wx = mx + mw + aw + 30
     g.text(wx, y0 + 6, "Why it is fast", size=BODY, weight="bold")
@@ -1004,9 +1012,9 @@ def build() -> str:
     """Return Figure 1 as SVG."""
     g = Svg()
     y = panel_a(g, 0.0)
-    y = panel_b(g, y + 7)
-    y = panel_c(g, y + 7)
-    y = panel_d(g, y + 7)
+    y = panel_b(g, y + 5)
+    y = panel_c(g, y + 5)
+    y = panel_d(g, y + 5)
     return g.render(round(y + 4))
 
 
