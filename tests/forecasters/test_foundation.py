@@ -602,3 +602,77 @@ def test_a_changed_cached_adapter_is_downloaded_again(
     (adapter / "adapter_model.safetensors").write_bytes(b"tampered")
     assert foundation.finetuned_adapter(_checkpoint("abc")) == adapter
     assert (adapter / "adapter_model.safetensors").read_bytes() == b"weights"
+
+
+def test_the_release_list_is_read_once_per_process(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[int] = []
+    listing = foundation.finetuned_releases()
+
+    def count() -> list[dict]:
+        calls.append(1)
+        return listing
+
+    monkeypatch.setattr(foundation, "finetuned_releases", count)
+    foundation.resolve_checkpoint.cache_clear()
+    for _ in range(3):
+        for name in FINETUNED_MODELS:
+            get_model(name)
+    assert len(calls) == 1
+
+
+def test_a_run_passes_its_resolved_checkpoint_down(
+    monkeypatch: pytest.MonkeyPatch, fake_checkpoint: str
+) -> None:
+    # A job given the hash its run resolved never lists the releases.
+    def offline() -> list[dict]:
+        raise AssertionError("listed the releases")
+
+    monkeypatch.setattr(foundation, "finetuned_releases", offline)
+    monkeypatch.setenv(foundation.FINETUNED_ENV, fake_checkpoint)
+    foundation.resolve_checkpoint.cache_clear()
+    model = get_model("fm_chronos_daily_ragged_ft")
+    assert model.checkpoint.hash == fake_checkpoint
+
+
+def test_the_release_list_sends_a_token_when_set(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seen: list = []
+
+    class Response:
+        def __enter__(self):  # type: ignore[no-untyped-def]
+            return self
+
+        def __exit__(self, *_: object) -> None:
+            return None
+
+        def read(self) -> bytes:
+            return b"[]"
+
+    def urlopen(request, **_: object):  # type: ignore[no-untyped-def]
+        seen.append(request)
+        return Response()
+
+    monkeypatch.undo()
+    monkeypatch.setattr(foundation.urllib.request, "urlopen", urlopen)
+    monkeypatch.setenv("GH_TOKEN", "secret")
+    assert foundation.finetuned_releases() == []
+    assert seen[0].get_header("Authorization") == "Bearer secret"
+    monkeypatch.delenv("GH_TOKEN")
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+    foundation.finetuned_releases()
+    assert seen[1].get_header("Authorization") is None
+
+
+def test_a_failed_lookup_says_how_to_set_a_token(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def refuse(*_: object, **__: object) -> None:
+        raise OSError("HTTP Error 403: rate limit exceeded")
+
+    monkeypatch.undo()
+    monkeypatch.setattr(foundation.urllib.request, "urlopen", refuse)
+    with pytest.raises(ConnectionError, match="GH_TOKEN"):
+        foundation.finetuned_releases()
