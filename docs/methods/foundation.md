@@ -68,7 +68,7 @@ The context is every step from the first onset in the releases to $t^*$.
 ## Scoring
 
 The models forecast final counts and model no delay.
-So the release backtest scores them on the complete target only, the weeks the latest release reports in full ([Evaluation](evaluation.md#real-releases)).
+So the release backtest scores them on the complete target only, each week against the first release the truth delay after it ends ([Evaluation](evaluation.md#real-releases)).
 
 ## Fine-tuning
 
