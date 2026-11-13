@@ -21,8 +21,8 @@ def test_numeric_factors_bin_to_tertiles() -> None:
 
 
 def test_few_valued_factors_stay_as_they_are() -> None:
-    f = pd.DataFrame({"location": list("abcd"), "report_days": [7, 5, 7, 5]})
-    assert set(bin_factors(f)["report_days"]) == {"5", "7"}
+    f = pd.DataFrame({"location": list("abcd"), "n_steps": [0, 2, 0, 2]})
+    assert set(bin_factors(f)["n_steps"]) == {"0", "2"}
 
 
 def test_places_become_single_or_multi() -> None:
