@@ -356,6 +356,7 @@ jobs:
           # here.
           uv run bdbvhubrenewal germany-fetch
           uv run bdbvhubrenewal germany-teams --out results/germany
+          uv run bdbvhubrenewal germany-asof --out results/germany
           uv run bdbvhubrenewal germany-paper --results results/germany
           uv run bdbvhubrenewal report --ledger output/ledger
       # Scores at each deploy from main, read from the gh-pages branch,

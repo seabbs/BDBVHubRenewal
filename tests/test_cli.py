@@ -815,3 +815,14 @@ def test_cli_germany_held_out_half_goes_to_its_own_directory(
     scores = pd.read_csv(out / "held-out" / "scores.csv.gz")
     assert set(scores["origin"]) == {"2021-10-05"}
     assert not (out / "scores.csv.gz").exists()
+
+
+def test_cli_germany_asof_writes_the_data_each_date_saw(
+    tmp_path: Path,
+) -> None:
+    data, config = _germany_data(tmp_path)
+    out = tmp_path / "results"
+    assert main(["germany-asof", "--config", str(config), "--data",
+                 str(data), "--out", str(out)]) == 0  # fmt: skip
+    asof = pd.read_csv(out / "asof.csv.gz")
+    assert set(asof["origin"]) == {"2021-10-04", "2021-10-05"}

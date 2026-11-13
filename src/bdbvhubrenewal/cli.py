@@ -351,6 +351,14 @@ def build_parser() -> argparse.ArgumentParser:
         "OUT/held-out.",
     )
 
+    gas = sub.add_parser(
+        "germany-asof",
+        help="Write the German 7-day sums as each development date saw them.",
+    )
+    gas.add_argument("--config", default="config/germany.toml")
+    gas.add_argument("--data", default=f"{data_dir}/raw/germany")
+    gas.add_argument("--out", default="results/germany")
+
     gpp = sub.add_parser(
         "germany-paper",
         help="Write the German benchmark's forecasts as the paper's table.",
@@ -1577,6 +1585,20 @@ def _germany_teams(args: argparse.Namespace) -> int:
     return 0
 
 
+def _germany_asof(args: argparse.Namespace) -> int:
+    from bdbvhubrenewal.data.germany import hub_triangle
+    from bdbvhubrenewal.evaluation import germany as de
+
+    config = de.load_germany_config(args.config)
+    triangle = hub_triangle(Path(args.data) / Path(config.triangle).name)
+    asof = de.asof_sums(triangle, de.nowcast_dates(config))
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+    write_csv(asof, out / "asof.csv.gz")
+    print(f"German data as of each date: {len(asof)} sums in {out}.")
+    return 0
+
+
 def _germany_paper(args: argparse.Namespace) -> int:
     from bdbvhubrenewal.evaluation import germany as de
 
@@ -1685,6 +1707,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _germany_backtest(args)
     if args.command == "germany-teams":
         return _germany_teams(args)
+    if args.command == "germany-asof":
+        return _germany_asof(args)
     if args.command == "germany-paper":
         return _germany_paper(args)
     if args.command == "digest":
