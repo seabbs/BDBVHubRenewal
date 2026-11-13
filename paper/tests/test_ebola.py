@@ -194,7 +194,9 @@ def store(tmp_path):
     (repo / "renewal/2026-10-25/a.json.gz").unlink()
     _fit(repo, "renewal", "2026-10-25", "b", "2026-11-05T10:00:00+00:00", 9)
     # A fit made after its round closed is never prospective.
-    _fit(repo, "fm_chronos_x", "2026-10-25", "c", "2026-11-12T10:00:00+00:00", 1)
+    _fit(
+        repo, "fm_chronos_x", "2026-10-25", "c", "2026-11-12T10:00:00+00:00", 1
+    )
     _git(repo, "add", "-A")
     _git(repo, "commit", "-q", "-m", "refit")
     return repo
@@ -269,4 +271,3 @@ def test_score_drops_rows_without_truth():
         }
     )
     assert ebola.score(q).empty
-
