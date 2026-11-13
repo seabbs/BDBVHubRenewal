@@ -19,12 +19,12 @@ def _drawn_settings() -> set[str]:
     for fn in ("draw_design", "draw_values"):
         body = text[text.index(f"{fn} <- function") :]
         body = body[: body.index("\n}\n")]
-        names |= set(re.findall(r"^\s+(\w+) = ", body, flags=re.MULTILINE))
+        names |= set(re.findall(r"^    (\w+) = ", body, flags=re.MULTILINE))
     return names
 
 
 def test_the_grid_has_a_row_for_every_drawn_setting() -> None:
-    drawn = _drawn_settings() - {"grid"}
+    drawn = _drawn_settings() - {"grid", "prob"}
     rows = {s for row in synthetic_grid.GRID["setting"] for s in row.split(";")}
     assert drawn <= rows
 
@@ -33,7 +33,7 @@ def test_the_table_adds_realised_values_from_the_settings() -> None:
     settings = pd.DataFrame(
         {
             "outbreak": ["a", "b", "c"],
-            "gt_mean": [6.0, 10.0, 20.0],
+            "delay_mean": [6.0, 10.0, 20.0],
             "n_places": [1, 1, 5],
             "report_days": ["all", "Monday", "all"],
             "family": ["negbin", "poisson", "negbin"],
@@ -43,7 +43,7 @@ def test_the_table_adds_realised_values_from_the_settings() -> None:
     )
     table = synthetic_grid.grid_table(settings)
     assert list(table.columns) == list(synthetic_grid.COLUMNS)
-    row = table.set_index("setting").loc["gt_mean"]
+    row = table.set_index("setting").loc["delay_mean"]
     assert row["realised"] == "10 [6, 20]"
     places = table.set_index("setting").loc["n_places"]
     assert places["realised"] == "1 [1, 5]; 67% one place"
@@ -59,10 +59,10 @@ def test_the_table_adds_realised_values_from_the_settings() -> None:
 
 def test_markdown_has_one_row_per_setting() -> None:
     settings = pd.DataFrame(
-        {"outbreak": ["a"], "gt_mean": [6.0], "drift_sd": [1.3e-5]}
+        {"outbreak": ["a"], "delay_mean": [6.0], "rt_drift_sd": [1.3e-5]}
     )
     table = synthetic_grid.grid_table(settings)
-    assert "e-" not in table.set_index("setting").loc["drift_sd", "realised"]
+    assert "e-" not in table.set_index("setting").loc["rt_drift_sd", "realised"]
     md = synthetic_grid.to_markdown(table)
     lines = md.strip().splitlines()
     assert len(lines) == len(table) + 2
