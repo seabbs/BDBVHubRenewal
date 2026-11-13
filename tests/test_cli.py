@@ -472,6 +472,39 @@ def test_backtest_without_recovery_never_runs_it(
     assert main(args) == 0
 
 
+@pytest.mark.usefixtures("in_root")
+def test_backtest_scores_the_complete_target_on_the_truth_delay(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from bdbvhubrenewal import cli
+    from bdbvhubrenewal.evaluation import backtest as bt
+    from bdbvhubrenewal.evaluation.nowcast import resolve_truth_delay
+
+    def development(*args: object, **kwargs: object) -> pd.DataFrame:
+        del args, kwargs
+        return pd.DataFrame({"model": []})
+
+    seen: dict[str, object] = {}
+
+    def release(*args: object, **kwargs: object) -> None:
+        del args
+        seen.update(kwargs)
+        raise SystemExit(0)
+
+    monkeypatch.setattr(bt, "run_development", development)
+    monkeypatch.setattr(
+        cli, "_stored", lambda *_: (pd.DataFrame(), pd.DataFrame())
+    )
+    monkeypatch.setattr(cli, "release_backtest", release)
+    out = ["--results", str(tmp_path), "--output", str(tmp_path)]
+    args = ["backtest", "--data", str(DATA), "--no-recovery"]
+    with pytest.raises(SystemExit):
+        main([*args, "--models", "randomwalk", *out])
+    config = bt.load_config("config/backtest.toml")
+    target = pd.read_csv(DATA / "target.csv")
+    assert seen["truth_delay"] == resolve_truth_delay(config, target)
+
+
 def test_concat_results_keeps_one_copy_of_shared_tables(
     tmp_path: Path,
 ) -> None:

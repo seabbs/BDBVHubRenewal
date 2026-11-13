@@ -24,6 +24,10 @@ from bdbvhubrenewal.evaluation.backtest import (
     score_tasks,
     truth_changes,
 )
+from bdbvhubrenewal.evaluation.nowcast import (
+    reporting_delay,
+    resolve_truth_delay,
+)
 from bdbvhubrenewal.forecasters import get_model
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -42,6 +46,34 @@ def test_load_config() -> None:
     # The first release is not a backtest origin.
     assert cfg.skip_origins == ("2026-08-18",)
     assert BacktestConfig().skip_origins == ()
+    # The truth delay is estimated from the data unless fixed.
+    assert cfg.truth_delay is None
+    assert cfg.truth_level == 0.99
+    assert BacktestConfig().truth_delay is None
+
+
+def test_load_config_takes_a_fixed_truth_delay(tmp_path: Path) -> None:
+    text = (ROOT / "config" / "backtest.toml").read_text()
+    assert 'truth_delay = "auto"' in text
+    path = tmp_path / "backtest.toml"
+    path.write_text(text.replace('truth_delay = "auto"', "truth_delay = 28"))
+    assert load_config(path).truth_delay == 28
+    path.write_text(text.replace('truth_delay = "auto"', 'truth_delay = "x"'))
+    with pytest.raises(ValueError, match="truth_delay"):
+        load_config(path)
+
+
+def test_truth_delay_is_fixed_or_estimated_from_the_releases() -> None:
+    target = pd.read_csv(DATA / "target.csv")
+    real = target.loc[target["kind"] == "real"]
+    cfg = BacktestConfig(skip_origins=("2026-08-18",))
+    estimated = reporting_delay(real, 0.99, skip=("2026-08-18",))
+    assert estimated is not None
+    assert resolve_truth_delay(cfg, target) == estimated
+    fixed = BacktestConfig(truth_delay=28)
+    assert resolve_truth_delay(fixed, target) == 28
+    with pytest.raises(ValueError, match="truth_level"):
+        resolve_truth_delay(BacktestConfig(truth_level=2.0), target)
 
 
 def test_forecast_weeks() -> None:
