@@ -16,20 +16,43 @@ Plan from #206.
 One SI section per paper section.
 -->
 
-# Methods
+## Methods
+
+### Baselines
 
 ::: {.callout-note title="Plan"}
-- `randomwalknowcast` in full.
+- `randomwalk` and `randomwalknowcast` in full.
+:::
+
+### Foundation model setup and fine-tuning
+
+::: {.callout-note title="Plan"}
 - Foundation model setup and fine-tuning settings.
+:::
+
+### Synthetic data generation
+
+::: {.callout-note title="Plan"}
 - Synthetic data generation in full, with an overview of the epinowcast model used.
+:::
+
+### Scoring
+
+::: {.callout-note title="Plan"}
 - Scoring, and its check against scoringutils.
 :::
 
-# Results
+## Results
 
 ::: {.callout-note title="Plan"}
 - Score breakdowns by location and horizon for each case study.
 - WIS over time for each case study.
 :::
 
-# References {.unnumbered}
+### Held-out synthetic data
+
+### German nowcast hub
+
+### Ebola hub submissions
+
+## References {.unnumbered}

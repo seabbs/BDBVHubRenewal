@@ -42,11 +42,11 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
 - The Ebola forecasting hub target and its releases.
 :::
 
-### Baseline
+### Baselines
 
 ::: {.callout-note title="Plan"}
-- `randomwalknowcast`.
-- Full detail in the SI.
+- `randomwalk`, a random walk with no delay adjustment, and `randomwalknowcast`, a random walk nowcast.
+- Both in full in the SI.
 :::
 
 ### Foundation model setup and fine-tuning
@@ -77,14 +77,14 @@ Placeholder: grid of synthetic scenarios.
 ### Case study 1: German nowcast hub
 
 ::: {.callout-note title="Plan"}
-- Compared with the hub's models, and evaluated as the hub did.
+- Compared with the hub's models, relative to the hub's own baseline, and evaluated as the hub did.
 - Daily and weekly versions may not both make sense here.
 :::
 
 ### Case study 2: prospective submission to the Ebola forecasting hub
 
 ::: {.callout-note title="Plan"}
-- Compared with the other submissions, and evaluated as the hub does.
+- Compared with the other submissions, relative to the hub's own baseline, and evaluated as the hub does.
 - Our models' forecasts are saved prospectively, alongside the main submissions as they were made.
 :::
 
@@ -95,7 +95,7 @@ Each section has a figure panel.
 Each panel shows:
 
 - nowcasts over time (ribbons);
-- scores relative to the baseline, with natural- and log-scale WIS (or CRPS, MAE where they make sense);
+- scores relative to the baseline (`randomwalknowcast` for synthetic data, the hub's baseline for each case study), with natural- and log-scale WIS (or CRPS, MAE where they make sense);
 - bias;
 - 50% and 90% coverage;
 - score variation by location and horizon, supported by SI plots.
@@ -107,7 +107,7 @@ Each section has two paragraphs, one on visual performance and one summarising s
 ### Held-out synthetic data
 
 ::: {.callout-note title="Plan"}
-- Visual performance of the candidate models and the baseline.
+- Visual performance of the candidate models against `randomwalk` and `randomwalknowcast`.
 - A summary of score performance.
 :::
 
@@ -174,4 +174,4 @@ Placeholder: Ebola hub submissions results panel.
 
 ## AI disclosure {.appendix}
 
-# References {.unnumbered}
+## References {.unnumbered}
