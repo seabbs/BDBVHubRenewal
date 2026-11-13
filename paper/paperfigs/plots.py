@@ -34,8 +34,10 @@ from matplotlib.ticker import (
 )
 
 from paperfigs.factors import (
+    ALWAYS_SHOWN,
     bin_factors,
     factor_label,
+    redundant_factors,
     relative_by_factor,
     top_factors,
 )
@@ -410,9 +412,14 @@ def _factor_points(
     models: Sequence[str],
     n_factors: int,
 ) -> None:
-    """Draw relative scores by level for the most spread factors."""
-    rel = relative_by_factor(scores, bin_factors(factors), baseline)
-    keep = top_factors(rel, n_factors)
+    """Draw relative scores by level for the most spread factors.
+
+    `ALWAYS_SHOWN` factors come first, and `redundant_factors` are left
+    out; the SI plot keeps every factor.
+    """
+    shown = factors.drop(columns=redundant_factors(factors))
+    rel = relative_by_factor(scores, bin_factors(shown), baseline)
+    keep = top_factors(rel, n_factors, always=ALWAYS_SHOWN)
     rel = rel.loc[rel["factor"].isin(keep)].copy()
     cats: list[str] = []
     groups = []

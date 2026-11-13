@@ -8,12 +8,31 @@ tertiles so each level holds a similar number of locations.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+from typing import Final
+
 import numpy as np
 import pandas as pd
 
 from paperfigs.scores import relative_scores
 
-__all__ = ["bin_factors", "factor_label", "relative_by_factor", "top_factors"]
+__all__ = [
+    "ALWAYS_SHOWN",
+    "REDUNDANT_PAIRS",
+    "bin_factors",
+    "factor_label",
+    "redundant_factors",
+    "relative_by_factor",
+    "top_factors",
+]
+
+ALWAYS_SHOWN: Final = ("delay_q99",)
+"""Factors the main panel always shows: long delays should make
+nowcasting harder, so the 99% delay is worth seeing whatever its spread."""
+
+REDUNDANT_PAIRS: Final = (("delay_q99", "delay_mean"),)
+"""(kept, dropped) pairs: the second leaves the main panel when its rank
+correlation with the first is above the threshold."""
 
 
 def factor_label(name: str) -> str:
@@ -103,8 +122,41 @@ def relative_by_factor(
     return out.loc[:, first]
 
 
+def redundant_factors(
+    factors: pd.DataFrame, threshold: float = 0.9
+) -> list[str]:
+    """Return factors that repeat another too closely for the main panel.
+
+    For each pair in `REDUNDANT_PAIRS` present in `factors`, the second is
+    redundant when its Spearman rank correlation with the first, over
+    locations, is above `threshold`.
+
+    Parameters
+    ----------
+    factors : pandas.DataFrame
+        Raw factor values by `location`, before `bin_factors`.
+    threshold : float
+        Rank correlation above which the second factor is dropped.
+
+    Returns
+    -------
+    list of str
+        Factors to leave out of the main panel.
+    """
+    out = []
+    for kept, dropped in REDUNDANT_PAIRS:
+        if {kept, dropped} <= set(factors.columns):
+            rho = factors[kept].corr(factors[dropped], method="spearman")
+            if rho > threshold:
+                out.append(dropped)
+    return out
+
+
 def top_factors(
-    rel: pd.DataFrame, n: int = 4, col: str = "rel_score"
+    rel: pd.DataFrame,
+    n: int = 4,
+    col: str = "rel_score",
+    always: Sequence[str] = (),
 ) -> list[str]:
     """Return the `n` factors whose levels spread the relative score most.
 
@@ -119,14 +171,18 @@ def top_factors(
         Factors to keep.
     col : str
         Score column.
+    always : sequence of str
+        Factors to keep first whatever their spread, if present.
 
     Returns
     -------
     list of str
-        Factor names, most spread first.
+        The `always` factors present, then the others, most spread first.
     """
     logs = rel.assign(_log=np.log(rel[col]))
     g = logs.groupby(["factor", "model"])["_log"]
     spread = g.max() - g.min()
     order = spread.groupby("factor").mean().sort_values(ascending=False)
-    return list(order.index[:n])
+    kept = [f for f in always if f in order.index]
+    rest = [f for f in order.index if f not in kept]
+    return (kept + rest)[:n]

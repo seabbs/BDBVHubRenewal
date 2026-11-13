@@ -99,7 +99,10 @@ def test_coverage_panel_follows_the_study(study) -> None:
 def test_synthetic_panel_shows_factors_and_weekly_horizons() -> None:
     fc, obs = dummy_study("synthetic", seed=1, n_samples=20)
     scores = score_forecasts(fc)
-    fig = results_panel(fc, obs, scores, factors=dummy_factors(fc, seed=1))
+    factors = dummy_factors(fc, seed=1)
+    # Rank delay_q99 exactly as delay_mean, so delay_mean is redundant.
+    factors["delay_q99"] = factors["delay_mean"] * 10
+    fig = results_panel(fc, obs, scores, factors=factors)
     titles = " ".join(ax.get_title() for ax in fig.axes)
     assert "by scenario factor" in titles
     assert "by location" not in titles
@@ -109,8 +112,9 @@ def test_synthetic_panel_shows_factors_and_weekly_horizons() -> None:
     labels = " ".join(ax.get_xlabel() for ax in fig.axes)
     assert "Horizon (weeks)" in labels
     plt.close(fig)
-    fig = si_scores_by_factor(scores, dummy_factors(fc, seed=1))
-    assert len([ax for ax in fig.axes if ax.get_title()]) == 5
+    fig = si_scores_by_factor(scores, factors)
+    # The SI keeps every factor, delay_mean included.
+    assert len([ax for ax in fig.axes if ax.get_title()]) == 6
     plt.close(fig)
 
 
