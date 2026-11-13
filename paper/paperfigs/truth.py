@@ -17,7 +17,9 @@ __all__ = ["attach_truth", "rolling_truth"]
 _KEYS = ["study", "location", "stratum", "target_date"]
 
 
-def rolling_truth(observations: pd.DataFrame, delay_days: int) -> pd.DataFrame:
+def rolling_truth(
+    observations: pd.DataFrame, delay_days: int | pd.Series
+) -> pd.DataFrame:
     """Return the count reported `delay_days` after each target date.
 
     Parameters
@@ -25,8 +27,10 @@ def rolling_truth(observations: pd.DataFrame, delay_days: int) -> pd.DataFrame:
     observations : pandas.DataFrame
         Observations in the schema of `paper/schema.md`, one row per
         target date and release (`as_of_date`).
-    delay_days : int
+    delay_days : int or pandas.Series
         D, the days after the target date at which the data are taken.
+        A series indexed by `location` gives each location its own D, as
+        for the synthetic outbreaks (their 99% reporting delay).
 
     Returns
     -------
@@ -38,14 +42,21 @@ def rolling_truth(observations: pd.DataFrame, delay_days: int) -> pd.DataFrame:
     Raises
     ------
     ValueError
-        If `delay_days` is negative.
+        If a delay is negative, or a per-location delay misses a location.
     """
-    if delay_days < 0:
-        raise ValueError("delay_days must be at least zero.")
     obs = observations.copy()
     if "stratum" not in obs.columns:
         obs["stratum"] = DEFAULT_STRATUM
-    obs["cutoff"] = obs["target_date"] + pd.Timedelta(days=delay_days)
+    if isinstance(delay_days, pd.Series):
+        missing = sorted(set(obs["location"]) - set(delay_days.index))
+        if missing:
+            raise ValueError(f"No delay_days for: {', '.join(missing)}.")
+        days = obs["location"].map(delay_days).astype(int)
+    else:
+        days = pd.Series(delay_days, index=obs.index)
+    if (days < 0).any():
+        raise ValueError("delay_days must be at least zero.")
+    obs["cutoff"] = obs["target_date"] + pd.to_timedelta(days, unit="D")
     latest = obs.groupby("study")["as_of_date"].transform("max")
     known = obs.loc[obs["as_of_date"] <= obs["cutoff"]]
     known = known.sort_values("as_of_date").drop_duplicates(_KEYS, keep="last")
