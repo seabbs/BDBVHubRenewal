@@ -4,6 +4,7 @@ import pytest
 
 from paperfigs.scores import (
     STUDY_BASELINES,
+    STUDY_COVERAGE,
     relative_scores,
     score_forecasts,
 )
@@ -201,3 +202,40 @@ def test_relative_scores_per_study_baseline() -> None:
     rel = relative_scores(score_forecasts(df)).set_index("model")
     assert rel.loc["BDBVHub-baseline", "rel_score"] == 1
     assert rel.loc["m", "rel_score"] > 1
+
+
+def test_wis_pins_the_hand_value() -> None:
+    # Q = (2, 4, 5, 7, 12) at levels (0.05, 0.25, 0.5, 0.75, 0.95), y = 3:
+    # (0.5 * |3 - 5| + 0.05 * 10 + 0.25 * (3 + 2 * 1 / 0.5)) / 2.5 = 1.3.
+    # scoringrules' weighted_interval_score (0.11 and 0.12) adds the median
+    # itself rather than |y - median| and gives 1.9, so the WIS is built
+    # from its interval_score instead.
+    s = score_forecasts(_rows("m", Q, 3.0))
+    assert s["score"].item() == pytest.approx(1.3)
+
+
+def test_coverage_levels_follow_the_study() -> None:
+    assert STUDY_COVERAGE["germany"] == (0.5, 0.95)
+    assert STUDY_COVERAGE["synthetic"] == (0.5, 0.9)
+    q = np.array([0.025, 0.25, 0.5, 0.75, 0.975])
+    df = _rows("m", Q, 11.0).assign(study="germany", quantile_level=q)
+    s = score_forecasts(df)
+    assert s["coverage_95"].item() == 1.0
+    assert "coverage_90" not in s.columns
+
+
+def test_coverage_levels_can_be_set() -> None:
+    s = score_forecasts(_rows("m", Q, 5.0), coverage=(0.5, 0.9, 0.95))
+    assert np.isnan(s["coverage_95"].item())
+    assert s["coverage_90"].item() == 1.0
+
+
+def test_relative_scores_match_on_stratum() -> None:
+    df = pd.concat(
+        [
+            _rows("randomwalknowcast", Q, 5.0).assign(stratum="a"),
+            _rows("m", Q * 2, 5.0).assign(stratum="b"),
+        ]
+    )
+    rel = relative_scores(score_forecasts(df))
+    assert "m" not in set(rel["model"])

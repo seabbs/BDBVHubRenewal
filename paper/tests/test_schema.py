@@ -151,3 +151,27 @@ def test_mixed_forms_in_one_forecast_fail() -> None:
 def test_duplicate_sample_ids_fail() -> None:
     with pytest.raises(ValueError, match="duplicate"):
         validate_forecasts(_sample_forecast(sample_id=[0, 0, 1, 2]))
+
+
+def test_stratum_defaults_to_all() -> None:
+    out = validate_forecasts(_forecast())
+    assert (out["stratum"] == "all").all()
+    assert list(out.columns) == list(FORECAST_COLUMNS)
+
+
+def test_strata_are_separate_forecasts() -> None:
+    df = pd.concat([_forecast(stratum="00-04"), _forecast(stratum="05-14")])
+    assert set(validate_forecasts(df)["stratum"]) == {"00-04", "05-14"}
+
+
+def test_observations_stratum_defaults_to_all() -> None:
+    obs = pd.DataFrame(
+        {
+            "study": ["germany"],
+            "location": ["DE"],
+            "target_date": [pd.Timestamp("2024-01-01")],
+            "as_of_date": [pd.Timestamp("2024-01-08")],
+            "value": [4.0],
+        }
+    )
+    assert validate_observations(obs)["stratum"].tolist() == ["all"]

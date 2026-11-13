@@ -60,3 +60,18 @@ def test_attach_truth_replaces_the_truth_column() -> None:
 def test_negative_delay_fails() -> None:
     with pytest.raises(ValueError, match="delay_days"):
         rolling_truth(_obs(), delay_days=-1)
+
+
+def test_truth_keeps_strata_apart() -> None:
+    obs = pd.concat(
+        [
+            _obs().assign(stratum="a"),
+            _obs().assign(stratum="b", value=[1.0, 1.0, 1.0]),
+        ]
+    )
+    t = rolling_truth(obs, delay_days=11)
+    assert set(t["stratum"]) == {"a", "b"}
+    one = t.loc[
+        (t["stratum"] == "b") & (t["target_date"] == pd.Timestamp("2024-01-01"))
+    ]
+    assert one["truth"].item() == 1.0

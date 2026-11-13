@@ -4,7 +4,8 @@
 # Uses scoringutils' defaults: WIS with weigh = TRUE and the median
 # counted once; CRPS by scoringRules::crps_sample ("edf"); bias_quantile
 # and bias_sample; coverage of central intervals, from type-7 sample
-# quantiles for sample forecasts. Log scores use log_shift(offset = 1).
+# quantiles for sample forecasts. 95% coverage is written for quantile
+# forecasts only, for the German study. Log scores use log_shift(offset = 1).
 suppressPackageStartupMessages({
   library(scoringutils)
   library(data.table)
@@ -19,10 +20,13 @@ log1p_forecast <- function(fc) {
 
 quant <- fixture[!is.na(quantile_level)][, sample_id := NULL]
 qfc <- as_forecast_quantile(quant, forecast_unit = keys)
-qs <- score(qfc)
+qs <- score(qfc, metrics = c(
+  get_metrics(qfc),
+  interval_coverage_95 = purrr::partial(interval_coverage, interval_range = 95)
+))
 qlog <- score(log1p_forecast(qfc), metrics = list(wis = wis))
 q_out <- qs[, c(keys, "wis", "bias", "interval_coverage_50",
-  "interval_coverage_90"), with = FALSE]
+  "interval_coverage_90", "interval_coverage_95"), with = FALSE]
 q_out[qlog, log_score := i.wis, on = keys]
 setnames(q_out, "wis", "score")
 q_out[, metric := "wis"]
@@ -46,14 +50,15 @@ s_out[scov, `:=`(
 setnames(s_out, "crps", "score")
 s_out[, metric := "crps"]
 
-out <- rbind(q_out, s_out, use.names = TRUE)
+out <- rbind(q_out, s_out, use.names = TRUE, fill = TRUE)
 setnames(
   out,
-  c("interval_coverage_50", "interval_coverage_90"),
-  c("coverage_50", "coverage_90")
+  c("interval_coverage_50", "interval_coverage_90", "interval_coverage_95"),
+  c("coverage_50", "coverage_90", "coverage_95")
 )
 out[, coverage_50 := as.numeric(coverage_50)]
 out[, coverage_90 := as.numeric(coverage_90)]
+out[, coverage_95 := as.numeric(coverage_95)]
 setcolorder(out, c(keys, "metric", "score", "log_score", "bias"))
 fwrite(out, "tests/fixtures/scoringutils-expected.csv")
 cat("scoringutils", as.character(packageVersion("scoringutils")), "\n")

@@ -91,3 +91,15 @@ def test_dummy_forms_follow_the_study(study) -> None:
             .eq(20)
             .all()
         )
+
+
+def test_germany_has_age_strata_for_the_nation(study) -> None:
+    name, fc, obs = study
+    strata = set(fc["stratum"])
+    if name == "germany":
+        assert len(strata) > 1
+        ages = fc.loc[fc["stratum"] != "all", "location"]
+        assert set(ages) == {"DE"}
+        assert set(obs["stratum"]) == strata
+    else:
+        assert strata == {"all"}

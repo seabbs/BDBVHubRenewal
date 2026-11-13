@@ -56,7 +56,10 @@ def test_results_panel_has_lettered_panels(study) -> None:
     letters = sorted(
         ax.get_title(loc="left") for ax in fig.axes if ax.get_title(loc="left")
     )
-    assert letters == list(PANEL_LETTERS)
+    stratified = fc["stratum"].nunique() > 1
+    assert letters == list(PANEL_LETTERS[: 8 if stratified else 7])
+    if stratified:
+        assert any("by stratum" in ax.get_title() for ax in fig.axes)
     metric = "WIS" if fc["study"].iloc[0] == "germany" else "CRPS"
     titles = " ".join(ax.get_title() for ax in fig.axes)
     assert f"Relative {metric}" in titles
@@ -80,4 +83,13 @@ def test_si_figures_render(study) -> None:
     plt.close(fig)
     fig = si_wis_over_time(scores)
     assert len(fig.axes) == 2
+    plt.close(fig)
+
+
+def test_coverage_panel_follows_the_study(study) -> None:
+    fc, obs, scores = study
+    fig = results_panel(fc, obs, scores)
+    labels = " ".join(ax.get_xlabel() for ax in fig.axes)
+    want = "95%" if fc["study"].iloc[0] == "germany" else "90%"
+    assert want in labels
     plt.close(fig)
