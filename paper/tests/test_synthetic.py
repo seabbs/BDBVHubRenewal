@@ -73,7 +73,8 @@ def test_origins_are_spread_over_complete_cutoffs_on_one_weekday() -> None:
     # The last origin's horizon is complete by the end of the reports.
     end = pd.Timestamp(counts["report_date"].max()).date()
     last = dt.date.fromisoformat(origins[-1])
-    assert end - last >= dt.timedelta(weeks=synthetic.COMPLETE_WEEKS)
+    weeks = synthetic.longest_delay_weeks(counts) + synthetic.HORIZON_WEEKS
+    assert end - last >= dt.timedelta(weeks=weeks)
     # Fixed by the outbreak.
     assert synthetic.origin_cutoffs(counts, "9-0001", 4) == (cutoffs, origins)
 
@@ -300,3 +301,25 @@ def test_observations_have_zero_weeks_so_every_target_has_truth() -> None:
     early = p02.loc[p02["target_date"] < "2026-03-14", "value"]
     assert len(early) > 0
     assert (early == 0).all()
+
+
+def test_a_longer_delay_moves_the_last_origin_back() -> None:
+    # The r2-real grid has 12-week delays in some outbreaks, so the last
+    # origin must leave its forecast weeks that long to complete.
+    counts = _counts(("P01",), weeks=40)
+    assert synthetic.longest_delay_weeks(counts) == 8
+    late = counts.iloc[:1].assign(
+        report_date=(
+            pd.Timestamp(counts["reference_date"].iloc[0])
+            + pd.Timedelta(days=80)
+        ).strftime("%Y-%m-%d")
+    )
+    longer = pd.concat([counts, late], ignore_index=True)
+    assert synthetic.longest_delay_weeks(longer) == 12
+    _, short = synthetic.origin_cutoffs(counts, "9-0001", 4)
+    _, long = synthetic.origin_cutoffs(longer, "9-0001", 4)
+    end = dt.date.fromisoformat(str(longer["report_date"].max()))
+    assert end - dt.date.fromisoformat(long[-1]) >= dt.timedelta(
+        weeks=12 + synthetic.HORIZON_WEEKS
+    )
+    assert long[-1] < short[-1]
