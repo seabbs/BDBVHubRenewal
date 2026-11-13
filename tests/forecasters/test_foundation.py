@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import dataclasses
 import importlib.util
+import json
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -30,7 +32,11 @@ from bdbvhubrenewal.forecasters.foundation import (
 )
 from bdbvhubrenewal.forecasters.randomwalk import RandomWalk
 
-MODELS = tuple(f"fm_chronos_{s}_{lay}" for s in SOURCES for lay in LAYOUTS)
+FINETUNED_MODELS = tuple(f"fm_chronos_{s}_ragged_ft" for s in SOURCES)
+MODELS = (
+    *(f"fm_chronos_{s}_{lay}" for s in SOURCES for lay in LAYOUTS),
+    *FINETUNED_MODELS,
+)
 
 
 def _constant(value: float):
@@ -294,7 +300,7 @@ class _FakePipeline:
 def test_draws_are_independent_across_series_and_weeks(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(foundation, "_chronos", lambda: _FakePipeline())
+    monkeypatch.setattr(foundation, "_chronos", lambda *_: _FakePipeline())
     groups = [{"target": np.zeros((2, 5))}, {"target": np.zeros((1, 5))}]
     draws = chronos_sampler(groups, 4, 200, 1)
     assert [d.shape for d in draws] == [(200, 2, 4), (200, 1, 4)]
@@ -314,3 +320,93 @@ def test_chronos_missing_fails() -> None:
     # failed, not as a fit with no forecast.
     with pytest.raises(ImportError):
         chronos_sampler([{"target": np.zeros((1, 5))}], 3, 10, 0)
+
+
+@pytest.mark.parametrize("name", FINETUNED_MODELS)
+def test_finetuned_models_are_the_ragged_models_with_the_checkpoint(
+    name: str,
+) -> None:
+    model = get_model(name)
+    zero_shot = get_model(name.removesuffix("_ft"))
+    assert model.checkpoint == foundation.FINETUNED_HASH
+    assert zero_shot.checkpoint is None
+    assert (model.source, model.layout) == (zero_shot.source, "ragged")
+    # The checkpoint is in the repr, so a new hash refits the stored fits.
+    assert foundation.FINETUNED_HASH in repr(model)
+
+
+@pytest.mark.skipif(
+    importlib.util.find_spec("torch") is None, reason="needs torch"
+)
+def test_sampler_loads_the_model_of_the_checkpoint(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    loaded: list = []
+
+    def chronos(checkpoint=None):
+        loaded.append(checkpoint)
+        return _FakePipeline()
+
+    monkeypatch.setattr(foundation, "_chronos", chronos)
+    chronos_sampler([{"target": np.zeros((1, 5))}], 3, 10, 0)
+    chronos_sampler([{"target": np.zeros((1, 5))}], 3, 10, 0, "abc")
+    assert loaded == [None, "abc"]
+
+
+def _release(root: Path, checkpoint: str, settings_hash: str) -> None:
+    """Write a fake release `chronos-ft-<checkpoint>` under `root`."""
+    assets = root / f"chronos-ft-{checkpoint}"
+    assets.mkdir(parents=True)
+    (assets / "adapter_config.json").write_text("{}")
+    (assets / "adapter_model.safetensors").write_bytes(b"weights")
+    (assets / "settings.json").write_text(json.dumps({"hash": settings_hash}))
+
+
+@pytest.fixture
+def releases(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """An empty fake release store and an empty adapter cache."""
+    root = tmp_path / "releases"
+    root.mkdir()
+    monkeypatch.setattr(foundation, "FINETUNED_URL", root.as_uri())
+    monkeypatch.setattr(foundation, "FINETUNED_CACHE", str(tmp_path / "cache"))
+    return root
+
+
+def test_adapter_is_downloaded_once_and_cached(
+    releases: Path, tmp_path: Path
+) -> None:
+    _release(releases, "abc", "abc")
+    adapter = foundation.finetuned_adapter("abc")
+    assert adapter == tmp_path / "cache" / "chronos-ft-abc"
+    assert (adapter / "adapter_model.safetensors").read_bytes() == b"weights"
+    assert (adapter / "adapter_config.json").exists()
+    # With the release gone, the cached copy is used.
+    for path in (releases / "chronos-ft-abc").iterdir():
+        path.unlink()
+    assert foundation.finetuned_adapter("abc") == adapter
+
+
+@pytest.mark.usefixtures("releases")
+def test_missing_release_fails_and_caches_nothing(tmp_path: Path) -> None:
+    with pytest.raises(FileNotFoundError, match="chronos-ft-abc"):
+        foundation.finetuned_adapter("abc")
+    assert not (tmp_path / "cache" / "chronos-ft-abc").exists()
+
+
+def test_release_of_another_hash_fails_and_caches_nothing(
+    releases: Path, tmp_path: Path
+) -> None:
+    _release(releases, "abc", "def")
+    with pytest.raises(ValueError, match="def"):
+        foundation.finetuned_adapter("abc")
+    assert not (tmp_path / "cache" / "chronos-ft-abc").exists()
+
+
+@pytest.mark.usefixtures("releases")
+def test_missing_release_is_stored_as_failed(task: ForecastTask) -> None:
+    from bdbvhubrenewal.evaluation import store
+
+    # As a missing Chronos-2: a failed fit, not a fit with no forecast.
+    stored = store.fit("fm_chronos_weekly_ragged_ft", task, {}, "c")
+    assert stored.meta["status"] == "failed"
+    assert f"chronos-ft-{foundation.FINETUNED_HASH}" in stored.meta["error"]
