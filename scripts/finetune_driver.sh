@@ -66,8 +66,9 @@ seeds() {
 }
 
 remote_scheduler() {
-  # Start the remote scheduler unless it runs; it skips started seeds.
-  if ssh -o ConnectTimeout=20 "$REMOTE" "pgrep -f '[f]inetune_remote.sh'" \
+  # Start the remote scheduler unless it, or a scheduler started by hand
+  # (run4.sh), runs; it skips started seeds.
+  if ssh -o ConnectTimeout=20 "$REMOTE" "pgrep -f '[f]inetune_remote.sh|[r]un4.sh'" \
       > /dev/null 2>&1; then
     return 0
   fi
