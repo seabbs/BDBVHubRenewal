@@ -2225,13 +2225,16 @@ We use the fair form over <span class="arithmatex">\(m\)</span> samples,</p>
 <p>The energy score on the log scale is the energy score of <span class="arithmatex">\(\log(1 + \mathbf{y})\)</span> against <span class="arithmatex">\(\log(1 + \mathbf{X}_i)\)</span>, never the log of the score.
 Relative energy scores are ratios of means against <code>randomwalk</code> over the origins and releases both have, and <span class="arithmatex">\(n\)</span> counts those.
 The score rewards a joint pattern across places only where draws are joint.
-The renewal models' draws are joint across provinces, one posterior draw per sample index.
+The draws of <code>renewal</code> and <code>renewalbvd</code> are joint across provinces, one posterior draw per sample index.
+<code>renewalsp</code> fits each province on its own, so its provinces are independent.
 Zones split each province draw, so zones are joint within a province for every renewal model.
-The random walk models draw each place independently.
+<code>pprandomwalknowcast</code> takes one posterior draw of its pooled parameters per sample index, so its places share that draw.
+<code>randomwalk</code> and <code>randomwalknowcast</code> draw each place independently.
 Hub teams' samples are joint across weeks within a place only, as the hub's sample format sets, so pairing their indices across places scores them as independent across places.</p>
 <h2 id="backtest-design">Backtest design<a class="headerlink" href="#backtest-design" title="Permanent link">&para;</a></h2>
 <p>Each vintage is a forecast task.
 The fitted models (the renewal models and <code>pprandomwalknowcast</code>) forecast real vintages only, from their stored fits (<a href="../../development/cli/#fit-store">fit store</a>).
+The one exception is the <a href="#health-zones">zone backtest</a>, which fits <code>pprandomwalknowcast</code> at each origin.
 The other models forecast every task.</p>
 <table>
 <thead>
@@ -2282,7 +2285,7 @@ A model that cannot forecast from an origin, such as a random walk model with no
 Two targets are scored.</p>
 <p><strong>Reported.</strong> The count each later release <span class="arithmatex">\(o'\)</span> shows for every forecast week it reports.
 <code>randomwalk</code> is scored on its samples as they are, with no delay.
-Every other model forecasts the final count <span class="arithmatex">\(X\)</span> of week <span class="arithmatex">\(w\)</span>, which is mapped to what <span class="arithmatex">\(o'\)</span> shows by the model's own delay.</p>
+Every other model with a modelled delay forecasts the final count <span class="arithmatex">\(X\)</span> of week <span class="arithmatex">\(w\)</span>, which is mapped to what <span class="arithmatex">\(o'\)</span> shows by that delay.</p>
 <ol>
 <li>Day <span class="arithmatex">\(t\)</span> is <span class="arithmatex">\(a = c - t\)</span> days old at a cut-off <span class="arithmatex">\(c\)</span>, and <span class="arithmatex">\(\pi(a)\)</span> is the share of its final count the model expects reported by then.
    For <code>randomwalknowcast</code>, <span class="arithmatex">\(\pi(a) = 1 / \Gamma(a)\)</span> under the daily delay it fits at the origin (<a href="../baselines/#delay">Baseline models</a>).
@@ -2300,7 +2303,7 @@ R_o + \text{Binomial}(X - R_o, q), \qquad q = \frac{\pi_w(c_{o'}) - \pi_w(c_o)}{
 </li>
 </ol>
 <p>with the sign carried when <span class="arithmatex">\(X &lt; R_o\)</span>, <span class="arithmatex">\(q\)</span> kept in <span class="arithmatex">\([0, 1]\)</span>, and <span class="arithmatex">\(q = 1\)</span> for a week fully reported at the origin.
-A model with no modelled delay, such as a hub team, is scored on complete weeks only.</p>
+A model with no modelled delay, such as a hub team or a Chronos-2 model (<a href="../foundation/">Foundation models</a>), is scored on complete weeks only.</p>
 <p><strong>Complete weeks.</strong> The count the latest release shows for the weeks it reports in full.
 A week is complete when it is at least 4 weeks back from the week holding the latest release's cut-off and grew by less than 2% since the release before.</p>
 <p>Scores are WIS, 50% and 90% coverage and bias, by model, origin, weeks back from the week holding the origin's cut-off, and place.
@@ -2326,7 +2329,9 @@ Each model's zone samples are made to sum to its province samples, as in the sub
 Each real vintage before the latest is forecast, and origins with no pair of releases within the delay window are skipped, as for provinces.
 Zones are scored on the reported target as for <a href="#real-releases">real releases</a>, with the zone delays fitted at the origin, so a zone count is never scored against a count still being reported.
 Relative WIS is against <code>randomwalk</code> in the same form.
-On the Nowcast page the fitted models' zone samples at the latest release are those of their stored fits, where they have one.</p>
+<code>pprandomwalknowcast</code> is fitted here on the zones and on the provinces.
+On the Nowcast page only <code>randomwalk</code> and <code>randomwalknowcast</code> are shown at zone level.
+The fitted models are shown at the country and provinces, from their stored forecasts.</p>
 <h2 id="checks">Scores by place type and plausibility<a class="headerlink" href="#checks" title="Permanent link">&para;</a></h2>
 <p>The scores on the reported target, at province and zone level, are also averaged by the type of place and by a plausibility flag of each forecast, both decided from the counts reported at the origin.
 Relative WIS in these averages is against <code>randomwalk</code>.

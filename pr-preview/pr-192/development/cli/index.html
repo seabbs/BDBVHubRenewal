@@ -2147,7 +2147,7 @@
 The files in <code>results/</code> are not committed, apart from <code>development-log.csv</code>, <code>ladder.csv</code> and <code>model-choice.yml</code>.
 The Pages build makes the rest with the steps of <code>task results</code>, from the code, the data and the fit store.</p>
 <h2 id="fit-store">Fit store<a class="headerlink" href="#fit-store" title="Permanent link">&para;</a></h2>
-<p>The backtest and the docs build never fit a model.
+<p>The backtest and the docs build fit no model, apart from the zone backtest, which fits <code>pprandomwalknowcast</code> at each origin (<a href="../../methods/evaluation/#health-zones">Evaluation</a>).
 The Fit store workflow (<code>.github/workflows/fit-store.yml</code>) fits each fitted model once at each real origin.
 Each fit is one file on the <code>fit-store</code> branch, <code>&lt;model&gt;/&lt;origin&gt;/&lt;key&gt;.json.gz</code>.
 The key hashes:</p>

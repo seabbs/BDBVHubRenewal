@@ -2751,8 +2751,8 @@ Leaving a province out drops the national term and the patch that holds it.
 The term adds no parameters, and <span class="arithmatex">\(\zeta = 0\)</span> gives <code>renewal</code>.</p>
 <h2 id="health-zones">Health zones<a class="headerlink" href="#health-zones" title="Permanent link">&para;</a></h2>
 <p>Zone samples sum to their province's samples, sample by sample and week by week, and zones do not enter the national value.
-The random walk baselines run at zone level and their samples set the zone shares of the province samples (<a href="../baselines/#health-zones">Baseline models</a>).
-Every other model's province forecast is split across the zones.</p>
+<code>randomwalk</code> and <code>randomwalknowcast</code> run at zone level and their samples set the zone shares of the province samples (<a href="../baselines/#health-zones">Baseline models</a>).
+Every other model's province forecast, <code>pprandomwalknowcast</code>'s included, is split across the zones.</p>
 <h3 id="split-of-province-samples">Split of province samples<a class="headerlink" href="#split-of-province-samples" title="Permanent link">&para;</a></h3>
 <p>For province <span class="arithmatex">\(p\)</span> with zones <span class="arithmatex">\(z\)</span>, let <span class="arithmatex">\(o_z(w)\)</span> be zone <span class="arithmatex">\(z\)</span>'s published count for week <span class="arithmatex">\(w\)</span> and <span class="arithmatex">\(O(w) = \sum_z o_z(w)\)</span>.
 Each province sample <span class="arithmatex">\(i\)</span> draws its zone shares once, for all weeks,</p>

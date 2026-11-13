@@ -2019,6 +2019,7 @@
 Two hub models are submitted, <code>seabbs-rwnowcast</code> and <code>seabbs-renewal</code>.</p>
 <h2 id="models">Models<a class="headerlink" href="#models" title="Permanent link">&para;</a></h2>
 <p><code>randomwalknowcast</code> is baselinenowcast (<a href="https://doi.org/10.12688/wellcomeopenres.25027.2">Johnson et al. 2025</a>, Wellcome Open Research) with a random walk on top, and <code>randomwalk</code> is the same walk with no nowcast (<a href="methods/baselines/">Baseline models</a>).
+<code>pprandomwalknowcast</code> is a generative variant that fits the delay and the walk jointly, partially pooled over places, and is not submitted.
 The renewal models (<code>renewal</code>, <code>renewalsp</code> and <code>renewalbvd</code>) are built on <a href="https://github.com/CDCgov/PyRenew">PyRenew</a> and fit the hub's known and imputed onsets (<a href="methods/model/">Renewal models</a>).
 Each week <code>randomwalknowcast</code> is submitted as <code>seabbs-rwnowcast</code> and the first renewal model to pass its checks as <code>seabbs-renewal</code> (<a href="submission/workflow/">Submission workflow</a>).</p>
 <h2 id="pages">Pages<a class="headerlink" href="#pages" title="Permanent link">&para;</a></h2>
@@ -2036,7 +2037,7 @@ Each week <code>randomwalknowcast</code> is submitted as <code>seabbs-rwnowcast<
 </tr>
 <tr>
 <td><a href="getting-started/">Getting started</a></td>
-<td>Forecast, plot and score the two baselines in Python.</td>
+<td>Forecast with the two baselines, load a stored renewal fit, and plot and score them in Python.</td>
 </tr>
 <tr>
 <td>Methods</td>

@@ -771,10 +771,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#delay" class="md-nav__link">
+  <a href="#scoring" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Delay
+        Scoring
       
     </span>
   </a>
@@ -2062,10 +2062,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#delay" class="md-nav__link">
+  <a href="#scoring" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Delay
+        Scoring
       
     </span>
   </a>
@@ -2158,10 +2158,9 @@ The daily source is summed to weeks, as the hub's target is weekly, and each wee
 <h2 id="patches-and-context">Patches and context<a class="headerlink" href="#patches-and-context" title="Permanent link">&para;</a></h2>
 <p>Chronos-2 reads a series in patches of 16 steps.
 The context is every step from the first onset in the releases to <span class="arithmatex">\(t^*\)</span>.</p>
-<h2 id="delay">Delay<a class="headerlink" href="#delay" title="Permanent link">&para;</a></h2>
-<p>The ragged models give the release backtest a delay (<a href="../evaluation/">Evaluation</a>): their share of a final count reported at each release lag <span class="arithmatex">\(d\)</span>, the sum of <span class="arithmatex">\(Y_{p,t,d}\)</span> over the sum of <span class="arithmatex">\(X_{p,t}\)</span> over final steps with a count at lag <span class="arithmatex">\(d\)</span>, made non-decreasing and 1 from lag <span class="arithmatex">\(D\)</span>, pooled over places for a place with none.
-A weekly lag is placed at the day ages it covers at the latest cut-off.
-The complete models give none.</p>
+<h2 id="scoring">Scoring<a class="headerlink" href="#scoring" title="Permanent link">&para;</a></h2>
+<p>The models forecast final counts and model no delay.
+So the release backtest scores them on the complete target only, the weeks the latest release reports in full (<a href="../evaluation/#real-releases">Evaluation</a>).</p>
 <h2 id="limitations">Limitations<a class="headerlink" href="#limitations" title="Permanent link">&para;</a></h2>
 <ul>
 <li>Chronos-2 is used as pretrained. It has not seen these data or outbreaks like them.</li>
