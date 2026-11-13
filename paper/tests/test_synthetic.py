@@ -9,7 +9,11 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.forecasters.base import NATIONAL, ModelUnavailableError
+from bdbvhubrenewal.forecasters.base import (
+    NATIONAL,
+    ModelUnavailableError,
+    get_model,
+)
 from bdbvhubrenewal.reporting.hubtables import HUB_QUANTILE_LEVELS
 from paper import synthetic
 
@@ -191,3 +195,11 @@ def test_default_models_include_the_zero_shot_ragged_ones(name: str) -> None:
     assert name in synthetic.MODELS
     assert "randomwalknowcast" in synthetic.MODELS
     assert f"{name}_ft" in synthetic.MODELS
+
+
+def test_the_random_walk_forecasts_a_single_place_as_the_country() -> None:
+    task = synthetic.outbreak_tasks(_counts(("P01",)), "9-0001", 1, 10)[0]
+    walk = synthetic.model_task(get_model("randomwalknowcast"), task)
+    chronos = synthetic.model_task(_Constant("flat"), task)
+    assert walk.locations == (NATIONAL,)
+    assert chronos.locations == ()
