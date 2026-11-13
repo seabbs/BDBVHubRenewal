@@ -48,9 +48,14 @@ def test_the_table_adds_realised_values_from_the_settings() -> None:
 
 
 def test_markdown_has_one_row_per_setting() -> None:
-    settings = pd.DataFrame({"outbreak": ["a"], "gt_mean": [6.0]})
+    settings = pd.DataFrame(
+        {"outbreak": ["a"], "gt_mean": [6.0], "drift_sd": [1.3e-5]}
+    )
     table = synthetic_grid.grid_table(settings)
+    assert "e-" not in table.set_index("setting").loc["drift_sd", "realised"]
     md = synthetic_grid.to_markdown(table)
     lines = md.strip().splitlines()
     assert len(lines) == len(table) + 2
     assert lines[0].startswith("| Factor |")
+    # Pipes in formulas are escaped, so each row has its five cells.
+    assert all(line.count(" | ") == 4 for line in lines[2:])
