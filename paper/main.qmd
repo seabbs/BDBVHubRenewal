@@ -61,6 +61,7 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
 
 ::: {.callout-note title="Plan"}
 - Simulated with epinowcast over a grid of outbreak, delay and noise settings.
+- A held-out set of simulations was not used during development.
 - A table in the main text gives the grid of synthetic scenarios.
 - The full process and an overview of the epinowcast model used are in the SI.
 :::
@@ -81,6 +82,7 @@ Placeholder: grid of synthetic scenarios.
 - Compared with the hub's models, relative to the hub's own baseline, and evaluated as the hub did.
 - Quantile forecasts scored with WIS and log-scale WIS, bias, and coverage, against a rolling evaluation set of the data as reported D days later [@Wolffram2023].
 - Daily and weekly versions may not both make sense here.
+- The nowcast dates are split in half. We developed our setup on the first half only, and the second half is held out for the results.
 :::
 
 ### Case study 2: prospective submission to the Ebola forecasting hub
@@ -103,6 +105,7 @@ Each panel shows:
 - bias;
 - 50% and 90% coverage;
 - score variation by location and horizon, supported by SI plots.
+- for Germany, a dotted line marking the split between the development and held-out halves.
 
 The plots in primarycensored-paper are a model for these.
 Each section has two paragraphs, one on visual performance and one summarising scores.
