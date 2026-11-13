@@ -9,6 +9,9 @@ format:
   html:
     toc: false
     number-sections: false
+    other-links:
+      - text: Supporting information
+        href: si.html
   pdf:
     number-sections: false
 bibliography: reference.bib
