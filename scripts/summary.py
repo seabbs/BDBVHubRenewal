@@ -2,10 +2,10 @@
 
 Relative WIS is against randomwalknowcast.
 
-Each target (reported, complete) is scored on the cells every model
-scored on that target forecasts, split into nowcast weeks (weeks back >= 0) and forecast weeks.
-National is also shown on its own: on the complete target it is each
-model's own national series.
+The Chronos-2 models give no delay, so they are scored on the complete
+target only. The table is the complete target, on the cells every model
+forecasts, split into nowcast weeks (weeks back >= 0) and forecast weeks.
+National is also shown on its own, each model's own national series.
 """
 import sys
 from pathlib import Path
@@ -16,6 +16,7 @@ from bdbvhubrenewal.evaluation.nowcast import relative_wis
 
 res = Path(sys.argv[1])
 s = pd.read_csv(res / "nowcast-scores.csv")
+s = s.loc[s["target"] == "complete"]
 s["weeks"] = s["weeks_back"].map(lambda k: "nowcast" if k >= 0 else "forecast")
 keys = ["target", "origin", "truth_vintage", "location", "target_end_date"]
 # Within each target, the cells every model scored on that target has.
