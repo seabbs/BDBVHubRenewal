@@ -31,6 +31,7 @@ from bdbvhubrenewal.forecasters.base import (
     ModelUnavailableError,
     register_model,
 )
+from bdbvhubrenewal.forecasters.chain import start_weeks
 from bdbvhubrenewal.forecasters.randomwalk import RandomWalk
 
 __all__ = [
@@ -288,9 +289,15 @@ def _group(
     }
 
 
-def _walk_start(origin: Any) -> str:
-    """Return the earliest week `randomwalk` starts its walk from."""
-    return str(origin.snap.week_ends[int(origin.start.min())])
+def _walk_start(task: ForecastTask) -> str:
+    """Return the earliest week `randomwalk` starts its walk from.
+
+    It is read from the delay alone, so it exists where the walk has no
+    spread.
+    """
+    walk = RandomWalk()
+    snap = walk.snapshots(task)
+    return str(snap.week_ends[int(start_weeks(snap, walk.settings).min())])
 
 
 @dataclass
@@ -355,8 +362,7 @@ class FoundationModel:
         tri = hub_triangle(rows, self.source, places, weeks[-1])
         start = tri.n_context
         if self.layout == "complete":
-            origin = RandomWalk().origin_at(task, errors=False)
-            start = tri.times.index(_walk_start(origin)) + 1
+            start = tri.times.index(_walk_start(task)) + 1
         if start < 2:
             raise ModelUnavailableError(
                 f"{self.name} needs two steps of context, and the task for "
