@@ -20,9 +20,11 @@ Sample forecasts (`metric` is `crps`):
 - **CRPS** from scoringrules' `crps_ensemble` with the `nrg` estimator,
   $E|X - y| - E|X - X'|/2$ over the empirical distribution, which is
   scoringRules' `crps_sample` that scoringutils calls.
-- **Bias** as scoringutils' `bias_sample`. For counts (integer samples and
-  truth) it is $1 - (P(X \le y) + P(X \le y - 1))$, otherwise
-  $1 - 2P(X \le y)$.
+- **Bias** as scoringutils' `bias_sample`. For counts it is
+  $1 - (P(X \le y) + P(X \le y - 1))$, otherwise $1 - 2P(X \le y)$.
+  Whether a study forecasts counts is set in `STUDY_COUNTS`; scoringutils
+  instead checks whether every value passed is an integer, which agrees
+  on an all-integer table.
 
 Both forms:
 
@@ -52,6 +54,7 @@ from paperfigs.schema import DEFAULT_STRATUM, FORECAST_KEYS
 __all__ = [
     "SCORE_COLUMNS",
     "STUDY_BASELINES",
+    "STUDY_COUNTS",
     "STUDY_COVERAGE",
     "coverage_column",
     "coverage_columns",
@@ -77,6 +80,17 @@ STUDY_COVERAGE: Final[dict[str, tuple[float, ...]]] = {
 
 The German hub's quantiles stop at 0.025 and 0.975 with no 0.05 or 0.95,
 so it reports 95% rather than 90% coverage.
+"""
+
+STUDY_COUNTS: Final[dict[str, bool]] = {
+    "synthetic": True,
+    "germany": True,
+    "ebola": True,
+}
+"""Whether each study forecasts counts, which sets the sample bias form.
+
+This is a study setting rather than a check of the values, so a
+forecast's bias does not depend on which other models are scored with it.
 """
 
 SCORE_COLUMNS: Final = ("score", "log_score", "bias")
@@ -181,10 +195,9 @@ def _crps(x: np.ndarray, y: np.ndarray) -> np.ndarray:
     ).reshape(y.shape)
 
 
-def _bias_sample(x: np.ndarray, y: np.ndarray) -> np.ndarray:
+def _bias_sample(x: np.ndarray, y: np.ndarray, counts: bool) -> np.ndarray:
     below = (x < y[:, None]).mean(axis=1)
     equal = (x == y[:, None]).mean(axis=1)
-    counts = np.all(x == np.round(x)) and np.all(y == np.round(y))
     if counts:
         # P(X <= y) + P(X <= y - 1) for integers.
         return 1 - (2 * below + equal)
@@ -197,7 +210,7 @@ def _coverage_sample(x: np.ndarray, y: np.ndarray, width: float) -> np.ndarray:
 
 
 def _score_sample_block(
-    block: pd.DataFrame, widths: tuple[float, ...]
+    block: pd.DataFrame, widths: tuple[float, ...], counts: bool
 ) -> pd.DataFrame:
     """Score sample forecasts that share one number of samples."""
     keys = list(FORECAST_KEYS)
@@ -209,7 +222,7 @@ def _score_sample_block(
     out["metric"] = "crps"
     out["score"] = _crps(x, y)
     out["log_score"] = _crps(np.log1p(x), np.log1p(y))
-    out["bias"] = _bias_sample(x, y)
+    out["bias"] = _bias_sample(x, y, counts)
     for w in widths:
         out[coverage_column(w)] = _coverage_sample(x, y, w)
     return out
@@ -236,7 +249,9 @@ def _blocks(df: pd.DataFrame, column: str) -> list[pd.DataFrame]:
 
 
 def score_forecasts(
-    forecasts: pd.DataFrame, coverage: tuple[float, ...] | None = None
+    forecasts: pd.DataFrame,
+    coverage: tuple[float, ...] | None = None,
+    counts: bool | None = None,
 ) -> pd.DataFrame:
     """Score each forecast with a known truth.
 
@@ -249,6 +264,9 @@ def score_forecasts(
     coverage : tuple of float, optional
         Central interval widths to score coverage for. Defaults to
         `STUDY_COVERAGE` for each study.
+    counts : bool, optional
+        Whether sample forecasts are of counts, which picks the bias form.
+        Defaults to `STUDY_COUNTS` for each study.
 
     Returns
     -------
@@ -265,13 +283,14 @@ def score_forecasts(
     parts = []
     for study, one in df.groupby("study", sort=False):
         widths = coverage or STUDY_COVERAGE[str(study)]
+        is_count = STUDY_COUNTS[str(study)] if counts is None else counts
         is_q = one["quantile_level"].notna()
         parts += [
             _score_quantile_block(b, widths)
             for b in _blocks(one[is_q], "quantile_level")
         ]
         parts += [
-            _score_sample_block(b, widths)
+            _score_sample_block(b, widths, is_count)
             for b in _blocks(one[~is_q], "sample_id")
         ]
     if not parts:

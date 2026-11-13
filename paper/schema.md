@@ -67,7 +67,7 @@ The latest `as_of_date` for a study is the final data.
 - `metric`, `wis` for quantile forecasts and `crps` for sample forecasts;
 - `score`, the WIS or the CRPS on the natural scale;
 - `log_score`, the same after `log1p` of the forecast and truth (Bosse et al. 2023);
-- `bias`, scoringutils' bias in [-1, 1], positive for overprediction;
+- `bias`, scoringutils' bias in [-1, 1], positive for overprediction, using the count form for sample forecasts in every study (`STUDY_COUNTS`);
 - `coverage_<width>`, whether the truth is in the central interval (from linear sample quantiles for samples). Widths are set per study in `STUDY_COVERAGE`: 50% and 95% for germany, whose hub has no 0.05 or 0.95 level, and 50% and 90% otherwise.
 
 These match scoringutils 2.2 defaults, checked by `tests/test_scoringutils.py` against `tests/scoringutils_reference.R`.
