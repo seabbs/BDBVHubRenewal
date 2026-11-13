@@ -57,7 +57,7 @@
     
       <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
     
-      <link rel="stylesheet" href="../../stylesheets/extra.css?v=1c6923d2">
+      <link rel="stylesheet" href="../../stylesheets/extra.css?v=afdda586">
     
     <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
@@ -2156,7 +2156,9 @@ The key hashes:</p>
 <li>the model as built, including its variant and sampler settings;</li>
 <li>the BVDOutbreakSize release, for <code>renewalbvd</code>;</li>
 <li>the code the model's fit can run (its import closure with <code>evaluation/store.py</code> and <code>evaluation/backtest.py</code>), without docstrings or comments;
-  the zone split (<code>forecasters/zones.py</code>, <code>evaluation/zones.py</code>) is left out, as a stored fit holds national and province samples only and its zones are split from them at load;</li>
+  the zone split (<code>forecasters/zones.py</code>, <code>evaluation/zones.py</code>) is left out, as a stored fit holds national and province samples only and its zones are split from them at load;
+  so are the key's own helper (<code>evaluation/digest.py</code>) and the plots (<code>reporting/plots.py</code>), which a fit does not run;</li>
+<li>the package's data files (<code>src/bdbvhubrenewal/data/*.csv</code>), such as the province centres of the gravity kernel;</li>
 <li>the runtime dependencies in <code>uv.lock</code>.</li>
 </ul>
 <p>The renewal variants use the sampler table of the submission candidate that runs them, in <code>ci/policy.toml</code>.
@@ -2353,7 +2355,7 @@ For any other reference date it prints a note and skips the checks.</p>
       
         <script src="../../javascripts/tablefilter.js?v=774f66a6"></script>
       
-        <script src="../../javascripts/explorer.js?v=84b4d7fb"></script>
+        <script src="../../javascripts/explorer.js?v=576e13e2"></script>
       
         <script src="../../javascripts/scorechart.js?v=1c27a70d"></script>
       

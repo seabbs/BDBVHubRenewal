@@ -57,7 +57,7 @@
     
       <link rel="stylesheet" href="../assets/_mkdocstrings.css">
     
-      <link rel="stylesheet" href="../stylesheets/extra.css?v=1c6923d2">
+      <link rel="stylesheet" href="../stylesheets/extra.css?v=afdda586">
     
     <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
@@ -969,6 +969,17 @@
       Table of contents
     </label>
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#nowcasts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Nowcasts
+      
+    </span>
+  </a>
+  
+</li>
       
         <li class="md-nav__item">
   <a href="#overall" class="md-nav__link">
@@ -1974,6 +1985,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#nowcasts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Nowcasts
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#overall" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2048,6 +2070,15 @@
 The paper's later dates, from 2022-02-10, are held out.
 Every nowcast is scored on its quantiles at the hub's seven levels, by WIS and the coverage of the 50% and 95% intervals, on the data reported 40 days after the sum ends (<a href="../methods/evaluation/#german-nowcast-benchmark">how the benchmark is set up</a>).
 Relative scores are against <code>randomwalknowcast</code> on the nowcasts both made.</p>
+<h2 id="nowcasts">Nowcasts<a class="headerlink" href="#nowcasts" title="Permanent link">&para;</a></h2>
+<p>Each model's median and its 50% and 95% intervals at every seventh nowcast date, for Germany, each state and each age group.
+The solid line is the 7-day sum as reported 40 days after it ends, and the dashed line the data on the nowcast date.
+<code>randomwalk</code> and <code>KIT-frozen_baseline</code> start switched off; tick them to show them.
+The table under the plot scores the place and dates shown, so with all rounds it covers the plotted dates only.</p>
+<div class="explorer" data-src="../figures/explorer-germany.json" data-targets='{"latest": "../figures/scoresummary-germany-latest.json"}' role="group" aria-label="German nowcasts">
+<noscript>The explorer needs JavaScript.</noscript>
+</div>
+
 <h2 id="overall">Overall<a class="headerlink" href="#overall" title="Permanent link">&para;</a></h2>
 <p>Scores at each of the paper's levels: Germany, its states and its age groups.</p>
 <p>Nowcast dates before 2022-02-10 only; the later half is held out for the paper.</p>
@@ -2572,7 +2603,7 @@ Pick a place to narrow the table.</p>
       
         <script src="../javascripts/tablefilter.js?v=774f66a6"></script>
       
-        <script src="../javascripts/explorer.js?v=84b4d7fb"></script>
+        <script src="../javascripts/explorer.js?v=576e13e2"></script>
       
         <script src="../javascripts/scorechart.js?v=1c27a70d"></script>
       
