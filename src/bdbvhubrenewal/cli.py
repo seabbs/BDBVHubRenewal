@@ -306,6 +306,57 @@ def build_parser() -> argparse.ArgumentParser:
     zb.add_argument("--quantiles-out", default="results/zone-quantiles.csv")
     zb.add_argument("--draws-out", default="results/zone-draws.csv.gz")
 
+    gfe = sub.add_parser(
+        "germany-fetch",
+        help="Download the German hospitalisation benchmark's data.",
+    )
+    gfe.add_argument("--config", default="config/germany.toml")
+    gfe.add_argument("--out", default=f"{data_dir}/raw/germany")
+
+    gbt = sub.add_parser(
+        "germany-backtest",
+        help="Nowcast and score the German hospitalisation benchmark.",
+    )
+    gbt.add_argument("--config", default="config/germany.toml")
+    gbt.add_argument("--data", default=f"{data_dir}/raw/germany")
+    gbt.add_argument(
+        "--models",
+        nargs="*",
+        default=None,
+        help="Defaults to the benchmark's models in the config.",
+    )
+    gbt.add_argument(
+        "--chunk", default=None, help=_CHUNK_HELP.format(what="nowcast dates")
+    )
+    gbt.add_argument("--out", default="results/germany")
+    gbt.add_argument(
+        "--held-out",
+        action="store_true",
+        help="Run the held-out half of the dates, for the paper, into "
+        "OUT/held-out.",
+    )
+
+    gtm = sub.add_parser(
+        "germany-teams",
+        help="Score the German hospitalisation hub teams' nowcasts.",
+    )
+    gtm.add_argument("--config", default="config/germany.toml")
+    gtm.add_argument("--data", default=f"{data_dir}/raw/germany")
+    gtm.add_argument("--out", default="results/germany")
+    gtm.add_argument(
+        "--held-out",
+        action="store_true",
+        help="Score the held-out half of the dates, for the paper, into "
+        "OUT/held-out.",
+    )
+
+    gpp = sub.add_parser(
+        "germany-paper",
+        help="Write the German benchmark's forecasts as the paper's table.",
+    )
+    gpp.add_argument("--config", default="config/germany.toml")
+    gpp.add_argument("--results", default="results/germany")
+
     dig = sub.add_parser(
         "digest",
         help="Print a hash of what a backtest reads, to key its outputs.",
@@ -1463,6 +1514,80 @@ def _compare_hub(args: argparse.Namespace) -> int:
     return 0
 
 
+def _germany_backtest(args: argparse.Namespace) -> int:
+    from bdbvhubrenewal.data.germany import hub_triangle
+    from bdbvhubrenewal.evaluation import germany as de
+
+    config = de.load_germany_config(args.config)
+    dates = de.nowcast_dates(config, held_out=args.held_out)
+    if args.chunk:
+        dates = chunk(dates, args.chunk)
+    models = config.models if args.models is None else args.models
+    triangle = hub_triangle(Path(args.data) / Path(config.triangle).name)
+    forecasts = de.with_truth(
+        de.germany_forecasts(
+            models, triangle, dates, config.n_samples, config.seed
+        ),
+        triangle,
+        config.truth_delay,
+    )
+    scores = de.score_germany(forecasts, config.truth_delay)
+    out = Path(args.out) / ("held-out" if args.held_out else "")
+    out.mkdir(parents=True, exist_ok=True)
+    write_csv(forecasts, out / "forecasts.csv.gz")
+    write_csv(scores, out / "scores.csv.gz")
+    print(f"German benchmark: {len(scores)} scored nowcasts in {out}.")
+    return 0
+
+
+def _germany_teams(args: argparse.Namespace) -> int:
+    from bdbvhubrenewal.data.germany import hub_triangle
+    from bdbvhubrenewal.evaluation import germany as de
+
+    config = de.load_germany_config(args.config)
+    data = Path(args.data)
+    submissions = de.read_submissions(
+        [data / Path(p).name for p in config.submissions]
+    )
+    dates = de.nowcast_dates(config, held_out=args.held_out)
+    forecasts = de.with_truth(
+        de.team_forecasts(submissions, dates),
+        hub_triangle(data / Path(config.triangle).name),
+        config.truth_delay,
+    )
+    scores = de.score_germany(forecasts, config.truth_delay)
+    out = Path(args.out) / ("held-out" if args.held_out else "")
+    out.mkdir(parents=True, exist_ok=True)
+    write_csv(forecasts, out / "teams-forecasts.csv.gz")
+    write_csv(scores, out / "teams.csv.gz")
+    print(f"German hub teams: {len(scores)} scored nowcasts in {out}.")
+    return 0
+
+
+def _germany_paper(args: argparse.Namespace) -> int:
+    from bdbvhubrenewal.evaluation import germany as de
+
+    config = de.load_germany_config(args.config)
+    res = Path(args.results)
+    parts = [
+        pd.read_csv(path, dtype={"origin": str, "target_end_date": str})
+        for name in ("forecasts.csv.gz", "teams-forecasts.csv.gz")
+        if (path := res / name).exists()
+    ]
+    paper = de.paper_forecasts(pd.concat(parts, ignore_index=True))
+    write_csv(paper, res / "paper-forecasts.csv.gz")
+    meta = {
+        "study": "germany",
+        "split_date": config.split_date,
+        "baseline": config.paper_baseline,
+        "truth_delay": config.truth_delay,
+        "quantile_levels": list(de.QUANTILE_LEVELS),
+    }
+    (res / "paper-forecasts.json").write_text(json.dumps(meta, indent=2) + "\n")
+    print(f"Paper table: {len(paper)} rows in {res}.")
+    return 0
+
+
 def _data_root() -> Path:
     """Return the tidy data directory, `$BDBV_DATA_DIR` or `data/`."""
     return Path(os.environ.get("BDBV_DATA_DIR") or "data")
@@ -1534,6 +1659,21 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _nowcast(args)
     if args.command == "zone-backtest":
         return _zone_backtest(args)
+    if args.command == "germany-fetch":  # pragma: no cover - network
+        from bdbvhubrenewal.evaluation.germany import (
+            fetch_germany,
+            load_germany_config,
+        )
+
+        fetch_germany(load_germany_config(args.config), args.out)
+        print(f"German benchmark data written to {args.out}.")
+        return 0
+    if args.command == "germany-backtest":
+        return _germany_backtest(args)
+    if args.command == "germany-teams":
+        return _germany_teams(args)
+    if args.command == "germany-paper":
+        return _germany_paper(args)
     if args.command == "digest":
         from bdbvhubrenewal.evaluation.digest import (
             backtest_digest,

@@ -1,0 +1,48 @@
+# German COVID-19 hospitalisation nowcast benchmark (Wolffram et al. 2023,
+# PLOS Comp Biol, doi:10.1371/journal.pcbi.1011394). Read by
+# `bdbvhubrenewal.evaluation.germany.load_germany_config`.
+# `bdbvhubrenewal germany-fetch` downloads the files below at these commits
+# into data/raw/germany/, which is not committed. The data come from the
+# Robert Koch Institute (CC BY 4.0) through the hub.
+
+[hub]
+# The reporting triangle by Meldedatum, as of 2022-08-08.
+repo = "KITmetricslab/hospitalization-nowcast-hub"
+commit = "11c745322c055cfbd4f0c8f72241642a50aea399"
+triangle = "data-truth/COVID-19/COVID-19_hospitalizations.csv"
+
+[teams]
+# The paper's evaluation repository (MIT), with the hub teams' submitted
+# quantiles as it gathered them.
+repo = "dwolffram/hospitalization-nowcast-hub-evaluation"
+commit = "0081bad6deca43e19570c37dd91cd405138fab41"
+submissions = [
+  "data/submissions.csv.gz",
+  "data/submissions_KIT-frozen_baseline.csv.gz",
+]
+
+[nowcast]
+# The paper's nowcast dates, every day of its evaluation period.
+first_date = "2021-11-22"
+last_date = "2022-04-29"
+# The first date of the held-out half, the midpoint of the dates above:
+# 2021-11-22 to 2022-02-09 (80 dates) are for development, 2022-02-10 to
+# 2022-04-29 (79 dates) are held out for the paper and not scored here.
+split_date = "2022-02-10"
+models = ["randomwalk", "randomwalknowcast"]
+# Samples per forecast and seed, as the backtest. The samples' quantiles at
+# the hub's seven levels are scored.
+n_samples = 100
+seed = 20261027
+
+[scoring]
+# Relative scores on the page divide by this model.
+baseline = "randomwalknowcast"
+# The paper's relative scores divide by the hub's own baseline, as
+# Wolffram et al. (2023) compare to it.
+paper_baseline = "KIT-frozen_baseline"
+
+[truth]
+# Each 7-day sum is scored on the data reported this many days after it
+# ends, the paper's 40-day truth.
+delay = 40

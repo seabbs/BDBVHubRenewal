@@ -30,6 +30,9 @@ model (`complete_weeks`).
 By default a week is complete when it is at least `COMPLETE_WEEKS` weeks
 old at the latest release and grew by less than `COMPLETE_GROWTH`
 between the last two releases.
+With a truth delay $D$, each week's truth is instead its count in the
+first release whose cut-off is at least $D$ days after the week ends
+(`rolling_truth`), and weeks no release has reached yet are not scored.
 
 A model that cannot forecast from an origin, such as a nowcast with no
 pair of releases within the delay window, is listed with no forecasts
@@ -88,6 +91,7 @@ __all__ = [
     "relative_wis",
     "release_backtest",
     "reported_samples",
+    "rolling_truth",
     "score_releases",
     "stored_delays",
     "summarise",
@@ -495,6 +499,36 @@ def _truth(real: pd.DataFrame, vintage: str) -> pd.DataFrame:
     )
 
 
+def rolling_truth(target: pd.DataFrame, delay: int) -> pd.DataFrame:
+    """Return each week's count in the first release `delay` days after it.
+
+    Parameters
+    ----------
+    target : pandas.DataFrame
+        Target rows of every release, with `vintage`, `cutoff`,
+        `location`, `target_end_date` and `total`.
+    delay : int
+        $D$, the days from the end of a week to the cut-off of the release
+        that gives its truth.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Columns `location`, `target_end_date`, `truth` and
+        `truth_vintage`, the release used. Weeks with no release $D$ days
+        after them have no row.
+    """
+    due = pd.to_datetime(target["target_end_date"]) + pd.Timedelta(days=delay)
+    late = target.loc[pd.to_datetime(target["cutoff"]) >= due]
+    first = late.sort_values(["cutoff", "vintage"]).drop_duplicates(
+        ["location", "target_end_date"]
+    )
+    out = first.rename(columns={"total": "truth", "vintage": "truth_vintage"})
+    return out[
+        ["location", "target_end_date", "truth", "truth_vintage"]
+    ].reset_index(drop=True)
+
+
 def release_backtest(
     tasks: Sequence[ForecastTask],
     daily: pd.DataFrame,
@@ -505,6 +539,7 @@ def release_backtest(
     complete_rule: str = "growth",
     complete_after: int = COMPLETE_WEEKS,
     compare: Collection[str] | None = None,
+    truth_delay: int | None = None,
 ) -> ReleaseBacktest:
     """Forecast from every real release and score every model.
 
@@ -530,6 +565,10 @@ def release_backtest(
     compare : collection of str, optional
         Models the energy score compares, on the cells they all forecast.
         All models if None. Other models get no energy score.
+    truth_delay : int, optional
+        $D$: score the complete target on each week's count in the first
+        release $D$ days after it (`rolling_truth`) rather than on the
+        complete weeks of the latest release.
 
     Returns
     -------
@@ -567,6 +606,7 @@ def release_backtest(
         complete_rule=complete_rule,
         complete_after=complete_after,
         compare=compare,
+        truth_delay=truth_delay,
     )
 
 
@@ -736,6 +776,7 @@ def score_releases(
     complete_rule: str = "growth",
     complete_after: int = COMPLETE_WEEKS,
     compare: Collection[str] | None = None,
+    truth_delay: int | None = None,
 ) -> ReleaseBacktest:
     """Score the forecasts of `forecast_releases` and of stored models.
 
@@ -756,6 +797,8 @@ def score_releases(
     complete_rule, complete_after : str, int
         As for `release_backtest`.
     compare : collection of str, optional
+        As for `release_backtest`.
+    truth_delay : int, optional
         As for `release_backtest`.
 
     Returns
@@ -846,7 +889,17 @@ def score_releases(
     done = complete_weeks(
         target, daily, latest, rule=complete_rule, weeks=complete_after
     )
-    return _score(frames, origin_rows, fit_rows, real, done, compare)
+    complete = (
+        _truth(real, latest)
+        .assign(truth_vintage=latest)
+        .merge(
+            done.loc[done["complete"], ["location", "target_end_date"]],
+            on=["location", "target_end_date"],
+        )
+        if truth_delay is None
+        else rolling_truth(real, truth_delay)
+    )
+    return _score(frames, origin_rows, fit_rows, real, done, complete, compare)
 
 
 def _rows(table: pd.DataFrame, model: str, origin: str) -> pd.DataFrame | None:
@@ -888,6 +941,7 @@ def _score(
     fit_rows: list[pd.DataFrame],
     real: pd.DataFrame,
     done: pd.DataFrame,
+    complete: pd.DataFrame,
     compare: Collection[str] | None,
 ) -> ReleaseBacktest:
     fits = (
@@ -900,12 +954,16 @@ def _score(
         empty = pd.DataFrame()
         return ReleaseBacktest(empty, empty, empty, origins, fits)
     samples = pd.concat(frames, ignore_index=True)
-    complete = done.loc[done["complete"], ["location", "target_end_date"]]
     scored, energy = [], []
     for (tgt, truth_v), grp in samples.groupby(["target", "truth_vintage"]):
-        if tgt == "complete":
-            grp = grp.merge(complete, on=["location", "target_end_date"])
         truth = _truth(real, str(truth_v))
+        if tgt == "complete":
+            # Each week's truth, and the release it is from.
+            truth = complete
+            grp = grp.drop(columns="truth_vintage").merge(
+                complete[["location", "target_end_date", "truth_vintage"]],
+                on=["location", "target_end_date"],
+            )
         s = score_forecasts(
             grp.assign(horizon=grp["weeks_back"]), truth, keys=_KEYS
         )

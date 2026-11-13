@@ -59,6 +59,7 @@ from bdbvhubrenewal.evaluation.checks import (
     flags,
     place_types,
 )
+from bdbvhubrenewal.evaluation.germany import load_germany_config
 from bdbvhubrenewal.evaluation.hubcompare import (
     attribution,
     forecast_quantiles,
@@ -85,6 +86,7 @@ from bdbvhubrenewal.reporting.explorer import (
     explorer_html,
     write_explorer,
 )
+from bdbvhubrenewal.reporting.germany import germany_page
 from bdbvhubrenewal.reporting.hubtables import hub_tables, write_hub_tables
 from bdbvhubrenewal.reporting.nowcast_plots import (
     plot_place_summary,
@@ -166,6 +168,8 @@ def make_report(
     output: Path | str = "results",
     config_path: Path | str = "config/backtest.toml",
     hub_comparison: Path | str = "results/hub-comparison",
+    germany: Path | str = "results/germany",
+    germany_config: Path | str = "config/germany.toml",
 ) -> None:
     """Write every docs figure and table.
 
@@ -185,6 +189,10 @@ def make_report(
         Backtest settings.
     hub_comparison : pathlib.Path or str
         Output of `bdbvhubrenewal compare-hub`, if it has been run.
+    germany : pathlib.Path or str
+        Output of `bdbvhubrenewal germany-backtest`, if it has been run.
+    germany_config : pathlib.Path or str
+        The German benchmark's settings.
     """
     fig, gen = Path(figures), Path(generated)
     res, out = Path(results), Path(output)
@@ -298,6 +306,7 @@ def make_report(
         fig, gen, res, out, config, target, names, data_dir, summaries
     )
     _comparison_page(fig, gen, Path(hub_comparison), target)
+    germany_page(fig, gen, Path(germany), load_germany_config(germany_config))
 
     # Nowcast page: latest real vintage, every registered model.
     rows = real.loc[real["vintage"] == latest]
