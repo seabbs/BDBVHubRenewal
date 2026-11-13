@@ -101,7 +101,11 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      # Quarto reads GH_TOKEN to look up the TinyTeX release, which
+      # unauthenticated runners can be refused (403).
       - uses: quarto-dev/quarto-actions/setup@8a96df13519ee81fd526f2dfca5962811136661b # v2.2.0
+        env:
+          GH_TOKEN: ${{ github.token }}
         with:
           version: 1.8.26
           tinytex: true
