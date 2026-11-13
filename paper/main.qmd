@@ -157,7 +157,9 @@ Placeholder: Ebola hub submissions results panel.
 - **Strengths and weaknesses.**
   - Weaknesses: only one foundation model, only one source of synthetic data, and limited case studies.
   - Weakness: we did not compare against epinowcast, or, for the synthetic study, against the data-generating model itself.
-  - Strengths: both retrospective and real-time case studies, synthetic data that are easy to tune to a setting, and tuning on a laptop, so it is accessible.
+  - Strengths: both retrospective and real-time case studies, and synthetic data that are easy to tune to a setting.
+  - Strength: fine-tuning ran locally on consumer hardware (a laptop), so it is accessible.
+  - Weakness: fine-tuning used the laptop's GPU, which sped it up by a factor still to be measured, and not everyone has one.
 - **Domain knowledge through synthetic data.**
   - Domain knowledge enters through the synthetic data source.
   - Fingers crossed it improves results; to fill in from the results.
