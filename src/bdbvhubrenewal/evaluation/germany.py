@@ -475,7 +475,8 @@ def team_forecasts(
 
     RKI's quantiles above `_RKI_ERROR` are replaced by its -1 day nowcast
     and Epiforecasts' missing 10% quantiles are filled (`_fill_tenth`), as
-    the paper does. Nothing else is filled.
+    the paper does. Nothing else is filled. Quantiles that cross are
+    sorted within their forecast.
 
     Parameters
     ----------
@@ -521,8 +522,13 @@ def team_forecasts(
             "value": rows["value"],
         }
     )
-    keep = out["location"].isin(set(PLACE_NAMES))
-    return out.loc[keep].reset_index(drop=True)
+    out = out.loc[out["location"].isin(set(PLACE_NAMES))]
+    # Under 1% of the submitted forecasts have quantiles that cross. Their
+    # values are sorted so each forecast is a distribution.
+    ids = ["model", "origin", "location", "target_end_date"]
+    out = out.sort_values([*ids, "quantile"])
+    out["value"] = out.groupby(ids)["value"].transform(np.sort)
+    return out.reset_index(drop=True)
 
 
 def relative_scores(
