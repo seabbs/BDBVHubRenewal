@@ -98,6 +98,12 @@
   stroke-width: 1.2;
 }
 
+.explorer-asof {
+  stroke: var(--md-default-fg-color--light);
+  stroke-width: 1.5;
+  stroke-dasharray: 4 3;
+}
+
 .explorer-point {
   fill: var(--md-default-fg-color);
 }
