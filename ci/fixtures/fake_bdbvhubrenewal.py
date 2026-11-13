@@ -257,6 +257,18 @@ def cmd_fit_store(args: argparse.Namespace) -> int:
     return status
 
 
+def cmd_hub_id(args: argparse.Namespace) -> int:
+    """Print the hub id from config/hub.toml, as the real CLI does."""
+    import tomllib
+
+    path = Path(__file__).resolve().parents[2] / "config" / "hub.toml"
+    config = tomllib.loads(path.read_text())
+    own = config.get("models", {}).get(args.model, {})
+    abbr = own.get("model_abbr") or config["submission"]["model_abbr"]
+    print(f"seabbs-{abbr}")
+    return 0
+
+
 CHRONOS_FT = ("fm_chronos_daily_ragged_ft", "fm_chronos_weekly_ragged_ft")
 """The fine-tuned Chronos-2 models of seabbs-chronos2_ft."""
 
@@ -524,16 +536,7 @@ def main() -> int:
         "plot-ppc": cmd_plot,
         "coherence": cmd_coherence,
         "bvd": lambda _a: 0,
-        "hub-id": lambda a: (
-            print(
-                "seabbs-rwnowcast"
-                if a.model == "randomwalknowcast"
-                else "seabbs-chronos2_ft"
-                if a.model in CHRONOS_FT
-                else "seabbs-renewal"
-            )
-            or 0
-        ),
+        "hub-id": cmd_hub_id,
         "metadata": cmd_metadata,
         "freeze-round": cmd_freeze,
     }[args.command](args)

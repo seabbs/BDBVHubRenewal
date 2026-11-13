@@ -211,9 +211,10 @@ MODEL_METADATA = {
             "provinces and health zones, and the hub's weekly target data."
         ),
     },
-    # Fine-tuned Chronos-2, the hub model seabbs-chronos2_ft. Its committed
-    # hub/model-metadata/seabbs-chronos2_ft.yml is that of the model in
-    # config/hub.toml (tests/submission/test_fitting.py checks it).
+    # Fine-tuned Chronos-2, the hub model seabbs-chronos2_ft. `{release}`
+    # is the checkpoint release the model loads, filled in by `metadata`.
+    # The committed hub/model-metadata/seabbs-chronos2_ft.yml is that of
+    # the model in config/hub.toml (tests/submission/test_fitting.py).
     "fm_chronos_daily_ragged_ft": {
         "model_name": "Fine-tuned Chronos-2 (daily releases)",
         "methods": (
@@ -227,10 +228,9 @@ MODEL_METADATA = {
             "adapter fine-tuned on 2,000 outbreaks simulated with "
             "epinowcast's generative model (renewal process, drifting "
             "reporting delays, day-of-week effects, negative binomial "
-            "noise). The adapter is the newest release "
-            "chronos-ft-<settings hash> of "
-            "https://github.com/seabbs/BDBVHubRenewal, named in each "
-            "submission's pull request. The hub target of "
+            "noise). The adapter is the release {release} of "
+            "https://github.com/seabbs/BDBVHubRenewal, the newest when "
+            "this was written. The hub target of "
             "every daily release is laid out by onset day and release "
             "lag. The country and each province are target series in one "
             "block. Each place's counts at release lags under 28 days are "
@@ -263,10 +263,9 @@ MODEL_METADATA = {
             "adapter fine-tuned on 2,000 outbreaks simulated with "
             "epinowcast's generative model (renewal process, drifting "
             "reporting delays, day-of-week effects, negative binomial "
-            "noise). The adapter is the newest release "
-            "chronos-ft-<settings hash> of "
-            "https://github.com/seabbs/BDBVHubRenewal, named in each "
-            "submission's pull request. The hub target of "
+            "noise). The adapter is the release {release} of "
+            "https://github.com/seabbs/BDBVHubRenewal, the newest when "
+            "this was written. The hub target of "
             "every weekly release is laid out by onset week and release "
             "lag. The country and each province are target series in one "
             "block. Each place's counts at release lags under 4 weeks are "

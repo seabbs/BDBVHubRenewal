@@ -36,6 +36,7 @@ in its job with no fit and never in another model's chain."""
 
 UNFITTED = ("randomwalk", "direct")
 """Kinds that run their model with no fit, so have no diagnostics."""
+
 STAGES = ("primary", "baseline")
 
 
@@ -71,10 +72,20 @@ class Policy:
     checks: dict[str, Any]
     ppc: dict[str, Any]
     timing: Timing
+    own: bool = False
+    """A hub model of its own (`for_model` with `only`), whose chain may
+    be a `direct` candidate."""
 
     def chain(self) -> list[Candidate]:
-        """Candidates in submission order."""
-        return [c for c in self.candidates if c.kind != "shadow"]
+        """Candidates in submission order.
+
+        `direct` candidates are in no chain but their own.
+        """
+        return [
+            c
+            for c in self.candidates
+            if c.kind != "shadow" and (self.own or c.kind != "direct")
+        ]
 
     def stage(self, name: str) -> list[Candidate]:
         """Candidates fitted in one stage, shadows included."""
@@ -98,7 +109,7 @@ class Policy:
             if only
             else [c for c in self.candidates if c.kind != "direct"]
         )
-        chain = [c for c in pool if c.kind != "shadow"]
+        chain = replace(self, candidates=pool, own=only).chain()
         names = [c.model or c.id for c in chain]
         if model not in names:
             if only:
@@ -107,7 +118,7 @@ class Policy:
         start = names.index(model)
         kept = {c.id for c in chain[start : start + 1 if only else None]}
         cands = [c if c.id in kept else replace(c, kind="shadow") for c in pool]
-        return replace(self, candidates=cands)
+        return replace(self, candidates=cands, own=only)
 
     def get(self, cid: str) -> Candidate:
         """Look up a candidate by id."""

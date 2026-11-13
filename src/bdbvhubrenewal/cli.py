@@ -1124,7 +1124,7 @@ def _nowcast(args: argparse.Namespace) -> int:
             forecast_date=args.forecast_date,
         )
         path = write_submission(table, args.out, model_id(_abbr(args)))
-    except (KeyError, ValueError, OSError) as err:
+    except (LookupError, ValueError, OSError) as err:
         print(f"ERROR: {err}", file=sys.stderr)
         return 1
     _write_national_sidecar(Path(args.out), task, result)
@@ -1349,11 +1349,18 @@ def _print_coherence(summary: dict[str, object]) -> None:
 
 def _metadata(args: argparse.Namespace) -> int:
     text = MODEL_METADATA[args.model]
+    methods_long = text["methods_long"]
+    if "{release}" in methods_long:
+        # The release of the checkpoint the model loads now.
+        checkpoint = get_model(args.model).checkpoint  # type: ignore[attr-defined]
+        methods_long = methods_long.format(
+            release=f"chronos-ft-{checkpoint.hash}"
+        )
     record = render_model_metadata(
         _abbr(args),
         model_name=text["model_name"],
         methods=text["methods"],
-        methods_long=text["methods_long"],
+        methods_long=methods_long,
         data_inputs=text["data_inputs"],
     )
     path = write_model_metadata(record, args.out)

@@ -89,9 +89,7 @@ CHRONOS_MODEL: Final = "amazon/chronos-2"
 CHRONOS_REVISION: Final = "29ec3766d36d6f73f0696f85560a422f50e8498c"
 """The checkpoint's commit, pinned so runs are reproducible."""
 
-FINETUNED_CONFIG: Final = (
-    Path(__file__).resolve().parents[3] / "config" / "finetune.toml"
-)
+FINETUNED_CONFIG: Final = Path("config/finetune.toml")
 """Which fine-tuned checkpoint the `_ft` models load: `hash`, `"latest"`
 or a settings hash."""
 
@@ -415,7 +413,8 @@ def finetuned_adapter(checkpoint: Checkpoint) -> Path:
     The release `chronos-ft-<hash>` at `FINETUNED_URL` holds
     `ADAPTER_FILES` and `settings.json`. They are kept in
     `FINETUNED_CACHE` only once all are downloaded, the settings hash
-    matches and each adapter file has its SHA-256.
+    matches and each adapter file has its SHA-256. A cached copy is
+    checked against the SHA-256 again on each use.
 
     Parameters
     ----------
@@ -440,7 +439,14 @@ def finetuned_adapter(checkpoint: Checkpoint) -> Path:
     cache = Path(FINETUNED_CACHE).expanduser()
     out = cache / tag
     if out.is_dir():
-        return out
+        if all(
+            (out / name).is_file()
+            and hashlib.sha256((out / name).read_bytes()).hexdigest() == sha
+            for name, sha in checkpoint.sha256
+        ):
+            return out
+        # A cached copy that has changed is downloaded again.
+        shutil.rmtree(out)
     cache.mkdir(parents=True, exist_ok=True)
     tmp = Path(tempfile.mkdtemp(dir=cache, prefix=f".{tag}-"))
     try:

@@ -7,7 +7,8 @@ The data and notation are on the [Data methods page](data.md#target-and-notation
 The models are named `fm_chronos_<source>_<layout>`, with two sources of the hub target and two layouts.
 None is fitted to these data: Chronos-2 forecasts in context, from its pretrained weights or a fine-tuned checkpoint.
 The two `fm_chronos_<source>_ragged_ft` models are the ragged models with Chronos-2 fine-tuned on simulated outbreaks ([Fine-tuning](#fine-tuning)).
-None is submitted.
+Each is a candidate, not submitted.
+The hub model `seabbs-chronos2_ft` is set up to submit `fm_chronos_daily_ragged_ft` and is off until it is opted in ([Opting in](../submission/opting-in.md)).
 
 In brief, each model:
 
@@ -82,6 +83,8 @@ A block holds at most 26 provinces when weekly and five when daily, so daily blo
 Training is 1,000 steps of LoRA at learning rate $10^{-4}$, with 5% of blocks held out (`scripts/finetune_chronos.py`).
 
 A checkpoint is named by its settings hash, of the blocks, the code and the training settings.
+The first release, `chronos-ft-2c2b22a03107`, was trained from earlier code, so its hash cannot be reproduced from this repository.
+Later releases are trained from the code here, so retraining from it gives the same hash.
 Each checkpoint is published as the repository's release `chronos-ft-<hash>`, with a `sha256sums.txt` of its files.
 The models load the newest such release by publish date, unless `config/finetune.toml` pins a hash.
 The checkpoint's hash and adapter SHA-256 key the stored fits, so a new release refits the `_ft` models, and each stored fit records the checkpoint it used.
