@@ -24,6 +24,7 @@ one long table of `HUB_QUANTILE_LEVELS` quantiles of their samples.
 
 from __future__ import annotations
 
+import dataclasses
 import datetime as dt
 import logging
 import zlib
@@ -42,6 +43,7 @@ from bdbvhubrenewal.forecasters.base import (
     get_model,
 )
 from bdbvhubrenewal.forecasters.finetune import releases, weekly_cutoffs
+from bdbvhubrenewal.forecasters.randomwalk import RandomWalk
 from bdbvhubrenewal.reporting.hubtables import HUB_QUANTILE_LEVELS
 
 __all__ = [
@@ -51,6 +53,7 @@ __all__ = [
     "MIN_RELEASES",
     "MODELS",
     "evaluate",
+    "model_task",
     "models_by_name",
     "origin_cutoffs",
     "outbreak_tasks",
@@ -254,6 +257,17 @@ def quantile_table(
     return out[list(COLUMNS)]
 
 
+def model_task(model: ForecastModel, task: ForecastTask) -> ForecastTask:
+    """Return the task as a model takes it.
+
+    The random walk models forecast the task's provinces, so a
+    single-place outbreak, which has none, gives them the country.
+    """
+    if not task.locations and isinstance(model, RandomWalk):
+        return dataclasses.replace(task, locations=(NATIONAL,))
+    return task
+
+
 def models_by_name(
     names: Sequence[str],
 ) -> tuple[list[ForecastModel], list[str]]:
@@ -305,7 +319,8 @@ def evaluate(
     frames = []
     for model in models:
         try:
-            frames.append(run_forecasts([model], tasks))
+            mine = [model_task(model, t) for t in tasks]
+            frames.append(run_forecasts([model], mine))
         except FileNotFoundError as err:
             log.warning("%s skipped %s: %s", model.name, outbreak, err)
     frames = [f for f in frames if not f.empty]
