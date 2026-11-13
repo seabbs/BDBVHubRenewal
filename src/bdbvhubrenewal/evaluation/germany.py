@@ -366,10 +366,10 @@ def _fix_rki(rows: pd.DataFrame) -> pd.DataFrame:
 
 
 def _fill_tenth(rows: pd.DataFrame) -> pd.DataFrame:
-    """Add a missing 10% quantile from the normal through 2.5% and 25%.
+    """Add Epiforecasts' missing 10% quantiles, as the paper does.
 
-    Epiforecasts left out the 10% quantile at times, and the paper filled
-    it so.
+    Epiforecasts left out the 10% quantile at times. It is filled from the
+    normal through the 2.5% and 25% quantiles, sorted.
     """
     ids = ["model", "location", "age_group", "forecast_date", "target"]
     wide = rows.pivot_table(
@@ -378,8 +378,12 @@ def _fill_tenth(rows: pd.DataFrame) -> pd.DataFrame:
         values="value",
         aggfunc="first",
     )
-    gap = wide.loc[wide[0.1].isna() & wide[[0.025, 0.25]].notna().all(axis=1)]
-    lo, hi = gap[0.025], gap[0.25]
+    epi = wide.index.get_level_values("model") == "Epiforecasts"
+    gap = wide.loc[
+        epi & wide[0.1].isna() & wide[[0.025, 0.25]].notna().all(axis=1)
+    ]
+    lo = gap[[0.025, 0.25]].min(axis=1)
+    hi = gap[[0.025, 0.25]].max(axis=1)
     z_lo, z_hi = norm.ppf(0.025), norm.ppf(0.25)
     sd = (hi - lo) / (z_hi - z_lo)
     tenth = lo + sd * (norm.ppf(0.1) - z_lo)
@@ -392,8 +396,8 @@ def team_forecasts(submissions: pd.DataFrame) -> pd.DataFrame:
     """Return the hub teams' quantile nowcasts at our horizons.
 
     RKI's quantiles above `_RKI_ERROR` are replaced by its -1 day nowcast
-    and a missing 10% quantile is filled from the normal through the 2.5%
-    and 25% quantiles, as the paper does. Nothing else is filled.
+    and Epiforecasts' missing 10% quantiles are filled (`_fill_tenth`), as
+    the paper does. Nothing else is filled.
 
     Parameters
     ----------
@@ -407,8 +411,16 @@ def team_forecasts(submissions: pd.DataFrame) -> pd.DataFrame:
         forecast date), `location` (the place, as in `PLACE_NAMES`),
         `target_end_date`, `horizon` (days, as `HORIZONS`), `quantile` and
         `value`, for the places in `PLACE_NAMES`.
+
+    Raises
+    ------
+    ValueError
+        If a team is not in `TEAM_NAMES`.
     """
     rows = submissions.loc[submissions["type"] == "quantile", list(_SUBMISSION)]
+    unknown = set(rows["model"]) - set(TEAM_NAMES)
+    if unknown:
+        raise ValueError(f"Teams with no name in TEAM_NAMES: {sorted(unknown)}")
     rows = rows.assign(model=rows["model"].map(TEAM_NAMES))
     targets = {f"{h} day ahead inc hosp": h for h in HORIZONS}
     rows = _fix_rki(rows)
