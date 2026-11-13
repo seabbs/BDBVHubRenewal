@@ -20,7 +20,7 @@ fine-tune's 2 to 7 weeks).
 
 The truth is the final simulated count of each place and week, with the
 country the sum of the places. `evaluate` runs the models and returns
-one long table of `HUB_QUANTILE_LEVELS` quantiles of their samples.
+one long table of their samples, `quantile_level` empty.
 """
 
 from __future__ import annotations
@@ -45,7 +45,6 @@ from bdbvhubrenewal.forecasters.base import (
 )
 from bdbvhubrenewal.forecasters.finetune import releases, weekly_cutoffs
 from bdbvhubrenewal.forecasters.randomwalk import RandomWalk
-from bdbvhubrenewal.reporting.hubtables import HUB_QUANTILE_LEVELS
 
 __all__ = [
     "COLUMNS",
@@ -60,7 +59,7 @@ __all__ = [
     "observation_table",
     "origin_cutoffs",
     "outbreak_tasks",
-    "quantile_table",
+    "sample_table",
     "series_label",
     "truth_table",
 ]
@@ -95,6 +94,7 @@ COLUMNS: Final = (
     "target_date",
     "horizon",
     "quantile_level",
+    "sample_id",
     "value",
     "truth",
 )
@@ -152,7 +152,7 @@ def outbreak_tasks(
     counts: pd.DataFrame,
     outbreak: str,
     n_origins: int,
-    n_samples: int = 1000,
+    n_samples: int = 200,
     seed: int = 1,
 ) -> list[ForecastTask]:
     """Return a task at each origin of one outbreak.
@@ -232,10 +232,10 @@ def truth_table(counts: pd.DataFrame) -> pd.DataFrame:
     ]
 
 
-def quantile_table(
+def sample_table(
     forecasts: pd.DataFrame, truth: pd.DataFrame, outbreak: str
 ) -> pd.DataFrame:
-    """Return the long quantile table of one outbreak's forecasts.
+    """Return the long sample table of one outbreak's forecasts.
 
     Parameters
     ----------
@@ -251,14 +251,10 @@ def quantile_table(
     pandas.DataFrame
         Columns `COLUMNS`.
     """
-    keys = ["model", "vintage", "location", "target_end_date", "horizon"]
-    final = forecasts.loc[forecasts["as_of"].isna()]
-    out = (
-        final.groupby(keys)["value"]
-        .quantile(list(HUB_QUANTILE_LEVELS))
-        .rename_axis([*keys, "quantile_level"])
-        .reset_index()
-    )
+    keep = ["model", "vintage", "location", "target_end_date", "sample"]
+    out = forecasts.loc[forecasts["as_of"].isna(), [*keep, "value"]]
+    out = out.rename(columns={"sample": "sample_id"})
+    out["quantile_level"] = np.nan
     out = out.merge(truth, on=["location", "target_end_date"], how="left")
     out["truth"] = out["truth"].fillna(0.0)
     out["location"] = [series_label(outbreak, p) for p in out["location"]]
@@ -345,7 +341,7 @@ def evaluate(
     counts: pd.DataFrame,
     models: Sequence[ForecastModel],
     n_origins: int,
-    n_samples: int = 1000,
+    n_samples: int = 200,
     seed: int = 1,
 ) -> pd.DataFrame:
     """Forecast one outbreak at each origin and return the long table.
@@ -381,4 +377,4 @@ def evaluate(
     if not frames:
         return pd.DataFrame(columns=list(COLUMNS))
     forecasts = pd.concat(frames, ignore_index=True)
-    return quantile_table(forecasts, truth_table(counts), outbreak)
+    return sample_table(forecasts, truth_table(counts), outbreak)

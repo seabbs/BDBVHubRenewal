@@ -12,10 +12,11 @@ Then, from the repo root:
     uv run --group chronos python -m paper.run_synthetic \
         output/finetune/heldout output/paper/synthetic.csv --device cpu
 
-Writes the long quantile table and, beside it, the observations as of
-each release (`-observations.csv`) and each model's seconds per outbreak
-(`-timings.csv`). Models that are not registered are skipped, and so are the
-fine-tuned ones until their checkpoint exists.
+Writes the long sample table, as parquet if `out` ends `.parquet`.
+Beside it go the observations as of each release (`-observations.csv`)
+and each model's seconds per outbreak (`-timings.csv`).
+Models that are not registered are skipped, and so are the fine-tuned
+ones until their checkpoint exists.
 """
 
 from __future__ import annotations
@@ -57,7 +58,7 @@ def main() -> None:
     parser.add_argument("--models", nargs="+", default=list(MODELS))
     parser.add_argument("--outbreaks", type=int, default=None)
     parser.add_argument("--origins", type=int, default=4)
-    parser.add_argument("--samples", type=int, default=1000)
+    parser.add_argument("--samples", type=int, default=200)
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--device", choices=("auto", "cpu"), default="auto")
     parser.add_argument("--threads", type=int, default=4)
@@ -102,7 +103,10 @@ def main() -> None:
     out = pd.concat(tables, ignore_index=True) if tables else None
     if out is None or out.empty:
         out = pd.DataFrame(columns=list(COLUMNS))
-    out.to_csv(args.out, index=False)
+    if args.out.suffix == ".parquet":
+        out.to_parquet(args.out, index=False)
+    else:
+        out.to_csv(args.out, index=False)
     pd.concat(observed, ignore_index=True).to_csv(
         args.out.with_name(args.out.stem + "-observations.csv"), index=False
     )
