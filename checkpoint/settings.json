@@ -1,0 +1,30 @@
+{
+ "chronos_revision": "29ec3766d36d6f73f0696f85560a422f50e8498c",
+ "blocks_sha256": "fcb6522b1d8e98f90cbeef9d45323924a43e95183c2ecd4041318e4e51d15371",
+ "code_sha256": {
+  "scripts/finetune_simulate.R": "d467e9122f5eb4c187a0d800795c5c15b91e96940f9b6472f6fc70112fe16eaa",
+  "scripts/finetune_chronos.py": "440ac7949158b282a4445c5a5eecc0f08cb1fec3bb1f8e5d0b0967569283c3e7",
+  "src/bdbvhubrenewal/forecasters/finetune.py": "d702313ab9e8eb5635a698c0b3da324235673dc3c2a44a3f4e6276555193b250",
+  "src/bdbvhubrenewal/forecasters/foundation.py": "581d868ef47124fcfc19d0b319b30c48be5df6651f790f258001256c9a3e4a3a"
+ },
+ "max_lags": {
+  "weekly": [
+   2,
+   7
+  ],
+  "daily": [
+   14,
+   49
+  ]
+ },
+ "n_fit": 14937,
+ "n_validation": 786,
+ "steps": 1000,
+ "learning_rate": 0.0001,
+ "batch_size": 256,
+ "context": 288,
+ "horizon": 96,
+ "seed": 1,
+ "hash": "2c2b22a03107",
+ "device": "mps"
+}
