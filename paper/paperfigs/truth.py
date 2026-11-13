@@ -10,9 +10,11 @@ from __future__ import annotations
 
 import pandas as pd
 
+from paperfigs.schema import DEFAULT_STRATUM
+
 __all__ = ["attach_truth", "rolling_truth"]
 
-_KEYS = ["study", "location", "target_date"]
+_KEYS = ["study", "location", "stratum", "target_date"]
 
 
 def rolling_truth(observations: pd.DataFrame, delay_days: int) -> pd.DataFrame:
@@ -29,7 +31,8 @@ def rolling_truth(observations: pd.DataFrame, delay_days: int) -> pd.DataFrame:
     Returns
     -------
     pandas.DataFrame
-        `study`, `location`, `target_date` and `truth`, with `truth`
+        `study`, `location`, `stratum`, `target_date` and `truth`, with
+        `truth`
         missing where no release on or after `target_date + D` exists.
 
     Raises
@@ -40,6 +43,8 @@ def rolling_truth(observations: pd.DataFrame, delay_days: int) -> pd.DataFrame:
     if delay_days < 0:
         raise ValueError("delay_days must be at least zero.")
     obs = observations.copy()
+    if "stratum" not in obs.columns:
+        obs["stratum"] = DEFAULT_STRATUM
     obs["cutoff"] = obs["target_date"] + pd.Timedelta(days=delay_days)
     latest = obs.groupby("study")["as_of_date"].transform("max")
     known = obs.loc[obs["as_of_date"] <= obs["cutoff"]]
@@ -68,5 +73,8 @@ def attach_truth(forecasts: pd.DataFrame, truth: pd.DataFrame) -> pd.DataFrame:
         The forecasts with `truth` from `truth`, missing where it has no
         row, and columns in their original order.
     """
-    out = forecasts.drop(columns="truth").merge(truth, on=_KEYS, how="left")
+    fc = forecasts.drop(columns="truth")
+    if "stratum" not in fc.columns:
+        fc = fc.assign(stratum=DEFAULT_STRATUM)
+    out = fc.merge(truth, on=_KEYS, how="left")
     return out.loc[:, list(forecasts.columns)]

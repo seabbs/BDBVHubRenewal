@@ -11,6 +11,7 @@ import numpy as np
 import pandas as pd
 
 __all__ = [
+    "DEFAULT_STRATUM",
     "FORECAST_COLUMNS",
     "FORECAST_KEYS",
     "OBSERVATION_COLUMNS",
@@ -22,10 +23,14 @@ __all__ = [
 STUDIES: Final = ("synthetic", "germany", "ebola")
 """The three studies, in the order the paper reports them."""
 
+DEFAULT_STRATUM: Final = "all"
+"""Stratum of a table without a `stratum` column."""
+
 FORECAST_KEYS: Final = (
     "study",
     "model",
     "location",
+    "stratum",
     "origin_date",
     "target_date",
     "horizon",
@@ -44,11 +49,19 @@ FORECAST_COLUMNS: Final = (
 OBSERVATION_COLUMNS: Final = (
     "study",
     "location",
+    "stratum",
     "target_date",
     "as_of_date",
     "value",
 )
 """Columns of the observation table, in order."""
+
+
+def _with_stratum(df: pd.DataFrame) -> pd.DataFrame:
+    """Add `stratum` as `DEFAULT_STRATUM` if the table has none."""
+    if "stratum" in df.columns:
+        return df
+    return df.assign(stratum=DEFAULT_STRATUM)
 
 
 def _check_columns(df: pd.DataFrame, columns: tuple[str, ...]) -> None:
@@ -78,15 +91,18 @@ def validate_forecasts(df: pd.DataFrame) -> pd.DataFrame:
     -------
     pandas.DataFrame
         The table with columns in schema order, dates as timestamps,
-        `horizon` as an integer and `sample_id` as a nullable integer.
+        `horizon` as an integer, `sample_id` as a nullable integer and
+        `stratum` set to `DEFAULT_STRATUM` if it was missing.
 
     Raises
     ------
     ValueError
         If a rule in `paper/schema.md` is broken.
     """
+    df = _with_stratum(df)
     _check_columns(df, FORECAST_COLUMNS)
     out = df.loc[:, list(FORECAST_COLUMNS)].copy()
+    out["stratum"] = out["stratum"].astype(str)
     _check_studies(out)
     for col in ("origin_date", "target_date"):
         out[col] = pd.to_datetime(out[col])
@@ -158,13 +174,16 @@ def validate_observations(df: pd.DataFrame) -> pd.DataFrame:
         If a column is missing or extra, a study is unknown, a value is
         negative or a count appears twice for one as-of date.
     """
+    df = _with_stratum(df)
     _check_columns(df, OBSERVATION_COLUMNS)
     out = df.loc[:, list(OBSERVATION_COLUMNS)].copy()
+    out["stratum"] = out["stratum"].astype(str)
     _check_studies(out)
     for col in ("target_date", "as_of_date"):
         out[col] = pd.to_datetime(out[col])
     if (out["value"].to_numpy(dtype=float) < 0).any():
         raise ValueError("Every value must be at least zero.")
-    if out.duplicated(["study", "location", "target_date", "as_of_date"]).any():
+    keys = ["study", "location", "stratum", "target_date", "as_of_date"]
+    if out.duplicated(keys).any():
         raise ValueError("An observation appears twice for one as_of_date.")
     return out

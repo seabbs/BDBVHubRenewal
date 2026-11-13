@@ -28,8 +28,10 @@ from matplotlib.figure import Figure
 from matplotlib.lines import Line2D
 from matplotlib.ticker import FixedLocator, FuncFormatter, NullFormatter
 
+from paperfigs.schema import DEFAULT_STRATUM
 from paperfigs.scores import (
     STUDY_BASELINES,
+    coverage_columns,
     metric_of,
     relative_scores,
     summarise_scores,
@@ -49,23 +51,19 @@ __all__ = [
     "si_wis_over_time",
 ]
 
-PANEL_LETTERS: Final = ("A", "B", "C", "D", "E", "F", "G")
-"""Letters of the results panel, in reading order."""
-
-_MOSAIC: Final = [
-    ["A", "A", "A", "A"],
-    ["B", "C", "D", "E"],
-    ["F", "F", "G", "G"],
-]
+PANEL_LETTERS: Final = ("A", "B", "C", "D", "E", "F", "G", "H")
+"""Letters of the results panel, in reading order. The last is used only
+when the study has strata."""
 
 _TITLES: Final = {
-    "A": "Nowcasts over time",
-    "B": "Relative {m}",
-    "C": "Relative {m}, log scale",
-    "D": "Bias",
-    "E": "Coverage",
-    "F": "Relative {m} by location",
-    "G": "Relative {m} by horizon",
+    "nowcast": "Nowcasts over time",
+    "rel": "Relative {m}",
+    "rel_log": "Relative {m}, log scale",
+    "bias": "Bias",
+    "coverage": "Coverage",
+    "location": "Relative {m} by location",
+    "stratum": "Relative {m} by stratum",
+    "horizon": "Relative {m} by horizon",
 }
 
 _RATIO_TICKS: Final = (0.1, 0.25, 0.5, 0.75, 1, 1.5, 2, 3, 5, 10)
@@ -142,6 +140,12 @@ def _quantile_table(one: pd.DataFrame) -> pd.DataFrame:
         )
     levels = [0.05, 0.25, 0.5, 0.75, 0.95]
     return one.groupby("target_date")["value"].quantile(levels).unstack()
+
+
+def _main_stratum(df: pd.DataFrame) -> str:
+    """Return `all` if present, else the first stratum."""
+    strata = sorted(df["stratum"].unique())
+    return DEFAULT_STRATUM if DEFAULT_STRATUM in strata else strata[0]
 
 
 def _largest_location(observations: pd.DataFrame) -> str:
@@ -272,18 +276,20 @@ def _bars_bias(ax: Axes, summary: pd.DataFrame, models: Sequence[str]) -> None:
 def _bars_coverage(
     ax: Axes, summary: pd.DataFrame, models: Sequence[str]
 ) -> None:
+    """Narrowest interval solid, widest light, with lines at nominal."""
+    cols = coverage_columns(summary)
+    narrow, wide = cols[0], cols[-1]
+    levels = [int(c.split("_")[1]) / 100 for c in (narrow, wide)]
     s = summary.set_index("model").reindex(models)
     for i, m in enumerate(models):
         style = bar_style(m, models)
-        ax.barh(
-            i - 0.18, s.loc[m, "coverage_90"], height=0.34, alpha=0.45, **style
-        )
-        ax.barh(i + 0.18, s.loc[m, "coverage_50"], height=0.34, **style)
-    for level in (0.5, 0.9):
+        ax.barh(i - 0.18, s.loc[m, wide], height=0.34, alpha=0.45, **style)
+        ax.barh(i + 0.18, s.loc[m, narrow], height=0.34, **style)
+    for level in levels:
         ax.axvline(level, color=INK["muted"], ls="--", lw=1, zorder=0)
     ax.set_xlim(0, 1)
-    ax.set_xticks([0, 0.5, 0.9])
-    ax.set_xlabel("Coverage (50% solid, 90% light)")
+    ax.set_xticks([0, *levels])
+    ax.set_xlabel(f"Coverage ({levels[0]:.0%} solid, {levels[1]:.0%} light)")
 
 
 def _points_by(
@@ -293,6 +299,7 @@ def _points_by(
     models: Sequence[str],
     col: str = "rel_score",
     lines: bool = False,
+    rotate: bool = False,
 ) -> None:
     cats = sorted(rel[by].unique(), key=lambda v: (str(type(v)), v))
     x = np.arange(len(cats))
@@ -313,7 +320,10 @@ def _points_by(
             )
     if not lines:
         ax.set_xticks(x)
-        ax.set_xticklabels([str(c) for c in cats])
+        if rotate:
+            ax.set_xticklabels([str(c) for c in cats], rotation=45, ha="right")
+        else:
+            ax.set_xticklabels([str(c) for c in cats])
         ax.grid(axis="x", visible=False)
     _log_ratio_axis(ax, "y")
     _pad_log_limits(ax, rel[col].to_numpy(dtype=float), "y")
@@ -359,8 +369,10 @@ def results_panel(
     """Plot the results panel for one study.
 
     Panels: A nowcasts over time at spaced origin dates; B relative score;
-    C relative score on the log scale; D mean bias; E 50% and 90%
-    coverage; F relative score by location; G relative score by horizon.
+    C relative score on the log scale; D mean bias; E coverage at the
+    study's two widths; F relative score by location (main stratum); then,
+    for a study with strata, G relative score by stratum; and last the
+    relative score by horizon.
     The score is the WIS for quantile forecasts and the CRPS for samples.
 
     Parameters
@@ -396,44 +408,70 @@ def results_panel(
     baseline = baseline or STUDY_BASELINES[study]
     name = metric_of(sc).upper()
     models = model_order(sc["model"].unique())
-    location = location or _largest_location(obs)
+    main = _main_stratum(sc)
+    stratified = len(sc["stratum"].unique()) > 1
+    location = location or _largest_location(obs.loc[obs["stratum"] == main])
     ribbons = list(ribbon_models or _ribbon_models(models, baseline))
+    if stratified:
+        bottom = ["location"] * 5 + ["stratum"] * 3 + ["horizon"] * 4
+    else:
+        bottom = ["location"] * 6 + ["horizon"] * 6
+    top = [["nowcast"] * 12, ["rel"] * 3 + ["rel_log"] * 3]
+    top[1] += ["bias"] * 3 + ["coverage"] * 3
     fig, axd = plt.subplot_mosaic(
-        _MOSAIC,
+        [*top, bottom],
         figsize=(12, 11),
         height_ratios=[1.25, 1, 1],
         layout="constrained",
     )
-    plot_nowcasts(axd["A"], forecasts, obs, ribbons, location, models)
+    plot_nowcasts(
+        axd["nowcast"],
+        forecasts.loc[forecasts["stratum"] == main],
+        obs.loc[obs["stratum"] == main],
+        ribbons,
+        location,
+        models,
+    )
     rel = relative_scores(sc, baseline=baseline)
     summary = summarise_scores(sc)
-    _bars_relative(axd["B"], rel, "rel_score", models)
-    axd["B"].set_xlabel(f"Relative to {baseline}")
-    _bars_relative(axd["C"], rel, "rel_log_score", models)
-    axd["C"].set_xlabel(f"Relative to {baseline}")
-    _bars_bias(axd["D"], summary, models)
-    _bars_coverage(axd["E"], summary, models)
-    for key in "BCDE":
-        _model_rows(axd[key], models, show_names=key == "B")
+    _bars_relative(axd["rel"], rel, "rel_score", models)
+    axd["rel"].set_xlabel(f"Relative to {baseline}")
+    _bars_relative(axd["rel_log"], rel, "rel_log_score", models)
+    axd["rel_log"].set_xlabel(f"Relative to {baseline}")
+    _bars_bias(axd["bias"], summary, models)
+    _bars_coverage(axd["coverage"], summary, models)
+    for key in ("rel", "rel_log", "bias", "coverage"):
+        _model_rows(axd[key], models, show_names=key == "rel")
+    # Locations are compared on their main stratum (all ages).
     _points_by(
-        axd["F"],
-        relative_scores(sc, ["location"], baseline),
+        axd["location"],
+        relative_scores(sc.loc[sc["stratum"] == main], ["location"], baseline),
         "location",
         models,
     )
-    axd["F"].set_ylabel(f"Relative {name}")
+    if stratified:
+        _points_by(
+            axd["stratum"],
+            relative_scores(sc, ["stratum"], baseline),
+            "stratum",
+            models,
+            rotate=True,
+        )
     _points_by(
-        axd["G"],
+        axd["horizon"],
         relative_scores(sc, ["horizon"], baseline),
         "horizon",
         models,
         lines=True,
     )
     unit = _STEP_UNIT.get(_step_days(forecasts), "steps")
-    axd["G"].set_xlabel(f"Horizon ({unit})")
-    axd["G"].set_ylabel(f"Relative {name}")
-    for letter in PANEL_LETTERS:
-        _label(axd[letter], letter, _TITLES[letter].format(m=name))
+    axd["horizon"].set_xlabel(f"Horizon ({unit})")
+    order = ["nowcast", "rel", "rel_log", "bias", "coverage", "location"]
+    order += ["stratum", "horizon"] if stratified else ["horizon"]
+    for letter, key in zip(PANEL_LETTERS, order, strict=False):
+        _label(axd[key], letter, _TITLES[key].format(m=name))
+    for key in bottom:
+        axd[key].set_ylabel(f"Relative {name}")
     _legend(fig, models)
     return fig
 
@@ -444,7 +482,7 @@ def si_scores_by_location_horizon(
     col: str = "rel_score",
     ncol: int = 4,
 ) -> Figure:
-    """Plot the relative score by horizon for every location.
+    """Plot the relative score by horizon for every location and stratum.
 
     Parameters
     ----------
@@ -463,9 +501,15 @@ def si_scores_by_location_horizon(
         One panel per location, sharing axes.
     """
     name = metric_of(scores).upper()
-    rel = relative_scores(scores, ["location", "horizon"], baseline)
+    rel = relative_scores(scores, ["location", "stratum", "horizon"], baseline)
+    main = _main_stratum(rel)
+    rel["series"] = rel["location"].where(
+        rel["stratum"] == main, rel["location"] + " " + rel["stratum"]
+    )
     models = model_order(rel["model"].unique())
-    locs = sorted(rel["location"].unique())
+    locs = list(
+        dict.fromkeys(rel.sort_values(["location", "stratum"])["series"])
+    )
     nrow = int(np.ceil(len(locs) / ncol))
     fig, axes = plt.subplots(
         nrow,
@@ -482,7 +526,7 @@ def si_scores_by_location_horizon(
     for ax, loc in zip(flat, locs, strict=False):
         _points_by(
             ax,
-            rel.loc[rel["location"] == loc],
+            rel.loc[rel["series"] == loc],
             "horizon",
             models,
             col,

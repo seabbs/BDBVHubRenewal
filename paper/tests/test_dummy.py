@@ -52,7 +52,9 @@ def test_dummy_data_as_of_origin_is_at_most_final(study) -> None:
     final = obs.loc[obs["as_of_date"] == final_date]
     early = obs.loc[obs["as_of_date"] < final_date]
     joined = early.merge(
-        final, on=["study", "location", "target_date"], suffixes=("", "_f")
+        final,
+        on=["study", "location", "stratum", "target_date"],
+        suffixes=("", "_f"),
     )
     assert len(joined) == len(early)
     assert (joined["value"] <= joined["value_f"]).all()
@@ -63,8 +65,10 @@ def test_dummy_data_as_of_origin_is_at_most_final(study) -> None:
 def test_dummy_truth_matches_final_data(study) -> None:
     _, fc, obs = study
     final = obs.loc[obs["as_of_date"] == obs["as_of_date"].max()]
-    truth = fc.drop_duplicates(["location", "target_date"])
-    joined = truth.merge(final, on=["study", "location", "target_date"])
+    truth = fc.drop_duplicates(["location", "stratum", "target_date"])
+    joined = truth.merge(
+        final, on=["study", "location", "stratum", "target_date"]
+    )
     assert len(joined) == len(truth)
     assert (joined["truth"] == joined["value_y"]).all()
 

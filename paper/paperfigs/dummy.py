@@ -19,6 +19,7 @@ import pandas as pd
 from scipy.stats import norm
 
 from paperfigs.schema import (
+    DEFAULT_STRATUM,
     FORECAST_COLUMNS,
     OBSERVATION_COLUMNS,
     validate_forecasts,
@@ -77,11 +78,14 @@ class StudySetup:
     mean_delay : float
         Mean reporting delay, in steps.
     scale : tuple of float
-        Range of peak counts per step across locations.
+        Range of peak counts per step across series.
     models : dict
         Model name to `ModelSkill`.
     form : str
         `quantile` or `sample`, the forecast form the study scores.
+    strata : tuple of str
+        Strata (age groups) given for the first location as well as
+        `all`; empty for none.
     """
 
     locations: tuple[str, ...]
@@ -96,6 +100,13 @@ class StudySetup:
     scale: tuple[float, float]
     models: dict[str, ModelSkill]
     form: str
+    strata: tuple[str, ...] = ()
+
+    @property
+    def series(self) -> list[tuple[str, str]]:
+        """Return each (location, stratum) series."""
+        out = [(loc, DEFAULT_STRATUM) for loc in self.locations]
+        return out + [(self.locations[0], s) for s in self.strata]
 
 
 _BASE = ModelSkill(0.0, 1.0, 1.4)
@@ -161,6 +172,7 @@ STUDY_SETUP: Final[dict[str, StudySetup]] = {
             "hub_team_c": ModelSkill(0.05, 1.3, 0.6),
         },
         form="quantile",
+        strata=("00-04", "05-14", "15-34", "35-59", "60-79", "80+"),
     ),
     "ebola": StudySetup(
         locations=tuple(f"loc{i:02d}" for i in range(1, 7)),
@@ -195,9 +207,9 @@ def _completeness(delay: np.ndarray, mean_delay: float) -> np.ndarray:
 
 
 def _final_counts(setup: StudySetup, rng: np.random.Generator) -> np.ndarray:
-    """Draw final counts, locations by steps, as one noisy wave each."""
+    """Draw final counts, series by steps, as one noisy wave each."""
     t = np.arange(setup.n_steps)
-    n_loc = len(setup.locations)
+    n_loc = len(setup.series)
     peak = rng.uniform(0.35, 0.65, n_loc)[:, None] * setup.n_steps
     width = rng.uniform(0.1, 0.2, n_loc)[:, None] * setup.n_steps
     scale = np.exp(rng.uniform(*np.log(setup.scale), n_loc))[:, None]
@@ -235,10 +247,12 @@ def _long_obs(
     values: np.ndarray,
 ) -> pd.DataFrame:
     n_loc, n_t = values.shape
+    locs, strata = zip(*setup.series, strict=True)
     return pd.DataFrame(
         {
             "study": study,
-            "location": np.repeat(setup.locations, n_t),
+            "location": np.repeat(locs, n_t),
+            "stratum": np.repeat(strata, n_t),
             "target_date": np.tile(dates, n_loc),
             "as_of_date": as_of,
             "value": values.ravel().astype(float),
@@ -261,7 +275,7 @@ def _forecasts(
     unreported = 1 - _completeness(np.maximum(-h, 0), setup.mean_delay)
     difficulty = 0.06 + 0.5 * unreported + 0.12 * np.maximum(h, 0)
     z = norm.ppf(QUANTILE_LEVELS)
-    n_loc = len(setup.locations)
+    n_loc = len(setup.series)
     o_grid, h_grid = np.meshgrid(origins, h, indexing="ij")
     target = o_grid + h_grid
     keep = target < setup.n_steps
@@ -271,7 +285,7 @@ def _forecasts(
     parts = []
     for model, skill in setup.models.items():
         loc_skill = np.exp(rng.normal(0, 0.15, n_loc))
-        for li, loc in enumerate(setup.locations):
+        for li, (loc, stratum) in enumerate(setup.series):
             truth = final[li, t_idx]
             # Small counts are noisier on the log scale.
             sd = skill.error * loc_skill[li] * diff + 0.3 / np.sqrt(truth + 1)
@@ -294,6 +308,7 @@ def _forecasts(
                         "study": study,
                         "model": model,
                         "location": loc,
+                        "stratum": stratum,
                         "origin_date": np.repeat(dates[o_idx], k),
                         "target_date": np.repeat(dates[t_idx], k),
                         "horizon": np.repeat(h_idx, k),

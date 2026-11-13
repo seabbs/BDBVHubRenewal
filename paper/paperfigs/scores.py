@@ -28,7 +28,8 @@ Both forms:
 
 - **Log score**: the same score after `log1p` of the forecast and truth
   (scoringutils' `log_shift` with offset 1; Bosse et al. 2023).
-- **Coverage** of the central 50% and 90% intervals, bounds included. A
+- **Coverage** of central intervals, bounds included: 50% and 90%, or 50%
+  and 95% for the German study (`STUDY_COVERAGE`). A
   sample forecast's bounds are its linear (type 7) sample quantiles, as
   scoringutils makes them; a quantile forecast without the levels gets a
   missing coverage.
@@ -46,11 +47,14 @@ import numpy as np
 import pandas as pd
 import scoringrules as sr
 
-from paperfigs.schema import FORECAST_KEYS
+from paperfigs.schema import DEFAULT_STRATUM, FORECAST_KEYS
 
 __all__ = [
     "SCORE_COLUMNS",
     "STUDY_BASELINES",
+    "STUDY_COVERAGE",
+    "coverage_column",
+    "coverage_columns",
     "metric_of",
     "relative_scores",
     "score_forecasts",
@@ -64,16 +68,43 @@ STUDY_BASELINES: Final[dict[str, str]] = {
 }
 """Reference model for relative scores in each study."""
 
-SCORE_COLUMNS: Final = (
-    "score",
-    "log_score",
-    "bias",
-    "coverage_50",
-    "coverage_90",
-)
-"""Score columns written by `score_forecasts`, beside `metric`."""
+STUDY_COVERAGE: Final[dict[str, tuple[float, ...]]] = {
+    "synthetic": (0.5, 0.9),
+    "germany": (0.5, 0.95),
+    "ebola": (0.5, 0.9),
+}
+"""Central interval widths scored for coverage in each study.
 
-_MATCH: Final = ("location", "origin_date", "target_date", "horizon")
+The German hub's quantiles stop at 0.025 and 0.975 with no 0.05 or 0.95,
+so it reports 95% rather than 90% coverage.
+"""
+
+SCORE_COLUMNS: Final = ("score", "log_score", "bias")
+"""Score columns written by `score_forecasts`, beside `metric` and the
+`coverage_<width>` columns."""
+
+_MATCH: Final = (
+    "location",
+    "stratum",
+    "origin_date",
+    "target_date",
+    "horizon",
+)
+
+
+def coverage_column(width: float) -> str:
+    """Return the column name for a coverage width, such as `coverage_90`."""
+    return f"coverage_{round(width * 100):d}"
+
+
+def coverage_columns(scores: pd.DataFrame) -> list[str]:
+    """Return the coverage columns with any value, narrowest first."""
+    cols = [
+        c
+        for c in scores.columns
+        if c.startswith("coverage_") and scores[c].notna().any()
+    ]
+    return sorted(cols, key=lambda c: int(c.split("_")[1]))
 
 
 # --------------------------------------------------------------------------
@@ -117,7 +148,9 @@ def _coverage_quantile(
     return ((q[:, lo][:, 0] <= y) & (y <= q[:, hi][:, 0])).astype(float)
 
 
-def _score_quantile_block(block: pd.DataFrame) -> pd.DataFrame:
+def _score_quantile_block(
+    block: pd.DataFrame, widths: tuple[float, ...]
+) -> pd.DataFrame:
     """Score quantile forecasts that share one set of levels."""
     wide = block.pivot_table(
         index=[*FORECAST_KEYS, "truth"],
@@ -132,8 +165,8 @@ def _score_quantile_block(block: pd.DataFrame) -> pd.DataFrame:
     out["score"] = _wis(q, levels, y)
     out["log_score"] = _wis(np.log1p(q), levels, np.log1p(y))
     out["bias"] = _bias_quantile(q, levels, y)
-    out["coverage_50"] = _coverage_quantile(q, levels, y, 0.5)
-    out["coverage_90"] = _coverage_quantile(q, levels, y, 0.9)
+    for w in widths:
+        out[coverage_column(w)] = _coverage_quantile(q, levels, y, w)
     return out
 
 
@@ -163,7 +196,9 @@ def _coverage_sample(x: np.ndarray, y: np.ndarray, width: float) -> np.ndarray:
     return ((lo <= y) & (y <= hi)).astype(float)
 
 
-def _score_sample_block(block: pd.DataFrame) -> pd.DataFrame:
+def _score_sample_block(
+    block: pd.DataFrame, widths: tuple[float, ...]
+) -> pd.DataFrame:
     """Score sample forecasts that share one number of samples."""
     keys = list(FORECAST_KEYS)
     ordered = block.sort_values([*keys, "sample_id"])
@@ -175,8 +210,8 @@ def _score_sample_block(block: pd.DataFrame) -> pd.DataFrame:
     out["score"] = _crps(x, y)
     out["log_score"] = _crps(np.log1p(x), np.log1p(y))
     out["bias"] = _bias_sample(x, y)
-    out["coverage_50"] = _coverage_sample(x, y, 0.5)
-    out["coverage_90"] = _coverage_sample(x, y, 0.9)
+    for w in widths:
+        out[coverage_column(w)] = _coverage_sample(x, y, w)
     return out
 
 
@@ -200,7 +235,9 @@ def _blocks(df: pd.DataFrame, column: str) -> list[pd.DataFrame]:
     return [b for _, b in df.groupby(sig, sort=False)]
 
 
-def score_forecasts(forecasts: pd.DataFrame) -> pd.DataFrame:
+def score_forecasts(
+    forecasts: pd.DataFrame, coverage: tuple[float, ...] | None = None
+) -> pd.DataFrame:
     """Score each forecast with a known truth.
 
     Quantile forecasts get the WIS and sample forecasts the CRPS.
@@ -209,25 +246,43 @@ def score_forecasts(forecasts: pd.DataFrame) -> pd.DataFrame:
     ----------
     forecasts : pandas.DataFrame
         Forecasts in the schema of `paper/schema.md`.
+    coverage : tuple of float, optional
+        Central interval widths to score coverage for. Defaults to
+        `STUDY_COVERAGE` for each study.
 
     Returns
     -------
     pandas.DataFrame
         One row per forecast: the key columns, `truth`, `metric` (`wis`
-        or `crps`) and `SCORE_COLUMNS`. Forecasts with missing truth are
-        dropped.
+        or `crps`), `SCORE_COLUMNS` and a `coverage_<width>` column per
+        width, such as `coverage_90`. A study's row is missing for a width
+        it does not score. Forecasts with missing truth are dropped.
     """
     keys = list(FORECAST_KEYS)
-    columns = [*keys, "truth", "metric", *SCORE_COLUMNS]
     df = forecasts.loc[forecasts["truth"].notna()]
-    is_q = df["quantile_level"].notna()
-    parts = [
-        _score_quantile_block(b) for b in _blocks(df[is_q], "quantile_level")
-    ]
-    parts += [_score_sample_block(b) for b in _blocks(df[~is_q], "sample_id")]
+    if "stratum" not in df.columns:
+        df = df.assign(stratum=DEFAULT_STRATUM)
+    parts = []
+    for study, one in df.groupby("study", sort=False):
+        widths = coverage or STUDY_COVERAGE[str(study)]
+        is_q = one["quantile_level"].notna()
+        parts += [
+            _score_quantile_block(b, widths)
+            for b in _blocks(one[is_q], "quantile_level")
+        ]
+        parts += [
+            _score_sample_block(b, widths)
+            for b in _blocks(one[~is_q], "sample_id")
+        ]
     if not parts:
-        return pd.DataFrame(columns=columns)
-    out = pd.concat(parts, ignore_index=True).loc[:, columns]
+        return pd.DataFrame(columns=[*keys, "truth", "metric", *SCORE_COLUMNS])
+    out = pd.concat(parts, ignore_index=True)
+    columns = [*keys, "truth", "metric", *SCORE_COLUMNS]
+    cover = sorted(
+        (c for c in out.columns if c.startswith("coverage_")),
+        key=lambda c: int(c.split("_")[1]),
+    )
+    out = out.loc[:, [*columns, *cover]]
     return out.sort_values(keys, ignore_index=True)
 
 
@@ -246,11 +301,12 @@ def summarise_scores(
     Returns
     -------
     pandas.DataFrame
-        Mean scores, the `metric` and the number of forecasts, `n`.
+        Mean scores and coverage, the `metric` and the number of
+        forecasts, `n`.
     """
     group = ["study", "model", "metric", *by]
     g = scores.groupby(group, observed=True)
-    out = g[list(SCORE_COLUMNS)].mean()
+    out = g[[*SCORE_COLUMNS, *coverage_columns(scores)]].mean()
     out["n"] = g.size()
     return out.reset_index()
 

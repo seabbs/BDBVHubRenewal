@@ -15,6 +15,7 @@ Germany uses quantiles; synthetic and Ebola use samples.
 | `study` | str | One of `synthetic`, `germany` or `ebola`. |
 | `model` | str | Model name, such as `randomwalknowcast` or `fm_chronos_daily_ragged_ft`. |
 | `location` | str | Location code within the study. |
+| `stratum` | str | Optional. Subgroup within a location, such as a German age group (`00-04`, ..., `80+`). Defaults to `all` when the column is absent. |
 | `origin_date` | date | Date the forecast was made, using data as of this date. |
 | `target_date` | date | Date the forecast is for (the onset day, or the start of the week). |
 | `horizon` | int | `target_date - origin_date` in the study's one time step (days for `synthetic` and `germany`, weeks for `ebola`). Zero or negative is a nowcast. |
@@ -33,7 +34,7 @@ Rules the validator checks:
 - sample forecasts have no duplicate `sample_id`;
 - quantile forecasts have levels in (0, 1), the level 0.5, no duplicate levels, and quantiles that do not decrease with level.
 
-Quantile forecasts should carry the levels 0.05, 0.25, 0.5, 0.75 and 0.95, so that 50% and 90% coverage can be scored.
+Quantile forecasts should carry the levels for the study's coverage widths: 0.025, 0.25, 0.5, 0.75 and 0.975 for germany.
 The WIS uses every level present, so it is only comparable between models with the same levels.
 Tables are written as CSV (gzip is fine) with ISO dates.
 
@@ -52,6 +53,7 @@ One row per study, location, target date and as-of date.
 |---|---|---|
 | `study` | str | As above. |
 | `location` | str | As above. |
+| `stratum` | str | As above; optional, default `all`. |
 | `target_date` | date | Reference date of the count. |
 | `as_of_date` | date | Date the data were available. |
 | `value` | float | Count as reported by `as_of_date`, at least zero. |
@@ -66,9 +68,9 @@ The latest `as_of_date` for a study is the final data.
 - `score`, the WIS or the CRPS on the natural scale;
 - `log_score`, the same after `log1p` of the forecast and truth (Bosse et al. 2023);
 - `bias`, scoringutils' bias in [-1, 1], positive for overprediction;
-- `coverage_50` and `coverage_90`, whether the truth is in the central interval (from linear sample quantiles for samples).
+- `coverage_<width>`, whether the truth is in the central interval (from linear sample quantiles for samples). Widths are set per study in `STUDY_COVERAGE`: 50% and 95% for germany, whose hub has no 0.05 or 0.95 level, and 50% and 90% otherwise.
 
 These match scoringutils 2.2 defaults, checked by `tests/test_scoringutils.py` against `tests/scoringutils_reference.R`.
 
-`paperfigs.scores.relative_scores` divides each model's mean score by the baseline's on the forecasts both made, within each group.
+`paperfigs.scores.relative_scores` divides each model's mean score by the baseline's on the forecasts both made (matched on location, stratum, origin, target and horizon), within each group.
 The baseline is set per study in `STUDY_BASELINES`: `randomwalknowcast` for synthetic, the hub's baseline for germany and `BDBVHub-baseline` for Ebola.

@@ -77,7 +77,7 @@ def test_results_panel_needs_one_study(study) -> None:
 
 def test_si_figures_render(study) -> None:
     _, _, scores = study
-    n_loc = scores["location"].nunique()
+    n_loc = len(scores[["location", "stratum"]].drop_duplicates())
     fig = si_scores_by_location_horizon(scores)
     assert sum(ax.get_visible() for ax in fig.axes) == n_loc
     plt.close(fig)
