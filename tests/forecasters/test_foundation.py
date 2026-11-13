@@ -23,7 +23,9 @@ from bdbvhubrenewal.forecasters import (
     list_models,
 )
 from bdbvhubrenewal.forecasters.chain import NoWalkSpread
+from bdbvhubrenewal.forecasters.copula import GaussianCopula
 from bdbvhubrenewal.forecasters.foundation import (
+    CHRONOS_COPULA,
     LAYOUTS,
     MAX_LAG,
     SOURCES,
@@ -51,6 +53,17 @@ def _constant(value: float):
         ]
 
     return sample
+
+
+def _independent(groups, horizon, n, seed):
+    """A sampler of independent, widely spread draws."""
+    rng = np.random.default_rng(seed)
+    return [
+        rng.gamma(
+            2.0, 1e3, size=(n, np.atleast_2d(g["target"]).shape[0], horizon)
+        )
+        for g in groups
+    ]
 
 
 def _recording(store: list):
@@ -189,6 +202,38 @@ def test_draws_are_counts_at_least_the_reported(
     high = dataclasses.replace(get_model(name), sample=_constant(1e4))
     out = high.forecast(task)
     assert (out["value"].to_numpy() > _reported(task, out)).any()
+
+
+def _wide(out: pd.DataFrame) -> pd.DataFrame:
+    return out.pivot_table(
+        index="sample",
+        columns=["location", "target_end_date"],
+        values="value",
+    )
+
+
+@pytest.mark.parametrize("name", MODELS)
+def test_draws_are_paired_by_the_copula(name: str, task: ForecastTask) -> None:
+    model = get_model(name)
+    assert model.copula == CHRONOS_COPULA
+    paired = dataclasses.replace(model, sample=_independent).forecast(task)
+    unpaired = dataclasses.replace(
+        model, sample=_independent, copula=GaussianCopula()
+    ).forecast(task)
+    wide, flat = _wide(paired), _wide(unpaired)
+    weeks = sorted(paired["target_end_date"].unique())
+    nat = [(NATIONAL, w) for w in weeks[-2:]]
+    corr = wide[nat].corr(method="spearman").iloc[0, 1]
+    assert corr > flat[nat].corr(method="spearman").iloc[0, 1] + 0.1
+    if name.startswith("fm_chronos_weekly"):
+        # Each weekly draw is kept, only paired anew.
+        assert np.array_equal(
+            np.sort(wide.to_numpy(), axis=0), np.sort(flat.to_numpy(), axis=0)
+        )
+    else:
+        # Days of a week are paired, so the week's sum is wider.
+        last = (NATIONAL, weeks[-1])
+        assert wide[last].std() > 1.1 * flat[last].std()
 
 
 @pytest.mark.parametrize("name", MODELS)
