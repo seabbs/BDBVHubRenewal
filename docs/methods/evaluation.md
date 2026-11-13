@@ -89,7 +89,7 @@ Two targets are scored.
 
 **Reported.** The count each later release $o'$ shows for every forecast week it reports.
 `randomwalk` is scored on its samples as they are, with no delay.
-Every other model forecasts the final count $X$ of week $w$, which is mapped to what $o'$ shows by the model's own delay.
+Every other model with a modelled delay forecasts the final count $X$ of week $w$, which is mapped to what $o'$ shows by that delay.
 
 1. Day $t$ is $a = c - t$ days old at a cut-off $c$, and $\pi(a)$ is the share of its final count the model expects reported by then.
    For `randomwalknowcast`, $\pi(a) = 1 / \Gamma(a)$ under the daily delay it fits at the origin ([Baseline models](baselines.md#delay)).
@@ -106,7 +106,7 @@ Every other model forecasts the final count $X$ of week $w$, which is mapped to 
     $$
 
 with the sign carried when $X < R_o$, $q$ kept in $[0, 1]$, and $q = 1$ for a week fully reported at the origin.
-A model with no modelled delay, such as a hub team, is scored on complete weeks only.
+A model with no modelled delay, such as a hub team or a Chronos-2 model ([Foundation models](foundation.md)), is scored on complete weeks only.
 
 **Complete weeks.** The count the latest release shows for the weeks it reports in full.
 A week is complete when it is at least 4 weeks back from the week holding the latest release's cut-off and grew by less than 2% since the release before.
