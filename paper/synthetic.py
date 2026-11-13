@@ -73,13 +73,15 @@ log = logging.getLogger(__name__)
 MODELS: Final = (
     "randomwalknowcast",
     "randomwalk",
+    "fm_chronos_weekly_complete",
+    "fm_chronos_daily_complete",
     "fm_chronos_weekly_ragged",
     "fm_chronos_daily_ragged",
     "fm_chronos_weekly_ragged_ft",
     "fm_chronos_daily_ragged_ft",
 )
-"""The baseline, the random walk, the zero-shot ragged models and the
-fine-tuned ones."""
+"""The baseline, the random walk, the zero-shot Chronos-2 models on complete
+data and on the ragged releases, and the fine-tuned ragged ones."""
 
 MIN_RELEASES: Final = 6
 """Releases up to the first origin: two weeks of context past the
