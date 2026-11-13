@@ -17,10 +17,10 @@ them.
 from __future__ import annotations
 
 import datetime as dt
+import http.client
 import json
 import shutil
 import tempfile
-import urllib.error
 import urllib.request
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
@@ -264,7 +264,8 @@ def finetuned_adapter(checkpoint: str) -> Path:
     Raises
     ------
     FileNotFoundError
-        If an asset cannot be downloaded.
+        If an asset cannot be downloaded, whether it is missing or the
+        connection fails.
     ValueError
         If the release's settings hash is not `checkpoint`.
     """
@@ -281,11 +282,11 @@ def finetuned_adapter(checkpoint: str) -> Path:
             try:
                 with urllib.request.urlopen(url, timeout=60) as response:
                     (tmp / name).write_bytes(response.read())
-            except urllib.error.URLError as err:
+            except (OSError, http.client.HTTPException) as err:
                 raise FileNotFoundError(
-                    f"The release {tag} has no {name} ({url}): {err}"
+                    f"The release {tag} has no {name} ({url}): {err!r}"
                 ) from err
-        found = json.loads((tmp / "settings.json").read_text())["hash"]
+        found = json.loads((tmp / "settings.json").read_text()).get("hash")
         if found != checkpoint:
             raise ValueError(
                 f"The release {tag} holds the checkpoint with settings "
@@ -364,6 +365,8 @@ def chronos_sampler(
         If Chronos-2 is not installed (`uv sync --group chronos`).
     FileNotFoundError
         If the checkpoint's release cannot be downloaded.
+    ValueError
+        If the release holds a checkpoint of another settings hash.
     """
     pipeline = _chronos(checkpoint)
     levels = np.asarray(pipeline.quantiles, dtype=float)
@@ -460,6 +463,8 @@ class FoundationModel:
             If Chronos-2 is not installed.
         FileNotFoundError
             If the fine-tuned checkpoint's release cannot be downloaded.
+        ValueError
+            If the release holds a checkpoint of another settings hash.
         """
         weekly = self.source == "weekly"
         rows = task.target_history if weekly else task.daily_history
