@@ -2,6 +2,7 @@
 for the country and Ituri at 2026-10-24 and 2026-11-01.
 
 The ragged models, zero-shot and fine-tuned, are at D = 4 w / 28 d.
+Each Chronos-2 line starts at the model's last step of context (t*).
 
 Usage: overlay.py SOURCE FT_STORE BASE_STORE RW_FORECASTS OUT, from the
 fm-finetune worktree's root. RW_FORECASTS is the forecasts.csv.gz of a
@@ -31,6 +32,12 @@ models = [
 t = pd.read_csv("data/target.csv")
 rw = pd.read_csv(rw_path)
 rw = rw[(rw.model == "randomwalknowcast") & rw.as_of.isna()]
+# Each model's last step of context (t*) by origin; draws up to t* equal
+# the reported count by construction.
+tstar = {
+    "ragged": {"2026-10-24": "2026-09-26", "2026-11-01": "2026-10-03"},
+    "complete": {"2026-10-24": "2026-09-19", "2026-11-01": "2026-10-03"},
+}
 
 
 def forecasts(store, name, origin):
@@ -49,10 +56,17 @@ for row, origin in enumerate(["2026-10-24", "2026-11-01"]):
         for label, store, name, c in models:
             f = forecasts(store, name, origin)
             f = f[f.location == loc]
+            first = f.target_end_date.min()
+            start = min(start or first, first)
+            kind = "complete" if name.endswith("complete") else "ragged"
+            ts = None if store is None else tstar[kind][origin]
+            if ts is not None:
+                f = f[f.target_end_date >= ts]
+                ax.axvline(pd.Timestamp(ts), color=c, lw=1, alpha=0.5,
+                           ls=(0, (2, 2)))
             q = (f.groupby("target_end_date")["value"]
                  .quantile([0.05, 0.25, 0.5, 0.75, 0.95]).unstack())
             x = pd.to_datetime(q.index)
-            start = min(start or q.index.min(), q.index.min())
             top = max(top, q[0.5].max())
             ax.fill_between(x, q[0.05], q[0.95], color=c, alpha=0.06, lw=0)
             ax.fill_between(x, q[0.25], q[0.75], color=c, alpha=0.25, lw=0)
@@ -80,7 +94,8 @@ fig.legend(handles, labels, loc="upper center", ncol=4, fontsize=9,
            frameon=False, bbox_to_anchor=(0.5, 0.995))
 fig.suptitle(f"{source} source: median, 50% and 90% intervals; "
              "ragged models at D = 4 w / 28 d; y-axis cut at twice the "
-             "highest median or count",
-             fontsize=10, y=0.925)
-fig.tight_layout(rect=(0, 0, 1, 0.92))
+             "highest median or count\nLines start at each model's last step of "
+             "context. Draws are floored at the count reported at the "
+             "origin.", fontsize=10, y=0.93)
+fig.tight_layout(rect=(0, 0, 1, 0.9))
 fig.savefig(out, dpi=100)
