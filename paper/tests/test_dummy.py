@@ -107,3 +107,12 @@ def test_germany_has_age_strata_for_the_nation(study) -> None:
         assert set(obs["stratum"]) == strata
     else:
         assert strata == {"all"}
+
+
+def test_dummy_has_complete_ragged_and_fine_tuned_chronos(study) -> None:
+    _, fc, _ = study
+    models = set(fc["model"])
+    for m in models:
+        if m.startswith("fm_chronos_") and m.endswith("_ragged_ft"):
+            family = m.removesuffix("_ragged_ft")
+            assert {f"{family}_complete", f"{family}_ragged"} <= models

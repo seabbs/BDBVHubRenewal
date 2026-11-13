@@ -16,7 +16,7 @@ from paperfigs.plots import (
 )
 from paperfigs.schema import STUDIES
 from paperfigs.scores import score_forecasts
-from paperfigs.style import model_style
+from paperfigs.style import bar_style, model_order, model_style, point_style
 
 
 @pytest.fixture(scope="module", params=STUDIES)
@@ -109,3 +109,20 @@ def test_synthetic_panel_shows_factors_and_weekly_horizons() -> None:
     fig = si_scores_by_factor(scores, dummy_factors(fc, seed=1))
     assert len([ax for ax in fig.axes if ax.get_title()]) == 5
     plt.close(fig)
+
+
+@pytest.mark.parametrize("family", ["daily", "weekly"])
+def test_chronos_variants_share_a_colour_with_distinct_styles(family) -> None:
+    names = [
+        f"fm_chronos_{family}_complete",
+        f"fm_chronos_{family}_ragged",
+        f"fm_chronos_{family}_ragged_ft",
+    ]
+    styles = [model_style(n, []) for n in names]
+    assert len({c for c, _ in styles}) == 1
+    assert [d for _, d in styles] == ["dotted", "dashed", "solid"]
+    bars = [bar_style(n, []).get("hatch") for n in names]
+    assert len(set(bars)) == 3
+    points = [tuple(sorted(point_style(n, []).items())) for n in names]
+    assert len(set(points)) == 3
+    assert model_order(list(reversed(names))) == names
