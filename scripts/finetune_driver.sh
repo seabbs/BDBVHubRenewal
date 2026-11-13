@@ -71,10 +71,14 @@ remote_tried=0
 
 done_seed() { [ -e "$SIM_DIR/settings-$1.csv" ]; }
 
+STARTED="$SIM_DIR/local-started.txt"
+touch "$STARTED"
+
 local_seeds() {
-  # The laptop's seeds: its range, then seeds taken over from the remote.
-  seq "$LOCAL_FIRST" "$LOCAL_LAST"
+  # The laptop's seeds: seeds taken over from the remote first, as they
+  # hold the held-out and first training outbreaks, then its own range.
   cat "$CLAIMED"
+  seq "$LOCAL_FIRST" "$LOCAL_LAST"
 }
 
 seeds() {
@@ -186,15 +190,16 @@ local_slots() {
         > "$SIM_DIR/logs/$s.log" 2>&1 < /dev/null
       rm -rf "$TMPDIR"
     ) &
+    echo "$s" >> "$STARTED"
     log "started local batch $s"
     sleep 5
   done
 }
 
 sync_remote() {
-  # Copy the remote's batches, except those the laptop runs.
+  # Copy the remote's batches, except those the laptop has started.
   local excludes=() s
-  for s in $(local_seeds); do
+  for s in $(sort -u "$STARTED"); do
     excludes+=(--exclude="counts-$s.csv.gz" --exclude="settings-$s.csv"
       --exclude="failures-$s.csv" --exclude="logs/$s.log")
   done
@@ -216,6 +221,9 @@ check_batches() {
     fi
   done
 }
+
+# Sourced (by the tests), the script only defines its functions.
+[[ "${BASH_SOURCE[0]}" != "$0" ]] && return 0
 
 # A restarted driver replaces the remote scheduler, whose running batches
 # finish.
