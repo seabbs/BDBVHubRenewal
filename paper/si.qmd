@@ -22,24 +22,28 @@ One SI section per paper section.
 
 ::: {.callout-note title="Plan"}
 - `randomwalk` and `randomwalknowcast` in full.
+- Key references: [@Johnson2025].
 :::
 
 ### Foundation model setup and fine-tuning
 
 ::: {.callout-note title="Plan"}
 - Foundation model setup and fine-tuning settings.
+- Key references: [@Ansari2025; @Hu2021].
 :::
 
 ### Synthetic data generation
 
 ::: {.callout-note title="Plan"}
 - Synthetic data generation in full, with an overview of the epinowcast model used.
+- Key references: [@abbottepinowcast; @lison2024; @Park2024; @abbottprimarycensored].
 :::
 
 ### Scoring
 
 ::: {.callout-note title="Plan"}
 - Scoring, and its check against scoringutils.
+- Key references: [@bosse2022scoringutils; @jordanEvaluatingProbabilisticForecasts2019; @zanetta_scoringrules_2024].
 :::
 
 ### Implementation
