@@ -17,7 +17,7 @@ Germany uses quantiles; synthetic and Ebola use samples.
 | `location` | str | Location code within the study. |
 | `stratum` | str | Optional. Subgroup within a location, such as a German age group (`00-04`, ..., `80+`). Defaults to `all` when the column is absent. |
 | `origin_date` | date | Date the forecast was made, using data as of this date. |
-| `target_date` | date | Date the forecast is for (the onset day, or the start of the week). |
+| `target_date` | date | Date the forecast is for; its meaning is set per study (see below). |
 | `horizon` | int | `target_date - origin_date` in the study's one time step (days for `synthetic` and `germany`, weeks for `ebola`). Zero or negative is a nowcast. |
 | `quantile_level` | float | In (0, 1) for a quantile forecast; empty for a sample forecast. |
 | `sample_id` | int | Sample index for a sample forecast; empty for a quantile forecast. A sample is a joint draw across the targets of one model, location and origin. |
@@ -37,6 +37,14 @@ Rules the validator checks:
 Quantile forecasts should carry the levels for the study's coverage widths: 0.025, 0.25, 0.5, 0.75 and 0.975 for germany.
 The WIS uses every level present, so it is only comparable between models with the same levels.
 Tables are written as CSV (gzip is fine) with ISO dates.
+
+`target_date` by study:
+
+- `germany`: the last day of the 7-day rolling sum, as the hub reports it.
+- `synthetic`: the Saturday that ends the onset week.
+- `ebola`: the hub's `target_end_date`, the last day of the onset week.
+
+Quantiles must not decrease with level; tables sort any crossing quantiles before writing.
 
 ## Truth
 
