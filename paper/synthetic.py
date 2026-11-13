@@ -49,11 +49,13 @@ from bdbvhubrenewal.forecasters.randomwalk import RandomWalk
 __all__ = [
     "COLUMNS",
     "COMPLETE_WEEKS",
+    "FACTORS",
     "HORIZONS",
     "MIN_RELEASES",
     "MODELS",
     "OBSERVATION_COLUMNS",
     "evaluate",
+    "factor_table",
     "model_task",
     "models_by_name",
     "observation_table",
@@ -102,6 +104,25 @@ COLUMNS: Final = (
     "truth",
 )
 """The long table's columns (`paper/schema.md`)."""
+
+FACTORS: Final = (
+    "delay_mean",
+    "delay_sd",
+    "delay_drift",
+    "hazard_sd",
+    "dow_sd",
+    "report_days",
+    "log_r0",
+    "n_steps",
+    "gt_mean",
+    "n_places",
+    "coupling",
+    "sqrt_phi",
+    "weeks",
+    "cases",
+)
+"""Outbreak settings (`scripts/finetune_simulate.R`) that scores are
+broken down by, as `factor_table` gives them."""
 
 OBSERVATION_COLUMNS: Final = (
     "study",
@@ -407,3 +428,33 @@ def evaluate(
         return pd.DataFrame(columns=list(COLUMNS))
     forecasts = pd.concat(frames, ignore_index=True)
     return sample_table(forecasts, truth_table(counts), outbreak)
+
+
+def factor_table(counts: pd.DataFrame, settings: pd.DataFrame) -> pd.DataFrame:
+    """Return each series of one outbreak with its outbreak's settings.
+
+    Every outbreak has the same aggregation, release schedule rule and
+    $D$, so only the simulation settings vary.
+
+    Parameters
+    ----------
+    counts : pandas.DataFrame
+        One outbreak's triangle, with its `outbreak` column.
+    settings : pandas.DataFrame
+        The simulator's `settings-*.csv` rows, one per outbreak.
+
+    Returns
+    -------
+    pandas.DataFrame
+        `location` (`series_label`), then the `FACTORS` in `settings`, raw.
+    """
+    outbreak = str(counts["outbreak"].iloc[0])
+    places = sorted(set(truth_table(counts)["location"]))
+    factors = [f for f in FACTORS if f in settings]
+    row = settings.loc[settings["outbreak"] == outbreak, factors].iloc[0]
+    out = pd.DataFrame(
+        {"location": [series_label(outbreak, p) for p in places]}
+    )
+    for f in factors:
+        out[f] = row[f]
+    return out

@@ -13,8 +13,9 @@ Then, from the repo root:
         output/finetune/heldout output/paper/synthetic.csv --device cpu
 
 Writes the long sample table, as parquet if `out` ends `.parquet`.
-Beside it go the observations as of each release (`-observations.csv`)
-and each model's seconds per outbreak (`-timings.csv`).
+Beside it go the observations as of each release (`-observations.csv`),
+each series' outbreak settings (`-factors.csv`) and each model's seconds
+per outbreak (`-timings.csv`).
 Models that are not registered are skipped, and so are the fine-tuned
 ones until their checkpoint exists.
 """
@@ -32,6 +33,7 @@ from paper.synthetic import (
     COLUMNS,
     MODELS,
     evaluate,
+    factor_table,
     models_by_name,
     observation_table,
 )
@@ -75,10 +77,14 @@ def main() -> None:
     for name in skipped:
         logging.warning("%s is not registered, so is skipped", name)
 
-    tables, timings, observed = [], [], []
+    settings = pd.concat(
+        [pd.read_csv(p) for p in sorted(args.sim_dir.glob("settings-*.csv"))]
+    )
+    tables, timings, observed, factors = [], [], [], []
     for outbreak in ids:
         rows = counts.loc[counts["outbreak"] == outbreak]
         observed.append(observation_table(rows, outbreak, args.origins))
+        factors.append(factor_table(rows, settings))
         for model in models:
             t0 = time.perf_counter()
             table = evaluate(
@@ -109,6 +115,9 @@ def main() -> None:
         out.to_csv(args.out, index=False)
     pd.concat(observed, ignore_index=True).to_csv(
         args.out.with_name(args.out.stem + "-observations.csv"), index=False
+    )
+    pd.concat(factors, ignore_index=True).to_csv(
+        args.out.with_name(args.out.stem + "-factors.csv"), index=False
     )
     pd.DataFrame(timings).to_csv(
         args.out.with_name(args.out.stem + "-timings.csv"), index=False
