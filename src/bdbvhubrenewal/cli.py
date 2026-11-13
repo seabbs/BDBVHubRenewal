@@ -14,8 +14,9 @@ Commands:
 - `score`: score the forecasts of `--forecast-only` runs together.
 - `fit`: fit a configuration and write the fit directory and its
   `diagnostics.json`, for the submission CI.
-- `fit-store`: list the fitted models' fits the store lacks, make one, or
-  load the stored fits into the results (`evaluation.store`).
+- `fit-store`: list the fitted models' fits the store lacks, make one,
+  load the stored fits into the results (`evaluation.store`), or archive
+  a round's stored forecasts (`evaluation.store_archive`).
 - `plot-submission`: plot a submitted hub file.
 - `plot-ppc`: plot a fit's posterior predictive checks (`ppc.json`).
 - `coherence`: compare the national data with the sum of the provinces.
@@ -62,7 +63,7 @@ from bdbvhubrenewal.data.tidy import write_csv
 from bdbvhubrenewal.data.zones import hub_zones, weekly_zone_counts
 from bdbvhubrenewal.devices import host_devices
 from bdbvhubrenewal.evaluation import backtest as bt
-from bdbvhubrenewal.evaluation import store
+from bdbvhubrenewal.evaluation import store, store_archive
 from bdbvhubrenewal.evaluation.nowcast import (
     ReleaseBacktest,
     ReleaseForecasts,
@@ -373,7 +374,9 @@ def build_parser() -> argparse.ArgumentParser:
     fst = sub.add_parser(
         "fit-store", help="Plan, make or load the fitted models' stored fits."
     )
-    fst.add_argument("action", choices=["plan", "fit", "load", "unpack"])
+    fst.add_argument(
+        "action", choices=["plan", "fit", "load", "unpack", "archive"]
+    )
     fst.add_argument("--store", default="output/fit-store")
     fst.add_argument("--data", default=data_dir)
     fst.add_argument("--config", default="config/backtest.toml")
@@ -388,20 +391,28 @@ def build_parser() -> argparse.ArgumentParser:
         "--out",
         default=None,
         help="With `plan`: write the missing fits as a matrix JSON here. "
-        "With `unpack`: the fit directory to write.",
+        "With `unpack`: the fit directory to write. "
+        "With `archive`: the forecasts file to write.",
     )
     fst.add_argument(
         "--origins",
         nargs="*",
         default=None,
-        help="With `plan` or `load`: only these origins (default: all).",
+        help="With `plan`, `load` or `archive`: only these origins "
+        "(default: all).",
     )
     fst.add_argument("--results", default="results")
+    fst.add_argument(
+        "--closes",
+        default=None,
+        help="With `archive`: when the round's window closed (ISO time).",
+    )
     fst.add_argument(
         "--models",
         nargs="*",
         default=None,
-        help="With `plan` or `load`: only these models (default: all fitted).",
+        help="With `plan`, `load` or `archive`: only these models "
+        "(default: all fitted).",
     )
     fst.add_argument(
         "--retry-failed",
@@ -1521,6 +1532,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "fit":
         return _fit(args)
     if args.command == "fit-store":
+        if args.action == "archive":
+            return store_archive.command(args)
         return store.command(args)
     if args.command == "plot-submission":
         return _plot_submission(args)
