@@ -1,0 +1,63 @@
+"""Render the results panel and SI plots for each study to figures/.
+
+Uses dummy data until the studies write real forecasts in the schema.
+
+Usage: `python make_figures.py [--out figures] [--studies ebola ...]`.
+"""
+
+from __future__ import annotations
+
+import argparse
+from collections.abc import Sequence
+from pathlib import Path
+
+import matplotlib.pyplot as plt
+
+from paperfigs.dummy import dummy_study
+from paperfigs.plots import (
+    results_panel,
+    si_scores_by_location_horizon,
+    si_wis_over_time,
+)
+from paperfigs.schema import STUDIES
+from paperfigs.scores import score_forecasts
+from paperfigs.style import theme
+
+
+def render(out: Path, studies: Sequence[str] = STUDIES) -> list[Path]:
+    """Write every figure for `studies` to `out` and return the paths."""
+    out.mkdir(parents=True, exist_ok=True)
+    written = []
+    with theme():
+        for study in studies:
+            fc, obs = dummy_study(study)
+            scores = score_forecasts(fc)
+            figures = {
+                "results": results_panel(fc, obs, scores),
+                "si-location-horizon": si_scores_by_location_horizon(scores),
+                "si-location-horizon-log": si_scores_by_location_horizon(
+                    scores, col="rel_log_wis"
+                ),
+                "si-wis-over-time": si_wis_over_time(scores),
+            }
+            for name, fig in figures.items():
+                path = out / f"{study}-{name}.png"
+                fig.savefig(path, dpi=200)
+                plt.close(fig)
+                written.append(path)
+    return written
+
+
+def main() -> None:
+    """Parse arguments and render."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    here = Path(__file__).parent
+    parser.add_argument("--out", type=Path, default=here / "figures")
+    parser.add_argument("--studies", nargs="+", default=list(STUDIES))
+    args = parser.parse_args()
+    for path in render(args.out, args.studies):
+        print(path)
+
+
+if __name__ == "__main__":
+    main()
