@@ -229,8 +229,8 @@ def panel_a(g: Svg, oy: float) -> float:
                 "growth with steps",
                 "smooth growth",
             ],
-            "Rt or growth paths with",
-            ["drift and step changes"],
+            "Rt or growth paths, some",
+            ["with drift and steps"],
         ),
         (
             "Expected onsets",
@@ -571,10 +571,10 @@ def panel_b(g: Svg, oy: float) -> float:
         nx,
         by + 2 * ch + 14,
         [
-            "counts reported so far",
-            "enter the forecast",
-            "window as known-",
-            "future inputs",
+            "each place's counts",
+            "reported so far enter",
+            "the forecast window as",
+            "known-future inputs",
         ],
         size=SMALL,
         fill=COV,
@@ -642,7 +642,7 @@ def panel_c(g: Svg, oy: float) -> float:
                 kind = "final" if c < n_ctx else "truth"
             else:
                 d = k - 1
-                kind = "lag" if c < n_ctx + n_now - d else "none"
+                kind = "lag" if d <= c < n_ctx + n_now - d else "none"
             cell(g, x, y, cw, ch, kind)
     bottom = by + n_now * (ch + 2) + 3 + ch
     exx = bx + n_ctx * cw
@@ -663,13 +663,15 @@ def panel_c(g: Svg, oy: float) -> float:
         bx - 36,
         bottom + 25,
         [
-            "Each outbreak gives several blocks, each with a random cut-off,",
-            "delay D and set of places, at weekly or daily steps.",
+            "Each outbreak gives several weekly and daily blocks, each with",
+            "a random cut-off, delay D and set of places. Daily blocks keep",
+            "weekly releases, so their lag series have a value once a week.",
+            "Checkpoints are trained on nested sets of simulated outbreaks.",
         ],
         size=SMALL,
         fill=MUTED,
     )
-    left_bottom = bottom + 25 + SMALL * 1.25 + 4
+    left_bottom = bottom + 25 + 3 * SMALL * 1.25 + 4
 
     # LoRA: the frozen model with small trained adapters.
     mx = 232.0
@@ -691,32 +693,33 @@ def panel_c(g: Svg, oy: float) -> float:
         mx - 4,
         y0 + 21,
         mw + aw + 12,
-        42,
+        47,
         fill="none",
         stroke=LINE,
         sw=0.7,
         dash="3 2",
         rx=3,
     )
-    g.rect(mx, y0 + 25, mw, 15, fill=CELL, rx=2)
+    g.rect(mx, y0 + 25, mw, 20, fill=CELL, rx=2)
     g.text(
         mx + mw / 2,
-        y0 + 35.5,
-        "attention q, k, v, o",
+        y0 + 33,
+        ["time and group attention", "q, k, v, o"],
         size=SMALL,
         anchor="middle",
+        lead=1.15,
     )
-    g.rect(mx, y0 + 44, mw, 15, fill=CELL, rx=2)
-    g.text(mx + mw / 2, y0 + 54.5, "feed-forward", size=SMALL, anchor="middle")
-    g.text(mx + mw + aw + 11, y0 + 45, "\u00d7 12", size=SMALL, fill=MUTED)
-    g.rect(mx, y0 + 69, mw, 15, fill=CELL, rx=2)
-    g.text(mx + mw / 2, y0 + 79.5, "output layer", size=SMALL, anchor="middle")
-    for yy in (y0 + 25, y0 + 69):
+    g.rect(mx, y0 + 49, mw, 15, fill=CELL, rx=2)
+    g.text(mx + mw / 2, y0 + 59.5, "feed-forward", size=SMALL, anchor="middle")
+    g.text(mx + mw + aw + 11, y0 + 50, "\u00d7 12", size=SMALL, fill=MUTED)
+    g.rect(mx, y0 + 74, mw, 15, fill=CELL, rx=2)
+    g.text(mx + mw / 2, y0 + 84.5, "output layer", size=SMALL, anchor="middle")
+    for yy, hh in ((y0 + 25, 20), (y0 + 74, 15)):
         g.rect(
             mx + mw + 4,
             yy,
             aw,
-            15,
+            hh,
             fill=ACCENT_SOFT,
             stroke=ACCENT,
             sw=0.9,
@@ -724,16 +727,22 @@ def panel_c(g: Svg, oy: float) -> float:
         )
         g.text(
             mx + mw + 4 + aw / 2,
-            yy + 10.5,
+            yy + hh / 2 + 2.5,
             "B\u00b7A",
             size=SMALL,
             anchor="middle",
             fill=ACCENT,
             weight="bold",
         )
-    g.text(mx, y0 + 96, "y = Wx + B(Ax), rank 8", size=SMALL, fill=FG)
+    g.text(
+        mx,
+        y0 + 100,
+        "y = Wx + (\u03b1/r) B(Ax), rank r = 8, \u03b1 = 16",
+        size=SMALL,
+        fill=FG,
+    )
     # Legend.
-    lgy = y0 + 108
+    lgy = y0 + 112
     g.rect(mx, lgy - 6.5, 9, 7.5, fill=CELL, rx=1)
     g.text(mx + 12, lgy, "frozen, as pretrained", size=SMALL)
     g.rect(mx, lgy + 4.5, 9, 7.5, fill=ACCENT_SOFT, stroke=ACCENT, sw=0.8, rx=1)
@@ -884,11 +893,11 @@ def panel_d(g: Svg, oy: float) -> float:
     )
     # Stage 3: quantiles, read at uniform draws.
     x3 = x2 + w2 + gap
-    w3 = 132.0
+    w3 = 138.0
     g.line(x2 + w2 + 2, top + h / 2, x3 - 2, top + h / 2, arrow="ah")
     g.rect(x3, top, w3, h, fill="white", stroke=LINE, sw=0.7, rx=3)
     g.text(x3 + 5, top + 10, "quantiles to draws", size=SMALL, weight="bold")
-    px, py, pw, ph = x3 + 16, top + 15, 52.0, 35.0
+    px, py, pw, ph = x3 + 20, top + 15, 52.0, 35.0
     g.line(px, py + ph, px + pw, py + ph, stroke=MUTED, sw=0.6)
     g.line(px, py, px, py + ph, stroke=MUTED, sw=0.6)
     g.text(

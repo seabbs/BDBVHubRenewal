@@ -59,6 +59,7 @@ One SI section per paper section.
 ::: {.callout-note title="Plan"}
 - Score breakdowns by location and horizon for each case study.
 - WIS over time for each case study.
+- Held-out synthetic scores by number of fine-tuning outbreaks.
 :::
 
 ### Held-out synthetic data
