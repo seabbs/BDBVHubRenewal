@@ -3,6 +3,7 @@ import matplotlib as mpl
 mpl.use("Agg")
 
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -196,3 +197,43 @@ def test_ribbons_fall_back_to_the_best_chronos_variant() -> None:
         "fm_chronos_daily_ragged",
         "fm_chronos_weekly_ragged_ft",
     ]
+
+
+@pytest.fixture(scope="module")
+def gappy():
+    fc, obs = dummy_study("ebola", seed=1, n_samples=5)
+    origins = sorted(fc["origin_date"].unique())
+    drop = (fc["model"] == "randomwalknowcast") & fc["origin_date"].isin(
+        origins[:6]
+    )
+    fc = fc.loc[~drop]
+    return fc, obs, score_forecasts(fc), origins[:6]
+
+
+def test_missing_forecasts_are_labelled(gappy) -> None:
+    fc, obs, scores, _ = gappy
+    fig = results_panel(fc, obs, scores, forecasts_share=fc)
+    labels = [
+        t.get_text()
+        for ax in fig.axes
+        for t in ax.get_yticklabels()
+        if "randomwalknowcast" in t.get_text()
+    ]
+    assert any("% made" in label for label in labels)
+    assert not any(
+        "% made" in t.get_text()
+        for ax in fig.axes
+        for t in ax.get_yticklabels()
+        if t.get_text().startswith("BDBVHub-baseline")
+    )
+    plt.close(fig)
+
+
+def test_missing_origins_break_lines_over_time(gappy) -> None:
+    _, _, scores, dropped = gappy
+    fig = si_wis_over_time(scores)
+    ax = fig.axes[0]
+    line = next(ln for ln in ax.get_lines() if ln.get_color() == "#eb6834")
+    y = np.asarray(line.get_ydata(), dtype=float)
+    assert np.isnan(y).sum() >= len(dropped)
+    plt.close(fig)

@@ -6,6 +6,7 @@ from paperfigs.scores import (
     STUDY_BASELINES,
     STUDY_COUNTS,
     STUDY_COVERAGE,
+    forecast_share,
     relative_scores,
     score_forecasts,
 )
@@ -255,3 +256,12 @@ def test_count_bias_is_a_study_setting() -> None:
     s = score_forecasts(_samples("m", X, 3.0), counts=False)
     # Continuous form: 1 - 2 P(X <= y) = 1 - 2 * 0.7.
     assert s["bias"].item() == pytest.approx(1 - 1.4)
+
+
+def test_forecast_share_counts_missing_forecasts() -> None:
+    full = pd.concat([_rows("a", Q, 5.0, h=h) for h in (-1, 0)])
+    half = _rows("b", Q, 5.0, h=0)
+    share = forecast_share(pd.concat([full, half])).set_index("model")
+    assert share.loc["a", "share"] == 1.0
+    assert share.loc["b", "share"] == 0.5
+    assert share.loc["b", "missing"] == 1
