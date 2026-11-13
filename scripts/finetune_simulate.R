@@ -32,7 +32,8 @@
 #   `(1 | week)` or `rw(week)`; reports every day or on one to three
 #   weekdays (a `structural` table), which may change once on a report
 #   date;
-# - observations: "negbin" (NB2), "negbin1d" (NB1) or "poisson".
+# - observations: "negbin" (NB2), "negbin1d" (NB1) or "poisson";
+# - longest delay: 8 weeks, or 12 weeks in one outbreak in four.
 #
 # The NB1 dispersion matches the NB2 scale (epinowcast issue #937). With
 # expected onsets lambda and delay probabilities p_d, NB2 has
@@ -65,7 +66,7 @@
 #   Rscript scripts/finetune_simulate.R <n> <seed> <out_dir>
 
 epinowcast_sha <- "e084b080"
-grid_name <- "r2-final"
+grid_name <- "r2-real"
 args <- commandArgs(trailingOnly = TRUE)
 n_outbreaks <- as.integer(args[[1]])
 seed <- as.integer(args[[2]])
@@ -83,7 +84,6 @@ enw_set_cache(
 )
 model <- suppressMessages(enw_model(threads = FALSE))
 
-max_delay <- 56L
 # Set ENW_DEBUG to see Stan's messages.
 debug <- nzchar(Sys.getenv("ENW_DEBUG"))
 
@@ -136,7 +136,7 @@ growth_path <- function(n, process, v) {
 # sd_int, the exponential rate exp(-mean_int). With no parametric delay,
 # the non-parametric hazard's intercept is the constant hazard of a
 # geometric delay with that mean.
-delay_parameters <- function(family, mean, cv) {
+delay_parameters <- function(family, mean, cv, max_delay) {
   d <- 0:max_delay
   out <- list()
   cdf <- switch(family,
@@ -230,7 +230,11 @@ draw_design <- function() {
     report_days = weekdays_drawn(),
     report_change = change(0.3),
     report_days_after = weekdays_drawn(),
-    family = sample(c("negbin", "negbin1d", "poisson"), 1)
+    family = sample(
+      c("negbin", "negbin1d", "poisson"), 1, prob = c(0.4, 0.4, 0.2)
+    ),
+    # Longest delay in days; the German data's delays run past 8 weeks.
+    max_delay = sample(c(56L, 84L), 1, prob = c(0.75, 0.25))
   )
 }
 
@@ -240,7 +244,7 @@ draw_values <- function(design) {
   list(
     weeks = if (places_ages) sample(16:24, 1) else sample(16:40, 1),
     offset = sample(0:6, 1),
-    quiet = runif(1, 0, 0.7),
+    quiet = runif(1, 0, 0.9),
     coupling = runif(1),
     gt_mean = runif(1, 6, 20),
     gt_cv = runif(1, 0.3, 0.7),
@@ -260,7 +264,7 @@ draw_values <- function(design) {
     smooth_amp = runif(1, 0.01, 0.06),
     smooth_period = runif(1, 40, 200),
     smooth_phase = runif(1, 0, 2 * pi),
-    seed_size = exp(runif(1, log(0.2), log(20))),
+    seed_size = exp(runif(1, log(0.2), log(200))),
     stratum_sd = runif(1, 0.5, 2),
     delay_mean = exp(runif(1, log(2), log(21))),
     # Gamma delays with shape above 2 fail or report nothing in the
@@ -294,7 +298,7 @@ draw_values <- function(design) {
     holiday_effect = runif(1, -2.5, -0.5),
     report_week_sd = runif(1, 0, 0.3),
     report_change_at = runif(1, 0.2, 0.8),
-    sqrt_phi = runif(1, 0.05, 1)
+    sqrt_phi = runif(1, 0.05, 1.5)
   )
 }
 
@@ -327,9 +331,10 @@ effect_sds <- function(rdesign, sds) {
 }
 
 simulate_outbreak <- function(design, v) {
-  # Twelve weeks past the last cut-off, so a block's horizon (four weeks)
-  # is complete to the longest delay (eight weeks).
-  n_time <- 7L * (v$weeks + 12L)
+  # Four weeks plus the longest delay past the last cut-off, so a block's
+  # horizon (four weeks) is complete.
+  max_delay <- design$max_delay
+  n_time <- 7L * (v$weeks + max_delay %/% 7L + 4L)
   place_ids <- sprintf("P%02d", seq_len(design$n_places))
   age_ids <- sprintf("A%d", seq_len(design$n_ages))
   dates <- as.IDate("2026-01-03") + v$offset + seq_len(n_time) - 1L
@@ -430,7 +435,9 @@ simulate_outbreak <- function(design, v) {
     non_parametric = refnp, data = pobs
   )
   rd <- reference$data
-  delay <- delay_parameters(design$delay_family, v$delay_mean, v$delay_cv)
+  delay <- delay_parameters(
+    design$delay_family, v$delay_mean, v$delay_cv, max_delay
+  )
   stratum_sd <- list(place = v$delay_stratum_sd, age = v$delay_stratum_sd)
   parameters <- list()
   if (parametric) {
@@ -580,7 +587,7 @@ simulate_outbreak <- function(design, v) {
 # strata allow larger outbreaks.
 min_size <- 10
 max_size <- function(design) {
-  30000 * max(1, design$n_places * design$n_ages / 26)
+  300000 * max(1, design$n_places * design$n_ages / 26)
 }
 
 if (sys.nframe() == 0L) {

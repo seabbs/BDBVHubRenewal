@@ -97,7 +97,8 @@ SAVE_EVERY = 1000
 """Steps between saved checkpoints."""
 
 SIM_DELAY_WEEKS = 8
-"""The simulations' longest delay, after which a count is complete."""
+"""The simulations' longest delay in weeks, after which a count is
+complete, unless an outbreak's settings give `max_delay` in days."""
 
 
 def _sha256(path: Path) -> str:
@@ -135,7 +136,10 @@ def strata(settings: pd.Series) -> list[str]:
 
 
 def outbreak_blocks(
-    counts: pd.DataFrame, provinces: list[str], rng: np.random.Generator
+    counts: pd.DataFrame,
+    provinces: list[str],
+    rng: np.random.Generator,
+    delay_weeks: int = SIM_DELAY_WEEKS,
 ) -> list[dict]:
     """Return the training blocks of one outbreak.
 
@@ -147,7 +151,7 @@ def outbreak_blocks(
     weekday = int(rng.integers(2, 6))
     first = str(counts["report_date"].min())
     end = pd.Timestamp(counts["report_date"].max()).date()
-    last = end - dt.timedelta(weeks=SIM_DELAY_WEEKS + 5)
+    last = end - dt.timedelta(weeks=delay_weeks + 5)
     cutoffs = weekly_cutoffs(first, last.isoformat(), weekday)
     out = []
     for source in ("weekly", "daily"):
@@ -206,7 +210,9 @@ def blocks(sim_dirs: list[Path], out: Path, seed: int) -> None:
     for outbreak, rows in counts.groupby("outbreak"):
         provinces = strata(settings.loc[outbreak])
         rng = np.random.default_rng([seed, zlib.crc32(outbreak.encode())])
-        cut = outbreak_blocks(rows, provinces, rng)
+        days = settings.loc[outbreak].get("max_delay", np.nan)
+        weeks = SIM_DELAY_WEEKS if pd.isna(days) else int(days) // 7
+        cut = outbreak_blocks(rows, provinces, rng, weeks)
         written.extend(cut)
         sources.extend([outbreak] * len(cut))
     seconds = time.perf_counter() - t0
