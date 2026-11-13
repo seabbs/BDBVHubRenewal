@@ -343,7 +343,7 @@ def _legend(fig: Figure, models: Sequence[str]) -> None:
     fig.legend(
         handles=handles,
         loc="outside lower center",
-        ncol=min(len(handles), 5),
+        ncol=min(int(np.ceil(len(handles) / 2)), 6),
         handlelength=2.6,
     )
 
