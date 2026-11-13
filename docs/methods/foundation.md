@@ -14,7 +14,7 @@ In brief, each model:
 
 1. lays out the hub target of every release by place, step and release lag ([Releases](#releases));
 2. puts the country and every province, each as its own hub-target series, in one block that Chronos-2 forecasts jointly ([Layouts](#layouts));
-3. draws 100 trajectories from Chronos-2's quantiles ([Trajectories](#trajectories));
+3. draws 100 trajectories from Chronos-2's quantiles, paired over steps and places by a Gaussian copula ([Trajectories](#trajectories));
 4. rounds the draws to counts no lower than the count already reported ([Counts](#counts)).
 
 ## Releases
@@ -51,8 +51,24 @@ Chronos-2 standardises each series and takes its arcsinh, so counts go in as the
 ## Trajectories
 
 Chronos-2 gives 21 quantiles, from 1% to 99%, of each series at each step ahead.
-Each of the 100 trajectories draws its own uniform level for every series and step, and reads the quantile function there: linear between the quantiles and flat beyond them.
-Draws are independent across steps and series.
+Each series and step has 100 draws of its own uniform level, read off the quantile function: linear between the quantiles and flat beyond them.
+
+A Gaussian copula pairs these draws into trajectories (`forecasters.copula`).
+Each trajectory draws one vector $z$ of standard normals over series and steps, and each cell's draws are reordered across trajectories to rank as $z$ does.
+This is $u = \Phi(z)$ read off each cell's draws, so every cell keeps exactly the draws it had and only the pairing changes.
+The correlation of $z$ is a place correlation times a step correlation.
+Steps $h$ and $h'$ have correlation $\rho_t^{|h - h'|}$ for weeks and $\rho_t^{|h - h'|/7}$ for days, so sums of days into weeks are of correlated draws.
+Two provinces have correlation $\rho_p$, and the country and a province $\rho_n$.
+Where these give no correlation matrix, the nearest one is used, by setting negative eigenvalues to zero.
+
+All six models use the same fixed values, $\rho_t = 0.9$, $\rho_p = 0.7$ and $\rho_n = 0.7$ (`CHRONOS_COPULA`).
+They were chosen on the release backtest from a grid of 0.3 to 0.95, where the energy score improved as each correlation grew and levelled off near these values.
+
+The correlations can also be estimated from the forecast errors of the weekly models (`estimate_copula`).
+Each matured week's truth gets its randomised PIT in the forecast's draws, mapped to a normal score, and weeks whose draws are all equal are left out.
+$\rho_t$ is the correlation of the scores of a place's consecutive weeks, $\rho_p$ of two provinces in a week and $\rho_n$ of the country and a province, each floored at zero.
+The daily models are left out, as their weekly values depend on the copula.
+So far too few weeks have matured with spread in the forecast for these estimates to be used.
 
 ## Counts
 
@@ -99,6 +115,7 @@ Such fits are retried by running the Fit store workflow with `retry_failed` (`gh
 - The zero-shot models use Chronos-2 as pretrained. It has not seen these data or outbreaks like them.
 - The fine-tuned models have seen only simulated outbreaks, whose delays and dynamics may not match these data.
 - The daily fine-tuned model was trained on blocks of at most five provinces but forecasts all 26 in one block.
-- Draws are independent across steps and places, so every weekly value of the daily models, a sum of seven daily draws, is too narrow, as are sums over weeks or places.
+- The copula's three correlations are fixed from a backtest of few origins, and are to be estimated from the errors as releases accumulate.
+- It ties days to weeks by one decay per day, which is not estimated from daily errors.
 
 [^chronos2]: Ansari A F et al. (2025) Chronos-2: From univariate to universal forecasting. arXiv:2510.15821. Code: <https://github.com/amazon-science/chronos-forecasting>.

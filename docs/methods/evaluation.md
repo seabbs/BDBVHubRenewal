@@ -56,6 +56,7 @@ The draws of `renewal` and `renewalbvd` are joint across provinces, one posterio
 Zones split each province draw, so zones are joint within a province for every renewal model.
 `pprandomwalknowcast` takes one posterior draw of its pooled parameters per sample index, so its places share that draw.
 `randomwalk` and `randomwalknowcast` draw each place independently.
+The Chronos-2 models pair their draws over weeks and places with a Gaussian copula ([Foundation models](foundation.md#trajectories)).
 Hub teams' samples are joint across weeks within a place only, as the hub's sample format sets, so pairing their indices across places scores them as independent across places.
 
 ## Backtest design

@@ -125,11 +125,10 @@ def test_normal_scores_are_the_truths_place_in_the_forecast() -> None:
     )
     out = normal_scores(forecasts, truth, np.random.default_rng(0))
     z = out.set_index(["location", "target_end_date"])["z"]
-    assert len(out) == 3
     assert z[("CD", "2026-10-17")] == pytest.approx(0.0, abs=0.03)
     assert z[("CD", "2026-10-24")] > 2.3
-    # A truth tied with every draw takes a random place among them.
-    assert np.isfinite(z[("CD-IT", "2026-10-17")])
+    # A forecast with no spread says nothing of where the truth falls.
+    assert ("CD-IT", "2026-10-17") not in z.index
     assert {"model", "origin", "location", "target_end_date"} <= set(out)
 
 
