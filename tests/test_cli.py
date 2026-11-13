@@ -644,3 +644,73 @@ def test_cli_germany_teams_scores_the_hub_teams(tmp_path: Path) -> None:
     teams = pd.read_csv(out / "teams.csv.gz")
     assert set(teams["model"]) == {"KIT", "KIT-frozen_baseline"}
     assert len(teams) == 2
+
+
+def _outside_repo(tmp_path: Path) -> tuple[Path, dict[str, str]]:
+    """Return a working directory with the config and no `data/`."""
+    import shutil
+
+    shutil.copytree(ROOT / "config", tmp_path / "config")
+    env = {**os.environ, "BDBV_DATA_DIR": str(ROOT / "tests/fixtures/data")}
+    return tmp_path, env
+
+
+def test_loaders_follow_bdbv_data_dir_after_the_cli_starts(
+    tmp_path: Path,
+) -> None:
+    # A new process: the conftest sets this one's loader default itself.
+    cwd, env = _outside_repo(tmp_path)
+    code = (
+        "from bdbvhubrenewal.cli import main\n"
+        "from bdbvhubrenewal.data import load_locations\n"
+        "main(['--version'])\n"
+        "print(len(load_locations()))\n"
+    )
+    out = subprocess.run(
+        [sys.executable, "-c", code],
+        cwd=cwd,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert out.returncode == 0, out.stderr
+    assert int(out.stdout.split()[-1]) > 0
+
+
+@pytest.mark.slow
+def test_the_smoke_fit_runs_with_no_data_dir(tmp_path: Path) -> None:
+    cwd, env = _outside_repo(tmp_path)
+    sampler = '{"num_chains": 1, "num_warmup": 5, "num_samples": 5}'
+    out = subprocess.run(
+        [
+            sys.executable, "-m", "bdbvhubrenewal.cli", "fit",
+            "--model", "renewal", "--config", "main",
+            "--sampler-json", sampler, "--out", str(tmp_path / "fit"),
+        ],
+        cwd=cwd,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )  # fmt: skip
+    assert out.returncode == 0, out.stderr[-2000:]
+    assert (tmp_path / "fit").is_dir()
+
+
+@pytest.mark.parametrize(
+    ("argv", "attr", "path"),
+    [
+        (["backtest"], "data", ""),
+        (["compare-hub"], "data", ""),
+        (["compare-hub"], "hub_dir", "/hub-submissions"),
+    ],
+)
+def test_data_defaults_follow_bdbv_data_dir(
+    monkeypatch: pytest.MonkeyPatch, argv: list[str], attr: str, path: str
+) -> None:
+    from bdbvhubrenewal.cli import build_parser
+
+    monkeypatch.setenv("BDBV_DATA_DIR", "elsewhere")
+    args = build_parser().parse_args(argv)
+    assert getattr(args, attr) == f"elsewhere{path}"

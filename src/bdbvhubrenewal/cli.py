@@ -53,6 +53,7 @@ from bdbvhubrenewal.data import (
     load_delays,
     load_health_zones,
     load_target,
+    tidy,
 )
 from bdbvhubrenewal.data.dates import as_date
 from bdbvhubrenewal.data.releases import cutoff_lags
@@ -179,7 +180,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--version", action="store_true", help="Print the version and exit."
     )
     sub = parser.add_subparsers(dest="command")
-    data_dir = os.environ.get("BDBV_DATA_DIR", "data")
+    data_dir = str(_data_root())
 
     data = sub.add_parser("data", help="Download and tidy the hub data.")
     data.add_argument(
@@ -190,7 +191,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     back = sub.add_parser("backtest", help="Run the backtest.")
     back.add_argument("--config", default="config/backtest.toml")
-    back.add_argument("--data", default="data")
+    back.add_argument("--data", default=data_dir)
     back.add_argument("--models", nargs="*", default=None)
     back.add_argument("--results", default="results")
     back.add_argument(
@@ -513,7 +514,7 @@ def build_parser() -> argparse.ArgumentParser:
     cmp.add_argument("--data", default=data_dir)
     cmp.add_argument(
         "--hub-dir",
-        default="data/hub-submissions",
+        default=f"{data_dir}/hub-submissions",
         help="Hub metadata and openly licensed forecasts.",
     )
     cmp.add_argument(
@@ -1536,6 +1537,11 @@ def _germany_teams(args: argparse.Namespace) -> int:
     return 0
 
 
+def _data_root() -> Path:
+    """Return the tidy data directory, `$BDBV_DATA_DIR` or `data/`."""
+    return Path(os.environ.get("BDBV_DATA_DIR") or "data")
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """Run the command line interface.
 
@@ -1569,6 +1575,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     if argv[:1] == ["validate"]:
         return validate_main(argv[1:])
+    # For loaders called with no directory, as inside a renewal fit.
+    tidy._DEFAULT_DATA_DIR = _data_root()
     parser = build_parser()
     args = parser.parse_args(argv)
     if args.version:
@@ -1648,7 +1656,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
     from bdbvhubrenewal.reporting.report import make_report
 
-    make_report(figures=args.figures, generated=args.generated)
+    make_report(
+        figures=args.figures,
+        generated=args.generated,
+        data_dir=_data_root(),
+    )
     from bdbvhubrenewal.submission.rounds import make_round_pages
 
     done = make_round_pages(args.ledger, generated=args.generated)

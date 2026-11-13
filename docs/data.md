@@ -178,6 +178,6 @@ The daily split into observed and imputed matches the weekly totals in every row
 
 ## Health zones
 
-Health zone onsets are in `daily_zones.csv.gz`, and their weekly totals in `health_zones.csv.gz`.
+Health zone onsets are in `data/daily_zones.csv.gz`, and their weekly totals in `data/health_zones.csv.gz`, once `task data` has fetched them.
 Zone totals sum to the province totals in every vintage.
 They set the zone series of the random walk baselines and the zone shares that split the province forecasts of the other models (see [Health zones](methods/model.md#health-zones)).
