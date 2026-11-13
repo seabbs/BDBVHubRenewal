@@ -28,8 +28,9 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
 - **Context.**
   - Nowcasting methods model reporting delays directly.
   - Time series foundation models forecast well with no training on the target data.
+  - Training on domain-specific synthetic data has precedent: KernelSynth for Chronos [@placeholder], ForecastPFN [@placeholder], prior-fitted networks [@placeholder; @placeholder], and Mantis for outbreaks [@placeholder].
 - **What we did.**
-  - We fine-tuned a foundation model on synthetic outbreak data.
+  - We fine-tuned a foundation model on synthetic outbreak data, following that precedent but fine-tuning a general model rather than training from scratch.
   - We evaluated it retrospectively and prospectively.
 :::
 
@@ -61,7 +62,6 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
 
 ::: {.callout-note title="Plan"}
 - Simulated with epinowcast over a grid of outbreak, delay and noise settings.
-- A held-out set of simulations was not used during development.
 - A table in the main text gives the grid of synthetic scenarios.
 - The full process and an overview of the epinowcast model used are in the SI.
 :::
@@ -74,6 +74,14 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
 | Noise    |        |
 
 Placeholder: grid of synthetic scenarios.
+:::
+
+### Evaluation on held-out synthetic data
+
+::: {.callout-note title="Plan"}
+- A held-out set of simulations was not used during development.
+- Sample forecasts scored with CRPS and log-scale CRPS, bias, and coverage, relative to `randomwalknowcast`.
+- Scored against a rolling evaluation set of the data as reported D days later, with D each outbreak's 99% delay.
 :::
 
 ### Case study 1: German nowcast hub
@@ -89,9 +97,15 @@ Placeholder: grid of synthetic scenarios.
 
 ::: {.callout-note title="Plan"}
 - Compared with the other submissions, relative to the hub's own baseline.
-- Sample forecasts scored with CRPS and log-scale CRPS, bias, and coverage, against a rolling evaluation set of the data as reported D days later, as in the German hub [@Wolffram2023].
-- D is the empirical 99% point of the reporting delay.
+- Scored as for the held-out synthetic data, with D the empirical 99% point of the hub data's reporting delay.
 - Our models' forecasts are saved prospectively, alongside the main submissions as they were made.
+:::
+
+### Implementation
+
+::: {.callout-note title="Plan"}
+- The tools we used, each cited: Python, PyTorch on the laptop GPU, chronos-forecasting, PEFT for LoRA, R and epinowcast for simulation, and scoringrules for scoring, checked against scoringutils.
+- The evaluation runs as a Snakemake workflow, so every result can be reproduced from the raw data.
 :::
 
 ## Results

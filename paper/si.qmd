@@ -42,6 +42,13 @@ One SI section per paper section.
 - Scoring, and its check against scoringutils.
 :::
 
+### Implementation
+
+::: {.callout-note title="Plan"}
+- The tools we used, each cited: Python, PyTorch on the laptop GPU, chronos-forecasting, PEFT for LoRA, R and epinowcast for simulation, and scoringrules for scoring, checked against scoringutils.
+- The evaluation runs as a Snakemake workflow, so every result can be reproduced from the raw data.
+:::
+
 ## Results
 
 ::: {.callout-note title="Plan"}
