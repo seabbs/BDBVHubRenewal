@@ -83,9 +83,9 @@ the settings."""
 ROUND2_SEED = 3001
 """First seed of the round 2 grid's simulations."""
 
-HELD_OUT_FROM = 1000
-"""Round 2 outbreaks the held-out outbreaks are drawn from: the smallest
-nested training set."""
+HELD_OUT_SEED = 3900
+"""First seed of the held-out outbreaks, simulated apart from every
+training set."""
 
 EVAL_BLOCKS = 100
 """Held-out blocks whose loss is logged during training."""
@@ -300,19 +300,34 @@ def steps_for(sizes: np.ndarray, batch_size: int, epochs: float) -> int:
     return int(np.ceil(epochs * sizes.sum() / np.mean(held)))
 
 
-def held_out_outbreaks(outbreaks: list[str], n: int, seed: int) -> list[str]:
-    """Return the held-out outbreaks: `n` of the first `HELD_OUT_FROM`.
+def _order(outbreak: str) -> tuple[int, int]:
+    """Sort key of an outbreak id, `<seed>-<index>`."""
+    seed, index = outbreak.split("-")
+    return int(seed), int(index)
 
-    The first outbreaks of the round 2 grid (seeds from `ROUND2_SEED`), in
-    order of seed and index, are in every nested training set, so each set
-    holds out the same outbreaks and so the same blocks.
+
+def training_sets(
+    outbreaks: list[str], round1: bool, round2: int, held_out: int
+) -> tuple[list[str], list[str]]:
+    """Return the training and held-out outbreaks.
+
+    Training is every round 1 outbreak (seeds below `ROUND2_SEED`) if
+    `round1`, and the first `round2` round 2 outbreaks in order of seed and
+    index, from seeds `ROUND2_SEED` to `HELD_OUT_SEED`. The held-out
+    outbreaks are the first `held_out` from seeds `HELD_OUT_SEED` on, so
+    nested training sets all hold out the same outbreaks and blocks.
     """
-    round2 = sorted(
-        {o for o in outbreaks if int(o.split("-")[0]) >= ROUND2_SEED},
-        key=lambda o: tuple(int(x) for x in o.split("-")),
-    )[:HELD_OUT_FROM]
-    rng = np.random.default_rng(seed)
-    return list(rng.choice(round2, size=min(n, len(round2)), replace=False))
+    ids = sorted(set(outbreaks), key=_order)
+    first = [o for o in ids if _order(o)[0] < ROUND2_SEED]
+    second = [o for o in ids if ROUND2_SEED <= _order(o)[0] < HELD_OUT_SEED]
+    rest = [o for o in ids if _order(o)[0] >= HELD_OUT_SEED]
+    if len(second) < round2 or len(rest) < held_out:
+        raise ValueError(
+            f"{len(second)} round 2 and {len(rest)} held-out outbreaks, "
+            f"fewer than {round2} and {held_out}."
+        )
+    train = (first if round1 else []) + second[:round2]
+    return train, rest[:held_out]
 
 
 def held_out_loss(pipeline, blocks: list[dict], batch_size: int) -> float:
@@ -353,6 +368,8 @@ def train(
     batch_size: int,
     holdout: int,
     seed: int,
+    round1: bool,
+    round2: int,
 ) -> None:
     """Fine-tune Chronos-2 with LoRA and save the checkpoint."""
     import torch
@@ -382,12 +399,21 @@ def train(
     # Chronos-2 cuts its training batches with numpy's global generator.
     np.random.seed(seed)  # noqa: NPY002
     saved = torch.load(blocks_path, weights_only=False)
-    held = set(held_out_outbreaks(saved["outbreaks"], holdout, seed))
+    train_ids, held_ids = training_sets(
+        saved["outbreaks"], round1, round2, holdout
+    )
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "outbreaks-train.txt").write_text("\n".join(train_ids) + "\n")
+    (out / "outbreaks-held-out.txt").write_text("\n".join(held_ids) + "\n")
+    use, held = set(train_ids), set(held_ids)
     val, fit = [], []
     for block, outbreak in zip(
         saved["blocks"], saved["outbreaks"], strict=True
     ):
-        (val if outbreak in held else fit).append(block)
+        if outbreak in held:
+            val.append(block)
+        elif outbreak in use:
+            fit.append(block)
     # The loss logged during training is on a fixed sample of the held-out
     # blocks, and the whole held-out set is scored at the start and end.
     monitor = val[:EVAL_BLOCKS]
@@ -443,7 +469,15 @@ def train(
         "max_lags": {k: [min(v), max(v)] for k, v in MAX_LAGS.items()},
         "n_fit": len(fit),
         "n_validation": len(val),
-        "held_out_outbreaks": holdout,
+        "n_round1_outbreaks": sum(
+            _order(o)[0] < ROUND2_SEED for o in train_ids
+        ),
+        "n_round2_outbreaks": round2,
+        "n_held_out_outbreaks": len(held_ids),
+        "outbreaks_sha256": {
+            f: _sha256(out / f)
+            for f in ("outbreaks-train.txt", "outbreaks-held-out.txt")
+        },
         "epochs": epochs,
         "steps": steps,
         "learning_rate": learning_rate,
@@ -476,6 +510,10 @@ def main() -> None:
     t.add_argument("--learning-rate", type=float, default=1e-4)
     t.add_argument("--batch-size", type=int, default=256)
     t.add_argument("--holdout", type=int, default=150)
+    t.add_argument(
+        "--round1", action=argparse.BooleanOptionalAction, default=False
+    )
+    t.add_argument("--round2", type=int, required=True)
     t.add_argument("--seed", type=int, default=1)
     args = parser.parse_args()
     if args.command == "blocks":
@@ -489,6 +527,8 @@ def main() -> None:
             args.batch_size,
             args.holdout,
             args.seed,
+            args.round1,
+            args.round2,
         )
 
 
