@@ -18,6 +18,6 @@ Each outbreak has four origins, spread evenly from its sixth release to the last
 Each forecast covers eight weeks of onsets, from four weeks before the week of the cut-off to three weeks after it.
 Every model forecasts weekly totals by onset week, for the country and each place, with 200 samples.
 The Chronos-2 models keep their own release lag of 4 weeks (weekly) or 28 days (daily).
-The scores use rolling truth, the count reported D days after the end of a target week, with D the outbreak's own 99% reporting delay in whole days.
+The scores use rolling truth, the count reported D days after the end of a target week, with D the outbreak's own 98% reporting delay in whole days.
 The final simulated count is kept as well.
 Scores are relative to `randomwalknowcast`.

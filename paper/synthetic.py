@@ -453,7 +453,7 @@ def factor_table(counts: pd.DataFrame, settings: pd.DataFrame) -> pd.DataFrame:
     -------
     pandas.DataFrame
         `location` (`series_label`), then the `FACTORS` in `settings`, raw,
-        and `delay_q99`, the outbreak's 99% reporting delay in days
+        and `delay_q98`, the outbreak's 98% reporting delay in days
         (`delay_quantile`), the $D$ of its rolling truth.
     """
     outbreak = str(counts["outbreak"].iloc[0])
@@ -465,7 +465,7 @@ def factor_table(counts: pd.DataFrame, settings: pd.DataFrame) -> pd.DataFrame:
     )
     for f in factors:
         out[f] = row[f]
-    out["delay_q99"] = delay_quantile(counts, 0.99)
+    out["delay_q98"] = delay_quantile(counts, 0.98)
     return out
 
 
