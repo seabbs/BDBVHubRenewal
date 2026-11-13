@@ -410,3 +410,24 @@ def test_missing_release_is_stored_as_failed(task: ForecastTask) -> None:
     stored = store.fit("fm_chronos_weekly_ragged_ft", task, {}, "c")
     assert stored.meta["status"] == "failed"
     assert f"chronos-ft-{foundation.FINETUNED_HASH}" in stored.meta["error"]
+
+
+def test_interrupted_download_fails_and_caches_nothing(
+    releases: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _release(releases, "abc", "abc")
+
+    def drop(*_: object, **__: object) -> None:
+        raise ConnectionResetError("reset")
+
+    monkeypatch.setattr(foundation.urllib.request, "urlopen", drop)
+    with pytest.raises(FileNotFoundError, match="chronos-ft-abc"):
+        foundation.finetuned_adapter("abc")
+    assert not (tmp_path / "cache" / "chronos-ft-abc").exists()
+
+
+def test_settings_with_no_hash_fail(releases: Path) -> None:
+    _release(releases, "abc", "abc")
+    (releases / "chronos-ft-abc" / "settings.json").write_text("{}")
+    with pytest.raises(ValueError, match="chronos-ft-abc"):
+        foundation.finetuned_adapter("abc")
