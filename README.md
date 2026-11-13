@@ -1,6 +1,6 @@
 # Evidence for #192: Chronos-2 candidate models
 
-- `results/fm-summary.csv`: relative WIS against `randomwalk`, log WIS, coverage and bias, by target (reported, complete), nowcast and forecast weeks, all places and national, on the cells every model forecasts (`scripts/summary.py`).
+- `results/fm-summary.csv`: relative WIS against `randomwalknowcast`, log WIS, coverage and bias, by target (reported, complete), nowcast and forecast weeks, all places and national, on the cells every model forecasts (`scripts/summary.py`).
 - `results/nowcast-scores.csv`, `results/nowcast-origins.csv`: the release backtest's scores and origins.
 - `results/fan-national.png`: national fans at 2026-10-24 and 2026-11-01 (`scripts/fan.py`).
 

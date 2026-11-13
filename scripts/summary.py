@@ -1,5 +1,7 @@
 """Scores of the Chronos-2 models and the random walks on matched cells.
 
+Relative WIS is against randomwalknowcast.
+
 Each target (reported, complete) is scored on the cells every model
 scored on that target forecasts, split into nowcast weeks (weeks back >= 0) and forecast weeks.
 National is also shown on its own: on the complete target it is each
@@ -26,7 +28,9 @@ cols = ["target", "weeks", "model", "n", "rel_wis", "rel_log_wis",
         "coverage_50", "coverage_90", "bias"]
 out = []
 for scale, rows in (("all", s), ("national", s[s["location"] == "CD"])):
-    t = relative_wis(rows, by=("target", "weeks"))
+    t = relative_wis(
+        rows, by=("target", "weeks"), baseline="randomwalknowcast"
+    )
     t.insert(0, "scale", scale)
     out.append(t[["scale", *cols]])
 out = pd.concat(out).round(2)
