@@ -189,8 +189,9 @@ def test_a_delay_is_own_with_10_cases_a_week_else_the_pooled_parents(
         gaps,
     )
     # The same rule as the walk spread: own with 10 cases a week, else
-    # the pooled estimate of the nearest parent that has them. Zones take
-    # their province's delay instead (`test_a_zone_takes_its_provinces_delay`).
+    # the pooled estimate of the nearest parent that has them. Zones have
+    # their own threshold
+    # (`test_a_zone_below_the_threshold_takes_its_provinces_delay`).
     src = source_index(level, snap.parent)
     kept = np.array([c.count("-") < 2 for c in snap.locations])
     want = np.concatenate([own_g, pooled_g])[src]
@@ -199,34 +200,33 @@ def test_a_delay_is_own_with_10_cases_a_week_else_the_pooled_parents(
     assert (src[kept] >= len(level)).any()
 
 
-def test_a_zone_takes_its_provinces_delay(
-    daily: pd.DataFrame, daily_zones: pd.DataFrame
+@pytest.mark.parametrize("threshold", [5.0, 10.0, 30.0, np.inf])
+def test_a_zone_below_the_threshold_takes_its_provinces_delay(
+    daily: pd.DataFrame, daily_zones: pd.DataFrame, threshold: float
 ) -> None:
-    # A zone's own delay rests on few cases, and the nowcast divides by
-    # its share reported, so its noise inflates the zones' nowcasts.
     both = pd.concat([daily, daily_zones])
     zones = tuple(
         sorted({z for z in daily_zones["location"] if z.startswith("CD-")})
     )
     snap = snapshot_arrays(both, "2026-10-24", zones)
-    fit = fit_delay(snap, 3, Settings())
+    settings = Settings(zone_delay_min_level=threshold)
+    fit = fit_delay(snap, 3, settings)
     assert fit is not None
-    level = levels(snap, 3, Settings())
+    level = levels(snap, 3, settings)
     zone = np.array([c.count("-") == 2 for c in snap.locations])
     rule = source_index(level, snap.parent)
-    # A zone with 10 cases a week had its own delay under the rule, and
-    # now takes its province's.
-    big = np.flatnonzero(zone & (level >= 10))
-    assert big.size
-    assert (rule[big] == big).all()
-    np.testing.assert_array_equal(fit.source[big], rule[snap.parent[big]])
-    par = snap.parent[zone]
-    np.testing.assert_array_equal(fit.source[zone], fit.source[par])
-    assert not fit.own[zone].any()
-    # Provinces keep the rule.
-    prov = np.array([c.count("-") == 1 for c in snap.locations])
-    src = source_index(level, snap.parent)
-    np.testing.assert_array_equal(fit.source[prov], src[prov])
+    # A zone with `threshold` cases a week uses its own delay, and
+    # otherwise its province's.
+    big = np.flatnonzero(zone & (level >= threshold))
+    small = np.flatnonzero(zone & (level < threshold))
+    assert small.size
+    np.testing.assert_array_equal(fit.source[big], big)
+    assert fit.own[big].all()
+    np.testing.assert_array_equal(
+        fit.source[small], fit.source[snap.parent[small]]
+    )
+    # Provinces and the country keep the rule.
+    np.testing.assert_array_equal(fit.source[~zone], rule[~zone])
 
 
 def test_one_rule_shares_the_size_by_level_only(origin24) -> None:
