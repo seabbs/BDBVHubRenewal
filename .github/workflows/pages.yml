@@ -344,6 +344,10 @@ jobs:
           uv run bdbvhubrenewal compare-hub --fetch
           uv run bdbvhubrenewal concat-results --out results/germany \
             output/parts/parts-germany-*/germany
+          # The hub teams' nowcasts are read, not run, so they are scored
+          # here.
+          uv run bdbvhubrenewal germany-fetch
+          uv run bdbvhubrenewal germany-teams --out results/germany
           uv run bdbvhubrenewal report --ledger output/ledger
       # Scores at each deploy from main, read from the gh-pages branch,
       # with this build's scores last. Only the trees are fetched, and the

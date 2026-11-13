@@ -172,10 +172,19 @@ The German COVID-19 hospitalisation nowcasting hub[^wolffram] collected nowcasts
 3. Hub weeks end on Saturdays, so every date of a nowcast moves forward by the 0 to 6 days to the next Saturday. The 7-day sums ending on the nowcast date and 7, 14, 21 and 28 days before it are then hub weeks, and the nowcasts move back.
 
 The nowcast dates are the paper's, every day from 2021-11-22 to 2022-04-29.
-Nowcasts are scored as in the backtest ([Scores](#scores)), relative to `randomwalk`.
+The hub collected nowcasts as quantiles at the levels 2.5%, 10%, 25%, 50%, 75%, 90% and 97.5%.
+Our models' samples are reduced to their quantiles at these levels.
+Our models and the hub teams are then scored the same way, as the paper did.
+The scores are the WIS of the seven quantiles, the absolute error of the median and the coverage of the 50% and 95% intervals.
 Each 7-day sum's truth is its count in the data 40 days after it ends, the paper's 40-day truth.
 The backtest can score its complete weeks the same way, on the first release $D$ days after each week, in place of the latest release.
-The hub teams submitted quantiles at seven levels, not samples, so they are not scored here.
+Relative scores divide a model's mean score by `randomwalknowcast`'s on the nowcasts both made.
+
+The teams' nowcasts are those the paper gathered, prospective and retrospective, at the horizons our models give.
+Two fixes are the paper's.
+RKI's quantiles above one million are errors, replaced by its -1 day nowcast.
+Epiforecasts' missing 10% quantile is filled from the normal through its 2.5% and 25% quantiles.
+The paper also filled some missing ILM and LMU nowcasts from later model versions, and those are not scored here.
 
 [^wolffram]: Wolffram D, Abbott S, an der Heiden M, Funk S, Günther F, Hailer D, et al. (2023). Collaborative nowcasting of COVID-19 hospitalization incidences in Germany. PLOS Computational Biology 19(8): e1011394. [doi:10.1371/journal.pcbi.1011394](https://doi.org/10.1371/journal.pcbi.1011394).
 
