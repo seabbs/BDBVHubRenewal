@@ -14,7 +14,6 @@ from bdbvhubrenewal.forecasters.base import (
     ModelUnavailableError,
     get_model,
 )
-from bdbvhubrenewal.reporting.hubtables import HUB_QUANTILE_LEVELS
 from paper import synthetic
 
 COLUMNS = [
@@ -25,6 +24,7 @@ COLUMNS = [
     "target_date",
     "horizon",
     "quantile_level",
+    "sample_id",
     "value",
     "truth",
 ]
@@ -152,7 +152,7 @@ class _Unavailable:
         raise ModelUnavailableError("no data")
 
 
-def test_evaluate_gives_one_long_quantile_table_with_truth() -> None:
+def test_evaluate_gives_one_long_sample_table_with_truth() -> None:
     counts = _counts(("P01", "P02"))
     out = synthetic.evaluate(
         counts,
@@ -174,18 +174,20 @@ def test_evaluate_gives_one_long_quantile_table_with_truth() -> None:
     assert (out["horizon"] == days).all()
     span = out["horizon"].max() - out["horizon"].min()
     assert span == 7 * (len(synthetic.HORIZONS) - 1)
-    np.testing.assert_allclose(
-        sorted(out["quantile_level"].unique()), HUB_QUANTILE_LEVELS
-    )
-    rows = out.groupby(["location", "origin_date", "target_date"]).size()
-    assert (rows == len(HUB_QUANTILE_LEVELS)).all()
+    # Sample forecasts, as `paper/schema.md` has the synthetic study.
+    assert out["quantile_level"].isna().all()
+    rows = out.groupby(["location", "origin_date", "target_date"])
+    assert (rows["sample_id"].nunique() == 20).all()
+    assert (rows.size() == 20).all()
     assert out["truth"].notna().all()
     # National is the sum of the provinces' samples.
-    q = out.loc[out["quantile_level"] == 0.5].set_index(
-        ["origin_date", "target_date", "location"]
-    )["value"]
-    nat = q.xs(synthetic.series_label("9-0001", NATIONAL), level="location")
-    assert (nat > q.xs(synthetic.series_label("9-0001", "P01"), level=2)).all()
+    v = out.set_index(["origin_date", "target_date", "sample_id", "location"])[
+        "value"
+    ]
+    nat = v.xs(synthetic.series_label("9-0001", NATIONAL), level="location")
+    p1 = v.xs(synthetic.series_label("9-0001", "P01"), level="location")
+    p2 = v.xs(synthetic.series_label("9-0001", "P02"), level="location")
+    np.testing.assert_allclose(nat, p1 + p2)
 
 
 def test_models_by_name_skip_unregistered_ones() -> None:

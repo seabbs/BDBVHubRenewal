@@ -40,7 +40,12 @@ def _cpu(threads: int) -> None:
     """Run Chronos-2 on the CPU, with `threads` threads."""
     import torch
 
-    torch.backends.mps.is_available = lambda: False
+    def no_mps() -> bool:
+        return False
+
+    # torch._dynamo reads the original through `__wrapped__`.
+    no_mps.__wrapped__ = torch.backends.mps.is_available  # type: ignore[attr-defined]
+    torch.backends.mps.is_available = no_mps
     torch.set_num_threads(threads)
 
 
