@@ -20,6 +20,7 @@ from bdbvhubrenewal.forecasters import (
     get_model,
     list_models,
 )
+from bdbvhubrenewal.forecasters.chain import NoWalkSpread
 from bdbvhubrenewal.forecasters.foundation import (
     LAYOUTS,
     MAX_LAG,
@@ -259,6 +260,44 @@ def test_weekly_ragged_needs_no_daily_releases(task: ForecastTask) -> None:
     # It reads no release snapshots, so it forecasts without them.
     assert not model.needs_snapshots
     check_samples(model.forecast(bare), bare)
+
+
+def _flat(task: ForecastTask) -> ForecastTask:
+    """The task with one case a day in every place and release."""
+    daily = task.daily_history
+    assert daily is not None
+    first = daily["onset_date"].min()
+    rows = [
+        pd.DataFrame(
+            {
+                "vintage": vintage,
+                "location": place,
+                "onset_date": pd.date_range(first, cutoff).strftime("%Y-%m-%d"),
+                "observed": 1,
+                "imputed": 0,
+                "cutoff": cutoff,
+            }
+        )
+        for (vintage, cutoff), _ in daily.groupby(["vintage", "cutoff"])
+        for place in daily["location"].unique()
+    ]
+    return dataclasses.replace(
+        task, daily_history=pd.concat(rows, ignore_index=True)
+    )
+
+
+@pytest.mark.parametrize("source", SOURCES)
+def test_complete_forecasts_with_no_walk_spread(
+    source: str, task: ForecastTask
+) -> None:
+    flat = _flat(task)
+    # A flat series gives the walk no spread, so randomwalk cannot run.
+    with pytest.raises(NoWalkSpread):
+        RandomWalk().origin_at(flat, errors=False)
+    model = dataclasses.replace(
+        get_model(f"fm_chronos_{source}_complete"), sample=_constant(0.0)
+    )
+    check_samples(model.forecast(flat), flat)
 
 
 def test_no_daily_releases_is_unavailable(task: ForecastTask) -> None:
