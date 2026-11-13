@@ -161,6 +161,21 @@ def test_team_forecasts_fill_epiforecasts_tenth_percentile(
     assert got.loc[("Epiforecasts", 0.1), "value"] == pytest.approx(want)
 
 
+def test_only_epiforecasts_tenth_percentile_is_filled(
+    submissions: pd.DataFrame,
+) -> None:
+    no_tenth = {q: v for q, v in _levels(100).items() if q != 0.1}
+    other = pd.DataFrame(_team("SU-hier_bayes", 0, no_tenth))
+    got = team_forecasts(pd.concat([submissions, other]))
+    assert got.loc[got["model"] == "SU", "quantile"].nunique() == 6
+
+
+def test_unknown_teams_are_an_error(submissions: pd.DataFrame) -> None:
+    other = pd.DataFrame(_team("New-model", 0, _levels(100)))
+    with pytest.raises(ValueError, match="New-model"):
+        team_forecasts(pd.concat([submissions, other]))
+
+
 def test_team_forecasts_replace_rki_errors_by_the_minus_one_day_nowcast(
     submissions: pd.DataFrame,
 ) -> None:
