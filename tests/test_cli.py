@@ -12,6 +12,7 @@ import pandas as pd
 import pytest
 
 from bdbvhubrenewal.cli import main
+from bdbvhubrenewal.evaluation.germany import load_germany_config
 from bdbvhubrenewal.reporting import plots
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -613,3 +614,33 @@ def test_cli_germany_backtest_scores_a_block_of_dates(tmp_path: Path) -> None:
     scores = pd.read_csv(out / "scores.csv.gz")
     assert set(scores["origin"]) == {"2021-10-05"}
     assert set(scores["model"]) == {"randomwalk"}
+
+
+def test_cli_germany_teams_scores_the_hub_teams(tmp_path: Path) -> None:
+    data, config = _germany_data(tmp_path)
+    rows = [
+        {
+            "location": "DE",
+            "age_group": "00+",
+            "forecast_date": "2021-10-04",
+            "target_end_date": "2021-10-04",
+            "target": "0 day ahead inc hosp",
+            "type": "quantile",
+            "quantile": q,
+            "value": 100.0 * (i + 1),
+            "pathogen": "COVID-19",
+        }
+        for i, q in enumerate((0.025, 0.1, 0.25, 0.5, 0.75, 0.9, 0.975))
+    ]
+    names = load_germany_config(config).submissions
+    models = ("KIT-simple_nowcast", "KIT-frozen_baseline")
+    for name, model in zip(names, models, strict=True):
+        pd.DataFrame(rows).assign(model=model).to_csv(
+            data / Path(name).name, index=False
+        )
+    out = tmp_path / "results"
+    assert main(["germany-teams", "--config", str(config), "--data",
+                 str(data), "--out", str(out)]) == 0  # fmt: skip
+    teams = pd.read_csv(out / "teams.csv.gz")
+    assert set(teams["model"]) == {"KIT", "KIT-frozen_baseline"}
+    assert len(teams) == 2
