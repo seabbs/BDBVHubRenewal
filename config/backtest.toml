@@ -20,6 +20,15 @@ complete_after_weeks = 3
 # are short by up to 12% of their latest counts, so its forecasts say
 # little about how the models do now.
 skip_origins = ["2026-08-18"]
+# The release backtest scores each week's complete target on the first
+# release whose cut-off is at least `truth_delay` days after the week
+# ends, and leaves out weeks no release has reached yet. "auto" takes the
+# age by which `truth_level` of the national count is reported, pooled
+# over the releases (less skip_origins) against the latest one
+# (`bdbvhubrenewal.evaluation.nowcast.reporting_delay`). A number of days
+# fixes it.
+truth_delay = "auto"
+truth_level = 0.99
 
 [sampler]
 # NUTS settings of leave-one-province-out fits only. Stored backtest

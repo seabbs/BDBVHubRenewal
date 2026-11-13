@@ -457,7 +457,11 @@ def _ours(frame: pd.DataFrame, names: Sequence[str]) -> pd.DataFrame:
 
 
 def _release_section(
-    fig: Path, gen: Path, res: Path, real: pd.DataFrame, names: Sequence[str]
+    fig: Path,
+    gen: Path,
+    res: Path,
+    real: pd.DataFrame,
+    names: Sequence[str],
 ) -> dict[str, str]:
     """Write the real-release evaluation tables and figure.
 
@@ -468,6 +472,8 @@ def _release_section(
         n: res / f"nowcast-{n}.csv" for n in ("scores", "quantiles", "origins")
     }
     scores = _ours(_with_horizon(pd.read_csv(paths["scores"])), names)
+    truth = json.loads((res / "nowcast-truth.json").read_text())
+    complete = _complete_on(scores, int(truth["truth_delay"]))
     quantiles = _ours(pd.read_csv(paths["quantiles"]), names)
     origins = _ours(pd.read_csv(paths["origins"]).fillna(""), names)
     national = scores["location"] == NATIONAL
@@ -587,11 +593,12 @@ def _release_section(
     _write(
         gen / "release-headline.md",
         "## Overall\n\n"
-        "Scores on the complete weeks of the latest release, or on what "
-        "each later release reported, as picked "
+        "Scores on the complete weeks, or on what each later release "
+        "reported, as picked "
         "([how scoring works](methods/evaluation.md#real-releases), "
         "[metrics](methods/evaluation.md#scores)).\n"
         + _scored_on(rep)
+        + complete
         + "The [energy score](methods/evaluation.md#energy-score) scores each "
         "scale's places and weeks as one forecast per origin and release, "
         "so its $n$ counts those.\n\n"
@@ -662,6 +669,20 @@ def _scored_on(reported: pd.DataFrame, baseline: str = "randomwalk") -> str:
         "model's WIS is close to 0, so mean WIS is lower than over places "
         "with cases.\n"
         "The renewal models are not scored at health zones.\n"
+    )
+
+
+def _complete_on(scores: pd.DataFrame, delay: int) -> str:
+    """Say what the complete target scores, and how many forecasts it has."""
+    done = scores.loc[
+        (scores["target"] == "complete") & (scores["model"] == "randomwalk")
+    ]
+    return (
+        "Nationally and in the provinces, a complete week is scored on the "
+        f"first release cut off at least {delay} days after it ends, "
+        f"which {len(done)} randomwalk forecasts have so far.\n"
+        "Health zones are scored on the complete weeks of the latest "
+        "release.\n"
     )
 
 

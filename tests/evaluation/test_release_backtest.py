@@ -450,15 +450,24 @@ def test_complete_target_can_take_the_rolling_truth(
         BacktestConfig(n_samples=20, seed=2),
         daily=daily,
     )
-    out = release_backtest(
+    result = release_backtest(
         tasks, daily, target, models=("randomwalk",), truth_delay=14
-    ).scores
+    )
+    out = result.scores
     done = out.loc[out["target"] == "complete"]
     truth = rolling_truth(real, 14)
     merged = done.merge(truth, on=["location", "target_end_date"])
     assert len(merged) == len(done) > 0
     assert (merged["truth_x"] == merged["truth_y"]).all()
     assert (merged["truth_vintage_x"] == merged["truth_vintage_y"]).all()
+    # The quantiles show the same truth, on the scored weeks only.
+    q = result.quantiles
+    q = q.loc[q["target"] == "complete"]
+    keys = ["model", "origin", "location", "target_end_date"]
+    shown = q.merge(done, on=keys)
+    assert len(shown) == len(q) == len(done)
+    assert (shown["truth_x"] == shown["truth_y"]).all()
+    assert (shown["truth_vintage_x"] == shown["truth_vintage_y"]).all()
 
 
 def test_reporting_delay_is_the_first_age_with_the_level_reported() -> None:

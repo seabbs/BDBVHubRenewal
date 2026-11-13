@@ -68,6 +68,7 @@ from bdbvhubrenewal.evaluation.nowcast import (
     ReleaseForecasts,
     forecast_releases,
     release_backtest,
+    resolve_truth_delay,
     score_releases,
     stored_delays,
 )
@@ -990,6 +991,7 @@ def _release_backtest(
     daily = load_daily(args.data)
     tasks = list(store.origin_tasks(target, delays, config, daily).values())
     stored, learnt = _stored(args, target, forecasts)
+    delay = resolve_truth_delay(config, target)
     out = release_backtest(
         tasks,
         daily,
@@ -997,8 +999,9 @@ def _release_backtest(
         stored=stored,
         delays=learnt,
         compare=[s.name for s in list_models()],
+        truth_delay=delay,
     )
-    _write_release(out, results)
+    _write_release(out, results, delay)
 
 
 def _release_scores(
@@ -1014,6 +1017,7 @@ def _release_scores(
     daily = load_daily(args.data)
     tasks = list(store.origin_tasks(target, delays, config, daily).values())
     stored, learnt = _stored(args, target, forecasts)
+    delay = resolve_truth_delay(config, target)
     out = score_releases(
         tasks,
         daily,
@@ -1022,11 +1026,12 @@ def _release_scores(
         stored=stored,
         delays=learnt,
         compare=[s.name for s in list_models()],
+        truth_delay=delay,
     )
-    _write_release(out, results)
+    _write_release(out, results, delay)
 
 
-def _write_release(out: ReleaseBacktest, results: Path) -> None:
+def _write_release(out: ReleaseBacktest, results: Path, delay: int) -> None:
     """Write the release backtest's tables to `results`."""
     for name, table in (
         ("scores", out.scores),
@@ -1036,7 +1041,15 @@ def _write_release(out: ReleaseBacktest, results: Path) -> None:
         ("fits", out.fits),
     ):
         write_csv(table, results / f"nowcast-{name}.csv")
-    print(f"Release backtest: {len(out.scores)} scored forecasts.")
+    (results / "nowcast-truth.json").write_text(
+        json.dumps({"truth_delay": delay}) + "\n"
+    )
+    scores = out.scores
+    n = int((scores["target"] == "complete").sum()) if len(scores) else 0
+    print(
+        f"Release backtest: {len(out.scores)} scored forecasts, {n} on the "
+        f"complete target of each week {delay} days on."
+    )
 
 
 def _stored(

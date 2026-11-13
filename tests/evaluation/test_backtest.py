@@ -61,15 +61,18 @@ def test_load_config_takes_a_fixed_truth_delay(tmp_path: Path) -> None:
     path.write_text(text.replace('truth_delay = "auto"', 'truth_delay = "x"'))
     with pytest.raises(ValueError, match="truth_delay"):
         load_config(path)
+    path.write_text(text.replace("truth_level = 0.99", "truth_level = 2"))
+    with pytest.raises(ValueError, match="truth_level"):
+        load_config(path)
 
 
 def test_truth_delay_is_fixed_or_estimated_from_the_releases() -> None:
     target = pd.read_csv(DATA / "target.csv")
     real = target.loc[target["kind"] == "real"]
     cfg = BacktestConfig(skip_origins=("2026-08-18",))
-    estimated = reporting_delay(real, 0.99, skip=("2026-08-18",))
-    assert estimated is not None
-    assert resolve_truth_delay(cfg, target) == estimated
+    # 99% of the national count is first reported at 8 weeks old.
+    assert reporting_delay(real, 0.99, skip=("2026-08-18",)) == 56
+    assert resolve_truth_delay(cfg, target) == 56
     fixed = BacktestConfig(truth_delay=28)
     assert resolve_truth_delay(fixed, target) == 28
     with pytest.raises(ValueError, match="truth_level"):
