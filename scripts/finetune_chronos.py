@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
 """Fine-tune Chronos-2 with LoRA on simulated outbreaks.
 
 `blocks` cuts the outbreaks from `scripts/finetune_simulate.R` into
@@ -27,6 +28,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import hashlib
+import inspect
 import json
 import time
 from pathlib import Path
@@ -34,6 +36,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from bdbvhubrenewal.forecasters import foundation
 from bdbvhubrenewal.forecasters.base import NATIONAL
 from bdbvhubrenewal.forecasters.finetune import training_block, weekly_cutoffs
 from bdbvhubrenewal.forecasters.foundation import (
@@ -61,9 +64,12 @@ CODE = (
     "scripts/finetune_simulate.R",
     "scripts/finetune_chronos.py",
     "src/bdbvhubrenewal/forecasters/finetune.py",
-    "src/bdbvhubrenewal/forecasters/foundation.py",
 )
-"""The code the checkpoint depends on, hashed into its settings."""
+"""Files the checkpoint depends on, hashed into its settings."""
+
+FOUNDATION_CODE = (foundation.hub_triangle, foundation._group)
+"""The functions of `foundation` the blocks are laid out with, hashed into
+the settings. Not the whole module, which pins the hash itself."""
 
 SIM_DELAY_WEEKS = 8
 """The simulations' longest delay, after which a count is complete."""
@@ -219,7 +225,15 @@ def train(
     settings = {
         "chronos_revision": CHRONOS_REVISION,
         "blocks_sha256": _sha256(blocks_path),
-        "code_sha256": {p: _sha256(Path(p)) for p in CODE},
+        "code_sha256": {
+            **{p: _sha256(Path(p)) for p in CODE},
+            **{
+                f"foundation.{f.__name__}": hashlib.sha256(
+                    inspect.getsource(f).encode()
+                ).hexdigest()
+                for f in FOUNDATION_CODE
+            },
+        },
         "max_lags": {k: [min(v), max(v)] for k, v in MAX_LAGS.items()},
         "n_fit": len(fit),
         "n_validation": len(val),
