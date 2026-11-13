@@ -178,3 +178,21 @@ def test_si_figures_split_by_half(germany) -> None:
     assert len(one.axes[0].lines) > len(none.axes[0].lines)
     plt.close(one)
     plt.close(none)
+
+
+def test_ribbons_fall_back_to_the_best_chronos_variant() -> None:
+    from paperfigs.plots import _ribbon_models
+
+    models = [
+        "randomwalknowcast",
+        "fm_chronos_daily_complete",
+        "fm_chronos_daily_ragged",
+        "fm_chronos_weekly_complete",
+        "fm_chronos_weekly_ragged",
+        "fm_chronos_weekly_ragged_ft",
+    ]
+    assert _ribbon_models(models, "randomwalknowcast") == [
+        "randomwalknowcast",
+        "fm_chronos_daily_ragged",
+        "fm_chronos_weekly_ragged_ft",
+    ]

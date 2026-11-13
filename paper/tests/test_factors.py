@@ -106,3 +106,17 @@ def test_top_factors_can_always_keep_one() -> None:
 def test_dummy_factors_include_delay_q98(synthetic) -> None:
     _, factors = synthetic
     assert "delay_q98" in factors.columns
+
+
+def test_level_labels_are_readable() -> None:
+    f = pd.DataFrame(
+        {
+            "location": list("abcdef"),
+            "cases": [269.0, 500, 871, 879, 1200, 1840],
+            "n_steps": [0.0, 1.0, 3.0, 0.0, 1.0, 3.0],
+        }
+    )
+    out = bin_factors(f)
+    assert set(out["n_steps"]) == {"0", "1", "3"}
+    assert "e+" not in " ".join(out["cases"])
+    assert "1,840" in " ".join(out["cases"])
