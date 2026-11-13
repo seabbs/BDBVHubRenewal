@@ -63,3 +63,15 @@ def test_top_factors_have_most_spread() -> None:
         }
     )
     assert top_factors(rel, n=2) == ["b", "c"]
+
+
+def test_report_days_become_daily_or_not() -> None:
+    f = pd.DataFrame({"location": list("abcd"), "report_days": [7, 1, 3, 2]})
+    out = bin_factors(f)
+    assert "report_days" not in out.columns
+    assert out["reporting"].tolist() == [
+        "daily",
+        "weekdays",
+        "weekdays",
+        "weekdays",
+    ]
