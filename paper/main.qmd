@@ -58,11 +58,14 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
 ### Foundation model setup and fine-tuning
 
 ::: {.callout-note title="Plan"}
-- Chronos-2, given the reporting triangle as series.
+- Chronos-2, given the reporting triangle as series: one series per place and reporting delay, each missing until reported. Introduced alongside the reporting triangle, with Figure 1B.
 - One fine-tune on synthetic data, run on a laptop.
 - Compared with Chronos-2 given only complete data points, to show what the ragged structure and fine-tuning add.
+- Figure 1, a multi-panel schematic of our pipeline: (A) the assumptions in the epinowcast simulations, (B) the reporting triangle laid out as ragged series for Chronos-2, (C) training blocks and LoRA fine-tuning, and why it is fast, and (D) forecasting with the fine-tuned model.
 - Key references: [@Ansari2025; @Ansari2024; @Hu2021; @Das2024b].
 :::
+
+![The fine-tuning pipeline: (A) the generative chain of the epinowcast simulations, (B) the reporting triangle laid out as ragged series for Chronos-2, (C) training blocks and LoRA fine-tuning, and (D) forecasting with the fine-tuned model.](figures/fig1-pipeline.svg){#fig-pipeline}
 
 ### Synthetic data generation
 

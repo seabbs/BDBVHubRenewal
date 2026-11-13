@@ -28,6 +28,7 @@ One SI section per paper section.
 ### Foundation model setup and fine-tuning
 
 ::: {.callout-note title="Plan"}
+- How Chronos-2 and LoRA work, in brief, with schematics.
 - Foundation model setup and fine-tuning settings.
 - Key references: [@Ansari2025; @Hu2021].
 :::
