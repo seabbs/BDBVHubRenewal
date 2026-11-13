@@ -19,8 +19,8 @@ Three sources give samples.
 `reporting_delay` estimates D, the age by which 99% of the national count
 is reported, from the hub's release history. `rolling_truth` gives each
 target week's count as reported D days after the week ended, as the
-German nowcast hub did (Wolffram et al. 2023). Weeks whose release that far after them is not out yet have no
-truth. `load` joins it to the samples as `truth`, one row per sample,
+German nowcast hub did (Wolffram et al. 2023). Weeks whose release
+that far after them is not out yet have no truth. `load` joins it to the samples as `truth`, one row per sample,
 with `quantile_level` left empty as the paper's schema has it.
 `score` scores the samples with the repo's sample scores
 (`bdbvhubrenewal.evaluation.scoring`): CRPS on the natural and `log1p`
