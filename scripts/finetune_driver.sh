@@ -11,12 +11,18 @@
 #   TRAIN_FIRST, TRAIN_LAST       training seeds
 #   HELD_FIRST, HELD_LAST         held-out seeds (simulated first)
 #   LOCAL_FIRST, LOCAL_LAST       training seeds run on the laptop
-#   LOCAL_SLOTS   laptop simulation processes (2)
-#   REMOTE, REMOTE_DIR, REMOTE_SLOTS   ssh host, its repo worktree (with
+#   LOCAL_SLOTS, LOCAL_SLOTS_TRAINING   laptop simulation processes
+#                 before and during training (2, 1)
+#   REMOTE, REMOTE_DIR, SIM_REMOTE   ssh host, its repo worktree (with
 #                 scripts/finetune_simulate.R of this commit and an
 #                 epinowcast library in output/finetune/rlib) and its
-#                 simulation processes; every seed not run locally runs
+#                 simulation directory; every seed not run locally runs
 #                 there, held-out seeds first
+#   REMOTE_SLOTS, REMOTE_MEM_KB   its simulation processes and the
+#                 memory limit of each (ulimit -v), sized by memory
+#   REMOTE_RETRY, REMOTE_GRACE   seconds between tries of the remote,
+#                 and without an answer before the laptop takes over the
+#                 held-out seeds and FIRST_CHUNK_SEEDS training seeds
 #   OUT           checkpoint directory
 #   OUTBREAKS     training outbreaks (8000)
 #   PUBLISH       1 to publish each checkpoint release
@@ -47,7 +53,7 @@ status() {
   stage=$(python3 -c "import json;print(json.load(open('$OUT/stream-status.json')).get('stage',''))" 2>/dev/null)
   step=$(python3 -c "import json;print(json.load(open('$OUT/stream-status.json')).get('step',0))" 2>/dev/null)
   ckpt=$(python3 -c "import json;print(json.load(open('$OUT/stream-status.json')).get('last_checkpoint','none'))" 2>/dev/null)
-  echo "$(date '+%Y-%m-%d %H:%M:%S') stage=${1:-${stage:-starting}} batches=$done/$total train_step=${step:-0} last_checkpoint=${ckpt:-none} last_error=${last_error:-none}" > "$STATUS"
+  echo "$(date '+%Y-%m-%d %H:%M:%S') stage=${1:-${stage:-starting}} batches=$done/$total train_step=${step:-0} remote=$( (( $(date +%s) - remote_ok <= REMOTE_RETRY + 60 )) && echo up || echo down) last_checkpoint=${ckpt:-none} last_error=${last_error:-none}" > "$STATUS"
 }
 
 fail() {
@@ -57,51 +63,103 @@ fail() {
   exit 1
 }
 
+CLAIMED="$SIM_DIR/local-seeds.txt"
+touch "$CLAIMED"
+remote_ok=$(date +%s)
+remote_tried=0
+
+done_seed() { [ -e "$SIM_DIR/settings-$1.csv" ]; }
+
+local_seeds() {
+  # The laptop's seeds: its range, then seeds taken over from the remote.
+  seq "$LOCAL_FIRST" "$LOCAL_LAST"
+  cat "$CLAIMED"
+}
+
 seeds() {
   # Remote seeds: held-out first, then training seeds not run locally.
-  seq "$HELD_FIRST" "$HELD_LAST"
-  for s in $(seq "$TRAIN_FIRST" "$TRAIN_LAST"); do
-    if (( s < LOCAL_FIRST || s > LOCAL_LAST )); then echo "$s"; fi
+  local s
+  for s in $(seq "$HELD_FIRST" "$HELD_LAST") $(seq "$TRAIN_FIRST" "$TRAIN_LAST"); do
+    if (( s >= LOCAL_FIRST && s <= LOCAL_LAST )); then continue; fi
+    grep -qx "$s" "$CLAIMED" && continue
+    done_seed "$s" && continue
+    echo "$s"
   done
 }
 
+remote() { ssh -o ConnectTimeout=20 -o BatchMode=yes "$REMOTE" "$@"; }
+
 remote_scheduler() {
-  # Start the remote scheduler unless it, or a scheduler started by hand
-  # (run4.sh), runs; it skips started seeds.
-  if ssh -o ConnectTimeout=20 "$REMOTE" "pgrep -f '[f]inetune_remote.sh|[r]un4.sh'" \
-      > /dev/null 2>&1; then
+  # Start the remote scheduler unless it runs. It runs at most REMOTE_SLOTS simulations, each
+  # limited to REMOTE_MEM_KB of memory, and skips seeds already done or
+  # running there.
+  if remote "pgrep -f '[f]inetune_remote.sh'" > /dev/null 2>&1; then
     return 0
   fi
   local list
   list=$(seeds | tr '\n' ' ')
-  ssh -o ConnectTimeout=20 "$REMOTE" "cat > $REMOTE_DIR/output/finetune/finetune_remote.sh" <<EOF || return 1
+  [ -z "$list" ] && return 0
+  remote "cat > $REMOTE_DIR/output/finetune/finetune_remote.sh" <<EOF || return 1
 #!/usr/bin/env bash
 cd "$REMOTE_DIR"
 export PATH=/usr/local/bin:/usr/bin:/bin:\$PATH
 export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
 mkdir -p $SIM_REMOTE/logs
 for s in $list; do
-  [ -e $SIM_REMOTE/logs/\$s.log ] && continue
+  [ -e $SIM_REMOTE/settings-\$s.csv ] && continue
+  pgrep -f "finetune_simulate.R --args 25 \$s " > /dev/null && continue
   while [ "\$(pgrep -fc 'finetune_simulate.R --args')" -ge $REMOTE_SLOTS ]; do sleep 10; done
-  Rscript scripts/finetune_simulate.R 25 \$s $SIM_REMOTE > $SIM_REMOTE/logs/\$s.log 2>&1 &
+  (ulimit -v $REMOTE_MEM_KB; exec Rscript scripts/finetune_simulate.R 25 \$s $SIM_REMOTE > $SIM_REMOTE/logs/\$s.log 2>&1) &
   sleep 3
 done
 wait
 while pgrep -f 'finetune_simulate.R --args' > /dev/null; do sleep 30; done
 echo all done > $SIM_REMOTE/remote-done
 EOF
-  ssh -o ConnectTimeout=20 "$REMOTE" "cd $REMOTE_DIR && chmod +x output/finetune/finetune_remote.sh && (nohup output/finetune/finetune_remote.sh > $SIM_REMOTE/remote.log 2>&1 < /dev/null &)" \
-    && log "started the remote scheduler on $REMOTE"
+  remote "cd $REMOTE_DIR && chmod +x output/finetune/finetune_remote.sh && (nohup output/finetune/finetune_remote.sh > $SIM_REMOTE/remote.log 2>&1 < /dev/null &)" \
+    && log "started the remote scheduler on $REMOTE ($REMOTE_SLOTS slots, $REMOTE_MEM_KB kB each)"
+}
+
+check_remote() {
+  # Try the remote every REMOTE_RETRY seconds. If it has not answered for
+  # REMOTE_GRACE seconds, the laptop takes over the held-out seeds and
+  # enough training seeds for the first chunk.
+  local now
+  now=$(date +%s)
+  (( now - remote_tried < REMOTE_RETRY )) && return 0
+  remote_tried=$now
+  if remote true > /dev/null 2>&1; then
+    remote_ok=$now
+    # A scheduler started by hand runs more processes than memory allows.
+    if remote "pkill -f '[r]un4.sh'" > /dev/null 2>&1; then
+      log "stopped run4.sh on $REMOTE; its running batches finish"
+    fi
+    [ -e "$PAUSE" ] && return 0
+    remote "test -e $REMOTE_DIR/$SIM_REMOTE/remote-done" 2> /dev/null \
+      || remote_scheduler || log "could not start the remote scheduler"
+    return 0
+  fi
+  log "$REMOTE does not answer"
+  if (( now - remote_ok >= REMOTE_GRACE )) && [ ! -s "$CLAIMED" ]; then
+    { seq "$HELD_FIRST" "$HELD_LAST"; seq "$TRAIN_FIRST" $(( TRAIN_FIRST + FIRST_CHUNK_SEEDS - 1 )); } \
+      | while read -r s; do done_seed "$s" || echo "$s"; done > "$CLAIMED"
+    log "$REMOTE down for $(( (now - remote_ok) / 60 )) min: the laptop takes seeds $(tr '\n' ' ' < "$CLAIMED")"
+  fi
 }
 
 local_slots() {
-  # Fill the laptop's slots with its seeds not yet started.
+  # Fill the laptop's slots: LOCAL_SLOTS while the trainer waits, and
+  # LOCAL_SLOTS_TRAINING while it trains, to leave memory for MPS.
   [ -e "$PAUSE" ] && return 0
-  local running s
-  for s in $(seq "$LOCAL_FIRST" "$LOCAL_LAST"); do
-    [ -e "$SIM_DIR/logs/$s.log" ] && continue
+  local running s slots stage
+  slots=$LOCAL_SLOTS
+  stage=$(python3 -c "import json;print(json.load(open('$OUT/stream-status.json')).get('stage',''))" 2>/dev/null)
+  [ "$stage" = training ] && slots=$LOCAL_SLOTS_TRAINING
+  for s in $(local_seeds); do
+    done_seed "$s" && continue
+    pgrep -f "(finetune_simulate|sim-real).R --args 25 $s " > /dev/null && continue
     running=$(pgrep -f 'finetune_simulate.R --args|sim-real.R --args' | wc -l)
-    (( running >= LOCAL_SLOTS )) && return 0
+    (( running >= slots )) && return 0
     nohup Rscript scripts/finetune_simulate.R 25 "$s" "$SIM_DIR" \
       > "$SIM_DIR/logs/$s.log" 2>&1 < /dev/null &
     log "started local batch $s"
@@ -110,7 +168,15 @@ local_slots() {
 }
 
 sync_remote() {
-  rsync -a --include='counts-*' --include='settings-*' \
+  # Copy the remote's batches, except those the laptop runs.
+  local excludes=() s
+  for s in $(local_seeds); do
+    excludes+=(--exclude="counts-$s.csv.gz" --exclude="settings-$s.csv"
+      --exclude="failures-$s.csv" --exclude="logs/$s.log")
+  done
+  (( $(date +%s) - remote_ok > REMOTE_RETRY )) && return 0
+  rsync -a -e "ssh -o ConnectTimeout=20 -o BatchMode=yes" "${excludes[@]}" \
+    --include='counts-*' --include='settings-*' \
     --include='failures-*' --include='logs/***' --exclude='*' \
     "$REMOTE:$REMOTE_DIR/$SIM_REMOTE/" "$SIM_DIR/" 2>> "$LOG" \
     || log "rsync from $REMOTE failed; retrying later"
@@ -122,14 +188,13 @@ check_batches() {
   for f in "$SIM_DIR"/logs/*.log; do
     [ -e "$f" ] || continue
     s=$(basename "$f" .log)
-    if grep -q "Execution halted" "$f" && [ ! -e "$SIM_DIR/settings-$s.csv" ]; then
+    if grep -q "Execution halted" "$f" && ! done_seed "$s"; then
       fail "simulation batch $s failed, see $f"
     fi
   done
 }
 
 log "starting round from $1: training seeds $TRAIN_FIRST-$TRAIN_LAST, held-out $HELD_FIRST-$HELD_LAST, laptop $LOCAL_FIRST-$LOCAL_LAST"
-remote_scheduler || log "could not reach $REMOTE; retrying later"
 trainer_args=("$SIM_DIR" "$OUT" --train-seeds "$TRAIN_FIRST" "$TRAIN_LAST"
   --held-out-seeds "$HELD_FIRST" "$HELD_LAST" --outbreaks "$OUTBREAKS")
 [ "${PUBLISH:-0}" = 1 ] && trainer_args+=(--publish)
@@ -140,6 +205,7 @@ trainer=$!
 echo "$trainer" > output/finetune/trainer.pid
 log "started the trainer, pid $trainer"
 while true; do
+  check_remote
   local_slots
   sync_remote
   check_batches
@@ -152,10 +218,6 @@ while true; do
     log "the trainer finished"
     status "finished"
     exit 0
-  fi
-  if [ ! -e "$PAUSE" ] && ! ssh -o ConnectTimeout=20 "$REMOTE" \
-      "test -e $REMOTE_DIR/$SIM_REMOTE/remote-done" 2> /dev/null; then
-    remote_scheduler || log "could not reach $REMOTE; retrying later"
   fi
   status
   sleep 180
