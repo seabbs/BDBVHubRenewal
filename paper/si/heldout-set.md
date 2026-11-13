@@ -1,7 +1,8 @@
 # The held-out synthetic set
 
-The held-out set is 100 outbreaks simulated with `scripts/finetune_simulate.R`, 25 for each of the seeds 9001, 9002, 9003 and 9004.
-The fine-tune used the seeds 1000 to 1079, so the held-out outbreaks are new draws from the same scenario grid.
+The held-out set is 100 outbreaks simulated with `scripts/finetune_simulate.R` on the r2-real grid, 25 for each of the seeds 9001, 9002, 9003 and 9004.
+The fine-tune never used these seeds, so the held-out outbreaks are new draws from the grid it was trained on.
+If an outbreak's design failed five times and was skipped, a further seed tops the set up to 100.
 They are written to `output/finetune/heldout`, as `counts-<seed>.csv.gz` and `settings-<seed>.csv`.
 The protocol is in `paper/synthetic.py`, and `paper/run_synthetic.py` runs the models on the set.
 
