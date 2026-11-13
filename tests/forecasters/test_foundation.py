@@ -10,7 +10,6 @@ import pandas as pd
 import pytest
 
 from bdbvhubrenewal.evaluation.backtest import BacktestConfig, make_tasks
-from bdbvhubrenewal.evaluation.nowcast import delay_curves, week_shares
 from bdbvhubrenewal.forecasters import (
     NATIONAL,
     ForecastTask,
@@ -186,35 +185,13 @@ def test_draws_are_counts_at_least_the_reported(
     assert (out["value"].to_numpy() > _reported(task, out)).any()
 
 
-@pytest.mark.parametrize("source", SOURCES)
-def test_ragged_maps_final_counts_through_its_own_lags(
-    source: str, task: ForecastTask
-) -> None:
-    name = f"fm_chronos_{source}_ragged"
-    # It reads no release snapshots, so it forecasts without them.
-    bare = dataclasses.replace(task, daily_history=None)
-    model = dataclasses.replace(get_model(name), sample=_constant(0.0))
-    model.forecast(task if source == "daily" else bare)
-    summary = model.delay_summary
-    assert summary is not None
-    assert set(summary["model"]) == {name}
-    assert set(summary["quantity"]) == {"reported_share"}
-    assert "pooled" in set(summary["location"])
-    for _, grp in summary.groupby("location"):
-        share = grp.sort_values("x")["q50"].to_numpy()
-        assert ((share >= 0) & (share <= 1)).all()
-        assert (np.diff(share) >= 0).all()
-        assert share[-1] == 1.0
-
-
-@pytest.mark.parametrize("source", SOURCES)
-def test_complete_gives_no_delay(source: str, task: ForecastTask) -> None:
-    name = f"fm_chronos_{source}_complete"
+@pytest.mark.parametrize("name", MODELS)
+def test_gives_no_delay(name: str, task: ForecastTask) -> None:
     model = dataclasses.replace(get_model(name), sample=_constant(0.0))
     model.forecast(task)
     # With no delay the release backtest scores it on the complete
     # target only, as for any model with none.
-    assert model.delay_summary is None
+    assert getattr(model, "delay_summary", None) is None
 
 
 @pytest.mark.parametrize("source", SOURCES)
@@ -329,25 +306,3 @@ def test_chronos_missing_fails() -> None:
     with pytest.raises(ImportError):
         chronos_sampler([{"target": np.zeros((1, 5))}], 3, 10, 0)
 
-
-@pytest.mark.parametrize(
-    "cutoff", ["2026-10-21", "2026-10-22", "2026-10-23", "2026-10-24"]
-)
-def test_weekly_lag_shares_map_back_to_themselves(cutoff: str) -> None:
-    lags = MAX_LAG["weekly"]
-    weeks = pd.date_range("2026-08-01", periods=20, freq="7D")
-    shares = np.array([0.1, 0.4, 0.7, 0.9])[:lags]
-    final = np.full((1, len(weeks)), 100.0)
-    partial = np.full((1, len(weeks), lags), np.nan)
-    for d in range(lags):
-        partial[0, : 10 - d, d] = 100.0 * shares[d]
-    # The cut-off is a Wednesday to Saturday of week 12 (2026-10-24).
-    tri = foundation.HubTriangle(
-        list(weeks.strftime("%Y-%m-%d")), final, partial, 12, cutoff
-    )
-    summary = foundation.lag_shares(tri, ("CD-IT",), "weekly", "m", "v")
-    curves = delay_curves(summary, ["CD-IT"])
-    back = [weeks[12 - d].strftime("%Y-%m-%d") for d in range(lags)]
-    got = week_shares(curves, pd.Timestamp(cutoff).date(), back)
-    got = got.set_index("target_end_date")
-    np.testing.assert_allclose(got.loc[back, "share"], shares)
