@@ -78,13 +78,15 @@ Placeholder: grid of synthetic scenarios.
 
 ::: {.callout-note title="Plan"}
 - Compared with the hub's models, relative to the hub's own baseline, and evaluated as the hub did.
+- Quantile forecasts scored with WIS and log-scale WIS, bias, and coverage, against a rolling evaluation set of the data as reported D days later [@Wolffram2023].
 - Daily and weekly versions may not both make sense here.
 :::
 
 ### Case study 2: prospective submission to the Ebola forecasting hub
 
 ::: {.callout-note title="Plan"}
-- Compared with the other submissions, relative to the hub's own baseline, and evaluated as the hub does.
+- Compared with the other submissions, relative to the hub's own baseline.
+- Sample forecasts scored with CRPS and log-scale CRPS, bias, and coverage, against a rolling evaluation set of the data as reported D days later, as in the German hub [@Wolffram2023].
 - Our models' forecasts are saved prospectively, alongside the main submissions as they were made.
 :::
 
