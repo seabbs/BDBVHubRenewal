@@ -260,8 +260,15 @@ def nowcast_tasks(
     """
     shift = _shift(nowcast_date)
     ref = as_date(nowcast_date) + shift
+    # The hub has age groups for every state, but only Germany's are
+    # nowcast.
     rows = triangle.loc[
-        (triangle["report_date"] <= nowcast_date) & (triangle["confirm"] != 0)
+        (triangle["report_date"] <= nowcast_date)
+        & (triangle["confirm"] != 0)
+        & (
+            (triangle["age_group"] == ALL_AGES)
+            | (triangle["location"] == GERMANY)
+        )
     ]
     vintage = _moved(rows["report_date"], shift)
     daily = pd.DataFrame(
