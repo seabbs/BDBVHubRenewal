@@ -80,6 +80,13 @@ FOUNDATION_CODE = (foundation.hub_triangle, foundation.layout_block)
 """The functions of `foundation` the blocks are laid out with, hashed into
 the settings."""
 
+ROUND2_SEED = 3001
+"""First seed of the round 2 grid's simulations."""
+
+HELD_OUT_FROM = 1000
+"""Round 2 outbreaks the held-out outbreaks are drawn from: the smallest
+nested training set."""
+
 EVAL_BLOCKS = 100
 """Held-out blocks whose loss is logged during training."""
 
@@ -170,10 +177,16 @@ def outbreak_blocks(
 
 
 def blocks(sim_dirs: list[Path], out: Path, seed: int) -> None:
-    """Write the training blocks of every outbreak in `sim_dirs` to one file."""
+    """Write the training blocks of every outbreak in `sim_dirs` to one file.
+
+    Each outbreak's blocks are cut with a generator seeded by `seed` and
+    its id, so an outbreak gives the same blocks in any set of outbreaks.
+    The file holds the blocks and the outbreak of each.
+    """
+    import zlib
+
     import torch
 
-    rng = np.random.default_rng(seed)
     counts = pd.concat(
         [
             pd.read_csv(p)
@@ -189,12 +202,15 @@ def blocks(sim_dirs: list[Path], out: Path, seed: int) -> None:
         ]
     ).set_index("outbreak")
     t0 = time.perf_counter()
-    written = []
+    written, sources = [], []
     for outbreak, rows in counts.groupby("outbreak"):
         provinces = strata(settings.loc[outbreak])
-        written.extend(outbreak_blocks(rows, provinces, rng))
+        rng = np.random.default_rng([seed, zlib.crc32(outbreak.encode())])
+        cut = outbreak_blocks(rows, provinces, rng)
+        written.extend(cut)
+        sources.extend([outbreak] * len(cut))
     seconds = time.perf_counter() - t0
-    torch.save(written, out)
+    torch.save({"blocks": written, "outbreaks": sources}, out)
     series = [int(b["context"].shape[0]) for b in written]
     print(
         f"{len(written)} blocks from {counts['outbreak'].nunique()} outbreaks "
@@ -284,6 +300,21 @@ def steps_for(sizes: np.ndarray, batch_size: int, epochs: float) -> int:
     return int(np.ceil(epochs * sizes.sum() / np.mean(held)))
 
 
+def held_out_outbreaks(outbreaks: list[str], n: int, seed: int) -> list[str]:
+    """Return the held-out outbreaks: `n` of the first `HELD_OUT_FROM`.
+
+    The first outbreaks of the round 2 grid (seeds from `ROUND2_SEED`), in
+    order of seed and index, are in every nested training set, so each set
+    holds out the same outbreaks and so the same blocks.
+    """
+    round2 = sorted(
+        {o for o in outbreaks if int(o.split("-")[0]) >= ROUND2_SEED},
+        key=lambda o: tuple(int(x) for x in o.split("-")),
+    )[:HELD_OUT_FROM]
+    rng = np.random.default_rng(seed)
+    return list(rng.choice(round2, size=min(n, len(round2)), replace=False))
+
+
 def held_out_loss(pipeline, blocks: list[dict], batch_size: int) -> float:
     """Return the mean quantile loss of a pipeline on held-out blocks."""
     import torch
@@ -320,7 +351,7 @@ def train(
     epochs: float,
     learning_rate: float,
     batch_size: int,
-    holdout: float,
+    holdout: int,
     seed: int,
 ) -> None:
     """Fine-tune Chronos-2 with LoRA and save the checkpoint."""
@@ -350,11 +381,13 @@ def train(
     torch.manual_seed(seed)
     # Chronos-2 cuts its training batches with numpy's global generator.
     np.random.seed(seed)  # noqa: NPY002
-    data = torch.load(blocks_path, weights_only=False)
-    order = np.random.default_rng(seed).permutation(len(data))
-    n_val = round(holdout * len(data))
-    val = [data[i] for i in order[:n_val]]
-    fit = [data[i] for i in order[n_val:]]
+    saved = torch.load(blocks_path, weights_only=False)
+    held = set(held_out_outbreaks(saved["outbreaks"], holdout, seed))
+    val, fit = [], []
+    for block, outbreak in zip(
+        saved["blocks"], saved["outbreaks"], strict=True
+    ):
+        (val if outbreak in held else fit).append(block)
     # The loss logged during training is on a fixed sample of the held-out
     # blocks, and the whole held-out set is scored at the start and end.
     monitor = val[:EVAL_BLOCKS]
@@ -410,6 +443,7 @@ def train(
         "max_lags": {k: [min(v), max(v)] for k, v in MAX_LAGS.items()},
         "n_fit": len(fit),
         "n_validation": len(val),
+        "held_out_outbreaks": holdout,
         "epochs": epochs,
         "steps": steps,
         "learning_rate": learning_rate,
@@ -441,7 +475,7 @@ def main() -> None:
     t.add_argument("--epochs", type=float, default=1.0)
     t.add_argument("--learning-rate", type=float, default=1e-4)
     t.add_argument("--batch-size", type=int, default=256)
-    t.add_argument("--holdout", type=float, default=0.05)
+    t.add_argument("--holdout", type=int, default=150)
     t.add_argument("--seed", type=int, default=1)
     args = parser.parse_args()
     if args.command == "blocks":
