@@ -71,7 +71,7 @@ def test_code_digest_ignores_docstrings_and_comments(tmp_path: Path) -> None:
 
 def test_code_digest_follows_each_models_own_code(tmp_path: Path) -> None:
     root = _copy_repo(tmp_path)
-    models = ("renewal", "renewalsp", "pprandomwalknowcast")
+    models = ("renewal", "renewalbvd", "renewalsp", "pprandomwalknowcast")
 
     def digests() -> dict[str, str]:
         return {m: store.code_digest(m, root) for m in models}
@@ -82,13 +82,20 @@ def test_code_digest_follows_each_models_own_code(tmp_path: Path) -> None:
 
     src = "src/bdbvhubrenewal"
     before = digests()
-    # The three renewal variants share a module, so share a key.
-    assert before["renewal"] == before["renewalsp"]
+    # The zone variants share a module, so share a key, and renewalsp,
+    # in the province module they build on, has its own.
+    assert before["renewal"] == before["renewalbvd"]
+    assert before["renewal"] != before["renewalsp"]
     assert before["renewal"] != before["pprandomwalknowcast"]
     edit(f"{src}/forecasters/pprandomwalk.py")
     after = digests()
     assert after["renewal"] == before["renewal"]
     assert after["pprandomwalknowcast"] != before["pprandomwalknowcast"]
+    before = after
+    edit(f"{src}/forecasters/renewal.py")
+    after = digests()
+    assert after["renewal"] != before["renewal"]
+    assert after["renewalsp"] != before["renewalsp"]
     before = after
     edit(f"{src}/model/observation.py")
     after = digests()
@@ -104,9 +111,8 @@ def test_code_digest_follows_each_models_own_code(tmp_path: Path) -> None:
 
 
 def test_the_zone_split_does_not_key_a_fit(tmp_path: Path) -> None:
-    # A stored fit holds national and province samples only. Zones are
-    # split from them at load (`zones_for_model`), so the zone code is not
-    # fit code.
+    # Zones of the models that do not fit them are split from their
+    # provinces at load (`zones_for_model`), so the split is not fit code.
     root = _copy_repo(tmp_path)
     models = ("renewal", "pprandomwalknowcast")
 

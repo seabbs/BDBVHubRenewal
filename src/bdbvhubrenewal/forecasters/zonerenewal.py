@@ -326,44 +326,17 @@ class ZoneRenewalFit(RenewalFit):
     zones: pd.DataFrame | None = None
 
 
-def zone_inputs_digest() -> str:
-    """Hash the zone centres and populations a zone fit reads.
-
-    `model.zones.ZONE_CENTRES`. The fit key hashes code, not data files,
-    so this digest sits in `ZoneRenewalModel`'s representation, which the
-    key does hash: editing the file refits.
-
-    Returns
-    -------
-    str
-        The first 16 hex digits of a SHA-256.
-    """
-    import hashlib
-
-    from bdbvhubrenewal.model.zones import ZONE_CENTRES
-
-    return hashlib.sha256(Path(ZONE_CENTRES).read_bytes()).hexdigest()[:16]
-
-
 @dataclass
 class ZoneRenewalModel(RenewalModel):
     """A renewal variant fitted on health zones, as a `ForecastModel`.
 
     Attributes
     ----------
-    zones : bool
-        Always True: in the representation, so it keys a stored fit
-        apart from the province model.
-    inputs : str
-        `zone_inputs_digest`, in the representation so the zone data
-        files key a stored fit.
     zone_samples : pandas.DataFrame or None
         Zone samples of the last `forecast`, which sum to its province
         samples.
     """
 
-    zones: bool = field(init=False, default=True)
-    inputs: str = field(init=False, default_factory=zone_inputs_digest)
     zone_samples: pd.DataFrame | None = field(
         init=False, default=None, repr=False, compare=False
     )

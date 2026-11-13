@@ -117,8 +117,9 @@ STORE_SKIP: Final = (
 )
 """Modules `STORE_ENTRIES` import but a fit does not call.
 
-The zone split: a stored fit holds national and province samples only,
-and its zones are split from them at load
+The zone split, which a fit does not run: the zone fits of `renewal` and
+`renewalbvd` store their own zone samples in their fit directory, and
+other models' zones are split from their provinces at load
 (`forecasters.zones.zones_for_model`). `fit_code`'s own helper
 (`evaluation.digest`), and the plots `evaluation.ppc` imports for
 `plot_ppc`, which a fit does not draw.
