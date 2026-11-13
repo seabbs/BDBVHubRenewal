@@ -2211,7 +2211,7 @@
 <h1 id="evaluation">Evaluation<a class="headerlink" href="#evaluation" title="Permanent link">&para;</a></h1>
 <p class="page-subtitle">Scoring, and the evaluations.</p>
 <h2 id="what-is-scored">What is scored<a class="headerlink" href="#what-is-scored" title="Permanent link">&para;</a></h2>
-<p>Forecasts from real releases are scored on the count each later release reports, and on the complete weeks of the latest release (<a href="#real-releases">Real releases</a>).
+<p>Forecasts from real releases are scored on the count each later release reports, and on each week's count once its reporting is close to complete (<a href="#real-releases">Real releases</a>).
 Forecasts from simulated vintages are scored against the simulated final counts.</p>
 <h2 id="scores">Scores<a class="headerlink" href="#scores" title="Permanent link">&para;</a></h2>
 <p>Scores follow <a href="https://epiforecasts.io/scoringutils/">scoringutils</a> and <a href="https://github.com/epiforecasts/BVDOutbreakSize">BVDOutbreakSize</a>.
@@ -2285,12 +2285,12 @@ The other models forecast every task.</p>
 <tr>
 <td>Real releases</td>
 <td>Every real release with a later release</td>
-<td>The count each later release shows, and the latest release's count for its complete weeks</td>
+<td>The count each later release shows, and each week's count in the first release cut off the truth delay after it</td>
 </tr>
 <tr>
 <td>Comparison with hub forecasts</td>
 <td>Real where one serves the round</td>
-<td>As for real releases</td>
+<td>The count each later release shows, and the latest release's count for its complete weeks</td>
 </tr>
 </tbody>
 </table>
@@ -2326,8 +2326,16 @@ R_o + \text{Binomial}(X - R_o, q), \qquad q = \frac{\pi_w(c_{o'}) - \pi_w(c_o)}{
 </ol>
 <p>with the sign carried when <span class="arithmatex">\(X &lt; R_o\)</span>, <span class="arithmatex">\(q\)</span> kept in <span class="arithmatex">\([0, 1]\)</span>, and <span class="arithmatex">\(q = 1\)</span> for a week fully reported at the origin.
 A model with no modelled delay, such as a hub team, is scored on complete weeks only.</p>
-<p><strong>Complete weeks.</strong> The count the latest release shows for the weeks it reports in full.
-A week is complete when it is at least 4 weeks back from the week holding the latest release's cut-off and grew by less than 2% since the release before.</p>
+<p><strong>Complete weeks.</strong> Each week's count in the first release whose cut-off is at least the truth delay after the week ends.
+The truth delay is <code>truth_delay</code> in <code>config/backtest.toml</code>.
+By default it is the age by which 98% of the national count is reported (<code>truth_level</code>).
+Each earlier release's national count of a week is set against the latest release's, at the week's age in that release rounded up to whole weeks, and the counts are pooled over releases at each age.
+The first age whose pooled share reaches 98% is the truth delay.
+The 2026-08-18 release is left out, as its old weeks were revised rather than late.
+Weeks with no release that far after them are not scored yet.
+The Backtest page gives the truth delay in use and how many forecasts it scores.
+Health zones are scored on the weeks the latest release reports in full.
+There a week is complete when it is at least 4 weeks back from the week holding the latest release's cut-off and grew by less than 2% since the release before.</p>
 <p>Scores are WIS, 50% and 90% coverage and bias, by model, origin, weeks back from the week holding the origin's cut-off, and place.
 Relative WIS is against <code>randomwalk</code> on the forecasts both made, for national and the provinces pooled, over all origins and by origin, and by origin and place.
 Every table counts its forecasts, <span class="arithmatex">\(n\)</span>, so a model with fewer forecasts was scored on fewer weeks or places.
@@ -2370,7 +2378,7 @@ Every scored week of a forecast takes the forecast's place type and flag, and th
 <p>For each hub reference date, our unfitted models forecast from the latest real vintage serving the round.
 Fitted models use their stored backtest forecasts for the same round.
 Where we submitted to a round, our submitted file is a series of its own beside these main-build forecasts.
-Every model is scored on the complete weeks it forecast, as for <a href="#real-releases">real releases</a>, from the vintage serving the round, since hub teams have no modelled delay we can see.
+Every model is scored on the complete weeks it forecast, from the vintage serving the round, since hub teams have no modelled delay we can see.
 WIS is relative to <code>randomwalk</code> on the weeks both forecast, on the <a href="../../comparison/">comparison page</a>.
 A round is pending until a later real release exists.</p>
 <h2 id="german-nowcast-benchmark">German nowcast benchmark<a class="headerlink" href="#german-nowcast-benchmark" title="Permanent link">&para;</a></h2>
@@ -2390,7 +2398,7 @@ Our models' samples are reduced to their quantiles at these levels, as for a hub
 Our models and the hub teams are then scored the same way, as the paper did.
 The scores are the WIS of the seven quantiles, the absolute error of the median and the coverage of the 50% and 95% intervals.
 Each 7-day sum's truth is its count in the data 40 days after it ends, the paper's 40-day truth.
-The backtest can score its complete weeks the same way, on the first release <span class="arithmatex">\(D\)</span> days after each week, in place of the latest release.
+The backtest scores its complete weeks the same way, on the first release the truth delay after each week (<a href="#real-releases">Real releases</a>).
 Relative scores divide a model's mean score by <code>randomwalknowcast</code>'s on the nowcasts both made.
 The paper's relative scores divide by the hub's own baseline, <code>KIT-frozen_baseline</code>.
 Both baselines are set in <code>config/germany.toml</code>.
