@@ -114,23 +114,27 @@ COLUMNS: Final = (
 """The long table's columns (`paper/schema.md`)."""
 
 FACTORS: Final = (
+    "strata",
+    "n_places",
+    "n_ages",
+    "process",
+    "reference",
+    "delay_family",
+    "stable",
+    "max_delay",
+    "family",
+    "report_days",
     "delay_mean",
-    "delay_sd",
-    "delay_drift",
+    "delay_cv",
     "hazard_sd",
     "dow_sd",
-    "report_days",
-    "log_r0",
-    "n_steps",
-    "gt_mean",
-    "n_places",
-    "coupling",
+    "quiet",
     "sqrt_phi",
     "weeks",
     "cases",
 )
-"""Outbreak settings (`scripts/finetune_simulate.R`) that scores are
-broken down by, as `factor_table` gives them."""
+"""Outbreak settings of the r2-real grid (`scripts/finetune_simulate.R`)
+that scores are broken down by, as `factor_table` gives them."""
 
 OBSERVATION_COLUMNS: Final = (
     "study",
