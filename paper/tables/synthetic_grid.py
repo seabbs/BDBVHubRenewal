@@ -18,7 +18,16 @@ from typing import Final
 import numpy as np
 import pandas as pd
 
-__all__ = ["COLUMNS", "GRID", "grid_table", "to_markdown"]
+__all__ = [
+    "COLUMNS",
+    "GRID",
+    "MAIN",
+    "MAIN_HEADERS",
+    "grid_table",
+    "main_table",
+    "to_markdown",
+    "write_tables",
+]
 
 COLUMNS: Final = (
     "setting",
@@ -458,11 +467,108 @@ def grid_table(settings: pd.DataFrame) -> pd.DataFrame:
     return out[list(COLUMNS)]
 
 
-def to_markdown(table: pd.DataFrame) -> str:
+MAIN_HEADERS: Final = {
+    "factor": "Design",
+    "levels": "Levels and shares",
+    "epinowcast": "Enters through",
+    "realised": "Realised",
+}
+"""Headers of the main-text table."""
+
+MAIN: Final = pd.DataFrame(
+    [
+        (
+            "strata",
+            "Strata",
+            "One place 30%; 2 to 26 places 40%; 2 to 8 age groups in one place"
+            " 20%; 6 to 16 places by 3 to 7 age groups 10%",
+            "`enw_preprocess_data(by)`",
+        ),
+        (
+            "process",
+            "Generative process",
+            "Renewal, renewal with incubation, weekly growth walk, log "
+            "incidence walk, growth steps or smooth growth, one sixth each",
+            "`enw_expectation()`, `enw_simulate(growth_rate)`",
+        ),
+        (
+            "reference",
+            "Delay model",
+            "Parametric 30%; non-parametric hazard 20%; both 50%",
+            "`enw_reference()`",
+        ),
+        (
+            "delay_family",
+            "Parametric delay",
+            "Lognormal, gamma or exponential, one third each",
+            "`enw_reference(distribution)`",
+        ),
+        (
+            "hazard",
+            "Hazard effects",
+            "By delay, by week or both, one third each; by delay if the delay "
+            "is stable",
+            "`enw_reference(non_parametric)`",
+        ),
+        (
+            "stable;delay_drift;spread_drift;delay_steps;delay_walk",
+            "Delay changes",
+            "Stable 20%; otherwise drift in location 60%, drift in spread 50%,"
+            " 0 to 3 steps (30%, 30%, 20%, 20%) and a weekly walk 30%",
+            "`enw_reference(parametric)`",
+        ),
+        (
+            "report_dow;report_holiday;report_week",
+            "Report date effects",
+            "Day of week 70%; holidays 30%; report week effects none 60%, `(1 "
+            "| week)` 20%, `rw(week)` 20%",
+            "`enw_report()`",
+        ),
+        (
+            "report_days;report_change;report_days_after",
+            "Report days",
+            "Every day 50%; 1 to 3 weekdays 50%; a change of days 30% if not "
+            "stable",
+            "`enw_report(structural)`",
+        ),
+        (
+            "family",
+            "Observation model",
+            "NB2 40%; NB1 40%; Poisson 20%",
+            "`enw_obs(family)`",
+        ),
+        (
+            "max_delay",
+            "Longest delay",
+            "8 weeks 75%; 12 weeks 25%",
+            "`enw_preprocess_data(max_delay)`",
+        ),
+    ],
+    columns=["setting", "factor", "levels", "epinowcast"],
+)
+"""One row per design branch of r2-real, for the main text; `GRID` has
+every setting, for the SI."""
+
+
+def main_table(settings: pd.DataFrame) -> pd.DataFrame:
+    """Return `MAIN` with each branch's realised shares over outbreaks."""
+    out = MAIN.copy()
+    first = [row.split(";")[0] for row in out["setting"]]
+    out["realised"] = [
+        _realised(name, settings[name].dropna()) if name in settings else ""
+        for name in first
+    ]
+    return out
+
+
+def to_markdown(
+    table: pd.DataFrame, headers: dict[str, str] | None = None
+) -> str:
     """Return the table as Markdown, without the `setting` key."""
-    cols = list(_HEADERS)
+    headers = _HEADERS if headers is None else headers
+    cols = list(headers)
     lines = [
-        "| " + " | ".join(_HEADERS[c] for c in cols) + " |",
+        "| " + " | ".join(headers[c] for c in cols) + " |",
         "|" + "---|" * len(cols),
     ]
     for _, row in table.iterrows():
@@ -472,7 +578,7 @@ def to_markdown(table: pd.DataFrame) -> str:
 
 
 def main() -> None:
-    """Write `synthetic-grid.csv` and `synthetic-grid.md`."""
+    """Write the main-text table and the SI table, as CSV and Markdown."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("sim_dir", type=Path)
     parser.add_argument("out_dir", type=Path)
@@ -480,16 +586,28 @@ def main() -> None:
     settings = pd.concat(
         [pd.read_csv(p) for p in sorted(args.sim_dir.glob("settings-*.csv"))]
     )
-    table = grid_table(settings)
-    args.out_dir.mkdir(parents=True, exist_ok=True)
-    table.to_csv(args.out_dir / "synthetic-grid.csv", index=False)
-    caption = (
-        f"Settings drawn for each simulated outbreak (grid r2-real). "
-        f"Realised values are over {len(settings):,} outbreaks.\n\n"
+    write_tables(settings, args.out_dir)
+
+
+def write_tables(settings: pd.DataFrame, out_dir: Path) -> None:
+    """Write `synthetic-grid` (main text) and `synthetic-grid-si` tables."""
+    out_dir.mkdir(parents=True, exist_ok=True)
+    realised = (
+        f"Realised values are over {len(settings):,} outbreaks."
+        if len(settings)
+        else "Realised values follow once the r2-real settings exist."
     )
-    (args.out_dir / "synthetic-grid.md").write_text(
-        caption + to_markdown(table)
-    )
+    for name, table, headers, what in (
+        ("synthetic-grid", main_table(settings), MAIN_HEADERS, "Design"),
+        ("synthetic-grid-si", grid_table(settings), _HEADERS, "Settings"),
+    ):
+        table.to_csv(out_dir / f"{name}.csv", index=False)
+        caption = (
+            f"{what} of each simulated outbreak (grid r2-real). {realised}\n\n"
+        )
+        (out_dir / f"{name}.md").write_text(
+            caption + to_markdown(table, headers)
+        )
 
 
 if __name__ == "__main__":
