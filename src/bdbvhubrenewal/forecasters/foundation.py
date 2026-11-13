@@ -44,7 +44,6 @@ __all__ = [
     "Sampler",
     "chronos_sampler",
     "hub_triangle",
-    "lag_shares",
     "quantile_draws",
 ]
 
@@ -179,90 +178,6 @@ def hub_triangle(
     return HubTriangle(times, final, partial, last, latest)
 
 
-def lag_shares(
-    tri: HubTriangle,
-    places: Sequence[str],
-    source: str,
-    model: str,
-    vintage: str,
-) -> pd.DataFrame:
-    """Return the share of a final count reported by each release lag.
-
-    At lag $d$ a place's share is the sum of its counts at lag $d$ over the
-    sum of their final counts, over the steps final at the latest release
-    with a count at that lag. Shares are capped at 1 and made
-    non-decreasing, and are 1 from lag $D$. `pooled` sums over places, for
-    places with none of their own.
-    The shares are given by a day's age at a cut-off, as
-    `evaluation.nowcast.week_shares` reads them, which averages over a
-    week's days and counts days after the cut-off as unreported. With the
-    cut-off $k$ days before the end of its week, weekly lag $d$ holds its
-    share over ages $7d - k$ to $7d - k + 6$, so a week's mean is its
-    share; lag 0 is scaled by $7 / (7 - k)$ for the days after the
-    cut-off.
-
-    Parameters
-    ----------
-    tri : HubTriangle
-        The releases.
-    places : sequence of str
-        The places of `tri`, in order.
-    source : str
-        One of `SOURCES`, for the age in days of a lag.
-    model, vintage : str
-        Labels for the rows.
-
-    Returns
-    -------
-    pandas.DataFrame
-        As `forecasters.chain.delay_summary`: columns `model`, `vintage`,
-        `location`, `kind`, `x` (age in days), `quantity`
-        (`"reported_share"`) and `q50`.
-    """
-    start = tri.n_context
-    lags = tri.partial.shape[2]
-    width = 7 if source == "weekly" else 1
-    end = epiweek_end(tri.cutoff) if source == "weekly" else as_date(tri.cutoff)
-    k = (end - as_date(tri.cutoff)).days
-    cells = tri.partial[:, :start]
-    seen = ~np.isnan(cells)
-    final = np.broadcast_to(tri.final[:, :start, None], cells.shape)
-    num = np.where(seen, cells, 0.0).sum(axis=1)  # [L, D]
-    den = np.where(seen, final, 0.0).sum(axis=1)
-    rows = [*zip(places, num, den, strict=True)]
-    rows.append(("pooled", num.sum(axis=0), den.sum(axis=0)))
-    frames = []
-    for place, n, d in rows:
-        ok = d > 0
-        if not ok.any():
-            continue
-        share = n[ok] / d[ok]
-        lag = np.arange(lags)[ok]
-        share = np.where(lag == 0, share * width / (width - k), share)
-        share = np.maximum.accumulate(np.minimum(share, 1.0))
-        first = np.maximum(lag * width - k, 0)
-        last = lag * width - k + width - 1
-        ages = np.stack([first, last], axis=1).ravel()
-        values = np.repeat(share, 2)
-        if width == 1:
-            ages, values = ages[::2], values[::2]
-        frames.append(
-            pd.DataFrame(
-                {
-                    "location": place,
-                    "x": [*ages, lags * width - k],
-                    "q50": [*values, 1.0],
-                }
-            )
-        )
-    out = pd.concat(frames, ignore_index=True)
-    out.insert(0, "model", model)
-    out.insert(1, "vintage", vintage)
-    out.insert(3, "kind", "cumulative")
-    out.insert(5, "quantity", "reported_share")
-    return out
-
-
 def quantile_draws(
     levels: np.ndarray, values: np.ndarray, u: np.ndarray
 ) -> np.ndarray:
@@ -395,19 +310,12 @@ class FoundationModel:
         One of `LAYOUTS`.
     sample : Sampler
         Draws the trajectories, Chronos-2 by default.
-    delay_summary : pandas.DataFrame or None
-        The `ragged` models' share reported by release lag at the last
-        forecast (`lag_shares`), which maps their final counts to what
-        later releases show. None for `complete`, which reads no delay.
     """
 
     name: str
     source: str
     layout: str
     sample: Sampler = field(default=chronos_sampler, repr=False)
-    delay_summary: pd.DataFrame | None = field(
-        init=False, default=None, repr=False
-    )
 
     @property
     def needs_snapshots(self) -> bool:
@@ -449,14 +357,9 @@ class FoundationModel:
         weeks = list(task.target_end_dates)
         tri = hub_triangle(rows, self.source, places, weeks[-1])
         start = tri.n_context
-        self.delay_summary = None
         if self.layout == "complete":
             origin = RandomWalk().origin_at(task, errors=False)
             start = tri.times.index(_walk_start(origin)) + 1
-        else:
-            self.delay_summary = lag_shares(
-                tri, places, self.source, self.name, task.vintage
-            )
         if start < 2:
             raise ModelUnavailableError(
                 f"{self.name} needs two steps of context, and the task for "

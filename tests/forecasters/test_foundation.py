@@ -305,4 +305,3 @@ def test_chronos_missing_fails() -> None:
     # failed, not as a fit with no forecast.
     with pytest.raises(ImportError):
         chronos_sampler([{"target": np.zeros((1, 5))}], 3, 10, 0)
-
