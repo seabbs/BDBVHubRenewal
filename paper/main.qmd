@@ -54,6 +54,7 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
 ::: {.callout-note title="Plan"}
 - Chronos-2, given the reporting triangle as series.
 - One fine-tune on synthetic data, run on a laptop.
+- Compared with Chronos-2 given only complete data points, to show what the ragged structure and fine-tuning add.
 :::
 
 ### Synthetic data generation
