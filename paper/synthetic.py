@@ -59,6 +59,7 @@ __all__ = [
     "observation_table",
     "origin_cutoffs",
     "outbreak_tasks",
+    "release_cutoffs",
     "sample_table",
     "series_label",
     "truth_table",
@@ -68,12 +69,14 @@ log = logging.getLogger(__name__)
 
 MODELS: Final = (
     "randomwalknowcast",
+    "randomwalk",
     "fm_chronos_weekly_ragged",
     "fm_chronos_daily_ragged",
     "fm_chronos_weekly_ragged_ft",
     "fm_chronos_daily_ragged_ft",
 )
-"""The baseline, the zero-shot ragged models and the fine-tuned ones."""
+"""The baseline, the random walk, the zero-shot ragged models and the
+fine-tuned ones."""
 
 MIN_RELEASES: Final = 6
 """Releases up to the first origin: two weeks of context past the
@@ -115,6 +118,33 @@ def series_label(outbreak: str, place: str) -> str:
     return f"{outbreak}_{place}"
 
 
+def release_cutoffs(counts: pd.DataFrame, outbreak: str) -> list[str]:
+    """Return an outbreak's weekly release cut-offs to its last report.
+
+    Releases fall on one weekday from Wednesday to Saturday, drawn from
+    the outbreak's id, as the training blocks' do.
+
+    Parameters
+    ----------
+    counts : pandas.DataFrame
+        The outbreak's triangle, as `finetune.releases` reads it.
+    outbreak : str
+        Its id.
+
+    Returns
+    -------
+    list of str
+        The cut-offs, ISO format.
+    """
+    rng = np.random.default_rng(zlib.crc32(outbreak.encode()))
+    weekday = int(rng.integers(2, 6))
+    return weekly_cutoffs(
+        str(counts["report_date"].min()),
+        str(counts["report_date"].max()),
+        weekday,
+    )
+
+
 def origin_cutoffs(
     counts: pd.DataFrame, outbreak: str, n_origins: int
 ) -> tuple[list[str], list[str]]:
@@ -123,24 +153,20 @@ def origin_cutoffs(
     Parameters
     ----------
     counts : pandas.DataFrame
-        The outbreak's triangle, as `finetune.releases` reads it.
+        The outbreak's triangle.
     outbreak : str
-        Its id, which seeds the release weekday.
+        Its id.
     n_origins : int
         Origins wanted. Fewer are returned if fewer releases qualify.
 
     Returns
     -------
     tuple of list of str
-        Every release's cut-off up to the last origin, and the origins.
+        The release cut-offs up to the last origin, and the origins.
     """
-    rng = np.random.default_rng(zlib.crc32(outbreak.encode()))
-    weekday = int(rng.integers(2, 6))
     end = pd.Timestamp(counts["report_date"].max()).date()
-    last = end - dt.timedelta(weeks=COMPLETE_WEEKS)
-    cutoffs = weekly_cutoffs(
-        str(counts["report_date"].min()), last.isoformat(), weekday
-    )
+    last = (end - dt.timedelta(weeks=COMPLETE_WEEKS)).isoformat()
+    cutoffs = [c for c in release_cutoffs(counts, outbreak) if c <= last]
     if len(cutoffs) < MIN_RELEASES:
         return cutoffs, []
     at = np.linspace(MIN_RELEASES - 1, len(cutoffs) - 1, n_origins)
@@ -273,6 +299,9 @@ def observation_table(
 ) -> pd.DataFrame:
     """Return the weekly counts as of each release, and the final counts.
 
+    The releases run to the last report, so `paperfigs.truth.rolling_truth`
+    finds the count reported D days after each target.
+
     Parameters
     ----------
     counts : pandas.DataFrame
@@ -280,7 +309,7 @@ def observation_table(
     outbreak : str
         Its id.
     n_origins : int
-        As `origin_cutoffs`. The releases run to the last origin.
+        As `origin_cutoffs`. An outbreak with no origin has no rows.
 
     Returns
     -------
@@ -289,12 +318,12 @@ def observation_table(
         `target_date`, `as_of_date` and `value`. The last `as_of_date` is
         the simulation's last report, which gives the truth.
     """
-    cutoffs, origins = origin_cutoffs(counts, outbreak, n_origins)
+    _, origins = origin_cutoffs(counts, outbreak, n_origins)
     if not origins:
         return pd.DataFrame(columns=list(OBSERVATION_COLUMNS))
     end = str(pd.Timestamp(counts["report_date"].max()).date())
-    kept = cutoffs[: cutoffs.index(origins[-1]) + 1]
-    rows = releases(counts, "weekly", [*kept, end])
+    cutoffs = release_cutoffs(counts, outbreak)
+    rows = releases(counts, "weekly", sorted({*cutoffs, end}))
     out = pd.DataFrame(
         {
             "study": "synthetic",
