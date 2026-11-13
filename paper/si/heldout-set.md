@@ -14,7 +14,7 @@ We checked the pipeline end to end on a separate validation set of five outbreak
 
 Each outbreak is released weekly, on one weekday from Wednesday to Saturday drawn from its id, as for the fine-tune's training blocks.
 A release's cut-off is its origin date.
-Each outbreak has four origins, spread evenly from its sixth release to the last release at least 13 weeks before its last report.
+Each outbreak has four origins, spread evenly from its sixth release to the last release at least its longest delay (8 or 12 weeks) plus 5 weeks before its last report.
 Each forecast covers eight weeks of onsets, from four weeks before the week of the cut-off to three weeks after it.
 Every model forecasts weekly totals by onset week, for the country and each place, with 200 samples.
 The Chronos-2 models keep their own release lag of 4 weeks (weekly) or 28 days (daily).

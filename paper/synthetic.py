@@ -48,15 +48,16 @@ from bdbvhubrenewal.forecasters.randomwalk import RandomWalk
 
 __all__ = [
     "COLUMNS",
-    "COMPLETE_WEEKS",
     "FACTORS",
     "HORIZONS",
+    "HORIZON_WEEKS",
     "MIN_RELEASES",
     "MODELS",
     "OBSERVATION_COLUMNS",
     "delay_quantile",
     "evaluate",
     "factor_table",
+    "longest_delay_weeks",
     "model_task",
     "models_by_name",
     "observation_table",
@@ -87,12 +88,13 @@ MIN_RELEASES: Final = 6
 """Releases up to the first origin: two weeks of context past the
 weekly models' four-week $D$."""
 
-COMPLETE_WEEKS: Final = 13
-"""Weeks from an origin to the simulation's last report, so its last
-forecast week is final under the longest delay (eight weeks)."""
+HORIZON_WEEKS: Final = 5
+"""Weeks from an origin to past its last forecast week: the rest of the
+cut-off's week and three more, with a week to spare. An origin is at
+least this plus the outbreak's longest delay before its last report."""
 
-MAX_DELAY_DAYS: Final = 56
-"""The simulations' longest reporting delay."""
+MIN_DELAY_WEEKS: Final = 8
+"""The grid's shortest longest delay; outbreaks have 8 or 12 weeks."""
 
 HORIZONS: Final = tuple(range(-4, 4))
 """Forecast weeks from the reference date."""
@@ -192,7 +194,8 @@ def origin_cutoffs(
         The release cut-offs up to the last origin, and the origins.
     """
     end = pd.Timestamp(counts["report_date"].max()).date()
-    last = (end - dt.timedelta(weeks=COMPLETE_WEEKS)).isoformat()
+    weeks = longest_delay_weeks(counts) + HORIZON_WEEKS
+    last = (end - dt.timedelta(weeks=weeks)).isoformat()
     cutoffs = [c for c in release_cutoffs(counts, outbreak) if c <= last]
     if len(cutoffs) < MIN_RELEASES:
         return cutoffs, []
@@ -489,8 +492,8 @@ def delay_quantile(counts: pd.DataFrame, q: float) -> int:
     """Return a quantile of an outbreak's reporting delay, in whole days.
 
     The delay is from onset to report over every simulated case, counting
-    only onsets at least `MAX_DELAY_DAYS` before the last report, so every
-    delay of theirs is seen.
+    only onsets at least its longest delay (`longest_delay_weeks`) before
+    the last report, so every delay of theirs is seen.
 
     Parameters
     ----------
@@ -506,8 +509,23 @@ def delay_quantile(counts: pd.DataFrame, q: float) -> int:
     """
     ref = pd.to_datetime(counts["reference_date"])
     rep = pd.to_datetime(counts["report_date"])
-    seen = ref <= rep.max() - pd.Timedelta(days=MAX_DELAY_DAYS)
+    longest = pd.Timedelta(weeks=longest_delay_weeks(counts))
+    seen = ref <= rep.max() - longest
     delay = (rep - ref).dt.days[seen]
     by = counts.loc[seen, "count"].groupby(delay).sum().sort_index()
     share = by.cumsum() / by.sum()
     return int(share.index[np.argmax(share.to_numpy() >= q - 1e-12)])
+
+
+def longest_delay_weeks(counts: pd.DataFrame) -> int:
+    """Return an outbreak's longest reporting delay in whole weeks.
+
+    The longest delay seen, rounded up to weeks, and at least
+    `MIN_DELAY_WEEKS`, so an outbreak whose cases all come early keeps
+    the grid's shortest.
+    """
+    delay = (
+        pd.to_datetime(counts["report_date"])
+        - pd.to_datetime(counts["reference_date"])
+    ).dt.days.max()
+    return max(MIN_DELAY_WEEKS, -(-int(delay) // 7))
