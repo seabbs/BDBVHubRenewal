@@ -14,15 +14,8 @@
 source "$(dirname "$0")/lib.sh"
 
 : "${REFERENCE_DATE:?}" "${DATA_COMMIT:?}" "${GITHUB_SHA:?}"
-LEDGER_BRANCH=${LEDGER_BRANCH:-submission-ledger}
 ledger="$WORK/ledger"
-rm -rf "$ledger"
-git worktree prune
-if git fetch -q --depth 1 origin "$LEDGER_BRANCH" 2> /dev/null; then
-  git worktree add -q -B "$LEDGER_BRANCH" "$ledger" FETCH_HEAD
-else
-  git worktree add -q --orphan -b "$LEDGER_BRANCH" "$ledger"
-fi
+ledger_worktree "$ledger"
 
 # A track's status from its SKIPPED and ACTION.
 status_of() {
@@ -80,9 +73,5 @@ record_model "${BASELINE_ID:-}" "${BASELINE_ACTION:-}" \
   "${BASELINE_PR_URL:-}" "${BASELINE_PRODUCED_BY:-}" \
   "${BASELINE_SKIPPED:-}" "$baseline_archive"
 
-git -C "$ledger" add -A
-git -C "$ledger" -c user.name="github-actions[bot]" \
-  -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
-  commit -q -m "Record $REFERENCE_DATE: $status"
-git -C "$ledger" push -q origin "$LEDGER_BRANCH"
+ledger_push "$ledger" "Record $REFERENCE_DATE: $status"
 note "Ledger: $REFERENCE_DATE recorded as $status."

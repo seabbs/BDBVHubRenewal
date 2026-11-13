@@ -16,7 +16,7 @@ Commands:
   `diagnostics.json`, for the submission CI.
 - `fit-store`: list the fitted models' fits the store lacks, make one,
   load the stored fits into the results (`evaluation.store`), or archive
-  a round's stored forecasts (`evaluation.store_archive`).
+  every candidate's forecasts for a round (`evaluation.store_archive`).
 - `plot-submission`: plot a submitted hub file.
 - `plot-ppc`: plot a fit's posterior predictive checks (`ppc.json`).
 - `coherence`: compare the national data with the sum of the provinces.
@@ -403,16 +403,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     fst.add_argument("--results", default="results")
     fst.add_argument(
-        "--closes",
-        default=None,
-        help="With `archive`: when the round's window closed (ISO time).",
-    )
-    fst.add_argument(
         "--models",
         nargs="*",
         default=None,
-        help="With `plan`, `load` or `archive`: only these models "
-        "(default: all fitted).",
+        help="With `plan` or `load`: only these models (default: all "
+        "fitted). With `archive`: default every candidate's model.",
     )
     fst.add_argument(
         "--retry-failed",

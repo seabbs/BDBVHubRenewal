@@ -110,6 +110,28 @@ deadline_args() {
   echo "$args"
 }
 
+# Check out the ledger branch (LEDGER_BRANCH, default submission-ledger)
+# as a worktree at $1, as a new orphan branch when there is none yet.
+ledger_worktree() {
+  local dir=$1 branch=${LEDGER_BRANCH:-submission-ledger}
+  rm -rf "$dir"
+  git worktree prune
+  if git fetch -q --depth 1 origin "$branch" 2> /dev/null; then
+    git worktree add -q -B "$branch" "$dir" FETCH_HEAD
+  else
+    git worktree add -q --orphan -b "$branch" "$dir"
+  fi
+}
+
+# Commit everything in the ledger worktree $1 with message $2 and push it.
+ledger_push() {
+  git -C "$1" add -A
+  git -C "$1" -c user.name="github-actions[bot]" \
+    -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+    commit -q -m "$2"
+  git -C "$1" push -q origin "${LEDGER_BRANCH:-submission-ledger}"
+}
+
 note() {
   echo "$*"
   if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then

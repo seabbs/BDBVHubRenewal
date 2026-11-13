@@ -20,7 +20,7 @@ It is the reference for the interface, and `ci/run_dry.sh` runs the whole workfl
 | `bdbvhubrenewal plot-ppc --ppc <ppc.json> --out <png>` | done, a thin wrapper on `ppc.plot_ppc` | candidates whose `ppc.json` is available |
 | `bdbvhubrenewal --version` | done | `run.json`, the PR body |
 | `bdbvhubrenewal coherence --vintage <as_of> --out <json>` | done | `prepare` (data coherence check) |
-| `bdbvhubrenewal fit-store archive --store <dir> --origins <as_of> --closes <time> --out <csv.gz>` | done, `evaluation.store.archive` | `record` (every stored model's forecasts for the ledger) |
+| `bdbvhubrenewal fit-store archive --store <dir> --origins <as_of> --out <csv.gz>` | done, `evaluation.store_archive` | `record`, after the ledger push (`archive_candidates.sh`): every candidate's forecasts for the ledger |
 
 ### `bdbvhubrenewal fit`
 

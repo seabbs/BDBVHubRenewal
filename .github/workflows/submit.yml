@@ -572,7 +572,7 @@ jobs:
       (needs.prepare.outputs.renewal == 'true' ||
       needs.prepare.outputs.baseline == 'true') }}
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 30
     permissions:
       contents: write
       # To rebuild the docs, so the round's page that the PR links to
@@ -620,6 +620,29 @@ jobs:
           BASELINE_PRODUCED_BY: ${{ needs.baseline.outputs.produced_by }}
           BASELINE_SKIPPED: ${{ needs.baseline.outputs.skipped }}
         run: ci/steps/record.sh
+      # Every candidate model's forecasts for the round, beside the
+      # round's files (candidates.csv.gz). Apart from the record above,
+      # so a failure here never stops a round being recorded.
+      - uses: ./.github/actions/setup-forecast-env
+        id: forecast-env
+        continue-on-error: true
+        with:
+          save-jax: 'false'
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        id: inputs
+        continue-on-error: true
+        with:
+          name: inputs
+          path: ${{ env.WORK }}
+      - name: Archive every candidate's forecasts
+        if: >-
+          steps.forecast-env.outcome == 'success' &&
+          steps.inputs.outcome == 'success'
+        continue-on-error: true
+        timeout-minutes: 15
+        env:
+          AS_OF: ${{ needs.detect.outputs.as_of }}
+        run: ci/steps/archive_candidates.sh
       - name: Rebuild the docs with this round's page
         env:
           GH_TOKEN: ${{ github.token }}

@@ -22,7 +22,7 @@ candidate id the step script exports as `CAND_ID`. Scenarios:
 
 `fit-store unpack` writes what `fit` would, as the stored fit's
 directory, with `store.json`. `fit-store plan` lists nothing to fit.
-`fit-store archive` writes one stored model's forecast rows.
+`fit-store archive` writes a stored and an unfitted model's rows.
 
 Unknown candidates default to `pass`. `randomwalk=implausible` breaks
 the random walk baseline too, which is how the dry run reaches a skip.
@@ -229,9 +229,6 @@ def cmd_fit_store(args: argparse.Namespace) -> int:
     """`fit-store plan` lists nothing; `unpack` writes a stored fit;
     `archive` writes one model's stored forecast."""
     if args.action == "archive":
-        fitted_at = "2026-11-02T08:00:00+00:00"
-        closes = dt.datetime.fromisoformat(args.closes)
-        prospective = dt.datetime.fromisoformat(fitted_at) <= closes
         out = Path(args.out)
         out.parent.mkdir(parents=True, exist_ok=True)
         with gzip.open(out, "wt", newline="") as fh:
@@ -248,26 +245,25 @@ def cmd_fit_store(args: argparse.Namespace) -> int:
                     "commit",
                     "fitted_at",
                     "current",
-                    "prospective",
                 ]
             )
-            for origin in args.origins:
-                key, commit = "0123456789abcdef", "c0ffee0" * 5 + "c"
-                w.writerow(
-                    [
-                        "renewal",
-                        origin,
-                        "CD",
-                        origin,
-                        1,
-                        10,
-                        key,
-                        commit,
-                        fitted_at,
-                        True,
-                        prospective,
-                    ]
-                )
+            key, commit = "0123456789abcdef", "c0ffee0" * 5 + "c"
+            for model in ("renewal", "randomwalk"):
+                for origin in args.origins:
+                    w.writerow(
+                        [
+                            model,
+                            origin,
+                            "CD",
+                            origin,
+                            1,
+                            10,
+                            key,
+                            commit,
+                            "2026-11-02T08:00:00+00:00",
+                            True,
+                        ]
+                    )
         return 0
     if args.action == "plan":
         if args.out:
@@ -540,7 +536,6 @@ def main() -> int:
     fr.add_argument("--round", required=True)
     fs = sub.add_parser("fit-store")
     fs.add_argument("action", choices=["plan", "unpack", "archive"])
-    fs.add_argument("--closes", default=None)
     fs.add_argument("--store", default="output/fit-store")
     fs.add_argument("--model", default=None)
     fs.add_argument("--models", nargs="*", default=None)

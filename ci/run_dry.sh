@@ -295,16 +295,20 @@ ledger() {
       BASELINE_ID=seabbs-rwnowcast BASELINE_SKIPPED=true \
       "$CI_DIR/steps/record.sh" > /dev/null)
   done
+  (cd "$repo" && WORK="$ROOT/fallback" GITHUB_RUN_ID=102 \
+    REFERENCE_DATE=2026-11-07 AS_OF=2026-10-31 \
+    "$CI_DIR/steps/archive_candidates.sh" > /dev/null) \
+    || { echo "FAIL: archive_candidates.sh"; return 1; }
   local files
   files=$(git -C "$origin" ls-tree -r --name-only submission-ledger)
   echo "$files" | grep -q "archive/2026-11-07/102/provenance.json" \
     || { echo "FAIL: ledger archive"; echo "$files"; return 1; }
   git -C "$origin" show submission-ledger:archive/2026-11-07/102/candidates.csv.gz \
-    | python3 -c "import csv, gzip, sys; r=list(csv.DictReader(gzip.open(sys.stdin.buffer, 'rt'))); assert r and r[0]['vintage']=='2026-10-31' and r[0]['prospective']=='True'" \
-    || { echo "FAIL: no stored forecasts in the ledger archive"; return 1; }
+    | python3 -c "import csv, gzip, sys; r=list(csv.DictReader(gzip.open(sys.stdin.buffer, 'rt'))); assert {x['model'] for x in r}=={'renewal','randomwalk'} and {x['vintage'] for x in r}=={'2026-10-31'}" \
+    || { echo "FAIL: no candidate forecasts in the ledger archive"; return 1; }
   git -C "$origin" show submission-ledger:state.json \
     | python3 -c "import json,sys; r=json.load(sys.stdin)['rounds']['2026-11-07']; m=r['models']; assert r['status']=='submitted' and r['code_commit']=='cccc' and len(r['history'])==2 and m['seabbs-renewal']['status']=='submitted' and m['seabbs-renewal']['archive']=='archive/2026-11-07/102' and m['seabbs-rwnowcast']['status']=='skipped'"
-  echo "=== ledger ===" && echo "ok: state.json, archive/2026-11-07/{101,102} and the stored forecasts on submission-ledger"
+  echo "=== ledger ===" && echo "ok: state.json, archive/2026-11-07/{101,102} and the candidates' forecasts on submission-ledger"
 
   # freeze.sh, with a `gh` that says the round's pull request is open:
   # nothing is frozen.
