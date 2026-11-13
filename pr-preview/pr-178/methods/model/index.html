@@ -57,7 +57,7 @@
     
       <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
     
-      <link rel="stylesheet" href="../../stylesheets/extra.css?v=1c6923d2">
+      <link rel="stylesheet" href="../../stylesheets/extra.css?v=afdda586">
     
     <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
@@ -1198,6 +1198,34 @@
     
   
     Comparison with hub forecasts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../germany/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    German nowcast benchmark
   
 
     
@@ -2723,8 +2751,8 @@ Leaving a province out drops the national term and the patch that holds it.
 The term adds no parameters, and <span class="arithmatex">\(\zeta = 0\)</span> gives <code>renewal</code>.</p>
 <h2 id="health-zones">Health zones<a class="headerlink" href="#health-zones" title="Permanent link">&para;</a></h2>
 <p>Zone samples sum to their province's samples, sample by sample and week by week, and zones do not enter the national value.
-The random walk baselines run at zone level and their samples set the zone shares of the province samples (<a href="../baselines/#health-zones">Baseline models</a>).
-Every other model's province forecast is split across the zones.</p>
+<code>randomwalk</code> and <code>randomwalknowcast</code> run at zone level and their samples set the zone shares of the province samples (<a href="../baselines/#health-zones">Baseline models</a>).
+Every other model's province forecast, <code>pprandomwalknowcast</code>'s included, is split across the zones.</p>
 <h3 id="split-of-province-samples">Split of province samples<a class="headerlink" href="#split-of-province-samples" title="Permanent link">&para;</a></h3>
 <p>For province <span class="arithmatex">\(p\)</span> with zones <span class="arithmatex">\(z\)</span>, let <span class="arithmatex">\(o_z(w)\)</span> be zone <span class="arithmatex">\(z\)</span>'s published count for week <span class="arithmatex">\(w\)</span> and <span class="arithmatex">\(O(w) = \sum_z o_z(w)\)</span>.
 Each province sample <span class="arithmatex">\(i\)</span> draws its zone shares once, for all weeks,</p>
@@ -2902,7 +2930,7 @@ Each zone keeps its published count and the rest of the province sample <span cl
       
         <script src="../../javascripts/tablefilter.js?v=774f66a6"></script>
       
-        <script src="../../javascripts/explorer.js?v=84b4d7fb"></script>
+        <script src="../../javascripts/explorer.js?v=b4440ba7"></script>
       
         <script src="../../javascripts/scorechart.js?v=1c27a70d"></script>
       
