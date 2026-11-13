@@ -351,6 +351,22 @@ def observation_table(
     end = str(pd.Timestamp(counts["report_date"].max()).date())
     cutoffs = release_cutoffs(counts, outbreak)
     rows = releases(counts, "weekly", sorted({*cutoffs, end}))
+    # Weeks with no case reported yet are zeros, from the first week to
+    # the week of each release's cut-off.
+    first = pd.Timestamp(rows["target_end_date"].min())
+    places = sorted(set(rows["location"]))
+    full = [
+        (vintage, place, week.strftime("%Y-%m-%d"))
+        for vintage in sorted(set(rows["vintage"]))
+        for place in places
+        for week in pd.date_range(first, epiweek_end(vintage), freq="7D")
+    ]
+    keys = ["vintage", "location", "target_end_date"]
+    rows = (
+        rows.set_index(keys)["total"]
+        .reindex(pd.MultiIndex.from_tuples(full, names=keys), fill_value=0)
+        .reset_index()
+    )
     out = pd.DataFrame(
         {
             "study": "synthetic",
