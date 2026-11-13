@@ -2150,6 +2150,18 @@ The observation model is in <code>forecasters.obs</code>, and fits and draws its
 <td><code>forecasters.walk</code></td>
 </tr>
 <tr>
+<td>Introductions into places with no recent case</td>
+<td><code>forecasters.introductions</code></td>
+</tr>
+<tr>
+<td>Zone samples that sum to the province samples</td>
+<td><code>forecasters.zones</code></td>
+</tr>
+<tr>
+<td><code>pprandomwalknowcast</code>, fitted with NUTS in NumPyro</td>
+<td><code>forecasters.pprandomwalk</code></td>
+</tr>
+<tr>
 <td>Backtest on real releases</td>
 <td><code>evaluation.nowcast</code></td>
 </tr>
@@ -2172,10 +2184,10 @@ Pandas only builds the inputs and the output frames.</p>
 <h2 id="sampling">Sampling<a class="headerlink" href="#sampling" title="Permanent link">&para;</a></h2>
 <p>PyRenew's <code>PyrenewBuilder</code> builds each model as a <code>MultiSignalModel</code>, and NumPyro's NUTS fits it.
 Chains run vectorised unless a fit's settings say otherwise.
-Stored backtest fits and CI submission fits run their chains in parallel.
+Stored fits run their chains in parallel.
 Without other settings, NUTS runs 4 chains of 1000 warm-up and 1000 draws, with target acceptance 0.9 and maximum tree depth 10.
 Each chain starts from its own draw from the prior.
-Submission fits and the <a href="../../development/cli/#fit-store">fit store</a>'s backtest fits take each model's settings from its candidate in <code>ci/policy.toml</code>.
+The <a href="../../development/cli/#fit-store">fit store</a>'s fits, which the backtest and the submission read, take each model's settings from its candidate in <code>ci/policy.toml</code>.
 <code>renewal</code>, <code>renewalsp</code> and <code>renewalbvd</code> use 2 chains of 500 warm-up and 750 draws, at target acceptance 0.9 (0.95 for <code>renewalbvd</code>).
 <code>pprandomwalknowcast</code> has no candidate and uses its own settings (<a href="../baselines/#partially-pooled-variant">Baseline models</a>).
 Leave-one-province-out fits take theirs from <code>[sampler]</code> in <code>config/backtest.toml</code> when <code>BDBV_RENEWAL_SAMPLER</code> is unset.

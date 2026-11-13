@@ -2192,7 +2192,7 @@ Both run at province and zone level (<a href="#health-zones">Health zones</a>), 
         SNAP["Daily onsets C&lt;sub&gt;p,r&lt;/sub&gt;(t)&lt;br/&gt;by onset day and release r"]
         PAIR["Release pairs (r, r + 1)&lt;br/&gt;gap s ≤ D = 42 days"]
     end
-    DEL["Daily delay Δ&lt;sub&gt;p&lt;/sub&gt;(j) ≥ 0&lt;br/&gt;weighted non-negative&lt;br/&gt;least squares&lt;br/&gt;&lt;i&gt;own or parent by age&lt;/i&gt;"]
+    DEL["Daily delay Δ&lt;sub&gt;p&lt;/sub&gt;(j) ≥ 0&lt;br/&gt;weighted non-negative&lt;br/&gt;least squares&lt;br/&gt;&lt;i&gt;own or parent's&lt;/i&gt;"]
     G["Growth to final Γ&lt;sub&gt;p&lt;/sub&gt;(a)&lt;br/&gt;share reported 1 / Γ&lt;sub&gt;p&lt;/sub&gt;(a)"]
     MU["Nowcast mean μ&lt;sub&gt;p&lt;/sub&gt;(w)&lt;br/&gt;weekly fill&lt;br/&gt;shares F&lt;sub&gt;p,j&lt;/sub&gt;(w) from Γ&lt;sub&gt;p&lt;/sub&gt;"]
     RETRO["Earlier releases r &amp;lt; o&lt;br/&gt;nowcast to release o"]
@@ -2420,10 +2420,10 @@ It is a random walk on the log scale over the 16 weeks to the week holding <span
 \]</div>
 <p>Each onset day <span class="arithmatex">\(t\)</span> in week <span class="arithmatex">\(w(t)\)</span> expects <span class="arithmatex">\(\lambda_{p,w(t)} / 7\)</span> cases.</p>
 <p><strong>Delay.</strong>
-A case is reported <span class="arithmatex">\(d\)</span> days after onset, with <span class="arithmatex">\(d\)</span> log-normal with location <span class="arithmatex">\(\mu_p\)</span> and scale <span class="arithmatex">\(s\)</span>, cut to whole days and capped at <span class="arithmatex">\(D = 42\)</span>.
+A case is reported <span class="arithmatex">\(d\)</span> days after onset, with <span class="arithmatex">\(d\)</span> log-normal with location <span class="arithmatex">\(\mu_p\)</span> and scale <span class="arithmatex">\(s_p\)</span>, cut to whole days and capped at <span class="arithmatex">\(D = 42\)</span>.
 The share of a day's final count reported by age <span class="arithmatex">\(a\)</span> is</p>
 <div class="arithmatex">\[
-\pi_p(a) = \frac{F(a + 1;\ \mu_p, s)}{F(D + 1;\ \mu_p, s)}, \quad 0 \le a &lt; D,
+\pi_p(a) = \frac{F(a + 1;\ \mu_p, s_p)}{F(D + 1;\ \mu_p, s_p)}, \quad 0 \le a &lt; D,
 \qquad
 \pi_p(a) = 1 \text{ for } a \ge D,
 \qquad
@@ -2435,7 +2435,7 @@ Day <span class="arithmatex">\(t\)</span> is <span class="arithmatex">\(a_r(t) =
 Let <span class="arithmatex">\(r'\)</span> be the release before <span class="arithmatex">\(r\)</span>, with <span class="arithmatex">\(a_{r'}(t) = -1\)</span> and <span class="arithmatex">\(C_{p,r'}(t) = 0\)</span> when <span class="arithmatex">\(r\)</span> is the first release that observes <span class="arithmatex">\(t\)</span>.
 The new reports between the two are</p>
 <div class="arithmatex">\[
-C_{p,r}(t) - C_{p,r'}(t) \sim \text{NB}\Big(\frac{\lambda_{p,w(t)}}{7}\,\big\{\pi_p(a_r(t)) - \pi_p(a_{r'}(t))\big\},\ \phi\Big),
+C_{p,r}(t) - C_{p,r'}(t) \sim \text{NB}\Big(\frac{\lambda_{p,w(t)}}{7}\,\big\{\pi_p(a_r(t)) - \pi_p(a_{r'}(t))\big\},\ \phi_p\Big),
 \]</div>
 <p>for every onset day in the 16 weeks and every release up to <span class="arithmatex">\(o\)</span> that observes it.
 This is epinowcast's reporting triangle, with each release a batch of report days.
@@ -2500,11 +2500,13 @@ A silent place takes the delay of its nearest fitted ancestor.</p>
 <p><strong>Forecast.</strong>
 Each sample takes one posterior draw, and every draw is used once before any is used again.
 A week's final count is the sum over its days.
-A day up to <span class="arithmatex">\(c_o\)</span> is its count reported plus an NB draw of the rest, with mean <span class="arithmatex">\(\lambda_{p,w(t)} / 7 \cdot \{1 - \pi_p(a_o(t))\}\)</span> and size <span class="arithmatex">\(\phi\)</span>.
+A day up to <span class="arithmatex">\(c_o\)</span> is its count reported plus an NB draw of the rest, with mean <span class="arithmatex">\(\lambda_{p,w(t)} / 7 \cdot \{1 - \pi_p(a_o(t))\}\)</span> and size <span class="arithmatex">\(\phi_p\)</span>.
 A later day of the week holding <span class="arithmatex">\(c_o\)</span> is an NB draw with mean <span class="arithmatex">\(\lambda_{p,w(t)} / 7\)</span>.
-Later weeks continue the walk from the draw's last <span class="arithmatex">\(\lambda\)</span> with its <span class="arithmatex">\(\sigma_p\)</span>, and their counts are NB with mean <span class="arithmatex">\(\lambda\)</span> and size <span class="arithmatex">\(7 \phi\)</span>, the sum of seven days.
+Later weeks continue the walk from the draw's last <span class="arithmatex">\(\lambda\)</span> with its <span class="arithmatex">\(\sigma_p\)</span>, and their counts are NB with mean <span class="arithmatex">\(\lambda\)</span> and size <span class="arithmatex">\(7 \phi_p\)</span>, the sum of seven days.
 Weeks before the 16 fitted weeks are the counts reported.
-National is the sum of the provinces by sample, and zones are reconciled to provinces as for <code>randomwalknowcast</code> (<a href="#health-zones">Health zones</a>).</p>
+National is the sum of the provinces by sample.
+In the zone backtest it also runs on the zones, which are reconciled to its provinces as for <code>randomwalknowcast</code> (<a href="#health-zones">Health zones</a>).
+Elsewhere, as in the hub tables, its province samples are split across the zones as for the renewal models (<a href="../model/#split-of-province-samples">Renewal models</a>).</p>
 <p><strong>Silent places.</strong>
 A silent leaf has no case to fit, and a walk from a <span class="arithmatex">\(\lambda\)</span> near 0 gave divergent draws.
 As in <code>renewalsp</code> (<a href="../model/">Renewal models</a>), it takes <code>randomwalknowcast</code>'s draws: its reported counts, then exactly 0 until an introduction, then a walk (<a href="#forecast">Forecast</a>).
@@ -2513,7 +2515,7 @@ This is the one part of the model that is not drawn from its posterior.</p>
 On the reported target, the backtest maps its final counts to what a later release shows by the posterior median <span class="arithmatex">\(\pi_p(a)\)</span> of each place (<a href="../evaluation/#real-releases">Evaluation</a>).</p>
 <p><strong>Sampler.</strong>
 NUTS runs 2 chains of 500 warm-up and 750 draws, in sequence, from the prior medians, at target acceptance 0.9.
-Each walk step is sampled as <span class="arithmatex">\(\delta^*_{p,w} \sim \mathcal{N}(0, \sigma_p)\)</span> and set to <span class="arithmatex">\(\delta_{p,w} = \sqrt{\sigma_p}\, \delta^*_{p,w}\)</span>, numpyro's location-scale reparameterisation with centring <span class="arithmatex">\(\tfrac{1}{2}\)</span>.
+Each walk step is sampled as <span class="arithmatex">\(\delta^*_{p,w}\)</span>, normal with mean 0 and scale <span class="arithmatex">\(\sigma_p^{1/2}\)</span>, and set to <span class="arithmatex">\(\delta_{p,w} = \sqrt{\sigma_p}\, \delta^*_{p,w}\)</span>, numpyro's location-scale reparameterisation with centring <span class="arithmatex">\(\tfrac{1}{2}\)</span>.
 A large place's counts pin its walk, which suits centred steps, and a place with few cases leaves it to the prior, which suits non-centred ones.
 The pooled parameters are non-centred, except the first level, whose tiers are centred, and <span class="arithmatex">\(\log s\)</span>, whose tiers are half centred.
 Sampling each tier about its parent's value, not as the country's value plus an offset, cut the median leapfrog steps from 255 to 511 down to 63.
