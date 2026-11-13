@@ -71,6 +71,7 @@ So the release backtest scores them on the complete target only, the weeks the l
 ## Fine-tuning
 
 The `_ft` models load one LoRA checkpoint of Chronos-2, trained on 2,000 outbreaks simulated with epinowcast's generative model (`scripts/finetune_simulate.R`).
+The simulator, `enw_simulate`, is on epinowcast's `feature/829-simulate-forecast` branch, pinned at commit `e084b080`, and is not yet in a release.
 Each outbreak is a renewal process with a drawn log $R_t$ path, a reporting delay that drifts and differs by place, day-of-week effects and negative binomial noise, in one to 26 places.
 Each gives a daily reporting triangle, and its weekly releases are summed from it.
 A training block cuts an outbreak's releases at one cut-off and lays them out as the ragged layout does, with the target past $t^*$ the outbreak's final counts (`forecasters.finetune.training_block`).
