@@ -6,6 +6,7 @@ import os
 from collections.abc import Iterator
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -367,3 +368,29 @@ def test_chronos_track_metadata_is_the_committed_file(
         if model == "fm_chronos_daily_ragged_ft":
             # The committed file is the configured model's.
             assert committed.read_text() == text
+
+
+@pytest.mark.usefixtures("in_root")
+def test_nowcast_records_the_checkpoint_it_loaded(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fake_checkpoint: str
+) -> None:
+    from bdbvhubrenewal.forecasters import foundation
+
+    def zeros(groups, horizon, n, _seed, checkpoint=None):  # type: ignore[no-untyped-def]
+        assert checkpoint.hash == fake_checkpoint
+        return [
+            np.zeros((n, np.atleast_2d(g["target"]).shape[0], horizon))
+            for g in groups
+        ]
+
+    monkeypatch.setattr(foundation, "chronos_sampler", zeros)
+    out = tmp_path / "ft"
+    args = ["--model", "fm_chronos_weekly_ragged_ft", "--out", str(out)]
+    assert main(["nowcast", *args]) == 0
+    record = json.loads((out / "checkpoint.json").read_text())
+    assert record["tag"] == f"chronos-ft-{fake_checkpoint}"
+    assert set(record["sha256"]) == set(foundation.ADAPTER_FILES)
+    # A model with no checkpoint writes none.
+    plain = tmp_path / "rw"
+    assert main(["nowcast", "--model", "randomwalk", "--out", str(plain)]) == 0
+    assert not (plain / "checkpoint.json").exists()

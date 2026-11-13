@@ -5,7 +5,6 @@ from __future__ import annotations
 import dataclasses
 import hashlib
 import importlib.util
-import json
 from pathlib import Path
 
 import numpy as np
@@ -364,36 +363,107 @@ def test_chronos_missing_fails() -> None:
 
 @pytest.mark.parametrize("name", FINETUNED_MODELS)
 def test_finetuned_models_are_the_ragged_models_with_the_checkpoint(
-    name: str,
+    name: str, fake_checkpoint
 ) -> None:
     model = get_model(name)
     zero_shot = get_model(name.removesuffix("_ft"))
-    assert model.checkpoint == foundation.FINETUNED
+    assert model.checkpoint == foundation.resolve_checkpoint("latest")
+    assert model.checkpoint.hash == fake_checkpoint
     assert zero_shot.checkpoint is None
     assert (model.source, model.layout) == (zero_shot.source, "ragged")
-    # The checkpoint is in the repr, so a new one refits the stored fits.
-    assert foundation.FINETUNED.hash in repr(model)
-    assert foundation.FINETUNED.sha256[0][1] in repr(model)
+    # The resolved checkpoint is in the repr, so it keys the stored fit.
+    assert fake_checkpoint in repr(model)
+    assert model.checkpoint.sha256[1][1] in repr(model)
 
 
-def test_checkpoint_is_read_from_its_config(tmp_path: Path) -> None:
-    config = tmp_path / "finetune.toml"
-    config.write_text(
-        'hash = "abc"\n[sha256]\n'
-        '"adapter_config.json" = "c1"\n'
-        '"adapter_model.safetensors" = "m1"\n'
+def test_the_models_take_the_latest_release_by_default() -> None:
+    assert foundation.finetuned_spec() == "latest"
+
+
+def _listing(*releases: tuple[str, str, bool]) -> list[dict]:
+    return [
+        {"tag_name": tag, "published_at": at, "draft": draft}
+        for tag, at, draft in releases
+    ]
+
+
+def test_latest_is_the_newest_published_checkpoint_release(
+    releases: Path, monkeypatch: pytest.MonkeyPatch, write_release
+) -> None:
+    for tag_hash in ("old", "new", "draft"):
+        write_release(releases, tag_hash, _ADAPTER, tag_hash)
+    listing = _listing(
+        ("chronos-ft-old", "2026-11-01T00:00:00Z", False),
+        ("round-2026-11-14", "2026-11-20T00:00:00Z", False),
+        ("chronos-ft-new", "2026-11-12T00:00:00Z", False),
+        ("chronos-ft-draft", "2026-11-19T00:00:00Z", True),
     )
-    got = foundation.finetuned_checkpoint(config)
-    assert got == foundation.Checkpoint(
-        "abc",
-        (("adapter_config.json", "c1"), ("adapter_model.safetensors", "m1")),
+    monkeypatch.setattr(foundation, "finetuned_releases", lambda: listing)
+    got = foundation.resolve_checkpoint("latest")
+    assert got == _checkpoint("new")
+    # A pinned hash takes its own release.
+    assert foundation.resolve_checkpoint("old") == _checkpoint("old")
+
+
+def test_a_new_release_changes_the_models_fit_key(
+    releases: Path, monkeypatch: pytest.MonkeyPatch, write_release
+) -> None:
+    for tag_hash in ("one", "two"):
+        write_release(releases, tag_hash, _ADAPTER, tag_hash)
+    listing = _listing(("chronos-ft-one", "2026-11-01T00:00:00Z", False))
+    monkeypatch.setattr(foundation, "finetuned_releases", lambda: listing)
+    before = repr(get_model("fm_chronos_daily_ragged_ft"))
+    listing += _listing(("chronos-ft-two", "2026-11-02T00:00:00Z", False))
+    foundation.resolve_checkpoint.cache_clear()
+    after = repr(get_model("fm_chronos_daily_ragged_ft"))
+    assert "'one'" in before
+    assert "'two'" in after
+    assert before != after
+
+
+def test_unreachable_github_fails_loudly(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, fake_checkpoint
+) -> None:
+    def offline() -> list[dict]:
+        raise ConnectionError("GitHub cannot be reached")
+
+    monkeypatch.setattr(foundation, "finetuned_releases", offline)
+    # Even with a checkpoint cached, no older one is used in its place.
+    cache = tmp_path / "cache"
+    (cache / f"chronos-ft-{fake_checkpoint}").mkdir(parents=True)
+    monkeypatch.setattr(foundation, "FINETUNED_CACHE", str(cache))
+    foundation.resolve_checkpoint.cache_clear()
+    with pytest.raises(ConnectionError):
+        get_model("fm_chronos_weekly_ragged_ft")
+
+
+def test_no_checkpoint_release_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+    listing = _listing(("v0.1.0", "2026-11-04T00:00:00Z", False))
+    monkeypatch.setattr(foundation, "finetuned_releases", lambda: listing)
+    with pytest.raises(LookupError, match="chronos-ft-"):
+        foundation.resolve_checkpoint("latest")
+
+
+@pytest.mark.usefixtures("releases")
+def test_a_release_with_no_checksums_fails() -> None:
+    with pytest.raises(FileNotFoundError, match=r"sha256sums\.txt"):
+        foundation.resolve_checkpoint("nosums")
+
+
+def test_checksums_must_cover_the_adapter(
+    releases: Path, write_release
+) -> None:
+    write_release(releases, "abc", _ADAPTER, "abc")
+    sums = releases / "chronos-ft-abc" / "sha256sums.txt"
+    sums.write_text(
+        "".join(
+            line + "\n"
+            for line in sums.read_text().splitlines()
+            if "adapter_config" not in line
+        )
     )
-    # Every adapter file must be pinned.
-    config.write_text('hash = "abc"\n[sha256]\n"adapter_config.json" = "c"\n')
-    with pytest.raises(ValueError, match=r"adapter_model\.safetensors"):
-        foundation.finetuned_checkpoint(config)
-    # The models' checkpoint is the repository's config.
-    assert foundation.finetuned_checkpoint() == foundation.FINETUNED
+    with pytest.raises(ValueError, match=r"adapter_config\.json"):
+        foundation.resolve_checkpoint("abc")
 
 
 @pytest.mark.skipif(
@@ -432,15 +502,6 @@ def _checkpoint(settings_hash: str) -> foundation.Checkpoint:
     )
 
 
-def _release(root: Path, tag_hash: str, settings_hash: str) -> None:
-    """Write a fake release `chronos-ft-<tag_hash>` under `root`."""
-    assets = root / f"chronos-ft-{tag_hash}"
-    assets.mkdir(parents=True)
-    for name, data in _ADAPTER.items():
-        (assets / name).write_bytes(data)
-    (assets / "settings.json").write_text(json.dumps({"hash": settings_hash}))
-
-
 @pytest.fixture
 def releases(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """An empty fake release store and an empty adapter cache."""
@@ -448,13 +509,14 @@ def releases(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     root.mkdir()
     monkeypatch.setattr(foundation, "FINETUNED_URL", root.as_uri())
     monkeypatch.setattr(foundation, "FINETUNED_CACHE", str(tmp_path / "cache"))
+    foundation.resolve_checkpoint.cache_clear()
     return root
 
 
 def test_adapter_is_downloaded_once_and_cached(
-    releases: Path, tmp_path: Path
+    releases: Path, tmp_path: Path, write_release
 ) -> None:
-    _release(releases, "abc", "abc")
+    write_release(releases, "abc", _ADAPTER, "abc")
     adapter = foundation.finetuned_adapter(_checkpoint("abc"))
     assert adapter == tmp_path / "cache" / "chronos-ft-abc"
     assert (adapter / "adapter_model.safetensors").read_bytes() == b"weights"
@@ -473,18 +535,18 @@ def test_missing_release_fails_and_caches_nothing(tmp_path: Path) -> None:
 
 
 def test_release_of_another_hash_fails_and_caches_nothing(
-    releases: Path, tmp_path: Path
+    releases: Path, tmp_path: Path, write_release
 ) -> None:
-    _release(releases, "abc", "def")
+    write_release(releases, "abc", _ADAPTER, "def")
     with pytest.raises(ValueError, match="def"):
         foundation.finetuned_adapter(_checkpoint("abc"))
     assert not (tmp_path / "cache" / "chronos-ft-abc").exists()
 
 
 def test_adapter_of_another_sha256_fails_and_caches_nothing(
-    releases: Path, tmp_path: Path
+    releases: Path, tmp_path: Path, write_release
 ) -> None:
-    _release(releases, "abc", "abc")
+    write_release(releases, "abc", _ADAPTER, "abc")
     (releases / "chronos-ft-abc" / "adapter_model.safetensors").write_bytes(
         b"other weights"
     )
@@ -493,20 +555,28 @@ def test_adapter_of_another_sha256_fails_and_caches_nothing(
     assert not (tmp_path / "cache" / "chronos-ft-abc").exists()
 
 
-@pytest.mark.usefixtures("releases")
-def test_missing_release_is_stored_as_failed(task: ForecastTask) -> None:
+def test_missing_adapter_is_stored_as_failed(
+    task: ForecastTask, fake_checkpoint
+) -> None:
     from bdbvhubrenewal.evaluation import store
 
-    # As a missing Chronos-2: a failed fit, not a fit with no forecast.
+    # The latest release lists its checksums but the adapter cannot be
+    # downloaded. As a missing Chronos-2: a failed fit, not a fit with no
+    # forecast.
     stored = store.fit("fm_chronos_weekly_ragged_ft", task, {}, "c")
     assert stored.meta["status"] == "failed"
-    assert f"chronos-ft-{foundation.FINETUNED.hash}" in stored.meta["error"]
+    assert f"chronos-ft-{fake_checkpoint}" in stored.meta["error"]
+    # The stored fit records the checkpoint it was keyed on.
+    assert fake_checkpoint in stored.meta["settings"]
 
 
 def test_interrupted_download_fails_and_caches_nothing(
-    releases: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    releases: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    write_release,
 ) -> None:
-    _release(releases, "abc", "abc")
+    write_release(releases, "abc", _ADAPTER, "abc")
 
     def drop(*_: object, **__: object) -> None:
         raise ConnectionResetError("reset")
@@ -517,8 +587,8 @@ def test_interrupted_download_fails_and_caches_nothing(
     assert not (tmp_path / "cache" / "chronos-ft-abc").exists()
 
 
-def test_settings_with_no_hash_fail(releases: Path) -> None:
-    _release(releases, "abc", "abc")
+def test_settings_with_no_hash_fail(releases: Path, write_release) -> None:
+    write_release(releases, "abc", _ADAPTER, "abc")
     (releases / "chronos-ft-abc" / "settings.json").write_text("{}")
     with pytest.raises(ValueError, match="chronos-ft-abc"):
         foundation.finetuned_adapter(_checkpoint("abc"))

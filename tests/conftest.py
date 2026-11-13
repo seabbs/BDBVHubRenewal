@@ -32,6 +32,84 @@ os.environ["BDBV_DATA_DIR"] = str(DATA)
 tidy._DEFAULT_DATA_DIR = DATA
 
 
+FAKE_CHECKPOINT = "fakefake0001"
+"""Settings hash of the fake latest fine-tuned checkpoint release."""
+
+
+def _write_checkpoint_release(
+    root: Path, tag_hash: str, adapter: dict[str, bytes], settings_hash: str
+) -> None:
+    """Write a fake release `chronos-ft-<tag_hash>` under `root`.
+
+    Its assets are the adapter files, `settings.json` and their
+    `sha256sums.txt`, as `scripts/finetune_chronos.py train` writes them.
+    """
+    import hashlib
+    import json
+
+    assets = root / f"chronos-ft-{tag_hash}"
+    assets.mkdir(parents=True)
+    files = {**adapter, "settings.json": json.dumps({"hash": settings_hash})}
+    for name, data in files.items():
+        raw = data.encode() if isinstance(data, str) else data
+        (assets / name).write_bytes(raw)
+    (assets / "sha256sums.txt").write_text(
+        "".join(
+            f"{hashlib.sha256((assets / n).read_bytes()).hexdigest()}  {n}\n"
+            for n in files
+        )
+    )
+
+
+@pytest.fixture(autouse=True)
+def _fake_checkpoint_releases(
+    tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch
+) -> Path:
+    """Resolve the fine-tuned checkpoint from a fake release list.
+
+    No test reaches GitHub. The latest `chronos-ft-*` release is
+    `FAKE_CHECKPOINT`, with its `sha256sums.txt` only.
+    """
+    from bdbvhubrenewal.forecasters import foundation
+
+    root = tmp_path_factory.getbasetemp() / "checkpoint-releases"
+    if not root.exists():
+        _write_checkpoint_release(
+            root, FAKE_CHECKPOINT, {"adapter_model.safetensors": b"w",
+                                    "adapter_config.json": b"{}"},
+            FAKE_CHECKPOINT,
+        )  # fmt: skip
+        for name in ("adapter_model.safetensors", "adapter_config.json"):
+            (root / f"chronos-ft-{FAKE_CHECKPOINT}" / name).unlink()
+    monkeypatch.setattr(foundation, "FINETUNED_URL", root.as_uri())
+    monkeypatch.setattr(
+        foundation,
+        "finetuned_releases",
+        lambda: [
+            {
+                "tag_name": f"chronos-ft-{FAKE_CHECKPOINT}",
+                "published_at": "2026-11-13T12:00:00Z",
+                "draft": False,
+            }
+        ],
+    )
+    foundation.resolve_checkpoint.cache_clear()
+    yield root
+    foundation.resolve_checkpoint.cache_clear()
+
+
+@pytest.fixture
+def write_release():  # type: ignore[no-untyped-def]
+    """Write a fake checkpoint release (`_write_checkpoint_release`)."""
+    return _write_checkpoint_release
+
+
+@pytest.fixture
+def fake_checkpoint() -> str:
+    """Settings hash of the fake latest checkpoint release."""
+    return FAKE_CHECKPOINT
+
+
 @pytest.fixture(autouse=True)
 def _one_province_at_a_time(monkeypatch: pytest.MonkeyPatch) -> None:
     """Fit per-province variants in this process, where stand-ins reach.
