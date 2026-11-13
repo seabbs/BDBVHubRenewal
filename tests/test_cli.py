@@ -641,3 +641,32 @@ def test_data_defaults_follow_bdbv_data_dir(
     monkeypatch.setenv("BDBV_DATA_DIR", "elsewhere")
     args = build_parser().parse_args(argv)
     assert getattr(args, attr) == f"elsewhere{path}"
+
+
+@pytest.mark.usefixtures("in_root")
+def test_cli_fit_store_archives_a_rounds_fits(
+    flat_model: str, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from bdbvhubrenewal.forecasters import base
+
+    factory = base._REGISTRY[flat_model].factory
+    monkeypatch.setattr(
+        base,
+        "_REGISTRY",
+        {"flat": base.ModelSpec("flat", factory, "Fitted.", fitted=True)},
+    )
+    store = tmp_path / "store"
+    fit = ["fit-store", "fit", "--store", str(store), "--model", "flat"]
+    assert main([*fit, "--origin", "2026-10-24"]) == 0
+    out = tmp_path / "archive" / "candidates.csv.gz"
+    args = ["fit-store", "archive", "--store", str(store), "--out", str(out)]
+    args += ["--origins", "2026-10-24", "--closes", "2099-01-01T00:00:00+01:00"]
+    assert main(args) == 0
+    table = pd.read_csv(out)
+    assert set(table["vintage"]) == {"2026-10-24"}
+    assert table["prospective"].all()
+    assert table["current"].all()
+    assert main([*args[:-2], "--closes", "2020-01-01T00:00:00+01:00"]) == 0
+    assert not pd.read_csv(out)["prospective"].any()
+    # The round close is needed.
+    assert main(args[:-2]) == 1

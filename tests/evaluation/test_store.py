@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import dataclasses
+import datetime as dt
 import json
 import shutil
 from pathlib import Path
@@ -437,3 +438,63 @@ def test_a_model_with_no_config_stores_no_files(
 ) -> None:
     stored = store.fit(fitted_flat, tasks[sorted(tasks)[-1]], {}, "c")
     assert stored.files == {}
+
+
+def _fitted_at(stored: store.StoredFit, when: str) -> store.StoredFit:
+    """Return the fit as if it were made at `when`."""
+    return dataclasses.replace(stored, meta={**stored.meta, "fitted_at": when})
+
+
+def test_the_archive_keeps_each_models_fit_at_the_round_close(
+    fitted_flat: str, tasks: dict[str, ForecastTask], tmp_path: Path
+) -> None:
+    from bdbvhubrenewal.evaluation import store_archive
+
+    root = tmp_path / "store"
+    keys = store.current_keys(tasks, [fitted_flat], {}, "c")
+    closes = dt.datetime.fromisoformat("2026-11-10T23:00:00+01:00")
+    before, after = "2026-11-10T21:00:00+00:00", "2026-11-10T22:30:00+00:00"
+    origins = sorted(tasks)
+    prospective, refitted, backfilled, broken = origins[-4:]
+    # A fit of this code made before the close.
+    store.write_fit(
+        root,
+        _fitted_at(store.fit(fitted_flat, tasks[prospective], {}, "c"), before),
+    )
+    # A fit of older code before the close and of this code after it.
+    old = _fitted_at(store.fit(fitted_flat, tasks[refitted], {}, "old"), before)
+    store.write_fit(root, old)
+    store.write_fit(
+        root,
+        _fitted_at(store.fit(fitted_flat, tasks[refitted], {}, "c"), after),
+    )
+    # Only a fit made after the close.
+    late = _fitted_at(store.fit(fitted_flat, tasks[backfilled], {}, "c"), after)
+    store.write_fit(root, late)
+    # A failed fit, and an origin with none, have no rows.
+    meta = {**late.meta, "origin": broken, "key": keys[(fitted_flat, broken)]}
+    store.write_fit(root, store.failed(meta, RuntimeError("x")))
+
+    table = store_archive.archive(root, keys, closes)
+    by_origin = table.groupby("vintage").first()
+    assert set(by_origin.index) == {prospective, refitted, backfilled}
+    assert set(table["model"]) == {fitted_flat}
+    got = by_origin.loc[prospective]
+    assert got["fitted_at"] == before
+    assert got["key"] == keys[(fitted_flat, prospective)]
+    assert bool(got["current"])
+    assert bool(got["prospective"])
+    got = by_origin.loc[refitted]
+    assert got["key"] == old.meta["key"]
+    assert got["commit"] == old.meta["commit"]
+    assert not bool(got["current"])
+    assert bool(got["prospective"])
+    got = by_origin.loc[backfilled]
+    assert got["fitted_at"] == after
+    assert bool(got["current"])
+    assert not bool(got["prospective"])
+    # Every week and sample of the stored forecast is kept.
+    rows = table.loc[table["vintage"] == backfilled, late.forecasts.columns]
+    pd.testing.assert_frame_equal(
+        rows.reset_index(drop=True), late.forecasts, check_dtype=False
+    )
