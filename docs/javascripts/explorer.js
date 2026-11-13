@@ -134,8 +134,9 @@
         "aria-label": "Forecasts by week for the selected location" }, figure);
       var plot = Z.clip(svg, { L: L, R: R, T: T, B: B, W: W, H: H });
       var cut = day(d.complete_through);
-      if (cut < x1) {
-        var sx = Math.max(X(cut + 3.5 * DAY), L);
+      // Shade the weeks after the last complete one, if any are shown.
+      var sx = Math.max(X(cut + 3.5 * DAY), L);
+      if (sx < W - R) {
         el("rect", { x: sx, y: T, width: W - R - sx, height: H - T - B,
           class: "explorer-shade" }, plot);
       }
