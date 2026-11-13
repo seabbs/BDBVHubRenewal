@@ -47,8 +47,9 @@ def _rows(models: tuple[tuple[str, float], ...]) -> pd.DataFrame:
 
 def _scores(path: Path) -> None:
     path.mkdir(parents=True)
-    ours = (("randomwalk", 10.0), ("randomwalknowcast", 5.0))
-    _rows(ours).to_csv(path / "scores.csv.gz", index=False)
+    ours = _rows((("randomwalk", 10.0), ("randomwalknowcast", 5.0)))
+    held = ours.assign(origin="2022-03-01")
+    pd.concat([ours, held]).to_csv(path / "scores.csv.gz", index=False)
     _rows((("KIT", 4.0),)).to_csv(path / "teams.csv.gz", index=False)
 
 
@@ -58,6 +59,7 @@ def test_page_tables_and_summaries(tmp_path: Path) -> None:
     fig, gen = tmp_path / "figures", tmp_path / "generated"
     germany_page(fig, gen, res, CONFIG)
     table = (gen / "germany-scores.md").read_text()
+    assert CONFIG.split_date in table
     assert "randomwalknowcast" in table
     assert "| KIT " in table
     assert "rel_wis" in table
@@ -69,6 +71,7 @@ def test_page_tables_and_summaries(tmp_path: Path) -> None:
     assert names["DE-BY"] == "Bavaria"
     assert names["80+"] == "Age 80+"
     assert data["models"][data["baseline"]]["name"] == "randomwalknowcast"
+    assert data["origins"] == ["2021-12-01"]
     assert [m["name"] for m in data["models"]][-1] == "KIT"
     keys = [m["key"] for m in data["metrics"]]
     assert keys == ["wis", "ae_median", "coverage_50", "coverage_95"]

@@ -11,15 +11,17 @@ from scipy.stats import norm
 
 from bdbvhubrenewal.data.germany import HORIZONS, hub_target, read_triangle
 from bdbvhubrenewal.evaluation.germany import (
-    BASELINE,
+    PAPER_COLUMNS,
     QUANTILE_LEVELS,
     SCORE_COLUMNS,
-    germany_backtest,
-    germany_teams,
+    germany_forecasts,
     load_germany_config,
     nowcast_dates,
+    paper_forecasts,
     relative_scores,
+    score_germany,
     team_forecasts,
+    with_truth,
 )
 from bdbvhubrenewal.evaluation.nowcast import rolling_truth
 
@@ -35,21 +37,28 @@ def triangle() -> pd.DataFrame:
 
 
 @pytest.fixture(scope="module")
-def scores(triangle: pd.DataFrame) -> pd.DataFrame:
-    return germany_backtest(
+def forecasts(triangle: pd.DataFrame) -> pd.DataFrame:
+    drawn = germany_forecasts(
         ["randomwalk", "randomwalknowcast"],
         triangle,
         ["2021-10-04", "2021-10-05"],
         n_samples=30,
         seed=1,
-        truth_delay=10,
     )
+    return with_truth(drawn, triangle, truth_delay=10)
+
+
+@pytest.fixture(scope="module")
+def scores(forecasts: pd.DataFrame) -> pd.DataFrame:
+    return score_germany(forecasts, truth_delay=10)
 
 
 def test_config_gives_the_paper_s_dates_and_an_explicit_model_set() -> None:
     config = load_germany_config(ROOT / "config" / "germany.toml")
-    dates = nowcast_dates(config)
-    assert (dates[0], dates[-1], len(dates)) == (
+    every = nowcast_dates(config, held_out=False) + nowcast_dates(
+        config, held_out=True
+    )
+    assert (every[0], every[-1], len(every)) == (
         "2021-11-22",
         "2022-04-29",
         159,
@@ -57,6 +66,25 @@ def test_config_gives_the_paper_s_dates_and_an_explicit_model_set() -> None:
     assert config.models == ("randomwalk", "randomwalknowcast")
     assert config.truth_delay == 40
     assert config.submissions
+    assert config.baseline == "randomwalknowcast"
+    assert config.paper_baseline == "KIT-frozen_baseline"
+
+
+def test_the_later_half_of_the_dates_is_held_out() -> None:
+    config = load_germany_config(ROOT / "config" / "germany.toml")
+    assert config.split_date == "2022-02-10"
+    development = nowcast_dates(config)
+    held = nowcast_dates(config, held_out=True)
+    assert development[-1] < config.split_date <= held[0]
+    assert len(development) - len(held) in (0, 1)
+
+
+def test_our_quantiles_are_the_samples_quantiles_at_the_hub_s_levels(
+    forecasts: pd.DataFrame,
+) -> None:
+    per = forecasts.groupby(["model", "origin", "location", "horizon"])
+    assert (per["quantile"].apply(tuple) == QUANTILE_LEVELS).all()
+    assert per["value"].is_monotonic_increasing.all()
 
 
 def test_scores_are_quantile_scores_on_the_d_day_truth(
@@ -83,12 +111,13 @@ def test_sums_with_no_release_d_days_on_are_not_scored(
     assert scores["target_end_date"].max() <= "2021-10-10"
 
 
-def test_relative_scores_are_against_randomwalknowcast(
+def test_relative_scores_are_against_the_baseline_given(
     scores: pd.DataFrame,
 ) -> None:
-    assert BASELINE == "randomwalknowcast"
-    rel = relative_scores(scores, ("pool",)).set_index(["pool", "model"])
-    assert rel.loc[("national", BASELINE), "rel_wis"] == pytest.approx(1)
+    for base in ("randomwalknowcast", "randomwalk"):
+        rel = relative_scores(scores, ("pool",), base)
+        rel = rel.set_index(["pool", "model"])
+        assert rel.loc[("national", base), "rel_wis"] == pytest.approx(1)
     assert (rel["n"] > 0).all()
     assert {"coverage_50", "coverage_95", "rel_ae_median"} <= set(rel.columns)
 
@@ -189,7 +218,8 @@ def test_teams_are_scored_as_our_models(
     submissions: pd.DataFrame,
     scores: pd.DataFrame,
 ) -> None:
-    teams = germany_teams(submissions, triangle, truth_delay=10)
+    quantiles = team_forecasts(submissions, ["2021-10-04"])
+    teams = score_germany(with_truth(quantiles, triangle, 10), 10)
     assert set(SCORE_COLUMNS) <= set(teams.columns)
     assert list(teams.columns) == list(scores.columns)
     cell = ["origin", "location", "target_end_date"]
@@ -198,3 +228,28 @@ def test_teams_are_scored_as_our_models(
     assert (both["truth_x"] == both["truth_y"]).all()
     assert (both["truth_vintage_x"] == both["truth_vintage_y"]).all()
     assert set(teams["pool"]) == {"national", "states", "age"}
+
+
+def test_team_forecasts_keep_the_dates_given(
+    submissions: pd.DataFrame,
+) -> None:
+    assert team_forecasts(submissions, ["2021-10-05"]).empty
+
+
+def test_paper_table_follows_the_paper_schema(
+    forecasts: pd.DataFrame,
+) -> None:
+    paper = paper_forecasts(forecasts)
+    assert list(paper.columns) == list(PAPER_COLUMNS)
+    assert set(paper["study"]) == {"germany"}
+    assert paper["sample_id"].isna().all()
+    ages = paper.loc[paper["stratum"] != "all"]
+    assert set(ages["location"]) == {"DE"}
+    assert set(ages["stratum"]) == {
+        "00-04", "05-14", "15-34", "35-59", "60-79", "80+"
+    }  # fmt: skip
+    days = pd.to_datetime(paper["target_date"]) - pd.to_datetime(
+        paper["origin_date"]
+    )
+    assert (days.dt.days == paper["horizon"]).all()
+    assert len(paper) == len(forecasts)

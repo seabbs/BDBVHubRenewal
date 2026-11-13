@@ -600,6 +600,7 @@ def _germany_data(tmp_path: Path) -> tuple[Path, Path]:
     text = text.replace('"2021-11-22"', '"2021-10-04"')
     text = text.replace('"2022-04-29"', '"2021-10-05"')
     text = text.replace("delay = 40", "delay = 10")
+    text = text.replace('"2022-02-10"', '"2021-10-06"')
     config = tmp_path / "germany.toml"
     config.write_text(text)
     return data, config
@@ -614,6 +615,8 @@ def test_cli_germany_backtest_scores_a_block_of_dates(tmp_path: Path) -> None:
     scores = pd.read_csv(out / "scores.csv.gz")
     assert set(scores["origin"]) == {"2021-10-05"}
     assert set(scores["model"]) == {"randomwalk"}
+    forecasts = pd.read_csv(out / "forecasts.csv.gz")
+    assert set(forecasts["origin"]) == {"2021-10-05"}
 
 
 def test_cli_germany_teams_scores_the_hub_teams(tmp_path: Path) -> None:
@@ -644,6 +647,14 @@ def test_cli_germany_teams_scores_the_hub_teams(tmp_path: Path) -> None:
     teams = pd.read_csv(out / "teams.csv.gz")
     assert set(teams["model"]) == {"KIT", "KIT-frozen_baseline"}
     assert len(teams) == 2
+    assert (out / "teams-forecasts.csv.gz").exists()
+    assert main(["germany-paper", "--config", str(config), "--results",
+                 str(out)]) == 0  # fmt: skip
+    paper = pd.read_csv(out / "paper-forecasts.csv.gz")
+    assert set(paper["model"]) == {"KIT", "KIT-frozen_baseline"}
+    meta = json.loads((out / "paper-forecasts.json").read_text())
+    assert meta["split_date"] == "2021-10-06"
+    assert meta["baseline"] == "KIT-frozen_baseline"
 
 
 def _outside_repo(tmp_path: Path) -> tuple[Path, dict[str, str]]:
