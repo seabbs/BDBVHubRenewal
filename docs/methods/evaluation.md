@@ -172,18 +172,24 @@ A round is pending until a later real release exists.
 The German COVID-19 hospitalisation nowcasting hub[^wolffram] collected nowcasts of the 7-day hospitalisation incidence by Meldedatum, the date a case was reported positive, for Germany, its 16 states and six age groups.
 `randomwalk` and `randomwalknowcast` run on its data unchanged, as follows.
 
-1. Each day's data version is a release whose cut-off is that day, and the Meldedatum is the onset date. A release's count of a day is the count reported by then in the hub's reporting triangle, with the changes after 80 days put at 81 days, as epinowcast's `germany_covid19_hosp` does.
-2. Germany is the country. The states are its provinces in one task and the age groups its provinces in another. Germany's nowcast is the sum of the states.
+1. Each day's data version is a release whose cut-off is that day, and the Meldedatum is the onset date. A release's count of a day is the count reported by then in the hub's reporting triangle, with the changes after 80 days put at 81 days, as epinowcast's `germany_covid19_hosp` does. A day's last count is carried to every later release.
+2. Germany is the country. The states are its provinces in one task and Germany's age groups its provinces in another. Germany's nowcast is the sum of the states.
 3. Hub weeks end on Saturdays, so every date of a nowcast moves forward by the 0 to 6 days to the next Saturday. The 7-day sums ending on the nowcast date and 7, 14, 21 and 28 days before it are then hub weeks, and the nowcasts move back.
 
 The nowcast dates are the paper's, every day from 2021-11-22 to 2022-04-29.
+They are split at their midpoint.
+The 80 dates before 2022-02-10 are for developing and checking our setup.
+The 79 dates from 2022-02-10 on are held out for the paper and are not scored here.
 The hub collected nowcasts as quantiles at the levels 2.5%, 10%, 25%, 50%, 75%, 90% and 97.5%.
-Our models' samples are reduced to their quantiles at these levels.
+Our models' samples are reduced to their quantiles at these levels, as for a hub submission.
 Our models and the hub teams are then scored the same way, as the paper did.
 The scores are the WIS of the seven quantiles, the absolute error of the median and the coverage of the 50% and 95% intervals.
 Each 7-day sum's truth is its count in the data 40 days after it ends, the paper's 40-day truth.
 The backtest can score its complete weeks the same way, on the first release $D$ days after each week, in place of the latest release.
 Relative scores divide a model's mean score by `randomwalknowcast`'s on the nowcasts both made.
+The paper's relative scores divide by the hub's own baseline, `KIT-frozen_baseline`.
+Both baselines are set in `config/germany.toml`.
+`bdbvhubrenewal germany-paper` writes every forecast, with its truth, as the paper's long table.
 
 The teams' nowcasts are those the paper gathered, prospective and retrospective, at the horizons our models give.
 Two fixes are the paper's.
