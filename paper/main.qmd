@@ -190,6 +190,7 @@ Placeholder: Ebola hub submissions results panel.
   - More case studies.
   - A comparison with custom neural networks.
   - Testing the fine-tuned model as an emulator of epinowcast.
+  - Fine-tuning with other epidemiological features as covariates, such as distances between locations or mobility.
 - **Conclusions.**
   - Reuse state-of-the-art generic forecasting models with domain-specific insight.
   - Fine-tuning on a package's simulations could give a fast emulator of that package, which may help other long-running packages.
