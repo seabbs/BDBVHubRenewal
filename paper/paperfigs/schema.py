@@ -103,8 +103,10 @@ def validate_forecasts(df: pd.DataFrame) -> pd.DataFrame:
     spread = truth.transform("max") - truth.transform("min")
     if (spread > 0).any():
         raise ValueError("truth differs between rows of one forecast.")
-    has_median = groups["quantile_level"].agg(
-        lambda q: bool(np.isclose(q, 0.5).any())
+    has_median = (
+        out.assign(_median=np.isclose(lvl, 0.5))
+        .groupby(keys, sort=False, dropna=False)["_median"]
+        .any()
     )
     if not has_median.all():
         raise ValueError("Every forecast needs the quantile level 0.5.")

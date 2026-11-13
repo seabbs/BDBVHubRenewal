@@ -119,8 +119,14 @@ def score_forecasts(forecasts: pd.DataFrame) -> pd.DataFrame:
         return pd.DataFrame(columns=[*keys, "truth", *SCORE_COLUMNS])
     # Forecasts are scored in blocks that share their quantile levels, so
     # a model with fewer levels is still scored on what it gave.
-    sig = df.groupby(keys, sort=False)["quantile_level"].transform(
-        lambda s: ",".join(f"{v:.4f}" for v in sorted(s))
+    lvl = df["quantile_level"].astype(float)
+    g = df.assign(_l=lvl, _l2=lvl**2).groupby(keys, sort=False)
+    sig = (
+        g["_l"].transform("size").astype(str)
+        + "|"
+        + g["_l"].transform("sum").round(6).astype(str)
+        + "|"
+        + g["_l2"].transform("sum").round(6).astype(str)
     )
     parts = [_score_block(b) for _, b in df.groupby(sig, sort=False)]
     out = pd.concat(parts, ignore_index=True)
