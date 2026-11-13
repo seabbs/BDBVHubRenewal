@@ -1,0 +1,177 @@
+---
+title: "Title to be chosen"
+# Candidate titles:
+# 1. Fine-tuning a time series foundation model on synthetic outbreaks for nowcasting and forecasting
+# 2. Teaching a foundation model to nowcast with domain-informed synthetic data
+# 3. Off-the-shelf forecasting models with domain knowledge for real-time infectious disease surveillance
+date: today
+format:
+  html:
+    toc: false
+    number-sections: false
+  pdf:
+    number-sections: false
+bibliography: reference.bib
+---
+
+<!--
+Plan from #206.
+Each top-level bullet is one paragraph, with 2–3 supporting points.
+-->
+
+## Introduction
+
+::: {.callout-note title="Plan"}
+- **The gap.**
+  - Real-time case counts are incomplete because of reporting delays.
+  - Generic forecasting models do not use the reporting structure.
+- **Context.**
+  - Nowcasting methods model reporting delays directly.
+  - Time series foundation models forecast well with no training on the target data.
+- **What we did.**
+  - We fine-tuned a foundation model on synthetic outbreak data.
+  - We evaluated it retrospectively and prospectively.
+:::
+
+## Methods
+
+### Data
+
+::: {.callout-note title="Plan"}
+- The German COVID-19 hospitalisation nowcast hub.
+- The Ebola forecasting hub target and its releases.
+:::
+
+### Baseline
+
+::: {.callout-note title="Plan"}
+- `randomwalknowcast`.
+- Full detail in the SI.
+:::
+
+### Foundation model setup and fine-tuning
+
+::: {.callout-note title="Plan"}
+- Chronos-2, given the reporting triangle as series.
+- One fine-tune on synthetic data, run on a laptop.
+:::
+
+### Synthetic data generation
+
+::: {.callout-note title="Plan"}
+- Simulated with epinowcast over a grid of outbreak, delay and noise settings.
+- A table in the main text gives the grid of synthetic scenarios.
+- The full process and an overview of the epinowcast model used are in the SI.
+:::
+
+::: {#tbl-synthetic-grid}
+| Setting  | Values |
+|----------|--------|
+| Outbreak |        |
+| Delay    |        |
+| Noise    |        |
+
+Placeholder: grid of synthetic scenarios.
+:::
+
+### Case study 1: German nowcast hub
+
+::: {.callout-note title="Plan"}
+- Compared with the hub's models, and evaluated as the hub did.
+- Daily and weekly versions may not both make sense here.
+:::
+
+### Case study 2: prospective submission to the Ebola forecasting hub
+
+::: {.callout-note title="Plan"}
+- Compared with the other submissions, and evaluated as the hub does.
+- Our models' forecasts are saved prospectively, alongside the main submissions as they were made.
+:::
+
+## Results
+
+::: {.callout-note title="Plan"}
+Each section has a figure panel.
+Each panel shows:
+
+- nowcasts over time (ribbons);
+- scores relative to the baseline, with natural- and log-scale WIS (or CRPS, MAE where they make sense);
+- bias;
+- 50% and 90% coverage;
+- score variation by location and horizon, supported by SI plots.
+
+The plots in primarycensored-paper are a model for these.
+Each section has two paragraphs, one on visual performance and one summarising scores.
+:::
+
+### Held-out synthetic data
+
+::: {.callout-note title="Plan"}
+- Visual performance of the candidate models and the baseline.
+- A summary of score performance.
+:::
+
+::: {#fig-synthetic}
+Figure to come.
+
+Placeholder: held-out synthetic data results panel.
+:::
+
+### German nowcast hub
+
+::: {.callout-note title="Plan"}
+- Visual performance against the other models.
+- A summary of score performance.
+:::
+
+::: {#fig-germany}
+Figure to come.
+
+Placeholder: German nowcast hub results panel.
+:::
+
+### Ebola hub submissions
+
+::: {.callout-note title="Plan"}
+- Visual performance against the other submissions.
+- A summary of score performance.
+:::
+
+::: {#fig-ebola}
+Figure to come.
+
+Placeholder: Ebola hub submissions results panel.
+:::
+
+## Discussion
+
+::: {.callout-note title="Plan"}
+- **Summary** of what we did.
+- **Strengths and weaknesses.**
+  - Weaknesses: only one foundation model, only one source of synthetic data, and limited case studies.
+  - Strengths: both retrospective and real-time case studies, synthetic data that are easy to tune to a setting, and tuning on a laptop, so it is accessible.
+- **Domain knowledge through synthetic data.**
+  - Domain knowledge enters through the synthetic data source.
+  - Fingers crossed it improves results; to fill in from the results.
+- **Against the literature.**
+  - Other uses of foundation models in infectious disease modelling.
+  - Fine-tuning in other domains.
+  - Other nowcasting approaches.
+- **Further work.**
+  - Other foundation models.
+  - More case studies.
+  - A comparison with custom neural networks.
+- **Conclusions.**
+  - Reuse state-of-the-art generic forecasting models with domain-specific insight.
+  - It shows promise, and more work is needed.
+:::
+
+## Funding {.appendix}
+
+## Acknowledgements {.appendix}
+
+## Data and software availability {.appendix}
+
+## AI disclosure {.appendix}
+
+# References {.unnumbered}

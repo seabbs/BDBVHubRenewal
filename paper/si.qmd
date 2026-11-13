@@ -1,0 +1,35 @@
+---
+title: "Supporting Information: title to be chosen"
+date: today
+format:
+  html:
+    toc: true
+    number-sections: false
+  pdf:
+    toc: true
+    number-sections: false
+bibliography: reference.bib
+---
+
+<!--
+Plan from #206.
+One SI section per paper section.
+-->
+
+# Methods
+
+::: {.callout-note title="Plan"}
+- `randomwalknowcast` in full.
+- Foundation model setup and fine-tuning settings.
+- Synthetic data generation in full, with an overview of the epinowcast model used.
+- Scoring, and its check against scoringutils.
+:::
+
+# Results
+
+::: {.callout-note title="Plan"}
+- Score breakdowns by location and horizon for each case study.
+- WIS over time for each case study.
+:::
+
+# References {.unnumbered}
