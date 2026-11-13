@@ -101,6 +101,33 @@ def test_age_groups_are_germany_s_only(triangle: pd.DataFrame) -> None:
     pd.testing.assert_frame_equal(got.daily_history, want.daily_history)
 
 
+def test_each_release_carries_every_meldedatum_reported_by_then(
+    triangle: pd.DataFrame,
+) -> None:
+    # The hub's triangle stops a Meldedatum's rows 81 days on, so a
+    # release must carry the last count of older dates forward rather than
+    # drop them.
+    delay = pd.to_datetime(triangle["report_date"]) - pd.to_datetime(
+        triangle["reference_date"]
+    )
+    short = triangle.loc[delay.dt.days <= 10]
+    states = nowcast_tasks(short, NOWCAST, n_samples=20, seed=1)[0]
+    daily = states.daily_history
+    latest = daily.loc[daily["vintage"] == daily["vintage"].max()]
+    first = short.loc[
+        (short["location"] == "DE") & (short["age_group"] == "00+")
+    ].sort_values("report_date")
+    want = first.groupby("reference_date")["confirm"].last()
+    got = latest.loc[latest["location"] == NATIONAL].set_index("onset_date")
+    shift = states.reference_date - dt.date.fromisoformat(NOWCAST)
+    moved = {
+        (dt.date.fromisoformat(d) + shift).isoformat(): v
+        for d, v in want.items()
+        if v != 0
+    }
+    assert got["observed"].to_dict() == moved
+
+
 def test_dates_move_to_the_next_saturday(tasks) -> None:
     for task in tasks:
         # 2021-10-20 is a Wednesday, three days before a Saturday.
