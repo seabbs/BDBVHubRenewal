@@ -20,6 +20,7 @@ from matplotlib.figure import Figure
 from paperfigs.checkpoints import drop_checkpoints
 from paperfigs.factors import factor_label
 from paperfigs.grid import grid_levels, read_grid
+from paperfigs.joint import relative_joint_scores
 from paperfigs.nowcasts import (
     other_places,
     pick_origins,
@@ -41,10 +42,12 @@ from paperpipe.meta import DUMMY_LABEL
 
 __all__ = [
     "FIGURES",
+    "JOINT_STUDIES",
     "MAIN_TABLES",
     "SI_TABLES",
     "design_tables",
     "figure_names",
+    "joint_table",
     "score_tables",
     "to_markdown",
     "write_figures",
@@ -81,6 +84,9 @@ FIGURES: Final[dict[str, dict[str, tuple[str, ...]]]] = {
     },
 }
 """Figure names of each study, for the main text and the SI."""
+
+JOINT_STUDIES: Final = ("synthetic", "ebola")
+"""Studies scored on sample trajectories, so also scored jointly."""
 
 MAIN_TABLES: Final = ("scores",)
 """Main-text tables of every study; the synthetic study adds `grid`."""
@@ -369,3 +375,24 @@ def design_tables(grid: Path, main_dir: Path, si_dir: Path) -> list[Path]:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(to_markdown(part))
     return list(paths)
+
+
+def joint_table(scores: pd.DataFrame, path: Path) -> Path:
+    """Write the mean joint scores relative to the baseline, as Markdown.
+
+    Parameters
+    ----------
+    scores : pandas.DataFrame
+        `paperfigs.joint.joint_scores` output for one study.
+    path : pathlib.Path
+        The table, `<study>-joint.md`.
+
+    Returns
+    -------
+    pathlib.Path
+        The table written.
+    """
+    table = relative_joint_scores(scores)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(to_markdown(table))
+    return path

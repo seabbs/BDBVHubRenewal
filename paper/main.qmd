@@ -181,6 +181,12 @@ Placeholder summary from the workflow: the best model was {{< meta results.synth
 Held-out synthetic data: mean scores, coverage and number of forecasts of each model, with scores relative to {{< meta results.synthetic.baseline >}}. {{< meta results.synthetic.label >}}
 :::
 
+::: {#tbl-synthetic-joint}
+{{< include build/tables/main/synthetic-joint.md >}}
+
+Held-out synthetic data: mean energy and variogram scores of each model's trajectories on log(x + 1) counts, and their ratio to {{< meta results.synthetic.baseline >}} on the forecasts both made. {{< meta results.synthetic.label >}}
+:::
+
 ### German nowcast hub
 
 ::: {.callout-note title="Plan"}
@@ -222,6 +228,12 @@ Placeholder summary from the workflow: the best model was {{< meta results.ebola
 {{< include build/tables/main/ebola-scores.md >}}
 
 Ebola hub submissions: mean scores, coverage and number of forecasts of each model, with scores relative to {{< meta results.ebola.baseline >}}. {{< meta results.ebola.label >}}
+:::
+
+::: {#tbl-ebola-joint}
+{{< include build/tables/main/ebola-joint.md >}}
+
+Ebola hub submissions: mean energy and variogram scores of each model's trajectories on log(x + 1) counts, and their ratio to {{< meta results.ebola.baseline >}} on the forecasts both made. {{< meta results.ebola.label >}}
 :::
 
 ## Discussion

@@ -92,6 +92,9 @@ def test_development_writes_main_and_si_outputs(development: Path) -> None:
         assert list((development / "figures" / "si").glob(f"{study}-*.png"))
         assert list((development / "tables" / "si").glob(f"{study}-*.csv"))
     assert (development / "tables" / "main" / "synthetic-grid.csv").is_file()
+    for study in ("synthetic", "ebola"):
+        joint = development / "tables" / "main" / f"{study}-joint.md"
+        assert "rel_energy_log" in joint.read_text()
     for part in ("main", "si"):
         design = development / "tables" / part / "synthetic-design.md"
         assert "Delay family" in design.read_text()

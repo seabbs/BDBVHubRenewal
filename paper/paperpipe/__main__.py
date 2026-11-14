@@ -8,6 +8,8 @@ Steps, in workflow order:
   guard;
 - `truth`: the rolling truth, D days after each target date;
 - `scores`: the forecasts scored against the truth;
+- `joint-scores`: sample trajectories scored jointly (energy and variogram
+  scores);
 - `figures` and `score-tables`: main-text and SI outputs;
 - `design-tables`: the simulation grid for the main text and SI;
 - `summary`: the numbers the paper quotes, as Quarto metadata.
@@ -23,6 +25,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from paperfigs.joint import joint_scores
 from paperfigs.schema import validate_forecasts, validate_observations
 from paperfigs.scores import score_forecasts
 from paperfigs.truth import attach_truth, rolling_truth
@@ -32,7 +35,12 @@ from paperpipe.config import (
     run_settings,
 )
 from paperpipe.meta import read_meta, write_meta
-from paperpipe.outputs import design_tables, score_tables, write_figures
+from paperpipe.outputs import (
+    design_tables,
+    joint_table,
+    score_tables,
+    write_figures,
+)
 from paperpipe.studies import (
     NO_SOURCES,
     Sources,
@@ -153,6 +161,13 @@ def _figures(a: argparse.Namespace) -> None:
     )
 
 
+def _joint(a: argparse.Namespace) -> None:
+    fc = validate_forecasts(_read(a.forecasts))
+    scores = joint_scores(attach_truth(fc, _read(a.truth)))
+    _write(scores, a.out)
+    joint_table(scores, a.table)
+
+
 def _design_tables(a: argparse.Namespace) -> None:
     design_tables(a.grid, a.main_dir, a.si_dir)
 
@@ -251,6 +266,13 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("score-tables")
     _outputs(p)
     p.set_defaults(run=_score_tables)
+
+    p = sub.add_parser("joint-scores")
+    p.add_argument("--forecasts", type=Path, required=True)
+    p.add_argument("--truth", type=Path, required=True)
+    p.add_argument("--out", type=Path, required=True)
+    p.add_argument("--table", type=Path, required=True)
+    p.set_defaults(run=_joint)
 
     p = sub.add_parser("design-tables")
     p.add_argument("--grid", type=Path, required=True)

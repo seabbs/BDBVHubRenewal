@@ -37,7 +37,12 @@ PAPER = Path(workflow.basedir).parent
 sys.path.insert(0, str(PAPER))
 
 from paperpipe.config import MODES, run_settings  # noqa: E402
-from paperpipe.outputs import MAIN_TABLES, SI_TABLES, figure_names  # noqa: E402
+from paperpipe.outputs import (  # noqa: E402
+    JOINT_STUDIES,
+    MAIN_TABLES,
+    SI_TABLES,
+    figure_names,
+)
 
 
 configfile: str(PAPER / "workflow" / "config.yaml")
@@ -147,7 +152,12 @@ def outputs(mode):
         f"{R}/{mode}/tables/{part}/synthetic-design.md"
         for part in ("main", "si")
     ]
-    return design + [
+    joint = [
+        f"{R}/{mode}/tables/main/{study}-joint.md"
+        for study in STUDIES
+        if study in JOINT_STUDIES
+    ]
+    return design + joint + [
         path
         for study in STUDIES
         for path in [*figures(mode, study), *tables(mode, study)]
@@ -303,6 +313,18 @@ rule scores:
     shell:
         "{PYTHON} -m paperpipe scores --forecasts {input.forecasts} "
         "--truth {input.truth} --out {output}"
+
+
+rule joint_scores:
+    input:
+        forecasts=rules.table.output,
+        truth=rules.truth.output,
+    output:
+        scores=f"{R}/{{mode}}/scores/{{study}}-joint.csv.gz",
+        table=f"{R}/{{mode}}/tables/main/{{study}}-joint.md",
+    shell:
+        "{PYTHON} -m paperpipe joint-scores --forecasts {input.forecasts} "
+        "--truth {input.truth} --out {output.scores} --table {output.table}"
 
 
 def study_split(mode, study):
