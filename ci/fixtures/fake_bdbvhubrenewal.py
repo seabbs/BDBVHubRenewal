@@ -22,7 +22,7 @@ candidate id the step script exports as `CAND_ID`. Scenarios:
 
 `fit-store unpack` writes what `fit` would, as the stored fit's
 directory, with `store.json`. `fit-store plan` lists nothing to fit.
-`fit-store archive` writes a stored and an unfitted model's rows.
+`fit-store archive` writes a stored and an unfitted model's hub rows.
 
 Unknown candidates default to `pass`. `randomwalk=implausible` breaks
 the random walk baseline too, which is how the dry run reaches a skip.
@@ -227,7 +227,7 @@ def cmd_fit(args: argparse.Namespace, stored: bool = False) -> int:
 
 def cmd_fit_store(args: argparse.Namespace) -> int:
     """`fit-store plan` lists nothing; `unpack` writes a stored fit;
-    `archive` writes one model's stored forecast."""
+    `archive` writes two models' hub rows, a zone's included."""
     if args.action == "archive":
         out = Path(args.out)
         out.parent.mkdir(parents=True, exist_ok=True)
@@ -237,9 +237,13 @@ def cmd_fit_store(args: argparse.Namespace) -> int:
                 [
                     "model",
                     "vintage",
-                    "location",
+                    "reference_date",
+                    "forecast_date",
+                    "target",
                     "target_end_date",
-                    "sample",
+                    "location",
+                    "output_type",
+                    "output_type_id",
                     "value",
                     "key",
                     "commit",
@@ -248,17 +252,22 @@ def cmd_fit_store(args: argparse.Namespace) -> int:
                 ]
             )
             key, commit = "0123456789abcdef", "c0ffee0" * 5 + "c"
+            ref = args.reference_date or args.origin
             for model in ("renewal", "randomwalk"):
-                for origin in args.origins:
+                for location in ("CD", "CD-KN", "CD-KN-ZS01"):
                     w.writerow(
                         [
                             model,
-                            origin,
-                            "CD",
-                            origin,
+                            args.origin,
+                            ref,
+                            ref,
+                            "wk inc confirmed cases",
+                            ref,
+                            location,
+                            "sample",
                             1,
                             10,
-                            key,
+                            key if model == "renewal" else "",
                             commit,
                             "2026-11-02T08:00:00+00:00",
                             True,
@@ -541,6 +550,7 @@ def main() -> int:
     fs.add_argument("--models", nargs="*", default=None)
     fs.add_argument("--origin", default=None)
     fs.add_argument("--origins", nargs="*", default=None)
+    fs.add_argument("--reference-date", default=None)
     fs.add_argument("--out", default=None)
     fs.add_argument("--keys", default=None)
     co = sub.add_parser("coherence")

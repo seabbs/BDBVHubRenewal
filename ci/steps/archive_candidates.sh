@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
-# Archive every candidate model's forecasts for the round on the ledger
-# branch, beside the files record.sh archived (`fit-store archive`).
-# The stored models' forecasts are those the fit store holds now; the
-# other candidates, such as randomwalk, are forecast now. Each row says
-# when its forecast was made. This runs after record.sh, apart from it,
-# so a failure here never stops a round being recorded.
+# Archive the hub file every candidate model would submit for the round,
+# health zones included, on the ledger branch beside the files record.sh
+# archived (`fit-store archive`). The stored models forecast from the
+# fits the fit store holds now; the other candidates, such as
+# randomwalk, are forecast now, as the submission forecasts them. Each
+# row says when its fit was made. This runs after record.sh, apart from
+# it, so a failure here never stops a round being recorded.
 #
 #   REFERENCE_DATE, AS_OF  from the earlier jobs
 #   LEDGER_BRANCH    default submission-ledger
@@ -20,7 +21,8 @@ if [ "${SKIP_FETCH:-false}" != true ]; then
   "$CI_DIR/../scripts/fit-store.sh" fetch "$store"
 fi
 made="$WORK/candidates.csv.gz"
-cli fit-store archive --store "$store" --origins "$AS_OF" --out "$made"
+cli fit-store archive --store "$store" --origin "$AS_OF" \
+  --reference-date "$REFERENCE_DATE" --out "$made"
 
 ledger="$WORK/ledger"
 ledger_worktree "$ledger"

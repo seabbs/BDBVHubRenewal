@@ -15,8 +15,8 @@ It is safe to install as is, because `DRY_RUN` is on until you turn it off.
 | `fit` | A matrix over the renewal candidates (`bvd`, `renewalsp` and `main`), in parallel. Each reads its stored fit (`fit-store unpack`); one the store lacks is ruled out. A stored fit forecasts one week past its own round, so a round with no new release reads last week's fit. |
 | `gate` | Walks the chain `bvd` → `renewalsp` → `main` → `randomwalknowcast` → `randomwalk`. A candidate is ruled out if its fit is past the convergence failure thresholds, its forecast is far from the recent data, or its file is invalid (format checks or hubValidations). |
 | `submit` | Publishes the plot, builds the PR body, and opens or updates the PR. A dry run prints the body instead. |
-| `record` | Live runs only. Writes the outcome to `state.json` on the `submission-ledger` branch and archives the round's files there. A later step adds `candidates.csv.gz`: every stored model's and submission candidate's forecasts at the round's origin, when the round was recorded, with each forecast's key, commit and `fitted_at`. A failure in that step does not stop the round being recorded. |
-| `outcome` | Fails the run if the round was skipped or a job broke, so you are notified. |
+| `record` | Live runs only. Writes the outcome to `state.json` on the `submission-ledger` branch and archives the round's files there. After the docs rebuild, a later step adds `candidates.csv.gz`: the hub file, health zones included, that every stored model and submission candidate would submit, from the fits the store holds when the round was recorded, with each fit's key, commit and `fitted_at`. A failure in that step does not stop the round being recorded, and the outcome job reports it. |
+| `outcome` | Fails the run if the round was skipped, a job broke or the candidates were not archived, so you are notified. |
 
 Each run uploads these artefacts: `inputs`, `candidate-<id>` (7 days), `fit-<id>` (3 days, as in BVDOutbreakSize), and `gate` and `pr` (90 days).
 
@@ -105,7 +105,7 @@ To pause submissions, set `DRY_RUN` back to `true`, or disable the workflow.
 ## Being told when something goes wrong
 
 No issues are opened anywhere.
-A round that is skipped (every candidate failed), a broken job, or a PR the hub had already closed all make the `outcome` job fail.
+A round that is skipped (every candidate failed), a broken job, a PR the hub had already closed, or candidates not archived all make the `outcome` job fail.
 The run's summary gives the reason, and the `gate` artefact has the details.
 Ways to see the failure:
 

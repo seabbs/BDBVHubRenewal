@@ -124,12 +124,27 @@ ledger_worktree() {
 }
 
 # Commit everything in the ledger worktree $1 with message $2 and push it.
+# A rejected push (the branch moved) fetches the branch, rebases the
+# commit onto it and tries again, up to LEDGER_PUSH_TRIES times
+# (default 3), LEDGER_PUSH_WAIT seconds apart (default 5).
 ledger_push() {
-  git -C "$1" add -A
-  git -C "$1" -c user.name="github-actions[bot]" \
-    -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
-    commit -q -m "$2"
-  git -C "$1" push -q origin "${LEDGER_BRANCH:-submission-ledger}"
+  local dir=$1 branch=${LEDGER_BRANCH:-submission-ledger} try
+  local tries=${LEDGER_PUSH_TRIES:-3}
+  local who=(-c user.name="github-actions[bot]"
+    -c user.email="41898282+github-actions[bot]@users.noreply.github.com")
+  git -C "$dir" add -A
+  git -C "$dir" "${who[@]}" commit -q -m "$2"
+  for ((try = 1; try <= tries; try++)); do
+    git -C "$dir" push -q origin "$branch" && return 0
+    [ "$try" -lt "$tries" ] || break
+    echo "::warning::ledger push rejected (try $try of $tries); fetching again"
+    sleep "${LEDGER_PUSH_WAIT:-5}"
+    git -C "$dir" fetch -q origin "$branch" \
+      && git -C "$dir" "${who[@]}" rebase -q FETCH_HEAD \
+      || { git -C "$dir" rebase --abort 2> /dev/null || true; }
+  done
+  echo "::error::ledger push failed after $tries tries"
+  return 1
 }
 
 note() {
