@@ -49,7 +49,9 @@ def releases(
     A release with cut-off $c$ counts every case reported by $c$. The
     country is the sum of the places, and a single place is the country.
     With `totals`, a place `P` whose strata are `P-<stratum>` also has its
-    own total, as a province has the total of its zones.
+    own total, as a province has the total of its zones, and an age group
+    `A<k>` has its total across places. Every total is summed from the
+    same counts, by onset and report date.
 
     Parameters
     ----------
@@ -78,9 +80,12 @@ def releases(
     if len(counts["location"].unique()) > 1:
         frames = [country, counts]
         if totals:
-            parent = counts["location"].str.split("-").str[0]
+            parts = counts["location"].str.split("-")
             nested = counts["location"].str.contains("-")
-            frames.append(counts.loc[nested].assign(location=parent[nested]))
+            frames.append(counts.loc[nested].assign(location=parts.str[0]))
+            # Strata that are age groups also total across places.
+            ages = nested & parts.str[1].str.fullmatch(r"A\d+").fillna(False)
+            frames.append(counts.loc[ages].assign(location=parts.str[1]))
         counts = pd.concat(frames, ignore_index=True)
     else:
         counts = country
