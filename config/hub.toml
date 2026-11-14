@@ -25,3 +25,10 @@ submit = true
 [models.randomwalk]
 model_abbr = "randomwalk"
 submit = false
+
+# Chronos-2 fine-tuned on simulated outbreaks, run in the submission job
+# (the table's key: fm_chronos_daily_ragged_ft or
+# fm_chronos_weekly_ragged_ft). It has no fallback.
+[models.fm_chronos_daily_ragged_ft]
+model_abbr = "chronos2_ft"
+submit = false

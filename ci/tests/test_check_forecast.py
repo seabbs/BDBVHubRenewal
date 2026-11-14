@@ -512,3 +512,12 @@ def test_a_new_forecast_has_one_forecast_date(tmp_path: Path) -> None:
     rows[0][7] = "2026-11-01"
     path = write_samples(tmp_path / "x" / f"{REF}-m.csv", rows)
     assert statuses(path)["schema"] == "fail"
+
+
+def test_direct_model_is_checked_against_the_baseline(tmp_path: Path) -> None:
+    base = tmp_path / "base.csv"
+    write_samples(base, make_samples())
+    assert (
+        statuses(sub(tmp_path), kind="direct", baseline=base)["baseline"]
+        == "pass"
+    )
