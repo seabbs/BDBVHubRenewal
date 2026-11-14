@@ -1,19 +1,32 @@
 # Settings of the paper's evaluation workflow (`workflow/Snakefile`).
 # Paths are relative to `paper/`.
 results: results
+# Where `publish` copies a run's outputs for main.qmd and si.qmd.
+build: build
+# The run `render` publishes first: development or paper.
+render: development
 studies: [synthetic, germany, ebola]
 # Samples per forecast for the studies scored on samples.
 n_samples: 100
 
-# Ebola sources, as paths relative to `paper/`.
-# Without a hub clone the Ebola study runs on dummy data.
+# The German benchmark, run with the `bdbvhubrenewal` command line
+# (config/germany.toml). Its models are the config's `models`.
+# `real: false` runs the study on dummy data.
+germany:
+  real: true
+  config: ../config/germany.toml
+  data: ../data/raw/germany
+  results: ../results/germany
+
+# The Ebola hub's data and forecasts, our stored forecasts and the fit
+# store. `hub: null` runs the study on dummy data, as does a hub whose
+# baseline has no forecast with known truth yet.
 ebola:
-  # A clone of the BDBV Modeling Hub.
-  hub: null
-  # Files of our stored forecasts, as data/candidate-forecasts.csv.gz.
-  candidates: []
-  # A clone holding the fit store branch.
-  store: null
+  hub: ../data/raw/bdbv-hub
+  hub_repo: https://github.com/InsightNet-US/BDBV-Modeling-Hub.git
+  candidates: [../data/candidate-forecasts.csv.gz]
+  store: ..
+  store_ref: origin/fit-store
 
 # Data the development runs use.
 development:

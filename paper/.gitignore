@@ -5,8 +5,9 @@
 *.docx
 *.tex
 !figures/*.pdf
-# Rendered by `task figures`.
-/figures/*.png
 # Written by the workflow.
 /results/
 /.snakemake/
+/build/
+/main_files/
+/si_files/

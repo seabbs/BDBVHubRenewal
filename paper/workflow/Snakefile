@@ -1,28 +1,34 @@
-"""The paper's evaluation, from each study's data to its figures and tables.
+"""The paper's evaluation, from each study's data to the rendered paper.
 
-Run from `paper/` with `task pipeline:dev` or `task pipeline:paper`.
-Every step is `python -m paperpipe <step>`, run with the Python that
-runs the workflow. Outputs go to `<results>/<mode>/`, so development and
-paper runs never share a file.
+Run from `paper/` with `task pipeline:dev`, `task pipeline:paper` or
+`task paper`. Every step is `python -m paperpipe <step>` or the
+`bdbvhubrenewal` command line, run with the Python that runs the
+workflow. Outputs go to `<results>/<mode>/`, so development and paper
+runs never share a file, and `publish` copies a run's figures, tables and
+numbers to `build/`, which `main.qmd` and `si.qmd` read.
 
 Targets:
 
 - `development`: the development seeds and the German first half only;
-- `paper`: the held-out seeds and both German halves, split by half.
-
-The synthetic and German studies run on dummy data until their models
-are merged (#192). Ebola reads the hub clone set in `config.yaml`, or
-dummy data without one.
+- `paper`: the held-out seeds and both German halves, split by half;
+- `render`: the paper as HTML and PDF from the last published run.
 
 The held-out sets are the `heldout` block of `config.yaml`.
-`paperpipe.config.run_settings` keeps them out of a development run, and
-the `table` rule fails if a development forecast table holds any of them.
+`paperpipe.config.run_settings` keeps them out of a development run, the
+German held-out benchmark rule runs only for a paper run, and the `table`
+rule fails if a development forecast table holds any held-out row.
+
+A study without its real data runs on dummy data, labelled as such on
+every figure and in the paper (`paperpipe.studies`).
 """
 
 import json
 import shlex
 import sys
+import tomllib
 from pathlib import Path
+
+from snakemake.exceptions import WorkflowError
 
 PAPER = Path(workflow.basedir).parent
 sys.path.insert(0, str(PAPER))
@@ -38,9 +44,23 @@ workdir: str(PAPER)
 
 
 R = config["results"]
+BUILD = config["build"]
+STUDIES = config["studies"]
 # Run each step with the Python running the workflow.
 PYTHON = shlex.quote(sys.executable)
-STUDIES = config["studies"]
+BDBV = shlex.quote(str(Path(sys.executable).parent / "bdbvhubrenewal"))
+GERMANY = config["germany"]
+EBOLA = config["ebola"]
+TRIANGLE = f"{GERMANY['data']}/COVID-19_hospitalizations.csv"
+
+# The benchmark's command line holds out the dates from its own split.
+with open(GERMANY["config"], "rb") as f:
+    _split = tomllib.load(f)["nowcast"]["split_date"]
+if str(_split) != str(config["heldout"]["germany_from"]):
+    raise WorkflowError(
+        f"{GERMANY['config']} splits at {_split} but `heldout.germany_from` "
+        f"is {config['heldout']['germany_from']}."
+    )
 
 
 wildcard_constraints:
@@ -52,30 +72,48 @@ def settings(w):
     return run_settings(config, w.mode)
 
 
+def germany_tables(mode):
+    """The German benchmark's paper tables a run reads."""
+    if not GERMANY["real"]:
+        return []
+    halves = [""] if mode == "development" else ["", "held-out/"]
+    return [f"{GERMANY['results']}/{h}paper-forecasts.csv.gz" for h in halves]
+
+
+def sources(w):
+    """A study's real data, as command line arguments."""
+    if w.study == "germany" and GERMANY["real"]:
+        tables = " ".join(germany_tables(w.mode))
+        return f"--germany-forecasts {tables} --germany-triangle {TRIANGLE}"
+    if w.study == "ebola" and EBOLA["hub"]:
+        args = [f"--hub {shlex.quote(EBOLA['hub'])}"]
+        if EBOLA["candidates"]:
+            files = " ".join(shlex.quote(c) for c in EBOLA["candidates"])
+            args.append(f"--candidates {files}")
+        if EBOLA["store"]:
+            args.append(f"--store {shlex.quote(EBOLA['store'])}")
+            args.append(f"--store-ref {EBOLA['store_ref']}")
+        return " ".join(args)
+    return ""
+
+
+def source_files(w):
+    """Files a study's real data come from, built by the rules below."""
+    if w.study == "germany":
+        return [*germany_tables(w.mode), *([TRIANGLE] if GERMANY["real"] else [])]
+    if w.study == "ebola" and EBOLA["hub"]:
+        return [f"{EBOLA['hub']}/target-data/time-series.csv"]
+    return []
+
+
 def limits(w):
-    """Data limits and sources of a study's loader, as arguments."""
+    """Data limits of a study's loader, as command line arguments."""
     s = settings(w)
     if w.study == "synthetic":
         return "--seeds " + " ".join(str(x) for x in s.synthetic_seeds)
     if w.study == "germany" and s.germany_before is not None:
         return f"--before {s.germany_before:%Y-%m-%d}"
-    if w.study == "ebola":
-        return ebola_sources()
     return ""
-
-
-def ebola_sources():
-    """The Ebola hub, stored forecasts and fit store, if configured."""
-    src = config.get("ebola") or {}
-    args = []
-    if src.get("hub"):
-        args.append(f"--hub {shlex.quote(str(src['hub']))}")
-    if src.get("candidates"):
-        files = " ".join(shlex.quote(str(c)) for c in src["candidates"])
-        args.append(f"--candidates {files}")
-    if src.get("store"):
-        args.append(f"--store {shlex.quote(str(src['store']))}")
-    return " ".join(args)
 
 
 def figures(mode, study):
@@ -103,20 +141,88 @@ def outputs(mode):
 
 rule development:
     input:
-        outputs("development"),
+        f"{BUILD}/development.done",
 
 
 rule paper:
     input:
-        outputs("paper"),
+        f"{BUILD}/paper.done",
+
+
+rule render:
+    input:
+        f"{BUILD}/{config['render']}.done",
+        "main.qmd",
+        "si.qmd",
+    output:
+        "main.html",
+        "main.pdf",
+        "si.html",
+        "si.pdf",
+    shell:
+        "quarto render main.qmd && quarto render si.qmd"
+
+
+rule germany_fetch:
+    output:
+        TRIANGLE,
+    shell:
+        "{BDBV} germany-fetch --config {GERMANY[config]} "
+        "--out {GERMANY[data]}"
+
+
+rule germany_development:
+    input:
+        TRIANGLE,
+    output:
+        f"{GERMANY['results']}/paper-forecasts.csv.gz",
+    params:
+        args=f"--config {GERMANY['config']} --data {GERMANY['data']}",
+        out=GERMANY["results"],
+    shell:
+        "{BDBV} germany-backtest {params.args} --out {params.out} && "
+        "{BDBV} germany-teams {params.args} --out {params.out} && "
+        "{BDBV} germany-paper --config {GERMANY[config]} "
+        "--results {params.out}"
+
+
+# Only a paper run asks for this, so development never runs it.
+rule germany_heldout:
+    input:
+        TRIANGLE,
+    output:
+        f"{GERMANY['results']}/held-out/paper-forecasts.csv.gz",
+    params:
+        args=f"--config {GERMANY['config']} --data {GERMANY['data']}",
+        out=GERMANY["results"],
+    shell:
+        "{BDBV} germany-backtest {params.args} --held-out "
+        "--out {params.out} && "
+        "{BDBV} germany-teams {params.args} --held-out --out {params.out} && "
+        "{BDBV} germany-paper --config {GERMANY[config]} "
+        "--results {params.out}/held-out"
+
+
+rule ebola_hub:
+    output:
+        f"{EBOLA['hub']}/target-data/time-series.csv",
+    params:
+        repo=EBOLA["hub_repo"],
+        hub=EBOLA["hub"],
+    shell:
+        "git clone --quiet --depth 1 {params.repo} {params.hub}"
 
 
 rule data:
+    input:
+        source_files,
     output:
         observations=f"{R}/{{mode}}/data/{{study}}-observations.csv.gz",
         locations=f"{R}/{{mode}}/data/{{study}}-locations.csv",
+        meta=f"{R}/{{mode}}/data/{{study}}-meta.json",
     params:
         limits=limits,
+        sources=sources,
         delay=lambda w: (
             f"--delay {config['truth_delay'][w.study]}"
             if w.study in config.get("truth_delay", {})
@@ -124,20 +230,24 @@ rule data:
         ),
     shell:
         "{PYTHON} -m paperpipe data {wildcards.study} {params.limits} "
-        "{params.delay} --observations {output.observations} "
-        "--locations {output.locations}"
+        "{params.sources} {params.delay} "
+        "--observations {output.observations} "
+        "--locations {output.locations} --meta {output.meta}"
 
 
 rule forecasts:
     input:
-        rules.data.output.observations,
+        observations=rules.data.output.observations,
+        meta=rules.data.output.meta,
     output:
         f"{R}/{{mode}}/raw/{{study}}.csv.gz",
     params:
         limits=limits,
+        sources=sources,
         n_samples=config["n_samples"],
     shell:
         "{PYTHON} -m paperpipe forecasts {wildcards.study} {params.limits} "
+        "{params.sources} --meta {input.meta} "
         "--n-samples {params.n_samples} --out {output}"
 
 
@@ -188,6 +298,7 @@ def study_files(study):
         "forecasts": f"{R}/{{mode}}/forecasts/{study}.csv.gz",
         "observations": f"{R}/{{mode}}/data/{study}-observations.csv.gz",
         "locations": f"{R}/{{mode}}/data/{study}-locations.csv",
+        "meta": f"{R}/{{mode}}/data/{study}-meta.json",
         "scores": f"{R}/{{mode}}/scores/{study}.csv.gz",
     }
 
@@ -212,6 +323,7 @@ for study in STUDIES:
             "--forecasts {input.forecasts} "
             "--observations {input.observations} "
             "--scores {input.scores} --locations {input.locations} "
+            "--meta {input.meta} "
             "--main-dir {params.main} --si-dir {params.si} {params.split}"
 
     rule:
@@ -231,3 +343,30 @@ for study in STUDIES:
             "{PYTHON} -m paperpipe score-tables {params.study} "
             "--scores {input.scores} --locations {input.locations} "
             "--main-dir {params.main} --si-dir {params.si} {params.split}"
+
+
+rule summary:
+    input:
+        meta=[study_files(s)["meta"] for s in STUDIES],
+        scores=[f"{R}/{{mode}}/tables/main/{s}-scores.csv" for s in STUDIES],
+    output:
+        f"{R}/{{mode}}/results.yml",
+    shell:
+        "{PYTHON} -m paperpipe summary --mode {wildcards.mode} "
+        "--meta {input.meta} --scores {input.scores} --out {output}"
+
+
+# The paper reads `build`, so it shows the last run published.
+rule publish:
+    input:
+        outputs=lambda w: outputs(w.mode),
+        summary=rules.summary.output,
+    output:
+        touch(f"{BUILD}/{{mode}}.done"),
+    params:
+        run=f"{R}/{{mode}}",
+        build=BUILD,
+    shell:
+        "rm -rf {params.build} && mkdir -p {params.build} && "
+        "cp -R {params.run}/figures {params.run}/tables {params.build}/ && "
+        "cp {input.summary} {params.build}/results.yml"
