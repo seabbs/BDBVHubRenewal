@@ -56,6 +56,11 @@ longest daily horizon is 6 + 28 + 49 days, in six patches of 16."""
 MAX_LAGS = {"weekly": tuple(range(2, 8)), "daily": tuple(range(14, 50))}
 """Release lags $D$ the blocks are drawn from."""
 
+MEMORY_GB = 36.0
+"""The GPU memory budget of a training step, in GB: the trainer's cap on
+MPS memory (0.85 of a 55.7 GB working set) less room for the model and
+the held-out set."""
+
 MAX_SERIES = 2000
 """Most series in a block. A block's series count is drawn log-uniformly
 up to it. With gradient checkpointing a block of 2,400 series fits the
@@ -65,10 +70,36 @@ laptop's GPU memory (64 GB) but peaks at about 56 GB in training, so
 CUTS = 8
 """Cut-off slots of each source (weekly, daily) per observation draw."""
 
-CHECKPOINT_SERIES = 900
-"""Batches with more series than this recompute each encoder block's
-activations in the backward pass (gradient checkpointing), to fit
-memory."""
+MEMORY_COST = {False: (0.0, 6.7e-5), True: (6.25e-3, 3.35e-6)}
+"""GPU memory of one training step in GB per series and per series
+squared, without and with gradient checkpointing: fitted to 800 series
+taking about 43 GB without it, and 1,000, 1,500 and 2,000 series taking
+9.6, 17.3 and 25.9 GB with it (Chronos-2 with LoRA and AdamW on an Apple
+M4 Max). Group attention makes it grow with the square of the series."""
+
+
+def memory_gb(series: int, checkpointed: bool) -> float:
+    """Return a training step's GPU memory in GB for `series` series."""
+    per, squared = MEMORY_COST[checkpointed]
+    return per * series + squared * series**2
+
+
+def _most_within(budget_gb: float, checkpointed: bool) -> int:
+    """Return the most series whose step fits `budget_gb`."""
+    per, squared = MEMORY_COST[checkpointed]
+    root = (-per + (per**2 + 4 * squared * budget_gb) ** 0.5) / (2 * squared)
+    return int(root)
+
+
+def checkpoint_above(budget_gb: float) -> int:
+    """Return the series above which a step needs gradient checkpointing."""
+    return _most_within(budget_gb, checkpointed=False)
+
+
+def max_series(budget_gb: float) -> int:
+    """Return the most series of a block that fits with checkpointing."""
+    return _most_within(budget_gb, checkpointed=True)
+
 
 CODE = (
     "scripts/finetune_simulate.R",
@@ -284,12 +315,12 @@ def blocks(sim_dirs: list[Path], out: Path, seed: int) -> None:
     )
 
 
-def checkpoint_large_batches() -> None:
+def checkpoint_large_batches(above: int) -> None:
     """Recompute encoder activations in backward for large batches.
 
     Chronos-2's group attention runs over every series of a batch, so its
-    memory grows with their square. Above `CHECKPOINT_SERIES` series each
-    encoder block is checkpointed (`torch.utils.checkpoint`).
+    memory grows with their square. Above `above` series each encoder block
+    is checkpointed (`torch.utils.checkpoint`).
     """
     import functools
 
@@ -300,7 +331,7 @@ def checkpoint_large_batches() -> None:
     forward = Chronos2EncoderBlock.forward
 
     def checkpointed(self, hidden_states, **kwargs):
-        large = hidden_states.shape[0] > CHECKPOINT_SERIES
+        large = hidden_states.shape[0] > above
         if large and self.training and torch.is_grad_enabled():
             return checkpoint(
                 functools.partial(forward, self, **kwargs),
@@ -468,7 +499,7 @@ def train(
     from chronos import Chronos2Pipeline
     from transformers import TrainerCallback
 
-    checkpoint_large_batches()
+    checkpoint_large_batches(checkpoint_above(MEMORY_GB))
     torch.manual_seed(seed)
     # Chronos-2 slices its training windows with numpy's global generator.
     np.random.seed(seed)  # noqa: NPY002

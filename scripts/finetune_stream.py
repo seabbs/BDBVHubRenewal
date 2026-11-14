@@ -60,13 +60,37 @@ def log(message: str) -> None:
     print(f"{stamp} [train] {message}", flush=True)
 
 
+def simulation_ids(outbreaks: pd.Series) -> set[str]:
+    """Return the simulations of outbreak draws `<seed>-<index>[-<draw>]`."""
+    parts = outbreaks.astype(str).str.split("-")
+    return set(parts.str[0] + "-" + parts.str[1])
+
+
+def quarantine(sim_dir: Path, seed: int, reason: str) -> None:
+    """Move a bad batch's files aside, so the driver runs it again."""
+    where = sim_dir / "bad" / f"{seed}-{int(time.time())}"
+    where.mkdir(parents=True, exist_ok=True)
+    for path in (
+        sim_dir / f"counts-{seed}.csv.gz",
+        sim_dir / f"settings-{seed}.csv",
+        sim_dir / f"failures-{seed}.csv",
+        sim_dir / "logs" / f"{seed}.log",
+    ):
+        if path.exists():
+            path.rename(where / path.name)
+    log(f"batch {seed} {reason}: moved to {where} to be run again")
+
+
 def seed_done(sim_dir: Path, seed: int) -> bool:
-    """Return whether a simulation batch has finished, checking it.
+    """Return whether a simulation batch has finished and is whole.
+
+    A batch whose counts and settings hold different simulations is moved
+    aside (`quarantine`), so it counts as not done and is run again.
 
     Raises
     ------
     RuntimeError
-        If the batch failed, or its counts and settings disagree.
+        If the batch failed.
     """
     counts = sim_dir / f"counts-{seed}.csv.gz"
     settings = sim_dir / f"settings-{seed}.csv"
@@ -75,10 +99,11 @@ def seed_done(sim_dir: Path, seed: int) -> bool:
         if log_file.exists() and "Execution halted" in log_file.read_text():
             raise RuntimeError(f"simulation batch {seed} failed: {log_file}")
         return False
-    a = set(pd.read_csv(settings, usecols=["outbreak"])["outbreak"])
-    b = set(pd.read_csv(counts, usecols=["outbreak"])["outbreak"])
+    a = simulation_ids(pd.read_csv(settings, usecols=["outbreak"])["outbreak"])
+    b = simulation_ids(pd.read_csv(counts, usecols=["outbreak"])["outbreak"])
     if a != b:
-        raise RuntimeError(f"batch {seed}: counts and settings disagree")
+        quarantine(sim_dir, seed, "has counts and settings that disagree")
+        return False
     return True
 
 
@@ -208,6 +233,40 @@ def publish(where: Path, key: str) -> None:
     raise RuntimeError(f"could not publish chronos-ft-{key}")
 
 
+def finite_step(params: list, optimiser, value: float) -> bool:
+    """Clip and apply the gradients unless any is not finite.
+
+    The step is skipped if the loss or a gradient is not finite, and the
+    gradients are cleared either way.
+
+    Returns
+    -------
+    bool
+        Whether the step was applied.
+    """
+    import torch
+
+    grads = [p.grad for p in params if p.grad is not None]
+    finite = (
+        np.isfinite(value)
+        and bool(grads)
+        and all(torch.isfinite(g).all() for g in grads)
+    )
+    if finite:
+        torch.nn.utils.clip_grad_norm_(params, 1.0)
+        optimiser.step()
+    optimiser.zero_grad()
+    return finite
+
+
+def skipped_lines(skipped: list[dict]) -> list[str]:
+    """Return the lines listing skipped blocks in a release's outbreaks."""
+    return [
+        f"# skipped {b['outbreak']} at step {b['step']}, {b['series']} series"
+        for b in skipped
+    ]
+
+
 def save_state(where: Path, model, optimiser, state: dict) -> None:
     """Save the trainer's state: adapter, optimiser and position."""
     import torch
@@ -267,6 +326,7 @@ def main() -> None:
     )
     parser.add_argument("--min-gain", type=float, default=0.01)
     parser.add_argument("--stop-from", type=int, default=8000)
+    parser.add_argument("--memory-gb", type=float, default=ft.MEMORY_GB)
     args = parser.parse_args()
     out, sim_dir = args.out, args.sim_dir
     out.mkdir(parents=True, exist_ok=True)
@@ -305,7 +365,9 @@ def main() -> None:
     val = [b for _, b in cut(sim_dir, held, args.seed, k)]
     log(f"{len(held)} held-out outbreaks, {len(val)} blocks")
 
-    ft.checkpoint_large_batches()
+    # Checkpointing and the largest block follow from the memory budget.
+    ft.checkpoint_large_batches(ft.checkpoint_above(args.memory_gb))
+    ft.MAX_SERIES = min(ft.MAX_SERIES, ft.max_series(args.memory_gb))
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)  # noqa: NPY002
     device = (
@@ -369,6 +431,7 @@ def main() -> None:
     step, done, position = 0, 0, 0
     seen = {"blocks": 0, "series": 0}
     losses: list[float] = []
+    skipped: list[dict] = []
     if state is None:
         consumed.write_text("")
         start_loss = ft.held_out_loss(model, val, args.batch_size)
@@ -378,6 +441,7 @@ def main() -> None:
         step, done, position = state["step"], state["done"], state["position"]
         start_loss, history = state["start_loss"], state["history"]
         seen, losses = state["seen"], state["losses"]
+        skipped = state.get("skipped", [])
         lines = consumed.read_text().splitlines()[:step]
         consumed.write_text("".join(f"{line}\n" for line in lines))
         log(f"resumed at step {step}, outbreaks {done + 1}-, batch {position}")
@@ -395,6 +459,7 @@ def main() -> None:
                 "history": history,
                 "seen": seen,
                 "losses": losses,
+                "skipped": skipped,
             },
         )
 
@@ -416,7 +481,17 @@ def main() -> None:
                 raise
             free_memory()
             if len(batch_blocks) == 1:
-                log(f"skipped a block too large for memory: {memory()}")
+                i = batch_blocks[0]
+                series = int(data.inputs[i]["context"].shape[0])
+                outbreak = pairs[i][0]
+                skipped.append(
+                    {"outbreak": outbreak, "step": step + 1, "series": series}
+                )
+                log(
+                    f"skipped block {i} of {pairs[i][0]}, "
+                    f"{series} series, "
+                    f"too large for memory: {memory()}"
+                )
                 return float("nan")
             half = len(batch_blocks) // 2
             log(f"split a batch of {len(batch_blocks)} blocks for memory")
@@ -460,9 +535,8 @@ def main() -> None:
                 report(stage="paused")
                 time.sleep(30)
             value = train_step(indices, 1.0)
-            torch.nn.utils.clip_grad_norm_(params, 1.0)
-            optimiser.step()
-            optimiser.zero_grad()
+            if not finite_step(params, optimiser, value):
+                log(f"step {step + 1}: no update (loss {value})")
             # Batches differ in shape, so cached buffers pile up unless they
             # are freed every step.
             free_memory()
@@ -495,7 +569,9 @@ def main() -> None:
             where = out / f"n{done}"
             where.mkdir(parents=True, exist_ok=True)
             order = ready[:done]
-            (where / "outbreaks.txt").write_text("\n".join(order) + "\n")
+            # The release lists its outbreaks and any block skipped.
+            lines = [*order, *skipped_lines(skipped)]
+            (where / "outbreaks.txt").write_text("\n".join(lines) + "\n")
             (where / "consumed.txt").write_text(consumed.read_text())
             model.save_pretrained(where / "finetuned-ckpt")
             settings = {
@@ -509,6 +585,8 @@ def main() -> None:
                 "tokens": seen["series"]
                 * (ft.CONTEXT + ft.HORIZON)
                 // ft.OUTPUT_PATCH,
+                "skipped_blocks": skipped,
+                "memory_gb": args.memory_gb,
             }
             key = ft._settings_hash(settings)
             settings["hash"] = key
