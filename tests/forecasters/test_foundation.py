@@ -12,6 +12,7 @@ import pandas as pd
 import pytest
 
 from bdbvhubrenewal.data.zones import (
+    ZoneData,
     hub_zones,
     is_zone,
     province_of,
@@ -92,9 +93,7 @@ def task(
         BacktestConfig(seed=3),
         history=real,
         daily=daily,
-        zones=health_zones,
-        daily_zones=daily_zones,
-        zone_codes=hub_zones(tasks_json),
+        zones=ZoneData(health_zones, daily_zones, hub_zones(tasks_json)),
     )[0]
 
 
@@ -653,36 +652,56 @@ def test_a_changed_cached_adapter_is_downloaded_again(
     assert (adapter / "adapter_model.safetensors").read_bytes() == b"weights"
 
 
+def _by_series(groups, horizon, n, _seed):
+    """A sampler whose draws of series $i$ are $i$, so each differs."""
+    return [
+        np.broadcast_to(
+            np.arange(len(g["target"]), dtype=float)[None, :, None],
+            (n, len(g["target"]), horizon),
+        ).copy()
+        for g in groups
+    ]
+
+
 @pytest.fixture(scope="module")
 def zoned(task: ForecastTask) -> pd.DataFrame:
-    """Samples with the zones, from a stand-in that draws 3 everywhere."""
+    """Samples with the zones, from a stand-in that draws each series apart."""
     model = dataclasses.replace(
-        get_model("fm_chronos_weekly_ragged"), sample=_constant(3.0)
+        get_model("fm_chronos_weekly_ragged"), sample=_by_series
     )
     return model.forecast(task)
 
 
-def test_samples_may_hold_zones_of_forecast_provinces(
+def _provinces(samples: pd.DataFrame) -> pd.DataFrame:
+    return samples.loc[
+        ~samples["location"].map(is_zone) & (samples["location"] != NATIONAL)
+    ]
+
+
+def test_samples_hold_every_zone_of_the_tasks_provinces(
     task: ForecastTask, zoned: pd.DataFrame
 ) -> None:
     check_samples(zoned, task)
+    zone = zoned["location"].map(is_zone)
+    assert set(zoned.loc[zone, "location"]) == set(_zones(task))
+    first = zoned.loc[zone, "location"].iloc[0]
     stray = zoned.copy()
-    zone = stray["location"].map(is_zone)
-    first = stray.loc[zone, "location"].iloc[0]
     stray.loc[stray["location"] == first, "location"] = "CD-XX-01"
-    with pytest.raises(ValueError, match="zone"):
+    with pytest.raises(ValueError, match="zones"):
         check_samples(stray, task)
+    missing = zoned.loc[zoned["location"] != first]
+    with pytest.raises(ValueError, match="zones"):
+        check_samples(missing, task)
 
 
 def test_national_sums_provinces_not_zones(zoned: pd.DataFrame) -> None:
     rows = zoned.loc[zoned["location"] != NATIONAL]
     out = add_national(rows)
     national = out.loc[out["location"] == NATIONAL, "value"].sum()
-    provinces = rows.loc[~rows["location"].map(is_zone), "value"].sum()
-    assert national == provinces
+    assert national == _provinces(rows)["value"].sum()
 
 
-def test_zone_samples_come_from_the_model_and_sum_to_provinces(
+def test_zone_samples_are_the_models_own_summed_to_its_provinces(
     task: ForecastTask,
     zoned: pd.DataFrame,
     daily_zones: pd.DataFrame,
@@ -690,15 +709,20 @@ def test_zone_samples_come_from_the_model_and_sum_to_provinces(
 ) -> None:
     zones = hub_zones(tasks_json)
     counts = weekly_zone_counts(daily_zones, task.vintage)
+    own = zoned.loc[zoned["location"].map(is_zone)]
+    provinces = _provinces(zoned)
+    # The model's zones sum to its provinces and keep the published counts.
+    assert not check_zone_coherence(provinces, own)
+    keys = ["location", "target_end_date"]
+    floor = own.merge(counts, on=keys, how="left")["total"].fillna(0).to_numpy()
+    assert (own["value"].to_numpy() >= floor).all()
+    # The hub file takes them as they are.
     split = zones_for_model(
         "fm_chronos_weekly_ragged", task, zoned, counts, zones, daily_zones
     )
-    provinces = zoned.loc[
-        ~zoned["location"].map(is_zone) & (zoned["location"] != NATIONAL)
-    ]
-    assert not check_zone_coherence(provinces, split)
-    allocated = ZoneAllocator().allocate(provinces, task, counts, zones)
     keys = ["location", "target_end_date", "sample"]
     a = split.set_index(keys)["value"].sort_index()
+    pd.testing.assert_series_equal(a, own.set_index(keys)["value"].sort_index())
+    allocated = ZoneAllocator().allocate(provinces, task, counts, zones)
     b = allocated.set_index(keys)["value"].sort_index()
     assert not a.equals(b)
