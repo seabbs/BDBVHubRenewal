@@ -116,9 +116,7 @@ def main() -> None:
     )
     origins = sorted({p.name.split("__")[1] for p in parts})
     run = ReleaseForecasts.read(parts)
-    base = forecast_releases(
-        [tasks[o] for o in origins], target, [BASE]
-    )
+    base = forecast_releases([tasks[o] for o in origins], target, [BASE])
     both = ReleaseForecasts(
         *(
             pd.concat([getattr(run, n), getattr(base, n)], ignore_index=True)
