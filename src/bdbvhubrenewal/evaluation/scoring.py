@@ -57,6 +57,7 @@ __all__ = [
     "score_quantiles",
     "score_sample",
     "summarise_scores",
+    "variogram_sample",
     "wis_quantile",
     "wis_sample",
 ]
@@ -205,6 +206,36 @@ def energy_sample(obs: ArrayLike, samples: ArrayLike) -> float:
     fit = np.mean(np.linalg.norm(x - y, axis=1))
     spread = np.sum(pdist(x)) / (m * (m - 1))
     return float(fit - spread)
+
+
+def variogram_sample(
+    obs: ArrayLike, samples: ArrayLike, p: float = 0.5
+) -> float:
+    r"""Return the variogram score of a sample forecast of a vector.
+
+    $\sum_{i, j} \left(\frac{1}{m} \sum_k |x_{k,i} - x_{k,j}|^p
+    - |y_i - y_j|^p\right)^2$ over every ordered pair of components, as
+    Scheuerer and Hamill (2015) define it, with equal weights.
+
+    Parameters
+    ----------
+    obs : array-like
+        The observed vector, length $d$.
+    samples : array-like
+        Joint samples, shape `[m, d]`.
+    p : float
+        The order.
+
+    Returns
+    -------
+    float
+        The variogram score.
+    """
+    y = np.asarray(obs, dtype=np.float64)
+    x = np.asarray(samples, dtype=np.float64)
+    fcst = np.mean(np.abs(x[:, :, None] - x[:, None, :]) ** p, axis=0)
+    seen = np.abs(y[:, None] - y[None, :]) ** p
+    return float(np.sum((fcst - seen) ** 2))
 
 
 def scale_of(location: pd.Series) -> pd.Series:
