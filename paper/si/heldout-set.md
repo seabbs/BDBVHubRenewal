@@ -1,4 +1,4 @@
-# The held-out synthetic set
+#### The held-out synthetic set
 
 The held-out set is 100 outbreaks simulated with `scripts/finetune_simulate.R` on the r2-real grid, 25 for each of the seeds 9001, 9002, 9003 and 9004.
 The fine-tune never used these seeds, so the held-out outbreaks are new draws from the grid it was trained on.
@@ -11,7 +11,7 @@ No model was scored on it during development, and no forecast or score from it w
 One early run of the pipeline forecast three held-out outbreaks before this rule was set, and its outputs were deleted unread.
 We checked the pipeline end to end on a separate validation set of five outbreaks with seed 7001, in `output/finetune/validation`.
 
-## Protocol
+##### Protocol
 
 Each outbreak is released weekly, on one weekday from Wednesday to Saturday drawn from its id, as for the fine-tune's training blocks.
 A release's cut-off is its origin date.

@@ -18,6 +18,10 @@ format:
   pdf:
     number-sections: false
 bibliography: reference.bib
+# The evaluation workflow's numbers (`task pipeline:dev` or
+# `task pipeline:paper`), quoted with the meta shortcode.
+metadata-files:
+  - build/results.yml
 ---
 
 <!--
@@ -87,13 +91,17 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
 :::
 
 ::: {#tbl-synthetic-grid}
-| Setting  | Values |
-|----------|--------|
-| Outbreak |        |
-| Delay    |        |
-| Noise    |        |
+{{< include tables/synthetic-grid.md >}}
 
-Placeholder: grid of synthetic scenarios.
+Design of each simulated outbreak (grid r2-real), with the share of outbreaks taking each level.
+The full settings are in the SI.
+:::
+
+### Correlated trajectories
+
+::: {.callout-note title="Plan"}
+- Models that give only per-step forecasts get correlated trajectories from a Gaussian copula, with correlations estimated over a rolling window of recent forecast errors (#221).
+- The same layer serves `randomwalknowcast`.
 :::
 
 ### Evaluation on held-out synthetic data
@@ -159,10 +167,12 @@ Key references: the Methods references, with [@bracherEvaluatingEpidemicForecast
 :::
 
 ::: {#fig-synthetic}
-Figure to come.
+![](build/figures/main/synthetic-results.png)
 
-Placeholder: held-out synthetic data results panel.
+Held-out synthetic data. (A) Nowcasts over time; (B, C) CRPS relative to `randomwalknowcast` on the natural and log scales; (D) bias; (E) 50% and 90% coverage; (F) relative CRPS by scenario factor; (G) relative CRPS by horizon. {{< meta results.synthetic.label >}}
 :::
+
+Placeholder summary from the workflow: the best model was {{< meta results.synthetic.best_model >}}, with a relative score of {{< meta results.synthetic.best_rel_score >}} and {{< meta results.synthetic.best_rel_log_score >}} on the log scale, against {{< meta results.synthetic.baseline >}}.
 
 ### German nowcast hub
 
@@ -173,10 +183,12 @@ Placeholder: held-out synthetic data results panel.
 :::
 
 ::: {#fig-germany}
-Figure to come.
+![](build/figures/main/germany-results.png)
 
-Placeholder: German nowcast hub results panel.
+German nowcast hub. (A) Nowcasts over time, with a dotted line at the split between the development and held-out halves; (B, C) WIS relative to `KIT-frozen_baseline` on the natural and log scales; (D) bias; (E) 50% and 95% coverage; (F) relative WIS by location; (G) by age group; (H) by horizon. {{< meta results.germany.label >}}
 :::
+
+Placeholder summary from the workflow: the best model was {{< meta results.germany.best_model >}}, with a relative score of {{< meta results.germany.best_rel_score >}} and {{< meta results.germany.best_rel_log_score >}} on the log scale, against {{< meta results.germany.baseline >}}.
 
 ### Ebola hub submissions
 
@@ -186,10 +198,12 @@ Placeholder: German nowcast hub results panel.
 :::
 
 ::: {#fig-ebola}
-Figure to come.
+![](build/figures/main/ebola-results.png)
 
-Placeholder: Ebola hub submissions results panel.
+Ebola hub submissions. (A) Nowcasts over time; (B, C) CRPS relative to `BDBVHub-baseline` on the natural and log scales; (D) bias; (E) 50% and 90% coverage; (F) relative CRPS by location; (G) by horizon. {{< meta results.ebola.label >}}
 :::
+
+Placeholder summary from the workflow: the best model was {{< meta results.ebola.best_model >}}, with a relative score of {{< meta results.ebola.best_rel_score >}} and {{< meta results.ebola.best_rel_log_score >}} on the log scale, against {{< meta results.ebola.baseline >}}.
 
 ## Discussion
 

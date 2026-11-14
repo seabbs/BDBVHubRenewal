@@ -1,4 +1,4 @@
-# The epinowcast model used to simulate outbreaks
+#### The epinowcast model used to simulate outbreaks
 
 We simulated each synthetic outbreak from the generative model of epinowcast @placeholder.
 We used `enw_simulate()`, which runs the epinowcast Stan model with fixed parameters and no likelihood.
@@ -9,14 +9,14 @@ Each outbreak first draws its design, the categorical choices below, and then it
 Outbreaks are simulated on a daily time step by stratum, with a longest reporting delay of 8 weeks, or 12 weeks in a quarter of outbreaks.
 A parameter we did not set is drawn from its epinowcast prior.
 
-## Strata
+##### Strata
 
 An outbreak has one stratum, 2 to 26 places, 2 to 8 age groups in one place, or 6 to 16 places by 3 to 7 age groups.
 Strata share part of their growth through a weighted sum of a shared path and a path of their own, and places by ages also share a path by place.
 Some places are quiet, seeded with almost no cases.
 The initial latent cases (`expr_lelatent_int`) are a drawn total split over strata by log-normal weights.
 
-## Expectation model
+##### Expectation model
 
 Expected cases come from `enw_expectation()`, driven by a daily growth path given to `enw_simulate()` as `growth_rate`.
 In the two renewal processes the path is log $R_t$, and expected latent cases are $\lambda_t = R_t \sum_{s=1}^{45} g_s \lambda_{t-s}$ with a discretised gamma generation time $g_s$.
@@ -25,7 +25,7 @@ One renewal process adds an incubation period, a discretised gamma delay from la
 The other four processes have no generation time, and the path is the daily growth rate of log incidence.
 It is a weekly random walk, white noise (a random walk on log incidence), one to three step changes, or a smooth sine wave, held between -0.06 and 0.06 a day.
 
-## Reference date model
+##### Reference date model
 
 The reporting delay of an onset is set by `enw_reference()`.
 It is a parametric delay alone, a non-parametric hazard alone, or both.
@@ -36,7 +36,7 @@ Strata have random effects on the delay.
 One outbreak in five has a stable delay.
 In the others the delay may drift linearly in its location and spread, step up to three times at random weeks, and follow a weekly random walk (`rw(week)`).
 
-## Report date model
+##### Report date model
 
 Effects of the report date are set by `enw_report()`.
 They may include random effects by day of the week of report, a `holiday` covariate that lowers reporting on a few dates, and report week effects, `(1 | week)` or `rw(week)`.
@@ -44,7 +44,7 @@ In half the outbreaks reports are made every day.
 In the rest, a structural table from `enw_structural_reporting_metadata()`, given to `enw_report(structural)`, limits reports to one to three weekdays, drawn from Monday to Friday.
 The report days may change once, at a drawn date.
 
-## Observation model
+##### Observation model
 
 The count of cases with onset on day $t$ reported with delay $d$ is negative binomial (NB2 or NB1) or Poisson, set by `enw_obs(family)`.
 Its mean is the expected onsets on day $t$ times the probability of a delay of $d$ given the reference and report date models.

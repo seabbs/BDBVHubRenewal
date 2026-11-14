@@ -12,6 +12,9 @@ format:
     toc: true
     number-sections: false
 bibliography: reference.bib
+# The evaluation workflow's numbers, as in main.qmd.
+metadata-files:
+  - build/results.yml
 ---
 
 <!--
@@ -43,6 +46,27 @@ One SI section per paper section.
 - Key references: [@abbottepinowcast; @lison2024; @Park2024; @abbottprimarycensored].
 :::
 
+{{< include si/epinowcast-model.md >}}
+
+::: {#tbl-synthetic-grid-si}
+{{< include tables/synthetic-grid-si.md >}}
+
+Settings of each simulated outbreak (grid r2-real), with the values realised over the simulated outbreaks.
+:::
+
+{{< include si/heldout-set.md >}}
+
+### Correlated trajectories
+
+::: {.callout-note title="Plan"}
+- Correlated trajectories: the copula, its rolling-window estimator and the window length.
+- Joint block or level by level for the foundation models (#222).
+:::
+
+::: {.callout-note title="Results to come"}
+Slots for the copula's window length (#221) and for the joint block against level by level (#222).
+:::
+
 ### Scoring
 
 ::: {.callout-note title="Plan"}
@@ -67,8 +91,86 @@ One SI section per paper section.
 
 ### Held-out synthetic data
 
+::: {#fig-synthetic-si-factors}
+![](build/figures/si/synthetic-si-factors.png)
+
+Held-out synthetic data: relative CRPS by level of each scenario factor. {{< meta results.synthetic.label >}}
+:::
+
+::: {#fig-synthetic-si-factors-log}
+![](build/figures/si/synthetic-si-factors-log.png)
+
+Held-out synthetic data: relative CRPS on the log scale by level of each scenario factor. {{< meta results.synthetic.label >}}
+:::
+
+::: {#fig-synthetic-si-wis-over-time}
+![](build/figures/si/synthetic-si-wis-over-time.png)
+
+Held-out synthetic data: CRPS over time. {{< meta results.synthetic.label >}}
+:::
+
+::: {#fig-synthetic-si-finetune-size}
+![](build/figures/si/synthetic-si-finetune-size.png)
+
+Held-out synthetic data: relative CRPS of each fine-tuning checkpoint against the number of simulated outbreaks it was trained on. {{< meta results.synthetic.label >}}
+:::
+
+::: {#tbl-synthetic-horizon}
+{{< include build/tables/si/synthetic-scores-by-horizon.md >}}
+
+Held-out synthetic data scores by horizon. {{< meta results.synthetic.label >}}
+:::
+
 ### German nowcast hub
 
+::: {#fig-germany-si-location-horizon}
+![](build/figures/si/germany-si-location-horizon.png)
+
+German nowcast hub: relative WIS by location and horizon. {{< meta results.germany.label >}}
+:::
+
+::: {#fig-germany-si-location-horizon-log}
+![](build/figures/si/germany-si-location-horizon-log.png)
+
+German nowcast hub: relative WIS on the log scale by location and horizon. {{< meta results.germany.label >}}
+:::
+
+::: {#fig-germany-si-wis-over-time}
+![](build/figures/si/germany-si-wis-over-time.png)
+
+German nowcast hub: WIS over time, with a dotted line at the split. {{< meta results.germany.label >}}
+:::
+
+::: {#tbl-germany-horizon}
+{{< include build/tables/si/germany-scores-by-horizon.md >}}
+
+German nowcast hub scores by horizon. {{< meta results.germany.label >}}
+:::
+
 ### Ebola hub submissions
+
+::: {#fig-ebola-si-location-horizon}
+![](build/figures/si/ebola-si-location-horizon.png)
+
+Ebola hub submissions: relative CRPS by location and horizon. {{< meta results.ebola.label >}}
+:::
+
+::: {#fig-ebola-si-location-horizon-log}
+![](build/figures/si/ebola-si-location-horizon-log.png)
+
+Ebola hub submissions: relative CRPS on the log scale by location and horizon. {{< meta results.ebola.label >}}
+:::
+
+::: {#fig-ebola-si-wis-over-time}
+![](build/figures/si/ebola-si-wis-over-time.png)
+
+Ebola hub submissions: CRPS over time. {{< meta results.ebola.label >}}
+:::
+
+::: {#tbl-ebola-horizon}
+{{< include build/tables/si/ebola-scores-by-horizon.md >}}
+
+Ebola hub submissions scores by horizon. {{< meta results.ebola.label >}}
+:::
 
 ## References {.unnumbered}
