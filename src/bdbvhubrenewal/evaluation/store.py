@@ -168,8 +168,7 @@ def samplers(policy: Path | str = "ci/policy.toml") -> dict[str, Any]:
     Returns
     -------
     dict
-        Sampler table by model name. A fitted model with no candidate
-        (`pprandomwalknowcast`) is absent and uses its own settings.
+        Sampler table by model name.
 
     Raises
     ------

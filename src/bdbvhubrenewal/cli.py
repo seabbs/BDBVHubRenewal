@@ -291,7 +291,7 @@ def build_parser() -> argparse.ArgumentParser:
     zb.add_argument(
         "--models",
         nargs="*",
-        default=["randomwalk", "randomwalknowcast", "pprandomwalknowcast"],
+        default=["randomwalk", "randomwalknowcast"],
     )
     zb.add_argument(
         "--chunk", default=None, help=_CHUNK_HELP.format(what="origins")

@@ -100,9 +100,7 @@ def _ran(run: object) -> set[str]:
     return {Path(f).relative_to(ROOT).as_posix() for f in seen}
 
 
-@pytest.mark.parametrize(
-    "model", ["randomwalk", "randomwalknowcast", "pprandomwalknowcast"]
-)
+@pytest.mark.parametrize("model", ["randomwalk", "randomwalknowcast"])
 def test_model_code_covers_what_its_forecasts_run(
     model: str,
     target: pd.DataFrame,
@@ -151,12 +149,10 @@ def test_model_code_leaves_out_other_models() -> None:
 
     code = set(model_code("randomwalk", ROOT))
     assert "src/bdbvhubrenewal/forecasters/renewal.py" not in code
-    assert "src/bdbvhubrenewal/forecasters/pprandomwalk.py" not in code
     assert "src/bdbvhubrenewal/forecasters/randomwalk.py" in code
-    pp = set(model_code("pprandomwalknowcast", ROOT))
-    assert "src/bdbvhubrenewal/forecasters/renewal.py" not in pp
+    renewal = set(model_code("renewal", ROOT))
     # It builds on the random walk module, so that is in its key.
-    assert "src/bdbvhubrenewal/forecasters/randomwalk.py" in pp
+    assert "src/bdbvhubrenewal/forecasters/randomwalk.py" in renewal
 
 
 @pytest.mark.slow

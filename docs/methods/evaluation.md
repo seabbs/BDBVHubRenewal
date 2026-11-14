@@ -54,15 +54,13 @@ The score rewards a joint pattern across places only where draws are joint.
 The draws of `renewal` and `renewalbvd` are joint across provinces, one posterior draw per sample index.
 `renewalsp` fits each province on its own, so its provinces are independent.
 Zones split each province draw, so zones are joint within a province for every renewal model.
-`pprandomwalknowcast` takes one posterior draw of its pooled parameters per sample index, so its places share that draw.
 `randomwalk` and `randomwalknowcast` draw each place independently.
 Hub teams' samples are joint across weeks within a place only, as the hub's sample format sets, so pairing their indices across places scores them as independent across places.
 
 ## Backtest design
 
 Each vintage is a forecast task.
-The fitted models (the renewal models and `pprandomwalknowcast`) forecast real vintages only, from their stored fits ([fit store](../development/cli.md#fit-store)).
-The one exception is the [zone backtest](#health-zones), which fits `pprandomwalknowcast` at each origin.
+The renewal models forecast real vintages only, from their stored fits ([fit store](../development/cli.md#fit-store)).
 The other models forecast every task.
 
 | Run | Vintages | Truth |
@@ -93,7 +91,6 @@ Every other model forecasts the final count $X$ of week $w$, which is mapped to 
 
 1. Day $t$ is $a = c - t$ days old at a cut-off $c$, and $\pi(a)$ is the share of its final count the model expects reported by then.
    For `randomwalknowcast`, $\pi(a) = 1 / \Gamma(a)$ under the daily delay it fits at the origin ([Baseline models](baselines.md#delay)).
-   For `pprandomwalknowcast` it is the posterior median of each place's $\pi_p(a)$ from its own fit ([Baseline models](baselines.md#partially-pooled-variant)).
    For the renewal models it is the posterior median of each province's cumulative onset-to-report delay of the latest onset week, as the fit stores it.
    Ages past the end of the delay take its last value, and days after the cut-off have $\pi = 0$.
 2. A week's share $\pi_w$ is the mean of $\pi$ over its seven days.
@@ -142,15 +139,13 @@ It runs on every real vintage for the three renewal models.
 
 ## Health zones
 
-`randomwalk`, `randomwalknowcast` and `pprandomwalknowcast` are scored at zone level, for every zone with cases at the vintage ([Baseline models](baselines.md#health-zones)).
+`randomwalk` and `randomwalknowcast` are scored at zone level, for every zone with cases at the vintage ([Baseline models](baselines.md#health-zones)).
 A week with no onsets in a zone has a count of 0.
 Each model's zone samples are made to sum to its province samples, as in the submitted file, and are scored in that form.
 Each real vintage before the latest is forecast, and origins with no pair of releases within the delay window are skipped, as for provinces.
 Zones are scored on the reported target as for [real releases](#real-releases), with the zone delays fitted at the origin, so a zone count is never scored against a count still being reported.
 Relative WIS is against `randomwalk` in the same form.
-`pprandomwalknowcast` is fitted here on the zones and on the provinces.
-On the Nowcast page only `randomwalk` and `randomwalknowcast` are shown at zone level.
-The fitted models are shown at the country and provinces, from their stored forecasts.
+On the Nowcast page the renewal models are shown at the country and provinces, from their stored forecasts.
 
 ## Scores by place type and plausibility { #checks }
 
