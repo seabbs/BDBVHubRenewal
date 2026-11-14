@@ -202,8 +202,18 @@ def main() -> None:
                 series[name] = _quantiles(Path(path))
         observed = pd.read_csv(args.observed)
         observed = observed.loc[observed["as_of"] == observed["as_of"].max()]
+        # The last 16 weeks, and the places with a case in them.
+        start = pd.to_datetime(mine["target_end_date"]).min() - pd.Timedelta(
+            weeks=12
+        )
+        observed = observed.loc[
+            pd.to_datetime(observed["target_end_date"]) >= start
+        ]
+        active = set(observed.loc[observed["observation"] > 0, "location"])
         locs = sorted(mine["location"].unique())
-        provinces = [loc for loc in locs if loc.count("-") == 1]
+        provinces = [
+            loc for loc in locs if loc.count("-") == 1 and loc in active
+        ]
         zones = [loc for loc in locs if loc.count("-") == 2]
         recent = (
             observed.loc[observed["location"].isin(zones)]
@@ -219,8 +229,11 @@ def main() -> None:
             f"Medians with 50% and 90% intervals: `{model_id}`, "
             + ", ".join(f"`{n}`" for n in list(series)[1:])
             + f". Dots are the counts reported as of "
-            f"{observed['as_of'].max()}. The file has {len(provinces)} "
-            f"provinces and {len(zones)} health zones.",
+            f"{observed['as_of'].max()}, over the last 16 weeks. Shown are "
+            f"the {len(provinces)} provinces with a case in them, and the six "
+            f"zones with the most. The file has "
+            f"{sum(loc.count('-') == 1 for loc in locs)} provinces and "
+            f"{len(zones)} health zones.",
             "",
         ]
         for name, places in (
