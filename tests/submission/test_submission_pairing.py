@@ -180,11 +180,7 @@ def test_a_model_with_no_past_forecasts_fails(tasks: list) -> None:
 
 def test_the_first_origin_takes_the_prior(tasks: list) -> None:
     # With no earlier origin, the backtest has no errors either.
-    task = next(
-        t
-        for t in tasks
-        if get_model("randomwalknowcast").forecast(t) is not None
-    )
+    task = tasks[-1]
     samples = get_model("randomwalknowcast").forecast(task)
     paired, fit = pair_submission(
         "fm_chronos_weekly_ragged",
