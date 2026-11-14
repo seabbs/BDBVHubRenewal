@@ -20,6 +20,8 @@ weeks at past origins (`normal_scores`), shrunk towards a prior.
 `pair_samples` pairs one forecast table, and `RollingCopula` pairs a
 model's forecasts at every origin, each with the copula estimated from
 the model's own recent matured errors.
+`pair_registered` pairs the models registered as `paired`, those that
+draw each place and week on their own.
 A country that is the sum of its provinces is summed again from the
 paired provinces.
 """
@@ -35,7 +37,7 @@ import numpy as np
 import pandas as pd
 from scipy.special import ndtri
 
-from bdbvhubrenewal.forecasters.base import NATIONAL
+from bdbvhubrenewal.forecasters.base import NATIONAL, list_models
 
 __all__ = [
     "MAX_RHO",
@@ -46,6 +48,7 @@ __all__ = [
     "RollingCopula",
     "estimate_copula",
     "normal_scores",
+    "pair_registered",
     "pair_samples",
 ]
 
@@ -59,6 +62,14 @@ PRIOR_WEIGHT: Final = 100.0
 """Normal scores the prior counts as, in `estimate_copula`'s shrinkage."""
 
 _CELL = ["model", "origin", "location", "target_end_date"]
+_FIT_COLUMNS = [
+    "model",
+    "origin",
+    "n_scores",
+    "rho_time",
+    "rho_provinces",
+    "rho_national",
+]
 
 
 def _factor(corr: np.ndarray) -> np.ndarray:
@@ -534,4 +545,42 @@ class RollingCopula:
                 }
             )
         out = pd.concat(paired, ignore_index=True)[list(forecasts.columns)]
-        return out, pd.DataFrame(fits)
+        return out, pd.DataFrame(fits, columns=_FIT_COLUMNS)
+
+
+def pair_registered(
+    forecasts: pd.DataFrame,
+    truth: pd.DataFrame,
+    seed: int,
+    national: str = NATIONAL,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Pair the forecasts of the models registered as `paired`.
+
+    Each is paired by `RollingCopula` with its defaults. Other models'
+    rows are left as they are.
+
+    Parameters
+    ----------
+    forecasts : pandas.DataFrame
+        As for `RollingCopula.pair`.
+    truth : pandas.DataFrame
+        As for `RollingCopula.pair`.
+    seed : int
+        Seed.
+    national : str
+        The country's location code.
+
+    Returns
+    -------
+    tuple of pandas.DataFrame
+        The forecasts, and each paired model and origin's fit.
+    """
+    names = {s.name for s in list_models() if s.paired}
+    mine = forecasts["model"].isin(names)
+    if not mine.any():
+        return forecasts, pd.DataFrame(columns=_FIT_COLUMNS)
+    paired, fits = RollingCopula(national=national).pair(
+        forecasts.loc[mine], truth, seed
+    )
+    out = pd.concat([forecasts.loc[~mine], paired], ignore_index=True)
+    return out, fits

@@ -79,6 +79,7 @@ from bdbvhubrenewal.forecasters.base import (
     list_models,
 )
 from bdbvhubrenewal.forecasters.chain import MissingSnapshots
+from bdbvhubrenewal.forecasters.copula import pair_registered
 from bdbvhubrenewal.forecasters.renewal import DELAY_SUMMARY_FILE
 
 __all__ = [
@@ -154,6 +155,11 @@ class ReleaseBacktest:
         of forecasts scored on each target.
     fits : pandas.DataFrame
         Each model's fit summaries from `ForecastModel.fit_diagnostics`.
+    copulas : pandas.DataFrame
+        The copula of each paired model and origin
+        (`bdbvhubrenewal.forecasters.copula.pair_registered`): `model`,
+        `origin`, `n_scores` and the three correlations. Empty with no
+        truth delay.
     """
 
     scores: pd.DataFrame
@@ -161,6 +167,7 @@ class ReleaseBacktest:
     energy: pd.DataFrame
     origins: pd.DataFrame
     fits: pd.DataFrame
+    copulas: pd.DataFrame
 
 
 def delay_curves(summary: pd.DataFrame, places: Sequence[str]) -> pd.DataFrame:
@@ -920,6 +927,33 @@ def score_releases(
         if len(run.samples)
         else (run.samples)
     )
+    copulas = pd.DataFrame()
+    if truth_delay is not None:
+        # Models that draw each place and week on their own are paired
+        # into trajectories, by origin, from their matured errors.
+        seed = min((t.seed for t in tasks), default=0)
+        parts = [
+            samples.reindex(columns=["model", "origin", *cols]),
+            kept.reindex(columns=["model", "vintage", *cols])
+            .rename(columns={"vintage": "origin"})
+            .astype({"origin": str})
+            .assign(stored=True),
+        ]
+        parts = [p for p in parts if len(p)]
+        if parts:
+            both = pd.concat(parts, ignore_index=True)
+            if "stored" not in both:
+                both["stored"] = False
+            paired, copulas = pair_registered(
+                both, rolling_truth(real, truth_delay), seed
+            )
+            is_stored = paired["stored"].eq(True)
+            samples = paired.loc[~is_stored].drop(columns="stored")
+            kept = (
+                paired.loc[is_stored]
+                .drop(columns="stored")
+                .rename(columns={"origin": "vintage"})
+            )
     frames: list[pd.DataFrame] = []
     origin_rows: list[dict[str, object]] = []
     fit_rows: list[pd.DataFrame] = []
@@ -1005,7 +1039,9 @@ def score_releases(
         # Each complete week is labelled with the release giving its truth,
         # and weeks with none yet are dropped, quantiles included.
         frames = [_relabel(f, complete) for f in frames]
-    return _score(frames, origin_rows, fit_rows, real, done, complete, compare)
+    return _score(
+        frames, origin_rows, fit_rows, real, done, complete, compare, copulas
+    )
 
 
 def _relabel(frame: pd.DataFrame, complete: pd.DataFrame) -> pd.DataFrame:
@@ -1059,6 +1095,7 @@ def _score(
     done: pd.DataFrame,
     complete: pd.DataFrame,
     compare: Collection[str] | None,
+    copulas: pd.DataFrame,
 ) -> ReleaseBacktest:
     fits = (
         pd.concat(fit_rows, ignore_index=True) if fit_rows else pd.DataFrame()
@@ -1068,7 +1105,7 @@ def _score(
     )
     if not frames:
         empty = pd.DataFrame()
-        return ReleaseBacktest(empty, empty, empty, origins, fits)
+        return ReleaseBacktest(empty, empty, empty, origins, fits, copulas)
     samples = pd.concat(frames, ignore_index=True)
     scored, energy = [], []
     for (tgt, truth_v), grp in samples.groupby(["target", "truth_vintage"]):
@@ -1115,6 +1152,7 @@ def _score(
         pd.concat(energy, ignore_index=True),
         origins,
         fits,
+        copulas,
     )
 
 

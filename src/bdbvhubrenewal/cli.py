@@ -1054,6 +1054,7 @@ def _write_release(out: ReleaseBacktest, results: Path, delay: int) -> None:
         ("energy", out.energy),
         ("origins", out.origins),
         ("fits", out.fits),
+        ("copulas", out.copulas),
     ):
         write_csv(table, results / f"nowcast-{name}.csv")
     (results / "nowcast-truth.json").write_text(

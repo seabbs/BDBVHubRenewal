@@ -526,7 +526,7 @@ def test_score_scores_the_complete_target_on_the_truth_delay(
         del args
         seen.update(kwargs)
         empty = pd.DataFrame()
-        return ReleaseBacktest(empty, empty, empty, empty, empty)
+        return ReleaseBacktest(empty, empty, empty, empty, empty, empty)
 
     monkeypatch.setattr(
         cli, "_stored", lambda *_: (pd.DataFrame(), pd.DataFrame())

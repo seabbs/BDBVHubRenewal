@@ -196,6 +196,10 @@ class ModelSpec:
     fitted : bool
         Whether the model is fitted by MCMC for each task, so is slow.
         The docs report and the smoke tests run only models that are not.
+    paired : bool
+        Whether the model draws each place and week on its own, so its
+        draws are paired into trajectories by the rolling copula
+        (`bdbvhubrenewal.forecasters.copula.pair_registered`).
     """
 
     name: str
@@ -203,6 +207,7 @@ class ModelSpec:
     description: str
     baseline: bool = False
     fitted: bool = False
+    paired: bool = False
 
 
 _REGISTRY: dict[str, ModelSpec] = {}
@@ -215,6 +220,7 @@ def register_model(
     *,
     baseline: bool = False,
     fitted: bool = False,
+    paired: bool = False,
     replace: bool = False,
 ) -> ModelSpec:
     """Add a model to the registry used by the backtest, CLI and docs.
@@ -231,6 +237,8 @@ def register_model(
         Mark the model as the baseline for relative skill.
     fitted : bool
         Mark the model as fitted by MCMC for each task.
+    paired : bool
+        Mark the model's draws as paired by the rolling copula.
     replace : bool
         Allow replacing an existing entry.
 
@@ -257,7 +265,7 @@ def register_model(
     """
     if name in _REGISTRY and not replace:
         raise ValueError(f"Model {name!r} is already registered.")
-    spec = ModelSpec(name, factory, description, baseline, fitted)
+    spec = ModelSpec(name, factory, description, baseline, fitted, paired)
     _REGISTRY[name] = spec
     return spec
 

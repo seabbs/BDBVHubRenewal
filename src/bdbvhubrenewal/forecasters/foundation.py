@@ -789,6 +789,7 @@ for _source in SOURCES:
             f"Chronos-2 on the hub target's {_source} releases, {_layout} "
             "layout, the country and provinces in one block.",
             fitted=True,
+            paired=True,
         )
     register_model(
         f"fm_chronos_{_source}_ragged_ft",
@@ -796,4 +797,5 @@ for _source in SOURCES:
         f"Chronos-2 fine-tuned on simulated outbreaks, on the hub target's "
         f"{_source} releases, ragged layout.",
         fitted=True,
+        paired=True,
     )
