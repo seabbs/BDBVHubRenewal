@@ -34,6 +34,8 @@
 #   OUTBREAKS     training outbreaks (8000)
 #   PUBLISH       1 to publish each checkpoint release
 #   NOTE          text recorded in each checkpoint's settings
+#   MPS_HIGH_WATERMARK   the trainer's cap on MPS memory, as a share of
+#                 the GPU's recommended working set
 #
 # If the training seeds' yield projects fewer than OUTBREAKS outbreaks,
 # the driver adds seeds after TRAIN_LAST (`extend_seeds`).
@@ -43,7 +45,8 @@
 # outbreaks as they arrive and publishes each checkpoint. Every step is
 # logged to output/finetune/driver.log, and output/finetune/STATUS holds
 # one line of state. It stops with an error in both on a failed
-# simulation batch, a bad batch or a failed trainer. Pause by creating
+# simulation batch or a bad batch. A failed trainer restarts from its
+# last saved state after a backoff while simulation carries on. Pause by creating
 # output/finetune/PAUSE (no new simulations, the trainer waits) and
 # resume by removing it.
 set -uo pipefail
@@ -326,44 +329,67 @@ trainer_args=("$SIM_DIR" "$OUT" --train-seeds "$TRAIN_FIRST" "$TRAIN_LAST"
   --held-out-seeds "$HELD_FIRST" "$HELD_LAST" --outbreaks "$OUTBREAKS"
   --note "${NOTE:-}")
 [ "${PUBLISH:-0}" = 1 ] && trainer_args+=(--publish)
+start_trainer() {
+  # MPS memory is capped so the caching allocator cannot fill the laptop.
+  PYTORCH_MPS_HIGH_WATERMARK_RATIO=$MPS_HIGH_WATERMARK \
+  PYTORCH_MPS_LOW_WATERMARK_RATIO=0.6 \
+  HF_HOME=output/finetune/hf HF_HUB_OFFLINE=1 MPLCONFIGDIR="${TMPDIR:-/tmp}" \
+    nohup .venv/bin/python scripts/finetune_stream.py "${trainer_args[@]}" \
+    >> "$LOG" 2>&1 < /dev/null &
+  trainer=$!
+  adopted=0
+  echo "$trainer" > output/finetune/trainer.pid
+  log "started the trainer, pid $trainer"
+}
+
+trainer_exit() {
+  # The exit code of a stopped trainer; a kept one is not this shell's
+  # child, so its state tells.
+  if (( adopted )); then
+    local stage
+    stage=$(python3 -c "import json;print(json.load(open('$OUT/stream-status.json'))['stage'])" 2> /dev/null)
+    [ "$stage" = finished ] && echo 0 || echo 1
+  else
+    wait "$trainer"
+    echo $?
+  fi
+}
+
 trainer=$(cat output/finetune/trainer.pid 2> /dev/null)
 if [ -n "$trainer" ] && ps -p "$trainer" -o args= | grep -q finetune_stream; then
   # A restarted driver keeps a running trainer and its progress.
   adopted=1
   log "kept the running trainer, pid $trainer"
 else
-  adopted=0
-  # Cap MPS memory so the caching allocator cannot fill the laptop.
-  PYTORCH_MPS_HIGH_WATERMARK_RATIO=0.8 PYTORCH_MPS_LOW_WATERMARK_RATIO=0.6 \
-  HF_HOME=output/finetune/hf HF_HUB_OFFLINE=1 MPLCONFIGDIR="${TMPDIR:-/tmp}" \
-    nohup .venv/bin/python scripts/finetune_stream.py "${trainer_args[@]}" \
-    >> "$LOG" 2>&1 < /dev/null &
-  trainer=$!
-  echo "$trainer" > output/finetune/trainer.pid
-  log "started the trainer, pid $trainer"
+  start_trainer
 fi
 [ -e "$OUT/train-last.txt" ] && TRAIN_LAST=$(cat "$OUT/train-last.txt")
+failures=0
+retry_at=0
 while true; do
   extend_seeds
   check_remote
   local_slots
   sync_remote
   check_batches
-  if ! kill -0 "$trainer" 2> /dev/null; then
-    if (( adopted )); then
-      # A kept trainer is not this shell's child: its state tells.
-      stage=$(python3 -c "import json;print(json.load(open('$OUT/stream-status.json'))['stage'])" 2> /dev/null)
-      [ "$stage" = finished ] && code=0 || code=1
-    else
-      wait "$trainer"
-      code=$?
+  if (( retry_at )) && (( $(date +%s) >= retry_at )); then
+    retry_at=0
+    start_trainer
+  elif (( ! retry_at )) && ! kill -0 "$trainer" 2> /dev/null; then
+    code=$(trainer_exit)
+    if [ "$code" -eq 0 ]; then
+      log "the trainer finished"
+      status "finished"
+      exit 0
     fi
-    if [ "$code" -ne 0 ]; then
-      fail "the trainer stopped with exit code $code, see $LOG"
-    fi
-    log "the trainer finished"
-    status "finished"
-    exit 0
+    # A failed trainer restarts from its last saved state after a backoff
+    # of 5 minutes, doubling to an hour; simulation carries on meanwhile.
+    failures=$(( failures + 1 ))
+    wait_s=$(( 300 * 2 ** (failures - 1) ))
+    (( wait_s > 3600 )) && wait_s=3600
+    retry_at=$(( $(date +%s) + wait_s ))
+    last_error="trainer failed (exit $code, failure $failures), restart in $(( wait_s / 60 )) min"
+    log "ERROR: $last_error; see the trainer's lines above"
   fi
   status
   sleep 180

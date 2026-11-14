@@ -43,6 +43,10 @@ import finetune_chronos as ft
 CHUNK = 500
 """Outbreaks per chunk."""
 
+SAVE_EVERY = 25
+"""Steps between saves of the trainer's state, which a restarted trainer
+resumes from."""
+
 POLL = 60
 """Seconds between checks for a chunk's simulations."""
 
@@ -177,6 +181,39 @@ def publish(where: Path, key: str) -> None:
     raise RuntimeError(f"could not publish chronos-ft-{key}")
 
 
+def save_state(where: Path, model, optimiser, state: dict) -> None:
+    """Save the trainer's state: adapter, optimiser and position."""
+    import torch
+    from peft import get_peft_model_state_dict
+
+    tmp = where.with_suffix(".tmp")
+    tmp.mkdir(parents=True, exist_ok=True)
+    torch.save(get_peft_model_state_dict(model), tmp / "adapter.pt")
+    torch.save(optimiser.state_dict(), tmp / "optimiser.pt")
+    (tmp / "state.json").write_text(json.dumps(state))
+    if where.exists():
+        for f in where.iterdir():
+            f.unlink()
+        where.rmdir()
+    tmp.rename(where)
+
+
+def load_state(where: Path, model, optimiser) -> dict | None:
+    """Load the trainer's saved state into the model and optimiser."""
+    import torch
+    from peft import set_peft_model_state_dict
+
+    if not (where / "state.json").exists():
+        return None
+    set_peft_model_state_dict(
+        model, torch.load(where / "adapter.pt", weights_only=True)
+    )
+    optimiser.load_state_dict(
+        torch.load(where / "optimiser.pt", weights_only=True)
+    )
+    return json.loads((where / "state.json").read_text())
+
+
 def main() -> None:
     """Train on the chunks as they are simulated."""
     import torch
@@ -263,9 +300,6 @@ def main() -> None:
     params = [p for p in model.parameters() if p.requires_grad]
     optimiser = torch.optim.AdamW(params, lr=args.learning_rate)
     accepted = inspect.signature(Chronos2Model.forward).parameters
-    start_loss = ft.held_out_loss(model, val, args.batch_size)
-    history = [{"step": 0, "held_out_loss": start_loss}]
-    log(f"held-out loss at the start {start_loss:.4f}")
     base = {
         "chronos_revision": ft.CHRONOS_REVISION,
         "code_sha256": {
@@ -291,8 +325,62 @@ def main() -> None:
         "note": args.note,
     }
     consumed = out / "consumed.txt"
-    consumed.write_text("")
-    step, done, t0 = 0, 0, time.perf_counter()
+    state_dir = out / "state"
+    state = load_state(state_dir, model, optimiser)
+    step, done, position = 0, 0, 0
+    if state is None:
+        consumed.write_text("")
+        start_loss = ft.held_out_loss(model, val, args.batch_size)
+        history = [{"step": 0, "held_out_loss": start_loss}]
+        log(f"held-out loss at the start {start_loss:.4f}")
+    else:
+        step, done, position = state["step"], state["done"], state["position"]
+        start_loss, history = state["start_loss"], state["history"]
+        lines = consumed.read_text().splitlines()[:step]
+        consumed.write_text("".join(f"{line}\n" for line in lines))
+        log(f"resumed at step {step}, outbreaks {done + 1}-, batch {position}")
+
+    def snapshot() -> None:
+        save_state(
+            state_dir,
+            model,
+            optimiser,
+            {
+                "step": step,
+                "done": done,
+                "position": position,
+                "start_loss": start_loss,
+                "history": history,
+            },
+        )
+
+    def train_step(batch_blocks: list[int], share: float) -> float:
+        """Accumulate gradients of a batch; split it if memory runs out."""
+        try:
+            batch = {
+                k: v.to(device) if torch.is_tensor(v) else v
+                for k, v in data._build_batch(batch_blocks).items()
+                if k in accepted
+            }
+            loss = model(**batch).loss
+            (loss * share).backward()
+            value = float(loss.detach())
+            del batch, loss
+            return value
+        except RuntimeError as error:
+            if "out of memory" not in str(error):
+                raise
+            free_memory()
+            if len(batch_blocks) == 1:
+                log(f"skipped a block too large for memory: {memory()}")
+                return float("nan")
+            half = len(batch_blocks) // 2
+            log(f"split a batch of {len(batch_blocks)} blocks for memory")
+            parts = (batch_blocks[:half], batch_blocks[half:])
+            values = [train_step(part, share / 2) for part in parts]
+            return float(np.nanmean(values))
+
+    t0 = time.perf_counter()
     while done < args.outbreaks:
         hi = min(done + CHUNK, args.outbreaks)
         report(stage=f"waiting for outbreaks {done + 1}-{hi}")
@@ -322,30 +410,27 @@ def main() -> None:
             f"outbreaks {done + 1}-{hi}: {len(blocks)} blocks, "
             f"{sizes.sum()} series, {len(plan)} steps"
         )
-        for indices in plan:
+        while position < len(plan):
+            indices = plan[position]
             while pause.exists():
                 report(stage="paused")
                 time.sleep(30)
-            batch = {
-                k: v.to(device) if torch.is_tensor(v) else v
-                for k, v in data._build_batch(indices).items()
-                if k in accepted
-            }
-            loss = model(**batch).loss
-            loss.backward()
-            value = float(loss.detach())
+            value = train_step(indices, 1.0)
             torch.nn.utils.clip_grad_norm_(params, 1.0)
             optimiser.step()
             optimiser.zero_grad()
+            # Batches differ in shape, so cached buffers pile up unless they
+            # are freed every step.
+            free_memory()
             step += 1
-            if len(batch["context"]) > ft.CHECKPOINT_SERIES:
-                del batch, loss
-                free_memory()
+            position += 1
             with consumed.open("a") as f:
                 f.write(f"{step}\t{','.join(pairs[i][0] for i in indices)}\n")
             if step % 10 == 0:
                 history.append({"step": step, "loss": value})
-                report(stage="training", step=step, outbreaks=done)
+                report(
+                    stage="training", step=step, outbreaks=done, gpu=memory()
+                )
             if step % ft.EVAL_EVERY == 0:
                 monitor = ft.held_out_loss(
                     model, val[: ft.EVAL_BLOCKS], args.batch_size
@@ -354,11 +439,12 @@ def main() -> None:
                 log(
                     f"step {step}: loss {value:.4f}, held-out "
                     f"(first {ft.EVAL_BLOCKS} blocks) {monitor:.4f}, "
-                    f"{time.perf_counter() - t0:.0f} s"
+                    f"{time.perf_counter() - t0:.0f} s; {memory()}"
                 )
                 (out / "history.json").write_text(json.dumps(history))
-        done = hi
-        report(stage="training", step=step, outbreaks=done)
+            if step % SAVE_EVERY == 0:
+                snapshot()
+        done, position = hi, 0
         if done in prefixes:
             where = out / f"n{done}"
             where.mkdir(parents=True, exist_ok=True)
@@ -400,6 +486,8 @@ def main() -> None:
             if args.publish:
                 publish(where, key)
                 report(last_release=f"chronos-ft-{key}")
+        snapshot()
+        report(stage="training", step=step, outbreaks=done)
     report(stage="finished", step=step, outbreaks=done)
     log("finished")
 
