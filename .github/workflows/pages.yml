@@ -10,6 +10,7 @@ on:
     paths:
       - 'docs/**'
       - 'mkdocs.yml'
+      - 'paper/**'
       - 'assets/**'
       - 'src/**'
       - 'data/**'
@@ -26,6 +27,7 @@ on:
     paths:
       - 'docs/**'
       - 'mkdocs.yml'
+      - 'paper/**'
       - 'assets/**'
       - 'src/**'
       - 'data/**'
@@ -86,6 +88,41 @@ jobs:
             !data/raw
             results
             output/fit-store
+          retention-days: 1
+
+  # The paper's main text and SI, as HTML and PDF, for the site's /paper/.
+  # Renders the manuscript as it stands and runs none of the evaluation.
+  # As `task paper:render`; keep the two in step.
+  paper:
+    name: Paper
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Quarto reads GH_TOKEN to look up the TinyTeX release, which
+      # unauthenticated runners can be refused (403).
+      - uses: quarto-dev/quarto-actions/setup@8a96df13519ee81fd526f2dfca5962811136661b # v2.2.0
+        env:
+          GH_TOKEN: ${{ github.token }}
+        with:
+          version: 1.8.26
+          tinytex: true
+      # From paper/, as Quarto writes the PDF links relative to where it
+      # runs.
+      - name: Render the paper
+        working-directory: paper
+        run: |
+          quarto render main.qmd
+          quarto render si.qmd
+          mkdir -p ../_paper
+          cp -R {main,si}.{html,pdf} {main,si}_files figures ../_paper/
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: paper
+          path: _paper
+          if-no-files-found: error
           retention-days: 1
 
   # The forecasts of the backtests that fit no model, one job per model
@@ -300,7 +337,7 @@ jobs:
           retention-days: 1
 
   build:
-    needs: [prep, backtest]
+    needs: [prep, backtest, paper]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -393,6 +430,11 @@ jobs:
         run: >-
           uv run --group docs jupytext --to ipynb --execute --run-path .
           docs/getting-started.py
+      # Copied in as they are, so the site serves them at /paper/.
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: paper
+          path: docs/paper
       - name: Build the site into _site
         run: uv run mkdocs build --strict
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

@@ -3,6 +3,9 @@ title: "Supporting Information: title to be chosen"
 date: today
 format:
   html:
+    # The site serves the paper at /paper/, so ../ is its home page.
+    include-before-body:
+      - text: '<p class="back-to-site"><a href="../">Back to the site</a></p>'
     toc: true
     number-sections: false
   pdf:

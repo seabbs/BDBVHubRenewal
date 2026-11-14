@@ -7,8 +7,14 @@ title: "Title to be chosen"
 date: today
 format:
   html:
+    # The site serves the paper at /paper/, so ../ is its home page.
+    include-before-body:
+      - text: '<p class="back-to-site"><a href="../">Back to the site</a></p>'
     toc: false
     number-sections: false
+    other-links:
+      - text: Supporting information
+        href: si.html
   pdf:
     number-sections: false
 bibliography: reference.bib
