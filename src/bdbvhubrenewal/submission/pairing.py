@@ -8,10 +8,11 @@ as the release backtest pairs them, so the scored and submitted
 forecasts are the same.
 The copula is estimated from the model's forecasts at earlier origins,
 against the truth the releases up to the forecast give.
-Those forecasts come from the ledger's archive of each round's
-candidates (`archived_forecasts`), then from the fit store
-(`stored_forecasts`), and, for a model that is not fitted, from
-forecasting again at the earlier releases.
+Those forecasts come from where the backtest takes them: the fit store
+(`stored_forecasts`) for a fitted model, and forecasting again at the
+earlier releases for one that is not.
+The ledger's archive of each round's candidates (`archived_forecasts`)
+gives an origin neither has.
 A paired model with no past forecasts from any of these fails, rather
 than be paired by the prior alone.
 """
@@ -27,6 +28,7 @@ import pandas as pd
 
 from bdbvhubrenewal.data.dates import as_date
 from bdbvhubrenewal.evaluation import store as fit_store
+from bdbvhubrenewal.evaluation.backtest import BacktestConfig
 from bdbvhubrenewal.evaluation.nowcast import rolling_truth
 from bdbvhubrenewal.forecasters.base import (
     ForecastTask,
@@ -78,8 +80,9 @@ def archived_forecasts(archive: Path | str | None, model: str) -> pd.DataFrame:
     -------
     pandas.DataFrame
         `model`, `origin` (the release forecast from), `location`,
-        `target_end_date`, `sample`, `value` and `source`. Of an origin
-        archived by more than one run, the latest run's.
+        `target_end_date`, `sample`, `value` and `source`, of the
+        provinces only, as a hub table's country is their sum. Of an
+        origin archived by more than one run, the latest run's.
     """
     if archive is None or not Path(archive).is_dir():
         return _empty()
@@ -90,7 +93,7 @@ def archived_forecasts(archive: Path | str | None, model: str) -> pd.DataFrame:
         rows = table.loc[
             (table["model"] == model)
             & (table["output_type"] == "sample")
-            & (table["location"].str.count("-") <= 1)
+            & (table["location"].str.count("-") == 1)
         ]
         for origin, own in rows.groupby("vintage"):
             by_origin[str(origin)] = own
@@ -172,9 +175,9 @@ def past_forecasts(
 ) -> pd.DataFrame:
     """Return a model's forecasts at origins before `origin`.
 
-    Each origin takes the archive's forecast, then the store's. A model
-    that is not fitted is forecast again at each task's release with
-    neither.
+    Each origin takes the forecast the release backtest scores: the
+    store's for a fitted model, or one made again at the task's release
+    for a model that is not. The archive gives an origin neither has.
 
     Parameters
     ----------
@@ -192,21 +195,22 @@ def past_forecasts(
     pandas.DataFrame
         As `archived_forecasts`, with each row's `source`.
     """
+    spec = {s.name: s for s in list_models()}.get(model)
     frames = []
     have: set[str] = set()
-    for table in (
-        archived_forecasts(archive, model),
-        stored_forecasts(store, model),
-    ):
+
+    def add(table: pd.DataFrame) -> None:
         table = table.loc[
             (table["origin"] < origin) & ~table["origin"].isin(have)
         ]
-        have |= set(table["origin"])
+        have.update(table["origin"])
         frames.append(table)
-    spec = {s.name: s for s in list_models()}.get(model)
+
+    add(stored_forecasts(store, model))
     if spec is not None and not spec.fitted:
         tasks = [t for t in past_tasks if t.vintage < origin]
-        frames.append(_recomputed(model, tasks, have))
+        add(_recomputed(model, tasks, have))
+    add(archived_forecasts(archive, model))
     frames = [f for f in frames if len(f)]
     if not frames:
         return _empty()
@@ -221,6 +225,7 @@ def pair_submission(
     archive: Path | str | None = None,
     store: Path | str | None = None,
     past_tasks: Sequence[ForecastTask] = (),
+    max_horizon: int = BacktestConfig().max_horizon,
 ) -> tuple[pd.DataFrame, dict[str, Any]]:
     """Pair a forecast's draws by the copula of the model's recent errors.
 
@@ -240,6 +245,9 @@ def pair_submission(
         Where the past forecasts come from (`past_forecasts`). Only the
         tasks of releases that can still give errors in the copula's
         window are forecast again.
+    max_horizon : int
+        The latest week of a forecast, in weeks after its reference week,
+        which sets how far back a release can still give such errors.
 
     Returns
     -------
@@ -255,8 +263,10 @@ def pair_submission(
         If no source gives a past forecast.
     """
     origin = task.vintage
+    # A forecast at r reaches week r + max_horizon, which is in the window
+    # only if it ends after the origin less D and WINDOW_WEEKS weeks.
     oldest = as_date(origin) - pd.Timedelta(
-        days=truth_delay + 7 * (WINDOW_WEEKS + 4)
+        days=truth_delay + 7 * (WINDOW_WEEKS + max_horizon + 1)
     )
     recent = [t for t in past_tasks if as_date(t.vintage) >= oldest]
     past = past_forecasts(model, origin, archive, store, recent)
@@ -280,7 +290,15 @@ def pair_submission(
     out = paired.loc[paired["origin"] == origin, list(samples.columns)]
     out = out.astype(samples.dtypes.to_dict()).reset_index(drop=True)
     row = fits.loc[fits["origin"] == origin].iloc[0]
-    record: dict[str, Any] = {str(k): v for k, v in row.items()}
+    record: dict[str, Any] = {
+        "model": str(row["model"]),
+        "origin": str(row["origin"]),
+        "n_scores": int(row["n_scores"]),
+        **{
+            name: float(row[name])
+            for name in ("rho_time", "rho_provinces", "rho_national")
+        },
+    }
     by_origin = past.drop_duplicates("origin").sort_values("origin")
     record["sources"] = dict(
         zip(by_origin["origin"], by_origin["source"], strict=True)

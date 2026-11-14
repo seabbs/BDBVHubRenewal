@@ -1247,7 +1247,14 @@ def _pair(
             ).values()
         )
     samples, record = pair_submission(
-        name, result.samples, task, delay, history, args.store, past
+        name,
+        result.samples,
+        task,
+        delay,
+        history,
+        args.store,
+        past,
+        config.max_horizon,
     )
     print(
         f"Pairing {name}: rho_t {record['rho_time']:.2f}, rho_p "
@@ -1790,10 +1797,9 @@ def _germany_scores(args: argparse.Namespace) -> int:
 
     config = de.load_germany_config(args.config)
     triangle = hub_triangle(Path(args.data) / Path(config.triangle).name)
+    files = [Path(p) / "samples.csv.gz" for p in args.parts]
     parts = [
-        t
-        for p in args.parts
-        if not (t := _read_or_empty(Path(p) / "samples.csv.gz")).empty
+        t for f in files if f.exists() and not (t := _read_or_empty(f)).empty
     ]
     samples = (
         pd.concat(parts, ignore_index=True).astype(

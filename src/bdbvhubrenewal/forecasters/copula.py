@@ -331,13 +331,15 @@ def _sum_country(samples: pd.DataFrame, national: str) -> pd.DataFrame:
 
 
 def normal_scores(
-    forecasts: pd.DataFrame, truth: pd.DataFrame, rng: np.random.Generator
+    forecasts: pd.DataFrame, truth: pd.DataFrame, seed: int
 ) -> pd.DataFrame:
     r"""Return the normal score of each truth in its forecast's draws.
 
     The score is $\Phi^{-1}$ of the randomised PIT: with $m$ draws, $b$
     below the truth and $e$ equal to it, $(b + U (e + 1)) / (m + 1)$ for
-    $U$ uniform.
+    $U$ uniform, drawn for each forecast from a hash of the seed, model,
+    origin, place and week, so a score does not depend on which other
+    forecasts are scored with it.
     A forecast whose draws are all equal gives no score, as its PIT is
     $U$ alone.
 
@@ -349,8 +351,8 @@ def normal_scores(
     truth : pandas.DataFrame
         Columns `location`, `target_end_date` and `truth`, plus any
         columns it should be matched on.
-    rng : numpy.random.Generator
-        Random generator.
+    seed : int
+        Seed of the uniform draws.
 
     Returns
     -------
@@ -371,7 +373,12 @@ def normal_scores(
         spread=("value", "nunique"),
     )
     out = out.loc[out["spread"] > 1].reset_index(drop=True)
-    u = 1.0 - rng.uniform(size=len(out))
+    if out.empty:
+        return out[_CELL].assign(z=pd.Series(dtype=float))
+    keys = out[_CELL].astype(str).agg("|".join, axis=1)
+    # A hash in (0, 1): never 0 or 1, so the score is finite.
+    u = np.array([(zlib.crc32(f"{seed}|{k}".encode()) + 0.5) for k in keys])
+    u = u / 2.0**32
     pit = (out["below"] + u * (out["equal"] + 1)) / (out["m"] + 1)
     return out[_CELL].assign(z=ndtri(pit.to_numpy()))
 
@@ -510,7 +517,7 @@ class RollingCopula:
             `rolling_truth`: `location`, `target_end_date`, `truth` and
             `truth_vintage`.
         seed : int
-            Seed. Each model's scores, and each model and origin's
+            Seed. Each forecast's score, and each model and origin's
             pairing, draw from their own streams.
 
         Returns
@@ -529,7 +536,7 @@ class RollingCopula:
             scores = normal_scores(
                 final[["model", "origin", *cells, "sample", "value"]],
                 truth[[*cells, "truth"]],
-                np.random.default_rng(key),
+                seed,
             ).merge(released, on=cells)
             for origin, rows in own.groupby("origin"):
                 origin = str(origin)

@@ -45,7 +45,9 @@ The wait for the store stops against the window's close (`[timing]` in `ci/polic
 
 `randomwalknowcast` and the Chronos-2 models draw each place and week on their own.
 Before their hub table is made, their draws are paired by the rolling copula, as the release backtest pairs them ([Correlated trajectories](../methods/evaluation.md#correlated-trajectories)).
-The copula is estimated from the model's forecasts at earlier rounds: those archived on the ledger, then the fit store's, and for `randomwalknowcast` its forecasts made again at the earlier releases (`bdbvhubrenewal nowcast --history --store`).
+The copula is estimated from the model's forecasts at earlier rounds, taken as the backtest takes them: a fitted model's from the fit store, and `randomwalknowcast`'s made again at the earlier releases (`bdbvhubrenewal nowcast --store`).
+Once #233 is merged, the ledger's archive of each round's candidates fills any round neither has (`--history`).
+Each round's source is logged, and the run fails if a paired model has no past forecasts at all.
 Each pairing is recorded in the round's `copula.json`.
 
 ## Checks

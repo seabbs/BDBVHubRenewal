@@ -162,7 +162,8 @@ ledger_archive() {
   local dir=$1
   rm -rf "$dir"
   mkdir -p "$dir"
-  if [ "${SKIP_FETCH:-false}" != true ] && git fetch -q --depth 1 origin "${LEDGER_BRANCH:-submission-ledger}" \
+  [ "${SKIP_FETCH:-false}" = true ] && return 0
+  if git fetch -q --depth 1 origin "${LEDGER_BRANCH:-submission-ledger}" \
     2> /dev/null; then
     git archive FETCH_HEAD archive 2> /dev/null | tar -x -C "$dir" \
       2> /dev/null || true

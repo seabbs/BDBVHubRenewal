@@ -147,6 +147,7 @@ _RKI_ERROR: Final = 1e6
 """RKI quantiles above this are errors, which the paper replaced."""
 
 _KEYS = ("model", "target", "origin", "truth_vintage", "location")
+"""Columns that, with the week, identify a scored forecast."""
 
 _SAMPLE_COLUMNS = (
     "model",
@@ -158,7 +159,7 @@ _SAMPLE_COLUMNS = (
     "sample",
     "value",
 )
-"""Columns that, with the week, identify a scored forecast."""
+"""Columns of `germany_samples`."""
 
 
 @dataclass(frozen=True)
