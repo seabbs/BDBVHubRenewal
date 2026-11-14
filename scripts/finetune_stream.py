@@ -483,7 +483,7 @@ def main() -> None:
         blocks = [b for _, b in pairs]
         sizes = np.array([int(b["context"].shape[0]) for b in blocks])
         rng = np.random.default_rng([args.seed, done])
-        plan = ft.plan_batches(sizes, args.batch_size, rng)
+        plan = ft.plan_batches(sizes, args.batch_size, rng, ft.MAX_SERIES)
         data = Chronos2Dataset(
             inputs=blocks,
             context_length=ft.CONTEXT,

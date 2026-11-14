@@ -346,20 +346,31 @@ def size_class(n: int) -> int:
 
 
 def plan_batches(
-    sizes: np.ndarray, batch_size: int, rng: np.random.Generator
+    sizes: np.ndarray,
+    batch_size: int,
+    rng: np.random.Generator,
+    most: int | None = None,
 ) -> list[list[int]]:
     """Return batches of block indices that use every block once.
 
     Blocks are shuffled and packed in that order into batches of one size
     class until a batch holds `batch_size` series, so batches of small
-    blocks pack tightly and a large block is a batch on its own. The
-    batches are then shuffled.
+    blocks pack tightly and a large block is a batch on its own. No batch
+    of several blocks holds more than `most` series, the most the memory
+    budget allows (`max_series`). The batches are then shuffled.
     """
     filling: dict[int, list[int]] = {}
     held: dict[int, int] = {}
     batches = []
     for i in rng.permutation(len(sizes)):
         c = size_class(int(sizes[i]))
+        if (
+            most is not None
+            and filling.get(c)
+            and (held[c] + int(sizes[i]) > most)
+        ):
+            batches.append(filling.pop(c))
+            held[c] = 0
         filling.setdefault(c, []).append(int(i))
         held[c] = held.get(c, 0) + int(sizes[i])
         if held[c] >= batch_size:
