@@ -71,7 +71,7 @@ def test_code_digest_ignores_docstrings_and_comments(tmp_path: Path) -> None:
 
 def test_code_digest_follows_each_models_own_code(tmp_path: Path) -> None:
     root = _copy_repo(tmp_path)
-    models = ("renewal", "renewalsp", "pprandomwalknowcast")
+    models = ("renewal", "renewalbvd", "renewalsp", "pprandomwalknowcast")
 
     def digests() -> dict[str, str]:
         return {m: store.code_digest(m, root) for m in models}
@@ -82,13 +82,20 @@ def test_code_digest_follows_each_models_own_code(tmp_path: Path) -> None:
 
     src = "src/bdbvhubrenewal"
     before = digests()
-    # The three renewal variants share a module, so share a key.
-    assert before["renewal"] == before["renewalsp"]
+    # The zone variants share a module, so share a key, and renewalsp,
+    # in the province module they build on, has its own.
+    assert before["renewal"] == before["renewalbvd"]
+    assert before["renewal"] != before["renewalsp"]
     assert before["renewal"] != before["pprandomwalknowcast"]
     edit(f"{src}/forecasters/pprandomwalk.py")
     after = digests()
     assert after["renewal"] == before["renewal"]
     assert after["pprandomwalknowcast"] != before["pprandomwalknowcast"]
+    before = after
+    edit(f"{src}/forecasters/renewal.py")
+    after = digests()
+    assert after["renewal"] != before["renewal"]
+    assert after["renewalsp"] != before["renewalsp"]
     before = after
     edit(f"{src}/model/observation.py")
     after = digests()
@@ -103,10 +110,9 @@ def test_code_digest_follows_each_models_own_code(tmp_path: Path) -> None:
     assert all(after[m] != before[m] for m in models)
 
 
-def test_the_zone_split_does_not_key_a_fit(tmp_path: Path) -> None:
-    # A stored fit holds national and province samples only. Zones are
-    # split from them at load (`zones_for_model`), so the zone code is not
-    # fit code.
+def test_zone_code_keys_only_the_zone_fits(tmp_path: Path) -> None:
+    # The zone backtest is not fit code. The zone split module is, for
+    # the zone fits of renewal and renewalbvd, which call its zone_task.
     root = _copy_repo(tmp_path)
     models = ("renewal", "pprandomwalknowcast")
 
@@ -118,23 +124,34 @@ def test_the_zone_split_does_not_key_a_fit(tmp_path: Path) -> None:
         path.write_text(path.read_text() + "\n_EDITED = 1\n")
 
     before = digests()
-    for rel in ("forecasters/zones.py", "evaluation/zones.py"):
-        edit(rel)
-        assert digests() == before, rel
+    edit("evaluation/zones.py")
+    assert digests() == before
+    edit("forecasters/zones.py")
+    after = digests()
+    assert after["renewal"] != before["renewal"]
+    assert after["pprandomwalknowcast"] == before["pprandomwalknowcast"]
+    before = after
     # Introductions are drawn in the fit, for provinces with no recent case.
     edit("forecasters/introductions.py")
     after = digests()
     assert all(after[m] != before[m] for m in models)
 
 
-def test_fit_code_has_the_store_and_no_other_model() -> None:
-    renewal = set(store.fit_code("renewal", ROOT))
-    assert "src/bdbvhubrenewal/evaluation/store.py" in renewal
-    assert "src/bdbvhubrenewal/model/observation.py" in renewal
-    assert "src/bdbvhubrenewal/forecasters/pprandomwalk.py" not in renewal
-    pp = set(store.fit_code("pprandomwalknowcast", ROOT))
-    assert "src/bdbvhubrenewal/forecasters/renewal.py" not in pp
-    assert "src/bdbvhubrenewal/evaluation/store.py" in pp
+def test_zone_data_keys_the_zone_fits(
+    tasks: dict[str, ForecastTask], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from bdbvhubrenewal.forecasters import zonerenewal as zr
+
+    sampler = store.samplers()
+    models = ["renewal", "renewalsp"]
+    keys = store.current_keys(tasks, models, sampler, "c")
+    daily = zr._daily_zones()
+    monkeypatch.setattr(
+        zr, "_daily_zones", lambda: daily.assign(observed=daily["observed"] + 1)
+    )
+    moved = store.current_keys(tasks, models, sampler, "c")
+    for (model, origin), key in keys.items():
+        assert (moved[(model, origin)] != key) == (model == "renewal")
 
 
 def test_fit_time_data_files_key_a_fit(tmp_path: Path) -> None:
@@ -212,7 +229,8 @@ def test_renewal_key_has_every_model_module() -> None:
 def test_samplers_come_from_the_policy() -> None:
     table = store.samplers(ROOT / "ci" / "policy.toml")
     assert set(table) == {"renewal", "renewalbvd", "renewalsp"}
-    assert table["renewalbvd"]["num_samples"] == 750
+    assert table["renewalbvd"]["num_samples"] == 1500
+    assert table["renewalbvd"]["thinning"] == 2
 
 
 @pytest.fixture
@@ -509,3 +527,43 @@ def test_a_model_with_no_config_stores_no_files(
 ) -> None:
     stored = store.fit(fitted_flat, tasks[sorted(tasks)[-1]], {}, "c")
     assert stored.files == {}
+
+
+def test_load_writes_the_zone_fits_zone_samples(tmp_path: Path) -> None:
+    import base64
+    import gzip
+
+    zones = pd.DataFrame(
+        {
+            "location": ["CD-IT-01", "CD-IT-01"],
+            "target_end_date": ["2026-10-24", "2026-10-24"],
+            "sample": [1, 1],
+            "value": [3.0, 1.0],
+            "as_of": [None, "2026-10-24"],
+        }
+    )
+    body = base64.b64encode(
+        gzip.compress(zones.to_csv(index=False).encode())
+    ).decode()
+    meta = {
+        "model": "renewal",
+        "origin": "2026-10-17",
+        "key": "k",
+        "commit": "c",
+        "fitted_at": "2026-11-13T00:00:00+00:00",
+        "settings": "",
+        "status": "ok",
+    }
+    empty = pd.DataFrame()
+    fit = store.StoredFit(
+        meta, empty, empty, empty, files={"zones.csv.gz": body}
+    )
+    store.write_fit(tmp_path / "store", fit)
+    store.load(
+        tmp_path / "store", {("renewal", "2026-10-17"): "k"}, tmp_path / "res"
+    )
+    written = pd.read_csv(tmp_path / "res" / store.ZONE_FITS_FILE)
+    # Final counts only, by model and origin.
+    assert written[
+        ["model", "vintage", "location", "value"]
+    ].to_numpy().tolist() == [["renewal", "2026-10-17", "CD-IT-01", 3.0]]

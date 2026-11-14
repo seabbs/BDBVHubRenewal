@@ -52,7 +52,7 @@ SCENARIOS=(
   # A wildly high forecast is ruled out by the plausibility check, and
   # the chain moves on.
   "implausible|bvd=implausible|renewalsp||was ruled out (plausible: "
-  "wild|bvd=implausible,renewalsp=implausible|main||Model: province renewal model"
+  "wild|bvd=implausible,renewalsp=implausible|main||Model: zone renewal model"
   "latestream|bvd=latestream|bvd"
   "fallback|bvd=fail|renewalsp||Model: single-patch province renewal models"
   # Tuesday 21:00 UTC, two hours before the close: the fit timeouts are
@@ -67,8 +67,8 @@ SCENARIOS=(
   # A chosen model further down the chain starts it there; the
   # candidates before it are shadows.
   "nospatial|bvd=pass|renewalsp|MODEL=renewalsp|Model: single-patch province renewal models"
-  "nospatialfallback|bvd=pass,renewalsp=fail|main|MODEL=renewalsp|Model: province renewal model"
-  "chosenrenewal|bvd=pass,renewalsp=pass|main|MODEL=renewal|Model: province renewal model"
+  "nospatialfallback|bvd=pass,renewalsp=fail|main|MODEL=renewalsp|Model: zone renewal model"
+  "chosenrenewal|bvd=pass,renewalsp=pass|main|MODEL=renewal|Model: zone renewal model"
   "chosenrenewalfallback|main=fail|randomwalknowcast|MODEL=renewal|Model: random walk on a nowcast"
 )
 

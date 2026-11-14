@@ -56,7 +56,8 @@ def test_baseline_choices_keep_the_chain_from_that_baseline() -> None:
 
 
 def test_ci_sampler_settings() -> None:
-    # 2 chains of 500 warm-up and 750 draws, run in parallel. renewalbvd
+    # 2 chains of 500 warm-up, run in parallel. The zone fits (bvd, main)
+    # keep every other of 1500 draws, renewalsp all of 750. renewalbvd
     # samples at target acceptance 0.95, the others at 0.9.
     pol = load_policy(POLICY_PATH)
     samplers = {
@@ -67,7 +68,12 @@ def test_ci_sampler_settings() -> None:
         assert (s["num_chains"], s["num_warmup"]) == (2, 500)
         assert s["chain_method"] == "parallel"
     assert samplers["bvd"]["target_accept"] == 0.95
-    assert {s["num_samples"] for s in samplers.values()} == {750}
+    kept = {
+        name: s["num_samples"] // s.get("thinning", 1)
+        for name, s in samplers.items()
+    }
+    assert kept == {"bvd": 750, "main": 750, "renewalsp": 750}
+    assert samplers["bvd"]["num_samples"] == 1500
 
 
 def test_policy_validation(tmp_path: Path) -> None:

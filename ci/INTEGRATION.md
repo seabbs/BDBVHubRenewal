@@ -260,7 +260,8 @@ output/ci/
   inputs/            time-series.csv, tasks.json, previous.csv, context.json,
                      coherence.json, coherence-summary.{md,json}
   fits/<id>/         diagnostics.json, ppc.json, draws, store.json (the
-                     stored fit it came from)
+                     stored fit it came from), zones.csv.gz (the zone
+                     samples of renewal and renewalbvd)
   candidates/<id>/   submission/…csv, submission/national.json, nowcast.png,
                      run.json, fit-summary.{md,json}, ppc.json, ppc.png,
                      ppc-summary.{md,json}, coherence-summary.json,
