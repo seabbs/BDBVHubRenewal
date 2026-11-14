@@ -7,6 +7,9 @@
 #                       unpack`), never fit, as the workflow does; `fit`
 #                       (the default) fits here, for a local run
 #   STORE               the fit store checkout (default output/fit-store)
+#   LEDGER_BRANCH       the ledger, whose archive of past rounds gives a
+#                       paired model's past forecasts (default
+#                       submission-ledger)
 #
 # A bad fit or a failed check does not fail this step: the verdicts are
 # written to the candidate's directory and the select step walks the
@@ -95,13 +98,18 @@ else
   note "Fit took $(( SECONDS - start )) s."
 fi
 
+# Past rounds' forecasts, for a model whose draws are paired by the
+# copula of its recent errors.
+history="$WORK/ledger-archive"
+[ -d "$history" ] || ledger_archive "$history"
+past=(--history "$history/archive" --store "${STORE:-output/fit-store}")
 if $unfitted; then
   cli nowcast --model "$model" --vintage "$AS_OF" \
-    --reference-date "$REFERENCE_DATE" \
+    --reference-date "$REFERENCE_DATE" "${past[@]}" \
     --out "$out/submission" || echo "::warning::$model nowcast failed"
 elif $fit_ok; then
   cli nowcast --model "$model" --config "$CAND_CONFIG" --fit "$fit" \
-    --vintage "$AS_OF" --reference-date "$REFERENCE_DATE" \
+    --vintage "$AS_OF" --reference-date "$REFERENCE_DATE" "${past[@]}" \
     --out "$out/submission" \
     || echo "::warning::nowcast for $CAND_ID failed"
 fi
@@ -166,10 +174,15 @@ store="null"
 checkpoint="null"
 [ -f "$out/submission/checkpoint.json" ] \
   && checkpoint=$(cat "$out/submission/checkpoint.json")
+# The copula the nowcast paired the draws by, if any.
+copula="null"
+[ -f "$out/submission/copula.json" ] \
+  && copula=$(cat "$out/submission/copula.json")
 cat > "$out/run.json" << EOF
 {"candidate": "$CAND_ID", "kind": "$CAND_KIND", "label": "$CAND_LABEL",
  "store": $store,
  "checkpoint": $checkpoint,
+ "copula": $copula,
  "model": "$model",
  "config": "$CAND_CONFIG", "sampler": $CAND_SAMPLER,
  "package_version": "$(cli --version 2> /dev/null || echo unknown)",

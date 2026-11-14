@@ -382,7 +382,7 @@ def test_names_the_copula_a_models_draws_were_paired_by(
     )
     lines = visible(body(g, provenance=prov))
     assert (
-        "Pairing: draws paired by a Gaussian copula with ρ_t 0.81, "
-        "ρ_p 0.50 and ρ_n 0.60, from 120 scored past forecasts "
+        "Pairing: draws paired by a Gaussian copula with rho_t 0.81, "
+        "rho_p 0.50 and rho_n 0.60, from 120 scored past forecasts "
         "(archive+recomputed)."
     ) in lines

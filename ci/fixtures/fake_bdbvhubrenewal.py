@@ -490,6 +490,8 @@ def main() -> int:
     n.add_argument("--model", required=True)
     n.add_argument("--config", default="main")
     n.add_argument("--fit", default=None)
+    n.add_argument("--history", default=None)
+    n.add_argument("--store", default=None)
     n.add_argument("--vintage", required=True)
     n.add_argument("--reference-date", default=None)
     n.add_argument("--out", required=True)
