@@ -485,8 +485,8 @@ def evaluate(
     """Forecast one outbreak at each origin and return the long table.
 
     A model that raises `ModelUnavailableError` has no rows for that
-    task. One without its fine-tuned checkpoint (`FileNotFoundError`) has
-    none for the outbreak.
+    task. Any other error, such as a fine-tuned checkpoint that cannot be
+    fetched, stops the run.
 
     Parameters
     ----------
@@ -506,11 +506,8 @@ def evaluate(
     tasks = outbreak_tasks(counts, outbreak, n_origins, n_samples, seed)
     frames = []
     for model in models:
-        try:
-            mine = [model_task(model, t) for t in tasks]
-            frames.append(run_forecasts([model], mine))
-        except FileNotFoundError as err:
-            log.warning("%s skipped %s: %s", model.name, outbreak, err)
+        mine = [model_task(model, t) for t in tasks]
+        frames.append(run_forecasts([model], mine))
     frames = [f for f in frames if not f.empty]
     if not frames:
         return pd.DataFrame(columns=list(COLUMNS))

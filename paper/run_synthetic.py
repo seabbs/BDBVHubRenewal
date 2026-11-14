@@ -18,8 +18,10 @@ Writes the long sample table, as parquet if `out` ends `.parquet`.
 Beside it go the observations as of each release (`-observations.csv`),
 each series' outbreak settings (`-factors.csv`) and each model's seconds
 per outbreak (`-timings.csv`).
-Models that are not registered are skipped, and so are the fine-tuned
-ones until their checkpoint exists.
+A model that is not registered stops the run. The fine-tuned
+models fetch their checkpoint's release from GitHub, so give the run a
+token, `GH_TOKEN=$(gh auth token)`, as anonymous requests are rate limited;
+a checkpoint that cannot be fetched stops the run.
 """
 
 from __future__ import annotations
@@ -87,8 +89,8 @@ def main() -> None:
     )
     ids = sorted(counts["outbreak"].unique())[: args.outbreaks]
     models, skipped = models_by_name(args.models)
-    for name in skipped:
-        logging.warning("%s is not registered, so is skipped", name)
+    if skipped:
+        raise SystemExit(f"Models not registered: {', '.join(skipped)}.")
 
     settings = pd.concat(
         [pd.read_csv(p) for p in sorted(args.sim_dir.glob("settings-*.csv"))]
