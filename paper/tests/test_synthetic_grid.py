@@ -2,93 +2,102 @@
 
 from __future__ import annotations
 
-import re
+import tomllib
 from pathlib import Path
 
 import pandas as pd
 
 from paper.tables import synthetic_grid
 
-SIMULATOR = Path(__file__).parents[2] / "scripts" / "finetune_simulate.R"
+ROOT = Path(__file__).parents[2]
+SIMULATOR = ROOT / "scripts" / "finetune_simulate.R"
+TEXT = SIMULATOR.read_text()
 
 
-def _drawn_settings() -> set[str]:
-    """Return the names `draw_design` and `draw_values` set."""
-    text = SIMULATOR.read_text()
-    names: set[str] = set()
-    for fn in ("draw_design", "draw_values"):
-        body = text[text.index(f"{fn} <- function") :]
-        body = body[: body.index("\n}\n")]
-        names |= set(re.findall(r"^    (\w+) = ", body, flags=re.MULTILINE))
-    return names
+def test_factors_and_levels_are_read_from_the_simulator() -> None:
+    factors = synthetic_grid.parse_factors(TEXT)
+    assert "strata" in factors
+    assert factors["observation"] == ["negbin", "negbin1d", "poisson"]
+    assert all(len(levels) >= 2 for levels in factors.values())
 
 
-def test_the_grid_has_a_row_for_every_drawn_setting() -> None:
-    drawn = _drawn_settings() - {"grid", "prob"}
-    rows = {s for row in synthetic_grid.GRID["setting"] for s in row.split(";")}
-    assert drawn <= rows
+def test_values_are_read_from_the_simulator() -> None:
+    values = synthetic_grid.parse_values(TEXT)
+    assert values["offset"] == "sample(0:6, 1)"
+    # Multi-line expressions are kept whole.
+    assert values["gt_mean"].startswith("if (renewal)")
+    assert "max_delay" in values
 
 
-def test_the_table_adds_realised_values_from_the_settings() -> None:
+def test_every_setting_has_a_label() -> None:
+    names = [
+        *synthetic_grid.parse_factors(TEXT),
+        *synthetic_grid.DERIVED,
+        *synthetic_grid.parse_values(TEXT),
+    ]
+    missing = [n for n in names if n not in synthetic_grid.LABELS]
+    assert not missing
+
+
+def test_the_main_table_has_one_row_per_factor_with_its_levels() -> None:
+    factors = synthetic_grid.parse_factors(TEXT)
+    table = synthetic_grid.main_table(TEXT, pd.DataFrame({"outbreak": []}))
+    assert list(table["setting"]) == list(factors)
+    for (_, row), levels in zip(
+        table.iterrows(), factors.values(), strict=True
+    ):
+        for level in levels:
+            assert level in row["levels"]
+        assert f"1/{len(levels)} each" in row["levels"]
+
+
+def test_the_si_table_has_every_setting() -> None:
+    table = synthetic_grid.si_table(TEXT, pd.DataFrame({"outbreak": []}))
+    names = [
+        *synthetic_grid.parse_factors(TEXT),
+        *synthetic_grid.DERIVED,
+        *synthetic_grid.parse_values(TEXT),
+    ]
+    assert list(table["setting"]) == names
+
+
+def test_realised_values_come_from_the_settings() -> None:
     settings = pd.DataFrame(
         {
             "outbreak": ["a", "b", "c"],
+            "observation": ["negbin", "poisson", "negbin"],
             "delay_mean": [6.0, 10.0, 20.0],
             "n_places": [1, 1, 5],
             "report_days": ["all", "Monday", "all"],
-            "family": ["negbin", "poisson", "negbin"],
-            "stable": [True, False, False],
-            "cases": [50, 100, 30000],
         }
     )
-    table = synthetic_grid.grid_table(settings)
-    assert list(table.columns) == list(synthetic_grid.COLUMNS)
-    row = table.set_index("setting").loc["delay_mean"]
-    assert row["realised"] == "10 [6, 20]"
-    places = table.set_index("setting").loc["n_places"]
-    assert places["realised"] == "1 [1, 5]; 67% one place"
-    days = table.set_index("setting").loc["report_days"]
-    assert days["realised"] == "67% every day"
-    family = table.set_index("setting").loc["family"]
-    assert family["realised"] == "negbin 67%, poisson 33%"
-    stable = table.set_index("setting").loc["stable"]
-    assert stable["realised"] == "33% yes"
-    # A setting not in the settings files has no realised value.
-    assert table.set_index("setting").loc["max_delay", "realised"] == ""
+    main = synthetic_grid.main_table(TEXT, settings).set_index("setting")
+    assert main.loc["observation", "realised"] == "negbin 67%, poisson 33%"
+    si = synthetic_grid.si_table(TEXT, settings).set_index("setting")
+    assert si.loc["delay_mean", "realised"] == "10 [6, 20]"
+    assert si.loc["n_places", "realised"] == "1 [1, 5]; 67% one place"
+    assert si.loc["report_days", "realised"] == "67% every day"
+    assert si.loc["offset", "realised"] == ""
 
 
-def test_markdown_has_one_row_per_setting() -> None:
-    settings = pd.DataFrame(
-        {"outbreak": ["a"], "delay_mean": [6.0], "rt_drift_sd": [1.3e-5]}
-    )
-    table = synthetic_grid.grid_table(settings)
-    assert "e-" not in table.set_index("setting").loc["rt_drift_sd", "realised"]
-    md = synthetic_grid.to_markdown(table)
+def test_markdown_escapes_pipes() -> None:
+    table = synthetic_grid.si_table(TEXT, pd.DataFrame({"outbreak": []}))
+    md = synthetic_grid.to_markdown(table, synthetic_grid.SI_HEADERS)
     lines = md.strip().splitlines()
     assert len(lines) == len(table) + 2
-    assert lines[0].startswith("| Factor |")
-    # Pipes in formulas are escaped, so each row has its five cells.
     assert all(line.count(" | ") == 4 for line in lines[2:])
 
 
-def _design_settings() -> set[str]:
-    """Return the names `draw_design` sets."""
-    text = SIMULATOR.read_text()
-    body = text[text.index("draw_design <- function") :]
-    body = body[: body.index("\n}\n")]
-    return set(re.findall(r"^    (\w+) = ", body, flags=re.MULTILINE))
-
-
-def test_the_main_table_has_one_row_per_design_branch() -> None:
-    main = synthetic_grid.MAIN
-    covered = {s for row in main["setting"] for s in row.split(";")}
-    # Places and ages follow from the strata.
-    assert (
-        _design_settings() - {"grid", "prob", "n_places", "n_ages"} <= covered
-    )
-    assert len(main) < len(synthetic_grid.GRID) / 3
-    md = synthetic_grid.to_markdown(
-        synthetic_grid.main_table(pd.DataFrame({"outbreak": []})),
-        synthetic_grid.MAIN_HEADERS,
-    )
-    assert md.splitlines()[0].startswith("| Design |")
+def test_the_si_notes_name_every_level_and_the_held_out_seeds() -> None:
+    config = tomllib.loads((ROOT / "config/paper/synthetic.toml").read_text())
+    model = synthetic_grid.model_note(TEXT)
+    for levels in synthetic_grid.parse_factors(TEXT).values():
+        for level in levels:
+            assert f"`{level}`" in model
+    assert "e084b080" in model
+    heldout = synthetic_grid.heldout_note(config)
+    seeds = config["heldout_seeds"]
+    assert f"{seeds[0]} to {seeds[-1]}" in heldout
+    assert all(str(b) in heldout for b in config["blocks"])
+    # One sentence per line.
+    assert all(line.count(". ") == 0 for line in heldout.splitlines() if line)
