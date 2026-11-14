@@ -82,6 +82,7 @@ def _fake_checkpoint_releases(
         for name in ("adapter_model.safetensors", "adapter_config.json"):
             (root / f"chronos-ft-{FAKE_CHECKPOINT}" / name).unlink()
     monkeypatch.setattr(foundation, "FINETUNED_URL", root.as_uri())
+    monkeypatch.setattr(foundation, "RETRY_SECONDS", (0, 0, 0))
     monkeypatch.setattr(
         foundation,
         "finetuned_releases",
