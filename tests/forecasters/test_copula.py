@@ -514,3 +514,8 @@ def test_zones_move_with_their_province() -> None:
         summed.sort_index(), province.sort_index(), check_names=False
     )
     pd.testing.assert_series_equal(_cells(out.loc[~is_zone]), _cells(samples))
+    # Each zone keeps its draws, moved by its province's permutation: a
+    # draw's first zone is still half of that draw's province.
+    pd.testing.assert_series_equal(_cells(out.loc[is_zone]), _cells(zones))
+    first = out.loc[out["location"] == "CD-A-01"].set_index(keys)["value"]
+    assert (first == (province // 2).reindex(first.index)).all()
