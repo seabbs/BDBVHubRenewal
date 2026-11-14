@@ -70,7 +70,7 @@
 #   Rscript scripts/finetune_simulate.R <n> <seed> <out_dir>
 
 epinowcast_sha <- "e084b080"
-grid_name <- "r2-cal3"
+grid_name <- "r2-cal4"
 args <- commandArgs(trailingOnly = TRUE)
 n_outbreaks <- as.integer(args[[1]])
 seed <- as.integer(args[[2]])
@@ -281,7 +281,7 @@ draw_values <- function(design) {
     rt_drift_sd = runif(1, 0, 0.03),
     # Most failed draws were growth processes overflowing at the start
     # growth rate's upper range, so it is narrower than for Rt.
-    r0 = rnorm(1, 0.01, 0.02),
+    r0 = rnorm(1, 0.005, 0.015),
     walk_sd = runif(1, 0.005, 0.015),
     incidence_sd = runif(1, 0.05, 0.3),
     growth_steps = sample(1:3, 1),
@@ -289,7 +289,9 @@ draw_values <- function(design) {
     smooth_amp = runif(1, 0.01, 0.06),
     smooth_period = runif(1, 40, 200),
     smooth_phase = runif(1, 0, 2 * pi),
-    seed_size = exp(runif(1, log(0.2), log(200))),
+    # Seeds above about 30 a day and growth sustained above about 2% a day
+    # gave most of the outbreaks too large to keep.
+    seed_size = exp(runif(1, log(0.2), log(30))),
     stratum_sd = runif(1, 0.5, 2),
     delay_mean = delay_mean,
     max_delay = max_delay_for(delay_mean, design$long_tail),
