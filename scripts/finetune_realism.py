@@ -110,15 +110,19 @@ def report_weekdays(report_dates: pd.Series, weights: np.ndarray) -> dict:
     return {f"report_dow_{i}": share[i] for i in range(7)}
 
 
-def simulated(sim_dirs: list[Path], rng: np.random.Generator) -> pd.DataFrame:
-    """Summaries of a sample of simulated outbreaks."""
+def simulated(
+    sim_dirs: list[Path], rng: np.random.Generator, sample: int | None = SAMPLE
+) -> pd.DataFrame:
+    """Return summaries of a sample of simulated outbreaks, or all."""
     files = sorted(p for d in sim_dirs for p in d.glob("counts-*.csv.gz"))
     counts = pd.concat([pd.read_csv(p) for p in files])
     ids = counts["outbreak"].unique()
-    ids = rng.choice(ids, size=min(SAMPLE, len(ids)), replace=False)
+    if sample is not None:
+        ids = rng.choice(ids, size=min(sample, len(ids)), replace=False)
+    groups = dict(tuple(counts.groupby("outbreak")))
     rows = []
     for outbreak in ids:
-        c = counts.loc[counts["outbreak"] == outbreak]
+        c = groups[outbreak]
         ref = pd.to_datetime(c["reference_date"])
         rep = pd.to_datetime(c["report_date"])
         week = (ref - pd.to_timedelta(ref.dt.day_of_week, unit="D")).dt.date

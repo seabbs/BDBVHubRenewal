@@ -43,6 +43,9 @@ import finetune_chronos as ft
 CHUNK = 500
 """Outbreaks per chunk."""
 
+LEVEL_BLOCKS = 300
+"""Held-out blocks scored by level at each checkpoint."""
+
 SAVE_EVERY = 50
 """Steps between saves of the trainer's state, which a restarted trainer
 resumes from."""
@@ -259,6 +262,49 @@ def finite_step(params: list, optimiser, value: float) -> bool:
     return finite
 
 
+def held_out_by_level(model, blocks: list[dict], n: int) -> dict:
+    """Return held-out loss by level (national, intermediate, leaf).
+
+    Each of the first `n` blocks is scored once per level it holds, with
+    the other rows' targets masked, so each level's loss is on its own
+    series in the full block.
+    """
+    import torch
+    from chronos.chronos2.dataset import Chronos2Dataset, DatasetMode
+    from chronos.chronos2.model import Chronos2Model
+
+    accepted = inspect.signature(Chronos2Model.forward).parameters
+    training = model.training
+    model.eval()
+    losses: dict[str, list[float]] = {}
+    with torch.no_grad():
+        for block in blocks[:n]:
+            data = Chronos2Dataset(
+                inputs=[block],
+                context_length=ft.CONTEXT,
+                prediction_length=ft.HORIZON,
+                batch_size=1,
+                output_patch_size=ft.OUTPUT_PATCH,
+                mode=DatasetMode.VALIDATION,
+            )
+            batch = next(iter(data))
+            levels = np.array(block["levels"])
+            for level in sorted(set(levels)):
+                target = batch["future_target"].clone()
+                keep = torch.zeros(len(target), dtype=torch.bool)
+                keep[: len(levels)] = torch.from_numpy(levels == level)
+                target[~keep] = float("nan")
+                inputs = {
+                    k: v.to(model.device) if torch.is_tensor(v) else v
+                    for k, v in {**batch, "future_target": target}.items()
+                    if k in accepted
+                }
+                loss = float(model(**inputs).loss)
+                losses.setdefault(level, []).append(loss)
+    model.train(training)
+    return {k: float(np.mean(v)) for k, v in losses.items()}
+
+
 def skipped_lines(skipped: list[dict]) -> list[str]:
     """Return the lines listing skipped blocks in a release's outbreaks."""
     return [
@@ -437,7 +483,10 @@ def main() -> None:
     if state is None:
         consumed.write_text("")
         start_loss = ft.held_out_loss(model, val, args.batch_size)
-        history = [{"step": 0, "held_out_loss": start_loss}]
+        by_level = held_out_by_level(model, val, LEVEL_BLOCKS)
+        history = [
+            {"step": 0, "held_out_loss": start_loss, "by_level": by_level}
+        ]
         log(f"held-out loss at the start {start_loss:.4f}")
     else:
         step, done, position = state["step"], state["done"], state["position"]
@@ -545,7 +594,14 @@ def main() -> None:
             step += 1
             position += 1
             with consumed.open("a") as f:
-                f.write(f"{step}\t{','.join(pairs[i][0] for i in indices)}\n")
+                f.write(
+                    f"{step}\t"
+                    + ",".join(
+                        f"{pairs[i][0]}:{'+'.join(sorted(set(blocks[i]['levels'])))}"
+                        for i in indices
+                    )
+                    + "\n"
+                )
             if step % 10 == 0:
                 history.append({"step": step, "loss": value})
                 report(
@@ -596,6 +652,9 @@ def main() -> None:
             settings["held_out_loss_start"] = start_loss
             settings["held_out_loss"] = ft.held_out_loss(
                 model, val, args.batch_size
+            )
+            settings["held_out_loss_by_level"] = held_out_by_level(
+                model, val, LEVEL_BLOCKS
             )
             settings["seconds"] = time.perf_counter() - t0
             (where / "settings.json").write_text(json.dumps(settings, indent=1))

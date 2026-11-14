@@ -127,3 +127,45 @@ def test_three_level_block_has_country_place_and_strata() -> None:
     # The country and P1 are both the sum of the strata.
     np.testing.assert_array_equal(target[0], target[1])
     np.testing.assert_array_equal(target[1], target[2] + target[3])
+
+
+def test_totals_sum_strata_by_place_and_by_age_exactly() -> None:
+    counts = _counts()
+    counts = pd.concat(
+        [
+            counts.assign(
+                location=counts["location"].map({"A": "P1-A1", "B": "P1-A2"})
+            ),
+            counts.assign(
+                location=counts["location"].map({"A": "P2-A1", "B": "P2-A2"})
+            ),
+        ]
+    )
+    rows = releases(counts, "daily", ["2026-10-09", "2026-10-30"], totals=True)
+    wide = rows.pivot_table(
+        index=["vintage", "onset_date"],
+        columns="location",
+        values="observed",
+        aggfunc="sum",
+        fill_value=0,
+    )
+    leaves = ["P1-A1", "P1-A2", "P2-A1", "P2-A2"]
+    assert (wide[NATIONAL] == wide[leaves].sum(axis=1)).all()
+    assert (wide["P1"] == wide["P1-A1"] + wide["P1-A2"]).all()
+    assert (wide["A1"] == wide["P1-A1"] + wide["P2-A1"]).all()
+
+
+def test_regions_of_places_total_their_places_exactly() -> None:
+    counts = _counts()
+    counts["location"] = counts["location"].map({"A": "R1-P01", "B": "R1-P02"})
+    rows = releases(counts, "weekly", ["2026-10-30"], totals=True)
+    wide = rows.pivot_table(
+        index="target_end_date",
+        columns="location",
+        values="total",
+        aggfunc="sum",
+        fill_value=0,
+    )
+    assert (wide["R1"] == wide["R1-P01"] + wide["R1-P02"]).all()
+    # A region's places are not age groups: no total by their second part.
+    assert "P01" not in wide.columns

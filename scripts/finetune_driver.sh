@@ -20,6 +20,9 @@
 #                 epinowcast library in output/finetune/rlib) and its
 #                 simulation directory; every seed not run locally runs
 #                 there, held-out seeds first
+#   REMOTE_RAM_GB   the remote's memory; REMOTE_SLOTS is cut so every
+#                 batch at its REMOTE_MEM_KB cap fits it less 16 GB
+#   LOCAL_MAX_LOAD   no new local batch at this load or above
 #   REMOTE_SLOTS, REMOTE_MEM_KB, REMOTE_MIN_FREE_MEM_GB, REMOTE_MAX_LOAD
 #                 its most simulation processes, the memory limit of each
 #                 (ulimit -v), and the free memory and highest load at
@@ -76,7 +79,7 @@ status() {
   stage=$(python3 -c "import json;print(json.load(open('$OUT/stream-status.json')).get('stage',''))" 2>/dev/null)
   step=$(python3 -c "import json;print(json.load(open('$OUT/stream-status.json')).get('step',0))" 2>/dev/null)
   ckpt=$(python3 -c "import json;print(json.load(open('$OUT/stream-status.json')).get('last_checkpoint','none'))" 2>/dev/null)
-  echo "$(date '+%Y-%m-%d %H:%M:%S') stage=${1:-${stage:-starting}} batches=$done/$total train_step=${step:-0} remote=$( (( $(date +%s) - remote_ok <= REMOTE_RETRY + 60 )) && echo up || echo down) last_checkpoint=${ckpt:-none} last_error=${last_error:-none}" > "$STATUS"
+  echo "$(date '+%Y-%m-%d %H:%M:%S') stage=${1:-${stage:-starting}} batches=$done/$total train_step=${step:-0} remote=$remote_state last_checkpoint=${ckpt:-none} last_error=${last_error:-none}" > "$STATUS"
 }
 
 fail() {
@@ -90,6 +93,24 @@ CLAIMED="$SIM_DIR/local-seeds.txt"
 touch "$CLAIMED"
 remote_ok=$(date +%s)
 remote_tried=0
+remote_state=unknown
+
+remote_slots() {
+  # Batches the remote may run at once: REMOTE_SLOTS, or fewer, so that
+  # every batch at its memory cap fits the remote's memory less 16 GB.
+  local fit
+  fit=$(( (REMOTE_RAM_GB - 16) * 1048576 / REMOTE_MEM_KB ))
+  echo $(( fit < REMOTE_SLOTS ? fit : REMOTE_SLOTS ))
+}
+
+load_now() {
+  # This machine's one-minute load average, on Linux or macOS.
+  if [ -r /proc/loadavg ]; then
+    cut -d' ' -f1 /proc/loadavg
+  else
+    sysctl -n vm.loadavg | awk '{print $2}'
+  fi
+}
 
 done_seed() { [ -e "$SIM_DIR/settings-$1.csv" ]; }
 
@@ -148,7 +169,7 @@ for s in $list; do
   # Start a batch only with a free slot, REMOTE_MIN_FREE_MEM_GB of memory
   # free (one outbreak can peak at 8 GB) and a load under REMOTE_MAX_LOAD,
   # as other jobs share the host.
-  while [ "\$(pgrep -fc 'finetune_simulate.R --args')" -ge $REMOTE_SLOTS ] \\
+  while [ "\$(pgrep -fc 'finetune_simulate.R --args')" -ge $(remote_slots) ] \\
     || [ "\$(free -g | awk '/^Mem/ {print \$7}')" -lt $REMOTE_MIN_FREE_MEM_GB ] \\
     || [ "\$(cut -d' ' -f1 /proc/loadavg | cut -d. -f1)" -ge $REMOTE_MAX_LOAD ]; do sleep 30; done
   # Wait while the disk is short; each batch's R temp files go in its own
@@ -170,7 +191,7 @@ while pgrep -f 'finetune_simulate.R --args' > /dev/null; do sleep 30; done
 echo all done > $SIM_REMOTE/remote-done
 EOF
   remote "cd $REMOTE_DIR && chmod +x output/finetune/finetune_remote.sh && (nohup output/finetune/finetune_remote.sh > $SIM_REMOTE/remote.log 2>&1 < /dev/null &)" \
-    && log "started the remote scheduler on $REMOTE ($REMOTE_SLOTS slots, $REMOTE_MEM_KB kB each)"
+    && log "started the remote scheduler on $REMOTE ($(remote_slots) slots, $REMOTE_MEM_KB kB each)"
 }
 
 check_remote() {
@@ -188,6 +209,7 @@ check_remote() {
   if [ -n "$free" ] && (( free < REMOTE_MIN_FREE_GB )); then
     log "$REMOTE has $free GB free, under $REMOTE_MIN_FREE_GB GB: counted as down"
   fi
+  if [ -n "$free" ]; then remote_state=up; else remote_state=down; fi
   if [ -n "$free" ] && (( free >= REMOTE_MIN_FREE_GB )); then
     remote_ok=$now
     # Batches of another grid are moved aside, never copied back.
@@ -251,6 +273,8 @@ local_slots() {
     pgrep -f "(finetune_simulate|sim-real).R --args 25 $s " > /dev/null && continue
     running=$(pgrep -f 'finetune_simulate.R --args' | wc -l)
     (( running >= slots )) && break
+    # The laptop shares its cores: no new batch above LOCAL_MAX_LOAD.
+    (( $(load_now | cut -d. -f1) >= ${LOCAL_MAX_LOAD:-12} )) && break
     (( $(free_mem_gb) < LOCAL_MIN_FREE_MEM_GB )) && break
     (
       export TMPDIR="$PWD/output/finetune/tmp/$s"

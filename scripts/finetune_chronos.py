@@ -34,6 +34,7 @@ import datetime as dt
 import hashlib
 import inspect
 import json
+import re
 import time
 from pathlib import Path
 
@@ -173,10 +174,39 @@ def strata(settings: pd.Series) -> list[str]:
     return ages if len(ages) > 1 else places
 
 
-LEVELS = {"three": 0.5, "places": 0.25, "strata": 0.25}
+LEVELS = {"three": 0.4, "places": 0.2, "ages": 0.1, "strata": 0.3}
 """Chance a block of places by strata (`P-<stratum>`) has the country,
 the places' totals and their strata (three levels), the country and the
 places' totals, or the country and strata."""
+
+
+REGIONS = 0.5
+"""Chance an outbreak of flat places is grouped into 2 to 6 regions for
+its blocks, so blocks nest places in regions in the country."""
+
+
+def regions(places: list[str], rng: np.random.Generator) -> dict[str, str]:
+    """Return each place's id in a seeded grouping into 2 to 6 regions."""
+    k = int(rng.integers(2, min(6, len(places) // 2) + 1))
+    order = rng.permutation(len(places))
+    group = {places[i]: 1 + j % k for j, i in enumerate(order)}
+    return {p: f"R{group[p]}-{p}" for p in places}
+
+
+def target_levels(places: tuple[str, ...]) -> tuple[str, ...]:
+    """Return the level of each place of a block.
+
+    The levels are national, intermediate (a total of strata) or leaf.
+    """
+    nested = any("-" in p for p in places)
+    return tuple(
+        "national"
+        if i == 0
+        else "leaf"
+        if "-" in p or not nested
+        else "intermediate"
+        for i, p in enumerate(places)
+    )
 
 
 def choose_places(
@@ -195,7 +225,18 @@ def choose_places(
     groups: dict[str, list[str]] = {}
     for p in provinces:
         groups.setdefault(p.split("-")[0], []).append(p)
-    level = rng.choice(list(LEVELS), p=list(LEVELS.values()))
+    ages = sorted(
+        {
+            p.split("-")[1]
+            for p in provinces
+            if re.fullmatch(r"A\d+", p.split("-")[1])
+        }
+    )
+    weights = {k: v for k, v in LEVELS.items() if k != "ages" or ages}
+    total = sum(weights.values())
+    level = rng.choice(list(weights), p=[v / total for v in weights.values()])
+    if level == "ages":
+        return tuple(ages[:budget])
     if level == "strata":
         k = min(budget, len(provinces))
         return tuple(str(p) for p in sorted(rng.choice(provinces, k, False)))
@@ -212,7 +253,12 @@ def choose_places(
         strata.extend(sorted(groups[parent])[:room])
         if room < len(groups[parent]):
             break
-    return tuple(str(p) for p in (*sorted(chosen), *sorted(strata)))
+    totals = sorted(chosen)
+    # Blocks of places by ages may add the age groups' totals.
+    if ages and rng.random() < 0.5:
+        room = budget - len(chosen) - len(strata)
+        totals += ages[: max(room, 0)]
+    return tuple(str(p) for p in (*totals, *sorted(strata)))
 
 
 def outbreak_blocks(
@@ -239,6 +285,12 @@ def outbreak_blocks(
     end = pd.Timestamp(counts["report_date"].max()).date()
     last = end - dt.timedelta(weeks=delay_weeks + 5)
     cutoffs = weekly_cutoffs(first, last.isoformat(), weekday)
+    # Flat places may nest in regions, each a total of its places.
+    flat = len(provinces) >= 4 and not any("-" in p for p in provinces)
+    if flat and rng.random() < REGIONS:
+        nest = regions(provinces, rng)
+        counts = counts.assign(location=counts["location"].map(nest))
+        provinces = sorted(nest.values())
     out = []
     for source in ("weekly", "daily"):
         for j in range(cuts):
@@ -264,11 +316,13 @@ def outbreak_blocks(
                 places,
                 cutoffs[: cut + 1],
                 max_lag=lag,
-                totals=any("-" in p for p in places),
+                totals=any("-" in p for p in provinces),
             )
             if block["start"] < 2:
                 continue
-            out.append(_pad(block, CONTEXT, HORIZON))
+            padded = _pad(block, CONTEXT, HORIZON)
+            padded["levels"] = target_levels(places)
+            out.append(padded)
     return out
 
 
