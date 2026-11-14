@@ -1,0 +1,7 @@
+summary,sim_q5,sim_q50,sim_q95,published,sources
+generation time or serial interval mean (days),2.72301219215601,7.23420301663196,16.83574880846665,COVID-19 5.2; COVID-19 3.95; COVID-19 4.7; influenza 3.6; influenza 2.2; influenza 2.8; Ebola (West Africa 2014-16) 15.3; measles 11.7; mpox (2022) 9.5,10.1016/j.ijid.2020.02.060; 10.1056/NEJMoa1411100; 10.1093/aje/kwu209; 10.1097/EDE.0b013e31819d1092; 10.1136/bmj-2022-073153; 10.2807/1560-7917.ES.2020.25.17.2000257
+doubling time (days),7.0,14.13190503643754,40.27055600838794,COVID-19 3; Ebola (West Africa 2014-16) 15.7; Ebola (West Africa 2014-16) 23.6; Ebola (West Africa 2014-16) 30.2; mpox (2022) 9.07,10.1056/NEJMoa1411100; 10.1098/rstb.2020.0264; 10.1136/bmj-2022-073153
+halving time (days),5.746484306349593,13.477746839465546,35.989178735100985,mpox (2022) 29,10.1136/bmj-2022-073153
+reporting delay mean (days),2.196562933977981,7.085813163393273,15.225385472697878,Ebola (West Africa 2014-16) 5,10.1056/NEJMoa1411100
+reporting delay 99% point (days),11.0,29.0,66.24999999999999,,
+outbreak size (cases),70.95,3672.5,84351.25,Ebola (West Africa 2014-16) 28646; mpox (2022) 3000; cholera 604634,10.1056/NEJMoa1204927; 10.1098/rstb.2016.0297; 10.1371/journal.pcbi.1011463
