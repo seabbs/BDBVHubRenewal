@@ -206,9 +206,9 @@ delay_parameters <- function(family, v, max_delay = NULL) {
 }
 
 weekdays_drawn <- function() {
-  # Onsets are reported every day or, in three outbreaks in ten, on one
-  # to three weekdays.
-  if (runif(1) < 0.7) {
+  # Onsets are reported every day or, in one outbreak in three, on one to
+  # three weekdays.
+  if (runif(1) < 2 / 3) {
     return("all")
   }
   days <- c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday")
@@ -222,7 +222,7 @@ draw_design <- function() {
     prob = c(0.3, 0.4, 0.2, 0.1)
   )
   reference <- sample(
-    c("parametric", "non_parametric", "both"), 1, prob = c(0.5, 0.2, 0.3)
+    c("parametric", "non_parametric", "both"), 1
   )
   stable <- runif(1) < 0.2
   change <- function(p) !stable && runif(1) < p
@@ -257,7 +257,7 @@ draw_design <- function() {
     reference = reference,
     delay_family = if (parametric) {
       sample(
-        c("lognormal", "gamma", "exponential"), 1, prob = c(0.7, 0.2, 0.1)
+        c("lognormal", "gamma", "exponential"), 1, prob = c(0.4, 0.4, 0.2)
       )
     } else {
       "none"
@@ -272,16 +272,14 @@ draw_design <- function() {
       0L
     },
     delay_walk = parametric && change(0.3),
-    reference_dow = runif(1) < 0.6,
-    report_dow = runif(1) < 0.7,
-    report_holiday = runif(1) < 0.15,
-    report_week = sample(c("none", "week", "rw"), 1, prob = c(8, 1, 1)),
+    reference_dow = runif(1) < 0.5,
+    report_dow = runif(1) < 0.5,
+    report_holiday = runif(1) < 0.25,
+    report_week = sample(c("none", "week", "rw"), 1, prob = c(3, 1, 1)),
     report_days = weekdays_drawn(),
     report_change = change(0.3),
     report_days_after = weekdays_drawn(),
-    family = sample(
-      c("negbin", "negbin1d", "poisson"), 1, prob = c(0.4, 0.4, 0.2)
-    )
+    family = sample(c("negbin", "negbin1d", "poisson"), 1)
   )
 }
 
@@ -294,7 +292,7 @@ draw_values <- function(design) {
     offset = sample(0:6, 1),
     quiet = runif(1, 0, 0.9),
     coupling = runif(1),
-    gt_mean = log_uniform(2.5, 16),
+    gt_mean = log_uniform(2.5, 20),
     gt_cv = runif(1, 0.4, 0.8),
     incubation_mean = runif(1, 3, 12),
     incubation_cv = runif(1, 0.3, 0.7),
