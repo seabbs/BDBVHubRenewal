@@ -153,3 +153,43 @@ def test_flat_places_can_nest_in_regions_with_levels_recorded():
     )
     assert target_levels(("CD", "P01", "P02")) == ("national", "leaf", "leaf")
     del pd
+
+
+def test_ages_are_not_grouped_into_regions():
+    import pandas as pd
+    from finetune_chronos import outbreak_blocks
+
+    days = pd.date_range("2026-01-01", periods=140)
+    rows = [
+        (f"A{a}", d, d + pd.Timedelta(days=2), 5)
+        for a in range(1, 6)
+        for d in days
+    ]
+    counts = pd.DataFrame(
+        rows, columns=["location", "reference_date", "report_date", "count"]
+    )
+    blocks = outbreak_blocks(
+        counts, [f"A{a}" for a in range(1, 6)], np.random.default_rng(0), 1, 4
+    )
+    assert blocks
+    assert all("intermediate" not in b["levels"] for b in blocks)
+
+
+def test_an_empty_batch_is_done_with_no_simulations(tmp_path):
+    from finetune_stream import ready_outbreaks
+
+    (tmp_path / "settings-5001.csv").write_text("")
+    (tmp_path / "counts-5001.csv.gz").write_text("")
+    pd_rows = "outbreak\n5002-0001\n"
+    (tmp_path / "settings-5002.csv").write_text(pd_rows)
+    (tmp_path / "counts-5002.csv.gz").write_text("outbreak\n5002-0001-1\n")
+    assert ready_outbreaks(tmp_path, range(5001, 5003)) == ["5002-0001"]
+
+
+def test_stop_rule_needs_two_checkpoints():
+    from finetune_stream import should_stop
+
+    assert not should_stop([0.2], 8000, 8000, 0.01)
+    assert should_stop([0.2, 0.199], 16000, 8000, 0.01)
+    assert not should_stop([0.2, 0.15], 16000, 8000, 0.01)
+    assert not should_stop([0.2, 0.199], 4000, 8000, 0.01)
