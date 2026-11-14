@@ -55,8 +55,9 @@ The draws of `renewal` and `renewalbvd` are joint across provinces, one posterio
 `renewalsp` fits each province on its own, so its provinces are independent.
 Zones split each province draw, so zones are joint within a province for every renewal model.
 `pprandomwalknowcast` takes one posterior draw of its pooled parameters per sample index, so its places share that draw.
-`randomwalk` and `randomwalknowcast` draw each place independently.
-The Chronos-2 models pair their draws over weeks and places with a Gaussian copula ([Foundation models](foundation.md#trajectories)).
+`randomwalk` draws each place independently.
+`randomwalknowcast` draws each place on its own, and the Chronos-2 models pair their draws by a fixed copula ([Foundation models](foundation.md#trajectories)).
+With `pair_trajectories` set, both are paired by the rolling copula before scoring ([Correlated trajectories](#correlated-trajectories)).
 Hub teams' samples are joint across weeks within a place only, as the hub's sample format sets, so pairing their indices across places scores them as independent across places.
 
 ## Backtest design
@@ -124,6 +125,25 @@ Scores are WIS, 50% and 90% coverage and bias, by model, origin, weeks back from
 Relative WIS is against `randomwalk` on the forecasts both made, for national and the provinces pooled, over all origins and by origin, and by origin and place.
 Every table counts its forecasts, $n$, so a model with fewer forecasts was scored on fewer weeks or places.
 The run stops if an origin has no release snapshots or two models run here give identical samples.
+
+## Correlated trajectories
+
+`randomwalknowcast` and the Chronos-2 models draw each place and week on their own.
+Their sums over weeks and places are then too narrow.
+With a truth delay and `pair_trajectories` set in `config/backtest.toml`, the release backtest pairs their draws into trajectories by a Gaussian copula fitted to each model's own recent errors (`forecasters.copula`).
+It is off by default, so the backtest scores the forecasts as they are submitted, and the paper's evidence runs it on and off.
+Pairing only reorders each place and week's draws across sample indices, so every per-week forecast and its WIS are unchanged.
+A country that is the sum of its provinces, as for `randomwalknowcast`, is summed again from the paired provinces, so its forecast widens.
+A country forecast as its own series, as by Chronos-2, keeps its draws.
+
+The copula has three correlations, between consecutive weeks of a place ($\rho_t$), between two provinces ($\rho_p$) and between the country and a province ($\rho_n$) ([Foundation models](foundation.md#trajectories)).
+At each origin they are estimated from the model's forecasts at earlier origins.
+Each week whose complete-target truth was released by the origin gives its randomised PIT in the forecast's draws, mapped to a normal score.
+The scores of the 8 latest such weeks are used.
+Each correlation is that of the scores of pairs from one forecast, shrunk towards the prior $(\rho_t, \rho_p, \rho_n) = (0.9, 0.7, 0.7)$ as $(n r + w \rho_0) / (n + w)$, with $n$ pairs and the prior worth $w = 100$ pairs.
+An origin with no matured errors, or a correlation its pairs do not define, takes the prior.
+The prior was chosen on the same release backtest, for the Chronos-2 models ([Foundation models](foundation.md#trajectories)), so it is tuned in sample.
+Each model's correlations at each origin are in `nowcast-copulas.csv`.
 
 ## Reading the figures
 

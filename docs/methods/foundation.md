@@ -61,14 +61,10 @@ Steps $h$ and $h'$ have correlation $\rho_t^{|h - h'|}$ for weeks and $\rho_t^{|
 Two provinces have correlation $\rho_p$, and the country and a province $\rho_n$.
 Where these give no correlation matrix, a nearby one is used, by setting negative eigenvalues to zero.
 
-All six models use the same fixed values, $\rho_t = 0.9$, $\rho_p = 0.7$ and $\rho_n = 0.7$ (`CHRONOS_COPULA`).
+All six models pair their draws with the same fixed values, $\rho_t = 0.9$, $\rho_p = 0.7$ and $\rho_n = 0.7$ (`CHRONOS_COPULA`).
 They were chosen on the release backtest from a grid of 0.3 to 0.95, where the energy score improved as each correlation grew and levelled off near these values.
-
-The correlations can also be estimated from the forecast errors of the weekly models (`estimate_copula`).
-Each matured week's truth gets its randomised PIT in the forecast's draws, mapped to a normal score, and weeks whose draws are all equal are left out.
-$\rho_t$ is the correlation of the scores of a place's consecutive weeks, $\rho_p$ of two provinces in a week and $\rho_n$ of the country and a province, each floored at zero.
-The daily models are left out, as their weekly values depend on the copula.
-On the release backtest, 63 matured weeks have spread in the forecast, and their estimates, $\rho_t = 0.45$ and $\rho_p = \rho_n = 0$, score worse than the fixed values.
+The release backtest can pair their weekly draws again by a copula fitted to each model's recent errors and shrunk towards these values ([Correlated trajectories](evaluation.md#correlated-trajectories)).
+The daily models' days stay paired by the fixed values, as their weekly errors do not show how days within a week are correlated.
 
 ## Counts
 
@@ -115,7 +111,7 @@ Such fits are retried by running the Fit store workflow with `retry_failed` (`gh
 - The zero-shot models use Chronos-2 as pretrained. It has not seen these data or outbreaks like them.
 - The fine-tuned models have seen only simulated outbreaks, whose delays and dynamics may not match these data.
 - The daily fine-tuned model was trained on blocks of at most five provinces but forecasts all 26 in one block.
-- The copula's three correlations are fixed from a backtest of five origins, and the estimates from the errors rest on 63 weeks.
+- The fixed correlations were chosen on a backtest of five origins.
 - It ties days to weeks by one decay per day, which is not estimated from daily errors.
 
 [^chronos2]: Ansari A F et al. (2025) Chronos-2: From univariate to universal forecasting. arXiv:2510.15821. Code: <https://github.com/amazon-science/chronos-forecasting>.

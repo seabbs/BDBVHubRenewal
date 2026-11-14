@@ -1015,6 +1015,7 @@ def _release_backtest(
         delays=learnt,
         compare=[s.name for s in list_models()],
         truth_delay=delay,
+        pair=config.pair_trajectories,
     )
     _write_release(out, results, delay)
 
@@ -1042,6 +1043,7 @@ def _release_scores(
         delays=learnt,
         compare=[s.name for s in list_models()],
         truth_delay=delay,
+        pair=config.pair_trajectories,
     )
     _write_release(out, results, delay)
 

@@ -59,7 +59,8 @@ WINDOW_WEEKS: Final = 8
 """Matured weeks of errors `RollingCopula` estimates from."""
 
 PRIOR_WEIGHT: Final = 100.0
-"""Normal scores the prior counts as, in `estimate_copula`'s shrinkage."""
+"""Pairs of normal scores the prior counts as, in `estimate_copula`'s
+shrinkage."""
 
 _CELL = ["model", "origin", "location", "target_end_date"]
 _FIT_COLUMNS = [
@@ -376,11 +377,12 @@ def normal_scores(
 
 
 def _corr(pairs: pd.DataFrame) -> float | None:
-    """Pearson correlation of `z_a` and `z_b`, or None with too few."""
+    """Pearson correlation of `z_a` and `z_b`, or None if it has none."""
     if len(pairs) < 2:
         return None
-    r = np.corrcoef(pairs["z_a"], pairs["z_b"])[0, 1]
-    return float(np.nan_to_num(r))
+    with np.errstate(invalid="ignore", divide="ignore"):
+        r = np.corrcoef(pairs["z_a"], pairs["z_b"])[0, 1]
+    return float(r) if np.isfinite(r) else None
 
 
 def estimate_copula(
@@ -394,9 +396,9 @@ def estimate_copula(
     Each is the correlation $r$ of the scores of pairs from one forecast:
     $\rho_t$ of a place's consecutive weeks, $\rho_p$ of two provinces in a
     week, and $\rho_n$ of the country and a province in a week.
-    With $n$ scores and the prior's $\rho_0$ each is
-    $(n r + w \rho_0) / (n + w)$, the prior's where no pair has $r$,
-    then floored at zero and capped at `MAX_RHO`.
+    With $n$ such pairs and the prior's $\rho_0$ each is
+    $(n r + w \rho_0) / (n + w)$, the prior's where the pairs give no
+    $r$, then floored at zero and capped at `MAX_RHO`.
 
     Parameters
     ----------
@@ -406,7 +408,7 @@ def estimate_copula(
     prior : GaussianCopula
         The correlations to shrink towards.
     weight : float
-        $w$, the scores the prior counts as.
+        $w$, the pairs the prior counts as.
     national : str
         The country's location code.
 
@@ -432,10 +434,9 @@ def estimate_copula(
         "rho_provinces": provinces,
         "rho_national": same.loc[a_national & ~b_national],
     }
-    n = len(scores)
     out = {}
     for name, rows in pairs.items():
-        r, rho0 = _corr(rows), getattr(prior, name)
+        r, rho0, n = _corr(rows), getattr(prior, name), len(rows)
         rho = rho0 if r is None else (n * r + weight * rho0) / (n + weight)
         out[name] = float(np.clip(rho, 0.0, MAX_RHO))
     return GaussianCopula(**out)
@@ -452,7 +453,7 @@ class RollingCopula:
     window_weeks : int
         The latest matured weeks whose errors are used.
     weight : float
-        The scores the prior counts as (`estimate_copula`).
+        The pairs the prior counts as (`estimate_copula`).
     national : str
         The country's location code.
     """
@@ -509,7 +510,8 @@ class RollingCopula:
             `rolling_truth`: `location`, `target_end_date`, `truth` and
             `truth_vintage`.
         seed : int
-            Seed. Each model and origin draws from its own stream.
+            Seed. Each model's scores, and each model and origin's
+            pairing, draw from their own streams.
 
         Returns
         -------
@@ -518,32 +520,30 @@ class RollingCopula:
             `model`, `origin`, `n_scores` and the three correlations.
         """
         cells = ["location", "target_end_date"]
-        final = forecasts.loc[_final(forecasts)]
-        scores = normal_scores(
-            final[["model", "origin", *cells, "sample", "value"]],
-            truth[[*cells, "truth"]],
-            np.random.default_rng(seed),
-        ).merge(truth[[*cells, "truth_vintage"]], on=cells)
+        released = truth[[*cells, "truth_vintage"]]
         paired, fits = [], []
-        for key, rows in forecasts.groupby(["model", "origin"]):
-            model, origin = (str(k) for k in key)
-            copula, n = self.fit(scores.loc[scores["model"] == model], origin)
-            rng = np.random.default_rng(
-                [
-                    seed,
-                    zlib.crc32(model.encode()),
-                    zlib.crc32(origin.encode()),
-                ]
-            )
-            paired.append(pair_samples(rows, copula, rng, self.national))
-            fits.append(
-                {
-                    "model": model,
-                    "origin": origin,
-                    "n_scores": n,
-                    **dataclasses.asdict(copula),
-                }
-            )
+        for model, own in forecasts.groupby("model"):
+            model = str(model)
+            key = [seed, zlib.crc32(model.encode())]
+            final = own.loc[_final(own)]
+            scores = normal_scores(
+                final[["model", "origin", *cells, "sample", "value"]],
+                truth[[*cells, "truth"]],
+                np.random.default_rng(key),
+            ).merge(released, on=cells)
+            for origin, rows in own.groupby("origin"):
+                origin = str(origin)
+                copula, n = self.fit(scores, origin)
+                rng = np.random.default_rng([*key, zlib.crc32(origin.encode())])
+                paired.append(pair_samples(rows, copula, rng, self.national))
+                fits.append(
+                    {
+                        "model": model,
+                        "origin": origin,
+                        "n_scores": n,
+                        **dataclasses.asdict(copula),
+                    }
+                )
         out = pd.concat(paired, ignore_index=True)[list(forecasts.columns)]
         return out, pd.DataFrame(fits, columns=_FIT_COLUMNS)
 

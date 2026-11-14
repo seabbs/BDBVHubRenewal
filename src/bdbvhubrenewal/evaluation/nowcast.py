@@ -158,8 +158,8 @@ class ReleaseBacktest:
     copulas : pandas.DataFrame
         The copula of each paired model and origin
         (`bdbvhubrenewal.forecasters.copula.pair_registered`): `model`,
-        `origin`, `n_scores` and the three correlations. Empty with no
-        truth delay.
+        `origin`, `n_scores` and the three correlations. Empty unless
+        the backtest pairs them.
     """
 
     scores: pd.DataFrame
@@ -649,6 +649,7 @@ def release_backtest(
     complete_after: int = COMPLETE_WEEKS,
     compare: Collection[str] | None = None,
     truth_delay: int | None = None,
+    pair: bool = False,
 ) -> ReleaseBacktest:
     """Forecast from every real release and score every model.
 
@@ -678,6 +679,11 @@ def release_backtest(
         $D$: score the complete target on each week's count in the first
         release $D$ days after it (`rolling_truth`) rather than on the
         complete weeks of the latest release.
+    pair : bool
+        Pair the draws of the models registered as `paired` into
+        trajectories by the rolling copula (`pair_registered`) before
+        scoring. Needs `truth_delay`. Off by default, so the scores are of
+        the forecasts as made.
 
     Returns
     -------
@@ -716,6 +722,7 @@ def release_backtest(
         complete_after=complete_after,
         compare=compare,
         truth_delay=truth_delay,
+        pair=pair,
     )
 
 
@@ -886,6 +893,7 @@ def score_releases(
     complete_after: int = COMPLETE_WEEKS,
     compare: Collection[str] | None = None,
     truth_delay: int | None = None,
+    pair: bool = False,
 ) -> ReleaseBacktest:
     """Score the forecasts of `forecast_releases` and of stored models.
 
@@ -909,6 +917,8 @@ def score_releases(
         As for `release_backtest`.
     truth_delay : int, optional
         As for `release_backtest`.
+    pair : bool
+        As for `release_backtest`.
 
     Returns
     -------
@@ -928,32 +938,28 @@ def score_releases(
         else (run.samples)
     )
     copulas = pd.DataFrame()
-    if truth_delay is not None:
+    if pair:
+        if truth_delay is None:
+            raise ValueError("Pairing trajectories needs a truth delay.")
         # Models that draw each place and week on their own are paired
         # into trajectories, by origin, from their matured errors.
+        truth = rolling_truth(real, truth_delay)
         seed = min((t.seed for t in tasks), default=0)
-        parts = [
-            samples.reindex(columns=["model", "origin", *cols]),
-            kept.reindex(columns=["model", "vintage", *cols])
-            .rename(columns={"vintage": "origin"})
-            .astype({"origin": str})
-            .assign(stored=True),
-        ]
-        parts = [p for p in parts if len(p)]
-        if parts:
-            both = pd.concat(parts, ignore_index=True)
-            if "stored" not in both:
-                both["stored"] = False
-            paired, copulas = pair_registered(
-                both, rolling_truth(real, truth_delay), seed
+        fits = []
+        if len(samples):
+            samples, fit = pair_registered(samples, truth, seed)
+            fits.append(fit)
+        if len(kept):
+            paired, fit = pair_registered(
+                kept.rename(columns={"vintage": "origin"}).astype(
+                    {"origin": str}
+                ),
+                truth,
+                seed,
             )
-            is_stored = paired["stored"].eq(True)
-            samples = paired.loc[~is_stored].drop(columns="stored")
-            kept = (
-                paired.loc[is_stored]
-                .drop(columns="stored")
-                .rename(columns={"origin": "vintage"})
-            )
+            kept = paired.rename(columns={"origin": "vintage"})
+            fits.append(fit)
+        copulas = pd.concat(fits, ignore_index=True)
     frames: list[pd.DataFrame] = []
     origin_rows: list[dict[str, object]] = []
     fit_rows: list[pd.DataFrame] = []
