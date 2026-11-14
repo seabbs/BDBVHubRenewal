@@ -170,7 +170,7 @@ Key references: the Methods references, with [@bracherEvaluatingEpidemicForecast
 ::: {#fig-synthetic}
 ![](build/figures/main/synthetic-results.png)
 
-Held-out synthetic data. (A) Nowcasts over time; (B, C) CRPS relative to `randomwalknowcast` on the natural and log scales; (D) bias; (E) 50% and 90% coverage; (F) relative CRPS by scenario factor; (G) relative CRPS by horizon. {{< meta results.synthetic.label >}}
+Held-out synthetic data. (A) Nowcasts of one held-out outbreak, drawn with the workflow's seed, against the rolling truth; (B, C) CRPS relative to `randomwalknowcast` on the natural and log scales; (D) bias; (E) 50% and 90% coverage; (F) relative CRPS by scenario factor; (G) relative CRPS by horizon. {{< meta results.synthetic.label >}}
 :::
 
 Placeholder summary from the workflow: the best model was {{< meta results.synthetic.best_model >}}, with a relative score of {{< meta results.synthetic.best_rel_score >}} and {{< meta results.synthetic.best_rel_log_score >}} on the log scale, against {{< meta results.synthetic.baseline >}}.
@@ -192,7 +192,7 @@ Held-out synthetic data: mean scores, coverage and number of forecasts of each m
 ::: {#fig-germany}
 ![](build/figures/main/germany-results.png)
 
-German nowcast hub. (A) Nowcasts over time, with a dotted line at the split between the development and held-out halves; (B, C) WIS relative to `KIT-frozen_baseline` on the natural and log scales; (D) bias; (E) 50% and 95% coverage; (F) relative WIS by location; (G) by age group; (H) by horizon. {{< meta results.germany.label >}}
+German nowcast hub. (A) National nowcasts against the rolling truth, with a dotted line at the split between the development and held-out halves; (B, C) WIS relative to `KIT-frozen_baseline` on the natural and log scales; (D) bias; (E) 50% and 95% coverage; (F) relative WIS by location; (G) by age group; (H) by horizon. {{< meta results.germany.label >}}
 :::
 
 Placeholder summary from the workflow: the best model was {{< meta results.germany.best_model >}}, with a relative score of {{< meta results.germany.best_rel_score >}} and {{< meta results.germany.best_rel_log_score >}} on the log scale, against {{< meta results.germany.baseline >}}.
@@ -213,7 +213,7 @@ German nowcast hub: mean scores, coverage and number of forecasts of each model,
 ::: {#fig-ebola}
 ![](build/figures/main/ebola-results.png)
 
-Ebola hub submissions. (A) Nowcasts over time; (B, C) CRPS relative to `BDBVHub-baseline` on the natural and log scales; (D) bias; (E) 50% and 90% coverage; (F) relative CRPS by location; (G) by horizon. {{< meta results.ebola.label >}}
+Ebola hub submissions. (A) National nowcasts against the rolling truth; (B, C) CRPS relative to `BDBVHub-baseline` on the natural and log scales; (D) bias; (E) 50% and 90% coverage; (F) relative CRPS by location; (G) by horizon. {{< meta results.ebola.label >}}
 :::
 
 Placeholder summary from the workflow: the best model was {{< meta results.ebola.best_model >}}, with a relative score of {{< meta results.ebola.best_rel_score >}} and {{< meta results.ebola.best_rel_log_score >}} on the log scale, against {{< meta results.ebola.baseline >}}.

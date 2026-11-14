@@ -148,6 +148,8 @@ def _figures(a: argparse.Namespace) -> None:
         a.si_dir,
         split=_date(a.split),
         dummy=read_meta(a.meta)["source"] == "dummy",
+        truth=_read(a.truth),
+        nowcasts=json.loads(a.config)["nowcasts"],
     )
 
 
@@ -240,6 +242,8 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("figures")
     _outputs(p)
     p.add_argument("--meta", type=Path, required=True)
+    p.add_argument("--truth", type=Path, required=True)
+    p.add_argument("--config", required=True, help="Workflow config as JSON.")
     p.add_argument("--forecasts", type=Path, required=True)
     p.add_argument("--observations", type=Path, required=True)
     p.set_defaults(run=_figures)

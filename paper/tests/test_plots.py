@@ -278,3 +278,16 @@ def test_nowcasts_draw_each_dates_latest_count_when_releases_are_partial():
     ]
     fig = results_panel(fc, obs, score_forecasts(fc))
     plt.close(fig)
+
+
+def test_si_nowcasts_draw_one_titled_panel_per_place() -> None:
+    from paperfigs.plots import si_nowcasts
+    from paperfigs.truth import rolling_truth
+
+    fc, obs = dummy_study("germany", seed=1, n_samples=5)
+    truth = rolling_truth(obs, delay_days=40)
+    panels = [("DE-BY", "all", "DE-BY"), ("DE", "80+", "DE, 80+")]
+    fig = si_nowcasts(fc, obs, panels, ["randomwalknowcast"], truth=truth)
+    titles = [ax.get_title() for ax in fig.axes if ax.get_visible()]
+    assert titles == ["DE-BY", "DE, 80+"]
+    plt.close(fig)

@@ -320,6 +320,7 @@ def study_files(study):
         "locations": f"{R}/{{mode}}/data/{study}-locations.csv",
         "meta": f"{R}/{{mode}}/data/{study}-meta.json",
         "scores": f"{R}/{{mode}}/scores/{study}.csv.gz",
+        "truth": f"{R}/{{mode}}/truth/{study}.csv.gz",
     }
 
 
@@ -336,6 +337,7 @@ for study in STUDIES:
         params:
             study=study,
             split=lambda w, study=study: study_split(w.mode, study),
+            config=shlex.quote(json.dumps(config)),
             main=f"{R}/{{mode}}/figures/main",
             si=f"{R}/{{mode}}/figures/si",
         shell:
@@ -343,7 +345,8 @@ for study in STUDIES:
             "--forecasts {input.forecasts} "
             "--observations {input.observations} "
             "--scores {input.scores} --locations {input.locations} "
-            "--meta {input.meta} "
+            "--meta {input.meta} --truth {input.truth} "
+            "--config {params.config} "
             "--main-dir {params.main} --si-dir {params.si} {params.split}"
 
     rule:

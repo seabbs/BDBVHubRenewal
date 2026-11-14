@@ -65,6 +65,7 @@ __all__ = [
     "PANEL_LETTERS",
     "STUDY_HORIZON_BIN",
     "results_panel",
+    "si_nowcasts",
     "si_scores_by_factor",
     "si_scores_by_finetune_size",
     "si_scores_by_location_horizon",
@@ -205,12 +206,15 @@ def plot_nowcasts(
     models: Sequence[str],
     location: str,
     all_models: Sequence[str],
+    origins: Sequence[pd.Timestamp] | None = None,
+    truth: pd.DataFrame | None = None,
 ) -> bool:
-    """Draw 50% and 90% ribbons and medians at spaced origin dates.
+    """Draw 50% and 90% ribbons and medians at a few origin dates.
 
-    Data as of each origin are in light grey, and the latest count of each
-    date in black. A model with no forecast at a shown origin gets a cross
-    in its colour at the foot of that origin's line.
+    Data as of each origin are in light grey, and the truth in black: the
+    rolling truth if given, else the latest count of each date. A model
+    with no forecast at a shown origin gets a cross in its colour at the
+    foot of that origin's line.
 
     Parameters
     ----------
@@ -226,6 +230,10 @@ def plot_nowcasts(
         Location to show.
     all_models : sequence of str
         Every model in the figure, for styles.
+    origins : sequence of pandas.Timestamp, optional
+        Origins to show. Defaults to evenly spaced ones.
+    truth : pandas.DataFrame, optional
+        `rolling_truth` output for the same rows; its `truth` is drawn.
 
     Returns
     -------
@@ -234,13 +242,20 @@ def plot_nowcasts(
     """
     fc = forecasts.loc[forecasts["location"] == location]
     obs = observations.loc[observations["location"] == location]
-    origins = _spaced_origins(fc)
-    # Each target's latest count, as a release need not hold every target.
-    final = (
-        obs.sort_values("as_of_date")
-        .groupby("target_date", as_index=False)
-        .last()
-    )
+    origins = list(origins) if origins is not None else _spaced_origins(fc)
+    if truth is not None:
+        final = (
+            truth.loc[truth["location"] == location, ["target_date", "truth"]]
+            .rename(columns={"truth": "value"})
+            .dropna()
+        )
+    else:
+        # Each target's latest count, as a release need not hold every one.
+        final = (
+            obs.sort_values("as_of_date")
+            .groupby("target_date", as_index=False)
+            .last()
+        )
     step = pd.Timedelta(days=_step_days(fc))
     hmin, hmax = fc["horizon"].min(), fc["horizon"].max()
     start = origins[0] + (hmin - abs(hmin) // 2) * step
@@ -534,7 +549,7 @@ def _legend(
             lw=1,
             marker="o",
             ms=2,
-            label="Final data",
+            label="Truth",
         )
     )
     if missing:
@@ -622,6 +637,8 @@ def results_panel(
     factors: pd.DataFrame | None = None,
     n_factors: int = 4,
     split: pd.Timestamp | None = None,
+    origins: Sequence[pd.Timestamp] | None = None,
+    truth: pd.DataFrame | None = None,
 ) -> Figure:
     """Plot the results panel for one study.
 
@@ -658,6 +675,10 @@ def results_panel(
     ribbon_models : sequence of str, optional
         Models with ribbons in panel A. Defaults to the baseline, the
         fine-tuned models and `hub_ensemble` if present.
+    origins : sequence of pandas.Timestamp, optional
+        Origins of panel A. Defaults to evenly spaced ones.
+    truth : pandas.DataFrame, optional
+        The rolling truth, drawn in panel A in place of the latest data.
 
     Returns
     -------
@@ -700,6 +721,8 @@ def results_panel(
         ribbons,
         location,
         models,
+        origins=origins,
+        truth=None if truth is None else truth.loc[truth["stratum"] == main],
     )
     _split_line(axd["nowcast"], split)
     rel = relative_scores(sc, halves, baseline)
@@ -1023,5 +1046,62 @@ def si_scores_by_finetune_size(
         ax.set_xlabel("Fine-tuning outbreaks")
         _label(ax, letter, title)
     axes[0].set_ylabel(f"Relative to {baseline}")
+    _legend_models(fig, models)
+    return fig
+
+
+def si_nowcasts(
+    forecasts: pd.DataFrame,
+    observations: pd.DataFrame,
+    panels: Sequence[tuple[str, str, str]],
+    models: Sequence[str],
+    origins: Sequence[pd.Timestamp] | None = None,
+    truth: pd.DataFrame | None = None,
+    ncol: int = 3,
+) -> Figure:
+    """Plot nowcasts for several locations, one panel each.
+
+    Parameters
+    ----------
+    forecasts, observations : pandas.DataFrame
+        Forecasts and observations for one study.
+    panels : sequence of tuple of str
+        `(location, stratum, title)` of each panel.
+    models : sequence of str
+        Models with ribbons.
+    origins : sequence of pandas.Timestamp, optional
+        Origins to show in every panel.
+    truth : pandas.DataFrame, optional
+        The rolling truth, drawn in black.
+    ncol : int
+        Panels per row.
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+        The panels, with one legend.
+    """
+    nrow = int(np.ceil(len(panels) / ncol))
+    fig, axes = plt.subplots(
+        nrow, ncol, figsize=(4 * ncol, 2.8 * nrow), layout="constrained"
+    )
+    axes = np.atleast_1d(axes).ravel()
+    for ax, (location, stratum, title) in zip(axes, panels, strict=False):
+        plot_nowcasts(
+            ax,
+            forecasts.loc[forecasts["stratum"] == stratum],
+            observations.loc[observations["stratum"] == stratum],
+            models,
+            location,
+            models,
+            origins=origins,
+            truth=None
+            if truth is None
+            else truth.loc[truth["stratum"] == stratum],
+        )
+        ax.set_title(title, fontsize=9)
+        ax.set_ylabel("Count")
+    for ax in axes[len(panels) :]:
+        ax.set_visible(False)
     _legend_models(fig, models)
     return fig

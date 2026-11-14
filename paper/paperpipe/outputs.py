@@ -9,6 +9,7 @@ scenario factors.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Final
 
@@ -19,9 +20,16 @@ from matplotlib.figure import Figure
 from paperfigs.checkpoints import drop_checkpoints
 from paperfigs.factors import factor_label
 from paperfigs.grid import grid_levels, read_grid
+from paperfigs.nowcasts import (
+    other_places,
+    pick_origins,
+    pick_outbreaks,
+    place_models,
+)
 from paperfigs.periods import add_period
 from paperfigs.plots import (
     results_panel,
+    si_nowcasts,
     si_scores_by_factor,
     si_scores_by_finetune_size,
     si_scores_by_location_horizon,
@@ -46,6 +54,7 @@ FIGURES: Final[dict[str, dict[str, tuple[str, ...]]]] = {
     "synthetic": {
         "main": ("results",),
         "si": (
+            "si-nowcasts",
             "si-factors",
             "si-factors-log",
             "si-wis-over-time",
@@ -55,6 +64,7 @@ FIGURES: Final[dict[str, dict[str, tuple[str, ...]]]] = {
     "germany": {
         "main": ("results",),
         "si": (
+            "si-nowcasts",
             "si-location-horizon",
             "si-location-horizon-log",
             "si-wis-over-time",
@@ -63,6 +73,7 @@ FIGURES: Final[dict[str, dict[str, tuple[str, ...]]]] = {
     "ebola": {
         "main": ("results",),
         "si": (
+            "si-nowcasts",
             "si-location-horizon",
             "si-location-horizon-log",
             "si-wis-over-time",
@@ -87,6 +98,14 @@ def _factors(locations: pd.DataFrame) -> pd.DataFrame:
     return locations.drop(columns="delay_days")
 
 
+def _national(study: str, forecasts: pd.DataFrame, nowcasts: Mapping) -> str:
+    """Return the national location, else the one with most forecast."""
+    national = nowcasts.get("national", {}).get(study)
+    if national in set(forecasts["location"]):
+        return str(national)
+    return str(forecasts.groupby("location")["value"].sum().idxmax())
+
+
 def _figures(
     study: str,
     forecasts: pd.DataFrame,
@@ -94,18 +113,34 @@ def _figures(
     scores: pd.DataFrame,
     locations: pd.DataFrame,
     split: pd.Timestamp | None,
+    truth: pd.DataFrame,
+    nowcasts: Mapping,
 ) -> dict[str, Figure]:
+    seed = int(nowcasts["seed"])
+    models = place_models(
+        forecasts["model"].unique(), nowcasts["models"][study]
+    )
+    origins = pick_origins(forecasts, int(nowcasts["origins"]), seed)
+    shown = {"ribbon_models": models, "origins": origins, "truth": truth}
     if study == "synthetic":
         # Outbreaks are many, so scores break down by scenario factor.
         # The fine-tune's checkpoints appear only in their own figure.
         factors = _factors(locations)
         main = drop_checkpoints(scores)
+        panels = pick_outbreaks(
+            locations, nowcasts["factors"], int(nowcasts["outbreaks"]), seed
+        )
         return {
             "results": results_panel(
                 drop_checkpoints(forecasts),
                 observations,
                 main,
                 factors=factors,
+                location=panels[0][0],
+                **shown,
+            ),
+            "si-nowcasts": si_nowcasts(
+                forecasts, observations, panels, models, origins, truth
             ),
             "si-factors": si_scores_by_factor(main, factors),
             "si-factors-log": si_scores_by_factor(
@@ -114,8 +149,24 @@ def _figures(
             "si-wis-over-time": si_wis_over_time(main),
             "si-finetune-size": si_scores_by_finetune_size(scores),
         }
+    national = _national(study, forecasts, nowcasts)
     return {
-        "results": results_panel(forecasts, observations, scores, split=split),
+        "results": results_panel(
+            forecasts,
+            observations,
+            scores,
+            split=split,
+            location=national,
+            **shown,
+        ),
+        "si-nowcasts": si_nowcasts(
+            forecasts,
+            observations,
+            other_places(forecasts, national),
+            models,
+            origins,
+            truth,
+        ),
         "si-location-horizon": si_scores_by_location_horizon(
             scores, split=split
         ),
@@ -136,6 +187,9 @@ def write_figures(
     si_dir: Path,
     split: pd.Timestamp | None = None,
     dummy: bool = False,
+    *,
+    truth: pd.DataFrame,
+    nowcasts: Mapping,
 ) -> list[Path]:
     """Write a study's figures as `<study>-<name>.png` and return the paths.
 
@@ -153,6 +207,11 @@ def write_figures(
         First held-out origin date, marked on the figures.
     dummy : bool
         Whether the study ran on dummy data, which labels every figure.
+    truth : pandas.DataFrame
+        The rolling truth, drawn in the nowcast panels.
+    nowcasts : mapping
+        Which series, origins and models the nowcast panels show: the
+        `nowcasts` block of the workflow config.
 
     Returns
     -------
@@ -163,7 +222,14 @@ def write_figures(
     written = []
     with theme():
         figs = _figures(
-            study, forecasts, observations, scores, locations, split
+            study,
+            forecasts,
+            observations,
+            scores,
+            locations,
+            split,
+            truth,
+            nowcasts,
         )
         for part, folder in dirs.items():
             folder.mkdir(parents=True, exist_ok=True)
