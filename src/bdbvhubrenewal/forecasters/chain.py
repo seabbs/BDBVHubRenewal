@@ -21,7 +21,9 @@ Cells a release does not observe are skipped, not filled.
 A place with at least 10 cases a week uses its own $g$, and otherwise
 the pooled $g$ of its nearest parent with them, fitted to the summed
 pair sums of that parent's places with 10 cases a week (`pooling`), as
-for the walk spread and the nowcast size.
+for the walk spread and the nowcast size. A zone instead uses its own $g$
+with at least `Settings.zone_delay_min_level` cases a week, and
+otherwise its province's.
 Only onset days within `Settings.history_delay` (63 for $D = 42$) of the
 latest cut-off are summed, and downward revisions are first moved onto
 earlier releases of the day, as baselinenowcast does.
@@ -78,6 +80,7 @@ from bdbvhubrenewal.forecasters.introductions import (
 from bdbvhubrenewal.forecasters.obs import fit_sizes
 from bdbvhubrenewal.forecasters.pooling import (
     MIN_LEVEL,
+    ZONE_DELAY_MIN_LEVEL,
     pool_matrix,
     source_index,
 )
@@ -135,6 +138,9 @@ class Settings:
     min_level : float
         Cases a week for a place to use its own delay, walk spread and
         nowcast size (`pooling`).
+    zone_delay_min_level : float
+        Cases a week for a zone to use its own delay, in place of its
+        province's (`pooling.ZONE_DELAY_MIN_LEVEL`).
     level_weeks : tuple of int
         First and last weeks back averaged for a place's level.
     completeness : float
@@ -152,6 +158,7 @@ class Settings:
 
     max_delay: int = 42
     min_level: float = MIN_LEVEL
+    zone_delay_min_level: float = ZONE_DELAY_MIN_LEVEL
     level_weeks: tuple[int, int] = (3, 6)
     completeness: float = 0.95
     walk_weeks: int = 9
@@ -194,8 +201,8 @@ class DelayFit:
     level : numpy.ndarray
         Cases a week of each place, `[L]`.
     source : numpy.ndarray
-        Index of the delay each place uses, `[L]`, as for
-        `source_index`.
+        Index of the delay each place uses, `[L]`, encoded as for
+        `source_index` (zones by `fit_delay`).
     own : numpy.ndarray
         Whether each place uses its own factor, `[L, D]`. The choice is
         made per place (`source`), so it is the same at every age.
@@ -347,6 +354,10 @@ def fit_delay(
 ) -> DelayFit | None:
     """Estimate the delay factors from the pairs up to release `r`.
 
+    Each place takes its delay by the own-or-pooled rule (`pooling`),
+    except a zone. A zone with at least `Settings.zone_delay_min_level`
+    cases a week uses its own delay, and otherwise its province's.
+
     Parameters
     ----------
     snap : SnapshotArrays
@@ -374,6 +385,11 @@ def fit_delay(
         gaps,
     )
     source = source_index(level, snap.parent, min_level=settings.min_level)
+    parent = np.maximum(snap.parent, 0)
+    zone = (snap.parent >= 0) & (snap.parent[parent] >= 0)
+    own_zone = level >= settings.zone_delay_min_level
+    zone_source = np.where(own_zone, np.arange(level.size), source[parent])
+    source = np.where(zone, zone_source, source)
     g = np.concatenate([own_g, pooled_g])[source]
     own = np.broadcast_to((source == np.arange(level.size))[:, None], g.shape)
     return DelayFit(pairs, g, level, source, np.array(own))

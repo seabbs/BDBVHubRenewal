@@ -189,11 +189,45 @@ def test_a_delay_is_own_with_10_cases_a_week_else_the_pooled_parents(
         gaps,
     )
     # The same rule as the walk spread: own with 10 cases a week, else
-    # the pooled estimate of the nearest parent that has them.
+    # the pooled estimate of the nearest parent that has them. Zones have
+    # their own threshold
+    # (`test_a_zone_below_the_threshold_takes_its_provinces_delay`).
     src = source_index(level, snap.parent)
-    np.testing.assert_allclose(fit.g, np.concatenate([own_g, pooled_g])[src])
-    assert (src < len(level)).any()
-    assert (src >= len(level)).any()
+    kept = np.array([c.count("-") < 2 for c in snap.locations])
+    want = np.concatenate([own_g, pooled_g])[src]
+    np.testing.assert_allclose(fit.g[kept], want[kept])
+    assert (src[kept] < len(level)).any()
+    assert (src[kept] >= len(level)).any()
+
+
+@pytest.mark.parametrize("threshold", [5.0, 10.0, 30.0, np.inf])
+def test_a_zone_below_the_threshold_takes_its_provinces_delay(
+    daily: pd.DataFrame, daily_zones: pd.DataFrame, threshold: float
+) -> None:
+    both = pd.concat([daily, daily_zones])
+    zones = tuple(
+        sorted({z for z in daily_zones["location"] if z.startswith("CD-")})
+    )
+    snap = snapshot_arrays(both, "2026-10-24", zones)
+    settings = Settings(zone_delay_min_level=threshold)
+    fit = fit_delay(snap, 3, settings)
+    assert fit is not None
+    level = levels(snap, 3, settings)
+    zone = np.array([c.count("-") == 2 for c in snap.locations])
+    rule = source_index(level, snap.parent)
+    # A zone with `threshold` cases a week uses its own delay, and
+    # otherwise its province's.
+    big = np.flatnonzero(zone & (level >= threshold))
+    small = np.flatnonzero(zone & (level < threshold))
+    assert small.size
+    np.testing.assert_array_equal(fit.source[big], big)
+    assert fit.own[big].all()
+    assert not fit.own[small].any()
+    np.testing.assert_array_equal(
+        fit.source[small], fit.source[snap.parent[small]]
+    )
+    # Provinces and the country keep the rule.
+    np.testing.assert_array_equal(fit.source[~zone], rule[~zone])
 
 
 def test_one_rule_shares_the_size_by_level_only(origin24) -> None:

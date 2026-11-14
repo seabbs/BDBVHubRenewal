@@ -16,7 +16,7 @@ In brief, `randomwalknowcast`:
 3. nowcasts every week up to the cut-off and completes a partial cut-off week from a walk that starts at the latest full week in the 9 weeks to the cut-off at least 5% reported with at least 5 cases ([Start from the nowcast](#start-from-the-nowcast));
 4. continues each nowcast trajectory with a random walk on $\log(1 + y)$ ([Forecast](#forecast));
 5. takes the walk's variance net of Poisson noise ([Forecast](#forecast));
-6. shares the delay, size and walk variance with a parent where a place has fewer than 10 cases a week ([Own or pooled estimates](#own-or-pooled-estimates)).
+6. shares the delay, size and walk variance with a parent where a place has fewer than 10 cases a week, and gives a zone with fewer than 20 its province's delay ([Own or pooled estimates](#own-or-pooled-estimates)).
 
 Two further rules keep places with few or no cases sensible: introductions for places with no recent case ([Forecast](#forecast)), and zone samples that sum to their province's ([Health zones](#health-zones)).
 
@@ -185,13 +185,18 @@ The negative binomial options scored the same within sampling noise, and the sig
 ## Own or pooled estimates
 
 The places form a hierarchy of zone, province and country.
-Each estimate is chosen by one rule.
+Each estimate is chosen by these rules.
 
 1. **Level.** The place's level $\ell_p$ is the mean of $Y_{p,o}(w)$ over weeks 3 to 6 back.
 2. **Own.** A place with $\ell_p \ge 10$ cases a week uses its own delay $\Delta_p$, size $\phi_{p,k}$ and walk spread $\sigma_p$.
    The walk spread also needs an own $\sigma_p^2 > 0$ ([below](#forecast)).
 3. **Fallback.** Otherwise it uses the pooled estimate of its nearest parent that meets the same rule, and otherwise the country's.
    A pooled estimate uses together the pair sums, errors and weekly changes of the parent's children with $\ell \ge 10$, or the parent's own where none has.
+4. **Zone delays.** A zone with $\ell_z \ge 20$ cases a week uses its own delay, and otherwise its province's.
+   A zone's own delay rests on few cases, and the nowcast divides by the share reported, so noise in it inflates the zones' nowcasts.
+   The threshold of 20 comes from the zone backtest of `randomwalknowcast` over thresholds of 5, 10, 20, 30, 50 and 100 cases a week.
+   Against 10, the size and walk spread threshold, 20 cut the WIS of the zones summed to provinces by 8% on the reported target and by 22% on the complete weeks of the latest release.
+   Higher thresholds cut it further but leave fewer zones on their own delay.
 
 ## Forecast
 

@@ -14,17 +14,24 @@ A qualifying node uses its own estimate.
 Otherwise it uses the pooled estimate of its nearest ancestor that
 qualifies, else the country's pooled estimate.
 The delay, the spread of the walk and the observation model all use this
-rule with one threshold.
+rule with one threshold, except that a zone below `ZONE_DELAY_MIN_LEVEL`
+takes its province's delay (`chain.fit_delay`).
 """
 
 from __future__ import annotations
 
 import numpy as np
 
-__all__ = ["MIN_LEVEL", "pool_matrix", "source_index"]
+__all__ = ["MIN_LEVEL", "ZONE_DELAY_MIN_LEVEL", "pool_matrix", "source_index"]
 
 MIN_LEVEL = 10.0
 """Cases a week at which a node uses its own estimates."""
+
+ZONE_DELAY_MIN_LEVEL = 20.0
+"""Cases a week at which a zone uses its own delay, not its province's.
+
+The choice is in docs/methods/baselines.md.
+"""
 
 
 def pool_matrix(
