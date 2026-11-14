@@ -673,6 +673,60 @@ def test_a_failed_lookup_says_how_to_set_a_token(
         raise OSError("HTTP Error 403: rate limit exceeded")
 
     monkeypatch.undo()
+    monkeypatch.setattr(foundation, "RETRY_SECONDS", (0, 0, 0))
     monkeypatch.setattr(foundation.urllib.request, "urlopen", refuse)
     with pytest.raises(ConnectionError, match="GH_TOKEN"):
         foundation.finetuned_releases()
+
+
+def test_a_passing_github_error_is_retried(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import urllib.error
+
+    calls: list[int] = []
+
+    class Response:
+        def __enter__(self):  # type: ignore[no-untyped-def]
+            return self
+
+        def __exit__(self, *_: object) -> None:
+            return None
+
+        def read(self) -> bytes:
+            return b"[]"
+
+    def flaky(request, **_: object):  # type: ignore[no-untyped-def]
+        calls.append(1)
+        if len(calls) < 3:
+            raise urllib.error.HTTPError(
+                request.full_url, 502, "Bad Gateway", {}, None
+            )
+        return Response()
+
+    monkeypatch.undo()
+    monkeypatch.setattr(foundation, "RETRY_SECONDS", (0, 0, 0))
+    monkeypatch.setattr(foundation.urllib.request, "urlopen", flaky)
+    assert foundation.finetuned_releases() == []
+    assert len(calls) == 3
+
+
+def test_a_missing_asset_is_not_retried(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import urllib.error
+
+    calls: list[int] = []
+
+    def missing(request, **_: object):  # type: ignore[no-untyped-def]
+        calls.append(1)
+        raise urllib.error.HTTPError(
+            request.full_url, 404, "Not Found", {}, None
+        )
+
+    monkeypatch.undo()
+    monkeypatch.setattr(foundation, "RETRY_SECONDS", (0, 0, 0))
+    monkeypatch.setattr(foundation.urllib.request, "urlopen", missing)
+    with pytest.raises(FileNotFoundError):
+        foundation.resolve_checkpoint("abc")
+    assert len(calls) == 1
