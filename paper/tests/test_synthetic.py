@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import datetime as dt
+import re
 from dataclasses import dataclass
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -308,7 +310,7 @@ def test_a_longer_delay_moves_the_last_origin_back() -> None:
     # The r2-real grid has 12-week delays in some outbreaks, so the last
     # origin must leave its forecast weeks that long to complete.
     counts = _counts(("P01",), weeks=40)
-    assert synthetic.longest_delay_weeks(counts) == 8
+    assert synthetic.longest_delay_weeks(counts) == 3
     late = counts.iloc[:1].assign(
         report_date=(
             pd.Timestamp(counts["reference_date"].iloc[0])
@@ -353,3 +355,56 @@ def test_strata_take_hub_codes_whose_parents_are_real_nodes(
         total = rows.groupby("location")["observed"].sum()
         kids = [c for c in nodes if parent_code(c) == parent]
         assert total[parent] == sum(total[k] for k in kids)
+
+
+SIMULATOR = Path(__file__).parents[2] / "scripts" / "finetune_simulate.R"
+
+
+def _r3_factors() -> set[str]:
+    """Return the factor names of the simulator's crossed design."""
+    text = SIMULATOR.read_text()
+    body = text[text.index("factors <- list(") :]
+    body = body[: body.index("\n)\n")]
+    return set(re.findall(r"^  (\w+) = ", body, flags=re.MULTILINE))
+
+
+def test_factors_include_every_factor_of_the_r3_design() -> None:
+    assert _r3_factors() <= set(synthetic.FACTORS)
+
+
+def _draws(counts: pd.DataFrame, n: int) -> pd.DataFrame:
+    """Return `counts` as `n` draws of one r3 simulation."""
+    return pd.concat(
+        [counts.assign(outbreak=f"9-0001-{k}") for k in range(1, n + 1)],
+        ignore_index=True,
+    )
+
+
+def test_first_draws_keep_one_outbreak_per_simulation() -> None:
+    counts = _draws(_counts(("P01",)), 3)
+    out = synthetic.first_draws(counts)
+    assert set(out["outbreak"]) == {"9-0001-1"}
+    assert len(out) == len(counts) / 3
+
+
+def test_settings_match_an_r3_outbreak_by_its_simulation() -> None:
+    counts = synthetic.first_draws(_draws(_counts(("P01", "P02")), 2))
+    settings = pd.DataFrame(
+        {
+            "outbreak": ["9-0001"],
+            "delay_mean": [5.0],
+            "observation": ["poisson"],
+        }
+    )
+    out = synthetic.factor_table(counts, settings)
+    assert (out["delay_mean"] == 5.0).all()
+    assert (out["observation"] == "poisson").all()
+    assert set(out["location"]) == {
+        synthetic.series_label("9-0001-1", p) for p in (NATIONAL, "P01", "P02")
+    }
+
+
+def test_short_delays_keep_their_own_longest_delay() -> None:
+    # r3's longest delay is 3, 4, 6, 8 or 12 weeks.
+    counts = _counts(("P01",))
+    assert synthetic.longest_delay_weeks(counts) == 3
