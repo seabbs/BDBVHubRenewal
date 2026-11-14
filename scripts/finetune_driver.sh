@@ -11,8 +11,9 @@
 #   TRAIN_FIRST, TRAIN_LAST       training seeds
 #   HELD_FIRST, HELD_LAST         held-out seeds (simulated first)
 #   LOCAL_FIRST, LOCAL_LAST       training seeds run on the laptop
-#   LOCAL_SLOTS, LOCAL_SLOTS_TRAINING   laptop simulation processes
-#                 before and during training (2, 1)
+#   LOCAL_SLOTS, LOCAL_SLOTS_TRAINING, LOCAL_MIN_FREE_MEM_GB   most
+#                 local simulation processes before and during training,
+#                 and the free memory a new local batch needs
 #   REMOTE, REMOTE_DIR, SIM_REMOTE   optional ssh host (none: every
 #                 seed runs locally), its repo worktree (with
 #                 scripts/finetune_simulate.R of this commit and an
@@ -189,6 +190,18 @@ check_remote() {
   fi
 }
 
+free_mem_gb() {
+  # Memory free on this machine in GB, on Linux or macOS.
+  if command -v free > /dev/null; then
+    free -g | awk '/^Mem/ {print $7}'
+  else
+    local pct total
+    pct=$(memory_pressure | awk '/free percentage/ {print $5}' | tr -d %)
+    total=$(sysctl -n hw.memsize)
+    echo $(( total / 1000000000 * pct / 100 ))
+  fi
+}
+
 local_slots() {
   # Fill the laptop's slots: LOCAL_SLOTS while the trainer waits, and
   # LOCAL_SLOTS_TRAINING while it trains, to leave memory for MPS.
@@ -200,8 +213,9 @@ local_slots() {
   for s in $(local_seeds); do
     done_seed "$s" && continue
     pgrep -f "(finetune_simulate|sim-real).R --args 25 $s " > /dev/null && continue
-    running=$(pgrep -f 'finetune_simulate.R --args|sim-real.R --args' | wc -l)
+    running=$(pgrep -f 'finetune_simulate.R --args' | wc -l)
     (( running >= slots )) && return 0
+    (( $(free_mem_gb) < LOCAL_MIN_FREE_MEM_GB )) && return 0
     (
       export TMPDIR="$PWD/output/finetune/tmp/$s"
       mkdir -p "$TMPDIR"
