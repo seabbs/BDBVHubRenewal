@@ -261,7 +261,8 @@ def test_finetune_size_plots_one_line_per_finetuned_model() -> None:
         {x for line in ax.get_lines() for x in line.get_xdata()} - {0, 1}
     )
     assert xs[0] == 1000
-    assert xs[-1] == 20000
+    assert xs[-1] == 16000
+    assert ax.get_xscale() == "log"
     plt.close(fig)
 
 

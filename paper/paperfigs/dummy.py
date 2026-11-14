@@ -156,7 +156,7 @@ STUDY_SETUP: Final[dict[str, StudySetup]] = {
                 f"fm_chronos_daily_ragged_ft@{n}": ModelSkill(
                     0.0, 0.75 + 0.05 * i, 1.0
                 )
-                for i, n in enumerate((20000, 10000, 5000, 2000, 1000))
+                for i, n in enumerate((16000, 8000, 4000, 2000, 1000))
             },
         },
         form="sample",

@@ -125,7 +125,7 @@ Held-out synthetic data: CRPS over time. {{< meta results.synthetic.label >}}
 ::: {#fig-synthetic-si-finetune-size}
 ![](build/figures/si/synthetic-si-finetune-size.png)
 
-Held-out synthetic data: relative CRPS of each fine-tuning checkpoint against the number of simulated outbreaks it was trained on. {{< meta results.synthetic.label >}}
+Held-out synthetic data: relative CRPS of each fine-tuning checkpoint, at doublings from 1,000 outbreaks, against the number of simulated outbreaks it was trained on (log scale). {{< meta results.synthetic.label >}}
 :::
 
 ::: {#tbl-synthetic-horizon}

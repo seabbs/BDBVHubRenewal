@@ -1,9 +1,9 @@
 """Fine-tuning checkpoints, as models named `<model>@<outbreaks>`.
 
-The fine-tune saves checkpoints from 1,000 simulated outbreaks up. The
-synthetic study forecasts with each it finds, as
+The fine-tune saves checkpoints at doublings of simulated outbreaks from
+1,000 upwards. The synthetic study forecasts with each it finds, as
 `fm_chronos_daily_ragged_ft@1000` and so on, and the main model is the
-largest. `checkpoint_of`
+last. `checkpoint_of`
 splits a name, and `drop_checkpoints` keeps every other model, for the
 results panel and tables.
 """
