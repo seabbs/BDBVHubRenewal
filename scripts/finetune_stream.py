@@ -24,6 +24,7 @@ held-out seeds, simulated first.
 from __future__ import annotations
 
 import argparse
+import gc
 import hashlib
 import inspect
 import json
@@ -110,6 +111,31 @@ def cut(sim_dir: Path, ids: list[str], seed: int) -> list[tuple[str, dict]]:
         for block in ft.outbreak_blocks(rows, ft.strata(row), rng, weeks):
             out.append((outbreak, block))
     return out
+
+
+def free_memory() -> None:
+    """Return the GPU memory PyTorch caches but does not use."""
+    import torch
+
+    gc.collect()
+    if torch.backends.mps.is_available():
+        torch.mps.empty_cache()
+    elif torch.cuda.is_available():
+        torch.cuda.empty_cache()
+
+
+def memory() -> str:
+    """Describe the GPU memory in use."""
+    import torch
+
+    if torch.backends.mps.is_available():
+        used = torch.mps.current_allocated_memory() / 1e9
+        driver = torch.mps.driver_allocated_memory() / 1e9
+        return f"MPS allocated {used:.1f} GB, driver {driver:.1f} GB"
+    if torch.cuda.is_available():
+        used = torch.cuda.memory_allocated() / 1e9
+        return f"CUDA allocated {used:.1f} GB"
+    return "CPU"
 
 
 def publish(where: Path, key: str) -> None:
@@ -211,7 +237,13 @@ def main() -> None:
     ft.checkpoint_large_batches()
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)  # noqa: NPY002
-    device = "mps" if torch.backends.mps.is_available() else "cpu"
+    device = (
+        "cuda"
+        if torch.cuda.is_available()
+        else "mps"
+        if torch.backends.mps.is_available()
+        else "cpu"
+    )
     pipeline = Chronos2Pipeline.from_pretrained(
         ft.CHRONOS_MODEL, revision=ft.CHRONOS_REVISION, device_map=device
     )
@@ -264,6 +296,7 @@ def main() -> None:
     while done < args.outbreaks:
         hi = min(done + CHUNK, args.outbreaks)
         report(stage=f"waiting for outbreaks {done + 1}-{hi}")
+        free_memory()
         while len(ready := ready_outbreaks(sim_dir, training_seeds())) < hi:
             if all(seed_done(sim_dir, s) for s in training_seeds()):
                 raise RuntimeError(
@@ -300,14 +333,18 @@ def main() -> None:
             }
             loss = model(**batch).loss
             loss.backward()
+            value = float(loss.detach())
             torch.nn.utils.clip_grad_norm_(params, 1.0)
             optimiser.step()
             optimiser.zero_grad()
             step += 1
+            if len(batch["context"]) > ft.CHECKPOINT_SERIES:
+                del batch, loss
+                free_memory()
             with consumed.open("a") as f:
                 f.write(f"{step}\t{','.join(pairs[i][0] for i in indices)}\n")
             if step % 10 == 0:
-                history.append({"step": step, "loss": float(loss)})
+                history.append({"step": step, "loss": value})
                 report(stage="training", step=step, outbreaks=done)
             if step % ft.EVAL_EVERY == 0:
                 monitor = ft.held_out_loss(
@@ -315,7 +352,7 @@ def main() -> None:
                 )
                 history.append({"step": step, "eval_loss": monitor})
                 log(
-                    f"step {step}: loss {float(loss):.4f}, held-out "
+                    f"step {step}: loss {value:.4f}, held-out "
                     f"(first {ft.EVAL_BLOCKS} blocks) {monitor:.4f}, "
                     f"{time.perf_counter() - t0:.0f} s"
                 )
@@ -356,7 +393,8 @@ def main() -> None:
             (out / "history.json").write_text(json.dumps(history))
             log(
                 f"checkpoint n{done}: hash {key}, held-out loss "
-                f"{settings['held_out_loss']:.4f} (start {start_loss:.4f})"
+                f"{settings['held_out_loss']:.4f} (start {start_loss:.4f}); "
+                f"{memory()}"
             )
             report(last_checkpoint=f"n{done} {key}")
             if args.publish:

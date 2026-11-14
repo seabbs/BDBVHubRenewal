@@ -520,8 +520,12 @@ simulate_outbreak <- function(design, v) {
     ))]
     structural <- structural[, .(.group, date, report_date, report)]
   }
+  # epinowcast fails on a report formula with only a random walk and no
+  # intercept, so that one has an intercept, which the report model
+  # always fixes at zero.
+  rw_only <- identical(report_terms, "rw(week)")
   report <- enw_report(
-    non_parametric = as_formula(FALSE, report_terms),
+    non_parametric = as_formula(rw_only, report_terms),
     structural = structural, data = pobs
   )
   rep <- report$data

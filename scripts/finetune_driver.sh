@@ -18,8 +18,9 @@
 #                 epinowcast library in output/finetune/rlib) and its
 #                 simulation directory; every seed not run locally runs
 #                 there, held-out seeds first
-#   REMOTE_SLOTS, REMOTE_MEM_KB   its simulation processes and the
-#                 memory limit of each (ulimit -v), sized by memory
+#   REMOTE_SLOTS, REMOTE_MEM_KB, REMOTE_MIN_FREE_MEM_GB   its most
+#                 simulation processes, the memory limit of each (ulimit
+#                 -v), and the free memory a new batch needs
 #   REMOTE_MIN_FREE_GB   free disk below which no new remote batch starts
 #   REMOTE_RETRY, REMOTE_GRACE   seconds between tries of the remote,
 #                 and without an answer before the laptop takes over the
@@ -108,6 +109,9 @@ remote_scheduler() {
   local list
   list=$(seeds | tr '\n' ' ')
   [ -z "$list" ] && return 0
+  # The remote runs this commit's simulator.
+  rsync -a -e "ssh -o ConnectTimeout=20 -o BatchMode=yes" \
+    scripts/finetune_simulate.R "$REMOTE:$REMOTE_DIR/scripts/" || return 1
   remote "cat > $REMOTE_DIR/output/finetune/finetune_remote.sh" <<EOF || return 1
 #!/usr/bin/env bash
 cd "$REMOTE_DIR"
@@ -118,7 +122,10 @@ free_gb() { df -BG --output=avail . | tail -1 | tr -dc 0-9; }
 for s in $list; do
   [ -e $SIM_REMOTE/settings-\$s.csv ] && continue
   pgrep -f "finetune_simulate.R --args 25 \$s " > /dev/null && continue
-  while [ "\$(pgrep -fc 'finetune_simulate.R --args')" -ge $REMOTE_SLOTS ]; do sleep 10; done
+  # Start a batch only with a free slot and REMOTE_MIN_FREE_MEM_GB of
+  # memory free, as one outbreak can peak at 8 GB.
+  while [ "\$(pgrep -fc 'finetune_simulate.R --args')" -ge $REMOTE_SLOTS ] \\
+    || [ "\$(free -g | awk '/^Mem/ {print \$7}')" -lt $REMOTE_MIN_FREE_MEM_GB ]; do sleep 30; done
   # Wait while the disk is short; each batch's R temp files go in its own
   # directory, removed when the batch ends.
   while [ "\$(free_gb)" -lt $REMOTE_MIN_FREE_GB ]; do
@@ -276,6 +283,8 @@ if [ -n "$trainer" ] && ps -p "$trainer" -o args= | grep -q finetune_stream; the
   log "kept the running trainer, pid $trainer"
 else
   adopted=0
+  # Cap MPS memory so the caching allocator cannot fill the laptop.
+  PYTORCH_MPS_HIGH_WATERMARK_RATIO=0.8 PYTORCH_MPS_LOW_WATERMARK_RATIO=0.6 \
   HF_HOME=output/finetune/hf HF_HUB_OFFLINE=1 MPLCONFIGDIR="${TMPDIR:-/tmp}" \
     nohup .venv/bin/python scripts/finetune_stream.py "${trainer_args[@]}" \
     >> "$LOG" 2>&1 < /dev/null &
