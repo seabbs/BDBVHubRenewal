@@ -90,3 +90,31 @@ def test_delay_can_differ_by_location() -> None:
 def test_per_location_delay_needs_every_location() -> None:
     with pytest.raises(ValueError, match="loc01"):
         rolling_truth(_obs(), delay_days=pd.Series({"loc02": 6}))
+
+
+def _releases() -> pd.DataFrame:
+    # Week 2026-01-03 as reported by releases 10 and 30 days later, and a
+    # second place whose releases stop early.
+    return pd.DataFrame(
+        {
+            "study": "ebola",
+            "location": ["A", "A", "B"],
+            "target_date": pd.to_datetime(["2026-01-03"] * 3),
+            "as_of_date": pd.to_datetime(
+                ["2026-01-13", "2026-02-02", "2026-01-13"]
+            ),
+            "value": [5.0, 9.0, 4.0],
+        }
+    )
+
+
+def test_first_after_takes_the_first_release_past_d() -> None:
+    before = rolling_truth(_releases(), 20).set_index("location")["truth"]
+    after = rolling_truth(_releases(), 20, first_after=True)
+    assert before["A"] == 5.0
+    assert after.set_index("location").loc["A", "truth"] == 9.0
+
+
+def test_a_location_whose_releases_stop_early_has_no_truth() -> None:
+    truth = rolling_truth(_releases(), 20).set_index("location")["truth"]
+    assert pd.isna(truth["B"])

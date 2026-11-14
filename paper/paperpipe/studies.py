@@ -18,11 +18,12 @@ functions return dummy data from `paperfigs.dummy`:
 
 - Germany reads the benchmark's paper tables and reporting triangle
   (`paperdata.germany`).
-- Ebola reads the release backtest's samples from past releases and a
-  clone of the hub for its releases (`paperdata.ebola`), with D the hub's
-  98% reporting delay. Once the hub's baseline has a forecast with known
-  truth, the hub's forecasts join and scores are relative to it; until
-  then they are relative to `randomwalknowcast` (`study_baseline`).
+- Ebola reads the release backtest's samples from past releases and the
+  releases from main's data, with D and the truth as the backtest sets
+  them (`paperdata.ebola`). Once the hub's baseline has a forecast with
+  known truth, the hub's forecasts join from a clone of the hub and
+  scores are relative to it; until then they are relative to
+  `randomwalknowcast` (`study_baseline`).
 - The synthetic study reads the simulated outbreaks of the run's seeds
   (`paperdata.synthetic`) and the models' forecasts of them, which the
   synthetic runner of #192 writes. Its dummy data are one dummy study per
@@ -38,6 +39,7 @@ import logging
 import subprocess
 from collections.abc import Sequence
 from dataclasses import dataclass
+from functools import cache
 from pathlib import Path
 from typing import Final
 
@@ -79,6 +81,10 @@ class Sources:
         The hub's reporting triangle.
     hub : pathlib.Path, optional
         A clone of the Ebola hub.
+    ebola_data : pathlib.Path, optional
+        Main's data folder, whose `target.csv` holds every release.
+    ebola_config : pathlib.Path, optional
+        The backtest config, which sets D (`config/backtest.toml`).
     ebola_backtest : pathlib.Path, optional
         The release backtest's samples (`results/forecasts.csv.gz`).
     ebola_extra : tuple of pathlib.Path
@@ -96,6 +102,8 @@ class Sources:
     germany_forecasts: tuple[Path, ...] = ()
     germany_triangle: Path | None = None
     hub: Path | None = None
+    ebola_data: Path | None = None
+    ebola_config: Path | None = None
     ebola_backtest: Path | None = None
     ebola_extra: tuple[Path, ...] = ()
     candidates: tuple[Path, ...] = ()
@@ -118,24 +126,31 @@ def _has_ref(repo: Path, ref: str) -> bool:
     return done.returncode == 0
 
 
+@cache
+def _release_delay(data: Path, config: Path) -> int:
+    return ebola.truth_delay(data, config)
+
+
+@cache
+def _latest_release(data: Path) -> pd.Timestamp:
+    return ebola.release_observations(data)["as_of_date"].max()
+
+
 def _ebola_delay(sources: Sources, delay_days: int | None) -> int:
     if delay_days is not None:
         return delay_days
-    assert sources.hub is not None
-    delay = ebola.reporting_delay(sources.hub)
-    if delay is None:
-        msg = f"No age reaches {ebola.DELAY_LEVEL:.0%} of the count."
-        raise ValueError(msg)
-    return delay
+    assert sources.ebola_data is not None
+    assert sources.ebola_config is not None
+    return _release_delay(sources.ebola_data, sources.ebola_config)
 
 
-def _baseline_scorable(hub: Path, delay_days: int) -> bool:
+@cache
+def _baseline_scorable(hub: Path, data: Path, delay_days: int) -> bool:
     """Whether the hub's baseline has a target with known truth."""
     samples = ebola.hub_samples(hub)
     base = samples.loc[samples["model"] == ebola.HUB_BASELINE]
-    latest = ebola.observations(hub)["as_of_date"].max()
     due = base["target_date"] + pd.Timedelta(days=delay_days)
-    return bool((due <= latest).any())
+    return bool((due <= _latest_release(data)).any())
 
 
 def missing(
@@ -176,15 +191,18 @@ def missing(
         if not sources.germany_forecasts or sources.germany_triangle is None:
             return "no German benchmark tables or triangle are set"
         return None
-    if sources.hub is None:
-        return "no Ebola hub clone is set (`ebola.hub`)"
+    if (
+        sources.ebola_data is None
+        or not (sources.ebola_data / "target.csv").exists()
+    ):
+        return "no release data are set (`ebola.data`)"
     if sources.ebola_backtest is None or not sources.ebola_backtest.exists():
         return "no release backtest is set (`ebola.backtest`)"
-    if delay_days is None and ebola.reporting_delay(sources.hub) is None:
-        return (
-            f"no reporting delay reaches {ebola.DELAY_LEVEL:.0%} of the "
-            "Ebola hub's count yet"
-        )
+    if delay_days is None:
+        try:
+            _ebola_delay(sources, delay_days)
+        except ValueError as err:
+            return f"the release backtest has no truth delay yet ({err})"
     return None
 
 
@@ -196,10 +214,12 @@ def study_baseline(
     Ebola scores are relative to the hub's baseline once it has a
     forecast with known truth, and to `randomwalknowcast` until then.
     """
-    if study != "ebola" or sources.hub is None:
+    if study != "ebola":
         return None
-    if _baseline_scorable(sources.hub, _ebola_delay(sources, delay_days)):
-        return None
+    if sources.hub is not None and sources.ebola_data is not None:
+        delay = _ebola_delay(sources, delay_days)
+        if _baseline_scorable(sources.hub, sources.ebola_data, delay):
+            return None
     return "randomwalknowcast"
 
 
@@ -270,11 +290,10 @@ def _ebola_forecasts(sources: Sources, with_hub: bool) -> pd.DataFrame:
     models' samples in its layout. The hub's forecasts join once its
     baseline can be scored.
     """
-    assert sources.hub is not None
     assert sources.ebola_backtest is not None
     parts = [ebola.backtest_samples(sources.ebola_backtest)]
     parts += [ebola.backtest_samples(p) for p in sources.ebola_extra]
-    if with_hub:
+    if with_hub and sources.hub is not None:
         store = sources.store
         if store is not None and not _has_ref(store, sources.store_ref):
             log.warning(
@@ -380,8 +399,8 @@ def load_data(
         obs = _germany_data(sources, before, delay_days)
         return obs, _locations(obs, delay_days)
     if study == "ebola" and real:
-        assert sources.hub is not None
-        obs = ebola.observations(sources.hub)
+        assert sources.ebola_data is not None
+        obs = ebola.release_observations(sources.ebola_data)
         return obs, _locations(obs, _ebola_delay(sources, delay_days))
     _, obs = dummy_study(study, n_samples=1)
     if study == "germany":

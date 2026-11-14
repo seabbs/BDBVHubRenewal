@@ -63,6 +63,25 @@ def hub_with_baseline(hub):
     return hub
 
 
+def _data(path: Path) -> Path:
+    """Main's data folder with a target table of three releases."""
+    path.mkdir()
+    pd.DataFrame(
+        {
+            "kind": "real",
+            "vintage": ["2026-10-26", "2026-11-03", "2026-11-10"],
+            "location": "CD",
+            "location_name": "DRC",
+            "target_end_date": "2026-10-24",
+            "observed": 1,
+            "imputed": 0,
+            "total": [3, 10, 12],
+            "cutoff": ["2026-10-24", "2026-11-01", "2026-11-08"],
+        }
+    ).to_csv(path / "target.csv", index=False)
+    return path
+
+
 def _backtest(path: Path) -> Path:
     """Release-backtest samples of one model from one release."""
     pd.DataFrame(
@@ -86,11 +105,13 @@ def test_ebola_reads_the_release_backtest_then_the_hub(
     hub_with_baseline, tmp_path
 ) -> None:
     sources = Sources(
-        hub=hub_with_baseline, ebola_backtest=_backtest(tmp_path / "q.csv")
+        hub=hub_with_baseline,
+        ebola_data=_data(tmp_path / "data"),
+        ebola_backtest=_backtest(tmp_path / "q.csv"),
     )
     assert source_of("ebola", sources, delay_days=14) == "real"
     obs, locations = load_data("ebola", delay_days=14, sources=sources)
-    assert len(obs) == 6
+    assert len(obs) == 3
     assert locations["delay_days"].iloc[0] == 14
     # The hub's baseline can be scored, so it is the baseline and the
     # hub's forecasts join.
@@ -105,7 +126,11 @@ def test_ebola_reads_the_release_backtest_then_the_hub(
 def test_ebola_is_relative_to_randomwalknowcast_until_the_hub_can_be(
     hub, tmp_path
 ) -> None:
-    sources = Sources(hub=hub, ebola_backtest=_backtest(tmp_path / "q.csv"))
+    sources = Sources(
+        hub=hub,
+        ebola_data=_data(tmp_path / "data"),
+        ebola_backtest=_backtest(tmp_path / "q.csv"),
+    )
     assert (
         study_baseline("ebola", sources, delay_days=14) == "randomwalknowcast"
     )
@@ -192,17 +217,15 @@ def test_germany_needs_its_truth_delay() -> None:
         load_data("germany")
 
 
-def test_missing_names_why_a_study_cannot_use_real_data(hub) -> None:
+def test_missing_names_why_a_study_cannot_use_real_data() -> None:
     assert "simulations" in missing("synthetic", Sources(), seeds=(9001,))
-    assert "hub" in missing("ebola", Sources())
-    assert "backtest" in missing("ebola", Sources(hub=hub), delay_days=14)
+    assert "release data" in missing("ebola", Sources())
     assert "German" in missing("germany", Sources())
 
 
-def test_ebola_without_a_delay_names_it(hub, tmp_path) -> None:
-    # The fixture's releases never reach 98% of the latest count.
-    sources = Sources(hub=hub, ebola_backtest=_backtest(tmp_path / "q.csv"))
-    assert "delay" in missing("ebola", sources)
+def test_ebola_without_a_backtest_names_it(tmp_path) -> None:
+    sources = Sources(ebola_data=_data(tmp_path / "data"))
+    assert "backtest" in missing("ebola", sources, delay_days=14)
 
 
 def test_a_paper_run_fails_on_dummy_data(tmp_path) -> None:

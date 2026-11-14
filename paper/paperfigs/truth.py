@@ -18,9 +18,16 @@ _KEYS = ["study", "location", "stratum", "target_date"]
 
 
 def rolling_truth(
-    observations: pd.DataFrame, delay_days: int | pd.Series
+    observations: pd.DataFrame,
+    delay_days: int | pd.Series,
+    first_after: bool = False,
 ) -> pd.DataFrame:
     """Return the count reported `delay_days` after each target date.
+
+    The truth is the latest release on or before `target_date + D`, as the
+    German nowcast hub took it, or with `first_after` the first release on
+    or after it, as the BDBV release backtest takes it for releases that
+    come at irregular gaps.
 
     Parameters
     ----------
@@ -31,13 +38,15 @@ def rolling_truth(
         D, the days after the target date at which the data are taken.
         A series indexed by `location` gives each location its own D, as
         for the synthetic outbreaks (their 98% reporting delay).
+    first_after : bool
+        Take the first release on or after `target_date + D`.
 
     Returns
     -------
     pandas.DataFrame
         `study`, `location`, `stratum`, `target_date` and `truth`, with
-        `truth`
-        missing where no release on or after `target_date + D` exists.
+        `truth` missing where the location has no release on or after
+        `target_date + D`.
 
     Raises
     ------
@@ -57,9 +66,16 @@ def rolling_truth(
     if (days < 0).any():
         raise ValueError("delay_days must be at least zero.")
     obs["cutoff"] = obs["target_date"] + pd.to_timedelta(days, unit="D")
-    latest = obs.groupby("study")["as_of_date"].transform("max")
-    known = obs.loc[obs["as_of_date"] <= obs["cutoff"]]
-    known = known.sort_values("as_of_date").drop_duplicates(_KEYS, keep="last")
+    # A location's releases may stop before another's.
+    latest = obs.groupby(["study", "location"])["as_of_date"].transform("max")
+    if first_after:
+        known = obs.loc[obs["as_of_date"] >= obs["cutoff"]]
+        known = known.sort_values("as_of_date").drop_duplicates(_KEYS)
+    else:
+        known = obs.loc[obs["as_of_date"] <= obs["cutoff"]]
+        known = known.sort_values("as_of_date").drop_duplicates(
+            _KEYS, keep="last"
+        )
     targets = obs.assign(final=latest).drop_duplicates(_KEYS)
     out = targets.loc[:, [*_KEYS, "cutoff", "final"]].merge(
         known.loc[:, [*_KEYS, "value"]], on=_KEYS, how="left"

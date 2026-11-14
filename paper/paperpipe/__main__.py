@@ -90,6 +90,8 @@ def _sources(a: argparse.Namespace) -> Sources:
         germany_forecasts=tuple(a.germany_forecasts),
         germany_triangle=a.germany_triangle,
         hub=a.hub,
+        ebola_data=a.ebola_data,
+        ebola_config=a.ebola_config,
         ebola_backtest=a.ebola_backtest,
         ebola_extra=tuple(a.ebola_extra),
         candidates=tuple(a.candidates),
@@ -151,7 +153,10 @@ def _table(a: argparse.Namespace) -> None:
 
 def _truth(a: argparse.Namespace) -> None:
     obs = validate_observations(_read(a.observations))
-    _write(rolling_truth(obs, _delays(_read(a.locations))), a.out)
+    truth = rolling_truth(
+        obs, _delays(_read(a.locations)), first_after=a.first_after
+    )
+    _write(truth, a.out)
 
 
 def _scores(a: argparse.Namespace) -> None:
@@ -235,6 +240,8 @@ def _limits(p: argparse.ArgumentParser) -> None:
     p.add_argument("--germany-forecasts", type=Path, nargs="*", default=[])
     p.add_argument("--germany-triangle", type=Path, default=None)
     p.add_argument("--hub", type=Path, default=None)
+    p.add_argument("--ebola-data", type=Path, default=None)
+    p.add_argument("--ebola-config", type=Path, default=None)
     p.add_argument("--ebola-backtest", type=Path, default=None)
     p.add_argument("--ebola-extra", type=Path, nargs="*", default=[])
     p.add_argument("--candidates", type=Path, nargs="*", default=[])
@@ -280,6 +287,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(run=_table)
 
     p = sub.add_parser("truth")
+    p.add_argument(
+        "--first-after",
+        action="store_true",
+        help="Take the first release on or after D days, not the last before.",
+    )
     p.add_argument("--observations", type=Path, required=True)
     p.add_argument("--locations", type=Path, required=True)
     p.add_argument("--out", type=Path, required=True)

@@ -109,6 +109,8 @@ def sources(w):
     if w.study == "ebola" and EBOLA["hub"]:
         args = [
             f"--hub {shlex.quote(EBOLA['hub'])}",
+            f"--ebola-data {shlex.quote(EBOLA['data'])}",
+            f"--ebola-config {shlex.quote(EBOLA['config'])}",
             f"--ebola-backtest {shlex.quote(EBOLA['backtest'])}",
         ]
         if EBOLA.get("extra"):
@@ -132,7 +134,8 @@ def source_files(w):
     if w.study == "ebola" and EBOLA["hub"]:
         hub = f"{EBOLA['hub']}/target-data/time-series.csv"
         extra = [evidence_file(n) for n in EBOLA.get("extra") or []]
-        return [hub, EBOLA["backtest"], *extra]
+        target = f"{EBOLA['data']}/target.csv"
+        return [hub, target, EBOLA["backtest"], *extra]
     return []
 
 
@@ -181,17 +184,17 @@ def outputs(mode):
 
 rule development:
     input:
-        f"{BUILD}/development.done",
+        f"{R}/development/published",
 
 
 rule paper:
     input:
-        f"{BUILD}/paper.done",
+        f"{R}/paper/published",
 
 
 rule render:
     input:
-        f"{BUILD}/{config['render']}.done",
+        f"{R}/{config['render']}/published",
         "main.qmd",
         "si.qmd",
     output:
@@ -261,6 +264,7 @@ rule ebola_hub:
 rule ebola_backtest:
     output:
         EBOLA["backtest"],
+        f"{EBOLA['data']}/target.csv",
     params:
         models=" ".join(EBOLA["backtest_models"]),
     shell:
@@ -332,8 +336,15 @@ rule truth:
         locations=rules.data.output.locations,
     output:
         f"{R}/{{mode}}/truth/{{study}}.csv.gz",
+    params:
+        rule=lambda w: (
+            "--first-after"
+            if w.study in config.get("truth_first_after", [])
+            else ""
+        ),
     shell:
-        "{PYTHON} -m paperpipe truth --observations {input.observations} "
+        "{PYTHON} -m paperpipe truth {params.rule} "
+        "--observations {input.observations} "
         "--locations {input.locations} --out {output}"
 
 
@@ -467,7 +478,8 @@ for name, entry in EVIDENCE.items():
             ref=entry["ref"],
             path=entry["path"],
         shell:
-            "git fetch -q --depth 1 origin {params.ref} 2>/dev/null || true; "
+            "(git cat-file -e {params.ref}^{{commit}} 2>/dev/null || "
+            "git fetch -q origin {params.ref}) && "
             "git show {params.ref}:{params.path} > {output}"
 
 
@@ -541,7 +553,8 @@ rule publish:
         outputs=lambda w: outputs(w.mode),
         summary=rules.summary.output,
     output:
-        touch(f"{BUILD}/{{mode}}.done"),
+        # Outside `build`, which each publish replaces.
+        touch(f"{R}/{{mode}}/published"),
     params:
         run=f"{R}/{{mode}}",
         build=BUILD,

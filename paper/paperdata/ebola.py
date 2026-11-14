@@ -1,4 +1,4 @@
-"""Load and score the prospective Ebola hub forecasts.
+"""Load the Ebola study's forecasts and data.
 
 The BDBV Modeling Hub collects 100 sample trajectories of weekly confirmed
 cases by week of symptom onset (`wk inc confirmed cases`) for each round,
@@ -16,11 +16,12 @@ Three sources give samples.
 - `store_samples`: the fit store branch. Each model and origin keeps the
   first fit stored, and only if it was made before its round closed.
 
-`observations` gives the hub's counts as of each release.
-`reporting_delay` estimates D, the age by which 98% of the national
-count is reported, from the hub's release history. `load` gives every
-forecast's samples, one row per sample, in the paper's schema with
-`truth` left for the workflow to attach.
+`load` gives every hub forecast's samples, one row per sample, in the
+paper's schema with `truth` left for the workflow to attach.
+`backtest_samples` reads our models' samples from the release backtest.
+`release_observations` gives each release's counts from main's data, and
+`truth_delay` D as the release backtest sets it, so the paper scores the
+backtest against the count it was scored against.
 """
 
 from __future__ import annotations
@@ -28,41 +29,32 @@ from __future__ import annotations
 import gzip
 import json
 import subprocess
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable
 from pathlib import Path
 from typing import Final
 
 import numpy as np
 import pandas as pd
+from bdbvhubrenewal.data import load_target
+from bdbvhubrenewal.evaluation.backtest import load_config
+from bdbvhubrenewal.evaluation.nowcast import resolve_truth_delay
 
 __all__ = [
     "COLUMNS",
-    "DELAY_LEVEL",
     "HUB_BASELINE",
     "TARGET",
     "backtest_samples",
     "candidate_samples",
     "hub_samples",
     "load",
-    "observations",
-    "reporting_delay",
+    "release_observations",
     "round_close",
     "store_samples",
+    "truth_delay",
 ]
 
 TARGET: Final = "wk inc confirmed cases"
 """The target of the hub's weekly round."""
-
-DELAY_LEVEL: Final = 0.98
-"""Share of the national count reported by the truth delay, D."""
-
-SKIP_RELEASES: Final = ("2026-08-18",)
-"""Releases left out of the delay estimate.
-
-The 2026-08-18 release has no delay file, is 50 days before the next and
-its old weeks are short by up to 12% of their latest counts, which is a
-revision rather than a reporting delay (as `config/backtest.toml`).
-"""
 
 COLUMNS: Final = (
     "study",
@@ -198,64 +190,6 @@ def store_samples(
     return pd.concat(frames, ignore_index=True)
 
 
-def _target(hub: str | Path) -> pd.DataFrame:
-    data = pd.read_csv(Path(hub, "target-data", "time-series.csv"))
-    data = data[data["target"] == TARGET]
-    return data.assign(
-        as_of=pd.to_datetime(data["as_of"]),
-        target_date=pd.to_datetime(data["target_end_date"]),
-    )
-
-
-def observations(hub: str | Path) -> pd.DataFrame:
-    """Return the hub's counts as of each release, in the paper's schema."""
-    data = _target(hub)
-    return pd.DataFrame(
-        {
-            "study": "ebola",
-            "location": data["location"],
-            "target_date": data["target_date"],
-            "as_of_date": data["as_of"],
-            "value": data["observation"].astype(float),
-        }
-    ).reset_index(drop=True)
-
-
-def reporting_delay(
-    hub: str | Path,
-    location: str = "CD",
-    level: float = DELAY_LEVEL,
-    skip: Sequence[str] = SKIP_RELEASES,
-) -> int | None:
-    """Return the age in days by which `level` of the count is reported.
-
-    Each earlier release's count of a week is set against the latest
-    release's count of that week, at the week's age in the release
-    (days from the week's end to the release, rounded up to whole weeks).
-    The counts are pooled over releases at each age. The delay is the
-    first age whose pooled share reaches `level`, or None if none does.
-    """
-    data = _target(hub)
-    data = data[data["location"] == location]
-    latest = data["as_of"].max()
-    final = data.loc[data["as_of"] == latest].set_index("target_date")[
-        "observation"
-    ]
-    early = data[
-        (data["as_of"] < latest)
-        & ~data["as_of"].isin(pd.to_datetime(list(skip)))
-    ]
-    early = early.assign(final=early["target_date"].map(final))
-    # Weeks the latest release no longer has cannot be compared.
-    early = early.dropna(subset=["final"])
-    days = (early["as_of"] - early["target_date"]).dt.days
-    early = early.assign(age=np.ceil(days / 7).astype(int))
-    pooled = early.groupby("age")[["observation", "final"]].sum()
-    share = pooled["observation"] / pooled["final"]
-    reached = share.index[share >= level]
-    return int(reached.min()) * 7 if len(reached) else None
-
-
 def load(
     hub: str | Path,
     candidates: Iterable[str | Path] = (),
@@ -286,6 +220,32 @@ def load(
     table["study"] = "ebola"
     table["quantile_level"] = np.nan
     return table[list(COLUMNS)].reset_index(drop=True)
+
+
+def release_observations(data: str | Path) -> pd.DataFrame:
+    """Return each release's weekly counts, in the paper's schema.
+
+    The tidy target table of main's data (`bdbvhubrenewal data`) has one
+    row per release, place and week. A release's `as_of_date` is its
+    cut-off, the latest onset day it covers, as the release backtest
+    dates it.
+    """
+    target = load_target(data)
+    target = target.loc[target["kind"] == "real"]
+    return pd.DataFrame(
+        {
+            "study": "ebola",
+            "location": target["location"],
+            "target_date": pd.to_datetime(target["target_end_date"]),
+            "as_of_date": pd.to_datetime(target["cutoff"]),
+            "value": target["total"].astype(float),
+        }
+    ).reset_index(drop=True)
+
+
+def truth_delay(data: str | Path, config: str | Path) -> int:
+    """Return D as the release backtest sets it (`resolve_truth_delay`)."""
+    return resolve_truth_delay(load_config(config), load_target(data))
 
 
 def backtest_samples(

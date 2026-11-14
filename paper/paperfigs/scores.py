@@ -235,16 +235,10 @@ def _score_sample_block(
 
 
 def _blocks(df: pd.DataFrame, column: str) -> list[pd.DataFrame]:
-    """Split forecasts into blocks with the same levels or sample count."""
+    """Split forecasts into blocks with the same levels or sample ids."""
     keys = list(FORECAST_KEYS)
-    v = df[column].astype(float)
-    g = df.assign(_v=v, _v2=v**2).groupby(keys, sort=False)
-    sig = (
-        g["_v"].transform("size").astype(str)
-        + "|"
-        + g["_v"].transform("sum").round(6).astype(str)
-        + "|"
-        + g["_v2"].transform("sum").round(6).astype(str)
+    sig = df.groupby(keys, sort=False)[column].transform(
+        lambda v: str(tuple(sorted(v)))
     )
     return [b for _, b in df.groupby(sig, sort=False)]
 

@@ -156,25 +156,23 @@ def test_hub_baseline_is_the_hub_model():
     assert ebola.HUB_BASELINE == "BDBVHub-baseline"
 
 
-def test_reporting_delay_is_first_week_age_reaching_level(hub):
-    # Against the 2026-11-08 release, the 2026-10-24 release has week
-    # 2026-10-17 (age 1 week) at 3 of 9. The 2026-11-01 release has it at
-    # 8 of 9 (age 3 weeks, rounded up) and week 2026-10-24 at 10 of 30
-    # (age 2 weeks, rounded up).
-    assert ebola.reporting_delay(hub, level=0.8) == 21
-    assert ebola.reporting_delay(hub, level=0.95) is None
-
-
-def test_reporting_delay_skips_releases(hub):
-    assert ebola.reporting_delay(hub, level=0.3, skip=("2026-11-01",)) == 7
-    assert ebola.reporting_delay(hub, level=0.8, skip=("2026-11-01",)) is None
-
-
-def test_reporting_delay_ignores_weeks_the_latest_release_lacks(hub):
-    path = hub / "target-data/time-series.csv"
-    data = pd.read_csv(path)
-    gone = data.iloc[[0]].assign(
-        as_of="2026-10-24", target_end_date="2026-10-10", observation=1000
-    )
-    pd.concat([data, gone]).to_csv(path, index=False)
-    assert ebola.reporting_delay(hub, level=0.8) == 21
+def test_release_observations_date_each_release_by_its_cutoff(tmp_path):
+    pd.DataFrame(
+        {
+            "kind": ["real", "real", "simulated"],
+            "vintage": ["2026-11-03", "2026-11-10", "2026-11-10"],
+            "location": "CD",
+            "location_name": "DRC",
+            "target_end_date": "2026-10-24",
+            "observed": 1,
+            "imputed": 0,
+            "total": [10, 12, 99],
+            "cutoff": ["2026-11-01", "2026-11-08", "2026-11-08"],
+        }
+    ).to_csv(tmp_path / "target.csv", index=False)
+    obs = ebola.release_observations(tmp_path)
+    assert obs["as_of_date"].dt.strftime("%Y-%m-%d").tolist() == [
+        "2026-11-01",
+        "2026-11-08",
+    ]
+    assert obs["value"].tolist() == [10.0, 12.0]
