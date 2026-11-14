@@ -107,3 +107,10 @@ def test_skipped_blocks_are_listed_for_the_release():
     assert skipped_lines(skipped) == [
         "# skipped 5043-0013 at step 3700, 897 series"
     ]
+
+
+def test_no_batch_holds_more_series_than_the_budget_allows():
+    rng = np.random.default_rng(3)
+    sizes = rng.integers(100, 200, 50)
+    for batch in plan_batches(sizes, 256, rng, most=300):
+        assert sizes[batch].sum() <= 300 or len(batch) == 1
