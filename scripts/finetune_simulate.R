@@ -449,8 +449,10 @@ simulate_outbreak <- function(design, v) {
         rd$refp_arima_T, rd$refp_arima_G
       )
       parameters$refp_arima_sigma <- array(v$walk_sd)
+      # The spread walks with the location's shocks; a zero scale sits on
+      # its bound, where Stan cannot start.
       if (family != "exponential") {
-        parameters$refp_arima_sd_sigma <- array(0)
+        parameters$refp_arima_sd_sigma <- array(v$walk_sd / 2)
       }
     }
   }
