@@ -44,14 +44,18 @@ _CELL = ["model", "origin", "location", "target_end_date"]
 
 
 def _factor(corr: np.ndarray) -> np.ndarray:
-    """Return $A$ with $A A^T$ the nearest correlation matrix to `corr`.
+    """Return $A$ with $A A^T$ a correlation matrix near `corr`.
 
     Negative eigenvalues are set to zero and the rows rescaled to unit
-    length.
+    length. A row left with no length keeps its own unit normal.
     """
     values, vectors = np.linalg.eigh(corr)
     a = vectors * np.sqrt(np.clip(values, 0.0, None))
-    return np.asarray(a / np.linalg.norm(a, axis=1, keepdims=True))
+    norm = np.linalg.norm(a, axis=1, keepdims=True)
+    empty = norm[:, 0] == 0.0
+    a[empty] = np.eye(len(a))[empty]
+    norm[empty] = 1.0
+    return np.asarray(a / norm)
 
 
 @dataclass(frozen=True)
@@ -89,7 +93,7 @@ class GaussianCopula:
         r"""Draw correlated standard normals over places and steps.
 
         Where $\rho_p$ and $\rho_n$ give no correlation matrix, the
-        nearest one is used (`_factor`).
+        nearby one is used (`_factor`).
 
         Parameters
         ----------
@@ -181,7 +185,7 @@ def normal_scores(
         `location`, `target_end_date` and `z`.
     """
     on = [c for c in truth.columns if c != "truth"]
-    rows = forecasts.merge(truth, on=on)
+    rows = forecasts.merge(truth.dropna(subset=["truth"]), on=on)
     rows = rows.assign(
         below=rows["value"] < rows["truth"],
         equal=rows["value"] == rows["truth"],
@@ -193,7 +197,7 @@ def normal_scores(
         spread=("value", "nunique"),
     )
     out = out.loc[out["spread"] > 1].reset_index(drop=True)
-    u = rng.uniform(size=len(out))
+    u = 1.0 - rng.uniform(size=len(out))
     pit = (out["below"] + u * (out["equal"] + 1)) / (out["m"] + 1)
     return out[_CELL].assign(z=ndtri(pit.to_numpy()))
 

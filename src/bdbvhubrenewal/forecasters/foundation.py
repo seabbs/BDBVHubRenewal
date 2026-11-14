@@ -98,9 +98,9 @@ CHRONOS_COPULA: Final = GaussianCopula(
     rho_time=0.9, rho_provinces=0.7, rho_national=0.7
 )
 """The copula pairing every Chronos-2 model's draws into trajectories.
-Fixed values, checked on the release backtest's energy score until
-enough weeks have matured to estimate them
-(`bdbvhubrenewal.forecasters.copula.estimate_copula`)."""
+Fixed values, chosen on the release backtest's energy score; the
+estimates from the backtest's errors
+(`bdbvhubrenewal.forecasters.copula.estimate_copula`) score worse."""
 
 FINETUNED_CONFIG: Final = Path("config/finetune.toml")
 """Which fine-tuned checkpoint the `_ft` models load: `hash`, `"latest"`
