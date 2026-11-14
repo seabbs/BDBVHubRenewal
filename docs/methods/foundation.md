@@ -70,15 +70,29 @@ So the release backtest scores them on the complete target only, the weeks the l
 
 ## Fine-tuning
 
-The `_ft` models load one LoRA checkpoint of Chronos-2, trained on 2,000 outbreaks simulated with epinowcast's generative model (`scripts/finetune_simulate.R`).
+The `_ft` models load one LoRA checkpoint of Chronos-2, fine-tuned on outbreaks simulated with epinowcast's generative model (`scripts/finetune_simulate.R`).
 The simulator, `enw_simulate`, is on epinowcast's `feature/829-simulate-forecast` branch, pinned at commit `e084b080`, and is not yet in a release.
-Each outbreak is a renewal process with a drawn log $R_t$ path, a reporting delay that drifts and differs by place, day-of-week effects and negative binomial noise, in one to 26 places.
-Each gives a daily reporting triangle, and its weekly releases are summed from it.
-A training block cuts an outbreak's releases at one cut-off and lays them out as the ragged layout does, with the target past $t^*$ the outbreak's final counts (`forecasters.finetune.training_block`).
+The simulations form the grid `r3`, a crossed design over ten factors.
+These are the process (exponential growth, or renewal with a mean generation time of 3, 7 or 15 days), the generation time's shape, the trajectory of $R_t$ (eight shapes, from steady growth to several waves), the delay's family, its form (parametric, non-parametric or both) and how it changes over time (static, drift, step, periodic or random walk), reporting on every day or on one to three weekdays, a reference day-of-week effect, the observation model and the strata.
+Each block of 120 simulations holds every level of each factor in equal shares, shuffled per factor.
+The observation model is NB2, NB1 or Poisson.
+NB1 dispersion is scaled by the expected count and the delay's $\sum_d p_d^2$ (epinowcast#937).
+The strata are one place, 2 to 26 places, 2 to 8 ages, or 6 to 16 places by 3 to 7 ages.
+Outbreak sizes have a median of about 3,700 cases, with 90% between 70 and 84,000.
+Each simulation gives ten observation draws, each a daily reporting triangle, and its weekly releases are summed from it.
+
+A training block cuts one draw's releases at one cut-off and lays them out as the ragged layout does, with the target past $t^*$ the outbreak's final counts (`forecasters.finetune.training_block`).
 $D$ is drawn from 2 to 7 weeks, or 14 to 49 days, so the model is not tied to one $D$.
-Each outbreak gives up to four weekly and four daily blocks, with the country and a random subset of its places.
-A block holds at most 26 provinces when weekly and five when daily, so daily blocks fit GPU memory.
-Training is 1,000 steps of LoRA at learning rate $10^{-4}$, with 5% of blocks held out (`scripts/finetune_chronos.py`).
+A block holds the totals over places and over ages as well as the strata, so every aggregate is the exact sum of the series below it.
+Four or more flat places are grouped into regions, with region totals.
+A block's targets are all levels, leaves and the national total, leaves only, or the national total only, in equal shares.
+Sixteen blocks are sampled from each simulation's draws, cut-offs and sources.
+
+Training runs in one pass while the outbreaks are simulated, at a constant learning rate of $10^{-4}$ (`scripts/finetune_stream.py`, run by `scripts/finetune_driver.sh` with `config/finetune/r3.env`).
+Blocks are packed into batches by size within a memory budget, which also sets the largest block.
+A checkpoint is saved after 1,000, 2,000, 4,000 and each further doubling of outbreaks.
+Each is scored on held-out blocks from separate simulations, by level, and published.
+Training stops from 8,000 outbreaks once a doubling cuts held-out loss by less than 1%.
 
 A checkpoint is named by its settings hash, of the blocks, the code and the training settings.
 The models load the checkpoint pinned in `config/finetune.toml`, by its hash and the SHA-256 of its adapter files.
@@ -90,7 +104,6 @@ The fit store keeps a failed fit until its inputs change, so a fit that failed b
 
 - The zero-shot models use Chronos-2 as pretrained. It has not seen these data or outbreaks like them.
 - The fine-tuned models have seen only simulated outbreaks, whose delays and dynamics may not match these data.
-- The daily fine-tuned model was trained on blocks of at most five provinces but forecasts all 26 in one block.
 - Draws are independent across steps and places, so every weekly value of the daily models, a sum of seven daily draws, is too narrow, as are sums over weeks or places.
 
 [^chronos2]: Ansari A F et al. (2025) Chronos-2: From univariate to universal forecasting. arXiv:2510.15821. Code: <https://github.com/amazon-science/chronos-forecasting>.
