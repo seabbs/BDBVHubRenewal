@@ -241,7 +241,7 @@ class _Gh:
         self.assets = assets
         self.calls = []
 
-    def __call__(self, command, **kwargs):
+    def __call__(self, command, **_):
         import subprocess
 
         self.calls.append(command[:3])
@@ -258,7 +258,7 @@ class _Gh:
         if action in ("create", "upload"):
             self.assets = self.assets or {}
             for f in command:
-                if "/" in f:
+                if Path(f).is_file():
                     self.assets[Path(f).name] = Path(f).read_text()
             return subprocess.CompletedProcess(command, 0, "ok", "")
         raise AssertionError(command)
@@ -292,7 +292,6 @@ def test_publish_uploads_only_missing_assets(tmp_path):
 
 def test_publish_refuses_a_release_with_other_sums(tmp_path):
     import pytest
-
     from finetune_stream import publish
 
     where = _checkpoint(tmp_path)

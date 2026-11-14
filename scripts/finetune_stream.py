@@ -216,8 +216,14 @@ def memory() -> str:
     return "CPU"
 
 
-def publish(where: Path, key: str) -> None:
-    """Publish a checkpoint as the release `chronos-ft-<key>`."""
+def publish(where: Path, key: str, run=subprocess.run) -> None:
+    """Publish a checkpoint as the release `chronos-ft-<key>`.
+
+    Safe to run again: a release whose sha256sums match is left as it is,
+    one missing assets gets them uploaded, and one whose sums differ is an
+    error.
+    """
+    tag = f"chronos-ft-{key}"
     files = [
         where / "finetuned-ckpt" / "adapter_config.json",
         where / "finetuned-ckpt" / "adapter_model.safetensors",
@@ -226,33 +232,48 @@ def publish(where: Path, key: str) -> None:
     ]
     sums = where / "sha256sums.txt"
     sums.write_text("".join(f"{ft._sha256(f)}  {f.name}\n" for f in files))
-    n = json.loads((where / "settings.json").read_text())["n_outbreaks"]
-    command = [
-        "gh",
-        "release",
-        "create",
-        f"chronos-ft-{key}",
-        "-R",
-        REPO,
-        "--latest=false",
-        "--title",
-        f"Chronos-2 fine-tuned checkpoint {key} ({n} outbreaks)",
-        "--notes",
-        f"LoRA adapter of Chronos-2 for the _ft models, fine-tuned in one "
-        f"pass on {n} simulated outbreaks (scripts/finetune_stream.py). "
-        f"Check the files with sha256sums.txt.\n\nThis was opened by a "
-        f"bot. Please ping @seabbs for any questions.",
-        *map(str, files),
-        str(sums),
-    ]
-    for attempt in range(1, 4):
-        result = subprocess.run(command, capture_output=True, text=True)
-        if result.returncode == 0:
-            log(f"published chronos-ft-{key}: {result.stdout.strip()}")
-            return
-        log(f"publish attempt {attempt} failed: {result.stderr.strip()}")
-        time.sleep(60)
-    raise RuntimeError(f"could not publish chronos-ft-{key}")
+    files.append(sums)
+
+    def gh(*command: str) -> subprocess.CompletedProcess:
+        return run(
+            ["gh", "release", *command, "-R", REPO],
+            capture_output=True,
+            text=True,
+        )
+
+    view = gh("view", tag, "--json", "assets")
+    if view.returncode != 0:
+        n = json.loads((where / "settings.json").read_text())["n_outbreaks"]
+        result = gh(
+            "create",
+            tag,
+            "--latest=false",
+            "--title",
+            f"Chronos-2 fine-tuned checkpoint {key} ({n} outbreaks)",
+            "--notes",
+            f"LoRA adapter of Chronos-2 for the _ft models, fine-tuned in one "
+            f"pass on {n} simulated outbreaks (scripts/finetune_stream.py). "
+            f"Check the files with sha256sums.txt.\n\nThis was opened by a "
+            f"bot. Please ping @seabbs for any questions.",
+            *map(str, files),
+        )
+        if result.returncode != 0:
+            raise RuntimeError(f"could not publish {tag}: {result.stderr}")
+        log(f"published {tag}: {result.stdout.strip()}")
+        return
+    present = {a["name"] for a in json.loads(view.stdout)["assets"]}
+    if sums.name in present:
+        theirs = gh("download", tag, "-p", sums.name, "-O", "-").stdout
+        if theirs != sums.read_text():
+            raise RuntimeError(f"{tag} exists and its sha256sums differ")
+    missing = [f for f in files if f.name not in present]
+    if not missing:
+        log(f"{tag} already published")
+        return
+    result = gh("upload", tag, *map(str, missing))
+    if result.returncode != 0:
+        raise RuntimeError(f"could not upload to {tag}: {result.stderr}")
+    log(f"uploaded {[f.name for f in missing]} to {tag}")
 
 
 def accumulate(indices: list[int], backward, zero, skip) -> float:
