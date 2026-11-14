@@ -63,8 +63,7 @@ laptop's GPU memory (64 GB) but peaks at about 56 GB in training, so
 2,000 leaves headroom."""
 
 CUTS = 8
-"""Cut-offs of each source (weekly, daily) per simulation, shared among
-its observation draws."""
+"""Cut-off slots of each source (weekly, daily) per observation draw."""
 
 CHECKPOINT_SERIES = 900
 """Batches with more series than this recompute each encoder block's
@@ -89,7 +88,7 @@ HELD_OUT_SEED = 5901
 """First seed of the held-out outbreaks, simulated apart from the
 training outbreaks."""
 
-PREFIXES = (1000, 2000, 4000, 6000, 8000)
+PREFIXES = (1000, 2000, 4000, 8000, 16000, 32000, 64000)
 """Outbreaks seen at each saved checkpoint. The last is every training
 outbreak."""
 
@@ -189,13 +188,15 @@ def outbreak_blocks(
     rng: np.random.Generator,
     delay_weeks: int = SIM_DELAY_WEEKS,
     cuts: int = CUTS,
+    picks: set[tuple[str, int]] | None = None,
 ) -> list[dict]:
     """Return the training blocks of one outbreak.
 
     Each source is cut at `cuts` forecast origins spread over the
     outbreak's course, one in each of `cuts` equal stretches of its
-    cut-offs, so they fall in its rising, peak and falling phases. A
-    block's series count is drawn log-uniformly from 1 to `MAX_SERIES`,
+    cut-offs, so they fall in its rising, peak and falling phases. With
+    `picks`, only those (source, slot) blocks are cut. A block's series
+    count is drawn log-uniformly from 1 to `MAX_SERIES`,
     and its places (`choose_places`) are about that many series at its
     lag, with the country first.
     """
@@ -208,6 +209,8 @@ def outbreak_blocks(
     out = []
     for source in ("weekly", "daily"):
         for j in range(cuts):
+            if picks is not None and (source, j) not in picks:
+                continue
             lag = int(rng.choice(MAX_LAGS[source]))
             width = 7 if source == "weekly" else 1
             # At least two steps of context before the lags.

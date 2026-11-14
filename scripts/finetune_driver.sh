@@ -31,7 +31,12 @@
 #   GRID          the simulator's grid name; remote batches of another
 #                 grid are moved aside
 #   OUT           checkpoint directory
-#   OUTBREAKS     training outbreaks (8000)
+#   OUTBREAKS     most training simulations
+#   PREFIXES      simulations at each saved checkpoint (doublings)
+#   STOP_FROM, MIN_GAIN   from this checkpoint on, training stops once a
+#                 doubling cuts held-out loss by less than this share
+#   BLOCKS_PER_SIMULATION   blocks sampled from each simulation's draws
+#                 and cut-offs
 #   PUBLISH       1 to publish each checkpoint release
 #   NOTE          text recorded in each checkpoint's settings
 #   MPS_HIGH_WATERMARK   the trainer's cap on MPS memory, as a share of
@@ -335,7 +340,9 @@ check_batches() {
 log "starting round from $1: training seeds $TRAIN_FIRST-$TRAIN_LAST, held-out $HELD_FIRST-$HELD_LAST, laptop $LOCAL_FIRST-$LOCAL_LAST"
 trainer_args=("$SIM_DIR" "$OUT" --train-seeds "$TRAIN_FIRST" "$TRAIN_LAST"
   --held-out-seeds "$HELD_FIRST" "$HELD_LAST" --outbreaks "$OUTBREAKS"
-  --note "${NOTE:-}")
+  --note "${NOTE:-}" --blocks-per-simulation "${BLOCKS_PER_SIMULATION:-12}"
+  --prefixes ${PREFIXES:-1000 2000 4000 8000} --min-gain "${MIN_GAIN:-0.01}"
+  --stop-from "${STOP_FROM:-8000}")
 [ "${PUBLISH:-0}" = 1 ] && trainer_args+=(--publish)
 start_trainer() {
   # MPS memory is capped so the caching allocator cannot fill the laptop.

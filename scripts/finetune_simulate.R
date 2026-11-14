@@ -70,7 +70,7 @@
 #   Rscript scripts/finetune_simulate.R <n> <seed> <out_dir>
 
 epinowcast_sha <- "e084b080"
-grid_name <- "r2-cal5"
+grid_name <- "r3"
 args <- commandArgs(trailingOnly = TRUE)
 n_outbreaks <- as.integer(args[[1]])
 seed <- as.integer(args[[2]])
@@ -90,7 +90,7 @@ model <- suppressMessages(enw_model(threads = FALSE))
 
 # Observation draws per simulation: each is its own realisation of the
 # same epidemic and reporting, sharing the costly setup.
-draws <- as.integer(Sys.getenv("ENW_DRAWS", "4"))
+draws <- as.integer(Sys.getenv("ENW_DRAWS", "10"))
 # Set ENW_DEBUG to see Stan's messages.
 debug <- nzchar(Sys.getenv("ENW_DEBUG"))
 
@@ -113,31 +113,45 @@ gamma_pmf <- function(mean, cv, n) {
 trajectory <- function(n, kind, v, scale) {
   t <- seq_len(n) / n
   scale * switch(kind,
-    turnover = -(0.1 + 0.5 * v$shape_size) * t,
+    turnover = -(0.1 + 0.3 * v$shape_size) * t,
     flat = numeric(n),
-    rise_fall = (0.1 + 0.4 * v$shape_size) * (1 - 2 * t),
-    second_wave = -0.3 * v$shape_size * t +
-      (0.2 + 0.4 * v$wave_size) * (t >= v$wave_at)
+    rise_fall = (0.1 + 0.3 * v$shape_size) * (1 - 2 * t),
+    second_wave = -0.2 * v$shape_size * t +
+      (0.15 + 0.25 * v$wave_size) * (t >= v$wave_at)
   )
 }
 
-# One log Rt path: steps at random times and a random walk drift.
+# The log reproduction number of a daily growth rate `r` under a gamma
+# generation time (the inverse of its Laplace transform).
+log_r_from_growth <- function(r, gt_mean, gt_cv) {
+  x <- 1 + r * gt_mean * gt_cv^2
+  ifelse(x > 0, log(pmax(x, 1e-12)) / gt_cv^2, -2)
+}
+
+# One log Rt path: the initial growth's Rt, steps at random times and a
+# random walk drift.
 log_rt_path <- function(n, v) {
   at <- sort(sample.int(n, v$rt_steps, replace = TRUE))
   jumps <- numeric(n)
-  jumps[at] <- rnorm(v$rt_steps, -0.2, v$rt_step_sd)
-  v$log_r0 + cumsum(jumps) + cumsum(rnorm(n, 0, v$rt_drift_sd))
+  jumps[at] <- rnorm(v$rt_steps, -0.1, v$rt_step_sd)
+  log_r_from_growth(v$r0, v$gt_mean, v$gt_cv) + cumsum(jumps) +
+    cumsum(rnorm(n, 0, v$rt_drift_sd))
 }
 
 # One daily growth rate path of a process with no generation time.
 growth_path <- function(n, process, v) {
-  path <- switch(process,
+  switch(process,
+    # A weekly AR(1) on growth, which reverts to the initial growth.
     growth_walk = {
-      steps <- rnorm(ceiling(n / 7), 0, v$walk_sd)
-      v$r0 + rep(cumsum(steps), each = 7)[seq_len(n)]
+      weeks <- ceiling(n / 7)
+      g <- numeric(weeks)
+      for (w in seq_len(weeks)[-1]) {
+        g[w] <- v$walk_pacf * g[w - 1] + rnorm(1, 0, v$walk_sd)
+      }
+      v$r0 + rep(g, each = 7)[seq_len(n)]
     },
     # A random walk on log incidence: white noise on the growth rate.
-    log_incidence_walk = v$r0 / 2 + rnorm(n, 0, v$incidence_sd),
+    log_incidence_walk = v$r0 + rnorm(n, 0, v$incidence_sd),
     growth_steps = {
       at <- sort(sample.int(n, v$growth_steps, replace = TRUE))
       jumps <- numeric(n)
@@ -147,52 +161,58 @@ growth_path <- function(n, process, v) {
     growth_smooth = v$r0 + v$smooth_amp *
       sin(2 * pi * seq_len(n) / v$smooth_period + v$smooth_phase)
   )
-  path
 }
 
-# The delay's epinowcast parameters (`refp_mean_int`, `refp_sd_int`) and
-# its probabilities on 0, ..., max_delay - 1 days, from a mean and a
-# coefficient of variation. Gamma is shape exp(mean_int) and rate
-# sd_int, the exponential rate exp(-mean_int). With no parametric delay,
-# the non-parametric hazard's intercept is the constant hazard of a
-# geometric delay with that mean.
-delay_parameters <- function(family, mean, cv, max_delay) {
-  d <- 0:max_delay
-  out <- list()
-  cdf <- switch(family,
-    lognormal = {
-      sdlog <- sqrt(log(1 + cv^2))
-      meanlog <- log(mean) - sdlog^2 / 2
-      out <- list(mean_int = meanlog, sd_int = sdlog)
-      plnorm(d, meanlog, sdlog)
-    },
+# The delay's epinowcast parameters (`refp_mean_int`, `refp_sd_int`), its
+# 99th centile and its probabilities on 0, ..., max_delay - 1 days.
+# Lognormal is meanlog and sdlog; gamma is shape exp(mean_int) and rate
+# sd_int; the exponential rate is exp(-mean_int). With no parametric
+# delay, the non-parametric hazard's intercept is the constant hazard of
+# a geometric delay with that mean.
+delay_parameters <- function(family, v, max_delay = NULL) {
+  out <- switch(family,
+    lognormal = list(
+      mean_int = log(v$delay_median), sd_int = v$delay_sdlog,
+      q99 = qlnorm(0.99, log(v$delay_median), v$delay_sdlog),
+      cdf = function(d) plnorm(d, log(v$delay_median), v$delay_sdlog)
+    ),
     gamma = {
-      shape <- 1 / cv^2
-      out <- list(mean_int = log(shape), sd_int = shape / mean)
-      pgamma(d, shape = shape, rate = shape / mean)
+      shape <- 1 / v$delay_cv^2
+      rate <- shape / v$delay_mean
+      list(
+        mean_int = log(shape), sd_int = rate,
+        q99 = qgamma(0.99, shape, rate),
+        cdf = function(d) pgamma(d, shape, rate)
+      )
     },
-    exponential = {
-      out <- list(mean_int = log(mean))
-      pexp(d, rate = 1 / mean)
-    },
+    exponential = list(
+      mean_int = log(v$delay_mean),
+      q99 = qexp(0.99, 1 / v$delay_mean),
+      cdf = function(d) pexp(d, 1 / v$delay_mean)
+    ),
     none = {
-      out <- list(hazard = 1 / (1 + mean))
-      pgeom(d - 1, out$hazard)
+      hazard <- 1 / (1 + v$delay_mean)
+      list(
+        hazard = hazard, q99 = qgeom(0.99, hazard),
+        cdf = function(d) pgeom(d - 1, hazard)
+      )
     }
   )
-  pmf <- diff(cdf)
-  out$pmf <- pmf / sum(pmf)
+  if (!is.null(max_delay)) {
+    pmf <- diff(out$cdf(0:max_delay))
+    out$pmf <- pmf / sum(pmf)
+  }
   out
 }
 
 weekdays_drawn <- function() {
-  # Onsets are reported every day or on one to three weekdays.
-  n <- if (runif(1) < 0.5) 7L else sample(1:3, 1)
-  if (n == 7L) {
+  # Onsets are reported every day or, in three outbreaks in ten, on one
+  # to three weekdays.
+  if (runif(1) < 0.7) {
     return("all")
   }
   days <- c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday")
-  paste(sort(sample(days, n)), collapse = ";")
+  paste(sort(sample(days, sample(1:3, 1))), collapse = ";")
 }
 
 # The categorical choices of an outbreak, kept when a draw fails.
@@ -202,7 +222,7 @@ draw_design <- function() {
     prob = c(0.3, 0.4, 0.2, 0.1)
   )
   reference <- sample(
-    c("parametric", "non_parametric", "both"), 1, prob = c(0.3, 0.2, 0.5)
+    c("parametric", "non_parametric", "both"), 1, prob = c(0.5, 0.2, 0.3)
   )
   stable <- runif(1) < 0.2
   change <- function(p) !stable && runif(1) < p
@@ -214,26 +234,31 @@ draw_design <- function() {
   } else {
     sample(c("delay", "week", "delay_week"), 1)
   }
+  # Places by ages have at most 60 strata.
+  n_places <- switch(strata,
+    single = 1L, ages = 1L,
+    places = sample(2:26, 1),
+    places_ages = sample(6:16, 1)
+  )
+  n_ages <- switch(strata,
+    single = 1L, places = 1L,
+    ages = sample(2:8, 1),
+    places_ages = sample(3:min(7L, 60L %/% n_places), 1)
+  )
   list(
     grid = grid_name,
     strata = strata,
-    n_places = switch(strata,
-      single = 1L, ages = 1L,
-      places = sample(2:26, 1),
-      places_ages = sample(6:16, 1)
-    ),
-    n_ages = switch(strata,
-      single = 1L, places = 1L,
-      ages = sample(2:8, 1),
-      places_ages = sample(3:7, 1)
-    ),
+    n_places = n_places,
+    n_ages = n_ages,
     process = sample(processes, 1),
     trajectory = sample(
       c("turnover", "flat", "rise_fall", "second_wave"), 1
     ),
     reference = reference,
     delay_family = if (parametric) {
-      sample(c("lognormal", "gamma", "exponential"), 1)
+      sample(
+        c("lognormal", "gamma", "exponential"), 1, prob = c(0.7, 0.2, 0.1)
+      )
     } else {
       "none"
     },
@@ -247,100 +272,95 @@ draw_design <- function() {
       0L
     },
     delay_walk = parametric && change(0.3),
+    reference_dow = runif(1) < 0.6,
     report_dow = runif(1) < 0.7,
-    report_holiday = runif(1) < 0.3,
-    report_week = sample(c("none", "week", "rw"), 1, prob = c(3, 1, 1)),
+    report_holiday = runif(1) < 0.15,
+    report_week = sample(c("none", "week", "rw"), 1, prob = c(8, 1, 1)),
     report_days = weekdays_drawn(),
     report_change = change(0.3),
     report_days_after = weekdays_drawn(),
     family = sample(
       c("negbin", "negbin1d", "poisson"), 1, prob = c(0.4, 0.4, 0.2)
-    ),
-    # A long tail: the longest delay one step above what the delay's mean
-    # needs (`max_delay_for`).
-    long_tail = runif(1) < 0.25
+    )
   )
 }
 
 # The continuous settings of an outbreak, drawn again when a draw fails.
 draw_values <- function(design) {
   places_ages <- design$strata == "places_ages"
-  delay_mean <- exp(runif(1, log(2), log(21)))
-  list(
-    weeks = if (places_ages) sample(16:24, 1) else sample(16:40, 1),
+  log_uniform <- function(lo, hi) exp(runif(1, log(lo), log(hi)))
+  v <- list(
+    weeks = if (places_ages) sample(16:24, 1) else sample(16:32, 1),
     offset = sample(0:6, 1),
     quiet = runif(1, 0, 0.9),
     coupling = runif(1),
-    gt_mean = runif(1, 2, 20),
-    gt_cv = runif(1, 0.3, 0.7),
+    gt_mean = log_uniform(2.5, 16),
+    gt_cv = runif(1, 0.4, 0.8),
     incubation_mean = runif(1, 3, 12),
     incubation_cv = runif(1, 0.3, 0.7),
-    log_r0 = rnorm(1, 0.1, 0.2),
+    # Initial daily growth for every process; a renewal process takes the
+    # Rt that gives it under its generation time.
+    r0 = max(min(rnorm(1, 0, 0.03), 0.08), -0.08),
     shape_size = runif(1),
     wave_size = runif(1),
     wave_at = runif(1, 0.4, 0.8),
-    rt_steps = rpois(1, 1.2),
-    rt_step_sd = runif(1, 0.1, 0.5),
+    rt_steps = rpois(1, 1),
+    rt_step_sd = runif(1, 0.05, 0.25),
     rt_drift_sd = runif(1, 0, 0.03),
-    r0 = rnorm(1, 0.01, 0.02),
-    walk_sd = runif(1, 0.005, 0.015),
+    walk_pacf = runif(1, 0.7, 0.95),
+    walk_sd = runif(1, 0.01, 0.03),
     incidence_sd = runif(1, 0.05, 0.3),
     growth_steps = sample(1:3, 1),
     growth_step_sd = runif(1, 0.02, 0.06),
     smooth_amp = runif(1, 0.01, 0.06),
     smooth_period = runif(1, 40, 200),
     smooth_phase = runif(1, 0, 2 * pi),
-    seed_size = exp(runif(1, log(0.2), log(200))),
+    # The seed is scaled so the expected size is the target.
+    target_size = log_uniform(30, 1e5) *
+      max(1, design$n_places * design$n_ages / 26),
     stratum_sd = runif(1, 0.5, 2),
-    delay_mean = delay_mean,
-    max_delay = max_delay_for(delay_mean, design$long_tail),
-    # Gamma delays with shape above 2 fail or report nothing in the
-    # simulate branch, so the gamma's coefficient of variation is at
-    # least 0.7.
-    delay_cv = switch(design$delay_family,
-      lognormal = runif(1, 0.3, 1.2),
-      gamma = runif(1, 0.7, 1.2),
-      1
-    ),
+    delay_median = log_uniform(1, 10),
+    delay_sdlog = runif(1, 0.5, 2.5),
+    delay_mean = log_uniform(2, 21),
+    # Gamma delays with shape above 2 fail in the simulate branch.
+    delay_cv = runif(1, 0.8, 1.6),
     # Log changes in the delay's location and spread from the first week
     # to the last, as a linear drift.
-    delay_change = rnorm(1, 0, 0.5),
+    delay_change = rnorm(1, 0, 0.3),
     spread_change = rnorm(1, 0, 0.3),
     step_at_1 = runif(1, 0.1, 0.9),
     step_at_2 = runif(1, 0.1, 0.9),
     step_at_3 = runif(1, 0.1, 0.9),
-    step_mean_1 = rnorm(1, 0, 0.4),
-    step_mean_2 = rnorm(1, 0, 0.4),
-    step_mean_3 = rnorm(1, 0, 0.4),
+    step_mean_1 = rnorm(1, 0, 0.3),
+    step_mean_2 = rnorm(1, 0, 0.3),
+    step_mean_3 = rnorm(1, 0, 0.3),
     step_spread_1 = rnorm(1, 0, 0.3),
     step_spread_2 = rnorm(1, 0, 0.3),
     step_spread_3 = rnorm(1, 0, 0.3),
     walk_mean_sd = runif(1, 0, 0.1),
     walk_spread_sd = runif(1, 0, 0.1),
-    delay_stratum_sd = runif(1, 0, 0.4),
-    hazard_sd = runif(1, 0, 0.4),
+    delay_place_sd = runif(1, 0.1, 0.5),
+    delay_age_sd = runif(1, 0.05, 0.25),
+    hazard_walk_sd = runif(1, 0.05, 0.2),
+    hazard_sd = runif(1, 0, 0.15),
     hazard_week_sd = runif(1, 0, 0.4),
-    dow_sd = runif(1, 0, 0.8),
+    reference_dow_sd = runif(1, 0.1, 0.5),
+    dow_sd = runif(1, 0.1, 0.6),
     holidays = sample(2:6, 1),
     holiday_effect = runif(1, -2.5, -0.5),
-    report_week_sd = runif(1, 0, 0.3),
+    report_week_sd = runif(1, 0, 0.2),
     report_change_at = runif(1, 0.2, 0.8),
-    sqrt_phi = runif(1, 0.05, 1.5)
+    sqrt_phi = log_uniform(0.1, 1)
   )
+  v$max_delay <- max_delay_for(delay_parameters(design$delay_family, v)$q99)
+  v
 }
 
-# The longest delay in days: the shortest of 3, 4, 6, 8 and 12 weeks that
-# is at least five times the delay's mean, or for a long tail the next one
-# up if it is at most ten times the mean. A longest delay many times the
-# mean gives the discretised delay non-finite tail hazards in epinowcast
-# (#939), so Stan cannot start.
-max_delay_for <- function(mean, long_tail) {
+# The longest delay in days: the shortest of 3, 4, 6, 8 and 12 weeks at
+# or above the delay's 99th centile, at most 12 weeks.
+max_delay_for <- function(q99) {
   options <- c(21L, 28L, 42L, 56L, 84L)
-  k <- min(which(c(options >= 5 * mean, TRUE))[1], length(options))
-  if (long_tail && k < length(options) && options[k + 1] <= 10 * mean) {
-    k <- k + 1
-  }
-  options[k]
+  options[min(which(c(options >= q99, TRUE))[1], length(options))]
 }
 
 # Expected onsets of each stratum by day, as epinowcast's renewal or
@@ -402,14 +422,19 @@ simulate_outbreak <- function(design, v) {
   } else {
     1
   }
+  # A reference-date day-of-week effect acts on the expected counts.
   expectation <- enw_expectation(
-    r = ~1, generation_time = gt, latent_reporting_delay = lrd, data = pobs
+    r = ~1, generation_time = gt, latent_reporting_delay = lrd,
+    observation = if (design$reference_dow) ~ (1 | day_of_week) else ~1,
+    data = pobs
   )
   n_r <- expectation$data$expr_t
   path <- function() {
     if (renewal) {
       shifted <- log_rt_path(n_r, v) + trajectory(n_r, design$trajectory, v, 1)
-      pmin(pmax(shifted, -1.2), 1.2)
+      # Rt within what daily growth of -0.1 to 0.1 gives.
+      limits <- log_r_from_growth(c(-0.1, 0.1), v$gt_mean, v$gt_cv)
+      pmin(pmax(shifted, limits[1]), limits[2])
     } else {
       shifted <- growth_path(n_r, design$process, v) +
         trajectory(n_r, design$trajectory, v, 0.1)
@@ -439,12 +464,12 @@ simulate_outbreak <- function(design, v) {
     weight[runif(length(weight)) < v$quiet / 2] <- 0
     if (all(weight == 0)) weight[1] <- 1
   }
-  size <- pmax(v$seed_size * weight / sum(weight), exp(-8))
-  # The size cap is the main filter on growth, so a draw expected to pass
-  # it by half again is rejected here, in a second, not after Stan.
-  if (sum(expected_onsets(size, gt, log_r)) > 1.5 * max_size(design)) {
-    stop("too large (expected)")
-  }
+  # The expected outbreak is linear in the seed, so the seed is scaled to
+  # give the target size rather than redrawn until the size fits.
+  share <- weight / sum(weight)
+  scale <- v$target_size / sum(expected_onsets(share, gt, log_r))
+  v$seed_size <- scale
+  size <- pmax(scale * share, exp(-8))
   lelatent <- matrix(
     log(size), nrow = expectation$data$expr_gt_n, ncol = nrow(strata),
     byrow = TRUE
@@ -471,9 +496,9 @@ simulate_outbreak <- function(design, v) {
   }
   hazard_terms <- switch(design$hazard,
     none = NULL,
-    delay = "(1 | delay)",
+    delay = c("rw(delay)", "(1 | delay)"),
     week = "(1 | week)",
-    delay_week = c("(1 | delay)", "(1 | week)")
+    delay_week = c("rw(delay)", "(1 | delay)", "(1 | week)")
   )
   refnp <- if (design$hazard == "none") {
     ~0
@@ -488,10 +513,8 @@ simulate_outbreak <- function(design, v) {
     non_parametric = refnp, data = pobs
   )
   rd <- reference$data
-  delay <- delay_parameters(
-    design$delay_family, v$delay_mean, v$delay_cv, max_delay
-  )
-  stratum_sd <- list(place = v$delay_stratum_sd, age = v$delay_stratum_sd)
+  delay <- delay_parameters(design$delay_family, v, max_delay)
+  stratum_sd <- list(place = v$delay_place_sd, age = v$delay_age_sd)
   parameters <- list()
   if (parametric) {
     fcols <- colnames(rd$refp_fdesign)
@@ -542,6 +565,19 @@ simulate_outbreak <- function(design, v) {
     if (!parametric) {
       parameters$refnp_int <- qlogis(delay$hazard)
     }
+    # A smooth hazard by delay: a random walk over delays.
+    if (rd$refnp_arima_present == 1) {
+      parameters$refnp_arima_z <- matrix(
+        rnorm(rd$refnp_arima_T * rd$refnp_arima_G),
+        rd$refnp_arima_T, rd$refnp_arima_G
+      )
+      parameters$refnp_arima_sigma <- array(v$hazard_walk_sd)
+    }
+  }
+  if (design$reference_dow) {
+    ed <- expectation$data
+    parameters$expl_beta <- array(rnorm(ed$expl_fncol))
+    parameters$expl_beta_sd <- array(v$reference_dow_sd)
   }
 
   # Report date.

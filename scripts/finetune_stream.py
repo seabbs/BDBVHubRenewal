@@ -96,19 +96,21 @@ def ready_outbreaks(sim_dir: Path, seeds: range) -> list[str]:
     return out
 
 
-def cut(sim_dir: Path, ids: list[str], seed: int) -> list[tuple[str, dict]]:
-    """Return the blocks of simulations, each with its outbreak draw.
+def cut(
+    sim_dir: Path, ids: list[str], seed: int, per_simulation: int
+) -> list[tuple[str, dict]]:
+    """Return a sample of blocks of each simulation, with its draw.
 
-    A simulation's `CUTS` cut-offs of each source are shared among its
-    observation draws (`<id>-<draw>`), each cut with its own generator.
+    A simulation's candidate blocks are each of its observation draws
+    (`<id>-<draw>`) cut in each of `CUTS` slots of each source; a sample of
+    `per_simulation` of them, seeded by the simulation, is cut.
     """
     seeds = sorted({ft._order(o)[0] for o in ids})
     counts = pd.concat(
         [pd.read_csv(sim_dir / f"counts-{s}.csv.gz") for s in seeds]
     )
-    counts["simulation"] = (
-        counts["outbreak"].str.split("-").str[:2].str.join("-")
-    )
+    parts = counts["outbreak"].str.split("-")
+    counts["simulation"] = parts.str[0] + "-" + parts.str[1]
     settings = pd.concat(
         [pd.read_csv(sim_dir / f"settings-{s}.csv") for s in seeds]
     ).set_index("outbreak")
@@ -119,11 +121,24 @@ def cut(sim_dir: Path, ids: list[str], seed: int) -> list[tuple[str, dict]]:
         days = row.get("max_delay", np.nan)
         weeks = ft.SIM_DELAY_WEEKS if pd.isna(days) else int(days) // 7
         draws = dict(tuple(by[simulation].groupby("outbreak")))
-        cuts = max(1, ft.CUTS // len(draws))
+        candidates = [
+            (outbreak, source, j)
+            for outbreak in sorted(draws)
+            for source in ("weekly", "daily")
+            for j in range(ft.CUTS)
+        ]
+        rng = np.random.default_rng([seed, zlib.crc32(simulation.encode())])
+        k = min(per_simulation, len(candidates))
+        chosen = [candidates[i] for i in rng.choice(len(candidates), k, False)]
         for outbreak in sorted(draws):
-            rng = np.random.default_rng([seed, zlib.crc32(outbreak.encode())])
+            picks = {(s, j) for o, s, j in chosen if o == outbreak}
+            if not picks:
+                continue
+            draw_rng = np.random.default_rng(
+                [seed, zlib.crc32(outbreak.encode())]
+            )
             blocks = ft.outbreak_blocks(
-                draws[outbreak], ft.strata(row), rng, weeks, cuts
+                draws[outbreak], ft.strata(row), draw_rng, weeks, picks=picks
             )
             out.extend((outbreak, block) for block in blocks)
     return out
@@ -246,6 +261,12 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--note", default="")
     parser.add_argument("--publish", action="store_true")
+    parser.add_argument("--blocks-per-simulation", type=int, default=12)
+    parser.add_argument(
+        "--prefixes", type=int, nargs="+", default=list(ft.PREFIXES)
+    )
+    parser.add_argument("--min-gain", type=float, default=0.01)
+    parser.add_argument("--stop-from", type=int, default=8000)
     args = parser.parse_args()
     out, sim_dir = args.out, args.sim_dir
     out.mkdir(parents=True, exist_ok=True)
@@ -267,8 +288,9 @@ def main() -> None:
         return range(args.train_seeds[0], last + 1)
 
     held_seeds = range(args.held_out_seeds[0], args.held_out_seeds[1] + 1)
-    prefixes = [p for p in ft.PREFIXES if p < args.outbreaks]
+    prefixes = [p for p in args.prefixes if p < args.outbreaks]
     prefixes.append(args.outbreaks)
+    k = args.blocks_per_simulation
 
     # Held-out outbreaks first.
     report(stage="waiting for held-out simulations")
@@ -280,7 +302,7 @@ def main() -> None:
         time.sleep(POLL)
     held = held[: args.holdout]
     (out / "outbreaks-held-out.txt").write_text("\n".join(held) + "\n")
-    val = [b for _, b in cut(sim_dir, held, args.seed)]
+    val = [b for _, b in cut(sim_dir, held, args.seed, k)]
     log(f"{len(held)} held-out outbreaks, {len(val)} blocks")
 
     ft.checkpoint_large_batches()
@@ -328,6 +350,11 @@ def main() -> None:
         "held_out_sha256": ft._sha256(out / "outbreaks-held-out.txt"),
         "n_validation": len(val),
         "chunk": CHUNK,
+        "blocks_per_simulation": k,
+        "block_sampling": (
+            f"{k} of each simulation's draws x {ft.CUTS} cut-off slots x "
+            "2 sources, seeded by the simulation"
+        ),
         "lora": {"r": 8, "alpha": 16},
         "learning_rate": args.learning_rate,
         "batch_size": args.batch_size,
@@ -340,6 +367,8 @@ def main() -> None:
     state_dir = out / "state"
     state = load_state(state_dir, model, optimiser)
     step, done, position = 0, 0, 0
+    seen = {"blocks": 0, "series": 0}
+    losses: list[float] = []
     if state is None:
         consumed.write_text("")
         start_loss = ft.held_out_loss(model, val, args.batch_size)
@@ -348,6 +377,7 @@ def main() -> None:
     else:
         step, done, position = state["step"], state["done"], state["position"]
         start_loss, history = state["start_loss"], state["history"]
+        seen, losses = state["seen"], state["losses"]
         lines = consumed.read_text().splitlines()[:step]
         consumed.write_text("".join(f"{line}\n" for line in lines))
         log(f"resumed at step {step}, outbreaks {done + 1}-, batch {position}")
@@ -363,6 +393,8 @@ def main() -> None:
                 "position": position,
                 "start_loss": start_loss,
                 "history": history,
+                "seen": seen,
+                "losses": losses,
             },
         )
 
@@ -404,7 +436,7 @@ def main() -> None:
                 )
             time.sleep(POLL)
         ids = ready[done:hi]
-        pairs = cut(sim_dir, ids, args.seed)
+        pairs = cut(sim_dir, ids, args.seed, k)
         blocks = [b for _, b in pairs]
         sizes = np.array([int(b["context"].shape[0]) for b in blocks])
         rng = np.random.default_rng([args.seed, done])
@@ -457,6 +489,8 @@ def main() -> None:
             if step % SAVE_EVERY == 0:
                 snapshot()
         done, position = hi, 0
+        seen["blocks"] += len(pairs)
+        seen["series"] += int(sizes.sum())
         if done in prefixes:
             where = out / f"n{done}"
             where.mkdir(parents=True, exist_ok=True)
@@ -470,6 +504,11 @@ def main() -> None:
                 "outbreaks_sha256": ft._sha256(where / "outbreaks.txt"),
                 "consumed_sha256": ft._sha256(where / "consumed.txt"),
                 "steps": step,
+                "blocks": seen["blocks"],
+                "series": seen["series"],
+                "tokens": seen["series"]
+                * (ft.CONTEXT + ft.HORIZON)
+                // ft.OUTPUT_PATCH,
             }
             key = ft._settings_hash(settings)
             settings["hash"] = key
@@ -498,6 +537,13 @@ def main() -> None:
             if args.publish:
                 publish(where, key)
                 report(last_release=f"chronos-ft-{key}")
+            # From `stop_from` on, go on only while the last doubling cut
+            # held-out loss by more than `min_gain`.
+            losses.append(settings["held_out_loss"])
+            gain = losses[-2] - losses[-1] if len(losses) > 1 else np.inf
+            if done >= args.stop_from and gain < args.min_gain * losses[-2]:
+                log(f"held-out loss gained under {args.min_gain:.0%}: stop")
+                break
         snapshot()
         report(stage="training", step=step, outbreaks=done)
     report(stage="finished", step=step, outbreaks=done)
