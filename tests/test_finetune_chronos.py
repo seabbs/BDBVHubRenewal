@@ -196,3 +196,29 @@ def test_stop_rule_needs_two_checkpoints():
     assert should_stop([0.2, 0.199], 16000, 8000, 0.01)
     assert not should_stop([0.2, 0.15], 16000, 8000, 0.01)
     assert not should_stop([0.2, 0.199], 4000, 8000, 0.01)
+
+
+def test_a_split_batch_starts_from_clear_gradients():
+    from finetune_stream import accumulate
+
+    grads: list[int] = []
+    skipped: list[int] = []
+
+    def backward(part, share):
+        if len(part) > 2:
+            grads.append(-1)  # a partial backward before running out
+            raise RuntimeError("MPS backend out of memory")
+        if 9 in part:
+            raise RuntimeError("MPS backend out of memory")
+        grads.extend(part)
+        return 0.5
+
+    def zero():
+        grads.clear()
+
+    value = accumulate([1, 2, 3, 4, 9], backward, zero, skipped.append)
+    # The partial backward is cleared; every block but the one too large
+    # for memory is used once.
+    assert sorted(grads) == [1, 2, 3, 4]
+    assert skipped == [9]
+    assert value == 0.5
