@@ -397,6 +397,81 @@ jobs:
         run: >-
           uv run --group docs jupytext --to ipynb --execute --run-path .
           docs/getting-started.py
+      # A pull request from a submit-* branch: a dry run of the
+      # seabbs-chronos2_ft track for the latest data, as the submission
+      # workflow's prepare and chronos jobs run it (DRY_RUN, read-only
+      # workflow token, nothing pushed), rendered as the preview's
+      # submission/review/ page.
+      - name: Detect the round to review
+        id: round
+        if: github.event_name == 'pull_request' && startsWith(github.head_ref, 'submit-')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          echo '{"schema_version": 1, "rounds": {}}' > "$RUNNER_TEMP/state.json"
+          uv run --project ci detect-new-vintage detect \
+            --state "$RUNNER_TEMP/state.json" \
+            --hub InsightNet-US/BDBV-Modeling-Hub --force --ignore-window
+      - name: Read the hub's config at that commit
+        if: steps.round.outcome == 'success'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: InsightNet-US/BDBV-Modeling-Hub
+          ref: ${{ steps.round.outputs.hub_ref }}
+          path: output/hub-clone
+          persist-credentials: false
+          sparse-checkout: |
+            hub-config
+            model-metadata
+      - name: Dry-run the seabbs-chronos2_ft track
+        id: review
+        if: steps.round.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DRY_RUN: 'true'
+          CI_DIR: ci
+          WORK: output/ci
+          HUB_REF: ${{ steps.round.outputs.hub_ref }}
+          AS_OF: ${{ steps.round.outputs.as_of }}
+          REFERENCE_DATE: ${{ steps.round.outputs.reference_date }}
+          DATA_COMMIT: ${{ steps.round.outputs.data_commit }}
+          SOURCE_SHA: ${{ github.sha }}
+          HUB_PATH: output/hub-clone
+          VALIDATE: 'true'
+          R_VALIDATION: 'false'
+          CHECK_WINDOW: 'false'
+          EXPECTED_LOCATIONS: ${{ vars.EXPECTED_LOCATIONS }}
+        run: |
+          ci/steps/prepare.sh
+          start=$SECONDS
+          status=0
+          TRACK_MODEL=$(uv run python -c 'import tomllib
+          m = tomllib.load(open("config/hub.toml", "rb"))["models"]
+          print(next(k for k, v in m.items() if v["model_abbr"] == "chronos2_ft"))')
+          TRACK_MODEL=$TRACK_MODEL ci/steps/track.sh || status=$?
+          echo "track.sh exited $status"
+          echo "seconds=$((SECONDS - start))" >> "$GITHUB_OUTPUT"
+          echo "model=$TRACK_MODEL" >> "$GITHUB_OUTPUT"
+          # The latest seabbs-renewal file on the hub, to show beside it.
+          prev=$(gh api "repos/InsightNet-US/BDBV-Modeling-Hub/contents/model-output/seabbs-renewal" \
+            --jq '[.[] | select(.name | endswith(".csv")) | .name] | sort | last')
+          curl -fsSL "https://raw.githubusercontent.com/InsightNet-US/BDBV-Modeling-Hub/main/model-output/seabbs-renewal/$prev" \
+            -o "$RUNNER_TEMP/seabbs-renewal.csv"
+      - name: Write the submission review page
+        if: steps.review.outcome == 'success'
+        env:
+          MODEL: ${{ steps.review.outputs.model }}
+          SECONDS_TAKEN: ${{ steps.review.outputs.seconds }}
+        run: |
+          uv run python scripts/submission_review.py \
+            --track "output/ci/track-$MODEL" \
+            --observed output/ci/inputs/time-series.csv \
+            --compare randomwalknowcast=output/ci/candidates/randomwalknowcast/submission \
+            --compare "seabbs-renewal (submitted)=$RUNNER_TEMP/seabbs-renewal.csv" \
+            --table "Release backtest, rolling truth, checkpoint r1 2c2b22a03107 (evidence/fm-chronos)=ci/review-tables/rolling.csv" \
+            --table "Groupings (fm-agg)=ci/review-tables/fm-agg.md" \
+            --table "Rolling copula (fm-copula)=ci/review-tables/fm-copula.md" \
+            --seconds "$SECONDS_TAKEN" --out docs/submission/review
       - name: Build the site into _site
         run: uv run mkdocs build --strict
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
