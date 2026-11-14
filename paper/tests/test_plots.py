@@ -263,3 +263,15 @@ def test_finetune_size_plots_one_line_per_finetuned_model() -> None:
     assert xs[0] == 1000
     assert xs[-1] == 8000
     plt.close(fig)
+
+
+def test_nowcasts_draw_each_dates_latest_count_when_releases_are_partial():
+    fc, obs = dummy_study("germany", seed=1, n_samples=5)
+    # The last release holds only its last week, as the German data do.
+    last = obs["as_of_date"].max()
+    obs = obs.loc[
+        (obs["as_of_date"] < last)
+        | (obs["target_date"] > last - pd.Timedelta(days=7))
+    ]
+    fig = results_panel(fc, obs, score_forecasts(fc))
+    plt.close(fig)

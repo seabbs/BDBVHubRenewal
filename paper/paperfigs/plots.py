@@ -208,7 +208,7 @@ def plot_nowcasts(
 ) -> bool:
     """Draw 50% and 90% ribbons and medians at spaced origin dates.
 
-    Data as of each origin are in light grey, the final data in black. A
+    Data as of each origin are in light grey, the latest count of each date in black. A
     model with no forecast at a shown origin gets a cross in its colour at
     the foot of that origin's line.
 
@@ -235,7 +235,12 @@ def plot_nowcasts(
     fc = forecasts.loc[forecasts["location"] == location]
     obs = observations.loc[observations["location"] == location]
     origins = _spaced_origins(fc)
-    final = obs.loc[obs["as_of_date"] == obs["as_of_date"].max()]
+    # Each target's latest count, as a release need not hold every target.
+    final = (
+        obs.sort_values("as_of_date")
+        .groupby("target_date", as_index=False)
+        .last()
+    )
     step = pd.Timedelta(days=_step_days(fc))
     hmin, hmax = fc["horizon"].min(), fc["horizon"].max()
     start = origins[0] + (hmin - abs(hmin) // 2) * step
