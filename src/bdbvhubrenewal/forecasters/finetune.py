@@ -100,7 +100,7 @@ def releases(
         ].sum()
         rows.insert(0, "vintage", cutoff)
         rows.insert(1, "cutoff", cutoff)
-        frames.append(rows)
+        frames.append(pd.DataFrame(rows))
     out = pd.DataFrame(pd.concat(frames, ignore_index=True))
     out["reference_date"] = out["reference_date"].dt.strftime("%Y-%m-%d")
     if source == "weekly":
