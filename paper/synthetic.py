@@ -58,6 +58,7 @@ __all__ = [
     "delay_quantile",
     "evaluate",
     "factor_table",
+    "first_draws",
     "hub_codes",
     "longest_delay_weeks",
     "model_task",
@@ -68,6 +69,7 @@ __all__ = [
     "release_cutoffs",
     "sample_table",
     "series_label",
+    "simulation_id",
     "truth_table",
 ]
 
@@ -95,8 +97,9 @@ HORIZON_WEEKS: Final = 5
 cut-off's week and three more, with a week to spare. An origin is at
 least this plus the outbreak's longest delay before its last report."""
 
-MIN_DELAY_WEEKS: Final = 8
-"""The grid's shortest longest delay; outbreaks have 8 or 12 weeks."""
+MIN_DELAY_WEEKS: Final = 3
+"""The grid's shortest longest delay; r3 outbreaks have 3, 4, 6, 8 or 12
+weeks."""
 
 HORIZONS: Final = tuple(range(-4, 4))
 """Forecast weeks from the reference date."""
@@ -116,27 +119,29 @@ COLUMNS: Final = (
 """The long table's columns (`paper/schema.md`)."""
 
 FACTORS: Final = (
+    "process",
+    "gt_shape",
+    "trajectory",
+    "delay_family",
+    "delay_form",
+    "delay_change",
+    "reporting",
+    "reference_dow",
+    "observation",
     "strata",
     "n_places",
     "n_ages",
-    "process",
-    "reference",
-    "delay_family",
-    "stable",
     "max_delay",
-    "family",
-    "report_days",
     "delay_mean",
     "delay_cv",
-    "hazard_sd",
-    "dow_sd",
-    "quiet",
     "sqrt_phi",
+    "target_size",
     "weeks",
     "cases",
 )
-"""Outbreak settings of the r2-real grid (`scripts/finetune_simulate.R`)
-that scores are broken down by, as `factor_table` gives them."""
+"""The r3 grid's design factors (`factors` in
+`scripts/finetune_simulate.R`) and other settings that scores are broken
+down by, as `factor_table` gives them."""
 
 OBSERVATION_COLUMNS: Final = (
     "study",
@@ -536,7 +541,8 @@ def factor_table(counts: pd.DataFrame, settings: pd.DataFrame) -> pd.DataFrame:
     outbreak = str(counts["outbreak"].iloc[0])
     places = sorted(set(truth_table(counts)["location"]))
     factors = [f for f in FACTORS if f in settings]
-    row = settings.loc[settings["outbreak"] == outbreak, factors].iloc[0]
+    mine = settings["outbreak"] == simulation_id(outbreak)
+    row = settings.loc[mine, factors].iloc[0]
     out = pd.DataFrame(
         {"location": [series_label(outbreak, p) for p in places]}
     )
@@ -587,3 +593,35 @@ def longest_delay_weeks(counts: pd.DataFrame) -> int:
         - pd.to_datetime(counts["reference_date"])
     ).dt.days.max()
     return max(MIN_DELAY_WEEKS, -(-int(delay) // 7))
+
+
+def simulation_id(outbreak: str) -> str:
+    """Return the simulation of an r3 outbreak, `<seed>-<index>-<draw>`.
+
+    The settings have one row per simulation, `<seed>-<index>`.
+    """
+    parts = outbreak.split("-")
+    return "-".join(parts[:2])
+
+
+def first_draws(counts: pd.DataFrame, draw: int = 1) -> pd.DataFrame:
+    """Return one draw of each simulation, so outbreaks are independent.
+
+    The draws of an r3 simulation share its parameters and differ only in
+    their observations.
+
+    Parameters
+    ----------
+    counts : pandas.DataFrame
+        Triangles of outbreaks `<seed>-<index>-<draw>`.
+    draw : int
+        The draw kept.
+
+    Returns
+    -------
+    pandas.DataFrame
+        The rows of that draw.
+    """
+    parts = counts["outbreak"].astype(str).str.split("-")
+    keep = (parts.str.len() == 3) & (parts.str[2] == str(draw))
+    return counts.loc[keep].reset_index(drop=True)

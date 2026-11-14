@@ -36,6 +36,7 @@ from paper.synthetic import (
     MODELS,
     evaluate,
     factor_table,
+    first_draws,
     hub_codes,
     models_by_name,
     observation_table,
@@ -65,6 +66,7 @@ def main() -> None:
     parser.add_argument("--origins", type=int, default=4)
     parser.add_argument("--samples", type=int, default=200)
     parser.add_argument("--seed", type=int, default=1)
+    parser.add_argument("--draw", type=int, default=1)
     parser.add_argument("--device", choices=("auto", "cpu"), default="auto")
     parser.add_argument("--threads", type=int, default=4)
     args = parser.parse_args()
@@ -72,13 +74,16 @@ def main() -> None:
     if args.device == "cpu":
         _cpu(args.threads)
 
-    counts = hub_codes(
-        pd.concat(
-            [
-                pd.read_csv(p)
-                for p in sorted(args.sim_dir.glob("counts-*.csv.gz"))
-            ]
-        )
+    counts = first_draws(
+        hub_codes(
+            pd.concat(
+                [
+                    pd.read_csv(p)
+                    for p in sorted(args.sim_dir.glob("counts-*.csv.gz"))
+                ]
+            )
+        ),
+        args.draw,
     )
     ids = sorted(counts["outbreak"].unique())[: args.outbreaks]
     models, skipped = models_by_name(args.models)
