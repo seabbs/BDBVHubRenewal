@@ -1,6 +1,6 @@
 # Evidence for #200: health zones in the Chronos-2 block
 
-Code: branch `fm-zones` (on `fm-chronos` at `313e5b9`), commit `089ee45`.
+Code: branch `fm-zones` (on `fm-chronos` at `313e5b9`), commit `756635b`.
 Data: hub releases 2026-08-18 to 2026-11-08.
 
 ## Does a model's own zone forecast beat the allocator?
@@ -8,9 +8,8 @@ Data: hub releases 2026-08-18 to 2026-11-08.
 Zone backtest origins 2026-10-09 to 2026-11-01 (2026-08-18 is a `skip_origins` release).
 Each Chronos-2 model is fitted twice at each origin (`scripts/zone_fits.py`).
 
-- `own`: the block holds every hub target, the 519 zones included, and the zones are the model's own, made to sum to its provinces as in a hub file.
+- `own`: the block holds every hub target, the 519 zones included, and the zones are the model's own, which the model makes sum to its provinces with each zone keeping its published count, as in its hub file.
 - `allocator`: the block holds the country and provinces only, as on main, and `ZoneAllocator` splits the provinces across the zones.
-- `own_raw`: the model's own zones before they are made to sum to its provinces.
 
 `randomwalknowcast` is its zone-level run made to sum to its provinces, as in its hub file.
 Only zones with cases at the origin are scored, as in main's zone backtest.
@@ -22,29 +21,34 @@ Weeks no release has reached yet are not scored.
 Relative WIS against `randomwalknowcast`, with relative log WIS in brackets, on the 65 zone-weeks all models forecast (origin 2026-10-17, horizon -4).
 `results/zone-relative.csv`.
 
-| Model | own | allocator | own_raw |
-|---|---|---|---|
-| fm_chronos_weekly_complete | 2.87 (2.61) | 2.21 (1.31) | 3.33 (2.83) |
-| fm_chronos_weekly_ragged | 2.20 (2.23) | 1.43 (1.00) | 2.24 (2.44) |
-| fm_chronos_weekly_ragged_ft | 2.13 (2.22) | 1.68 (1.08) | 2.11 (2.29) |
-| fm_chronos_daily_complete | 3.37 (3.46) | 2.71 (1.61) | 5.24 (4.42) |
-| fm_chronos_daily_ragged | 2.51 (2.89) | 2.59 (1.69) | 5.00 (4.42) |
-| fm_chronos_daily_ragged_ft | 3.16 (3.27) | 2.69 (1.66) | 5.48 (4.52) |
+| Model | own | allocator |
+|---|---|---|
+| fm_chronos_weekly_complete | 2.18 (1.75) | 2.19 (1.29) |
+| fm_chronos_weekly_ragged | 1.29 (1.09) | 1.42 (0.98) |
+| fm_chronos_daily_complete | 2.94 (2.59) | 2.69 (1.58) |
+| fm_chronos_daily_ragged | 2.11 (1.93) | 2.57 (1.65) |
 
-The rolling truth leaves few zone-weeks: `randomwalknowcast` forecasts from ref - 4 weeks and has no delay at 2026-10-09.
+The fine-tuned models, apart, as they were trained on blocks of at most 26 provinces (five daily) and here see 546 targets:
+
+| Model | own | allocator |
+|---|---|---|
+| fm_chronos_weekly_ragged_ft | 1.38 (1.18) | 1.67 (1.06) |
+| fm_chronos_daily_ragged_ft | 2.79 (2.44) | 2.67 (1.63) |
+
+The rolling truth leaves few zone-weeks: `randomwalknowcast` forecasts from 4 weeks before the reference date and has no delay at 2026-10-09.
 On every zone-week both arms forecast, own over allocator (`scripts/own_vs_allocator.py`, `results/own-vs-allocator.csv`):
 
 | Model | n | WIS | log WIS |
 |---|---|---|---|
-| fm_chronos_weekly_complete | 261 | 1.55 | 2.14 |
-| fm_chronos_weekly_ragged | 517 | 1.13 | 1.55 |
-| fm_chronos_weekly_ragged_ft | 517 | 0.90 | 1.37 |
-| fm_chronos_daily_complete | 261 | 1.25 | 1.89 |
-| fm_chronos_daily_ragged | 517 | 1.03 | 1.67 |
-| fm_chronos_daily_ragged_ft | 517 | 1.11 | 1.79 |
+| fm_chronos_weekly_complete | 261 | 0.96 | 1.21 |
+| fm_chronos_weekly_ragged | 517 | 0.84 | 1.05 |
+| fm_chronos_weekly_ragged_ft | 517 | 0.71 | 0.96 |
+| fm_chronos_daily_complete | 261 | 1.04 | 1.36 |
+| fm_chronos_daily_ragged | 517 | 0.85 | 1.24 |
+| fm_chronos_daily_ragged_ft | 517 | 0.99 | 1.44 |
 
-The allocator beats the models' own zones on log WIS for every model, and on WIS for all but `fm_chronos_weekly_ragged_ft`.
-Making the own zones sum to the provinces helps the daily models most.
+Own zones have lower WIS than the allocator for five of six models, and higher log WIS for all but `fm_chronos_weekly_ragged_ft`.
+No model's zones beat `randomwalknowcast`'s.
 
 ## Time and memory per fit
 

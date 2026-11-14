@@ -21,8 +21,6 @@ out = pd.DataFrame(
         "own_over_allocator_wis": mean[("wis", "own")] / mean[("wis", "allocator")],
         "own_over_allocator_log_wis": mean[("log_wis", "own")]
         / mean[("log_wis", "allocator")],
-        "raw_over_allocator_wis": mean[("wis", "own_raw")]
-        / mean[("wis", "allocator")],
     }
 ).round(3)
 print(out.to_string())

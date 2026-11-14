@@ -8,16 +8,9 @@ from __future__ import annotations
 import argparse
 import dataclasses
 import time
-from pathlib import Path
 
-from bdbvhubrenewal.data import (
-    load_daily,
-    load_daily_zones,
-    load_delays,
-    load_health_zones,
-    load_target,
-)
-from bdbvhubrenewal.data.zones import hub_zones
+from bdbvhubrenewal.data import load_daily, load_delays, load_target
+from bdbvhubrenewal.data.zones import load_zone_data
 from bdbvhubrenewal.evaluation import backtest as bt
 from bdbvhubrenewal.evaluation.store import NEXT_ROUND_WEEKS
 from bdbvhubrenewal.forecasters import check_samples, get_model
@@ -34,19 +27,11 @@ def main() -> None:
     target = load_target(args.data)
     real = target.loc[target["kind"] == "real"]
     vintage = args.vintage or bt.real_vintages(real)[-1]
-    zones = {}
-    if not args.plain:
-        zones = {
-            "zones": load_health_zones(args.data),
-            "daily_zones": load_daily_zones(args.data),
-            "zone_codes": hub_zones(
-                Path(args.data) / "hub-config" / "tasks.json"
-            ),
-        }
+    zones = None if args.plain else load_zone_data(args.data)
     # As the fit store builds it, one week past the horizon.
     task, _ = bt.vintage_task(
         target, load_delays(args.data), bt.load_config("config/backtest.toml"),
-        vintage, load_daily(args.data), NEXT_ROUND_WEEKS, **zones,
+        vintage, load_daily(args.data), NEXT_ROUND_WEEKS, zones=zones,
     )  # fmt: skip
     model = get_model(args.model)
     sizes = []

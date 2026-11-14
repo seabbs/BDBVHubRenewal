@@ -1,7 +1,7 @@
 """Fit the Chronos-2 models at each zone-backtest origin, two ways.
 
 own: the block holds every hub target, zones included (fm-zones), and
-the zones are the model's own, made to sum to its provinces.
+the zones are the model's own, which it makes sum to its provinces.
 allocator: the block holds the country and provinces only (as on
 main), and the zones are split from the provinces by ZoneAllocator.
 
@@ -19,18 +19,12 @@ from pathlib import Path
 
 import pandas as pd
 
-from bdbvhubrenewal.data import (
-    load_daily,
-    load_daily_zones,
-    load_delays,
-    load_health_zones,
-    load_target,
-)
-from bdbvhubrenewal.data.zones import hub_zones, is_zone, weekly_zone_counts
+from bdbvhubrenewal.data import load_daily, load_delays, load_target
+from bdbvhubrenewal.data.zones import load_zone_data, weekly_zone_counts
 from bdbvhubrenewal.evaluation import backtest as bt
 from bdbvhubrenewal.forecasters import get_model
-from bdbvhubrenewal.forecasters.base import NATIONAL, ModelUnavailableError
-from bdbvhubrenewal.forecasters.zones import ZoneAllocator, reconcile_zones
+from bdbvhubrenewal.forecasters.base import ModelUnavailableError
+from bdbvhubrenewal.forecasters.zones import ZoneAllocator
 
 
 def main() -> None:
@@ -45,9 +39,8 @@ def main() -> None:
     target = load_target(args.data)
     delays = load_delays(args.data)
     daily = load_daily(args.data)
-    daily_zones = load_daily_zones(args.data)
-    health = load_health_zones(args.data)
-    codes = hub_zones(Path(args.data) / "hub-config" / "tasks.json")
+    zones = load_zone_data(args.data)
+    daily_zones, codes = zones.daily, zones.codes
     config = bt.load_config("config/backtest.toml")
     real = target.loc[target["kind"] == "real"]
     vintages = [
@@ -58,9 +51,8 @@ def main() -> None:
         counts = weekly_zone_counts(daily_zones, vintage)
         active = tuple(z for z in codes if z in set(counts["location"]))
         zoned, _ = bt.vintage_task(
-            target, delays, config, vintage, daily,
-            zones=health, daily_zones=daily_zones, zone_codes=codes,
-        )  # fmt: skip
+            target, delays, config, vintage, daily, zones=zones
+        )
         plain, _ = bt.vintage_task(target, delays, config, vintage, daily)
         for name in args.models:
             path = out / f"{name}__{vintage}.csv.gz"
@@ -76,12 +68,8 @@ def main() -> None:
             except ModelUnavailableError as err:
                 print(f"{name} skips {vintage}: {err}", flush=True)
                 continue
-            own = with_zones["location"].map(is_zone)
-            provinces = with_zones.loc[~own & (with_zones["location"] != NATIONAL)]
-            mine = with_zones.loc[own & with_zones["location"].isin(active)]
             frames = {
-                "own_raw": mine,
-                "own": reconcile_zones(mine, provinces, zoned, counts, active),
+                "own": with_zones.loc[with_zones["location"].isin(active)],
                 "allocator": ZoneAllocator().allocate(
                     without, plain, counts, active
                 ),

@@ -1,7 +1,7 @@
-name,n,own_over_allocator_wis,own_over_allocator_log_wis,raw_over_allocator_wis
-fm_chronos_daily_complete,261,1.25,1.887,2.156
-fm_chronos_daily_ragged,517,1.028,1.669,1.885
-fm_chronos_daily_ragged_ft,517,1.113,1.788,1.971
-fm_chronos_weekly_complete,261,1.548,2.144,1.765
-fm_chronos_weekly_ragged,517,1.13,1.554,1.311
-fm_chronos_weekly_ragged_ft,517,0.903,1.371,1.038
+name,n,own_over_allocator_wis,own_over_allocator_log_wis
+fm_chronos_daily_complete,261,1.04,1.361
+fm_chronos_daily_ragged,517,0.854,1.244
+fm_chronos_daily_ragged_ft,517,0.986,1.438
+fm_chronos_weekly_complete,261,0.964,1.214
+fm_chronos_weekly_ragged,517,0.841,1.053
+fm_chronos_weekly_ragged_ft,517,0.705,0.963
