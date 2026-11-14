@@ -60,7 +60,7 @@ Hub teams' samples are joint across weeks within a place only, as the hub's samp
 ## Backtest design
 
 Each vintage is a forecast task.
-The fitted models (the renewal models) forecast real vintages only, from their stored fits ([fit store](../development/cli.md#fit-store)).
+The renewal models forecast real vintages only, from their stored fits ([fit store](../development/cli.md#fit-store)).
 The other models forecast every task.
 
 | Run | Vintages | Truth |
