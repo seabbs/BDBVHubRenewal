@@ -1,13 +1,22 @@
+import json
 from pathlib import Path
 
 import pandas as pd
 import pytest
+import yaml
 
 from paperdata.ebola import HUB_BASELINE
 from paperpipe.config import seed_of
-from paperpipe.studies import Sources, load_data, run_forecasts, source_of
+from paperpipe.studies import (
+    Sources,
+    load_data,
+    missing,
+    run_forecasts,
+    source_of,
+)
 
 SPLIT = pd.Timestamp("2022-02-10")
+CONFIG = Path(__file__).parents[1] / "workflow" / "config.yaml"
 
 
 def test_synthetic_data_has_one_set_of_outbreaks_per_seed() -> None:
@@ -140,3 +149,50 @@ def test_germany_fails_on_tables_with_heldout_dates(tmp_path) -> None:
 def test_germany_needs_its_truth_delay() -> None:
     with pytest.raises(ValueError, match="delay_days"):
         load_data("germany")
+
+
+def test_missing_names_why_a_study_cannot_use_real_data(hub) -> None:
+    assert "simulations" in missing("synthetic", Sources(), seeds=(9001,))
+    assert "hub" in missing("ebola", Sources())
+    assert "baseline" in missing("ebola", Sources(hub=hub), delay_days=14)
+    assert "German" in missing("germany", Sources())
+
+
+def test_ebola_without_a_delay_names_it(hub) -> None:
+    # The fixture's releases never reach 98% of the latest count.
+    assert "delay" in missing("ebola", Sources(hub=hub))
+
+
+def test_a_paper_run_fails_on_dummy_data(tmp_path) -> None:
+    from paperpipe.__main__ import main
+
+    cfg = yaml.safe_load(CONFIG.read_text())
+    out = tmp_path / "x"
+    args = ["data", "synthetic", "--seeds", "9001", "--mode", "paper"]
+    args += ["--config", json.dumps(cfg), "--meta", str(out / "m.json")]
+    args += [
+        "--observations",
+        str(out / "o.csv"),
+        "--locations",
+        str(out / "l.csv"),
+    ]
+    with pytest.raises(ValueError, match="synthetic"):
+        main(args)
+
+
+def test_a_development_run_may_use_labelled_dummy_data(tmp_path) -> None:
+    from paperpipe.__main__ import main
+    from paperpipe.meta import read_meta
+
+    cfg = yaml.safe_load(CONFIG.read_text())
+    out = tmp_path / "x"
+    args = ["data", "synthetic", "--seeds", "7001", "--mode", "development"]
+    args += ["--config", json.dumps(cfg), "--meta", str(out / "m.json")]
+    args += [
+        "--observations",
+        str(out / "o.csv"),
+        "--locations",
+        str(out / "l.csv"),
+    ]
+    main(args)
+    assert read_meta(out / "m.json")["source"] == "dummy"
