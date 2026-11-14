@@ -170,12 +170,50 @@ def _workflow_paths(event: str) -> list[str]:
     return list(workflow[True][event]["paths"])
 
 
+def _key_files(monkeypatch: pytest.MonkeyPatch) -> set[str]:
+    """List every repository file a fit key depends on.
+
+    The files `code_digest` reads, the modules whose source it hashes,
+    and the backtest config and policy the tasks and samplers come from.
+    """
+    import inspect
+
+    from bdbvhubrenewal.evaluation import backtest
+
+    read: set[Path] = set()
+    for name in ("read_bytes", "read_text"):
+        original = getattr(Path, name)
+
+        def record(self: Path, *args: object, _f: object = original) -> object:
+            read.add(self.resolve())
+            return _f(self, *args)  # type: ignore[operator]
+
+        monkeypatch.setattr(Path, name, record)
+    for model in store.stored_models():
+        store.code_digest(model, ROOT)
+    monkeypatch.undo()
+    read |= {
+        Path(inspect.getsourcefile(f)).resolve()  # type: ignore[arg-type]
+        for f in (backtest.run_forecasts, backtest._fit_rows)
+    }
+    for func, arg in (
+        (backtest.load_config, "path"),
+        (store.samplers, "policy"),
+    ):
+        default = inspect.signature(func).parameters[arg].default
+        read.add((ROOT / default).resolve())
+    return {p.relative_to(ROOT.resolve()).as_posix() for p in read}
+
+
 @pytest.mark.parametrize("event", ["push", "pull_request"])
-def test_fit_store_runs_on_every_file_in_a_key(event: str) -> None:
+def test_fit_store_runs_on_every_file_in_a_key(
+    event: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
     import fnmatch
 
     patterns = _workflow_paths(event)
-    files = {f for m in store.stored_models() for f in store.fit_code(m, ROOT)}
+    files = _key_files(monkeypatch)
+    assert {"pyproject.toml", "uv.lock", "ci/policy.toml"} <= files
     missed = sorted(
         f
         for f in files
