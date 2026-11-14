@@ -216,11 +216,17 @@ free_mem_gb() {
 }
 
 unstarted_seeds() {
-  # Training seeds no machine has started, lowest first: the laptop takes
-  # these when its own are done, as the trainer needs seeds in order.
-  local s
+  # Training seeds no machine is running, lowest first: never started, or
+  # with no result and a log untouched for STALE_MIN minutes (a batch the
+  # remote lost). The laptop takes these, as the trainer needs seeds in
+  # order.
+  local s f
   for s in $(seq "$TRAIN_FIRST" "$TRAIN_LAST"); do
-    [ -e "$SIM_DIR/logs/$s.log" ] || echo "$s"
+    f="$SIM_DIR/logs/$s.log"
+    done_seed "$s" && continue
+    if [ ! -e "$f" ] || [ -n "$(find "$f" -mmin +"${STALE_MIN:-90}")" ]; then
+      echo "$s"
+    fi
   done
 }
 
