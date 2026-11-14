@@ -1,17 +1,29 @@
-"""The synthetic scenario grid, a main-text table of the paper.
+"""The synthetic scenario grid tables and SI notes, read from the simulator.
 
-`GRID` lists each setting `scripts/finetune_simulate.R` draws for an
-outbreak, with its range, its distribution and the epinowcast function it
-enters through. `grid_table` adds the values realised over the simulated
-outbreaks, from their `settings-*.csv` files, for the first setting of a
-row. Run from the repo root:
+`scripts/finetune_simulate.R` defines the r3 grid: a crossed design of
+`factors`, each level balanced in every block of simulations, and
+continuous settings drawn within a cell by `draw_values`. Everything here
+is read from that code, so the tables and notes cannot drift from it;
+`LABELS` only names each setting and the epinowcast function it enters
+through, and a test fails if a setting has no label.
 
-    python -m paper.tables.synthetic_grid output/finetune/full paper/tables
+- `main_table`: one row per factor, with its levels (main text);
+- `si_table`: every factor, derived setting and drawn value, with the R
+  expression that draws it (SI);
+- `model_note` and `heldout_note`: the SI notes on the epinowcast model
+  and on the held-out set (`config/paper/synthetic.toml`).
+
+Run from the repo root, optionally with simulations whose settings give
+the realised values:
+
+    python -m paper.tables.synthetic_grid [--settings <sim_dir>]
 """
 
 from __future__ import annotations
 
 import argparse
+import re
+import tomllib
 from pathlib import Path
 from typing import Final
 
@@ -19,398 +31,221 @@ import numpy as np
 import pandas as pd
 
 __all__ = [
-    "COLUMNS",
-    "GRID",
-    "MAIN",
+    "DERIVED",
+    "LABELS",
     "MAIN_HEADERS",
-    "grid_table",
+    "SI_HEADERS",
+    "heldout_note",
     "main_table",
+    "model_note",
+    "parse_factors",
+    "parse_values",
+    "si_table",
     "to_markdown",
-    "write_tables",
 ]
 
-COLUMNS: Final = (
-    "setting",
-    "factor",
-    "range",
-    "distribution",
-    "epinowcast",
-    "realised",
-)
-"""Columns of the table."""
+SIMULATOR: Final = Path("scripts/finetune_simulate.R")
+CONFIG: Final = Path("config/paper/synthetic.toml")
 
-_HEADERS: Final = {
+DERIVED: Final = ("n_places", "n_ages", "report_days")
+"""Settings `draw_design` derives from a cell's strata and reporting."""
+
+LABELS: Final = {
+    # Factors of the crossed design.
+    "process": ("Generative process", "`enw_expectation()`"),
+    "gt_shape": ("Generation time shape", "`enw_expectation(generation_time)`"),
+    "trajectory": (
+        "Trajectory of the growth rate",
+        "`enw_simulate(growth_rate)`",
+    ),
+    "delay_family": (
+        "Parametric delay family",
+        "`enw_reference(distribution)`",
+    ),
+    "delay_form": ("Delay form", "`enw_reference(parametric, non_parametric)`"),
+    "delay_change": ("Delay over time", "`enw_reference()`"),
+    "reporting": ("Report days", "`enw_report(structural)`"),
+    "reference_dow": (
+        "Day-of-week effect on expected counts",
+        "`enw_expectation(observation)`",
+    ),
+    "observation": ("Observation model", "`enw_obs(family)`"),
+    "strata": ("Strata", "`enw_preprocess_data(by)`"),
+    # Derived from the cell.
+    "n_places": ("Places", "`enw_preprocess_data(by)`"),
+    "n_ages": ("Age groups", "`enw_preprocess_data(by)`"),
+    "report_days": ("Weekdays with reports", "`enw_report(structural)`"),
+    # Drawn within the cell.
+    "weeks": ("Weeks of cut-offs", "`enw_preprocess_data()` grid"),
+    "offset": ("Start day offset (days)", "`enw_preprocess_data()` grid"),
+    "quiet": ("Probability a place is quiet", "`expr_lelatent_int`"),
+    "coupling": (
+        "Weight of the shared growth path",
+        "`enw_simulate(growth_rate)`",
+    ),
+    "stratum_sd": (
+        "Sd of the strata's log seed weights",
+        "`expr_lelatent_int`",
+    ),
+    "gt_mean": (
+        "Generation time mean (days)",
+        "`enw_expectation(generation_time)`",
+    ),
+    "rate": (
+        "Steady daily growth or decline rate",
+        "`enw_simulate(growth_rate)`",
+    ),
+    "flat": (
+        "Daily growth rate of a flat trajectory",
+        "`enw_simulate(growth_rate)`",
+    ),
+    "peak": (
+        "Time of the peak or trough, as a share",
+        "`enw_simulate(growth_rate)`",
+    ),
+    "amplitude": (
+        "Amplitude of oscillations and waves",
+        "`enw_simulate(growth_rate)`",
+    ),
+    "period": ("Period of oscillations (days)", "`enw_simulate(growth_rate)`"),
+    "phase": ("Phase of oscillations and waves", "`enw_simulate(growth_rate)`"),
+    "waves": (
+        "Waves of a multi-wave trajectory",
+        "`enw_simulate(growth_rate)`",
+    ),
+    "noise_sd": (
+        "Sd of the weekly AR(1) growth noise",
+        "`enw_simulate(growth_rate)`",
+    ),
+    "target_size": (
+        "Expected outbreak size, which scales the seed",
+        "`expr_lelatent_int`",
+    ),
+    "delay_median": ("Lognormal delay median (days)", "`refp_mean_int`"),
+    "delay_sdlog": ("Lognormal delay log sd", "`refp_sd_int`"),
+    "delay_mean": (
+        "Gamma, exponential or geometric delay mean (days)",
+        "`refp_mean_int` or the hazard intercept",
+    ),
+    "delay_cv": ("Gamma delay coefficient of variation", "`refp_sd_int`"),
+    "delay_place_sd": (
+        "Sd of the places' delay effects",
+        "`(1 | place)` of `enw_reference()`",
+    ),
+    "delay_age_sd": (
+        "Sd of the age groups' delay effects",
+        "`(1 | age)` of `enw_reference()`",
+    ),
+    "hazard_walk_sd": (
+        "Sd of the smooth walk over delays",
+        "`enw_reference(non_parametric)`",
+    ),
+    "hazard_sd": (
+        "Sd of the iid hazard effects by delay",
+        "`enw_reference(non_parametric)`",
+    ),
+    "drift": (
+        "Delay drift over the outbreak",
+        "`trend` covariate of `enw_reference()`",
+    ),
+    "step": ("Delay step size", "`step` covariate of `enw_reference()`"),
+    "step_at": (
+        "Time of the delay step, as a share",
+        "Step covariate of `enw_reference()`",
+    ),
+    "periodic": (
+        "Amplitude of periodic delay change",
+        "`periodic` covariate of `enw_reference()`",
+    ),
+    "periodic_weeks": (
+        "Period of periodic delay change (weeks)",
+        "`enw_reference()`",
+    ),
+    "walk_sd": (
+        "Sd of the weekly delay walk",
+        "`rw(week)` of `enw_reference()`",
+    ),
+    "reference_dow_sd": (
+        "Sd of the day-of-week effect on expected counts",
+        "`enw_expectation(observation)`",
+    ),
+    "dow_sd": (
+        "Sd of the report day-of-week effects",
+        "`(1 | day_of_week)` of `enw_report()`",
+    ),
+    "sqrt_phi": ("Overdispersion on the NB2 scale", "`enw_obs()`"),
+    "max_delay": (
+        "Longest delay (days), from the delay's 99th centile",
+        "`enw_preprocess_data(max_delay)`",
+    ),
+}
+"""Each setting's label and the epinowcast function it enters through."""
+
+MAIN_HEADERS: Final = {
     "factor": "Factor",
-    "range": "Range or levels",
-    "distribution": "Distribution",
+    "levels": "Levels",
     "epinowcast": "Enters through",
     "realised": "Realised",
 }
+"""Headers of the main-text table."""
 
-GRID: Final = pd.DataFrame(
-    [
-        (
-            "strata",
-            "Strata",
-            "One place; 2 to 26 places; 2 to 8 age groups in one place; 6 to "
-            "16 places by 3 to 7 age groups",
-            "Probabilities 0.3, 0.4, 0.2 and 0.1",
-            "`enw_preprocess_data(by = c('place', 'age'))`",
-        ),
-        (
-            "n_places",
-            "Places",
-            "1 to 26",
-            "Uniform on the strata's range",
-            "`enw_preprocess_data()`",
-        ),
-        (
-            "n_ages",
-            "Age groups",
-            "1 to 8",
-            "Uniform on the strata's range",
-            "`enw_preprocess_data()`",
-        ),
-        (
-            "process",
-            "Generative process",
-            "Renewal; renewal with incubation; weekly growth walk; log "
-            "incidence walk; growth steps; smooth growth",
-            "Uniform",
-            "`enw_expectation()` and `enw_simulate(growth_rate)`",
-        ),
-        (
-            "reference",
-            "Reference date model",
-            "Parametric; non-parametric; both",
-            "Probabilities 0.3, 0.2 and 0.5",
-            "`enw_reference()`",
-        ),
-        (
-            "delay_family",
-            "Parametric delay",
-            "Lognormal; gamma; exponential",
-            "Uniform, if there is a parametric delay",
-            "`enw_reference(distribution)`",
-        ),
-        (
-            "hazard",
-            "Delay hazard effects",
-            "None; by delay; by week; both",
-            "None with a parametric delay alone, by delay if stable, else "
-            "uniform",
-            "`enw_reference(non_parametric)`",
-        ),
-        (
-            "stable",
-            "Stable delay",
-            "Yes or no",
-            "Yes with probability 0.2, which turns off every delay and report "
-            "change",
-            "All delay changes",
-        ),
-        (
-            "delay_drift",
-            "Drift in the delay's location",
-            "Yes or no",
-            "Probability 0.6 if not stable",
-            "`week` in `enw_reference(parametric)`",
-        ),
-        (
-            "spread_drift",
-            "Drift in the delay's spread",
-            "Yes or no",
-            "Probability 0.5 if not stable",
-            "`week` in `enw_reference(parametric)`",
-        ),
-        (
-            "delay_steps",
-            "Step changes in the delay",
-            "0 to 3",
-            "Probabilities 0.3, 0.3, 0.2 and 0.2 if not stable",
-            "Step covariates in `enw_reference(parametric)`",
-        ),
-        (
-            "delay_walk",
-            "Weekly random walk in the delay",
-            "Yes or no",
-            "Probability 0.3 if not stable",
-            "`rw(week)` in `enw_reference(parametric)`",
-        ),
-        (
-            "report_dow",
-            "Day-of-week report effects",
-            "Yes or no",
-            "Probability 0.7",
-            "`(1 | day_of_week)` in `enw_report()`",
-        ),
-        (
-            "report_holiday",
-            "Holidays",
-            "Yes or no",
-            "Probability 0.3",
-            "`holiday` in `enw_report()`",
-        ),
-        (
-            "report_week",
-            "Report week effects",
-            "None; `(1 | week)`; `rw(week)`",
-            "Probabilities 0.6, 0.2 and 0.2",
-            "`enw_report()`",
-        ),
-        (
-            "report_days",
-            "Days with reports",
-            "Every day, or 1 to 3 of Monday to Friday",
-            "Every day with probability 0.5, else uniform on 1 to 3 days",
-            "`enw_report(structural)`",
-        ),
-        (
-            "report_days_after",
-            "Days with reports after a change",
-            "Every day, or 1 to 3 of Monday to Friday",
-            "As the days before",
-            "`enw_report(structural)`",
-        ),
-        (
-            "report_change",
-            "Change of report days",
-            "Yes or no",
-            "Probability 0.3 if not stable",
-            "`enw_report(structural)`",
-        ),
-        (
-            "family",
-            "Observation model",
-            "NB2; NB1; Poisson",
-            "Probabilities 0.4, 0.4 and 0.2",
-            "`enw_obs(family)`",
-        ),
-        (
-            "max_delay",
-            "Longest delay (days)",
-            "56 or 84",
-            "Probabilities 0.75 and 0.25",
-            "`enw_preprocess_data(max_delay)`",
-        ),
-        (
-            "weeks",
-            "Weeks of cut-offs",
-            "16 to 40, or 16 to 24 for places by ages",
-            "Uniform on integers",
-            "`enw_preprocess_data()` grid, with the longest delay and 4 more "
-            "weeks of reports",
-        ),
-        (
-            "offset",
-            "Start day offset (days)",
-            "0 to 6",
-            "Uniform on integers",
-            "`enw_preprocess_data()` grid",
-        ),
-        (
-            "quiet",
-            "Probability a place is quiet",
-            "0 to 0.9",
-            "Uniform",
-            "`expr_lelatent_int` of `enw_expectation()`",
-        ),
-        (
-            "coupling",
-            "Weight of the shared growth path",
-            "0 to 1",
-            "Uniform",
-            "`enw_simulate(growth_rate)`",
-        ),
-        (
-            "gt_mean;gt_cv",
-            "Generation time mean (days) and coefficient of variation",
-            "6 to 20; 0.3 to 0.7",
-            "Uniform",
-            "`enw_expectation(generation_time)`, gamma on 1 to 45 days",
-        ),
-        (
-            "incubation_mean;incubation_cv",
-            "Incubation period mean (days) and coefficient of variation",
-            "3 to 12; 0.3 to 0.7",
-            "Uniform",
-            "`enw_expectation(latent_reporting_delay)`, gamma on 1 to 30 days",
-        ),
-        (
-            "log_r0",
-            "Initial log Rt",
-            "Unbounded, paths held to -1.2 to 1.2",
-            "Normal(0.1, 0.2)",
-            "`enw_simulate(growth_rate)`",
-        ),
-        (
-            "rt_steps;rt_step_sd",
-            "Step changes in log Rt, and their size sd (mean -0.2)",
-            "0 or more; 0.1 to 0.5",
-            "Poisson(1.2); uniform",
-            "`enw_simulate(growth_rate)`",
-        ),
-        (
-            "rt_drift_sd",
-            "Daily random walk sd of log Rt",
-            "0 to 0.03",
-            "Uniform",
-            "`enw_simulate(growth_rate)`",
-        ),
-        (
-            "r0",
-            "Initial daily growth rate",
-            "Unbounded, paths held to -0.06 to 0.06",
-            "Normal(0.01, 0.02)",
-            "`enw_simulate(growth_rate)`",
-        ),
-        (
-            "walk_sd",
-            "Weekly growth walk sd",
-            "0.005 to 0.015",
-            "Uniform",
-            "`enw_simulate(growth_rate)`",
-        ),
-        (
-            "incidence_sd",
-            "Daily growth noise of the log incidence walk",
-            "0.05 to 0.3",
-            "Uniform",
-            "`enw_simulate(growth_rate)`",
-        ),
-        (
-            "growth_steps;growth_step_sd",
-            "Step changes in growth, and their size sd (mean -0.01)",
-            "1 to 3; 0.02 to 0.06",
-            "Uniform",
-            "`enw_simulate(growth_rate)`",
-        ),
-        (
-            "smooth_amp;smooth_period;smooth_phase",
-            "Smooth growth amplitude, period (days) and phase",
-            "0.01 to 0.06; 40 to 200; 0 to 2 pi",
-            "Uniform",
-            "`enw_simulate(growth_rate)`",
-        ),
-        (
-            "seed_size",
-            "Initial expected cases a day, over all strata",
-            "0.2 to 200",
-            "Log-uniform",
-            "`expr_lelatent_int` of `enw_expectation()`",
-        ),
-        (
-            "stratum_sd",
-            "Sd of the places' log seed weights (half for age groups)",
-            "0.5 to 2",
-            "Uniform",
-            "`expr_lelatent_int` of `enw_expectation()`",
-        ),
-        (
-            "delay_mean",
-            "Delay mean (days)",
-            "2 to 21",
-            "Log-uniform",
-            "`refp_mean_int`, or the hazard intercept with no parametric delay",
-        ),
-        (
-            "delay_cv",
-            "Delay coefficient of variation",
-            "0.3 to 1.2 (lognormal); 0.7 to 1.2 (gamma); 1 (exponential)",
-            "Uniform",
-            "`refp_sd_int` of `enw_reference()`",
-        ),
-        (
-            "delay_change;spread_change",
-            "Log change in the delay's location and spread over the outbreak",
-            "Unbounded",
-            "Normal(0, 0.5); Normal(0, 0.3)",
-            "`week` effects of `enw_reference(parametric)`",
-        ),
-        (
-            "step_at_1;step_at_2;step_at_3",
-            "When each delay step happens, as a share of the outbreak",
-            "0.1 to 0.9",
-            "Uniform",
-            "Step covariates in `enw_reference(parametric)`",
-        ),
-        (
-            "step_mean_1;step_mean_2;step_mean_3;step_spread_1;step_spread_2;s"
-            "tep_spread_3",
-            "Delay steps in log location and spread",
-            "Unbounded",
-            "Normal(0, 0.4); Normal(0, 0.3)",
-            "Step effects of `enw_reference(parametric)`",
-        ),
-        (
-            "walk_mean_sd;walk_spread_sd",
-            "Weekly walk sd of the delay's location and spread",
-            "0 to 0.1",
-            "Uniform",
-            "`rw(week)` of `enw_reference(parametric)`",
-        ),
-        (
-            "delay_stratum_sd",
-            "Sd of the strata's delay effects",
-            "0 to 0.4",
-            "Uniform",
-            "`(1 | place)` and `(1 | age)` of `enw_reference()`",
-        ),
-        (
-            "hazard_sd;hazard_week_sd",
-            "Sd of the hazard effects by delay and by week",
-            "0 to 0.4",
-            "Uniform",
-            "`enw_reference(non_parametric)`",
-        ),
-        (
-            "dow_sd",
-            "Sd of the day-of-week report effects",
-            "0 to 0.8",
-            "Uniform",
-            "`(1 | day_of_week)` of `enw_report()`",
-        ),
-        (
-            "holidays;holiday_effect",
-            "Holidays, and their effect on the logit hazard",
-            "2 to 6; -2.5 to -0.5",
-            "Uniform",
-            "`holiday` of `enw_report()`",
-        ),
-        (
-            "report_week_sd",
-            "Sd of the report week effects",
-            "0 to 0.3",
-            "Uniform",
-            "`enw_report()`",
-        ),
-        (
-            "report_change_at",
-            "When report days change, as a share of the outbreak",
-            "0.2 to 0.8",
-            "Uniform",
-            "`enw_report(structural)`",
-        ),
-        (
-            "sqrt_phi",
-            "Overdispersion, 1 / sqrt(phi), on the NB2 scale",
-            "0.05 to 1.5",
-            "Uniform; NB1 scaled to match",
-            "`enw_obs()`",
-        ),
-        (
-            "cases",
-            "Reported cases in an outbreak",
-            "10 to 300,000, more with many strata",
-            "Drawn again up to 5 times, else the design is skipped",
-            "`enw_simulate()`",
-        ),
-    ],
-    columns=list(COLUMNS[:-1]),
-)
-"""One row per setting, or per set of `;`-separated settings, that
-`draw_design` and `draw_values` draw in `scripts/finetune_simulate.R`
-(grid r2-real), and the accepted outbreak size."""
+SI_HEADERS: Final = {
+    "factor": "Setting",
+    "drawn": "Drawn as",
+    "epinowcast": "Enters through",
+    "realised": "Realised, median [min, max] or shares",
+}
+"""Headers of the SI table."""
+
+
+def parse_factors(text: str) -> dict[str, list[str]]:
+    """Return the simulator's design factors and their levels, in order."""
+    body = text[text.index("factors <- list(") :]
+    body = body[: body.index("\n)\n")]
+    return {
+        name: re.findall(r'"([^"]+)"', levels)
+        for name, levels in re.findall(r"(\w+) = c\(([^)]*)\)", body)
+    }
+
+
+def _function(text: str, name: str) -> str:
+    body = text[text.index(f"{name} <- function") :]
+    return body[: body.index("\n}\n")]
+
+
+def parse_values(text: str) -> dict[str, str]:
+    """Return the settings `draw_values` draws and their R expressions."""
+    body = _function(text, "draw_values")
+    block = body[body.index("  v <- list(\n") :]
+    block = block[len("  v <- list(\n") : block.index("\n  )\n")]
+    out: dict[str, list[str]] = {}
+    name = ""
+    for line in block.split("\n"):
+        if line.strip().startswith("#"):
+            continue
+        m = re.match(r"^    (\w+) = (.*)$", line)
+        if m:
+            name = m.group(1)
+            out[name] = [m.group(2)]
+        elif name:
+            out[name].append(line.strip())
+    values = {k: " ".join(v).rstrip(",").strip() for k, v in out.items()}
+    m = re.search(r"v\$max_delay <- (.*)\n", body)
+    if m:
+        values["max_delay"] = m.group(1).strip()
+    return values
+
+
+def _derived(text: str) -> dict[str, str]:
+    """Return the R expressions `draw_design` derives settings with."""
+    body = _function(text, "draw_design")
+    out = {}
+    for name in ("n_places", "n_ages"):
+        m = re.search(rf"  {name} <- (switch\(.*?\n  \))", body, flags=re.S)
+        out[name] = " ".join(m.group(1).split()) if m else ""
+    m = re.search(r"report_days = (if .*?else \{.*?\})", body, flags=re.S)
+    out["report_days"] = " ".join(m.group(1).split()) if m else ""
+    return out
 
 
 def _number(x: float) -> str:
@@ -422,18 +257,17 @@ def _number(x: float) -> str:
     )
 
 
-def _realised(name: str, values: pd.Series) -> str:
-    """Return a setting's realised values over outbreaks.
-
-    Numbers give the median and range, yes or no settings the share of
-    yes, and other levels the share of each.
-    """
-    if name in ("report_days", "report_days_after"):
+def _realised(name: str, settings: pd.DataFrame) -> str:
+    """Return a setting's realised values over simulations, or ''."""
+    if name not in settings:
+        return ""
+    values = settings[name].dropna()
+    if values.empty:
+        return ""
+    if name == "report_days":
         return f"{(values.astype(str) == 'all').mean():.0%} every day"
-    if values.dtype == bool or set(values.unique()) <= {True, False}:
-        return f"{values.astype(bool).mean():.0%} yes"
     if not pd.api.types.is_numeric_dtype(values):
-        shares = values.value_counts(normalize=True)
+        shares = values.astype(str).value_counts(normalize=True)
         return ", ".join(f"{k} {v:.0%}" for k, v in shares.items())
     out = (
         f"{_number(values.median())} "
@@ -444,128 +278,50 @@ def _realised(name: str, values: pd.Series) -> str:
     return out
 
 
-def grid_table(settings: pd.DataFrame) -> pd.DataFrame:
-    """Return `GRID` with the values realised over the outbreaks.
-
-    Parameters
-    ----------
-    settings : pandas.DataFrame
-        One row per outbreak, from the simulator's `settings-*.csv`.
-
-    Returns
-    -------
-    pandas.DataFrame
-        Columns `COLUMNS`. A setting with no column in `settings` has an
-        empty `realised`.
-    """
-    out = GRID.copy()
-    first = [row.split(";")[0] for row in out["setting"]]
-    out["realised"] = [
-        _realised(name, settings[name].dropna()) if name in settings else ""
-        for name in first
-    ]
-    return out[list(COLUMNS)]
+def main_table(text: str, settings: pd.DataFrame) -> pd.DataFrame:
+    """Return one row per design factor, with its levels and shares."""
+    rows = []
+    for name, levels in parse_factors(text).items():
+        label, enters = LABELS[name]
+        listed = ", ".join(f"`{level}`" for level in levels)
+        rows.append(
+            {
+                "setting": name,
+                "factor": label,
+                "levels": f"{listed}; balanced, 1/{len(levels)} each",
+                "epinowcast": enters,
+                "realised": _realised(name, settings),
+            }
+        )
+    return pd.DataFrame(rows)
 
 
-MAIN_HEADERS: Final = {
-    "factor": "Design",
-    "levels": "Levels and shares",
-    "epinowcast": "Enters through",
-    "realised": "Realised",
-}
-"""Headers of the main-text table."""
-
-MAIN: Final = pd.DataFrame(
-    [
-        (
-            "strata",
-            "Strata",
-            "One place 30%; 2 to 26 places 40%; 2 to 8 age groups in one place"
-            " 20%; 6 to 16 places by 3 to 7 age groups 10%",
-            "`enw_preprocess_data(by)`",
-        ),
-        (
-            "process",
-            "Generative process",
-            "Renewal, renewal with incubation, weekly growth walk, log "
-            "incidence walk, growth steps or smooth growth, one sixth each",
-            "`enw_expectation()`, `enw_simulate(growth_rate)`",
-        ),
-        (
-            "reference",
-            "Delay model",
-            "Parametric 30%; non-parametric hazard 20%; both 50%",
-            "`enw_reference()`",
-        ),
-        (
-            "delay_family",
-            "Parametric delay",
-            "Lognormal, gamma or exponential, one third each",
-            "`enw_reference(distribution)`",
-        ),
-        (
-            "hazard",
-            "Hazard effects",
-            "By delay, by week or both, one third each; by delay if the delay "
-            "is stable",
-            "`enw_reference(non_parametric)`",
-        ),
-        (
-            "stable;delay_drift;spread_drift;delay_steps;delay_walk",
-            "Delay changes",
-            "Stable 20%; otherwise drift in location 60%, drift in spread 50%,"
-            " 0 to 3 steps (30%, 30%, 20%, 20%) and a weekly walk 30%",
-            "`enw_reference(parametric)`",
-        ),
-        (
-            "report_dow;report_holiday;report_week",
-            "Report date effects",
-            "Day of week 70%; holidays 30%; report week effects none 60%, `(1 "
-            "| week)` 20%, `rw(week)` 20%",
-            "`enw_report()`",
-        ),
-        (
-            "report_days;report_change;report_days_after",
-            "Report days",
-            "Every day 50%; 1 to 3 weekdays 50%; a change of days 30% if not "
-            "stable",
-            "`enw_report(structural)`",
-        ),
-        (
-            "family",
-            "Observation model",
-            "NB2 40%; NB1 40%; Poisson 20%",
-            "`enw_obs(family)`",
-        ),
-        (
-            "max_delay",
-            "Longest delay",
-            "8 weeks 75%; 12 weeks 25%",
-            "`enw_preprocess_data(max_delay)`",
-        ),
-    ],
-    columns=["setting", "factor", "levels", "epinowcast"],
-)
-"""One row per design branch of r2-real, for the main text; `GRID` has
-every setting, for the SI."""
+def si_table(text: str, settings: pd.DataFrame) -> pd.DataFrame:
+    """Return every factor, derived setting and drawn value."""
+    drawn = {
+        **{
+            name: "One of " + ", ".join(f"`{x}`" for x in levels)
+            for name, levels in parse_factors(text).items()
+        },
+        **{k: f"`{v}`" for k, v in _derived(text).items()},
+        **{k: f"`{v}`" for k, v in parse_values(text).items()},
+    }
+    return pd.DataFrame(
+        [
+            {
+                "setting": name,
+                "factor": LABELS[name][0],
+                "drawn": how,
+                "epinowcast": LABELS[name][1],
+                "realised": _realised(name, settings),
+            }
+            for name, how in drawn.items()
+        ]
+    )
 
 
-def main_table(settings: pd.DataFrame) -> pd.DataFrame:
-    """Return `MAIN` with each branch's realised shares over outbreaks."""
-    out = MAIN.copy()
-    first = [row.split(";")[0] for row in out["setting"]]
-    out["realised"] = [
-        _realised(name, settings[name].dropna()) if name in settings else ""
-        for name in first
-    ]
-    return out
-
-
-def to_markdown(
-    table: pd.DataFrame, headers: dict[str, str] | None = None
-) -> str:
+def to_markdown(table: pd.DataFrame, headers: dict[str, str]) -> str:
     """Return the table as Markdown, without the `setting` key."""
-    headers = _HEADERS if headers is None else headers
     cols = list(headers)
     lines = [
         "| " + " | ".join(headers[c] for c in cols) + " |",
@@ -577,37 +333,130 @@ def to_markdown(
     return "\n".join(lines) + "\n"
 
 
+def _sha(text: str) -> str:
+    m = re.search(r'epinowcast_sha <- "(\w+)"', text)
+    return m.group(1) if m else "@placeholder"
+
+
+def model_note(text: str) -> str:
+    """Return the SI note on the epinowcast model that simulates."""
+    grid = re.search(r'grid_name <- "([\w-]+)"', text)
+    factors = parse_factors(text)
+    lines = [
+        "# The epinowcast model used to simulate outbreaks",
+        "",
+        "We simulated each synthetic outbreak from the generative model of"
+        " epinowcast @placeholder.",
+        "We used `enw_simulate()`, which runs the epinowcast Stan model with"
+        " fixed parameters and no likelihood, and draws reported counts from"
+        " its generated quantities.",
+        "`enw_simulate()` is on the `feature/829-simulate-forecast` branch"
+        f" of epinowcast, at commit `{_sha(text)}`.",
+        "The simulation script is `scripts/finetune_simulate.R`, with grid"
+        f" `{grid.group(1) if grid else ''}`.",
+        "Each simulation is one set of fixed parameters with several"
+        " observation draws, and we evaluate one draw of each.",
+        "Simulations follow a crossed design, in which every level of every"
+        " factor is balanced within each block of simulations.",
+        "Continuous settings are drawn within a simulation's cell, as the"
+        " SI table lists.",
+        "A parameter we did not set is drawn from its epinowcast prior.",
+        "",
+        "## Design factors",
+        "",
+    ]
+    for name, levels in factors.items():
+        label, enters = LABELS[name]
+        listed = ", ".join(f"`{level}`" for level in levels)
+        lines.append(f"- {label} (`{name}`, through {enters}): {listed}.")
+    lines += [
+        "",
+        "## Model",
+        "",
+        "Expected onsets come from `enw_expectation()`, driven by a daily"
+        " growth rate given to `enw_simulate()` as `growth_rate`.",
+        "In a renewal process the growth rate is turned into log $R_t$"
+        " under the generation time, and expected latent cases follow"
+        " $\\lambda_t = R_t \\sum_s g_s \\lambda_{t-s}$.",
+        "The seed is scaled so the expected outbreak size is a drawn target.",
+        "The reporting delay is set by `enw_reference()`, as a parametric"
+        " delay, a non-parametric hazard over delays, or both, and it may"
+        " change over time.",
+        "Report date effects and report days are set by `enw_report()`.",
+        "Counts by onset day and delay are negative binomial (NB2 or NB1)"
+        " or Poisson, set by `enw_obs()`, with the NB1 dispersion matched"
+        " to the NB2 scale (epinowcast issue 937).",
+        "The longest delay is the shortest of 3, 4, 6, 8 and 12 weeks at or"
+        " above the delay's 99th centile.",
+        "A draw that fails or is out of size is drawn again in its cell, up"
+        " to five times, after which the cell is skipped.",
+    ]
+    return "\n".join(lines) + "\n"
+
+
+def heldout_note(config: dict) -> str:
+    """Return the SI note on the held-out set, from its config."""
+    seeds = config["heldout_seeds"]
+    n = config["simulations_per_seed"]
+    blocks = config["blocks"]
+    dev = config["development_seeds"]
+    lines = [
+        "# The held-out synthetic set",
+        "",
+        f"The held-out set is simulated on grid `{config['grid']}` with"
+        f" seeds {seeds[0]} to {seeds[-1]}, {n} simulations each.",
+        f"These cover the complete balanced blocks {blocks[0]} to"
+        f" {blocks[-1]}, and simulations outside them are not used.",
+        f"We evaluate draw {config['draw']} of each simulation, so the"
+        " outbreaks are independent.",
+        "The seeds are disjoint from the fine-tune's training and held-out"
+        " seeds (`config/finetune/r3.env`).",
+        f"The simulations are written to `{config['dir']}`, and"
+        " `config/paper/synthetic.toml` records them.",
+        "The protocol is in `paper/synthetic.py`, and"
+        " `paper/run_synthetic.py` runs the models on the set.",
+        "",
+        "The held-out set was reserved for the final evaluation.",
+        "No model was scored on it during development.",
+        f"We checked the pipeline on the development seeds {dev[0]} to"
+        f" {dev[-1]} and the pilot simulations, whose forecasts are not"
+        " results.",
+    ]
+    return "\n".join(lines) + "\n"
+
+
 def main() -> None:
-    """Write the main-text table and the SI table, as CSV and Markdown."""
+    """Write the grid tables and the SI notes."""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("sim_dir", type=Path)
-    parser.add_argument("out_dir", type=Path)
+    parser.add_argument("--settings", type=Path, default=None)
     args = parser.parse_args()
-    settings = pd.concat(
-        [pd.read_csv(p) for p in sorted(args.sim_dir.glob("settings-*.csv"))]
-    )
-    write_tables(settings, args.out_dir)
-
-
-def write_tables(settings: pd.DataFrame, out_dir: Path) -> None:
-    """Write `synthetic-grid` (main text) and `synthetic-grid-si` tables."""
-    out_dir.mkdir(parents=True, exist_ok=True)
-    realised = (
-        f"Realised values are over {len(settings):,} outbreaks."
+    text = SIMULATOR.read_text()
+    settings = pd.DataFrame({"outbreak": []})
+    if args.settings is not None:
+        settings = pd.concat(
+            [
+                pd.read_csv(p)
+                for p in sorted(args.settings.glob("settings-*.csv"))
+            ]
+        )
+    out = Path("paper/tables")
+    caption = (
+        f"Realised values are over {len(settings):,} simulations."
         if len(settings)
-        else "Realised values follow once the r2-real settings exist."
+        else "Realised values follow once the simulations exist."
     )
-    for name, table, headers, what in (
-        ("synthetic-grid", main_table(settings), MAIN_HEADERS, "Design"),
-        ("synthetic-grid-si", grid_table(settings), _HEADERS, "Settings"),
+    for name, table, headers in (
+        ("synthetic-grid", main_table(text, settings), MAIN_HEADERS),
+        ("synthetic-grid-si", si_table(text, settings), SI_HEADERS),
     ):
-        table.to_csv(out_dir / f"{name}.csv", index=False)
-        caption = (
-            f"{what} of each simulated outbreak (grid r2-real). {realised}\n\n"
+        table.to_csv(out / f"{name}.csv", index=False)
+        (out / f"{name}.md").write_text(
+            f"{caption}\n\n" + to_markdown(table, headers)
         )
-        (out_dir / f"{name}.md").write_text(
-            caption + to_markdown(table, headers)
-        )
+    si = Path("paper/si")
+    (si / "epinowcast-model.md").write_text(model_note(text))
+    config = tomllib.loads(CONFIG.read_text())
+    (si / "heldout-set.md").write_text(heldout_note(config))
 
 
 if __name__ == "__main__":

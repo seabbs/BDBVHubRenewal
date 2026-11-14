@@ -1,54 +1,50 @@
-Settings of each simulated outbreak (grid r2-real). Realised values follow once the r2-real settings exist.
+Realised values follow once the simulations exist.
 
-| Factor | Range or levels | Distribution | Enters through | Realised |
-|---|---|---|---|---|
-| Strata | One place; 2 to 26 places; 2 to 8 age groups in one place; 6 to 16 places by 3 to 7 age groups | Probabilities 0.3, 0.4, 0.2 and 0.1 | `enw_preprocess_data(by = c('place', 'age'))` |  |
-| Places | 1 to 26 | Uniform on the strata's range | `enw_preprocess_data()` |  |
-| Age groups | 1 to 8 | Uniform on the strata's range | `enw_preprocess_data()` |  |
-| Generative process | Renewal; renewal with incubation; weekly growth walk; log incidence walk; growth steps; smooth growth | Uniform | `enw_expectation()` and `enw_simulate(growth_rate)` |  |
-| Reference date model | Parametric; non-parametric; both | Probabilities 0.3, 0.2 and 0.5 | `enw_reference()` |  |
-| Parametric delay | Lognormal; gamma; exponential | Uniform, if there is a parametric delay | `enw_reference(distribution)` |  |
-| Delay hazard effects | None; by delay; by week; both | None with a parametric delay alone, by delay if stable, else uniform | `enw_reference(non_parametric)` |  |
-| Stable delay | Yes or no | Yes with probability 0.2, which turns off every delay and report change | All delay changes |  |
-| Drift in the delay's location | Yes or no | Probability 0.6 if not stable | `week` in `enw_reference(parametric)` |  |
-| Drift in the delay's spread | Yes or no | Probability 0.5 if not stable | `week` in `enw_reference(parametric)` |  |
-| Step changes in the delay | 0 to 3 | Probabilities 0.3, 0.3, 0.2 and 0.2 if not stable | Step covariates in `enw_reference(parametric)` |  |
-| Weekly random walk in the delay | Yes or no | Probability 0.3 if not stable | `rw(week)` in `enw_reference(parametric)` |  |
-| Day-of-week report effects | Yes or no | Probability 0.7 | `(1 \| day_of_week)` in `enw_report()` |  |
-| Holidays | Yes or no | Probability 0.3 | `holiday` in `enw_report()` |  |
-| Report week effects | None; `(1 \| week)`; `rw(week)` | Probabilities 0.6, 0.2 and 0.2 | `enw_report()` |  |
-| Days with reports | Every day, or 1 to 3 of Monday to Friday | Every day with probability 0.5, else uniform on 1 to 3 days | `enw_report(structural)` |  |
-| Days with reports after a change | Every day, or 1 to 3 of Monday to Friday | As the days before | `enw_report(structural)` |  |
-| Change of report days | Yes or no | Probability 0.3 if not stable | `enw_report(structural)` |  |
-| Observation model | NB2; NB1; Poisson | Probabilities 0.4, 0.4 and 0.2 | `enw_obs(family)` |  |
-| Longest delay (days) | 56 or 84 | Probabilities 0.75 and 0.25 | `enw_preprocess_data(max_delay)` |  |
-| Weeks of cut-offs | 16 to 40, or 16 to 24 for places by ages | Uniform on integers | `enw_preprocess_data()` grid, with the longest delay and 4 more weeks of reports |  |
-| Start day offset (days) | 0 to 6 | Uniform on integers | `enw_preprocess_data()` grid |  |
-| Probability a place is quiet | 0 to 0.9 | Uniform | `expr_lelatent_int` of `enw_expectation()` |  |
-| Weight of the shared growth path | 0 to 1 | Uniform | `enw_simulate(growth_rate)` |  |
-| Generation time mean (days) and coefficient of variation | 6 to 20; 0.3 to 0.7 | Uniform | `enw_expectation(generation_time)`, gamma on 1 to 45 days |  |
-| Incubation period mean (days) and coefficient of variation | 3 to 12; 0.3 to 0.7 | Uniform | `enw_expectation(latent_reporting_delay)`, gamma on 1 to 30 days |  |
-| Initial log Rt | Unbounded, paths held to -1.2 to 1.2 | Normal(0.1, 0.2) | `enw_simulate(growth_rate)` |  |
-| Step changes in log Rt, and their size sd (mean -0.2) | 0 or more; 0.1 to 0.5 | Poisson(1.2); uniform | `enw_simulate(growth_rate)` |  |
-| Daily random walk sd of log Rt | 0 to 0.03 | Uniform | `enw_simulate(growth_rate)` |  |
-| Initial daily growth rate | Unbounded, paths held to -0.06 to 0.06 | Normal(0.01, 0.02) | `enw_simulate(growth_rate)` |  |
-| Weekly growth walk sd | 0.005 to 0.015 | Uniform | `enw_simulate(growth_rate)` |  |
-| Daily growth noise of the log incidence walk | 0.05 to 0.3 | Uniform | `enw_simulate(growth_rate)` |  |
-| Step changes in growth, and their size sd (mean -0.01) | 1 to 3; 0.02 to 0.06 | Uniform | `enw_simulate(growth_rate)` |  |
-| Smooth growth amplitude, period (days) and phase | 0.01 to 0.06; 40 to 200; 0 to 2 pi | Uniform | `enw_simulate(growth_rate)` |  |
-| Initial expected cases a day, over all strata | 0.2 to 200 | Log-uniform | `expr_lelatent_int` of `enw_expectation()` |  |
-| Sd of the places' log seed weights (half for age groups) | 0.5 to 2 | Uniform | `expr_lelatent_int` of `enw_expectation()` |  |
-| Delay mean (days) | 2 to 21 | Log-uniform | `refp_mean_int`, or the hazard intercept with no parametric delay |  |
-| Delay coefficient of variation | 0.3 to 1.2 (lognormal); 0.7 to 1.2 (gamma); 1 (exponential) | Uniform | `refp_sd_int` of `enw_reference()` |  |
-| Log change in the delay's location and spread over the outbreak | Unbounded | Normal(0, 0.5); Normal(0, 0.3) | `week` effects of `enw_reference(parametric)` |  |
-| When each delay step happens, as a share of the outbreak | 0.1 to 0.9 | Uniform | Step covariates in `enw_reference(parametric)` |  |
-| Delay steps in log location and spread | Unbounded | Normal(0, 0.4); Normal(0, 0.3) | Step effects of `enw_reference(parametric)` |  |
-| Weekly walk sd of the delay's location and spread | 0 to 0.1 | Uniform | `rw(week)` of `enw_reference(parametric)` |  |
-| Sd of the strata's delay effects | 0 to 0.4 | Uniform | `(1 \| place)` and `(1 \| age)` of `enw_reference()` |  |
-| Sd of the hazard effects by delay and by week | 0 to 0.4 | Uniform | `enw_reference(non_parametric)` |  |
-| Sd of the day-of-week report effects | 0 to 0.8 | Uniform | `(1 \| day_of_week)` of `enw_report()` |  |
-| Holidays, and their effect on the logit hazard | 2 to 6; -2.5 to -0.5 | Uniform | `holiday` of `enw_report()` |  |
-| Sd of the report week effects | 0 to 0.3 | Uniform | `enw_report()` |  |
-| When report days change, as a share of the outbreak | 0.2 to 0.8 | Uniform | `enw_report(structural)` |  |
-| Overdispersion, 1 / sqrt(phi), on the NB2 scale | 0.05 to 1.5 | Uniform; NB1 scaled to match | `enw_obs()` |  |
-| Reported cases in an outbreak | 10 to 300,000, more with many strata | Drawn again up to 5 times, else the design is skipped | `enw_simulate()` |  |
+| Setting | Drawn as | Enters through | Realised, median [min, max] or shares |
+|---|---|---|---|
+| Generative process | One of `growth`, `renewal_3`, `renewal_7`, `renewal_15` | `enw_expectation()` |  |
+| Generation time shape | One of `gamma_0.3`, `gamma_0.6`, `gamma_1`, `lognormal_0.6` | `enw_expectation(generation_time)` |  |
+| Trajectory of the growth rate | One of `growth`, `decline`, `flat`, `rise_fall_sharp`, `rise_fall_gradual`, `fall_rise`, `oscillating`, `multi_wave` | `enw_simulate(growth_rate)` |  |
+| Parametric delay family | One of `lognormal`, `gamma`, `exponential` | `enw_reference(distribution)` |  |
+| Delay form | One of `parametric`, `non_parametric`, `both` | `enw_reference(parametric, non_parametric)` |  |
+| Delay over time | One of `static`, `drift`, `step`, `periodic`, `walk` | `enw_reference()` |  |
+| Report days | One of `daily`, `weekdays` | `enw_report(structural)` |  |
+| Day-of-week effect on expected counts | One of `no`, `yes` | `enw_expectation(observation)` |  |
+| Observation model | One of `negbin`, `negbin1d`, `poisson` | `enw_obs(family)` |  |
+| Strata | One of `single`, `places`, `ages`, `places_ages` | `enw_preprocess_data(by)` |  |
+| Places | `switch(cell$strata, single = 1L, ages = 1L, places = sample(2:26, 1), places_ages = sample(6:16, 1) )` | `enw_preprocess_data(by)` |  |
+| Age groups | `switch(cell$strata, single = 1L, places = 1L, ages = sample(2:8, 1), places_ages = sample(3:min(7L, 60L %/% n_places), 1) )` | `enw_preprocess_data(by)` |  |
+| Weekdays with reports | `if (cell$reporting == "weekdays") { paste(sort(sample(days, sample(1:3, 1))), collapse = ";") } else { "all" }` | `enw_report(structural)` |  |
+| Weeks of cut-offs | `if (places_ages) sample(16:24, 1) else sample(16:32, 1)` | `enw_preprocess_data()` grid |  |
+| Start day offset (days) | `sample(0:6, 1)` | `enw_preprocess_data()` grid |  |
+| Probability a place is quiet | `runif(1, 0, 0.9)` | `expr_lelatent_int` |  |
+| Weight of the shared growth path | `runif(1, 0.5, 1)` | `enw_simulate(growth_rate)` |  |
+| Sd of the strata's log seed weights | `runif(1, 0.5, 2)` | `expr_lelatent_int` |  |
+| Generation time mean (days) | `if (renewal) { as.numeric(sub("renewal_", "", design$process)) * exp(runif(1, -0.2, 0.2)) } else { NA_real_ }` | `enw_expectation(generation_time)` |  |
+| Steady daily growth or decline rate | `runif(1, log(2) / 28, log(2) / 7)` | `enw_simulate(growth_rate)` |  |
+| Daily growth rate of a flat trajectory | `rnorm(1, 0, 0.005)` | `enw_simulate(growth_rate)` |  |
+| Time of the peak or trough, as a share | `runif(1, 0.3, 0.7)` | `enw_simulate(growth_rate)` |  |
+| Amplitude of oscillations and waves | `runif(1, 0.02, 0.08)` | `enw_simulate(growth_rate)` |  |
+| Period of oscillations (days) | `runif(1, 28, 120)` | `enw_simulate(growth_rate)` |  |
+| Phase of oscillations and waves | `runif(1, 0, 2 * pi)` | `enw_simulate(growth_rate)` |  |
+| Waves of a multi-wave trajectory | `sample(2:3, 1)` | `enw_simulate(growth_rate)` |  |
+| Sd of the weekly AR(1) growth noise | `runif(1, 0.002, 0.01)` | `enw_simulate(growth_rate)` |  |
+| Expected outbreak size, which scales the seed | `log_uniform(30, 1e5) * max(1, design$n_places * design$n_ages / 26)` | `expr_lelatent_int` |  |
+| Lognormal delay median (days) | `log_uniform(1, 10)` | `refp_mean_int` |  |
+| Lognormal delay log sd | `runif(1, 0.5, 2.5)` | `refp_sd_int` |  |
+| Gamma, exponential or geometric delay mean (days) | `log_uniform(2, 21)` | `refp_mean_int` or the hazard intercept |  |
+| Gamma delay coefficient of variation | `runif(1, 0.8, 1.6)` | `refp_sd_int` |  |
+| Sd of the places' delay effects | `runif(1, 0.1, 0.5)` | `(1 \| place)` of `enw_reference()` |  |
+| Sd of the age groups' delay effects | `runif(1, 0.05, 0.25)` | `(1 \| age)` of `enw_reference()` |  |
+| Sd of the smooth walk over delays | `runif(1, 0.05, 0.3)` | `enw_reference(non_parametric)` |  |
+| Sd of the iid hazard effects by delay | `runif(1, 0, 0.15)` | `enw_reference(non_parametric)` |  |
+| Delay drift over the outbreak | `sample(c(-1, 1), 1) * runif(1, 0.1, 0.4)` | `trend` covariate of `enw_reference()` |  |
+| Delay step size | `sample(c(-1, 1), 1) * runif(1, 0.2, 0.5)` | `step` covariate of `enw_reference()` |  |
+| Time of the delay step, as a share | `runif(1, 0.2, 0.8)` | Step covariate of `enw_reference()` |  |
+| Amplitude of periodic delay change | `runif(1, 0.1, 0.4)` | `periodic` covariate of `enw_reference()` |  |
+| Period of periodic delay change (weeks) | `runif(1, 4, 12)` | `enw_reference()` |  |
+| Sd of the weekly delay walk | `runif(1, 0.03, 0.1)` | `rw(week)` of `enw_reference()` |  |
+| Sd of the day-of-week effect on expected counts | `runif(1, 0.1, 0.5)` | `enw_expectation(observation)` |  |
+| Sd of the report day-of-week effects | `runif(1, 0.1, 0.6)` | `(1 \| day_of_week)` of `enw_report()` |  |
+| Overdispersion on the NB2 scale | `log_uniform(0.1, 1)` | `enw_obs()` |  |
+| Longest delay (days), from the delay's 99th centile | `max_delay_for(delay_parameters(family, v)$q99)` | `enw_preprocess_data(max_delay)` |  |

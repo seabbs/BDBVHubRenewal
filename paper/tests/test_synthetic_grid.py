@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import tomllib
 from pathlib import Path
 
@@ -85,7 +86,8 @@ def test_markdown_escapes_pipes() -> None:
     md = synthetic_grid.to_markdown(table, synthetic_grid.SI_HEADERS)
     lines = md.strip().splitlines()
     assert len(lines) == len(table) + 2
-    assert all(line.count(" | ") == 4 for line in lines[2:])
+    # Five unescaped pipes bound the four cells of each row.
+    assert all(len(re.findall(r"(?<!\\)\|", line)) == 5 for line in lines[2:])
 
 
 def test_the_si_notes_name_every_level_and_the_held_out_seeds() -> None:
