@@ -69,6 +69,20 @@ nowcasts:
       - fm_chronos_weekly_ragged
       - fm_chronos_weekly_ragged_ft
 
+# SI results from code not yet on main, as rows committed to evidence
+# branches (`paperpipe.evidence`). Each is `{ref: <commit>, path: <file>}`;
+# null leaves a note of what it waits on in a development run and fails a
+# paper run.
+evidence:
+  copula_scores: null
+  copula_rho: null
+  aggregation_scores: null
+  aggregation_cost: null
+  finetune_heldout: null
+  sim_summaries: null
+  sim_realism: null
+  sim_diseases: null
+
 # Data the development runs use.
 development:
   # Validation outbreaks for checking the setup.

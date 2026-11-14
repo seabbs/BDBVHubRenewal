@@ -37,6 +37,7 @@ PAPER = Path(workflow.basedir).parent
 sys.path.insert(0, str(PAPER))
 
 from paperpipe.config import MODES, run_settings  # noqa: E402
+from paperpipe.evidence import EVIDENCE as EVIDENCE_NAMES  # noqa: E402
 from paperpipe.outputs import (  # noqa: E402
     JOINT_STUDIES,
     MAIN_TABLES,
@@ -152,12 +153,13 @@ def outputs(mode):
         f"{R}/{mode}/tables/{part}/synthetic-design.md"
         for part in ("main", "si")
     ]
+    evidence = [f"{R}/{mode}/evidence.yml"]
     joint = [
         f"{R}/{mode}/tables/main/{study}-joint.md"
         for study in STUDIES
         if study in JOINT_STUDIES
     ]
-    return design + joint + [
+    return evidence + design + joint + [
         path
         for study in STUDIES
         for path in [*figures(mode, study), *tables(mode, study)]
@@ -404,6 +406,50 @@ rule design_tables:
         "--main-dir {params.main} --si-dir {params.si}"
 
 
+# Rows from evidence branches, pinned by commit in `evidence` (config).
+EVIDENCE = {
+    name: entry
+    for name, entry in (config.get("evidence") or {}).items()
+    if entry
+}
+
+
+def evidence_file(name):
+    suffix = "".join(Path(EVIDENCE[name]["path"]).suffixes)
+    return f"{R}/evidence/{name}{suffix}"
+
+
+for name, entry in EVIDENCE.items():
+
+    rule:
+        name:
+            f"evidence_{name}"
+        output:
+            evidence_file(name),
+        params:
+            ref=entry["ref"],
+            path=entry["path"],
+        shell:
+            "git fetch -q --depth 1 origin {params.ref} 2>/dev/null || true; "
+            "git show {params.ref}:{params.path} > {output}"
+
+
+rule evidence:
+    input:
+        **{name: evidence_file(name) for name in EVIDENCE},
+    output:
+        yml=f"{R}/{{mode}}/evidence.yml",
+    params:
+        args=" ".join(
+            f"--{n.replace('_', '-')} {evidence_file(n)}" for n in EVIDENCE
+        ),
+        si=f"{R}/{{mode}}/tables/si",
+        fig=f"{R}/{{mode}}/figures/si",
+    shell:
+        "{PYTHON} -m paperpipe evidence {params.args} --mode {wildcards.mode} "
+        "--si-dir {params.si} --fig-dir {params.fig} --out {output.yml}"
+
+
 rule summary:
     input:
         meta=[study_files(s)["meta"] for s in STUDIES],
@@ -428,4 +474,5 @@ rule publish:
     shell:
         "rm -rf {params.build} && mkdir -p {params.build} && "
         "cp -R {params.run}/figures {params.run}/tables {params.build}/ && "
-        "cp {input.summary} {params.build}/results.yml"
+        "cp {input.summary} {params.build}/results.yml && "
+        "cp {params.run}/evidence.yml {params.build}/evidence.yml"

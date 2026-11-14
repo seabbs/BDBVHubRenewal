@@ -11,6 +11,7 @@ Steps, in workflow order:
 - `joint-scores`: sample trajectories scored jointly (energy and variogram
   scores);
 - `figures` and `score-tables`: main-text and SI outputs;
+- `evidence`: SI tables, figures and numbers from evidence branches;
 - `design-tables`: the simulation grid for the main text and SI;
 - `summary`: the numbers the paper quotes, as Quarto metadata.
 """
@@ -34,6 +35,7 @@ from paperpipe.config import (
     check_no_heldout_releases,
     run_settings,
 )
+from paperpipe.evidence import EVIDENCE, write_evidence
 from paperpipe.meta import read_meta, write_meta
 from paperpipe.outputs import (
     design_tables,
@@ -168,6 +170,17 @@ def _joint(a: argparse.Namespace) -> None:
     joint_table(scores, a.table)
 
 
+def _evidence(a: argparse.Namespace) -> None:
+    paths = {name: getattr(a, name) for name in EVIDENCE}
+    numbers = write_evidence(paths, a.si_dir, a.fig_dir, a.out)
+    if a.mode == "paper" and numbers["evidence"]["waiting"]:
+        raise ValueError(
+            "The paper run cannot leave SI results out; it waits on "
+            + "; ".join(numbers["evidence"]["waiting"])
+            + "."
+        )
+
+
 def _design_tables(a: argparse.Namespace) -> None:
     design_tables(a.grid, a.main_dir, a.si_dir)
 
@@ -273,6 +286,15 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--out", type=Path, required=True)
     p.add_argument("--table", type=Path, required=True)
     p.set_defaults(run=_joint)
+
+    p = sub.add_parser("evidence")
+    for name in EVIDENCE:
+        p.add_argument(f"--{name.replace('_', '-')}", type=Path, default=None)
+    p.add_argument("--mode", required=True)
+    p.add_argument("--si-dir", type=Path, required=True)
+    p.add_argument("--fig-dir", type=Path, required=True)
+    p.add_argument("--out", type=Path, required=True)
+    p.set_defaults(run=_evidence)
 
     p = sub.add_parser("design-tables")
     p.add_argument("--grid", type=Path, required=True)
