@@ -103,3 +103,22 @@ def test_short_yield_adds_training_seeds(tmp_path):
     # 10 per seed, 200 projected: 115 more for 5% to spare is 12 seeds.
     assert out.stdout.split() == ["5032"]
     assert (tmp_path / "ckpt" / "train-last.txt").read_text() == "5032\n"
+
+
+def test_no_remote_runs_every_seed_locally(tmp_path):
+    (tmp_path / "round.env").write_text(
+        ENV.replace("REMOTE=nowhere", "REMOTE=")
+    )
+    (tmp_path / "output" / "finetune").mkdir(parents=True)
+    (tmp_path / "sims").mkdir()
+    out = subprocess.run(
+        ["bash", "-c", f'set -- round.env; source "{DRIVER}"; local_seeds'],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert out.stdout.split() == [
+        *map(str, range(5901, 5904)),
+        *map(str, range(5001, 5011)),
+    ]

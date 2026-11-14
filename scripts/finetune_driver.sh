@@ -2,7 +2,7 @@
 # Simulate, fine-tune and publish a round of Chronos-2 fine-tuning,
 # unattended. Run from the repo root, detached:
 #
-#   nohup scripts/finetune_driver.sh output/finetune/round.env \
+#   nohup scripts/finetune_driver.sh config/finetune/r2-real.env \
 #     > /dev/null 2>&1 &
 #
 # The env file sets the round:
@@ -13,7 +13,8 @@
 #   LOCAL_FIRST, LOCAL_LAST       training seeds run on the laptop
 #   LOCAL_SLOTS, LOCAL_SLOTS_TRAINING   laptop simulation processes
 #                 before and during training (2, 1)
-#   REMOTE, REMOTE_DIR, SIM_REMOTE   ssh host, its repo worktree (with
+#   REMOTE, REMOTE_DIR, SIM_REMOTE   optional ssh host (none: every
+#                 seed runs locally), its repo worktree (with
 #                 scripts/finetune_simulate.R of this commit and an
 #                 epinowcast library in output/finetune/rlib) and its
 #                 simulation directory; every seed not run locally runs
@@ -82,6 +83,12 @@ touch "$STARTED"
 local_seeds() {
   # The laptop's seeds: seeds taken over from the remote first, as they
   # hold the held-out and first training outbreaks, then its own range.
+  # With no remote, every seed.
+  if [ -z "${REMOTE:-}" ]; then
+    seq "$HELD_FIRST" "$HELD_LAST"
+    seq "$TRAIN_FIRST" "$TRAIN_LAST"
+    return 0
+  fi
   cat "$CLAIMED"
   seq "$LOCAL_FIRST" "$LOCAL_LAST"
 }
@@ -149,6 +156,7 @@ EOF
 }
 
 check_remote() {
+  [ -z "${REMOTE:-}" ] && return 0
   # Try the remote every REMOTE_RETRY seconds. If it has not answered, or
   # has had less than REMOTE_MIN_FREE_GB of disk free, for REMOTE_GRACE
   # seconds, the laptop takes over the held-out seeds and
@@ -208,6 +216,7 @@ local_slots() {
 }
 
 sync_remote() {
+  [ -z "${REMOTE:-}" ] && return 0
   # Copy the remote's batches, except those the laptop has started.
   local excludes=() s
   for s in $(sort -u "$STARTED"); do
@@ -269,8 +278,8 @@ check_batches() {
 
 # A restarted driver replaces the remote scheduler, whose running batches
 # finish.
-remote "pkill -f '[f]inetune_remote.sh'" > /dev/null 2>&1 \
-  && log "stopped the previous remote scheduler"
+[ -n "${REMOTE:-}" ] && remote "pkill -f '[f]inetune_remote.sh'" \
+  > /dev/null 2>&1 && log "stopped the previous remote scheduler"
 log "starting round from $1: training seeds $TRAIN_FIRST-$TRAIN_LAST, held-out $HELD_FIRST-$HELD_LAST, laptop $LOCAL_FIRST-$LOCAL_LAST"
 trainer_args=("$SIM_DIR" "$OUT" --train-seeds "$TRAIN_FIRST" "$TRAIN_LAST"
   --held-out-seeds "$HELD_FIRST" "$HELD_LAST" --outbreaks "$OUTBREAKS"
