@@ -33,6 +33,7 @@ __all__ = [
     "FIGURES",
     "MAIN_TABLES",
     "SI_TABLES",
+    "design_tables",
     "figure_names",
     "score_tables",
     "to_markdown",
@@ -264,3 +265,37 @@ def to_markdown(table: pd.DataFrame, digits: int = 3) -> str:
         for r in table.itertuples(index=False)
     ]
     return "\n".join([head, rule, *rows]) + "\n"
+
+
+def design_tables(grid: Path, main_dir: Path, si_dir: Path) -> list[Path]:
+    """Write the simulation grid as Markdown, for the main text and SI.
+
+    Parameters
+    ----------
+    grid : pathlib.Path
+        `tables/synthetic-grid.csv`: each `setting`, its `range` and the
+        `reason` for it.
+    main_dir, si_dir : pathlib.Path
+        Folders for the main-text table (setting and range) and the SI
+        table (with the reasons).
+
+    Returns
+    -------
+    list of pathlib.Path
+        The tables written.
+    """
+    table = pd.read_csv(grid).rename(
+        columns={
+            "setting": "Setting",
+            "range": "Range or mix",
+            "reason": "Reason",
+        }
+    )
+    paths = {
+        main_dir / "synthetic-design.md": table[["Setting", "Range or mix"]],
+        si_dir / "synthetic-design.md": table,
+    }
+    for path, part in paths.items():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(to_markdown(part))
+    return list(paths)

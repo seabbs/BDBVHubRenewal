@@ -1,6 +1,6 @@
 #### The held-out synthetic set
 
-The held-out set is 100 outbreaks simulated with `scripts/finetune_simulate.R` on the r2-real grid, 25 for each of the seeds 9001, 9002, 9003 and 9004.
+The held-out set is 100 outbreaks simulated with `scripts/finetune_simulate.R` on the r2-cal5 grid, 25 for each of the seeds 9001, 9002, 9003 and 9004.
 The fine-tune never used these seeds, so the held-out outbreaks are new draws from the grid it was trained on.
 If an outbreak's design failed five times and was skipped, a further seed tops the set up to 100.
 They are written to `output/finetune/heldout`, as `counts-<seed>.csv.gz` and `settings-<seed>.csv`.
@@ -20,7 +20,7 @@ The evaluation workflow checks both, and fails a development run that reads late
 
 Each outbreak is released weekly, on one weekday from Wednesday to Saturday drawn from its id, as for the fine-tune's training blocks.
 A release's cut-off is its origin date.
-Each outbreak has four origins, spread evenly from its sixth release to the last release at least its longest delay (8 or 12 weeks) plus 5 weeks before its last report.
+Each outbreak has four origins, spread evenly from its sixth release to the last release at least its longest delay (3 to 12 weeks) plus 5 weeks before its last report.
 Each forecast covers eight weeks of onsets, from four weeks before the week of the cut-off to three weeks after it.
 Every model forecasts weekly totals by onset week, for the country and each place, with 200 samples (`n_samples` in the workflow config).
 The Chronos-2 models keep their own release lag of 4 weeks (weekly) or 28 days (daily).

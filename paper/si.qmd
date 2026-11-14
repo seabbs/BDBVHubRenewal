@@ -49,10 +49,17 @@ One SI section per paper section.
 {{< include si/epinowcast-model.md >}}
 
 ::: {#tbl-synthetic-grid-si}
-{{< include tables/synthetic-grid-si.md >}}
+{{< include build/tables/si/synthetic-design.md >}}
 
-Settings of each simulated outbreak (grid r2-real), with the values realised over the simulated outbreaks.
+The simulation grid (r2-cal5), with the reason for each range.
+Ranges are chosen to be plausible across infectious diseases rather than for one disease.
 :::
+
+The grid has two limitations.
+Simulated strata are less sparse than BDBV's provinces: the share of stratum-weeks with no cases reaches 0.75, against 0.89 for BDBV.
+Delays stop at 12 weeks, while the German data are capped at 80 days by their reporting, so their 99% delay point (81 days) is beyond the grid.
+
+![How 200 simulated outbreaks (grey histograms) compare with the BDBV data (red) and the German data by state (green) and by age (orange): outbreak size, weekly peak, growth, the share of stratum-weeks with no cases, dispersion, the mean and 99% point of the reporting delay, the share reported within 0, 7, 14 and 28 days, and the share reported on each weekday.](figures/sim-realism.png){#fig-sim-realism}
 
 {{< include si/heldout-set.md >}}
 

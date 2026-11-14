@@ -1,11 +1,18 @@
-setting,factor,levels,epinowcast,realised
-strata,Strata,One place 30%; 2 to 26 places 40%; 2 to 8 age groups in one place 20%; 6 to 16 places by 3 to 7 age groups 10%,`enw_preprocess_data(by)`,
-process,Generative process,"Renewal, renewal with incubation, weekly growth walk, log incidence walk, growth steps or smooth growth, one sixth each","`enw_expectation()`, `enw_simulate(growth_rate)`",
-reference,Delay model,Parametric 30%; non-parametric hazard 20%; both 50%,`enw_reference()`,
-delay_family,Parametric delay,"Lognormal, gamma or exponential, one third each",`enw_reference(distribution)`,
-hazard,Hazard effects,"By delay, by week or both, one third each; by delay if the delay is stable",`enw_reference(non_parametric)`,
-stable;delay_drift;spread_drift;delay_steps;delay_walk,Delay changes,"Stable 20%; otherwise drift in location 60%, drift in spread 50%, 0 to 3 steps (30%, 30%, 20%, 20%) and a weekly walk 30%",`enw_reference(parametric)`,
-report_dow;report_holiday;report_week,Report date effects,"Day of week 70%; holidays 30%; report week effects none 60%, `(1 | week)` 20%, `rw(week)` 20%",`enw_report()`,
-report_days;report_change;report_days_after,Report days,Every day 50%; 1 to 3 weekdays 50%; a change of days 30% if not stable,`enw_report(structural)`,
-family,Observation model,NB2 40%; NB1 40%; Poisson 20%,`enw_obs(family)`,
-max_delay,Longest delay,8 weeks 75%; 12 weeks 25%,`enw_preprocess_data(max_delay)`,
+setting,range,reason
+Strata,"one 30%, 2-26 places 40%, 2-8 age groups 20%, 6-16 places by 3-7 ages 10%","Single series, regional, age-structured and nested surveillance all occur."
+Quiet strata,up to 90% of places seeded with almost no cases,Many places report no cases in a local outbreak.
+Generative process,"renewal, renewal with incubation, growth walk, log-incidence walk, growth steps, smooth growth; a sixth each",Different shapes of transmission and reporting of infection.
+Generation time,"gamma, mean 2-20 days, CV 0.3-0.7",Spans fast respiratory to slow haemorrhagic-fever transmission.
+Starting log Rt,"normal, mean 0.1, sd 0.2",Reproduction numbers mostly 0.7 to 1.8 at the start.
+Starting daily growth (no generation time),"normal, mean 0.01, sd 0.02; limits plus or minus 0.1",Doubling or halving times of a week or longer.
+Trajectory,"turning over, flat, rising then falling, second wave; a quarter each","Forecast origins fall in rising, peak, falling and resurging phases."
+Seed,"0.2-200 a day, log-uniform",From single introductions to established spread.
+Size,"10 to 300,000 cases times strata/26; draws expected over 1.5 times the cap rejected before simulating",From small outbreaks to national-scale waves.
+Duration,16-40 weeks (16-24 for places by ages),One season or wave.
+Delay distribution,"lognormal, gamma (CV 0.7 or more), exponential, or a non-parametric hazard alone",Common parametric and free forms.
+Delay mean,"2-21 days, log-uniform",From near-real-time reporting to slow confirmation.
+Longest delay,"3-12 weeks, 5-10 times the delay mean",Realistic tails without the numerical failure of very long tails (epinowcast #939).
+Delay changes,"stable 20%; otherwise drift, 0-3 step changes, spread changes, weekly walk, week hazard effects",Reporting systems change.
+Report-date effects,"day of week 70%, holidays 30%, report-week effects 40%, weekday-only reporting 50%, weekday switch 30%",Common reporting patterns.
+Observation model,"negative binomial NB2 40%, NB1 40% (dispersion matched to NB2, epinowcast #937), Poisson 20%",From Poisson to heavily overdispersed counts.
+Overdispersion,sqrt(phi) 0.05-1.5,From near Poisson to very noisy counts.

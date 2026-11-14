@@ -135,7 +135,11 @@ def tables(mode, study):
 
 
 def outputs(mode):
-    return [
+    design = [
+        f"{R}/{mode}/tables/{part}/synthetic-design.md"
+        for part in ("main", "si")
+    ]
+    return design + [
         path
         for study in STUDIES
         for path in [*figures(mode, study), *tables(mode, study)]
@@ -212,8 +216,11 @@ rule ebola_hub:
     params:
         repo=EBOLA["hub_repo"],
         hub=EBOLA["hub"],
+    # Snakemake makes the output's folders first, so clone beside them.
     shell:
-        "git clone --quiet --depth 1 {params.repo} {params.hub}"
+        "rm -rf {params.hub}.clone && "
+        "git clone --quiet --depth 1 {params.repo} {params.hub}.clone && "
+        "rm -rf {params.hub} && mv {params.hub}.clone {params.hub}"
 
 
 rule data:
@@ -348,6 +355,20 @@ for study in STUDIES:
             "{PYTHON} -m paperpipe score-tables {params.study} "
             "--scores {input.scores} --locations {input.locations} "
             "--main-dir {params.main} --si-dir {params.si} {params.split}"
+
+
+rule design_tables:
+    input:
+        "tables/synthetic-grid.csv",
+    output:
+        main=f"{R}/{{mode}}/tables/main/synthetic-design.md",
+        si=f"{R}/{{mode}}/tables/si/synthetic-design.md",
+    params:
+        main=f"{R}/{{mode}}/tables/main",
+        si=f"{R}/{{mode}}/tables/si",
+    shell:
+        "{PYTHON} -m paperpipe design-tables --grid {input} "
+        "--main-dir {params.main} --si-dir {params.si}"
 
 
 rule summary:

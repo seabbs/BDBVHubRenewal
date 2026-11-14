@@ -215,7 +215,7 @@ tasks:
       - uv run --group paper snakemake -s workflow/Snakefile render --cores {{.CORES | default 4}}
       - mkdir -p ../docs/paper/figures ../docs/paper/build
       - cp -R main.html main.pdf main_files si.html si.pdf si_files ../docs/paper/
-      - cp figures/*.svg figures/*.pdf ../docs/paper/figures/
+      - cp figures/*.svg figures/*.pdf figures/*.png ../docs/paper/figures/
       - cp -R build/figures ../docs/paper/build/
 
   docs:

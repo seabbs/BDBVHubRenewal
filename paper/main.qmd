@@ -91,10 +91,10 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
 :::
 
 ::: {#tbl-synthetic-grid}
-{{< include tables/synthetic-grid.md >}}
+{{< include build/tables/main/synthetic-design.md >}}
 
-Design of each simulated outbreak (grid r2-real), with the share of outbreaks taking each level.
-The full settings are in the SI.
+The simulation grid (r2-cal5). Ranges are chosen to be plausible across infectious diseases rather than for one disease.
+The reason for each is in the SI.
 :::
 
 ### Correlated trajectories

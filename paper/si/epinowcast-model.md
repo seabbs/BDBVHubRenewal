@@ -4,9 +4,9 @@ We simulated each synthetic outbreak from the generative model of epinowcast @pl
 We used `enw_simulate()`, which runs the epinowcast Stan model with fixed parameters and no likelihood.
 It draws reported counts from the model's generated quantities, so the simulated data come from the same model epinowcast fits.
 `enw_simulate()` is on the `feature/829-simulate-forecast` branch of epinowcast, at commit `e084b08089796ca7def8dac43fd62d29ae34258b`.
-The simulation script is `scripts/finetune_simulate.R`, with the grid named r2-real, and the settings drawn for each outbreak are in the synthetic scenario grid table.
+The simulation script is `scripts/finetune_simulate.R`, with the grid named r2-cal5, and the settings drawn for each outbreak are in the synthetic scenario grid table.
 Each outbreak first draws its design, the categorical choices below, and then its continuous settings.
-Outbreaks are simulated on a daily time step by stratum, with a longest reporting delay of 8 weeks, or 12 weeks in a quarter of outbreaks.
+Outbreaks are simulated on a daily time step by stratum, with a longest reporting delay of 3 to 12 weeks, 5 to 10 times the delay mean.
 A parameter we did not set is drawn from its epinowcast prior.
 
 ##### Strata
