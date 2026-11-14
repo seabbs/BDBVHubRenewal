@@ -31,4 +31,4 @@ submit = false
 # fm_chronos_weekly_ragged_ft). It has no fallback.
 [models.fm_chronos_daily_ragged_ft]
 model_abbr = "chronos2_ft"
-submit = false
+submit = true
