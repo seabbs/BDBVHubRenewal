@@ -159,6 +159,12 @@ def test_no_errors_take_the_prior_size(daily: pd.DataFrame) -> None:
     np.testing.assert_allclose(origin.size, PRIOR_SIZE, rtol=1e-6)
 
 
+def _zones(snap) -> np.ndarray:
+    """Return true for each place whose parent has a parent."""
+    parent = np.maximum(snap.parent, 0)
+    return np.asarray((snap.parent >= 0) & (snap.parent[parent] >= 0))
+
+
 def test_a_delay_is_own_with_10_cases_a_week_else_the_pooled_parents(
     daily: pd.DataFrame, daily_zones: pd.DataFrame
 ) -> None:
@@ -188,12 +194,8 @@ def test_a_delay_is_own_with_10_cases_a_week_else_the_pooled_parents(
         np.einsum("nm,mpa->npa", pool, den),
         gaps,
     )
-    # The same rule as the walk spread: own with 10 cases a week, else
-    # the pooled estimate of the nearest parent that has them. Zones have
-    # their own threshold
-    # (`test_a_zone_below_the_threshold_takes_its_provinces_delay`).
     src = source_index(level, snap.parent)
-    kept = np.array([c.count("-") < 2 for c in snap.locations])
+    kept = ~_zones(snap)
     want = np.concatenate([own_g, pooled_g])[src]
     np.testing.assert_allclose(fit.g[kept], want[kept])
     assert (src[kept] < len(level)).any()
@@ -213,7 +215,7 @@ def test_a_zone_below_the_threshold_takes_its_provinces_delay(
     fit = fit_delay(snap, 3, settings)
     assert fit is not None
     level = levels(snap, 3, settings)
-    zone = np.array([c.count("-") == 2 for c in snap.locations])
+    zone = _zones(snap)
     rule = source_index(level, snap.parent)
     # A zone with `threshold` cases a week uses its own delay, and
     # otherwise its province's.

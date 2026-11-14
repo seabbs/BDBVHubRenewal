@@ -385,6 +385,8 @@ def fit_delay(
         gaps,
     )
     source = source_index(level, snap.parent, min_level=settings.min_level)
+    # A zone is a place whose parent has a parent. The root's -1 is
+    # clipped to 0 only to keep the indexing in range.
     parent = np.maximum(snap.parent, 0)
     zone = (snap.parent >= 0) & (snap.parent[parent] >= 0)
     own_zone = level >= settings.zone_delay_min_level
