@@ -1,0 +1,20 @@
+# The paper's held-out synthetic set (paper/synthetic.py), on the r3 grid
+# of scripts/finetune_simulate.R. Each seed runs 25 simulations of 10
+# draws; simulation g = seed * 25 + i - 1 takes its design cell from
+# block g %/% 120, in which every factor level is balanced. Seeds 8016 to
+# 8025 cover g = 200400 to 200649, the complete blocks 1670 and 1671
+# (g = 200400 to 200639), and the ten simulations after them are not used.
+# They are disjoint from the fine-tune's training seeds (10001 and up) and
+# held-out seeds (9901 to 9910), in config/finetune/r3.env.
+
+grid = "r3"
+dir = "output/finetune/heldout"
+simulations_per_seed = 25
+heldout_seeds = [8016, 8017, 8018, 8019, 8020, 8021, 8022, 8023, 8024, 8025]
+blocks = [1670, 1671]
+# The draw of each simulation evaluated, so outbreaks are independent.
+draw = 1
+
+# A small set for checking the pipeline during development, never results.
+development_seeds = [7001]
+development_dir = "output/finetune/validation"
