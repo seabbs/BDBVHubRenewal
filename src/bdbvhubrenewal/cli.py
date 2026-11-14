@@ -14,8 +14,9 @@ Commands:
 - `score`: score the forecasts of `--forecast-only` runs together.
 - `fit`: fit a configuration and write the fit directory and its
   `diagnostics.json`, for the submission CI.
-- `fit-store`: list the fitted models' fits the store lacks, make one, or
-  load the stored fits into the results (`evaluation.store`).
+- `fit-store`: list the fitted models' fits the store lacks, make one,
+  load the stored fits into the results (`evaluation.store`), or archive
+  every candidate's forecasts for a round (`evaluation.store_archive`).
 - `plot-submission`: plot a submitted hub file.
 - `plot-ppc`: plot a fit's posterior predictive checks (`ppc.json`).
 - `coherence`: compare the national data with the sum of the provinces.
@@ -65,7 +66,7 @@ from bdbvhubrenewal.data.tidy import write_csv
 from bdbvhubrenewal.data.zones import hub_zones, weekly_zone_counts
 from bdbvhubrenewal.devices import host_devices
 from bdbvhubrenewal.evaluation import backtest as bt
-from bdbvhubrenewal.evaluation import store
+from bdbvhubrenewal.evaluation import store, store_archive
 from bdbvhubrenewal.evaluation.nowcast import (
     ReleaseBacktest,
     ReleaseForecasts,
@@ -464,8 +465,16 @@ def build_parser() -> argparse.ArgumentParser:
     fst = sub.add_parser(
         "fit-store", help="Plan, make or load the fitted models' stored fits."
     )
-    fst.add_argument("action", choices=["plan", "fit", "load", "unpack"])
+    fst.add_argument(
+        "action", choices=["plan", "fit", "load", "unpack", "archive"]
+    )
     fst.add_argument("--store", default="output/fit-store")
+    fst.add_argument(
+        "--history",
+        default=None,
+        help="With archive: the ledger's archive of each round's "
+        "candidates, for the copula a paired model is paired by.",
+    )
     fst.add_argument("--data", default=data_dir)
     fst.add_argument("--config", default="config/backtest.toml")
     fst.add_argument("--policy", default="ci/policy.toml")
@@ -473,13 +482,20 @@ def build_parser() -> argparse.ArgumentParser:
         "--model", help="With `fit` or `unpack`: the model to fit or read."
     )
     fst.add_argument(
-        "--origin", help="With `fit` or `unpack`: the real origin."
+        "--origin",
+        help="With `fit`, `unpack` or `archive`: the real origin.",
+    )
+    fst.add_argument(
+        "--reference-date",
+        default=None,
+        help="With `archive`: the round, as `nowcast --reference-date`.",
     )
     fst.add_argument(
         "--out",
         default=None,
         help="With `plan`: write the missing fits as a matrix JSON here. "
-        "With `unpack`: the fit directory to write.",
+        "With `unpack`: the fit directory to write. "
+        "With `archive`: the hub tables file to write.",
     )
     fst.add_argument(
         "--origins",
@@ -492,7 +508,8 @@ def build_parser() -> argparse.ArgumentParser:
         "--models",
         nargs="*",
         default=None,
-        help="With `plan` or `load`: only these models (default: all fitted).",
+        help="With `plan` or `load`: only these models (default: all "
+        "fitted). With `archive`: default every candidate's model.",
     )
     fst.add_argument(
         "--retry-failed",
@@ -1221,6 +1238,7 @@ def _pair(
     config = bt.load_config(args.backtest_config)
     target = load_target(args.data)
     delay = resolve_truth_delay(config, target)
+    history = getattr(args, "history", None)
     past: list[ForecastTask] = []
     if not _spec(name).fitted:
         past = list(
@@ -1229,9 +1247,136 @@ def _pair(
             ).values()
         )
     samples, record = pair_submission(
-        name, result.samples, task, delay, args.history, args.store, past
+        name, result.samples, task, delay, history, args.store, past
+    )
+    print(
+        f"Pairing {name}: rho_t {record['rho_time']:.2f}, rho_p "
+        f"{record['rho_provinces']:.2f}, rho_n {record['rho_national']:.2f} "
+        f"from {record['n_scores']} scores; past forecasts by origin: "
+        + ", ".join(f"{o} {s}" for o, s in record["sources"].items())
     )
     return dataclasses.replace(result, samples=samples), record
+
+
+@dataclasses.dataclass(frozen=True)
+class _HubForecast:
+    """The hub table `nowcast` writes, and how it was made."""
+
+    table: pd.DataFrame
+    result: Forecast
+    zones: pd.DataFrame | None
+    zone_note: str
+    checkpoint: Any = None
+    copula: dict[str, object] | None = None
+
+
+def _hub_forecast(
+    args: argparse.Namespace,
+    task: ForecastTask,
+    samples: pd.DataFrame | None = None,
+) -> _HubForecast:
+    """Return the hub table `nowcast` writes, with its forecast and zones.
+
+    With `args.config` it forecasts from the fit in `args.fit`, else
+    `args.model` forecasts, unless `samples` are given. A model
+    registered as `paired` has its draws paired (`_pair`). The zones come
+    from `_zones`, after pairing.
+
+    Returns
+    -------
+    _HubForecast
+        The hub table, the forecast, the zone samples (or None), why there
+        are no zones ("" if there are), the fine-tuned checkpoint loaded
+        (or None) and the copula's record (or None).
+    """
+    hub_config = Path(args.data) / "hub-config" / "tasks.json"
+    checkpoint = None
+    if samples is not None:
+        result = Forecast(samples)
+    elif args.config:
+        result = run_forecast(get_config(args.config), task, args.fit)
+    else:
+        model = get_model(args.model)
+        checkpoint = getattr(model, "checkpoint", None)
+        samples = model.forecast(task)
+        check_samples(samples, task)
+        result = Forecast(samples)
+    name = get_config(args.config).model if args.config else args.model
+    copula = None
+    if name is not None and _spec(name).paired:
+        result, copula = _pair(args, name, task, result)
+    zones, zone_note = _zones(args, task, result.samples, hub_config)
+    table = to_hub_table(
+        result.samples,
+        task.reference_date,
+        unassigned=result.unassigned,
+        zones=zones,
+        forecast_date=args.forecast_date,
+    )
+    return _HubForecast(table, result, zones, zone_note, checkpoint, copula)
+
+
+def _fit_store_archive(args: argparse.Namespace) -> int:
+    """Run `fit-store archive` (`evaluation.store_archive`)."""
+    if not (args.out and args.origin):
+        print("ERROR: archive needs --out and --origin.", file=sys.stderr)
+        return 1
+    round_args = argparse.Namespace(
+        backtest_config=args.config,
+        data=args.data,
+        vintage=args.origin,
+        reference_date=args.reference_date,
+    )
+    try:
+        task, _ = _task(round_args)
+    except (KeyError, ValueError, OSError) as err:
+        print(f"ERROR: {err}", file=sys.stderr)
+        return 1
+    tasks = store.origin_tasks(
+        load_target(args.data),
+        load_delays(args.data),
+        bt.load_config(args.config),
+        load_daily(args.data),
+    )
+
+    def hub(
+        model: str,
+        *,
+        config: str | None = None,
+        fit_dir: Path | None = None,
+        samples: pd.DataFrame | None = None,
+    ) -> pd.DataFrame:
+        hub_args = argparse.Namespace(
+            data=args.data,
+            model=model,
+            config=config,
+            fit=fit_dir,
+            forecast_date=None,
+            backtest_config=args.config,
+            history=args.history,
+            store=args.store,
+        )
+        return _hub_forecast(hub_args, task, samples).table
+
+    models = store_archive.candidate_models(args.policy)
+    if args.models:
+        models = {m: models.get(m) for m in args.models}
+    table = store_archive.archive(
+        args.store,
+        task,
+        tasks.get(task.vintage),
+        models,
+        store.samplers(args.policy),
+        hub,
+    )
+    out = Path(args.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    write_csv(table, out)
+    for row in table.drop_duplicates("model").itertuples():
+        print(f"{row.model}: key {row.key}, made {row.fitted_at}.")
+    n = table["model"].nunique()
+    print(f"Archived {n} of {len(models)} models' forecasts in {out}.")
+    return 0
 
 
 def _nowcast(args: argparse.Namespace) -> int:
@@ -1239,33 +1384,18 @@ def _nowcast(args: argparse.Namespace) -> int:
 
     # A renewal model given by --model is fitted here.
     host_devices(int(sampler_settings()["num_chains"]))
-    hub_config = Path(args.data) / "hub-config" / "tasks.json"
-    checkpoint = None
     try:
         task, handled = _task(args)
-        if args.config:
-            config = get_config(args.config)
-            result = run_forecast(config, task, args.fit)
-        else:
-            model = get_model(args.model)
-            checkpoint = getattr(model, "checkpoint", None)
-            samples = model.forecast(task)
-            check_samples(samples, task)
-            result = Forecast(samples)
-        name = config.model if args.config else args.model
-        copula = None
-        if name is not None and _spec(name).paired:
-            result, copula = _pair(args, name, task, result)
-        zones, zone_note = _zones(args, task, result.samples, hub_config)
+        made = _hub_forecast(args, task)
+        table, result, zones, zone_note = (
+            made.table,
+            made.result,
+            made.zones,
+            made.zone_note,
+        )
+        checkpoint, copula = made.checkpoint, made.copula
         if zone_note:
             handled.append(zone_note)
-        table = to_hub_table(
-            result.samples,
-            task.reference_date,
-            unassigned=result.unassigned,
-            zones=zones,
-            forecast_date=args.forecast_date,
-        )
         path = write_submission(table, args.out, model_id(_abbr(args)))
     except (LookupError, ValueError, OSError) as err:
         print(f"ERROR: {err}", file=sys.stderr)
@@ -1818,6 +1948,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "fit":
         return _fit(args)
     if args.command == "fit-store":
+        if args.action == "archive":
+            return _fit_store_archive(args)
         return store.command(args)
     if args.command == "plot-submission":
         return _plot_submission(args)
