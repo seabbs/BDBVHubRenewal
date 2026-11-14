@@ -166,12 +166,24 @@ def _locations(obs: pd.DataFrame, delay_days: int) -> pd.DataFrame:
     )
 
 
+def _germany_forecasts(
+    sources: Sources, before: pd.Timestamp | None
+) -> pd.DataFrame:
+    """Return the benchmark's forecasts, failing on any from `before`."""
+    fc = germany.forecasts(sources.germany_forecasts)
+    if before is not None and (fc["origin_date"] >= before).any():
+        raise ValueError(
+            f"German forecast tables hold nowcast dates from {before:%Y-%m-%d}"
+            ", which this run must not read."
+        )
+    return fc
+
+
 def _germany_data(
     sources: Sources, before: pd.Timestamp | None, delay_days: int
 ) -> pd.DataFrame:
     assert sources.germany_triangle is not None
-    fc = germany.forecasts(sources.germany_forecasts)
-    fc = _before(fc, "origin_date", before)
+    fc = _germany_forecasts(sources, before)
     last = fc["origin_date"].max() if before is None else before
     lag = pd.Timedelta(days=delay_days)
     # Releases up to D days after the last date give the last truths.
@@ -282,9 +294,7 @@ def run_forecasts(
         ]
         return pd.concat(parts, ignore_index=True)
     if study == "germany" and source == "real":
-        return _before(
-            germany.forecasts(sources.germany_forecasts), "origin_date", before
-        )
+        return _germany_forecasts(sources, before)
     if study == "ebola" and source == "real":
         assert sources.hub is not None
         store = sources.store

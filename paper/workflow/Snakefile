@@ -77,7 +77,8 @@ def germany_tables(mode):
     if not GERMANY["real"]:
         return []
     halves = [""] if mode == "development" else ["", "held-out/"]
-    return [f"{GERMANY['results']}/{h}paper-forecasts.csv.gz" for h in halves]
+    tables = [f"{GERMANY['results']}/{h}paper-forecasts.csv.gz" for h in halves]
+    return tables + list(GERMANY.get("extra") or [])
 
 
 def sources(w):

@@ -17,6 +17,10 @@ germany:
   config: ../config/germany.toml
   data: ../data/raw/germany
   results: ../results/germany
+  # Further paper tables of the benchmark (`germany-paper` output), such
+  # as models run outside config/germany.toml. A development run fails
+  # if one holds a held-out date.
+  extra: []
 
 # The Ebola hub's data and forecasts, our stored forecasts and the fit
 # store. `hub: null` runs the study on dummy data, as does a hub whose

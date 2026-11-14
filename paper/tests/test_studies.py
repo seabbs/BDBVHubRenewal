@@ -89,8 +89,8 @@ def _triangle(path: Path) -> Path:
     return path
 
 
-def _paper_table(path: Path) -> Path:
-    origins = pd.date_range("2022-02-01", "2022-02-20")
+def _paper_table(path: Path, last: str = "2022-02-09") -> Path:
+    origins = pd.date_range("2022-02-01", last)
     pd.DataFrame(
         {
             "study": "germany",
@@ -126,6 +126,15 @@ def test_germany_reads_the_benchmark(tmp_path) -> None:
     fc = run_forecasts("germany", before=SPLIT, sources=sources, source="real")
     assert fc["origin_date"].max() < SPLIT
     assert fc["truth"].isna().all()
+
+
+def test_germany_fails_on_tables_with_heldout_dates(tmp_path) -> None:
+    sources = Sources(
+        germany_forecasts=(_paper_table(tmp_path / "p.csv", "2022-02-20"),),
+        germany_triangle=_triangle(tmp_path / "triangle.csv"),
+    )
+    with pytest.raises(ValueError, match="must not read"):
+        run_forecasts("germany", before=SPLIT, sources=sources, source="real")
 
 
 def test_germany_needs_its_truth_delay() -> None:
