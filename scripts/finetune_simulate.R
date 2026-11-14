@@ -70,7 +70,7 @@
 #   Rscript scripts/finetune_simulate.R <n> <seed> <out_dir>
 
 epinowcast_sha <- "e084b080"
-grid_name <- "r2-cal4"
+grid_name <- "r2-cal5"
 args <- commandArgs(trailingOnly = TRUE)
 n_outbreaks <- as.integer(args[[1]])
 seed <- as.integer(args[[2]])
@@ -279,9 +279,7 @@ draw_values <- function(design) {
     rt_steps = rpois(1, 1.2),
     rt_step_sd = runif(1, 0.1, 0.5),
     rt_drift_sd = runif(1, 0, 0.03),
-    # Most failed draws were growth processes overflowing at the start
-    # growth rate's upper range, so it is narrower than for Rt.
-    r0 = rnorm(1, 0.005, 0.015),
+    r0 = rnorm(1, 0.01, 0.02),
     walk_sd = runif(1, 0.005, 0.015),
     incidence_sd = runif(1, 0.05, 0.3),
     growth_steps = sample(1:3, 1),
@@ -289,9 +287,7 @@ draw_values <- function(design) {
     smooth_amp = runif(1, 0.01, 0.06),
     smooth_period = runif(1, 40, 200),
     smooth_phase = runif(1, 0, 2 * pi),
-    # Seeds above about 30 a day and growth sustained above about 2% a day
-    # gave most of the outbreaks too large to keep.
-    seed_size = exp(runif(1, log(0.2), log(30))),
+    seed_size = exp(runif(1, log(0.2), log(200))),
     stratum_sd = runif(1, 0.5, 2),
     delay_mean = delay_mean,
     max_delay = max_delay_for(delay_mean, design$long_tail),
@@ -441,6 +437,11 @@ simulate_outbreak <- function(design, v) {
     if (all(weight == 0)) weight[1] <- 1
   }
   size <- pmax(v$seed_size * weight / sum(weight), exp(-8))
+  # The size cap is the main filter on growth, so a draw expected to pass
+  # it by half again is rejected here, in a second, not after Stan.
+  if (sum(expected_onsets(size, gt, log_r)) > 1.5 * max_size(design)) {
+    stop("too large (expected)")
+  }
   lelatent <- matrix(
     log(size), nrow = expectation$data$expr_gt_n, ncol = nrow(strata),
     byrow = TRUE
@@ -598,11 +599,6 @@ simulate_outbreak <- function(design, v) {
 
   # Observations: the NB1 dispersion on the NB2 scale (epinowcast #937).
   onsets <- expected_onsets(size, gt, log_r)
-  # A draw expected to be far beyond the largest size kept cannot pass,
-  # so it fails before Stan runs.
-  if (sum(onsets) > 50 * max_size(design)) {
-    stop("too large (expected)")
-  }
   v$lambda_hat <- max(1, median(onsets[onsets >= 1]), na.rm = TRUE)
   v$sum_p2 <- sum(delay$pmf^2)
   v$sqrt_phi_obs <- switch(design$family,
