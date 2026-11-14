@@ -26,6 +26,7 @@ if os.environ.get("AGG_CPU"):
 
     _no_mps.__wrapped__ = _mps  # type: ignore[attr-defined]
     torch.backends.mps.is_available = _no_mps
+    torch.set_num_threads(1)
 
 import argparse
 import dataclasses

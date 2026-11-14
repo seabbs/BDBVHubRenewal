@@ -109,6 +109,8 @@ def main() -> None:
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     table = pd.concat(frames, ignore_index=True)
+    # The n1000 checkpoint's models are named as in bdbv-joint-samples.
+    table["model"] = table["model"].str.replace("@0cea0acef1ce", "_n1000")
     table.to_csv(out / "aggregation-scores.csv.gz", index=False)
     print(
         table.groupby(["study", "level", "option"])
