@@ -227,12 +227,15 @@ draw_design <- function() {
   stable <- runif(1) < 0.2
   change <- function(p) !stable && runif(1) < p
   parametric <- reference != "non_parametric"
+  # The non-parametric hazard (alone, with distribution "none", or as a
+  # deviation from a parametric baseline) always has a smooth random walk
+  # over delays and an iid part, and may add effects by reference week.
   hazard <- if (reference == "parametric") {
     "none"
   } else if (stable) {
     "delay"
   } else {
-    sample(c("delay", "week", "delay_week"), 1)
+    sample(c("delay", "delay_week"), 1)
   }
   # Places by ages have at most 60 strata.
   n_places <- switch(strata,
@@ -339,7 +342,7 @@ draw_values <- function(design) {
     walk_spread_sd = runif(1, 0, 0.1),
     delay_place_sd = runif(1, 0.1, 0.5),
     delay_age_sd = runif(1, 0.05, 0.25),
-    hazard_walk_sd = runif(1, 0.05, 0.2),
+    hazard_walk_sd = runif(1, 0.05, 0.3),
     hazard_sd = runif(1, 0, 0.15),
     hazard_week_sd = runif(1, 0, 0.4),
     reference_dow_sd = runif(1, 0.1, 0.5),
@@ -495,7 +498,6 @@ simulate_outbreak <- function(design, v) {
   hazard_terms <- switch(design$hazard,
     none = NULL,
     delay = c("rw(delay)", "(1 | delay)"),
-    week = "(1 | week)",
     delay_week = c("rw(delay)", "(1 | delay)", "(1 | week)")
   )
   refnp <- if (design$hazard == "none") {
