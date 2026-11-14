@@ -153,3 +153,167 @@ def test_flat_places_can_nest_in_regions_with_levels_recorded():
     )
     assert target_levels(("CD", "P01", "P02")) == ("national", "leaf", "leaf")
     del pd
+
+
+def test_ages_are_not_grouped_into_regions():
+    import pandas as pd
+    from finetune_chronos import outbreak_blocks
+
+    days = pd.date_range("2026-01-01", periods=140)
+    rows = [
+        (f"A{a}", str(d.date()), str((d + pd.Timedelta(days=2)).date()), 5)
+        for a in range(1, 6)
+        for d in days
+    ]
+    counts = pd.DataFrame(
+        rows, columns=["location", "reference_date", "report_date", "count"]
+    )
+    blocks = outbreak_blocks(
+        counts, [f"A{a}" for a in range(1, 6)], np.random.default_rng(0), 1, 4
+    )
+    assert blocks
+    assert all("intermediate" not in b["levels"] for b in blocks)
+
+
+def test_an_empty_batch_is_done_with_no_simulations(tmp_path):
+    import pandas as pd
+    from finetune_stream import ready_outbreaks
+
+    (tmp_path / "settings-5001.csv").write_text("")
+    (tmp_path / "counts-5001.csv.gz").write_text("")
+    pd_rows = "outbreak\n5002-0001\n"
+    (tmp_path / "settings-5002.csv").write_text(pd_rows)
+    pd.DataFrame({"outbreak": ["5002-0001-1"]}).to_csv(
+        tmp_path / "counts-5002.csv.gz", index=False
+    )
+    assert ready_outbreaks(tmp_path, range(5001, 5003)) == ["5002-0001"]
+
+
+def test_stop_rule_needs_two_checkpoints():
+    from finetune_stream import should_stop
+
+    assert not should_stop([0.2], 8000, 8000, 0.01)
+    assert should_stop([0.2, 0.199], 16000, 8000, 0.01)
+    assert not should_stop([0.2, 0.15], 16000, 8000, 0.01)
+    assert not should_stop([0.2, 0.199], 4000, 8000, 0.01)
+
+
+def test_a_split_batch_starts_from_clear_gradients():
+    from finetune_stream import accumulate
+
+    grads: list[int] = []
+    skipped: list[int] = []
+
+    def backward(part, _share):
+        if len(part) > 2:
+            grads.append(-1)  # a partial backward before running out
+            raise RuntimeError("MPS backend out of memory")
+        if 9 in part:
+            raise RuntimeError("MPS backend out of memory")
+        grads.extend(part)
+        return 0.5
+
+    def zero():
+        grads.clear()
+
+    value = accumulate([1, 2, 3, 4, 9], backward, zero, skipped.append)
+    # The partial backward is cleared; every block but the one too large
+    # for memory is used once.
+    assert sorted(grads) == [1, 2, 3, 4]
+    assert skipped == [9]
+    assert value == 0.5
+
+
+def _checkpoint(tmp_path):
+    ckpt = tmp_path / "finetuned-ckpt"
+    ckpt.mkdir()
+    (ckpt / "adapter_config.json").write_text("{}")
+    (ckpt / "adapter_model.safetensors").write_text("w")
+    (tmp_path / "settings.json").write_text('{"n_outbreaks": 1000}')
+    (tmp_path / "outbreaks.txt").write_text("1\n")
+    return tmp_path
+
+
+class _Gh:
+    """Fake gh: `assets` maps the release's asset names to their content."""
+
+    def __init__(self, assets=None):
+        self.assets = assets
+        self.calls = []
+
+    def __call__(self, command, **_):
+        import subprocess
+
+        self.calls.append(command[:3])
+        action = command[2]
+        if action == "view":
+            if self.assets is None:
+                return subprocess.CompletedProcess(command, 1, "", "not found")
+            names = [{"name": n} for n in self.assets]
+            out = __import__("json").dumps({"assets": names})
+            return subprocess.CompletedProcess(command, 0, out, "")
+        if action == "download":
+            sums = self.assets.get("sha256sums.txt", "")
+            return subprocess.CompletedProcess(command, 0, sums, "")
+        if action in ("create", "upload"):
+            self.assets = self.assets or {}
+            for f in command:
+                if Path(f).is_file():
+                    self.assets[Path(f).name] = Path(f).read_text()
+            return subprocess.CompletedProcess(command, 0, "ok", "")
+        raise AssertionError(command)
+
+
+def test_publish_is_done_when_the_release_matches(tmp_path):
+    from finetune_stream import publish
+
+    where = _checkpoint(tmp_path)
+    gh = _Gh()
+    publish(where, "abc", run=gh)
+    assert [c[2] for c in gh.calls] == ["view", "create"]
+    gh.calls.clear()
+    publish(where, "abc", run=gh)
+    assert "create" not in [c[2] for c in gh.calls]
+    assert "upload" not in [c[2] for c in gh.calls]
+
+
+def test_publish_uploads_only_missing_assets(tmp_path):
+    from finetune_stream import publish
+
+    where = _checkpoint(tmp_path)
+    gh = _Gh()
+    publish(where, "abc", run=gh)
+    del gh.assets["outbreaks.txt"]
+    gh.calls.clear()
+    publish(where, "abc", run=gh)
+    assert [c[2] for c in gh.calls if c[2] != "download"] == ["view", "upload"]
+    assert "outbreaks.txt" in gh.assets
+
+
+def test_publish_refuses_a_release_with_other_sums(tmp_path):
+    import pytest
+    from finetune_stream import publish
+
+    where = _checkpoint(tmp_path)
+    gh = _Gh({"sha256sums.txt": "0  adapter_model.safetensors\n"})
+    with pytest.raises(RuntimeError, match="differ"):
+        publish(where, "abc", run=gh)
+    assert "upload" not in [c[2] for c in gh.calls]
+
+
+def test_a_finished_batch_is_read_once(tmp_path, monkeypatch):
+    import finetune_stream
+    import pandas as pd
+
+    (tmp_path / "settings-5003.csv").write_text("outbreak\n5003-0001\n")
+    pd.DataFrame({"outbreak": ["5003-0001-1"]}).to_csv(
+        tmp_path / "counts-5003.csv.gz", index=False
+    )
+    first = finetune_stream.ready_outbreaks(tmp_path, range(5003, 5004))
+    reads = []
+    monkeypatch.setattr(
+        finetune_stream, "read_ids", lambda p: reads.append(p) or pd.Series()
+    )
+    again = finetune_stream.ready_outbreaks(tmp_path, range(5003, 5004))
+    assert again == first == ["5003-0001"]
+    assert reads == []

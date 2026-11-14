@@ -2,7 +2,7 @@
 # Simulate, fine-tune and publish a round of Chronos-2 fine-tuning,
 # unattended. Run from the repo root, detached:
 #
-#   nohup scripts/finetune_driver.sh config/finetune/r2-cal5.env \
+#   nohup scripts/finetune_driver.sh config/finetune/r3.env \
 #     > /dev/null 2>&1 &
 #
 # The env file sets the round:
@@ -215,20 +215,23 @@ check_remote() {
     # Batches of another grid are moved aside, never copied back.
     remote "cd $REMOTE_DIR && if [ \"\$(cat $SIM_REMOTE/grid 2> /dev/null)\" != $GRID ]; then pkill -f '[f]inetune_remote.sh'; pkill -f '[f]inetune_simulate.R --args'; [ -d $SIM_REMOTE ] && mv $SIM_REMOTE $SIM_REMOTE-old-\$(date +%s); mkdir -p $SIM_REMOTE/logs; echo $GRID > $SIM_REMOTE/grid; echo moved; fi" 2> /dev/null \
       | grep -q moved && log "moved $REMOTE's batches of another grid aside"
-    # A scheduler started by hand runs more processes than memory allows.
-    if remote "pkill -f '[r]un4.sh'" > /dev/null 2>&1; then
-      log "stopped run4.sh on $REMOTE; its running batches finish"
-    fi
     [ -e "$PAUSE" ] && return 0
     remote "test -e $REMOTE_DIR/$SIM_REMOTE/remote-done" 2> /dev/null \
       || remote_scheduler || log "could not start the remote scheduler"
     return 0
   fi
   [ -z "$free" ] && log "$REMOTE does not answer"
-  if (( now - remote_ok >= REMOTE_GRACE )) && [ ! -s "$CLAIMED" ]; then
-    { seq "$HELD_FIRST" "$HELD_LAST"; seq "$TRAIN_FIRST" $(( TRAIN_FIRST + FIRST_CHUNK_SEEDS - 1 )); } \
-      | while read -r s; do done_seed "$s" || echo "$s"; done > "$CLAIMED"
-    log "$REMOTE down for $(( (now - remote_ok) / 60 )) min: the laptop takes seeds $(tr '\n' ' ' < "$CLAIMED")"
+  if (( now - remote_ok >= REMOTE_GRACE )); then
+    # Unfinished held-out seeds go first, then the first chunk's, then
+    # whatever the laptop had already taken.
+    local before taken
+    before=$(cat "$CLAIMED")
+    { seq "$HELD_FIRST" "$HELD_LAST"; seq "$TRAIN_FIRST" $(( TRAIN_FIRST + FIRST_CHUNK_SEEDS - 1 )); echo "$before"; } \
+      | while read -r s; do [ -n "$s" ] && ! done_seed "$s" && echo "$s"; done \
+      | awk '!seen[$0]++' > "$CLAIMED"
+    taken=$(cat "$CLAIMED")
+    [ "$taken" != "$before" ] \
+      && log "$REMOTE down for $(( (now - remote_ok) / 60 )) min: the laptop takes seeds $(echo $taken)"
   fi
 }
 
@@ -340,7 +343,10 @@ EOF
   TRAIN_LAST=$(( TRAIN_LAST + extra ))
   echo "$TRAIN_LAST" > "$OUT/train-last.txt"
   log "projected short of $OUTBREAKS outbreaks: added $extra training seeds, now to $TRAIN_LAST"
-  remote "pkill -f '[f]inetune_remote.sh'" > /dev/null 2>&1
+  # A remote scheduler that has finished must start again for the new
+  # seeds.
+  remote "pkill -f '[f]inetune_remote.sh'; rm -f $REMOTE_DIR/$SIM_REMOTE/remote-done" \
+    > /dev/null 2>&1
   remote_tried=0
 }
 
@@ -412,8 +418,8 @@ retry_at=0
 while true; do
   extend_seeds
   check_remote
-  local_slots
   sync_remote
+  local_slots
   check_batches
   if (( retry_at )) && (( $(date +%s) >= retry_at )); then
     retry_at=0

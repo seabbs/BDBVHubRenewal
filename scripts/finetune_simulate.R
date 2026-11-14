@@ -222,7 +222,12 @@ draw_design <- function(g) {
   n_ages <- switch(cell$strata,
     single = 1L, places = 1L,
     ages = sample(2:8, 1),
-    places_ages = sample(3:min(7L, 60L %/% n_places), 1)
+    # At most 60 strata; `sample` on a single number n draws from 1:n,
+    # so the range is indexed instead.
+    places_ages = {
+      ages <- 3:max(3L, min(7L, 60L %/% n_places))
+      ages[sample.int(length(ages), 1)]
+    }
   )
   days <- c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday")
   c(

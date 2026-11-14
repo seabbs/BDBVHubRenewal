@@ -4,6 +4,6 @@
 # publish date, so a new release is picked up and refits those models. A
 # settings hash pins that release instead. Either way the adapter is
 # checked against the release's sha256sums.txt. Kept out of the code, so
-# the settings hash `scripts/finetune_chronos.py train` gives does not
+# the settings hash `scripts/finetune_stream.py` gives does not
 # cover it.
 hash = "latest"

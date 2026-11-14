@@ -15,7 +15,11 @@ is set. Held-out loss is on the first `--holdout` outbreaks of the
 held-out seeds, simulated first.
 
     uv run --group chronos python scripts/finetune_stream.py SIM_DIR OUT \
-        --train-seeds 5001 5360 --held-out-seeds 5901 5907 --publish
+        --grid r3 --train-seeds FIRST LAST --held-out-seeds FIRST LAST \
+        --publish
+
+`scripts/finetune_driver.sh` runs it with the seeds of a config such as
+`config/finetune/r3.env`.
 
 `OUT/stream-status.json` holds the trainer's state, and while
 `OUT/../PAUSE` exists the trainer waits between steps.
@@ -36,6 +40,11 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+
+from bdbvhubrenewal.forecasters.foundation import (
+    CHRONOS_MODEL,
+    CHRONOS_REVISION,
+)
 
 sys.path.insert(0, str(Path(__file__).parent))
 import finetune_chronos as ft
@@ -63,6 +72,25 @@ def log(message: str) -> None:
     print(f"{stamp} [train] {message}", flush=True)
 
 
+def read_ids(path: Path) -> pd.Series:
+    """Return a batch file's outbreak ids; none if every draw failed."""
+    if path.stat().st_size == 0:
+        return pd.Series([], dtype=str)
+    try:
+        return pd.read_csv(path, usecols=["outbreak"])["outbreak"]
+    except pd.errors.EmptyDataError:
+        return pd.Series([], dtype=str)
+
+
+def should_stop(
+    losses: list[float], done: int, stop_from: int, min_gain: float
+) -> bool:
+    """Return whether the last doubling cut held-out loss by too little."""
+    if done < stop_from or len(losses) < 2:
+        return False
+    return losses[-2] - losses[-1] < min_gain * losses[-2]
+
+
 def simulation_ids(outbreaks: pd.Series) -> set[str]:
     """Return the simulations of outbreak draws `<seed>-<index>[-<draw>]`."""
     parts = outbreaks.astype(str).str.split("-")
@@ -84,6 +112,10 @@ def quarantine(sim_dir: Path, seed: int, reason: str) -> None:
     log(f"batch {seed} {reason}: moved to {where} to be run again")
 
 
+# Outbreaks of each finished batch, by simulation folder and seed.
+_READY: dict[tuple[Path, int], list[str]] = {}
+
+
 def seed_done(sim_dir: Path, seed: int) -> bool:
     """Return whether a simulation batch has finished and is whole.
 
@@ -95,6 +127,8 @@ def seed_done(sim_dir: Path, seed: int) -> bool:
     RuntimeError
         If the batch failed.
     """
+    if (sim_dir, seed) in _READY:
+        return True
     counts = sim_dir / f"counts-{seed}.csv.gz"
     settings = sim_dir / f"settings-{seed}.csv"
     if not (counts.exists() and settings.exists()):
@@ -102,8 +136,8 @@ def seed_done(sim_dir: Path, seed: int) -> bool:
         if log_file.exists() and "Execution halted" in log_file.read_text():
             raise RuntimeError(f"simulation batch {seed} failed: {log_file}")
         return False
-    a = simulation_ids(pd.read_csv(settings, usecols=["outbreak"])["outbreak"])
-    b = simulation_ids(pd.read_csv(counts, usecols=["outbreak"])["outbreak"])
+    a = simulation_ids(read_ids(settings))
+    b = simulation_ids(read_ids(counts))
     if a != b:
         quarantine(sim_dir, seed, "has counts and settings that disagree")
         return False
@@ -114,13 +148,16 @@ def ready_outbreaks(sim_dir: Path, seeds: range) -> list[str]:
     """Return the outbreaks of the finished batches, in order.
 
     The batches are read in seed order up to the first not yet finished.
+    A finished batch is read once and remembered.
     """
     out: list[str] = []
     for seed in seeds:
-        if not seed_done(sim_dir, seed):
-            break
-        ids = pd.read_csv(sim_dir / f"settings-{seed}.csv")["outbreak"]
-        out.extend(sorted(ids, key=ft._order))
+        if (sim_dir, seed) not in _READY:
+            if not seed_done(sim_dir, seed):
+                break
+            ids = read_ids(sim_dir / f"settings-{seed}.csv")
+            _READY[sim_dir, seed] = sorted(ids, key=ft._order)
+        out.extend(_READY[sim_dir, seed])
     return out
 
 
@@ -197,8 +234,14 @@ def memory() -> str:
     return "CPU"
 
 
-def publish(where: Path, key: str) -> None:
-    """Publish a checkpoint as the release `chronos-ft-<key>`."""
+def publish(where: Path, key: str, run=subprocess.run) -> None:
+    """Publish a checkpoint as the release `chronos-ft-<key>`.
+
+    Safe to run again: a release whose sha256sums match is left as it is,
+    one missing assets gets them uploaded, and one whose sums differ is an
+    error.
+    """
+    tag = f"chronos-ft-{key}"
     files = [
         where / "finetuned-ckpt" / "adapter_config.json",
         where / "finetuned-ckpt" / "adapter_model.safetensors",
@@ -207,33 +250,78 @@ def publish(where: Path, key: str) -> None:
     ]
     sums = where / "sha256sums.txt"
     sums.write_text("".join(f"{ft._sha256(f)}  {f.name}\n" for f in files))
-    n = json.loads((where / "settings.json").read_text())["n_outbreaks"]
-    command = [
-        "gh",
-        "release",
-        "create",
-        f"chronos-ft-{key}",
-        "-R",
-        REPO,
-        "--latest=false",
-        "--title",
-        f"Chronos-2 fine-tuned checkpoint {key} ({n} outbreaks)",
-        "--notes",
-        f"LoRA adapter of Chronos-2 for the _ft models, fine-tuned in one "
-        f"pass on {n} simulated outbreaks (scripts/finetune_stream.py). "
-        f"Check the files with sha256sums.txt.\n\nThis was opened by a "
-        f"bot. Please ping @seabbs for any questions.",
-        *map(str, files),
-        str(sums),
-    ]
-    for attempt in range(1, 4):
-        result = subprocess.run(command, capture_output=True, text=True)
-        if result.returncode == 0:
-            log(f"published chronos-ft-{key}: {result.stdout.strip()}")
-            return
-        log(f"publish attempt {attempt} failed: {result.stderr.strip()}")
-        time.sleep(60)
-    raise RuntimeError(f"could not publish chronos-ft-{key}")
+    files.append(sums)
+
+    def gh(*command: str) -> subprocess.CompletedProcess:
+        return run(
+            ["gh", "release", *command, "-R", REPO],
+            capture_output=True,
+            text=True,
+        )
+
+    view = gh("view", tag, "--json", "assets")
+    if view.returncode != 0:
+        n = json.loads((where / "settings.json").read_text())["n_outbreaks"]
+        result = gh(
+            "create",
+            tag,
+            "--latest=false",
+            "--title",
+            f"Chronos-2 fine-tuned checkpoint {key} ({n} outbreaks)",
+            "--notes",
+            f"LoRA adapter of Chronos-2 for the _ft models, fine-tuned in one "
+            f"pass on {n} simulated outbreaks (scripts/finetune_stream.py). "
+            f"Check the files with sha256sums.txt.\n\nThis was opened by a "
+            f"bot. Please ping @seabbs for any questions.",
+            *map(str, files),
+        )
+        if result.returncode != 0:
+            raise RuntimeError(f"could not publish {tag}: {result.stderr}")
+        log(f"published {tag}: {result.stdout.strip()}")
+        return
+    present = {a["name"] for a in json.loads(view.stdout)["assets"]}
+    if sums.name in present:
+        theirs = gh("download", tag, "-p", sums.name, "-O", "-").stdout
+        if theirs != sums.read_text():
+            raise RuntimeError(f"{tag} exists and its sha256sums differ")
+    missing = [f for f in files if f.name not in present]
+    if not missing:
+        log(f"{tag} already published")
+        return
+    result = gh("upload", tag, *map(str, missing))
+    if result.returncode != 0:
+        raise RuntimeError(f"could not upload to {tag}: {result.stderr}")
+    log(f"uploaded {[f.name for f in missing]} to {tag}")
+
+
+def accumulate(indices: list[int], backward, zero, skip) -> float:
+    """Return a batch's loss, accumulating its gradients by `backward`.
+
+    If memory runs out, the gradients are cleared (`zero`) and the batch
+    is run again in halves, and so on; a single block that still does not
+    fit is left out (`skip`). Every other block is used once.
+    """
+    parts = [indices]
+    while True:
+        zero()
+        values, sizes = [], []
+        try:
+            for part in parts:
+                values.append(backward(part, len(part) / len(indices)))
+                sizes.append(len(part))
+            return (
+                float(np.average(values, weights=sizes)) if values else np.nan
+            )
+        except RuntimeError as error:
+            if "out of memory" not in str(error):
+                raise
+            if len(part) == 1:
+                skip(part[0])
+                parts = [p for p in parts if p is not part]
+            else:
+                half = len(part) // 2
+                at = parts.index(part)
+                parts[at : at + 1] = [part[:half], part[half:]]
 
 
 def finite_step(params: list, optimiser, value: float) -> bool:
@@ -409,12 +497,12 @@ def main() -> None:
         time.sleep(POLL)
     held = held[: args.holdout]
     (out / "outbreaks-held-out.txt").write_text("\n".join(held) + "\n")
-    val = [b for _, b in cut(sim_dir, held, args.seed, k)]
-    log(f"{len(held)} held-out outbreaks, {len(val)} blocks")
-
-    # Checkpointing and the largest block follow from the memory budget.
+    # Checkpointing and the largest block follow from the memory budget,
+    # so held-out blocks are cut to the same size as training blocks.
     ft.checkpoint_large_batches(ft.checkpoint_above(args.memory_gb))
     ft.MAX_SERIES = min(ft.MAX_SERIES, ft.max_series(args.memory_gb))
+    val = [b for _, b in cut(sim_dir, held, args.seed, k)]
+    log(f"{len(held)} held-out outbreaks, {len(val)} blocks")
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)  # noqa: NPY002
     device = (
@@ -425,7 +513,7 @@ def main() -> None:
         else "cpu"
     )
     pipeline = Chronos2Pipeline.from_pretrained(
-        ft.CHRONOS_MODEL, revision=ft.CHRONOS_REVISION, device_map=device
+        CHRONOS_MODEL, revision=CHRONOS_REVISION, device_map=device
     )
     lora = LoraConfig(
         r=8,
@@ -445,7 +533,7 @@ def main() -> None:
     accepted = inspect.signature(Chronos2Model.forward).parameters
     base = {
         "grid": args.grid,
-        "chronos_revision": ft.CHRONOS_REVISION,
+        "chronos_revision": CHRONOS_REVISION,
         "code_sha256": {
             **{p: ft._sha256(Path(p)) for p in ft.CODE},
             "scripts/finetune_stream.py": ft._sha256(Path(__file__)),
@@ -514,41 +602,30 @@ def main() -> None:
             },
         )
 
-    def train_step(batch_blocks: list[int], share: float) -> float:
-        """Accumulate gradients of a batch; split it if memory runs out."""
-        try:
-            batch = {
-                k: v.to(device) if torch.is_tensor(v) else v
-                for k, v in data._build_batch(batch_blocks).items()
-                if k in accepted
-            }
-            loss = model(**batch).loss
-            (loss * share).backward()
-            value = float(loss.detach())
-            del batch, loss
-            return value
-        except RuntimeError as error:
-            if "out of memory" not in str(error):
-                raise
-            free_memory()
-            if len(batch_blocks) == 1:
-                i = batch_blocks[0]
-                series = int(data.inputs[i]["context"].shape[0])
-                outbreak = pairs[i][0]
-                skipped.append(
-                    {"outbreak": outbreak, "step": step + 1, "series": series}
-                )
-                log(
-                    f"skipped block {i} of {pairs[i][0]}, "
-                    f"{series} series, "
-                    f"too large for memory: {memory()}"
-                )
-                return float("nan")
-            half = len(batch_blocks) // 2
-            log(f"split a batch of {len(batch_blocks)} blocks for memory")
-            parts = (batch_blocks[:half], batch_blocks[half:])
-            values = [train_step(part, share / 2) for part in parts]
-            return float(np.nanmean(values))
+    def backward(part: list[int], share: float) -> float:
+        """Accumulate the gradients of part of a batch."""
+        batch = {
+            k: v.to(device) if torch.is_tensor(v) else v
+            for k, v in data._build_batch(part).items()
+            if k in accepted
+        }
+        loss = model(**batch).loss
+        (loss * share).backward()
+        value = float(loss.detach())
+        del batch, loss
+        return value
+
+    def skip(i: int) -> None:
+        """Record a block too large for memory."""
+        series = int(data.inputs[i]["context"].shape[0])
+        skipped.append(
+            {"outbreak": pairs[i][0], "step": step + 1, "series": series}
+        )
+        log(f"skipped {pairs[i][0]}, {series} series, too large: {memory()}")
+
+    def zero() -> None:
+        optimiser.zero_grad()
+        free_memory()
 
     t0 = time.perf_counter()
     while done < args.outbreaks:
@@ -585,7 +662,7 @@ def main() -> None:
             while pause.exists():
                 report(stage="paused")
                 time.sleep(30)
-            value = train_step(indices, 1.0)
+            value = accumulate(list(indices), backward, zero, skip)
             if not finite_step(params, optimiser, value):
                 log(f"step {step + 1}: no update (loss {value})")
             # Batches differ in shape, so cached buffers pile up unless they
@@ -683,8 +760,7 @@ def main() -> None:
             # From `stop_from` on, go on only while the last doubling cut
             # held-out loss by more than `min_gain`.
             losses.append(settings["held_out_loss"])
-            gain = losses[-2] - losses[-1] if len(losses) > 1 else np.inf
-            if done >= args.stop_from and gain < args.min_gain * losses[-2]:
+            if should_stop(losses, done, args.stop_from, args.min_gain):
                 log(f"held-out loss gained under {args.min_gain:.0%}: stop")
                 break
         snapshot()

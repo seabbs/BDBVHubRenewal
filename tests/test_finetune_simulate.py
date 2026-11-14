@@ -72,3 +72,22 @@ cat("cases", sum(simulate_outbreak(d, v)$counts$count), "\\n")
         tmp_path,
     )
     assert int(out.split("cases")[-1].split()[0]) > 0
+
+
+@needs_r
+def test_places_by_ages_always_have_three_or_more_ages(tmp_path):
+    out = run_r(
+        """
+set.seed(1)
+ok <- TRUE
+for (g in 0:2000) {
+  d <- draw_design(g)
+  if (d$strata == "places_ages") {
+    ok <- ok && d$n_ages >= 3 && d$n_places * d$n_ages <= 60
+  }
+}
+cat("ok", ok, "\\n")
+""",
+        tmp_path,
+    )
+    assert out.split()[-1] == "TRUE"

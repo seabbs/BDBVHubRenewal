@@ -136,7 +136,7 @@ class Checkpoint:
     Attributes
     ----------
     hash : str
-        Settings hash from `scripts/finetune_chronos.py train`. The release
+        Settings hash from `scripts/finetune_stream.py`. The release
         is `chronos-ft-<hash>`.
     sha256 : tuple of (str, str)
         SHA-256 of each of `ADAPTER_FILES`, by file name.
