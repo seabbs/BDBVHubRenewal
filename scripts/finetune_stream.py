@@ -319,6 +319,7 @@ def main() -> None:
     parser.add_argument("--batch-size", type=int, default=256)
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--note", default="")
+    parser.add_argument("--grid", required=True)
     parser.add_argument("--publish", action="store_true")
     parser.add_argument("--blocks-per-simulation", type=int, default=12)
     parser.add_argument(
@@ -397,6 +398,7 @@ def main() -> None:
     optimiser = torch.optim.AdamW(params, lr=args.learning_rate)
     accepted = inspect.signature(Chronos2Model.forward).parameters
     base = {
+        "grid": args.grid,
         "chronos_revision": ft.CHRONOS_REVISION,
         "code_sha256": {
             **{p: ft._sha256(Path(p)) for p in ft.CODE},

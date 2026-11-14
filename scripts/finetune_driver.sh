@@ -342,7 +342,7 @@ check_batches() {
 log "starting round from $1: training seeds $TRAIN_FIRST-$TRAIN_LAST, held-out $HELD_FIRST-$HELD_LAST, laptop $LOCAL_FIRST-$LOCAL_LAST"
 trainer_args=("$SIM_DIR" "$OUT" --train-seeds "$TRAIN_FIRST" "$TRAIN_LAST"
   --held-out-seeds "$HELD_FIRST" "$HELD_LAST" --outbreaks "$OUTBREAKS"
-  --note "${NOTE:-}" --blocks-per-simulation "${BLOCKS_PER_SIMULATION:-12}"
+  --note "${NOTE:-}" --grid "$GRID" --blocks-per-simulation "${BLOCKS_PER_SIMULATION:-12}"
   --prefixes ${PREFIXES:-1000 2000 4000 8000} --min-gain "${MIN_GAIN:-0.01}"
   --stop-from "${STOP_FROM:-8000}" --memory-gb "${MEMORY_GB:-36}")
 [ "${PUBLISH:-0}" = 1 ] && trainer_args+=(--publish)
