@@ -28,6 +28,8 @@
 #   REMOTE_RETRY, REMOTE_GRACE   seconds between tries of the remote,
 #                 and without an answer before the laptop takes over the
 #                 held-out seeds and FIRST_CHUNK_SEEDS training seeds
+#   GRID          the simulator's grid name; remote batches of another
+#                 grid are moved aside
 #   OUT           checkpoint directory
 #   OUTBREAKS     training outbreaks (8000)
 #   PUBLISH       1 to publish each checkpoint release
@@ -176,6 +178,9 @@ check_remote() {
   fi
   if [ -n "$free" ] && (( free >= REMOTE_MIN_FREE_GB )); then
     remote_ok=$now
+    # Batches of another grid are moved aside, never copied back.
+    remote "cd $REMOTE_DIR && if [ \"\$(cat $SIM_REMOTE/grid 2> /dev/null)\" != $GRID ]; then pkill -f '[f]inetune_remote.sh'; pkill -f '[f]inetune_simulate.R --args'; [ -d $SIM_REMOTE ] && mv $SIM_REMOTE $SIM_REMOTE-old-\$(date +%s); mkdir -p $SIM_REMOTE/logs; echo $GRID > $SIM_REMOTE/grid; echo moved; fi" 2> /dev/null \
+      | grep -q moved && log "moved $REMOTE's batches of another grid aside"
     # A scheduler started by hand runs more processes than memory allows.
     if remote "pkill -f '[r]un4.sh'" > /dev/null 2>&1; then
       log "stopped run4.sh on $REMOTE; its running batches finish"
