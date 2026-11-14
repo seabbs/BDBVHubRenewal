@@ -11,11 +11,59 @@ They equal the zone rows of the hub's `time-series.csv`.
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from pathlib import Path
 
 import pandas as pd
 
-__all__ = ["hub_zones", "is_zone", "province_of", "weekly_zone_counts"]
+from bdbvhubrenewal.data.tidy import load_daily_zones, load_health_zones
+
+__all__ = [
+    "ZoneData",
+    "hub_zones",
+    "is_zone",
+    "load_zone_data",
+    "province_of",
+    "weekly_zone_counts",
+]
+
+
+@dataclass(frozen=True)
+class ZoneData:
+    """The health-zone tables a forecast task carries.
+
+    Attributes
+    ----------
+    weekly : pandas.DataFrame
+        Weekly zone counts by release (`load_health_zones`).
+    daily : pandas.DataFrame
+        Daily zone onsets by release (`load_daily_zones`).
+    codes : tuple of str
+        The hub's zone codes (`hub_zones`).
+    """
+
+    weekly: pd.DataFrame
+    daily: pd.DataFrame
+    codes: tuple[str, ...]
+
+
+def load_zone_data(data_dir: Path | str) -> ZoneData:
+    """Load the zone tables and codes of a data directory.
+
+    Parameters
+    ----------
+    data_dir : pathlib.Path or str
+        Directory holding the tidy tables and `hub-config/tasks.json`.
+
+    Returns
+    -------
+    ZoneData
+    """
+    return ZoneData(
+        load_health_zones(data_dir),
+        load_daily_zones(data_dir),
+        hub_zones(Path(data_dir) / "hub-config" / "tasks.json"),
+    )
 
 
 def is_zone(location: str) -> bool:

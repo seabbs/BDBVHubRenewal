@@ -46,7 +46,8 @@ Chronos-2 forecasts every target series in the block jointly, from one shared la
   Lag series $d$ holds $Y_{p,t,d}$, missing where it is not yet reported, and Chronos-2 masks the missing values.
   $t^* = c - D$, the last step whose count is at lag $D$ or more, with $D = 4$ weeks or $D = 28$ days.
   The lag series run past $t^*$ as known future values, which is how recent counts reach the nowcast.
-  A place with no cases has no lag series, as they would be all zero. This keeps the daily block, about 75 places with cases of some 500, within memory.
+  A place with no cases has no lag series, as they would be all zero.
+  So the daily block, where 75 of 546 places have cases, fits in memory.
 
 Chronos-2 standardises each series and takes its arcsinh, so counts go in as they are.
 
@@ -75,7 +76,8 @@ So the release backtest scores them on the complete target only, the weeks the l
 ## Health zones
 
 The models forecast the zones themselves, as series of the block.
-A hub file needs zones that sum to their province, so its zone samples are the model's own, made to sum to the model's provinces sample by sample (`forecasters.zones.reconcile_zones`).
+Each model makes its zones sum to its provinces sample by sample, with each zone keeping its published count (`forecasters.zones.reconcile_zones`, [Health zones](baselines.md#health-zones)).
+So the stored forecasts, the hub file and the scores all have the zones as submitted.
 The other fitted models split their provinces across the zones instead ([Health zones](baselines.md#health-zones)).
 
 ## Fine-tuning
@@ -105,7 +107,7 @@ Such fits are retried by running the Fit store workflow with `retry_failed` (`gh
 
 - The zero-shot models use Chronos-2 as pretrained. It has not seen these data or outbreaks like them.
 - The fine-tuned models have seen only simulated outbreaks, whose delays and dynamics may not match these data.
-- The daily fine-tuned model was trained on blocks of at most five provinces but forecasts all 26 in one block.
+- The fine-tuned models were trained on blocks of at most 26 provinces, five for the daily one, but forecast all 546 hub targets in one block.
 - Draws are independent across steps and places, so every weekly value of the daily models, a sum of seven daily draws, is too narrow, as are sums over weeks or places.
 
 [^chronos2]: Ansari A F et al. (2025) Chronos-2: From univariate to universal forecasting. arXiv:2510.15821. Code: <https://github.com/amazon-science/chronos-forecasting>.

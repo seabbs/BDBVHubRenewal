@@ -187,8 +187,8 @@ class ForecastModel(Protocol):
             Columns `SAMPLE_COLUMNS`: one row per province, week and
             sample, with samples numbered 1 to `task.n_samples`. A sample
             number is one joint trajectory across weeks and provinces.
-            A model may add the country, and the zones of the task's
-            provinces, as their own rows.
+            A model may add the country, and every zone of the task's
+            provinces summed to its provinces, as their own rows.
             A model that answers `task.report_by` adds an `as_of` column:
             missing for the final counts, and $T$ for the counts it
             predicts are reported by $T$.
@@ -332,10 +332,13 @@ def _check_block(
 ) -> set[str]:
     """Check one set of sample rows against the task and return its places."""
     locs = set(rows["location"])
-    # Zones beyond the task's own places must be of its provinces.
+    # Zones, if any, are every zone of the task's provinces.
     zones = {c for c in locs - set(task.locations) if is_zone(c)}
-    if any(province_of(z) not in task.locations for z in zones):
-        raise ValueError(f"A zone is outside the task's provinces{what}.")
+    mine = {z for z in task.zone_codes if province_of(z) in task.locations}
+    if zones and zones != mine:
+        raise ValueError(
+            f"The zones are not those of the task's provinces{what}."
+        )
     if locs - zones not in (set(task.locations), {*task.locations, NATIONAL}):
         raise ValueError(f"Locations do not match the task{what}.")
     if set(rows["target_end_date"]) != weeks:

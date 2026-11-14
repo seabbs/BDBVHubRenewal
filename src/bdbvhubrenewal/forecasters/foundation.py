@@ -36,7 +36,7 @@ import numpy as np
 import pandas as pd
 
 from bdbvhubrenewal.data.dates import as_date, epiweek_end
-from bdbvhubrenewal.data.zones import province_of
+from bdbvhubrenewal.data.zones import province_of, weekly_zone_counts
 from bdbvhubrenewal.forecasters.base import (
     NATIONAL,
     SAMPLE_COLUMNS,
@@ -46,6 +46,7 @@ from bdbvhubrenewal.forecasters.base import (
 )
 from bdbvhubrenewal.forecasters.chain import start_weeks
 from bdbvhubrenewal.forecasters.randomwalk import RandomWalk
+from bdbvhubrenewal.forecasters.zones import reconcile_zones
 
 __all__ = [
     "ADAPTER_FILES",
@@ -613,7 +614,7 @@ def _walk_start(task: ForecastTask) -> str:
     return str(snap.week_ends[int(start_weeks(snap, walk.settings).min())])
 
 
-def _lags_of(group: Series, places: Sequence[str]) -> Series:
+def _lags_of(group: Series, places: set[str]) -> Series:
     """Keep the lag series of `places` only.
 
     A place with no cases has lag series of zeros, which tell Chronos-2
@@ -683,7 +684,8 @@ class FoundationModel:
         pandas.DataFrame
             Columns `location`, `target_end_date`, `sample`, `value`, for
             the country, the provinces and their zones, each its own
-            series.
+            series. The zones are made to sum to the provinces
+            (`forecasters.zones.reconcile_zones`).
 
         Raises
         ------
@@ -707,8 +709,12 @@ class FoundationModel:
                 f"{self.name} needs the {self.source} releases, and the task "
                 f"for {task.vintage} has none."
             )
-        zones = tuple(
-            z for z in task.zone_codes if province_of(z) in task.locations
+        zones = (
+            tuple(
+                z for z in task.zone_codes if province_of(z) in task.locations
+            )
+            if task.zone_daily_history is not None
+            else ()
         )
         places = (NATIONAL, *task.locations, *zones)
         weeks = list(task.target_end_dates)
@@ -723,7 +729,7 @@ class FoundationModel:
             )
         horizon = len(tri.times) - start
         seed = int(task.rng(self.name).integers(0, 2**31 - 1))
-        cased = [places[i] for i in np.flatnonzero(tri.final.sum(axis=1))]
+        cased = {places[i] for i in np.flatnonzero(tri.final.sum(axis=1))}
         group = _lags_of(layout_block(tri, self.layout, places, start), cased)
         sample = self.sample or partial(
             chronos_sampler, checkpoint=self.checkpoint
@@ -744,7 +750,7 @@ class FoundationModel:
         at = [reported.times.index(w) for w in weeks]
         values = np.maximum(values, reported.final[:, at])  # [S, L, W]
         n, n_loc = task.n_samples, len(places)
-        return pd.DataFrame(
+        out = pd.DataFrame(
             {
                 "location": np.repeat(list(places), n * len(weeks)),
                 "target_end_date": np.tile(weeks, n * n_loc),
@@ -754,6 +760,16 @@ class FoundationModel:
                 "value": values.transpose(1, 0, 2).reshape(-1),
             }
         )[list(SAMPLE_COLUMNS)]
+        if not zones:
+            return out
+        # The zones are made to sum to the provinces, as submitted.
+        assert task.zone_daily_history is not None
+        counts = weekly_zone_counts(task.zone_daily_history, task.vintage)
+        own = out["location"].isin(set(zones))
+        split = reconcile_zones(
+            out.loc[own], out.loc[~own], task, counts, zones
+        )
+        return pd.concat([out.loc[~own], split], ignore_index=True)
 
 
 for _source in SOURCES:
