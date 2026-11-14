@@ -5,6 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 import pytest
+from scipy.special import ndtri
 from scipy.stats import spearmanr
 
 from bdbvhubrenewal.forecasters import NATIONAL
@@ -153,19 +154,56 @@ def test_estimate_recovers_the_correlations() -> None:
     assert fit.rho_national == pytest.approx(0.5, abs=0.05)
 
 
-def test_estimate_of_no_correlation_is_floored_at_zero() -> None:
-    rng = np.random.default_rng(7)
-    weeks = ["2026-10-17", "2026-10-24"]
+def test_estimate_of_negative_correlation_is_floored_at_zero() -> None:
+    # Every pair of scores, across weeks and places, is of opposite sign.
     rows = [
-        ("m", str(o), loc, w, rng.normal())
+        ("m", str(o), loc, week, z)
         for o in range(5)
-        for loc in (NATIONAL, "CD-IT", "CD-NK")
-        for w in weeks
+        for loc, sign in ((NATIONAL, 1), ("CD-IT", -1))
+        for week, z in (
+            ("2026-10-17", sign * (o + 1.0)),
+            ("2026-10-24", -sign * (o + 1.0)),
+        )
     ]
     scores = pd.DataFrame(
         rows,
         columns=["model", "origin", "location", "target_end_date", "z"],
     )
     fit = estimate_copula(scores)
-    for rho in (fit.rho_time, fit.rho_provinces, fit.rho_national):
-        assert 0.0 <= rho < 1.0
+    assert fit.rho_time == 0.0
+    assert fit.rho_national == 0.0
+
+
+def test_a_truth_tied_with_draws_falls_among_them() -> None:
+    draws = np.r_[np.zeros(60), np.ones(40)]
+    forecasts = _forecasts({("CD", "2026-10-17"): draws})
+    truth = pd.DataFrame(
+        {"location": ["CD"], "target_end_date": ["2026-10-17"], "truth": [0.0]}
+    )
+    z = [
+        normal_scores(forecasts, truth, np.random.default_rng(s))["z"].iloc[0]
+        for s in range(200)
+    ]
+    # The PIT is uniform on (0, 61 / 101], so finite and below its top.
+    assert np.isfinite(z).all()
+    assert max(z) <= ndtri(61 / 101)
+    assert min(z) < ndtri(0.1)
+
+
+def test_weeks_with_no_truth_give_no_score() -> None:
+    forecasts = _forecasts(
+        {
+            ("CD", "2026-10-17"): np.arange(100.0),
+            ("CD", "2026-10-24"): np.arange(100.0),
+        }
+    )
+    truth = pd.DataFrame(
+        {
+            "location": ["CD", "CD"],
+            "target_end_date": ["2026-10-17", "2026-10-24"],
+            "truth": [10.0, np.nan],
+        }
+    )
+    out = normal_scores(forecasts, truth, np.random.default_rng(0))
+    assert out["target_end_date"].tolist() == ["2026-10-17"]
+    assert np.isfinite(out["z"]).all()

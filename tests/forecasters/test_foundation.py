@@ -237,6 +237,14 @@ def test_draws_are_paired_by_the_copula(name: str, task: ForecastTask) -> None:
 
 
 @pytest.mark.parametrize("name", MODELS)
+def test_paired_forecasts_are_reproducible(
+    name: str, task: ForecastTask
+) -> None:
+    model = dataclasses.replace(get_model(name), sample=_independent)
+    pd.testing.assert_frame_equal(model.forecast(task), model.forecast(task))
+
+
+@pytest.mark.parametrize("name", MODELS)
 def test_gives_no_delay(name: str, task: ForecastTask) -> None:
     model = dataclasses.replace(get_model(name), sample=_constant(0.0))
     model.forecast(task)
