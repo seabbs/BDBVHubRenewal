@@ -34,9 +34,9 @@ GRID=g
 """
 
 
-def run(tmp_path: Path, script: str) -> str:
+def run(tmp_path: Path, script: str, env: str = ENV) -> str:
     """Run bash with the driver's functions and return its output."""
-    (tmp_path / "round.env").write_text(ENV)
+    (tmp_path / "round.env").write_text(env)
     (tmp_path / "output" / "finetune").mkdir(parents=True)
     (tmp_path / "sims").mkdir()
     (tmp_path / "sims" / "settings-5902.csv").write_text("outbreak\n")
@@ -200,3 +200,26 @@ def test_seed_extension_reopens_a_finished_remote_scheduler(tmp_path):
         check=True,
     )
     assert "remote-done" in out.stdout
+
+
+def test_extra_seeds_run_after_held_out_and_before_training(tmp_path):
+    (tmp_path / "round.env").write_text(
+        ENV.replace("REMOTE=nowhere", "REMOTE=") + 'EXTRA_SEEDS="8016 7001"\n'
+    )
+    (tmp_path / "output" / "finetune").mkdir(parents=True)
+    (tmp_path / "sims").mkdir()
+    out = subprocess.run(
+        ["bash", "-c", f'set -- round.env; source "{DRIVER}"; local_seeds'],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert out.stdout.split()[2:6] == ["5903", "8016", "7001", "5001"]
+
+
+def test_remote_runs_extra_seeds_after_held_out(tmp_path):
+    env = ENV + 'EXTRA_SEEDS="8016 7001"\n'
+    out = run(tmp_path, "seeds | tr '\\n' ' '", env)
+    # Held-out 5902 is done; the laptop's own range 5009-5010 is skipped.
+    assert out.split()[:5] == ["5901", "5903", "8016", "7001", "5001"]

@@ -10,6 +10,8 @@
 #   SIM_DIR       local directory of the simulations
 #   TRAIN_FIRST, TRAIN_LAST       training seeds
 #   HELD_FIRST, HELD_LAST         held-out seeds (simulated first)
+#   EXTRA_SEEDS   optional seeds for other work, simulated after the
+#                 held-out seeds and never trained on
 #   LOCAL_FIRST, LOCAL_LAST       training seeds run on the laptop
 #   LOCAL_SLOTS, LOCAL_SLOTS_TRAINING, LOCAL_MIN_FREE_MEM_GB   most
 #                 local simulation processes before and during training,
@@ -123,6 +125,7 @@ local_seeds() {
   # With no remote, every seed.
   if [ -z "${REMOTE:-}" ]; then
     seq "$HELD_FIRST" "$HELD_LAST"
+    extra_seeds
     seq "$TRAIN_FIRST" "$TRAIN_LAST"
     return 0
   fi
@@ -130,10 +133,18 @@ local_seeds() {
   seq "$LOCAL_FIRST" "$LOCAL_LAST"
 }
 
-seeds() {
-  # Remote seeds: held-out first, then training seeds not run locally.
+extra_seeds() {
+  # Seeds simulated for other work (EXTRA_SEEDS), which the trainer never
+  # reads.
   local s
-  for s in $(seq "$HELD_FIRST" "$HELD_LAST") $(seq "$TRAIN_FIRST" "$TRAIN_LAST"); do
+  for s in ${EXTRA_SEEDS:-}; do echo "$s"; done
+}
+
+seeds() {
+  # Remote seeds: held-out first, then extra seeds, then training seeds
+  # not run locally.
+  local s
+  for s in $(seq "$HELD_FIRST" "$HELD_LAST") $(extra_seeds) $(seq "$TRAIN_FIRST" "$TRAIN_LAST"); do
     if (( s >= LOCAL_FIRST && s <= LOCAL_LAST )); then continue; fi
     grep -qx "$s" "$CLAIMED" && continue
     done_seed "$s" && continue
