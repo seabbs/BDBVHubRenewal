@@ -286,7 +286,10 @@ def outbreak_blocks(
     last = end - dt.timedelta(weeks=delay_weeks + 5)
     cutoffs = weekly_cutoffs(first, last.isoformat(), weekday)
     # Flat places may nest in regions, each a total of its places.
-    flat = len(provinces) >= 4 and not any("-" in p for p in provinces)
+    # Only places nest in regions; age groups total across places.
+    flat = len(provinces) >= 4 and all(
+        "-" not in p and p.startswith("P") for p in provinces
+    )
     if flat and rng.random() < REGIONS:
         nest = regions(provinces, rng)
         counts = counts.assign(location=counts["location"].map(nest))

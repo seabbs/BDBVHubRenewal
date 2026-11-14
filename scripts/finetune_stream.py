@@ -63,6 +63,25 @@ def log(message: str) -> None:
     print(f"{stamp} [train] {message}", flush=True)
 
 
+def read_ids(path: Path) -> pd.Series:
+    """Return a batch file's outbreak ids; none if every draw failed."""
+    if path.stat().st_size == 0:
+        return pd.Series([], dtype=str)
+    try:
+        return pd.read_csv(path, usecols=["outbreak"])["outbreak"]
+    except pd.errors.EmptyDataError:
+        return pd.Series([], dtype=str)
+
+
+def should_stop(
+    losses: list[float], done: int, stop_from: int, min_gain: float
+) -> bool:
+    """Return whether the last doubling cut held-out loss by too little."""
+    if done < stop_from or len(losses) < 2:
+        return False
+    return losses[-2] - losses[-1] < min_gain * losses[-2]
+
+
 def simulation_ids(outbreaks: pd.Series) -> set[str]:
     """Return the simulations of outbreak draws `<seed>-<index>[-<draw>]`."""
     parts = outbreaks.astype(str).str.split("-")
@@ -102,8 +121,8 @@ def seed_done(sim_dir: Path, seed: int) -> bool:
         if log_file.exists() and "Execution halted" in log_file.read_text():
             raise RuntimeError(f"simulation batch {seed} failed: {log_file}")
         return False
-    a = simulation_ids(pd.read_csv(settings, usecols=["outbreak"])["outbreak"])
-    b = simulation_ids(pd.read_csv(counts, usecols=["outbreak"])["outbreak"])
+    a = simulation_ids(read_ids(settings))
+    b = simulation_ids(read_ids(counts))
     if a != b:
         quarantine(sim_dir, seed, "has counts and settings that disagree")
         return False
@@ -119,7 +138,7 @@ def ready_outbreaks(sim_dir: Path, seeds: range) -> list[str]:
     for seed in seeds:
         if not seed_done(sim_dir, seed):
             break
-        ids = pd.read_csv(sim_dir / f"settings-{seed}.csv")["outbreak"]
+        ids = read_ids(sim_dir / f"settings-{seed}.csv")
         out.extend(sorted(ids, key=ft._order))
     return out
 
@@ -683,8 +702,7 @@ def main() -> None:
             # From `stop_from` on, go on only while the last doubling cut
             # held-out loss by more than `min_gain`.
             losses.append(settings["held_out_loss"])
-            gain = losses[-2] - losses[-1] if len(losses) > 1 else np.inf
-            if done >= args.stop_from and gain < args.min_gain * losses[-2]:
+            if should_stop(losses, done, args.stop_from, args.min_gain):
                 log(f"held-out loss gained under {args.min_gain:.0%}: stop")
                 break
         snapshot()

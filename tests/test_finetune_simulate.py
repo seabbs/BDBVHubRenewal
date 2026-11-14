@@ -82,7 +82,9 @@ set.seed(1)
 ok <- TRUE
 for (g in 0:2000) {
   d <- draw_design(g)
-  if (d$strata == "places_ages") ok <- ok && d$n_ages >= 3 && d$n_places * d$n_ages <= 60
+  if (d$strata == "places_ages") {
+    ok <- ok && d$n_ages >= 3 && d$n_places * d$n_ages <= 60
+  }
 }
 cat("ok", ok, "\\n")
 """,

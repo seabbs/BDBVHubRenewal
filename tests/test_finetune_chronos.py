@@ -161,7 +161,7 @@ def test_ages_are_not_grouped_into_regions():
 
     days = pd.date_range("2026-01-01", periods=140)
     rows = [
-        (f"A{a}", d, d + pd.Timedelta(days=2), 5)
+        (f"A{a}", str(d.date()), str((d + pd.Timedelta(days=2)).date()), 5)
         for a in range(1, 6)
         for d in days
     ]
@@ -176,13 +176,16 @@ def test_ages_are_not_grouped_into_regions():
 
 
 def test_an_empty_batch_is_done_with_no_simulations(tmp_path):
+    import pandas as pd
     from finetune_stream import ready_outbreaks
 
     (tmp_path / "settings-5001.csv").write_text("")
     (tmp_path / "counts-5001.csv.gz").write_text("")
     pd_rows = "outbreak\n5002-0001\n"
     (tmp_path / "settings-5002.csv").write_text(pd_rows)
-    (tmp_path / "counts-5002.csv.gz").write_text("outbreak\n5002-0001-1\n")
+    pd.DataFrame({"outbreak": ["5002-0001-1"]}).to_csv(
+        tmp_path / "counts-5002.csv.gz", index=False
+    )
     assert ready_outbreaks(tmp_path, range(5001, 5003)) == ["5002-0001"]
 
 
