@@ -18,8 +18,7 @@ import pandas as pd
 import yaml
 
 from paperfigs.periods import PERIODS
-from paperfigs.scores import STUDY_BASELINES
-from paperpipe.meta import DUMMY_LABEL
+from paperpipe.meta import DUMMY_LABEL, baseline_of
 
 __all__ = ["study_summary", "write_summary"]
 
@@ -37,29 +36,36 @@ def study_summary(meta: Mapping[str, Any], scores: pd.DataFrame) -> dict:
     Returns
     -------
     dict
-        `source`, `label` (empty for real data), `baseline`, `n_models`,
-        `best_model`, `best_rel_score` and `best_rel_log_score`.
+        `source`, `label` (empty for real data), `note` (what is
+        provisional), `baseline`, `n_models`, `best_model`,
+        `best_rel_score`, `best_rel_log_score` and, where the baseline is
+        another model, `best_rel_score_randomwalknowcast`.
     """
-    study = meta["study"]
-    baseline = STUDY_BASELINES[study]
+    baseline = baseline_of(meta)
     if "period" in scores.columns:
         scores = scores.loc[scores["period"] == PERIODS[-1]]
     others = scores.loc[scores["model"] != baseline].dropna(
         subset=["rel_score"]
     )
     best = others.loc[others["rel_score"].idxmin()] if len(others) else None
+
+    def value(col: str) -> float | None:
+        if best is None or col not in best or pd.isna(best[col]):
+            return None
+        return round(float(best[col]), 2)
+
     return {
         "source": meta["source"],
         "label": DUMMY_LABEL if meta["source"] == "dummy" else "",
+        "note": meta.get("note", ""),
         "baseline": baseline,
         "n_models": int(scores["model"].nunique()),
         "best_model": "" if best is None else str(best["model"]),
-        "best_rel_score": None
-        if best is None
-        else round(float(best["rel_score"]), 2),
-        "best_rel_log_score": None
-        if best is None
-        else round(float(best["rel_log_score"]), 2),
+        "best_rel_score": value("rel_score"),
+        "best_rel_log_score": value("rel_log_score"),
+        "best_rel_score_randomwalknowcast": value(
+            "rel_score_randomwalknowcast"
+        ),
     }
 
 

@@ -36,16 +36,19 @@ import numpy as np
 import pandas as pd
 
 __all__ = [
+    "BACKTEST_LEVELS",
     "COLUMNS",
     "DELAY_LEVEL",
     "HUB_BASELINE",
     "TARGET",
+    "backtest_forecasts",
     "candidate_samples",
     "hub_samples",
     "load",
     "observations",
     "reporting_delay",
     "round_close",
+    "sample_quantiles",
     "store_samples",
 ]
 
@@ -285,3 +288,75 @@ def load(
     table["study"] = "ebola"
     table["quantile_level"] = np.nan
     return table[list(COLUMNS)].reset_index(drop=True)
+
+
+BACKTEST_LEVELS: Final = {
+    "q5": 0.05,
+    "q25": 0.25,
+    "q50": 0.5,
+    "q75": 0.75,
+    "q95": 0.95,
+}
+"""Quantile columns of the release backtest and their levels."""
+
+
+def backtest_forecasts(path: str | Path) -> pd.DataFrame:
+    """Return the release backtest's forecasts of each week's complete count.
+
+    `bdbvhubrenewal backtest` forecasts from every past release and writes
+    the quantiles of each model's forecast (`nowcast-quantiles.csv`). Rows
+    of the `complete` target, the count as reported D days after the
+    week, become quantile forecasts in the paper's schema, with the
+    horizon in weeks from the release.
+    """
+    raw = pd.read_csv(path)
+    raw = raw.loc[raw["target"] == "complete"]
+    long = raw.melt(
+        id_vars=[
+            "model",
+            "origin",
+            "location",
+            "target_end_date",
+            "weeks_back",
+        ],
+        value_vars=list(BACKTEST_LEVELS),
+        var_name="column",
+        value_name="value",
+    )
+    return pd.DataFrame(
+        {
+            "study": "ebola",
+            "model": long["model"],
+            "location": long["location"],
+            "origin_date": pd.to_datetime(long["origin"]),
+            "target_date": pd.to_datetime(long["target_end_date"]),
+            "horizon": -long["weeks_back"].astype(int),
+            "quantile_level": long["column"].map(BACKTEST_LEVELS),
+            "sample_id": np.nan,
+            "value": long["value"].astype(float),
+            "truth": np.nan,
+        }
+    ).reset_index(drop=True)
+
+
+def sample_quantiles(
+    samples: pd.DataFrame, levels: Iterable[float]
+) -> pd.DataFrame:
+    """Return sample forecasts as quantile forecasts at `levels`."""
+    keys = [
+        "study",
+        "model",
+        "location",
+        "origin_date",
+        "target_date",
+        "horizon",
+    ]
+    levels = list(levels)
+    rows = [
+        (*key, level, np.nan, float(np.quantile(g["value"], level)), np.nan)
+        for key, g in samples.groupby(keys)
+        for level in levels
+    ]
+    return pd.DataFrame(
+        rows, columns=[*keys, "quantile_level", "sample_id", "value", "truth"]
+    )

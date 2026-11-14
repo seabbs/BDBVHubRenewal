@@ -38,7 +38,7 @@ from paperpipe.config import (
     run_settings,
 )
 from paperpipe.evidence import EVIDENCE, write_evidence
-from paperpipe.meta import read_meta, write_meta
+from paperpipe.meta import baseline_of, read_meta, write_meta
 from paperpipe.outputs import (
     design_tables,
     joint_table,
@@ -51,6 +51,7 @@ from paperpipe.studies import (
     load_data,
     missing,
     run_forecasts,
+    study_baseline,
 )
 from paperpipe.summary import study_summary, write_summary
 
@@ -89,6 +90,7 @@ def _sources(a: argparse.Namespace) -> Sources:
         germany_forecasts=tuple(a.germany_forecasts),
         germany_triangle=a.germany_triangle,
         hub=a.hub,
+        ebola_backtest=a.ebola_backtest,
         candidates=tuple(a.candidates),
         store=a.store,
         store_ref=a.store_ref,
@@ -118,7 +120,13 @@ def _data(a: argparse.Namespace) -> None:
         check_no_heldout_releases(obs, settings, a.delay)
     _write(validate_observations(obs), a.observations)
     _write(locations, a.locations)
-    write_meta(a.meta, a.study, "dummy" if reason else "real")
+    write_meta(
+        a.meta,
+        a.study,
+        "dummy" if reason else "real",
+        baseline=None if reason else study_baseline(a.study, sources, a.delay),
+        note="" if reason else a.note,
+    )
 
 
 def _forecasts(a: argparse.Namespace) -> None:
@@ -129,6 +137,7 @@ def _forecasts(a: argparse.Namespace) -> None:
         n_samples=a.n_samples,
         sources=_sources(a),
         source=read_meta(a.meta)["source"],
+        baseline=read_meta(a.meta).get("baseline"),
     )
     _write(fc, a.out)
 
@@ -162,6 +171,7 @@ def _figures(a: argparse.Namespace) -> None:
         dummy=read_meta(a.meta)["source"] == "dummy",
         truth=_read(a.truth),
         nowcasts=json.loads(a.config)["nowcasts"],
+        baseline=baseline_of(read_meta(a.meta)),
     )
 
 
@@ -169,7 +179,7 @@ def _joint(a: argparse.Namespace) -> None:
     fc = validate_forecasts(_read(a.forecasts))
     scores = joint_scores(attach_truth(fc, _read(a.truth)))
     _write(scores, a.out)
-    joint_table(scores, a.table)
+    joint_table(scores, a.table, baseline_of(read_meta(a.meta)))
 
 
 def _evidence(a: argparse.Namespace) -> None:
@@ -210,6 +220,7 @@ def _score_tables(a: argparse.Namespace) -> None:
         a.main_dir,
         a.si_dir,
         split=_date(a.split),
+        baseline=baseline_of(read_meta(a.meta)),
     )
 
 
@@ -223,6 +234,7 @@ def _limits(p: argparse.ArgumentParser) -> None:
     p.add_argument("--germany-forecasts", type=Path, nargs="*", default=[])
     p.add_argument("--germany-triangle", type=Path, default=None)
     p.add_argument("--hub", type=Path, default=None)
+    p.add_argument("--ebola-backtest", type=Path, default=None)
     p.add_argument("--candidates", type=Path, nargs="*", default=[])
     p.add_argument("--store", type=Path, default=None)
     p.add_argument("--store-ref", default="origin/fit-store")
@@ -245,6 +257,7 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("data")
     _limits(p)
     p.add_argument("--delay", type=int, default=None)
+    p.add_argument("--note", default="", help="What is provisional.")
     p.add_argument("--mode", required=True)
     p.add_argument("--config", required=True, help="Workflow config as JSON.")
     p.add_argument("--observations", type=Path, required=True)
@@ -287,9 +300,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("score-tables")
     _outputs(p)
+    p.add_argument("--meta", type=Path, required=True)
     p.set_defaults(run=_score_tables)
 
     p = sub.add_parser("joint-scores")
+    p.add_argument("--meta", type=Path, required=True)
     p.add_argument("--forecasts", type=Path, required=True)
     p.add_argument("--truth", type=Path, required=True)
     p.add_argument("--out", type=Path, required=True)

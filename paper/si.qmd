@@ -191,49 +191,49 @@ The cost of each option: series per block, memory and time.
 ::: {#tbl-synthetic-evaluated}
 {{< include build/tables/main/synthetic-grid.md >}}
 
-The share of evaluated outbreaks in each level of each grid factor, as each simulation recorded its cell. {{< meta results.synthetic.label >}}
+The share of evaluated outbreaks in each level of each grid factor, as each simulation recorded its cell. {{< meta results.synthetic.label >}} {{< meta results.synthetic.note >}}
 :::
 
 ::: {#fig-synthetic-si-nowcasts}
 ![](build/figures/si/synthetic-si-nowcasts.png)
 
-Held-out synthetic data: nowcasts of outbreaks drawn to cover the levels of the trajectory, delay form, observation model and strata, each titled by its cell, at origins drawn with the workflow's seed (dotted lines). Black is the rolling truth, grey the data as of each origin, and ribbons the 50% and 90% intervals of `randomwalknowcast` and Chronos-2 zero-shot and fine-tuned. {{< meta results.synthetic.label >}}
+Held-out synthetic data: nowcasts of outbreaks drawn to cover the levels of the trajectory, delay form, observation model and strata, each titled by its cell, at origins drawn with the workflow's seed (dotted lines). Black is the rolling truth, grey the data as of each origin, and ribbons the 50% and 90% intervals of `randomwalknowcast` and Chronos-2 zero-shot and fine-tuned. {{< meta results.synthetic.label >}} {{< meta results.synthetic.note >}}
 :::
 
 ::: {#fig-synthetic-si-factors}
 ![](build/figures/si/synthetic-si-factors.png)
 
-Held-out synthetic data: relative CRPS by level of each scenario factor. {{< meta results.synthetic.label >}}
+Held-out synthetic data: relative CRPS by level of each scenario factor. {{< meta results.synthetic.label >}} {{< meta results.synthetic.note >}}
 :::
 
 ::: {#fig-synthetic-si-factors-log}
 ![](build/figures/si/synthetic-si-factors-log.png)
 
-Held-out synthetic data: relative CRPS on the log scale by level of each scenario factor. {{< meta results.synthetic.label >}}
+Held-out synthetic data: relative CRPS on the log scale by level of each scenario factor. {{< meta results.synthetic.label >}} {{< meta results.synthetic.note >}}
 :::
 
 ::: {#fig-synthetic-si-wis-over-time}
 ![](build/figures/si/synthetic-si-wis-over-time.png)
 
-Held-out synthetic data: CRPS over time. {{< meta results.synthetic.label >}}
+Held-out synthetic data: CRPS over time. {{< meta results.synthetic.label >}} {{< meta results.synthetic.note >}}
 :::
 
 ::: {#fig-synthetic-si-finetune-size}
 ![](build/figures/si/synthetic-si-finetune-size.png)
 
-Held-out synthetic data: relative CRPS of each fine-tuning checkpoint, at doublings from 1,000 outbreaks, against the number of simulated outbreaks it was trained on (log scale). {{< meta results.synthetic.label >}}
+Held-out synthetic data: relative CRPS of each fine-tuning checkpoint, at doublings from 1,000 outbreaks, against the number of simulated outbreaks it was trained on (log scale). {{< meta results.synthetic.label >}} {{< meta results.synthetic.note >}}
 :::
 
 ::: {#tbl-synthetic-horizon}
 {{< include build/tables/si/synthetic-scores-by-horizon.md >}}
 
-Held-out synthetic data scores by horizon. {{< meta results.synthetic.label >}}
+Held-out synthetic data scores by horizon. {{< meta results.synthetic.label >}} {{< meta results.synthetic.note >}}
 :::
 
 ::: {#tbl-synthetic-location}
 {{< include build/tables/si/synthetic-scores-by-location.md >}}
 
-Held-out synthetic data scores by location and stratum. {{< meta results.synthetic.label >}}
+Held-out synthetic data scores by location and stratum. {{< meta results.synthetic.label >}} {{< meta results.synthetic.note >}}
 :::
 
 ### German nowcast hub
@@ -241,37 +241,37 @@ Held-out synthetic data scores by location and stratum. {{< meta results.synthet
 ::: {#fig-germany-si-nowcasts}
 ![](build/figures/si/germany-si-nowcasts.png)
 
-German nowcast hub: nowcasts for each state and age group at origins drawn with the workflow's seed (dotted lines). Black is the rolling truth, grey the data as of each origin, and ribbons the 50% and 90% intervals of `randomwalknowcast`, Chronos-2 zero-shot and fine-tuned, and the hub ensemble. {{< meta results.germany.label >}}
+German nowcast hub: nowcasts for each state and age group at origins drawn with the workflow's seed (dotted lines). Black is the rolling truth, grey the data as of each origin, and ribbons the 50% and 90% intervals of `randomwalknowcast`, Chronos-2 zero-shot and fine-tuned, and the hub ensemble. {{< meta results.germany.label >}} {{< meta results.germany.note >}}
 :::
 
 ::: {#fig-germany-si-location-horizon}
 ![](build/figures/si/germany-si-location-horizon.png)
 
-German nowcast hub: relative WIS by location and horizon. {{< meta results.germany.label >}}
+German nowcast hub: relative WIS by location and horizon. {{< meta results.germany.label >}} {{< meta results.germany.note >}}
 :::
 
 ::: {#fig-germany-si-location-horizon-log}
 ![](build/figures/si/germany-si-location-horizon-log.png)
 
-German nowcast hub: relative WIS on the log scale by location and horizon. {{< meta results.germany.label >}}
+German nowcast hub: relative WIS on the log scale by location and horizon. {{< meta results.germany.label >}} {{< meta results.germany.note >}}
 :::
 
 ::: {#fig-germany-si-wis-over-time}
 ![](build/figures/si/germany-si-wis-over-time.png)
 
-German nowcast hub: WIS over time, with a dotted line at the split. {{< meta results.germany.label >}}
+German nowcast hub: WIS over time, with a dotted line at the split. {{< meta results.germany.label >}} {{< meta results.germany.note >}}
 :::
 
 ::: {#tbl-germany-horizon}
 {{< include build/tables/si/germany-scores-by-horizon.md >}}
 
-German nowcast hub scores by horizon. {{< meta results.germany.label >}}
+German nowcast hub scores by horizon. {{< meta results.germany.label >}} {{< meta results.germany.note >}}
 :::
 
 ::: {#tbl-germany-location}
 {{< include build/tables/si/germany-scores-by-location.md >}}
 
-German nowcast hub scores by location and stratum. {{< meta results.germany.label >}}
+German nowcast hub scores by location and stratum. {{< meta results.germany.label >}} {{< meta results.germany.note >}}
 :::
 
 ### Ebola hub submissions
@@ -279,37 +279,37 @@ German nowcast hub scores by location and stratum. {{< meta results.germany.labe
 ::: {#fig-ebola-si-nowcasts}
 ![](build/figures/si/ebola-si-nowcasts.png)
 
-Ebola hub submissions: nowcasts for each province at origins drawn with the workflow's seed (dotted lines). Black is the rolling truth, grey the data as of each origin, and ribbons the 50% and 90% intervals of `randomwalknowcast` and Chronos-2 zero-shot and fine-tuned. {{< meta results.ebola.label >}}
+Ebola hub submissions: nowcasts for each province at origins drawn with the workflow's seed (dotted lines). Black is the rolling truth, grey the data as of each origin, and ribbons the 50% and 90% intervals of `randomwalknowcast` and Chronos-2 zero-shot and fine-tuned. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
 :::
 
 ::: {#fig-ebola-si-location-horizon}
 ![](build/figures/si/ebola-si-location-horizon.png)
 
-Ebola hub submissions: relative CRPS by location and horizon. {{< meta results.ebola.label >}}
+Ebola: relative WIS by location and horizon. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
 :::
 
 ::: {#fig-ebola-si-location-horizon-log}
 ![](build/figures/si/ebola-si-location-horizon-log.png)
 
-Ebola hub submissions: relative CRPS on the log scale by location and horizon. {{< meta results.ebola.label >}}
+Ebola: relative WIS on the log scale by location and horizon. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
 :::
 
 ::: {#fig-ebola-si-wis-over-time}
 ![](build/figures/si/ebola-si-wis-over-time.png)
 
-Ebola hub submissions: CRPS over time. {{< meta results.ebola.label >}}
+Ebola: WIS over time. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
 :::
 
 ::: {#tbl-ebola-horizon}
 {{< include build/tables/si/ebola-scores-by-horizon.md >}}
 
-Ebola hub submissions scores by horizon. {{< meta results.ebola.label >}}
+Ebola hub submissions scores by horizon. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
 :::
 
 ::: {#tbl-ebola-location}
 {{< include build/tables/si/ebola-scores-by-location.md >}}
 
-Ebola hub submissions scores by location and stratum. {{< meta results.ebola.label >}}
+Ebola hub submissions scores by location and stratum. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
 :::
 
 ## References {.unnumbered}

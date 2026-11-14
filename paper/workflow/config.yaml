@@ -33,14 +33,26 @@ germany:
   # keeps the models matching a regular expression, `suffix` renames
   # them, and `backtest` reads a `germany-backtest` table. A development
   # run fails if one holds a held-out date.
+  # `provisional` notes what is to be redone, in every German caption.
   extra:
-    - {evidence: germany_chronos, models: "^fm_chronos_"}
-    - {evidence: germany_chronos_n1000, backtest: true, suffix: _n1000}
+    - evidence: germany_chronos
+      models: "^fm_chronos_"
+      provisional: &chronos >-
+        Chronos-2 rows are provisional: their daily source treated reports
+        at lags of 28 days or more as final, and they are being rescored.
+    - evidence: germany_chronos_n1000
+      backtest: true
+      suffix: _n1000
+      provisional: *chronos
 
-# The Ebola hub's data and forecasts, our stored forecasts and the fit
-# store. `hub: null` runs the study on dummy data, as does a hub whose
-# baseline has no forecast with known truth yet.
+# The Ebola study: the release backtest of `backtest_models` from every
+# past release (`bdbvhubrenewal backtest`), the hub's releases, and once
+# the hub's baseline has a forecast with known truth, every team's
+# forecasts, our stored forecasts and the fit store. `hub: null` runs the
+# study on dummy data.
 ebola:
+  backtest: ../results/nowcast-quantiles.csv
+  backtest_models: [randomwalk, randomwalknowcast]
   hub: ../data/raw/bdbv-hub
   hub_repo: https://github.com/InsightNet-US/BDBV-Modeling-Hub.git
   candidates: [../data/candidate-forecasts.csv.gz]
@@ -89,10 +101,18 @@ evidence:
   copula_rho: null
   aggregation_scores: null
   aggregation_cost: null
-  finetune_heldout: null
-  sim_summaries: null
-  sim_realism: null
-  sim_diseases: null
+  finetune_heldout:
+    ref: 31ea2bf4c687f5c0ea85d9a880fa0f6cfcb3dce3
+    path: results/finetune/finetune-heldout.csv
+  sim_summaries:
+    ref: 31ea2bf4c687f5c0ea85d9a880fa0f6cfcb3dce3
+    path: results/finetune/sim-summaries-r3-pilot.csv
+  sim_realism:
+    ref: 31ea2bf4c687f5c0ea85d9a880fa0f6cfcb3dce3
+    path: results/finetune/sim-realism-r3-pilot.csv
+  sim_diseases:
+    ref: 31ea2bf4c687f5c0ea85d9a880fa0f6cfcb3dce3
+    path: results/finetune/sim-diseases-r3-pilot.csv
 
 # Data the development runs use.
 development:

@@ -13,6 +13,7 @@ from paperpipe.studies import (
     missing,
     run_forecasts,
     source_of,
+    study_baseline,
 )
 
 SPLIT = pd.Timestamp("2022-02-10")
@@ -62,22 +63,62 @@ def hub_with_baseline(hub):
     return hub
 
 
-def test_ebola_reads_the_hub_once_its_baseline_is_scorable(
-    hub_with_baseline,
+def _backtest(path: Path) -> Path:
+    """A release backtest table with one model at one release."""
+    pd.DataFrame(
+        {
+            "model": "randomwalknowcast",
+            "origin": "2026-11-01",
+            "target": ["complete", "reported"],
+            "location": "CD",
+            "target_end_date": "2026-10-24",
+            "weeks_back": 1,
+            "q5": 1.0,
+            "q25": 2.0,
+            "q50": 3.0,
+            "q75": 4.0,
+            "q95": 5.0,
+        }
+    ).to_csv(path, index=False)
+    return path
+
+
+def test_ebola_reads_the_release_backtest_then_the_hub(
+    hub_with_baseline, tmp_path
 ) -> None:
-    sources = Sources(hub=hub_with_baseline)
+    sources = Sources(
+        hub=hub_with_baseline, ebola_backtest=_backtest(tmp_path / "q.csv")
+    )
     assert source_of("ebola", sources, delay_days=14) == "real"
     obs, locations = load_data("ebola", delay_days=14, sources=sources)
-    assert set(obs["study"]) == {"ebola"}
     assert len(obs) == 6
-    assert list(locations["location"]) == ["CD"]
     assert locations["delay_days"].iloc[0] == 14
+    # The hub's baseline can be scored, so it is the baseline and the
+    # hub's forecasts join as quantiles.
+    assert study_baseline("ebola", sources, delay_days=14) is None
     fc = run_forecasts("ebola", sources=sources, source="real")
-    assert set(fc["model"]) == {"team-a", HUB_BASELINE}
+    assert {"randomwalknowcast", "team-a", HUB_BASELINE} <= set(fc["model"])
+    assert fc["sample_id"].isna().all()
+    assert set(fc["quantile_level"]) == {0.05, 0.25, 0.5, 0.75, 0.95}
     assert fc["truth"].isna().all()
 
 
-def test_ebola_stays_dummy_until_its_baseline_is_scorable(hub) -> None:
+def test_ebola_is_relative_to_randomwalknowcast_until_the_hub_can_be(
+    hub, tmp_path
+) -> None:
+    sources = Sources(hub=hub, ebola_backtest=_backtest(tmp_path / "q.csv"))
+    assert (
+        study_baseline("ebola", sources, delay_days=14) == "randomwalknowcast"
+    )
+    fc = run_forecasts(
+        "ebola", sources=sources, source="real", baseline="randomwalknowcast"
+    )
+    assert set(fc["model"]) == {"randomwalknowcast"}
+    # Only the complete target, as quantiles.
+    assert len(fc) == 5
+
+
+def test_ebola_without_a_backtest_or_hub_is_dummy(hub) -> None:
     assert source_of("ebola", Sources(hub=hub), delay_days=14) == "dummy"
     assert source_of("ebola", Sources()) == "dummy"
 
@@ -154,13 +195,14 @@ def test_germany_needs_its_truth_delay() -> None:
 def test_missing_names_why_a_study_cannot_use_real_data(hub) -> None:
     assert "simulations" in missing("synthetic", Sources(), seeds=(9001,))
     assert "hub" in missing("ebola", Sources())
-    assert "baseline" in missing("ebola", Sources(hub=hub), delay_days=14)
+    assert "backtest" in missing("ebola", Sources(hub=hub), delay_days=14)
     assert "German" in missing("germany", Sources())
 
 
-def test_ebola_without_a_delay_names_it(hub) -> None:
+def test_ebola_without_a_delay_names_it(hub, tmp_path) -> None:
     # The fixture's releases never reach 98% of the latest count.
-    assert "delay" in missing("ebola", Sources(hub=hub))
+    sources = Sources(hub=hub, ebola_backtest=_backtest(tmp_path / "q.csv"))
+    assert "delay" in missing("ebola", sources)
 
 
 def test_a_paper_run_fails_on_dummy_data(tmp_path) -> None:

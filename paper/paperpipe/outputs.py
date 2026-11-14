@@ -36,7 +36,11 @@ from paperfigs.plots import (
     si_scores_by_location_horizon,
     si_wis_over_time,
 )
-from paperfigs.scores import relative_scores, summarise_scores
+from paperfigs.scores import (
+    STUDY_BASELINES,
+    relative_scores,
+    summarise_scores,
+)
 from paperfigs.style import theme
 from paperpipe.meta import DUMMY_LABEL
 
@@ -121,13 +125,19 @@ def _figures(
     split: pd.Timestamp | None,
     truth: pd.DataFrame,
     nowcasts: Mapping,
+    baseline: str,
 ) -> dict[str, Figure]:
     seed = int(nowcasts["seed"])
     models = place_models(
         forecasts["model"].unique(), nowcasts["models"][study]
     )
     origins = pick_origins(forecasts, int(nowcasts["origins"]), seed)
-    shown = {"ribbon_models": models, "origins": origins, "truth": truth}
+    shown = {
+        "ribbon_models": models,
+        "origins": origins,
+        "truth": truth,
+        "baseline": baseline,
+    }
     if study == "synthetic":
         # Outbreaks are many, so scores break down by scenario factor.
         # The fine-tune's checkpoints appear only in their own figure.
@@ -148,12 +158,12 @@ def _figures(
             "si-nowcasts": si_nowcasts(
                 forecasts, observations, panels, models, origins, truth
             ),
-            "si-factors": si_scores_by_factor(main, factors),
+            "si-factors": si_scores_by_factor(main, factors, baseline),
             "si-factors-log": si_scores_by_factor(
-                main, factors, col="rel_log_score"
+                main, factors, baseline, col="rel_log_score"
             ),
             "si-wis-over-time": si_wis_over_time(main),
-            "si-finetune-size": si_scores_by_finetune_size(scores),
+            "si-finetune-size": si_scores_by_finetune_size(scores, baseline),
         }
     national = _national(study, forecasts, nowcasts)
     return {
@@ -174,10 +184,10 @@ def _figures(
             truth,
         ),
         "si-location-horizon": si_scores_by_location_horizon(
-            scores, split=split
+            scores, baseline, split=split
         ),
         "si-location-horizon-log": si_scores_by_location_horizon(
-            scores, col="rel_log_score", split=split
+            scores, baseline, col="rel_log_score", split=split
         ),
         "si-wis-over-time": si_wis_over_time(scores, split=split),
     }
@@ -196,6 +206,7 @@ def write_figures(
     *,
     truth: pd.DataFrame,
     nowcasts: Mapping,
+    baseline: str,
 ) -> list[Path]:
     """Write a study's figures as `<study>-<name>.png` and return the paths.
 
@@ -218,6 +229,8 @@ def write_figures(
     nowcasts : mapping
         Which series, origins and models the nowcast panels show: the
         `nowcasts` block of the workflow config.
+    baseline : str
+        The model scores are relative to.
 
     Returns
     -------
@@ -236,6 +249,7 @@ def write_figures(
             split,
             truth,
             nowcasts,
+            baseline,
         )
         for part, folder in dirs.items():
             folder.mkdir(parents=True, exist_ok=True)
@@ -253,10 +267,25 @@ def _mark_dummy(fig: Figure) -> None:
     fig.suptitle(DUMMY_LABEL, color="#b3261e", fontweight="bold")
 
 
-def _table(scores: pd.DataFrame, by: list[str]) -> pd.DataFrame:
-    rel = relative_scores(scores, by=by).drop(columns="n")
-    mean = summarise_scores(scores, by=by)
-    return mean.merge(rel, on=["study", "model", *by], how="left")
+REFERENCE: Final = "randomwalknowcast"
+"""A second reference for the score tables when the baseline is another
+model, such as a hub's point-forecast baseline."""
+
+
+def _table(scores: pd.DataFrame, by: list[str], baseline: str) -> pd.DataFrame:
+    keys = ["study", "model", *by]
+    rel = relative_scores(scores, by=by, baseline=baseline).drop(columns="n")
+    out = summarise_scores(scores, by=by).merge(rel, on=keys, how="left")
+    if baseline != REFERENCE and REFERENCE in set(scores["model"]):
+        ref = relative_scores(scores, by=by, baseline=REFERENCE)
+        ref = ref.drop(columns="n").rename(
+            columns={
+                "rel_score": f"rel_score_{REFERENCE}",
+                "rel_log_score": f"rel_log_score_{REFERENCE}",
+            }
+        )
+        out = out.merge(ref, on=keys, how="left")
+    return out
 
 
 def _grid(locations: pd.DataFrame) -> pd.DataFrame:
@@ -281,12 +310,14 @@ def score_tables(
     main_dir: Path,
     si_dir: Path,
     split: pd.Timestamp | None = None,
+    baseline: str | None = None,
 ) -> list[Path]:
     """Write a study's score tables as CSV and return the paths.
 
     Each table has the mean scores, coverage and number of forecasts of
     each model, with `rel_score` and `rel_log_score` relative to the
-    study's baseline. With a `split`, every table is split by `period`.
+    study's baseline, and to `REFERENCE` as well when the baseline is
+    another model. With a `split`, every table is split by `period`.
 
     Parameters
     ----------
@@ -300,21 +331,25 @@ def score_tables(
         Folders for the main-text and SI tables.
     split : pandas.Timestamp, optional
         First held-out origin date.
+    baseline : str, optional
+        The model scores are relative to. Defaults to the study's entry in
+        `STUDY_BASELINES`.
 
     Returns
     -------
     list of pathlib.Path
         The tables written.
     """
+    baseline = baseline or STUDY_BASELINES[study]
     scores = add_period(drop_checkpoints(scores), split)
     period = ["period"] if split is not None else []
     tables = {
-        main_dir / f"{study}-scores.csv": _table(scores, period),
+        main_dir / f"{study}-scores.csv": _table(scores, period, baseline),
         si_dir / f"{study}-scores-by-horizon.csv": _table(
-            scores, [*period, "horizon"]
+            scores, [*period, "horizon"], baseline
         ),
         si_dir / f"{study}-scores-by-location.csv": _table(
-            scores, [*period, "location", "stratum"]
+            scores, [*period, "location", "stratum"], baseline
         ),
     }
     if study == "synthetic":
@@ -377,7 +412,9 @@ def design_tables(grid: Path, main_dir: Path, si_dir: Path) -> list[Path]:
     return list(paths)
 
 
-def joint_table(scores: pd.DataFrame, path: Path) -> Path:
+def joint_table(
+    scores: pd.DataFrame, path: Path, baseline: str | None = None
+) -> Path:
     """Write the mean joint scores relative to the baseline, as Markdown.
 
     Parameters
@@ -392,7 +429,11 @@ def joint_table(scores: pd.DataFrame, path: Path) -> Path:
     pathlib.Path
         The table written.
     """
-    table = relative_joint_scores(scores)
+    if scores.empty:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("*No sample trajectories to score jointly.*\n")
+        return path
+    table = relative_joint_scores(scores, baseline=baseline)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(to_markdown(table))
     return path

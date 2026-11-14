@@ -107,7 +107,10 @@ def sources(w):
         tables = " ".join(germany_tables(w.mode))
         return f"--germany-forecasts {tables} --germany-triangle {TRIANGLE}"
     if w.study == "ebola" and EBOLA["hub"]:
-        args = [f"--hub {shlex.quote(EBOLA['hub'])}"]
+        args = [
+            f"--hub {shlex.quote(EBOLA['hub'])}",
+            f"--ebola-backtest {shlex.quote(EBOLA['backtest'])}",
+        ]
         if EBOLA["candidates"]:
             files = " ".join(shlex.quote(c) for c in EBOLA["candidates"])
             args.append(f"--candidates {files}")
@@ -124,7 +127,8 @@ def source_files(w):
         triangle = [TRIANGLE] if GERMANY["real"] else []
         return [*germany_tables(w.mode), *triangle]
     if w.study == "ebola" and EBOLA["hub"]:
-        return [f"{EBOLA['hub']}/target-data/time-series.csv"]
+        hub = f"{EBOLA['hub']}/target-data/time-series.csv"
+        return [hub, EBOLA["backtest"]]
     return []
 
 
@@ -248,6 +252,18 @@ rule ebola_hub:
         "rm -rf {params.hub} && mv {params.hub}.clone {params.hub}"
 
 
+# The release backtest of the models on main, from every past release. CI
+# has run it by the paper step, so this rule then has nothing to do.
+rule ebola_backtest:
+    output:
+        EBOLA["backtest"],
+    params:
+        models=" ".join(EBOLA["backtest_models"]),
+    shell:
+        "cd .. && {BDBV} data && "
+        "{BDBV} backtest --models {params.models} --no-recovery"
+
+
 rule data:
     input:
         source_files,
@@ -263,10 +279,16 @@ rule data:
             if w.study in config.get("truth_delay", {})
             else ""
         ),
+        note=lambda w: (
+            f"--note {shlex.quote(provisional())}"
+            if w.study == "germany" and provisional()
+            else ""
+        ),
         config=shlex.quote(json.dumps(config)),
     shell:
         "{PYTHON} -m paperpipe data {wildcards.study} {params.limits} "
-        "{params.sources} {params.delay} --mode {wildcards.mode} "
+        "{params.sources} {params.delay} {params.note} "
+        "--mode {wildcards.mode} "
         "--config {params.config} "
         "--observations {output.observations} "
         "--locations {output.locations} --meta {output.meta}"
@@ -326,11 +348,13 @@ rule joint_scores:
     input:
         forecasts=rules.table.output,
         truth=rules.truth.output,
+        meta=rules.data.output.meta,
     output:
         scores=f"{R}/{{mode}}/scores/{{study}}-joint.csv.gz",
         table=f"{R}/{{mode}}/tables/main/{{study}}-joint.md",
     shell:
         "{PYTHON} -m paperpipe joint-scores --forecasts {input.forecasts} "
+        "--meta {input.meta} "
         "--truth {input.truth} --out {output.scores} --table {output.table}"
 
 
@@ -384,6 +408,7 @@ for study in STUDIES:
         input:
             locations=study_files(study)["locations"],
             scores=study_files(study)["scores"],
+            meta=study_files(study)["meta"],
         output:
             tables("{mode}", study),
         params:
@@ -394,6 +419,7 @@ for study in STUDIES:
         shell:
             "{PYTHON} -m paperpipe score-tables {params.study} "
             "--scores {input.scores} --locations {input.locations} "
+            "--meta {input.meta} "
             "--main-dir {params.main} --si-dir {params.si} {params.split}"
 
 
@@ -437,6 +463,12 @@ for name, entry in EVIDENCE.items():
         shell:
             "git fetch -q --depth 1 origin {params.ref} 2>/dev/null || true; "
             "git show {params.ref}:{params.path} > {output}"
+
+
+def provisional():
+    """What is provisional in the further German forecasts, if anything."""
+    notes = [e.get("provisional") for e in GERMANY.get("extra") or []]
+    return " ".join(dict.fromkeys(n for n in notes if n))
 
 
 def extra_args(entry):

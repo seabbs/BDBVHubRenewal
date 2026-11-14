@@ -66,7 +66,9 @@ def joint_scores(forecasts: pd.DataFrame) -> pd.DataFrame:
 
 
 def relative_joint_scores(
-    scores: pd.DataFrame, by: list[str] | None = None
+    scores: pd.DataFrame,
+    by: list[str] | None = None,
+    baseline: str | None = None,
 ) -> pd.DataFrame:
     """Return each model's mean joint scores and their ratio to the baseline.
 
@@ -76,6 +78,8 @@ def relative_joint_scores(
         `joint_scores` output for one study.
     by : list of str, optional
         Columns to group by beyond the model.
+    baseline : str, optional
+        The reference model. Defaults to the study's `STUDY_BASELINES`.
 
     Returns
     -------
@@ -85,7 +89,7 @@ def relative_joint_scores(
     """
     by = by or []
     study = str(scores["study"].iloc[0])
-    base = scores.loc[scores["model"] == STUDY_BASELINES[study]]
+    base = scores.loc[scores["model"] == (baseline or STUDY_BASELINES[study])]
     keys = [k for k in _KEYS if k != "model"]
     paired = scores.merge(
         base[[*keys, *JOINT]], on=keys, suffixes=("", "_base")

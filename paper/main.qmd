@@ -190,7 +190,7 @@ Key references: the Methods references, with [@bracherEvaluatingEpidemicForecast
 ::: {#fig-synthetic}
 ![](build/figures/main/synthetic-results.png)
 
-Held-out synthetic data. (A) Nowcasts of one held-out outbreak, drawn with the workflow's seed, against the rolling truth; (B, C) CRPS relative to `randomwalknowcast` on the natural and log scales; (D) bias; (E) 50% and 90% coverage; (F) relative CRPS by scenario factor; (G) relative CRPS by horizon. {{< meta results.synthetic.label >}}
+Held-out synthetic data. (A) Nowcasts of one held-out outbreak, drawn with the workflow's seed, against the rolling truth; (B, C) CRPS relative to `randomwalknowcast` on the natural and log scales; (D) bias; (E) 50% and 90% coverage; (F) relative CRPS by scenario factor; (G) relative CRPS by horizon. {{< meta results.synthetic.label >}} {{< meta results.synthetic.note >}}
 :::
 
 Placeholder summary from the workflow: the best model was {{< meta results.synthetic.best_model >}}, with a relative score of {{< meta results.synthetic.best_rel_score >}} and {{< meta results.synthetic.best_rel_log_score >}} on the log scale, against {{< meta results.synthetic.baseline >}}.
@@ -198,13 +198,13 @@ Placeholder summary from the workflow: the best model was {{< meta results.synth
 ::: {#tbl-synthetic-scores}
 {{< include build/tables/main/synthetic-scores.md >}}
 
-Held-out synthetic data: mean scores, coverage and number of forecasts of each model, with scores relative to {{< meta results.synthetic.baseline >}}. {{< meta results.synthetic.label >}}
+Held-out synthetic data: mean scores, coverage and number of forecasts of each model, with scores relative to {{< meta results.synthetic.baseline >}}. {{< meta results.synthetic.label >}} {{< meta results.synthetic.note >}}
 :::
 
 ::: {#tbl-synthetic-joint}
 {{< include build/tables/main/synthetic-joint.md >}}
 
-Held-out synthetic data: mean energy and variogram scores of each model's trajectories on log(x + 1) counts, and their ratio to {{< meta results.synthetic.baseline >}} on the forecasts both made. {{< meta results.synthetic.label >}}
+Held-out synthetic data: mean energy and variogram scores of each model's trajectories on log(x + 1) counts, and their ratio to {{< meta results.synthetic.baseline >}} on the forecasts both made. {{< meta results.synthetic.label >}} {{< meta results.synthetic.note >}}
 :::
 
 ### German nowcast hub
@@ -218,15 +218,15 @@ Held-out synthetic data: mean energy and variogram scores of each model's trajec
 ::: {#fig-germany}
 ![](build/figures/main/germany-results.png)
 
-German nowcast hub. (A) National nowcasts against the rolling truth, with a dotted line at the split between the development and held-out halves; (B, C) WIS relative to `KIT-frozen_baseline` on the natural and log scales; (D) bias; (E) 50% and 95% coverage; (F) relative WIS by location; (G) by age group; (H) by horizon. {{< meta results.germany.label >}}
+German nowcast hub. (A) National nowcasts against the rolling truth, with a dotted line at the split between the development and held-out halves; (B, C) WIS relative to `KIT-frozen_baseline` on the natural and log scales; (D) bias; (E) 50% and 95% coverage; (F) relative WIS by location; (G) by age group; (H) by horizon. {{< meta results.germany.label >}} {{< meta results.germany.note >}}
 :::
 
-Placeholder summary from the workflow: the best model was {{< meta results.germany.best_model >}}, with a relative score of {{< meta results.germany.best_rel_score >}} and {{< meta results.germany.best_rel_log_score >}} on the log scale, against {{< meta results.germany.baseline >}}.
+Placeholder summary from the workflow: the best model was {{< meta results.germany.best_model >}}, with a relative score of {{< meta results.germany.best_rel_score >}} and {{< meta results.germany.best_rel_log_score >}} on the log scale, against {{< meta results.germany.baseline >}}, and {{< meta results.germany.best_rel_score_randomwalknowcast >}} against `randomwalknowcast`, as the hub's baseline is a point forecast with no coverage.
 
 ::: {#tbl-germany-scores}
 {{< include build/tables/main/germany-scores.md >}}
 
-German nowcast hub: mean scores, coverage and number of forecasts of each model, with scores relative to {{< meta results.germany.baseline >}}. {{< meta results.germany.label >}}
+German nowcast hub: mean scores, coverage and number of forecasts of each model, with scores relative to {{< meta results.germany.baseline >}}. {{< meta results.germany.label >}} {{< meta results.germany.note >}}
 :::
 
 ### Ebola hub submissions
@@ -239,7 +239,7 @@ German nowcast hub: mean scores, coverage and number of forecasts of each model,
 ::: {#fig-ebola}
 ![](build/figures/main/ebola-results.png)
 
-Ebola hub submissions. (A) National nowcasts against the rolling truth; (B, C) CRPS relative to `BDBVHub-baseline` on the natural and log scales; (D) bias; (E) 50% and 90% coverage; (F) relative CRPS by location; (G) by horizon. {{< meta results.ebola.label >}}
+Ebola: forecasts from past releases (release backtest), joined by the hub's forecasts as they can be scored. (A) National nowcasts against the rolling truth; (B, C) WIS relative to {{< meta results.ebola.baseline >}} on the natural and log scales; (D) bias; (E) 50% and 90% coverage; (F) relative WIS by location; (G) by horizon. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
 :::
 
 Placeholder summary from the workflow: the best model was {{< meta results.ebola.best_model >}}, with a relative score of {{< meta results.ebola.best_rel_score >}} and {{< meta results.ebola.best_rel_log_score >}} on the log scale, against {{< meta results.ebola.baseline >}}.
@@ -247,13 +247,13 @@ Placeholder summary from the workflow: the best model was {{< meta results.ebola
 ::: {#tbl-ebola-scores}
 {{< include build/tables/main/ebola-scores.md >}}
 
-Ebola hub submissions: mean scores, coverage and number of forecasts of each model, with scores relative to {{< meta results.ebola.baseline >}}. {{< meta results.ebola.label >}}
+Ebola hub submissions: mean scores, coverage and number of forecasts of each model, with scores relative to {{< meta results.ebola.baseline >}}. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
 :::
 
 ::: {#tbl-ebola-joint}
 {{< include build/tables/main/ebola-joint.md >}}
 
-Ebola hub submissions: mean energy and variogram scores of each model's trajectories on log(x + 1) counts, and their ratio to {{< meta results.ebola.baseline >}} on the forecasts both made. {{< meta results.ebola.label >}}
+Ebola hub submissions: mean energy and variogram scores of each model's trajectories on log(x + 1) counts, and their ratio to {{< meta results.ebola.baseline >}} on the forecasts both made. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
 :::
 
 ## Discussion

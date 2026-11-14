@@ -187,15 +187,24 @@ def aggregation_table(
 
 
 def heldout_figure(curve: pd.DataFrame) -> Figure:
-    """Plot held-out loss against the outbreaks seen, one line per run."""
+    """Plot held-out loss against the outbreaks seen.
+
+    One line per run and set of held-out blocks (`blocks`), as losses on
+    different blocks do not compare.
+    """
     fig, ax = plt.subplots(figsize=(6, 3.6), layout="constrained")
-    for run, g in curve.groupby("run"):
-        g = g.sort_values("outbreaks")
-        ax.plot(g["outbreaks"], g["heldout_loss"], marker="o", ms=3, label=run)
-    ax.set_xscale("log")
+    for (run, blocks), g in curve.groupby(["run", "blocks"]):
+        g = g.sort_values("outbreaks_seen")
+        ax.plot(
+            g["outbreaks_seen"],
+            g["heldout_loss"],
+            marker="o",
+            ms=3,
+            label=f"{run}, {blocks}",
+        )
     ax.set_xlabel("Simulated outbreaks seen")
     ax.set_ylabel("Held-out loss")
-    ax.legend(frameon=False)
+    ax.legend(frameon=False, fontsize=8)
     return fig
 
 

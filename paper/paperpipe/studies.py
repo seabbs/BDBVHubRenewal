@@ -18,10 +18,11 @@ functions return dummy data from `paperfigs.dummy`:
 
 - Germany reads the benchmark's paper tables and reporting triangle
   (`paperdata.germany`).
-- Ebola reads a clone of the hub, our stored forecasts and the fit store
-  (`paperdata.ebola`), with D the hub's 98% reporting delay. It stays on
-  dummy data until the hub's baseline has a forecast with known truth,
-  as every score is relative to it.
+- Ebola reads the release backtest's forecasts from past releases and a
+  clone of the hub for its releases (`paperdata.ebola`), with D the hub's
+  98% reporting delay. Once the hub's baseline has a forecast with known
+  truth, the hub's forecasts join and scores are relative to it; until
+  then they are relative to `randomwalknowcast` (`study_baseline`).
 - The synthetic study reads the simulated outbreaks of the run's seeds
   (`paperdata.synthetic`) and the models' forecasts of them, which the
   synthetic runner of #192 writes. Its dummy data are one dummy study per
@@ -54,6 +55,7 @@ __all__ = [
     "missing",
     "run_forecasts",
     "source_of",
+    "study_baseline",
 ]
 
 DUMMY_EBOLA_DELAY: Final = 21
@@ -77,6 +79,8 @@ class Sources:
         The hub's reporting triangle.
     hub : pathlib.Path, optional
         A clone of the Ebola hub.
+    ebola_backtest : pathlib.Path, optional
+        The release backtest's quantiles (`nowcast-quantiles.csv`).
     candidates : tuple of pathlib.Path
         Files of our stored Ebola forecasts.
     store : pathlib.Path, optional
@@ -90,6 +94,7 @@ class Sources:
     germany_forecasts: tuple[Path, ...] = ()
     germany_triangle: Path | None = None
     hub: Path | None = None
+    ebola_backtest: Path | None = None
     candidates: tuple[Path, ...] = ()
     store: Path | None = None
     store_ref: str = "origin/fit-store"
@@ -170,18 +175,29 @@ def missing(
         return None
     if sources.hub is None:
         return "no Ebola hub clone is set (`ebola.hub`)"
+    if sources.ebola_backtest is None or not sources.ebola_backtest.exists():
+        return "no release backtest is set (`ebola.backtest`)"
     if delay_days is None and ebola.reporting_delay(sources.hub) is None:
         return (
             f"no reporting delay reaches {ebola.DELAY_LEVEL:.0%} of the "
             "Ebola hub's count yet"
         )
-    delay = _ebola_delay(sources, delay_days)
-    if not _baseline_scorable(sources.hub, delay):
-        return (
-            f"the Ebola hub's {ebola.HUB_BASELINE} has no forecast with "
-            "known truth yet"
-        )
     return None
+
+
+def study_baseline(
+    study: str, sources: Sources, delay_days: int | None = None
+) -> str | None:
+    """Return the model a study's scores are relative to, if not the usual.
+
+    Ebola scores are relative to the hub's baseline once it has a
+    forecast with known truth, and to `randomwalknowcast` until then.
+    """
+    if study != "ebola" or sources.hub is None:
+        return None
+    if _baseline_scorable(sources.hub, _ebola_delay(sources, delay_days)):
+        return None
+    return "randomwalknowcast"
 
 
 def source_of(
@@ -241,6 +257,37 @@ def _germany_forecasts(
             ", which this run must not read."
         )
     return fc
+
+
+def _ebola_forecasts(sources: Sources, with_hub: bool) -> pd.DataFrame:
+    """Return the release backtest's forecasts, with the hub's once scorable.
+
+    Hub forecasts are samples; they join as quantiles at the backtest's
+    levels so the study is scored by one metric.
+    """
+    assert sources.hub is not None
+    assert sources.ebola_backtest is not None
+    fc = ebola.backtest_forecasts(sources.ebola_backtest)
+    if not with_hub:
+        return fc
+    store = sources.store
+    if store is not None and not _has_ref(store, sources.store_ref):
+        log.warning(
+            "%s has no %s; the Ebola study reads no stored fits.",
+            store,
+            sources.store_ref,
+        )
+        store = None
+    hub = ebola.load(
+        sources.hub,
+        candidates=sources.candidates,
+        store=store,
+        store_ref=sources.store_ref,
+    )
+    levels = ebola.BACKTEST_LEVELS.values()
+    return pd.concat(
+        [fc, ebola.sample_quantiles(hub, levels)], ignore_index=True
+    )
 
 
 def _germany_data(
@@ -347,6 +394,7 @@ def run_forecasts(
     n_samples: int = 100,
     sources: Sources = NO_SOURCES,
     source: str = "dummy",
+    baseline: str | None = None,
 ) -> pd.DataFrame:
     """Return every model's forecasts for a study, in the schema.
 
@@ -364,6 +412,9 @@ def run_forecasts(
         Where the real data are.
     source : str
         `real` or `dummy`, as `source_of` gave for the study's data.
+    baseline : str, optional
+        The baseline `study_baseline` gave, if not the usual one. Ebola
+        leaves the hub's forecasts out while it is set.
 
     Returns
     -------
@@ -381,21 +432,7 @@ def run_forecasts(
     if study == "germany" and source == "real":
         return _germany_forecasts(sources, before)
     if study == "ebola" and source == "real":
-        assert sources.hub is not None
-        store = sources.store
-        if store is not None and not _has_ref(store, sources.store_ref):
-            log.warning(
-                "%s has no %s; the Ebola study reads no stored fits.",
-                store,
-                sources.store_ref,
-            )
-            store = None
-        return ebola.load(
-            sources.hub,
-            candidates=sources.candidates,
-            store=store,
-            store_ref=sources.store_ref,
-        )
+        return _ebola_forecasts(sources, with_hub=baseline is None)
     fc, _ = dummy_study(study, n_samples=n_samples)
     if study == "germany":
         fc = _before(fc, "origin_date", before)
