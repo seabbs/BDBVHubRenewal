@@ -128,7 +128,7 @@ def test_normal_scores_are_the_truths_place_in_the_forecast() -> None:
             "truth": [49.5, 1000.0, 0.0],
         }
     )
-    out = normal_scores(forecasts, truth, np.random.default_rng(0))
+    out = normal_scores(forecasts, truth, seed=0)
     z = out.set_index(["location", "target_end_date"])["z"]
     assert z[("CD", "2026-10-17")] == pytest.approx(0.0, abs=0.03)
     assert z[("CD", "2026-10-24")] > 2.3
@@ -185,8 +185,7 @@ def test_a_truth_tied_with_draws_falls_among_them() -> None:
         {"location": ["CD"], "target_end_date": ["2026-10-17"], "truth": [0.0]}
     )
     z = [
-        normal_scores(forecasts, truth, np.random.default_rng(s))["z"].iloc[0]
-        for s in range(200)
+        normal_scores(forecasts, truth, seed=s)["z"].iloc[0] for s in range(200)
     ]
     # The PIT is uniform on (0, 61 / 101], so finite and below its top.
     assert np.isfinite(z).all()
@@ -208,7 +207,7 @@ def test_weeks_with_no_truth_give_no_score() -> None:
             "truth": [10.0, np.nan],
         }
     )
-    out = normal_scores(forecasts, truth, np.random.default_rng(0))
+    out = normal_scores(forecasts, truth, seed=0)
     assert out["target_end_date"].tolist() == ["2026-10-17"]
     assert np.isfinite(out["z"]).all()
 
@@ -464,3 +463,28 @@ def test_a_models_pairing_does_not_depend_on_other_models() -> None:
         alone.sort_values(keys).reset_index(drop=True),
         both.loc[both["model"] == "m"].sort_values(keys).reset_index(drop=True),
     )
+
+
+def test_a_cells_normal_score_does_not_depend_on_other_cells() -> None:
+    one = _forecasts({("CD", "2026-10-17"): np.zeros(50)})
+    many = _forecasts(
+        {
+            ("CD-IT", "2026-10-10"): np.zeros(50),
+            ("CD", "2026-10-17"): np.zeros(50),
+        }
+    )
+    many = pd.concat(
+        [many, many.assign(value=many["value"] + 1)], ignore_index=True
+    )
+    one = pd.concat([one, one.assign(value=1.0)], ignore_index=True)
+    truth = pd.DataFrame(
+        {
+            "location": ["CD", "CD-IT"],
+            "target_end_date": ["2026-10-17", "2026-10-10"],
+            "truth": [0.0, 0.0],
+        }
+    )
+    a = normal_scores(one, truth, seed=4).set_index("location")["z"]
+    b = normal_scores(many, truth, seed=4).set_index("location")["z"]
+    assert a["CD"] == b["CD"]
+    assert normal_scores(one, truth, seed=5)["z"].iloc[0] != a["CD"]

@@ -919,6 +919,8 @@ def test_cli_nowcast_pairs_a_paired_model_and_records_it(
                  str(archive), "--out", str(out)]) == 0  # fmt: skip
     record = json.loads((out / "copula.json").read_text())
     assert record["model"] == "randomwalknowcast"
+    assert isinstance(record["n_scores"], int)
+    assert isinstance(record["rho_time"], float)
     assert {"rho_time", "rho_provinces", "rho_national", "n_scores"} <= set(
         record
     )

@@ -63,8 +63,9 @@ def test_archive_gives_each_origins_latest_run(tmp_path: Path) -> None:
         "value",
     }
     assert set(out["origin"]) == {"2026-10-17", "2026-10-24"}
-    # Zones are left out, and a round run twice gives its latest run.
-    assert set(out["location"]) == {NATIONAL, "CD-IT"}
+    # Zones and the country, the sum of the provinces in a hub table, are
+    # left out, and a round run twice gives its latest run.
+    assert set(out["location"]) == {"CD-IT"}
     late = out.loc[out["origin"] == "2026-10-24", "value"]
     assert set(late) == {10.0, 11.0}
 
@@ -105,20 +106,27 @@ def test_store_gives_each_origins_latest_good_fit(tmp_path: Path) -> None:
     assert set(out["value"]) == {7.0, 8.0}
 
 
-def test_past_forecasts_take_the_archive_then_the_store(
+def test_past_forecasts_take_the_store_then_the_archive(
     tmp_path: Path,
 ) -> None:
     archive, root = tmp_path / "archive", tmp_path / "store"
+    _archive(archive, "2026-10-17", "1", _hub("2026-10-17", 50.0))
     _archive(archive, "2026-10-24", "1", _hub("2026-10-24", 5.0))
-    _stored(root, "2026-10-17", "2026-10-18T00:00:00", 1.0)
     _stored(root, "2026-10-24", "2026-10-25T00:00:00", 99.0)
     out = past_forecasts("m", "2026-10-31", archive=archive, store=root)
-    assert set(out["origin"]) == {"2026-10-17", "2026-10-24"}
-    # The archive's forecast, as submitted, wins over the store's.
-    assert 99.0 not in set(out["value"])
+    sources = out.drop_duplicates("origin").set_index("origin")["source"]
+    # The store's forecast, as the backtest scores it, wins, and the
+    # archive fills an origin the store lacks.
+    assert sources.to_dict() == {"2026-10-24": "store", "2026-10-17": "archive"}
+    assert 5.0 + 1 not in set(out["value"])
     # Only origins before the forecast's.
     early = past_forecasts("m", "2026-10-24", archive=archive, store=root)
     assert set(early["origin"]) == {"2026-10-17"}
+
+
+def test_archived_national_rows_are_left_out(tmp_path: Path) -> None:
+    _archive(tmp_path, "2026-10-17", "1", _hub("2026-10-17", 1.0))
+    assert NATIONAL not in set(archived_forecasts(tmp_path, "m")["location"])
 
 
 @pytest.fixture(scope="module")
@@ -164,3 +172,43 @@ def test_a_model_with_no_past_forecasts_fails(tasks: list) -> None:
         pair_submission(
             "fm_chronos_weekly_ragged", samples, task, truth_delay=7
         )
+
+
+def test_submission_pairs_as_the_release_backtest_does(
+    tasks: list, target: pd.DataFrame
+) -> None:
+    from bdbvhubrenewal.evaluation.nowcast import (
+        forecast_releases,
+        rolling_truth,
+    )
+    from bdbvhubrenewal.forecasters.copula import pair_registered
+
+    real = target.loc[target["kind"] == "real"]
+    run = forecast_releases(tasks, target, ["randomwalknowcast"])
+    origin = max(run.samples["origin"])
+    task = next(t for t in tasks if t.vintage == origin)
+    scored, fits = pair_registered(
+        run.samples.astype({"origin": str}),
+        rolling_truth(real, 7),
+        task.seed,
+    )
+    submitted, record = pair_submission(
+        "randomwalknowcast",
+        get_model("randomwalknowcast").forecast(task),
+        task,
+        truth_delay=7,
+        past_tasks=tasks,
+    )
+    fit = fits.loc[fits["origin"] == origin].iloc[0]
+    assert record["n_scores"] == fit["n_scores"] > 0
+    assert record["rho_time"] == pytest.approx(fit["rho_time"])
+    assert record["rho_provinces"] == pytest.approx(fit["rho_provinces"])
+    keys = ["location", "target_end_date", "sample"]
+    mine = scored.loc[
+        (scored["origin"] == origin) & (scored["location"] != NATIONAL)
+    ]
+    pd.testing.assert_frame_equal(
+        mine[[*keys, "value"]].sort_values(keys).reset_index(drop=True),
+        submitted[[*keys, "value"]].sort_values(keys).reset_index(drop=True),
+        check_dtype=False,
+    )
