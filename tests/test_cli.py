@@ -861,3 +861,20 @@ def test_cli_germany_asof_writes_the_data_each_date_saw(
                  str(data), "--out", str(out)]) == 0  # fmt: skip
     asof = pd.read_csv(out / "asof.csv.gz")
     assert set(asof["origin"]) == {"2021-10-04", "2021-10-05"}
+
+
+@pytest.mark.usefixtures("in_root")
+def test_cli_nowcast_pairs_a_paired_model_and_records_it(
+    tmp_path: Path,
+) -> None:
+    out, archive = tmp_path / "sub", tmp_path / "no-archive"
+    assert main(["nowcast", "--model", "randomwalknowcast", "--history",
+                 str(archive), "--out", str(out)]) == 0  # fmt: skip
+    record = json.loads((out / "copula.json").read_text())
+    assert record["model"] == "randomwalknowcast"
+    assert {"rho_time", "rho_provinces", "rho_national", "n_scores"} <= set(
+        record
+    )
+    plain = tmp_path / "plain"
+    assert main(["nowcast", "--model", "randomwalk", "--out", str(plain)]) == 0
+    assert not (plain / "copula.json").exists()
