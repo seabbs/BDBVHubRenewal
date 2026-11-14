@@ -11,7 +11,12 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.evaluation.backtest import BacktestConfig, make_tasks
+from bdbvhubrenewal.evaluation.backtest import (
+    BacktestConfig,
+    load_config,
+    make_tasks,
+)
+from bdbvhubrenewal.evaluation.nowcast import reporting_delay
 from bdbvhubrenewal.forecasters import (
     NATIONAL,
     ForecastTask,
@@ -25,10 +30,10 @@ from bdbvhubrenewal.forecasters import (
 from bdbvhubrenewal.forecasters.chain import NoWalkSpread
 from bdbvhubrenewal.forecasters.foundation import (
     LAYOUTS,
-    MAX_LAG,
     SOURCES,
     chronos_sampler,
     hub_triangle,
+    lag_steps,
     quantile_draws,
 )
 from bdbvhubrenewal.forecasters.randomwalk import RandomWalk
@@ -96,6 +101,66 @@ def test_registered_as_fitted_models() -> None:
         assert "0x" not in repr(model)
 
 
+def _ragged_lags(model: FoundationModel, task: ForecastTask) -> int:
+    """Return the release lags a ragged model gives Chronos-2 per place."""
+    store: list = []
+    dataclasses.replace(model, sample=_recording(store)).forecast(task)
+    (groups, _) = store[0]
+    return len(groups[0]["future_covariates"]) // (1 + len(task.locations))
+
+
+@pytest.mark.parametrize(
+    ("source", "steps"), [("daily", 35), ("weekly", 5)]
+)
+def test_ragged_lags_reach_the_truth_delay(
+    source: str, steps: int, task: ForecastTask
+) -> None:
+    # Counts reported up to D days late are still partial, so the lag
+    # series run to D days: 35 days, or 5 weeks.
+    model = dataclasses.replace(
+        get_model(f"fm_chronos_{source}_ragged"), truth_delay=35
+    )
+    assert _ragged_lags(model, task) == steps
+
+
+def test_lag_steps_round_up_to_whole_steps() -> None:
+    assert lag_steps("daily", 40) == 40
+    assert lag_steps("weekly", 35) == 5
+    assert lag_steps("weekly", 40) == 6
+
+
+@pytest.mark.parametrize("name", MODELS)
+def test_the_models_take_the_backtest_truth(name: str) -> None:
+    # D comes from the config the release backtest scores on, so the two
+    # cannot drift apart.
+    config = load_config()
+    model = get_model(name)
+    assert model.truth_delay == config.truth_delay
+    assert model.truth_level == config.truth_level
+    assert model.truth_skip == config.skip_origins
+
+
+@pytest.mark.parametrize("source", SOURCES)
+def test_auto_truth_delay_is_estimated_at_the_origin(
+    source: str, task: ForecastTask
+) -> None:
+    # With truth_delay "auto", D is the reporting delay of the releases up
+    # to the origin, as the backtest estimates it from all releases.
+    model = dataclasses.replace(
+        get_model(f"fm_chronos_{source}_ragged"),
+        truth_delay=None,
+        truth_level=0.9,
+        truth_skip=(),
+    )
+    history = task.target_history
+    assert history is not None
+    real = history.loc[history["kind"] == "real"]
+    delay = reporting_delay(real, 0.9)
+    assert delay is not None
+    assert model.delay_days(task) == delay
+    assert _ragged_lags(model, task) == lag_steps(source, delay)
+
+
 def _history() -> pd.DataFrame:
     """Two weekly releases of one place, the second a week later."""
     return pd.DataFrame(
@@ -116,12 +181,12 @@ def _history() -> pd.DataFrame:
 
 
 def test_weekly_triangle_puts_each_release_at_its_lag() -> None:
-    tri = hub_triangle(_history(), "weekly", ("A",), "2026-10-31")
+    tri = hub_triangle(_history(), "weekly", ("A",), "2026-10-31", max_lag=4)
     assert tri.times == ["2026-10-10", "2026-10-17", "2026-10-24", "2026-10-31"]
     assert tri.last == 2
     assert tri.final[0].tolist() == [7.0, 4.0, 2.0, 0.0]
     partial = tri.partial[0]
-    assert partial.shape == (4, MAX_LAG["weekly"])
+    assert partial.shape == (4, 4)
     # Week 10-10 was 5 at lag 1 and 7 at lag 2; 10-17 1 then 4.
     assert partial[0, 1] == 5.0
     assert partial[0, 2] == 7.0
@@ -131,7 +196,7 @@ def test_weekly_triangle_puts_each_release_at_its_lag() -> None:
     # No release saw week 10-10 at lag 0, or any week after the data.
     assert np.isnan(partial[0, 0])
     assert np.isnan(partial[3]).all()
-    assert tri.n_context == tri.last - MAX_LAG["weekly"] + 1
+    assert tri.n_context == tri.last - 4 + 1
 
 
 def test_daily_triangle_lags_are_days() -> None:
@@ -145,7 +210,7 @@ def test_daily_triangle_lags_are_days() -> None:
             "cutoff": ["2026-10-16", "2026-10-23", "2026-10-23"],
         }
     )
-    tri = hub_triangle(daily, "daily", ("A",), "2026-10-24")
+    tri = hub_triangle(daily, "daily", ("A",), "2026-10-24", max_lag=28)
     # The latest release gives the final counts and the last step.
     assert tri.times[0] == "2026-10-15"
     assert tri.times[-1] == "2026-10-24"
@@ -202,7 +267,7 @@ def test_gives_no_delay(name: str, task: ForecastTask) -> None:
 
 @pytest.mark.parametrize("source", SOURCES)
 def test_one_block_holds_every_target(source: str, task: ForecastTask) -> None:
-    lags = MAX_LAG[source]
+    lags = lag_steps(source, 35)
     # The country and the provinces are each a target.
     n_places = 1 + len(task.locations)
     seen: dict[str, tuple] = {}
@@ -211,6 +276,7 @@ def test_one_block_holds_every_target(source: str, task: ForecastTask) -> None:
         model = dataclasses.replace(
             get_model(f"fm_chronos_{source}_{layout}"),
             sample=_recording(store),
+            truth_delay=35,
         )
         model.forecast(task)
         groups, horizon = store[0]
