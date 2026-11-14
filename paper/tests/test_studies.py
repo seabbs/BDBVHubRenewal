@@ -64,20 +64,19 @@ def hub_with_baseline(hub):
 
 
 def _backtest(path: Path) -> Path:
-    """A release backtest table with one model at one release."""
+    """Release-backtest samples of one model from one release."""
     pd.DataFrame(
         {
             "model": "randomwalknowcast",
-            "origin": "2026-11-01",
-            "target": ["complete", "reported"],
+            "kind": ["real"] * 3 + ["simulated"],
+            "vintage": "2026-11-01",
+            "reference_date": "2026-11-07",
             "location": "CD",
             "target_end_date": "2026-10-24",
-            "weeks_back": 1,
-            "q5": 1.0,
-            "q25": 2.0,
-            "q50": 3.0,
-            "q75": 4.0,
-            "q95": 5.0,
+            "sample": [1, 2, 3, 1],
+            "value": [4.0, 5.0, 6.0, 7.0],
+            "as_of": None,
+            "horizon": -2,
         }
     ).to_csv(path, index=False)
     return path
@@ -94,13 +93,13 @@ def test_ebola_reads_the_release_backtest_then_the_hub(
     assert len(obs) == 6
     assert locations["delay_days"].iloc[0] == 14
     # The hub's baseline can be scored, so it is the baseline and the
-    # hub's forecasts join as quantiles.
+    # hub's forecasts join.
     assert study_baseline("ebola", sources, delay_days=14) is None
     fc = run_forecasts("ebola", sources=sources, source="real")
     assert {"randomwalknowcast", "team-a", HUB_BASELINE} <= set(fc["model"])
-    assert fc["sample_id"].isna().all()
-    assert set(fc["quantile_level"]) == {0.05, 0.25, 0.5, 0.75, 0.95}
-    assert fc["truth"].isna().all()
+    # Samples throughout, so the study is scored by CRPS.
+    assert fc["sample_id"].notna().all()
+    assert fc["quantile_level"].isna().all()
 
 
 def test_ebola_is_relative_to_randomwalknowcast_until_the_hub_can_be(
@@ -114,8 +113,9 @@ def test_ebola_is_relative_to_randomwalknowcast_until_the_hub_can_be(
         "ebola", sources=sources, source="real", baseline="randomwalknowcast"
     )
     assert set(fc["model"]) == {"randomwalknowcast"}
-    # Only the complete target, as quantiles.
-    assert len(fc) == 5
+    # Only real releases' samples.
+    assert len(fc) == 3
+    assert fc["truth"].isna().all()
 
 
 def test_ebola_without_a_backtest_or_hub_is_dummy(hub) -> None:

@@ -61,7 +61,9 @@ def test_pairing_matters_and_baseline_scores_one() -> None:
     assert rel.loc["paired", "rel_variogram_log"] < 1
 
 
-def test_forecasts_without_every_truth_are_left_out() -> None:
+def test_only_targets_with_known_truth_count() -> None:
     draws = np.ones((5, 3))
     out = joint_scores(_trajectories("m", draws, [1.0, np.nan, 1.0]))
-    assert out.empty
+    assert out["n_targets"].tolist() == [2]
+    one = joint_scores(_trajectories("m", draws, [1.0, np.nan, np.nan]))
+    assert one.empty

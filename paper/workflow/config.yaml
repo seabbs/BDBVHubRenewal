@@ -42,13 +42,17 @@ germany:
         lags at 28 days rather than the 40-day truth delay, and they are
         being rescored.
 
-# The Ebola study: the release backtest of `backtest_models` from every
-# past release (`bdbvhubrenewal backtest`), the hub's releases, and once
+# The Ebola study: samples of the release backtest of `backtest_models`
+# from every past release, with the stored fits' (`bdbvhubrenewal
+# backtest`, after `fit-store load` on CI), the hub's releases, and once
 # the hub's baseline has a forecast with known truth, every team's
 # forecasts, our stored forecasts and the fit store. `hub: null` runs the
 # study on dummy data.
 ebola:
-  backtest: ../results/nowcast-quantiles.csv
+  backtest: ../results/forecasts.csv.gz
+  # Further models' release-backtest samples from evidence rows (`evidence`
+  # below), in the backtest's layout.
+  extra: []
   backtest_models: [randomwalk, randomwalknowcast]
   hub: ../data/raw/bdbv-hub
   hub_repo: https://github.com/InsightNet-US/BDBV-Modeling-Hub.git

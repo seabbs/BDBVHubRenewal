@@ -36,19 +36,17 @@ import numpy as np
 import pandas as pd
 
 __all__ = [
-    "BACKTEST_LEVELS",
     "COLUMNS",
     "DELAY_LEVEL",
     "HUB_BASELINE",
     "TARGET",
-    "backtest_forecasts",
+    "backtest_samples",
     "candidate_samples",
     "hub_samples",
     "load",
     "observations",
     "reporting_delay",
     "round_close",
-    "sample_quantiles",
     "store_samples",
 ]
 
@@ -290,73 +288,35 @@ def load(
     return table[list(COLUMNS)].reset_index(drop=True)
 
 
-BACKTEST_LEVELS: Final = {
-    "q5": 0.05,
-    "q25": 0.25,
-    "q50": 0.5,
-    "q75": 0.75,
-    "q95": 0.95,
-}
-"""Quantile columns of the release backtest and their levels."""
+def backtest_samples(
+    path: str | Path, models: str | None = None
+) -> pd.DataFrame:
+    """Return release-backtest samples in the paper's schema.
 
-
-def backtest_forecasts(path: str | Path) -> pd.DataFrame:
-    """Return the release backtest's forecasts of each week's complete count.
-
-    `bdbvhubrenewal backtest` forecasts from every past release and writes
-    the quantiles of each model's forecast (`nowcast-quantiles.csv`). Rows
-    of the `complete` target, the count as reported D days after the
-    week, become quantile forecasts in the paper's schema, with the
-    horizon in weeks from the release.
+    `bdbvhubrenewal backtest` forecasts from every past release, and
+    `fit-store load` adds the stored fits' forecasts, to one table of
+    samples (`results/forecasts.csv.gz`): `model`, `kind`, `vintage` (the
+    release), `location`, `target_end_date`, `sample`, `value`, `as_of`
+    and `horizon` (weeks from the round's reference date). Rows of real
+    releases become sample forecasts from the release, with `truth` left
+    for the workflow. `models` keeps the models matching a regular
+    expression.
     """
     raw = pd.read_csv(path)
-    raw = raw.loc[raw["target"] == "complete"]
-    long = raw.melt(
-        id_vars=[
-            "model",
-            "origin",
-            "location",
-            "target_end_date",
-            "weeks_back",
-        ],
-        value_vars=list(BACKTEST_LEVELS),
-        var_name="column",
-        value_name="value",
-    )
+    raw = raw.loc[(raw["kind"] == "real") & raw["as_of"].isna()]
+    if models:
+        raw = raw.loc[raw["model"].str.match(models)]
     return pd.DataFrame(
         {
             "study": "ebola",
-            "model": long["model"],
-            "location": long["location"],
-            "origin_date": pd.to_datetime(long["origin"]),
-            "target_date": pd.to_datetime(long["target_end_date"]),
-            "horizon": -long["weeks_back"].astype(int),
-            "quantile_level": long["column"].map(BACKTEST_LEVELS),
-            "sample_id": np.nan,
-            "value": long["value"].astype(float),
+            "model": raw["model"],
+            "location": raw["location"],
+            "origin_date": pd.to_datetime(raw["vintage"]),
+            "target_date": pd.to_datetime(raw["target_end_date"]),
+            "horizon": raw["horizon"].astype(int),
+            "quantile_level": np.nan,
+            "sample_id": raw["sample"].astype(int),
+            "value": raw["value"].astype(float),
             "truth": np.nan,
         }
     ).reset_index(drop=True)
-
-
-def sample_quantiles(
-    samples: pd.DataFrame, levels: Iterable[float]
-) -> pd.DataFrame:
-    """Return sample forecasts as quantile forecasts at `levels`."""
-    keys = [
-        "study",
-        "model",
-        "location",
-        "origin_date",
-        "target_date",
-        "horizon",
-    ]
-    levels = list(levels)
-    rows = [
-        (*key, level, np.nan, float(np.quantile(g["value"], level)), np.nan)
-        for key, g in samples.groupby(keys)
-        for level in levels
-    ]
-    return pd.DataFrame(
-        rows, columns=[*keys, "quantile_level", "sample_id", "value", "truth"]
-    )

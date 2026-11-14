@@ -111,6 +111,9 @@ def sources(w):
             f"--hub {shlex.quote(EBOLA['hub'])}",
             f"--ebola-backtest {shlex.quote(EBOLA['backtest'])}",
         ]
+        if EBOLA.get("extra"):
+            files = " ".join(evidence_file(n) for n in EBOLA["extra"])
+            args.append(f"--ebola-extra {files}")
         if EBOLA["candidates"]:
             files = " ".join(shlex.quote(c) for c in EBOLA["candidates"])
             args.append(f"--candidates {files}")
@@ -128,7 +131,8 @@ def source_files(w):
         return [*germany_tables(w.mode), *triangle]
     if w.study == "ebola" and EBOLA["hub"]:
         hub = f"{EBOLA['hub']}/target-data/time-series.csv"
-        return [hub, EBOLA["backtest"]]
+        extra = [evidence_file(n) for n in EBOLA.get("extra") or []]
+        return [hub, EBOLA["backtest"], *extra]
     return []
 
 

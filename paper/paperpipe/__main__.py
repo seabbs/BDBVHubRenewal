@@ -91,6 +91,7 @@ def _sources(a: argparse.Namespace) -> Sources:
         germany_triangle=a.germany_triangle,
         hub=a.hub,
         ebola_backtest=a.ebola_backtest,
+        ebola_extra=tuple(a.ebola_extra),
         candidates=tuple(a.candidates),
         store=a.store,
         store_ref=a.store_ref,
@@ -235,6 +236,7 @@ def _limits(p: argparse.ArgumentParser) -> None:
     p.add_argument("--germany-triangle", type=Path, default=None)
     p.add_argument("--hub", type=Path, default=None)
     p.add_argument("--ebola-backtest", type=Path, default=None)
+    p.add_argument("--ebola-extra", type=Path, nargs="*", default=[])
     p.add_argument("--candidates", type=Path, nargs="*", default=[])
     p.add_argument("--store", type=Path, default=None)
     p.add_argument("--store-ref", default="origin/fit-store")

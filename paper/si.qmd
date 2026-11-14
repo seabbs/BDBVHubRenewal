@@ -164,9 +164,8 @@ German nowcast hub, development half: as @tbl-copula-ebola, by state and by age 
 
 ### Joint block or aggregation
 
-::: {.callout-note title="To come"}
-Which option the submission uses and why (fm-agg, #222).
-:::
+The submission uses option (a), all levels in one joint block.
+@tbl-aggregation-ebola and @tbl-aggregation-germany compare it with the other options at every level, and @tbl-aggregation-cost gives what each costs.
 
 ::: {#tbl-aggregation-ebola}
 {{< include build/tables/si/aggregation-ebola.md >}}
@@ -285,19 +284,19 @@ Ebola hub submissions: nowcasts for each province at origins drawn with the work
 ::: {#fig-ebola-si-location-horizon}
 ![](build/figures/si/ebola-si-location-horizon.png)
 
-Ebola: relative WIS by location and horizon. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
+Ebola: relative CRPS by location and horizon. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
 :::
 
 ::: {#fig-ebola-si-location-horizon-log}
 ![](build/figures/si/ebola-si-location-horizon-log.png)
 
-Ebola: relative WIS on the log scale by location and horizon. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
+Ebola: relative CRPS on the log scale by location and horizon. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
 :::
 
 ::: {#fig-ebola-si-wis-over-time}
 ![](build/figures/si/ebola-si-wis-over-time.png)
 
-Ebola: WIS over time. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
+Ebola: CRPS over time. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
 :::
 
 ::: {#tbl-ebola-horizon}

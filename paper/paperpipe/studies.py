@@ -18,7 +18,7 @@ functions return dummy data from `paperfigs.dummy`:
 
 - Germany reads the benchmark's paper tables and reporting triangle
   (`paperdata.germany`).
-- Ebola reads the release backtest's forecasts from past releases and a
+- Ebola reads the release backtest's samples from past releases and a
   clone of the hub for its releases (`paperdata.ebola`), with D the hub's
   98% reporting delay. Once the hub's baseline has a forecast with known
   truth, the hub's forecasts join and scores are relative to it; until
@@ -80,7 +80,9 @@ class Sources:
     hub : pathlib.Path, optional
         A clone of the Ebola hub.
     ebola_backtest : pathlib.Path, optional
-        The release backtest's quantiles (`nowcast-quantiles.csv`).
+        The release backtest's samples (`results/forecasts.csv.gz`).
+    ebola_extra : tuple of pathlib.Path
+        Further models' release-backtest samples in the same layout.
     candidates : tuple of pathlib.Path
         Files of our stored Ebola forecasts.
     store : pathlib.Path, optional
@@ -95,6 +97,7 @@ class Sources:
     germany_triangle: Path | None = None
     hub: Path | None = None
     ebola_backtest: Path | None = None
+    ebola_extra: tuple[Path, ...] = ()
     candidates: tuple[Path, ...] = ()
     store: Path | None = None
     store_ref: str = "origin/fit-store"
@@ -260,34 +263,35 @@ def _germany_forecasts(
 
 
 def _ebola_forecasts(sources: Sources, with_hub: bool) -> pd.DataFrame:
-    """Return the release backtest's forecasts, with the hub's once scorable.
+    """Return the release backtest's samples, with the hub's once scorable.
 
-    Hub forecasts are samples; they join as quantiles at the backtest's
-    levels so the study is scored by one metric.
+    The backtest's table holds our models' forecasts from every past
+    release, the stored fits' among them; `ebola_extra` adds further
+    models' samples in its layout. The hub's forecasts join once its
+    baseline can be scored.
     """
     assert sources.hub is not None
     assert sources.ebola_backtest is not None
-    fc = ebola.backtest_forecasts(sources.ebola_backtest)
-    if not with_hub:
-        return fc
-    store = sources.store
-    if store is not None and not _has_ref(store, sources.store_ref):
-        log.warning(
-            "%s has no %s; the Ebola study reads no stored fits.",
-            store,
-            sources.store_ref,
+    parts = [ebola.backtest_samples(sources.ebola_backtest)]
+    parts += [ebola.backtest_samples(p) for p in sources.ebola_extra]
+    if with_hub:
+        store = sources.store
+        if store is not None and not _has_ref(store, sources.store_ref):
+            log.warning(
+                "%s has no %s; the Ebola study reads no stored fits.",
+                store,
+                sources.store_ref,
+            )
+            store = None
+        parts.append(
+            ebola.load(
+                sources.hub,
+                candidates=sources.candidates,
+                store=store,
+                store_ref=sources.store_ref,
+            )
         )
-        store = None
-    hub = ebola.load(
-        sources.hub,
-        candidates=sources.candidates,
-        store=store,
-        store_ref=sources.store_ref,
-    )
-    levels = ebola.BACKTEST_LEVELS.values()
-    return pd.concat(
-        [fc, ebola.sample_quantiles(hub, levels)], ignore_index=True
-    )
+    return pd.concat(parts, ignore_index=True)
 
 
 def _germany_data(

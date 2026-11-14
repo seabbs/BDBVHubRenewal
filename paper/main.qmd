@@ -239,7 +239,7 @@ German nowcast hub: mean scores, coverage and number of forecasts of each model,
 ::: {#fig-ebola}
 ![](build/figures/main/ebola-results.png)
 
-Ebola: forecasts from past releases (release backtest), joined by the hub's forecasts as they can be scored. (A) National nowcasts against the rolling truth; (B, C) WIS relative to {{< meta results.ebola.baseline >}} on the natural and log scales; (D) bias; (E) 50% and 90% coverage; (F) relative WIS by location; (G) by horizon. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
+Ebola: sample forecasts from past releases (release backtest), joined by the hub's forecasts as they can be scored. (A) National nowcasts against the rolling truth; (B, C) CRPS relative to {{< meta results.ebola.baseline >}} on the natural and log scales, on the forecasts each model shares with it, with the share of forecasts a model made in its label where it missed some; (D) bias; (E) 50% and 90% coverage; (F) relative CRPS by location; (G) by horizon. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
 :::
 
 Placeholder summary from the workflow: the best model was {{< meta results.ebola.best_model >}}, with a relative score of {{< meta results.ebola.best_rel_score >}} and {{< meta results.ebola.best_rel_log_score >}} on the log scale, against {{< meta results.ebola.baseline >}}.
