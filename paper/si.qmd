@@ -3,12 +3,18 @@ title: "Supporting Information: title to be chosen"
 date: today
 format:
   html:
+    # The site serves the paper at /paper/, so ../ is its home page.
+    include-before-body:
+      - text: '<p class="back-to-site"><a href="../">Back to the site</a></p>'
     toc: true
     number-sections: false
   pdf:
     toc: true
     number-sections: false
 bibliography: reference.bib
+# The evaluation workflow's numbers, as in main.qmd.
+metadata-files:
+  - build/results.yml
 ---
 
 <!--
@@ -40,6 +46,34 @@ One SI section per paper section.
 - Key references: [@abbottepinowcast; @lison2024; @Park2024; @abbottprimarycensored].
 :::
 
+{{< include si/epinowcast-model.md >}}
+
+::: {#tbl-synthetic-grid-si}
+{{< include build/tables/si/synthetic-design.md >}}
+
+The simulation grid (r2-cal5), with the reason for each range.
+Ranges are chosen to be plausible across infectious diseases rather than for one disease.
+:::
+
+The grid has two limitations.
+Simulated strata are less sparse than BDBV's provinces: the share of stratum-weeks with no cases reaches 0.75, against 0.89 for BDBV.
+Delays stop at 12 weeks, while the German data are capped at 80 days by their reporting, so their 99% delay point (81 days) is beyond the grid.
+
+![How 200 simulated outbreaks (grey histograms) compare with the BDBV data (red) and the German data by state (green) and by age (orange): outbreak size, weekly peak, growth, the share of stratum-weeks with no cases, dispersion, the mean and 99% point of the reporting delay, the share reported within 0, 7, 14 and 28 days, and the share reported on each weekday.](figures/sim-realism.png){#fig-sim-realism}
+
+{{< include si/heldout-set.md >}}
+
+### Correlated trajectories
+
+::: {.callout-note title="Plan"}
+- Correlated trajectories: the copula, its rolling-window estimator and the window length.
+- Joint block or level by level for the foundation models (#222).
+:::
+
+::: {.callout-note title="Results to come"}
+Slots for the copula's window length (#221) and for the joint block against level by level (#222).
+:::
+
 ### Scoring
 
 ::: {.callout-note title="Plan"}
@@ -64,8 +98,110 @@ One SI section per paper section.
 
 ### Held-out synthetic data
 
+::: {#tbl-synthetic-evaluated}
+{{< include build/tables/main/synthetic-grid.md >}}
+
+Scenario settings realised over the evaluated outbreaks: the smallest, median and largest value of each. {{< meta results.synthetic.label >}}
+:::
+
+::: {#fig-synthetic-si-factors}
+![](build/figures/si/synthetic-si-factors.png)
+
+Held-out synthetic data: relative CRPS by level of each scenario factor. {{< meta results.synthetic.label >}}
+:::
+
+::: {#fig-synthetic-si-factors-log}
+![](build/figures/si/synthetic-si-factors-log.png)
+
+Held-out synthetic data: relative CRPS on the log scale by level of each scenario factor. {{< meta results.synthetic.label >}}
+:::
+
+::: {#fig-synthetic-si-wis-over-time}
+![](build/figures/si/synthetic-si-wis-over-time.png)
+
+Held-out synthetic data: CRPS over time. {{< meta results.synthetic.label >}}
+:::
+
+::: {#fig-synthetic-si-finetune-size}
+![](build/figures/si/synthetic-si-finetune-size.png)
+
+Held-out synthetic data: relative CRPS of each fine-tuning checkpoint, at doublings from 1,000 outbreaks, against the number of simulated outbreaks it was trained on (log scale). {{< meta results.synthetic.label >}}
+:::
+
+::: {#tbl-synthetic-horizon}
+{{< include build/tables/si/synthetic-scores-by-horizon.md >}}
+
+Held-out synthetic data scores by horizon. {{< meta results.synthetic.label >}}
+:::
+
+::: {#tbl-synthetic-location}
+{{< include build/tables/si/synthetic-scores-by-location.md >}}
+
+Held-out synthetic data scores by location and stratum. {{< meta results.synthetic.label >}}
+:::
+
 ### German nowcast hub
 
+::: {#fig-germany-si-location-horizon}
+![](build/figures/si/germany-si-location-horizon.png)
+
+German nowcast hub: relative WIS by location and horizon. {{< meta results.germany.label >}}
+:::
+
+::: {#fig-germany-si-location-horizon-log}
+![](build/figures/si/germany-si-location-horizon-log.png)
+
+German nowcast hub: relative WIS on the log scale by location and horizon. {{< meta results.germany.label >}}
+:::
+
+::: {#fig-germany-si-wis-over-time}
+![](build/figures/si/germany-si-wis-over-time.png)
+
+German nowcast hub: WIS over time, with a dotted line at the split. {{< meta results.germany.label >}}
+:::
+
+::: {#tbl-germany-horizon}
+{{< include build/tables/si/germany-scores-by-horizon.md >}}
+
+German nowcast hub scores by horizon. {{< meta results.germany.label >}}
+:::
+
+::: {#tbl-germany-location}
+{{< include build/tables/si/germany-scores-by-location.md >}}
+
+German nowcast hub scores by location and stratum. {{< meta results.germany.label >}}
+:::
+
 ### Ebola hub submissions
+
+::: {#fig-ebola-si-location-horizon}
+![](build/figures/si/ebola-si-location-horizon.png)
+
+Ebola hub submissions: relative CRPS by location and horizon. {{< meta results.ebola.label >}}
+:::
+
+::: {#fig-ebola-si-location-horizon-log}
+![](build/figures/si/ebola-si-location-horizon-log.png)
+
+Ebola hub submissions: relative CRPS on the log scale by location and horizon. {{< meta results.ebola.label >}}
+:::
+
+::: {#fig-ebola-si-wis-over-time}
+![](build/figures/si/ebola-si-wis-over-time.png)
+
+Ebola hub submissions: CRPS over time. {{< meta results.ebola.label >}}
+:::
+
+::: {#tbl-ebola-horizon}
+{{< include build/tables/si/ebola-scores-by-horizon.md >}}
+
+Ebola hub submissions scores by horizon. {{< meta results.ebola.label >}}
+:::
+
+::: {#tbl-ebola-location}
+{{< include build/tables/si/ebola-scores-by-location.md >}}
+
+Ebola hub submissions scores by location and stratum. {{< meta results.ebola.label >}}
+:::
 
 ## References {.unnumbered}

@@ -206,12 +206,25 @@ tasks:
         uv run --group docs jupytext --to ipynb --execute --run-path .
         docs/getting-started.py
 
+  # As the paper step of .github/workflows/pages.yml; keep the two in
+  # step.
+  paper:render:
+    desc: Run the paper workflow's development target, render the paper (HTML and PDF) and copy it into docs/paper/ for the site
+    dir: paper
+    cmds:
+      - uv run --group paper snakemake -s workflow/Snakefile render --cores {{.CORES | default 4}}
+      - mkdir -p ../docs/paper/figures ../docs/paper/build
+      - cp -R main.html main.pdf main_files si.html si.pdf si_files ../docs/paper/
+      - cp figures/*.svg figures/*.pdf figures/*.png ../docs/paper/figures/
+      - cp -R build/figures ../docs/paper/build/
+
   docs:
     desc: Build the docs site into _site/
     cmds:
       - task: results
       - task: plots
       - task: getting-started
+      - task: paper:render
       - uv run mkdocs build --strict
 
   serve:

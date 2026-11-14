@@ -36,6 +36,7 @@ nav:
       - Simulation checks: simulation.md
       - Comparison with hub forecasts: comparison.md
       - German nowcast benchmark: germany.md
+  - Paper: paper.md
   - Submission:
       - Submission log: submission/rounds/index.md
       - Opting in: submission/opting-in.md

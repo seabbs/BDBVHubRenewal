@@ -1,0 +1,28 @@
+version: "3"
+
+tasks:
+  test:
+    desc: Run the paper tests
+    cmds:
+      - uv run --group paper pytest -q tests
+  lint:
+    desc: Lint and format-check the paper code
+    cmds:
+      - uv run ruff check .
+      - uv run ruff format --check .
+  pipeline:dev:
+    desc: Run the evaluation workflow without the held-out data, to results/development/
+    cmds:
+      - uv run --group paper snakemake -s workflow/Snakefile development --cores {{.CORES | default 4}} {{.CLI_ARGS}}
+  pipeline:paper:
+    desc: Run the evaluation workflow with the held-out data, to results/paper/
+    cmds:
+      - uv run --group paper snakemake -s workflow/Snakefile paper --cores {{.CORES | default 4}} {{.CLI_ARGS}}
+  render:
+    desc: Run the development target and render the paper (HTML and PDF) from it
+    cmds:
+      - uv run --group paper snakemake -s workflow/Snakefile render --cores {{.CORES | default 4}} {{.CLI_ARGS}}
+  pipeline:dry:
+    desc: Dry-run both workflow targets to check the DAG
+    cmds:
+      - uv run --group paper snakemake -s workflow/Snakefile development paper -n --cores 1

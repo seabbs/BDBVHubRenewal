@@ -1,0 +1,54 @@
+# Settings of the paper's evaluation workflow (`workflow/Snakefile`).
+# Paths are relative to `paper/`.
+results: results
+# Where `publish` copies a run's outputs for main.qmd and si.qmd.
+build: build
+# The run `render` publishes first: development or paper.
+render: development
+studies: [synthetic, germany, ebola]
+# Samples per forecast for the studies scored on samples.
+n_samples: 200
+
+# The German benchmark, run with the `bdbvhubrenewal` command line
+# (config/germany.toml). Its models are the config's `models`.
+# `real: false` runs the study on dummy data.
+germany:
+  real: true
+  config: ../config/germany.toml
+  data: ../data/raw/germany
+  results: ../results/germany
+  # Further paper tables of the benchmark (`germany-paper` output), such
+  # as models run outside config/germany.toml. A development run fails
+  # if one holds a held-out date.
+  extra: []
+
+# The Ebola hub's data and forecasts, our stored forecasts and the fit
+# store. `hub: null` runs the study on dummy data, as does a hub whose
+# baseline has no forecast with known truth yet.
+ebola:
+  hub: ../data/raw/bdbv-hub
+  hub_repo: https://github.com/InsightNet-US/BDBV-Modeling-Hub.git
+  candidates: [../data/candidate-forecasts.csv.gz]
+  store: ..
+  store_ref: origin/fit-store
+
+# Data the development runs use.
+development:
+  # Validation outbreaks for checking the setup.
+  synthetic_seeds: [7001]
+
+# Data kept out of every development run.
+# Only the `paper` target reads them.
+heldout:
+  # Outbreaks simulated with seeds the fine-tune never saw.
+  synthetic_seeds: [9001, 9002, 9003, 9004]
+  # First held-out German nowcast date.
+  # The benchmark's dates run from 2021-11-22 to 2022-04-29.
+  # The first 80 are the development half.
+  germany_from: "2022-02-10"
+
+# D, the days after a target date at which the truth is taken.
+# Synthetic outbreaks use their own 98% reporting delay.
+# Ebola uses the 98% point of the hub data's reporting delay.
+truth_delay:
+  germany: 40

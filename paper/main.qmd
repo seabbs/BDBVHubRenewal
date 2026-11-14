@@ -7,11 +7,21 @@ title: "Title to be chosen"
 date: today
 format:
   html:
+    # The site serves the paper at /paper/, so ../ is its home page.
+    include-before-body:
+      - text: '<p class="back-to-site"><a href="../">Back to the site</a></p>'
     toc: false
     number-sections: false
+    other-links:
+      - text: Supporting information
+        href: si.html
   pdf:
     number-sections: false
 bibliography: reference.bib
+# The evaluation workflow's numbers (`task pipeline:dev` or
+# `task pipeline:paper`), quoted with the meta shortcode.
+metadata-files:
+  - build/results.yml
 ---
 
 <!--
@@ -59,7 +69,7 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
 
 ::: {.callout-note title="Plan"}
 - Chronos-2, given the reporting triangle as series: one series per place and reporting delay, each missing until reported. Introduced alongside the reporting triangle, with Figure 1B.
-- Fine-tuned on synthetic data on a laptop, with checkpoints after 1,000, 2,000, 4,000, 6,000 and 8,000 simulated outbreaks. The largest is the main model.
+- Fine-tuned on synthetic data on a laptop, with checkpoints at doublings of simulated outbreaks from 1,000 upwards, each outbreak giving several forecast origins and 10 observation draws, continuing while held-out loss keeps falling. The last is the main model.
 - Compared with Chronos-2 given only complete data points, to show what the ragged structure and fine-tuning add.
 - Figure 1, a multi-panel schematic of our pipeline: (A) the assumptions in the epinowcast simulations, (B) the reporting triangle laid out as ragged series for Chronos-2, (C) training blocks and LoRA fine-tuning, and why it is fast, and (D) forecasting with the fine-tuned model.
 - Key references: [@Ansari2025; @Ansari2024; @Hu2021; @Das2024b].
@@ -81,13 +91,17 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
 :::
 
 ::: {#tbl-synthetic-grid}
-| Setting  | Values |
-|----------|--------|
-| Outbreak |        |
-| Delay    |        |
-| Noise    |        |
+{{< include build/tables/main/synthetic-design.md >}}
 
-Placeholder: grid of synthetic scenarios.
+The simulation grid (r2-cal5). Ranges are chosen to be plausible across infectious diseases rather than for one disease.
+The reason for each is in the SI.
+:::
+
+### Correlated trajectories
+
+::: {.callout-note title="Plan"}
+- Models that give only per-step forecasts get correlated trajectories from a Gaussian copula, with correlations estimated over a rolling window of recent forecast errors (#221).
+- The same layer serves `randomwalknowcast`.
 :::
 
 ### Evaluation on held-out synthetic data
@@ -149,13 +163,21 @@ Key references: the Methods references, with [@bracherEvaluatingEpidemicForecast
 ::: {.callout-note title="Plan"}
 - Visual performance of the candidate models against `randomwalk` and `randomwalknowcast`.
 - A summary of score performance.
-- How scores change with the amount of fine-tuning data (1,000 to 8,000 outbreaks), as an SI figure.
+- How scores change with the amount of fine-tuning data (doublings from 1,000 outbreaks), as an SI figure.
 :::
 
 ::: {#fig-synthetic}
-Figure to come.
+![](build/figures/main/synthetic-results.png)
 
-Placeholder: held-out synthetic data results panel.
+Held-out synthetic data. (A) Nowcasts over time; (B, C) CRPS relative to `randomwalknowcast` on the natural and log scales; (D) bias; (E) 50% and 90% coverage; (F) relative CRPS by scenario factor; (G) relative CRPS by horizon. {{< meta results.synthetic.label >}}
+:::
+
+Placeholder summary from the workflow: the best model was {{< meta results.synthetic.best_model >}}, with a relative score of {{< meta results.synthetic.best_rel_score >}} and {{< meta results.synthetic.best_rel_log_score >}} on the log scale, against {{< meta results.synthetic.baseline >}}.
+
+::: {#tbl-synthetic-scores}
+{{< include build/tables/main/synthetic-scores.md >}}
+
+Held-out synthetic data: mean scores, coverage and number of forecasts of each model, with scores relative to {{< meta results.synthetic.baseline >}}. {{< meta results.synthetic.label >}}
 :::
 
 ### German nowcast hub
@@ -167,9 +189,17 @@ Placeholder: held-out synthetic data results panel.
 :::
 
 ::: {#fig-germany}
-Figure to come.
+![](build/figures/main/germany-results.png)
 
-Placeholder: German nowcast hub results panel.
+German nowcast hub. (A) Nowcasts over time, with a dotted line at the split between the development and held-out halves; (B, C) WIS relative to `KIT-frozen_baseline` on the natural and log scales; (D) bias; (E) 50% and 95% coverage; (F) relative WIS by location; (G) by age group; (H) by horizon. {{< meta results.germany.label >}}
+:::
+
+Placeholder summary from the workflow: the best model was {{< meta results.germany.best_model >}}, with a relative score of {{< meta results.germany.best_rel_score >}} and {{< meta results.germany.best_rel_log_score >}} on the log scale, against {{< meta results.germany.baseline >}}.
+
+::: {#tbl-germany-scores}
+{{< include build/tables/main/germany-scores.md >}}
+
+German nowcast hub: mean scores, coverage and number of forecasts of each model, with scores relative to {{< meta results.germany.baseline >}}. {{< meta results.germany.label >}}
 :::
 
 ### Ebola hub submissions
@@ -180,9 +210,17 @@ Placeholder: German nowcast hub results panel.
 :::
 
 ::: {#fig-ebola}
-Figure to come.
+![](build/figures/main/ebola-results.png)
 
-Placeholder: Ebola hub submissions results panel.
+Ebola hub submissions. (A) Nowcasts over time; (B, C) CRPS relative to `BDBVHub-baseline` on the natural and log scales; (D) bias; (E) 50% and 90% coverage; (F) relative CRPS by location; (G) by horizon. {{< meta results.ebola.label >}}
+:::
+
+Placeholder summary from the workflow: the best model was {{< meta results.ebola.best_model >}}, with a relative score of {{< meta results.ebola.best_rel_score >}} and {{< meta results.ebola.best_rel_log_score >}} on the log scale, against {{< meta results.ebola.baseline >}}.
+
+::: {#tbl-ebola-scores}
+{{< include build/tables/main/ebola-scores.md >}}
+
+Ebola hub submissions: mean scores, coverage and number of forecasts of each model, with scores relative to {{< meta results.ebola.baseline >}}. {{< meta results.ebola.label >}}
 :::
 
 ## Discussion
