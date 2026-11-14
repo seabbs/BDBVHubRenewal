@@ -136,3 +136,30 @@ def test_a_paper_run_fails_while_evidence_is_missing(tmp_path) -> None:
                 str(tmp_path / "e.yml"),
             ]
         )
+
+
+def test_a_study_without_rows_still_waits(tmp_path) -> None:
+    rows = tmp_path / "agg.csv"
+    pd.DataFrame(
+        {
+            "study": "ebola",
+            "model": ["randomwalknowcast", "fm"],
+            "option": ["reference", "joint"],
+            "level": "national",
+            "location": "CD",
+            "origin_date": "2026-10-04",
+            "target_date": "2026-09-27",
+            "wis": 1.0,
+            "log_wis": 1.0,
+            "cover50": 1,
+            "cover95": 1,
+        }
+    ).to_csv(rows, index=False)
+    paths = dict.fromkeys(EVIDENCE) | {"aggregation_scores": rows}
+    write_evidence(paths, tmp_path / "si", tmp_path / "fig", tmp_path / "e.yml")
+    assert (
+        "Joint block" in (tmp_path / "si" / "aggregation-ebola.md").read_text()
+    )
+    assert (
+        "waits on" in (tmp_path / "si" / "aggregation-germany.md").read_text()
+    )

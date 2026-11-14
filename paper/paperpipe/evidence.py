@@ -363,9 +363,10 @@ def write_evidence(
     data = {name: _read(paths, name) for name in EVIDENCE}
 
     def table(name: str, frame: pd.DataFrame | None, needs: list[str]) -> None:
+        # Rows for another study only still leave this one waiting.
         text = (
             to_markdown(frame)
-            if frame is not None
+            if frame is not None and not frame.empty
             else waiting(", ".join(EVIDENCE[n] for n in needs))
         )
         (si_dir / f"{name}.md").write_text(text)
