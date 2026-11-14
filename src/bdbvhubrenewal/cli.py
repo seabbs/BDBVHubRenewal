@@ -61,7 +61,13 @@ from bdbvhubrenewal.data.dates import as_date
 from bdbvhubrenewal.data.releases import cutoff_lags
 from bdbvhubrenewal.data.simulate import SCENARIO_RT_SCALE
 from bdbvhubrenewal.data.tidy import write_csv
-from bdbvhubrenewal.data.zones import hub_zones, is_zone, weekly_zone_counts
+from bdbvhubrenewal.data.zones import (
+    ZoneData,
+    hub_zones,
+    is_zone,
+    load_zone_data,
+    weekly_zone_counts,
+)
 from bdbvhubrenewal.devices import host_devices
 from bdbvhubrenewal.evaluation import backtest as bt
 from bdbvhubrenewal.evaluation import store
@@ -629,6 +635,14 @@ def _vintage(target_vintages: Sequence[str], vintage: str | None) -> str:
     return vintage
 
 
+def _zone_data(data: Path | str) -> ZoneData | None:
+    """Return the zone tables, or None if the data has none."""
+    try:
+        return load_zone_data(data)
+    except OSError:
+        return None
+
+
 def _task(args: argparse.Namespace) -> tuple[ForecastTask, list[str]]:
     """Build the forecast task, and notes on any stream that stood in."""
     config = bt.load_config(args.backtest_config)
@@ -641,9 +655,7 @@ def _task(args: argparse.Namespace) -> tuple[ForecastTask, list[str]]:
         config,
         vintage,
         load_daily(args.data),
-        zones=load_health_zones(args.data),
-        daily_zones=load_daily_zones(args.data),
-        zone_codes=hub_zones(Path(args.data) / "hub-config" / "tasks.json"),
+        zones=_zone_data(args.data),
     )
     notes = [note] if note else []
     if args.reference_date and as_date(args.reference_date) != (
@@ -769,6 +781,7 @@ def _backtest(args: argparse.Namespace) -> int:
         fits=fits,
         learnt=learnt,
         daily=load_daily(args.data),
+        zones=_zone_data(args.data),
     )
     _write_fits(fits, results / "backtest-fits.csv")
     _write_fits(learnt, output / DELAY_SUMMARY_FILE)
@@ -844,7 +857,7 @@ def _forecast_parts(
         learnt: list[pd.DataFrame] = []
         forecasts = bt.run_development(
             models, target, delays, config, fits=fits, learnt=learnt,
-            daily=daily,
+            daily=daily, zones=_zone_data(args.data),
         )  # fmt: skip
         write_csv(forecasts, parts / "forecasts.csv.gz")
         for name, frames in (
@@ -853,7 +866,11 @@ def _forecast_parts(
         ):
             table = pd.concat(frames, ignore_index=True) if frames else None
             write_csv(pd.DataFrame() if table is None else table, parts / name)
-        tasks = list(store.origin_tasks(target, delays, config, daily).values())
+        tasks = list(
+            store.origin_tasks(
+                target, delays, config, daily, _zone_data(args.data)
+            ).values()
+        )
         forecast_releases(tasks, target, models).write(parts)
     print(f"Forecasts of {[m.name for m in models]} written to {parts}.")
     return 0
@@ -1011,7 +1028,11 @@ def _release_backtest(
     The fitted models' final-count forecasts are taken from `forecasts`.
     """
     daily = load_daily(args.data)
-    tasks = list(store.origin_tasks(target, delays, config, daily).values())
+    tasks = list(
+        store.origin_tasks(
+            target, delays, config, daily, _zone_data(args.data)
+        ).values()
+    )
     stored, learnt = _stored(args, target, forecasts)
     delay = resolve_truth_delay(config, target)
     out = release_backtest(
@@ -1037,7 +1058,11 @@ def _release_scores(
 ) -> None:
     """Score stacked release forecasts with the stored models'."""
     daily = load_daily(args.data)
-    tasks = list(store.origin_tasks(target, delays, config, daily).values())
+    tasks = list(
+        store.origin_tasks(
+            target, delays, config, daily, _zone_data(args.data)
+        ).values()
+    )
     stored, learnt = _stored(args, target, forecasts)
     delay = resolve_truth_delay(config, target)
     out = score_releases(
@@ -1511,8 +1536,7 @@ def _compare_hub(args: argparse.Namespace) -> int:
         config,
         live,
         daily,
-        load_daily_zones(args.data),
-        codes,
+        load_zone_data(args.data),
         min_horizon=min(int(horizons.min()), config.min_horizon)
         if len(hub)
         else None,

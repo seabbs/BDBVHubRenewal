@@ -46,17 +46,21 @@ release snapshots (`zone_task`), with the zone, then province, then
 national pooling of `pooling`.
 Their zone samples are then made to sum to the province samples
 (`reconcile_zones`).
-Province sample $Y^{(k)}(w)$ is apportioned over the zones in proportion
-to the zone model's own sample $x^{(k)}_z(w)$, by largest remainders, so
+Each zone keeps what it has published, and the rest of province sample
+$Y^{(k)}(w)$ is apportioned over the zones in proportion to the zone
+model's own sample $x^{(k)}_z(w)$ above that, by largest remainders, so
 the values are whole numbers that sum exactly to $Y^{(k)}(w)$:
 
 $$
-y^{(k)}_z(w) \approx
-  Y^{(k)}(w)\, \frac{x^{(k)}_z(w)}{\sum_{z'} x^{(k)}_{z'}(w)}.
+y^{(k)}_z(w) \approx o_z(w) +
+  \big(Y^{(k)}(w) - O(w)\big)\, \frac{\max(x^{(k)}_z(w) - o_z(w), 0)}
+  {\sum_{z'} \max(x^{(k)}_{z'}(w) - o_{z'}(w), 0)}.
 $$
 
-Where every zone sample is 0 the split uses the Dirichlet mean shares of
-the allocator above.
+Where no zone sample is above its published count the split uses the
+Dirichlet mean shares of the allocator above.
+If a sample is below the published total, it is apportioned by the
+published counts.
 """
 
 from __future__ import annotations
@@ -318,8 +322,11 @@ def reconcile_zones(
 ) -> pd.DataFrame:
     """Make zone samples sum to their province samples.
 
-    Each province sample is apportioned over the province's zones in
-    proportion to the zone model's own sample of the same id and week.
+    Each zone keeps its published count, and the rest of each province
+    sample is apportioned over the province's zones in proportion to the
+    zone model's own sample of the same id and week above that count. A
+    province sample below the published total is apportioned by the
+    published counts.
 
     Parameters
     ----------
@@ -352,6 +359,7 @@ def reconcile_zones(
     weeks = list(task.target_end_dates)
     ids = np.arange(1, task.n_samples + 1)
     shape = {"index": "sample", "columns": "target_end_date", "values": "value"}
+    seen = counts.set_index(["location", "target_end_date"])["total"]
     frames = []
     for prov in sorted(set(final["location"])):
         mine = tuple(z for z in zones if province_of(z) == prov)
@@ -376,10 +384,22 @@ def reconcile_zones(
                     .fillna(0.0)
                     .to_numpy()
                 )
-        fallback = allocator.alpha(counts, mine, task.vintage)
+        published = np.array(
+            [[int(seen.get((z, w), 0)) for z in mine] for w in weeks]
+        )  # [W, Z]
+        # Each zone keeps what it has published; the rest is split by
+        # each zone's sample above its published count.
+        weight = np.clip(weight - published, 0.0, None)
         empty = weight.sum(axis=-1) <= 0
-        weight[empty] = fallback
-        values = _apportion(totals, weight)
+        weight[empty] = allocator.alpha(counts, mine, task.vintage)
+        extra = totals - published.sum(axis=-1)
+        values = published + _apportion(np.maximum(extra, 0), weight)
+        # A sample below the published total is split by the published
+        # counts.
+        short = extra < 0
+        values[short] = _apportion(
+            totals[short], np.broadcast_to(published, values.shape)[short]
+        )
         frames.append(_zone_frame(mine, weeks, ids, values))
     if not frames:
         return pd.DataFrame(columns=list(SAMPLE_COLUMNS))
@@ -547,9 +567,9 @@ def zones_for_model(
 ) -> pd.DataFrame:
     """Return health-zone samples that sum to a model's province samples.
 
-    A model that forecasts the zones itself gives zone rows in `samples`,
-    which are made to sum to its provinces (`reconcile_zones`), as the hub
-    file needs. A random walk model with no fit is run on the zones and
+    A model that forecasts the zones itself gives zone rows in `samples`
+    that already sum to its provinces (`reconcile_zones`), and they are
+    used as they are. A random walk model with no fit is run on the zones and
     summed to the provinces. Any other model's province samples, a fitted
     model's included, are split across the zones by `ZoneAllocator`, so
     no model is fitted here.
@@ -577,9 +597,7 @@ def zones_for_model(
     """
     own = samples["location"].map(is_zone)
     if own.any():
-        return reconcile_zones(
-            samples.loc[own], samples.loc[~own], task, counts, zones
-        )
+        return samples.loc[own, list(SAMPLE_COLUMNS)].reset_index(drop=True)
     fitted = {s.name for s in list_models() if s.fitted}
     model = None if name is None else get_model(name)
     if isinstance(model, RandomWalk) and name not in fitted:

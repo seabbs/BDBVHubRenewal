@@ -57,15 +57,9 @@ from typing import Any, Final
 
 import pandas as pd
 
-from bdbvhubrenewal.data import (
-    load_daily,
-    load_daily_zones,
-    load_delays,
-    load_health_zones,
-    load_target,
-)
+from bdbvhubrenewal.data import load_daily, load_delays, load_target
 from bdbvhubrenewal.data.tidy import write_csv
-from bdbvhubrenewal.data.zones import hub_zones
+from bdbvhubrenewal.data.zones import ZoneData, load_zone_data
 from bdbvhubrenewal.evaluation.backtest import (
     BacktestConfig,
     _fit_rows,
@@ -124,9 +118,10 @@ STORE_SKIP: Final = (
 )
 """Modules `STORE_ENTRIES` import but a fit does not call.
 
-The zone split: a stored fit holds national and province samples only,
+The zone split: a stored fit holds national and province samples,
 and its zones are split from them at load
-(`forecasters.zones.zones_for_model`). `fit_code`'s own helper
+(`forecasters.zones.zones_for_model`); a model that forecasts the zones
+itself imports the split, so it is in its code. `fit_code`'s own helper
 (`evaluation.digest`), and the plots `evaluation.ppc` imports for
 `plot_ppc`, which a fit does not draw.
 """
@@ -253,8 +248,8 @@ def fit_code(model: str, root: Path | str = ".") -> list[str]:
 
     The import closure of the model's module and `STORE_ENTRIES`
     (`evaluation.digest.model_code`), without the other models' modules
-    and the modules a fit does not call (`STORE_SKIP`), and the package's
-    data files (`STORE_DATA`).
+    and the modules a fit does not call (`STORE_SKIP`) unless the model's
+    own module imports them, and the package's data files (`STORE_DATA`).
 
     Parameters
     ----------
@@ -348,9 +343,7 @@ def origin_tasks(
     delays: pd.DataFrame,
     config: BacktestConfig,
     daily: pd.DataFrame,
-    zones: pd.DataFrame | None = None,
-    daily_zones: pd.DataFrame | None = None,
-    zone_codes: tuple[str, ...] = (),
+    zones: ZoneData | None = None,
 ) -> dict[str, ForecastTask]:
     """Build the task of every real origin, as the store fits it.
 
@@ -366,13 +359,10 @@ def origin_tasks(
     ----------
     target, delays, daily : pandas.DataFrame
         The tidy tables.
-    zones, daily_zones : pandas.DataFrame, optional
-        The weekly and daily health-zone tables, for the models that read
-        zones.
-    zone_codes : tuple of str
-        The hub's zone codes, for the models that read zones.
     config : BacktestConfig
         Horizons, samples and seed (`[forecast]`).
+    zones : ZoneData, optional
+        The health-zone tables, for the models that read zones.
 
     Returns
     -------
@@ -388,8 +378,6 @@ def origin_tasks(
             daily,
             NEXT_ROUND_WEEKS,
             zones=zones,
-            daily_zones=daily_zones,
-            zone_codes=zone_codes,
         )[0]
         for v in real_vintages(target)
         if v not in config.skip_origins
@@ -1009,9 +997,7 @@ def command(args: argparse.Namespace) -> int:
         load_delays(args.data),
         config,
         load_daily(args.data),
-        load_health_zones(args.data),
-        load_daily_zones(args.data),
-        hub_zones(Path(args.data) / "hub-config" / "tasks.json"),
+        load_zone_data(args.data),
     )
     models = args.models or stored_models()
     one = args.action in ("fit", "unpack")
