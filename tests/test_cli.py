@@ -859,6 +859,12 @@ def test_cli_fit_store_archives_what_each_model_submits(
     # An origin that is not a real one, or none, is an error.
     assert main([*args, "--origin", "2020-01-04"]) == 1
     assert main(args) == 1
+    # A candidate that is not archived fails the command, but the others
+    # are written.
+    out.unlink()
+    broken = ["--models", "flat", "renewal"]
+    assert main([*args, *when, *broken]) == 1
+    assert set(pd.read_csv(out)["model"]) == {"flat"}
 
 
 def test_cli_germany_held_out_half_goes_to_its_own_directory(
