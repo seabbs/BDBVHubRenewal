@@ -5,6 +5,16 @@ studies: [synthetic, germany, ebola]
 # Samples per forecast for the studies scored on samples.
 n_samples: 100
 
+# Ebola sources, as paths relative to `paper/`.
+# Without a hub clone the Ebola study runs on dummy data.
+ebola:
+  # A clone of the BDBV Modeling Hub.
+  hub: null
+  # Files of our stored forecasts, as data/candidate-forecasts.csv.gz.
+  candidates: []
+  # A clone holding the fit store branch.
+  store: null
+
 # Data the development runs use.
 development:
   # Validation outbreaks for checking the setup.

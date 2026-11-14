@@ -16,8 +16,9 @@ Three sources give samples.
 - `store_samples`: the fit store branch. Each model and origin keeps the
   first fit stored, and only if it was made before its round closed.
 
-`reporting_delay` estimates D, the age by which 98% of the national count
-is reported, from the hub's release history. `rolling_truth` gives each
+`observations` gives the hub's counts as of each release.
+`reporting_delay` estimates D, the age by which 98% of the national
+count is reported, from the hub's release history. `rolling_truth` gives each
 target week's count as reported D days after the week ended, as the
 German nowcast hub did (Wolffram et al. 2023). Weeks whose release
 that far after them is not out yet have no truth. `load` joins it to the
@@ -56,6 +57,7 @@ __all__ = [
     "candidate_samples",
     "hub_samples",
     "load",
+    "observations",
     "relative_scores",
     "reporting_delay",
     "rolling_truth",
@@ -221,6 +223,20 @@ def _target(hub: str | Path) -> pd.DataFrame:
         as_of=pd.to_datetime(data["as_of"]),
         target_date=pd.to_datetime(data["target_end_date"]),
     )
+
+
+def observations(hub: str | Path) -> pd.DataFrame:
+    """Return the hub's counts as of each release, in the paper's schema."""
+    data = _target(hub)
+    return pd.DataFrame(
+        {
+            "study": "ebola",
+            "location": data["location"],
+            "target_date": data["target_date"],
+            "as_of_date": data["as_of"],
+            "value": data["observation"].astype(float),
+        }
+    ).reset_index(drop=True)
 
 
 def reporting_delay(

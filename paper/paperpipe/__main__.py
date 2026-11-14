@@ -55,7 +55,11 @@ def _delays(locations: pd.DataFrame) -> pd.Series:
 
 def _data(a: argparse.Namespace) -> None:
     obs, locations = load_data(
-        a.study, seeds=a.seeds, before=_date(a.before), delay_days=a.delay
+        a.study,
+        seeds=a.seeds,
+        before=_date(a.before),
+        delay_days=a.delay,
+        hub=a.hub,
     )
     _write(validate_observations(obs), a.observations)
     _write(locations, a.locations)
@@ -63,7 +67,13 @@ def _data(a: argparse.Namespace) -> None:
 
 def _forecasts(a: argparse.Namespace) -> None:
     fc = run_forecasts(
-        a.study, seeds=a.seeds, before=_date(a.before), n_samples=a.n_samples
+        a.study,
+        seeds=a.seeds,
+        before=_date(a.before),
+        n_samples=a.n_samples,
+        hub=a.hub,
+        candidates=a.candidates,
+        store=a.store,
     )
     _write(fc, a.out)
 
@@ -112,6 +122,9 @@ def _limits(p: argparse.ArgumentParser) -> None:
     p.add_argument("study")
     p.add_argument("--seeds", type=int, nargs="*", default=[])
     p.add_argument("--before", default=None)
+    p.add_argument("--hub", type=Path, default=None)
+    p.add_argument("--candidates", type=Path, nargs="*", default=[])
+    p.add_argument("--store", type=Path, default=None)
 
 
 def _outputs(p: argparse.ArgumentParser) -> None:

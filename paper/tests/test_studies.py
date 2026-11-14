@@ -41,7 +41,7 @@ def test_ebola_delay_is_set_per_location() -> None:
 
 
 def test_ebola_reads_the_hub_when_given_one(hub) -> None:
-    obs, locations = load_data("ebola", hub=hub)
+    obs, locations = load_data("ebola", hub=hub, delay_days=14)
     assert set(obs["study"]) == {"ebola"}
     assert len(obs) == 6
     assert set(obs["as_of_date"].astype(str)) == {
@@ -50,7 +50,7 @@ def test_ebola_reads_the_hub_when_given_one(hub) -> None:
         "2026-11-08",
     }
     assert list(locations["location"]) == ["CD"]
-    assert locations["delay_days"].iloc[0] > 0
+    assert locations["delay_days"].iloc[0] == 14
 
 
 def test_ebola_forecasts_come_from_the_hub_when_given_one(hub) -> None:

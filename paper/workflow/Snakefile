@@ -1,13 +1,18 @@
 """The paper's evaluation, from each study's data to its figures and tables.
 
 Run from `paper/` with `task pipeline:dev` or `task pipeline:paper`.
-Every step is `python -m paperpipe <step>`. Outputs go to
-`<results>/<mode>/`, so development and paper runs never share a file.
+Every step is `python -m paperpipe <step>`, run with the Python that
+runs the workflow. Outputs go to `<results>/<mode>/`, so development and
+paper runs never share a file.
 
 Targets:
 
 - `development`: the development seeds and the German first half only;
 - `paper`: the held-out seeds and both German halves, split by half.
+
+The synthetic and German studies run on dummy data until their models
+are merged (#192). Ebola reads the hub clone set in `config.yaml`, or
+dummy data without one.
 
 The held-out sets are the `heldout` block of `config.yaml`.
 `paperpipe.config.run_settings` keeps them out of a development run, and
@@ -33,6 +38,8 @@ workdir: str(PAPER)
 
 
 R = config["results"]
+# Run each step with the Python running the workflow.
+PYTHON = shlex.quote(sys.executable)
 STUDIES = config["studies"]
 
 
@@ -46,13 +53,29 @@ def settings(w):
 
 
 def limits(w):
-    """Data limits of a study's loader, as command line arguments."""
+    """Data limits and sources of a study's loader, as arguments."""
     s = settings(w)
     if w.study == "synthetic":
         return "--seeds " + " ".join(str(x) for x in s.synthetic_seeds)
     if w.study == "germany" and s.germany_before is not None:
         return f"--before {s.germany_before:%Y-%m-%d}"
+    if w.study == "ebola":
+        return ebola_sources()
     return ""
+
+
+def ebola_sources():
+    """The Ebola hub, stored forecasts and fit store, if configured."""
+    src = config.get("ebola") or {}
+    args = []
+    if src.get("hub"):
+        args.append(f"--hub {shlex.quote(str(src['hub']))}")
+    if src.get("candidates"):
+        files = " ".join(shlex.quote(str(c)) for c in src["candidates"])
+        args.append(f"--candidates {files}")
+    if src.get("store"):
+        args.append(f"--store {shlex.quote(str(src['store']))}")
+    return " ".join(args)
 
 
 def figures(mode, study):
@@ -100,7 +123,7 @@ rule data:
             else ""
         ),
     shell:
-        "python -m paperpipe data {wildcards.study} {params.limits} "
+        "{PYTHON} -m paperpipe data {wildcards.study} {params.limits} "
         "{params.delay} --observations {output.observations} "
         "--locations {output.locations}"
 
@@ -114,7 +137,7 @@ rule forecasts:
         limits=limits,
         n_samples=config["n_samples"],
     shell:
-        "python -m paperpipe forecasts {wildcards.study} {params.limits} "
+        "{PYTHON} -m paperpipe forecasts {wildcards.study} {params.limits} "
         "--n-samples {params.n_samples} --out {output}"
 
 
@@ -126,7 +149,7 @@ rule table:
     params:
         config=shlex.quote(json.dumps(config)),
     shell:
-        "python -m paperpipe table --raw {input} --mode {wildcards.mode} "
+        "{PYTHON} -m paperpipe table --raw {input} --mode {wildcards.mode} "
         "--config {params.config} --out {output}"
 
 
@@ -137,7 +160,7 @@ rule truth:
     output:
         f"{R}/{{mode}}/truth/{{study}}.csv.gz",
     shell:
-        "python -m paperpipe truth --observations {input.observations} "
+        "{PYTHON} -m paperpipe truth --observations {input.observations} "
         "--locations {input.locations} --out {output}"
 
 
@@ -148,7 +171,7 @@ rule scores:
     output:
         f"{R}/{{mode}}/scores/{{study}}.csv.gz",
     shell:
-        "python -m paperpipe scores --forecasts {input.forecasts} "
+        "{PYTHON} -m paperpipe scores --forecasts {input.forecasts} "
         "--truth {input.truth} --out {output}"
 
 
@@ -185,7 +208,7 @@ for study in STUDIES:
             main=f"{R}/{{mode}}/figures/main",
             si=f"{R}/{{mode}}/figures/si",
         shell:
-            "python -m paperpipe figures {params.study} "
+            "{PYTHON} -m paperpipe figures {params.study} "
             "--forecasts {input.forecasts} "
             "--observations {input.observations} "
             "--scores {input.scores} --locations {input.locations} "
@@ -205,6 +228,6 @@ for study in STUDIES:
             main=f"{R}/{{mode}}/tables/main",
             si=f"{R}/{{mode}}/tables/si",
         shell:
-            "python -m paperpipe score-tables {params.study} "
+            "{PYTHON} -m paperpipe score-tables {params.study} "
             "--scores {input.scores} --locations {input.locations} "
             "--main-dir {params.main} --si-dir {params.si} {params.split}"
