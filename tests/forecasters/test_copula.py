@@ -253,10 +253,12 @@ def test_estimate_shrinks_towards_the_prior() -> None:
     prior = GaussianCopula(0.1, 0.1, 0.1)
     raw = estimate_copula(scores)
     assert estimate_copula(scores, prior, weight=0.0) == raw
-    half = estimate_copula(scores, prior, weight=float(len(scores)))
-    assert half.rho_time == pytest.approx((raw.rho_time + 0.1) / 2)
-    assert half.rho_provinces == pytest.approx((raw.rho_provinces + 0.1) / 2)
-    assert half.rho_national == pytest.approx((raw.rho_national + 0.1) / 2)
+    # Each correlation counts its own pairs: of 6 places by 4 weeks at
+    # 400 origins, 7,200 pairs of weeks and 16,000 of provinces.
+    time = estimate_copula(scores, prior, weight=7200.0)
+    assert time.rho_time == pytest.approx((raw.rho_time + 0.1) / 2)
+    places = estimate_copula(scores, prior, weight=16000.0)
+    assert places.rho_provinces == pytest.approx((raw.rho_provinces + 0.1) / 2)
     far = estimate_copula(scores, prior, weight=1e12)
     assert far.rho_time == pytest.approx(0.1)
 
@@ -420,3 +422,45 @@ def test_rolling_pairing_keeps_draws_and_records_each_fit() -> None:
     assert list(fits["origin"]) == ["2026-10-24", "2026-10-31"]
     assert list(fits["n_scores"]) == [0, 12]
     assert {"rho_time", "rho_provinces", "rho_national"} <= set(fits)
+
+
+def test_a_correlation_with_no_variation_takes_the_prior() -> None:
+    scores = _structured_scores(n_origins=5).assign(z=0.5)
+    fit = estimate_copula(scores, GaussianCopula(0.3, 0.2, 0.1))
+    assert fit == GaussianCopula(0.3, 0.2, 0.1)
+
+
+def test_rolling_fit_leaves_out_each_truth_not_yet_released() -> None:
+    scores = _origin_scores()
+    late = scores["location"] == NATIONAL
+    scores.loc[late, "truth_vintage"] = "2026-11-07"
+    rolling = RollingCopula(GaussianCopula(), weight=0.0)
+    fit, n = rolling.fit(scores, "2026-10-31")
+    used = scores.loc[(scores["origin"] < "2026-10-31") & ~late]
+    assert n == len(used)
+    assert fit == estimate_copula(used)
+
+
+def test_a_models_pairing_does_not_depend_on_other_models() -> None:
+    a = _samples(n=200).assign(model="m", origin="2026-10-31")
+    b = a.assign(model="another")
+    truth = (
+        a.groupby(["location", "target_end_date"], as_index=False)["value"]
+        .median()
+        .rename(columns={"value": "truth"})
+        .assign(truth_vintage="2026-10-30")
+    )
+    earlier = a.assign(origin="2026-10-24")
+    alone, _ = RollingCopula().pair(
+        pd.concat([earlier, a], ignore_index=True), truth, seed=3
+    )
+    both, _ = RollingCopula().pair(
+        pd.concat([earlier, a, earlier.assign(model="another"), b]),
+        truth,
+        seed=3,
+    )
+    keys = ["origin", "location", "target_end_date", "sample"]
+    pd.testing.assert_frame_equal(
+        alone.sort_values(keys).reset_index(drop=True),
+        both.loc[both["model"] == "m"].sort_values(keys).reset_index(drop=True),
+    )

@@ -10,6 +10,7 @@ import pytest
 
 from bdbvhubrenewal.evaluation.backtest import (
     BacktestConfig,
+    load_config,
     make_tasks,
     run_forecasts,
 )
@@ -139,10 +140,22 @@ def test_release_backtest_pairs_with_the_rolling_truth(
         BacktestConfig(n_samples=20, seed=2),
         daily=daily,
     )
-    result = release_backtest(tasks, daily, target, truth_delay=14)
+    result = release_backtest(tasks, daily, target, truth_delay=14, pair=True)
     copulas = result.copulas
     assert set(copulas["model"]) == {"randomwalknowcast"}
     assert {"origin", "n_scores", "rho_time"} <= set(copulas)
-    # With no rolling truth nothing is paired.
-    plain = release_backtest(tasks, daily, target)
+    # By default nothing is paired, so the scores are of the forecasts
+    # as submitted.
+    plain = release_backtest(tasks, daily, target, truth_delay=14)
     assert plain.copulas.empty
+    walk = plain.scores["model"] == "randomwalk"
+    pd.testing.assert_frame_equal(
+        plain.scores.loc[walk].reset_index(drop=True),
+        result.scores.loc[result.scores["model"] == "randomwalk"].reset_index(
+            drop=True
+        ),
+    )
+
+
+def test_pairing_is_off_by_default_in_the_backtest_config() -> None:
+    assert not load_config("config/backtest.toml").pair_trajectories
