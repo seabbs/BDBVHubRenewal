@@ -140,6 +140,48 @@ def strata(settings: pd.Series) -> list[str]:
     return ages if len(ages) > 1 else places
 
 
+LEVELS = {"three": 0.5, "places": 0.25, "strata": 0.25}
+"""Chance a block of places by strata (`P-<stratum>`) has the country,
+the places' totals and their strata (three levels), the country and the
+places' totals, or the country and strata."""
+
+
+def choose_places(
+    provinces: list[str], budget: int, rng: np.random.Generator
+) -> tuple[str, ...]:
+    """Return a block's places below the country, at most `budget` of them.
+
+    Strata of places (`P-<stratum>`) give blocks of `LEVELS`; other
+    provinces give a random subset.
+    """
+    if budget < 1:
+        return ()
+    if not any("-" in p for p in provinces):
+        k = min(budget, len(provinces))
+        return tuple(str(p) for p in sorted(rng.choice(provinces, k, False)))
+    groups: dict[str, list[str]] = {}
+    for p in provinces:
+        groups.setdefault(p.split("-")[0], []).append(p)
+    level = rng.choice(list(LEVELS), p=list(LEVELS.values()))
+    if level == "strata":
+        k = min(budget, len(provinces))
+        return tuple(str(p) for p in sorted(rng.choice(provinces, k, False)))
+    parents = list(rng.permutation(sorted(groups)))
+    if level == "places" or budget < 2:
+        return tuple(str(p) for p in sorted(parents[:budget]))
+    chosen: list[str] = []
+    strata: list[str] = []
+    for parent in parents:
+        room = budget - len(chosen) - len(strata) - 1
+        if room < 1:
+            break
+        chosen.append(parent)
+        strata.extend(sorted(groups[parent])[:room])
+        if room < len(groups[parent]):
+            break
+    return tuple(str(p) for p in (*sorted(chosen), *sorted(strata)))
+
+
 def outbreak_blocks(
     counts: pd.DataFrame,
     provinces: list[str],
@@ -149,8 +191,8 @@ def outbreak_blocks(
     """Return the training blocks of one outbreak.
 
     A block's series count is drawn log-uniformly from 1 to `MAX_SERIES`,
-    and its strata are a random subset of `provinces` of about that many
-    series at its lag, with the total over strata first.
+    and its places (`choose_places`) are about that many series at its
+    lag, with the country first.
     """
     # Cut-offs fall Wednesday to Saturday, as the hub's releases do.
     weekday = int(rng.integers(2, 6))
@@ -172,12 +214,15 @@ def outbreak_blocks(
             if len(provinces) > 1:
                 size = np.exp(rng.uniform(0, np.log(MAX_SERIES)))
                 fits = MAX_SERIES // (lag + 1) - 1
-                k = min(round(size / (lag + 1)) - 1, len(provinces), fits)
-                if k > 0:
-                    chosen = rng.choice(provinces, size=k, replace=False)
-                    places = (NATIONAL, *sorted(chosen))
+                budget = min(round(size / (lag + 1)) - 1, fits)
+                places = (NATIONAL, *choose_places(provinces, budget, rng))
             block = training_block(
-                counts, source, places, cutoffs[: cut + 1], max_lag=lag
+                counts,
+                source,
+                places,
+                cutoffs[: cut + 1],
+                max_lag=lag,
+                totals=any("-" in p for p in places),
             )
             if block["start"] < 2:
                 continue
