@@ -121,6 +121,12 @@ Held-out synthetic data: relative CRPS of each fine-tuning checkpoint against th
 Held-out synthetic data scores by horizon. {{< meta results.synthetic.label >}}
 :::
 
+::: {#tbl-synthetic-location}
+{{< include build/tables/si/synthetic-scores-by-location.md >}}
+
+Held-out synthetic data scores by location and stratum. {{< meta results.synthetic.label >}}
+:::
+
 ### German nowcast hub
 
 ::: {#fig-germany-si-location-horizon}
@@ -147,6 +153,12 @@ German nowcast hub: WIS over time, with a dotted line at the split. {{< meta res
 German nowcast hub scores by horizon. {{< meta results.germany.label >}}
 :::
 
+::: {#tbl-germany-location}
+{{< include build/tables/si/germany-scores-by-location.md >}}
+
+German nowcast hub scores by location and stratum. {{< meta results.germany.label >}}
+:::
+
 ### Ebola hub submissions
 
 ::: {#fig-ebola-si-location-horizon}
@@ -171,6 +183,12 @@ Ebola hub submissions: CRPS over time. {{< meta results.ebola.label >}}
 {{< include build/tables/si/ebola-scores-by-horizon.md >}}
 
 Ebola hub submissions scores by horizon. {{< meta results.ebola.label >}}
+:::
+
+::: {#tbl-ebola-location}
+{{< include build/tables/si/ebola-scores-by-location.md >}}
+
+Ebola hub submissions scores by location and stratum. {{< meta results.ebola.label >}}
 :::
 
 ## References {.unnumbered}

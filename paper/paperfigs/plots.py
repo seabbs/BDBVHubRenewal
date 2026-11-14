@@ -208,9 +208,9 @@ def plot_nowcasts(
 ) -> bool:
     """Draw 50% and 90% ribbons and medians at spaced origin dates.
 
-    Data as of each origin are in light grey, the latest count of each date in black. A
-    model with no forecast at a shown origin gets a cross in its colour at
-    the foot of that origin's line.
+    Data as of each origin are in light grey, and the latest count of each
+    date in black. A model with no forecast at a shown origin gets a cross
+    in its colour at the foot of that origin's line.
 
     Parameters
     ----------

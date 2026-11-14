@@ -25,11 +25,12 @@ def test_summary_names_the_best_model_against_the_baseline() -> None:
     assert out["label"] == ""
 
 
-def test_summary_uses_the_last_period_and_labels_dummy_data() -> None:
+def test_summary_uses_the_heldout_half_and_labels_dummy_data() -> None:
+    # Held-out rows first, as a table sorted by model may have them.
     scores = pd.concat(
         [
-            _scores(period="development"),
             _scores(period="held out").assign(rel_score=[1.0, 0.5, 0.9]),
+            _scores(period="development"),
         ]
     )
     out = study_summary({"study": "germany", "source": "dummy"}, scores)

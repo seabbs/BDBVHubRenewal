@@ -6,6 +6,8 @@ on:
     paths:
       - 'paper/**'
       - 'src/bdbvhubrenewal/evaluation/**'
+      - 'src/bdbvhubrenewal/data/**'
+      - 'config/germany.toml'
       - 'pyproject.toml'
       - 'uv.lock'
       - '.github/workflows/paper-tests.yml'
@@ -13,6 +15,8 @@ on:
     paths:
       - 'paper/**'
       - 'src/bdbvhubrenewal/evaluation/**'
+      - 'src/bdbvhubrenewal/data/**'
+      - 'config/germany.toml'
       - 'pyproject.toml'
       - 'uv.lock'
       - '.github/workflows/paper-tests.yml'

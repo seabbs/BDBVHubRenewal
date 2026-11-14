@@ -421,11 +421,18 @@ jobs:
         env:
           TARGET: ${{ inputs.paper_target || 'development' }}
         run: |
+          # The Ebola study reads our stored fits from the fit store's
+          # history.
+          git fetch -q --no-tags origin \
+            +refs/heads/fit-store:refs/remotes/origin/fit-store
           uv run --group paper snakemake -s workflow/Snakefile render \
             --config render="$TARGET" --cores 4 --rerun-triggers mtime
           mkdir -p ../docs/paper
+          mkdir -p ../docs/paper/figures ../docs/paper/build
           cp -R main.html main.pdf main_files si.html si.pdf si_files \
-            figures build ../docs/paper/
+            ../docs/paper/
+          cp figures/*.svg figures/*.pdf ../docs/paper/figures/
+          cp -R build/figures ../docs/paper/build/
       - name: Build the site into _site
         run: uv run mkdocs build --strict
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

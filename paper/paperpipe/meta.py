@@ -14,7 +14,7 @@ from typing import Any, Final
 __all__ = ["DUMMY_LABEL", "read_meta", "write_meta"]
 
 DUMMY_LABEL: Final = "Illustrative, dummy data"
-"""Label on every figure and table built from dummy data."""
+"""Title of every figure, and part of every caption, from dummy data."""
 
 
 def write_meta(path: Path, study: str, source: str) -> None:

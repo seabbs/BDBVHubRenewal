@@ -28,6 +28,7 @@ functions return dummy data from `paperfigs.dummy`:
 
 from __future__ import annotations
 
+import logging
 import subprocess
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -80,6 +81,8 @@ class Sources:
     store: Path | None = None
     store_ref: str = "origin/fit-store"
 
+
+log = logging.getLogger(__name__)
 
 NO_SOURCES: Final = Sources()
 """No real data: every study runs on dummy data."""
@@ -137,10 +140,13 @@ def source_of(
         real = bool(sources.germany_forecasts) and bool(
             sources.germany_triangle
         )
-    elif study == "ebola":
-        real = sources.hub is not None and _baseline_scorable(
-            sources.hub, _ebola_delay(sources, delay_days)
-        )
+    elif study == "ebola" and sources.hub is not None:
+        try:
+            delay = _ebola_delay(sources, delay_days)
+        except ValueError:
+            log.warning("No Ebola reporting delay yet; using dummy data.")
+            return "dummy"
+        real = _baseline_scorable(sources.hub, delay)
     else:
         real = False
     return "real" if real else "dummy"
@@ -184,13 +190,14 @@ def _germany_data(
 ) -> pd.DataFrame:
     assert sources.germany_triangle is not None
     fc = _germany_forecasts(sources, before)
-    last = fc["origin_date"].max() if before is None else before
-    lag = pd.Timedelta(days=delay_days)
     # Releases up to D days after the last date give the last truths.
+    last = (
+        fc["origin_date"].max() + pd.Timedelta(days=delay_days)
+        if before is None
+        else last_release(before, delay_days)
+    )
     obs = germany.observations(
-        sources.germany_triangle,
-        fc["origin_date"].min(),
-        last + lag - pd.Timedelta(days=1 if before is not None else 0),
+        sources.germany_triangle, fc["origin_date"].min(), last
     )
     return _development_releases(obs, before, delay_days)
 
@@ -311,6 +318,11 @@ def run_forecasts(
         assert sources.hub is not None
         store = sources.store
         if store is not None and not _has_ref(store, sources.store_ref):
+            log.warning(
+                "%s has no %s; the Ebola study reads no stored fits.",
+                store,
+                sources.store_ref,
+            )
             store = None
         return ebola.load(
             sources.hub,

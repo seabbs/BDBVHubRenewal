@@ -1,11 +1,11 @@
 """The numbers the paper quotes, as Quarto metadata.
 
-`summarise` reads each study's run notes and main-text score table and
+`study_summary` reads each study's run notes and main-text score table and
 returns one entry per study: where its data came from, its baseline, and
 the best model with its relative scores. `write_summary` writes them as
 YAML under `results`, so `main.qmd` and `si.qmd` quote them with
 `{{< meta results.<study>.<field> >}}`. Where a study has a split, the
-numbers are from its last period, the held-out half in a paper run.
+numbers are from its held-out half.
 """
 
 from __future__ import annotations
@@ -17,6 +17,7 @@ from typing import Any
 import pandas as pd
 import yaml
 
+from paperfigs.periods import PERIODS
 from paperfigs.scores import STUDY_BASELINES
 from paperpipe.meta import DUMMY_LABEL
 
@@ -42,7 +43,7 @@ def study_summary(meta: Mapping[str, Any], scores: pd.DataFrame) -> dict:
     study = meta["study"]
     baseline = STUDY_BASELINES[study]
     if "period" in scores.columns:
-        scores = scores.loc[scores["period"] == scores["period"].iloc[-1]]
+        scores = scores.loc[scores["period"] == PERIODS[-1]]
     others = scores.loc[scores["model"] != baseline].dropna(
         subset=["rel_score"]
     )
