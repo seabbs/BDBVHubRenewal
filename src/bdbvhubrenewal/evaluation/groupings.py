@@ -62,8 +62,10 @@ _SAMPLES = ["model", "origin", "location", "target_end_date", "sample"]
 
 
 def arm_name(model: str, grouping: str, checkpoint: str | None = None) -> str:
-    """Return an arm's name, `<model>:<grouping>`, with `@<checkpoint>`
-    after the model when one is given."""
+    """Return an arm's name, `<model>:<grouping>`.
+
+    A checkpoint is added after the model as `@<checkpoint>`.
+    """
     at = "" if checkpoint is None else f"@{checkpoint}"
     return f"{model}{at}:{grouping}"
 

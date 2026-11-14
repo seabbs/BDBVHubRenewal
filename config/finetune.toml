@@ -6,4 +6,4 @@
 # checked against the release's sha256sums.txt. Kept out of the code, so
 # the settings hash `scripts/finetune_chronos.py train` gives does not
 # cover it.
-hash = "latest"
+hash = "2c2b22a03107"
