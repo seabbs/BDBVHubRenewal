@@ -582,7 +582,8 @@ def test_interrupted_download_fails_and_caches_nothing(
         raise ConnectionResetError("reset")
 
     monkeypatch.setattr(foundation.urllib.request, "urlopen", drop)
-    with pytest.raises(FileNotFoundError, match="chronos-ft-abc"):
+    # A dropped connection is not a missing file.
+    with pytest.raises(ConnectionError, match="chronos-ft-abc"):
         foundation.finetuned_adapter(_checkpoint("abc"))
     assert not (tmp_path / "cache" / "chronos-ft-abc").exists()
 
@@ -730,3 +731,50 @@ def test_a_missing_asset_is_not_retried(
     with pytest.raises(FileNotFoundError):
         foundation.resolve_checkpoint("abc")
     assert len(calls) == 1
+
+
+def _http_error(code: int):  # type: ignore[no-untyped-def]
+    """An `urlopen` that always fails with HTTP `code`, counting calls."""
+    import urllib.error
+
+    calls: list[int] = []
+
+    def fail(request, **_: object):  # type: ignore[no-untyped-def]
+        calls.append(1)
+        raise urllib.error.HTTPError(request.full_url, code, "no", {}, None)
+
+    return fail, calls
+
+
+@pytest.mark.usefixtures("releases")
+def test_a_rate_limited_download_names_the_token(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fail, calls = _http_error(403)
+    monkeypatch.setattr(foundation.urllib.request, "urlopen", fail)
+    with pytest.raises(ConnectionError, match="GH_TOKEN") as err:
+        foundation.finetuned_adapter(_checkpoint("abc"))
+    assert "has no" not in str(err.value)
+    assert len(calls) == 1
+
+
+@pytest.mark.usefixtures("releases")
+def test_a_missing_file_is_named_and_not_retried(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fail, calls = _http_error(404)
+    monkeypatch.setattr(foundation.urllib.request, "urlopen", fail)
+    with pytest.raises(FileNotFoundError, match="has no adapter_config"):
+        foundation.finetuned_adapter(_checkpoint("abc"))
+    assert len(calls) == 1
+
+
+@pytest.mark.usefixtures("releases")
+def test_too_many_requests_is_retried_a_bounded_number_of_times(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fail, calls = _http_error(429)
+    monkeypatch.setattr(foundation.urllib.request, "urlopen", fail)
+    with pytest.raises(ConnectionError, match="GH_TOKEN"):
+        foundation.finetuned_adapter(_checkpoint("abc"))
+    assert len(calls) == len(foundation.RETRY_SECONDS) + 1
