@@ -1,0 +1,27 @@
+# Settings of the paper's evaluation workflow (`workflow/Snakefile`).
+# Paths are relative to `paper/`.
+results: results
+studies: [synthetic, germany, ebola]
+# Samples per forecast for the studies scored on samples.
+n_samples: 100
+
+# Data the development runs use.
+development:
+  # Validation outbreaks for checking the setup.
+  synthetic_seeds: [7001]
+
+# Data kept out of every development run.
+# Only the `paper` target reads them.
+heldout:
+  # Outbreaks simulated with seeds the fine-tune never saw.
+  synthetic_seeds: [9001, 9002, 9003, 9004]
+  # First held-out German nowcast date.
+  # The benchmark's dates run from 2021-11-22 to 2022-04-29.
+  # The first 80 are the development half.
+  germany_from: "2022-02-10"
+
+# D, the days after a target date at which the truth is taken.
+# Synthetic outbreaks use their own 99% reporting delay.
+# Ebola uses the 99% point of the hub data's reporting delay.
+truth_delay:
+  germany: 40
