@@ -42,14 +42,19 @@ from bdbvhubrenewal.forecasters.copula import RollingCopula
 from bdbvhubrenewal.forecasters.foundation import resolve_checkpoint
 
 __all__ = [
+    "AGGREGATION_COLUMNS",
     "FITTED_GROUPINGS",
     "GROUPING_ARMS",
+    "OPTIONS",
+    "aggregation_rows",
     "arm_name",
     "germany_grouping_samples",
     "merged_task",
     "pair_and_sum",
     "release_grouping_forecasts",
     "rolling_zone_truth",
+    "sample_coverage",
+    "split_arm",
 ]
 
 FITTED_GROUPINGS: Final = ("joint", "level", "bottom")
@@ -57,6 +62,32 @@ FITTED_GROUPINGS: Final = ("joint", "level", "bottom")
 
 GROUPING_ARMS: Final = (*FITTED_GROUPINGS, "paired")
 """Every arm: the fitted ones and `paired`, made from `bottom`."""
+
+OPTIONS: Final = {
+    "joint": "joint",
+    "level": "level",
+    "bottom": "zones_summed",
+    "paired": "zones_copula",
+}
+"""The paper's name of each arm."""
+
+REFERENCE: Final = "randomwalknowcast"
+"""The model every arm is compared with, option `reference`."""
+
+AGGREGATION_COLUMNS: Final = (
+    "study",
+    "model",
+    "option",
+    "level",
+    "location",
+    "origin_date",
+    "target_date",
+    "wis",
+    "log_wis",
+    "cover50",
+    "cover95",
+)
+"""Columns of the paper's aggregation scores (`aggregation_rows`)."""
 
 _SAMPLES = ["model", "origin", "location", "target_end_date", "sample"]
 
@@ -335,3 +366,95 @@ def germany_grouping_samples(
     return out.assign(model=label)[
         [*_SAMPLES[:4], "horizon", "sample", "value"]
     ]
+
+
+def split_arm(arm: str) -> tuple[str, str]:
+    """Return an arm's model and its option, as the paper names them.
+
+    Parameters
+    ----------
+    arm : str
+        An `arm_name`, or `REFERENCE`.
+
+    Returns
+    -------
+    tuple of str
+        The model, with any `@<checkpoint>`, and its option in `OPTIONS`,
+        `reference` for `REFERENCE`.
+    """
+    if arm == REFERENCE:
+        return arm, "reference"
+    model, _, grouping = arm.rpartition(":")
+    return model, OPTIONS[grouping]
+
+
+def sample_coverage(
+    samples: pd.DataFrame, truth: pd.DataFrame, level: float
+) -> pd.DataFrame:
+    """Return whether each truth is in its samples' central interval.
+
+    Parameters
+    ----------
+    samples : pandas.DataFrame
+        `model`, `origin`, `location`, `target_end_date`, `sample` and
+        `value`.
+    truth : pandas.DataFrame
+        `location`, `target_end_date` and `truth`.
+    level : float
+        The interval's width, such as 0.95.
+
+    Returns
+    -------
+    pandas.DataFrame
+        One row per scored cell: `model`, `origin`, `location`,
+        `target_end_date` and `cover<100 level>`, 1 inside (bounds
+        included) and 0 outside, as `scoring.coverage_sample`.
+    """
+    cell = _SAMPLES[:4]
+    bounds = (
+        samples.groupby(cell)["value"]
+        .quantile([(1 - level) / 2, (1 + level) / 2])
+        .unstack()
+    )
+    bounds.columns = ["lo", "hi"]
+    rows = bounds.reset_index().merge(
+        truth[["location", "target_end_date", "truth"]],
+        on=["location", "target_end_date"],
+    )
+    inside = (rows["lo"] <= rows["truth"]) & (rows["truth"] <= rows["hi"])
+    name = f"cover{round(level * 100)}"
+    return rows[cell].assign(**{name: inside.astype(float)})
+
+
+def aggregation_rows(scores: pd.DataFrame, study: str) -> pd.DataFrame:
+    """Return scores as the paper's aggregation table.
+
+    Only cells `REFERENCE` scored are kept, so every option is matched
+    against it.
+
+    Parameters
+    ----------
+    scores : pandas.DataFrame
+        `model` (an arm or `REFERENCE`), `origin`, `location`,
+        `target_end_date`, `level`, `wis`, `log_wis`, `cover50` and
+        `cover95`.
+    study : str
+        `ebola` or `germany`.
+
+    Returns
+    -------
+    pandas.DataFrame
+        `AGGREGATION_COLUMNS`.
+    """
+    cell = ["origin", "location", "target_end_date"]
+    ref = scores.loc[scores["model"] == REFERENCE, cell].drop_duplicates()
+    rows = scores.merge(ref, on=cell)
+    split = rows["model"].map(split_arm)
+    out = rows.assign(
+        study=study,
+        model=split.str[0],
+        option=split.str[1],
+        origin_date=rows["origin"],
+        target_date=rows["target_end_date"],
+    )
+    return out[list(AGGREGATION_COLUMNS)].reset_index(drop=True)
