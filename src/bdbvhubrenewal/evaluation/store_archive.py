@@ -101,10 +101,16 @@ def archive(
         `COLUMNS`: the forecasts, every week and sample, with the fit's
         `key`, `commit` and `fitted_at`, and whether it is the fit of
         the current code and data (`current`). A stored model with no
-        good fit, or a forecast that fails, has no rows.
+        good fit, a model that cannot be built, or a forecast that
+        fails, has no rows.
     """
     stored = set(store.stored_models())
-    keys = store.current_keys(tasks, models, sampler, code)
+    keys: store.Keys = {}
+    for model in models:
+        try:
+            keys |= store.current_keys(tasks, [model], sampler, code)
+        except Exception as err:
+            print(f"{model} not archived: {err!r}.", file=sys.stderr)
     rows = [pd.DataFrame(columns=COLUMNS)]
     for (model, origin), key in sorted(keys.items()):
         if model in stored:

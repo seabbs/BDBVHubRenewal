@@ -642,6 +642,8 @@ jobs:
         timeout-minutes: 15
         env:
           AS_OF: ${{ needs.detect.outputs.as_of }}
+          # To list releases, such as a fine-tuned model's checkpoint.
+          GITHUB_TOKEN: ${{ github.token }}
         run: ci/steps/archive_candidates.sh
       - name: Rebuild the docs with this round's page
         env:
