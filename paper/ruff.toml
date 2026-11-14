@@ -4,4 +4,4 @@ extend = "../pyproject.toml"
 "tests/**" = ["D", "PD101"]
 
 [lint.isort]
-known-first-party = ["paperfigs"]
+known-first-party = ["paperdata", "paperfigs", "paperpipe", "papertables"]
