@@ -63,3 +63,23 @@ def test_a_mixed_batch_is_moved_aside_to_run_again(tmp_path):
     assert not seed_done(tmp_path, 5001)
     assert not (tmp_path / "settings-5001.csv").exists()
     assert list((tmp_path / "bad").iterdir())
+
+
+def test_a_non_finite_loss_or_gradient_leaves_the_weights():
+    import torch
+    from finetune_stream import finite_step
+
+    layer = torch.nn.Linear(2, 1)
+    params = list(layer.parameters())
+    optimiser = torch.optim.AdamW(params, lr=0.1)
+    before = [p.detach().clone() for p in params]
+    layer(torch.ones(1, 2)).sum().backward()
+    for p in params:
+        p.grad[...] = float("nan")
+    assert not finite_step(params, optimiser, 1.0)
+    # A skipped block leaves no gradients and a NaN loss.
+    assert not finite_step(params, optimiser, float("nan"))
+    assert all(torch.equal(a, b) for a, b in zip(before, params, strict=True))
+    layer(torch.ones(1, 2)).sum().backward()
+    assert finite_step(params, optimiser, 0.5)
+    assert not torch.equal(before[0], params[0])

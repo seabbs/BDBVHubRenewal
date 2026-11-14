@@ -66,10 +66,10 @@ CUTS = 8
 """Cut-offs of each source (weekly, daily) per simulation, shared among
 its observation draws."""
 
-CHECKPOINT_SERIES = 900
+CHECKPOINT_SERIES = 400
 """Batches with more series than this recompute each encoder block's
 activations in the backward pass (gradient checkpointing), to fit
-memory."""
+memory: without it, 800 series take about 43 GB."""
 
 CODE = (
     "scripts/finetune_simulate.R",

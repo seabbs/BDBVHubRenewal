@@ -218,6 +218,32 @@ def publish(where: Path, key: str) -> None:
     raise RuntimeError(f"could not publish chronos-ft-{key}")
 
 
+def finite_step(params: list, optimiser, value: float) -> bool:
+    """Clip and apply the gradients unless any is not finite.
+
+    The step is skipped if the loss or a gradient is not finite, and the
+    gradients are cleared either way.
+
+    Returns
+    -------
+    bool
+        Whether the step was applied.
+    """
+    import torch
+
+    grads = [p.grad for p in params if p.grad is not None]
+    finite = (
+        np.isfinite(value)
+        and bool(grads)
+        and all(torch.isfinite(g).all() for g in grads)
+    )
+    if finite:
+        torch.nn.utils.clip_grad_norm_(params, 1.0)
+        optimiser.step()
+    optimiser.zero_grad()
+    return finite
+
+
 def save_state(where: Path, model, optimiser, state: dict) -> None:
     """Save the trainer's state: adapter, optimiser and position."""
     import torch
@@ -409,7 +435,12 @@ def main() -> None:
                 raise
             free_memory()
             if len(batch_blocks) == 1:
-                log(f"skipped a block too large for memory: {memory()}")
+                i = batch_blocks[0]
+                log(
+                    f"skipped block {i} of {pairs[i][0]}, "
+                    f"{int(data.inputs[i]['context'].shape[0])} series, "
+                    f"too large for memory: {memory()}"
+                )
                 return float("nan")
             half = len(batch_blocks) // 2
             log(f"split a batch of {len(batch_blocks)} blocks for memory")
@@ -453,9 +484,8 @@ def main() -> None:
                 report(stage="paused")
                 time.sleep(30)
             value = train_step(indices, 1.0)
-            torch.nn.utils.clip_grad_norm_(params, 1.0)
-            optimiser.step()
-            optimiser.zero_grad()
+            if not finite_step(params, optimiser, value):
+                log(f"step {step + 1}: no update (loss {value})")
             # Batches differ in shape, so cached buffers pile up unless they
             # are freed every step.
             free_memory()
