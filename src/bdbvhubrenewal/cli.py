@@ -639,7 +639,7 @@ def _zone_data(data: Path | str) -> ZoneData | None:
     """Return the zone tables, or None if the data has none."""
     try:
         return load_zone_data(data)
-    except OSError:
+    except FileNotFoundError:
         return None
 
 

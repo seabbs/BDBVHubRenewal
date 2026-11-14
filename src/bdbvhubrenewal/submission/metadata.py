@@ -220,8 +220,8 @@ MODEL_METADATA = {
         "methods": (
             "Chronos-2 time series foundation model, LoRA fine-tuned on "
             "outbreaks simulated with epinowcast, forecasting the hub "
-            "target from its daily releases. Health zones split from "
-            "provinces."
+            "target from its daily releases. Country, provinces and "
+            "health zones in one block."
         ),
         "methods_long": (
             "Chronos-2 (Ansari et al. 2025, arXiv:2510.15821) with a LoRA "
@@ -232,22 +232,22 @@ MODEL_METADATA = {
             "https://github.com/seabbs/BDBVHubRenewal, the newest when "
             "this was written. The hub target of "
             "every daily release is laid out by onset day and release "
-            "lag. The country and each province are target series in one "
-            "block. Each place's counts at release lags under 28 days are "
+            "lag. The country, each province and each of their health "
+            "zones are target series in one block. Each place with "
+            "cases has its counts at release lags under 28 days as "
             "covariates, known past the last day at that lag, and "
             "Chronos-2 forecasts the block jointly. Each of 100 samples "
             "draws its own uniform level per series and day from "
             "Chronos-2's 21 quantiles, rounded to counts no lower than "
-            "those reported. Not fitted to these data. Each province "
-            "sample is split across its health zones with shares drawn "
-            "from a Dirichlet on published zone counts. See "
+            "those reported. Not fitted to these data. The zones are made "
+            "to sum to their province sample by sample, each keeping its "
+            "published count. See "
             "https://samabbott.co.uk/BDBVHubRenewal/methods/foundation/."
         ),
         "data_inputs": (
             "The hub's daily onsets by release (observed plus "
             "imputed) "
-            "for the country and provinces, and published health zone "
-            "counts for the zone split."
+            "for the country, provinces and health zones."
         ),
     },
     "fm_chronos_weekly_ragged_ft": {
@@ -255,8 +255,8 @@ MODEL_METADATA = {
         "methods": (
             "Chronos-2 time series foundation model, LoRA fine-tuned on "
             "outbreaks simulated with epinowcast, forecasting the hub "
-            "target from its weekly releases. Health zones split from "
-            "provinces."
+            "target from its weekly releases. Country, provinces and "
+            "health zones in one block."
         ),
         "methods_long": (
             "Chronos-2 (Ansari et al. 2025, arXiv:2510.15821) with a LoRA "
@@ -267,21 +267,21 @@ MODEL_METADATA = {
             "https://github.com/seabbs/BDBVHubRenewal, the newest when "
             "this was written. The hub target of "
             "every weekly release is laid out by onset week and release "
-            "lag. The country and each province are target series in one "
-            "block. Each place's counts at release lags under 4 weeks are "
+            "lag. The country, each province and each of their health "
+            "zones are target series in one block. Each place with "
+            "cases has its counts at release lags under 4 weeks as "
             "covariates, known past the last week at that lag, and "
             "Chronos-2 forecasts the block jointly. Each of 100 samples "
             "draws its own uniform level per series and week from "
             "Chronos-2's 21 quantiles, rounded to counts no lower than "
-            "those reported. Not fitted to these data. Each province "
-            "sample is split across its health zones with shares drawn "
-            "from a Dirichlet on published zone counts. See "
+            "those reported. Not fitted to these data. The zones are made "
+            "to sum to their province sample by sample, each keeping its "
+            "published count. See "
             "https://samabbott.co.uk/BDBVHubRenewal/methods/foundation/."
         ),
         "data_inputs": (
             "The hub's weekly target data by release "
-            "for the country and provinces, and published health zone "
-            "counts for the zone split."
+            "for the country, provinces and health zones."
         ),
     },
 }
