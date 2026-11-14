@@ -103,6 +103,10 @@ def quarantine(sim_dir: Path, seed: int, reason: str) -> None:
     log(f"batch {seed} {reason}: moved to {where} to be run again")
 
 
+# Outbreaks of each finished batch, by simulation folder and seed.
+_READY: dict[tuple[Path, int], list[str]] = {}
+
+
 def seed_done(sim_dir: Path, seed: int) -> bool:
     """Return whether a simulation batch has finished and is whole.
 
@@ -114,6 +118,8 @@ def seed_done(sim_dir: Path, seed: int) -> bool:
     RuntimeError
         If the batch failed.
     """
+    if (sim_dir, seed) in _READY:
+        return True
     counts = sim_dir / f"counts-{seed}.csv.gz"
     settings = sim_dir / f"settings-{seed}.csv"
     if not (counts.exists() and settings.exists()):
@@ -133,13 +139,16 @@ def ready_outbreaks(sim_dir: Path, seeds: range) -> list[str]:
     """Return the outbreaks of the finished batches, in order.
 
     The batches are read in seed order up to the first not yet finished.
+    A finished batch is read once and remembered.
     """
     out: list[str] = []
     for seed in seeds:
-        if not seed_done(sim_dir, seed):
-            break
-        ids = read_ids(sim_dir / f"settings-{seed}.csv")
-        out.extend(sorted(ids, key=ft._order))
+        if (sim_dir, seed) not in _READY:
+            if not seed_done(sim_dir, seed):
+                break
+            ids = read_ids(sim_dir / f"settings-{seed}.csv")
+            _READY[sim_dir, seed] = sorted(ids, key=ft._order)
+        out.extend(_READY[sim_dir, seed])
     return out
 
 
@@ -479,12 +488,12 @@ def main() -> None:
         time.sleep(POLL)
     held = held[: args.holdout]
     (out / "outbreaks-held-out.txt").write_text("\n".join(held) + "\n")
-    val = [b for _, b in cut(sim_dir, held, args.seed, k)]
-    log(f"{len(held)} held-out outbreaks, {len(val)} blocks")
-
-    # Checkpointing and the largest block follow from the memory budget.
+    # Checkpointing and the largest block follow from the memory budget,
+    # so held-out blocks are cut to the same size as training blocks.
     ft.checkpoint_large_batches(ft.checkpoint_above(args.memory_gb))
     ft.MAX_SERIES = min(ft.MAX_SERIES, ft.max_series(args.memory_gb))
+    val = [b for _, b in cut(sim_dir, held, args.seed, k)]
+    log(f"{len(held)} held-out outbreaks, {len(val)} blocks")
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)  # noqa: NPY002
     device = (
