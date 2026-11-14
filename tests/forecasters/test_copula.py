@@ -11,8 +11,10 @@ from scipy.stats import spearmanr
 from bdbvhubrenewal.forecasters import NATIONAL
 from bdbvhubrenewal.forecasters.copula import (
     GaussianCopula,
+    RollingCopula,
     estimate_copula,
     normal_scores,
+    pair_samples,
 )
 
 
@@ -67,7 +69,9 @@ def test_no_correlation_leaves_the_draws_unpaired() -> None:
 
 def test_daily_steps_take_the_weekly_correlation_over_seven_days() -> None:
     copula = GaussianCopula(0.5, 0.0, 0.0)
-    out = copula.couple(_draws(steps=15), np.random.default_rng(4), step_days=1)
+    out = copula.couple(
+        _draws(steps=15), np.random.default_rng(4), days=np.arange(15)
+    )
     assert _rank_corr(out[:, 1, 0], out[:, 1, 7]) == pytest.approx(
         6 / np.pi * np.arcsin(0.5 / 2), abs=0.05
     )
@@ -140,7 +144,7 @@ def test_estimate_recovers_the_correlations() -> None:
     weeks = [f"2026-10-{d:02d}" for d in (3, 10, 17, 24)]
     rows = []
     for origin in range(400):
-        z = truth.normals(rng, 1, len(places), len(weeks))[0]
+        z = truth.normals(rng, 1, len(places), 7 * np.arange(len(weeks)))[0]
         for i, loc in enumerate(places):
             for h, week in enumerate(weeks):
                 rows.append(("m", str(origin), loc, week, z[i, h]))
@@ -207,3 +211,212 @@ def test_weeks_with_no_truth_give_no_score() -> None:
     out = normal_scores(forecasts, truth, np.random.default_rng(0))
     assert out["target_end_date"].tolist() == ["2026-10-17"]
     assert np.isfinite(out["z"]).all()
+
+
+def test_steps_are_correlated_by_their_days_apart() -> None:
+    out = GaussianCopula(0.8, 0.0, 0.0).couple(
+        _draws(steps=3), np.random.default_rng(8), days=np.array([0, 7, 21])
+    )
+    assert _rank_corr(out[:, 1, 0], out[:, 1, 2]) == pytest.approx(
+        6 / np.pi * np.arcsin(0.8**3 / 2), abs=0.05
+    )
+
+
+def test_with_no_country_every_place_is_a_province() -> None:
+    out = GaussianCopula(0.0, 0.5, 0.0).couple(
+        _draws(), np.random.default_rng(9), national=False
+    )
+    assert _rank_corr(out[:, 0, 2], out[:, 1, 2]) == pytest.approx(
+        6 / np.pi * np.arcsin(0.5 / 2), abs=0.05
+    )
+
+
+def _structured_scores(n_origins: int = 400) -> pd.DataFrame:
+    rng = np.random.default_rng(6)
+    places = [NATIONAL, *(f"CD-{i:02d}" for i in range(5))]
+    weeks = [f"2026-10-{d:02d}" for d in (3, 10, 17, 24)]
+    copula = GaussianCopula(0.6, 0.4, 0.5)
+    rows = []
+    for origin in range(n_origins):
+        z = copula.normals(rng, 1, len(places), 7 * np.arange(len(weeks)))
+        for i, loc in enumerate(places):
+            for h, week in enumerate(weeks):
+                rows.append(("m", str(origin), loc, week, z[0, i, h]))
+    return pd.DataFrame(
+        rows,
+        columns=["model", "origin", "location", "target_end_date", "z"],
+    )
+
+
+def test_estimate_shrinks_towards_the_prior() -> None:
+    scores = _structured_scores()
+    prior = GaussianCopula(0.1, 0.1, 0.1)
+    raw = estimate_copula(scores)
+    assert estimate_copula(scores, prior, weight=0.0) == raw
+    half = estimate_copula(scores, prior, weight=float(len(scores)))
+    assert half.rho_time == pytest.approx((raw.rho_time + 0.1) / 2)
+    assert half.rho_provinces == pytest.approx((raw.rho_provinces + 0.1) / 2)
+    assert half.rho_national == pytest.approx((raw.rho_national + 0.1) / 2)
+    far = estimate_copula(scores, prior, weight=1e12)
+    assert far.rho_time == pytest.approx(0.1)
+
+
+def _samples(n: int = 1000, national: str = "own") -> pd.DataFrame:
+    """Independent draws of three provinces over three weeks, and the
+    country as its own series or as their sum."""
+    rng = np.random.default_rng(10)
+    weeks = ["2026-10-10", "2026-10-17", "2026-10-24"]
+    rows = []
+    for p in ("CD-A", "CD-B", "CD-C"):
+        for w in weeks:
+            values = rng.gamma(2.0, 10.0, size=n).round()
+            rows.append(
+                pd.DataFrame(
+                    {
+                        "location": p,
+                        "target_end_date": w,
+                        "sample": np.arange(1, n + 1),
+                        "value": values,
+                    }
+                )
+            )
+    out = pd.concat(rows, ignore_index=True)
+    if national == "own":
+        nat = out.loc[out["location"] == "CD-A"].assign(
+            location=NATIONAL, value=lambda x: x["value"] * 3
+        )
+        nat["value"] = rng.permutation(nat["value"].to_numpy())
+    else:
+        nat = out.groupby(["target_end_date", "sample"], as_index=False)[
+            "value"
+        ].sum()
+        nat.insert(0, "location", NATIONAL)
+    return pd.concat([out, nat[list(out.columns)]], ignore_index=True)
+
+
+def _cells(samples: pd.DataFrame) -> pd.Series:
+    return samples.groupby(["location", "target_end_date"])["value"].apply(
+        lambda v: tuple(np.sort(v.to_numpy()))
+    )
+
+
+def _wide(samples: pd.DataFrame) -> pd.DataFrame:
+    return samples.pivot(
+        index="sample", columns=["location", "target_end_date"], values="value"
+    )
+
+
+def test_pairing_a_table_keeps_each_cells_draws() -> None:
+    samples = _samples()
+    out = pair_samples(
+        samples, GaussianCopula(0.8, 0.5, 0.6), np.random.default_rng(11)
+    )
+    assert set(out.columns) == set(samples.columns)
+    pd.testing.assert_series_equal(_cells(out), _cells(samples))
+    wide = _wide(out)
+    a, b = ("CD-A", "2026-10-10"), ("CD-A", "2026-10-17")
+    assert _rank_corr(wide[a], wide[b]) > 0.6
+    assert _rank_corr(wide[a], wide[(NATIONAL, "2026-10-10")]) > 0.4
+
+
+def test_a_summed_country_is_summed_again() -> None:
+    samples = _samples(national="sum")
+    out = pair_samples(
+        samples, GaussianCopula(0.0, 0.7, 0.0), np.random.default_rng(12)
+    )
+    prov = out.loc[out["location"] != NATIONAL]
+    pd.testing.assert_series_equal(
+        _cells(prov), _cells(samples.loc[samples["location"] != NATIONAL])
+    )
+    wide = _wide(out)
+    week = "2026-10-17"
+    total = sum(wide[(p, week)] for p in ("CD-A", "CD-B", "CD-C"))
+    assert np.array_equal(wide[(NATIONAL, week)], total)
+    # Paired provinces make the country's sum wider.
+    before = _wide(samples)[(NATIONAL, week)].std()
+    assert wide[(NATIONAL, week)].std() > 1.2 * before
+
+
+def test_reported_rows_move_with_their_sample() -> None:
+    samples = _samples()
+    final = samples.assign(as_of=np.nan)
+    reported = samples.assign(as_of="2026-11-01", value=samples["value"] + 0.5)
+    both = pd.concat([final, reported], ignore_index=True)
+    out = pair_samples(
+        both, GaussianCopula(0.8, 0.5, 0.6), np.random.default_rng(13)
+    )
+    keys = ["location", "target_end_date", "sample"]
+    joined = out.loc[out["as_of"].isna()].merge(
+        out.loc[out["as_of"].notna()], on=keys
+    )
+    assert len(joined) == len(samples)
+    assert np.allclose(joined["value_y"] - joined["value_x"], 0.5)
+
+
+def test_pairing_is_reproducible() -> None:
+    samples = _samples()
+    copula = GaussianCopula(0.8, 0.5, 0.6)
+    a = pair_samples(samples, copula, np.random.default_rng(14))
+    b = pair_samples(samples, copula, np.random.default_rng(14))
+    pd.testing.assert_frame_equal(a, b)
+
+
+def _origin_scores() -> pd.DataFrame:
+    """Scores of forecasts at three origins, with each truth's release."""
+    scores = _structured_scores(n_origins=30)
+    origin = np.where(
+        scores["origin"].astype(int) < 10,
+        "2026-10-03",
+        np.where(scores["origin"].astype(int) < 20, "2026-10-17", "2026-10-31"),
+    )
+    return scores.assign(origin=origin, truth_vintage="2026-10-25")
+
+
+def test_the_first_origin_takes_the_prior() -> None:
+    rolling = RollingCopula(GaussianCopula(0.2, 0.2, 0.2))
+    fit, n = rolling.fit(_origin_scores(), "2026-10-03")
+    assert fit == GaussianCopula(0.2, 0.2, 0.2)
+    assert n == 0
+
+
+def test_rolling_fit_uses_matured_weeks_of_earlier_origins() -> None:
+    scores = _origin_scores()
+    prior = GaussianCopula(0.2, 0.2, 0.2)
+    rolling = RollingCopula(prior, window_weeks=2, weight=10.0)
+    fit, n = rolling.fit(scores, "2026-10-31")
+    # Earlier origins, truth released by the origin, and the last two
+    # matured weeks.
+    used = scores.loc[
+        (scores["origin"] < "2026-10-31")
+        & (scores["target_end_date"] > "2026-10-10")
+    ]
+    assert n == len(used)
+    assert fit == estimate_copula(used, prior, weight=10.0)
+    # No truth released by the origin: the prior.
+    late = scores.assign(truth_vintage="2026-11-07")
+    assert rolling.fit(late, "2026-10-31")[0] == prior
+
+
+def test_rolling_pairing_keeps_draws_and_records_each_fit() -> None:
+    a = _samples(n=200).assign(model="m", origin="2026-10-24")
+    b = _samples(n=200).assign(model="m", origin="2026-10-31")
+    forecasts = pd.concat([a, b], ignore_index=True)
+    truth = (
+        forecasts.groupby(["location", "target_end_date"], as_index=False)[
+            "value"
+        ]
+        .median()
+        .rename(columns={"value": "truth"})
+        .assign(truth_vintage="2026-10-30")
+    )
+    rolling = RollingCopula(GaussianCopula(0.5, 0.5, 0.5))
+    paired, fits = rolling.pair(forecasts, truth, seed=1)
+    for origin in ("2026-10-24", "2026-10-31"):
+        mine = forecasts["origin"] == origin
+        pd.testing.assert_series_equal(
+            _cells(paired.loc[paired["origin"] == origin]),
+            _cells(forecasts.loc[mine]),
+        )
+    assert list(fits["origin"]) == ["2026-10-24", "2026-10-31"]
+    assert list(fits["n_scores"]) == [0, 12]
+    assert {"rho_time", "rho_provinces", "rho_national"} <= set(fits)
