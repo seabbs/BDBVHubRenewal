@@ -9,7 +9,6 @@ Two hub models are submitted, `seabbs-rwnowcast` and `seabbs-renewal`.
 ## Models
 
 `randomwalknowcast` is baselinenowcast ([Johnson et al. 2025](https://doi.org/10.12688/wellcomeopenres.25027.2), Wellcome Open Research) with a random walk on top, and `randomwalk` is the same walk with no nowcast ([Baseline models](methods/baselines.md)).
-`pprandomwalknowcast` is a generative variant that fits the delay and the walk jointly, partially pooled over places, and is not submitted.
 The renewal models (`renewal`, `renewalsp` and `renewalbvd`) are built on [PyRenew](https://github.com/CDCgov/PyRenew) and fit the hub's known and imputed onsets ([Renewal models](methods/model.md)).
 Each week `randomwalknowcast` is submitted as `seabbs-rwnowcast` and the first renewal model to pass its checks as `seabbs-renewal` ([Submission workflow](submission/workflow.md)).
 

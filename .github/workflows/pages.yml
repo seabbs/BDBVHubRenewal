@@ -183,16 +183,6 @@ jobs:
             run: >-
               uv run bdbvhubrenewal backtest --scenarios-only --forecast-only
               --models randomwalknowcast --scenarios rising
-          - cell: zones-pprandomwalknowcast-0
-            model: pprandomwalknowcast
-            run: >-
-              uv run bdbvhubrenewal zone-backtest --forecast-only
-              --models pprandomwalknowcast --chunk 0/2
-          - cell: zones-pprandomwalknowcast-1
-            model: pprandomwalknowcast
-            run: >-
-              uv run bdbvhubrenewal zone-backtest --forecast-only
-              --models pprandomwalknowcast --chunk 1/2
           - cell: zones-randomwalknowcast
             model: randomwalknowcast
             run: >-
@@ -338,7 +328,6 @@ jobs:
             "$p"-development-{randomwalk,randomwalknowcast} \
             "$p"-recovery-randomwalk "$p"-recovery-randomwalknowcast-{0,1,2} \
             "$p"-zones-{randomwalk,randomwalknowcast} \
-            "$p"-zones-pprandomwalknowcast-{0,1} \
             "$p"-scenario-{randomwalk,randomwalknowcast}-{falling,flat,rising}
       - name: Compare with hub forecasts, then the docs figures and tables
         env:
