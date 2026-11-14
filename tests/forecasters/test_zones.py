@@ -554,3 +554,44 @@ def test_reconcile_keeps_each_zones_published_count(
         & ~rows["location"].isin(set(keep.values()))
     )
     assert floored.any()
+
+
+def test_reconcile_works_draw_by_draw(
+    task: ForecastTask, counts: pd.DataFrame, zones: tuple[str, ...]
+) -> None:
+    # Reordering the draws of provinces and zones together, as a copula's
+    # pairing does, reorders the reconciled zones the same way.
+    prov = RandomWalk().forecast(task)
+    provinces = prov.loc[prov["location"].isin(task.locations)]
+    mine = tuple(z for z in zones if province_of(z) in task.locations)
+    rng = np.random.default_rng(1)
+    own = pd.concat(
+        [
+            provinces.loc[provinces["location"] == province_of(z)].assign(
+                location=z,
+                value=lambda d: rng.integers(0, 5, len(d)).astype(float),
+            )
+            for z in mine
+        ],
+        ignore_index=True,
+    )
+    order = dict(
+        zip(
+            range(1, task.n_samples + 1),
+            rng.permutation(task.n_samples) + 1,
+            strict=True,
+        )
+    )
+
+    def shuffled(rows: pd.DataFrame) -> pd.DataFrame:
+        return rows.assign(sample=rows["sample"].map(order))
+
+    keys = ["location", "target_end_date", "sample"]
+    once = reconcile_zones(own, provinces, task, counts, mine)
+    again = reconcile_zones(
+        shuffled(own), shuffled(provinces), task, counts, mine
+    )
+    pd.testing.assert_series_equal(
+        again.set_index(keys)["value"].sort_index(),
+        shuffled(once).set_index(keys)["value"].sort_index(),
+    )
