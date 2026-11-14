@@ -206,12 +206,26 @@ tasks:
         uv run --group docs jupytext --to ipynb --execute --run-path .
         docs/getting-started.py
 
+  # The same commands as the paper job of .github/workflows/pages.yml;
+  # keep the two in step.
+  paper:render:
+    desc: Render the paper's main text and SI (HTML and PDF) and copy them into docs/paper/ for the site
+    # From paper/, as Quarto writes the PDF links relative to where it runs.
+    dir: paper
+    cmds:
+      - quarto render main.qmd
+      - quarto render si.qmd
+      - mkdir -p ../docs/paper
+      - cp -R main.html main.pdf main_files si.html si.pdf si_files figures
+        ../docs/paper/
+
   docs:
     desc: Build the docs site into _site/
     cmds:
       - task: results
       - task: plots
       - task: getting-started
+      - task: paper:render
       - uv run mkdocs build --strict
 
   serve:
