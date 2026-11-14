@@ -560,13 +560,14 @@ def chronos_sampler(
     pipeline = _chronos(checkpoint)
     levels = np.asarray(pipeline.quantiles, dtype=float)
     rng = np.random.default_rng(seed)
-    quantiles, _ = pipeline.predict_quantiles(
-        [dict(g) for g in groups],
-        prediction_length=horizon,
-        quantile_levels=levels.tolist(),
-    )
     out = []
-    for q in quantiles:
+    # Chronos-2 takes groups of one size per call, so each is its own.
+    for g in groups:
+        (q,), _ = pipeline.predict_quantiles(
+            [dict(g)],
+            prediction_length=horizon,
+            quantile_levels=levels.tolist(),
+        )
         q = q.float().cpu().numpy()  # [V, horizon, Q]
         u = rng.uniform(size=(n_samples, *q.shape[:2]))
         out.append(
