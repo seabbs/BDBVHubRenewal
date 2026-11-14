@@ -16,7 +16,8 @@
 #   the same with latent infections and an incubation delay
 #   (`latent_reporting_delay`), or with no generation time a weekly random
 #   walk on the growth rate, a random walk on log incidence, growth with
-#   step changes, or smoothly varying growth. The growth rate is given to
+#   step changes, or smoothly varying growth. Each declines linearly by a
+#   drawn amount, as epidemics turn over. The growth rate is given to
 #   `enw_simulate`, so the `r` formula is not used;
 # - reference date (`enw_reference`): a parametric delay alone, a
 #   non-parametric hazard alone, or both. The parametric delay is a
@@ -33,7 +34,8 @@
 #   weekdays (a `structural` table), which may change once on a report
 #   date;
 # - observations: "negbin" (NB2), "negbin1d" (NB1) or "poisson";
-# - longest delay: 8 weeks, or 12 weeks in one outbreak in four.
+# - longest delay: the shortest of 4, 8 and 12 weeks that is at least ten
+#   times the delay's mean, or one step longer in one outbreak in four.
 #
 # The NB1 dispersion matches the NB2 scale (epinowcast issue #937). With
 # expected onsets lambda and delay probabilities p_d, NB2 has
@@ -66,7 +68,7 @@
 #   Rscript scripts/finetune_simulate.R <n> <seed> <out_dir>
 
 epinowcast_sha <- "e084b080"
-grid_name <- "r2-real"
+grid_name <- "r2-cal"
 args <- commandArgs(trailingOnly = TRUE)
 n_outbreaks <- as.integer(args[[1]])
 seed <- as.integer(args[[2]])
@@ -100,12 +102,14 @@ gamma_pmf <- function(mean, cv, n) {
   pmf / sum(pmf)
 }
 
-# One log Rt path: steps at random times plus a random walk drift.
+# One log Rt path: steps at random times, a random walk drift, and a
+# linear decline (`turn`) as an epidemic turns over.
 log_rt_path <- function(n, v) {
   at <- sort(sample.int(n, v$rt_steps, replace = TRUE))
   jumps <- numeric(n)
   jumps[at] <- rnorm(v$rt_steps, -0.2, v$rt_step_sd)
-  path <- v$log_r0 + cumsum(jumps) + cumsum(rnorm(n, 0, v$rt_drift_sd))
+  path <- v$log_r0 + cumsum(jumps) + cumsum(rnorm(n, 0, v$rt_drift_sd)) -
+    v$rt_turn * seq_len(n) / n
   pmin(pmax(path, -1.2), 1.2)
 }
 
@@ -127,7 +131,10 @@ growth_path <- function(n, process, v) {
     growth_smooth = v$r0 + v$smooth_amp *
       sin(2 * pi * seq_len(n) / v$smooth_period + v$smooth_phase)
   )
-  pmin(pmax(path, -0.06), 0.06)
+  # Growth that never turns over is the main cause of outbreaks too large
+  # to keep, so growth declines linearly to `turn` lower by the end.
+  path <- path - v$growth_turn * seq_len(n) / n
+  pmin(pmax(path, -0.1), 0.1)
 }
 
 # The delay's epinowcast parameters (`refp_mean_int`, `refp_sd_int`) and
@@ -233,30 +240,34 @@ draw_design <- function() {
     family = sample(
       c("negbin", "negbin1d", "poisson"), 1, prob = c(0.4, 0.4, 0.2)
     ),
-    # Longest delay in days; the German data's delays run past 8 weeks.
-    max_delay = sample(c(56L, 84L), 1, prob = c(0.75, 0.25))
+    # A long tail: the longest delay one step above what the delay's mean
+    # needs (`max_delay_for`).
+    long_tail = runif(1) < 0.25
   )
 }
 
 # The continuous settings of an outbreak, drawn again when a draw fails.
 draw_values <- function(design) {
   places_ages <- design$strata == "places_ages"
+  delay_mean <- exp(runif(1, log(2), log(21)))
   list(
     weeks = if (places_ages) sample(16:24, 1) else sample(16:40, 1),
     offset = sample(0:6, 1),
     quiet = runif(1, 0, 0.9),
     coupling = runif(1),
-    gt_mean = runif(1, 6, 20),
+    gt_mean = runif(1, 2, 20),
     gt_cv = runif(1, 0.3, 0.7),
     incubation_mean = runif(1, 3, 12),
     incubation_cv = runif(1, 0.3, 0.7),
     log_r0 = rnorm(1, 0.1, 0.2),
+    rt_turn = runif(1, 0, 0.6),
     rt_steps = rpois(1, 1.2),
     rt_step_sd = runif(1, 0.1, 0.5),
     rt_drift_sd = runif(1, 0, 0.03),
     # Most failed draws were growth processes overflowing at the start
     # growth rate's upper range, so it is narrower than for Rt.
     r0 = rnorm(1, 0.01, 0.02),
+    growth_turn = runif(1, 0, 0.05),
     walk_sd = runif(1, 0.005, 0.015),
     incidence_sd = runif(1, 0.05, 0.3),
     growth_steps = sample(1:3, 1),
@@ -266,7 +277,8 @@ draw_values <- function(design) {
     smooth_phase = runif(1, 0, 2 * pi),
     seed_size = exp(runif(1, log(0.2), log(200))),
     stratum_sd = runif(1, 0.5, 2),
-    delay_mean = exp(runif(1, log(2), log(21))),
+    delay_mean = delay_mean,
+    max_delay = max_delay_for(delay_mean, design$long_tail),
     # Gamma delays with shape above 2 fail or report nothing in the
     # simulate branch, so the gamma's coefficient of variation is at
     # least 0.7.
@@ -302,6 +314,16 @@ draw_values <- function(design) {
   )
 }
 
+# The longest delay in days: the shortest of 4, 8 and 12 weeks that is at
+# least ten times the delay's mean, or the next one up for a long tail.
+# A longest delay many times the mean gives the discretised delay
+# non-finite tail hazards in epinowcast (#939), so Stan cannot start.
+max_delay_for <- function(mean, long_tail) {
+  options <- c(28L, 56L, 84L)
+  k <- min(which(c(options >= 10 * mean, TRUE))[1], length(options))
+  options[min(k + long_tail, length(options))]
+}
+
 # Expected onsets of each stratum by day, as epinowcast's renewal or
 # growth model gives them from the latent seeding and the growth rate
 # (ignoring an incubation delay, which keeps their scale).
@@ -333,7 +355,7 @@ effect_sds <- function(rdesign, sds) {
 simulate_outbreak <- function(design, v) {
   # Four weeks plus the longest delay past the last cut-off, so a block's
   # horizon (four weeks) is complete.
-  max_delay <- design$max_delay
+  max_delay <- v$max_delay
   n_time <- 7L * (v$weeks + max_delay %/% 7L + 4L)
   place_ids <- sprintf("P%02d", seq_len(design$n_places))
   age_ids <- sprintf("A%d", seq_len(design$n_ages))
@@ -549,6 +571,11 @@ simulate_outbreak <- function(design, v) {
 
   # Observations: the NB1 dispersion on the NB2 scale (epinowcast #937).
   onsets <- expected_onsets(size, gt, log_r)
+  # A draw expected to be far beyond the largest size kept cannot pass,
+  # so it fails before Stan runs.
+  if (sum(onsets) > 50 * max_size(design)) {
+    stop("too large (expected)")
+  }
   v$lambda_hat <- max(1, median(onsets[onsets >= 1]), na.rm = TRUE)
   v$sum_p2 <- sum(delay$pmf^2)
   v$sqrt_phi_obs <- switch(design$family,
