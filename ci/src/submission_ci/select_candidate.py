@@ -39,7 +39,7 @@ from .common import (
     write_json,
     write_text,
 )
-from .policy import Candidate, Policy, load_policy
+from .policy import UNFITTED, Candidate, Policy, load_policy
 
 Validator = Callable[[Path, Path], str]  # (submission, log) -> status
 
@@ -75,7 +75,7 @@ def assess(c: Candidate, cdir: Path) -> Attempt:
         return a
     statuses = []
     fit_path = cdir / "fit-summary.json"
-    if c.kind == "randomwalk" and not fit_path.exists():
+    if c.kind in UNFITTED and not fit_path.exists():
         a.fit = "skip"
     elif fit_path.exists():
         fit = read_json(fit_path)
@@ -94,7 +94,7 @@ def assess(c: Candidate, cdir: Path) -> Attempt:
             f"ppc: {m}"
             for m in [*ppc.get("failures", []), *ppc.get("warnings", [])]
         ]
-    elif c.kind == "randomwalk" or a.fit == "skip":
+    elif c.kind in UNFITTED or a.fit == "skip":
         a.ppc = "skip"
     else:
         a.ppc = "warn"

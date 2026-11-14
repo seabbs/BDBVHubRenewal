@@ -257,6 +257,22 @@ def cmd_fit_store(args: argparse.Namespace) -> int:
     return status
 
 
+def cmd_hub_id(args: argparse.Namespace) -> int:
+    """Print the hub id from config/hub.toml, as the real CLI does."""
+    import tomllib
+
+    path = Path(__file__).resolve().parents[2] / "config" / "hub.toml"
+    config = tomllib.loads(path.read_text())
+    own = config.get("models", {}).get(args.model, {})
+    abbr = own.get("model_abbr") or config["submission"]["model_abbr"]
+    print(f"seabbs-{abbr}")
+    return 0
+
+
+CHRONOS_FT = ("fm_chronos_daily_ragged_ft", "fm_chronos_weekly_ragged_ft")
+"""The fine-tuned Chronos-2 models of seabbs-chronos2_ft."""
+
+
 def cmd_nowcast(args: argparse.Namespace) -> int:
     sc = scenario()
     as_of = args.vintage
@@ -290,10 +306,11 @@ def cmd_nowcast(args: argparse.Namespace) -> int:
                 rows.append([loc, s, w, v])
     for (s, w), v in totals.items():
         rows.append(["CD", s, w, v])
-    # Health zones, as the baselines write them: each province split
-    # evenly over two zones. `nozones` (or FAKE_ZONES=none) leaves them out.
+    # Health zones, as the baselines and the fine-tuned Chronos-2 models
+    # write them: each province split evenly over two zones. `nozones` (or
+    # FAKE_ZONES=none) leaves them out.
     if (
-        args.model in ("randomwalk", "randomwalknowcast")
+        args.model in ("randomwalk", "randomwalknowcast", *CHRONOS_FT)
         and sc != "nozones"
         and os.environ.get("FAKE_ZONES") != "none"
     ):
@@ -519,14 +536,7 @@ def main() -> int:
         "plot-ppc": cmd_plot,
         "coherence": cmd_coherence,
         "bvd": lambda _a: 0,
-        "hub-id": lambda a: (
-            print(
-                "seabbs-rwnowcast"
-                if a.model == "randomwalknowcast"
-                else "seabbs-renewal"
-            )
-            or 0
-        ),
+        "hub-id": cmd_hub_id,
         "metadata": cmd_metadata,
         "freeze-round": cmd_freeze,
     }[args.command](args)

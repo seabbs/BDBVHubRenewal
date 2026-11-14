@@ -21,6 +21,8 @@ Commands:
 - `coherence`: compare the national data with the sum of the provinces.
 - `validate`: run the hub's checks on files (`submission.validate`).
 - `metadata`: write and check a model's metadata YAML.
+- `finetuned-checkpoint`: print the settings hash of the fine-tuned
+  checkpoint the `_ft` models load, resolved once for a run's jobs.
 - `compare-hub`: score our forecasts against the hub's submitted ones.
 - `report`: make the docs figures and tables.
 
@@ -524,6 +526,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Defaults to every real backtest vintage.",
     )
 
+    sub.add_parser(
+        "finetuned-checkpoint",
+        help="Print the fine-tuned checkpoint's settings hash, for "
+        "BDBV_CHRONOS_FT.",
+    )
     hid = sub.add_parser(
         "hub-id", help="Print the hub model id that submissions use."
     )
@@ -1173,13 +1180,16 @@ def _nowcast(args: argparse.Namespace) -> int:
     # A renewal model given by --model is fitted here.
     host_devices(int(sampler_settings()["num_chains"]))
     hub_config = Path(args.data) / "hub-config" / "tasks.json"
+    checkpoint = None
     try:
         task, handled = _task(args)
         if args.config:
             config = get_config(args.config)
             result = run_forecast(config, task, args.fit)
         else:
-            samples = get_model(args.model).forecast(task)
+            model = get_model(args.model)
+            checkpoint = getattr(model, "checkpoint", None)
+            samples = model.forecast(task)
             check_samples(samples, task)
             result = Forecast(samples)
         zones, zone_note = _zones(args, task, result.samples, hub_config)
@@ -1193,7 +1203,7 @@ def _nowcast(args: argparse.Namespace) -> int:
             forecast_date=args.forecast_date,
         )
         path = write_submission(table, args.out, model_id(_abbr(args)))
-    except (KeyError, ValueError, OSError) as err:
+    except (LookupError, ValueError, OSError) as err:
         print(f"ERROR: {err}", file=sys.stderr)
         return 1
     _write_national_sidecar(Path(args.out), task, result)
@@ -1203,6 +1213,15 @@ def _nowcast(args: argparse.Namespace) -> int:
     n_zones = 0 if zones is None else int(zones["location"].nunique())
     zone_record = {"zones": n_zones > 0, "n_zones": n_zones, "note": zone_note}
     (Path(args.out) / "zones.json").write_text(json.dumps(zone_record) + "\n")
+    # The fine-tuned checkpoint the model loaded, for the PR body.
+    if checkpoint is not None:
+        record = {
+            "tag": f"chronos-ft-{checkpoint.hash}",
+            "sha256": dict(checkpoint.sha256),
+        }
+        (Path(args.out) / "checkpoint.json").write_text(
+            json.dumps(record) + "\n"
+        )
     for note in handled:
         print(f"Handled: {note}")
     print(f"Wrote {path} ({len(table)} rows, locations incl. {NATIONAL}).")
@@ -1409,11 +1428,18 @@ def _print_coherence(summary: dict[str, object]) -> None:
 
 def _metadata(args: argparse.Namespace) -> int:
     text = MODEL_METADATA[args.model]
+    methods_long = text["methods_long"]
+    if "{release}" in methods_long:
+        # The release of the checkpoint the model loads now.
+        checkpoint = get_model(args.model).checkpoint  # type: ignore[attr-defined]
+        methods_long = methods_long.format(
+            release=f"chronos-ft-{checkpoint.hash}"
+        )
     record = render_model_metadata(
         _abbr(args),
         model_name=text["model_name"],
         methods=text["methods"],
-        methods_long=text["methods_long"],
+        methods_long=methods_long,
         data_inputs=text["data_inputs"],
     )
     path = write_model_metadata(record, args.out)
@@ -1730,6 +1756,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _metadata(args)
     if args.command == "bvd":  # pragma: no cover - network
         return _bvd(args)
+    if args.command == "finetuned-checkpoint":
+        from bdbvhubrenewal.forecasters.foundation import (
+            finetuned_spec,
+            resolve_checkpoint,
+        )
+
+        print(resolve_checkpoint(finetuned_spec()).hash)
+        return 0
     if args.command == "hub-id":
         print(model_id(model_abbr_for(args.model, args.hub_toml)))
         return 0

@@ -451,6 +451,45 @@ no_new_data() {
   echo "ok: $(grep '^reason=' "$WORK/out2")"
 }
 
+chronos_track() {
+  # track.sh for seabbs-chronos2_ft, as the workflow's chronos job runs it
+  # once its submit flag is on: the configured model, run with no fit,
+  # checked against the random walk, with zones, under its own id.
+  local src="$ROOT/main" status selected model
+  get() { python3 -c "import json;print(json.load(open('$src/decision.json'))['$1'])"; }
+  echo "=== chronos ==="
+  model=$(python3 -c 'import sys, tomllib
+models = tomllib.load(open(sys.argv[1], "rb"))["models"]
+print(next(k for k, v in models.items() if v["model_abbr"] == "chronos2_ft"))' \
+    "$CI_DIR/../config/hub.toml")
+  export WORK="$ROOT/chronos"
+  rm -rf "$WORK" && mkdir -p "$WORK"
+  cp -R "$src/inputs" "$WORK/inputs"
+  export GH_LOG="$WORK/gh.log" GITHUB_OUTPUT="$WORK/github-output"
+  export GITHUB_STEP_SUMMARY="$WORK/summary.md" FAKE_ZONES="" FAKE_SCENARIOS=""
+  status=0
+  HUB_REF=$(get hub_ref) DATA_COMMIT=$(get data_commit) AS_OF=$(get as_of) \
+    REFERENCE_DATE=$(get reference_date) DRY_RUN=true HUB_PATH="$FIX/hub" \
+    HUB_VALIDATOR=true MODEL="" MODEL_ID="" TRACK_MODEL=$model \
+    "$CI_DIR/steps/track.sh" > "$WORK/track.log" 2>&1 || status=$?
+  local gate="$WORK/track-$model/gate"
+  [ "$status" = 0 ] || { echo "FAIL: chronos exited $status"; cat "$WORK/track.log"; return 1; }
+  selected=$(python3 -c "import json;print(json.load(open('$gate/provenance.json'))['selected'])")
+  [[ "$selected" = chronos2_ft_* ]] \
+    || { echo "FAIL: chronos selected $selected"; return 1; }
+  grep -q "CD-IT-01" "$(find "$gate/selected/submission" -name '*.csv' | head -n 1)" \
+    || { echo "FAIL: chronos file has no zones"; return 1; }
+  grep -q "bdbv-submission:seabbs-chronos2_ft:" "$gate/pr-body.md" \
+    || { echo "FAIL: chronos id"; return 1; }
+  if grep -q "^Fit:" "$gate/pr-body.md"; then
+    echo "FAIL: chronos body names a fit"; return 1
+  fi
+  if grep -v '^pr list' "$WORK/gh.log" 2> /dev/null; then
+    echo "FAIL: chronos dry run wrote to GitHub"; return 1
+  fi
+  echo "ok: seabbs-chronos2_ft submits $model with zones, with no fit and no fallback"
+}
+
 own_model() {
   # The renewal track resolves its model from `[submission] model` in
   # config/hub.toml.
@@ -483,6 +522,7 @@ no_new_data || failed=1
 resubmission || failed=1
 ledger || failed=1
 baseline_track || failed=1
+chronos_track || failed=1
 own_model || failed=1
 [ $failed = 0 ] && echo "All dry-run scenarios passed." || echo "Some scenarios FAILED."
 exit $failed

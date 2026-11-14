@@ -6,6 +6,7 @@ import os
 from collections.abc import Iterator
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -320,6 +321,7 @@ def test_committed_metadata_is_only_for_hub_models() -> None:
     # One file per hub model in config/hub.toml, written as the CLI does.
     names = sorted(p.stem for p in (ROOT / "hub" / "model-metadata").glob("*"))
     assert names == [
+        "seabbs-chronos2_ft",
         "seabbs-renewal",
         "seabbs-rwnowcast",
     ]
@@ -347,3 +349,89 @@ def test_committed_renewal_metadata_is_one_of_the_variants(
         rendered[variant] = (out / "seabbs-renewal.yml").read_text()
     assert path.read_text() in rendered.values()
     assert len(set(rendered.values())) == 3
+
+
+@pytest.mark.usefixtures("in_root")
+def test_chronos_track_metadata_is_the_committed_file(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert main(["hub-id", "--model", "fm_chronos_daily_ragged_ft"]) == 0
+    assert capsys.readouterr().out.strip() == "seabbs-chronos2_ft"
+    for model in ("fm_chronos_daily_ragged_ft", "fm_chronos_weekly_ragged_ft"):
+        out = tmp_path / model
+        args = ["--model", model, "--abbr", "chronos2_ft", "--out", str(out)]
+        assert main(["metadata", *args]) == 0
+        text = (out / "seabbs-chronos2_ft.yml").read_text()
+        assert "model_abbr: chronos2_ft" in text
+        assert "chronos-ft-" in text
+
+
+@pytest.mark.usefixtures("in_root")
+def test_nowcast_records_the_checkpoint_it_loaded(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fake_checkpoint: str
+) -> None:
+    from bdbvhubrenewal.forecasters import foundation
+
+    def zeros(groups, horizon, n, _seed, checkpoint=None):  # type: ignore[no-untyped-def]
+        assert checkpoint.hash == fake_checkpoint
+        return [
+            np.zeros((n, np.atleast_2d(g["target"]).shape[0], horizon))
+            for g in groups
+        ]
+
+    monkeypatch.setattr(foundation, "chronos_sampler", zeros)
+    out = tmp_path / "ft"
+    args = ["--model", "fm_chronos_weekly_ragged_ft", "--out", str(out)]
+    assert main(["nowcast", *args]) == 0
+    record = json.loads((out / "checkpoint.json").read_text())
+    assert record["tag"] == f"chronos-ft-{fake_checkpoint}"
+    assert set(record["sha256"]) == set(foundation.ADAPTER_FILES)
+    # Zones split from the provinces, and the national sidecar.
+    assert json.loads((out / "zones.json").read_text())["zones"]
+    assert (out / "national.json").exists()
+    # With no checkpoint release, the nowcast fails.
+    monkeypatch.setattr(foundation, "finetuned_releases", lambda: [])
+    foundation.resolve_checkpoint.cache_clear()
+    assert main(["nowcast", *args[:2], "--out", str(tmp_path / "x")]) == 1
+    # A model with no checkpoint writes none.
+    plain = tmp_path / "rw"
+    assert main(["nowcast", "--model", "randomwalk", "--out", str(plain)]) == 0
+    assert not (plain / "checkpoint.json").exists()
+
+
+@pytest.mark.usefixtures("in_root")
+def test_chronos_metadata_names_the_release(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, write_release
+) -> None:
+    from bdbvhubrenewal.forecasters import foundation
+
+    # The committed file names the release that was latest when written.
+    root = tmp_path / "releases"
+    tag = "2c2b22a03107"
+    adapter = {"adapter_config.json": b"{}", "adapter_model.safetensors": b"w"}
+    write_release(root, tag, adapter, tag)
+    monkeypatch.setattr(foundation, "FINETUNED_URL", root.as_uri())
+    listing = [
+        {
+            "tag_name": f"chronos-ft-{tag}",
+            "published_at": "2026-11-13T00:00:00Z",
+            "draft": False,
+        }
+    ]
+    monkeypatch.setattr(foundation, "finetuned_releases", lambda: listing)
+    foundation.resolve_checkpoint.cache_clear()
+    out = tmp_path / "meta"
+    args = ["--model", "fm_chronos_daily_ragged_ft", "--out", str(out)]
+    assert main(["metadata", *args]) == 0
+    text = (out / "seabbs-chronos2_ft.yml").read_text()
+    assert "release chronos-ft-2c2b22a03107 of" in text
+    assert "<" not in text
+    committed = ROOT / "hub" / "model-metadata" / "seabbs-chronos2_ft.yml"
+    assert committed.read_text() == text
+
+
+def test_cli_prints_the_checkpoint_a_run_resolves(
+    capsys: pytest.CaptureFixture[str], fake_checkpoint: str
+) -> None:
+    assert main(["finetuned-checkpoint"]) == 0
+    assert capsys.readouterr().out.strip() == fake_checkpoint

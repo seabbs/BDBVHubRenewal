@@ -331,7 +331,30 @@ def test_says_when_the_fit_was_made_in_the_run(tmp_path: Path) -> None:
     assert visible(body(g, provenance=prov))[3] == (
         "Fit: made in this run, as the fit store holds no fit for this round."
     )
-    prov["run"].update(kind="randomwalk")
+    for kind in ("randomwalk", "direct"):
+        prov["run"].update(kind=kind)
+        assert not any(
+            line.startswith("Fit:")
+            for line in visible(body(g, provenance=prov))
+        )
+
+
+def test_names_the_checkpoint_a_model_loaded(tmp_path: Path) -> None:
+    g = gate(tmp_path)
+    prov = read_json(g / "provenance.json")
     assert not any(
-        line.startswith("Fit:") for line in visible(body(g, provenance=prov))
+        line.startswith("Checkpoint:")
+        for line in visible(body(g, provenance=prov))
     )
+    prov["run"].update(
+        kind="direct",
+        checkpoint={
+            "tag": "chronos-ft-2c2b22a03107",
+            "sha256": {"adapter_model.safetensors": "3459d83a8855" + "0" * 52},
+        },
+    )
+    lines = visible(body(g, provenance=prov))
+    assert (
+        "Checkpoint: release `chronos-ft-2c2b22a03107` of "
+        "seabbs/BDBVHubRenewal, adapter SHA-256 `3459d83a8855`."
+    ) in lines

@@ -59,7 +59,7 @@ import numpy as np
 import pandas as pd
 
 from bdbvhubrenewal.data.dates import as_date
-from bdbvhubrenewal.data.snapshots import snapshot_arrays
+from bdbvhubrenewal.data.snapshots import SnapshotArrays, snapshot_arrays
 from bdbvhubrenewal.forecasters.base import (
     SAMPLE_COLUMNS,
     ForecastTask,
@@ -273,6 +273,33 @@ class RandomWalk:
     fit_diagnostics: list[dict[str, object]] = field(default_factory=list)
     needs_snapshots: ClassVar[bool] = True
 
+    def snapshots(self, task: ForecastTask) -> SnapshotArrays:
+        """Return the task's release snapshots as arrays.
+
+        Parameters
+        ----------
+        task : ForecastTask
+            The task. Its `daily_history` holds the release snapshots.
+
+        Returns
+        -------
+        SnapshotArrays
+            The snapshots up to the task's vintage.
+
+        Raises
+        ------
+        MissingSnapshots
+            If the task has no release snapshots.
+        """
+        _clear_caches(task)
+        daily = task.daily_history
+        if daily is None or daily.empty:
+            raise MissingSnapshots(
+                f"{self.name} needs daily release snapshots, and the task "
+                f"for {task.vintage} has none."
+            )
+        return snapshot_arrays(daily, task.vintage, task.locations)
+
     def origin_at(self, task: ForecastTask, errors: bool) -> Origin:
         """Fit the delays and the walk at the task's vintage.
 
@@ -293,15 +320,7 @@ class RandomWalk:
         MissingSnapshots
             If the task has no release snapshots.
         """
-        _clear_caches(task)
-        daily = task.daily_history
-        if daily is None or daily.empty:
-            raise MissingSnapshots(
-                f"{self.name} needs daily release snapshots, and the task "
-                f"for {task.vintage} has none."
-            )
-        snap = snapshot_arrays(daily, task.vintage, task.locations)
-        return build_origin(snap, self.settings, errors)
+        return build_origin(self.snapshots(task), self.settings, errors)
 
     def rows(self, origin: Origin, task: ForecastTask) -> list[int]:
         """Return the origin's row of each of the task's places.

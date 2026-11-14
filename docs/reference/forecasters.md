@@ -23,4 +23,6 @@ Build a model from the registry and forecast a task with it. See [Getting starte
 
 ::: bdbvhubrenewal.forecasters.renewal
 
+::: bdbvhubrenewal.forecasters.foundation
+
 ::: bdbvhubrenewal.forecasters.zones

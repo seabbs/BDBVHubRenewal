@@ -186,3 +186,7 @@ def test_assess_without_ppc_summary(tmp_path: Path) -> None:
     write_json(p / "checks.json", {"status": "pass", "checks": []})
     write_json(p / "submission" / "x.csv", {})
     assert assess(POLICY.get("randomwalk"), p).ppc == "skip"
+
+
+def test_direct_model_without_file_is_na(tmp_path: Path) -> None:
+    assert run(tmp_path, None, "--kind", "direct")["status"] == "skip"

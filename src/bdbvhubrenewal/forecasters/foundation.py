@@ -1,0 +1,759 @@
+# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+r"""The Chronos-2 foundation model on the hub target's releases.
+
+See the Foundation models methods page for the model.
+Each pair of a source (`SOURCES`) and a layout (`LAYOUTS`) is one
+registered model, `fm_chronos_<source>_<layout>`, and each source's
+ragged model with a fine-tuned checkpoint (`resolve_checkpoint`, the
+latest release unless `config/finetune.toml` pins one) is
+`fm_chronos_<source>_ragged_ft`.
+`hub_triangle` lays out the hub target by place, time and release lag,
+`FoundationModel` gives it to Chronos-2 as one group of series, and
+`chronos_sampler` draws trajectories from Chronos-2's quantiles.
+Chronos-2 is an optional dependency group (`uv sync --group chronos`).
+Without it, or without the fine-tuned checkpoint's release, a fit raises
+and the fit store stores it as failed.
+"""
+
+from __future__ import annotations
+
+import datetime as dt
+import hashlib
+import http.client
+import json
+import os
+import shutil
+import tempfile
+import tomllib
+import urllib.request
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass, field
+from functools import cache, partial
+from pathlib import Path
+from typing import Any, Final
+
+import numpy as np
+import pandas as pd
+
+from bdbvhubrenewal.data.dates import as_date, epiweek_end
+from bdbvhubrenewal.forecasters.base import (
+    NATIONAL,
+    SAMPLE_COLUMNS,
+    ForecastTask,
+    ModelUnavailableError,
+    register_model,
+)
+from bdbvhubrenewal.forecasters.chain import start_weeks
+from bdbvhubrenewal.forecasters.randomwalk import RandomWalk
+
+__all__ = [
+    "ADAPTER_FILES",
+    "CHRONOS_MODEL",
+    "CHRONOS_REVISION",
+    "FINETUNED_CACHE",
+    "FINETUNED_CONFIG",
+    "FINETUNED_ENV",
+    "FINETUNED_RELEASES",
+    "FINETUNED_URL",
+    "LAYOUTS",
+    "MAX_LAG",
+    "SOURCES",
+    "SUMS_FILE",
+    "Checkpoint",
+    "FoundationModel",
+    "HubTriangle",
+    "Sampler",
+    "chronos_sampler",
+    "finetuned_adapter",
+    "finetuned_releases",
+    "finetuned_spec",
+    "hub_triangle",
+    "layout_block",
+    "quantile_draws",
+    "resolve_checkpoint",
+]
+
+SOURCES: Final = ("weekly", "daily")
+"""The hub target's releases by onset week (`target.csv`) or onset day
+(`daily.csv`)."""
+
+LAYOUTS: Final = ("complete", "ragged")
+"""The ways the releases are given to Chronos-2."""
+
+MAX_LAG: Final = {"weekly": 4, "daily": 28}
+"""Release lag $D$, in the source's steps, from which a count is taken as
+final."""
+
+CHRONOS_MODEL: Final = "amazon/chronos-2"
+"""The Hugging Face checkpoint."""
+
+CHRONOS_REVISION: Final = "29ec3766d36d6f73f0696f85560a422f50e8498c"
+"""The checkpoint's commit, pinned so runs are reproducible."""
+
+FINETUNED_CONFIG: Final = Path("config/finetune.toml")
+"""Which fine-tuned checkpoint the `_ft` models load: `hash`, `"latest"`
+or a settings hash."""
+
+FINETUNED_URL: Final = (
+    "https://github.com/seabbs/BDBVHubRenewal/releases/download"
+)
+"""Where the fine-tuned checkpoints' releases are downloaded from."""
+
+FINETUNED_RELEASES: Final = (
+    "https://api.github.com/repos/seabbs/BDBVHubRenewal/releases"
+)
+"""The repository's releases, listed to find the latest checkpoint."""
+
+FINETUNED_ENV: Final = "BDBV_CHRONOS_FT"
+"""Environment variable with the settings hash a run resolved once, which
+then overrides `FINETUNED_CONFIG`, so its jobs never list the releases."""
+
+SUMS_FILE: Final = "sha256sums.txt"
+"""A checkpoint release's asset with the SHA-256 of its other assets."""
+
+ADAPTER_FILES: Final = ("adapter_config.json", "adapter_model.safetensors")
+"""The LoRA adapter's files. A checkpoint's release holds them and its
+`settings.json`."""
+
+FINETUNED_CACHE: Final = "~/.cache/bdbvhubrenewal"
+"""Directory each downloaded checkpoint is kept in, as
+`chronos-ft-<hash>`."""
+
+Series = Mapping[str, Any]
+"""One group for Chronos-2: `target` `[V, S]`, and optionally
+`past_covariates` (name to `[S]`) and `future_covariates` (name to
+`[H]`, NaN where unknown)."""
+
+
+@dataclass(frozen=True)
+class Checkpoint:
+    """A fine-tuned checkpoint of Chronos-2, from its release.
+
+    Attributes
+    ----------
+    hash : str
+        Settings hash from `scripts/finetune_chronos.py train`. The release
+        is `chronos-ft-<hash>`.
+    sha256 : tuple of (str, str)
+        SHA-256 of each of `ADAPTER_FILES`, by file name.
+    """
+
+    hash: str
+    sha256: tuple[tuple[str, str], ...]
+
+
+def finetuned_spec(path: Path | str = FINETUNED_CONFIG) -> str:
+    """Return the checkpoint the `_ft` models load: `"latest"` or a hash.
+
+    `FINETUNED_ENV`, when set, overrides the file.
+
+    Parameters
+    ----------
+    path : pathlib.Path or str
+        A TOML file with `hash`.
+
+    Returns
+    -------
+    str
+    """
+    if os.environ.get(FINETUNED_ENV):
+        return os.environ[FINETUNED_ENV]
+    return str(tomllib.loads(Path(path).read_text())["hash"])
+
+
+def _get(url: str) -> bytes:
+    """Read a URL, with a GitHub token from the environment if there is one."""
+    request = urllib.request.Request(url)
+    token = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")
+    if token and url.startswith("https://api.github.com/"):
+        request.add_header("Authorization", f"Bearer {token}")
+    with urllib.request.urlopen(request, timeout=60) as response:
+        return bytes(response.read())
+
+
+def finetuned_releases() -> list[dict[str, Any]]:
+    """List the repository's releases from the GitHub API.
+
+    Returns
+    -------
+    list of dict
+        Each release's `tag_name`, `published_at` and `draft`, among
+        others.
+
+    Raises
+    ------
+    ConnectionError
+        If GitHub cannot be reached.
+    """
+    out: list[dict[str, Any]] = []
+    for page in range(1, 11):
+        url = f"{FINETUNED_RELEASES}?per_page=100&page={page}"
+        try:
+            batch = json.loads(_get(url))
+        except (OSError, http.client.HTTPException) as err:
+            raise ConnectionError(
+                f"Cannot list the releases at {url} to find the fine-tuned "
+                f"checkpoint: {err!r}. Set GH_TOKEN or GITHUB_TOKEN to a "
+                "GitHub token (anonymous requests are rate limited), or "
+                f"set {FINETUNED_ENV} to a settings hash."
+            ) from err
+        out += batch
+        if len(batch) < 100:
+            break
+    return out
+
+
+@cache
+def resolve_checkpoint(spec: str) -> Checkpoint:
+    """Return a fine-tuned checkpoint from its release.
+
+    `"latest"` is the newest published `chronos-ft-*` release by publish
+    date. The release's `SUMS_FILE` gives the SHA-256 of its adapter
+    files. Each process resolves once.
+
+    Parameters
+    ----------
+    spec : str
+        `"latest"` or a settings hash.
+
+    Returns
+    -------
+    Checkpoint
+
+    Raises
+    ------
+    ConnectionError
+        If GitHub cannot be reached. No cached checkpoint is used instead.
+    LookupError
+        If there is no checkpoint release.
+    FileNotFoundError
+        If the release has no `SUMS_FILE`.
+    ValueError
+        If `SUMS_FILE` lacks an adapter file.
+    """
+    checkpoint = spec
+    if spec == "latest":
+        tags = sorted(
+            (r["published_at"], r["tag_name"])
+            for r in finetuned_releases()
+            if str(r["tag_name"]).startswith("chronos-ft-")
+            and not r.get("draft")
+            and r.get("published_at")
+        )
+        if not tags:
+            raise LookupError("No chronos-ft-* release holds a checkpoint.")
+        checkpoint = tags[-1][1].removeprefix("chronos-ft-")
+    tag = f"chronos-ft-{checkpoint}"
+    url = f"{FINETUNED_URL}/{tag}/{SUMS_FILE}"
+    try:
+        text = _get(url).decode()
+    except (OSError, http.client.HTTPException) as err:
+        # A release with no such asset: 404 from GitHub, or no file.
+        reason = getattr(err, "reason", None)
+        if getattr(err, "code", None) == 404 or isinstance(
+            reason, FileNotFoundError
+        ):
+            raise FileNotFoundError(
+                f"The release {tag} has no {SUMS_FILE} ({url})."
+            ) from err
+        raise ConnectionError(f"Cannot read {url}: {err!r}") from err
+    sums = {}
+    for line in text.splitlines():
+        if line.strip():
+            sha, name = line.split(maxsplit=1)
+            sums[name.lstrip("*").strip()] = sha
+    missing = [f for f in ADAPTER_FILES if f not in sums]
+    if missing:
+        raise ValueError(
+            f"{SUMS_FILE} of the release {tag} has no SHA-256 of "
+            f"{', '.join(missing)}."
+        )
+    return Checkpoint(checkpoint, tuple((f, sums[f]) for f in ADAPTER_FILES))
+
+
+def _finetuned(name: str, source: str) -> FoundationModel:
+    """Build a fine-tuned model with the checkpoint `finetuned_spec` names."""
+    return FoundationModel(
+        name, source, "ragged", resolve_checkpoint(finetuned_spec())
+    )
+
+
+Sampler = Callable[[Sequence[Series], int, int, int], list[np.ndarray]]
+"""Draws trajectories: `(groups, horizon, n, seed)` to one
+`[n, V, horizon]` array per group."""
+
+
+@dataclass(frozen=True)
+class HubTriangle:
+    """The hub target by place, time step and release lag.
+
+    Attributes
+    ----------
+    times : list of str
+        Consecutive weeks (ISO Saturdays) or days.
+    final : numpy.ndarray
+        The count of each place and step at the latest release, `[L, T]`.
+    partial : numpy.ndarray
+        The count of each place and step at release lag $d < D$, from the
+        release whose cut-off is $d$ steps after it, NaN where no release
+        is, `[L, T, D]`.
+    last : int
+        Index of the step holding the latest release's cut-off.
+    """
+
+    times: list[str]
+    final: np.ndarray
+    partial: np.ndarray
+    last: int
+
+    @property
+    def n_context(self) -> int:
+        """Steps whose count at the latest release is at lag $D$ or more."""
+        return self.last - int(self.partial.shape[2]) + 1
+
+
+def _step(source: str, day: str) -> dt.date:
+    """Return the step holding a day: its week's Saturday, or the day."""
+    return epiweek_end(day) if source == "weekly" else as_date(day)
+
+
+def hub_triangle(
+    rows: pd.DataFrame,
+    source: str,
+    places: Sequence[str],
+    last_time: str,
+    max_lag: int | None = None,
+) -> HubTriangle:
+    """Lay out the hub target of every release by place, step and lag.
+
+    Parameters
+    ----------
+    rows : pandas.DataFrame
+        The releases. The latest gives the final counts. Weekly rows have
+        `target_end_date` and `total`; daily rows have `onset_date`,
+        `observed` and `imputed`. Both have `vintage`, `location` and
+        `cutoff`.
+    source : str
+        One of `SOURCES`.
+    places : sequence of str
+        Places, in the order of the output.
+    last_time : str
+        Last step of the grid.
+    max_lag : int, optional
+        Release lag $D$, `MAX_LAG` of the source by default.
+
+    Returns
+    -------
+    HubTriangle
+        Steps from the first in `rows` to `last_time`.
+    """
+    width = 7 if source == "weekly" else 1
+    time_col = "target_end_date" if source == "weekly" else "onset_date"
+    rows = rows.loc[rows["location"].isin(places)]
+    value = (
+        rows["total"]
+        if source == "weekly"
+        else rows["observed"] + rows["imputed"]
+    )
+    first = _step(source, str(rows[time_col].min()))
+    n_times = (as_date(last_time) - first).days // width + 1
+    times = [
+        (first + dt.timedelta(days=width * i)).isoformat()
+        for i in range(n_times)
+    ]
+    place = rows["location"].map({c: i for i, c in enumerate(places)})
+    days = (pd.to_datetime(rows[time_col]) - pd.Timestamp(first)).dt.days
+    step = days.to_numpy() // width
+    lags = MAX_LAG[source] if max_lag is None else max_lag
+    partial = np.full((len(places), n_times, lags), np.nan)
+    final = np.zeros((len(places), n_times))
+    last = 0
+    # The latest release gives the final counts and the last step.
+    for release in sorted(set(rows["vintage"])):
+        mine = (rows["vintage"] == release).to_numpy()
+        cutoff = str(rows.loc[mine, "cutoff"].iloc[0])
+        at = (_step(source, cutoff) - first).days // width
+        counts = np.zeros((len(places), n_times))
+        keep = mine & (step >= 0) & (step < n_times)
+        np.add.at(
+            counts,
+            (place.to_numpy()[keep].astype(int), step[keep]),
+            value.to_numpy()[keep],
+        )
+        for d in range(lags):
+            if 0 <= at - d < n_times:
+                partial[:, at - d, d] = counts[:, at - d]
+        final, last = counts, at
+    return HubTriangle(times, final, partial, last)
+
+
+def quantile_draws(
+    levels: np.ndarray, values: np.ndarray, u: np.ndarray
+) -> np.ndarray:
+    """Read quantile functions at uniform draws.
+
+    Linear between the levels and flat beyond them.
+
+    Parameters
+    ----------
+    levels : numpy.ndarray
+        Increasing quantile levels, `[Q]`.
+    values : numpy.ndarray
+        Quantiles at those levels, `[..., Q]`. They are sorted first, so
+        crossed quantiles give a valid function.
+    u : numpy.ndarray
+        Uniform draws, the shape of `values` less its last axis.
+
+    Returns
+    -------
+    numpy.ndarray
+        The draws, the shape of `u`.
+    """
+    values = np.sort(values, axis=-1)
+    hi = np.clip(np.searchsorted(levels, u), 1, len(levels) - 1)
+    lo = hi - 1
+    weight = np.clip((u - levels[lo]) / (levels[hi] - levels[lo]), 0.0, 1.0)
+    at_lo = np.take_along_axis(values, lo[..., None], axis=-1)[..., 0]
+    at_hi = np.take_along_axis(values, hi[..., None], axis=-1)[..., 0]
+    return np.asarray(at_lo + weight * (at_hi - at_lo))
+
+
+def finetuned_adapter(checkpoint: Checkpoint) -> Path:
+    """Return a fine-tuned checkpoint's LoRA adapter, downloading it once.
+
+    The release `chronos-ft-<hash>` at `FINETUNED_URL` holds
+    `ADAPTER_FILES` and `settings.json`. They are kept in
+    `FINETUNED_CACHE` only once all are downloaded, the settings hash
+    matches and each adapter file has its SHA-256. A cached copy is
+    checked against the SHA-256 again on each use.
+
+    Parameters
+    ----------
+    checkpoint : Checkpoint
+        The checkpoint.
+
+    Returns
+    -------
+    pathlib.Path
+        The adapter directory.
+
+    Raises
+    ------
+    FileNotFoundError
+        If an asset cannot be downloaded, whether it is missing or the
+        connection fails.
+    ValueError
+        If the release's settings hash or an adapter file's SHA-256 is not
+        the checkpoint's.
+    """
+    tag = f"chronos-ft-{checkpoint.hash}"
+    cache = Path(FINETUNED_CACHE).expanduser()
+    out = cache / tag
+    if out.is_dir():
+        if all(
+            (out / name).is_file()
+            and hashlib.sha256((out / name).read_bytes()).hexdigest() == sha
+            for name, sha in checkpoint.sha256
+        ):
+            return out
+        # A cached copy that has changed is downloaded again.
+        shutil.rmtree(out)
+    cache.mkdir(parents=True, exist_ok=True)
+    tmp = Path(tempfile.mkdtemp(dir=cache, prefix=f".{tag}-"))
+    try:
+        for name in (*ADAPTER_FILES, "settings.json"):
+            url = f"{FINETUNED_URL}/{tag}/{name}"
+            try:
+                with urllib.request.urlopen(url, timeout=60) as response:
+                    (tmp / name).write_bytes(response.read())
+            except (OSError, http.client.HTTPException) as err:
+                raise FileNotFoundError(
+                    f"The release {tag} has no {name} ({url}): {err!r}"
+                ) from err
+        found = json.loads((tmp / "settings.json").read_text()).get("hash")
+        if found != checkpoint.hash:
+            raise ValueError(
+                f"The release {tag} holds the checkpoint with settings "
+                f"hash {found}."
+            )
+        for name, expected in checkpoint.sha256:
+            sha = hashlib.sha256((tmp / name).read_bytes()).hexdigest()
+            if sha != expected:
+                raise ValueError(
+                    f"{name} of the release {tag} has SHA-256 {sha}, not "
+                    f"{expected}."
+                )
+        try:
+            tmp.rename(out)
+        except OSError:
+            # Another process cached it first.
+            if not out.is_dir():
+                raise
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    return out
+
+
+@cache
+def _chronos(checkpoint: Checkpoint | None = None) -> Any:
+    adapter = None if checkpoint is None else finetuned_adapter(checkpoint)
+    import torch
+    from chronos import Chronos2Pipeline
+
+    device = (
+        "cuda"
+        if torch.cuda.is_available()
+        else "mps"
+        if torch.backends.mps.is_available()
+        else "cpu"
+    )
+    pipeline = Chronos2Pipeline.from_pretrained(
+        CHRONOS_MODEL, revision=CHRONOS_REVISION, device_map=device
+    )
+    if adapter is None:
+        return pipeline
+    from peft import PeftModel
+
+    model = PeftModel.from_pretrained(pipeline.model, adapter)
+    return Chronos2Pipeline(model=model.merge_and_unload())
+
+
+def chronos_sampler(
+    groups: Sequence[Series],
+    horizon: int,
+    n_samples: int,
+    seed: int,
+    checkpoint: Checkpoint | None = None,
+) -> list[np.ndarray]:
+    """Draw trajectories from Chronos-2's quantiles.
+
+    Every series and step draws its own uniform level, so draws are
+    independent across series and steps. Runs on a CUDA or Apple GPU when
+    torch sees one.
+
+    Parameters
+    ----------
+    groups : sequence of Series
+        The groups of series.
+    horizon : int
+        Steps to draw.
+    n_samples : int
+        Trajectories.
+    seed : int
+        Seed for the uniform draws.
+    checkpoint : Checkpoint, optional
+        The fine-tuned checkpoint (`finetuned_adapter`) to load into
+        Chronos-2. The pretrained model by default.
+
+    Returns
+    -------
+    list of numpy.ndarray
+        Draws, `[n_samples, V, horizon]` per group.
+
+    Raises
+    ------
+    ImportError
+        If Chronos-2 is not installed (`uv sync --group chronos`).
+    FileNotFoundError
+        If the checkpoint's release cannot be downloaded.
+    ValueError
+        If the release holds another checkpoint or adapter.
+    """
+    pipeline = _chronos(checkpoint)
+    levels = np.asarray(pipeline.quantiles, dtype=float)
+    rng = np.random.default_rng(seed)
+    quantiles, _ = pipeline.predict_quantiles(
+        [dict(g) for g in groups],
+        prediction_length=horizon,
+        quantile_levels=levels.tolist(),
+    )
+    out = []
+    for q in quantiles:
+        q = q.float().cpu().numpy()  # [V, horizon, Q]
+        u = rng.uniform(size=(n_samples, *q.shape[:2]))
+        out.append(
+            quantile_draws(levels, np.broadcast_to(q, (n_samples, *q.shape)), u)
+        )
+    return out
+
+
+def layout_block(
+    tri: HubTriangle, layout: str, places: Sequence[str], start: int
+) -> Series:
+    """Return the one block of every place's series, split at `start`.
+
+    Parameters
+    ----------
+    tri : HubTriangle
+        The hub target by place, step and lag.
+    layout : str
+        One of `LAYOUTS`.
+    places : sequence of str
+        Places, in the order of `tri`.
+    start : int
+        Steps of context, the first `start` steps of `tri`.
+
+    Returns
+    -------
+    Series
+        The targets' context, and for `ragged` each place's lag series
+        as past and future covariates.
+    """
+    target = tri.final[:, :start]
+    if layout == "complete":
+        return {"target": target}
+    lags = tri.partial.shape[2]
+    names = [f"{p}_lag_{d}" for p in places for d in range(lags)]
+    cells = tri.partial.transpose(0, 2, 1).reshape(len(names), -1)
+    return {
+        "target": target,
+        "past_covariates": dict(zip(names, cells[:, :start], strict=True)),
+        "future_covariates": dict(zip(names, cells[:, start:], strict=True)),
+    }
+
+
+def _walk_start(task: ForecastTask) -> str:
+    """Return the earliest week `randomwalk` starts its walk from.
+
+    It is read from the delay alone, so it exists where the walk has no
+    spread.
+    """
+    walk = RandomWalk()
+    snap = walk.snapshots(task)
+    return str(snap.week_ends[int(start_weeks(snap, walk.settings).min())])
+
+
+@dataclass
+class FoundationModel:
+    """Chronos-2 on one source and layout of the hub target's releases.
+
+    Attributes
+    ----------
+    name : str
+        Model name.
+    source : str
+        One of `SOURCES`.
+    layout : str
+        One of `LAYOUTS`.
+    checkpoint : Checkpoint or None
+        The fine-tuned checkpoint Chronos-2 loads, or None for the
+        pretrained model.
+    sample : Sampler or None
+        Draws the trajectories, Chronos-2 with `checkpoint` by default.
+    """
+
+    name: str
+    source: str
+    layout: str
+    checkpoint: Checkpoint | None = None
+    sample: Sampler | None = field(default=None, repr=False)
+
+    @property
+    def needs_snapshots(self) -> bool:
+        """Whether the model reads release snapshots: `complete` does."""
+        return self.layout == "complete"
+
+    def forecast(self, task: ForecastTask) -> pd.DataFrame:
+        """Return trajectories of the country and the task's provinces.
+
+        Parameters
+        ----------
+        task : ForecastTask
+            The data and weeks to forecast. Its `target_history` holds the
+            weekly releases and its `daily_history` the daily ones.
+
+        Returns
+        -------
+        pandas.DataFrame
+            Columns `location`, `target_end_date`, `sample`, `value`, for
+            the country and the provinces, each its own series.
+
+        Raises
+        ------
+        ModelUnavailableError
+            If the task has no releases of the source or fewer than two
+            steps of context, or, for `complete`, no week `randomwalk`
+            can start from.
+        ImportError
+            If Chronos-2 is not installed.
+        FileNotFoundError
+            If the fine-tuned checkpoint's release cannot be downloaded.
+        ValueError
+            If the release holds another checkpoint or adapter.
+        """
+        weekly = self.source == "weekly"
+        rows = task.target_history if weekly else task.daily_history
+        if rows is None or rows.empty:
+            raise ModelUnavailableError(
+                f"{self.name} needs the {self.source} releases, and the task "
+                f"for {task.vintage} has none."
+            )
+        places = (NATIONAL, *task.locations)
+        weeks = list(task.target_end_dates)
+        tri = hub_triangle(rows, self.source, places, weeks[-1])
+        start = tri.n_context
+        if self.layout == "complete":
+            start = tri.times.index(_walk_start(task)) + 1
+        if start < 2:
+            raise ModelUnavailableError(
+                f"{self.name} needs two steps of context, and the task for "
+                f"{task.vintage} has {max(start, 0)}."
+            )
+        horizon = len(tri.times) - start
+        seed = int(task.rng(self.name).integers(0, 2**31 - 1))
+        group = layout_block(tri, self.layout, places, start)
+        sample = self.sample or partial(
+            chronos_sampler, checkpoint=self.checkpoint
+        )
+        draws = sample([group], horizon, task.n_samples, seed)[0]
+        final = tri.final
+        steps = np.broadcast_to(final, (task.n_samples, *final.shape)).copy()
+        drawn = np.maximum(np.round(draws), 0.0)
+        steps[:, :, start:] = np.maximum(drawn, final[:, start:])
+        # The hub's target is weekly, so the daily source is summed to weeks.
+        week_of = np.array([_step("weekly", t).isoformat() for t in tri.times])
+        values = np.stack(
+            [steps[:, :, week_of == w].sum(axis=2) for w in weeks], axis=2
+        )
+        reported = (
+            task.target.pivot_table(
+                index="location",
+                columns="target_end_date",
+                values="total",
+                aggfunc="sum",
+            )
+            .reindex(index=list(places), columns=weeks)
+            .fillna(0.0)
+            .to_numpy()
+        )
+        values = np.maximum(values, reported)  # [S, L, W]
+        n, n_loc = task.n_samples, len(places)
+        return pd.DataFrame(
+            {
+                "location": np.repeat(list(places), n * len(weeks)),
+                "target_end_date": np.tile(weeks, n * n_loc),
+                "sample": np.tile(
+                    np.repeat(np.arange(1, n + 1), len(weeks)), n_loc
+                ),
+                "value": values.transpose(1, 0, 2).reshape(-1),
+            }
+        )[list(SAMPLE_COLUMNS)]
+
+
+for _source in SOURCES:
+    for _layout in LAYOUTS:
+        _name = f"fm_chronos_{_source}_{_layout}"
+        register_model(
+            _name,
+            partial(FoundationModel, _name, _source, _layout),
+            f"Chronos-2 on the hub target's {_source} releases, {_layout} "
+            "layout, the country and provinces in one block.",
+            fitted=True,
+        )
+    register_model(
+        f"fm_chronos_{_source}_ragged_ft",
+        partial(_finetuned, f"fm_chronos_{_source}_ragged_ft", _source),
+        f"Chronos-2 fine-tuned on simulated outbreaks, on the hub target's "
+        f"{_source} releases, ragged layout.",
+        fitted=True,
+    )
