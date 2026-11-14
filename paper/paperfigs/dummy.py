@@ -92,6 +92,8 @@ class StudySetup:
     strata : tuple of str
         Strata (age groups) given for the first location as well as
         `all`; empty for none.
+    horizon_days : bool
+        Whether the horizon is in days rather than steps.
     """
 
     locations: tuple[str, ...]
@@ -107,6 +109,7 @@ class StudySetup:
     models: dict[str, ModelSkill]
     form: str
     strata: tuple[str, ...] = ()
+    horizon_days: bool = False
 
     @property
     def series(self) -> list[tuple[str, str]]:
@@ -128,14 +131,15 @@ _FM_WEEKLY_FT = ModelSkill(0.02, 0.85, 1.05)
 STUDY_SETUP: Final[dict[str, StudySetup]] = {
     "synthetic": StudySetup(
         locations=tuple(f"sim{i:02d}" for i in range(1, 9)),
-        start="2024-01-01",
-        n_steps=200,
-        step_days=1,
-        first_origin=63,
+        # Weekly onsets ending on Saturdays, horizons in days.
+        start="2024-01-06",
+        n_steps=30,
+        step_days=7,
+        first_origin=9,
         n_origins=18,
-        origin_every=7,
-        horizons=(-28, 0),
-        mean_delay=5.0,
+        origin_every=1,
+        horizons=(-4, 3),
+        mean_delay=0.8,
         scale=(40.0, 400.0),
         models={
             "randomwalk": _RW,
@@ -156,6 +160,7 @@ STUDY_SETUP: Final[dict[str, StudySetup]] = {
             },
         },
         form="sample",
+        horizon_days=True,
     ),
     "germany": StudySetup(
         locations=(
@@ -194,7 +199,8 @@ STUDY_SETUP: Final[dict[str, StudySetup]] = {
     ),
     "ebola": StudySetup(
         locations=tuple(f"loc{i:02d}" for i in range(1, 7)),
-        start="2025-08-04",
+        # Weeks end on Saturdays, as the hub's target_end_date.
+        start="2025-08-02",
         n_steps=32,
         step_days=7,
         first_origin=8,
@@ -330,7 +336,11 @@ def _forecasts(
                         "stratum": stratum,
                         "origin_date": np.repeat(dates[o_idx], k),
                         "target_date": np.repeat(dates[t_idx], k),
-                        "horizon": np.repeat(h_idx, k),
+                        "horizon": np.repeat(
+                            h_idx
+                            * (setup.step_days if setup.horizon_days else 1),
+                            k,
+                        ),
                         "quantile_level": (
                             np.tile(QUANTILE_LEVELS, n)
                             if setup.form == "quantile"

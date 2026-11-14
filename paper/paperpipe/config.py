@@ -23,6 +23,8 @@ __all__ = [
     "MODES",
     "RunSettings",
     "check_no_heldout",
+    "check_no_heldout_releases",
+    "last_release",
     "run_settings",
     "seed_of",
     "synthetic_location",
@@ -124,6 +126,54 @@ def seed_of(location: str) -> int | None:
     """Return the seed of a synthetic location code, or None."""
     m = _SEED.match(location)
     return int(m.group(1)) if m else None
+
+
+def last_release(split: pd.Timestamp, delay_days: int) -> pd.Timestamp:
+    """Return the last release a development run reads.
+
+    The truth of the last development target date, the day before `split`,
+    is its count as reported `delay_days` later.
+    """
+    return (
+        pd.Timestamp(split)
+        - pd.Timedelta(days=1)
+        + pd.Timedelta(days=delay_days)
+    )
+
+
+def check_no_heldout_releases(
+    observations: pd.DataFrame, settings: RunSettings, delay_days: int
+) -> None:
+    """Fail if a development run's German data go past `last_release`.
+
+    Parameters
+    ----------
+    observations : pandas.DataFrame
+        Observations with `study`, `target_date` and `as_of_date`.
+    settings : RunSettings
+        The run's settings. Paper runs pass unchecked.
+    delay_days : int
+        D for Germany.
+
+    Raises
+    ------
+    ValueError
+        If a German target date is held out or a release is later than
+        the development truth needs.
+    """
+    if settings.mode != "development":
+        return
+    germany = observations.loc[observations["study"] == "germany"]
+    last = last_release(settings.heldout_from, delay_days)
+    late = (pd.to_datetime(germany["as_of_date"]) > last) | (
+        pd.to_datetime(germany["target_date"]) >= settings.heldout_from
+    )
+    if late.any():
+        raise ValueError(
+            f"{int(late.sum())} German observations are held out: target "
+            f"dates from {settings.heldout_from:%Y-%m-%d} or releases after "
+            f"{last:%Y-%m-%d}."
+        )
 
 
 def check_no_heldout(forecasts: pd.DataFrame, settings: RunSettings) -> None:

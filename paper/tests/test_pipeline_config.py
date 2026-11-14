@@ -7,6 +7,8 @@ import yaml
 from paperpipe.config import (
     MODES,
     check_no_heldout,
+    check_no_heldout_releases,
+    last_release,
     run_settings,
     seed_of,
     synthetic_location,
@@ -105,3 +107,25 @@ def test_guard_rejects_heldout_seeds() -> None:
 def test_guard_allows_everything_in_paper_mode() -> None:
     paper = run_settings(_config(), "paper")
     check_no_heldout(_table("germany", "DE", "2022-04-01"), paper)
+
+
+def _obs(target: str, as_of: str) -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "study": ["germany"],
+            "target_date": [pd.Timestamp(target)],
+            "as_of_date": [pd.Timestamp(as_of)],
+        }
+    )
+
+
+def test_development_reads_releases_up_to_d_days_after_the_split() -> None:
+    dev = run_settings(_config(), "development")
+    assert last_release(dev.heldout_from, 40) == pd.Timestamp("2022-03-21")
+    check_no_heldout_releases(_obs("2022-02-09", "2022-03-21"), dev, 40)
+    with pytest.raises(ValueError, match="held out"):
+        check_no_heldout_releases(_obs("2022-02-09", "2022-03-22"), dev, 40)
+    with pytest.raises(ValueError, match="held out"):
+        check_no_heldout_releases(_obs("2022-02-10", "2022-03-01"), dev, 40)
+    paper = run_settings(_config(), "paper")
+    check_no_heldout_releases(_obs("2022-04-01", "2022-06-01"), paper, 40)

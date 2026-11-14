@@ -14,9 +14,11 @@ Targets:
 - `render`: the paper as HTML and PDF from the last published run.
 
 The held-out sets are the `heldout` block of `config.yaml`.
-`paperpipe.config.run_settings` keeps them out of a development run, the
-German held-out benchmark rule runs only for a paper run, and the `table`
-rule fails if a development forecast table holds any held-out row.
+`paperpipe.config.run_settings` keeps them out of a development run and
+the German held-out benchmark rule runs only for a paper run. The `data`
+rule fails if development German data hold a held-out target date or a
+release later than its truth needs, and the `table` rule if a development
+forecast table holds any held-out row.
 
 A study without its real data runs on dummy data, labelled as such on
 every figure and in the paper (`paperpipe.studies`).
@@ -229,9 +231,11 @@ rule data:
             if w.study in config.get("truth_delay", {})
             else ""
         ),
+        config=shlex.quote(json.dumps(config)),
     shell:
         "{PYTHON} -m paperpipe data {wildcards.study} {params.limits} "
-        "{params.sources} {params.delay} "
+        "{params.sources} {params.delay} --mode {wildcards.mode} "
+        "--config {params.config} "
         "--observations {output.observations} "
         "--locations {output.locations} --meta {output.meta}"
 

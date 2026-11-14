@@ -24,7 +24,11 @@ import pandas as pd
 from paperfigs.schema import validate_forecasts, validate_observations
 from paperfigs.scores import score_forecasts
 from paperfigs.truth import attach_truth, rolling_truth
-from paperpipe.config import check_no_heldout, run_settings
+from paperpipe.config import (
+    check_no_heldout,
+    check_no_heldout_releases,
+    run_settings,
+)
 from paperpipe.meta import read_meta, write_meta
 from paperpipe.outputs import score_tables, write_figures
 from paperpipe.studies import (
@@ -85,6 +89,9 @@ def _data(a: argparse.Namespace) -> None:
         delay_days=a.delay,
         sources=sources,
     )
+    if a.study == "germany":
+        settings = run_settings(json.loads(a.config), a.mode)
+        check_no_heldout_releases(obs, settings, a.delay)
     _write(validate_observations(obs), a.observations)
     _write(locations, a.locations)
     write_meta(a.meta, a.study, source)
@@ -181,6 +188,8 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("data")
     _limits(p)
     p.add_argument("--delay", type=int, default=None)
+    p.add_argument("--mode", required=True)
+    p.add_argument("--config", required=True, help="Workflow config as JSON.")
     p.add_argument("--observations", type=Path, required=True)
     p.add_argument("--locations", type=Path, required=True)
     p.set_defaults(run=_data)

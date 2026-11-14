@@ -8,6 +8,8 @@ import pandas as pd
 import pytest
 import yaml
 
+from paperpipe.config import last_release
+
 pytest.importorskip("snakemake")
 
 PAPER = Path(__file__).parents[1]
@@ -101,9 +103,11 @@ def test_development_never_reads_heldout_data(development: Path) -> None:
     assert germany["origin_date"].max() < split
     obs = pd.read_csv(
         development / "data" / "germany-observations.csv.gz",
-        parse_dates=["target_date"],
+        parse_dates=["target_date", "as_of_date"],
     )
     assert obs["target_date"].max() < split
+    delay = CONFIG["truth_delay"]["germany"]
+    assert obs["as_of_date"].max() <= last_release(split, delay)
     synthetic = pd.read_csv(development / "forecasts" / "synthetic.csv.gz")
     held = tuple(f"s{s}-" for s in CONFIG["heldout"]["synthetic_seeds"])
     assert not synthetic["location"].str.startswith(held).any()

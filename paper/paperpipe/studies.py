@@ -9,8 +9,8 @@ schema of `paper/schema.md`.
 Both take the run's data limits. `seeds` picks the synthetic outbreaks,
 and a synthetic location code carries its seed (`synthetic_location`).
 `before` keeps German nowcast and target dates before that date, and
-German releases up to D days after it, which the truth of the last
-target dates needs.
+German releases up to D days after the last of them, which their truth
+needs (`paperpipe.config.last_release`).
 
 `Sources` says where the real data are. `source_of` gives `real` for a
 study whose sources are set and usable, and `dummy` otherwise, when both
@@ -38,7 +38,7 @@ import pandas as pd
 
 from paperdata import ebola, germany
 from paperfigs.dummy import dummy_factors, dummy_study
-from paperpipe.config import synthetic_location
+from paperpipe.config import last_release, synthetic_location
 
 __all__ = [
     "DUMMY_EBOLA_DELAY",
@@ -192,7 +192,18 @@ def _germany_data(
         fc["origin_date"].min(),
         last + lag - pd.Timedelta(days=1 if before is not None else 0),
     )
-    return _before(obs, "target_date", before)
+    return _development_releases(obs, before, delay_days)
+
+
+def _development_releases(
+    obs: pd.DataFrame, before: pd.Timestamp | None, delay_days: int
+) -> pd.DataFrame:
+    """Keep target dates before `before` and releases its truth needs."""
+    if before is None:
+        return obs
+    obs = _before(obs, "target_date", before)
+    last = last_release(before, delay_days)
+    return obs.loc[obs["as_of_date"] <= last].reset_index(drop=True)
 
 
 def load_data(
@@ -252,7 +263,8 @@ def load_data(
         return obs, _locations(obs, _ebola_delay(sources, delay_days))
     _, obs = dummy_study(study, n_samples=1)
     if study == "germany":
-        obs = _before(obs, "target_date", before)
+        assert delay_days is not None
+        obs = _development_releases(obs, before, delay_days)
     delay = delay_days if delay_days is not None else DUMMY_EBOLA_DELAY
     return obs, _locations(obs, delay)
 

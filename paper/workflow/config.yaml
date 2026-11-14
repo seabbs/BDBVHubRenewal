@@ -7,7 +7,7 @@ build: build
 render: development
 studies: [synthetic, germany, ebola]
 # Samples per forecast for the studies scored on samples.
-n_samples: 100
+n_samples: 200
 
 # The German benchmark, run with the `bdbvhubrenewal` command line
 # (config/germany.toml). Its models are the config's `models`.

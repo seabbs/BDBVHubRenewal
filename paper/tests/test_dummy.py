@@ -40,10 +40,18 @@ def test_dummy_models_include_baseline_and_foundation_models(study) -> None:
 def test_dummy_horizons_and_dates_agree(study) -> None:
     name, fc, _ = study
     setup = STUDY_SETUP[name]
-    step = pd.Timedelta(days=setup.step_days)
-    assert fc["horizon"].between(*setup.horizons).all()
-    implied = fc["origin_date"] + fc["horizon"] * step
+    # Days per unit of the horizon.
+    days = 1 if setup.horizon_days else setup.step_days
+    steps = fc["horizon"] * days // setup.step_days
+    assert steps.between(*setup.horizons).all()
+    implied = fc["origin_date"] + fc["horizon"] * pd.Timedelta(days=days)
     assert (implied == fc["target_date"]).all()
+
+
+def test_weekly_dummy_targets_end_on_saturdays(study) -> None:
+    name, fc, _ = study
+    if STUDY_SETUP[name].step_days == 7:
+        assert (fc["target_date"].dt.day_of_week == 5).all()
 
 
 def test_dummy_data_as_of_origin_is_at_most_final(study) -> None:
