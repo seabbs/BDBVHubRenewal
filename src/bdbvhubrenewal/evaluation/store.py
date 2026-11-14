@@ -120,7 +120,7 @@ STORE_SKIP: Final = (
 
 The zone split: a stored fit holds national and province samples,
 and its zones are split from them at load
-(`forecasters.zones.zones_for_model`); a model that forecasts the zones
+(`forecasters.zones.zones_for_model`). A model that forecasts the zones
 itself imports the split, so it is in its code. `fit_code`'s own helper
 (`evaluation.digest`), and the plots `evaluation.ppc` imports for
 `plot_ppc`, which a fit does not draw.

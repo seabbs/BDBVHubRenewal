@@ -7,10 +7,16 @@ import pandas as pd
 import pytest
 
 from bdbvhubrenewal.data import load_daily_zones
-from bdbvhubrenewal.data.zones import hub_zones, is_zone, province_of
+from bdbvhubrenewal.data.zones import (
+    hub_zones,
+    is_zone,
+    province_of,
+    weekly_zone_counts,
+)
 from bdbvhubrenewal.evaluation import backtest as bt
 from bdbvhubrenewal.forecasters import get_model
 from bdbvhubrenewal.forecasters.base import NATIONAL
+from bdbvhubrenewal.forecasters.zones import reconcile_zones
 from bdbvhubrenewal.reporting.hubtables import (
     HUB_QUANTILE_LEVELS,
     hub_quantiles,
@@ -116,21 +122,26 @@ def test_a_models_own_zones_stay_apart_from_its_provinces(
     zones = hub_zones(DATA / "hub-config" / "tasks.json")
     mine = tuple(z for z in zones if province_of(z) in task.locations)
     provinces = walk.loc[walk["location"].isin(set(task.locations))]
-    # A model that forecasts each zone of its provinces as 1.
-    own = pd.concat(
-        [
-            walk,
-            *(
-                provinces.loc[provinces["location"] == province_of(z)].assign(
-                    location=z, value=1.0
-                )
-                for z in mine
-            ),
-        ]
-    ).assign(model="own")
-    tables = hub_tables(
-        pd.concat([walk, own]), task, load_daily_zones(DATA), zones
+    # A model that forecasts each zone of its provinces as 1, summed to
+    # its provinces as the Chronos-2 models give them.
+    daily_zones = load_daily_zones(DATA)
+    ones = pd.concat(
+        provinces.loc[provinces["location"] == province_of(z)].assign(
+            location=z, value=1.0
+        )
+        for z in mine
     )
+    split = reconcile_zones(
+        ones,
+        provinces,
+        task,
+        weekly_zone_counts(daily_zones, task.vintage),
+        mine,
+    )
+    own = pd.concat(
+        [walk, split.assign(**walk.iloc[0][["kind", "vintage"]].to_dict())]
+    ).assign(model="own")
+    tables = hub_tables(pd.concat([walk, own]), task, daily_zones, zones)
     keys = ["location", "target_end_date", "output_type_id"]
 
     def places(name: str) -> pd.DataFrame:
@@ -140,13 +151,12 @@ def test_a_models_own_zones_stay_apart_from_its_provinces(
 
     # The country and provinces are as without the zones.
     pd.testing.assert_frame_equal(places("own"), places("randomwalk"))
+    # The zones are the model's own, as they are.
     table = tables["own"]
-    split = table.loc[table["location"].map(is_zone)]
-    assert set(split["location"]) <= set(mine)
-    summed = (
-        split.assign(location=split["location"].map(province_of))
-        .groupby(keys)["value"]
-        .sum()
+    rows = table.loc[table["location"].map(is_zone)]
+    got = rows.set_index(["location", "target_end_date", "output_type_id"])
+    want = split.set_index(["location", "target_end_date", "sample"])
+    assert np.array_equal(
+        got["value"].sort_index().to_numpy(),
+        want["value"].sort_index().to_numpy(),
     )
-    hub = table.set_index(keys)["value"]
-    assert np.allclose(summed, hub.loc[summed.index])
