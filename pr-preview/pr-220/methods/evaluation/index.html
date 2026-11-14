@@ -2356,7 +2356,8 @@ Each model's zone samples are made to sum to its province samples, as in the sub
 Each real vintage before the latest is forecast, and origins with no pair of releases within the delay window are skipped, as for provinces.
 Zones are scored on the reported target as for <a href="#real-releases">real releases</a>, with the zone delays fitted at the origin, so a zone count is never scored against a count still being reported.
 Relative WIS is against <code>randomwalk</code> in the same form.
-On the Nowcast page the renewal models are shown at the country and provinces, from their stored forecasts.</p>
+On the Nowcast page only <code>randomwalk</code> and <code>randomwalknowcast</code> are shown at zone level.
+The renewal models are shown at the country and provinces, from their stored forecasts.</p>
 <h2 id="checks">Scores by place type and plausibility<a class="headerlink" href="#checks" title="Permanent link">&para;</a></h2>
 <p>The scores on the reported target, at province and zone level, are also averaged by the type of place and by a plausibility flag of each forecast, both decided from the counts reported at the origin.
 Relative WIS in these averages is against <code>randomwalk</code>.
