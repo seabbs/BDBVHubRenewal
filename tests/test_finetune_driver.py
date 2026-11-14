@@ -27,6 +27,7 @@ REMOTE_GRACE=1800
 FIRST_CHUNK_SEEDS=2
 OUT=ckpt
 OUTBREAKS=10
+REMOTE_RAM_GB=62
 GRID=g
 MPS_HIGH_WATERMARK=0.8
 GRID=g
@@ -143,3 +144,22 @@ def test_laptop_takes_unstarted_seeds_in_order(tmp_path):
         check=True,
     )
     assert out.stdout.split()[:3] == ["5002", "5004", "5005"]
+
+
+def test_remote_slots_fit_the_worst_case_memory(tmp_path):
+    out = run(
+        tmp_path,
+        "REMOTE_SLOTS=12; REMOTE_MEM_KB=10485760; REMOTE_RAM_GB=62; "
+        "remote_slots",
+    )
+    # 12 batches of 10 GB do not fit 62 GB less 16 GB: 4 do.
+    assert out.split() == ["4"]
+
+
+def test_status_reports_the_remote_as_last_seen(tmp_path):
+    out = run(
+        tmp_path,
+        "remote() { return 1; }; remote_tried=0; check_remote; "
+        "echo $remote_state",
+    )
+    assert out.split()[-1] == "down"
