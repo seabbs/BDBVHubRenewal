@@ -299,3 +299,21 @@ def test_publish_refuses_a_release_with_other_sums(tmp_path):
     with pytest.raises(RuntimeError, match="differ"):
         publish(where, "abc", run=gh)
     assert "upload" not in [c[2] for c in gh.calls]
+
+
+def test_a_finished_batch_is_read_once(tmp_path, monkeypatch):
+    import finetune_stream
+    import pandas as pd
+
+    (tmp_path / "settings-5003.csv").write_text("outbreak\n5003-0001\n")
+    pd.DataFrame({"outbreak": ["5003-0001-1"]}).to_csv(
+        tmp_path / "counts-5003.csv.gz", index=False
+    )
+    first = finetune_stream.ready_outbreaks(tmp_path, range(5003, 5004))
+    reads = []
+    monkeypatch.setattr(
+        finetune_stream, "read_ids", lambda p: reads.append(p) or pd.Series()
+    )
+    again = finetune_stream.ready_outbreaks(tmp_path, range(5003, 5004))
+    assert again == first == ["5003-0001"]
+    assert reads == []
