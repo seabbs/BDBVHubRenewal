@@ -398,3 +398,17 @@ def test_fixture_holds_the_pinned_vintages(
     # The fixture is frozen, so the tests pin its vintages.
     real = target.loc[target["kind"] == "real", "vintage"].astype(str)
     assert sorted(set(real)) == vintages
+
+
+def test_loaders_default_to_bdbv_data_dir(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    # A fit loads the populations with `load_locations()`, no directory
+    # given, also in renewalsp's spawned province workers, which do not
+    # inherit a default the CLI set. Only the environment reaches them.
+    from bdbvhubrenewal.data import load_locations, tidy
+
+    fixture = Path(__file__).resolve().parents[1] / "fixtures" / "data"
+    monkeypatch.setattr(tidy, "_DEFAULT_DATA_DIR", tmp_path / "absent")
+    monkeypatch.setenv("BDBV_DATA_DIR", str(fixture))
+    assert len(load_locations()) > 0

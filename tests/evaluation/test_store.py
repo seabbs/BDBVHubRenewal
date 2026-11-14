@@ -137,6 +137,78 @@ def test_fit_code_has_the_store_and_no_other_model() -> None:
     assert "src/bdbvhubrenewal/evaluation/store.py" in pp
 
 
+def test_fit_time_data_files_key_a_fit(tmp_path: Path) -> None:
+    # The gravity kernel reads the province centres at fit time.
+    root = _copy_repo(tmp_path)
+    before = store.code_digest("renewal", root)
+    path = root / "src/bdbvhubrenewal/data/province_centres.csv"
+    path.write_text(path.read_text() + "CD-XX,0.0,0.0\n")
+    assert store.code_digest("renewal", root) != before
+
+
+def test_report_code_does_not_key_a_fit(tmp_path: Path) -> None:
+    root = _copy_repo(tmp_path)
+    models = ("renewal", "pprandomwalknowcast")
+
+    def digests() -> dict[str, str]:
+        return {m: store.code_digest(m, root) for m in models}
+
+    before = digests()
+    for rel in ("evaluation/digest.py", "reporting/plots.py"):
+        path = root / "src/bdbvhubrenewal" / rel
+        path.write_text(path.read_text() + "\n_EDITED = 1\n")
+        assert digests() == before, rel
+
+
+def _workflow_paths(event: str) -> list[str]:
+    import yaml
+
+    workflow = yaml.safe_load(
+        (ROOT / ".github/workflows/fit-store.yml").read_text()
+    )
+    # PyYAML reads the `on` key as True.
+    return list(workflow[True][event]["paths"])
+
+
+@pytest.mark.parametrize("event", ["push", "pull_request"])
+def test_fit_store_runs_on_every_file_in_a_key(event: str) -> None:
+    import fnmatch
+
+    patterns = _workflow_paths(event)
+    files = {f for m in store.stored_models() for f in store.fit_code(m, ROOT)}
+    missed = sorted(
+        f
+        for f in files
+        if not any(fnmatch.fnmatch(f, p.replace("**", "*")) for p in patterns)
+    )
+    assert not missed, f"fit-store.yml {event} paths miss {missed}"
+
+
+def test_samplers_refuse_two_candidates_for_one_model(
+    tmp_path: Path,
+) -> None:
+    policy = tmp_path / "policy.toml"
+    policy.write_text(
+        "\n".join(
+            f'[[candidates]]\nid = "{i}"\nmodel = "renewal"\n'
+            f"[candidates.sampler]\nnum_samples = {n}\n"
+            for i, n in (("a", 10), ("b", 20))
+        )
+    )
+    with pytest.raises(ValueError, match="renewal"):
+        store.samplers(policy)
+
+
+def test_renewal_key_has_every_model_module() -> None:
+    # `fit_code` does not follow a package's `__init__` imports.
+    renewal = set(store.fit_code("renewal", ROOT))
+    model = {
+        p.relative_to(ROOT).as_posix()
+        for p in (ROOT / "src/bdbvhubrenewal/model").glob("*.py")
+    }
+    assert model <= renewal, sorted(model - renewal)
+
+
 def test_samplers_come_from_the_policy() -> None:
     table = store.samplers(ROOT / "ci" / "policy.toml")
     assert set(table) == {"renewal", "renewalbvd", "renewalsp"}
