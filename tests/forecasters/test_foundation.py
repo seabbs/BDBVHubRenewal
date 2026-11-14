@@ -726,3 +726,91 @@ def test_zone_samples_are_the_models_own_summed_to_its_provinces(
     allocated = ZoneAllocator().allocate(provinces, task, counts, zones)
     b = allocated.set_index(keys)["value"].sort_index()
     assert not a.equals(b)
+
+
+@pytest.mark.parametrize("source", SOURCES)
+def test_by_level_gives_each_level_its_own_block(
+    source: str, task: ForecastTask
+) -> None:
+    store: list = []
+    model = dataclasses.replace(
+        get_model(f"fm_chronos_{source}_ragged"),
+        sample=_recording(store),
+        grouping="level",
+    )
+    model.forecast(task)
+    groups, _ = store[0]
+    sizes = [np.atleast_2d(g["target"]).shape[0] for g in groups]
+    assert sizes == [1, len(task.locations), len(_zones(task))]
+    # Each block has the lag series of its own places with cases only.
+    lagged = [
+        {n.rsplit("_lag_", 1)[0] for n in g["future_covariates"]}
+        for g in groups
+    ]
+    places = [{NATIONAL}, set(task.locations), set(_zones(task))]
+    for lags, own in zip(lagged, places, strict=True):
+        assert lags <= own
+    assert set().union(*lagged) == _with_cases(task)
+
+
+def test_zones_only_fits_the_zones_and_sums_them_up(task: ForecastTask) -> None:
+    store: list = []
+
+    def sample(groups, horizon, n, seed):
+        store.append(groups)
+        return _constant(1000.0)(groups, horizon, n, seed)
+
+    model = dataclasses.replace(
+        get_model("fm_chronos_weekly_ragged"), sample=sample, grouping="bottom"
+    )
+    out = model.forecast(task)
+    (groups,) = store
+    assert len(groups) == 1
+    assert np.atleast_2d(groups[0]["target"]).shape[0] == len(_zones(task))
+    check_samples(out, task)
+    keys = ["target_end_date", "sample"]
+    zones = out.loc[out["location"].map(is_zone)]
+    by_province = zones.assign(
+        location=zones["location"].map(province_of)
+    ).groupby(["location", *keys])["value"].sum()
+    provinces = _provinces(out).set_index(["location", *keys])["value"]
+    pd.testing.assert_series_equal(
+        provinces.sort_index(), by_province.sort_index(), check_names=False
+    )
+    national = out.loc[out["location"] == NATIONAL].set_index(keys)["value"]
+    pd.testing.assert_series_equal(
+        national.sort_index(),
+        provinces.groupby(keys).sum().sort_index(),
+        check_names=False,
+    )
+
+
+def test_zones_only_with_no_zones_sums_the_provinces(
+    task: ForecastTask,
+) -> None:
+    plain = dataclasses.replace(
+        task, zone_history=None, zone_daily_history=None
+    )
+    store: list = []
+    model = dataclasses.replace(
+        get_model("fm_chronos_weekly_ragged"),
+        sample=_recording(store),
+        grouping="bottom",
+    )
+    out = model.forecast(plain)
+    (groups, _), = store
+    assert np.atleast_2d(groups[0]["target"]).shape[0] == len(task.locations)
+    keys = ["target_end_date", "sample"]
+    national = out.loc[out["location"] == NATIONAL].set_index(keys)["value"]
+    summed = _provinces(out).groupby(keys)["value"].sum()
+    assert (national.sort_index() >= summed.sort_index()).all()
+
+
+def test_unknown_grouping_fails(task: ForecastTask) -> None:
+    model = dataclasses.replace(
+        get_model("fm_chronos_weekly_ragged"),
+        sample=_constant(0.0),
+        grouping="nope",
+    )
+    with pytest.raises(ValueError, match="grouping"):
+        model.forecast(task)
