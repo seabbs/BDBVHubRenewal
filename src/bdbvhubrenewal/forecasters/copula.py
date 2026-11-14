@@ -258,6 +258,8 @@ def pair_samples(
 
     Each place and week keeps its draws, and every row of a draw, such as
     its counts as a later release reports them (`as_of`), moves with it.
+    A health zone's draws move with its province's, so a draw's zones
+    still sum to its province.
     A country that is the sum of the other places is not paired but
     summed again from them.
 
@@ -279,8 +281,11 @@ def pair_samples(
     pandas.DataFrame
         `samples` with the sample ids of each cell reordered.
     """
+    # A zone (`CD-IT-01`) is not paired: its draws move with its
+    # province's, so each draw's zones still sum to the province.
+    zone = samples["location"].str.count("-") >= 2
     is_final = _final(samples)
-    final = samples.loc[is_final]
+    final = samples.loc[is_final & ~zone]
     summed = _summed(final, national)
     places = sorted(set(final["location"]) - {national})
     own = not summed and bool((final["location"] == national).any())
@@ -303,7 +308,18 @@ def pair_samples(
         }
     )
     keys = ["location", "target_end_date", "sample"]
-    out = samples.merge(moves, on=keys, how="left")
+    province = samples["location"].where(
+        ~zone, samples["location"].str.rsplit("-", n=1).str[0]
+    )
+    out = (
+        samples.assign(_place=province)
+        .merge(
+            moves.rename(columns={"location": "_place"}),
+            on=["_place", *keys[1:]],
+            how="left",
+        )
+        .drop(columns="_place")
+    )
     out["sample"] = (
         out["paired"].fillna(out["sample"]).astype(samples["sample"].dtype)
     )
@@ -314,13 +330,14 @@ def pair_samples(
 
 
 def _sum_country(samples: pd.DataFrame, national: str) -> pd.DataFrame:
-    """Set the country's rows to the sum of the other places' rows."""
+    """Set the country's rows to the sum of its provinces' rows."""
     keys = ["target_end_date", "sample"]
     if "as_of" in samples:
         keys.append("as_of")
     is_nat = samples["location"] == national
+    province = samples["location"].str.count("-") == 1
     total = (
-        samples.loc[~is_nat]
+        samples.loc[province]
         .groupby(keys, dropna=False)["value"]
         .sum()
         .rename("total")
