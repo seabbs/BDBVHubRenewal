@@ -20,9 +20,10 @@
 #                 epinowcast library in output/finetune/rlib) and its
 #                 simulation directory; every seed not run locally runs
 #                 there, held-out seeds first
-#   REMOTE_SLOTS, REMOTE_MEM_KB, REMOTE_MIN_FREE_MEM_GB   its most
-#                 simulation processes, the memory limit of each (ulimit
-#                 -v), and the free memory a new batch needs
+#   REMOTE_SLOTS, REMOTE_MEM_KB, REMOTE_MIN_FREE_MEM_GB, REMOTE_MAX_LOAD
+#                 its most simulation processes, the memory limit of each
+#                 (ulimit -v), and the free memory and highest load at
+#                 which a new batch starts
 #   REMOTE_MIN_FREE_GB   free disk below which no new remote batch starts
 #   REMOTE_RETRY, REMOTE_GRACE   seconds between tries of the remote,
 #                 and without an answer before the laptop takes over the
@@ -130,10 +131,12 @@ free_gb() { df -BG --output=avail . | tail -1 | tr -dc 0-9; }
 for s in $list; do
   [ -e $SIM_REMOTE/settings-\$s.csv ] && continue
   pgrep -f "finetune_simulate.R --args 25 \$s " > /dev/null && continue
-  # Start a batch only with a free slot and REMOTE_MIN_FREE_MEM_GB of
-  # memory free, as one outbreak can peak at 8 GB.
+  # Start a batch only with a free slot, REMOTE_MIN_FREE_MEM_GB of memory
+  # free (one outbreak can peak at 8 GB) and a load under REMOTE_MAX_LOAD,
+  # as other jobs share the host.
   while [ "\$(pgrep -fc 'finetune_simulate.R --args')" -ge $REMOTE_SLOTS ] \\
-    || [ "\$(free -g | awk '/^Mem/ {print \$7}')" -lt $REMOTE_MIN_FREE_MEM_GB ]; do sleep 30; done
+    || [ "\$(free -g | awk '/^Mem/ {print \$7}')" -lt $REMOTE_MIN_FREE_MEM_GB ] \\
+    || [ "\$(cut -d' ' -f1 /proc/loadavg | cut -d. -f1)" -ge $REMOTE_MAX_LOAD ]; do sleep 30; done
   # Wait while the disk is short; each batch's R temp files go in its own
   # directory, removed when the batch ends.
   while [ "\$(free_gb)" -lt $REMOTE_MIN_FREE_GB ]; do
