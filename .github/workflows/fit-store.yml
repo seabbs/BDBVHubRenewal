@@ -22,6 +22,7 @@ on:
     branches: [main]
     paths:
       - 'src/bdbvhubrenewal/__init__.py'
+      - 'src/bdbvhubrenewal/cli.py'
       - 'src/bdbvhubrenewal/devices.py'
       - 'src/bdbvhubrenewal/baselinenowcast/**'
       - 'src/bdbvhubrenewal/data/**'
@@ -38,6 +39,7 @@ on:
       - 'src/bdbvhubrenewal/model/**'
       - 'config/backtest.toml'
       - 'ci/policy.toml'
+      - 'pyproject.toml'
       - 'uv.lock'
       - '.python-version'
       - 'scripts/fit-store.sh'
@@ -47,6 +49,7 @@ on:
   pull_request:
     paths:
       - 'src/bdbvhubrenewal/__init__.py'
+      - 'src/bdbvhubrenewal/cli.py'
       - 'src/bdbvhubrenewal/devices.py'
       - 'src/bdbvhubrenewal/baselinenowcast/**'
       - 'src/bdbvhubrenewal/data/**'
@@ -63,6 +66,7 @@ on:
       - 'src/bdbvhubrenewal/model/**'
       - 'config/backtest.toml'
       - 'ci/policy.toml'
+      - 'pyproject.toml'
       - 'uv.lock'
       - '.python-version'
       - 'scripts/fit-store.sh'

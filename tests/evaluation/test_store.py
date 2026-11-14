@@ -170,12 +170,70 @@ def _workflow_paths(event: str) -> list[str]:
     return list(workflow[True][event]["paths"])
 
 
+def _key_files(monkeypatch: pytest.MonkeyPatch) -> set[str]:
+    """List every repository file a fit key depends on.
+
+    The files `code_digest` reads, the modules whose source it hashes,
+    `.python-version` (the key hashes the Python version), the CLI and
+    the backtest config and policy `fit-store plan` reads by default.
+    A file outside the repository is returned as an absolute path.
+    """
+    import inspect
+    from collections.abc import Callable
+
+    from bdbvhubrenewal import cli
+    from bdbvhubrenewal.evaluation import backtest
+
+    read: set[Path] = set()
+    for name in ("read_bytes", "read_text"):
+        original = getattr(Path, name)
+
+        def record(
+            self: Path,
+            *args: object,
+            _f: Callable[..., object] = original,
+            **kwargs: object,
+        ) -> object:
+            read.add(self.resolve())
+            return _f(self, *args, **kwargs)
+
+        monkeypatch.setattr(Path, name, record)
+    for model in store.stored_models():
+        store.code_digest(model, ROOT)
+    monkeypatch.undo()
+    read |= {
+        Path(inspect.getsourcefile(f)).resolve()  # type: ignore[arg-type]
+        for f in (backtest.run_forecasts, backtest._fit_rows)
+    }
+    plan = cli.build_parser().parse_args(["fit-store", "plan"])
+    read |= {
+        (ROOT / f).resolve()
+        for f in (plan.config, plan.policy, ".python-version")
+    }
+    read.add(Path(inspect.getsourcefile(cli)).resolve())  # type: ignore[arg-type]
+    root = ROOT.resolve()
+    return {
+        p.relative_to(root).as_posix() if p.is_relative_to(root) else str(p)
+        for p in read
+    }
+
+
 @pytest.mark.parametrize("event", ["push", "pull_request"])
-def test_fit_store_runs_on_every_file_in_a_key(event: str) -> None:
+def test_fit_store_runs_on_every_file_in_a_key(
+    event: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
     import fnmatch
 
     patterns = _workflow_paths(event)
-    files = {f for m in store.stored_models() for f in store.fit_code(m, ROOT)}
+    files = _key_files(monkeypatch)
+    required = {
+        "pyproject.toml",
+        "uv.lock",
+        ".python-version",
+        "ci/policy.toml",
+        "src/bdbvhubrenewal/cli.py",
+    }
+    assert required <= files
     missed = sorted(
         f
         for f in files
