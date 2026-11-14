@@ -173,44 +173,47 @@ def _workflow_paths(event: str) -> list[str]:
 def _key_files(monkeypatch: pytest.MonkeyPatch) -> set[str]:
     """List every repository file a fit key depends on.
 
-    The files `code_digest` reads, the modules whose source it hashes,
-    `.python-version` (the key hashes the Python version), the CLI and
-    the backtest config and policy `fit-store plan` reads by default.
-    A file outside the repository is returned as an absolute path.
+    The files `code_digest` opens, the source files of the functions it
+    hashes, `evaluation/digest.py` (it decides what `fit_code` lists),
+    `.python-version` (the key hashes the Python version), the backtest
+    config and policy `fit-store plan` reads by default, and the CLI,
+    which plans and runs the fits and picks the BVD release a BVD model
+    is keyed on. A file outside the repository is returned as an
+    absolute path.
     """
     import inspect
     from collections.abc import Callable
 
     from bdbvhubrenewal import cli
-    from bdbvhubrenewal.evaluation import backtest
+    from bdbvhubrenewal.evaluation import digest
 
     read: set[Path] = set()
-    for name in ("read_bytes", "read_text"):
-        original = getattr(Path, name)
+    open_ = Path.open
+    getsource = inspect.getsource
 
-        def record(
-            self: Path,
-            *args: object,
-            _f: Callable[..., object] = original,
-            **kwargs: object,
-        ) -> object:
-            read.add(self.resolve())
-            return _f(self, *args, **kwargs)
+    def record_open(self: Path, *args: object, **kwargs: object) -> object:
+        read.add(self.resolve())
+        return open_(self, *args, **kwargs)
 
-        monkeypatch.setattr(Path, name, record)
-    for model in store.stored_models():
-        store.code_digest(model, ROOT)
-    monkeypatch.undo()
-    read |= {
-        Path(inspect.getsourcefile(f)).resolve()  # type: ignore[arg-type]
-        for f in (backtest.run_forecasts, backtest._fit_rows)
-    }
+    def record_source(obj: Callable[..., object]) -> str:
+        read.add(Path(inspect.getsourcefile(obj) or "").resolve())
+        return getsource(obj)
+
+    with monkeypatch.context() as mp:
+        mp.setattr(Path, "open", record_open)
+        mp.setattr(store.inspect, "getsource", record_source)
+        for model in store.stored_models():
+            store.code_digest(model, ROOT)
     plan = cli.build_parser().parse_args(["fit-store", "plan"])
     read |= {
         (ROOT / f).resolve()
         for f in (plan.config, plan.policy, ".python-version")
     }
-    read.add(Path(inspect.getsourcefile(cli)).resolve())  # type: ignore[arg-type]
+    read |= {
+        Path(src).resolve()
+        for src in (inspect.getsourcefile(cli), inspect.getsourcefile(digest))
+        if src is not None
+    }
     root = ROOT.resolve()
     return {
         p.relative_to(root).as_posix() if p.is_relative_to(root) else str(p)
@@ -226,12 +229,11 @@ def test_fit_store_runs_on_every_file_in_a_key(
 
     patterns = _workflow_paths(event)
     files = _key_files(monkeypatch)
+    # Read by `code_digest`, so these check the spies see its reads.
     required = {
         "pyproject.toml",
         "uv.lock",
-        ".python-version",
-        "ci/policy.toml",
-        "src/bdbvhubrenewal/cli.py",
+        "src/bdbvhubrenewal/evaluation/backtest.py",
     }
     assert required <= files
     missed = sorted(
