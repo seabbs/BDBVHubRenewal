@@ -441,6 +441,27 @@ jobs:
           CHECK_WINDOW: 'false'
           EXPECTED_LOCATIONS: ${{ vars.EXPECTED_LOCATIONS }}
         run: |
+          # Until the hub opens the detected round, review the newest round
+          # its tasks.json has, so the file is checked against a round.
+          REFERENCE_DATE=$(python3 - "$REFERENCE_DATE" << 'PY'
+          import json, sys
+          want = sys.argv[1]
+          def dates(o):
+              if isinstance(o, dict):
+                  for k, v in o.items():
+                      if k == "reference_date" and isinstance(v, dict):
+                          yield from (v.get("required") or []) + (v.get("optional") or [])
+                      else:
+                          yield from dates(v)
+              elif isinstance(o, list):
+                  for x in o:
+                      yield from dates(x)
+          have = set(dates(json.load(open("output/hub-clone/hub-config/tasks.json"))))
+          print(want if want in have else max(d for d in have if d <= want))
+          PY
+          )
+          export REFERENCE_DATE
+          echo "reference_date=$REFERENCE_DATE" >> "$GITHUB_OUTPUT"
           ci/steps/prepare.sh
           start=$SECONDS
           status=0
