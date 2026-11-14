@@ -513,7 +513,9 @@ jobs:
 
   deploy:
     needs: build
-    if: github.event_name != 'pull_request'
+    if: >-
+      !cancelled() && needs.build.result == 'success'
+      && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -536,10 +538,13 @@ jobs:
 
   # Only for branches of this repository: a fork's token cannot write, and
   # it never gets secrets.
+  # Each job below names the build's result, as the skipped held-out job
+  # upstream would otherwise skip it.
   preview:
     needs: build
     if: >-
-      github.event_name == 'pull_request'
+      !cancelled() && needs.build.result == 'success'
+      && github.event_name == 'pull_request'
       && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     permissions:
@@ -565,7 +570,9 @@ jobs:
   # workflow token can do it.
   release:
     needs: build
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    if: >-
+      !cancelled() && needs.build.result == 'success'
+      && github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:

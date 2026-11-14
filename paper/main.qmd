@@ -69,7 +69,7 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
 
 ::: {.callout-note title="Plan"}
 - Chronos-2, given the reporting triangle as series: one series per place and reporting delay, each missing until reported. Introduced alongside the reporting triangle, with Figure 1B.
-- Fine-tuned on synthetic data on a laptop, with checkpoints after 1,000, 2,000, 4,000, 6,000 and 8,000 simulated outbreaks. The largest is the main model.
+- Fine-tuned on synthetic data on a laptop, with checkpoints from 1,000 to 20,000 or more simulated outbreaks, each giving several forecast origins and 10 observation draws. The largest is the main model.
 - Compared with Chronos-2 given only complete data points, to show what the ragged structure and fine-tuning add.
 - Figure 1, a multi-panel schematic of our pipeline: (A) the assumptions in the epinowcast simulations, (B) the reporting triangle laid out as ragged series for Chronos-2, (C) training blocks and LoRA fine-tuning, and why it is fast, and (D) forecasting with the fine-tuned model.
 - Key references: [@Ansari2025; @Ansari2024; @Hu2021; @Das2024b].
@@ -163,7 +163,7 @@ Key references: the Methods references, with [@bracherEvaluatingEpidemicForecast
 ::: {.callout-note title="Plan"}
 - Visual performance of the candidate models against `randomwalk` and `randomwalknowcast`.
 - A summary of score performance.
-- How scores change with the amount of fine-tuning data (1,000 to 8,000 outbreaks), as an SI figure.
+- How scores change with the amount of fine-tuning data (1,000 to 20,000 or more outbreaks), as an SI figure.
 :::
 
 ::: {#fig-synthetic}
