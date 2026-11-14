@@ -2,7 +2,7 @@
 # Simulate, fine-tune and publish a round of Chronos-2 fine-tuning,
 # unattended. Run from the repo root, detached:
 #
-#   nohup scripts/finetune_driver.sh config/finetune/r2-real.env \
+#   nohup scripts/finetune_driver.sh config/finetune/r2-cal2.env \
 #     > /dev/null 2>&1 &
 #
 # The env file sets the round:
