@@ -34,8 +34,9 @@
 #   weekdays (a `structural` table), which may change once on a report
 #   date;
 # - observations: "negbin" (NB2), "negbin1d" (NB1) or "poisson";
-# - longest delay: the shortest of 4, 8 and 12 weeks that is at least ten
-#   times the delay's mean, or one step longer in one outbreak in four.
+# - longest delay: the shortest of 3, 4, 6, 8 and 12 weeks that is at
+#   least five times the delay's mean, or one step longer, up to ten times
+#   the mean, in one outbreak in four.
 #
 # The NB1 dispersion matches the NB2 scale (epinowcast issue #937). With
 # expected onsets lambda and delay probabilities p_d, NB2 has
@@ -68,7 +69,7 @@
 #   Rscript scripts/finetune_simulate.R <n> <seed> <out_dir>
 
 epinowcast_sha <- "e084b080"
-grid_name <- "r2-cal"
+grid_name <- "r2-cal2"
 args <- commandArgs(trailingOnly = TRUE)
 n_outbreaks <- as.integer(args[[1]])
 seed <- as.integer(args[[2]])
@@ -267,7 +268,7 @@ draw_values <- function(design) {
     # Most failed draws were growth processes overflowing at the start
     # growth rate's upper range, so it is narrower than for Rt.
     r0 = rnorm(1, 0.01, 0.02),
-    growth_turn = runif(1, 0, 0.05),
+    growth_turn = runif(1, 0.01, 0.1),
     walk_sd = runif(1, 0.005, 0.015),
     incidence_sd = runif(1, 0.05, 0.3),
     growth_steps = sample(1:3, 1),
@@ -314,14 +315,18 @@ draw_values <- function(design) {
   )
 }
 
-# The longest delay in days: the shortest of 4, 8 and 12 weeks that is at
-# least ten times the delay's mean, or the next one up for a long tail.
-# A longest delay many times the mean gives the discretised delay
-# non-finite tail hazards in epinowcast (#939), so Stan cannot start.
+# The longest delay in days: the shortest of 3, 4, 6, 8 and 12 weeks that
+# is at least five times the delay's mean, or for a long tail the next one
+# up if it is at most ten times the mean. A longest delay many times the
+# mean gives the discretised delay non-finite tail hazards in epinowcast
+# (#939), so Stan cannot start.
 max_delay_for <- function(mean, long_tail) {
-  options <- c(28L, 56L, 84L)
-  k <- min(which(c(options >= 10 * mean, TRUE))[1], length(options))
-  options[min(k + long_tail, length(options))]
+  options <- c(21L, 28L, 42L, 56L, 84L)
+  k <- min(which(c(options >= 5 * mean, TRUE))[1], length(options))
+  if (long_tail && k < length(options) && options[k + 1] <= 10 * mean) {
+    k <- k + 1
+  }
+  options[k]
 }
 
 # Expected onsets of each stratum by day, as epinowcast's renewal or
