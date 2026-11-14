@@ -62,8 +62,9 @@ up to it. With gradient checkpointing a block of 2,400 series fits the
 laptop's GPU memory (64 GB) but peaks at about 56 GB in training, so
 2,000 leaves headroom."""
 
-CUTS = {"weekly": 1, "daily": 2}
-"""Blocks of each source per outbreak."""
+CUTS = 8
+"""Cut-offs of each source (weekly, daily) per simulation, shared among
+its observation draws."""
 
 CHECKPOINT_SERIES = 900
 """Batches with more series than this recompute each encoder block's
@@ -187,10 +188,14 @@ def outbreak_blocks(
     provinces: list[str],
     rng: np.random.Generator,
     delay_weeks: int = SIM_DELAY_WEEKS,
+    cuts: int = CUTS,
 ) -> list[dict]:
     """Return the training blocks of one outbreak.
 
-    A block's series count is drawn log-uniformly from 1 to `MAX_SERIES`,
+    Each source is cut at `cuts` forecast origins spread over the
+    outbreak's course, one in each of `cuts` equal stretches of its
+    cut-offs, so they fall in its rising, peak and falling phases. A
+    block's series count is drawn log-uniformly from 1 to `MAX_SERIES`,
     and its places (`choose_places`) are about that many series at its
     lag, with the country first.
     """
@@ -202,14 +207,15 @@ def outbreak_blocks(
     cutoffs = weekly_cutoffs(first, last.isoformat(), weekday)
     out = []
     for source in ("weekly", "daily"):
-        for _ in range(CUTS[source]):
+        for j in range(cuts):
             lag = int(rng.choice(MAX_LAGS[source]))
             width = 7 if source == "weekly" else 1
             # At least two steps of context before the lags.
             least = -(-(lag + 2) * width // 7)
             if len(cutoffs) <= least:
                 continue
-            cut = int(rng.integers(least, len(cutoffs)))
+            share = (j + rng.random()) / cuts
+            cut = least + int(share * (len(cutoffs) - least))
             places: tuple[str, ...] = (NATIONAL,)
             if len(provinces) > 1:
                 size = np.exp(rng.uniform(0, np.log(MAX_SERIES)))

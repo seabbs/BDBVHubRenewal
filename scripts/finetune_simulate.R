@@ -88,6 +88,9 @@ enw_set_cache(
 )
 model <- suppressMessages(enw_model(threads = FALSE))
 
+# Observation draws per simulation: each is its own realisation of the
+# same epidemic and reporting, sharing the costly setup.
+draws <- as.integer(Sys.getenv("ENW_DRAWS", "4"))
 # Set ENW_DEBUG to see Stan's messages.
 debug <- nzchar(Sys.getenv("ENW_DEBUG"))
 
@@ -613,14 +616,19 @@ simulate_outbreak <- function(design, v) {
     pobs, growth_rate = as.numeric(log_r), parameters = parameters,
     reference = reference, report = report, expectation = expectation,
     obs = enw_obs(family = design$family, data = pobs), model = model,
-    seed = sample.int(.Machine$integer.max, 1), show_messages = debug,
-    show_exceptions = debug, refresh = 0
+    seed = sample.int(.Machine$integer.max, 1), draws = draws,
+    show_messages = debug, show_exceptions = debug, refresh = 0
   )))
   # The draws in the order `enw_pp_summary` binds them to the triangle,
   # read directly as summarising them is slow.
-  pp <- data.table::copy(sims$new_confirm[[1]])
-  data.table::setorderv(pp, c(".group", "reference_date"))
-  pp[, mean := as.numeric(sims$fit[[1]]$draws("pp_obs", format = "matrix"))]
+  cells <- data.table::copy(sims$new_confirm[[1]])
+  data.table::setorderv(cells, c(".group", "reference_date"))
+  obs <- sims$fit[[1]]$draws("pp_obs", format = "matrix")
+  pp <- rbindlist(lapply(seq_len(nrow(obs)), function(k) {
+    cells[, .(.group, place, age, reference_date, report_date,
+      draw = k, mean = as.numeric(obs[k, ])
+    )]
+  }))
   pp[, location := if (multi_place && multi_age) {
     paste(place, age, sep = "-")
   } else if (multi_age) {
@@ -631,7 +639,7 @@ simulate_outbreak <- function(design, v) {
   list(
     values = v,
     counts = pp[mean > 0, .(
-      outbreak = NA_character_, timestep = "day", location,
+      outbreak = NA_character_, draw, timestep = "day", location,
       reference_date, report_date, count = as.integer(mean)
     )]
   )
@@ -662,7 +670,8 @@ if (sys.nframe() == 0L) {
       reason <- if (inherits(res, "error")) {
         conditionMessage(res)
       } else {
-        size <- sum(res$counts$count)
+        # The draws' mean size is checked against the limits.
+        size <- sum(res$counts$count) / draws
         if (size < min_size) {
           "too small"
         } else if (size > max_size(design)) {
@@ -680,11 +689,13 @@ if (sys.nframe() == 0L) {
       )
     }
     if (is.null(out)) next
-    out$counts[, outbreak := id]
+    # Each draw is an outbreak `<seed>-<index>-<draw>`.
+    out$counts[, outbreak := if (draws > 1) paste(id, draw, sep = "-") else id]
+    out$counts[, draw := NULL]
     settings[[length(settings) + 1L]] <- c(
       list(outbreak = id), design, out$values,
       list(
-        tries = try, cases = sum(out$counts$count),
+        draws = draws, tries = try, cases = sum(out$counts$count) / draws,
         seconds = as.numeric(Sys.time() - t1, units = "secs")
       )
     )

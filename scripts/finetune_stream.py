@@ -97,23 +97,35 @@ def ready_outbreaks(sim_dir: Path, seeds: range) -> list[str]:
 
 
 def cut(sim_dir: Path, ids: list[str], seed: int) -> list[tuple[str, dict]]:
-    """Return the blocks of outbreaks, each with its outbreak."""
+    """Return the blocks of simulations, each with its outbreak draw.
+
+    A simulation's `CUTS` cut-offs of each source are shared among its
+    observation draws (`<id>-<draw>`), each cut with its own generator.
+    """
     seeds = sorted({ft._order(o)[0] for o in ids})
     counts = pd.concat(
         [pd.read_csv(sim_dir / f"counts-{s}.csv.gz") for s in seeds]
     )
+    counts["simulation"] = (
+        counts["outbreak"].str.split("-").str[:2].str.join("-")
+    )
     settings = pd.concat(
         [pd.read_csv(sim_dir / f"settings-{s}.csv") for s in seeds]
     ).set_index("outbreak")
+    by = dict(tuple(counts.groupby("simulation")))
     out = []
-    for outbreak in ids:
-        rows = counts.loc[counts["outbreak"] == outbreak]
-        row = settings.loc[outbreak]
-        rng = np.random.default_rng([seed, zlib.crc32(outbreak.encode())])
+    for simulation in ids:
+        row = settings.loc[simulation]
         days = row.get("max_delay", np.nan)
         weeks = ft.SIM_DELAY_WEEKS if pd.isna(days) else int(days) // 7
-        for block in ft.outbreak_blocks(rows, ft.strata(row), rng, weeks):
-            out.append((outbreak, block))
+        draws = dict(tuple(by[simulation].groupby("outbreak")))
+        cuts = max(1, ft.CUTS // len(draws))
+        for outbreak in sorted(draws):
+            rng = np.random.default_rng([seed, zlib.crc32(outbreak.encode())])
+            blocks = ft.outbreak_blocks(
+                draws[outbreak], ft.strata(row), rng, weeks, cuts
+            )
+            out.extend((outbreak, block) for block in blocks)
     return out
 
 
