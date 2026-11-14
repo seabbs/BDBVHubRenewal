@@ -160,7 +160,7 @@ def test_evaluate_gives_one_long_sample_table_with_truth() -> None:
     counts = _counts(("P01", "P02"))
     out = synthetic.evaluate(
         counts,
-        [_Constant("flat"), _Missing(), _Unavailable()],
+        [_Constant("flat"), _Unavailable()],
         n_origins=2,
         n_samples=20,
     )
@@ -408,3 +408,10 @@ def test_short_delays_keep_their_own_longest_delay() -> None:
     # r3's longest delay is 3, 4, 6, 8 or 12 weeks.
     counts = _counts(("P01",))
     assert synthetic.longest_delay_weeks(counts) == 3
+
+
+def test_a_model_that_cannot_load_stops_the_run() -> None:
+    # A checkpoint that cannot be fetched, as on a rate limit, must not
+    # drop the model from the results silently.
+    with pytest.raises(FileNotFoundError, match="no checkpoint"):
+        synthetic.evaluate(_counts(("P01",)), [_Missing()], 1, 10)
