@@ -13,9 +13,13 @@ from bdbvhubrenewal.evaluation.backtest import (
     make_tasks,
     run_forecasts,
 )
-from bdbvhubrenewal.evaluation.nowcast import rolling_truth
-from bdbvhubrenewal.forecasters import NATIONAL, get_model
-from bdbvhubrenewal.forecasters.copula import PRIOR, RollingCopula
+from bdbvhubrenewal.evaluation.nowcast import release_backtest, rolling_truth
+from bdbvhubrenewal.forecasters import NATIONAL, get_model, list_models
+from bdbvhubrenewal.forecasters.copula import (
+    PRIOR,
+    RollingCopula,
+    pair_registered,
+)
 
 
 def _independent(groups, horizon, n, seed):
@@ -94,3 +98,51 @@ def test_randomwalknowcast_country_stays_the_sum_of_its_provinces(
         prov.reindex(nat.index).sort_index(),
         check_names=False,
     )
+
+
+def test_models_with_draws_per_cell_are_registered_as_paired() -> None:
+    specs = {s.name: s for s in list_models()}
+    assert specs["randomwalknowcast"].paired
+    for source in ("weekly", "daily"):
+        for layout in ("complete", "ragged", "ragged_ft"):
+            assert specs[f"fm_chronos_{source}_{layout}"].paired
+    assert not specs["randomwalk"].paired
+
+
+def test_only_paired_models_are_paired(
+    forecasts: pd.DataFrame, truth: pd.DataFrame
+) -> None:
+    other = forecasts.loc[forecasts["model"] == "randomwalknowcast"].assign(
+        model="randomwalk"
+    )
+    both = pd.concat([forecasts, other], ignore_index=True)
+    paired, fits = pair_registered(both, truth, seed=1)
+    keys = ["model", "origin", "location", "target_end_date", "sample"]
+    walk = paired.loc[paired["model"] == "randomwalk"].sort_values(keys)
+    pd.testing.assert_frame_equal(
+        walk.reset_index(drop=True),
+        other.sort_values(keys).reset_index(drop=True),
+    )
+    assert set(fits["model"]) == {
+        "randomwalknowcast",
+        "fm_chronos_weekly_ragged",
+    }
+
+
+def test_release_backtest_pairs_with_the_rolling_truth(
+    target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
+) -> None:
+    real = target.loc[target["kind"] == "real"]
+    tasks = make_tasks(
+        real,
+        delays.assign(kind="real"),
+        BacktestConfig(n_samples=20, seed=2),
+        daily=daily,
+    )
+    result = release_backtest(tasks, daily, target, truth_delay=14)
+    copulas = result.copulas
+    assert set(copulas["model"]) == {"randomwalknowcast"}
+    assert {"origin", "n_scores", "rho_time"} <= set(copulas)
+    # With no rolling truth nothing is paired.
+    plain = release_backtest(tasks, daily, target)
+    assert plain.copulas.empty
