@@ -326,7 +326,7 @@ def make_report(
     daily_zones = load_daily_zones(data_dir)
     zone_codes = hub_zones(Path(data_dir) / "hub-config" / "tasks.json")
     zone_fits = res / ZONE_FITS_FILE
-    fitted = (
+    zone_samples = (
         pd.read_csv(zone_fits, dtype={"vintage": str, "target_end_date": str})
         if zone_fits.exists()
         else None
@@ -344,7 +344,7 @@ def make_report(
             )[0]
             at = _stored_at(res, vintage)
         write_hub_tables(
-            hub_tables(at, task, daily_zones, zone_codes, fitted),
+            hub_tables(at, task, daily_zones, zone_codes, zone_samples),
             res / "hub" / str(vintage),
         )
     groups = _nowcast_groups(target, sorted(set(forecasts_now["location"])))

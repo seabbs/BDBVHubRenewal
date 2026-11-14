@@ -229,7 +229,8 @@ def test_renewal_key_has_every_model_module() -> None:
 def test_samplers_come_from_the_policy() -> None:
     table = store.samplers(ROOT / "ci" / "policy.toml")
     assert set(table) == {"renewal", "renewalbvd", "renewalsp"}
-    assert table["renewalbvd"]["num_samples"] == 750
+    assert table["renewalbvd"]["num_samples"] == 1500
+    assert table["renewalbvd"]["thinning"] == 2
 
 
 @pytest.fixture
