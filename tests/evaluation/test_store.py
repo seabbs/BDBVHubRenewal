@@ -174,19 +174,26 @@ def _key_files(monkeypatch: pytest.MonkeyPatch) -> set[str]:
     """List every repository file a fit key depends on.
 
     The files `code_digest` reads, the modules whose source it hashes,
-    and the backtest config and policy the tasks and samplers come from.
+    and the backtest config and policy `fit-store plan` reads by default.
     """
     import inspect
+    from collections.abc import Callable
 
+    from bdbvhubrenewal.cli import build_parser
     from bdbvhubrenewal.evaluation import backtest
 
     read: set[Path] = set()
     for name in ("read_bytes", "read_text"):
         original = getattr(Path, name)
 
-        def record(self: Path, *args: object, _f: object = original) -> object:
+        def record(
+            self: Path,
+            *args: object,
+            _f: Callable[..., object] = original,
+            **kwargs: object,
+        ) -> object:
             read.add(self.resolve())
-            return _f(self, *args)  # type: ignore[operator]
+            return _f(self, *args, **kwargs)
 
         monkeypatch.setattr(Path, name, record)
     for model in store.stored_models():
@@ -196,12 +203,8 @@ def _key_files(monkeypatch: pytest.MonkeyPatch) -> set[str]:
         Path(inspect.getsourcefile(f)).resolve()  # type: ignore[arg-type]
         for f in (backtest.run_forecasts, backtest._fit_rows)
     }
-    for func, arg in (
-        (backtest.load_config, "path"),
-        (store.samplers, "policy"),
-    ):
-        default = inspect.signature(func).parameters[arg].default
-        read.add((ROOT / default).resolve())
+    plan = build_parser().parse_args(["fit-store", "plan"])
+    read |= {(ROOT / f).resolve() for f in (plan.config, plan.policy)}
     return {p.relative_to(ROOT.resolve()).as_posix() for p in read}
 
 
