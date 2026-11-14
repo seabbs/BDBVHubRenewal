@@ -1,0 +1,183 @@
+# Data
+
+The hub data, with all their vintages.
+{ .page-subtitle }
+
+Extraction and synthetic vintages are on the [Data methods page](methods/data.md).
+
+## Vintages
+
+??? note "Tables"
+
+    --8<-- "vintages.md"
+
+The 2026-08-18 vintage has no delay data.
+The 2026-10-09 delay file exists only in the hub's git history.
+
+## Release cut-offs
+
+Each release's cut-off is its latest onset day.
+It falls up to three days before the release date (`days_to_release` in the table above).
+The hub target is the sum of daily onsets over each epi week, Sunday to Saturday, so the week holding the cut-off is partial.
+
+<figure class="doc-figure" markdown="span">
+  ![National daily onsets by onset status for the four weeks up to each of the last four releases' cut-offs, with each epi week's total above it.](figures/cutoff-days.svg#only-light)
+  ![National daily onsets by onset status for the four weeks up to each of the last four releases' cut-offs, with each epi week's total above it.](figures/cutoff-days-dark.svg#only-dark)
+  <figcaption markdown="1">
+    National daily onsets up to each release's cut-off, with each epi week's total (the hub target) above it and the release date dotted.
+  </figcaption>
+</figure>
+
+The last days before a cut-off hold few cases because most of their onsets are not yet reported.
+In the 2026-11-08 release, cut at 2026-11-05, the last five onset days hold 19, 19, 15, 10 and 5 cases.
+Its last week has five of seven days and 68 cases.
+
+## National coherence
+
+The national (`CD`) row should equal the sum of the provinces.
+The table counts the weeks where they differ, by vintage and stream.
+
+??? note "Tables"
+
+    --8<-- "national-coherence.md"
+
+A gap is cases counted nationally but in no province.
+The renewal model forecasts it as an unassigned component ([Forecasts](methods/model.md#forecasts)).
+
+## Target by vintage
+
+<figure class="doc-figure" markdown="span">
+  ![Weekly confirmed cases by onset week for each province with cases, one line per vintage.](figures/target.svg#only-light)
+  ![Weekly confirmed cases by onset week for each province with cases, one line per vintage.](figures/target-dark.svg#only-dark)
+  <figcaption markdown="1">
+    Weekly confirmed cases by onset week (observed plus imputed), by vintage.
+    Ituri and Nord Kivu hold most cases.
+  </figcaption>
+</figure>
+
+## Revisions of recent weeks
+
+Each release is a vintage that restates every onset week, so a week's count grows as later releases report more of its cases.
+
+<figure class="doc-figure" markdown="span">
+  ![Count for each of the latest six onset weeks in every release that reports it, for the country, Ituri and Nord Kivu.](figures/release-counts.svg#only-light)
+  ![Count for each of the latest six onset weeks in every release that reports it, for the country, Ituri and Nord Kivu.](figures/release-counts-dark.svg#only-dark)
+  <figcaption markdown="1">
+    Count for each recent onset week (labelled by the week's last day) in each release that reports it.
+  </figcaption>
+</figure>
+
+Nationally the week ending 2026-10-24 had 91 cases at the 2026-10-24 release, 381 at 2026-11-01 and 482 at 2026-11-08.
+The week ending 2026-10-31 rose from 150 to 349 in one release.
+Delay-file rows are the known-onset part of these counts, so their backfill follows the same pattern.
+
+<figure class="doc-figure" markdown="span">
+  ![Share of the latest national count reported in each earlier vintage, by weeks before the vintage.](figures/revisions.svg#only-light)
+  ![Share of the latest national count reported in each earlier vintage, by weeks before the vintage.](figures/revisions-dark.svg#only-dark)
+  <figcaption markdown="1">
+    National counts in each vintage as a share of the latest vintage, by weeks from the onset week to the vintage's epi week.
+    The last two weeks are far from complete.
+    Weeks three back are still revised by 3 to 13%.
+  </figcaption>
+</figure>
+
+## Negative updates
+
+A count falls when a release reports fewer cases for a place and onset week than the release before it.
+Each release is compared with the one before it, on the weeks of the earlier release with cases in either.
+A health zone missing from a release has no cases, so a zone that disappears counts as a fall to zero.
+
+<figure class="doc-figure" markdown="span">
+  ![Share of place-weeks that fell and cases removed as a share of all change between consecutive releases, by the onset week's age at the earlier release, for the country, provinces and health zones.](figures/downward-updates.svg#only-light)
+  ![Share of place-weeks that fell and cases removed as a share of all change between consecutive releases, by the onset week's age at the earlier release, for the country, provinces and health zones.](figures/downward-updates-dark.svg#only-dark)
+  <figcaption markdown="1">
+    Share of place-weeks that fell (top) and cases removed as a share of all change (bottom), by the onset week's age at the earlier release.
+    The 2026-08-18 to 2026-10-09 comparison spans seven weeks and the others one week.
+    No national or province count fell while its onset week was less than three weeks old.
+    Most falls came between the 2026-10-17 and 2026-10-24 releases, mainly in Nord Kivu.
+  </figcaption>
+</figure>
+
+Over all releases, 8 of 102 national weeks fell, 25 of 357 province weeks and 85 of 2738 health zone weeks.
+Falls removed 24 cases nationally against 2684 added, 1% of all change.
+They were 2% of all change for provinces and 4% for health zones.
+No fall was larger than 8 cases.
+
+??? note "Tables"
+
+    --8<-- "downward-updates.md"
+
+## Missing onsets
+
+The hub publishes, for every vintage, the cases in each province and onset week with an imputed onset.
+How the hub imputes them is on the [methods page](methods/model.md#hub-imputation).
+
+<figure class="doc-figure" markdown="span">
+  ![Share of each week's cases with an imputed onset, by province and vintage, with point size by the week's count.](figures/imputed-share.svg#only-light)
+  ![Share of each week's cases with an imputed onset, by province and vintage, with point size by the week's count.](figures/imputed-share-dark.svg#only-dark)
+  <figcaption markdown="1">
+    Imputed share of cases by onset week, by vintage.
+    Point size grows with the week's count.
+    It varies over time and between provinces.
+  </figcaption>
+</figure>
+
+<figure class="doc-figure" markdown="span">
+  ![Share of all cases with an imputed onset in each release, for the country and each province with cases.](figures/imputed-by-release.svg#only-light)
+  ![Share of all cases with an imputed onset in each release, for the country and each province with cases.](figures/imputed-by-release-dark.svg#only-dark)
+  <figcaption markdown="1">
+    Share of all cases with an imputed onset in each release.
+    Nationally it stays between 15% and 17%.
+    In Nord Kivu it fell from 24% to 14% between the 2026-10-17 and 2026-10-24 releases, as cases gained an onset.
+    Sud Ubangi's few cases all have an imputed onset.
+  </figcaption>
+</figure>
+
+The change between vintages approximates the cases reported without an onset.
+It is net of cases that gain an onset later, so it can be negative.
+
+<figure class="doc-figure" markdown="span">
+  ![Known-onset and imputed-onset cases added between consecutive vintages, by province.](figures/newly-missing.svg#only-light)
+  ![Known-onset and imputed-onset cases added between consecutive vintages, by province.](figures/newly-missing-dark.svg#only-dark)
+  <figcaption markdown="1">
+    Cases added between vintages, by onset status.
+    In Nord Kivu between 2026-10-17 and 2026-10-24, imputed onsets fell by 174 while known onsets rose by 379, so many cases gained an onset after their first report.
+  </figcaption>
+</figure>
+
+??? note "Tables"
+
+    --8<-- "newly-missing.md"
+
+## Delays
+
+<figure class="doc-figure" markdown="span">
+  ![Histogram of onset-to-report delays for each province with at least ten cases, latest vintage.](figures/delay-distribution.svg#only-light)
+  ![Histogram of onset-to-report delays for each province with at least ten cases, latest vintage.](figures/delay-distribution-dark.svg#only-dark)
+  <figcaption markdown="1">
+    Onset-to-report delays by province in the latest vintage, cut at 40 days.
+  </figcaption>
+</figure>
+
+??? note "Tables"
+
+    --8<-- "delays.md"
+
+A few delays are negative (down to −104 days) and a few very long (up to 193 days).
+The daily split into observed and imputed matches the weekly totals in every row, and the delay rows match the observed totals of their vintage.
+
+<figure class="doc-figure" markdown="span">
+  ![Mean and median delay by onset week for the four largest provinces, with the number of cases per week below.](figures/delays-time.svg#only-light)
+  ![Mean and median delay by onset week for the four largest provinces, with the number of cases per week below.](figures/delays-time-dark.svg#only-dark)
+  <figcaption markdown="1">
+    Mean (line) and median (points) delay by onset week, with cases per week below on a log scale.
+    Delays were long early on and shortened by June.
+    The fall in the last weeks is right truncation, since only short delays have been reported yet.
+  </figcaption>
+</figure>
+
+## Health zones
+
+Health zone onsets are in `data/daily_zones.csv.gz`, and their weekly totals in `data/health_zones.csv.gz`, once `task data` has fetched them.
+Zone totals sum to the province totals in every vintage.
+They set the zone series of the random walk baselines and the zone shares that split the province forecasts of the other models (see [Health zones](methods/model.md#health-zones)).

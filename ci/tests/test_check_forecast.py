@@ -1,0 +1,514 @@
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from typing import Any
+
+import pytest
+from conftest import (
+    AS_OF,
+    HUB,
+    POLICY,
+    POLICY_PATH,
+    REF,
+    make_samples,
+    weeks,
+    write_samples,
+)
+
+from submission_ci.check_forecast import main, run_checks
+from submission_ci.common import read_json
+from submission_ci.hubdata import read_observed
+
+OBS = read_observed(HUB / "time-series.csv", AS_OF)
+TASKS = read_json(HUB / "tasks.json")
+LOCS = ["CD", "CD-IT", "CD-NK", "CD-HU"]
+
+
+def statuses(path: Path, **kwargs: Any) -> dict[str, str]:
+    checks = run_checks(
+        path,
+        reference_date=REF,
+        settings=POLICY.checks,
+        observed=OBS,
+        expected_locations=LOCS,
+        tasks=TASKS,
+        **{"national_sidecar": _sidecar(), **kwargs},
+    )
+    return {c.name: c.status for c in checks}
+
+
+def sub(tmp_path: Path, **kwargs: Any) -> Path:
+    return write_samples(
+        tmp_path / f"{REF}-seabbs-renewal.csv",
+        make_samples(**kwargs),
+    )
+
+
+def test_plausible_file_passes(tmp_path: Path) -> None:
+    s = statuses(sub(tmp_path))
+    assert s.pop("baseline") == "skip" and s.pop("previous") == "skip"
+    # Zones are required only for baseline.
+    assert s.pop("zones") == "skip"
+    assert set(s.values()) == {"pass"}, s
+    assert "plausible" in s
+
+
+def test_negative_and_nan_values_fail(tmp_path: Path) -> None:
+    def mutate(rows: list[list[Any]]) -> None:
+        rows[0][6] = -3.0
+        rows[1][6] = float("nan")
+
+    assert statuses(sub(tmp_path, mutate=mutate))["values"] == "fail"
+
+
+def test_unparsable_value_fails(tmp_path: Path) -> None:
+    def mutate(rows: list[list[Any]]) -> None:
+        rows[0][6] = "abc"
+
+    assert statuses(sub(tmp_path, mutate=mutate))["values"] == "fail"
+
+
+def test_wrong_sample_count_fails(tmp_path: Path) -> None:
+    assert statuses(sub(tmp_path, n=99))["samples"] == "fail"
+
+
+def test_ragged_trajectory_fails(tmp_path: Path) -> None:
+    def mutate(rows: list[list[Any]]) -> None:
+        del rows[3]
+
+    s = statuses(sub(tmp_path, mutate=mutate))
+    assert s["samples"] == "fail"
+
+
+def test_missing_location_and_horizon_warn(tmp_path: Path) -> None:
+    last = weeks()[-1]
+
+    def mutate(rows: list[list[Any]]) -> None:
+        rows[:] = [r for r in rows if r[2] != last]
+
+    s = statuses(
+        sub(tmp_path, levels={"CD-IT": 200.0, "CD-NK": 80.0}, mutate=mutate)
+    )
+    assert s["coverage"] == "warn"
+
+
+def test_national_not_sum_fails(tmp_path: Path) -> None:
+    def mutate(rows: list[list[Any]]) -> None:
+        for r in rows:
+            if r[3] == "CD":
+                r[6] += 1
+                break
+
+    assert statuses(sub(tmp_path, mutate=mutate))["national_sum"] == "fail"
+
+
+def _checks(path: Path, **kwargs: Any) -> dict[str, Any]:
+    checks = run_checks(
+        path,
+        reference_date=REF,
+        settings=POLICY.checks,
+        observed=OBS,
+        expected_locations=LOCS,
+        tasks=TASKS,
+        **{"national_sidecar": _sidecar(), **kwargs},
+    )
+    return {c.name: c for c in checks}
+
+
+def _sidecar(**kw: Any) -> dict[str, Any]:
+    return {
+        "schema_version": 1,
+        "national": "CD",
+        "modelled_provinces": ["CD-HU", "CD-IT", "CD-NK"],
+        "unassigned": [],
+        **kw,
+    }
+
+
+def _bump_national(week: str, sample: int, by: float) -> Any:
+    def mutate(rows: list[list[Any]]) -> None:
+        for r in rows:
+            if r[3] == "CD" and r[2] == week and r[5] == sample:
+                r[6] += by
+
+    return mutate
+
+
+def test_national_exact_with_sidecar(tmp_path: Path) -> None:
+    c = _checks(sub(tmp_path), national_sidecar=_sidecar())["national_sum"]
+    assert c.status == "pass"
+    assert "3 modelled provinces" in c.summary
+
+
+def test_national_allows_only_float_noise(tmp_path: Path) -> None:
+    w = weeks()[-1]
+    noisy = sub(tmp_path, mutate=_bump_national(w, 1, 1e-12))
+    assert statuses(noisy)["national_sum"] == "pass"
+    off = sub(tmp_path, mutate=_bump_national(w, 1, 1e-6))
+    assert statuses(off)["national_sum"] == "fail"
+
+
+def test_national_off_by_one_fails(tmp_path: Path) -> None:
+    path = sub(tmp_path, mutate=_bump_national(weeks()[0], 7, 1.0))
+    c = _checks(path, national_sidecar=_sidecar())["national_sum"]
+    assert c.status == "fail"
+    assert "sample 7" in c.summary
+
+
+def test_national_missing_modelled_province_warns(tmp_path: Path) -> None:
+    side = _sidecar(modelled_provinces=["CD-HU", "CD-IT", "CD-NK", "CD-TO"])
+    c = _checks(sub(tmp_path), national_sidecar=side)["national_sum"]
+    assert c.status == "warn"
+    assert "CD-TO" in c.summary
+
+
+def test_national_unassigned_component_adds_up(tmp_path: Path) -> None:
+    w = weeks()[-1]
+    path = sub(tmp_path, mutate=_bump_national(w, 3, 4.0))
+    assert statuses(path)["national_sum"] == "fail"
+    side = _sidecar(
+        unassigned=[{"target_end_date": w, "sample": 3, "value": 4.0}]
+    )
+    c = _checks(path, national_sidecar=side)["national_sum"]
+    assert c.status == "pass"
+    assert "unassigned" in c.summary
+    short = _sidecar(
+        unassigned=[{"target_end_date": w, "sample": 3, "value": 3.0}]
+    )
+    assert (
+        _checks(path, national_sidecar=short)["national_sum"].status == "fail"
+    )
+
+
+def test_cli_reads_national_sidecar(tmp_path: Path) -> None:
+    w = weeks()[-1]
+    path = sub(tmp_path, mutate=_bump_national(w, 3, 4.0))
+    side = tmp_path / "national.json"
+    side.write_text(
+        json.dumps(
+            _sidecar(
+                unassigned=[{"target_end_date": w, "sample": 3, "value": 4.0}]
+            )
+        )
+    )
+    args = [
+        "--id",
+        "main",
+        "--submission",
+        str(path),
+        "--reference-date",
+        REF,
+        "--observed",
+        str(HUB / "time-series.csv"),
+        "--policy",
+        str(POLICY_PATH),
+        "--out",
+        str(tmp_path / "o"),
+        "--national-sidecar",
+    ]
+    main([*args, str(side), "--no-fail"])
+    got = read_json(tmp_path / "o" / "checks.json")["checks"]
+    assert {c["name"]: c["status"] for c in got}["national_sum"] == "pass"
+
+
+def test_schema_failures(tmp_path: Path) -> None:
+    def mutate(rows: list[list[Any]]) -> None:
+        rows[0][4] = "quantile"
+        rows[1][2] = "2026-11-06"  # a Friday
+
+    assert statuses(sub(tmp_path, mutate=mutate))["schema"] == "fail"
+    extra = write_samples(
+        tmp_path / "x" / f"{REF}-m.csv",
+        [[*r, "x"] for r in make_samples()],
+        header=[
+            "reference_date",
+            "target",
+            "target_end_date",
+            "location",
+            "output_type",
+            "output_type_id",
+            "value",
+            "forecast_date",
+            "extra",
+        ],
+    )
+    assert statuses(extra)["schema"] == "fail"
+
+
+def test_location_not_in_tasks_fails(tmp_path: Path) -> None:
+    s = statuses(sub(tmp_path, levels={"CD-XX": 10.0}))
+    assert s["schema"] == "fail"
+
+
+@pytest.mark.parametrize(
+    ("growth", "status"), [(1.5, "pass"), (2.5, "warn"), (5.0, "warn")]
+)
+def test_growth_levels(tmp_path: Path, growth: float, status: str) -> None:
+    assert statuses(sub(tmp_path, growth=growth))["growth"] == status
+
+
+def test_bounds_warn_on_explosion(tmp_path: Path) -> None:
+    assert statuses(sub(tmp_path, growth=8.0))["bounds"] == "warn"
+
+
+@pytest.mark.parametrize(
+    ("scale", "status"), [(1.0, "pass"), (3.0, "warn"), (8.0, "warn")]
+)
+def test_observed_levels(tmp_path: Path, scale: float, status: str) -> None:
+    levels = {
+        k: v * 1.2 * scale
+        for k, v in {"CD-IT": 200.0, "CD-NK": 80.0, "CD-HU": 15.0}.items()
+    }
+    assert statuses(sub(tmp_path, levels=levels))["observed"] == status
+
+
+def test_baseline_and_previous_only_warn(tmp_path: Path) -> None:
+    base = write_samples(tmp_path / "b" / "base.csv", make_samples(seed=2))
+    far = write_samples(
+        tmp_path / "p" / "prev.csv",
+        make_samples(levels={"CD-IT": 2000.0, "CD-NK": 800.0, "CD-HU": 150.0}),
+    )
+    s = statuses(sub(tmp_path), baseline=base, previous=far)
+    assert s["baseline"] == "pass" and s["previous"] == "warn"
+    s = statuses(sub(tmp_path), baseline=far)
+    assert s["baseline"] == "warn"
+
+
+def test_randomwalk_skips_baseline(tmp_path: Path) -> None:
+    assert statuses(sub(tmp_path), kind="randomwalk")["baseline"] == "skip"
+
+
+def test_cli_writes_report(tmp_path: Path) -> None:
+    path = sub(tmp_path, growth=5.0)
+    side = tmp_path / "national.json"
+    side.write_text(json.dumps(_sidecar()))
+    args = [
+        "--national-sidecar",
+        str(side),
+        "--id",
+        "main",
+        "--submission",
+        str(path),
+        "--reference-date",
+        REF,
+        "--observed",
+        str(HUB / "time-series.csv"),
+        "--policy",
+        str(POLICY_PATH),
+        "--tasks",
+        str(HUB / "tasks.json"),
+        "--out",
+        str(tmp_path / "o"),
+        "--locations",
+        ",".join(LOCS),
+    ]
+    assert main(args) == 1
+    assert main([*args, "--no-fail"]) == 0
+    data = read_json(tmp_path / "o" / "checks.json")
+    assert data["status"] == "fail"
+    assert (
+        "Forecast checks for `main`: FAIL"
+        in (tmp_path / "o" / "checks.md").read_text()
+    )
+
+
+def test_cli_missing_file_is_error(tmp_path: Path) -> None:
+    assert (
+        main(
+            [
+                "--id",
+                "m",
+                "--submission",
+                str(tmp_path / "none.csv"),
+                "--national-sidecar",
+                str(tmp_path / "national.json"),
+                "--reference-date",
+                REF,
+                "--observed",
+                str(HUB / "time-series.csv"),
+                "--policy",
+                str(POLICY_PATH),
+                "--out",
+                str(tmp_path),
+            ]
+        )
+        == 1
+    )
+    assert read_json(tmp_path / "checks.json")["status"] == "error"
+
+
+def with_zones(rows: list[list[Any]], skip: str = "", off: float = 0.0) -> None:
+    """Split each province's samples evenly over two zones."""
+    for r in list(rows):
+        loc = r[3]
+        if loc == "CD" or loc == skip:
+            continue
+        for k in (1, 2):
+            rows.append(
+                [*r[:3], f"{loc}-0{k}", r[4], r[5], r[6] / 2 + off, *r[7:]]
+            )
+
+
+def test_zones_required_and_present(tmp_path: Path) -> None:
+    f = sub(tmp_path, mutate=with_zones)
+    checks = {c.name: c for c in run_checks(
+        f, reference_date=REF,
+        settings=POLICY.checks,
+        national_sidecar=_sidecar(),
+        observed=read_observed(HUB / "time-series.csv"),
+        require_zones=True,
+    )}  # fmt: skip
+    assert checks["zones"].status == "pass"
+    # Zones do not count as provinces in the national sum.
+    assert checks["national_sum"].status == "pass"
+
+
+def test_missing_zones_fail_when_required(tmp_path: Path) -> None:
+    obs = read_observed(HUB / "time-series.csv")
+    none = sub(tmp_path)
+    check = {c.name: c for c in run_checks(
+        none, reference_date=REF,
+        settings=POLICY.checks,
+        national_sidecar=_sidecar(), observed=obs, require_zones=True
+    )}["zones"]  # fmt: skip
+    assert check.status == "fail"
+    part = sub(tmp_path / "p", mutate=lambda r: with_zones(r, skip="CD-NK"))
+    check = {c.name: c for c in run_checks(
+        part, reference_date=REF,
+        settings=POLICY.checks,
+        national_sidecar=_sidecar(), observed=obs, require_zones=True
+    )}["zones"]  # fmt: skip
+    assert check.status == "fail"
+    assert "CD-NK" in check.summary
+    # Not required: no zones is fine.
+    check = {c.name: c for c in run_checks(
+        none, reference_date=REF,
+        settings=POLICY.checks,
+        national_sidecar=_sidecar(), observed=obs
+    )}["zones"]  # fmt: skip
+    assert check.status == "skip"
+
+
+def test_zones_that_do_not_add_up_warn(tmp_path: Path) -> None:
+    f = sub(tmp_path, mutate=lambda r: with_zones(r, off=1.0))
+    check = {c.name: c for c in run_checks(
+        f, reference_date=REF,
+        settings=POLICY.checks,
+        national_sidecar=_sidecar(),
+        observed=read_observed(HUB / "time-series.csv"),
+        require_zones=True,
+    )}["zones"]  # fmt: skip
+    assert check.status == "warn"
+
+
+def test_plausible_forecast_passes(tmp_path: Path) -> None:
+    assert statuses(sub(tmp_path))["plausible"] == "pass"
+
+
+def test_wildly_high_median_is_ruled_out(tmp_path: Path) -> None:
+    # Far above the last 4 observed weeks' maximum: the candidate fails.
+    assert statuses(sub(tmp_path, growth=8.0))["plausible"] == "fail"
+
+
+def test_heavy_upper_tail_is_ruled_out(tmp_path: Path) -> None:
+    def mutate(rows: list[list[Any]]) -> None:
+        last = max(r[2] for r in rows)
+        for r in rows:
+            if r[3] == "CD-IT" and r[5] <= 5 and r[2] == last:
+                r[6] = r[6] * 100
+
+    checks = {c.name: c for c in run_checks(
+        sub(tmp_path, mutate=mutate, national=False), reference_date=REF,
+        settings=POLICY.checks, national_sidecar=_sidecar(),
+        observed=read_observed(HUB / "time-series.csv"),
+    )}  # fmt: skip
+    assert checks["plausible"].status == "fail"
+    assert "97.5%" in " ".join(checks["plausible"].details)
+
+
+def test_collapse_to_near_zero_is_ruled_out(tmp_path: Path) -> None:
+    low = {"CD-IT": 1.0, "CD-NK": 80.0, "CD-HU": 15.0}
+    checks = {c.name: c for c in run_checks(
+        sub(tmp_path, levels=low), reference_date=REF,
+        settings=POLICY.checks, national_sidecar=_sidecar(),
+        observed=read_observed(HUB / "time-series.csv"),
+    )}  # fmt: skip
+    assert checks["plausible"].status == "fail"
+    assert "CD-IT" in checks["plausible"].summary
+
+
+def test_plausible_thresholds_are_settings(tmp_path: Path) -> None:
+    loose = {
+        **POLICY.checks,
+        "plausible_median_ratio": 1e6,
+        "plausible_q975_ratio": 1e9,
+    }
+    checks = {c.name: c for c in run_checks(
+        sub(tmp_path, growth=8.0), reference_date=REF,
+        settings=loose, national_sidecar=_sidecar(),
+        observed=read_observed(HUB / "time-series.csv"),
+    )}  # fmt: skip
+    assert checks["plausible"].status == "pass"
+
+
+def _with_forecast_date(
+    rows: list[list[object]], value: str
+) -> list[list[object]]:
+    return [[*r[:7], value] for r in rows]
+
+
+@pytest.mark.parametrize(
+    ("value", "message"),
+    [
+        ("20/11/2026", "not YYYY-MM-DD"),
+        ("", "not YYYY-MM-DD"),
+        ("2026-11-08", "after"),
+    ],
+)
+def test_forecast_date_must_be_valid_and_not_after_reference(
+    tmp_path: Path, value: str, message: str
+) -> None:
+    path = write_samples(
+        tmp_path / "x" / f"{REF}-m.csv",
+        _with_forecast_date(make_samples(), value),
+    )
+    assert statuses(path)["schema"] == "fail"
+    schema = next(
+        c
+        for c in run_checks(
+            path,
+            reference_date=REF,
+            settings=POLICY.checks,
+            national_sidecar=_sidecar(),
+            observed=OBS,
+            expected_locations=LOCS,
+            tasks=TASKS,
+        )
+        if c.name == "schema"
+    )
+    assert message in str(schema)
+
+
+def test_forecast_date_column_is_required(tmp_path: Path) -> None:
+    path = write_samples(
+        tmp_path / "x" / f"{REF}-m.csv",
+        [r[:7] for r in make_samples()],
+        header=[
+            "reference_date",
+            "target",
+            "target_end_date",
+            "location",
+            "output_type",
+            "output_type_id",
+            "value",
+        ],
+    )
+    assert statuses(path)["schema"] == "fail"
+
+
+def test_a_new_forecast_has_one_forecast_date(tmp_path: Path) -> None:
+    rows = make_samples()
+    rows[0][7] = "2026-11-01"
+    path = write_samples(tmp_path / "x" / f"{REF}-m.csv", rows)
+    assert statuses(path)["schema"] == "fail"

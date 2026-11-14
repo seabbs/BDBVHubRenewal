@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "rounds": {
+    "2026-10-31": {
+      "data_commit": "cccccccccccccccccccccccccccccccccccccccc",
+      "as_of": "2026-10-24",
+      "status": "submitted",
+      "produced_by": "main model",
+      "pr_url": "",
+      "run": "",
+      "updated": "2026-10-26T09:00:00+00:00",
+      "history": []
+    }
+  }
+}

@@ -1,0 +1,46 @@
+name: Pull request closed
+
+# When a pull request closes or merges, stops its running workflows and
+# removes its docs preview from gh-pages.
+# pull_request_target runs even when the pull request has merge
+# conflicts, which pull_request does not. It never checks out the pull
+# request's code.
+on:
+  pull_request_target:
+    types: [closed]
+
+permissions:
+  contents: read
+
+jobs:
+  cancel:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: Cancel the pull request's running workflows
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ github.event.pull_request.head.ref }}
+        run: |
+          gh run list -R "$GITHUB_REPOSITORY" --branch "$BRANCH" \
+            --event pull_request -L 100 --json databaseId,status \
+            -q '.[] | select(.status != "completed") | .databaseId' |
+            xargs -r -n 1 gh run cancel -R "$GITHUB_REPOSITORY" || true
+
+  remove:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    # The preview deploy's group, so a removal waits for a deploy to end.
+    concurrency: preview-refs/pull/${{ github.event.number }}/merge
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: rossjrw/pr-preview-action@873417d2df72380da1f3978378fb58560bcde976 # v1.8.2
+        with:
+          action: remove
+          preview-branch: gh-pages
+          umbrella-dir: pr-preview

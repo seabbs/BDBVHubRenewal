@@ -1,0 +1,10 @@
+# Model choice record.
+# Each entry is the model chosen for submission from its date on, with
+# the reason. Add an entry, never edit an old one, when the choice changes.
+choices:
+  - date: 2026-10-28
+    model: randomwalknowcast
+    summary: >-
+      randomwalknowcast is the submitted baseline (as seabbs-rwnowcast). It
+      is chosen by design, as baselinenowcast with a random walk, not on its
+      backtest scores.

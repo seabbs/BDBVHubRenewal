@@ -1,0 +1,20 @@
+team_name: "Test Team"
+team_abbr: "testteam"
+model_name: "Test model"
+model_abbr: "testmodel"
+model_contributors: [
+  {
+    "name": "A Person",
+    "affiliation": "Somewhere",
+    "email": "a.person@example.com",
+    "orcid": "0000-0001-8057-8037"
+  }
+]
+license: "CC-BY-4.0"
+model_details:
+  data_inputs: "Hub target data."
+  methods: "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  methods_long: "A longer description."
+model_version: "0.1.0"
+repo_url: "https://github.com/example/example"
+ensemble_of_hub_models: false

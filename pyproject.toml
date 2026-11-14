@@ -1,0 +1,188 @@
+[project]
+name = "BDBVHubRenewal"
+version = "0.1.0"
+description = "Renewal-model nowcasts and forecasts for the BDBV Modeling Hub, with data tools and a backtest harness"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Sam Abbott", email = "sam.abbott@lshtm.ac.uk" }]
+requires-python = ">=3.13"
+dependencies = [
+  "numpy>=1.26,<3",
+  "pandas>=2.1,<4",
+  "scipy>=1.11,<2",
+  "matplotlib>=3.8,<4",
+  "pyyaml>=6",
+  "tabulate>=0.9",
+  "tzdata>=2024.1",
+  "jax>=0.12.0",
+]
+keywords = [
+  "epidemiology",
+  "forecasting",
+  "nowcasting",
+  "hubverse",
+  "Ebola",
+  "Bundibugyo virus disease",
+]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Science/Research",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Scientific/Engineering :: Medical Science Apps.",
+  "Typing :: Typed",
+]
+
+[project.optional-dependencies]
+# The PyRenew renewal model (`bdbvhubrenewal.model`), pinned by SHA.
+# PyRenew brings JAX and NumPyro. The package imports without it.
+model = [
+  "pyrenew @ git+https://github.com/CDCgov/PyRenew@2441cb327d6e563eab0495540cb7467a102c234f",
+]
+
+[project.urls]
+Homepage = "https://samabbott.co.uk/BDBVHubRenewal/"
+Documentation = "https://samabbott.co.uk/BDBVHubRenewal/"
+Repository = "https://github.com/seabbs/BDBVHubRenewal"
+Issues = "https://github.com/seabbs/BDBVHubRenewal/issues"
+
+[project.scripts]
+bdbvhubrenewal = "bdbvhubrenewal.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.8,<0.14"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+  "BDBVHubRenewal[model]",
+  "mypy>=1.11",
+  "pandas-stubs>=2.1",
+  "pytest>=8",
+  "pytest-cov>=5",
+  "ruff>=0.6",
+  "scoringrules>=0.7",
+  "types-PyYAML",
+]
+docs = [
+  "jupytext>=1.19.6",
+  "mkdocs-jupyter>=0.27.0",
+  "mkdocs-material>=9.5",
+  "mkdocstrings[python]>=0.26",
+]
+
+[tool.uv]
+default-groups = ["dev"]
+
+[tool.uv.build-backend]
+module-name = "bdbvhubrenewal"
+
+[tool.ruff]
+line-length = 80
+target-version = "py313"
+
+[tool.ruff.lint]
+select = [
+  "E",   # pycodestyle errors
+  "W",   # pycodestyle warnings
+  "F",   # pyflakes
+  "I",   # isort
+  "B",   # flake8-bugbear
+  "UP",  # pyupgrade
+  "N",   # pep8-naming
+  "D",   # pydocstyle
+  "SIM", # flake8-simplify
+  "RUF", # ruff-specific
+  "C4",  # flake8-comprehensions
+  "PT",  # flake8-pytest-style
+  "PTH", # flake8-use-pathlib
+  "NPY", # numpy-specific
+  "PD",  # pandas-vet
+  "RET", # flake8-return
+  "ARG", # unused arguments
+]
+ignore = [
+  "PD010", # `unstack` reads more clearly than `pivot_table` here
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "numpy"
+
+[tool.ruff.lint.per-file-ignores]
+# Test functions are named for what they check; docstrings would repeat it.
+"tests/**" = ["D", "PD101"]
+# Ported from the hub validation bundle, whose checks are named after
+# hubValidations' and are documented in docs/submission/hub-spec.md.
+# The small config classes and helpers carry no docstrings.
+"src/bdbvhubrenewal/submission/validate.py" = ["D101", "D102", "D103"]
+# Method signatures follow PyRenew's, and maths names keep their capitals.
+"src/bdbvhubrenewal/model/**" = ["ARG002", "N803", "N806", "PTH123"]
+# The model's tests, from the prototype.
+"tests/model/**" = ["D", "PT018", "PD008", "N806", "ARG001"]
+# The port's abort tests check R's conditions, not message text.
+"tests/baselinenowcast/**" = ["PT011"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# Model fits are slow; `task test-slow` runs them.
+addopts = ["-ra", "--strict-markers", "--strict-config", "-m", "not slow"]
+xfail_strict = true
+filterwarnings = [
+  # Raised inside pandas by `pd.Timedelta(days=...)` with NumPy 2.4.
+  "ignore:The 'generic' unit for NumPy timedelta:DeprecationWarning",
+]
+markers = [
+  "network: tests that download from GitHub (deselect with '-m \"not network\"')",
+  "slow: model fits (deselect with '-m \"not slow\"')",
+]
+
+[tool.coverage.run]
+source = ["bdbvhubrenewal"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+warn_unreachable = true
+files = ["src"]
+
+[[tool.mypy.overrides]]
+# matplotlib's date locators and formatters are untyped.
+module = [
+  "bdbvhubrenewal.reporting.plots",
+  "bdbvhubrenewal.reporting.nowcast_plots",
+]
+disallow_untyped_calls = false
+
+[[tool.mypy.overrides]]
+module = [
+  "scipy",
+  "scipy.*",
+  "matplotlib",
+  "matplotlib.*",
+  "jax",
+  "jax.*",
+  "numpyro",
+  "numpyro.*",
+  "pyrenew",
+  "pyrenew.*",
+]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# JAX calls are untyped, so results come back as Any.
+module = ["bdbvhubrenewal.baselinenowcast.*"]
+warn_return_any = false
+disallow_untyped_calls = false
+
+[[tool.mypy.overrides]]
+# The model subclasses PyRenew's and NumPyro's classes, which are untyped.
+module = ["bdbvhubrenewal.model.*"]
+disallow_subclassing_any = false

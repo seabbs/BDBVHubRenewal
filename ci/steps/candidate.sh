@@ -1,0 +1,169 @@
+#!/usr/bin/env bash
+# Produce and check one candidate of the fallback chain. One matrix leg.
+#
+#   CAND_ID, CAND_KIND, CAND_CONFIG, CAND_LABEL, CAND_SAMPLER (JSON)
+#   CAND_MODEL          the model to run (default $MODEL, the chosen one)
+#   FIT_SOURCE=store    read the fit from the fit store (`fit-store
+#                       unpack`), never fit, as the workflow does; `fit`
+#                       (the default) fits here, for a local run
+#   STORE               the fit store checkout (default output/fit-store)
+#
+# A bad fit or a failed check does not fail this step: the verdicts are
+# written to the candidate's directory and the select step walks the
+# chain. Only a broken step (missing inputs) exits non-zero.
+# shellcheck source=ci/steps/lib.sh
+source "$(dirname "$0")/lib.sh"
+
+: "${CAND_ID:?}" "${CAND_KIND:?}" "${CAND_CONFIG:?}"
+CAND_SAMPLER=${CAND_SAMPLER:-'{}'}
+CAND_LABEL=${CAND_LABEL:-$CAND_ID}
+# The model this leg runs: its own (a fallback or a shadow) or the chosen
+# one.
+model=${CAND_MODEL:-$MODEL}
+[ "$CAND_KIND" = randomwalk ] && model=${CAND_MODEL:-randomwalk}
+inputs="$WORK/inputs"
+[ -f "$inputs/context.json" ] || { echo "::error::run prepare.sh first"; exit 1; }
+ctx() { python3 -c "import json,sys; print(json.load(open('$inputs/context.json'))['$1'])"; }
+AS_OF=$(ctx as_of)
+REFERENCE_DATE=$(ctx reference_date)
+
+out="$WORK/candidates/$CAND_ID"
+fit="$WORK/fits/$CAND_ID"
+mkdir -p "$out" "$fit"
+export CAND_ID  # read by the fixture CLI to pick a scenario
+# The data check from prepare, carried with each candidate so the PR
+# body can report it.
+cp "$inputs/coherence-summary.json" "$out/" 2> /dev/null || true
+
+note "### Candidate \`$CAND_ID\`: $CAND_LABEL"
+
+fit_ok=true
+if [ "$CAND_KIND" = "randomwalk" ]; then
+  : # no fit
+elif [ "${FIT_SOURCE:-fit}" = "store" ]; then
+  # The stored fit of the same code and data: the fit the docs and the
+  # backtest show. A candidate the store lacks, or whose fit failed, has
+  # no diagnostics, so the gate rules it out and the chain moves on.
+  unpacked=0
+  cli fit-store unpack --store "${STORE:-output/fit-store}" --model "$model" \
+    --origin "$AS_OF" --out "$fit" || unpacked=$?
+  case "$unpacked" in
+    0)
+      where=$(python3 -c 'import json, sys
+r = json.load(open(sys.argv[1]))
+print(r["key"], r["commit"][:7], (r["store_commit"] or "unknown")[:7])' \
+        "$fit/store.json")
+      read -r skey scommit sstore <<< "$where"
+      note "Fit read from the fit store: key \`$skey\`, fitted at \`$scommit\`, store commit \`$sstore\`."
+      cp "$fit/store.json" "$out/"
+      ;;
+    3) fit_ok=false; note "Not in the fit store for this code and data, so ruled out." ;;
+    4) fit_ok=false; note "The stored fit for this code and data failed, so ruled out." ;;
+    *) fit_ok=false; echo "::warning::fit-store unpack for $CAND_ID exited $unpacked" ;;
+  esac
+else
+  start=$SECONDS
+  # Heartbeat, as in BVDOutbreakSize's docs.yml: lift the newest
+  # progress line into the job log once a minute, only when it moved,
+  # so a stalled fit is distinguishable from a slow one.
+  (
+    last=""
+    while sleep "${HEARTBEAT_SECONDS:-60}"; do
+      line=$(tail -n 1 "$fit/progress.log" 2> /dev/null) || true
+      [ -n "$line" ] && [ "$line" != "$last" ] || continue
+      printf '[%3dm] %s\n' "$(( (SECONDS - start) / 60 ))" "$line"
+      last="$line"
+    done
+  ) &
+  heartbeat=$!
+  trap 'kill "$heartbeat" 2> /dev/null || true' EXIT
+  # Read when JAX starts, so set per candidate, in case a candidate asks
+  # for more chains than the runner has vCPUs.
+  XLA_FLAGS=$(xla_flags_for "$CAND_SAMPLER")
+  export XLA_FLAGS
+  note "XLA host devices: ${XLA_FLAGS##*=}, for $(sampler_chains "$CAND_SAMPLER") chains."
+  if ! cli fit --model "$model" --config "$CAND_CONFIG" --vintage "$AS_OF" \
+      --reference-date "$REFERENCE_DATE" \
+      --sampler-json "$CAND_SAMPLER" --out "$fit"; then
+    fit_ok=false
+    echo "::warning::fit for $CAND_ID exited non-zero"
+  fi
+  kill "$heartbeat" 2> /dev/null || true
+  note "Fit took $(( SECONDS - start )) s."
+fi
+
+if [ "$CAND_KIND" = "randomwalk" ]; then
+  cli nowcast --model "$model" --vintage "$AS_OF" \
+    --reference-date "$REFERENCE_DATE" \
+    --out "$out/submission" || echo "::warning::$model nowcast failed"
+elif $fit_ok; then
+  cli nowcast --model "$model" --config "$CAND_CONFIG" --fit "$fit" \
+    --vintage "$AS_OF" --reference-date "$REFERENCE_DATE" \
+    --out "$out/submission" \
+    || echo "::warning::nowcast for $CAND_ID failed"
+fi
+sub=$(find "$out/submission" -name '*.csv' 2> /dev/null | sort | head -n 1)
+
+if [ "$CAND_KIND" != "randomwalk" ]; then
+  cp "$fit/diagnostics.json" "$out/" 2> /dev/null || true
+  sci summarise-fit --id "$CAND_ID" --diagnostics "$out/diagnostics.json" \
+    --out "$out" --policy "$POLICY" --no-fail
+fi
+
+# Posterior predictive checks, from the ppc.json the fit wrote beside its
+# diagnostics. n/a for a model with no posterior; an error for a sampled
+# fit that wrote none.
+ppc_args=(--id "$CAND_ID" --kind "$CAND_KIND" --ppc "$out/ppc.json"
+  --out "$out" --policy "$POLICY" --no-fail)
+if [ "$CAND_KIND" != "randomwalk" ]; then
+  cp "$fit/ppc.json" "$out/" 2> /dev/null || true
+  ppc_args+=(--diagnostics "$out/diagnostics.json")
+fi
+sci check-ppc "${ppc_args[@]}"
+if python3 -c "import json, sys; sys.exit(not json.load(open(sys.argv[1])).get('available'))" \
+    "$out/ppc.json" 2> /dev/null; then
+  if cli plot-ppc --ppc "$out/ppc.json" --out "$out/ppc.png"; then
+    note "Posterior predictive plot: \`ppc.png\` in the \`candidate-$CAND_ID\` artefact."
+  else
+    echo "::warning::posterior predictive plot for $CAND_ID failed"
+  fi
+fi
+
+baseline=$(find "$WORK/candidates/randomwalk/submission" -name '*.csv' \
+  2> /dev/null | sort | head -n 1)
+checks=(--id "$CAND_ID" --kind "$CAND_KIND"
+  --submission "${sub:-$out/submission/missing.csv}"
+  --reference-date "$REFERENCE_DATE"
+  --observed "$inputs/time-series.csv" --as-of "$AS_OF"
+  --tasks "$inputs/tasks.json" --locations "${EXPECTED_LOCATIONS:-}"
+  --policy "$POLICY" --out "$out" --no-fail)
+if [ -n "$baseline" ]; then
+  checks+=(--baseline "$baseline")
+fi
+if [ -f "$inputs/previous.csv" ]; then
+  checks+=(--previous "$inputs/previous.csv")
+fi
+# Written by the nowcast beside the hub file: the unassigned part of the
+# national rows.
+checks+=(--national-sidecar "$out/submission/national.json")
+# baseline must submit health zones (track.sh).
+if [ "${REQUIRE_ZONES:-false}" = "true" ]; then
+  checks+=(--require-zones)
+fi
+sci check-forecast "${checks[@]}"
+
+if [ -n "$sub" ]; then
+  cli plot-submission --submission "$sub" --vintage "$AS_OF" \
+    --out "$out/nowcast.png" || echo "::warning::plot for $CAND_ID failed"
+fi
+
+store="null"
+[ -f "$out/store.json" ] && store=$(cat "$out/store.json")
+cat > "$out/run.json" << EOF
+{"candidate": "$CAND_ID", "kind": "$CAND_KIND", "label": "$CAND_LABEL",
+ "store": $store,
+ "model": "$model",
+ "config": "$CAND_CONFIG", "sampler": $CAND_SAMPLER,
+ "package_version": "$(cli --version 2> /dev/null || echo unknown)",
+ "as_of": "$AS_OF", "reference_date": "$REFERENCE_DATE"}
+EOF
