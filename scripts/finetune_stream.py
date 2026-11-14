@@ -244,6 +244,14 @@ def finite_step(params: list, optimiser, value: float) -> bool:
     return finite
 
 
+def skipped_lines(skipped: list[dict]) -> list[str]:
+    """Return the lines listing skipped blocks in a release's outbreaks."""
+    return [
+        f"# skipped {b['outbreak']} at step {b['step']}, {b['series']} series"
+        for b in skipped
+    ]
+
+
 def save_state(where: Path, model, optimiser, state: dict) -> None:
     """Save the trainer's state: adapter, optimiser and position."""
     import torch
@@ -297,6 +305,7 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--note", default="")
     parser.add_argument("--publish", action="store_true")
+    parser.add_argument("--memory-gb", type=float, default=ft.MEMORY_GB)
     args = parser.parse_args()
     out, sim_dir = args.out, args.sim_dir
     out.mkdir(parents=True, exist_ok=True)
@@ -334,7 +343,9 @@ def main() -> None:
     val = [b for _, b in cut(sim_dir, held, args.seed)]
     log(f"{len(held)} held-out outbreaks, {len(val)} blocks")
 
-    ft.checkpoint_large_batches()
+    # Checkpointing and the largest block follow from the memory budget.
+    ft.checkpoint_large_batches(ft.checkpoint_above(args.memory_gb))
+    ft.MAX_SERIES = min(ft.MAX_SERIES, ft.max_series(args.memory_gb))
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)  # noqa: NPY002
     device = (
@@ -391,6 +402,7 @@ def main() -> None:
     state_dir = out / "state"
     state = load_state(state_dir, model, optimiser)
     step, done, position = 0, 0, 0
+    skipped: list[dict] = []
     if state is None:
         consumed.write_text("")
         start_loss = ft.held_out_loss(model, val, args.batch_size)
@@ -399,6 +411,7 @@ def main() -> None:
     else:
         step, done, position = state["step"], state["done"], state["position"]
         start_loss, history = state["start_loss"], state["history"]
+        skipped = state.get("skipped", [])
         lines = consumed.read_text().splitlines()[:step]
         consumed.write_text("".join(f"{line}\n" for line in lines))
         log(f"resumed at step {step}, outbreaks {done + 1}-, batch {position}")
@@ -414,6 +427,7 @@ def main() -> None:
                 "position": position,
                 "start_loss": start_loss,
                 "history": history,
+                "skipped": skipped,
             },
         )
 
@@ -436,9 +450,14 @@ def main() -> None:
             free_memory()
             if len(batch_blocks) == 1:
                 i = batch_blocks[0]
+                series = int(data.inputs[i]["context"].shape[0])
+                outbreak = pairs[i][0]
+                skipped.append(
+                    {"outbreak": outbreak, "step": step + 1, "series": series}
+                )
                 log(
                     f"skipped block {i} of {pairs[i][0]}, "
-                    f"{int(data.inputs[i]['context'].shape[0])} series, "
+                    f"{series} series, "
                     f"too large for memory: {memory()}"
                 )
                 return float("nan")
@@ -516,7 +535,9 @@ def main() -> None:
             where = out / f"n{done}"
             where.mkdir(parents=True, exist_ok=True)
             order = ready[:done]
-            (where / "outbreaks.txt").write_text("\n".join(order) + "\n")
+            # The release lists its outbreaks and any block skipped.
+            lines = [*order, *skipped_lines(skipped)]
+            (where / "outbreaks.txt").write_text("\n".join(lines) + "\n")
             (where / "consumed.txt").write_text(consumed.read_text())
             model.save_pretrained(where / "finetuned-ckpt")
             settings = {
@@ -525,6 +546,8 @@ def main() -> None:
                 "outbreaks_sha256": ft._sha256(where / "outbreaks.txt"),
                 "consumed_sha256": ft._sha256(where / "consumed.txt"),
                 "steps": step,
+                "skipped_blocks": skipped,
+                "memory_gb": args.memory_gb,
             }
             key = ft._settings_hash(settings)
             settings["hash"] = key

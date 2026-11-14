@@ -36,6 +36,8 @@
 #   NOTE          text recorded in each checkpoint's settings
 #   MPS_HIGH_WATERMARK   the trainer's cap on MPS memory, as a share of
 #                 the GPU's recommended working set
+#   MEMORY_GB     the memory budget of a training step, from which
+#                 checkpointing and the largest block follow
 #
 # If the training seeds' yield projects fewer than OUTBREAKS outbreaks,
 # the driver adds seeds after TRAIN_LAST (`extend_seeds`).
@@ -335,7 +337,7 @@ check_batches() {
 log "starting round from $1: training seeds $TRAIN_FIRST-$TRAIN_LAST, held-out $HELD_FIRST-$HELD_LAST, laptop $LOCAL_FIRST-$LOCAL_LAST"
 trainer_args=("$SIM_DIR" "$OUT" --train-seeds "$TRAIN_FIRST" "$TRAIN_LAST"
   --held-out-seeds "$HELD_FIRST" "$HELD_LAST" --outbreaks "$OUTBREAKS"
-  --note "${NOTE:-}")
+  --note "${NOTE:-}" --memory-gb "${MEMORY_GB:-36}")
 [ "${PUBLISH:-0}" = 1 ] && trainer_args+=(--publish)
 start_trainer() {
   # MPS memory is capped so the caching allocator cannot fill the laptop.
