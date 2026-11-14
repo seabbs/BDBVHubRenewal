@@ -287,8 +287,13 @@ def design_tables(grid: Path, main_dir: Path, si_dir: Path) -> list[Path]:
     list of pathlib.Path
         The tables written.
     """
-    table = read_grid(grid).rename(
-        columns={"factor": "Factor", "levels": "Levels", "reason": "Reason"}
+    raw = read_grid(grid)
+    table = pd.DataFrame(
+        {
+            "Factor": raw["factor"].map(factor_label),
+            "Levels": raw["levels"].str.replace("_", " "),
+            "Reason": raw["reason"],
+        }
     )
     paths = {
         main_dir / "synthetic-design.md": table[["Factor", "Levels"]],

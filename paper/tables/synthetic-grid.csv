@@ -1,8 +1,11 @@
 factor,levels,reason
-Epidemic process,growth rate; renewal with a short generation time; renewal with a medium generation time; renewal with a long generation time,Generation times span fast respiratory to slow haemorrhagic-fever transmission.
-Trajectory,turning over; flat; rising then falling; second wave,"Forecast origins fall in rising, peak, falling and resurging phases."
-Delay family and form,lognormal; gamma; exponential; non-parametric hazard,Common parametric and free forms.
-Delay over time,stable; drift; step changes; weekly walk,Reporting systems change.
-Reporting,every day; weekdays only; day-of-week effects; holidays,Common reporting patterns.
-Observation model,NB2; NB1; Poisson,From Poisson to heavily overdispersed counts.
-Strata,one; places; age groups; places by age groups,"Single series, regional, age-structured and nested surveillance all occur."
+process,growth; renewal_3; renewal_7; renewal_15,"Growth-rate (r(t)) or renewal (Rt(t) giving the same r(t)) epidemics; renewal generation-time means of about 3, 7 and 15 days (each jittered by up to 20%) span fast respiratory infections to Ebola-like."
+gt_shape,gamma_0.3; gamma_0.6; gamma_1; lognormal_0.6,"Generation-time shape for renewal levels: narrow, medium and wide gamma, and a lognormal; discretised on 1 to n days and truncated at about mean x (1 + 4 CV), at most 60 days."
+trajectory,growth; decline; flat; rise_fall_sharp; rise_fall_gradual; fall_rise; oscillating; multi_wave,"A bounded library of epidemic courses: doubling or halving in 1 to 4 weeks, flat, sharp or gradual turnover, resurgence, oscillation (period 4 to 17 weeks) and two to three waves, with small weekly noise; daily growth kept within -0.1 to 0.1."
+delay_family,lognormal; gamma; exponential,"Common parametric reporting-delay families; lognormal median 1 to 10 days with sdlog 0.5 to 2.5, gamma mean 2 to 21 days with CV 0.8 to 1.6, exponential mean 2 to 21 days (epinowcast vignettes and German fits)."
+delay_form,parametric; non_parametric; both,"Delay as the parametric family alone, a non-parametric hazard alone (a smooth walk over delays plus iid effects; family not used), or the hazard as a deviation from the family."
+delay_change,static; drift; step; periodic; walk,"How the delay changes over the outbreak: not at all, a linear drift, a step, a periodic change (4 to 12 weeks), or a weekly random walk (iid weekly hazard effects for the non-parametric form)."
+reporting,daily; weekdays,"Reports every day with day-of-week effects, or only on one to three fixed weekdays."
+reference_dow,no; yes,"Whether expected counts have a day-of-week effect by reference date, as in most German nowcasting setups."
+observation,negbin; negbin1d; poisson,"Observation model: negative binomial with quadratic (NB2) or linear (NB1, dispersion matched to NB2 as in epinowcast #937) variance, or Poisson; sqrt(phi) log-uniform 0.1 to 1."
+strata,single; places; ages; places_ages,"One series, 2 to 26 places, 2 to 8 age groups, or places by ages (at most 60 strata), with totals as their own series in training blocks."
