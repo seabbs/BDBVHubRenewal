@@ -9,7 +9,7 @@ The protocol is in `paper/synthetic.py`, and `paper/run_synthetic.py` runs the m
 
 The held-out set was reserved for the final evaluation.
 No model was scored on it during development.
-We checked the pipeline on the development seed 7001 and the pilot simulations, whose forecasts are not results.
+We checked the pipeline on the r3 pilot seeds 9501 to 9504, whose forecasts are not results.
 
 ## Protocol
 

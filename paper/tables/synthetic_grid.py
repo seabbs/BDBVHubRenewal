@@ -435,8 +435,8 @@ def heldout_note(config: dict) -> str:
         "",
         "The held-out set was reserved for the final evaluation.",
         "No model was scored on it during development.",
-        f"We checked the pipeline on the development {_seeds(dev)} and the"
-        " pilot simulations, whose forecasts are not results.",
+        f"We checked the pipeline on the r3 pilot {_seeds(dev)}, whose"
+        " forecasts are not results.",
         "",
         "## Protocol",
         "",

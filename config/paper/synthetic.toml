@@ -15,6 +15,12 @@ blocks = [1670, 1671]
 # The draw of each simulation evaluated, so outbreaks are independent.
 draw = 1
 
-# A small set for checking the pipeline during development, never results.
-development_seeds = [7001]
-development_dir = "output/finetune/validation"
+# The r3 pilot simulations, for checking the pipeline during development,
+# never results.
+development_seeds = [9501, 9502, 9503, 9504]
+development_dir = "output/finetune/pilot-r3"
+
+# Runner outputs (`python -m paper.run_synthetic <dir> <out>`); each also
+# writes <stem>-observations.csv, <stem>-factors.csv and <stem>-timings.csv.
+heldout_out = "output/paper/synthetic.csv.gz"
+development_out = "output/paper/synthetic-dev.csv.gz"
