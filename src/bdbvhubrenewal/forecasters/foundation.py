@@ -24,6 +24,7 @@ import json
 import os
 import shutil
 import tempfile
+import time
 import tomllib
 import urllib.request
 from collections.abc import Callable, Mapping, Sequence
@@ -111,6 +112,9 @@ then overrides `FINETUNED_CONFIG`, so its jobs never list the releases."""
 SUMS_FILE: Final = "sha256sums.txt"
 """A checkpoint release's asset with the SHA-256 of its other assets."""
 
+RETRY_SECONDS: Final = (2, 10, 30)
+"""Waits before each retry of a GitHub request that failed in passing."""
+
 ADAPTER_FILES: Final = ("adapter_config.json", "adapter_model.safetensors")
 """The LoRA adapter's files. A checkpoint's release holds them and its
 `settings.json`."""
@@ -161,14 +165,34 @@ def finetuned_spec(path: Path | str = FINETUNED_CONFIG) -> str:
     return str(tomllib.loads(Path(path).read_text())["hash"])
 
 
+def _passing(err: BaseException) -> bool:
+    """Whether a failed request may succeed if tried again."""
+    if isinstance(err, urllib.error.HTTPError):
+        return err.code >= 500 or err.code == 429
+    if isinstance(err, urllib.error.URLError):
+        return not isinstance(err.reason, FileNotFoundError)
+    return isinstance(err, (OSError, http.client.HTTPException))
+
+
 def _get(url: str) -> bytes:
-    """Read a URL, with a GitHub token from the environment if there is one."""
+    """Read a URL, with a GitHub token from the environment if there is one.
+
+    A server error or a dropped connection is tried again after each of
+    `RETRY_SECONDS`.
+    """
     request = urllib.request.Request(url)
     token = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")
     if token and url.startswith("https://api.github.com/"):
         request.add_header("Authorization", f"Bearer {token}")
-    with urllib.request.urlopen(request, timeout=60) as response:
-        return bytes(response.read())
+    for wait in (*RETRY_SECONDS, None):
+        try:
+            with urllib.request.urlopen(request, timeout=60) as response:
+                return bytes(response.read())
+        except (OSError, http.client.HTTPException) as err:
+            if wait is None or not _passing(err):
+                raise
+            time.sleep(wait)
+    raise AssertionError("unreachable")
 
 
 def finetuned_releases() -> list[dict[str, Any]]:
@@ -464,8 +488,7 @@ def finetuned_adapter(checkpoint: Checkpoint) -> Path:
         for name in (*ADAPTER_FILES, "settings.json"):
             url = f"{FINETUNED_URL}/{tag}/{name}"
             try:
-                with urllib.request.urlopen(url, timeout=60) as response:
-                    (tmp / name).write_bytes(response.read())
+                (tmp / name).write_bytes(_get(url))
             except (OSError, http.client.HTTPException) as err:
                 raise FileNotFoundError(
                     f"The release {tag} has no {name} ({url}): {err!r}"
