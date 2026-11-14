@@ -163,3 +163,40 @@ def test_status_reports_the_remote_as_last_seen(tmp_path):
         "echo $remote_state",
     )
     assert out.split()[-1] == "down"
+
+
+def test_down_remote_hands_over_held_out_seeds_after_other_claims(tmp_path):
+    out = run(
+        tmp_path,
+        "echo 5005 > sims/local-seeds.txt; remote() { return 1; }; "
+        "remote_ok=$(( $(date +%s) - 1801 )); remote_tried=0; "
+        "check_remote; local_seeds | tr '\\n' ' '",
+    )
+    # Unfinished held-out seeds first, whatever was claimed before.
+    assert out.split()[:2] == ["5901", "5903"]
+
+
+def test_seed_extension_reopens_a_finished_remote_scheduler(tmp_path):
+    rows = "outbreak\n" + "".join(f"x-{i}\n" for i in range(10))
+    (tmp_path / "sims").mkdir()
+    for s in range(5001, 5011):
+        (tmp_path / "sims" / f"settings-{s}.csv").write_text(rows)
+    env = ENV.replace("TRAIN_LAST=5010", "TRAIN_LAST=5020").replace(
+        "OUTBREAKS=10", "OUTBREAKS=300"
+    )
+    (tmp_path / "round.env").write_text(env)
+    (tmp_path / "output" / "finetune").mkdir(parents=True)
+    (tmp_path / "ckpt").mkdir()
+    out = subprocess.run(
+        [
+            "bash",
+            "-c",
+            f'set -- round.env; source "{DRIVER}"; '
+            'remote() { echo "$@" >> calls.txt; }; extend_seeds; cat calls.txt',
+        ],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert "remote-done" in out.stdout
