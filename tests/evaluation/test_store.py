@@ -108,23 +108,45 @@ def test_the_zone_split_does_not_key_a_fit(tmp_path: Path) -> None:
     # split from them at load (`zones_for_model`), so the zone code is not
     # fit code.
     root = _copy_repo(tmp_path)
-    models = ("renewal",)
-
-    def digests() -> dict[str, str]:
-        return {m: store.code_digest(m, root) for m in models}
 
     def edit(rel: str) -> None:
         path = root / "src/bdbvhubrenewal" / rel
         path.write_text(path.read_text() + "\n_EDITED = 1\n")
 
-    before = digests()
+    before = store.code_digest("renewal", root)
     for rel in ("forecasters/zones.py", "evaluation/zones.py"):
         edit(rel)
-        assert digests() == before, rel
+        assert store.code_digest("renewal", root) == before, rel
     # Introductions are drawn in the fit, for provinces with no recent case.
     edit("forecasters/introductions.py")
-    after = digests()
-    assert all(after[m] != before[m] for m in models)
+    assert store.code_digest("renewal", root) != before
+
+
+def test_adding_or_removing_a_model_does_not_key_a_fit(
+    tmp_path: Path,
+) -> None:
+    root = _copy_repo(tmp_path)
+    pkg = root / "src/bdbvhubrenewal/forecasters"
+    before = {m: store.code_digest(m, root) for m in store.stored_models()}
+    init = pkg / "__init__.py"
+    (pkg / "extra.py").write_text(
+        "from bdbvhubrenewal.forecasters.base import register_model\n"
+    )
+    init.write_text(
+        init.read_text()
+        + "from bdbvhubrenewal.forecasters.extra import register_model\n"
+    )
+    assert {m: store.code_digest(m, root) for m in before} == before
+    text = init.read_text()
+    init.write_text(text.replace("    RandomWalkNowcast,\n", "", 1))
+    assert init.read_text() != text
+    assert {m: store.code_digest(m, root) for m in before} == before
+
+
+def test_every_stored_model_has_a_sampler() -> None:
+    assert set(store.stored_models()) <= set(
+        store.samplers(ROOT / "ci/policy.toml")
+    )
 
 
 def test_fit_code_has_the_store_and_no_other_model() -> None:
@@ -147,16 +169,11 @@ def test_fit_time_data_files_key_a_fit(tmp_path: Path) -> None:
 
 def test_report_code_does_not_key_a_fit(tmp_path: Path) -> None:
     root = _copy_repo(tmp_path)
-    models = ("renewal",)
-
-    def digests() -> dict[str, str]:
-        return {m: store.code_digest(m, root) for m in models}
-
-    before = digests()
+    before = store.code_digest("renewal", root)
     for rel in ("evaluation/digest.py", "reporting/plots.py"):
         path = root / "src/bdbvhubrenewal" / rel
         path.write_text(path.read_text() + "\n_EDITED = 1\n")
-        assert digests() == before, rel
+        assert store.code_digest("renewal", root) == before, rel
 
 
 def _workflow_paths(event: str) -> list[str]:

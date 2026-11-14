@@ -1618,8 +1618,7 @@ def _sampler_section(
     ).reset_index()
     return (
         "## Sampler\n\n"
-        "Stored fits use these settings. "
-        "The renewal variants use the submission's.\n\n"
+        "Stored fits use the submission's settings.\n\n"
         + sub
         + "\n"
         + _dropdown(

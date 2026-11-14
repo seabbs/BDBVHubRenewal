@@ -112,6 +112,7 @@ STORE_ENTRIES: Final = (
 STORE_SKIP: Final = (
     "src/bdbvhubrenewal/evaluation/digest.py",
     "src/bdbvhubrenewal/evaluation/zones.py",
+    "src/bdbvhubrenewal/forecasters/__init__.py",
     "src/bdbvhubrenewal/forecasters/zones.py",
     "src/bdbvhubrenewal/reporting/plots.py",
 )
@@ -121,7 +122,9 @@ The zone split: a stored fit holds national and province samples only,
 and its zones are split from them at load
 (`forecasters.zones.zones_for_model`). `fit_code`'s own helper
 (`evaluation.digest`), and the plots `evaluation.ppc` imports for
-`plot_ppc`, which a fit does not draw.
+`plot_ppc`, which a fit does not draw. The model registry
+(`forecasters/__init__.py`): what a fit takes from it is keyed by the
+module that defines it, so adding or removing a model refits no other.
 """
 
 STORE_DATA: Final = "src/bdbvhubrenewal/data/*.csv"
@@ -196,7 +199,7 @@ def build_model(name: str, sampler: Mapping[str, Any]) -> ForecastModel:
     name : str
         The model name.
     sampler : mapping
-        `samplers`. A model absent from it keeps its own settings.
+        `samplers`.
 
     Returns
     -------
