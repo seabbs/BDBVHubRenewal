@@ -174,6 +174,24 @@ def _passing(err: BaseException) -> bool:
     return isinstance(err, (OSError, http.client.HTTPException))
 
 
+def _missing(err: BaseException) -> bool:
+    """Whether a failed request means the file is not there (a 404)."""
+    if isinstance(err, urllib.error.HTTPError):
+        return err.code == 404
+    reason = getattr(err, "reason", None)
+    return isinstance(err, FileNotFoundError) or isinstance(
+        reason, FileNotFoundError
+    )
+
+
+def _unreachable(url: str, err: BaseException) -> ConnectionError:
+    """Return the error for a request refused or dropped, not missing."""
+    return ConnectionError(
+        f"Cannot read {url}: {err!r}. If GitHub is rate limiting, set "
+        "GH_TOKEN or GITHUB_TOKEN to a GitHub token."
+    )
+
+
 def _get(url: str) -> bytes:
     """Read a URL, with a GitHub token from the environment if there is one.
 
@@ -272,15 +290,11 @@ def resolve_checkpoint(spec: str) -> Checkpoint:
     try:
         text = _get(url).decode()
     except (OSError, http.client.HTTPException) as err:
-        # A release with no such asset: 404 from GitHub, or no file.
-        reason = getattr(err, "reason", None)
-        if getattr(err, "code", None) == 404 or isinstance(
-            reason, FileNotFoundError
-        ):
+        if _missing(err):
             raise FileNotFoundError(
                 f"The release {tag} has no {SUMS_FILE} ({url})."
             ) from err
-        raise ConnectionError(f"Cannot read {url}: {err!r}") from err
+        raise _unreachable(url, err) from err
     sums = {}
     for line in text.splitlines():
         if line.strip():
@@ -464,8 +478,9 @@ def finetuned_adapter(checkpoint: Checkpoint) -> Path:
     Raises
     ------
     FileNotFoundError
-        If an asset cannot be downloaded, whether it is missing or the
-        connection fails.
+        If the release has no such asset.
+    ConnectionError
+        If GitHub refuses the request or the connection fails.
     ValueError
         If the release's settings hash or an adapter file's SHA-256 is not
         the checkpoint's.
@@ -490,9 +505,11 @@ def finetuned_adapter(checkpoint: Checkpoint) -> Path:
             try:
                 (tmp / name).write_bytes(_get(url))
             except (OSError, http.client.HTTPException) as err:
-                raise FileNotFoundError(
-                    f"The release {tag} has no {name} ({url}): {err!r}"
-                ) from err
+                if _missing(err):
+                    raise FileNotFoundError(
+                        f"The release {tag} has no {name} ({url})."
+                    ) from err
+                raise _unreachable(url, err) from err
         found = json.loads((tmp / "settings.json").read_text()).get("hash")
         if found != checkpoint.hash:
             raise ValueError(
@@ -578,7 +595,9 @@ def chronos_sampler(
     ImportError
         If Chronos-2 is not installed (`uv sync --group chronos`).
     FileNotFoundError
-        If the checkpoint's release cannot be downloaded.
+        If the checkpoint's release has no such asset.
+    ConnectionError
+        If GitHub cannot be reached.
     ValueError
         If the release holds another checkpoint or adapter.
     """
@@ -700,7 +719,9 @@ class FoundationModel:
         ImportError
             If Chronos-2 is not installed.
         FileNotFoundError
-            If the fine-tuned checkpoint's release cannot be downloaded.
+            If the fine-tuned checkpoint's release has no such asset.
+        ConnectionError
+            If GitHub cannot be reached.
         ValueError
             If the release holds another checkpoint or adapter.
         """
