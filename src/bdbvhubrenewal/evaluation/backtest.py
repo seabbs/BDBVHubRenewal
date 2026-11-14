@@ -147,10 +147,6 @@ class BacktestConfig:
         (`bdbvhubrenewal.evaluation.nowcast.resolve_truth_delay`).
     truth_level : float
         The share of the national count reported by an estimated $D$.
-    pair_trajectories : bool
-        Whether the release backtest pairs the draws of models registered
-        as `paired` by the rolling copula before scoring
-        (`bdbvhubrenewal.evaluation.nowcast.score_releases`).
     """
 
     min_horizon: int = -4
@@ -164,7 +160,6 @@ class BacktestConfig:
     skip_origins: tuple[str, ...] = ()
     truth_delay: int | None = None
     truth_level: float = TRUTH_LEVEL
-    pair_trajectories: bool = False
 
 
 def apply_sampler(config: BacktestConfig) -> None:
@@ -229,7 +224,6 @@ def load_config(path: Path | str = "config/backtest.toml") -> BacktestConfig:
         skip_origins=tuple(str(d) for d in sp.get("skip_origins", ())),
         truth_delay=_truth_delay(sp.get("truth_delay", "auto")),
         truth_level=_truth_level(sp.get("truth_level", TRUTH_LEVEL)),
-        pair_trajectories=bool(sp.get("pair_trajectories", False)),
     )
 
 

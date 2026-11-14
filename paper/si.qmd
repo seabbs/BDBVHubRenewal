@@ -51,7 +51,6 @@ One SI section per paper section.
 - Each correlation is the Pearson correlation of score pairs within a forecast, shrunk as $(n r + w \rho_0)/(n + w)$ with $n$ pairs, $w = 100$ and prior $(\rho_t, \rho_p, \rho_n) = (0.9, 0.7, 0.7)$, then kept in $[0, 0.95]$.
 - The prior was chosen on the same BDBV release backtest, so it is tuned in sample.
 - Sensitivity: $w = 25$.
-- Only this evidence pairs the scored forecasts. The submitted forecasts are paired once the submission pipeline uses the same layer.
 :::
 
 ### Scoring

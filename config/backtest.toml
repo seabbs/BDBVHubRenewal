@@ -29,10 +29,6 @@ skip_origins = ["2026-08-18"]
 # fixes it.
 truth_delay = "auto"
 truth_level = 0.98
-# Pair the draws of models that draw each place and week on their own
-# (randomwalknowcast and the Chronos-2 models) by the rolling copula
-# before scoring. Off, so the scores are of the forecasts as submitted.
-pair_trajectories = false
 
 [sampler]
 # NUTS settings of leave-one-province-out fits only. Stored backtest

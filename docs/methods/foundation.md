@@ -63,7 +63,7 @@ Where these give no correlation matrix, a nearby one is used, by setting negativ
 
 All six models pair their draws with the same fixed values, $\rho_t = 0.9$, $\rho_p = 0.7$ and $\rho_n = 0.7$ (`CHRONOS_COPULA`).
 They were chosen on the release backtest from a grid of 0.3 to 0.95, where the energy score improved as each correlation grew and levelled off near these values.
-The release backtest can pair their weekly draws again by a copula fitted to each model's recent errors and shrunk towards these values ([Correlated trajectories](evaluation.md#correlated-trajectories)).
+Their weekly draws are then paired again by a copula fitted to each model's recent errors and shrunk towards these values ([Correlated trajectories](evaluation.md#correlated-trajectories)).
 The daily models' days stay paired by the fixed values, as their weekly errors do not show how days within a week are correlated.
 
 ## Counts
