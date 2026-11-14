@@ -91,6 +91,12 @@ Slots for the copula's window length (#221) and for the joint block against leve
 
 ### Held-out synthetic data
 
+::: {#tbl-synthetic-evaluated}
+{{< include build/tables/main/synthetic-grid.md >}}
+
+Scenario settings realised over the evaluated outbreaks: the smallest, median and largest value of each. {{< meta results.synthetic.label >}}
+:::
+
 ::: {#fig-synthetic-si-factors}
 ![](build/figures/si/synthetic-si-factors.png)
 
