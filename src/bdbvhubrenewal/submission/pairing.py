@@ -12,7 +12,8 @@ Those forecasts come from the ledger's archive of each round's
 candidates (`archived_forecasts`), then from the fit store
 (`stored_forecasts`), and, for a model that is not fitted, from
 forecasting again at the earlier releases.
-A model with none takes the copula's prior.
+A paired model with no past forecasts from any of these fails, rather
+than be paired by the prior alone.
 """
 
 from __future__ import annotations
@@ -244,8 +245,14 @@ def pair_submission(
     -------
     tuple
         The paired samples, and a record of the copula: `model`,
-        `origin`, `n_scores`, the three correlations and `source`, the
-        past forecasts' sources joined by `+`, or `none`.
+        `origin`, `n_scores`, the three correlations, `sources`, each past
+        origin's source (`archive`, `store` or `recomputed`), and
+        `source`, the sources used joined by `+`.
+
+    Raises
+    ------
+    LookupError
+        If no source gives a past forecast.
     """
     origin = task.vintage
     oldest = as_date(origin) - pd.Timedelta(
@@ -253,6 +260,12 @@ def pair_submission(
     )
     recent = [t for t in past_tasks if as_date(t.vintage) >= oldest]
     past = past_forecasts(model, origin, archive, store, recent)
+    if past.empty:
+        raise LookupError(
+            f"{model} has no past forecasts before {origin} in the archive "
+            f"({archive}), the fit store ({store}) or forecast again, so its "
+            "draws cannot be paired."
+        )
     history = task.target_history
     truth = (
         rolling_truth(history, truth_delay)
@@ -268,6 +281,9 @@ def pair_submission(
     out = out.astype(samples.dtypes.to_dict()).reset_index(drop=True)
     row = fits.loc[fits["origin"] == origin].iloc[0]
     record: dict[str, Any] = {str(k): v for k, v in row.items()}
-    sources = sorted(set(past["source"]))
-    record["source"] = "+".join(sources) if sources else "none"
+    by_origin = past.drop_duplicates("origin").sort_values("origin")
+    record["sources"] = dict(
+        zip(by_origin["origin"], by_origin["source"], strict=True)
+    )
+    record["source"] = "+".join(sorted(set(past["source"])))
     return out, record
