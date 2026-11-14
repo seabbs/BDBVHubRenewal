@@ -488,3 +488,29 @@ def test_a_cells_normal_score_does_not_depend_on_other_cells() -> None:
     b = normal_scores(many, truth, seed=4).set_index("location")["z"]
     assert a["CD"] == b["CD"]
     assert normal_scores(one, truth, seed=5)["z"].iloc[0] != a["CD"]
+
+
+def test_zones_move_with_their_province() -> None:
+    samples = _samples(n=300)
+    prov = samples.loc[samples["location"] == "CD-A"]
+    half = (prov["value"] // 2).to_numpy()
+    zones = pd.concat(
+        [
+            prov.assign(location="CD-A-01", value=half),
+            prov.assign(location="CD-A-02", value=prov["value"] - half),
+        ],
+        ignore_index=True,
+    )
+    both = pd.concat([samples, zones], ignore_index=True)
+    out = pair_samples(
+        both, GaussianCopula(0.8, 0.5, 0.6), np.random.default_rng(15)
+    )
+    keys = ["target_end_date", "sample"]
+    is_zone = out["location"].str.count("-") == 2
+    summed = out.loc[is_zone].groupby(keys)["value"].sum()
+    province = out.loc[out["location"] == "CD-A"].set_index(keys)["value"]
+    # Each draw's zones still sum to its province.
+    pd.testing.assert_series_equal(
+        summed.sort_index(), province.sort_index(), check_names=False
+    )
+    pd.testing.assert_series_equal(_cells(out.loc[~is_zone]), _cells(samples))

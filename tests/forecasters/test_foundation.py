@@ -226,9 +226,13 @@ def test_draws_are_paired_by_the_copula(name: str, task: ForecastTask) -> None:
     corr = wide[nat].corr(method="spearman").iloc[0, 1]
     assert corr > flat[nat].corr(method="spearman").iloc[0, 1] + 0.1
     if name.startswith("fm_chronos_weekly"):
-        # Each weekly draw is kept, only paired anew.
+        # Each weekly draw of the country and provinces is kept, only
+        # paired anew. Zones, if any, are then reconciled to their
+        # province draw by draw.
+        places = [c for c in wide.columns if c[0].count("-") < 2]
         assert np.array_equal(
-            np.sort(wide.to_numpy(), axis=0), np.sort(flat.to_numpy(), axis=0)
+            np.sort(wide[places].to_numpy(), axis=0),
+            np.sort(flat[places].to_numpy(), axis=0),
         )
     else:
         # Days of a week are paired, so the week's sum is wider.
