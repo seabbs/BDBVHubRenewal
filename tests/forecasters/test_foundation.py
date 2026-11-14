@@ -770,9 +770,11 @@ def test_zones_only_fits_the_zones_and_sums_them_up(task: ForecastTask) -> None:
     check_samples(out, task)
     keys = ["target_end_date", "sample"]
     zones = out.loc[out["location"].map(is_zone)]
-    by_province = zones.assign(
-        location=zones["location"].map(province_of)
-    ).groupby(["location", *keys])["value"].sum()
+    by_province = (
+        zones.assign(location=zones["location"].map(province_of))
+        .groupby(["location", *keys])["value"]
+        .sum()
+    )
     provinces = _provinces(out).set_index(["location", *keys])["value"]
     pd.testing.assert_series_equal(
         provinces.sort_index(), by_province.sort_index(), check_names=False
@@ -798,7 +800,7 @@ def test_zones_only_with_no_zones_sums_the_provinces(
         grouping="bottom",
     )
     out = model.forecast(plain)
-    (groups, _), = store
+    ((groups, _),) = store
     assert np.atleast_2d(groups[0]["target"]).shape[0] == len(task.locations)
     keys = ["target_end_date", "sample"]
     national = out.loc[out["location"] == NATIONAL].set_index(keys)["value"]

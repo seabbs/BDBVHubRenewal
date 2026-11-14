@@ -56,6 +56,7 @@ __all__ = [
     "FINETUNED_CONFIG",
     "FINETUNED_RELEASES",
     "FINETUNED_URL",
+    "GROUPINGS",
     "LAYOUTS",
     "MAX_LAG",
     "SOURCES",
@@ -80,6 +81,12 @@ SOURCES: Final = ("weekly", "daily")
 
 LAYOUTS: Final = ("complete", "ragged")
 """The ways the releases are given to Chronos-2."""
+
+GROUPINGS: Final = ("joint", "level", "bottom")
+"""How the places are split into blocks: every place in one block
+(`joint`), one block per level (`level`: the country, the provinces,
+the zones), or the lowest level alone (`bottom`: the zones, or the
+provinces if there are none), summed draw by draw to the levels above."""
 
 MAX_LAG: Final = {"weekly": 4, "daily": 28}
 """Release lag $D$, in the source's steps, from which a count is taken as
@@ -603,6 +610,33 @@ def layout_block(
     }
 
 
+def _sub_triangle(tri: HubTriangle, rows: Sequence[int]) -> HubTriangle:
+    """Return the triangle of some places only."""
+    idx = list(rows)
+    return HubTriangle(tri.times, tri.final[idx], tri.partial[idx], tri.last)
+
+
+def _blocks(
+    grouping: str, places: Sequence[str], n_provinces: int
+) -> list[list[int]]:
+    """Return the places of each block, as indices into `places`.
+
+    `places` is the country, then `n_provinces` provinces, then zones.
+    """
+    country = [0]
+    provinces = list(range(1, 1 + n_provinces))
+    zones = list(range(1 + n_provinces, len(places)))
+    if grouping == "joint":
+        return [list(range(len(places)))]
+    if grouping == "level":
+        return [b for b in (country, provinces, zones) if b]
+    if grouping == "bottom":
+        return [zones or provinces]
+    raise ValueError(
+        f"Unknown grouping {grouping!r}: use one of {', '.join(GROUPINGS)}."
+    )
+
+
 def _walk_start(task: ForecastTask) -> str:
     """Return the earliest week `randomwalk` starts its walk from.
 
@@ -654,6 +688,8 @@ class FoundationModel:
         pretrained model.
     sample : Sampler or None
         Draws the trajectories, Chronos-2 with `checkpoint` by default.
+    grouping : str
+        One of `GROUPINGS`.
     """
 
     name: str
@@ -661,6 +697,7 @@ class FoundationModel:
     layout: str
     checkpoint: Checkpoint | None = None
     sample: Sampler | None = field(default=None, repr=False)
+    grouping: str = "joint"
     reads_zones: ClassVar[bool] = True
 
     @property
@@ -730,15 +767,37 @@ class FoundationModel:
         horizon = len(tri.times) - start
         seed = int(task.rng(self.name).integers(0, 2**31 - 1))
         cased = {places[i] for i in np.flatnonzero(tri.final.sum(axis=1))}
-        group = _lags_of(layout_block(tri, self.layout, places, start), cased)
+        blocks = _blocks(self.grouping, places, len(task.locations))
+        groups = []
+        for block in blocks:
+            own = [places[i] for i in block]
+            sub = _sub_triangle(tri, block)
+            groups.append(
+                _lags_of(layout_block(sub, self.layout, own, start), cased)
+            )
         sample = self.sample or partial(
             chronos_sampler, checkpoint=self.checkpoint
         )
-        draws = sample([group], horizon, task.n_samples, seed)[0]
+        draws = sample(groups, horizon, task.n_samples, seed)
         final = tri.final
         steps = np.broadcast_to(final, (task.n_samples, *final.shape)).copy()
-        drawn = np.maximum(np.round(draws), 0.0)
-        steps[:, :, start:] = np.maximum(drawn, final[:, start:])
+        for block, drawn in zip(blocks, draws, strict=True):
+            drawn = np.maximum(np.round(drawn), 0.0)
+            steps[:, block, start:] = np.maximum(drawn, final[block, start:])
+        if self.grouping == "bottom":
+            # The levels above are summed draw by draw, from the lowest up.
+            n_prov = len(task.locations)
+            for p in range(1, 1 + n_prov) if zones else ():
+                mine = [
+                    1 + n_prov + i
+                    for i, z in enumerate(zones)
+                    if province_of(z) == places[p]
+                ]
+                if mine:
+                    summed = steps[:, mine, start:].sum(axis=1)
+                    steps[:, p, start:] = np.maximum(summed, final[p, start:])
+            summed = steps[:, 1 : 1 + n_prov, start:].sum(axis=1)
+            steps[:, 0, start:] = np.maximum(summed, final[0, start:])
         # The hub's target is weekly, so the daily source is summed to weeks.
         week_of = np.array([_step("weekly", t).isoformat() for t in tri.times])
         values = np.stack(
