@@ -41,7 +41,8 @@
 # the driver adds seeds after TRAIN_LAST (`extend_seeds`).
 #
 # It keeps both hosts' simulation slots busy, copies the remote results
-# back, and runs scripts/finetune_stream.py, which trains on the
+# back, and runs scripts/finetune_stream.py (logging to
+# output/finetune/trainer.log), which trains on the
 # outbreaks as they arrive and publishes each checkpoint. Every step is
 # logged to output/finetune/driver.log, and output/finetune/STATUS holds
 # one line of state. It stops with an error in both on a failed
@@ -52,6 +53,7 @@
 set -uo pipefail
 source "$1"
 LOG=output/finetune/driver.log
+TRAINER_LOG=output/finetune/trainer.log
 STATUS=output/finetune/STATUS
 PAUSE=output/finetune/PAUSE
 export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
@@ -335,8 +337,10 @@ start_trainer() {
   PYTORCH_MPS_LOW_WATERMARK_RATIO=0.6 \
   HF_HOME=output/finetune/hf HF_HUB_OFFLINE=1 MPLCONFIGDIR="${TMPDIR:-/tmp}" \
     nohup .venv/bin/python scripts/finetune_stream.py "${trainer_args[@]}" \
-    >> "$LOG" 2>&1 < /dev/null &
+    >> "$TRAINER_LOG" 2>&1 < /dev/null &
   trainer=$!
+  echo "$(date '+%Y-%m-%d %H:%M:%S') [driver] trainer started, pid $trainer" \
+    >> "$TRAINER_LOG"
   adopted=0
   echo "$trainer" > output/finetune/trainer.pid
   log "started the trainer, pid $trainer"
@@ -389,7 +393,8 @@ while true; do
     (( wait_s > 3600 )) && wait_s=3600
     retry_at=$(( $(date +%s) + wait_s ))
     last_error="trainer failed (exit $code, failure $failures), restart in $(( wait_s / 60 )) min"
-    log "ERROR: $last_error; see the trainer's lines above"
+    log "ERROR: $last_error; the end of $TRAINER_LOG:"
+    tail -n 20 "$TRAINER_LOG" | sed 's/^/    /' >> "$LOG"
   fi
   status
   sleep 180

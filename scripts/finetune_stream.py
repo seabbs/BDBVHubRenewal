@@ -43,7 +43,7 @@ import finetune_chronos as ft
 CHUNK = 500
 """Outbreaks per chunk."""
 
-SAVE_EVERY = 25
+SAVE_EVERY = 50
 """Steps between saves of the trainer's state, which a restarted trainer
 resumes from."""
 
