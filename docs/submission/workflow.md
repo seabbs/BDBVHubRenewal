@@ -43,6 +43,11 @@ Every stored fit is 2 chains of 500 warm-up, run in parallel, with no refit.
 Each takes 750 draws, `renewalbvd` at target acceptance 0.95 and the others at 0.9.
 The wait for the store stops against the window's close (`[timing]` in `ci/policy.toml`).
 
+`randomwalknowcast` and the Chronos-2 models draw each place and week on their own.
+Before their hub table is made, their draws are paired by the rolling copula, as the release backtest pairs them ([Correlated trajectories](../methods/evaluation.md#correlated-trajectories)).
+The copula is estimated from the model's forecasts at earlier rounds: those archived on the ledger, then the fit store's, and for `randomwalknowcast` its forecasts made again at the earlier releases (`bdbvhubrenewal nowcast --history --store`).
+Each pairing is recorded in the round's `copula.json`.
+
 ## Checks
 
 An invalid file, a fit past the convergence failure thresholds or a forecast far from the recent data rules a candidate out.

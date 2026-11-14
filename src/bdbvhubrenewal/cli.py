@@ -79,6 +79,7 @@ from bdbvhubrenewal.forecasters.base import (
     NATIONAL,
     ForecastModel,
     ForecastTask,
+    ModelSpec,
     check_samples,
     get_model,
     list_models,
@@ -281,6 +282,18 @@ def build_parser() -> argparse.ArgumentParser:
     )
     now.add_argument(
         "--fit", default=None, help="Fit directory written by `fit`."
+    )
+    now.add_argument(
+        "--history",
+        default=None,
+        help="The ledger's archive of each round's candidates, whose past "
+        "forecasts estimate the copula a paired model's draws are paired "
+        "by (`submission.pairing`).",
+    )
+    now.add_argument(
+        "--store",
+        default=None,
+        help="A fit store checkout, for past forecasts the archive lacks.",
     )
     now.add_argument("--out", default="output/submission")
     now.add_argument(
@@ -1191,6 +1204,36 @@ def _zones(
     return zones, ""
 
 
+def _spec(name: str) -> ModelSpec:
+    """Return a registered model's entry."""
+    return {s.name: s for s in list_models()}[name]
+
+
+def _pair(
+    args: argparse.Namespace,
+    name: str,
+    task: ForecastTask,
+    result: Forecast,
+) -> tuple[Forecast, dict[str, object]]:
+    """Pair a paired model's draws by the copula of its recent errors."""
+    from bdbvhubrenewal.submission.pairing import pair_submission
+
+    config = bt.load_config(args.backtest_config)
+    target = load_target(args.data)
+    delay = resolve_truth_delay(config, target)
+    past: list[ForecastTask] = []
+    if not _spec(name).fitted:
+        past = list(
+            store.origin_tasks(
+                target, load_delays(args.data), config, load_daily(args.data)
+            ).values()
+        )
+    samples, record = pair_submission(
+        name, result.samples, task, delay, args.history, args.store, past
+    )
+    return dataclasses.replace(result, samples=samples), record
+
+
 def _nowcast(args: argparse.Namespace) -> int:
     from bdbvhubrenewal.forecasters.renewal import sampler_settings
 
@@ -1209,6 +1252,10 @@ def _nowcast(args: argparse.Namespace) -> int:
             samples = model.forecast(task)
             check_samples(samples, task)
             result = Forecast(samples)
+        name = config.model if args.config else args.model
+        copula = None
+        if name is not None and _spec(name).paired:
+            result, copula = _pair(args, name, task, result)
         zones, zone_note = _zones(args, task, result.samples, hub_config)
         if zone_note:
             handled.append(zone_note)
@@ -1230,6 +1277,11 @@ def _nowcast(args: argparse.Namespace) -> int:
     n_zones = 0 if zones is None else int(zones["location"].nunique())
     zone_record = {"zones": n_zones > 0, "n_zones": n_zones, "note": zone_note}
     (Path(args.out) / "zones.json").write_text(json.dumps(zone_record) + "\n")
+    # The copula a paired model's draws were paired by, for the PR body.
+    if copula is not None:
+        (Path(args.out) / "copula.json").write_text(
+            json.dumps(copula, default=str) + "\n"
+        )
     # The fine-tuned checkpoint the model loaded, for the PR body.
     if checkpoint is not None:
         record = {
