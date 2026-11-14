@@ -623,6 +623,9 @@ def main() -> None:
         done, position = hi, 0
         seen["blocks"] += len(pairs)
         seen["series"] += int(sizes.sum())
+        for block in blocks:
+            mix = seen.setdefault("mix", {})
+            mix[block["mix"]] = mix.get(block["mix"], 0) + 1
         if done in prefixes:
             where = out / f"n{done}"
             where.mkdir(parents=True, exist_ok=True)
@@ -640,6 +643,7 @@ def main() -> None:
                 "steps": step,
                 "blocks": seen["blocks"],
                 "series": seen["series"],
+                "level_mix": seen.get("mix", {}),
                 "tokens": seen["series"]
                 * (ft.CONTEXT + ft.HORIZON)
                 // ft.OUTPUT_PATCH,
