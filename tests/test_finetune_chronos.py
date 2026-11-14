@@ -114,3 +114,23 @@ def test_no_batch_holds_more_series_than_the_budget_allows():
     sizes = rng.integers(100, 200, 50)
     for batch in plan_batches(sizes, 256, rng, most=300):
         assert sizes[batch].sum() <= 300 or len(batch) == 1
+
+
+def test_flat_places_can_nest_in_regions_with_levels_recorded():
+    import pandas as pd
+    from finetune_chronos import regions, target_levels
+
+    rng = np.random.default_rng(4)
+    places = [f"P{i:02d}" for i in range(1, 9)]
+    mapping = regions(places, rng)
+    assert set(mapping) == set(places)
+    parents = {m.split("-")[0] for m in mapping.values()}
+    assert 2 <= len(parents) <= 6
+    assert target_levels(("CD", "R1", "R1-P01", "A1")) == (
+        "national",
+        "intermediate",
+        "leaf",
+        "intermediate",
+    )
+    assert target_levels(("CD", "P01", "P02")) == ("national", "leaf", "leaf")
+    del pd
