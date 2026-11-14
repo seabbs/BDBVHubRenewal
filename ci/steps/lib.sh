@@ -139,9 +139,10 @@ ledger_push() {
     [ "$try" -lt "$tries" ] || break
     echo "::warning::ledger push rejected (try $try of $tries); fetching again"
     sleep "${LEDGER_PUSH_WAIT:-5}"
-    git -C "$dir" fetch -q origin "$branch" \
-      && git -C "$dir" "${who[@]}" rebase -q FETCH_HEAD \
-      || { git -C "$dir" rebase --abort 2> /dev/null || true; }
+    if git -C "$dir" fetch -q origin "$branch"; then
+      git -C "$dir" "${who[@]}" rebase -q FETCH_HEAD \
+        || git -C "$dir" rebase --abort 2> /dev/null || true
+    fi
   done
   echo "::error::ledger push failed after $tries tries"
   return 1
