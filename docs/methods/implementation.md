@@ -57,7 +57,6 @@ The observation model is in `forecasters.obs`, and fits and draws its new report
 | One random walk for both models | `forecasters.walk` |
 | Introductions into places with no recent case | `forecasters.introductions` |
 | Zone samples that sum to the province samples | `forecasters.zones` |
-| `pprandomwalknowcast`, fitted with NUTS in NumPyro | `forecasters.pprandomwalk` |
 | Backtest on real releases | `evaluation.nowcast` |
 
 Shapes are fixed within an origin, so each new origin compiles once.
@@ -86,7 +85,6 @@ Without other settings, NUTS runs 4 chains of 1000 warm-up and 1000 draws, with 
 Each chain starts from its own draw from the prior.
 The [fit store](../development/cli.md#fit-store)'s fits, which the backtest and the submission read, take each model's settings from its candidate in `ci/policy.toml`.
 `renewal`, `renewalsp` and `renewalbvd` use 2 chains of 500 warm-up and 750 draws, at target acceptance 0.9 (0.95 for `renewalbvd`).
-`pprandomwalknowcast` has no candidate and uses its own settings ([Baseline models](baselines.md#partially-pooled-variant)).
 Leave-one-province-out fits take theirs from `[sampler]` in `config/backtest.toml` when `BDBV_RENEWAL_SAMPLER` is unset.
 Each fit reports its largest R-hat over parameters and the share of draws at the maximum tree depth.
 

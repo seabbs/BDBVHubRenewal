@@ -99,10 +99,6 @@ def test_renewal_models_read_zones(name: str) -> None:
     assert getattr(get_model(name), "reads_zones", False)
 
 
-def test_pprandomwalknowcast_reads_zones() -> None:
-    assert getattr(get_model("pprandomwalknowcast"), "reads_zones", False)
-
-
 def _fake_renewal(monkeypatch: pytest.MonkeyPatch) -> None:
     # The renewal tests' stand-in for a NUTS run.
     spec = importlib.util.spec_from_file_location(
@@ -164,17 +160,3 @@ def test_the_submitted_file_is_unchanged(
         zones=_submitted_split(prov, zone_task), forecast_date=VINTAGE,
     )  # fmt: skip
     pd.testing.assert_frame_equal(table, want)
-
-
-# A NUTS fit, about 5 minutes.
-@pytest.mark.slow
-def test_pprandomwalknowcast_returns_the_submitted_zones(
-    zone_task: ForecastTask,
-) -> None:
-    out = get_model("pprandomwalknowcast").forecast(zone_task)
-    own = out["location"].map(is_zone)
-    assert own.any()
-    pd.testing.assert_frame_equal(
-        _sorted(out.loc[own]),
-        _sorted(_submitted_split(out.loc[~own], zone_task)),
-    )

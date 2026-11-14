@@ -335,9 +335,8 @@ def test_a_place_with_no_week_to_start_from_starts_late_and_stays_small(
 ) -> None:
     # Sud Ubangi has 2 cases ever, in the week of 10-03, so no week has
     # enough cases to start a walk from. It walks from its mean count from
-    # its latest complete week, so even a wide walk spread, as
-    # pprandomwalknowcast fits it, keeps its draws in the thousands at
-    # most.
+    # its latest complete week, so even a wide walk spread keeps its draws
+    # in the thousands at most.
     model = RandomWalkNowcast()
     origin = model.origin_at(task, errors=True)
     i = list(origin.snap.locations).index("CD-SU")

@@ -515,7 +515,6 @@ def test_only_the_random_walks_forecast_their_own_zones() -> None:
     assert walks_own_zones("randomwalk")
     assert walks_own_zones("randomwalknowcast")
     assert not walks_own_zones("renewal")
-    assert not walks_own_zones("pprandomwalknowcast")
     assert not walks_own_zones(None)
     assert not walks_own_zones("not-a-model")
 

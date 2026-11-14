@@ -7,9 +7,6 @@ model's draws re-pins them: both for local plus global introduction
 rates, randomwalknowcast for quiet places with recent cases walking
 from their level, and both for pairing their province draws within each
 week (#253), which reorders draws and keeps every cell's.
-
-pprandomwalknowcast is not pinned: its NUTS fit is compiled for the CPU it
-runs on, so its draws differ between machines (archie and the CI runners).
 """
 
 from __future__ import annotations
@@ -65,7 +62,6 @@ def test_samples_are_unchanged(name: str, task: ForecastTask) -> None:
     assert _digest(get_model(name).forecast(task)) == PINNED[name]
 
 
-# pprandomwalknowcast's pooled fit compiles its own programs each time.
 @pytest.mark.parametrize("name", ["randomwalk", "randomwalknowcast"])
 def test_a_second_forecast_of_the_same_shape_compiles_nothing(
     name: str, task: ForecastTask, compiles: list[float]
