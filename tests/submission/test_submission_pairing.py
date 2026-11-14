@@ -170,8 +170,34 @@ def test_a_model_with_no_past_forecasts_fails(tasks: list) -> None:
     samples = get_model("randomwalknowcast").forecast(task)
     with pytest.raises(LookupError, match="no past forecasts"):
         pair_submission(
-            "fm_chronos_weekly_ragged", samples, task, truth_delay=7
+            "fm_chronos_weekly_ragged",
+            samples,
+            task,
+            truth_delay=7,
+            past_tasks=tasks,
         )
+
+
+def test_the_first_origin_takes_the_prior(tasks: list) -> None:
+    # With no earlier origin, the backtest has no errors either.
+    task = next(
+        t
+        for t in tasks
+        if get_model("randomwalknowcast").forecast(t) is not None
+    )
+    samples = get_model("randomwalknowcast").forecast(task)
+    paired, fit = pair_submission(
+        "fm_chronos_weekly_ragged",
+        samples,
+        task,
+        truth_delay=7,
+        past_tasks=[t for t in tasks if t.vintage >= task.vintage],
+    )
+    pd.testing.assert_series_equal(_cells(paired), _cells(samples))
+    assert fit["n_scores"] == 0
+    assert fit["source"] == "none"
+    assert fit["sources"] == {}
+    assert fit["rho_time"] == pytest.approx(0.9)
 
 
 def test_submission_pairs_as_the_release_backtest_does(
