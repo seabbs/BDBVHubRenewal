@@ -88,7 +88,11 @@ def germany_tables(mode):
         return []
     halves = [""] if mode == "development" else ["", "held-out/"]
     tables = [f"{GERMANY['results']}/{h}paper-forecasts.csv.gz" for h in halves]
-    return tables + list(GERMANY.get("extra") or [])
+    extra = [
+        f"{R}/evidence/germany-extra-{i}.csv.gz"
+        for i in range(len(GERMANY.get("extra") or []))
+    ]
+    return tables + extra
 
 
 def sources(w):
@@ -117,7 +121,8 @@ def sources(w):
 def source_files(w):
     """Files a study's real data come from, built by the rules below."""
     if w.study == "germany":
-        return [*germany_tables(w.mode), *([TRIANGLE] if GERMANY["real"] else [])]
+        triangle = [TRIANGLE] if GERMANY["real"] else []
+        return [*germany_tables(w.mode), *triangle]
     if w.study == "ebola" and EBOLA["hub"]:
         return [f"{EBOLA['hub']}/target-data/time-series.csv"]
     return []
@@ -434,14 +439,45 @@ for name, entry in EVIDENCE.items():
             "git show {params.ref}:{params.path} > {output}"
 
 
+def extra_args(entry):
+    """The `germany-extra` options of a `germany.extra` entry."""
+    args = []
+    if entry.get("models"):
+        args.append(f"--models {shlex.quote(entry['models'])}")
+    if entry.get("suffix"):
+        args.append(f"--suffix {shlex.quote(entry['suffix'])}")
+    if entry.get("backtest"):
+        args.append("--backtest")
+    return " ".join(args)
+
+
+# Further German forecasts from evidence rows, as paper tables.
+for i, entry in enumerate(GERMANY.get("extra") or []):
+
+    rule:
+        name:
+            f"germany_extra_{i}"
+        input:
+            evidence_file(entry["evidence"]),
+        output:
+            f"{R}/evidence/germany-extra-{i}.csv.gz",
+        params:
+            args=extra_args(entry),
+        shell:
+            "{PYTHON} -m paperpipe germany-extra --input {input} "
+            "{params.args} --out {output}"
+
+
 rule evidence:
     input:
-        **{name: evidence_file(name) for name in EVIDENCE},
+        **{n: evidence_file(n) for n in EVIDENCE if n in EVIDENCE_NAMES},
     output:
         yml=f"{R}/{{mode}}/evidence.yml",
     params:
         args=" ".join(
-            f"--{n.replace('_', '-')} {evidence_file(n)}" for n in EVIDENCE
+            f"--{n.replace('_', '-')} {evidence_file(n)}"
+            for n in EVIDENCE
+            if n in EVIDENCE_NAMES
         ),
         si=f"{R}/{{mode}}/tables/si",
         fig=f"{R}/{{mode}}/figures/si",

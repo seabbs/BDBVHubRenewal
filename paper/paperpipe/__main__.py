@@ -12,6 +12,7 @@ Steps, in workflow order:
   scores);
 - `figures` and `score-tables`: main-text and SI outputs;
 - `evidence`: SI tables, figures and numbers from evidence branches;
+- `germany-extra`: further German forecasts as a paper table;
 - `design-tables`: the simulation grid for the main text and SI;
 - `summary`: the numbers the paper quotes, as Quarto metadata.
 """
@@ -26,6 +27,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from paperdata import germany
 from paperfigs.joint import joint_scores
 from paperfigs.schema import validate_forecasts, validate_observations
 from paperfigs.scores import score_forecasts
@@ -181,6 +183,13 @@ def _evidence(a: argparse.Namespace) -> None:
         )
 
 
+def _germany_extra(a: argparse.Namespace) -> None:
+    table = germany.extra_table(
+        a.input, models=a.models, suffix=a.suffix, backtest=a.backtest
+    )
+    _write(table, a.out)
+
+
 def _design_tables(a: argparse.Namespace) -> None:
     design_tables(a.grid, a.main_dir, a.si_dir)
 
@@ -295,6 +304,14 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--fig-dir", type=Path, required=True)
     p.add_argument("--out", type=Path, required=True)
     p.set_defaults(run=_evidence)
+
+    p = sub.add_parser("germany-extra")
+    p.add_argument("--input", type=Path, required=True)
+    p.add_argument("--models", default=None)
+    p.add_argument("--suffix", default="")
+    p.add_argument("--backtest", action="store_true")
+    p.add_argument("--out", type=Path, required=True)
+    p.set_defaults(run=_germany_extra)
 
     p = sub.add_parser("design-tables")
     p.add_argument("--grid", type=Path, required=True)

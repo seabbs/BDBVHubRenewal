@@ -28,10 +28,14 @@ germany:
   config: ../config/germany.toml
   data: ../data/raw/germany
   results: ../results/germany
-  # Further paper tables of the benchmark (`germany-paper` output), such
-  # as models run outside config/germany.toml. A development run fails
-  # if one holds a held-out date.
-  extra: []
+  # Further forecasts of the benchmark from evidence rows (`evidence`
+  # below), such as models run outside config/germany.toml: `models`
+  # keeps the models matching a regular expression, `suffix` renames
+  # them, and `backtest` reads a `germany-backtest` table. A development
+  # run fails if one holds a held-out date.
+  extra:
+    - {evidence: germany_chronos, models: "^fm_chronos_"}
+    - {evidence: germany_chronos_n1000, backtest: true, suffix: _n1000}
 
 # The Ebola hub's data and forecasts, our stored forecasts and the fit
 # store. `hub: null` runs the study on dummy data, as does a hub whose
@@ -62,6 +66,7 @@ nowcasts:
       - randomwalknowcast
       - fm_chronos_daily_ragged
       - fm_chronos_daily_ragged_ft
+      - fm_chronos_daily_ragged_ft_n1000
       - MeanEnsemble
       - hub_ensemble
     ebola:
@@ -74,6 +79,12 @@ nowcasts:
 # null leaves a note of what it waits on in a development run and fails a
 # paper run.
 evidence:
+  germany_chronos:
+    ref: 1697968b1674f0f42eb784785fcae522d4576eff
+    path: germany/chronos-paper-forecasts.csv.gz
+  germany_chronos_n1000:
+    ref: 1697968b1674f0f42eb784785fcae522d4576eff
+    path: germany/n1000-ft-forecasts.csv.gz
   copula_scores: null
   copula_rho: null
   aggregation_scores: null

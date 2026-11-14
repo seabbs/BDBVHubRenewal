@@ -15,9 +15,9 @@ from pathlib import Path
 
 import pandas as pd
 from bdbvhubrenewal.data.germany import GERMANY, STATES, hub_triangle
-from bdbvhubrenewal.evaluation.germany import asof_sums
+from bdbvhubrenewal.evaluation.germany import asof_sums, paper_forecasts
 
-__all__ = ["forecasts", "observations"]
+__all__ = ["extra_table", "forecasts", "observations"]
 
 
 def forecasts(paths: Sequence[str | Path]) -> pd.DataFrame:
@@ -30,6 +30,41 @@ def forecasts(paths: Sequence[str | Path]) -> pd.DataFrame:
     for col in ("origin_date", "target_date"):
         out[col] = pd.to_datetime(out[col])
     return out.assign(truth=float("nan"))
+
+
+def extra_table(
+    path: str | Path,
+    models: str | None = None,
+    suffix: str = "",
+    backtest: bool = False,
+) -> pd.DataFrame:
+    """Return further forecasts of the benchmark as a paper table.
+
+    Parameters
+    ----------
+    path : str or pathlib.Path
+        A paper table, or with `backtest` a `germany-backtest` forecast
+        table.
+    models : str, optional
+        A regular expression the kept models match.
+    suffix : str
+        Added to every model name, to tell runs of one model apart.
+    backtest : bool
+        Whether `path` is a `germany-backtest` table.
+
+    Returns
+    -------
+    pandas.DataFrame
+        The paper table.
+    """
+    if backtest:
+        raw = pd.read_csv(path, dtype={"origin": str, "target_end_date": str})
+        table = paper_forecasts(raw)
+    else:
+        table = pd.read_csv(path, dtype={"stratum": str})
+    if models:
+        table = table.loc[table["model"].str.match(models)]
+    return table.assign(model=table["model"] + suffix).reset_index(drop=True)
 
 
 def observations(
