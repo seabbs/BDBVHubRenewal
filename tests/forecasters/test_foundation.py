@@ -673,6 +673,7 @@ def test_a_failed_lookup_says_how_to_set_a_token(
         raise OSError("HTTP Error 403: rate limit exceeded")
 
     monkeypatch.undo()
+    monkeypatch.setattr(foundation, "RETRY_SECONDS", (0, 0, 0))
     monkeypatch.setattr(foundation.urllib.request, "urlopen", refuse)
     with pytest.raises(ConnectionError, match="GH_TOKEN"):
         foundation.finetuned_releases()
