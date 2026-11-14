@@ -446,8 +446,10 @@ EVIDENCE = {
 
 
 def evidence_file(name):
-    suffix = "".join(Path(EVIDENCE[name]["path"]).suffixes)
-    return f"{R}/evidence/{name}{suffix}"
+    """The extracted file, named by its commit so a new pin extracts anew."""
+    entry = EVIDENCE[name]
+    suffix = "".join(Path(entry["path"]).suffixes)
+    return f"{R}/evidence/{name}-{entry['ref'][:12]}{suffix}"
 
 
 for name, entry in EVIDENCE.items():
