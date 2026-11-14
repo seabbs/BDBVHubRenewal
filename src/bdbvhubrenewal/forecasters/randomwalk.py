@@ -587,4 +587,5 @@ register_model(
     "randomwalknowcast",
     RandomWalkNowcast,
     "Random walk carried forward from a daily nowcast of the recent weeks.",
+    paired=True,
 )

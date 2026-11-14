@@ -55,7 +55,8 @@ The draws of `renewal` and `renewalbvd` are joint across provinces, one posterio
 `renewalsp` fits each province on its own, so its provinces are independent.
 Zones split each province draw, so zones are joint within a province for every renewal model.
 `pprandomwalknowcast` takes one posterior draw of its pooled parameters per sample index, so its places share that draw.
-`randomwalk` and `randomwalknowcast` draw each place independently.
+`randomwalk` draws each place independently.
+`randomwalknowcast` and the Chronos-2 models are paired over weeks and places by the rolling copula ([Correlated trajectories](#correlated-trajectories)).
 Hub teams' samples are joint across weeks within a place only, as the hub's sample format sets, so pairing their indices across places scores them as independent across places.
 
 ## Backtest design
@@ -124,6 +125,25 @@ Relative WIS is against `randomwalk` on the forecasts both made, for national an
 Every table counts its forecasts, $n$, so a model with fewer forecasts was scored on fewer weeks or places.
 The run stops if an origin has no release snapshots or two models run here give identical samples.
 
+## Correlated trajectories
+
+`randomwalknowcast` and the Chronos-2 models draw each place and week on their own.
+Their sums over weeks and places are then too narrow.
+So the release backtest, the German benchmark and the submissions pair their draws into trajectories by a Gaussian copula fitted to each model's own recent errors (`forecasters.copula`).
+Models with joint draws, such as the renewal models, keep their own.
+Pairing only reorders each place and week's draws across sample indices, so every per-week forecast and its WIS are unchanged.
+A country that is the sum of its provinces, as for `randomwalknowcast`, is summed again from the paired provinces, so its forecast widens.
+A country forecast as its own series, as by Chronos-2, keeps its draws.
+
+The copula has three correlations, between consecutive weeks of a place ($\rho_t$), between two provinces ($\rho_p$) and between the country and a province ($\rho_n$) ([Foundation models](foundation.md#trajectories)).
+At each origin they are estimated from the model's forecasts at earlier origins.
+Each week whose complete-target truth was released by the origin gives its randomised PIT in the forecast's draws, mapped to a normal score.
+The scores of the 8 latest such weeks are used.
+Each correlation is that of the scores of pairs from one forecast, shrunk towards the prior $(\rho_t, \rho_p, \rho_n) = (0.9, 0.7, 0.7)$ as $(n r + w \rho_0) / (n + w)$, with $n$ pairs and the prior worth $w = 100$ pairs.
+An origin with no matured errors, or a correlation its pairs do not define, takes the prior, as does every origin of a backtest with no truth delay.
+The prior was chosen on the same release backtest, for the Chronos-2 models ([Foundation models](foundation.md#trajectories)), so it is tuned in sample.
+Each model's correlations at each origin are in `nowcast-copulas.csv`.
+
 ## Reading the figures
 
 Fans show 100 sample trajectories, the 50% and 90% bands and the median.
@@ -183,6 +203,7 @@ The German COVID-19 hospitalisation nowcasting hub[^wolffram] collected nowcasts
 1. Each day's data version is a release whose cut-off is that day, and the Meldedatum is the onset date. A release's count of a day is the count reported by then in the hub's reporting triangle, with the changes after 80 days put at 81 days, as epinowcast's `germany_covid19_hosp` does. A day's last count is carried to every later release.
 2. Germany is the country. The states are its provinces in one task and Germany's age groups its provinces in another. Germany's nowcast is the sum of the states.
 3. Hub weeks end on Saturdays, so every date of a nowcast moves forward by the 0 to 6 days to the next Saturday. The 7-day sums ending on the nowcast date and 7, 14, 21 and 28 days before it are then hub weeks, and the nowcasts move back.
+4. `randomwalknowcast`'s draws are paired by the rolling copula, for each task apart, from its errors at earlier nowcast dates against the 40-day truth ([Correlated trajectories](#correlated-trajectories)). Each state's and age group's nowcast is unchanged, and Germany's, the sum of the paired states, widens.
 
 The nowcast dates are the paper's, every day from 2021-11-22 to 2022-04-29.
 They are split at their midpoint.

@@ -40,6 +40,19 @@ One SI section per paper section.
 - Key references: [@abbottepinowcast; @lison2024; @Park2024; @abbottprimarycensored].
 :::
 
+### Correlated trajectories
+
+::: {.callout-note title="Plan"}
+- Pairing: each trajectory draws $z \sim N(0, \Sigma)$ over places and weeks, and each place and week's draws are reordered across samples to rank as $z$ does, the Gaussian copula with $u = \Phi(z)$ read off the drawn marginal.
+- $\Sigma$ is a place correlation times a week correlation: $\rho_t^{\delta/7}$ for steps $\delta$ days apart, $\rho_p$ between provinces, $\rho_n$ between the country and a province, with the nearby correlation matrix where these give none.
+- A country that is the sum of its provinces is summed again from the paired provinces.
+- Estimator: the randomised PIT of each matured truth in its forecast's draws, $(b + U(e + 1))/(m + 1)$, mapped to a normal score; forecasts with no spread are left out.
+- Window: forecasts from earlier origins whose truth was released by the origin, the 8 latest such weeks.
+- Each correlation is the Pearson correlation of score pairs within a forecast, shrunk as $(n r + w \rho_0)/(n + w)$ with $n$ pairs, $w = 100$ and prior $(\rho_t, \rho_p, \rho_n) = (0.9, 0.7, 0.7)$, then kept in $[0, 0.95]$.
+- The prior was chosen on the same BDBV release backtest, so it is tuned in sample.
+- Sensitivity: $w = 25$.
+:::
+
 ### Scoring
 
 ::: {.callout-note title="Plan"}

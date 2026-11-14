@@ -21,8 +21,13 @@ if [ "${SKIP_FETCH:-false}" != true ]; then
   "$CI_DIR/../scripts/fit-store.sh" fetch "$store"
 fi
 made="$WORK/candidates.csv.gz"
+# Past rounds' forecasts, for the copula a paired model is paired by, as
+# in the submission (candidate.sh).
+history="$WORK/ledger-archive"
+[ -d "$history" ] || ledger_archive "$history"
 cli fit-store archive --store "$store" --origin "$AS_OF" \
-  --reference-date "$REFERENCE_DATE" --out "$made"
+  --reference-date "$REFERENCE_DATE" --history "$history/archive" \
+  --out "$made"
 
 ledger="$WORK/ledger"
 ledger_worktree "$ledger"

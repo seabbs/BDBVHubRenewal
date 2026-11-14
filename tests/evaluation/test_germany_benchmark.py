@@ -16,6 +16,7 @@ from bdbvhubrenewal.evaluation.germany import (
     SCORE_COLUMNS,
     asof_sums,
     germany_forecasts,
+    germany_samples,
     load_germany_config,
     nowcast_dates,
     paper_forecasts,
@@ -38,15 +39,65 @@ def triangle() -> pd.DataFrame:
 
 
 @pytest.fixture(scope="module")
-def forecasts(triangle: pd.DataFrame) -> pd.DataFrame:
-    drawn = germany_forecasts(
+def samples(triangle: pd.DataFrame) -> pd.DataFrame:
+    return germany_samples(
         ["randomwalk", "randomwalknowcast"],
         triangle,
         ["2021-10-04", "2021-10-05"],
         n_samples=30,
         seed=1,
     )
-    return with_truth(drawn, triangle, truth_delay=10)
+
+
+@pytest.fixture(scope="module")
+def paired(
+    samples: pd.DataFrame, triangle: pd.DataFrame
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    return germany_forecasts(samples, triangle, truth_delay=10, seed=1)
+
+
+@pytest.fixture(scope="module")
+def forecasts(
+    paired: tuple[pd.DataFrame, pd.DataFrame], triangle: pd.DataFrame
+) -> pd.DataFrame:
+    return with_truth(paired[0], triangle, truth_delay=10)
+
+
+def test_samples_carry_each_task(samples: pd.DataFrame) -> None:
+    assert set(samples["task"]) == {"states", "ages"}
+    assert {"model", "origin", "location", "sample", "value"} <= set(samples)
+    ages = samples.loc[samples["task"] == "ages", "location"]
+    assert "DE" not in set(ages)
+
+
+def test_paired_models_are_paired_by_task(
+    samples: pd.DataFrame,
+    paired: tuple[pd.DataFrame, pd.DataFrame],
+    triangle: pd.DataFrame,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    quantiles, copulas = paired
+    assert set(copulas["model"]) == {"randomwalknowcast"}
+    assert set(copulas["task"]) == {"states", "ages"}
+    from bdbvhubrenewal.evaluation import germany
+
+    monkeypatch.setattr(
+        germany,
+        "pair_registered",
+        lambda f, *_, **__: (f, pd.DataFrame(columns=["model", "origin"])),
+    )
+    plain, _ = germany_forecasts(samples, triangle, truth_delay=10, seed=1)
+    keys = ["model", "origin", "location", "target_end_date", "quantile"]
+    both = quantiles.merge(plain, on=keys, suffixes=("", "_plain"))
+    assert len(both) == len(quantiles)
+    same = both["value"] == both["value_plain"]
+    # Each place keeps its forecast, and only the country, the sum of the
+    # paired states, changes.
+    assert same[both["location"] != "DE"].all()
+    assert not same[
+        (both["location"] == "DE") & (both["model"] == "randomwalknowcast")
+    ].all()
+    assert same[both["model"] == "randomwalk"].all()
 
 
 @pytest.fixture(scope="module")

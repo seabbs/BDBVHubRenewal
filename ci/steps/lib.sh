@@ -153,3 +153,19 @@ note() {
     echo "$*" >> "$GITHUB_STEP_SUMMARY"
   fi
 }
+
+# Copy the ledger branch's archive of past rounds to $1/archive, read
+# only, for the copula a paired model's draws are paired by. No ledger
+# (a first round), or SKIP_FETCH=true (the dry run), leaves $1/archive
+# absent.
+ledger_archive() {
+  local dir=$1
+  rm -rf "$dir"
+  mkdir -p "$dir"
+  [ "${SKIP_FETCH:-false}" = true ] && return 0
+  if git fetch -q --depth 1 origin "${LEDGER_BRANCH:-submission-ledger}" \
+    2> /dev/null; then
+    git archive FETCH_HEAD archive 2> /dev/null | tar -x -C "$dir" \
+      2> /dev/null || true
+  fi
+}

@@ -340,6 +340,23 @@ def checkpoint_line(provenance: Mapping[str, Any]) -> str:
     )
 
 
+def copula_line(provenance: Mapping[str, Any]) -> str:
+    """The copula the submitted model's draws were paired by, or "".
+
+    From `run.json` `copula`, which `candidate.sh` copies from the
+    nowcast's `copula.json`.
+    """
+    copula = (provenance.get("run") or {}).get("copula")
+    if not copula:
+        return ""
+    return (
+        "Pairing: draws paired by a Gaussian copula with "
+        f"rho_t {copula['rho_time']:.2f}, rho_p {copula['rho_provinces']:.2f} "
+        f"and rho_n {copula['rho_national']:.2f}, from {copula['n_scores']} "
+        f"scored past forecasts ({copula['source']})."
+    )
+
+
 def checks_table(
     fit: Mapping[str, Any] | None,
     ppc: Mapping[str, Any] | None,
@@ -421,6 +438,8 @@ def build(
         out.append(fit_line(provenance) + "\n")
     if checkpoint_line(provenance):
         out.append(checkpoint_line(provenance) + "\n")
+    if copula_line(provenance):
+        out.append(copula_line(provenance) + "\n")
     if dry_run:
         out.append("Dry run: nothing was pushed.\n")
     if plot_url.startswith("http"):
