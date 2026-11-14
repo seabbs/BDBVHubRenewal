@@ -116,3 +116,61 @@ def test_merged_task_holds_both_tasks_places_once() -> None:
     assert task.locations == ("S1", "S2", "A1")
     for table in (task.target, task.target_history, task.daily_history):
         assert table["location"].tolist() == [NATIONAL, "S1", "S2", "A1"]
+
+
+def test_options_are_named_for_the_paper() -> None:
+    from bdbvhubrenewal.evaluation.groupings import split_arm
+
+    assert split_arm("m:joint") == ("m", "joint")
+    assert split_arm("m@abc:bottom") == ("m@abc", "zones_summed")
+    assert split_arm("m:paired") == ("m", "zones_copula")
+    assert split_arm("randomwalknowcast") == ("randomwalknowcast", "reference")
+
+
+def test_aggregation_rows_keep_cells_the_reference_scored() -> None:
+    from bdbvhubrenewal.evaluation.groupings import (
+        AGGREGATION_COLUMNS,
+        aggregation_rows,
+    )
+
+    scores = pd.DataFrame(
+        {
+            "model": ["randomwalknowcast", "m:joint", "m:joint"],
+            "origin": "2026-10-17",
+            "location": ["CD", "CD", "CD-KS"],
+            "target_end_date": "2026-10-10",
+            "level": ["national", "national", "provinces"],
+            "wis": [2.0, 1.0, 3.0],
+            "log_wis": [0.2, 0.1, 0.3],
+            "cover50": [1.0, 0.0, 1.0],
+            "cover95": [1.0, 1.0, 1.0],
+        }
+    )
+    out = aggregation_rows(scores, "ebola")
+    assert list(out.columns) == list(AGGREGATION_COLUMNS)
+    assert out["location"].tolist() == ["CD", "CD"]
+    assert set(out["option"]) == {"reference", "joint"}
+    assert (out["study"] == "ebola").all()
+    assert out["target_date"].tolist() == ["2026-10-10"] * 2
+
+
+def test_sample_coverage_is_the_central_interval() -> None:
+    from bdbvhubrenewal.evaluation.groupings import sample_coverage
+
+    samples = pd.DataFrame(
+        {
+            "model": "m",
+            "origin": "o",
+            "location": "x",
+            "target_end_date": "w",
+            "sample": range(1, 101),
+            "value": np.arange(100.0),
+        }
+    )
+    truth = pd.DataFrame(
+        {"location": ["x"], "target_end_date": ["w"], "truth": [98.5]}
+    )
+    out = sample_coverage(samples, truth, 0.95)
+    assert out["cover95"].tolist() == [0.0]
+    out = sample_coverage(samples, truth.assign(truth=50.0), 0.95)
+    assert out["cover95"].tolist() == [1.0]
