@@ -585,3 +585,29 @@ def test_the_candidate_models_are_the_stored_and_the_policy_models() -> None:
     assert "randomwalknowcast" in models
     assert set(store.stored_models()) <= set(models)
     assert len(models) == len(set(models))
+
+
+def test_a_model_that_cannot_be_built_leaves_the_others_archived(
+    fitted_flat: str,
+    tasks: dict[str, ForecastTask],
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    from bdbvhubrenewal.evaluation import store_archive
+    from bdbvhubrenewal.forecasters import base
+
+    # As a fine-tuned model whose checkpoint's release cannot be read.
+    def broken() -> object:
+        raise ConnectionError("no release")
+
+    monkeypatch.setitem(
+        base._REGISTRY, "broken", base.ModelSpec("broken", broken, "Broken.")
+    )
+    origin = sorted(tasks)[-1]
+    round_tasks = {origin: tasks[origin]}
+    root = tmp_path / "store"
+    store.write_fit(root, store.fit(fitted_flat, tasks[origin], {}, "c"))
+    models = ["broken", fitted_flat]
+    code = dict.fromkeys(models, "c")
+    table = store_archive.archive(root, round_tasks, models, {}, code)
+    assert set(table["model"]) == {fitted_flat}
