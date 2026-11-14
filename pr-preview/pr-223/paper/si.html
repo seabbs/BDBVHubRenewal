@@ -55,7 +55,7 @@ div.csl-indent {
 <link href="si_files/libs/quarto-html/quarto-syntax-highlighting-587c61ba64f3a5504c4d52d930310e48.css" rel="stylesheet" id="quarto-text-highlighting-styles">
 <script src="si_files/libs/bootstrap/bootstrap.min.js"></script>
 <link href="si_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
-<link href="si_files/libs/bootstrap/bootstrap-67135126376fdcfdeadaafff27d21302.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<link href="si_files/libs/bootstrap/bootstrap-d99fc85c7253c7d071cb1f16904a1173.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
 
   <script src="https://cdnjs.cloudflare.com/polyfill/v3/polyfill.min.js?features=es6"></script>
   <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js" type="text/javascript"></script>
@@ -203,6 +203,7 @@ One SI section per paper section.
 <div class="callout-body-container callout-body">
 <ul>
 <li>Synthetic data generation in full, with an overview of the epinowcast model used.</li>
+<li>The full factor table and the realism comparison against published disease parameters.</li>
 <li>Key references: <span class="citation" data-cites="abbottepinowcast lison2024 Park2024 abbottprimarycensored">(<a href="#ref-abbottepinowcast" role="doc-biblioref">Abbott et al. 2026</a>; <a href="#ref-lison2024" role="doc-biblioref">Lison et al. 2024</a>; <a href="#ref-Park2024" role="doc-biblioref">Park et al. 2024</a>; <a href="#ref-abbottprimarycensored" role="doc-biblioref">Abbott 2026</a>)</span>.</li>
 </ul>
 </div>
@@ -232,7 +233,7 @@ One SI section per paper section.
 <div id="tbl-synthetic-grid-si" class="quarto-float quarto-figure quarto-figure-center anchored">
 <figure class="quarto-float quarto-float-tbl figure">
 <figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-synthetic-grid-si-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Table&nbsp;1: The simulation grid (r2-cal5), with the reason for each range. Ranges are chosen to be plausible across infectious diseases rather than for one disease.
+Table&nbsp;1: The crossed factors of the simulation grid, their levels and the reason for each.
 </figcaption>
 <div aria-describedby="tbl-synthetic-grid-si-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
 <table class="caption-top table">
@@ -243,96 +244,61 @@ Table&nbsp;1: The simulation grid (r2-cal5), with the reason for each range. Ran
 </colgroup>
 <thead>
 <tr class="header">
-<th>Setting</th>
-<th>Range or mix</th>
+<th>Factor</th>
+<th>Levels</th>
 <th>Reason</th>
 </tr>
 </thead>
 <tbody>
 <tr class="odd">
-<td>Strata</td>
-<td>one 30%, 2-26 places 40%, 2-8 age groups 20%, 6-16 places by 3-7 ages 10%</td>
-<td>Single series, regional, age-structured and nested surveillance all occur.</td>
+<td>Process</td>
+<td>growth; renewal 3; renewal 7; renewal 15</td>
+<td>Growth-rate (r(t)) or renewal (Rt(t) giving the same r(t)) epidemics; renewal generation-time means of about 3, 7 and 15 days (each jittered by up to 20%) span fast respiratory infections to Ebola-like.</td>
 </tr>
 <tr class="even">
-<td>Quiet strata</td>
-<td>up to 90% of places seeded with almost no cases</td>
-<td>Many places report no cases in a local outbreak.</td>
-</tr>
-<tr class="odd">
-<td>Generative process</td>
-<td>renewal, renewal with incubation, growth walk, log-incidence walk, growth steps, smooth growth; a sixth each</td>
-<td>Different shapes of transmission and reporting of infection.</td>
-</tr>
-<tr class="even">
-<td>Generation time</td>
-<td>gamma, mean 2-20 days, CV 0.3-0.7</td>
-<td>Spans fast respiratory to slow haemorrhagic-fever transmission.</td>
-</tr>
-<tr class="odd">
-<td>Starting log Rt</td>
-<td>normal, mean 0.1, sd 0.2</td>
-<td>Reproduction numbers mostly 0.7 to 1.8 at the start.</td>
-</tr>
-<tr class="even">
-<td>Starting daily growth (no generation time)</td>
-<td>normal, mean 0.01, sd 0.02; limits plus or minus 0.1</td>
-<td>Doubling or halving times of a week or longer.</td>
+<td>Gt shape</td>
+<td>gamma 0.3; gamma 0.6; gamma 1; lognormal 0.6</td>
+<td>Generation-time shape for renewal levels: narrow, medium and wide gamma, and a lognormal; discretised on 1 to n days and truncated at about mean x (1 + 4 CV), at most 60 days.</td>
 </tr>
 <tr class="odd">
 <td>Trajectory</td>
-<td>turning over, flat, rising then falling, second wave; a quarter each</td>
-<td>Forecast origins fall in rising, peak, falling and resurging phases.</td>
+<td>growth; decline; flat; rise fall sharp; rise fall gradual; fall rise; oscillating; multi wave</td>
+<td>A bounded library of epidemic courses: doubling or halving in 1 to 4 weeks, flat, sharp or gradual turnover, resurgence, oscillation (period 4 to 17 weeks) and two to three waves, with small weekly noise; daily growth kept within -0.1 to 0.1.</td>
 </tr>
 <tr class="even">
-<td>Seed</td>
-<td>0.2-200 a day, log-uniform</td>
-<td>From single introductions to established spread.</td>
+<td>Delay family</td>
+<td>lognormal; gamma; exponential</td>
+<td>Common parametric reporting-delay families; lognormal median 1 to 10 days with sdlog 0.5 to 2.5, gamma mean 2 to 21 days with CV 0.8 to 1.6, exponential mean 2 to 21 days (epinowcast vignettes and German fits).</td>
 </tr>
 <tr class="odd">
-<td>Size</td>
-<td>10 to 300,000 cases times strata/26; draws expected over 1.5 times the cap rejected before simulating</td>
-<td>From small outbreaks to national-scale waves.</td>
+<td>Delay form</td>
+<td>parametric; non parametric; both</td>
+<td>Delay as the parametric family alone, a non-parametric hazard alone (a smooth walk over delays plus iid effects; family not used), or the hazard as a deviation from the family.</td>
 </tr>
 <tr class="even">
-<td>Duration</td>
-<td>16-40 weeks (16-24 for places by ages)</td>
-<td>One season or wave.</td>
+<td>Delay change</td>
+<td>static; drift; step; periodic; walk</td>
+<td>How the delay changes over the outbreak: not at all, a linear drift, a step, a periodic change (4 to 12 weeks), or a weekly random walk (iid weekly hazard effects for the non-parametric form).</td>
 </tr>
 <tr class="odd">
-<td>Delay distribution</td>
-<td>lognormal, gamma (CV 0.7 or more), exponential, or a non-parametric hazard alone</td>
-<td>Common parametric and free forms.</td>
+<td>Reporting</td>
+<td>daily; weekdays</td>
+<td>Reports every day with day-of-week effects, or only on one to three fixed weekdays.</td>
 </tr>
 <tr class="even">
-<td>Delay mean</td>
-<td>2-21 days, log-uniform</td>
-<td>From near-real-time reporting to slow confirmation.</td>
+<td>Reference dow</td>
+<td>no; yes</td>
+<td>Whether expected counts have a day-of-week effect by reference date, as in most German nowcasting setups.</td>
 </tr>
 <tr class="odd">
-<td>Longest delay</td>
-<td>3-12 weeks, 5-10 times the delay mean</td>
-<td>Realistic tails without the numerical failure of very long tails (epinowcast #939).</td>
+<td>Observation</td>
+<td>negbin; negbin1d; poisson</td>
+<td>Observation model: negative binomial with quadratic (NB2) or linear (NB1, dispersion matched to NB2 as in epinowcast #937) variance, or Poisson; sqrt(phi) log-uniform 0.1 to 1.</td>
 </tr>
 <tr class="even">
-<td>Delay changes</td>
-<td>stable 20%; otherwise drift, 0-3 step changes, spread changes, weekly walk, week hazard effects</td>
-<td>Reporting systems change.</td>
-</tr>
-<tr class="odd">
-<td>Report-date effects</td>
-<td>day of week 70%, holidays 30%, report-week effects 40%, weekday-only reporting 50%, weekday switch 30%</td>
-<td>Common reporting patterns.</td>
-</tr>
-<tr class="even">
-<td>Observation model</td>
-<td>negative binomial NB2 40%, NB1 40% (dispersion matched to NB2, epinowcast #937), Poisson 20%</td>
-<td>From Poisson to heavily overdispersed counts.</td>
-</tr>
-<tr class="odd">
-<td>Overdispersion</td>
-<td>sqrt(phi) 0.05-1.5</td>
-<td>From near Poisson to very noisy counts.</td>
+<td>Strata</td>
+<td>single; places; ages; places ages</td>
+<td>One series, 2 to 26 places, 2 to 8 age groups, or places by ages (at most 60 strata), with totals as their own series in training blocks.</td>
 </tr>
 </tbody>
 </table>
@@ -349,6 +315,19 @@ Table&nbsp;1: The simulation grid (r2-cal5), with the reason for each range. Ran
 Figure&nbsp;1: How 200 simulated outbreaks (grey histograms) compare with the BDBV data (red) and the German data by state (green) and by age (orange): outbreak size, weekly peak, growth, the share of stratum-weeks with no cases, dispersion, the mean and 99% point of the reporting delay, the share reported within 0, 7, 14 and 28 days, and the share reported on each weekday.
 </figcaption>
 </figure>
+</div>
+<div class="callout callout-style-default callout-note callout-titled" title="Results to come">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Note</span>Results to come
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>Slot for the table of grid ranges against published values for several diseases, the case studies among them.</p>
+</div>
 </div>
 </section>
 </section>
@@ -458,61 +437,192 @@ Figure&nbsp;1: How 200 simulated outbreaks (grey histograms) compare with the BD
 <div id="tbl-synthetic-evaluated" class="quarto-float quarto-figure quarto-figure-center anchored">
 <figure class="quarto-float quarto-float-tbl figure">
 <figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-synthetic-evaluated-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Table&nbsp;2: Scenario settings realised over the evaluated outbreaks: the smallest, median and largest value of each. Illustrative, dummy data
+Table&nbsp;2: The share of evaluated outbreaks in each level of each grid factor, as each simulation recorded its cell. Illustrative, dummy data
 </figcaption>
 <div aria-describedby="tbl-synthetic-evaluated-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
 <table class="caption-top table">
 <thead>
 <tr class="header">
 <th>factor</th>
-<th>min</th>
-<th>median</th>
-<th>max</th>
-<th>n_locations</th>
+<th>level</th>
+<th>share</th>
 </tr>
 </thead>
 <tbody>
 <tr class="odd">
-<td>delay_mean</td>
-<td>2.17</td>
-<td>4.31</td>
-<td>7.71</td>
-<td>8</td>
+<td>Process</td>
+<td>renewal_3</td>
+<td>0.375</td>
 </tr>
 <tr class="even">
-<td>delay_q98</td>
-<td>11</td>
-<td>19.5</td>
-<td>62</td>
-<td>8</td>
+<td>Process</td>
+<td>renewal_15</td>
+<td>0.25</td>
 </tr>
 <tr class="odd">
-<td>gt_mean</td>
-<td>6.2</td>
-<td>15.1</td>
-<td>19.1</td>
-<td>8</td>
+<td>Process</td>
+<td>growth</td>
+<td>0.25</td>
 </tr>
 <tr class="even">
-<td>log_r0</td>
-<td>-0.49</td>
-<td>0.215</td>
-<td>0.89</td>
-<td>8</td>
+<td>Process</td>
+<td>renewal_7</td>
+<td>0.125</td>
 </tr>
 <tr class="odd">
-<td>n_places</td>
-<td>1</td>
-<td>2.5</td>
-<td>12</td>
-<td>8</td>
+<td>Gt shape</td>
+<td>lognormal_0.6</td>
+<td>0.5</td>
 </tr>
 <tr class="even">
-<td>report_days</td>
-<td>5</td>
-<td>5</td>
-<td>7</td>
-<td>8</td>
+<td>Gt shape</td>
+<td>gamma_0.3</td>
+<td>0.375</td>
+</tr>
+<tr class="odd">
+<td>Gt shape</td>
+<td>gamma_1</td>
+<td>0.125</td>
+</tr>
+<tr class="even">
+<td>Trajectory</td>
+<td>fall_rise</td>
+<td>0.25</td>
+</tr>
+<tr class="odd">
+<td>Trajectory</td>
+<td>oscillating</td>
+<td>0.25</td>
+</tr>
+<tr class="even">
+<td>Trajectory</td>
+<td>growth</td>
+<td>0.125</td>
+</tr>
+<tr class="odd">
+<td>Trajectory</td>
+<td>rise_fall_sharp</td>
+<td>0.125</td>
+</tr>
+<tr class="even">
+<td>Trajectory</td>
+<td>rise_fall_gradual</td>
+<td>0.125</td>
+</tr>
+<tr class="odd">
+<td>Trajectory</td>
+<td>multi_wave</td>
+<td>0.125</td>
+</tr>
+<tr class="even">
+<td>Delay family</td>
+<td>gamma</td>
+<td>0.5</td>
+</tr>
+<tr class="odd">
+<td>Delay family</td>
+<td>exponential</td>
+<td>0.25</td>
+</tr>
+<tr class="even">
+<td>Delay family</td>
+<td>lognormal</td>
+<td>0.25</td>
+</tr>
+<tr class="odd">
+<td>Delay form</td>
+<td>parametric</td>
+<td>0.5</td>
+</tr>
+<tr class="even">
+<td>Delay form</td>
+<td>both</td>
+<td>0.375</td>
+</tr>
+<tr class="odd">
+<td>Delay form</td>
+<td>non_parametric</td>
+<td>0.125</td>
+</tr>
+<tr class="even">
+<td>Delay change</td>
+<td>step</td>
+<td>0.25</td>
+</tr>
+<tr class="odd">
+<td>Delay change</td>
+<td>drift</td>
+<td>0.25</td>
+</tr>
+<tr class="even">
+<td>Delay change</td>
+<td>periodic</td>
+<td>0.25</td>
+</tr>
+<tr class="odd">
+<td>Delay change</td>
+<td>walk</td>
+<td>0.125</td>
+</tr>
+<tr class="even">
+<td>Delay change</td>
+<td>static</td>
+<td>0.125</td>
+</tr>
+<tr class="odd">
+<td>Reporting</td>
+<td>daily</td>
+<td>0.75</td>
+</tr>
+<tr class="even">
+<td>Reporting</td>
+<td>weekdays</td>
+<td>0.25</td>
+</tr>
+<tr class="odd">
+<td>Reference dow</td>
+<td>no</td>
+<td>0.75</td>
+</tr>
+<tr class="even">
+<td>Reference dow</td>
+<td>yes</td>
+<td>0.25</td>
+</tr>
+<tr class="odd">
+<td>Observation</td>
+<td>negbin1d</td>
+<td>0.75</td>
+</tr>
+<tr class="even">
+<td>Observation</td>
+<td>poisson</td>
+<td>0.125</td>
+</tr>
+<tr class="odd">
+<td>Observation</td>
+<td>negbin</td>
+<td>0.125</td>
+</tr>
+<tr class="even">
+<td>Strata</td>
+<td>places</td>
+<td>0.5</td>
+</tr>
+<tr class="odd">
+<td>Strata</td>
+<td>single</td>
+<td>0.25</td>
+</tr>
+<tr class="even">
+<td>Strata</td>
+<td>places_ages</td>
+<td>0.125</td>
+</tr>
+<tr class="odd">
+<td>Strata</td>
+<td>ages</td>
+<td>0.125</td>
 </tr>
 </tbody>
 </table>
