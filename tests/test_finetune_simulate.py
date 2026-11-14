@@ -54,7 +54,7 @@ for (f in names(factors)) {
 """,
         tmp_path,
     )
-    assert all(line.endswith("TRUE") for line in out.strip().splitlines())
+    assert all(line.split()[-1] == "TRUE" for line in out.strip().splitlines())
 
 
 @needs_r
