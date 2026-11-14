@@ -6,4 +6,5 @@
   check on simulated vintages and leave one province out.
 - `ppc`: posterior predictive check summaries and their plot.
 - `hubcompare`: comparison with the forecasts submitted to the hub.
+- `germany`: the German hospitalisation nowcast benchmark.
 """

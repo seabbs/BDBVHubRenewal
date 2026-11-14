@@ -21,11 +21,18 @@ on:
   push:
     branches: [main]
     paths:
+      - 'src/bdbvhubrenewal/__init__.py'
+      - 'src/bdbvhubrenewal/devices.py'
       - 'src/bdbvhubrenewal/baselinenowcast/**'
       - 'src/bdbvhubrenewal/data/**'
+      - 'src/bdbvhubrenewal/evaluation/__init__.py'
       - 'src/bdbvhubrenewal/evaluation/backtest.py'
+      - 'src/bdbvhubrenewal/evaluation/nowcast.py'
       - 'src/bdbvhubrenewal/evaluation/ppc.py'
+      - 'src/bdbvhubrenewal/evaluation/scoring.py'
       - 'src/bdbvhubrenewal/evaluation/store.py'
+      - 'src/bdbvhubrenewal/reporting/__init__.py'
+      - 'src/bdbvhubrenewal/submission/__init__.py'
       - 'src/bdbvhubrenewal/submission/fitting.py'
       - 'src/bdbvhubrenewal/forecasters/**'
       - 'src/bdbvhubrenewal/model/**'
@@ -40,11 +47,18 @@ on:
   # change will cost on main.
   pull_request:
     paths:
+      - 'src/bdbvhubrenewal/__init__.py'
+      - 'src/bdbvhubrenewal/devices.py'
       - 'src/bdbvhubrenewal/baselinenowcast/**'
       - 'src/bdbvhubrenewal/data/**'
+      - 'src/bdbvhubrenewal/evaluation/__init__.py'
       - 'src/bdbvhubrenewal/evaluation/backtest.py'
+      - 'src/bdbvhubrenewal/evaluation/nowcast.py'
       - 'src/bdbvhubrenewal/evaluation/ppc.py'
+      - 'src/bdbvhubrenewal/evaluation/scoring.py'
       - 'src/bdbvhubrenewal/evaluation/store.py'
+      - 'src/bdbvhubrenewal/reporting/__init__.py'
+      - 'src/bdbvhubrenewal/submission/__init__.py'
       - 'src/bdbvhubrenewal/submission/fitting.py'
       - 'src/bdbvhubrenewal/forecasters/**'
       - 'src/bdbvhubrenewal/model/**'
@@ -106,6 +120,7 @@ jobs:
       rest: ${{ steps.plan.outputs.rest }}
       rest_count: ${{ steps.plan.outputs.rest_count }}
       write: ${{ steps.guard.outputs.write }}
+      chronos_ft: ${{ steps.finetuned.outputs.hash }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -137,6 +152,17 @@ jobs:
           uv run bdbvhubrenewal bvd
       - name: Fetch the store
         run: scripts/fit-store.sh fetch "$STORE"
+      # The fine-tuned models' checkpoint, resolved once for the run so
+      # every fit job keys and loads the same one without listing the
+      # releases again.
+      - name: Resolve the fine-tuned checkpoint
+        id: finetuned
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          hash=$(uv run bdbvhubrenewal finetuned-checkpoint)
+          echo "hash=$hash" >> "$GITHUB_OUTPUT"
+          echo "BDBV_CHRONOS_FT=$hash" >> "$GITHUB_ENV"
       - name: Plan
         id: plan
         env:
@@ -228,15 +254,16 @@ jobs:
         with:
           path: ~/.cache/huggingface
           key: chronos-2-29ec3766d36d6f73f0696f85560a422f50e8498c
-      # The fine-tuned models download the LoRA adapter config/finetune.toml
-      # pins from its release, cached by that file. With no release the
-      # fit fails and is stored as failed.
-      - name: Cache the fine-tuned checkpoint
+      # The fine-tuned models download the LoRA adapter of the newest
+      # chronos-ft-* release (or the one config/finetune.toml pins), kept
+      # by its hash. A missing adapter is stored as failed.
+      - name: Cache the fine-tuned checkpoints
         if: endsWith(matrix.model, '_ft')
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/bdbvhubrenewal
-          key: chronos-ft-${{ hashFiles('config/finetune.toml') }}
+          key: chronos-ft-${{ github.run_id }}
+          restore-keys: chronos-ft-
       # A fit that raises is stored as failed and is not retried until
       # its inputs change or a dispatch sets retry_failed. One that times
       # out is retried next run.
@@ -246,6 +273,7 @@ jobs:
           MODEL: ${{ matrix.model }}
           ORIGIN: ${{ matrix.origin }}
           KEY: ${{ matrix.key }}
+          BDBV_CHRONOS_FT: ${{ needs.plan.outputs.chronos_ft }}
         run: |
           if ! uv run bdbvhubrenewal fit-store fit --model "$MODEL" \
             --origin "$ORIGIN" --store new; then

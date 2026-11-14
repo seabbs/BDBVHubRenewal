@@ -12,7 +12,7 @@ no model.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Final
 
@@ -43,13 +43,17 @@ HUB_QUANTILE_LEVELS: Final = (
 """The 23 quantile levels of hubverse quantile forecasts."""
 
 
-def hub_quantiles(table: pd.DataFrame) -> pd.DataFrame:
+def hub_quantiles(
+    table: pd.DataFrame, levels: Sequence[float] = HUB_QUANTILE_LEVELS
+) -> pd.DataFrame:
     """Return a hub sample table as hub quantiles.
 
     Parameters
     ----------
     table : pandas.DataFrame
         A hub sample table (`to_hub_table`).
+    levels : sequence of float
+        The quantile levels, by default the hub's.
 
     Returns
     -------
@@ -59,10 +63,9 @@ def hub_quantiles(table: pd.DataFrame) -> pd.DataFrame:
     """
     keys = [c for c in table.columns if c not in ("output_type_id", "value")]
     keys.remove("output_type")
-    levels = np.array(HUB_QUANTILE_LEVELS)
     out = (
         table.groupby(keys)["value"]
-        .quantile(levels)
+        .quantile(np.array(levels))
         .rename_axis([*keys, "output_type_id"])
         .reset_index()
     )

@@ -77,6 +77,7 @@ from bdbvhubrenewal.forecasters import (
 
 __all__ = [
     "STATUS_FILE",
+    "STORE_DATA",
     "STORE_ENTRIES",
     "STORE_SKIP",
     "UNPACKED_FILE",
@@ -109,14 +110,24 @@ STORE_ENTRIES: Final = (
 """The shared modules a stored fit calls: `fit` and `run_forecasts`."""
 
 STORE_SKIP: Final = (
+    "src/bdbvhubrenewal/evaluation/digest.py",
     "src/bdbvhubrenewal/evaluation/zones.py",
     "src/bdbvhubrenewal/forecasters/zones.py",
+    "src/bdbvhubrenewal/reporting/plots.py",
 )
-"""The zone split, which `STORE_ENTRIES` import but a fit does not call.
+"""Modules `STORE_ENTRIES` import but a fit does not call.
 
-A stored fit holds national and province samples only, and its zones are
-split from them at load (`forecasters.zones.zones_for_model`).
+The zone split: a stored fit holds national and province samples only,
+and its zones are split from them at load
+(`forecasters.zones.zones_for_model`). `fit_code`'s own helper
+(`evaluation.digest`), and the plots `evaluation.ppc` imports for
+`plot_ppc`, which a fit does not draw.
 """
+
+STORE_DATA: Final = "src/bdbvhubrenewal/data/*.csv"
+"""The package's data files, which a fit may read (the province centres
+of the renewal models' gravity kernel). Every stored fit's key holds
+them."""
 
 STATUS_FILE: Final = "fit-store.json"
 """What `load` used, written beside the results for the docs."""
@@ -159,13 +170,23 @@ def samplers(policy: Path | str = "ci/policy.toml") -> dict[str, Any]:
     dict
         Sampler table by model name. A fitted model with no candidate
         (`pprandomwalknowcast`) is absent and uses its own settings.
+
+    Raises
+    ------
+    ValueError
+        If two candidates with a sampler table run the same model, as a
+        stored fit has one.
     """
     raw = tomllib.loads(Path(policy).read_text())
-    return {
-        c["model"]: dict(c["sampler"])
-        for c in raw["candidates"]
-        if "model" in c and "sampler" in c
-    }
+    out: dict[str, Any] = {}
+    for c in raw["candidates"]:
+        if "model" not in c or "sampler" not in c:
+            continue
+        if c["model"] in out:
+            msg = f"Two candidates in {policy} run {c['model']}."
+            raise ValueError(msg)
+        out[c["model"]] = dict(c["sampler"])
+    return out
 
 
 def build_model(name: str, sampler: Mapping[str, Any]) -> ForecastModel:
@@ -221,7 +242,8 @@ def fit_code(model: str, root: Path | str = ".") -> list[str]:
 
     The import closure of the model's module and `STORE_ENTRIES`
     (`evaluation.digest.model_code`), without the other models' modules
-    and the zone split (`STORE_SKIP`).
+    and the modules a fit does not call (`STORE_SKIP`), and the package's
+    data files (`STORE_DATA`).
 
     Parameters
     ----------
@@ -237,7 +259,9 @@ def fit_code(model: str, root: Path | str = ".") -> list[str]:
     """
     from bdbvhubrenewal.evaluation.digest import model_code
 
-    return model_code(model, root, STORE_ENTRIES, cli=False, skip=STORE_SKIP)
+    code = model_code(model, root, STORE_ENTRIES, cli=False, skip=STORE_SKIP)
+    data = [p.relative_to(root).as_posix() for p in Path(root).glob(STORE_DATA)]
+    return sorted([*code, *data])
 
 
 @functools.cache
@@ -995,6 +1019,14 @@ def command(args: argparse.Namespace) -> int:
             print(f"ERROR: {found.meta.get('error')}", file=sys.stderr)
         return {"ok": 0, "missing": 3, "failed": 4}[state]
     if args.origins:
+        unknown = sorted(set(args.origins) - set(tasks))
+        if unknown:
+            print(
+                f"ERROR: {', '.join(unknown)} not among the origins the "
+                f"store fits, {list(tasks)}.",
+                file=sys.stderr,
+            )
+            return 1
         tasks = {o: t for o, t in tasks.items() if o in set(args.origins)}
     keys = current_keys(tasks, models, sampler, code)
     if args.action == "plan":

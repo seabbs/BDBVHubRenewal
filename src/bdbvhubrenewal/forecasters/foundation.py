@@ -4,8 +4,9 @@ r"""The Chronos-2 foundation model on the hub target's releases.
 See the Foundation models methods page for the model.
 Each pair of a source (`SOURCES`) and a layout (`LAYOUTS`) is one
 registered model, `fm_chronos_<source>_<layout>`, and each source's
-ragged model with the fine-tuned checkpoint (`FINETUNED`, pinned in
-`config/finetune.toml`) is `fm_chronos_<source>_ragged_ft`.
+ragged model with a fine-tuned checkpoint (`resolve_checkpoint`, the
+latest release unless `config/finetune.toml` pins one) is
+`fm_chronos_<source>_ragged_ft`.
 `hub_triangle` lays out the hub target by place, time and release lag,
 `FoundationModel` gives it to Chronos-2 as one group of series, and
 `chronos_sampler` draws trajectories from Chronos-2's quantiles.
@@ -20,6 +21,7 @@ import datetime as dt
 import hashlib
 import http.client
 import json
+import os
 import shutil
 import tempfile
 import tomllib
@@ -41,29 +43,34 @@ from bdbvhubrenewal.forecasters.base import (
     ModelUnavailableError,
     register_model,
 )
+from bdbvhubrenewal.forecasters.chain import start_weeks
 from bdbvhubrenewal.forecasters.randomwalk import RandomWalk
 
 __all__ = [
     "ADAPTER_FILES",
     "CHRONOS_MODEL",
     "CHRONOS_REVISION",
-    "FINETUNED",
     "FINETUNED_CACHE",
     "FINETUNED_CONFIG",
+    "FINETUNED_ENV",
+    "FINETUNED_RELEASES",
     "FINETUNED_URL",
     "LAYOUTS",
     "MAX_LAG",
     "SOURCES",
+    "SUMS_FILE",
     "Checkpoint",
     "FoundationModel",
     "HubTriangle",
     "Sampler",
     "chronos_sampler",
     "finetuned_adapter",
-    "finetuned_checkpoint",
+    "finetuned_releases",
+    "finetuned_spec",
     "hub_triangle",
     "layout_block",
     "quantile_draws",
+    "resolve_checkpoint",
 ]
 
 SOURCES: Final = ("weekly", "daily")
@@ -83,16 +90,26 @@ CHRONOS_MODEL: Final = "amazon/chronos-2"
 CHRONOS_REVISION: Final = "29ec3766d36d6f73f0696f85560a422f50e8498c"
 """The checkpoint's commit, pinned so runs are reproducible."""
 
-FINETUNED_CONFIG: Final = (
-    Path(__file__).resolve().parents[3] / "config" / "finetune.toml"
-)
-"""The fine-tuned checkpoint the `_ft` models load: its settings hash and
-the SHA-256 of its adapter files."""
+FINETUNED_CONFIG: Final = Path("config/finetune.toml")
+"""Which fine-tuned checkpoint the `_ft` models load: `hash`, `"latest"`
+or a settings hash."""
 
 FINETUNED_URL: Final = (
     "https://github.com/seabbs/BDBVHubRenewal/releases/download"
 )
 """Where the fine-tuned checkpoints' releases are downloaded from."""
+
+FINETUNED_RELEASES: Final = (
+    "https://api.github.com/repos/seabbs/BDBVHubRenewal/releases"
+)
+"""The repository's releases, listed to find the latest checkpoint."""
+
+FINETUNED_ENV: Final = "BDBV_CHRONOS_FT"
+"""Environment variable with the settings hash a run resolved once, which
+then overrides `FINETUNED_CONFIG`, so its jobs never list the releases."""
+
+SUMS_FILE: Final = "sha256sums.txt"
+"""A checkpoint release's asset with the SHA-256 of its other assets."""
 
 ADAPTER_FILES: Final = ("adapter_config.json", "adapter_model.safetensors")
 """The LoRA adapter's files. A checkpoint's release holds them and its
@@ -125,13 +142,79 @@ class Checkpoint:
     sha256: tuple[tuple[str, str], ...]
 
 
-def finetuned_checkpoint(path: Path | str = FINETUNED_CONFIG) -> Checkpoint:
-    """Read the pinned fine-tuned checkpoint.
+def finetuned_spec(path: Path | str = FINETUNED_CONFIG) -> str:
+    """Return the checkpoint the `_ft` models load: `"latest"` or a hash.
+
+    `FINETUNED_ENV`, when set, overrides the file.
 
     Parameters
     ----------
     path : pathlib.Path or str
-        A TOML file with `hash` and a `sha256` table by adapter file.
+        A TOML file with `hash`.
+
+    Returns
+    -------
+    str
+    """
+    if os.environ.get(FINETUNED_ENV):
+        return os.environ[FINETUNED_ENV]
+    return str(tomllib.loads(Path(path).read_text())["hash"])
+
+
+def _get(url: str) -> bytes:
+    """Read a URL, with a GitHub token from the environment if there is one."""
+    request = urllib.request.Request(url)
+    token = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")
+    if token and url.startswith("https://api.github.com/"):
+        request.add_header("Authorization", f"Bearer {token}")
+    with urllib.request.urlopen(request, timeout=60) as response:
+        return bytes(response.read())
+
+
+def finetuned_releases() -> list[dict[str, Any]]:
+    """List the repository's releases from the GitHub API.
+
+    Returns
+    -------
+    list of dict
+        Each release's `tag_name`, `published_at` and `draft`, among
+        others.
+
+    Raises
+    ------
+    ConnectionError
+        If GitHub cannot be reached.
+    """
+    out: list[dict[str, Any]] = []
+    for page in range(1, 11):
+        url = f"{FINETUNED_RELEASES}?per_page=100&page={page}"
+        try:
+            batch = json.loads(_get(url))
+        except (OSError, http.client.HTTPException) as err:
+            raise ConnectionError(
+                f"Cannot list the releases at {url} to find the fine-tuned "
+                f"checkpoint: {err!r}. Set GH_TOKEN or GITHUB_TOKEN to a "
+                "GitHub token (anonymous requests are rate limited), or "
+                f"set {FINETUNED_ENV} to a settings hash."
+            ) from err
+        out += batch
+        if len(batch) < 100:
+            break
+    return out
+
+
+@cache
+def resolve_checkpoint(spec: str) -> Checkpoint:
+    """Return a fine-tuned checkpoint from its release.
+
+    `"latest"` is the newest published `chronos-ft-*` release by publish
+    date. The release's `SUMS_FILE` gives the SHA-256 of its adapter
+    files. Each process resolves once.
+
+    Parameters
+    ----------
+    spec : str
+        `"latest"` or a settings hash.
 
     Returns
     -------
@@ -139,21 +222,61 @@ def finetuned_checkpoint(path: Path | str = FINETUNED_CONFIG) -> Checkpoint:
 
     Raises
     ------
+    ConnectionError
+        If GitHub cannot be reached. No cached checkpoint is used instead.
+    LookupError
+        If there is no checkpoint release.
+    FileNotFoundError
+        If the release has no `SUMS_FILE`.
     ValueError
-        If an adapter file has no SHA-256.
+        If `SUMS_FILE` lacks an adapter file.
     """
-    config = tomllib.loads(Path(path).read_text())
-    sha256 = config["sha256"]
-    missing = [f for f in ADAPTER_FILES if f not in sha256]
+    checkpoint = spec
+    if spec == "latest":
+        tags = sorted(
+            (r["published_at"], r["tag_name"])
+            for r in finetuned_releases()
+            if str(r["tag_name"]).startswith("chronos-ft-")
+            and not r.get("draft")
+            and r.get("published_at")
+        )
+        if not tags:
+            raise LookupError("No chronos-ft-* release holds a checkpoint.")
+        checkpoint = tags[-1][1].removeprefix("chronos-ft-")
+    tag = f"chronos-ft-{checkpoint}"
+    url = f"{FINETUNED_URL}/{tag}/{SUMS_FILE}"
+    try:
+        text = _get(url).decode()
+    except (OSError, http.client.HTTPException) as err:
+        # A release with no such asset: 404 from GitHub, or no file.
+        reason = getattr(err, "reason", None)
+        if getattr(err, "code", None) == 404 or isinstance(
+            reason, FileNotFoundError
+        ):
+            raise FileNotFoundError(
+                f"The release {tag} has no {SUMS_FILE} ({url})."
+            ) from err
+        raise ConnectionError(f"Cannot read {url}: {err!r}") from err
+    sums = {}
+    for line in text.splitlines():
+        if line.strip():
+            sha, name = line.split(maxsplit=1)
+            sums[name.lstrip("*").strip()] = sha
+    missing = [f for f in ADAPTER_FILES if f not in sums]
     if missing:
-        raise ValueError(f"{path} pins no SHA-256 of {', '.join(missing)}.")
-    return Checkpoint(
-        str(config["hash"]), tuple((f, str(sha256[f])) for f in ADAPTER_FILES)
+        raise ValueError(
+            f"{SUMS_FILE} of the release {tag} has no SHA-256 of "
+            f"{', '.join(missing)}."
+        )
+    return Checkpoint(checkpoint, tuple((f, sums[f]) for f in ADAPTER_FILES))
+
+
+def _finetuned(name: str, source: str) -> FoundationModel:
+    """Build a fine-tuned model with the checkpoint `finetuned_spec` names."""
+    return FoundationModel(
+        name, source, "ragged", resolve_checkpoint(finetuned_spec())
     )
 
-
-FINETUNED: Final = finetuned_checkpoint()
-"""The checkpoint the `_ft` models load."""
 
 Sampler = Callable[[Sequence[Series], int, int, int], list[np.ndarray]]
 """Draws trajectories: `(groups, horizon, n, seed)` to one
@@ -301,7 +424,8 @@ def finetuned_adapter(checkpoint: Checkpoint) -> Path:
     The release `chronos-ft-<hash>` at `FINETUNED_URL` holds
     `ADAPTER_FILES` and `settings.json`. They are kept in
     `FINETUNED_CACHE` only once all are downloaded, the settings hash
-    matches and each adapter file has its SHA-256.
+    matches and each adapter file has its SHA-256. A cached copy is
+    checked against the SHA-256 again on each use.
 
     Parameters
     ----------
@@ -326,7 +450,14 @@ def finetuned_adapter(checkpoint: Checkpoint) -> Path:
     cache = Path(FINETUNED_CACHE).expanduser()
     out = cache / tag
     if out.is_dir():
-        return out
+        if all(
+            (out / name).is_file()
+            and hashlib.sha256((out / name).read_bytes()).hexdigest() == sha
+            for name, sha in checkpoint.sha256
+        ):
+            return out
+        # A cached copy that has changed is downloaded again.
+        shutil.rmtree(out)
     cache.mkdir(parents=True, exist_ok=True)
     tmp = Path(tempfile.mkdtemp(dir=cache, prefix=f".{tag}-"))
     try:
@@ -481,9 +612,15 @@ def layout_block(
     }
 
 
-def _walk_start(origin: Any) -> str:
-    """Return the earliest week `randomwalk` starts its walk from."""
-    return str(origin.snap.week_ends[int(origin.start.min())])
+def _walk_start(task: ForecastTask) -> str:
+    """Return the earliest week `randomwalk` starts its walk from.
+
+    It is read from the delay alone, so it exists where the walk has no
+    spread.
+    """
+    walk = RandomWalk()
+    snap = walk.snapshots(task)
+    return str(snap.week_ends[int(start_weeks(snap, walk.settings).min())])
 
 
 @dataclass
@@ -556,8 +693,7 @@ class FoundationModel:
         tri = hub_triangle(rows, self.source, places, weeks[-1])
         start = tri.n_context
         if self.layout == "complete":
-            origin = RandomWalk().origin_at(task, errors=False)
-            start = tri.times.index(_walk_start(origin)) + 1
+            start = tri.times.index(_walk_start(task)) + 1
         if start < 2:
             raise ModelUnavailableError(
                 f"{self.name} needs two steps of context, and the task for "
@@ -616,13 +752,7 @@ for _source in SOURCES:
         )
     register_model(
         f"fm_chronos_{_source}_ragged_ft",
-        partial(
-            FoundationModel,
-            f"fm_chronos_{_source}_ragged_ft",
-            _source,
-            "ragged",
-            FINETUNED,
-        ),
+        partial(_finetuned, f"fm_chronos_{_source}_ragged_ft", _source),
         f"Chronos-2 fine-tuned on simulated outbreaks, on the hub target's "
         f"{_source} releases, ragged layout.",
         fitted=True,

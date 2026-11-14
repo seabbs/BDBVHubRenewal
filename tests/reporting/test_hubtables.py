@@ -43,6 +43,22 @@ def test_hub_quantiles_give_the_23_levels() -> None:
     assert out["value"].is_monotonic_increasing
 
 
+def test_hub_quantiles_take_other_levels() -> None:
+    table = pd.DataFrame(
+        {
+            "location": "DE",
+            "output_type": "sample",
+            "output_type_id": np.arange(1, 101),
+            "value": np.arange(100.0),
+        }
+    )
+    levels = (0.025, 0.1, 0.25, 0.5, 0.75, 0.9, 0.975)
+    out = hub_quantiles(table, levels)
+    assert list(out["output_type_id"]) == pytest.approx(list(levels))
+    want = np.quantile(np.arange(100.0), levels)
+    assert list(out["value"]) == pytest.approx(list(want))
+
+
 def test_hub_tables_cover_country_provinces_and_zones(
     target: pd.DataFrame,
     delays: pd.DataFrame,

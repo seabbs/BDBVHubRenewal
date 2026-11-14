@@ -14,6 +14,8 @@ from bdbvhubrenewal.evaluation.scoring import (
     energy_scores,
     relative_skill,
     score_forecasts,
+    score_quantiles,
+    wis_quantile,
     wis_sample,
 )
 
@@ -37,6 +39,82 @@ def test_wis_matches_interval_form(obs: float) -> None:
     assert got["wis"] == pytest.approx(_interval_wis(obs, samples))
     parts = got["dispersion"] + got["overprediction"] + got["underprediction"]
     assert parts == pytest.approx(got["wis"])
+
+
+HUB_LEVELS = np.array([0.025, 0.1, 0.25, 0.5, 0.75, 0.9, 0.975])
+"""The German hub's quantile levels."""
+
+
+def test_wis_of_quantiles_is_the_mean_quantile_score() -> None:
+    # As the German hub's paper scores its seven levels: the mean over
+    # levels of 2 (1{y < q} - tau) (q - y).
+    q = np.array([[2.0, 4.0, 6.0, 9.0, 12.0, 15.0, 20.0]] * 3)
+    obs = np.array([1.0, 10.0, 30.0])
+    want = np.mean(
+        2 * ((obs[:, None] < q) - HUB_LEVELS) * (q - obs[:, None]), axis=1
+    )
+    got = wis_quantile(obs, q, HUB_LEVELS)
+    np.testing.assert_allclose(got["wis"], want)
+    parts = got["dispersion"] + got["overprediction"] + got["underprediction"]
+    np.testing.assert_allclose(parts, want)
+
+
+def test_wis_of_samples_is_wis_of_their_quantiles() -> None:
+    samples = np.random.default_rng(4).poisson(25, 100).astype(float)
+    q = np.quantile(samples, QUANTILE_LEVELS)[None, :]
+    got = wis_quantile(np.array([18.0]), q, QUANTILE_LEVELS)
+    assert got["wis"][0] == pytest.approx(wis_sample(18.0, samples)["wis"])
+
+
+def _quantile_rows(model: str, place: str, values: list[float]) -> list[dict]:
+    return [
+        {
+            "model": model,
+            "location": place,
+            "target_end_date": "2021-12-04",
+            "horizon": 0,
+            "quantile": tau,
+            "value": v,
+        }
+        for tau, v in zip(HUB_LEVELS, values, strict=True)
+    ]
+
+
+def test_score_quantiles_gives_wis_median_error_and_coverage() -> None:
+    q = [2.0, 4.0, 6.0, 9.0, 12.0, 15.0, 20.0]
+    forecasts = pd.DataFrame(
+        _quantile_rows("a", "DE", q) + _quantile_rows("a", "DE-BY", q)
+    )
+    truth = pd.DataFrame(
+        {
+            "location": ["DE", "DE-BY"],
+            "target_end_date": "2021-12-04",
+            "truth": [10.0, 30.0],
+        }
+    )
+    got = score_quantiles(
+        forecasts, truth, ("model", "location", "target_end_date"), HUB_LEVELS
+    ).set_index("location")
+    want = wis_quantile(np.array([10.0, 30.0]), np.array([q, q]), HUB_LEVELS)
+    np.testing.assert_allclose(got.loc[["DE", "DE-BY"], "wis"], want["wis"])
+    assert got.loc["DE", "ae_median"] == pytest.approx(1.0)
+    assert got.loc["DE", "coverage_50"] == 1.0
+    assert got.loc["DE-BY", "coverage_95"] == 0.0
+    assert got.loc["DE", "horizon"] == 0
+    assert set(got.columns) >= {"truth", "coverage_80", "dispersion"}
+
+
+def test_score_quantiles_refuses_a_forecast_missing_a_level() -> None:
+    rows = _quantile_rows("a", "DE", [2.0, 4.0, 6.0, 9.0, 12.0, 15.0, 20.0])
+    forecasts = pd.DataFrame(rows[1:])
+    truth = pd.DataFrame(
+        {"location": ["DE"], "target_end_date": "2021-12-04", "truth": [1.0]}
+    )
+    with pytest.raises(ValueError, match="quantile levels"):
+        score_quantiles(
+            forecasts, truth, ("model", "location", "target_end_date"),
+            HUB_LEVELS,
+        )  # fmt: skip
 
 
 def test_wis_of_point_mass_is_absolute_error() -> None:

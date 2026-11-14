@@ -49,6 +49,7 @@ from bdbvhubrenewal.data.simulate import (
     simulate_outbreak,
 )
 from bdbvhubrenewal.data.tidy import delays_for_vintage
+from bdbvhubrenewal.evaluation.nowcast import TRUTH_LEVEL
 from bdbvhubrenewal.evaluation.scoring import energy_scores, score_forecasts
 from bdbvhubrenewal.forecasters.base import (
     NATIONAL,
@@ -139,6 +140,13 @@ class BacktestConfig:
     skip_origins : tuple of str
         Real releases that are not backtest origins. They stay in the
         histories of later origins.
+    truth_delay : int, optional
+        $D$, in days: the release backtest scores each week's complete
+        target on the first release whose cut-off is at least $D$ days
+        after it. None estimates $D$ from the releases
+        (`bdbvhubrenewal.evaluation.nowcast.resolve_truth_delay`).
+    truth_level : float
+        The share of the national count reported by an estimated $D$.
     """
 
     min_horizon: int = -4
@@ -150,6 +158,8 @@ class BacktestConfig:
     sampler: dict[str, Any] = field(default_factory=dict)
     bvd_max_rhat: float = MAX_RHAT
     skip_origins: tuple[str, ...] = ()
+    truth_delay: int | None = None
+    truth_level: float = TRUTH_LEVEL
 
 
 def apply_sampler(config: BacktestConfig) -> None:
@@ -212,6 +222,26 @@ def load_config(path: Path | str = "config/backtest.toml") -> BacktestConfig:
         bvd_max_rhat=float(raw["bvd"]["max_rhat"]),
         simulated_dates=saturdays(sim["first_vintage"], sim["last_vintage"]),
         skip_origins=tuple(str(d) for d in sp.get("skip_origins", ())),
+        truth_delay=_truth_delay(sp.get("truth_delay", "auto")),
+        truth_level=_truth_level(sp.get("truth_level", TRUTH_LEVEL)),
+    )
+
+
+def _truth_level(value: object) -> float:
+    """Read `truth_level`: a share above 0 and at most 1."""
+    if isinstance(value, int | float) and 0 < value <= 1:
+        return float(value)
+    raise ValueError(f"truth_level must be in (0, 1], not {value!r}.")
+
+
+def _truth_delay(value: object) -> int | None:
+    """Read `truth_delay`: a number of days, or "auto" to estimate it."""
+    if value == "auto":
+        return None
+    if isinstance(value, int) and not isinstance(value, bool) and value >= 0:
+        return value
+    raise ValueError(
+        f'truth_delay must be "auto" or a number of days, not {value!r}.'
     )
 
 

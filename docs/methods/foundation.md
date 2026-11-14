@@ -7,7 +7,8 @@ The data and notation are on the [Data methods page](data.md#target-and-notation
 The models are named `fm_chronos_<source>_<layout>`, with two sources of the hub target and two layouts.
 None is fitted to these data: Chronos-2 forecasts in context, from its pretrained weights or a fine-tuned checkpoint.
 The two `fm_chronos_<source>_ragged_ft` models are the ragged models with Chronos-2 fine-tuned on simulated outbreaks ([Fine-tuning](#fine-tuning)).
-None is submitted.
+Each is a candidate, not submitted.
+The hub model `seabbs-chronos2_ft` is set up to submit `fm_chronos_daily_ragged_ft` and is off until it is opted in ([Opting in](../submission/opting-in.md)).
 
 In brief, each model:
 
@@ -39,6 +40,7 @@ Health zones are split from the provinces as for the other fitted models ([Healt
 
 - **Complete** (`*_complete`): the targets $X_{p,t}$ for $t \le t^*$.
   $t^*$ is the earliest over places of the week `randomwalk` starts its walk from, the latest week 95% complete under its delay ([Baseline models](baselines.md#forecast)).
+  It comes from the delay alone, so it needs no walk spread.
 - **Ragged** (`*_ragged`): the same targets, with one lag series per place and lag $d < D$, indexed by onset step as in a regression nowcast.
   Lag series $d$ holds $Y_{p,t,d}$, missing where it is not yet reported, and Chronos-2 masks the missing values.
   $t^* = c - D$, the last step whose count is at lag $D$ or more, with $D = 4$ weeks or $D = 28$ days.
@@ -66,7 +68,7 @@ The context is every step from the first onset in the releases to $t^*$.
 ## Scoring
 
 The models forecast final counts and model no delay.
-So the release backtest scores them on the complete target only, the weeks the latest release reports in full ([Evaluation](evaluation.md#real-releases)).
+So the release backtest scores them on the complete target only, each week against the first release the truth delay after it ends ([Evaluation](evaluation.md#real-releases)).
 
 ## Fine-tuning
 
@@ -81,10 +83,16 @@ A block holds at most 26 provinces when weekly and five when daily, so daily blo
 Training is 1,000 steps of LoRA at learning rate $10^{-4}$, with 5% of blocks held out (`scripts/finetune_chronos.py`).
 
 A checkpoint is named by its settings hash, of the blocks, the code and the training settings.
-The models load the checkpoint pinned in `config/finetune.toml`, by its hash and the SHA-256 of its adapter files.
-It is downloaded once from the repository's release `chronos-ft-<hash>`.
-A fit fails if that release is missing or holds another checkpoint.
-The fit store keeps a failed fit until its inputs change, so a fit that failed before its release was published is retried by running the Fit store workflow with `retry_failed` (`gh workflow run fit-store.yml -R seabbs/BDBVHubRenewal -f retry_failed=true -f models="fm_chronos_weekly_ragged_ft fm_chronos_daily_ragged_ft"`).
+The first release, `chronos-ft-2c2b22a03107`, was trained from earlier code, so its hash cannot be reproduced from this repository.
+Later releases are trained from the code here, so retraining from it gives the same hash.
+Each checkpoint is published as the repository's release `chronos-ft-<hash>`, with a `sha256sums.txt` of its files.
+The models load the newest such release by publish date, unless `config/finetune.toml` pins a hash.
+The checkpoint's hash and adapter SHA-256 key the stored fits, so a new release refits the `_ft` models, and each stored fit records the checkpoint it used.
+The adapter is downloaded once and checked against `sha256sums.txt` and the settings hash.
+The fit store resolves the release once per run, with the workflow's GitHub token, and passes its hash to every fit in `BDBV_CHRONOS_FT`.
+If GitHub cannot be reached, building a model fails rather than fall back to a checkpoint downloaded before.
+A fit whose adapter cannot be downloaded is stored as failed, and the fit store keeps it until its inputs change.
+Such fits are retried by running the Fit store workflow with `retry_failed` (`gh workflow run fit-store.yml -R seabbs/BDBVHubRenewal -f retry_failed=true -f models="fm_chronos_weekly_ragged_ft fm_chronos_daily_ragged_ft"`).
 
 ## Limitations
 

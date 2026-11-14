@@ -12,17 +12,19 @@ the repo root:
     uv run --group chronos python scripts/finetune_chronos.py train \
         output/finetune/blocks.pt output/finetune/ckpt
 
-The `_ft` models download the checkpoint from the release
-`chronos-ft-<hash>` (`forecasters.foundation.finetuned_adapter`).
-Publish a checkpoint (`output/finetune/ckpt/n<N>`), then set its hash and
-adapter SHA-256 in `config/finetune.toml`:
+The unattended run (`scripts/finetune_driver.sh`, training with
+`scripts/finetune_stream.py`) publishes each checkpoint itself, with
+`sha256sums.txt` of its assets. The `_ft` models load the newest release
+`chronos-ft-<hash>` (`forecasters.foundation.resolve_checkpoint`), so
+publishing one is all a new checkpoint needs. By hand:
 
     gh release create chronos-ft-<hash> -R seabbs/BDBVHubRenewal \
         --latest=false --title "Chronos-2 fine-tuned checkpoint <hash>" \
         --notes "LoRA adapter of Chronos-2 for the _ft models." \
         output/finetune/ckpt/n<N>/finetuned-ckpt/adapter_config.json \
         output/finetune/ckpt/n<N>/finetuned-ckpt/adapter_model.safetensors \
-        output/finetune/ckpt/n<N>/settings.json
+        output/finetune/ckpt/n<N>/settings.json \
+        output/finetune/ckpt/n<N>/sha256sums.txt
 """
 
 from __future__ import annotations

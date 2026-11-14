@@ -12,3 +12,5 @@ Plot data, forecasts and scores, and write the docs figures and tables. See [Get
 ::: bdbvhubrenewal.reporting.nowcast_plots
 
 ::: bdbvhubrenewal.reporting.report
+
+::: bdbvhubrenewal.reporting.germany

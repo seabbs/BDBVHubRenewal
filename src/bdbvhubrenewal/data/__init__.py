@@ -9,6 +9,7 @@
 - `snapshots`: daily release snapshots as arrays on the onset clock.
 - `bvd`: BVDOutbreakSize releases as of a forecast's cut-off.
 - `zones`: the hub's health-zone codes and weekly zone counts.
+- `germany`: the German hospitalisation nowcasting hub data as tasks.
 
 The names of `tidy` are re-exported here.
 """

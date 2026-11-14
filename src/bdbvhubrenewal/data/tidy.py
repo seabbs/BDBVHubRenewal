@@ -845,7 +845,10 @@ _DEFAULT_DATA_DIR = Path("data")
 
 
 def _data_dir(data_dir: Path | str | None) -> Path:
-    return Path(data_dir) if data_dir is not None else _DEFAULT_DATA_DIR
+    """Return `data_dir`, else `$BDBV_DATA_DIR`, else `_DEFAULT_DATA_DIR`."""
+    if data_dir is not None:
+        return Path(data_dir)
+    return Path(os.environ.get("BDBV_DATA_DIR") or _DEFAULT_DATA_DIR)
 
 
 def load_target(data_dir: Path | str | None = None) -> pd.DataFrame:
