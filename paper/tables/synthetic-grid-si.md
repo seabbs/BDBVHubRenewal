@@ -1,5 +1,3 @@
-Settings of each simulated outbreak (grid r2-real). Realised values follow once the r2-real settings exist.
-
 | Factor | Range or levels | Distribution | Enters through | Realised |
 |---|---|---|---|---|
 | Strata | One place; 2 to 26 places; 2 to 8 age groups in one place; 6 to 16 places by 3 to 7 age groups | Probabilities 0.3, 0.4, 0.2 and 0.1 | `enw_preprocess_data(by = c('place', 'age'))` |  |

@@ -590,24 +590,18 @@ def main() -> None:
 
 
 def write_tables(settings: pd.DataFrame, out_dir: Path) -> None:
-    """Write `synthetic-grid` (main text) and `synthetic-grid-si` tables."""
+    """Write `synthetic-grid` (main text) and `synthetic-grid-si` tables.
+
+    Each is a CSV and a Markdown table that the paper includes under its
+    own caption.
+    """
     out_dir.mkdir(parents=True, exist_ok=True)
-    realised = (
-        f"Realised values are over {len(settings):,} outbreaks."
-        if len(settings)
-        else "Realised values follow once the r2-real settings exist."
-    )
-    for name, table, headers, what in (
-        ("synthetic-grid", main_table(settings), MAIN_HEADERS, "Design"),
-        ("synthetic-grid-si", grid_table(settings), _HEADERS, "Settings"),
+    for name, table, headers in (
+        ("synthetic-grid", main_table(settings), MAIN_HEADERS),
+        ("synthetic-grid-si", grid_table(settings), _HEADERS),
     ):
         table.to_csv(out_dir / f"{name}.csv", index=False)
-        caption = (
-            f"{what} of each simulated outbreak (grid r2-real). {realised}\n\n"
-        )
-        (out_dir / f"{name}.md").write_text(
-            caption + to_markdown(table, headers)
-        )
+        (out_dir / f"{name}.md").write_text(to_markdown(table, headers))
 
 
 if __name__ == "__main__":

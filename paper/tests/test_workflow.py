@@ -15,6 +15,8 @@ SNAKEFILE = PAPER / "workflow" / "Snakefile"
 CONFIG = yaml.safe_load((PAPER / "workflow" / "config.yaml").read_text())
 RULES = (
     "data",
+    "publish",
+    "summary",
     "forecasts",
     "table",
     "truth",
@@ -22,6 +24,20 @@ RULES = (
     "figures",
     "score_tables",
 )
+
+
+def _offline(tmp: Path, **extra) -> Path:
+    """A config that runs every study on dummy data, writing under `tmp`."""
+    path = tmp / "offline.yaml"
+    cfg = {
+        "results": str(tmp / "results"),
+        "build": str(tmp / "build"),
+        "germany": {"real": False},
+        "ebola": {"hub": None},
+        **extra,
+    }
+    path.write_text(yaml.safe_dump(cfg))
+    return path
 
 
 def _snakemake(*args: str) -> subprocess.CompletedProcess:
@@ -34,7 +50,13 @@ def _snakemake(*args: str) -> subprocess.CompletedProcess:
 @pytest.mark.parametrize("target", ["development", "paper"])
 def test_dry_run(target: str, tmp_path: Path) -> None:
     res = _snakemake(
-        target, "-n", "--cores", "1", "--config", f"results={tmp_path}"
+        target,
+        "-n",
+        "--cores",
+        "1",
+        "--configfile",
+        str(PAPER / "workflow" / "config.yaml"),
+        str(_offline(tmp_path)),
     )
     assert res.returncode == 0, res.stderr
     log = res.stdout + res.stderr
@@ -44,17 +66,17 @@ def test_dry_run(target: str, tmp_path: Path) -> None:
 
 @pytest.fixture(scope="module")
 def development(tmp_path_factory: pytest.TempPathFactory) -> Path:
-    out = tmp_path_factory.mktemp("results")
+    tmp = tmp_path_factory.mktemp("run")
     res = _snakemake(
         "development",
         "--cores",
         "2",
-        "--config",
-        f"results={out}",
-        "n_samples=20",
+        "--configfile",
+        str(PAPER / "workflow" / "config.yaml"),
+        str(_offline(tmp, n_samples=20)),
     )
     assert res.returncode == 0, res.stderr
-    return out / "development"
+    return tmp / "results" / "development"
 
 
 def test_development_writes_main_and_si_outputs(development: Path) -> None:
@@ -92,3 +114,39 @@ def test_development_scores_have_truth(development: Path) -> None:
         scores = pd.read_csv(development / "scores" / f"{study}.csv.gz")
         assert len(scores) > 0
         assert scores["score"].notna().all()
+
+
+def test_development_publishes_for_the_paper(development: Path) -> None:
+    build = development.parents[1] / "build"
+    assert (build / "figures" / "main" / "germany-results.png").is_file()
+    assert (build / "tables" / "main" / "germany-scores.md").is_file()
+    results = yaml.safe_load((build / "results.yml").read_text())["results"]
+    assert results["mode"] == "development"
+    assert results["germany"]["source"] == "dummy"
+    assert results["germany"]["label"]
+
+
+def test_dry_run_with_real_data_runs_the_benchmark(tmp_path: Path) -> None:
+    cfg = tmp_path / "real.yaml"
+    cfg.write_text(
+        yaml.safe_dump(
+            {
+                "results": str(tmp_path / "results"),
+                "build": str(tmp_path / "build"),
+                "germany": {
+                    "data": str(tmp_path / "germany"),
+                    "results": str(tmp_path / "germany-results"),
+                },
+                "ebola": {"hub": str(tmp_path / "hub")},
+            }
+        )
+    )
+    base = str(PAPER / "workflow" / "config.yaml")
+    dev = _snakemake("development", "-n", "--configfile", base, str(cfg))
+    assert dev.returncode == 0, dev.stderr
+    log = dev.stdout + dev.stderr
+    for rule in ("germany_fetch", "germany_development", "ebola_hub"):
+        assert f"rule {rule}" in log
+    assert "rule germany_heldout" not in log
+    paper = _snakemake("paper", "-n", "--configfile", base, str(cfg))
+    assert "rule germany_heldout" in paper.stdout + paper.stderr

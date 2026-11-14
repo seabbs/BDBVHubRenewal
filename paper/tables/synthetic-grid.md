@@ -1,5 +1,3 @@
-Design of each simulated outbreak (grid r2-real). Realised values follow once the r2-real settings exist.
-
 | Design | Levels and shares | Enters through | Realised |
 |---|---|---|---|
 | Strata | One place 30%; 2 to 26 places 40%; 2 to 8 age groups in one place 20%; 6 to 16 places by 3 to 7 age groups 10% | `enw_preprocess_data(by)` |  |

@@ -147,6 +147,13 @@ STUDY_SETUP: Final[dict[str, StudySetup]] = {
             "fm_chronos_weekly_ragged": _FM_WEEKLY,
             "fm_chronos_weekly_ragged_ft": _FM_WEEKLY_FT,
             "epinowcast": ModelSkill(0.0, 0.65, 1.05),
+            # Checkpoints of the fine-tune, improving with its outbreaks.
+            **{
+                f"fm_chronos_daily_ragged_ft@{n}": ModelSkill(
+                    0.0, 0.75 + 0.05 * i, 1.0
+                )
+                for i, n in enumerate((8000, 6000, 4000, 2000, 1000))
+            },
         },
         form="sample",
     ),

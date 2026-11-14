@@ -8,7 +8,6 @@ import pandas as pd
 import pytest
 
 from paperfigs.dummy import dummy_factors, dummy_study
-from paperfigs.periods import STUDY_SPLITS
 from paperfigs.plots import (
     PANEL_LETTERS,
     results_panel,
@@ -140,7 +139,7 @@ def test_chronos_variants_share_a_colour_with_distinct_styles(family) -> None:
 @pytest.fixture(scope="module")
 def germany():
     fc, obs = dummy_study("germany", seed=1, n_samples=5)
-    return fc, obs, score_forecasts(fc), STUDY_SPLITS["germany"]
+    return fc, obs, score_forecasts(fc), pd.Timestamp("2022-02-10")
 
 
 def _texts(fig) -> str:
@@ -162,7 +161,7 @@ def test_split_draws_both_halves_and_the_line(germany) -> None:
 
 def test_no_split_draws_one_bar_per_model(germany) -> None:
     fc, obs, scores, _ = germany
-    fig = results_panel(fc, obs, scores, split=False)
+    fig = results_panel(fc, obs, scores, split=None)
     rel_ax = next(ax for ax in fig.axes if ax.get_title() == "Relative WIS")
     assert len(rel_ax.patches) == scores["model"].nunique()
     assert "development | held out" not in _texts(fig)
@@ -242,10 +241,25 @@ def test_missing_origins_break_lines_over_time(gappy) -> None:
 def test_nowcast_panel_marks_a_missing_ribbon(gappy) -> None:
     fc, obs, scores, _ = gappy
     fig = results_panel(
-        fc, obs, scores, ribbon_models=["randomwalknowcast"], split=False
+        fc, obs, scores, ribbon_models=["randomwalknowcast"], split=None
     )
     ax = next(a for a in fig.axes if a.get_title() == "Nowcasts over time")
     assert any(ln.get_marker() == "x" for ln in ax.get_lines())
     labels = [t.get_text() for t in fig.legends[0].get_texts()]
     assert "No forecast at origin" in labels
+    plt.close(fig)
+
+
+def test_finetune_size_plots_one_line_per_finetuned_model() -> None:
+    from paperfigs.plots import si_scores_by_finetune_size
+
+    fc, _ = dummy_study("synthetic", seed=1, n_samples=10)
+    fig = si_scores_by_finetune_size(score_forecasts(fc))
+    ax = fig.axes[0]
+    # The reference line at 1 spans the axes, from 0 to 1.
+    xs = sorted(
+        {x for line in ax.get_lines() for x in line.get_xdata()} - {0, 1}
+    )
+    assert xs[0] == 1000
+    assert xs[-1] == 8000
     plt.close(fig)

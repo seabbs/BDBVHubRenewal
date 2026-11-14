@@ -18,16 +18,9 @@ Three sources give samples.
 
 `observations` gives the hub's counts as of each release.
 `reporting_delay` estimates D, the age by which 98% of the national
-count is reported, from the hub's release history. `rolling_truth` gives each
-target week's count as reported D days after the week ended, as the
-German nowcast hub did (Wolffram et al. 2023). Weeks whose release
-that far after them is not out yet have no truth. `load` joins it to the
-samples as `truth`, one row per sample, with `quantile_level` left empty
-as the paper's schema has it.
-`score` scores the samples with the repo's sample scores
-(`bdbvhubrenewal.evaluation.scoring`): CRPS on the natural and `log1p`
-scales, bias, and 50% and 90% coverage. `relative_scores` divides each
-model's mean CRPS by the hub's baseline's on the forecasts the two share.
+count is reported, from the hub's release history. `load` gives every
+forecast's samples, one row per sample, in the paper's schema with
+`truth` left for the workflow to attach.
 """
 
 from __future__ import annotations
@@ -41,28 +34,18 @@ from typing import Final
 
 import numpy as np
 import pandas as pd
-from bdbvhubrenewal.evaluation.scoring import (
-    bias_sample,
-    coverage_sample,
-    crps_sample,
-    relative_skill,
-)
 
 __all__ = [
     "COLUMNS",
     "DELAY_LEVEL",
     "HUB_BASELINE",
-    "SCORES",
     "TARGET",
     "candidate_samples",
     "hub_samples",
     "load",
     "observations",
-    "relative_scores",
     "reporting_delay",
-    "rolling_truth",
     "round_close",
-    "score",
     "store_samples",
 ]
 
@@ -99,8 +82,6 @@ HUB_BASELINE: Final = "BDBVHub-baseline"
 
 KEYS: Final = ["model", "location", "origin_date", "target_date"]
 SAMPLE_COLUMNS: Final = [*KEYS, "sample_id", "value"]
-SCORES: Final = ("crps", "log_crps", "bias", "coverage_50", "coverage_90")
-"""The scores `score` gives for each forecast."""
 
 
 def round_close(origin_date: pd.Timestamp) -> pd.Timestamp:
@@ -264,6 +245,8 @@ def reporting_delay(
         & ~data["as_of"].isin(pd.to_datetime(list(skip)))
     ]
     early = early.assign(final=early["target_date"].map(final))
+    # Weeks the latest release no longer has cannot be compared.
+    early = early.dropna(subset=["final"])
     days = (early["as_of"] - early["target_date"]).dt.days
     early = early.assign(age=np.ceil(days / 7).astype(int))
     pooled = early.groupby("age")[["observation", "final"]].sum()
@@ -272,53 +255,19 @@ def reporting_delay(
     return int(reached.min()) * 7 if len(reached) else None
 
 
-def rolling_truth(hub: str | Path, delay_days: int) -> pd.DataFrame:
-    """Return each target week's count as reported `delay_days` after it.
-
-    The count is from the latest release on or before the week's end plus
-    `delay_days`. A week is left out until a release on or after that
-    day exists, so its truth no longer changes.
-    """
-    data = _target(hub)
-    due = data["target_date"] + pd.Timedelta(days=delay_days)
-    data = data.assign(due=due)
-    latest = data["as_of"].max()
-    data = data[(data["as_of"] <= data["due"]) & (data["due"] <= latest)]
-    data = (
-        data.sort_values("as_of")
-        .groupby(["location", "target_date"], as_index=False)
-        .last()
-    )
-    return pd.DataFrame(
-        {
-            "location": data["location"],
-            "target_date": data["target_date"],
-            "truth": data["observation"].astype(float),
-        }
-    ).reset_index(drop=True)
-
-
 def load(
     hub: str | Path,
     candidates: Iterable[str | Path] = (),
     store: str | Path | None = None,
     store_ref: str = "origin/fit-store",
-    delay_days: int | None = None,
 ) -> pd.DataFrame:
-    """Return every forecast's samples with the rolling truth.
+    """Return every forecast's samples, with `truth` left empty.
 
     `hub` is a clone of the hub. `candidates` are files of our models'
     stored forecasts and `store` a clone holding the fit store branch
     `store_ref`. A model and round in more than one source is taken from
-    the first of hub, candidates and store. `truth` is missing where the
-    release `delay_days` after the week is not out yet. `delay_days`
-    defaults to `reporting_delay(hub)`.
+    the first of hub, candidates and store.
     """
-    if delay_days is None:
-        delay_days = reporting_delay(hub)
-        if delay_days is None:
-            msg = f"No age reaches {DELAY_LEVEL:.0%} of the national count."
-            raise ValueError(msg)
     parts = [hub_samples(hub), candidate_samples(candidates)]
     if store is not None:
         parts.append(store_samples(store, store_ref))
@@ -329,62 +278,10 @@ def load(
         kept.append(part[[p not in seen for p in pairs]])
         seen |= set(pairs)
     table = pd.concat([k for k in kept if not k.empty], ignore_index=True)
-    truth = rolling_truth(hub, delay_days)
-    table = table.merge(truth, on=["location", "target_date"], how="left")
+    table["truth"] = np.nan
     table["horizon"] = (
         (table["target_date"] - table["origin_date"]).dt.days // 7
     ).astype(int)
     table["study"] = "ebola"
     table["quantile_level"] = np.nan
     return table[list(COLUMNS)].reset_index(drop=True)
-
-
-def score(table: pd.DataFrame) -> pd.DataFrame:
-    """Score each forecast with truth from its samples.
-
-    Returns one row per forecast: its keys, `horizon`, `truth`,
-    `n_samples` and `SCORES`. `log_crps` is the CRPS of `log1p` of the
-    samples against `log1p` of the truth. Bias is positive for
-    overprediction.
-    """
-    keys = [*KEYS, "horizon"]
-    table = table.dropna(subset=["truth"])
-    rows = []
-    for key, group in table.groupby(keys, sort=True):
-        y = float(group["truth"].iloc[0])
-        x = group["value"].to_numpy(float)
-        rows.append(
-            {
-                **dict(zip(keys, key, strict=True)),
-                "truth": y,
-                "n_samples": x.size,
-                "crps": crps_sample(y, x),
-                "log_crps": crps_sample(float(np.log1p(y)), np.log1p(x)),
-                "bias": bias_sample(y, x),
-                "coverage_50": coverage_sample(y, x, 0.5),
-                "coverage_90": coverage_sample(y, x, 0.9),
-            }
-        )
-    return pd.DataFrame(rows, columns=[*keys, "truth", "n_samples", *SCORES])
-
-
-def relative_scores(
-    scores: pd.DataFrame,
-    baseline: str = HUB_BASELINE,
-    by: Sequence[str] = (),
-) -> pd.DataFrame:
-    """Return each model's mean CRPS over the baseline's.
-
-    Each model is compared with the baseline on the forecasts (location,
-    round and target week) the two of them made. The baseline has 1.
-    Also gives `log_crps`, bias and coverage means.
-    """
-    match = ["location", "origin_date", "target_date"]
-    return relative_skill(
-        scores,
-        baseline=baseline,
-        by=by,
-        metrics=("crps", "log_crps"),
-        match_on=match,
-        means=("crps", "log_crps", "bias", "coverage_50", "coverage_90"),
-    )

@@ -88,8 +88,8 @@ def run_settings(config: Mapping[str, Any], mode: str) -> RunSettings:
     Raises
     ------
     ValueError
-        If the mode is unknown, an entry is missing, or a development seed
-        is also held out.
+        If the mode is unknown, an entry is missing, a seed list is empty,
+        or a development seed is also held out.
     """
     if mode not in MODES:
         raise ValueError(f"Unknown mode {mode!r}; use one of {MODES}.")
@@ -102,6 +102,8 @@ def run_settings(config: Mapping[str, Any], mode: str) -> RunSettings:
     dev_seeds = tuple(
         int(s) for s in _entry(dev, "development", "synthetic_seeds")
     )
+    if not dev_seeds or not held_seeds:
+        raise ValueError("Each run needs at least one synthetic seed.")
     shared = sorted(set(dev_seeds) & set(held_seeds))
     if shared:
         seeds = ", ".join(str(s) for s in shared)

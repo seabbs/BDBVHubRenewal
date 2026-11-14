@@ -8,38 +8,142 @@ schema of `paper/schema.md`.
 
 Both take the run's data limits. `seeds` picks the synthetic outbreaks,
 and a synthetic location code carries its seed (`synthetic_location`).
-`before` keeps German nowcast and target dates before that date.
+`before` keeps German nowcast and target dates before that date, and
+German releases up to D days after it, which the truth of the last
+target dates needs.
 
-Ebola reads a clone of the BDBV Modeling Hub (`hub`) through
-`paperdata.ebola`: the hub's releases, every team's samples and,
-optionally, our stored forecasts (`candidates`) and the fit store
-(`store`). D is the hub's 98% reporting delay. Without a hub, Ebola uses
-dummy data.
+`Sources` says where the real data are. `source_of` gives `real` for a
+study whose sources are set and usable, and `dummy` otherwise, when both
+functions return dummy data from `paperfigs.dummy`:
 
-The synthetic and German studies run models that are not merged yet
-(#192), so they always use dummy data from `paperfigs.dummy`
-(`DUMMY_STUDIES`), one dummy study per synthetic seed.
+- Germany reads the benchmark's paper tables and reporting triangle
+  (`paperdata.germany`).
+- Ebola reads a clone of the hub, our stored forecasts and the fit store
+  (`paperdata.ebola`), with D the hub's 98% reporting delay. It stays on
+  dummy data until the hub's baseline has a forecast with known truth,
+  as every score is relative to it.
+- The synthetic study needs the fine-tuned models of #192, so it always
+  runs on dummy data, one dummy study per seed.
 """
 
 from __future__ import annotations
 
+import subprocess
 from collections.abc import Sequence
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 
 import pandas as pd
 
-from paperdata import ebola
+from paperdata import ebola, germany
 from paperfigs.dummy import dummy_factors, dummy_study
 from paperpipe.config import synthetic_location
 
-__all__ = ["DUMMY_EBOLA_DELAY", "DUMMY_STUDIES", "load_data", "run_forecasts"]
-
-DUMMY_STUDIES: Final = ("synthetic", "germany")
-"""Studies whose loaders need unmerged models, so run on dummy data."""
+__all__ = [
+    "DUMMY_EBOLA_DELAY",
+    "NO_SOURCES",
+    "Sources",
+    "load_data",
+    "run_forecasts",
+    "source_of",
+]
 
 DUMMY_EBOLA_DELAY: Final = 21
 """D for the dummy Ebola data, in days."""
+
+
+@dataclass(frozen=True)
+class Sources:
+    """Where each study's real data are; unset means dummy data.
+
+    Attributes
+    ----------
+    germany_forecasts : tuple of pathlib.Path
+        The benchmark's paper tables (`paper-forecasts.csv.gz`).
+    germany_triangle : pathlib.Path, optional
+        The hub's reporting triangle.
+    hub : pathlib.Path, optional
+        A clone of the Ebola hub.
+    candidates : tuple of pathlib.Path
+        Files of our stored Ebola forecasts.
+    store : pathlib.Path, optional
+        A clone holding the fit store branch `store_ref`.
+    store_ref : str
+        The fit store branch.
+    """
+
+    germany_forecasts: tuple[Path, ...] = ()
+    germany_triangle: Path | None = None
+    hub: Path | None = None
+    candidates: tuple[Path, ...] = ()
+    store: Path | None = None
+    store_ref: str = "origin/fit-store"
+
+
+NO_SOURCES: Final = Sources()
+"""No real data: every study runs on dummy data."""
+
+
+def _has_ref(repo: Path, ref: str) -> bool:
+    done = subprocess.run(
+        ["git", "-C", str(repo), "rev-parse", "--verify", "--quiet", ref],
+        capture_output=True,
+        check=False,
+    )
+    return done.returncode == 0
+
+
+def _ebola_delay(sources: Sources, delay_days: int | None) -> int:
+    if delay_days is not None:
+        return delay_days
+    assert sources.hub is not None
+    delay = ebola.reporting_delay(sources.hub)
+    if delay is None:
+        msg = f"No age reaches {ebola.DELAY_LEVEL:.0%} of the count."
+        raise ValueError(msg)
+    return delay
+
+
+def _baseline_scorable(hub: Path, delay_days: int) -> bool:
+    """Whether the hub's baseline has a target with known truth."""
+    samples = ebola.hub_samples(hub)
+    base = samples.loc[samples["model"] == ebola.HUB_BASELINE]
+    latest = ebola.observations(hub)["as_of_date"].max()
+    due = base["target_date"] + pd.Timedelta(days=delay_days)
+    return bool((due <= latest).any())
+
+
+def source_of(
+    study: str, sources: Sources, delay_days: int | None = None
+) -> str:
+    """Return `real` if a study's real data are set and usable, else `dummy`.
+
+    Parameters
+    ----------
+    study : str
+        `synthetic`, `germany` or `ebola`.
+    sources : Sources
+        Where the real data are.
+    delay_days : int, optional
+        For Ebola, D in place of the hub's 98% reporting delay.
+
+    Returns
+    -------
+    str
+        `real` or `dummy`.
+    """
+    if study == "germany":
+        real = bool(sources.germany_forecasts) and bool(
+            sources.germany_triangle
+        )
+    elif study == "ebola":
+        real = sources.hub is not None and _baseline_scorable(
+            sources.hub, _ebola_delay(sources, delay_days)
+        )
+    else:
+        real = False
+    return "real" if real else "dummy"
 
 
 def _relabel(df: pd.DataFrame, seed: int) -> pd.DataFrame:
@@ -56,12 +160,35 @@ def _before(
     return df.loc[df[column] < pd.Timestamp(before)].reset_index(drop=True)
 
 
+def _locations(obs: pd.DataFrame, delay_days: int) -> pd.DataFrame:
+    return pd.DataFrame(
+        {"location": sorted(obs["location"].unique()), "delay_days": delay_days}
+    )
+
+
+def _germany_data(
+    sources: Sources, before: pd.Timestamp | None, delay_days: int
+) -> pd.DataFrame:
+    assert sources.germany_triangle is not None
+    fc = germany.forecasts(sources.germany_forecasts)
+    fc = _before(fc, "origin_date", before)
+    last = fc["origin_date"].max() if before is None else before
+    lag = pd.Timedelta(days=delay_days)
+    # Releases up to D days after the last date give the last truths.
+    obs = germany.observations(
+        sources.germany_triangle,
+        fc["origin_date"].min(),
+        last + lag - pd.Timedelta(days=1 if before is not None else 0),
+    )
+    return _before(obs, "target_date", before)
+
+
 def load_data(
     study: str,
     seeds: Sequence[int] = (),
     before: pd.Timestamp | None = None,
     delay_days: int | None = None,
-    hub: str | Path | None = None,
+    sources: Sources = NO_SOURCES,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Return a study's observations and its per-location table.
 
@@ -74,16 +201,21 @@ def load_data(
     before : pandas.Timestamp, optional
         For Germany, keep target dates before this date.
     delay_days : int, optional
-        For Germany, D for every location. For Ebola, D overrides the
+        D for every location. Germany needs it. For Ebola it replaces the
         hub's 98% reporting delay.
-    hub : str or pathlib.Path, optional
-        For Ebola, a clone of the hub.
+    sources : Sources
+        Where the real data are; a study without them gets dummy data.
 
     Returns
     -------
     tuple of pandas.DataFrame
         Observations in the schema, and `location`, `delay_days` and any
         scenario factors.
+
+    Raises
+    ------
+    ValueError
+        If Germany has no `delay_days`.
     """
     if study == "synthetic":
         obs, locs = [], []
@@ -95,30 +227,22 @@ def load_data(
         locations = pd.concat(locs, ignore_index=True)
         locations.insert(1, "delay_days", locations["delay_q98"].astype(int))
         return pd.concat(obs, ignore_index=True), locations
-    if study == "ebola" and hub is not None:
-        obs = ebola.observations(hub)
-        if delay_days is None:
-            delay_days = ebola.reporting_delay(hub)
-        if delay_days is None:
-            msg = f"No age reaches {ebola.DELAY_LEVEL:.0%} of the count."
-            raise ValueError(msg)
-        locations = pd.DataFrame(
-            {
-                "location": sorted(obs["location"].unique()),
-                "delay_days": delay_days,
-            }
-        )
-        return obs, locations
+    if study == "germany" and delay_days is None:
+        raise ValueError("Germany needs `delay_days`, its truth delay.")
+    real = source_of(study, sources, delay_days) == "real"
+    if study == "germany" and real:
+        assert delay_days is not None
+        obs = _germany_data(sources, before, delay_days)
+        return obs, _locations(obs, delay_days)
+    if study == "ebola" and real:
+        assert sources.hub is not None
+        obs = ebola.observations(sources.hub)
+        return obs, _locations(obs, _ebola_delay(sources, delay_days))
     _, obs = dummy_study(study, n_samples=1)
     if study == "germany":
         obs = _before(obs, "target_date", before)
-        delay = delay_days
-    else:
-        delay = DUMMY_EBOLA_DELAY if delay_days is None else delay_days
-    locations = pd.DataFrame(
-        {"location": sorted(obs["location"].unique()), "delay_days": delay}
-    )
-    return obs, locations
+    delay = delay_days if delay_days is not None else DUMMY_EBOLA_DELAY
+    return obs, _locations(obs, delay)
 
 
 def run_forecasts(
@@ -126,9 +250,8 @@ def run_forecasts(
     seeds: Sequence[int] = (),
     before: pd.Timestamp | None = None,
     n_samples: int = 100,
-    hub: str | Path | None = None,
-    candidates: Sequence[str | Path] = (),
-    store: str | Path | None = None,
+    sources: Sources = NO_SOURCES,
+    source: str = "dummy",
 ) -> pd.DataFrame:
     """Return every model's forecasts for a study, in the schema.
 
@@ -142,17 +265,15 @@ def run_forecasts(
         For Germany, keep nowcast dates before this date.
     n_samples : int
         Samples per forecast, for dummy studies scored on samples.
-    hub : str or pathlib.Path, optional
-        For Ebola, a clone of the hub.
-    candidates : sequence of str or pathlib.Path
-        For Ebola, files of our stored forecasts.
-    store : str or pathlib.Path, optional
-        For Ebola, a clone holding the fit store branch.
+    sources : Sources
+        Where the real data are.
+    source : str
+        `real` or `dummy`, as `source_of` gave for the study's data.
 
     Returns
     -------
     pandas.DataFrame
-        Forecasts in the schema.
+        Forecasts in the schema, with `truth` left for the workflow.
     """
     if study == "synthetic":
         parts = [
@@ -160,10 +281,21 @@ def run_forecasts(
             for s in seeds
         ]
         return pd.concat(parts, ignore_index=True)
-    if study == "ebola" and hub is not None:
-        # The truth is attached later, from the observations.
-        fc = ebola.load(hub, candidates=candidates, store=store, delay_days=0)
-        return fc.assign(truth=float("nan"))
+    if study == "germany" and source == "real":
+        return _before(
+            germany.forecasts(sources.germany_forecasts), "origin_date", before
+        )
+    if study == "ebola" and source == "real":
+        assert sources.hub is not None
+        store = sources.store
+        if store is not None and not _has_ref(store, sources.store_ref):
+            store = None
+        return ebola.load(
+            sources.hub,
+            candidates=sources.candidates,
+            store=store,
+            store_ref=sources.store_ref,
+        )
     fc, _ = dummy_study(study, n_samples=n_samples)
     if study == "germany":
         fc = _before(fc, "origin_date", before)

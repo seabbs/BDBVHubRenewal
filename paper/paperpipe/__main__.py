@@ -2,13 +2,14 @@
 
 Steps, in workflow order:
 
-- `data`: a study's observations and per-location table;
+- `data`: a study's observations, per-location table and run notes;
 - `forecasts`: every model's forecasts for a study;
 - `table`: the forecasts checked against the schema and the held-out
   guard;
 - `truth`: the rolling truth, D days after each target date;
 - `scores`: the forecasts scored against the truth;
-- `figures` and `score-tables`: main-text and SI outputs.
+- `figures` and `score-tables`: main-text and SI outputs;
+- `summary`: the numbers the paper quotes, as Quarto metadata.
 """
 
 from __future__ import annotations
@@ -24,8 +25,16 @@ from paperfigs.schema import validate_forecasts, validate_observations
 from paperfigs.scores import score_forecasts
 from paperfigs.truth import attach_truth, rolling_truth
 from paperpipe.config import check_no_heldout, run_settings
+from paperpipe.meta import read_meta, write_meta
 from paperpipe.outputs import score_tables, write_figures
-from paperpipe.studies import load_data, run_forecasts
+from paperpipe.studies import (
+    NO_SOURCES,
+    Sources,
+    load_data,
+    run_forecasts,
+    source_of,
+)
+from paperpipe.summary import study_summary, write_summary
 
 _DATES = ("origin_date", "target_date", "as_of_date")
 
@@ -53,16 +62,32 @@ def _delays(locations: pd.DataFrame) -> pd.Series:
     return locations.set_index("location")["delay_days"].astype(int)
 
 
+def _sources(a: argparse.Namespace) -> Sources:
+    return Sources(
+        germany_forecasts=tuple(a.germany_forecasts),
+        germany_triangle=a.germany_triangle,
+        hub=a.hub,
+        candidates=tuple(a.candidates),
+        store=a.store,
+        store_ref=a.store_ref,
+    )
+
+
 def _data(a: argparse.Namespace) -> None:
+    sources = _sources(a)
+    source = source_of(a.study, sources, a.delay)
+    if source == "dummy":
+        sources = NO_SOURCES
     obs, locations = load_data(
         a.study,
         seeds=a.seeds,
         before=_date(a.before),
         delay_days=a.delay,
-        hub=a.hub,
+        sources=sources,
     )
     _write(validate_observations(obs), a.observations)
     _write(locations, a.locations)
+    write_meta(a.meta, a.study, source)
 
 
 def _forecasts(a: argparse.Namespace) -> None:
@@ -71,9 +96,8 @@ def _forecasts(a: argparse.Namespace) -> None:
         seeds=a.seeds,
         before=_date(a.before),
         n_samples=a.n_samples,
-        hub=a.hub,
-        candidates=a.candidates,
-        store=a.store,
+        sources=_sources(a),
+        source=read_meta(a.meta)["source"],
     )
     _write(fc, a.out)
 
@@ -104,7 +128,16 @@ def _figures(a: argparse.Namespace) -> None:
         a.main_dir,
         a.si_dir,
         split=_date(a.split),
+        dummy=read_meta(a.meta)["source"] == "dummy",
     )
+
+
+def _summary(a: argparse.Namespace) -> None:
+    studies = {
+        read_meta(m)["study"]: study_summary(read_meta(m), pd.read_csv(t))
+        for m, t in zip(a.meta, a.scores, strict=True)
+    }
+    write_summary(a.out, a.mode, studies)
 
 
 def _score_tables(a: argparse.Namespace) -> None:
@@ -122,9 +155,13 @@ def _limits(p: argparse.ArgumentParser) -> None:
     p.add_argument("study")
     p.add_argument("--seeds", type=int, nargs="*", default=[])
     p.add_argument("--before", default=None)
+    p.add_argument("--meta", type=Path, required=True)
+    p.add_argument("--germany-forecasts", type=Path, nargs="*", default=[])
+    p.add_argument("--germany-triangle", type=Path, default=None)
     p.add_argument("--hub", type=Path, default=None)
     p.add_argument("--candidates", type=Path, nargs="*", default=[])
     p.add_argument("--store", type=Path, default=None)
+    p.add_argument("--store-ref", default="origin/fit-store")
 
 
 def _outputs(p: argparse.ArgumentParser) -> None:
@@ -175,6 +212,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("figures")
     _outputs(p)
+    p.add_argument("--meta", type=Path, required=True)
     p.add_argument("--forecasts", type=Path, required=True)
     p.add_argument("--observations", type=Path, required=True)
     p.set_defaults(run=_figures)
@@ -182,6 +220,13 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("score-tables")
     _outputs(p)
     p.set_defaults(run=_score_tables)
+
+    p = sub.add_parser("summary")
+    p.add_argument("--mode", required=True)
+    p.add_argument("--meta", type=Path, nargs="+", required=True)
+    p.add_argument("--scores", type=Path, nargs="+", required=True)
+    p.add_argument("--out", type=Path, required=True)
+    p.set_defaults(run=_summary)
     return parser
 
 

@@ -43,7 +43,7 @@ def test_load_adds_candidates(hub, tmp_path):
             "as_of": None,
         }
     ).to_csv(cand, index=False)
-    table = ebola.load(hub, candidates=[cand], delay_days=14)
+    table = ebola.load(hub, candidates=[cand])
     assert set(table["model"]) == {"team-a", "renewal"}
 
 
@@ -141,98 +141,19 @@ def test_hub_samples_keep_trajectory_ids(hub):
     assert sorted(s["sample_id"].unique()) == list(range(1, 101))
 
 
-def test_rolling_truth_is_release_d_days_after_week(hub):
-    truth = ebola.rolling_truth(hub, delay_days=14).set_index("target_date")
-    # 2026-10-17 + 14 days is 2026-10-31: the 2026-10-24 release.
-    assert truth.loc["2026-10-17", "truth"] == 3
-    # 2026-10-24 + 14 days is 2026-11-07: the 2026-11-01 release.
-    assert truth.loc["2026-10-24", "truth"] == 10
-    # 2026-11-07 + 14 days is not released yet.
-    assert pd.Timestamp("2026-11-07") not in truth.index
-
-
-def test_rolling_truth_needs_a_release_by_d_days(hub):
-    truth = ebola.rolling_truth(hub, delay_days=3)
-    # 2026-10-17 + 3 is before the first release.
-    assert pd.Timestamp("2026-10-17") not in set(truth["target_date"])
-
-
 def test_load_gives_sample_schema(hub):
-    table = ebola.load(hub, delay_days=14)
+    table = ebola.load(hub)
     assert list(table.columns) == list(ebola.COLUMNS)
     assert "sample_id" in table
     assert table["quantile_level"].isna().all()
     assert set(table["study"]) == {"ebola"}
     assert set(table["horizon"]) == {-1, 1}
     assert len(table) == 200
-    week = table.set_index("target_date")["truth"]
-    assert (week.loc["2026-10-24"] == 10).all()
-    assert week.loc["2026-11-07"].isna().all()
-
-
-def _forecast(model, location, values, truth, target="2026-10-24"):
-    return pd.DataFrame(
-        {
-            "study": "ebola",
-            "model": model,
-            "location": location,
-            "origin_date": pd.Timestamp("2026-10-31"),
-            "target_date": pd.Timestamp(target),
-            "horizon": -1,
-            "sample_id": np.arange(1, len(values) + 1),
-            "value": np.asarray(values, dtype=float),
-            "truth": truth,
-        }
-    )
-
-
-def test_score_uses_the_repo_sample_scores():
-    from bdbvhubrenewal.evaluation.scoring import (
-        bias_sample,
-        coverage_sample,
-        crps_sample,
-    )
-
-    x = np.arange(0.0, 20.0)
-    scores = ebola.score(_forecast("m", "CD", x, 7.0))
-    row = scores.iloc[0]
-    assert row["crps"] == pytest.approx(crps_sample(7.0, x))
-    assert row["log_crps"] == pytest.approx(
-        crps_sample(np.log1p(7.0), np.log1p(x))
-    )
-    assert row["bias"] == pytest.approx(bias_sample(7.0, x))
-    assert row["coverage_50"] == coverage_sample(7.0, x, 0.5)
-    assert row["coverage_90"] == coverage_sample(7.0, x, 0.9)
-    assert row["n_samples"] == 20
-
-
-def test_score_drops_forecasts_without_truth():
-    assert ebola.score(_forecast("m", "CD", [1.0, 2.0], np.nan)).empty
+    assert table["truth"].isna().all()
 
 
 def test_hub_baseline_is_the_hub_model():
     assert ebola.HUB_BASELINE == "BDBVHub-baseline"
-
-
-def test_relative_scores_pair_each_model_with_the_baseline():
-    base = ebola.HUB_BASELINE
-    table = pd.concat(
-        [
-            _forecast(base, "CD", [4.0, 4.0], 0.0),
-            _forecast(base, "CD-IT", [100.0, 100.0], 0.0),
-            _forecast("a", "CD", [2.0, 2.0], 0.0),
-            _forecast("a", "CD-IT", [1.0, 1.0], 0.0),
-            _forecast("b", "CD", [8.0, 8.0], 0.0),
-        ]
-    )
-    rel = ebola.relative_scores(ebola.score(table)).set_index("model")
-    # a shares CD and CD-IT with the baseline, b only CD.
-    assert rel.loc["a", "n"] == 2
-    assert rel.loc["a", "relative_crps"] == pytest.approx(1.5 / 52)
-    assert rel.loc["b", "n"] == 1
-    assert rel.loc["b", "relative_crps"] == pytest.approx(2.0)
-    assert rel.loc[base, "relative_crps"] == 1
-    assert "relative_log_crps" in rel
 
 
 def test_reporting_delay_is_first_week_age_reaching_level(hub):
@@ -247,3 +168,13 @@ def test_reporting_delay_is_first_week_age_reaching_level(hub):
 def test_reporting_delay_skips_releases(hub):
     assert ebola.reporting_delay(hub, level=0.3, skip=("2026-11-01",)) == 7
     assert ebola.reporting_delay(hub, level=0.8, skip=("2026-11-01",)) is None
+
+
+def test_reporting_delay_ignores_weeks_the_latest_release_lacks(hub):
+    path = hub / "target-data/time-series.csv"
+    data = pd.read_csv(path)
+    gone = data.iloc[[0]].assign(
+        as_of="2026-10-24", target_end_date="2026-10-10", observation=1000
+    )
+    pd.concat([data, gone]).to_csv(path, index=False)
+    assert ebola.reporting_delay(hub, level=0.8) == 21

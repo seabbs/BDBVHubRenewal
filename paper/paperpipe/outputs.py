@@ -16,15 +16,18 @@ import matplotlib.pyplot as plt
 import pandas as pd
 from matplotlib.figure import Figure
 
+from paperfigs.checkpoints import drop_checkpoints
 from paperfigs.periods import add_period
 from paperfigs.plots import (
     results_panel,
     si_scores_by_factor,
+    si_scores_by_finetune_size,
     si_scores_by_location_horizon,
     si_wis_over_time,
 )
 from paperfigs.scores import relative_scores, summarise_scores
 from paperfigs.style import theme
+from paperpipe.meta import DUMMY_LABEL
 
 __all__ = [
     "FIGURES",
@@ -32,13 +35,19 @@ __all__ = [
     "SI_TABLES",
     "figure_names",
     "score_tables",
+    "to_markdown",
     "write_figures",
 ]
 
 FIGURES: Final[dict[str, dict[str, tuple[str, ...]]]] = {
     "synthetic": {
         "main": ("results",),
-        "si": ("si-factors", "si-factors-log", "si-wis-over-time"),
+        "si": (
+            "si-factors",
+            "si-factors-log",
+            "si-wis-over-time",
+            "si-finetune-size",
+        ),
     },
     "germany": {
         "main": ("results",),
@@ -85,16 +94,22 @@ def _figures(
 ) -> dict[str, Figure]:
     if study == "synthetic":
         # Outbreaks are many, so scores break down by scenario factor.
+        # The fine-tune's checkpoints appear only in their own figure.
         factors = _factors(locations)
+        main = drop_checkpoints(scores)
         return {
             "results": results_panel(
-                forecasts, observations, scores, factors=factors
+                drop_checkpoints(forecasts),
+                observations,
+                main,
+                factors=factors,
             ),
-            "si-factors": si_scores_by_factor(scores, factors),
+            "si-factors": si_scores_by_factor(main, factors),
             "si-factors-log": si_scores_by_factor(
-                scores, factors, col="rel_log_score"
+                main, factors, col="rel_log_score"
             ),
-            "si-wis-over-time": si_wis_over_time(scores),
+            "si-wis-over-time": si_wis_over_time(main),
+            "si-finetune-size": si_scores_by_finetune_size(scores),
         }
     return {
         "results": results_panel(forecasts, observations, scores, split=split),
@@ -117,6 +132,7 @@ def write_figures(
     main_dir: Path,
     si_dir: Path,
     split: pd.Timestamp | None = None,
+    dummy: bool = False,
 ) -> list[Path]:
     """Write a study's figures as `<study>-<name>.png` and return the paths.
 
@@ -132,6 +148,8 @@ def write_figures(
         Folders for the main-text and SI figures.
     split : pandas.Timestamp, optional
         First held-out origin date, marked on the figures.
+    dummy : bool
+        Whether the study ran on dummy data, which labels every figure.
 
     Returns
     -------
@@ -148,10 +166,16 @@ def write_figures(
             folder.mkdir(parents=True, exist_ok=True)
             for name in figure_names(study, part):
                 path = folder / f"{study}-{name}.png"
+                if dummy:
+                    _mark_dummy(figs[name])
                 figs[name].savefig(path, dpi=200)
                 plt.close(figs[name])
                 written.append(path)
     return written
+
+
+def _mark_dummy(fig: Figure) -> None:
+    fig.suptitle(DUMMY_LABEL, color="#b3261e", fontweight="bold")
 
 
 def _table(scores: pd.DataFrame, by: list[str]) -> pd.DataFrame:
@@ -205,7 +229,7 @@ def score_tables(
     list of pathlib.Path
         The tables written.
     """
-    scores = add_period(scores, split)
+    scores = add_period(drop_checkpoints(scores), split)
     period = ["period"] if split is not None else []
     tables = {
         main_dir / f"{study}-scores.csv": _table(scores, period),
@@ -221,4 +245,22 @@ def score_tables(
     for path, table in tables.items():
         path.parent.mkdir(parents=True, exist_ok=True)
         table.to_csv(path, index=False)
+        path.with_suffix(".md").write_text(to_markdown(table))
     return list(tables)
+
+
+def to_markdown(table: pd.DataFrame, digits: int = 3) -> str:
+    """Return a table as a Markdown pipe table, numbers to `digits`."""
+
+    def cell(v: object) -> str:
+        if isinstance(v, float):
+            return "" if pd.isna(v) else f"{v:.{digits}g}"
+        return str(v).replace("|", "\\|")
+
+    head = "| " + " | ".join(table.columns) + " |"
+    rule = "|" + "---|" * len(table.columns)
+    rows = [
+        "| " + " | ".join(cell(v) for v in r) + " |"
+        for r in table.itertuples(index=False)
+    ]
+    return "\n".join([head, rule, *rows]) + "\n"
