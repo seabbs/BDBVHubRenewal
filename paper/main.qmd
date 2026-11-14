@@ -84,7 +84,8 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
 ### Synthetic data generation
 
 ::: {.callout-note title="Plan"}
-- Simulated with epinowcast over a grid of outbreak, delay and noise settings.
+- Simulated with epinowcast over a crossed factorial grid: epidemic process (growth-rate based, or renewal at several generation times), trajectory, delay family and form, delay over time, reporting, observation model and strata.
+- Ranges reflect realistic infectious diseases, checked against published values for several diseases, with the case studies among them.
 - A table in the main text gives the grid of synthetic scenarios.
 - The full process and an overview of the epinowcast model used are in the SI.
 - Key references: [@abbottepinowcast; @lison2024; @Park2024; @Ansari2024; @Dooley2023; @Muller2022; @Hollmann2025].
@@ -93,8 +94,8 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
 ::: {#tbl-synthetic-grid}
 {{< include build/tables/main/synthetic-design.md >}}
 
-The simulation grid (r2-cal5). Ranges are chosen to be plausible across infectious diseases rather than for one disease.
-The reason for each is in the SI.
+The crossed factors of the simulation grid and their levels.
+The reason for each and the full settings are in the SI.
 :::
 
 ### Correlated trajectories

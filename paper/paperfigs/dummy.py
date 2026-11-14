@@ -18,6 +18,7 @@ import numpy as np
 import pandas as pd
 from scipy.stats import norm
 
+from paperfigs.grid import grid_levels
 from paperfigs.schema import (
     DEFAULT_STRATUM,
     FORECAST_COLUMNS,
@@ -396,7 +397,7 @@ def dummy_study(
 
 
 def dummy_factors(forecasts: pd.DataFrame, seed: int = 1) -> pd.DataFrame:
-    """Make dummy scenario factor values for each location.
+    """Make a dummy grid cell and delay for each location.
 
     Parameters
     ----------
@@ -408,26 +409,24 @@ def dummy_factors(forecasts: pd.DataFrame, seed: int = 1) -> pd.DataFrame:
     Returns
     -------
     pandas.DataFrame
-        `location` and raw values of `delay_mean`, `delay_q98`,
-        `gt_mean`, `log_r0`, `n_places` and `report_days`, as the
-        synthetic grid table gives.
+        `location`, one level of each grid factor (`paperfigs.grid`), as
+        a simulation records its cell, and `delay_mean` and `delay_q98`,
+        the realised mean and 98% point of its reporting delay in days.
     """
     rng = np.random.default_rng(seed)
     locs = sorted(forecasts["location"].unique())
     n = len(locs)
     delay_mean = np.round(np.exp(rng.uniform(0.5, 2.5, n)), 2)
     delay_sd = rng.uniform(0.3, 1.1, n)
+    cells = {
+        name: rng.choice(levels, n) for name, levels in grid_levels().items()
+    }
     return pd.DataFrame(
         {
             "location": locs,
+            **cells,
             "delay_mean": delay_mean,
             # 98% quantile of a lognormal with median delay_mean.
             "delay_q98": np.ceil(delay_mean * np.exp(2.054 * delay_sd)),
-            "gt_mean": np.round(rng.uniform(6, 20, n), 1),
-            "log_r0": np.round(rng.normal(0.2, 0.3, n), 2),
-            "n_places": np.where(
-                rng.uniform(size=n) < 0.4, 1, rng.integers(2, 27, n)
-            ),
-            "report_days": rng.choice([5, 7], n),
         }
     )

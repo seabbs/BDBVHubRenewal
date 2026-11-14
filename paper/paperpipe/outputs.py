@@ -17,6 +17,8 @@ import pandas as pd
 from matplotlib.figure import Figure
 
 from paperfigs.checkpoints import drop_checkpoints
+from paperfigs.factors import factor_label
+from paperfigs.grid import grid_levels, read_grid
 from paperfigs.periods import add_period
 from paperfigs.plots import (
     results_panel,
@@ -186,16 +188,18 @@ def _table(scores: pd.DataFrame, by: list[str]) -> pd.DataFrame:
 
 
 def _grid(locations: pd.DataFrame) -> pd.DataFrame:
-    factors = _factors(locations).set_index("location")
-    return pd.DataFrame(
-        {
-            "factor": factors.columns,
-            "min": factors.min().to_numpy(),
-            "median": factors.median().to_numpy(),
-            "max": factors.max().to_numpy(),
-            "n_locations": len(factors),
-        }
-    )
+    """Each grid factor's levels and their shares of the outbreaks."""
+    cells = _factors(locations).set_index("location")
+    names = [c for c in cells.columns if c in grid_levels()]
+    parts = [
+        cells[name]
+        .value_counts(normalize=True)
+        .rename_axis("level")
+        .reset_index(name="share")
+        .assign(factor=factor_label(name))
+        for name in names
+    ]
+    return pd.concat(parts, ignore_index=True)[["factor", "level", "share"]]
 
 
 def score_tables(
@@ -273,10 +277,9 @@ def design_tables(grid: Path, main_dir: Path, si_dir: Path) -> list[Path]:
     Parameters
     ----------
     grid : pathlib.Path
-        `tables/synthetic-grid.csv`: each `setting`, its `range` and the
-        `reason` for it.
+        `tables/synthetic-grid.csv` (`paperfigs.grid`).
     main_dir, si_dir : pathlib.Path
-        Folders for the main-text table (setting and range) and the SI
+        Folders for the main-text table (factors and levels) and the SI
         table (with the reasons).
 
     Returns
@@ -284,15 +287,11 @@ def design_tables(grid: Path, main_dir: Path, si_dir: Path) -> list[Path]:
     list of pathlib.Path
         The tables written.
     """
-    table = pd.read_csv(grid).rename(
-        columns={
-            "setting": "Setting",
-            "range": "Range or mix",
-            "reason": "Reason",
-        }
+    table = read_grid(grid).rename(
+        columns={"factor": "Factor", "levels": "Levels", "reason": "Reason"}
     )
     paths = {
-        main_dir / "synthetic-design.md": table[["Setting", "Range or mix"]],
+        main_dir / "synthetic-design.md": table[["Factor", "Levels"]],
         si_dir / "synthetic-design.md": table,
     }
     for path, part in paths.items():

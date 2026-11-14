@@ -8,6 +8,7 @@ import pandas as pd
 import pytest
 
 from paperfigs.dummy import dummy_factors, dummy_study
+from paperfigs.grid import grid_levels
 from paperfigs.plots import (
     PANEL_LETTERS,
     results_panel,
@@ -114,8 +115,9 @@ def test_synthetic_panel_shows_factors_and_weekly_horizons() -> None:
     assert "Horizon (weeks)" in labels
     plt.close(fig)
     fig = si_scores_by_factor(scores, factors)
-    # The SI keeps every factor, delay_mean included.
-    assert len([ax for ax in fig.axes if ax.get_title()]) == 6
+    # The SI keeps every grid factor and both delays.
+    n = len(grid_levels()) + 2
+    assert len([ax for ax in fig.axes if ax.get_title()]) == n
     plt.close(fig)
 
 

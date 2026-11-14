@@ -124,3 +124,13 @@ def test_dummy_has_complete_ragged_and_fine_tuned_chronos(study) -> None:
         if m.startswith("fm_chronos_") and m.endswith("_ragged_ft"):
             family = m.removesuffix("_ragged_ft")
             assert {f"{family}_complete", f"{family}_ragged"} <= models
+
+
+def test_dummy_cells_take_a_level_of_each_grid_factor() -> None:
+    from paperfigs.dummy import dummy_factors
+    from paperfigs.grid import grid_levels
+
+    fc, _ = dummy_study("synthetic", seed=1, n_samples=5)
+    cells = dummy_factors(fc)
+    for name, levels in grid_levels().items():
+        assert set(cells[name]) <= set(levels)

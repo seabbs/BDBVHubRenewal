@@ -94,7 +94,7 @@ def test_development_writes_main_and_si_outputs(development: Path) -> None:
     assert (development / "tables" / "main" / "synthetic-grid.csv").is_file()
     for part in ("main", "si"):
         design = development / "tables" / part / "synthetic-design.md"
-        assert "Generation time" in design.read_text()
+        assert "Epidemic process" in design.read_text()
 
 
 def test_development_never_reads_heldout_data(development: Path) -> None:
