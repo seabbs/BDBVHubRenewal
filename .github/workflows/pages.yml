@@ -41,6 +41,14 @@ on:
       - '.github/workflows/pages.yml'
       - '.github/actions/setup-forecast-env/**'
   workflow_dispatch:
+    inputs:
+      paper_target:
+        description: >-
+          The paper workflow's target. `paper` reads the held-out data;
+          run it only when the held-out results are to be shown.
+        type: choice
+        options: [development, paper]
+        default: development
 
 permissions:
   contents: read
@@ -88,41 +96,6 @@ jobs:
             !data/raw
             results
             output/fit-store
-          retention-days: 1
-
-  # The paper's main text and SI, as HTML and PDF, for the site's /paper/.
-  # Renders the manuscript as it stands and runs none of the evaluation.
-  # As `task paper:render`; keep the two in step.
-  paper:
-    name: Paper
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      # Quarto reads GH_TOKEN to look up the TinyTeX release, which
-      # unauthenticated runners can be refused (403).
-      - uses: quarto-dev/quarto-actions/setup@8a96df13519ee81fd526f2dfca5962811136661b # v2.2.0
-        env:
-          GH_TOKEN: ${{ github.token }}
-        with:
-          version: 1.8.26
-          tinytex: true
-      # From paper/, as Quarto writes the PDF links relative to where it
-      # runs.
-      - name: Render the paper
-        working-directory: paper
-        run: |
-          quarto render main.qmd
-          quarto render si.qmd
-          mkdir -p ../_paper
-          cp -R {main,si}.{html,pdf} {main,si}_files figures ../_paper/
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: paper
-          path: _paper
-          if-no-files-found: error
           retention-days: 1
 
   # The forecasts of the backtests that fit no model, one job per model
@@ -337,7 +310,7 @@ jobs:
           retention-days: 1
 
   build:
-    needs: [prep, backtest, paper]
+    needs: [prep, backtest]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -430,11 +403,29 @@ jobs:
         run: >-
           uv run --group docs jupytext --to ipynb --execute --run-path .
           docs/getting-started.py
-      # Copied in as they are, so the site serves them at /paper/.
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+      # Quarto reads GH_TOKEN to look up the TinyTeX release, which
+      # unauthenticated runners can be refused (403).
+      - uses: quarto-dev/quarto-actions/setup@8a96df13519ee81fd526f2dfca5962811136661b # v2.2.0
+        env:
+          GH_TOKEN: ${{ github.token }}
         with:
-          name: paper
-          path: docs/paper
+          version: 1.8.26
+          tinytex: true
+      # The paper's evaluation workflow, reusing the German benchmark run
+      # above, then the paper from its results, for the site's /paper/.
+      # Pull requests and pushes run the development target, which never
+      # reads the held-out data; the paper target runs only on dispatch.
+      # As `task paper`; keep the two in step.
+      - name: Run the paper workflow and render the paper
+        working-directory: paper
+        env:
+          TARGET: ${{ inputs.paper_target || 'development' }}
+        run: |
+          uv run --group paper snakemake -s workflow/Snakefile render \
+            --config render="$TARGET" --cores 4 --rerun-triggers mtime
+          mkdir -p ../docs/paper
+          cp -R main.html main.pdf main_files si.html si.pdf si_files \
+            figures build ../docs/paper/
       - name: Build the site into _site
         run: uv run mkdocs build --strict
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
