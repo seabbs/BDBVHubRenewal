@@ -39,12 +39,17 @@ forecast's last horizon."""
 
 
 def releases(
-    counts: pd.DataFrame, source: str, cutoffs: Sequence[str]
+    counts: pd.DataFrame,
+    source: str,
+    cutoffs: Sequence[str],
+    totals: bool = False,
 ) -> pd.DataFrame:
     """Return the hub target of each release of a simulated outbreak.
 
     A release with cut-off $c$ counts every case reported by $c$. The
     country is the sum of the places, and a single place is the country.
+    With `totals`, a place `P` whose strata are `P-<stratum>` also has its
+    own total, as a province has the total of its zones.
 
     Parameters
     ----------
@@ -55,6 +60,8 @@ def releases(
         `"weekly"` (rows by onset week) or `"daily"` (by onset day).
     cutoffs : sequence of str
         The releases' cut-offs, ISO format.
+    totals : bool
+        Add each place's total of its strata.
 
     Returns
     -------
@@ -69,7 +76,12 @@ def releases(
     )
     country = counts.assign(location=NATIONAL)
     if len(counts["location"].unique()) > 1:
-        counts = pd.concat([country, counts], ignore_index=True)
+        frames = [country, counts]
+        if totals:
+            parent = counts["location"].str.split("-").str[0]
+            nested = counts["location"].str.contains("-")
+            frames.append(counts.loc[nested].assign(location=parent[nested]))
+        counts = pd.concat(frames, ignore_index=True)
     else:
         counts = country
     if source == "weekly":
@@ -101,6 +113,7 @@ def final_counts(
     source: str,
     places: Sequence[str],
     times: Sequence[str],
+    totals: bool = False,
 ) -> np.ndarray:
     """Return each place's count of each step with every report in.
 
@@ -114,6 +127,8 @@ def final_counts(
         Places, the country first if there are several.
     times : sequence of str
         Steps of the grid.
+    totals : bool
+        As `releases`.
 
     Returns
     -------
@@ -121,7 +136,7 @@ def final_counts(
         `[L, T]`.
     """
     last = str(pd.to_datetime(counts["report_date"]).max().date())
-    rows = releases(counts, source, [last])
+    rows = releases(counts, source, [last], totals)
     tri = hub_triangle(rows, source, places, times[-1], max_lag=1)
     at = {t: i for i, t in enumerate(tri.times)}
     out = np.zeros((len(places), len(times)))
@@ -138,6 +153,7 @@ def training_block(
     cutoffs: Sequence[str],
     max_lag: int,
     ahead_weeks: int = AHEAD_WEEKS,
+    totals: bool = False,
 ) -> dict[str, Any]:
     """Return one training block, cut at the last of `cutoffs`.
 
@@ -160,6 +176,8 @@ def training_block(
         Release lag $D$ in the source's steps.
     ahead_weeks : int
         Weeks after the cut-off's week to the last step.
+    totals : bool
+        As `releases`, so `places` may hold a place's total and its strata.
 
     Returns
     -------
@@ -171,12 +189,12 @@ def training_block(
     """
     cut = cutoffs[-1]
     end = epiweek_end(cut) + dt.timedelta(weeks=ahead_weeks)
-    rows = releases(counts, source, cutoffs)
+    rows = releases(counts, source, cutoffs, totals)
     tri = hub_triangle(rows, source, places, end.isoformat(), max_lag=max_lag)
     start = tri.n_context
     horizon = len(tri.times) - start
     group = layout_block(tri, "ragged", places, start)
-    truth = final_counts(counts, source, places, tri.times)
+    truth = final_counts(counts, source, places, tri.times, totals)
     names = list(group["past_covariates"])
     lagged = np.stack(
         [
