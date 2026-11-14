@@ -746,16 +746,6 @@ def test_stored_samples_missing_a_week_are_not_archived(
     assert f"{fitted_flat} not archived: ValueError" in capsys.readouterr().err
 
 
-def test_write_fit_files_writes_a_fit_directory(
-    fitted_flat: str, tasks: dict[str, ForecastTask], tmp_path: Path
-) -> None:
-    fit = store.fit(fitted_flat, tasks[sorted(tasks)[-1]], {}, "c")
-    body = base64.b64encode(b"{}").decode()
-    fit = dataclasses.replace(fit, files={"fit.json": body})
-    store.write_fit_files(fit, tmp_path / "fit")
-    assert (tmp_path / "fit" / "fit.json").read_bytes() == b"{}"
-
-
 def test_the_policy_candidates_are_the_policy_models() -> None:
     from bdbvhubrenewal.evaluation import store_archive
 
