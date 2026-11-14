@@ -13,6 +13,20 @@ Writes one `ReleaseForecasts` directory per model, grouping and origin to
 
 from __future__ import annotations
 
+import os
+
+if os.environ.get("AGG_CPU"):
+    import torch
+
+    # CPU only: the laptop GPU is held by the fine-tune trainer.
+    _mps = torch.backends.mps.is_available
+
+    def _no_mps() -> bool:
+        return False
+
+    _no_mps.__wrapped__ = _mps  # type: ignore[attr-defined]
+    torch.backends.mps.is_available = _no_mps
+
 import argparse
 import dataclasses
 import time

@@ -39,6 +39,7 @@ from bdbvhubrenewal.evaluation.nowcast import (
 from bdbvhubrenewal.forecasters import get_model
 from bdbvhubrenewal.forecasters.base import NATIONAL, ForecastTask
 from bdbvhubrenewal.forecasters.copula import RollingCopula
+from bdbvhubrenewal.forecasters.foundation import resolve_checkpoint
 
 __all__ = [
     "FITTED_GROUPINGS",
@@ -60,9 +61,21 @@ GROUPING_ARMS: Final = (*FITTED_GROUPINGS, "paired")
 _SAMPLES = ["model", "origin", "location", "target_end_date", "sample"]
 
 
-def arm_name(model: str, grouping: str) -> str:
-    """Return an arm's name, `<model>:<grouping>`."""
-    return f"{model}:{grouping}"
+def arm_name(model: str, grouping: str, checkpoint: str | None = None) -> str:
+    """Return an arm's name, `<model>:<grouping>`, with `@<checkpoint>`
+    after the model when one is given."""
+    at = "" if checkpoint is None else f"@{checkpoint}"
+    return f"{model}{at}:{grouping}"
+
+
+def _built(model: str, grouping: str, checkpoint: str | None) -> object:
+    """Return a registered Chronos-2 model with a grouping and checkpoint."""
+    built = dataclasses.replace(get_model(model), grouping=grouping)
+    if checkpoint is not None:
+        built = dataclasses.replace(
+            built, checkpoint=resolve_checkpoint(checkpoint)
+        )
+    return built
 
 
 def release_grouping_forecasts(
@@ -70,6 +83,7 @@ def release_grouping_forecasts(
     target: pd.DataFrame,
     model: str,
     grouping: str,
+    checkpoint: str | None = None,
 ) -> ReleaseForecasts:
     """Forecast from every release with one model and grouping.
 
@@ -83,15 +97,19 @@ def release_grouping_forecasts(
         A registered Chronos-2 model.
     grouping : str
         One of `FITTED_GROUPINGS`.
+    checkpoint : str, optional
+        A fine-tuned checkpoint's settings hash to load in place of the
+        model's own (`resolve_checkpoint`).
 
     Returns
     -------
     ReleaseForecasts
         As `forecast_releases`, with the model named by `arm_name`.
     """
-    built = dataclasses.replace(get_model(model), grouping=grouping)
-    run = forecast_releases(tasks, target, [built])
-    name = arm_name(model, grouping)
+    run = forecast_releases(
+        tasks, target, [_built(model, grouping, checkpoint)]
+    )
+    name = arm_name(model, grouping, checkpoint)
     return ReleaseForecasts(
         **{
             k: v.assign(model=name) if "model" in v else v
@@ -159,6 +177,7 @@ def pair_and_sum(
     parent: Callable[[str], str] | None = None,
     floors: pd.DataFrame | None = None,
     copula: RollingCopula | None = None,
+    national: str = NATIONAL,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Pair the lowest level's draws by the rolling copula, then sum up.
 
@@ -187,15 +206,17 @@ def pair_and_sum(
         `target_end_date` and `floor`.
     copula : RollingCopula, optional
         The copula, its defaults by default.
+    national : str
+        The country's location code.
 
     Returns
     -------
     tuple of pandas.DataFrame
         The paired draws of every level, columns of `samples`, with the
-        country's location `NATIONAL`, and each model and origin's copula
+        country's location `national`, and each model and origin's copula
         fit.
     """
-    copula = copula or RollingCopula()
+    copula = copula or RollingCopula(national=national)
     cols = [*_SAMPLES, "value"]
     paired, fits = copula.pair(samples[cols], truth, seed)
     levels = [paired]
@@ -206,7 +227,7 @@ def pair_and_sum(
             up.groupby(_SAMPLES, as_index=False)["value"].sum(), floors
         )
         levels.append(lowest)
-    country = lowest.assign(location=NATIONAL)
+    country = lowest.assign(location=national)
     levels.append(
         _floor(country.groupby(_SAMPLES, as_index=False)["value"].sum(), floors)
     )
@@ -261,6 +282,7 @@ def germany_grouping_samples(
     date: str,
     n_samples: int,
     seed: int,
+    checkpoint: str | None = None,
 ) -> pd.DataFrame:
     """Nowcast one German date with one model and grouping, as samples.
 
@@ -276,6 +298,8 @@ def germany_grouping_samples(
         The nowcast date.
     n_samples, seed : int
         Samples per forecast, and the seed.
+    checkpoint : str, optional
+        As for `release_grouping_forecasts`.
 
     Returns
     -------
@@ -293,8 +317,8 @@ def germany_grouping_samples(
     built = get_model(model)
     label = model
     if hasattr(built, "grouping"):
-        built = dataclasses.replace(built, grouping=grouping)
-        label = arm_name(model, grouping)
+        built = _built(model, grouping, checkpoint)
+        label = arm_name(model, grouping, checkpoint)
     if label.endswith(":joint"):
         runs = [(merged_task(states, ages), states)]
     else:

@@ -99,7 +99,9 @@ def level(location: str) -> str:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--data", default="data")
-    parser.add_argument("--fits", required=True)
+    parser.add_argument(
+        "--fits", nargs="+", required=True, help="DIR, or DIR@checkpoint"
+    )
     parser.add_argument("--out", required=True)
     args = parser.parse_args()
     out = Path(args.out)
@@ -111,11 +113,31 @@ def main() -> None:
     tasks = store.origin_tasks(
         target, delays, config, daily, load_zone_data(args.data)
     )
-    parts = sorted(
-        p for p in Path(args.fits).iterdir() if p.is_dir() and "__" in p.name
+    runs, origins = [], set()
+    for spec in args.fits:
+        where, _, ckpt = spec.partition("@")
+        parts = sorted(
+            p for p in Path(where).iterdir() if p.is_dir() and "__" in p.name
+        )
+        origins |= {p.name.split("__")[1] for p in parts}
+        one = ReleaseForecasts.read(parts)
+        if ckpt:
+            one = ReleaseForecasts(
+                *(
+                    t.assign(model=t["model"].str.replace(
+                        "_ft:", f"_ft@{ckpt}:"))
+                    if "model" in t and len(t) else t
+                    for t in (getattr(one, n) for n in ReleaseForecasts._NAMES)
+                )
+            )  # fmt: skip
+        runs.append(one)
+    origins = sorted(origins)
+    run = ReleaseForecasts(
+        *(
+            pd.concat([getattr(r, n) for r in runs], ignore_index=True)
+            for n in ReleaseForecasts._NAMES
+        )
     )
-    origins = sorted({p.name.split("__")[1] for p in parts})
-    run = ReleaseForecasts.read(parts)
     base = forecast_releases([tasks[o] for o in origins], target, [BASE])
     both = ReleaseForecasts(
         *(
