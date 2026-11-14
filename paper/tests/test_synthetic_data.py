@@ -68,3 +68,35 @@ def test_locations_carry_the_recorded_cell_and_the_98pct_delay(sims) -> None:
 def test_missing_names_the_seeds_without_simulations(sims) -> None:
     assert synthetic.missing(sims, [9001]) is None
     assert "9002" in synthetic.missing(sims, [9001, 9002])
+
+
+def test_the_synthetic_study_reads_simulations_and_their_forecasts(
+    sims, tmp_path
+) -> None:
+    from paperpipe.studies import Sources, load_data, run_forecasts, source_of
+
+    fc = tmp_path / "fc.csv"
+    pd.DataFrame(
+        {
+            "study": "synthetic",
+            "model": "m",
+            "location": ["s9001-0001-1-P01", "s9002-0001-1-P01"],
+            "origin_date": "2026-01-10",
+            "target_date": "2026-01-10",
+            "horizon": 0,
+            "quantile_level": None,
+            "sample_id": 0,
+            "value": 1.0,
+            "truth": 1.0,
+        }
+    ).to_csv(fc, index=False)
+    sources = Sources(synthetic_simulations=sims, synthetic_forecasts=(fc,))
+    assert source_of("synthetic", sources, seeds=(9001,)) == "real"
+    obs, _ = load_data("synthetic", seeds=(9001,), sources=sources)
+    assert "s9001-0001-1-P01" in set(obs["location"])
+    out = run_forecasts(
+        "synthetic", seeds=(9001,), sources=sources, source="real"
+    )
+    # Only the run's seeds, and the truth is left for the workflow.
+    assert out["location"].tolist() == ["s9001-0001-1-P01"]
+    assert out["truth"].isna().all()

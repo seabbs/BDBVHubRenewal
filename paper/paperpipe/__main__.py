@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -36,10 +37,12 @@ from paperpipe.studies import (
     NO_SOURCES,
     Sources,
     load_data,
+    missing,
     run_forecasts,
-    source_of,
 )
 from paperpipe.summary import study_summary, write_summary
+
+log = logging.getLogger(__name__)
 
 _DATES = ("origin_date", "target_date", "as_of_date")
 
@@ -69,6 +72,8 @@ def _delays(locations: pd.DataFrame) -> pd.Series:
 
 def _sources(a: argparse.Namespace) -> Sources:
     return Sources(
+        synthetic_simulations=a.synthetic_simulations,
+        synthetic_forecasts=tuple(a.synthetic_forecasts),
         germany_forecasts=tuple(a.germany_forecasts),
         germany_triangle=a.germany_triangle,
         hub=a.hub,
@@ -80,8 +85,14 @@ def _sources(a: argparse.Namespace) -> Sources:
 
 def _data(a: argparse.Namespace) -> None:
     sources = _sources(a)
-    source = source_of(a.study, sources, a.delay)
-    if source == "dummy":
+    reason = missing(a.study, sources, a.delay, a.seeds)
+    if reason and a.mode == "paper":
+        raise ValueError(
+            f"The paper run cannot use dummy data for the {a.study} study: "
+            f"{reason}."
+        )
+    if reason:
+        log.warning("The %s study uses dummy data: %s.", a.study, reason)
         sources = NO_SOURCES
     obs, locations = load_data(
         a.study,
@@ -95,7 +106,7 @@ def _data(a: argparse.Namespace) -> None:
         check_no_heldout_releases(obs, settings, a.delay)
     _write(validate_observations(obs), a.observations)
     _write(locations, a.locations)
-    write_meta(a.meta, a.study, source)
+    write_meta(a.meta, a.study, "dummy" if reason else "real")
 
 
 def _forecasts(a: argparse.Namespace) -> None:
@@ -168,6 +179,8 @@ def _limits(p: argparse.ArgumentParser) -> None:
     p.add_argument("--seeds", type=int, nargs="*", default=[])
     p.add_argument("--before", default=None)
     p.add_argument("--meta", type=Path, required=True)
+    p.add_argument("--synthetic-simulations", type=Path, default=None)
+    p.add_argument("--synthetic-forecasts", type=Path, nargs="*", default=[])
     p.add_argument("--germany-forecasts", type=Path, nargs="*", default=[])
     p.add_argument("--germany-triangle", type=Path, default=None)
     p.add_argument("--hub", type=Path, default=None)

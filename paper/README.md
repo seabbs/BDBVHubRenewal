@@ -24,11 +24,11 @@ Everything from forecasting on runs in this workflow, locally or on CI.
 <details>
 <summary>The studies</summary>
 
-- **Held-out synthetic outbreaks**: sample forecasts scored by CRPS relative to `randomwalknowcast`, with D each outbreak's 98% delay. They run on dummy data until the fine-tuned models of #192 are merged ([`paperpipe/studies.py`](paperpipe/studies.py)).
+- **Held-out synthetic outbreaks**: the simulations of each run's seeds ([`paperdata/synthetic.py`](paperdata/synthetic.py)) and the models' forecasts of them, which the synthetic runner of #192 writes. Sample forecasts scored by CRPS relative to `randomwalknowcast`, with D each outbreak's 98% delay.
 - **German nowcast hub**: the benchmark of Wolffram et al. (2023), run with `bdbvhubrenewal germany-backtest`, `germany-teams` and `germany-paper` ([`config/germany.toml`](../config/germany.toml), [German benchmark page](../docs/germany.md)). Quantiles scored by WIS relative to `KIT-frozen_baseline`, with D 40 days.
 - **Ebola hub**: every team's samples from a clone of the BDBV Modeling Hub, with our stored forecasts ([`paperdata/ebola.py`](paperdata/ebola.py)). CRPS relative to `BDBVHub-baseline`, with D the hub's 98% reporting delay. It runs on dummy data until the hub's baseline has a forecast with known truth.
 
-A study on dummy data says so on every figure and caption.
+In a development run, a study without its real data runs on dummy data and says so on every figure and caption. A paper run fails instead, naming the study and what is missing ([`paperpipe/studies.py`](paperpipe/studies.py)).
 The long table every study writes is in [`schema.md`](schema.md).
 
 </details>

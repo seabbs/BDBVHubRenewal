@@ -20,8 +20,9 @@ rule fails if development German data hold a held-out target date or a
 release later than its truth needs, and the `table` rule if a development
 forecast table holds any held-out row.
 
-A study without its real data runs on dummy data, labelled as such on
-every figure and in the paper (`paperpipe.studies`).
+In a development run, a study without its real data runs on dummy data,
+labelled as such on every figure and in the paper. A paper run fails
+instead, naming the study and what is missing (`paperpipe.studies`).
 """
 
 import json
@@ -53,6 +54,7 @@ PYTHON = shlex.quote(sys.executable)
 BDBV = shlex.quote(str(Path(sys.executable).parent / "bdbvhubrenewal"))
 GERMANY = config["germany"]
 EBOLA = config["ebola"]
+SYNTHETIC = config["synthetic"]
 TRIANGLE = f"{GERMANY['data']}/COVID-19_hospitalizations.csv"
 
 # The benchmark's command line holds out the dates from its own split.
@@ -85,6 +87,12 @@ def germany_tables(mode):
 
 def sources(w):
     """A study's real data, as command line arguments."""
+    if w.study == "synthetic":
+        sims = SYNTHETIC["simulations"][w.mode]
+        fc = " ".join(shlex.quote(f) for f in SYNTHETIC["forecasts"][w.mode])
+        return f"--synthetic-simulations {shlex.quote(sims)} " + (
+            f"--synthetic-forecasts {fc}" if fc else ""
+        )
     if w.study == "germany" and GERMANY["real"]:
         tables = " ".join(germany_tables(w.mode))
         return f"--germany-forecasts {tables} --germany-triangle {TRIANGLE}"

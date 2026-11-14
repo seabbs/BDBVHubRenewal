@@ -22,8 +22,13 @@ functions return dummy data from `paperfigs.dummy`:
   (`paperdata.ebola`), with D the hub's 98% reporting delay. It stays on
   dummy data until the hub's baseline has a forecast with known truth,
   as every score is relative to it.
-- The synthetic study needs the fine-tuned models of #192, so it always
-  runs on dummy data, one dummy study per seed.
+- The synthetic study reads the simulated outbreaks of the run's seeds
+  (`paperdata.synthetic`) and the models' forecasts of them, which the
+  synthetic runner of #192 writes. Its dummy data are one dummy study per
+  seed.
+
+`missing` says why a study cannot use its real data. A development run
+may then use dummy data; a paper run fails.
 """
 
 from __future__ import annotations
@@ -37,15 +42,16 @@ from typing import Final
 
 import pandas as pd
 
-from paperdata import ebola, germany
+from paperdata import ebola, germany, synthetic
 from paperfigs.dummy import dummy_factors, dummy_study
-from paperpipe.config import last_release, synthetic_location
+from paperpipe.config import last_release, seed_of, synthetic_location
 
 __all__ = [
     "DUMMY_EBOLA_DELAY",
     "NO_SOURCES",
     "Sources",
     "load_data",
+    "missing",
     "run_forecasts",
     "source_of",
 ]
@@ -60,6 +66,11 @@ class Sources:
 
     Attributes
     ----------
+    synthetic_simulations : pathlib.Path, optional
+        The simulated outbreaks of the run's seeds (`paperdata.synthetic`).
+    synthetic_forecasts : tuple of pathlib.Path
+        The models' forecasts of them, as the paper's long table, from the
+        synthetic runner of #192.
     germany_forecasts : tuple of pathlib.Path
         The benchmark's paper tables (`paper-forecasts.csv.gz`).
     germany_triangle : pathlib.Path, optional
@@ -74,6 +85,8 @@ class Sources:
         The fit store branch.
     """
 
+    synthetic_simulations: Path | None = None
+    synthetic_forecasts: tuple[Path, ...] = ()
     germany_forecasts: tuple[Path, ...] = ()
     germany_triangle: Path | None = None
     hub: Path | None = None
@@ -117,10 +130,13 @@ def _baseline_scorable(hub: Path, delay_days: int) -> bool:
     return bool((due <= latest).any())
 
 
-def source_of(
-    study: str, sources: Sources, delay_days: int | None = None
-) -> str:
-    """Return `real` if a study's real data are set and usable, else `dummy`.
+def missing(
+    study: str,
+    sources: Sources,
+    delay_days: int | None = None,
+    seeds: Sequence[int] = (),
+) -> str | None:
+    """Return why a study cannot use its real data, or None if it can.
 
     Parameters
     ----------
@@ -130,26 +146,55 @@ def source_of(
         Where the real data are.
     delay_days : int, optional
         For Ebola, D in place of the hub's 98% reporting delay.
+    seeds : sequence of int
+        For the synthetic study, the run's seeds.
 
     Returns
     -------
-    str
-        `real` or `dummy`.
+    str or None
+        What is missing, or None.
     """
+    if study == "synthetic":
+        if sources.synthetic_simulations is None:
+            return "no simulations are set (`synthetic.simulations`)"
+        absent = [str(p) for p in sources.synthetic_forecasts if not p.exists()]
+        if not sources.synthetic_forecasts or absent:
+            return (
+                "no forecasts of the simulations, which the synthetic "
+                f"runner of #192 writes ({', '.join(absent) or 'none set'})"
+            )
+        return synthetic.missing(sources.synthetic_simulations, seeds)
     if study == "germany":
-        real = bool(sources.germany_forecasts) and bool(
-            sources.germany_triangle
+        if not sources.germany_forecasts or sources.germany_triangle is None:
+            return "no German benchmark tables or triangle are set"
+        return None
+    if sources.hub is None:
+        return "no Ebola hub clone is set (`ebola.hub`)"
+    if delay_days is None and ebola.reporting_delay(sources.hub) is None:
+        return (
+            f"no reporting delay reaches {ebola.DELAY_LEVEL:.0%} of the "
+            "Ebola hub's count yet"
         )
-    elif study == "ebola" and sources.hub is not None:
-        try:
-            delay = _ebola_delay(sources, delay_days)
-        except ValueError:
-            log.warning("No Ebola reporting delay yet; using dummy data.")
-            return "dummy"
-        real = _baseline_scorable(sources.hub, delay)
-    else:
-        real = False
-    return "real" if real else "dummy"
+    delay = _ebola_delay(sources, delay_days)
+    if not _baseline_scorable(sources.hub, delay):
+        return (
+            f"the Ebola hub's {ebola.HUB_BASELINE} has no forecast with "
+            "known truth yet"
+        )
+    return None
+
+
+def source_of(
+    study: str,
+    sources: Sources,
+    delay_days: int | None = None,
+    seeds: Sequence[int] = (),
+) -> str:
+    """Return `real` if a study's real data are set and usable, else `dummy`.
+
+    See `missing` for the parameters and why a study is on dummy data.
+    """
+    return "dummy" if missing(study, sources, delay_days, seeds) else "real"
 
 
 def _relabel(df: pd.DataFrame, seed: int) -> pd.DataFrame:
@@ -170,6 +215,19 @@ def _locations(obs: pd.DataFrame, delay_days: int) -> pd.DataFrame:
     return pd.DataFrame(
         {"location": sorted(obs["location"].unique()), "delay_days": delay_days}
     )
+
+
+def _synthetic_forecasts(
+    sources: Sources, seeds: Sequence[int]
+) -> pd.DataFrame:
+    """Return the forecasts of the run's seeds, with `truth` left empty."""
+    fc = pd.concat(
+        [pd.read_csv(p) for p in sources.synthetic_forecasts], ignore_index=True
+    )
+    for col in ("origin_date", "target_date"):
+        fc[col] = pd.to_datetime(fc[col])
+    keep = fc["location"].map(seed_of).isin(set(seeds))
+    return fc.loc[keep].assign(truth=float("nan")).reset_index(drop=True)
 
 
 def _germany_forecasts(
@@ -247,6 +305,12 @@ def load_data(
     ValueError
         If Germany has no `delay_days`.
     """
+    if (
+        study == "synthetic"
+        and source_of(study, sources, seeds=seeds) == "real"
+    ):
+        assert sources.synthetic_simulations is not None
+        return synthetic.load(sources.synthetic_simulations, seeds)
     if study == "synthetic":
         obs, locs = [], []
         for seed in seeds:
@@ -306,6 +370,8 @@ def run_forecasts(
     pandas.DataFrame
         Forecasts in the schema, with `truth` left for the workflow.
     """
+    if study == "synthetic" and source == "real":
+        return _synthetic_forecasts(sources, seeds)
     if study == "synthetic":
         parts = [
             _relabel(dummy_study(study, seed=s, n_samples=n_samples)[0], s)

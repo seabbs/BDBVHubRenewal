@@ -9,6 +9,17 @@ studies: [synthetic, germany, ebola]
 # Samples per forecast for the studies scored on samples.
 n_samples: 200
 
+# The simulated outbreaks of each run's seeds (`paperdata.synthetic`), and
+# the models' forecasts of them, which the synthetic runner of #192
+# writes as the paper's long table.
+synthetic:
+  simulations:
+    development: ../output/finetune/validation
+    paper: ../output/finetune/heldout
+  forecasts:
+    development: [../output/paper/synthetic-development.csv.gz]
+    paper: [../output/paper/synthetic-paper.csv.gz]
+
 # The German benchmark, run with the `bdbvhubrenewal` command line
 # (config/germany.toml). Its models are the config's `models`.
 # `real: false` runs the study on dummy data.
