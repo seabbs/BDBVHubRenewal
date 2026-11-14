@@ -138,7 +138,11 @@ def main() -> None:
             for n in ReleaseForecasts._NAMES
         )
     )
-    base = forecast_releases([tasks[o] for o in origins], target, [BASE])
+    if (out / "base" / "release-samples.csv.gz").exists():
+        base = ReleaseForecasts.read([out / "base"])
+    else:
+        base = forecast_releases([tasks[o] for o in origins], target, [BASE])
+        base.write(out / "base")
     both = ReleaseForecasts(
         *(
             pd.concat([getattr(run, n), getattr(base, n)], ignore_index=True)

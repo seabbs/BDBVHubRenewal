@@ -39,7 +39,10 @@ from bdbvhubrenewal.evaluation.nowcast import (
 from bdbvhubrenewal.forecasters import get_model
 from bdbvhubrenewal.forecasters.base import NATIONAL, ForecastTask
 from bdbvhubrenewal.forecasters.copula import RollingCopula
-from bdbvhubrenewal.forecasters.foundation import resolve_checkpoint
+from bdbvhubrenewal.forecasters.foundation import (
+    FoundationModel,
+    resolve_checkpoint,
+)
 
 __all__ = [
     "AGGREGATION_COLUMNS",
@@ -49,6 +52,7 @@ __all__ = [
     "aggregation_rows",
     "arm_name",
     "germany_grouping_samples",
+    "grouping_model",
     "merged_task",
     "pair_and_sum",
     "release_grouping_forecasts",
@@ -101,8 +105,24 @@ def arm_name(model: str, grouping: str, checkpoint: str | None = None) -> str:
     return f"{model}{at}:{grouping}"
 
 
-def _built(model: str, grouping: str, checkpoint: str | None) -> object:
-    """Return a registered Chronos-2 model with a grouping and checkpoint."""
+def grouping_model(
+    model: str, grouping: str, checkpoint: str | None = None
+) -> FoundationModel:
+    """Return a registered Chronos-2 model with a grouping and checkpoint.
+
+    Parameters
+    ----------
+    model : str
+        A registered Chronos-2 model.
+    grouping : str
+        One of `FITTED_GROUPINGS`.
+    checkpoint : str or None
+        A fine-tuned checkpoint's settings hash, or None for the model's.
+
+    Returns
+    -------
+    FoundationModel
+    """
     built = dataclasses.replace(get_model(model), grouping=grouping)
     if checkpoint is not None:
         built = dataclasses.replace(
@@ -140,7 +160,7 @@ def release_grouping_forecasts(
         As `forecast_releases`, with the model named by `arm_name`.
     """
     run = forecast_releases(
-        tasks, target, [_built(model, grouping, checkpoint)]
+        tasks, target, [grouping_model(model, grouping, checkpoint)]
     )
     name = arm_name(model, grouping, checkpoint)
     return ReleaseForecasts(
@@ -350,7 +370,7 @@ def germany_grouping_samples(
     built = get_model(model)
     label = model
     if hasattr(built, "grouping"):
-        built = _built(model, grouping, checkpoint)
+        built = grouping_model(model, grouping, checkpoint)
         label = arm_name(model, grouping, checkpoint)
     if label.endswith(":joint"):
         runs = [(merged_task(states, ages), states)]
