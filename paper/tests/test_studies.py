@@ -10,8 +10,8 @@ def test_synthetic_data_has_one_set_of_outbreaks_per_seed() -> None:
     obs, locations = load_data("synthetic", seeds=(7001, 7002))
     assert {seed_of(loc) for loc in obs["location"]} == {7001, 7002}
     assert set(locations["location"]) == set(obs["location"])
-    assert {"delay_days", "delay_q99", "gt_mean"} <= set(locations.columns)
-    assert (locations["delay_days"] == locations["delay_q99"]).all()
+    assert {"delay_days", "delay_q98", "gt_mean"} <= set(locations.columns)
+    assert (locations["delay_days"] == locations["delay_q98"]).all()
 
 
 def test_synthetic_forecasts_match_the_data() -> None:

@@ -77,7 +77,7 @@ def load_data(
             obs.append(_relabel(one, seed))
             locs.append(_relabel(factors, seed))
         locations = pd.concat(locs, ignore_index=True)
-        locations.insert(1, "delay_days", locations["delay_q99"].astype(int))
+        locations.insert(1, "delay_days", locations["delay_q98"].astype(int))
         return pd.concat(obs, ignore_index=True), locations
     _, obs = dummy_study(study, n_samples=1)
     if study == "germany":
