@@ -1605,11 +1605,13 @@ def _fit_settings() -> dict[str, dict[str, Any]]:
 
 
 def _settings_text(sampler: Mapping[str, Any]) -> str:
+    thin = int(sampler.get("thinning", 1))
+    kept = f", every {thin}th kept," if thin > 1 else ""
     return (
         f"{int(sampler['num_chains'])} chains of "
         f"{int(sampler['num_warmup'])} warm-up and "
-        f"{int(sampler['num_samples'])} draws at a target acceptance of "
-        f"{sampler['target_accept']}"
+        f"{int(sampler['num_samples'])} draws{kept} at a target acceptance "
+        f"of {sampler['target_accept']}"
     )
 
 

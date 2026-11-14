@@ -327,7 +327,8 @@ def run_nuts(model: Any, data: Any, sampler: Mapping[str, Any]) -> Any:
     data : bdbvhubrenewal.model.Vintage
         The inputs.
     sampler : mapping
-        The full sampler table (`sampler_settings`).
+        The full sampler table (`sampler_settings`), with an optional
+        `thinning`.
 
     Returns
     -------
@@ -351,6 +352,8 @@ def run_nuts(model: Any, data: Any, sampler: Mapping[str, Any]) -> Any:
         num_warmup=int(sampler["num_warmup"]),
         num_samples=int(sampler["num_samples"]),
         num_chains=int(sampler["num_chains"]),
+        # Every `thinning`-th draw is kept, so a long chain fits in memory.
+        thinning=int(sampler.get("thinning", 1)),
         chain_method=str(sampler.get("chain_method", "vectorized")),
         progress_bar=False,
     )
