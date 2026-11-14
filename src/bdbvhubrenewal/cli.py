@@ -445,21 +445,26 @@ def build_parser() -> argparse.ArgumentParser:
         "--model", help="With `fit` or `unpack`: the model to fit or read."
     )
     fst.add_argument(
-        "--origin", help="With `fit` or `unpack`: the real origin."
+        "--origin",
+        help="With `fit`, `unpack` or `archive`: the real origin.",
+    )
+    fst.add_argument(
+        "--reference-date",
+        default=None,
+        help="With `archive`: the round, as `nowcast --reference-date`.",
     )
     fst.add_argument(
         "--out",
         default=None,
         help="With `plan`: write the missing fits as a matrix JSON here. "
         "With `unpack`: the fit directory to write. "
-        "With `archive`: the forecasts file to write.",
+        "With `archive`: the hub tables file to write.",
     )
     fst.add_argument(
         "--origins",
         nargs="*",
         default=None,
-        help="With `plan`, `load` or `archive`: only these origins "
-        "(default: all).",
+        help="With `plan` or `load`: only these origins (default: all).",
     )
     fst.add_argument("--results", default="results")
     fst.add_argument(
@@ -1173,31 +1178,113 @@ def _zones(
     return zones, ""
 
 
+def _hub_forecast(
+    args: argparse.Namespace,
+    task: ForecastTask,
+    samples: pd.DataFrame | None = None,
+) -> tuple[pd.DataFrame, Forecast, pd.DataFrame | None, str]:
+    """Return the hub table `nowcast` writes, with its forecast and zones.
+
+    With `args.config` it forecasts from the fit in `args.fit`, else
+    `args.model` forecasts, unless `samples` are given. The zones come
+    from `_zones`.
+
+    Returns
+    -------
+    tuple
+        The hub table, the forecast, the zone samples (or None) and why
+        there are no zones ("" if there are).
+    """
+    hub_config = Path(args.data) / "hub-config" / "tasks.json"
+    if samples is not None:
+        result = Forecast(samples)
+    elif args.config:
+        result = run_forecast(get_config(args.config), task, args.fit)
+    else:
+        samples = get_model(args.model).forecast(task)
+        check_samples(samples, task)
+        result = Forecast(samples)
+    zones, zone_note = _zones(args, task, result.samples, hub_config)
+    table = to_hub_table(
+        result.samples,
+        task.reference_date,
+        unassigned=result.unassigned,
+        zones=zones,
+        forecast_date=args.forecast_date,
+    )
+    return table, result, zones, zone_note
+
+
+def _fit_store_archive(args: argparse.Namespace) -> int:
+    """Run `fit-store archive` (`evaluation.store_archive`)."""
+    if not (args.out and args.origin):
+        print("ERROR: archive needs --out and --origin.", file=sys.stderr)
+        return 1
+    round_args = argparse.Namespace(
+        backtest_config=args.config,
+        data=args.data,
+        vintage=args.origin,
+        reference_date=args.reference_date,
+    )
+    try:
+        task, _ = _task(round_args)
+    except (KeyError, ValueError, OSError) as err:
+        print(f"ERROR: {err}", file=sys.stderr)
+        return 1
+    tasks = store.origin_tasks(
+        load_target(args.data),
+        load_delays(args.data),
+        bt.load_config(args.config),
+        load_daily(args.data),
+    )
+
+    def hub(
+        model: str,
+        *,
+        config: str | None = None,
+        fit_dir: Path | None = None,
+        samples: pd.DataFrame | None = None,
+    ) -> pd.DataFrame:
+        hub_args = argparse.Namespace(
+            data=args.data,
+            model=model,
+            config=config,
+            fit=fit_dir,
+            forecast_date=None,
+        )
+        return _hub_forecast(hub_args, task, samples)[0]
+
+    models = store_archive.candidate_models(args.policy)
+    if args.models:
+        models = {m: models.get(m) for m in args.models}
+    table = store_archive.archive(
+        args.store,
+        task,
+        tasks.get(task.vintage),
+        models,
+        store.samplers(args.policy),
+        hub,
+    )
+    out = Path(args.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    write_csv(table, out)
+    for row in table.drop_duplicates("model").itertuples():
+        print(f"{row.model}: key {row.key}, made {row.fitted_at}.")
+    n = table["model"].nunique()
+    print(f"Archived {n} of {len(models)} models' forecasts in {out}.")
+    return 0
+
+
 def _nowcast(args: argparse.Namespace) -> int:
     from bdbvhubrenewal.forecasters.renewal import sampler_settings
 
     # A renewal model given by --model is fitted here.
     host_devices(int(sampler_settings()["num_chains"]))
-    hub_config = Path(args.data) / "hub-config" / "tasks.json"
     try:
         task, handled = _task(args)
-        if args.config:
-            config = get_config(args.config)
-            result = run_forecast(config, task, args.fit)
-        else:
-            samples = get_model(args.model).forecast(task)
-            check_samples(samples, task)
-            result = Forecast(samples)
-        zones, zone_note = _zones(args, task, result.samples, hub_config)
+        table, result, zones, zone_note = _hub_forecast(args, task)
         if zone_note:
             handled.append(zone_note)
-        table = to_hub_table(
-            result.samples,
-            task.reference_date,
-            unassigned=result.unassigned,
-            zones=zones,
-            forecast_date=args.forecast_date,
-        )
         path = write_submission(table, args.out, model_id(_abbr(args)))
     except (KeyError, ValueError, OSError) as err:
         print(f"ERROR: {err}", file=sys.stderr)
@@ -1688,7 +1775,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _fit(args)
     if args.command == "fit-store":
         if args.action == "archive":
-            return store_archive.command(args)
+            return _fit_store_archive(args)
         return store.command(args)
     if args.command == "plot-submission":
         return _plot_submission(args)
