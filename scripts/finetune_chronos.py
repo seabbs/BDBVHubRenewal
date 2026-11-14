@@ -172,15 +172,17 @@ def strata(settings: pd.Series) -> list[str]:
     return ages if len(ages) > 1 else places
 
 
-LEVELS = {"three": 0.4, "places": 0.2, "ages": 0.1, "strata": 0.3}
-"""Chance a block of places by strata (`P-<stratum>`) has the country,
-the places' totals and their strata (three levels), the country and the
-places' totals, or the country and strata."""
+LEVEL_MIX = ("all_levels", "leaves_national", "leaves", "national")
+"""The blocks of an outbreak with strata, a quarter each: the country,
+intermediate totals and leaves (as the deployed block: national,
+provinces, zones), leaves and the country, leaves only, or the country
+only. All levels need nested strata (regions of places, or places by
+ages)."""
 
-
-REGIONS = 0.5
-"""Chance an outbreak of flat places is grouped into 2 to 6 regions for
-its blocks, so blocks nest places in regions in the country."""
+REGIONS = 1.0
+"""Chance an outbreak of four or more flat places is grouped into 2 to 6
+regions for its blocks, so blocks can nest places in regions in the
+country."""
 
 
 def regions(places: list[str], rng: np.random.Generator) -> dict[str, str]:
@@ -199,27 +201,35 @@ def target_levels(places: tuple[str, ...]) -> tuple[str, ...]:
     nested = any("-" in p for p in places)
     return tuple(
         "national"
-        if i == 0
+        if p == NATIONAL
         else "leaf"
         if "-" in p or not nested
         else "intermediate"
-        for i, p in enumerate(places)
+        for p in places
     )
 
 
 def choose_places(
     provinces: list[str], budget: int, rng: np.random.Generator
-) -> tuple[str, ...]:
-    """Return a block's places below the country, at most `budget` of them.
+) -> tuple[tuple[str, ...], str]:
+    """Return a block's places and its level mix (`LEVEL_MIX`).
 
-    Strata of places (`P-<stratum>`) give blocks of `LEVELS`; other
-    provinces give a random subset.
+    At most `budget` places are below the country. All levels are the
+    country, the totals of the chosen leaves' groups (and, for places by
+    ages, the age groups' totals) and the leaves.
     """
-    if budget < 1:
-        return ()
-    if not any("-" in p for p in provinces):
+    nested = any("-" in p for p in provinces)
+    mixes = LEVEL_MIX if nested else LEVEL_MIX[1:]
+    mix = str(rng.choice(mixes))
+    # A block's size gives way to its level mix: leaves need at least one
+    # place below the country, all levels a group's total and a leaf.
+    budget = max(budget, 2 if mix == "all_levels" else 1)
+    if mix == "national":
+        return (NATIONAL,), mix
+    if mix in ("leaves_national", "leaves"):
         k = min(budget, len(provinces))
-        return tuple(str(p) for p in sorted(rng.choice(provinces, k, False)))
+        leaves = tuple(str(p) for p in sorted(rng.choice(provinces, k, False)))
+        return ((NATIONAL,) if mix == "leaves_national" else ()) + leaves, mix
     groups: dict[str, list[str]] = {}
     for p in provinces:
         groups.setdefault(p.split("-")[0], []).append(p)
@@ -230,33 +240,25 @@ def choose_places(
             if re.fullmatch(r"A\d+", p.split("-")[1])
         }
     )
-    weights = {k: v for k, v in LEVELS.items() if k != "ages" or ages}
-    total = sum(weights.values())
-    level = rng.choice(list(weights), p=[v / total for v in weights.values()])
-    if level == "ages":
-        return tuple(ages[:budget])
-    if level == "strata":
-        k = min(budget, len(provinces))
-        return tuple(str(p) for p in sorted(rng.choice(provinces, k, False)))
-    parents = list(rng.permutation(sorted(groups)))
-    if level == "places" or budget < 2:
-        return tuple(str(p) for p in sorted(parents[:budget]))
     chosen: list[str] = []
-    strata: list[str] = []
-    for parent in parents:
-        room = budget - len(chosen) - len(strata) - 1
+    leaves: list[str] = []
+    for parent in rng.permutation(sorted(groups)):
+        room = budget - len(chosen) - len(leaves) - 1
         if room < 1:
             break
-        chosen.append(parent)
-        strata.extend(sorted(groups[parent])[:room])
+        chosen.append(str(parent))
+        leaves.extend(sorted(groups[parent])[:room])
         if room < len(groups[parent]):
             break
+    if not chosen:
+        # Too small a budget for a group: one group's total and a leaf.
+        parent = sorted(groups)[0]
+        chosen, leaves = [parent], [sorted(groups[parent])[0]]
     totals = sorted(chosen)
-    # Blocks of places by ages may add the age groups' totals.
     if ages and rng.random() < 0.5:
-        room = budget - len(chosen) - len(strata)
+        room = budget - len(chosen) - len(leaves)
         totals += ages[: max(room, 0)]
-    return tuple(str(p) for p in (*totals, *sorted(strata)))
+    return (NATIONAL, *totals, *sorted(leaves)), mix
 
 
 def outbreak_blocks(
@@ -303,11 +305,21 @@ def outbreak_blocks(
             share = (j + rng.random()) / cuts
             cut = least + int(share * (len(cutoffs) - least))
             places: tuple[str, ...] = (NATIONAL,)
+            mix = "national"
             if len(provinces) > 1:
                 size = np.exp(rng.uniform(0, np.log(MAX_SERIES)))
                 fits = MAX_SERIES // (lag + 1) - 1
                 budget = min(round(size / (lag + 1)) - 1, fits)
-                places = (NATIONAL, *choose_places(provinces, budget, rng))
+                places, mix = choose_places(provinces, budget, rng)
+            # Leaves only, with nothing reported by the cut, have nothing
+            # to lay out.
+            if NATIONAL not in places:
+                seen = counts["location"].isin(places) & (
+                    pd.to_datetime(counts["report_date"])
+                    <= pd.Timestamp(cutoffs[cut])
+                )
+                if not seen.any():
+                    continue
             block = training_block(
                 counts,
                 source,
@@ -320,6 +332,7 @@ def outbreak_blocks(
                 continue
             padded = _pad(block, CONTEXT, HORIZON)
             padded["levels"] = target_levels(places)
+            padded["mix"] = mix
             out.append(padded)
     return out
 
