@@ -46,7 +46,7 @@ from bdbvhubrenewal.forecasters.base import (
     register_model,
 )
 from bdbvhubrenewal.forecasters.chain import start_weeks
-from bdbvhubrenewal.forecasters.copula import GaussianCopula
+from bdbvhubrenewal.forecasters.copula import PRIOR, GaussianCopula
 from bdbvhubrenewal.forecasters.randomwalk import RandomWalk
 
 __all__ = [
@@ -94,13 +94,9 @@ CHRONOS_MODEL: Final = "amazon/chronos-2"
 CHRONOS_REVISION: Final = "29ec3766d36d6f73f0696f85560a422f50e8498c"
 """The checkpoint's commit, pinned so runs are reproducible."""
 
-CHRONOS_COPULA: Final = GaussianCopula(
-    rho_time=0.9, rho_provinces=0.7, rho_national=0.7
-)
-"""The copula pairing every Chronos-2 model's draws into trajectories.
-Fixed values, chosen on the release backtest's energy score; the
-estimates from the backtest's errors
-(`bdbvhubrenewal.forecasters.copula.estimate_copula`) score worse."""
+CHRONOS_COPULA: Final = PRIOR
+"""The copula pairing every Chronos-2 model's draws into trajectories,
+days included, before they are summed to weeks."""
 
 FINETUNED_CONFIG: Final = Path("config/finetune.toml")
 """Which fine-tuned checkpoint the `_ft` models load: `hash`, `"latest"`
@@ -748,7 +744,7 @@ class FoundationModel:
         draws = self.copula.couple(
             sample([group], horizon, task.n_samples, seed)[0],
             rng,
-            step_days=7 if weekly else 1,
+            days=np.arange(horizon) * (7 if weekly else 1),
         )
         final = tri.final
         steps = np.broadcast_to(final, (task.n_samples, *final.shape)).copy()
