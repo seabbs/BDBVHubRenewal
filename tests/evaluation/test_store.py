@@ -559,8 +559,18 @@ def test_load_writes_the_zone_fits_zone_samples(tmp_path: Path) -> None:
         meta, empty, empty, empty, files={"zones.csv.gz": body}
     )
     store.write_fit(tmp_path / "store", fit)
+    # A fit with no zone samples adds no rows.
+    plain = store.StoredFit(
+        {**meta, "model": "randomwalknowcast", "key": "p"}, empty, empty, empty
+    )
+    store.write_fit(tmp_path / "store", plain)
     store.load(
-        tmp_path / "store", {("renewal", "2026-10-17"): "k"}, tmp_path / "res"
+        tmp_path / "store",
+        {
+            ("renewal", "2026-10-17"): "k",
+            ("randomwalknowcast", "2026-10-17"): "p",
+        },
+        tmp_path / "res",
     )
     written = pd.read_csv(tmp_path / "res" / store.ZONE_FITS_FILE)
     # Final counts only, by model and origin.

@@ -206,7 +206,7 @@ def nested_basis(
 def _nested_walk(
     baseline_process: TemporalProcess,
     parent_process: TemporalProcess,
-    place_process: TemporalProcess | None,
+    place_process: TemporalProcess,
     base_start: ArrayLike,
     dev_start: ArrayLike,
     n_timepoints: int,
@@ -236,8 +236,6 @@ def _nested_walk(
     ):
         if basis.shape[1] == 0:
             continue
-        if process is None:
-            raise ValueError("Nested deviations need a place process.")
         start = (
             jnp.asarray(np.linalg.pinv(basis)) @ dev_start
             if coord_starts is None
@@ -628,9 +626,9 @@ class ZoneOnsetStreams(OnsetStreams):
 def zone_table(locations: tuple[str, ...] | None = None) -> pd.DataFrame:
     """Health zone populations and centres, as a locations table.
 
-    The hub zones the map lacks (19 of 519, none with a case so far) take
-    their province's centre and the mean WorldPop count of its mapped
-    zones, or the median zone's where none of its zones are mapped.
+    The hub zones the map lacks take their province's centre and the
+    mean WorldPop count of its mapped zones, or the median zone's where
+    none of its zones are mapped.
 
     Parameters
     ----------
@@ -651,12 +649,8 @@ def zone_table(locations: tuple[str, ...] | None = None) -> pd.DataFrame:
     return _zone_rows(tuple(locations), zones.set_index("location"))
 
 
-def _zone_rows(
-    locations: tuple[str, ...], zones: pd.DataFrame | None = None
-) -> pd.DataFrame:
+def _zone_rows(locations: tuple[str, ...], zones: pd.DataFrame) -> pd.DataFrame:
     """Zone table rows for some zones, with the province fallback."""
-    if zones is None:
-        zones = zone_table().set_index("location")
     missing = [z for z in locations if z not in zones.index]
     if missing:
         provinces = province_centres().set_index("location")
@@ -761,10 +755,11 @@ def zone_kernel(
     numpy.ndarray
         Rows sum to one, zero diagonal.
     """
-    pops = table.set_index("location")["population"].reindex(list(zones))
+    rows = table.set_index("location").reindex(list(zones))
+    pops = rows["population"]
     if pops.isna().any():
         raise ValueError("Missing zone population.")
-    dist_km = place_distances(_zone_rows(zones))
+    dist_km = place_distances(rows)
     k = pops.to_numpy(float)[None, :] * np.exp(-dist_km / decay_km)
     np.fill_diagonal(k, 0.0)
     k = k / k.sum(axis=1, keepdims=True)
