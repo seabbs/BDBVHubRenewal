@@ -16,9 +16,10 @@
 #   the same with latent infections and an incubation delay
 #   (`latent_reporting_delay`), or with no generation time a weekly random
 #   walk on the growth rate, a random walk on log incidence, growth with
-#   step changes, or smoothly varying growth. Each declines linearly by a
-#   drawn amount, as epidemics turn over. The growth rate is given to
-#   `enw_simulate`, so the `r` formula is not used;
+#   step changes, or smoothly varying growth. On top, each outbreak has a
+#   trajectory, a quarter each: turning over, flat or slowly varying,
+#   rising then falling, or a second wave (`trajectory`). The growth rate
+#   is given to `enw_simulate`, so the `r` formula is not used;
 # - reference date (`enw_reference`): a parametric delay alone, a
 #   non-parametric hazard alone, or both. The parametric delay is a
 #   lognormal, gamma or exponential, and the hazard has effects by delay,
@@ -69,7 +70,7 @@
 #   Rscript scripts/finetune_simulate.R <n> <seed> <out_dir>
 
 epinowcast_sha <- "e084b080"
-grid_name <- "r2-cal2"
+grid_name <- "r2-cal3"
 args <- commandArgs(trailingOnly = TRUE)
 n_outbreaks <- as.integer(args[[1]])
 seed <- as.integer(args[[2]])
@@ -103,15 +104,26 @@ gamma_pmf <- function(mean, cv, n) {
   pmf / sum(pmf)
 }
 
-# One log Rt path: steps at random times, a random walk drift, and a
-# linear decline (`turn`) as an epidemic turns over.
+# A trajectory's shift of log Rt (`scale` 1) or of the daily growth rate
+# (`scale` 0.1) over `n` days: a linear decline (turning over), none
+# (flat), a rise then a fall, or a decline then a step up (second wave).
+trajectory <- function(n, kind, v, scale) {
+  t <- seq_len(n) / n
+  scale * switch(kind,
+    turnover = -(0.1 + 0.5 * v$shape_size) * t,
+    flat = numeric(n),
+    rise_fall = (0.1 + 0.4 * v$shape_size) * (1 - 2 * t),
+    second_wave = -0.3 * v$shape_size * t +
+      (0.2 + 0.4 * v$wave_size) * (t >= v$wave_at)
+  )
+}
+
+# One log Rt path: steps at random times and a random walk drift.
 log_rt_path <- function(n, v) {
   at <- sort(sample.int(n, v$rt_steps, replace = TRUE))
   jumps <- numeric(n)
   jumps[at] <- rnorm(v$rt_steps, -0.2, v$rt_step_sd)
-  path <- v$log_r0 + cumsum(jumps) + cumsum(rnorm(n, 0, v$rt_drift_sd)) -
-    v$rt_turn * seq_len(n) / n
-  pmin(pmax(path, -1.2), 1.2)
+  v$log_r0 + cumsum(jumps) + cumsum(rnorm(n, 0, v$rt_drift_sd))
 }
 
 # One daily growth rate path of a process with no generation time.
@@ -132,10 +144,7 @@ growth_path <- function(n, process, v) {
     growth_smooth = v$r0 + v$smooth_amp *
       sin(2 * pi * seq_len(n) / v$smooth_period + v$smooth_phase)
   )
-  # Growth that never turns over is the main cause of outbreaks too large
-  # to keep, so growth declines linearly to `turn` lower by the end.
-  path <- path - v$growth_turn * seq_len(n) / n
-  pmin(pmax(path, -0.1), 0.1)
+  path
 }
 
 # The delay's epinowcast parameters (`refp_mean_int`, `refp_sd_int`) and
@@ -216,6 +225,9 @@ draw_design <- function() {
       places_ages = sample(3:7, 1)
     ),
     process = sample(processes, 1),
+    trajectory = sample(
+      c("turnover", "flat", "rise_fall", "second_wave"), 1
+    ),
     reference = reference,
     delay_family = if (parametric) {
       sample(c("lognormal", "gamma", "exponential"), 1)
@@ -261,14 +273,15 @@ draw_values <- function(design) {
     incubation_mean = runif(1, 3, 12),
     incubation_cv = runif(1, 0.3, 0.7),
     log_r0 = rnorm(1, 0.1, 0.2),
-    rt_turn = runif(1, 0, 0.6),
+    shape_size = runif(1),
+    wave_size = runif(1),
+    wave_at = runif(1, 0.4, 0.8),
     rt_steps = rpois(1, 1.2),
     rt_step_sd = runif(1, 0.1, 0.5),
     rt_drift_sd = runif(1, 0, 0.03),
     # Most failed draws were growth processes overflowing at the start
     # growth rate's upper range, so it is narrower than for Rt.
     r0 = rnorm(1, 0.01, 0.02),
-    growth_turn = runif(1, 0.01, 0.1),
     walk_sd = runif(1, 0.005, 0.015),
     incidence_sd = runif(1, 0.05, 0.3),
     growth_steps = sample(1:3, 1),
@@ -393,7 +406,14 @@ simulate_outbreak <- function(design, v) {
   )
   n_r <- expectation$data$expr_t
   path <- function() {
-    if (renewal) log_rt_path(n_r, v) else growth_path(n_r, design$process, v)
+    if (renewal) {
+      shifted <- log_rt_path(n_r, v) + trajectory(n_r, design$trajectory, v, 1)
+      pmin(pmax(shifted, -1.2), 1.2)
+    } else {
+      shifted <- growth_path(n_r, design$process, v) +
+        trajectory(n_r, design$trajectory, v, 0.1)
+      pmin(pmax(shifted, -0.1), 0.1)
+    }
   }
   # Strata share a path, and places by ages also share their place's.
   shared <- path()

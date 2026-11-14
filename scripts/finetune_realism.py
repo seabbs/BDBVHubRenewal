@@ -67,6 +67,28 @@ def weekly_summary(weekly: pd.DataFrame) -> dict[str, float]:
     }
 
 
+def phases(weekly: pd.Series, last: pd.Timestamp | None = None) -> dict:
+    """Return the shares of origins at which the total rises, is flat, falls.
+
+    At an origin, the log ratio of the week to two weeks earlier is above
+    0.2 (rising), below -0.2 (falling) or between (flat). Origins are the
+    weeks from the third after the first case to `last`.
+    """
+    w = weekly.sort_index()
+    w = w.loc[w.index >= w.index[w.to_numpy() > 0][0]]
+    if last is not None:
+        w = w.loc[w.index <= last]
+    x = np.log(w.to_numpy(dtype=float) + 1)
+    if len(x) < 3:
+        return {}
+    ratio = x[2:] - x[:-2]
+    return {
+        "origin_rising": float((ratio > 0.2).mean()),
+        "origin_flat": float((np.abs(ratio) <= 0.2).mean()),
+        "origin_falling": float((ratio < -0.2).mean()),
+    }
+
+
 def delay_summary(delays: np.ndarray, weights: np.ndarray) -> dict:
     """Mean, 99% point and share reported by `LAGS` of a delay sample."""
     order = np.argsort(delays)
@@ -107,6 +129,11 @@ def simulated(sim_dirs: list[Path], rng: np.random.Generator) -> pd.DataFrame:
         )
         delays = (rep - ref).dt.days.to_numpy()
         w = c["count"].to_numpy(dtype=float)
+        total = weekly.groupby("week")["count"].sum()
+        total.index = pd.to_datetime(total.index)
+        # Blocks are cut at least the longest delay plus five weeks before
+        # the last report.
+        last = rep.max() - pd.Timedelta(weeks=int(delays.max()) // 7 + 5)
         rows.append(
             {
                 "source": "simulated",
@@ -114,6 +141,7 @@ def simulated(sim_dirs: list[Path], rng: np.random.Generator) -> pd.DataFrame:
                 **weekly_summary(weekly),
                 **delay_summary(delays, w),
                 **report_weekdays(c["report_date"], w),
+                **phases(total, last),
             }
         )
     return pd.DataFrame(rows)
@@ -124,6 +152,8 @@ def bdbv() -> dict:
     t = load_target("data")
     t = t.loc[(t["vintage"] == t["vintage"].max()) & (t["location"] != "CD")]
     weekly = t.rename(columns={"target_end_date": "week", "total": "count"})
+    total = weekly.groupby("week")["count"].sum()
+    total.index = pd.to_datetime(total.index)
     d = load_delays("data")
     d = d.loc[d["vintage"] == d["vintage"].max(), "delay"].to_numpy()
     d = d[(d >= 0) & (d <= 120)].astype(float)
@@ -132,6 +162,7 @@ def bdbv() -> dict:
         "id": "BDBV",
         **weekly_summary(weekly[["location", "week", "count"]]),
         **delay_summary(d, np.ones_like(d)),
+        **phases(total, total.index.max() - pd.Timedelta(weeks=4)),
     }
 
 
@@ -170,10 +201,14 @@ def germany(path: Path) -> list[dict]:
         last = pd.Timestamp(GERMANY_LAST) - pd.Timedelta(days=81)
         seen = rows.loc[pd.to_datetime(rows["date"]) <= last]
         w = seen["count"].to_numpy(dtype=float)
+        total = weekly.groupby("week")["count"].sum()
+        # Origins are the German hub's development nowcast dates.
+        total = total.loc[total.index >= "2021-11-15"]
         out.append(
             {
                 "source": name,
                 "id": name,
+                **phases(total, pd.Timestamp(GERMANY_LAST)),
                 **weekly_summary(weekly),
                 **delay_summary(seen["delay"].to_numpy(dtype=float), w),
                 **report_weekdays(seen["report_date"], w),
@@ -198,8 +233,10 @@ def main() -> None:
         ("delay_mean", True),
         ("delay_q99", True),
         *[(f"reported_by_{lag}d", False) for lag in LAGS],
+        ("origin_rising", False),
+        ("origin_falling", False),
     ]
-    fig, axes = plt.subplots(3, 5, figsize=(18, 10))
+    fig, axes = plt.subplots(3, 6, figsize=(21, 10))
     colours = {"BDBV": "C3", "Germany states": "C2", "Germany ages": "C1"}
     for ax, (stat, log) in zip(axes.flat, stats, strict=False):
         x = sims[stat].dropna().to_numpy()
