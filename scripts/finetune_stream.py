@@ -255,6 +255,36 @@ def publish(where: Path, key: str) -> None:
     raise RuntimeError(f"could not publish chronos-ft-{key}")
 
 
+def accumulate(indices: list[int], backward, zero, skip) -> float:
+    """Return a batch's loss, accumulating its gradients by `backward`.
+
+    If memory runs out, the gradients are cleared (`zero`) and the batch
+    is run again in halves, and so on; a single block that still does not
+    fit is left out (`skip`). Every other block is used once.
+    """
+    parts = [indices]
+    while True:
+        zero()
+        values, sizes = [], []
+        try:
+            for part in parts:
+                values.append(backward(part, len(part) / len(indices)))
+                sizes.append(len(part))
+            return (
+                float(np.average(values, weights=sizes)) if values else np.nan
+            )
+        except RuntimeError as error:
+            if "out of memory" not in str(error):
+                raise
+            if len(part) == 1:
+                skip(part[0])
+                parts = [p for p in parts if p is not part]
+            else:
+                half = len(part) // 2
+                at = parts.index(part)
+                parts[at : at + 1] = [part[:half], part[half:]]
+
+
 def finite_step(params: list, optimiser, value: float) -> bool:
     """Clip and apply the gradients unless any is not finite.
 
@@ -533,41 +563,30 @@ def main() -> None:
             },
         )
 
-    def train_step(batch_blocks: list[int], share: float) -> float:
-        """Accumulate gradients of a batch; split it if memory runs out."""
-        try:
-            batch = {
-                k: v.to(device) if torch.is_tensor(v) else v
-                for k, v in data._build_batch(batch_blocks).items()
-                if k in accepted
-            }
-            loss = model(**batch).loss
-            (loss * share).backward()
-            value = float(loss.detach())
-            del batch, loss
-            return value
-        except RuntimeError as error:
-            if "out of memory" not in str(error):
-                raise
-            free_memory()
-            if len(batch_blocks) == 1:
-                i = batch_blocks[0]
-                series = int(data.inputs[i]["context"].shape[0])
-                outbreak = pairs[i][0]
-                skipped.append(
-                    {"outbreak": outbreak, "step": step + 1, "series": series}
-                )
-                log(
-                    f"skipped block {i} of {pairs[i][0]}, "
-                    f"{series} series, "
-                    f"too large for memory: {memory()}"
-                )
-                return float("nan")
-            half = len(batch_blocks) // 2
-            log(f"split a batch of {len(batch_blocks)} blocks for memory")
-            parts = (batch_blocks[:half], batch_blocks[half:])
-            values = [train_step(part, share / 2) for part in parts]
-            return float(np.nanmean(values))
+    def backward(part: list[int], share: float) -> float:
+        """Accumulate the gradients of part of a batch."""
+        batch = {
+            k: v.to(device) if torch.is_tensor(v) else v
+            for k, v in data._build_batch(part).items()
+            if k in accepted
+        }
+        loss = model(**batch).loss
+        (loss * share).backward()
+        value = float(loss.detach())
+        del batch, loss
+        return value
+
+    def skip(i: int) -> None:
+        """Record a block too large for memory."""
+        series = int(data.inputs[i]["context"].shape[0])
+        skipped.append(
+            {"outbreak": pairs[i][0], "step": step + 1, "series": series}
+        )
+        log(f"skipped {pairs[i][0]}, {series} series, too large: {memory()}")
+
+    def zero() -> None:
+        optimiser.zero_grad()
+        free_memory()
 
     t0 = time.perf_counter()
     while done < args.outbreaks:
@@ -604,7 +623,7 @@ def main() -> None:
             while pause.exists():
                 report(stage="paused")
                 time.sleep(30)
-            value = train_step(indices, 1.0)
+            value = accumulate(list(indices), backward, zero, skip)
             if not finite_step(params, optimiser, value):
                 log(f"step {step + 1}: no update (loss {value})")
             # Batches differ in shape, so cached buffers pile up unless they

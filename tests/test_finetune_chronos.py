@@ -204,7 +204,7 @@ def test_a_split_batch_starts_from_clear_gradients():
     grads: list[int] = []
     skipped: list[int] = []
 
-    def backward(part, share):
+    def backward(part, _share):
         if len(part) > 2:
             grads.append(-1)  # a partial backward before running out
             raise RuntimeError("MPS backend out of memory")
