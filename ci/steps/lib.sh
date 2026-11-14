@@ -123,26 +123,30 @@ ledger_worktree() {
   fi
 }
 
-# Commit everything in the ledger worktree $1 with message $2 and push it.
-# A rejected push (the branch moved) fetches the branch, rebases the
-# commit onto it and tries again, up to LEDGER_PUSH_TRIES times
-# (default 3), LEDGER_PUSH_WAIT seconds apart (default 5).
+# Write the ledger worktree $1 with the command after $2 (WRITER ARGS...),
+# then commit it with message $2 and push it. A rejected push (the
+# branch moved) fetches the branch, resets the worktree to it and runs
+# the writer again on what it holds, up to LEDGER_PUSH_TRIES times
+# (default 3), LEDGER_PUSH_WAIT seconds apart (default 5). With nothing
+# to commit, nothing is pushed.
 ledger_push() {
-  local dir=$1 branch=${LEDGER_BRANCH:-submission-ledger} try
+  local dir=$1 msg=$2 branch=${LEDGER_BRANCH:-submission-ledger} try
   local tries=${LEDGER_PUSH_TRIES:-3}
   local who=(-c user.name="github-actions[bot]"
     -c user.email="41898282+github-actions[bot]@users.noreply.github.com")
-  git -C "$dir" add -A
-  git -C "$dir" "${who[@]}" commit -q -m "$2"
+  shift 2
   for ((try = 1; try <= tries; try++)); do
-    git -C "$dir" push -q origin "$branch" && return 0
+    "$@"
+    git -C "$dir" add -A
+    git -C "$dir" diff --cached --quiet && return 0
+    git -C "$dir" "${who[@]}" commit -q -m "$msg"
+    git -C "$dir" push -q origin "HEAD:$branch" && return 0
     [ "$try" -lt "$tries" ] || break
-    echo "::warning::ledger push rejected (try $try of $tries); fetching again"
+    echo "::warning::ledger push rejected (try $try of $tries); writing again"
     sleep "${LEDGER_PUSH_WAIT:-5}"
-    if git -C "$dir" fetch -q origin "$branch"; then
-      git -C "$dir" "${who[@]}" rebase -q FETCH_HEAD \
-        || git -C "$dir" rebase --abort 2> /dev/null || true
-    fi
+    git -C "$dir" fetch -q --depth 1 origin "$branch"
+    git -C "$dir" reset -q --hard FETCH_HEAD
+    git -C "$dir" clean -q -fd
   done
   echo "::error::ledger push failed after $tries tries"
   return 1

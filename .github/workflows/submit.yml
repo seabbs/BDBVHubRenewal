@@ -714,18 +714,14 @@ jobs:
             [ -n "$failed" ] && echo "Failed jobs: $failed"
             [ -n "$archive" ] && echo "Candidates not archived: $archive."
           } >> "$GITHUB_STEP_SUMMARY"
-          if [ "$RENEWAL" = true ] && [ -z "$SELECTED" ]; then
-            echo "::error::round $REF skipped: every candidate was ruled out"
-            exit 1
-          fi
-          if [ -n "$failed" ]; then
-            echo "::error::jobs failed: $failed"
-            exit 1
-          fi
-          if [ -n "$archive" ]; then
-            echo "::error::candidates not archived: $archive"
-            exit 1
-          fi
+          # Every error is annotated, then the run fails once.
+          errors=()
+          [ "$RENEWAL" = true ] && [ -z "$SELECTED" ] \
+            && errors+=("round $REF skipped: every candidate was ruled out")
+          [ -n "$failed" ] && errors+=("jobs failed: $failed")
+          [ -n "$archive" ] && errors+=("candidates not archived: $archive")
           case "$ACTION $BASELINE_PR" in
-            *skipped-*) echo "::error::PR not submitted: $ACTION $BASELINE_PR"; exit 1 ;;
+            *skipped-*) errors+=("PR not submitted: $ACTION $BASELINE_PR") ;;
           esac
+          for e in "${errors[@]}"; do echo "::error::$e"; done
+          [ "${#errors[@]}" -eq 0 ] || exit 1
