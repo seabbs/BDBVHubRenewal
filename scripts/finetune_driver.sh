@@ -2,7 +2,7 @@
 # Simulate, fine-tune and publish a round of Chronos-2 fine-tuning,
 # unattended. Run from the repo root, detached:
 #
-#   nohup scripts/finetune_driver.sh config/finetune/r2-cal5.env \
+#   nohup scripts/finetune_driver.sh config/finetune/r3.env \
 #     > /dev/null 2>&1 &
 #
 # The env file sets the round:
@@ -215,10 +215,6 @@ check_remote() {
     # Batches of another grid are moved aside, never copied back.
     remote "cd $REMOTE_DIR && if [ \"\$(cat $SIM_REMOTE/grid 2> /dev/null)\" != $GRID ]; then pkill -f '[f]inetune_remote.sh'; pkill -f '[f]inetune_simulate.R --args'; [ -d $SIM_REMOTE ] && mv $SIM_REMOTE $SIM_REMOTE-old-\$(date +%s); mkdir -p $SIM_REMOTE/logs; echo $GRID > $SIM_REMOTE/grid; echo moved; fi" 2> /dev/null \
       | grep -q moved && log "moved $REMOTE's batches of another grid aside"
-    # A scheduler started by hand runs more processes than memory allows.
-    if remote "pkill -f '[r]un4.sh'" > /dev/null 2>&1; then
-      log "stopped run4.sh on $REMOTE; its running batches finish"
-    fi
     [ -e "$PAUSE" ] && return 0
     remote "test -e $REMOTE_DIR/$SIM_REMOTE/remote-done" 2> /dev/null \
       || remote_scheduler || log "could not start the remote scheduler"

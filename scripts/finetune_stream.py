@@ -15,7 +15,11 @@ is set. Held-out loss is on the first `--holdout` outbreaks of the
 held-out seeds, simulated first.
 
     uv run --group chronos python scripts/finetune_stream.py SIM_DIR OUT \
-        --train-seeds 5001 5360 --held-out-seeds 5901 5907 --publish
+        --grid r3 --train-seeds FIRST LAST --held-out-seeds FIRST LAST \
+        --publish
+
+`scripts/finetune_driver.sh` runs it with the seeds of a config such as
+`config/finetune/r3.env`.
 
 `OUT/stream-status.json` holds the trainer's state, and while
 `OUT/../PAUSE` exists the trainer waits between steps.
@@ -36,6 +40,11 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+
+from bdbvhubrenewal.forecasters.foundation import (
+    CHRONOS_MODEL,
+    CHRONOS_REVISION,
+)
 
 sys.path.insert(0, str(Path(__file__).parent))
 import finetune_chronos as ft
@@ -504,7 +513,7 @@ def main() -> None:
         else "cpu"
     )
     pipeline = Chronos2Pipeline.from_pretrained(
-        ft.CHRONOS_MODEL, revision=ft.CHRONOS_REVISION, device_map=device
+        CHRONOS_MODEL, revision=CHRONOS_REVISION, device_map=device
     )
     lora = LoraConfig(
         r=8,
@@ -524,7 +533,7 @@ def main() -> None:
     accepted = inspect.signature(Chronos2Model.forward).parameters
     base = {
         "grid": args.grid,
-        "chronos_revision": ft.CHRONOS_REVISION,
+        "chronos_revision": CHRONOS_REVISION,
         "code_sha256": {
             **{p: ft._sha256(Path(p)) for p in ft.CODE},
             "scripts/finetune_stream.py": ft._sha256(Path(__file__)),
