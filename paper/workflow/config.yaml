@@ -37,13 +37,10 @@ germany:
   extra:
     - evidence: germany_chronos
       models: "^fm_chronos_"
-      provisional: &chronos >-
-        Chronos-2 rows are provisional: their daily source treated reports
-        at lags of 28 days or more as final, and they are being rescored.
-    - evidence: germany_chronos_n1000
-      backtest: true
-      suffix: _n1000
-      provisional: *chronos
+      provisional: >-
+        Chronos-2 rows are provisional: their ragged models capped release
+        lags at 28 days rather than the 40-day truth delay, and they are
+        being rescored.
 
 # The Ebola study: the release backtest of `backtest_models` from every
 # past release (`bdbvhubrenewal backtest`), the hub's releases, and once
@@ -92,11 +89,8 @@ nowcasts:
 # paper run.
 evidence:
   germany_chronos:
-    ref: 1697968b1674f0f42eb784785fcae522d4576eff
-    path: germany/chronos-paper-forecasts.csv.gz
-  germany_chronos_n1000:
-    ref: 1697968b1674f0f42eb784785fcae522d4576eff
-    path: germany/n1000-ft-forecasts.csv.gz
+    ref: e0323a7d19794f06b50ccc5f0118f85e58b16af5
+    path: evidence/paper-forecasts-chronos.csv.gz
   copula_scores: null
   copula_rho: null
   aggregation_scores: null
