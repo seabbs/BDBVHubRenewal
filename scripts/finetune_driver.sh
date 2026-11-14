@@ -269,12 +269,20 @@ trainer_args=("$SIM_DIR" "$OUT" --train-seeds "$TRAIN_FIRST" "$TRAIN_LAST"
   --held-out-seeds "$HELD_FIRST" "$HELD_LAST" --outbreaks "$OUTBREAKS"
   --note "${NOTE:-}")
 [ "${PUBLISH:-0}" = 1 ] && trainer_args+=(--publish)
-HF_HOME=output/finetune/hf HF_HUB_OFFLINE=1 MPLCONFIGDIR="${TMPDIR:-/tmp}" \
-  nohup .venv/bin/python scripts/finetune_stream.py "${trainer_args[@]}" \
-  >> "$LOG" 2>&1 < /dev/null &
-trainer=$!
-echo "$trainer" > output/finetune/trainer.pid
-log "started the trainer, pid $trainer"
+trainer=$(cat output/finetune/trainer.pid 2> /dev/null)
+if [ -n "$trainer" ] && ps -p "$trainer" -o args= | grep -q finetune_stream; then
+  # A restarted driver keeps a running trainer and its progress.
+  adopted=1
+  log "kept the running trainer, pid $trainer"
+else
+  adopted=0
+  HF_HOME=output/finetune/hf HF_HUB_OFFLINE=1 MPLCONFIGDIR="${TMPDIR:-/tmp}" \
+    nohup .venv/bin/python scripts/finetune_stream.py "${trainer_args[@]}" \
+    >> "$LOG" 2>&1 < /dev/null &
+  trainer=$!
+  echo "$trainer" > output/finetune/trainer.pid
+  log "started the trainer, pid $trainer"
+fi
 [ -e "$OUT/train-last.txt" ] && TRAIN_LAST=$(cat "$OUT/train-last.txt")
 while true; do
   extend_seeds
@@ -283,8 +291,14 @@ while true; do
   sync_remote
   check_batches
   if ! kill -0 "$trainer" 2> /dev/null; then
-    wait "$trainer"
-    code=$?
+    if (( adopted )); then
+      # A kept trainer is not this shell's child: its state tells.
+      stage=$(python3 -c "import json;print(json.load(open('$OUT/stream-status.json'))['stage'])" 2> /dev/null)
+      [ "$stage" = finished ] && code=0 || code=1
+    else
+      wait "$trainer"
+      code=$?
+    fi
     if [ "$code" -ne 0 ]; then
       fail "the trainer stopped with exit code $code, see $LOG"
     fi
