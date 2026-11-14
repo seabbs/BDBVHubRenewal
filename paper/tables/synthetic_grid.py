@@ -394,8 +394,25 @@ def model_note(text: str) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _seeds(seeds: list[int]) -> str:
+    """Return seeds as `seed 7001` or `seeds 8016 to 8025`."""
+    if len(seeds) == 1:
+        return f"seed {seeds[0]}"
+    return f"seeds {seeds[0]} to {seeds[-1]}"
+
+
+def _ordinal(n: int) -> str:
+    """Return `n` as an ordinal, such as 6th."""
+    suffix = {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
+    if 10 <= n % 100 <= 20:
+        suffix = "th"
+    return f"{n}{suffix}"
+
+
 def heldout_note(config: dict) -> str:
     """Return the SI note on the held-out set, from its config."""
+    from paper.synthetic import HORIZON_WEEKS, HORIZONS, MIN_RELEASES
+
     seeds = config["heldout_seeds"]
     n = config["simulations_per_seed"]
     blocks = config["blocks"]
@@ -404,7 +421,7 @@ def heldout_note(config: dict) -> str:
         "# The held-out synthetic set",
         "",
         f"The held-out set is simulated on grid `{config['grid']}` with"
-        f" seeds {seeds[0]} to {seeds[-1]}, {n} simulations each.",
+        f" {_seeds(seeds)}, {n} simulations each.",
         f"These cover the complete balanced blocks {blocks[0]} to"
         f" {blocks[-1]}, and simulations outside them are not used.",
         f"We evaluate draw {config['draw']} of each simulation, so the"
@@ -418,9 +435,22 @@ def heldout_note(config: dict) -> str:
         "",
         "The held-out set was reserved for the final evaluation.",
         "No model was scored on it during development.",
-        f"We checked the pipeline on the development seeds {dev[0]} to"
-        f" {dev[-1]} and the pilot simulations, whose forecasts are not"
-        " results.",
+        f"We checked the pipeline on the development {_seeds(dev)} and the"
+        " pilot simulations, whose forecasts are not results.",
+        "",
+        "## Protocol",
+        "",
+        "Each outbreak is released weekly, on one weekday from Wednesday to"
+        " Saturday drawn from its id, and a release's cut-off is its origin.",
+        "Each outbreak has four origins, spread evenly from its"
+        f" {_ordinal(MIN_RELEASES)} release to the last release at least its"
+        f" longest delay plus {HORIZON_WEEKS} weeks before its last report.",
+        f"Each forecast covers weeks {HORIZONS[0]} to {HORIZONS[-1]} from"
+        " the week of the cut-off, as weekly totals by onset week for the"
+        " country and each stratum.",
+        "Scores use rolling truth, the count reported D days after the end"
+        " of a target week, with D the outbreak's own 98% reporting delay in"
+        " whole days, and are relative to `randomwalknowcast`.",
     ]
     return "\n".join(lines) + "\n"
 

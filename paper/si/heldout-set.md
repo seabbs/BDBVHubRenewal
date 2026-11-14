@@ -9,4 +9,11 @@ The protocol is in `paper/synthetic.py`, and `paper/run_synthetic.py` runs the m
 
 The held-out set was reserved for the final evaluation.
 No model was scored on it during development.
-We checked the pipeline on the development seeds 7001 to 7001 and the pilot simulations, whose forecasts are not results.
+We checked the pipeline on the development seed 7001 and the pilot simulations, whose forecasts are not results.
+
+## Protocol
+
+Each outbreak is released weekly, on one weekday from Wednesday to Saturday drawn from its id, and a release's cut-off is its origin.
+Each outbreak has four origins, spread evenly from its 6th release to the last release at least its longest delay plus 5 weeks before its last report.
+Each forecast covers weeks -4 to 3 from the week of the cut-off, as weekly totals by onset week for the country and each stratum.
+Scores use rolling truth, the count reported D days after the end of a target week, with D the outbreak's own 98% reporting delay in whole days, and are relative to `randomwalknowcast`.
