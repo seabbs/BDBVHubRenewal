@@ -203,6 +203,7 @@ The German COVID-19 hospitalisation nowcasting hub[^wolffram] collected nowcasts
 1. Each day's data version is a release whose cut-off is that day, and the Meldedatum is the onset date. A release's count of a day is the count reported by then in the hub's reporting triangle, with the changes after 80 days put at 81 days, as epinowcast's `germany_covid19_hosp` does. A day's last count is carried to every later release.
 2. Germany is the country. The states are its provinces in one task and Germany's age groups its provinces in another. Germany's nowcast is the sum of the states.
 3. Hub weeks end on Saturdays, so every date of a nowcast moves forward by the 0 to 6 days to the next Saturday. The 7-day sums ending on the nowcast date and 7, 14, 21 and 28 days before it are then hub weeks, and the nowcasts move back.
+4. `randomwalknowcast`'s draws are paired by the rolling copula, for each task apart, from its errors at earlier nowcast dates against the 40-day truth ([Correlated trajectories](#correlated-trajectories)). Each state's and age group's nowcast is unchanged, and Germany's, the sum of the paired states, widens.
 
 The nowcast dates are the paper's, every day from 2021-11-22 to 2022-04-29.
 They are split at their midpoint.

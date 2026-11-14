@@ -43,6 +43,7 @@ import sys
 from collections.abc import Sequence
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pandas as pd
 
@@ -108,6 +109,9 @@ from bdbvhubrenewal.submission.validate import (
     validate_submission,
 )
 from bdbvhubrenewal.submission.validate import main as validate_main
+
+if TYPE_CHECKING:
+    from bdbvhubrenewal.evaluation.germany import GermanyConfig
 
 __all__ = ["build_parser", "chunk", "host_devices", "main"]
 
@@ -337,6 +341,18 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Run the held-out half of the dates, for the paper, into "
         "OUT/held-out.",
+    )
+
+    gsc = sub.add_parser(
+        "germany-score",
+        help="Pair and score the German benchmark's samples of every block "
+        "(`germany-backtest --chunk`) together.",
+    )
+    gsc.add_argument("--config", default="config/germany.toml")
+    gsc.add_argument("--data", default=f"{data_dir}/raw/germany")
+    gsc.add_argument("--out", default="results/germany")
+    gsc.add_argument(
+        "parts", nargs="+", help="Directories with a samples.csv.gz."
     )
 
     gtm = sub.add_parser(
@@ -1572,18 +1588,60 @@ def _germany_backtest(args: argparse.Namespace) -> int:
         dates = chunk(dates, args.chunk)
     models = config.models if args.models is None else args.models
     triangle = hub_triangle(Path(args.data) / Path(config.triangle).name)
-    forecasts = de.with_truth(
-        de.germany_forecasts(
-            models, triangle, dates, config.n_samples, config.seed
-        ),
-        triangle,
-        config.truth_delay,
+    samples = de.germany_samples(
+        models, triangle, dates, config.n_samples, config.seed
     )
-    scores = de.score_germany(forecasts, config.truth_delay)
     out = Path(args.out) / ("held-out" if args.held_out else "")
     out.mkdir(parents=True, exist_ok=True)
+    write_csv(samples, out / "samples.csv.gz")
+    if args.chunk:
+        # A block's copula would see only its own dates, so blocks are
+        # scored together (`germany-score`).
+        print(f"German benchmark: samples of {len(dates)} dates in {out}.")
+        return 0
+    return _germany_score(samples, triangle, config, out)
+
+
+def _germany_scores(args: argparse.Namespace) -> int:
+    from bdbvhubrenewal.data.germany import hub_triangle
+    from bdbvhubrenewal.evaluation import germany as de
+
+    config = de.load_germany_config(args.config)
+    triangle = hub_triangle(Path(args.data) / Path(config.triangle).name)
+    parts = [
+        t
+        for p in args.parts
+        if not (t := _read_or_empty(Path(p) / "samples.csv.gz")).empty
+    ]
+    samples = (
+        pd.concat(parts, ignore_index=True).astype(
+            {"origin": str, "target_end_date": str}
+        )
+        if parts
+        else pd.DataFrame()
+    )
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+    return _germany_score(samples, triangle, config, out)
+
+
+def _germany_score(
+    samples: pd.DataFrame,
+    triangle: pd.DataFrame,
+    config: GermanyConfig,
+    out: Path,
+) -> int:
+    """Pair, take quantiles of and score German samples into `out`."""
+    from bdbvhubrenewal.evaluation import germany as de
+
+    quantiles, copulas = de.germany_forecasts(
+        samples, triangle, config.truth_delay, config.seed
+    )
+    forecasts = de.with_truth(quantiles, triangle, config.truth_delay)
+    scores = de.score_germany(forecasts, config.truth_delay)
     write_csv(forecasts, out / "forecasts.csv.gz")
     write_csv(scores, out / "scores.csv.gz")
+    write_csv(copulas, out / "copulas.csv.gz")
     print(f"German benchmark: {len(scores)} scored nowcasts in {out}.")
     return 0
 
@@ -1732,6 +1790,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
     if args.command == "germany-backtest":
         return _germany_backtest(args)
+    if args.command == "germany-score":
+        return _germany_scores(args)
     if args.command == "germany-teams":
         return _germany_teams(args)
     if args.command == "germany-asof":
