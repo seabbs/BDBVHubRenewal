@@ -101,3 +101,29 @@ def test_block_is_the_ragged_layout_with_final_counts_ahead() -> None:
     assert np.array_equal(
         block["future_covariates"], context[:, start:], equal_nan=True
     )
+
+
+def test_releases_add_each_place_total_of_its_strata() -> None:
+    counts = _counts()
+    counts["location"] = counts["location"].map({"A": "P1-A1", "B": "P1-A2"})
+    rows = releases(counts, "daily", ["2026-10-30"], totals=True)
+    by = rows.groupby("location")["observed"].sum()
+    # P1 is the sum of its two strata, and the country counts them once.
+    assert by["P1"] == by["P1-A1"] + by["P1-A2"]
+    assert by[NATIONAL] == by["P1"]
+
+
+def test_three_level_block_has_country_place_and_strata() -> None:
+    counts = _counts()
+    counts["location"] = counts["location"].map({"A": "P1-A1", "B": "P1-A2"})
+    cutoffs = weekly_cutoffs("2026-10-05", "2026-10-21", 2)
+    places = (NATIONAL, "P1", "P1-A1", "P1-A2")
+    block = training_block(
+        counts, "daily", places, cutoffs, max_lag=3, totals=True
+    )
+    assert block["n_targets"] == 4
+    start = block["start"]
+    target = block["context"][:4, start:]
+    # The country and P1 are both the sum of the strata.
+    np.testing.assert_array_equal(target[0], target[1])
+    np.testing.assert_array_equal(target[1], target[2] + target[3])
