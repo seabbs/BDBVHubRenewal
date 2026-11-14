@@ -30,7 +30,7 @@ def rolling_truth(
     delay_days : int or pandas.Series
         D, the days after the target date at which the data are taken.
         A series indexed by `location` gives each location its own D, as
-        for the synthetic outbreaks (their 99% reporting delay).
+        for the synthetic outbreaks (their 98% reporting delay).
 
     Returns
     -------

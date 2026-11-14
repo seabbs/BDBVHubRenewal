@@ -26,11 +26,11 @@ __all__ = [
     "top_factors",
 ]
 
-ALWAYS_SHOWN: Final = ("delay_q99",)
+ALWAYS_SHOWN: Final = ("delay_q98",)
 """Factors the main panel always shows: long delays should make
-nowcasting harder, so the 99% delay is worth seeing whatever its spread."""
+nowcasting harder, so the 98% delay is worth seeing whatever its spread."""
 
-REDUNDANT_PAIRS: Final = (("delay_q99", "delay_mean"),)
+REDUNDANT_PAIRS: Final = (("delay_q98", "delay_mean"),)
 """(kept, dropped) pairs: the second leaves the main panel when its rank
 correlation with the first is above the threshold."""
 
@@ -40,8 +40,15 @@ def factor_label(name: str) -> str:
     return name.replace("_", " ").capitalize()
 
 
+def _fmt(v: float) -> str:
+    """Format a level bound: whole numbers plainly, else 3 figures."""
+    if float(v).is_integer() or abs(v) >= 100:
+        return f"{v:,.0f}"
+    return f"{v:.3g}"
+
+
 def _range_label(lo: float, hi: float) -> str:
-    return f"{lo:.3g} to {hi:.3g}"
+    return _fmt(lo) if lo == hi else f"{_fmt(lo)} to {_fmt(hi)}"
 
 
 def bin_factors(factors: pd.DataFrame, n_bins: int = 3) -> pd.DataFrame:
@@ -87,7 +94,7 @@ def bin_factors(factors: pd.DataFrame, n_bins: int = 3) -> pd.DataFrame:
             }
             out[col] = bins.map(labels).astype(str)
         else:
-            out[col] = values.astype(str)
+            out[col] = values.map(_fmt) if numeric else values.astype(str)
     return out
 
 

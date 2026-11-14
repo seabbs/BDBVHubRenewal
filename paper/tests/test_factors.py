@@ -78,16 +78,16 @@ def test_report_days_become_daily_or_not() -> None:
     ]
 
 
-def test_delay_mean_is_redundant_when_ranked_like_delay_q99() -> None:
+def test_delay_mean_is_redundant_when_ranked_like_delay_q98() -> None:
     f = pd.DataFrame(
         {
             "location": list("abcde"),
             "delay_mean": [1.0, 2, 3, 4, 5],
-            "delay_q99": [10.0, 20, 30, 40, 55],
+            "delay_q98": [10.0, 20, 30, 40, 55],
         }
     )
     assert redundant_factors(f) == ["delay_mean"]
-    f["delay_q99"] = [30.0, 10, 50, 20, 40]
+    f["delay_q98"] = [30.0, 10, 50, 20, 40]
     assert redundant_factors(f) == []
 
 
@@ -103,6 +103,20 @@ def test_top_factors_can_always_keep_one() -> None:
     assert top_factors(rel, n=2, always=("a",)) == ["a", "b"]
 
 
-def test_dummy_factors_include_delay_q99(synthetic) -> None:
+def test_dummy_factors_include_delay_q98(synthetic) -> None:
     _, factors = synthetic
-    assert "delay_q99" in factors.columns
+    assert "delay_q98" in factors.columns
+
+
+def test_level_labels_are_readable() -> None:
+    f = pd.DataFrame(
+        {
+            "location": list("abcdef"),
+            "cases": [269.0, 500, 871, 879, 1200, 1840],
+            "n_steps": [0.0, 1.0, 3.0, 0.0, 1.0, 3.0],
+        }
+    )
+    out = bin_factors(f)
+    assert set(out["n_steps"]) == {"0", "1", "3"}
+    assert "e+" not in " ".join(out["cases"])
+    assert "1,840" in " ".join(out["cases"])

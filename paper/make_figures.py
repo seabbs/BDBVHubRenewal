@@ -13,7 +13,8 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 
-from paperfigs.dummy import dummy_factors, dummy_split, dummy_study
+from paperfigs.dummy import dummy_factors, dummy_study
+from paperfigs.periods import study_split
 from paperfigs.plots import (
     results_panel,
     si_scores_by_factor,
@@ -49,8 +50,8 @@ def render(
                 }
             else:
                 # Germany is split into a development and a held-out
-                # half; the dummy split is the middle origin.
-                split = dummy_split(fc) if study == "germany" else None
+                # half at its STUDY_SPLITS date.
+                split = study_split(study)
                 figures = {
                     "results": results_panel(fc, obs, scores, split=split),
                     "si-location-horizon": si_scores_by_location_horizon(

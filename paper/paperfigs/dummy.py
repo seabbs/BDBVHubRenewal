@@ -31,7 +31,6 @@ __all__ = [
     "STUDY_SETUP",
     "StudySetup",
     "dummy_factors",
-    "dummy_split",
     "dummy_study",
 ]
 
@@ -177,7 +176,7 @@ STUDY_SETUP: Final[dict[str, StudySetup]] = {
             "fm_chronos_daily_complete": _FM_COMPLETE,
             "fm_chronos_daily_ragged": _FM,
             "fm_chronos_daily_ragged_ft": _FM_FT,
-            "hub_baseline": _HUB_BASE,
+            "KIT-frozen_baseline": _HUB_BASE,
             "hub_ensemble": ModelSkill(0.03, 0.8, 1.1),
             "hub_team_a": ModelSkill(0.15, 0.9, 0.9),
             "hub_team_b": ModelSkill(-0.1, 1.05, 1.3),
@@ -392,7 +391,7 @@ def dummy_factors(forecasts: pd.DataFrame, seed: int = 1) -> pd.DataFrame:
     Returns
     -------
     pandas.DataFrame
-        `location` and raw values of `delay_mean`, `delay_q99`,
+        `location` and raw values of `delay_mean`, `delay_q98`,
         `gt_mean`, `log_r0`, `n_places` and `report_days`, as the
         synthetic grid table gives.
     """
@@ -405,8 +404,8 @@ def dummy_factors(forecasts: pd.DataFrame, seed: int = 1) -> pd.DataFrame:
         {
             "location": locs,
             "delay_mean": delay_mean,
-            # 99% quantile of a lognormal with median delay_mean.
-            "delay_q99": np.ceil(delay_mean * np.exp(2.326 * delay_sd)),
+            # 98% quantile of a lognormal with median delay_mean.
+            "delay_q98": np.ceil(delay_mean * np.exp(2.054 * delay_sd)),
             "gt_mean": np.round(rng.uniform(6, 20, n), 1),
             "log_r0": np.round(rng.normal(0.2, 0.3, n), 2),
             "n_places": np.where(
@@ -415,20 +414,3 @@ def dummy_factors(forecasts: pd.DataFrame, seed: int = 1) -> pd.DataFrame:
             "report_days": rng.choice([5, 7], n),
         }
     )
-
-
-def dummy_split(forecasts: pd.DataFrame) -> pd.Timestamp:
-    """Return the dummy split: the middle origin date.
-
-    Parameters
-    ----------
-    forecasts : pandas.DataFrame
-        Forecasts of one study.
-
-    Returns
-    -------
-    pandas.Timestamp
-        The first origin of the later half.
-    """
-    origins = sorted(forecasts["origin_date"].unique())
-    return pd.Timestamp(origins[len(origins) // 2])

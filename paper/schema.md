@@ -17,7 +17,7 @@ Germany uses quantiles; synthetic and Ebola use samples.
 | `location` | str | Location code within the study. |
 | `stratum` | str | Optional. Subgroup within a location, such as a German age group (`00-04`, ..., `80+`). Defaults to `all` when the column is absent. |
 | `origin_date` | date | Date the forecast was made, using data as of this date. |
-| `target_date` | date | Date the forecast is for (the onset day, or the start of the week). |
+| `target_date` | date | Date the forecast is for; its meaning is set per study (see below). |
 | `horizon` | int | `target_date - origin_date` in the study's one time step (days for `synthetic` and `germany`, weeks for `ebola`). Zero or negative is a nowcast. |
 | `quantile_level` | float | In (0, 1) for a quantile forecast; empty for a sample forecast. |
 | `sample_id` | int | Sample index for a sample forecast; empty for a quantile forecast. A sample is a joint draw across the targets of one model, location and origin. |
@@ -38,12 +38,20 @@ Quantile forecasts should carry the levels for the study's coverage widths: 0.02
 The WIS uses every level present, so it is only comparable between models with the same levels.
 Tables are written as CSV (gzip is fine) with ISO dates.
 
+`target_date` by study:
+
+- `germany`: the last day of the 7-day rolling sum, as the hub reports it.
+- `synthetic`: the Saturday that ends the onset week.
+- `ebola`: the hub's `target_end_date`, the last day of the onset week.
+
+Quantiles must not decrease with level; tables sort any crossing quantiles before writing.
+
 ## Truth
 
 Following the German nowcast hub (Wolffram et al. 2023), the truth for a target is the count in the latest release on or before `target_date + D` days.
 It is missing until a release on or after that date exists.
 `paperfigs.truth.rolling_truth(observations, delay_days=D)` builds it from release vintages, and `paperfigs.truth.attach_truth` sets the `truth` column.
-`delay_days` is a number of days, or a series indexed by location for a D per location; the synthetic study uses each outbreak's 99% reporting delay (`delay_q99` in its factors table).
+`delay_days` is a number of days, or a series indexed by location for a D per location; the synthetic study uses each outbreak's 98% reporting delay (`delay_q98` in its factors table).
 
 ## Observations
 
@@ -74,4 +82,4 @@ The latest `as_of_date` for a study is the final data.
 These match scoringutils 2.2 defaults, checked by `tests/test_scoringutils.py` against `tests/scoringutils_reference.R`.
 
 `paperfigs.scores.relative_scores` divides each model's mean score by the baseline's on the forecasts both made (matched on location, stratum, origin, target and horizon), within each group.
-The baseline is set per study in `STUDY_BASELINES`: `randomwalknowcast` for synthetic, the hub's baseline for germany and `BDBVHub-baseline` for Ebola.
+The baseline is set per study in `STUDY_BASELINES`: `randomwalknowcast` for synthetic, `KIT-frozen_baseline` for germany and `BDBVHub-baseline` for Ebola.

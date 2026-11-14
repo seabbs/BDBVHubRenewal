@@ -3,10 +3,12 @@ import matplotlib as mpl
 mpl.use("Agg")
 
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 import pytest
 
-from paperfigs.dummy import dummy_factors, dummy_split, dummy_study
+from paperfigs.dummy import dummy_factors, dummy_study
+from paperfigs.periods import STUDY_SPLITS
 from paperfigs.plots import (
     PANEL_LETTERS,
     results_panel,
@@ -34,7 +36,7 @@ def test_model_style_is_fixed_whatever_else_is_shown() -> None:
 def test_baselines_have_their_own_colours() -> None:
     colours = {
         model_style(m, [])[0]
-        for m in ("randomwalk", "randomwalknowcast", "hub_baseline")
+        for m in ("randomwalk", "randomwalknowcast", "KIT-frozen_baseline")
     }
     assert len(colours) == 3
 
@@ -100,14 +102,14 @@ def test_synthetic_panel_shows_factors_and_weekly_horizons() -> None:
     fc, obs = dummy_study("synthetic", seed=1, n_samples=20)
     scores = score_forecasts(fc)
     factors = dummy_factors(fc, seed=1)
-    # Rank delay_q99 exactly as delay_mean, so delay_mean is redundant.
-    factors["delay_q99"] = factors["delay_mean"] * 10
+    # Rank delay_q98 exactly as delay_mean, so delay_mean is redundant.
+    factors["delay_q98"] = factors["delay_mean"] * 10
     fig = results_panel(fc, obs, scores, factors=factors)
     titles = " ".join(ax.get_title() for ax in fig.axes)
     assert "by scenario factor" in titles
     assert "by location" not in titles
     groups = {t.get_text() for ax in fig.axes for t in ax.texts}
-    assert "Delay q99" in groups
+    assert "Delay q98" in groups
     assert "Delay mean" not in groups
     labels = " ".join(ax.get_xlabel() for ax in fig.axes)
     assert "Horizon (weeks)" in labels
@@ -138,7 +140,7 @@ def test_chronos_variants_share_a_colour_with_distinct_styles(family) -> None:
 @pytest.fixture(scope="module")
 def germany():
     fc, obs = dummy_study("germany", seed=1, n_samples=5)
-    return fc, obs, score_forecasts(fc), dummy_split(fc)
+    return fc, obs, score_forecasts(fc), STUDY_SPLITS["germany"]
 
 
 def _texts(fig) -> str:
@@ -160,7 +162,7 @@ def test_split_draws_both_halves_and_the_line(germany) -> None:
 
 def test_no_split_draws_one_bar_per_model(germany) -> None:
     fc, obs, scores, _ = germany
-    fig = results_panel(fc, obs, scores)
+    fig = results_panel(fc, obs, scores, split=False)
     rel_ax = next(ax for ax in fig.axes if ax.get_title() == "Relative WIS")
     assert len(rel_ax.patches) == scores["model"].nunique()
     assert "development | held out" not in _texts(fig)
@@ -177,3 +179,73 @@ def test_si_figures_split_by_half(germany) -> None:
     assert len(one.axes[0].lines) > len(none.axes[0].lines)
     plt.close(one)
     plt.close(none)
+
+
+def test_ribbons_fall_back_to_the_best_chronos_variant() -> None:
+    from paperfigs.plots import _ribbon_models
+
+    models = [
+        "randomwalknowcast",
+        "fm_chronos_daily_complete",
+        "fm_chronos_daily_ragged",
+        "fm_chronos_weekly_complete",
+        "fm_chronos_weekly_ragged",
+        "fm_chronos_weekly_ragged_ft",
+    ]
+    assert _ribbon_models(models, "randomwalknowcast") == [
+        "randomwalknowcast",
+        "fm_chronos_daily_ragged",
+        "fm_chronos_weekly_ragged_ft",
+    ]
+
+
+@pytest.fixture(scope="module")
+def gappy():
+    fc, obs = dummy_study("ebola", seed=1, n_samples=5)
+    origins = sorted(fc["origin_date"].unique())
+    drop = (fc["model"] == "randomwalknowcast") & fc["origin_date"].isin(
+        origins[:6]
+    )
+    fc = fc.loc[~drop]
+    return fc, obs, score_forecasts(fc), origins[:6]
+
+
+def test_missing_forecasts_are_labelled(gappy) -> None:
+    fc, obs, scores, _ = gappy
+    fig = results_panel(fc, obs, scores)
+    labels = [
+        t.get_text()
+        for ax in fig.axes
+        for t in ax.get_yticklabels()
+        if "randomwalknowcast" in t.get_text()
+    ]
+    assert any("% made" in label for label in labels)
+    assert not any(
+        "% made" in t.get_text()
+        for ax in fig.axes
+        for t in ax.get_yticklabels()
+        if t.get_text().startswith("BDBVHub-baseline")
+    )
+    plt.close(fig)
+
+
+def test_missing_origins_break_lines_over_time(gappy) -> None:
+    _, _, scores, dropped = gappy
+    fig = si_wis_over_time(scores)
+    ax = fig.axes[0]
+    line = next(ln for ln in ax.get_lines() if ln.get_color() == "#eb6834")
+    y = np.asarray(line.get_ydata(), dtype=float)
+    assert np.isnan(y).sum() >= len(dropped)
+    plt.close(fig)
+
+
+def test_nowcast_panel_marks_a_missing_ribbon(gappy) -> None:
+    fc, obs, scores, _ = gappy
+    fig = results_panel(
+        fc, obs, scores, ribbon_models=["randomwalknowcast"], split=False
+    )
+    ax = next(a for a in fig.axes if a.get_title() == "Nowcasts over time")
+    assert any(ln.get_marker() == "x" for ln in ax.get_lines())
+    labels = [t.get_text() for t in fig.legends[0].get_texts()]
+    assert "No forecast at origin" in labels
+    plt.close(fig)

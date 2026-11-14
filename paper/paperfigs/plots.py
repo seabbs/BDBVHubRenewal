@@ -42,11 +42,12 @@ from paperfigs.factors import (
     relative_by_factor,
     top_factors,
 )
-from paperfigs.periods import PERIOD_ALPHA, PERIODS, STUDY_SPLITS, add_period
+from paperfigs.periods import PERIOD_ALPHA, PERIODS, add_period, study_split
 from paperfigs.schema import DEFAULT_STRATUM
 from paperfigs.scores import (
     STUDY_BASELINES,
     coverage_columns,
+    forecast_share,
     metric_of,
     relative_scores,
     summarise_scores,
@@ -140,8 +141,22 @@ def _pad_log_limits(ax: Axes, values: np.ndarray, axis: str = "y") -> None:
 
 
 def _ribbon_models(models: Sequence[str], baseline: str) -> list[str]:
-    keep = [m for m in models if m == baseline or m.endswith("_ft")]
-    keep += [m for m in models if m == "hub_ensemble"]
+    """Baseline, the best variant of each Chronos family, and an ensemble.
+
+    A family's best variant is fine-tuned if present, else ragged, else
+    complete.
+    """
+    keep = [m for m in models if m in (baseline, "hub_ensemble")]
+    families = {
+        m.split("_complete")[0].split("_ragged")[0]
+        for m in models
+        if m.startswith("fm_chronos_")
+    }
+    for family in sorted(families):
+        for suffix in ("_ragged_ft", "_ragged", "_complete"):
+            if family + suffix in models:
+                keep.append(family + suffix)
+                break
     return model_order(keep)
 
 
@@ -188,10 +203,12 @@ def plot_nowcasts(
     models: Sequence[str],
     location: str,
     all_models: Sequence[str],
-) -> None:
+) -> bool:
     """Draw 50% and 90% ribbons and medians at spaced origin dates.
 
-    Data as of each origin are in light grey, the final data in black.
+    Data as of each origin are in light grey, the final data in black. A
+    model with no forecast at a shown origin gets a cross in its colour at
+    the foot of that origin's line.
 
     Parameters
     ----------
@@ -207,6 +224,11 @@ def plot_nowcasts(
         Location to show.
     all_models : sequence of str
         Every model in the figure, for styles.
+
+    Returns
+    -------
+    bool
+        Whether any ribbon model was missing at a shown origin.
     """
     fc = forecasts.loc[forecasts["location"] == location]
     obs = observations.loc[observations["location"] == location]
@@ -217,6 +239,7 @@ def plot_nowcasts(
     start = origins[0] + (hmin - abs(hmin) // 2) * step
     end = origins[-1] + (max(hmax, 0) + 3) * step
     window = final.loc[final["target_date"].between(start, end)]
+    missing = False
     for origin in origins:
         asof = obs.loc[
             (obs["as_of_date"] == origin)
@@ -233,6 +256,20 @@ def plot_nowcasts(
         for model in models:
             one = fc.loc[(fc["model"] == model) & (fc["origin_date"] == origin)]
             if one.empty:
+                # Mark the gap so it is not read as a good nowcast.
+                ax.plot(
+                    [origin],
+                    [0.04 + 0.05 * list(models).index(model)],
+                    marker="x",
+                    ms=6,
+                    mew=1.6,
+                    ls="none",
+                    color=line_style(model, all_models)["color"],
+                    transform=ax.get_xaxis_transform(),
+                    zorder=8,
+                    clip_on=False,
+                )
+                missing = True
                 continue
             wide = _quantile_table(one)
             colour = line_style(model, all_models)["color"]
@@ -270,11 +307,14 @@ def plot_nowcasts(
     locator = mdates.AutoDateLocator(maxticks=10)
     ax.xaxis.set_major_locator(locator)
     ax.xaxis.set_major_formatter(mdates.ConciseDateFormatter(locator))
+    return missing
 
 
-def _model_rows(ax: Axes, models: Sequence[str], show_names: bool) -> None:
+def _model_rows(
+    ax: Axes, models: Sequence[str], labels: Sequence[str] | None
+) -> None:
     ax.set_yticks(range(len(models)))
-    ax.set_yticklabels(models if show_names else [])
+    ax.set_yticklabels(list(labels) if labels is not None else [])
     ax.set_ylim(len(models) - 0.5, -0.5)
     ax.grid(axis="y", visible=False)
 
@@ -459,7 +499,10 @@ def _period_handles(split: pd.Timestamp | None) -> list[Patch]:
 
 
 def _legend(
-    fig: Figure, models: Sequence[str], split: pd.Timestamp | None = None
+    fig: Figure,
+    models: Sequence[str],
+    split: pd.Timestamp | None = None,
+    missing: bool = False,
 ) -> None:
     handles = [
         Line2D(
@@ -487,6 +530,18 @@ def _legend(
             label="Final data",
         )
     )
+    if missing:
+        handles.append(
+            Line2D(
+                [],
+                [],
+                color=INK["muted"],
+                marker="x",
+                mew=1.6,
+                ls="none",
+                label="No forecast at origin",
+            )
+        )
     handles += _period_handles(split)
     fig.legend(
         handles=handles,
@@ -559,7 +614,7 @@ def results_panel(
     ribbon_models: Sequence[str] | None = None,
     factors: pd.DataFrame | None = None,
     n_factors: int = 4,
-    split: pd.Timestamp | None = None,
+    split: pd.Timestamp | bool | None = None,
 ) -> Figure:
     """Plot the results panel for one study.
 
@@ -589,9 +644,10 @@ def results_panel(
         factors whose levels spread the relative score most.
     n_factors : int
         Factors to show when `factors` is given.
-    split : pandas.Timestamp, optional
-        First held-out origin date. Defaults to the study's in
-        `STUDY_SPLITS`. When set, the score panels show the development
+    split : pandas.Timestamp or False, optional
+        First held-out origin date. Defaults to `study_split(study)`;
+        pass the sidecar's with `study_split(study, read_sidecar(path))`,
+        or False for no split. When set, the score panels show the development
         and held-out halves side by side (development lighter) and the
         nowcast panel marks the split with a dotted line.
     ribbon_models : sequence of str, optional
@@ -610,7 +666,10 @@ def results_panel(
     """
     study = _one_study(forecasts)
     obs = observations.loc[observations["study"] == study]
-    split = split if split is not None else STUDY_SPLITS.get(study)
+    if split is None:
+        split = study_split(study)
+    elif split is False:
+        split = None
     sc = add_period(scores.loc[scores["study"] == study], split)
     halves = ["period"] if split is not None else []
     baseline = baseline or STUDY_BASELINES[study]
@@ -633,7 +692,7 @@ def results_panel(
         height_ratios=[1.25, 1, 1],
         layout="constrained",
     )
-    plot_nowcasts(
+    missing = plot_nowcasts(
         axd["nowcast"],
         forecasts.loc[forecasts["stratum"] == main],
         obs.loc[obs["stratum"] == main],
@@ -644,6 +703,12 @@ def results_panel(
     _split_line(axd["nowcast"], split)
     rel = relative_scores(sc, halves, baseline)
     summary = summarise_scores(sc, halves)
+    # A model that skipped forecasts scores only on the rest; say so.
+    share = forecast_share(forecasts).set_index("model")["share"]
+    labels = [
+        m if share.get(m, 1.0) >= 1 else f"{m} ({share[m]:.0%} made)"
+        for m in models
+    ]
     _bars_relative(axd["rel"], rel, "rel_score", models)
     axd["rel"].set_xlabel(f"Relative to {baseline}")
     _bars_relative(axd["rel_log"], rel, "rel_log_score", models)
@@ -651,7 +716,7 @@ def results_panel(
     _bars_bias(axd["bias"], summary, models)
     _bars_coverage(axd["coverage"], summary, models)
     for key in ("rel", "rel_log", "bias", "coverage"):
-        _model_rows(axd[key], models, show_names=key == "rel")
+        _model_rows(axd[key], models, labels if key == "rel" else None)
     # Locations are compared on their main stratum (all ages).
     if factors is None:
         _points_by(
@@ -694,7 +759,7 @@ def results_panel(
         _label(axd[key], letter, _TITLES[key].format(m=name))
     for key in bottom:
         axd[key].set_ylabel(f"Relative {name}")
-    _legend(fig, models, split)
+    _legend(fig, models, split, missing)
     return fig
 
 
@@ -810,6 +875,7 @@ def si_wis_over_time(
     name = metric_of(scores).upper()
     summary = summarise_scores(scores, ["origin_date"])
     models = model_order(summary["model"].unique())
+    origins = sorted(summary["origin_date"].unique())
     fig, axes = plt.subplots(
         1, 2, figsize=(11, 3.8), sharex=True, layout="constrained"
     )
@@ -818,10 +884,13 @@ def si_wis_over_time(
         (axes[1], "log_score", "B", f"{name}, log scale"),
     ):
         for m in models:
-            one = summary.loc[summary["model"] == m]
-            ax.plot(
-                one["origin_date"], one[col], lw=1.4, **line_style(m, models)
+            # Reindex on every origin so a skipped origin breaks the line.
+            one = (
+                summary.loc[summary["model"] == m]
+                .set_index("origin_date")[col]
+                .reindex(origins)
             )
+            ax.plot(origins, one.to_numpy(), lw=1.4, **line_style(m, models))
         _label(ax, letter, title)
         locator = mdates.AutoDateLocator(maxticks=8)
         ax.xaxis.set_major_locator(locator)

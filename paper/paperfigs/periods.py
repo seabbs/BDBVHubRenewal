@@ -7,11 +7,20 @@ use it. Scores are shown for both halves, never the held-out half alone.
 
 from __future__ import annotations
 
-from typing import Final
+import json
+from pathlib import Path
+from typing import Any, Final
 
 import pandas as pd
 
-__all__ = ["PERIODS", "PERIOD_ALPHA", "STUDY_SPLITS", "add_period"]
+__all__ = [
+    "PERIODS",
+    "PERIOD_ALPHA",
+    "STUDY_SPLITS",
+    "add_period",
+    "read_sidecar",
+    "study_split",
+]
 
 PERIODS: Final = ("development", "held out")
 """Period labels, in time order."""
@@ -19,12 +28,53 @@ PERIODS: Final = ("development", "held out")
 PERIOD_ALPHA: Final = {"development": 0.45, "held out": 1.0}
 """Shade of each period: the development half is lighter."""
 
-STUDY_SPLITS: Final[dict[str, pd.Timestamp]] = {}
+STUDY_SPLITS: Final[dict[str, pd.Timestamp]] = {
+    "germany": pd.Timestamp("2022-02-10"),
+}
 """First held-out origin date of each split study.
 
-Germany's comes from the benchmark (germany-bench); until then the figure
-script passes the dummy data's midpoint.
+Germany develops on nowcast dates 2021-11-22 to 2022-02-09 (80 dates) and
+holds out 2022-02-10 to 2022-04-29 (79 dates). A study's sidecar, where it
+gives one, takes precedence (see `study_split`).
 """
+
+
+def read_sidecar(path: Path | str) -> dict[str, Any]:
+    """Read a forecast table's JSON sidecar, such as paper-forecasts.json.
+
+    Parameters
+    ----------
+    path : pathlib.Path or str
+        The sidecar file.
+
+    Returns
+    -------
+    dict
+        Its fields, such as `study`, `split_date` and `baseline`.
+    """
+    return json.loads(Path(path).read_text())
+
+
+def study_split(
+    study: str, sidecar: dict[str, Any] | None = None
+) -> pd.Timestamp | None:
+    """Return a study's split date: the sidecar's, else `STUDY_SPLITS`.
+
+    Parameters
+    ----------
+    study : str
+        The study.
+    sidecar : dict, optional
+        Output of `read_sidecar` for the study's forecast table.
+
+    Returns
+    -------
+    pandas.Timestamp or None
+        First held-out origin date, or None if the study is not split.
+    """
+    if sidecar and sidecar.get("split_date"):
+        return pd.Timestamp(sidecar["split_date"])
+    return STUDY_SPLITS.get(study)
 
 
 def add_period(df: pd.DataFrame, split: pd.Timestamp | None) -> pd.DataFrame:
