@@ -1,0 +1,17 @@
+scale,target,weeks,model,n,rel_wis,rel_log_wis,coverage_50,coverage_90,bias
+all,complete,nowcast,fm_chronos_daily_complete,27,3.95,5.59,0.81,0.85,0.2
+all,complete,nowcast,fm_chronos_daily_ragged,27,2.78,5.18,0.81,0.93,0.18
+all,complete,nowcast,fm_chronos_daily_ragged_ft,27,3.66,5.6,0.81,0.89,0.19
+all,complete,nowcast,fm_chronos_weekly_complete,27,3.28,3.92,0.85,0.96,0.15
+all,complete,nowcast,fm_chronos_weekly_ragged,27,1.3,2.7,0.89,1.0,0.05
+all,complete,nowcast,fm_chronos_weekly_ragged_ft,27,1.47,2.83,0.93,1.0,0.09
+all,complete,nowcast,randomwalk,27,1.36,1.19,0.89,0.89,-0.1
+all,complete,nowcast,randomwalknowcast,27,1.0,1.0,0.89,0.93,-0.05
+national,complete,nowcast,fm_chronos_daily_complete,1,4.49,3.84,0.0,0.0,1.0
+national,complete,nowcast,fm_chronos_daily_ragged,1,2.55,2.2,0.0,0.0,0.9
+national,complete,nowcast,fm_chronos_daily_ragged_ft,1,3.96,3.41,0.0,0.0,1.0
+national,complete,nowcast,fm_chronos_weekly_complete,1,3.07,2.63,0.0,1.0,0.8
+national,complete,nowcast,fm_chronos_weekly_ragged,1,0.68,0.64,1.0,1.0,-0.14
+national,complete,nowcast,fm_chronos_weekly_ragged_ft,1,1.08,0.95,1.0,1.0,0.18
+national,complete,nowcast,randomwalk,1,1.3,1.32,0.0,0.0,-0.98
+national,complete,nowcast,randomwalknowcast,1,1.0,1.0,0.0,0.0,-1.0
