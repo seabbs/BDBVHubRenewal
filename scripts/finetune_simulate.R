@@ -706,16 +706,19 @@ if (sys.nframe() == 0L) {
     length(settings), n_outbreaks,
     as.numeric(Sys.time() - t0, units = "secs"), epinowcast_sha, grid_name
   ))
-  fwrite(
-    rbindlist(counts), file.path(out_dir, sprintf("counts-%d.csv.gz", seed))
-  )
-  fwrite(
-    rbindlist(settings), file.path(out_dir, sprintf("settings-%d.csv", seed))
-  )
-  if (length(failures)) {
-    fwrite(
-      rbindlist(failures, fill = TRUE),
-      file.path(out_dir, sprintf("failures-%d.csv", seed))
-    )
+  # Written to temporary files and renamed into place, counts before
+  # settings, so a reader that sees the settings sees the whole batch.
+  final <- function(name) file.path(out_dir, sprintf("%s-%d.%s", name, seed,
+    c(counts = "csv.gz", settings = "csv", failures = "csv")[[name]]))
+  write_atomic <- function(rows, name) {
+    # The extension stays last, so fwrite still compresses counts.
+    tmp <- file.path(out_dir, paste0(".tmp-", basename(final(name))))
+    fwrite(rows, tmp)
+    file.rename(tmp, final(name))
   }
+  if (length(failures)) {
+    write_atomic(rbindlist(failures, fill = TRUE), "failures")
+  }
+  write_atomic(rbindlist(counts), "counts")
+  write_atomic(rbindlist(settings), "settings")
 }

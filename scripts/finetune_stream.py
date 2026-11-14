@@ -60,13 +60,37 @@ def log(message: str) -> None:
     print(f"{stamp} [train] {message}", flush=True)
 
 
+def simulation_ids(outbreaks: pd.Series) -> set[str]:
+    """Return the simulations of outbreak draws `<seed>-<index>[-<draw>]`."""
+    parts = outbreaks.astype(str).str.split("-")
+    return set(parts.str[0] + "-" + parts.str[1])
+
+
+def quarantine(sim_dir: Path, seed: int, reason: str) -> None:
+    """Move a bad batch's files aside, so the driver runs it again."""
+    where = sim_dir / "bad" / f"{seed}-{int(time.time())}"
+    where.mkdir(parents=True, exist_ok=True)
+    for path in (
+        sim_dir / f"counts-{seed}.csv.gz",
+        sim_dir / f"settings-{seed}.csv",
+        sim_dir / f"failures-{seed}.csv",
+        sim_dir / "logs" / f"{seed}.log",
+    ):
+        if path.exists():
+            path.rename(where / path.name)
+    log(f"batch {seed} {reason}: moved to {where} to be run again")
+
+
 def seed_done(sim_dir: Path, seed: int) -> bool:
-    """Return whether a simulation batch has finished, checking it.
+    """Return whether a simulation batch has finished and is whole.
+
+    A batch whose counts and settings hold different simulations is moved
+    aside (`quarantine`), so it counts as not done and is run again.
 
     Raises
     ------
     RuntimeError
-        If the batch failed, or its counts and settings disagree.
+        If the batch failed.
     """
     counts = sim_dir / f"counts-{seed}.csv.gz"
     settings = sim_dir / f"settings-{seed}.csv"
@@ -75,10 +99,11 @@ def seed_done(sim_dir: Path, seed: int) -> bool:
         if log_file.exists() and "Execution halted" in log_file.read_text():
             raise RuntimeError(f"simulation batch {seed} failed: {log_file}")
         return False
-    a = set(pd.read_csv(settings, usecols=["outbreak"])["outbreak"])
-    b = set(pd.read_csv(counts, usecols=["outbreak"])["outbreak"])
+    a = simulation_ids(pd.read_csv(settings, usecols=["outbreak"])["outbreak"])
+    b = simulation_ids(pd.read_csv(counts, usecols=["outbreak"])["outbreak"])
     if a != b:
-        raise RuntimeError(f"batch {seed}: counts and settings disagree")
+        quarantine(sim_dir, seed, "has counts and settings that disagree")
+        return False
     return True
 
 

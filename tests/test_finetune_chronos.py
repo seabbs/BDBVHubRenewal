@@ -42,3 +42,24 @@ def test_batches_use_every_block_once_and_pack_by_size():
         assert len({size_class(int(sizes[i])) for i in batch}) == 1
         total = sizes[batch].sum()
         assert total < 2 * 256 or len(batch) == 1
+
+
+def test_a_mixed_batch_is_moved_aside_to_run_again(tmp_path):
+    import pandas as pd
+    from finetune_stream import seed_done
+
+    pd.DataFrame({"outbreak": ["5001-0001", "5001-0002"]}).to_csv(
+        tmp_path / "settings-5001.csv", index=False
+    )
+    pd.DataFrame({"outbreak": ["5001-0001-1", "5001-0002-3"]}).to_csv(
+        tmp_path / "counts-5001.csv.gz", index=False
+    )
+    # Draws of the same simulations: whole.
+    assert seed_done(tmp_path, 5001)
+    pd.DataFrame({"outbreak": ["5001-0001-1", "5001-0009-1"]}).to_csv(
+        tmp_path / "counts-5001.csv.gz", index=False
+    )
+    # Another run's counts: moved aside, not done.
+    assert not seed_done(tmp_path, 5001)
+    assert not (tmp_path / "settings-5001.csv").exists()
+    assert list((tmp_path / "bad").iterdir())
