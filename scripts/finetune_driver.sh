@@ -210,6 +210,15 @@ free_mem_gb() {
   fi
 }
 
+unstarted_seeds() {
+  # Training seeds no machine has started, lowest first: the laptop takes
+  # these when its own are done, as the trainer needs seeds in order.
+  local s
+  for s in $(seq "$TRAIN_FIRST" "$TRAIN_LAST"); do
+    [ -e "$SIM_DIR/logs/$s.log" ] || echo "$s"
+  done
+}
+
 local_slots() {
   # Fill the laptop's slots: LOCAL_SLOTS while the trainer waits, and
   # LOCAL_SLOTS_TRAINING while it trains, to leave memory for MPS.
@@ -218,12 +227,13 @@ local_slots() {
   slots=$LOCAL_SLOTS
   stage=$(python3 -c "import json;print(json.load(open('$OUT/stream-status.json')).get('stage',''))" 2>/dev/null)
   [ "$stage" = training ] && slots=$LOCAL_SLOTS_TRAINING
-  for s in $(local_seeds); do
+  local claimed=0
+  for s in $(local_seeds) $(unstarted_seeds); do
     done_seed "$s" && continue
     pgrep -f "(finetune_simulate|sim-real).R --args 25 $s " > /dev/null && continue
     running=$(pgrep -f 'finetune_simulate.R --args' | wc -l)
-    (( running >= slots )) && return 0
-    (( $(free_mem_gb) < LOCAL_MIN_FREE_MEM_GB )) && return 0
+    (( running >= slots )) && break
+    (( $(free_mem_gb) < LOCAL_MIN_FREE_MEM_GB )) && break
     (
       export TMPDIR="$PWD/output/finetune/tmp/$s"
       mkdir -p "$TMPDIR"
@@ -232,9 +242,18 @@ local_slots() {
       rm -rf "$TMPDIR"
     ) &
     echo "$s" >> "$STARTED"
+    if ! local_seeds | grep -qx "$s"; then
+      echo "$s" >> "$CLAIMED"
+      claimed=1
+    fi
     log "started local batch $s"
     sleep 5
   done
+  if (( claimed )) && [ -n "${REMOTE:-}" ]; then
+    # The remote's scheduler restarts without the seeds the laptop took.
+    remote "pkill -f '[f]inetune_remote.sh'" > /dev/null 2>&1
+    remote_tried=0
+  fi
 }
 
 sync_remote() {

@@ -124,3 +124,20 @@ def test_no_remote_runs_every_seed_locally(tmp_path):
         *map(str, range(5901, 5904)),
         *map(str, range(5001, 5011)),
     ]
+
+
+def test_laptop_takes_unstarted_seeds_in_order(tmp_path):
+    (tmp_path / "round.env").write_text(ENV)
+    (tmp_path / "output" / "finetune").mkdir(parents=True)
+    logs = tmp_path / "sims" / "logs"
+    logs.mkdir(parents=True)
+    for s in (5001, 5003):
+        (logs / f"{s}.log").write_text("")
+    out = subprocess.run(
+        ["bash", "-c", f'set -- round.env; source "{DRIVER}"; unstarted_seeds'],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert out.stdout.split()[:3] == ["5002", "5004", "5005"]
