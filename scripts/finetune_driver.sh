@@ -225,10 +225,17 @@ check_remote() {
     return 0
   fi
   [ -z "$free" ] && log "$REMOTE does not answer"
-  if (( now - remote_ok >= REMOTE_GRACE )) && [ ! -s "$CLAIMED" ]; then
-    { seq "$HELD_FIRST" "$HELD_LAST"; seq "$TRAIN_FIRST" $(( TRAIN_FIRST + FIRST_CHUNK_SEEDS - 1 )); } \
-      | while read -r s; do done_seed "$s" || echo "$s"; done > "$CLAIMED"
-    log "$REMOTE down for $(( (now - remote_ok) / 60 )) min: the laptop takes seeds $(tr '\n' ' ' < "$CLAIMED")"
+  if (( now - remote_ok >= REMOTE_GRACE )); then
+    # Unfinished held-out seeds go first, then the first chunk's, then
+    # whatever the laptop had already taken.
+    local before taken
+    before=$(cat "$CLAIMED")
+    { seq "$HELD_FIRST" "$HELD_LAST"; seq "$TRAIN_FIRST" $(( TRAIN_FIRST + FIRST_CHUNK_SEEDS - 1 )); echo "$before"; } \
+      | while read -r s; do [ -n "$s" ] && ! done_seed "$s" && echo "$s"; done \
+      | awk '!seen[$0]++' > "$CLAIMED"
+    taken=$(cat "$CLAIMED")
+    [ "$taken" != "$before" ] \
+      && log "$REMOTE down for $(( (now - remote_ok) / 60 )) min: the laptop takes seeds $(echo $taken)"
   fi
 }
 
@@ -340,7 +347,10 @@ EOF
   TRAIN_LAST=$(( TRAIN_LAST + extra ))
   echo "$TRAIN_LAST" > "$OUT/train-last.txt"
   log "projected short of $OUTBREAKS outbreaks: added $extra training seeds, now to $TRAIN_LAST"
-  remote "pkill -f '[f]inetune_remote.sh'" > /dev/null 2>&1
+  # A remote scheduler that has finished must start again for the new
+  # seeds.
+  remote "pkill -f '[f]inetune_remote.sh'; rm -f $REMOTE_DIR/$SIM_REMOTE/remote-done" \
+    > /dev/null 2>&1
   remote_tried=0
 }
 
@@ -412,8 +422,8 @@ retry_at=0
 while true; do
   extend_seeds
   check_remote
-  local_slots
   sync_remote
+  local_slots
   check_batches
   if (( retry_at )) && (( $(date +%s) >= retry_at )); then
     retry_at=0
