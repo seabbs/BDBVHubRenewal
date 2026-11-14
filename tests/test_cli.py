@@ -693,17 +693,39 @@ def _germany_data(tmp_path: Path) -> tuple[Path, Path]:
     return data, config
 
 
-def test_cli_germany_backtest_scores_a_block_of_dates(tmp_path: Path) -> None:
+def test_cli_germany_blocks_are_scored_together(tmp_path: Path) -> None:
+    data, config = _germany_data(tmp_path)
+    parts = []
+    for block in ("0/2", "1/2"):
+        part = tmp_path / f"part-{block[0]}"
+        assert main(["germany-backtest", "--config", str(config), "--data",
+                     str(data), "--models", "randomwalknowcast", "--chunk",
+                     block, "--out", str(part)]) == 0  # fmt: skip
+        # A block draws its dates only, so the copula sees every block.
+        assert not (part / "scores.csv.gz").exists()
+        assert len(pd.read_csv(part / "samples.csv.gz"))
+        parts.append(str(part))
+    out = tmp_path / "results"
+    assert main(["germany-score", "--config", str(config), "--data",
+                 str(data), "--out", str(out), *parts]) == 0  # fmt: skip
+    scores = pd.read_csv(out / "scores.csv.gz")
+    assert set(scores["origin"]) == {"2021-10-04", "2021-10-05"}
+    copulas = pd.read_csv(out / "copulas.csv.gz")
+    assert set(copulas["origin"]) == {"2021-10-04", "2021-10-05"}
+    assert (out / "forecasts.csv.gz").exists()
+
+
+def test_cli_germany_backtest_of_every_date_scores_them(
+    tmp_path: Path,
+) -> None:
     data, config = _germany_data(tmp_path)
     out = tmp_path / "results"
     assert main(["germany-backtest", "--config", str(config), "--data",
-                 str(data), "--models", "randomwalk", "--chunk", "1/2",
+                 str(data), "--models", "randomwalk",
                  "--out", str(out)]) == 0  # fmt: skip
     scores = pd.read_csv(out / "scores.csv.gz")
-    assert set(scores["origin"]) == {"2021-10-05"}
     assert set(scores["model"]) == {"randomwalk"}
-    forecasts = pd.read_csv(out / "forecasts.csv.gz")
-    assert set(forecasts["origin"]) == {"2021-10-05"}
+    assert (out / "copulas.csv.gz").exists()
 
 
 def test_cli_germany_teams_scores_the_hub_teams(tmp_path: Path) -> None:
