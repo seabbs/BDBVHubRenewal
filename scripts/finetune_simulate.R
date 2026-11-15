@@ -219,7 +219,12 @@ draw_design <- function(g) {
   cell <- cell_for(g)
   n_places <- switch(cell$strata,
     single = 1L, ages = 1L,
-    places = sample(2:26, 1),
+    # Concentrated outbreaks spread over many places, as BDBV's provinces.
+    places = if (cell$spread == "concentrated") {
+      sample(15:26, 1)
+    } else {
+      sample(2:26, 1)
+    },
     places_ages = sample(6:16, 1)
   )
   n_ages <- switch(cell$strata,
@@ -256,7 +261,13 @@ draw_values <- function(design) {
   v <- list(
     weeks = if (places_ages) sample(16:24, 1) else sample(16:32, 1),
     offset = sample(0:6, 1),
-    quiet = runif(1, 0, 0.9),
+    # Places with no cases: concentrated outbreaks leave one to four
+    # places active, so most series stay at zero.
+    quiet = if (design$spread == "concentrated") {
+      1 - sample(1:min(4, design$n_places), 1) / design$n_places
+    } else {
+      runif(1, 0, 0.9)
+    },
     coupling = runif(1, 0.5, 1),
     stratum_sd = if (design$spread == "concentrated") {
       runif(1, 2.5, 4)
@@ -277,11 +288,12 @@ draw_values <- function(design) {
     phase = runif(1, 0, 2 * pi),
     waves = sample(2:3, 1),
     noise_sd = runif(1, 0.002, 0.01),
-    # Even outbreaks grow with their strata; concentrated ones do not.
-    target_size = log_uniform(30, 1e5) * if (design$spread == "even") {
-      max(1, design$n_places * design$n_ages / 26)
+    # Even outbreaks grow with their strata; concentrated ones stay small,
+    # so active strata also have weeks without cases.
+    target_size = if (design$spread == "even") {
+      log_uniform(30, 1e5) * max(1, design$n_places * design$n_ages / 26)
     } else {
-      1
+      log_uniform(30, 3000)
     },
     delay_median = log_uniform(1, 10),
     delay_sdlog = runif(1, 0.5, 2.5),
