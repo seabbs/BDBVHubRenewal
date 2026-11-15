@@ -177,3 +177,50 @@ def test_block_of_places_with_no_release_rows_is_none() -> None:
     cutoffs = ["2026-10-17", "2026-10-24"]
     assert training_block(counts, "daily", ("A",), cutoffs, max_lag=3) is None
     assert training_block(counts, "daily", ("B",), cutoffs, max_lag=3) is None
+
+
+def _longer_counts() -> pd.DataFrame:
+    """One place, onsets over five weeks, reported 0, 2 and 5 days on."""
+    rows = []
+    for onset in pd.date_range("2026-09-01", "2026-10-05"):
+        for delay, n in ((0, 1), (2, 2), (5, 4)):
+            rows.append(("A", onset, onset + pd.Timedelta(days=delay), n))
+    return pd.DataFrame(
+        rows, columns=["location", "reference_date", "report_date", "count"]
+    )
+
+
+def test_three_day_triangle_sums_daily_reports_by_each_release() -> None:
+    from bdbvhubrenewal.forecasters.finetune import aggregate_triangle
+
+    counts = _longer_counts()
+    cutoffs = ["2026-09-23", "2026-09-30"]
+    rows = releases(counts, "daily", cutoffs)
+    daily = hub_triangle(rows, "daily", ("A",), "2026-10-05", max_lag=8)
+    three = aggregate_triangle(daily, 3, 2)
+    ref = pd.to_datetime(counts["reference_date"])
+    rep = pd.to_datetime(counts["report_date"])
+    # Bins end on the latest cut-off and every 3 days either side of it.
+    assert three.times[three.last] == "2026-09-30"
+    for j, end in enumerate(three.times):
+        e = pd.Timestamp(end)
+        days = (ref > e - pd.Timedelta(days=3)) & (ref <= e)
+        for k in range(2):
+            release = e + pd.Timedelta(days=3 * k)
+            got = three.partial[0, j, k]
+            if release.date().isoformat() not in cutoffs:
+                assert np.isnan(got)
+                continue
+            # Lag k: the release 3k days after the bin, for all its days.
+            assert got == counts.loc[days & (rep <= release), "count"].sum()
+
+
+def test_three_day_blocks_are_cut_like_daily_ones() -> None:
+    counts = _longer_counts()
+    cutoffs = ["2026-09-23", "2026-09-30"]
+    block = training_block(counts, "3day", ("A",), cutoffs, max_lag=2)
+    assert block["n_targets"] == 1
+    assert block["n_covariates"] == 2
+    target = block["context"][0]
+    # Every full bin of three days holds 21 cases.
+    assert target[block["start"] - 1] == 21.0
