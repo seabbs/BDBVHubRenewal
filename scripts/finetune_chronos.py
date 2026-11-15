@@ -240,6 +240,7 @@ def outbreak_blocks(
     delay_weeks: int = SIM_DELAY_WEEKS,
     cuts: int = CUTS,
     picks: set[tuple[str, int]] | None = None,
+    empty: list[str] | None = None,
 ) -> list[dict]:
     """Return the training blocks of one outbreak.
 
@@ -249,7 +250,9 @@ def outbreak_blocks(
     `picks`, only those (source, slot) blocks are cut. A block's series
     count is drawn log-uniformly from 1 to `MAX_SERIES`,
     and its places (`choose_places`) are about that many series at its
-    lag, with the country first.
+    lag, with the country first. A block whose places have no release
+    rows by its cut (strata with no cases) is skipped and, with `empty`,
+    described there.
     """
     # Cut-offs fall Wednesday to Saturday, as the hub's releases do.
     weekday = int(rng.integers(2, 6))
@@ -286,15 +289,6 @@ def outbreak_blocks(
                 fits = MAX_SERIES // (lag + 1) - 1
                 budget = min(round(size / (lag + 1)) - 1, fits)
                 places, mix = choose_places(provinces, budget, rng)
-            # Leaves only, with nothing reported by the cut, have nothing
-            # to lay out.
-            if NATIONAL not in places:
-                seen = counts["location"].isin(places) & (
-                    pd.to_datetime(counts["report_date"])
-                    <= pd.Timestamp(cutoffs[cut])
-                )
-                if not seen.any():
-                    continue
             block = training_block(
                 counts,
                 source,
@@ -303,6 +297,10 @@ def outbreak_blocks(
                 max_lag=lag,
                 totals=any("-" in p for p in provinces),
             )
+            if block is None:
+                if empty is not None:
+                    empty.append(f"{source} cut {j}: {', '.join(places)}")
+                continue
             if block["start"] < 2:
                 continue
             padded = _pad(block, CONTEXT, HORIZON)

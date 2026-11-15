@@ -169,3 +169,11 @@ def test_regions_of_places_total_their_places_exactly() -> None:
     assert (wide["R1"] == wide["R1-P01"] + wide["R1-P02"]).all()
     # A region's places are not age groups: no total by their second part.
     assert "P01" not in wide.columns
+
+
+def test_block_of_places_with_no_release_rows_is_none() -> None:
+    # Only place A had cases, so its releases hold the country alone.
+    counts = _counts().query("location == 'A'")
+    cutoffs = ["2026-10-17", "2026-10-24"]
+    assert training_block(counts, "daily", ("A",), cutoffs, max_lag=3) is None
+    assert training_block(counts, "daily", ("B",), cutoffs, max_lag=3) is None

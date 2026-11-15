@@ -388,6 +388,8 @@ def hub_triangle(
     width = 7 if source == "weekly" else 1
     time_col = "target_end_date" if source == "weekly" else "onset_date"
     rows = rows.loc[rows["location"].isin(places)]
+    if rows.empty:
+        raise ValueError(f"no release rows for {list(places)}")
     value = (
         rows["total"]
         if source == "weekly"

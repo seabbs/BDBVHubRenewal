@@ -162,13 +162,18 @@ def ready_outbreaks(sim_dir: Path, seeds: range) -> list[str]:
 
 
 def cut(
-    sim_dir: Path, ids: list[str], seed: int, per_simulation: int
+    sim_dir: Path,
+    ids: list[str],
+    seed: int,
+    per_simulation: int,
+    empty: list[str] | None = None,
 ) -> list[tuple[str, dict]]:
     """Return a sample of blocks of each simulation, with its draw.
 
     A simulation's candidate blocks are each of its observation draws
     (`<id>-<draw>`) cut in each of `CUTS` slots of each source; a sample of
-    `per_simulation` of them, seeded by the simulation, is cut.
+    `per_simulation` of them, seeded by the simulation, is cut. Blocks
+    skipped for having no rows are described in `empty`.
     """
     seeds = sorted({ft._order(o)[0] for o in ids})
     counts = pd.concat(
@@ -203,7 +208,12 @@ def cut(
                 [seed, zlib.crc32(outbreak.encode())]
             )
             blocks = ft.outbreak_blocks(
-                draws[outbreak], ft.strata(row), draw_rng, weeks, picks=picks
+                draws[outbreak],
+                ft.strata(row),
+                draw_rng,
+                weeks,
+                picks=picks,
+                empty=empty,
             )
             out.extend((outbreak, block) for block in blocks)
     return out
@@ -501,8 +511,12 @@ def main() -> None:
     # so held-out blocks are cut to the same size as training blocks.
     ft.checkpoint_large_batches(ft.checkpoint_above(args.memory_gb))
     ft.MAX_SERIES = min(ft.MAX_SERIES, ft.max_series(args.memory_gb))
-    val = [b for _, b in cut(sim_dir, held, args.seed, k)]
-    log(f"{len(held)} held-out outbreaks, {len(val)} blocks")
+    empty: list[str] = []
+    val = [b for _, b in cut(sim_dir, held, args.seed, k, empty)]
+    log(
+        f"{len(held)} held-out outbreaks, {len(val)} blocks, "
+        f"{len(empty)} skipped with no rows"
+    )
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)  # noqa: NPY002
     device = (
@@ -639,7 +653,8 @@ def main() -> None:
                 )
             time.sleep(POLL)
         ids = ready[done:hi]
-        pairs = cut(sim_dir, ids, args.seed, k)
+        empty = []
+        pairs = cut(sim_dir, ids, args.seed, k, empty)
         blocks = [b for _, b in pairs]
         sizes = np.array([int(b["context"].shape[0]) for b in blocks])
         rng = np.random.default_rng([args.seed, done])
@@ -700,9 +715,11 @@ def main() -> None:
         done, position = hi, 0
         seen["blocks"] += len(pairs)
         seen["series"] += int(sizes.sum())
+        mix = seen.setdefault("mix", {})
         for block in blocks:
-            mix = seen.setdefault("mix", {})
             mix[block["mix"]] = mix.get(block["mix"], 0) + 1
+        # Blocks of strata with no cases by their cut are not laid out.
+        mix["empty"] = mix.get("empty", 0) + len(empty)
         if done in prefixes:
             where = out / f"n{done}"
             where.mkdir(parents=True, exist_ok=True)

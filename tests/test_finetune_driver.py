@@ -37,7 +37,7 @@ GRID=g
 def run(tmp_path: Path, script: str, env: str = ENV) -> str:
     """Run bash with the driver's functions and return its output."""
     (tmp_path / "round.env").write_text(env)
-    (tmp_path / "output" / "finetune").mkdir(parents=True)
+    (tmp_path / "output" / "finetune").mkdir(parents=True, exist_ok=True)
     (tmp_path / "sims").mkdir()
     (tmp_path / "sims" / "settings-5902.csv").write_text("outbreak\n")
     out = subprocess.run(
@@ -91,7 +91,7 @@ def test_short_yield_adds_training_seeds(tmp_path):
         "OUTBREAKS=10", "OUTBREAKS=300"
     )
     (tmp_path / "round.env").write_text(env)
-    (tmp_path / "output" / "finetune").mkdir(parents=True)
+    (tmp_path / "output" / "finetune").mkdir(parents=True, exist_ok=True)
     (tmp_path / "ckpt").mkdir()
     out = subprocess.run(
         [
@@ -185,7 +185,7 @@ def test_seed_extension_reopens_a_finished_remote_scheduler(tmp_path):
         "OUTBREAKS=10", "OUTBREAKS=300"
     )
     (tmp_path / "round.env").write_text(env)
-    (tmp_path / "output" / "finetune").mkdir(parents=True)
+    (tmp_path / "output" / "finetune").mkdir(parents=True, exist_ok=True)
     (tmp_path / "ckpt").mkdir()
     out = subprocess.run(
         [
@@ -223,3 +223,20 @@ def test_remote_runs_extra_seeds_after_held_out(tmp_path):
     out = run(tmp_path, "seeds | tr '\\n' ' '", env)
     # Held-out 5902 is done; the laptop's own range 5009-5010 is skipped.
     assert out.split()[:5] == ["5901", "5903", "8016", "7001", "5001"]
+
+
+def test_second_trainer_failure_alerts_the_mailbox(tmp_path):
+    env = ENV + "MAILBOX=inbox.md\n"
+    (tmp_path / "output" / "finetune").mkdir(parents=True)
+    (tmp_path / "output" / "finetune" / "trainer.log").write_text("boom\n")
+    out = run(
+        tmp_path,
+        "remote_state=down; failures=0; "
+        "trainer_failed 1; cat inbox.md 2> /dev/null; echo ---; "
+        "trainer_failed 1; cat inbox.md; cat output/finetune/STATUS",
+        env,
+    )
+    before, after = out.split("---")
+    assert before.strip() == ""
+    assert "ALERT: trainer failed 2 times" in after
+    assert after.count("ALERT") == 2  # one mailbox line, and STATUS
