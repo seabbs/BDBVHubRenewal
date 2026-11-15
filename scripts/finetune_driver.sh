@@ -156,23 +156,37 @@ seeds() {
 
 remote() { ssh -o ConnectTimeout=20 -o BatchMode=yes "$REMOTE" "$@"; }
 
+enw_fingerprint() {
+  # The laptop's epinowcast (scripts/enw_fingerprint.R), worked out once.
+  [ -n "${enw_local:-}" ] \
+    || enw_local=$(Rscript scripts/enw_fingerprint.R output/finetune/rlib 2> /dev/null)
+  echo "$enw_local"
+}
+
 remote_code() {
   # Make the remote run this commit's simulator: if its sha256 differs,
   # stop the remote's scheduler and batches (their outbreaks would be of
-  # another simulator), copy it across and check it again.
+  # another simulator), copy it across and check it again. The remote's
+  # epinowcast must match the laptop's too; a copy cannot fix that.
   local want
   want=$(shasum -a 256 scripts/finetune_simulate.R | cut -d' ' -f1)
-  [ "$(remote "sha256sum $REMOTE_DIR/scripts/finetune_simulate.R" 2> /dev/null | cut -d' ' -f1)" = "$want" ] \
-    && return 0
-  remote "pkill -f '[f]inetune_remote.sh'; pkill -f '[f]inetune_simulate.R --args'" > /dev/null 2>&1
-  rsync -a -e "ssh -o ConnectTimeout=20 -o BatchMode=yes" \
-    scripts/finetune_simulate.R "$REMOTE:$REMOTE_DIR/scripts/"
-  if [ "$(remote "sha256sum $REMOTE_DIR/scripts/finetune_simulate.R" 2> /dev/null | cut -d' ' -f1)" = "$want" ]; then
+  if [ "$(remote "sha256sum $REMOTE_DIR/scripts/finetune_simulate.R" 2> /dev/null | cut -d' ' -f1)" != "$want" ]; then
+    remote "pkill -f '[f]inetune_remote.sh'; pkill -f '[f]inetune_simulate.R --args'" > /dev/null 2>&1
+    rsync -a -e "ssh -o ConnectTimeout=20 -o BatchMode=yes" \
+      scripts/finetune_simulate.R scripts/enw_fingerprint.R \
+      "$REMOTE:$REMOTE_DIR/scripts/"
+    if [ "$(remote "sha256sum $REMOTE_DIR/scripts/finetune_simulate.R" 2> /dev/null | cut -d' ' -f1)" != "$want" ]; then
+      log "ERROR: $REMOTE's simulator does not match this one; no remote batches"
+      return 1
+    fi
     log "copied the simulator to $REMOTE, stopping its batches of the old one"
-    return 0
   fi
-  log "ERROR: $REMOTE's simulator does not match this one; no remote batches"
-  return 1
+  local theirs
+  theirs=$(remote "cd $REMOTE_DIR && Rscript scripts/enw_fingerprint.R output/finetune/rlib" 2> /dev/null)
+  if [ -z "$theirs" ] || [ "$theirs" != "$(enw_fingerprint)" ]; then
+    log "ERROR: $REMOTE's epinowcast (${theirs:-unknown}) is not the laptop's ($(enw_fingerprint)); no remote batches"
+    return 1
+  fi
 }
 
 remote_scheduler() {
@@ -412,20 +426,12 @@ trainer_failed() {
   status
 }
 
-[[ "${BASH_SOURCE[0]}" != "$0" ]] && return 0
-
-# A restarted driver replaces the remote scheduler, whose running batches
-# finish.
-[ -n "${REMOTE:-}" ] && remote "pkill -f '[f]inetune_remote.sh'" \
-  > /dev/null 2>&1 && log "stopped the previous remote scheduler"
-log "starting round from $1: training seeds $TRAIN_FIRST-$TRAIN_LAST, held-out $HELD_FIRST-$HELD_LAST, laptop $LOCAL_FIRST-$LOCAL_LAST"
-trainer_args=("$SIM_DIR" "$OUT" --train-seeds "$TRAIN_FIRST" "$TRAIN_LAST"
-  --held-out-seeds "$HELD_FIRST" "$HELD_LAST" --outbreaks "$OUTBREAKS"
-  --note "${NOTE:-}" --grid "$GRID" --blocks-per-simulation "${BLOCKS_PER_SIMULATION:-12}"
-  --prefixes ${PREFIXES:-1000 2000 4000 8000} --min-gain "${MIN_GAIN:-0.01}"
-  --stop-from "${STOP_FROM:-8000}" --memory-gb "${MEMORY_GB:-36}")
-[ "${PUBLISH:-0}" = 1 ] && trainer_args+=(--publish)
 start_trainer() {
+  # Checkpoints must be rebuildable from a commit, so the trainer runs
+  # only from a worktree with no uncommitted changes to tracked files.
+  if [ -n "$(git status --porcelain --untracked-files=no 2>&1)" ]; then
+    fail "the worktree has uncommitted changes; commit them to train"
+  fi
   # MPS memory is capped so the caching allocator cannot fill the laptop.
   PYTORCH_MPS_HIGH_WATERMARK_RATIO=$MPS_HIGH_WATERMARK \
   PYTORCH_MPS_LOW_WATERMARK_RATIO=0.6 \
@@ -440,6 +446,19 @@ start_trainer() {
   log "started the trainer, pid $trainer"
 }
 
+[[ "${BASH_SOURCE[0]}" != "$0" ]] && return 0
+
+# A restarted driver replaces the remote scheduler, whose running batches
+# finish.
+[ -n "${REMOTE:-}" ] && remote "pkill -f '[f]inetune_remote.sh'" \
+  > /dev/null 2>&1 && log "stopped the previous remote scheduler"
+log "starting round from $1: training seeds $TRAIN_FIRST-$TRAIN_LAST, held-out $HELD_FIRST-$HELD_LAST, laptop $LOCAL_FIRST-$LOCAL_LAST"
+trainer_args=("$SIM_DIR" "$OUT" --train-seeds "$TRAIN_FIRST" "$TRAIN_LAST"
+  --held-out-seeds "$HELD_FIRST" "$HELD_LAST" --outbreaks "$OUTBREAKS"
+  --note "${NOTE:-}" --grid "$GRID" --blocks-per-simulation "${BLOCKS_PER_SIMULATION:-12}"
+  --prefixes ${PREFIXES:-1000 2000 4000 8000} --min-gain "${MIN_GAIN:-0.01}"
+  --stop-from "${STOP_FROM:-8000}" --memory-gb "${MEMORY_GB:-36}")
+[ "${PUBLISH:-0}" = 1 ] && trainer_args+=(--publish)
 trainer_exit() {
   # The exit code of a stopped trainer; a kept one is not this shell's
   # child, so its state tells.

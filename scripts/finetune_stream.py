@@ -746,6 +746,14 @@ def main() -> None:
             }
             key = ft._settings_hash(settings)
             settings["hash"] = key
+            # The commit the trainer ran from, outside the hash: the
+            # checkpoint is rebuilt from it to the same hash.
+            settings["code_commit"] = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout.strip()
             settings["device"] = device
             settings["held_out_loss_start"] = start_loss
             settings["held_out_loss"] = ft.held_out_loss(
