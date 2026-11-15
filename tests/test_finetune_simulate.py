@@ -299,3 +299,45 @@ cat(nrow(data.table::rbindlist(rows, fill = TRUE)), "\\n")
         tmp_path,
     )
     assert out.split() == ["2"]
+
+
+SHOCK = """
+set.seed(7)
+d <- draw_design(1L)
+d$strata <- "places"; d$n_places <- 2L; d$n_ages <- 1L
+d$spread <- "even"; d$seeding <- "start"; d$place_rt <- "shared"
+d$trajectory <- "flat"; d$delay_change <- "static"
+d$delay_form <- "parametric"; d$delay_family <- "lognormal"
+d$reporting <- "daily"; d$shocks <- "{level}"
+v <- draw_values(d)
+v$weeks <- 16L; v$target_size <- 6000; v$quiet_places <- integer(0)
+v$delay_median <- 3; v$delay_sdlog <- 0.6; v$flat <- 0
+v$shock_places <- 1L; v$shock_at <- 0.4; v$shock_weeks <- 3L
+v$shock_mult <- 4
+out <- simulate_outbreak(d, v)
+c <- out$counts[draw == 1 & location == "P01"]
+w <- shock_window(out$counts, v)
+inside <- c[reference_date >= w[1] & reference_date <= w[2]]
+outside <- c[reference_date < w[1] - 14]
+delay <- function(x) {
+  x[, sum(count * as.numeric(report_date - reference_date)) / sum(count)]
+}
+cat("delay", delay(inside), delay(outside), "\\n")
+during <- c[report_date >= w[1] & report_date <= w[2], sum(count)]
+cat("reported_in_window", during, "\\n")
+"""
+
+
+@needs_r
+def test_a_backlog_lengthens_one_place_s_delays_for_a_while(tmp_path):
+    out = run_r(SHOCK.replace("{level}", "backlog"), tmp_path)
+    line = next(x for x in out.splitlines() if x.startswith("delay"))
+    inside, outside = map(float, line.split()[1:])
+    assert inside > 2 * outside
+
+
+@needs_r
+def test_an_outage_stops_one_place_s_reports_for_a_while(tmp_path):
+    out = run_r(SHOCK.replace("{level}", "outage"), tmp_path)
+    line = next(x for x in out.splitlines() if x.startswith("reported"))
+    assert float(line.split()[-1]) == 0

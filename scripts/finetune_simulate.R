@@ -101,7 +101,11 @@ factors <- list(
   # When places start: all at the outset, or some seeded mid-outbreak.
   # Constant or pulsed importations need an import term in the renewal
   # (epinowcast#940), so they are not simulated.
-  seeding = c("start", "mid")
+  seeding = c("start", "mid"),
+  # Reporting shocks in one or two places, on top of `delay_change`: none,
+  # a backlog (mean delay x2-5 for 1-4 weeks) or an outage (no reports for
+  # 1-4 weeks, then the held cases at once).
+  shocks = c("none", "backlog", "outage")
 )
 
 # Simulations per balanced block: a multiple of every factor's levels.
@@ -334,6 +338,10 @@ draw_values <- function(design) {
     place_sd = runif(1, 0.01, 0.03),
     place_lags = c(0L, sample(1:28, design$n_places - 1L, replace = TRUE)),
     late_at = runif(1, 0.2, 0.6),
+    # Reporting shocks: when, how long and how large.
+    shock_at = runif(1, 0.3, 0.8),
+    shock_weeks = sample(1:4, 1),
+    shock_mult = runif(1, 2, 5),
     late_days = sample(7:14, 1),
     stratum_sd = if (design$spread == "concentrated") {
       runif(1, 2.5, 4)
@@ -367,7 +375,8 @@ draw_values <- function(design) {
     delay_mean = log_uniform(2, 21),
     # Gamma delays with shape above 2 fail in the simulate branch.
     delay_cv = runif(1, 0.8, 1.6),
-    delay_place_sd = runif(1, 0.1, 0.5),
+    # Delays differ by place, up to about x2 on the location.
+    delay_place_sd = runif(1, 0.1, 0.8),
     delay_age_sd = runif(1, 0.05, 0.25),
     hazard_walk_sd = runif(1, 0.05, 0.3),
     hazard_sd = runif(1, 0, 0.15),
@@ -400,7 +409,20 @@ draw_values <- function(design) {
   } else {
     integer(0)
   }
+  # Places with a reporting shock: one or two places with cases.
+  cases <- setdiff(seq_len(design$n_places), quiet)
+  v$shock_places <- if (design$shocks == "none") {
+    integer(0)
+  } else {
+    cases[sample.int(length(cases), min(length(cases), sample(1:2, 1)))]
+  }
   v
+}
+
+# The first and last reference dates of a reporting shock in `counts`.
+shock_window <- function(counts, v) {
+  start <- min(counts$reference_date) + round(v$shock_at * v$weeks * 7)
+  c(start, start + 7L * v$shock_weeks - 1L)
 }
 
 # A rejected try's row: its design and values, flat.
@@ -505,6 +527,11 @@ simulate_outbreak <- function(design, v) {
   set(meta, j = "step", value = as.numeric(meta$week >= v$step_at * n_weeks))
   set(meta, j = "periodic",
       value = sin(2 * pi * meta$week / v$periodic_weeks))
+  window <- shock_window(data.table(reference_date = meta$date), v)
+  shocked <- sprintf("P%02d", v$shock_places)
+  set(meta, j = "backlog", value = as.numeric(
+    meta$place %in% shocked & meta$date >= window[1] & meta$date <= window[2]
+  ))
   parametric <- design$delay_form != "non_parametric"
   # epinowcast allows one walk per formula, so a hazard with no parametric
   # part, which already walks over delays, changes by week as iid effects.
@@ -515,6 +542,7 @@ simulate_outbreak <- function(design, v) {
   change_beta <- switch(design$delay_change,
     drift = v$drift, step = v$step, periodic = v$periodic, 0
   )
+  if (design$shocks == "backlog") change_terms <- c(change_terms, "backlog")
   stratum_terms <- c(
     if (multi_place) "(1 | place)", if (multi_age) "(1 | age)"
   )
@@ -544,6 +572,10 @@ simulate_outbreak <- function(design, v) {
   set_change <- function(prefix, cols) {
     beta <- rnorm(length(cols))
     beta[cols %in% c("trend", "step", "periodic")] <- change_beta
+    # A backlog multiplies the mean delay: log of it on the location, or
+    # its negative on the logit hazard.
+    beta[cols == "backlog"] <- log(v$shock_mult) *
+      if (prefix == "refp_mean") 1 else -1
     parameters[[paste0(prefix, "_beta")]] <<- array(beta)
   }
   if (parametric) {
@@ -603,6 +635,18 @@ simulate_outbreak <- function(design, v) {
     structural <- enw_structural_reporting_metadata(pobs)
     structural[, report := as.integer(weekdays(report_date) %in% on)]
     structural <- structural[, .(.group, date, report_date, report)]
+  }
+  if (design$shocks == "outage") {
+    if (is.null(structural)) {
+      structural <- enw_structural_reporting_metadata(pobs)
+      structural[, report := 1L]
+    }
+    groups <- strata[place %in% shocked, .group]
+    structural[
+      .group %in% groups & report_date >= window[1] &
+        report_date <= window[2],
+      report := 0L
+    ]
   }
   report <- enw_report(
     non_parametric = as_formula(FALSE, report_terms),
