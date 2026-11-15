@@ -302,9 +302,12 @@ c <- out$counts[draw == 1 & location == "P01"]
 w <- shock_window(out$counts, v)
 inside <- c[reference_date >= w[1] & reference_date <= w[2]]
 outside <- c[reference_date < w[1] - 14]
-delay <- function(x) x[, sum(count * as.numeric(report_date - reference_date)) / sum(count)]
+delay <- function(x) {
+  x[, sum(count * as.numeric(report_date - reference_date)) / sum(count)]
+}
 cat("delay", delay(inside), delay(outside), "\\n")
-cat("reported_in_window", c[report_date >= w[1] & report_date <= w[2], sum(count)], "\\n")
+during <- c[report_date >= w[1] & report_date <= w[2], sum(count)]
+cat("reported_in_window", during, "\\n")
 """
 
 
