@@ -10,6 +10,8 @@
 #   SIM_DIR       local directory of the simulations
 #   TRAIN_FIRST, TRAIN_LAST       training seeds
 #   HELD_FIRST, HELD_LAST         held-out seeds (simulated first)
+#   MAILBOX       optional file the driver appends an alert line to
+#                 from the trainer's second failure on
 #   EXTRA_SEEDS   optional seeds for other work, simulated after the
 #                 held-out seeds and never trained on
 #   LOCAL_FIRST, LOCAL_LAST       training seeds run on the laptop
@@ -374,6 +376,25 @@ check_batches() {
 }
 
 # Sourced (by the tests), the script only defines its functions.
+trainer_failed() {
+  # A failed trainer restarts from its last saved state after a backoff
+  # of 5 minutes, doubling to an hour; simulation carries on meanwhile.
+  # From the second failure on, each is an alert in STATUS and
+  # the MAILBOX file, so a crash loop is seen.
+  failures=$(( failures + 1 ))
+  local wait_s=$(( 300 * 2 ** (failures - 1) ))
+  (( wait_s > 3600 )) && wait_s=3600
+  retry_at=$(( $(date +%s) + wait_s ))
+  last_error="trainer failed (exit $1, failure $failures), restart in $(( wait_s / 60 )) min"
+  if (( failures >= 2 )); then
+    last_error="ALERT: trainer failed $failures times; $last_error"
+    [ -n "${MAILBOX:-}" ] && echo "$(date '+%Y-%m-%d %H:%M') fm-finetune3 ${GRID:-} trainer: $last_error; see $TRAINER_LOG" >> "$MAILBOX"
+  fi
+  log "ERROR: $last_error; the end of $TRAINER_LOG:"
+  tail -n 20 "$TRAINER_LOG" | sed 's/^/    /' >> "$LOG"
+  status
+}
+
 [[ "${BASH_SOURCE[0]}" != "$0" ]] && return 0
 
 # A restarted driver replaces the remote scheduler, whose running batches
@@ -442,15 +463,7 @@ while true; do
       status "finished"
       exit 0
     fi
-    # A failed trainer restarts from its last saved state after a backoff
-    # of 5 minutes, doubling to an hour; simulation carries on meanwhile.
-    failures=$(( failures + 1 ))
-    wait_s=$(( 300 * 2 ** (failures - 1) ))
-    (( wait_s > 3600 )) && wait_s=3600
-    retry_at=$(( $(date +%s) + wait_s ))
-    last_error="trainer failed (exit $code, failure $failures), restart in $(( wait_s / 60 )) min"
-    log "ERROR: $last_error; the end of $TRAINER_LOG:"
-    tail -n 20 "$TRAINER_LOG" | sed 's/^/    /' >> "$LOG"
+    trainer_failed "$code"
   fi
   status
   sleep 180
