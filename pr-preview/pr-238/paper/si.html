@@ -55,7 +55,7 @@ div.csl-indent {
 <link href="si_files/libs/quarto-html/quarto-syntax-highlighting-587c61ba64f3a5504c4d52d930310e48.css" rel="stylesheet" id="quarto-text-highlighting-styles">
 <script src="si_files/libs/bootstrap/bootstrap.min.js"></script>
 <link href="si_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
-<link href="si_files/libs/bootstrap/bootstrap-d99fc85c7253c7d071cb1f16904a1173.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<link href="si_files/libs/bootstrap/bootstrap-67135126376fdcfdeadaafff27d21302.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
 
   <script src="https://cdnjs.cloudflare.com/polyfill/v3/polyfill.min.js?features=es6"></script>
   <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js" type="text/javascript"></script>
@@ -611,6 +611,16 @@ Table&nbsp;2: The simulated outbreaks’ ranges against published values for sev
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-finetune-heldout-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
 Figure&nbsp;2: Held-out loss of the fine-tune against the number of simulated outbreaks it has seen.
+</figcaption>
+</figure>
+</div>
+<div id="fig-checkpoint-curve" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-checkpoint-curve-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="build/figures/si/checkpoint-curve.png" class="img-fluid figure-img">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-checkpoint-curve-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;3: WIS relative to <code>randomwalknowcast</code> of the ragged Chronos-2 models against the number of simulated outbreaks each r3 checkpoint was fine-tuned on, with the zero-shot model at the left, on the case studies by level. Each panel gives n, the fewest matched cells of its points, and the forecast origins they come from, and panels with fewer than 5 are grey. On BDBV’s provinces (n = 26 cells from 1 origin) the daily model goes from 2.94 zero-shot to 0.92 at 1,000 and 1.04 at 2,000 outbreaks, then worsens to 1.39 at 4,000; the weekly model worsens throughout, from 1.74 to 4.2. BDBV’s national panel has n = 1, so it is grey. German checkpoints join as they are scored.
 </figcaption>
 </figure>
 </div>
@@ -2990,7 +3000,7 @@ Table&nbsp;8: The share of evaluated outbreaks in each level of each grid factor
 <img src="build/figures/si/synthetic-si-nowcasts.png" class="img-fluid figure-img">
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-synthetic-si-nowcasts-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;3: Held-out synthetic data: nowcasts of outbreaks drawn to cover the levels of the trajectory, delay form, observation model and strata, each titled by its cell, at origins drawn with the workflow’s seed (dotted lines). Black is the rolling truth, grey the data as of each origin, and ribbons the 50% and 90% intervals of <code>randomwalknowcast</code> and Chronos-2 zero-shot and fine-tuned. Illustrative, dummy data
+Figure&nbsp;4: Held-out synthetic data: nowcasts of outbreaks drawn to cover the levels of the trajectory, delay form, observation model and strata, each titled by its cell, at origins drawn with the workflow’s seed (dotted lines). Black is the rolling truth, grey the data as of each origin, and ribbons the 50% and 90% intervals of <code>randomwalknowcast</code> and Chronos-2 zero-shot and fine-tuned. Illustrative, dummy data
 </figcaption>
 </figure>
 </div>
@@ -3000,7 +3010,7 @@ Figure&nbsp;3: Held-out synthetic data: nowcasts of outbreaks drawn to cover the
 <img src="build/figures/si/synthetic-si-factors.png" class="img-fluid figure-img">
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-synthetic-si-factors-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;4: Held-out synthetic data: relative CRPS by level of each scenario factor. Illustrative, dummy data
+Figure&nbsp;5: Held-out synthetic data: relative CRPS by level of each scenario factor. Illustrative, dummy data
 </figcaption>
 </figure>
 </div>
@@ -3010,7 +3020,7 @@ Figure&nbsp;4: Held-out synthetic data: relative CRPS by level of each scenario 
 <img src="build/figures/si/synthetic-si-factors-log.png" class="img-fluid figure-img">
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-synthetic-si-factors-log-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;5: Held-out synthetic data: relative CRPS on the log scale by level of each scenario factor. Illustrative, dummy data
+Figure&nbsp;6: Held-out synthetic data: relative CRPS on the log scale by level of each scenario factor. Illustrative, dummy data
 </figcaption>
 </figure>
 </div>
@@ -3020,7 +3030,7 @@ Figure&nbsp;5: Held-out synthetic data: relative CRPS on the log scale by level 
 <img src="build/figures/si/synthetic-si-wis-over-time.png" class="img-fluid figure-img">
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-synthetic-si-wis-over-time-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;6: Held-out synthetic data: CRPS over time. Illustrative, dummy data
+Figure&nbsp;7: Held-out synthetic data: CRPS over time. Illustrative, dummy data
 </figcaption>
 </figure>
 </div>
@@ -3030,7 +3040,7 @@ Figure&nbsp;6: Held-out synthetic data: CRPS over time. Illustrative, dummy data
 <img src="build/figures/si/synthetic-si-finetune-size.png" class="img-fluid figure-img">
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-synthetic-si-finetune-size-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;7: Held-out synthetic data: relative CRPS of each fine-tuning checkpoint, at doublings from 1,000 outbreaks, against the number of simulated outbreaks it was trained on (log scale). Illustrative, dummy data
+Figure&nbsp;8: Held-out synthetic data: relative CRPS of each fine-tuning checkpoint, at doublings from 1,000 outbreaks, against the number of simulated outbreaks it was trained on (log scale). Illustrative, dummy data
 </figcaption>
 </figure>
 </div>
@@ -5219,7 +5229,7 @@ Table&nbsp;10: Held-out synthetic data scores by location and stratum. Illustrat
 <img src="build/figures/si/germany-si-nowcasts.png" class="img-fluid figure-img">
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-germany-si-nowcasts-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;8: German nowcast hub: nowcasts for each state and age group at origins drawn with the workflow’s seed (dotted lines). Black is the rolling truth, grey the data as of each origin, and ribbons the 50% and 90% intervals of <code>randomwalknowcast</code>, Chronos-2 zero-shot and fine-tuned, and the hub ensemble.
+Figure&nbsp;9: German nowcast hub: nowcasts for each state and age group at origins drawn with the workflow’s seed (dotted lines). Black is the rolling truth, grey the data as of each origin, and ribbons the 50% and 90% intervals of <code>randomwalknowcast</code>, Chronos-2 zero-shot and fine-tuned, and the hub ensemble.
 </figcaption>
 </figure>
 </div>
@@ -5229,7 +5239,7 @@ Figure&nbsp;8: German nowcast hub: nowcasts for each state and age group at orig
 <img src="build/figures/si/germany-si-location-horizon.png" class="img-fluid figure-img">
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-germany-si-location-horizon-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;9: German nowcast hub: relative WIS by location and horizon.
+Figure&nbsp;10: German nowcast hub: relative WIS by location and horizon.
 </figcaption>
 </figure>
 </div>
@@ -5239,7 +5249,7 @@ Figure&nbsp;9: German nowcast hub: relative WIS by location and horizon.
 <img src="build/figures/si/germany-si-location-horizon-log.png" class="img-fluid figure-img">
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-germany-si-location-horizon-log-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;10: German nowcast hub: relative WIS on the log scale by location and horizon.
+Figure&nbsp;11: German nowcast hub: relative WIS on the log scale by location and horizon.
 </figcaption>
 </figure>
 </div>
@@ -5249,7 +5259,7 @@ Figure&nbsp;10: German nowcast hub: relative WIS on the log scale by location an
 <img src="build/figures/si/germany-si-wis-over-time.png" class="img-fluid figure-img">
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-germany-si-wis-over-time-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;11: German nowcast hub: WIS over time, with a dotted line at the split.
+Figure&nbsp;12: German nowcast hub: WIS over time, with a dotted line at the split.
 </figcaption>
 </figure>
 </div>
@@ -13916,7 +13926,7 @@ Table&nbsp;12: German nowcast hub scores by location and stratum.
 <img src="build/figures/si/ebola-si-nowcasts.png" class="img-fluid figure-img">
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-ebola-si-nowcasts-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;12: Ebola hub submissions: nowcasts for each province at origins drawn with the workflow’s seed (dotted lines). Black is the rolling truth, grey the data as of each origin, and ribbons the 50% and 90% intervals of <code>randomwalknowcast</code> and Chronos-2 zero-shot and fine-tuned.
+Figure&nbsp;13: Ebola hub submissions: nowcasts for each province at origins drawn with the workflow’s seed (dotted lines). Black is the rolling truth, grey the data as of each origin, and ribbons the 50% and 90% intervals of <code>randomwalknowcast</code> and Chronos-2 zero-shot and fine-tuned.
 </figcaption>
 </figure>
 </div>
@@ -13926,7 +13936,7 @@ Figure&nbsp;12: Ebola hub submissions: nowcasts for each province at origins dra
 <img src="build/figures/si/ebola-si-location-horizon.png" class="img-fluid figure-img">
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-ebola-si-location-horizon-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;13: Ebola: relative CRPS by location and horizon.
+Figure&nbsp;14: Ebola: relative CRPS by location and horizon.
 </figcaption>
 </figure>
 </div>
@@ -13936,7 +13946,7 @@ Figure&nbsp;13: Ebola: relative CRPS by location and horizon.
 <img src="build/figures/si/ebola-si-location-horizon-log.png" class="img-fluid figure-img">
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-ebola-si-location-horizon-log-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;14: Ebola: relative CRPS on the log scale by location and horizon.
+Figure&nbsp;15: Ebola: relative CRPS on the log scale by location and horizon.
 </figcaption>
 </figure>
 </div>
@@ -13946,7 +13956,7 @@ Figure&nbsp;14: Ebola: relative CRPS on the log scale by location and horizon.
 <img src="build/figures/si/ebola-si-wis-over-time.png" class="img-fluid figure-img">
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-ebola-si-wis-over-time-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;15: Ebola: CRPS over time.
+Figure&nbsp;16: Ebola: CRPS over time.
 </figcaption>
 </figure>
 </div>
