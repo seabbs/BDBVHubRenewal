@@ -277,11 +277,16 @@ def checkpoint_figure(scores: pd.DataFrame) -> Figure:
     """Plot each model's relative WIS against the fine-tune's outbreaks.
 
     One panel per study and level, one line per model, on a log axis of
-    outbreaks with the zero-shot model at 0 drawn at the left edge.
+    outbreaks with the zero-shot model left of the first checkpoint.
     `scores` has one row per study, level, model and checkpoint, with
     `outbreaks` and `rel_wis` against `randomwalknowcast`.
     """
     sc = scores.loc[scores["model"] != "randomwalknowcast"]
+    sizes = sorted(sc.loc[sc["outbreaks"] > 0, "outbreaks"].unique())
+    # Zero-shot sits at half the first checkpoint on the log axis.
+    zero = sizes[0] / 2 if sizes else 500
+    ticks = [zero, *sizes]
+    labels = ["zero-shot", *(f"{n:,.0f}" for n in sizes)]
     panels = list(sc.groupby(["study", "level"], sort=False).groups)
     ncol = min(3, len(panels))
     nrow = int(np.ceil(len(panels) / ncol))
@@ -297,14 +302,15 @@ def checkpoint_figure(scores: pd.DataFrame) -> Figure:
         one = sc.loc[(sc["study"] == study) & (sc["level"] == level)]
         for model, g in one.groupby("model"):
             g = g.sort_values("outbreaks")
-            # Zero-shot sits at half the first checkpoint on the log axis.
-            first = g.loc[g["outbreaks"] > 0, "outbreaks"].min()
-            x = g["outbreaks"].where(g["outbreaks"] > 0, first / 2)
+            x = g["outbreaks"].where(g["outbreaks"] > 0, zero)
             ax.plot(x, g["rel_wis"], marker="o", ms=3, label=model)
         ax.set_xscale("log")
+        ax.set_xlim(ticks[0] / 1.5, ticks[-1] * 1.5)
+        ax.set_xticks(ticks, labels, rotation=45, fontsize=7)
+        ax.minorticks_off()
         ax.axhline(1, color="#888888", ls="--", lw=1)
         ax.set_title(f"{study}, {level}", fontsize=9)
-        ax.set_xlabel("Fine-tuning outbreaks (zero-shot at left)")
+        ax.set_xlabel("Fine-tuning outbreaks")
         ax.set_ylabel("Relative WIS")
     for ax in axes[len(panels) :]:
         ax.set_visible(False)
