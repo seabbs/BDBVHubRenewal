@@ -89,6 +89,16 @@ def read_ids(path: Path) -> pd.Series:
         return pd.Series([], dtype=str)
 
 
+def learning_rate(done: int, base: float, decay: float, first: int) -> float:
+    """Return the learning rate after `done` outbreaks.
+
+    It is `base` up to `first` outbreaks and then `base * (first / done)
+    ** decay`, so with `decay` 1 each doubling of outbreaks halves it, and
+    with 0 it stays constant.
+    """
+    return base * (first / max(done, first)) ** decay
+
+
 def should_stop(
     losses: list[float], done: int, stop_from: int, min_gain: float
 ) -> bool:
@@ -643,6 +653,9 @@ def main() -> None:
     parser.add_argument("--outbreaks", type=int, default=ft.PREFIXES[-1])
     parser.add_argument("--holdout", type=int, default=150)
     parser.add_argument("--learning-rate", type=float, default=1e-4)
+    # 1 halves the learning rate with each doubling of outbreaks after the
+    # first checkpoint; 0 keeps it constant.
+    parser.add_argument("--lr-decay", type=float, default=0.0)
     parser.add_argument("--batch-size", type=int, default=256)
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--note", default="")
@@ -769,6 +782,7 @@ def main() -> None:
         ),
         "lora": {"r": 8, "alpha": 16},
         "learning_rate": args.learning_rate,
+        **({"lr_decay": args.lr_decay} if args.lr_decay else {}),
         "batch_size": args.batch_size,
         "context": ft.CONTEXT,
         "horizon": ft.HORIZON,
@@ -868,6 +882,10 @@ def main() -> None:
     t0 = time.perf_counter()
     while done < args.outbreaks:
         hi = min(done + CHUNK, args.outbreaks)
+        for group in optimiser.param_groups:
+            group["lr"] = learning_rate(
+                done, args.learning_rate, args.lr_decay, prefixes[0]
+            )
         split = {"wait_s": 0.0, "cut_s": 0.0, "train_s": 0.0, "eval_s": 0.0}
         tick = time.perf_counter()
         report(
