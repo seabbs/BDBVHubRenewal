@@ -445,10 +445,16 @@ def test_blocks_are_cut_without_torch(tmp_path):
     ids = _sim_dir(tmp_path)
     # CI's test environment has no torch: cutting blocks must not need it.
     code = (
-        "import sys; sys.modules['torch'] = None; "
-        "sys.path.insert(0, 'scripts'); import finetune_stream as fs; "
+        "import builtins, sys\n"
+        "real = builtins.__import__\n"
+        "def no_torch(name, *args, **kwargs):\n"
+        "    if name.split('.')[0] == 'torch':\n"
+        "        raise ModuleNotFoundError(name)\n"
+        "    return real(name, *args, **kwargs)\n"
+        "builtins.__import__ = no_torch\n"
+        "sys.path.insert(0, 'scripts'); import finetune_stream as fs\n"
         f"pairs = fs.cut(__import__('pathlib').Path({str(tmp_path)!r}), "
-        f"{ids!r}, 1, 6); print(len(pairs))"
+        f"{ids!r}, 1, 6)\nprint(len(pairs))"
     )
     out = subprocess.run(
         [sys.executable, "-c", code],

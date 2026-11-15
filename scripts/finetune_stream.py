@@ -330,6 +330,77 @@ def _join(
     return pairs, empty
 
 
+def tensors(block: dict) -> dict:
+    """Return a block with its arrays as the tensors Chronos-2 reads."""
+    import torch
+
+    context = torch.from_numpy(block["context"])
+    return {
+        **block,
+        "context": context,
+        "future_covariates": context[:, ft.CONTEXT :],
+    }
+
+
+def checkpoint_large_batches(above: int) -> None:
+    """Recompute encoder activations in backward for large batches.
+
+    Chronos-2's group attention runs over every series of a batch, so its
+    memory grows with their square. Above `above` series each encoder block
+    is checkpointed (`torch.utils.checkpoint`).
+    """
+    import functools
+
+    import torch
+    from chronos.chronos2.model import Chronos2EncoderBlock
+    from torch.utils.checkpoint import checkpoint
+
+    forward = Chronos2EncoderBlock.forward
+
+    def checkpointed(self, hidden_states, **kwargs):
+        large = hidden_states.shape[0] > above
+        if large and self.training and torch.is_grad_enabled():
+            return checkpoint(
+                functools.partial(forward, self, **kwargs),
+                hidden_states,
+                use_reentrant=False,
+            )
+        return forward(self, hidden_states, **kwargs)
+
+    Chronos2EncoderBlock.forward = checkpointed
+
+
+def held_out_loss(model, blocks: list[dict], batch_size: int) -> float:
+    """Return the mean quantile loss of a Chronos-2 model on blocks."""
+    import torch
+    from chronos.chronos2.dataset import Chronos2Dataset, DatasetMode
+    from chronos.chronos2.model import Chronos2Model
+
+    data = Chronos2Dataset(
+        inputs=[tensors(b) for b in blocks],
+        context_length=ft.CONTEXT,
+        prediction_length=ft.HORIZON,
+        batch_size=batch_size,
+        output_patch_size=ft.OUTPUT_PATCH,
+        mode=DatasetMode.VALIDATION,
+    )
+    accepted = inspect.signature(Chronos2Model.forward).parameters
+    training = model.training
+    model.eval()
+    losses, weights = [], []
+    with torch.no_grad():
+        for batch in data:
+            batch = {
+                k: v.to(model.device) if torch.is_tensor(v) else v
+                for k, v in batch.items()
+                if k in accepted
+            }
+            losses.append(float(model(**batch).loss))
+            weights.append(len(batch["context"]))
+    model.train(training)
+    return float(np.average(losses, weights=weights))
+
+
 def free_memory() -> None:
     """Return the GPU memory PyTorch caches but does not use."""
     import torch
@@ -489,7 +560,7 @@ def held_out_by_level(model, blocks: list[dict], n: int) -> dict:
     with torch.no_grad():
         for block in blocks[:n]:
             data = Chronos2Dataset(
-                inputs=[block],
+                inputs=[tensors(block)],
                 context_length=ft.CONTEXT,
                 prediction_length=ft.HORIZON,
                 batch_size=1,
@@ -622,7 +693,7 @@ def main() -> None:
     (out / "outbreaks-held-out.txt").write_text("\n".join(held) + "\n")
     # Checkpointing and the largest block follow from the memory budget,
     # so held-out blocks are cut to the same size as training blocks.
-    ft.checkpoint_large_batches(ft.checkpoint_above(args.memory_gb))
+    checkpoint_large_batches(ft.checkpoint_above(args.memory_gb))
     ft.MAX_SERIES = min(ft.MAX_SERIES, ft.max_series(args.memory_gb))
     pool = ProcessPoolExecutor(
         args.cut_workers,
@@ -708,7 +779,7 @@ def main() -> None:
     skipped: list[dict] = []
     if state is None:
         consumed.write_text("")
-        start_loss = ft.held_out_loss(model, val, args.batch_size)
+        start_loss = held_out_loss(model, val, args.batch_size)
         by_level = held_out_by_level(model, val, LEVEL_BLOCKS)
         history = [
             {"step": 0, "held_out_loss": start_loss, "by_level": by_level}
@@ -834,7 +905,7 @@ def main() -> None:
         rng = np.random.default_rng([args.seed, done])
         plan = ft.plan_batches(sizes, args.batch_size, rng, ft.MAX_SERIES)
         data = Chronos2Dataset(
-            inputs=blocks,
+            inputs=[tensors(b) for b in blocks],
             context_length=ft.CONTEXT,
             prediction_length=ft.HORIZON,
             batch_size=args.batch_size,
@@ -876,7 +947,7 @@ def main() -> None:
                 )
             if step % ft.EVAL_EVERY == 0:
                 since = time.perf_counter()
-                monitor = ft.held_out_loss(
+                monitor = held_out_loss(
                     model, val[: ft.EVAL_BLOCKS], args.batch_size
                 )
                 split["eval_s"] += time.perf_counter() - since
@@ -937,7 +1008,7 @@ def main() -> None:
             ).stdout.strip()
             settings["device"] = device
             settings["held_out_loss_start"] = start_loss
-            settings["held_out_loss"] = ft.held_out_loss(
+            settings["held_out_loss"] = held_out_loss(
                 model, val, args.batch_size
             )
             settings["held_out_loss_by_level"] = held_out_by_level(

@@ -3,8 +3,8 @@
 
 Cuts outbreaks from `scripts/finetune_simulate.R` into training blocks
 (`outbreak_blocks`), packs them into batches within a memory budget
-(`plan_batches`, `max_series`) and scores held-out blocks
-(`held_out_loss`). `scripts/finetune_stream.py` trains on them and
+(`plan_batches`, `max_series`), without torch.
+`scripts/finetune_stream.py` trains on them and
 publishes each checkpoint as the release `chronos-ft-<hash>`, which the
 `_ft` models load the newest one
 (`forecasters.foundation.resolve_checkpoint`).
@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import datetime as dt
 import hashlib
-import inspect
 import json
 import re
 from pathlib import Path
@@ -116,17 +115,19 @@ def _sha256(path: Path) -> str:
 
 
 def _pad(block: dict, context: int, horizon: int) -> dict:
-    """Pad a block to `context + horizon` steps, cropping long context."""
-    import torch
+    """Pad a block to `context + horizon` steps, cropping long context.
 
+    The arrays are numpy, so blocks are cut without torch; the trainer
+    makes them tensors (`finetune_stream.tensors`).
+    """
     start, h = block["start"], block["horizon"]
     x = block["context"]
     keep = min(start, context)
     out = np.full((x.shape[0], context + horizon), np.nan, dtype=np.float32)
     out[:, context - keep : context + h] = x[:, start - keep : start + h]
     return {
-        "context": torch.from_numpy(out),
-        "future_covariates": torch.from_numpy(out)[:, context:],
+        "context": out,
+        "future_covariates": out[:, context:],
         "n_targets": block["n_targets"],
         "n_covariates": block["n_covariates"],
         "n_future_covariates": block["n_future_covariates"],
@@ -310,34 +311,6 @@ def outbreak_blocks(
     return out
 
 
-def checkpoint_large_batches(above: int) -> None:
-    """Recompute encoder activations in backward for large batches.
-
-    Chronos-2's group attention runs over every series of a batch, so its
-    memory grows with their square. Above `above` series each encoder block
-    is checkpointed (`torch.utils.checkpoint`).
-    """
-    import functools
-
-    import torch
-    from chronos.chronos2.model import Chronos2EncoderBlock
-    from torch.utils.checkpoint import checkpoint
-
-    forward = Chronos2EncoderBlock.forward
-
-    def checkpointed(self, hidden_states, **kwargs):
-        large = hidden_states.shape[0] > above
-        if large and self.training and torch.is_grad_enabled():
-            return checkpoint(
-                functools.partial(forward, self, **kwargs),
-                hidden_states,
-                use_reentrant=False,
-            )
-        return forward(self, hidden_states, **kwargs)
-
-    Chronos2EncoderBlock.forward = checkpointed
-
-
 def size_class(n: int) -> int:
     """Return a block's size class, by powers of two of its series."""
     return int(np.floor(np.log2(n)))
@@ -382,37 +355,6 @@ def _order(outbreak: str) -> tuple[int, int]:
     """Sort key of an outbreak id, `<seed>-<index>`."""
     seed, index = outbreak.split("-")
     return int(seed), int(index)
-
-
-def held_out_loss(model, blocks: list[dict], batch_size: int) -> float:
-    """Return the mean quantile loss of a Chronos-2 model on blocks."""
-    import torch
-    from chronos.chronos2.dataset import Chronos2Dataset, DatasetMode
-    from chronos.chronos2.model import Chronos2Model
-
-    data = Chronos2Dataset(
-        inputs=blocks,
-        context_length=CONTEXT,
-        prediction_length=HORIZON,
-        batch_size=batch_size,
-        output_patch_size=OUTPUT_PATCH,
-        mode=DatasetMode.VALIDATION,
-    )
-    accepted = inspect.signature(Chronos2Model.forward).parameters
-    training = model.training
-    model.eval()
-    losses, weights = [], []
-    with torch.no_grad():
-        for batch in data:
-            batch = {
-                k: v.to(model.device) if torch.is_tensor(v) else v
-                for k, v in batch.items()
-                if k in accepted
-            }
-            losses.append(float(model(**batch).loss))
-            weights.append(len(batch["context"]))
-    model.train(training)
-    return float(np.average(losses, weights=weights))
 
 
 def _settings_hash(settings: dict) -> str:
