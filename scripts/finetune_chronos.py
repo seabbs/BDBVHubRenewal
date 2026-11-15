@@ -462,3 +462,168 @@ def real_blocks(
         padded["source"] = "weekly"
         out.append(padded)
     return out
+
+
+GERMAN_LAGS = {
+    "weekly": (2, 3, 4, 5, 6, 7),
+    "daily": (14, 21, 28, 35, 40, 49),
+}
+"""Release lags $D$ of the German blocks, taken in turn over the cuts:
+the ragged models' default (4 weeks, 28 days), the German truth delay
+(40 days) and the simulations' range around them."""
+
+GERMAN_PLACES = ("national", "states", "ages")
+"""The German blocks' places: Germany alone, or Germany with its states
+or its age groups, as the German tasks group them."""
+
+
+def german_counts(wide: pd.DataFrame, as_of: str) -> pd.DataFrame:
+    """Return the German hub triangle's counts as known on a date.
+
+    Each change of `value_0d` to `value_80d` is reported on its Meldedatum
+    plus its delay; `value_>80d` holds every change up to the file's date,
+    so it is left out. Changes reported after `as_of` are dropped and
+    negative changes are kept. States (all ages) and Germany's age groups
+    are kept, named as the German tasks name them
+    (`bdbvhubrenewal.data.germany.place_code`); Germany is their sum.
+
+    Parameters
+    ----------
+    wide : pandas.DataFrame
+        The hub's `COVID-19_hospitalizations.csv`.
+    as_of : str
+        The last report date, ISO format.
+
+    Returns
+    -------
+    pandas.DataFrame
+        `location`, `reference_date`, `report_date` and `count`, as
+        `training_block` reads.
+    """
+    from bdbvhubrenewal.data import germany
+
+    keep = (
+        (wide["age_group"] == germany.ALL_AGES)
+        & (wide["location"] != germany.GERMANY)
+    ) | (
+        (wide["location"] == germany.GERMANY)
+        & (wide["age_group"] != germany.ALL_AGES)
+    )
+    wide = wide.loc[keep]
+    changes = [f"value_{d}d" for d in range(81)]
+    long = wide.melt(
+        id_vars=["date", "location", "age_group"],
+        value_vars=changes,
+        var_name="delay",
+        value_name="count",
+    ).dropna(subset=["count"])
+    delay = long["delay"].str.extract(r"(\d+)")[0].astype(int)
+    report = pd.to_datetime(long["date"]) + pd.to_timedelta(delay, unit="D")
+    out = pd.DataFrame(
+        {
+            "location": [
+                germany.place_code(loc, age)
+                for loc, age in zip(
+                    long["location"], long["age_group"], strict=True
+                )
+            ],
+            "reference_date": long["date"].astype(str),
+            "report_date": report.dt.date.astype(str),
+            "count": long["count"].astype("int64"),
+        }
+    )
+    out = out.loc[out["report_date"] <= as_of]
+    return out.sort_values(
+        ["location", "reference_date", "report_date"]
+    ).reset_index(drop=True)
+
+
+def _moved(dates: pd.Series, days: int) -> pd.Series:
+    """Return ISO dates moved `days` days later."""
+    return (pd.to_datetime(dates) + pd.Timedelta(days=days)).dt.date.astype(
+        str
+    )
+
+
+def german_blocks(
+    counts: pd.DataFrame,
+    cuts: list[str],
+    truth_until: str,
+    lags: dict[str, tuple[int, ...]] = GERMAN_LAGS,
+    sources: tuple[str, ...] = ("weekly", "daily"),
+) -> list[dict]:
+    """Return training blocks of the German data at nowcast dates.
+
+    Each cut is a German nowcast date laid out as the German tasks lay it
+    out (`bdbvhubrenewal.data.germany.nowcast_tasks`): every date moves to
+    the next Saturday, every report date up to the cut is a release, and
+    Germany is the country. Each source and each of `GERMAN_PLACES` gives
+    a block by `training_block`, at a lag taken in turn from `lags`, with
+    the counts in `counts` past the cut as the truth ahead.
+
+    Parameters
+    ----------
+    counts : pandas.DataFrame
+        As `german_counts`. The truth is each count at its latest report.
+    cuts : list of str
+        Nowcast dates, ISO format.
+    truth_until : str
+        The last Meldedatum a block's truth may hold.
+    lags : dict
+        Release lags of each source.
+    sources : tuple of str
+        `"weekly"` and `"daily"`.
+
+    Returns
+    -------
+    list of dict
+        Padded blocks with `levels`, `mix` (`"germany"`), `source`, `cut`,
+        `lag`, `places` and `truth_end`, the last Meldedatum of the truth.
+
+    Raises
+    ------
+    ValueError
+        If a cut's horizon ends after `truth_until`.
+    """
+    states = sorted(p for p in counts["location"].unique() if "-A" not in p)
+    ages = sorted(p for p in counts["location"].unique() if "-A" in p)
+    leaves = {"national": states, "states": states, "ages": ages}
+    out = []
+    for i, cut in enumerate(cuts):
+        shift = (epiweek_end(cut) - dt.date.fromisoformat(cut)).days
+        end = dt.date.fromisoformat(cut) + dt.timedelta(weeks=AHEAD_WEEKS)
+        if end.isoformat() > truth_until:
+            raise ValueError(
+                f"cut {cut} needs truth to {end}, past the truth date "
+                f"{truth_until}"
+            )
+        moved = counts.assign(
+            reference_date=_moved(counts["reference_date"], shift),
+            report_date=_moved(counts["report_date"], shift),
+        )
+        last = (dt.date.fromisoformat(cut) + dt.timedelta(shift)).isoformat()
+        cutoffs = sorted(
+            d for d in moved["report_date"].unique() if d <= last
+        )
+        for source in sources:
+            for j, which in enumerate(GERMAN_PLACES):
+                lag = lags[source][(i + j) % len(lags[source])]
+                own = moved.loc[moved["location"].isin(leaves[which])]
+                places = (NATIONAL,)
+                if which != "national":
+                    places = (NATIONAL, *leaves[which])
+                block = training_block(
+                    own, source, places, cutoffs, max_lag=lag
+                )
+                if block is None or block["start"] < 2:
+                    continue
+                padded = _pad(block, CONTEXT)
+                padded["levels"] = target_levels(places)
+                padded["mix"] = "germany"
+                padded["source"] = source
+                padded["cut"] = cut
+                padded["lag"] = lag
+                padded["places"] = which
+                padded["truth_end"] = end.isoformat()
+                out.append(padded)
+    return out

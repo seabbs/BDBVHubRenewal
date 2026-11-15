@@ -155,7 +155,7 @@ def test_german_blocks_see_what_the_ragged_model_sees(
     path = tmp_path / "triangle.csv"
     wide.to_csv(path, index=False)
     # A Wednesday, so dates move three days to a Saturday.
-    day = "2021-08-25"
+    day = "2021-07-28"
     task = germany.nowcast_tasks(
         germany.hub_triangle(path), day, n_samples=2, seed=1
     )[task_index]
