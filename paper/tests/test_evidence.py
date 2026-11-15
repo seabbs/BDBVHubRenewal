@@ -201,3 +201,20 @@ def test_lag_numbers_pair_each_model_with_its_longer_horizon() -> None:
     assert out["bdbv"] == {
         "fm_chronos_weekly_ragged": {"capped": 1.3, "longer": 3.2}
     }
+
+
+def test_checkpoint_figure_has_a_panel_per_study_and_level() -> None:
+    from paperpipe.evidence import checkpoint_figure
+
+    rows = pd.DataFrame(
+        {
+            "study": ["ebola"] * 3 + ["germany"] * 3,
+            "level": "national",
+            "model": "fm_chronos_daily_ragged",
+            "outbreaks": [0, 1000, 2000] * 2,
+            "rel_wis": [2.0, 1.5, 1.2] * 2,
+        }
+    )
+    fig = checkpoint_figure(rows)
+    titles = [ax.get_title() for ax in fig.axes if ax.get_visible()]
+    assert titles == ["ebola, national", "germany, national"]

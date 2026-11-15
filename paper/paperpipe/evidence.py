@@ -35,6 +35,7 @@ __all__ = [
     "EVIDENCE",
     "aggregation_numbers",
     "aggregation_table",
+    "checkpoint_figure",
     "copula_table",
     "cost_table",
     "diseases_table",
@@ -272,6 +273,46 @@ def lag_numbers(
     return {"germany": de, "bdbv": bdbv}
 
 
+def checkpoint_figure(scores: pd.DataFrame) -> Figure:
+    """Plot each model's relative WIS against the fine-tune's outbreaks.
+
+    One panel per study and level, one line per model, on a log axis of
+    outbreaks with the zero-shot model at 0 drawn at the left edge.
+    `scores` has one row per study, level, model and checkpoint, with
+    `outbreaks` and `rel_wis` against `randomwalknowcast`.
+    """
+    sc = scores.loc[scores["model"] != "randomwalknowcast"]
+    panels = list(sc.groupby(["study", "level"], sort=False).groups)
+    ncol = min(3, len(panels))
+    nrow = int(np.ceil(len(panels) / ncol))
+    fig, axes = plt.subplots(
+        nrow,
+        ncol,
+        figsize=(3.6 * ncol, 2.8 * nrow),
+        layout="constrained",
+        squeeze=False,
+    )
+    axes = axes.ravel()
+    for ax, (study, level) in zip(axes, panels, strict=False):
+        one = sc.loc[(sc["study"] == study) & (sc["level"] == level)]
+        for model, g in one.groupby("model"):
+            g = g.sort_values("outbreaks")
+            # Zero-shot sits at half the first checkpoint on the log axis.
+            first = g.loc[g["outbreaks"] > 0, "outbreaks"].min()
+            x = g["outbreaks"].where(g["outbreaks"] > 0, first / 2)
+            ax.plot(x, g["rel_wis"], marker="o", ms=3, label=model)
+        ax.set_xscale("log")
+        ax.axhline(1, color="#888888", ls="--", lw=1)
+        ax.set_title(f"{study}, {level}", fontsize=9)
+        ax.set_xlabel("Fine-tuning outbreaks (zero-shot at left)")
+        ax.set_ylabel("Relative WIS")
+    for ax in axes[len(panels) :]:
+        ax.set_visible(False)
+    handles, labels = axes[0].get_legend_handles_labels()
+    fig.legend(handles, labels, loc="outside lower center", ncol=len(labels))
+    return fig
+
+
 def heldout_figure(curve: pd.DataFrame) -> Figure:
     """Plot held-out loss against the outbreaks seen.
 
@@ -393,6 +434,7 @@ EVIDENCE: Final = {
     "sim_summaries": "fm-finetune3's per-outbreak r3 pilot summaries",
     "sim_realism": "fm-finetune3's data reference values",
     "sim_diseases": "fm-finetune3's published disease values",
+    "checkpoint_scores": "germany-chronos2's scores of each r3 checkpoint",
     "lag_germany": "germany-chronos2's German lag-horizon scores",
     "lag_bdbv_before": "the BDBV scores with the 4-week lag horizon",
     "lag_bdbv_after": "the BDBV scores with lags to the truth delay",
@@ -498,6 +540,12 @@ def write_evidence(
         "sim-diseases",
         None if dis is None else diseases_table(dis),
         ["sim_diseases"],
+    )
+    ckpt = data["checkpoint_scores"]
+    figure(
+        "checkpoint-curve",
+        None if ckpt is None else checkpoint_figure(ckpt),
+        ["checkpoint_scores"],
     )
     curve = data["finetune_heldout"]
     figure(

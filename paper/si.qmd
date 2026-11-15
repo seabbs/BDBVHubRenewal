@@ -76,6 +76,8 @@ The simulated outbreaks' ranges against published values for several diseases, t
 
 ![Held-out loss of the fine-tune against the number of simulated outbreaks it has seen.](build/figures/si/finetune-heldout.png){#fig-finetune-heldout}
 
+![WIS relative to `randomwalknowcast` of the ragged Chronos-2 models against the number of simulated outbreaks each r3 checkpoint was fine-tuned on, with the zero-shot model at the left, on the case studies by level.](build/figures/si/checkpoint-curve.png){#fig-checkpoint-curve}
+
 {{< include build/tables/si/heldout-set.md >}}
 
 ### Correlated trajectories
