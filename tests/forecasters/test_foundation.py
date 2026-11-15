@@ -142,9 +142,10 @@ def test_registered_as_fitted_models() -> None:
 def test_ragged_lags_stop_below_the_truth_delay(
     source: str, steps: int, task: ForecastTask
 ) -> None:
-    # The lag series stop at 28 days or 4 weeks, short of the 35-day truth
-    # delay. Zone releases began on 2026-10-09, so at 5 weeks no lag 0 to
-    # 2 value of a zone would fall in the context.
+    # The lag series stop at 28 days or 4 weeks, short of the truth delay,
+    # because the zones' release histories are short: with longer lags no
+    # early lag of a zone falls in the context, and Chronos-2 reads partial
+    # counts as levels.
     store: list = []
     model = dataclasses.replace(
         get_model(f"fm_chronos_{source}_ragged"), sample=_recording(store)
