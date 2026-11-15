@@ -65,7 +65,7 @@ Settings, data paths and the held-out sets are in [`workflow/config.yaml`](workf
   The `paper` target runs only when the Pages workflow is dispatched with `paper_target: paper`.
 - No held-out data or results are committed.
   `results/` and `build/` are ignored.
-  See also [`si/heldout-set.md`](si/heldout-set.md).
+  The SI note on the held-out set is generated with the grid tables ([`papertables/synthetic_grid.py`](papertables/synthetic_grid.py)).
 
 </details>
 
