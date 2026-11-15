@@ -118,6 +118,10 @@ evidence:
   checkpoint_scores:
     ref: 9337dc8d18de01b04d259fc0658fefb9c1db0e68
     path: evidence/checkpoint-scores.csv
+  # The scale-floor test (fm-finetune3).
+  scale_floor:
+    ref: 500fe77caed9fdf846cfac9270b0be4179e742ee
+    path: results/finetune/scale-floor.csv
   # The lag-horizon test of the ragged layout (germany-chronos2).
   lag_germany:
     ref: e4f4d7a49773a3050a9529df5c70d7cc8504dafc

@@ -45,6 +45,7 @@ __all__ = [
     "realism_figure",
     "realism_numbers",
     "rho_medians",
+    "scale_floor_numbers",
     "waiting",
     "write_evidence",
 ]
@@ -364,6 +365,38 @@ def checkpoint_figure(scores: pd.DataFrame) -> Figure:
     return fig
 
 
+def scale_floor_numbers(rows: pd.DataFrame) -> dict:
+    """Return the scale-floor test without and with the floor.
+
+    Held-out simulation rows give, by model and series size (the first
+    word of `size`), the median loss and the percentage of 99% quantiles
+    over 100 times the truth; BDBV rows give relative WIS by level,
+    source (daily or weekly) and model. Each value is keyed `none` (no
+    floor) or `floor`.
+    """
+    arm = {0: "none", 1: "floor"}
+    sims = rows.loc[rows["source"].isna()]
+    out: dict = {"sims": {}, "bdbv": {}}
+    for r in sims.itertuples():
+        size = str(r.size).split()[0]
+        node = out["sims"].setdefault(r.model, {}).setdefault(size, {})
+        node.setdefault("median_loss", {})[arm[r.floor]] = round(
+            float(r.median_loss), 1
+        )
+        node.setdefault("q99_over_100x", {})[arm[r.floor]] = round(
+            100 * float(r.share_q99_over_100x)
+        )
+    for r in rows.loc[rows["source"].notna()].itertuples():
+        node = (
+            out["bdbv"]
+            .setdefault(r.size, {})
+            .setdefault(r.source, {})
+            .setdefault(r.model, {})
+        )
+        node[arm[r.floor]] = round(float(r.relative_wis), 2)
+    return out
+
+
 def heldout_figure(curve: pd.DataFrame) -> Figure:
     """Plot held-out loss against the outbreaks seen.
 
@@ -486,6 +519,7 @@ EVIDENCE: Final = {
     "sim_realism": "fm-finetune3's data reference values",
     "sim_diseases": "fm-finetune3's published disease values",
     "checkpoint_scores": "germany-chronos2's scores of each r3 checkpoint",
+    "scale_floor": "fm-finetune3's scale-floor test",
     "lag_germany": "germany-chronos2's German lag-horizon scores",
     "lag_bdbv_before": "the BDBV scores with the 4-week lag horizon",
     "lag_bdbv_after": "the BDBV scores with lags to the truth delay",
@@ -629,6 +663,11 @@ def write_evidence(
                     data["lag_bdbv_before"],
                     data["lag_bdbv_after"],
                 )
+            ),
+            "scale_floor": (
+                None
+                if data["scale_floor"] is None
+                else scale_floor_numbers(data["scale_floor"])
             ),
             "checkpoints": (None if ckpt is None else checkpoint_numbers(ckpt)),
             "aggregation": (None if agg is None else aggregation_numbers(agg)),
