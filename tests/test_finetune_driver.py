@@ -240,3 +240,45 @@ def test_second_trainer_failure_alerts_the_mailbox(tmp_path):
     assert before.strip() == ""
     assert "ALERT: trainer failed 2 times" in after
     assert after.count("ALERT") == 2  # one mailbox line, and STATUS
+
+
+def _simulator(tmp_path: Path) -> str:
+    import hashlib
+
+    (tmp_path / "scripts").mkdir()
+    (tmp_path / "scripts" / "finetune_simulate.R").write_text("new\n")
+    return hashlib.sha256(b"new\n").hexdigest()
+
+
+def test_stale_remote_simulator_is_replaced_before_batches(tmp_path):
+    sha = _simulator(tmp_path)
+    out = run(
+        tmp_path,
+        # The remote holds an old simulator until the copy lands.
+        "copied=0; "
+        "remote() { case $1 in sha256sum*) "
+        f"(( copied )) && echo '{sha}  f' || echo 'old  f';; "
+        '*) echo "$1" >> calls;; esac; }; '
+        "rsync() { copied=1; echo copied >> calls; }; "
+        "remote_code && echo current; cat calls",
+    )
+    # Old batches stop before the copy, and the copy is checked.
+    assert out.startswith("current")
+    assert out.index("pkill") < out.index("copied")
+
+
+def test_remote_simulator_that_stays_stale_blocks_batches(tmp_path):
+    _simulator(tmp_path)
+    out = run(
+        tmp_path,
+        "remote() { case $1 in sha256sum*) echo 'old  f';; esac; }; "
+        "rsync() { :; }; "
+        "remote_scheduler() { echo started; }; "
+        "remote_code || echo stale; "
+        "remote() { case $1 in sha256sum*) echo 'old  f';; "
+        "*df*) echo 100G;; esac; }; "
+        "remote_tried=0; check_remote; cat output/finetune/driver.log",
+    )
+    assert "stale" in out
+    assert "started" not in out
+    assert "simulator" in out

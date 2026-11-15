@@ -156,6 +156,25 @@ seeds() {
 
 remote() { ssh -o ConnectTimeout=20 -o BatchMode=yes "$REMOTE" "$@"; }
 
+remote_code() {
+  # Make the remote run this commit's simulator: if its sha256 differs,
+  # stop the remote's scheduler and batches (their outbreaks would be of
+  # another simulator), copy it across and check it again.
+  local want
+  want=$(shasum -a 256 scripts/finetune_simulate.R | cut -d' ' -f1)
+  [ "$(remote "sha256sum $REMOTE_DIR/scripts/finetune_simulate.R" 2> /dev/null | cut -d' ' -f1)" = "$want" ] \
+    && return 0
+  remote "pkill -f '[f]inetune_remote.sh'; pkill -f '[f]inetune_simulate.R --args'" > /dev/null 2>&1
+  rsync -a -e "ssh -o ConnectTimeout=20 -o BatchMode=yes" \
+    scripts/finetune_simulate.R "$REMOTE:$REMOTE_DIR/scripts/"
+  if [ "$(remote "sha256sum $REMOTE_DIR/scripts/finetune_simulate.R" 2> /dev/null | cut -d' ' -f1)" = "$want" ]; then
+    log "copied the simulator to $REMOTE, stopping its batches of the old one"
+    return 0
+  fi
+  log "ERROR: $REMOTE's simulator does not match this one; no remote batches"
+  return 1
+}
+
 remote_scheduler() {
   # Start the remote scheduler unless it runs. It runs at most REMOTE_SLOTS simulations, each
   # limited to REMOTE_MEM_KB of memory, and skips seeds already done or
@@ -166,9 +185,6 @@ remote_scheduler() {
   local list
   list=$(seeds | tr '\n' ' ')
   [ -z "$list" ] && return 0
-  # The remote runs this commit's simulator.
-  rsync -a -e "ssh -o ConnectTimeout=20 -o BatchMode=yes" \
-    scripts/finetune_simulate.R "$REMOTE:$REMOTE_DIR/scripts/" || return 1
   remote "cat > $REMOTE_DIR/output/finetune/finetune_remote.sh" <<EOF || return 1
 #!/usr/bin/env bash
 cd "$REMOTE_DIR"
@@ -229,6 +245,7 @@ check_remote() {
     remote "cd $REMOTE_DIR && if [ \"\$(cat $SIM_REMOTE/grid 2> /dev/null)\" != $GRID ]; then pkill -f '[f]inetune_remote.sh'; pkill -f '[f]inetune_simulate.R --args'; [ -d $SIM_REMOTE ] && mv $SIM_REMOTE $SIM_REMOTE-old-\$(date +%s); mkdir -p $SIM_REMOTE/logs; echo $GRID > $SIM_REMOTE/grid; echo moved; fi" 2> /dev/null \
       | grep -q moved && log "moved $REMOTE's batches of another grid aside"
     [ -e "$PAUSE" ] && return 0
+    remote_code || return 0
     remote "test -e $REMOTE_DIR/$SIM_REMOTE/remote-done" 2> /dev/null \
       || remote_scheduler || log "could not start the remote scheduler"
     return 0
