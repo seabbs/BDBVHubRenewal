@@ -132,3 +132,11 @@ def test_a_sample_model_gives_the_quantiles_of_its_draws(
     pd.testing.assert_frame_equal(
         out.reset_index(drop=True), want[list(out.columns)]
     )
+
+
+@needs_torch
+@pytest.mark.usefixtures("fake_chronos")
+def test_an_unavailable_quantile_model_has_no_rows(task: ForecastTask) -> None:
+    no_history = dataclasses.replace(task, target_history=None)
+    model = get_model("fm_chronos_weekly_ragged")
+    assert forecast_quantiles(model, no_history, LEVELS).empty

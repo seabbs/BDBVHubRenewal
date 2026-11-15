@@ -14,8 +14,9 @@ held out for the paper (`nowcast_dates`).
 
 `germany_forecasts` runs our models on the tasks of each nowcast date
 (`bdbvhubrenewal.data.germany.nowcast_tasks`), for the sums ending 0, 7,
-14, 21 and 28 days back (`HORIZONS`), and keeps the quantiles of their
-samples at `QUANTILE_LEVELS` (`hub_quantiles`).
+14, 21 and 28 days back (`HORIZONS`), and keeps their quantiles at
+`QUANTILE_LEVELS`: a model's own where it gives them, else those of its
+samples (`bdbvhubrenewal.evaluation.marginals.forecast_quantiles`).
 `team_forecasts` takes the hub teams' submitted quantiles at the same
 horizons.
 `with_truth` adds each sum's truth, its count in the data $D$ days after
@@ -51,11 +52,10 @@ from bdbvhubrenewal.data.germany import (
     level,
     nowcast_tasks,
 )
-from bdbvhubrenewal.evaluation.backtest import run_forecasts
+from bdbvhubrenewal.evaluation.marginals import forecast_quantiles
 from bdbvhubrenewal.evaluation.nowcast import rolling_truth
 from bdbvhubrenewal.evaluation.scoring import relative_skill, score_quantiles
 from bdbvhubrenewal.forecasters import get_model
-from bdbvhubrenewal.reporting.hubtables import hub_quantiles
 
 __all__ = [
     "PAPER_COLUMNS",
@@ -347,40 +347,47 @@ def germany_forecasts(
     dates : sequence of str
         Nowcast dates.
     n_samples, seed : int
-        Samples per forecast, and the seed.
+        Samples per forecast where the quantiles come from samples, and
+        their seed, the same for every model.
 
     Returns
     -------
     pandas.DataFrame
         One row per quantile: `model`, `origin` (the nowcast date),
         `location` (the place), `target_end_date`, `horizon` (days),
-        `quantile` and `value`, the samples' quantiles at
-        `QUANTILE_LEVELS` (`hub_quantiles`).
+        `quantile` and `value`, at `QUANTILE_LEVELS`
+        (`bdbvhubrenewal.evaluation.marginals.forecast_quantiles`).
     """
     built = [get_model(m) for m in models]
     keys = ["model", "origin", "location", "target_end_date", "horizon"]
     frames = []
     for date in dates:
         for task in nowcast_tasks(triangle, date, n_samples, seed):
-            samples = run_forecasts(built, [task])
-            if samples.empty:
-                continue
-            drawn = hub_forecasts(samples, task, date).rename(
-                columns={
-                    "forecast_date": "origin",
-                    "sample": "output_type_id",
-                }
-            )
-            table = drawn.assign(output_type="sample")[
-                [*keys, "output_type", "output_type_id", "value"]
-            ]
-            frames.append(hub_quantiles(table, QUANTILE_LEVELS))
+            for model in built:
+                at = forecast_quantiles(
+                    model, task, QUANTILE_LEVELS, n_samples, seed
+                )
+                if at.empty:
+                    continue
+                # `hub_forecasts` moves rows to the hub's dates and places,
+                # carrying each row's level where it carries a sample.
+                moved = hub_forecasts(
+                    at.rename(columns={"quantile": "sample"}), task, date
+                )
+                frames.append(
+                    moved.rename(
+                        columns={
+                            "forecast_date": "origin",
+                            "sample": "quantile",
+                        }
+                    )
+                )
     if not frames:
         return pd.DataFrame(columns=[*keys, "quantile", "value"])
     out = pd.concat(frames, ignore_index=True)
-    return out.drop(columns="output_type").rename(
-        columns={"output_type_id": "quantile"}
-    )[[*keys, "quantile", "value"]]
+    return out.sort_values([*keys, "quantile"], kind="stable")[
+        [*keys, "quantile", "value"]
+    ].reset_index(drop=True)
 
 
 def with_truth(

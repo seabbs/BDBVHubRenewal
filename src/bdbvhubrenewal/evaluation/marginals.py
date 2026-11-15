@@ -15,6 +15,7 @@ numbers (common random numbers).
 from __future__ import annotations
 
 import dataclasses
+import logging
 from collections.abc import Sequence
 from typing import Any, Final
 
@@ -22,12 +23,18 @@ import numpy as np
 import pandas as pd
 
 from bdbvhubrenewal.evaluation.backtest import run_forecasts
-from bdbvhubrenewal.forecasters.base import ForecastModel, ForecastTask
+from bdbvhubrenewal.forecasters.base import (
+    ForecastModel,
+    ForecastTask,
+    ModelUnavailableError,
+)
 
 __all__ = ["COMMON_STREAM", "N_DRAWS", "forecast_quantiles"]
 
 N_DRAWS: Final = 1000
 """Draws per forecast where the quantiles come from draws."""
+
+log = logging.getLogger(__name__)
 
 COMMON_STREAM: Final = "common"
 """The task's random stream that models with a `stream` share."""
@@ -95,7 +102,14 @@ def _own_quantiles(
     quantiles = getattr(model, "quantiles", None)
     if not callable(quantiles):
         return None
-    own: pd.DataFrame | None = quantiles(task, levels)
+    try:
+        own: pd.DataFrame | None = quantiles(task, levels)
+    except ModelUnavailableError as err:
+        # As `run_forecasts`: an unavailable model has no rows.
+        log.warning("%s skipped %s: %s", model.name, task.vintage, err)
+        own = pd.DataFrame(
+            columns=["location", "target_end_date", "quantile", "value"]
+        )
     if own is None:
         return None
     # `run_forecasts`'s columns, with the quantile in the sample's place.
