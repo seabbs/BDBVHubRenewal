@@ -162,6 +162,29 @@ def valid_step_loss(model) -> None:
     model._compute_loss = types.MethodType(compute_loss, model)
 
 
+def lora_targets(modules: str) -> list[str] | str:
+    """Return the modules LoRA adapts.
+
+    "all" is Chronos-2's own choice: q, k, v and o of time and group
+    attention, and the output layer. "time" leaves group attention
+    frozen, so the adapter cannot learn how series attend to each other.
+    """
+    if modules == "all":
+        return [
+            "self_attention.q",
+            "self_attention.v",
+            "self_attention.k",
+            "self_attention.o",
+            "output_patch_embedding.output_layer",
+        ]
+    if modules == "time":
+        return (
+            r".*layer\.0\.self_attention\.[qkvo]"
+            r"|.*output_patch_embedding\.output_layer"
+        )
+    raise ValueError(f"unknown LoRA modules {modules!r}")
+
+
 def learning_rate(step: int, base: float, steps: int) -> float:
     """Return the learning rate of step `step` (from 0).
 
@@ -736,6 +759,10 @@ def main() -> None:
     parser.add_argument("--lr-steps", type=int, default=0)
     # Least scale, in counts, a series is divided by; 0 keeps Chronos-2's.
     parser.add_argument("--scale-floor", type=float, default=0.0)
+    # Modules LoRA adapts: "all", or "time" to freeze group attention.
+    parser.add_argument(
+        "--lora-modules", default="all", choices=["all", "time"]
+    )
     # Average the loss over valid horizon steps and target rows only.
     parser.add_argument("--valid-step-loss", action="store_true")
     # Cut every block at the release lags the `_ft` models forecast with.
@@ -837,13 +864,7 @@ def main() -> None:
     lora = LoraConfig(
         r=8,
         lora_alpha=16,
-        target_modules=[
-            "self_attention.q",
-            "self_attention.v",
-            "self_attention.k",
-            "self_attention.o",
-            "output_patch_embedding.output_layer",
-        ],
+        target_modules=lora_targets(args.lora_modules),
     )
     set_scale_floor(pipeline.model, args.scale_floor)
     if args.valid_step_loss:
@@ -875,7 +896,15 @@ def main() -> None:
             f"{k} of each simulation's draws x {ft.CUTS} cut-off slots x "
             "2 sources, seeded by the simulation"
         ),
-        "lora": {"r": 8, "alpha": 16},
+        "lora": {
+            "r": 8,
+            "alpha": 16,
+            **(
+                {"modules": args.lora_modules}
+                if args.lora_modules != "all"
+                else {}
+            ),
+        },
         "learning_rate": args.learning_rate,
         **({"lr_steps": args.lr_steps} if args.lr_steps else {}),
         **({"scale_floor": args.scale_floor} if args.scale_floor else {}),
