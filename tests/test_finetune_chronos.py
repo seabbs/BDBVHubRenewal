@@ -650,3 +650,24 @@ def test_lora_targets_freeze_group_attention_when_asked():
         "encoder.block.11.layer.0.self_attention.o",
         "output_patch_embedding.output_layer",
     ]
+
+
+def test_step_length_covariate_adds_one_known_row_of_days_per_step(
+    tmp_path, monkeypatch
+):
+    import finetune_chronos
+    from finetune_stream import cut
+
+    ids = _sim_dir(tmp_path)
+    plain = [b for _, b in cut(tmp_path, ids, 1, 32)]
+    monkeypatch.setattr(finetune_chronos, "STEP_COVARIATE", True)
+    marked = [b for _, b in cut(tmp_path, ids, 1, 32)]
+    assert len(plain) == len(marked)
+    for a, b in zip(plain, marked, strict=True):
+        assert b["n_covariates"] == a["n_covariates"] + 1
+        assert b["n_future_covariates"] == a["n_future_covariates"] + 1
+        row = b["context"][-1]
+        days = set(row[~np.isnan(row)].tolist())
+        # Weekly blocks have D of 7 or less, daily blocks more.
+        assert days == ({7.0} if _d(a) <= 7 else {1.0})
+        assert np.array_equal(a["context"], b["context"][:-1], equal_nan=True)
