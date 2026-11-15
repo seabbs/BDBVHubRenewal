@@ -264,7 +264,7 @@ def cut(
         candidates = [
             (outbreak, source, j)
             for outbreak in sorted(draws)
-            for source in ("weekly", "daily")
+            for source in ft.SOURCES
             for j in range(ft.CUTS)
         ]
         rng = np.random.default_rng([seed, zlib.crc32(simulation.encode())])
@@ -289,9 +289,13 @@ def cut(
     return out
 
 
-def init_worker(max_series: int) -> None:
-    """Set a cutting worker's largest block to the trainer's."""
-    ft.MAX_SERIES = max_series
+def init_worker(
+    max_series: int,
+    lags: dict[str, tuple[int, ...]],
+    sources: tuple[str, ...],
+) -> None:
+    """Give a cutting worker the trainer's block settings."""
+    ft.MAX_SERIES, ft.MAX_LAGS, ft.SOURCES = max_series, lags, sources
 
 
 def _cut_part(
@@ -671,6 +675,10 @@ def main() -> None:
     parser.add_argument("--lr-steps", type=int, default=0)
     # Least scale, in counts, a series is divided by; 0 keeps Chronos-2's.
     parser.add_argument("--scale-floor", type=float, default=0.0)
+    # Cut every block at the release lags the `_ft` models forecast with.
+    parser.add_argument("--deployed-lags", action="store_true")
+    # Sources to train on: one of them trains an adapter for it alone.
+    parser.add_argument("--sources", nargs="+", default=list(ft.SOURCES))
     # Real validation blocks (scripts/finetune_real_validation.py), scored
     # at each checkpoint to choose among them; not trained on.
     parser.add_argument("--real-validation", type=Path)
@@ -689,6 +697,9 @@ def main() -> None:
     # Processes cutting blocks a chunk ahead; they do not change the blocks.
     parser.add_argument("--cut-workers", type=int, default=3)
     args = parser.parse_args()
+    if args.deployed_lags:
+        ft.MAX_LAGS = ft.DEPLOYED_LAGS
+    ft.SOURCES = tuple(args.sources)
     out, sim_dir = args.out, args.sim_dir
     # The commit this trainer runs, read once: the worktree may move on.
     commit = subprocess.run(
@@ -738,7 +749,7 @@ def main() -> None:
         args.cut_workers,
         mp_context=multiprocessing.get_context("spawn"),
         initializer=init_worker,
-        initargs=(ft.MAX_SERIES,),
+        initargs=(ft.MAX_SERIES, ft.MAX_LAGS, ft.SOURCES),
     )
     held_pairs, empty = cut_in_workers(
         pool, sim_dir, held, args.seed, k, args.cut_workers
@@ -803,6 +814,11 @@ def main() -> None:
         "learning_rate": args.learning_rate,
         **({"lr_steps": args.lr_steps} if args.lr_steps else {}),
         **({"scale_floor": args.scale_floor} if args.scale_floor else {}),
+        **(
+            {"sources": list(ft.SOURCES)}
+            if ft.SOURCES != ("weekly", "daily")
+            else {}
+        ),
         "batch_size": args.batch_size,
         "context": ft.CONTEXT,
         "horizon": ft.HORIZON,

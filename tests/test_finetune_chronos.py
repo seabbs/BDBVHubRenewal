@@ -412,7 +412,11 @@ def test_blocks_cut_by_a_process_pool_match(tmp_path):
         2,
         mp_context=multiprocessing.get_context("spawn"),
         initializer=init_worker,
-        initargs=(finetune_chronos.MAX_SERIES,),
+        initargs=(
+            finetune_chronos.MAX_SERIES,
+            finetune_chronos.MAX_LAGS,
+            finetune_chronos.SOURCES,
+        ),
     ) as pool:
         pairs, _ = cut_in_workers(pool, tmp_path, ids, 1, 6, parts=2)
     assert [o for o, _ in pairs] == [o for o, _ in here]

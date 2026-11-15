@@ -40,6 +40,13 @@ longest daily horizon is 6 + 28 + 49 days, in six patches of 16."""
 MAX_LAGS = {"weekly": tuple(range(2, 8)), "daily": tuple(range(14, 50))}
 """Release lags $D$ the blocks are drawn from."""
 
+DEPLOYED_LAGS = {source: (lag,) for source, lag in foundation.MAX_LAG.items()}
+"""The release lags the `_ft` models forecast with, to train on only."""
+
+SOURCES = ("weekly", "daily")
+"""Sources blocks are cut from; one of them trains an adapter for that
+source alone."""
+
 MEMORY_GB = 36.0
 """The GPU memory budget of a training step, in GB: the trainer's cap on
 MPS memory (0.85 of a 55.7 GB working set) less room for the model and
@@ -276,7 +283,7 @@ def outbreak_blocks(
         counts = counts.assign(location=counts["location"].map(nest))
         provinces = sorted(nest.values())
     out = []
-    for source in ("weekly", "daily"):
+    for source in SOURCES:
         for j in range(cuts):
             if picks is not None and (source, j) not in picks:
                 continue
