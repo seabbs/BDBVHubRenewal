@@ -159,7 +159,7 @@ def training_block(
     max_lag: int,
     ahead_weeks: int = AHEAD_WEEKS,
     totals: bool = False,
-) -> dict[str, Any]:
+) -> dict[str, Any] | None:
     """Return one training block, cut at the last of `cutoffs`.
 
     The block is the ragged layout's group of series at the cut-off, from
@@ -190,11 +190,14 @@ def training_block(
         Chronos-2's prepared input: `context` `[V, S + H]`, the targets
         first and then the lag series, `future_covariates` `[V, H]`,
         `n_targets`, `n_covariates` and `n_future_covariates`, and the
-        `start` $S$ and `horizon` $H$.
+        `start` $S$ and `horizon` $H$. None if no release up to the cut
+        has a row for any of `places`, as for strata with no cases.
     """
     cut = cutoffs[-1]
     end = epiweek_end(cut) + dt.timedelta(weeks=ahead_weeks)
     rows = releases(counts, source, cutoffs, totals)
+    if not rows["location"].isin(places).any():
+        return None
     tri = hub_triangle(rows, source, places, end.isoformat(), max_lag=max_lag)
     start = tri.n_context
     horizon = len(tri.times) - start
