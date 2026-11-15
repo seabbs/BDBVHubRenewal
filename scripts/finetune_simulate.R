@@ -261,7 +261,9 @@ draw_values <- function(design) {
   # Places with cases in a concentrated outbreak.
   active <- sample(1:min(4, design$n_places), 1)
   v <- list(
-    weeks = if (places_ages) sample(16:24, 1) else sample(16:32, 1),
+    # Long enough for contexts of BDBV's 40 weeks; places by ages, the
+    # largest in memory, stop at 28.
+    weeks = if (places_ages) sample(16:28, 1) else sample(16:44, 1),
     offset = sample(0:6, 1),
     # Places with no cases: concentrated outbreaks leave one to four
     # places active, so most series stay at zero.
