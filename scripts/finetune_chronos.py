@@ -337,6 +337,7 @@ def outbreak_blocks(
             padded = _pad(block, CONTEXT, HORIZON)
             padded["levels"] = target_levels(places)
             padded["mix"] = mix
+            padded["source"] = source
             out.append(padded)
     return out
 
@@ -351,6 +352,7 @@ def plan_batches(
     batch_size: int,
     rng: np.random.Generator,
     most: int | None = None,
+    groups: np.ndarray | None = None,
 ) -> list[list[int]]:
     """Return batches of block indices that use every block once.
 
@@ -359,7 +361,13 @@ def plan_batches(
     blocks pack tightly and a large block is a batch on its own. No batch
     of several blocks holds more than `most` series, the most the memory
     budget allows (`max_series`). The batches are then shuffled.
+
+    With `groups`, such as each block's aggregation, blocks are taken from
+    the groups in turn, whatever their size, so every batch holds each
+    group alike.
     """
+    if groups is not None:
+        return _balanced_batches(sizes, groups, batch_size, rng, most)
     filling: dict[int, list[int]] = {}
     held: dict[int, int] = {}
     batches = []
@@ -378,6 +386,41 @@ def plan_batches(
             batches.append(filling.pop(c))
             held[c] = 0
     batches.extend(b for b in filling.values() if b)
+    return [batches[j] for j in rng.permutation(len(batches))]
+
+
+def _balanced_batches(
+    sizes: np.ndarray,
+    groups: np.ndarray,
+    batch_size: int,
+    rng: np.random.Generator,
+    most: int | None,
+) -> list[list[int]]:
+    """Return batches taking blocks from each group in turn."""
+    queues = [
+        list(rng.permutation(np.flatnonzero(groups == g)))
+        for g in sorted(set(groups.tolist()))
+    ]
+    order = []
+    while any(queues):
+        for q in queues:
+            if q:
+                order.append(int(q.pop()))
+    batches: list[list[int]] = []
+    batch: list[int] = []
+    held = 0
+    for i in order:
+        size = int(sizes[i])
+        if batch and most is not None and held + size > most:
+            batches.append(batch)
+            batch, held = [], 0
+        batch.append(i)
+        held += size
+        if held >= batch_size:
+            batches.append(batch)
+            batch, held = [], 0
+    if batch:
+        batches.append(batch)
     return [batches[j] for j in rng.permutation(len(batches))]
 
 
@@ -448,5 +491,6 @@ def real_blocks(
         padded = _pad(block, CONTEXT, HORIZON)
         padded["levels"] = target_levels(places)
         padded["mix"] = "real"
+        padded["source"] = "weekly"
         out.append(padded)
     return out

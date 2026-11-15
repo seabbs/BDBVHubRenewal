@@ -765,6 +765,8 @@ def main() -> None:
     parser.add_argument(
         "--lora-modules", default="all", choices=["all", "time"]
     )
+    # Take each aggregation in turn when packing batches.
+    parser.add_argument("--balance-aggregations", action="store_true")
     # Give each block a known row of days per step.
     parser.add_argument("--step-covariate", action="store_true")
     # Average the loss over valid horizon steps and target rows only.
@@ -916,6 +918,11 @@ def main() -> None:
         **({"loss": "valid steps"} if args.valid_step_loss else {}),
         **({"step_covariate": True} if args.step_covariate else {}),
         **(
+            {"batches": "aggregations balanced"}
+            if args.balance_aggregations
+            else {}
+        ),
+        **(
             {"sources": list(ft.SOURCES)}
             if ft.SOURCES != ("weekly", "daily")
             else {}
@@ -1062,7 +1069,14 @@ def main() -> None:
         blocks = [b for _, b in pairs]
         sizes = np.array([int(b["context"].shape[0]) for b in blocks])
         rng = np.random.default_rng([args.seed, done])
-        plan = ft.plan_batches(sizes, args.batch_size, rng, ft.MAX_SERIES)
+        groups = (
+            np.array([b["source"] for b in blocks])
+            if args.balance_aggregations
+            else None
+        )
+        plan = ft.plan_batches(
+            sizes, args.batch_size, rng, ft.MAX_SERIES, groups=groups
+        )
         data = Chronos2Dataset(
             inputs=[tensors(b) for b in blocks],
             context_length=ft.CONTEXT,
