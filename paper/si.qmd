@@ -219,7 +219,7 @@ The share of evaluated outbreaks in each level of each grid factor, as each simu
 ::: {#fig-synthetic-si-nowcasts}
 ![](build/figures/si/synthetic-si-nowcasts.png)
 
-Held-out synthetic data: nowcasts of outbreaks drawn to cover the levels of the trajectory, delay form, observation model and strata, each titled by its cell, at origins drawn with the workflow's seed (dotted lines). Black is the rolling truth, grey the data as of each origin, and ribbons the 50% and 90% intervals of `randomwalknowcast` and Chronos-2 zero-shot and fine-tuned. {{< meta results.synthetic.label >}} {{< meta results.synthetic.note >}}
+Held-out synthetic data: nowcasts of outbreaks drawn to cover the levels of the trajectory, delay form, observation model and strata, one row per outbreak labelled by its cell, one column per model. Black is the rolling truth, grey dashed the data as of the origin, and blue the model's median with its 50% and 95% intervals. {{< meta results.synthetic.label >}} {{< meta results.synthetic.note >}}
 :::
 
 ::: {#fig-synthetic-si-factors}
@@ -263,7 +263,7 @@ Held-out synthetic data scores by location and stratum. {{< meta results.synthet
 ::: {#fig-germany-si-nowcasts}
 ![](build/figures/si/germany-si-nowcasts.png)
 
-German nowcast hub: nowcasts for each state and age group at origins drawn with the workflow's seed (dotted lines). Black is the rolling truth, grey the data as of each origin, and ribbons the 50% and 90% intervals of `randomwalknowcast`, Chronos-2 zero-shot and fine-tuned, and the hub ensemble. {{< meta results.germany.label >}} {{< meta results.germany.note >}}
+German nowcast hub: nowcasts for the largest states and age groups, one row per place at the last origin shown in the main text, one column per model. Black is the rolling truth, grey dashed the data as of the origin, and blue the model's median with its 50% and 95% intervals. {{< meta results.germany.label >}} {{< meta results.germany.note >}}
 :::
 
 ::: {#fig-germany-si-location-horizon}
@@ -301,7 +301,7 @@ German nowcast hub scores by location and stratum. {{< meta results.germany.labe
 ::: {#fig-ebola-si-nowcasts}
 ![](build/figures/si/ebola-si-nowcasts.png)
 
-Ebola hub submissions: nowcasts for each province at origins drawn with the workflow's seed (dotted lines). Black is the rolling truth, grey the data as of each origin, and ribbons the 50% and 90% intervals of `randomwalknowcast` and Chronos-2 zero-shot and fine-tuned. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
+Ebola: nowcasts for the largest provinces, one row per province at the last origin shown in the main text, one column per model. Black is the rolling truth, grey dashed the data as of the origin, and blue the model's median with its 50% and 95% intervals. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
 :::
 
 ::: {#fig-ebola-si-location-horizon}

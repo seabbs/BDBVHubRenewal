@@ -30,7 +30,6 @@ from paperfigs.periods import add_period
 from paperfigs.plots import (
     nowcast_panels,
     results_panel,
-    si_nowcasts,
     si_scores_by_factor,
     si_scores_by_finetune_size,
     si_scores_by_location_horizon,
@@ -115,6 +114,37 @@ def _national(study: str, forecasts: pd.DataFrame, nowcasts: Mapping) -> str:
     return str(forecasts.groupby("location")["value"].sum().idxmax())
 
 
+def _place_rows(
+    forecasts: pd.DataFrame,
+    places: list[tuple[str, str, str]],
+    origins: list[pd.Timestamp],
+    nowcasts: Mapping,
+) -> list[tuple[pd.Timestamp, str, str, str]]:
+    """Rows of the SI nowcast figure: the largest places, one origin each.
+
+    Each place takes the last of `origins` it has a forecast at, else its
+    own last origin. Places are ranked by their forecasts' mean and the
+    `si_places` largest kept, in their given order.
+    """
+    size = forecasts.groupby(["location", "stratum"])["value"].mean()
+    keep = sorted(places, key=lambda p: -float(size.get((p[0], p[1]), 0.0)))[
+        : int(nowcasts.get("si_places", 9))
+    ]
+    rows = []
+    for location, stratum, title in places:
+        if (location, stratum, title) not in keep:
+            continue
+        made = forecasts.loc[
+            (forecasts["location"] == location)
+            & (forecasts["stratum"] == stratum),
+            "origin_date",
+        ]
+        shown = [o for o in origins if (made == o).any()]
+        origin = shown[-1] if shown else made.max()
+        rows.append((origin, location, stratum, title))
+    return rows
+
+
 def _figures(
     study: str,
     forecasts: pd.DataFrame,
@@ -130,7 +160,16 @@ def _figures(
     models = place_models(
         forecasts["model"].unique(), nowcasts["models"][study]
     )
-    origins = pick_origins(forecasts, int(nowcasts["origins"]), seed)
+    # Origins every shown model forecast from, where they share any.
+    shown_fc = forecasts.loc[forecasts["model"].isin(models)]
+    by_model = shown_fc.groupby("model")["origin_date"].agg(set)
+    common = set.intersection(*by_model) if len(by_model) else set()
+    pool = (
+        shown_fc.loc[shown_fc["origin_date"].isin(common)]
+        if common
+        else shown_fc
+    )
+    origins = pick_origins(pool, int(nowcasts["origins"]), seed)
     shown = {"baseline": baseline, "nowcast": False}
     reference = REFERENCE if REFERENCE in set(scores["model"]) else baseline
     rel = (
@@ -139,10 +178,13 @@ def _figures(
         .to_dict()
     )
 
-    def panels(location: str) -> Figure:
-        return nowcast_panels(
-            forecasts, observations, truth, models, origins, location, rel
-        )
+    def by_origin(location: str, stratum: str = "all") -> Figure:
+        rows = [(o, location, stratum, f"origin {o:%Y-%m-%d}") for o in origins]
+        return nowcast_panels(forecasts, observations, truth, models, rows, rel)
+
+    def by_place(places: list[tuple[str, str, str]]) -> Figure:
+        rows = _place_rows(forecasts, places, origins, nowcasts)
+        return nowcast_panels(forecasts, observations, truth, models, rows, rel)
 
     if study == "synthetic":
         # Outbreaks are many, so scores break down by scenario factor.
@@ -153,7 +195,7 @@ def _figures(
             locations, nowcasts["factors"], int(nowcasts["outbreaks"]), seed
         )
         return {
-            "nowcasts": panels(panels_[0][0]),
+            "nowcasts": by_origin(panels_[0][0]),
             "results": results_panel(
                 drop_checkpoints(forecasts),
                 observations,
@@ -161,9 +203,7 @@ def _figures(
                 factors=factors,
                 **shown,
             ),
-            "si-nowcasts": si_nowcasts(
-                forecasts, observations, panels_, models, origins, truth
-            ),
+            "si-nowcasts": by_place(panels_),
             "si-factors": si_scores_by_factor(main, factors, baseline),
             "si-factors-log": si_scores_by_factor(
                 main, factors, baseline, col="rel_log_score"
@@ -173,7 +213,7 @@ def _figures(
         }
     national = _national(study, forecasts, nowcasts)
     return {
-        "nowcasts": panels(national),
+        "nowcasts": by_origin(national),
         "results": results_panel(
             forecasts,
             observations,
@@ -181,14 +221,7 @@ def _figures(
             split=split,
             **shown,
         ),
-        "si-nowcasts": si_nowcasts(
-            forecasts,
-            observations,
-            other_places(forecasts, national),
-            models,
-            origins,
-            truth,
-        ),
+        "si-nowcasts": by_place(other_places(forecasts, national)),
         "si-location-horizon": si_scores_by_location_horizon(
             scores, baseline, split=split
         ),
