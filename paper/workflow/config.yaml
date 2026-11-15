@@ -86,8 +86,10 @@ nowcasts:
   seed: 20261114
   origins: 3
   outbreaks: 6
-  # Places, the largest by count, in the SI nowcast figure.
-  si_places: 9
+  # The places of the SI nowcast figure, one per entry: the largest,
+  # median and smallest (with any cases) by recent count, and the most
+  # rising and most falling (`paperfigs.nowcasts.pick_places`).
+  place_rule: [largest, median, small, rising, falling]
   factors: [trajectory, delay_form, observation, strata]
   national: {germany: DE, ebola: CD}
   models:

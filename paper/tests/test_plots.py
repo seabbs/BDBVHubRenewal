@@ -298,3 +298,15 @@ def test_nowcast_panels_have_a_column_per_model_and_a_row_per_origin_or_place():
     assert fig.axes[0].get_ylabel().startswith("origin ")
     assert fig.axes[4].get_ylabel() == "DE, 80+"
     plt.close(fig)
+
+
+def test_place_dots_have_a_row_per_place() -> None:
+    from paperfigs.plots import si_place_dots
+
+    fc, _ = dummy_study("germany", seed=1, n_samples=5)
+    scores = score_forecasts(fc)
+    fig = si_place_dots(scores, ["randomwalknowcast", "hub_ensemble"])
+    ax = fig.axes[0]
+    places = {(loc, st) for loc, st in fc[["location", "stratum"]].to_numpy()}
+    assert len(ax.get_yticks()) == len(places)
+    plt.close(fig)

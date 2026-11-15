@@ -12,6 +12,7 @@ figures pick the same series and origins on every run.
 from __future__ import annotations
 
 from collections.abc import Sequence
+from typing import Final
 
 import numpy as np
 import pandas as pd
@@ -19,7 +20,17 @@ import pandas as pd
 from paperfigs.factors import factor_label
 from paperfigs.schema import DEFAULT_STRATUM
 
-__all__ = ["other_places", "pick_origins", "pick_outbreaks", "place_models"]
+__all__ = [
+    "PLACE_RULE",
+    "other_places",
+    "pick_origins",
+    "pick_outbreaks",
+    "pick_places",
+    "place_models",
+]
+
+PLACE_RULE: Final = ("largest", "median", "small", "rising", "falling")
+"""How the SI picks places to draw, one per entry, each a new place."""
 
 
 def place_models(models: Sequence[str], wanted: Sequence[str]) -> list[str]:
@@ -122,3 +133,75 @@ def pick_outbreaks(
         )
         for i in chosen
     ]
+
+
+def pick_places(
+    truth: pd.DataFrame,
+    places: Sequence[tuple[str, str, str]],
+    origin: pd.Timestamp,
+    rule: Sequence[str] = PLACE_RULE,
+    seed: int = 1,
+    weeks: int = 4,
+) -> list[tuple[str, str, str]]:
+    """Pick places by a rule: largest, median, small, rising, falling.
+
+    Each place's level is its mean truth over the `weeks` weeks before
+    `origin`, and its trend the log ratio of the last of those weeks to
+    the first. Each entry of `rule` picks a place not yet picked:
+    `largest`, `median` and `small` (the smallest with any cases) by
+    level, `rising` and `falling` by trend. Ties are broken in an order
+    drawn with `seed`.
+
+    Returns
+    -------
+    list of tuple of str
+        `(location, stratum, title)`, the title naming why it was picked.
+    """
+    start = pd.Timestamp(origin) - pd.Timedelta(weeks=weeks)
+    window = truth.loc[truth["target_date"].between(start, origin)].dropna(
+        subset=["truth"]
+    )
+    rows = []
+    for location, stratum, title in places:
+        one = window.loc[
+            (window["location"] == location) & (window["stratum"] == stratum)
+        ].sort_values("target_date")
+        if one.empty:
+            continue
+        first, last = one["truth"].iloc[0], one["truth"].iloc[-1]
+        rows.append(
+            {
+                "place": (location, stratum, title),
+                "level": float(one["truth"].mean()),
+                "trend": float(np.log((last + 1) / (first + 1))),
+            }
+        )
+    table = pd.DataFrame(rows)
+    if table.empty:
+        return []
+    rng = np.random.default_rng(seed)
+    table = table.iloc[rng.permutation(len(table))].reset_index(drop=True)
+    chosen: list[tuple[str, str, str]] = []
+    out = []
+    for reason in rule:
+        left = table.loc[~table["place"].isin(chosen)]
+        if left.empty:
+            break
+        if reason == "largest":
+            i = left["level"].idxmax()
+        elif reason == "small":
+            some = left.loc[left["level"] > 0]
+            i = (some if len(some) else left)["level"].idxmin()
+        elif reason == "median":
+            mid = left["level"].median()
+            i = (left["level"] - mid).abs().idxmin()
+        elif reason == "rising":
+            i = left["trend"].idxmax()
+        elif reason == "falling":
+            i = left["trend"].idxmin()
+        else:
+            raise ValueError(f"Unknown place rule {reason!r}.")
+        location, stratum, title = table["place"][i]
+        chosen.append((location, stratum, title))
+        out.append((location, stratum, f"{title} ({reason})"))
+    return out

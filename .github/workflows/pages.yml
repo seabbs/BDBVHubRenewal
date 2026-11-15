@@ -581,7 +581,14 @@ jobs:
             -w fit-store.yml -b main -s in_progress -L 1 \
             --json url -q '.[0].url // ""')
           export FIT_STORE_RUN
-          uv run bdbvhubrenewal compare-hub --fetch
+          # The hub's forecasts come over the network, which times out
+          # now and then; three tries, a minute apart (#231).
+          for try in 1 2 3; do
+            uv run bdbvhubrenewal compare-hub --fetch && break
+            if [ "$try" = 3 ]; then exit 1; fi
+            echo "::warning::compare-hub --fetch failed (try $try); retrying"
+            sleep 60
+          done
           uv run bdbvhubrenewal concat-results --out results/germany \
             output/parts/parts-germany-*/germany
           # The hub teams' nowcasts are read, not run, so they are scored

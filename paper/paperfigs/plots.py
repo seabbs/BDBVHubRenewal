@@ -67,6 +67,7 @@ __all__ = [
     "STUDY_HORIZON_BIN",
     "nowcast_panels",
     "results_panel",
+    "si_place_dots",
     "si_scores_by_factor",
     "si_scores_by_finetune_size",
     "si_scores_by_location_horizon",
@@ -1210,4 +1211,63 @@ def nowcast_panels(
                             fontsize=7,
                             color=colour,
                         )
+    return fig
+
+
+def si_place_dots(
+    scores: pd.DataFrame,
+    models: Sequence[str],
+    baseline: str | None = None,
+) -> Figure:
+    """Plot each place's relative score, one dot per model.
+
+    Every location and stratum of the study gets a row, so the SI covers
+    all places without a panel each.
+
+    Parameters
+    ----------
+    scores : pandas.DataFrame
+        `score_forecasts` output for one study.
+    models : sequence of str
+        Models to show.
+    baseline : str, optional
+        Model relative scores are divided by. Defaults to the study's
+        entry in `STUDY_BASELINES`.
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+        A dot plot on a log axis with a line at 1.
+    """
+    study = _one_study(scores)
+    baseline = baseline or STUDY_BASELINES[study]
+    name = metric_of(scores).upper()
+    rel = relative_scores(scores, ["location", "stratum"], baseline)
+    rel = rel.loc[rel["model"].isin(models)]
+    rel = rel.assign(
+        place=[
+            loc if st == DEFAULT_STRATUM else f"{loc}, {st}"
+            for loc, st in zip(rel["location"], rel["stratum"], strict=True)
+        ]
+    )
+    places = sorted(rel["place"].unique())
+    y = {p: i for i, p in enumerate(places)}
+    fig, ax = plt.subplots(
+        figsize=(5, 0.22 * len(places) + 1.2), layout="constrained"
+    )
+    for m in models:
+        one = rel.loc[rel["model"] == m]
+        ax.plot(
+            one["rel_score"],
+            one["place"].map(y),
+            ls="none",
+            ms=5,
+            label=m,
+            **point_style(m, models),
+        )
+    _log_ratio_axis(ax, axis="x")
+    ax.set_yticks(range(len(places)), places, fontsize=7)
+    ax.invert_yaxis()
+    ax.set_xlabel(f"{name} relative to {baseline}")
+    ax.legend(fontsize=7, frameon=False, loc="lower right")
     return fig
