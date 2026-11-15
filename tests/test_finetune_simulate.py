@@ -262,5 +262,5 @@ cat("late", late, "\\n")
     lines = out.strip().splitlines()
     # Late places are drawn among the active ones.
     assert all(x.split()[-1] == "TRUE" for x in lines if x.startswith("drawn"))
-    late = [x for x in lines if x.startswith("late")][0]
+    late = next(x for x in lines if x.startswith("late"))
     assert float(late.split()[-1]) > 0
