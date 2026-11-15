@@ -89,6 +89,11 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           scripts/fit-store.sh fetch output/fit-store
+          # Stopgap until #192 merges: the Chronos-2 fits its pull request
+          # stored on a scratch store join main's (#231).
+          FIT_STORE_BRANCH=fit-store-scratch-fm-chronos \
+            scripts/fit-store.sh fetch output/fit-store-chronos
+          cp -R output/fit-store-chronos/fm_chronos_* output/fit-store/
           uv run bdbvhubrenewal fit-store load --store output/fit-store
       # The store too, as the Getting started notebook reads a stored fit.
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
