@@ -196,3 +196,39 @@ for (level in c("shared", "independent", "correlated", "lagged")) {
     assert rows["correlated"][1] == "FALSE"
     # A lagged place follows the first with its own delay.
     assert rows["lagged"][1:] == ["FALSE", "TRUE"]
+
+
+@needs_r
+def test_late_places_start_tiny_and_jump_mid_outbreak(tmp_path):
+    out = run_r(
+        """
+set.seed(4)
+strata <- data.table::data.table(
+  .group = 1:3, place = c("P01", "P02", "P03"), age = "A1"
+)
+d <- draw_design(0)
+d$n_places <- 3L
+d$seeding <- "mid"
+v <- draw_values(d)
+g <- matrix(0, 100, 3)
+late <- seed_late(g, strata, d, v)
+jump <- colSums(late$growth - g)
+cat(round(jump, 4), late$seed, "\\n")
+d$seeding <- "start"
+start <- seed_late(g, strata, d, v)
+cat(all(start$growth == g), start$seed, "\\n")
+""",
+        tmp_path,
+    )
+    mid, start = out.strip().splitlines()
+    values = [float(x) for x in mid.split()]
+    jumps, seeds = values[:3], values[3:]
+    # The first place starts as usual; late places start a thousandth as
+    # large and grow by log(1000) mid-outbreak.
+    assert jumps[0] == 0
+    assert seeds[0] == 1
+    late = [j for j in jumps[1:] if j > 0]
+    assert late
+    assert all(abs(j - 6.9078) < 1e-3 for j in late)
+    assert all(s == 1e-3 for j, s in zip(jumps[1:], seeds[1:]) if j > 0)
+    assert start.split() == ["TRUE", "1", "1", "1"]
