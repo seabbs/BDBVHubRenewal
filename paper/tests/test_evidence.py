@@ -201,3 +201,33 @@ def test_lag_numbers_pair_each_model_with_its_longer_horizon() -> None:
     assert out["bdbv"] == {
         "fm_chronos_weekly_ragged": {"capped": 1.3, "longer": 3.2}
     }
+
+
+def test_checkpoint_panels_show_n_and_grey_thin_ones() -> None:
+    from paperpipe.evidence import checkpoint_figure, checkpoint_numbers
+
+    rows = pd.DataFrame(
+        {
+            "study": ["ebola"] * 3 + ["germany"] * 3,
+            "level": "national",
+            "model": "fm_chronos_daily_ragged",
+            "outbreaks": [0, 1000, 2000] * 2,
+            "n": [1] * 3 + [400] * 3,
+            "rel_wis": [2.0, 1.5, 1.2] * 2,
+        }
+    )
+    fig = checkpoint_figure(rows)
+    axes = [ax for ax in fig.axes if ax.get_visible()]
+    assert [ax.get_title() for ax in axes] == [
+        "ebola, national (n = 1)",
+        "germany, national (n = 400)",
+    ]
+    assert "too few cells" in axes[0].texts[0].get_text()
+    assert not axes[1].texts
+    numbers = checkpoint_numbers(rows)
+    assert numbers["germany"]["national"]["n"] == 400
+    assert numbers["ebola"]["national"]["fm_chronos_daily_ragged"] == {
+        "zero-shot": 2.0,
+        "n1000": 1.5,
+        "n2000": 1.2,
+    }

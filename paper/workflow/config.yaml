@@ -114,6 +114,10 @@ evidence:
   simulator:
     ref: 6bcb6f2fa4a2f2f5978271a7d3d30e613ea3f939
     path: scripts/finetune_simulate.R
+  # Scores of each r3 checkpoint on the case studies (germany-chronos2).
+  checkpoint_scores:
+    ref: 11dc356db3e0e231cb3a0cd4eb486638c6ad444f
+    path: evidence/checkpoint-scores.csv
   # The lag-horizon test of the ragged layout (germany-chronos2).
   lag_germany:
     ref: e4f4d7a49773a3050a9529df5c70d7cc8504dafc
