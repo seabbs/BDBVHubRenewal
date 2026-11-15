@@ -44,7 +44,9 @@ Chronos-2 forecasts every target series in the block jointly, from one shared la
   It comes from the delay alone, so it needs no walk spread.
 - **Ragged** (`*_ragged`): the same targets, with one lag series per place with cases and lag $d < D$, indexed by onset step as in a regression nowcast.
   Lag series $d$ holds $Y_{p,t,d}$, missing where it is not yet reported, and Chronos-2 masks the missing values.
-  $t^* = c - D$, the last step whose count is at lag $D$ or more, with $D = 4$ weeks or $D = 28$ days.
+  $t^* = c - D$, the last step whose count is at lag $D$ or more.
+  $D$ is the truth delay the forecasts are scored on: the release backtest's `truth_delay` (`config/backtest.toml`), or the German benchmark's (`config/germany.toml`), in days or in weeks rounded up.
+  Where `truth_delay` is `"auto"`, $D$ is resolved from the tidy data as the backtest resolves it, and, with no tidy data, estimated the same way from the releases up to the origin.
   The lag series run past $t^*$ as known future values, which is how recent counts reach the nowcast.
   A place with no cases has no lag series, as they would be all zero.
   So the daily block, where 75 of 546 places have cases, fits in memory.
