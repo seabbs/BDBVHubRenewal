@@ -67,7 +67,6 @@ __all__ = [
     "STUDY_HORIZON_BIN",
     "nowcast_panels",
     "results_panel",
-    "si_nowcasts",
     "si_scores_by_factor",
     "si_scores_by_finetune_size",
     "si_scores_by_location_horizon",
@@ -1063,63 +1062,6 @@ def si_scores_by_finetune_size(
     return fig
 
 
-def si_nowcasts(
-    forecasts: pd.DataFrame,
-    observations: pd.DataFrame,
-    panels: Sequence[tuple[str, str, str]],
-    models: Sequence[str],
-    origins: Sequence[pd.Timestamp] | None = None,
-    truth: pd.DataFrame | None = None,
-    ncol: int = 3,
-) -> Figure:
-    """Plot nowcasts for several locations, one panel each.
-
-    Parameters
-    ----------
-    forecasts, observations : pandas.DataFrame
-        Forecasts and observations for one study.
-    panels : sequence of tuple of str
-        `(location, stratum, title)` of each panel.
-    models : sequence of str
-        Models with ribbons.
-    origins : sequence of pandas.Timestamp, optional
-        Origins to show in every panel.
-    truth : pandas.DataFrame, optional
-        The rolling truth, drawn in black.
-    ncol : int
-        Panels per row.
-
-    Returns
-    -------
-    matplotlib.figure.Figure
-        The panels, with one legend.
-    """
-    nrow = int(np.ceil(len(panels) / ncol))
-    fig, axes = plt.subplots(
-        nrow, ncol, figsize=(4 * ncol, 2.8 * nrow), layout="constrained"
-    )
-    axes = np.atleast_1d(axes).ravel()
-    for ax, (location, stratum, title) in zip(axes, panels, strict=False):
-        plot_nowcasts(
-            ax,
-            forecasts.loc[forecasts["stratum"] == stratum],
-            observations.loc[observations["stratum"] == stratum],
-            models,
-            location,
-            models,
-            origins=origins,
-            truth=None
-            if truth is None
-            else truth.loc[truth["stratum"] == stratum],
-        )
-        ax.set_title(title, fontsize=9)
-        ax.set_ylabel("Count")
-    for ax in axes[len(panels) :]:
-        ax.set_visible(False)
-    _legend_models(fig, models)
-    return fig
-
-
 NOWCAST_LEVELS: Final = (0.025, 0.25, 0.5, 0.75, 0.975)
 """Quantiles of the nowcast panels: the median and the 50% and 95% bands."""
 
@@ -1150,18 +1092,16 @@ def nowcast_panels(
     observations: pd.DataFrame,
     truth: pd.DataFrame,
     models: Sequence[str],
-    origins: Sequence[pd.Timestamp],
-    location: str,
+    rows: Sequence[tuple[pd.Timestamp, str, str, str]],
     rel: Mapping[str, float] | None = None,
-    stratum: str = DEFAULT_STRATUM,
 ) -> Figure:
-    """Draw one column per model and one row per origin.
+    """Draw one column per model and one row per origin or place.
 
-    Every panel shows the same truth (black) and the data as of the
-    origin (grey, dashed), and one model's median with its 50% and 95%
-    bands in one colour, so no two models' lines overlap. Each column is
-    titled with the model and its relative score. The truth and data
-    lines are labelled in the first column, and there is no legend.
+    Every panel of a row shows the same truth (black) and the data as of
+    its origin (grey, dashed), and one model's median with its 50% and
+    95% bands in one colour, so no two models' lines overlap. Each
+    column is titled with the model and its relative score. The truth and
+    data lines are labelled in the first column, and there is no legend.
 
     Parameters
     ----------
@@ -1171,10 +1111,9 @@ def nowcast_panels(
         `rolling_truth` output.
     models : sequence of str
         The columns.
-    origins : sequence of pandas.Timestamp
-        The rows.
-    location, stratum : str
-        The series drawn.
+    rows : sequence of tuple
+        `(origin, location, stratum, label)` of each row, so a figure can
+        have a row per origin of one place or a row per place.
     rel : mapping, optional
         Each model's relative score, shown under its name.
 
@@ -1184,29 +1123,29 @@ def nowcast_panels(
         The panels.
     """
     ink = _PANEL_INK
-    fc = forecasts.loc[
-        (forecasts["location"] == location) & (forecasts["stratum"] == stratum)
-    ]
-    obs = observations.loc[observations["location"] == location]
-    if "stratum" in obs.columns:
-        obs = obs.loc[obs["stratum"] == stratum]
-    tr = truth.loc[
-        (truth["location"] == location) & (truth["stratum"] == stratum)
-    ].dropna(subset=["truth"])
     fig, axes = plt.subplots(
-        len(origins),
+        len(rows),
         len(models),
-        figsize=(2.6 * len(models), 2.3 * len(origins) + 0.6),
-        sharey="row",
+        figsize=(2.6 * len(models), 2.3 * len(rows) + 0.6),
         squeeze=False,
         layout="constrained",
     )
-    for i, origin in enumerate(origins):
+    for i, (origin, location, stratum, label) in enumerate(rows):
+        fc = forecasts.loc[
+            (forecasts["location"] == location)
+            & (forecasts["stratum"] == stratum)
+            & (forecasts["origin_date"] == origin)
+        ]
+        obs = observations.loc[observations["location"] == location]
+        if "stratum" in obs.columns:
+            obs = obs.loc[obs["stratum"] == stratum]
+        tr = truth.loc[
+            (truth["location"] == location) & (truth["stratum"] == stratum)
+        ].dropna(subset=["truth"])
         # The latest release on or before the origin.
         before = obs.loc[obs["as_of_date"] <= origin]
         seen = before.loc[before["as_of_date"] == before["as_of_date"].max()]
-        made = fc.loc[fc["origin_date"] == origin]
-        span = made["target_date"]
+        span = fc["target_date"]
         if span.empty:
             span = pd.Series([origin])
         lo, hi = span.min(), span.max()
@@ -1216,6 +1155,8 @@ def nowcast_panels(
         t = tr.loc[tr["target_date"].between(lo, hi)].sort_values("target_date")
         for j, model in enumerate(models):
             ax = axes[i, j]
+            if j:
+                ax.sharey(axes[i, 0])
             ax.plot(t["target_date"], t["truth"], color=ink["truth"], lw=1.5)
             ax.plot(
                 seen["target_date"],
@@ -1224,12 +1165,10 @@ def nowcast_panels(
                 lw=1.2,
                 ls="--",
             )
-            q = _panel_quantiles(made.loc[made["model"] == model])
+            q = _panel_quantiles(fc.loc[fc["model"] == model])
             if not q.empty:
-                for (a, b), alpha in (
-                    ((0.025, 0.975), 0.15),
-                    ((0.25, 0.75), 0.3),
-                ):
+                bands = (((0.025, 0.975), 0.15), ((0.25, 0.75), 0.3))
+                for (a, b), alpha in bands:
                     if a in q and b in q:
                         ax.fill_between(
                             q.index,
@@ -1253,18 +1192,14 @@ def nowcast_panels(
                 sub = "" if score is None else f"\nrel. {score:.2f}"
                 ax.set_title(model + sub, fontsize=9)
             if j == 0:
-                ax.set_ylabel(
-                    f"origin {pd.Timestamp(origin):%Y-%m-%d}",
-                    fontsize=8,
-                    color=ink["text"],
-                )
-                for frame, col, label, colour in (
+                ax.set_ylabel(label, fontsize=8, color=ink["text"])
+                for frame, col, name, colour in (
                     (t, "truth", "truth", ink["truth"]),
                     (seen, "value", "data", ink["text"]),
                 ):
                     if len(frame):
                         ax.annotate(
-                            label,
+                            name,
                             (
                                 frame["target_date"].iloc[-1],
                                 frame[col].iloc[-1],

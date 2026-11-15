@@ -87,6 +87,8 @@ nowcasts:
   seed: 20261114
   origins: 3
   outbreaks: 6
+  # Places, the largest by count, in the SI nowcast figure.
+  si_places: 9
   factors: [trajectory, delay_form, observation, strata]
   national: {germany: DE, ebola: CD}
   models:
@@ -104,6 +106,7 @@ nowcasts:
       - randomwalknowcast
       - fm_chronos_weekly_ragged
       - fm_chronos_weekly_ragged_ft
+      - fm_chronos_weekly_ragged_ft_n1000
 
 # SI results from code not yet on main, as rows committed to evidence
 # branches (`paperpipe.evidence`). Each is `{ref: <commit>, path: <file>}`;
