@@ -51,7 +51,7 @@ STREAM = "chronos-common"
 
 
 def _native(levels: np.ndarray):
-    """A sampler returning TimesFM 3's quantiles at `levels` as paths."""
+    """Return a sampler giving TimesFM 3's quantiles at `levels` as paths."""
 
     def sample(groups, horizon, n, seed):  # noqa: ARG001
         out = []
@@ -66,7 +66,7 @@ def _native(levels: np.ndarray):
 
 
 def _common(task: ForecastTask):
-    """A sampler drawing from the task's shared random stream."""
+    """Return a sampler drawing from the task's shared random stream."""
 
     def sample(groups, horizon, n, seed):  # noqa: ARG001
         levels = np.asarray(timesfm.EXTENDED_LEVELS)
