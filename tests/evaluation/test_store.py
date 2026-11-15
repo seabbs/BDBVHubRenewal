@@ -846,6 +846,10 @@ def test_the_policy_candidates_are_the_policy_models() -> None:
 
     policy = ROOT / "ci/policy.toml"
     candidates = store_archive.policy_candidates(policy)
-    assert set(candidates) == {"renewalbvd", "renewalsp", "renewal",
-                               "randomwalknowcast", "randomwalk"}  # fmt: skip
+    # Every candidate's model, and the random walk a candidate that names
+    # none runs, whatever candidates the policy holds.
+    raw = tomllib.loads(policy.read_text())["candidates"]
+    want = {c.get("model", store_archive.RANDOM_WALK) for c in raw}
+    assert set(candidates) == want
+    assert {"renewal", "randomwalk", "randomwalknowcast"} <= want
     assert set(candidates) <= set(store_archive.candidate_models(policy))
