@@ -714,3 +714,20 @@ def test_blocks_reach_deployed_sizes_on_many_places():
             big.append((b["n_targets"], b["context"].shape[0]))
     # BDBV's daily block: 27 targets and 783 series.
     assert any(t >= 27 and s >= 700 for t, s in big)
+
+
+def test_three_day_source_cuts_three_day_blocks(tmp_path, monkeypatch):
+    import finetune_chronos
+    from finetune_stream import cut
+
+    ids = _sim_dir(tmp_path)
+    monkeypatch.setattr(finetune_chronos, "SOURCES", ("3day",))
+    monkeypatch.setattr(finetune_chronos, "STEP_COVARIATE", True)
+    blocks = [b for _, b in cut(tmp_path, ids, 1, 32)]
+    assert blocks
+    for b in blocks:
+        assert b["source"] == "3day"
+        # D runs 5-16 steps of 3 days, plus the step row.
+        assert 5 <= (b["n_covariates"] - 1) // b["n_targets"] <= 16
+        row = b["context"][-1]
+        assert set(row[~np.isnan(row)].tolist()) == {3.0}
