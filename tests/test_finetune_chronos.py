@@ -597,3 +597,31 @@ def test_three_day_source_cuts_three_day_blocks(tmp_path, monkeypatch):
         assert b["source"] == "3day"
         # D runs 5-16 steps of 3 days.
         assert 5 <= _d(b) <= 16
+
+
+def test_blocks_predict_their_own_horizon_in_whole_patches(tmp_path):
+    from finetune_chronos import CONTEXT, OUTPUT_PATCH
+    from finetune_stream import cut
+
+    ids = _sim_dir(tmp_path)
+    for _, b in cut(tmp_path, ids, 1, 32):
+        truth = b["context"][0, CONTEXT:]
+        horizon = int((~np.isnan(truth)).sum())
+        length = b["prediction_length"]
+        assert length % OUTPUT_PATCH == 0
+        assert length - OUTPUT_PATCH < horizon <= length
+        assert b["context"].shape[1] == CONTEXT + length
+
+
+def test_batches_share_one_prediction_length():
+    from finetune_chronos import plan_by_length
+
+    rng = np.random.default_rng(1)
+    lengths = np.array([16] * 30 + [64] * 30 + [80] * 10)
+    sizes = rng.integers(5, 300, len(lengths))
+    plan = plan_by_length(lengths, sizes, 256, rng, 2000)
+    used = sorted(i for length, batch in plan for i in batch)
+    assert used == list(range(len(lengths)))
+    for length, batch in plan:
+        assert set(lengths[batch]) == {length}
+        assert sizes[batch].sum() <= 2000 or len(batch) == 1
