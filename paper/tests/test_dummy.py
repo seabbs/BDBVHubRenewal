@@ -127,10 +127,9 @@ def test_dummy_has_complete_ragged_and_fine_tuned_chronos(study) -> None:
 
 
 def test_dummy_cells_take_a_level_of_each_grid_factor() -> None:
-    from paperfigs.dummy import dummy_factors
-    from paperfigs.grid import grid_levels
+    from paperfigs.dummy import DUMMY_CELLS, dummy_factors
 
     fc, _ = dummy_study("synthetic", seed=1, n_samples=5)
     cells = dummy_factors(fc)
-    for name, levels in grid_levels().items():
+    for name, levels in DUMMY_CELLS.items():
         assert set(cells[name]) <= set(levels)

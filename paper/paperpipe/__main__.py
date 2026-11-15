@@ -12,8 +12,8 @@ Steps, in workflow order:
   scores);
 - `figures` and `score-tables`: main-text and SI outputs;
 - `evidence`: SI tables, figures and numbers from evidence branches;
+- `ebola-extra`: further Ebola samples, kept to some models;
 - `germany-extra`: further German forecasts as a paper table;
-- `design-tables`: the simulation grid for the main text and SI;
 - `summary`: the numbers the paper quotes, as Quarto metadata.
 """
 
@@ -40,7 +40,6 @@ from paperpipe.config import (
 from paperpipe.evidence import EVIDENCE, write_evidence
 from paperpipe.meta import baseline_of, read_meta, write_meta
 from paperpipe.outputs import (
-    design_tables,
     joint_table,
     score_tables,
     write_figures,
@@ -85,8 +84,7 @@ def _delays(locations: pd.DataFrame) -> pd.Series:
 
 def _sources(a: argparse.Namespace) -> Sources:
     return Sources(
-        synthetic_simulations=a.synthetic_simulations,
-        synthetic_forecasts=tuple(a.synthetic_forecasts),
+        synthetic_forecasts=a.synthetic_forecasts,
         germany_forecasts=tuple(a.germany_forecasts),
         germany_triangle=a.germany_triangle,
         hub=a.hub,
@@ -102,7 +100,7 @@ def _sources(a: argparse.Namespace) -> Sources:
 
 def _data(a: argparse.Namespace) -> None:
     sources = _sources(a)
-    reason = missing(a.study, sources, a.delay, a.seeds)
+    reason = missing(a.study, sources, a.delay)
     if reason and a.mode == "paper":
         raise ValueError(
             f"The paper run cannot use dummy data for the {a.study} study: "
@@ -199,15 +197,16 @@ def _evidence(a: argparse.Namespace) -> None:
         )
 
 
+def _ebola_extra(a: argparse.Namespace) -> None:
+    raw = pd.read_csv(a.input)
+    _write(raw.loc[raw["model"].str.match(a.models)], a.out)
+
+
 def _germany_extra(a: argparse.Namespace) -> None:
     table = germany.extra_table(
         a.input, models=a.models, suffix=a.suffix, backtest=a.backtest
     )
     _write(table, a.out)
-
-
-def _design_tables(a: argparse.Namespace) -> None:
-    design_tables(a.grid, a.main_dir, a.si_dir)
 
 
 def _summary(a: argparse.Namespace) -> None:
@@ -235,8 +234,7 @@ def _limits(p: argparse.ArgumentParser) -> None:
     p.add_argument("--seeds", type=int, nargs="*", default=[])
     p.add_argument("--before", default=None)
     p.add_argument("--meta", type=Path, required=True)
-    p.add_argument("--synthetic-simulations", type=Path, default=None)
-    p.add_argument("--synthetic-forecasts", type=Path, nargs="*", default=[])
+    p.add_argument("--synthetic-forecasts", type=Path, default=None)
     p.add_argument("--germany-forecasts", type=Path, nargs="*", default=[])
     p.add_argument("--germany-triangle", type=Path, default=None)
     p.add_argument("--hub", type=Path, default=None)
@@ -334,6 +332,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--out", type=Path, required=True)
     p.set_defaults(run=_evidence)
 
+    p = sub.add_parser("ebola-extra")
+    p.add_argument("--input", type=Path, required=True)
+    p.add_argument("--models", default=".")
+    p.add_argument("--out", type=Path, required=True)
+    p.set_defaults(run=_ebola_extra)
+
     p = sub.add_parser("germany-extra")
     p.add_argument("--input", type=Path, required=True)
     p.add_argument("--models", default=None)
@@ -341,12 +345,6 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--backtest", action="store_true")
     p.add_argument("--out", type=Path, required=True)
     p.set_defaults(run=_germany_extra)
-
-    p = sub.add_parser("design-tables")
-    p.add_argument("--grid", type=Path, required=True)
-    p.add_argument("--main-dir", type=Path, required=True)
-    p.add_argument("--si-dir", type=Path, required=True)
-    p.set_defaults(run=_design_tables)
 
     p = sub.add_parser("summary")
     p.add_argument("--mode", required=True)

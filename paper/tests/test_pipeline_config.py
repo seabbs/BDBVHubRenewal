@@ -50,8 +50,8 @@ def test_unknown_mode_raises() -> None:
 
 def test_overlapping_seeds_raise() -> None:
     cfg = _config()
-    cfg["development"]["synthetic_seeds"] = [9001]
-    with pytest.raises(ValueError, match="9001"):
+    cfg["development"]["synthetic_seeds"] = [8016]
+    with pytest.raises(ValueError, match="8016"):
         run_settings(cfg, "development")
 
 
@@ -99,7 +99,7 @@ def test_guard_rejects_heldout_german_dates() -> None:
 
 def test_guard_rejects_heldout_seeds() -> None:
     dev = run_settings(_config(), "development")
-    bad = _table("synthetic", synthetic_location(9002, "sim01"), "2024-03-01")
+    bad = _table("synthetic", synthetic_location(8017, "sim01"), "2024-03-01")
     with pytest.raises(ValueError, match="held-out"):
         check_no_heldout(bad, dev)
 

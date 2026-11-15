@@ -98,8 +98,7 @@ Settings, data paths and the held-out sets are in [`workflow/config.yaml`](workf
 - [`paperfigs/`](paperfigs): schema checks, scores (checked against scoringutils), rolling truth, scenario factors, periods, fine-tuning checkpoints, plots and dummy data.
 - [`paperdata/`](paperdata): the German and Ebola loaders.
 - [`paperpipe/`](paperpipe) and [`workflow/`](workflow): the steps and the Snakemake workflow.
-- [`tables/synthetic-grid.csv`](tables/synthetic-grid.csv): the crossed factors of the simulation grid, their levels and reasons, which the workflow writes as the main-text and SI tables and the dummy data draw their cells from ([`paperfigs/grid.py`](paperfigs/grid.py)).
-- [`si/`](si): SI notes on the epinowcast model and the held-out set.
+- [`papertables/`](papertables): the grid tables and the SI notes on the simulator and the held-out set, read from the simulator's code by the `grid_tables` rule.
 - [`figures/fig1_pipeline.py`](figures/fig1_pipeline.py): Figure 1.
 - [`tests/`](tests): `task test`.
 

@@ -97,7 +97,7 @@ def test_development_writes_main_and_si_outputs(development: Path) -> None:
         assert "rel_energy_log" in joint.read_text()
     for part in ("main", "si"):
         design = development / "tables" / part / "synthetic-design.md"
-        assert "Delay family" in design.read_text()
+        assert "Generative process" in design.read_text()
 
 
 def test_development_never_reads_heldout_data(development: Path) -> None:

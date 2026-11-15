@@ -19,7 +19,6 @@ from matplotlib.figure import Figure
 
 from paperfigs.checkpoints import drop_checkpoints
 from paperfigs.factors import factor_label
-from paperfigs.grid import grid_levels, read_grid
 from paperfigs.joint import relative_joint_scores
 from paperfigs.nowcasts import (
     other_places,
@@ -49,7 +48,6 @@ __all__ = [
     "JOINT_STUDIES",
     "MAIN_TABLES",
     "SI_TABLES",
-    "design_tables",
     "figure_names",
     "joint_table",
     "score_tables",
@@ -289,9 +287,14 @@ def _table(scores: pd.DataFrame, by: list[str], baseline: str) -> pd.DataFrame:
 
 
 def _grid(locations: pd.DataFrame) -> pd.DataFrame:
-    """Each grid factor's levels and their shares of the outbreaks."""
+    """Each grid factor's levels and their shares of the outbreaks.
+
+    The factors are the non-numeric columns: each simulation's cell.
+    """
     cells = _factors(locations).set_index("location")
-    names = [c for c in cells.columns if c in grid_levels()]
+    names = [
+        c for c in cells.columns if not pd.api.types.is_numeric_dtype(cells[c])
+    ]
     parts = [
         cells[name]
         .value_counts(normalize=True)
@@ -376,40 +379,6 @@ def to_markdown(table: pd.DataFrame, digits: int = 3) -> str:
         for r in table.itertuples(index=False)
     ]
     return "\n".join([head, rule, *rows]) + "\n"
-
-
-def design_tables(grid: Path, main_dir: Path, si_dir: Path) -> list[Path]:
-    """Write the simulation grid as Markdown, for the main text and SI.
-
-    Parameters
-    ----------
-    grid : pathlib.Path
-        `tables/synthetic-grid.csv` (`paperfigs.grid`).
-    main_dir, si_dir : pathlib.Path
-        Folders for the main-text table (factors and levels) and the SI
-        table (with the reasons).
-
-    Returns
-    -------
-    list of pathlib.Path
-        The tables written.
-    """
-    raw = read_grid(grid)
-    table = pd.DataFrame(
-        {
-            "Factor": raw["factor"].map(factor_label),
-            "Levels": raw["levels"].str.replace("_", " "),
-            "Reason": raw["reason"],
-        }
-    )
-    paths = {
-        main_dir / "synthetic-design.md": table[["Factor", "Levels"]],
-        si_dir / "synthetic-design.md": table,
-    }
-    for path, part in paths.items():
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(to_markdown(part))
-    return list(paths)
 
 
 def joint_table(

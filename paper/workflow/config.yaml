@@ -13,12 +13,25 @@ n_samples: 200
 # the models' forecasts of them, which the synthetic runner of #192
 # writes as the paper's long table.
 synthetic:
+  # The simulator, whose code gives the grid tables and SI notes
+  # (`evidence` below), and the held-out set's design.
+  simulator: simulator
+  grid: r3
+  simulations_per_seed: 25
+  blocks: [1670, 1671]
+  draw: 1
+  # The synthetic runner's protocol, quoted in the SI note.
+  protocol: {min_releases: 6, horizon_weeks: 5, horizons: [-4, 3]}
+  # The simulations of each run's seeds, whose settings give the grid's
+  # realised values.
   simulations:
-    development: ../output/finetune/validation
+    development: ../output/finetune/pilot-r3
     paper: ../output/finetune/heldout
+  # The synthetic runner's forecasts of them (#192), with its
+  # observations and factors beside them.
   forecasts:
-    development: [../output/paper/synthetic-development.csv.gz]
-    paper: [../output/paper/synthetic-paper.csv.gz]
+    development: ../output/paper/synthetic-dev.csv.gz
+    paper: ../output/paper/synthetic.csv.gz
 
 # The German benchmark, run with the `bdbvhubrenewal` command line
 # (config/germany.toml). Its models are the config's `models`.
@@ -55,9 +68,16 @@ ebola:
   data: ../data
   config: ../config/backtest.toml
   # Further models' release-backtest samples from evidence rows (`evidence`
-  # below), in the backtest's layout: Chronos-2 as submitted, one joint
-  # block.
-  extra: [ebola_chronos]
+  # below), in the backtest's layout, kept to `models`: the Chronos-2
+  # models fine-tuned on 1,000 outbreaks, as submitted (one joint block),
+  # until the fit store holds them. The other Chronos-2 models come from
+  # the fit store.
+  extra:
+    - evidence: ebola_chronos
+      models: ".*_n1000$"
+      provisional: >-
+        Chronos-2 rows are provisional: they are refitted once the
+        release-lag fix of #192 merges.
   backtest_models: [randomwalk, randomwalknowcast]
   hub: ../data/raw/bdbv-hub
   hub_repo: https://github.com/InsightNet-US/BDBV-Modeling-Hub.git
@@ -97,6 +117,10 @@ nowcasts:
 # null leaves a note of what it waits on in a development run and fails a
 # paper run.
 evidence:
+  # scripts/finetune_simulate.R of the r3 fine-tune (fm-finetune-driver).
+  simulator:
+    ref: 922e2f4c63a75081bd656a7373cc660c429aebe4
+    path: scripts/finetune_simulate.R
   germany_chronos:
     ref: e0323a7d19794f06b50ccc5f0118f85e58b16af5
     path: evidence/paper-forecasts-chronos.csv.gz
@@ -124,14 +148,14 @@ evidence:
 
 # Data the development runs use.
 development:
-  # Validation outbreaks for checking the setup.
-  synthetic_seeds: [7001]
+  # The r3 pilot's outbreaks, for checking the setup.
+  synthetic_seeds: [9501, 9502, 9503, 9504]
 
 # Data kept out of every development run.
 # Only the `paper` target reads them.
 heldout:
   # Outbreaks simulated with seeds the fine-tune never saw.
-  synthetic_seeds: [9001, 9002, 9003, 9004]
+  synthetic_seeds: [8016, 8017, 8018, 8019, 8020, 8021, 8022, 8023, 8024, 8025]
   # First held-out German nowcast date.
   # The benchmark's dates run from 2021-11-22 to 2022-04-29.
   # The first 80 are the development half.

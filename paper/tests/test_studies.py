@@ -218,7 +218,7 @@ def test_germany_needs_its_truth_delay() -> None:
 
 
 def test_missing_names_why_a_study_cannot_use_real_data() -> None:
-    assert "simulations" in missing("synthetic", Sources(), seeds=(9001,))
+    assert "runner" in missing("synthetic", Sources())
     assert "release data" in missing("ebola", Sources())
     assert "German" in missing("germany", Sources())
 

@@ -26,6 +26,7 @@ instead, naming the study and what is missing (`paperpipe.studies`).
 """
 
 import json
+import os
 import shlex
 import sys
 import tomllib
@@ -73,6 +74,98 @@ if str(_split) != str(config["heldout"]["germany_from"]):
     )
 
 
+# Rows from evidence branches, pinned by commit in `evidence` (config).
+EVIDENCE = {
+    name: entry
+    for name, entry in (config.get("evidence") or {}).items()
+    if entry
+}
+
+
+def evidence_file(name):
+    """The extracted file, named by its commit so a new pin extracts anew."""
+    entry = EVIDENCE[name]
+    suffix = "".join(Path(entry["path"]).suffixes)
+    return f"{R}/evidence/{name}-{entry['ref'][:12]}{suffix}"
+
+
+for name, entry in EVIDENCE.items():
+
+    rule:
+        name:
+            f"evidence_{name}"
+        output:
+            evidence_file(name),
+        params:
+            ref=entry["ref"],
+            path=entry["path"],
+        shell:
+            "(git cat-file -e {params.ref}^{{commit}} 2>/dev/null || "
+            "git fetch -q origin {params.ref}) && "
+            "git show {params.ref}:{params.path} > {output}"
+
+
+def provisional(study):
+    """What is provisional in a study's further forecasts, if anything."""
+    block = {"germany": GERMANY, "ebola": EBOLA}.get(study, {})
+    notes = [e.get("provisional") for e in block.get("extra") or []]
+    return " ".join(dict.fromkeys(n for n in notes if n))
+
+
+def ebola_extra(mode):
+    """Further Ebola samples, each kept to its models."""
+    return [
+        f"{R}/evidence/ebola-extra-{i}.csv.gz"
+        for i in range(len(EBOLA.get("extra") or []))
+    ]
+
+
+def extra_args(entry):
+    """The `germany-extra` options of a `germany.extra` entry."""
+    args = []
+    if entry.get("models"):
+        args.append(f"--models {shlex.quote(entry['models'])}")
+    if entry.get("suffix"):
+        args.append(f"--suffix {shlex.quote(entry['suffix'])}")
+    if entry.get("backtest"):
+        args.append("--backtest")
+    return " ".join(args)
+
+
+# Further Ebola samples from evidence rows, kept to their models.
+for i, entry in enumerate(EBOLA.get("extra") or []):
+
+    rule:
+        name:
+            f"ebola_extra_{i}"
+        input:
+            evidence_file(entry["evidence"]),
+        output:
+            f"{R}/evidence/ebola-extra-{i}.csv.gz",
+        params:
+            models=shlex.quote(entry.get("models") or "."),
+        shell:
+            "{PYTHON} -m paperpipe ebola-extra --input {input} "
+            "--models {params.models} --out {output}"
+
+
+# Further German forecasts from evidence rows, as paper tables.
+for i, entry in enumerate(GERMANY.get("extra") or []):
+
+    rule:
+        name:
+            f"germany_extra_{i}"
+        input:
+            evidence_file(entry["evidence"]),
+        output:
+            f"{R}/evidence/germany-extra-{i}.csv.gz",
+        params:
+            args=extra_args(entry),
+        shell:
+            "{PYTHON} -m paperpipe germany-extra --input {input} "
+            "{params.args} --out {output}"
+
+
 wildcard_constraints:
     mode="|".join(MODES),
     study="|".join(STUDIES),
@@ -98,11 +191,8 @@ def germany_tables(mode):
 def sources(w):
     """A study's real data, as command line arguments."""
     if w.study == "synthetic":
-        sims = SYNTHETIC["simulations"][w.mode]
-        fc = " ".join(shlex.quote(f) for f in SYNTHETIC["forecasts"][w.mode])
-        return f"--synthetic-simulations {shlex.quote(sims)} " + (
-            f"--synthetic-forecasts {fc}" if fc else ""
-        )
+        fc = SYNTHETIC["forecasts"][w.mode]
+        return f"--synthetic-forecasts {shlex.quote(fc)}" if fc else ""
     if w.study == "germany" and GERMANY["real"]:
         tables = " ".join(germany_tables(w.mode))
         return f"--germany-forecasts {tables} --germany-triangle {TRIANGLE}"
@@ -114,7 +204,7 @@ def sources(w):
             f"--ebola-backtest {shlex.quote(EBOLA['backtest'])}",
         ]
         if EBOLA.get("extra"):
-            files = " ".join(evidence_file(n) for n in EBOLA["extra"])
+            files = " ".join(ebola_extra(w.mode))
             args.append(f"--ebola-extra {files}")
         if EBOLA["candidates"]:
             files = " ".join(shlex.quote(c) for c in EBOLA["candidates"])
@@ -133,7 +223,7 @@ def source_files(w):
         return [*germany_tables(w.mode), *triangle]
     if w.study == "ebola" and EBOLA["hub"]:
         hub = f"{EBOLA['hub']}/target-data/time-series.csv"
-        extra = [evidence_file(n) for n in EBOLA.get("extra") or []]
+        extra = ebola_extra(w.mode)
         target = f"{EBOLA['data']}/target.csv"
         return [hub, target, EBOLA["backtest"], *extra]
     return []
@@ -166,8 +256,11 @@ def tables(mode, study):
 
 def outputs(mode):
     design = [
-        f"{R}/{mode}/tables/{part}/synthetic-design.md"
-        for part in ("main", "si")
+        f"{R}/{mode}/tables/main/synthetic-design.md",
+        *(
+            f"{R}/{mode}/tables/si/{n}.md"
+            for n in ("synthetic-design", "epinowcast-model", "heldout-set")
+        ),
     ]
     evidence = [f"{R}/{mode}/evidence.yml"]
     joint = [
@@ -288,8 +381,8 @@ rule data:
             else ""
         ),
         note=lambda w: (
-            f"--note {shlex.quote(provisional())}"
-            if w.study == "germany" and provisional()
+            f"--note {shlex.quote(provisional(w.study))}"
+            if provisional(w.study)
             else ""
         ),
         config=shlex.quote(json.dumps(config)),
@@ -438,84 +531,42 @@ for study in STUDIES:
             "--main-dir {params.main} --si-dir {params.si} {params.split}"
 
 
-rule design_tables:
+def grid_config(mode):
+    """The `synthetic` block with the run's seeds, for the SI notes."""
+    s = run_settings(config, "paper")
+    d = run_settings(config, "development")
+    return {
+        **SYNTHETIC,
+        "heldout_seeds": list(s.synthetic_seeds),
+        "development_seeds": list(d.synthetic_seeds),
+    }
+
+
+def grid_settings(w):
+    """Simulations whose settings give the realised values, if they exist."""
+    sims = SYNTHETIC["simulations"][w.mode]
+    return f"--settings {shlex.quote(sims)}" if os.path.isdir(sims) else ""
+
+
+# The grid tables and SI notes, read from the simulator's code
+# (`papertables.synthetic_grid`).
+rule grid_tables:
     input:
-        "tables/synthetic-grid.csv",
+        simulator=evidence_file(SYNTHETIC["simulator"]),
     output:
         main=f"{R}/{{mode}}/tables/main/synthetic-design.md",
         si=f"{R}/{{mode}}/tables/si/synthetic-design.md",
+        model=f"{R}/{{mode}}/tables/si/epinowcast-model.md",
+        heldout=f"{R}/{{mode}}/tables/si/heldout-set.md",
     params:
+        config=lambda w: shlex.quote(json.dumps(grid_config(w.mode))),
+        settings=grid_settings,
         main=f"{R}/{{mode}}/tables/main",
         si=f"{R}/{{mode}}/tables/si",
     shell:
-        "{PYTHON} -m paperpipe design-tables --grid {input} "
+        "{PYTHON} -m papertables.synthetic_grid --simulator {input.simulator} "
+        "--config {params.config} {params.settings} "
         "--main-dir {params.main} --si-dir {params.si}"
-
-
-# Rows from evidence branches, pinned by commit in `evidence` (config).
-EVIDENCE = {
-    name: entry
-    for name, entry in (config.get("evidence") or {}).items()
-    if entry
-}
-
-
-def evidence_file(name):
-    """The extracted file, named by its commit so a new pin extracts anew."""
-    entry = EVIDENCE[name]
-    suffix = "".join(Path(entry["path"]).suffixes)
-    return f"{R}/evidence/{name}-{entry['ref'][:12]}{suffix}"
-
-
-for name, entry in EVIDENCE.items():
-
-    rule:
-        name:
-            f"evidence_{name}"
-        output:
-            evidence_file(name),
-        params:
-            ref=entry["ref"],
-            path=entry["path"],
-        shell:
-            "(git cat-file -e {params.ref}^{{commit}} 2>/dev/null || "
-            "git fetch -q origin {params.ref}) && "
-            "git show {params.ref}:{params.path} > {output}"
-
-
-def provisional():
-    """What is provisional in the further German forecasts, if anything."""
-    notes = [e.get("provisional") for e in GERMANY.get("extra") or []]
-    return " ".join(dict.fromkeys(n for n in notes if n))
-
-
-def extra_args(entry):
-    """The `germany-extra` options of a `germany.extra` entry."""
-    args = []
-    if entry.get("models"):
-        args.append(f"--models {shlex.quote(entry['models'])}")
-    if entry.get("suffix"):
-        args.append(f"--suffix {shlex.quote(entry['suffix'])}")
-    if entry.get("backtest"):
-        args.append("--backtest")
-    return " ".join(args)
-
-
-# Further German forecasts from evidence rows, as paper tables.
-for i, entry in enumerate(GERMANY.get("extra") or []):
-
-    rule:
-        name:
-            f"germany_extra_{i}"
-        input:
-            evidence_file(entry["evidence"]),
-        output:
-            f"{R}/evidence/germany-extra-{i}.csv.gz",
-        params:
-            args=extra_args(entry),
-        shell:
-            "{PYTHON} -m paperpipe germany-extra --input {input} "
-            "{params.args} --out {output}"
 
 
 rule evidence:

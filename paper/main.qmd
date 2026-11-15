@@ -95,8 +95,8 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
 ::: {#tbl-synthetic-grid}
 {{< include build/tables/main/synthetic-design.md >}}
 
-The crossed factors of the simulation grid and their levels.
-The reason for each and the full settings are in the SI.
+The crossed factors of the simulation grid and their levels, each balanced within every block of simulations, read from the simulator's code.
+The full settings are in the SI.
 :::
 
 ### Correlated trajectories

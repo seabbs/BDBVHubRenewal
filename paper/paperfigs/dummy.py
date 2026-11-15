@@ -18,7 +18,6 @@ import numpy as np
 import pandas as pd
 from scipy.stats import norm
 
-from paperfigs.grid import grid_levels
 from paperfigs.schema import (
     DEFAULT_STRATUM,
     FORECAST_COLUMNS,
@@ -28,6 +27,7 @@ from paperfigs.schema import (
 )
 
 __all__ = [
+    "DUMMY_CELLS",
     "QUANTILE_LEVELS",
     "STUDY_SETUP",
     "StudySetup",
@@ -396,6 +396,30 @@ def dummy_study(
     )
 
 
+DUMMY_CELLS: Final[dict[str, tuple[str, ...]]] = {
+    "process": ("growth", "renewal_3", "renewal_7", "renewal_15"),
+    "gt_shape": ("gamma_0.3", "gamma_0.6", "gamma_1", "lognormal_0.6"),
+    "trajectory": (
+        "growth",
+        "decline",
+        "flat",
+        "rise_fall_sharp",
+        "rise_fall_gradual",
+        "fall_rise",
+        "oscillating",
+        "multi_wave",
+    ),
+    "delay_family": ("lognormal", "gamma", "exponential"),
+    "delay_form": ("parametric", "non_parametric", "both"),
+    "delay_change": ("static", "drift", "step", "periodic", "walk"),
+    "reporting": ("daily", "weekdays"),
+    "reference_dow": ("no", "yes"),
+    "observation": ("negbin", "negbin1d", "poisson"),
+    "strata": ("single", "places", "ages", "places_ages"),
+}
+"""Levels of the dummy grid cells, after the r3 grid's factors."""
+
+
 def dummy_factors(forecasts: pd.DataFrame, seed: int = 1) -> pd.DataFrame:
     """Make a dummy grid cell and delay for each location.
 
@@ -409,7 +433,7 @@ def dummy_factors(forecasts: pd.DataFrame, seed: int = 1) -> pd.DataFrame:
     Returns
     -------
     pandas.DataFrame
-        `location`, one level of each grid factor (`paperfigs.grid`), as
+        `location`, one level of each grid factor (`DUMMY_CELLS`), as
         a simulation records its cell, and `delay_mean` and `delay_q98`,
         the realised mean and 98% point of its reporting delay in days.
     """
@@ -419,7 +443,7 @@ def dummy_factors(forecasts: pd.DataFrame, seed: int = 1) -> pd.DataFrame:
     delay_mean = np.round(np.exp(rng.uniform(0.5, 2.5, n)), 2)
     delay_sd = rng.uniform(0.3, 1.1, n)
     cells = {
-        name: rng.choice(levels, n) for name, levels in grid_levels().items()
+        name: rng.choice(levels, n) for name, levels in DUMMY_CELLS.items()
     }
     return pd.DataFrame(
         {

@@ -33,7 +33,7 @@ __all__ = [
 MODES: Final = ("development", "paper")
 """Run modes: `development` leaves out the held-out sets, `paper` uses them."""
 
-_SEED: Final = re.compile(r"^s(\d+)-")
+_SEED: Final = re.compile(r"^s?(\d+)-")
 
 
 @dataclass(frozen=True)
@@ -123,7 +123,11 @@ def synthetic_location(seed: int, name: str) -> str:
 
 
 def seed_of(location: str) -> int | None:
-    """Return the seed of a synthetic location code, or None."""
+    """Return the seed of a synthetic location code, or None.
+
+    Dummy codes are `s<seed>-<name>`, and the synthetic runner's
+    `<seed>-<simulation>-<draw>_<stratum>`.
+    """
     m = _SEED.match(location)
     return int(m.group(1)) if m else None
 
