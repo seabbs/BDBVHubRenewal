@@ -2209,13 +2209,16 @@ Each series and step has 100 draws of its own uniform level, read off the quanti
 Each trajectory draws one vector <span class="arithmatex">\(z\)</span> of standard normals over series and steps, and each cell's draws are reordered across trajectories to rank as <span class="arithmatex">\(z\)</span> does.
 This is <span class="arithmatex">\(u = \Phi(z)\)</span> read off each cell's draws, so every cell keeps exactly the draws it had and only the pairing changes.
 The correlation of <span class="arithmatex">\(z\)</span> is a place correlation times a step correlation.
-Steps <span class="arithmatex">\(h\)</span> and <span class="arithmatex">\(h'\)</span> have correlation <span class="arithmatex">\(\rho_t^{|h - h'|}\)</span> for weeks and <span class="arithmatex">\(\rho_t^{|h - h'|/7}\)</span> for days, so sums of days into weeks are of correlated draws.
+Weeks <span class="arithmatex">\(h\)</span> and <span class="arithmatex">\(h'\)</span> have correlation <span class="arithmatex">\(\rho_t^{|h - h'|}\)</span>, and days <span class="arithmatex">\(d\)</span> and <span class="arithmatex">\(d'\)</span> have <span class="arithmatex">\(\rho_d^{|d - d'|}\)</span>, so sums of days into weeks are of correlated draws.
 Two provinces have correlation <span class="arithmatex">\(\rho_p\)</span>, and the country and a province <span class="arithmatex">\(\rho_n\)</span>.
 Where these give no correlation matrix, a nearby one is used, by setting negative eigenvalues to zero.</p>
-<p>All six models pair their draws with the same fixed values, <span class="arithmatex">\(\rho_t = 0.9\)</span>, <span class="arithmatex">\(\rho_p = 0.7\)</span> and <span class="arithmatex">\(\rho_n = 0.7\)</span> (<code>CHRONOS_COPULA</code>).
-They were chosen on the release backtest from a grid of 0.3 to 0.95, where the energy score improved as each correlation grew and levelled off near these values.
-Their weekly draws are then paired again by a copula fitted to each model's recent errors and shrunk towards these values (<a href="../evaluation/#correlated-trajectories">Correlated trajectories</a>).
-The daily models' days stay paired by the fixed values, as their weekly errors do not show how days within a week are correlated.</p>
+<p>The six models pair their draws with <span class="arithmatex">\(\rho_p = 0.7\)</span> and <span class="arithmatex">\(\rho_n = 0.7\)</span>, the weekly models with <span class="arithmatex">\(\rho_t = 0.9\)</span> (<code>CHRONOS_COPULA</code>), and the daily models with <span class="arithmatex">\(\rho_d = 0.985\)</span> (<code>CHRONOS_DAILY_COPULA</code>).
+<span class="arithmatex">\(\rho_t\)</span>, <span class="arithmatex">\(\rho_p\)</span> and <span class="arithmatex">\(\rho_n\)</span> were chosen on the release backtest from a grid of 0.3 to 0.95, where the energy score improved as each correlation grew and levelled off near these values.
+<span class="arithmatex">\(\rho_d\)</span> was chosen on the release backtest from 0, 0.3, 0.5, 0.7, 0.9 and 0.985, by the weekly WIS, median bias and coverage of the daily models.
+It gave the lowest WIS and median bias, and pairing days moved each week's median towards the truth.
+Pairing skewed days lowers a week's median, from near the sum of the daily means towards the sum of the daily medians.
+<span class="arithmatex">\(\rho_d\)</span> cannot be estimated from weekly errors, as each is of a week's sum, so it is fixed (#239).
+Their weekly draws are then paired again by a copula fitted to each model's recent errors and shrunk towards the weekly values (<a href="../evaluation/#correlated-trajectories">Correlated trajectories</a>).</p>
 <h2 id="counts">Counts<a class="headerlink" href="#counts" title="Permanent link">&para;</a></h2>
 <p>A draw is rounded to the nearest count and floored at zero.
 A step's draw is no lower than its count at the vintage, and steps up to <span class="arithmatex">\(t^*\)</span> are their count at the vintage.
@@ -2253,7 +2256,7 @@ Such fits are retried by running the Fit store workflow with <code>retry_failed<
 <li>The fine-tuned models have seen only simulated outbreaks, whose delays and dynamics may not match these data.</li>
 <li>The daily fine-tuned model was trained on blocks of at most five provinces but forecasts all 26 in one block.</li>
 <li>The fixed correlations were chosen on a backtest of five origins.</li>
-<li>It ties days to weeks by one decay per day, which is not estimated from daily errors.</li>
+<li>The correlation between days is chosen on a backtest of five origins, not estimated from daily errors.</li>
 </ul>
 <div class="footnote">
 <hr />
