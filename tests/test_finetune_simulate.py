@@ -135,3 +135,25 @@ for (i in 1:50) {
     )
     assert out.split()
     assert all(x == "TRUE" for x in out.split())
+
+
+@needs_r
+def test_outbreaks_run_long_enough_for_deployed_contexts(tmp_path):
+    out = run_r(
+        """
+set.seed(2)
+weeks <- vapply(0:239, function(g) {
+  d <- draw_design(g)
+  c(d$strata == "places_ages", draw_values(d)$weeks)
+}, numeric(2))
+cat(max(weeks[2, weeks[1, ] == 0]), max(weeks[2, weeks[1, ] == 1]),
+  min(weeks[2, ]), "\\n")
+""",
+        tmp_path,
+    )
+    longest, longest_by_ages, shortest = map(int, out.split())
+    # BDBV's contexts reach 40 weeks: blocks are cut up to a week before
+    # the end of the onsets, so outbreaks run to 44 weeks.
+    assert longest == 44
+    assert longest_by_ages == 28
+    assert shortest == 16
