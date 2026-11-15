@@ -264,3 +264,21 @@ cat("late", late, "\\n")
     assert all(x.split()[-1] == "TRUE" for x in lines if x.startswith("drawn"))
     late = next(x for x in lines if x.startswith("late"))
     assert float(late.split()[-1]) > 0
+
+
+@needs_r
+def test_settings_hold_one_row_per_simulation(tmp_path):
+    out = run_r(
+        """
+set.seed(6)
+rows <- lapply(1:3, function(i) {
+  d <- draw_design(i)
+  d$n_places <- 5L
+  flat_values(c(list(outbreak = i), d, draw_values(d)))
+})
+s <- data.table::rbindlist(rows, fill = TRUE)
+cat(nrow(s), is.character(s$place_lags), "\\n")
+""",
+        tmp_path,
+    )
+    assert out.split() == ["3", "TRUE"]
