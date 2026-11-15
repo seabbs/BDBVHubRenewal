@@ -52,7 +52,7 @@ def series_rows(model, blocks: list[dict], qs: np.ndarray) -> list[dict]:
                     Chronos2Dataset(
                         inputs=[fs.tensors(block)],
                         context_length=ft.CONTEXT,
-                        prediction_length=ft.HORIZON,
+                        prediction_length=block["prediction_length"],
                         batch_size=1,
                         output_patch_size=ft.OUTPUT_PATCH,
                         mode=DatasetMode.VALIDATION,

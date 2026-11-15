@@ -387,26 +387,61 @@ def checkpoint_large_batches(above: int) -> None:
     Chronos2EncoderBlock.forward = checkpointed
 
 
+class ByLength:
+    """Chronos-2 datasets of blocks, one for each prediction length.
+
+    `_build_batch` takes indices of blocks that share a length
+    (`finetune_chronos.plan_by_length`), as `Chronos2Dataset` does.
+    """
+
+    def __init__(self, blocks: list[dict], batch_size: int, mode) -> None:
+        from chronos.chronos2.dataset import Chronos2Dataset, DatasetMode
+
+        self.inputs = [tensors(b) for b in blocks]
+        self.lengths = [b["prediction_length"] for b in blocks]
+        self.local: dict[int, int] = {}
+        self.data = {}
+        for length in sorted(set(self.lengths)):
+            idx = [i for i, n in enumerate(self.lengths) if n == length]
+            self.local |= {i: j for j, i in enumerate(idx)}
+            self.data[length] = Chronos2Dataset(
+                inputs=[self.inputs[i] for i in idx],
+                context_length=ft.CONTEXT,
+                prediction_length=length,
+                batch_size=batch_size,
+                output_patch_size=ft.OUTPUT_PATCH,
+                mode=mode,
+                **(
+                    {"min_past": ft.CONTEXT}
+                    if mode == DatasetMode.TRAIN
+                    else {}
+                ),
+            )
+
+    def _build_batch(self, indices: list[int]) -> dict:
+        """Return the batch of blocks `indices`, all of one length."""
+        length = self.lengths[indices[0]]
+        return self.data[length]._build_batch([self.local[i] for i in indices])
+
+    def batches(self):
+        """Yield every block once, in batches of one length."""
+        for data in self.data.values():
+            yield from data
+
+
 def held_out_loss(model, blocks: list[dict], batch_size: int) -> float:
     """Return the mean quantile loss of a Chronos-2 model on blocks."""
     import torch
-    from chronos.chronos2.dataset import Chronos2Dataset, DatasetMode
+    from chronos.chronos2.dataset import DatasetMode
     from chronos.chronos2.model import Chronos2Model
 
-    data = Chronos2Dataset(
-        inputs=[tensors(b) for b in blocks],
-        context_length=ft.CONTEXT,
-        prediction_length=ft.HORIZON,
-        batch_size=batch_size,
-        output_patch_size=ft.OUTPUT_PATCH,
-        mode=DatasetMode.VALIDATION,
-    )
+    data = ByLength(blocks, batch_size, DatasetMode.VALIDATION)
     accepted = inspect.signature(Chronos2Model.forward).parameters
     training = model.training
     model.eval()
     losses, weights = [], []
     with torch.no_grad():
-        for batch in data:
+        for batch in data.batches():
             batch = {
                 k: v.to(model.device) if torch.is_tensor(v) else v
                 for k, v in batch.items()
@@ -579,7 +614,7 @@ def held_out_by_level(model, blocks: list[dict], n: int) -> dict:
             data = Chronos2Dataset(
                 inputs=[tensors(block)],
                 context_length=ft.CONTEXT,
-                prediction_length=ft.HORIZON,
+                prediction_length=block["prediction_length"],
                 batch_size=1,
                 output_patch_size=ft.OUTPUT_PATCH,
                 mode=DatasetMode.VALIDATION,
@@ -647,7 +682,7 @@ def main() -> None:
     """Train on the chunks as they are simulated."""
     import torch
     from chronos import Chronos2Pipeline
-    from chronos.chronos2.dataset import Chronos2Dataset, DatasetMode
+    from chronos.chronos2.dataset import DatasetMode
     from chronos.chronos2.model import Chronos2Model
     from peft import LoraConfig, get_peft_model
 
@@ -803,7 +838,9 @@ def main() -> None:
         ),
         "batch_size": args.batch_size,
         "context": ft.CONTEXT,
-        "horizon": ft.HORIZON,
+        "prediction_length": (
+            f"each block's horizon in whole patches of {ft.OUTPUT_PATCH} steps"
+        ),
         "seed": args.seed,
         "note": args.note,
     }
@@ -943,22 +980,17 @@ def main() -> None:
         blocks = [b for _, b in pairs]
         sizes = np.array([int(b["context"].shape[0]) for b in blocks])
         rng = np.random.default_rng([args.seed, done])
-        plan = ft.plan_batches(sizes, args.batch_size, rng, ft.MAX_SERIES)
-        data = Chronos2Dataset(
-            inputs=[tensors(b) for b in blocks],
-            context_length=ft.CONTEXT,
-            prediction_length=ft.HORIZON,
-            batch_size=args.batch_size,
-            output_patch_size=ft.OUTPUT_PATCH,
-            min_past=ft.CONTEXT,
-            mode=DatasetMode.TRAIN,
+        lengths = np.array([b["prediction_length"] for b in blocks])
+        plan = ft.plan_by_length(
+            lengths, sizes, args.batch_size, rng, ft.MAX_SERIES
         )
+        data = ByLength(blocks, args.batch_size, DatasetMode.TRAIN)
         log(
             f"outbreaks {done + 1}-{hi}: {len(blocks)} blocks, "
             f"{sizes.sum()} series, {len(plan)} steps"
         )
         while position < len(plan):
-            indices = plan[position]
+            _, indices = plan[position]
             while pause.exists():
                 report(stage="paused")
                 time.sleep(30)
@@ -1011,6 +1043,9 @@ def main() -> None:
         tick = time.perf_counter()
         seen["blocks"] += len(pairs)
         seen["series"] += int(sizes.sum())
+        seen["tokens"] = seen.get("tokens", 0) + int(
+            (sizes * (ft.CONTEXT + lengths)).sum() // ft.OUTPUT_PATCH
+        )
         mix = seen.setdefault("mix", {})
         for block in blocks:
             mix[block["mix"]] = mix.get(block["mix"], 0) + 1
@@ -1034,9 +1069,7 @@ def main() -> None:
                 "blocks": seen["blocks"],
                 "series": seen["series"],
                 "level_mix": seen.get("mix", {}),
-                "tokens": seen["series"]
-                * (ft.CONTEXT + ft.HORIZON)
-                // ft.OUTPUT_PATCH,
+                "tokens": seen.get("tokens", 0),
                 "skipped_blocks": skipped,
                 "memory_gb": args.memory_gb,
             }

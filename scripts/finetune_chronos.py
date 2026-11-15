@@ -33,9 +33,6 @@ from bdbvhubrenewal.forecasters.finetune import (
 CONTEXT = 288
 """Steps of context in a block, left-padded with missing values."""
 
-HORIZON = 96
-"""Steps of horizon in a block, right-padded with missing values: the
-longest daily horizon is 6 + 28 + 49 days, in six patches of 16."""
 
 MAX_LAGS = {
     "weekly": tuple(range(2, 8)),
@@ -132,16 +129,21 @@ def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def _pad(block: dict, context: int, horizon: int) -> dict:
-    """Pad a block to `context + horizon` steps, cropping long context.
+def _pad(block: dict, context: int) -> dict:
+    """Pad a block to `context` steps and its horizon in whole patches.
 
-    The arrays are numpy, so blocks are cut without torch; the trainer
-    makes them tensors (`finetune_stream.tensors`).
+    Chronos-2 predicts in patches of `OUTPUT_PATCH` steps, so a block's
+    prediction length is its horizon, its nowcast and forecast steps,
+    rounded up to whole patches; the steps past the horizon are missing.
+    Long context is cropped. The arrays are numpy, so blocks are cut
+    without torch; the trainer makes them tensors
+    (`finetune_stream.tensors`).
     """
     start, h = block["start"], block["horizon"]
+    length = -(-h // OUTPUT_PATCH) * OUTPUT_PATCH
     x = block["context"]
     keep = min(start, context)
-    out = np.full((x.shape[0], context + horizon), np.nan, dtype=np.float32)
+    out = np.full((x.shape[0], context + length), np.nan, dtype=np.float32)
     out[:, context - keep : context + h] = x[:, start - keep : start + h]
     return {
         "context": out,
@@ -149,6 +151,7 @@ def _pad(block: dict, context: int, horizon: int) -> dict:
         "n_targets": block["n_targets"],
         "n_covariates": block["n_covariates"],
         "n_future_covariates": block["n_future_covariates"],
+        "prediction_length": length,
     }
 
 
@@ -322,7 +325,7 @@ def outbreak_blocks(
                 continue
             if block["start"] < 2:
                 continue
-            padded = _pad(block, CONTEXT, HORIZON)
+            padded = _pad(block, CONTEXT)
             padded["levels"] = target_levels(places)
             padded["mix"] = mix
             padded["source"] = source
@@ -368,6 +371,27 @@ def plan_batches(
             held[c] = 0
     batches.extend(b for b in filling.values() if b)
     return [batches[j] for j in rng.permutation(len(batches))]
+
+
+def plan_by_length(
+    lengths: np.ndarray,
+    sizes: np.ndarray,
+    batch_size: int,
+    rng: np.random.Generator,
+    most: int | None = None,
+) -> list[tuple[int, list[int]]]:
+    """Return batches of blocks that share a prediction length.
+
+    Blocks of each prediction length are batched by `plan_batches`, and
+    the batches of every length are then shuffled together. Each batch is
+    `(length, indices)`.
+    """
+    plan = []
+    for length in sorted(set(lengths.tolist())):
+        idx = np.flatnonzero(lengths == length)
+        for batch in plan_batches(sizes[idx], batch_size, rng, most):
+            plan.append((int(length), [int(idx[i]) for i in batch]))
+    return [plan[j] for j in rng.permutation(len(plan))]
 
 
 def _order(outbreak: str) -> tuple[int, int]:
@@ -432,7 +456,7 @@ def real_blocks(
             weekly_cutoffs(first, cut, weekday),
             max_lag=lag,
         )
-        padded = _pad(block, CONTEXT, HORIZON)
+        padded = _pad(block, CONTEXT)
         padded["levels"] = target_levels(places)
         padded["mix"] = "real"
         padded["source"] = "weekly"
