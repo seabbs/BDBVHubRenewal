@@ -688,3 +688,29 @@ def test_balanced_batches_hold_each_aggregation_in_turn():
             assert (
                 abs((kinds == "weekly").sum() - (kinds == "daily").sum()) <= 1
             )
+
+
+def test_blocks_reach_deployed_sizes_on_many_places():
+    import pandas as pd
+    from finetune_chronos import outbreak_blocks
+
+    places = [f"P{i:02d}" for i in range(1, 27)]
+    rows = [
+        (p, onset, onset + pd.Timedelta(days=d), 3)
+        for p in places
+        for onset in pd.date_range("2026-01-03", periods=280)
+        for d in (0, 3, 9)
+    ]
+    counts = pd.DataFrame(
+        rows, columns=["location", "reference_date", "report_date", "count"]
+    )
+    for col in ("reference_date", "report_date"):
+        counts[col] = counts[col].dt.date.astype(str)
+    big = []
+    for seed in range(30):
+        for b in outbreak_blocks(
+            counts, places, np.random.default_rng(seed), 3
+        ):
+            big.append((b["n_targets"], b["context"].shape[0]))
+    # BDBV's daily block: 27 targets and 783 series.
+    assert any(t >= 27 and s >= 700 for t, s in big)
