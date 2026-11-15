@@ -282,3 +282,36 @@ def test_remote_simulator_that_stays_stale_blocks_batches(tmp_path):
     assert "stale" in out
     assert "started" not in out
     assert "simulator" in out
+
+
+def test_trainer_does_not_start_from_a_dirty_worktree(tmp_path):
+    def git(*args):
+        subprocess.run(["git", *args], cwd=tmp_path, check=True)
+
+    git("init", "-q")
+    (tmp_path / "code.py").write_text("x = 1\n")
+    git("add", "code.py")
+    git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "c")
+    (tmp_path / "code.py").write_text("x = 2\n")
+    out = run(
+        tmp_path,
+        "trainer_args=(); (start_trainer); echo exit $?; "
+        "cat output/finetune/driver.log; ls output/finetune",
+    )
+    assert "exit 1" in out
+    assert "uncommitted" in out
+    assert "trainer.pid" not in out
+
+
+def test_remote_with_another_epinowcast_runs_no_batches(tmp_path):
+    sha = _simulator(tmp_path)
+    out = run(
+        tmp_path,
+        "enw_fingerprint() { echo laptop; }; "
+        "remote() { case $1 in sha256sum*) "
+        f"echo '{sha}  f';; *enw_fingerprint*) echo archie;; esac; }}; "
+        "rsync() { :; }; "
+        "remote_code || echo blocked; cat output/finetune/driver.log",
+    )
+    assert "blocked" in out
+    assert "epinowcast" in out
