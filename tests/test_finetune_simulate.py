@@ -291,7 +291,9 @@ def test_failures_hold_one_row_per_try(tmp_path):
 set.seed(8)
 d <- draw_design(1L)
 d$n_places <- 5L
-rows <- lapply(1:2, function(i) failure_row("x", i, "too small", d, draw_values(d)))
+rows <- lapply(1:2, function(i) {
+  failure_row("x", i, "too small", d, draw_values(d))
+})
 cat(nrow(data.table::rbindlist(rows, fill = TRUE)), "\\n")
 """,
         tmp_path,

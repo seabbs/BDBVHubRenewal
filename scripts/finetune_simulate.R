@@ -403,6 +403,11 @@ draw_values <- function(design) {
   v
 }
 
+# A rejected try's row: its design and values, flat.
+failure_row <- function(id, try, reason, design, v) {
+  flat_values(c(list(outbreak = id, try = try, reason = reason), design, v))
+}
+
 # A simulation's settings as one row: values with one entry per place
 # become text joined by ";".
 flat_values <- function(x) {
@@ -707,8 +712,8 @@ if (sys.nframe() == 0L) {
         out <- res
         break
       }
-      failures[[length(failures) + 1L]] <- c(
-        list(outbreak = id, try = try, reason = reason), design, v
+      failures[[length(failures) + 1L]] <- failure_row(
+        id, try, reason, design, v
       )
     }
     if (is.null(out)) next
