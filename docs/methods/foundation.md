@@ -43,7 +43,9 @@ Health zones are split from the provinces as for the other fitted models ([Healt
   It comes from the delay alone, so it needs no walk spread.
 - **Ragged** (`*_ragged`): the same targets, with one lag series per place and lag $d < D$, indexed by onset step as in a regression nowcast.
   Lag series $d$ holds $Y_{p,t,d}$, missing where it is not yet reported, and Chronos-2 masks the missing values.
-  $t^* = c - D$, the last step whose count is at lag $D$ or more, with $D = 4$ weeks or $D = 28$ days.
+  $t^* = c - D$, the last step whose count is at lag $D$ or more.
+  $D$ is the truth delay the forecasts are scored on: the release backtest's `truth_delay` (`config/backtest.toml`), or the German benchmark's (`config/germany.toml`), in days or in weeks rounded up.
+  Where `truth_delay` is `"auto"`, $D$ is resolved from the tidy data as the backtest resolves it, and, with no tidy data, estimated the same way from the releases up to the origin.
   The lag series run past $t^*$ as known future values, which is how recent counts reach the nowcast.
 
 Chronos-2 standardises each series and takes its arcsinh, so counts go in as they are.
