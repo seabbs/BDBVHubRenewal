@@ -350,3 +350,18 @@ def test_status_shows_the_last_chunk_time_split(tmp_path):
     )
     out = run(tmp_path, "remote_state=up; status; cat output/finetune/STATUS")
     assert "last_chunk=wait 5s cut 0s train 3500s eval 60s" in out
+
+
+def test_laptop_takes_a_seed_that_crashed_on_the_remote_at_once(tmp_path):
+    logs = tmp_path / "sims" / "logs"
+    logs.mkdir(parents=True)
+    for s in range(5001, 5011):
+        (logs / f"{s}.log").write_text("running\n")
+    # A segfault under the remote's memory cap aborts R without "Execution
+    # halted", and the remote retrying it keeps its log fresh.
+    (logs / "5002.log").write_text(
+        " *** caught segfault ***\nAn irrecoverable exception occurred. "
+        "R is aborting now ...\n"
+    )
+    out = run(tmp_path, "unstarted_seeds | tr '\\n' ' '")
+    assert out.split() == ["5002"]
