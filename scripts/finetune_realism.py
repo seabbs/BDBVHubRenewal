@@ -24,6 +24,9 @@ import pandas as pd
 
 from bdbvhubrenewal.data import load_delays, load_target
 
+sys.path.insert(0, str(Path(__file__).parent))
+from finetune_chronos import strata
+
 GERMANY_LAST = "2022-02-09"
 """Last report date of the German development half."""
 
@@ -34,11 +37,14 @@ LAGS = (0, 7, 14, 28)
 """Days by which the share reported is summarised."""
 
 
-def weekly_summary(weekly: pd.DataFrame) -> dict[str, float]:
+def weekly_summary(
+    weekly: pd.DataFrame, strata: list[str] | None = None
+) -> dict[str, float]:
     """Return summaries of weekly counts by stratum.
 
     `weekly` has `location`, `week` and `count`, and the total is the sum
-    over strata.
+    over strata. `strata` lists every stratum, so those with no case
+    count as zero in the zero share, as a real place reporting none does.
     """
     total = weekly.groupby("week")["count"].sum().sort_index()
     active = total.index[total > 0]
@@ -55,6 +61,8 @@ def weekly_summary(weekly: pd.DataFrame) -> dict[str, float]:
     by = weekly.pivot_table(
         index="week", columns="location", values="count", aggfunc="sum"
     ).reindex(total.index)
+    if strata is not None:
+        by = by.reindex(columns=strata)
     return {
         "size": w.sum(),
         "peak_weekly": w.max(),
@@ -115,6 +123,9 @@ def simulated(
 ) -> pd.DataFrame:
     """Return summaries of a sample of simulated outbreaks, or all."""
     files = sorted(p for d in sim_dirs for p in d.glob("counts-*.csv.gz"))
+    settings = pd.concat(
+        [pd.read_csv(p) for d in sim_dirs for p in d.glob("settings-*.csv")]
+    ).set_index("outbreak")
     counts = pd.concat([pd.read_csv(p) for p in files])
     ids = counts["outbreak"].unique()
     if sample is not None:
@@ -142,7 +153,9 @@ def simulated(
             {
                 "source": "simulated",
                 "id": outbreak,
-                **weekly_summary(weekly),
+                **weekly_summary(
+                    weekly, strata(settings.loc[outbreak.rsplit("-", 1)[0]])
+                ),
                 **delay_summary(delays, w),
                 **report_weekdays(c["report_date"], w),
                 **phases(total, last),
