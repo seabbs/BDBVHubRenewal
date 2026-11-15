@@ -28,6 +28,7 @@ from paperfigs.nowcasts import (
 )
 from paperfigs.periods import add_period
 from paperfigs.plots import (
+    nowcast_panels,
     results_panel,
     si_nowcasts,
     si_scores_by_factor,
@@ -57,7 +58,7 @@ __all__ = [
 
 FIGURES: Final[dict[str, dict[str, tuple[str, ...]]]] = {
     "synthetic": {
-        "main": ("results",),
+        "main": ("nowcasts", "results"),
         "si": (
             "si-nowcasts",
             "si-factors",
@@ -67,7 +68,7 @@ FIGURES: Final[dict[str, dict[str, tuple[str, ...]]]] = {
         ),
     },
     "germany": {
-        "main": ("results",),
+        "main": ("nowcasts", "results"),
         "si": (
             "si-nowcasts",
             "si-location-horizon",
@@ -76,7 +77,7 @@ FIGURES: Final[dict[str, dict[str, tuple[str, ...]]]] = {
         ),
     },
     "ebola": {
-        "main": ("results",),
+        "main": ("nowcasts", "results"),
         "si": (
             "si-nowcasts",
             "si-location-horizon",
@@ -130,31 +131,38 @@ def _figures(
         forecasts["model"].unique(), nowcasts["models"][study]
     )
     origins = pick_origins(forecasts, int(nowcasts["origins"]), seed)
-    shown = {
-        "ribbon_models": models,
-        "origins": origins,
-        "truth": truth,
-        "baseline": baseline,
-    }
+    shown = {"baseline": baseline, "nowcast": False}
+    reference = REFERENCE if REFERENCE in set(scores["model"]) else baseline
+    rel = (
+        relative_scores(drop_checkpoints(scores), baseline=reference)
+        .set_index("model")["rel_score"]
+        .to_dict()
+    )
+
+    def panels(location: str) -> Figure:
+        return nowcast_panels(
+            forecasts, observations, truth, models, origins, location, rel
+        )
+
     if study == "synthetic":
         # Outbreaks are many, so scores break down by scenario factor.
         # The fine-tune's checkpoints appear only in their own figure.
         factors = _factors(locations)
         main = drop_checkpoints(scores)
-        panels = pick_outbreaks(
+        panels_ = pick_outbreaks(
             locations, nowcasts["factors"], int(nowcasts["outbreaks"]), seed
         )
         return {
+            "nowcasts": panels(panels_[0][0]),
             "results": results_panel(
                 drop_checkpoints(forecasts),
                 observations,
                 main,
                 factors=factors,
-                location=panels[0][0],
                 **shown,
             ),
             "si-nowcasts": si_nowcasts(
-                forecasts, observations, panels, models, origins, truth
+                forecasts, observations, panels_, models, origins, truth
             ),
             "si-factors": si_scores_by_factor(main, factors, baseline),
             "si-factors-log": si_scores_by_factor(
@@ -165,12 +173,12 @@ def _figures(
         }
     national = _national(study, forecasts, nowcasts)
     return {
+        "nowcasts": panels(national),
         "results": results_panel(
             forecasts,
             observations,
             scores,
             split=split,
-            location=national,
             **shown,
         ),
         "si-nowcasts": si_nowcasts(

@@ -189,10 +189,16 @@ Key references: the Methods references, with [@bracherEvaluatingEpidemicForecast
 - How scores change with the amount of fine-tuning data (doublings from 1,000 outbreaks), as an SI figure.
 :::
 
+::: {#fig-synthetic-nowcasts}
+![](build/figures/main/synthetic-nowcasts.png)
+
+Held-out synthetic data: nowcasts of one held-out outbreak, drawn with the workflow's seed, one column per model and one row per origin. Black is the rolling truth, grey dashed the data as of the origin, and blue the model's median with its 50% and 95% intervals; each column gives the model's score relative to `randomwalknowcast`. {{< meta results.synthetic.label >}} {{< meta results.synthetic.note >}}
+:::
+
 ::: {#fig-synthetic}
 ![](build/figures/main/synthetic-results.png)
 
-Held-out synthetic data. (A) Nowcasts of one held-out outbreak, drawn with the workflow's seed, against the rolling truth; (B, C) CRPS relative to `randomwalknowcast` on the natural and log scales; (D) bias; (E) 50% and 90% coverage; (F) relative CRPS by scenario factor; (G) relative CRPS by horizon. {{< meta results.synthetic.label >}} {{< meta results.synthetic.note >}}
+Held-out synthetic data. (A, B) CRPS relative to `randomwalknowcast` on the natural and log scales; (C) bias; (D) 50% and 90% coverage; (E) relative CRPS by scenario factor; (F) relative CRPS by horizon. {{< meta results.synthetic.label >}} {{< meta results.synthetic.note >}}
 :::
 
 Placeholder summary from the workflow: the best model was {{< meta results.synthetic.best_model >}}, with a relative score of {{< meta results.synthetic.best_rel_score >}} and {{< meta results.synthetic.best_rel_log_score >}} on the log scale, against {{< meta results.synthetic.baseline >}}.
@@ -217,10 +223,16 @@ Held-out synthetic data: mean energy and variogram scores of each model's trajec
 - Key references: [@Wolffram2023; @amaralPostprocessingWeightedCombination2025].
 :::
 
+::: {#fig-germany-nowcasts}
+![](build/figures/main/germany-nowcasts.png)
+
+German nowcast hub: national nowcasts, one column per model and one row per origin. Black is the rolling truth, grey dashed the data as of the origin, and blue the model's median with its 50% and 95% intervals; each column gives the model's WIS relative to `randomwalknowcast`. {{< meta results.germany.label >}} {{< meta results.germany.note >}}
+:::
+
 ::: {#fig-germany}
 ![](build/figures/main/germany-results.png)
 
-German nowcast hub. (A) National nowcasts against the rolling truth, with a dotted line at the split between the development and held-out halves; (B, C) WIS relative to `KIT-frozen_baseline` on the natural and log scales; (D) bias; (E) 50% and 95% coverage; (F) relative WIS by location; (G) by age group; (H) by horizon. {{< meta results.germany.label >}} {{< meta results.germany.note >}}
+German nowcast hub. (A, B) WIS relative to `KIT-frozen_baseline` on the natural and log scales; (C) bias; (D) 50% and 95% coverage; (E) relative WIS by location; (F) by age group; (G) by horizon. {{< meta results.germany.label >}} {{< meta results.germany.note >}}
 :::
 
 Placeholder summary from the workflow: the best model was {{< meta results.germany.best_model >}}, with a relative score of {{< meta results.germany.best_rel_score >}} and {{< meta results.germany.best_rel_log_score >}} on the log scale, against {{< meta results.germany.baseline >}}, and {{< meta results.germany.best_rel_score_randomwalknowcast >}} against `randomwalknowcast`, as the hub's baseline is a point forecast with no coverage.
@@ -238,10 +250,16 @@ German nowcast hub: mean scores, coverage and number of forecasts of each model,
 - A summary of score performance.
 :::
 
+::: {#fig-ebola-nowcasts}
+![](build/figures/main/ebola-nowcasts.png)
+
+Ebola: national nowcasts from past releases, one column per model and one row per origin. Black is the rolling truth, grey dashed the data as of the origin, and blue the model's median with its 50% and 95% intervals; each column gives the model's CRPS relative to `randomwalknowcast`. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
+:::
+
 ::: {#fig-ebola}
 ![](build/figures/main/ebola-results.png)
 
-Ebola: sample forecasts from past releases (release backtest), joined by the hub's forecasts as they can be scored. (A) National nowcasts against the rolling truth; (B, C) CRPS relative to {{< meta results.ebola.baseline >}} on the natural and log scales, on the forecasts each model shares with it, with the share of forecasts a model made in its label where it missed some; (D) bias; (E) 50% and 90% coverage; (F) relative CRPS by location; (G) by horizon. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
+Ebola: sample forecasts from past releases (release backtest), joined by the hub's forecasts as they can be scored. (A, B) CRPS relative to {{< meta results.ebola.baseline >}} on the natural and log scales, on the forecasts each model shares with it, with the share of forecasts a model made in its label where it missed some; (C) bias; (D) 50% and 90% coverage; (E) relative CRPS by location; (F) by horizon. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
 :::
 
 Placeholder summary from the workflow: the best model was {{< meta results.ebola.best_model >}}, with a relative score of {{< meta results.ebola.best_rel_score >}} and {{< meta results.ebola.best_rel_log_score >}} on the log scale, against {{< meta results.ebola.baseline >}}.

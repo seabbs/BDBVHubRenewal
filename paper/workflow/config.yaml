@@ -120,7 +120,7 @@ evidence:
     path: evidence/paper-forecasts-chronos.csv.gz
   # Scores of each r3 checkpoint on the case studies (germany-chronos2).
   checkpoint_scores:
-    ref: 9337dc8d18de01b04d259fc0658fefb9c1db0e68
+    ref: a0ccfc67bc1471a2405eb4af3254310b087c92c3
     path: evidence/checkpoint-scores.csv
   # The scale-floor test (fm-finetune3).
   scale_floor:

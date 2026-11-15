@@ -12,7 +12,7 @@ a log axis with a dashed line at 1.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from typing import Final
 
 import matplotlib as mpl
@@ -62,8 +62,10 @@ from paperfigs.style import (
 )
 
 __all__ = [
+    "NOWCAST_LEVELS",
     "PANEL_LETTERS",
     "STUDY_HORIZON_BIN",
+    "nowcast_panels",
     "results_panel",
     "si_nowcasts",
     "si_scores_by_factor",
@@ -639,6 +641,7 @@ def results_panel(
     split: pd.Timestamp | None = None,
     origins: Sequence[pd.Timestamp] | None = None,
     truth: pd.DataFrame | None = None,
+    nowcast: bool = True,
 ) -> Figure:
     """Plot the results panel for one study.
 
@@ -679,6 +682,10 @@ def results_panel(
         Origins of panel A. Defaults to evenly spaced ones.
     truth : pandas.DataFrame, optional
         The rolling truth, drawn in panel A in place of the latest data.
+    nowcast : bool
+        Whether to draw panel A. Without it the panels start at the
+        relative score, for a study whose nowcasts have their own figure
+        (`nowcast_panels`).
 
     Returns
     -------
@@ -706,25 +713,30 @@ def results_panel(
         bottom = [where] * 5 + ["stratum"] * 3 + ["horizon"] * 4
     else:
         bottom = [where] * 7 + ["horizon"] * 5
-    top = [["nowcast"] * 12, ["rel"] * 3 + ["rel_log"] * 3]
-    top[1] += ["bias"] * 3 + ["coverage"] * 3
+    scores_row = ["rel"] * 3 + ["rel_log"] * 3 + ["bias"] * 3
+    top = [["nowcast"] * 12] if nowcast else []
+    top.append(scores_row + ["coverage"] * 3)
     fig, axd = plt.subplot_mosaic(
         [*top, bottom],
-        figsize=(12, 11),
-        height_ratios=[1.25, 1, 1],
+        figsize=(12, 11 if nowcast else 7.5),
+        height_ratios=[1.25, 1, 1] if nowcast else [1, 1],
         layout="constrained",
     )
-    missing = plot_nowcasts(
-        axd["nowcast"],
-        forecasts.loc[forecasts["stratum"] == main],
-        obs.loc[obs["stratum"] == main],
-        ribbons,
-        location,
-        models,
-        origins=origins,
-        truth=None if truth is None else truth.loc[truth["stratum"] == main],
-    )
-    _split_line(axd["nowcast"], split)
+    missing = False
+    if nowcast:
+        missing = plot_nowcasts(
+            axd["nowcast"],
+            forecasts.loc[forecasts["stratum"] == main],
+            obs.loc[obs["stratum"] == main],
+            ribbons,
+            location,
+            models,
+            origins=origins,
+            truth=(
+                None if truth is None else truth.loc[truth["stratum"] == main]
+            ),
+        )
+        _split_line(axd["nowcast"], split)
     rel = relative_scores(sc, halves, baseline)
     summary = summarise_scores(sc, halves)
     # A model that skipped forecasts scores only on the rest; say so.
@@ -777,7 +789,8 @@ def results_panel(
     unit = _STEP_UNIT.get(bin_days or _step_days(forecasts), "steps")
     axd["horizon"].xaxis.set_major_locator(MaxNLocator(integer=True))
     axd["horizon"].set_xlabel(f"Horizon ({unit})")
-    order = ["nowcast", "rel", "rel_log", "bias", "coverage", where]
+    order = [*(["nowcast"] if nowcast else []), "rel", "rel_log"]
+    order += ["bias", "coverage", where]
     order += ["stratum", "horizon"] if stratified else ["horizon"]
     for letter, key in zip(PANEL_LETTERS, order, strict=False):
         _label(axd[key], letter, _TITLES[key].format(m=name))
@@ -1104,4 +1117,162 @@ def si_nowcasts(
     for ax in axes[len(panels) :]:
         ax.set_visible(False)
     _legend_models(fig, models)
+    return fig
+
+
+NOWCAST_LEVELS: Final = (0.025, 0.25, 0.5, 0.75, 0.975)
+"""Quantiles of the nowcast panels: the median and the 50% and 95% bands."""
+
+_PANEL_INK: Final = {
+    "series": "#2a78d6",
+    "truth": "#0b0b0b",
+    "data": "#8a8984",
+    "text": "#52514e",
+    "grid": "#e6e5e1",
+}
+
+
+def _panel_quantiles(one: pd.DataFrame) -> pd.DataFrame:
+    """Return a forecast's quantiles at `NOWCAST_LEVELS` by target date."""
+    if one["sample_id"].notna().any():
+        g = one.groupby("target_date")["value"]
+        return pd.DataFrame(
+            {q: g.quantile(q) for q in NOWCAST_LEVELS}
+        ).sort_index()
+    wide = one.pivot_table(
+        index="target_date", columns="quantile_level", values="value"
+    ).sort_index()
+    return wide[[q for q in NOWCAST_LEVELS if q in wide.columns]]
+
+
+def nowcast_panels(
+    forecasts: pd.DataFrame,
+    observations: pd.DataFrame,
+    truth: pd.DataFrame,
+    models: Sequence[str],
+    origins: Sequence[pd.Timestamp],
+    location: str,
+    rel: Mapping[str, float] | None = None,
+    stratum: str = DEFAULT_STRATUM,
+) -> Figure:
+    """Draw one column per model and one row per origin.
+
+    Every panel shows the same truth (black) and the data as of the
+    origin (grey, dashed), and one model's median with its 50% and 95%
+    bands in one colour, so no two models' lines overlap. Each column is
+    titled with the model and its relative score. The truth and data
+    lines are labelled in the first column, and there is no legend.
+
+    Parameters
+    ----------
+    forecasts, observations : pandas.DataFrame
+        One study's forecasts (quantiles or samples) and observations.
+    truth : pandas.DataFrame
+        `rolling_truth` output.
+    models : sequence of str
+        The columns.
+    origins : sequence of pandas.Timestamp
+        The rows.
+    location, stratum : str
+        The series drawn.
+    rel : mapping, optional
+        Each model's relative score, shown under its name.
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+        The panels.
+    """
+    ink = _PANEL_INK
+    fc = forecasts.loc[
+        (forecasts["location"] == location) & (forecasts["stratum"] == stratum)
+    ]
+    obs = observations.loc[observations["location"] == location]
+    if "stratum" in obs.columns:
+        obs = obs.loc[obs["stratum"] == stratum]
+    tr = truth.loc[
+        (truth["location"] == location) & (truth["stratum"] == stratum)
+    ].dropna(subset=["truth"])
+    fig, axes = plt.subplots(
+        len(origins),
+        len(models),
+        figsize=(2.6 * len(models), 2.3 * len(origins) + 0.6),
+        sharey="row",
+        squeeze=False,
+        layout="constrained",
+    )
+    for i, origin in enumerate(origins):
+        # The latest release on or before the origin.
+        before = obs.loc[obs["as_of_date"] <= origin]
+        seen = before.loc[before["as_of_date"] == before["as_of_date"].max()]
+        made = fc.loc[fc["origin_date"] == origin]
+        span = made["target_date"]
+        if span.empty:
+            span = pd.Series([origin])
+        lo, hi = span.min(), span.max()
+        seen = seen.loc[seen["target_date"].between(lo, hi)].sort_values(
+            "target_date"
+        )
+        t = tr.loc[tr["target_date"].between(lo, hi)].sort_values("target_date")
+        for j, model in enumerate(models):
+            ax = axes[i, j]
+            ax.plot(t["target_date"], t["truth"], color=ink["truth"], lw=1.5)
+            ax.plot(
+                seen["target_date"],
+                seen["value"],
+                color=ink["data"],
+                lw=1.2,
+                ls="--",
+            )
+            q = _panel_quantiles(made.loc[made["model"] == model])
+            if not q.empty:
+                for (a, b), alpha in (
+                    ((0.025, 0.975), 0.15),
+                    ((0.25, 0.75), 0.3),
+                ):
+                    if a in q and b in q:
+                        ax.fill_between(
+                            q.index,
+                            q[a],
+                            q[b],
+                            color=ink["series"],
+                            alpha=alpha,
+                            lw=0,
+                        )
+                ax.plot(
+                    q.index, q[0.5], color=ink["series"], lw=2, marker="o", ms=3
+                )
+            ax.grid(axis="y", color=ink["grid"], lw=0.8)
+            ax.tick_params(colors=ink["text"], labelsize=7)
+            ax.margins(x=0.12)
+            locator = mdates.AutoDateLocator(maxticks=4)
+            ax.xaxis.set_major_locator(locator)
+            ax.xaxis.set_major_formatter(mdates.ConciseDateFormatter(locator))
+            if i == 0:
+                score = (rel or {}).get(model)
+                sub = "" if score is None else f"\nrel. {score:.2f}"
+                ax.set_title(model + sub, fontsize=9)
+            if j == 0:
+                ax.set_ylabel(
+                    f"origin {pd.Timestamp(origin):%Y-%m-%d}",
+                    fontsize=8,
+                    color=ink["text"],
+                )
+                for frame, col, label, colour in (
+                    (t, "truth", "truth", ink["truth"]),
+                    (seen, "value", "data", ink["text"]),
+                ):
+                    if len(frame):
+                        ax.annotate(
+                            label,
+                            (
+                                frame["target_date"].iloc[-1],
+                                frame[col].iloc[-1],
+                            ),
+                            xytext=(4, 0),
+                            va="center",
+                            textcoords="offset points",
+                            fontsize=7,
+                            color=colour,
+                        )
     return fig
