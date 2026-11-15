@@ -479,3 +479,20 @@ def test_simulation_pauses_far_ahead_of_the_trainer(tmp_path):
     assert lines[1].split() == []
     # 20 ahead is between the bounds, so the pause holds; 9 ahead ends it.
     assert lines[2:] == ["1", "0"]
+
+
+def test_a_checkpoint_that_fails_its_check_is_an_alert(tmp_path):
+    for n in (1000, 2000):
+        (tmp_path / "ckpt" / f"n{n}").mkdir(parents=True)
+        (tmp_path / "ckpt" / f"n{n}" / "settings.json").write_text("{}")
+    out = run(
+        tmp_path,
+        'verify_checkpoint() { [[ "$1" == *n1000 ]]; }; '
+        "check_checkpoints; check_checkpoints; ls ckpt/n1000 ckpt/n2000; "
+        "cat inbox.md; cat output/finetune/STATUS",
+        ENV + "MAILBOX=inbox.md\n",
+    )
+    assert "verified" in out.split("ckpt/n2000")[0]
+    assert "ALERT: checkpoint n2000 does not match its code_commit" in out
+    # One mailbox line however often it is checked.
+    assert out.count("fm-finetune3") == 1
