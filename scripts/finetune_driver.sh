@@ -18,9 +18,9 @@
 #   LEAD_MAX, LEAD_RESUME   optional: no new batches while finished
 #                 training outbreaks lead the trainer by more than
 #                 LEAD_MAX, until the lead is under LEAD_RESUME
-#   LR_DECAY, SCALE_FLOOR, REAL_VALIDATION   optional trainer settings
-#                 (finetune_stream.py --lr-decay, --scale-floor,
-#                 --real-validation)
+#   LEARNING_RATE, LR_STEPS, SCALE_FLOOR, REAL_VALIDATION   optional
+#                 trainer settings (finetune_stream.py --learning-rate,
+#                 --lr-steps, --scale-floor, --real-validation)
 #   MAILBOX       optional file the driver appends an alert line to
 #                 from the trainer's second failure on
 #   EXTRA_SEEDS   optional seeds for other work, simulated after the
@@ -665,8 +665,8 @@ another_driver() {
 }
 
 build_trainer_args() {
-  # The trainer's arguments from the env file; LR_DECAY, SCALE_FLOOR and
-  # REAL_VALIDATION are passed only when set.
+  # The trainer's arguments from the env file; the optional settings
+  # are passed only when set.
   trainer_args=("$SIM_DIR" "$OUT" --train-seeds "$TRAIN_FIRST" "$TRAIN_LAST"
     --held-out-seeds "$HELD_FIRST" "$HELD_LAST" --outbreaks "$OUTBREAKS"
     --note "${NOTE:-}" --grid "$GRID"
@@ -674,7 +674,9 @@ build_trainer_args() {
     --prefixes ${PREFIXES:-1000 2000 4000 8000} --min-gain "${MIN_GAIN:-0.01}"
     --stop-from "${STOP_FROM:-8000}" --memory-gb "${MEMORY_GB:-36}")
   [ "${PUBLISH:-0}" = 1 ] && trainer_args+=(--publish)
-  [ -n "${LR_DECAY:-}" ] && trainer_args+=(--lr-decay "$LR_DECAY")
+  [ -n "${LEARNING_RATE:-}" ] \
+    && trainer_args+=(--learning-rate "$LEARNING_RATE")
+  [ -n "${LR_STEPS:-}" ] && trainer_args+=(--lr-steps "$LR_STEPS")
   [ -n "${SCALE_FLOOR:-}" ] && trainer_args+=(--scale-floor "$SCALE_FLOOR")
   [ -n "${REAL_VALIDATION:-}" ] \
     && trainer_args+=(--real-validation "$REAL_VALIDATION")

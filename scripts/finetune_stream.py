@@ -101,14 +101,15 @@ def set_scale_floor(model, floor: float) -> None:
         floor_scale(model, floor)
 
 
-def learning_rate(done: int, base: float, decay: float, first: int) -> float:
-    """Return the learning rate after `done` outbreaks.
+def learning_rate(step: int, base: float, steps: int) -> float:
+    """Return the learning rate of step `step` (from 0).
 
-    It is `base` up to `first` outbreaks and then `base * (first / done)
-    ** decay`, so with `decay` 1 each doubling of outbreaks halves it, and
-    with 0 it stays constant.
+    It falls linearly from `base` to zero over `steps` steps, as
+    Chronos-2's own fine-tuning does, and stays constant if `steps` is 0.
     """
-    return base * (first / max(done, first)) ** decay
+    if steps <= 0:
+        return base
+    return base * max(0.0, 1 - step / steps)
 
 
 def should_stop(
@@ -665,9 +666,9 @@ def main() -> None:
     parser.add_argument("--outbreaks", type=int, default=ft.PREFIXES[-1])
     parser.add_argument("--holdout", type=int, default=150)
     parser.add_argument("--learning-rate", type=float, default=1e-4)
-    # 1 halves the learning rate with each doubling of outbreaks after the
-    # first checkpoint; 0 keeps it constant.
-    parser.add_argument("--lr-decay", type=float, default=0.0)
+    # Steps over which the learning rate falls linearly to zero; 0 keeps
+    # it constant.
+    parser.add_argument("--lr-steps", type=int, default=0)
     # Least scale, in counts, a series is divided by; 0 keeps Chronos-2's.
     parser.add_argument("--scale-floor", type=float, default=0.0)
     # Real validation blocks (scripts/finetune_real_validation.py), scored
@@ -800,7 +801,7 @@ def main() -> None:
         ),
         "lora": {"r": 8, "alpha": 16},
         "learning_rate": args.learning_rate,
-        **({"lr_decay": args.lr_decay} if args.lr_decay else {}),
+        **({"lr_steps": args.lr_steps} if args.lr_steps else {}),
         **({"scale_floor": args.scale_floor} if args.scale_floor else {}),
         "batch_size": args.batch_size,
         "context": ft.CONTEXT,
@@ -901,10 +902,6 @@ def main() -> None:
     t0 = time.perf_counter()
     while done < args.outbreaks:
         hi = min(done + CHUNK, args.outbreaks)
-        for group in optimiser.param_groups:
-            group["lr"] = learning_rate(
-                done, args.learning_rate, args.lr_decay, prefixes[0]
-            )
         split = {"wait_s": 0.0, "cut_s": 0.0, "train_s": 0.0, "eval_s": 0.0}
         tick = time.perf_counter()
         report(
@@ -967,6 +964,10 @@ def main() -> None:
             while pause.exists():
                 report(stage="paused")
                 time.sleep(30)
+            for group in optimiser.param_groups:
+                group["lr"] = learning_rate(
+                    step, args.learning_rate, args.lr_steps
+                )
             value = accumulate(list(indices), backward, zero, skip)
             if not finite_step(params, optimiser, value):
                 log(f"step {step + 1}: no update (loss {value})")
