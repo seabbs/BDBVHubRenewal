@@ -6,7 +6,7 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
-<meta name="dcterms.date" content="2026-11-14">
+<meta name="dcterms.date" content="2026-11-15">
 
 <title>Title to be chosen</title>
 <style>
@@ -55,7 +55,7 @@ div.csl-indent {
 <link href="main_files/libs/quarto-html/quarto-syntax-highlighting-587c61ba64f3a5504c4d52d930310e48.css" rel="stylesheet" id="quarto-text-highlighting-styles">
 <script src="main_files/libs/bootstrap/bootstrap.min.js"></script>
 <link href="main_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
-<link href="main_files/libs/bootstrap/bootstrap-d99fc85c7253c7d071cb1f16904a1173.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<link href="main_files/libs/bootstrap/bootstrap-67135126376fdcfdeadaafff27d21302.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
 
   <script src="https://cdnjs.cloudflare.com/polyfill/v3/polyfill.min.js?features=es6"></script>
   <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js" type="text/javascript"></script>
@@ -110,7 +110,7 @@ window.Quarto = {
     <div>
     <div class="quarto-title-meta-heading">Published</div>
     <div class="quarto-title-meta-contents">
-      <p class="date">November 14, 2026</p>
+      <p class="date">November 15, 2026</p>
     </div>
   </div>
   
@@ -260,60 +260,84 @@ Figure&nbsp;1: The fine-tuning pipeline. (A) The assumptions in the epinowcast s
 <div id="tbl-synthetic-grid" class="quarto-float quarto-figure quarto-figure-center anchored">
 <figure class="quarto-float quarto-float-tbl figure">
 <figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-synthetic-grid-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Table&nbsp;1: The crossed factors of the simulation grid and their levels. The reason for each and the full settings are in the SI.
+Table&nbsp;1: The crossed factors of the simulation grid and their levels, each balanced within every block of simulations, read from the simulator’s code. The full settings are in the SI.
 </figcaption>
 <div aria-describedby="tbl-synthetic-grid-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
 <table class="caption-top table">
 <colgroup>
-<col style="width: 50%">
-<col style="width: 50%">
+<col style="width: 25%">
+<col style="width: 25%">
+<col style="width: 25%">
+<col style="width: 25%">
 </colgroup>
 <thead>
 <tr class="header">
 <th>Factor</th>
 <th>Levels</th>
+<th>Enters through</th>
+<th>Realised</th>
 </tr>
 </thead>
 <tbody>
 <tr class="odd">
-<td>Process</td>
-<td>growth; renewal 3; renewal 7; renewal 15</td>
+<td>Generative process</td>
+<td><code>growth</code>, <code>renewal_3</code>, <code>renewal_7</code>, <code>renewal_15</code>; balanced, 1/4 each</td>
+<td><code>enw_expectation()</code></td>
+<td></td>
 </tr>
 <tr class="even">
-<td>Gt shape</td>
-<td>gamma 0.3; gamma 0.6; gamma 1; lognormal 0.6</td>
+<td>Generation time shape</td>
+<td><code>gamma_0.3</code>, <code>gamma_0.6</code>, <code>gamma_1</code>, <code>lognormal_0.6</code>; balanced, 1/4 each</td>
+<td><code>enw_expectation(generation_time)</code></td>
+<td></td>
 </tr>
 <tr class="odd">
-<td>Trajectory</td>
-<td>growth; decline; flat; rise fall sharp; rise fall gradual; fall rise; oscillating; multi wave</td>
+<td>Trajectory of the growth rate</td>
+<td><code>growth</code>, <code>decline</code>, <code>flat</code>, <code>rise_fall_sharp</code>, <code>rise_fall_gradual</code>, <code>fall_rise</code>, <code>oscillating</code>, <code>multi_wave</code>; balanced, 1/8 each</td>
+<td><code>enw_simulate(growth_rate)</code></td>
+<td></td>
 </tr>
 <tr class="even">
-<td>Delay family</td>
-<td>lognormal; gamma; exponential</td>
+<td>Parametric delay family</td>
+<td><code>lognormal</code>, <code>gamma</code>, <code>exponential</code>; balanced, 1/3 each</td>
+<td><code>enw_reference(distribution)</code></td>
+<td></td>
 </tr>
 <tr class="odd">
 <td>Delay form</td>
-<td>parametric; non parametric; both</td>
+<td><code>parametric</code>, <code>non_parametric</code>, <code>both</code>; balanced, 1/3 each</td>
+<td><code>enw_reference(parametric, non_parametric)</code></td>
+<td></td>
 </tr>
 <tr class="even">
-<td>Delay change</td>
-<td>static; drift; step; periodic; walk</td>
+<td>Delay over time</td>
+<td><code>static</code>, <code>drift</code>, <code>step</code>, <code>periodic</code>, <code>walk</code>; balanced, 1/5 each</td>
+<td><code>enw_reference()</code></td>
+<td></td>
 </tr>
 <tr class="odd">
-<td>Reporting</td>
-<td>daily; weekdays</td>
+<td>Report days</td>
+<td><code>daily</code>, <code>weekdays</code>; balanced, 1/2 each</td>
+<td><code>enw_report(structural)</code></td>
+<td></td>
 </tr>
 <tr class="even">
-<td>Reference dow</td>
-<td>no; yes</td>
+<td>Day-of-week effect on expected counts</td>
+<td><code>no</code>, <code>yes</code>; balanced, 1/2 each</td>
+<td><code>enw_expectation(observation)</code></td>
+<td></td>
 </tr>
 <tr class="odd">
-<td>Observation</td>
-<td>negbin; negbin1d; poisson</td>
+<td>Observation model</td>
+<td><code>negbin</code>, <code>negbin1d</code>, <code>poisson</code>; balanced, 1/3 each</td>
+<td><code>enw_obs(family)</code></td>
+<td></td>
 </tr>
 <tr class="even">
 <td>Strata</td>
-<td>single; places; ages; places ages</td>
+<td><code>single</code>, <code>places</code>, <code>ages</code>, <code>places_ages</code>; balanced, 1/4 each</td>
+<td><code>enw_preprocess_data(by)</code></td>
+<td></td>
 </tr>
 </tbody>
 </table>
@@ -464,7 +488,7 @@ Figure&nbsp;2: Held-out synthetic data. (A) Nowcasts of one held-out outbreak, d
 </figcaption>
 </figure>
 </div>
-<p>Placeholder summary from the workflow: the best model was epinowcast, with a relative score of 0.61 and 0.68 on the log scale, against randomwalknowcast.</p>
+<p>Placeholder summary from the workflow: the best model was epinowcast, with a relative score of 0.68 and 0.87 on the log scale, against randomwalknowcast.</p>
 <div id="tbl-synthetic-scores" class="quarto-float quarto-figure quarto-figure-center anchored">
 <figure class="quarto-float quarto-float-tbl figure">
 <figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-synthetic-scores-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
@@ -505,116 +529,116 @@ Table&nbsp;2: Held-out synthetic data: mean scores, coverage and number of forec
 <td>synthetic</td>
 <td>epinowcast</td>
 <td>crps</td>
-<td>12.6</td>
-<td>0.12</td>
-<td>0.143</td>
-<td>0.522</td>
-<td>0.876</td>
-<td>1051</td>
-<td>0.613</td>
-<td>0.681</td>
+<td>10.8</td>
+<td>0.149</td>
+<td>0.24</td>
+<td>0.465</td>
+<td>0.8</td>
+<td>1056</td>
+<td>0.678</td>
+<td>0.866</td>
 </tr>
 <tr class="even">
 <td>synthetic</td>
 <td>fm_chronos_daily_complete</td>
 <td>crps</td>
-<td>22.3</td>
-<td>0.211</td>
-<td>-0.227</td>
-<td>0.426</td>
-<td>0.821</td>
-<td>1051</td>
-<td>1.08</td>
-<td>1.2</td>
+<td>18.6</td>
+<td>0.203</td>
+<td>-0.107</td>
+<td>0.415</td>
+<td>0.792</td>
+<td>1056</td>
+<td>1.17</td>
+<td>1.18</td>
 </tr>
 <tr class="odd">
 <td>synthetic</td>
 <td>fm_chronos_daily_ragged</td>
 <td>crps</td>
-<td>23.4</td>
-<td>0.187</td>
-<td>0.369</td>
-<td>0.335</td>
-<td>0.676</td>
-<td>1051</td>
-<td>1.14</td>
-<td>1.07</td>
+<td>21.1</td>
+<td>0.235</td>
+<td>0.427</td>
+<td>0.295</td>
+<td>0.598</td>
+<td>1056</td>
+<td>1.33</td>
+<td>1.36</td>
 </tr>
 <tr class="even">
 <td>synthetic</td>
 <td>fm_chronos_daily_ragged_ft</td>
 <td>crps</td>
-<td>13.3</td>
-<td>0.129</td>
-<td>0.105</td>
-<td>0.495</td>
-<td>0.882</td>
-<td>1051</td>
-<td>0.648</td>
-<td>0.734</td>
+<td>11.6</td>
+<td>0.148</td>
+<td>0.254</td>
+<td>0.42</td>
+<td>0.806</td>
+<td>1056</td>
+<td>0.729</td>
+<td>0.86</td>
 </tr>
 <tr class="odd">
 <td>synthetic</td>
 <td>fm_chronos_weekly_complete</td>
 <td>crps</td>
-<td>24</td>
-<td>0.216</td>
-<td>-0.271</td>
-<td>0.426</td>
-<td>0.817</td>
-<td>1051</td>
-<td>1.17</td>
-<td>1.23</td>
+<td>17.8</td>
+<td>0.21</td>
+<td>-0.2</td>
+<td>0.423</td>
+<td>0.781</td>
+<td>1056</td>
+<td>1.12</td>
+<td>1.22</td>
 </tr>
 <tr class="even">
 <td>synthetic</td>
 <td>fm_chronos_weekly_ragged</td>
 <td>crps</td>
-<td>19.9</td>
-<td>0.181</td>
-<td>-0.0368</td>
-<td>0.435</td>
-<td>0.793</td>
-<td>1051</td>
-<td>0.969</td>
-<td>1.03</td>
+<td>21.8</td>
+<td>0.227</td>
+<td>0.0425</td>
+<td>0.391</td>
+<td>0.733</td>
+<td>1056</td>
+<td>1.37</td>
+<td>1.32</td>
 </tr>
 <tr class="odd">
 <td>synthetic</td>
 <td>fm_chronos_weekly_ragged_ft</td>
 <td>crps</td>
-<td>17.4</td>
-<td>0.14</td>
-<td>0.197</td>
-<td>0.538</td>
-<td>0.882</td>
-<td>1051</td>
-<td>0.847</td>
-<td>0.796</td>
+<td>14</td>
+<td>0.175</td>
+<td>0.245</td>
+<td>0.433</td>
+<td>0.811</td>
+<td>1056</td>
+<td>0.883</td>
+<td>1.02</td>
 </tr>
 <tr class="even">
 <td>synthetic</td>
 <td>randomwalk</td>
 <td>crps</td>
-<td>22.3</td>
-<td>0.186</td>
-<td>-0.163</td>
-<td>0.574</td>
-<td>0.95</td>
-<td>1051</td>
-<td>1.09</td>
-<td>1.06</td>
+<td>19.2</td>
+<td>0.212</td>
+<td>-0.0361</td>
+<td>0.549</td>
+<td>0.89</td>
+<td>1056</td>
+<td>1.21</td>
+<td>1.23</td>
 </tr>
 <tr class="odd">
 <td>synthetic</td>
 <td>randomwalknowcast</td>
 <td>crps</td>
-<td>20.6</td>
-<td>0.176</td>
-<td>0.0841</td>
-<td>0.656</td>
-<td>0.967</td>
-<td>1051</td>
+<td>15.9</td>
+<td>0.172</td>
+<td>0.178</td>
+<td>0.623</td>
+<td>0.915</td>
+<td>1056</td>
 <td>1</td>
 <td>1</td>
 </tr>
@@ -651,113 +675,113 @@ Table&nbsp;3: Held-out synthetic data: mean energy and variogram scores of each 
 <tbody>
 <tr class="odd">
 <td>epinowcast</td>
-<td>142</td>
-<td>0.446</td>
-<td>2.26</td>
-<td>0.671</td>
-<td>0.503</td>
+<td>144</td>
+<td>0.522</td>
+<td>2.18</td>
+<td>0.849</td>
+<td>0.658</td>
 </tr>
 <tr class="even">
 <td>fm_chronos_daily_complete</td>
-<td>142</td>
-<td>0.789</td>
-<td>5.02</td>
+<td>144</td>
+<td>0.732</td>
+<td>4.08</td>
 <td>1.19</td>
-<td>1.12</td>
+<td>1.23</td>
 </tr>
 <tr class="odd">
 <td>fm_chronos_daily_ragged</td>
-<td>142</td>
-<td>0.668</td>
-<td>3.56</td>
-<td>1.01</td>
-<td>0.793</td>
+<td>144</td>
+<td>0.813</td>
+<td>3.83</td>
+<td>1.32</td>
+<td>1.16</td>
 </tr>
 <tr class="even">
 <td>fm_chronos_daily_ragged_ft</td>
-<td>142</td>
-<td>0.486</td>
-<td>2.47</td>
-<td>0.731</td>
-<td>0.55</td>
+<td>144</td>
+<td>0.518</td>
+<td>2.22</td>
+<td>0.843</td>
+<td>0.671</td>
 </tr>
 <tr class="odd">
 <td>fm_chronos_daily_ragged_ft@1000</td>
-<td>142</td>
-<td>0.675</td>
-<td>3.96</td>
-<td>1.02</td>
-<td>0.883</td>
+<td>144</td>
+<td>0.659</td>
+<td>3.12</td>
+<td>1.07</td>
+<td>0.944</td>
 </tr>
 <tr class="even">
 <td>fm_chronos_daily_ragged_ft@16000</td>
-<td>142</td>
-<td>0.504</td>
-<td>2.59</td>
-<td>0.758</td>
-<td>0.577</td>
+<td>144</td>
+<td>0.575</td>
+<td>2.72</td>
+<td>0.935</td>
+<td>0.821</td>
 </tr>
 <tr class="odd">
 <td>fm_chronos_daily_ragged_ft@2000</td>
-<td>142</td>
-<td>0.583</td>
-<td>3.15</td>
-<td>0.877</td>
-<td>0.702</td>
+<td>144</td>
+<td>0.597</td>
+<td>2.8</td>
+<td>0.97</td>
+<td>0.845</td>
 </tr>
 <tr class="even">
 <td>fm_chronos_daily_ragged_ft@4000</td>
-<td>142</td>
-<td>0.522</td>
-<td>2.85</td>
-<td>0.786</td>
-<td>0.635</td>
+<td>144</td>
+<td>0.588</td>
+<td>2.79</td>
+<td>0.956</td>
+<td>0.842</td>
 </tr>
 <tr class="odd">
 <td>fm_chronos_daily_ragged_ft@8000</td>
-<td>142</td>
-<td>0.457</td>
-<td>2.36</td>
-<td>0.688</td>
-<td>0.526</td>
+<td>144</td>
+<td>0.554</td>
+<td>2.51</td>
+<td>0.901</td>
+<td>0.757</td>
 </tr>
 <tr class="even">
 <td>fm_chronos_weekly_complete</td>
-<td>142</td>
-<td>0.792</td>
-<td>5.12</td>
-<td>1.19</td>
-<td>1.14</td>
+<td>144</td>
+<td>0.752</td>
+<td>4.18</td>
+<td>1.22</td>
+<td>1.26</td>
 </tr>
 <tr class="odd">
 <td>fm_chronos_weekly_ragged</td>
-<td>142</td>
-<td>0.676</td>
-<td>3.97</td>
-<td>1.02</td>
-<td>0.884</td>
+<td>144</td>
+<td>0.827</td>
+<td>4.61</td>
+<td>1.34</td>
+<td>1.39</td>
 </tr>
 <tr class="even">
 <td>fm_chronos_weekly_ragged_ft</td>
-<td>142</td>
-<td>0.524</td>
-<td>2.85</td>
-<td>0.789</td>
-<td>0.635</td>
+<td>144</td>
+<td>0.619</td>
+<td>2.89</td>
+<td>1.01</td>
+<td>0.872</td>
 </tr>
 <tr class="odd">
 <td>randomwalk</td>
-<td>142</td>
-<td>0.695</td>
-<td>4.55</td>
-<td>1.05</td>
-<td>1.01</td>
+<td>144</td>
+<td>0.783</td>
+<td>4.75</td>
+<td>1.27</td>
+<td>1.43</td>
 </tr>
 <tr class="even">
 <td>randomwalknowcast</td>
-<td>142</td>
-<td>0.664</td>
-<td>4.49</td>
+<td>144</td>
+<td>0.615</td>
+<td>3.31</td>
 <td>1</td>
 <td>1</td>
 </tr>
@@ -792,7 +816,7 @@ Table&nbsp;3: Held-out synthetic data: mean energy and variogram scores of each 
 <img src="build/figures/main/germany-results.png" class="img-fluid figure-img">
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-germany-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;3: German nowcast hub. (A) National nowcasts against the rolling truth, with a dotted line at the split between the development and held-out halves; (B, C) WIS relative to <code>KIT-frozen_baseline</code> on the natural and log scales; (D) bias; (E) 50% and 95% coverage; (F) relative WIS by location; (G) by age group; (H) by horizon. Chronos-2 rows are provisional: their ragged models capped release lags at 28 days rather than the 40-day truth delay, and they are being rescored.
+Figure&nbsp;3: German nowcast hub. (A) National nowcasts against the rolling truth, with a dotted line at the split between the development and held-out halves; (B, C) WIS relative to <code>KIT-frozen_baseline</code> on the natural and log scales; (D) bias; (E) 50% and 95% coverage; (F) relative WIS by location; (G) by age group; (H) by horizon.
 </figcaption>
 </figure>
 </div>
@@ -800,7 +824,7 @@ Figure&nbsp;3: German nowcast hub. (A) National nowcasts against the rolling tru
 <div id="tbl-germany-scores" class="quarto-float quarto-figure quarto-figure-center anchored">
 <figure class="quarto-float quarto-float-tbl figure">
 <figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-germany-scores-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Table&nbsp;4: German nowcast hub: mean scores, coverage and number of forecasts of each model, with scores relative to KIT-frozen_baseline. Chronos-2 rows are provisional: their ragged models capped release lags at 28 days rather than the 40-day truth delay, and they are being rescored.
+Table&nbsp;4: German nowcast hub: mean scores, coverage and number of forecasts of each model, with scores relative to KIT-frozen_baseline.
 </figcaption>
 <div aria-describedby="tbl-germany-scores-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
 <table class="caption-top table">
@@ -1225,32 +1249,6 @@ Table&nbsp;5: Ebola hub submissions: mean scores, coverage and number of forecas
 <tbody>
 <tr class="odd">
 <td>ebola</td>
-<td>fm_chronos_daily_ragged</td>
-<td>crps</td>
-<td>2.48</td>
-<td>0.0223</td>
-<td>0.0476</td>
-<td>0.893</td>
-<td>0.933</td>
-<td>270</td>
-<td>2.78</td>
-<td>5.7</td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>fm_chronos_daily_ragged_ft</td>
-<td>crps</td>
-<td>3.3</td>
-<td>0.0249</td>
-<td>0.0566</td>
-<td>0.881</td>
-<td>0.922</td>
-<td>270</td>
-<td>3.69</td>
-<td>6.11</td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
 <td>fm_chronos_daily_ragged_ft_n1000</td>
 <td>crps</td>
 <td>3.1</td>
@@ -1261,32 +1259,6 @@ Table&nbsp;5: Ebola hub submissions: mean scores, coverage and number of forecas
 <td>270</td>
 <td>2.12</td>
 <td>4.19</td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>fm_chronos_weekly_ragged</td>
-<td>crps</td>
-<td>1.92</td>
-<td>0.0145</td>
-<td>-0.0121</td>
-<td>0.911</td>
-<td>0.937</td>
-<td>270</td>
-<td>1.69</td>
-<td>3.21</td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>fm_chronos_weekly_ragged_ft</td>
-<td>crps</td>
-<td>2.08</td>
-<td>0.015</td>
-<td>-0.00226</td>
-<td>0.911</td>
-<td>0.93</td>
-<td>270</td>
-<td>1.41</td>
-<td>2.89</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
