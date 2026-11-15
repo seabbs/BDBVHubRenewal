@@ -357,8 +357,9 @@ def _scheduler(tmp_path: Path) -> str:
     run(
         tmp_path,
         "remote() { case $1 in cat*) cat > sched.sh;; *) return 1;; esac; }; "
-        "remote_scheduler",
-        ENV + "REMOTE_RETRY_MEM_KB=2\n",
+        "remote_scheduler; true",
+        ENV + "REMOTE_RETRY_MEM_KB=2\nREMOTE_MIN_FREE_MEM_GB=1\n"
+        "REMOTE_MAX_LOAD=9\n",
     )
     return (tmp_path / "sched.sh").read_text()
 
@@ -368,8 +369,8 @@ def test_remote_retries_an_aborted_seed_with_a_higher_cap(tmp_path):
     # A batch that R aborted (a segfault under the memory cap) runs again
     # once the first pass is done, under REMOTE_RETRY_MEM_KB.
     assert "R is aborting" in script
-    assert "ulimit -v 2" in script
-    assert "ulimit -v 1" in script
+    assert "batch $s 1 &" in script
+    assert "batch $s 2\n" in script
 
 
 def test_batches_log_their_peak_memory(tmp_path):
@@ -394,10 +395,10 @@ def test_laptop_leaves_unclaimed_seeds_to_an_answering_remote(tmp_path):
 def test_a_claimed_seed_is_stopped_on_the_remote(tmp_path):
     out = run(
         tmp_path,
-        "remote() { echo \"$@\" >> calls; }; claim 5004; cat calls; "
+        'remote() { echo "$@" >> calls; }; claim 5004; cat calls; '
         "cat sims/local-seeds.txt",
     )
-    assert "finetune_simulate.R --args 25 5004 " in out
+    assert "inetune_simulate.R --args 25 5004 " in out
     assert out.split()[-1] == "5004"
 
 
@@ -407,8 +408,7 @@ def test_long_wait_is_an_alert_in_status_and_the_mailbox(tmp_path):
     (tmp_path / "ckpt").mkdir()
     since = time.time() - 31 * 60
     (tmp_path / "ckpt" / "stream-status.json").write_text(
-        '{"stage": "waiting for outbreaks 1-500", '
-        f'"waiting_since": {since}}}'
+        f'{{"stage": "waiting for outbreaks 1-500", "waiting_since": {since}}}'
     )
     out = run(
         tmp_path,

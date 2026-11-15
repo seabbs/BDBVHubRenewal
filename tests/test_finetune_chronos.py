@@ -431,6 +431,7 @@ def test_a_straggler_is_folded_into_a_later_chunk(tmp_path):
     # The straggler joins the next chunk once it finishes.
     for name in ("counts-6001.csv.gz", "settings-6001.csv"):
         (tmp_path / f"late-{name}").rename(tmp_path / name)
-    assert next_chunk(tmp_path, seeds, late, 2, waited=0, patience=1200) == (
-        ids[:2]
+    assert (
+        next_chunk(tmp_path, seeds, late, 2, waited=0, patience=1200)
+        == (ids[:2])
     )

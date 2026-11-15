@@ -10,6 +10,9 @@
 #   SIM_DIR       local directory of the simulations
 #   TRAIN_FIRST, TRAIN_LAST       training seeds
 #   HELD_FIRST, HELD_LAST         held-out seeds (simulated first)
+#   REMOTE_RETRY_MEM_KB   memory cap of a remote batch run again after R
+#                 aborted it (default twice REMOTE_MEM_KB)
+#   WAIT_ALERT_MIN   minutes the trainer waits before an alert (30)
 #   MAILBOX       optional file the driver appends an alert line to
 #                 from the trainer's second failure on
 #   EXTRA_SEEDS   optional seeds for other work, simulated after the
@@ -86,6 +89,18 @@ status() {
   # Seconds of the last chunk waiting for outbreaks, cutting blocks,
   # training and evaluating.
   split=$(python3 -c "import json;t=json.load(open('$OUT/stream-status.json')).get('split');print(' '.join(f'{k[:-2]} {v:.0f}s' for k,v in t.items()) if t else 'none')" 2>/dev/null)
+  local since waited
+  since=$(python3 -c "import json;print(int(json.load(open('$OUT/stream-status.json')).get('waiting_since') or 0))" 2>/dev/null)
+  if [[ "$stage" == "waiting for outbreaks"* ]] && (( ${since:-0} > 0 )); then
+    waited=$(( ($(date +%s) - since) / 60 ))
+    if (( waited > ${WAIT_ALERT_MIN:-30} )); then
+      last_error="ALERT: trainer waiting $waited min ($stage)"
+      if [ "${alerted_since:-}" != "$since" ]; then
+        alerted_since=$since
+        [ -n "${MAILBOX:-}" ] && echo "$(date '+%Y-%m-%d %H:%M') fm-finetune3 ${GRID:-} trainer: $last_error; see $STATUS" >> "$MAILBOX"
+      fi
+    fi
+  fi
   echo "$(date '+%Y-%m-%d %H:%M:%S') stage=${1:-${stage:-starting}} batches=$done/$total train_step=${step:-0} remote=$remote_state last_checkpoint=${ckpt:-none} last_chunk=${split:-none} last_error=${last_error:-none}" > "$STATUS"
 }
 
@@ -211,6 +226,18 @@ export PATH=/usr/local/bin:/usr/bin:/bin:\$PATH
 export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
 mkdir -p $SIM_REMOTE/logs
 free_gb() { df -BG --output=avail . | tail -1 | tr -dc 0-9; }
+# One batch under a memory cap (kB); its log ends with its peak memory.
+batch() {
+  (
+    export TMPDIR="\$PWD/output/finetune/tmp/\$1"
+    mkdir -p "\$TMPDIR"
+    ulimit -v \$2
+    /usr/bin/time -f "peak_rss_kb %M" \\
+      Rscript scripts/finetune_simulate.R 25 \$1 $SIM_REMOTE \\
+      > $SIM_REMOTE/logs/\$1.log 2>&1
+    rm -rf "\$TMPDIR"
+  )
+}
 for s in $list; do
   [ -e $SIM_REMOTE/settings-\$s.csv ] && continue
   pgrep -f "finetune_simulate.R --args 25 \$s " > /dev/null && continue
@@ -225,17 +252,19 @@ for s in $list; do
   while [ "\$(free_gb)" -lt $REMOTE_MIN_FREE_GB ]; do
     echo "\$(date) waiting: \$(free_gb) GB free"; sleep 60
   done
-  (
-    export TMPDIR="\$PWD/output/finetune/tmp/\$s"
-    mkdir -p "\$TMPDIR"
-    ulimit -v $REMOTE_MEM_KB
-    Rscript scripts/finetune_simulate.R 25 \$s $SIM_REMOTE > $SIM_REMOTE/logs/\$s.log 2>&1
-    rm -rf "\$TMPDIR"
-  ) &
+  batch \$s $REMOTE_MEM_KB &
   sleep 3
 done
 wait
 while pgrep -f 'finetune_simulate.R --args' > /dev/null; do sleep 30; done
+# A batch R aborted (a segfault under the memory cap) runs again, one at
+# a time, under the higher cap REMOTE_RETRY_MEM_KB.
+for s in $list; do
+  [ -e $SIM_REMOTE/settings-\$s.csv ] && continue
+  grep -q "R is aborting" $SIM_REMOTE/logs/\$s.log 2> /dev/null || continue
+  pgrep -f "finetune_simulate.R --args 25 \$s " > /dev/null && continue
+  batch \$s ${REMOTE_RETRY_MEM_KB:-$(( 2 * REMOTE_MEM_KB ))}
+done
 echo all done > $SIM_REMOTE/remote-done
 EOF
   remote "cd $REMOTE_DIR && chmod +x output/finetune/finetune_remote.sh && (nohup output/finetune/finetune_remote.sh > $SIM_REMOTE/remote.log 2>&1 < /dev/null &)" \
@@ -351,6 +380,25 @@ restart_remote_scheduler() {
   remote "pkill -o -f '[f]inetune_remote.sh'" > /dev/null 2>&1
 }
 
+candidate_seeds() {
+  # The laptop's seeds, in order: those the trainer waits for, its own,
+  # and, while the remote does not answer, any unstarted seed. An
+  # answering remote keeps the rest, so no seed runs on both.
+  {
+    blocking_seeds
+    local_seeds
+    [ "${remote_state:-down}" = up ] || unstarted_seeds
+  } | awk '!seen[$0]++'
+}
+
+claim() {
+  # The laptop takes seed $1; the remote stops any batch of it.
+  echo "$1" >> "$CLAIMED"
+  [ -n "${REMOTE:-}" ] \
+    && remote "pkill -f '[f]inetune_simulate.R --args 25 $1 '" > /dev/null 2>&1
+  return 0
+}
+
 local_slots() {
   # Fill the laptop's slots: LOCAL_SLOTS while the trainer waits, and
   # LOCAL_SLOTS_TRAINING while it trains, to leave memory for MPS.
@@ -360,7 +408,7 @@ local_slots() {
   stage=$(python3 -c "import json;print(json.load(open('$OUT/stream-status.json')).get('stage',''))" 2>/dev/null)
   [ "$stage" = training ] && slots=$LOCAL_SLOTS_TRAINING
   local claimed=0
-  for s in $(blocking_seeds) $(local_seeds) $(unstarted_seeds); do
+  for s in $(candidate_seeds); do
     done_seed "$s" && continue
     pgrep -f "(finetune_simulate|sim-real).R --args 25 $s " > /dev/null && continue
     running=$(pgrep -f 'finetune_simulate.R --args' | wc -l)
@@ -371,13 +419,13 @@ local_slots() {
     (
       export TMPDIR="$PWD/output/finetune/tmp/$s"
       mkdir -p "$TMPDIR"
-      Rscript scripts/finetune_simulate.R 25 "$s" "$SIM_DIR" \
+      /usr/bin/time -l Rscript scripts/finetune_simulate.R 25 "$s" "$SIM_DIR" \
         > "$SIM_DIR/logs/$s.log" 2>&1 < /dev/null
       rm -rf "$TMPDIR"
     ) &
     echo "$s" >> "$STARTED"
     if ! local_seeds | grep -qx "$s"; then
-      echo "$s" >> "$CLAIMED"
+      claim "$s"
       claimed=1
     fi
     log "started local batch $s"

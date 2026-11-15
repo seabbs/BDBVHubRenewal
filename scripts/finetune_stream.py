@@ -64,6 +64,10 @@ resumes from."""
 POLL = 60
 """Seconds between checks for a chunk's simulations."""
 
+PATIENCE = 20 * 60
+"""Seconds a chunk waits for a missing batch before later batches train
+first; the late batch's outbreaks then join a later chunk."""
+
 REPO = "seabbs/BDBVHubRenewal"
 """Repository of the checkpoint releases."""
 
@@ -146,21 +150,61 @@ def seed_done(sim_dir: Path, seed: int) -> bool:
     return True
 
 
+def batch_outbreaks(sim_dir: Path, seed: int) -> list[str] | None:
+    """Return a finished batch's outbreaks in order, or None if not done.
+
+    A finished batch is read once and remembered.
+    """
+    if (sim_dir, seed) not in _READY:
+        if not seed_done(sim_dir, seed):
+            return None
+        ids = read_ids(sim_dir / f"settings-{seed}.csv")
+        _READY[sim_dir, seed] = sorted(ids, key=ft._order)
+    return _READY[sim_dir, seed]
+
+
 def ready_outbreaks(sim_dir: Path, seeds: range) -> list[str]:
     """Return the outbreaks of the finished batches, in order.
 
     The batches are read in seed order up to the first not yet finished.
-    A finished batch is read once and remembered.
     """
     out: list[str] = []
     for seed in seeds:
-        if (sim_dir, seed) not in _READY:
-            if not seed_done(sim_dir, seed):
-                break
-            ids = read_ids(sim_dir / f"settings-{seed}.csv")
-            _READY[sim_dir, seed] = sorted(ids, key=ft._order)
-        out.extend(_READY[sim_dir, seed])
+        ids = batch_outbreaks(sim_dir, seed)
+        if ids is None:
+            break
+        out.extend(ids)
     return out
+
+
+def next_chunk(
+    sim_dir: Path,
+    seeds: range,
+    trained: list[str],
+    size: int,
+    waited: float,
+    patience: float = PATIENCE,
+) -> list[str] | None:
+    """Return the next `size` outbreaks to train on, or None if not ready.
+
+    They are the first outbreaks not yet `trained` of the finished
+    batches in seed order, up to the first batch not finished. Once the
+    chunk has `waited` `patience` seconds, later finished batches count
+    too, so a straggler's outbreaks join a later chunk instead of holding
+    up training.
+    """
+    seen = set(trained)
+    out: list[str] = []
+    for seed in seeds:
+        ids = batch_outbreaks(sim_dir, seed)
+        if ids is None:
+            if waited < patience:
+                break
+            continue
+        out.extend(o for o in ids if o not in seen)
+        if len(out) >= size:
+            return out[:size]
+    return None
 
 
 def cut(
@@ -656,6 +700,9 @@ def main() -> None:
     state_dir = out / "state"
     state = load_state(state_dir, model, optimiser)
     step, done, position = 0, 0, 0
+    # The outbreaks trained on, in order, and those of the current chunk.
+    trained: list[str] = []
+    chunk: list[str] = []
     seen = {"blocks": 0, "series": 0}
     losses: list[float] = []
     skipped: list[dict] = []
@@ -672,6 +719,11 @@ def main() -> None:
         start_loss, history = state["start_loss"], state["history"]
         seen, losses = state["seen"], state["losses"]
         skipped = state.get("skipped", [])
+        trained = (
+            state.get("trained")
+            or ready_outbreaks(sim_dir, training_seeds())[:done]
+        )
+        chunk = state.get("chunk", []) if position else []
         lines = consumed.read_text().splitlines()[:step]
         consumed.write_text("".join(f"{line}\n" for line in lines))
         log(f"resumed at step {step}, outbreaks {done + 1}-, batch {position}")
@@ -685,6 +737,8 @@ def main() -> None:
                 "step": step,
                 "done": done,
                 "position": position,
+                "trained": trained,
+                "chunk": chunk,
                 "start_loss": start_loss,
                 "history": history,
                 "seen": seen,
@@ -719,17 +773,17 @@ def main() -> None:
         free_memory()
 
     # The next chunk's blocks are cut in `pool` while this one trains.
-    ahead: dict[int, list[Future]] = {}
+    ahead: dict[tuple[str, ...], list[Future]] = {}
 
-    def cut_ahead(lo: int) -> None:
-        """Start cutting the chunk from outbreak `lo` if it is ready."""
-        top = min(lo + CHUNK, args.outbreaks)
-        if lo >= top or lo in ahead:
+    def cut_ahead(after: list[str]) -> None:
+        """Start cutting the chunk after outbreaks `after` if it is ready."""
+        size = min(CHUNK, args.outbreaks - len(after))
+        if size <= 0:
             return
-        ready = ready_outbreaks(sim_dir, training_seeds())
-        if len(ready) >= top:
-            ahead[lo] = submit_cut(
-                pool, sim_dir, ready[lo:top], args.seed, k, args.cut_workers
+        ids = next_chunk(sim_dir, training_seeds(), after, size, 0)
+        if ids is not None and tuple(ids) not in ahead:
+            ahead[tuple(ids)] = submit_cut(
+                pool, sim_dir, ids, args.seed, k, args.cut_workers
             )
 
     t0 = time.perf_counter()
@@ -737,19 +791,42 @@ def main() -> None:
         hi = min(done + CHUNK, args.outbreaks)
         split = {"wait_s": 0.0, "cut_s": 0.0, "train_s": 0.0, "eval_s": 0.0}
         tick = time.perf_counter()
-        report(stage=f"waiting for outbreaks {done + 1}-{hi}")
+        report(
+            stage=f"waiting for outbreaks {done + 1}-{hi}",
+            waiting_since=time.time(),
+        )
         free_memory()
-        while len(ready := ready_outbreaks(sim_dir, training_seeds())) < hi:
+        while not chunk:
+            waited = time.perf_counter() - tick
+            ids = next_chunk(
+                sim_dir, training_seeds(), trained, hi - done, waited
+            )
+            if ids is not None:
+                chunk = ids
+                break
             if all(seed_done(sim_dir, s) for s in training_seeds()):
-                raise RuntimeError(
-                    f"{len(ready)} training outbreaks, fewer than {hi}"
-                )
+                raise RuntimeError(f"fewer than {hi} training outbreaks")
             time.sleep(POLL)
+        contiguous = ready_outbreaks(sim_dir, training_seeds())[done:hi]
+        if chunk != contiguous:
+            log(
+                f"outbreaks {done + 1}-{hi}: batches still running after "
+                f"{PATIENCE // 60} min, so later batches train first"
+            )
         split["wait_s"] = time.perf_counter() - tick
         tick = time.perf_counter()
-        report(stage=f"cutting blocks of outbreaks {done + 1}-{hi}")
-        cut_ahead(done)
-        pairs, empty = _join(ahead.pop(done))
+        report(
+            stage=f"cutting blocks of outbreaks {done + 1}-{hi}",
+            waiting_since=None,
+        )
+        if tuple(chunk) not in ahead:
+            ahead.clear()
+            cut_ahead(trained)
+        if tuple(chunk) not in ahead:
+            ahead[tuple(chunk)] = submit_cut(
+                pool, sim_dir, chunk, args.seed, k, args.cut_workers
+            )
+        pairs, empty = _join(ahead.pop(tuple(chunk)))
         split["cut_s"] = time.perf_counter() - tick
         tick = time.perf_counter()
         blocks = [b for _, b in pairs]
@@ -792,7 +869,7 @@ def main() -> None:
                     + "\n"
                 )
             if step % 10 == 0:
-                cut_ahead(hi)
+                cut_ahead(trained + chunk)
                 history.append({"step": step, "loss": value})
                 report(
                     stage="training", step=step, outbreaks=done, gpu=memory()
@@ -812,7 +889,9 @@ def main() -> None:
                 (out / "history.json").write_text(json.dumps(history))
             if step % SAVE_EVERY == 0:
                 snapshot()
-        done, position = hi, 0
+        trained.extend(chunk)
+        chunk = []
+        done, position = len(trained), 0
         split["train_s"] = time.perf_counter() - tick - split["eval_s"]
         tick = time.perf_counter()
         seen["blocks"] += len(pairs)
@@ -825,9 +904,9 @@ def main() -> None:
         if done in prefixes:
             where = out / f"n{done}"
             where.mkdir(parents=True, exist_ok=True)
-            order = ready[:done]
-            # The release lists its outbreaks and any block skipped.
-            lines = [*order, *skipped_lines(skipped)]
+            # The release lists its outbreaks in the order trained, and
+            # any block skipped.
+            lines = [*trained, *skipped_lines(skipped)]
             (where / "outbreaks.txt").write_text("\n".join(lines) + "\n")
             (where / "consumed.txt").write_text(consumed.read_text())
             model.save_pretrained(where / "finetuned-ckpt")
