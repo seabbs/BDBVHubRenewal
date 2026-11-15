@@ -329,11 +329,8 @@ def checkpoint_figure(scores: pd.DataFrame) -> Figure:
         one = sc.loc[(sc["study"] == study) & (sc["level"] == level)]
         n = int(one["n"].min())
         thin = n < MIN_CELLS
-        origins = (
-            f", {int(one['n_origins'].min())} origins"
-            if "n_origins" in one
-            else ""
-        )
+        k = int(one["n_origins"].min()) if "n_origins" in one else None
+        origins = "" if k is None else f", {k} origin{'s' if k != 1 else ''}"
         for i, (model, g) in enumerate(one.groupby("model")):
             g = g.sort_values("outbreaks")
             x = g["outbreaks"].where(g["outbreaks"] > 0, zero)
