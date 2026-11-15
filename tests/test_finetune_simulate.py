@@ -127,7 +127,8 @@ for (i in 1:50) {
   v <- draw_values(d)
   active <- d$n_places * (1 - v$quiet)
   cat(d$n_places >= 15, active >= 1 - 1e-9, active <= 4 + 1e-9,
-    v$stratum_sd >= 2.5, v$target_size <= 3000, "\\n")
+    v$stratum_sd >= 2.5, v$target_size >= 30 * round(active),
+    v$target_size <= 3000 * round(active), "\\n")
 }
 """,
         tmp_path,
