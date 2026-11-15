@@ -54,6 +54,33 @@ def scores(forecasts: pd.DataFrame) -> pd.DataFrame:
     return score_germany(forecasts, truth_delay=10)
 
 
+def test_chronos_lags_reach_the_german_truth_delay(
+    triangle: pd.DataFrame, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The ragged series run to the D of the German truth, so counts are
+    # partial until the age they are scored at.
+    from bdbvhubrenewal.forecasters import foundation
+
+    seen: list = []
+
+    def sample(groups, horizon, n, _seed, checkpoint=None):  # noqa: ARG001
+        seen.append(groups[0])
+        return [np.zeros((n, g["target"].shape[0], horizon)) for g in groups]
+
+    monkeypatch.setattr(foundation, "chronos_sampler", sample)
+    germany_forecasts(
+        ["fm_chronos_daily_ragged"],
+        triangle,
+        ["2021-10-04"],
+        n_samples=5,
+        seed=1,
+        truth_delay=12,
+    )
+    for group in seen:
+        n_places = group["target"].shape[0]
+        assert len(group["future_covariates"]) == n_places * 12
+
+
 def test_config_gives_the_paper_s_dates_and_an_explicit_model_set() -> None:
     config = load_germany_config(ROOT / "config" / "germany.toml")
     every = nowcast_dates(config, held_out=False) + nowcast_dates(
@@ -64,7 +91,17 @@ def test_config_gives_the_paper_s_dates_and_an_explicit_model_set() -> None:
         "2022-04-29",
         159,
     )
-    assert config.models == ("randomwalk", "randomwalknowcast")
+    assert config.models == (
+        "randomwalk",
+        "randomwalknowcast",
+        *(
+            f"fm_chronos_{source}_{layout}"
+            for layout in ("complete", "ragged")
+            for source in ("daily", "weekly")
+        ),
+        "fm_chronos_daily_ragged_ft",
+        "fm_chronos_weekly_ragged_ft",
+    )
     assert config.truth_delay == 40
     assert config.submissions
     assert config.baseline == "randomwalknowcast"
