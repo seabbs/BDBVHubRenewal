@@ -111,3 +111,22 @@ def test_batches_record_the_stack_they_ran_on(tmp_path):
     assert stack["r_version"].startswith("R version")
     assert len(stack["enw_fingerprint"]) == 32
     assert all(stack.values())
+
+
+@needs_r
+def test_concentrated_outbreaks_put_cases_in_few_strata(tmp_path):
+    out = run_r(
+        """
+set.seed(1)
+g <- which(vapply(0:(block - 1L), function(i) {
+  cell_for(i)$spread == "concentrated" && cell_for(i)$strata == "places"
+}, TRUE))[1] - 1L
+d <- draw_design(g)
+for (i in 1:50) {
+  v <- draw_values(d)
+  cat(v$stratum_sd >= 2.5, v$target_size <= 1e5, "\\n")
+}
+""",
+        tmp_path,
+    )
+    assert out.split() and all(x == "TRUE" for x in out.split())
