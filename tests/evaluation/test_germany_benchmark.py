@@ -21,6 +21,7 @@ from bdbvhubrenewal.evaluation.germany import (
     nowcast_dates,
     paper_forecasts,
     relative_scores,
+    run_models,
     score_germany,
     team_forecasts,
     with_truth,
@@ -80,6 +81,15 @@ def test_config_gives_the_paper_s_dates_and_an_explicit_model_set() -> None:
     assert config.submissions
     assert config.baseline == "randomwalknowcast"
     assert config.paper_baseline == "KIT-frozen_baseline"
+
+
+def test_german_trained_models_run_on_the_held_out_half_only() -> None:
+    config = load_germany_config(ROOT / "config" / "germany.toml")
+    german = ("fm_chronos_daily_ragged_de", "fm_chronos_weekly_ragged_de")
+    assert config.held_out_models == german
+    # They were fine-tuned on the development half, so never score on it.
+    assert not set(german) & set(run_models(config, held_out=False))
+    assert run_models(config, held_out=True) == (*config.models, *german)
 
 
 def test_the_later_half_of_the_dates_is_held_out() -> None:
