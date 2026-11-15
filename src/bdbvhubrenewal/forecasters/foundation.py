@@ -536,6 +536,32 @@ def finetuned_adapter(checkpoint: Checkpoint) -> Path:
     return out
 
 
+SCALE_FLOOR: Final = float(os.environ.get("BDBV_CHRONOS_SCALE_FLOOR", "0"))
+"""Least scale, in counts, Chronos-2 divides a series by; 0 keeps its own.
+
+Chronos-2 scales each series by its context's standard deviation, and a
+flat context, such as all zeros, by 1e-5, so one count in the forecast
+is 1e5 scaled units and the upper quantiles can blow up. Experimental:
+set `BDBV_CHRONOS_SCALE_FLOOR` to compare forecasts with a floor."""
+
+
+def floor_scale(model: Any, floor: float) -> None:
+    """Make `model` scale each series by at least `floor` counts."""
+    from chronos.chronos_bolt import InstanceNorm
+
+    class FlooredNorm(InstanceNorm):  # type: ignore[misc]
+        def forward(self, x, loc_scale=None):  # type: ignore[no-untyped-def]
+            if loc_scale is None:
+                _, (loc, scale) = super().forward(x)
+                loc_scale = (loc, scale.clamp(min=floor))
+            return super().forward(x, loc_scale)
+
+    norm = model.instance_norm
+    model.instance_norm = FlooredNorm(
+        eps=norm.eps, use_arcsinh=norm.use_arcsinh
+    )
+
+
 @cache
 def _chronos(checkpoint: Checkpoint | None = None) -> Any:
     adapter = None if checkpoint is None else finetuned_adapter(checkpoint)
@@ -552,12 +578,14 @@ def _chronos(checkpoint: Checkpoint | None = None) -> Any:
     pipeline = Chronos2Pipeline.from_pretrained(
         CHRONOS_MODEL, revision=CHRONOS_REVISION, device_map=device
     )
-    if adapter is None:
-        return pipeline
-    from peft import PeftModel
+    if adapter is not None:
+        from peft import PeftModel
 
-    model = PeftModel.from_pretrained(pipeline.model, adapter)
-    return Chronos2Pipeline(model=model.merge_and_unload())
+        model = PeftModel.from_pretrained(pipeline.model, adapter)
+        pipeline = Chronos2Pipeline(model=model.merge_and_unload())
+    if SCALE_FLOOR > 0:
+        floor_scale(pipeline.model, SCALE_FLOOR)
+    return pipeline
 
 
 def chronos_sampler(
