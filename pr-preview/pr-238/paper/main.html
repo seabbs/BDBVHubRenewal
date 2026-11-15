@@ -55,7 +55,7 @@ div.csl-indent {
 <link href="main_files/libs/quarto-html/quarto-syntax-highlighting-587c61ba64f3a5504c4d52d930310e48.css" rel="stylesheet" id="quarto-text-highlighting-styles">
 <script src="main_files/libs/bootstrap/bootstrap.min.js"></script>
 <link href="main_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
-<link href="main_files/libs/bootstrap/bootstrap-67135126376fdcfdeadaafff27d21302.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<link href="main_files/libs/bootstrap/bootstrap-d99fc85c7253c7d071cb1f16904a1173.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
 
   <script src="https://cdnjs.cloudflare.com/polyfill/v3/polyfill.min.js?features=es6"></script>
   <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js" type="text/javascript"></script>
@@ -478,13 +478,23 @@ Table&nbsp;1: The crossed factors of the simulation grid and their levels, each 
 </ul>
 </div>
 </div>
+<div id="fig-synthetic-nowcasts" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-synthetic-nowcasts-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="build/figures/main/synthetic-nowcasts.png" class="img-fluid figure-img">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-synthetic-nowcasts-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;2: Held-out synthetic data: nowcasts of one held-out outbreak, drawn with the workflow’s seed, one column per model and one row per origin. Black is the rolling truth, grey dashed the data as of the origin, and blue the model’s median with its 50% and 95% intervals; each column gives the model’s score relative to <code>randomwalknowcast</code>. Illustrative, dummy data
+</figcaption>
+</figure>
+</div>
 <div id="fig-synthetic" class="quarto-float quarto-figure quarto-figure-center anchored">
 <figure class="quarto-float quarto-float-fig figure">
 <div aria-describedby="fig-synthetic-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
 <img src="build/figures/main/synthetic-results.png" class="img-fluid figure-img">
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-synthetic-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;2: Held-out synthetic data. (A) Nowcasts of one held-out outbreak, drawn with the workflow’s seed, against the rolling truth; (B, C) CRPS relative to <code>randomwalknowcast</code> on the natural and log scales; (D) bias; (E) 50% and 90% coverage; (F) relative CRPS by scenario factor; (G) relative CRPS by horizon. Illustrative, dummy data
+Figure&nbsp;3: Held-out synthetic data. (A, B) CRPS relative to <code>randomwalknowcast</code> on the natural and log scales; (C) bias; (D) 50% and 90% coverage; (E) relative CRPS by scenario factor; (F) relative CRPS by horizon. Illustrative, dummy data
 </figcaption>
 </figure>
 </div>
@@ -810,13 +820,23 @@ Table&nbsp;3: Held-out synthetic data: mean energy and variogram scores of each 
 </ul>
 </div>
 </div>
+<div id="fig-germany-nowcasts" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-germany-nowcasts-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="build/figures/main/germany-nowcasts.png" class="img-fluid figure-img">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-germany-nowcasts-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;4: German nowcast hub: national nowcasts, one column per model and one row per origin. Black is the rolling truth, grey dashed the data as of the origin, and blue the model’s median with its 50% and 95% intervals; each column gives the model’s WIS relative to <code>randomwalknowcast</code>.
+</figcaption>
+</figure>
+</div>
 <div id="fig-germany" class="quarto-float quarto-figure quarto-figure-center anchored">
 <figure class="quarto-float quarto-float-fig figure">
 <div aria-describedby="fig-germany-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
 <img src="build/figures/main/germany-results.png" class="img-fluid figure-img">
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-germany-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;3: German nowcast hub. (A) National nowcasts against the rolling truth, with a dotted line at the split between the development and held-out halves; (B, C) WIS relative to <code>KIT-frozen_baseline</code> on the natural and log scales; (D) bias; (E) 50% and 95% coverage; (F) relative WIS by location; (G) by age group; (H) by horizon.
+Figure&nbsp;5: German nowcast hub. (A, B) WIS relative to <code>KIT-frozen_baseline</code> on the natural and log scales; (C) bias; (D) 50% and 95% coverage; (E) relative WIS by location; (F) by age group; (G) by horizon.
 </figcaption>
 </figure>
 </div>
@@ -1170,13 +1190,23 @@ Table&nbsp;4: German nowcast hub: mean scores, coverage and number of forecasts 
 </ul>
 </div>
 </div>
+<div id="fig-ebola-nowcasts" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-ebola-nowcasts-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="build/figures/main/ebola-nowcasts.png" class="img-fluid figure-img">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-ebola-nowcasts-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;6: Ebola: national nowcasts from past releases, one column per model and one row per origin. Black is the rolling truth, grey dashed the data as of the origin, and blue the model’s median with its 50% and 95% intervals; each column gives the model’s CRPS relative to <code>randomwalknowcast</code>.
+</figcaption>
+</figure>
+</div>
 <div id="fig-ebola" class="quarto-float quarto-figure quarto-figure-center anchored">
 <figure class="quarto-float quarto-float-fig figure">
 <div aria-describedby="fig-ebola-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
 <img src="build/figures/main/ebola-results.png" class="img-fluid figure-img">
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-ebola-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;4: Ebola: sample forecasts from past releases (release backtest), joined by the hub’s forecasts as they can be scored. (A) National nowcasts against the rolling truth; (B, C) CRPS relative to randomwalknowcast on the natural and log scales, on the forecasts each model shares with it, with the share of forecasts a model made in its label where it missed some; (D) bias; (E) 50% and 90% coverage; (F) relative CRPS by location; (G) by horizon.
+Figure&nbsp;7: Ebola: sample forecasts from past releases (release backtest), joined by the hub’s forecasts as they can be scored. (A, B) CRPS relative to randomwalknowcast on the natural and log scales, on the forecasts each model shares with it, with the share of forecasts a model made in its label where it missed some; (C) bias; (D) 50% and 90% coverage; (E) relative CRPS by location; (F) by horizon.
 </figcaption>
 </figure>
 </div>
