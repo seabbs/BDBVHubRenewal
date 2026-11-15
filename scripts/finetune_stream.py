@@ -90,6 +90,24 @@ def read_ids(path: Path) -> pd.Series:
         return pd.Series([], dtype=str)
 
 
+def read_seed_list(path: Path) -> list[int]:
+    """Return the training seeds a file lists, one a line, in its order."""
+    return [int(x) for x in path.read_text().split()]
+
+
+def lora_model(base, config, init: Path | None):
+    """Return `base` with a LoRA adapter to train.
+
+    A fresh adapter from `config`, or, to continue a round, the adapter
+    saved at `init`, still trainable.
+    """
+    from peft import PeftModel, get_peft_model
+
+    if init is None:
+        return get_peft_model(base, config)
+    return PeftModel.from_pretrained(base, init, is_trainable=True)
+
+
 def learning_rate(step: int, base: float, steps: int) -> float:
     """Return the learning rate of step `step` (from 0).
 
@@ -684,12 +702,16 @@ def main() -> None:
     from chronos import Chronos2Pipeline
     from chronos.chronos2.dataset import DatasetMode
     from chronos.chronos2.model import Chronos2Model
-    from peft import LoraConfig, get_peft_model
+    from peft import LoraConfig
 
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("sim_dir", type=Path)
     parser.add_argument("out", type=Path)
-    parser.add_argument("--train-seeds", type=int, nargs=2, required=True)
+    parser.add_argument("--train-seeds", type=int, nargs=2)
+    # A round: its training seeds, one a line, in place of --train-seeds,
+    # and the adapter it continues from.
+    parser.add_argument("--seed-list", type=Path)
+    parser.add_argument("--init-adapter", type=Path)
     parser.add_argument("--held-out-seeds", type=int, nargs=2, required=True)
     parser.add_argument("--outbreaks", type=int, default=ft.PREFIXES[-1])
     parser.add_argument("--holdout", type=int, default=150)
@@ -738,7 +760,12 @@ def main() -> None:
 
     extended = out / "train-last.txt"
 
-    def training_seeds() -> range:
+    if (args.seed_list is None) == (args.train_seeds is None):
+        parser.error("give one of --train-seeds and --seed-list")
+
+    def training_seeds() -> range | list[int]:
+        if args.seed_list is not None:
+            return read_seed_list(args.seed_list)
         # The driver adds seeds by writing the last one to `extended`.
         last = args.train_seeds[1]
         if extended.exists():
@@ -801,7 +828,7 @@ def main() -> None:
             "output_patch_embedding.output_layer",
         ],
     )
-    model = get_peft_model(pipeline.model, lora)
+    model = lora_model(pipeline.model, lora, args.init_adapter)
     model.train()
     params = [p for p in model.parameters() if p.requires_grad]
     optimiser = torch.optim.AdamW(params, lr=args.learning_rate)
@@ -830,6 +857,20 @@ def main() -> None:
         ),
         "lora": {"r": 8, "alpha": 16},
         "learning_rate": args.learning_rate,
+        **(
+            {
+                "init_adapter_sha256": ft._sha256(
+                    args.init_adapter / "adapter_model.safetensors"
+                )
+            }
+            if args.init_adapter
+            else {}
+        ),
+        **(
+            {"seed_list_sha256": ft._sha256(args.seed_list)}
+            if args.seed_list
+            else {}
+        ),
         **({"lr_steps": args.lr_steps} if args.lr_steps else {}),
         **(
             {"sources": list(ft.SOURCES)}
