@@ -1,0 +1,57 @@
+floor,model,size,series,median_loss,median_q99_over_truth,share_q99_over_100x,coverage_50,coverage_90,coverage_98,study,source,relative_wis
+0,n1000,large (>50),199,6.605,3.093,0.07538,0.3844,0.8111,0.967,"held-out simulations, 300 r3 blocks",,
+0,n1000,medium (5-50),266,6.708,3.183,0.1617,0.4401,0.8538,0.9691,"held-out simulations, 300 r3 blocks",,
+0,n1000,small (<=5),928,4.002,4.245,0.1778,0.6108,0.9318,0.9919,"held-out simulations, 300 r3 blocks",,
+0,n2000,large (>50),199,6.196,2.878,0.05528,0.414,0.8459,0.9724,"held-out simulations, 300 r3 blocks",,
+0,n2000,medium (5-50),266,5.678,3.055,0.1015,0.4918,0.8999,0.9816,"held-out simulations, 300 r3 blocks",,
+0,n2000,small (<=5),928,3.796,3.548,0.1498,0.4972,0.9446,0.9894,"held-out simulations, 300 r3 blocks",,
+0,n4000,large (>50),199,5.277,2.641,0.05025,0.407,0.8536,0.9761,"held-out simulations, 300 r3 blocks",,
+0,n4000,medium (5-50),266,5.756,2.715,0.06391,0.4402,0.878,0.9739,"held-out simulations, 300 r3 blocks",,
+0,n4000,small (<=5),928,3.311,3.176,0.1067,0.5203,0.8952,0.9899,"held-out simulations, 300 r3 blocks",,
+0,zero-shot,large (>50),199,11.61,6.396,0.1658,0.3191,0.7858,0.9344,"held-out simulations, 300 r3 blocks",,
+0,zero-shot,medium (5-50),266,10.63,7.765,0.2293,0.4369,0.8653,0.9716,"held-out simulations, 300 r3 blocks",,
+0,zero-shot,small (<=5),928,6.495,13.22,0.3341,0.5909,0.9567,0.9959,"held-out simulations, 300 r3 blocks",,
+1,n1000,large (>50),199,6.413,2.717,0.0804,0.3602,0.7883,0.9438,"held-out simulations, 300 r3 blocks",,
+1,n1000,medium (5-50),266,6.318,3.132,0.1692,0.475,0.8662,0.9701,"held-out simulations, 300 r3 blocks",,
+1,n1000,small (<=5),928,6.042,9.382,0.3621,0.5762,0.915,0.9925,"held-out simulations, 300 r3 blocks",,
+1,n2000,large (>50),199,6.012,2.716,0.06533,0.3974,0.8292,0.9581,"held-out simulations, 300 r3 blocks",,
+1,n2000,medium (5-50),266,5.662,2.935,0.1015,0.5087,0.9088,0.9802,"held-out simulations, 300 r3 blocks",,
+1,n2000,small (<=5),928,4.997,4.57,0.2802,0.4821,0.9022,0.9817,"held-out simulations, 300 r3 blocks",,
+1,n4000,large (>50),199,5.281,2.348,0.06533,0.4026,0.8338,0.9653,"held-out simulations, 300 r3 blocks",,
+1,n4000,medium (5-50),266,5.892,2.691,0.1053,0.4681,0.8769,0.9711,"held-out simulations, 300 r3 blocks",,
+1,n4000,small (<=5),928,4.814,6.758,0.2845,0.5085,0.8981,0.9922,"held-out simulations, 300 r3 blocks",,
+1,zero-shot,large (>50),199,11.58,6.265,0.1658,0.3151,0.7782,0.9399,"held-out simulations, 300 r3 blocks",,
+1,zero-shot,medium (5-50),266,10.6,8.272,0.3008,0.4347,0.8953,0.9954,"held-out simulations, 300 r3 blocks",,
+1,zero-shot,small (<=5),928,125.6,1841,0.7015,0.5673,0.9753,0.9995,"held-out simulations, 300 r3 blocks",,
+0,zero-shot,provinces,,,,,,,,"BDBV, 27 cells, origin 2026-10-17",daily,2.94
+0,n1000,provinces,,,,,,,,"BDBV, 27 cells, origin 2026-10-17",daily,0.92
+0,n2000,provinces,,,,,,,,"BDBV, 27 cells, origin 2026-10-17",daily,1.04
+0,n4000,provinces,,,,,,,,"BDBV, 27 cells, origin 2026-10-17",daily,1.39
+0,zero-shot,provinces,,,,,,,,"BDBV, 27 cells, origin 2026-10-17",weekly,1.74
+0,n1000,provinces,,,,,,,,"BDBV, 27 cells, origin 2026-10-17",weekly,2.04
+0,n2000,provinces,,,,,,,,"BDBV, 27 cells, origin 2026-10-17",weekly,2.47
+0,n4000,provinces,,,,,,,,"BDBV, 27 cells, origin 2026-10-17",weekly,4.2
+0,zero-shot,national,,,,,,,,"BDBV, 27 cells, origin 2026-10-17",daily,2.55
+0,n1000,national,,,,,,,,"BDBV, 27 cells, origin 2026-10-17",daily,0.89
+0,n2000,national,,,,,,,,"BDBV, 27 cells, origin 2026-10-17",daily,0.84
+0,n4000,national,,,,,,,,"BDBV, 27 cells, origin 2026-10-17",daily,1.26
+0,zero-shot,national,,,,,,,,"BDBV, 27 cells, origin 2026-10-17",weekly,0.68
+0,n1000,national,,,,,,,,"BDBV, 27 cells, origin 2026-10-17",weekly,1.54
+0,n2000,national,,,,,,,,"BDBV, 27 cells, origin 2026-10-17",weekly,1.88
+0,n4000,national,,,,,,,,"BDBV, 27 cells, origin 2026-10-17",weekly,4.18
+1,zero-shot,provinces,,,,,,,,"BDBV, 27 cells, origin 2026-10-17",daily,2.93
+1,n1000,provinces,,,,,,,,"BDBV, 27 cells, origin 2026-10-17",daily,0.66
+1,n2000,provinces,,,,,,,,"BDBV, 27 cells, origin 2026-10-17",daily,0.8
+1,n4000,provinces,,,,,,,,"BDBV, 27 cells, origin 2026-10-17",daily,1.01
+1,zero-shot,provinces,,,,,,,,"BDBV, 27 cells, origin 2026-10-17",weekly,1.74
+1,n1000,provinces,,,,,,,,"BDBV, 27 cells, origin 2026-10-17",weekly,1.69
+1,n2000,provinces,,,,,,,,"BDBV, 27 cells, origin 2026-10-17",weekly,2.15
+1,n4000,provinces,,,,,,,,"BDBV, 27 cells, origin 2026-10-17",weekly,2.94
+1,zero-shot,national,,,,,,,,"BDBV, 27 cells, origin 2026-10-17",daily,2.53
+1,n1000,national,,,,,,,,"BDBV, 27 cells, origin 2026-10-17",daily,0.5
+1,n2000,national,,,,,,,,"BDBV, 27 cells, origin 2026-10-17",daily,0.6
+1,n4000,national,,,,,,,,"BDBV, 27 cells, origin 2026-10-17",daily,0.71
+1,zero-shot,national,,,,,,,,"BDBV, 27 cells, origin 2026-10-17",weekly,0.68
+1,n1000,national,,,,,,,,"BDBV, 27 cells, origin 2026-10-17",weekly,1.4
+1,n2000,national,,,,,,,,"BDBV, 27 cells, origin 2026-10-17",weekly,1.59
+1,n4000,national,,,,,,,,"BDBV, 27 cells, origin 2026-10-17",weekly,2.99
