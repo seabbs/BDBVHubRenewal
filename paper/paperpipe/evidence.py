@@ -36,6 +36,7 @@ __all__ = [
     "aggregation_numbers",
     "aggregation_table",
     "checkpoint_figure",
+    "checkpoint_numbers",
     "copula_table",
     "cost_table",
     "diseases_table",
@@ -273,11 +274,35 @@ def lag_numbers(
     return {"germany": de, "bdbv": bdbv}
 
 
+MIN_CELLS: Final = 5
+"""Panels of the checkpoint figure with fewer matched cells are greyed."""
+
+
+def checkpoint_numbers(scores: pd.DataFrame) -> dict:
+    """Return each panel's cells and each model's relative WIS by size.
+
+    Keys are study and level, then `n` (the fewest matched cells of a
+    point) and each model with its `rel_wis` by outbreaks (`zero-shot`
+    for 0), to two decimals.
+    """
+    out: dict = {}
+    for (study, level), one in scores.groupby(["study", "level"]):
+        node = out.setdefault(study, {}).setdefault(level, {})
+        node["n"] = int(one["n"].min())
+        for model, g in one.groupby("model"):
+            node[model] = {
+                ("zero-shot" if k == 0 else f"n{int(k)}"): round(float(v), 2)
+                for k, v in zip(g["outbreaks"], g["rel_wis"], strict=True)
+            }
+    return out
+
+
 def checkpoint_figure(scores: pd.DataFrame) -> Figure:
     """Plot each model's relative WIS against the fine-tune's outbreaks.
 
-    One panel per study and level, one line per model, on a log axis of
-    outbreaks with the zero-shot model left of the first checkpoint.
+    One panel per study and level, titled with its n of matched cells and
+    greyed when n is under `MIN_CELLS`, one line per model, on a log axis
+    of outbreaks with the zero-shot model left of the first checkpoint.
     `scores` has one row per study, level, model and checkpoint, with
     `outbreaks` and `rel_wis` against `randomwalknowcast`.
     """
@@ -300,21 +325,37 @@ def checkpoint_figure(scores: pd.DataFrame) -> Figure:
     axes = axes.ravel()
     for ax, (study, level) in zip(axes, panels, strict=False):
         one = sc.loc[(sc["study"] == study) & (sc["level"] == level)]
-        for model, g in one.groupby("model"):
+        n = int(one["n"].min())
+        thin = n < MIN_CELLS
+        for i, (model, g) in enumerate(one.groupby("model")):
             g = g.sort_values("outbreaks")
             x = g["outbreaks"].where(g["outbreaks"] > 0, zero)
-            ax.plot(x, g["rel_wis"], marker="o", ms=3, label=model)
+            colour = "#bbbbbb" if thin else f"C{i}"
+            ax.plot(
+                x, g["rel_wis"], marker="o", ms=3, color=colour, label=model
+            )
+        if thin:
+            ax.text(
+                0.5,
+                0.5,
+                f"too few cells (n < {MIN_CELLS})",
+                transform=ax.transAxes,
+                ha="center",
+                color="#888888",
+            )
         ax.set_xscale("log")
         ax.set_xlim(ticks[0] / 1.5, ticks[-1] * 1.5)
         ax.set_xticks(ticks, labels, rotation=45, fontsize=7)
         ax.minorticks_off()
         ax.axhline(1, color="#888888", ls="--", lw=1)
-        ax.set_title(f"{study}, {level}", fontsize=9)
+        ax.set_title(f"{study}, {level} (n = {n})", fontsize=9)
         ax.set_xlabel("Fine-tuning outbreaks")
         ax.set_ylabel("Relative WIS")
     for ax in axes[len(panels) :]:
         ax.set_visible(False)
-    handles, labels = axes[0].get_legend_handles_labels()
+    # The legend from a panel drawn in colour.
+    shown = [ax for ax in axes if ax.get_visible() and ax.texts == []]
+    handles, labels = (shown or axes)[0].get_legend_handles_labels()
     fig.legend(handles, labels, loc="outside lower center", ncol=len(labels))
     return fig
 
@@ -585,6 +626,7 @@ def write_evidence(
                     data["lag_bdbv_after"],
                 )
             ),
+            "checkpoints": (None if ckpt is None else checkpoint_numbers(ckpt)),
             "aggregation": (None if agg is None else aggregation_numbers(agg)),
             "realism": (
                 QUOTED["realism"] if ref is None else realism_numbers(ref)

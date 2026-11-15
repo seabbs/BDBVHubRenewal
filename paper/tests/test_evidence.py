@@ -203,8 +203,8 @@ def test_lag_numbers_pair_each_model_with_its_longer_horizon() -> None:
     }
 
 
-def test_checkpoint_figure_has_a_panel_per_study_and_level() -> None:
-    from paperpipe.evidence import checkpoint_figure
+def test_checkpoint_panels_show_n_and_grey_thin_ones() -> None:
+    from paperpipe.evidence import checkpoint_figure, checkpoint_numbers
 
     rows = pd.DataFrame(
         {
@@ -212,9 +212,22 @@ def test_checkpoint_figure_has_a_panel_per_study_and_level() -> None:
             "level": "national",
             "model": "fm_chronos_daily_ragged",
             "outbreaks": [0, 1000, 2000] * 2,
+            "n": [1] * 3 + [400] * 3,
             "rel_wis": [2.0, 1.5, 1.2] * 2,
         }
     )
     fig = checkpoint_figure(rows)
-    titles = [ax.get_title() for ax in fig.axes if ax.get_visible()]
-    assert titles == ["ebola, national", "germany, national"]
+    axes = [ax for ax in fig.axes if ax.get_visible()]
+    assert [ax.get_title() for ax in axes] == [
+        "ebola, national (n = 1)",
+        "germany, national (n = 400)",
+    ]
+    assert "too few cells" in axes[0].texts[0].get_text()
+    assert not axes[1].texts
+    numbers = checkpoint_numbers(rows)
+    assert numbers["germany"]["national"]["n"] == 400
+    assert numbers["ebola"]["national"]["fm_chronos_daily_ragged"] == {
+        "zero-shot": 2.0,
+        "n1000": 1.5,
+        "n2000": 1.2,
+    }
