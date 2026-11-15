@@ -1783,7 +1783,6 @@ def _germany_backtest(args: argparse.Namespace) -> int:
         dates,
         config.n_samples,
         config.seed,
-        truth_delay=config.truth_delay,
     )
     out = Path(args.out) / ("held-out" if args.held_out else "")
     out.mkdir(parents=True, exist_ok=True)
