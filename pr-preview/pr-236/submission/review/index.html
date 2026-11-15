@@ -2068,14 +2068,14 @@
 <h2 id="what-would-be-submitted">What would be submitted<a class="headerlink" href="#what-would-be-submitted" title="Permanent link">&para;</a></h2>
 <ul>
 <li>Model: <code>fm_chronos_daily_ragged_ft</code>.</li>
-<li>Outcome: round skipped. fine-tuned Chronos-2 on the daily releases could not run or was ruled out (fine-tuned Chronos-2 on the daily releases was ruled out (plausible: CD-IT-35 2026-12-05: median 2 is under 1/20 of the recent maximum 42 (and 2 more))). This round is skipped for this model: no other model is submitted in its place.</li>
-<li>The track ran in 4.9 min on a GitHub runner's CPU.</li>
-<li>Checkpoint: release <code>chronos-ft-3d3bc724bbfa</code>, adapter SHA-256 <code>7ea9ab8f3eef</code>.</li>
-<li>Held-out loss: 0.290 before fine-tuning, 0.186 after, on 2098 held-out blocks from 2000 outbreaks.</li>
+<li>Outcome: round skipped. fine-tuned Chronos-2 on the daily releases could not run or was ruled out (fine-tuned Chronos-2 on the daily releases was ruled out (plausible: CD-NK-14 2026-11-28: 97.5% quantile 370 is over 15 times the recent maximum 22 (and 1 more))). This round is skipped for this model: no other model is submitted in its place.</li>
+<li>The track ran in 3.9 min on a GitHub runner's CPU.</li>
+<li>Checkpoint: release <code>chronos-ft-6b7aaa8d4f55</code>, adapter SHA-256 <code>afc50d842aa0</code>.</li>
+<li>Held-out loss: 0.290 before fine-tuning, 0.192 after, on 2098 held-out blocks from 1000 outbreaks.</li>
 </ul>
 <h2 id="checks-and-hub-validation">Checks and hub validation<a class="headerlink" href="#checks-and-hub-validation" title="Permanent link">&para;</a></h2>
 <h3 id="round-skipped">Round skipped<a class="headerlink" href="#round-skipped" title="Permanent link">&para;</a></h3>
-<p>fine-tuned Chronos-2 on the daily releases could not run or was ruled out (fine-tuned Chronos-2 on the daily releases was ruled out (plausible: CD-IT-35 2026-12-05: median 2 is under 1/20 of the recent maximum 42 (and 2 more))). This round is skipped for this model: no other model is submitted in its place.</p>
+<p>fine-tuned Chronos-2 on the daily releases could not run or was ruled out (fine-tuned Chronos-2 on the daily releases was ruled out (plausible: CD-NK-14 2026-11-28: 97.5% quantile 370 is over 15 times the recent maximum 22 (and 1 more))). This round is skipped for this model: no other model is submitted in its place.</p>
 <table>
 <thead>
 <tr>
@@ -2143,12 +2143,12 @@
 <tr>
 <td>bounds</td>
 <td>WARN</td>
-<td>CD-NK: 95th centile 1.24e+03 is 5.38 times the bound base 230 (and 1 more)</td>
+<td>CD-HU: 95th centile 312 is 6.65 times the bound base 47 (and 6 more)</td>
 </tr>
 <tr>
 <td>plausible</td>
 <td>FAIL</td>
-<td>CD-IT-35 2026-12-05: median 2 is under 1/20 of the recent maximum 42 (and 2 more)</td>
+<td>CD-NK-14 2026-11-28: 97.5% quantile 370 is over 15 times the recent maximum 22 (and 1 more)</td>
 </tr>
 <tr>
 <td>growth</td>
@@ -2163,7 +2163,7 @@
 <tr>
 <td>baseline</td>
 <td>WARN</td>
-<td>CD-HU-07: median 0 against random walk baseline 11 over 2026-11-21 to 2026-12-05 (ratio 0.312) (and 8 more)</td>
+<td>CD-HU-07: median 0 against random walk baseline 11 over 2026-11-21 to 2026-12-05 (ratio 0.312) (and 5 more)</td>
 </tr>
 <tr>
 <td>previous</td>
@@ -2176,26 +2176,27 @@
 
 **bounds**
 
-- WARN: CD-NK: 95th centile 1.24e+03 is 5.38 times the bound base 230
-- WARN: CD-TO: 95th centile 128 is 6.39 times the bound base 20
+- WARN: CD-HU: 95th centile 312 is 6.65 times the bound base 47
+- WARN: CD-HU-10: 95th centile 102 is 5.12 times the bound base 20
+- WARN: CD-HU-12: 95th centile 129 is 6.13 times the bound base 21
+- WARN: CD-NK: 95th centile 1.31e+03 is 5.71 times the bound base 230
+- WARN: CD-NK-21: 95th centile 124 is 6.22 times the bound base 20
+- WARN: CD-NK-29: 95th centile 126 is 5.26 times the bound base 24
+- WARN: CD-TO: 95th centile 172 is 8.58 times the bound base 20
 
 **plausible**
 
-- FAIL: CD-IT-35 2026-12-05: median 2 is under 1/20 of the recent maximum 42
-- FAIL: CD-NK-14 2026-11-28: 97.5% quantile 376 is over 15 times the recent maximum 22
-- FAIL: CD-NK-14 2026-12-05: 97.5% quantile 403 is over 15 times the recent maximum 22
+- FAIL: CD-NK-14 2026-11-28: 97.5% quantile 370 is over 15 times the recent maximum 22
+- FAIL: CD-NK-14 2026-12-05: 97.5% quantile 366 is over 15 times the recent maximum 22
 
 **baseline**
 
 - WARN: CD-HU-07: median 0 against random walk baseline 11 over 2026-11-21 to 2026-12-05 (ratio 0.312)
-- WARN: CD-IT-07: median 0 against random walk baseline 24 over 2026-11-21 to 2026-12-05 (ratio 0.172)
-- WARN: CD-IT-21: median 3 against random walk baseline 24.5 over 2026-11-21 to 2026-12-05 (ratio 0.271)
-- WARN: CD-IT-28: median 0 against random walk baseline 16 over 2026-11-21 to 2026-12-05 (ratio 0.238)
-- WARN: CD-IT-29: median 0 against random walk baseline 26.5 over 2026-11-21 to 2026-12-05 (ratio 0.159)
-- WARN: CD-IT-35: median 12 against random walk baseline 74.5 over 2026-11-21 to 2026-12-05 (ratio 0.214)
-- WARN: CD-NK-07: median 11 against random walk baseline 49 over 2026-11-21 to 2026-12-05 (ratio 0.296)
-- WARN: CD-NK-26: median 23 against random walk baseline 3 over 2026-11-21 to 2026-12-05 (ratio 3.5)
-- ... and 1 more
+- WARN: CD-IT-07: median 2 against random walk baseline 24 over 2026-11-21 to 2026-12-05 (ratio 0.241)
+- WARN: CD-IT-29: median 3 against random walk baseline 26.5 over 2026-11-21 to 2026-12-05 (ratio 0.254)
+- WARN: CD-IT-35: median 16.5 against random walk baseline 74.5 over 2026-11-21 to 2026-12-05 (ratio 0.27)
+- WARN: CD-NK-26: median 19.5 against random walk baseline 3 over 2026-11-21 to 2026-12-05 (ratio 3.06)
+- WARN: CD-TO-02: median 25.5 against random walk baseline 3 over 2026-11-21 to 2026-12-05 (ratio 3.81)
 
 **previous**
 
@@ -2211,67 +2212,6 @@
 <h3 id="locations-the-gate-flags">Locations the gate flags<a class="headerlink" href="#locations-the-gate-flags" title="Permanent link">&para;</a></h3>
 <p>Median and 97.5% quantile (in brackets) of each model by week, with the counts reported so far. The gate's plausibility check fails a median under 1/20 of the largest of the last four reported weeks, or a 97.5% quantile over 15 times it.</p>
 <p><img alt="focus" src="figures/focus.png" /></p>
-<p><strong>CD-IT-35</strong></p>
-<table>
-<thead>
-<tr>
-<th>model</th>
-<th>2026-10-31</th>
-<th>2026-11-07</th>
-<th>2026-11-14</th>
-<th>2026-11-21</th>
-<th>2026-11-28</th>
-<th>2026-12-05</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>reported</td>
-<td>23</td>
-<td>7</td>
-<td></td>
-<td></td>
-<td></td>
-<td></td>
-</tr>
-<tr>
-<td>seabbs-chronos2_ft</td>
-<td>26 (103)</td>
-<td>20 (88)</td>
-<td>12 (100)</td>
-<td>6 (118)</td>
-<td>4 (114)</td>
-<td>2 (127)</td>
-</tr>
-<tr>
-<td>randomwalknowcast</td>
-<td>31 (55)</td>
-<td>29 (82)</td>
-<td>28 (97)</td>
-<td>30 (110)</td>
-<td>24 (121)</td>
-<td>26 (125)</td>
-</tr>
-<tr>
-<td>fm_chronos_weekly_ragged_ft</td>
-<td>24 (116)</td>
-<td>18 (95)</td>
-<td>21 (150)</td>
-<td>12 (224)</td>
-<td>12 (176)</td>
-<td>8 (154)</td>
-</tr>
-<tr>
-<td>seabbs-renewal (submitted)</td>
-<td>39 (56)</td>
-<td>44 (72)</td>
-<td>40 (78)</td>
-<td>38 (81)</td>
-<td>34 (84)</td>
-<td>34 (84)</td>
-</tr>
-</tbody>
-</table>
 <p><strong>CD-NK-14</strong></p>
 <table>
 <thead>
@@ -2297,12 +2237,12 @@
 </tr>
 <tr>
 <td>seabbs-chronos2_ft</td>
-<td>27 (121)</td>
-<td>29 (165)</td>
-<td>28 (245)</td>
-<td>36 (264)</td>
-<td>30 (376)</td>
-<td>31 (403)</td>
+<td>24 (117)</td>
+<td>28 (168)</td>
+<td>26 (249)</td>
+<td>36 (256)</td>
+<td>29 (370)</td>
+<td>33 (366)</td>
 </tr>
 <tr>
 <td>randomwalknowcast</td>
@@ -2315,12 +2255,12 @@
 </tr>
 <tr>
 <td>fm_chronos_weekly_ragged_ft</td>
-<td>20 (82)</td>
-<td>19 (111)</td>
-<td>13 (108)</td>
-<td>14 (147)</td>
-<td>13 (255)</td>
-<td>12 (111)</td>
+<td>20 (71)</td>
+<td>18 (93)</td>
+<td>12 (88)</td>
+<td>12 (121)</td>
+<td>14 (210)</td>
+<td>13 (92)</td>
 </tr>
 <tr>
 <td>seabbs-renewal (submitted)</td>
