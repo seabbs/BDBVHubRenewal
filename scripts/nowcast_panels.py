@@ -1,4 +1,4 @@
-"""Small-multiple nowcast panels: one column per model, one row per origin.
+"""Small-multiple nowcast panels: one column per model, one row per panel.
 
 Every panel shows the same truth (black) and the data as of the origin
 (grey, dashed), and one model's median with its 50% and 95% intervals,
@@ -42,12 +42,14 @@ def draw_panels(
     rel_wis: Mapping[str, float],
     truth: pd.DataFrame,
     asof: pd.DataFrame,
-    origins: Sequence[str],
-    place: str,
+    rows: Sequence[tuple[str, str, str]],
     title: str,
     out: Path,
+    truth_label: str = "truth",
+    truth_short: str = "truth",
+    scored_on: str = "all development dates",
 ) -> None:
-    """Draw one column per model and one row per origin into `out`.
+    """Draw one column per model and one row per (origin, place) into `out`.
 
     Parameters
     ----------
@@ -62,30 +64,34 @@ def draw_panels(
     asof : pandas.DataFrame
         `origin`, `location`, `target_end_date`, `total`: the data as each
         origin saw them.
-    origins : sequence of str
-        The rows.
-    place : str
-        The location drawn.
+    rows : sequence of (str, str, str)
+        Each row's origin, location and label.
     title, out
         Figure title and file.
+    truth_label : str
+        What the black line is, for the caption.
+    truth_short : str
+        The black line's label in the first column.
+    scored_on : str
+        The cells the relative WIS is on, for the caption.
     """
     labels = list(models)
     fig, axes = plt.subplots(
-        len(origins),
+        len(rows),
         len(labels),
-        figsize=(2.6 * len(labels), 2.3 * len(origins) + 0.8),
+        figsize=(2.6 * len(labels), 2.3 * len(rows) + 0.8),
         sharey="row",
         squeeze=False,
         facecolor=SURFACE,
     )
-    for i, origin in enumerate(origins):
+    for i, (origin, place, row_label) in enumerate(rows):
         seen = asof.loc[
             (asof["origin"] == origin) & (asof["location"] == place)
         ].sort_values("target_end_date")
         x_seen = pd.to_datetime(seen["target_end_date"])
         tr = truth.loc[
             (truth["location"] == place)
-            & truth["target_end_date"].isin(seen["target_end_date"])
+            & (truth["target_end_date"] >= seen["target_end_date"].min())
         ].sort_values("target_end_date")
         x_tr = pd.to_datetime(tr["target_end_date"])
         for j, label in enumerate(labels):
@@ -131,17 +137,19 @@ def draw_panels(
                 ax.spines[side].set_color(GRID)
             ax.tick_params(colors=TEXT, labelsize=7)
             ax.margins(x=0.12)
-            ax.xaxis.set_major_locator(mdates.WeekdayLocator(interval=2))
+            ax.xaxis.set_major_locator(
+                mdates.AutoDateLocator(minticks=3, maxticks=4)
+            )
             ax.xaxis.set_major_formatter(mdates.DateFormatter("%d %b"))
             if i == 0:
                 score = rel_wis.get(label)
                 sub = "" if score is None else f"\nrel. WIS {score:.2f}"
                 ax.set_title(label + sub, fontsize=9, color=TRUTH)
             if j == 0:
-                ax.set_ylabel(f"origin {origin}", fontsize=8, color=TEXT)
+                ax.set_ylabel(row_label, fontsize=8, color=TEXT)
                 if len(x_tr):
                     ax.annotate(
-                        "truth",
+                        truth_short,
                         (x_tr.iloc[-1], tr["truth"].iloc[-1]),
                         xytext=(4, 0),
                         va="center",
@@ -163,9 +171,10 @@ def draw_panels(
     fig.text(
         0.01,
         0.005,
-        "Black: truth. Grey dashed: data as of the origin. Blue: median, "
-        "50% and 95% intervals. Relative WIS against randomwalknowcast, "
-        "all development dates.",
+        f"Black: {truth_label}. Grey dashed: data as of the origin. "
+        "Blue: median, 50% and 95% intervals. Relative WIS against "
+        "randomwalknowcast, "
+        f"{scored_on}.",
         fontsize=8,
         color=TEXT,
     )

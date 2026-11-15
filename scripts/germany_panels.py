@@ -82,8 +82,7 @@ def main(results: Path, ckpt_dir: Path, out: Path) -> None:
         scored,
         truth,
         asof,
-        ORIGINS,
-        PLACE,
+        [(o, PLACE, f"origin {o}") for o in ORIGINS],
         "German COVID-19 hospitalisations, national 7-day sums: nowcasts "
         "by model (daily Chronos-2 source)",
         out,
