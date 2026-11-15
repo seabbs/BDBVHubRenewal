@@ -199,7 +199,7 @@ for (level in c("shared", "independent", "correlated", "lagged")) {
 
 
 @needs_r
-def test_late_places_start_tiny_and_jump_mid_outbreak(tmp_path):
+def test_mid_seeded_places_start_empty_and_are_imported(tmp_path):
     out = run_r(
         """
 set.seed(4)
@@ -207,32 +207,193 @@ strata <- data.table::data.table(
   .group = 1:3, place = c("P01", "P02", "P03"), age = "A1"
 )
 d <- draw_design(0)
-d$n_places <- 3L
-d$seeding <- "mid"
+d$n_places <- 3L; d$seeding <- "mid"; d$imports <- "none"
 v <- draw_values(d)
-g <- matrix(0, 100, 3)
-late <- seed_late(g, strata, d, v)
-jump <- colSums(late$growth - g)
-cat(round(jump, 4), late$seed, "\\n")
+v$quiet_places <- integer(0); v$late_places <- 2L
+n <- 100
+share <- c(0.5, 0.3, 0.2)
+seed <- stratum_seed(share, strata, d, v)
+imp <- stratum_imports(n, share, strata, d, v)
+from <- max(1L, round(v$late_at * n))
+cat(seed, "\\n")
+cat(sum(imp[, 1]), sum(imp[, 3]), round(sum(imp[, 2]), 10), "\\n")
+cat(all(imp[seq_len(from - 1L), 2] == 0), imp[from, 2] > 0, "\\n")
 d$seeding <- "start"
-start <- seed_late(g, strata, d, v)
-cat(all(start$growth == g), start$seed, "\\n")
+cat(stratum_seed(share, strata, d, v),
+  sum(stratum_imports(n, share, strata, d, v)), "\\n")
 """,
         tmp_path,
     )
-    mid, start = out.strip().splitlines()
-    values = [float(x) for x in mid.split()]
-    jumps, seeds = values[:3], values[3:]
-    # The first place starts as usual; late places start a thousandth as
-    # large and grow by log(1000) mid-outbreak.
-    assert jumps[0] == 0
-    assert seeds[0] == 1
-    late = [j for j in jumps[1:] if j > 0]
-    assert late
-    assert all(abs(j - 6.9078) < 1e-3 for j in late)
-    pairs = zip(jumps[1:], seeds[1:], strict=True)
-    assert all(s == 1e-3 for j, s in pairs if j > 0)
-    assert start.split() == ["TRUE", "1", "1", "1"]
+    seed, totals, timing, start = out.strip().splitlines()
+    # A late place has no seed and is imported its share over its seed days.
+    assert seed.split() == ["0.5", "0", "0.2"]
+    assert totals.split() == ["0", "0", "0.3"]
+    assert timing.split() == ["TRUE", "TRUE"]
+    assert start.split() == ["0.5", "0.3", "0.2", "0"]
+
+
+@needs_r
+def test_injected_latent_reproduces_lambda_exactly(tmp_path):
+    out = run_r(
+        """
+set.seed(7)
+dates <- as.IDate("2026-01-03") + 0:59
+grid <- CJ(place = c("P01", "P02", "P03"), age = "A1",
+  reference_date = dates, delay = 0:4)
+grid[, report_date := reference_date + delay][, delay := NULL]
+grid <- grid[report_date <= max(dates)][, confirm := 0L]
+pobs <- suppressMessages(enw_preprocess_data(grid, by = c("place", "age"),
+  max_delay = 5))
+strata <- unique(pobs$metareference[[1]][, .(.group, place, age)])
+gt <- gt_pmf(7, "gamma_0.6")
+n_r <- length(dates) - length(gt)
+log_r <- matrix(rnorm(n_r * 3, 0.02, 0.05), n_r, 3)
+d <- draw_design(0); d$n_places <- 3L; d$n_ages <- 1L
+d$mixing <- "symmetric"; d$imports <- "constant"; d$seeding <- "start"
+v <- draw_values(d); v$quiet_places <- integer(0); v$mixing_eps <- 0.3
+seed <- c(20, 0, 5)
+lambda <- expected_onsets(seed, gt, log_r,
+  mixing = place_mixing(n_r, strata, d, v),
+  imports = 3 * stratum_imports(n_r, seed / sum(seed), strata, d, v))
+latent_of <- function(sims) {
+  m <- sims$fit[[1]]$draws("exp_llatent", format = "matrix")
+  idx <- do.call(rbind, regmatches(colnames(m),
+    gregexpr("[0-9]+", colnames(m))))
+  out <- matrix(NA_real_, max(as.integer(idx[, 2])), 3)
+  out[cbind(as.integer(idx[, 2]), as.integer(idx[, 1]))] <- exp(m[1, ])
+  out
+}
+run <- function(expectation, growth_rate, lelatent) {
+  suppressMessages(suppressWarnings(enw_simulate(pobs,
+    growth_rate = growth_rate,
+    parameters = list(expr_lelatent_int = lelatent, sqrt_phi = array(0.5)),
+    reference = enw_reference(~1, distribution = "lognormal", data = pobs),
+    expectation = expectation, model = model, draws = 1L, refresh = 0,
+    show_messages = FALSE, sig_figs = 18)))
+}
+inj <- latent_expectation(pobs, lambda, ~1)
+got <- latent_of(run(inj$expectation, inj$growth_rate, inj$lelatent))
+cat("rows", nrow(got) == nrow(lambda), "\\n")
+cat("mixed", max(abs(got / pmax(lambda, 1e-8) - 1)) < 1e-10, "\\n")
+# With no mixing or imports, the injected path matches epinowcast's own
+# renewal driven by the same Rt.
+seed <- c(20, 1, 5)
+plain <- expected_onsets(seed, gt, log_r)
+inj <- latent_expectation(pobs, plain, ~1)
+got <- latent_of(run(inj$expectation, inj$growth_rate, inj$lelatent))
+ren <- enw_expectation(r = ~1, generation_time = gt, data = pobs)
+own <- latent_of(run(ren, as.numeric(log_r),
+  matrix(log(seed), length(gt), 3, byrow = TRUE)))
+cat("renewal", max(abs(got / own - 1)) < 1e-10, "\\n")
+""",
+        tmp_path,
+    )
+    rows = dict(line.split() for line in out.strip().splitlines())
+    assert rows == {"rows": "TRUE", "mixed": "TRUE", "renewal": "TRUE"}
+
+
+@needs_r
+def test_each_mixing_kind_gives_its_cross_place_structure(tmp_path):
+    out = run_r(
+        """
+set.seed(8)
+strata <- data.table::data.table(
+  .group = 1:4, place = sprintf("P%02d", 1:4), age = "A1"
+)
+d <- draw_design(0); d$n_places <- 4L; d$n_ages <- 1L
+v <- draw_values(d)
+v$quiet_places <- integer(0); v$mixing_eps <- 0.3
+n <- 90
+gt <- gt_pmf(7, "gamma_0.6")
+log_r <- matrix(0, n, 4)
+onsets <- function(kind, seed) {
+  d$mixing <- kind
+  expected_onsets(seed, gt, log_r, mixing = place_mixing(n, strata, d, v))
+}
+first <- function(x) apply(x, 2, function(y) which(y > 1e-3)[1])
+o <- onsets("none", c(1, 0, 0, 0))
+cat("none", all(o[, 2:4] == 0), "\\n")
+d$mixing <- "symmetric"
+m <- place_mixing(n, strata, d, v)
+o <- onsets("symmetric", c(1, 0, 0, 0))
+cat("symmetric", isSymmetric(m$K), all(o[n, 2:4] > 0),
+  isTRUE(all.equal(o[, 2], o[, 4])), "\\n")
+ord <- v$mixing_order
+seed <- numeric(4); seed[ord[4]] <- 1
+o_last <- onsets("asymmetric", seed)
+seed <- numeric(4); seed[ord[1]] <- 1
+o_first <- onsets("asymmetric", seed)
+cat("asymmetric", all(o_last[, ord[1:3]] == 0), all(o_first[n, ] > 0),
+  all(diff(first(o_first)[ord]) >= 0), "\\n")
+v$mixing_x <- c(0, 0.1, 0.5, 1); v$mixing_y <- rep(0, 4)
+v$mixing_range <- 0.2
+o <- onsets("distance", c(1, 0, 0, 0))
+cs <- colSums(o)
+cat("distance", cs[2] > cs[3], cs[3] > cs[4], all(diff(first(o)[2:4]) >= 0),
+  "\\n")
+v$mixing_switch <- "on"; v$mixing_switch_at <- 0.5
+d$mixing <- "time_varying"
+m <- place_mixing(n, strata, d, v)
+on <- which(m$eps > 0)[1]
+o <- onsets("time_varying", c(1, 0, 0, 0))
+cat("time_on", m$eps[1] == 0, m$eps[n] == v$mixing_eps,
+  all(o[seq_len(length(gt) + on - 1L), 2:4] == 0), all(o[n, 2:4] > 0), "\\n")
+v$mixing_switch <- "off"
+m <- place_mixing(n, strata, d, v)
+cat("time_off", m$eps[1] == v$mixing_eps, m$eps[n] == 0, "\\n")
+v$quiet_places <- 4L
+o <- onsets("symmetric", c(1, 0, 0, 0))
+cat("quiet", all(o[, 4] == 0), all(o[n, 2:3] > 0), "\\n")
+""",
+        tmp_path,
+    )
+    rows = {r.split()[0]: r.split()[1:] for r in out.strip().splitlines()}
+    assert set(rows) == {
+        "none",
+        "symmetric",
+        "asymmetric",
+        "distance",
+        "time_on",
+        "time_off",
+        "quiet",
+    }
+    assert all(x == "TRUE" for r in rows.values() for x in r), rows
+
+
+@needs_r
+def test_imports_appear_in_active_strata_only(tmp_path):
+    out = run_r(
+        """
+set.seed(9)
+strata <- data.table::data.table(
+  .group = 1:3, place = c("P01", "P02", "P03"), age = "A1"
+)
+d <- draw_design(0); d$n_places <- 3L; d$n_ages <- 1L
+d$seeding <- "start"; d$mixing <- "none"
+v <- draw_values(d); v$quiet_places <- 3L
+n <- 80
+gt <- gt_pmf(7, "gamma_0.6")
+log_r <- matrix(-0.02, n, 3)
+share <- c(0.6, 0.4, 0)
+for (kind in c("none", "constant", "pulses")) {
+  d$imports <- kind
+  imp <- stratum_imports(n, share, strata, d, v)
+  o <- expected_onsets(numeric(3), gt, log_r, imports = imp)
+  days <- which(imp[, 1] > 0)
+  cat(kind, sum(imp[, 1:2]) > 0, all(imp[, 3] == 0), all(o[, 3] == 0),
+    all(o[length(gt) + days, 1] >= imp[days, 1]),
+    length(days), "\\n")
+}
+""",
+        tmp_path,
+    )
+    rows = {r.split()[0]: r.split()[1:] for r in out.strip().splitlines()}
+    assert rows["none"][:3] == ["FALSE", "TRUE", "TRUE"]
+    assert rows["none"][4] == "0"
+    for kind in ("constant", "pulses"):
+        assert rows[kind][:4] == ["TRUE"] * 4
+    assert rows["constant"][4] == "80"
+    assert 1 <= int(rows["pulses"][4]) <= 4
 
 
 @needs_r
