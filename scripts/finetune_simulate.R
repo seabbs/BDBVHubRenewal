@@ -555,7 +555,22 @@ max_size <- function(design) {
   300000 * max(1, design$n_places * design$n_ages / 26)
 }
 
+# The software a batch ran on, recorded with each simulation: the same
+# seed gives the same counts only on the same R, BLAS and LAPACK.
+build_stack <- function(lib) {
+  source("scripts/enw_fingerprint.R", local = TRUE)
+  info <- sessionInfo()
+  list(
+    r_version = R.version.string,
+    blas = info$BLAS,
+    lapack = info$LAPACK,
+    enw_fingerprint = enw_fingerprint(lib),
+    host = Sys.info()[["nodename"]]
+  )
+}
+
 if (sys.nframe() == 0L) {
+  stack <- build_stack(lib)
   set.seed(seed)
   dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
   t0 <- Sys.time()
@@ -599,7 +614,8 @@ if (sys.nframe() == 0L) {
       list(
         draws = draws, tries = try, cases = sum(out$counts$count) / draws,
         seconds = as.numeric(Sys.time() - t1, units = "secs")
-      )
+      ),
+      stack
     )
     counts[[length(counts) + 1L]] <- out$counts
   }
