@@ -7,6 +7,8 @@
 #                       unpack`), never fit, as the workflow does; `fit`
 #                       (the default) fits here, for a local run
 #   STORE               the fit store checkout (default output/fit-store)
+#   HUB_FORECAST_DATE   the hub file's forecast_date (default the run date),
+#                       to review a round already past
 #   LEDGER_BRANCH       the ledger, whose archive of past rounds gives a
 #                       paired model's past forecasts (default
 #                       submission-ledger)
@@ -103,6 +105,9 @@ fi
 history="$WORK/ledger-archive"
 [ -d "$history" ] || ledger_archive "$history"
 past=(--history "$history/archive" --store "${STORE:-output/fit-store}")
+if [ -n "${HUB_FORECAST_DATE:-}" ]; then
+  past+=(--forecast-date "$HUB_FORECAST_DATE")
+fi
 if $unfitted; then
   cli nowcast --model "$model" --vintage "$AS_OF" \
     --reference-date "$REFERENCE_DATE" "${past[@]}" \
