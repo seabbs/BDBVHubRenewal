@@ -85,7 +85,9 @@ def test_a_mixed_batch_is_moved_aside_to_run_again(tmp_path):
 
 
 def test_a_non_finite_loss_or_gradient_leaves_the_weights():
-    import torch
+    import pytest
+
+    torch = pytest.importorskip("torch")
     from finetune_stream import finite_step
 
     layer = torch.nn.Linear(2, 1)
@@ -435,3 +437,24 @@ def test_a_straggler_is_folded_into_a_later_chunk(tmp_path):
         next_chunk(tmp_path, seeds, late, 2, waited=0, patience=1200)
         == (ids[:2])
     )
+
+
+def test_blocks_are_cut_without_torch(tmp_path):
+    import subprocess
+
+    ids = _sim_dir(tmp_path)
+    # CI's test environment has no torch: cutting blocks must not need it.
+    code = (
+        "import sys; sys.modules['torch'] = None; "
+        "sys.path.insert(0, 'scripts'); import finetune_stream as fs; "
+        f"pairs = fs.cut(__import__('pathlib').Path({str(tmp_path)!r}), "
+        f"{ids!r}, 1, 6); print(len(pairs))"
+    )
+    out = subprocess.run(
+        [sys.executable, "-c", code],
+        cwd=Path(__file__).parents[1],
+        capture_output=True,
+        text=True,
+    )
+    assert out.returncode == 0, out.stderr
+    assert int(out.stdout.split()[-1]) > 0
