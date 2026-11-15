@@ -474,8 +474,12 @@ jobs:
           # The model's stored fits at past origins pair its draws. Until
           # Fit store holds them (once this model is on main), fit the
           # missing ones into this job's copy of the store.
+          # The other source's model, to show beside it.
+          OTHER=fm_chronos_weekly_ragged_ft
+          [ "$TRACK_MODEL" = "$OTHER" ] && OTHER=fm_chronos_daily_ragged_ft
+          echo "other=$OTHER" >> "$GITHUB_OUTPUT"
           uv run bdbvhubrenewal fit-store plan --store output/fit-store \
-            --models "$TRACK_MODEL" --out "$RUNNER_TEMP/plan.json"
+            --models "$TRACK_MODEL" "$OTHER" --out "$RUNNER_TEMP/plan.json"
           jq -r '.include[] | "\(.model) \(.origin)"' "$RUNNER_TEMP/plan.json" \
             | while read -r m o; do
                 uv run bdbvhubrenewal fit-store fit --model "$m" --origin "$o" \
@@ -487,6 +491,13 @@ jobs:
           TRACK_MODEL=$TRACK_MODEL ci/steps/track.sh 2>&1 \
             | tee "$RUNNER_TEMP/track.log" || status=$?
           echo "track.sh exited $status"
+          fdate=()
+          [ -n "${HUB_FORECAST_DATE:-}" ] && fdate=(--forecast-date "$HUB_FORECAST_DATE")
+          BDBV_DATA_DIR=output/ci/inputs/data uv run bdbvhubrenewal nowcast \
+            --model "$OTHER" --vintage "$AS_OF" --reference-date "$REFERENCE_DATE" \
+            --store output/fit-store \
+            --history "output/ci/track-$TRACK_MODEL/ledger-archive/archive" \
+            "${fdate[@]}" --out "$RUNNER_TEMP/other" || true
           echo "seconds=$((SECONDS - start))" >> "$GITHUB_OUTPUT"
           echo "model=$TRACK_MODEL" >> "$GITHUB_OUTPUT"
           # The latest seabbs-renewal file on the hub, to show beside it.
@@ -498,12 +509,14 @@ jobs:
         if: steps.review.outcome == 'success'
         env:
           MODEL: ${{ steps.review.outputs.model }}
+          OTHER: ${{ steps.review.outputs.other }}
           SECONDS_TAKEN: ${{ steps.review.outputs.seconds }}
         run: |
           uv run python scripts/submission_review.py \
             --track "output/ci/track-$MODEL" \
             --observed output/ci/inputs/time-series.csv \
             --compare randomwalknowcast=output/ci/candidates/randomwalknowcast/submission \
+            --compare "$OTHER=$RUNNER_TEMP/other" \
             --compare "seabbs-renewal (submitted)=$RUNNER_TEMP/seabbs-renewal.csv" \
             --table "Release backtest, rolling truth, checkpoint r1 2c2b22a03107 (evidence/fm-chronos)=ci/review-tables/rolling.csv" \
             --table "Groupings (fm-agg)=ci/review-tables/fm-agg.md" \

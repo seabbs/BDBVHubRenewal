@@ -27,7 +27,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 RELEASES = "https://github.com/seabbs/BDBVHubRenewal/releases/download"
-LEVELS = (0.05, 0.25, 0.5, 0.75, 0.95)
+LEVELS = (0.05, 0.25, 0.5, 0.75, 0.95, 0.975)
 COLOURS = ("#2a78d6", "#eb6834", "#1baf7a", "#6250d6")
 
 
@@ -109,6 +109,90 @@ def _markdown(table: pd.DataFrame) -> str:
     return "\n".join([head, rule, *body])
 
 
+def _flagged(
+    q: pd.DataFrame, observed: pd.DataFrame, reference_date: str | None
+) -> list[str]:
+    """Return the locations the gate's plausibility check flags.
+
+    As `submission_ci.check_forecast.check_plausible` with the thresholds
+    of `ci/policy.toml`.
+    """
+    if not reference_date:
+        return []
+    ref = pd.Timestamp(reference_date)
+    weeks = {
+        (ref + pd.Timedelta(weeks=k)).strftime("%Y-%m-%d") for k in range(-3, 4)
+    }
+    out = []
+    for loc, obs in observed.groupby("location"):
+        top = obs.sort_values("target_end_date")["observation"].tail(4).max()
+        base = max(top, 20)
+        mine = q.loc[(q["location"] == loc) & q["target_end_date"].isin(weeks)]
+        if mine.empty:
+            continue
+        if (
+            (mine[0.5] > 5 * base).any()
+            or (mine[0.975] > 15 * base).any()
+            or (top >= 20 and (mine[0.5] < top / 20).any())
+        ):
+            out.append(str(loc))
+    return out
+
+
+def _focus(
+    series: dict[str, pd.DataFrame],
+    observed: pd.DataFrame,
+    places: list[str],
+    figures: Path,
+) -> list[str]:
+    """Fans and a week-by-week table of the median and 97.5% quantile."""
+    fan_charts(series, observed, places, figures / "focus.png", "Focus")
+    lines = [
+        "### Locations the gate flags",
+        "",
+        "Median and 97.5% quantile (in brackets) of each model by week, "
+        "with the counts reported so far. The gate's plausibility check "
+        "fails a median under 1/20 of the largest of the last four "
+        "reported weeks, or a 97.5% quantile over 15 times it.",
+        "",
+        "![focus](figures/focus.png)",
+        "",
+    ]
+    for loc in places:
+        weeks = sorted(
+            {
+                w
+                for q in series.values()
+                for w in q.loc[q["location"] == loc, "target_end_date"]
+            }
+        )[-6:]
+        obs = observed.loc[observed["location"] == loc].set_index(
+            "target_end_date"
+        )["observation"]
+        head = ["model", *weeks]
+        rows = [["reported", *[str(obs.get(w, "")) for w in weeks]]]
+        for name, q in series.items():
+            mine = q.loc[q["location"] == loc].set_index("target_end_date")
+            rows.append(
+                [
+                    name,
+                    *[
+                        f"{mine.loc[w, 0.5]:.0f} ({mine.loc[w, 0.975]:.0f})"
+                        if w in mine.index
+                        else ""
+                        for w in weeks
+                    ],
+                ]
+            )
+        lines += [
+            f"**{loc}**",
+            "",
+            _markdown(pd.DataFrame(rows, columns=head)),
+            "",
+        ]
+    return lines
+
+
 def _settings(tag: str) -> dict:
     """Return the checkpoint release's `settings.json`."""
     url = f"{RELEASES}/{tag}/settings.json"
@@ -135,6 +219,11 @@ def main() -> None:
     )
     p.add_argument("--seconds", type=float, default=None)
     p.add_argument("--log", type=Path, default=None, help="track.sh's log")
+    p.add_argument(
+        "--focus",
+        default="",
+        help="Comma-separated locations to compare week by week",
+    )
     p.add_argument("--out", type=Path, required=True)
     args = p.parse_args()
 
@@ -156,7 +245,12 @@ def main() -> None:
         return
     prov = json.loads((gate / "provenance.json").read_text())
     selected = gate / "selected"
+    if not selected.exists() and prov.get("attempts"):
+        # A round ruled out: review the model's own candidate.
+        selected = args.track / "candidates" / prov["attempts"][0]["id"]
     run = prov.get("run") or {}
+    if not run and (selected / "run.json").exists():
+        run = json.loads((selected / "run.json").read_text())
     model_id = (args.track / "metadata").glob("*.yml")
     model_id = next(iter(sorted(model_id)), Path("unknown")).stem
     figures = args.out / "figures"
@@ -252,6 +346,12 @@ def main() -> None:
             f"{len(zones)} health zones.",
             "",
         ]
+        focus = _flagged(mine, observed, run.get("reference_date"))
+        focus += [
+            loc for loc in args.focus.split(",") if loc and loc not in focus
+        ]
+        if focus:
+            lines += _focus(series, observed, focus, figures)
         for name, places in (
             ("national", ["CD"]),
             ("provinces", provinces),
