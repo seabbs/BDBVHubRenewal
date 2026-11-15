@@ -75,7 +75,14 @@ def test_no_archive_gives_no_forecasts(tmp_path: Path) -> None:
     assert archived_forecasts(None, "m").empty
 
 
-def _stored(root: Path, origin: str, fitted_at: str, value: float) -> None:
+def _stored(
+    root: Path,
+    origin: str,
+    fitted_at: str,
+    value: float,
+    model: str = "m",
+    settings: str = "",
+) -> None:
     forecasts = pd.DataFrame(
         {
             "location": ["CD-IT", "CD-IT"],
@@ -86,10 +93,11 @@ def _stored(root: Path, origin: str, fitted_at: str, value: float) -> None:
         }
     )
     meta = {
-        "model": "m",
+        "model": model,
         "origin": origin,
         "key": f"k{fitted_at}",
         "fitted_at": fitted_at,
+        "settings": settings,
         "status": "ok",
     }
     empty = pd.DataFrame()
@@ -165,9 +173,18 @@ def test_randomwalknowcast_is_recomputed_when_nothing_is_kept(
     assert all(o < task.vintage for o in fit["sources"])
 
 
-def test_a_model_with_no_past_forecasts_fails(tasks: list) -> None:
+def test_a_model_with_no_past_forecasts_fails(
+    tasks: list, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # No store, and forecasting again gives nothing though the model could
+    # forecast there.
+    from bdbvhubrenewal.submission import pairing
+
     task = tasks[-1]
     samples = get_model("randomwalknowcast").forecast(task)
+    monkeypatch.setattr(
+        pairing, "_recomputed", lambda *_: (pairing._empty(), set())
+    )
     with pytest.raises(LookupError, match="no past forecasts"):
         pair_submission(
             "fm_chronos_weekly_ragged",
@@ -277,3 +294,40 @@ def test_an_unfitted_model_whose_past_forecasts_are_missing_fails(
         pair_submission(
             "randomwalknowcast", samples, task, truth_delay=7, past_tasks=tasks
         )
+
+
+def test_only_fits_of_the_models_own_settings_are_used(
+    tasks: list, tmp_path: Path
+) -> None:
+    # A store with fits of two checkpoints: only the current model's are
+    # used, and the other origins are forecast again with it.
+    name = "randomwalknowcast"
+    settings = store._settings(get_model(name))
+    _stored(tmp_path, "2026-10-17", "2026-10-18T00:00:00", 1.0, name, settings)
+    _stored(tmp_path, "2026-10-24", "2026-10-25T00:00:00", 99.5, name, "B")
+    out, _ = past_forecasts(
+        name, "2026-11-08", store=tmp_path, past_tasks=tasks
+    )
+    sources = out.drop_duplicates("origin").set_index("origin")["source"]
+    assert sources["2026-10-17"] == "store"
+    assert sources["2026-10-24"] == "recomputed"
+    assert 99.5 not in set(out["value"])
+
+
+def test_a_fitted_paired_model_is_forecast_again_where_nothing_is_kept(
+    tasks: list, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from bdbvhubrenewal.forecasters import foundation
+
+    def zeros(groups, horizon, n, _seed, checkpoint=None):  # noqa: ARG001
+        return [
+            np.zeros((n, np.atleast_2d(g["target"]).shape[0], horizon))
+            for g in groups
+        ]
+
+    monkeypatch.setattr(foundation, "chronos_sampler", zeros)
+    out, _ = past_forecasts(
+        "fm_chronos_weekly_ragged", "2026-11-08", past_tasks=tasks
+    )
+    assert set(out["source"]) == {"recomputed"}
+    assert set(out["origin"]) <= {t.vintage for t in tasks}
