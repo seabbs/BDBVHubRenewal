@@ -101,6 +101,67 @@ def set_scale_floor(model, floor: float) -> None:
         floor_scale(model, floor)
 
 
+def valid_step_loss(model) -> None:
+    """Make `model` average its loss over valid steps and targets only.
+
+    Chronos-2's loss averages each row over every horizon step, missing
+    ones included, and the batch over every row, lag rows included, so a
+    target's weight falls with its share of valid steps and its number of
+    lag rows. This averages each row over its valid steps, then over the
+    rows with any, so weekly and daily blocks and every D weigh alike.
+    """
+    import types
+
+    import torch
+    from einops import rearrange
+
+    def compute_loss(
+        self,
+        quantile_preds,
+        future_target,
+        future_target_mask,
+        patched_future_covariates_mask,
+        loc_scale,
+        num_output_patches,
+    ):
+        batch_size = future_target.shape[0]
+        patch = self.chronos_config.output_patch_size
+        future_target, _ = self.instance_norm(future_target, loc_scale)
+        future_target = future_target.unsqueeze(1).to(self.device)
+        mask = (
+            future_target_mask.unsqueeze(1).to(self.device)
+            if future_target_mask is not None
+            else ~torch.isnan(future_target)
+        )
+        future_target = torch.where(mask > 0.0, future_target, 0.0)
+        pad = quantile_preds.shape[-1] - future_target.shape[-1]
+        if pad > 0:
+            shape = (*future_target.shape[:-1], pad)
+            future_target = torch.cat(
+                [future_target, torch.zeros(shape).to(future_target)], dim=-1
+            )
+            mask = torch.cat([mask, torch.zeros(shape).to(mask)], dim=-1)
+        quantiles = rearrange(self.quantiles, "q -> 1 q 1")
+        loss = 2 * torch.abs(
+            (future_target - quantile_preds)
+            * ((future_target <= quantile_preds).float() - quantiles)
+        )
+        known = rearrange(
+            patched_future_covariates_mask,
+            "b n p -> b 1 (n p)",
+            b=batch_size,
+            n=num_output_patches,
+            p=patch,
+        )
+        weight = mask.float() * (1 - known)
+        steps = weight.sum(dim=-1)
+        per_row = ((loss * weight).sum(dim=-1) / steps.clamp(min=1)).sum(-1)
+        rows = steps[:, 0] > 0
+        return per_row[rows].mean() if rows.any() else per_row.sum() * 0
+
+    model._compute_loss = types.MethodType(compute_loss, model)
+
+
 def learning_rate(step: int, base: float, steps: int) -> float:
     """Return the learning rate of step `step` (from 0).
 
@@ -675,6 +736,8 @@ def main() -> None:
     parser.add_argument("--lr-steps", type=int, default=0)
     # Least scale, in counts, a series is divided by; 0 keeps Chronos-2's.
     parser.add_argument("--scale-floor", type=float, default=0.0)
+    # Average the loss over valid horizon steps and target rows only.
+    parser.add_argument("--valid-step-loss", action="store_true")
     # Cut every block at the release lags the `_ft` models forecast with.
     parser.add_argument("--deployed-lags", action="store_true")
     # Sources to train on: one of them trains an adapter for it alone.
@@ -783,6 +846,8 @@ def main() -> None:
         ],
     )
     set_scale_floor(pipeline.model, args.scale_floor)
+    if args.valid_step_loss:
+        valid_step_loss(pipeline.model)
     model = get_peft_model(pipeline.model, lora)
     model.train()
     params = [p for p in model.parameters() if p.requires_grad]
@@ -814,6 +879,7 @@ def main() -> None:
         "learning_rate": args.learning_rate,
         **({"lr_steps": args.lr_steps} if args.lr_steps else {}),
         **({"scale_floor": args.scale_floor} if args.scale_floor else {}),
+        **({"loss": "valid steps"} if args.valid_step_loss else {}),
         **(
             {"sources": list(ft.SOURCES)}
             if ft.SOURCES != ("weekly", "daily")

@@ -23,6 +23,8 @@
 #                 --lr-steps, --scale-floor, --real-validation)
 #   DEPLOYED_LAGS=1, SOURCES   optional: train at the deployed D only,
 #                 and on these sources only ("weekly" or "daily")
+#   VALID_STEP_LOSS=1   optional: average the loss over valid horizon
+#                 steps and target rows only
 #   MAILBOX       optional file the driver appends an alert line to
 #                 from the trainer's second failure on
 #   EXTRA_SEEDS   optional seeds for other work, simulated after the
@@ -681,6 +683,7 @@ build_trainer_args() {
   [ -n "${LR_STEPS:-}" ] && trainer_args+=(--lr-steps "$LR_STEPS")
   [ -n "${SCALE_FLOOR:-}" ] && trainer_args+=(--scale-floor "$SCALE_FLOOR")
   [ "${DEPLOYED_LAGS:-0}" = 1 ] && trainer_args+=(--deployed-lags)
+  [ "${VALID_STEP_LOSS:-0}" = 1 ] && trainer_args+=(--valid-step-loss)
   [ -n "${SOURCES:-}" ] && trainer_args+=(--sources $SOURCES)
   [ -n "${REAL_VALIDATION:-}" ] \
     && trainer_args+=(--real-validation "$REAL_VALIDATION")
