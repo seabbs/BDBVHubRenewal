@@ -658,6 +658,13 @@ def main() -> None:
     parser.add_argument("--cut-workers", type=int, default=3)
     args = parser.parse_args()
     out, sim_dir = args.out, args.sim_dir
+    # The commit this trainer runs, read once: the worktree may move on.
+    commit = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
     out.mkdir(parents=True, exist_ok=True)
     pause = out.parent / "PAUSE"
     status_file = out / "stream-status.json"
@@ -1000,12 +1007,7 @@ def main() -> None:
             settings["hash"] = key
             # The commit the trainer ran from, outside the hash: the
             # checkpoint is rebuilt from it to the same hash.
-            settings["code_commit"] = subprocess.run(
-                ["git", "rev-parse", "HEAD"],
-                capture_output=True,
-                text=True,
-                check=True,
-            ).stdout.strip()
+            settings["code_commit"] = commit
             settings["device"] = device
             settings["held_out_loss_start"] = start_loss
             settings["held_out_loss"] = held_out_loss(
