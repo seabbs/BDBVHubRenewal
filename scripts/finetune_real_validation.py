@@ -2,8 +2,11 @@
 r"""Write the real validation blocks the trainer scores each checkpoint on.
 
 The blocks are BDBV as known at pseudo-origins before the first release
-the paper scores, rebuilt from one release's line list
-(`finetune_chronos.real_blocks`). Every forecast week ends by the last
+the paper scores, rebuilt from the hub's public per-case delay table
+(`auxiliary-data/weekly-reporting-delays-by-province.csv` of
+InsightNet-US/BDBV-Modeling-Hub, its 2026-10-09 vintage, as
+`bdbvhubrenewal.data.fetch_hub_data` saves it;
+`finetune_chronos.real_blocks`). Every forecast week ends by the last
 week before the paper's first scored week, so choosing checkpoints on
 them leaks nothing the paper evaluates. Germany's development half is
 not used.
@@ -24,8 +27,8 @@ sys.path.insert(0, str(Path(__file__).parent))
 import finetune_chronos as ft
 
 VINTAGE = "2026-10-09"
-"""The release whose line list gives the blocks: the first scored one,
-whose line list is the earliest with report delays."""
+"""The vintage of the hub's delay table that gives the blocks: the first
+scored release, and the earliest with a delay table."""
 
 CUTS = ["2026-07-25", "2026-08-01", "2026-08-08"]
 """Pseudo-origins: Saturdays whose forecast weeks end by `LAST_WEEK`."""

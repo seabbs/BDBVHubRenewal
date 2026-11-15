@@ -371,9 +371,10 @@ def _settings_hash(settings: dict) -> str:
 def real_blocks(
     line_list: pd.DataFrame, cuts: list[str], last_week: str, lag: int
 ) -> list[dict]:
-    """Return weekly validation blocks of a real outbreak's line list.
+    """Return weekly validation blocks of a real outbreak's delay table.
 
-    Each case of `line_list` (`location`, `onset_week`, the week's
+    Each case of `line_list`, a public per-case delay table such as the
+    hub's (`location`, `onset_week`, the week's
     Saturday, and `delay`, days from onset to report) is reported on its
     onset week's end plus its delay. Each block is the outbreak as known
     at a cut in `cuts`, weekly releases to it laid out as the ragged
