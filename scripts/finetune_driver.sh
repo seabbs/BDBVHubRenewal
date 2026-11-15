@@ -12,6 +12,8 @@
 #   HELD_FIRST, HELD_LAST         held-out seeds (simulated first)
 #   REMOTE_RETRY_MEM_KB   memory cap of a remote batch run again after R
 #                 aborted it (default twice REMOTE_MEM_KB)
+#   LOOKAHEAD_OUTBREAKS   outbreaks past the trainer's progress whose
+#                 lost or aborted seeds the laptop runs early (1000)
 #   WAIT_ALERT_MIN   minutes the trainer waits before an alert (30)
 #   LEAD_MAX, LEAD_RESUME   optional: no new batches while finished
 #                 training outbreaks lead the trainer by more than
@@ -372,22 +374,30 @@ unstarted_seeds() {
 }
 
 blocking_seeds() {
-  # Training seeds the waiting trainer needs that are not done, lowest
-  # first. A seed lost elsewhere would hold training up until its log is
-  # stale, so the laptop runs these first.
-  python3 - "$SIM_DIR" "$OUT/stream-status.json" "$TRAIN_FIRST" "$TRAIN_LAST" <<'EOF'
-import json, re, sys
+  # Training seeds the trainer needs soon that are not done, lowest
+  # first: while it waits, every missing seed of its chunk; while it
+  # trains, those of the next LOOKAHEAD_OUTBREAKS outbreaks that the
+  # remote lost (aborted, or with a stale log).
+  # The laptop runs these first, so a seed lost or aborted on the remote
+  # is done before the trainer reaches it.
+  python3 - "$SIM_DIR" "$OUT" "$TRAIN_FIRST" "$TRAIN_LAST" \
+    "${LOOKAHEAD_OUTBREAKS:-1000}" "${STALE_MIN:-90}" <<'EOF'
+import json, re, sys, time
 from pathlib import Path
-sim, status = Path(sys.argv[1]), Path(sys.argv[2])
-first, last = map(int, sys.argv[3:])
-try:
-    stage = json.loads(status.read_text()).get("stage", "")
-except (OSError, ValueError):
-    sys.exit()
+sim, out = Path(sys.argv[1]), Path(sys.argv[2])
+first, last, ahead, stale = map(int, sys.argv[3:])
+def read(path):
+    try:
+        return json.loads((out / path).read_text())
+    except (OSError, ValueError):
+        return {}
+stage = read("stream-status.json").get("stage", "")
 wait = re.fullmatch(r"waiting for outbreaks \d+-(\d+)", stage)
-if not wait:
-    sys.exit()
-need, have, per = int(wait.group(1)), 0, None
+if wait:
+    need = int(wait.group(1))
+else:
+    need = read("state/state.json").get("done", 0) + ahead
+have, per = 0, None
 for s in range(first, last + 1):
     if have >= need:
         break
@@ -396,9 +406,15 @@ for s in range(first, last + 1):
         n = max(len(path.read_text().splitlines()) - 1, 0)
         per = per or n
         have += n
-    else:
+        continue
+    have += per or 25
+    log = sim / "logs" / f"{s}.log"
+    lost = log.exists() and (
+        "R is aborting" in log.read_text(errors="replace")
+        or time.time() - log.stat().st_mtime > stale * 60
+    )
+    if wait or lost:
         print(s)
-        have += per or 25
 EOF
 }
 
