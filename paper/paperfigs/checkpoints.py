@@ -14,7 +14,17 @@ from typing import Final
 
 import pandas as pd
 
-__all__ = ["SEP", "checkpoint_of", "drop_checkpoints"]
+__all__ = [
+    "GERMAN_TRAINED",
+    "SEP",
+    "checkpoint_of",
+    "drop_checkpoints",
+    "drop_german_trained",
+]
+
+GERMAN_TRAINED: Final = "_de"
+"""Suffix of the models fine-tuned on the German data's development half,
+compared with the simulation-trained models in one SI table only."""
 
 SEP: Final = "@"
 """Separates a fine-tuned model from its number of training outbreaks."""
@@ -31,4 +41,10 @@ def checkpoint_of(model: str) -> tuple[str, int] | None:
 def drop_checkpoints(df: pd.DataFrame) -> pd.DataFrame:
     """Return the rows of models that are not checkpoints."""
     keep = [checkpoint_of(m) is None for m in df["model"]]
+    return df.loc[keep].reset_index(drop=True)
+
+
+def drop_german_trained(df: pd.DataFrame) -> pd.DataFrame:
+    """Return the rows of models not fine-tuned on the German data."""
+    keep = ~df["model"].astype(str).str.endswith(GERMAN_TRAINED)
     return df.loc[keep].reset_index(drop=True)

@@ -17,7 +17,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 from matplotlib.figure import Figure
 
-from paperfigs.checkpoints import drop_checkpoints
+from paperfigs.checkpoints import drop_checkpoints, drop_german_trained
 from paperfigs.factors import factor_label
 from paperfigs.joint import relative_joint_scores
 from paperfigs.nowcasts import (
@@ -51,8 +51,10 @@ __all__ = [
     "JOINT_STUDIES",
     "MAIN_TABLES",
     "SI_TABLES",
+    "STUDY_SI_TABLES",
     "figure_names",
     "joint_table",
+    "real_finetune_table",
     "score_tables",
     "to_markdown",
     "write_figures",
@@ -99,6 +101,20 @@ MAIN_TABLES: Final = ("scores",)
 """Main-text tables of every study; the synthetic study adds `grid`."""
 
 SI_TABLES: Final = ("scores-by-horizon", "scores-by-location")
+
+STUDY_SI_TABLES: Final[dict[str, tuple[str, ...]]] = {
+    "germany": ("real-finetune",)
+}
+"""Further SI tables of a study: for Germany, Chronos-2 fine-tuned on the
+German data against the simulation-trained model (`real_finetune_table`)."""
+
+REAL_FINETUNE_MODELS: Final = tuple(
+    f"fm_chronos_{source}_ragged{variant}"
+    for source in ("daily", "weekly")
+    for variant in ("", "_ft", "_de")
+)
+"""The Chronos-2 models of the German fine-tuning comparison: zero-shot,
+fine-tuned on simulations and fine-tuned on the German data."""
 """SI tables of every study."""
 
 
@@ -275,6 +291,9 @@ def write_figures(
     """
     dirs = {"main": main_dir, "si": si_dir}
     written = []
+    # The German-trained models appear in their own SI table only.
+    forecasts = drop_german_trained(forecasts)
+    scores = drop_german_trained(scores)
     with theme():
         figs = _figures(
             study,
@@ -344,6 +363,59 @@ def _grid(locations: pd.DataFrame) -> pd.DataFrame:
     return pd.concat(parts, ignore_index=True)[["factor", "level", "share"]]
 
 
+def _level(scores: pd.DataFrame) -> pd.Series:
+    """Return the German level of each score row."""
+    national = scores["location"] == "DE"
+    ages = scores["stratum"].fillna("all") != "all"
+    return pd.Series(
+        [
+            "age groups" if a else "national" if n else "states"
+            for n, a in zip(national, ages, strict=True)
+        ],
+        index=scores.index,
+    )
+
+
+def real_finetune_table(
+    scores: pd.DataFrame, split: pd.Timestamp | None
+) -> pd.DataFrame:
+    """Compare Chronos-2 fine-tuned on German data with the other models.
+
+    The German-trained models saw the development half, so only the
+    held-out half is scored: each model's mean scores and coverage
+    overall (`level` `all`) and by level (national, states, age groups),
+    relative to `REFERENCE`.
+
+    Parameters
+    ----------
+    scores : pandas.DataFrame
+        The German scores, every model.
+    split : pandas.Timestamp or None
+        First held-out origin date. Without one there is no held-out half
+        and the table is empty.
+
+    Returns
+    -------
+    pandas.DataFrame
+    """
+    keep = scores["model"].isin([REFERENCE, *REAL_FINETUNE_MODELS])
+    rows = scores.loc[keep]
+    if split is None:
+        rows = rows.iloc[0:0]
+    else:
+        rows = rows.loc[rows["origin_date"] >= pd.Timestamp(split)]
+    if rows.empty or REFERENCE not in set(rows["model"]):
+        return pd.DataFrame(columns=["study", "model", "level"])
+    rows = rows.assign(level=_level(rows))
+    return pd.concat(
+        [
+            _table(rows, [], REFERENCE).assign(level="all"),
+            _table(rows, ["level"], REFERENCE),
+        ],
+        ignore_index=True,
+    )
+
+
 def score_tables(
     study: str,
     scores: pd.DataFrame,
@@ -382,7 +454,8 @@ def score_tables(
         The tables written.
     """
     baseline = baseline or STUDY_BASELINES[study]
-    scores = add_period(drop_checkpoints(scores), split)
+    every = scores
+    scores = add_period(drop_checkpoints(drop_german_trained(scores)), split)
     period = ["period"] if split is not None else []
     tables = {
         main_dir / f"{study}-scores.csv": _table(scores, period, baseline),
@@ -395,10 +468,17 @@ def score_tables(
     }
     if study == "synthetic":
         tables[main_dir / f"{study}-grid.csv"] = _grid(locations)
+    if study == "germany":
+        tables[si_dir / "germany-real-finetune.csv"] = real_finetune_table(
+            every, split
+        )
     for path, table in tables.items():
         path.parent.mkdir(parents=True, exist_ok=True)
         table.to_csv(path, index=False)
-        path.with_suffix(".md").write_text(to_markdown(table))
+        text = to_markdown(table)
+        if table.empty:
+            text = "*No held-out forecasts in this run.*\n"
+        path.with_suffix(".md").write_text(text)
     return list(tables)
 
 

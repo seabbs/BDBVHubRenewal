@@ -43,6 +43,7 @@ from paperpipe.outputs import (  # noqa: E402
     JOINT_STUDIES,
     MAIN_TABLES,
     SI_TABLES,
+    STUDY_SI_TABLES,
     figure_names,
 )
 
@@ -250,7 +251,8 @@ def figures(mode, study):
 def tables(mode, study):
     main = [*MAIN_TABLES, *(["grid"] if study == "synthetic" else [])]
     return [f"{R}/{mode}/tables/main/{study}-{n}.csv" for n in main] + [
-        f"{R}/{mode}/tables/si/{study}-{n}.csv" for n in SI_TABLES
+        f"{R}/{mode}/tables/si/{study}-{n}.csv"
+        for n in (*SI_TABLES, *STUDY_SI_TABLES.get(study, ()))
     ]
 
 
