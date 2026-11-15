@@ -91,7 +91,17 @@ def test_config_gives_the_paper_s_dates_and_an_explicit_model_set() -> None:
         "2022-04-29",
         159,
     )
-    assert config.models == ("randomwalk", "randomwalknowcast")
+    assert config.models == (
+        "randomwalk",
+        "randomwalknowcast",
+        *(
+            f"fm_chronos_{source}_{layout}"
+            for layout in ("complete", "ragged")
+            for source in ("daily", "weekly")
+        ),
+        "fm_chronos_daily_ragged_ft",
+        "fm_chronos_weekly_ragged_ft",
+    )
     assert config.truth_delay == 40
     assert config.submissions
     assert config.baseline == "randomwalknowcast"
