@@ -151,7 +151,8 @@ def _ragged_lags(model: FoundationModel, task: ForecastTask) -> int:
     store: list = []
     dataclasses.replace(model, sample=_recording(store)).forecast(task)
     (groups, _) = store[0]
-    return len(groups[0]["future_covariates"]) // (1 + len(task.locations))
+    names = groups[0]["future_covariates"]
+    return len({name.rsplit("_lag_", 1)[1] for name in names})
 
 
 @pytest.mark.parametrize(("source", "steps"), [("daily", 35), ("weekly", 5)])
