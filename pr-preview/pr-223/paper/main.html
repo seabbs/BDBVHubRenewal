@@ -57,6 +57,35 @@ div.csl-indent {
 <link href="main_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
 <link href="main_files/libs/bootstrap/bootstrap-d99fc85c7253c7d071cb1f16904a1173.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
 
+  <script src="https://cdnjs.cloudflare.com/polyfill/v3/polyfill.min.js?features=es6"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js" type="text/javascript"></script>
+
+<script type="text/javascript">
+const typesetMath = (el) => {
+  if (window.MathJax) {
+    // MathJax Typeset
+    window.MathJax.typeset([el]);
+  } else if (window.katex) {
+    // KaTeX Render
+    var mathElements = el.getElementsByClassName("math");
+    var macros = [];
+    for (var i = 0; i < mathElements.length; i++) {
+      var texText = mathElements[i].firstChild;
+      if (mathElements[i].tagName == "SPAN" && texText && texText.data) {
+        window.katex.render(texText.data, mathElements[i], {
+          displayMode: mathElements[i].classList.contains('display'),
+          throwOnError: false,
+          macros: macros,
+          fleqn: false
+        });
+      }
+    }
+  }
+}
+window.Quarto = {
+  typesetMath
+};
+</script>
 
 </head>
 
@@ -294,22 +323,8 @@ Table&nbsp;1: The crossed factors of the simulation grid and their levels. The r
 </section>
 <section id="correlated-trajectories" class="level3">
 <h3 class="anchored" data-anchor-id="correlated-trajectories">Correlated trajectories</h3>
-<div class="callout callout-style-default callout-note callout-titled" title="Plan">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-<span class="screen-reader-only">Note</span>Plan
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<ul>
-<li>Models that give only per-step forecasts get correlated trajectories from a Gaussian copula, with correlations estimated over a rolling window of recent forecast errors (#221).</li>
-<li>The same layer serves <code>randomwalknowcast</code>.</li>
-</ul>
-</div>
-</div>
+<p>Chronos-2 and <code>randomwalknowcast</code> draw each place and week on its own. Paired at random, their draws give sums over weeks or places that are too narrow. We pair them into trajectories with a Gaussian copula over weeks and places. Each trajectory draws a vector <span class="math inline">\(z\)</span> from a multivariate normal with correlation matrix <span class="math inline">\(\Sigma\)</span>. Each place-week’s draws are then reordered across trajectories so that they rank as <span class="math inline">\(z\)</span> does. This is an empirical copula reordering in the style of the Schaake shuffle <span class="citation" data-cites="Clark2004">(<a href="#ref-Clark2004" role="doc-biblioref">Clark et al. 2004</a>)</span> and ensemble copula coupling <span class="citation" data-cites="Schefzik2013">(<a href="#ref-Schefzik2013" role="doc-biblioref">Schefzik, Thorarinsdottir, and Gneiting 2013</a>)</span>. Each place-week keeps its own draws, so every marginal forecast and every per-week score is unchanged. <span class="math inline">\(\Sigma\)</span> is a place correlation times a week correlation. Two steps <span class="math inline">\(\delta\)</span> days apart have correlation <span class="math inline">\(\rho_t^{\delta/7}\)</span>. Two provinces have correlation <span class="math inline">\(\rho_p\)</span>, and the country and a province have correlation <span class="math inline">\(\rho_n\)</span>. Where the country is the sum of its provinces, as for <code>randomwalknowcast</code>, it is summed again from the paired provinces. Copulas have been used before to give joint forecasts of seasonal influenza <span class="citation" data-cites="Ray2018 Brooks2018">(<a href="#ref-Ray2018" role="doc-biblioref">Ray and Reich 2018</a>; <a href="#ref-Brooks2018" role="doc-biblioref">Brooks et al. 2018</a>)</span>.</p>
+<p>At each forecast origin we estimate the three correlations from the model’s own matured errors. For each forecast made at an earlier origin whose truth had been released by this origin, we take the randomised probability integral transform (PIT) of the truth in the forecast’s draws and map it to a normal score. We use the scores of the 8 latest matured weeks. Each correlation is the Pearson correlation of pairs of scores from the same forecast. We shrink it towards a fixed prior, <span class="math inline">\((\rho_t, \rho_p, \rho_n) = (0.9, 0.7, 0.7)\)</span>, with the prior worth 100 pairs, and keep it between 0 and 0.95. An origin with no matured errors takes the prior. We score the paired trajectories with the energy score <span class="citation" data-cites="Gneiting2008">(<a href="#ref-Gneiting2008" role="doc-biblioref">Gneiting et al. 2008</a>)</span> and the variogram score of order 0.5 <span class="citation" data-cites="Scheuerer2015">(<a href="#ref-Scheuerer2015" role="doc-biblioref">Scheuerer and Hamill 2015</a>)</span> on <span class="math inline">\(\log(x + 1)\)</span> counts. Both are proper scores for joint forecasts <span class="citation" data-cites="gneitingStrictlyProperScoring2007">(<a href="#ref-gneitingStrictlyProperScoring2007" role="doc-biblioref">Gneiting and Raftery 2007</a>)</span>, and the energy score has been used for epidemic trajectories from forecast hubs <span class="citation" data-cites="Bay2026">(<a href="#ref-Bay2026" role="doc-biblioref">Bay et al. 2026</a>)</span>. We also report the coverage of sums over weeks and over places. The estimator, its window and the evidence for it are in the SI.</p>
 </section>
 <section id="evaluation-on-held-out-synthetic-data" class="level3">
 <h3 class="anchored" data-anchor-id="evaluation-on-held-out-synthetic-data">Evaluation on held-out synthetic data</h3>
@@ -445,7 +460,7 @@ Table&nbsp;1: The crossed factors of the simulation grid and their levels. The r
 <img src="build/figures/main/synthetic-results.png" class="img-fluid figure-img">
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-synthetic-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;2: Held-out synthetic data. (A) Nowcasts over time; (B, C) CRPS relative to <code>randomwalknowcast</code> on the natural and log scales; (D) bias; (E) 50% and 90% coverage; (F) relative CRPS by scenario factor; (G) relative CRPS by horizon. Illustrative, dummy data
+Figure&nbsp;2: Held-out synthetic data. (A) Nowcasts of one held-out outbreak, drawn with the workflow’s seed, against the rolling truth; (B, C) CRPS relative to <code>randomwalknowcast</code> on the natural and log scales; (D) bias; (E) 50% and 90% coverage; (F) relative CRPS by scenario factor; (G) relative CRPS by horizon. Illustrative, dummy data
 </figcaption>
 </figure>
 </div>
@@ -608,6 +623,149 @@ Table&nbsp;2: Held-out synthetic data: mean scores, coverage and number of forec
 </div>
 </figure>
 </div>
+<div id="tbl-synthetic-joint" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-tbl figure">
+<figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-synthetic-joint-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Table&nbsp;3: Held-out synthetic data: mean energy and variogram scores of each model’s trajectories on log(x + 1) counts, and their ratio to randomwalknowcast on the forecasts both made. Illustrative, dummy data
+</figcaption>
+<div aria-describedby="tbl-synthetic-joint-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<table class="caption-top table">
+<colgroup>
+<col style="width: 16%">
+<col style="width: 16%">
+<col style="width: 16%">
+<col style="width: 16%">
+<col style="width: 16%">
+<col style="width: 16%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>model</th>
+<th>n</th>
+<th>energy_log</th>
+<th>variogram_log</th>
+<th>rel_energy_log</th>
+<th>rel_variogram_log</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>epinowcast</td>
+<td>142</td>
+<td>0.446</td>
+<td>2.26</td>
+<td>0.671</td>
+<td>0.503</td>
+</tr>
+<tr class="even">
+<td>fm_chronos_daily_complete</td>
+<td>142</td>
+<td>0.789</td>
+<td>5.02</td>
+<td>1.19</td>
+<td>1.12</td>
+</tr>
+<tr class="odd">
+<td>fm_chronos_daily_ragged</td>
+<td>142</td>
+<td>0.668</td>
+<td>3.56</td>
+<td>1.01</td>
+<td>0.793</td>
+</tr>
+<tr class="even">
+<td>fm_chronos_daily_ragged_ft</td>
+<td>142</td>
+<td>0.486</td>
+<td>2.47</td>
+<td>0.731</td>
+<td>0.55</td>
+</tr>
+<tr class="odd">
+<td>fm_chronos_daily_ragged_ft@1000</td>
+<td>142</td>
+<td>0.675</td>
+<td>3.96</td>
+<td>1.02</td>
+<td>0.883</td>
+</tr>
+<tr class="even">
+<td>fm_chronos_daily_ragged_ft@16000</td>
+<td>142</td>
+<td>0.504</td>
+<td>2.59</td>
+<td>0.758</td>
+<td>0.577</td>
+</tr>
+<tr class="odd">
+<td>fm_chronos_daily_ragged_ft@2000</td>
+<td>142</td>
+<td>0.583</td>
+<td>3.15</td>
+<td>0.877</td>
+<td>0.702</td>
+</tr>
+<tr class="even">
+<td>fm_chronos_daily_ragged_ft@4000</td>
+<td>142</td>
+<td>0.522</td>
+<td>2.85</td>
+<td>0.786</td>
+<td>0.635</td>
+</tr>
+<tr class="odd">
+<td>fm_chronos_daily_ragged_ft@8000</td>
+<td>142</td>
+<td>0.457</td>
+<td>2.36</td>
+<td>0.688</td>
+<td>0.526</td>
+</tr>
+<tr class="even">
+<td>fm_chronos_weekly_complete</td>
+<td>142</td>
+<td>0.792</td>
+<td>5.12</td>
+<td>1.19</td>
+<td>1.14</td>
+</tr>
+<tr class="odd">
+<td>fm_chronos_weekly_ragged</td>
+<td>142</td>
+<td>0.676</td>
+<td>3.97</td>
+<td>1.02</td>
+<td>0.884</td>
+</tr>
+<tr class="even">
+<td>fm_chronos_weekly_ragged_ft</td>
+<td>142</td>
+<td>0.524</td>
+<td>2.85</td>
+<td>0.789</td>
+<td>0.635</td>
+</tr>
+<tr class="odd">
+<td>randomwalk</td>
+<td>142</td>
+<td>0.695</td>
+<td>4.55</td>
+<td>1.05</td>
+<td>1.01</td>
+</tr>
+<tr class="even">
+<td>randomwalknowcast</td>
+<td>142</td>
+<td>0.664</td>
+<td>4.49</td>
+<td>1</td>
+<td>1</td>
+</tr>
+</tbody>
+</table>
+</div>
+</figure>
+</div>
 </section>
 <section id="german-nowcast-hub" class="level3">
 <h3 class="anchored" data-anchor-id="german-nowcast-hub">German nowcast hub</h3>
@@ -634,30 +792,32 @@ Table&nbsp;2: Held-out synthetic data: mean scores, coverage and number of forec
 <img src="build/figures/main/germany-results.png" class="img-fluid figure-img">
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-germany-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;3: German nowcast hub. (A) Nowcasts over time, with a dotted line at the split between the development and held-out halves; (B, C) WIS relative to <code>KIT-frozen_baseline</code> on the natural and log scales; (D) bias; (E) 50% and 95% coverage; (F) relative WIS by location; (G) by age group; (H) by horizon.
+Figure&nbsp;3: German nowcast hub. (A) National nowcasts against the rolling truth, with a dotted line at the split between the development and held-out halves; (B, C) WIS relative to <code>KIT-frozen_baseline</code> on the natural and log scales; (D) bias; (E) 50% and 95% coverage; (F) relative WIS by location; (G) by age group; (H) by horizon. Chronos-2 rows are provisional: their ragged models capped release lags at 28 days rather than the 40-day truth delay, and they are being rescored.
 </figcaption>
 </figure>
 </div>
-<p>Placeholder summary from the workflow: the best model was MeanEnsemble, with a relative score of 0.11 and 0.14 on the log scale, against KIT-frozen_baseline.</p>
+<p>Placeholder summary from the workflow: the best model was MeanEnsemble, with a relative score of 0.11 and 0.14 on the log scale, against KIT-frozen_baseline, and 0.81 against <code>randomwalknowcast</code>, as the hub’s baseline is a point forecast with no coverage.</p>
 <div id="tbl-germany-scores" class="quarto-float quarto-figure quarto-figure-center anchored">
 <figure class="quarto-float quarto-float-tbl figure">
 <figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-germany-scores-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Table&nbsp;3: German nowcast hub: mean scores, coverage and number of forecasts of each model, with scores relative to KIT-frozen_baseline.
+Table&nbsp;4: German nowcast hub: mean scores, coverage and number of forecasts of each model, with scores relative to KIT-frozen_baseline. Chronos-2 rows are provisional: their ragged models capped release lags at 28 days rather than the 40-day truth delay, and they are being rescored.
 </figcaption>
 <div aria-describedby="tbl-germany-scores-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
 <table class="caption-top table">
 <colgroup>
-<col style="width: 9%">
-<col style="width: 9%">
-<col style="width: 9%">
-<col style="width: 9%">
-<col style="width: 9%">
-<col style="width: 9%">
-<col style="width: 9%">
-<col style="width: 9%">
-<col style="width: 9%">
-<col style="width: 9%">
-<col style="width: 9%">
+<col style="width: 7%">
+<col style="width: 7%">
+<col style="width: 7%">
+<col style="width: 7%">
+<col style="width: 7%">
+<col style="width: 7%">
+<col style="width: 7%">
+<col style="width: 7%">
+<col style="width: 7%">
+<col style="width: 7%">
+<col style="width: 7%">
+<col style="width: 7%">
+<col style="width: 7%">
 </colgroup>
 <thead>
 <tr class="header">
@@ -672,6 +832,8 @@ Table&nbsp;3: German nowcast hub: mean scores, coverage and number of forecasts 
 <th>n</th>
 <th>rel_score</th>
 <th>rel_log_score</th>
+<th>rel_score_randomwalknowcast</th>
+<th>rel_log_score_randomwalknowcast</th>
 </tr>
 </thead>
 <tbody>
@@ -687,6 +849,8 @@ Table&nbsp;3: German nowcast hub: mean scores, coverage and number of forecasts 
 <td>9185</td>
 <td>0.137</td>
 <td>0.159</td>
+<td>0.998</td>
+<td>1.01</td>
 </tr>
 <tr class="even">
 <td>germany</td>
@@ -700,6 +864,8 @@ Table&nbsp;3: German nowcast hub: mean scores, coverage and number of forecasts 
 <td>2716</td>
 <td>0.224</td>
 <td>0.22</td>
+<td>1.97</td>
+<td>1.99</td>
 </tr>
 <tr class="odd">
 <td>germany</td>
@@ -713,6 +879,8 @@ Table&nbsp;3: German nowcast hub: mean scores, coverage and number of forecasts 
 <td>9200</td>
 <td>0.148</td>
 <td>0.168</td>
+<td>1.08</td>
+<td>1.07</td>
 </tr>
 <tr class="even">
 <td>germany</td>
@@ -726,6 +894,8 @@ Table&nbsp;3: German nowcast hub: mean scores, coverage and number of forecasts 
 <td>9200</td>
 <td>1</td>
 <td>1</td>
+<td>7.31</td>
+<td>6.36</td>
 </tr>
 <tr class="odd">
 <td>germany</td>
@@ -739,6 +909,8 @@ Table&nbsp;3: German nowcast hub: mean scores, coverage and number of forecasts 
 <td>8495</td>
 <td>0.148</td>
 <td>0.171</td>
+<td>1.09</td>
+<td>1.16</td>
 </tr>
 <tr class="even">
 <td>germany</td>
@@ -752,6 +924,8 @@ Table&nbsp;3: German nowcast hub: mean scores, coverage and number of forecasts 
 <td>9177</td>
 <td>0.11</td>
 <td>0.143</td>
+<td>0.809</td>
+<td>0.912</td>
 </tr>
 <tr class="odd">
 <td>germany</td>
@@ -765,6 +939,8 @@ Table&nbsp;3: German nowcast hub: mean scores, coverage and number of forecasts 
 <td>9177</td>
 <td>0.112</td>
 <td>0.143</td>
+<td>0.825</td>
+<td>0.912</td>
 </tr>
 <tr class="even">
 <td>germany</td>
@@ -778,6 +954,8 @@ Table&nbsp;3: German nowcast hub: mean scores, coverage and number of forecasts 
 <td>9200</td>
 <td>0.169</td>
 <td>0.197</td>
+<td>1.24</td>
+<td>1.25</td>
 </tr>
 <tr class="odd">
 <td>germany</td>
@@ -791,6 +969,8 @@ Table&nbsp;3: German nowcast hub: mean scores, coverage and number of forecasts 
 <td>6800</td>
 <td>0.202</td>
 <td>0.255</td>
+<td>1.39</td>
+<td>1.48</td>
 </tr>
 <tr class="even">
 <td>germany</td>
@@ -804,6 +984,8 @@ Table&nbsp;3: German nowcast hub: mean scores, coverage and number of forecasts 
 <td>9200</td>
 <td>0.159</td>
 <td>0.179</td>
+<td>1.16</td>
+<td>1.14</td>
 </tr>
 <tr class="odd">
 <td>germany</td>
@@ -817,6 +999,128 @@ Table&nbsp;3: German nowcast hub: mean scores, coverage and number of forecasts 
 <td>9131</td>
 <td>0.266</td>
 <td>0.28</td>
+<td>1.94</td>
+<td>1.78</td>
+</tr>
+<tr class="even">
+<td>germany</td>
+<td>fm_chronos_daily_complete</td>
+<td>wis</td>
+<td>102</td>
+<td>0.115</td>
+<td>-0.0342</td>
+<td>0.163</td>
+<td>0.392</td>
+<td>9200</td>
+<td>0.616</td>
+<td>0.603</td>
+<td>4.5</td>
+<td>3.83</td>
+</tr>
+<tr class="odd">
+<td>germany</td>
+<td>fm_chronos_daily_ragged</td>
+<td>wis</td>
+<td>57.6</td>
+<td>0.0687</td>
+<td>-0.0326</td>
+<td>0.198</td>
+<td>0.486</td>
+<td>9200</td>
+<td>0.348</td>
+<td>0.361</td>
+<td>2.55</td>
+<td>2.29</td>
+</tr>
+<tr class="even">
+<td>germany</td>
+<td>fm_chronos_daily_ragged_ft</td>
+<td>wis</td>
+<td>59.7</td>
+<td>0.0736</td>
+<td>0.221</td>
+<td>0.176</td>
+<td>0.479</td>
+<td>9200</td>
+<td>0.361</td>
+<td>0.386</td>
+<td>2.64</td>
+<td>2.46</td>
+</tr>
+<tr class="odd">
+<td>germany</td>
+<td>fm_chronos_daily_ragged_ft_n1000</td>
+<td>wis</td>
+<td>49.9</td>
+<td>0.0669</td>
+<td>0.247</td>
+<td>0.236</td>
+<td>0.548</td>
+<td>9200</td>
+<td>0.302</td>
+<td>0.351</td>
+<td>2.21</td>
+<td>2.23</td>
+</tr>
+<tr class="even">
+<td>germany</td>
+<td>fm_chronos_weekly_complete</td>
+<td>wis</td>
+<td>95.5</td>
+<td>0.0983</td>
+<td>-0.266</td>
+<td>0.323</td>
+<td>0.717</td>
+<td>9200</td>
+<td>0.577</td>
+<td>0.516</td>
+<td>4.22</td>
+<td>3.28</td>
+</tr>
+<tr class="odd">
+<td>germany</td>
+<td>fm_chronos_weekly_ragged</td>
+<td>wis</td>
+<td>89.6</td>
+<td>0.0949</td>
+<td>-0.195</td>
+<td>0.29</td>
+<td>0.713</td>
+<td>9200</td>
+<td>0.542</td>
+<td>0.498</td>
+<td>3.96</td>
+<td>3.16</td>
+</tr>
+<tr class="even">
+<td>germany</td>
+<td>fm_chronos_weekly_ragged_ft</td>
+<td>wis</td>
+<td>88.9</td>
+<td>0.0865</td>
+<td>-0.032</td>
+<td>0.33</td>
+<td>0.735</td>
+<td>9200</td>
+<td>0.538</td>
+<td>0.454</td>
+<td>3.93</td>
+<td>2.88</td>
+</tr>
+<tr class="odd">
+<td>germany</td>
+<td>fm_chronos_weekly_ragged_ft_n1000</td>
+<td>wis</td>
+<td>116</td>
+<td>0.104</td>
+<td>0.234</td>
+<td>0.283</td>
+<td>0.732</td>
+<td>9200</td>
+<td>0.7</td>
+<td>0.546</td>
+<td>5.12</td>
+<td>3.47</td>
 </tr>
 <tr class="even">
 <td>germany</td>
@@ -830,6 +1134,8 @@ Table&nbsp;3: German nowcast hub: mean scores, coverage and number of forecasts 
 <td>9200</td>
 <td>0.593</td>
 <td>0.522</td>
+<td>4.34</td>
+<td>3.32</td>
 </tr>
 <tr class="odd">
 <td>germany</td>
@@ -843,6 +1149,8 @@ Table&nbsp;3: German nowcast hub: mean scores, coverage and number of forecasts 
 <td>9200</td>
 <td>0.137</td>
 <td>0.157</td>
+<td>1</td>
+<td>1</td>
 </tr>
 </tbody>
 </table>
@@ -874,15 +1182,15 @@ Table&nbsp;3: German nowcast hub: mean scores, coverage and number of forecasts 
 <img src="build/figures/main/ebola-results.png" class="img-fluid figure-img">
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-ebola-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;4: Ebola hub submissions. (A) Nowcasts over time; (B, C) CRPS relative to <code>BDBVHub-baseline</code> on the natural and log scales; (D) bias; (E) 50% and 90% coverage; (F) relative CRPS by location; (G) by horizon. Illustrative, dummy data
+Figure&nbsp;4: Ebola: sample forecasts from past releases (release backtest), joined by the hub’s forecasts as they can be scored. (A) National nowcasts against the rolling truth; (B, C) CRPS relative to randomwalknowcast on the natural and log scales, on the forecasts each model shares with it, with the share of forecasts a model made in its label where it missed some; (D) bias; (E) 50% and 90% coverage; (F) relative CRPS by location; (G) by horizon.
 </figcaption>
 </figure>
 </div>
-<p>Placeholder summary from the workflow: the best model was randomwalknowcast, with a relative score of 0.73 and 0.85 on the log scale, against BDBVHub-baseline.</p>
+<p>Placeholder summary from the workflow: the best model was pprandomwalknowcast, with a relative score of 0.77 and 1.09 on the log scale, against randomwalknowcast.</p>
 <div id="tbl-ebola-scores" class="quarto-float quarto-figure quarto-figure-center anchored">
 <figure class="quarto-float quarto-float-tbl figure">
 <figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-ebola-scores-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Table&nbsp;4: Ebola hub submissions: mean scores, coverage and number of forecasts of each model, with scores relative to BDBVHub-baseline. Illustrative, dummy data
+Table&nbsp;5: Ebola hub submissions: mean scores, coverage and number of forecasts of each model, with scores relative to randomwalknowcast.
 </figcaption>
 <div aria-describedby="tbl-ebola-scores-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
 <table class="caption-top table">
@@ -917,121 +1225,191 @@ Table&nbsp;4: Ebola hub submissions: mean scores, coverage and number of forecas
 <tbody>
 <tr class="odd">
 <td>ebola</td>
-<td>BDBVHub-baseline</td>
+<td>fm_chronos_daily_ragged</td>
 <td>crps</td>
-<td>4.24</td>
-<td>0.293</td>
-<td>-0.00217</td>
-<td>0.711</td>
-<td>0.964</td>
-<td>810</td>
-<td>1</td>
-<td>1</td>
+<td>2.48</td>
+<td>0.0223</td>
+<td>0.0476</td>
+<td>0.893</td>
+<td>0.933</td>
+<td>270</td>
+<td>2.78</td>
+<td>5.7</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
-<td>fm_chronos_weekly_complete</td>
+<td>fm_chronos_daily_ragged_ft</td>
 <td>crps</td>
-<td>5.63</td>
-<td>0.347</td>
-<td>-0.102</td>
-<td>0.562</td>
-<td>0.886</td>
-<td>810</td>
-<td>1.33</td>
-<td>1.18</td>
+<td>3.3</td>
+<td>0.0249</td>
+<td>0.0566</td>
+<td>0.881</td>
+<td>0.922</td>
+<td>270</td>
+<td>3.69</td>
+<td>6.11</td>
 </tr>
 <tr class="odd">
+<td>ebola</td>
+<td>fm_chronos_daily_ragged_ft_n1000</td>
+<td>crps</td>
+<td>3.1</td>
+<td>0.0237</td>
+<td>0.0526</td>
+<td>0.885</td>
+<td>0.933</td>
+<td>270</td>
+<td>2.12</td>
+<td>4.19</td>
+</tr>
+<tr class="even">
 <td>ebola</td>
 <td>fm_chronos_weekly_ragged</td>
 <td>crps</td>
-<td>3.63</td>
-<td>0.293</td>
-<td>-0.0367</td>
-<td>0.533</td>
-<td>0.83</td>
-<td>810</td>
-<td>0.856</td>
-<td>1</td>
+<td>1.92</td>
+<td>0.0145</td>
+<td>-0.0121</td>
+<td>0.911</td>
+<td>0.937</td>
+<td>270</td>
+<td>1.69</td>
+<td>3.21</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td>ebola</td>
 <td>fm_chronos_weekly_ragged_ft</td>
 <td>crps</td>
-<td>3.2</td>
-<td>0.237</td>
-<td>0.116</td>
-<td>0.631</td>
-<td>0.931</td>
-<td>810</td>
-<td>0.755</td>
-<td>0.809</td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>hub_ensemble</td>
-<td>crps</td>
-<td>3.26</td>
-<td>0.24</td>
-<td>0.14</td>
-<td>0.599</td>
-<td>0.904</td>
-<td>810</td>
-<td>0.77</td>
-<td>0.817</td>
+<td>2.08</td>
+<td>0.015</td>
+<td>-0.00226</td>
+<td>0.911</td>
+<td>0.93</td>
+<td>270</td>
+<td>1.41</td>
+<td>2.89</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
-<td>hub_team_a</td>
+<td>fm_chronos_weekly_ragged_ft_n1000</td>
 <td>crps</td>
-<td>5.28</td>
-<td>0.326</td>
-<td>0.38</td>
-<td>0.432</td>
-<td>0.777</td>
-<td>810</td>
-<td>1.25</td>
-<td>1.11</td>
+<td>2.69</td>
+<td>0.0168</td>
+<td>-0.0101</td>
+<td>0.911</td>
+<td>0.93</td>
+<td>270</td>
+<td>2.3</td>
+<td>3.44</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
-<td>hub_team_b</td>
+<td>pprandomwalknowcast</td>
 <td>crps</td>
-<td>3.53</td>
-<td>0.294</td>
-<td>0.00569</td>
-<td>0.662</td>
-<td>0.964</td>
-<td>810</td>
-<td>0.833</td>
-<td>1</td>
+<td>1.66</td>
+<td>0.0115</td>
+<td>0.0467</td>
+<td>0.889</td>
+<td>0.926</td>
+<td>27</td>
+<td>0.773</td>
+<td>1.09</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
 <td>randomwalk</td>
 <td>crps</td>
-<td>4.06</td>
-<td>0.308</td>
-<td>-0.0843</td>
-<td>0.673</td>
-<td>0.965</td>
-<td>810</td>
-<td>0.958</td>
-<td>1.05</td>
+<td>2.95</td>
+<td>0.0122</td>
+<td>-0.093</td>
+<td>0.889</td>
+<td>0.889</td>
+<td>27</td>
+<td>1.38</td>
+<td>1.16</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
 <td>randomwalknowcast</td>
 <td>crps</td>
-<td>3.11</td>
-<td>0.25</td>
-<td>0.0655</td>
-<td>0.737</td>
-<td>0.983</td>
-<td>810</td>
-<td>0.734</td>
-<td>0.853</td>
+<td>2.14</td>
+<td>0.0105</td>
+<td>-0.0481</td>
+<td>0.889</td>
+<td>0.926</td>
+<td>27</td>
+<td>1</td>
+<td>1</td>
 </tr>
+<tr class="even">
+<td>ebola</td>
+<td>renewal</td>
+<td>crps</td>
+<td>1.19</td>
+<td>0.0235</td>
+<td>-0.0499</td>
+<td>0.901</td>
+<td>0.963</td>
+<td>81</td>
+<td>0.835</td>
+<td>2</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>renewalbvd</td>
+<td>crps</td>
+<td>1.21</td>
+<td>0.024</td>
+<td>-0.0554</td>
+<td>0.901</td>
+<td>0.963</td>
+<td>81</td>
+<td>0.854</td>
+<td>2.04</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>renewalsp</td>
+<td>crps</td>
+<td>1.75</td>
+<td>0.0179</td>
+<td>-0.0467</td>
+<td>0.926</td>
+<td>0.926</td>
+<td>27</td>
+<td>0.819</td>
+<td>1.7</td>
+</tr>
+</tbody>
+</table>
+</div>
+</figure>
+</div>
+<div id="tbl-ebola-joint" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-tbl figure">
+<figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-ebola-joint-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Table&nbsp;6: Ebola hub submissions: mean energy and variogram scores of each model’s trajectories on log(x + 1) counts, and their ratio to randomwalknowcast on the forecasts both made.
+</figcaption>
+<div aria-describedby="tbl-ebola-joint-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<table class="caption-top" style="width:100%;">
+<colgroup>
+<col style="width: 16%">
+<col style="width: 16%">
+<col style="width: 16%">
+<col style="width: 16%">
+<col style="width: 16%">
+<col style="width: 16%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>model</th>
+<th>n</th>
+<th>energy_log</th>
+<th>variogram_log</th>
+<th>rel_energy_log</th>
+<th>rel_variogram_log</th>
+</tr>
+</thead>
+<tbody>
 </tbody>
 </table>
 </div>
@@ -1138,6 +1516,9 @@ Aygün, Eser, Anastasiya Belyaeva, Gheorghe Comanici, Marc Coram, Hao Cui, Jake 
 <div id="ref-bastos" class="csl-entry" role="listitem">
 Bastos, Leonardo S, Theodoros Economou, Marcelo F C Gomes, Daniel A M Villela, Flavio C Coelho, Oswaldo G Cruz, Oliver Stoner, Trevor Bailey, and Claudia T Codeço. 2019. <span>“A Modelling Approach for Correcting Reporting Delays in Disease Surveillance Data.”</span> <em>Statistics in Medicine</em> 38 (22): 4363–77. <a href="https://doi.org/10.1002/sim.8303">https://doi.org/10.1002/sim.8303</a>.
 </div>
+<div id="ref-Bay2026" class="csl-entry" role="listitem">
+Bay, Clara, Kunpeng Mu, Guillaume St-Onge, Matteo Chinazzi, Jessica T. Davis, and Alessandro Vespignani. 2026. <span>“Evaluation of Stochastic Trajectory-Based Epidemic Models Using the Energy Score.”</span> <em>Epidemics</em> 56: 100929. <a href="https://doi.org/10.1016/j.epidem.2026.100929">https://doi.org/10.1016/j.epidem.2026.100929</a>.
+</div>
 <div id="ref-Bergstrom2022" class="csl-entry" role="listitem">
 Bergström, Fanny, Felix Günther, Michael Höhle, and Tom Britton. 2022. <span>“Bayesian Nowcasting with Leading Indicators Applied to <span>COVID</span>-19 Fatalities in <span>Sweden</span>.”</span> <em>PLOS Computational Biology</em> 18 (12): e1010767. <a href="https://doi.org/10.1371/journal.pcbi.1010767">https://doi.org/10.1371/journal.pcbi.1010767</a>.
 </div>
@@ -1147,8 +1528,14 @@ Bosse, Nikos I., Sam Abbott, Anne Cori, Edwin van Leeuwen, Johannes Bracher, and
 <div id="ref-bracherEvaluatingEpidemicForecasts2021" class="csl-entry" role="listitem">
 Bracher, Johannes, Evan L. Ray, Tilmann Gneiting, and Nicholas G. Reich. 2021. <span>“Evaluating Epidemic Forecasts in an Interval Format.”</span> <em>PLOS Computational Biology</em> 17 (2): e1008618. <a href="https://doi.org/10.1371/journal.pcbi.1008618">https://doi.org/10.1371/journal.pcbi.1008618</a>.
 </div>
+<div id="ref-Brooks2018" class="csl-entry" role="listitem">
+Brooks, Logan C., David C. Farrow, Sangwon Hyun, Ryan J. Tibshirani, and Roni Rosenfeld. 2018. <span>“Nonmechanistic Forecasts of Seasonal Influenza with Iterative One-Week-Ahead Distributions.”</span> <em>PLOS Computational Biology</em> 14 (6): e1006134. <a href="https://doi.org/10.1371/journal.pcbi.1006134">https://doi.org/10.1371/journal.pcbi.1006134</a>.
+</div>
 <div id="ref-Cai2026" class="csl-entry" role="listitem">
 Cai, Peng, Guoyu Huang, and Ximing Xu. 2026. <span>“Benchmarking Time Series Foundation Models for Multi-Country Infectious Disease Forecasting: A Retrospective Evaluation Across over 70 Diseases.”</span> <em>BMC Public Health</em>, October. <a href="https://doi.org/10.1186/s12889-026-29918-1">https://doi.org/10.1186/s12889-026-29918-1</a>.
+</div>
+<div id="ref-Clark2004" class="csl-entry" role="listitem">
+Clark, Martyn, Subhrendu Gangopadhyay, Lauren Hay, Balaji Rajagopalan, and Robert Wilby. 2004. <span>“The <span>Schaake</span> Shuffle: A Method for Reconstructing Space–Time Variability in Forecasted Precipitation and Temperature Fields.”</span> <em>Journal of Hydrometeorology</em> 5 (1): 243–62. <a href="https://doi.org/10.1175/1525-7541(2004)005<0243:TSSAMF>2.0.CO;2">https://doi.org/10.1175/1525-7541(2004)005&lt;0243:TSSAMF&gt;2.0.CO;2</a>.
 </div>
 <div id="ref-Das2024b" class="csl-entry" role="listitem">
 Das, Abhimanyu, Matthew Faw, Rajat Sen, and Yichen Zhou. 2024. <span>“In-Context Fine-Tuning for Time-Series Foundation Models.”</span> arXiv. <a href="https://doi.org/10.48550/arXiv.2410.24087">https://doi.org/10.48550/arXiv.2410.24087</a>.
@@ -1179,6 +1566,9 @@ Gneiting, Tilmann, Fadoua Balabdaoui, and Adrian E. Raftery. 2007. <span>“Prob
 </div>
 <div id="ref-gneitingStrictlyProperScoring2007" class="csl-entry" role="listitem">
 Gneiting, Tilmann, and Adrian E Raftery. 2007. <span>“Strictly <span>Proper Scoring Rules</span>, <span>Prediction</span>, and <span>Estimation</span>.”</span> <em>Journal of the American Statistical Association</em> 102 (477): 359–78. <a href="https://doi.org/10.1198/016214506000001437">https://doi.org/10.1198/016214506000001437</a>.
+</div>
+<div id="ref-Gneiting2008" class="csl-entry" role="listitem">
+Gneiting, Tilmann, Larissa I. Stanberry, Eric P. Grimit, Leonhard Held, and Nicholas A. Johnson. 2008. <span>“Assessing Probabilistic Forecasts of Multivariate Quantities, with an Application to Ensemble Predictions of Surface Winds.”</span> <em>TEST</em> 17 (2): 211–35. <a href="https://doi.org/10.1007/s11749-008-0114-x">https://doi.org/10.1007/s11749-008-0114-x</a>.
 </div>
 <div id="ref-gunther2021nowcasting" class="csl-entry" role="listitem">
 Günther, Felix, Andreas Bender, Katharina Katz, Helmut Küchenhoff, and Michael Höhle. 2021. <span>“Nowcasting the <span>COVID</span>-19 Pandemic in Bavaria.”</span> <em>Biom. J.</em> 63 (3): 490–502. <a href="https://doi.org/10.1002/bimj.202000112">https://doi.org/10.1002/bimj.202000112</a>.
@@ -1255,8 +1645,17 @@ Park, Sang Woo, Andrei R. Akhmetzhanov, Kelly Charniga, Anne Cori, Nicholas G. D
 <div id="ref-Rasul2023" class="csl-entry" role="listitem">
 Rasul, Kashif, Arjun Ashok, Andrew Robert Williams, Hena Ghonia, Rishika Bhagwatkar, Arian Khorasani, Mohammad Javad Darvishi Bayazi, et al. 2023. <span>“<span>Lag-Llama</span>: Towards Foundation Models for Probabilistic Time Series Forecasting.”</span> arXiv. <a href="https://doi.org/10.48550/arXiv.2310.08278">https://doi.org/10.48550/arXiv.2310.08278</a>.
 </div>
+<div id="ref-Ray2018" class="csl-entry" role="listitem">
+Ray, Evan L., and Nicholas G. Reich. 2018. <span>“Prediction of Infectious Disease Epidemics via Weighted Density Ensembles.”</span> <em>PLOS Computational Biology</em> 14 (2): e1005910. <a href="https://doi.org/10.1371/journal.pcbi.1005910">https://doi.org/10.1371/journal.pcbi.1005910</a>.
+</div>
 <div id="ref-reichCollaborativeHubsMaking2022" class="csl-entry" role="listitem">
 Reich, Nicholas G., Justin Lessler, Sebastian Funk, Cecile Viboud, Alessandro Vespignani, Ryan J. Tibshirani, Katriona Shea, et al. 2022. <span>“Collaborative <span>Hubs</span>: <span>Making</span> the <span>Most</span> of <span>Predictive Epidemic Modeling</span>.”</span> <em>American Journal of Public Health</em> 112 (6): 839–42. <a href="https://doi.org/10.2105/AJPH.2022.306831">https://doi.org/10.2105/AJPH.2022.306831</a>.
+</div>
+<div id="ref-Schefzik2013" class="csl-entry" role="listitem">
+Schefzik, Roman, Thordis L. Thorarinsdottir, and Tilmann Gneiting. 2013. <span>“Uncertainty Quantification in Complex Simulation Models Using Ensemble Copula Coupling.”</span> <em>Statistical Science</em> 28 (4): 616–40. <a href="https://doi.org/10.1214/13-STS443">https://doi.org/10.1214/13-STS443</a>.
+</div>
+<div id="ref-Scheuerer2015" class="csl-entry" role="listitem">
+Scheuerer, Michael, and Thomas M. Hamill. 2015. <span>“Variogram-Based Proper Scoring Rules for Probabilistic Forecasts of Multivariate Quantities.”</span> <em>Monthly Weather Review</em> 143 (4): 1321–34. <a href="https://doi.org/10.1175/MWR-D-14-00269.1">https://doi.org/10.1175/MWR-D-14-00269.1</a>.
 </div>
 <div id="ref-Schneble2021" class="csl-entry" role="listitem">
 Schneble, Marc, Giacomo De Nicola, Göran Kauermann, and Ursula Berger. 2021. <span>“Nowcasting Fatal <span>COVID</span>-19 Infections on a Regional Level in <span>Germany</span>.”</span> <em>Biometrical Journal</em> 63 (3): 471–89. <a href="https://doi.org/10.1002/bimj.202000143">https://doi.org/10.1002/bimj.202000143</a>.
