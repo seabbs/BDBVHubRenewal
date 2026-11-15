@@ -39,13 +39,13 @@ def checkpoint(tmp_path):
 
 def test_a_checkpoint_that_matches_its_commit_has_no_problems(checkpoint):
     where, files = checkpoint
-    assert problems(where, lambda commit, path: files[path]) == []
+    assert problems(where, lambda _, path: files[path]) == []
 
 
 def test_changed_code_at_the_commit_is_a_problem(checkpoint):
     where, files = checkpoint
     files = {**files, "src/b.py": b"b = 3\n"}
-    found = problems(where, lambda commit, path: files[path])
+    found = problems(where, lambda _, path: files[path])
     assert any("src/b.py" in p for p in found)
 
 
@@ -54,5 +54,5 @@ def test_a_changed_setting_breaks_the_hash(checkpoint):
     settings = json.loads((where / "settings.json").read_text())
     settings["n_outbreaks"] = 11
     (where / "settings.json").write_text(json.dumps(settings))
-    found = problems(where, lambda commit, path: files[path])
+    found = problems(where, lambda _, path: files[path])
     assert any("hash" in p for p in found)
