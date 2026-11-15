@@ -21,15 +21,18 @@ from paperfigs.checkpoints import drop_checkpoints
 from paperfigs.factors import factor_label
 from paperfigs.joint import relative_joint_scores
 from paperfigs.nowcasts import (
+    PLACE_RULE,
     other_places,
     pick_origins,
     pick_outbreaks,
+    pick_places,
     place_models,
 )
 from paperfigs.periods import add_period
 from paperfigs.plots import (
     nowcast_panels,
     results_panel,
+    si_place_dots,
     si_scores_by_factor,
     si_scores_by_finetune_size,
     si_scores_by_location_horizon,
@@ -70,6 +73,7 @@ FIGURES: Final[dict[str, dict[str, tuple[str, ...]]]] = {
         "main": ("nowcasts", "results"),
         "si": (
             "si-nowcasts",
+            "si-places",
             "si-location-horizon",
             "si-location-horizon-log",
             "si-wis-over-time",
@@ -79,6 +83,7 @@ FIGURES: Final[dict[str, dict[str, tuple[str, ...]]]] = {
         "main": ("nowcasts", "results"),
         "si": (
             "si-nowcasts",
+            "si-places",
             "si-location-horizon",
             "si-location-horizon-log",
             "si-wis-over-time",
@@ -115,34 +120,25 @@ def _national(study: str, forecasts: pd.DataFrame, nowcasts: Mapping) -> str:
 
 
 def _place_rows(
-    forecasts: pd.DataFrame,
+    truth: pd.DataFrame,
     places: list[tuple[str, str, str]],
     origins: list[pd.Timestamp],
     nowcasts: Mapping,
 ) -> list[tuple[pd.Timestamp, str, str, str]]:
-    """Rows of the SI nowcast figure: the largest places, one origin each.
+    """Return the SI nowcast figure's rows: places picked by the rule.
 
-    Each place takes the last of `origins` it has a forecast at, else its
-    own last origin. Places are ranked by their forecasts' mean and the
-    `si_places` largest kept, in their given order.
+    Each is drawn at the last origin shown in the main text
+    (`paperfigs.nowcasts.pick_places`).
     """
-    size = forecasts.groupby(["location", "stratum"])["value"].mean()
-    keep = sorted(places, key=lambda p: -float(size.get((p[0], p[1]), 0.0)))[
-        : int(nowcasts.get("si_places", 9))
-    ]
-    rows = []
-    for location, stratum, title in places:
-        if (location, stratum, title) not in keep:
-            continue
-        made = forecasts.loc[
-            (forecasts["location"] == location)
-            & (forecasts["stratum"] == stratum),
-            "origin_date",
-        ]
-        shown = [o for o in origins if (made == o).any()]
-        origin = shown[-1] if shown else made.max()
-        rows.append((origin, location, stratum, title))
-    return rows
+    origin = origins[-1]
+    picked = pick_places(
+        truth,
+        places,
+        origin,
+        nowcasts.get("place_rule", PLACE_RULE),
+        int(nowcasts["seed"]),
+    )
+    return [(origin, loc, st, title) for loc, st, title in picked]
 
 
 def _figures(
@@ -183,7 +179,7 @@ def _figures(
         return nowcast_panels(forecasts, observations, truth, models, rows, rel)
 
     def by_place(places: list[tuple[str, str, str]]) -> Figure:
-        rows = _place_rows(forecasts, places, origins, nowcasts)
+        rows = _place_rows(truth, places, origins, nowcasts)
         return nowcast_panels(forecasts, observations, truth, models, rows, rel)
 
     if study == "synthetic":
@@ -222,6 +218,7 @@ def _figures(
             **shown,
         ),
         "si-nowcasts": by_place(other_places(forecasts, national)),
+        "si-places": si_place_dots(scores, models, baseline),
         "si-location-horizon": si_scores_by_location_horizon(
             scores, baseline, split=split
         ),

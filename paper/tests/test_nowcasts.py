@@ -46,3 +46,31 @@ def test_outbreaks_cover_factor_levels_and_name_their_cell() -> None:
 
 def test_models_without_forecasts_are_left_out() -> None:
     assert place_models(["a", "c"], ["c", "b", "a"]) == ["c", "a"]
+
+
+def test_pick_places_follows_the_rule() -> None:
+    from paperfigs.nowcasts import pick_places
+
+    dates = pd.date_range("2026-01-03", periods=5, freq="7D")
+    series = {
+        "big": [100, 100, 100, 100, 100],
+        "mid": [10, 10, 10, 10, 10],
+        "tiny": [1, 1, 1, 1, 1],
+        "up": [2, 4, 8, 16, 32],
+        "down": [32, 16, 8, 4, 2],
+        "none": [0, 0, 0, 0, 0],
+    }
+    truth = pd.DataFrame(
+        [
+            {"location": k, "stratum": "all", "target_date": d, "truth": v}
+            for k, vals in series.items()
+            for d, v in zip(dates, vals, strict=True)
+        ]
+    )
+    places = [(k, "all", k) for k in series]
+    picked = pick_places(truth, places, dates[-1], seed=1)
+    reasons = [p[2].split("(")[1].rstrip(")") for p in picked]
+    assert reasons == ["largest", "median", "small", "rising", "falling"]
+    assert picked[0][0] == "big"
+    assert picked[2][0] == "tiny"
+    assert len({p[0] for p in picked}) == 5

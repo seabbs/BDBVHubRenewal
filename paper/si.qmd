@@ -263,8 +263,15 @@ Held-out synthetic data scores by location and stratum. {{< meta results.synthet
 ::: {#fig-germany-si-nowcasts}
 ![](build/figures/si/germany-si-nowcasts.png)
 
-German nowcast hub: nowcasts for the largest states and age groups, one row per place at the last origin shown in the main text, one column per model. Black is the rolling truth, grey dashed the data as of the origin, and blue the model's median with its 50% and 95% intervals. {{< meta results.germany.label >}} {{< meta results.germany.note >}}
+German nowcast hub: nowcasts for places picked by a rule in the workflow config (the largest, median and smallest by recent count, and the most rising and most falling), one row per place labelled with why it was picked, at the last origin shown in the main text, one column per model. Black is the rolling truth, grey dashed the data as of the origin, and blue the model's median with its 50% and 95% intervals. {{< meta results.germany.label >}} {{< meta results.germany.note >}}
 :::
+
+::: {#fig-germany-si-places}
+![](build/figures/si/germany-si-places.png)
+
+German nowcast hub: WIS of every place relative to {{< meta results.germany.baseline >}}, one dot per model. {{< meta results.germany.label >}} {{< meta results.germany.note >}}
+:::
+
 
 ::: {#fig-germany-si-location-horizon}
 ![](build/figures/si/germany-si-location-horizon.png)
@@ -301,8 +308,15 @@ German nowcast hub scores by location and stratum. {{< meta results.germany.labe
 ::: {#fig-ebola-si-nowcasts}
 ![](build/figures/si/ebola-si-nowcasts.png)
 
-Ebola: nowcasts for the largest provinces, one row per province at the last origin shown in the main text, one column per model. Black is the rolling truth, grey dashed the data as of the origin, and blue the model's median with its 50% and 95% intervals. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
+Ebola: nowcasts for places picked by a rule in the workflow config (the largest, median and smallest by recent count, and the most rising and most falling), one row per place labelled with why it was picked, at the last origin shown in the main text, one column per model. Black is the rolling truth, grey dashed the data as of the origin, and blue the model's median with its 50% and 95% intervals. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
 :::
+
+::: {#fig-ebola-si-places}
+![](build/figures/si/ebola-si-places.png)
+
+Ebola: CRPS of every place relative to {{< meta results.ebola.baseline >}}, one dot per model. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
+:::
+
 
 ::: {#fig-ebola-si-location-horizon}
 ![](build/figures/si/ebola-si-location-horizon.png)
