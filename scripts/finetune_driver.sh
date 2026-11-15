@@ -491,12 +491,23 @@ start_trainer() {
   log "started the trainer, pid $trainer"
 }
 
+another_driver() {
+  # Whether a driver other than this one runs: two would each start
+  # batches and restart the remote's scheduler.
+  local pid
+  pid=$(cat output/finetune/driver.pid 2> /dev/null)
+  [ -n "$pid" ] && [ "$pid" != "$$" ] \
+    && ps -p "$pid" -o args= 2> /dev/null | grep -q finetune_driver
+}
+
 [[ "${BASH_SOURCE[0]}" != "$0" ]] && return 0
 
 # A restarted driver replaces the remote scheduler, whose running batches
 # finish.
 [ -n "${REMOTE:-}" ] && remote "pkill -o -f '[f]inetune_remote.sh'" \
   > /dev/null 2>&1 && log "stopped the previous remote scheduler"
+another_driver && { echo "a driver runs, pid $(cat output/finetune/driver.pid)" >&2; exit 1; }
+echo $$ > output/finetune/driver.pid
 log "starting round from $1: training seeds $TRAIN_FIRST-$TRAIN_LAST, held-out $HELD_FIRST-$HELD_LAST, laptop $LOCAL_FIRST-$LOCAL_LAST"
 trainer_args=("$SIM_DIR" "$OUT" --train-seeds "$TRAIN_FIRST" "$TRAIN_LAST"
   --held-out-seeds "$HELD_FIRST" "$HELD_LAST" --outbreaks "$OUTBREAKS"
