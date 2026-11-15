@@ -59,14 +59,17 @@ A Gaussian copula pairs these draws into trajectories (`forecasters.copula`).
 Each trajectory draws one vector $z$ of standard normals over series and steps, and each cell's draws are reordered across trajectories to rank as $z$ does.
 This is $u = \Phi(z)$ read off each cell's draws, so every cell keeps exactly the draws it had and only the pairing changes.
 The correlation of $z$ is a place correlation times a step correlation.
-Steps $h$ and $h'$ have correlation $\rho_t^{|h - h'|}$ for weeks and $\rho_t^{|h - h'|/7}$ for days, so sums of days into weeks are of correlated draws.
+Weeks $h$ and $h'$ have correlation $\rho_t^{|h - h'|}$, and days $d$ and $d'$ have $\rho_d^{|d - d'|}$, so sums of days into weeks are of correlated draws.
 Two provinces have correlation $\rho_p$, and the country and a province $\rho_n$.
 Where these give no correlation matrix, a nearby one is used, by setting negative eigenvalues to zero.
 
-All six models pair their draws with the same fixed values, $\rho_t = 0.9$, $\rho_p = 0.7$ and $\rho_n = 0.7$ (`CHRONOS_COPULA`).
-They were chosen on the release backtest from a grid of 0.3 to 0.95, where the energy score improved as each correlation grew and levelled off near these values.
-Their weekly draws are then paired again by a copula fitted to each model's recent errors and shrunk towards these values ([Correlated trajectories](evaluation.md#correlated-trajectories)).
-The daily models' days stay paired by the fixed values, as their weekly errors do not show how days within a week are correlated.
+The six models pair their draws with $\rho_p = 0.7$ and $\rho_n = 0.7$, the weekly models with $\rho_t = 0.9$ (`CHRONOS_COPULA`), and the daily models with $\rho_d = 0.985$ (`CHRONOS_DAILY_COPULA`).
+$\rho_t$, $\rho_p$ and $\rho_n$ were chosen on the release backtest from a grid of 0.3 to 0.95, where the energy score improved as each correlation grew and levelled off near these values.
+$\rho_d$ was chosen on the release backtest from 0, 0.3, 0.5, 0.7, 0.9 and 0.985, by the weekly WIS, median bias and coverage of the daily models.
+It gave the lowest WIS and median bias, and pairing days moved each week's median towards the truth.
+Pairing skewed days lowers a week's median, from near the sum of the daily means towards the sum of the daily medians.
+$\rho_d$ cannot be estimated from weekly errors, as each is of a week's sum, so it is fixed (#239).
+Their weekly draws are then paired again by a copula fitted to each model's recent errors and shrunk towards the weekly values ([Correlated trajectories](evaluation.md#correlated-trajectories)).
 
 ## Counts
 
@@ -114,6 +117,6 @@ Such fits are retried by running the Fit store workflow with `retry_failed` (`gh
 - The fine-tuned models have seen only simulated outbreaks, whose delays and dynamics may not match these data.
 - The daily fine-tuned model was trained on blocks of at most five provinces but forecasts all 26 in one block.
 - The fixed correlations were chosen on a backtest of five origins.
-- It ties days to weeks by one decay per day, which is not estimated from daily errors.
+- The correlation between days is chosen on a backtest of five origins, not estimated from daily errors.
 
 [^chronos2]: Ansari A F et al. (2025) Chronos-2: From univariate to universal forecasting. arXiv:2510.15821. Code: <https://github.com/amazon-science/chronos-forecasting>.

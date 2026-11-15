@@ -53,6 +53,8 @@ from bdbvhubrenewal.forecasters.randomwalk import RandomWalk
 __all__ = [
     "ADAPTER_FILES",
     "CHRONOS_COPULA",
+    "CHRONOS_DAILY_COPULA",
+    "CHRONOS_DAY_RHO",
     "CHRONOS_MODEL",
     "CHRONOS_REVISION",
     "FINETUNED_CACHE",
@@ -96,8 +98,20 @@ CHRONOS_REVISION: Final = "29ec3766d36d6f73f0696f85560a422f50e8498c"
 """The checkpoint's commit, pinned so runs are reproducible."""
 
 CHRONOS_COPULA: Final = PRIOR
-"""The copula pairing every Chronos-2 model's draws into trajectories,
-days included, before they are summed to weeks."""
+"""The copula pairing the weekly Chronos-2 models' draws into
+trajectories."""
+
+CHRONOS_DAY_RHO: Final = 0.985
+"""The daily models' correlation between adjacent days, before the days
+are summed to weeks. Chosen on the release backtest from 0, 0.3, 0.5,
+0.7, 0.9 and 0.985, where it gave the lowest WIS and weekly median bias.
+Weekly errors cannot estimate it, as each is of a week's sum."""
+
+CHRONOS_DAILY_COPULA: Final = dataclasses.replace(
+    PRIOR, rho_time=CHRONOS_DAY_RHO**7
+)
+"""The daily models' copula: days d apart have correlation
+`CHRONOS_DAY_RHO` to the power d."""
 
 FINETUNED_CONFIG: Final = Path("config/finetune.toml")
 """Which fine-tuned checkpoint the `_ft` models load: `hash`, `"latest"`
@@ -359,6 +373,7 @@ def _model(name: str, source: str, layout: str) -> FoundationModel:
         name,
         source,
         layout,
+        copula=CHRONOS_COPULA if source == "weekly" else CHRONOS_DAILY_COPULA,
         truth_delay=delay,
         truth_level=level,
         truth_skip=skip,
