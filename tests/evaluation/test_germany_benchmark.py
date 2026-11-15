@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib.util
 from pathlib import Path
 
 import numpy as np
@@ -292,3 +293,57 @@ def test_asof_sums_are_the_data_each_nowcast_date_saw(
     both = got.merge(want, on=["location", "target_end_date"])
     assert len(both) == len(got) == len(want)
     assert (both["total_x"] == both["total_y"]).all()
+
+
+@pytest.mark.skipif(
+    importlib.util.find_spec("torch") is None, reason="needs torch"
+)
+def test_a_quantile_model_s_german_scores_do_not_depend_on_the_seed(
+    triangle: pd.DataFrame, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from bdbvhubrenewal.forecasters import foundation
+
+    class Pipeline:
+        quantiles = (0.01, 0.05, 0.1, 0.5, 0.9, 0.95, 0.99)
+
+        def predict_quantiles(self, groups, prediction_length, quantile_levels):
+            import torch
+
+            level = 1000 * torch.tensor(quantile_levels, dtype=torch.float32)
+            return [
+                level[None, None, :].expand(
+                    np.atleast_2d(g["target"]).shape[0], prediction_length, -1
+                )
+                for g in groups
+            ], None
+
+    monkeypatch.setattr(foundation, "_chronos", lambda *_: Pipeline())
+    runs = [
+        germany_forecasts(
+            ["fm_chronos_weekly_ragged"],
+            triangle,
+            ["2021-10-04"],
+            n_samples=30,
+            seed=seed,
+        )
+        for seed in (1, 2)
+    ]
+    assert not runs[0].empty
+    pd.testing.assert_frame_equal(*runs)
+
+
+def test_a_sample_model_s_german_quantiles_use_the_draws_given(
+    triangle: pd.DataFrame,
+) -> None:
+    runs = [
+        germany_forecasts(
+            ["randomwalknowcast"],
+            triangle,
+            ["2021-10-04"],
+            n_samples=30,
+            seed=seed,
+        )
+        for seed in (1, 1, 2)
+    ]
+    pd.testing.assert_frame_equal(runs[0], runs[1])
+    assert not np.array_equal(runs[0]["value"], runs[2]["value"])
