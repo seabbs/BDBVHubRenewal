@@ -290,3 +290,21 @@ def test_si_nowcasts_draw_one_titled_panel_per_place() -> None:
     titles = [ax.get_title() for ax in fig.axes if ax.get_visible()]
     assert titles == ["DE-BY", "DE, 80+"]
     plt.close(fig)
+
+
+def test_nowcast_panels_have_a_column_per_model_and_a_row_per_origin():
+    from paperfigs.plots import nowcast_panels
+    from paperfigs.truth import rolling_truth
+
+    fc, obs = dummy_study("germany", seed=1, n_samples=5)
+    truth = rolling_truth(obs, delay_days=40)
+    origins = sorted(fc["origin_date"].unique())[:2]
+    models = ["randomwalknowcast", "fm_chronos_daily_ragged_ft"]
+    fig = nowcast_panels(
+        fc, obs, truth, models, origins, "DE", rel={"randomwalknowcast": 1.0}
+    )
+    assert len(fig.axes) == 4
+    assert fig.axes[0].get_title() == "randomwalknowcast\nrel. 1.00"
+    assert fig.axes[1].get_title() == "fm_chronos_daily_ragged_ft"
+    assert fig.axes[0].get_ylabel().startswith("origin ")
+    plt.close(fig)
