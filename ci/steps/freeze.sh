@@ -21,9 +21,12 @@ if ! git fetch -q --depth 1 origin "$LEDGER_BRANCH" 2> /dev/null; then
 fi
 git worktree add -q --detach "$ledger" FETCH_HEAD
 
-# Rounds with no frozen page yet, and the pull request of each submitted
-# hub model.
-pending=$(python3 - "$ledger" << 'PY'
+# Freeze each round whose pull requests are all merged or closed, on the
+# ledger as it is. Run again by ledger_push if another run pushed first.
+freeze_rounds() {
+  # Rounds with no frozen page yet, and the pull request of each submitted
+  # hub model.
+  pending=$(python3 - "$ledger" << 'PY'
 import json, pathlib, sys
 root = pathlib.Path(sys.argv[1])
 rounds = json.loads((root / "state.json").read_text()).get("rounds", {})
@@ -33,28 +36,23 @@ for ref, r in sorted(rounds.items()):
     if urls and not (root / "pages" / f"{ref}.md").exists():
         print(ref, *urls)
 PY
-)
+  )
 
-frozen=0
-while read -r ref urls; do
-  [ -n "$ref" ] || continue
-  done_all=true
-  for url in $urls; do
-    state=$(gh pr view "$url" --json state -q .state 2> /dev/null || echo unknown)
-    case "$state" in MERGED | CLOSED) ;; *) done_all=false ;; esac
-  done
-  if [ "$done_all" = true ]; then
-    cli freeze-round --ledger "$ledger" --round "$ref"
-    frozen=$((frozen + 1))
-  fi
-done <<< "$pending"
+  frozen=0
+  while read -r ref urls; do
+    [ -n "$ref" ] || continue
+    done_all=true
+    for url in $urls; do
+      state=$(gh pr view "$url" --json state -q .state 2> /dev/null || echo unknown)
+      case "$state" in MERGED | CLOSED) ;; *) done_all=false ;; esac
+    done
+    if [ "$done_all" = true ]; then
+      cli freeze-round --ledger "$ledger" --round "$ref"
+      frozen=$((frozen + 1))
+    fi
+  done <<< "$pending"
+}
 
-if [ "$frozen" -gt 0 ]; then
-  git -C "$ledger" add -A
-  git -C "$ledger" -c user.name="github-actions[bot]" \
-    -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
-    commit -q -m "Freeze $frozen round page(s)"
-  git -C "$ledger" push -q origin "HEAD:$LEDGER_BRANCH"
-fi
+ledger_push "$ledger" "Freeze round pages" freeze_rounds
 note "Froze $frozen round page(s)."
 echo "frozen=$frozen" >> "${GITHUB_OUTPUT:-/dev/null}"

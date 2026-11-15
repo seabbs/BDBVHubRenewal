@@ -691,23 +691,35 @@ def _zone_data(data: Path | str) -> ZoneData | None:
 
 def _task(args: argparse.Namespace) -> tuple[ForecastTask, list[str]]:
     """Build the forecast task, and notes on any stream that stood in."""
-    config = bt.load_config(args.backtest_config)
-    target, delays = load_target(args.data), load_delays(args.data)
-    real = target.loc[target["kind"] == "real"]
-    vintage = _vintage([str(v) for v in real["vintage"].unique()], args.vintage)
-    task, note = bt.vintage_task(
-        target,
-        delays,
-        config,
-        vintage,
+    return _round_task(
+        load_target(args.data),
+        load_delays(args.data),
         load_daily(args.data),
+        bt.load_config(args.backtest_config),
+        args.vintage,
+        args.reference_date,
         zones=_zone_data(args.data),
     )
+
+
+def _round_task(
+    target: pd.DataFrame,
+    delays: pd.DataFrame,
+    daily: pd.DataFrame,
+    config: bt.BacktestConfig,
+    vintage: str | None,
+    reference_date: str | None,
+    zones: ZoneData | None = None,
+) -> tuple[ForecastTask, list[str]]:
+    """Build a round's task from the tables, as `_task` does."""
+    real = target.loc[target["kind"] == "real"]
+    vintage = _vintage([str(v) for v in real["vintage"].unique()], vintage)
+    task, note = bt.vintage_task(
+        target, delays, config, vintage, daily, zones=zones
+    )
     notes = [note] if note else []
-    if args.reference_date and as_date(args.reference_date) != (
-        task.reference_date
-    ):
-        ref = as_date(args.reference_date)
+    if reference_date and as_date(reference_date) != task.reference_date:
+        ref = as_date(reference_date)
         weeks = dataclasses.replace(config, min_horizon=bt.TASK_MIN_HORIZON)
         task = dataclasses.replace(
             task,
@@ -1231,23 +1243,23 @@ def _write_fits(fits: list[pd.DataFrame], path: Path) -> None:
 
 
 def _zones(
-    args: argparse.Namespace,
+    data: str,
+    name: str | None,
     task: ForecastTask,
     samples: pd.DataFrame,
-    hub_config: Path,
 ) -> tuple[pd.DataFrame | None, str]:
     """Forecast the zones to sum to the provinces, or say why not.
 
-    The zones come from `zones_for_model`.
+    The zones come from `zones_for_model` for model `name`.
     """
+    hub_config = Path(data) / "hub-config" / "tasks.json"
     try:
-        daily = load_daily_zones(args.data)
+        daily = load_daily_zones(data)
     except OSError:
         return None, "no zone data, so the file has no health zones"
     counts = weekly_zone_counts(daily, task.vintage)
     if counts.empty:
         return None, f"no zone data for {task.vintage}, so no health zones"
-    name = get_config(args.config).model if args.config else args.model
     zones = zones_for_model(
         name, task, samples, counts, hub_zones(hub_config), daily
     )
@@ -1260,23 +1272,26 @@ def _spec(name: str) -> ModelSpec:
 
 
 def _pair(
-    args: argparse.Namespace,
     name: str,
     task: ForecastTask,
     result: Forecast,
+    *,
+    data: str,
+    backtest_config: str,
+    history: str | None,
+    store_dir: str | None,
 ) -> tuple[Forecast, dict[str, object]]:
     """Pair a paired model's draws by the copula of its recent errors."""
     from bdbvhubrenewal.submission.pairing import pair_submission
 
-    config = bt.load_config(args.backtest_config)
-    target = load_target(args.data)
+    config = bt.load_config(backtest_config)
+    target = load_target(data)
     delay = resolve_truth_delay(config, target)
-    history = getattr(args, "history", None)
     # The backtest's origins: those before this one give the copula's
     # errors, and a model that is not fitted is forecast again there.
     past = list(
         store.origin_tasks(
-            target, load_delays(args.data), config, load_daily(args.data)
+            target, load_delays(data), config, load_daily(data)
         ).values()
     )
     samples, record = pair_submission(
@@ -1285,7 +1300,7 @@ def _pair(
         task,
         delay,
         history,
-        args.store,
+        store_dir,
         past,
         config.max_horizon,
     )
@@ -1311,16 +1326,25 @@ class _HubForecast:
 
 
 def _hub_forecast(
-    args: argparse.Namespace,
     task: ForecastTask,
-    samples: pd.DataFrame | None = None,
+    *,
+    data: str,
+    model: str | None,
+    config: str | None = None,
+    fit: Path | str | None = None,
+    forecast: Forecast | None = None,
+    forecast_date: str | None = None,
+    backtest_config: str = "config/backtest.toml",
+    history: str | None = None,
+    store: str | None = None,
 ) -> _HubForecast:
     """Return the hub table `nowcast` writes, with its forecast and zones.
 
-    With `args.config` it forecasts from the fit in `args.fit`, else
-    `args.model` forecasts, unless `samples` are given. A model
-    registered as `paired` has its draws paired (`_pair`). The zones come
-    from `_zones`, after pairing.
+    A `forecast` given is used as it is. Otherwise, with `config` it
+    forecasts from the fit directory `fit`, else `model` forecasts. A
+    model registered as `paired` has its draws paired (`_pair`), from
+    past forecasts in `history` or `store`. The zones come from `_zones`,
+    after pairing.
 
     Returns
     -------
@@ -1329,23 +1353,30 @@ def _hub_forecast(
         are no zones ("" if there are), the fine-tuned checkpoint loaded
         (or None) and the copula's record (or None).
     """
-    hub_config = Path(args.data) / "hub-config" / "tasks.json"
     checkpoint = None
-    if samples is not None:
-        result = Forecast(samples)
-    elif args.config:
-        result = run_forecast(get_config(args.config), task, args.fit)
+    if forecast is not None:
+        result = forecast
+    elif config:
+        result = run_forecast(get_config(config), task, fit)
     else:
-        model = get_model(args.model)
-        checkpoint = getattr(model, "checkpoint", None)
-        samples = model.forecast(task)
+        built = get_model(str(model))
+        checkpoint = getattr(built, "checkpoint", None)
+        samples = built.forecast(task)
         check_samples(samples, task)
         result = Forecast(samples)
-    name = get_config(args.config).model if args.config else args.model
+    name = get_config(config).model if config else model
     copula = None
     if name is not None and _spec(name).paired:
-        result, copula = _pair(args, name, task, result)
-    zones, zone_note = _zones(args, task, result.samples, hub_config)
+        result, copula = _pair(
+            name,
+            task,
+            result,
+            data=data,
+            backtest_config=backtest_config,
+            history=history,
+            store_dir=store,
+        )
+    zones, zone_note = _zones(data, name, task, result.samples)
     # A model's own zone rows come back reconciled in `zones`.
     own_zones = result.samples["location"].map(is_zone)
     table = to_hub_table(
@@ -1353,32 +1384,39 @@ def _hub_forecast(
         task.reference_date,
         unassigned=result.unassigned,
         zones=zones,
-        forecast_date=args.forecast_date,
+        forecast_date=forecast_date,
     )
     return _HubForecast(table, result, zones, zone_note, checkpoint, copula)
 
 
 def _fit_store_archive(args: argparse.Namespace) -> int:
-    """Run `fit-store archive` (`evaluation.store_archive`)."""
+    """Run `fit-store archive` (`evaluation.store_archive`).
+
+    Returns 1 if an argument is missing, the origin is no real one, or a
+    policy candidate (or a model in `--models`) is not archived; the
+    others are written all the same.
+    """
     if not (args.out and args.origin):
         print("ERROR: archive needs --out and --origin.", file=sys.stderr)
         return 1
-    round_args = argparse.Namespace(
-        backtest_config=args.config,
-        data=args.data,
-        vintage=args.origin,
-        reference_date=args.reference_date,
-    )
+    target, delays = load_target(args.data), load_delays(args.data)
+    daily, config = load_daily(args.data), bt.load_config(args.config)
     try:
-        task, _ = _task(round_args)
+        zones = _zone_data(args.data)
+        task, _ = _round_task(
+            target,
+            delays,
+            daily,
+            config,
+            args.origin,
+            args.reference_date,
+            zones=zones,
+        )
     except (KeyError, ValueError, OSError) as err:
         print(f"ERROR: {err}", file=sys.stderr)
         return 1
-    tasks = store.origin_tasks(
-        load_target(args.data),
-        load_delays(args.data),
-        bt.load_config(args.config),
-        load_daily(args.data),
+    stored_task = store_archive.store_task(
+        target, delays, config, daily, task.vintage, zones
     )
 
     def hub(
@@ -1386,27 +1424,29 @@ def _fit_store_archive(args: argparse.Namespace) -> int:
         *,
         config: str | None = None,
         fit_dir: Path | None = None,
-        samples: pd.DataFrame | None = None,
+        forecast: Forecast | None = None,
     ) -> pd.DataFrame:
-        hub_args = argparse.Namespace(
+        return _hub_forecast(
+            task,
             data=args.data,
             model=model,
             config=config,
             fit=fit_dir,
-            forecast_date=None,
+            forecast=forecast,
             backtest_config=args.config,
             history=args.history,
             store=args.store,
-        )
-        return _hub_forecast(hub_args, task, samples).table
+        ).table
 
     models = store_archive.candidate_models(args.policy)
+    required = set(store_archive.policy_candidates(args.policy))
     if args.models:
         models = {m: models.get(m) for m in args.models}
+        required = set(args.models)
     table = store_archive.archive(
         args.store,
         task,
-        tasks.get(task.vintage),
+        stored_task,
         models,
         store.samplers(args.policy),
         hub,
@@ -1418,6 +1458,10 @@ def _fit_store_archive(args: argparse.Namespace) -> int:
         print(f"{row.model}: key {row.key}, made {row.fitted_at}.")
     n = table["model"].nunique()
     print(f"Archived {n} of {len(models)} models' forecasts in {out}.")
+    missing = sorted(required - set(table["model"]))
+    if missing:
+        print(f"ERROR: candidates not archived: {missing}.", file=sys.stderr)
+        return 1
     return 0
 
 
@@ -1428,7 +1472,17 @@ def _nowcast(args: argparse.Namespace) -> int:
     host_devices(int(sampler_settings()["num_chains"]))
     try:
         task, handled = _task(args)
-        made = _hub_forecast(args, task)
+        made = _hub_forecast(
+            task,
+            data=args.data,
+            model=args.model,
+            config=args.config,
+            fit=args.fit,
+            forecast_date=args.forecast_date,
+            backtest_config=args.backtest_config,
+            history=args.history,
+            store=args.store,
+        )
         table, result, zones, zone_note = (
             made.table,
             made.result,

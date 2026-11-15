@@ -38,10 +38,25 @@ import pandas as pd
 
 from bdbvhubrenewal.data.dates import as_date
 from bdbvhubrenewal.evaluation import store
+from bdbvhubrenewal.evaluation.backtest import BacktestConfig, vintage_task
 from bdbvhubrenewal.forecasters import ForecastTask
+from bdbvhubrenewal.forecasters.base import (
+    NATIONAL,
+    SAMPLE_COLUMNS,
+    check_samples,
+)
+from bdbvhubrenewal.submission.fitting import Forecast
 from bdbvhubrenewal.submission.hub import HUB_COLUMNS
 
-__all__ = ["COLUMNS", "FILE", "Hub", "archive", "candidate_models"]
+__all__ = [
+    "COLUMNS",
+    "FILE",
+    "Hub",
+    "archive",
+    "candidate_models",
+    "policy_candidates",
+    "store_task",
+]
 
 FILE: Final = "candidates.csv.gz"
 """The archive's name in a round's ledger folder."""
@@ -49,9 +64,6 @@ FILE: Final = "candidates.csv.gz"
 RANDOM_WALK: Final = "randomwalk"
 """The model of a `randomwalk` candidate that names none, as in
 `ci/steps/candidate.sh`."""
-
-SAMPLE_COLUMNS: Final = ("location", "target_end_date", "sample", "value")
-"""The stored forecasts' columns a hub table is made from."""
 
 COLUMNS: Final = (
     "model",
@@ -67,19 +79,18 @@ COLUMNS: Final = (
 
 Hub = Callable[..., pd.DataFrame]
 """Returns the hub table a model submits (`cli._hub_forecast`): called
-with the model and `config`, `fit_dir` or `samples` by keyword."""
+with the model and `config`, `fit_dir` or `forecast` by keyword."""
 
 
-def candidate_models(
+def policy_candidates(
     policy: Path | str = "ci/policy.toml",
 ) -> dict[str, str | None]:
-    """Return every stored model and candidate's model, with its config.
+    """Return every submission candidate's model, with its config.
 
     A candidate's model is its `model`, and a `randomwalk` candidate that
     names none runs `RANDOM_WALK`. A candidate forecasts with its fit
     configuration, except a `randomwalk` one, which runs its model as
-    `ci/steps/candidate.sh` does. A stored model that is no candidate
-    has no configuration.
+    `ci/steps/candidate.sh` does.
 
     Parameters
     ----------
@@ -89,7 +100,7 @@ def candidate_models(
     Returns
     -------
     dict
-        Configuration (or None) by model name, candidates first.
+        Configuration (or None) by model name, in the policy's order.
     """
     raw = tomllib.loads(Path(policy).read_text())
     models: dict[str, str | None] = {}
@@ -98,9 +109,84 @@ def candidate_models(
             models.setdefault(c.get("model") or RANDOM_WALK, None)
         elif "model" in c:
             models.setdefault(c["model"], c.get("config"))
+    return models
+
+
+def candidate_models(
+    policy: Path | str = "ci/policy.toml",
+) -> dict[str, str | None]:
+    """Return every candidate's model and every stored model.
+
+    Parameters
+    ----------
+    policy : pathlib.Path or str
+        The CI policy.
+
+    Returns
+    -------
+    dict
+        `policy_candidates`, then each stored model that is no candidate,
+        with no configuration.
+    """
+    models = policy_candidates(policy)
     for model in store.stored_models():
         models.setdefault(model, None)
     return models
+
+
+def store_task(
+    target: pd.DataFrame,
+    delays: pd.DataFrame,
+    config: BacktestConfig,
+    daily: pd.DataFrame,
+    origin: str,
+) -> ForecastTask | None:
+    """Return the stored fits' task at one origin, as `store.origin_tasks`.
+
+    Parameters
+    ----------
+    target, delays, daily : pandas.DataFrame
+        The tidy tables.
+    config : BacktestConfig
+        The backtest configuration.
+    origin : str
+        A real vintage.
+
+    Returns
+    -------
+    ForecastTask or None
+        The task, or None for a release the store does not fit
+        (`config.skip_origins`).
+    """
+    if origin in config.skip_origins:
+        return None
+    weeks = store.NEXT_ROUND_WEEKS
+    return vintage_task(target, delays, config, origin, daily, weeks)[0]
+
+
+def _stored_forecast(rows: pd.DataFrame, task: ForecastTask) -> Forecast:
+    """Return a stored fit's forecast for the round's weeks.
+
+    The nowcasts of earlier report dates (`as_of`) are dropped. Stored
+    national rows are the model's own, so what they hold beyond the sum
+    of the provinces is the national part no province holds
+    (`Forecast.unassigned`), as a fit directory gives it.
+    """
+    if "as_of" in rows:
+        rows = rows.loc[rows["as_of"].isna()]
+    weeks = set(task.target_end_dates)
+    iso = rows["target_end_date"].map(lambda d: as_date(d).isoformat())
+    rows = rows.assign(target_end_date=iso)
+    rows = rows.loc[rows["target_end_date"].isin(weeks), list(SAMPLE_COLUMNS)]
+    national = rows["location"] == NATIONAL
+    samples = rows.loc[~national].reset_index(drop=True)
+    check_samples(samples, task)
+    keys = ["target_end_date", "sample"]
+    total = rows.loc[national].set_index(keys)["value"]
+    summed = samples.groupby(keys)["value"].sum()
+    extra = (total - summed.reindex(total.index)).clip(lower=0)
+    unassigned = extra.rename("value").reset_index()
+    return Forecast(samples, None if unassigned.empty else unassigned)
 
 
 def _stored(
@@ -123,17 +209,13 @@ def _stored(
     if fit is None:
         raise LookupError(f"the store holds no good fit at {origin}")
     if config and fit.files:
+        # As `store.unpack` writes it.
         with tempfile.TemporaryDirectory() as fit_dir:
             for name, body in fit.files.items():
                 (Path(fit_dir) / name).write_bytes(base64.b64decode(body))
             table = hub(model, config=config, fit_dir=Path(fit_dir))
     else:
-        weeks = {as_date(d) for d in task.target_end_dates}
-        samples = fit.forecasts.loc[
-            fit.forecasts["target_end_date"].map(as_date).isin(weeks),
-            list(SAMPLE_COLUMNS),
-        ]
-        table = hub(model, samples=samples.reset_index(drop=True))
+        table = hub(model, forecast=_stored_forecast(fit.forecasts, task))
     meta = fit.meta
     return table.assign(
         key=meta["key"],
