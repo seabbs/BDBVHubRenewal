@@ -13,15 +13,15 @@ tasks:
   pipeline:dev:
     desc: Run the evaluation workflow without the held-out data, to results/development/
     cmds:
-      - uv run --group paper snakemake -s workflow/Snakefile development --cores {{.CORES | default 4}} {{.CLI_ARGS}}
+      - uv run --group paper snakemake -s workflow/Snakefile development --cores {{.CORES | default 4}} --resources heavy=1 {{.CLI_ARGS}}
   pipeline:paper:
     desc: Run the evaluation workflow with the held-out data, to results/paper/
     cmds:
-      - uv run --group paper snakemake -s workflow/Snakefile paper --cores {{.CORES | default 4}} {{.CLI_ARGS}}
+      - uv run --group paper snakemake -s workflow/Snakefile paper --cores {{.CORES | default 4}} --resources heavy=1 {{.CLI_ARGS}}
   render:
     desc: Run the development target and render the paper (HTML and PDF) from it
     cmds:
-      - uv run --group paper snakemake -s workflow/Snakefile render --cores {{.CORES | default 4}} {{.CLI_ARGS}}
+      - uv run --group paper snakemake -s workflow/Snakefile render --cores {{.CORES | default 4}} --resources heavy=1 {{.CLI_ARGS}}
   pipeline:dry:
     desc: Dry-run both workflow targets to check the DAG
     cmds:

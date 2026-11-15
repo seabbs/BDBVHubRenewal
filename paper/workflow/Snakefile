@@ -447,6 +447,9 @@ rule scores:
         truth=rules.truth.output,
     output:
         f"{R}/{{mode}}/scores/{{study}}.csv.gz",
+    # One memory-heavy step at a time with `--resources heavy=1`.
+    resources:
+        heavy=1,
     shell:
         "{PYTHON} -m paperpipe scores --forecasts {input.forecasts} "
         "--truth {input.truth} --out {output}"
@@ -460,6 +463,9 @@ rule joint_scores:
     output:
         scores=f"{R}/{{mode}}/scores/{{study}}-joint.csv.gz",
         table=f"{R}/{{mode}}/tables/main/{{study}}-joint.md",
+    # One memory-heavy step at a time with `--resources heavy=1`.
+    resources:
+        heavy=1,
     shell:
         "{PYTHON} -m paperpipe joint-scores --forecasts {input.forecasts} "
         "--meta {input.meta} "

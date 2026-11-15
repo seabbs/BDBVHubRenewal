@@ -7,7 +7,7 @@ build: build
 render: development
 studies: [synthetic, germany, ebola]
 # Samples per forecast for the studies scored on samples.
-n_samples: 200
+n_samples: 100
 
 # The simulated outbreaks of each run's seeds (`paperdata.synthetic`), and
 # the models' forecasts of them, which the synthetic runner of #192
