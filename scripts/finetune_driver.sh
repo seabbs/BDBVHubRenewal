@@ -173,7 +173,7 @@ remote_code() {
   if [ "$(remote "sha256sum $REMOTE_DIR/scripts/finetune_simulate.R" 2> /dev/null | cut -d' ' -f1)" != "$want" ]; then
     remote "pkill -f '[f]inetune_remote.sh'; pkill -f '[f]inetune_simulate.R --args'" > /dev/null 2>&1
     rsync -a -e "ssh -o ConnectTimeout=20 -o BatchMode=yes" \
-      scripts/finetune_simulate.R scripts/enw_fingerprint.R \
+      scripts/finetune_simulate.R \
       "$REMOTE:$REMOTE_DIR/scripts/"
     if [ "$(remote "sha256sum $REMOTE_DIR/scripts/finetune_simulate.R" 2> /dev/null | cut -d' ' -f1)" != "$want" ]; then
       log "ERROR: $REMOTE's simulator does not match this one; no remote batches"
@@ -182,6 +182,8 @@ remote_code() {
     log "copied the simulator to $REMOTE, stopping its batches of the old one"
   fi
   local theirs
+  rsync -a -e "ssh -o ConnectTimeout=20 -o BatchMode=yes" \
+    scripts/enw_fingerprint.R "$REMOTE:$REMOTE_DIR/scripts/"
   theirs=$(remote "cd $REMOTE_DIR && Rscript scripts/enw_fingerprint.R output/finetune/rlib" 2> /dev/null)
   if [ -z "$theirs" ] || [ "$theirs" != "$(enw_fingerprint)" ]; then
     log "ERROR: $REMOTE's epinowcast (${theirs:-unknown}) is not the laptop's ($(enw_fingerprint)); no remote batches"
