@@ -797,3 +797,60 @@ def test_too_many_requests_is_retried_a_bounded_number_of_times(
     with pytest.raises(ConnectionError, match="GH_TOKEN"):
         foundation.finetuned_adapter(_checkpoint("abc"))
     assert len(calls) == len(foundation.RETRY_SECONDS) + 1
+
+
+def test_inference_settings_come_from_config(tmp_path: Path) -> None:
+    path = tmp_path / "finetune.toml"
+    path.write_text('hash = "latest"\nscale_floor = 1\nstep_covariate = true\n')
+    assert foundation.finetuned_settings(path) == {
+        "scale_floor": 1.0,
+        "step_covariate": True,
+    }
+    path.write_text('hash = "latest"\n')
+    assert foundation.finetuned_settings(path) == {
+        "scale_floor": 0.0,
+        "step_covariate": False,
+    }
+
+
+def test_inference_settings_change_the_fit_key() -> None:
+    plain = _checkpoint("abc")
+    floored = dataclasses.replace(plain, scale_floor=1.0)
+    stepped = dataclasses.replace(plain, step_covariate=True)
+    reprs = {
+        repr(foundation.FoundationModel("m", "daily", "ragged", c))
+        for c in (plain, floored, stepped)
+    }
+    # The fit key hashes the model's representation, so each differs.
+    assert len(reprs) == 3
+
+
+def test_days_per_step_is_a_known_covariate() -> None:
+    group = {
+        "target": np.zeros((2, 5)),
+        "past_covariates": {"a": np.zeros(5)},
+        "future_covariates": {"a": np.zeros(3)},
+    }
+    out = foundation.with_days_per_step(group, "weekly")
+    assert np.array_equal(
+        out["past_covariates"]["days_per_step"], np.full(5, 7)
+    )
+    assert np.array_equal(
+        out["future_covariates"]["days_per_step"], np.full(3, 7)
+    )
+    daily = foundation.with_days_per_step(group, "daily")
+    assert set(daily["future_covariates"]["days_per_step"]) == {1}
+
+
+def test_scale_floor_keeps_a_flat_context_from_a_tiny_scale() -> None:
+    pytest.importorskip("chronos")
+    import torch
+    from chronos.chronos_bolt import InstanceNorm
+
+    model = type("M", (), {})()
+    model.instance_norm = InstanceNorm(use_arcsinh=True)
+    flat = torch.zeros(2, 8)
+    assert float(model.instance_norm(flat)[1][1].max()) < 1e-4
+    foundation.floor_scale(model, 1.0)
+    _, (_, scale) = model.instance_norm(flat)
+    assert torch.equal(scale, torch.ones(2, 1))
