@@ -53,7 +53,7 @@
 #   Rscript scripts/finetune_simulate.R <n> <seed> <out_dir>
 
 epinowcast_sha <- "e084b080"
-grid_name <- "r3"
+grid_name <- "r4"
 args <- commandArgs(trailingOnly = TRUE)
 n_outbreaks <- as.integer(args[[1]])
 seed <- as.integer(args[[2]])
@@ -90,7 +90,10 @@ factors <- list(
   reporting = c("daily", "weekdays"),
   reference_dow = c("no", "yes"),
   observation = c("negbin", "negbin1d", "poisson"),
-  strata = c("single", "places", "ages", "places_ages")
+  strata = c("single", "places", "ages", "places_ages"),
+  # How cases spread over strata: "concentrated" puts nearly all in a few,
+  # as in BDBV, where most provinces report no case in most weeks.
+  spread = c("even", "concentrated")
 )
 
 # Simulations per balanced block: a multiple of every factor's levels.
@@ -255,7 +258,11 @@ draw_values <- function(design) {
     offset = sample(0:6, 1),
     quiet = runif(1, 0, 0.9),
     coupling = runif(1, 0.5, 1),
-    stratum_sd = runif(1, 0.5, 2),
+    stratum_sd = if (design$spread == "concentrated") {
+      runif(1, 2.5, 4)
+    } else {
+      runif(1, 0.5, 2)
+    },
     gt_mean = if (renewal) {
       as.numeric(sub("renewal_", "", design$process)) * exp(runif(1, -0.2, 0.2))
     } else {
@@ -270,8 +277,12 @@ draw_values <- function(design) {
     phase = runif(1, 0, 2 * pi),
     waves = sample(2:3, 1),
     noise_sd = runif(1, 0.002, 0.01),
-    target_size = log_uniform(30, 1e5) *
-      max(1, design$n_places * design$n_ages / 26),
+    # Even outbreaks grow with their strata; concentrated ones do not.
+    target_size = log_uniform(30, 1e5) * if (design$spread == "even") {
+      max(1, design$n_places * design$n_ages / 26)
+    } else {
+      1
+    },
     delay_median = log_uniform(1, 10),
     delay_sdlog = runif(1, 0.5, 2.5),
     delay_mean = log_uniform(2, 21),
