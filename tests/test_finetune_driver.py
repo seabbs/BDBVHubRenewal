@@ -258,14 +258,13 @@ def test_stale_remote_simulator_is_replaced_before_batches(tmp_path):
         "copied=0; "
         "remote() { case $1 in sha256sum*) "
         f"(( copied )) && echo '{sha}  f' || echo 'old  f';; "
-        '*) echo "remote: $1";; esac; }; '
-        "rsync() { copied=1; echo copied; }; "
-        "remote_code && echo current",
+        '*) echo "$1" >> calls;; esac; }; '
+        "rsync() { copied=1; echo copied >> calls; }; "
+        "remote_code && echo current; cat calls",
     )
-    lines = out.split()
     # Old batches stop before the copy, and the copy is checked.
+    assert out.startswith("current")
     assert out.index("pkill") < out.index("copied")
-    assert lines[-1] == "current"
 
 
 def test_remote_simulator_that_stays_stale_blocks_batches(tmp_path):
