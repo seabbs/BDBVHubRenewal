@@ -466,17 +466,16 @@ def test_blocks_are_cut_without_torch(tmp_path):
     assert int(out.stdout.split()[-1]) > 0
 
 
-def test_learning_rate_halves_with_each_doubling_of_outbreaks():
+def test_learning_rate_decays_linearly_to_zero_over_its_steps():
     from finetune_stream import learning_rate
 
-    # Constant without decay.
-    assert learning_rate(4000, 1e-4, 0.0, 1000) == 1e-4
-    # With decay 1, a doubling of outbreaks halves it, from the first
-    # checkpoint on.
-    assert learning_rate(0, 1e-4, 1.0, 1000) == 1e-4
-    assert learning_rate(1000, 1e-4, 1.0, 1000) == 1e-4
-    assert learning_rate(2000, 1e-4, 1.0, 1000) == 5e-5
-    assert abs(learning_rate(8000, 1e-4, 1.0, 1000) - 1.25e-5) < 1e-12
+    # Constant without a schedule length.
+    assert learning_rate(5000, 1e-5, 0) == 1e-5
+    # Linear decay to zero over the steps, as Chronos-2's own fit.
+    assert learning_rate(0, 1e-5, 1000) == 1e-5
+    assert abs(learning_rate(500, 1e-5, 1000) - 5e-6) < 1e-15
+    assert learning_rate(1000, 1e-5, 1000) == 0.0
+    assert learning_rate(1500, 1e-5, 1000) == 0.0
 
 
 def test_training_scale_floor_applies_only_when_set():
