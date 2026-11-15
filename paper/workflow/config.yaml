@@ -50,10 +50,6 @@ germany:
   extra:
     - evidence: germany_chronos
       models: "^fm_chronos_"
-      provisional: >-
-        Chronos-2 rows are provisional: their ragged models capped release
-        lags at 28 days rather than the 40-day truth delay, and they are
-        being rescored.
 
 # The Ebola study: samples of the release backtest of `backtest_models`
 # from every past release, with the stored fits' (`bdbvhubrenewal
@@ -75,9 +71,6 @@ ebola:
   extra:
     - evidence: ebola_chronos
       models: ".*_n1000$"
-      provisional: >-
-        Chronos-2 rows are provisional: they are refitted once the
-        release-lag fix of #192 merges.
   backtest_models: [randomwalk, randomwalknowcast]
   hub: ../data/raw/bdbv-hub
   hub_repo: https://github.com/InsightNet-US/BDBV-Modeling-Hub.git
@@ -125,6 +118,16 @@ evidence:
   germany_chronos:
     ref: e0323a7d19794f06b50ccc5f0118f85e58b16af5
     path: evidence/paper-forecasts-chronos.csv.gz
+  # The lag-horizon test of the ragged layout (germany-chronos2).
+  lag_germany:
+    ref: e4f4d7a49773a3050a9529df5c70d7cc8504dafc
+    path: results/germany-chronos-dev/scores.csv
+  lag_bdbv_before:
+    ref: e4f4d7a49773a3050a9529df5c70d7cc8504dafc
+    path: evidence/bdbv-lagfix/fm-summary-before.csv
+  lag_bdbv_after:
+    ref: e4f4d7a49773a3050a9529df5c70d7cc8504dafc
+    path: evidence/bdbv-lagfix/fm-summary-after.csv
   copula_scores: null
   copula_rho: null
   aggregation_scores:

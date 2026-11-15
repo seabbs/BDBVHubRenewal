@@ -40,6 +40,12 @@ One SI section per paper section.
 - Key references: [@Ansari2025; @Hu2021].
 :::
 
+We tested the ragged layout's lag horizon.
+Running the lags to the truth delay, rather than 4 weeks or 28 days, hurt with short release histories.
+On the German development half, the national WIS relative to `randomwalknowcast` went from {{< meta evidence.lag.germany.fm_chronos_daily_ragged.capped >}} to {{< meta evidence.lag.germany.fm_chronos_daily_ragged.longer >}} for the daily zero-shot model and from {{< meta evidence.lag.germany.fm_chronos_weekly_ragged.capped >}} to {{< meta evidence.lag.germany.fm_chronos_weekly_ragged.longer >}} for the weekly one.
+On the BDBV release backtest it went from {{< meta evidence.lag.bdbv.fm_chronos_daily_ragged.capped >}} to {{< meta evidence.lag.bdbv.fm_chronos_daily_ragged.longer >}} for the daily zero-shot model and from {{< meta evidence.lag.bdbv.fm_chronos_weekly_ragged.capped >}} to {{< meta evidence.lag.bdbv.fm_chronos_weekly_ragged.longer >}} for the weekly one.
+BDBV's zones have few weekly releases, so with the longer horizon no recent lag of a zone falls in the model's context.
+
 ### Synthetic data generation
 
 ::: {.callout-note title="Plan"}
