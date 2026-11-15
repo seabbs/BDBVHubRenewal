@@ -625,3 +625,47 @@ def test_batches_share_one_prediction_length():
     for length, batch in plan:
         assert set(lengths[batch]) == {length}
         assert sizes[batch].sum() <= 2000 or len(batch) == 1
+
+
+def test_a_seed_list_gives_the_training_seeds_in_its_order(tmp_path):
+    from finetune_stream import read_seed_list
+
+    path = tmp_path / "seeds.txt"
+    path.write_text("10005\n10001\n\n10003\n")
+    assert read_seed_list(path) == [10005, 10001, 10003]
+
+
+def test_a_round_continues_from_the_previous_adapter(tmp_path):
+    import pytest
+
+    torch = pytest.importorskip("torch")
+    pytest.importorskip("peft")
+    from finetune_stream import lora_model
+    from peft import LoraConfig
+
+    class Attention(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            for name in "qkvo":
+                setattr(self, name, torch.nn.Linear(4, 4))
+
+    class Net(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.self_attention = Attention()
+
+    config = LoraConfig(r=2, lora_alpha=4, target_modules=["self_attention.q"])
+    torch.manual_seed(0)
+    first = lora_model(Net(), config, None)
+    for p in first.parameters():
+        if p.requires_grad:
+            p.data.normal_()
+    first.save_pretrained(tmp_path / "round0")
+    torch.manual_seed(1)
+    second = lora_model(Net(), config, tmp_path / "round0")
+    trained = {n: p for n, p in first.named_parameters() if "lora" in n}
+    loaded = {n: p for n, p in second.named_parameters() if "lora" in n}
+    assert loaded.keys() == trained.keys()
+    assert all(torch.equal(loaded[n], trained[n]) for n in trained)
+    # The loaded adapter trains on.
+    assert all(p.requires_grad for p in loaded.values())
