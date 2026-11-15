@@ -47,13 +47,8 @@ germany:
   # them, and `backtest` reads a `germany-backtest` table. A development
   # run fails if one holds a held-out date.
   # `provisional` notes what is to be redone, in every German caption.
-  extra:
-    - evidence: germany_chronos
-      models: "^fm_chronos_"
-      provisional: >-
-        Chronos-2 rows are provisional: their ragged models capped release
-        lags at 28 days rather than the 40-day truth delay, and they are
-        being rescored.
+  # The Chronos-2 models are in config/germany.toml.
+  extra: []
 
 # The Ebola study: samples of the release backtest of `backtest_models`
 # from every past release, with the stored fits' (`bdbvhubrenewal
@@ -122,9 +117,6 @@ evidence:
   simulator:
     ref: 6bcb6f2fa4a2f2f5978271a7d3d30e613ea3f939
     path: scripts/finetune_simulate.R
-  germany_chronos:
-    ref: e0323a7d19794f06b50ccc5f0118f85e58b16af5
-    path: evidence/paper-forecasts-chronos.csv.gz
   copula_scores: null
   copula_rho: null
   aggregation_scores:
