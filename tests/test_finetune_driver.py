@@ -336,7 +336,7 @@ def test_laptop_first_runs_the_seeds_the_trainer_waits_for(tmp_path):
 def test_restarting_the_remote_scheduler_spares_its_batches(tmp_path):
     out = run(
         tmp_path,
-        'remote() { echo "$@"; }; restart_remote_scheduler',
+        'remote() { echo "$@" >> calls; }; restart_remote_scheduler; cat calls',
     )
     assert "pkill -o -f" in out
     assert "finetune_simulate" not in out

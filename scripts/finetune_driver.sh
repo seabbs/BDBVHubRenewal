@@ -308,6 +308,43 @@ unstarted_seeds() {
   done
 }
 
+blocking_seeds() {
+  # Training seeds the waiting trainer needs that are not done, lowest
+  # first. A seed lost elsewhere would hold training up until its log is
+  # stale, so the laptop runs these first.
+  python3 - "$SIM_DIR" "$OUT/stream-status.json" "$TRAIN_FIRST" "$TRAIN_LAST" <<'EOF'
+import json, re, sys
+from pathlib import Path
+sim, status = Path(sys.argv[1]), Path(sys.argv[2])
+first, last = map(int, sys.argv[3:])
+try:
+    stage = json.loads(status.read_text()).get("stage", "")
+except (OSError, ValueError):
+    sys.exit()
+wait = re.fullmatch(r"waiting for outbreaks \d+-(\d+)", stage)
+if not wait:
+    sys.exit()
+need, have, per = int(wait.group(1)), 0, None
+for s in range(first, last + 1):
+    if have >= need:
+        break
+    path = sim / f"settings-{s}.csv"
+    if path.exists():
+        n = max(len(path.read_text().splitlines()) - 1, 0)
+        per = per or n
+        have += n
+    else:
+        print(s)
+        have += per or 25
+EOF
+}
+
+restart_remote_scheduler() {
+  # Stop the remote scheduler so it starts again with a new list; only
+  # its main process, so its running batches carry on.
+  remote "pkill -o -f '[f]inetune_remote.sh'" > /dev/null 2>&1
+}
+
 local_slots() {
   # Fill the laptop's slots: LOCAL_SLOTS while the trainer waits, and
   # LOCAL_SLOTS_TRAINING while it trains, to leave memory for MPS.
@@ -317,7 +354,7 @@ local_slots() {
   stage=$(python3 -c "import json;print(json.load(open('$OUT/stream-status.json')).get('stage',''))" 2>/dev/null)
   [ "$stage" = training ] && slots=$LOCAL_SLOTS_TRAINING
   local claimed=0
-  for s in $(local_seeds) $(unstarted_seeds); do
+  for s in $(blocking_seeds) $(local_seeds) $(unstarted_seeds); do
     done_seed "$s" && continue
     pgrep -f "(finetune_simulate|sim-real).R --args 25 $s " > /dev/null && continue
     running=$(pgrep -f 'finetune_simulate.R --args' | wc -l)
@@ -342,7 +379,7 @@ local_slots() {
   done
   if (( claimed )) && [ -n "${REMOTE:-}" ]; then
     # The remote's scheduler restarts without the seeds the laptop took.
-    remote "pkill -f '[f]inetune_remote.sh'" > /dev/null 2>&1
+    restart_remote_scheduler
     remote_tried=0
   fi
 }
@@ -391,7 +428,7 @@ EOF
   log "projected short of $OUTBREAKS outbreaks: added $extra training seeds, now to $TRAIN_LAST"
   # A remote scheduler that has finished must start again for the new
   # seeds.
-  remote "pkill -f '[f]inetune_remote.sh'; rm -f $REMOTE_DIR/$SIM_REMOTE/remote-done" \
+  remote "pkill -o -f '[f]inetune_remote.sh'; rm -f $REMOTE_DIR/$SIM_REMOTE/remote-done" \
     > /dev/null 2>&1
   remote_tried=0
 }
@@ -452,7 +489,7 @@ start_trainer() {
 
 # A restarted driver replaces the remote scheduler, whose running batches
 # finish.
-[ -n "${REMOTE:-}" ] && remote "pkill -f '[f]inetune_remote.sh'" \
+[ -n "${REMOTE:-}" ] && remote "pkill -o -f '[f]inetune_remote.sh'" \
   > /dev/null 2>&1 && log "stopped the previous remote scheduler"
 log "starting round from $1: training seeds $TRAIN_FIRST-$TRAIN_LAST, held-out $HELD_FIRST-$HELD_LAST, laptop $LOCAL_FIRST-$LOCAL_LAST"
 trainer_args=("$SIM_DIR" "$OUT" --train-seeds "$TRAIN_FIRST" "$TRAIN_LAST"
