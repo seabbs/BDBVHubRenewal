@@ -797,3 +797,22 @@ def test_too_many_requests_is_retried_a_bounded_number_of_times(
     with pytest.raises(ConnectionError, match="GH_TOKEN"):
         foundation.finetuned_adapter(_checkpoint("abc"))
     assert len(calls) == len(foundation.RETRY_SECONDS) + 1
+
+
+def test_scale_floor_keeps_a_flat_context_from_a_tiny_scale():
+    pytest.importorskip("chronos")
+    import torch
+    from chronos.chronos_bolt import InstanceNorm
+
+    model = type("M", (), {})()
+    model.instance_norm = InstanceNorm(use_arcsinh=True)
+    flat = torch.zeros(2, 8)
+    # Chronos-2 scales a flat context by 1e-5, so one count is 1e5 units.
+    assert float(model.instance_norm(flat)[1][1].max()) < 1e-4
+    foundation.floor_scale(model, 1.0)
+    _, (_, scale) = model.instance_norm(flat)
+    assert torch.equal(scale, torch.ones(2, 1))
+    # Scales above the floor are unchanged.
+    wide = torch.arange(16.0).reshape(2, 8) * 10
+    _, (_, wide_scale) = model.instance_norm(wide)
+    assert bool((wide_scale > 1).all())
