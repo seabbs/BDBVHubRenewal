@@ -71,6 +71,7 @@ __all__ = [
     "paper_forecasts",
     "read_submissions",
     "relative_scores",
+    "run_models",
     "score_germany",
     "team_forecasts",
     "with_truth",
@@ -159,6 +160,9 @@ class GermanyConfig:
         are for development.
     models : tuple of str
         The models run.
+    held_out_models : tuple of str
+        Models run on the held-out half only, such as those fine-tuned on
+        the development half (`run_models`).
     n_samples, seed : int
         Samples per forecast, and the seed.
     truth_delay : int
@@ -190,6 +194,24 @@ class GermanyConfig:
     paper_baseline: str
     hidden: tuple[str, ...]
     plot_every: int
+    held_out_models: tuple[str, ...] = ()
+
+
+def run_models(config: GermanyConfig, held_out: bool) -> tuple[str, ...]:
+    """Return the models a half runs: `held_out_models` join the held-out.
+
+    Parameters
+    ----------
+    config : GermanyConfig
+        The settings.
+    held_out : bool
+        The held-out half rather than the development half.
+
+    Returns
+    -------
+    tuple of str
+    """
+    return (*config.models, *(config.held_out_models if held_out else ()))
 
 
 def load_germany_config(
@@ -227,6 +249,7 @@ def load_germany_config(
         paper_baseline=raw["scoring"]["paper_baseline"],
         hidden=tuple(raw["page"]["hidden"]),
         plot_every=int(raw["page"]["plot_every"]),
+        held_out_models=tuple(now.get("held_out_models", ())),
     )
 
 

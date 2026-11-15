@@ -39,6 +39,14 @@ models = [
   "fm_chronos_daily_ragged_ft",
   "fm_chronos_weekly_ragged_ft",
 ]
+# Chronos-2 fine-tuned on the development half alone
+# (scripts/finetune_germany.py on the germany-ft branch), run on the
+# held-out half only, for the SI's comparison with the models fine-tuned on
+# simulations.
+held_out_models = [
+  "fm_chronos_daily_ragged_de",
+  "fm_chronos_weekly_ragged_de",
+]
 # Draws per forecast and their seed, the same for every model. A model's own
 # quantiles at the hub's seven levels are scored where it gives them (the
 # weekly Chronos-2 models); every other forecast is scored from the
