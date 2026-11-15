@@ -43,6 +43,10 @@ MAX_LAGS = {"weekly": tuple(range(2, 8)), "daily": tuple(range(14, 50))}
 DEPLOYED_LAGS = {source: (lag,) for source, lag in foundation.MAX_LAG.items()}
 """The release lags the `_ft` models forecast with, to train on only."""
 
+STEP_COVARIATE = False
+"""Whether blocks carry a known-future row of days per step (7 weekly, 1
+daily), so one model can tell the aggregations apart."""
+
 SOURCES = ("weekly", "daily")
 """Sources blocks are cut from; one of them trains an adapter for that
 source alone."""
@@ -124,6 +128,18 @@ complete, unless an outbreak's settings give `max_delay` in days."""
 def _sha256(path: Path) -> str:
     """Return a file's SHA-256."""
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def with_step_length(block: dict, days: int) -> dict:
+    """Return a block with a last known-future row of `days` per step."""
+    x = block["context"]
+    row = np.full((1, x.shape[1]), float(days), dtype=x.dtype)
+    return {
+        **block,
+        "context": np.concatenate([x, row]),
+        "n_covariates": block["n_covariates"] + 1,
+        "n_future_covariates": block["n_future_covariates"] + 1,
+    }
 
 
 def _pad(block: dict, context: int, horizon: int) -> dict:
@@ -316,6 +332,8 @@ def outbreak_blocks(
                 continue
             if block["start"] < 2:
                 continue
+            if STEP_COVARIATE:
+                block = with_step_length(block, width)
             padded = _pad(block, CONTEXT, HORIZON)
             padded["levels"] = target_levels(places)
             padded["mix"] = mix
@@ -425,6 +443,8 @@ def real_blocks(
             weekly_cutoffs(first, cut, weekday),
             max_lag=lag,
         )
+        if STEP_COVARIATE:
+            block = with_step_length(block, 7)
         padded = _pad(block, CONTEXT, HORIZON)
         padded["levels"] = target_levels(places)
         padded["mix"] = "real"

@@ -377,9 +377,11 @@ def init_worker(
     max_series: int,
     lags: dict[str, tuple[int, ...]],
     sources: tuple[str, ...],
+    step_covariate: bool = False,
 ) -> None:
     """Give a cutting worker the trainer's block settings."""
     ft.MAX_SERIES, ft.MAX_LAGS, ft.SOURCES = max_series, lags, sources
+    ft.STEP_COVARIATE = step_covariate
 
 
 def _cut_part(
@@ -763,6 +765,8 @@ def main() -> None:
     parser.add_argument(
         "--lora-modules", default="all", choices=["all", "time"]
     )
+    # Give each block a known row of days per step.
+    parser.add_argument("--step-covariate", action="store_true")
     # Average the loss over valid horizon steps and target rows only.
     parser.add_argument("--valid-step-loss", action="store_true")
     # Cut every block at the release lags the `_ft` models forecast with.
@@ -790,6 +794,7 @@ def main() -> None:
     if args.deployed_lags:
         ft.MAX_LAGS = ft.DEPLOYED_LAGS
     ft.SOURCES = tuple(args.sources)
+    ft.STEP_COVARIATE = args.step_covariate
     out, sim_dir = args.out, args.sim_dir
     # The commit this trainer runs, read once: the worktree may move on.
     commit = subprocess.run(
@@ -839,7 +844,7 @@ def main() -> None:
         args.cut_workers,
         mp_context=multiprocessing.get_context("spawn"),
         initializer=init_worker,
-        initargs=(ft.MAX_SERIES, ft.MAX_LAGS, ft.SOURCES),
+        initargs=(ft.MAX_SERIES, ft.MAX_LAGS, ft.SOURCES, ft.STEP_COVARIATE),
     )
     held_pairs, empty = cut_in_workers(
         pool, sim_dir, held, args.seed, k, args.cut_workers
@@ -909,6 +914,7 @@ def main() -> None:
         **({"lr_steps": args.lr_steps} if args.lr_steps else {}),
         **({"scale_floor": args.scale_floor} if args.scale_floor else {}),
         **({"loss": "valid steps"} if args.valid_step_loss else {}),
+        **({"step_covariate": True} if args.step_covariate else {}),
         **(
             {"sources": list(ft.SOURCES)}
             if ft.SOURCES != ("weekly", "daily")
