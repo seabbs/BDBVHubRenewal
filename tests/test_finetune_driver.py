@@ -38,7 +38,7 @@ def run(tmp_path: Path, script: str, env: str = ENV) -> str:
     """Run bash with the driver's functions and return its output."""
     (tmp_path / "round.env").write_text(env)
     (tmp_path / "output" / "finetune").mkdir(parents=True, exist_ok=True)
-    (tmp_path / "sims").mkdir()
+    (tmp_path / "sims").mkdir(exist_ok=True)
     (tmp_path / "sims" / "settings-5902.csv").write_text("outbreak\n")
     out = subprocess.run(
         ["bash", "-c", f'set -- round.env; source "{DRIVER}"; {script}'],
@@ -316,3 +316,27 @@ def test_remote_with_another_epinowcast_runs_no_batches(tmp_path):
     )
     assert "blocked" in out
     assert "epinowcast" in out
+
+
+def test_laptop_first_runs_the_seeds_the_trainer_waits_for(tmp_path):
+    (tmp_path / "sims").mkdir()
+    rows = "outbreak\n" + "".join(f"x-{i}\n" for i in range(5))
+    for s in (5001, 5002, 5004, 5005):
+        (tmp_path / "sims" / f"settings-{s}.csv").write_text(rows)
+    (tmp_path / "ckpt").mkdir()
+    (tmp_path / "ckpt" / "stream-status.json").write_text(
+        '{"stage": "waiting for outbreaks 11-20"}'
+    )
+    # 5003 is missing: with five outbreaks a seed, outbreaks 11-20 need
+    # seeds 5001-5004, and 5003 is on no machine's list first.
+    out = run(tmp_path, "blocking_seeds | tr '\\n' ' '")
+    assert out.split() == ["5003"]
+
+
+def test_restarting_the_remote_scheduler_spares_its_batches(tmp_path):
+    out = run(
+        tmp_path,
+        'remote() { echo "$@"; }; restart_remote_scheduler',
+    )
+    assert "pkill -o -f" in out
+    assert "finetune_simulate" not in out
