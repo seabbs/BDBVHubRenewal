@@ -43,7 +43,7 @@ import pandas as pd
 import yaml
 
 from bdbvhubrenewal.data.dates import as_date, reference_date_for_vintage
-from bdbvhubrenewal.data.zones import ZoneData, weekly_zone_counts
+from bdbvhubrenewal.data.zones import ZoneData, is_zone, weekly_zone_counts
 from bdbvhubrenewal.evaluation.backtest import (
     BacktestConfig,
     make_tasks,
@@ -479,7 +479,7 @@ def our_forecasts(
     zones with cases at the vintage, as the zone backtest runs them. Only
     the zones are kept from the zone run, as it also gives the country.
     A model that forecasts the zones itself (`reads_zones`) has no zone
-    run.
+    run, and only its zones with cases are kept.
 
     Parameters
     ----------
@@ -522,6 +522,8 @@ def our_forecasts(
         history = pd.concat([daily, zones.daily])
         walks = [m for m in built if not getattr(m, "reads_zones", False)]
         fc = run_forecasts(built, tasks)
+        # Every model's zones are those with cases, as the walks run on.
+        fc = fc.loc[~fc["location"].map(is_zone) | fc["location"].isin(here)]
         if walks:
             zone = run_forecasts(
                 walks, [zone_task(t, counts, here, history) for t in tasks]

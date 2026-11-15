@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
+import datetime as dt
 import hashlib
 import importlib.util
 from pathlib import Path
@@ -11,6 +12,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from bdbvhubrenewal.data.dates import as_date
 from bdbvhubrenewal.data.zones import (
     ZoneData,
     hub_zones,
@@ -155,18 +157,16 @@ def test_ragged_lags_stop_below_the_truth_delay(
     source: str, steps: int, task: ForecastTask
 ) -> None:
     # The lag series stop at 28 days or 4 weeks, short of the 35-day truth
-    # delay. Running them to the truth delay (e43eda80c) was reverted: zone
-    # releases began on 2026-10-09, so at 5 weeks no lag 0 to 2 value of a
-    # zone fell in the context, Chronos-2 read partial counts as levels,
-    # and the forecasts and scores were worse.
+    # delay. Zone releases began on 2026-10-09, so at 5 weeks no lag 0 to
+    # 2 value of a zone would fall in the context.
     store: list = []
     model = dataclasses.replace(
         get_model(f"fm_chronos_{source}_ragged"), sample=_recording(store)
     )
     model.forecast(task)
     groups, _ = store[0]
-    n_places = 1 + len(task.locations)
-    assert len(groups[0]["future_covariates"]) == n_places * steps
+    names = groups[0]["future_covariates"]
+    assert len({name.rsplit("_lag_", 1)[1] for name in names}) == steps
     assert MAX_LAG[source] == steps
 
 
@@ -939,6 +939,51 @@ def test_a_missing_asset_is_not_retried(
     with pytest.raises(FileNotFoundError):
         foundation.resolve_checkpoint("abc")
     assert len(calls) == 1
+
+
+def test_zone_releases_without_a_target_release_add_no_lag_cells(
+    target: pd.DataFrame,
+    delays: pd.DataFrame,
+    daily: pd.DataFrame,
+    health_zones: pd.DataFrame,
+    daily_zones: pd.DataFrame,
+    tasks_json,
+) -> None:
+    # With no history, the task has one weekly target release but every
+    # zone release, as the hub comparison builds it.
+    rows = target.loc[target["vintage"] == "2026-10-24"]
+    task = make_tasks(
+        rows,
+        delays,
+        BacktestConfig(seed=3),
+        daily=daily,
+        zones=ZoneData(health_zones, daily_zones, hub_zones(tasks_json)),
+    )[0]
+    store: list = []
+    model = dataclasses.replace(
+        get_model("fm_chronos_weekly_ragged"), sample=_recording(store)
+    )
+    model.forecast(task)
+    group = store[0][0][0]
+    for name, past in group["past_covariates"].items():
+        cells = np.concatenate([past, group["future_covariates"][name]])
+        # One release gives each lag one cell.
+        assert np.sum(~np.isnan(cells)) <= 1, name
+
+
+def test_weeks_before_the_first_onset_are_forecast(
+    task: ForecastTask,
+) -> None:
+    first = min(task.target_end_dates)
+    early = (as_date(first) - dt.timedelta(weeks=60)).isoformat()
+    longer = dataclasses.replace(
+        task, target_end_dates=(early, *task.target_end_dates)
+    )
+    model = dataclasses.replace(
+        get_model("fm_chronos_weekly_ragged"), sample=_constant(0.0)
+    )
+    out = model.forecast(longer)
+    assert set(out.loc[out["target_end_date"] == early, "value"]) == {0.0}
 
 
 def _http_error(code: int):  # type: ignore[no-untyped-def]

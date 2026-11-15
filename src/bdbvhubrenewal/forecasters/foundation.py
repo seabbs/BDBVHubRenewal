@@ -710,6 +710,11 @@ def _lags_of(group: Series, places: set[str]) -> Series:
     return out
 
 
+def _at(rows: pd.DataFrame | None, vintage: str) -> pd.DataFrame | None:
+    """Return the rows of one release, or None."""
+    return None if rows is None else rows.loc[rows["vintage"] == vintage]
+
+
 def _rows(*tables: pd.DataFrame | None) -> pd.DataFrame | None:
     """Stack the tables that are there, None if none is."""
     there = [t for t in tables if t is not None and not t.empty]
@@ -788,19 +793,23 @@ class FoundationModel:
         weekly = self.source == "weekly"
         base = task.target_history if weekly else task.daily_history
         zone = task.zone_history if weekly else task.zone_daily_history
-        rows = _rows(base, zone)
-        if base is None or base.empty or rows is None:
+        if base is None or base.empty:
             raise ModelUnavailableError(
                 f"{self.name} needs the {self.source} releases, and the task "
                 f"for {task.vintage} has none."
             )
-        zones = (
-            tuple(
-                z for z in task.zone_codes if province_of(z) in task.locations
-            )
-            if task.zone_daily_history is not None
-            else ()
+        # Only the releases of the country and provinces, so a release
+        # gives every place's lag cells or none.
+        if zone is not None:
+            zone = zone.loc[zone["vintage"].isin(set(base["vintage"]))]
+        has_zones = zone is not None and task.zone_daily_history is not None
+        zones = tuple(
+            z
+            for z in task.zone_codes
+            if has_zones and province_of(z) in task.locations
         )
+        rows = _rows(base, zone if zones else None)
+        assert rows is not None
         places = (NATIONAL, *task.locations, *zones)
         weeks = list(task.target_end_dates)
         tri = hub_triangle(rows, self.source, places, weeks[-1])
@@ -834,11 +843,20 @@ class FoundationModel:
         values = np.stack(
             [steps[:, :, week_of == w].sum(axis=2) for w in weeks], axis=2
         )
-        weekly_rows = _rows(task.target_history, task.zone_history)
-        assert weekly_rows is not None
-        reported = hub_triangle(weekly_rows, "weekly", places, weeks[-1])
-        at = [reported.times.index(w) for w in weeks]
-        values = np.maximum(values, reported.final[:, at])  # [S, L, W]
+        latest = _rows(task.target, _at(task.zone_history, task.vintage))
+        assert latest is not None
+        reported = (
+            latest.pivot_table(
+                index="location",
+                columns="target_end_date",
+                values="total",
+                aggfunc="sum",
+            )
+            .reindex(index=list(places), columns=weeks)
+            .fillna(0.0)
+            .to_numpy()
+        )
+        values = np.maximum(values, reported)  # [S, L, W]
         n, n_loc = task.n_samples, len(places)
         out = pd.DataFrame(
             {
