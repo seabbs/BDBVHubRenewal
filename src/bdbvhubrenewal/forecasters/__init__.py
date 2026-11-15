@@ -10,6 +10,7 @@
   the PyRenew model in `bdbvhubrenewal.model`.
 - `foundation`: the pretrained Chronos-2 model on two layouts of the hub
   target's releases.
+- `timesfm`: the pretrained TimesFM 3 model on the same layouts.
 - `zones`: health-zone forecasts split from any model's province samples.
 
 Importing this package registers the built-in models.
@@ -17,6 +18,7 @@ To add a variant, write a class with `name` and `forecast(task)` and call
 `register_model` in its module, then import that module here.
 """
 
+from bdbvhubrenewal.forecasters import timesfm  # noqa: F401  (registers)
 from bdbvhubrenewal.forecasters.base import (
     NATIONAL,
     SAMPLE_COLUMNS,
