@@ -28,7 +28,16 @@
 # - reference day-of-week effect on expected counts: no or yes;
 # - observation: "negbin" (NB2), "negbin1d" (NB1) or "poisson";
 # - strata: one, 2 to 26 places, 2 to 8 ages, or places by ages (at most
-#   60), sharing their trajectory and delay through random effects.
+#   60), sharing their trajectory and delay through random effects;
+# - seeding: every place at the outset, or some imported mid-outbreak;
+# - mixing between places: none, symmetric, asymmetric (one way, in a
+#   drawn order), by distance, or by distance switching on or off, weak
+#   or strong;
+# - imports into strata with cases: none, constant or pulses.
+#
+# The latent infections (a multi-place renewal with imports) are run in
+# R and injected into epinowcast through its growth model, whose growth
+# rate is set to their daily change in log (`latent_expectation`).
 #
 # The seed is scaled so the expected size is a drawn target, and the
 # longest delay is the shortest of 3, 4, 6, 8 and 12 weeks at or above the
@@ -98,10 +107,13 @@ factors <- list(
   # shared path with correlated place deviations, or the shared path
   # delayed per place, so one place leads another.
   place_rt = c("shared", "independent", "correlated", "lagged"),
-  # When places start: all at the outset, or some seeded mid-outbreak.
-  # Constant or pulsed importations need an import term in the renewal
-  # (epinowcast#940), so they are not simulated.
-  seeding = c("start", "mid")
+  # When places start: all at the outset, or some imported mid-outbreak.
+  seeding = c("start", "mid"),
+  # How places infect each other (`place_mixing`), and how strongly.
+  mixing = c("none", "symmetric", "asymmetric", "distance", "time_varying"),
+  mixing_strength = c("weak", "strong"),
+  # Imports into strata with cases: none, a constant trickle, or pulses.
+  imports = c("none", "constant", "pulses")
 )
 
 # Simulations per balanced block: a multiple of every factor's levels.
@@ -194,22 +206,86 @@ place_growth <- function(n, strata, design, v) {
   matrix(growth, nrow = n)
 }
 
-# Places seeded mid-outbreak, for `design$seeding` "mid": the renewal has
-# no import term, so a late place starts with a seed a thousandth as large
-# and its growth jumps by log(1000) over `late_days` from a share
-# `late_at` of the way through. Returns the growth and each stratum's
-# seed multiplier.
-seed_late <- function(growth, strata, design, v) {
-  seed <- rep(1, nrow(strata))
-  if (design$seeding != "mid" || length(v$late_places) == 0) {
-    return(list(growth = growth, seed = seed))
+# Strata of places seeded mid-outbreak, for `design$seeding` "mid".
+late_strata <- function(strata, design, v) {
+  design$seeding == "mid" &
+    strata$place %in% sprintf("P%02d", v$late_places)
+}
+
+# Each stratum's seed from `seed`: late places start with none, as they
+# are imported mid-outbreak (`stratum_imports`).
+stratum_seed <- function(seed, strata, design, v) {
+  seed[late_strata(strata, design, v)] <- 0
+  seed
+}
+
+# Imports into each stratum on `n` days, in units of the seed `share`.
+# A late place is imported its share over `late_days` from a share
+# `late_at` of the way through. Other strata with cases are imported a
+# constant `import_rate` of their share a day, or pulses of
+# `import_size` times it at shares `import_at` of the way through.
+stratum_imports <- function(n, share, strata, design, v) {
+  out <- matrix(0, n, nrow(strata))
+  late <- late_strata(strata, design, v)
+  if (any(late)) {
+    from <- max(1L, round(v$late_at * n))
+    days <- from:min(n, from + v$late_days - 1L)
+    out[days, late] <- rep(share[late] / length(days), each = length(days))
   }
-  late <- strata$place %in% sprintf("P%02d", v$late_places)
-  from <- max(1L, round(v$late_at * nrow(growth)))
-  days <- from:min(nrow(growth), from + v$late_days - 1L)
-  growth[days, late] <- growth[days, late] + log(1000) / length(days)
-  seed[late] <- 1e-3
-  list(growth = growth, seed = seed)
+  on <- !late & share > 0
+  if (design$imports == "constant") {
+    out[, on] <- rep(v$import_rate * share[on], each = n)
+  } else if (design$imports == "pulses") {
+    days <- unique(pmax(1L, round(v$import_at * n)))
+    out[days, on] <- out[days, on] +
+      rep(v$import_size * share[on], each = length(days))
+  }
+  out
+}
+
+# Mixing between places on `n` days: the share `eps[t]` of each place's
+# infection pressure that comes from other places, by row-normalised
+# kernel `K` between strata (each age mixes with the same age elsewhere).
+# Kinds: none; symmetric (every other place alike); asymmetric (only from
+# places earlier in `mixing_order`); distance (decaying with distance
+# between places at `mixing_x`, `mixing_y` over `mixing_range`); and
+# time-varying (the distance kernel switching on or off over
+# `mixing_switch_days` from a share `mixing_switch_at` of the way
+# through). Places without cases neither give nor take infections.
+place_mixing <- function(n, strata, design, v) {
+  places <- sort(unique(strata$place))
+  n_p <- length(places)
+  kernel <- matrix(0, n_p, n_p)
+  if (n_p > 1 && design$mixing != "none") {
+    kernel <- switch(design$mixing,
+      symmetric = 1 - diag(n_p),
+      asymmetric = {
+        at <- match(seq_len(n_p), v$mixing_order[v$mixing_order <= n_p])
+        1 * outer(at, at, ">")
+      },
+      {
+        xy <- cbind(v$mixing_x[seq_len(n_p)], v$mixing_y[seq_len(n_p)])
+        exp(-as.matrix(dist(xy)) / v$mixing_range) * (1 - diag(n_p))
+      }
+    )
+    quiet <- v$quiet_places[v$quiet_places <= n_p]
+    kernel[quiet, ] <- 0
+    kernel[, quiet] <- 0
+    from <- rowSums(kernel) > 0
+    kernel[from, ] <- kernel[from, ] / rowSums(kernel)[from]
+  }
+  idx <- match(strata$place, places)
+  K <- kernel[idx, idx, drop = FALSE] * outer(strata$age, strata$age, "==")
+  eps <- if (design$mixing == "none") {
+    numeric(n)
+  } else if (design$mixing == "time_varying") {
+    start <- round(v$mixing_switch_at * n)
+    ramp <- pmin(pmax((seq_len(n) - start) / v$mixing_switch_days, 0), 1)
+    v$mixing_eps * if (v$mixing_switch == "on") ramp else 1 - ramp
+  } else {
+    rep(v$mixing_eps, n)
+  }
+  list(K = K, eps = eps)
 }
 
 # Weekly AR(1) noise (autocorrelation 0.8) on `n` days.
@@ -335,6 +411,26 @@ draw_values <- function(design) {
     place_lags = c(0L, sample(1:28, design$n_places - 1L, replace = TRUE)),
     late_at = runif(1, 0.2, 0.6),
     late_days = sample(7:14, 1),
+    # Mixing: the share of pressure from other places, the asymmetric
+    # order, places' positions and the kernel's range, and the
+    # time-varying switch.
+    mixing_eps = if (design$mixing_strength == "weak") {
+      runif(1, 0.02, 0.1)
+    } else {
+      runif(1, 0.2, 0.5)
+    },
+    mixing_order = sample.int(design$n_places),
+    mixing_x = runif(design$n_places),
+    mixing_y = runif(design$n_places),
+    mixing_range = log_uniform(0.05, 0.5),
+    mixing_switch = sample(c("on", "off"), 1),
+    mixing_switch_at = runif(1, 0.2, 0.8),
+    mixing_switch_days = sample(7:21, 1),
+    # Imports, in units of a stratum's seed: a daily rate, or one to four
+    # pulses at shares of the way through.
+    import_rate = log_uniform(0.005, 0.1),
+    import_at = sort(runif(sample(1:4, 1))),
+    import_size = runif(1, 0.5, 3),
     stratum_sd = if (design$spread == "concentrated") {
       runif(1, 2.5, 4)
     } else {
@@ -411,19 +507,47 @@ flat_values <- function(x) {
   })
 }
 
-# Expected onsets of each stratum by day, as epinowcast's renewal or
-# growth model gives them from the latent seeding and the growth rate.
-expected_onsets <- function(size, gt, log_r) {
+# Expected onsets of each stratum by day from the seed (on the first
+# `length(gt)` days) and the growth rate: epinowcast's renewal or growth
+# model, with each stratum's infection pressure mixed with other places'
+# (`place_mixing`) and imports (`stratum_imports`) added:
+# lambda[t] = R[t] * M[t] %*% sum_s gt[s] lambda[t - s] + imports[t],
+# with M[t] = I + eps[t] * (K - diag(rowSums(K))).
+expected_onsets <- function(seed, gt, log_r, mixing = NULL, imports = NULL) {
   n_gt <- length(gt)
   n <- nrow(log_r)
-  out <- matrix(0, n_gt + n, length(size))
-  out[seq_len(n_gt), ] <- rep(size, each = n_gt)
+  out <- matrix(0, n_gt + n, length(seed))
+  out[seq_len(n_gt), ] <- rep(seed, each = n_gt)
   rev_gt <- rev(gt)
+  if (!is.null(mixing)) from <- rowSums(mixing$K)
   for (t in seq_len(n)) {
     past <- out[t:(t + n_gt - 1), , drop = FALSE]
-    out[n_gt + t, ] <- exp(log_r[t, ]) * colSums(past * rev_gt)
+    own <- colSums(past * rev_gt)
+    if (!is.null(mixing) && mixing$eps[t] > 0) {
+      own <- own + mixing$eps[t] * (drop(mixing$K %*% own) - from * own)
+    }
+    out[n_gt + t, ] <- exp(log_r[t, ]) * own
+    if (!is.null(imports)) out[n_gt + t, ] <- out[n_gt + t, ] + imports[t, ]
   }
   out
+}
+
+# An expectation that gives the latent infections `lambda` (days by
+# strata) exactly: epinowcast's growth model (`generation_time = 1`)
+# starts each stratum at its first day and grows it by the growth rate,
+# so the growth rate is the daily change in log `lambda`. Days without
+# infections are floored at 1e-8.
+latent_expectation <- function(pobs, lambda, observation) {
+  expectation <- enw_expectation(
+    r = ~1, generation_time = 1, observation = observation, data = pobs
+  )
+  stopifnot(nrow(lambda) == expectation$data$expr_t + 1L)
+  log_l <- log(pmax(lambda, 1e-8))
+  list(
+    expectation = expectation,
+    growth_rate = as.numeric(apply(log_l, 2, diff)),
+    lelatent = matrix(log_l[1, ], nrow = 1)
+  )
 }
 
 # A formula from its terms, `~ 0` if there are none.
@@ -460,18 +584,13 @@ simulate_outbreak <- function(design, v) {
   multi_place <- design$n_places > 1
   multi_age <- design$n_ages > 1
 
-  # Expectation: growth r(t) directly, or the Rt(t) giving it.
+  # Latent infections: growth r(t) directly, or the Rt(t) giving it, with
+  # mixing between places and imports, run here and injected into
+  # epinowcast (`latent_expectation`).
   gt <- if (design$process == "growth") 1 else gt_pmf(v$gt_mean, design$gt_shape)
   reference_dow <- design$reference_dow == "yes"
-  expectation <- enw_expectation(
-    r = ~1, generation_time = gt,
-    observation = if (reference_dow) ~ (1 | day_of_week) else ~1,
-    data = pobs
-  )
-  n_r <- expectation$data$expr_t
+  n_r <- length(unique(pobs$metareference[[1]]$date)) - length(gt)
   growth <- place_growth(n_r, strata, design, v)
-  late <- seed_late(growth, strata, design, v)
-  growth <- late$growth
   log_r <- if (design$process == "growth") {
     growth
   } else {
@@ -481,16 +600,26 @@ simulate_outbreak <- function(design, v) {
   place_weight[v$quiet_places] <- 0
   age_weight <- exp(rnorm(design$n_ages, 0, v$stratum_sd / 2))
   weight <- place_weight[match(strata$place, place_ids)] *
-    age_weight[match(strata$age, age_ids)] * late$seed
-  # The expected outbreak is linear in the seed, so the seed is scaled to
-  # give the target size.
+    age_weight[match(strata$age, age_ids)]
   share <- weight / sum(weight)
-  v$seed_size <- v$target_size / sum(expected_onsets(share, gt, log_r))
-  size <- pmax(v$seed_size * share, exp(-8))
-  lelatent <- matrix(
-    log(size), nrow = expectation$data$expr_gt_n, ncol = nrow(strata),
-    byrow = TRUE
+  mixing <- place_mixing(n_r, strata, design, v)
+  # Imports are in units of the seed, so the expected outbreak is linear
+  # in the seed, which is scaled to give the target size.
+  imports <- stratum_imports(n_r, share, strata, design, v)
+  unit <- expected_onsets(
+    stratum_seed(share, strata, design, v), gt, log_r,
+    mixing = mixing, imports = imports
   )
+  v$seed_size <- v$target_size / sum(unit)
+  size <- stratum_seed(pmax(v$seed_size * share, exp(-8)), strata, design, v)
+  onsets <- expected_onsets(
+    size, gt, log_r, mixing = mixing, imports = v$seed_size * imports
+  )
+  latent <- latent_expectation(
+    pobs, onsets,
+    observation = if (reference_dow) ~ (1 | day_of_week) else ~1
+  )
+  expectation <- latent$expectation
 
   # Reference date: the delay's form, and its change over time as
   # covariates of the parametric part, or of the hazard if there is none.
@@ -607,10 +736,9 @@ simulate_outbreak <- function(design, v) {
     parameters$rep_beta <- array(rnorm(report$data$rep_fncol))
     parameters$rep_beta_sd <- array(v$dow_sd)
   }
-  parameters$expr_lelatent_int <- lelatent
+  parameters$expr_lelatent_int <- latent$lelatent
 
   # Observations: the NB1 dispersion on the NB2 scale (epinowcast #937).
-  onsets <- expected_onsets(size, gt, log_r)
   v$lambda_hat <- max(1, median(onsets[onsets >= 1]), na.rm = TRUE)
   v$sum_p2 <- sum(delay$pmf^2)
   v$sqrt_phi_obs <- switch(design$observation,
@@ -622,7 +750,7 @@ simulate_outbreak <- function(design, v) {
     parameters$sqrt_phi <- array(v$sqrt_phi_obs)
   }
   sims <- suppressMessages(suppressWarnings(enw_simulate(
-    pobs, growth_rate = as.numeric(log_r), parameters = parameters,
+    pobs, growth_rate = latent$growth_rate, parameters = parameters,
     reference = reference, report = report, expectation = expectation,
     obs = enw_obs(family = design$observation, data = pobs), model = model,
     seed = sample.int(.Machine$integer.max, 1), draws = draws,

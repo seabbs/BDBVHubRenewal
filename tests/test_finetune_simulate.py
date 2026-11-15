@@ -269,12 +269,12 @@ run <- function(expectation, growth_rate, lelatent) {
     parameters = list(expr_lelatent_int = lelatent, sqrt_phi = array(0.5)),
     reference = enw_reference(~1, distribution = "lognormal", data = pobs),
     expectation = expectation, model = model, draws = 1L, refresh = 0,
-    show_messages = FALSE)))
+    show_messages = FALSE, sig_figs = 18)))
 }
 inj <- latent_expectation(pobs, lambda, ~1)
 got <- latent_of(run(inj$expectation, inj$growth_rate, inj$lelatent))
 cat("rows", nrow(got) == nrow(lambda), "\\n")
-cat("mixed", max(abs(got / pmax(lambda, 1e-8) - 1)) < 1e-8, "\\n")
+cat("mixed", max(abs(got / pmax(lambda, 1e-8) - 1)) < 1e-10, "\\n")
 # With no mixing or imports, the injected path matches epinowcast's own
 # renewal driven by the same Rt.
 seed <- c(20, 1, 5)
@@ -284,7 +284,7 @@ got <- latent_of(run(inj$expectation, inj$growth_rate, inj$lelatent))
 ren <- enw_expectation(r = ~1, generation_time = gt, data = pobs)
 own <- latent_of(run(ren, as.numeric(log_r),
   matrix(log(seed), length(gt), 3, byrow = TRUE)))
-cat("renewal", max(abs(got / own - 1)) < 1e-8, "\\n")
+cat("renewal", max(abs(got / own - 1)) < 1e-10, "\\n")
 """,
         tmp_path,
     )
