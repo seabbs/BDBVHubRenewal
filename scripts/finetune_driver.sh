@@ -13,6 +13,9 @@
 #   REMOTE_RETRY_MEM_KB   memory cap of a remote batch run again after R
 #                 aborted it (default twice REMOTE_MEM_KB)
 #   WAIT_ALERT_MIN   minutes the trainer waits before an alert (30)
+#   LEAD_MAX, LEAD_RESUME   optional: no new batches while finished
+#                 training outbreaks lead the trainer by more than
+#                 LEAD_MAX, until the lead is under LEAD_RESUME
 #   MAILBOX       optional file the driver appends an alert line to
 #                 from the trainer's second failure on
 #   EXTRA_SEEDS   optional seeds for other work, simulated after the
@@ -318,6 +321,7 @@ check_remote() {
       | grep -q moved && log "moved $REMOTE's batches of another grid aside"
     [ -e "$PAUSE" ] && return 0
     remote_code || return 0
+    (( throttled )) && return 0
     remote "test -e $REMOTE_DIR/$SIM_REMOTE/remote-done" 2> /dev/null \
       || remote_scheduler || log "could not start the remote scheduler"
     return 0
@@ -404,12 +408,54 @@ restart_remote_scheduler() {
   remote "pkill -o -f '[f]inetune_remote.sh'" > /dev/null 2>&1
 }
 
+throttled=0
+throttle() {
+  # Pause new simulation while the finished training outbreaks lead the
+  # trainer by more than LEAD_MAX, and resume below LEAD_RESUME: further
+  # batches would only take CPU from the trainer and its cutting workers.
+  [ -z "${LEAD_MAX:-}" ] && return 0
+  local lead before=$throttled
+  lead=$(python3 - "$SIM_DIR" "$OUT" "$TRAIN_FIRST" "$TRAIN_LAST" <<'EOF'
+import json, sys
+from pathlib import Path
+sim, out = Path(sys.argv[1]), Path(sys.argv[2])
+first, last = map(int, sys.argv[3:])
+try:
+    done = json.loads((out / "state" / "state.json").read_text())["done"]
+except (OSError, ValueError, KeyError):
+    done = 0
+n = sum(
+    len(p.read_text().splitlines()) - 1
+    for s in range(first, last + 1)
+    if (p := sim / f"settings-{s}.csv").exists()
+)
+print(n - done)
+EOF
+)
+  [ -z "$lead" ] && return 0
+  if (( lead > LEAD_MAX )); then
+    throttled=1
+  elif (( lead < ${LEAD_RESUME:-0} )); then
+    throttled=0
+  fi
+  if (( throttled != before )); then
+    if (( throttled )); then
+      log "simulation $lead outbreaks ahead of the trainer: no new batches until under ${LEAD_RESUME:-0}"
+      [ -n "${REMOTE:-}" ] && restart_remote_scheduler
+    else
+      log "simulation $lead outbreaks ahead of the trainer: new batches again"
+      remote_tried=0
+    fi
+  fi
+}
+
 candidate_seeds() {
   # The laptop's seeds, in order: those the trainer waits for, its own,
   # and, while the remote does not answer, any unstarted seed. An
   # answering remote keeps the rest, so no seed runs on both.
   {
     blocking_seeds
+    (( throttled )) && return 0
     local_seeds
     [ "${remote_state:-down}" = up ] || unstarted_seeds
   } | awk '!seen[$0]++'
@@ -613,6 +659,7 @@ failures=0
 retry_at=0
 while true; do
   extend_seeds
+  throttle
   check_remote
   sync_remote
   local_slots
