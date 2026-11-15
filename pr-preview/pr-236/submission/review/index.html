@@ -1933,6 +1933,56 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#forecast-checks-for-chronos2_ft_daily-fail" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Forecast checks for chronos2_ft_daily: FAIL
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#posterior-predictive-checks-for-chronos2_ft_daily-na" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Posterior predictive checks for chronos2_ft_daily: N/A
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fan-charts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fan charts
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Fan charts">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#locations-the-gate-flags" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Locations the gate flags
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -2014,16 +2064,18 @@
 
 
 <h1 id="submission-review-seabbs-chronos2_ft">Submission review: seabbs-chronos2_ft<a class="headerlink" href="#submission-review-seabbs-chronos2_ft" title="Permanent link">&para;</a></h1>
-<p class="page-subtitle">Dry run of the <code>seabbs-chronos2_ft</code> track for the round n/a, from data as of n/a. Nothing was pushed.</p>
+<p class="page-subtitle">Dry run of the <code>seabbs-chronos2_ft</code> track for the round 2026-11-14, from data as of 2026-11-08. Nothing was pushed.</p>
 <h2 id="what-would-be-submitted">What would be submitted<a class="headerlink" href="#what-would-be-submitted" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Model: <code>n/a</code>.</li>
-<li>Outcome: round skipped. fine-tuned Chronos-2 on the daily releases could not run or was ruled out (fine-tuned Chronos-2 on the daily releases was ruled out (plausible: CD-IT-35 2026-11-21: median 1 is under 1/20 of the recent maximum 42 (and 2 more))). This round is skipped for this model: no other model is submitted in its place.</li>
-<li>The track ran in 3.9 min on a GitHub runner's CPU.</li>
+<li>Model: <code>fm_chronos_daily_ragged_ft</code>.</li>
+<li>Outcome: round skipped. fine-tuned Chronos-2 on the daily releases could not run or was ruled out (fine-tuned Chronos-2 on the daily releases was ruled out (plausible: CD-NK-14 2026-11-28: 97.5% quantile 370 is over 15 times the recent maximum 22 (and 1 more))). This round is skipped for this model: no other model is submitted in its place.</li>
+<li>The track ran in 4.7 min on a GitHub runner's CPU.</li>
+<li>Checkpoint: release <code>chronos-ft-e8a1f5ae338b</code>, adapter SHA-256 <code>315b2f7a96e6</code>.</li>
+<li>Held-out loss: 0.290 before fine-tuning, 0.177 after, on 2098 held-out blocks from 4000 outbreaks.</li>
 </ul>
 <h2 id="checks-and-hub-validation">Checks and hub validation<a class="headerlink" href="#checks-and-hub-validation" title="Permanent link">&para;</a></h2>
 <h3 id="round-skipped">Round skipped<a class="headerlink" href="#round-skipped" title="Permanent link">&para;</a></h3>
-<p>fine-tuned Chronos-2 on the daily releases could not run or was ruled out (fine-tuned Chronos-2 on the daily releases was ruled out (plausible: CD-IT-35 2026-11-21: median 1 is under 1/20 of the recent maximum 42 (and 2 more))). This round is skipped for this model: no other model is submitted in its place.</p>
+<p>fine-tuned Chronos-2 on the daily releases could not run or was ruled out (fine-tuned Chronos-2 on the daily releases was ruled out (plausible: CD-NK-14 2026-11-28: 97.5% quantile 370 is over 15 times the recent maximum 22 (and 1 more))). This round is skipped for this model: no other model is submitted in its place.</p>
 <table>
 <thead>
 <tr>
@@ -2048,6 +2100,180 @@
 </tr>
 </tbody>
 </table>
+<h3 id="forecast-checks-for-chronos2_ft_daily-fail">Forecast checks for <code>chronos2_ft_daily</code>: FAIL<a class="headerlink" href="#forecast-checks-for-chronos2_ft_daily-fail" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>check</th>
+<th>status</th>
+<th>result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>schema</td>
+<td>PASS</td>
+<td>format matches the hub's round</td>
+</tr>
+<tr>
+<td>values</td>
+<td>PASS</td>
+<td>all values finite and non-negative</td>
+</tr>
+<tr>
+<td>samples</td>
+<td>PASS</td>
+<td>100 full trajectories per location</td>
+</tr>
+<tr>
+<td>coverage</td>
+<td>PASS</td>
+<td>546 locations, weeks 2026-10-24 to 2026-12-05</td>
+</tr>
+<tr>
+<td>zones</td>
+<td>PASS</td>
+<td>519 zones in 26 provinces</td>
+</tr>
+<tr>
+<td>national_sum</td>
+<td>PASS</td>
+<td>CD is the exact sum (national.json: 26 modelled provinces)</td>
+</tr>
+<tr>
+<td>bounds</td>
+<td>WARN</td>
+<td>CD-HU: 95th centile 257 is 5.48 times the bound base 47 (and 2 more)</td>
+</tr>
+<tr>
+<td>plausible</td>
+<td>FAIL</td>
+<td>CD-NK-14 2026-11-28: 97.5% quantile 370 is over 15 times the recent maximum 22 (and 1 more)</td>
+</tr>
+<tr>
+<td>growth</td>
+<td>PASS</td>
+<td>forecast growth within the cap</td>
+</tr>
+<tr>
+<td>observed</td>
+<td>PASS</td>
+<td>close to observed (2026-11-08)</td>
+</tr>
+<tr>
+<td>baseline</td>
+<td>WARN</td>
+<td>CD-HU-10: median 32 against random walk baseline 6 over 2026-11-21 to 2026-12-05 (ratio 3.36) (and 6 more)</td>
+</tr>
+<tr>
+<td>previous</td>
+<td>WARN</td>
+<td>CD-IT-05: median 17 against last week's submission 65.5 over 2026-10-03 to 2026-11-28 (ratio 0.312) (and 2 more)</td>
+</tr>
+</tbody>
+</table>
+<details><summary>Findings</summary>
+
+**bounds**
+
+- WARN: CD-HU: 95th centile 257 is 5.48 times the bound base 47
+- WARN: CD-NK: 95th centile 1.53e+03 is 6.65 times the bound base 230
+- WARN: CD-TO: 95th centile 120 is 6.01 times the bound base 20
+
+**plausible**
+
+- FAIL: CD-NK-14 2026-11-28: 97.5% quantile 370 is over 15 times the recent maximum 22
+- FAIL: CD-NK-14 2026-12-05: 97.5% quantile 484 is over 15 times the recent maximum 22
+
+**baseline**
+
+- WARN: CD-HU-10: median 32 against random walk baseline 6 over 2026-11-21 to 2026-12-05 (ratio 3.36)
+- WARN: CD-IT-07: median 0.5 against random walk baseline 24 over 2026-11-21 to 2026-12-05 (ratio 0.19)
+- WARN: CD-IT-28: median 1 against random walk baseline 16 over 2026-11-21 to 2026-12-05 (ratio 0.286)
+- WARN: CD-IT-29: median 3.5 against random walk baseline 26.5 over 2026-11-21 to 2026-12-05 (ratio 0.27)
+- WARN: CD-IT-35: median 18.5 against random walk baseline 74.5 over 2026-11-21 to 2026-12-05 (ratio 0.296)
+- WARN: CD-NK-20: median 14.5 against random walk baseline 1 over 2026-11-21 to 2026-12-05 (ratio 3.25)
+- WARN: CD-NK-26: median 30 against random walk baseline 3 over 2026-11-21 to 2026-12-05 (ratio 4.38)
+
+**previous**
+
+- WARN: CD-IT-05: median 17 against last week's submission 65.5 over 2026-10-03 to 2026-11-28 (ratio 0.312)
+- WARN: CD-IT-13: median 6 against last week's submission 27 over 2026-10-03 to 2026-11-28 (ratio 0.344)
+- WARN: CD-NK-10: median 28.5 against last week's submission 10 over 2026-10-03 to 2026-11-28 (ratio 2.23)
+
+</details>
+
+<h3 id="posterior-predictive-checks-for-chronos2_ft_daily-na">Posterior predictive checks for <code>chronos2_ft_daily</code>: N/A<a class="headerlink" href="#posterior-predictive-checks-for-chronos2_ft_daily-na" title="Permanent link">&para;</a></h3>
+<p><code>chronos2_ft_daily</code>: no posterior, so posterior predictive checks do not apply (the model has no sampler).</p>
+<h2 id="fan-charts">Fan charts<a class="headerlink" href="#fan-charts" title="Permanent link">&para;</a></h2>
+<p>Medians with 50% and 90% intervals: <code>seabbs-chronos2_ft</code>, <code>randomwalknowcast</code>, <code>fm_chronos_weekly_ragged_ft</code>, <code>seabbs-renewal (submitted)</code>. Dots are the counts reported as of 2026-11-08, over the last 16 weeks. Shown are the 7 provinces with a case in them, and the six zones with the most. The file has 26 provinces and 519 health zones.</p>
+<h3 id="locations-the-gate-flags">Locations the gate flags<a class="headerlink" href="#locations-the-gate-flags" title="Permanent link">&para;</a></h3>
+<p>Median and 97.5% quantile (in brackets) of each model by week, with the counts reported so far. The gate's plausibility check fails a median under 1/20 of the largest of the last four reported weeks, or a 97.5% quantile over 15 times it.</p>
+<p><img alt="focus" src="figures/focus.png" /></p>
+<p><strong>CD-NK-14</strong></p>
+<table>
+<thead>
+<tr>
+<th>model</th>
+<th>2026-10-31</th>
+<th>2026-11-07</th>
+<th>2026-11-14</th>
+<th>2026-11-21</th>
+<th>2026-11-28</th>
+<th>2026-12-05</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>reported</td>
+<td>19</td>
+<td>2</td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>seabbs-chronos2_ft</td>
+<td>43 (136)</td>
+<td>48 (158)</td>
+<td>50 (249)</td>
+<td>48 (251)</td>
+<td>48 (370)</td>
+<td>49 (484)</td>
+</tr>
+<tr>
+<td>randomwalknowcast</td>
+<td>19 (52)</td>
+<td>10 (70)</td>
+<td>8 (102)</td>
+<td>8 (119)</td>
+<td>10 (89)</td>
+<td>6 (150)</td>
+</tr>
+<tr>
+<td>fm_chronos_weekly_ragged_ft</td>
+<td>34 (132)</td>
+<td>36 (164)</td>
+<td>30 (183)</td>
+<td>30 (211)</td>
+<td>34 (353)</td>
+<td>36 (282)</td>
+</tr>
+<tr>
+<td>seabbs-renewal (submitted)</td>
+<td>33 (46)</td>
+<td>37 (61)</td>
+<td>41 (84)</td>
+<td>41 (80)</td>
+<td>43 (92)</td>
+<td>40 (99)</td>
+</tr>
+</tbody>
+</table>
+<p><img alt="national" src="figures/national.png" /></p>
+<p><img alt="provinces" src="figures/provinces.png" /></p>
+<p><img alt="zones" src="figures/zones.png" /></p>
 <h2 id="backtest-against-randomwalknowcast">Backtest against randomwalknowcast<a class="headerlink" href="#backtest-against-randomwalknowcast" title="Permanent link">&para;</a></h2>
 <h3 id="release-backtest-rolling-truth-checkpoint-r1-2c2b22a03107-evidencefm-chronos">Release backtest, rolling truth, checkpoint r1 2c2b22a03107 (evidence/fm-chronos)<a class="headerlink" href="#release-backtest-rolling-truth-checkpoint-r1-2c2b22a03107-evidencefm-chronos" title="Permanent link">&para;</a></h3>
 <table>
