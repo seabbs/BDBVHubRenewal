@@ -258,13 +258,15 @@ draw_values <- function(design) {
   log_uniform <- function(lo, hi) exp(runif(1, log(lo), log(hi)))
   places_ages <- design$strata == "places_ages"
   renewal <- design$process != "growth"
+  # Places with cases in a concentrated outbreak.
+  active <- sample(1:min(4, design$n_places), 1)
   v <- list(
     weeks = if (places_ages) sample(16:24, 1) else sample(16:32, 1),
     offset = sample(0:6, 1),
     # Places with no cases: concentrated outbreaks leave one to four
     # places active, so most series stay at zero.
     quiet = if (design$spread == "concentrated") {
-      1 - sample(1:min(4, design$n_places), 1) / design$n_places
+      1 - active / design$n_places
     } else {
       runif(1, 0, 0.9)
     },
@@ -288,12 +290,13 @@ draw_values <- function(design) {
     phase = runif(1, 0, 2 * pi),
     waves = sample(2:3, 1),
     noise_sd = runif(1, 0.002, 0.01),
-    # Even outbreaks grow with their strata; concentrated ones stay small,
-    # so active strata also have weeks without cases.
+    # Even outbreaks grow with their strata; concentrated ones with their
+    # active places, each small, so active places also have weeks without
+    # cases.
     target_size = if (design$spread == "even") {
       log_uniform(30, 1e5) * max(1, design$n_places * design$n_ages / 26)
     } else {
-      log_uniform(30, 3000)
+      log_uniform(30, 3000) * active
     },
     delay_median = log_uniform(1, 10),
     delay_sdlog = runif(1, 0.5, 2.5),
