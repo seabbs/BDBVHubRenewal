@@ -8,9 +8,9 @@ as the release backtest pairs them, so the scored and submitted
 forecasts are the same.
 The copula is estimated from the model's forecasts at earlier origins,
 against the truth the releases up to the forecast give.
-Those forecasts come from where the backtest takes them: the fit store
-(`stored_forecasts`) for a fitted model, and forecasting again at the
-earlier releases for one that is not.
+Those forecasts come from where the backtest takes them: the fit
+store's fits of the model's own settings (`stored_forecasts`), else the
+model forecast again at the earlier releases.
 The ledger's archive of each round's candidates (`archived_forecasts`)
 gives an origin neither has.
 A model whose earlier origins give no forecasts from any of these
@@ -108,7 +108,9 @@ def archived_forecasts(archive: Path | str | None, model: str) -> pd.DataFrame:
     return out[_COLUMNS].assign(source="archive")
 
 
-def stored_forecasts(store: Path | str | None, model: str) -> pd.DataFrame:
+def stored_forecasts(
+    store: Path | str | None, model: str, settings: str | None = None
+) -> pd.DataFrame:
     """Return a model's stored forecasts: each origin's latest good fit.
 
     Parameters
@@ -117,6 +119,9 @@ def stored_forecasts(store: Path | str | None, model: str) -> pd.DataFrame:
         The fit store root.
     model : str
         The model.
+    settings : str, optional
+        Keep only fits of these settings (the fit's `meta["settings"]`,
+        such as a fine-tuned model's checkpoint).
 
     Returns
     -------
@@ -130,6 +135,8 @@ def stored_forecasts(store: Path | str | None, model: str) -> pd.DataFrame:
         fit = fit_store.read_fit(path)
         meta = fit.meta
         if meta.get("status") != "ok" or fit.forecasts.empty:
+            continue
+        if settings is not None and meta.get("settings") != settings:
             continue
         origin, at = str(meta["origin"]), str(meta.get("fitted_at", ""))
         if origin not in latest or at > latest[origin][0]:
@@ -182,9 +189,9 @@ def past_forecasts(
 ) -> tuple[pd.DataFrame, set[str]]:
     """Return a model's forecasts at origins before `origin`.
 
-    Each origin takes the forecast the release backtest scores: the
-    store's for a fitted model, or one made again at the task's release
-    for a model that is not. The archive gives an origin neither has.
+    Each origin takes the store's fit of the model's own settings, as the
+    release backtest scores, else a forecast made again with the model at
+    the task's release. The archive gives an origin neither has.
 
     Parameters
     ----------
@@ -204,6 +211,7 @@ def past_forecasts(
         and the origins a model forecast again cannot forecast from.
     """
     spec = {s.name: s for s in list_models()}.get(model)
+    settings = None if spec is None else fit_store._settings(get_model(model))
     frames = []
     have: set[str] = set()
 
@@ -214,9 +222,9 @@ def past_forecasts(
         have.update(table["origin"])
         frames.append(table)
 
-    add(stored_forecasts(store, model))
+    add(stored_forecasts(store, model, settings))
     unavailable: set[str] = set()
-    if spec is not None and not spec.fitted:
+    if spec is not None:
         tasks = [t for t in past_tasks if t.vintage < origin]
         recomputed, unavailable = _recomputed(model, tasks, have)
         add(recomputed)
