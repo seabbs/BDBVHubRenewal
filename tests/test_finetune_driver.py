@@ -451,3 +451,31 @@ def test_status_after_a_restart_keeps_step_and_last_checkpoint(tmp_path):
     out = run(tmp_path, "remote_state=up; status; cat output/finetune/STATUS")
     assert "train_step=5577" in out
     assert "last_checkpoint=n2000 bbb" in out
+
+
+def test_simulation_pauses_far_ahead_of_the_trainer(tmp_path):
+    (tmp_path / "sims").mkdir()
+    rows = "outbreak\n" + "".join(f"x-{i}\n" for i in range(5))
+    for s in range(5001, 5009):
+        if s != 5003:
+            (tmp_path / "sims" / f"settings-{s}.csv").write_text(rows)
+    (tmp_path / "ckpt" / "state").mkdir(parents=True)
+    state = tmp_path / "ckpt" / "state" / "state.json"
+    status = tmp_path / "ckpt" / "stream-status.json"
+    status.write_text('{"stage": "training"}')
+    env = ENV + "LEAD_MAX=20\nLEAD_RESUME=10\n"
+    script = (
+        "throttle; echo $throttled; candidate_seeds | tr '\\n' ' '; echo; "
+        "echo '{\"done\": 15}' > ckpt/state/state.json; "
+        "throttle; echo $throttled; "
+        "echo '{\"done\": 26}' > ckpt/state/state.json; "
+        "throttle; echo $throttled"
+    )
+    state.write_text('{"done": 0}')
+    lines = run(tmp_path, "remote_state=up; " + script, env).splitlines()
+    # 35 outbreaks done ahead of 0 trained: paused, and the laptop runs
+    # only seeds the trainer waits for (none while it trains).
+    assert lines[0] == "1"
+    assert lines[1].split() == []
+    # 20 ahead is between the bounds, so the pause holds; 9 ahead ends it.
+    assert lines[2:] == ["1", "0"]
