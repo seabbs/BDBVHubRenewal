@@ -380,6 +380,23 @@ def test_nowcast_records_the_checkpoint_it_loaded(
         ]
 
     monkeypatch.setattr(foundation, "chronos_sampler", zeros)
+    # Pairing is tested apart (tests/submission/test_submission_pairing.py):
+    # here the fine-tuned model's draws go as drawn.
+    from bdbvhubrenewal.submission import pairing
+
+    record = {
+        "model": "fm_chronos_weekly_ragged_ft",
+        "origin": "",
+        "n_scores": 0,
+        "rho_time": 0.9,
+        "rho_provinces": 0.7,
+        "rho_national": 0.7,
+        "sources": {},
+        "source": "none",
+    }
+    monkeypatch.setattr(
+        pairing, "pair_submission", lambda _m, samples, *_a: (samples, record)
+    )
     out = tmp_path / "ft"
     args = ["--model", "fm_chronos_weekly_ragged_ft", "--out", str(out)]
     assert main(["nowcast", *args]) == 0
