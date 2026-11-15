@@ -338,3 +338,79 @@ def test_strata_with_no_cases_give_no_empty_blocks():
         rng = np.random.default_rng(seed)
         for block in outbreak_blocks(counts, ["P01", "P02", "P03"], rng, 3):
             assert block["context"].shape[0] > 0
+
+
+def _sim_dir(tmp_path):
+    import pandas as pd
+
+    rows, settings = [], []
+    for seed in (6001, 6002):
+        for sim in (1, 2):
+            simulation = f"{seed}-{sim:04d}"
+            settings.append((simulation, 2, 1, 28))
+            for draw in (1, 2):
+                for place, scale in (("P01", 1), ("P02", draw + sim)):
+                    for onset in pd.date_range("2026-01-03", periods=120):
+                        for d in (0, 2, 6):
+                            report = onset + pd.Timedelta(days=d)
+                            rows.append(
+                                (
+                                    f"{simulation}-{draw}",
+                                    place,
+                                    onset.date().isoformat(),
+                                    report.date().isoformat(),
+                                    scale,
+                                )
+                            )
+    counts = pd.DataFrame(
+        rows,
+        columns=[
+            "outbreak",
+            "location",
+            "reference_date",
+            "report_date",
+            "count",
+        ],
+    )
+    table = pd.DataFrame(
+        settings, columns=["outbreak", "n_places", "n_ages", "max_delay"]
+    )
+    for seed in (6001, 6002):
+        part = counts["outbreak"].str.startswith(str(seed))
+        counts[part].to_csv(tmp_path / f"counts-{seed}.csv.gz", index=False)
+        keep = table["outbreak"].str.startswith(str(seed))
+        table[keep].to_csv(tmp_path / f"settings-{seed}.csv", index=False)
+    return [o for o, *_ in settings]
+
+
+def test_blocks_cut_in_workers_match_blocks_cut_here(tmp_path):
+    from finetune_stream import cut, cut_in_workers
+
+    ids = _sim_dir(tmp_path)
+    here = cut(tmp_path, ids, 1, 6)
+    pairs, empty = cut_in_workers(None, tmp_path, ids, 1, 6, parts=3)
+    assert [o for o, _ in pairs] == [o for o, _ in here]
+    for (_, a), (_, b) in zip(pairs, here, strict=True):
+        assert np.array_equal(
+            np.asarray(a["context"]), np.asarray(b["context"]), equal_nan=True
+        )
+    assert empty == []
+
+
+def test_blocks_cut_by_a_process_pool_match(tmp_path):
+    import multiprocessing
+    from concurrent.futures import ProcessPoolExecutor
+
+    import finetune_chronos
+    from finetune_stream import cut, cut_in_workers, init_worker
+
+    ids = _sim_dir(tmp_path)
+    here = cut(tmp_path, ids, 1, 6)
+    with ProcessPoolExecutor(
+        2,
+        mp_context=multiprocessing.get_context("spawn"),
+        initializer=init_worker,
+        initargs=(finetune_chronos.MAX_SERIES,),
+    ) as pool:
+        pairs, _ = cut_in_workers(pool, tmp_path, ids, 1, 6, parts=2)
+    assert [o for o, _ in pairs] == [o for o, _ in here]

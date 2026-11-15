@@ -340,3 +340,13 @@ def test_restarting_the_remote_scheduler_spares_its_batches(tmp_path):
     )
     assert "pkill -o -f" in out
     assert "finetune_simulate" not in out
+
+
+def test_status_shows_the_last_chunk_time_split(tmp_path):
+    (tmp_path / "ckpt").mkdir()
+    (tmp_path / "ckpt" / "stream-status.json").write_text(
+        '{"stage": "training", "split": '
+        '{"wait_s": 5, "cut_s": 0, "train_s": 3500, "eval_s": 60}}'
+    )
+    out = run(tmp_path, "remote_state=up; status; cat output/finetune/STATUS")
+    assert "last_chunk=wait 5s cut 0s train 3500s eval 60s" in out
