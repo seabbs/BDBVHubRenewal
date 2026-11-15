@@ -97,7 +97,11 @@ factors <- list(
   # How places' Rt relate: one shared path, a trajectory per place, the
   # shared path with correlated place deviations, or the shared path
   # delayed per place, so one place leads another.
-  place_rt = c("shared", "independent", "correlated", "lagged")
+  place_rt = c("shared", "independent", "correlated", "lagged"),
+  # When places start: all at the outset, or some seeded mid-outbreak.
+  # Constant or pulsed importations need an import term in the renewal
+  # (epinowcast#940), so they are not simulated.
+  seeding = c("start", "mid")
 )
 
 # Simulations per balanced block: a multiple of every factor's levels.
@@ -188,6 +192,24 @@ place_growth <- function(n, strata, design, v) {
     pmin(pmax(path[[i]] + (1 - v$coupling) * weekly_noise(n, 0.01), -0.1), 0.1)
   }, numeric(n))
   matrix(growth, nrow = n)
+}
+
+# Places seeded mid-outbreak, for `design$seeding` "mid": the renewal has
+# no import term, so a late place starts with a seed a thousandth as large
+# and its growth jumps by log(1000) over `late_days` from a share
+# `late_at` of the way through. Returns the growth and each stratum's
+# seed multiplier.
+seed_late <- function(growth, strata, design, v) {
+  seed <- rep(1, nrow(strata))
+  if (design$seeding != "mid" || length(v$late_places) == 0) {
+    return(list(growth = growth, seed = seed))
+  }
+  late <- strata$place %in% sprintf("P%02d", v$late_places)
+  from <- max(1L, round(v$late_at * nrow(growth)))
+  days <- from:min(nrow(growth), from + v$late_days - 1L)
+  growth[days, late] <- growth[days, late] + log(1000) / length(days)
+  seed[late] <- 1e-3
+  list(growth = growth, seed = seed)
 }
 
 # Weekly AR(1) noise (autocorrelation 0.8) on `n` days.
@@ -311,6 +333,17 @@ draw_values <- function(design) {
     place_rho = runif(1, 0.3, 0.9),
     place_sd = runif(1, 0.01, 0.03),
     place_lags = c(0L, sample(1:28, design$n_places - 1L, replace = TRUE)),
+    # Places seeded mid-outbreak: one to three after the first.
+    late_places = if (design$n_places > 1) {
+      others <- 2:design$n_places
+      others[sample.int(length(others), min(3L, length(others)))][
+        seq_len(sample(1:min(3L, length(others)), 1))
+      ]
+    } else {
+      integer(0)
+    },
+    late_at = runif(1, 0.2, 0.6),
+    late_days = sample(7:14, 1),
     stratum_sd = if (design$spread == "concentrated") {
       runif(1, 2.5, 4)
     } else {
@@ -426,6 +459,8 @@ simulate_outbreak <- function(design, v) {
   )
   n_r <- expectation$data$expr_t
   growth <- place_growth(n_r, strata, design, v)
+  late <- seed_late(growth, strata, design, v)
+  growth <- late$growth
   log_r <- if (design$process == "growth") {
     growth
   } else {
@@ -436,7 +471,7 @@ simulate_outbreak <- function(design, v) {
   if (all(place_weight == 0)) place_weight[1] <- 1
   age_weight <- exp(rnorm(design$n_ages, 0, v$stratum_sd / 2))
   weight <- place_weight[match(strata$place, place_ids)] *
-    age_weight[match(strata$age, age_ids)]
+    age_weight[match(strata$age, age_ids)] * late$seed
   # The expected outbreak is linear in the seed, so the seed is scaled to
   # give the target size.
   share <- weight / sum(weight)
