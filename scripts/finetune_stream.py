@@ -50,6 +50,7 @@ from bdbvhubrenewal.forecasters.foundation import (
 
 sys.path.insert(0, str(Path(__file__).parent))
 import finetune_chronos as ft
+import finetune_verify
 
 CHUNK = 500
 """Outbreaks per chunk."""
@@ -1033,7 +1034,12 @@ def main() -> None:
                 f"{memory()}"
             )
             report(last_checkpoint=f"n{done} {key}")
-            if args.publish:
+            # A checkpoint whose hash does not recompute from its commit
+            # is kept but not published.
+            mismatch = finetune_verify.problems(where)
+            if mismatch:
+                log(f"n{done} not published: {'; '.join(mismatch)}")
+            elif args.publish:
                 publish(where, key)
                 report(last_release=f"chronos-ft-{key}")
             # From `stop_from` on, go on only while the last doubling cut

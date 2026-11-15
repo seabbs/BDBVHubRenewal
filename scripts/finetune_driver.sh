@@ -449,6 +449,33 @@ EOF
   fi
 }
 
+verify_checkpoint() {
+  # Whether checkpoint $1's hash recomputes from its code_commit.
+  .venv/bin/python scripts/finetune_verify.py "$1" >> "$LOG" 2>&1
+}
+
+check_checkpoints() {
+  # Check each new checkpoint against its recorded commit once: a match
+  # is marked `verified`, a mismatch is an alert in STATUS and the
+  # mailbox.
+  local dir n
+  for dir in "$OUT"/n*; do
+    [ -e "$dir/settings.json" ] || continue
+    [ -e "$dir/verified" ] || [ -e "$dir/mismatch" ] && continue
+    n=$(basename "$dir")
+    if verify_checkpoint "$dir"; then
+      touch "$dir/verified"
+      log "checkpoint $n matches its code_commit"
+    else
+      touch "$dir/mismatch"
+      last_error="ALERT: checkpoint $n does not match its code_commit"
+      log "$last_error"
+      [ -n "${MAILBOX:-}" ] && echo "$(date '+%Y-%m-%d %H:%M') fm-finetune3 ${GRID:-} checkpoint: $last_error; see $LOG" >> "$MAILBOX"
+    fi
+  done
+  return 0
+}
+
 candidate_seeds() {
   # The laptop's seeds, in order: those the trainer waits for, its own,
   # and, while the remote does not answer, any unstarted seed. An
@@ -664,6 +691,7 @@ while true; do
   sync_remote
   local_slots
   check_batches
+  check_checkpoints
   if (( retry_at )) && (( $(date +%s) >= retry_at )); then
     retry_at=0
     start_trainer

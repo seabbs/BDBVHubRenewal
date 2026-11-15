@@ -489,7 +489,7 @@ def test_a_checkpoint_that_fails_its_check_is_an_alert(tmp_path):
         tmp_path,
         'verify_checkpoint() { [[ "$1" == *n1000 ]]; }; '
         "check_checkpoints; check_checkpoints; ls ckpt/n1000 ckpt/n2000; "
-        "cat inbox.md; cat output/finetune/STATUS",
+        "cat inbox.md; remote_state=up; status; cat output/finetune/STATUS",
         ENV + "MAILBOX=inbox.md\n",
     )
     assert "verified" in out.split("ckpt/n2000")[0]
