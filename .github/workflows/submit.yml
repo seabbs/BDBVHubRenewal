@@ -658,10 +658,10 @@ jobs:
           HUB_PATH: output/hub-clone
           CHECK_WINDOW: ${{ needs.detect.outputs.dry_run == 'false' }}
           TRACK_MODEL: ${{ needs.prepare.outputs.chronos_model }}
-          # One-round pin to r3 n2000 for the 2026-11-21 round (submitted
+          # One-round pin to r3 n1000 for the 2026-11-21 round (submitted
           # 2026-11-16): n4000 fails the gate and scores worse on BDBV.
           # Remove after that round.
-          BDBV_CHRONOS_FT: ${{ needs.detect.outputs.reference_date == '2026-11-21' && '3d3bc724bbfa' || '' }}
+          BDBV_CHRONOS_FT: ${{ needs.detect.outputs.reference_date == '2026-11-21' && '6b7aaa8d4f55' || '' }}
         run: ci/steps/track.sh
       - name: Show the PR body
         if: always()
