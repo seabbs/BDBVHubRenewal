@@ -317,3 +317,24 @@ def test_a_finished_batch_is_read_once(tmp_path, monkeypatch):
     again = finetune_stream.ready_outbreaks(tmp_path, range(5003, 5004))
     assert again == first == ["5003-0001"]
     assert reads == []
+
+
+def test_strata_with_no_cases_give_no_empty_blocks():
+    import pandas as pd
+    from finetune_chronos import outbreak_blocks
+
+    rows = [
+        ("P01", onset, onset + pd.Timedelta(days=d), 5)
+        for onset in pd.date_range("2026-01-03", periods=140)
+        for d in (0, 2, 6)
+    ]
+    counts = pd.DataFrame(
+        rows, columns=["location", "reference_date", "report_date", "count"]
+    )
+    counts["reference_date"] = counts["reference_date"].dt.date.astype(str)
+    counts["report_date"] = counts["report_date"].dt.date.astype(str)
+    # P02 and P03 had no cases, so their leaves are never released.
+    for seed in range(20):
+        rng = np.random.default_rng(seed)
+        for block in outbreak_blocks(counts, ["P01", "P02", "P03"], rng, 3):
+            assert block["context"].shape[0] > 0
