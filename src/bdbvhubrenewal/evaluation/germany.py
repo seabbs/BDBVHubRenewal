@@ -32,7 +32,7 @@ import datetime as dt
 import json
 import tomllib
 from collections.abc import Sequence
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 
@@ -54,11 +54,7 @@ from bdbvhubrenewal.data.germany import (
 from bdbvhubrenewal.evaluation.backtest import run_forecasts
 from bdbvhubrenewal.evaluation.nowcast import rolling_truth
 from bdbvhubrenewal.evaluation.scoring import relative_skill, score_quantiles
-from bdbvhubrenewal.forecasters import (
-    ForecastModel,
-    FoundationModel,
-    get_model,
-)
+from bdbvhubrenewal.forecasters import get_model
 from bdbvhubrenewal.reporting.hubtables import hub_quantiles
 
 __all__ = [
@@ -165,9 +161,6 @@ class GermanyConfig:
         The models run.
     n_samples, seed : int
         Samples per forecast, and the seed.
-    truth_delay : int, optional
-        $D$ of the truth, in days, given to the models that take it (the
-        Chronos-2 models), so their counts are partial until $D$.
     truth_delay : int
         $D$, the days after a sum ends that its truth is reported by.
     baseline : str
@@ -341,7 +334,6 @@ def germany_forecasts(
     dates: Sequence[str],
     n_samples: int,
     seed: int,
-    truth_delay: int | None = None,
 ) -> pd.DataFrame:
     """Nowcast each date with each model, as quantiles at the hub's levels.
 
@@ -356,9 +348,6 @@ def germany_forecasts(
         Nowcast dates.
     n_samples, seed : int
         Samples per forecast, and the seed.
-    truth_delay : int, optional
-        $D$ of the truth, in days, given to the models that take it (the
-        Chronos-2 models), so their counts are partial until $D$.
 
     Returns
     -------
@@ -368,7 +357,7 @@ def germany_forecasts(
         `quantile` and `value`, the samples' quantiles at
         `QUANTILE_LEVELS` (`hub_quantiles`).
     """
-    built = [_with_truth_delay(get_model(m), truth_delay) for m in models]
+    built = [get_model(m) for m in models]
     keys = ["model", "origin", "location", "target_end_date", "horizon"]
     frames = []
     for date in dates:
@@ -392,13 +381,6 @@ def germany_forecasts(
     return out.drop(columns="output_type").rename(
         columns={"output_type_id": "quantile"}
     )[[*keys, "quantile", "value"]]
-
-
-def _with_truth_delay(model: ForecastModel, delay: int | None) -> ForecastModel:
-    """Give a model with a `truth_delay` field the benchmark's $D$."""
-    if delay is None or not isinstance(model, FoundationModel):
-        return model
-    return replace(model, truth_delay=delay)
 
 
 def with_truth(
