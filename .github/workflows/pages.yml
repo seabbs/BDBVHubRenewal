@@ -463,13 +463,29 @@ jobs:
           )
           export REFERENCE_DATE
           echo "reference_date=$REFERENCE_DATE" >> "$GITHUB_OUTPUT"
+          # A past round's file is dated on its reference date.
+          if [ "$REFERENCE_DATE" != "${{ steps.round.outputs.reference_date }}" ]; then
+            export HUB_FORECAST_DATE=$REFERENCE_DATE
+          fi
           ci/steps/prepare.sh
-          start=$SECONDS
-          status=0
           TRACK_MODEL=$(uv run python -c 'import tomllib
           m = tomllib.load(open("config/hub.toml", "rb"))["models"]
           print(next(k for k, v in m.items() if v["model_abbr"] == "chronos2_ft"))')
-          TRACK_MODEL=$TRACK_MODEL ci/steps/track.sh || status=$?
+          # The model's stored fits at past origins pair its draws. Until
+          # Fit store holds them (once this model is on main), fit the
+          # missing ones into this job's copy of the store.
+          uv run bdbvhubrenewal fit-store plan --store output/fit-store \
+            --models "$TRACK_MODEL" --out "$RUNNER_TEMP/plan.json"
+          jq -r '.include[] | "\(.model) \(.origin)"' "$RUNNER_TEMP/plan.json" \
+            | while read -r m o; do
+                uv run bdbvhubrenewal fit-store fit --model "$m" --origin "$o" \
+                  --store output/fit-store || true
+              done
+          start=$SECONDS
+          status=0
+          set -o pipefail
+          TRACK_MODEL=$TRACK_MODEL ci/steps/track.sh 2>&1 \
+            | tee "$RUNNER_TEMP/track.log" || status=$?
           echo "track.sh exited $status"
           echo "seconds=$((SECONDS - start))" >> "$GITHUB_OUTPUT"
           echo "model=$TRACK_MODEL" >> "$GITHUB_OUTPUT"
@@ -492,7 +508,8 @@ jobs:
             --table "Release backtest, rolling truth, checkpoint r1 2c2b22a03107 (evidence/fm-chronos)=ci/review-tables/rolling.csv" \
             --table "Groupings (fm-agg)=ci/review-tables/fm-agg.md" \
             --table "Rolling copula (fm-copula)=ci/review-tables/fm-copula.md" \
-            --seconds "$SECONDS_TAKEN" --out docs/submission/review
+            --seconds "$SECONDS_TAKEN" --log "$RUNNER_TEMP/track.log" \
+            --out docs/submission/review
       - name: Build the site into _site
         run: uv run mkdocs build --strict
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

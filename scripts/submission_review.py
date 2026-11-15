@@ -134,10 +134,26 @@ def main() -> None:
         help="TITLE=PATH of a Markdown or CSV backtest table",
     )
     p.add_argument("--seconds", type=float, default=None)
+    p.add_argument("--log", type=Path, default=None, help="track.sh's log")
     p.add_argument("--out", type=Path, required=True)
     args = p.parse_args()
 
     gate = args.track / "gate"
+    if not (gate / "provenance.json").exists():
+        # The track stopped before its gate: show why.
+        log = args.log.read_text() if args.log and args.log.exists() else ""
+        errors = [
+            line for line in log.splitlines() if "ERROR" in line or "::" in line
+        ]
+        args.out.mkdir(parents=True, exist_ok=True)
+        (args.out / "index.md").write_text(
+            "# Submission review\n\nThe dry run stopped before its gate, so "
+            "nothing would be submitted.\n\n```text\n"
+            + "\n".join(errors[-20:] or log.splitlines()[-40:])
+            + "\n```\n"
+        )
+        print(f"Wrote {args.out / 'index.md'} (no gate).")
+        return
     prov = json.loads((gate / "provenance.json").read_text())
     selected = gate / "selected"
     run = prov.get("run") or {}
