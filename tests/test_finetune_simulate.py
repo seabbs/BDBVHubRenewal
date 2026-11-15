@@ -91,3 +91,23 @@ cat("ok", ok, "\\n")
         tmp_path,
     )
     assert out.split()[-1] == "TRUE"
+
+
+@needs_r
+def test_batches_record_the_stack_they_ran_on(tmp_path):
+    out = run_r(
+        "s <- build_stack(lib)\n"
+        "cat(paste(names(s), unlist(s), sep = '=', collapse = '\\n'))\n",
+        tmp_path,
+    )
+    stack = dict(line.split("=", 1) for line in out.strip().splitlines())
+    assert set(stack) == {
+        "r_version",
+        "blas",
+        "lapack",
+        "enw_fingerprint",
+        "host",
+    }
+    assert stack["r_version"].startswith("R version")
+    assert len(stack["enw_fingerprint"]) == 32
+    assert all(stack.values())
