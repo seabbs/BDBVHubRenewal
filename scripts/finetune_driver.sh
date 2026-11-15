@@ -18,13 +18,11 @@
 #   LEAD_MAX, LEAD_RESUME   optional: no new batches while finished
 #                 training outbreaks lead the trainer by more than
 #                 LEAD_MAX, until the lead is under LEAD_RESUME
-#   LEARNING_RATE, LR_STEPS, SCALE_FLOOR, REAL_VALIDATION   optional
-#                 trainer settings (finetune_stream.py --learning-rate,
-#                 --lr-steps, --scale-floor, --real-validation)
-#   DEPLOYED_LAGS=1, SOURCES   optional: train at the deployed D only,
-#                 and on these sources only ("weekly" or "daily")
-#   VALID_STEP_LOSS=1   optional: average the loss over valid horizon
-#                 steps and target rows only
+#   LEARNING_RATE, LR_STEPS, REAL_VALIDATION   optional trainer settings
+#                 (finetune_stream.py --learning-rate, --lr-steps,
+#                 --real-validation)
+#   SOURCES       optional: the sources to train on ("weekly", "daily",
+#                 "3day")
 #   MAILBOX       optional file the driver appends an alert line to
 #                 from the trainer's second failure on
 #   EXTRA_SEEDS   optional seeds for other work, simulated after the
@@ -681,9 +679,6 @@ build_trainer_args() {
   [ -n "${LEARNING_RATE:-}" ] \
     && trainer_args+=(--learning-rate "$LEARNING_RATE")
   [ -n "${LR_STEPS:-}" ] && trainer_args+=(--lr-steps "$LR_STEPS")
-  [ -n "${SCALE_FLOOR:-}" ] && trainer_args+=(--scale-floor "$SCALE_FLOOR")
-  [ "${DEPLOYED_LAGS:-0}" = 1 ] && trainer_args+=(--deployed-lags)
-  [ "${VALID_STEP_LOSS:-0}" = 1 ] && trainer_args+=(--valid-step-loss)
   [ -n "${SOURCES:-}" ] && trainer_args+=(--sources $SOURCES)
   [ -n "${REAL_VALIDATION:-}" ] \
     && trainer_args+=(--real-validation "$REAL_VALIDATION")

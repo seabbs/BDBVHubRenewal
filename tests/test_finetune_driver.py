@@ -525,13 +525,10 @@ def test_laptop_runs_next_chunk_seeds_that_aborted_before_they_are_due(
 
 def test_r4_training_settings_reach_the_trainer(tmp_path):
     env = ENV + (
-        "LEARNING_RATE=1e-5\nLR_STEPS=2000\nSCALE_FLOOR=1\n"
-        "REAL_VALIDATION=real.pkl\n"
+        "LEARNING_RATE=1e-5\nLR_STEPS=2000\nREAL_VALIDATION=real.pkl\n"
     )
     out = run(tmp_path, 'build_trainer_args; echo "${trainer_args[@]}"', env)
     assert "--learning-rate 1e-5 --lr-steps 2000" in out
-    assert "--scale-floor 1" in out
     assert "--real-validation real.pkl" in out
     out = run(tmp_path, 'build_trainer_args; echo "${trainer_args[@]}"')
     assert "--lr-steps" not in out
-    assert "--scale-floor" not in out

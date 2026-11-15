@@ -482,28 +482,6 @@ def test_learning_rate_decays_linearly_to_zero_over_its_steps():
     assert learning_rate(1500, 1e-5, 1000) == 0.0
 
 
-def test_training_scale_floor_applies_only_when_set():
-    import pytest
-
-    pytest.importorskip("chronos")
-    import torch
-    from chronos.chronos_bolt import InstanceNorm
-    from finetune_stream import set_scale_floor
-
-    def model():
-        m = type("M", (), {})()
-        m.instance_norm = InstanceNorm(use_arcsinh=True)
-        return m
-
-    flat = torch.zeros(1, 8)
-    kept = model()
-    set_scale_floor(kept, 0.0)
-    assert float(kept.instance_norm(flat)[1][1]) < 1e-4
-    floored = model()
-    set_scale_floor(floored, 1.0)
-    assert float(floored.instance_norm(flat)[1][1]) == 1.0
-
-
 def _line_list():
     import pandas as pd
 
@@ -547,18 +525,6 @@ def _d(block) -> int:
     return block["n_covariates"] // block["n_targets"]
 
 
-def test_deployed_lags_cut_every_block_at_the_deployed_d(tmp_path, monkeypatch):
-    import finetune_chronos
-    from finetune_stream import cut
-
-    ids = _sim_dir(tmp_path)
-    monkeypatch.setattr(
-        finetune_chronos, "MAX_LAGS", finetune_chronos.DEPLOYED_LAGS
-    )
-    ds = {_d(b) for _, b in cut(tmp_path, ids, 1, 32)}
-    assert ds == {4, 28}
-
-
 def test_one_source_cuts_only_that_source(tmp_path, monkeypatch):
     import finetune_chronos
     from finetune_stream import cut
@@ -580,9 +546,10 @@ def test_workers_take_the_trainer_block_settings():
         finetune_chronos.SOURCES,
     )
     try:
-        init_worker(100, finetune_chronos.DEPLOYED_LAGS, ("daily",))
+        lags = {"daily": (28,)}
+        init_worker(100, lags, ("daily",))
         assert finetune_chronos.MAX_SERIES == 100
-        assert finetune_chronos.MAX_LAGS == finetune_chronos.DEPLOYED_LAGS
+        assert lags == finetune_chronos.MAX_LAGS
         assert finetune_chronos.SOURCES == ("daily",)
     finally:
         (
@@ -590,104 +557,6 @@ def test_workers_take_the_trainer_block_settings():
             finetune_chronos.MAX_LAGS,
             finetune_chronos.SOURCES,
         ) = saved
-
-
-def test_valid_step_loss_averages_over_valid_steps_and_targets_only():
-    import pytest
-
-    torch = pytest.importorskip("torch")
-    from chronos.chronos2.model import Chronos2Model
-    from finetune_stream import valid_step_loss
-
-    class Fake:
-        quantiles = torch.tensor([0.1, 0.5, 0.9])
-        chronos_config = type("C", (), {"output_patch_size": 4})()
-        device = "cpu"
-
-        def instance_norm(self, x, loc_scale):
-            return x, loc_scale
-
-        _compute_loss = Chronos2Model._compute_loss
-
-    model = Fake()
-    preds = torch.zeros(2, 3, 8)
-    target = torch.ones(2, 8)
-    target[0, 2:] = float("nan")  # the first row has 2 valid steps
-    target[1, :] = float("nan")  # the second is a lag row: no target
-    covariates = torch.zeros(2, 2, 4)
-    loc_scale = (torch.zeros(2, 1), torch.ones(2, 1))
-    args = (preds, target, None, covariates, loc_scale, 2)
-    # Chronos-2 divides by all 8 steps and both rows.
-    full = float(model._compute_loss(*args))
-    valid_step_loss(model)
-    valid = float(model._compute_loss(*args))
-    # Each step's loss is 2 * |1 - 0| * (1 - q), summed over q: 3.
-    assert abs(valid - 3.0) < 1e-6
-    assert abs(full - 3.0 * 2 / 8 / 2) < 1e-6
-
-
-def test_lora_targets_freeze_group_attention_when_asked():
-    import re
-
-    from finetune_stream import lora_targets
-
-    names = [
-        "encoder.block.0.layer.0.self_attention.q",
-        "encoder.block.0.layer.1.self_attention.q",
-        "encoder.block.11.layer.0.self_attention.o",
-        "encoder.block.11.layer.1.self_attention.v",
-        "output_patch_embedding.output_layer",
-    ]
-
-    def hits(targets):
-        if isinstance(targets, list):
-            return [n for n in names if any(n.endswith(t) for t in targets)]
-        return [n for n in names if re.fullmatch(targets, n)]
-
-    assert hits(lora_targets("all")) == names
-    assert hits(lora_targets("time")) == [
-        "encoder.block.0.layer.0.self_attention.q",
-        "encoder.block.11.layer.0.self_attention.o",
-        "output_patch_embedding.output_layer",
-    ]
-
-
-def test_step_length_covariate_adds_one_known_row_of_days_per_step(
-    tmp_path, monkeypatch
-):
-    import finetune_chronos
-    from finetune_stream import cut
-
-    ids = _sim_dir(tmp_path)
-    plain = [b for _, b in cut(tmp_path, ids, 1, 32)]
-    monkeypatch.setattr(finetune_chronos, "STEP_COVARIATE", True)
-    marked = [b for _, b in cut(tmp_path, ids, 1, 32)]
-    assert len(plain) == len(marked)
-    for a, b in zip(plain, marked, strict=True):
-        assert b["n_covariates"] == a["n_covariates"] + 1
-        assert b["n_future_covariates"] == a["n_future_covariates"] + 1
-        row = b["context"][-1]
-        days = set(row[~np.isnan(row)].tolist())
-        # Weekly blocks have D of 7 or less, daily blocks more.
-        assert days == ({7.0} if _d(a) <= 7 else {1.0})
-        assert np.array_equal(a["context"], b["context"][:-1], equal_nan=True)
-
-
-def test_balanced_batches_hold_each_aggregation_in_turn():
-    rng = np.random.default_rng(0)
-    sizes = np.array([5] * 40 + [60] * 40)
-    groups = np.array(["weekly"] * 40 + ["daily"] * 40)
-    plan = plan_batches(sizes, 256, rng, 2000, groups=groups)
-    used = sorted(i for batch in plan for i in batch)
-    assert used == list(range(80))
-    for batch in plan:
-        assert sizes[batch].sum() <= 2000
-        kinds = groups[batch]
-        if len(batch) > 1:
-            # Blocks alternate, so each batch holds both aggregations.
-            assert (
-                abs((kinds == "weekly").sum() - (kinds == "daily").sum()) <= 1
-            )
 
 
 def test_blocks_reach_deployed_sizes_on_many_places():
@@ -722,12 +591,9 @@ def test_three_day_source_cuts_three_day_blocks(tmp_path, monkeypatch):
 
     ids = _sim_dir(tmp_path)
     monkeypatch.setattr(finetune_chronos, "SOURCES", ("3day",))
-    monkeypatch.setattr(finetune_chronos, "STEP_COVARIATE", True)
     blocks = [b for _, b in cut(tmp_path, ids, 1, 32)]
     assert blocks
     for b in blocks:
         assert b["source"] == "3day"
-        # D runs 5-16 steps of 3 days, plus the step row.
-        assert 5 <= (b["n_covariates"] - 1) // b["n_targets"] <= 16
-        row = b["context"][-1]
-        assert set(row[~np.isnan(row)].tolist()) == {3.0}
+        # D runs 5-16 steps of 3 days.
+        assert 5 <= _d(b) <= 16

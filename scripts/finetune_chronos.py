@@ -44,15 +44,10 @@ MAX_LAGS = {
 }
 """Release lags $D$ the blocks are drawn from."""
 
-DEPLOYED_LAGS = {source: (lag,) for source, lag in foundation.MAX_LAG.items()}
-"""The release lags the `_ft` models forecast with, to train on only."""
 
 DAYS_PER_STEP = {"weekly": 7, "daily": 1, "3day": 3}
 """Days in a step of each source; 3-day blocks train only."""
 
-STEP_COVARIATE = False
-"""Whether blocks carry a known-future row of days per step (7 weekly, 1
-daily), so one model can tell the aggregations apart."""
 
 SOURCES = ("weekly", "daily")
 """Sources blocks are cut from; one of them trains an adapter for that
@@ -135,18 +130,6 @@ complete, unless an outbreak's settings give `max_delay` in days."""
 def _sha256(path: Path) -> str:
     """Return a file's SHA-256."""
     return hashlib.sha256(path.read_bytes()).hexdigest()
-
-
-def with_step_length(block: dict, days: int) -> dict:
-    """Return a block with a last known-future row of `days` per step."""
-    x = block["context"]
-    row = np.full((1, x.shape[1]), float(days), dtype=x.dtype)
-    return {
-        **block,
-        "context": np.concatenate([x, row]),
-        "n_covariates": block["n_covariates"] + 1,
-        "n_future_covariates": block["n_future_covariates"] + 1,
-    }
 
 
 def _pad(block: dict, context: int, horizon: int) -> dict:
@@ -339,8 +322,6 @@ def outbreak_blocks(
                 continue
             if block["start"] < 2:
                 continue
-            if STEP_COVARIATE:
-                block = with_step_length(block, width)
             padded = _pad(block, CONTEXT, HORIZON)
             padded["levels"] = target_levels(places)
             padded["mix"] = mix
@@ -359,7 +340,6 @@ def plan_batches(
     batch_size: int,
     rng: np.random.Generator,
     most: int | None = None,
-    groups: np.ndarray | None = None,
 ) -> list[list[int]]:
     """Return batches of block indices that use every block once.
 
@@ -368,13 +348,7 @@ def plan_batches(
     blocks pack tightly and a large block is a batch on its own. No batch
     of several blocks holds more than `most` series, the most the memory
     budget allows (`max_series`). The batches are then shuffled.
-
-    With `groups`, such as each block's aggregation, blocks are taken from
-    the groups in turn, whatever their size, so every batch holds each
-    group alike.
     """
-    if groups is not None:
-        return _balanced_batches(sizes, groups, batch_size, rng, most)
     filling: dict[int, list[int]] = {}
     held: dict[int, int] = {}
     batches = []
@@ -393,41 +367,6 @@ def plan_batches(
             batches.append(filling.pop(c))
             held[c] = 0
     batches.extend(b for b in filling.values() if b)
-    return [batches[j] for j in rng.permutation(len(batches))]
-
-
-def _balanced_batches(
-    sizes: np.ndarray,
-    groups: np.ndarray,
-    batch_size: int,
-    rng: np.random.Generator,
-    most: int | None,
-) -> list[list[int]]:
-    """Return batches taking blocks from each group in turn."""
-    queues = [
-        list(rng.permutation(np.flatnonzero(groups == g)))
-        for g in sorted(set(groups.tolist()))
-    ]
-    order = []
-    while any(queues):
-        for q in queues:
-            if q:
-                order.append(int(q.pop()))
-    batches: list[list[int]] = []
-    batch: list[int] = []
-    held = 0
-    for i in order:
-        size = int(sizes[i])
-        if batch and most is not None and held + size > most:
-            batches.append(batch)
-            batch, held = [], 0
-        batch.append(i)
-        held += size
-        if held >= batch_size:
-            batches.append(batch)
-            batch, held = [], 0
-    if batch:
-        batches.append(batch)
     return [batches[j] for j in rng.permutation(len(batches))]
 
 
@@ -493,8 +432,6 @@ def real_blocks(
             weekly_cutoffs(first, cut, weekday),
             max_lag=lag,
         )
-        if STEP_COVARIATE:
-            block = with_step_length(block, 7)
         padded = _pad(block, CONTEXT, HORIZON)
         padded["levels"] = target_levels(places)
         padded["mix"] = "real"

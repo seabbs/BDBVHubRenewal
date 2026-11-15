@@ -100,10 +100,11 @@ def test_registered_as_fitted_models() -> None:
 def test_ragged_lags_stop_below_the_truth_delay(
     source: str, steps: int, task: ForecastTask
 ) -> None:
-    # The lag series stop at 28 days or 4 weeks, short of the truth delay,
-    # because the zones' release histories are short: with longer lags no
-    # early lag of a zone falls in the context, and Chronos-2 reads partial
-    # counts as levels.
+    # The lag series stop at 28 days or 4 weeks, short of the 35-day truth
+    # delay. Running them to the truth delay (e43eda80c) was reverted: zone
+    # releases began on 2026-10-09, so at 5 weeks no lag 0 to 2 value of a
+    # zone fell in the context, Chronos-2 read partial counts as levels,
+    # and the forecasts and scores were worse.
     store: list = []
     model = dataclasses.replace(
         get_model(f"fm_chronos_{source}_ragged"), sample=_recording(store)
@@ -797,22 +798,3 @@ def test_too_many_requests_is_retried_a_bounded_number_of_times(
     with pytest.raises(ConnectionError, match="GH_TOKEN"):
         foundation.finetuned_adapter(_checkpoint("abc"))
     assert len(calls) == len(foundation.RETRY_SECONDS) + 1
-
-
-def test_scale_floor_keeps_a_flat_context_from_a_tiny_scale():
-    pytest.importorskip("chronos")
-    import torch
-    from chronos.chronos_bolt import InstanceNorm
-
-    model = type("M", (), {})()
-    model.instance_norm = InstanceNorm(use_arcsinh=True)
-    flat = torch.zeros(2, 8)
-    # Chronos-2 scales a flat context by 1e-5, so one count is 1e5 units.
-    assert float(model.instance_norm(flat)[1][1].max()) < 1e-4
-    foundation.floor_scale(model, 1.0)
-    _, (_, scale) = model.instance_norm(flat)
-    assert torch.equal(scale, torch.ones(2, 1))
-    # Scales above the floor are unchanged.
-    wide = torch.arange(16.0).reshape(2, 8) * 10
-    _, (_, wide_scale) = model.instance_norm(wide)
-    assert bool((wide_scale > 1).all())

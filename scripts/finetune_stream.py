@@ -47,7 +47,6 @@ import pandas as pd
 from bdbvhubrenewal.forecasters.foundation import (
     CHRONOS_MODEL,
     CHRONOS_REVISION,
-    floor_scale,
 )
 
 sys.path.insert(0, str(Path(__file__).parent))
@@ -89,100 +88,6 @@ def read_ids(path: Path) -> pd.Series:
         return pd.read_csv(path, usecols=["outbreak"])["outbreak"]
     except pd.errors.EmptyDataError:
         return pd.Series([], dtype=str)
-
-
-def set_scale_floor(model, floor: float) -> None:
-    """Scale each series by at least `floor` counts when it is positive.
-
-    The `_ft` models must forecast with the same floor
-    (`foundation.SCALE_FLOOR`).
-    """
-    if floor > 0:
-        floor_scale(model, floor)
-
-
-def valid_step_loss(model) -> None:
-    """Make `model` average its loss over valid steps and targets only.
-
-    Chronos-2's loss averages each row over every horizon step, missing
-    ones included, and the batch over every row, lag rows included, so a
-    target's weight falls with its share of valid steps and its number of
-    lag rows. This averages each row over its valid steps, then over the
-    rows with any, so weekly and daily blocks and every D weigh alike.
-    """
-    import types
-
-    import torch
-    from einops import rearrange
-
-    def compute_loss(
-        self,
-        quantile_preds,
-        future_target,
-        future_target_mask,
-        patched_future_covariates_mask,
-        loc_scale,
-        num_output_patches,
-    ):
-        batch_size = future_target.shape[0]
-        patch = self.chronos_config.output_patch_size
-        future_target, _ = self.instance_norm(future_target, loc_scale)
-        future_target = future_target.unsqueeze(1).to(self.device)
-        mask = (
-            future_target_mask.unsqueeze(1).to(self.device)
-            if future_target_mask is not None
-            else ~torch.isnan(future_target)
-        )
-        future_target = torch.where(mask > 0.0, future_target, 0.0)
-        pad = quantile_preds.shape[-1] - future_target.shape[-1]
-        if pad > 0:
-            shape = (*future_target.shape[:-1], pad)
-            future_target = torch.cat(
-                [future_target, torch.zeros(shape).to(future_target)], dim=-1
-            )
-            mask = torch.cat([mask, torch.zeros(shape).to(mask)], dim=-1)
-        quantiles = rearrange(self.quantiles, "q -> 1 q 1")
-        loss = 2 * torch.abs(
-            (future_target - quantile_preds)
-            * ((future_target <= quantile_preds).float() - quantiles)
-        )
-        known = rearrange(
-            patched_future_covariates_mask,
-            "b n p -> b 1 (n p)",
-            b=batch_size,
-            n=num_output_patches,
-            p=patch,
-        )
-        weight = mask.float() * (1 - known)
-        steps = weight.sum(dim=-1)
-        per_row = ((loss * weight).sum(dim=-1) / steps.clamp(min=1)).sum(-1)
-        rows = steps[:, 0] > 0
-        return per_row[rows].mean() if rows.any() else per_row.sum() * 0
-
-    model._compute_loss = types.MethodType(compute_loss, model)
-
-
-def lora_targets(modules: str) -> list[str] | str:
-    """Return the modules LoRA adapts.
-
-    "all" is Chronos-2's own choice: q, k, v and o of time and group
-    attention, and the output layer. "time" leaves group attention
-    frozen, so the adapter cannot learn how series attend to each other.
-    """
-    if modules == "all":
-        return [
-            "self_attention.q",
-            "self_attention.v",
-            "self_attention.k",
-            "self_attention.o",
-            "output_patch_embedding.output_layer",
-        ]
-    if modules == "time":
-        return (
-            r".*layer\.0\.self_attention\.[qkvo]"
-            r"|.*output_patch_embedding\.output_layer"
-        )
-    raise ValueError(f"unknown LoRA modules {modules!r}")
 
 
 def learning_rate(step: int, base: float, steps: int) -> float:
@@ -377,11 +282,9 @@ def init_worker(
     max_series: int,
     lags: dict[str, tuple[int, ...]],
     sources: tuple[str, ...],
-    step_covariate: bool = False,
 ) -> None:
     """Give a cutting worker the trainer's block settings."""
     ft.MAX_SERIES, ft.MAX_LAGS, ft.SOURCES = max_series, lags, sources
-    ft.STEP_COVARIATE = step_covariate
 
 
 def _cut_part(
@@ -759,20 +662,6 @@ def main() -> None:
     # Steps over which the learning rate falls linearly to zero; 0 keeps
     # it constant.
     parser.add_argument("--lr-steps", type=int, default=0)
-    # Least scale, in counts, a series is divided by; 0 keeps Chronos-2's.
-    parser.add_argument("--scale-floor", type=float, default=0.0)
-    # Modules LoRA adapts: "all", or "time" to freeze group attention.
-    parser.add_argument(
-        "--lora-modules", default="all", choices=["all", "time"]
-    )
-    # Take each aggregation in turn when packing batches.
-    parser.add_argument("--balance-aggregations", action="store_true")
-    # Give each block a known row of days per step.
-    parser.add_argument("--step-covariate", action="store_true")
-    # Average the loss over valid horizon steps and target rows only.
-    parser.add_argument("--valid-step-loss", action="store_true")
-    # Cut every block at the release lags the `_ft` models forecast with.
-    parser.add_argument("--deployed-lags", action="store_true")
     # Sources to train on: weekly, daily, and 3-day blocks summed from the
     # daily triangle; one of them trains an adapter for it alone.
     parser.add_argument("--sources", nargs="+", default=list(ft.SOURCES))
@@ -794,10 +683,7 @@ def main() -> None:
     # Processes cutting blocks a chunk ahead; they do not change the blocks.
     parser.add_argument("--cut-workers", type=int, default=3)
     args = parser.parse_args()
-    if args.deployed_lags:
-        ft.MAX_LAGS = {**ft.MAX_LAGS, **ft.DEPLOYED_LAGS}
     ft.SOURCES = tuple(args.sources)
-    ft.STEP_COVARIATE = args.step_covariate
     out, sim_dir = args.out, args.sim_dir
     # The commit this trainer runs, read once: the worktree may move on.
     commit = subprocess.run(
@@ -847,7 +733,7 @@ def main() -> None:
         args.cut_workers,
         mp_context=multiprocessing.get_context("spawn"),
         initializer=init_worker,
-        initargs=(ft.MAX_SERIES, ft.MAX_LAGS, ft.SOURCES, ft.STEP_COVARIATE),
+        initargs=(ft.MAX_SERIES, ft.MAX_LAGS, ft.SOURCES),
     )
     held_pairs, empty = cut_in_workers(
         pool, sim_dir, held, args.seed, k, args.cut_workers
@@ -872,11 +758,14 @@ def main() -> None:
     lora = LoraConfig(
         r=8,
         lora_alpha=16,
-        target_modules=lora_targets(args.lora_modules),
+        target_modules=[
+            "self_attention.q",
+            "self_attention.v",
+            "self_attention.k",
+            "self_attention.o",
+            "output_patch_embedding.output_layer",
+        ],
     )
-    set_scale_floor(pipeline.model, args.scale_floor)
-    if args.valid_step_loss:
-        valid_step_loss(pipeline.model)
     model = get_peft_model(pipeline.model, lora)
     model.train()
     params = [p for p in model.parameters() if p.requires_grad]
@@ -904,25 +793,9 @@ def main() -> None:
             f"{k} of each simulation's draws x {ft.CUTS} cut-off slots x "
             "2 sources, seeded by the simulation"
         ),
-        "lora": {
-            "r": 8,
-            "alpha": 16,
-            **(
-                {"modules": args.lora_modules}
-                if args.lora_modules != "all"
-                else {}
-            ),
-        },
+        "lora": {"r": 8, "alpha": 16},
         "learning_rate": args.learning_rate,
         **({"lr_steps": args.lr_steps} if args.lr_steps else {}),
-        **({"scale_floor": args.scale_floor} if args.scale_floor else {}),
-        **({"loss": "valid steps"} if args.valid_step_loss else {}),
-        **({"step_covariate": True} if args.step_covariate else {}),
-        **(
-            {"batches": "aggregations balanced"}
-            if args.balance_aggregations
-            else {}
-        ),
         **(
             {"sources": list(ft.SOURCES)}
             if ft.SOURCES != ("weekly", "daily")
@@ -1070,14 +943,7 @@ def main() -> None:
         blocks = [b for _, b in pairs]
         sizes = np.array([int(b["context"].shape[0]) for b in blocks])
         rng = np.random.default_rng([args.seed, done])
-        groups = (
-            np.array([b["source"] for b in blocks])
-            if args.balance_aggregations
-            else None
-        )
-        plan = ft.plan_batches(
-            sizes, args.batch_size, rng, ft.MAX_SERIES, groups=groups
-        )
+        plan = ft.plan_batches(sizes, args.batch_size, rng, ft.MAX_SERIES)
         data = Chronos2Dataset(
             inputs=[tensors(b) for b in blocks],
             context_length=ft.CONTEXT,
