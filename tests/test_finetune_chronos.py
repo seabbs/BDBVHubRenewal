@@ -590,3 +590,37 @@ def test_workers_take_the_trainer_block_settings():
             finetune_chronos.MAX_LAGS,
             finetune_chronos.SOURCES,
         ) = saved
+
+
+def test_valid_step_loss_averages_over_valid_steps_and_targets_only():
+    import pytest
+
+    torch = pytest.importorskip("torch")
+    from chronos.chronos2.model import Chronos2Model
+    from finetune_stream import valid_step_loss
+
+    class Fake:
+        quantiles = torch.tensor([0.1, 0.5, 0.9])
+        chronos_config = type("C", (), {"output_patch_size": 4})()
+        device = "cpu"
+
+        def instance_norm(self, x, loc_scale):
+            return x, loc_scale
+
+        _compute_loss = Chronos2Model._compute_loss
+
+    model = Fake()
+    preds = torch.zeros(2, 3, 8)
+    target = torch.ones(2, 8)
+    target[0, 2:] = float("nan")  # the first row has 2 valid steps
+    target[1, :] = float("nan")  # the second is a lag row: no target
+    covariates = torch.zeros(2, 2, 4)
+    loc_scale = (torch.zeros(2, 1), torch.ones(2, 1))
+    args = (preds, target, None, covariates, loc_scale, 2)
+    # Chronos-2 divides by all 8 steps and both rows.
+    full = float(model._compute_loss(*args))
+    valid_step_loss(model)
+    valid = float(model._compute_loss(*args))
+    # Each step's loss is 2 * |1 - 0| * (1 - q), summed over q: 3.
+    assert abs(valid - 3.0) < 1e-6
+    assert abs(full - 3.0 * 2 / 8 / 2) < 1e-6
