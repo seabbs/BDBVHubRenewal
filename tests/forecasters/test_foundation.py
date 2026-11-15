@@ -16,7 +16,10 @@ from bdbvhubrenewal.evaluation.backtest import (
     load_config,
     make_tasks,
 )
-from bdbvhubrenewal.evaluation.nowcast import reporting_delay
+from bdbvhubrenewal.evaluation.nowcast import (
+    reporting_delay,
+    resolve_truth_delay,
+)
 from bdbvhubrenewal.forecasters import (
     NATIONAL,
     ForecastTask,
@@ -109,9 +112,7 @@ def _ragged_lags(model: FoundationModel, task: ForecastTask) -> int:
     return len(groups[0]["future_covariates"]) // (1 + len(task.locations))
 
 
-@pytest.mark.parametrize(
-    ("source", "steps"), [("daily", 35), ("weekly", 5)]
-)
+@pytest.mark.parametrize(("source", "steps"), [("daily", 35), ("weekly", 5)])
 def test_ragged_lags_reach_the_truth_delay(
     source: str, steps: int, task: ForecastTask
 ) -> None:
@@ -135,9 +136,28 @@ def test_the_models_take_the_backtest_truth(name: str) -> None:
     # cannot drift apart.
     config = load_config()
     model = get_model(name)
-    assert model.truth_delay == config.truth_delay
+    assert (model.truth_delay, model.truth_level, model.truth_skip) == (
+        foundation.truth_settings()
+    )
     assert model.truth_level == config.truth_level
     assert model.truth_skip == config.skip_origins
+
+
+def test_auto_truth_delay_is_the_one_the_backtest_scores_on(
+    target: pd.DataFrame, tmp_path: Path
+) -> None:
+    # "auto" resolves D from the tidy data as the release backtest does,
+    # so the models' D is the scoring truth's.
+    text = Path("config/backtest.toml").read_text()
+    config = tmp_path / "backtest.toml"
+    config.write_text(text.replace("truth_level = 0.98", "truth_level = 0.9"))
+    target.to_csv(tmp_path / "target.csv", index=False)
+    delay, level, _ = foundation.truth_settings(config, data=tmp_path)
+    assert level == 0.9
+    assert delay == resolve_truth_delay(load_config(config), target)
+    # With no tidy data, D is left to be estimated at each origin.
+    empty = tmp_path / "none"
+    assert foundation.truth_settings(config, data=empty)[0] is None
 
 
 @pytest.mark.parametrize("source", SOURCES)

@@ -63,7 +63,7 @@ def test_chronos_lags_reach_the_german_truth_delay(
 
     seen: list = []
 
-    def sample(groups, horizon, n, seed, checkpoint=None):
+    def sample(groups, horizon, n, _seed, checkpoint=None):  # noqa: ARG001
         seen.append(groups[0])
         return [np.zeros((n, g["target"].shape[0], horizon)) for g in groups]
 

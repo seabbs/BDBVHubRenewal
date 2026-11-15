@@ -1573,7 +1573,12 @@ def _germany_backtest(args: argparse.Namespace) -> int:
     triangle = hub_triangle(Path(args.data) / Path(config.triangle).name)
     forecasts = de.with_truth(
         de.germany_forecasts(
-            models, triangle, dates, config.n_samples, config.seed
+            models,
+            triangle,
+            dates,
+            config.n_samples,
+            config.seed,
+            truth_delay=config.truth_delay,
         ),
         triangle,
         config.truth_delay,
