@@ -230,5 +230,6 @@ cat(all(start$growth == g), start$seed, "\\n")
     late = [j for j in jumps[1:] if j > 0]
     assert late
     assert all(abs(j - 6.9078) < 1e-3 for j in late)
-    assert all(s == 1e-3 for j, s in zip(jumps[1:], seeds[1:]) if j > 0)
+    pairs = zip(jumps[1:], seeds[1:], strict=True)
+    assert all(s == 1e-3 for j, s in pairs if j > 0)
     assert start.split() == ["TRUE", "1", "1", "1"]
