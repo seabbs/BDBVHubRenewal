@@ -292,6 +292,20 @@ def test_publish_uploads_only_missing_assets(tmp_path):
     assert "outbreaks.txt" in gh.assets
 
 
+def test_publish_takes_a_tag_prefix(tmp_path):
+    from finetune_stream import publish
+
+    where = _checkpoint(tmp_path)
+    gh, tags = _Gh(), []
+
+    def run(command, **kwargs):
+        tags.append(command[3])
+        return gh(command, **kwargs)
+
+    publish(where, "abc", run=run, prefix="germany-ft")
+    assert tags == ["germany-ft-abc"] * 2
+
+
 def test_publish_refuses_a_release_with_other_sums(tmp_path):
     import pytest
     from finetune_stream import publish
