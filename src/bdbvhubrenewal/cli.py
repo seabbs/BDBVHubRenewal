@@ -1272,13 +1272,13 @@ def _pair(
     target = load_target(args.data)
     delay = resolve_truth_delay(config, target)
     history = getattr(args, "history", None)
-    past: list[ForecastTask] = []
-    if not _spec(name).fitted:
-        past = list(
-            store.origin_tasks(
-                target, load_delays(args.data), config, load_daily(args.data)
-            ).values()
-        )
+    # The backtest's origins: those before this one give the copula's
+    # errors, and a model that is not fitted is forecast again there.
+    past = list(
+        store.origin_tasks(
+            target, load_delays(args.data), config, load_daily(args.data)
+        ).values()
+    )
     samples, record = pair_submission(
         name,
         result.samples,
