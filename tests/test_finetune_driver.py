@@ -435,3 +435,19 @@ def test_a_second_driver_does_not_start(tmp_path):
     assert out.split() == ["running"]
     out = run(tmp_path, "another_driver && echo running || echo none")
     assert out.split() == ["none"]
+
+
+def test_status_after_a_restart_keeps_step_and_last_checkpoint(tmp_path):
+    ckpt = tmp_path / "ckpt"
+    (ckpt / "state").mkdir(parents=True)
+    (ckpt / "state" / "state.json").write_text('{"step": 5577, "done": 2000}')
+    for n, key in ((1000, "aaa"), (2000, "bbb")):
+        (ckpt / f"n{n}").mkdir()
+        (ckpt / f"n{n}" / "settings.json").write_text(f'{{"hash": "{key}"}}')
+    # A restarted trainer's status starts again from nothing.
+    (ckpt / "stream-status.json").write_text(
+        '{"stage": "waiting for held-out simulations", "step": 0}'
+    )
+    out = run(tmp_path, "remote_state=up; status; cat output/finetune/STATUS")
+    assert "train_step=5577" in out
+    assert "last_checkpoint=n2000 bbb" in out
