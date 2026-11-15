@@ -7,7 +7,7 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).parents[1] / "scripts"))
 
-from finetune_realism import weekly_summary  # noqa: E402
+from finetune_realism import weekly_summary
 
 
 def test_zero_share_counts_strata_with_no_cases():
