@@ -56,3 +56,12 @@ def test_a_changed_setting_breaks_the_hash(checkpoint):
     (where / "settings.json").write_text(json.dumps(settings))
     found = problems(where, lambda _, path: files[path])
     assert any("hash" in p for p in found)
+
+
+def test_real_validation_results_are_outside_the_hash(checkpoint):
+    where, files = checkpoint
+    settings = json.loads((where / "settings.json").read_text())
+    settings["real_validation_loss"] = 0.2
+    settings["real_validation_sha256"] = "abc"
+    (where / "settings.json").write_text(json.dumps(settings))
+    assert problems(where, lambda _, path: files[path]) == []
