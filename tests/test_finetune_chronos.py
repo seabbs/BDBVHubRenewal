@@ -624,3 +624,29 @@ def test_valid_step_loss_averages_over_valid_steps_and_targets_only():
     # Each step's loss is 2 * |1 - 0| * (1 - q), summed over q: 3.
     assert abs(valid - 3.0) < 1e-6
     assert abs(full - 3.0 * 2 / 8 / 2) < 1e-6
+
+
+def test_lora_targets_freeze_group_attention_when_asked():
+    import re
+
+    from finetune_stream import lora_targets
+
+    names = [
+        "encoder.block.0.layer.0.self_attention.q",
+        "encoder.block.0.layer.1.self_attention.q",
+        "encoder.block.11.layer.0.self_attention.o",
+        "encoder.block.11.layer.1.self_attention.v",
+        "output_patch_embedding.output_layer",
+    ]
+
+    def hits(targets):
+        if isinstance(targets, list):
+            return [n for n in names if any(n.endswith(t) for t in targets)]
+        return [n for n in names if re.fullmatch(targets, n)]
+
+    assert hits(lora_targets("all")) == names
+    assert hits(lora_targets("time")) == [
+        "encoder.block.0.layer.0.self_attention.q",
+        "encoder.block.11.layer.0.self_attention.o",
+        "output_patch_embedding.output_layer",
+    ]
