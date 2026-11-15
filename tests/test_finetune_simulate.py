@@ -129,4 +129,5 @@ for (i in 1:50) {
 """,
         tmp_path,
     )
-    assert out.split() and all(x == "TRUE" for x in out.split())
+    assert out.split()
+    assert all(x == "TRUE" for x in out.split())
