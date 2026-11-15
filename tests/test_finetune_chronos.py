@@ -526,13 +526,13 @@ def test_real_validation_blocks_stop_before_the_scored_weeks():
 
 
 def test_real_validation_context_holds_only_reports_by_the_cut():
-    from finetune_chronos import real_blocks
+    from finetune_chronos import CONTEXT, real_blocks
 
     late = _line_list()
     late.loc[len(late)] = ("CD-A", "2026-07-25", 30)  # reported 08-24
     a = real_blocks(_line_list(), ["2026-07-25"], "2026-09-05", 4)[0]
     b = real_blocks(late, ["2026-07-25"], "2026-09-05", 4)[0]
-    start = a["start"]
+    start = CONTEXT
     # The late report changes the final count ahead, not the context.
     assert np.array_equal(
         a["context"][:, :start], b["context"][:, :start], equal_nan=True

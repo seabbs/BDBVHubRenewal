@@ -21,9 +21,14 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from bdbvhubrenewal.data.dates import epiweek_end
 from bdbvhubrenewal.forecasters import foundation
 from bdbvhubrenewal.forecasters.base import NATIONAL
-from bdbvhubrenewal.forecasters.finetune import training_block, weekly_cutoffs
+from bdbvhubrenewal.forecasters.finetune import (
+    AHEAD_WEEKS,
+    training_block,
+    weekly_cutoffs,
+)
 
 CONTEXT = 288
 """Steps of context in a block, left-padded with missing values."""
@@ -361,3 +366,59 @@ def _settings_hash(settings: dict) -> str:
     """Return the first 12 hex digits of the settings' SHA-256."""
     text = json.dumps(settings, sort_keys=True).encode()
     return hashlib.sha256(text).hexdigest()[:12]
+
+
+def real_blocks(
+    line_list: pd.DataFrame, cuts: list[str], last_week: str, lag: int
+) -> list[dict]:
+    """Return weekly validation blocks of a real outbreak's line list.
+
+    Each case of `line_list` (`location`, `onset_week`, the week's
+    Saturday, and `delay`, days from onset to report) is reported on its
+    onset week's end plus its delay. Each block is the outbreak as known
+    at a cut in `cuts`, weekly releases to it laid out as the ragged
+    layout does, with the line list's counts ahead as the truth. A cut
+    whose forecast weeks run past `last_week` is refused, so the blocks
+    stay clear of weeks a later evaluation scores.
+
+    Raises
+    ------
+    ValueError
+        If a cut's forecast weeks run past `last_week`.
+    """
+    onset = pd.to_datetime(line_list["onset_week"])
+    counts = (
+        pd.DataFrame(
+            {
+                "location": line_list["location"],
+                "reference_date": onset.dt.date.astype(str),
+                "report_date": (
+                    onset
+                    + pd.to_timedelta(line_list["delay"].clip(lower=0), "D")
+                ).dt.date.astype(str),
+                "count": 1,
+            }
+        )
+        .groupby(["location", "reference_date", "report_date"], as_index=False)
+        .sum()
+    )
+    places = (NATIONAL, *sorted(counts["location"].unique()))
+    first = counts["reference_date"].min()
+    out = []
+    for cut in cuts:
+        end = epiweek_end(cut) + dt.timedelta(weeks=AHEAD_WEEKS)
+        if end > dt.date.fromisoformat(last_week):
+            raise ValueError(f"cut {cut} forecasts {end}, past {last_week}")
+        weekday = dt.date.fromisoformat(cut).weekday()
+        block = training_block(
+            counts,
+            "weekly",
+            places,
+            weekly_cutoffs(first, cut, weekday),
+            max_lag=lag,
+        )
+        padded = _pad(block, CONTEXT, HORIZON)
+        padded["levels"] = target_levels(places)
+        padded["mix"] = "real"
+        out.append(padded)
+    return out
