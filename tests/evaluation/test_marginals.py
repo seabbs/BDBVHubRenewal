@@ -23,7 +23,13 @@ needs_torch = pytest.mark.skipif(
 class _FakePipeline:
     """Chronos-2's native levels, with quantiles 1,000 times the level."""
 
-    quantiles = (0.01, 0.05, *np.round(np.arange(0.1, 0.91, 0.1), 2), 0.95, 0.99)
+    quantiles = (
+        0.01,
+        0.05,
+        *np.round(np.arange(0.1, 0.91, 0.1), 2),
+        0.95,
+        0.99,
+    )
 
     def predict_quantiles(self, groups, prediction_length, quantile_levels):
         import torch
@@ -54,8 +60,9 @@ def fake_chronos(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @needs_torch
+@pytest.mark.usefixtures("fake_chronos")
 def test_a_quantile_model_s_quantiles_do_not_depend_on_the_seed(
-    task: ForecastTask, fake_chronos: None
+    task: ForecastTask,
 ) -> None:
     model = get_model("fm_chronos_weekly_ragged")
     one = forecast_quantiles(model, task, LEVELS, seed=1)
@@ -65,8 +72,9 @@ def test_a_quantile_model_s_quantiles_do_not_depend_on_the_seed(
 
 
 @needs_torch
+@pytest.mark.usefixtures("fake_chronos")
 def test_native_quantiles_are_interpolated_to_the_levels(
-    task: ForecastTask, fake_chronos: None
+    task: ForecastTask,
 ) -> None:
     model = get_model("fm_chronos_weekly_ragged")
     out = forecast_quantiles(model, task, LEVELS, seed=1)
@@ -80,8 +88,9 @@ def test_native_quantiles_are_interpolated_to_the_levels(
 
 
 @needs_torch
+@pytest.mark.usefixtures("fake_chronos")
 def test_sums_use_the_same_draws_for_every_model(
-    task: ForecastTask, fake_chronos: None
+    task: ForecastTask,
 ) -> None:
     model = get_model("fm_chronos_daily_ragged")
     other = dataclasses.replace(model, name="fm_chronos_other")
@@ -91,8 +100,9 @@ def test_sums_use_the_same_draws_for_every_model(
 
 
 @needs_torch
+@pytest.mark.usefixtures("fake_chronos")
 def test_daily_sums_come_from_draws_seeded_by_the_seed(
-    task: ForecastTask, fake_chronos: None
+    task: ForecastTask,
 ) -> None:
     model = get_model("fm_chronos_daily_ragged")
     one = forecast_quantiles(model, task, LEVELS, n_draws=200, seed=4)

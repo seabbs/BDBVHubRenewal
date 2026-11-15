@@ -28,7 +28,7 @@ import time
 import tomllib
 import urllib.request
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from functools import cache, partial
 from pathlib import Path
 from typing import Any, Final
@@ -70,6 +70,7 @@ __all__ = [
     "finetuned_spec",
     "hub_triangle",
     "layout_block",
+    "native_sampler",
     "quantile_draws",
     "resolve_checkpoint",
 ]
@@ -682,6 +683,10 @@ class FoundationModel:
         pretrained model.
     sample : Sampler or None
         Draws the trajectories, Chronos-2 with `checkpoint` by default.
+    stream : str or None
+        The task's random stream the draws are seeded from, the model's
+        name by default. Models given one stream draw the same random
+        numbers (`bdbvhubrenewal.evaluation.marginals.forecast_quantiles`).
     """
 
     name: str
@@ -689,6 +694,7 @@ class FoundationModel:
     layout: str
     checkpoint: Checkpoint | None = None
     sample: Sampler | None = field(default=None, repr=False)
+    stream: str | None = field(default=None, repr=False)
 
     @property
     def needs_snapshots(self) -> bool:
@@ -744,7 +750,7 @@ class FoundationModel:
                 f"{task.vintage} has {max(start, 0)}."
             )
         horizon = len(tri.times) - start
-        seed = int(task.rng(self.name).integers(0, 2**31 - 1))
+        seed = int(task.rng(self.stream or self.name).integers(0, 2**31 - 1))
         group = layout_block(tri, self.layout, places, start)
         sample = self.sample or partial(
             chronos_sampler, checkpoint=self.checkpoint
@@ -782,6 +788,86 @@ class FoundationModel:
                 "value": values.transpose(1, 0, 2).reshape(-1),
             }
         )[list(SAMPLE_COLUMNS)]
+
+    def quantiles(
+        self, task: ForecastTask, levels: Sequence[float]
+    ) -> pd.DataFrame | None:
+        """Return Chronos-2's own quantiles where each target is one step.
+
+        Each week of the weekly source is one of Chronos-2's steps, so its
+        quantiles are Chronos-2's native quantiles read at `levels` by
+        linear interpolation between the native levels (`native_sampler`).
+        They pass through `forecast` as one trajectory per level; every
+        step after the draws (rounding, the floors at the reported counts)
+        is monotone, so trajectory `k` is the quantile at level `k`.
+        A week of the daily source is a sum of steps, which has no native
+        quantile.
+
+        Parameters
+        ----------
+        task : ForecastTask
+            The data and weeks to forecast.
+        levels : sequence of float
+            Increasing quantile levels.
+
+        Returns
+        -------
+        pandas.DataFrame or None
+            Columns `location`, `target_end_date`, `quantile` and `value`,
+            or None for the daily source.
+        """
+        if self.source != "weekly":
+            return None
+        at = np.asarray(levels, dtype=float)
+        run = replace(self, sample=native_sampler(at, self.checkpoint))
+        out = run.forecast(replace(task, n_samples=len(at)))
+        out["quantile"] = at[out["sample"].to_numpy() - 1]
+        return out[["location", "target_end_date", "quantile", "value"]]
+
+
+def native_sampler(
+    levels: np.ndarray, checkpoint: Checkpoint | None = None
+) -> Sampler:
+    """Return a sampler giving Chronos-2's quantiles at `levels` as paths.
+
+    Parameters
+    ----------
+    levels : numpy.ndarray
+        Increasing quantile levels, `[K]`.
+    checkpoint : Checkpoint, optional
+        The fine-tuned checkpoint, the pretrained model by default.
+
+    Returns
+    -------
+    Sampler
+        Gives `[K, V, horizon]` per group: path `k` is each series and
+        step's quantile at `levels[k]`, linear between Chronos-2's native
+        levels and flat beyond them. It draws no random numbers.
+    """
+
+    def sample(
+        groups: Sequence[Series],
+        horizon: int,
+        n: int,  # noqa: ARG001
+        seed: int,  # noqa: ARG001
+    ) -> list[np.ndarray]:
+        pipeline = _chronos(checkpoint)
+        native = np.asarray(pipeline.quantiles, dtype=float)
+        quantiles, _ = pipeline.predict_quantiles(
+            [dict(g) for g in groups],
+            prediction_length=horizon,
+            quantile_levels=native.tolist(),
+        )
+        out = []
+        for q in quantiles:
+            q = np.sort(q.float().cpu().numpy(), axis=-1)  # [V, H, Q]
+            at = np.apply_along_axis(
+                lambda v: np.interp(levels, native, v), -1, q
+            )  # [V, H, K]
+            out.append(np.moveaxis(at, -1, 0))  # [K, V, H]
+        return out
+
+    return sample
 
 
 for _source in SOURCES:
