@@ -180,7 +180,8 @@ def test_block_of_places_with_no_release_rows_is_none() -> None:
 
 
 def _longer_counts() -> pd.DataFrame:
-    """One place, onsets over five weeks, reported 0, 2 and 5 days on."""
+    """One place, the country, onsets over five weeks, reported 0, 2 and
+    5 days on."""
     rows = []
     for onset in pd.date_range("2026-09-01", "2026-10-05"):
         for delay, n in ((0, 1), (2, 2), (5, 4)):
@@ -196,7 +197,7 @@ def test_three_day_triangle_sums_daily_reports_by_each_release() -> None:
     counts = _longer_counts()
     cutoffs = ["2026-09-23", "2026-09-30"]
     rows = releases(counts, "daily", cutoffs)
-    daily = hub_triangle(rows, "daily", ("A",), "2026-10-05", max_lag=8)
+    daily = hub_triangle(rows, "daily", (NATIONAL,), "2026-10-05", max_lag=6)
     three = aggregate_triangle(daily, 3, 2)
     ref = pd.to_datetime(counts["reference_date"])
     rep = pd.to_datetime(counts["report_date"])
@@ -218,7 +219,7 @@ def test_three_day_triangle_sums_daily_reports_by_each_release() -> None:
 def test_three_day_blocks_are_cut_like_daily_ones() -> None:
     counts = _longer_counts()
     cutoffs = ["2026-09-23", "2026-09-30"]
-    block = training_block(counts, "3day", ("A",), cutoffs, max_lag=2)
+    block = training_block(counts, "3day", (NATIONAL,), cutoffs, max_lag=2)
     assert block["n_targets"] == 1
     assert block["n_covariates"] == 2
     target = block["context"][0]

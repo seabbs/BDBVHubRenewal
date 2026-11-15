@@ -23,7 +23,11 @@ import pandas as pd
 
 from bdbvhubrenewal.data.dates import as_date, epiweek_end
 from bdbvhubrenewal.forecasters.base import NATIONAL
-from bdbvhubrenewal.forecasters.foundation import hub_triangle, layout_block
+from bdbvhubrenewal.forecasters.foundation import (
+    HubTriangle,
+    hub_triangle,
+    layout_block,
+)
 
 __all__ = [
     "AHEAD_WEEKS",
@@ -151,6 +155,71 @@ def final_counts(
     return out
 
 
+BINNED: Final = {"3day": 3}
+"""Training-only sources summed from the daily triangle, by days per
+step."""
+
+
+def bin_ends(tri: HubTriangle, k: int) -> list[int]:
+    """Return the last day of each `k`-day bin of a daily triangle.
+
+    Bins end on the day of the latest release's cut-off and every `k` days
+    either side of it, and only whole bins are kept.
+    """
+    first = tri.last % k
+    if first < k - 1:
+        first += k
+    return list(range(first, len(tri.times), k))
+
+
+def _sum_bins(x: np.ndarray, ends: list[int], k: int) -> np.ndarray:
+    """Return `x` `[L, T]` summed over each `k`-day bin ending in `ends`."""
+    return np.stack([x[:, e - k + 1 : e + 1].sum(axis=1) for e in ends], 1)
+
+
+def aggregate_triangle(tri: HubTriangle, k: int, lags: int) -> HubTriangle:
+    """Return a daily triangle in steps of `k` days, with `lags` lags.
+
+    A bin's count at lag $d$ is the release $kd$ days after its last day,
+    summed over its days: day $e - i$ of a bin ending on day $e$ is at
+    daily lag $kd + i$ in that release. It is missing where no release
+    had its cut-off then.
+
+    Parameters
+    ----------
+    tri : HubTriangle
+        A daily triangle with at least `k * lags` daily lags.
+    k : int
+        Days per step.
+    lags : int
+        Lags of the result.
+
+    Returns
+    -------
+    HubTriangle
+    """
+    ends = bin_ends(tri, k)
+    partial = np.stack(
+        [
+            np.stack(
+                [
+                    sum(tri.partial[:, e - i, k * d + i] for i in range(k))
+                    for d in range(lags)
+                ],
+                axis=-1,
+            )
+            for e in ends
+        ],
+        axis=1,
+    )
+    return HubTriangle(
+        times=[tri.times[e] for e in ends],
+        final=_sum_bins(tri.final, ends, k),
+        partial=partial,
+        last=ends.index(tri.last),
+    )
+
+
 def training_block(
     counts: pd.DataFrame,
     source: str,
@@ -198,11 +267,23 @@ def training_block(
     rows = releases(counts, source, cutoffs, totals)
     if not rows["location"].isin(places).any():
         return None
-    tri = hub_triangle(rows, source, places, end.isoformat(), max_lag=max_lag)
+    if source in BINNED:
+        k = BINNED[source]
+        rows = releases(counts, "daily", cutoffs, totals)
+        daily = hub_triangle(
+            rows, "daily", places, end.isoformat(), max_lag=k * max_lag
+        )
+        tri = aggregate_triangle(daily, k, max_lag)
+        days = final_counts(counts, "daily", places, daily.times, totals)
+        truth = _sum_bins(days, bin_ends(daily, k), k)
+    else:
+        tri = hub_triangle(
+            rows, source, places, end.isoformat(), max_lag=max_lag
+        )
+        truth = final_counts(counts, source, places, tri.times, totals)
     start = tri.n_context
     horizon = len(tri.times) - start
     group = layout_block(tri, "ragged", places, start)
-    truth = final_counts(counts, source, places, tri.times, totals)
     names = list(group["past_covariates"])
     lagged = np.stack(
         [
