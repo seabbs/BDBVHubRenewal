@@ -369,7 +369,7 @@ def test_laptop_takes_a_seed_that_crashed_on_the_remote_at_once(tmp_path):
 
 def test_a_second_driver_does_not_start(tmp_path):
     (tmp_path / "output" / "finetune").mkdir(parents=True)
-    live = subprocess.Popen(["sh", "-c", "sleep 30", "finetune_driver.sh"])
+    live = subprocess.Popen(["sh", "-c", "sleep 30; true", "finetune_driver.sh"])
     try:
         (tmp_path / "output" / "finetune" / "driver.pid").write_text(
             f"{live.pid}\n"
