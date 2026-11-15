@@ -13,10 +13,10 @@ Those forecasts come from where the backtest takes them: the fit store
 earlier releases for one that is not.
 The ledger's archive of each round's candidates (`archived_forecasts`)
 gives an origin neither has.
-A fitted model whose earlier origins have no forecasts from the store
-or the archive fails, rather than be paired by the prior alone.
-Otherwise a forecast with no past forecasts, as at the first origin,
-takes the prior, as in the backtest.
+A model whose earlier origins give no forecasts from any of these
+fails, rather than be paired by the prior alone. Only where the backtest
+has none either, with no earlier origin or none the model can forecast
+from, is it paired by the prior.
 """
 
 from __future__ import annotations
@@ -148,24 +148,29 @@ def stored_forecasts(store: Path | str | None, model: str) -> pd.DataFrame:
 
 def _recomputed(
     model: str, tasks: Sequence[ForecastTask], skip: set[str]
-) -> pd.DataFrame:
-    """Forecast again at each task's release not in `skip`."""
+) -> tuple[pd.DataFrame, set[str]]:
+    """Forecast again at each task's release not in `skip`.
+
+    Also returns the releases the model cannot forecast from, where the
+    backtest has no forecast either.
+    """
     built = get_model(model)
-    frames = []
+    frames, unavailable = [], set()
     for task in tasks:
         if task.vintage in skip:
             continue
         try:
             drawn = built.forecast(task)
         except ModelUnavailableError:
+            unavailable.add(task.vintage)
             continue
         frames.append(
             add_national(drawn).assign(model=model, origin=task.vintage)
         )
     if not frames:
-        return _empty()
+        return _empty(), unavailable
     out = pd.concat(frames, ignore_index=True)
-    return out[_COLUMNS].assign(source="recomputed")
+    return out[_COLUMNS].assign(source="recomputed"), unavailable
 
 
 def past_forecasts(
@@ -174,7 +179,7 @@ def past_forecasts(
     archive: Path | str | None = None,
     store: Path | str | None = None,
     past_tasks: Sequence[ForecastTask] = (),
-) -> pd.DataFrame:
+) -> tuple[pd.DataFrame, set[str]]:
     """Return a model's forecasts at origins before `origin`.
 
     Each origin takes the forecast the release backtest scores: the
@@ -194,8 +199,9 @@ def past_forecasts(
 
     Returns
     -------
-    pandas.DataFrame
-        As `archived_forecasts`, with each row's `source`.
+    tuple
+        The forecasts, as `archived_forecasts` with each row's `source`,
+        and the origins a model forecast again cannot forecast from.
     """
     spec = {s.name: s for s in list_models()}.get(model)
     frames = []
@@ -209,14 +215,16 @@ def past_forecasts(
         frames.append(table)
 
     add(stored_forecasts(store, model))
+    unavailable: set[str] = set()
     if spec is not None and not spec.fitted:
         tasks = [t for t in past_tasks if t.vintage < origin]
-        add(_recomputed(model, tasks, have))
+        recomputed, unavailable = _recomputed(model, tasks, have)
+        add(recomputed)
     add(archived_forecasts(archive, model))
     frames = [f for f in frames if len(f)]
     if not frames:
-        return _empty()
-    return pd.concat(frames, ignore_index=True)
+        return _empty(), unavailable
+    return pd.concat(frames, ignore_index=True), unavailable
 
 
 def pair_submission(
@@ -256,16 +264,17 @@ def pair_submission(
     tuple
         The paired samples, and a record of the copula: `model`,
         `origin`, `n_scores`, the three correlations, `sources`, each past
-        origin's source (`archive`, `store` or `recomputed`), and
-        `source`, the sources used joined by `+`.
+        origin's source (`archive`, `store` or `recomputed`),
+        `source`, the sources used joined by `+` (or `none`), and
+        `unavailable`, the earlier origins the model cannot forecast from.
 
     Raises
     ------
     LookupError
-        If a fitted model has no forecast at the earlier origins in the
-        window from the store or the archive. With no earlier origin, as
-        at the first, or a model forecast again that has none there, the
-        copula is its prior, as in the backtest.
+        If no source gives a forecast at the earlier origins in the
+        window. The copula is its prior only where the backtest has none
+        either: with no earlier origin, as at the first, or none the model
+        can forecast from.
     """
     origin = task.vintage
     # A forecast at r reaches week r + max_horizon, which is in the window
@@ -274,13 +283,11 @@ def pair_submission(
         days=truth_delay + 7 * (WINDOW_WEEKS + max_horizon + 1)
     )
     recent = [t for t in past_tasks if as_date(t.vintage) >= oldest]
-    past = past_forecasts(model, origin, archive, store, recent)
-    # A model forecast again has the forecasts the backtest has, so none
-    # at the earlier origins is as in the backtest. A fitted model's must
-    # come from the store or the archive.
-    spec = {s.name: s for s in list_models()}[model]
-    earlier = [t for t in recent if t.vintage < origin]
-    if past.empty and earlier and spec.fitted:
+    past, unavailable = past_forecasts(model, origin, archive, store, recent)
+    # The prior applies only where the backtest has no past forecast
+    # either: no earlier origin, or none the model can forecast from.
+    earlier = {t.vintage for t in recent if t.vintage < origin} - unavailable
+    if past.empty and earlier:
         raise LookupError(
             f"{model} has no past forecasts before {origin} in the archive "
             f"({archive}), the fit store ({store}) or forecast again, so its "
@@ -295,7 +302,11 @@ def pair_submission(
         )
     )
     current = samples.assign(model=model, origin=origin)
-    both = pd.concat([past.drop(columns="source"), current], ignore_index=True)
+    both = (
+        pd.concat([past.drop(columns="source"), current], ignore_index=True)
+        if len(past)
+        else current
+    )
     paired, fits = RollingCopula().pair(both, truth, seed=task.seed)
     out = paired.loc[paired["origin"] == origin, list(samples.columns)]
     out = out.astype(samples.dtypes.to_dict()).reset_index(drop=True)
@@ -314,4 +325,5 @@ def pair_submission(
         zip(by_origin["origin"], by_origin["source"], strict=True)
     )
     record["source"] = "+".join(sorted(set(past["source"]))) or "none"
+    record["unavailable"] = sorted(unavailable)
     return out, record
