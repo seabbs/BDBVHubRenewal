@@ -40,6 +40,15 @@ One SI section per paper section.
 - Key references: [@Ansari2025; @Hu2021].
 :::
 
+Chronos-2 divides a flat context by a scale of $10^{-5}$.
+We tested a floor of one count on that scale at inference only, for the zero-shot model and each fine-tuned checkpoint.
+On held-out simulations it hurt small series, of five counts or fewer.
+At 4,000 outbreaks their median loss went from {{< meta evidence.scale_floor.sims.n4000.small.median_loss.none >}} to {{< meta evidence.scale_floor.sims.n4000.small.median_loss.floor >}}, and the share of 99% quantiles over 100 times the truth from {{< meta evidence.scale_floor.sims.n4000.small.q99_over_100x.none >}}% to {{< meta evidence.scale_floor.sims.n4000.small.q99_over_100x.floor >}}%.
+Large series were unchanged, with median loss {{< meta evidence.scale_floor.sims.n4000.large.median_loss.none >}} and {{< meta evidence.scale_floor.sims.n4000.large.median_loss.floor >}}.
+On the BDBV release backtest the floor improved relative WIS at every fine-tuned checkpoint, and that of the weekly model at 4,000 outbreaks on provinces went from {{< meta evidence.scale_floor.bdbv.provinces.weekly.n4000.none >}} to {{< meta evidence.scale_floor.bdbv.provinces.weekly.n4000.floor >}}.
+We use no floor at inference only, and the next fine-tune trains with it.
+Chronos-2's widest interval is from 1% to 99%, as it has no 2.5% or 97.5% quantiles.
+
 We tested the ragged layout's lag horizon.
 Running the lags to the truth delay, rather than 4 weeks or 28 days, hurt with short release histories.
 On the German development half, the national WIS relative to `randomwalknowcast` went from {{< meta evidence.lag.germany.fm_chronos_daily_ragged.capped >}} to {{< meta evidence.lag.germany.fm_chronos_daily_ragged.longer >}} for the daily zero-shot model and from {{< meta evidence.lag.germany.fm_chronos_weekly_ragged.capped >}} to {{< meta evidence.lag.germany.fm_chronos_weekly_ragged.longer >}} for the weekly one.

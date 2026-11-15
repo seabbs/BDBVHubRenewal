@@ -231,3 +231,27 @@ def test_checkpoint_panels_show_n_and_grey_thin_ones() -> None:
         "n1000": 1.5,
         "n2000": 1.2,
     }
+
+
+def test_scale_floor_numbers_split_simulations_and_bdbv() -> None:
+    from paperpipe.evidence import scale_floor_numbers
+
+    rows = pd.DataFrame(
+        {
+            "floor": [0, 1, 0, 1],
+            "model": "n4000",
+            "size": ["small (<=5)", "small (<=5)", "provinces", "provinces"],
+            "median_loss": [3.311, 4.814, None, None],
+            "share_q99_over_100x": [0.1067, 0.2845, None, None],
+            "source": [None, None, "weekly", "weekly"],
+            "relative_wis": [None, None, 4.2, 2.94],
+        }
+    )
+    out = scale_floor_numbers(rows)
+    small = out["sims"]["n4000"]["small"]
+    assert small["median_loss"] == {"none": 3.3, "floor": 4.8}
+    assert small["q99_over_100x"] == {"none": 11, "floor": 28}
+    assert out["bdbv"]["provinces"]["weekly"]["n4000"] == {
+        "none": 4.2,
+        "floor": 2.94,
+    }
