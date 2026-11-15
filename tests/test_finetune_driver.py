@@ -352,24 +352,79 @@ def test_status_shows_the_last_chunk_time_split(tmp_path):
     assert "last_chunk=wait 5s cut 0s train 3500s eval 60s" in out
 
 
-def test_laptop_takes_a_seed_that_crashed_on_the_remote_at_once(tmp_path):
-    logs = tmp_path / "sims" / "logs"
-    logs.mkdir(parents=True)
-    for s in range(5001, 5011):
-        (logs / f"{s}.log").write_text("running\n")
-    # A segfault under the remote's memory cap aborts R without "Execution
-    # halted", and the remote retrying it keeps its log fresh.
-    (logs / "5002.log").write_text(
-        " *** caught segfault ***\nAn irrecoverable exception occurred. "
-        "R is aborting now ...\n"
+def _scheduler(tmp_path: Path) -> str:
+    """Return the remote scheduler script the driver writes."""
+    run(
+        tmp_path,
+        "remote() { case $1 in cat*) cat > sched.sh;; *) return 1;; esac; }; "
+        "remote_scheduler",
+        ENV + "REMOTE_RETRY_MEM_KB=2\n",
     )
-    out = run(tmp_path, "unstarted_seeds | tr '\\n' ' '")
-    assert out.split() == ["5002"]
+    return (tmp_path / "sched.sh").read_text()
+
+
+def test_remote_retries_an_aborted_seed_with_a_higher_cap(tmp_path):
+    script = _scheduler(tmp_path)
+    # A batch that R aborted (a segfault under the memory cap) runs again
+    # once the first pass is done, under REMOTE_RETRY_MEM_KB.
+    assert "R is aborting" in script
+    assert "ulimit -v 2" in script
+    assert "ulimit -v 1" in script
+
+
+def test_batches_log_their_peak_memory(tmp_path):
+    script = _scheduler(tmp_path)
+    assert "/usr/bin/time" in script
+    assert "peak_rss_kb" in script
+
+
+def test_laptop_leaves_unclaimed_seeds_to_an_answering_remote(tmp_path):
+    out = run(
+        tmp_path,
+        "remote_state=up; candidate_seeds | tr '\\n' ' '; echo; "
+        "remote_state=down; candidate_seeds | tr '\\n' ' '",
+    )
+    up, down = out.split("\n")[:2]
+    # With the remote up the laptop runs its own range (5009-5010) only;
+    # with it down, every unstarted seed too.
+    assert up.split() == ["5009", "5010"]
+    assert "5001" in down.split()
+
+
+def test_a_claimed_seed_is_stopped_on_the_remote(tmp_path):
+    out = run(
+        tmp_path,
+        "remote() { echo \"$@\" >> calls; }; claim 5004; cat calls; "
+        "cat sims/local-seeds.txt",
+    )
+    assert "finetune_simulate.R --args 25 5004 " in out
+    assert out.split()[-1] == "5004"
+
+
+def test_long_wait_is_an_alert_in_status_and_the_mailbox(tmp_path):
+    import time
+
+    (tmp_path / "ckpt").mkdir()
+    since = time.time() - 31 * 60
+    (tmp_path / "ckpt" / "stream-status.json").write_text(
+        '{"stage": "waiting for outbreaks 1-500", '
+        f'"waiting_since": {since}}}'
+    )
+    out = run(
+        tmp_path,
+        "remote_state=up; status; status; cat output/finetune/STATUS; "
+        "cat inbox.md",
+        ENV + "MAILBOX=inbox.md\n",
+    )
+    assert "ALERT: trainer waiting 31 min" in out
+    # One mailbox line per wait, however often STATUS is written.
+    assert out.count("fm-finetune3") == 1
 
 
 def test_a_second_driver_does_not_start(tmp_path):
     (tmp_path / "output" / "finetune").mkdir(parents=True)
-    live = subprocess.Popen(["sh", "-c", "sleep 30; true", "finetune_driver.sh"])
+    fake = ["sh", "-c", "sleep 30; true", "finetune_driver.sh"]
+    live = subprocess.Popen(fake)
     try:
         (tmp_path / "output" / "finetune" / "driver.pid").write_text(
             f"{live.pid}\n"

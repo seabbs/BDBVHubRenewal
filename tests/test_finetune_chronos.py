@@ -414,3 +414,23 @@ def test_blocks_cut_by_a_process_pool_match(tmp_path):
     ) as pool:
         pairs, _ = cut_in_workers(pool, tmp_path, ids, 1, 6, parts=2)
     assert [o for o, _ in pairs] == [o for o, _ in here]
+
+
+def test_a_straggler_is_folded_into_a_later_chunk(tmp_path):
+    from finetune_stream import next_chunk
+
+    ids = _sim_dir(tmp_path)  # seeds 6001 and 6002, two simulations each
+    # Seed 6002 finished; 6001 has not.
+    for name in ("counts-6001.csv.gz", "settings-6001.csv"):
+        (tmp_path / name).rename(tmp_path / f"late-{name}")
+    seeds = range(6001, 6003)
+    assert next_chunk(tmp_path, seeds, [], 2, waited=60, patience=1200) is None
+    # After the patience, later finished seeds train first.
+    late = next_chunk(tmp_path, seeds, [], 2, waited=1300, patience=1200)
+    assert late == ids[2:]
+    # The straggler joins the next chunk once it finishes.
+    for name in ("counts-6001.csv.gz", "settings-6001.csv"):
+        (tmp_path / f"late-{name}").rename(tmp_path / name)
+    assert next_chunk(tmp_path, seeds, late, 2, waited=0, patience=1200) == (
+        ids[:2]
+    )
