@@ -499,3 +499,42 @@ def test_training_scale_floor_applies_only_when_set():
     floored = model()
     set_scale_floor(floored, 1.0)
     assert float(floored.instance_norm(flat)[1][1]) == 1.0
+
+
+def _line_list():
+    import pandas as pd
+
+    rows = []
+    for week in pd.date_range("2026-05-02", "2026-09-26", freq="7D"):
+        for place, n in (("CD-A", 6), ("CD-B", 3)):
+            for k in range(n):
+                rows.append((place, week.date().isoformat(), 2 + 3 * k))
+    return pd.DataFrame(rows, columns=["location", "onset_week", "delay"])
+
+
+def test_real_validation_blocks_stop_before_the_scored_weeks():
+    import pytest
+    from finetune_chronos import real_blocks
+
+    cuts = ["2026-07-25", "2026-08-01", "2026-08-08"]
+    blocks = real_blocks(_line_list(), cuts, last_week="2026-09-05", lag=4)
+    assert len(blocks) == 3
+    assert all(b["context"].shape[0] > 0 for b in blocks)
+    # A cut whose forecast weeks reach past the last week is refused.
+    with pytest.raises(ValueError, match="past"):
+        real_blocks(_line_list(), ["2026-08-15"], "2026-09-05", 4)
+
+
+def test_real_validation_context_holds_only_reports_by_the_cut():
+    from finetune_chronos import real_blocks
+
+    late = _line_list()
+    late.loc[len(late)] = ("CD-A", "2026-07-25", 30)  # reported 08-24
+    a = real_blocks(_line_list(), ["2026-07-25"], "2026-09-05", 4)[0]
+    b = real_blocks(late, ["2026-07-25"], "2026-09-05", 4)[0]
+    start = a["start"]
+    # The late report changes the final count ahead, not the context.
+    assert np.array_equal(
+        a["context"][:, :start], b["context"][:, :start], equal_nan=True
+    )
+    assert not np.array_equal(a["context"], b["context"], equal_nan=True)
