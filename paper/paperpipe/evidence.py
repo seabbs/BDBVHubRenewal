@@ -33,6 +33,7 @@ from paperpipe.outputs import to_markdown
 __all__ = [
     "ARMS",
     "EVIDENCE",
+    "aggregation_numbers",
     "aggregation_table",
     "copula_table",
     "cost_table",
@@ -206,6 +207,30 @@ def cost_table(cost: pd.DataFrame) -> pd.DataFrame:
             "seconds": "Time (s)",
         }
     )
+
+
+def aggregation_numbers(
+    scores: pd.DataFrame, reference: str = "randomwalknowcast"
+) -> dict:
+    """Return each option's relative WIS, as the paper quotes them.
+
+    Keys are study, level, model and option (`OPTIONS`), and values the
+    WIS relative to `reference` on shared targets, to two decimals.
+    """
+    keys = ["study", "level", "location", "origin_date", "target_date"]
+    ref = scores.loc[scores["model"] == reference, [*keys, "wis"]]
+    paired = scores.loc[scores["model"] != reference].merge(
+        ref, on=keys, suffixes=("", "_ref")
+    )
+    sums = paired.groupby(["study", "level", "model", "option"])[
+        ["wis", "wis_ref"]
+    ].sum()
+    rel = (sums["wis"] / sums["wis_ref"]).round(2)
+    out: dict = {}
+    for (study, level, model, option), value in rel.items():
+        node = out.setdefault(study, {}).setdefault(level, {})
+        node.setdefault(model, {})[option] = float(value)
+    return out
 
 
 def heldout_figure(curve: pd.DataFrame) -> Figure:
@@ -448,6 +473,7 @@ def write_evidence(
     numbers = {
         "evidence": {
             "rho": QUOTED["rho"] if rho is None else rho_medians(rho),
+            "aggregation": (None if agg is None else aggregation_numbers(agg)),
             "realism": (
                 QUOTED["realism"] if ref is None else realism_numbers(ref)
             ),
