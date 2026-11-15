@@ -521,3 +521,14 @@ def test_laptop_runs_next_chunk_seeds_that_aborted_before_they_are_due(
         ENV + "LOOKAHEAD_OUTBREAKS=10\n",
     )
     assert out.split() == ["5003"]
+
+
+def test_r4_training_settings_reach_the_trainer(tmp_path):
+    env = ENV + "LR_DECAY=1\nSCALE_FLOOR=1\nREAL_VALIDATION=real.pkl\n"
+    out = run(tmp_path, 'build_trainer_args; echo "${trainer_args[@]}"', env)
+    assert "--lr-decay 1" in out
+    assert "--scale-floor 1" in out
+    assert "--real-validation real.pkl" in out
+    out = run(tmp_path, 'build_trainer_args; echo "${trainer_args[@]}"')
+    assert "--lr-decay" not in out
+    assert "--scale-floor" not in out
