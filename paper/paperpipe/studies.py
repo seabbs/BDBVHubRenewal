@@ -26,8 +26,8 @@ functions return dummy data from `paperfigs.dummy`:
   `randomwalknowcast` (`study_baseline`).
 - The synthetic study reads the synthetic runner's forecasts of the
   simulated outbreaks and its observations and factors beside them
-  (`paperdata.synthetic`, #192). Its dummy data are one dummy study per
-  seed.
+  (`paperdata.synthetic`, #192). Its dummy data are one dummy study,
+  for the run's first seed, so a dummy run stays small.
 
 `missing` says why a study cannot use its real data. A development run
 may then use dummy data; a paper run fails.
@@ -366,7 +366,7 @@ def load_data(
         return synthetic.load(sources.synthetic_forecasts, seeds)
     if study == "synthetic":
         obs, locs = [], []
-        for seed in seeds:
+        for seed in seeds[:1]:
             _, one = dummy_study(study, seed=seed, n_samples=1)
             factors = dummy_factors(one, seed=seed)
             obs.append(_relabel(one, seed))
@@ -432,7 +432,7 @@ def run_forecasts(
     if study == "synthetic":
         parts = [
             _relabel(dummy_study(study, seed=s, n_samples=n_samples)[0], s)
-            for s in seeds
+            for s in seeds[:1]
         ]
         return pd.concat(parts, ignore_index=True)
     if study == "germany" and source == "real":
