@@ -108,9 +108,7 @@ are summed to weeks. Chosen on the release backtest from 0, 0.3, 0.5,
 0.7, 0.9 and 0.985, where it gave the lowest WIS and weekly median bias.
 Weekly errors cannot estimate it, as each is of a week's sum."""
 
-CHRONOS_DAILY_COPULA: Final = replace(
-    PRIOR, rho_time=CHRONOS_DAY_RHO**7
-)
+CHRONOS_DAILY_COPULA: Final = replace(PRIOR, rho_time=CHRONOS_DAY_RHO**7)
 """The daily models' copula: days d apart have correlation
 `CHRONOS_DAY_RHO` to the power d."""
 
