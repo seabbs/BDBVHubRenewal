@@ -255,9 +255,10 @@ def test_stale_remote_simulator_is_replaced_before_batches(tmp_path):
     out = run(
         tmp_path,
         # The remote holds an old simulator until the copy lands.
-        "copied=0; "
+        "copied=0; enw_fingerprint() { echo same; }; "
         "remote() { case $1 in sha256sum*) "
         f"(( copied )) && echo '{sha}  f' || echo 'old  f';; "
+        "*enw_fingerprint*) echo same;; "
         '*) echo "$1" >> calls;; esac; }; '
         "rsync() { copied=1; echo copied >> calls; }; "
         "remote_code && echo current; cat calls",
