@@ -46,6 +46,7 @@ import pandas as pd
 from bdbvhubrenewal.forecasters.foundation import (
     CHRONOS_MODEL,
     CHRONOS_REVISION,
+    floor_scale,
 )
 
 sys.path.insert(0, str(Path(__file__).parent))
@@ -87,6 +88,16 @@ def read_ids(path: Path) -> pd.Series:
         return pd.read_csv(path, usecols=["outbreak"])["outbreak"]
     except pd.errors.EmptyDataError:
         return pd.Series([], dtype=str)
+
+
+def set_scale_floor(model, floor: float) -> None:
+    """Scale each series by at least `floor` counts when it is positive.
+
+    The `_ft` models must forecast with the same floor
+    (`foundation.SCALE_FLOOR`).
+    """
+    if floor > 0:
+        floor_scale(model, floor)
 
 
 def learning_rate(done: int, base: float, decay: float, first: int) -> float:
@@ -656,6 +667,8 @@ def main() -> None:
     # 1 halves the learning rate with each doubling of outbreaks after the
     # first checkpoint; 0 keeps it constant.
     parser.add_argument("--lr-decay", type=float, default=0.0)
+    # Least scale, in counts, a series is divided by; 0 keeps Chronos-2's.
+    parser.add_argument("--scale-floor", type=float, default=0.0)
     parser.add_argument("--batch-size", type=int, default=256)
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--note", default="")
@@ -753,6 +766,7 @@ def main() -> None:
             "output_patch_embedding.output_layer",
         ],
     )
+    set_scale_floor(pipeline.model, args.scale_floor)
     model = get_peft_model(pipeline.model, lora)
     model.train()
     params = [p for p in model.parameters() if p.requires_grad]
@@ -783,6 +797,7 @@ def main() -> None:
         "lora": {"r": 8, "alpha": 16},
         "learning_rate": args.learning_rate,
         **({"lr_decay": args.lr_decay} if args.lr_decay else {}),
+        **({"scale_floor": args.scale_floor} if args.scale_floor else {}),
         "batch_size": args.batch_size,
         "context": ft.CONTEXT,
         "horizon": ft.HORIZON,
