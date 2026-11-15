@@ -111,6 +111,8 @@ Each place-week keeps its own draws, so every marginal forecast and every per-we
 $\Sigma$ is a place correlation times a week correlation.
 Two steps $\delta$ days apart have correlation $\rho_t^{\delta/7}$.
 Two provinces have correlation $\rho_p$, and the country and a province have correlation $\rho_n$.
+The daily models also pair the days of a week, with correlation $\rho_d^{|d - d'|}$ between days $d$ and $d'$.
+$\rho_d = 0.985$ was chosen on the Ebola release backtest by the weekly WIS, median bias and coverage of the daily models, not estimated, as each matured error is of a week's sum (#239).
 Where the country is the sum of its provinces, as for `randomwalknowcast`, it is summed again from the paired provinces.
 Copulas have been used before to give joint forecasts of seasonal influenza [@Ray2018; @Brooks2018].
 

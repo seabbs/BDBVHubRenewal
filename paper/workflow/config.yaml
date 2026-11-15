@@ -128,8 +128,13 @@ evidence:
   lag_bdbv_after:
     ref: e4f4d7a49773a3050a9529df5c70d7cc8504dafc
     path: evidence/bdbv-lagfix/fm-summary-after.csv
-  copula_scores: null
-  copula_rho: null
+  # The copula's arms scored by `evaluation.trajectories` (#237).
+  copula_scores:
+    ref: addbf7d86d01aca10f2a7ae8e63792c741cb5668
+    path: results/copula-scores.csv.gz
+  copula_rho:
+    ref: addbf7d86d01aca10f2a7ae8e63792c741cb5668
+    path: results/copula-rho.csv.gz
   aggregation_scores:
     ref: 5a3e0440880f54751fd8dccbfa14133a2a74ba81
     path: results/agg/aggregation-scores.csv.gz
