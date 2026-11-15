@@ -39,6 +39,7 @@ __all__ = [
     "cost_table",
     "diseases_table",
     "heldout_figure",
+    "lag_numbers",
     "realism_figure",
     "realism_numbers",
     "rho_medians",
@@ -233,6 +234,44 @@ def aggregation_numbers(
     return out
 
 
+def lag_numbers(
+    germany: pd.DataFrame, before: pd.DataFrame, after: pd.DataFrame
+) -> dict:
+    """Return each model's relative WIS with the capped and longer lags.
+
+    Germany's national rows name the longer horizon `<model>_fix`; the
+    BDBV release backtest gives each horizon its own table, of which the
+    `all` nowcast rows of the complete target are compared. Values are
+    WIS relative to `randomwalknowcast`.
+    """
+    nat = germany.loc[germany["pool"] == "national"].set_index("model")
+    rel = nat["rel_wis_randomwalknowcast"]
+    de = {
+        m: {
+            "capped": round(float(rel[m]), 2),
+            "longer": round(float(rel[f"{m}_fix"]), 2),
+        }
+        for m in rel.index
+        if f"{m}_fix" in rel.index
+    }
+
+    def pick(t: pd.DataFrame) -> pd.Series:
+        keep = (
+            (t["scale"] == "all")
+            & (t["target"] == "complete")
+            & (t["weeks"] == "nowcast")
+        )
+        return t.loc[keep].set_index("model")["rel_wis"]
+
+    b, a = pick(before), pick(after)
+    bdbv = {
+        m: {"capped": round(float(b[m]), 2), "longer": round(float(a[m]), 2)}
+        for m in b.index
+        if m in a.index and m.startswith("fm_chronos")
+    }
+    return {"germany": de, "bdbv": bdbv}
+
+
 def heldout_figure(curve: pd.DataFrame) -> Figure:
     """Plot held-out loss against the outbreaks seen.
 
@@ -354,6 +393,9 @@ EVIDENCE: Final = {
     "sim_summaries": "fm-finetune3's per-outbreak r3 pilot summaries",
     "sim_realism": "fm-finetune3's data reference values",
     "sim_diseases": "fm-finetune3's published disease values",
+    "lag_germany": "germany-chronos2's German lag-horizon scores",
+    "lag_bdbv_before": "the BDBV scores with the 4-week lag horizon",
+    "lag_bdbv_after": "the BDBV scores with lags to the truth delay",
 }
 """Each evidence input and what it waits on until set."""
 
@@ -473,6 +515,22 @@ def write_evidence(
     numbers = {
         "evidence": {
             "rho": QUOTED["rho"] if rho is None else rho_medians(rho),
+            "lag": (
+                None
+                if any(
+                    data[n] is None
+                    for n in (
+                        "lag_germany",
+                        "lag_bdbv_before",
+                        "lag_bdbv_after",
+                    )
+                )
+                else lag_numbers(
+                    data["lag_germany"],
+                    data["lag_bdbv_before"],
+                    data["lag_bdbv_after"],
+                )
+            ),
             "aggregation": (None if agg is None else aggregation_numbers(agg)),
             "realism": (
                 QUOTED["realism"] if ref is None else realism_numbers(ref)

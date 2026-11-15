@@ -169,3 +169,35 @@ def test_a_study_without_rows_still_waits(tmp_path) -> None:
     assert (
         "waits on" in (tmp_path / "si" / "aggregation-germany.md").read_text()
     )
+
+
+def test_lag_numbers_pair_each_model_with_its_longer_horizon() -> None:
+    from paperpipe.evidence import lag_numbers
+
+    germany = pd.DataFrame(
+        {
+            "pool": "national",
+            "model": ["fm_chronos_daily_ragged", "fm_chronos_daily_ragged_fix"],
+            "rel_wis_randomwalknowcast": [2.9, 3.8],
+        }
+    )
+
+    def bdbv(value: float) -> pd.DataFrame:
+        return pd.DataFrame(
+            {
+                "scale": "all",
+                "target": "complete",
+                "weeks": "nowcast",
+                "model": ["fm_chronos_weekly_ragged", "randomwalk"],
+                "rel_wis": [value, 1.4],
+            }
+        )
+
+    out = lag_numbers(germany, bdbv(1.3), bdbv(3.2))
+    assert out["germany"]["fm_chronos_daily_ragged"] == {
+        "capped": 2.9,
+        "longer": 3.8,
+    }
+    assert out["bdbv"] == {
+        "fm_chronos_weekly_ragged": {"capped": 1.3, "longer": 3.2}
+    }

@@ -70,9 +70,6 @@ ebola:
   extra:
     - evidence: ebola_chronos
       models: ".*_n1000$"
-      provisional: >-
-        Chronos-2 rows are provisional: they are refitted once the
-        release-lag fix of #192 merges.
   backtest_models: [randomwalk, randomwalknowcast]
   hub: ../data/raw/bdbv-hub
   hub_repo: https://github.com/InsightNet-US/BDBV-Modeling-Hub.git
@@ -117,6 +114,16 @@ evidence:
   simulator:
     ref: 6bcb6f2fa4a2f2f5978271a7d3d30e613ea3f939
     path: scripts/finetune_simulate.R
+  # The lag-horizon test of the ragged layout (germany-chronos2).
+  lag_germany:
+    ref: e4f4d7a49773a3050a9529df5c70d7cc8504dafc
+    path: results/germany-chronos-dev/scores.csv
+  lag_bdbv_before:
+    ref: e4f4d7a49773a3050a9529df5c70d7cc8504dafc
+    path: evidence/bdbv-lagfix/fm-summary-before.csv
+  lag_bdbv_after:
+    ref: e4f4d7a49773a3050a9529df5c70d7cc8504dafc
+    path: evidence/bdbv-lagfix/fm-summary-after.csv
   copula_scores: null
   copula_rho: null
   aggregation_scores:
