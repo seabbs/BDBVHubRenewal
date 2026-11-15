@@ -84,8 +84,32 @@ status() {
   total=$(( TRAIN_LAST - TRAIN_FIRST + 1 + HELD_LAST - HELD_FIRST + 1 ))
   done=$(ls "$SIM_DIR" | grep -c '^settings-')
   stage=$(python3 -c "import json;print(json.load(open('$OUT/stream-status.json')).get('stage',''))" 2>/dev/null)
-  step=$(python3 -c "import json;print(json.load(open('$OUT/stream-status.json')).get('step',0))" 2>/dev/null)
-  ckpt=$(python3 -c "import json;print(json.load(open('$OUT/stream-status.json')).get('last_checkpoint','none'))" 2>/dev/null)
+  # A restarted trainer's status starts from nothing, so the step is the
+  # larger of its own and the saved state's, and the last checkpoint is
+  # the newest saved one.
+  step=$(python3 - "$OUT" <<'EOF' 2>/dev/null
+import json, sys
+from pathlib import Path
+out = Path(sys.argv[1])
+def get(path, key):
+    try:
+        return json.loads((out / path).read_text()).get(key) or 0
+    except (OSError, ValueError):
+        return 0
+print(max(get("stream-status.json", "step"), get("state/state.json", "step")))
+EOF
+)
+  ckpt=$(python3 - "$OUT" <<'EOF' 2>/dev/null
+import json, sys
+from pathlib import Path
+saved = sorted(
+    Path(sys.argv[1]).glob("n*/settings.json"),
+    key=lambda p: int(p.parent.name[1:]),
+)
+if saved:
+    print(saved[-1].parent.name, json.loads(saved[-1].read_text())["hash"])
+EOF
+)
   # Seconds of the last chunk waiting for outbreaks, cutting blocks,
   # training and evaluating.
   split=$(python3 -c "import json;t=json.load(open('$OUT/stream-status.json')).get('split');print(' '.join(f'{k[:-2]} {v:.0f}s' for k,v in t.items()) if t else 'none')" 2>/dev/null)
