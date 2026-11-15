@@ -34,6 +34,7 @@ from bdbvhubrenewal.forecasters.chain import NoWalkSpread
 from bdbvhubrenewal.forecasters.copula import GaussianCopula
 from bdbvhubrenewal.forecasters.foundation import (
     CHRONOS_COPULA,
+    CHRONOS_DAY_RHO,
     LAYOUTS,
     SOURCES,
     chronos_sampler,
@@ -300,7 +301,13 @@ def _wide(out: pd.DataFrame) -> pd.DataFrame:
 @pytest.mark.parametrize("name", MODELS)
 def test_draws_are_paired_by_the_copula(name: str, task: ForecastTask) -> None:
     model = get_model(name)
-    assert model.copula == CHRONOS_COPULA
+    if "_weekly_" in name:
+        assert model.copula == CHRONOS_COPULA
+    else:
+        # Days apart by one are paired by the daily prior.
+        per_day = model.copula.rho_time ** (1 / 7)
+        assert per_day == pytest.approx(CHRONOS_DAY_RHO)
+        assert model.copula.rho_provinces == CHRONOS_COPULA.rho_provinces
     paired = dataclasses.replace(model, sample=_independent).forecast(task)
     unpaired = dataclasses.replace(
         model, sample=_independent, copula=GaussianCopula()
