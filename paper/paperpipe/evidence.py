@@ -282,13 +282,15 @@ def checkpoint_numbers(scores: pd.DataFrame) -> dict:
     """Return each panel's cells and each model's relative WIS by size.
 
     Keys are study and level, then `n` (the fewest matched cells of a
-    point) and each model with its `rel_wis` by outbreaks (`zero-shot`
-    for 0), to two decimals.
+    point), `n_origins` where the rows give it, and each model with its
+    `rel_wis` by outbreaks (`zero-shot` for 0), to two decimals.
     """
     out: dict = {}
     for (study, level), one in scores.groupby(["study", "level"]):
         node = out.setdefault(study, {}).setdefault(level, {})
         node["n"] = int(one["n"].min())
+        if "n_origins" in one:
+            node["n_origins"] = int(one["n_origins"].min())
         for model, g in one.groupby("model"):
             node[model] = {
                 ("zero-shot" if k == 0 else f"n{int(k)}"): round(float(v), 2)
@@ -327,6 +329,11 @@ def checkpoint_figure(scores: pd.DataFrame) -> Figure:
         one = sc.loc[(sc["study"] == study) & (sc["level"] == level)]
         n = int(one["n"].min())
         thin = n < MIN_CELLS
+        origins = (
+            f", {int(one['n_origins'].min())} origins"
+            if "n_origins" in one
+            else ""
+        )
         for i, (model, g) in enumerate(one.groupby("model")):
             g = g.sort_values("outbreaks")
             x = g["outbreaks"].where(g["outbreaks"] > 0, zero)
@@ -348,7 +355,7 @@ def checkpoint_figure(scores: pd.DataFrame) -> Figure:
         ax.set_xticks(ticks, labels, rotation=45, fontsize=7)
         ax.minorticks_off()
         ax.axhline(1, color="#888888", ls="--", lw=1)
-        ax.set_title(f"{study}, {level} (n = {n})", fontsize=9)
+        ax.set_title(f"{study}, {level} (n = {n}{origins})", fontsize=9)
         ax.set_xlabel("Fine-tuning outbreaks")
         ax.set_ylabel("Relative WIS")
     for ax in axes[len(panels) :]:
