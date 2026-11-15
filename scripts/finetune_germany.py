@@ -155,7 +155,12 @@ def train(args: argparse.Namespace) -> None:
     with args.blocks.open("rb") as f:
         blocks, held = split_held_out(pickle.load(f))
     log(f"{len(blocks)} training blocks, {len(held)} held out")
-    fs.checkpoint_large_batches(ft.checkpoint_above(args.memory_gb))
+    above = (
+        ft.checkpoint_above(args.memory_gb)
+        if args.checkpoint_above is None
+        else args.checkpoint_above
+    )
+    fs.checkpoint_large_batches(above)
     most = ft.max_series(args.memory_gb)
     torch.manual_seed(args.seed)
     pipeline = Chronos2Pipeline.from_pretrained(
@@ -211,6 +216,7 @@ def train(args: argparse.Namespace) -> None:
         "steps": args.steps,
         "batch_size": args.batch_size,
         "memory_gb": args.memory_gb,
+        "checkpoint_above": above,
         "context": ft.CONTEXT,
         "prediction_length": (
             f"each block's horizon in whole patches of {ft.OUTPUT_PATCH} steps"
@@ -363,6 +369,10 @@ def main() -> None:
     run.add_argument("--learning-rate", type=float, default=1e-5)
     run.add_argument("--batch-size", type=int, default=256)
     run.add_argument("--memory-gb", type=float, default=10.0)
+    # Series above which a batch recomputes activations in backward. The
+    # GPU memory model does not hold on CPU, where a 493-series block ran
+    # out of 14 GB without it and an 850-series block peaks at 7.6 GB with.
+    run.add_argument("--checkpoint-above", type=int, default=None)
     run.add_argument("--threads", type=int, default=6)
     run.add_argument("--seed", type=int, default=1)
     run.add_argument("--real-validation", type=Path)
