@@ -32,10 +32,12 @@ import gc
 import hashlib
 import inspect
 import json
+import multiprocessing
 import subprocess
 import sys
 import time
 import zlib
+from concurrent.futures import Executor, Future, ProcessPoolExecutor
 from pathlib import Path
 
 import numpy as np
@@ -217,6 +219,71 @@ def cut(
             )
             out.extend((outbreak, block) for block in blocks)
     return out
+
+
+def init_worker(max_series: int) -> None:
+    """Set a cutting worker's largest block to the trainer's."""
+    ft.MAX_SERIES = max_series
+
+
+def _cut_part(
+    sim_dir: Path, ids: list[str], seed: int, per_simulation: int
+) -> tuple[list[tuple[str, dict]], list[str]]:
+    """Return `cut` of some simulations and the empty blocks skipped."""
+    empty: list[str] = []
+    return cut(sim_dir, ids, seed, per_simulation, empty), empty
+
+
+def cut_in_workers(
+    pool: Executor | None,
+    sim_dir: Path,
+    ids: list[str],
+    seed: int,
+    per_simulation: int,
+    parts: int,
+) -> tuple[list[tuple[str, dict]], list[str]]:
+    """Return `cut` of the simulations `ids`, in `parts` run by `pool`.
+
+    Each simulation's blocks are seeded by it alone, so the parts, joined
+    in order, are the blocks `cut` gives for all of them at once. Without
+    a pool the parts run here.
+    """
+    return _join(submit_cut(pool, sim_dir, ids, seed, per_simulation, parts))
+
+
+def submit_cut(
+    pool: Executor | None,
+    sim_dir: Path,
+    ids: list[str],
+    seed: int,
+    per_simulation: int,
+    parts: int,
+) -> list[Future]:
+    """Start cutting the simulations `ids` in `parts` (`cut_in_workers`)."""
+    split = np.array_split(np.arange(len(ids)), max(1, min(parts, len(ids))))
+    futures = []
+    for part in split:
+        args = (sim_dir, [ids[i] for i in part], seed, per_simulation)
+        if pool is None:
+            future: Future = Future()
+            future.set_result(_cut_part(*args))
+        else:
+            future = pool.submit(_cut_part, *args)
+        futures.append(future)
+    return futures
+
+
+def _join(
+    futures: list[Future],
+) -> tuple[list[tuple[str, dict]], list[str]]:
+    """Return the blocks and empty blocks of cut parts, in order."""
+    pairs: list[tuple[str, dict]] = []
+    empty: list[str] = []
+    for future in futures:
+        part, skipped = future.result()
+        pairs.extend(part)
+        empty.extend(skipped)
+    return pairs, empty
 
 
 def free_memory() -> None:
@@ -472,6 +539,8 @@ def main() -> None:
     parser.add_argument("--min-gain", type=float, default=0.01)
     parser.add_argument("--stop-from", type=int, default=8000)
     parser.add_argument("--memory-gb", type=float, default=ft.MEMORY_GB)
+    # Processes cutting blocks a chunk ahead; they do not change the blocks.
+    parser.add_argument("--cut-workers", type=int, default=3)
     args = parser.parse_args()
     out, sim_dir = args.out, args.sim_dir
     out.mkdir(parents=True, exist_ok=True)
@@ -511,8 +580,16 @@ def main() -> None:
     # so held-out blocks are cut to the same size as training blocks.
     ft.checkpoint_large_batches(ft.checkpoint_above(args.memory_gb))
     ft.MAX_SERIES = min(ft.MAX_SERIES, ft.max_series(args.memory_gb))
-    empty: list[str] = []
-    val = [b for _, b in cut(sim_dir, held, args.seed, k, empty)]
+    pool = ProcessPoolExecutor(
+        args.cut_workers,
+        mp_context=multiprocessing.get_context("spawn"),
+        initializer=init_worker,
+        initargs=(ft.MAX_SERIES,),
+    )
+    held_pairs, empty = cut_in_workers(
+        pool, sim_dir, held, args.seed, k, args.cut_workers
+    )
+    val = [b for _, b in held_pairs]
     log(
         f"{len(held)} held-out outbreaks, {len(val)} blocks, "
         f"{len(empty)} skipped with no rows"
@@ -641,9 +718,25 @@ def main() -> None:
         optimiser.zero_grad()
         free_memory()
 
+    # The next chunk's blocks are cut in `pool` while this one trains.
+    ahead: dict[int, list[Future]] = {}
+
+    def cut_ahead(lo: int) -> None:
+        """Start cutting the chunk from outbreak `lo` if it is ready."""
+        top = min(lo + CHUNK, args.outbreaks)
+        if lo >= top or lo in ahead:
+            return
+        ready = ready_outbreaks(sim_dir, training_seeds())
+        if len(ready) >= top:
+            ahead[lo] = submit_cut(
+                pool, sim_dir, ready[lo:top], args.seed, k, args.cut_workers
+            )
+
     t0 = time.perf_counter()
     while done < args.outbreaks:
         hi = min(done + CHUNK, args.outbreaks)
+        split = {"wait_s": 0.0, "cut_s": 0.0, "train_s": 0.0, "eval_s": 0.0}
+        tick = time.perf_counter()
         report(stage=f"waiting for outbreaks {done + 1}-{hi}")
         free_memory()
         while len(ready := ready_outbreaks(sim_dir, training_seeds())) < hi:
@@ -652,9 +745,13 @@ def main() -> None:
                     f"{len(ready)} training outbreaks, fewer than {hi}"
                 )
             time.sleep(POLL)
-        ids = ready[done:hi]
-        empty = []
-        pairs = cut(sim_dir, ids, args.seed, k, empty)
+        split["wait_s"] = time.perf_counter() - tick
+        tick = time.perf_counter()
+        report(stage=f"cutting blocks of outbreaks {done + 1}-{hi}")
+        cut_ahead(done)
+        pairs, empty = _join(ahead.pop(done))
+        split["cut_s"] = time.perf_counter() - tick
+        tick = time.perf_counter()
         blocks = [b for _, b in pairs]
         sizes = np.array([int(b["context"].shape[0]) for b in blocks])
         rng = np.random.default_rng([args.seed, done])
@@ -695,14 +792,17 @@ def main() -> None:
                     + "\n"
                 )
             if step % 10 == 0:
+                cut_ahead(hi)
                 history.append({"step": step, "loss": value})
                 report(
                     stage="training", step=step, outbreaks=done, gpu=memory()
                 )
             if step % ft.EVAL_EVERY == 0:
+                since = time.perf_counter()
                 monitor = ft.held_out_loss(
                     model, val[: ft.EVAL_BLOCKS], args.batch_size
                 )
+                split["eval_s"] += time.perf_counter() - since
                 history.append({"step": step, "eval_loss": monitor})
                 log(
                     f"step {step}: loss {value:.4f}, held-out "
@@ -713,6 +813,8 @@ def main() -> None:
             if step % SAVE_EVERY == 0:
                 snapshot()
         done, position = hi, 0
+        split["train_s"] = time.perf_counter() - tick - split["eval_s"]
+        tick = time.perf_counter()
         seen["blocks"] += len(pairs)
         seen["series"] += int(sizes.sum())
         mix = seen.setdefault("mix", {})
@@ -788,8 +890,14 @@ def main() -> None:
             if should_stop(losses, done, args.stop_from, args.min_gain):
                 log(f"held-out loss gained under {args.min_gain:.0%}: stop")
                 break
+        split["eval_s"] += time.perf_counter() - tick
+        log(
+            "chunk time: "
+            + ", ".join(f"{k[:-2]} {v:.0f} s" for k, v in split.items())
+        )
         snapshot()
-        report(stage="training", step=step, outbreaks=done)
+        report(stage="training", step=step, outbreaks=done, split=split)
+    pool.shutdown(cancel_futures=True)
     report(stage="finished", step=step, outbreaks=done)
     log("finished")
 

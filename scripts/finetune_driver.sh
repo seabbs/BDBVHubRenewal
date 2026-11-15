@@ -77,13 +77,16 @@ last_error=""
 log() { echo "$(date '+%Y-%m-%d %H:%M:%S') [driver] $*" >> "$LOG"; }
 
 status() {
-  local done total step ckpt stage
+  local done total step ckpt stage split
   total=$(( TRAIN_LAST - TRAIN_FIRST + 1 + HELD_LAST - HELD_FIRST + 1 ))
   done=$(ls "$SIM_DIR" | grep -c '^settings-')
   stage=$(python3 -c "import json;print(json.load(open('$OUT/stream-status.json')).get('stage',''))" 2>/dev/null)
   step=$(python3 -c "import json;print(json.load(open('$OUT/stream-status.json')).get('step',0))" 2>/dev/null)
   ckpt=$(python3 -c "import json;print(json.load(open('$OUT/stream-status.json')).get('last_checkpoint','none'))" 2>/dev/null)
-  echo "$(date '+%Y-%m-%d %H:%M:%S') stage=${1:-${stage:-starting}} batches=$done/$total train_step=${step:-0} remote=$remote_state last_checkpoint=${ckpt:-none} last_error=${last_error:-none}" > "$STATUS"
+  # Seconds of the last chunk waiting for outbreaks, cutting blocks,
+  # training and evaluating.
+  split=$(python3 -c "import json;t=json.load(open('$OUT/stream-status.json')).get('split');print(' '.join(f'{k[:-2]} {v:.0f}s' for k,v in t.items()) if t else 'none')" 2>/dev/null)
+  echo "$(date '+%Y-%m-%d %H:%M:%S') stage=${1:-${stage:-starting}} batches=$done/$total train_step=${step:-0} remote=$remote_state last_checkpoint=${ckpt:-none} last_chunk=${split:-none} last_error=${last_error:-none}" > "$STATUS"
 }
 
 fail() {
