@@ -773,7 +773,8 @@ def main() -> None:
     parser.add_argument("--valid-step-loss", action="store_true")
     # Cut every block at the release lags the `_ft` models forecast with.
     parser.add_argument("--deployed-lags", action="store_true")
-    # Sources to train on: one of them trains an adapter for it alone.
+    # Sources to train on: weekly, daily, and 3-day blocks summed from the
+    # daily triangle; one of them trains an adapter for it alone.
     parser.add_argument("--sources", nargs="+", default=list(ft.SOURCES))
     # Real validation blocks (scripts/finetune_real_validation.py), scored
     # at each checkpoint to choose among them; not trained on.
@@ -794,7 +795,7 @@ def main() -> None:
     parser.add_argument("--cut-workers", type=int, default=3)
     args = parser.parse_args()
     if args.deployed_lags:
-        ft.MAX_LAGS = ft.DEPLOYED_LAGS
+        ft.MAX_LAGS = {**ft.MAX_LAGS, **ft.DEPLOYED_LAGS}
     ft.SOURCES = tuple(args.sources)
     ft.STEP_COVARIATE = args.step_covariate
     out, sim_dir = args.out, args.sim_dir

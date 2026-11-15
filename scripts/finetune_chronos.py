@@ -37,11 +37,18 @@ HORIZON = 96
 """Steps of horizon in a block, right-padded with missing values: the
 longest daily horizon is 6 + 28 + 49 days, in six patches of 16."""
 
-MAX_LAGS = {"weekly": tuple(range(2, 8)), "daily": tuple(range(14, 50))}
+MAX_LAGS = {
+    "weekly": tuple(range(2, 8)),
+    "daily": tuple(range(14, 50)),
+    "3day": tuple(range(5, 17)),
+}
 """Release lags $D$ the blocks are drawn from."""
 
 DEPLOYED_LAGS = {source: (lag,) for source, lag in foundation.MAX_LAG.items()}
 """The release lags the `_ft` models forecast with, to train on only."""
+
+DAYS_PER_STEP = {"weekly": 7, "daily": 1, "3day": 3}
+"""Days in a step of each source; 3-day blocks train only."""
 
 STEP_COVARIATE = False
 """Whether blocks carry a known-future row of days per step (7 weekly, 1
@@ -304,7 +311,7 @@ def outbreak_blocks(
             if picks is not None and (source, j) not in picks:
                 continue
             lag = int(rng.choice(MAX_LAGS[source]))
-            width = 7 if source == "weekly" else 1
+            width = DAYS_PER_STEP[source]
             # At least two steps of context before the lags.
             least = -(-(lag + 2) * width // 7)
             if len(cutoffs) <= least:
