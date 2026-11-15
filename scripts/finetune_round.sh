@@ -11,7 +11,8 @@
 #   seeds.txt          training seeds, one a line, in order
 #   held-out.txt       first and last held-out seed
 #   sims/              their counts-*.csv.gz and settings-*.csv
-#   real-training.pkl  optional real-data training blocks
+#   real-training.pkl  real-data training blocks, used only with
+#                      USE_REAL_TRAINING=1 (a separate arm, not round 1)
 #
 # The round is copied to output/finetune/rounds/r<ROUND>, trained with
 # Chronos-2's recipe (scripts/finetune_stream.py: learning rate 1e-5
@@ -45,7 +46,7 @@ trainer_args() {
     --sources $SOURCES --real-validation "$REAL_VALIDATION"
     --note "round $1" --publish)
   [ "$2" != none ] && args+=(--init-adapter "$2")
-  [ -e "$ROUND_LOCAL/real-training.pkl" ] \
+  [ "${USE_REAL_TRAINING:-0}" = 1 ] \
     && args+=(--real-training "$ROUND_LOCAL/real-training.pkl")
   return 0
 }
@@ -64,8 +65,9 @@ mkdir -p "$ROUND_LOCAL"
 rsync -a "$REMOTE:$remote_round/seeds.txt" "$REMOTE:$remote_round/held-out.txt" \
   "$ROUND_LOCAL/" || { echo "round $round inputs not on $REMOTE" >&2; exit 1; }
 rsync -a "$REMOTE:$remote_round/sims/" "$ROUND_LOCAL/sims/" || exit 1
-rsync -a "$REMOTE:$remote_round/real-training.pkl" "$ROUND_LOCAL/" \
-  2> /dev/null || true
+if [ "${USE_REAL_TRAINING:-0}" = 1 ]; then
+  rsync -a "$REMOTE:$remote_round/real-training.pkl" "$ROUND_LOCAL/" || exit 1
+fi
 trainer_args "$round" "$init"
 PYTORCH_MPS_HIGH_WATERMARK_RATIO=${MPS_HIGH_WATERMARK:-0.85} \
 PYTORCH_MPS_LOW_WATERMARK_RATIO=0.6 \
