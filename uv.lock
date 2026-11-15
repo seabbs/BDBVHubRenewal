@@ -1,5 +1,5 @@
 version = 1
-revision = 5
+revision = 3
 requires-python = ">=3.13"
 resolution-markers = [
     "python_full_version >= '3.15' and sys_platform == 'win32'",
@@ -223,6 +223,11 @@ docs = [
     { name = "mkdocs-material" },
     { name = "mkdocstrings", extra = ["python"] },
 ]
+timesfm = [
+    { name = "timesfm", extra = ["torch"] },
+    { name = "torch", version = "2.14.1+cu126", source = { registry = "https://download.pytorch.org/whl/cu126" }, marker = "sys_platform == 'linux'" },
+    { name = "torch", version = "2.15.0", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'linux'" },
+]
 
 [package.metadata]
 requires-dist = [
@@ -260,6 +265,11 @@ docs = [
     { name = "mkdocs-jupyter", specifier = ">=0.27.0" },
     { name = "mkdocs-material", specifier = ">=9.5" },
     { name = "mkdocstrings", extras = ["python"], specifier = ">=0.26" },
+]
+timesfm = [
+    { name = "timesfm", extras = ["torch"], specifier = "==3.0.2" },
+    { name = "torch", marker = "sys_platform != 'linux'", specifier = ">=2.7" },
+    { name = "torch", marker = "sys_platform == 'linux'", specifier = ">=2.7", index = "https://download.pytorch.org/whl/cu126" },
 ]
 
 [[package]]
@@ -3213,6 +3223,26 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/46/58/8c37dea7bbf769b20d58e7ace7e5edfe65b849442b00ffcdd56be88697c6/tabulate-0.10.0.tar.gz", hash = "sha256:e2cfde8f79420f6deeffdeda9aaec3b6bc5abce947655d17ac662b126e48a60d", size = 91754, upload-time = "2026-03-04T18:55:34.402Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/99/55/db07de81b5c630da5cbf5c7df646580ca26dfaefa593667fc6f2fe016d2e/tabulate-0.10.0-py3-none-any.whl", hash = "sha256:f0b0622e567335c8fabaaa659f1b33bcb6ddfe2e496071b743aa113f8774f2d3", size = 39814, upload-time = "2026-03-04T18:55:31.284Z" },
+]
+
+[[package]]
+name = "timesfm"
+version = "3.0.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "huggingface-hub" },
+    { name = "numpy" },
+    { name = "safetensors" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/75/c5/1138508a4bd74f2c7ea91b2ca95b126cda8e40cadf8a2dadc9e0d812297f/timesfm-3.0.2.tar.gz", hash = "sha256:a602deba10b9323132d0bc694c08e6cfaf144d7b9e4554da33155b6a9cb0ea5c", size = 100423, upload-time = "2026-09-09T22:07:06.923Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d9/08/06f17372e1843e203d579241ce199594a22d5c705a3315623697f50697f6/timesfm-3.0.2-py3-none-any.whl", hash = "sha256:cfa3d22ddc3f019f0d9d95f19055428c4a4713526dafd7e5d1a7769782e7613f", size = 125052, upload-time = "2026-09-09T22:07:05.683Z" },
+]
+
+[package.optional-dependencies]
+torch = [
+    { name = "torch", version = "2.14.1+cu126", source = { registry = "https://download.pytorch.org/whl/cu126" }, marker = "sys_platform == 'linux'" },
+    { name = "torch", version = "2.15.0", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'linux'" },
 ]
 
 [[package]]
