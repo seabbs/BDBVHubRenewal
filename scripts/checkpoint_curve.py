@@ -3,7 +3,8 @@
 Writes `evidence/checkpoint-scores.csv`: one row per study, level, model
 and checkpoint, with relative WIS and log WIS against randomwalknowcast
 and interval coverage, on the cells every model of that study and level
-made. Zero-shot rows have checkpoint `zero-shot` and 0 outbreaks.
+made, with how many origins those cells come from and the first and
+last of them. Zero-shot rows have checkpoint `zero-shot` and 0 outbreaks.
 
 Germany: the development half, levels national, states and age, scored
 on the 40-day truth (`germany_chronos_dev.scores`). BDBV: the release
@@ -40,6 +41,9 @@ COLUMNS = [
     "checkpoint",
     "outbreaks",
     "n",
+    "n_origins",
+    "first_origin",
+    "last_origin",
     "rel_wis",
     "rel_log_wis",
     "coverage_50",
@@ -75,6 +79,10 @@ def _relative(rows: pd.DataFrame, study: str) -> pd.DataFrame:
     keys = ["level", "model", "checkpoint"]
     mean = rows.groupby(keys)[["wis", "log_wis", *covers]].mean()
     mean["n"] = rows.groupby(keys).size()
+    origins = rows.groupby(keys)["origin"]
+    mean["n_origins"] = origins.nunique()
+    mean["first_origin"] = origins.min()
+    mean["last_origin"] = origins.max()
     base = mean.xs((BASELINE, "zero-shot"), level=("model", "checkpoint"))
     for m in ("wis", "log_wis"):
         mean[f"rel_{m}"] = (
