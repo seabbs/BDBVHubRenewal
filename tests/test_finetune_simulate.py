@@ -254,7 +254,7 @@ out <- simulate_outbreak(d, v)
 counts <- out$counts[draw == 1]
 dates <- sort(unique(counts$reference_date))
 seed_day <- dates[1] + round(v$late_at * length(dates))
-late <- counts[place == "P02" & reference_date >= seed_day, sum(count)]
+late <- counts[location == "P02" & reference_date >= seed_day, sum(count)]
 cat("late", late, "\\n")
 """,
         tmp_path,

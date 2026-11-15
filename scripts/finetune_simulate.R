@@ -333,15 +333,6 @@ draw_values <- function(design) {
     place_rho = runif(1, 0.3, 0.9),
     place_sd = runif(1, 0.01, 0.03),
     place_lags = c(0L, sample(1:28, design$n_places - 1L, replace = TRUE)),
-    # Places seeded mid-outbreak: one to three after the first.
-    late_places = if (design$n_places > 1) {
-      others <- 2:design$n_places
-      others[sample.int(length(others), min(3L, length(others)))][
-        seq_len(sample(1:min(3L, length(others)), 1))
-      ]
-    } else {
-      integer(0)
-    },
     late_at = runif(1, 0.2, 0.6),
     late_days = sample(7:14, 1),
     stratum_sd = if (design$spread == "concentrated") {
@@ -397,7 +388,27 @@ draw_values <- function(design) {
     design$delay_family
   }
   v$max_delay <- max_delay_for(delay_parameters(family, v)$q99)
+  # Places with no cases; the first has cases if every place would not.
+  quiet <- which(runif(design$n_places) < v$quiet)
+  if (length(quiet) == design$n_places) quiet <- setdiff(quiet, 1L)
+  v$quiet_places <- quiet
+  # Places seeded mid-outbreak: one to three places with cases, after the
+  # first.
+  active <- setdiff(seq_len(design$n_places)[-1], quiet)
+  v$late_places <- if (length(active)) {
+    active[sample.int(length(active), sample(1:min(3L, length(active)), 1))]
+  } else {
+    integer(0)
+  }
   v
+}
+
+# A simulation's settings as one row: values with one entry per place
+# become text joined by ";".
+flat_values <- function(x) {
+  lapply(x, function(e) {
+    if (length(e) == 1L) e else paste(e, collapse = ";")
+  })
 }
 
 # Expected onsets of each stratum by day, as epinowcast's renewal or
@@ -467,8 +478,7 @@ simulate_outbreak <- function(design, v) {
     matrix(log_r_from_growth(as.numeric(growth), gt), nrow = n_r)
   }
   place_weight <- exp(rnorm(design$n_places, 0, v$stratum_sd))
-  place_weight[runif(design$n_places) < v$quiet] <- 0
-  if (all(place_weight == 0)) place_weight[1] <- 1
+  place_weight[v$quiet_places] <- 0
   age_weight <- exp(rnorm(design$n_ages, 0, v$stratum_sd / 2))
   weight <- place_weight[match(strata$place, place_ids)] *
     age_weight[match(strata$age, age_ids)] * late$seed
@@ -705,14 +715,14 @@ if (sys.nframe() == 0L) {
     # Each draw is an outbreak `<seed>-<index>-<draw>`.
     out$counts[, outbreak := paste(id, draw, sep = "-")]
     out$counts[, draw := NULL]
-    settings[[length(settings) + 1L]] <- c(
+    settings[[length(settings) + 1L]] <- flat_values(c(
       list(outbreak = id), design, out$values,
       list(
         draws = draws, tries = try, cases = sum(out$counts$count) / draws,
         seconds = as.numeric(Sys.time() - t1, units = "secs")
       ),
       stack
-    )
+    ))
     counts[[length(counts) + 1L]] <- out$counts
   }
   message(sprintf(
