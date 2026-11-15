@@ -477,3 +477,25 @@ def test_learning_rate_halves_with_each_doubling_of_outbreaks():
     assert learning_rate(1000, 1e-4, 1.0, 1000) == 1e-4
     assert learning_rate(2000, 1e-4, 1.0, 1000) == 5e-5
     assert abs(learning_rate(8000, 1e-4, 1.0, 1000) - 1.25e-5) < 1e-12
+
+
+def test_training_scale_floor_applies_only_when_set():
+    import pytest
+
+    pytest.importorskip("chronos")
+    import torch
+    from chronos.chronos_bolt import InstanceNorm
+    from finetune_stream import set_scale_floor
+
+    def model():
+        m = type("M", (), {})()
+        m.instance_norm = InstanceNorm(use_arcsinh=True)
+        return m
+
+    flat = torch.zeros(1, 8)
+    kept = model()
+    set_scale_floor(kept, 0.0)
+    assert float(kept.instance_norm(flat)[1][1]) < 1e-4
+    floored = model()
+    set_scale_floor(floored, 1.0)
+    assert float(floored.instance_norm(flat)[1][1]) == 1.0
