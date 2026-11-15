@@ -26,6 +26,17 @@ DATA = "#8a8984"
 TEXT = "#52514e"
 GRID = "#e6e5e1"
 SURFACE = "#fcfcfb"
+# One colour per model, the dataviz reference palette's first seven
+# slots in panel order (validated on adjacent pairs; panels are titled).
+MODEL_COLOURS = {
+    "randomwalknowcast": "#2a78d6",
+    "Hub MeanEnsemble": "#eb6834",
+    "Chronos-2 zero-shot": "#1baf7a",
+    "Chronos-2 ft round 1": "#eda100",
+    "Chronos-2 ft r3 n1000": "#e87ba4",
+    "Chronos-2 ft r3 n2000": "#008300",
+    "Chronos-2 ft r3 n4000": "#6250d6",
+}
 
 
 def _quantiles(fc: pd.DataFrame, origin: str, place: str) -> pd.DataFrame:
@@ -48,6 +59,7 @@ def draw_panels(
     truth_label: str = "truth",
     truth_short: str = "truth",
     scored_on: str = "all development dates",
+    colours: Mapping[str, str] | None = None,
 ) -> None:
     """Draw one column per model and one row per (origin, place) into `out`.
 
@@ -74,6 +86,8 @@ def draw_panels(
         The black line's label in the first column.
     scored_on : str
         The cells the relative WIS is on, for the caption.
+    colours : mapping, optional
+        Model label to colour; `MODEL_COLOURS` by default.
     """
     labels = list(models)
     fig, axes = plt.subplots(
@@ -89,9 +103,24 @@ def draw_panels(
             (asof["origin"] == origin) & (asof["location"] == place)
         ].sort_values("target_end_date")
         x_seen = pd.to_datetime(seen["target_end_date"])
+        # The truth spans the data and the latest week any model forecasts.
+        last = max(
+            [str(seen["target_end_date"].max())]
+            + [
+                str(
+                    fc.loc[
+                        (fc["origin"] == origin) & (fc["location"] == place),
+                        "target_end_date",
+                    ].max()
+                )
+                for fc in models.values()
+                if ((fc["origin"] == origin) & (fc["location"] == place)).any()
+            ]
+        )
         tr = truth.loc[
             (truth["location"] == place)
             & (truth["target_end_date"] >= seen["target_end_date"].min())
+            & (truth["target_end_date"] <= last)
         ].sort_values("target_end_date")
         x_tr = pd.to_datetime(tr["target_end_date"])
         for j, label in enumerate(labels):
@@ -101,13 +130,14 @@ def draw_panels(
             ax.plot(
                 x_seen, seen["total"], color=DATA, lw=1.2, ls="--", zorder=2
             )
+            colour = (colours or MODEL_COLOURS).get(label, SERIES)
             q = _quantiles(models[label], origin, place)
             if not q.empty:
                 ax.fill_between(
                     q.index,
                     q[0.025],
                     q[0.975],
-                    color=SERIES,
+                    color=colour,
                     alpha=0.15,
                     lw=0,
                     zorder=1,
@@ -116,7 +146,7 @@ def draw_panels(
                     q.index,
                     q[0.25],
                     q[0.75],
-                    color=SERIES,
+                    color=colour,
                     alpha=0.3,
                     lw=0,
                     zorder=1,
@@ -124,7 +154,7 @@ def draw_panels(
                 ax.plot(
                     q.index,
                     q[0.5],
-                    color=SERIES,
+                    color=colour,
                     lw=2,
                     marker="o",
                     ms=4,
@@ -172,7 +202,7 @@ def draw_panels(
         0.01,
         0.005,
         f"Black: {truth_label}. Grey dashed: data as of the origin. "
-        "Blue: median, 50% and 95% intervals. Relative WIS against "
+        "Coloured: median, 50% and 95% intervals. Relative WIS against "
         "randomwalknowcast, "
         f"{scored_on}.",
         fontsize=8,

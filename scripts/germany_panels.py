@@ -1,6 +1,6 @@
 """German national nowcast panels, one per model (`nowcast_panels`).
 
-Usage: python scripts/germany_panels.py RESULTS CHECKPOINTS OUT
+Usage: python scripts/germany_panels.py RESULTS CHECKPOINTS OUT [PLACE]
 
 RESULTS holds `forecasts.csv.gz` (our models, round 1 fine-tuned as
 `fm_chronos_daily_ragged_ft`) and `teams-forecasts.csv.gz`. CHECKPOINTS
@@ -27,22 +27,23 @@ from bdbvhubrenewal.evaluation import germany as de
 from bdbvhubrenewal.evaluation.nowcast import rolling_truth
 
 ORIGINS = ("2021-11-29", "2021-12-27", "2022-01-31")
-PLACE = "DE"
+NAMES = {"DE": "national", "35-59": "ages 35-59", "80+": "ages 80+"}
 READ = {"dtype": {"origin": str, "target_end_date": str}}
 
 
-def main(results: Path, ckpt_dir: Path, out: Path) -> None:
-    """Draw the German national panels."""
+def main(results: Path, ckpt_dir: Path, out: Path, place: str) -> None:
+    """Draw the panels of one German place."""
     config = de.load_germany_config("config/germany.toml")
     ours = pd.read_csv(results / "forecasts.csv.gz", **READ)
     teams = pd.read_csv(results / "teams-forecasts.csv.gz", **READ)
     scores = pd.read_csv("results/germany-chronos-dev/scores.csv")
-    national = scores.loc[scores["pool"] == "national"].set_index("model")
-    rel = national["rel_wis_randomwalknowcast"]
+    level = "national" if place == "DE" else "age"
+    pooled = scores.loc[scores["pool"] == level].set_index("model")
+    rel = pooled["rel_wis_randomwalknowcast"]
     curve = pd.read_csv("evidence/checkpoint-scores.csv")
     curve = curve.loc[
         (curve["study"] == "germany")
-        & (curve["level"] == "national")
+        & (curve["level"] == level)
         & (curve["model"] == "fm_chronos_daily_ragged")
     ].set_index("checkpoint")
     models = {
@@ -82,12 +83,17 @@ def main(results: Path, ckpt_dir: Path, out: Path) -> None:
         scored,
         truth,
         asof,
-        [(o, PLACE, f"origin {o}") for o in ORIGINS],
-        "German COVID-19 hospitalisations, national 7-day sums: nowcasts "
-        "by model (daily Chronos-2 source)",
+        [(o, place, f"origin {o}") for o in ORIGINS],
+        f"German COVID-19 hospitalisations, {NAMES.get(place, place)} 7-day "
+        "sums: nowcasts by model (daily Chronos-2 source)",
         out,
     )
 
 
 if __name__ == "__main__":
-    main(Path(sys.argv[1]), Path(sys.argv[2]), Path(sys.argv[3]))
+    main(
+        Path(sys.argv[1]),
+        Path(sys.argv[2]),
+        Path(sys.argv[3]),
+        sys.argv[4] if len(sys.argv) > 4 else "DE",
+    )
