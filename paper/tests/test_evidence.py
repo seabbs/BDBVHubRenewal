@@ -49,11 +49,14 @@ def test_rho_medians_by_strata_and_model() -> None:
             "study": "germany",
             "strata": "states",
             "model": "randomwalknowcast",
+            "arm": "rolling",
             "rho_t": [0.5, 0.6, 0.7],
             "rho_p": [0.0, 0.04, 0.1],
             "rho_n": np.nan,
         }
     )
+    # The fixed arm's prior is not an estimate.
+    rho = pd.concat([rho, rho.assign(arm="fixed", rho_t=0.9, rho_p=0.7)])
     out = rho_medians(rho)
     assert out["germany"]["states"]["randomwalknowcast"] == {
         "rho_t": 0.6,
