@@ -17,6 +17,7 @@ and the fit store stores it as failed.
 
 from __future__ import annotations
 
+import dataclasses
 import datetime as dt
 import hashlib
 import http.client
@@ -24,6 +25,7 @@ import json
 import os
 import shutil
 import tempfile
+import time
 import tomllib
 import urllib.request
 from collections.abc import Callable, Mapping, Sequence
@@ -56,7 +58,6 @@ __all__ = [
     "FINETUNED_RELEASES",
     "FINETUNED_URL",
     "LAYOUTS",
-    "MAX_LAG",
     "SOURCES",
     "SUMS_FILE",
     "Checkpoint",
@@ -68,6 +69,7 @@ __all__ = [
     "finetuned_releases",
     "finetuned_spec",
     "hub_triangle",
+    "lag_steps",
     "layout_block",
     "quantile_draws",
     "resolve_checkpoint",
@@ -80,9 +82,9 @@ SOURCES: Final = ("weekly", "daily")
 LAYOUTS: Final = ("complete", "ragged")
 """The ways the releases are given to Chronos-2."""
 
-MAX_LAG: Final = {"weekly": 4, "daily": 28}
-"""Release lag $D$, in the source's steps, from which a count is taken as
-final."""
+TRUTH_CONFIG: Final = Path("config/backtest.toml")
+"""The release backtest's settings, whose truth delay $D$ the models
+take (`truth_settings`)."""
 
 CHRONOS_MODEL: Final = "amazon/chronos-2"
 """The Hugging Face checkpoint."""
@@ -110,6 +112,9 @@ then overrides `FINETUNED_CONFIG`, so its jobs never list the releases."""
 
 SUMS_FILE: Final = "sha256sums.txt"
 """A checkpoint release's asset with the SHA-256 of its other assets."""
+
+RETRY_SECONDS: Final = (2, 10, 30)
+"""Waits before each retry of a GitHub request that failed in passing."""
 
 ADAPTER_FILES: Final = ("adapter_config.json", "adapter_model.safetensors")
 """The LoRA adapter's files. A checkpoint's release holds them and its
@@ -161,14 +166,52 @@ def finetuned_spec(path: Path | str = FINETUNED_CONFIG) -> str:
     return str(tomllib.loads(Path(path).read_text())["hash"])
 
 
+def _passing(err: BaseException) -> bool:
+    """Whether a failed request may succeed if tried again."""
+    if isinstance(err, urllib.error.HTTPError):
+        return err.code >= 500 or err.code == 429
+    if isinstance(err, urllib.error.URLError):
+        return not isinstance(err.reason, FileNotFoundError)
+    return isinstance(err, (OSError, http.client.HTTPException))
+
+
+def _missing(err: BaseException) -> bool:
+    """Whether a failed request means the file is not there (a 404)."""
+    if isinstance(err, urllib.error.HTTPError):
+        return err.code == 404
+    reason = getattr(err, "reason", None)
+    return isinstance(err, FileNotFoundError) or isinstance(
+        reason, FileNotFoundError
+    )
+
+
+def _unreachable(url: str, err: BaseException) -> ConnectionError:
+    """Return the error for a request refused or dropped, not missing."""
+    return ConnectionError(
+        f"Cannot read {url}: {err!r}. If GitHub is rate limiting, set "
+        "GH_TOKEN or GITHUB_TOKEN to a GitHub token."
+    )
+
+
 def _get(url: str) -> bytes:
-    """Read a URL, with a GitHub token from the environment if there is one."""
+    """Read a URL, with a GitHub token from the environment if there is one.
+
+    A server error or a dropped connection is tried again after each of
+    `RETRY_SECONDS`.
+    """
     request = urllib.request.Request(url)
     token = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")
     if token and url.startswith("https://api.github.com/"):
         request.add_header("Authorization", f"Bearer {token}")
-    with urllib.request.urlopen(request, timeout=60) as response:
-        return bytes(response.read())
+    for wait in (*RETRY_SECONDS, None):
+        try:
+            with urllib.request.urlopen(request, timeout=60) as response:
+                return bytes(response.read())
+        except (OSError, http.client.HTTPException) as err:
+            if wait is None or not _passing(err):
+                raise
+            time.sleep(wait)
+    raise AssertionError("unreachable")
 
 
 def finetuned_releases() -> list[dict[str, Any]]:
@@ -248,15 +291,11 @@ def resolve_checkpoint(spec: str) -> Checkpoint:
     try:
         text = _get(url).decode()
     except (OSError, http.client.HTTPException) as err:
-        # A release with no such asset: 404 from GitHub, or no file.
-        reason = getattr(err, "reason", None)
-        if getattr(err, "code", None) == 404 or isinstance(
-            reason, FileNotFoundError
-        ):
+        if _missing(err):
             raise FileNotFoundError(
                 f"The release {tag} has no {SUMS_FILE} ({url})."
             ) from err
-        raise ConnectionError(f"Cannot read {url}: {err!r}") from err
+        raise _unreachable(url, err) from err
     sums = {}
     for line in text.splitlines():
         if line.strip():
@@ -271,10 +310,59 @@ def resolve_checkpoint(spec: str) -> Checkpoint:
     return Checkpoint(checkpoint, tuple((f, sums[f]) for f in ADAPTER_FILES))
 
 
+def truth_settings(
+    path: Path | str = TRUTH_CONFIG, data: Path | str | None = None
+) -> tuple[int | None, float, tuple[str, ...]]:
+    """Return the release backtest's truth delay, level and skipped releases.
+
+    Parameters
+    ----------
+    path : pathlib.Path or str
+        The backtest settings.
+    data : pathlib.Path or str, optional
+        The tidy data (`data.load_target`), from which an "auto"
+        `truth_delay` is resolved as the release backtest resolves it
+        (`evaluation.nowcast.resolve_truth_delay`).
+
+    Returns
+    -------
+    tuple
+        $D$ in days, `truth_level` and `skip_origins`. $D$ is None if it
+        is "auto" and the data are missing or never reach `truth_level`;
+        the models then estimate it at each origin.
+    """
+    from bdbvhubrenewal.data import load_target
+    from bdbvhubrenewal.evaluation.backtest import load_config
+    from bdbvhubrenewal.evaluation.nowcast import resolve_truth_delay
+
+    config = load_config(path)
+    delay = config.truth_delay
+    if delay is None:
+        try:
+            delay = resolve_truth_delay(config, load_target(data))
+        except (FileNotFoundError, ValueError):
+            delay = None
+    return delay, config.truth_level, config.skip_origins
+
+
+def _model(name: str, source: str, layout: str) -> FoundationModel:
+    """Build a model with the release backtest's truth delay."""
+    delay, level, skip = truth_settings()
+    return FoundationModel(
+        name,
+        source,
+        layout,
+        truth_delay=delay,
+        truth_level=level,
+        truth_skip=skip,
+    )
+
+
 def _finetuned(name: str, source: str) -> FoundationModel:
     """Build a fine-tuned model with the checkpoint `finetuned_spec` names."""
-    return FoundationModel(
-        name, source, "ragged", resolve_checkpoint(finetuned_spec())
+    return dataclasses.replace(
+        _model(name, source, "ragged"),
+        checkpoint=resolve_checkpoint(finetuned_spec()),
     )
 
 
@@ -312,6 +400,25 @@ class HubTriangle:
         return self.last - int(self.partial.shape[2]) + 1
 
 
+def lag_steps(source: str, delay: int) -> int:
+    """Return the release lags, in the source's steps, that reach $D$.
+
+    Parameters
+    ----------
+    source : str
+        One of `SOURCES`.
+    delay : int
+        $D$, in days.
+
+    Returns
+    -------
+    int
+        $D$ in days, or in weeks rounded up.
+    """
+    width = 7 if source == "weekly" else 1
+    return -(-delay // width)
+
+
 def _step(source: str, day: str) -> dt.date:
     """Return the step holding a day: its week's Saturday, or the day."""
     return epiweek_end(day) if source == "weekly" else as_date(day)
@@ -322,7 +429,7 @@ def hub_triangle(
     source: str,
     places: Sequence[str],
     last_time: str,
-    max_lag: int | None = None,
+    max_lag: int,
 ) -> HubTriangle:
     """Lay out the hub target of every release by place, step and lag.
 
@@ -339,8 +446,9 @@ def hub_triangle(
         Places, in the order of the output.
     last_time : str
         Last step of the grid.
-    max_lag : int, optional
-        Release lag $D$, `MAX_LAG` of the source by default.
+    max_lag : int
+        Release lag $D$, in the source's steps, from which a count is
+        taken as final (`lag_steps`).
 
     Returns
     -------
@@ -364,7 +472,7 @@ def hub_triangle(
     place = rows["location"].map({c: i for i, c in enumerate(places)})
     days = (pd.to_datetime(rows[time_col]) - pd.Timestamp(first)).dt.days
     step = days.to_numpy() // width
-    lags = MAX_LAG[source] if max_lag is None else max_lag
+    lags = max_lag
     partial = np.full((len(places), n_times, lags), np.nan)
     final = np.zeros((len(places), n_times))
     last = 0
@@ -440,8 +548,9 @@ def finetuned_adapter(checkpoint: Checkpoint) -> Path:
     Raises
     ------
     FileNotFoundError
-        If an asset cannot be downloaded, whether it is missing or the
-        connection fails.
+        If the release has no such asset.
+    ConnectionError
+        If GitHub refuses the request or the connection fails.
     ValueError
         If the release's settings hash or an adapter file's SHA-256 is not
         the checkpoint's.
@@ -464,12 +573,13 @@ def finetuned_adapter(checkpoint: Checkpoint) -> Path:
         for name in (*ADAPTER_FILES, "settings.json"):
             url = f"{FINETUNED_URL}/{tag}/{name}"
             try:
-                with urllib.request.urlopen(url, timeout=60) as response:
-                    (tmp / name).write_bytes(response.read())
+                (tmp / name).write_bytes(_get(url))
             except (OSError, http.client.HTTPException) as err:
-                raise FileNotFoundError(
-                    f"The release {tag} has no {name} ({url}): {err!r}"
-                ) from err
+                if _missing(err):
+                    raise FileNotFoundError(
+                        f"The release {tag} has no {name} ({url})."
+                    ) from err
+                raise _unreachable(url, err) from err
         found = json.loads((tmp / "settings.json").read_text()).get("hash")
         if found != checkpoint.hash:
             raise ValueError(
@@ -555,7 +665,9 @@ def chronos_sampler(
     ImportError
         If Chronos-2 is not installed (`uv sync --group chronos`).
     FileNotFoundError
-        If the checkpoint's release cannot be downloaded.
+        If the checkpoint's release has no such asset.
+    ConnectionError
+        If GitHub cannot be reached.
     ValueError
         If the release holds another checkpoint or adapter.
     """
@@ -638,6 +750,13 @@ class FoundationModel:
     checkpoint : Checkpoint or None
         The fine-tuned checkpoint Chronos-2 loads, or None for the
         pretrained model.
+    truth_delay : int or None
+        $D$, in days: counts reported up to $D$ days late are partial and
+        those older are final, as in the truth they are scored on. None
+        estimates it at the origin (`delay_days`).
+    truth_level, truth_skip
+        The share of the count reported by $D$, and the releases left out,
+        when $D$ is estimated.
     sample : Sampler or None
         Draws the trajectories, Chronos-2 with `checkpoint` by default.
     """
@@ -646,7 +765,40 @@ class FoundationModel:
     source: str
     layout: str
     checkpoint: Checkpoint | None = None
+    truth_delay: int | None = None
+    truth_level: float = 0.98
+    truth_skip: tuple[str, ...] = ()
     sample: Sampler | None = field(default=None, repr=False)
+
+    def delay_days(self, task: ForecastTask) -> int:
+        """Return $D$, in days, for a task.
+
+        `truth_delay` if set, else the age by which `truth_level` of the
+        national count is reported in the task's releases, which hold
+        only those up to the origin
+        (`evaluation.nowcast.reporting_delay`).
+
+        Raises
+        ------
+        ModelUnavailableError
+            If $D$ is estimated and no age reaches `truth_level`.
+        """
+        if self.truth_delay is not None:
+            return self.truth_delay
+        from bdbvhubrenewal.evaluation.nowcast import reporting_delay
+
+        rows = task.target_history
+        delay = None
+        if rows is not None and not rows.empty:
+            real = rows.loc[rows["kind"] == "real"] if "kind" in rows else rows
+            delay = reporting_delay(real, self.truth_level, self.truth_skip)
+        if delay is None:
+            raise ModelUnavailableError(
+                f"{self.name} needs the truth delay, and no age of the "
+                f"releases to {task.vintage} has {self.truth_level:.0%} of "
+                "the national count reported."
+            )
+        return delay
 
     @property
     def needs_snapshots(self) -> bool:
@@ -677,7 +829,9 @@ class FoundationModel:
         ImportError
             If Chronos-2 is not installed.
         FileNotFoundError
-            If the fine-tuned checkpoint's release cannot be downloaded.
+            If the fine-tuned checkpoint's release has no such asset.
+        ConnectionError
+            If GitHub cannot be reached.
         ValueError
             If the release holds another checkpoint or adapter.
         """
@@ -690,7 +844,13 @@ class FoundationModel:
             )
         places = (NATIONAL, *task.locations)
         weeks = list(task.target_end_dates)
-        tri = hub_triangle(rows, self.source, places, weeks[-1])
+        # Only the ragged layout gives Chronos-2 the lags.
+        lags = (
+            lag_steps(self.source, self.delay_days(task))
+            if self.layout == "ragged"
+            else 1
+        )
+        tri = hub_triangle(rows, self.source, places, weeks[-1], lags)
         start = tri.n_context
         if self.layout == "complete":
             start = tri.times.index(_walk_start(task)) + 1
@@ -745,7 +905,7 @@ for _source in SOURCES:
         _name = f"fm_chronos_{_source}_{_layout}"
         register_model(
             _name,
-            partial(FoundationModel, _name, _source, _layout),
+            partial(_model, _name, _source, _layout),
             f"Chronos-2 on the hub target's {_source} releases, {_layout} "
             "layout, the country and provinces in one block.",
             fitted=True,
