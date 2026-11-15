@@ -233,3 +233,34 @@ cat(all(start$growth == g), start$seed, "\\n")
     pairs = zip(jumps[1:], seeds[1:], strict=True)
     assert all(s == 1e-3 for j, s in pairs if j > 0)
     assert start.split() == ["TRUE", "1", "1", "1"]
+
+
+@needs_r
+def test_every_mid_seeded_place_has_cases_after_its_seed_day(tmp_path):
+    out = run_r(
+        """
+set.seed(5)
+d <- draw_design(1L)
+d$strata <- "places"; d$n_places <- 15L; d$n_ages <- 1L
+d$spread <- "concentrated"; d$seeding <- "mid"
+d$place_rt <- "shared"; d$trajectory <- "flat"
+for (i in 1:40) {
+  v <- draw_values(d)
+  cat("drawn", all(!v$late_places %in% v$quiet_places), "\\n")
+}
+v$weeks <- 20L; v$target_size <- 3000
+v$late_places <- 2L; v$quiet_places <- setdiff(3:15, 4L)
+out <- simulate_outbreak(d, v)
+counts <- out$counts[draw == 1]
+dates <- sort(unique(counts$reference_date))
+seed_day <- dates[1] + round(v$late_at * length(dates))
+late <- counts[place == "P02" & reference_date >= seed_day, sum(count)]
+cat("late", late, "\\n")
+""",
+        tmp_path,
+    )
+    lines = out.strip().splitlines()
+    # Late places are drawn among the active ones.
+    assert all(x.split()[-1] == "TRUE" for x in lines if x.startswith("drawn"))
+    late = [x for x in lines if x.startswith("late")][0]
+    assert float(late.split()[-1]) > 0
