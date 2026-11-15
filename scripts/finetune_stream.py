@@ -33,6 +33,7 @@ import hashlib
 import inspect
 import json
 import multiprocessing
+import pickle
 import subprocess
 import sys
 import time
@@ -669,6 +670,9 @@ def main() -> None:
     parser.add_argument("--lr-decay", type=float, default=0.0)
     # Least scale, in counts, a series is divided by; 0 keeps Chronos-2's.
     parser.add_argument("--scale-floor", type=float, default=0.0)
+    # Real validation blocks (scripts/finetune_real_validation.py), scored
+    # at each checkpoint to choose among them; not trained on.
+    parser.add_argument("--real-validation", type=Path)
     parser.add_argument("--batch-size", type=int, default=256)
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--note", default="")
@@ -1047,6 +1051,15 @@ def main() -> None:
             settings["held_out_loss"] = held_out_loss(
                 model, val, args.batch_size
             )
+            if args.real_validation:
+                with args.real_validation.open("rb") as f:
+                    real = pickle.load(f)
+                settings["real_validation_sha256"] = ft._sha256(
+                    args.real_validation
+                )
+                settings["real_validation_loss"] = held_out_loss(
+                    model, real, args.batch_size
+                )
             settings["held_out_loss_by_level"] = held_out_by_level(
                 model, val, LEVEL_BLOCKS
             )

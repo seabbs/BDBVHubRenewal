@@ -32,6 +32,8 @@ NOT_HASHED = (
     "held_out_loss",
     "held_out_loss_by_level",
     "seconds",
+    "real_validation_sha256",
+    "real_validation_loss",
 )
 """Settings written after the hash is taken."""
 
