@@ -127,12 +127,14 @@ evidence:
   copula_scores: null
   copula_rho: null
   aggregation_scores:
-    ref: d55305af55ec4d8b8e7824a3df88f7ee487c3267
+    ref: 5a3e0440880f54751fd8dccbfa14133a2a74ba81
     path: results/agg/aggregation-scores.csv.gz
   ebola_chronos:
-    ref: d55305af55ec4d8b8e7824a3df88f7ee487c3267
+    ref: 5a3e0440880f54751fd8dccbfa14133a2a74ba81
     path: results/agg/bdbv-joint-samples.csv.gz
-  aggregation_cost: null
+  aggregation_cost:
+    ref: 5a3e0440880f54751fd8dccbfa14133a2a74ba81
+    path: results/agg/aggregation-cost.csv
   finetune_heldout:
     ref: 31ea2bf4c687f5c0ea85d9a880fa0f6cfcb3dce3
     path: results/finetune/finetune-heldout.csv

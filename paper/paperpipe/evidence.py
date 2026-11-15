@@ -35,6 +35,7 @@ __all__ = [
     "EVIDENCE",
     "aggregation_table",
     "copula_table",
+    "cost_table",
     "diseases_table",
     "heldout_figure",
     "realism_figure",
@@ -183,6 +184,21 @@ def aggregation_table(
     out["option"] = out["option"].map(OPTIONS).astype(str)
     return out.rename(
         columns={"model": "Model", "option": "Option", "level": "Level"}
+    )
+
+
+def cost_table(cost: pd.DataFrame) -> pd.DataFrame:
+    """Return each option's cost, with the options named as in the SI."""
+    out = cost.assign(option=cost["option"].map(OPTIONS).fillna(cost["option"]))
+    return out.rename(
+        columns={
+            "study": "Study",
+            "model": "Model",
+            "option": "Option",
+            "series": "Series per block",
+            "memory_gb": "Memory (GB)",
+            "seconds": "Time (s)",
+        }
     )
 
 
@@ -398,7 +414,12 @@ def write_evidence(
             None if agg is None else aggregation_table(agg, study),
             ["aggregation_scores"],
         )
-    table("aggregation-cost", data["aggregation_cost"], ["aggregation_cost"])
+    cost = data["aggregation_cost"]
+    table(
+        "aggregation-cost",
+        None if cost is None else cost_table(cost),
+        ["aggregation_cost"],
+    )
     dis = data["sim_diseases"]
     table(
         "sim-diseases",
