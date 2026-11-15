@@ -441,6 +441,9 @@ jobs:
           R_VALIDATION: 'false'
           CHECK_WINDOW: 'false'
           EXPECTED_LOCATIONS: ${{ vars.EXPECTED_LOCATIONS }}
+          # The submission's one-round pin to r3 n2000 for the 2026-11-21
+          # round (submit.yml). Remove after that round.
+          BDBV_CHRONOS_FT: ${{ steps.round.outputs.reference_date == '2026-11-21' && '3d3bc724bbfa' || '' }}
         run: |
           # Until the hub opens the detected round, review the newest round
           # its tasks.json has, so the file is checked against a round.
