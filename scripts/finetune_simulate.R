@@ -93,7 +93,11 @@ factors <- list(
   strata = c("single", "places", "ages", "places_ages"),
   # How cases spread over strata: "concentrated" puts nearly all in a few,
   # as in BDBV, where most provinces report no case in most weeks.
-  spread = c("even", "concentrated")
+  spread = c("even", "concentrated"),
+  # How places' Rt relate: one shared path, a trajectory per place, the
+  # shared path with correlated place deviations, or the shared path
+  # delayed per place, so one place leads another.
+  place_rt = c("shared", "independent", "correlated", "lagged")
 )
 
 # Simulations per balanced block: a multiple of every factor's levels.
@@ -155,6 +159,35 @@ trajectory_path <- function(n, kind, v) {
     multi_wave = v$amplitude * sin(2 * pi * v$waves * t + v$phase)
   )
   pmin(pmax(r + weekly_noise(n, v$noise_sd), -0.1), 0.1)
+}
+
+# The growth rate of each stratum on `n` days: its place's path, as
+# `design$place_rt` relates places, plus the stratum's own weekly noise.
+place_growth <- function(n, strata, design, v) {
+  places <- sort(unique(strata$place))
+  shared <- trajectory_path(n, design$trajectory, v)
+  paths <- switch(design$place_rt,
+    shared = rep(list(shared), length(places)),
+    independent = c(list(shared), lapply(places[-1], function(p) {
+      trajectory_path(n, sample(factors$trajectory, 1), v)
+    })),
+    correlated = {
+      common <- weekly_noise(n, v$place_sd)
+      lapply(places, function(p) {
+        shared + sqrt(v$place_rho) * common +
+          sqrt(1 - v$place_rho) * weekly_noise(n, v$place_sd)
+      })
+    },
+    lagged = lapply(seq_along(places), function(i) {
+      k <- v$place_lags[i]
+      c(rep(shared[1], k), shared)[seq_len(n)]
+    })
+  )
+  path <- paths[match(strata$place, places)]
+  growth <- vapply(seq_len(nrow(strata)), function(i) {
+    pmin(pmax(path[[i]] + (1 - v$coupling) * weekly_noise(n, 0.01), -0.1), 0.1)
+  }, numeric(n))
+  matrix(growth, nrow = n)
 }
 
 # Weekly AR(1) noise (autocorrelation 0.8) on `n` days.
@@ -273,6 +306,11 @@ draw_values <- function(design) {
       runif(1, 0, 0.9)
     },
     coupling = runif(1, 0.5, 1),
+    # Places' Rt: correlation and scale of correlated deviations, and each
+    # place's delay in days behind the first when lagged.
+    place_rho = runif(1, 0.3, 0.9),
+    place_sd = runif(1, 0.01, 0.03),
+    place_lags = c(0L, sample(1:28, design$n_places - 1L, replace = TRUE)),
     stratum_sd = if (design$spread == "concentrated") {
       runif(1, 2.5, 4)
     } else {
@@ -387,12 +425,7 @@ simulate_outbreak <- function(design, v) {
     data = pobs
   )
   n_r <- expectation$data$expr_t
-  # Strata share the trajectory and differ by their own weekly noise.
-  shared <- trajectory_path(n_r, design$trajectory, v)
-  growth <- sapply(seq_len(nrow(strata)), function(i) {
-    pmin(pmax(shared + (1 - v$coupling) * weekly_noise(n_r, 0.01), -0.1), 0.1)
-  })
-  growth <- matrix(growth, nrow = n_r)
+  growth <- place_growth(n_r, strata, design, v)
   log_r <- if (design$process == "growth") {
     growth
   } else {

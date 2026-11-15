@@ -170,6 +170,7 @@ strata <- data.table::data.table(
 )
 d <- draw_design(0)
 d$trajectory <- "rise_fall_sharp"
+d$n_places <- 3L
 v <- draw_values(d)
 v$coupling <- 1  # no stratum noise, so places' paths show
 n <- 120
@@ -182,7 +183,6 @@ for (level in c("shared", "independent", "correlated", "lagged")) {
   lagged <- shift > 0 && isTRUE(all.equal(
     g[(shift + 1):n, 3], g[1:(n - shift), 1]
   ))
-  rho <- cor(g[, 3] - g[, 1], g[, 5] - g[, 1])
   cat(level, same_age, same_place, lagged, "\\n")
 }
 """,
