@@ -547,7 +547,7 @@ def floor_scale(model: Any, floor: float) -> None:
     """Make `model` scale each series by at least `floor` counts."""
     from chronos.chronos_bolt import InstanceNorm
 
-    class FlooredNorm(InstanceNorm):
+    class FlooredNorm(InstanceNorm):  # type: ignore[misc]
         def forward(self, x, loc_scale=None):  # type: ignore[no-untyped-def]
             if loc_scale is None:
                 _, (loc, scale) = super().forward(x)
