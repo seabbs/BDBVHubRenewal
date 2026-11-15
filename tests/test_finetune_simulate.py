@@ -502,3 +502,68 @@ def test_an_outage_stops_one_place_s_reports_for_a_while(tmp_path):
     out = run_r(SHOCK.replace("{level}", "outage"), tmp_path)
     line = next(x for x in out.splitlines() if x.startswith("reported"))
     assert float(line.split()[-1]) == 0
+
+
+# A design from the grid whose cell has the given levels, run through the
+# batch's own tries (`simulate_cell`): it gives an outbreak within 5 tries.
+CELL_RUNS = """
+want <- list({levels})
+g <- 0L
+repeat {{
+  cell <- cell_for(g)
+  if (all(vapply(names(want), function(k) cell[[k]] == want[[k]], TRUE))) break
+  g <- g + 1L
+}}
+ok <- 0L
+for (k in 1:3) {{
+  set.seed(k)
+  design <- draw_design(g)
+  res <- simulate_cell(design)
+  if (!is.null(res$out) && sum(res$out$counts$count) > 0) ok <- ok + 1L
+}}
+cat("ok", ok, "\\n")
+"""
+
+
+@needs_r
+@pytest.mark.parametrize(
+    "levels",
+    [
+        'strata = "places", spread = "concentrated", seeding = "mid"',
+        'strata = "places", mixing = "asymmetric", seeding = "mid", '
+        'imports = "constant"',
+        'strata = "single", reporting = "weekdays", seeding = "mid"',
+    ],
+)
+def test_each_cell_gives_an_outbreak_within_five_tries(levels, tmp_path):
+    out = run_r(CELL_RUNS.format(levels=levels), tmp_path)
+    line = next(x for x in out.splitlines() if x.startswith("ok"))
+    assert line.split()[1] == "3"
+
+
+@needs_r
+def test_a_place_with_cases_starts_at_the_outset(tmp_path):
+    out = run_r(
+        """
+g <- 0L
+repeat {
+  cell <- cell_for(g)
+  if (cell$strata == "places" && cell$spread == "concentrated" &&
+      cell$seeding == "mid" && cell$trajectory == "growth") break
+  g <- g + 1L
+}
+set.seed(3)
+design <- draw_design(g)
+bad <- 0L
+for (k in 1:20) {
+  v <- draw_values(design)
+  # No place seeded mid-outbreak is the only place with cases.
+  cases <- setdiff(seq_len(design$n_places), v$quiet_places)
+  if (all(cases %in% v$late_places)) bad <- bad + 1L
+}
+cat("lonely_late", bad, "\\n")
+""",
+        tmp_path,
+    )
+    line = next(x for x in out.splitlines() if x.startswith("lonely_late"))
+    assert line.split()[1] == "0"
