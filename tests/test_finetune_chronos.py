@@ -671,3 +671,20 @@ def test_step_length_covariate_adds_one_known_row_of_days_per_step(
         # Weekly blocks have D of 7 or less, daily blocks more.
         assert days == ({7.0} if _d(a) <= 7 else {1.0})
         assert np.array_equal(a["context"], b["context"][:-1], equal_nan=True)
+
+
+def test_balanced_batches_hold_each_aggregation_in_turn():
+    rng = np.random.default_rng(0)
+    sizes = np.array([5] * 40 + [60] * 40)
+    groups = np.array(["weekly"] * 40 + ["daily"] * 40)
+    plan = plan_batches(sizes, 256, rng, 2000, groups=groups)
+    used = sorted(i for batch in plan for i in batch)
+    assert used == list(range(80))
+    for batch in plan:
+        assert sizes[batch].sum() <= 2000
+        kinds = groups[batch]
+        if len(batch) > 1:
+            # Blocks alternate, so each batch holds both aggregations.
+            assert (
+                abs((kinds == "weekly").sum() - (kinds == "daily").sum()) <= 1
+            )
