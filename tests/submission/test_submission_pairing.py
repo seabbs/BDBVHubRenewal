@@ -113,14 +113,14 @@ def test_past_forecasts_take_the_store_then_the_archive(
     _archive(archive, "2026-10-17", "1", _hub("2026-10-17", 50.0))
     _archive(archive, "2026-10-24", "1", _hub("2026-10-24", 5.0))
     _stored(root, "2026-10-24", "2026-10-25T00:00:00", 99.0)
-    out = past_forecasts("m", "2026-10-31", archive=archive, store=root)
+    out, _ = past_forecasts("m", "2026-10-31", archive=archive, store=root)
     sources = out.drop_duplicates("origin").set_index("origin")["source"]
     # The store's forecast, as the backtest scores it, wins, and the
     # archive fills an origin the store lacks.
     assert sources.to_dict() == {"2026-10-24": "store", "2026-10-17": "archive"}
     assert 5.0 + 1 not in set(out["value"])
     # Only origins before the forecast's.
-    early = past_forecasts("m", "2026-10-24", archive=archive, store=root)
+    early, _ = past_forecasts("m", "2026-10-24", archive=archive, store=root)
     assert set(early["origin"]) == {"2026-10-17"}
 
 
@@ -256,3 +256,24 @@ def test_an_unfitted_model_with_no_forecast_at_earlier_origins_takes_the_prior(
     )
     assert fit["n_scores"] == 0
     assert fit["source"] == "none"
+    # Each earlier origin is listed as one the model cannot forecast.
+    assert fit["unavailable"]
+    assert all(o < task.vintage for o in fit["unavailable"])
+
+
+def test_an_unfitted_model_whose_past_forecasts_are_missing_fails(
+    tasks: list, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Forecasting again gives nothing, though the model could forecast
+    # there, so the submission cannot pair as the backtest does.
+    from bdbvhubrenewal.submission import pairing
+
+    task = tasks[-1]
+    samples = get_model("randomwalknowcast").forecast(task)
+    monkeypatch.setattr(
+        pairing, "_recomputed", lambda *_: (pairing._empty(), set())
+    )
+    with pytest.raises(LookupError, match="no past forecasts"):
+        pair_submission(
+            "randomwalknowcast", samples, task, truth_delay=7, past_tasks=tasks
+        )
