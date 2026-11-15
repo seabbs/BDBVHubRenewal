@@ -86,12 +86,16 @@ def table(sc: pd.DataFrame) -> pd.DataFrame:
     return mean.sort_values(["pool", "rel_wis_randomwalknowcast"])
 
 
-def context_end(task, model: str) -> str:
+def context_end(task, model: str, delay: int) -> str:
     """Return the last context step Chronos had for a task (task days)."""
     source = "weekly" if "_weekly_" in model else "daily"
     rows = task.target_history if source == "weekly" else task.daily_history
     tri = fm.hub_triangle(
-        rows, source, ("DE", *task.locations), task.target_end_dates[-1]
+        rows,
+        source,
+        ("DE", *task.locations),
+        task.target_end_dates[-1],
+        fm.lag_steps(source, delay),
     )
     if model.endswith("_complete"):
         return fm._walk_start(task)
@@ -148,7 +152,10 @@ def overlay(fc: pd.DataFrame, triangle: pd.DataFrame, cfg, out: Path) -> None:
                 x = pd.to_datetime(q.index)
                 start = None
                 if model.startswith("fm_chronos"):
-                    start = pd.Timestamp(context_end(task, model)) - shift
+                    start = (
+                        pd.Timestamp(context_end(task, model, cfg.truth_delay))
+                        - shift
+                    )
                     keep = x >= start
                     q, x = q.loc[keep], x[keep]
                     anchor = seen.loc[
