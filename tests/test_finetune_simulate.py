@@ -114,7 +114,7 @@ def test_batches_record_the_stack_they_ran_on(tmp_path):
 
 
 @needs_r
-def test_concentrated_outbreaks_put_cases_in_few_strata(tmp_path):
+def test_concentrated_outbreaks_have_few_active_places_among_many(tmp_path):
     out = run_r(
         """
 set.seed(1)
@@ -123,8 +123,11 @@ g <- which(vapply(0:(block - 1L), function(i) {
 }, TRUE))[1] - 1L
 d <- draw_design(g)
 for (i in 1:50) {
+  d <- draw_design(g)
   v <- draw_values(d)
-  cat(v$stratum_sd >= 2.5, v$target_size <= 1e5, "\\n")
+  active <- d$n_places * (1 - v$quiet)
+  cat(d$n_places >= 15, active >= 1 - 1e-9, active <= 4 + 1e-9,
+    v$stratum_sd >= 2.5, v$target_size <= 3000, "\\n")
 }
 """,
         tmp_path,
