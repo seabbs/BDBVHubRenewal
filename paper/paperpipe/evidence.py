@@ -122,7 +122,13 @@ def copula_table(scores: pd.DataFrame, study: str) -> pd.DataFrame:
 
 
 def rho_medians(rho: pd.DataFrame) -> dict:
-    """Return the median rolling correlations by study, strata and model."""
+    """Return the median rolling correlations by study, strata and model.
+
+    Rows of other pairing arms, where `rho` has an `arm` column, are left
+    out.
+    """
+    if "arm" in rho.columns:
+        rho = rho.loc[rho["arm"] == "rolling"]
     out: dict = {}
     for (study, strata, model), g in rho.groupby(["study", "strata", "model"]):
         out.setdefault(study, {}).setdefault(strata, {})[model] = {
