@@ -157,3 +157,42 @@ cat(max(weeks[2, weeks[1, ] == 0]), max(weeks[2, weeks[1, ] == 1]),
     assert longest == 44
     assert longest_by_ages == 28
     assert shortest == 16
+
+
+@needs_r
+def test_places_rt_relate_as_their_level_says(tmp_path):
+    out = run_r(
+        """
+set.seed(3)
+strata <- data.table::data.table(
+  .group = 1:6, place = rep(c("P01", "P02", "P03"), each = 2),
+  age = rep(c("A1", "A2"), 3)
+)
+d <- draw_design(0)
+d$trajectory <- "rise_fall_sharp"
+v <- draw_values(d)
+v$coupling <- 1  # no stratum noise, so places' paths show
+n <- 120
+for (level in c("shared", "independent", "correlated", "lagged")) {
+  d$place_rt <- level
+  g <- place_growth(n, strata, d, v)
+  same_age <- isTRUE(all.equal(g[, 1], g[, 2]))
+  same_place <- isTRUE(all.equal(g[, 1], g[, 3]))
+  shift <- v$place_lags[2]
+  lagged <- shift > 0 && isTRUE(all.equal(
+    g[(shift + 1):n, 3], g[1:(n - shift), 1]
+  ))
+  rho <- cor(g[, 3] - g[, 1], g[, 5] - g[, 1])
+  cat(level, same_age, same_place, lagged, "\\n")
+}
+""",
+        tmp_path,
+    )
+    rows = {r.split()[0]: r.split()[1:] for r in out.strip().splitlines()}
+    # Ages share their place's path at every level.
+    assert all(r[0] == "TRUE" for r in rows.values())
+    assert rows["shared"][1] == "TRUE"
+    assert rows["independent"][1] == "FALSE"
+    assert rows["correlated"][1] == "FALSE"
+    # A lagged place follows the first with its own delay.
+    assert rows["lagged"][1:] == ["FALSE", "TRUE"]
