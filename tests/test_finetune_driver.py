@@ -365,3 +365,18 @@ def test_laptop_takes_a_seed_that_crashed_on_the_remote_at_once(tmp_path):
     )
     out = run(tmp_path, "unstarted_seeds | tr '\\n' ' '")
     assert out.split() == ["5002"]
+
+
+def test_a_second_driver_does_not_start(tmp_path):
+    (tmp_path / "output" / "finetune").mkdir(parents=True)
+    live = subprocess.Popen(["sh", "-c", "sleep 30", "finetune_driver.sh"])
+    try:
+        (tmp_path / "output" / "finetune" / "driver.pid").write_text(
+            f"{live.pid}\n"
+        )
+        out = run(tmp_path, "another_driver && echo running || echo none")
+    finally:
+        live.kill()
+    assert out.split() == ["running"]
+    out = run(tmp_path, "another_driver && echo running || echo none")
+    assert out.split() == ["none"]
