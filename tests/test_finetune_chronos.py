@@ -537,3 +537,52 @@ def test_real_validation_context_holds_only_reports_by_the_cut():
         a["context"][:, :start], b["context"][:, :start], equal_nan=True
     )
     assert not np.array_equal(a["context"], b["context"], equal_nan=True)
+
+
+def _d(block) -> int:
+    return block["n_covariates"] // block["n_targets"]
+
+
+def test_deployed_lags_cut_every_block_at_the_deployed_d(tmp_path, monkeypatch):
+    import finetune_chronos
+    from finetune_stream import cut
+
+    ids = _sim_dir(tmp_path)
+    monkeypatch.setattr(
+        finetune_chronos, "MAX_LAGS", finetune_chronos.DEPLOYED_LAGS
+    )
+    ds = {_d(b) for _, b in cut(tmp_path, ids, 1, 32)}
+    assert ds == {4, 28}
+
+
+def test_one_source_cuts_only_that_source(tmp_path, monkeypatch):
+    import finetune_chronos
+    from finetune_stream import cut
+
+    ids = _sim_dir(tmp_path)
+    monkeypatch.setattr(finetune_chronos, "SOURCES", ("weekly",))
+    blocks = [b for _, b in cut(tmp_path, ids, 1, 32)]
+    assert blocks
+    assert all(_d(b) <= 7 for b in blocks)
+
+
+def test_workers_take_the_trainer_block_settings():
+    import finetune_chronos
+    from finetune_stream import init_worker
+
+    saved = (
+        finetune_chronos.MAX_SERIES,
+        finetune_chronos.MAX_LAGS,
+        finetune_chronos.SOURCES,
+    )
+    try:
+        init_worker(100, finetune_chronos.DEPLOYED_LAGS, ("daily",))
+        assert finetune_chronos.MAX_SERIES == 100
+        assert finetune_chronos.MAX_LAGS == finetune_chronos.DEPLOYED_LAGS
+        assert finetune_chronos.SOURCES == ("daily",)
+    finally:
+        (
+            finetune_chronos.MAX_SERIES,
+            finetune_chronos.MAX_LAGS,
+            finetune_chronos.SOURCES,
+        ) = saved
