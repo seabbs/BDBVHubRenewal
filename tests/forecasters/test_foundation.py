@@ -798,3 +798,54 @@ def test_too_many_requests_is_retried_a_bounded_number_of_times(
     with pytest.raises(ConnectionError, match="GH_TOKEN"):
         foundation.finetuned_adapter(_checkpoint("abc"))
     assert len(calls) == len(foundation.RETRY_SECONDS) + 1
+
+
+GERMAN_MODELS = tuple(f"fm_chronos_{s}_ragged_de" for s in SOURCES)
+
+
+def test_latest_never_takes_a_german_release(
+    releases: Path, monkeypatch: pytest.MonkeyPatch, write_release
+) -> None:
+    write_release(releases, "old", _ADAPTER, "old")
+    write_release(releases, "de", _ADAPTER, "de", prefix="germany-ft")
+    listing = _listing(
+        ("chronos-ft-old", "2026-11-01T00:00:00Z", False),
+        ("germany-ft-de", "2026-11-20T00:00:00Z", False),
+    )
+    monkeypatch.setattr(foundation, "finetuned_releases", lambda: listing)
+    assert foundation.resolve_checkpoint("latest") == _checkpoint("old")
+
+
+@pytest.mark.parametrize("name", GERMAN_MODELS)
+def test_german_models_load_their_pinned_german_release(
+    name: str,
+    releases: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    write_release,
+) -> None:
+    write_release(releases, "de", _ADAPTER, "de", prefix="germany-ft")
+    monkeypatch.setattr(foundation, "germany_spec", lambda: "de")
+    # The simulation checkpoint's override does not reach them.
+    monkeypatch.setenv(foundation.FINETUNED_ENV, "other")
+    model = get_model(name)
+    ragged = get_model(name.removesuffix("_de"))
+    assert model.checkpoint.hash == "de"
+    assert model.checkpoint.tag == "germany-ft-de"
+    assert model.checkpoint.sha256 == _checkpoint("de").sha256
+    assert (model.source, model.layout) == (ragged.source, "ragged")
+    assert "'de'" in repr(model)
+    adapter = foundation.finetuned_adapter(model.checkpoint)
+    assert adapter.name == "germany-ft-de"
+    assert (adapter / "adapter_model.safetensors").read_bytes() == b"weights"
+
+
+def test_the_simulation_checkpoints_keep_their_fit_keys() -> None:
+    # A tag prefix must not enter the repr, which keys stored fits.
+    assert "prefix" not in repr(_checkpoint("abc"))
+    assert _checkpoint("abc").tag == "chronos-ft-abc"
+
+
+def test_the_german_checkpoint_is_pinned_to_a_hash() -> None:
+    spec = foundation.germany_spec()
+    assert spec != "latest"
+    assert len(spec) == 12
