@@ -55,6 +55,14 @@ On the German development half, the national WIS relative to `randomwalknowcast`
 On the BDBV release backtest it went from {{< meta evidence.lag.bdbv.fm_chronos_daily_ragged.capped >}} to {{< meta evidence.lag.bdbv.fm_chronos_daily_ragged.longer >}} for the daily zero-shot model and from {{< meta evidence.lag.bdbv.fm_chronos_weekly_ragged.capped >}} to {{< meta evidence.lag.bdbv.fm_chronos_weekly_ragged.longer >}} for the weekly one.
 BDBV's zones have few weekly releases, so with the longer horizon no recent lag of a zone falls in the model's context.
 
+To compare training on simulations with training on real data, we also fine-tuned Chronos-2 on the German data alone (`fm_chronos_daily_ragged_de` and `fm_chronos_weekly_ragged_de`).
+It used the data as available on 2022-02-09, the last day of the German development half, and nothing later.
+Training blocks were cut at every nowcast date whose truth, four weeks ahead, was at least 40 days old by then, from 2021-04-20 to 2021-12-03.
+Each date was laid out as the German nowcast tasks are, with the same block functions as the simulations, from the daily and weekly releases, for Germany alone and with its states or age groups, at release lags of 14 to 49 days (including 40) or 2 to 7 weeks.
+Training followed Chronos-2's recipe as the simulation fine-tune does, from base Chronos-2, for its default 1,000 steps.
+The last 14 nowcast dates were held out to monitor the loss.
+The hub file's changes after 80 days hold revisions made up to August 2022, so they were left out.
+
 ### Synthetic data generation
 
 ::: {.callout-note title="Plan"}
@@ -301,6 +309,17 @@ German nowcast hub scores by horizon. {{< meta results.germany.label >}} {{< met
 {{< include build/tables/si/germany-scores-by-location.md >}}
 
 German nowcast hub scores by location and stratum. {{< meta results.germany.label >}} {{< meta results.germany.note >}}
+:::
+
+#### Fine-tuning on the German data
+
+@tbl-germany-real-finetune compares Chronos-2 fine-tuned on the German development half with the zero-shot model and the model fine-tuned on simulations, on the held-out half only, as the German-trained model saw the development half.
+It is left out of every other German table and figure.
+
+::: {#tbl-germany-real-finetune}
+{{< include build/tables/si/germany-real-finetune.md >}}
+
+German nowcast hub held-out half: Chronos-2 zero-shot (`_ragged`), fine-tuned on simulations (`_ft`) and fine-tuned on the German development half (`_de`), overall (`all`) and by level, with WIS relative to `randomwalknowcast`. {{< meta results.germany.label >}} {{< meta results.germany.note >}}
 :::
 
 ### Ebola hub submissions
