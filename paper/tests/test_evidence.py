@@ -5,6 +5,7 @@ import yaml
 
 from paperpipe.evidence import (
     EVIDENCE,
+    aggregation_numbers,
     aggregation_table,
     copula_table,
     rho_medians,
@@ -105,6 +106,8 @@ def test_aggregation_is_relative_to_the_reference_on_shared_targets() -> None:
     assert t["Option"].tolist() == ["Joint block", "Level by level"]
     assert t["Relative WIS (log)"].tolist() == ["0.50 (0.50)", "2.00 (2.00)"]
     assert t["n"].tolist() == [1, 1]
+    numbers = aggregation_numbers(pd.DataFrame(rows))
+    assert numbers["ebola"]["national"]["fm"] == {"joint": 0.5, "level": 2.0}
 
 
 def test_missing_evidence_leaves_a_note_and_no_numbers(tmp_path) -> None:
