@@ -299,13 +299,16 @@ free_mem_gb() {
 unstarted_seeds() {
   # Training seeds no machine is running, lowest first: never started, or
   # with no result and a log untouched for STALE_MIN minutes (a batch the
-  # remote lost). The laptop takes these, as the trainer needs seeds in
-  # order.
+  # remote lost), or that R aborted on the remote (a segfault under its
+  # memory cap, which the remote would retry and fail again). The laptop
+  # takes these, as the trainer needs seeds in order.
   local s f
   for s in $(seq "$TRAIN_FIRST" "$TRAIN_LAST"); do
     f="$SIM_DIR/logs/$s.log"
     done_seed "$s" && continue
     if [ ! -e "$f" ] || [ -n "$(find "$f" -mmin +"${STALE_MIN:-90}")" ]; then
+      echo "$s"
+    elif ! grep -qx "$s" "$STARTED" && grep -q "R is aborting" "$f"; then
       echo "$s"
     fi
   done
