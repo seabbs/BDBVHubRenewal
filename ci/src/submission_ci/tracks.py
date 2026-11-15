@@ -9,6 +9,8 @@ checks everything but pushes nothing.
 - `baseline` (`[models.randomwalknowcast]`): random walk on a nowcast.
   It has no fallback. If it cannot run, its
   round is skipped and nothing is submitted under its id.
+- `chronos` (`[models.<fm_chronos_*_ragged_ft>]`): fine-tuned Chronos-2,
+  run in its own job, with no fallback either.
 """
 
 from __future__ import annotations
@@ -22,7 +24,7 @@ from pathlib import Path
 from .common import append_summary, set_outputs
 
 TEAM = "seabbs"
-KEYS = {"renewal": "renewal", "rwnowcast": "baseline"}
+KEYS = {"renewal": "renewal", "rwnowcast": "baseline", "chronos2_ft": "chronos"}
 """Step output name of each hub model's switch."""
 
 

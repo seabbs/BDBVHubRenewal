@@ -99,6 +99,7 @@ __all__ = [
     "levels",
     "own_ages",
     "retro_errors",
+    "start_weeks",
     "walk_changes",
     "week_nowcast",
     "weeks_back",
@@ -651,6 +652,75 @@ class Origin:
         return int(full.max()) if full.size else 0
 
 
+def _latest_fit(
+    snap: SnapshotArrays, settings: Settings, delay: DelayFn
+) -> tuple[int, DelayFit]:
+    """Return the latest release and its delay fit.
+
+    Raises
+    ------
+    NoDelayPair
+        If no pair of releases has a step within the delay window.
+    """
+    o = len(snap.releases) - 1
+    fit = delay(snap, o, settings)
+    if fit is None:
+        raise NoDelayPair(
+            f"No pair of releases up to {snap.releases[o]} has a step of at "
+            f"most {settings.max_delay} days."
+        )
+    return o, fit
+
+
+def _completeness(
+    snap: SnapshotArrays, o: int, fit: DelayFit, settings: Settings
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Return $G$, the share reported by week and each place's start week.
+
+    The start week is the latest week at least `Settings.completeness`
+    complete, or the first week where none is.
+    """
+    g = final_growth(snap, o, fit, settings)
+    inv = np.where(snap.observed[o][None, :], 1.0 / g, 0.0)
+    complete = week_sum(snap, inv) / 7.0
+    good = complete >= settings.completeness
+    start = np.where(
+        good.any(axis=1), snap.n_weeks - 1 - np.argmax(good[:, ::-1], axis=1), 0
+    )
+    return g, complete, start
+
+
+def start_weeks(
+    snap: SnapshotArrays, settings: Settings, delay: DelayFn = fit_delay
+) -> np.ndarray:
+    """Return the week each place's walk starts from, from the delay alone.
+
+    It is `Origin.start` with no walk spread fitted, so it exists where
+    `build_origin` raises `NoWalkSpread`.
+
+    Parameters
+    ----------
+    snap : SnapshotArrays
+        The arrays. The origin is the latest release.
+    settings : Settings
+        Settings.
+    delay : callable
+        Fits the delay at a release.
+
+    Returns
+    -------
+    numpy.ndarray
+        Week index of each place, `[L]`.
+
+    Raises
+    ------
+    NoDelayPair
+        If no pair of releases has a step within the delay window.
+    """
+    o, fit = _latest_fit(snap, settings, delay)
+    return _completeness(snap, o, fit, settings)[2]
+
+
 def build_origin(
     snap: SnapshotArrays,
     settings: Settings,
@@ -680,23 +750,11 @@ def build_origin(
     NoDelayPair
         If no pair of releases has a step within the delay window.
     """
-    o = len(snap.releases) - 1
-    fit = delay(snap, o, settings)
-    if fit is None:
-        raise NoDelayPair(
-            f"No pair of releases up to {snap.releases[o]} has a step of at "
-            f"most {settings.max_delay} days."
-        )
-    g = final_growth(snap, o, fit, settings)
+    o, fit = _latest_fit(snap, settings, delay)
+    g, complete, start = _completeness(snap, o, fit, settings)
     reported = weekly_sums(snap, o)
     age = snap.cut[o] - np.arange(snap.week.size)
     point = week_nowcast(snap, o, fit.g, age, settings.max_delay)
-    inv = np.where(snap.observed[o][None, :], 1.0 / g, 0.0)
-    complete = week_sum(snap, inv) / 7.0
-    good = complete >= settings.completeness
-    start = np.where(
-        good.any(axis=1), snap.n_weeks - 1 - np.argmax(good[:, ::-1], axis=1), 0
-    )
     own, pooled = _walk_spreads(reported, start, snap, fit.level, settings)
     # A variance of 0 or below is no estimate, so the place takes its
     # nearest parent's, as one without the level does.

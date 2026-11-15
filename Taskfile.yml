@@ -113,10 +113,11 @@ tasks:
       - uv run bdbvhubrenewal nowcast {{.CLI_ARGS}}
 
   metadata:
-    desc: Write and check the metadata of both hub models in hub/model-metadata/
+    desc: Write and check the metadata of the hub models in hub/model-metadata/
     cmds:
       - uv run bdbvhubrenewal metadata --model randomwalk --out hub/model-metadata
       - uv run bdbvhubrenewal metadata --model randomwalknowcast --out hub/model-metadata
+      - uv run bdbvhubrenewal metadata --model fm_chronos_daily_ragged_ft --out hub/model-metadata
 
   validate-hub:
     desc: Check the nowcast file and metadata with hub_validate (Python) and hubValidations (R)

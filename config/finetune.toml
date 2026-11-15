@@ -1,0 +1,9 @@
+# The fine-tuned Chronos-2 checkpoint the `fm_chronos_*_ragged_ft`
+# models load (`forecasters.foundation.resolve_checkpoint`). "latest" is
+# the newest `chronos-ft-<hash>` release on seabbs/BDBVHubRenewal, by
+# publish date, so a new release is picked up and refits those models. A
+# settings hash pins that release instead. Either way the adapter is
+# checked against the release's sha256sums.txt. Kept out of the code, so
+# the settings hash `scripts/finetune_chronos.py train` gives does not
+# cover it.
+hash = "latest"
