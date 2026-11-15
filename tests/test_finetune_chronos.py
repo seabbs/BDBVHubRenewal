@@ -464,3 +464,16 @@ def test_blocks_are_cut_without_torch(tmp_path):
     )
     assert out.returncode == 0, out.stderr
     assert int(out.stdout.split()[-1]) > 0
+
+
+def test_learning_rate_halves_with_each_doubling_of_outbreaks():
+    from finetune_stream import learning_rate
+
+    # Constant without decay.
+    assert learning_rate(4000, 1e-4, 0.0, 1000) == 1e-4
+    # With decay 1, a doubling of outbreaks halves it, from the first
+    # checkpoint on.
+    assert learning_rate(0, 1e-4, 1.0, 1000) == 1e-4
+    assert learning_rate(1000, 1e-4, 1.0, 1000) == 1e-4
+    assert learning_rate(2000, 1e-4, 1.0, 1000) == 5e-5
+    assert abs(learning_rate(8000, 1e-4, 1.0, 1000) - 1.25e-5) < 1e-12
