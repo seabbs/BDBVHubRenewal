@@ -195,3 +195,26 @@ def test_german_blocks_see_what_the_ragged_model_sees(
     assert np.array_equal(
         ctx[n:, CONTEXT : CONTEXT + h], future, equal_nan=True
     )
+
+
+def test_german_fine_tune_uses_only_the_development_half():
+    from finetune_germany import AS_OF, FIRST_CUT, cut_dates, truth_until
+
+    # The development half ends the day before the held-out half starts.
+    assert AS_OF == "2022-02-09"
+    assert truth_until() == "2021-12-31"
+    cuts = cut_dates(FIRST_CUT, truth_until())
+    # The last cut's four weeks ahead end on the truth date.
+    assert cuts[-1] == "2021-12-03"
+    assert cuts[0] == FIRST_CUT
+    assert len(set(cuts)) == len(cuts)
+
+
+def test_the_latest_cuts_are_held_out_not_trained_on():
+    from finetune_germany import HELD_OUT_DAYS, split_held_out
+
+    days = [f"2021-11-{d:02d}" for d in range(1, 31)]
+    blocks = [{"cut": d, "source": "daily"} for d in days]
+    train, held = split_held_out(blocks)
+    assert len(held) == HELD_OUT_DAYS
+    assert max(b["cut"] for b in train) < min(b["cut"] for b in held)
