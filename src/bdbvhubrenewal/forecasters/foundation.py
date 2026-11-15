@@ -17,6 +17,7 @@ and the fit store stores it as failed.
 
 from __future__ import annotations
 
+import dataclasses
 import datetime as dt
 import hashlib
 import http.client
@@ -67,11 +68,14 @@ __all__ = [
     "chronos_sampler",
     "finetuned_adapter",
     "finetuned_releases",
+    "finetuned_settings",
     "finetuned_spec",
+    "floor_scale",
     "hub_triangle",
     "layout_block",
     "quantile_draws",
     "resolve_checkpoint",
+    "with_days_per_step",
 ]
 
 SOURCES: Final = ("weekly", "daily")
@@ -140,10 +144,21 @@ class Checkpoint:
         is `chronos-ft-<hash>`.
     sha256 : tuple of (str, str)
         SHA-256 of each of `ADAPTER_FILES`, by file name.
+    scale_floor : float
+        Least scale, in counts, Chronos-2 divides a series by, as the
+        checkpoint was trained with; 0 keeps Chronos-2's own.
+    step_covariate : bool
+        Whether a known covariate gives the days per step, as the
+        checkpoint was trained with.
+
+    The settings are part of the model's representation, so stored fits
+    with and without them never share a fit key.
     """
 
     hash: str
     sha256: tuple[tuple[str, str], ...]
+    scale_floor: float = 0.0
+    step_covariate: bool = False
 
 
 def finetuned_spec(path: Path | str = FINETUNED_CONFIG) -> str:
@@ -163,6 +178,27 @@ def finetuned_spec(path: Path | str = FINETUNED_CONFIG) -> str:
     if os.environ.get(FINETUNED_ENV):
         return os.environ[FINETUNED_ENV]
     return str(tomllib.loads(Path(path).read_text())["hash"])
+
+
+def finetuned_settings(path: Path | str = FINETUNED_CONFIG) -> dict[str, Any]:
+    """Return the settings the `_ft` models forecast with, from config.
+
+    Parameters
+    ----------
+    path : pathlib.Path or str
+        A TOML file with optional `scale_floor` (counts, default 0) and
+        `step_covariate` (default false).
+
+    Returns
+    -------
+    dict
+        `scale_floor` and `step_covariate`, for `Checkpoint`.
+    """
+    config = tomllib.loads(Path(path).read_text())
+    return {
+        "scale_floor": float(config.get("scale_floor", 0)),
+        "step_covariate": bool(config.get("step_covariate", False)),
+    }
 
 
 def _passing(err: BaseException) -> bool:
@@ -311,9 +347,10 @@ def resolve_checkpoint(spec: str) -> Checkpoint:
 
 def _finetuned(name: str, source: str) -> FoundationModel:
     """Build a fine-tuned model with the checkpoint `finetuned_spec` names."""
-    return FoundationModel(
-        name, source, "ragged", resolve_checkpoint(finetuned_spec())
+    checkpoint = dataclasses.replace(
+        resolve_checkpoint(finetuned_spec()), **finetuned_settings()
     )
+    return FoundationModel(name, source, "ragged", checkpoint)
 
 
 Sampler = Callable[[Sequence[Series], int, int, int], list[np.ndarray]]
@@ -534,6 +571,46 @@ def finetuned_adapter(checkpoint: Checkpoint) -> Path:
     return out
 
 
+def floor_scale(model: Any, floor: float) -> None:
+    """Make `model` scale each series by at least `floor` counts.
+
+    Chronos-2 scales each series by its context's standard deviation, and
+    a flat context, such as all zeros, by 1e-5, so one count in the
+    forecast is 1e5 scaled units.
+    """
+    from chronos.chronos_bolt import InstanceNorm
+
+    class FlooredNorm(InstanceNorm):  # type: ignore[misc]
+        def forward(self, x, loc_scale=None):  # type: ignore[no-untyped-def]
+            if loc_scale is None:
+                _, (loc, scale) = super().forward(x)
+                loc_scale = (loc, scale.clamp(min=floor))
+            return super().forward(x, loc_scale)
+
+    norm = model.instance_norm
+    model.instance_norm = FlooredNorm(
+        eps=norm.eps, use_arcsinh=norm.use_arcsinh
+    )
+
+
+def with_days_per_step(group: Series, source: str) -> Series:
+    """Return a block with a known covariate of the days per step."""
+    days = 7 if source == "weekly" else 1
+    start = group["target"].shape[-1]
+    horizon = len(next(iter(group["future_covariates"].values())))
+    return {
+        **group,
+        "past_covariates": {
+            **group["past_covariates"],
+            "days_per_step": np.full(start, days, dtype=float),
+        },
+        "future_covariates": {
+            **group["future_covariates"],
+            "days_per_step": np.full(horizon, days, dtype=float),
+        },
+    }
+
+
 @cache
 def _chronos(checkpoint: Checkpoint | None = None) -> Any:
     adapter = None if checkpoint is None else finetuned_adapter(checkpoint)
@@ -550,12 +627,14 @@ def _chronos(checkpoint: Checkpoint | None = None) -> Any:
     pipeline = Chronos2Pipeline.from_pretrained(
         CHRONOS_MODEL, revision=CHRONOS_REVISION, device_map=device
     )
-    if adapter is None:
-        return pipeline
-    from peft import PeftModel
+    if adapter is not None:
+        from peft import PeftModel
 
-    model = PeftModel.from_pretrained(pipeline.model, adapter)
-    return Chronos2Pipeline(model=model.merge_and_unload())
+        model = PeftModel.from_pretrained(pipeline.model, adapter)
+        pipeline = Chronos2Pipeline(model=model.merge_and_unload())
+    if checkpoint is not None and checkpoint.scale_floor > 0:
+        floor_scale(pipeline.model, checkpoint.scale_floor)
+    return pipeline
 
 
 def chronos_sampler(
@@ -746,6 +825,8 @@ class FoundationModel:
         horizon = len(tri.times) - start
         seed = int(task.rng(self.name).integers(0, 2**31 - 1))
         group = layout_block(tri, self.layout, places, start)
+        if self.checkpoint is not None and self.checkpoint.step_covariate:
+            group = with_days_per_step(group, self.source)
         sample = self.sample or partial(
             chronos_sampler, checkpoint=self.checkpoint
         )

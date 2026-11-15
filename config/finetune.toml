@@ -7,3 +7,10 @@
 # the settings hash `scripts/finetune_chronos.py train` gives does not
 # cover it.
 hash = "latest"
+
+# How the `_ft` models forecast, as their checkpoint was trained: the
+# least scale in counts Chronos-2 divides a series by (0 keeps its own),
+# and whether a known covariate gives the days per step. Both are part of
+# the fit key.
+scale_floor = 0
+step_covariate = false
