@@ -17,7 +17,12 @@ Germany: development half, 2021-11-22 to 2022-02-09, quantile scores on the 40-d
 
 Files:
 
-- `aggregation-scores.csv.gz`: one row per scored cell, in the paper's schema (`aggregation_rows`).
+- `aggregation-scores.csv.gz`: one row per scored cell, in the paper's schema (`aggregation_rows`), BDBV (`ebola`) and the German development half (`germany`).
+- `aggregation-cost.csv`: one fit per arm, each in its own process, on the laptop CPU with one thread: BDBV at origin 2026-11-01, Germany at 2022-02-09 (both of its tasks, or the merged task for `joint`).
+  `series` counts target and lag series per block, `+` between blocks; `memory_gb` is the process's peak resident memory, Chronos-2 loaded; `seconds` is the fit alone.
+  `zones_copula` repeats `zones_summed`: its pairing is not timed.
 - `bdbv-joint-samples.csv.gz`: the `joint` samples of the six Chronos-2 models, country and provinces, in main's forecasts layout.
 - `bdbv-relative.csv`: relative WIS and log WIS against randomwalknowcast, by level, on the rolling truth and against the latest release (partly incomplete).
-- `germany-relative-round1-quantiles.csv`: relative WIS of the round-1 arms on Germany, from quantile files.
+- `germany-relative.csv`: relative WIS and log WIS against randomwalknowcast, by level, on the forecasts every arm made.
+
+The pairing used fm-copula-rolling's copula at c83d85461, before its per-cell seeding.
