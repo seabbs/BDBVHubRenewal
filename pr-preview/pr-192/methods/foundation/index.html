@@ -2196,9 +2196,7 @@ Health zones are split from the provinces as for the other fitted models (<a hre
   It comes from the delay alone, so it needs no walk spread.</li>
 <li><strong>Ragged</strong> (<code>*_ragged</code>): the same targets, with one lag series per place and lag <span class="arithmatex">\(d &lt; D\)</span>, indexed by onset step as in a regression nowcast.
   Lag series <span class="arithmatex">\(d\)</span> holds <span class="arithmatex">\(Y_{p,t,d}\)</span>, missing where it is not yet reported, and Chronos-2 masks the missing values.
-  <span class="arithmatex">\(t^* = c - D\)</span>, the last step whose count is at lag <span class="arithmatex">\(D\)</span> or more.
-  <span class="arithmatex">\(D\)</span> is the truth delay the forecasts are scored on: the release backtest's <code>truth_delay</code> (<code>config/backtest.toml</code>), or the German benchmark's (<code>config/germany.toml</code>), in days or in weeks rounded up.
-  Where <code>truth_delay</code> is <code>"auto"</code>, <span class="arithmatex">\(D\)</span> is resolved from the tidy data as the backtest resolves it, and, with no tidy data, estimated the same way from the releases up to the origin.
+  <span class="arithmatex">\(t^* = c - D\)</span>, the last step whose count is at lag <span class="arithmatex">\(D\)</span> or more, with <span class="arithmatex">\(D = 4\)</span> weeks or <span class="arithmatex">\(D = 28\)</span> days.
   The lag series run past <span class="arithmatex">\(t^*\)</span> as known future values, which is how recent counts reach the nowcast.</li>
 </ul>
 <p>Chronos-2 standardises each series and takes its arcsinh, so counts go in as they are.</p>
