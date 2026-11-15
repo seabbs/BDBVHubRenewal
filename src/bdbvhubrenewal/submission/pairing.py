@@ -13,9 +13,10 @@ Those forecasts come from where the backtest takes them: the fit store
 earlier releases for one that is not.
 The ledger's archive of each round's candidates (`archived_forecasts`)
 gives an origin neither has.
-A paired model whose earlier origins have no forecasts from any of
-these fails, rather than be paired by the prior alone. At the first
-origin, with no earlier one, it takes the prior, as in the backtest.
+A fitted model whose earlier origins have no forecasts from the store
+or the archive fails, rather than be paired by the prior alone.
+Otherwise a forecast with no past forecasts, as at the first origin,
+takes the prior, as in the backtest.
 """
 
 from __future__ import annotations
@@ -261,9 +262,10 @@ def pair_submission(
     Raises
     ------
     LookupError
-        If an earlier origin in the window has no forecast from any
-        source. With no earlier origin, as at the first, the copula is
-        its prior, as in the backtest.
+        If a fitted model has no forecast at the earlier origins in the
+        window from the store or the archive. With no earlier origin, as
+        at the first, or a model forecast again that has none there, the
+        copula is its prior, as in the backtest.
     """
     origin = task.vintage
     # A forecast at r reaches week r + max_horizon, which is in the window
@@ -273,8 +275,12 @@ def pair_submission(
     )
     recent = [t for t in past_tasks if as_date(t.vintage) >= oldest]
     past = past_forecasts(model, origin, archive, store, recent)
+    # A model forecast again has the forecasts the backtest has, so none
+    # at the earlier origins is as in the backtest. A fitted model's must
+    # come from the store or the archive.
+    spec = {s.name: s for s in list_models()}[model]
     earlier = [t for t in recent if t.vintage < origin]
-    if past.empty and earlier:
+    if past.empty and earlier and spec.fitted:
         raise LookupError(
             f"{model} has no past forecasts before {origin} in the archive "
             f"({archive}), the fit store ({store}) or forecast again, so its "

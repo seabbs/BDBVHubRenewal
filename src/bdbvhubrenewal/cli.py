@@ -1812,7 +1812,11 @@ def _germany_backtest(args: argparse.Namespace) -> int:
     models = config.models if args.models is None else args.models
     triangle = hub_triangle(Path(args.data) / Path(config.triangle).name)
     samples = de.germany_samples(
-        models, triangle, dates, config.n_samples, config.seed
+        models,
+        triangle,
+        dates,
+        config.n_samples,
+        config.seed,
     )
     out = Path(args.out) / ("held-out" if args.held_out else "")
     out.mkdir(parents=True, exist_ok=True)

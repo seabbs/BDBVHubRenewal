@@ -234,3 +234,25 @@ def test_submission_pairs_as_the_release_backtest_does(
         submitted[[*keys, "value"]].sort_values(keys).reset_index(drop=True),
         check_dtype=False,
     )
+
+
+def test_an_unfitted_model_with_no_forecast_at_earlier_origins_takes_the_prior(
+    tasks: list, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # As in the backtest, where the model has no forecast there either.
+    from bdbvhubrenewal.forecasters import ModelUnavailableError
+    from bdbvhubrenewal.submission import pairing
+
+    task = tasks[-1]
+    samples = get_model("randomwalknowcast").forecast(task)
+
+    class Unavailable:
+        def forecast(self, _task):  # type: ignore[no-untyped-def]
+            raise ModelUnavailableError("no delay pair")
+
+    monkeypatch.setattr(pairing, "get_model", lambda _name: Unavailable())
+    _, fit = pair_submission(
+        "randomwalknowcast", samples, task, truth_delay=7, past_tasks=tasks
+    )
+    assert fit["n_scores"] == 0
+    assert fit["source"] == "none"

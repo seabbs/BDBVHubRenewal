@@ -34,6 +34,7 @@ from bdbvhubrenewal.forecasters.chain import NoWalkSpread
 from bdbvhubrenewal.forecasters.copula import GaussianCopula
 from bdbvhubrenewal.forecasters.foundation import (
     CHRONOS_COPULA,
+    CHRONOS_DAY_RHO,
     LAYOUTS,
     MAX_LAG,
     SOURCES,
@@ -149,6 +150,26 @@ def test_registered_as_fitted_models() -> None:
         assert "0x" not in repr(model)
 
 
+@pytest.mark.parametrize(("source", "steps"), [("daily", 28), ("weekly", 4)])
+def test_ragged_lags_stop_below_the_truth_delay(
+    source: str, steps: int, task: ForecastTask
+) -> None:
+    # The lag series stop at 28 days or 4 weeks, short of the 35-day truth
+    # delay. Running them to the truth delay (e43eda80c) was reverted: zone
+    # releases began on 2026-10-09, so at 5 weeks no lag 0 to 2 value of a
+    # zone fell in the context, Chronos-2 read partial counts as levels,
+    # and the forecasts and scores were worse.
+    store: list = []
+    model = dataclasses.replace(
+        get_model(f"fm_chronos_{source}_ragged"), sample=_recording(store)
+    )
+    model.forecast(task)
+    groups, _ = store[0]
+    n_places = 1 + len(task.locations)
+    assert len(groups[0]["future_covariates"]) == n_places * steps
+    assert MAX_LAG[source] == steps
+
+
 def _history() -> pd.DataFrame:
     """Two weekly releases of one place, the second a week later."""
     return pd.DataFrame(
@@ -259,7 +280,13 @@ def _wide(out: pd.DataFrame) -> pd.DataFrame:
 @pytest.mark.parametrize("name", MODELS)
 def test_draws_are_paired_by_the_copula(name: str, task: ForecastTask) -> None:
     model = get_model(name)
-    assert model.copula == CHRONOS_COPULA
+    if "_weekly_" in name:
+        assert model.copula == CHRONOS_COPULA
+    else:
+        # Days apart by one are paired by the daily prior.
+        per_day = model.copula.rho_time ** (1 / 7)
+        assert per_day == pytest.approx(CHRONOS_DAY_RHO)
+        assert model.copula.rho_provinces == CHRONOS_COPULA.rho_provinces
     paired = dataclasses.replace(model, sample=_independent).forecast(task)
     unpaired = dataclasses.replace(
         model, sample=_independent, copula=GaussianCopula()

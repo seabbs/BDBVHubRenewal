@@ -29,7 +29,7 @@ import time
 import tomllib
 import urllib.request
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from functools import cache, partial
 from pathlib import Path
 from typing import Any, ClassVar, Final
@@ -54,6 +54,8 @@ from bdbvhubrenewal.forecasters.zones import reconcile_zones
 __all__ = [
     "ADAPTER_FILES",
     "CHRONOS_COPULA",
+    "CHRONOS_DAILY_COPULA",
+    "CHRONOS_DAY_RHO",
     "CHRONOS_MODEL",
     "CHRONOS_REVISION",
     "FINETUNED_CACHE",
@@ -97,8 +99,22 @@ CHRONOS_REVISION: Final = "29ec3766d36d6f73f0696f85560a422f50e8498c"
 """The checkpoint's commit, pinned so runs are reproducible."""
 
 CHRONOS_COPULA: Final = PRIOR
-"""The copula pairing every Chronos-2 model's draws into trajectories,
-days included, before they are summed to weeks."""
+"""The copula pairing the weekly Chronos-2 models' draws into
+trajectories."""
+
+CHRONOS_DAY_RHO: Final = 0.985
+"""The daily models' correlation between adjacent days, before the days
+are summed to weeks. Chosen on the release backtest from 0, 0.3, 0.5,
+0.7, 0.9 and 0.985, where it gave the lowest WIS and weekly median bias.
+Weekly errors cannot estimate it, as each is of a week's sum."""
+
+CHRONOS_DAILY_COPULA: Final = replace(
+    PRIOR, rho_time=CHRONOS_DAY_RHO**7
+)
+"""The daily models' copula: days d apart have correlation
+`CHRONOS_DAY_RHO` to the power d."""
+
+_COPULAS: Final = {"weekly": CHRONOS_COPULA, "daily": CHRONOS_DAILY_COPULA}
 
 FINETUNED_CONFIG: Final = Path("config/finetune.toml")
 """Which fine-tuned checkpoint the `_ft` models load: `hash`, `"latest"`
@@ -321,7 +337,11 @@ def resolve_checkpoint(spec: str) -> Checkpoint:
 def _finetuned(name: str, source: str) -> FoundationModel:
     """Build a fine-tuned model with the checkpoint `finetuned_spec` names."""
     return FoundationModel(
-        name, source, "ragged", resolve_checkpoint(finetuned_spec())
+        name,
+        source,
+        "ragged",
+        resolve_checkpoint(finetuned_spec()),
+        copula=_COPULAS[source],
     )
 
 
@@ -849,7 +869,13 @@ for _source in SOURCES:
         _name = f"fm_chronos_{_source}_{_layout}"
         register_model(
             _name,
-            partial(FoundationModel, _name, _source, _layout),
+            partial(
+                FoundationModel,
+                _name,
+                _source,
+                _layout,
+                copula=_COPULAS[_source],
+            ),
             f"Chronos-2 on the hub target's {_source} releases, {_layout} "
             "layout, every target in one block.",
             fitted=True,
