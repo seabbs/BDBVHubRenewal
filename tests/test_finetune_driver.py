@@ -496,3 +496,28 @@ def test_a_checkpoint_that_fails_its_check_is_an_alert(tmp_path):
     assert "ALERT: checkpoint n2000 does not match its code_commit" in out
     # One mailbox line however often it is checked.
     assert out.count("fm-finetune3") == 1
+
+
+def test_laptop_runs_next_chunk_seeds_that_aborted_before_they_are_due(
+    tmp_path,
+):
+    sims = tmp_path / "sims"
+    (sims / "logs").mkdir(parents=True)
+    rows = "outbreak\n" + "".join(f"x-{i}\n" for i in range(5))
+    for s in (5001, 5002, 5005):
+        (sims / f"settings-{s}.csv").write_text(rows)
+    # 5003 aborted on the remote; 5004 is running there.
+    (sims / "logs" / "5003.log").write_text("R is aborting now ...\n")
+    (sims / "logs" / "5004.log").write_text("running\n")
+    (tmp_path / "ckpt" / "state").mkdir(parents=True)
+    (tmp_path / "ckpt" / "state" / "state.json").write_text('{"done": 10}')
+    (tmp_path / "ckpt" / "stream-status.json").write_text(
+        '{"stage": "training"}'
+    )
+    # Training outbreaks 1-10 with 10 more ahead needs seeds 5001-5004.
+    out = run(
+        tmp_path,
+        "blocking_seeds | tr '\\n' ' '",
+        ENV + "LOOKAHEAD_OUTBREAKS=10\n",
+    )
+    assert out.split() == ["5003"]
