@@ -561,11 +561,12 @@ def forward(model, batch: dict, accepted, device=None):
         return model(**inputs)
 
 
-def step(model, batch: dict, accepted, device, share: float) -> float:
-    """Accumulate the gradients of a batch's loss, scaled by `share`.
+def train_step(model, batch: dict, accepted, device, share: float) -> float:
+    """Accumulate a batch's gradients, scaled by `share`; return its loss.
 
-    Its rows stay assigned through backward, which recomputes checkpointed
-    blocks' series bias from them (`checkpoint_large_batches`).
+    Forward and backward both run with the rows' places assigned, so a
+    block recomputed in backward (`checkpoint_large_batches`) gets the
+    same series bias.
     """
     with series_bias.assigned(model, batch.get("series_rows")):
         loss = forward(model, batch, accepted, device).loss
@@ -1332,7 +1333,7 @@ def main() -> None:
     def backward(part: list[int], share: float) -> float:
         """Accumulate the gradients of part of a batch."""
         batch = data._build_batch(part)
-        value = step(model, batch, accepted, device, share)
+        value = train_step(model, batch, accepted, device, share)
         del batch
         return value
 

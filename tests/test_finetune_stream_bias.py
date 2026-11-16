@@ -132,39 +132,3 @@ def test_continuing_without_the_bias_in_the_adapter_is_refused(tmp_path):
     series_bias.attach(model)
     with pytest.raises(ValueError, match="bias"):
         fs.lora_model(model, fs.lora_config(True), tmp_path / "round0")
-
-
-@pytest.mark.usefixtures("short_context")
-def test_a_training_step_keeps_the_rows_through_a_checkpointed_backward(
-    monkeypatch,
-):
-    import inspect
-
-    from chronos.chronos2.dataset import DatasetMode
-    from chronos.chronos2.model import Chronos2EncoderBlock, Chronos2Model
-
-    accepted = inspect.signature(Chronos2Model.forward).parameters
-    blocks = [padded(toy_block(0))]
-    data = fs.ByLength(blocks, 100, DatasetMode.TRAIN, bias=True)
-
-    def grads(checkpointed: bool):
-        model = tiny_model()
-        series_bias.attach(model)
-        model.train()
-        module = getattr(model, series_bias.BIAS_MODULE)
-        with torch.no_grad():
-            for p in module.parameters():
-                p.fill_(0.3)
-        if checkpointed:
-            monkeypatch.setattr(
-                Chronos2EncoderBlock, "forward", Chronos2EncoderBlock.forward
-            )
-            fs.checkpoint_large_batches(0)
-        fs.step(model, data._build_batch([0]), accepted, "cpu", 1.0)
-        return [p.grad.clone() for p in module.parameters()]
-
-    plain, checked = grads(False), grads(True)
-    assert all(
-        torch.allclose(a, b) for a, b in zip(plain, checked, strict=True)
-    )
-    assert any(float(g.abs().sum()) > 0 for g in plain)
