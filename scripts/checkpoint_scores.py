@@ -156,8 +156,7 @@ def scored_checkpoints(evidence: pd.DataFrame) -> set[str]:
 
 
 def run_of(settings: Mapping[str, Any]) -> str:
-    """Return a checkpoint's run: `bias`, `slots`, `slots-zeroinit` or
-    `no-slots`.
+    """Return a checkpoint's run: bias, slots, slots-zeroinit or no-slots.
 
     The first slots run's slots started at zero and did not learn; the
     slots run restarted with random slots at their own learning rate. The
