@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import tomllib
 import urllib.request
 from pathlib import Path
 
@@ -29,6 +30,7 @@ import pandas as pd
 RELEASES = "https://github.com/seabbs/BDBVHubRenewal/releases/download"
 LEVELS = (0.05, 0.25, 0.5, 0.75, 0.95, 0.975)
 COLOURS = ("#2a78d6", "#eb6834", "#1baf7a", "#6250d6")
+POLICY = Path(__file__).resolve().parents[1] / "ci" / "policy.toml"
 
 
 def _hub_file(path: Path) -> Path:
@@ -63,9 +65,14 @@ def fan_charts(
     locations: list[str],
     path: Path,
     title: str,
-) -> None:
-    """One panel per location, each model's 50% and 90% intervals."""
+) -> bool:
+    """One panel per location, each model's 50% and 90% intervals.
+
+    Returns whether a chart was written: none is for no locations.
+    """
     n = len(locations)
+    if n == 0:
+        return False
     cols = min(n, 3)
     rows = -(-n // cols)
     fig, axes = plt.subplots(
@@ -96,6 +103,7 @@ def fan_charts(
     path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(path, dpi=110)
     plt.close(fig)
+    return True
 
 
 def _markdown(table: pd.DataFrame) -> str:
@@ -110,30 +118,42 @@ def _markdown(table: pd.DataFrame) -> str:
 
 
 def _flagged(
-    q: pd.DataFrame, observed: pd.DataFrame, reference_date: str | None
+    q: pd.DataFrame,
+    observed: pd.DataFrame,
+    reference_date: str | None,
+    policy: Path = POLICY,
 ) -> list[str]:
     """Return the locations the gate's plausibility check flags.
 
-    As `submission_ci.check_forecast.check_plausible` with the thresholds
-    of `ci/policy.toml`.
+    As `submission_ci.check_forecast.check_plausible`, with the weeks and
+    thresholds of `[checks]` in `policy`.
     """
     if not reference_date:
         return []
+    c = tomllib.loads(policy.read_text())["checks"]
+    n_recent, floor = int(c["plausible_recent_weeks"]), c["plausible_floor"]
+    hi, tail, lo = (
+        c["plausible_median_ratio"],
+        c["plausible_q975_ratio"],
+        c["plausible_low_ratio"],
+    )
     ref = pd.Timestamp(reference_date)
     weeks = {
-        (ref + pd.Timedelta(weeks=k)).strftime("%Y-%m-%d") for k in range(-3, 4)
+        (ref + pd.Timedelta(weeks=k)).strftime("%Y-%m-%d")
+        for k in range(-n_recent + 1, int(c["horizon_weeks"]) + 1)
     }
     out = []
     for loc, obs in observed.groupby("location"):
-        top = obs.sort_values("target_end_date")["observation"].tail(4).max()
-        base = max(top, 20)
+        recent = obs.sort_values("target_end_date")["observation"]
+        top = recent.tail(n_recent).max()
+        base = max(top, floor)
         mine = q.loc[(q["location"] == loc) & q["target_end_date"].isin(weeks)]
         if mine.empty:
             continue
         if (
-            (mine[0.5] > 5 * base).any()
-            or (mine[0.975] > 15 * base).any()
-            or (top >= 20 and (mine[0.5] < top / 20).any())
+            (mine[0.5] > hi * base).any()
+            or (mine[0.975] > tail * base).any()
+            or (top >= floor and (mine[0.5] < top / lo).any())
         ):
             out.append(str(loc))
     return out
@@ -152,8 +172,8 @@ def _focus(
         "",
         "Median and 97.5% quantile (in brackets) of each model by week, "
         "with the counts reported so far. The gate's plausibility check "
-        "fails a median under 1/20 of the largest of the last four "
-        "reported weeks, or a 97.5% quantile over 15 times it.",
+        "(`[checks]` in `ci/policy.toml`) compares them with the largest "
+        "of the last reported weeks.",
         "",
         "![focus](figures/focus.png)",
         "",
@@ -219,11 +239,6 @@ def main() -> None:
     )
     p.add_argument("--seconds", type=float, default=None)
     p.add_argument("--log", type=Path, default=None, help="track.sh's log")
-    p.add_argument(
-        "--focus",
-        default="",
-        help="Comma-separated locations to compare week by week",
-    )
     p.add_argument("--out", type=Path, required=True)
     args = p.parse_args()
 
@@ -251,8 +266,8 @@ def main() -> None:
     run = prov.get("run") or {}
     if not run and (selected / "run.json").exists():
         run = json.loads((selected / "run.json").read_text())
-    model_id = (args.track / "metadata").glob("*.yml")
-    model_id = next(iter(sorted(model_id)), Path("unknown")).stem
+    metadata = sorted((args.track / "metadata").glob("*.yml"))
+    model_id = next(iter(metadata), Path("unknown")).stem
     figures = args.out / "figures"
     lines = [
         f"# Submission review: {model_id}",
@@ -276,14 +291,17 @@ def main() -> None:
     checkpoint = run.get("checkpoint")
     if checkpoint:
         settings = _settings(checkpoint["tag"])
-        lines += [
+        lines.append(
             f"- Checkpoint: release `{checkpoint['tag']}`, adapter SHA-256 "
-            f"`{checkpoint['sha256']['adapter_model.safetensors'][:12]}`.",
-            f"- Held-out loss: {settings.get('held_out_loss_start', 'n/a'):.3f}"
-            f" before fine-tuning, {settings.get('held_out_loss', 'n/a'):.3f}"
-            f" after, on {settings.get('n_validation', 'n/a')} held-out "
-            f"blocks from {settings.get('n_outbreaks', 'n/a')} outbreaks.",
-        ]
+            f"`{checkpoint['sha256']['adapter_model.safetensors'][:12]}`."
+        )
+        if {"held_out_loss_start", "held_out_loss"} <= settings.keys():
+            lines.append(
+                f"- Held-out loss: {settings['held_out_loss_start']:.3f}"
+                f" before fine-tuning, {settings['held_out_loss']:.3f} after,"
+                f" on {settings.get('n_validation', 'n/a')} held-out blocks "
+                f"from {settings.get('n_outbreaks', 'n/a')} outbreaks."
+            )
     lines += ["", "## Checks and hub validation", ""]
     lines.append((gate / "provenance.md").read_text().replace("## ", "### "))
     for name in ("checks.md", "fit-summary.md", "ppc-summary.md"):
@@ -347,9 +365,6 @@ def main() -> None:
             "",
         ]
         focus = _flagged(mine, observed, run.get("reference_date"))
-        focus += [
-            loc for loc in args.focus.split(",") if loc and loc not in focus
-        ]
         if focus:
             lines += _focus(series, observed, focus, figures)
         for name, places in (
@@ -358,21 +373,21 @@ def main() -> None:
             ("zones", sample),
         ):
             path = figures / f"{name}.png"
-            fan_charts(series, observed, places, path, name.capitalize())
-            lines += [f"![{name}](figures/{name}.png)", ""]
+            if fan_charts(series, observed, places, path, name.capitalize()):
+                lines += [f"![{name}](figures/{name}.png)", ""]
 
     if args.table:
-        lines += ["## Backtest against randomwalknowcast", ""]
+        lines += ["## Backtest tables", ""]
         for spec in args.table:
-            title, path = spec.split("=", 1)
+            title, name = spec.split("=", 1)
             lines += [f"### {title}", ""]
-            p_ = Path(path)
-            if not p_.exists():
+            table = Path(name)
+            if not table.exists():
                 lines += ["Pending.", ""]
-            elif p_.suffix == ".csv":
-                lines += [_markdown(pd.read_csv(p_)), ""]
+            elif table.suffix == ".csv":
+                lines += [_markdown(pd.read_csv(table)), ""]
             else:
-                lines += [p_.read_text(), ""]
+                lines += [table.read_text(), ""]
     args.out.mkdir(parents=True, exist_ok=True)
     (args.out / "index.md").write_text("\n".join(lines) + "\n")
     print(f"Wrote {args.out / 'index.md'}.")
