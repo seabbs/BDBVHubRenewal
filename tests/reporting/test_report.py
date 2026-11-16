@@ -328,6 +328,7 @@ def test_scenario_scores_table(tmp_path: Path) -> None:
     assert "randomwalknowcast" in text
     assert "10.5" in text  # mean WIS over horizons 0 and 1
     assert "0.12" in text  # bias to 2 dp
+    assert '<div class="tablesort" markdown="1">' in text
 
 
 def test_plot_scenarios() -> None:
