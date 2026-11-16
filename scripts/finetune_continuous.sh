@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Fine-tune Chronos-2 continuously on the r4 rounds archie simulates.
+# Fine-tune Chronos-2 continuously on the r4 rounds as they are simulated.
 #
 #   nohup scripts/finetune_continuous.sh > output/finetune/continuous.out 2>&1 &
 #
-# Each round of 1,000 simulations lands on the remote (archie) in
-# `$REMOTE_ROOT/rounds/r<N>/` (`manifest.csv`, `held-out.txt`, `sims/`).
+# Each round of 1,000 simulations lands on the rounds host (REMOTE, or this
+# machine; scripts/local_config.sh) in `$REMOTE_ROOT/rounds/r<N>/` (`manifest.csv`, `held-out.txt`, `sims/`).
 # This streams each round's finished batches into output/finetune/continuous/
 # as its manifest lists them, appends their seeds to one seed list, and runs
 # one trainer over the growing list from
@@ -14,14 +14,11 @@
 # cut at 16 snapshots. The trainer checks and publishes a checkpoint at each
 # doubling from 1,000, whatever its scores, and waits for rounds as they
 # land. Each checkpoint is copied to `$REMOTE_ROOT/checkpoints/` with a
-# line in the remote's mailbox; a stopped trainer is an alert in the
+# line in the shared mailbox; a stopped trainer is an alert in the
 # mailbox and the local INBOX. Run from the repo root of a clean worktree.
 set -uo pipefail
 
-REMOTE=${REMOTE:-archie}
-REMOTE_ROOT=${REMOTE_ROOT:-bdbv-rounds}
-REMOTE_MAILBOX=${REMOTE_MAILBOX:-bdbv-archie-mailbox.md}
-MAILBOX=${MAILBOX:-}
+source "$(dirname "${BASH_SOURCE[0]}")/local_config.sh"
 HERE=${HERE:-output/finetune/continuous}
 OUTBREAKS=${OUTBREAKS:-8000}
 # Each round simulates 100 held-out outbreaks.
@@ -47,15 +44,15 @@ CHUNK=${CHUNK:-250}
 REAL_VALIDATION=${REAL_VALIDATION:-output/finetune/real-validation.pkl}
 # Per-series slots (src/bdbvhubrenewal/forecasters/slots.py): 0 trains
 # without them; N trains N slots beside the adapter. A slots run keeps to
-# its own HERE and archie checkpoint folder (checkpoints/slots/, the
+# its own HERE and checkpoint folder (checkpoints/slots/, the
 # paper's finetune_run name), so the run without slots is
 # never touched, and its releases are chronos-slots-<hash>.
 SERIES_SLOTS=${SERIES_SLOTS:-0}
 
-remote_ls() { ssh -o ConnectTimeout=20 "$REMOTE" "ls $REMOTE_ROOT/rounds" 2> /dev/null; }
+remote_ls() { on_rounds "ls $REMOTE_ROOT/rounds" 2> /dev/null; }
 # Copy a round's file or folder ($2, "sims/" for its simulations) to $3.
 pull() {
-  rsync -a --exclude '.tmp-*' "$REMOTE:$REMOTE_ROOT/rounds/$1/$2" "$3/"
+  rsync -a --exclude '.tmp-*' "$(at_rounds "$REMOTE_ROOT/rounds/$1/$2")" "$3/"
 }
 
 sync_rounds() {
@@ -99,7 +96,7 @@ slots_args() {
 }
 
 remote_checkpoints() {
-  # The archie folder this run copies its checkpoints to.
+  # The folder under REMOTE_ROOT this run copies its checkpoints to.
   if [ "$SERIES_SLOTS" -gt 0 ]; then
     echo checkpoints/slots
   else
@@ -121,12 +118,7 @@ sys.exit(0 if ok else 1)
 
 [[ "${BASH_SOURCE[0]}" != "$0" ]] && return 0
 
-alert() {
-  local line
-  line="$(date '+%Y-%m-%d %H:%M') fm-finetune3 continuous: $*"
-  [ -n "$MAILBOX" ] && echo "$line" >> "$MAILBOX"
-  ssh "$REMOTE" "echo \"$line\" >> $REMOTE_MAILBOX"
-}
+alert() { post "continuous: $*"; }
 
 slots=$(slots_args) || exit 1
 ckpts=$(remote_checkpoints)
@@ -144,7 +136,7 @@ while true; do
     # shellcheck disable=SC2086
     PYTORCH_MPS_HIGH_WATERMARK_RATIO=${MPS_HIGH_WATERMARK:-0.85} \
     PYTORCH_MPS_LOW_WATERMARK_RATIO=0.6 \
-    HF_HOME=output/finetune/hf HF_HUB_OFFLINE=1 MPLCONFIGDIR="${TMPDIR:-/tmp}" \
+    HF_HOME=${HF_HOME:-output/finetune/hf} HF_HUB_OFFLINE=1 MPLCONFIGDIR="${TMPDIR:-/tmp}" \
       nohup .venv/bin/python scripts/finetune_stream.py \
       "$HERE/sims" "$HERE/train" --grid r4 --seed-list "$HERE/seeds.txt" \
       --held-out-seeds "${held[0]}" "${held[1]}" --holdout "$HOLDOUT" \
@@ -166,8 +158,8 @@ while true; do
     dir=$(dirname "$ckpt")
     n=$(basename "$dir")
     [[ " $published " == *" $n "* ]] && continue
-    ssh "$REMOTE" "mkdir -p $REMOTE_ROOT/$ckpts" \
-      && rsync -a "$dir/" "$REMOTE:$REMOTE_ROOT/$ckpts/$n/" || continue
+    on_rounds "mkdir -p $REMOTE_ROOT/$ckpts" \
+      && rsync -a "$dir/" "$(at_rounds "$REMOTE_ROOT/$ckpts/$n/")" || continue
     key=$(python3 -c "import json;print(json.load(open('$ckpt'))['hash'])")
     alert "checkpoint $n ($slots) hash $key at $REMOTE_ROOT/$ckpts/$n"
     published="$published $n"

@@ -8,10 +8,9 @@
 # rounds WORKTREE, removes STOP and runs LAUNCHER NEXT_ROUND, writing
 # mailbox lines. Run it from anywhere, under nohup.
 set -uo pipefail
-ROOT=${ROOT:-$HOME/bdbv-rounds}
-MAILBOX=${MAILBOX:-$HOME/bdbv-archie-mailbox.md}
+source "$(dirname "${BASH_SOURCE[0]}")/local_config.sh"
 pid=$1 worktree=$2 commit=$3 next=$4 launcher=$5
-say() { echo "$(date '+%F %H:%M') archie: sim rounds handover: $*" >> "$MAILBOX"; }
+say() { echo "$(date '+%F %H:%M') $HOST_NAME sim rounds handover: $*" >> "$MAILBOX"; }
 [ -f "$ROOT/STOP" ] || { say "not started: $ROOT/STOP is not set"; exit 1; }
 say "waiting for the driver (pid $pid) to finish its round, then round $next on ${commit:0:9}"
 while kill -0 "$pid" 2> /dev/null; do sleep 300; done

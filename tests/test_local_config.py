@@ -120,3 +120,13 @@ def test_no_fine_tuning_or_simulation_code_names_a_host_or_home():
         check=False,
     ).stdout
     assert found == ""
+
+
+def test_the_trainer_takes_its_device_from_the_machine():
+    import sys
+
+    sys.path.insert(0, str(ROOT / "scripts"))
+    import finetune_stream as fs
+
+    assert fs.pick_device("cpu") == "cpu"
+    assert fs.pick_device("auto") in {"cuda", "mps", "cpu"}

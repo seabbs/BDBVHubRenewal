@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-# Simulate claimed batches of a remote (archie) round on this laptop.
+# Simulate claimed batches of the rounds host's round on this machine.
 #
 #   SIM_TREE=<worktree at the grid commit> nohup \
 #     scripts/sim_rounds_laptop.sh ROUND FIRST_SEED LAST_SEED \
 #     > output/finetune/laptop-rounds.out 2>&1 &
 #
 # Claims seeds FIRST_SEED to LAST_SEED of round ROUND with a "claim" line
-# in the remote's mailbox, which the remote's scripts/sim_rounds.sh then
+# in the shared mailbox, which the rounds host's scripts/sim_rounds.sh then
 # skips. Each batch runs scripts/finetune_simulate.R from SIM_TREE, a clean
-# worktree at the grid commit of the remote's latest round, SLOTS at a
+# worktree at the grid commit of the rounds host's latest round, SLOTS at a
 # time at the lowest priority. Each finished batch is copied to
 # $REMOTE_ROOT/rounds/r<ROUND>/sims/ and only then given its row in that
 # round's manifest.csv, in scripts/sim_rounds.sh's format, so a reader of
@@ -17,9 +17,7 @@
 # batch is retried once at RETRY_MEM_GB. Run from the repo root.
 set -uo pipefail
 
-REMOTE=${REMOTE:-archie}
-REMOTE_ROOT=${REMOTE_ROOT:-bdbv-rounds}
-REMOTE_MAILBOX=${REMOTE_MAILBOX:-bdbv-archie-mailbox.md}
+source "$(dirname "${BASH_SOURCE[0]}")/local_config.sh"
 LOCAL=${LOCAL:-$PWD/output/finetune/laptop-rounds}
 ENW_LIB=${ENW_LIB:-$PWD/output/finetune/rlib}
 ENW_CACHE=${ENW_CACHE:-$PWD/output/finetune/enwcache}
@@ -28,7 +26,6 @@ DRAWS=10
 SLOTS=${SLOTS:-2}
 SLOT_MEM_GB=${SLOT_MEM_GB:-16}
 RETRY_MEM_GB=${RETRY_MEM_GB:-20}
-HOST=${HOST:-laptop-$(hostname -s)}
 HEADER="round,seed,kind,grid,grid_commit,draws,batch,counts_sha256,settings_sha256,failures_sha256,peak_rss_kb,wall_s,host,finished"
 
 # Total resident memory in KB of process $1 and its descendants.
@@ -57,7 +54,7 @@ tree_pids() {
     }'
 }
 
-sha() { if [ -f "$1" ]; then shasum -a 256 "$1" | cut -d' ' -f1; fi; }
+sha() { if [ -f "$1" ]; then sha256 "$1"; fi; }
 
 # The peak memory (KB) and wall time (s) of a `/usr/bin/time -l` log $1,
 # as scripts/sim_rounds.sh's GNU time line.
@@ -74,7 +71,7 @@ manifest_row() {
   log=$sims/logs/$seed.log
   rss=$(grep -o 'peak_rss_kb [0-9]*' "$log" | tail -n 1 | cut -d' ' -f2)
   wall=$(grep -o 'wall_s [0-9.]*' "$log" | tail -n 1 | cut -d' ' -f2)
-  echo "$ROUND,$seed,$kind,$GRID,$COMMIT,$DRAWS,$BATCH,$(sha "$sims/counts-$seed.csv.gz"),$(sha "$sims/settings-$seed.csv"),$(sha "$sims/failures-$seed.csv"),${rss:-},${wall:-},$HOST,$(date -u +%FT%TZ)"
+  echo "$ROUND,$seed,$kind,$GRID,$COMMIT,$DRAWS,$BATCH,$(sha "$sims/counts-$seed.csv.gz"),$(sha "$sims/settings-$seed.csv"),$(sha "$sims/failures-$seed.csv"),${rss:-},${wall:-},$HOST_NAME,$(date -u +%FT%TZ)"
 }
 
 [[ "${BASH_SOURCE[0]}" != "$0" ]] && return 0
@@ -87,21 +84,18 @@ RDIR=$REMOTE_ROOT/rounds/r$ROUND
 DIR=$LOCAL/r$ROUND
 mkdir -p "$DIR/sims/logs"
 
-rsh() { ssh -o ConnectTimeout=20 "$REMOTE" "$@"; }
 say() {
-  local line
-  line="$(date '+%F %H:%M') fm-finetune3 laptop: sim round $ROUND: $*"
-  echo "$line"
-  rsh "echo \"$line\" >> $REMOTE_MAILBOX"
+  echo "$(date '+%F %H:%M') sim round $ROUND: $*"
+  post "sim round $ROUND: $*"
 }
 
-# The grid and commit of the remote's latest recorded batch: this laptop
+# The grid and commit of the rounds host's latest recorded batch: this machine
 # must simulate the same grid version.
-latest=$(rsh "tail -q -n 1 \$(ls -d $REMOTE_ROOT/rounds/r*/manifest.csv | sort -V | tail -n 1)")
+latest=$(on_rounds "tail -q -n 1 \$(ls -d $REMOTE_ROOT/rounds/r*/manifest.csv | sort -V | tail -n 1)")
 GRID=$(echo "$latest" | cut -d, -f4)
 COMMIT=$(git -C "$SIM_TREE" rev-parse HEAD)
 if [ "$COMMIT" != "$(echo "$latest" | cut -d, -f5)" ]; then
-  echo "$SIM_TREE is at $COMMIT, not the remote's grid commit ($latest)" >&2
+  echo "$SIM_TREE is at $COMMIT, not the rounds host's grid commit ($latest)" >&2
   exit 1
 fi
 if [ -n "$(git -C "$SIM_TREE" status --porcelain --untracked-files=no)" ]; then
@@ -116,12 +110,11 @@ fi
 # Held-out seeds of a round follow its 40 training seeds.
 held_from=$((30000 + ROUND * 100 + 40))
 claim="claim $FIRST-$LAST for round $ROUND (grid $GRID)"
-rsh "mkdir -p $RDIR/sims/logs && { [ -f $RDIR/manifest.csv ] || echo $HEADER > $RDIR/manifest.csv; }"
-if ! rsh "grep -qF 'fm-finetune3 laptop: $claim' $REMOTE_MAILBOX"; then
-  line="$(date '+%F %H:%M') fm-finetune3 laptop: $claim"
-  rsh "echo \"$line\" >> $REMOTE_MAILBOX"
+on_rounds "mkdir -p $RDIR/sims/logs && { [ -f $RDIR/manifest.csv ] || echo $HEADER > $RDIR/manifest.csv; }"
+if ! on_rounds "grep -qF '$HOST_NAME $claim' $REMOTE_MAILBOX"; then
+  post "$claim"
 fi
-say "started: seeds $FIRST-$LAST, $BATCH simulations each, $DRAWS draws, grid $GRID at ${COMMIT:0:9}, $SLOTS slots of $SLOT_MEM_GB GB, host $HOST"
+say "started: seeds $FIRST-$LAST, $BATCH simulations each, $DRAWS draws, grid $GRID at ${COMMIT:0:9}, $SLOTS slots of $SLOT_MEM_GB GB, host $HOST_NAME"
 
 # Run batch seed $1 capped at $2 GB; 0 if it exited cleanly and wrote
 # readable counts and settings.
@@ -149,18 +142,18 @@ run_batch() {
     gzip -t "$DIR/sims/counts-$seed.csv.gz" 2> /dev/null
 }
 
-# Copy batch $1 (kind $2) to the remote round, then record it there.
+# Copy batch $1 (kind $2) to the rounds host's round, then record it there.
 publish() {
   local seed=$1 kind=$2 f
   local files=("$DIR/sims/counts-$seed.csv.gz" "$DIR/sims/settings-$seed.csv")
   f=$DIR/sims/failures-$seed.csv
   [ -f "$f" ] && files+=("$f")
-  rsync -a "${files[@]}" "$REMOTE:$RDIR/sims/" && \
-    rsync -a "$DIR/sims/logs/$seed.log" "$REMOTE:$RDIR/sims/logs/" && \
-    rsh "echo '$(manifest_row "$seed" "$kind" "$DIR/sims")' >> $RDIR/manifest.csv"
+  rsync -a "${files[@]}" "$(at_rounds "$RDIR/sims/")" && \
+    rsync -a "$DIR/sims/logs/$seed.log" "$(at_rounds "$RDIR/sims/logs/")" && \
+    on_rounds "echo '$(manifest_row "$seed" "$kind" "$DIR/sims")' >> $RDIR/manifest.csv"
 }
 
-recorded() { rsh "grep -q '^$ROUND,$1,' $RDIR/manifest.csv"; }
+recorded() { on_rounds "grep -q '^$ROUND,$1,' $RDIR/manifest.csv"; }
 
 slot() {
   local s kind
@@ -193,5 +186,5 @@ for _ in $(seq 1 "$SLOTS"); do
   sleep 60
 done
 wait
-n=$(rsh "grep -c '$HOST' $RDIR/manifest.csv")
+n=$(on_rounds "grep -c ',$HOST_NAME,' $RDIR/manifest.csv")
 say "finished: $n batches of seeds $FIRST-$LAST recorded in $RDIR/manifest.csv in $(( ($(date +%s) - t0) / 60 )) min"

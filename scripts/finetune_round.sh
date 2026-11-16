@@ -5,7 +5,7 @@
 #
 # ROUND is the round number and INIT the adapter it continues from (a
 # `finetuned-ckpt` directory), or "none" for round 0. The round's inputs
-# are on the remote (archie) in REMOTE_ROUND, by default
+# are on the rounds host (scripts/local_config.sh) in REMOTE_ROUND, by default
 # `rounds/r<ROUND>` under `$REMOTE_ROOT`:
 #
 #   seeds.txt          training seeds, one a line, in order
@@ -19,13 +19,11 @@
 # falling linearly to zero over LR_STEPS, each block's horizon as its
 # prediction length), checked against its code_commit and published as
 # a release, and its checkpoint is copied back to REMOTE_ROUND/checkpoint
-# with a line in the remote's mailbox. Run from the repo root of a clean
+# with a line in the shared mailbox. Run from the repo root of a clean
 # worktree.
 set -uo pipefail
 
-REMOTE=${REMOTE:-archie}
-REMOTE_ROOT=${REMOTE_ROOT:-bdbv-rounds}
-REMOTE_MAILBOX=${REMOTE_MAILBOX:-bdbv-archie-mailbox.md}
+source "$(dirname "${BASH_SOURCE[0]}")/local_config.sh"
 OUTBREAKS=${OUTBREAKS:-1000}
 LR_STEPS=${LR_STEPS:-2750}
 LEARNING_RATE=${LEARNING_RATE:-1e-5}
@@ -63,20 +61,21 @@ if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
   exit 1
 fi
 mkdir -p "$ROUND_LOCAL"
-rsync -a "$REMOTE:$remote_round/seeds.txt" "$REMOTE:$remote_round/held-out.txt" \
-  "$ROUND_LOCAL/" || { echo "round $round inputs not on $REMOTE" >&2; exit 1; }
-# Only a round archie marked READY (simulated and reviewed) is trained.
-ssh "$REMOTE" test -f "$remote_round/READY" \
-  || { echo "round $round is not ready on $REMOTE" >&2; exit 1; }
-rsync -a "$REMOTE:$remote_round/sims/" "$ROUND_LOCAL/sims/" || exit 1
-rsync -a "$REMOTE:$remote_round/qc/" "$ROUND_LOCAL/qc/" || exit 1
+rsync -a "$(at_rounds "$remote_round/seeds.txt")" \
+  "$(at_rounds "$remote_round/held-out.txt")" "$ROUND_LOCAL/" \
+  || { echo "round $round inputs not in $remote_round" >&2; exit 1; }
+# Only a round marked READY (simulated and reviewed) is trained.
+on_rounds "test -f $remote_round/READY" \
+  || { echo "round $round is not ready" >&2; exit 1; }
+rsync -a "$(at_rounds "$remote_round/sims/")" "$ROUND_LOCAL/sims/" || exit 1
+rsync -a "$(at_rounds "$remote_round/qc/")" "$ROUND_LOCAL/qc/" || exit 1
 if [ "${USE_REAL_TRAINING:-0}" = 1 ]; then
-  rsync -a "$REMOTE:$remote_round/real-training.pkl" "$ROUND_LOCAL/" || exit 1
+  rsync -a "$(at_rounds "$remote_round/real-training.pkl")" "$ROUND_LOCAL/" || exit 1
 fi
 trainer_args "$round" "$init"
 PYTORCH_MPS_HIGH_WATERMARK_RATIO=${MPS_HIGH_WATERMARK:-0.85} \
 PYTORCH_MPS_LOW_WATERMARK_RATIO=0.6 \
-HF_HOME=output/finetune/hf HF_HUB_OFFLINE=1 MPLCONFIGDIR="${TMPDIR:-/tmp}" \
+HF_HOME=${HF_HOME:-output/finetune/hf} HF_HUB_OFFLINE=1 MPLCONFIGDIR="${TMPDIR:-/tmp}" \
   .venv/bin/python scripts/finetune_stream.py "${args[@]}" \
   >> "$ROUND_LOCAL/train.log" 2>&1 || {
     echo "round $round training failed; see $ROUND_LOCAL/train.log" >&2
@@ -88,6 +87,6 @@ ckpt=$ROUND_LOCAL/train/n$OUTBREAKS
   exit 1
 }
 key=$(python3 -c "import json;print(json.load(open('$ckpt/settings.json'))['hash'])")
-rsync -a "$ckpt/" "$REMOTE:$remote_round/checkpoint/" || exit 1
-ssh "$REMOTE" "echo \"$(date '+%Y-%m-%d %H:%M') fm-finetune3: round $round trained, chronos-ft-$key at $remote_round/checkpoint\" >> $REMOTE_MAILBOX"
+rsync -a "$ckpt/" "$(at_rounds "$remote_round/checkpoint/")" || exit 1
+post "round $round trained, chronos-ft-$key at $remote_round/checkpoint"
 echo "round $round: chronos-ft-$key"

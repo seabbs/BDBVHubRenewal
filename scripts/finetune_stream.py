@@ -33,6 +33,7 @@ import hashlib
 import inspect
 import json
 import multiprocessing
+import os
 import pickle
 import shutil
 import subprocess
@@ -688,6 +689,24 @@ def held_out_loss(model, blocks: list[dict], batch_size: int) -> float:
     return float(np.average(losses, weights=weights))
 
 
+def pick_device(device: str = "auto") -> str:
+    """Return the torch device to train on.
+
+    `auto` takes CUDA, then MPS, then the CPU; any other name is used as
+    given. The device is a machine setting (`DEVICE` in the local config),
+    kept out of the checkpoint hash.
+    """
+    import torch
+
+    if device != "auto":
+        return device
+    if torch.cuda.is_available():
+        return "cuda"
+    if torch.backends.mps.is_available():
+        return "mps"
+    return "cpu"
+
+
 def free_memory() -> None:
     """Return the GPU memory PyTorch caches but does not use."""
     import torch
@@ -1001,6 +1020,7 @@ def main() -> None:
     # at each checkpoint to choose among them; not trained on.
     parser.add_argument("--real-validation", type=Path)
     parser.add_argument("--batch-size", type=int, default=256)
+    parser.add_argument("--device", default=os.environ.get("DEVICE", "auto"))
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--note", default="")
     parser.add_argument("--grid", required=True)
@@ -1097,13 +1117,7 @@ def main() -> None:
     )
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)  # noqa: NPY002
-    device = (
-        "cuda"
-        if torch.cuda.is_available()
-        else "mps"
-        if torch.backends.mps.is_available()
-        else "cpu"
-    )
+    device = pick_device(args.device)
     pipeline = Chronos2Pipeline.from_pretrained(
         CHRONOS_MODEL, revision=CHRONOS_REVISION, device_map=device
     )
