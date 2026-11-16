@@ -70,10 +70,7 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
 
 ::: {.callout-note title="Plan"}
 - We give Chronos-2 the reporting triangle as series, one per place and reporting delay, each missing until reported (Figure 1B).
-- We add a learned bias to Chronos-2's group attention between rows of the same place, its counts and lags.
-- We add a second learned bias between a place and its parent or children.
-- Each bias is set per layer and head, and starts at zero, so fine-tuning starts from base Chronos-2.
-- The biases train at a learning rate of BIASLR, and the LoRA adapter at Chronos-2's $10^{-5}$.
+- We add learned attention biases that mark a place's counts and lags, and parent and child places, so the model links each delay series to its place (SI).
 - A third each of the training blocks with places have a country equal to, above or later than the sum of its places.
 - We fine-tune base Chronos-2 on synthetic data on a laptop, with its default LoRA recipe.
 - The learning rate falls linearly to zero at 8,000 simulations.

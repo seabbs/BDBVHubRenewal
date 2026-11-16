@@ -42,13 +42,17 @@ One SI section per paper section.
 
 **Attention biases.**
 Chronos-2's group attention has no notion of which series is which, so on its own it can link a lag series to its place's counts only by matching their values.
-We add a learned bias to the group-attention scores between rows of the same place, its count series and its lag series.
-We add a second learned bias between rows of a place and rows of its parent or its children.
-Each bias is set per layer and head.
-The link to the parent means that a place belongs to its parent, not that it sums to it, as training blocks include countries that do not equal the sum of their places.
-The biases start at zero, so before training the model is base Chronos-2.
-They train at a learning rate of BIASLR, while the LoRA adapter keeps Chronos-2's recipe and its learning rate of $10^{-5}$.
-Moirai's any-variate attention uses a related learned bias for whether two tokens belong to the same variate [@Woo2024].
+
+- We add learned biases to Chronos-2's group attention.
+- One bias applies between rows of the same place, its counts and its lags.
+- The other applies between parent and child places.
+- Each bias is set per layer and head.
+- The biases start at zero, so fine-tuning starts from base Chronos-2.
+- The biases train at a learning rate of $10^{-3}$ and the LoRA adapter at Chronos-2's $10^{-5}$, both falling linearly to zero at 8,000 outbreaks.
+- We identify places by name within each block, with no limit on the number of places.
+- A place's parent is the nearest prefix of its name in the block, else the country.
+- Training blocks include countries equal to, above or later than the sum of their places, so a place belongs to its parent without summing to it.
+- Moirai's any-variate attention uses a related learned bias for whether two tokens belong to the same variate [@Woo2024].
 
 **Training blocks.**
 A simulation gives daily counts by onset and report date, and a release counts every case reported by its cut-off, one cut-off a week.
