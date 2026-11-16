@@ -36,15 +36,25 @@ def test_the_stored_ft_model_is_not_forecast_by_pages() -> None:
     # Its forecasts come from the checkpoint scorer's store.
     cells = _jobs()["backtest"]["strategy"]["matrix"]["include"]
     live = {c["model"] for c in cells if c.get("germany")}
-    assert "fm_chronos_daily_ragged_ft" not in live
+    assert not live & {
+        "fm_chronos_daily_ragged_ft",
+        "fm_chronos_weekly_ragged_ft",
+    }
     run = _build_script()
     load = run.index("germany-ft-load")
     assert "germany-ft-forecasts" in run
     assert load < run.index("concat-results --out results/germany")
-    assert "parts-germany-fm_chronos_daily_ragged_ft/germany" in run
+    assert "parts-germany-ft-store/germany" in run
 
 
 def test_the_built_german_page_is_checked_for_held_out_dates() -> None:
     run = _build_script()
     check = run.index("scripts/check_germany_site.py")
     assert run.index("mkdocs build") < check
+
+
+def test_a_paper_dispatch_is_never_deployed() -> None:
+    # Its pages hold the held-out half, which waits for the paper.
+    jobs = _jobs()
+    for name in ("deploy", "release"):
+        assert "inputs.paper_target != 'paper'" in jobs[name]["if"], name
