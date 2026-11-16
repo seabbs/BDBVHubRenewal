@@ -711,7 +711,7 @@ def _round_task(
     reference_date: str | None,
     zones: ZoneData | None = None,
 ) -> tuple[ForecastTask, list[str]]:
-    """Build a round's task from the tables, as `_task` does."""
+    """Build a round's task, moved to `reference_date` if one is given."""
     real = target.loc[target["kind"] == "real"]
     vintage = _vintage([str(v) for v in real["vintage"].unique()], vintage)
     task, note = bt.vintage_task(
@@ -1278,8 +1278,8 @@ def _pair(
     *,
     data: str,
     backtest_config: str,
+    fit_store: str | None,
     history: str | None,
-    store_dir: str | None,
 ) -> tuple[Forecast, dict[str, object]]:
     """Pair a paired model's draws by the copula of its recent errors."""
     from bdbvhubrenewal.submission.pairing import pair_submission
@@ -1300,7 +1300,7 @@ def _pair(
         task,
         delay,
         history,
-        store_dir,
+        fit_store,
         past,
         config.max_horizon,
     )
@@ -1335,16 +1335,16 @@ def _hub_forecast(
     forecast: Forecast | None = None,
     forecast_date: str | None = None,
     backtest_config: str = "config/backtest.toml",
+    fit_store: str | None = None,
     history: str | None = None,
-    store: str | None = None,
 ) -> _HubForecast:
     """Return the hub table `nowcast` writes, with its forecast and zones.
 
     A `forecast` given is used as it is. Otherwise, with `config` it
     forecasts from the fit directory `fit`, else `model` forecasts. A
-    model registered as `paired` has its draws paired (`_pair`), from
-    past forecasts in `history` or `store`. The zones come from `_zones`,
-    after pairing.
+    model registered as `paired` has its draws paired (`_pair`, with
+    `backtest_config`, `fit_store` and `history`). The zones come from
+    `_zones`, after pairing.
 
     Returns
     -------
@@ -1359,9 +1359,9 @@ def _hub_forecast(
     elif config:
         result = run_forecast(get_config(config), task, fit)
     else:
-        built = get_model(str(model))
-        checkpoint = getattr(built, "checkpoint", None)
-        samples = built.forecast(task)
+        loaded = get_model(str(model))
+        checkpoint = getattr(loaded, "checkpoint", None)
+        samples = loaded.forecast(task)
         check_samples(samples, task)
         result = Forecast(samples)
     name = get_config(config).model if config else model
@@ -1373,8 +1373,8 @@ def _hub_forecast(
             result,
             data=data,
             backtest_config=backtest_config,
+            fit_store=fit_store,
             history=history,
-            store_dir=store,
         )
     zones, zone_note = _zones(data, name, task, result.samples)
     # A model's own zone rows come back reconciled in `zones`.
@@ -1434,8 +1434,8 @@ def _fit_store_archive(args: argparse.Namespace) -> int:
             fit=fit_dir,
             forecast=forecast,
             backtest_config=args.config,
+            fit_store=args.store,
             history=args.history,
-            store=args.store,
         ).table
 
     models = store_archive.candidate_models(args.policy)
@@ -1480,8 +1480,8 @@ def _nowcast(args: argparse.Namespace) -> int:
             fit=args.fit,
             forecast_date=args.forecast_date,
             backtest_config=args.backtest_config,
+            fit_store=args.store,
             history=args.history,
-            store=args.store,
         )
         table, result, zones, zone_note = (
             made.table,

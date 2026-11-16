@@ -31,7 +31,10 @@ archived=0
 cli fit-store archive --store "$store" --origin "$AS_OF" \
   --reference-date "$REFERENCE_DATE" --history "$history/archive" \
   --out "$made" || archived=$?
-[ -f "$made" ] || exit "$archived"
+if [ ! -f "$made" ]; then
+  echo "::error::no candidates file written"
+  exit $((archived ? archived : 1))
+fi
 
 ledger="$WORK/ledger"
 ledger_worktree "$ledger"

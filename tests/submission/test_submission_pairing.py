@@ -331,3 +331,43 @@ def test_a_fitted_paired_model_is_forecast_again_where_nothing_is_kept(
     )
     assert set(out["source"]) == {"recomputed"}
     assert set(out["origin"]) <= {t.vintage for t in tasks}
+
+
+def test_archived_origins_alone_give_rho_national_its_prior(
+    tasks: list, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # An archive holds provinces only, so origins taken from it give no
+    # country scores: rho_national is the prior's, while the provinces
+    # are estimated. This pins the current behaviour.
+    from bdbvhubrenewal.forecasters import ModelUnavailableError
+    from bdbvhubrenewal.forecasters.copula import PRIOR
+    from bdbvhubrenewal.submission import pairing
+
+    task = tasks[-1]
+    model = get_model("randomwalknowcast")
+    for past in tasks[-9:-1]:
+        try:
+            drawn = model.forecast(past)
+        except ModelUnavailableError:
+            continue
+        hub = drawn.rename(columns={"sample": "output_type_id"}).assign(
+            model="randomwalknowcast",
+            vintage=past.vintage,
+            output_type="sample",
+        )
+        _archive(tmp_path, past.vintage, "1", hub)
+    monkeypatch.setattr(
+        pairing, "_recomputed", lambda *_: (pairing._empty(), set())
+    )
+    _, fit = pair_submission(
+        "randomwalknowcast",
+        model.forecast(task),
+        task,
+        truth_delay=7,
+        archive=tmp_path,
+        past_tasks=tasks,
+    )
+    assert fit["source"] == "archive"
+    assert fit["n_scores"] > 0
+    assert fit["rho_national"] == pytest.approx(PRIOR.rho_national)
+    assert fit["rho_provinces"] != pytest.approx(PRIOR.rho_provinces)
