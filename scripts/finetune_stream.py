@@ -803,6 +803,11 @@ def main() -> None:
     # and the adapter it continues from.
     parser.add_argument("--seed-list", type=Path)
     parser.add_argument("--init-adapter", type=Path)
+    # The seed list grows as rounds land: wait for more seeds rather than
+    # stop when every listed seed is done.
+    parser.add_argument("--wait-for-seeds", action="store_true")
+    # Outbreaks per chunk: training starts once this many have landed.
+    parser.add_argument("--chunk", type=int, default=CHUNK)
     # Real-data training blocks (for example the German data's first 40%,
     # cut with `finetune_chronos` functions), spread over the chunks.
     parser.add_argument("--real-training", type=Path)
@@ -844,6 +849,8 @@ def main() -> None:
     # Processes cutting blocks a chunk ahead; they do not change the blocks.
     parser.add_argument("--cut-workers", type=int, default=3)
     args = parser.parse_args()
+    global CHUNK
+    CHUNK = args.chunk
     ft.SOURCES = tuple(args.sources)
     ft.UNIVARIATE_SHARE = args.univariate_share
     global EXCLUDE_FILE, DRAWS_PER_PASS, SUBSET_SEED
@@ -1129,7 +1136,8 @@ def main() -> None:
             if ids is not None:
                 chunk = ids
                 break
-            if all(seed_done(sim_dir, s) for s in training_seeds()):
+            done_all = all(seed_done(sim_dir, s) for s in training_seeds())
+            if done_all and not args.wait_for_seeds:
                 raise RuntimeError(f"fewer than {hi} training outbreaks")
             time.sleep(POLL)
         contiguous = ready_outbreaks(sim_dir, training_seeds())[done:hi]

@@ -4,9 +4,10 @@
 #   nohup scripts/finetune_continuous.sh > output/finetune/continuous.out 2>&1 &
 #
 # Each round of 1,000 simulations lands on the remote (archie) in
-# `$REMOTE_ROOT/rounds/r<N>/` (`seeds.txt`, `held-out.txt`, `sims/`). This
-# copies each new round once into output/finetune/continuous/, appends its
-# seeds to one seed list, and runs one trainer over the growing list from
+# `$REMOTE_ROOT/rounds/r<N>/` (`manifest.csv`, `held-out.txt`, `sims/`).
+# This streams each round's finished batches into output/finetune/continuous/
+# as its manifest lists them, appends their seeds to one seed list, and runs
+# one trainer over the growing list from
 # base Chronos-2 to OUTBREAKS with Chronos-2's recipe
 # (scripts/finetune_stream.py): learning rate 1e-5 falling linearly to zero
 # over LR_STEPS, each block's horizon as its prediction length, every draw
@@ -39,30 +40,44 @@ LR_STEPS=${LR_STEPS:-36500}
 ZERO_SHOT_REAL=${ZERO_SHOT_REAL:-4.147}
 SOURCES=${SOURCES:-weekly daily 3day}
 UNIVARIATE_SHARE=${UNIVARIATE_SHARE:-0.2}
+# Simulations per training chunk: training starts once this many have
+# landed, in seed order.
+CHUNK=${CHUNK:-250}
 REAL_VALIDATION=${REAL_VALIDATION:-output/finetune/real-validation.pkl}
 
 remote_ls() { ssh -o ConnectTimeout=20 "$REMOTE" "ls $REMOTE_ROOT/rounds" 2> /dev/null; }
-pull() { rsync -a "$REMOTE:$REMOTE_ROOT/rounds/$1/" "$2/"; }
+# Copy a round's file or folder ($2, "sims/" for its simulations) to $3.
+pull() {
+  rsync -a --exclude '.tmp-*' "$REMOTE:$REMOTE_ROOT/rounds/$1/$2" "$3/"
+}
 
 sync_rounds() {
-  # Copy each new round, in order, once; its seeds join the seed list.
+  # Stream each round's finished batches as its manifest lists them, so
+  # training need not wait for the round to be ready: the manifest first,
+  # then the simulations, so every seed it lists has its files; its new
+  # training seeds join the seed list once each, in manifest order.
   mkdir -p "$HERE/sims" "$HERE/rounds"
-  touch "$HERE/seeds.txt" "$HERE/excluded.txt"
-  local n
+  touch "$HERE/seeds.txt"
+  local n d
   for n in $(remote_ls | sed -n 's/^r\([0-9]*\)$/\1/p' | sort -n); do
-    [ -e "$HERE/rounds/r$n.done" ] && continue
-    pull "r$n" "$HERE/rounds/r$n" || return 1
-    # A round is pulled for training once archie marks it READY (simulated
-    # and reviewed); its QC exclusions join the list the trainer skips.
-    [ -e "$HERE/rounds/r$n/READY" ] || return 0
-    [ -s "$HERE/rounds/r$n/seeds.txt" ] || return 0
-    if [ -s "$HERE/rounds/r$n/qc/excluded.csv" ]; then
-      tail -n +2 "$HERE/rounds/r$n/qc/excluded.csv" | cut -d, -f1 \
-        >> "$HERE/excluded.txt"
-    fi
-    cp -R "$HERE/rounds/r$n/sims/." "$HERE/sims/"
-    cat "$HERE/rounds/r$n/seeds.txt" >> "$HERE/seeds.txt"
-    touch "$HERE/rounds/r$n.done"
+    d=$HERE/rounds/r$n
+    mkdir -p "$d"
+    pull "r$n" manifest.csv "$d" || continue
+    pull "r$n" held-out.txt "$d" 2> /dev/null || true
+    pull "r$n" sims/ "$HERE/sims" || return 1
+    python3 - "$d/manifest.csv" "$HERE/seeds.txt" <<'PY'
+import csv, sys
+from pathlib import Path
+manifest, seeds = Path(sys.argv[1]), Path(sys.argv[2])
+have = set(seeds.read_text().split())
+new = [
+    r["seed"]
+    for r in csv.DictReader(manifest.open())
+    if r["kind"] == "train" and r["seed"] not in have
+]
+with seeds.open("a") as f:
+    f.writelines(f"{s}\n" for s in dict.fromkeys(new))
+PY
   done
 }
 
@@ -95,7 +110,7 @@ trainer=""
 published=""
 while true; do
   sync_rounds || echo "$(date) sync failed; trying again"
-  if [ -z "$trainer" ] && [ -e "$HERE/rounds/r1.done" ]; then
+  if [ -z "$trainer" ] && [ -s "$HERE/rounds/r1/held-out.txt" ]; then
     read -r -a held < "$HERE/rounds/r1/held-out.txt"
     PYTORCH_MPS_HIGH_WATERMARK_RATIO=${MPS_HIGH_WATERMARK:-0.85} \
     PYTORCH_MPS_LOW_WATERMARK_RATIO=0.6 \
@@ -109,6 +124,7 @@ while true; do
       --subset-seed "$SUBSET_SEED" --learning-rate 1e-5 --lr-steps "$LR_STEPS" \
       --sources $SOURCES --univariate-share "$UNIVARIATE_SHARE" \
       --real-validation "$REAL_VALIDATION" --note "continuous r4" --publish \
+      --chunk "$CHUNK" --wait-for-seeds \
       --exclude "$HERE/excluded.txt" \
       >> "$HERE/train.log" 2>&1 < /dev/null &
     trainer=$!
@@ -120,7 +136,8 @@ while true; do
     dir=$(dirname "$ckpt")
     n=$(basename "$dir")
     [[ " $published " == *" $n "* ]] && continue
-    rsync -a "$dir/" "$REMOTE:$REMOTE_ROOT/checkpoints/$n/" || continue
+    ssh "$REMOTE" "mkdir -p $REMOTE_ROOT/checkpoints" \
+      && rsync -a "$dir/" "$REMOTE:$REMOTE_ROOT/checkpoints/$n/" || continue
     key=$(python3 -c "import json;print(json.load(open('$ckpt'))['hash'])")
     alert "checkpoint $n chronos-ft-$key at $REMOTE_ROOT/checkpoints/$n"
     published="$published $n"

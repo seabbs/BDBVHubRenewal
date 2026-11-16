@@ -56,9 +56,9 @@ def test_n1000_must_beat_zero_shot_on_both(tmp_path):
     import json
 
     cases = {
-        "better": (0.20, 0.29, 0.50),
-        "worse_sims": (0.30, 0.29, 0.50),
-        "worse_real": (0.20, 0.29, 0.70),
+        "better": (0.20, 0.29, 3.60),
+        "worse_sims": (0.30, 0.29, 3.60),
+        "worse_real": (0.20, 0.29, 4.50),
     }
     results = {}
     for name, (loss, start, real) in cases.items():
