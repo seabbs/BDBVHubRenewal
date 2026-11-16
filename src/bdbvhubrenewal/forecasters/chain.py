@@ -47,8 +47,9 @@ the delay.
 is silent.
 Its weekly probability of an introduction is the rate of a first case,
 or of a re-introduction if it was seen before, over the `walk_weeks`
-weeks to its start week, or all weeks to it if those have none, pooled
-over its siblings (`introductions.introduction_rates`).
+weeks to its start week. Its siblings' pooled rate and that of the rest
+of its level combine as independent sources
+(`introductions.introduction_rates`).
 """
 
 from __future__ import annotations
