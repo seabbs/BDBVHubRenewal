@@ -1606,7 +1606,7 @@ def _fit_settings() -> dict[str, dict[str, Any]]:
 
 def _settings_text(sampler: Mapping[str, Any]) -> str:
     thin = int(sampler.get("thinning", 1))
-    kept = f", every {thin}th kept," if thin > 1 else ""
+    kept = f", keeping 1 in {thin}," if thin > 1 else ""
     return (
         f"{int(sampler['num_chains'])} chains of "
         f"{int(sampler['num_warmup'])} warm-up and "
