@@ -772,3 +772,19 @@ cat("cells", length(strsplit(res$out$values$stratum_cells, ";")[[1]]), "\\n")
     assert int(rows["n"][0]) >= 15
     assert 1 <= int(rows["active"][0]) <= 4
     assert int(rows["cells"][0]) == int(rows["active"][0])
+
+
+@needs_r
+def test_a_batch_writes_settings_of_linked_and_independent_outbreaks(tmp_path):
+    out = run_r(
+        """
+linked <- flat_values(list(outbreak = "1-0001", strata = "places"))
+independent <- flat_values(list(
+  outbreak = "1-0002", strata = "places", stratum_cells = "4;9"
+))
+s <- settings_table(list(linked, independent))
+cat("rows", nrow(s), "cols", ncol(s), "\\n")
+""",
+        tmp_path,
+    )
+    assert out.split() == ["rows", "2", "cols", "3"]
