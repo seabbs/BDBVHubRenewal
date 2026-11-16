@@ -127,3 +127,31 @@ def test_finished_checkpoints_are_kept(tmp_path):
     (n250 / "state" / "state.json").write_text('{"done": 250}')
     jobs = dry(tmp_path, "finetune", config=FT)
     assert jobs["train_segment"] == 1
+
+
+def _checkpoint(tmp_path, n):
+    where = tmp_path / "checkpoints" / "slots" / "train" / f"n{n}"
+    (where / "finetuned-ckpt").mkdir(parents=True)
+    (where / "state").mkdir()
+    (where / "settings.json").write_text("{}")
+    (where / "finetuned-ckpt" / "adapter_model.safetensors").write_text("")
+    (where / "state" / "state.json").write_text(f'{{"done": {n}}}')
+
+
+def test_publish_verifies_then_releases_each_checkpoint(tmp_path):
+    for n in (250, 500):
+        _checkpoint(tmp_path, n)
+    jobs = dry(tmp_path, "publish", config=FT)
+    assert jobs["verify_checkpoint"] == 2
+    assert jobs["publish_checkpoint"] == 2
+    assert "train_segment" not in jobs
+
+
+def test_verify_alone_never_releases(tmp_path):
+    _checkpoint(tmp_path, 250)
+    jobs = dry(
+        tmp_path,
+        f"{tmp_path}/checkpoints/slots/train/n250/verified.txt",
+        config=FT,
+    )
+    assert jobs == {"verify_checkpoint": 1}
