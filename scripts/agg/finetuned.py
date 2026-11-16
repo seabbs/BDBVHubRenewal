@@ -440,7 +440,8 @@ def sanity(args: argparse.Namespace) -> None:
     both.to_csv(args.out, index=False)
     if n.get("left_only", 0) or n.get("right_only", 0):
         raise SystemExit("sanity: the cells differ")
-    if not exact and abs(rel - 1) > args.tolerance:
+    # CSV round trips leave differences of one ulp, so 1e-9 is the same.
+    if max(diff.values()) > max(args.tolerance, 1e-9):
         raise SystemExit("sanity: the scores differ beyond the tolerance")
 
 
