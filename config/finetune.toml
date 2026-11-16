@@ -7,3 +7,8 @@
 # the settings hash `scripts/finetune_chronos.py train` gives does not
 # cover it.
 hash = "latest"
+
+# The Chronos-2 checkpoint fine-tuned on the German development half
+# (`germany-ft-<hash>`) that the `fm_chronos_*_ragged_de` models load.
+# Empty until that release is published.
+germany = ""

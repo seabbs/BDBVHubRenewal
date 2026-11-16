@@ -284,8 +284,19 @@ def germany_spec(path: Path | str = FINETUNED_CONFIG) -> str:
     Returns
     -------
     str
+
+    Raises
+    ------
+    ValueError
+        If the pin is pending (empty) until the release is published.
     """
-    return str(tomllib.loads(Path(path).read_text())["germany"])
+    spec = str(tomllib.loads(Path(path).read_text())["germany"])
+    if not spec:
+        raise ValueError(
+            f"No {GERMANY_PREFIX} release is pinned yet: set `germany` in "
+            f"{path} to its settings hash."
+        )
+    return spec
 
 
 @cache
