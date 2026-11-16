@@ -26,7 +26,7 @@ from __future__ import annotations
 import dataclasses
 import functools
 import re
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from typing import Final
 
 import numpy as np
@@ -65,6 +65,7 @@ __all__ = [
     "check_checkpoint_rows",
     "checkpoint_label",
     "checkpoint_rows",
+    "choose_checkpoint",
     "germany_grouping_samples",
     "grouping_model",
     "merge_checkpoint_rows",
@@ -761,3 +762,59 @@ def slots_rule(rows: pd.DataFrame, slots: bool) -> pd.Series:
         | ((rows["option"] == "level") & (rows["level"] == "zones"))
     )
     return pd.Series(np.where(big, "cases-only", "all"), index=rows.index)
+
+
+def choose_checkpoint(
+    label: str | None,
+    releases: Sequence[Mapping[str, object]],
+    done: set[str],
+) -> tuple[str | None, list[str]]:
+    """Return the slots checkpoint a run takes, and what it says about it.
+
+    Only checkpoints of the slots run that starts its slots at random
+    (`init` other than `zero`) are eligible; of those the newest, with the
+    most outbreaks, is taken, whatever label the run was called with. A
+    label that is done, or older than one done, takes none.
+
+    Parameters
+    ----------
+    label : str or None
+        The label the run was called with, or None for the next
+        checkpoint after a run.
+    releases : sequence of mapping
+        Each slots release's `label`, `init` (its settings'
+        `series_slots.init`) and `n_outbreaks`.
+    done : set of str
+        Labels whose rows are in.
+
+    Returns
+    -------
+    tuple
+        The label to run, or None, and lines for the mailbox.
+    """
+    size = {str(r["label"]): int(str(r["n_outbreaks"])) for r in releases}
+    zero = sorted(str(r["label"]) for r in releases if r["init"] == "zero")
+    eligible = sorted(
+        (str(r["label"]) for r in releases if r["init"] != "zero"),
+        key=lambda x: size[x],
+    )
+    if not eligible:
+        return None, ["no slots-run checkpoint yet (zero-init ones skipped)"]
+    if label is not None:
+        if label in done:
+            return None, [f"{label} is already done"]
+        finished = [size[d] for d in done if d in size and d in eligible]
+        if finished and size.get(label, 0) <= max(finished):
+            return None, [f"{label} is older than a checkpoint already done"]
+    newest = eligible[-1]
+    if newest in done:
+        return None, [f"the newest checkpoint, {newest}, is already done"]
+    notes = []
+    skipped = [x for x in eligible[:-1] if x not in done]
+    if label is not None and label != newest and label not in skipped:
+        skipped.append(label)
+    if skipped:
+        notes.append(f"skipping {', '.join(skipped)} for the newest, {newest}")
+    if zero:
+        notes.append(f"zero-init checkpoints not run: {', '.join(zero)}")
+    return newest, notes
