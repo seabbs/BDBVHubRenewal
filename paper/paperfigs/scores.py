@@ -237,8 +237,9 @@ def _score_sample_block(
 def _blocks(df: pd.DataFrame, column: str) -> list[pd.DataFrame]:
     """Split forecasts into blocks with the same levels or sample ids."""
     g = df.groupby(list(FORECAST_KEYS), sort=False)[column]
-    # One signature per forecast, spread to its rows by group number.
-    per = g.agg(lambda v: hash(tuple(sorted(v)))).to_numpy()
+    # One signature per forecast, spread to its rows by group number. The
+    # signature is the sorted tuple itself, so blocks match exactly.
+    per = pd.factorize(g.agg(lambda v: tuple(sorted(v))))[0]
     sig = per[g.ngroup().to_numpy()]
     return [b for _, b in df.groupby(sig, sort=False)]
 
