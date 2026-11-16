@@ -216,7 +216,7 @@ def test_the_latest_cuts_are_held_out_not_trained_on():
     days = [f"2021-11-{d:02d}" for d in range(1, 31)]
     blocks = [{"cut": d, "source": "daily"} for d in days]
     train, held = split_held_out(blocks)
-    assert len(held) == HELD_OUT_DAYS
+    assert len(held) == HELD_OUT_DAYS["germany"]
     assert max(b["cut"] for b in train) < min(b["cut"] for b in held)
 
 
@@ -297,8 +297,12 @@ def test_bdbv_truth_after_the_truth_date_is_masked():
         n = b["n_targets"]
         late = [i for i, t in enumerate(times) if t > truth_until]
         assert np.isnan(b["context"][:n, late]).all()
-    # A cut whose every truth step is too young gives no block.
-    assert not bdbv_daily_blocks(rows, truth_until, cuts=["2026-11-04"])
+    # A cut whose every truth step is too young gives no block; a long lag
+    # reaches back to older steps.
+    assert not bdbv_daily_blocks(
+        rows, truth_until, lags=(14,), cuts=["2026-11-04"]
+    )
+    assert bdbv_daily_blocks(rows, truth_until, lags=(49,), cuts=["2026-11-04"])
 
 
 def test_bdbv_weekly_blocks_take_every_lag_and_mask_young_truth():

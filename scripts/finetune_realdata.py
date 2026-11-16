@@ -1,26 +1,34 @@
 # Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
-r"""Fine-tune Chronos-2 on the German data's development half alone.
+r"""Fine-tune Chronos-2 on real data: the German and BDBV data alone.
 
 For the SI's comparison of Chronos-2 fine-tuned on real data with the
-model fine-tuned on simulations. `blocks` cuts the German hub triangle,
-as known on `AS_OF` (the last day of the development half), into
-training blocks with `finetune_chronos.german_blocks`: every nowcast
-date whose truth, four weeks ahead, is at least `TRUTH_DELAY` days old
-by `AS_OF`, weekly and daily sources, Germany alone and with its states
-or age groups, lags of `finetune_chronos.GERMAN_LAGS`. `train` trains a
-LoRA adapter from base Chronos-2 with Chronos-2's own recipe as
-`scripts/finetune_stream.py` uses it (LoRA r 8, alpha 16, its own loss,
-the learning rate falling linearly to zero, prediction length the
-block's horizon in whole patches) for Chronos-2's default 1,000 steps,
-and publishes it as `germany-ft-<hash>`, a tag the `_ft` models'
-newest-release lookup does not read.
+model fine-tuned on simulations (`fm_chronos_<source>_ragged_real`).
 
-    python scripts/finetune_germany.py blocks \
-        data/raw/germany/COVID-19_hospitalizations.csv OUT/blocks.pkl
-    python scripts/finetune_germany.py train OUT/blocks.pkl OUT --publish
+German blocks (`blocks-germany`): the German hub triangle as known on
+`AS_OF` (the last day of the development half), cut with
+`finetune_chronos.german_blocks` at every nowcast date whose truth, four
+weeks ahead, is at least `TRUTH_DELAY` days old by `AS_OF`; weekly and
+daily sources; Germany alone and with its states or age groups; lags of
+`finetune_chronos.GERMAN_LAGS` taken in turn.
 
-The last `HELD_OUT_DAYS` of cuts are held out: their loss is logged, and
-they are not trained on.
+BDBV blocks (`blocks-bdbv`): every public BDBV release up to the one in
+`config/finetune/realdata.toml`. Daily blocks are cut at each daily
+release (`finetune_chronos.bdbv_daily_blocks`) and weekly blocks at each
+Saturday from the hub's public per-case delay table
+(`finetune_chronos.bdbv_weekly_blocks`), the country alone and with its
+provinces, at every lag. Truth is the latest release's counts, masked
+after its cut-off less the BDBV truth delay, so every count trained on is
+as old as the paper's BDBV truth.
+
+`train` trains a LoRA adapter from base Chronos-2 on both with
+Chronos-2's own recipe as `scripts/finetune_stream.py` uses it (LoRA r 8,
+alpha 16, its own loss, the learning rate falling linearly to zero,
+prediction length the block's horizon in whole patches) for Chronos-2's
+default 1,000 steps, checks it against its commit, and with `--publish`
+releases it as `realdata-ft-<hash>`, which the `_ft` models'
+newest-release lookup never takes. `scripts/finetune_realdata.sh` runs
+all three. The latest `HELD_OUT_DAYS` of each dataset's cuts are held out:
+their loss is logged, and they are not trained on.
 """
 
 from __future__ import annotations
@@ -34,6 +42,7 @@ import pickle
 import subprocess
 import sys
 import time
+import tomllib
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
@@ -62,13 +71,17 @@ FIRST_CUT = "2021-04-20"
 """The first nowcast date cut, two weeks after the triangle's first
 Meldedatum; cuts with under two steps of context are skipped."""
 
-HELD_OUT_DAYS = 14
-"""The latest cuts held out for the logged loss."""
+HELD_OUT_DAYS = {"germany": 14, "bdbv": 0}
+"""Days of each dataset's latest cuts held out for the logged loss. BDBV's
+few releases are all trained on."""
+
+CONFIG = Path("config/finetune/realdata.toml")
+"""The BDBV release trained up to and its truth delay."""
 
 STEPS = 1000
 """Training steps: Chronos-2's default (`Chronos2Pipeline.fit`)."""
 
-PREFIX = "germany-ft"
+PREFIX = "realdata-ft"
 """The checkpoint's release tag prefix."""
 
 LOG_EVERY = 10
@@ -124,17 +137,69 @@ def make_blocks(path: Path, out: Path, workers: int) -> None:
     log(f"{len(blocks)} blocks written to {out}")
 
 
+def bdbv_settings(path: Path = CONFIG) -> dict:
+    """Return the BDBV release trained up to, its cut-off and truth date."""
+    raw = tomllib.loads(path.read_text())["bdbv"]
+    cutoff = dt.date.fromisoformat(raw["cutoff"])
+    until = cutoff - dt.timedelta(days=int(raw["truth_delay"]))
+    return {**raw, "truth_until": until.isoformat()}
+
+
+def make_bdbv_blocks(data: Path, out: Path) -> None:
+    """Cut the BDBV blocks from the repo's public data and pickle them."""
+    from bdbvhubrenewal.data.tidy import tidy_delays, tidy_locations
+
+    bdbv = bdbv_settings()
+    daily = pd.read_csv(data / "daily.csv", dtype=str)
+    daily[["observed", "imputed"]] = daily[["observed", "imputed"]].astype(
+        "int64"
+    )
+    daily = daily.loc[daily["vintage"] <= bdbv["release"]]
+    locations = tidy_locations(data / "raw/auxiliary-data/locations.csv")
+    delays = tidy_delays(
+        {bdbv["release"]: data / f"raw/delays/{bdbv['release']}.csv"},
+        locations,
+    )
+    blocks = ft.bdbv_daily_blocks(daily, bdbv["truth_until"])
+    n_daily = len(blocks)
+    blocks += ft.bdbv_weekly_blocks(delays, bdbv["cutoff"], bdbv["truth_until"])
+    with out.open("wb") as f:
+        pickle.dump(blocks, f)
+    log(
+        f"{len(blocks)} BDBV blocks ({n_daily} daily) to {out}, release "
+        f"{bdbv['release']}, truth to {bdbv['truth_until']}"
+    )
+
+
 def block_id(block: dict) -> str:
-    """Return a block's id: cut, source, places and lag."""
-    return f"{block['cut']}:{block['source']}:{block['places']}:{block['lag']}"
+    """Return a block's id: data, cut, source, places and lag."""
+    return (
+        f"{block.get('data', 'germany')}:{block['cut']}:{block['source']}:"
+        f"{block['places']}:{block['lag']}"
+    )
 
 
 def split_held_out(blocks: list[dict]) -> tuple[list[dict], list[dict]]:
-    """Return the training blocks and the last `HELD_OUT_DAYS` of cuts."""
-    last = max(dt.date.fromisoformat(b["cut"]) for b in blocks)
-    first_held = (last - dt.timedelta(HELD_OUT_DAYS - 1)).isoformat()
-    train = [b for b in blocks if b["cut"] < first_held]
-    held = [b for b in blocks if b["cut"] >= first_held]
+    """Return the training blocks and each dataset's held-out cuts.
+
+    Each dataset holds out its cuts in its last `HELD_OUT_DAYS` days.
+    """
+    first_held = {}
+    for data in {b.get("data", "germany") for b in blocks}:
+        last = max(
+            dt.date.fromisoformat(b["cut"])
+            for b in blocks
+            if b.get("data", "germany") == data
+        )
+        days = HELD_OUT_DAYS.get(data, 0)
+        first_held[data] = (
+            (last - dt.timedelta(days - 1)).isoformat() if days else "9999"
+        )
+    held_out = [
+        b["cut"] >= first_held[b.get("data", "germany")] for b in blocks
+    ]
+    train = [b for b, h in zip(blocks, held_out, strict=True) if not h]
+    held = [b for b, h in zip(blocks, held_out, strict=True) if h]
     return train, held
 
 
@@ -152,8 +217,11 @@ def train(args: argparse.Namespace) -> None:
     commit = subprocess.run(
         ["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=True
     ).stdout.strip()
-    with args.blocks.open("rb") as f:
-        blocks, held = split_held_out(pickle.load(f))
+    every: list[dict] = []
+    for path in args.blocks:
+        with path.open("rb") as f:
+            every += pickle.load(f)
+    blocks, held = split_held_out(every)
     log(f"{len(blocks)} training blocks, {len(held)} held out")
     above = (
         ft.checkpoint_above(args.memory_gb)
@@ -186,12 +254,13 @@ def train(args: argparse.Namespace) -> None:
     (out / "blocks.txt").write_text("\n".join(ids) + "\n")
     data_file = Path(args.data)
     base = {
-        "grid": "germany",
+        "grid": "realdata",
         "chronos_revision": CHRONOS_REVISION,
         "code_sha256": {
             **{p: ft._sha256(Path(p)) for p in ft.CODE},
             "scripts/finetune_stream.py": ft._sha256(Path(fs.__file__)),
-            "scripts/finetune_germany.py": ft._sha256(Path(__file__)),
+            "scripts/finetune_realdata.py": ft._sha256(Path(__file__)),
+            str(CONFIG): ft._sha256(CONFIG),
             **{
                 f"foundation.{f.__name__}": hashlib.sha256(
                     inspect.getsource(f).encode()
@@ -205,11 +274,17 @@ def train(args: argparse.Namespace) -> None:
             "truth_until": truth_until(),
             "first_cut": FIRST_CUT,
             "held_out_days": HELD_OUT_DAYS,
+            "bdbv": bdbv_settings(),
+            "bdbv_lags": "every lag at each cut",
+            "germany_lags": "taken in turn over the cuts",
         },
-        "blocks_sha256": ft._sha256(args.blocks),
+        "blocks_sha256": [ft._sha256(p) for p in args.blocks],
         "blocks_list_sha256": ft._sha256(out / "blocks.txt"),
         "max_lags": {k: list(v) for k, v in ft.GERMAN_LAGS.items()},
-        "n_blocks": len(blocks),
+        "n_blocks": {
+            d: sum(b.get("data", "germany") == d for b in blocks)
+            for d in ("germany", "bdbv")
+        },
         "lora": {"r": 8, "alpha": 16},
         "learning_rate": args.learning_rate,
         "lr_steps": args.steps,
@@ -338,12 +413,13 @@ def train(args: argparse.Namespace) -> None:
             prefix=PREFIX,
             listing="blocks.txt",
             describe=(
-                f"Chronos-2 fine-tuned on German data {key} (SI only)",
+                f"Chronos-2 fine-tuned on real data {key} (SI only)",
                 f"LoRA adapter of Chronos-2 fine-tuned from base Chronos-2 "
-                f"on {len(blocks)} blocks of the German hospitalisation "
-                f"data as known on {AS_OF} (the development half), with "
-                f"truth at least {TRUTH_DELAY} days old "
-                f"(scripts/finetune_germany.py). For the SI comparison "
+                f"on {len(blocks)} blocks of real data: the German "
+                f"hospitalisation data as known on {AS_OF} (the development "
+                f"half) and the public BDBV data up to the release "
+                f"{bdbv_settings()['release']} "
+                f"(scripts/finetune_realdata.py). For the SI comparison "
                 f"only; the _ft models never load it.",
             ),
         )
@@ -354,13 +430,16 @@ def main() -> None:
     """Cut the blocks or train."""
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
-    cut = sub.add_parser("blocks")
+    cut = sub.add_parser("blocks-germany")
     cut.add_argument("triangle", type=Path)
     cut.add_argument("out", type=Path)
     cut.add_argument("--workers", type=int, default=4)
+    bdbv = sub.add_parser("blocks-bdbv")
+    bdbv.add_argument("data", type=Path, help="The tidy data, e.g. data/")
+    bdbv.add_argument("out", type=Path)
     run = sub.add_parser("train")
-    run.add_argument("blocks", type=Path)
     run.add_argument("out", type=Path)
+    run.add_argument("--blocks", type=Path, nargs="+", required=True)
     run.add_argument(
         "--data",
         default="data/raw/germany/COVID-19_hospitalizations.csv",
@@ -379,8 +458,10 @@ def main() -> None:
     run.add_argument("--note", default="")
     run.add_argument("--publish", action="store_true")
     args = parser.parse_args()
-    if args.command == "blocks":
+    if args.command == "blocks-germany":
         make_blocks(args.triangle, args.out, args.workers)
+    elif args.command == "blocks-bdbv":
+        make_bdbv_blocks(args.data, args.out)
     else:
         train(args)
 

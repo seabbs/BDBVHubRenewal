@@ -406,6 +406,31 @@ def _settings_hash(settings: dict) -> str:
     return hashlib.sha256(text).hexdigest()[:12]
 
 
+def delay_counts(line_list: pd.DataFrame) -> pd.DataFrame:
+    """Return a per-case delay table's counts by onset and report date.
+
+    Each case of `line_list` (`location`, `onset_week`, the week's
+    Saturday, and `delay`, days from onset to report) is reported on its
+    onset week's end plus its delay.
+    """
+    onset = pd.to_datetime(line_list["onset_week"])
+    return (
+        pd.DataFrame(
+            {
+                "location": line_list["location"],
+                "reference_date": onset.dt.date.astype(str),
+                "report_date": (
+                    onset
+                    + pd.to_timedelta(line_list["delay"].clip(lower=0), "D")
+                ).dt.date.astype(str),
+                "count": 1,
+            }
+        )
+        .groupby(["location", "reference_date", "report_date"], as_index=False)
+        .sum()
+    )
+
+
 def real_blocks(
     line_list: pd.DataFrame, cuts: list[str], last_week: str, lag: int
 ) -> list[dict]:
@@ -425,22 +450,7 @@ def real_blocks(
     ValueError
         If a cut's forecast weeks run past `last_week`.
     """
-    onset = pd.to_datetime(line_list["onset_week"])
-    counts = (
-        pd.DataFrame(
-            {
-                "location": line_list["location"],
-                "reference_date": onset.dt.date.astype(str),
-                "report_date": (
-                    onset
-                    + pd.to_timedelta(line_list["delay"].clip(lower=0), "D")
-                ).dt.date.astype(str),
-                "count": 1,
-            }
-        )
-        .groupby(["location", "reference_date", "report_date"], as_index=False)
-        .sum()
-    )
+    counts = delay_counts(line_list)
     places = (NATIONAL, *sorted(counts["location"].unique()))
     first = counts["reference_date"].min()
     out = []
@@ -540,9 +550,7 @@ def german_counts(wide: pd.DataFrame, as_of: str) -> pd.DataFrame:
 
 def _moved(dates: pd.Series, days: int) -> pd.Series:
     """Return ISO dates moved `days` days later."""
-    return (pd.to_datetime(dates) + pd.Timedelta(days=days)).dt.date.astype(
-        str
-    )
+    return (pd.to_datetime(dates) + pd.Timedelta(days=days)).dt.date.astype(str)
 
 
 def german_blocks(
@@ -602,9 +610,7 @@ def german_blocks(
             report_date=_moved(counts["report_date"], shift),
         )
         last = (dt.date.fromisoformat(cut) + dt.timedelta(shift)).isoformat()
-        cutoffs = sorted(
-            d for d in moved["report_date"].unique() if d <= last
-        )
+        cutoffs = sorted(d for d in moved["report_date"].unique() if d <= last)
         for source in sources:
             for j, which in enumerate(GERMAN_PLACES):
                 lag = lags[source][(i + j) % len(lags[source])]
@@ -625,5 +631,189 @@ def german_blocks(
                 padded["lag"] = lag
                 padded["places"] = which
                 padded["truth_end"] = end.isoformat()
+                padded["data"] = "germany"
                 out.append(padded)
+    return out
+
+
+BDBV_PLACES = ("national", "provinces")
+"""The BDBV blocks' places: the country alone, or with its provinces."""
+
+
+def _masked(block: dict, truth_until: str) -> dict | None:
+    """Mask a block's truth after `truth_until`; None if none is left.
+
+    The targets' steps after the cut that end after `truth_until` are set
+    missing, which Chronos-2's loss leaves out, so every count trained on
+    is at least the truth delay old.
+    """
+    start, n = block["start"], block["n_targets"]
+    times = block["times"]
+    late = [i for i in range(start, len(times)) if times[i] > truth_until]
+    kept = [i for i in range(start, len(times)) if times[i] <= truth_until]
+    if not kept:
+        return None
+    block["context"][:n, late] = np.nan
+    block["truth_end"] = times[max(kept)]
+    return block
+
+
+def _bdbv_block(
+    counts: pd.DataFrame,
+    source: str,
+    which: str,
+    cutoffs: list[str],
+    lag: int,
+    truth_until: str,
+) -> dict | None:
+    """Cut, mask and pad one BDBV block."""
+    provinces = sorted(counts["location"].unique())
+    places = (NATIONAL,) + (tuple(provinces) if which == "provinces" else ())
+    block = training_block(counts, source, places, cutoffs, max_lag=lag)
+    if block is None or block["start"] < 2:
+        return None
+    block = _masked(block, truth_until)
+    if block is None:
+        return None
+    padded = _pad(block, CONTEXT)
+    # The step of each padded column, "" where padded.
+    keep = min(block["start"], CONTEXT)
+    pad_after = padded["prediction_length"] - block["horizon"]
+    padded["times"] = (
+        [""] * (CONTEXT - keep)
+        + block["times"][block["start"] - keep :]
+        + [""] * pad_after
+    )
+    padded["levels"] = target_levels(places)
+    padded["mix"] = "bdbv"
+    padded["source"] = source
+    padded["cut"] = cutoffs[-1]
+    padded["lag"] = lag
+    padded["places"] = which
+    padded["truth_end"] = block["truth_end"]
+    padded["data"] = "bdbv"
+    return padded
+
+
+def release_counts(rows: pd.DataFrame) -> pd.DataFrame:
+    """Return daily releases as counts reported at each release's cut-off.
+
+    `rows` are the hub's daily releases (`vintage`, `location`,
+    `onset_date`, `observed`, `imputed`, `cutoff`), provinces only. Each
+    onset day's count at a cut-off, observed plus imputed (0 where a
+    release has no row), less its count at the release before, is
+    reported on that cut-off, so `releases` gives each release back.
+    """
+    value = rows.assign(value=rows["observed"] + rows["imputed"])
+    wide = value.pivot_table(
+        index=["location", "onset_date"],
+        columns="cutoff",
+        values="value",
+        aggfunc="sum",
+        fill_value=0,
+    ).sort_index(axis=1)
+    change = wide.diff(axis=1).fillna(wide)
+    long = change.stack().rename("count").reset_index()  # noqa: PD013
+    long = long.loc[long["count"] != 0]
+    return pd.DataFrame(
+        {
+            "location": long["location"],
+            "reference_date": long["onset_date"],
+            "report_date": long["cutoff"],
+            "count": long["count"].astype("int64"),
+        }
+    ).reset_index(drop=True)
+
+
+def bdbv_daily_blocks(
+    rows: pd.DataFrame,
+    truth_until: str,
+    lags: tuple[int, ...] = GERMAN_LAGS["daily"],
+    cuts: list[str] | None = None,
+) -> list[dict]:
+    """Return daily BDBV blocks, one per release, place set and lag.
+
+    Each release's cut-off is a cut, with the releases up to it as the
+    model sees them and the latest release's counts as the truth, masked
+    after `truth_until`.
+
+    Parameters
+    ----------
+    rows : pandas.DataFrame
+        The hub's daily releases (`data/daily.csv`). The country is the
+        sum of the provinces, so its rows are left out.
+    truth_until : str
+        The last onset day a truth count may hold.
+    lags : tuple of int
+        Release lags, every one cut at each release.
+    cuts : list of str, optional
+        Cut-offs to cut, every release's by default.
+
+    Returns
+    -------
+    list of dict
+    """
+    provinces = rows.loc[rows["location"].str.count("-") == 1]
+    counts = release_counts(provinces)
+    cutoffs = sorted(provinces["cutoff"].unique())
+    out = []
+    for cut in cuts or cutoffs:
+        upto = [c for c in cutoffs if c <= cut]
+        for which in BDBV_PLACES:
+            for lag in lags:
+                block = _bdbv_block(
+                    counts, "daily", which, upto, lag, truth_until
+                )
+                if block is not None:
+                    out.append(block)
+    return out
+
+
+def bdbv_weekly_blocks(
+    line_list: pd.DataFrame,
+    last_cutoff: str,
+    truth_until: str,
+    lags: tuple[int, ...] = GERMAN_LAGS["weekly"],
+) -> list[dict]:
+    """Return weekly BDBV blocks from the public per-case delay table.
+
+    The counts are rebuilt from the delay table (`delay_counts`), as the
+    r4 validation blocks are, with no report after `last_cutoff`. Each
+    Saturday from the first onset week to `last_cutoff` is a cut, with
+    weekly releases on Saturdays, each place set and every lag, and the
+    truth masked after `truth_until`.
+
+    Parameters
+    ----------
+    line_list : pandas.DataFrame
+        `location` (province codes), `onset_week` and `delay`.
+    last_cutoff : str
+        The latest release's cut-off.
+    truth_until : str
+        The last week end a truth count may hold.
+    lags : tuple of int
+        Release lags in weeks.
+
+    Returns
+    -------
+    list of dict
+    """
+    counts = delay_counts(line_list)
+    counts = counts.loc[counts["report_date"] <= last_cutoff]
+    first = str(counts["reference_date"].min())
+    saturdays = weekly_cutoffs(first, last_cutoff, 5)
+    out = []
+    for i in range(len(saturdays)):
+        for which in BDBV_PLACES:
+            for lag in lags:
+                block = _bdbv_block(
+                    counts,
+                    "weekly",
+                    which,
+                    saturdays[: i + 1],
+                    lag,
+                    truth_until,
+                )
+                if block is not None:
+                    out.append(block)
     return out

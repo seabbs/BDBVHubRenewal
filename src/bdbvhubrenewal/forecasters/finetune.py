@@ -259,8 +259,9 @@ def training_block(
         Chronos-2's prepared input: `context` `[V, S + H]`, the targets
         first and then the lag series, `future_covariates` `[V, H]`,
         `n_targets`, `n_covariates` and `n_future_covariates`, and the
-        `start` $S$ and `horizon` $H$. None if no release up to the cut
-        has a row for any of `places`, as for strata with no cases.
+        `start` $S$, `horizon` $H$ and the steps' `times`. None if no
+        release up to the cut has a row for any of `places`, as for strata
+        with no cases.
     """
     cut = cutoffs[-1]
     end = epiweek_end(cut) + dt.timedelta(weeks=ahead_weeks)
@@ -303,6 +304,7 @@ def training_block(
         "n_future_covariates": len(names),
         "start": start,
         "horizon": horizon,
+        "times": list(tri.times),
     }
 
 

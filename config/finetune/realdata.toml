@@ -1,0 +1,12 @@
+# The real-data fine-tune (scripts/finetune_realdata.py): the BDBV data it
+# trains on. Every public BDBV release up to `release` (its cut-off
+# `cutoff`), from the data `bdbvhubrenewal data` fetches. Truth counts are
+# masked after `cutoff` less `truth_delay` days, the release backtest's
+# BDBV truth delay on these releases (config/backtest.toml, "auto" with
+# truth_level 0.98), so every count trained on is as old as the paper's
+# BDBV truth. The paper scores the real-data model on BDBV only from the
+# first round after `release`.
+[bdbv]
+release = "2026-11-08"
+cutoff = "2026-11-05"
+truth_delay = 35
