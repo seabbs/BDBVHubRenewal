@@ -332,7 +332,6 @@ def _check_block(
 ) -> set[str]:
     """Check one set of sample rows against the task and return its places."""
     locs = set(rows["location"])
-    # Zones, if any, are every zone of the task's provinces.
     zones = {c for c in locs - set(task.locations) if is_zone(c)}
     mine = {z for z in task.zone_codes if province_of(z) in task.locations}
     if zones and zones != mine:
