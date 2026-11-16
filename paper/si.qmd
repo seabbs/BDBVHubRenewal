@@ -192,10 +192,8 @@ German nowcast hub, development half: as @tbl-copula-ebola, by state and by age 
 ### Joint block or aggregation
 
 The submission uses the joint block.
-On BDBV it is best or tied at provinces and zones for every model, and at the national level for the zero-shot models.
-At the national level, level by level is better for the daily fine-tuned models and the weekly model fine-tuned on 1,000 outbreaks, with relative WIS {{< meta evidence.aggregation.ebola.national.fm_chronos_daily_ragged_ft.level >}} against {{< meta evidence.aggregation.ebola.national.fm_chronos_daily_ragged_ft.joint >}} for round 1.
-On the German development half, the joint block is best at the national level with the daily checkpoint fine-tuned on 1,000 outbreaks ({{< meta evidence.aggregation.germany.national.fm_chronos_daily_ragged_ft_n1000.joint >}} against {{< meta evidence.aggregation.germany.national.fm_chronos_daily_ragged_ft_n1000.level >}} level by level).
-Level by level is competitive on Germany for the daily zero-shot and round-1 models ({{< meta evidence.aggregation.germany.national.fm_chronos_daily_ragged.level >}} against {{< meta evidence.aggregation.germany.national.fm_chronos_daily_ragged.joint >}} for zero-shot at the national level) and for age groups.
+On BDBV it is best or tied at provinces, zones and the national level for the zero-shot models.
+On the German development half, level by level is competitive for the daily zero-shot model ({{< meta evidence.aggregation.germany.national.fm_chronos_daily_ragged.level >}} against {{< meta evidence.aggregation.germany.national.fm_chronos_daily_ragged.joint >}} at the national level) and for age groups.
 Summing the lowest level loses at every level above it, with or without the copula: at BDBV's national level the daily zero-shot model scores {{< meta evidence.aggregation.ebola.national.fm_chronos_daily_ragged.zones_summed >}} summed and {{< meta evidence.aggregation.ebola.national.fm_chronos_daily_ragged.zones_copula >}} summed after pairing, against {{< meta evidence.aggregation.ebola.national.fm_chronos_daily_ragged.joint >}} for the joint block.
 All WIS are relative to `randomwalknowcast` on the same targets.
 @tbl-aggregation-ebola and @tbl-aggregation-germany give every model and level, and @tbl-aggregation-cost what each option costs.

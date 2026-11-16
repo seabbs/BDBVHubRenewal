@@ -41,6 +41,7 @@ __all__ = [
     "copula_table",
     "cost_table",
     "diseases_table",
+    "drop_finetuned",
     "heldout_figure",
     "lag_numbers",
     "realism_figure",
@@ -286,8 +287,9 @@ def checkpoint_rows(scores: pd.DataFrame, grid: str | None) -> pd.DataFrame:
     """Return the checkpoint rows of one fine-tuning grid, under one rule.
 
     Rows of `CHECKPOINT_RULE` are kept where the table records a rule, and
-    the case studies' rows only (not the held-out loss). Where it records
-    a grid, the checkpoints of `grid` are kept, with the zero-shot model.
+    the case studies' rows only (not the held-out loss). The checkpoints
+    of `grid` and its revisions (`r4.1` of `r4`) are kept, with the
+    zero-shot model; a table that records no grid gives zero-shot only.
     BDBV's relative CRPS fills `rel_wis` where that is empty, so one
     column holds each study's relative score.
     """
@@ -295,9 +297,14 @@ def checkpoint_rows(scores: pd.DataFrame, grid: str | None) -> pd.DataFrame:
     if "rule" in out:
         out = out.loc[out["rule"] == CHECKPOINT_RULE]
     out = out.loc[out["study"].isin(["germany", "ebola"])]
-    if "grid" in out and grid is not None:
-        keep = (out["checkpoint"] == "zero-shot") | (out["grid"] == grid)
-        out = out.loc[keep]
+    zero = out["checkpoint"] == "zero-shot"
+    if grid is not None and "grid" not in out:
+        # Rows that record no grid come from earlier fine-tunes.
+        out = out.loc[zero]
+    elif grid is not None:
+        ours = out["grid"].astype(str)
+        ours = (ours == grid) | ours.str.startswith(f"{grid}.")
+        out = out.loc[zero | ours]
     if "rel_crps" in out:
         out = out.assign(rel_wis=out["rel_wis"].fillna(out["rel_crps"]))
         if "rel_log_crps" in out and "rel_log_wis" in out:
@@ -305,6 +312,22 @@ def checkpoint_rows(scores: pd.DataFrame, grid: str | None) -> pd.DataFrame:
                 rel_log_wis=out["rel_log_wis"].fillna(out["rel_log_crps"])
             )
     return out.reset_index(drop=True)
+
+
+FINETUNED_EVIDENCE: Final = (
+    "copula_scores",
+    "copula_rho",
+    "aggregation_scores",
+    "aggregation_cost",
+)
+"""Evidence of both zero-shot and fine-tuned models, whose fine-tuned rows
+come from earlier fine-tunes than the paper's and are left out."""
+
+
+def drop_finetuned(rows: pd.DataFrame) -> pd.DataFrame:
+    """Leave out the fine-tuned models' rows (`_ft`, `_ft_n<k>`)."""
+    fine = rows["model"].astype(str).str.contains(r"_ft(_|$)")
+    return rows.loc[~fine].reset_index(drop=True)
 
 
 MIN_CELLS: Final = 5
@@ -620,6 +643,9 @@ def write_evidence(
     si_dir.mkdir(parents=True, exist_ok=True)
     fig_dir.mkdir(parents=True, exist_ok=True)
     data = {name: _read(paths, name) for name in EVIDENCE}
+    for name in FINETUNED_EVIDENCE:
+        if data.get(name) is not None and "model" in data[name]:
+            data[name] = drop_finetuned(data[name])
 
     def table(name: str, frame: pd.DataFrame | None, needs: list[str]) -> None:
         # Rows for another study only still leave this one waiting.

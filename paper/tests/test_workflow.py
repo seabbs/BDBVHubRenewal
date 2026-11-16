@@ -324,16 +324,44 @@ def test_the_paper_runs_its_ebola_models_at_its_own_draws(
 def test_the_workflow_pins_and_records_the_fine_tuned_checkpoint(
     tmp_path: Path,
 ) -> None:
-    pin = CONFIG["finetuned"]
-    assert len(pin) == 12
     base = str(PAPER / "workflow" / "config.yaml")
-    res = _snakemake(
+    sims = tmp_path / "sims"
+    sims.mkdir()
+    for seed in CONFIG["development"]["synthetic_seeds"]:
+        (sims / f"counts-{seed}.csv.gz").write_text("")
+        (sims / f"settings-{seed}.csv").write_text("")
+    synthetic = {
+        **CONFIG["synthetic"],
+        "simulations": {"development": str(sims), "paper": str(sims)},
+        "forecasts": {
+            "development": str(tmp_path / "out" / "synthetic-dev.csv.gz"),
+            "paper": str(tmp_path / "out" / "synthetic.csv.gz"),
+        },
+    }
+    # Until the final run publishes a checkpoint, the fine-tuned models
+    # are pending: not run, and no checkpoint recorded.
+    assert CONFIG["finetuned"] is None
+    pending = _snakemake(
         "development",
         "-n",
         "-p",
         "--configfile",
         base,
-        str(_offline(tmp_path)),
+        str(_offline(tmp_path, synthetic=synthetic)),
     )
-    assert res.returncode == 0, res.stderr
-    assert f"--finetuned {pin}" in res.stdout + res.stderr
+    assert pending.returncode == 0, pending.stderr
+    log = pending.stdout + pending.stderr
+    assert "--finetuned" not in log
+    runner = [line for line in log.splitlines() if "run_synthetic.py" in line]
+    assert runner
+    assert all("_ft" not in line for line in runner)
+    pinned = _snakemake(
+        "development",
+        "-n",
+        "-p",
+        "--configfile",
+        base,
+        str(_offline(tmp_path, synthetic=synthetic, finetuned="abcdef123456")),
+    )
+    assert pinned.returncode == 0, pinned.stderr
+    assert "--finetuned abcdef123456" in pinned.stdout + pinned.stderr

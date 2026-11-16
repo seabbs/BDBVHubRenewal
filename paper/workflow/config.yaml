@@ -8,8 +8,12 @@ render: development
 studies: [synthetic, germany, ebola]
 # The fine-tuned Chronos-2 checkpoint (`chronos-ft-<hash>`) every `_ft`
 # model of the workflow loads, the same in each study, and that the paper
-# names. CI's forecast jobs take the latest release, so set this to it.
-finetuned: e8a1f5ae338b
+# names: the newest published checkpoint of the final run, whose
+# settings.json grid is `finetune_grid` or a revision of it
+# (scripts/follow_checkpoint.py). Null leaves the fine-tuned rows out as
+# pending until the run publishes its first checkpoint.
+finetuned: null
+finetune_grid: r4
 # Samples per forecast for the studies scored on samples.
 n_samples: 100
 
@@ -67,14 +71,9 @@ ebola:
   # backtest config, which sets D, as the release backtest takes them.
   data: ../data
   config: ../config/backtest.toml
-  # Further models' release-backtest samples from evidence rows (`evidence`
-  # below), in the backtest's layout, kept to `models`: the Chronos-2
-  # models fine-tuned on 1,000 outbreaks, as submitted (one joint block),
-  # until the fit store holds them. The other Chronos-2 models come from
-  # the fit store.
-  extra:
-    - evidence: ebola_chronos
-      models: ".*_n1000$"
+  # Further models' release-backtest samples from evidence rows
+  # (`evidence` below), in the backtest's layout, kept to `models`.
+  extra: []
   backtest_models: [randomwalk, randomwalknowcast]
   # Draws per forecast of the paper's own run of `backtest_models`, with
   # the backtest's seed shared by every model (common random numbers).
@@ -109,14 +108,12 @@ nowcasts:
       - randomwalknowcast
       - fm_chronos_daily_ragged
       - fm_chronos_daily_ragged_ft
-      - fm_chronos_daily_ragged_ft_n1000
       - MeanEnsemble
       - hub_ensemble
     ebola:
       - randomwalknowcast
       - fm_chronos_weekly_ragged
       - fm_chronos_weekly_ragged_ft
-      - fm_chronos_weekly_ragged_ft_n1000
 
 # SI results kept as rows committed to evidence
 # branches (`paperpipe.evidence`). Each is `{ref: <commit>, path: <file>}`;
@@ -128,17 +125,15 @@ evidence:
   simulator:
     ref: c77f5a241afef356430c5a587623f8fa0d03f9b5
     path: scripts/finetune_simulate.R
-  # Scores of each r3 checkpoint on the case studies (germany-chronos2).
+  # Scores of the final run's checkpoints on the case studies (ckpt-scores).
   checkpoint_scores:
     ref: a0ccfc67bc1471a2405eb4af3254310b087c92c3
     path: evidence/checkpoint-scores.csv
-    # The fine-tuning grid whose checkpoints the curve shows; the rows
+    # The final run's grid, whose checkpoints the curve shows; the rows
     # also carry the scoring rule, and only `CHECKPOINT_RULE`'s are shown.
-    grid: r3
-  # The scale-floor test (fm-finetune3).
-  scale_floor:
-    ref: 500fe77caed9fdf846cfac9270b0be4179e742ee
-    path: results/finetune/scale-floor.csv
+    grid: r4
+  # Pending: the scale-floor test on the final run's checkpoints.
+  scale_floor: null
   # The lag-horizon test of the ragged layout (germany-chronos2).
   lag_germany:
     ref: e4f4d7a49773a3050a9529df5c70d7cc8504dafc
@@ -159,24 +154,17 @@ evidence:
   aggregation_scores:
     ref: 5a3e0440880f54751fd8dccbfa14133a2a74ba81
     path: results/agg/aggregation-scores.csv.gz
-  ebola_chronos:
-    ref: 5a3e0440880f54751fd8dccbfa14133a2a74ba81
-    path: results/agg/bdbv-joint-samples.csv.gz
   aggregation_cost:
     ref: 5a3e0440880f54751fd8dccbfa14133a2a74ba81
     path: results/agg/aggregation-cost.csv
-  finetune_heldout:
-    ref: 31ea2bf4c687f5c0ea85d9a880fa0f6cfcb3dce3
-    path: results/finetune/finetune-heldout.csv
-  sim_summaries:
-    ref: 31ea2bf4c687f5c0ea85d9a880fa0f6cfcb3dce3
-    path: results/finetune/sim-summaries-r3-pilot.csv
-  sim_realism:
-    ref: 31ea2bf4c687f5c0ea85d9a880fa0f6cfcb3dce3
-    path: results/finetune/sim-realism-r3-pilot.csv
-  sim_diseases:
-    ref: 31ea2bf4c687f5c0ea85d9a880fa0f6cfcb3dce3
-    path: results/finetune/sim-diseases-r3-pilot.csv
+  # Pending: the final run's held-out loss curve.
+  finetune_heldout: null
+  # Pending: summaries of the final grid's simulations.
+  sim_summaries: null
+  # Pending: the final grid's realism comparison.
+  sim_realism: null
+  # Pending: the final grid's ranges against published values.
+  sim_diseases: null
 
 # Data the development runs use.
 development:

@@ -37,6 +37,9 @@ from snakemake.exceptions import WorkflowError
 PAPER = Path(workflow.basedir).parent
 sys.path.insert(0, str(PAPER))
 
+from paperdata.synthetic_runner import (  # noqa: E402
+    MODELS as SYNTHETIC_MODELS,
+)
 from paperpipe.config import MODES, run_settings  # noqa: E402
 from paperpipe.evidence import EVIDENCE as EVIDENCE_NAMES  # noqa: E402
 from paperpipe.outputs import (  # noqa: E402
@@ -284,12 +287,19 @@ for _mode in MODES:
             seeds=" ".join(
                 str(s) for s in run_settings(config, _mode).synthetic_seeds
             ),
+            # The fine-tuned models wait for the final run's checkpoint.
+            models=(
+                ""
+                if config.get("finetuned")
+                else "--models "
+                + " ".join(m for m in SYNTHETIC_MODELS if "_ft" not in m)
+            ),
         resources:
             heavy=1,
         shell:
             "PYTHONPATH=. {PYTHON} scripts/run_synthetic.py {params.sims} "
             "{output} --seeds {params.seeds} --samples 1000 --device cpu "
-            "--threads 1"
+            "--threads 1 {params.models}"
 
 
 def limits(w):

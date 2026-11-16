@@ -35,6 +35,7 @@ from paperfigs.truth import attach_truth, rolling_truth
 from paperpipe.config import (
     check_no_heldout,
     check_no_heldout_releases,
+    keep_finetuned,
     run_settings,
 )
 from paperpipe.evidence import EVIDENCE, write_evidence
@@ -147,8 +148,9 @@ def _forecasts(a: argparse.Namespace) -> None:
 
 
 def _table(a: argparse.Namespace) -> None:
-    fc = validate_forecasts(_read(a.raw))
-    check_no_heldout(fc, run_settings(json.loads(a.config), a.mode))
+    config = json.loads(a.config)
+    fc = keep_finetuned(validate_forecasts(_read(a.raw)), config)
+    check_no_heldout(fc, run_settings(config, a.mode))
     _write(fc, a.out)
 
 

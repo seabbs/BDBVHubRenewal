@@ -26,6 +26,7 @@ __all__ = [
     "RunSettings",
     "check_no_heldout",
     "check_no_heldout_releases",
+    "keep_finetuned",
     "last_release",
     "run_settings",
     "seed_of",
@@ -255,3 +256,20 @@ def check_no_heldout(forecasts: pd.DataFrame, settings: RunSettings) -> None:
     bad = sorted(set(seeds.dropna().astype(int)) & set(settings.heldout_seeds))
     if bad:
         raise ValueError(f"Synthetic rows from held-out seeds: {bad}.")
+
+
+_FINETUNED = re.compile(r"_ft(_|$)")
+
+
+def keep_finetuned(
+    forecasts: pd.DataFrame, config: Mapping[str, Any]
+) -> pd.DataFrame:
+    """Leave out the fine-tuned models until a checkpoint is pinned.
+
+    The paper's fine-tuned models are the final run's (`finetuned` in the
+    config). While it has no published checkpoint, their rows are pending.
+    """
+    if config.get("finetuned"):
+        return forecasts
+    fine = forecasts["model"].astype(str).str.contains(_FINETUNED)
+    return forecasts.loc[~fine].reset_index(drop=True)

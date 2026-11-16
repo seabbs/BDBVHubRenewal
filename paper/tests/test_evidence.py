@@ -363,9 +363,9 @@ def test_checkpoint_rows_keep_one_grid_and_the_current_rule() -> None:
     assert set(out["study"]) == {"germany", "ebola"}
     assert sorted(out["checkpoint"]) == ["b", "b", "zero-shot"]
     assert out.set_index("study").loc["ebola", "rel_wis"] == 0.8
-    # Old tables, with no grid or rule, pass as they are.
+    # Old tables, with no grid or rule, give the zero-shot rows only.
     old = rows.drop(columns=["grid", "rule", "rel_crps"]).iloc[:2]
-    assert len(checkpoint_rows(old, grid="r4")) == 2
+    assert list(checkpoint_rows(old, grid="r4")["checkpoint"]) == ["zero-shot"]
 
 
 def test_checkpoint_rows_without_a_grid_keep_only_zero_shot() -> None:
