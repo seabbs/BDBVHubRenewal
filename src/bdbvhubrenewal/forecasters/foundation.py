@@ -787,8 +787,9 @@ class FoundationModel:
         The task's random stream the draws are seeded from, the model's
         name by default. Models given one stream draw the same random
         numbers (`bdbvhubrenewal.evaluation.marginals.forecast_quantiles`).
-    copula : GaussianCopula
-        Pairs the draws into trajectories over places and steps.
+    copula : GaussianCopula or None
+        Pairs the draws into trajectories over places and steps. None
+        leaves them as drawn.
     """
 
     name: str
@@ -797,7 +798,7 @@ class FoundationModel:
     checkpoint: Checkpoint | None = None
     sample: Sampler | None = field(default=None, repr=False)
     stream: str | None = field(default=None, repr=False)
-    copula: GaussianCopula = CHRONOS_COPULA
+    copula: GaussianCopula | None = CHRONOS_COPULA
 
     @property
     def needs_snapshots(self) -> bool:
@@ -866,11 +867,11 @@ class FoundationModel:
         sample = self.sample or partial(
             chronos_sampler, checkpoint=self.checkpoint
         )
-        draws = self.copula.couple(
-            sample([group], horizon, task.n_samples, seed)[0],
-            rng,
-            days=np.arange(horizon) * (7 if weekly else 1),
-        )
+        draws = sample([group], horizon, task.n_samples, seed)[0]
+        if self.copula is not None:
+            draws = self.copula.couple(
+                draws, rng, days=np.arange(horizon) * (7 if weekly else 1)
+            )
         final = tri.final
         steps = np.broadcast_to(final, (task.n_samples, *final.shape)).copy()
         drawn = np.maximum(np.round(draws), 0.0)
@@ -912,9 +913,10 @@ class FoundationModel:
         Each week of the weekly source is one of Chronos-2's steps, so its
         quantiles are Chronos-2's native quantiles read at `levels` by
         linear interpolation between the native levels (`native_sampler`).
-        They pass through `forecast` as one trajectory per level; every
-        step after the draws (rounding, the floors at the reported counts)
-        is monotone, so trajectory `k` is the quantile at level `k`.
+        They pass through `forecast` as one trajectory per level, not
+        paired; every step after the draws (rounding, the floors at the
+        reported counts) is monotone, so trajectory `k` is the quantile at
+        level `k`.
         A week of the daily source is a sum of steps, which has no native
         quantile.
 
@@ -934,7 +936,10 @@ class FoundationModel:
         if self.source != "weekly":
             return None
         at = np.asarray(levels, dtype=float)
-        run = replace(self, sample=native_sampler(at, self.checkpoint))
+        # Path k is the quantile at level k, so the paths are not paired.
+        run = replace(
+            self, sample=native_sampler(at, self.checkpoint), copula=None
+        )
         out = run.forecast(replace(task, n_samples=len(at)))
         out["quantile"] = at[out["sample"].to_numpy() - 1]
         return out[["location", "target_end_date", "quantile", "value"]]
