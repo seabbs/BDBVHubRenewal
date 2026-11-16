@@ -16,8 +16,9 @@
 # Whichever path finds it, the checkpoint is labelled slots-<hash>.
 #
 # One run per label: each label holds a lock ($RUN_ROOT/locks), and a
-# label whose final summary exists is skipped, so a second caller (the
-# auto watcher, or checkpoint-scoring's slots_followups.sh) exits 0.
+# label whose final summary exists is skipped: an explicit LABEL already
+# checked exits 0 at once, one being checked waits for that check and
+# then exits 0, and the auto watcher passes over both.
 # In auto mode a failed checkpoint is marked (`failed` in its run folder)
 # and skipped, and the watcher goes on with the next.
 #
@@ -319,8 +320,13 @@ if [ -n "$want" ] && finished "$want"; then
   exit 0
 fi
 if [ -n "$want" ] && locked "$want"; then
-  log "slots-$want is being checked by another caller"
-  exit 0
+  # Wait for the other caller's check, then exit if it finished.
+  log "slots-$want is being checked by another caller; waiting"
+  flock "$LOCKS/slots-$want${dry:+-dry}.lock" true
+  if finished "$want"; then
+    log "slots-$want is already checked"
+    exit 0
+  fi
 fi
 preflight || exit 1
 commit=$(git rev-parse HEAD)
