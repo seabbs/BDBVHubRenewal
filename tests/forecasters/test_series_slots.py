@@ -34,7 +34,7 @@ def tiny_model(seed: int = 0):
             "input_patch_stride": 16,
             "max_output_patches": 4,
             "output_patch_size": 16,
-            "quantiles": [0.1, 0.5, 0.9],
+            "quantiles": [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9],
             "use_arcsinh": True,
             "use_reg_token": True,
         },

@@ -37,6 +37,7 @@ import numpy as np
 import pandas as pd
 
 from bdbvhubrenewal.data.dates import as_date, epiweek_end
+from bdbvhubrenewal.forecasters import slots
 from bdbvhubrenewal.forecasters.base import (
     NATIONAL,
     SAMPLE_COLUMNS,
@@ -554,10 +555,8 @@ def _chronos(checkpoint: Checkpoint | None = None) -> Any:
     )
     if adapter is None:
         return pipeline
-    from peft import PeftModel
-
-    model = PeftModel.from_pretrained(pipeline.model, adapter)
-    return Chronos2Pipeline(model=model.merge_and_unload())
+    # Slots, if the adapter holds them, load with it.
+    return Chronos2Pipeline(model=slots.load_adapter(pipeline.model, adapter))
 
 
 def chronos_sampler(
@@ -606,11 +605,32 @@ def chronos_sampler(
     pipeline = _chronos(checkpoint)
     levels = np.asarray(pipeline.quantiles, dtype=float)
     rng = np.random.default_rng(seed)
-    quantiles, _ = pipeline.predict_quantiles(
-        [dict(g) for g in groups],
-        prediction_length=horizon,
-        quantile_levels=levels.tolist(),
-    )
+    model = getattr(pipeline, "model", None)
+    if model is not None and slots.has_slots(model):
+        # Each group is predicted on its own, so its rows are one batch
+        # and each place's series share the slot drawn with the fixed
+        # seed, as in held-out losses.
+        quantiles = []
+        for g in groups:
+            ids = slots.slot_ids(
+                np.atleast_2d(g["target"]).shape[0],
+                len(g.get("past_covariates", {})),
+                np.random.default_rng(slots.EVAL_SEED),
+                slots.n_slots(model),
+            )
+            with slots.assigned(model, ids):
+                q, _ = pipeline.predict_quantiles(
+                    [dict(g)],
+                    prediction_length=horizon,
+                    quantile_levels=levels.tolist(),
+                )
+            quantiles.extend(q)
+    else:
+        quantiles, _ = pipeline.predict_quantiles(
+            [dict(g) for g in groups],
+            prediction_length=horizon,
+            quantile_levels=levels.tolist(),
+        )
     out = []
     for q in quantiles:
         q = q.float().cpu().numpy()  # [V, horizon, Q]
