@@ -679,3 +679,34 @@ def test_a_comparison_figure_draws_each_run_by_checkpoint() -> None:
     ]
     lines = {line.get_label(): line for line in axes[0].get_lines()}
     assert list(lines["no delays"].get_xdata()) == [1000, 2000]
+
+
+def test_two_no_slots_checkpoints_of_one_size_fail() -> None:
+    from paperpipe.evidence import CHECKPOINT_RULE, slots_scores_table
+
+    base = {
+        "study": "germany",
+        "level": "national",
+        "model": "fm_chronos_daily_ragged",
+        "rule": CHECKPOINT_RULE,
+        "outbreaks": 1000,
+    }
+    rows = pd.DataFrame(
+        [
+            {**base, "checkpoint": "slots-new", "rel_wis": 0.9},
+            {**base, "checkpoint": "plain-a", "rel_wis": 1.0},
+            {**base, "checkpoint": "plain-b", "rel_wis": 1.1},
+        ]
+    )
+    with pytest.raises(ValueError, match="plain-a"):
+        slots_scores_table(rows, ("slots-new",))
+
+
+def test_the_3_day_label_matches_the_slots_check_s_sets() -> None:
+    from paperpipe.evidence import THREE_DAY, slots_loss_table
+
+    check = _slots_check()
+    assert check["set"].str.contains(THREE_DAY).any()
+    # Every 3-day row against no slots is dropped.
+    out = slots_loss_table(check)
+    assert not out["Set"].str.contains(THREE_DAY).any()
