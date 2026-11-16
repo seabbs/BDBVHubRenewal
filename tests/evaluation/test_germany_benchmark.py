@@ -87,7 +87,7 @@ def test_config_gives_the_paper_s_dates_and_an_explicit_model_set() -> None:
 
 def test_german_trained_models_run_on_the_held_out_half_only() -> None:
     config = load_germany_config(ROOT / "config" / "germany.toml")
-    german = ("fm_chronos_daily_ragged_de", "fm_chronos_weekly_ragged_de")
+    german = ("fm_chronos_daily_ragged_real", "fm_chronos_weekly_ragged_real")
     assert config.held_out_models == german
     # They were fine-tuned on the development half, so never score on it.
     assert not set(german) & set(run_models(config, held_out=False))

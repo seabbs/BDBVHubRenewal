@@ -6,11 +6,11 @@ Each pair of a source (`SOURCES`) and a layout (`LAYOUTS`) is one
 registered model, `fm_chronos_<source>_<layout>`, and each source's
 ragged model with a fine-tuned checkpoint (`resolve_checkpoint`, the
 latest release unless `config/finetune.toml` pins one) is
-`fm_chronos_<source>_ragged_ft`. For the SI, `fm_chronos_<source>_ragged_de`
-is the ragged model with the checkpoint fine-tuned on the German data's
-development half alone (`scripts/finetune_germany.py`), pinned in
-`config/finetune.toml` and released as `germany-ft-<hash>`, which the
-latest lookup never takes.
+`fm_chronos_<source>_ragged_ft`. For the SI, `fm_chronos_<source>_ragged_real`
+is the ragged model with the checkpoint fine-tuned on real data alone
+(the German development half and the public BDBV data to date,
+`scripts/finetune_realdata.py`), pinned in `config/finetune.toml` and
+released as `realdata-ft-<hash>`, which the latest lookup never takes.
 `hub_triangle` lays out the hub target by place, time and release lag,
 `FoundationModel` gives it to Chronos-2 as one group of series, and
 `chronos_sampler` draws trajectories from Chronos-2's quantiles.
@@ -61,9 +61,9 @@ __all__ = [
     "FINETUNED_PREFIX",
     "FINETUNED_RELEASES",
     "FINETUNED_URL",
-    "GERMANY_PREFIX",
     "LAYOUTS",
     "MAX_LAG",
+    "REALDATA_PREFIX",
     "SOURCES",
     "SUMS_FILE",
     "Checkpoint",
@@ -74,13 +74,13 @@ __all__ = [
     "finetuned_adapter",
     "finetuned_releases",
     "finetuned_spec",
-    "germany_pinned",
-    "germany_spec",
     "hub_triangle",
     "layout_block",
     "native_sampler",
     "quantile_draws",
-    "register_german_models",
+    "realdata_pinned",
+    "realdata_spec",
+    "register_realdata_models",
     "resolve_checkpoint",
 ]
 
@@ -119,8 +119,8 @@ FINETUNED_PREFIX: Final = "chronos-ft"
 """Tag prefix of the simulation-trained checkpoints' releases, the only
 ones `"latest"` takes."""
 
-GERMANY_PREFIX: Final = "germany-ft"
-"""Tag prefix of the German-trained checkpoints' releases."""
+REALDATA_PREFIX: Final = "realdata-ft"
+"""Tag prefix of the real-data checkpoints' releases."""
 
 FINETUNED_ENV: Final = "BDBV_CHRONOS_FT"
 """Environment variable with the settings hash a run resolved once, which
@@ -158,7 +158,7 @@ class Checkpoint:
     sha256 : tuple of (str, str)
         SHA-256 of each of `ADAPTER_FILES`, by file name.
     prefix : str
-        The release's tag prefix, `FINETUNED_PREFIX` or `GERMANY_PREFIX`.
+        The release's tag prefix, `FINETUNED_PREFIX` or `REALDATA_PREFIX`.
         Left out of the repr, which keys stored fits; the hash tells the
         checkpoints apart.
     """
@@ -272,8 +272,8 @@ def finetuned_releases() -> list[dict[str, Any]]:
     return out
 
 
-def germany_spec(path: Path | str = FINETUNED_CONFIG) -> str:
-    """Return the settings hash the `_de` models load.
+def realdata_spec(path: Path | str = FINETUNED_CONFIG) -> str:
+    """Return the settings hash the `_real` models load.
 
     No environment variable overrides it, so a run that pins the
     simulation-trained checkpoint leaves it as it is.
@@ -281,7 +281,7 @@ def germany_spec(path: Path | str = FINETUNED_CONFIG) -> str:
     Parameters
     ----------
     path : pathlib.Path or str
-        A TOML file with `germany`.
+        A TOML file with `realdata`.
 
     Returns
     -------
@@ -292,10 +292,10 @@ def germany_spec(path: Path | str = FINETUNED_CONFIG) -> str:
     ValueError
         If the pin is pending (empty) until the release is published.
     """
-    spec = str(tomllib.loads(Path(path).read_text())["germany"])
+    spec = str(tomllib.loads(Path(path).read_text())["realdata"])
     if not spec:
         raise ValueError(
-            f"No {GERMANY_PREFIX} release is pinned yet: set `germany` in "
+            f"No {REALDATA_PREFIX} release is pinned yet: set `realdata` in "
             f"{path} to its settings hash."
         )
     return spec
@@ -306,7 +306,7 @@ def resolve_checkpoint(spec: str, prefix: str = FINETUNED_PREFIX) -> Checkpoint:
     """Return a fine-tuned checkpoint from its release.
 
     `"latest"` is the newest published `chronos-ft-*` release by publish
-    date; releases of other prefixes, such as `germany-ft-*`, are never
+    date; releases of other prefixes, such as `realdata-ft-*`, are never
     taken. The release's `SUMS_FILE` gives the SHA-256 of its adapter
     files. Each process resolves once.
 
@@ -380,13 +380,13 @@ def _finetuned(name: str, source: str) -> FoundationModel:
     )
 
 
-def _german(name: str, source: str) -> FoundationModel:
-    """Build a model with the German-trained checkpoint `germany_spec`."""
+def _real_data(name: str, source: str) -> FoundationModel:
+    """Build a model with the real-data checkpoint `realdata_spec`."""
     return FoundationModel(
         name,
         source,
         "ragged",
-        resolve_checkpoint(germany_spec(), GERMANY_PREFIX),
+        resolve_checkpoint(realdata_spec(), REALDATA_PREFIX),
     )
 
 
@@ -969,39 +969,38 @@ for _source in SOURCES:
     )
 
 
-def germany_pinned(path: Path | str = FINETUNED_CONFIG) -> bool:
-    """Whether `path` pins the German-trained checkpoint.
+def realdata_pinned(path: Path | str = FINETUNED_CONFIG) -> bool:
+    """Whether `path` pins the real-data checkpoint.
 
     Parameters
     ----------
     path : pathlib.Path or str
-        A TOML file with `germany`.
+        A TOML file with `realdata`.
 
     Returns
     -------
     bool
     """
-    return bool(tomllib.loads(Path(path).read_text()).get("germany"))
+    return bool(tomllib.loads(Path(path).read_text()).get("realdata"))
 
 
-def register_german_models() -> None:
-    """Register the `_de` models, fine-tuned on the German development half.
+def register_realdata_models() -> None:
+    """Register the `_real` models, fine-tuned on real data alone.
 
-    The module registers them only once `germany_pinned`, so while the
+    The module registers them only once `realdata_pinned`, so while the
     pin is pending no store plan or backtest resolves their checkpoint.
     """
     for source in SOURCES:
-        name = f"fm_chronos_{source}_ragged_de"
+        name = f"fm_chronos_{source}_ragged_real"
         register_model(
             name,
-            partial(_german, name, source),
-            f"Chronos-2 fine-tuned on the German data's development half, "
-            f"on the hub target's {source} releases, ragged layout (SI "
-            "only).",
+            partial(_real_data, name, source),
+            f"Chronos-2 fine-tuned on real data (German and BDBV), on the "
+            f"hub target's {source} releases, ragged layout (SI only).",
             fitted=True,
             replace=True,
         )
 
 
-if Path(FINETUNED_CONFIG).exists() and germany_pinned():
-    register_german_models()
+if Path(FINETUNED_CONFIG).exists() and realdata_pinned():
+    register_realdata_models()

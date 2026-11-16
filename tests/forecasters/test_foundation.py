@@ -838,45 +838,45 @@ def test_too_many_requests_is_retried_a_bounded_number_of_times(
     assert len(calls) == len(foundation.RETRY_SECONDS) + 1
 
 
-GERMAN_MODELS = tuple(f"fm_chronos_{s}_ragged_de" for s in SOURCES)
+REALDATA_MODELS = tuple(f"fm_chronos_{s}_ragged_real" for s in SOURCES)
 
 
-def test_latest_never_takes_a_german_release(
+def test_latest_never_takes_a_realdata_release(
     releases: Path, monkeypatch: pytest.MonkeyPatch, write_release
 ) -> None:
     write_release(releases, "old", _ADAPTER, "old")
-    write_release(releases, "de", _ADAPTER, "de", prefix="germany-ft")
+    write_release(releases, "de", _ADAPTER, "de", prefix="realdata-ft")
     listing = _listing(
         ("chronos-ft-old", "2026-11-01T00:00:00Z", False),
-        ("germany-ft-de", "2026-11-20T00:00:00Z", False),
+        ("realdata-ft-de", "2026-11-20T00:00:00Z", False),
     )
     monkeypatch.setattr(foundation, "finetuned_releases", lambda: listing)
     assert foundation.resolve_checkpoint("latest") == _checkpoint("old")
 
 
-@pytest.mark.parametrize("name", GERMAN_MODELS)
-def test_german_models_load_their_pinned_german_release(
+@pytest.mark.parametrize("name", REALDATA_MODELS)
+def test_realdata_models_load_their_pinned_release(
     name: str,
     releases: Path,
     monkeypatch: pytest.MonkeyPatch,
     write_release,
 ) -> None:
-    write_release(releases, "de", _ADAPTER, "de", prefix="germany-ft")
-    monkeypatch.setattr(foundation, "germany_spec", lambda: "de")
+    write_release(releases, "de", _ADAPTER, "de", prefix="realdata-ft")
+    monkeypatch.setattr(foundation, "realdata_spec", lambda: "de")
     # Registered on a copy of the registry, as a pinned config would.
     monkeypatch.setattr(base, "_REGISTRY", dict(base._REGISTRY))
-    foundation.register_german_models()
+    foundation.register_realdata_models()
     # The simulation checkpoint's override does not reach them.
     monkeypatch.setenv(foundation.FINETUNED_ENV, "other")
     model = get_model(name)
-    ragged = get_model(name.removesuffix("_de"))
+    ragged = get_model(name.removesuffix("_real"))
     assert model.checkpoint.hash == "de"
-    assert model.checkpoint.tag == "germany-ft-de"
+    assert model.checkpoint.tag == "realdata-ft-de"
     assert model.checkpoint.sha256 == _checkpoint("de").sha256
     assert (model.source, model.layout) == (ragged.source, "ragged")
     assert "'de'" in repr(model)
     adapter = foundation.finetuned_adapter(model.checkpoint)
-    assert adapter.name == "germany-ft-de"
+    assert adapter.name == "realdata-ft-de"
     assert (adapter / "adapter_model.safetensors").read_bytes() == b"weights"
 
 
@@ -886,29 +886,29 @@ def test_the_simulation_checkpoints_keep_their_fit_keys() -> None:
     assert _checkpoint("abc").tag == "chronos-ft-abc"
 
 
-def test_the_german_checkpoint_is_pinned_to_a_hash_or_pending() -> None:
-    # Pending ("") until the germany-ft release is published.
+def test_the_realdata_checkpoint_is_pinned_to_a_hash_or_pending() -> None:
+    # Pending ("") until the realdata-ft release is published.
     text = Path(foundation.FINETUNED_CONFIG).read_text()
-    pin = tomllib.loads(text)["germany"]
+    pin = tomllib.loads(text)["realdata"]
     assert pin == "" or (pin != "latest" and len(pin) == 12)
 
 
-def test_a_pending_german_checkpoint_names_what_is_missing(
+def test_a_pending_realdata_checkpoint_names_what_is_missing(
     tmp_path: Path,
 ) -> None:
     config = tmp_path / "finetune.toml"
-    config.write_text('hash = "latest"\ngermany = ""\n')
-    with pytest.raises(ValueError, match="germany-ft"):
-        foundation.germany_spec(config)
+    config.write_text('hash = "latest"\nrealdata = ""\n')
+    with pytest.raises(ValueError, match="realdata-ft"):
+        foundation.realdata_spec(config)
 
 
-def test_the_german_trained_models_wait_for_their_pin() -> None:
+def test_the_realdata_models_wait_for_their_pin() -> None:
     # While the pin is pending they are not registered, so neither the
     # BDBV fit store nor a backtest resolves their checkpoint.
     from bdbvhubrenewal.evaluation.store import stored_models
 
-    if foundation.germany_pinned():
-        pytest.skip("the germany-ft release is pinned")
+    if foundation.realdata_pinned():
+        pytest.skip("the realdata-ft release is pinned")
     names = {s.name for s in list_models()}
-    assert not {m for m in names if m.endswith("_de")}
-    assert not [m for m in stored_models() if m.endswith("_de")]
+    assert not {m for m in names if m.endswith("_real")}
+    assert not [m for m in stored_models() if m.endswith("_real")]

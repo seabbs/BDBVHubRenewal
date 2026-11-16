@@ -53,13 +53,17 @@ On the German development half, the national WIS relative to `randomwalknowcast`
 On the BDBV release backtest it is {{< meta evidence.lag.bdbv.fm_chronos_daily_ragged.capped >}} and {{< meta evidence.lag.bdbv.fm_chronos_daily_ragged.longer >}} for the daily zero-shot model, and {{< meta evidence.lag.bdbv.fm_chronos_weekly_ragged.capped >}} and {{< meta evidence.lag.bdbv.fm_chronos_weekly_ragged.longer >}} for the weekly one.
 BDBV's zones have few weekly releases, so with the longer horizon no recent lag of a zone falls in the model's context.
 
-To compare training on simulations with training on real data, we also fine-tuned Chronos-2 on the German data alone (`fm_chronos_daily_ragged_de` and `fm_chronos_weekly_ragged_de`).
-It used the data as available on 2022-02-09, the last day of the German development half, and nothing later.
-Training blocks were cut at every nowcast date whose truth, four weeks ahead, was at least 40 days old by then, from 2021-04-20 to 2021-12-03.
+To compare training on simulations with training on real data, we also fine-tuned Chronos-2 on real data alone (`fm_chronos_daily_ragged_real` and `fm_chronos_weekly_ragged_real`).
+It was trained on the German data and the BDBV data together.
+The German part used the data as available on 2022-02-09, the last day of the German development half, and nothing later.
+German training blocks were cut at every nowcast date whose truth, four weeks ahead, was at least 40 days old by then, from 2021-04-20 to 2021-12-03.
 Each date was laid out as the German nowcast tasks are, with the same block functions as the simulations, from the daily and weekly releases, for Germany alone and with its states or age groups, at release lags of 14 to 49 days (including 40) or 2 to 7 weeks.
-Training followed Chronos-2's recipe as the simulation fine-tune does, from base Chronos-2, for its default 1,000 steps.
-The last 14 nowcast dates were held out to monitor the loss.
 The hub file's changes after 80 days hold revisions made up to August 2022, so they were left out.
+The BDBV part used every public release up to 2026-11-08 (cut-off 2026-11-05).
+Daily blocks were cut at each daily release, and weekly blocks at each week from the hub's public per-case delay table, for the country alone and with its provinces, at every release lag.
+Truth was the latest release's counts, left out after 2026-10-01, so every count trained on was at least the BDBV truth delay of 35 days old.
+Training followed Chronos-2's recipe as the simulation fine-tune does, from base Chronos-2, for its default 1,000 steps.
+The last 14 German nowcast dates were held out to monitor the loss.
 
 ### Synthetic data generation
 
@@ -309,15 +313,22 @@ German nowcast hub scores by horizon. {{< meta results.germany.label >}} {{< met
 German nowcast hub scores by location and stratum. {{< meta results.germany.label >}} {{< meta results.germany.note >}}
 :::
 
-#### Fine-tuning on the German data
+#### Fine-tuning on real data
 
-@tbl-germany-real-finetune compares Chronos-2 fine-tuned on the German development half with the zero-shot model and the model fine-tuned on simulations, on the held-out half only, as the German-trained model saw the development half.
-It is left out of every other German table and figure.
+@tbl-germany-real-finetune compares Chronos-2 fine-tuned on real data with the zero-shot model and the model fine-tuned on simulations, on the German held-out half only, as the real-data model saw the development half.
+@tbl-ebola-real-finetune makes the same comparison on BDBV, from the first round after the last release it trained on, so it is scored prospectively.
+The real-data model is left out of every other table and figure.
 
 ::: {#tbl-germany-real-finetune}
 {{< include build/tables/si/germany-real-finetune.md >}}
 
-German nowcast hub held-out half: Chronos-2 zero-shot (`_ragged`), fine-tuned on simulations (`_ft`) and fine-tuned on the German development half (`_de`), overall (`all`) and by level, with WIS relative to `randomwalknowcast`. {{< meta results.germany.label >}} {{< meta results.germany.note >}}
+German nowcast hub held-out half: Chronos-2 zero-shot (`_ragged`), fine-tuned on simulations (`_ft`) and fine-tuned on real data (`_real`), overall (`all`) and by level, with WIS relative to `randomwalknowcast`. {{< meta results.germany.label >}} {{< meta results.germany.note >}}
+:::
+
+::: {#tbl-ebola-real-finetune}
+{{< include build/tables/si/ebola-real-finetune.md >}}
+
+BDBV scored rounds (from 21 November 2026, after every release the real-data model trained on): Chronos-2 zero-shot (`_ragged`), fine-tuned on simulations (`_ft`) and fine-tuned on real data (`_real`), overall (`all`) and by level, with CRPS relative to `randomwalknowcast`. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
 :::
 
 ### Ebola hub submissions

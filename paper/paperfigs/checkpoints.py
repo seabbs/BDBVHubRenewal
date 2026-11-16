@@ -15,16 +15,17 @@ from typing import Final
 import pandas as pd
 
 __all__ = [
-    "GERMAN_TRAINED",
+    "REAL_DATA",
     "SEP",
     "checkpoint_of",
     "drop_checkpoints",
-    "drop_german_trained",
+    "drop_real_data",
 ]
 
-GERMAN_TRAINED: Final = "_de"
-"""Suffix of the models fine-tuned on the German data's development half,
-compared with the simulation-trained models in one SI table only."""
+REAL_DATA: Final = "_real"
+"""Suffix of the models fine-tuned on real data alone (the German
+development half and BDBV to date), compared with the simulation-trained
+models in the SI only."""
 
 SEP: Final = "@"
 """Separates a fine-tuned model from its number of training outbreaks."""
@@ -44,7 +45,7 @@ def drop_checkpoints(df: pd.DataFrame) -> pd.DataFrame:
     return df.loc[keep].reset_index(drop=True)
 
 
-def drop_german_trained(df: pd.DataFrame) -> pd.DataFrame:
-    """Return the rows of models not fine-tuned on the German data."""
-    keep = ~df["model"].astype(str).str.endswith(GERMAN_TRAINED)
+def drop_real_data(df: pd.DataFrame) -> pd.DataFrame:
+    """Return the rows of models not fine-tuned on real data."""
+    keep = ~df["model"].astype(str).str.endswith(REAL_DATA)
     return df.loc[keep].reset_index(drop=True)
