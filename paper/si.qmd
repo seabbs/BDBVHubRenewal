@@ -45,6 +45,8 @@ Chronos-2's group attention has no notion of which series is which, so on its ow
 The fine-tuned model adds a learned slot embedding, shared by each place's count series and its lag series.
 The places of a block take distinct slots, so the model ties each place's covariates to its counts while seeing all places at once.
 In each training block the places are assigned to slots by a random permutation, so a slot carries no meaning of its own beyond marking which series go together.
+Each place carries its own slot plus its parent's slot from the same table, and both are learned, so a place carries its parent's identity.
+The link means that a place belongs to its parent, not that it sums to it, as training blocks include countries that do not equal the sum of their places.
 The slot embeddings start as random codes drawn from a normal distribution with standard deviation 0.02, so each slot is distinct from the first step.
 They are trained in their own parameter group at a learning rate of $10^{-4}$ with linear decay, while the LoRA adapter keeps Chronos-2's recipe and its learning rate of $10^{-5}$.
 
@@ -53,6 +55,7 @@ A simulation gives daily counts by onset and report date, and a release counts e
 Each simulation gives 10 observation draws, and at each of 16 cut-offs 2 of the 10 draws are sampled, so one simulation gives 32 blocks.
 Each block takes daily steps, or sums the days to 3-day or weekly steps, at random.
 Four in five blocks are multivariate, holding several of the simulation's strata with or without the country and their totals, and one in five is univariate, the country or a single stratum.
+Of the blocks with places, a third each have a country equal to the sum of its places, a country above it (cases not allocated to a place), and a country reported later than its places (its own stream).
 Each block's prediction length is its horizon, and the LoRA learning rate falls linearly from $10^{-5}$ to zero at 8,000 simulations, with checkpoints at 1,000, 2,000, 4,000 and 8,000.
 
 **Order of the training data.**
