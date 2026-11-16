@@ -494,7 +494,7 @@ def panel_b(g: Svg, oy: float) -> float:
         g.text(
             bx - 40,
             (y0 + bottom) / 2 + 9,
-            f"slot {p} + parent",
+            f"slot {p} + \u00bd parent",
             size=SMALL,
             anchor="end",
             fill=colour,
