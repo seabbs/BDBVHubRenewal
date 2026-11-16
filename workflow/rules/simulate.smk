@@ -66,6 +66,8 @@ rule simulate_batch:
         mem_mb=lambda wc, attempt: (
             SIM["mem_mb"] if attempt == 1 else SIM["retry_mem_mb"]
         ),
+        # At most `--resources sim_slots=N` batches at once (2 on archie).
+        sim_slots=1,
     threads: 1
     shell:
         # The simulator must be the committed one, as the manifest records
@@ -197,6 +199,25 @@ rule release_batch:
         """
 
 
+rule release_qc:
+    # Opt-in (target `release`): the round's QC exclusions, so a machine
+    # training from the releases skips them too.
+    input:
+        rules.sim_qc.output.excluded,
+    output:
+        touch(f"{ROUNDS_DIR}/r{{round}}/released/qc.done"),
+    params:
+        repo=SIM["repo"],
+        tag="sims-r{round}",
+        named=f"{ROUNDS_DIR}/r{{round}}/qc/excluded-r{{round}}.csv",
+    localrule: True
+    shell:
+        """
+        cp {input} {params.named}
+        gh release upload {params.tag} -R {params.repo} --clobber {params.named}
+        """
+
+
 rule simulate:
     input:
         expand(f"{ROUNDS_DIR}/r{{round}}/READY", round=config["rounds"]),
@@ -209,3 +230,4 @@ rule release:
             for r in config["rounds"]
             for s in all_seeds(r)
         ],
+        expand(f"{ROUNDS_DIR}/r{{r}}/released/qc.done", r=config["rounds"]),

@@ -41,6 +41,7 @@ def known_exclusions():
     """The sim-QC exclusions known now."""
     paths = [Path(f"{RUN}/excluded.csv")]
     paths += Path(ROUNDS_DIR).glob("r*/qc/excluded.csv")
+    paths += Path(f"{RUN}/excluded-releases").glob("*.csv")
     return set().union(*(segments.excluded(p) for p in paths))
 
 
@@ -166,7 +167,10 @@ rule train_segment:
         slots=f"--series-slots {FT['series_slots']}"
         if FT["series_slots"]
         else "",
-        device=LOCAL.get("DEVICE", "auto"),
+        device=LOCAL.get("DEVICE") or os.environ.get("DEVICE", "auto"),
+        from_releases=FT["sims_from"] == "release",
+        rounds=" ".join(str(r) for r in FT["rounds"]),
+        repo=SIM["repo"],
         hf_home=LOCAL.get("HF_HOME", "output/finetune/hf"),
         watermark=LOCAL.get("MPS_HIGH_WATERMARK", "0.85"),
     resources:
@@ -179,10 +183,17 @@ rule train_segment:
 from flowlib import segments; \
 print(segments.resume_state('{TRAIN}/state', '{params.prev}' or None, \
 {params.prev_n}))" > {log}
+        if [ "{params.from_releases}" = True ]; then
+          mkdir -p {RUN}/excluded-releases
+          for r in {params.rounds}; do
+            gh release download sims-r$r -R {params.repo} --clobber \
+              -D {RUN}/excluded-releases -p "excluded-r$r.csv" 2> /dev/null || true
+          done
+        fi
         python -c "import sys, glob; sys.path.insert(0, 'workflow'); \
 from flowlib import segments; \
 segments.gather_exclusions(glob.glob('{ROUNDS_DIR}/r*/qc/excluded.csv') \
-+ ['{RUN}/excluded-releases.csv'], '{RUN}/excluded.csv')"
++ glob.glob('{RUN}/excluded-releases/*.csv'), '{RUN}/excluded.csv')"
         DEVICE={params.device} HF_HOME={params.hf_home} HF_HUB_OFFLINE=1 \
         PYTORCH_MPS_HIGH_WATERMARK_RATIO={params.watermark} \
         PYTORCH_MPS_LOW_WATERMARK_RATIO=0.6 MPLCONFIGDIR="${{TMPDIR:-/tmp}}" \

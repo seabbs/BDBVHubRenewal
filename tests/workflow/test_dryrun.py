@@ -208,9 +208,11 @@ def test_score_takes_checkpoints_from_the_release_list(tmp_path):
 
 
 def test_finished_units_are_kept(tmp_path):
+    data = tmp_path / "target.csv"
+    data.write_text("x\n")
     (tmp_path / "scores" / "bdbv").mkdir(parents=True)
     (tmp_path / "scores" / "bdbv" / "reference.done").write_text("")
-    config = {"score": {"labels": ["aaa"]}}
+    config = {"score": {"labels": ["aaa"], "data": str(data)}}
     jobs = dry(tmp_path, "score", config=config)
     assert jobs["score_bdbv"] == 1
 

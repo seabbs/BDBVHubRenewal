@@ -39,9 +39,25 @@ def checkpoint_labels(wc=None):
     return releases.labels(json.loads(Path(path).read_text()), SC["published_from"])
 
 
+rule bdbv_data:
+    # The hub's data (`bdbvhubrenewal data`). A refresh (`task data`) makes
+    # the BDBV units rerun, and they add only the new origins.
+    output:
+        SC["data"],
+    localrule: True
+    shell:
+        "uv run bdbvhubrenewal data"
+
+
+ROOM = (
+    f"workflow/scripts/wait_for_room.sh {LOCAL['MIN_FREE_GB']} "
+    f"{LOCAL['MIN_DISK_GB']} {CACHE} && "
+)
+
+
 def unit_shell(study):
     return (
-        "OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 "
+        "mkdir -p " + CACHE + " && " + ROOM + "OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 "
         "XLA_FLAGS=--xla_cpu_multi_thread_eigen=false "
         "{params.prefix} nice -n 19 uv run --group chronos python "
         f"scripts/checkpoint_scores.py {study} {CACHE} {{wildcards.label}} "
@@ -50,6 +66,8 @@ def unit_shell(study):
 
 
 rule score_bdbv:
+    input:
+        SC["data"],
     output:
         f"{CACHE}/bdbv/{{label}}.done",
     log:

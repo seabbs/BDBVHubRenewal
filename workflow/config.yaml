@@ -63,6 +63,8 @@ score:
   # Labels scored beside every checkpoint: randomwalknowcast and zero-shot
   # Chronos-2.
   reference: [reference]
+  # The BDBV data the units read; newer data reruns them.
+  data: data/target.csv
   # A unit's memory cap (MB), at its measured 5 GB peak.
   mem_mb: 6144
   # The evidence tables the scores merge into, kept rows of other rules.
@@ -91,5 +93,5 @@ agg:
   # The zero-shot rows the sanity check reproduces, and the table the
   # checkpoint's rows join.
   zero_shot: origin/evidence/fm-agg:results/agg/aggregation-scores.csv.gz
-  existing: results/agg/aggregation-scores.csv.gz
+  existing: origin/agg-slots:results/agg/aggregation-scores.csv.gz
   mem_mb: 6144

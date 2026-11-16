@@ -10,7 +10,7 @@ SLC = config["slots_check"]
 AGG = config["agg"]
 AGG_ROOT = f"{CACHE}/agg"
 HEAVY = (
-    "{params.prefix} nice -n 19 env OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 "
+    ROOM + "{params.prefix} nice -n 19 env OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 "
     "OPENBLAS_NUM_THREADS=1 CUDA_VISIBLE_DEVICES= "
 )
 
@@ -102,9 +102,11 @@ rule agg_data:
         target=f"{AGG_ROOT}/data/target.csv",
         germany=f"{AGG_ROOT}/germany/COVID-19_hospitalizations.csv",
         zero_shot=f"{AGG_ROOT}/zero-shot-scores.csv.gz",
+        existing=f"{AGG_ROOT}/existing-scores.csv.gz",
     params:
         ref=AGG["hub_ref"],
         zero_shot=AGG["zero_shot"],
+        existing=AGG["existing"],
     localrule: True
     shell:
         """
@@ -114,6 +116,7 @@ rule agg_data:
         uv run python -m bdbvhubrenewal.cli germany-fetch \
           --out {AGG_ROOT}/germany
         git show {params.zero_shot} > {output.zero_shot}
+        git show {params.existing} > {output.existing}
         """
 
 
@@ -200,7 +203,7 @@ rule agg_rows:
     params:
         prefix=lambda wc, resources: job_prefix(resources.mem_mb),
         cache=f"{AGG_ROOT}/{{label}}",
-        existing=AGG["existing"],
+        existing=f"{AGG_ROOT}/existing-scores.csv.gz",
     resources:
         mem_mb=AGG["mem_mb"],
     shell:

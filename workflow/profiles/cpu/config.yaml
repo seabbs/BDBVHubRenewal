@@ -9,3 +9,5 @@ default-resources:
   - mem_mb=2048
 set-threads:
   - simulate_batch=1
+resources:
+  - sim_slots=2

@@ -224,7 +224,8 @@ tasks:
         {{.SNAKEMAKE}} {{.WF_TARGET}}
         --workflow-profile workflow/profiles/{{.PROFILE}}
         --cores {{.CORES | default 1}}
-        --resources mem_mb={{.MEM_MB | default 16384}} gpu=1
+        --resources mem_mb={{.MEM_MB | default 32768}} gpu=1
+        sim_slots={{.SIM_SLOTS | default 2}}
         {{.CLI_ARGS}}
 
   all:

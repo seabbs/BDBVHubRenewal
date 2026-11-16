@@ -35,7 +35,14 @@ Helpers: `task dag` draws the rule graph, `task progress` lists what exists and 
 Paths and host details are in `config/local.env`, which git ignores; `config/local.env.example` lists every key.
 The same file is read by the Taskfile (`dotenv`), by the shell scripts (`scripts/local_config.sh`) and by the workflow (`workflow/flowlib/localconfig.py`).
 A variable in the environment wins, and with no file everything runs on this machine.
-The workflow uses `ROOT` (rounds), `RUN` (the fine-tuning run), `SCORE_CACHE`, `HOST_NAME`, `JOB_PREFIX` (a per-job memory cap such as a `systemd-run` scope; `{mem}` becomes the job's budget), `MIN_FREE_GB` and `MIN_DISK_GB`, and the Taskfile `CORES` and `MEM_MB`.
+The workflow uses:
+
+- paths: `ROOT` (rounds), `RUN` (the fine-tuning run), `SCORE_CACHE`, `NOSLOTS_RUN` and `GERMANY_BLOCKS` (the slots check's);
+- what this machine does: `TARGETS` (what `all` runs; by default `simulate finetune score`, so archie sets `simulate score` and the laptop `finetune`), `SIMS_FROM` (`local` or `release`), `PUBLISH` (release each checkpoint as it is trained);
+- resources: `JOB_PREFIX` (a per-job memory cap such as a `systemd-run` scope; `{mem}` becomes the job's budget), `MIN_FREE_GB` and `MIN_DISK_GB` (room a heavy job waits for), and the Taskfile's `CORES`, `MEM_MB` and `SIM_SLOTS`;
+- `HOST_NAME`, and `NOTIFY` with `MAILBOX`: with `NOTIFY` set, a mailbox line when a round is ready, a checkpoint is saved or published, n1000 misses zero-shot, scores land or a run fails.
+
+Task reads `config/local.env` itself, not `$LOCAL_CONFIG`.
 
 Profiles in `workflow/profiles/` hold resources only and are named by role: `cpu` (simulate, score), `gpu` (fine-tune, publish) and `ci`.
 All of them rerun a step only when an input is newer (`rerun-triggers: mtime`), so editing a script does not reschedule finished work.
@@ -53,8 +60,8 @@ Round r is 40 training and 4 held-out batches of 25 outbreaks, seeds from 30000 
 - `round_manifest`: the round's `manifest.csv`, rows in seed order.
 - `sim_qc`: the recorded sim-QC review (`scripts/sim_qc.py`), whose exclusions (`qc/excluded.csv`) the trainer skips. Nothing is deleted.
 - `round_ready`: the seed lists and `READY`, last.
-- `simulate`: the rounds in `rounds`.
-- `release_batch`, `release`: opt-in, each batch to its round's release.
+- `simulate`: the rounds in `rounds`. At most `sim_slots` batches run at once (2 by default).
+- `release_batch`, `release_qc`, `release`: opt-in, each batch and the round's QC exclusions to its round's release.
 
 Outputs are in `<ROOT>/rounds/r<N>/`.
 
@@ -82,9 +89,10 @@ Outputs are in `<RUN>/train/n<N>/`.
 ## 4. Score (`rules/score.smk`, `rules/followups.smk`)
 
 - `release_list`: the repository's releases, the only rule that reads the network; `task score` reruns it. The checkpoints scored are the slots ones first, then the others, oldest first, from `published_from`, or `score.labels`.
+- `bdbv_data`: the hub's data (`bdbvhubrenewal data`), or `task data`. Newer data reruns the BDBV units, which add only the new origins.
 - `score_bdbv`, `score_germany`, `score_heldout`: the units of `scripts/checkpoint_scores.py` for each checkpoint and the references. BDBV units run before German ones. Each caches one file per origin or date and resumes from it.
 - `score_table`: the rows of every checkpoint in `<SCORE_CACHE>/tables/`, keeping other rules' rows of the committed tables.
-- `land`: opt-in, commit the tables to `evidence/` and push.
+- `land`: opt-in, commit the tables to `evidence/` and push, only from the evidence branch (`score.branch`), never main.
 
 After each slots checkpoint's scores:
 
