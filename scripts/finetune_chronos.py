@@ -27,6 +27,7 @@ from bdbvhubrenewal.forecasters.base import NATIONAL
 from bdbvhubrenewal.forecasters.finetune import (
     AHEAD_WEEKS,
     BINNED,
+    MIXED,
     training_block,
     weekly_cutoffs,
 )
@@ -39,17 +40,37 @@ MAX_LAGS = {
     "weekly": tuple(range(2, 8)),
     "daily": tuple(range(14, 50)),
     "3day": tuple(range(5, 17)),
+    "daily+weekly": tuple(range(14, 50)),
+    "daily+3day": tuple(range(14, 50)),
 }
-"""Release lags $D$ the blocks are drawn from."""
+"""Release lags $D$ the blocks are drawn from; daily blocks with period
+totals have daily lags."""
 
 
-DAYS_PER_STEP = {"weekly": 7, "daily": 1, "3day": 3}
-"""Days in a step of each source; 3-day blocks train only."""
+DAYS_PER_STEP = {
+    "weekly": 7,
+    "daily": 1,
+    "3day": 3,
+    "daily+weekly": 1,
+    "daily+3day": 1,
+}
+"""Days in a step of each source."""
 
 
-SOURCES = ("weekly", "daily")
-"""Sources blocks are cut from; one of them trains an adapter for that
-source alone."""
+SOURCE_SHARES = {
+    "daily": 0.25,
+    "weekly": 0.25,
+    "3day": 0.15,
+    "daily+weekly": 0.25,
+    "daily+3day": 0.10,
+}
+"""Share of blocks of each layout, for one model of every frequency:
+daily, weekly and 3-day blocks, and daily blocks with each place's weekly
+or 3-day totals on period-end days (`finetune.MIXED`)."""
+
+
+SOURCES = tuple(SOURCE_SHARES)
+"""Sources blocks are cut from, drawn at `SOURCE_SHARES`."""
 
 
 def check_sources(sources: tuple[str, ...]) -> None:
@@ -61,7 +82,7 @@ def check_sources(sources: tuple[str, ...]) -> None:
     bad = [
         s
         for s in sources
-        if (s not in foundation.SOURCES and s not in BINNED)
+        if (s not in foundation.SOURCES and s not in BINNED and s not in MIXED)
         or s not in DAYS_PER_STEP
         or s not in MAX_LAGS
     ]
@@ -384,7 +405,8 @@ def outbreak_blocks(
             if block["start"] < 2:
                 continue
             padded = _pad(block, CONTEXT)
-            padded["levels"] = target_levels(places)
+            levels = target_levels(places)
+            padded["levels"] = tuple(levels[i] for i in block["target_places"])
             padded["places"] = tuple(places)
             padded["parent"] = parent
             padded["mix"] = mix

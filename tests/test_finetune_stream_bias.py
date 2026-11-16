@@ -163,3 +163,15 @@ def test_each_group_reports_its_current_rate_by_name():
         "lora": fs.learning_rate(25, 1e-5, 100),
         "bias": fs.learning_rate(25, 1e-3, 100),
     }
+
+
+def test_a_places_period_totals_row_is_in_its_place():
+    block = {
+        "n_targets": 6,
+        "n_covariates": 6,
+        "places": ("CD", "CD-NK", "CD-IT"),
+        "target_places": [0, 1, 2, 0, 1, 2],
+    }
+    place, parent = fs.block_rows([block])
+    assert list(place) == [0, 1, 2, 0, 1, 2, 0, 0, 1, 1, 2, 2]
+    assert list(parent) == [-1, 0, 0, -1, 0, 0, -1, -1, 0, 0, 0, 0]
