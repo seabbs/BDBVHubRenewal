@@ -614,8 +614,92 @@ def test_shifted_and_independent_delays_differ_by_place(level, tmp_path):
 @needs_r
 def test_delay_places_is_a_balanced_factor(tmp_path):
     out = run_r(
-        "f <- factors$delay_places\n"
-        'cat(f, block %% length(f), "\\n")',
+        'f <- factors$delay_places\ncat(f, block %% length(f), "\\n")',
         tmp_path,
     )
     assert out.split() == ["shared", "shifted", "independent", "0"]
+
+
+# Observation noise by stratum: each stratum's variance over mean across
+# draws of the same expected reports.
+OBS_STRATA = """
+draws <- 40L
+set.seed(5)
+d <- draw_design(1L)
+d$strata <- "places"; d$n_places <- 4L; d$n_ages <- 1L
+d$spread <- "even"; d$seeding <- "start"; d$place_rt <- "shared"
+d$mixing <- "none"; d$imports <- "none"; d$shocks <- "none"
+d$trajectory <- "flat"; d$delay_change <- "static"
+d$delay_form <- "parametric"; d$delay_family <- "lognormal"
+d$reporting <- "daily"; d$report_days <- "all"; d$delay_places <- "shared"
+d$observation <- "negbin"; d$obs_strata <- "{level}"
+v <- draw_values(d)
+v$weeks <- 16L; v$target_size <- 40000; v$quiet_places <- integer(0)
+v$delay_median <- 3; v$delay_sdlog <- 0.6; v$flat <- 0
+{set_values}
+out <- simulate_outbreak(d, v)
+c <- out$counts
+full <- CJ(location = unique(c$location), reference_date =
+  unique(c$reference_date), report_date = unique(c$report_date),
+  draw = seq_len(draws))
+c <- c[full, on = .(location, reference_date, report_date, draw)]
+c[is.na(count), count := 0L]
+s <- c[, .(m = mean(count), v = var(count)),
+  by = .(location, reference_date, report_date)][m > 20]
+r <- s[, .(ratio = median((v - m) / m^2)), by = location][order(location)]
+cat("excess", r$ratio, "\\n")
+cat("families", out$values$obs_family, "\\n")
+"""
+
+
+def _obs(level: str, set_values: str, tmp_path: Path) -> dict[str, list]:
+    out = run_r(
+        OBS_STRATA.replace("{level}", level).replace(
+            "{set_values}", set_values
+        ),
+        tmp_path,
+    )
+    rows = {}
+    for x in out.splitlines():
+        if x.startswith(("excess", "families")):
+            k, *vals = x.split()
+            rows[k] = vals
+    return rows
+
+
+@needs_r
+def test_dispersion_differs_by_stratum_as_set(tmp_path):
+    # sqrt_phi 0.1 (near Poisson) in places 1 and 3, 1 (phi = 1) in 2, 4.
+    rows = _obs("dispersion", "v$obs_sqrt_phi <- c(0.1, 1, 0.1, 1)", tmp_path)
+    excess = [float(x) for x in rows["excess"]]
+    assert len(excess) == 4
+    # NB2: (var - mean) / mean^2 is 1 / phi = sqrt_phi^2.
+    assert excess[1] > 0.6
+    assert excess[3] > 0.6
+    assert excess[0] < 0.1
+    assert excess[2] < 0.1
+
+
+@needs_r
+def test_families_differ_by_stratum_and_are_recorded(tmp_path):
+    rows = _obs(
+        "families",
+        'v$obs_family <- c("poisson", "negbin", "poisson", "negbin")\n'
+        "v$obs_sqrt_phi <- rep(1, 4)",
+        tmp_path,
+    )
+    excess = [float(x) for x in rows["excess"]]
+    assert rows["families"] == ["poisson", "negbin", "poisson", "negbin"]
+    assert abs(excess[0]) < 0.1
+    assert abs(excess[2]) < 0.1
+    assert excess[1] > 0.6
+    assert excess[3] > 0.6
+
+
+@needs_r
+def test_obs_strata_is_a_balanced_factor(tmp_path):
+    out = run_r(
+        'f <- factors$obs_strata\ncat(f, block %% length(f), "\\n")',
+        tmp_path,
+    )
+    assert out.split() == ["shared", "dispersion", "families", "0"]
