@@ -33,6 +33,7 @@ import hashlib
 import inspect
 import json
 import multiprocessing
+import shutil
 import subprocess
 import sys
 import time
@@ -604,18 +605,25 @@ def save_state(where: Path, model, optimiser, state: dict) -> None:
     torch.save(get_peft_model_state_dict(model), tmp / "adapter.pt")
     torch.save(optimiser.state_dict(), tmp / "optimiser.pt")
     (tmp / "state.json").write_text(json.dumps(state))
+    # The last state is kept until the new one is in place.
+    old = where.with_suffix(".old")
     if where.exists():
-        for f in where.iterdir():
-            f.unlink()
-        where.rmdir()
+        shutil.rmtree(old, ignore_errors=True)
+        where.rename(old)
     tmp.rename(where)
+    shutil.rmtree(old, ignore_errors=True)
 
 
 def load_state(where: Path, model, optimiser) -> dict | None:
-    """Load the trainer's saved state into the model and optimiser."""
+    """Load the trainer's saved state into the model and optimiser.
+
+    If a save stopped between its renames, the last state is in `.old`.
+    """
     import torch
     from peft import set_peft_model_state_dict
 
+    if not (where / "state.json").exists():
+        where = where.with_suffix(".old")
     if not (where / "state.json").exists():
         return None
     set_peft_model_state_dict(
@@ -659,9 +667,10 @@ def main() -> None:
     parser.add_argument("--cut-workers", type=int, default=3)
     args = parser.parse_args()
     out, sim_dir = args.out, args.sim_dir
-    # The commit this trainer runs, read once: the worktree may move on.
+    # The commit of the code this trainer runs.
     commit = subprocess.run(
         ["git", "rev-parse", "HEAD"],
+        cwd=Path(__file__).parent,
         capture_output=True,
         text=True,
         check=True,
