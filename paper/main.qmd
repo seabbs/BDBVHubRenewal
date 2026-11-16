@@ -70,7 +70,7 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
 
 ::: {.callout-note title="Plan"}
 - Chronos-2, given the reporting triangle as series: one series per place and reporting delay, each missing until reported. Introduced alongside the reporting triangle, with Figure 1B.
-- The fine-tuned model adds a learned series-identity slot embedding, so it can tell which lag series belong to which place. Each place's count series and its lag series share a slot. Slots are assigned by a random permutation in each training block, start at zero and are trained with the LoRA adapter.
+- Per-series slots: a learned slot embedding is shared by each place's count series and its lag series, so the model ties each place's covariates to its counts while seeing all places at once. Slots are assigned by random permutation in each training block, start at zero and are trained with the LoRA adapter.
 - Fine-tuned on synthetic data on a laptop from the base Chronos-2 weights, with Chronos-2's default LoRA settings and loss, a learning rate of $10^{-5}$ with linear decay, and a prediction length equal to each block's horizon.
 - Each simulation gives 10 observation draws, and each draw is cut at 16 dates, so one simulation gives 160 multivariate blocks. Single-stratum series cut from the same simulations are mixed in, so training sees multivariate and univariate series from one pool.
 - Training runs continuously up to 32,000 simulations, with a checkpoint published at every doubling from 1,000 (1,000, 2,000, 4,000, 8,000, 16,000 and 32,000).

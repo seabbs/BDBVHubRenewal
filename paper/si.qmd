@@ -42,8 +42,8 @@ One SI section per paper section.
 
 **Series slots.**
 Chronos-2's group attention has no notion of which series is which, so on its own it can link a lag series to its place's counts only by matching their values.
-The fine-tuned model adds a learned series-identity embedding, one per slot, so that series sharing a slot are marked as belonging together.
-Each place's count series and all its lag series share one slot, and the places of a block take distinct slots.
+The fine-tuned model adds a learned slot embedding, shared by each place's count series and its lag series.
+The places of a block take distinct slots, so the model ties each place's covariates to its counts while seeing all places at once.
 In each training block the places are assigned to slots by a random permutation, so a slot carries no meaning of its own beyond marking which series go together.
 The slot embeddings start at zero, so before training the model is base Chronos-2, and they are trained with the LoRA adapter under Chronos-2's fine-tuning recipe.
 
