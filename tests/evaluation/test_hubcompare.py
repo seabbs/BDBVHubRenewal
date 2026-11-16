@@ -152,6 +152,19 @@ def test_load_hub_submissions_keeps_latest_resubmission(
     assert (hub["value"].to_numpy() == expected).all()
 
 
+def test_load_hub_submissions_stops_on_repeated_samples(
+    tmp_path: Path,
+) -> None:
+    rows = _hub_rows()
+    out = tmp_path / "model-output" / "teamA-weekly"
+    out.mkdir(parents=True)
+    pd.concat([rows, rows]).to_csv(
+        out / "2026-10-24-teamA-weekly.csv", index=False
+    )
+    with pytest.raises(ValueError, match="teamA-weekly has"):
+        load_hub_submissions(tmp_path)
+
+
 def test_load_team_metadata(tmp_path: Path) -> None:
     _write_hub(tmp_path)
     meta = load_team_metadata(tmp_path)

@@ -372,6 +372,12 @@ def fetch_hub_submissions(  # pragma: no cover - network
 def load_hub_submissions(*roots: Path | str) -> pd.DataFrame:
     """Read the weekly-round sample forecasts in some directories.
 
+    A team may resubmit a round by adding a second forecast to the same
+    file with a later `forecast_date` (ACCIDDA-Chromantis did for
+    2026-11-14, in hub commit 555492761 "resubmission (forecast_date
+    2026-11-11)"). The resubmission supersedes the first, so only the
+    rows of a file's latest `forecast_date` are read.
+
     Parameters
     ----------
     *roots : pathlib.Path or str
@@ -383,6 +389,12 @@ def load_hub_submissions(*roots: Path | str) -> pd.DataFrame:
     pandas.DataFrame
         Columns `model`, `source` (`hub`), `reference_date`, `location`,
         `target_end_date`, `sample` and `value`.
+
+    Raises
+    ------
+    ValueError
+        If a model still has two rows of one round, place, week and
+        sample.
     """
     frames = []
     for root in roots:
@@ -394,6 +406,9 @@ def load_hub_submissions(*roots: Path | str) -> pd.DataFrame:
             ]
             if rows.empty:
                 continue
+            if "forecast_date" in rows:
+                dates = rows["forecast_date"].astype(str)
+                rows = rows.loc[dates == dates.max()]
             frames.append(
                 pd.DataFrame(
                     {
@@ -411,7 +426,17 @@ def load_hub_submissions(*roots: Path | str) -> pd.DataFrame:
             )
     if not frames:
         return pd.DataFrame(columns=list(SAMPLE_COLUMNS))
-    return pd.concat(frames, ignore_index=True)
+    out = pd.concat(frames, ignore_index=True)
+    keys = ["model", "reference_date", "location", "target_end_date", "sample"]
+    twice = out.duplicated(keys)
+    if twice.any():
+        first = out.loc[twice].iloc[0]
+        raise ValueError(
+            f"{first['model']} has {int(twice.sum())} repeated sample rows, "
+            f"such as round {first['reference_date']}, {first['location']}, "
+            f"week {first['target_end_date']}, sample {first['sample']}."
+        )
+    return out
 
 
 def load_team_metadata(root: Path | str) -> pd.DataFrame:
