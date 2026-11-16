@@ -48,6 +48,8 @@ MAILBOX = Path(
 BUDGET = Path.home() / ".claude/hooks/compute-budget.sh"
 POLL_SECONDS = 30 * 60
 TICK_SECONDS = 60
+PAUSE_SECONDS = 5 * 60
+"""How often a slots checkpoint's German run checks for a newer one."""
 MAX_UNITS = 3
 SCOPE_GB = 6
 UNIT_PEAK_GB = 5
@@ -98,14 +100,41 @@ COMPLETE_JOB = "complete-data reference"
 """The job that adds the complete-data models to the zero-shot reference."""
 
 
-def next_job(queue: list[str], complete_pending: bool) -> str | None:
-    """Return what to run next: slots checkpoints, then the complete-data
-    reference, then the no-slots checkpoints."""
+def next_job(
+    queue: list[str], complete_pending: bool, fresh: set[str] | None = None
+) -> str | None:
+    """Return what to run next.
+
+    Slots checkpoints whose held-out and BDBV units have not run
+    (`fresh`) first, then other slots checkpoints, then the complete-data
+    reference, then the no-slots checkpoints.
+    """
+    for label in queue:
+        if label.startswith("slots-") and label in (fresh or set()):
+            return label
     if queue and queue[0].startswith("slots-"):
         return queue[0]
     if complete_pending:
         return COMPLETE_JOB
     return queue[0] if queue else None
+
+
+def should_pause(current: str, slots: list[str], fresh: set[str]) -> bool:
+    """Whether to pause `current`'s German run for a newer slots
+    checkpoint whose held-out and BDBV units have not run."""
+    return any(lb != current and lb in fresh for lb in slots)
+
+
+def fresh_slots(cache: Path, labels: list[str]) -> set[str]:
+    """Return the slots labels whose held-out or BDBV unit is not done."""
+    return {
+        lb
+        for lb in labels
+        if lb.startswith("slots-")
+        and not all(
+            cs.unit_done(cache, study, lb) for study in ("heldout", "bdbv")
+        )
+    }
 
 
 def split_fast(
@@ -245,13 +274,36 @@ def launch(cache: Path, unit: tuple[str, str]) -> subprocess.Popen:
     )
 
 
-def run_units(cache: Path, units: list[tuple[str, str]], name: str) -> bool:
-    """Run the units not yet done, gated; return whether all finished."""
+def run_units(
+    cache: Path,
+    units: list[tuple[str, str]],
+    name: str,
+    pause: Any = None,
+    paused: list[str] | None = None,
+) -> bool:
+    """Run the units not yet done, gated; return whether all finished.
+
+    With `pause`, a callable checked every `PAUSE_SECONDS`, a True answer
+    stops the running units (their finished dates stay in the cache),
+    appends `name` to `paused` and returns False.
+    """
     pending = [u for u in units if not cs.unit_done(cache, *u)]
     total, ok = len(pending), True
     running: dict[tuple[str, str], subprocess.Popen] = {}
     waited = False
+    checked = time.monotonic()
     while pending or running:
+        if pause is not None and time.monotonic() - checked > PAUSE_SECONDS:
+            checked = time.monotonic()
+            if pause():
+                for proc in running.values():
+                    proc.terminate()
+                for proc in running.values():
+                    proc.wait()
+                log(f"progress: {name}: paused for a newer slots checkpoint")
+                if paused is not None:
+                    paused.append(name)
+                return False
         for unit, proc in list(running.items()):
             if proc.poll() is None:
                 continue
@@ -432,7 +484,8 @@ def main(cache: Path) -> None:
             log("progress: idle, every published checkpoint scored")
             time.sleep(POLL_SECONDS)
             continue
-        job = next_job(queue, not (cache / cs.COMPLETE_STAMP).exists())
+        fresh = fresh_slots(cache, queue)
+        job = next_job(queue, not (cache / cs.COMPLETE_STAMP).exists(), fresh)
         if job == COMPLETE_JOB:
             log(f"progress: {COMPLETE_JOB} started")
             units = [("bdbv", cs.COMPLETE_LABEL), ("germany", cs.COMPLETE_LABEL)]
@@ -462,7 +515,24 @@ def main(cache: Path) -> None:
                     say(f"bdbv-paper: {checkpoint} held-out and BDBV rows "
                         f"landed at {sha} on origin/{BRANCH}; German first "
                         "half follows, written per date to the cache")  # fmt: skip
-        if not run_units(cache, units, checkpoint):
+            # An older slots checkpoint's paused German run goes on first.
+            if queue[0] != checkpoint:
+                continue
+        paused: list[str] = []
+
+        def newer_slots(current: str = checkpoint) -> bool:
+            try:
+                labels = cs.checkpoint_queue(releases(), scored)
+            except (subprocess.CalledProcessError, ValueError):
+                return False
+            return should_pause(
+                current, labels, fresh_slots(cache, labels)
+            )
+
+        pause = newer_slots if checkpoint.startswith("slots-") else None
+        if not run_units(cache, units, checkpoint, pause, paused):
+            if paused:
+                continue
             failures[checkpoint] = failures.get(checkpoint, 0) + 1
             if failures[checkpoint] >= MAX_FAILURES:
                 say(f"FAILED scoring {checkpoint} twice; skipped until "
