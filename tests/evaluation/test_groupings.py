@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import functools
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -251,7 +253,7 @@ def test_checkpoint_rows_name_the_model_and_keep_the_reference_cells() -> None:
         "checkpoint",
         "slots_rule",
     ]
-    assert out["slots_rule"].tolist() == ["cased"]
+    assert out["slots_rule"].tolist() == ["cases-only"]
     assert out["target_date"].tolist() == ["2026-10-03"]
     assert out["model"].tolist() == [m]
     assert out["option"].tolist() == ["zones_copula"]
@@ -370,6 +372,51 @@ def test_slots_rule_of_each_row() -> None:
         }
     )  # fmt: skip
     assert slots_rule(rows, slots=True).tolist() == [
-        "cased", "all", "cased", "cased", "cased", "all",
+        "cases-only", "all", "cases-only", "cases-only", "cases-only", "all",
     ]  # fmt: skip
     assert set(slots_rule(rows, slots=False)) == {"none"}
+
+
+def test_slots_over_the_slots_follow_chronos_rows_with_hub_names() -> None:
+    # Chronos-2 stacks covariates by sorted name, and "-" sorts before
+    # "_": CD-KN's lags come before CD's. CD-EQ has no cases and no lags.
+    from bdbvhubrenewal.evaluation.groupings import cased_group_slots
+
+    names = ["CD_lag_0", "CD_lag_1", "CD-KN_lag_0", "CD-KN_lag_1"]
+    group = {
+        "target": np.array([[3.0] * 4, [1.0] * 4, [0.0] * 4]),
+        "past_covariates": {n: np.zeros(4) for n in names},
+        "future_covariates": {n: np.zeros(2) for n in names},
+        "places": ["CD", "CD-KN", "CD-EQ"],
+    }
+    ids = cased_group_slots(group, 2)
+    cd, kn, eq = ids[:3]
+    assert eq == -1
+    assert {cd, kn} == {0, 1}
+    assert ids[3:].tolist() == [kn, kn, cd, cd]
+
+
+def test_the_runner_checkpoint_overrides_the_pin(monkeypatch) -> None:
+    # config/finetune.toml pins 2c2b22a03107 on this branch; the runner's
+    # BDBV_CHRONOS_FT must win for every model and arm it fits.
+    from bdbvhubrenewal.evaluation import groupings
+    from bdbvhubrenewal.forecasters import foundation, get_model
+
+    @functools.cache
+    def fake(spec: str) -> foundation.Checkpoint:
+        return foundation.Checkpoint(spec, ())
+
+    label = "slots-0123456789ab"
+    monkeypatch.setenv(foundation.FINETUNED_ENV, label)
+    monkeypatch.setattr(foundation, "resolve_checkpoint", fake)
+    monkeypatch.setattr(groupings, "resolve_checkpoint", fake)
+    assert foundation.finetuned_spec() == label
+    for model in ("fm_chronos_daily_ragged_ft", "fm_chronos_weekly_ragged_ft"):
+        assert get_model(model).checkpoint.hash == label
+        for grouping in groupings.FITTED_GROUPINGS:
+            built = groupings.grouping_model(model, grouping, label)
+            assert built.checkpoint.hash == label
+            assert built.sample.keywords["checkpoint"].hash == label
+            assert built.sample.keywords["group_slots"] is (
+                groupings.cased_group_slots
+            )
