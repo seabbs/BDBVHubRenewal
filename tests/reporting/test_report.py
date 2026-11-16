@@ -214,6 +214,11 @@ def test_sampler_section() -> None:
         "target acceptance of 0.95" in text
     )
     assert "same as" not in text
+    thinned = {**base, "num_samples": 1500, "thinning": 2, "target_accept": 0.9}
+    assert (
+        "2 chains of 300 warm-up and 1500 draws, keeping 1 in 2, at a "
+        "target acceptance of 0.9" in report._settings_text(thinned)
+    )
     assert "renewalsp" in text
     assert report._sampler_section(fits.iloc[:0], settings) == ""
 

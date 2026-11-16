@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import replace
+from functools import partial
 from pathlib import Path
 from typing import Any
 
@@ -14,6 +15,7 @@ from bdbvhubrenewal.forecasters import (
     NATIONAL,
     ForecastModel,
     ForecastTask,
+    base,
     check_samples,
     get_model,
     list_models,
@@ -45,6 +47,25 @@ def quiet(task: ForecastTask, monkeypatch: pytest.MonkeyPatch) -> str:
     )
     monkeypatch.setattr(rn, "_silent_walk", lambda _: (rows, {place}))
     return place
+
+
+@pytest.fixture
+def province_fits(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Register province fits as `renewal` and `renewalbvd` for one test.
+
+    The zone fits (`forecasters.zonerenewal`) extend `RenewalModel`, so
+    these tests check its plumbing with its own `run` stubbed out.
+    """
+    for name in ("renewal", "renewalbvd"):
+        variant = rn.VARIANTS[name]
+        monkeypatch.setitem(base._REGISTRY, name, base._REGISTRY[name])
+        base.register_model(
+            name,
+            partial(rn.RenewalModel, variant),
+            variant.description,
+            fitted=True,
+            replace=True,
+        )
 
 
 def test_variants_are_registered_as_fitted_models() -> None:
@@ -240,6 +261,7 @@ def _fake_run(task: ForecastTask, variant: rn.Variant) -> rn.RenewalRun:
     )
 
 
+@pytest.mark.usefixtures("province_fits")
 def test_fit_renewal_writes_the_ci_contract(
     task: ForecastTask, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -352,6 +374,7 @@ def test_bvd_variant_reads_the_release_for_its_vintage(
     assert "renewalbvd" in {s.name for s in list_models()}
 
 
+@pytest.mark.usefixtures("province_fits")
 def test_bvd_fit_records_the_release_and_its_rhat(
     task: ForecastTask, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -406,6 +429,7 @@ def test_bvd_fit_records_the_release_and_its_rhat(
     assert "bvd" not in plain
 
 
+@pytest.mark.usefixtures("province_fits")
 def test_fit_records_the_posterior_draw_behind_each_trajectory(
     task: ForecastTask, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -497,7 +521,7 @@ def test_report_cutoffs_are_days_from_the_model_start(
     assert cuts == {(pd.Timestamp(last[d]) - start).days: d for d in last}
 
 
-@pytest.mark.usefixtures("quiet")
+@pytest.mark.usefixtures("quiet", "province_fits")
 @pytest.mark.parametrize("name", ["renewal", "renewalsp"])
 def test_forecast_gives_counts_as_reported_later(
     task: ForecastTask, monkeypatch: pytest.MonkeyPatch, name: str
@@ -518,6 +542,7 @@ def test_forecast_gives_counts_as_reported_later(
     assert "as_of" not in plain
 
 
+@pytest.mark.usefixtures("province_fits")
 def test_forecast_records_a_summary_of_each_fit(
     task: ForecastTask, monkeypatch: pytest.MonkeyPatch
 ) -> None:

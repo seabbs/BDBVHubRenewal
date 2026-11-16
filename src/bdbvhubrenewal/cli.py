@@ -83,6 +83,7 @@ from bdbvhubrenewal.forecasters.base import (
     list_models,
 )
 from bdbvhubrenewal.forecasters.renewal import DELAY_SUMMARY_FILE
+from bdbvhubrenewal.forecasters.zonerenewal import ZONES_FILE
 from bdbvhubrenewal.forecasters.zones import zones_for_model
 from bdbvhubrenewal.submission.fitting import (
     Forecast,
@@ -1155,11 +1156,28 @@ def _zones(
     task: ForecastTask,
     samples: pd.DataFrame,
     hub_config: Path,
+    own: pd.DataFrame | None = None,
 ) -> tuple[pd.DataFrame | None, str]:
     """Forecast the zones to sum to the provinces, or say why not.
 
-    The zones come from `zones_for_model`.
+    A model that forecast the zones itself (`own`: the zone renewal fits,
+    from the fit directory or the model) gives its zone samples, for the
+    hub's zones. Otherwise the zones come from `zones_for_model`.
+    Zone samples with none of the hub's zones or target dates (a stale
+    `ZONES_FILE`) give no zones, and a note.
     """
+    if own is not None:
+        codes = set(hub_zones(hub_config))
+        own = own.loc[
+            own["location"].isin(codes)
+            & own["target_end_date"].astype(str).isin(task.target_end_dates)
+        ]
+        if own.empty:
+            return None, (
+                "the fit's zone samples have none of the hub's zones or "
+                "target dates, so the file has no health zones"
+            )
+        return own.reset_index(drop=True), ""
     try:
         daily = load_daily_zones(args.data)
     except OSError:
@@ -1183,16 +1201,21 @@ def _nowcast(args: argparse.Namespace) -> int:
     checkpoint = None
     try:
         task, handled = _task(args)
+        own = None
         if args.config:
             config = get_config(args.config)
             result = run_forecast(config, task, args.fit)
+            own_file = Path(args.fit) / ZONES_FILE
+            if own_file.exists():
+                own = pd.read_csv(own_file, dtype={"target_end_date": str})
         else:
             model = get_model(args.model)
             checkpoint = getattr(model, "checkpoint", None)
             samples = model.forecast(task)
             check_samples(samples, task)
             result = Forecast(samples)
-        zones, zone_note = _zones(args, task, result.samples, hub_config)
+            own = getattr(model, "zone_samples", None)
+        zones, zone_note = _zones(args, task, result.samples, hub_config, own)
         if zone_note:
             handled.append(zone_note)
         table = to_hub_table(

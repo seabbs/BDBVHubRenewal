@@ -32,7 +32,8 @@ It runs by province and health zone, and the national value is the sum of the pr
 `randomwalk` is the same walk with no nowcast.
 `pprandomwalknowcast` is a generative variant in the style of epinowcast, with the delay and the walk fitted jointly and partially pooled over places, and is not submitted.
 The renewal models are built on [PyRenew](https://github.com/CDCgov/PyRenew) and model daily symptom onsets, with a learnt onset-to-report delay and the hub's imputation of missing onsets.
-`renewal` fits the provinces together, with a pooled Rt and importation between provinces through a gravity kernel.
+`renewal` fits the health zones together, nested in their provinces, with a pooled Rt and importation between zones through a gravity kernel.
+Its provinces are the sums of its zones.
 `renewalsp` fits the same model to each province on its own, with no pooling or importation.
 `renewalbvd` is `renewal` with the BVDOutbreakSize Rt estimates added to the fit.
 `seabbs-renewal` submits the first model in the chain in `ci/policy.toml` that passes its checks, starting with `renewalbvd`.

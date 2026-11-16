@@ -10,6 +10,8 @@
   the PyRenew model in `bdbvhubrenewal.model`.
 - `foundation`: the pretrained Chronos-2 model on two layouts of the hub
   target's releases.
+- `zonerenewal`: `renewal` and `renewalbvd` fitted on health zones, with
+  provinces the zone sums; registered in place of their province fits.
 - `zones`: health-zone forecasts split from any model's province samples.
 
 Importing this package registers the built-in models.
@@ -37,6 +39,7 @@ from bdbvhubrenewal.forecasters.randomwalk import (
     RandomWalkNowcast,
 )
 from bdbvhubrenewal.forecasters.renewal import VARIANTS, RenewalModel
+from bdbvhubrenewal.forecasters.zonerenewal import ZoneRenewalModel
 
 __all__ = [
     "NATIONAL",
@@ -51,6 +54,7 @@ __all__ = [
     "RandomWalk",
     "RandomWalkNowcast",
     "RenewalModel",
+    "ZoneRenewalModel",
     "add_national",
     "check_samples",
     "get_model",

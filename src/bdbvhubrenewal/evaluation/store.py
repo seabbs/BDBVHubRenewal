@@ -13,10 +13,11 @@ branch, one file per fit:
 The key (`fit_key`) hashes only what reaches a fit: the task at the
 origin, which holds only the releases up to the origin; the built model,
 whose representation gives its variant and resolved sampler settings;
-the BVDOutbreakSize release a BVD model uses; the code the model's fit
-can run (`fit_code`, without docstrings or comments, and
-`run_forecasts`), less the zone split, which runs at load; and the
-runtime dependencies locked in `uv.lock`.
+the BVDOutbreakSize release a BVD model uses; data a model reads beside
+the task (`fit_inputs`, the zone fits' zone data up to the origin); the
+code the model's fit can run (`fit_code`, without docstrings or
+comments, and `run_forecasts`), less the zone backtest; the package data
+files; and the runtime dependencies locked in `uv.lock`.
 A new release adds one fit per model and leaves the older ones valid,
 while a change to a model's code or settings refits every origin of the
 models that run it, and no other.
@@ -81,6 +82,7 @@ __all__ = [
     "STORE_ENTRIES",
     "STORE_SKIP",
     "UNPACKED_FILE",
+    "ZONE_FITS_FILE",
     "StoreStatus",
     "StoredFit",
     "build_model",
@@ -112,16 +114,14 @@ STORE_ENTRIES: Final = (
 STORE_SKIP: Final = (
     "src/bdbvhubrenewal/evaluation/digest.py",
     "src/bdbvhubrenewal/evaluation/zones.py",
-    "src/bdbvhubrenewal/forecasters/zones.py",
     "src/bdbvhubrenewal/reporting/plots.py",
 )
 """Modules `STORE_ENTRIES` import but a fit does not call.
 
-The zone split: a stored fit holds national and province samples only,
-and its zones are split from them at load
-(`forecasters.zones.zones_for_model`). `fit_code`'s own helper
-(`evaluation.digest`), and the plots `evaluation.ppc` imports for
-`plot_ppc`, which a fit does not draw.
+The zone backtest, which a fit does not run (the zone fits of `renewal`
+and `renewalbvd` call `forecasters.zones`, so it is in their keys only),
+`fit_code`'s own helper (`evaluation.digest`), and the plots
+`evaluation.ppc` imports for `plot_ppc`, which a fit does not draw.
 """
 
 STORE_DATA: Final = "src/bdbvhubrenewal/data/*.csv"
@@ -131,6 +131,11 @@ them."""
 
 STATUS_FILE: Final = "fit-store.json"
 """What `load` used, written beside the results for the docs."""
+
+ZONE_FITS_FILE: Final = "zone-fits.csv.gz"
+"""The zone samples of the stored zone fits, which `load` writes beside
+the results: `model`, `vintage`, `location`, `target_end_date`, `sample`
+and `value`."""
 
 UNPACKED_FILE: Final = "store.json"
 """Which stored fit `unpack` wrote, in the fit directory."""
@@ -412,6 +417,10 @@ def fit_key(model: ForecastModel, task: ForecastTask, code: str) -> str:
         "code": code,
         "bvd": _bvd_tag(model, task),
     }
+    # Data a model reads beside the task (the zone fits' zone data).
+    inputs = getattr(model, "fit_inputs", None)
+    if inputs is not None:
+        head["inputs"] = inputs(task)
     digest.update(json.dumps(head, sort_keys=True).encode())
     for f in fields(task):
         value = getattr(task, f.name)
@@ -868,8 +877,9 @@ def load(
     Every origin goes to `forecasts.csv.gz`, from `min_horizon` to
     `max_horizon`: a stored fit holds the submission's weeks, which start
     earlier and end later.
-    Fit summaries go to `backtest-fits.csv` and learnt delays to
-    `delay-summary.csv`. Each file keeps the rows of models not stored.
+    Fit summaries go to `backtest-fits.csv`, learnt delays to
+    `delay-summary.csv` and the zone fits' final-count zone samples to
+    `ZONE_FITS_FILE`. Each file keeps the rows of models not stored.
     What was used is written to `STATUS_FILE`.
 
     Parameters
@@ -922,12 +932,32 @@ def load(
         ("forecasts.csv.gz", forecasts),
         ("backtest-fits.csv", [f.fits for f in loaded]),
         (DELAY_SUMMARY_FILE, [f.delays for f in loaded]),
+        (ZONE_FITS_FILE, [_zone_samples(f) for f in loaded]),
     ):
         _merge(out / name, frames)
     (out / STATUS_FILE).write_text(
         json.dumps([vars(s) for s in status], indent=1) + "\n"
     )
     return status
+
+
+def _zone_samples(fit: StoredFit) -> pd.DataFrame:
+    """Return a stored zone fit's final-count zone samples, else none."""
+    from bdbvhubrenewal.forecasters.zonerenewal import ZONES_FILE
+
+    body = fit.files.get(ZONES_FILE)
+    if body is None:
+        return pd.DataFrame()
+    zones = pd.read_csv(
+        io.BytesIO(base64.b64decode(body)),
+        compression="gzip",
+        dtype={"target_end_date": str},
+    )
+    if "as_of" in zones:
+        zones = zones.loc[zones["as_of"].isna()].drop(columns="as_of")
+    return zones.assign(
+        model=fit.meta["model"], vintage=fit.meta["origin"]
+    ).reset_index(drop=True)
 
 
 def _merge(path: Path, frames: Iterable[pd.DataFrame]) -> None:

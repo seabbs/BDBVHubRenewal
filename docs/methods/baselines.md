@@ -368,7 +368,7 @@ Later weeks continue the walk from the draw's last $\lambda$ with its $\sigma_p$
 Weeks before the 16 fitted weeks are the counts reported.
 National is the sum of the provinces by sample.
 In the zone backtest it also runs on the zones, which are reconciled to its provinces as for `randomwalknowcast` ([Health zones](#health-zones)).
-Elsewhere, as in the hub tables, its province samples are split across the zones as for the renewal models ([Renewal models](model.md#split-of-province-samples)).
+Elsewhere, as in the hub tables, its province samples are split across the zones as for `renewalsp` ([Renewal models](model.md#split-of-province-samples)).
 
 **Silent places.**
 A silent leaf has no case to fit, and a walk from a $\lambda$ near 0 gave divergent draws.
