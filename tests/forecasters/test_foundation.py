@@ -268,6 +268,35 @@ def test_draws_are_paired_by_the_copula(name: str, task: ForecastTask) -> None:
         assert wide[last].std() > 1.1 * flat[last].std()
 
 
+def test_own_quantiles_are_not_paired(
+    task: ForecastTask, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Path k of the native sampler is the quantile at level k, so pairing
+    # must not reorder the paths: each cell's quantiles rise with level.
+    def native(levels, checkpoint=None):  # noqa: ARG001
+        def sample(groups, horizon, n, seed):  # noqa: ARG001
+            k = np.arange(len(levels), dtype=float)[:, None, None]
+            return [
+                np.broadcast_to(
+                    1e5 * (1 + k),
+                    (len(levels), np.atleast_2d(g["target"]).shape[0], horizon),
+                ).copy()
+                for g in groups
+            ]
+
+        return sample
+
+    monkeypatch.setattr(foundation, "native_sampler", native)
+    model = get_model("fm_chronos_weekly_ragged")
+    out = model.quantiles(task, [0.1, 0.5, 0.9])
+    assert out is not None
+    by_cell = out.sort_values("quantile").groupby(
+        ["location", "target_end_date"]
+    )["value"]
+    assert by_cell.apply(lambda v: v.is_monotonic_increasing).all()
+    assert (by_cell.nunique() == 3).all()
+
+
 @pytest.mark.parametrize("name", MODELS)
 def test_paired_forecasts_are_reproducible(
     name: str, task: ForecastTask
