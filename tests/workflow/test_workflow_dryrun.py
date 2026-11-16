@@ -299,3 +299,45 @@ def test_at_most_two_simulations_run_at_once(tmp_path):
     )
     assert out.returncode == 0, out.stderr + out.stdout
     assert "sim_slots=1" in out.stdout
+
+
+def test_a_failed_run_posts_a_mailbox_line(tmp_path):
+    # A real run of one local rule that fails: n1000_check on settings
+    # with no losses.
+    box = tmp_path / "box.md"
+    _local(tmp_path, "NOTIFY=1", f"MAILBOX={box}")
+    n1000 = tmp_path / "checkpoints" / "slots" / "train" / "n1000"
+    n1000.mkdir(parents=True)
+    (n1000 / "settings.json").write_text("{}")
+    target = tmp_path / "checkpoints" / "slots" / "reports" / "n1000-check.txt"
+    out = subprocess.run(
+        [
+            str(SNAKEMAKE),
+            str(target),
+            "--cores",
+            "1",
+            "--workflow-profile",
+            "workflow/profiles/ci",
+        ],
+        cwd=ROOT,
+        env={
+            "PATH": str(SNAKEMAKE.parent) + ":/usr/bin:/bin",
+            "HOME": str(tmp_path),
+            "LOCAL_CONFIG": str(tmp_path / "local.env"),
+        },
+        capture_output=True,
+        text=True,
+    )
+    assert out.returncode != 0
+    line = box.read_text()
+    assert "FAILED" in line
+    assert ".snakemake/log/" in line
+
+
+def test_the_check_follows_the_configured_prefix(tmp_path):
+    config = {
+        **FT,
+        "finetune": {**FT["finetune"], "check_at": 500},
+    }
+    jobs = dry(tmp_path, "finetune", config=config)
+    assert jobs["checkpoint_check"] == 1
