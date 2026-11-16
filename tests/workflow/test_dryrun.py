@@ -185,3 +185,14 @@ def test_finished_units_are_kept(tmp_path):
     config = {"score": {"labels": ["aaa"]}}
     jobs = dry(tmp_path, "score", config=config)
     assert jobs["score_bdbv"] == 1
+
+
+def test_score_runs_the_follow_ups_of_slots_checkpoints_only(tmp_path):
+    config = {"score": {"labels": ["slots-aaa", "bbb"]}}
+    jobs = dry(tmp_path, "score", config=config)
+    assert jobs["slots_check_shard"] == 2
+    assert jobs["slots_check_summary"] == 1
+    assert jobs["agg_fit"] == 2
+    assert jobs["agg_rows"] == 1
+    assert jobs["agg_sanity"] == 1
+    assert jobs["fetch_adapter"] == 1

@@ -67,3 +67,26 @@ score:
   # The evidence tables the scores merge into, kept rows of other rules.
   evidence: evidence/checkpoint-scores.csv
   checkpoints: evidence/checkpoints.csv
+
+slots_check:
+  # Each slots checkpoint against zero-shot Chronos-2 and the no-slots
+  # checkpoint of its size (scripts/slots_check.py), in `shards` parts.
+  run: true
+  shards: 2
+  mem_mb: 6144
+
+agg:
+  # The aggregation arms of each slots checkpoint (scripts/agg/), as
+  # scripts/agg/run_finetuned.sh ran them: data pinned to the hub at
+  # `hub_ref`, the models' fits at the BDBV origins and every German
+  # development date (`dates: []`), the paired arm, scores and rows.
+  run: true
+  hub_ref: ad1bb4af13bf
+  models: [fm_chronos_daily_ragged_ft, fm_chronos_weekly_ragged_ft]
+  origins: ["2026-10-09", "2026-10-17", "2026-10-24", "2026-11-01"]
+  dates: []
+  # The zero-shot rows the sanity check reproduces, and the table the
+  # checkpoint's rows join.
+  zero_shot: origin/evidence/fm-agg:results/agg/aggregation-scores.csv.gz
+  existing: results/agg/aggregation-scores.csv.gz
+  mem_mb: 6144

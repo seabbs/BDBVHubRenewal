@@ -147,3 +147,4 @@ rule land:
 rule score:
     input:
         rules.score_table.output,
+        lambda wc: followups(wc),
