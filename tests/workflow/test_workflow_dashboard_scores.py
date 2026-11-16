@@ -100,3 +100,35 @@ def test_the_first_scored_run_and_the_references_are_shown_first():
     rows = [_row("fm_chronos_daily_ragged_ft", "realdata-ft-bbbbbb", n="0")]
     got = scores.payload(rows, rs, refs, RULE, local=[])
     assert got["defaults"] == ["realdata", "zero", "rw"]
+
+
+def test_reference_roles_go_to_the_page():
+    rs = runs.load_runs([], "a=a-", [])
+    refs = runs.load_references(
+        [
+            {
+                "key": "base",
+                "label": "b",
+                "colour": "#1",
+                "model": "^rw$",
+                "role": "baseline",
+            },
+            {
+                "key": "zs",
+                "label": "z",
+                "colour": "#2",
+                "model": "x",
+                "checkpoint": "zero-shot",
+                "role": "start",
+            },
+            {"key": "other", "label": "o", "colour": "#3", "model": "y"},
+        ],
+        ["extra=z,role=start"],
+    )
+    got = scores.payload([], rs, refs, RULE, local=[])
+    assert got["roles"] == {
+        "base": "baseline",
+        "zs": "start",
+        "other": "other",
+        "extra": "start",
+    }
