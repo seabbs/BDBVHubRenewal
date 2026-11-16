@@ -52,7 +52,7 @@ Chronos-2's group attention has no notion of which series is which, so on its ow
 - We identify places by name within each block, with no limit on the number of places.
 - A place's parent is the nearest prefix of its name in the block, else the country.
 - Training blocks include countries equal to, above or later than the sum of their places, so a place belongs to its parent without summing to it.
-- Moirai's any-variate attention uses a related learned bias for whether two tokens belong to the same variate [@Woo2024].
+- We build on Moirai's any-variate attention, which learns a bias per layer and head for whether two tokens belong to the same variate [@Woo2024].
 
 **Training blocks.**
 A simulation gives daily counts by onset and report date, and a release counts every case reported by its cut-off, one cut-off a week.
