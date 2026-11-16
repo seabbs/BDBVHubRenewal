@@ -112,14 +112,15 @@ def coverage_column(width: float) -> str:
     return f"coverage_{round(width * 100):d}"
 
 
+def _by_width(columns) -> list[str]:
+    """Return the coverage columns among `columns`, narrowest first."""
+    cols = [c for c in columns if c.startswith("coverage_")]
+    return sorted(cols, key=lambda c: int(c.split("_")[1]))
+
+
 def coverage_columns(scores: pd.DataFrame) -> list[str]:
     """Return the coverage columns with any value, narrowest first."""
-    cols = [
-        c
-        for c in scores.columns
-        if c.startswith("coverage_") and scores[c].notna().any()
-    ]
-    return sorted(cols, key=lambda c: int(c.split("_")[1]))
+    return [c for c in _by_width(scores.columns) if scores[c].notna().any()]
 
 
 # --------------------------------------------------------------------------
@@ -293,11 +294,7 @@ def score_forecasts(
         return pd.DataFrame(columns=[*keys, "truth", "metric", *SCORE_COLUMNS])
     out = pd.concat(parts, ignore_index=True)
     columns = [*keys, "truth", "metric", *SCORE_COLUMNS]
-    cover = sorted(
-        (c for c in out.columns if c.startswith("coverage_")),
-        key=lambda c: int(c.split("_")[1]),
-    )
-    out = out.loc[:, [*columns, *cover]]
+    out = out.loc[:, [*columns, *_by_width(out.columns)]]
     return out.sort_values(keys, ignore_index=True)
 
 
