@@ -63,8 +63,8 @@ ARMS: Final = {
 OPTIONS: Final = {
     "joint": "Joint block",
     "level": "Level by level",
-    "zones_summed": "Zones summed",
-    "zones_copula": "Zones summed after pairing",
+    "zones_summed": "Lowest level summed",
+    "zones_copula": "Lowest level summed after pairing",
 }
 """Aggregation options, in table order."""
 
