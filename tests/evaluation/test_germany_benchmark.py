@@ -14,6 +14,7 @@ from bdbvhubrenewal.evaluation.germany import (
     PAPER_COLUMNS,
     QUANTILE_LEVELS,
     SCORE_COLUMNS,
+    asof_sums,
     germany_forecasts,
     load_germany_config,
     nowcast_dates,
@@ -264,3 +265,20 @@ def test_paper_table_follows_the_paper_schema(
     )
     assert (days.dt.days == paper["horizon"]).all()
     assert len(paper) == len(forecasts)
+
+
+def test_asof_sums_are_the_data_each_nowcast_date_saw(
+    triangle: pd.DataFrame,
+) -> None:
+    got = asof_sums(triangle, ["2021-10-04"], weeks=1)
+    assert set(got.columns) == {
+        "origin", "location", "target_end_date", "total"
+    }  # fmt: skip
+    assert got["target_end_date"].min() == "2021-09-27"
+    assert got["target_end_date"].max() == "2021-10-04"
+    ends = sorted(set(got["target_end_date"]))
+    want = hub_target(triangle, ends)
+    want = want.loc[want["vintage"] == "2021-10-04"]
+    both = got.merge(want, on=["location", "target_end_date"])
+    assert len(both) == len(got) == len(want)
+    assert (both["total_x"] == both["total_y"]).all()

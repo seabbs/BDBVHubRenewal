@@ -17,6 +17,7 @@ and the fit store stores it as failed.
 
 from __future__ import annotations
 
+import contextlib
 import datetime as dt
 import hashlib
 import http.client
@@ -24,6 +25,7 @@ import json
 import os
 import shutil
 import tempfile
+import time
 import tomllib
 import urllib.request
 from collections.abc import Callable, Mapping, Sequence
@@ -37,6 +39,7 @@ import pandas as pd
 
 from bdbvhubrenewal.data.dates import as_date, epiweek_end
 from bdbvhubrenewal.data.zones import province_of, weekly_zone_counts
+from bdbvhubrenewal.forecasters import slots
 from bdbvhubrenewal.forecasters.base import (
     NATIONAL,
     SAMPLE_COLUMNS,
@@ -54,11 +57,13 @@ __all__ = [
     "CHRONOS_REVISION",
     "FINETUNED_CACHE",
     "FINETUNED_CONFIG",
+    "FINETUNED_ENV",
     "FINETUNED_RELEASES",
     "FINETUNED_URL",
     "GROUPINGS",
     "LAYOUTS",
     "MAX_LAG",
+    "SLOTS_PREFIX",
     "SOURCES",
     "SUMS_FILE",
     "Checkpoint",
@@ -72,6 +77,7 @@ __all__ = [
     "hub_triangle",
     "layout_block",
     "quantile_draws",
+    "release_tag",
     "resolve_checkpoint",
 ]
 
@@ -112,8 +118,15 @@ FINETUNED_RELEASES: Final = (
 )
 """The repository's releases, listed to find the latest checkpoint."""
 
+FINETUNED_ENV: Final = "BDBV_CHRONOS_FT"
+"""Environment variable with the settings hash a run resolved once, which
+then overrides `FINETUNED_CONFIG`, so its jobs never list the releases."""
+
 SUMS_FILE: Final = "sha256sums.txt"
 """A checkpoint release's asset with the SHA-256 of its other assets."""
+
+RETRY_SECONDS: Final = (2, 10, 30)
+"""Waits before each retry of a GitHub request that failed in passing."""
 
 ADAPTER_FILES: Final = ("adapter_config.json", "adapter_model.safetensors")
 """The LoRA adapter's files. A checkpoint's release holds them and its
@@ -122,6 +135,23 @@ ADAPTER_FILES: Final = ("adapter_config.json", "adapter_model.safetensors")
 FINETUNED_CACHE: Final = "~/.cache/bdbvhubrenewal"
 """Directory each downloaded checkpoint is kept in, as
 `chronos-ft-<hash>`."""
+
+SLOTS_PREFIX: Final = "slots-"
+"""Prefix of the spec of a checkpoint with per-series slots
+(`forecasters.slots`). Such a checkpoint is released as
+`chronos-slots-<hash>`, so the `latest` lookup, which takes only
+`chronos-ft-*` releases, never gives it to code without slots."""
+
+
+def release_tag(spec: str) -> str:
+    """Return the release tag of a checkpoint.
+
+    `chronos-ft-<hash>`, or `chronos-slots-<hash>` for `slots-<hash>`.
+    """
+    if spec.startswith(SLOTS_PREFIX):
+        return f"chronos-{spec}"
+    return f"chronos-ft-{spec}"
+
 
 Series = Mapping[str, Any]
 """One group for Chronos-2: `target` `[V, S]`, and optionally
@@ -149,6 +179,8 @@ class Checkpoint:
 def finetuned_spec(path: Path | str = FINETUNED_CONFIG) -> str:
     """Return the checkpoint the `_ft` models load: `"latest"` or a hash.
 
+    `FINETUNED_ENV`, when set, overrides the file.
+
     Parameters
     ----------
     path : pathlib.Path or str
@@ -158,17 +190,57 @@ def finetuned_spec(path: Path | str = FINETUNED_CONFIG) -> str:
     -------
     str
     """
+    if os.environ.get(FINETUNED_ENV):
+        return os.environ[FINETUNED_ENV]
     return str(tomllib.loads(Path(path).read_text())["hash"])
 
 
+def _passing(err: BaseException) -> bool:
+    """Whether a failed request may succeed if tried again."""
+    if isinstance(err, urllib.error.HTTPError):
+        return err.code >= 500 or err.code == 429
+    if isinstance(err, urllib.error.URLError):
+        return not isinstance(err.reason, FileNotFoundError)
+    return isinstance(err, (OSError, http.client.HTTPException))
+
+
+def _missing(err: BaseException) -> bool:
+    """Whether a failed request means the file is not there (a 404)."""
+    if isinstance(err, urllib.error.HTTPError):
+        return err.code == 404
+    reason = getattr(err, "reason", None)
+    return isinstance(err, FileNotFoundError) or isinstance(
+        reason, FileNotFoundError
+    )
+
+
+def _unreachable(url: str, err: BaseException) -> ConnectionError:
+    """Return the error for a request refused or dropped, not missing."""
+    return ConnectionError(
+        f"Cannot read {url}: {err!r}. If GitHub is rate limiting, set "
+        "GH_TOKEN or GITHUB_TOKEN to a GitHub token."
+    )
+
+
 def _get(url: str) -> bytes:
-    """Read a URL, with a GitHub token from the environment if there is one."""
+    """Read a URL, with a GitHub token from the environment if there is one.
+
+    A server error or a dropped connection is tried again after each of
+    `RETRY_SECONDS`.
+    """
     request = urllib.request.Request(url)
     token = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")
     if token and url.startswith("https://api.github.com/"):
         request.add_header("Authorization", f"Bearer {token}")
-    with urllib.request.urlopen(request, timeout=60) as response:
-        return bytes(response.read())
+    for wait in (*RETRY_SECONDS, None):
+        try:
+            with urllib.request.urlopen(request, timeout=60) as response:
+                return bytes(response.read())
+        except (OSError, http.client.HTTPException) as err:
+            if wait is None or not _passing(err):
+                raise
+            time.sleep(wait)
+    raise AssertionError("unreachable")
 
 
 def finetuned_releases() -> list[dict[str, Any]]:
@@ -193,7 +265,9 @@ def finetuned_releases() -> list[dict[str, Any]]:
         except (OSError, http.client.HTTPException) as err:
             raise ConnectionError(
                 f"Cannot list the releases at {url} to find the fine-tuned "
-                f"checkpoint: {err!r}"
+                f"checkpoint: {err!r}. Set GH_TOKEN or GITHUB_TOKEN to a "
+                "GitHub token (anonymous requests are rate limited), or "
+                f"set {FINETUNED_ENV} to a settings hash."
             ) from err
         out += batch
         if len(batch) < 100:
@@ -241,25 +315,22 @@ def resolve_checkpoint(spec: str) -> Checkpoint:
         if not tags:
             raise LookupError("No chronos-ft-* release holds a checkpoint.")
         checkpoint = tags[-1][1].removeprefix("chronos-ft-")
-    tag = f"chronos-ft-{checkpoint}"
+    tag = release_tag(checkpoint)
     url = f"{FINETUNED_URL}/{tag}/{SUMS_FILE}"
     try:
         text = _get(url).decode()
     except (OSError, http.client.HTTPException) as err:
-        # A release with no such asset: 404 from GitHub, or no file.
-        reason = getattr(err, "reason", None)
-        if getattr(err, "code", None) == 404 or isinstance(
-            reason, FileNotFoundError
-        ):
+        if _missing(err):
             raise FileNotFoundError(
                 f"The release {tag} has no {SUMS_FILE} ({url})."
             ) from err
-        raise ConnectionError(f"Cannot read {url}: {err!r}") from err
+        raise _unreachable(url, err) from err
     sums = {}
     for line in text.splitlines():
-        if line.strip():
-            sha, name = line.split(maxsplit=1)
-            sums[name.lstrip("*").strip()] = sha
+        parts = line.split(maxsplit=1)
+        # A line that is not `<sha> <name>` is left to the check below.
+        if len(parts) == 2:
+            sums[parts[1].lstrip("*").strip()] = parts[0]
     missing = [f for f in ADAPTER_FILES if f not in sums]
     if missing:
         raise ValueError(
@@ -366,7 +437,6 @@ def hub_triangle(
     partial = np.full((len(places), n_times, lags), np.nan)
     final = np.zeros((len(places), n_times))
     last = 0
-    # The latest release gives the final counts and the last step.
     for release in sorted(set(rows["vintage"])):
         mine = (rows["vintage"] == release).to_numpy()
         cutoff = str(rows.loc[mine, "cutoff"].iloc[0])
@@ -381,6 +451,7 @@ def hub_triangle(
         for d in range(lags):
             if 0 <= at - d < n_times:
                 partial[:, at - d, d] = counts[:, at - d]
+        # Sorted, so the last release's counts and cut-off are the latest.
         final, last = counts, at
     return HubTriangle(times, final, partial, last)
 
@@ -438,13 +509,14 @@ def finetuned_adapter(checkpoint: Checkpoint) -> Path:
     Raises
     ------
     FileNotFoundError
-        If an asset cannot be downloaded, whether it is missing or the
-        connection fails.
+        If the release has no such asset.
+    ConnectionError
+        If GitHub refuses the request or the connection fails.
     ValueError
         If the release's settings hash or an adapter file's SHA-256 is not
         the checkpoint's.
     """
-    tag = f"chronos-ft-{checkpoint.hash}"
+    tag = release_tag(checkpoint.hash)
     cache = Path(FINETUNED_CACHE).expanduser()
     out = cache / tag
     if out.is_dir():
@@ -462,14 +534,15 @@ def finetuned_adapter(checkpoint: Checkpoint) -> Path:
         for name in (*ADAPTER_FILES, "settings.json"):
             url = f"{FINETUNED_URL}/{tag}/{name}"
             try:
-                with urllib.request.urlopen(url, timeout=60) as response:
-                    (tmp / name).write_bytes(response.read())
+                (tmp / name).write_bytes(_get(url))
             except (OSError, http.client.HTTPException) as err:
-                raise FileNotFoundError(
-                    f"The release {tag} has no {name} ({url}): {err!r}"
-                ) from err
+                if _missing(err):
+                    raise FileNotFoundError(
+                        f"The release {tag} has no {name} ({url})."
+                    ) from err
+                raise _unreachable(url, err) from err
         found = json.loads((tmp / "settings.json").read_text()).get("hash")
-        if found != checkpoint.hash:
+        if found != checkpoint.hash.removeprefix(SLOTS_PREFIX):
             raise ValueError(
                 f"The release {tag} holds the checkpoint with settings "
                 f"hash {found}."
@@ -510,10 +583,8 @@ def _chronos(checkpoint: Checkpoint | None = None) -> Any:
     )
     if adapter is None:
         return pipeline
-    from peft import PeftModel
-
-    model = PeftModel.from_pretrained(pipeline.model, adapter)
-    return Chronos2Pipeline(model=model.merge_and_unload())
+    # Slots, if the adapter holds them, load with it.
+    return Chronos2Pipeline(model=slots.load_adapter(pipeline.model, adapter))
 
 
 def chronos_sampler(
@@ -553,21 +624,41 @@ def chronos_sampler(
     ImportError
         If Chronos-2 is not installed (`uv sync --group chronos`).
     FileNotFoundError
-        If the checkpoint's release cannot be downloaded.
+        If the checkpoint's release has no such asset.
+    ConnectionError
+        If GitHub cannot be reached.
     ValueError
         If the release holds another checkpoint or adapter.
     """
     pipeline = _chronos(checkpoint)
     levels = np.asarray(pipeline.quantiles, dtype=float)
     rng = np.random.default_rng(seed)
+    model = getattr(pipeline, "model", None)
+    n_slots = (
+        slots.n_slots(model)
+        if model is not None and slots.has_slots(model)
+        else None
+    )
     out = []
     # Chronos-2 takes groups of one size per call, so each is its own.
+    # With slots, each place's series share the slot drawn with the fixed
+    # seed, as in held-out losses; each group is one batch.
     for g in groups:
-        (q,), _ = pipeline.predict_quantiles(
-            [dict(g)],
-            prediction_length=horizon,
-            quantile_levels=levels.tolist(),
-        )
+        ctx: contextlib.AbstractContextManager[None] = contextlib.nullcontext()
+        if n_slots is not None:
+            ids = slots.slot_ids(
+                np.atleast_2d(g["target"]).shape[0],
+                len(g.get("past_covariates", {})),
+                np.random.default_rng(slots.EVAL_SEED),
+                n_slots,
+            )
+            ctx = slots.assigned(model, ids)
+        with ctx:
+            (q,), _ = pipeline.predict_quantiles(
+                [dict(g)],
+                prediction_length=horizon,
+                quantile_levels=levels.tolist(),
+            )
         q = q.float().cpu().numpy()  # [V, horizon, Q]
         u = rng.uniform(size=(n_samples, *q.shape[:2]))
         out.append(
@@ -734,7 +825,9 @@ class FoundationModel:
         ImportError
             If Chronos-2 is not installed.
         FileNotFoundError
-            If the fine-tuned checkpoint's release cannot be downloaded.
+            If the fine-tuned checkpoint's release has no such asset.
+        ConnectionError
+            If GitHub cannot be reached.
         ValueError
             If the release holds another checkpoint or adapter.
         """
@@ -759,7 +852,14 @@ class FoundationModel:
         tri = hub_triangle(rows, self.source, places, weeks[-1])
         start = tri.n_context
         if self.layout == "complete":
-            start = tri.times.index(_walk_start(task)) + 1
+            walk = _walk_start(task)
+            if walk not in tri.times:
+                raise ModelUnavailableError(
+                    f"{self.name} starts from the randomwalk week {walk}, "
+                    f"which the task for {task.vintage} has no "
+                    f"{self.source} release of."
+                )
+            start = tri.times.index(walk) + 1
         if start < 2:
             raise ModelUnavailableError(
                 f"{self.name} needs two steps of context, and the task for "
@@ -845,7 +945,7 @@ for _source in SOURCES:
     register_model(
         f"fm_chronos_{_source}_ragged_ft",
         partial(_finetuned, f"fm_chronos_{_source}_ragged_ft", _source),
-        f"Chronos-2 fine-tuned on simulated outbreaks, on the hub target's "
+        "Chronos-2 fine-tuned on simulated outbreaks, on the hub target's "
         f"{_source} releases, ragged layout.",
         fitted=True,
     )

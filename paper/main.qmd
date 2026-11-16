@@ -58,11 +58,18 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
 ### Foundation model setup and fine-tuning
 
 ::: {.callout-note title="Plan"}
-- Chronos-2, given the reporting triangle as series.
-- One fine-tune on synthetic data, run on a laptop.
+- Chronos-2, given the reporting triangle as series: one series per place and reporting delay, each missing until reported. Introduced alongside the reporting triangle, with Figure 1B.
+- Fine-tuned on synthetic data on a laptop, with checkpoints after 1,000, 2,000, 4,000, 6,000 and 8,000 simulated outbreaks. The largest is the main model.
 - Compared with Chronos-2 given only complete data points, to show what the ragged structure and fine-tuning add.
+- Figure 1, a multi-panel schematic of our pipeline: (A) the assumptions in the epinowcast simulations, (B) the reporting triangle laid out as ragged series for Chronos-2, (C) training blocks and LoRA fine-tuning, and why it is fast, and (D) forecasting with the fine-tuned model.
 - Key references: [@Ansari2025; @Ansari2024; @Hu2021; @Das2024b].
 :::
+
+![The fine-tuning pipeline.
+(A) The assumptions in the epinowcast simulations: a latent process gives expected onsets by stratum, which a reporting delay that may drift or step, report-day effects and count noise turn into a reporting triangle.
+(B) The reporting triangle laid out as ragged series for Chronos-2: each place has a target complete up to E and one series per lag, missing until reported (daily lag series fill only on release days), and counts reported after E enter as known-future inputs.
+(C) Training blocks and LoRA fine-tuning, and why it is fast: blocks cut from simulated release histories at random cut-offs are scored against the final counts, and only rank-8 adapters, about 1% of the weights, are trained.
+(D) Forecasting with the fine-tuned model: one forward pass gives quantiles for each step, and each draw reads them at a uniform level u and is at least the count reported so far.](figures/fig1-pipeline.svg){#fig-pipeline}
 
 ### Synthetic data generation
 
@@ -88,7 +95,7 @@ Placeholder: grid of synthetic scenarios.
 ::: {.callout-note title="Plan"}
 - A held-out set of simulations was not used during development.
 - Sample forecasts scored with CRPS and log-scale CRPS, bias, and coverage, relative to `randomwalknowcast`.
-- Scored against a rolling evaluation set of the data as reported D days later, with D each outbreak's 99% delay.
+- Scored against a rolling evaluation set of the data as reported D days later, with D each outbreak's 98% delay.
 - Key references: [@bracherEvaluatingEpidemicForecasts2021; @Bosse2023-sx; @gneitingStrictlyProperScoring2007; @gneitingProbabilisticForecastsCalibration2007; @sherrattPredictivePerformanceMultimodel2023].
 :::
 
@@ -106,7 +113,7 @@ Placeholder: grid of synthetic scenarios.
 
 ::: {.callout-note title="Plan"}
 - Compared with the other submissions, relative to the hub's own baseline.
-- Scored as for the held-out synthetic data, with D the empirical 99% point of the hub data's reporting delay.
+- Scored as for the held-out synthetic data, with D the empirical 98% point of the hub data's reporting delay.
 - Our models' forecasts are saved prospectively, alongside the main submissions as they were made.
 - Key references: [@bdbv_modeling_hub_2026; @Viboud2018; @funkAssessingPerformanceRealtime2019].
 :::
@@ -142,6 +149,7 @@ Key references: the Methods references, with [@bracherEvaluatingEpidemicForecast
 ::: {.callout-note title="Plan"}
 - Visual performance of the candidate models against `randomwalk` and `randomwalknowcast`.
 - A summary of score performance.
+- How scores change with the amount of fine-tuning data (1,000 to 8,000 outbreaks), as an SI figure.
 :::
 
 ::: {#fig-synthetic}

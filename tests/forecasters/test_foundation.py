@@ -136,6 +136,26 @@ def test_registered_as_fitted_models() -> None:
         assert "0x" not in repr(model)
 
 
+@pytest.mark.parametrize(("source", "steps"), [("daily", 28), ("weekly", 4)])
+def test_ragged_lags_stop_below_the_truth_delay(
+    source: str, steps: int, task: ForecastTask
+) -> None:
+    # The lag series stop at 28 days or 4 weeks, short of the truth delay,
+    # because the zones' release histories are short: with longer lags no
+    # early lag of a zone falls in the context, and Chronos-2 reads partial
+    # counts as levels.
+    store: list = []
+    model = dataclasses.replace(
+        get_model(f"fm_chronos_{source}_ragged"), sample=_recording(store)
+    )
+    model.forecast(task)
+    groups, _ = store[0]
+    # Only places with cases have lag series.
+    n_places = len(_with_cases(task))
+    assert len(groups[0]["future_covariates"]) == n_places * steps
+    assert MAX_LAG[source] == steps
+
+
 def _history() -> pd.DataFrame:
     """Two weekly releases of one place, the second a week later."""
     return pd.DataFrame(
@@ -363,6 +383,19 @@ def test_no_daily_releases_is_unavailable(task: ForecastTask) -> None:
         model.forecast(bare)
 
 
+@pytest.mark.parametrize("source", SOURCES)
+def test_complete_with_a_walk_start_off_the_grid_is_unavailable(
+    source: str, task: ForecastTask, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A walk that starts before the first release step is off the grid.
+    monkeypatch.setattr(foundation, "_walk_start", lambda _: "1900-01-06")
+    model = dataclasses.replace(
+        get_model(f"fm_chronos_{source}_complete"), sample=_constant(0.0)
+    )
+    with pytest.raises(ModelUnavailableError, match="1900-01-06"):
+        model.forecast(task)
+
+
 class _FakePipeline:
     """Quantiles that grow with the level and the week."""
 
@@ -514,6 +547,30 @@ def test_checksums_must_cover_the_adapter(
         foundation.resolve_checkpoint("abc")
 
 
+def test_a_checksum_line_with_one_token_is_skipped(
+    releases: Path, write_release
+) -> None:
+    write_release(releases, "abc", _ADAPTER, "abc")
+    sums = releases / "chronos-ft-abc" / "sha256sums.txt"
+    sums.write_text("sha256sums\n" + sums.read_text())
+    assert foundation.resolve_checkpoint("abc") == _checkpoint("abc")
+
+
+def test_a_truncated_checksum_line_names_the_missing_file(
+    releases: Path, write_release
+) -> None:
+    write_release(releases, "abc", _ADAPTER, "abc")
+    sums = releases / "chronos-ft-abc" / "sha256sums.txt"
+    sums.write_text(
+        "".join(
+            (line.split()[0] if "adapter_config" in line else line) + "\n"
+            for line in sums.read_text().splitlines()
+        )
+    )
+    with pytest.raises(ValueError, match=r"adapter_config\.json"):
+        foundation.resolve_checkpoint("abc")
+
+
 @pytest.mark.skipif(
     importlib.util.find_spec("torch") is None, reason="needs torch"
 )
@@ -630,7 +687,8 @@ def test_interrupted_download_fails_and_caches_nothing(
         raise ConnectionResetError("reset")
 
     monkeypatch.setattr(foundation.urllib.request, "urlopen", drop)
-    with pytest.raises(FileNotFoundError, match="chronos-ft-abc"):
+    # A dropped connection is not a missing file.
+    with pytest.raises(ConnectionError, match="chronos-ft-abc"):
         foundation.finetuned_adapter(_checkpoint("abc"))
     assert not (tmp_path / "cache" / "chronos-ft-abc").exists()
 
@@ -816,3 +874,201 @@ def test_unknown_grouping_fails(task: ForecastTask) -> None:
     )
     with pytest.raises(ValueError, match="grouping"):
         model.forecast(task)
+
+
+def test_the_release_list_is_read_once_per_process(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[int] = []
+    listing = foundation.finetuned_releases()
+
+    def count() -> list[dict]:
+        calls.append(1)
+        return listing
+
+    monkeypatch.setattr(foundation, "finetuned_releases", count)
+    foundation.resolve_checkpoint.cache_clear()
+    for _ in range(3):
+        for name in FINETUNED_MODELS:
+            get_model(name)
+    assert len(calls) == 1
+
+
+def test_a_run_passes_its_resolved_checkpoint_down(
+    monkeypatch: pytest.MonkeyPatch, fake_checkpoint: str
+) -> None:
+    # A job given the hash its run resolved never lists the releases.
+    def offline() -> list[dict]:
+        raise AssertionError("listed the releases")
+
+    monkeypatch.setattr(foundation, "finetuned_releases", offline)
+    monkeypatch.setenv(foundation.FINETUNED_ENV, fake_checkpoint)
+    foundation.resolve_checkpoint.cache_clear()
+    model = get_model("fm_chronos_daily_ragged_ft")
+    assert model.checkpoint.hash == fake_checkpoint
+
+
+def test_the_release_list_sends_a_token_when_set(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seen: list = []
+
+    class Response:
+        def __enter__(self):  # type: ignore[no-untyped-def]
+            return self
+
+        def __exit__(self, *_: object) -> None:
+            return None
+
+        def read(self) -> bytes:
+            return b"[]"
+
+    def urlopen(request, **_: object):  # type: ignore[no-untyped-def]
+        seen.append(request)
+        return Response()
+
+    monkeypatch.undo()
+    monkeypatch.setattr(foundation.urllib.request, "urlopen", urlopen)
+    monkeypatch.setenv("GH_TOKEN", "secret")
+    assert foundation.finetuned_releases() == []
+    assert seen[0].get_header("Authorization") == "Bearer secret"
+    monkeypatch.delenv("GH_TOKEN")
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+    foundation.finetuned_releases()
+    assert seen[1].get_header("Authorization") is None
+
+
+def test_a_failed_lookup_says_how_to_set_a_token(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def refuse(*_: object, **__: object) -> None:
+        raise OSError("HTTP Error 403: rate limit exceeded")
+
+    monkeypatch.undo()
+    monkeypatch.setattr(foundation, "RETRY_SECONDS", (0, 0, 0))
+    monkeypatch.setattr(foundation.urllib.request, "urlopen", refuse)
+    with pytest.raises(ConnectionError, match="GH_TOKEN"):
+        foundation.finetuned_releases()
+
+
+def test_a_passing_github_error_is_retried(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import urllib.error
+
+    calls: list[int] = []
+
+    class Response:
+        def __enter__(self):  # type: ignore[no-untyped-def]
+            return self
+
+        def __exit__(self, *_: object) -> None:
+            return None
+
+        def read(self) -> bytes:
+            return b"[]"
+
+    def flaky(request, **_: object):  # type: ignore[no-untyped-def]
+        calls.append(1)
+        if len(calls) < 3:
+            raise urllib.error.HTTPError(
+                request.full_url, 502, "Bad Gateway", {}, None
+            )
+        return Response()
+
+    monkeypatch.undo()
+    monkeypatch.setattr(foundation, "RETRY_SECONDS", (0, 0, 0))
+    monkeypatch.setattr(foundation.urllib.request, "urlopen", flaky)
+    assert foundation.finetuned_releases() == []
+    assert len(calls) == 3
+
+
+def test_a_missing_asset_is_not_retried(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import urllib.error
+
+    calls: list[int] = []
+
+    def missing(request, **_: object):  # type: ignore[no-untyped-def]
+        calls.append(1)
+        raise urllib.error.HTTPError(
+            request.full_url, 404, "Not Found", {}, None
+        )
+
+    monkeypatch.undo()
+    monkeypatch.setattr(foundation, "RETRY_SECONDS", (0, 0, 0))
+    monkeypatch.setattr(foundation.urllib.request, "urlopen", missing)
+    with pytest.raises(FileNotFoundError):
+        foundation.resolve_checkpoint("abc")
+    assert len(calls) == 1
+
+
+def _http_error(code: int):  # type: ignore[no-untyped-def]
+    """An `urlopen` that always fails with HTTP `code`, counting calls."""
+    import urllib.error
+
+    calls: list[int] = []
+
+    def fail(request, **_: object):  # type: ignore[no-untyped-def]
+        calls.append(1)
+        raise urllib.error.HTTPError(request.full_url, code, "no", {}, None)
+
+    return fail, calls
+
+
+@pytest.mark.usefixtures("releases")
+def test_a_rate_limited_download_names_the_token(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fail, calls = _http_error(403)
+    monkeypatch.setattr(foundation.urllib.request, "urlopen", fail)
+    with pytest.raises(ConnectionError, match="GH_TOKEN") as err:
+        foundation.finetuned_adapter(_checkpoint("abc"))
+    assert "has no" not in str(err.value)
+    assert len(calls) == 1
+
+
+@pytest.mark.usefixtures("releases")
+def test_a_missing_file_is_named_and_not_retried(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fail, calls = _http_error(404)
+    monkeypatch.setattr(foundation.urllib.request, "urlopen", fail)
+    with pytest.raises(FileNotFoundError, match="has no adapter_config"):
+        foundation.finetuned_adapter(_checkpoint("abc"))
+    assert len(calls) == 1
+
+
+@pytest.mark.usefixtures("releases")
+def test_too_many_requests_is_retried_a_bounded_number_of_times(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fail, calls = _http_error(429)
+    monkeypatch.setattr(foundation.urllib.request, "urlopen", fail)
+    with pytest.raises(ConnectionError, match="GH_TOKEN"):
+        foundation.finetuned_adapter(_checkpoint("abc"))
+    assert len(calls) == len(foundation.RETRY_SECONDS) + 1
+
+
+def test_slots_checkpoints_have_their_own_releases(
+    releases: Path, monkeypatch: pytest.MonkeyPatch, write_release
+) -> None:
+    # A checkpoint with per-series slots is released as chronos-slots-<hash>,
+    # so code without slots, taking the latest chronos-ft-* release, never
+    # loads it; it is pinned as "slots-<hash>".
+    assert foundation.release_tag("abc") == "chronos-ft-abc"
+    assert foundation.release_tag("slots-abc") == "chronos-slots-abc"
+    write_release(releases, "abc", _ADAPTER, "abc")
+    (releases / "chronos-ft-abc").rename(releases / "chronos-slots-abc")
+    write_release(releases, "old", _ADAPTER, "old")
+    listing = _listing(
+        ("chronos-ft-old", "2026-11-01T00:00:00Z", False),
+        ("chronos-slots-abc", "2026-11-20T00:00:00Z", False),
+    )
+    monkeypatch.setattr(foundation, "finetuned_releases", lambda: listing)
+    assert foundation.resolve_checkpoint("latest") == _checkpoint("old")
+    pinned = foundation.resolve_checkpoint("slots-abc")
+    assert pinned == _checkpoint("slots-abc")
+    adapter = foundation.finetuned_adapter(pinned)
+    assert adapter.name == "chronos-slots-abc"

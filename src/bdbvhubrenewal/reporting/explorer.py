@@ -7,7 +7,7 @@ SVG from a JSON file, so it works in a static site and follows the theme.
 from __future__ import annotations
 
 import json
-from collections.abc import Collection, Mapping
+from collections.abc import Callable, Collection, Mapping, Sequence
 from pathlib import Path
 
 import pandas as pd
@@ -120,6 +120,13 @@ def explorer_data(
     truth_vintage: str | None = None,
     hidden: Collection[str] = (),
     samples: pd.DataFrame | None = None,
+    level_of: Callable[[str], str] = _level,
+    levels: Sequence[str] = ("National", "Province", "Zone"),
+    outer: str = "90%",
+    unit: str = "cases",
+    complete_through: str | None = None,
+    data_label: str | None = None,
+    asof: pd.DataFrame | None = None,
 ) -> dict[str, object]:
     """Collect what the explorer draws.
 
@@ -144,6 +151,22 @@ def explorer_data(
     samples : pandas.DataFrame, optional
         Sample draws with `model` (the label shown), as `trajectories`
         takes them. Models without samples are drawn as bands only.
+    level_of : callable
+        The level of a location id, by default from the hub code.
+    levels : sequence of str
+        The levels, in the order the location picker shows them.
+    outer : str
+        The width of the interval from `q05` to `q95`, as shown.
+    unit : str
+        What the counts are, as shown.
+    complete_through : str, optional
+        The last complete week, shaded after it. Defaults to
+        `complete_after_weeks` before the truth vintage.
+    data_label : str, optional
+        What the data line is, as shown. Defaults to the truth vintage.
+    asof : pandas.DataFrame, optional
+        The data as each round saw it: `reference_date`, `location`,
+        `target_end_date` and `total`. Drawn when one round is shown.
 
     Returns
     -------
@@ -162,8 +185,8 @@ def explorer_data(
         for loc in dict.fromkeys(quantiles["location"])
         if loc in set(quantiles["location"])
     ]
-    order = {"National": 0, "Province": 1, "Zone": 2}
-    locs.sort(key=lambda x: (order[_level(x)], names.get(x, x)))
+    order = {lev: i for i, lev in enumerate(levels)}
+    locs.sort(key=lambda x: (order[level_of(x)], names.get(x, x)))
     latest = real.loc[real["vintage"] == truth_v]
     data = {
         loc: [
@@ -174,7 +197,10 @@ def explorer_data(
         .sort_values("target_end_date")
         .groupby("location")
     }
-    cut = pd.Timestamp(truth_v) - pd.Timedelta(weeks=complete_after_weeks)
+    cut = pd.Timestamp(
+        complete_through
+        or pd.Timestamp(truth_v) - pd.Timedelta(weeks=complete_after_weeks)
+    )
     q = quantiles.assign(
         m=quantiles["model"].map(models.index),
         r=quantiles["reference_date"].astype(str).map(rounds.index),
@@ -200,16 +226,32 @@ def explorer_data(
             ]
             for m, r, loc, k, start, vals in t.itertuples(index=False)
         ]
+    seen: list[list[object]] = []
+    if asof is not None:
+        a = asof.assign(reference_date=asof["reference_date"].astype(str))
+        a = a.loc[a["reference_date"].isin(rounds) & a["location"].isin(locs)]
+        seen = [
+            [rounds.index(r), loc, str(d), compact(v)]
+            for r, loc, d, v in a.sort_values(
+                ["reference_date", "location", "target_end_date"]
+            )[
+                ["reference_date", "location", "target_end_date", "total"]
+            ].itertuples(index=False)
+        ]
     have = {r[0] for r in traj}
     on = set(models) - set(hidden)
     return {
         "truth_vintage": truth_v,
+        "data_label": data_label or truth_v,
         "complete_through": cut.date().isoformat(),
+        "levels": [lev for lev in levels if lev in {level_of(x) for x in locs}],
+        "outer": outer,
+        "unit": unit,
         "locations": [
             {
                 "id": loc,
                 "name": names.get(loc, loc),
-                "level": _level(loc),
+                "level": level_of(loc),
             }
             for loc in locs
         ],
@@ -229,6 +271,7 @@ def explorer_data(
         "data": data,
         "q": rows,
         "traj": traj,
+        "asof": seen,
     }
 
 

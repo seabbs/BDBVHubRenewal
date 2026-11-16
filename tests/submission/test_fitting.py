@@ -428,3 +428,10 @@ def test_chronos_metadata_names_the_release(
     assert "<" not in text
     committed = ROOT / "hub" / "model-metadata" / "seabbs-chronos2_ft.yml"
     assert committed.read_text() == text
+
+
+def test_cli_prints_the_checkpoint_a_run_resolves(
+    capsys: pytest.CaptureFixture[str], fake_checkpoint: str
+) -> None:
+    assert main(["finetuned-checkpoint"]) == 0
+    assert capsys.readouterr().out.strip() == fake_checkpoint

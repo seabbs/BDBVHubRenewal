@@ -21,6 +21,8 @@ Commands:
 - `coherence`: compare the national data with the sum of the provinces.
 - `validate`: run the hub's checks on files (`submission.validate`).
 - `metadata`: write and check a model's metadata YAML.
+- `finetuned-checkpoint`: print the settings hash of the fine-tuned
+  checkpoint the `_ft` models load, resolved once for a run's jobs.
 - `compare-hub`: score our forecasts against the hub's submitted ones.
 - `report`: make the docs figures and tables.
 
@@ -357,6 +359,14 @@ def build_parser() -> argparse.ArgumentParser:
         "OUT/held-out.",
     )
 
+    gas = sub.add_parser(
+        "germany-asof",
+        help="Write the German 7-day sums as each development date saw them.",
+    )
+    gas.add_argument("--config", default="config/germany.toml")
+    gas.add_argument("--data", default=f"{data_dir}/raw/germany")
+    gas.add_argument("--out", default="results/germany")
+
     gpp = sub.add_parser(
         "germany-paper",
         help="Write the German benchmark's forecasts as the paper's table.",
@@ -522,6 +532,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Defaults to every real backtest vintage.",
     )
 
+    sub.add_parser(
+        "finetuned-checkpoint",
+        help="Print the fine-tuned checkpoint's settings hash, for "
+        "BDBV_CHRONOS_FT.",
+    )
     hid = sub.add_parser(
         "hub-id", help="Print the hub model id that submissions use."
     )
@@ -1629,6 +1644,20 @@ def _germany_teams(args: argparse.Namespace) -> int:
     return 0
 
 
+def _germany_asof(args: argparse.Namespace) -> int:
+    from bdbvhubrenewal.data.germany import hub_triangle
+    from bdbvhubrenewal.evaluation import germany as de
+
+    config = de.load_germany_config(args.config)
+    triangle = hub_triangle(Path(args.data) / Path(config.triangle).name)
+    asof = de.asof_sums(triangle, de.nowcast_dates(config))
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+    write_csv(asof, out / "asof.csv.gz")
+    print(f"German data as of each date: {len(asof)} sums in {out}.")
+    return 0
+
+
 def _germany_paper(args: argparse.Namespace) -> int:
     from bdbvhubrenewal.evaluation import germany as de
 
@@ -1737,6 +1766,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _germany_backtest(args)
     if args.command == "germany-teams":
         return _germany_teams(args)
+    if args.command == "germany-asof":
+        return _germany_asof(args)
     if args.command == "germany-paper":
         return _germany_paper(args)
     if args.command == "digest":
@@ -1758,6 +1789,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _metadata(args)
     if args.command == "bvd":  # pragma: no cover - network
         return _bvd(args)
+    if args.command == "finetuned-checkpoint":
+        from bdbvhubrenewal.forecasters.foundation import (
+            finetuned_spec,
+            resolve_checkpoint,
+        )
+
+        print(resolve_checkpoint(finetuned_spec()).hash)
+        return 0
     if args.command == "hub-id":
         print(model_id(model_abbr_for(args.model, args.hub_toml)))
         return 0

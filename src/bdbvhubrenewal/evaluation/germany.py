@@ -63,6 +63,7 @@ __all__ = [
     "SCORE_COLUMNS",
     "TEAM_NAMES",
     "GermanyConfig",
+    "asof_sums",
     "fetch_germany",
     "germany_forecasts",
     "load_germany_config",
@@ -166,6 +167,10 @@ class GermanyConfig:
         The model the page's relative scores divide by.
     paper_baseline : str
         The model the paper's relative scores divide by, the hub's own.
+    hidden : tuple of str
+        Models switched off on the page until the reader switches them on.
+    plot_every : int
+        The nowcast plots show every this many development dates.
     """
 
     repo: str
@@ -183,6 +188,8 @@ class GermanyConfig:
     truth_delay: int
     baseline: str
     paper_baseline: str
+    hidden: tuple[str, ...]
+    plot_every: int
 
 
 def load_germany_config(
@@ -218,6 +225,8 @@ def load_germany_config(
         truth_delay=int(raw["truth"]["delay"]),
         baseline=raw["scoring"]["baseline"],
         paper_baseline=raw["scoring"]["paper_baseline"],
+        hidden=tuple(raw["page"]["hidden"]),
+        plot_every=int(raw["page"]["plot_every"]),
     )
 
 
@@ -279,6 +288,44 @@ def fetch_germany(  # pragma: no cover - network
     }
     (out / "sources.json").write_text(json.dumps(sources, indent=2) + "\n")
     return sources
+
+
+def asof_sums(
+    triangle: pd.DataFrame, dates: Sequence[str], weeks: int = 8
+) -> pd.DataFrame:
+    """Return the 7-day sums as each nowcast date's data gave them.
+
+    Parameters
+    ----------
+    triangle : pandas.DataFrame
+        Counts by Meldedatum and report date.
+    dates : sequence of str
+        Nowcast dates.
+    weeks : int
+        How far back the sums go, from each nowcast date.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Columns `origin` (the nowcast date), `location` (the place),
+        `target_end_date`, every day from `weeks` weeks before the
+        nowcast date to it, and `total`, the sum reported by the nowcast
+        date.
+    """
+    cols = ["origin", "location", "target_end_date", "total"]
+    if not dates:
+        return pd.DataFrame(columns=cols)
+    first = dt.date.fromisoformat(min(dates)) - dt.timedelta(weeks=weeks)
+    ends = pd.date_range(first, max(dates), freq="D").date.astype(str)
+    sums = hub_target(triangle, list(ends))
+    sums = sums.loc[sums["vintage"].isin(set(dates))].rename(
+        columns={"vintage": "origin"}
+    )
+    back = pd.to_datetime(sums["origin"]) - pd.to_datetime(
+        sums["target_end_date"]
+    )
+    keep = back.dt.days <= 7 * weeks
+    return sums.loc[keep, cols].reset_index(drop=True)
 
 
 def germany_forecasts(
