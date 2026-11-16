@@ -53,7 +53,11 @@ from bdbvhubrenewal.forecasters.base import (
     ModelUnavailableError,
     get_model,
 )
-from bdbvhubrenewal.forecasters.zones import ZoneAllocator, zone_task
+from bdbvhubrenewal.forecasters.zones import (
+    ZoneAllocator,
+    zone_draws,
+    zone_task,
+)
 
 log = logging.getLogger(__name__)
 
@@ -267,7 +271,7 @@ def zone_forecasts(
         for name in models:
             model = get_model(name)
             try:
-                direct = model.forecast(zt)
+                direct = zone_draws(model.forecast(zt))
                 summary = getattr(model, "delay_summary", None)
             except ModelUnavailableError as err:
                 log.warning("%s has no zone forecast at %s: %s", name,
