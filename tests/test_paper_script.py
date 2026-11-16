@@ -120,6 +120,8 @@ def test_pages_and_the_taskfile_run_the_script() -> None:
         if s.get("name") == "Run the paper workflow and render the paper"
     ]
     assert 'scripts/paper.sh "$TARGET"' in paper["run"]
+    # The script path is from the repository root.
+    assert "working-directory" not in paper
     assert "snakemake" not in paper["run"]
     tasks = yaml.safe_load((ROOT / "Taskfile.yml").read_text())["tasks"]
     assert any("scripts/paper.sh" in str(c) for c in tasks["paper"]["cmds"])

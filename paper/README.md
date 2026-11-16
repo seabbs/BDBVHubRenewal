@@ -5,20 +5,25 @@ One Snakemake workflow runs its evaluation, from each study's data to the figure
 
 ## Reproducing the paper
 
-From `paper/`, with [uv](https://docs.astral.sh/uv/), [Task](https://taskfile.dev) and [Quarto](https://quarto.org):
+From the repository root, with [uv](https://docs.astral.sh/uv/), [Task](https://taskfile.dev), [Quarto](https://quarto.org) and git:
 
 ```sh
-task pipeline:dev      # the development run, without the held-out data
-task pipeline:paper    # the paper run, with the held-out data
-task render            # the paper as HTML and PDF from the last run
+task paper                 # the development run, without the held-out data
+task paper TARGET=paper    # the paper run, with the held-out data
 ```
+
+This is the command CI runs ([`scripts/paper.sh`](../scripts/paper.sh)).
+It fetches the fit store, runs the target's missing steps, renders the paper as HTML and PDF and copies it into `docs/paper/`.
+`CORES=8 task paper` sets Snakemake's cores (4 by default).
+From `paper/`, `task pipeline:dev`, `task pipeline:paper` and `task render` run the steps one at a time.
 
 ```mermaid
 flowchart LR
   sim[Simulate] --> ft[Fine-tune] --> fc[Forecast] --> sc[Score] --> fig[Figures and tables] --> paper[Paper]
 ```
 
-Simulation and fine-tuning run locally and publish checkpoints (#192).
+Simulation and fine-tuning run locally, not on CI, and publish each checkpoint as a `chronos-ft-<hash>` release (#192).
+A round's simulations are made on a CPU host and trained on a GPU with `scripts/finetune_round.sh ROUND INIT` (on the `fm-finetune-r4` branch until it merges), whose header lists its inputs.
 Everything from forecasting on runs in this workflow, locally or on CI.
 
 <details>
