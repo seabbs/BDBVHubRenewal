@@ -196,8 +196,12 @@ def nice(lo, hi, n=5):
     return ticks
 
 
+DASHES = {"dash": ("5 3", "dashed"), "dot": ("1.5 3", "dotted"),
+          "dd": ("8 3 1.5 3", "dash-dot")}
+
+
 def chart(title, series, marks=(), ylog=False, W=620, H=300,
-          xticks=None, hlines=(), xlabel="step"):
+          xticks=None, hlines=(), xlabel="step", note=""):
     """series: list of (label, colour, points[(x,y)], kind) kind line|dots"""
     import math
     pts = [p for s in series for p in s[2] if p[1] is not None]
@@ -246,8 +250,8 @@ def chart(title, series, marks=(), ylog=False, W=620, H=300,
                      f'y="{T+10}" class=ax>{lab}</text>')
     for i, s in enumerate(series):
         lab, col, p, kind = s[:4]
-        dash = f' stroke-dasharray="5 3"' if len(s) > 4 and s[4] == "dash" \
-            else ""
+        dash = (f' stroke-dasharray="{DASHES[s[4]][0]}"' if len(s) > 4
+                else "")
         op = ' opacity=".4"' if kind == "faint" else ""
         p = [q for q in p if q[1] is not None]
         if kind == "dots":
@@ -270,10 +274,10 @@ def chart(title, series, marks=(), ylog=False, W=620, H=300,
     leg = "".join(
         f'<span><i style="background:{s[1]}'
         f'{";opacity:.4" if s[3] == "faint" else ""}"></i>{s[0]}'
-        f'{" (dashed)" if len(s) > 4 and s[4] == "dash" else ""}</span>'
+        f'{" (" + DASHES[s[4]][1] + ")" if len(s) > 4 else ""}</span>'
         for s in series)
     return (f"<div class=card><h3>{title}</h3>{''.join(o)}"
-            f"<div class=leg>{leg}</div></div>")
+            f"<div class=leg>{leg}</div>{note}</div>")
 
 
 def rolling(rows, k):
@@ -399,6 +403,7 @@ def score_charts(rows, slot_hashes, r4_hashes):
 
     def lines(study, level_cols, model, col):
         ser = []
+        cmodel = model.replace("_ragged", "_complete")
         for lvl, colour in level_cols:
             rs = [r for r in rows if r["study"] == study
                   and r["level"] == lvl and r["model"] == model
@@ -412,7 +417,25 @@ def score_charts(rows, slot_hashes, r4_hashes):
                 if len(pts) > 1 or (pts and run == "slots" and not zs):
                     s = (f"{lvl}, {run}", colour, pts, "pts")
                     ser.append(s + (dash,) if dash else s)
+            if zs:
+                ser.append((f"{lvl}, zero-shot ragged", colour,
+                            [(125, zs[0][1]), (8000, zs[0][1])], "line",
+                            "dot"))
+            cs = [num(r[col]) for r in rows if r["study"] == study
+                  and r["level"] == lvl and r["model"] == cmodel
+                  and r["checkpoint"] == "zero-shot"
+                  and num(r.get(col)) is not None]
+            if cs:
+                ser.append((f"{lvl}, complete-only", colour,
+                            [(125, cs[0]), (8000, cs[0])], "line", "dd"))
+        ser.append(("randomwalknowcast (1)", "var(--mut)",
+                    [(125, 1.0), (8000, 1.0)], "line"))
         return ser
+
+    def has_complete(study, model):
+        cm = model.replace("_ragged", "_complete")
+        return any(r["study"] == study and r["model"] == cm
+                   and r["checkpoint"] == "zero-shot" for r in rows)
 
     ger = [("national", PAL[0]), ("states", PAL[1]), ("age", PAL[2])]
     bd = [("national", PAL[0]), ("provinces", PAL[1])]
@@ -425,7 +448,9 @@ def score_charts(rows, slot_hashes, r4_hashes):
             out.append(chart(
                 f"{lab} vs randomwalknowcast, {nm}",
                 lines(study, cols, model, col), ylog=True, xticks=xt,
-                hlines=(1.0,), xlabel="simulations (log2)"))
+                xlabel="simulations (log2)",
+                note="" if has_complete(study, model) else
+                "<p class=mut>complete-only pending</p>"))
     ho = []
     for lvl, colour in (("all", PAL[0]), ("real_validation", PAL[3])):
         rs = [r for r in rows if r["study"] == "held_out"
@@ -498,6 +523,7 @@ def parse_ger_file(path):
                 continue
             for s in srcs:
                 k = (r["location"], "rw" if mdl == "randomwalknowcast"
+                     else "complete-only" if mdl.endswith("_complete")
                      else None, s)
                 e = out.setdefault(k, {}).setdefault(
                     r["target_end_date"], {"q": {}, "y": None, "v": ""})
@@ -592,7 +618,10 @@ def ger_meta(b, slot_n, prev_n):
     meta = []
     for s in b["sets"]:
         if s == "zero-shot":
-            meta.append(dict(id=s, label="zero-shot", run="ref", n=0))
+            meta.append(dict(id=s, label="zero-shot (ragged)", run="ref",
+                             n=0))
+        elif s == "complete-only":
+            meta.append(dict(id=s, label="complete-only", run="ref", n=2))
         elif s == "rw":
             meta.append(dict(id=s, label="randomwalknowcast", run="ref", n=1))
         else:
@@ -759,7 +788,10 @@ def build():
             recent[-1]["t"] - recent[0]["t"])
     prefixes = trainer_prefixes()
     saved = {n for n in prefixes if (RUN / f"train/n{n}/settings.json").exists()}
-    nxt = next((n for n in prefixes if n not in saved), None)
+    scoring = [n for n in prefixes if n not in saved
+               and (RUN / f"train/n{n}/finetuned-ckpt").exists()]
+    nxt = next((n for n in prefixes if n not in saved and n not in scoring),
+               None)
     tstep = lambda n: round(n * STEPS_PER_SIM)
     eta = lambda n: ("n/a" if not (rate and step is not None and n) else
                      "due now" if tstep(n) <= step else
@@ -776,7 +808,12 @@ def build():
          if ntrained is not None else ""),
         ("Steps / s (30 min)", f"{rate:.3f}" if rate else "n/a",
          f"{rate*60:.1f} steps/min" if rate else ""),
-        ("Next checkpoint", f"n{nxt}" if nxt else "none",
+        ("Next checkpoint",
+         (f"n{scoring[0]}: scoring since " + datetime.fromtimestamp(
+             (RUN / f"train/n{scoring[0]}").stat().st_mtime).strftime("%H:%M")
+          if scoring else f"n{nxt}" if nxt else "none"),
+         (f"then n{nxt} at step {tstep(nxt)}, ETA {eta(nxt)}" if nxt else "")
+         if scoring else
          f"at step {tstep(nxt)}, ETA {eta(nxt)}" if nxt else ""),
         ("ETA n8000", eta(8000), f"step {tstep(8000)}"),
         ("Learning rate", f"{lr:.3e}" if lr is not None else "n/a",
@@ -803,6 +840,7 @@ def build():
     for name, s, _ in cks_s:
         n = int(re.sub(r"\D", "", name) or 0)
         marks.append((s.get("steps") or tstep(n), name))
+    marks += [(tstep(n), f"n{n}?") for n in scoring]
     train = [(h["step"], h["loss"]) for h in hist
              if isinstance(h, dict) and "loss" in h and "step" in h]
     if not train:
