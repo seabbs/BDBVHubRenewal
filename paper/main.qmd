@@ -165,6 +165,7 @@ The SI gives the copula in full, its estimator and window, and the scores of pai
 - We score each model on its own quantiles at the hub's seven levels, interpolated linearly where it lacks one.
 - We score models that give samples, and sums over days, on the quantiles of 1,000 draws with common random numbers.
 - One fine-tuned Chronos-2 model forecasts daily, 3-day and weekly data.
+- For both case studies, we also score our models' daily counts directly from the daily rows, against `randomwalknowcast` (SI).
 - We split the nowcast dates in half at 10 February 2022.
 - We developed the setup on the first half and score the second half.
 - Key references: [@Wolffram2023; @Johnson2025; @amaralPostprocessingWeightedCombination2025].
@@ -255,6 +256,7 @@ Held-out synthetic data: mean energy and variogram scores of each model's trajec
 - We summarise the scores.
 - The SI compares the model fine-tuned on real data with the one fine-tuned on simulations (Real-data fine-tune against synthetic).
 - The SI compares capped lags with lags run to the truth delay (Foundation model setup).
+- The SI gives daily nowcasts for both case studies against `randomwalknowcast` (Daily nowcasts).
 - Key references: [@Wolffram2023; @amaralPostprocessingWeightedCombination2025].
 :::
 

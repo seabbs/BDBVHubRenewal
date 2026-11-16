@@ -636,6 +636,7 @@ EVIDENCE: Final = {
     "block_combinations": (
         "fm-finetune3's realised shares of block layouts and options"
     ),
+    "heldout_layout": "held-out synthetic scores by block layout and target",
 }
 """Each evidence input and what it waits on until set.
 
@@ -943,6 +944,7 @@ def write_evidence(
         data["block_combinations"],
         ["block_combinations"],
     )
+    table("heldout-layout", data["heldout_layout"], ["heldout_layout"])
     for name in ("slots", "delays", "realdata", "daily"):
         rows = data[f"compare_{name}"]
         figure(

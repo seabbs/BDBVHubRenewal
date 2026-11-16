@@ -171,6 +171,9 @@ evidence:
   # Pending: fm-finetune3's realised shares of each combination of block
   # layout and options.
   block_combinations: null
+  # Pending: held-out synthetic scores by block layout and target, from
+  # fm-finetune3's manifest of each held-out block.
+  heldout_layout: null
   # Pending: the final run's held-out loss curve.
   finetune_heldout: null
   # Pending: summaries of the final grid's simulations.

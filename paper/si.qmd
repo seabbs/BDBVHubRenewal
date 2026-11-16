@@ -237,7 +237,9 @@ The simulated outbreaks' ranges against published values for several diseases, t
 
 {{< include build/tables/si/heldout-set.md >}}
 
-The training blocks cut from these simulations include countries that equal, exceed or lag the sum of their places, a third of the blocks with places each (Foundation model setup).
+We cut the held-out simulations into blocks as in training, with the five layouts, report batching and non-summing parents (@tbl-block-layouts), using a fixed seed.
+A manifest records each held-out block's layout and options.
+The paper's test set, 100 simulations outside training, is cut the same way.
 
 ### Correlated trajectories
 
@@ -438,7 +440,39 @@ German nowcast hub held-out half: Chronos-2 zero-shot (`_ragged`), fine-tuned on
 BDBV scored rounds (from 21 November 2026, after every release the real-data model trained on): Chronos-2 zero-shot (`_ragged`), fine-tuned on simulations (`_ft`) and fine-tuned on real data (`_real`), overall (`all`) and by level, with CRPS relative to `randomwalknowcast`. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
 :::
 
+### Daily nowcasts
+
+- We score our models' daily counts in both case studies directly from the daily rows, not summed.
+- The main text scores the hub targets, 7-day counts for Germany and weekly counts for BDBV.
+- Hub teams give no daily forecasts, so we compare our models with `randomwalknowcast` only.
+- @tbl-compare-daily gives German and BDBV relative scores on daily counts and on the hub targets at each checkpoint.
+- @fig-compare-daily shows both.
+- @fig-germany-si-results-daily repeats the German results figure for daily counts.
+
+![Daily nowcasts: German and BDBV relative scores on daily counts and on the hub targets, by checkpoint.](build/figures/si/compare-daily.png){#fig-compare-daily}
+
+::: {#tbl-compare-daily}
+{{< include build/tables/si/compare-daily.md >}}
+
+Our models' relative scores on daily counts and on the hub targets at matched checkpoints: relative WIS for Germany and relative CRPS for BDBV, against `randomwalknowcast`.
+:::
+
+::: {#fig-germany-si-results-daily}
+![](build/figures/si/germany-si-results-daily.png)
+
+German nowcast hub, daily counts: the panels of the German results figure, with daily nowcasts against the daily truth and WIS on daily counts, without the hub teams. {{< meta results.germany.label >}} {{< meta results.germany.note >}}
+:::
+
 ### Held-out synthetic data
+
+- We report held-out scores by block layout, and by target where the layout has it: the weekly or 3-day totals from the aggregate row, and the daily counts.
+- @tbl-heldout-layout gives them.
+
+::: {#tbl-heldout-layout}
+{{< include build/tables/si/heldout-layout.md >}}
+
+Held-out synthetic data: CRPS relative to `randomwalknowcast` by block layout and target. {{< meta results.synthetic.label >}} {{< meta results.synthetic.note >}}
+:::
 
 ::: {#tbl-synthetic-evaluated}
 {{< include build/tables/main/synthetic-grid.md >}}
