@@ -74,7 +74,7 @@ def segment_inputs(wc):
         "seeds": f"{RUN}/seeds.txt",
     }
     if PREV[n] is not None:
-        out["prev"] = f"{TRAIN}/n{PREV[n]}/state/state.json"
+        out["prev"] = f"{TRAIN}/n{PREV[n]}/settings.json"
     if FT["real_validation"]:
         out["real"] = FT["real_validation"]
     return out
@@ -145,13 +145,13 @@ rule train_segment:
         adapter=protected(
             f"{TRAIN}/n{{n}}/finetuned-ckpt/adapter_model.safetensors"
         ),
-        state=protected(f"{TRAIN}/n{{n}}/state/state.json"),
     log:
         f"{TRAIN}/n{{n}}.log",
     params:
         prev=lambda wc: (
             f"{TRAIN}/n{PREV[int(wc.n)]}/state" if PREV[int(wc.n)] else ""
         ),
+        prev_n=lambda wc: PREV[int(wc.n)] or "None",
         held=lambda wc: f"{held_seeds()[0]} {held_seeds()[-1]}",
         prefixes=" ".join(str(p) for p in FT["prefixes"]),
         stop_from=FT["outbreaks"] + 1,
@@ -174,7 +174,8 @@ rule train_segment:
         """
         python -c "import sys; sys.path.insert(0, 'workflow'); \
 from flowlib import segments; \
-print(segments.resume_state('{TRAIN}/state', '{params.prev}' or None))" > {log}
+print(segments.resume_state('{TRAIN}/state', '{params.prev}' or None, \
+{params.prev_n}))" > {log}
         python -c "import sys, glob; sys.path.insert(0, 'workflow'); \
 from flowlib import segments; \
 segments.gather_exclusions(glob.glob('{ROUNDS_DIR}/r*/qc/excluded.csv') \
@@ -223,7 +224,21 @@ rule n1000_check:
         )
 
 
+def trainable():
+    """The prefixes done or within reach of the seed list."""
+    skip = known_exclusions()
+    order = training_seeds()
+    return [
+        n
+        for n in FT["prefixes"]
+        if Path(f"{TRAIN}/n{n}/settings.json").exists()
+        or segments.reachable(
+            n + SIM["batch"], order, lambda s: kept_or_full(s, skip)
+        )
+    ]
+
+
 rule finetune:
     input:
-        expand(f"{TRAIN}/n{{n}}/settings.json", n=FT["prefixes"]),
+        lambda wc: expand(f"{TRAIN}/n{{n}}/settings.json", n=trainable()),
         [f"{RUN}/reports/n1000-check.txt"] if 1000 in FT["prefixes"] else [],

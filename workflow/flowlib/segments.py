@@ -100,30 +100,51 @@ def _done(state: Path) -> int:
     return int(json.loads((state / "state.json").read_text())["done"])
 
 
-def resume_state(run: Path | str, prev: Path | str | None) -> str:
+def resume_state(
+    run: Path | str, prev: Path | str | None, prev_n: int | None
+) -> str:
     """Put the state a segment resumes from in the trainer's `run` folder.
 
-    The trainer resumes from `run` (its `OUT/state`). If that is missing
-    or behind the state kept with the prefix before (`prev`, `n<P>/state`),
-    `prev` is copied in; a state further on is kept, as a segment that
-    stopped part way resumes from its own saves.
+    The trainer resumes from `run` (its `OUT/state`). That is kept if it
+    has reached the prefix before, `prev_n`, as a segment that stopped
+    part way, or a live run whose checkpoints kept no state, resumes
+    from its own saves. Otherwise the state kept with that prefix
+    (`prev`, `n<P>/state`) is copied in.
 
     Returns
     -------
     str
-        "base" (first segment, no state), "copied" or "kept".
+        "base" (first segment), "kept" or "copied".
+
+    Raises
+    ------
+    ValueError
+        If there is no state at or past the prefix before.
     """
     import shutil
 
     run = Path(run)
-    if prev is None:
+    if prev_n is None:
         return "base"
-    prev = Path(prev)
-    if (run / "state.json").exists() and _done(run) >= _done(prev):
+    if (run / "state.json").exists() and _done(run) >= prev_n:
         return "kept"
+    if prev is None or not (Path(prev) / "state.json").exists():
+        raise ValueError(
+            f"no state at or past n{prev_n} to resume from: neither {run} "
+            f"nor {prev}"
+        )
     shutil.rmtree(run, ignore_errors=True)
     shutil.copytree(prev, run)
     return "copied"
+
+
+def reachable(n: int, seeds: Sequence[int], kept: Callable[[int], int]) -> bool:
+    """Whether the seed list can hold `n` outbreaks."""
+    try:
+        seeds_for(n, seeds, kept)
+    except ValueError:
+        return False
+    return True
 
 
 def gather_exclusions(paths: Iterable[Path | str], out: Path | str) -> None:

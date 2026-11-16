@@ -45,6 +45,7 @@ def grid_name():
 wildcard_constraints:
     round=r"\d+",
     seed=r"\d+",
+    n=r"\d+",
 
 
 rule simulate_batch:
