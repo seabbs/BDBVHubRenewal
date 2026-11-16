@@ -710,3 +710,34 @@ def test_the_3_day_label_matches_the_slots_check_s_sets() -> None:
     # Every 3-day row against no slots is dropped.
     out = slots_loss_table(check)
     assert not out["Set"].str.contains(THREE_DAY).any()
+
+
+def test_the_block_combinations_table_waits_then_shows_its_rows(
+    tmp_path,
+) -> None:
+    write_evidence(
+        dict.fromkeys(EVIDENCE),
+        tmp_path / "si",
+        tmp_path / "fig",
+        tmp_path / "e.yml",
+    )
+    table = tmp_path / "si" / "block-combinations.md"
+    assert "waits on" in table.read_text()
+    rows = tmp_path / "combos.csv"
+    pd.DataFrame(
+        {"layout": ["daily"], "batched": [True], "share": [0.02]}
+    ).to_csv(rows, index=False)
+    paths = dict.fromkeys(EVIDENCE) | {"block_combinations": rows}
+    write_evidence(paths, tmp_path / "si", tmp_path / "fig", tmp_path / "e.yml")
+    assert "daily" in table.read_text()
+
+
+def test_the_daily_nowcasts_have_a_figure_and_a_table(tmp_path) -> None:
+    rows = tmp_path / "daily.csv"
+    _comparison().to_csv(rows, index=False)
+    paths = dict.fromkeys(EVIDENCE) | {"compare_daily": rows}
+    write_evidence(paths, tmp_path / "si", tmp_path / "fig", tmp_path / "e.yml")
+    assert (tmp_path / "fig" / "compare-daily.png").is_file()
+    assert (
+        "germany national" in (tmp_path / "si" / "compare-daily.md").read_text()
+    )

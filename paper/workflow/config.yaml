@@ -166,6 +166,11 @@ evidence:
   compare_slots: null
   compare_delays: null
   compare_realdata: null
+  # Pending: daily and hub-target scores from the target column.
+  compare_daily: null
+  # Pending: fm-finetune3's realised shares of each combination of block
+  # layout and options.
+  block_combinations: null
   # Pending: the final run's held-out loss curve.
   finetune_heldout: null
   # Pending: summaries of the final grid's simulations.
