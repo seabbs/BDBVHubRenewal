@@ -61,17 +61,19 @@ def test_germany_pairs_by_name():
     parents = slots.parents_of(places)
     assert parents == [-1, 0, 0, 0, 0]
     rows = series_bias.block_rows(len(places), 2 * len(places), parents)
-    same, linked = series_bias.pair_masks(
+    me, same, up, down = series_bias.pair_masks(
         torch.as_tensor(rows[0]), torch.as_tensor(rows[1])
     )
     place = rows[0]
     for q in range(len(place)):
         for k in range(len(place)):
-            assert bool(same[q, k]) == (place[q] == place[k])
-            want = (place[q] == 0) != (place[k] == 0)
-            assert bool(linked[q, k]) == want
+            assert bool(me[q, k]) == (q == k)
+            assert bool(same[q, k]) == (place[q] == place[k] and q != k)
+            assert bool(up[q, k]) == (place[q] != 0 and place[k] == 0)
+            assert bool(down[q, k]) == (place[q] == 0 and place[k] != 0)
     # States and ages are siblings, not linked to each other.
-    assert not linked[1, 2]
+    assert not up[1, 2]
+    assert not down[1, 2]
 
 
 def bdbv_places(n: int) -> list[str]:
@@ -103,12 +105,14 @@ def test_bdbv_pairs_by_name_beyond_128_places(n):
             assert parents[i] == at[p.rsplit("-", 1)[0]]
     rows = series_bias.block_rows(n, 0, parents)
     assert rows[0].max() == n - 1
-    same, linked = series_bias.pair_masks(
+    me, same, up, down = series_bias.pair_masks(
         torch.as_tensor(rows[0]), torch.as_tensor(rows[1])
     )
-    assert int(same.sum()) == n
-    # Each place with a parent is linked to it, both ways round.
-    assert int(linked.sum()) == 2 * sum(q >= 0 for q in parents)
+    assert int(me.sum()) == n
+    assert not same.any()
+    # Each place with a parent points up to it, and it down to the place.
+    assert int(up.sum()) == int(down.sum()) == sum(q >= 0 for q in parents)
+    assert torch.equal(up, down.T)
 
 
 def test_a_1000_place_block_runs_with_the_bias():
@@ -134,10 +138,11 @@ def test_a_block_with_no_parents_links_nothing():
     parents = slots.parents_of(places)
     assert parents == [-1, -1, -1]
     rows = series_bias.block_rows(3, 6, parents)
-    _, linked = series_bias.pair_masks(
+    _, _, up, down = series_bias.pair_masks(
         torch.as_tensor(rows[0]), torch.as_tensor(rows[1])
     )
-    assert not linked.any()
+    assert not up.any()
+    assert not down.any()
 
 
 def test_a_bias_adapter_loads_through_the_strict_loader(tmp_path):
@@ -222,8 +227,10 @@ def test_the_bias_survives_gradient_checkpointing(monkeypatch):
         model.train()
         module = getattr(model, series_bias.BIAS_MODULE)
         with torch.no_grad():
+            module.self_.fill_(0.2)
             module.same.fill_(0.5)
-            module.parent.fill_(-0.3)
+            module.up.fill_(-0.3)
+            module.down.fill_(0.4)
         if checkpointed:
             monkeypatch.setattr(
                 Chronos2EncoderBlock, "forward", Chronos2EncoderBlock.forward
@@ -239,8 +246,8 @@ def test_the_bias_survives_gradient_checkpointing(monkeypatch):
                 future_target=batch["future_target"],
             ).loss
             loss.backward()
-        return module.same.grad, module.parent.grad
+        return [p.grad for p in module.parameters()]
 
     plain, checked = grads(False), grads(True)
-    assert torch.allclose(plain[0], checked[0], atol=1e-6)
-    assert torch.allclose(plain[1], checked[1], atol=1e-6)
+    for a, b in zip(plain, checked, strict=True):
+        assert torch.allclose(a, b, atol=1e-6)

@@ -43,31 +43,51 @@ def test_zero_bias_is_base_chronos_bit_for_bit():
     assert torch.equal(predict(model, block, toy_rows()), predict(base, block))
 
 
-def test_pairs_mark_same_place_and_parent_or_child():
+def masks(place, parent):
+    return series_bias.pair_masks(
+        torch.as_tensor(place), torch.as_tensor(parent)
+    )
+
+
+def test_pairs_mark_self_same_place_child_to_parent_and_back():
     # More places than the old 128 labels: no limit.
     n = 300
-    place, parent = series_bias.block_rows(n, 0, [-1] + [0] * (n - 1))
-    same, linked = series_bias.pair_masks(
-        torch.as_tensor(place), torch.as_tensor(parent)
+    me, same, up, down = masks(
+        *series_bias.block_rows(n, 0, [-1] + [0] * (n - 1))
     )
-    assert same.shape == linked.shape == (n, n)
-    assert torch.equal(same, torch.eye(n, dtype=torch.bool))
-    assert bool(linked[0, 1])
-    assert bool(linked[1, 0])
-    assert not bool(linked[1, 2])  # siblings are not parent and child
+    assert me.shape == same.shape == up.shape == down.shape == (n, n)
+    assert torch.equal(me, torch.eye(n, dtype=torch.bool))
+    assert not same.any()  # one row per place: no other row of it
+    assert bool(up[1, 0])  # a child's row attends to its parent's
+    assert bool(down[0, 1])  # and the parent's to its child's
+    assert not bool(up[0, 1])
+    assert not bool(down[1, 0])
+    assert not bool(up[1, 2])
+    assert not bool(down[1, 2])
     # Each place's lags are its own: same with each other and its count.
-    place, parent = series_bias.block_rows(
-        len(HIER), 2 * len(HIER), slots.parents_of(HIER)
-    )
-    same, linked = series_bias.pair_masks(
-        torch.as_tensor(place), torch.as_tensor(parent)
-    )
+    par = slots.parents_of(HIER)
     rows = slots.row_places(len(HIER), 2 * len(HIER))
+    me, same, up, down = masks(
+        *series_bias.block_rows(len(HIER), 2 * len(HIER), par)
+    )
     for i, p in enumerate(rows):
         for j, q in enumerate(rows):
-            assert bool(same[i, j]) == (p == q)
-            par = slots.parents_of(HIER)
-            assert bool(linked[i, j]) == (par[p] == q or par[q] == p)
+            assert bool(me[i, j]) == (i == j)
+            assert bool(same[i, j]) == (p == q and i != j)
+            assert bool(up[i, j]) == (par[p] == q)
+            assert bool(down[i, j]) == (par[q] == p)
+
+
+def test_the_four_biases_are_zero_fp32_scalars_per_layer_and_head():
+    model = tiny_model().to(torch.bfloat16)
+    series_bias.attach(model)
+    module = getattr(model, series_bias.BIAS_MODULE)
+    names = dict(module.named_parameters())
+    assert set(names) == {"self_", "same", "up", "down"}
+    for p in names.values():
+        assert p.shape == (model.config.num_layers, model.config.num_heads)
+        assert p.dtype == torch.float32
+        assert not p.any()
 
 
 def test_blocks_batched_together_keep_their_own_places():
