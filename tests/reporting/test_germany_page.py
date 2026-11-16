@@ -190,7 +190,11 @@ def _with_ft(res: Path, tag: str | None = "chronos-ft-bbb") -> None:
     pd.concat([sc, _rows(((FT, 2.5),)).astype(str)]).to_csv(
         res / "scores.csv.gz", index=False
     )
-    meta = {"tag": tag, "pinned": "chronos-ft-bbb", "model": FT}
+    meta = {
+        "tag": tag,
+        "pinned": "chronos-ft-bbb",
+        "models": [FT, "fm_chronos_weekly_ragged_ft"],
+    }
     (res / "ft-checkpoint.json").write_text(json.dumps(meta))
 
 
@@ -200,6 +204,11 @@ def test_the_stored_ft_model_is_scored_on_the_baselines_cells(
     res = tmp_path / "germany"
     _scores(res)
     _with_ft(res)
+    # A team missing one national cell keeps its smaller n.
+    teams = pd.read_csv(res / "teams.csv.gz", dtype=str)
+    gap = _rows((("SU", 3.0),)).astype(str)
+    gap = gap.loc[~((gap["pool"] == "national") & (gap["horizon"] == "-7"))]
+    pd.concat([teams, gap]).to_csv(res / "teams.csv.gz", index=False)
     fig, gen = tmp_path / "figures", tmp_path / "generated"
     germany_page(fig, gen, res, CONFIG)
     table = (gen / "germany-scores.md").read_text()
@@ -210,10 +219,13 @@ def test_the_stored_ft_model_is_scored_on_the_baselines_cells(
     ]
     head, body = rows[0], rows[1:]
     got = pd.DataFrame(body, columns=head)
-    ns = got.pivot(index="pool", columns="model", values="n")
+    ns = got.pivot(index="pool", columns="model", values="n").astype(int)
     assert FT in ns.columns
-    # Every model on the page has the same n at each level.
-    assert (ns.nunique(axis=1) == 1).all(), ns
+    # Pairwise with the baseline: the stored model, as every one of ours,
+    # has the baseline's n at each level.
+    for model in (FT, "randomwalk"):
+        assert (ns[model] == ns["randomwalknowcast"]).all(), ns
+    assert ns.loc["national", "SU"] == ns.loc["national", FT] - 1
     rel = got.loc[got["model"] == FT].set_index("pool")["rel_wis"]
     assert set(rel.astype(float)) == {0.5}
     data = json.loads((fig / "explorer-germany.json").read_text())
@@ -229,6 +241,9 @@ def test_the_page_names_the_ft_checkpoint(tmp_path: Path) -> None:
     note = (gen / "germany-ft.md").read_text()
     assert "chronos-ft-bbb" in note
     assert FT in note
+    assert "fm_chronos_weekly_ragged_ft" in note
+    # The checkpoint is named once for both models.
+    assert note.count("chronos-ft-bbb") == 2  # link text and URL
     assert "releases/tag/chronos-ft-bbb" in note
 
 

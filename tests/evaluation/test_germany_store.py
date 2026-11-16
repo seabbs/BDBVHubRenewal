@@ -12,7 +12,7 @@ import pytest
 
 from bdbvhubrenewal.evaluation.germany import load_germany_config
 from bdbvhubrenewal.evaluation.germany_store import (
-    STORED_MODEL,
+    STORED_MODELS,
     choose_checkpoint,
     development_rows,
     load_stored,
@@ -25,7 +25,10 @@ CONFIG = load_germany_config(ROOT / "config" / "germany.toml")
 SPLIT = CONFIG.split_date
 
 
-def _cache(origins: tuple[str, ...], model: str = STORED_MODEL) -> pd.DataFrame:
+DAILY, WEEKLY = "fm_chronos_daily_ragged_ft", "fm_chronos_weekly_ragged_ft"
+
+
+def _cache(origins: tuple[str, ...], model: str = DAILY) -> pd.DataFrame:
     rows = []
     for origin in origins:
         for h in (0, -7):
@@ -117,11 +120,12 @@ def test_development_rows_keep_the_model_before_the_split() -> None:
     frame = pd.concat(
         [
             _cache(("2021-11-22", "2022-02-09")),
-            _cache(("2021-11-22",), model="fm_chronos_weekly_ragged_ft"),
+            _cache(("2021-11-22",), model=WEEKLY),
+            _cache(("2021-11-22",), model="fm_chronos_daily_ragged"),
         ]
     )
     out = development_rows(frame, SPLIT)
-    assert set(out["model"]) == {STORED_MODEL}
+    assert set(out["model"]) == {DAILY, WEEKLY}
     assert out["origin"].max() == "2022-02-09"
     assert (out["target_end_date"] < SPLIT).all()
 
@@ -139,7 +143,7 @@ def test_write_then_load_round_trips(tmp_path: Path) -> None:
     manifest = json.loads(
         (store / "chronos-ft-bbb" / "manifest.json").read_text()
     )
-    assert manifest["model"] == STORED_MODEL
+    assert manifest["models"] == [DAILY]
     assert manifest["first_origin"] == "2021-11-22"
     assert manifest["last_origin"] == "2021-11-23"
     assert manifest["split_date"] == SPLIT
@@ -171,7 +175,8 @@ def test_the_store_script_writes_a_label_from_the_cache(
         pd.concat(
             [
                 _cache((origin,)),
-                _cache((origin,), model="fm_chronos_weekly_ragged_ft"),
+                _cache((origin,), model=WEEKLY),
+                _cache((origin,), model="randomwalknowcast"),
             ]
         ).to_csv(day / f"{origin}.csv.gz", index=False)
     out = tmp_path / "out"
@@ -191,7 +196,7 @@ def test_the_store_script_writes_a_label_from_the_cache(
         check=True,
     )
     stored = load_stored(out, "chronos-ft-abcdef123456", SPLIT)
-    assert set(stored["model"]) == {STORED_MODEL}
+    assert set(stored["model"]) == {DAILY, WEEKLY}
     assert sorted(set(stored["origin"])) == ["2021-11-22", "2021-11-23"]
 
 
@@ -252,9 +257,9 @@ def test_the_load_command_writes_the_chosen_checkpoint(
     meta = json.loads(note.read_text())
     assert meta["tag"] == "chronos-ft-bbb"
     assert meta["pinned"] == "chronos-ft-bbb"
-    assert meta["model"] == STORED_MODEL
+    assert meta["models"] == list(STORED_MODELS)
     scores = pd.read_csv(out / "scores.csv.gz")
-    assert set(scores["model"]) == {STORED_MODEL}
+    assert set(scores["model"]) == {DAILY}
     assert (scores["origin"] < SPLIT).all()
     assert (out / "forecasts.csv.gz").exists()
 
@@ -285,3 +290,7 @@ def test_the_load_command_writes_nothing_without_a_stored_checkpoint(
     assert cli.main(args) == 0
     assert not (out / "forecasts.csv.gz").exists()
     assert json.loads(note.read_text())["tag"] is None
+
+
+def test_both_fine_tuned_models_are_stored() -> None:
+    assert STORED_MODELS == (DAILY, WEEKLY)
