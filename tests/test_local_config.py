@@ -79,6 +79,9 @@ def test_with_no_remote_rounds_stream_in_from_this_machine(tmp_path):
     (rounds / "sims").mkdir(parents=True)
     (rounds / "manifest.csv").write_text("round,seed,kind\n1,20001,train\n")
     (rounds / "sims" / "settings-20001.csv").write_text("x")
+    # A running batch's temporary files are not simulations.
+    (rounds / "sims" / "tmp" / "20002").mkdir(parents=True)
+    (rounds / "sims" / "tmp" / "20002" / "standata.json").write_text("x")
     out = subprocess.run(
         [
             "bash",
@@ -94,6 +97,7 @@ def test_with_no_remote_rounds_stream_in_from_this_machine(tmp_path):
     )
     assert out.stdout.split() == ["20001"]
     assert (tmp_path / "local" / "sims" / "settings-20001.csv").exists()
+    assert not (tmp_path / "local" / "sims" / "tmp").exists()
 
 
 def test_no_fine_tuning_or_simulation_code_names_a_host_or_home():
