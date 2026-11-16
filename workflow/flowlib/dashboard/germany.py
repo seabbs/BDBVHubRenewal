@@ -185,6 +185,37 @@ def build(
     }
 
 
+def _signature(cache: Path) -> tuple:
+    out = []
+    for f in sorted(cache.glob("*/*.csv.gz")):
+        try:
+            st = f.stat()
+        except OSError:
+            continue
+        out.append((str(f), st.st_mtime_ns, st.st_size))
+    return tuple(out)
+
+
+def cached_build(
+    cache: Path | str,
+    run_list: Sequence[Run],
+    references: Sequence[Reference],
+    store: dict,
+    levels: Sequence[float] = PAGE_LEVELS,
+) -> dict[str, Any] | None:
+    """Return `build`'s result, reused while no cache file changes.
+
+    `store` keeps the last build and the cache files' paths, times and
+    sizes it was built from.
+    """
+    cache = Path(cache)
+    sig = (_signature(cache) if cache.is_dir() else None, tuple(levels))
+    if store.get("sig") != sig or "built" not in store:
+        store["built"] = build(cache, run_list, references, levels)
+        store["sig"] = sig
+    return store["built"]
+
+
 def location(built: Mapping[str, Any] | None, loc: str) -> dict[str, Any]:
     """Return one location's page data: series, mean WIS and truth."""
     if not built or loc not in built["series"]:

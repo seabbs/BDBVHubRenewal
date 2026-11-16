@@ -112,3 +112,14 @@ def test_one_location_as_page_data(tmp_path):
     assert set(got) == {"series", "wis", "truth"}
     assert got["truth"] == {"t": ["2022-02-01"], "y": [10.0]}
     assert germany.location(built, "XX") == {}
+
+
+def test_a_build_is_reused_until_a_cache_file_changes(tmp_path):
+    cache, rs, refs = _setup(tmp_path)
+    store = {}
+    first = germany.cached_build(cache, rs, refs, store)
+    assert germany.cached_build(cache, rs, refs, store) is first
+    _write(cache / "reference" / "2022-02-11.csv.gz", "randomwalknowcast")
+    again = germany.cached_build(cache, rs, refs, store)
+    assert again is not first
+    assert "2022-02-11" in again["origins"]

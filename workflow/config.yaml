@@ -129,8 +129,9 @@ dashboard:
   rule: own-quantile-wis_crps-1000-common
   # Mailbox lines shown (a regular expression).
   mail_filter: "slots|ckpt-scores|agg-slots|slots-check|fm-finetune|sim round|workflow:"
-  # Where scores are mirrored to when REMOTE is set.
+  # Where scores are mirrored to when REMOTE is set, and how often (s).
   mirror: output/dashboard/mirror
+  mirror_every: 300
   # The datasets of the nowcast panels and their location groups.
   datasets:
     - key: germany

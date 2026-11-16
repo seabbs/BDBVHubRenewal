@@ -14,6 +14,7 @@ from __future__ import annotations
 import argparse
 import sys
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote
@@ -67,7 +68,6 @@ def handler(ctx: page.Context) -> type[BaseHTTPRequestHandler]:
                 return
             try:
                 with LOCK:
-                    ctx.source.refresh()
                     body = page.build(ctx).encode()
                 self._send(200, body, "text/html; charset=utf-8")
             except Exception as err:
@@ -77,6 +77,19 @@ def handler(ctx: page.Context) -> type[BaseHTTPRequestHandler]:
             pass
 
     return Handler
+
+
+def keep_mirrored(ctx: page.Context, every: float) -> None:
+    """Refresh the score mirror every `every` seconds, outside requests."""
+
+    def loop() -> None:
+        while True:
+            status = ctx.source.refresh()
+            with LOCK:
+                ctx.mirror_status = status
+            time.sleep(every)
+
+    threading.Thread(target=loop, daemon=True).start()
 
 
 def main() -> None:
@@ -92,6 +105,8 @@ def main() -> None:
         a.once.write_text(page.build(ctx))
         print("wrote", a.once)
         return
+    if ctx.source.command():
+        keep_mirrored(ctx, float(config["dashboard"].get("mirror_every", 300)))
     server = ThreadingHTTPServer(("127.0.0.1", a.port), handler(ctx))
     print(f"http://127.0.0.1:{a.port}/")
     server.serve_forever()

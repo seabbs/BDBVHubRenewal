@@ -46,6 +46,18 @@ class Context:
     mail_filter: str = ""
     once: bool = False
     logs: dict[str, logs.Log] = field(default_factory=dict)
+    germany_store: dict = field(default_factory=dict)
+    mirror_status: str = ""
+
+    def germany(self) -> dict[str, Any] | None:
+        """Return the German nowcasts, rebuilt only when the cache changes."""
+        return germany.cached_build(
+            self.source.germany,
+            self.runs,
+            self.references,
+            self.germany_store,
+            levels=self.style["levels"],
+        )
 
     @property
     def steps_per_outbreak(self) -> float:
@@ -635,9 +647,14 @@ def build(ctx: Context) -> str:
         "@media(prefers-color-scheme:dark){:root{--truth:var(--fg)}}"
     )
     refresh = "" if ctx.once else "auto-refresh 60 s; "
+    mirror = (
+        f"scores {html.escape(ctx.mirror_status)}; "
+        if ctx.mirror_status
+        else ""
+    )
     ck_data = checkpoint_payload(ctx, info)
     body = f"""<h1>Chronos-2 fine-tuning: {html.escape(live.label)}</h1>
-<div class=mut>{datetime.now():%Y-%m-%d %H:%M:%S}; {refresh}{sub}</div>
+<div class=mut>{datetime.now():%Y-%m-%d %H:%M:%S}; {refresh}{mirror}{sub}</div>
 <h2>Status</h2><div class=tiles>{status_tiles(ctx, live, rows)}</div>
 <h2>Loss plots</h2>{modebar}
 <p class=mut>Relative values divide by the run's own step-0 held-out loss
