@@ -1,26 +1,11 @@
 # Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
 """Every candidate model's forecasts for a round, for the ledger.
 
-The submission ledger keeps the submitted file of each round.
-`archive` adds the hub table every stored model and every submission
-candidate would submit for the round, health zones included, so each
-can be scored prospectively, and not only the one submitted.
-Each table is made by `hub`, the path `bdbvhubrenewal nowcast` takes.
-A stored model's fit is the one the store holds when the round is
-recorded, the fit `store.load` uses: a submission candidate forecasts
-from its fit directory, as the submission does, and any other stored
-model from its stored samples.
-A model the store does not hold, such as `randomwalk`, is forecast then,
-as the submission forecasts it, and nothing is stored.
-Each row carries its fit's key, commit and `fitted_at`, so an analysis
-can compare when each forecast was made with the window's close.
-A model that cannot be archived is reported and left out; the others are
-archived.
-`ci/steps/archive_candidates.sh` writes it to the ledger as
-`archive/<reference_date>/<run>/candidates.csv.gz`
-(`bdbvhubrenewal fit-store archive`).
-
-This module is apart from `store`, whose source keys every stored fit.
+`archive` returns the hub table each stored model and each submission
+candidate would submit for the round, health zones included.
+A stored model forecasts from the fit the store holds, and any other
+candidate is forecast now.
+A model that cannot be archived is reported and left out.
 """
 
 from __future__ import annotations
@@ -195,16 +180,16 @@ def _stored(
     model: str,
     config: str | None,
     task: ForecastTask,
-    store_task: ForecastTask | None,
+    origin_task: ForecastTask | None,
     sampler: Mapping[str, Any],
     code: Callable[[str], str],
     hub: Hub,
 ) -> pd.DataFrame:
     """Return a stored model's hub table from the fit the store holds."""
-    if store_task is None:
+    if origin_task is None:
         raise LookupError(f"{task.vintage} is not an origin the store fits")
-    origin = store_task.vintage
-    tasks = {origin: store_task}
+    origin = origin_task.vintage
+    tasks = {origin: origin_task}
     key = store.current_keys(tasks, [model], sampler, code(model))
     fit, _ = store._choose(root, model, origin, key[(model, origin)])
     if fit is None:
@@ -229,7 +214,7 @@ def _stored(
 def archive(
     root: Path | str,
     task: ForecastTask,
-    store_task: ForecastTask | None,
+    origin_task: ForecastTask | None,
     models: Mapping[str, str | None],
     sampler: Mapping[str, Any],
     hub: Hub,
@@ -243,7 +228,7 @@ def archive(
         The store root.
     task : ForecastTask
         The round's task, as `bdbvhubrenewal nowcast` builds it.
-    store_task : ForecastTask or None
+    origin_task : ForecastTask or None
         The store's task at the same origin (`store.origin_tasks`), for
         the stored fits' keys; None if the store fits no such origin.
     models : mapping
@@ -276,7 +261,7 @@ def archive(
                     model,
                     config,
                     task,
-                    store_task,
+                    origin_task,
                     sampler,
                     digest,
                     hub,
