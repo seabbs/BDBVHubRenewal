@@ -13,7 +13,7 @@ the results are filtered to it, and the page refuses to write a nowcast
 date on or after it (`held_out_leaks`), which CI checks again on the built
 site (`scripts/check_germany_site.py`).
 The configured hidden models start switched off.
-`fm_chronos_daily_ragged_ft`'s forecasts come from the store
+The fine-tuned models' forecasts come from the store
 (`bdbvhubrenewal.evaluation.germany_store`); the page names the checkpoint
 shown (`germany-ft.md`).
 """
@@ -209,16 +209,18 @@ def _ft_note(results: Path) -> str:
     if not path.exists():
         return ""
     meta = json.loads(path.read_text())
-    model, tag, pinned = meta["model"], meta["tag"], meta["pinned"]
+    tag, pinned = meta["tag"], meta["pinned"]
+    models = " and ".join(f"`{m}`" for m in meta["models"])
     if tag is None:
         return (
-            f"`{model}` is not shown: the German forecasts of its "
+            f"{models} are not shown: the German forecasts of their "
             f"checkpoint (`{pinned}`) are not stored yet.\n"
         )
     note = (
-        f"`{model}` shows the checkpoint [`{tag}`]({_RELEASES}/{tag}). "
-        "Its forecasts are those the checkpoint scoring run made, stored "
-        "on the `germany-ft-forecasts` branch, not rerun here."
+        f"{models} show the fine-tuned checkpoint [`{tag}`]"
+        f"({_RELEASES}/{tag}). Their forecasts are those the checkpoint "
+        "scoring run made, stored on the `germany-ft-forecasts` branch, "
+        "not rerun here."
     )
     if pinned and tag != pinned:
         note += f" The pinned checkpoint, `{pinned}`, is not stored yet."

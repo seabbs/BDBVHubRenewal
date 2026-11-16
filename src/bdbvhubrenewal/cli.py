@@ -1690,11 +1690,11 @@ def _germany_ft_load(args: argparse.Namespace) -> int:
     )
     note = Path(args.note)
     note.parent.mkdir(parents=True, exist_ok=True)
-    meta = {"tag": tag, "pinned": pinned, "model": gs.STORED_MODEL}
+    meta = {"tag": tag, "pinned": pinned, "models": list(gs.STORED_MODELS)}
     note.write_text(json.dumps(meta, indent=2) + "\n")
     if tag is None:
         print(
-            f"No stored German forecasts of {gs.STORED_MODEL} for {pinned} "
+            f"No stored German forecasts of the _ft models for {pinned} "
             f"or any other checkpoint ({len(stored)} stored)."
         )
         return 0
@@ -1705,7 +1705,7 @@ def _germany_ft_load(args: argparse.Namespace) -> int:
     write_csv(forecasts, out / "forecasts.csv.gz")
     write_csv(scores, out / "scores.csv.gz")
     print(
-        f"{gs.STORED_MODEL} at {tag} (pinned {pinned}): {len(scores)} "
+        f"The _ft models at {tag} (pinned {pinned}): {len(scores)} "
         f"scored nowcasts in {out}."
     )
     return 0

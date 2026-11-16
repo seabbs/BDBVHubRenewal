@@ -46,8 +46,8 @@ on:
     inputs:
       paper_target:
         description: >-
-          The paper workflow's target. `paper` reads the held-out data;
-          run it only when the held-out results are to be shown.
+          The paper workflow's target. `paper` reads the held-out data,
+          so its build is never deployed or attached to a release.
         type: choice
         options: [development, paper]
         default: development
@@ -133,8 +133,9 @@ jobs:
       matrix:
         # Longest first, so the short ones fill in behind them.
         include:
-          # fm_chronos_daily_ragged_ft has no cells: its forecasts come
-          # from the checkpoint scorer's store (`germany-ft-load` in build).
+          # The fine-tuned models (fm_chronos_*_ragged_ft) have no cells:
+          # their forecasts come from the checkpoint scorer's store
+          # (`germany-ft-load` in build).
           # The German benchmark reads none of the hub data, so its cells
           # run without the inputs and are keyed on its own code and
           # config/germany.toml, which pins its data. A nowcast date takes
@@ -271,30 +272,6 @@ jobs:
             run: >-
               uv run --group chronos bdbvhubrenewal germany-backtest
               --models fm_chronos_weekly_ragged --chunk 3/4 --out output/parts/germany
-          - cell: germany-fm_chronos_weekly_ragged_ft-0
-            model: fm_chronos_weekly_ragged_ft
-            germany: true
-            run: >-
-              uv run --group chronos bdbvhubrenewal germany-backtest
-              --models fm_chronos_weekly_ragged_ft --chunk 0/4 --out output/parts/germany
-          - cell: germany-fm_chronos_weekly_ragged_ft-1
-            model: fm_chronos_weekly_ragged_ft
-            germany: true
-            run: >-
-              uv run --group chronos bdbvhubrenewal germany-backtest
-              --models fm_chronos_weekly_ragged_ft --chunk 1/4 --out output/parts/germany
-          - cell: germany-fm_chronos_weekly_ragged_ft-2
-            model: fm_chronos_weekly_ragged_ft
-            germany: true
-            run: >-
-              uv run --group chronos bdbvhubrenewal germany-backtest
-              --models fm_chronos_weekly_ragged_ft --chunk 2/4 --out output/parts/germany
-          - cell: germany-fm_chronos_weekly_ragged_ft-3
-            model: fm_chronos_weekly_ragged_ft
-            germany: true
-            run: >-
-              uv run --group chronos bdbvhubrenewal germany-backtest
-              --models fm_chronos_weekly_ragged_ft --chunk 3/4 --out output/parts/germany
           - cell: recovery-randomwalknowcast-0
             model: randomwalknowcast
             run: >-
@@ -594,7 +571,7 @@ jobs:
             "$p"-zones-{randomwalk,randomwalknowcast} \
             "$p"-zones-pprandomwalknowcast-{0,1} \
             "$p"-scenario-{randomwalk,randomwalknowcast}-{falling,flat,rising}
-      # fm_chronos_daily_ragged_ft's German forecasts, as the checkpoint
+      # The fine-tuned models' German forecasts, as the checkpoint
       # scorer made them, from the germany-ft-forecasts branch
       # (scripts/germany_ft_store.py): the newest stored final-run
       # (chronos-slots-*) checkpoint, else the one config/finetune.toml
@@ -610,7 +587,7 @@ jobs:
           fi
           uv run bdbvhubrenewal germany-ft-load \
             --store output/germany-ft-store \
-            --out output/parts/parts-germany-fm_chronos_daily_ragged_ft/germany \
+            --out output/parts/parts-germany-ft-store/germany \
             --note results/germany/ft-checkpoint.json
       - name: Compare with hub forecasts, then the docs figures and tables
         env:
@@ -728,6 +705,8 @@ jobs:
     if: >-
       !cancelled() && needs.build.result == 'success'
       && github.event_name != 'pull_request'
+      && inputs.paper_target != 'paper'
+    # A `paper` build holds the held-out half, which waits for the paper.
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -785,6 +764,7 @@ jobs:
     if: >-
       !cancelled() && needs.build.result == 'success'
       && github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+      && inputs.paper_target != 'paper'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:

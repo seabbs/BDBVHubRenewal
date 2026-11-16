@@ -68,6 +68,7 @@ Settings, data paths and the held-out sets are in [`workflow/config.yaml`](workf
 - Development German data stop at the split, with releases up to D days after it for the truth of the last dates.
 - CI runs the development target.
   The `paper` target runs only when the Pages workflow is dispatched with `paper_target: paper`.
+  That build is never deployed to the site or attached to a release.
 - No held-out data or results are committed.
   `results/` and `build/` are ignored.
   The SI note on the held-out set is generated with the grid tables ([`papertables/synthetic_grid.py`](papertables/synthetic_grid.py)).

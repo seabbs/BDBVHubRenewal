@@ -1,7 +1,7 @@
 # Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
 """Stored German forecasts of the fine-tuned Chronos-2 model.
 
-The Pages build never runs `STORED_MODEL` on the German benchmark. The
+The Pages build never runs `STORED_MODELS` on the German benchmark. The
 checkpoint scorer (`scripts/checkpoint_scores.py germany` on the
 `checkpoint-scoring` branch) already nowcasts every development date
 with each published checkpoint, by `germany_forecasts` and `with_truth`
@@ -30,7 +30,7 @@ import pandas as pd
 __all__ = [
     "FT_PREFIX",
     "SLOTS_PREFIX",
-    "STORED_MODEL",
+    "STORED_MODELS",
     "STORE_BRANCH",
     "choose_checkpoint",
     "development_rows",
@@ -40,8 +40,12 @@ __all__ = [
     "write_stored",
 ]
 
-STORED_MODEL: Final = "fm_chronos_daily_ragged_ft"
-"""The model whose German forecasts come from the store."""
+STORED_MODELS: Final = (
+    "fm_chronos_daily_ragged_ft",
+    "fm_chronos_weekly_ragged_ft",
+)
+"""The models whose German forecasts come from the store, both at the
+same checkpoint."""
 
 STORE_BRANCH: Final = "germany-ft-forecasts"
 """The branch that holds the stored forecasts."""
@@ -144,9 +148,11 @@ def choose_checkpoint(
 
 
 def development_rows(
-    forecasts: pd.DataFrame, split_date: str, model: str = STORED_MODEL
+    forecasts: pd.DataFrame,
+    split_date: str,
+    models: tuple[str, ...] = STORED_MODELS,
 ) -> pd.DataFrame:
-    """Return the model's forecasts, refusing any held-out date.
+    """Return the models' forecasts, refusing any held-out date.
 
     Parameters
     ----------
@@ -155,21 +161,21 @@ def development_rows(
         models.
     split_date : str
         The first held-out nowcast date (`GermanyConfig.split_date`).
-    model : str
-        The model kept.
+    models : tuple of str
+        The models kept.
 
     Returns
     -------
     pandas.DataFrame
-        The model's rows, sorted.
+        The models' rows, sorted.
 
     Raises
     ------
     ValueError
-        If a row of the model has a nowcast date or a target end date on
+        If a row of the models has a nowcast date or a target end date on
         or after the split date, or there are none.
     """
-    rows = forecasts.loc[forecasts["model"] == model].copy()
+    rows = forecasts.loc[forecasts["model"].isin(models)].copy()
     for col in ("origin", "target_end_date", "truth_vintage"):
         rows[col] = rows[col].astype(str)
     late = (rows["origin"] >= split_date) | (
@@ -178,13 +184,21 @@ def development_rows(
     if late.any():
         first = rows.loc[late, "origin"].min()
         raise ValueError(
-            f"{int(late.sum())} rows of {model} are held-out (on or after "
-            f"{split_date}, from {first}); only development dates may be "
+            f"{int(late.sum())} rows of {', '.join(models)} are held-out "
+            f"(on or after {split_date}, from {first}); only development "
+            "dates may be "
             "stored or shown."
         )
     if rows.empty:
-        raise ValueError(f"No forecasts of {model}.")
-    keys = ["origin", "location", "target_end_date", "horizon", "quantile"]
+        raise ValueError(f"No forecasts of {', '.join(models)}.")
+    keys = [
+        "model",
+        "origin",
+        "location",
+        "target_end_date",
+        "horizon",
+        "quantile",
+    ]
     return rows.sort_values(keys, kind="stable").reset_index(drop=True)
 
 
@@ -217,7 +231,7 @@ def write_stored(
     tag : str
         The checkpoint's release tag, the directory written.
     forecasts : pandas.DataFrame
-        Its forecasts (`development_rows` keeps `STORED_MODEL`).
+        Its forecasts (`development_rows` keeps `STORED_MODELS`).
     split_date : str
         The first held-out nowcast date.
     label : str
@@ -237,7 +251,7 @@ def write_stored(
     manifest = {
         "tag": tag,
         "label": label,
-        "model": STORED_MODEL,
+        "models": sorted(set(rows["model"])),
         "split_date": split_date,
         "first_origin": str(rows["origin"].min()),
         "last_origin": str(rows["origin"].max()),
@@ -282,7 +296,7 @@ def load_stored(store: Path | str, tag: str, split_date: str) -> pd.DataFrame:
     Returns
     -------
     pandas.DataFrame
-        `germany-backtest`'s forecast columns, `STORED_MODEL` only.
+        `germany-backtest`'s forecast columns, `STORED_MODELS` only.
     """
     dtype = {"origin": str, "truth_vintage": str, "target_end_date": str}
     frame = pd.read_csv(Path(store) / tag / FORECASTS, dtype=dtype)

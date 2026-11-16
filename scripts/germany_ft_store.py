@@ -7,7 +7,8 @@ germany CACHE LABEL` on the checkpoint-scoring branch), with one file
 per development date in CACHE/germany/LABEL/. LABEL is a settings hash
 (release `chronos-ft-<hash>`) or `slots-<hash>` (`chronos-slots-<hash>`).
 
-The script keeps `fm_chronos_daily_ragged_ft` on the development dates
+The script keeps `fm_chronos_daily_ragged_ft` and
+`fm_chronos_weekly_ragged_ft` on the development dates
 (refusing any date on or after the split date in config/germany.toml),
 writes them to `<release tag>/forecasts.csv.gz` with a `manifest.json`,
 commits that to the `germany-ft-forecasts` branch of `origin` and pushes
@@ -55,8 +56,9 @@ Written by `scripts/germany_ft_store.py` on main from the checkpoint
 scorer's cache, and read by the Pages build (`bdbvhubrenewal
 germany-ft-load`). One directory per checkpoint release tag, with
 `forecasts.csv.gz` (`germany-backtest`'s forecast columns,
-`fm_chronos_daily_ragged_ft` only) and `manifest.json`. Development
-nowcast dates only: nothing on or after the split date in
+`fm_chronos_daily_ragged_ft` and `fm_chronos_weekly_ragged_ft` only)
+and `manifest.json`. Development nowcast dates only: nothing on or after
+the split date in
 config/germany.toml.
 """
 
