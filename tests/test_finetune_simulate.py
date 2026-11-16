@@ -704,3 +704,42 @@ def test_obs_strata_is_a_balanced_factor(tmp_path):
         tmp_path,
     )
     assert out.split() == ["shared", "dispersion", "families", "0"]
+
+
+@needs_r
+def test_independent_strata_are_separate_simulations(tmp_path):
+    out = run_r(
+        """
+g <- 0L
+repeat {
+  cell <- cell_for(g)
+  if (cell$strata == "places" && cell$strata_link == "independent") break
+  g <- g + 1L
+}
+set.seed(2)
+design <- draw_design(g)
+res <- simulate_cell(design)
+c <- res$out$counts
+v <- res$out$values
+cat("n", design$n_places, "\\n")
+cat("locations", sort(unique(c$location)), "\\n")
+cat("cells", length(strsplit(v$stratum_cells, ";")[[1]]), "\\n")
+cat("trajectories", length(strsplit(v$stratum_trajectory, ";")[[1]]), "\\n")
+""",
+        tmp_path,
+    )
+    rows = {x.split()[0]: x.split()[1:] for x in out.splitlines() if x}
+    n = int(rows["n"][0])
+    assert 2 <= n <= 8
+    assert len(rows["locations"]) == n
+    assert int(rows["cells"][0]) == n
+    assert int(rows["trajectories"][0]) == n
+
+
+@needs_r
+def test_strata_link_is_a_balanced_factor(tmp_path):
+    out = run_r(
+        'f <- factors$strata_link\ncat(f, block %% length(f), "\\n")',
+        tmp_path,
+    )
+    assert out.split() == ["linked", "independent", "0"]
