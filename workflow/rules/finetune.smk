@@ -266,3 +266,14 @@ rule finetune:
         if LOCAL["PUBLISH"]
         else [],
         [f"{RUN}/reports/n{CHECK}-check.txt"] if CHECK in FT["prefixes"] else [],
+
+
+rule dashboard:
+    # A static render of the dashboard for the configured runs, for a
+    # finished run or the record; `task dashboard` serves it live instead.
+    output:
+        f"{RUN}/reports/dashboard.html",
+    localrule: True
+    shell:
+        "uv run --group paper python workflow/scripts/dashboard.py "
+        "--once {output}"

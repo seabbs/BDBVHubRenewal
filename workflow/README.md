@@ -101,6 +101,17 @@ After each slots checkpoint's scores:
 - `agg_data`, `agg_sanity`, `agg_fit`, `agg_rows`: the aggregation arms (`scripts/agg/`), with the data pinned to the zero-shot rows' hub commit and a sanity check that a zero-shot arm reproduces its rows, once per package version.
 - `followups`: all of these; `score` includes them.
 
+## 5. Dashboard (`workflow/flowlib/dashboard/`)
+
+`task dashboard` serves a page for a running fine-tune on 127.0.0.1 (`PORT=8765`); it is not a Snakemake job, so it never holds the workflow's lock.
+`task dashboard:static` builds the rule `dashboard`, a static render of the same page in `<RUN>/reports/dashboard.html`.
+
+- Runs are configured, not coded: `dashboard.runs` in `workflow/config.yaml` (release-prefix runs, which need no paths), then `DASHBOARD_RUNS` in `config/local.env` (runs with a local folder), then `--run` (`task dashboard -- --run realdata=realdata-ft-,colour=#0d9488`). A spec is `name=<folder|prefix>[,label=..][,colour=..][,live][,base=..][,prefix=..][,hashes=h1+h2][,n=h1:250+h2:500]`; any run can be compared with any other.
+- References (zero-shot ragged, complete-only, randomwalknowcast) are `dashboard.references`, matched on rows by model and checkpoint, with `--ref` to add or replace one.
+- Scores and German forecasts come from `SCORE_CACHE`, or, with `REMOTE` set, a read-only rsync mirror of `REMOTE:REMOTE_ROOT/scores` (or `REMOTE_SCORE_CACHE`) in `dashboard.mirror`.
+- German nowcasts use the paper panels' quantile levels, bands and truth ink (`paperfigs.plots`, through `flowlib/dashboard/paperstyle.py`, with a test that fails if the paper's bands change), so the dashboard and the paper's nowcast figures look alike.
+- The mailbox section shows `MAILBOX`'s last lines matching `dashboard.mail_filter`.
+
 ## CI
 
 | Target | On CI | Why |
