@@ -18,6 +18,22 @@ mailbox=${MAILBOX:-$HOME/bdbv-archie-mailbox.md}
 say() {
   echo "$(date '+%Y-%m-%d %H:%M') archie: slots-followups: $label: $*" >> "$mailbox"
 }
+# The site's Germany page reads the checkpoint's development forecasts
+# from the germany-ft-forecasts branch (scripts/germany_ft_store.py,
+# #255); quick, so before the lock.
+store=$trees/germany-site-ft/scripts/germany_ft_store.py
+[ -f "$here/scripts/germany_ft_store.py" ] && store=$here/scripts/germany_ft_store.py
+if [ -f "$store" ]; then
+  if uv run --project "$(dirname "$(dirname "$store")")" python "$store" \
+    "$HOME/ckpt-scores/cache" "$label" \
+    --repo "$(dirname "$(dirname "$store")")"; then
+    say "German development forecasts stored for the site (germany-ft-forecasts)"
+  else
+    say "FAILED to store the German forecasts for the site ($store)"
+  fi
+else
+  say "skipped the site's German store: no germany_ft_store.py yet"
+fi
 exec 9> "$HOME/.slots-followups.lock"
 flock 9
 for job in "slots-check:scripts/slots_check.sh" "agg-slots:scripts/agg/run_finetuned.sh"; do
