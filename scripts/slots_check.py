@@ -82,6 +82,11 @@ rows changes the order Chronos-2 sums them in, so a swap without slots
 can move the output by rounding, about 1e-6; a slot that matters moves
 it by 1e-2 or more."""
 
+FLOOR_FACTOR = 10
+"""A slots model's swap counts as a change on a block when it moves the
+output by more than this many times the larger of the zero-shot and
+no-slots swaps on the same block (their rounding)."""
+
 
 def model_ids(model, block: dict) -> np.ndarray | None:
     """Return each row's slot as inference assigns it, None without slots.
@@ -390,6 +395,12 @@ def score(args) -> None:
     models = load_models(
         Path(args.noslots).expanduser(), Path(args.slots).expanduser()
     )
+    # How far the slots are from zero init: Chronos-2's patch tokens have
+    # an sd of about 0.03.
+    weight = getattr(models["slots"], slots.SLOT_MODULE).embedding.weight
+    slot_sd = float(weight.detach().std())
+    slot_absmax = float(weight.detach().abs().max())
+    print(f"slots sd {slot_sd:.3g}, max |w| {slot_absmax:.3g}", flush=True)
     rows = []
     t0 = time.time()
     for j, block in enumerate(blocks):
@@ -425,6 +436,10 @@ def score(args) -> None:
                         "forecast": float(loss[:, d:h].mean()),
                         **{f"change_{k}": v for k, v in change.items()},
                         "seconds": time.time() - t1,
+                        "slot_sd": slot_sd if name == "slots" else np.nan,
+                        "slot_absmax": (
+                            slot_absmax if name == "slots" else np.nan
+                        ),
                     }
                 )
         print(
@@ -458,7 +473,8 @@ def summarise_rows(d: pd.DataFrame, n_boot: int = 2000) -> pd.DataFrame:
     = share of blocks whose loss rose; output_change_max and _mean = the
     largest and the mean absolute change in the scaled quantiles;
     n_identical and n_unchanged = blocks whose largest change is zero or
-    under `UNCHANGED`.
+    under `UNCHANGED`; n_above_floor = blocks whose largest change is over
+    `FLOOR_FACTOR` times the zero-shot and no-slots swaps' on that block.
     """
     rng = np.random.default_rng(1)
     d = groups(d)
@@ -466,6 +482,12 @@ def summarise_rows(d: pd.DataFrame, n_boot: int = 2000) -> pd.DataFrame:
     rows = []
     for window in WINDOWS:
         given = d[d["condition"] == "given"].set_index(key)[window]
+        col = f"change_{window}_max"
+        floor = (
+            d[d["model"].isin(["zero-shot", "n1000"])]
+            .groupby(["group", "condition", "key"])[col]
+            .max()
+        )
         for (group, model, cond), part in d[d["condition"] != "given"].groupby(
             ["group", "model", "condition"], sort=False
         ):
@@ -478,7 +500,17 @@ def summarise_rows(d: pd.DataFrame, n_boot: int = 2000) -> pd.DataFrame:
                 continue
             idx = rng.integers(0, len(g), (n_boot, len(g)))
             boot = c[idx].mean(1) / g[idx].mean(1)
-            change_max = part[f"change_{window}_max"].to_numpy()[ok]
+            change_max = part[col].to_numpy()[ok]
+            fl = floor.reindex(
+                pd.MultiIndex.from_arrays(
+                    [
+                        part.index.get_level_values("group"),
+                        [cond] * len(part),
+                        part.index.get_level_values("key"),
+                    ]
+                )
+            ).to_numpy()[ok]
+            above = (change_max > FLOOR_FACTOR * fl) & (change_max > 0)
             rows.append(
                 {
                     "set": group,
@@ -494,6 +526,10 @@ def summarise_rows(d: pd.DataFrame, n_boot: int = 2000) -> pd.DataFrame:
                     "n_blocks": len(g),
                     "n_identical": int((change_max == 0).sum()),
                     "n_unchanged": int((change_max < UNCHANGED).sum()),
+                    "n_above_floor": int(above.sum()),
+                    "slot_sd": float(part["slot_sd"].iloc[0])
+                    if "slot_sd" in part
+                    else np.nan,
                     "output_change_max": float(change_max.max()),
                     "output_change_mean": float(
                         part[f"change_{window}_mean"].to_numpy()[ok].mean()
@@ -525,10 +561,18 @@ def headline(s: pd.DataFrame) -> str:
         cells = [
             f"{r.model} x{r.ratio:.2f} ({r.ci_low:.2f}-{r.ci_high:.2f}) "
             f"unchanged {r.n_unchanged}/{r.n_blocks} "
-            f"change max {r.output_change_max:.3g}"
+            + (
+                f"above {FLOOR_FACTOR}x no-slots rounding "
+                f"{r.n_above_floor}/{r.n_blocks} "
+                if r.model == "slots"
+                else ""
+            )
+            + f"change max {r.output_change_max:.3g}"
             for r in part.itertuples()
         ]
-        out.append(f"{group} {window} swap: " + "; ".join(cells))
+        sd = part.loc[part["model"] == "slots", "slot_sd"]
+        tag = f" (slot sd {sd.iloc[0]:.3g}, token sd ~0.03)" if len(sd) else ""
+        out.append(f"{group} {window} swap{tag}: " + "; ".join(cells))
     return "\n".join(out)
 
 
