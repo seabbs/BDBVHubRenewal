@@ -654,6 +654,77 @@ def _chronos(checkpoint: Checkpoint | None = None) -> Any:
     return Chronos2Pipeline(model=slots.load_adapter(pipeline.model, adapter))
 
 
+def _chronos_input(group: Series) -> dict[str, Any]:
+    """Return a group as Chronos-2 takes it, without its `places`."""
+    return {k: v for k, v in group.items() if k != "places"}
+
+
+def _group_slots(group: Series, n_slots: int) -> np.ndarray:
+    """Return each of a group's rows' slot, in Chronos-2's row order.
+
+    Chronos-2's dict path puts the targets first, then the covariates by
+    sorted name, past-only ones before known-future ones, not in input
+    order. Each place gets a distinct slot drawn with `slots.EVAL_SEED`
+    in target order, and each lag series `<place>_lag_<d>` its place's.
+    The places are the group's `places`, else the order in which the
+    covariates name them.
+
+    Raises
+    ------
+    ValueError
+        If a covariate names no target place, or the places do not match
+        the targets.
+    """
+    past = list(group.get("past_covariates", {}))
+    known = set(group.get("future_covariates", {}))
+    n_targets = np.atleast_2d(group["target"]).shape[0]
+    named = dict.fromkeys(n.rsplit("_lag_", 1)[0] for n in past)
+    places = list(group.get("places") or named)
+    if len(places) != n_targets:
+        raise ValueError(f"{len(places)} places for {n_targets} targets")
+    rows = sorted(n for n in past if n not in known)
+    rows += sorted(n for n in past if n in known)
+    at = {p: i for i, p in enumerate(places)}
+    try:
+        owner = [at[n.rsplit("_lag_", 1)[0]] for n in rows]
+    except KeyError as err:
+        raise ValueError(f"covariate of no target place: {err}") from err
+    chosen = slots.slot_ids(
+        n_targets, 0, np.random.default_rng(slots.EVAL_SEED), n_slots
+    )
+    return np.concatenate([chosen, chosen[owner]]).astype(int)
+
+
+def _predict(
+    pipeline: Any, groups: Sequence[Series], horizon: int, levels: np.ndarray
+) -> list[Any]:
+    """Return Chronos-2's quantiles at `levels` for each group.
+
+    With a slots adapter each group is predicted on its own, so its rows
+    are one batch, with its rows' slots (`_group_slots`), as in held-out
+    losses.
+    """
+    model = getattr(pipeline, "model", None)
+    if model is None or not slots.has_slots(model):
+        quantiles, _ = pipeline.predict_quantiles(
+            [_chronos_input(g) for g in groups],
+            prediction_length=horizon,
+            quantile_levels=levels.tolist(),
+        )
+        return list(quantiles)
+    out = []
+    for g in groups:
+        ids = _group_slots(g, slots.n_slots(model))
+        with slots.assigned(model, ids):
+            q, _ = pipeline.predict_quantiles(
+                [_chronos_input(g)],
+                prediction_length=horizon,
+                quantile_levels=levels.tolist(),
+            )
+        out.extend(q)
+    return out
+
+
 def chronos_sampler(
     groups: Sequence[Series],
     horizon: int,
@@ -700,32 +771,7 @@ def chronos_sampler(
     pipeline = _chronos(checkpoint)
     levels = np.asarray(pipeline.quantiles, dtype=float)
     rng = np.random.default_rng(seed)
-    model = getattr(pipeline, "model", None)
-    if model is not None and slots.has_slots(model):
-        # Each group is predicted on its own, so its rows are one batch
-        # and each place's series share the slot drawn with the fixed
-        # seed, as in held-out losses.
-        quantiles = []
-        for g in groups:
-            ids = slots.slot_ids(
-                np.atleast_2d(g["target"]).shape[0],
-                len(g.get("past_covariates", {})),
-                np.random.default_rng(slots.EVAL_SEED),
-                slots.n_slots(model),
-            )
-            with slots.assigned(model, ids):
-                q, _ = pipeline.predict_quantiles(
-                    [dict(g)],
-                    prediction_length=horizon,
-                    quantile_levels=levels.tolist(),
-                )
-            quantiles.extend(q)
-    else:
-        quantiles, _ = pipeline.predict_quantiles(
-            [dict(g) for g in groups],
-            prediction_length=horizon,
-            quantile_levels=levels.tolist(),
-        )
+    quantiles = _predict(pipeline, groups, horizon, levels)
     out = []
     for q in quantiles:
         q = q.float().cpu().numpy()  # [V, horizon, Q]
@@ -768,6 +814,7 @@ def layout_block(
         "target": target,
         "past_covariates": dict(zip(names, cells[:, :start], strict=True)),
         "future_covariates": dict(zip(names, cells[:, start:], strict=True)),
+        "places": list(places),
     }
 
 
@@ -976,11 +1023,7 @@ def native_sampler(
     ) -> list[np.ndarray]:
         pipeline = _chronos(checkpoint)
         native = np.asarray(pipeline.quantiles, dtype=float)
-        quantiles, _ = pipeline.predict_quantiles(
-            [dict(g) for g in groups],
-            prediction_length=horizon,
-            quantile_levels=native.tolist(),
-        )
+        quantiles = _predict(pipeline, groups, horizon, native)
         out = []
         for q in quantiles:
             q = np.sort(q.float().cpu().numpy(), axis=-1)  # [V, H, Q]

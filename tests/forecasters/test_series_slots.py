@@ -314,3 +314,37 @@ def test_forecast_groups_name_their_places():
     )
     group = foundation.layout_block(tri, "ragged", ["CD", "CD-KN"], 2)
     assert group["places"] == ["CD", "CD-KN"]
+
+
+def test_native_quantiles_use_the_slots(monkeypatch, tmp_path):
+    # The weekly models' own quantiles (native_sampler) go through the same
+    # slot assignment as the draws, not the bare model.
+    from chronos import Chronos2Pipeline
+
+    from bdbvhubrenewal.forecasters import foundation
+
+    model = trained()
+    model.save_pretrained(tmp_path / "ckpt")
+    loaded = slots.load_adapter(tiny_model(), tmp_path / "ckpt")
+    monkeypatch.setattr(
+        foundation,
+        "_chronos",
+        lambda _checkpoint=None: Chronos2Pipeline(model=loaded),
+    )
+    calls = []
+    real = slots.assigned
+
+    def spy(m, ids):
+        calls.append(ids)
+        return real(m, ids)
+
+    monkeypatch.setattr(slots, "assigned", spy)
+    x = toy_block()["context"]
+    names = [f"p{p}_lag_{d}" for p in range(N_PLACES) for d in range(LAG)]
+    group = {
+        "target": x[:N_PLACES, :T],
+        "past_covariates": dict(zip(names, x[N_PLACES:, :T], strict=True)),
+        "future_covariates": dict(zip(names, x[N_PLACES:, T:], strict=True)),
+    }
+    foundation.native_sampler(np.array([0.1, 0.5, 0.9]))([group], H, 3, 0)
+    assert len(calls) == 1
