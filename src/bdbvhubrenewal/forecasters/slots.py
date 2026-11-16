@@ -107,7 +107,7 @@ def _slots_module(n_slots: int, d_model: int) -> Any:
     import torch
     from torch import nn
 
-    class SeriesSlots(nn.Module):  # type: ignore[misc]
+    class SeriesSlots(nn.Module):
         """One learned vector per slot, zero at the start."""
 
         def __init__(self) -> None:
@@ -195,7 +195,7 @@ def adapter_slots(adapter: Path | str) -> int | None:
     config = json.loads((adapter / "adapter_config.json").read_text())
     if SLOT_MODULE not in (config.get("modules_to_save") or []):
         return None
-    from safetensors import safe_open  # type: ignore[import-not-found]
+    from safetensors import safe_open
 
     with safe_open(adapter / "adapter_model.safetensors", "pt") as f:
         for key in f.keys():  # noqa: SIM118
