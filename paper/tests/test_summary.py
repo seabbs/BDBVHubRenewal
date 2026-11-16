@@ -81,3 +81,10 @@ def test_summary_says_which_part_its_numbers_come_from() -> None:
     assert study_summary(synthetic, _scores(), mode="paper")["scope"] == (
         "held-out simulations"
     )
+
+
+def test_summary_records_the_fine_tuned_checkpoint(tmp_path) -> None:
+    path = tmp_path / "results.yml"
+    write_summary(path, "paper", {}, finetuned="e8a1f5ae338b")
+    doc = yaml.safe_load(path.read_text())["results"]
+    assert doc["finetuned"] == "e8a1f5ae338b"

@@ -319,3 +319,21 @@ def test_the_paper_runs_its_ebola_models_at_its_own_draws(
     assert "rule ebola_backtest_draws" in log
     assert f"n_samples = {CONFIG['ebola']['n_samples']}" in log
     assert CONFIG["ebola"]["n_samples"] == 1000
+
+
+def test_the_workflow_pins_and_records_the_fine_tuned_checkpoint(
+    tmp_path: Path,
+) -> None:
+    pin = CONFIG["finetuned"]
+    assert pin and len(pin) == 12
+    base = str(PAPER / "workflow" / "config.yaml")
+    res = _snakemake(
+        "development",
+        "-n",
+        "-p",
+        "--configfile",
+        base,
+        str(_offline(tmp_path)),
+    )
+    assert res.returncode == 0, res.stderr
+    assert f"--finetuned {pin}" in res.stdout + res.stderr
