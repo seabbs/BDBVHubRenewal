@@ -738,3 +738,24 @@ def test_a_pass_samples_draws_across_every_snapshot():
     # The subset seed alone picks the draws, so a later pass can take others.
     assert {(o, j) for o, _, j in b} == {(o, j) for o, _, j in a}
     assert {(o, j) for o, _, j in c} != {(o, j) for o, _, j in a}
+
+
+def test_stale_block_files_fail_when_loaded(tmp_path):
+    import pickle
+
+    import pytest
+    from finetune_stream import load_blocks
+
+    good = {
+        "context": np.zeros((1, 4)),
+        "n_targets": 1,
+        "prediction_length": 16,
+        "levels": ("national",),
+    }
+    stale = {k: v for k, v in good.items() if k != "prediction_length"}
+    path = tmp_path / "blocks.pkl"
+    path.write_bytes(pickle.dumps([good]))
+    assert load_blocks(path) == [good]
+    path.write_bytes(pickle.dumps([good, stale]))
+    with pytest.raises(ValueError, match="prediction_length"):
+        load_blocks(path)
