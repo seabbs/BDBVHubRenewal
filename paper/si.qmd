@@ -45,7 +45,8 @@ Chronos-2's group attention has no notion of which series is which, so on its ow
 The fine-tuned model adds a learned slot embedding, shared by each place's count series and its lag series.
 The places of a block take distinct slots, so the model ties each place's covariates to its counts while seeing all places at once.
 In each training block the places are assigned to slots by a random permutation, so a slot carries no meaning of its own beyond marking which series go together.
-The slot embeddings start at zero, so before training the model is base Chronos-2, and they are trained with the LoRA adapter under Chronos-2's fine-tuning recipe.
+The slot embeddings start as random codes drawn from a normal distribution with standard deviation 0.02, so each slot is distinct from the first step.
+They are trained in their own parameter group at a learning rate of $10^{-4}$ with linear decay, while the LoRA adapter keeps Chronos-2's recipe and its learning rate of $10^{-5}$.
 
 **Order of the training data.**
 The grid is a crossed factorial design balanced in every block of 120 simulations, with each factor's levels shuffled independently, as in a Latin hypercube.
@@ -86,7 +87,7 @@ It showed the training and held-out loss by source, each checkpoint's scores aga
 Reviewing it led to the complete-only reference in the checkpoint curve (@fig-checkpoint-curve).
 The dashboard was built with the help of a large language model.
 
-![The fine-tuning dashboard on 16 November 2026 at 17:29, with the slots run at 500 simulations: training and held-out loss by source, checkpoint scores against `randomwalknowcast` with the zero-shot and complete-only references, and German nowcasts by checkpoint.](figures/dashboard-2026-11-16.png){#fig-dashboard}
+![The fine-tuning dashboard on 16 November 2026 at 17:29, with a run at 500 simulations: training and held-out loss by source, checkpoint scores against `randomwalknowcast` with the zero-shot and complete-only references, and German nowcasts by checkpoint.](figures/dashboard-2026-11-16.png){#fig-dashboard}
 
 ### Synthetic data generation
 
@@ -241,7 +242,7 @@ The cost of each option: series per block, memory and time.
 
 ### Per-series slots against no slots
 
-Two fine-tuning runs differ only in the series slots, with the same recipe, grid, simulations and checkpoints.
+Two fine-tuning runs differ only in the series slots, with the same LoRA recipe, grid, simulations and checkpoints.
 @tbl-slots-loss gives the slots run's held-out loss by source against the no-slots run at the same checkpoint and against zero-shot Chronos-2.
 The no-slots run built its 3-day blocks as daily steps, so 3-day blocks are compared with zero-shot only, and weekly and daily blocks with both.
 @tbl-slots-scores gives both runs' relative scores on the German first half and the BDBV release backtest at matched checkpoints.

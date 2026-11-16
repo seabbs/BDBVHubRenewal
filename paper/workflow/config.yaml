@@ -159,9 +159,8 @@ evidence:
     path: results/agg/aggregation-cost.csv
   # The slots run's check against no slots and zero-shot, with the
   # lag-swap test (slots-check), for its newest checked checkpoint.
-  slots_check:
-    ref: 542b7ce82d3dd6fb2b3a367c58feca5bc204f55c
-    path: evidence/slots-check/slots-7d7c5d9f247e.csv
+  # Pending: the final slots run's first checked checkpoint.
+  slots_check: null
   # Pending: the final run's held-out loss curve.
   finetune_heldout: null
   # Pending: summaries of the final grid's simulations.
