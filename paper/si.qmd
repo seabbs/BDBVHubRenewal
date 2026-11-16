@@ -124,7 +124,7 @@ The dashboard was built with the help of a large language model.
 ::: {#tbl-synthetic-grid-si}
 {{< include build/tables/si/synthetic-design.md >}}
 
-Every setting of the simulation grid: the crossed factors and their levels, the settings derived from a cell, and the values drawn within it, with the R expression that draws them and the epinowcast function each enters through, read from the simulator's code. Realised values are over the run's simulations where they exist.
+Every setting of the simulation grid: the crossed factors and their levels, the settings derived from a cell, the values drawn within it, and the bounds on outbreak size (a simulation outside them is drawn again), with the R expression that draws them and the epinowcast function each enters through, read from the simulator's code. Realised values are over the run's simulations where they exist.
 :::
 
 The grid has two limitations.
