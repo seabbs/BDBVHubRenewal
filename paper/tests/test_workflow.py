@@ -160,3 +160,24 @@ def test_dry_run_with_real_data_runs_the_benchmark(tmp_path: Path) -> None:
     assert "rule germany_heldout" not in log
     paper = _snakemake("paper", "-n", "--configfile", base, str(cfg))
     assert "rule germany_heldout" in paper.stdout + paper.stderr
+
+
+def test_ebola_runs_split_at_the_first_scored_round(tmp_path: Path) -> None:
+    first = CONFIG["heldout"]["ebola_from"]
+    base = str(PAPER / "workflow" / "config.yaml")
+    for target, flag in (("development", "--before"), ("paper", "--split")):
+        res = _snakemake(
+            target, "-n", "-p", "--configfile", base, str(_offline(tmp_path))
+        )
+        assert res.returncode == 0, res.stderr
+        lines = (res.stdout + res.stderr).splitlines()
+        ebola = [
+            line
+            for line in lines
+            if "paperpipe forecasts ebola" in line
+            or "paperpipe figures ebola" in line
+        ]
+        assert ebola
+        for line in ebola:
+            if target == "paper" or "forecasts" in line:
+                assert f"{flag} {first}" in line, line
