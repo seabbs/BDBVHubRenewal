@@ -128,6 +128,16 @@ FACTORS: Final = (
     "reference_dow",
     "observation",
     "strata",
+    "spread",
+    "place_rt",
+    "seeding",
+    "mixing",
+    "mixing_strength",
+    "imports",
+    "shocks",
+    "delay_places",
+    "obs_strata",
+    "strata_link",
     "n_places",
     "n_ages",
     "max_delay",
@@ -138,7 +148,7 @@ FACTORS: Final = (
     "weeks",
     "cases",
 )
-"""The r3 grid's design factors (`factors` in
+"""The r4 grid's design factors (`factors` in
 `scripts/finetune_simulate.R`) and other settings that scores are broken
 down by, as `factor_table` gives them."""
 
