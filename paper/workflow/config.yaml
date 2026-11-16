@@ -6,6 +6,10 @@ build: build
 # The run `render` publishes first: development or paper.
 render: development
 studies: [synthetic, germany, ebola]
+# The fine-tuned Chronos-2 checkpoint (`chronos-ft-<hash>`) every `_ft`
+# model of the workflow loads, the same in each study, and that the paper
+# names. CI's forecast jobs take the latest release, so set this to it.
+finetuned: e8a1f5ae338b
 # Samples per forecast for the studies scored on samples.
 n_samples: 100
 

@@ -325,7 +325,7 @@ def test_the_workflow_pins_and_records_the_fine_tuned_checkpoint(
     tmp_path: Path,
 ) -> None:
     pin = CONFIG["finetuned"]
-    assert pin and len(pin) == 12
+    assert len(pin) == 12
     base = str(PAPER / "workflow" / "config.yaml")
     res = _snakemake(
         "development",

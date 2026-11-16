@@ -219,7 +219,7 @@ def _summary(a: argparse.Namespace) -> None:
     for m, t in zip(a.meta, a.scores, strict=True):
         meta = read_meta(m)
         studies[meta["study"]] = study_summary(meta, pd.read_csv(t), a.mode)
-    write_summary(a.out, a.mode, studies)
+    write_summary(a.out, a.mode, studies, finetuned=a.finetuned)
 
 
 def _score_tables(a: argparse.Namespace) -> None:
@@ -363,6 +363,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--meta", type=Path, nargs="+", required=True)
     p.add_argument("--scores", type=Path, nargs="+", required=True)
     p.add_argument("--out", type=Path, required=True)
+    p.add_argument("--finetuned", default=None)
     p.set_defaults(run=_summary)
     return parser
 

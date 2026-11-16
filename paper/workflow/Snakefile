@@ -67,6 +67,10 @@ GERMANY = config["germany"]
 with open("../config/finetune.toml", "rb") as f:
     REALDATA_AFTER = tomllib.load(f)["realdata_bdbv"]["release"]
 EBOLA = config["ebola"]
+# The fine-tuned checkpoint every `_ft` model the workflow runs loads, so
+# each study uses the same one; recorded in results.yml.
+if config.get("finetuned"):
+    os.environ["BDBV_CHRONOS_FT"] = str(config["finetuned"])
 SYNTHETIC = config["synthetic"]
 TRIANGLE = f"{GERMANY['data']}/COVID-19_hospitalizations.csv"
 
@@ -702,7 +706,8 @@ rule summary:
         f"{R}/{{mode}}/results.yml",
     shell:
         "{PYTHON} -m paperpipe summary --mode {wildcards.mode} "
-        "--meta {input.meta} --scores {input.scores} --out {output}"
+        "--meta {input.meta} --scores {input.scores} --out {output} "
+        + (f"--finetuned {config['finetuned']}" if config.get("finetuned") else "")
 
 
 # The paper reads `build`, so it shows the last run published.

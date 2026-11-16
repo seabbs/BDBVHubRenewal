@@ -96,8 +96,16 @@ def study_summary(
     }
 
 
-def write_summary(path: Path, mode: str, studies: Mapping[str, dict]) -> None:
-    """Write every study's numbers as Quarto metadata under `results`."""
-    doc = {"results": {"mode": mode, **studies}}
+def write_summary(
+    path: Path,
+    mode: str,
+    studies: Mapping[str, dict],
+    finetuned: str | None = None,
+) -> None:
+    """Write every study's numbers as Quarto metadata under `results`.
+
+    `finetuned` is the fine-tuned checkpoint the `_ft` models loaded.
+    """
+    doc = {"results": {"mode": mode, "finetuned": finetuned or "", **studies}}
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(yaml.safe_dump(doc, sort_keys=False))

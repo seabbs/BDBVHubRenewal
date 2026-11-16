@@ -155,7 +155,7 @@ The estimator, its window and the evidence for it are in the SI.
 - Compared with the other submissions, relative to the hub's own baseline.
 - The hub's rounds from 21 November 2026 are scored. Earlier rounds, and the release backtest from releases before that date, were used for development and are shown in the SI.
 - Sample forecasts scored with CRPS and log-scale CRPS, bias, and coverage, with D the empirical 98% point of the hub data's reporting delay. Our models are scored on 1,000 draws with common random numbers, and hub submissions on their submitted trajectories.
-- Our submitted models are scored on their submissions. Each other model of ours forecasts each scored round from the last data release before the round closed, as the release backtest runs it, so it uses only data available at the time. The fine-tuned models use the final checkpoint, which was trained on simulations only.
+- Our submitted models are scored on their submissions. Each other model of ours forecasts each scored round from the last data release before the round closed, as the release backtest runs it, so it uses only data available at the time. The fine-tuned models use checkpoint `{{< meta results.finetuned >}}`, which was trained on simulations only.
 - Key references: [@bdbv_modeling_hub_2026; @Viboud2018; @funkAssessingPerformanceRealtime2019].
 :::
 
