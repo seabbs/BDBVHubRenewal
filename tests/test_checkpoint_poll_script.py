@@ -121,3 +121,26 @@ def test_a_rebuild_with_no_change_tells_bdbv_paper_nothing(poll) -> None:
     note = poll.interim_note("slots-a", "abc", changed=True)
     assert note is not None
     assert "abc" in note
+
+
+def test_the_new_slots_run_goes_first_and_zero_init_runs_last(poll) -> None:
+    # The lead: the random-init slots run first; the zero-init run's German
+    # runs only with spare capacity, after every other job.
+    queue = ["slots-z1", "slots-z2", "slots-n1", "c"]
+    zero = {"slots-z1", "slots-z2"}
+    assert poll.next_job(queue, True, fresh=set(), zero_init=zero) == "slots-n1"
+    assert poll.next_job(queue, True, fresh={"slots-z2"}, zero_init=zero) == (
+        "slots-n1"
+    )
+    rest = ["slots-z1", "c"]
+    assert poll.next_job(rest, True, set(), zero) == poll.COMPLETE_JOB
+    assert poll.next_job(rest, False, set(), zero) == "c"
+    assert poll.next_job(["slots-z1"], False, set(), zero) == "slots-z1"
+    # A fresh new-run checkpoint pauses a zero-init German run, not the
+    # other way round.
+    assert poll.should_pause(
+        "slots-z1", ["slots-z1", "slots-n1"], {"slots-n1"}, zero
+    )
+    assert not poll.should_pause(
+        "slots-n1", ["slots-z1", "slots-n1"], {"slots-z1"}, zero
+    )

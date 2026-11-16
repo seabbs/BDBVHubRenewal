@@ -386,3 +386,12 @@ def test_interim_rows_are_kept_when_rows_are_rebuilt(cs) -> None:
         }
     )
     assert cs.checkpoints_with_rows(rows) == {"slots-a"}
+
+
+def test_each_checkpoint_s_rows_name_its_run(cs) -> None:
+    zero = {"series_slots": {"n": 128, "init": "zero"}}
+    rand = {"series_slots": {"n": 128, "init": "normal"}}
+    assert cs.run_of(zero) == "slots-zeroinit"
+    assert cs.run_of(rand) == "slots"
+    assert cs.run_of({}) == "no-slots"
+    assert "run" in cs.COLUMNS
