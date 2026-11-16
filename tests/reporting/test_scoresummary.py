@@ -363,7 +363,7 @@ def _check_against(got: list[dict[str, object]], scores: pd.DataFrame) -> None:
 
 def test_one_round_scores_as_that_round_alone() -> None:
     scores = _scores()
-    data = summary_rows(scores, MODELS, COLOURS, {})
+    data = summary_rows(scores, MODELS, COLOURS, {}, baseline="randomwalk")
     first = data["origins"].index("2026-10-24")
     got = _node_rounds(data, f"[{first}]")
     alone = scores.loc[scores["origin"] == "2026-10-24"]
@@ -374,7 +374,7 @@ def test_one_round_scores_as_that_round_alone() -> None:
 
 def test_several_rounds_pool_their_cells() -> None:
     scores = _scores()
-    data = summary_rows(scores, MODELS, COLOURS, {})
+    data = summary_rows(scores, MODELS, COLOURS, {}, baseline="randomwalk")
     both = [data["origins"].index(o) for o in ("2026-10-17", "2026-10-24")]
     got = _node_rounds(data, json.dumps(both))
     # Recomputed over the union of the rounds' cells, not a mean of each
@@ -385,5 +385,5 @@ def test_several_rounds_pool_their_cells() -> None:
 
 def test_all_rounds_keeps_every_row() -> None:
     scores = _scores()
-    data = summary_rows(scores, MODELS, COLOURS, {})
+    data = summary_rows(scores, MODELS, COLOURS, {}, baseline="randomwalk")
     _check_against(_node_rounds(data, "null"), scores)
