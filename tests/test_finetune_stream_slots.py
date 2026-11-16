@@ -16,6 +16,7 @@ import finetune_stream as fs  # noqa: E402
 from test_series_slots import (  # noqa: E402
     LAG,
     N_PLACES,
+    batch_of,
     swapped,
     tiny_model,
     toy_block,
@@ -120,36 +121,47 @@ def test_lora_config_saves_the_slots_with_the_adapter():
 
 def test_slot_settings_enter_the_hash_only_when_on():
     assert fs.slot_settings(0) == {}
-    on = fs.slot_settings(128, init_std=0.02, init_seed=1, lr=1e-4)
+    on = fs.slot_settings(128, init_std=0.02, init_seed=1)
     assert on["series_slots"]["n"] == 128
     assert on["series_slots"]["init"] == "normal"
     assert on["series_slots"]["init_std"] == 0.02
     assert on["series_slots"]["init_seed"] == 1
-    assert on["series_slots"]["learning_rate"] == 1e-4
+    assert on["series_slots"]["trained"] is False
+    assert "learning_rate" not in on["series_slots"]
 
 
-def test_the_slots_train_in_their_own_group_at_their_own_rate():
-    from peft import get_peft_model
-    from test_series_slots import lora
-
+def test_the_labels_are_fixed_and_only_lora_trains():
     model = tiny_model()
     slots.attach(model, 8, init_std=0.02, seed=1)
-    model = get_peft_model(model, lora())
-    opt = torch.optim.AdamW(fs.param_groups(model, 1e-5, 1e-4))
-    assert [g["lr"] for g in opt.param_groups] == [1e-5, 1e-4]
-    slot_params = {
-        id(p)
-        for n, p in model.named_parameters()
-        if slots.SLOT_MODULE in n and p.requires_grad
-    }
-    assert {id(p) for p in opt.param_groups[1]["params"]} == slot_params
-    assert not slot_params & {id(p) for p in opt.param_groups[0]["params"]}
-    # Both decay linearly to zero over the same steps.
+    model = fs.lora_model(model, fs.lora_config(8), None)
+    labels = [p for n, p in model.named_parameters() if slots.SLOT_MODULE in n]
+    assert labels
+    assert not any(p.requires_grad for p in labels)
+    before = [p.detach().clone() for p in labels]
+    opt = torch.optim.AdamW(fs.param_groups(model, 1e-3))
+    assert len(opt.param_groups) == 1
+    assert opt.param_groups[0]["lr"] == 1e-3
+    trainable = {id(p) for p in opt.param_groups[0]["params"]}
+    assert not trainable & {id(p) for p in labels}
+    batch = batch_of(toy_block())
+    ids = slots.slot_ids(N_PLACES, N_PLACES * LAG, np.random.default_rng(0), 8)
+    model.train()
+    for _ in range(3):
+        with slots.assigned(model, ids):
+            loss = model(
+                context=batch["context"],
+                group_ids=batch["group_ids"],
+                future_covariates=batch["future_covariates"],
+                num_output_patches=batch["num_output_patches"],
+                future_target=batch["future_target"],
+            ).loss
+        opt.zero_grad()
+        loss.backward()
+        opt.step()
+    assert all(torch.equal(a, b) for a, b in zip(before, labels, strict=True))
+    # One rate, falling linearly to zero.
     fs.set_learning_rates(opt, 50, 100)
-    assert [g["lr"] for g in opt.param_groups] == [
-        fs.learning_rate(50, 1e-5, 100),
-        fs.learning_rate(50, 1e-4, 100),
-    ]
+    assert opt.param_groups[0]["lr"] == fs.learning_rate(50, 1e-3, 100)
 
 
 def test_random_slots_round_trip_through_the_trainer_state(tmp_path):
@@ -159,12 +171,12 @@ def test_random_slots_round_trip_through_the_trainer_state(tmp_path):
     model = tiny_model()
     slots.attach(model, 8, init_std=0.02, seed=1)
     model = get_peft_model(model, lora())
-    opt = torch.optim.AdamW(fs.param_groups(model, 1e-5, 1e-4))
+    opt = torch.optim.AdamW(fs.param_groups(model, 1e-5))
     fs.save_state(tmp_path / "state", model, opt, {"step": 0})
     fresh = tiny_model()
     slots.attach(fresh, 8)
     fresh = get_peft_model(fresh, lora())
-    opt2 = torch.optim.AdamW(fs.param_groups(fresh, 1e-5, 1e-4))
+    opt2 = torch.optim.AdamW(fs.param_groups(fresh, 1e-5))
     fs.load_state(tmp_path / "state", fresh, opt2)
 
     def slot_weight(m):
@@ -176,7 +188,7 @@ def test_random_slots_round_trip_through_the_trainer_state(tmp_path):
 
     assert float(slot_weight(model).abs().sum()) > 0
     assert torch.equal(slot_weight(model), slot_weight(fresh))
-    assert [g["lr"] for g in opt2.param_groups] == [1e-5, 1e-4]
+    assert [g["lr"] for g in opt2.param_groups] == [1e-5]
 
 
 def test_trainer_state_round_trips_the_slots(tmp_path):
@@ -235,7 +247,7 @@ def test_training_slots_link_each_place_to_its_parent():
 
 
 def test_parent_link_settings_enter_the_hash():
-    on = fs.slot_settings(128, init_std=0.02, init_seed=1, lr=1e-4)
+    on = fs.slot_settings(128, init_std=0.02, init_seed=1)
     assert "scale_init" not in on["series_slots"]["parent"]
     assert "plus the parent's own slot" in on["series_slots"]["parent"]["link"]
     assert "nearest" in on["series_slots"]["parent"]["rule"]
