@@ -896,3 +896,26 @@ def test_a_pending_german_checkpoint_names_what_is_missing(
     config.write_text('hash = "latest"\ngermany = ""\n')
     with pytest.raises(ValueError, match="germany-ft"):
         foundation.germany_spec(config)
+
+
+def test_slots_checkpoints_have_their_own_releases(
+    releases: Path, monkeypatch: pytest.MonkeyPatch, write_release
+) -> None:
+    # A checkpoint with per-series slots is released as chronos-slots-<hash>,
+    # so code without slots, taking the latest chronos-ft-* release, never
+    # loads it; it is pinned as "slots-<hash>".
+    assert foundation.release_tag("abc") == "chronos-ft-abc"
+    assert foundation.release_tag("slots-abc") == "chronos-slots-abc"
+    write_release(releases, "abc", _ADAPTER, "abc")
+    (releases / "chronos-ft-abc").rename(releases / "chronos-slots-abc")
+    write_release(releases, "old", _ADAPTER, "old")
+    listing = _listing(
+        ("chronos-ft-old", "2026-11-01T00:00:00Z", False),
+        ("chronos-slots-abc", "2026-11-20T00:00:00Z", False),
+    )
+    monkeypatch.setattr(foundation, "finetuned_releases", lambda: listing)
+    assert foundation.resolve_checkpoint("latest") == _checkpoint("old")
+    pinned = foundation.resolve_checkpoint("slots-abc")
+    assert pinned == _checkpoint("slots-abc")
+    adapter = foundation.finetuned_adapter(pinned)
+    assert adapter.name == "chronos-slots-abc"
