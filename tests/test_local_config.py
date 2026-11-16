@@ -4,6 +4,8 @@ import os
 import subprocess
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).parents[1]
 CONFIG = ROOT / "scripts" / "local_config.sh"
 CONTINUOUS = ROOT / "scripts" / "finetune_continuous.sh"
@@ -132,5 +134,15 @@ def test_the_trainer_takes_its_device_from_the_machine():
     sys.path.insert(0, str(ROOT / "scripts"))
     import finetune_stream as fs
 
+    # A named device needs no torch, so CI's env without it can run this.
     assert fs.pick_device("cpu") == "cpu"
+
+
+def test_auto_takes_the_best_device_torch_finds():
+    import sys
+
+    pytest.importorskip("torch")
+    sys.path.insert(0, str(ROOT / "scripts"))
+    import finetune_stream as fs
+
     assert fs.pick_device("auto") in {"cuda", "mps", "cpu"}

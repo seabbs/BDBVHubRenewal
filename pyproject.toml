@@ -195,6 +195,8 @@ module = [
   "peft.*",
   "torch",
   "torch.*",
+  "safetensors",
+  "safetensors.*",
 ]
 ignore_missing_imports = true
 
@@ -207,4 +209,9 @@ disallow_untyped_calls = false
 [[tool.mypy.overrides]]
 # The model subclasses PyRenew's and NumPyro's classes, which are untyped.
 module = ["bdbvhubrenewal.model.*"]
+disallow_subclassing_any = false
+
+[[tool.mypy.overrides]]
+# The slots subclass torch's untyped `nn.Module` (torch is optional).
+module = ["bdbvhubrenewal.forecasters.slots"]
 disallow_subclassing_any = false

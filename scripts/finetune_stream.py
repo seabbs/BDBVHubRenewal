@@ -723,10 +723,10 @@ def pick_device(device: str = "auto") -> str:
     given. The device is a machine setting (`DEVICE` in the local config),
     kept out of the checkpoint hash.
     """
-    import torch
-
     if device != "auto":
         return device
+    import torch
+
     if torch.cuda.is_available():
         return "cuda"
     if torch.backends.mps.is_available():
