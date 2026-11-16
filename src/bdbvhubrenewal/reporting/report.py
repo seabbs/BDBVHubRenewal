@@ -43,7 +43,11 @@ from bdbvhubrenewal.data.zone_map import (
     zone_boundaries,
     zone_names,
 )
-from bdbvhubrenewal.data.zones import hub_zones, weekly_zone_counts
+from bdbvhubrenewal.data.zones import (
+    hub_zones,
+    load_zone_data,
+    weekly_zone_counts,
+)
 from bdbvhubrenewal.evaluation.backtest import (
     BacktestConfig,
     check_distinct,
@@ -315,7 +319,10 @@ def make_report(
 
     # Nowcast page: latest real vintage, every registered model.
     rows = real.loc[real["vintage"] == latest]
-    tasks = make_tasks(rows, delays, config, history=real, daily=daily)
+    zone_data = load_zone_data(data_dir)
+    tasks = make_tasks(
+        rows, delays, config, history=real, daily=daily, zones=zone_data
+    )
     forecasts_now = _nowcast_forecasts(tasks, latest, res)
     _nowcast_page(fig, gen, target, forecasts_now, names, config, latest)
     _zone_nowcast_section(
@@ -324,8 +331,6 @@ def make_report(
     # Every model's hub tables at every real origin, for the round
     # releases, so a round released after later hub releases still gets
     # its own.
-    daily_zones = load_daily_zones(data_dir)
-    zone_codes = hub_zones(Path(data_dir) / "hub-config" / "tasks.json")
     for vintage in sorted(set(real["vintage"]) - set(config.skip_origins)):
         if vintage == latest:
             task, at = tasks[0], forecasts_now
@@ -336,10 +341,11 @@ def make_report(
                 config,
                 history=real,
                 daily=daily,
+                zones=zone_data,
             )[0]
             at = _stored_at(res, vintage)
         write_hub_tables(
-            hub_tables(at, task, daily_zones, zone_codes),
+            hub_tables(at, task, zone_data.daily, zone_data.codes),
             res / "hub" / str(vintage),
         )
     groups = _nowcast_groups(target, sorted(set(forecasts_now["location"])))

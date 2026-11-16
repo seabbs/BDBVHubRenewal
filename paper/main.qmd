@@ -71,9 +71,16 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
 ::: {.callout-note title="Plan"}
 - Chronos-2, given the reporting triangle as series: one series per place and reporting delay, each missing until reported. Introduced alongside the reporting triangle, with Figure 1B.
 - Per-series slots: a learned slot embedding is shared by each place's count series and its lag series, so the model ties each place's covariates to its counts while seeing all places at once. Slots are assigned by random permutation in each training block, start at zero and are trained with the LoRA adapter.
-- Fine-tuned on synthetic data on a laptop from the base Chronos-2 weights, with Chronos-2's default LoRA settings and loss, a learning rate of $10^{-5}$ with linear decay, and a prediction length equal to each block's horizon.
-- Each simulation gives 10 observation draws, and each draw is cut at 16 dates, so one simulation gives 160 multivariate blocks. Single-stratum series cut from the same simulations are mixed in, so training sees multivariate and univariate series from one pool.
-- Training runs continuously up to 32,000 simulations, with a checkpoint published at every doubling from 1,000 (1,000, 2,000, 4,000, 8,000, 16,000 and 32,000).
+- Fine-tuned on synthetic data on a laptop from the base Chronos-2 weights, with Chronos-2's default LoRA settings and loss, and a prediction length equal to each block's horizon. The learning rate starts at $10^{-5}$ and falls linearly to zero at 8,000 simulations.
+- Each simulation gives 10 observation draws. At each of 16 cut-offs, 2 of the 10 draws are sampled, so one simulation gives 32 blocks.
+- Where each block comes from: a simulation gives daily counts by onset and report date, and a release counts every case reported by its cut-off, one cut-off a week. Each block is drawn at random as daily steps, or with the days summed to 3-day or weekly steps. Four in five blocks are multivariate, holding several of the simulation's strata with or without the country and their totals. One in five is univariate, the country or a single stratum, from the same simulations.
+- Training runs continuously up to 8,000 simulations, with checkpoints at 1,000, 2,000, 4,000 and 8,000.
+- Training draws simulations from a balanced, shuffled design, so every checkpoint has seen the whole grid.
+- Levels: Chronos-2 forecasts the country, provinces and health zones as separate series in one joint block, so each level is forecast directly and not summed. The copula only pairs draws across weeks and places, for joint scores and sums, and leaves every marginal forecast unchanged.
+- SI, aggregation options: the joint block against each level in its own block, and against the lowest level summed up with its draws paired at random or by the copula.
+- SI, lag cap: the lag series stop at 4 weeks or 28 days, compared with lags run to the truth delay.
+- SI, checkpoint curve: scores of each checkpoint against the number of simulations it was trained on.
+- SI, real data: Chronos-2 fine-tuned on real data, compared with the model fine-tuned on simulations on the German held-out half and the scored BDBV rounds.
 - Compared with Chronos-2 given only complete data points, to show what the ragged structure and fine-tuning add.
 - Figure 1, a multi-panel schematic of our pipeline: (A) the assumptions in the epinowcast simulations, (B) the reporting triangle laid out as ragged series for Chronos-2, (C) training blocks and LoRA fine-tuning, and why it is fast, and (D) forecasting with the fine-tuned model.
 - Key references: [@Ansari2025; @Ansari2024; @Hu2021; @Das2024b].
@@ -129,12 +136,13 @@ An origin with no matured errors takes the prior.
 We score the paired trajectories with the energy score [@Gneiting2008] and the variogram score of order 0.5 [@Scheuerer2015] on $\log(x + 1)$ counts.
 Both are proper scores for joint forecasts [@gneitingStrictlyProperScoring2007], and the energy score has been used for epidemic trajectories from forecast hubs [@Bay2026].
 We also report the coverage of sums over weeks and over places.
-The estimator, its window and the evidence for it are in the SI.
+The SI gives the copula in full, its estimator and window, and the scores of paired against unpaired trajectories.
 
 ### Evaluation on held-out synthetic data
 
 ::: {.callout-note title="Plan"}
 - A held-out set of simulations was not used during development.
+- SI, held-out set: its seeds, size and grid.
 - Sample forecasts scored with CRPS and log-scale CRPS, bias, and coverage, relative to `randomwalknowcast`.
 - Scored against a rolling evaluation set of the data as reported D days later, with D each outbreak's 98% delay.
 - Key references: [@bracherEvaluatingEpidemicForecasts2021; @Bosse2023-sx; @gneitingStrictlyProperScoring2007; @gneitingProbabilisticForecastsCalibration2007; @sherrattPredictivePerformanceMultimodel2023].
@@ -306,6 +314,7 @@ The fine-tuned model is trained on simulations only, so it never sees the BDBV t
   - Weakness: we did not compare against epinowcast, or, for the synthetic study, against the data-generating model itself.
   - Strengths: both retrospective and real-time case studies, and synthetic data that are easy to tune to a setting.
   - Strength: fine-tuning ran locally on consumer hardware (a laptop), so it is accessible.
+  - Limitation: the BDBV hub's published counts include cases whose symptom-onset dates the hub imputed from the observed reporting delays [@bdbv_modeling_hub_2026], described in the Methods (Data). Error in that imputation can make the Ebola data smoother than the process that generated them, so their release histories may not match what an epinowcast-style reporting model, and our epinowcast simulations, assume. This may disadvantage models built on that structure, the fine-tuned Chronos-2 among them.
   - Weakness: fine-tuning used the laptop's GPU, which made it several times faster, and not everyone has one. On a laptop CPU alone it would still run in hours.
   - Key references: [@Kalahasti2026; @Meyer2025].
 - **Domain knowledge through synthetic data.**
