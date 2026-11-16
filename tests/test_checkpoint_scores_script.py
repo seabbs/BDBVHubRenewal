@@ -125,17 +125,19 @@ def test_outbreaks_and_grid_fall_back_to_the_release_text(cs) -> None:
     )
 
 
-def test_chronos_draws_share_one_stream_and_others_keep_theirs(
-    cs, monkeypatch
-) -> None:
-    monkeypatch.setenv("BDBV_CHRONOS_FT", "e8a1f5ae338b")
+def test_chronos_draws_share_one_stream_and_others_keep_theirs(cs) -> None:
+    import dataclasses
+
     from bdbvhubrenewal.forecasters import get_model
 
-    zero = cs.common(get_model("fm_chronos_daily_ragged"))
-    ft = cs.common(get_model("fm_chronos_daily_ragged_ft"))
-    assert zero.stream == ft.stream == COMMON_STREAM
+    zero = get_model("fm_chronos_daily_ragged")
+    # The fine-tuned model differs from the zero-shot one by its name and
+    # checkpoint; its own stream would be keyed on its name.
+    ft = dataclasses.replace(zero, name="fm_chronos_daily_ragged_ft")
+    assert (zero.stream or zero.name) != (ft.stream or ft.name)
+    assert cs.common(zero).stream == cs.common(ft).stream == COMMON_STREAM
     rw = cs.common(get_model("randomwalknowcast"))
-    assert not hasattr(rw, "stream") or rw.stream != COMMON_STREAM
+    assert getattr(rw, "stream", None) != COMMON_STREAM
 
 
 def _samples(model: str, draws: np.ndarray, location: str) -> pd.DataFrame:
