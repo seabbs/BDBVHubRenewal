@@ -71,7 +71,7 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
 ::: {.callout-note title="Plan"}
 - We give Chronos-2 the reporting triangle as series, one per place and reporting delay, each missing until reported (Figure 1B).
 - Each place's count and lag series share a learned slot, which ties its covariates to its counts.
-- Each place carries its own slot plus its parent's slot, both learned, so a place belongs to its parent without having to sum to it.
+- Each place carries its own slot plus half of its parent's slot, from one learned table.
 - We assign places to slots by a random permutation in each training block.
 - Slots start as random codes (standard deviation 0.02) and train at a learning rate of $10^{-4}$, against the adapter's $10^{-5}$.
 - A third each of the training blocks with places have a country equal to, above or later than the sum of its places.
@@ -86,20 +86,20 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
 - The copula only pairs draws, for joint scores and sums, and leaves marginals unchanged.
 - We compare the joint block with forecasting each level alone and with summing the lowest level (SI).
 - We compare lags capped at 4 weeks or 28 days with lags run to the truth delay (SI).
-- TODO: replace the SI's dashboard screenshot with a static render of the finished run from the workflow (#256).
 - We compare the model with slots with one fine-tuned without slots (SI).
 - We fine-tune Chronos-2 on complete counts only, without delay series, and compare it with the ragged model (SI).
 - We fine-tune Chronos-2 on real data and compare it with the model fine-tuned on simulations (SI).
 - We compare the fine-tuned model with zero-shot Chronos-2 and with Chronos-2 given only complete data.
 - We plot each checkpoint's scores, with both as reference lines (SI).
 - Figure 1 shows the simulation, the ragged series, training and forecasting.
+- TODO: replace the SI's dashboard screenshot with a static render of the finished run from the workflow.
 - Key references: [@Ansari2025; @Ansari2024; @Hu2021; @Das2024b].
 :::
 
 ![The fine-tuning pipeline.
 (A) The assumptions in the epinowcast simulations: a latent process gives expected onsets by stratum, which a reporting delay that may drift or step, report-day effects and count noise turn into a reporting triangle.
 (B) The reporting triangle laid out as ragged series for Chronos-2: each place has a target complete up to E and one series per lag, missing until reported (daily lag series fill only on release days), and counts reported after E enter as known-future inputs.
-A place's target and its lag series share one learned slot and also carry their parent's slot, from one learned table, while a place with no parent carries only its own, so the model ties those lags to that place while every place's series sit in one group.
+A place's target and its lag series share one learned slot and also carry half of their parent's slot, a fixed weight, from one learned table, while a place with no parent carries only its own, so the model ties those lags to that place while every place's series sit in one group.
 (C) Training blocks and LoRA fine-tuning, and why it is fast: blocks cut from simulated release histories at random cut-offs are scored against the final counts, and only rank-8 adapters, about 1% of the weights, and the slot embedding are trained.
 (D) Forecasting with the fine-tuned model: one forward pass gives quantiles for each step, and each draw reads them at a uniform level u and is at least the count reported so far.](figures/fig1-pipeline.svg){#fig-pipeline}
 

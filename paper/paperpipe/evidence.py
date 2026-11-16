@@ -33,6 +33,7 @@ from paperpipe.outputs import to_markdown
 __all__ = [
     "ARMS",
     "EVIDENCE",
+    "THREE_DAY",
     "aggregation_numbers",
     "aggregation_table",
     "checkpoint_figure",
@@ -288,6 +289,24 @@ model's own quantiles for Germany, and CRPS on 1,000 draws with common
 random numbers for BDBV."""
 
 
+def _case_study_rows(scores: pd.DataFrame) -> pd.DataFrame:
+    """Return the case studies' rows of `CHECKPOINT_RULE`, one score column.
+
+    BDBV's relative CRPS fills `rel_wis` where that is empty.
+    """
+    out = scores
+    if "rule" in out:
+        out = out.loc[out["rule"] == CHECKPOINT_RULE]
+    out = out.loc[out["study"].isin(["germany", "ebola"])]
+    if "rel_crps" in out:
+        out = out.assign(rel_wis=out["rel_wis"].fillna(out["rel_crps"]))
+        if "rel_log_crps" in out and "rel_log_wis" in out:
+            out = out.assign(
+                rel_log_wis=out["rel_log_wis"].fillna(out["rel_log_crps"])
+            )
+    return out
+
+
 def checkpoint_rows(
     scores: pd.DataFrame, checkpoints: tuple[str, ...] = ()
 ) -> pd.DataFrame:
@@ -300,21 +319,11 @@ def checkpoint_rows(
     BDBV's relative CRPS fills `rel_wis` where that is empty, so one
     column holds each study's relative score.
     """
-    out = scores
-    if "rule" in out:
-        out = out.loc[out["rule"] == CHECKPOINT_RULE]
-    out = out.loc[out["study"].isin(["germany", "ebola"])]
+    out = _case_study_rows(scores)
     keep = (out["checkpoint"] == "zero-shot") | out["checkpoint"].isin(
         list(checkpoints)
     )
-    out = out.loc[keep]
-    if "rel_crps" in out:
-        out = out.assign(rel_wis=out["rel_wis"].fillna(out["rel_crps"]))
-        if "rel_log_crps" in out and "rel_log_wis" in out:
-            out = out.assign(
-                rel_log_wis=out["rel_log_wis"].fillna(out["rel_log_crps"])
-            )
-    return out.reset_index(drop=True)
+    return out.loc[keep].reset_index(drop=True)
 
 
 FINETUNED_EVIDENCE: Final = (
@@ -650,7 +659,12 @@ QUOTED: Final = {
 """The numbers the paper quotes, as they read until their rows exist."""
 
 
+THREE_DAY: Final = "3day"
+"""How the slots check names its 3-day sets."""
+
+
 def _ratio_ci(rows: pd.DataFrame) -> list[str]:
+    """Return each ratio and its 90% interval as `r (lo to hi)`, 2 d.p."""
     return [
         f"{r:.2f} ({lo:.2f} to {hi:.2f})"
         for r, lo, hi in zip(
@@ -672,7 +686,7 @@ def slots_loss_table(check: pd.DataFrame) -> pd.DataFrame:
         (check["model"] == "slots") & (check["condition"] == "given")
     ]
     rows = rows.loc[
-        ~(rows["set"].str.contains("3day") & (rows["against"] == "no-slots"))
+        ~(rows["set"].str.contains(THREE_DAY) & (rows["against"] == "no-slots"))
     ]
     return pd.DataFrame(
         {
@@ -715,18 +729,18 @@ def slots_scores_table(
     checkpoints (`slots-<hash>`) are left out. Relative WIS for Germany
     and relative CRPS for BDBV, against `randomwalknowcast`.
     """
-    rows = scores
-    if "rule" in rows:
-        rows = rows.loc[rows["rule"] == CHECKPOINT_RULE]
-    rows = rows.loc[
-        rows["study"].isin(["germany", "ebola"]) & (rows["outbreaks"] > 0)
-    ]
-    if "rel_crps" in rows:
-        rows = rows.assign(rel_wis=rows["rel_wis"].fillna(rows["rel_crps"]))
+    rows = _case_study_rows(scores)
+    rows = rows.loc[rows["outbreaks"] > 0]
     ids = rows["checkpoint"].astype(str)
     slots = ids.isin(list(checkpoints))
     plain = ~ids.str.startswith("slots-")
     keys = ["study", "level", "model", "outbreaks"]
+    twice = rows.loc[plain].duplicated(keys, keep=False)
+    if twice.any():
+        names = sorted(set(rows.loc[plain].loc[twice, "checkpoint"]))
+        raise ValueError(
+            f"More than one no-slots checkpoint per size: {', '.join(names)}."
+        )
     pairs = rows.loc[slots, [*keys, "rel_wis"]].merge(
         rows.loc[plain, [*keys, "rel_wis"]],
         on=keys,
