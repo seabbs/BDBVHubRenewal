@@ -30,6 +30,9 @@ DEFAULTS = (
     ("RUN", "$ROOT/checkpoints/slots"),
     ("SCORE_CACHE", "$ROOT/scores"),
     ("JOB_PREFIX", ""),
+    # Memory and disk a job leaves free when it starts (GB).
+    ("MIN_FREE_GB", "20"),
+    ("MIN_DISK_GB", "16"),
 )
 """Each setting and its default, in order, as later ones use earlier."""
 

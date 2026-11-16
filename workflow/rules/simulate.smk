@@ -58,6 +58,8 @@ rule simulate_batch:
         batch=SIM["batch"],
         draws=SIM["draws"],
         prefix=lambda wc, resources: job_prefix(resources.mem_mb),
+        min_free=LOCAL["MIN_FREE_GB"],
+        min_disk=LOCAL["MIN_DISK_GB"],
     retries: 1
     resources:
         mem_mb=lambda wc, attempt: (
@@ -74,6 +76,8 @@ rule simulate_batch:
           echo "scripts/finetune_simulate.R differs from HEAD" > {log}
           exit 1
         }}
+        workflow/scripts/wait_for_room.sh {params.min_free} {params.min_disk} \
+          {params.sims}
         [ -s {log} ] && mv {log} {params.sims}/logs/{wildcards.seed}.first.log
         tmp={params.sims}/tmp/{wildcards.seed}
         rm -rf "$tmp" && mkdir -p "$tmp"
