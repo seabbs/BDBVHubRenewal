@@ -14,6 +14,17 @@ RUN = ROOT / "output/finetune/continuous-slots"
 PREV = Path("/Users/lshsa2/code/seabbs/bdbv-hub-baseline-forecasts/"
             ".worktrees/fm-finetune-r4/output/finetune/continuous")
 CSV = ROOT / "output/finetune/slots-vs-noslots.csv"
+# Runs shown on the dashboard. Any other hash in the archie mirror or the
+# scores CSV is ignored. "hashes" lists a run's checkpoints explicitly; None
+# means the run in "dir" (its saved settings.json hashes, plus mirror folders
+# named slots-<hash>).
+RUNS = [
+    {"key": "slots", "label": "slots", "dir": RUN, "hashes": None, "hue": 217,
+     "n": {}},
+    {"key": "no slots", "label": "no slots", "dir": PREV,
+     "hashes": ["de129103cacc", "7962fd718a47"], "hue": 25,
+     "n": {"de129103cacc": 1000, "7962fd718a47": 2000}},
+]
 CKPTS = [250, 500, 750, 1000, 2000, 4000, 8000]  # fallback prefixes
 TARGET_SIMS, LR0, LR_STEPS = 8000, 1e-5, 36500
 STEPS_PER_SIM = LR_STEPS / TARGET_SIMS  # 4.5625
@@ -389,6 +400,26 @@ XT = [(125, "zero-shot"), (250, "250"), (500, "500"), (1000, "1000"),
 RULE = "own-quantile-wis_crps-1000-common"
 
 
+def run_hashes(cfg):
+    """The hashes a run owns (saved settings for a directory-based run)."""
+    if cfg["hashes"] is not None:
+        return set(cfg["hashes"])
+    return {str(s.get("hash")) for d in Path(cfg["dir"]).glob("train/n*")
+            for s in [JC.get(str(d / "settings.json"))]
+            if isinstance(s, dict) and s.get("hash")}
+
+
+def hash_run(h, pref=False):
+    """Run key for a checkpoint hash, or None to ignore it."""
+    for cfg in RUNS:
+        if cfg["hashes"] is not None and h in cfg["hashes"]:
+            return cfg["key"]
+    for cfg in RUNS:
+        if cfg["hashes"] is None and (pref or h in run_hashes(cfg)):
+            return cfg["key"]
+    return None
+
+
 def norm_hash(name):
     """('slots-abc', 'chronos-slots-abc' and 'abc') -> ('abc', is_slots)."""
     m = re.match(r"^(?:chronos-)?(slots-|ft-)?(.*)$", name)
@@ -396,14 +427,14 @@ def norm_hash(name):
 
 
 def run_colour(run, rank, count):
-    hue = {"slots": 217, "no slots": 25, "older run": 330}.get(run)
+    hue = next((c["hue"] for c in RUNS if c["key"] == run), None)
     if hue is None:
         return "#6b7280"
     light = 48 if count < 2 else 66 - 28 * rank / (count - 1)
     return f"hsl({hue},80%,{light:.0f}%)"
 
 
-def score_classify(r, slot_set, r4_set):
+def score_classify(r):
     """Series key for a scores row, or None to skip."""
     mdl, ck = r["model"], r["checkpoint"]
     if mdl == "randomwalknowcast":
@@ -413,20 +444,19 @@ def score_classify(r, slot_set, r4_set):
     if ck == "zero-shot":
         return "zero"
     h, pref = norm_hash(ck)
-    if h in r4_set or r.get("grid") == "r4":
-        return "noslots"
-    if pref or h in slot_set:
-        return "slots"
+    run = hash_run(h, pref)
+    if run:
+        return run.replace(" ", "")
     return None
 
 
-def score_payload(rows, slot_set, r4_set, local):
+def score_payload(rows, local):
     """Rows for the client-side score chart and not-yet-scored markers."""
     out, seen_h, seen_slot_n = [], set(), set()
     for r in rows:
         if r.get("rule") != RULE or r["study"] not in ("germany", "ebola"):
             continue
-        ser = score_classify(r, slot_set, r4_set)
+        ser = score_classify(r)
         v = num(r["rel_wis" if r["study"] == "germany" else "rel_crps"])
         if ser is None or v is None:
             continue
@@ -451,7 +481,7 @@ def score_payload(rows, slot_set, r4_set, local):
     return {"rows": out, "pending": pending, "col": SER_COL, "xt": XT}
 
 
-def heldout_chart(rows, slot_set, r4_set):
+def heldout_chart(rows):
     ho = []
     xval = lambda r: 125 if r["checkpoint"] == "zero-shot" else (
         num(r.get("outbreaks")) or None)
@@ -462,9 +492,8 @@ def heldout_chart(rows, slot_set, r4_set):
               and r["level"] == lvl and num(r.get("loss")) is not None]
         for run, dash in (("slots", None), ("no slots", "dash")):
             pts = sorted((xval(r), num(r["loss"])) for r in rs
-                         if xval(r) and (norm_hash(r["checkpoint"])[0]
-                                         in r4_set or r.get("grid") == "r4")
-                         == (run == "no slots"))
+                         if xval(r) and hash_run(*norm_hash(
+                             r["checkpoint"])) == run)
             z = [(125, num(r["loss_zero_shot"])) for r in rs
                  if num(r.get("loss_zero_shot")) is not None][:1]
             if pts:
@@ -564,12 +593,12 @@ draw();
 """
 
 
-def scores_html(rows, slot_set, r4_set, local):
-    pay = json.dumps(score_payload(rows, slot_set, r4_set, local),
+def scores_html(rows, local):
+    pay = json.dumps(score_payload(rows, local),
                      separators=(",", ":")).replace("</", "<\\/")
     return (f'<div id=sctl class=sctl></div>'
             f'<div class=plots2><div class=card><div id=splot></div></div>'
-            f'{heldout_chart(rows, slot_set, r4_set)}</div>'
+            f'{heldout_chart(rows)}</div>'
             f'<script type="application/json" id=sdata>{pay}</script>'
             f'<script>{SC_JS}</script>')
 
@@ -655,7 +684,6 @@ def ger_build():
         return GER["built"]
     cache = GER["files"]
     series, wis, truth, origins = {}, {}, {}, set()
-    slots_pref = set()
     for setid, origin, f, mt in files:
         key = str(f)
         if key not in cache or cache[key][0] != mt:
@@ -665,8 +693,8 @@ def ger_build():
                 continue
         origins.add(origin) if setid == "reference" else None
         sid = "zero-shot" if setid == "reference" else norm_hash(setid)[0]
-        if norm_hash(setid)[1]:
-            slots_pref.add(sid)
+        if setid != "reference" and not hash_run(*norm_hash(setid)):
+            continue
         for (loc, rw, src), dates in cache[key][1].items():
             s = rw or sid
             ds = sorted(dates)
@@ -692,7 +720,7 @@ def ger_build():
     sets = sorted({s for l in series.values() for s in l})
     locs = sorted(series, key=lambda l: (
         0 if l == "DE" else 1 if l.startswith("DE-") else 2, l))
-    built = {"slots_pref": slots_pref, "series": series, "wis": wis, "truth": truth, "sets": sets,
+    built = {"series": series, "wis": wis, "truth": truth, "sets": sets,
              "locs": locs, "origins": sorted(origins or {
                  o for l in series.values() for s in l.values()
                  for src in s.values() for o in src})}
@@ -731,20 +759,17 @@ def ger_meta(b, slot_n, prev_n):
         elif s == "rw":
             meta.append(dict(id=s, label="randomwalknowcast", run="ref", n=1))
         else:
-            if s in slot_n or s in b["slots_pref"]:
-                run, n = "slots", slot_n.get(s) or csv_n.get(s)
-            elif s in prev_n or s in ("de129103cacc", "7962fd718a47"):
-                run, n = "no slots", prev_n.get(s) or csv_n.get(s) or {
-                    "de129103cacc": 1000, "7962fd718a47": 2000}.get(s)
-            else:
-                run, n = "older run", csv_n.get(s)
+            cfg = next(c for c in RUNS if c["key"] == hash_run(s, True))
+            run = cfg["key"]
+            n = (slot_n.get(s) if run == "slots" else prev_n.get(s)) \
+                or cfg["n"].get(s) or csv_n.get(s)
             meta.append(dict(id=s, run=run, n=n or 0, label=(
-                f"{run} n{n} {s}" if n else f"{run} {s}")))
-    order = {"ref": 0, "slots": 1, "no slots": 2, "older run": 3}
+                f"{cfg['label']} n{n} {s}" if n else f"{cfg['label']} {s}")))
+    order = {"ref": 0, **{c["key"]: i + 1 for i, c in enumerate(RUNS)}}
     meta.sort(key=lambda m: (order.get(m["run"], 4), m["n"]))
     fixed = {"zero-shot": SER_COL["zero"], "complete-only": SER_COL["complete"],
              "rw": SER_COL["rw"]}
-    for run in ("slots", "no slots", "older run"):
+    for run in [c["key"] for c in RUNS]:
         grp = [m for m in meta if m["run"] == run]
         for i, m in enumerate(grp):
             m["color"] = run_colour(run, i, len(grp))
@@ -1028,12 +1053,9 @@ def build():
 
     for k in ("scores", "md", "germany"):
         rem_kick(k)
-    r4_set = {str(s.get("hash")) for _, s, _ in cks_p} | {
-        "de129103cacc", "7962fd718a47"}
-    slot_set = {str(s.get("hash")) for _, s, _ in cks_s} - r4_set
     srows = read_scores()
     local = []
-    for run, base in (("slots", RUN), ("no slots", PREV)):
+    for run, base in [(c["key"], c["dir"]) for c in RUNS]:
         for d in base.glob("train/n*"):
             n = int(re.sub(r"\D", "", d.name) or 0)
             st = jload(d / "settings.json") if (d / "settings.json").exists() \
@@ -1042,7 +1064,7 @@ def build():
                 local.append((run, n, str((st or {}).get("hash") or "")))
     sc_h = note("scores", "Scores")
     if srows:
-        sc_h += scores_html(srows, slot_set, r4_set, local)
+        sc_h += scores_html(srows, local)
     elif not sc_h:
         sc_h = "<p class=mut>no checkpoint scores yet</p>"
     try:
