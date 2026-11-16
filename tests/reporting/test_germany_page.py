@@ -105,6 +105,7 @@ def test_page_tables_and_summaries(tmp_path: Path) -> None:
     assert "rel_wis" in table
     assert "| wis " not in table
     assert "0.8" in table
+    assert '<div class="tablesort" markdown="1">' in table
     data = json.loads((fig / "scoresummary-germany-latest.json").read_text())
     assert [p["id"] for p in data["pools"]] == ["national", "states", "age"]
     names = {p["id"]: p["name"] for p in data["places"]}
