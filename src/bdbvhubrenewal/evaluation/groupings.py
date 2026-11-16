@@ -24,6 +24,7 @@ Arms are named `<model>:<grouping>` (`arm_name`).
 from __future__ import annotations
 
 import dataclasses
+import re
 from collections.abc import Callable, Sequence
 from typing import Final
 
@@ -40,19 +41,27 @@ from bdbvhubrenewal.forecasters import get_model
 from bdbvhubrenewal.forecasters.base import NATIONAL, ForecastTask
 from bdbvhubrenewal.forecasters.copula import RollingCopula
 from bdbvhubrenewal.forecasters.foundation import (
+    SLOTS_PREFIX,
     FoundationModel,
+    release_tag,
     resolve_checkpoint,
 )
 
 __all__ = [
     "AGGREGATION_COLUMNS",
+    "CHECKPOINT",
     "FITTED_GROUPINGS",
     "GROUPING_ARMS",
     "OPTIONS",
+    "ZERO_SHOT",
     "aggregation_rows",
     "arm_name",
+    "check_checkpoint_rows",
+    "checkpoint_label",
+    "checkpoint_rows",
     "germany_grouping_samples",
     "grouping_model",
+    "merge_checkpoint_rows",
     "merged_task",
     "pair_and_sum",
     "release_grouping_forecasts",
@@ -94,6 +103,14 @@ AGGREGATION_COLUMNS: Final = (
 """Columns of the paper's aggregation scores (`aggregation_rows`)."""
 
 _SAMPLES = ["model", "origin", "location", "target_end_date", "sample"]
+
+CHECKPOINT: Final = "checkpoint"
+"""Column of the checkpoint a row's model loaded (`checkpoint_rows`)."""
+
+ZERO_SHOT: Final = "zero-shot"
+"""The `CHECKPOINT` of the zero-shot models' and the reference's rows."""
+
+_LABEL = re.compile(rf"^(?:{SLOTS_PREFIX})?[0-9a-f]{{12}}$")
 
 
 def arm_name(model: str, grouping: str, checkpoint: str | None = None) -> str:
@@ -478,3 +495,141 @@ def aggregation_rows(scores: pd.DataFrame, study: str) -> pd.DataFrame:
         target_date=rows["target_end_date"],
     )
     return out[list(AGGREGATION_COLUMNS)].reset_index(drop=True)
+
+
+def checkpoint_label(label: str) -> tuple[str, str]:
+    """Return a checkpoint label's settings and its release.
+
+    Parameters
+    ----------
+    label : str
+        `slots-<hash>` for a checkpoint with per-series slots, or a plain
+        settings hash.
+
+    Returns
+    -------
+    tuple of str
+        The value of `BDBV_CHRONOS_FT` that pins it, and its release tag
+        (`forecasters.foundation.release_tag`).
+
+    Raises
+    ------
+    ValueError
+        If the label is not a checkpoint's.
+    """
+    if not _LABEL.match(label):
+        raise ValueError(
+            f"{label!r} is no checkpoint label: use slots-<hash> or <hash>, "
+            "a 12-character settings hash."
+        )
+    return label, release_tag(label)
+
+
+def checkpoint_rows(
+    scores: pd.DataFrame,
+    reference: pd.DataFrame,
+    study: str,
+    checkpoint: str,
+) -> pd.DataFrame:
+    """Return one checkpoint's arms as the paper's rows, with a checkpoint.
+
+    Only the cells the reference has in `reference` are kept, so the rows
+    match the zero-shot ones.
+
+    Parameters
+    ----------
+    scores : pandas.DataFrame
+        As for `aggregation_rows`, with arms `arm_name(model, grouping,
+        checkpoint)` and no reference rows.
+    reference : pandas.DataFrame
+        The paper's rows (`AGGREGATION_COLUMNS`) with the reference's.
+    study : str
+        `ebola` or `germany`.
+    checkpoint : str
+        The checkpoint's label, as in the arm names.
+
+    Returns
+    -------
+    pandas.DataFrame
+        `AGGREGATION_COLUMNS` and `CHECKPOINT`, the model named without
+        `@<checkpoint>`.
+    """
+    cell = ["origin_date", "location", "target_date"]
+    ref = reference.loc[
+        (reference["study"] == study) & (reference["model"] == REFERENCE),
+        cell,
+    ].drop_duplicates()
+    rows = scores.rename(
+        columns={"origin": "origin_date", "target_end_date": "target_date"}
+    ).merge(ref, on=cell)
+    split = rows["model"].map(split_arm)
+    out = rows.assign(
+        study=study,
+        model=split.str[0].str.replace(f"@{checkpoint}", "", regex=False),
+        option=split.str[1],
+        **{CHECKPOINT: checkpoint},
+    )
+    return out[[*AGGREGATION_COLUMNS, CHECKPOINT]].reset_index(drop=True)
+
+
+def merge_checkpoint_rows(
+    existing: pd.DataFrame, new: pd.DataFrame, checkpoint: str
+) -> pd.DataFrame:
+    """Return the paper's rows with one checkpoint's rows put in.
+
+    Rows with no `CHECKPOINT` (the file as fm-agg wrote it) are the
+    zero-shot models' and the reference's, `ZERO_SHOT`; its fine-tuned
+    rows (`_ft`, `_ft_n<k>`), of older checkpoints, are dropped. Rows of
+    `checkpoint` are replaced by `new`; other checkpoints' rows are kept.
+
+    Parameters
+    ----------
+    existing : pandas.DataFrame
+        The paper's rows, with or without `CHECKPOINT`.
+    new : pandas.DataFrame
+        `checkpoint_rows` of `checkpoint`.
+    checkpoint : str
+        The checkpoint's label.
+
+    Returns
+    -------
+    pandas.DataFrame
+        `AGGREGATION_COLUMNS` and `CHECKPOINT`.
+    """
+    old = existing
+    if CHECKPOINT not in old:
+        fine = old["model"].astype(str).str.contains(r"_ft(?:_|$)")
+        old = old.loc[~fine].assign(**{CHECKPOINT: ZERO_SHOT})
+    old = old.loc[old[CHECKPOINT] != checkpoint]
+    cols = [*AGGREGATION_COLUMNS, CHECKPOINT]
+    return pd.concat([old[cols], new[cols]], ignore_index=True)
+
+
+def check_checkpoint_rows(rows: pd.DataFrame) -> None:
+    """Check each arm of each checkpoint has every reference cell.
+
+    Parameters
+    ----------
+    rows : pandas.DataFrame
+        The paper's rows with `CHECKPOINT`.
+
+    Raises
+    ------
+    ValueError
+        If an arm has more or fewer rows than the reference in its study.
+    """
+    n = (
+        rows.groupby(["study", "model", "option", CHECKPOINT])
+        .size()
+        .rename("n")
+        .reset_index()
+    )
+    ref = n.loc[n["model"] == REFERENCE].set_index("study")["n"]
+    want = n["study"].map(ref)
+    bad = [
+        f"{r.study} {r.model} {r.option} {r.checkpoint}: {r.n} != {w}"
+        for r, w in zip(n.itertuples(), want, strict=True)
+        if r.n != w
+    ]
+    if bad:
+        raise ValueError("rows do not match the reference: " + "; ".join(bad))
