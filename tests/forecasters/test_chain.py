@@ -19,6 +19,7 @@ from bdbvhubrenewal.forecasters.chain import (
     fit_delay,
     levels,
     retro_errors,
+    start_weeks,
     weeks_back,
 )
 from bdbvhubrenewal.forecasters.obs import MAX_SIZE, PRIOR_SIZE
@@ -391,3 +392,8 @@ def test_retrospective_nowcasts_reach_back_as_far_as_baselinenowcasts(
         "2026-10-24",
         "2026-11-01",
     ]
+
+
+def test_start_weeks_are_the_origin_start(snap24, origin24) -> None:
+    # The delay alone gives the walk's start weeks.
+    assert np.array_equal(start_weeks(snap24, Settings()), origin24.start)

@@ -47,7 +47,7 @@ from .common import (
     write_json,
     write_text,
 )
-from .policy import load_policy
+from .policy import UNFITTED, load_policy
 
 STREAMS = ("total", "observed", "imputed")
 # Descriptive cut-offs for the PIT shape. Reported, never gated.
@@ -387,7 +387,7 @@ def is_sampled(kind: str, diagnostics: Path | None) -> bool:
     Any other fit is taken to be sampled, so a fit that wrote nothing
     cannot pass by omission.
     """
-    if kind == "randomwalk":
+    if kind in UNFITTED:
         return False
     if diagnostics is None or not diagnostics.exists():
         return True

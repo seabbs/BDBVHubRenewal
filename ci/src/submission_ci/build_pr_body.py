@@ -30,6 +30,7 @@ from .common import (
     write_text,
 )
 from .hubdata import quantile, read_observed, read_samples
+from .policy import UNFITTED
 
 MAX_BODY = 60000  # GitHub's limit is 65536 characters
 HUB = "InsightNet-US/BDBV-Modeling-Hub"
@@ -307,7 +308,7 @@ def fit_line(provenance: Mapping[str, Any]) -> str:
     run (`candidate.sh` with `FIT_SOURCE=fit`, a local run) says so.
     """
     run = provenance.get("run") or {}
-    if "store" not in run or run.get("kind") == "randomwalk":
+    if "store" not in run or run.get("kind") in UNFITTED:
         return ""
     store = run["store"]
     if not store:
@@ -320,6 +321,22 @@ def fit_line(provenance: Mapping[str, Any]) -> str:
         f"Fit: read from the fit store, the `{store['model']}` fit at "
         f"{store['origin']} (key `{store['key']}`, fitted at "
         f"`{store['commit'][:7]}`, fit-store commit `{where}`)."
+    )
+
+
+def checkpoint_line(provenance: Mapping[str, Any]) -> str:
+    """The fine-tuned checkpoint the submitted model loaded, or "".
+
+    From `run.json` `checkpoint`, which `candidate.sh` copies from the
+    nowcast's `checkpoint.json`.
+    """
+    checkpoint = (provenance.get("run") or {}).get("checkpoint")
+    if not checkpoint:
+        return ""
+    sha = checkpoint["sha256"].get("adapter_model.safetensors", "")
+    return (
+        f"Checkpoint: release `{checkpoint['tag']}` of seabbs/BDBVHubRenewal, "
+        f"adapter SHA-256 `{sha[:12]}`."
     )
 
 
@@ -402,6 +419,8 @@ def build(
     out.append(model_line(provenance) + "\n")
     if fit_line(provenance):
         out.append(fit_line(provenance) + "\n")
+    if checkpoint_line(provenance):
+        out.append(checkpoint_line(provenance) + "\n")
     if dry_run:
         out.append("Dry run: nothing was pushed.\n")
     if plot_url.startswith("http"):

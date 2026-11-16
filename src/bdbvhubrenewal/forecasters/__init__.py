@@ -8,6 +8,8 @@
   delay fitted jointly with partial pooling (numpyro).
 - `renewal`: the renewal variants, the adapter from a `ForecastTask` to
   the PyRenew model in `bdbvhubrenewal.model`.
+- `foundation`: the pretrained Chronos-2 model on two layouts of the hub
+  target's releases.
 - `zonerenewal`: `renewal` and `renewalbvd` fitted on health zones, with
   provinces the zone sums; registered in place of their province fits.
 - `zones`: health-zone forecasts split from any model's province samples.
@@ -30,6 +32,7 @@ from bdbvhubrenewal.forecasters.base import (
     list_models,
     register_model,
 )
+from bdbvhubrenewal.forecasters.foundation import FoundationModel
 from bdbvhubrenewal.forecasters.pprandomwalk import PPRandomWalkNowcast
 from bdbvhubrenewal.forecasters.randomwalk import (
     RandomWalk,
@@ -44,6 +47,7 @@ __all__ = [
     "VARIANTS",
     "ForecastModel",
     "ForecastTask",
+    "FoundationModel",
     "ModelSpec",
     "ModelUnavailableError",
     "PPRandomWalkNowcast",

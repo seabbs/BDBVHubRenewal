@@ -214,6 +214,8 @@ jobs:
       matrix: ${{ steps.matrix.outputs.matrix }}
       renewal: ${{ steps.tracks.outputs.renewal }}
       baseline: ${{ steps.tracks.outputs.baseline }}
+      chronos: ${{ steps.tracks.outputs.chronos }}
+      chronos_model: ${{ steps.tracks.outputs.chronos_model }}
       models: ${{ steps.source.outputs.models }}
       wait: ${{ steps.source.outputs.wait }}
     env:
@@ -563,14 +565,125 @@ jobs:
             ${{ env.WORK }}/track-randomwalknowcast/metadata
           retention-days: 90
 
+  # chronos: fine-tuned Chronos-2 (`chronos_model`, the
+  # [models.fm_chronos_*_ragged_ft] table of config/hub.toml) under its
+  # own hub id, run here with no fit and no fallback. Off until that
+  # table sets `submit = true`.
+  chronos:
+    name: Submit fine-tuned Chronos-2
+    needs: [detect, prepare]
+    if: >-
+      ${{ !cancelled() && needs.prepare.result == 'success' &&
+      needs.prepare.outputs.chronos == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: hub-submission
+    outputs:
+      action: ${{ steps.track.outputs.action }}
+      pr_url: ${{ steps.track.outputs.pr_url }}
+      produced_by: ${{ steps.track.outputs.produced_by }}
+      skipped: ${{ steps.track.outputs.skipped }}
+      model_id: ${{ steps.track.outputs.model_id }}
+    env:
+      HUB_REF: ${{ needs.detect.outputs.hub_ref }}
+      AS_OF: ${{ needs.detect.outputs.as_of }}
+      DATA_COMMIT: ${{ needs.detect.outputs.data_commit }}
+      REFERENCE_DATE: ${{ needs.detect.outputs.reference_date }}
+      DRY_RUN: ${{ needs.detect.outputs.dry_run }}
+      SOURCE_SHA: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # The chronos group is synced on its own below.
+      - uses: ./.github/actions/setup-forecast-env
+        with:
+          sync: 'false'
+          save-jax: 'false'
+      - name: Install Chronos-2
+        run: uv sync --frozen --group chronos
+      - name: Cache the Chronos-2 checkpoint
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/huggingface
+          key: chronos-2-29ec3766d36d6f73f0696f85560a422f50e8498c
+      - name: Cache the fine-tuned checkpoints
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/bdbvhubrenewal
+          key: chronos-ft-${{ github.run_id }}
+          restore-keys: chronos-ft-
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: inputs
+          path: ${{ env.WORK }}
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ env.HUB }}
+          ref: ${{ env.HUB_REF }}
+          path: output/hub-clone
+          sparse-checkout: |
+            hub-config
+            model-metadata
+      - uses: r-lib/actions/setup-r@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2.14.0
+        if: vars.HUB_VALIDATIONS != 'false'
+        with:
+          use-public-rspm: true
+          extra-repositories: https://hubverse-org.r-universe.dev
+      - uses: r-lib/actions/setup-r-dependencies@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2.14.0
+        if: vars.HUB_VALIDATIONS != 'false'
+        with:
+          packages: any::hubValidations
+          dependencies: '"hard"'
+      - name: Authenticate as the bot
+        if: env.DRY_RUN == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.HUB_SUBMIT_TOKEN }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::HUB_SUBMIT_TOKEN is not set in the hub-submission environment"
+            exit 1
+          fi
+          gh auth setup-git
+          git config --global user.name "seabbs-bot"
+          git config --global user.email "signin@samabbott.co.uk"
+      - name: Check and submit
+        id: track
+        env:
+          GH_TOKEN: ${{ needs.detect.outputs.dry_run == 'false' && secrets.HUB_SUBMIT_TOKEN || github.token }}
+          VALIDATE: 'true'
+          R_VALIDATION: ${{ vars.HUB_VALIDATIONS != 'false' }}
+          HUB_PATH: output/hub-clone
+          CHECK_WINDOW: ${{ needs.detect.outputs.dry_run == 'false' }}
+          TRACK_MODEL: ${{ needs.prepare.outputs.chronos_model }}
+        run: ci/steps/track.sh
+      - name: Show the PR body
+        if: always()
+        env:
+          TRACK_MODEL: ${{ needs.prepare.outputs.chronos_model }}
+        run: |
+          {
+            echo "<details><summary>chronos PR body</summary>"
+            echo
+            cat "$WORK/track-$TRACK_MODEL/gate/pr-body.md" 2> /dev/null
+            echo "</details>"
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: chronos-gate
+          path: |
+            ${{ env.WORK }}/track-${{ needs.prepare.outputs.chronos_model }}/gate
+            ${{ env.WORK }}/track-${{ needs.prepare.outputs.chronos_model }}/metadata
+          retention-days: 90
+
   record:
     name: Record the round in the ledger
-    needs: [detect, prepare, gate, submit, baseline]
+    needs: [detect, prepare, gate, submit, baseline, chronos]
     if: >-
       ${{ always() && needs.detect.outputs.should_run == 'true' &&
       needs.detect.outputs.dry_run == 'false' &&
       (needs.prepare.outputs.renewal == 'true' ||
-      needs.prepare.outputs.baseline == 'true') }}
+      needs.prepare.outputs.baseline == 'true' ||
+      needs.prepare.outputs.chronos == 'true') }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -595,17 +708,24 @@ jobs:
         with:
           name: baseline-gate
           path: ${{ env.WORK }}/baseline
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        if: needs.prepare.outputs.chronos == 'true'
+        continue-on-error: true
+        with:
+          name: chronos-gate
+          path: ${{ env.WORK }}/chronos
       # The round's status is renewal's when it ran, otherwise
-      # baseline's. baseline's files are archived beside it.
+      # baseline's, otherwise chronos's. baseline's and chronos's files
+      # are archived beside it.
       - name: Update the ledger and archive the round
         env:
           GH_TOKEN: ${{ github.token }}
           DATA_COMMIT: ${{ needs.detect.outputs.data_commit }}
           AS_OF: ${{ needs.detect.outputs.as_of }}
-          ACTION: ${{ needs.submit.outputs.action || needs.baseline.outputs.action }}
-          PR_URL: ${{ needs.submit.outputs.pr_url || needs.baseline.outputs.pr_url }}
-          PRODUCED_BY: ${{ needs.gate.outputs.produced_by || needs.baseline.outputs.produced_by }}
-          SKIPPED: ${{ needs.prepare.outputs.renewal == 'true' && needs.gate.outputs.skipped || needs.baseline.outputs.skipped }}
+          ACTION: ${{ needs.submit.outputs.action || needs.baseline.outputs.action || needs.chronos.outputs.action }}
+          PR_URL: ${{ needs.submit.outputs.pr_url || needs.baseline.outputs.pr_url || needs.chronos.outputs.pr_url }}
+          PRODUCED_BY: ${{ needs.gate.outputs.produced_by || needs.baseline.outputs.produced_by || needs.chronos.outputs.produced_by }}
+          SKIPPED: ${{ needs.prepare.outputs.renewal == 'true' && needs.gate.outputs.skipped || needs.prepare.outputs.baseline == 'true' && needs.baseline.outputs.skipped || needs.chronos.outputs.skipped }}
           BASELINE_GATE: ${{ needs.prepare.outputs.baseline == 'true' && format('{0}/baseline/gate', env.WORK) || '' }}
           RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           # Each hub model that ran, recorded under its id.
@@ -619,6 +739,12 @@ jobs:
           BASELINE_PR_URL: ${{ needs.baseline.outputs.pr_url }}
           BASELINE_PRODUCED_BY: ${{ needs.baseline.outputs.produced_by }}
           BASELINE_SKIPPED: ${{ needs.baseline.outputs.skipped }}
+          CHRONOS_GATE: ${{ needs.prepare.outputs.chronos == 'true' && format('{0}/chronos/gate', env.WORK) || '' }}
+          CHRONOS_ID: ${{ needs.chronos.outputs.model_id }}
+          CHRONOS_ACTION: ${{ needs.chronos.outputs.action }}
+          CHRONOS_PR_URL: ${{ needs.chronos.outputs.pr_url }}
+          CHRONOS_PRODUCED_BY: ${{ needs.chronos.outputs.produced_by }}
+          CHRONOS_SKIPPED: ${{ needs.chronos.outputs.skipped }}
         run: ci/steps/record.sh
       - name: Rebuild the docs with this round's page
         env:
@@ -627,7 +753,8 @@ jobs:
 
   outcome:
     name: Submission outcome
-    needs: [detect, prepare, await-fits, fit, gate, submit, baseline, record]
+    needs:
+      [detect, prepare, await-fits, fit, gate, submit, baseline, chronos, record]
     if: ${{ always() && needs.detect.outputs.should_run == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -641,6 +768,9 @@ jobs:
           BASELINE: ${{ needs.prepare.outputs.baseline }}
           BASELINE_BY: ${{ needs.baseline.outputs.produced_by }}
           BASELINE_PR: ${{ needs.baseline.outputs.action }} ${{ needs.baseline.outputs.pr_url }}
+          CHRONOS: ${{ needs.prepare.outputs.chronos }}
+          CHRONOS_BY: ${{ needs.chronos.outputs.produced_by }}
+          CHRONOS_PR: ${{ needs.chronos.outputs.action }} ${{ needs.chronos.outputs.pr_url }}
           SELECTED: ${{ needs.gate.outputs.selected }}
           PRODUCED_BY: ${{ needs.gate.outputs.produced_by }}
           STATUS: ${{ needs.gate.outputs.status }}
@@ -656,9 +786,12 @@ jobs:
             echo "## Round $REF"
             echo
             [ "$RENEWAL" = true ] || [ "$BASELINE" = true ] \
+              || [ "$CHRONOS" = true ] \
               || echo "No hub model is opted in (config/hub.toml)."
             [ "$BASELINE" = true ] \
               && echo "baseline: **${BASELINE_BY:-not submitted}**, PR $BASELINE_PR"
+            [ "$CHRONOS" = true ] \
+              && echo "chronos: **${CHRONOS_BY:-not submitted}**, PR $CHRONOS_PR"
             if [ "$RENEWAL" != true ]; then
               :
             elif [ -z "$SELECTED" ]; then
@@ -679,6 +812,6 @@ jobs:
             echo "::error::jobs failed: $failed"
             exit 1
           fi
-          case "$ACTION $BASELINE_PR" in
-            *skipped-*) echo "::error::PR not submitted: $ACTION $BASELINE_PR"; exit 1 ;;
+          case "$ACTION $BASELINE_PR $CHRONOS_PR" in
+            *skipped-*) echo "::error::PR not submitted: $ACTION $BASELINE_PR $CHRONOS_PR"; exit 1 ;;
           esac
