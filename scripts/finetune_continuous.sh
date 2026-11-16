@@ -26,6 +26,7 @@ OUTBREAKS=${OUTBREAKS:-32000}
 PREFIXES=${PREFIXES:-1000 2000 4000 8000 16000 32000}
 LR_STEPS=${LR_STEPS:-0}
 SOURCES=${SOURCES:-weekly daily 3day}
+UNIVARIATE_SHARE=${UNIVARIATE_SHARE:-0.2}
 REAL_VALIDATION=${REAL_VALIDATION:-output/finetune/real-validation.pkl}
 
 remote_ls() { ssh -o ConnectTimeout=20 "$REMOTE" "ls $REMOTE_ROOT/rounds" 2> /dev/null; }
@@ -73,8 +74,8 @@ while true; do
       --held-out-seeds "${held[0]}" "${held[1]}" --outbreaks "$OUTBREAKS" \
       --prefixes $PREFIXES --stop-from "$((OUTBREAKS + 1))" \
       --blocks-per-simulation 160 --learning-rate 1e-5 --lr-steps "$LR_STEPS" \
-      --sources $SOURCES --real-validation "$REAL_VALIDATION" \
-      --note "continuous r4" --publish \
+      --sources $SOURCES --univariate-share "$UNIVARIATE_SHARE" \
+      --real-validation "$REAL_VALIDATION" --note "continuous r4" --publish \
       >> "$HERE/train.log" 2>&1 < /dev/null &
     trainer=$!
     echo "$trainer" > "$HERE/trainer.pid"

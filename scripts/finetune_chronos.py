@@ -168,12 +168,15 @@ def strata(settings: pd.Series) -> list[str]:
 
 
 LEVEL_MIX = ("all_levels", "leaves_national", "leaves", "national", "single")
-"""The blocks of an outbreak with strata, a fifth each: the country,
-intermediate totals and leaves (as the deployed block: national,
-provinces, zones), leaves and the country, leaves only, the country only,
-or one leaf only. The last two are univariate series from the same
-outbreaks. All levels need nested strata (regions of places, or places by
-ages)."""
+"""A block's levels: the country, intermediate totals and leaves (as the
+deployed block: national, provinces, zones), leaves and the country,
+leaves only, the country only, or one leaf only. The last two are
+univariate series from the same outbreaks. All levels need nested strata
+(regions of places, or places by ages)."""
+
+UNIVARIATE_SHARE = 0.2
+"""Share of blocks that are one series, the country or one leaf; the rest
+are multivariate, shared evenly among their mixes."""
 
 REGIONS = 1.0
 """Chance an outbreak of four or more flat places is grouped into 2 to 6
@@ -215,8 +218,10 @@ def choose_places(
     ages, the age groups' totals) and the leaves.
     """
     nested = any("-" in p for p in provinces)
-    mixes = LEVEL_MIX if nested else LEVEL_MIX[1:]
-    mix = str(rng.choice(mixes))
+    if rng.random() < UNIVARIATE_SHARE:
+        mix = str(rng.choice(LEVEL_MIX[3:]))
+    else:
+        mix = str(rng.choice(LEVEL_MIX[:3] if nested else LEVEL_MIX[1:3]))
     # A block's size gives way to its level mix: leaves need at least one
     # place below the country, all levels a group's total and a leaf.
     budget = max(budget, 2 if mix == "all_levels" else 1)

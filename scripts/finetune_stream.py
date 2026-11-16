@@ -319,9 +319,11 @@ def init_worker(
     max_series: int,
     lags: dict[str, tuple[int, ...]],
     sources: tuple[str, ...],
+    univariate: float = ft.UNIVARIATE_SHARE,
 ) -> None:
     """Give a cutting worker the trainer's block settings."""
     ft.MAX_SERIES, ft.MAX_LAGS, ft.SOURCES = max_series, lags, sources
+    ft.UNIVARIATE_SHARE = univariate
 
 
 def _cut_part(
@@ -744,6 +746,10 @@ def main() -> None:
     # Sources to train on: weekly, daily, and 3-day blocks summed from the
     # daily triangle; one of them trains an adapter for it alone.
     parser.add_argument("--sources", nargs="+", default=list(ft.SOURCES))
+    # Share of blocks that are one series (the country or one leaf).
+    parser.add_argument(
+        "--univariate-share", type=float, default=ft.UNIVARIATE_SHARE
+    )
     # Real validation blocks (scripts/finetune_real_validation.py), scored
     # at each checkpoint to choose among them; not trained on.
     parser.add_argument("--real-validation", type=Path)
@@ -763,6 +769,7 @@ def main() -> None:
     parser.add_argument("--cut-workers", type=int, default=3)
     args = parser.parse_args()
     ft.SOURCES = tuple(args.sources)
+    ft.UNIVARIATE_SHARE = args.univariate_share
     out, sim_dir = args.out, args.sim_dir
     # The commit this trainer runs, read once: the worktree may move on.
     commit = subprocess.run(
@@ -817,7 +824,12 @@ def main() -> None:
         args.cut_workers,
         mp_context=multiprocessing.get_context("spawn"),
         initializer=init_worker,
-        initargs=(ft.MAX_SERIES, ft.MAX_LAGS, ft.SOURCES),
+        initargs=(
+            ft.MAX_SERIES,
+            ft.MAX_LAGS,
+            ft.SOURCES,
+            ft.UNIVARIATE_SHARE,
+        ),
     )
     held_pairs, empty = cut_in_workers(
         pool, sim_dir, held, args.seed, k, args.cut_workers
@@ -873,6 +885,7 @@ def main() -> None:
         "n_validation": len(val),
         "chunk": CHUNK,
         "blocks_per_simulation": k,
+        "univariate_share": ft.UNIVARIATE_SHARE,
         "block_sampling": (
             f"{k} of each simulation's draws x {ft.CUTS} cut-off slots x "
             "2 sources, seeded by the simulation"
