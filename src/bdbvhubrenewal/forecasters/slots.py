@@ -52,9 +52,11 @@ __all__ = [
     "slot_ids",
 ]
 
-N_SLOTS: Final = 128
-"""Slots. A training block can hold about 95 targets (the country, place
-and age totals and up to 60 leaves), so 64 is too few."""
+N_SLOTS: Final = 1024
+"""Labels. BDBV's joint block holds the country, 26 provinces and 519
+zones, 546 places; training blocks hold up to about 70. Labels are fixed
+random codes, so a larger table costs no parameters, and each block draws
+its places' labels from the whole table."""
 
 SLOT_MODULE: Final = "series_slots"
 """Name of the slots module, PEFT's `modules_to_save` entry."""
