@@ -144,3 +144,16 @@ def test_the_new_slots_run_goes_first_and_zero_init_runs_last(poll) -> None:
     assert not poll.should_pause(
         "slots-n1", ["slots-z1", "slots-n1"], {"slots-z1"}, zero
     )
+
+
+def test_slots_run_checkpoints_are_held_while_the_hold_file_exists(
+    poll, tmp_path
+) -> None:
+    # The new run's adapters carry parent_scale, which slots.py drops until
+    # bdbv-covariates' fix is merged: hold them, not the zero-init ones.
+    queue = ["slots-z", "slots-new", "c"]
+    zero = {"slots-z"}
+    hold = tmp_path / "hold"
+    assert poll.unheld(queue, zero, hold) == queue
+    hold.write_text("pending\n")
+    assert poll.unheld(queue, zero, hold) == ["slots-z", "c"]
