@@ -1,4 +1,7 @@
-"""Post the mailbox line for a saved checkpoint: segment_saved.py SETTINGS N"""
+"""Post the mailbox line for a saved checkpoint.
+
+segment_saved.py SETTINGS N
+"""
 
 import json
 import sys
