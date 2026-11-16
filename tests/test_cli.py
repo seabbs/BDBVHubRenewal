@@ -98,6 +98,35 @@ def test_cli_nowcast_takes_a_fit_s_own_zones(tmp_path: Path) -> None:
 
 
 @pytest.mark.usefixtures("in_root")
+def test_cli_nowcast_says_when_a_fit_s_own_zones_are_stale(
+    tmp_path: Path,
+) -> None:
+    fit = tmp_path / "fit"
+    args = ["--data", str(DATA), "--vintage", "2026-10-17"]
+    assert (
+        main(["fit", "--config", "randomwalk", *args, "--out", str(fit)]) == 0
+    )
+    # Zone samples of another week: none for the task's target dates.
+    pd.DataFrame(
+        {
+            "location": ["CD-NK-BE"],
+            "target_end_date": ["2020-01-04"],
+            "sample": [0],
+            "value": [1.0],
+        }
+    ).to_csv(fit / "zones.csv.gz", index=False)
+    out = tmp_path / "sub"
+    nowcast = ["nowcast", "--config", "randomwalk", "--fit", str(fit), *args]
+    assert main([*nowcast, "--out", str(out)]) == 0
+    assert (_written(out)["location"].str.count("-") < 2).all()
+    assert "zone" in (out / "handled.json").read_text()
+    side = json.loads((out / "zones.json").read_text())
+    assert side["zones"] is False
+    assert side["n_zones"] == 0
+    assert "zone" in side["note"]
+
+
+@pytest.mark.usefixtures("in_root")
 def test_cli_nowcast_without_zone_data_skips_zones(tmp_path: Path) -> None:
     data = tmp_path / "data"
     data.mkdir()
