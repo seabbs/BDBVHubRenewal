@@ -913,3 +913,31 @@ def test_a_live_run_forecasts_the_provinces_as_the_stored_fit(
     plain = vintage_task(target, delays, config, latest, daily)[0]
     got = provinces(plain)
     assert not got.equals(want.reindex(got.index))
+
+
+def test_an_archive_task_keys_a_zone_model_as_the_store(
+    target: pd.DataFrame,
+    delays: pd.DataFrame,
+    daily: pd.DataFrame,
+    daily_zones: pd.DataFrame,
+    health_zones: pd.DataFrame,
+    config: BacktestConfig,
+) -> None:
+    # The archive finds a stored fit by the key of its own task, so a
+    # model that reads zones needs the zone tables the store fitted with.
+    from bdbvhubrenewal.evaluation import store_archive
+
+    zones = ZoneData(health_zones, daily_zones, ("CD-IT-01", "CD-NK-01"))
+    latest = real_vintages(target)[-1]
+    stored = store.origin_tasks(target, delays, config, daily, zones)[latest]
+    archived = store_archive.store_task(
+        target, delays, config, daily, latest, zones
+    )
+    assert archived is not None
+    assert archived.zone_codes == stored.zone_codes
+    pd.testing.assert_frame_equal(archived.zone_history, stored.zone_history)
+    reads = ["fm_chronos_weekly_complete"]
+    sampler = store.samplers()
+    assert store.current_keys({latest: archived}, reads, sampler, "c") == (
+        store.current_keys({latest: stored}, reads, sampler, "c")
+    )
