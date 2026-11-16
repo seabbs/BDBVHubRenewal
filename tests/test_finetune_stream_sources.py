@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parents[1] / "scripts"))
-import finetune_stream as fs  # noqa: E402
+import finetune_stream as fs
 
 
 def test_held_out_loss_is_reported_by_source(monkeypatch):
@@ -19,7 +19,7 @@ def test_held_out_loss_is_reported_by_source(monkeypatch):
         ]
     ]
 
-    def mean_value(model, blocks, batch_size):
+    def mean_value(_model, blocks, _batch_size):
         return sum(b["value"] for b in blocks) / len(blocks)
 
     monkeypatch.setattr(fs, "held_out_loss", mean_value)
