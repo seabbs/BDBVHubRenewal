@@ -205,3 +205,46 @@ def test_benchmark_commands_run_from_the_repository_root(
         assert line.startswith("cd .. && ")
         assert "--config config/germany.toml" in line
         assert "--data data/raw/germany" in line
+
+
+def test_the_synthetic_runner_runs_once_the_simulations_exist(
+    tmp_path: Path,
+) -> None:
+    sims = tmp_path / "sims"
+    sims.mkdir()
+    seeds = CONFIG["development"]["synthetic_seeds"]
+    extra = {
+        "synthetic": {
+            **CONFIG["synthetic"],
+            "simulations": {"development": str(sims), "paper": str(sims)},
+            "forecasts": {
+                "development": str(tmp_path / "out" / "synthetic-dev.csv.gz"),
+                "paper": str(tmp_path / "out" / "synthetic.csv.gz"),
+            },
+        }
+    }
+    base = str(PAPER / "workflow" / "config.yaml")
+    absent = _snakemake(
+        "development",
+        "-n",
+        "--configfile",
+        base,
+        str(_offline(tmp_path, **extra)),
+    )
+    assert absent.returncode == 0, absent.stderr
+    assert "rule synthetic_forecasts" not in absent.stdout + absent.stderr
+    for seed in seeds:
+        (sims / f"counts-{seed}.csv.gz").write_text("")
+        (sims / f"settings-{seed}.csv").write_text("")
+    present = _snakemake(
+        "development",
+        "-n",
+        "-p",
+        "--configfile",
+        base,
+        str(_offline(tmp_path, **extra)),
+    )
+    assert present.returncode == 0, present.stderr
+    log = present.stdout + present.stderr
+    assert "rule synthetic_forecasts_development" in log
+    assert "--seeds " + " ".join(str(s) for s in seeds) in log

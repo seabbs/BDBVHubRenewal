@@ -426,3 +426,20 @@ def test_a_model_that_cannot_load_stops_the_run() -> None:
     # drop the model from the results silently.
     with pytest.raises(FileNotFoundError, match="no checkpoint"):
         synthetic.evaluate(_counts(("P01",)), [_Missing()], 1, 10)
+
+
+def test_simulation_files_keep_the_run_seeds(tmp_path: Path) -> None:
+    for seed in (30100, 30140, 30141):
+        (tmp_path / f"counts-{seed}.csv.gz").write_text("")
+        (tmp_path / f"settings-{seed}.csv").write_text("")
+    counts, settings = synthetic.simulation_files(tmp_path, [30140, 30141])
+    assert [p.name for p in counts] == [
+        "counts-30140.csv.gz",
+        "counts-30141.csv.gz",
+    ]
+    assert [p.name for p in settings] == [
+        "settings-30140.csv",
+        "settings-30141.csv",
+    ]
+    with pytest.raises(FileNotFoundError, match="30142"):
+        synthetic.simulation_files(tmp_path, [30142])
