@@ -243,3 +243,54 @@ def test_inference_assigns_slots_by_place(monkeypatch, tmp_path):
     b = foundation.chronos_sampler([group(swapped(block))], H, 50, 1)[0]
     assert np.array_equal(a, again)
     assert not np.allclose(a, b)
+
+
+def _ragged(places, lagged, lag=LAG, steps=T):
+    """A ragged group whose lag series are those of `lagged` places only."""
+    rng = np.random.default_rng(0)
+    names = [f"{p}_lag_{d}" for p in places if p in lagged for d in range(lag)]
+    return {
+        "target": rng.poisson(5.0, (len(places), steps)).astype(np.float32),
+        "past_covariates": {n: rng.poisson(2.0, steps) for n in names},
+        "places": tuple(places),
+    }
+
+
+def test_row_slots_tie_lags_to_their_place_when_some_have_none():
+    from bdbvhubrenewal.forecasters import foundation
+
+    # Places with no cases have no lag series (`_lags_of`), so the lag
+    # rows are not an even split over the places.
+    group = _ragged(["a", "b", "c"], {"a", "c"})
+    ids = foundation.row_slots(group, np.random.default_rng(0), 8)
+    assert len(ids) == 3 + 2 * LAG
+    assert len(set(ids[:3])) == 3
+    assert set(ids[3 : 3 + LAG]) == {ids[0]}
+    assert set(ids[3 + LAG :]) == {ids[2]}
+
+
+def test_row_slots_of_a_full_block_are_slot_ids():
+    from bdbvhubrenewal.forecasters import foundation
+
+    group = _ragged(["a", "b", "c"], {"a", "b", "c"})
+    a = foundation.row_slots(group, np.random.default_rng(3), 8)
+    b = slots.slot_ids(3, 3 * LAG, np.random.default_rng(3), 8)
+    assert a.tolist() == b.tolist()
+
+
+def test_inference_runs_where_some_places_have_no_lags(monkeypatch, tmp_path):
+    from chronos import Chronos2Pipeline
+
+    from bdbvhubrenewal.forecasters import foundation
+
+    model = trained()
+    model.save_pretrained(tmp_path / "ckpt")
+    loaded = slots.load_adapter(tiny_model(), tmp_path / "ckpt")
+    monkeypatch.setattr(
+        foundation,
+        "_chronos",
+        lambda _checkpoint=None: Chronos2Pipeline(model=loaded),
+    )
+    group = _ragged(["a", "b", "c"], {"a", "c"})
+    (draws,) = foundation.chronos_sampler([group], H, 20, 1)
+    assert draws.shape == (20, 3, H)
