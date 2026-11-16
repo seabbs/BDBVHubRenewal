@@ -1,0 +1,43 @@
+# The project's workflow: simulate, fine-tune, publish, score and the
+# paper, one Snakemake workflow. See workflow/README.md for the targets.
+#
+#   snakemake --workflow-profile workflow/profiles/<role> <target>
+#
+# or the Taskfile entry points (`task simulate`, `task finetune`, ...).
+# Machine settings come from config/local.env (flowlib.localconfig),
+# the rest from workflow/config.yaml.
+
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(workflow.basedir)))
+
+from flowlib import localconfig  # noqa: E402
+
+
+configfile: str(Path(workflow.basedir) / "config.yaml")
+
+
+LOCAL = localconfig.read()
+HOST = LOCAL["HOST_NAME"]
+ROUNDS_DIR = f"{LOCAL['ROOT']}/rounds"
+
+
+def job_prefix(mem_mb):
+    """The machine's command prefix for a job capped at `mem_mb` MB."""
+    return LOCAL["JOB_PREFIX"].replace("{mem}", f"{int(mem_mb)}M")
+
+
+def git_commit():
+    """The commit the workflow runs at."""
+    return subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+
+
+include: "rules/simulate.smk"

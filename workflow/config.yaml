@@ -1,0 +1,22 @@
+# Settings of the top-level workflow (workflow/Snakefile) that are the
+# same on every machine. Machine settings (paths, host name, memory caps)
+# are in config/local.env (see config/local.env.example), never here.
+# Override any of these with `--config key=value`.
+
+# Simulation rounds to make or read, as round numbers.
+rounds: []
+
+simulate:
+  # As scripts/sim_rounds.sh: round r is `train_batches` training then
+  # `held_batches` held-out batches from seed `seed_base` + 100 r, each
+  # `batch` outbreaks with exactly `draws` observation draws.
+  seed_base: 30000
+  train_batches: 40
+  held_batches: 4
+  batch: 25
+  draws: 10
+  # A batch's memory, and its one retry's (MB).
+  mem_mb: 16384
+  retry_mem_mb: 20480
+  # GitHub repository of the `sims-r<N>` releases.
+  repo: seabbs/BDBVHubRenewal

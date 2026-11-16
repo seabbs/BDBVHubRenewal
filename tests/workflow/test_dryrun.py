@@ -18,10 +18,11 @@ def dry(tmp_path, *targets, config=()):
     """Return the jobs per rule of a dry run of `targets`."""
     local = tmp_path / "local.env"
     if not local.exists():
-        local.write_text(f"ROOT={tmp_path}/rounds\nHOST_NAME=test-host\n")
+        local.write_text(f"ROOT={tmp_path}\nHOST_NAME=test-host\n")
     out = subprocess.run(
         [
             str(SNAKEMAKE),
+            *targets,
             "-s",
             "workflow/Snakefile",
             "-n",
@@ -32,7 +33,6 @@ def dry(tmp_path, *targets, config=()):
             "--workflow-profile",
             "workflow/profiles/ci",
             *(["--config", *config] if config else []),
-            *targets,
         ],
         cwd=ROOT,
         env={

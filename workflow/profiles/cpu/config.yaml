@@ -1,0 +1,11 @@
+# A CPU machine that simulates and scores. Its cores and memory budget
+# come from config/local.env through the Taskfile (CORES, MEM_MB), so
+# this file names no machine.
+rerun-triggers: [mtime]
+printshellcmds: true
+keep-going: true
+latency-wait: 30
+default-resources:
+  - mem_mb=2048
+set-threads:
+  - simulate_batch=1
