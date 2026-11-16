@@ -653,7 +653,7 @@ def _round_task(
     vintage: str | None,
     reference_date: str | None,
 ) -> tuple[ForecastTask, list[str]]:
-    """Build a round's task from the tables, as `_task` does."""
+    """Build a round's task, moved to `reference_date` if one is given."""
     real = target.loc[target["kind"] == "real"]
     vintage = _vintage([str(v) for v in real["vintage"].unique()], vintage)
     task, note = bt.vintage_task(target, delays, config, vintage, daily)

@@ -20,7 +20,10 @@ def _git(*args: str, cwd: Path) -> str:
 
 
 def _ledger(tmp_path: Path) -> tuple[Path, Path]:
-    """A bare origin with a ledger branch, and a clone to run steps in."""
+    """A bare origin with a ledger branch, and the clone that seeded it.
+
+    A clone to run steps in is made at `tmp_path / "repo"`.
+    """
     origin = tmp_path / "origin.git"
     _git("init", "-q", "--bare", str(origin), cwd=tmp_path)
     seed = tmp_path / "seed"
