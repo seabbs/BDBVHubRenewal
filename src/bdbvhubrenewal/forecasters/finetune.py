@@ -230,6 +230,50 @@ def aggregate_triangle(tri: HubTriangle, k: int, lags: int) -> HubTriangle:
     )
 
 
+MIXED: Final = {"daily+weekly": "weekly", "daily+3day": "3day"}
+"""Training-only sources on daily steps with each place's period totals:
+the period of each, weekly or 3-day."""
+
+
+def period_totals(
+    days: np.ndarray, times: Sequence[str], period: str
+) -> np.ndarray:
+    """Return each place's period totals on its periods' last days.
+
+    `days` is `[L, T]` daily counts on the days `times`. A weekly period
+    ends on a Saturday (an epiweek's end) and a 3-day one on every third
+    day back from the last (`bin_ends`'s anchor). Only whole periods
+    count; every other day is missing.
+
+    Parameters
+    ----------
+    days : numpy.ndarray
+        Daily counts, `[L, T]`.
+    times : sequence of str
+        The days, ISO format.
+    period : str
+        `"weekly"` or `"3day"`.
+
+    Returns
+    -------
+    numpy.ndarray
+        `[L, T]`, the period totals on period-end days, NaN elsewhere.
+    """
+    k = 7 if period == "weekly" else BINNED[period]
+    n = len(times)
+    if period == "weekly":
+        ends = [
+            e for e, t in enumerate(times) if epiweek_end(t).isoformat() == t
+        ]
+    else:
+        ends = list(range((n - 1) % k, n, k))
+    out = np.full(days.shape, np.nan)
+    for e in ends:
+        if e - k + 1 >= 0:
+            out[:, e] = days[:, e - k + 1 : e + 1].sum(axis=1)
+    return out
+
+
 PARENTS: Final = ("exact", "unallocated", "late_parent")
 """How a block's country relates to its places (`country_counts`)."""
 
@@ -321,7 +365,16 @@ def training_block(
     rows = releases(counts, source, cutoffs, totals, country)
     if not rows["location"].isin(places).any():
         return None
-    if source in BINNED:
+    period = MIXED.get(source)
+    if period is not None:
+        rows = releases(counts, "daily", cutoffs, totals, country)
+        tri = hub_triangle(
+            rows, "daily", places, end.isoformat(), max_lag=max_lag
+        )
+        truth = final_counts(
+            counts, "daily", places, tri.times, totals, country
+        )
+    elif source in BINNED:
         k = BINNED[source]
         rows = releases(counts, "daily", cutoffs, totals, country)
         daily = hub_triangle(
@@ -352,15 +405,25 @@ def training_block(
         ]
     )
     target = np.concatenate([group["target"], truth[:, start:]], axis=1)
+    target_places = list(range(len(places)))
+    if period is not None:
+        # One row a place of its period totals, after the daily counts;
+        # Chronos-2 scores it only where it has a value.
+        target = np.concatenate(
+            [target, period_totals(truth, tri.times, period)]
+        )
+        target_places += target_places
     context = np.concatenate([target, lagged]).astype(np.float32)
     return {
         "context": context,
         "future_covariates": context[:, start:].copy(),
-        "n_targets": len(places),
+        "n_targets": len(target_places),
         "n_covariates": len(names),
         "n_future_covariates": len(names),
         "start": start,
         "horizon": horizon,
+        "places": tuple(places),
+        "target_places": target_places,
     }
 
 

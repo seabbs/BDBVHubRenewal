@@ -151,3 +151,27 @@ def test_bias_summary_gives_each_pairs_values_by_layer_and_head():
     assert same["max"] == float(n - 1)
     assert same["mean"] == pytest.approx((n - 1) / 2)
     assert summary["up"]["max"] == 0.0
+
+
+def test_each_group_reports_its_current_rate_by_name():
+    model = tiny_model()
+    series_bias.attach(model)
+    model = fs.lora_model(model, fs.lora_config(True), None)
+    opt = torch.optim.AdamW(fs.param_groups(model, 1e-5, 1e-3))
+    fs.set_learning_rates(opt, 25, 100)
+    assert fs.group_rates(opt) == {
+        "lora": fs.learning_rate(25, 1e-5, 100),
+        "bias": fs.learning_rate(25, 1e-3, 100),
+    }
+
+
+def test_a_places_period_totals_row_is_in_its_place():
+    block = {
+        "n_targets": 6,
+        "n_covariates": 6,
+        "places": ("CD", "CD-NK", "CD-IT"),
+        "target_places": [0, 1, 2, 0, 1, 2],
+    }
+    place, parent = fs.block_rows([block])
+    assert list(place) == [0, 1, 2, 0, 1, 2, 0, 0, 1, 1, 2, 2]
+    assert list(parent) == [-1, 0, 0, -1, 0, 0, -1, -1, 0, 0, 0, 0]

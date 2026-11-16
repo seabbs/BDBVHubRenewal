@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from bdbvhubrenewal.forecasters import NATIONAL
 from bdbvhubrenewal.forecasters.finetune import (
@@ -301,3 +302,33 @@ def test_a_late_country_keeps_its_late_reports_in_its_truth() -> None:
     )
     truth = final_counts(counts, "daily", (NATIONAL,), days, False, country)
     assert truth.sum() == counts["count"].sum()
+
+
+@pytest.mark.parametrize(
+    ("source", "width"), [("daily+weekly", 7), ("daily+3day", 3)]
+)
+def test_a_mixed_block_adds_each_places_period_totals_on_daily_steps(
+    source, width
+) -> None:
+    counts = _two_places()
+    cutoffs = ["2026-09-23", "2026-09-30"]
+    places = (NATIONAL, "A", "B")
+    block = training_block(counts, source, places, cutoffs, max_lag=3)
+    daily = training_block(counts, "daily", places, cutoffs, max_lag=3)
+    n = len(places)
+    # Daily counts, then one aggregate row per place, then daily lags.
+    assert block["n_targets"] == 2 * n
+    assert list(block["target_places"]) == [*range(n), *range(n)]
+    assert block["places"] == places
+    assert block["n_covariates"] == daily["n_covariates"]
+    x, d = block["context"], daily["context"]
+    assert np.array_equal(x[:n], d[:n], equal_nan=True)
+    assert np.array_equal(x[2 * n :], d[n:], equal_nan=True)
+    agg = x[n : 2 * n]
+    ends = np.flatnonzero(~np.isnan(agg[0]))
+    # A value on each period's last day only, the period's total.
+    assert len(ends) > 1
+    assert set(np.diff(ends)) == {width}
+    assert np.isnan(agg[:, ends[0] + 1 : ends[1]]).all()
+    for e in ends:
+        assert np.allclose(agg[:, e], d[:n, e - width + 1 : e + 1].sum(1))

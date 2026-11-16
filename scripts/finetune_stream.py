@@ -200,10 +200,17 @@ def param_groups(model, lr: float, bias_lr: float = 0.0) -> list[dict]:
     for name, p in model.named_parameters():
         if p.requires_grad:
             (bias if series_bias.BIAS_MODULE in name else adapter).append(p)
-    groups = [{"params": adapter, "lr": lr, "base_lr": lr}]
+    groups = [{"params": adapter, "lr": lr, "base_lr": lr, "name": "lora"}]
     if bias:
-        groups.append({"params": bias, "lr": bias_lr, "base_lr": bias_lr})
+        groups.append(
+            {"params": bias, "lr": bias_lr, "base_lr": bias_lr, "name": "bias"}
+        )
     return groups
+
+
+def group_rates(optimiser) -> dict:
+    """Return each optimiser group's current rate by its name."""
+    return {g["name"]: g["lr"] for g in optimiser.param_groups}
 
 
 def set_learning_rates(optimiser, step: int, steps: int) -> None:
@@ -397,12 +404,14 @@ def snapshots(
 
     Every observation draw is cut once at each snapshot, so a simulation
     of 10 draws gives 160 blocks; each block's source is drawn from
-    `SOURCES`. With `n_draws`, a pass cuts only that many draws at each
-    snapshot, sampled across all the draws by `subset_seed`, the
-    simulation and the snapshot, so a later pass with another seed can
-    take the others.
+    `SOURCES` at its share (`SOURCE_SHARES`). With `n_draws`, a pass cuts
+    only that many draws at each snapshot, sampled across all the draws
+    by `subset_seed`, the simulation and the snapshot, so a later pass
+    with another seed can take the others.
     """
     simulation = draws[0].rsplit("-", 1)[0] if draws else ""
+    shares = np.array([ft.SOURCE_SHARES[s] for s in ft.SOURCES])
+    shares = shares / shares.sum()
     out = []
     for j in range(ft.CUTS):
         chosen = range(len(draws))
@@ -413,7 +422,7 @@ def snapshots(
                 ).choice(len(draws), n_draws, replace=False)
             )
         for i in chosen:
-            out.append((draws[i], str(rng.choice(ft.SOURCES)), j))
+            out.append((draws[i], str(rng.choice(ft.SOURCES, p=shares)), j))
     return out
 
 
@@ -604,20 +613,26 @@ def _bias_range(summary: dict) -> str:
 def block_rows(blocks: list[dict]) -> np.ndarray:
     """Return the places and parents of the rows of blocks batched together.
 
-    Each block's places are its own (`series_bias.batch_rows`).
+    A block's rows are its targets, each of its place (`target_places`, a
+    place's daily counts and its period totals alike), then each place's
+    lags in turn; each block's places are its own
+    (`series_bias.batch_rows`).
     """
-    return series_bias.batch_rows(
-        [
-            series_bias.block_rows(
-                int(b["n_targets"]), int(b["n_covariates"]), block_parents(b)
-            )
-            for b in blocks
-        ]
-    )
+    out = []
+    for b in blocks:
+        targets = np.asarray(
+            b.get("target_places", range(int(b["n_targets"]))), dtype=int
+        )
+        n_places = int(targets.max()) + 1
+        lags = int(b["n_covariates"]) // n_places
+        place = np.concatenate([targets, np.repeat(np.arange(n_places), lags)])
+        parent = np.asarray(block_parents(b), dtype=int)[place]
+        out.append(np.stack([place, parent]))
+    return series_bias.batch_rows(out)
 
 
 def block_parents(block: dict) -> list[int]:
-    """Return each target's parent in a block (`series_bias.parents_of`).
+    """Return each place's parent in a block (`series_bias.parents_of`).
 
     A block without place names links every place to the country, when
     it holds it, by its levels.
@@ -1507,6 +1522,7 @@ def main() -> None:
                         model, val, args.batch_size, ft.EVAL_BLOCKS
                     )
                     described = f"by source {_by_source(entry['by_source'])}, "
+                entry["lr"] = group_rates(optimiser)
                 bias = bias_summary(model)
                 if bias:
                     entry["bias"] = bias
