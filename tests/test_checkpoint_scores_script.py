@@ -395,3 +395,26 @@ def test_each_checkpoint_s_rows_name_its_run(cs) -> None:
     assert cs.run_of(rand) == "slots"
     assert cs.run_of({}) == "no-slots"
     assert "run" in cs.COLUMNS
+
+
+def test_an_origin_no_model_can_forecast_is_cached_empty(cs) -> None:
+    # The complete-data models need two releases at most 42 days apart,
+    # which the first origin lacks: the origin is cached with no rows, so
+    # the unit finishes, rather than failing.
+    out = cs.origin_draws([], "2026-10-09")
+    assert out.empty
+    assert {"location", "target_end_date", "sample", "value", "model"} <= set(
+        out.columns
+    )
+    one = pd.DataFrame(
+        {
+            "location": ["CD"],
+            "target_end_date": ["2026-10-03"],
+            "sample": [1],
+            "value": [2.0],
+            "model": ["m"],
+        }
+    )
+    got = cs.origin_draws([one], "2026-10-09")
+    assert got["origin"].tolist() == ["2026-10-09"]
+    assert got["value"].dtype == "float32"
