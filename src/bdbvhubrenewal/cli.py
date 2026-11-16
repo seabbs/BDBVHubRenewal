@@ -2043,6 +2043,8 @@ def _germany_score(
             table = pd.concat([old, table], ignore_index=True)
         write_csv(table, path)
     write_csv(copulas, out / "copulas.csv.gz")
+    # The draws are consumed here; the results keep their quantiles only.
+    (out / "samples.csv.gz").unlink(missing_ok=True)
     print(
         f"German benchmark: {len(scores)} scored nowcasts of paired models "
         f"({', '.join(sorted(paired)) or 'none'}) added in {out}."
