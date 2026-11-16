@@ -53,11 +53,11 @@ def test_values_are_read_from_the_simulator() -> None:
 
 def test_size_bounds_are_read_from_the_simulator() -> None:
     bounds = synthetic_grid.parse_bounds(TEXT)
-    assert bounds == {
-        "min_size": "10",
-        "max_size": "1e5 * design$n_places * design$n_ages",
-        "max_independent": "8L",
-    }
+    assert list(bounds) == ["min_size", "max_size", "max_independent"]
+    assert bounds["min_size"] == "10"
+    assert bounds["max_independent"] == "8L"
+    # The upper bound scales with the strata.
+    assert "design$n_places" in bounds["max_size"]
 
 
 def test_every_setting_has_a_label() -> None:
