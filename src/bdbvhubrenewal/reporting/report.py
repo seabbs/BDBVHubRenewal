@@ -473,6 +473,15 @@ def _site_rows(frame: pd.DataFrame) -> pd.DataFrame:
     )
 
 
+def _real_forecasts(
+    forecasts: pd.DataFrame, names: Sequence[str]
+) -> pd.DataFrame:
+    """Keep the real backtest forecasts of the models the site shows."""
+    return forecasts.loc[
+        (forecasts["kind"] == "real") & forecasts["model"].isin(names)
+    ]
+
+
 def _ours(frame: pd.DataFrame, names: Sequence[str]) -> pd.DataFrame:
     """Keep our models, without the hub teams."""
     return frame.loc[frame["model"].isin(names)]
@@ -1575,7 +1584,9 @@ def _scenario_section(
             labels,
         )
         shown_views = _summary_views(srcs, f"({title})")
-        drawn = samples.loc[samples["scenario"] == key]
+        drawn = samples.loc[
+            (samples["scenario"] == key) & samples["model"].isin(names)
+        ]
         shown = [m for m in names if m in set(drawn["model"])]
         target = (
             truth.loc[truth["scenario"] == key]
@@ -1748,7 +1759,7 @@ def _backtest_page(
         forecasts = pd.read_csv(fc_path, dtype={"as_of": object})
         if "as_of" in forecasts:
             forecasts = forecasts.loc[forecasts["as_of"].isna()]
-        real_fc = forecasts.loc[forecasts["kind"] == "real"]
+        real_fc = _real_forecasts(forecasts, names)
         shown = [m for m in names if m in set(real_fc["model"])]
         for m in shown:
             for loc in BACKTEST_LOCATIONS:

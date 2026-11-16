@@ -170,3 +170,39 @@ def test_hidden_models_leave_the_store_note(tmp_path: Path) -> None:
     text = (tmp_path / "gen" / "fit-store.md").read_text()
     assert "`renewal`" in text
     assert "fm_chronos_weekly_ragged" not in text
+
+
+def test_hidden_models_leave_the_backtest_explorer() -> None:
+    forecasts = pd.DataFrame(
+        {
+            "model": ["fm_chronos_daily_complete", "randomwalknowcast"] * 2,
+            "kind": ["real", "real", "simulated", "simulated"],
+        }
+    )
+    got = report._real_forecasts(forecasts, report._page_models())
+    assert list(got["model"]) == ["randomwalknowcast"]
+
+
+def test_hidden_models_leave_the_scenario_explorer(tmp_path: Path) -> None:
+    import json
+
+    from reporting.test_report import _scenario_results
+
+    _scenario_results(tmp_path)
+    path = tmp_path / "scenario-forecasts.csv.gz"
+    samples = pd.read_csv(path)
+    hidden = samples.loc[samples["model"] == "randomwalk"].assign(
+        model="fm_chronos_daily_complete"
+    )
+    pd.concat([samples, hidden]).to_csv(path, index=False)
+    report._scenario_section(
+        tmp_path, tmp_path, ["randomwalk", "randomwalknowcast"], {}
+    )
+    for key in report._SCENARIOS:
+        explorer = json.loads(
+            (tmp_path / f"explorer-scenario-{key}.json").read_text()
+        )
+        assert [m["name"] for m in explorer["models"]] == [
+            "randomwalk",
+            "randomwalknowcast",
+        ]
