@@ -13,7 +13,7 @@
 # over LR_STEPS, each block's horizon as its prediction length, every draw
 # cut at 16 snapshots. The trainer checks and publishes a checkpoint at each
 # doubling from 1,000, whatever its scores, and waits for rounds as they
-# land. Each checkpoint is copied to `$REMOTE_ROOT/checkpoints/` with a
+# land. Each checkpoint is copied to `$REMOTE_ROOT/$REMOTE_CKPT/` with a
 # line in the remote's mailbox; a stopped trainer is an alert in the
 # mailbox and the local INBOX. Run from the repo root of a clean worktree.
 set -uo pipefail
@@ -21,6 +21,8 @@ set -uo pipefail
 REMOTE=${REMOTE:-archie}
 REMOTE_ROOT=${REMOTE_ROOT:-bdbv-rounds}
 REMOTE_MAILBOX=${REMOTE_MAILBOX:-bdbv-archie-mailbox.md}
+# Where checkpoints go under REMOTE_ROOT, one folder per run.
+REMOTE_CKPT=${REMOTE_CKPT:-checkpoints}
 MAILBOX=${MAILBOX:-}
 HERE=${HERE:-output/finetune/continuous}
 OUTBREAKS=${OUTBREAKS:-8000}
@@ -129,17 +131,17 @@ while true; do
       >> "$HERE/train.log" 2>&1 < /dev/null &
     trainer=$!
     echo "$trainer" > "$HERE/trainer.pid"
-    alert "started training from base Chronos-2 (pid $trainer)"
+    alert "started training from base Chronos-2 into $HERE (pid $trainer)"
   fi
   for ckpt in "$HERE"/train/n*/settings.json; do
     [ -e "$ckpt" ] || continue
     dir=$(dirname "$ckpt")
     n=$(basename "$dir")
     [[ " $published " == *" $n "* ]] && continue
-    ssh "$REMOTE" "mkdir -p $REMOTE_ROOT/checkpoints" \
-      && rsync -a "$dir/" "$REMOTE:$REMOTE_ROOT/checkpoints/$n/" || continue
+    ssh "$REMOTE" "mkdir -p $REMOTE_ROOT/$REMOTE_CKPT" \
+      && rsync -a "$dir/" "$REMOTE:$REMOTE_ROOT/$REMOTE_CKPT/$n/" || continue
     key=$(python3 -c "import json;print(json.load(open('$ckpt'))['hash'])")
-    alert "checkpoint $n chronos-ft-$key at $REMOTE_ROOT/checkpoints/$n"
+    alert "checkpoint $n chronos-ft-$key at $REMOTE_ROOT/$REMOTE_CKPT/$n"
     published="$published $n"
     if [ "$n" = n1000 ] && ! beats_zero_shot "$ckpt"; then
       alert "ALERT n1000 does not beat zero-shot on held-out sims and pseudo-origins; training goes on, check before n2000"
