@@ -9,6 +9,7 @@ mirror with rsync. Nothing is ever written back.
 
 from __future__ import annotations
 
+import contextlib
 import subprocess
 from collections.abc import Mapping
 from pathlib import Path
@@ -22,6 +23,11 @@ class Source:
 
     def __init__(self, cfg: Mapping[str, str], mirror: Path | str) -> None:
         self.remote = cfg.get("REMOTE", "")
+        self.remote_mailbox = cfg.get("REMOTE_MAILBOX", "")
+        local_box = cfg.get("MAILBOX") or ""
+        self._local_mailbox = (
+            Path(local_box).expanduser() if local_box else None
+        )
         if self.remote:
             self.path = cfg.get("REMOTE_SCORE_CACHE") or (
                 f"{cfg.get('REMOTE_ROOT') or 'bdbv-rounds'}/scores"
@@ -40,6 +46,25 @@ class Source:
     def germany(self) -> Path:
         """Return the German forecast caches' folder."""
         return self.root / "germany"
+
+    @property
+    def mailbox(self) -> Path | None:
+        """Return the mailbox the page reads: mirrored, or this machine's."""
+        if self.remote and self.remote_mailbox:
+            return self.root / "mailbox.md"
+        return None if self.remote else self._local_mailbox
+
+    def mailbox_command(self) -> list[str] | None:
+        """Return the rsync command that copies the remote mailbox, if any."""
+        if not (self.remote and self.remote_mailbox):
+            return None
+        return [
+            "rsync",
+            "-a",
+            "--timeout=60",
+            f"{self.remote}:{self.remote_mailbox}",
+            str(self.root / "mailbox.md"),
+        ]
 
     def command(self) -> list[str] | None:
         """Return the rsync command that refreshes the mirror, if any."""
@@ -71,4 +96,9 @@ class Source:
             return f"mirror failed: {err}"
         if out.returncode != 0:
             return f"mirror failed: {out.stderr.strip()[:200]}"
+        box = self.mailbox_command()
+        if box:
+            # A missing mailbox leaves the page's section empty, no more.
+            with contextlib.suppress(OSError, subprocess.SubprocessError):
+                subprocess.run(box, capture_output=True, text=True, timeout=60)
         return f"mirrored from {self.remote}"

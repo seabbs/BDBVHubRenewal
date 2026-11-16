@@ -76,3 +76,32 @@ def test_no_runs_at_all_is_an_error():
     }
     with pytest.raises(SystemExit, match="no runs"):
         context.build(cfg, local, runs=[], refs=[])
+
+
+def test_a_reference_can_take_its_paper_colour(tmp_path):
+    from flowlib.dashboard import paperstyle
+
+    cfg = {
+        **CONFIG,
+        "dashboard": {
+            **CONFIG["dashboard"],
+            "references": [
+                {
+                    "key": "rw",
+                    "label": "randomwalknowcast",
+                    "model": "^randomwalknowcast$",
+                    "paper_model": "randomwalknowcast",
+                }
+            ],
+        },
+    }
+    local = {
+        "DASHBOARD_RUNS": f"a={tmp_path}",
+        "REMOTE": "",
+        "SCORE_CACHE": "/x",
+        "MAILBOX": "",
+    }
+    ctx = context.build(cfg, local)
+    assert ctx.references[0].colour == paperstyle.model_colour(
+        "randomwalknowcast"
+    )

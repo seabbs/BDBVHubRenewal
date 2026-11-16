@@ -122,7 +122,8 @@ dashboard:
       checkpoint: zero-shot
     - key: rw
       label: randomwalknowcast
-      colour: "#6b7280"
+      # Its colour in the paper figures (paperfigs.style).
+      paper_model: randomwalknowcast
       model: "^randomwalknowcast$"
       role: baseline
   # The checkpoint scores' rule shown.

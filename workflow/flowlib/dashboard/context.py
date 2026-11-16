@@ -46,18 +46,29 @@ def build(
             "no runs to show: set dashboard.runs, DASHBOARD_RUNS in "
             "config/local.env, or --run name=<folder|prefix>"
         )
-    mailbox = local.get("MAILBOX") or ""
+    # A reference may take its colour from the paper figures' model.
+    references = [
+        {
+            **e,
+            "colour": e.get("colour")
+            or paperstyle.model_colour(e["paper_model"]),
+        }
+        if e.get("paper_model")
+        else e
+        for e in dash.get("references") or []
+    ]
+    source = Source(local, root / dash["mirror"])
     return Context(
         runs=run_list,
-        references=spec.load_references(dash.get("references") or [], refs),
-        source=Source(local, root / dash["mirror"]),
+        references=spec.load_references(references, refs),
+        source=source,
         rule=dash["rule"],
         outbreaks=int(ft["outbreaks"]),
         learning_rate=float(ft["learning_rate"]),
         lr_steps=int(ft["lr_steps"]),
         style=paperstyle.page_style(),
         datasets=dash.get("datasets") or [],
-        mailbox=Path(mailbox).expanduser() if mailbox else None,
+        mailbox=source.mailbox,
         mail_filter=dash.get("mail_filter", ""),
         once=once,
     )

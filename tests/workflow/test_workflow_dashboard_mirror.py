@@ -44,3 +44,29 @@ def test_paths_under_the_root(tmp_path):
     src = mirror.Source({"REMOTE": "", "SCORE_CACHE": str(tmp_path)}, Path("m"))
     assert src.scores == tmp_path / "tables" / "checkpoint-scores.csv"
     assert src.germany == tmp_path / "germany"
+
+
+def test_a_remote_mailbox_is_mirrored_too(tmp_path):
+    cfg = {
+        "REMOTE": "h",
+        "REMOTE_ROOT": "r",
+        "REMOTE_MAILBOX": "box.md",
+        "SCORE_CACHE": "/x",
+        "MAILBOX": "/local/box.md",
+    }
+    src = mirror.Source(cfg, tmp_path)
+    assert src.mailbox == tmp_path / "mailbox.md"
+    assert src.mailbox_command() == [
+        "rsync",
+        "-a",
+        "--timeout=60",
+        "h:box.md",
+        str(tmp_path / "mailbox.md"),
+    ]
+
+
+def test_a_local_mailbox_is_read_where_it_is(tmp_path):
+    cfg = {"REMOTE": "", "SCORE_CACHE": str(tmp_path), "MAILBOX": "/b.md"}
+    src = mirror.Source(cfg, tmp_path / "m")
+    assert src.mailbox == Path("/b.md")
+    assert src.mailbox_command() is None
