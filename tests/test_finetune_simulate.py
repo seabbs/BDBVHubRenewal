@@ -567,3 +567,55 @@ cat("lonely_late", bad, "\\n")
     )
     line = next(x for x in out.splitlines() if x.startswith("lonely_late"))
     assert line.split()[1] == "0"
+
+
+# Places' mean delays under each relationship between places' delays.
+DELAY_PLACES = """
+set.seed(11)
+d <- draw_design(1L)
+d$strata <- "places"; d$n_places <- 4L; d$n_ages <- 1L
+d$spread <- "even"; d$seeding <- "start"; d$place_rt <- "shared"
+d$mixing <- "none"; d$imports <- "none"
+d$trajectory <- "flat"; d$delay_change <- "static"
+d$delay_form <- "parametric"; d$delay_family <- "lognormal"
+d$reporting <- "daily"; d$shocks <- "none"; d$delay_places <- "{level}"
+v <- draw_values(d)
+v$weeks <- 16L; v$target_size <- 20000; v$quiet_places <- integer(0)
+v$delay_median <- 4; v$delay_sdlog <- 0.6; v$flat <- 0
+v$delay_place_sd <- 0.8
+out <- simulate_outbreak(d, v)
+c <- out$counts[draw == 1]
+m <- c[, .(d = sum(count * as.numeric(report_date - reference_date)) /
+  sum(count)), by = location][order(location), d]
+cat("means", m, "\\n")
+"""
+
+
+def _place_means(level: str, tmp_path: Path) -> list[float]:
+    out = run_r(DELAY_PLACES.replace("{level}", level), tmp_path)
+    line = next(x for x in out.splitlines() if x.startswith("means"))
+    return [float(x) for x in line.split()[1:]]
+
+
+@needs_r
+def test_shared_delays_are_the_same_in_every_place(tmp_path):
+    means = _place_means("shared", tmp_path)
+    assert len(means) == 4
+    assert max(means) / min(means) < 1.15
+
+
+@needs_r
+@pytest.mark.parametrize("level", ["shifted", "independent"])
+def test_shifted_and_independent_delays_differ_by_place(level, tmp_path):
+    means = _place_means(level, tmp_path)
+    assert max(means) / min(means) > 1.3
+
+
+@needs_r
+def test_delay_places_is_a_balanced_factor(tmp_path):
+    out = run_r(
+        "f <- factors$delay_places\n"
+        'cat(f, block %% length(f), "\\n")',
+        tmp_path,
+    )
+    assert out.split() == ["shared", "shifted", "independent", "0"]
