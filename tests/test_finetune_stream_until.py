@@ -66,3 +66,20 @@ def test_the_random_state_round_trips(tmp_path):
 def test_no_saved_random_state_leaves_it_as_it_is(tmp_path):
     pytest.importorskip("torch")
     assert not fs.load_rng(tmp_path)
+
+
+def test_a_segment_trains_while_the_state_is_short_of_it():
+    assert fs.until_start(750, 1000, have_prefix=False) == "train"
+    assert fs.until_start(0, 250, have_prefix=False) == "train"
+    assert fs.until_start(500, None, have_prefix=False) == "train"
+
+
+def test_a_segment_already_saved_at_its_prefix_only_keeps_its_state():
+    assert fs.until_start(1000, 1000, have_prefix=True) == "kept"
+
+
+def test_a_state_past_the_prefix_cannot_make_it():
+    with pytest.raises(SystemExit, match="past n1000"):
+        fs.until_start(1250, 1000, have_prefix=True)
+    with pytest.raises(SystemExit, match="n1000 is missing"):
+        fs.until_start(1000, 1000, have_prefix=False)
