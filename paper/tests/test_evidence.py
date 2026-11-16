@@ -474,3 +474,143 @@ def test_checkpoint_curves_show_the_untuned_models_as_lines() -> None:
     legend = [t.get_text() for t in fig.legends[0].get_texts()]
     assert "fm_chronos_daily_complete, complete data only" in legend
     assert "randomwalknowcast" in legend
+
+
+def _slots_check() -> pd.DataFrame:
+    """Rows in the slots check's layout: slots against zero-shot and no
+    slots, and the lag-swap test."""
+    base = {"window": "nowcast", "ci_low": 0.8, "ci_high": 0.95}
+    return pd.DataFrame(
+        [
+            {
+                **base,
+                "set": "sims weekly",
+                "model": "slots",
+                "condition": "given",
+                "against": "zero-shot",
+                "loss": 8.0,
+                "against_loss": 10.0,
+                "ratio": 0.8,
+            },
+            {
+                **base,
+                "set": "sims weekly",
+                "model": "slots",
+                "condition": "given",
+                "against": "no-slots",
+                "loss": 8.0,
+                "against_loss": 9.0,
+                "ratio": 0.89,
+            },
+            {
+                **base,
+                "set": "sims 3day",
+                "model": "slots",
+                "condition": "given",
+                "against": "no-slots",
+                "loss": 4.0,
+                "against_loss": 5.0,
+                "ratio": 0.8,
+            },
+            {
+                **base,
+                "set": "sims weekly",
+                "model": "slots",
+                "condition": "swap_places",
+                "against": "given",
+                "loss": 8.4,
+                "against_loss": 8.0,
+                "ratio": 1.05,
+            },
+            {
+                **base,
+                "set": "sims weekly",
+                "model": "zero-shot",
+                "condition": "swap_places",
+                "against": "given",
+                "loss": 10.0,
+                "against_loss": 10.0,
+                "ratio": 1.0,
+            },
+        ]
+    )
+
+
+def test_slots_loss_leaves_out_3_day_blocks_against_no_slots() -> None:
+    # The no-slots run built its 3-day blocks as daily, so only weekly and
+    # daily blocks compare cleanly with it.
+    from paperpipe.evidence import slots_loss_table
+
+    out = slots_loss_table(_slots_check())
+    assert list(out["Against"]) == ["zero-shot", "no-slots"]
+    assert set(out["Set"]) == {"sims weekly"}
+    assert out["Ratio (90% CI)"].iloc[0] == "0.80 (0.80 to 0.95)"
+
+
+def test_slots_swap_gives_each_model_s_lag_swap_ratio() -> None:
+    from paperpipe.evidence import slots_swap_table
+
+    out = slots_swap_table(_slots_check())
+    assert list(out["Model"]) == ["slots", "zero-shot"]
+    assert list(out["Ratio (90% CI)"]) == [
+        "1.05 (0.80 to 0.95)",
+        "1.00 (0.80 to 0.95)",
+    ]
+
+
+def test_slots_scores_pair_the_runs_at_matched_checkpoints() -> None:
+    from paperpipe.evidence import CHECKPOINT_RULE, slots_scores_table
+
+    base = {
+        "level": "national",
+        "model": "fm_chronos_daily_ragged",
+        "rule": CHECKPOINT_RULE,
+        "grid": "r4",
+        "rel_crps": None,
+    }
+    rows = pd.DataFrame(
+        [
+            {
+                **base,
+                "study": "germany",
+                "checkpoint": "slots-aaa",
+                "outbreaks": 1000,
+                "rel_wis": 0.9,
+            },
+            {
+                **base,
+                "study": "germany",
+                "checkpoint": "bbb",
+                "outbreaks": 1000,
+                "rel_wis": 1.0,
+            },
+            # No no-slots checkpoint at 250, so no pair.
+            {
+                **base,
+                "study": "germany",
+                "checkpoint": "slots-ccc",
+                "outbreaks": 250,
+                "rel_wis": 1.1,
+            },
+            {
+                **base,
+                "study": "ebola",
+                "checkpoint": "slots-aaa",
+                "outbreaks": 1000,
+                "rel_wis": None,
+                "rel_crps": 0.7,
+            },
+            {
+                **base,
+                "study": "ebola",
+                "checkpoint": "bbb",
+                "outbreaks": 1000,
+                "rel_wis": None,
+                "rel_crps": 0.75,
+            },
+        ]
+    )
+    out = slots_scores_table(rows)
+    assert list(out["Outbreaks"]) == [1000, 1000]
+    assert list(out["Slots"]) == [0.7, 0.9]
+    assert list(out["No slots"]) == [0.75, 1.0]
