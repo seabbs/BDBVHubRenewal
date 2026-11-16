@@ -58,3 +58,12 @@ def test_stop_step_is_an_argument():
         ]
     )
     assert (args.stop_step, args.stop_label) == (610, 125)
+
+
+def test_checkpoint_threshold_can_be_lowered_without_changing_blocks():
+    base = ["sims", "out", "--grid", "r4", "--held-out-seeds", "1", "2"]
+    assert fs.parser().parse_args(base).checkpoint_above is None
+    args = fs.parser().parse_args([*base, "--checkpoint-above", "64"])
+    assert args.checkpoint_above == 64
+    # The memory budget, which sets the largest block, is unchanged.
+    assert args.memory_gb == fs.ft.MEMORY_GB
