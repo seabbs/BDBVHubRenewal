@@ -14,8 +14,9 @@ RUN = ROOT / "output/finetune/continuous-slots"
 PREV = Path("/Users/lshsa2/code/seabbs/bdbv-hub-baseline-forecasts/"
             ".worktrees/fm-finetune-r4/output/finetune/continuous")
 CSV = ROOT / "output/finetune/slots-vs-noslots.csv"
-CKPTS = [250, 500, 1000, 2000, 4000, 8000]
+CKPTS = [250, 500, 750, 1000, 2000, 4000, 8000]  # fallback prefixes
 TARGET_SIMS, LR0, LR_STEPS = 8000, 1e-5, 36500
+STEPS_PER_SIM = LR_STEPS / TARGET_SIMS  # 4.5625
 MAIL_RE = re.compile(
     r"slots|ckpt-scores|agg-slots|slots-check|fm-finetune3|sim round|"
     r"sim-round|sims? rounds?", re.I)
@@ -128,6 +129,23 @@ def checkpoints(base):
                 mt = None
             out.append((d.name, s, mt))
     return out
+
+
+def trainer_prefixes():
+    """Checkpoint sizes: trainer's --prefixes, else saved folders, else
+    the default list."""
+    try:
+        pid = int((RUN / "trainer.pid").read_text().split()[0])
+        r = subprocess.run(["ps", "-p", str(pid), "-o", "args="],
+                           capture_output=True, text=True, timeout=5)
+        m = re.search(r"--prefixes((?:\s+\d+)+)", r.stdout)
+        if m:
+            return sorted(int(x) for x in m.group(1).split())
+    except Exception:
+        pass
+    done = [int(re.sub(r"\D", "", d.name)) for d in
+            RUN.glob("train/n*") if re.sub(r"\D", "", d.name)]
+    return sorted(set(CKPTS) | set(done))
 
 
 def pid_state():
@@ -732,41 +750,35 @@ def build():
     sl, pv = LOGS["slots"].sorted(), LOGS["prev"].sorted()
     status = JC.get(str(RUN / "train/stream-status.json")) or {}
     hist = JC.get(str(RUN / "train/history.json")) or []
-    cons = RUN / "train/consumed.txt"
-    nsims = 0
-    try:
-        for ln in cons.read_text().splitlines():
-            parts = ln.split("\t", 1)
-            if len(parts) == 2:
-                nsims += len([x for x in parts[1].split(",") if x])
-    except Exception:
-        pass
-    step = sl[-1]["step"] if sl else status.get("step")
-    if isinstance(status.get("step"), int) and (
-            step is None or status["step"] > step):
-        step = status["step"]
+    step = sl[-1]["step"] if sl else None
     last_t = sl[-1]["t"] if sl else None
     rate = None
     recent = [r for r in sl if r["t"] >= (last_t or 0) - 1800]
     if len(recent) >= 2 and recent[-1]["t"] > recent[0]["t"]:
         rate = (recent[-1]["step"] - recent[0]["step"]) / (
             recent[-1]["t"] - recent[0]["t"])
-    nxt = next((c for c in CKPTS if step is not None and c > step), None)
-    eta = lambda tgt: dur((tgt - step) / rate) if rate and step is not None \
-        and tgt else "n/a"
+    prefixes = trainer_prefixes()
+    saved = {n for n in prefixes if (RUN / f"train/n{n}/settings.json").exists()}
+    nxt = next((n for n in prefixes if n not in saved), None)
+    tstep = lambda n: round(n * STEPS_PER_SIM)
+    eta = lambda n: ("n/a" if not (rate and step is not None and n) else
+                     "due now" if tstep(n) <= step else
+                     dur((tstep(n) - step) / rate))
+    ntrained = step / STEPS_PER_SIM if step is not None else None
     lr = LR0 * max(0.0, 1 - step / LR_STEPS) if step is not None else None
     pidtxt, alive = pid_state()
     age = now - last_t if last_t else None
     stale = age is not None and age > 600
     cls = lambda ok: "ok" if ok else "bad"
     tiles = [
-        ("Step", f"{step}" if step is not None else "n/a", ""),
-        ("Simulations consumed", f"{nsims} / {TARGET_SIMS}", ""),
+        ("Step", f"{step}" if step is not None else "n/a",
+         f"n{ntrained:.0f} of {TARGET_SIMS} simulations trained"
+         if ntrained is not None else ""),
         ("Steps / s (30 min)", f"{rate:.3f}" if rate else "n/a",
          f"{rate*60:.1f} steps/min" if rate else ""),
         ("Next checkpoint", f"n{nxt}" if nxt else "none",
-         f"ETA {eta(nxt)}" if nxt else ""),
-        ("ETA n8000", eta(8000), ""),
+         f"at step {tstep(nxt)}, ETA {eta(nxt)}" if nxt else ""),
+        ("ETA n8000", eta(8000), f"step {tstep(8000)}"),
         ("Learning rate", f"{lr:.3e}" if lr is not None else "n/a",
          f"linear decay, {LR_STEPS} steps"),
         ("Trainer", pidtxt, cls(alive) if alive is not None else ""),
@@ -790,7 +802,7 @@ def build():
     marks = []
     for name, s, _ in cks_s:
         n = int(re.sub(r"\D", "", name) or 0)
-        marks.append((n, name))
+        marks.append((s.get("steps") or tstep(n), name))
     train = [(h["step"], h["loss"]) for h in hist
              if isinstance(h, dict) and "loss" in h and "step" in h]
     if not train:
