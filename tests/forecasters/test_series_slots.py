@@ -256,28 +256,6 @@ def _ragged(places, lagged, lag=LAG, steps=T):
     }
 
 
-def test_row_slots_tie_lags_to_their_place_when_some_have_none():
-    from bdbvhubrenewal.forecasters import foundation
-
-    # Places with no cases have no lag series (`_lags_of`), so the lag
-    # rows are not an even split over the places.
-    group = _ragged(["a", "b", "c"], {"a", "c"})
-    ids = foundation.row_slots(group, np.random.default_rng(0), 8)
-    assert len(ids) == 3 + 2 * LAG
-    assert len(set(ids[:3])) == 3
-    assert set(ids[3 : 3 + LAG]) == {ids[0]}
-    assert set(ids[3 + LAG :]) == {ids[2]}
-
-
-def test_row_slots_of_a_full_block_are_slot_ids():
-    from bdbvhubrenewal.forecasters import foundation
-
-    group = _ragged(["a", "b", "c"], {"a", "b", "c"})
-    a = foundation.row_slots(group, np.random.default_rng(3), 8)
-    b = slots.slot_ids(3, 3 * LAG, np.random.default_rng(3), 8)
-    assert a.tolist() == b.tolist()
-
-
 def test_inference_runs_where_some_places_have_no_lags(monkeypatch, tmp_path):
     from chronos import Chronos2Pipeline
 
@@ -294,3 +272,74 @@ def test_inference_runs_where_some_places_have_no_lags(monkeypatch, tmp_path):
     group = _ragged(["a", "b", "c"], {"a", "c"})
     (draws,) = foundation.chronos_sampler([group], H, 20, 1)
     assert draws.shape == (20, 3, H)
+
+
+@pytest.mark.parametrize("drop_lags_of", [None, "CD-EQ"])
+def test_inference_slots_follow_chronos_row_order(
+    monkeypatch, tmp_path, drop_lags_of
+):
+    # Chronos-2's dict path stacks covariates by sorted name (past-only
+    # first, then known-future), not in input order. With hub names "-"
+    # sorts before "_", so "CD_lag_*" comes after "CD-KN_lag_*": each lag
+    # row must still get its own place's slot. A place may have no lags.
+    from contextlib import contextmanager
+
+    from chronos import Chronos2Pipeline
+
+    from bdbvhubrenewal.forecasters import foundation
+
+    model = trained()
+    model.save_pretrained(tmp_path / "ckpt")
+    loaded = slots.load_adapter(tiny_model(), tmp_path / "ckpt")
+    monkeypatch.setattr(
+        foundation,
+        "_chronos",
+        lambda _checkpoint=None: Chronos2Pipeline(model=loaded),
+    )
+    seen = []
+    real = slots.assigned
+
+    @contextmanager
+    def spy(m, ids):
+        seen.append(np.asarray(ids))
+        with real(m, ids):
+            yield
+
+    monkeypatch.setattr(slots, "assigned", spy)
+    places = ["CD", "CD-KN", "CD-EQ"]
+    x = toy_block()["context"]
+    names = [f"{p}_lag_{d}" for p in places for d in range(LAG)]
+    rows = dict(zip(names, x[N_PLACES:], strict=True))
+    if drop_lags_of:
+        rows = {
+            k: v
+            for k, v in rows.items()
+            if not k.startswith(drop_lags_of + "_")
+        }
+    group = {
+        "target": x[:N_PLACES, :T],
+        "past_covariates": {k: v[:T] for k, v in rows.items()},
+        "future_covariates": {k: v[T:] for k, v in rows.items()},
+        "places": places,
+    }
+    foundation.chronos_sampler([group], H, 5, 1)
+    ids = seen[-1]
+    target_slot = dict(zip(places, ids[:N_PLACES], strict=True))
+    for k, name in enumerate(sorted(rows)):
+        assert ids[N_PLACES + k] == target_slot[name.rsplit("_lag_", 1)[0]]
+    assert len(set(target_slot.values())) == N_PLACES
+
+
+def test_forecast_groups_name_their_places():
+    # The forecasting path gives the sampler each group's target places,
+    # in target order, as the slots need them.
+    from bdbvhubrenewal.forecasters import foundation
+
+    tri = foundation.HubTriangle(
+        times=["a", "b", "c", "d"],
+        final=np.ones((2, 4)),
+        partial=np.ones((2, 4, 2)),
+        last=3,
+    )
+    group = foundation.layout_block(tri, "ragged", ["CD", "CD-KN"], 2)
+    assert group["places"] == ["CD", "CD-KN"]

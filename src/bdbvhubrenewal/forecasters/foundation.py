@@ -17,7 +17,6 @@ and the fit store stores it as failed.
 
 from __future__ import annotations
 
-import contextlib
 import datetime as dt
 import hashlib
 import http.client
@@ -79,7 +78,6 @@ __all__ = [
     "quantile_draws",
     "release_tag",
     "resolve_checkpoint",
-    "row_slots",
 ]
 
 SOURCES: Final = ("weekly", "daily")
@@ -158,7 +156,7 @@ Series = Mapping[str, Any]
 """One group for Chronos-2: `target` `[V, S]`, and optionally
 `past_covariates` (name to `[S]`) and `future_covariates` (name to
 `[H]`, NaN where unknown). `places`, the targets' places, is read by
-`row_slots` and not passed to Chronos-2."""
+`_group_slots` and not passed to Chronos-2."""
 
 
 @dataclass(frozen=True)
@@ -589,12 +587,92 @@ def _chronos(checkpoint: Checkpoint | None = None) -> Any:
     return Chronos2Pipeline(model=slots.load_adapter(pipeline.model, adapter))
 
 
+GroupSlots = Callable[[Series, int], np.ndarray]
+"""Gives each of a group's rows its slot, from the group and the slots."""
+
+
+def _chronos_input(group: Series) -> dict[str, Any]:
+    """Return a group as Chronos-2 takes it, without its `places`."""
+    return {k: v for k, v in group.items() if k != "places"}
+
+
+def _group_slots(group: Series, n_slots: int) -> np.ndarray:
+    """Return each of a group's rows' slot, in Chronos-2's row order.
+
+    Chronos-2's dict path puts the targets first, then the covariates by
+    sorted name, past-only ones before known-future ones, not in input
+    order. Each place gets a distinct slot drawn with `slots.EVAL_SEED`
+    in target order, and each lag series `<place>_lag_<d>` its place's.
+    The places are the group's `places`, else the order in which the
+    covariates name them.
+
+    Raises
+    ------
+    ValueError
+        If a covariate names no target place, or the places do not match
+        the targets.
+    """
+    past = list(group.get("past_covariates", {}))
+    known = set(group.get("future_covariates", {}))
+    n_targets = np.atleast_2d(group["target"]).shape[0]
+    named = dict.fromkeys(n.rsplit("_lag_", 1)[0] for n in past)
+    places = list(group.get("places") or named)
+    if len(places) != n_targets:
+        raise ValueError(f"{len(places)} places for {n_targets} targets")
+    rows = sorted(n for n in past if n not in known)
+    rows += sorted(n for n in past if n in known)
+    at = {p: i for i, p in enumerate(places)}
+    try:
+        owner = [at[n.rsplit("_lag_", 1)[0]] for n in rows]
+    except KeyError as err:
+        raise ValueError(f"covariate of no target place: {err}") from err
+    chosen = slots.slot_ids(
+        n_targets, 0, np.random.default_rng(slots.EVAL_SEED), n_slots
+    )
+    return np.concatenate([chosen, chosen[owner]]).astype(int)
+
+
+def _predict(
+    pipeline: Any,
+    groups: Sequence[Series],
+    horizon: int,
+    levels: np.ndarray,
+    group_slots: GroupSlots | None = None,
+) -> list[Any]:
+    """Return Chronos-2's quantiles at `levels` for each group.
+
+    With a slots adapter each group is predicted on its own, so its rows
+    are one batch, with its rows' slots (`group_slots`, `_group_slots` by
+    default), as in held-out losses.
+    """
+    model = getattr(pipeline, "model", None)
+    if model is None or not slots.has_slots(model):
+        quantiles, _ = pipeline.predict_quantiles(
+            [_chronos_input(g) for g in groups],
+            prediction_length=horizon,
+            quantile_levels=levels.tolist(),
+        )
+        return list(quantiles)
+    out = []
+    for g in groups:
+        ids = (group_slots or _group_slots)(g, slots.n_slots(model))
+        with slots.assigned(model, ids):
+            q, _ = pipeline.predict_quantiles(
+                [_chronos_input(g)],
+                prediction_length=horizon,
+                quantile_levels=levels.tolist(),
+            )
+        out.extend(q)
+    return out
+
+
 def chronos_sampler(
     groups: Sequence[Series],
     horizon: int,
     n_samples: int,
     seed: int,
     checkpoint: Checkpoint | None = None,
+    group_slots: GroupSlots | None = None,
 ) -> list[np.ndarray]:
     """Draw trajectories from Chronos-2's quantiles.
 
@@ -615,6 +693,8 @@ def chronos_sampler(
     checkpoint : Checkpoint, optional
         The fine-tuned checkpoint (`finetuned_adapter`) to load into
         Chronos-2. The pretrained model by default.
+    group_slots : GroupSlots, optional
+        Each row's slot with a slots adapter, `_group_slots` by default.
 
     Returns
     -------
@@ -635,82 +715,15 @@ def chronos_sampler(
     pipeline = _chronos(checkpoint)
     levels = np.asarray(pipeline.quantiles, dtype=float)
     rng = np.random.default_rng(seed)
-    model = getattr(pipeline, "model", None)
-    n_slots = (
-        slots.n_slots(model)
-        if model is not None and slots.has_slots(model)
-        else None
-    )
     out = []
     # Chronos-2 takes groups of one size per call, so each is its own.
-    # With slots, each place's series share the slot drawn with the fixed
-    # seed, as in held-out losses; each group is one batch.
     for g in groups:
-        ctx: contextlib.AbstractContextManager[None] = contextlib.nullcontext()
-        if n_slots is not None:
-            ids = row_slots(g, np.random.default_rng(slots.EVAL_SEED), n_slots)
-            ctx = slots.assigned(model, ids)
-        series = {k: v for k, v in g.items() if k != "places"}
-        with ctx:
-            (q,), _ = pipeline.predict_quantiles(
-                [series],
-                prediction_length=horizon,
-                quantile_levels=levels.tolist(),
-            )
+        (q,) = _predict(pipeline, [g], horizon, levels, group_slots)
         q = q.float().cpu().numpy()  # [V, horizon, Q]
         u = rng.uniform(size=(n_samples, *q.shape[:2]))
         out.append(
             quantile_draws(levels, np.broadcast_to(q, (n_samples, *q.shape)), u)
         )
-    return out
-
-
-def row_slots(
-    group: Series, rng: np.random.Generator, n_slots: int
-) -> np.ndarray:
-    """Return each row's slot in a ragged group: one slot per place.
-
-    Each target gets a distinct slot, as `slots.slot_ids` draws them, and
-    each lag series its place's slot. A group with `places` (the targets'
-    places) maps a lag series to its place by name, `<place>_lag_<d>`, so
-    places with no lag series (`_lags_of`) are allowed. Without `places`,
-    every place must have the same number of lag series.
-
-    Parameters
-    ----------
-    group : Series
-        A group of `layout_block`, with `places` optional.
-    rng : numpy.random.Generator
-        Draws the slots.
-    n_slots : int
-        Slots of the model.
-
-    Returns
-    -------
-    numpy.ndarray
-        The slot of each target, then of each lag series in order.
-
-    Raises
-    ------
-    ValueError
-        If the group has more places than slots, or a lag series of a
-        place not in `places`.
-    """
-    n_targets = np.atleast_2d(group["target"]).shape[0]
-    names = list(group.get("past_covariates", {}))
-    places = group.get("places")
-    if places is None:
-        return slots.slot_ids(n_targets, len(names), rng, n_slots)
-    if n_targets > n_slots:
-        raise ValueError(f"{n_targets} places but only {n_slots} slots")
-    chosen = np.asarray(rng.permutation(n_slots))[:n_targets]
-    index = {p: i for i, p in enumerate(places)}
-    owners = [name.rsplit("_lag_", 1)[0] for name in names]
-    stray = sorted(set(owners) - set(index))
-    if stray:
-        raise ValueError(f"lag series of places not in the group: {stray}")
-    rows = np.array([*range(n_targets), *(index[o] for o in owners)])
-    out: np.ndarray = chosen[rows]
     return out
 
 
@@ -746,6 +759,7 @@ def layout_block(
         "target": target,
         "past_covariates": dict(zip(names, cells[:, :start], strict=True)),
         "future_covariates": dict(zip(names, cells[:, start:], strict=True)),
+        "places": list(places),
     }
 
 
@@ -920,9 +934,9 @@ class FoundationModel:
         for block in blocks:
             own = [places[i] for i in block]
             sub = _sub_triangle(tri, block)
-            group = _lags_of(layout_block(sub, self.layout, own, start), cased)
-            # The targets' places, so slots follow each lag series' place.
-            groups.append({**group, "places": tuple(own)})
+            groups.append(
+                _lags_of(layout_block(sub, self.layout, own, start), cased)
+            )
         sample = self.sample or partial(
             chronos_sampler, checkpoint=self.checkpoint
         )
