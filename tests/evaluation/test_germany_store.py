@@ -9,6 +9,8 @@ from pathlib import Path
 
 import pandas as pd
 import pytest
+
+from bdbvhubrenewal.evaluation.germany import load_germany_config
 from bdbvhubrenewal.evaluation.germany_store import (
     STORED_MODEL,
     choose_checkpoint,
@@ -17,8 +19,6 @@ from bdbvhubrenewal.evaluation.germany_store import (
     release_tag,
     write_stored,
 )
-
-from bdbvhubrenewal.evaluation.germany import load_germany_config
 
 ROOT = Path(__file__).resolve().parents[2]
 CONFIG = load_germany_config(ROOT / "config" / "germany.toml")
@@ -165,7 +165,7 @@ def test_the_store_script_writes_a_label_from_the_cache(
     tmp_path: Path,
 ) -> None:
     cache = tmp_path / "cache"
-    day = cache / "germany" / "bbb"
+    day = cache / "germany" / "abcdef123456"
     day.mkdir(parents=True)
     for origin in ("2021-11-22", "2021-11-23"):
         pd.concat(
@@ -180,7 +180,7 @@ def test_the_store_script_writes_a_label_from_the_cache(
             sys.executable,
             str(ROOT / "scripts" / "germany_ft_store.py"),
             str(cache),
-            "bbb",
+            "abcdef123456",
             "--no-push",
             "--partial",
             "--out",
@@ -190,13 +190,13 @@ def test_the_store_script_writes_a_label_from_the_cache(
         ],
         check=True,
     )
-    stored = load_stored(out, "chronos-ft-bbb", SPLIT)
+    stored = load_stored(out, "chronos-ft-abcdef123456", SPLIT)
     assert set(stored["model"]) == {STORED_MODEL}
     assert sorted(set(stored["origin"])) == ["2021-11-22", "2021-11-23"]
 
 
 def test_the_store_script_refuses_a_partial_label(tmp_path: Path) -> None:
-    day = tmp_path / "cache" / "germany" / "bbb"
+    day = tmp_path / "cache" / "germany" / "abcdef123456"
     day.mkdir(parents=True)
     _cache(("2021-11-22",)).to_csv(day / "2021-11-22.csv.gz", index=False)
     run = subprocess.run(
@@ -204,7 +204,7 @@ def test_the_store_script_refuses_a_partial_label(tmp_path: Path) -> None:
             sys.executable,
             str(ROOT / "scripts" / "germany_ft_store.py"),
             str(tmp_path / "cache"),
-            "bbb",
+            "abcdef123456",
             "--no-push",
             "--out",
             str(tmp_path / "out"),

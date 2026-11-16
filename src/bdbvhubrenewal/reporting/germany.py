@@ -8,13 +8,21 @@ and the `scoresummary` views, relative to the configured baseline.
 `germany_explorer` draws the nowcasts at every `plot_every`-th
 development date in the forecast explorer, against the 40-day truth and
 the data each date saw (`bdbvhubrenewal germany-asof`).
-Only the development half, nowcast dates before the split date, is shown.
+Only the development half, nowcast dates before the split date, is shown:
+the results are filtered to it, and the page refuses to write a nowcast
+date on or after it (`held_out_leaks`), which CI checks again on the built
+site (`scripts/check_germany_site.py`).
 The configured hidden models start switched off.
+`fm_chronos_daily_ragged_ft`'s forecasts come from the store
+(`bdbvhubrenewal.evaluation.germany_store`); the page names the checkpoint
+shown (`germany-ft.md`).
 """
 
 from __future__ import annotations
 
-from collections.abc import Collection, Sequence
+import json
+import re
+from collections.abc import Collection, Iterable, Sequence
 from pathlib import Path
 from typing import Final
 
@@ -47,6 +55,7 @@ __all__ = [
     "METRICS",
     "germany_explorer",
     "germany_page",
+    "held_out_leaks",
     "model_styles",
 ]
 
@@ -78,6 +87,14 @@ _PAGES: Final = (
     "germany-place.md",
     "germany-sources.md",
 )
+
+_DATE = re.compile(r"\b\d{4}-\d{2}-\d{2}\b")
+
+_TRUTH_KEYS: Final = frozenset({"releases"})
+"""JSON keys of truth vintages: report dates of the truth of development
+sums, 40 days after them, so they may fall after the split date."""
+
+_RELEASES: Final = "https://github.com/seabbs/BDBVHubRenewal/releases/tag"
 
 
 def _write(path: Path, text: str) -> None:
@@ -119,6 +136,93 @@ def model_styles(
             dashes[(k // len(free)) % len(dashes)],
         )
     return {m: out[m] for m in models}
+
+
+def _development(frame: pd.DataFrame, config: GermanyConfig) -> pd.DataFrame:
+    """Keep the development half: nowcast dates before the split date."""
+    return frame.loc[frame["origin"].astype(str) < config.split_date]
+
+
+def _refuse_held_out(frame: pd.DataFrame, split_date: str) -> None:
+    """Raise if a nowcast or target end date is on or after the split."""
+    for col in ("origin", "target_end_date"):
+        if col in frame and (frame[col].astype(str) >= split_date).any():
+            raise ValueError(
+                f"The German page would show held-out {col}s (on or after "
+                f"{split_date}); only development dates may be shown."
+            )
+
+
+def _json_dates(obj: object, path: str) -> Iterable[tuple[str, str]]:
+    """Yield each ISO date string in a JSON value, with its key path."""
+    if isinstance(obj, dict):
+        for key, value in obj.items():
+            if key not in _TRUTH_KEYS:
+                yield from _json_dates(value, f"{path}.{key}")
+    elif isinstance(obj, list):
+        for value in obj:
+            yield from _json_dates(value, f"{path}[]")
+    elif isinstance(obj, str):
+        for date in _DATE.findall(obj):
+            yield path, date
+
+
+def held_out_leaks(paths: Iterable[Path], split_date: str) -> list[str]:
+    """Return the held-out dates the German page's files name.
+
+    A JSON file may name no date on or after the split date, other than
+    its truth vintages (`releases`). A text file (Markdown or HTML) may
+    name the split date itself, as the page's prose does, but no later
+    date.
+
+    Parameters
+    ----------
+    paths : iterable of pathlib.Path
+        The page's files: the summary and explorer JSON, the snippets or
+        the built page.
+    split_date : str
+        The first held-out nowcast date.
+
+    Returns
+    -------
+    list of str
+        One line per file and date found, empty if none.
+    """
+    found = []
+    for path in paths:
+        text = path.read_text()
+        if path.suffix == ".json":
+            hits = {
+                (where, d)
+                for where, d in _json_dates(json.loads(text), "")
+                if d >= split_date
+            }
+        else:
+            hits = {("", d) for d in _DATE.findall(text) if d > split_date}
+        found += [f"{path}{where}: {d}" for where, d in sorted(hits)]
+    return found
+
+
+def _ft_note(results: Path) -> str:
+    """Say which checkpoint's stored forecasts the fine-tuned model shows."""
+    path = results / "ft-checkpoint.json"
+    if not path.exists():
+        return ""
+    meta = json.loads(path.read_text())
+    model, tag, pinned = meta["model"], meta["tag"], meta["pinned"]
+    if tag is None:
+        return (
+            f"`{model}` is not shown: the German forecasts of its "
+            f"checkpoint (`{pinned}`) are not stored yet.\n"
+        )
+    note = (
+        f"`{model}` shows the checkpoint [`{tag}`]({_RELEASES}/{tag}). "
+        "Its forecasts are those the checkpoint scoring run made, stored "
+        "on the `germany-ft-forecasts` branch, not rerun here."
+    )
+    if pinned and tag != pinned:
+        note += f" The pinned checkpoint, `{pinned}`, is not stored yet."
+    return note + "\n"
 
 
 def _read(results: Path, names: tuple[str, ...]) -> pd.DataFrame | None:
@@ -239,13 +343,15 @@ def germany_page(
         f"- The hub teams' nowcasts: {files} in {config.teams_repo} at "
         f"`{config.teams_commit[:7]}` (MIT).\n",
     )
+    _write(gen / "germany-ft.md", _ft_note(results))
     if not (results / "scores.csv.gz").exists():
         for name in _PAGES[:-1]:
             _write(gen / name, "Not run yet: `task germany`.\n")
         return
     scores = _read(results, ("scores.csv.gz", "teams.csv.gz"))
     assert scores is not None
-    scores = scores.loc[scores["origin"] < config.split_date]
+    scores = _development(scores, config)
+    _refuse_held_out(scores, config.split_date)
     forecasts = _read(results, ("forecasts.csv.gz", "teams-forecasts.csv.gz"))
     run = set(scores["model"])
     if forecasts is not None:
@@ -286,7 +392,8 @@ def germany_page(
     if forecasts is None:
         _write(gen / "germany-nowcasts.md", "Not run yet: `task germany`.\n")
     else:
-        forecasts = forecasts.loc[forecasts["origin"] < config.split_date]
+        forecasts = _development(forecasts, config)
+        _refuse_held_out(forecasts, config.split_date)
         write_explorer(
             fig / "explorer-germany.json",
             germany_explorer(
@@ -309,3 +416,13 @@ def germany_page(
         gen / "germany-place.md",
         summary_html(srcs, "Scores by place", view="place"),
     )
+    written = [
+        fig / "scoresummary-germany-latest.json",
+        *[p for p in [fig / "explorer-germany.json"] if p.exists()],
+        *[gen / name for name in (*_PAGES, "germany-ft.md")],
+    ]
+    leaks = held_out_leaks(written, config.split_date)
+    if leaks:
+        raise ValueError(
+            "The German page names held-out dates: " + "; ".join(leaks[:5])
+        )
