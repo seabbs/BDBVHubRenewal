@@ -314,3 +314,10 @@ def test_forecast_groups_name_their_places():
     )
     group = foundation.layout_block(tri, "ragged", ["CD", "CD-KN"], 2)
     assert group["places"] == ["CD", "CD-KN"]
+
+
+def test_slots_are_made_on_the_models_device():
+    model = tiny_model().to("meta")
+    slots.attach(model, 4)
+    for p in getattr(model, slots.SLOT_MODULE).parameters():
+        assert p.device.type == "meta"
