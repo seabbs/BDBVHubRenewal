@@ -123,7 +123,7 @@ SLOTS_RULE: Final = "slots_rule"
 SLOTS_RULES: Final = {
     "none": "no slots: zero-shot, the reference, or a checkpoint without",
     "all": "every place of each block has a slot, as in forecasting",
-    "cased": (
+    "cases-only": (
         "a block had more places than slots, so only places with cases in "
         "its context have slots, the others none (`cased_group_slots`)"
     ),
@@ -733,7 +733,7 @@ def slots_rule(rows: pd.DataFrame, slots: bool) -> pd.Series:
 
     On BDBV the joint block, the zones' block of `level` and the zones of
     `bottom` (summed, or paired and summed, to the levels above) hold
-    over 128 places, so `cased`; every other block, and every German one,
+    over 128 places, so `cases-only`; every other block, and every German one,
     `all`. Without slots, `none`.
 
     Parameters
@@ -746,7 +746,7 @@ def slots_rule(rows: pd.DataFrame, slots: bool) -> pd.Series:
     Returns
     -------
     pandas.Series
-        `none`, `all` or `cased`, on `rows`' index.
+        `none`, `all` or `cases-only`, on `rows`' index.
     """
     if not slots:
         return pd.Series("none", index=rows.index)
@@ -754,4 +754,4 @@ def slots_rule(rows: pd.DataFrame, slots: bool) -> pd.Series:
         rows["option"].isin(["joint", "zones_summed", "zones_copula"])
         | ((rows["option"] == "level") & (rows["level"] == "zones"))
     )
-    return pd.Series(np.where(big, "cased", "all"), index=rows.index)
+    return pd.Series(np.where(big, "cases-only", "all"), index=rows.index)
