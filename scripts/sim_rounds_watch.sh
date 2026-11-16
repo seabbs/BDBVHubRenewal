@@ -4,11 +4,10 @@
 #
 #   scripts/sim_rounds_watch.sh DRIVER_PID
 set -uo pipefail
-ROOT=${ROOT:-$HOME/bdbv-rounds}
-MAILBOX=${MAILBOX:-$HOME/bdbv-archie-mailbox.md}
+source "$(dirname "${BASH_SOURCE[0]}")/local_config.sh"
 STALL_MIN=${STALL_MIN:-120}
 pid=$1
-say() { echo "$(date '+%F %H:%M') archie: sim rounds watcher: $*" >> "$MAILBOX"; }
+say() { echo "$(date '+%F %H:%M') $HOST_NAME sim rounds watcher: $*" >> "$MAILBOX"; }
 stalled=0
 while kill -0 "$pid" 2> /dev/null; do
   latest=$(find "$ROOT/rounds" -name manifest.csv -mmin "-$STALL_MIN" 2> /dev/null | head -n 1)

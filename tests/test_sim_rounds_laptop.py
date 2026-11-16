@@ -35,7 +35,7 @@ def test_manifest_row_matches_archie_and_reads_macos_time(tmp_path):
     assert "peak_rss_kb 2097152 wall_s 1034.12" in log.read_text()
     row = run(
         tmp_path,
-        "ROUND=3; GRID=r4.1; COMMIT=abc; HOST=laptop-x; "
+        "ROUND=3; GRID=r4.1; COMMIT=abc; HOST_NAME=laptop-x; "
         f'manifest_row 30324 train "{sims}"',
     ).strip()
     fields = row.split(",")
