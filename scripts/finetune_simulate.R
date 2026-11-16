@@ -498,8 +498,8 @@ draw_values <- function(design) {
   if (length(quiet) == design$n_places) quiet <- setdiff(quiet, 1L)
   v$quiet_places <- quiet
   # Places seeded mid-outbreak: one to three places with cases, after the
-  # first.
-  active <- setdiff(seq_len(design$n_places)[-1], quiet)
+  # first place with cases, which starts at the outset.
+  active <- setdiff(seq_len(design$n_places), quiet)[-1]
   v$late_places <- if (length(active)) {
     active[sample.int(length(active), sample(1:min(3L, length(active)), 1))]
   } else {
@@ -638,7 +638,10 @@ simulate_outbreak <- function(design, v) {
     mixing = mixing, imports = imports
   )
   v$seed_size <- v$target_size / sum(unit)
-  size <- stratum_seed(pmax(v$seed_size * share, exp(-8)), strata, design, v)
+  # Quiet strata (share 0) get no seed; a floor here would seed them after
+  # the scaling and break the target size (`latent_expectation` floors
+  # the infections it logs).
+  size <- stratum_seed(v$seed_size * share, strata, design, v)
   onsets <- expected_onsets(
     size, gt, log_r, mixing = mixing, imports = v$seed_size * imports
   )
@@ -852,6 +855,36 @@ build_stack <- function(lib) {
   )
 }
 
+# Simulate one design: up to five draws of its values, each kept if it
+# runs and its size per draw is in range. Returns the outbreak (or NULL)
+# and a failure row per failed try.
+simulate_cell <- function(design, id = NA_character_) {
+  failures <- list()
+  for (try in 1:5) {
+    v <- draw_values(design)
+    res <- tryCatch(simulate_outbreak(design, v), error = function(e) e)
+    reason <- if (inherits(res, "error")) {
+      conditionMessage(res)
+    } else {
+      size <- sum(res$counts$count) / draws
+      if (size < min_size) {
+        "too small"
+      } else if (size > max_size(design)) {
+        "too large"
+      } else {
+        NA_character_
+      }
+    }
+    if (is.na(reason)) {
+      return(list(out = res, failures = failures))
+    }
+    failures[[length(failures) + 1L]] <- failure_row(
+      id, try, reason, design, v
+    )
+  }
+  list(out = NULL, failures = failures)
+}
+
 if (sys.nframe() == 0L) {
   stack <- build_stack(lib)
   set.seed(seed)
@@ -864,30 +897,9 @@ if (sys.nframe() == 0L) {
     id <- sprintf("%d-%04d", seed, i)
     design <- draw_design(seed * n_outbreaks + i - 1L)
     t1 <- Sys.time()
-    out <- NULL
-    for (try in 1:5) {
-      v <- draw_values(design)
-      res <- tryCatch(simulate_outbreak(design, v), error = function(e) e)
-      reason <- if (inherits(res, "error")) {
-        conditionMessage(res)
-      } else {
-        size <- sum(res$counts$count) / draws
-        if (size < min_size) {
-          "too small"
-        } else if (size > max_size(design)) {
-          "too large"
-        } else {
-          NA_character_
-        }
-      }
-      if (is.na(reason)) {
-        out <- res
-        break
-      }
-      failures[[length(failures) + 1L]] <- failure_row(
-        id, try, reason, design, v
-      )
-    }
+    cell_run <- simulate_cell(design, id)
+    out <- cell_run$out
+    failures <- c(failures, cell_run$failures)
     if (is.null(out)) next
     # Each draw is an outbreak `<seed>-<index>-<draw>`.
     out$counts[, outbreak := paste(id, draw, sep = "-")]
@@ -895,7 +907,7 @@ if (sys.nframe() == 0L) {
     settings[[length(settings) + 1L]] <- flat_values(c(
       list(outbreak = id), design, out$values,
       list(
-        draws = draws, tries = try, cases = sum(out$counts$count) / draws,
+        draws = draws, tries = length(cell_run$failures) + 1L, cases = sum(out$counts$count) / draws,
         seconds = as.numeric(Sys.time() - t1, units = "secs")
       ),
       stack
