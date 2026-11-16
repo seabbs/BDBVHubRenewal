@@ -389,3 +389,20 @@ def test_slots_without_a_parent_link_ignore_parent_ids(tmp_path):
         "places": ("CD", "CD-NK"),
     }
     assert _group_slots(group, 8, parent=False).ndim == 1
+
+
+def test_every_place_of_a_joint_block_gets_its_own_label():
+    # BDBV's joint block: the country, 26 provinces and 519 zones.
+    places = 546
+    own, _parent = slots.slot_ids(
+        places,
+        places * 4,
+        np.random.default_rng(0),
+        parents=[-1] + [0] * (places - 1),
+    )
+    assert slots.N_SLOTS >= 1024
+    assert len(set(own[:places])) == places
+    # No place falls back to a shared or zero label.
+    assert (own >= 0).all()
+    with pytest.raises(ValueError, match="slots"):
+        slots.slot_ids(slots.N_SLOTS + 1, 0, np.random.default_rng(0))

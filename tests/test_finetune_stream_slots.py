@@ -251,3 +251,10 @@ def test_parent_link_settings_enter_the_hash():
     assert "scale_init" not in on["series_slots"]["parent"]
     assert "plus the parent's own slot" in on["series_slots"]["parent"]["link"]
     assert "nearest" in on["series_slots"]["parent"]["rule"]
+
+
+def test_the_table_size_enters_the_hash():
+    assert (
+        fs.slot_settings(1024, init_std=0.02, init_seed=1)["series_slots"]["n"]
+        == 1024
+    )
