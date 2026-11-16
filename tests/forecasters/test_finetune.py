@@ -332,3 +332,49 @@ def test_a_mixed_block_adds_each_places_period_totals_on_daily_steps(
     assert np.isnan(agg[:, ends[0] + 1 : ends[1]]).all()
     for e in ends:
         assert np.allclose(agg[:, e], d[:n, e - width + 1 : e + 1].sum(1))
+
+
+def test_a_mixed_blocks_periods_can_end_on_any_day() -> None:
+    from bdbvhubrenewal.forecasters.finetune import period_totals
+
+    times = [
+        d.date().isoformat() for d in pd.date_range("2026-09-01", periods=30)
+    ]
+    days = np.ones((1, 30))
+    for weekday in range(7):
+        out = period_totals(days, times, "weekly", end=weekday)
+        ends = [
+            pd.Timestamp(times[e]).weekday()
+            for e in np.flatnonzero(~np.isnan(out[0]))
+        ]
+        assert set(ends) == {weekday}
+        assert np.nansum(out) == 7 * len(ends)
+    offsets = set()
+    for k in range(3):
+        out = period_totals(days, times, "3day", end=k)
+        ends = np.flatnonzero(~np.isnan(out[0]))
+        assert set(np.diff(ends)) == {3}
+        offsets.add(int(ends[0] % 3))
+    assert offsets == {0, 1, 2}
+
+
+def test_batched_reports_land_only_on_one_weekday() -> None:
+    from bdbvhubrenewal.forecasters.finetune import batch_reports
+
+    counts = _two_places()
+    batched = batch_reports(counts, 2)
+    report = pd.to_datetime(batched["report_date"])
+    before = pd.to_datetime(counts["report_date"])
+    assert set(report.dt.weekday) == {2}
+    assert ((report - before).dt.days.between(0, 6)).all()
+    # Every case is still reported, against its reference date.
+    totals = batched.groupby(["location", "reference_date"])["count"].sum()
+    assert totals.equals(
+        counts.groupby(["location", "reference_date"])["count"].sum()
+    )
+    # Cut-offs between batch days see no new reports.
+    cutoffs = ["2026-09-17", "2026-09-18", "2026-09-19", "2026-09-23"]
+    rows = releases(batched, "daily", cutoffs)
+    seen = rows.groupby("cutoff")["observed"].sum()
+    assert seen["2026-09-17"] == seen["2026-09-18"] == seen["2026-09-19"]
+    assert seen["2026-09-23"] > seen["2026-09-19"]
