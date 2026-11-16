@@ -40,3 +40,11 @@ def test_the_pin_and_the_run_s_checkpoints_are_written(tmp_path) -> None:
     assert "finetuned: bbbbbbbbbbbb\n" in text
     assert "final_checkpoints: [aaaaaaaaaaaa, bbbbbbbbbbbb]\n" in text
     assert text.startswith("render: development\n")
+
+
+def test_slots_releases_pin_by_their_spec() -> None:
+    # A `chronos-slots-<hash>` release is pinned as `slots-<hash>`, the
+    # spec the loader takes; `chronos-ft-<hash>` as its hash.
+    assert follow.spec_of("chronos-slots-aaaaaaaaaaaa") == "slots-aaaaaaaaaaaa"
+    assert follow.spec_of("chronos-ft-bbbbbbbbbbbb") == "bbbbbbbbbbbb"
+    assert follow.spec_of("realdata-ft-cccccccccccc") is None
