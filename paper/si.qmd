@@ -198,7 +198,7 @@ German nowcast hub, development half: as @tbl-copula-ebola, by state and by age 
 
 ### Joint block or aggregation
 
-The submission uses the joint block.
+Our Chronos-2 models use the joint block.
 On BDBV it is best or tied at provinces, zones and the national level for the zero-shot models.
 On the German development half, level by level is competitive for the daily zero-shot model ({{< meta evidence.aggregation.germany.national.fm_chronos_daily_ragged.level >}} against {{< meta evidence.aggregation.germany.national.fm_chronos_daily_ragged.joint >}} at the national level) and for age groups.
 Summing the lowest level loses at every level above it, with or without the copula: at BDBV's national level the daily zero-shot model scores {{< meta evidence.aggregation.ebola.national.fm_chronos_daily_ragged.zones_summed >}} summed and {{< meta evidence.aggregation.ebola.national.fm_chronos_daily_ragged.zones_copula >}} summed after pairing, against {{< meta evidence.aggregation.ebola.national.fm_chronos_daily_ragged.joint >}} for the joint block.
