@@ -40,6 +40,7 @@ def test_comparison_page(tmp_path: Path, target: pd.DataFrame) -> None:
                 str(tmp_path / "none.csv.gz"),
                 "--models",
                 "randomwalk",
+                "randomwalknowcast",
             ]
         )
         == 0
@@ -63,7 +64,7 @@ def test_comparison_page(tmp_path: Path, target: pd.DataFrame) -> None:
     assert "2026-10-24" in figures
     assert (fig / "comparison-2026-10-24.svg").exists()
     # The Backtest summaries lead, with the static figure as the fallback,
-    # and randomwalk starts off as the relative reference.
+    # and randomwalk, which we do not submit, starts off.
     # Complete weeks first. The latest release is not offered: these
     # rounds have no score of the baseline against a later release.
     assert "scoresummary-comparison-complete.json" in scores
@@ -328,6 +329,7 @@ def test_scenario_scores_table(tmp_path: Path) -> None:
     assert "randomwalknowcast" in text
     assert "10.5" in text  # mean WIS over horizons 0 and 1
     assert "0.12" in text  # bias to 2 dp
+    assert '<div class="tablesort" markdown="1">' in text
 
 
 def test_plot_scenarios() -> None:
@@ -421,7 +423,7 @@ def test_scored_on_counts_pairs_and_forecasts() -> None:
             "truth": [5.0, 0.0, 3.0, 5.0],
         }
     )
-    assert report._scored_on(rows) == (
+    assert report._scored_on(rows, "randomwalk") == (
         "On later releases, the scores cover 3 origin and release pairs.\n"
         "The randomwalk baseline has 1 national and 2 province forecasts.\n"
         "1 of them are of a place and week with no case, where every model's "
@@ -553,6 +555,7 @@ def test_checks_chart_has_a_set_per_baseline() -> None:
             "renewal": summary({"randomwalk": 0.5, "renewal": 1.0}),
         },
         names,
+        baseline="randomwalk",
     )
     assert got["baseline"] == 0
     assert [m["name"] for m in got["models"]] == names

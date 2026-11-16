@@ -16,15 +16,8 @@
 source "$(dirname "$0")/lib.sh"
 
 : "${REFERENCE_DATE:?}" "${DATA_COMMIT:?}" "${GITHUB_SHA:?}"
-LEDGER_BRANCH=${LEDGER_BRANCH:-submission-ledger}
 ledger="$WORK/ledger"
-rm -rf "$ledger"
-git worktree prune
-if git fetch -q --depth 1 origin "$LEDGER_BRANCH" 2> /dev/null; then
-  git worktree add -q -B "$LEDGER_BRANCH" "$ledger" FETCH_HEAD
-else
-  git worktree add -q --orphan -b "$LEDGER_BRANCH" "$ledger"
-fi
+ledger_worktree "$ledger"
 
 # A track's status from its SKIPPED and ACTION.
 status_of() {
@@ -38,12 +31,39 @@ status_of() {
   esac
 }
 status=$(status_of "${SKIPPED:-}" "${ACTION:-}")
-sci detect-new-vintage record --state "$ledger/state.json" \
-  --reference-date "$REFERENCE_DATE" --data-commit "$DATA_COMMIT" \
-  --as-of "${AS_OF:-}" --status "$status" --produced-by "${PRODUCED_BY:-}" \
-  --pr-url "${PR_URL:-}" --run "${RUN:-}" --code-commit "$GITHUB_SHA"
 
 archive="$ledger/archive/$REFERENCE_DATE/${GITHUB_RUN_ID:-local}"
+# baseline's files sit beside the round's (BASELINE_GATE); when it
+# is the only hub model that ran, they are the round's own.
+baseline_archive=$archive
+[ -d "$WORK/gate" ] && baseline_archive="$archive/baseline"
+# chronos's files sit beside the round's, or are its own when it is the
+# only hub model that ran.
+chronos_archive=$archive
+if [ -d "$WORK/gate" ] || [ -n "${BASELINE_GATE:-}" ]; then
+  chronos_archive="$archive/chronos"
+fi
+
+# The round's record and files, written on the ledger as it is. Run
+# again by ledger_push if another run pushed first.
+write_record() {
+  sci detect-new-vintage record --state "$ledger/state.json" \
+    --reference-date "$REFERENCE_DATE" --data-commit "$DATA_COMMIT" \
+    --as-of "${AS_OF:-}" --status "$status" --produced-by "${PRODUCED_BY:-}" \
+    --pr-url "${PR_URL:-}" --run "${RUN:-}" --code-commit "$GITHUB_SHA"
+  mkdir -p "$archive"
+  archive_gate "$WORK/gate" "$archive"
+  [ -n "${BASELINE_GATE:-}" ] && archive_gate "$BASELINE_GATE" "$baseline_archive"
+  record_model "${RENEWAL_ID:-}" "${RENEWAL_ACTION:-}" "${RENEWAL_PR_URL:-}" \
+    "${RENEWAL_PRODUCED_BY:-}" "${RENEWAL_SKIPPED:-}" "$archive"
+  record_model "${BASELINE_ID:-}" "${BASELINE_ACTION:-}" \
+    "${BASELINE_PR_URL:-}" "${BASELINE_PRODUCED_BY:-}" \
+    "${BASELINE_SKIPPED:-}" "$baseline_archive"
+  [ -n "${CHRONOS_GATE:-}" ] && archive_gate "$CHRONOS_GATE" "$chronos_archive"
+  record_model "${CHRONOS_ID:-}" "${CHRONOS_ACTION:-}" "${CHRONOS_PR_URL:-}" \
+    "${CHRONOS_PRODUCED_BY:-}" "${CHRONOS_SKIPPED:-}" "$chronos_archive"
+}
+
 # The gate's small files: provenance, PR body, the selected file and plot.
 archive_gate() {
   local gate=$1 dest=$2 f
@@ -59,14 +79,6 @@ archive_gate() {
     find "$gate/selected/submission" -name '*.csv' -exec cp {} "$dest/" \;
   fi
 }
-mkdir -p "$archive"
-archive_gate "$WORK/gate" "$archive"
-# baseline's files sit beside the round's (BASELINE_GATE); when it
-# is the only hub model that ran, they are the round's own.
-baseline_archive=$archive
-[ -d "$WORK/gate" ] && baseline_archive="$archive/baseline"
-[ -n "${BASELINE_GATE:-}" ] && archive_gate "$BASELINE_GATE" "$baseline_archive"
-
 # Each hub model that ran, under its id: status, PR and files.
 #   record_model ID ACTION PR_URL PRODUCED_BY SKIPPED ARCHIVE
 record_model() {
@@ -76,24 +88,6 @@ record_model() {
     --status "$(status_of "$5" "$2")" --pr-url "$3" --produced-by "$4" \
     --run "${RUN:-}" --code-commit "$GITHUB_SHA" --archive "${6#"$ledger"/}"
 }
-record_model "${RENEWAL_ID:-}" "${RENEWAL_ACTION:-}" "${RENEWAL_PR_URL:-}" \
-  "${RENEWAL_PRODUCED_BY:-}" "${RENEWAL_SKIPPED:-}" "$archive"
-record_model "${BASELINE_ID:-}" "${BASELINE_ACTION:-}" \
-  "${BASELINE_PR_URL:-}" "${BASELINE_PRODUCED_BY:-}" \
-  "${BASELINE_SKIPPED:-}" "$baseline_archive"
-# chronos's files sit beside the round's, or are its own when it is the
-# only hub model that ran.
-chronos_archive=$archive
-if [ -d "$WORK/gate" ] || [ -n "${BASELINE_GATE:-}" ]; then
-  chronos_archive="$archive/chronos"
-fi
-[ -n "${CHRONOS_GATE:-}" ] && archive_gate "$CHRONOS_GATE" "$chronos_archive"
-record_model "${CHRONOS_ID:-}" "${CHRONOS_ACTION:-}" "${CHRONOS_PR_URL:-}" \
-  "${CHRONOS_PRODUCED_BY:-}" "${CHRONOS_SKIPPED:-}" "$chronos_archive"
 
-git -C "$ledger" add -A
-git -C "$ledger" -c user.name="github-actions[bot]" \
-  -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
-  commit -q -m "Record $REFERENCE_DATE: $status"
-git -C "$ledger" push -q origin "$LEDGER_BRANCH"
+ledger_push "$ledger" "Record $REFERENCE_DATE: $status" write_record
 note "Ledger: $REFERENCE_DATE recorded as $status."

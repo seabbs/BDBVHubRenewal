@@ -7,6 +7,9 @@
 #                       unpack`), never fit, as the workflow does; `fit`
 #                       (the default) fits here, for a local run
 #   STORE               the fit store checkout (default output/fit-store)
+#   LEDGER_BRANCH       the ledger, whose archive of past rounds gives a
+#                       paired model's past forecasts (default
+#                       submission-ledger)
 #
 # A bad fit or a failed check does not fail this step: the verdicts are
 # written to the candidate's directory and the select step walks the
@@ -95,9 +98,11 @@ else
   note "Fit took $(( SECONDS - start )) s."
 fi
 
-# The stored fits of past origins, for a model whose draws are paired by
-# the copula of its recent errors.
-past=(--store "${STORE:-output/fit-store}")
+# Past rounds' forecasts, for a model whose draws are paired by the
+# copula of its recent errors.
+history="$WORK/ledger-archive"
+[ -d "$history" ] || ledger_archive "$history"
+past=(--history "$history/archive" --store "${STORE:-output/fit-store}")
 if $unfitted; then
   cli nowcast --model "$model" --vintage "$AS_OF" \
     --reference-date "$REFERENCE_DATE" "${past[@]}" \

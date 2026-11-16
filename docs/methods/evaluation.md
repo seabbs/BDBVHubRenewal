@@ -31,7 +31,8 @@ $$
 Positive bias is overprediction.
 Relative WIS is a ratio of means against a baseline $b$ over the forecasts both made, and below 1 beats it.
 Relative WIS on the log scale is the same ratio of mean WIS on the log scale.
-The baseline is `randomwalk`.
+The baseline is `randomwalknowcast`, set by `[scores] baseline` in `config/site.toml`.
+Of the Chronos-2 models the site shows only `fm_chronos_daily_ragged_ft` (`[models]` in `config/site.toml`); the others are still fitted, scored and in the paper.
 The interactive summaries and the checks chart have a Relative to picker that makes any model the baseline, and the overall score tables a baseline filter.
 In the summaries a new baseline changes which forecasts are matched, so $n$ and the means change too.
 Coverage is whether $y$ falls in the central 50% and 90% sample intervals.
@@ -49,7 +50,7 @@ $$
 $$
 
 The energy score on the log scale is the energy score of $\log(1 + \mathbf{y})$ against $\log(1 + \mathbf{X}_i)$, never the log of the score.
-Relative energy scores are ratios of means against `randomwalk` over the origins and releases both have, and $n$ counts those.
+Relative energy scores are ratios of means against `randomwalknowcast` over the origins and releases both have, and $n$ counts those.
 The score rewards a joint pattern across places only where draws are joint.
 The draws of `renewal` and `renewalbvd` are joint across provinces, one posterior draw per sample index.
 `renewalsp` fits each province on its own, so its provinces are independent.
@@ -121,7 +122,7 @@ Health zones are scored on the weeks the latest release reports in full.
 There a week is complete when it is at least 4 weeks back from the week holding the latest release's cut-off and grew by less than 2% since the release before.
 
 Scores are WIS, 50% and 90% coverage and bias, by model, origin, weeks back from the week holding the origin's cut-off, and place.
-Relative WIS is against `randomwalk` on the forecasts both made, for national and the provinces pooled, over all origins and by origin, and by origin and place.
+Relative WIS is against `randomwalknowcast` on the forecasts both made, for national and the provinces pooled, over all origins and by origin, and by origin and place.
 Every table counts its forecasts, $n$, so a model with fewer forecasts was scored on fewer weeks or places.
 The run stops if an origin has no release snapshots or two models run here give identical samples.
 
@@ -167,7 +168,7 @@ A week with no onsets in a zone has a count of 0.
 Each model's zone samples are made to sum to its province samples, as in the submitted file, and are scored in that form.
 Each real vintage before the latest is forecast, and origins with no pair of releases within the delay window are skipped, as for provinces.
 Zones are scored on the reported target as for [real releases](#real-releases), with the zone delays fitted at the origin, so a zone count is never scored against a count still being reported.
-Relative WIS is against `randomwalk` in the same form.
+Relative WIS is against `randomwalknowcast` in the same form.
 `pprandomwalknowcast` is fitted here on the zones and on the provinces.
 On the Nowcast page only `randomwalk` and `randomwalknowcast` are shown at zone level.
 The fitted models are shown at the country and provinces, from their stored forecasts.
@@ -175,7 +176,7 @@ The fitted models are shown at the country and provinces, from their stored fore
 ## Scores by place type and plausibility { #checks }
 
 The scores on the reported target, at province and zone level, are also averaged by the type of place and by a plausibility flag of each forecast, both decided from the counts reported at the origin.
-Relative WIS in these averages is against `randomwalk`.
+Relative WIS in these averages is against `randomwalknowcast`.
 Week $w$ is the latest week ending on or before the origin, and $n(t)$ the count reported then for the week ending $t$, with 0 for a week with no row.
 A place with no case in the 9 weeks to $w$, one with no week above 5 cases, and the rest form the three place types.
 The flag is set from each origin's forecast of week $w + 1$, with median $q_{50}$ and 95% quantile $q_{95}$.
@@ -189,10 +190,13 @@ Every scored week of a forecast takes the forecast's place type and flag, and th
 ## Comparison with hub forecasts
 
 For each hub reference date, our unfitted models forecast from the latest real vintage serving the round.
-Fitted models use their stored backtest forecasts for the same round.
+Fitted models use their stored fits for the same round, every week the fit forecast.
 Where we submitted to a round, our submitted file is a series of its own beside these main-build forecasts.
-Every model is scored on the complete weeks it forecast, from the vintage serving the round, since hub teams have no modelled delay we can see.
-WIS is relative to `randomwalk` on the weeks both forecast, on the [comparison page](../comparison.md).
+Every model is scored only on the hub teams' cells: the rounds, places and weeks any team forecast.
+Our models forecast more places and weeks, and rounds no team forecast, and those cells are not scored.
+Each cell is scored on the complete weeks, from the vintage serving the round, since hub teams have no modelled delay we can see.
+The table by round gives each model's `n` beside `hub_cells`, the team cells scored, so a model with fewer missed some.
+WIS is relative to `randomwalknowcast` on the weeks both forecast, on the [comparison page](../comparison.md).
 A round is pending until a later real release exists.
 
 ## German nowcast benchmark

@@ -33,6 +33,7 @@ import pandas as pd
 
 from bdbvhubrenewal.evaluation.scoring import summarise_scores
 from bdbvhubrenewal.forecasters.chain import Settings
+from bdbvhubrenewal.reporting.site import site_baseline
 
 __all__ = [
     "RECENT_WEEKS",
@@ -145,7 +146,7 @@ def check_summary(
     scores: pd.DataFrame,
     types: pd.DataFrame,
     flagged: pd.DataFrame,
-    baseline: str = "randomwalk",
+    baseline: str | None = None,
 ) -> pd.DataFrame:
     """Average the scores by scale, model and place type, and by flag.
 
@@ -169,6 +170,7 @@ def check_summary(
         Columns `scale`, `split` (`place type` or `flag`), `group`,
         `model`, `n`, the mean of each metric and `relative WIS`.
     """
+    baseline = baseline or site_baseline()
     keyed = scores.merge(types, on=["origin", "location"], how="left").merge(
         flagged, on=["model", "origin", "location"], how="left"
     )
