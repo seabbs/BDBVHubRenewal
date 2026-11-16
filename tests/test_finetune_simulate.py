@@ -743,3 +743,30 @@ def test_strata_link_is_a_balanced_factor(tmp_path):
         tmp_path,
     )
     assert out.split() == ["linked", "independent", "0"]
+
+
+@needs_r
+def test_concentrated_independent_strata_simulate_only_active_places(tmp_path):
+    out = run_r(
+        """
+g <- 0L
+repeat {
+  cell <- cell_for(g)
+  if (cell$strata == "places" && cell$strata_link == "independent" &&
+      cell$spread == "concentrated") break
+  g <- g + 1L
+}
+set.seed(4)
+design <- draw_design(g)
+res <- simulate_cell(design)
+c <- res$out$counts
+cat("n", design$n_places, "\\n")
+cat("active", length(unique(c$location)), "\\n")
+cat("cells", length(strsplit(res$out$values$stratum_cells, ";")[[1]]), "\\n")
+""",
+        tmp_path,
+    )
+    rows = {x.split()[0]: x.split()[1:] for x in out.splitlines() if x}
+    assert int(rows["n"][0]) >= 15
+    assert 1 <= int(rows["active"][0]) <= 4
+    assert int(rows["cells"][0]) == int(rows["active"][0])
