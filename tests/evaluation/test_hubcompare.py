@@ -132,6 +132,26 @@ def test_load_hub_submissions_keeps_weekly_samples(tmp_path: Path) -> None:
     assert len(load_hub_submissions(tmp_path, tmp_path / "none")) == len(weekly)
 
 
+def test_load_hub_submissions_keeps_latest_resubmission(
+    tmp_path: Path,
+) -> None:
+    # A team resubmitted a round by appending a second forecast to the
+    # same file, with a later forecast_date (ACCIDDA-Chromantis,
+    # 2026-11-14), so every sample appears twice.
+    first = _hub_rows().assign(forecast_date="2026-10-20")
+    again = first.assign(forecast_date="2026-10-21", value=first["value"] + 1)
+    out = tmp_path / "model-output" / "teamA-weekly"
+    out.mkdir(parents=True)
+    with gzip.open(out / "2026-10-24-teamA-weekly.csv.gz", "wt") as fh:
+        pd.concat([first, again]).to_csv(fh, index=False)
+    hub = load_hub_submissions(tmp_path)
+    keys = ["model", "reference_date", "location", "target_end_date", "sample"]
+    assert not hub.duplicated(keys).any()
+    assert len(hub) == len(first)
+    expected = again["value"].to_numpy()
+    assert (hub["value"].to_numpy() == expected).all()
+
+
 def test_load_team_metadata(tmp_path: Path) -> None:
     _write_hub(tmp_path)
     meta = load_team_metadata(tmp_path)
