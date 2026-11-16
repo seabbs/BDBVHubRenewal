@@ -128,6 +128,8 @@ The simulated outbreaks' ranges against published values for several diseases, t
 
 {{< include build/tables/si/heldout-set.md >}}
 
+The training blocks cut from these simulations include countries that equal, exceed or lag the sum of their places, a third of the blocks with places each (Foundation model setup).
+
 ### Correlated trajectories
 
 The copula pairs the draws of models that give each place and week only its own draws.
