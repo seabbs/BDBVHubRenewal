@@ -171,7 +171,10 @@ Every scored week of a forecast takes the forecast's place type and flag, and th
 For each hub reference date, our unfitted models forecast from the latest real vintage serving the round.
 Fitted models use their stored backtest forecasts for the same round.
 Where we submitted to a round, our submitted file is a series of its own beside these main-build forecasts.
-Every model is scored on the complete weeks it forecast, from the vintage serving the round, since hub teams have no modelled delay we can see.
+Every model is scored only on the hub teams' cells: the rounds, places and weeks any team forecast.
+Our models forecast more places and weeks, and rounds no team forecast, and those cells are not scored.
+Each cell is scored on the complete weeks, from the vintage serving the round, since hub teams have no modelled delay we can see.
+The table by round gives each model's `n` beside `hub_cells`, the team cells scored, so a model with fewer missed some.
 WIS is relative to `randomwalk` on the weeks both forecast, on the [comparison page](../comparison.md).
 A round is pending until a later real release exists.
 

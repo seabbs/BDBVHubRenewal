@@ -2110,14 +2110,18 @@ def _comparison_page(
     ]
     _write(
         gen / "comparison-lead.md",
-        "Scores on the weeks the latest release reports in full, from "
-        "the release serving each round "
+        "Scores on the hub teams' cells only, the rounds, places and "
+        "weeks any team forecast, on the weeks the latest release reports "
+        "in full, from the release serving each round "
         "([how scoring works]"
         "(methods/evaluation.md#comparison-with-hub-forecasts)).\n"
         "A series marked submitted is the file we sent to a round, and one "
         "marked main build is the current main branch's forecast for every "
         "round, so a round we did not submit to shows only the main "
-        "build.\n",
+        "build.\n"
+        "Each row's n is beside the hub cells scored in its round. "
+        "Fitted models are not run at health zone level and take their "
+        "stored backtest weeks, so they cover fewer of the hub's cells.\n",
     )
     scores_path = cmp_dir / "scores.csv"
     scores = (
