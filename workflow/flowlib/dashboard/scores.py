@@ -14,6 +14,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
+from .rows import num, source
 from .runs import Classifier, Reference, Run, split_label
 
 VALUE = {"germany": "rel_wis", "ebola": "rel_crps"}
@@ -38,21 +39,6 @@ def read(path: Path | str) -> list[dict[str, str]]:
             return list(csv.DictReader(f))
     except OSError:
         return []
-
-
-def _num(x: Any) -> float | None:
-    try:
-        return float(x)
-    except (TypeError, ValueError):
-        return None
-
-
-def _source(model: str) -> str | None:
-    if "daily" in model:
-        return "daily"
-    if "weekly" in model:
-        return "weekly"
-    return None
 
 
 def payload(
@@ -92,15 +78,15 @@ def payload(
         if r.get("rule") != rule or study not in VALUE:
             continue
         series = which.series(r)
-        value = _num(r.get(VALUE[study]))
-        source = _source(r.get("model", ""))
-        if series is None or value is None or source is None:
+        value = num(r.get(VALUE[study]))
+        src = source(r.get("model", ""))
+        if series is None or value is None or src is None:
             continue
         checkpoint = r.get("checkpoint", "")
         key = "" if checkpoint == "zero-shot" else split_label(checkpoint)[0]
-        n = int(_num(r.get("outbreaks")) or 0)
+        n = int(num(r.get("outbreaks")) or 0)
         out.append(
-            [study, r.get("level", ""), source, series, n, key, round(value, 4)]
+            [study, r.get("level", ""), src, series, n, key, round(value, 4)]
         )
         seen_hash.add(key)
         seen_n.setdefault(series, set()).add(n)
