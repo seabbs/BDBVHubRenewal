@@ -21,5 +21,5 @@ The Chronos-2 marginal draws come from `scripts/evidence.py draws`, and the Germ
 ## Pairing on and off (#253)
 
 Made at copula-pairing c3277b2f2 (zones: 0003752c7) with `BDBV_CHRONOS_FT=6b7aaa8d4f55` (r3 n1000), 1,000 draws and the configs' seeds, by `scripts/pairing_germany.py`, `scripts/pairing_bdbv.py` and `scripts/pairing_zones.py` (launched with `scripts/pairing_run.sh`), summarised by `scripts/pairing_summary.py` into `results/pairing/pairing-table.md` and the two figures.
-Arms: `off` (no pairing), `fixed` (the prior, which for the daily Chronos-2 model pairs its days by 0.985), `rolling` (as shipped).
-The German Chronos-2 draws were made at fm-copula-rolling 3b508d330 and checked bit for bit against copula-pairing for 2021-11-22.
+Arms: `off` (no pairing), `fixed` (the prior), `rolling` (as shipped).
+randomwalknowcast only: Chronos-2 was dropped from #253 (Sam, 2026-11-16 23:30), as the fine-tuned Chronos-2 will forecast weekly totals directly.
