@@ -1309,7 +1309,7 @@ def _zones(
     samples: pd.DataFrame,
     own: pd.DataFrame | None = None,
 ) -> tuple[pd.DataFrame | None, str]:
-    """Forecast the zones to sum to the provinces, or say why not.
+    """Forecast the zones, or say why not.
 
     A model that forecast the zones itself (`own`: the zone renewal fits,
     from the fit directory or the model) gives its zone samples, for the

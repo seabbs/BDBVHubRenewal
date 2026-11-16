@@ -1,0 +1,6 @@
+# A machine that fine-tunes on its GPU: one training segment at a time.
+rerun-triggers: [mtime]
+printshellcmds: true
+latency-wait: 30
+resources:
+  - gpu=1

@@ -1,0 +1,23 @@
+<div class=gctl>
+<label id=gdsl hidden>Dataset <select id=gds></select></label>
+<label>Source <select id=gsrc><option value=daily>daily</option>
+<option value=weekly>weekly</option></select></label>
+<label class=gwide>Nowcast date <button id=gprev>&lt;</button>
+<input type=range id=gsl><button id=gnext>&gt;</button>
+<b id=gdate></b></label>
+<label class=gwide><button id=gplay>Play</button>
+<select id=gspd><option value=0.5>0.5x</option>
+<option value=1 selected>1x</option><option value=2>2x</option></select>
+</label>
+<label>Dates overlaid <select id=gnd><option>1</option><option>2</option>
+<option>3</option><option>4</option></select></label>
+<label>every <select id=gstep><option value=1>1 week</option>
+<option value=2>2 weeks</option><option value=4>4 weeks</option></select>
+</label></div>
+<details class=glocs><summary id=gsum>Locations</summary>
+<div id=glocs></div></details>
+<div id=gruns class=gck></div>
+<div id=gck class=gck></div>
+<div class=plots><div class=card><h3>Nowcasts, weekly counts</h3>
+<div id=gplot></div></div>
+<div class=card><h3>WIS by checkpoint</h3><div id=gwis></div></div></div>
