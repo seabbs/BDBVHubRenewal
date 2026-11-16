@@ -74,7 +74,7 @@ def waiting(what: str) -> str:
 
 def _pair(a: pd.Series, b: pd.Series) -> list[str]:
     return [
-        "" if pd.isna(x) else f"{x:.2f} / {y:.2f}"
+        "" if pd.isna(x) or pd.isna(y) else f"{x:.2f} / {y:.2f}"
         for x, y in zip(a, b, strict=True)
     ]
 
