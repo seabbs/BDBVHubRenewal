@@ -79,8 +79,6 @@ def live_dir():
 
 
 CKPTS = [250, 500, 750, 1000, 2000, 4000, 8000]  # fallback prefixes
-TARGET_SIMS, LR0, LR_STEPS = 8000, 1e-5, 36500
-STEPS_PER_SIM = LR_STEPS / TARGET_SIMS  # 4.5625
 MAIL_RE = re.compile(
     r"slots|ckpt-scores|agg-slots|slots-check|fm-finetune3|sim round|"
     r"sim-round|sims? rounds?", re.I)
@@ -203,21 +201,126 @@ def checkpoints(base):
     return out
 
 
-def trainer_prefixes(rundir):
-    """Checkpoint sizes: trainer's --prefixes, else saved folders, else
-    the default list."""
+def trainer_cmdline(rundir):
+    """The trainer's command line (ps on trainer.pid), '' if unavailable."""
     try:
         pid = int((rundir / "trainer.pid").read_text().split()[0])
         r = subprocess.run(["ps", "-p", str(pid), "-o", "args="],
                            capture_output=True, text=True, timeout=5)
-        m = re.search(r"--prefixes((?:\s+\d+)+)", r.stdout)
-        if m:
-            return sorted(int(x) for x in m.group(1).split())
+        return r.stdout
     except Exception:
-        pass
+        return ""
+
+
+def trainer_prefixes(rundir, args=None):
+    """Checkpoint sizes: trainer's --prefixes, else saved folders plus the
+    default list."""
+    args = trainer_cmdline(rundir) if args is None else args
+    m = re.search(r"--prefixes((?:\s+\d+)+)", args)
+    if m:
+        return sorted(int(x) for x in m.group(1).split())
     done = [int(re.sub(r"\D", "", d.name)) for d in
             rundir.glob("train/n*") if re.sub(r"\D", "", d.name)]
     return sorted(set(CKPTS) | set(done))
+
+
+def run_params(rundir, hist, step):
+    """Schedule facts of a run, from its command line, settings and history.
+
+    Returns lr_steps, the optimiser groups (name -> base rate), each group's
+    current rate, its rate history and the prefixes.
+    """
+    args = trainer_cmdline(rundir)
+    sets = [(int(re.sub(r"\D", "", d.name) or 0), JC.get(str(d / "settings.json")))
+            for d in rundir.glob("train/n*")]
+    sets = [s for _, s in sorted(
+        ((n, s) for n, s in sets if isinstance(s, dict)),
+        key=lambda x: x[0])]
+    s = sets[-1] if sets else {}
+    m = re.search(r"--lr-steps\s+(\d+)", args)
+    lr_steps = int(m.group(1)) if m else int(s.get("lr_steps") or 0)
+    groups = {}
+    base_name = "LoRA" if s.get("lora") or "--series-bias" in args else \
+        "adapter"
+    m = re.search(r"--learning-rate\s+(\S+)", args)
+    if m:
+        groups[base_name] = float(m.group(1))
+    elif s.get("learning_rate"):
+        groups[base_name] = float(s["learning_rate"])
+    for m in re.finditer(r"--([a-z][a-z-]*)-lr\s+(\S+)", args):
+        groups[m.group(1)] = float(m.group(2))
+    for k, v in s.items():
+        if isinstance(v, dict) and v.get("learning_rate") and \
+                not any(re.fullmatch(r"\w*" + k.split("_")[-1] + r"\w*", g)
+                        for g in groups if g != base_name):
+            groups.setdefault(k.replace("series_", ""), float(v["learning_rate"]))
+    logged = {}
+    for h in hist if isinstance(hist, list) else []:
+        v = h.get("lr") if isinstance(h, dict) else None
+        if v is None or "step" not in h:
+            continue
+        v = v if isinstance(v, dict) else (
+            {f"group {i}": x for i, x in enumerate(v)}
+            if isinstance(v, list) else {"lr": v})
+        for g, x in v.items():
+            logged.setdefault(g, []).append((h["step"], float(x)))
+    for g in logged:
+        groups.setdefault(g, logged[g][0][1])
+    current = {}
+    for g, base in groups.items():
+        if g in logged:
+            current[g] = logged[g][-1][1]
+        elif step is not None:
+            current[g] = base * max(0.0, 1 - step / lr_steps) if lr_steps \
+                else base
+    return {"lr_steps": lr_steps, "groups": groups, "current": current,
+            "logged": logged, "prefixes": trainer_prefixes(rundir, args)}
+
+
+def lr_card(P, step, small=(190, 150)):
+    """Small learning-rate-against-step chart for every optimiser group."""
+    import math
+    if not P["groups"]:
+        return ""
+    W, H = small
+    L, R, T, B = 34, 6, 6, 18
+    xmax = P["lr_steps"] or max([step or 0, 1])
+    sx = lambda x: L + x / xmax * (W - L - R)
+    vals = [max(b, 1e-12) for b in P["groups"].values()]
+    # linear decay reaches zero, so the log axis stops at 1% of the base
+    lo = math.log10(min(vals) * (0.01 if P["lr_steps"] else 1)) - 0.1
+    hi = math.log10(max(vals)) + 0.15
+    sy = lambda v: T + (1 - (math.log10(max(v, 1e-12)) - lo) / (hi - lo)) \
+        * (H - T - B)
+    o = [f'<svg viewBox="0 0 {W} {H}" width="{W}" height="{H}">']
+    for e in range(math.ceil(lo), math.floor(hi) + 1):
+        o.append(f'<line x1="{L}" x2="{W-R}" y1="{sy(10**e):.1f}" '
+                 f'y2="{sy(10**e):.1f}" class=grid /><text x="{L-3}" '
+                 f'y="{sy(10**e)+3:.1f}" text-anchor=end class=ax>1e{e}</text>')
+    o.append(f'<text x="{L}" y="{H-4}" class=ax>0</text><text x="{W-R}" '
+             f'y="{H-4}" text-anchor=end class=ax>{xmax}</text>')
+    leg = []
+    for i, (g, base) in enumerate(P["groups"].items()):
+        col = PAL[i % len(PAL)]
+        pts = P["logged"].get(g) or (
+            [(0, base), (0.99 * xmax, base * 0.01)] if P["lr_steps"]
+            else [(0, base), (xmax, base)])
+        pts = [(x, max(y, 1e-12)) for x, y in pts]
+        o.append('<polyline points="' + " ".join(
+            f"{sx(x):.1f},{sy(y):.1f}" for x, y in pts)
+            + f'" fill=none stroke="{col}" stroke-width=1.6 />')
+        cur = P["current"].get(g)
+        if cur is not None and step is not None:
+            o.append(f'<circle cx="{sx(step):.1f}" cy="{sy(cur):.1f}" r=3 '
+                     f'fill="{col}"><title>{g} {cur:.3e} at step {step}'
+                     f'</title></circle>')
+        leg.append(f'<span><i style="background:{col}"></i>{html.escape(g)}'
+                   f'</span>')
+    o.append("</svg>")
+    return (f'<div class=card style="padding:4px;line-height:1.2">'
+            f'<div class=mut style="font-size:11px">learning rate vs step'
+            f'</div>{"".join(o)}<div class=leg style="font-size:11px">'
+            f'{"".join(leg)}</div></div>')
 
 
 def pid_state(rundir):
@@ -1290,10 +1393,12 @@ def heat_svg(rows, title, lo, hi, size=140):
     return "".join(h)
 
 
-def bias_html(rundir, label, hist, cur_step):
+def bias_html(rundir, label, hist, cur_step, lr_h=""):
     d = bias_data(rundir, hist, cur_step)
     if not d:
-        return f"<p class=mut>no bias module in the {html.escape(label)} run</p>"
+        return (f"<p class=mut>no bias module in the {html.escape(label)} "
+                f"run</p>" + (f'<div class=biasrow>{lr_h}</div>' if lr_h
+                              else ""))
     W, H, L, R, T, B = 480, 280, 44, 10, 8, 28
     names = dict(BIAS_PAIRS)
     allp = [(s, v) for k in d["pts"] for s, v in d["pts"][k]]
@@ -1356,7 +1461,7 @@ def bias_html(rundir, label, hist, cur_step):
              f'scale {lo:.3g} to {hi:.3g}, shared; rows are layers, columns '
              f'are heads</div></div>' if tiles else "")
     return (f'<div class=biasrow><div class=card>{"".join(svg)}</div>'
-            f'{right}</div>')
+            f'{right}{lr_h}</div>')
 
 
 # ---------- page ----------
@@ -1387,25 +1492,32 @@ def build():
     if len(recent) >= 2 and recent[-1]["t"] > recent[0]["t"]:
         rate = (recent[-1]["step"] - recent[0]["step"]) / (
             recent[-1]["t"] - recent[0]["t"])
-    prefixes = trainer_prefixes(RUN)
+    P = run_params(RUN, hist, step)
+    prefixes = P["prefixes"]
+    target = max(prefixes)
+    # steps per simulation: the learning-rate schedule spans the final
+    # prefix; without one, the last checkpoint's own ratio.
+    sps = (P["lr_steps"] / target if P["lr_steps"] else next(
+        (s["steps"] / s["n_outbreaks"] for _, s, _ in reversed(
+            checkpoints(RUN)) if s.get("steps") and s.get("n_outbreaks")),
+        1.0))
     saved = {n for n in prefixes if (RUN / f"train/n{n}/settings.json").exists()}
     scoring = [n for n in prefixes if n not in saved
                and (RUN / f"train/n{n}/finetuned-ckpt").exists()]
     nxt = next((n for n in prefixes if n not in saved and n not in scoring),
                None)
-    tstep = lambda n: round(n * STEPS_PER_SIM)
+    tstep = lambda n: round(n * sps)
     eta = lambda n: ("n/a" if not (rate and step is not None and n) else
                      "due now" if tstep(n) <= step else
                      dur((tstep(n) - step) / rate))
-    ntrained = step / STEPS_PER_SIM if step is not None else None
-    lr = LR0 * max(0.0, 1 - step / LR_STEPS) if step is not None else None
+    ntrained = step / sps if step is not None else None
     pidtxt, alive = pid_state(RUN)
     age = now - last_t if last_t else None
     stale = age is not None and age > 600
     cls = lambda ok: "ok" if ok else "bad"
     tiles = [
         ("Step", f"{step}" if step is not None else "n/a",
-         f"n{ntrained:.0f} of {TARGET_SIMS} simulations trained"
+         f"n{ntrained:.0f} of {target} simulations trained"
          if ntrained is not None else ""),
         ("Steps / s (30 min)", f"{rate:.3f}" if rate else "n/a",
          f"{rate*60:.1f} steps/min" if rate else ""),
@@ -1416,9 +1528,12 @@ def build():
          (f"then n{nxt} at step {tstep(nxt)}, ETA {eta(nxt)}" if nxt else "")
          if scoring else
          f"at step {tstep(nxt)}, ETA {eta(nxt)}" if nxt else ""),
-        ("ETA n8000", eta(8000), f"step {tstep(8000)}"),
-        ("Learning rate", f"{lr:.3e}" if lr is not None else "n/a",
-         f"linear decay, {LR_STEPS} steps"),
+        (f"ETA n{target}", eta(target), f"step {tstep(target)}"),
+        ("Learning rates",
+         "\n".join(f"{g} {v:.2e}" for g, v in P["current"].items())
+         or "n/a",
+         (f"linear decay to 0 at step {P['lr_steps']}" if P["lr_steps"]
+          else "constant") + (", from history" if P["logged"] else "")),
         ("Trainer", pidtxt, cls(alive) if alive is not None else ""),
         ("Last log line",
          datetime.fromtimestamp(last_t).strftime("%H:%M:%S") if last_t
@@ -1428,7 +1543,8 @@ def build():
     ]
     tiles_h = "".join(
         f'<div class="tile {c if c else ""}{" bad" if t=="Last log line" and stale else ""}">'
-        f'<div class=k>{k}</div><div class=v>{html.escape(v)}</div>'
+        f'<div class=k>{k}</div><div class="v{" vl" if "\n" in v else ""}">'
+        f'{html.escape(v).replace(chr(10), "<br>")}</div>'
         f'<div class=s>{html.escape(s) if c not in ("ok","bad") else ""}</div>'
         f'</div>' for k, v, s in tiles for t, c in [(k, s if k == "Trainer" else "")])
     stage = status.get("stage")
@@ -1617,7 +1733,7 @@ def build():
         {str(s.get("hash")): s.get("n_outbreaks")
          for v in cks.values() for _, s, _ in v}, ONCE["on"])
 
-    bias_h = bias_html(RUN, LC["label"], hist, step)
+    bias_h = bias_html(RUN, LC["label"], hist, step, lr_card(P, step))
     modebar = (
         '<div class="sctl modebar"><span class=mut>Loss scale</span>'
         '<button class=tog data-mode=raw>raw</button>'
@@ -1638,7 +1754,7 @@ h1{font-size:18px;margin:0 0 4px}h2{font-size:15px;margin:24px 0 8px}
 h3{font-size:13px;margin:0 0 6px}.mut{color:var(--mut)}
 .tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));
 gap:8px}.tile,.card{background:var(--card);border-radius:8px;padding:10px}
-.k{font-size:11px;color:var(--mut)}.v{font-size:18px;font-weight:600;
+.vl{font-size:14px!important;line-height:1.3}.k{font-size:11px;color:var(--mut)}.v{font-size:18px;font-weight:600;
 font-variant-numeric:tabular-nums}.s{font-size:11px;color:var(--mut)}
 .tile.ok .v{color:var(--ok)}.tile.bad .v{color:var(--bad)}
 .plots{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,520px),1fr));
