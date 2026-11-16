@@ -215,9 +215,10 @@ tasks:
     cmds:
       - quarto render main.qmd
       - quarto render si.qmd
-      - mkdir -p ../docs/paper
-      - cp -R main.html main.pdf main_files si.html si.pdf si_files figures
+      - mkdir -p ../docs/paper/figures
+      - cp -R main.html main.pdf main_files si.html si.pdf si_files
         ../docs/paper/
+      - cp figures/*.svg figures/*.pdf ../docs/paper/figures/
 
   docs:
     desc: Build the docs site into _site/

@@ -116,8 +116,10 @@ jobs:
         run: |
           quarto render main.qmd
           quarto render si.qmd
-          mkdir -p ../_paper
-          cp -R {main,si}.{html,pdf} {main,si}_files figures ../_paper/
+          mkdir -p ../_paper/figures
+          cp -R {main,si}.{html,pdf} {main,si}_files ../_paper/
+          # The figures only, not the scripts that draw them.
+          cp figures/*.svg figures/*.pdf ../_paper/figures/
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: paper
