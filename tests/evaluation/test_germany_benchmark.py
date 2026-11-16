@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import importlib.util
 from pathlib import Path
 
@@ -357,3 +358,14 @@ def test_a_sample_model_s_german_quantiles_use_the_draws_given(
     ]
     pd.testing.assert_frame_equal(runs[0], runs[1])
     assert not np.array_equal(runs[0]["value"], runs[2]["value"])
+
+
+def test_held_out_models_wait_until_they_are_registered(caplog) -> None:
+    config = load_germany_config(ROOT / "config" / "germany.toml")
+    config = dataclasses.replace(
+        config, held_out_models=("randomwalk", "not_registered_de")
+    )
+    with caplog.at_level("WARNING"):
+        held = run_models(config, held_out=True)
+    assert held == (*config.models, "randomwalk")
+    assert "not_registered_de" in caplog.text
