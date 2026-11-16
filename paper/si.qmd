@@ -47,6 +47,13 @@ The places of a block take distinct slots, so the model ties each place's covari
 In each training block the places are assigned to slots by a random permutation, so a slot carries no meaning of its own beyond marking which series go together.
 The slot embeddings start at zero, so before training the model is base Chronos-2, and they are trained with the LoRA adapter under Chronos-2's fine-tuning recipe.
 
+**Order of the training data.**
+The grid is a crossed factorial design balanced in every block of 120 simulations, with each factor's levels shuffled independently, as in a Latin hypercube.
+Training takes the simulations in chunks of 250, about two balanced blocks.
+Each block's source (daily, 3-day or weekly), draws and cut-offs are drawn at random.
+A chunk gives about 6,700 training blocks, which are shuffled and packed into about 1,250 steps of up to 256 series each.
+So every checkpoint has seen the whole grid, and no factor level comes in a run of its own.
+
 Chronos-2 divides a flat context by a scale of $10^{-5}$, and we apply no floor to that scale at inference.
 A floor of one count at inference only hurts small series, of five counts or fewer, on held-out simulations.
 At 4,000 outbreaks their median loss is {{< meta evidence.scale_floor.sims.n4000.small.median_loss.none >}} without it and {{< meta evidence.scale_floor.sims.n4000.small.median_loss.floor >}} with it, and the share of 99% quantiles over 100 times the truth is {{< meta evidence.scale_floor.sims.n4000.small.q99_over_100x.none >}}% and {{< meta evidence.scale_floor.sims.n4000.small.q99_over_100x.floor >}}%.
