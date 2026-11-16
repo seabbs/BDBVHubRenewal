@@ -741,3 +741,21 @@ def test_the_daily_nowcasts_have_a_figure_and_a_table(tmp_path) -> None:
     assert (
         "germany national" in (tmp_path / "si" / "compare-daily.md").read_text()
     )
+
+
+def test_the_heldout_layout_table_waits_then_shows_its_rows(tmp_path) -> None:
+    write_evidence(
+        dict.fromkeys(EVIDENCE),
+        tmp_path / "si",
+        tmp_path / "fig",
+        tmp_path / "e.yml",
+    )
+    table = tmp_path / "si" / "heldout-layout.md"
+    assert "waits on" in table.read_text()
+    rows = tmp_path / "layout.csv"
+    pd.DataFrame(
+        {"layout": ["daily_weekly"], "target": ["weekly"], "rel_crps": [0.8]}
+    ).to_csv(rows, index=False)
+    paths = dict.fromkeys(EVIDENCE) | {"heldout_layout": rows}
+    write_evidence(paths, tmp_path / "si", tmp_path / "fig", tmp_path / "e.yml")
+    assert "daily_weekly" in table.read_text()
