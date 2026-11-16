@@ -358,6 +358,21 @@ def git(*args: str) -> subprocess.CompletedProcess:
     )
 
 
+LANDED: dict[str, bool] = {"changed": False}
+"""Whether the last `land` made a new evidence commit."""
+
+
+def interim_note(checkpoint: str, sha: str, changed: bool) -> str | None:
+    """Return bdbv-paper's line for interim rows, or None if unchanged."""
+    if not changed:
+        return None
+    return (
+        f"bdbv-paper: {checkpoint} held-out and BDBV rows landed at {sha} on "
+        f"origin/{BRANCH}; German first half follows, written per date to "
+        "the cache"
+    )
+
+
 def land(cache: Path, hashes: list[str], what: str) -> str | None:
     """Rebuild the rows, commit, push and verify; return the commit."""
     table = subprocess.run(
@@ -380,6 +395,7 @@ def land(cache: Path, hashes: list[str], what: str) -> str | None:
         return None
     log(table.stdout)
     git("add", str(EVIDENCE), str(CHECKPOINTS))
+    LANDED["changed"] = False
     if git("diff", "--cached", "--quiet").returncode == 0:
         log(f"no change in the evidence for {what}")
         return git("rev-parse", "HEAD").stdout.strip()
@@ -396,6 +412,7 @@ def land(cache: Path, hashes: list[str], what: str) -> str | None:
             f"{(commit.stdout + commit.stderr).strip()[-300:]}")  # fmt: skip
         return None
     sha = git("rev-parse", "HEAD").stdout.strip()
+    LANDED["changed"] = True
     push = git("push", "-q", "origin", f"HEAD:{BRANCH}")
     if push.returncode != 0:
         say(f"FAILED pushing {sha[:9]} ({what}): {push.stderr.strip()[-300:]}")
@@ -511,10 +528,9 @@ def main(cache: Path) -> None:
             if run_units(cache, fast, checkpoint):
                 sha = land(cache, sorted(keep | {checkpoint}),
                            f"{checkpoint} held-out and BDBV (German running)")  # fmt: skip
-                if sha is not None:
-                    say(f"bdbv-paper: {checkpoint} held-out and BDBV rows "
-                        f"landed at {sha} on origin/{BRANCH}; German first "
-                        "half follows, written per date to the cache")  # fmt: skip
+                note = interim_note(checkpoint, sha or "", LANDED["changed"])
+                if sha is not None and note is not None:
+                    say(note)
             # An older slots checkpoint's paused German run goes on first.
             if queue[0] != checkpoint:
                 continue
