@@ -89,7 +89,8 @@ def test_development_run_fetches_the_store_then_renders(repo: Path) -> None:
     assert "refs/heads/fit-store:refs/remotes/origin/fit-store" in calls[fetch]
     assert fetch < snake
     assert calls[snake] == (
-        "uv run --group paper snakemake -s workflow/Snakefile render "
+        "uv run --group paper --group chronos snakemake -s workflow/Snakefile "
+        "render "
         "--config render=development --cores 4 --resources heavy=1 "
         "--rerun-triggers mtime"
     )

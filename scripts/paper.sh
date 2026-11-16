@@ -12,8 +12,9 @@
 # the fit-store branch is fetched first. Snakemake then runs the target's
 # missing steps (`--rerun-triggers mtime` reuses the backtest forecasts
 # CI has already made) and renders main.qmd and si.qmd, which are copied
-# into docs/paper/ for the site. Needs uv, git and Quarto, and a GitHub
-# token (GITHUB_TOKEN, GH_TOKEN or a gh login).
+# into docs/paper/ for the site. The chronos group is installed too, as
+# the German rule runs the Chronos-2 models. Needs uv, git and Quarto,
+# and a GitHub token (GITHUB_TOKEN, GH_TOKEN or a gh login).
 set -euo pipefail
 
 target=${1:-development}
@@ -37,7 +38,7 @@ git fetch -q --no-tags origin \
   +refs/heads/fit-store:refs/remotes/origin/fit-store
 
 cd paper
-uv run --group paper snakemake -s workflow/Snakefile render \
+uv run --group paper --group chronos snakemake -s workflow/Snakefile render \
   --config render="$target" --cores "${CORES:-4}" --resources heavy=1 \
   --rerun-triggers mtime
 
