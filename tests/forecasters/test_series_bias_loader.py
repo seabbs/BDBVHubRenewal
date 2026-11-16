@@ -201,3 +201,46 @@ def test_inference_gives_a_bias_model_its_rows_by_name(monkeypatch, tmp_path):
     # Lags in Chronos-2's sorted row order carry their own place.
     for k, name in enumerate(sorted(lags)):
         assert place[N_PLACES + k] == places.index(name.rsplit("_lag_", 1)[0])
+
+
+def test_the_bias_survives_gradient_checkpointing(monkeypatch):
+    # The trainer recomputes large batches' encoder blocks in backward
+    # (finetune_stream.checkpoint_large_batches), after the rows are
+    # unset; the bias must reach that recompute as an input.
+    import sys
+    from pathlib import Path
+
+    from chronos.chronos2.model import Chronos2EncoderBlock
+    from test_series_slots import batch_of
+
+    sys.path.insert(0, str(Path(__file__).parents[2] / "scripts"))
+    import finetune_stream as fs
+
+    def grads(checkpointed: bool):
+        model = tiny_model()
+        series_bias.attach(model)
+        model.train()
+        module = getattr(model, series_bias.BIAS_MODULE)
+        with torch.no_grad():
+            module.same.fill_(0.5)
+            module.parent.fill_(-0.3)
+        if checkpointed:
+            monkeypatch.setattr(
+                Chronos2EncoderBlock, "forward", Chronos2EncoderBlock.forward
+            )
+            fs.checkpoint_large_batches(0)
+        batch = batch_of(toy_block())
+        with series_bias.assigned(model, toy_rows()):
+            loss = model(
+                context=batch["context"],
+                group_ids=batch["group_ids"],
+                future_covariates=batch["future_covariates"],
+                num_output_patches=batch["num_output_patches"],
+                future_target=batch["future_target"],
+            ).loss
+        loss.backward()
+        return module.same.grad, module.parent.grad
+
+    plain, checked = grads(False), grads(True)
+    assert torch.allclose(plain[0], checked[0], atol=1e-6)
+    assert torch.allclose(plain[1], checked[1], atol=1e-6)
