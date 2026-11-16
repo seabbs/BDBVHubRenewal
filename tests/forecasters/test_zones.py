@@ -508,3 +508,90 @@ def test_zone_hub_table_validates_and_sums_up_the_hierarchy(
     assert (by_prov == want["value"].reindex(by_prov.index)).all()
     path = write_submission(table, tmp_path, "seabbs-rwnowcast")
     assert _hub_failures(path) == []
+
+
+def test_reconcile_keeps_each_zones_published_count(
+    task: ForecastTask, counts: pd.DataFrame, zones: tuple[str, ...]
+) -> None:
+    prov = RandomWalk().forecast(task)
+    provinces = prov.loc[prov["location"].isin(task.locations)]
+    mine = tuple(z for z in zones if province_of(z) in task.locations)
+    # Zone samples of 0 everywhere but one zone per province, so without
+    # the floor the other zones would get nothing.
+    keep = {
+        p: next(z for z in mine if province_of(z) == p)
+        for p in task.locations
+        if any(province_of(z) == p for z in mine)
+    }
+    own = pd.concat(
+        [
+            provinces.loc[provinces["location"] == province_of(z)].assign(
+                location=z, value=float(z in keep.values())
+            )
+            for z in mine
+        ],
+        ignore_index=True,
+    )
+    got = reconcile_zones(own, provinces, task, counts, mine)
+    assert check_zone_coherence(provinces, got) == []
+    zone_keys = ["location", "target_end_date"]
+    rows = got.merge(counts, on=zone_keys, how="left").fillna({"total": 0})
+    rows["province"] = rows["location"].map(province_of)
+    published = rows.groupby(["province", "target_end_date", "sample"])[
+        "total"
+    ].transform("sum")
+    whole = rows.groupby(["province", "target_end_date", "sample"])[
+        "value"
+    ].transform("sum")
+    # Where the province sample covers what its zones have published,
+    # every zone keeps its own published count.
+    covered = whole >= published
+    assert covered.any()
+    assert (rows.loc[covered, "value"] >= rows.loc[covered, "total"]).all()
+    floored = (
+        covered
+        & (rows["total"] > 0)
+        & ~rows["location"].isin(set(keep.values()))
+    )
+    assert floored.any()
+
+
+def test_reconcile_works_draw_by_draw(
+    task: ForecastTask, counts: pd.DataFrame, zones: tuple[str, ...]
+) -> None:
+    # Reordering the draws of provinces and zones together, as a copula's
+    # pairing does, reorders the reconciled zones the same way.
+    prov = RandomWalk().forecast(task)
+    provinces = prov.loc[prov["location"].isin(task.locations)]
+    mine = tuple(z for z in zones if province_of(z) in task.locations)
+    rng = np.random.default_rng(1)
+    own = pd.concat(
+        [
+            provinces.loc[provinces["location"] == province_of(z)].assign(
+                location=z,
+                value=lambda d: rng.integers(0, 5, len(d)).astype(float),
+            )
+            for z in mine
+        ],
+        ignore_index=True,
+    )
+    order = dict(
+        zip(
+            range(1, task.n_samples + 1),
+            rng.permutation(task.n_samples) + 1,
+            strict=True,
+        )
+    )
+
+    def shuffled(rows: pd.DataFrame) -> pd.DataFrame:
+        return rows.assign(sample=rows["sample"].map(order))
+
+    keys = ["location", "target_end_date", "sample"]
+    once = reconcile_zones(own, provinces, task, counts, mine)
+    again = reconcile_zones(
+        shuffled(own), shuffled(provinces), task, counts, mine
+    )
+    pd.testing.assert_series_equal(
+        again.set_index(keys)["value"].sort_index(),
+        shuffled(once).set_index(keys)["value"].sort_index(),
+    )

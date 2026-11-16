@@ -36,12 +36,13 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from functools import cache, partial
 from pathlib import Path
-from typing import Any, Final
+from typing import Any, ClassVar, Final
 
 import numpy as np
 import pandas as pd
 
 from bdbvhubrenewal.data.dates import as_date, epiweek_end
+from bdbvhubrenewal.data.zones import province_of, weekly_zone_counts
 from bdbvhubrenewal.forecasters.base import (
     NATIONAL,
     SAMPLE_COLUMNS,
@@ -52,6 +53,7 @@ from bdbvhubrenewal.forecasters.base import (
 from bdbvhubrenewal.forecasters.chain import start_weeks
 from bdbvhubrenewal.forecasters.copula import PRIOR, GaussianCopula
 from bdbvhubrenewal.forecasters.randomwalk import RandomWalk
+from bdbvhubrenewal.forecasters.zones import reconcile_zones
 
 __all__ = [
     "ADAPTER_FILES",
@@ -765,6 +767,34 @@ def _walk_start(task: ForecastTask) -> str:
     return str(snap.week_ends[int(start_weeks(snap, walk.settings).min())])
 
 
+def _lags_of(group: Series, places: set[str]) -> Series:
+    """Keep the lag series of `places` only.
+
+    A place with no cases has lag series of zeros, which tell Chronos-2
+    nothing and in the daily block would take most of its memory.
+    """
+    out = dict(group)
+    for key in ("past_covariates", "future_covariates"):
+        if key in out:
+            out[key] = {
+                name: values
+                for name, values in out[key].items()
+                if name.rsplit("_lag_", 1)[0] in places
+            }
+    return out
+
+
+def _at(rows: pd.DataFrame | None, vintage: str) -> pd.DataFrame | None:
+    """Return the rows of one release, or None."""
+    return None if rows is None else rows.loc[rows["vintage"] == vintage]
+
+
+def _rows(*tables: pd.DataFrame | None) -> pd.DataFrame | None:
+    """Stack the tables that are there, None if none is."""
+    there = [t for t in tables if t is not None and not t.empty]
+    return pd.concat(there, ignore_index=True) if there else None
+
+
 @dataclass
 class FoundationModel:
     """Chronos-2 on one source and layout of the hub target's releases.
@@ -798,6 +828,7 @@ class FoundationModel:
     checkpoint: Checkpoint | None = None
     sample: Sampler | None = field(default=None, repr=False)
     stream: str | None = field(default=None, repr=False)
+    reads_zones: ClassVar[bool] = True
     copula: GaussianCopula | None = CHRONOS_COPULA
 
     @property
@@ -806,19 +837,23 @@ class FoundationModel:
         return self.layout == "complete"
 
     def forecast(self, task: ForecastTask) -> pd.DataFrame:
-        """Return trajectories of the country and the task's provinces.
+        """Return trajectories of every hub target in the task.
 
         Parameters
         ----------
         task : ForecastTask
-            The data and weeks to forecast. Its `target_history` holds the
-            weekly releases and its `daily_history` the daily ones.
+            The data and weeks to forecast. Its `target_history` and
+            `zone_history` hold the weekly releases, its `daily_history`
+            and `zone_daily_history` the daily ones, and its `zone_codes`
+            the zones.
 
         Returns
         -------
         pandas.DataFrame
             Columns `location`, `target_end_date`, `sample`, `value`, for
-            the country and the provinces, each its own series.
+            the country, the provinces and their zones, each its own
+            series. The zones are made to sum to the provinces
+            (`forecasters.zones.reconcile_zones`).
 
         Raises
         ------
@@ -836,13 +871,26 @@ class FoundationModel:
             If the release holds another checkpoint or adapter.
         """
         weekly = self.source == "weekly"
-        rows = task.target_history if weekly else task.daily_history
-        if rows is None or rows.empty:
+        base = task.target_history if weekly else task.daily_history
+        zone = task.zone_history if weekly else task.zone_daily_history
+        if base is None or base.empty:
             raise ModelUnavailableError(
                 f"{self.name} needs the {self.source} releases, and the task "
                 f"for {task.vintage} has none."
             )
-        places = (NATIONAL, *task.locations)
+        # Only the releases of the country and provinces, so a release
+        # gives every place's lag cells or none.
+        if zone is not None:
+            zone = zone.loc[zone["vintage"].isin(set(base["vintage"]))]
+        has_zones = zone is not None and task.zone_daily_history is not None
+        zones = tuple(
+            z
+            for z in task.zone_codes
+            if has_zones and province_of(z) in task.locations
+        )
+        rows = _rows(base, zone if zones else None)
+        assert rows is not None
+        places = (NATIONAL, *task.locations, *zones)
         weeks = list(task.target_end_dates)
         tri = hub_triangle(rows, self.source, places, weeks[-1])
         start = tri.n_context
@@ -863,7 +911,8 @@ class FoundationModel:
         horizon = len(tri.times) - start
         rng = task.rng(self.stream or self.name)
         seed = int(rng.integers(0, 2**31 - 1))
-        group = layout_block(tri, self.layout, places, start)
+        cased = {places[i] for i in np.flatnonzero(tri.final.sum(axis=1))}
+        group = _lags_of(layout_block(tri, self.layout, places, start), cased)
         sample = self.sample or partial(
             chronos_sampler, checkpoint=self.checkpoint
         )
@@ -881,8 +930,10 @@ class FoundationModel:
         values = np.stack(
             [steps[:, :, week_of == w].sum(axis=2) for w in weeks], axis=2
         )
+        latest = _rows(task.target, _at(task.zone_history, task.vintage))
+        assert latest is not None
         reported = (
-            task.target.pivot_table(
+            latest.pivot_table(
                 index="location",
                 columns="target_end_date",
                 values="total",
@@ -894,7 +945,7 @@ class FoundationModel:
         )
         values = np.maximum(values, reported)  # [S, L, W]
         n, n_loc = task.n_samples, len(places)
-        return pd.DataFrame(
+        out = pd.DataFrame(
             {
                 "location": np.repeat(list(places), n * len(weeks)),
                 "target_end_date": np.tile(weeks, n * n_loc),
@@ -904,6 +955,16 @@ class FoundationModel:
                 "value": values.transpose(1, 0, 2).reshape(-1),
             }
         )[list(SAMPLE_COLUMNS)]
+        if not zones:
+            return out
+        # The zones are made to sum to the provinces, as submitted.
+        assert task.zone_daily_history is not None
+        counts = weekly_zone_counts(task.zone_daily_history, task.vintage)
+        own = out["location"].isin(set(zones))
+        split = reconcile_zones(
+            out.loc[own], out.loc[~own], task, counts, zones
+        )
+        return pd.concat([out.loc[~own], split], ignore_index=True)
 
     def quantiles(
         self, task: ForecastTask, levels: Sequence[float]
@@ -1003,7 +1064,7 @@ for _source in SOURCES:
                 copula=_COPULAS[_source],
             ),
             f"Chronos-2 on the hub target's {_source} releases, {_layout} "
-            "layout, the country and provinces in one block.",
+            "layout, every target in one block.",
             fitted=True,
             paired=True,
         )
