@@ -12,7 +12,9 @@ The panels are:
 - A, the assumptions in the epinowcast simulations
   (`scripts/finetune_simulate.R`), one box per stage;
 - B, the reporting triangle laid out as ragged series for Chronos-2
-  (`forecasters.foundation.layout_block`);
+  (`forecasters.foundation.layout_block`), each place's count and lag
+  series sharing one series slot (`forecasters.slots`), all places in
+  one group;
 - C, a training block cut from a simulated release history
   (`forecasters.finetune.training_block`) and the LoRA adapters;
 - D, forecasting with the fine-tuned model
@@ -45,6 +47,8 @@ COV_SOFT = "#f5e5c8"
 HATCH = "#a3aabb"
 TRUTH = "#1b7f5f"
 TRUTH_SOFT = "#d4eee3"
+# One colour per place's series slot (panel B).
+SLOTS = ("#6f42c1", "#c0397a")
 
 # Body text, small notes and headings, in points.
 BODY = 7.5
@@ -473,12 +477,23 @@ def panel_b(g: Svg, oy: float) -> float:
         )
         g.line(bx - 2, y0 + rh + 2.5, bx - 2, bottom - 0.5, stroke=COV, sw=0.6)
         g.text(
-            bx - 36,
-            (y0 + bottom) / 2 + 2.5,
+            bx - 40,
+            (y0 + bottom) / 2 + 0.5,
             f"place {p}",
             size=SMALL,
             anchor="end",
             weight="bold",
+        )
+        # The place's slot, shared by its target and its lag series.
+        colour = SLOTS[p - 1]
+        g.rect(bx - 35, y0, 3.2, bottom - y0, fill=colour, rx=1.6)
+        g.text(
+            bx - 40,
+            (y0 + bottom) / 2 + 9,
+            f"slot {p}",
+            size=SMALL,
+            anchor="end",
+            fill=colour,
         )
         bottoms.append(bottom)
         y0 = bottom + 7
@@ -522,11 +537,23 @@ def panel_b(g: Svg, oy: float) -> float:
     )
     # Known-future inputs, beside place 1's lag rows.
     g.text(
-        bx + cols * bw + 5,
+        bx + cols * bw + 7,
         starts[0] + 24,
         ["known", "future"],
         size=SMALL,
         fill=COV,
+    )
+    # Every place's series are one group in group attention.
+    gx = bx + cols * bw + 3
+    g.line(gx, starts[0], gx, bottom, stroke=MUTED, sw=0.7)
+    for yy in (starts[0], bottom):
+        g.line(gx - 2, yy, gx, yy, stroke=MUTED, sw=0.7)
+    g.text(
+        gx + 4,
+        starts[1] + 16,
+        ["all places", "in one", "group"],
+        size=SMALL,
+        fill=MUTED,
     )
     # One-row legend.
     lgy = max(tri_bottom, bottom + 11) + 12
@@ -536,12 +563,16 @@ def panel_b(g: Svg, oy: float) -> float:
         ("future", "to forecast"),
         ("none", "no release"),
         ("unseen", "not yet reported"),
+        ("slot", "one slot per place"),
     ]
     x = 0.0
     for kind, name in items:
-        cell(g, x, lgy - 6.5, 9, 7.5, kind)
+        if kind == "slot":
+            g.rect(x + 3, lgy - 7, 3.2, 8.5, fill=SLOTS[0], rx=1.6)
+        else:
+            cell(g, x, lgy - 6.5, 9, 7.5, kind)
         g.text(x + 12, lgy, name, size=SMALL)
-        x += 12 + 3.6 * len(name) + 16
+        x += 12 + 3.6 * len(name) + 12
     return lgy + 3
 
 
@@ -628,6 +659,17 @@ def panel_c(g: Svg, oy: float) -> float:
     g.rect(mx, y0, mw, 13, fill=CELL, rx=2)
     g.text(
         mx + mw / 2, y0 + 9.3, "input embedding", size=SMALL, anchor="middle"
+    )
+    # The series slots, added to every token of a place's series.
+    g.rect(mx + mw + 4, y0, aw, 13, fill=ACCENT_SOFT, stroke=ACCENT, sw=0.9)
+    g.text(
+        mx + mw + 4 + aw / 2,
+        y0 + 9.3,
+        "slot",
+        size=SMALL,
+        anchor="middle",
+        fill=ACCENT,
+        weight="bold",
     )
     g.rect(
         mx - 4,
@@ -739,9 +781,9 @@ def panel_d(g: Svg, oy: float) -> float:
     # Stage 2: the model and its adapter.
     x2, w2 = xs[1], widths[1]
     g.rect(
-        x2 + w2 / 2 - 22,
+        x2 + w2 / 2 - 34,
         top + 24,
-        44,
+        68,
         15,
         fill=ACCENT_SOFT,
         stroke=ACCENT,
@@ -751,7 +793,7 @@ def panel_d(g: Svg, oy: float) -> float:
     g.text(
         x2 + w2 / 2,
         top + 34.5,
-        "+ adapter",
+        "+ adapter \u00b7 slots",
         size=SMALL,
         anchor="middle",
         fill=ACCENT,
