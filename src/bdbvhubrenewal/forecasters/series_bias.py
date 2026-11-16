@@ -110,17 +110,27 @@ def parents_of(places: Sequence[str]) -> list[int]:
 
 
 def block_rows(
-    n_targets: int, n_covariates: int, parents: Sequence[int]
+    target_places: Sequence[int], n_covariates: int, parents: Sequence[int]
 ) -> np.ndarray:
     """Return each row's place and its place's parent, `[2, rows]`.
 
-    Places are numbered in target order; a parent is -1 for none.
+    The targets are at `target_places` (indices into `parents`; a place
+    may have more than one target row, as its daily counts and its period
+    totals), then each place's lags in turn, `n_covariates` in all. A
+    parent is -1 for none.
+
+    Raises
+    ------
+    ValueError
+        If the covariates do not split evenly over the places.
     """
-    rows = (
-        row_places(n_targets, n_covariates)
-        if n_covariates
-        else np.arange(n_targets)
-    )
+    n_places = len(parents)
+    if n_covariates % n_places:
+        raise ValueError(
+            f"{n_covariates} covariates do not split over {n_places} places"
+        )
+    lags = np.repeat(np.arange(n_places), n_covariates // n_places)
+    rows = np.concatenate([np.asarray(target_places, dtype=int), lags])
     parent = np.asarray(parents, dtype=int)
     return np.stack([rows, parent[rows]])
 

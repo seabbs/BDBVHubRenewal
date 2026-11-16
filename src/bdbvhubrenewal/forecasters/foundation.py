@@ -332,9 +332,17 @@ def resolve_checkpoint(spec: str) -> Checkpoint:
 
 
 def _finetuned(name: str, source: str) -> FoundationModel:
-    """Build a fine-tuned model with the checkpoint `finetuned_spec` names."""
+    """Build a fine-tuned model with the checkpoint `finetuned_spec` names.
+
+    The weekly and daily models share the checkpoint; the daily one reads
+    its weekly forecast from per-place weekly total rows, as trained.
+    """
     return FoundationModel(
-        name, source, "ragged", resolve_checkpoint(finetuned_spec())
+        name,
+        source,
+        "ragged",
+        resolve_checkpoint(finetuned_spec()),
+        weekly_totals=source == "daily",
     )
 
 
@@ -375,6 +383,40 @@ class HubTriangle:
 def _step(source: str, day: str) -> dt.date:
     """Return the step holding a day: its week's Saturday, or the day."""
     return epiweek_end(day) if source == "weekly" else as_date(day)
+
+
+@dataclass(frozen=True)
+class PeriodRows:
+    """Each place's period totals on a daily grid, for its total row.
+
+    Attributes
+    ----------
+    ends : numpy.ndarray
+        Whether each day of the grid ends a whole period, `[T]`.
+    totals : numpy.ndarray
+        Each place's total over the period ending on each such day, NaN on
+        every other day, `[L, T]`.
+    """
+
+    ends: np.ndarray
+    totals: np.ndarray
+
+
+def week_rows(tri: HubTriangle) -> PeriodRows:
+    """Return each place's weekly totals of a daily triangle's counts.
+
+    Each week (Sunday to Saturday) whose seven days are all on the grid is
+    summed from the daily counts at the latest release and put on its
+    Saturday; a week the grid cuts has no total.
+    """
+    days = [as_date(t) for t in tri.times]
+    ends = np.array(
+        [epiweek_end(d.isoformat()) == d and i >= 6 for i, d in enumerate(days)]
+    )
+    totals = np.full(tri.final.shape, np.nan)
+    for t in np.flatnonzero(ends):
+        totals[:, t] = tri.final[:, t - 6 : t + 1].sum(axis=1)
+    return PeriodRows(ends, totals)
 
 
 def hub_triangle(
@@ -582,31 +624,39 @@ def _chronos(checkpoint: Checkpoint | None = None) -> Any:
     )
 
 
+CHRONOS_KEYS: Final = ("target", "past_covariates", "future_covariates")
+"""The parts of a group Chronos-2 reads; the rest name its rows' places."""
+
+
 def _chronos_input(group: Series) -> dict[str, Any]:
-    """Return a group as Chronos-2 takes it, without its `places`."""
-    return {k: v for k, v in group.items() if k != "places"}
+    """Return the parts of a group Chronos-2 reads (`CHRONOS_KEYS`)."""
+    return {k: group[k] for k in CHRONOS_KEYS if k in group}
 
 
 def _group_rows(group: Series) -> np.ndarray:
     """Return each of a group's rows' place and parent, `[2, rows]`.
 
-    In Chronos-2's row order: the targets, then the
-    covariates by sorted name, past-only ones before known-future ones.
-    Places are numbered in target order (`series_bias`).
+    In Chronos-2's row order: the targets, then the covariates by sorted
+    name, past-only ones before known-future ones. Places are numbered in
+    the group's `places` order; a target row's place is its
+    `target_places` entry, one row per place by default.
 
     Raises
     ------
     ValueError
-        If a covariate names no target place, or the places do not match
-        the targets.
+        If a covariate names no place, or the target rows do not match
+        their places.
     """
     past = list(group.get("past_covariates", {}))
     known = set(group.get("future_covariates", {}))
     n_targets = np.atleast_2d(group["target"]).shape[0]
     named = dict.fromkeys(n.rsplit("_lag_", 1)[0] for n in past)
     places = list(group.get("places") or named)
-    if len(places) != n_targets:
-        raise ValueError(f"{len(places)} places for {n_targets} targets")
+    target_places = list(group.get("target_places", range(len(places))))
+    if len(target_places) != n_targets:
+        raise ValueError(
+            f"{len(target_places)} target places for {n_targets} targets"
+        )
     rows = sorted(n for n in past if n not in known)
     rows += sorted(n for n in past if n in known)
     at = {p: i for i, p in enumerate(places)}
@@ -614,7 +664,7 @@ def _group_rows(group: Series) -> np.ndarray:
         owner = [at[n.rsplit("_lag_", 1)[0]] for n in rows]
     except KeyError as err:
         raise ValueError(f"covariate of no target place: {err}") from err
-    place = np.concatenate([np.arange(n_targets), owner]).astype(int)
+    place = np.concatenate([target_places, owner]).astype(int)
     parent = np.asarray(series_bias.parents_of(places), dtype=int)
     return np.stack([place, parent[place]])
 
@@ -707,7 +757,11 @@ def chronos_sampler(
 
 
 def layout_block(
-    tri: HubTriangle, layout: str, places: Sequence[str], start: int
+    tri: HubTriangle,
+    layout: str,
+    places: Sequence[str],
+    start: int,
+    period: PeriodRows | None = None,
 ) -> Series:
     """Return the one block of every place's series, split at `start`.
 
@@ -721,16 +775,25 @@ def layout_block(
         Places, in the order of `tri`.
     start : int
         Steps of context, the first `start` steps of `tri`.
+    period : PeriodRows, optional
+        Each place's period totals on `tri`'s grid. With them each place
+        has a second target row, of its totals, after the count rows; it
+        has no lags.
 
     Returns
     -------
     Series
-        The targets' context, and for `ragged` each place's lag series
-        as past and future covariates.
+        The targets' context, the place of each target row
+        (`target_places`, indices into `places`), and for `ragged` each
+        place's lag series as past and future covariates.
     """
     target = tri.final[:, :start]
+    target_places = list(range(len(places)))
+    if period is not None:
+        target = np.concatenate([target, period.totals[:, :start]])
+        target_places += target_places
     if layout == "complete":
-        return {"target": target}
+        return {"target": target, "target_places": target_places}
     lags = tri.partial.shape[2]
     names = [f"{p}_lag_{d}" for p in places for d in range(lags)]
     cells = tri.partial.transpose(0, 2, 1).reshape(len(names), -1)
@@ -739,6 +802,7 @@ def layout_block(
         "past_covariates": dict(zip(names, cells[:, :start], strict=True)),
         "future_covariates": dict(zip(names, cells[:, start:], strict=True)),
         "places": list(places),
+        "target_places": target_places,
     }
 
 
@@ -751,6 +815,31 @@ def _walk_start(task: ForecastTask) -> str:
     walk = RandomWalk()
     snap = walk.snapshots(task)
     return str(snap.week_ends[int(start_weeks(snap, walk.settings).min())])
+
+
+def _weekly_from_totals(
+    drawn: np.ndarray,
+    period: PeriodRows,
+    tri: HubTriangle,
+    start: int,
+    weeks: Sequence[str],
+) -> np.ndarray:
+    """Return weekly draws `[S, L, W]` read from the total rows.
+
+    A week whose Saturday is past the context takes its total row's draw
+    there; an earlier week takes its total summed from the daily counts.
+    `drawn` is `[S, 2L, horizon]`, the count rows then the total rows.
+    """
+    n_places = period.totals.shape[0]
+    out = []
+    for week in weeks:
+        t = tri.times.index(week)
+        if t >= start:
+            out.append(drawn[:, n_places:, t - start])
+        else:
+            total = np.nan_to_num(period.totals[:, t])
+            out.append(np.broadcast_to(total, drawn[:, :n_places, 0].shape))
+    return np.stack(out, axis=2)
 
 
 @dataclass
@@ -768,6 +857,10 @@ class FoundationModel:
     checkpoint : Checkpoint or None
         The fine-tuned checkpoint Chronos-2 loads, or None for the
         pretrained model.
+    weekly_totals : bool
+        For the daily source: give each place a row of its weekly totals,
+        summed from its daily counts (`week_rows`), and read the weekly
+        forecast from that row. As the fine-tuned model was trained.
     sample : Sampler or None
         Draws the trajectories, Chronos-2 with `checkpoint` by default.
     """
@@ -776,6 +869,7 @@ class FoundationModel:
     source: str
     layout: str
     checkpoint: Checkpoint | None = None
+    weekly_totals: bool = False
     sample: Sampler | None = field(default=None, repr=False)
 
     @property
@@ -840,20 +934,30 @@ class FoundationModel:
             )
         horizon = len(tri.times) - start
         seed = int(task.rng(self.name).integers(0, 2**31 - 1))
-        group = layout_block(tri, self.layout, places, start)
+        period = week_rows(tri) if self.weekly_totals else None
+        group = layout_block(tri, self.layout, places, start, period)
         sample = self.sample or partial(
             chronos_sampler, checkpoint=self.checkpoint
         )
         draws = sample([group], horizon, task.n_samples, seed)[0]
-        final = tri.final
-        steps = np.broadcast_to(final, (task.n_samples, *final.shape)).copy()
         drawn = np.maximum(np.round(draws), 0.0)
-        steps[:, :, start:] = np.maximum(drawn, final[:, start:])
-        # The hub's target is weekly, so the daily source is summed to weeks.
-        week_of = np.array([_step("weekly", t).isoformat() for t in tri.times])
-        values = np.stack(
-            [steps[:, :, week_of == w].sum(axis=2) for w in weeks], axis=2
-        )
+        if period is not None:
+            values = _weekly_from_totals(drawn, period, tri, start, weeks)
+        else:
+            final = tri.final
+            steps = np.broadcast_to(
+                final, (task.n_samples, *final.shape)
+            ).copy()
+            steps[:, :, start:] = np.maximum(
+                drawn[:, : len(places)], final[:, start:]
+            )
+            # The hub's target is weekly: the daily source is summed to it.
+            week_of = np.array(
+                [_step("weekly", t).isoformat() for t in tri.times]
+            )
+            values = np.stack(
+                [steps[:, :, week_of == w].sum(axis=2) for w in weeks], axis=2
+            )
         reported = (
             task.target.pivot_table(
                 index="location",

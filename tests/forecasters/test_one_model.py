@@ -41,23 +41,26 @@ def daily_tri(lags: int = 3) -> HubTriangle:
     return HubTriangle(DAYS, final, partial, last=13)
 
 
-def weekly_tri() -> HubTriangle:
-    final = np.array([[70.0, 77.0], [7.0, 8.0]])
-    return HubTriangle(
-        ["2026-10-03", "2026-10-10"], final, np.zeros((2, 2, 1)), 1
-    )
-
-
-def test_week_rows_put_each_weeks_total_on_its_saturday():
-    rows = week_rows(daily_tri(), weekly_tri())
+def test_week_rows_sum_each_whole_week_of_daily_counts_on_its_saturday():
+    tri = daily_tri()
+    rows = week_rows(tri)
+    # 2026-09-27 is a Sunday: two whole weeks, ending on these Saturdays.
     sat = [DAYS.index("2026-10-03"), DAYS.index("2026-10-10")]
     assert list(np.flatnonzero(rows.ends)) == sat
     assert rows.totals.shape == (2, 14)
-    assert rows.totals[0, sat[0]] == 70.0
-    assert rows.totals[1, sat[1]] == 8.0
+    assert rows.totals[0, sat[0]] == tri.final[0, 0:7].sum()
+    assert rows.totals[1, sat[1]] == tri.final[1, 7:14].sum()
     off = np.ones(14, dtype=bool)
     off[sat] = False
     assert np.isnan(rows.totals[:, off]).all()
+
+
+def test_a_week_cut_by_the_grid_has_no_total():
+    tri = daily_tri()
+    cut = HubTriangle(tri.times[2:], tri.final[:, 2:], tri.partial[:, 2:], 11)
+    rows = week_rows(cut)
+    # The first week lost two days, so only the second has a total.
+    assert list(np.flatnonzero(rows.ends)) == [cut.times.index("2026-10-10")]
 
 
 def test_a_period_block_adds_one_total_row_per_place_after_the_daily_rows():
@@ -179,15 +182,17 @@ def test_weekly_forecasts_are_read_from_the_total_rows(
         assert (rows["value"] >= 1000 + i).all()
 
 
-def test_with_no_daily_releases_the_weekly_block_is_used(
-    ft: FoundationModel, task: ForecastTask
+def test_the_weekly_finetuned_model_uses_the_weekly_block_alone(
+    task: ForecastTask, fake_checkpoint: str
 ) -> None:
     store: list = []
-    model = dataclasses.replace(ft, sample=_aggregate_sampler(store))
-    model.forecast(dataclasses.replace(task, daily_history=None))
+    weekly = dataclasses.replace(
+        get_model("fm_chronos_weekly_ragged_ft"),
+        sample=_aggregate_sampler(store),
+    )
+    assert weekly.checkpoint.hash == fake_checkpoint
+    weekly.forecast(task)
     group = store[-1]
     assert np.atleast_2d(group["target"]).shape[0] == len(group["places"])
-    assert (
-        len(group["past_covariates"])
-        == len(group["places"]) * foundation.MAX_LAG["weekly"]
-    )
+    n_lags = len(group["places"]) * foundation.MAX_LAG["weekly"]
+    assert len(group["past_covariates"]) == n_lags
