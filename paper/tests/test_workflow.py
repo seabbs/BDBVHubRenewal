@@ -179,5 +179,5 @@ def test_ebola_runs_split_at_the_first_scored_round(tmp_path: Path) -> None:
         ]
         assert ebola
         for line in ebola:
-            if target == "paper" or "forecasts" in line:
+            if target == "paper" or "paperpipe forecasts" in line:
                 assert f"{flag} {first}" in line, line

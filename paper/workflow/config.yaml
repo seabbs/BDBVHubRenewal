@@ -180,6 +180,10 @@ heldout:
   # The benchmark's dates run from 2021-11-22 to 2022-04-29.
   # The first 80 are the development half.
   germany_from: "2022-02-10"
+  # First scored Ebola round (its reference date, a Saturday). Earlier
+  # rounds and the release backtest from earlier releases are the
+  # development part; prospective rounds from this one are scored.
+  ebola_from: "2026-11-21"
 
 # Studies whose truth is the first release on or after D days, as the
 # release backtest takes it, rather than the last release before.

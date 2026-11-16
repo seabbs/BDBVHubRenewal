@@ -268,18 +268,28 @@ def _germany_forecasts(
     return fc
 
 
-def _ebola_forecasts(sources: Sources, with_hub: bool) -> pd.DataFrame:
-    """Return the release backtest's samples, with the hub's once scorable.
+def _ebola_forecasts(
+    sources: Sources,
+    with_hub: bool,
+    before: pd.Timestamp | None = None,
+    split: pd.Timestamp | None = None,
+) -> pd.DataFrame:
+    """Return the release backtest's samples and the prospective rounds'.
 
     The backtest's table holds our models' forecasts from every past
     release, the stored fits' among them; `ebola_extra` adds further
-    models' samples in its layout. The hub's forecasts join once its
-    baseline can be scored.
+    models' samples in its layout. The prospective rounds' forecasts (the
+    hub's, our stored and candidate forecasts, by round) join once the
+    hub's baseline can be scored, and from `split` on in any case, as
+    they are the scored part. Release-backtest origins are kept before
+    `split` or `before`, and rounds before `before`.
     """
     assert sources.ebola_backtest is not None
     parts = [ebola.backtest_samples(sources.ebola_backtest)]
     parts += [ebola.backtest_samples(p) for p in sources.ebola_extra]
-    if with_hub and sources.hub is not None:
+    end = split if split is not None else before
+    parts = [_before(p, "origin_date", end) for p in parts]
+    if (with_hub or split is not None) and sources.hub is not None:
         store = sources.store
         if store is not None and not _has_ref(store, sources.store_ref):
             log.warning(
@@ -288,14 +298,16 @@ def _ebola_forecasts(sources: Sources, with_hub: bool) -> pd.DataFrame:
                 sources.store_ref,
             )
             store = None
-        parts.append(
-            ebola.load(
-                sources.hub,
-                candidates=sources.candidates,
-                store=store,
-                store_ref=sources.store_ref,
-            )
+        rounds = ebola.load(
+            sources.hub,
+            candidates=sources.candidates,
+            store=store,
+            store_ref=sources.store_ref,
         )
+        rounds = _before(rounds, "origin_date", before)
+        if not with_hub:
+            rounds = rounds.loc[rounds["origin_date"] >= split]
+        parts.append(rounds)
     return pd.concat(parts, ignore_index=True)
 
 
@@ -401,6 +413,7 @@ def run_forecasts(
     sources: Sources = NO_SOURCES,
     source: str = "dummy",
     baseline: str | None = None,
+    split: pd.Timestamp | None = None,
 ) -> pd.DataFrame:
     """Return every model's forecasts for a study, in the schema.
 
@@ -411,7 +424,8 @@ def run_forecasts(
     seeds : sequence of int
         Synthetic seeds to forecast.
     before : pandas.Timestamp, optional
-        For Germany, keep nowcast dates before this date.
+        For Germany, keep nowcast dates before this date; for Ebola, keep
+        rounds and release-backtest origins before it.
     n_samples : int
         Samples per forecast, for dummy studies scored on samples.
     sources : Sources
@@ -420,7 +434,10 @@ def run_forecasts(
         `real` or `dummy`, as `source_of` gave for the study's data.
     baseline : str, optional
         The baseline `study_baseline` gave, if not the usual one. Ebola
-        leaves the hub's forecasts out while it is set.
+        leaves the hub's forecasts before `split` out while it is set.
+    split : pandas.Timestamp, optional
+        For Ebola, the first scored round: the release backtest is kept
+        before it and the prospective rounds from it.
 
     Returns
     -------
@@ -438,7 +455,9 @@ def run_forecasts(
     if study == "germany" and source == "real":
         return _germany_forecasts(sources, before)
     if study == "ebola" and source == "real":
-        return _ebola_forecasts(sources, with_hub=baseline is None)
+        return _ebola_forecasts(
+            sources, with_hub=baseline is None, before=before, split=split
+        )
     fc, _ = dummy_study(study, n_samples=n_samples)
     if study == "germany":
         fc = _before(fc, "origin_date", before)

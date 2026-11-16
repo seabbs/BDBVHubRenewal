@@ -237,7 +237,9 @@ def limits(w):
         return "--seeds " + " ".join(str(x) for x in s.synthetic_seeds)
     if w.study == "germany" and s.germany_before is not None:
         return f"--before {s.germany_before:%Y-%m-%d}"
-    return ""
+    if w.study == "ebola" and s.ebola_before is not None:
+        return f"--before {s.ebola_before:%Y-%m-%d}"
+    return study_split(w.mode, w.study)
 
 
 def figures(mode, study):
@@ -478,6 +480,8 @@ def study_split(mode, study):
     s = run_settings(config, mode)
     if study == "germany" and s.germany_split is not None:
         return f"--split {s.germany_split:%Y-%m-%d}"
+    if study == "ebola" and s.ebola_split is not None:
+        return f"--split {s.ebola_split:%Y-%m-%d}"
     return ""
 
 

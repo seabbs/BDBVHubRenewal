@@ -139,6 +139,7 @@ def _forecasts(a: argparse.Namespace) -> None:
         sources=_sources(a),
         source=read_meta(a.meta)["source"],
         baseline=read_meta(a.meta).get("baseline"),
+        split=_date(a.split),
     )
     _write(fc, a.out)
 
@@ -233,6 +234,7 @@ def _limits(p: argparse.ArgumentParser) -> None:
     p.add_argument("study")
     p.add_argument("--seeds", type=int, nargs="*", default=[])
     p.add_argument("--before", default=None)
+    p.add_argument("--split", default=None)
     p.add_argument("--meta", type=Path, required=True)
     p.add_argument("--synthetic-forecasts", type=Path, default=None)
     p.add_argument("--germany-forecasts", type=Path, nargs="*", default=[])
