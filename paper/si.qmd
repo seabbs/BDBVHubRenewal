@@ -131,6 +131,12 @@ The grid has two limitations.
 Simulated strata are less sparse than BDBV's provinces: the share of stratum-weeks with no cases reaches {{< meta evidence.realism.zero_share.sim_q95 >}} at the 95% point of the simulations, against {{< meta evidence.realism.zero_share.BDBV >}} for BDBV.
 Simulated delays are shorter than the German data's, whose 99% point is {{< meta evidence.realism.delay_q99.Germany_states >}} days against {{< meta evidence.realism.delay_q99.sim_q95 >}} at the 95% point of the simulations.
 
+The simulator works around four limits of epinowcast's simulation mode, each until the linked epinowcast change.
+It uses `enw_simulate()` from a feature branch of epinowcast (commit e084b080), until [epinowcast#841](https://github.com/epinowcast/epinowcast/pull/841) is merged.
+It reads the posterior predictive counts (`pp_obs`) from the fit directly, as `enw_pp_summary()` is slow, and runs each batch of 25 simulations under a 16 GB memory cap ([epinowcast#841](https://github.com/epinowcast/epinowcast/pull/841)).
+Gamma reporting delays have a coefficient of variation of 0.8 to 1.6, as a shape above 2 gives NaN tail hazards ([epinowcast#939](https://github.com/epinowcast/epinowcast/issues/939)).
+When the delay walks over weeks, its log spread walks at half the scale of its log location, as a zero scale sits on the parameter's lower bound, where Stan cannot start ([epinowcast#941](https://github.com/epinowcast/epinowcast/issues/941)).
+
 ![How the simulated outbreaks (grey histograms) compare with the BDBV data and the German data by state and by age: outbreak size, weekly peak, growth, the share of stratum-weeks with no cases, dispersion, the reporting delay and the share reported within 0, 7, 14 and 28 days.](build/figures/si/sim-realism.png){#fig-sim-realism}
 
 ::: {#tbl-sim-diseases}
@@ -196,6 +202,7 @@ Option (d) tests whether pairing the draws with the copula before summing narrow
 
 ::: {.callout-note title="Plan"}
 - We describe the scores and check them against scoringutils.
+- We compute the WIS from scoringrules' `interval_score` and the absolute error of the median, as its `weighted_interval_score` (0.11) adds the median itself ([scoringrules#140](https://github.com/frazane/scoringrules/issues/140)).
 - Key references: [@bosse2022scoringutils; @jordanEvaluatingProbabilisticForecasts2019; @zanetta_scoringrules_2024].
 :::
 
