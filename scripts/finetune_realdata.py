@@ -203,6 +203,23 @@ def split_held_out(blocks: list[dict]) -> tuple[list[dict], list[dict]]:
     return train, held
 
 
+def pick_device(name: str) -> str:
+    """Return the torch device to train on.
+
+    `name` itself, or for "auto" a GPU (CUDA, then Apple's MPS) if there is
+    one, else the CPU.
+    """
+    if name != "auto":
+        return name
+    import torch
+
+    if torch.cuda.is_available():
+        return "cuda"
+    if torch.backends.mps.is_available():
+        return "mps"
+    return "cpu"
+
+
 def train(args: argparse.Namespace) -> None:
     """Train the adapter on the German blocks and save, verify, publish."""
     import torch
@@ -231,8 +248,10 @@ def train(args: argparse.Namespace) -> None:
     fs.checkpoint_large_batches(above)
     most = ft.max_series(args.memory_gb)
     torch.manual_seed(args.seed)
+    device = pick_device(args.device)
+    log(f"training on {device}")
     pipeline = Chronos2Pipeline.from_pretrained(
-        CHRONOS_MODEL, revision=CHRONOS_REVISION, device_map="cpu"
+        CHRONOS_MODEL, revision=CHRONOS_REVISION, device_map=device
     )
     lora = LoraConfig(
         r=8,
@@ -324,7 +343,9 @@ def train(args: argparse.Namespace) -> None:
 
     def backward(part: list[int], share: float) -> float:
         batch = {
-            k: v for k, v in data._build_batch(part).items() if k in accepted
+            k: v.to(device) if torch.is_tensor(v) else v
+            for k, v in data._build_batch(part).items()
+            if k in accepted
         }
         loss = model(**batch).loss
         (loss * share).backward()
@@ -385,7 +406,7 @@ def train(args: argparse.Namespace) -> None:
     key = ft._settings_hash(settings)
     settings["hash"] = key
     settings["code_commit"] = commit
-    settings["device"] = "cpu"
+    settings["device"] = device
     settings["held_out_loss_start"] = state["start_loss"]
     settings["held_out_loss"] = fs.held_out_loss(model, held, args.batch_size)
     if args.real_validation:
@@ -453,6 +474,8 @@ def main() -> None:
     # out of 14 GB without it and an 850-series block peaks at 7.6 GB with.
     run.add_argument("--checkpoint-above", type=int, default=None)
     run.add_argument("--threads", type=int, default=6)
+    # "cpu", or "auto" for a GPU if there is one; outside the settings hash.
+    run.add_argument("--device", default="cpu")
     run.add_argument("--seed", type=int, default=1)
     run.add_argument("--real-validation", type=Path)
     run.add_argument("--note", default="")
