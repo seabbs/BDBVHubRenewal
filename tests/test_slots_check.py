@@ -495,3 +495,76 @@ def test_a_non_zero_init_checkpoint_is_held_while_the_hold_file_exists(
     if hold:
         hold_file.touch()
     assert sc.held(adapter, hold_file) is expected
+
+
+HIER = ["CD", "CD-NK", "CD-NK-01"]
+"""Places of a multi-level block: the country, a province and its zone."""
+
+
+def linked_block() -> dict:
+    return {**block(), "places": tuple(HIER)}
+
+
+def with_linked_labels(seed: int = 3):
+    """A tiny model with fixed random labels and the parent link."""
+    model = tiny_model()
+    slots.attach(model, n_slots=N_SLOTS, init_std=0.1, seed=seed)
+    return model
+
+
+def test_wrong_parents_are_other_places_in_the_block():
+    parents = [-1, 0, 1, 1, 0]
+    wrong = sc.wrong_parents(parents, np.random.default_rng(0))
+    # A place with no parent keeps none.
+    assert wrong[0] == -1
+    for i, (q, w) in enumerate(zip(parents, wrong, strict=True)):
+        if q < 0:
+            continue
+        assert w not in (i, q)
+        assert 0 <= w < len(parents)
+    # Nothing to swap to when the block holds only a place and its parent.
+    assert sc.wrong_parents([-1, 0], np.random.default_rng(0)) == [-1, 0]
+
+
+def test_linked_ids_give_each_place_its_parent_label():
+    model = with_linked_labels()
+    ids = sc.model_ids(model, linked_block())
+    assert ids.shape == (2, linked_block()["context"].shape[0])
+    own, parent = ids
+    assert parent[0] == -1
+    assert parent[1] == own[0]
+    assert parent[2] == own[1]
+    # Lags carry their place's own and parent labels.
+    places = slots.row_places(N_PLACES, N_PLACES * LAG)
+    for p in range(N_PLACES):
+        assert set(own[places == p]) == {own[p]}
+        assert set(parent[places == p]) == {parent[p]}
+
+
+def test_parent_swap_moves_only_parent_labels():
+    model = with_linked_labels()
+    b = linked_block()
+    right = sc.model_ids(model, b)
+    wrong = sc.model_ids(model, b, rng=np.random.default_rng(0))
+    assert np.array_equal(right[0], wrong[0])
+    assert wrong[1][0] == -1
+    # CD-NK-01's parent becomes CD, not CD-NK; CD-NK's can only become
+    # CD-NK-01.
+    assert wrong[1][2] == right[0][0]
+    assert wrong[1][1] == right[0][2]
+
+
+def test_parent_swap_changes_the_output_of_a_linked_model():
+    model = with_linked_labels()
+    b = linked_block()
+    _, given = sc.predict(model, b)
+    _, swapped = sc.predict(model, b, parent_rng=np.random.default_rng(0))
+    assert sc.output_change(given, swapped, LAG, H)["nowcast_max"] > 1e-4
+
+
+def test_parent_swap_is_scored_for_the_slots_model_only():
+    assert "swap_parents" in sc.CONDITIONS
+    for phase in ("headline", "rest", "all"):
+        work = sc.phase_work(phase, True)
+        assert all(m == "slots" for m, c in work if c == "swap_parents")
+    assert ("slots", "swap_parents") in sc.phase_work("headline", True)
