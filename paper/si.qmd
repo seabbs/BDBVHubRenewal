@@ -43,12 +43,12 @@ One SI section per paper section.
 **Attention biases.**
 Chronos-2's group attention has no notion of which series is which, so on its own it can link a lag series to its place's counts only by matching their values.
 
-- We add three learned scalars to the group-attention scores of each layer and head.
-- One applies from each of a place's series to its other series, its count and its lags.
+- We add four learned scalars to the group-attention scores of each layer and head.
+- One applies from a series to itself.
+- One applies from a series to the other series of its place, its count and its lags.
 - One applies from a child place to its parent, and one from a parent to its child.
-- There is no bias for a series attending to itself.
 - There is no bias for particular delays, as the model identifies a delay from which of its values are missing.
-- All three start at zero, so fine-tuning starts from base Chronos-2, as for the relation biases TableFormer adds to a pretrained model [@Yang2022].
+- All four start at zero, so fine-tuning starts from base Chronos-2, as for the relation biases TableFormer adds to a pretrained model [@Yang2022].
 - The biases train at a learning rate of $10^{-3}$ and the LoRA adapter at Chronos-2's $10^{-5}$, both falling linearly to zero at 8,000 outbreaks.
 - We identify places by name within each block, with no limit on the number of places.
 - A place's parent is the nearest prefix of its name in the block, else the country.
