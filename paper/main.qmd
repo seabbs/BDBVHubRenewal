@@ -70,25 +70,26 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
 
 ::: {.callout-note title="Plan"}
 - Chronos-2, given the reporting triangle as series: one series per place and reporting delay, each missing until reported. Introduced alongside the reporting triangle, with Figure 1B.
-- Per-series slots: each place's count and lag series share a learned slot, tying its covariates to its counts.
+- Each place's count and lag series share a learned slot, which ties its covariates to its counts.
 - Slots are assigned by random permutation in each training block.
 - Slots start as random codes and train at their own learning rate.
-- Fine-tuned on synthetic data on a laptop from base Chronos-2, with its default LoRA recipe.
+- We fine-tune base Chronos-2 on synthetic data on a laptop, with its default LoRA recipe.
 - The learning rate falls linearly to zero at 8,000 simulations.
 - Each simulation gives 32 training blocks.
 - A block takes daily steps, or sums the days to 3-day or weekly steps.
 - Four in five blocks are multivariate and one in five univariate.
-- Checkpoints at 1,000, 2,000, 4,000 and 8,000 simulations.
+- We save checkpoints at 1,000, 2,000, 4,000 and 8,000 simulations.
 - Training draws simulations from a balanced, shuffled design, so every checkpoint has seen the whole grid.
-- Levels: the country, provinces and health zones are separate series in one joint block.
+- Chronos-2 forecasts the country, provinces and health zones as separate series in one joint block.
 - The copula only pairs draws, for joint scores and sums, and leaves marginals unchanged.
-- SI, aggregation options: joint block, level by level, or the lowest level summed.
-- SI, lag cap: lags to 4 weeks or 28 days, against lags to the truth delay.
+- We compare the joint block with forecasting each level alone and with summing the lowest level (SI).
+- We compare lags capped at 4 weeks or 28 days with lags run to the truth delay (SI).
 - TODO: replace the SI's dashboard screenshot with a static render of the finished run from the workflow (#256).
-- SI, series slots: the slots run against a run without slots.
-- SI, real data: Chronos-2 fine-tuned on real data against the model fine-tuned on simulations.
-- Compared with zero-shot Chronos-2 and with Chronos-2 given only complete data.
-- SI, checkpoint curve: scores by checkpoint, with both as reference lines.
+- We compare the model with slots with one fine-tuned without slots (SI).
+- We fine-tune Chronos-2 on complete counts only, without delay series, and compare it with the ragged model (SI).
+- We fine-tune Chronos-2 on real data and compare it with the model fine-tuned on simulations (SI).
+- We compare the fine-tuned model with zero-shot Chronos-2 and with Chronos-2 given only complete data.
+- We plot each checkpoint's scores, with both as reference lines (SI).
 - Figure 1, a multi-panel schematic of our pipeline: (A) the assumptions in the epinowcast simulations, (B) the reporting triangle laid out as ragged series for Chronos-2, (C) training blocks and LoRA fine-tuning, and why it is fast, and (D) forecasting with the fine-tuned model.
 - Key references: [@Ansari2025; @Ansari2024; @Hu2021; @Das2024b].
 :::
@@ -149,7 +150,7 @@ The SI gives the copula in full, its estimator and window, and the scores of pai
 
 ::: {.callout-note title="Plan"}
 - A held-out set of simulations was not used during development.
-- SI, held-out set: its seeds, size and grid.
+- The SI gives the held-out set's seeds, size and grid.
 - Sample forecasts scored with CRPS and log-scale CRPS, bias, and coverage, relative to `randomwalknowcast`.
 - Scored against a rolling evaluation set of the data as reported D days later, with D each outbreak's 98% delay.
 - Key references: [@bracherEvaluatingEpidemicForecasts2021; @Bosse2023-sx; @gneitingStrictlyProperScoring2007; @gneitingProbabilisticForecastsCalibration2007; @sherrattPredictivePerformanceMultimodel2023].
@@ -210,6 +211,7 @@ Key references: the Methods references, with [@bracherEvaluatingEpidemicForecast
 - See SI, checkpoint curve.
 - See SI, held-out set.
 - See SI, per-series slots against no slots.
+- See SI, delays against no delays.
 - See SI, monitoring fine-tuning.
 :::
 
@@ -244,7 +246,7 @@ Held-out synthetic data: mean energy and variogram scores of each model's trajec
 ::: {.callout-note title="Plan"}
 - Visual performance against the other models.
 - A summary of score performance.
-- See SI, fine-tuning on real data.
+- See SI, real-data fine-tune against synthetic.
 - See SI, lag cap (foundation model setup).
 - Key references: [@Wolffram2023; @amaralPostprocessingWeightedCombination2025].
 :::
@@ -318,8 +320,8 @@ The fine-tuned model is trained on simulations only, so it never sees the BDBV t
   - Weakness: we did not compare against epinowcast, or, for the synthetic study, against the data-generating model itself.
   - Strengths: both retrospective and real-time case studies, and synthetic data that are easy to tune to a setting.
   - Strength: fine-tuning ran locally on consumer hardware (a laptop), so it is accessible.
-  - Limitation: the BDBV hub imputes missing onset dates from reporting delays, which can over-smooth its data (Methods, Data) [@bdbv_modeling_hub_2026].
-  - Limitation: smoothed release histories mismatch the epinowcast reporting structure our simulations assume, which may disadvantage the fine-tuned Chronos-2.
+  - The BDBV hub imputes missing onset dates from reporting delays, which can over-smooth its data (Methods, Data) [@bdbv_modeling_hub_2026].
+  - Smoothed release histories mismatch the epinowcast reporting structure our simulations assume, which may disadvantage the fine-tuned Chronos-2.
   - Weakness: fine-tuning used the laptop's GPU, which made it several times faster, and not everyone has one. On a laptop CPU alone it would still run in hours.
   - Key references: [@Kalahasti2026; @Meyer2025].
 - **Domain knowledge through synthetic data.**
