@@ -165,10 +165,10 @@ It runs on every real vintage for the three renewal models.
 
 `randomwalk`, `randomwalknowcast` and `pprandomwalknowcast` are scored at zone level, for every zone with cases at the vintage ([Baseline models](baselines.md#health-zones)).
 A week with no onsets in a zone has a count of 0.
-Each model's zone samples are made to sum to its province samples, as in the submitted file, and are scored in that form.
+Each model's zone samples are scored as the model draws them, as in the submitted file.
 Each real vintage before the latest is forecast, and origins with no pair of releases within the delay window are skipped, as for provinces.
 Zones are scored on the reported target as for [real releases](#real-releases), with the zone delays fitted at the origin, so a zone count is never scored against a count still being reported.
-Relative WIS is against `randomwalknowcast` in the same form.
+Relative WIS is against `randomwalknowcast`.
 `pprandomwalknowcast` is fitted here on the zones and on the provinces.
 On the Nowcast page only `randomwalk` and `randomwalknowcast` are shown at zone level.
 The fitted models are shown at the country and provinces, from their stored forecasts.

@@ -45,4 +45,6 @@ uv run --group paper --group chronos snakemake -s workflow/Snakefile render \
 mkdir -p ../docs/paper/figures ../docs/paper/build
 cp -R main.html main.pdf main_files si.html si.pdf si_files ../docs/paper/
 cp figures/*.svg figures/*.pdf ../docs/paper/figures/
+# The line above copies no PNGs, so screenshots get their own.
+find figures -maxdepth 1 -name "*.png" -exec cp {} ../docs/paper/figures/ \;
 cp -R build/figures ../docs/paper/build/

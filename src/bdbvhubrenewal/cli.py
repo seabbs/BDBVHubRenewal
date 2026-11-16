@@ -94,7 +94,7 @@ from bdbvhubrenewal.forecasters.base import (
     list_models,
 )
 from bdbvhubrenewal.forecasters.renewal import DELAY_SUMMARY_FILE
-from bdbvhubrenewal.forecasters.zones import zones_for_model
+from bdbvhubrenewal.forecasters.zones import walks_own_zones, zones_for_model
 from bdbvhubrenewal.submission.fitting import (
     Forecast,
     get_config,
@@ -1344,7 +1344,7 @@ def _zones(
     task: ForecastTask,
     samples: pd.DataFrame,
 ) -> tuple[pd.DataFrame | None, str]:
-    """Forecast the zones to sum to the provinces, or say why not.
+    """Forecast the zones, or say why not.
 
     The zones come from `zones_for_model` for model `name`.
     """
@@ -1481,6 +1481,7 @@ def _hub_forecast(
         unassigned=result.unassigned,
         zones=zones,
         forecast_date=forecast_date,
+        zones_sum=not walks_own_zones(name),
     )
     return _HubForecast(table, result, zones, zone_note, checkpoint, copula)
 

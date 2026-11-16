@@ -283,11 +283,11 @@ def test_checkpoint_models_keep_one_colour_across_panels() -> None:
         (ax.get_title(), line.get_label()): line.get_color()
         for ax in fig.axes
         for line in ax.get_lines()
-        if line.get_label() in {"a", "b"}
+        if line.get_label() in {"a, fine-tuned", "b, fine-tuned"}
     }
     assert (
-        colours[("ebola, national (n = 400)", "b")]
-        == colours[("germany, national (n = 400)", "b")]
+        colours[("ebola, national (n = 400)", "b, fine-tuned")]
+        == colours[("germany, national (n = 400)", "b, fine-tuned")]
     )
 
 
@@ -434,3 +434,279 @@ def test_aggregation_options_name_the_lowest_level_not_zones() -> None:
 
     assert OPTIONS["zones_summed"] == "Lowest level summed"
     assert OPTIONS["zones_copula"] == "Lowest level summed after pairing"
+
+
+def test_checkpoint_curves_show_the_untuned_models_as_lines() -> None:
+    # The fine-tuned checkpoints are the curve; zero-shot Chronos-2 on the
+    # ragged layout and on complete data only are horizontal lines, and
+    # randomwalknowcast is the line at 1.
+    from paperpipe.evidence import checkpoint_figure
+
+    rows = pd.DataFrame(
+        {
+            "study": "germany",
+            "level": "national",
+            "model": [
+                "fm_chronos_daily_ragged",
+                "fm_chronos_daily_ragged",
+                "fm_chronos_daily_ragged",
+                "fm_chronos_daily_complete",
+            ],
+            "checkpoint": ["zero-shot", "a", "b", "zero-shot"],
+            "outbreaks": [0, 1000, 2000, 0],
+            "n": 400,
+            "rel_wis": [2.0, 1.5, 1.2, 1.7],
+        }
+    )
+    fig = checkpoint_figure(rows)
+    ax = next(a for a in fig.axes if a.get_visible())
+    lines = {line.get_label(): line for line in ax.get_lines()}
+    curve = lines["fm_chronos_daily_ragged, fine-tuned"]
+    assert list(curve.get_xdata()) == [1000, 2000]
+    zero = lines["fm_chronos_daily_ragged, zero-shot"]
+    complete = lines["fm_chronos_daily_complete, complete data only"]
+    assert set(zero.get_ydata()) == {2.0}
+    assert set(complete.get_ydata()) == {1.7}
+    # One colour per source, the references in other line styles.
+    assert zero.get_color() == curve.get_color() == complete.get_color()
+    assert len({zero.get_linestyle(), complete.get_linestyle()}) == 2
+    assert set(lines["randomwalknowcast"].get_ydata()) == {1}
+    legend = [t.get_text() for t in fig.legends[0].get_texts()]
+    assert "fm_chronos_daily_complete, complete data only" in legend
+    assert "randomwalknowcast" in legend
+
+
+def _slots_check() -> pd.DataFrame:
+    """Rows in the slots check's layout: slots against zero-shot and no
+    slots, and the lag-swap test."""
+    base = {"window": "nowcast", "ci_low": 0.8, "ci_high": 0.95}
+    return pd.DataFrame(
+        [
+            {
+                **base,
+                "set": "sims weekly",
+                "model": "slots",
+                "condition": "given",
+                "against": "zero-shot",
+                "loss": 8.0,
+                "against_loss": 10.0,
+                "ratio": 0.8,
+            },
+            {
+                **base,
+                "set": "sims weekly",
+                "model": "slots",
+                "condition": "given",
+                "against": "no-slots",
+                "loss": 8.0,
+                "against_loss": 9.0,
+                "ratio": 0.89,
+            },
+            {
+                **base,
+                "set": "sims 3day",
+                "model": "slots",
+                "condition": "given",
+                "against": "no-slots",
+                "loss": 4.0,
+                "against_loss": 5.0,
+                "ratio": 0.8,
+            },
+            {
+                **base,
+                "set": "sims weekly",
+                "model": "slots",
+                "condition": "swap_places",
+                "against": "given",
+                "loss": 8.4,
+                "against_loss": 8.0,
+                "ratio": 1.05,
+            },
+            {
+                **base,
+                "set": "sims weekly",
+                "model": "zero-shot",
+                "condition": "swap_places",
+                "against": "given",
+                "loss": 10.0,
+                "against_loss": 10.0,
+                "ratio": 1.0,
+            },
+        ]
+    )
+
+
+def test_slots_loss_leaves_out_3_day_blocks_against_no_slots() -> None:
+    # The no-slots run built its 3-day blocks as daily, so only weekly and
+    # daily blocks compare cleanly with it.
+    from paperpipe.evidence import slots_loss_table
+
+    out = slots_loss_table(_slots_check())
+    assert list(out["Against"]) == ["zero-shot", "no-slots"]
+    assert set(out["Set"]) == {"sims weekly"}
+    assert out["Ratio (90% CI)"].iloc[0] == "0.80 (0.80 to 0.95)"
+
+
+def test_slots_swap_gives_each_model_s_lag_swap_ratio() -> None:
+    from paperpipe.evidence import slots_swap_table
+
+    out = slots_swap_table(_slots_check())
+    assert list(out["Model"]) == ["slots", "zero-shot"]
+    assert list(out["Ratio (90% CI)"]) == [
+        "1.05 (0.80 to 0.95)",
+        "1.00 (0.80 to 0.95)",
+    ]
+
+
+def test_slots_scores_pair_the_runs_at_matched_checkpoints() -> None:
+    from paperpipe.evidence import CHECKPOINT_RULE, slots_scores_table
+
+    base = {
+        "level": "national",
+        "model": "fm_chronos_daily_ragged",
+        "rule": CHECKPOINT_RULE,
+        "grid": "r4",
+        "rel_crps": None,
+    }
+    rows = pd.DataFrame(
+        [
+            {
+                **base,
+                "study": "germany",
+                "checkpoint": "slots-aaa",
+                "outbreaks": 1000,
+                "rel_wis": 0.9,
+            },
+            {
+                **base,
+                "study": "germany",
+                "checkpoint": "bbb",
+                "outbreaks": 1000,
+                "rel_wis": 1.0,
+            },
+            # No no-slots checkpoint at 250, so no pair.
+            {
+                **base,
+                "study": "germany",
+                "checkpoint": "slots-ccc",
+                "outbreaks": 250,
+                "rel_wis": 1.1,
+            },
+            {
+                **base,
+                "study": "ebola",
+                "checkpoint": "slots-aaa",
+                "outbreaks": 1000,
+                "rel_wis": None,
+                "rel_crps": 0.7,
+            },
+            {
+                **base,
+                "study": "ebola",
+                "checkpoint": "bbb",
+                "outbreaks": 1000,
+                "rel_wis": None,
+                "rel_crps": 0.75,
+            },
+        ]
+    )
+    out = slots_scores_table(rows, ("slots-aaa", "slots-ccc"))
+    assert list(out["Outbreaks"]) == [1000, 1000]
+    assert list(out["Slots"]) == [0.7, 0.9]
+    assert list(out["No slots"]) == [0.75, 1.0]
+
+
+def test_slots_scores_keep_only_the_final_run_s_checkpoints() -> None:
+    # An earlier slots run's checkpoints are not the paper's.
+    from paperpipe.evidence import CHECKPOINT_RULE, slots_scores_table
+
+    base = {
+        "study": "germany",
+        "level": "national",
+        "model": "fm_chronos_daily_ragged",
+        "rule": CHECKPOINT_RULE,
+        "outbreaks": 1000,
+    }
+    rows = pd.DataFrame(
+        [
+            {**base, "checkpoint": "slots-old", "rel_wis": 0.8},
+            {**base, "checkpoint": "slots-new", "rel_wis": 0.9},
+            {**base, "checkpoint": "plain", "rel_wis": 1.0},
+        ]
+    )
+    out = slots_scores_table(rows, ("slots-new",))
+    assert list(out["Slots"]) == [0.9]
+    assert slots_scores_table(rows, ()).empty
+
+
+def _comparison() -> pd.DataFrame:
+    """Rows of a fine-tuning comparison: two runs scored by set."""
+    return pd.DataFrame(
+        {
+            "set": ["held-out weekly"] * 4 + ["germany national"] * 2,
+            "run": [
+                "full",
+                "full",
+                "no delays",
+                "no delays",
+                "full",
+                "no delays",
+            ],
+            "outbreaks": [1000, 2000, 1000, 2000, 1000, 1000],
+            "score": [0.5, 0.4, 0.7, 0.6, 0.9, 1.1],
+        }
+    )
+
+
+def test_a_comparison_table_puts_each_run_beside_the_other() -> None:
+    from paperpipe.evidence import comparison_table
+
+    out = comparison_table(_comparison())
+    assert list(out.columns) == ["Set", "Outbreaks", "full", "no delays"]
+    first = out.iloc[0]
+    assert (first["Set"], first["Outbreaks"]) == ("germany national", 1000)
+    assert (first["full"], first["no delays"]) == (0.9, 1.1)
+
+
+def test_a_comparison_figure_draws_each_run_by_checkpoint() -> None:
+    from paperpipe.evidence import comparison_figure
+
+    fig = comparison_figure(_comparison())
+    axes = [ax for ax in fig.axes if ax.get_visible()]
+    assert [ax.get_title() for ax in axes] == [
+        "held-out weekly",
+        "germany national",
+    ]
+    lines = {line.get_label(): line for line in axes[0].get_lines()}
+    assert list(lines["no delays"].get_xdata()) == [1000, 2000]
+
+
+def test_two_no_slots_checkpoints_of_one_size_fail() -> None:
+    from paperpipe.evidence import CHECKPOINT_RULE, slots_scores_table
+
+    base = {
+        "study": "germany",
+        "level": "national",
+        "model": "fm_chronos_daily_ragged",
+        "rule": CHECKPOINT_RULE,
+        "outbreaks": 1000,
+    }
+    rows = pd.DataFrame(
+        [
+            {**base, "checkpoint": "slots-new", "rel_wis": 0.9},
+            {**base, "checkpoint": "plain-a", "rel_wis": 1.0},
+            {**base, "checkpoint": "plain-b", "rel_wis": 1.1},
+        ]
+    )
+    with pytest.raises(ValueError, match="plain-a"):
+        slots_scores_table(rows, ("slots-new",))
+
+
+def test_the_3_day_label_matches_the_slots_check_s_sets() -> None:
+    from paperpipe.evidence import THREE_DAY, slots_loss_table
+
+    check = _slots_check()
+    assert check["set"].str.contains(THREE_DAY).any()
+    # Every 3-day row against no slots is dropped.
+    out = slots_loss_table(check)
+    assert not out["Set"].str.contains(THREE_DAY).any()

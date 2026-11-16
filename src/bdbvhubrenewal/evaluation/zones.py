@@ -10,9 +10,7 @@ origin.
 The zone delay, observation model and walk spread are each the zone's own
 where it has at least 10 cases a week, else its province's, else
 national (`pooling`).
-Each model is scored as it runs, and again with its zone samples made to
-sum to its province samples (`reconcile_zones`), which is the form
-submitted.
+Each model is scored on its zone samples as it runs, the form submitted.
 Zones are scored on the zone count each later real vintage reports.
 `randomwalk` is scored on its samples as they are, with no delay.
 `randomwalknowcast`'s final-count samples are drawn as for provinces
@@ -57,14 +55,13 @@ from bdbvhubrenewal.forecasters.base import (
 )
 from bdbvhubrenewal.forecasters.zones import (
     ZoneAllocator,
-    reconcile_zones,
+    zone_draws,
     zone_task,
 )
 
 log = logging.getLogger(__name__)
 
 __all__ = [
-    "SUMMED",
     "ZONE_BASELINE",
     "ZoneForecasts",
     "scenario_zone_scores",
@@ -78,9 +75,6 @@ __all__ = [
 
 ZONE_BASELINE = "randomwalknowcast"
 """Name of the zone baseline in the scores."""
-
-SUMMED = " (summed to provinces)"
-"""Suffix of a model whose zones were made to sum to its provinces."""
 
 _KEYS = (
     "model",
@@ -153,13 +147,12 @@ def zone_backtest(
         `target` (`"reported"` or `"complete"`), `truth_vintage` and
         `horizon` in weeks
         from the reference date, one row per model, origin, later
-        vintage, zone and week. Each model appears under its name and
-        again under its name with `SUMMED`.
+        vintage, zone and week.
         Then `energy_scores` of every model's zones by `origin`, `target`
         and `truth_vintage`, from the same drawn samples. Then the zone
-        forecasts made to sum to the provinces, as submitted, under each
-        model's name: `model`, `origin`, `reference_date`, `location`,
-        `target_end_date`, `sample` and `value`.
+        forecasts, as submitted, under each model's name: `model`,
+        `origin`, `reference_date`, `location`, `target_end_date`,
+        `sample` and `value`.
     """
     run = zone_forecasts(
         target, delays, daily, daily_zones, zones, models, config, origins
@@ -180,10 +173,8 @@ class ZoneForecasts:
         One row per origin and model that forecast there, in the order
         run: `origin` and `model`.
     samples : pandas.DataFrame
-        Zone samples under `key`, the model's name for its direct zone
-        forecast and the name with `SUMMED` for it made to sum to the
-        provinces: `key`, `origin`, `location`, `target_end_date`,
-        `sample` and `value`.
+        Zone samples under `key`, the model's name: `key`, `origin`,
+        `location`, `target_end_date`, `sample` and `value`.
     delays : pandas.DataFrame
         Each model's delay summary at each origin, if it has one.
     """
@@ -263,7 +254,7 @@ def zone_forecasts(
     Returns
     -------
     ZoneForecasts
-        The direct and summed zone samples and the delay summaries.
+        The zone samples and the delay summaries.
     """
     config = config or BacktestConfig()
     real = target.loc[target["kind"] == "real"]
@@ -280,17 +271,14 @@ def zone_forecasts(
         for name in models:
             model = get_model(name)
             try:
-                direct = model.forecast(zt)
+                direct = zone_draws(model.forecast(zt))
                 summary = getattr(model, "delay_summary", None)
-                prov = model.forecast(task)
             except ModelUnavailableError as err:
                 log.warning("%s has no zone forecast at %s: %s", name,
                             vintage, err)  # fmt: skip
                 continue
             runs.append({"origin": vintage, "model": name})
-            summed = reconcile_zones(direct, prov, task, counts, active)
-            for key, table in ((name, direct), (name + SUMMED, summed)):
-                samples.append(table.assign(key=key, origin=vintage))
+            samples.append(direct.assign(key=name, origin=vintage))
             if summary is not None:
                 summaries.append(summary.assign(origin=vintage))
 
@@ -348,19 +336,17 @@ def score_zones(
         forecasts: dict[str, pd.DataFrame] = {}
         summaries: dict[str, pd.DataFrame | None] = {}
         for name in here:
-            for key in (name, name + SUMMED):
-                mine = (run.samples["key"] == key) & (
-                    run.samples["origin"].astype(str) == vintage
-                )
-                forecasts[key] = (
-                    run.samples.loc[mine]
-                    .drop(columns=["key", "origin"])
-                    .reset_index(drop=True)
-                )
-            summary = _summary(run.delays, name, vintage)
-            summaries[name] = summaries[name + SUMMED] = summary
+            mine = (run.samples["key"] == name) & (
+                run.samples["origin"].astype(str) == vintage
+            )
+            forecasts[name] = (
+                run.samples.loc[mine]
+                .drop(columns=["key", "origin"])
+                .reset_index(drop=True)
+            )
+            summaries[name] = _summary(run.delays, name, vintage)
             kept.append(
-                forecasts[name + SUMMED].assign(
+                forecasts[name].assign(
                     model=name,
                     origin=vintage,
                     reference_date=task.reference_date.isoformat(),
@@ -378,7 +364,7 @@ def score_zones(
             key: reported_samples(
                 samples,
                 summaries[key],
-                key.removesuffix(SUMMED),
+                key,
                 vintage,
                 later,
                 daily,

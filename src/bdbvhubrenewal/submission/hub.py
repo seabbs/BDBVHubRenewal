@@ -144,6 +144,7 @@ def to_hub_table(
     zones: pd.DataFrame | None = None,
     n_samples: int = 100,
     forecast_date: dt.date | str | None = None,
+    zones_sum: bool = True,
 ) -> pd.DataFrame:
     """Turn forecast samples into the hub's submission table.
 
@@ -168,8 +169,7 @@ def to_hub_table(
         It is added to the national sum. Missing rows count as zero.
     zones : pandas.DataFrame, optional
         Health-zone samples (columns as `samples`), such as from
-        `forecasters.zones.ZoneAllocator`. They must sum to the rounded
-        province samples, sample by sample, and are not added to the
+        `forecasters.zones.zones_for_model`. They are not added to the
         national value.
     n_samples : int
         Number of samples each location must have.
@@ -177,6 +177,12 @@ def to_hub_table(
         The day the PR is opened. The default is today (UTC), see
         `run_date`. The hub requires it to be on or before the
         reference date and within a day of the validation date.
+    zones_sum : bool
+        Check that the zones sum to the rounded province samples, sample
+        by sample, as a split model's must. False for the random walks'
+        own zone draws (`forecasters.zones.walks_own_zones`); the hub
+        does not require the sum (its `model-output/README.md` allows
+        any subset of locations).
 
     Returns
     -------
@@ -189,8 +195,8 @@ def to_hub_table(
     ------
     ValueError
         If a province or zone does not have sample ids `1..n_samples`, a
-        sample lacks a week, locations cover different weeks, or the
-        zones do not sum to their provinces.
+        sample lacks a week, locations cover different weeks, or, with
+        `zones_sum`, the zones do not sum to their provinces.
 
     Examples
     --------
@@ -210,7 +216,7 @@ def to_hub_table(
     prov["location"] = prov["location"].astype(str)
     prov["sample"] = prov["sample"].astype("int64")
     prov["value"] = prov["value"].clip(lower=0).round()
-    zone = _zone_rows(prov, zones)
+    zone = _zone_rows(prov, zones, zones_sum)
     ids = set(range(1, n_samples + 1))
     weeks = sorted(set(prov["target_end_date"]))
     for loc, rows in pd.concat([prov, zone]).groupby("location"):
@@ -263,8 +269,10 @@ def to_hub_table(
     ).reset_index(drop=True)[list(HUB_COLUMNS)]
 
 
-def _zone_rows(prov: pd.DataFrame, zones: pd.DataFrame | None) -> pd.DataFrame:
-    """Tidy zone samples and check they sum to the province samples."""
+def _zone_rows(
+    prov: pd.DataFrame, zones: pd.DataFrame | None, check: bool
+) -> pd.DataFrame:
+    """Tidy zone samples, and with `check` check they sum to provinces."""
     if zones is None or zones.empty:
         return prov.iloc[:0]
     from bdbvhubrenewal.forecasters.zones import check_zone_coherence
@@ -274,7 +282,7 @@ def _zone_rows(prov: pd.DataFrame, zones: pd.DataFrame | None) -> pd.DataFrame:
     zone["location"] = zone["location"].astype(str)
     zone["sample"] = zone["sample"].astype("int64")
     zone["value"] = zone["value"].clip(lower=0).round()
-    gaps = check_zone_coherence(prov, zone)
+    gaps = check_zone_coherence(prov, zone) if check else []
     if gaps:
         raise ValueError(f"{len(gaps)} zone sums differ: {gaps[0]}.")
     return zone

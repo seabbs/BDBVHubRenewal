@@ -23,7 +23,7 @@ from bdbvhubrenewal.data.tidy import write_csv
 from bdbvhubrenewal.data.zones import is_zone, weekly_zone_counts
 from bdbvhubrenewal.forecasters import ForecastTask
 from bdbvhubrenewal.forecasters.base import NATIONAL, SAMPLE_COLUMNS
-from bdbvhubrenewal.forecasters.zones import zones_for_model
+from bdbvhubrenewal.forecasters.zones import walks_own_zones, zones_for_model
 from bdbvhubrenewal.submission.hub import to_hub_table
 
 __all__ = [
@@ -128,6 +128,7 @@ def hub_tables(
             unassigned=_unassigned(own),
             zones=split,
             forecast_date=task.vintage,
+            zones_sum=not walks_own_zones(str(name)),
         )
     return out
 

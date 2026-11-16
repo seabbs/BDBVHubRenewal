@@ -1,0 +1,4 @@
+# Dry runs and the test mode on CI: one core, nothing outward-facing.
+cores: 1
+rerun-triggers: [mtime]
+printshellcmds: true
