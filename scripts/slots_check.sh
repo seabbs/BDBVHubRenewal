@@ -20,7 +20,8 @@
 # Shards run one at a time, each under
 #   systemd-run --user --scope -p MemoryMax=6G -p MemorySwapMax=0 nice -n 19
 # with one thread, started only when compute-budget.sh is not red and at
-# least $MIN_FREE_GB GB would stay free with the shard at its cap.
+# least $MIN_FREE_GB GB would stay free with the shard at its measured
+# peak, $SHARD_NEED_GB GB (2.8 GB on a 255-row block; 6 GB is the cap).
 # Outputs per checkpoint LABEL (slots-<hash>):
 #   evidence/slots-check/LABEL.csv          summary rows
 #   evidence/slots-check/LABEL-blocks.csv.gz per-block rows
@@ -33,7 +34,8 @@
 # lines instead of writing them, and never commits or pushes.
 #
 # Environment: PY (python with chronos and peft), CKPTS, RUN_ROOT,
-# PAGE_ROOT, SHARDS, POLL, MIN_FREE_GB, SHARD_GB, MAILBOX, SCORE_ARGS
+# PAGE_ROOT, SHARDS, POLL, MIN_FREE_GB, SHARD_GB, SHARD_NEED_GB, MAILBOX,
+# SCORE_ARGS
 # (passed on to slots_check.py score).
 set -uo pipefail
 
@@ -51,6 +53,7 @@ SHARDS=${SHARDS:-2}
 POLL=${POLL:-300}
 MIN_FREE_GB=${MIN_FREE_GB:-16}
 SHARD_GB=${SHARD_GB:-6}
+SHARD_NEED_GB=${SHARD_NEED_GB:-3}
 MAILBOX=${MAILBOX:-$HOME/bdbv-archie-mailbox.md}
 SCORE_ARGS=${SCORE_ARGS:-}
 REPO=seabbs/BDBVHubRenewal
@@ -161,7 +164,7 @@ room() {
   verdict=$("$BUDGET" 2> /dev/null | tail -1)
   avail=$(awk '/^MemAvailable:/ {print int($2 / 1048576)}' /proc/meminfo)
   log "budget ${verdict:-unknown}, ${avail} GB available"
-  [ "$verdict" != red ] && [ "$avail" -ge $((MIN_FREE_GB + SHARD_GB)) ]
+  [ "$verdict" != red ] && [ "$avail" -ge $((MIN_FREE_GB + SHARD_NEED_GB)) ]
 }
 
 # --- check one checkpoint ------------------------------------------------
