@@ -147,6 +147,8 @@ def test_fit_time_data_files_key_a_fit(tmp_path: Path) -> None:
 
 
 def test_report_code_does_not_key_a_fit(tmp_path: Path) -> None:
+    # `fit_code` runs `digest.model_code`, so a change to its import
+    # closure can move a key. Its own source is not hashed (`STORE_SKIP`).
     root = _copy_repo(tmp_path)
     models = ("renewal", "pprandomwalknowcast")
 
@@ -171,16 +173,7 @@ def _workflow_paths(event: str) -> list[str]:
 
 
 def _key_files(monkeypatch: pytest.MonkeyPatch) -> set[str]:
-    """List every repository file a fit key depends on.
-
-    The files `code_digest` opens, the source files of the functions it
-    hashes, `evaluation/digest.py` (it decides what `fit_code` lists),
-    `.python-version` (the key hashes the Python version), the backtest
-    config and policy `fit-store plan` reads by default, and the CLI,
-    which plans and runs the fits and picks the BVD release a BVD model
-    is keyed on. A file outside the repository is returned as an
-    absolute path.
-    """
+    """List the repository files a fit key depends on."""
     import inspect
     from collections.abc import Callable
 
@@ -196,7 +189,9 @@ def _key_files(monkeypatch: pytest.MonkeyPatch) -> set[str]:
         return open_(self, *args, **kwargs)
 
     def record_source(obj: Callable[..., object]) -> str:
-        read.add(Path(inspect.getsourcefile(obj) or "").resolve())
+        src = inspect.getsourcefile(obj)
+        assert src is not None
+        read.add(Path(src).resolve())
         return getsource(obj)
 
     with monkeypatch.context() as mp:
@@ -204,16 +199,18 @@ def _key_files(monkeypatch: pytest.MonkeyPatch) -> set[str]:
         mp.setattr(store.inspect, "getsource", record_source)
         for model in store.stored_models():
             store.code_digest(model, ROOT)
+    # The key hashes the Python version. `fit-store plan` reads the config
+    # and policy by default, and the CLI picks the BVD release a model is
+    # keyed on. `digest.py` decides what `fit_code` lists.
     plan = cli.build_parser().parse_args(["fit-store", "plan"])
     read |= {
         (ROOT / f).resolve()
         for f in (plan.config, plan.policy, ".python-version")
     }
-    read |= {
-        Path(src).resolve()
-        for src in (inspect.getsourcefile(cli), inspect.getsourcefile(digest))
-        if src is not None
-    }
+    for module in (cli, digest):
+        src = inspect.getsourcefile(module)
+        assert src is not None
+        read.add(Path(src).resolve())
     root = ROOT.resolve()
     return {
         p.relative_to(root).as_posix() if p.is_relative_to(root) else str(p)
@@ -229,7 +226,7 @@ def test_fit_store_runs_on_every_file_in_a_key(
 
     patterns = _workflow_paths(event)
     files = _key_files(monkeypatch)
-    # Read by `code_digest`, so these check the spies see its reads.
+    # Fails if the spies stop recording reads.
     required = {
         "pyproject.toml",
         "uv.lock",
