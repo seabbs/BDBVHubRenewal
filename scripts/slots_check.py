@@ -67,8 +67,9 @@ CONDITIONS = ("given", "swap_places", "removed", "shuffle_places")
 AHEAD_STEPS = {"weekly": AHEAD_WEEKS, "daily": 7 * AHEAD_WEEKS}
 """Forecast steps after the nowcast steps of a German block."""
 
-NOSLOTS = Path("~/bdbv-rounds/checkpoints/n1000/finetuned-ckpt")
-"""The no-slots adapter the ablation used (release chronos-ft-de129103cacc)."""
+NOSLOTS_ROOT = Path("~/bdbv-rounds/checkpoints")
+"""Folder of the no-slots run's checkpoints, `nK/` each with `settings.json`
+and `finetuned-ckpt/`: n1000 is de129103cacc and n2000 7962fd718a47."""
 
 SIM_DIR = Path("~/bdbv-rounds/rounds/r1/sims")
 HELD = (30140, 30143)
@@ -295,8 +296,45 @@ def _slot_weight_check(model, adapter: Path) -> None:
         raise ValueError(f"{adapter}: loaded slots differ from the file's")
 
 
-def load_models(noslots: Path, slotted: Path) -> dict:
-    """Return zero-shot Chronos-2 and both adapters merged into it."""
+def _settings(adapter: Path) -> dict:
+    """Return a checkpoint's settings, beside its adapter or in it."""
+    adapter = Path(adapter).expanduser()
+    for path in (adapter / "settings.json", adapter.parent / "settings.json"):
+        if path.exists():
+            out: dict = json.loads(path.read_text())
+            return out
+    raise FileNotFoundError(f"no settings.json in or beside {adapter}")
+
+
+def comparator(
+    slotted: Path, root: Path = NOSLOTS_ROOT
+) -> tuple[str | None, Path | None, int]:
+    """Return the no-slots checkpoint trained on as many outbreaks.
+
+    The slots checkpoint's `n_outbreaks` is read from its settings (beside
+    the adapter in a checkpoint folder, in it in a release download) and
+    matched against the no-slots run's `nK/settings.json`. Returns its
+    hash and adapter, or None for both where no such checkpoint exists
+    (the slots run's n250 and n500), and the n.
+    """
+    n = int(_settings(slotted)["n_outbreaks"])
+    for d in sorted(Path(root).expanduser().glob("n*")):
+        path = d / "settings.json"
+        if not path.exists():
+            continue
+        settings = json.loads(path.read_text())
+        if "series_slots" in settings:
+            continue
+        if int(settings.get("n_outbreaks", -1)) == n:
+            return settings["hash"], d / "finetuned-ckpt", n
+    return None, None, n
+
+
+def load_models(noslots: Path | None, slotted: Path) -> dict:
+    """Return zero-shot Chronos-2 and the adapters merged into it.
+
+    `no-slots` is left out when there is no comparator.
+    """
     from chronos import Chronos2Pipeline
 
     from bdbvhubrenewal.forecasters.foundation import (
@@ -309,13 +347,12 @@ def load_models(noslots: Path, slotted: Path) -> dict:
             CHRONOS_MODEL, revision=CHRONOS_REVISION, device_map="cpu"
         ).model
 
-    models = {
-        "zero-shot": base().eval(),
-        "n1000": slots.load_adapter(base(), noslots).eval(),
-        "slots": slots.load_adapter(base(), slotted).eval(),
-    }
-    if slots.has_slots(models["n1000"]):
-        raise ValueError(f"{noslots} holds slots")
+    models = {"zero-shot": base().eval()}
+    if noslots is not None:
+        models["no-slots"] = slots.load_adapter(base(), noslots).eval()
+        if slots.has_slots(models["no-slots"]):
+            raise ValueError(f"{noslots} holds slots")
+    models["slots"] = slots.load_adapter(base(), slotted).eval()
     if not slots.has_slots(models["slots"]):
         raise ValueError(f"{slotted} holds no slots")
     _slot_weight_check(models["slots"], slotted)
@@ -392,9 +429,18 @@ def score(args) -> None:
         f"{[b['context'].shape[0] for b in blocks]}",
         flush=True,
     )
-    models = load_models(
-        Path(args.noslots).expanduser(), Path(args.slots).expanduser()
+    slotted = Path(args.slots).expanduser()
+    if args.noslots == "auto":
+        against, noslots, n = comparator(slotted, args.noslots_root)
+    else:
+        against, noslots = Path(args.noslots).name, Path(args.noslots)
+        n = int(_settings(slotted).get("n_outbreaks", -1))
+    print(
+        f"{args.label}: n_outbreaks {n}, no-slots comparator "
+        f"{against or 'none (zero-shot only)'}",
+        flush=True,
     )
+    models = load_models(noslots, slotted)
     # How far the slots are from zero init: Chronos-2's patch tokens have
     # an sd of about 0.03.
     weight = getattr(models["slots"], slots.SLOT_MODULE).embedding.weight
@@ -426,6 +472,9 @@ def score(args) -> None:
                         "id": block["id"],
                         "set": block["set"],
                         "source": block.get("source", "weekly"),
+                        "levels": "|".join(
+                            sorted(set(block.get("levels", ())))
+                        ),
                         "n_targets": block["n_targets"],
                         "rows": block["context"].shape[0],
                         "lag": d,
@@ -440,6 +489,8 @@ def score(args) -> None:
                         "slot_absmax": (
                             slot_absmax if name == "slots" else np.nan
                         ),
+                        "n_outbreaks": n,
+                        "comparator": against or "",
                     }
                 )
         print(
@@ -454,37 +505,70 @@ def score(args) -> None:
 
 def groups(d: pd.DataFrame) -> pd.DataFrame:
     """Return the rows under each summary set (a row may sit in several)."""
-    multi = np.where(d["n_targets"] > 1, "multi-place", "univariate")
+    sim, de = d[d["set"] == "sim"], d[d["set"] == "germany"]
+    multi = np.where(sim["n_targets"] > 1, "multi-place", "univariate")
     parts = [
-        d[d["set"] == "sim"].assign(group="sims all"),
-        d[d["set"] == "sim"].assign(group="sims " + multi[d["set"] == "sim"]),
-        d[d["set"] == "germany"].assign(group="germany states"),
+        sim.assign(group="sims all"),
+        # 3-day blocks stay apart from daily ones (issue #245).
+        sim.assign(group="sims " + sim["source"]),
+        sim.assign(group="sims " + multi),
+        de.assign(group="germany states"),
+        de.assign(group="germany states " + de["source"]),
     ]
-    de = d[d["set"] == "germany"]
-    parts.append(de.assign(group="germany states " + de["source"]))
     return pd.concat(parts, ignore_index=True)
 
 
-def summarise_rows(d: pd.DataFrame, n_boot: int = 2000) -> pd.DataFrame:
-    """Return the paired summary: each condition against `given`.
+def _paired(c, g, rng, n_boot: int) -> dict:
+    """Return the ratio of mean losses with its 90% bootstrap interval."""
+    idx = rng.integers(0, len(g), (n_boot, len(g)))
+    boot = c[idx].mean(1) / g[idx].mean(1)
+    return {
+        "loss": c.mean(),
+        "against_loss": g.mean(),
+        "ratio": c.mean() / g.mean(),
+        "ci_low": np.quantile(boot, 0.05),
+        "ci_high": np.quantile(boot, 0.95),
+        "share_worse": float((c > g * (1 + 1e-6)).mean()),
+        "n_blocks": len(g),
+    }
 
-    Ratio = mean loss under the condition / mean under `given`, over the
-    blocks scored under both; CI = 90% bootstrap over blocks; share_worse
-    = share of blocks whose loss rose; output_change_max and _mean = the
-    largest and the mean absolute change in the scaled quantiles;
-    n_identical and n_unchanged = blocks whose largest change is zero or
-    under `UNCHANGED`; n_above_floor = blocks whose largest change is over
-    `FLOOR_FACTOR` times the zero-shot and no-slots swaps' on that block.
+
+MODEL_PAIRS = (
+    ("slots", "no-slots"),
+    ("slots", "zero-shot"),
+    ("no-slots", "zero-shot"),
+)
+"""Models compared on their `given` loss, the first against the second."""
+
+
+def summarise_rows(d: pd.DataFrame, n_boot: int = 2000) -> pd.DataFrame:
+    """Return the paired summary, over the blocks scored under both sides.
+
+    Two kinds of row:
+      - a condition against `given` for the same model (`against` is
+        "given"): ratio = mean loss under the condition / under `given`;
+        output_change_max and _mean = the largest and the mean absolute
+        change in the scaled quantiles; n_identical and n_unchanged =
+        blocks whose largest change is zero or under `UNCHANGED`;
+        n_above_floor = blocks whose largest change is over
+        `FLOOR_FACTOR` times the zero-shot and no-slots models' on that
+        block;
+      - a model against another on `given` (`MODEL_PAIRS`; `against` is
+        the other model): the held-out loss of each by set and source.
+    CI = 90% bootstrap over blocks; share_worse = share of blocks whose
+    loss rose.
     """
     rng = np.random.default_rng(1)
     d = groups(d)
     key = ["group", "model", "key"]
+    sd = d.loc[d["model"] == "slots", "slot_sd"] if "slot_sd" in d else []
+    slot_sd = float(sd.iloc[0]) if len(sd) else np.nan
     rows = []
     for window in WINDOWS:
         given = d[d["condition"] == "given"].set_index(key)[window]
         col = f"change_{window}_max"
         floor = (
-            d[d["model"].isin(["zero-shot", "n1000"])]
+            d[d["model"].isin(["zero-shot", "no-slots"])]
             .groupby(["group", "condition", "key"])[col]
             .max()
         )
@@ -495,11 +579,8 @@ def summarise_rows(d: pd.DataFrame, n_boot: int = 2000) -> pd.DataFrame:
             g = given.loc[part.index].to_numpy()
             c = part[window].to_numpy()
             ok = np.isfinite(g) & np.isfinite(c)
-            g, c = g[ok], c[ok]
-            if not len(g):
+            if not ok.any():
                 continue
-            idx = rng.integers(0, len(g), (n_boot, len(g)))
-            boot = c[idx].mean(1) / g[idx].mean(1)
             change_max = part[col].to_numpy()[ok]
             fl = floor.reindex(
                 pd.MultiIndex.from_arrays(
@@ -516,27 +597,39 @@ def summarise_rows(d: pd.DataFrame, n_boot: int = 2000) -> pd.DataFrame:
                     "set": group,
                     "model": model,
                     "condition": cond,
+                    "against": "given",
                     "window": window,
-                    "given_loss": g.mean(),
-                    "condition_loss": c.mean(),
-                    "ratio": c.mean() / g.mean(),
-                    "ci_low": np.quantile(boot, 0.05),
-                    "ci_high": np.quantile(boot, 0.95),
-                    "share_worse": float((c > g * (1 + 1e-6)).mean()),
-                    "n_blocks": len(g),
+                    **_paired(c[ok], g[ok], rng, n_boot),
                     "n_identical": int((change_max == 0).sum()),
                     "n_unchanged": int((change_max < UNCHANGED).sum()),
                     "n_above_floor": int(above.sum()),
-                    "slot_sd": float(part["slot_sd"].iloc[0])
-                    if "slot_sd" in part
-                    else np.nan,
                     "output_change_max": float(change_max.max()),
                     "output_change_mean": float(
                         part[f"change_{window}_mean"].to_numpy()[ok].mean()
                     ),
                 }
             )
-    return pd.DataFrame(rows)
+        wide = given.unstack("model")
+        for group in wide.index.get_level_values("group").unique():
+            part = wide.loc[group]
+            for model, other in MODEL_PAIRS:
+                if model not in part or other not in part:
+                    continue
+                c, g = part[model].to_numpy(), part[other].to_numpy()
+                ok = np.isfinite(c) & np.isfinite(g)
+                if not ok.any():
+                    continue
+                rows.append(
+                    {
+                        "set": group,
+                        "model": model,
+                        "condition": "given",
+                        "against": other,
+                        "window": window,
+                        **_paired(c[ok], g[ok], rng, n_boot),
+                    }
+                )
+    return pd.DataFrame(rows).assign(slot_sd=slot_sd)
 
 
 def summarise(args) -> None:
@@ -544,35 +637,58 @@ def summarise(args) -> None:
     shards = sorted(Path(args.shard_dir).glob("shard-*.csv"))
     d = pd.concat((pd.read_csv(f) for f in shards), ignore_index=True)
     d = d.assign(checkpoint=args.label, commit=args.commit)
-    s = summarise_rows(d).assign(checkpoint=args.label, commit=args.commit)
-    Path(args.csv).parent.mkdir(parents=True, exist_ok=True)
-    s.to_csv(args.csv, index=False, float_format="%.6g")
+    s = summarise_rows(d).assign(
+        checkpoint=args.label,
+        n_outbreaks=d["n_outbreaks"].iloc[0] if "n_outbreaks" in d else -1,
+        comparator=d["comparator"].fillna("").iloc[0]
+        if "comparator" in d
+        else "",
+        commit=args.commit,
+    )
+    for path in (args.csv, *args.copy):
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
+        s.to_csv(path, index=False, float_format="%.6g")
     d.to_csv(args.blocks, index=False, float_format="%.6g")
     print(headline(s))
 
 
 def headline(s: pd.DataFrame) -> str:
-    """Return a one-line-per-set reading of the swap for the mailbox."""
+    """Return a few lines reading the run for the mailbox."""
     out = []
-    swap = s[s["condition"] == "swap_places"]
-    for (group, window), part in swap.groupby(["set", "window"], sort=False):
+    sd = s["slot_sd"].iloc[0]
+    out.append(f"slot sd {sd:.3g} (token sd ~0.03)")
+    swap = s[(s["condition"] == "swap_places") & (s["window"] == "nowcast")]
+    for group, part in swap.groupby("set", sort=False):
         if group not in ("sims multi-place", "germany states"):
             continue
         cells = [
             f"{r.model} x{r.ratio:.2f} ({r.ci_low:.2f}-{r.ci_high:.2f}) "
-            f"unchanged {r.n_unchanged}/{r.n_blocks} "
             + (
-                f"above {FLOOR_FACTOR}x no-slots rounding "
-                f"{r.n_above_floor}/{r.n_blocks} "
+                f"changed beyond {FLOOR_FACTOR}x no-slots rounding "
+                f"{r.n_above_floor}/{r.n_blocks}"
                 if r.model == "slots"
-                else ""
+                else f"unchanged {r.n_unchanged}/{r.n_blocks}"
             )
-            + f"change max {r.output_change_max:.3g}"
             for r in part.itertuples()
         ]
-        sd = part.loc[part["model"] == "slots", "slot_sd"]
-        tag = f" (slot sd {sd.iloc[0]:.3g}, token sd ~0.03)" if len(sd) else ""
-        out.append(f"{group} {window} swap{tag}: " + "; ".join(cells))
+        out.append(f"{group} nowcast swap/given: " + "; ".join(cells))
+    given = s[(s["condition"] == "given") & (s["model"] == "slots")]
+    for (group, window), part in given.groupby(["set", "window"], sort=False):
+        if group not in (
+            "sims weekly",
+            "sims daily",
+            "sims 3day",
+            "germany states",
+        ):
+            continue
+        cells = [
+            f"/{r.against} x{r.ratio:.2f} ({r.ci_low:.2f}-{r.ci_high:.2f})"
+            for r in part.itertuples()
+        ]
+        loss = part["loss"].iloc[0]
+        out.append(
+            f"{group} {window} slots loss {loss:.3g}: " + " ".join(cells)
+        )
     return "\n".join(out)
 
 
@@ -600,15 +716,20 @@ def main() -> None:
     p.add_argument("out", type=Path)
     p.add_argument("--slots", required=True)
     p.add_argument("--label", required=True)
-    p.add_argument("--noslots", default=str(NOSLOTS))
+    # "auto": the no-slots checkpoint with the slots one's n_outbreaks.
+    p.add_argument("--noslots", default="auto")
+    p.add_argument("--noslots-root", default=str(NOSLOTS_ROOT))
     p.add_argument("--sim-dir", default=str(SIM_DIR))
     p.add_argument("--held", type=int, nargs=2, default=HELD)
     p.add_argument("--sims", type=int, default=30)
-    p.add_argument("--per-source", type=int, default=16)
-    p.add_argument("--max-rows", type=int, default=150)
+    # Sized for about 30 minutes on one thread with three models.
+    p.add_argument("--per-source", type=int, default=10)
+    p.add_argument("--max-rows", type=int, default=100)
     p.add_argument("--germany", default=str(GERMANY))
-    p.add_argument("--germany-per-source", type=int, default=16)
-    p.add_argument("--germany-max-rows", type=int, default=300)
+    # Daily states blocks have 255 rows or more, so the cap keeps weekly
+    # blocks at lags 2 and 3 only.
+    p.add_argument("--germany-per-source", type=int, default=4)
+    p.add_argument("--germany-max-rows", type=int, default=68)
     p.add_argument("--seed", type=int, default=1)
     p.add_argument("--shard", type=int, nargs=2, default=(0, 1))
     p.add_argument("--limit", type=int, default=0)
@@ -627,6 +748,7 @@ def main() -> None:
     p.add_argument("--commit", required=True)
     p.add_argument("--csv", type=Path, required=True)
     p.add_argument("--blocks", type=Path, required=True)
+    p.add_argument("--copy", type=Path, nargs="*", default=[])
     p.set_defaults(run=summarise)
     args = parser.parse_args()
     args.run(args)
