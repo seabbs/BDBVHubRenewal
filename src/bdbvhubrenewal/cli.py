@@ -1421,7 +1421,7 @@ def _fit_store_archive(args: argparse.Namespace) -> int:
         print(f"ERROR: {err}", file=sys.stderr)
         return 1
     stored_task = store_archive.store_task(
-        target, delays, config, daily, task.vintage
+        target, delays, config, daily, task.vintage, zones
     )
 
     def hub(
