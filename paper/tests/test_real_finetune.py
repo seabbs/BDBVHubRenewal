@@ -1,11 +1,11 @@
-"""The SI comparison of Chronos-2 fine-tuned on German data with the model
+"""The SI comparison of Chronos-2 fine-tuned on real data with the model
 fine-tuned on simulations."""
 
 from pathlib import Path
 
 import pandas as pd
 
-from paperfigs.checkpoints import drop_german_trained
+from paperfigs.checkpoints import drop_real_data
 from paperpipe.outputs import real_finetune_table, score_tables
 
 SPLIT = pd.Timestamp("2022-02-10")
@@ -13,7 +13,7 @@ MODELS = {
     "randomwalknowcast": 2.0,
     "fm_chronos_daily_ragged": 3.0,
     "fm_chronos_daily_ragged_ft": 1.5,
-    "fm_chronos_daily_ragged_de": 1.0,
+    "fm_chronos_daily_ragged_real": 1.0,
 }
 
 
@@ -26,7 +26,7 @@ def _scores() -> pd.DataFrame:
                 ("DE-BY", "all"),
                 ("DE", "00-04"),
             ):
-                # The German-trained model is best in-sample.
+                # The real-data model is best in-sample.
                 held = origin >= "2022-02-10"
                 rows.append(
                     {
@@ -48,13 +48,11 @@ def _scores() -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def test_german_trained_models_are_dropped_from_the_other_outputs() -> None:
+def test_real_data_models_are_dropped_from_the_other_outputs() -> None:
     df = pd.DataFrame(
-        {"model": ["fm_chronos_daily_ragged_de", "fm_chronos_daily_ragged"]}
+        {"model": ["fm_chronos_daily_ragged_real", "fm_chronos_daily_ragged"]}
     )
-    assert drop_german_trained(df)["model"].tolist() == [
-        "fm_chronos_daily_ragged"
-    ]
+    assert drop_real_data(df)["model"].tolist() == ["fm_chronos_daily_ragged"]
 
 
 def test_the_comparison_is_on_the_held_out_half_by_level() -> None:
@@ -62,7 +60,7 @@ def test_the_comparison_is_on_the_held_out_half_by_level() -> None:
     assert set(table["level"]) == {"all", "national", "states", "age groups"}
     assert set(table["model"]) == set(MODELS)
     de = table.loc[
-        (table["model"] == "fm_chronos_daily_ragged_de")
+        (table["model"] == "fm_chronos_daily_ragged_real")
         & (table["level"] == "all")
     ]
     # Held-out scores only: 1.0 against randomwalknowcast's 2.0.
@@ -88,4 +86,4 @@ def test_german_score_tables_add_the_comparison_and_leave_it_out_elsewhere(
     for path in written:
         if path != table:
             models = set(pd.read_csv(path)["model"])
-            assert "fm_chronos_daily_ragged_de" not in models
+            assert "fm_chronos_daily_ragged_real" not in models

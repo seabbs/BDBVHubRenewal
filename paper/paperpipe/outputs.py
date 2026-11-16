@@ -17,7 +17,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 from matplotlib.figure import Figure
 
-from paperfigs.checkpoints import drop_checkpoints, drop_german_trained
+from paperfigs.checkpoints import drop_checkpoints, drop_real_data
 from paperfigs.factors import factor_label
 from paperfigs.joint import relative_joint_scores
 from paperfigs.nowcasts import (
@@ -106,15 +106,15 @@ STUDY_SI_TABLES: Final[dict[str, tuple[str, ...]]] = {
     "germany": ("real-finetune",)
 }
 """Further SI tables of a study: for Germany, Chronos-2 fine-tuned on the
-German data against the simulation-trained model (`real_finetune_table`)."""
+real data against the simulation-trained model (`real_finetune_table`)."""
 
 REAL_FINETUNE_MODELS: Final = tuple(
     f"fm_chronos_{source}_ragged{variant}"
     for source in ("daily", "weekly")
-    for variant in ("", "_ft", "_de")
+    for variant in ("", "_ft", "_real")
 )
 """The Chronos-2 models of the German fine-tuning comparison: zero-shot,
-fine-tuned on simulations and fine-tuned on the German data."""
+fine-tuned on simulations and fine-tuned on real data."""
 """SI tables of every study."""
 
 
@@ -291,9 +291,9 @@ def write_figures(
     """
     dirs = {"main": main_dir, "si": si_dir}
     written = []
-    # The German-trained models appear in their own SI table only.
-    forecasts = drop_german_trained(forecasts)
-    scores = drop_german_trained(scores)
+    # The real-data models appear in their own SI table only.
+    forecasts = drop_real_data(forecasts)
+    scores = drop_real_data(scores)
     with theme():
         figs = _figures(
             study,
@@ -379,9 +379,9 @@ def _level(scores: pd.DataFrame) -> pd.Series:
 def real_finetune_table(
     scores: pd.DataFrame, split: pd.Timestamp | None
 ) -> pd.DataFrame:
-    """Compare Chronos-2 fine-tuned on German data with the other models.
+    """Compare Chronos-2 fine-tuned on real data with the other models.
 
-    The German-trained models saw the development half, so only the
+    The real-data models saw the development half, so only the
     held-out half is scored: each model's mean scores and coverage
     overall (`level` `all`) and by level (national, states, age groups),
     relative to `REFERENCE`.
@@ -455,7 +455,7 @@ def score_tables(
     """
     baseline = baseline or STUDY_BASELINES[study]
     every = scores
-    scores = add_period(drop_checkpoints(drop_german_trained(scores)), split)
+    scores = add_period(drop_checkpoints(drop_real_data(scores)), split)
     period = ["period"] if split is not None else []
     tables = {
         main_dir / f"{study}-scores.csv": _table(scores, period, baseline),
