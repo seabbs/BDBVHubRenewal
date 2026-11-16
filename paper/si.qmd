@@ -230,6 +230,33 @@ German nowcast hub, development half: as @tbl-aggregation-ebola, by level (natio
 The cost of each option: series per block, memory and time.
 :::
 
+### Per-series slots against no slots
+
+Two fine-tuning runs differ only in the series slots, with the same recipe, grid, simulations and checkpoints.
+@tbl-slots-loss gives the slots run's held-out loss by source against the no-slots run at the same checkpoint and against zero-shot Chronos-2.
+The no-slots run built its 3-day blocks as daily steps, so 3-day blocks are compared with zero-shot only, and weekly and daily blocks with both.
+@tbl-slots-scores gives both runs' relative scores on the German first half and the BDBV release backtest at matched checkpoints.
+@tbl-slots-swap gives the lag-swap test, in which whole lag series move to another place.
+Its ratio of loss to the loss as given is 1 for a model that does not tell which place a lag series belongs to.
+
+::: {#tbl-slots-loss}
+{{< include build/tables/si/slots-loss.md >}}
+
+Held-out loss of the slots run by source and window (nowcast or forecast steps), against the no-slots run at the same checkpoint and against zero-shot Chronos-2, with the paired ratio and its 90% interval over blocks.
+:::
+
+::: {#tbl-slots-scores}
+{{< include build/tables/si/slots-scores.md >}}
+
+Relative WIS on the German first half and relative CRPS on the BDBV release backtest, both against `randomwalknowcast`, of the slots and no-slots runs at checkpoints fine-tuned on the same number of outbreaks.
+:::
+
+::: {#tbl-slots-swap}
+{{< include build/tables/si/slots-swap.md >}}
+
+Lag-swap test: loss with whole lag series moved between places, as a ratio of the loss as given, with its 90% interval over blocks, for zero-shot Chronos-2 and the slots run.
+:::
+
 ### Held-out synthetic data
 
 ::: {#tbl-synthetic-evaluated}

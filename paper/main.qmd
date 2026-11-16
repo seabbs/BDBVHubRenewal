@@ -79,6 +79,7 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
 - Levels: Chronos-2 forecasts the country, provinces and health zones as separate series in one joint block, so each level is forecast directly and not summed. The copula only pairs draws across weeks and places, for joint scores and sums, and leaves every marginal forecast unchanged.
 - SI, aggregation options: the joint block against each level in its own block, and against the lowest level summed up with its draws paired at random or by the copula.
 - SI, lag cap: the lag series stop at 4 weeks or 28 days, compared with lags run to the truth delay.
+- SI, series slots: the slots run is compared with a run without slots on the same recipe, grid and checkpoints.
 - SI, real data: Chronos-2 fine-tuned on real data, compared with the model fine-tuned on simulations on the German held-out half and the scored BDBV rounds.
 - Compared with Chronos-2 given only complete data points and with zero-shot Chronos-2 on the ragged layout, to show what the ragged structure and fine-tuning add. The SI's checkpoint curve shows each checkpoint's scores against the number of simulations it was trained on, with both as reference lines.
 - Figure 1, a multi-panel schematic of our pipeline: (A) the assumptions in the epinowcast simulations, (B) the reporting triangle laid out as ragged series for Chronos-2, (C) training blocks and LoRA fine-tuning, and why it is fast, and (D) forecasting with the fine-tuned model.
@@ -199,7 +200,9 @@ Key references: the Methods references, with [@bracherEvaluatingEpidemicForecast
 ::: {.callout-note title="Plan"}
 - Visual performance of the candidate models against `randomwalk` and `randomwalknowcast`.
 - A summary of score performance.
-- How scores change with the amount of fine-tuning data (doublings from 1,000 outbreaks), as an SI figure.
+- See SI, checkpoint curve: scores of each checkpoint by the number of simulations it was trained on.
+- See SI, held-out set: its seeds, size and grid.
+- See SI, per-series slots against no slots.
 :::
 
 ::: {#fig-synthetic-nowcasts}
@@ -233,6 +236,8 @@ Held-out synthetic data: mean energy and variogram scores of each model's trajec
 ::: {.callout-note title="Plan"}
 - Visual performance against the other models.
 - A summary of score performance.
+- See SI, fine-tuning on real data: the model fine-tuned on real data against the zero-shot model and the model fine-tuned on simulations.
+- See SI, foundation model setup: the lag cap against lags run to the truth delay.
 - Key references: [@Wolffram2023; @amaralPostprocessingWeightedCombination2025].
 :::
 
@@ -261,6 +266,8 @@ German nowcast hub: mean scores, coverage and number of forecasts of each model,
 ::: {.callout-note title="Plan"}
 - Visual performance against the other submissions.
 - A summary of score performance.
+- See SI, joint block or aggregation: the joint block against each level alone and the lowest level summed.
+- See SI, impact of correlated trajectories: paired against unpaired trajectories.
 :::
 
 ::: {#fig-ebola-nowcasts}
