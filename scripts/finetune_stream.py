@@ -265,19 +265,41 @@ def next_chunk(
     return None
 
 
-def snapshots(draws: list[str], rng: np.random.Generator) -> list[tuple]:
-    """Return each draw at each of `CUTS` snapshots, with a source each.
+DRAWS_PER_PASS: int | None = None
+"""Observation draws of each simulation a pass trains on; None is all."""
+
+SUBSET_SEED = 0
+"""Seed of the draws a pass takes (`snapshots`)."""
+
+
+def snapshots(
+    draws: list[str],
+    rng: np.random.Generator,
+    n_draws: int | None = None,
+    subset_seed: int = 0,
+) -> list[tuple]:
+    """Return the draws cut at each of `CUTS` snapshots, with a source each.
 
     Every observation draw is cut once at each snapshot, so a simulation
     of 10 draws gives 160 blocks; each block's source is drawn from
-    `SOURCES`.
+    `SOURCES`. With `n_draws`, a pass cuts only that many draws at each
+    snapshot, sampled across all the draws by `subset_seed`, the
+    simulation and the snapshot, so a later pass with another seed can
+    take the others.
     """
-    sources = rng.choice(ft.SOURCES, size=(len(draws), ft.CUTS))
-    return [
-        (draw, str(sources[i, j]), j)
-        for i, draw in enumerate(draws)
-        for j in range(ft.CUTS)
-    ]
+    simulation = draws[0].rsplit("-", 1)[0] if draws else ""
+    out = []
+    for j in range(ft.CUTS):
+        chosen = range(len(draws))
+        if n_draws is not None and n_draws < len(draws):
+            chosen = sorted(
+                np.random.default_rng(
+                    [subset_seed, zlib.crc32(simulation.encode()), j]
+                ).choice(len(draws), n_draws, replace=False)
+            )
+        for i in chosen:
+            out.append((draws[i], str(rng.choice(ft.SOURCES)), j))
+    return out
 
 
 def cut(
@@ -311,7 +333,7 @@ def cut(
         weeks = ft.SIM_DELAY_WEEKS if pd.isna(days) else int(days) // 7
         draws = dict(tuple(by[simulation].groupby("outbreak")))
         rng = np.random.default_rng([seed, zlib.crc32(simulation.encode())])
-        candidates = snapshots(sorted(draws), rng)
+        candidates = snapshots(sorted(draws), rng, DRAWS_PER_PASS, SUBSET_SEED)
         k = min(per_simulation, len(candidates))
         chosen = [candidates[i] for i in rng.choice(len(candidates), k, False)]
         for outbreak in sorted(draws):
@@ -338,10 +360,14 @@ def init_worker(
     lags: dict[str, tuple[int, ...]],
     sources: tuple[str, ...],
     univariate: float = ft.UNIVARIATE_SHARE,
+    draws: int | None = None,
+    subset_seed: int = 0,
 ) -> None:
     """Give a cutting worker the trainer's block settings."""
+    global DRAWS_PER_PASS, SUBSET_SEED
     ft.MAX_SERIES, ft.MAX_LAGS, ft.SOURCES = max_series, lags, sources
     ft.UNIVARIATE_SHARE = univariate
+    DRAWS_PER_PASS, SUBSET_SEED = draws, subset_seed
 
 
 def _cut_part(
@@ -764,6 +790,10 @@ def main() -> None:
     # Sources to train on: weekly, daily, and 3-day blocks summed from the
     # daily triangle; one of them trains an adapter for it alone.
     parser.add_argument("--sources", nargs="+", default=list(ft.SOURCES))
+    # Draws of each simulation this pass trains on, all 16 snapshots
+    # each, picked by --subset-seed; all draws if not given.
+    parser.add_argument("--draws-per-simulation", type=int)
+    parser.add_argument("--subset-seed", type=int, default=0)
     # Share of blocks that are one series (the country or one leaf).
     parser.add_argument(
         "--univariate-share", type=float, default=ft.UNIVARIATE_SHARE
@@ -790,8 +820,9 @@ def main() -> None:
     args = parser.parse_args()
     ft.SOURCES = tuple(args.sources)
     ft.UNIVARIATE_SHARE = args.univariate_share
-    global EXCLUDE_FILE
+    global EXCLUDE_FILE, DRAWS_PER_PASS, SUBSET_SEED
     EXCLUDE_FILE = args.exclude
+    DRAWS_PER_PASS, SUBSET_SEED = args.draws_per_simulation, args.subset_seed
     out, sim_dir = args.out, args.sim_dir
     # The commit this trainer runs, read once: the worktree may move on.
     commit = subprocess.run(
@@ -851,6 +882,8 @@ def main() -> None:
             ft.MAX_LAGS,
             ft.SOURCES,
             ft.UNIVARIATE_SHARE,
+            DRAWS_PER_PASS,
+            SUBSET_SEED,
         ),
     )
     held_pairs, empty = cut_in_workers(
@@ -908,6 +941,14 @@ def main() -> None:
         "chunk": CHUNK,
         "blocks_per_simulation": k,
         "univariate_share": ft.UNIVARIATE_SHARE,
+        **(
+            {
+                "draws_per_simulation": DRAWS_PER_PASS,
+                "subset_seed": SUBSET_SEED,
+            }
+            if DRAWS_PER_PASS
+            else {}
+        ),
         "block_sampling": (
             f"{k} of each simulation's draws x {ft.CUTS} cut-off slots x "
             "2 sources, seeded by the simulation"

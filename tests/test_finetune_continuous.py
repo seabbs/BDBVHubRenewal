@@ -43,3 +43,32 @@ def test_each_new_round_is_synced_once_in_order(tmp_path):
     assert "22001" not in lines
     assert "settings-3.csv" not in lines
     assert lines[lines.index("excluded") + 1 :] == ["20001-0003"]
+
+
+def test_n1000_must_beat_zero_shot_on_both(tmp_path):
+    import json
+
+    cases = {
+        "better": (0.20, 0.29, 0.50),
+        "worse_sims": (0.30, 0.29, 0.50),
+        "worse_real": (0.20, 0.29, 0.70),
+    }
+    results = {}
+    for name, (loss, start, real) in cases.items():
+        path = tmp_path / f"{name}.json"
+        path.write_text(
+            json.dumps(
+                {
+                    "held_out_loss": loss,
+                    "held_out_loss_start": start,
+                    "real_validation_loss": real,
+                }
+            )
+        )
+        out = subprocess.run(
+            ["bash", "-c", f'source "{SCRIPT}"; beats_zero_shot {path}'],
+            cwd=tmp_path,
+            capture_output=True,
+        )
+        results[name] = out.returncode == 0
+    assert results == {"better": True, "worse_sims": False, "worse_real": False}

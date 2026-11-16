@@ -22,9 +22,18 @@ REMOTE_ROOT=${REMOTE_ROOT:-bdbv-rounds}
 REMOTE_MAILBOX=${REMOTE_MAILBOX:-bdbv-archie-mailbox.md}
 MAILBOX=${MAILBOX:-}
 HERE=${HERE:-output/finetune/continuous}
-OUTBREAKS=${OUTBREAKS:-32000}
-PREFIXES=${PREFIXES:-1000 2000 4000 8000 16000 32000}
-LR_STEPS=${LR_STEPS:-0}
+OUTBREAKS=${OUTBREAKS:-8000}
+PREFIXES=${PREFIXES:-1000 2000 4000 8000}
+# Two draws at each of 16 snapshots, sampled across the 10: 32 blocks, about
+# 2.2 h per 1,000 simulations on an M-series laptop (2026-11-16 probe:
+# 22,820 steps per 1,000 at 160 blocks, 1.75 s a step). The learning rate
+# reaches zero at OUTBREAKS: 8 x 4,564 steps.
+DRAWS=${DRAWS:-2}
+SUBSET_SEED=${SUBSET_SEED:-1}
+LR_STEPS=${LR_STEPS:-36500}
+# Zero-shot Chronos-2's loss on the BDBV pseudo-origins
+# (scripts/finetune_real_validation.py), which n1000 must beat.
+ZERO_SHOT_REAL=${ZERO_SHOT_REAL:-0.666}
 SOURCES=${SOURCES:-weekly daily 3day}
 UNIVARIATE_SHARE=${UNIVARIATE_SHARE:-0.2}
 REAL_VALIDATION=${REAL_VALIDATION:-output/finetune/real-validation.pkl}
@@ -54,6 +63,18 @@ sync_rounds() {
   done
 }
 
+beats_zero_shot() {
+  # Whether checkpoint settings $1 improve on zero-shot on both the
+  # held-out simulations and the BDBV pseudo-origins.
+  python3 -c '
+import json, sys
+s = json.load(open(sys.argv[1]))
+real = s.get("real_validation_loss", float("inf"))
+ok = s["held_out_loss"] < s["held_out_loss_start"] and real < float(sys.argv[2])
+sys.exit(0 if ok else 1)
+' "$1" "$ZERO_SHOT_REAL"
+}
+
 [[ "${BASH_SOURCE[0]}" != "$0" ]] && return 0
 
 alert() {
@@ -80,7 +101,8 @@ while true; do
       "$HERE/sims" "$HERE/train" --grid r4 --seed-list "$HERE/seeds.txt" \
       --held-out-seeds "${held[0]}" "${held[1]}" --outbreaks "$OUTBREAKS" \
       --prefixes $PREFIXES --stop-from "$((OUTBREAKS + 1))" \
-      --blocks-per-simulation 160 --learning-rate 1e-5 --lr-steps "$LR_STEPS" \
+      --blocks-per-simulation $((16 * DRAWS)) --draws-per-simulation "$DRAWS" \
+      --subset-seed "$SUBSET_SEED" --learning-rate 1e-5 --lr-steps "$LR_STEPS" \
       --sources $SOURCES --univariate-share "$UNIVARIATE_SHARE" \
       --real-validation "$REAL_VALIDATION" --note "continuous r4" --publish \
       --exclude "$HERE/excluded.txt" \
@@ -98,6 +120,9 @@ while true; do
     key=$(python3 -c "import json;print(json.load(open('$ckpt'))['hash'])")
     alert "checkpoint $n chronos-ft-$key at $REMOTE_ROOT/checkpoints/$n"
     published="$published $n"
+    if [ "$n" = n1000 ] && ! beats_zero_shot "$ckpt"; then
+      alert "ALERT n1000 does not beat zero-shot on held-out sims and pseudo-origins; training goes on, check before n2000"
+    fi
   done
   if [ -n "$trainer" ] && ! kill -0 "$trainer" 2> /dev/null; then
     if grep -q '"stage": "finished"' "$HERE/train/stream-status.json" 2> /dev/null; then
