@@ -39,8 +39,11 @@ def cached(path, groups, horizon, n, seed):
 
 
 rows = []
-for name in ("fm_chronos_daily_complete", "fm_chronos_daily_ragged",
-             "fm_chronos_daily_ragged_ft"):
+for name in (
+    "fm_chronos_daily_complete",
+    "fm_chronos_daily_ragged",
+    "fm_chronos_daily_ragged_ft",
+):
     for rho_day in GRID:
         copula = dataclasses.replace(PRIOR, rho_time=rho_day**7)
         for origin, task in tasks.items():
@@ -64,20 +67,36 @@ for name in ("fm_chronos_daily_complete", "fm_chronos_daily_ragged",
                 y = float(g["truth"].iloc[0])
                 s = score_sample(y, g["value"])
                 med = float(g["value"].median())
-                rows.append({
-                    "model": name, "rho_day": rho_day, "origin": origin,
-                    "location": loc, "week": week,
-                    "log_bias": np.log1p(med) - np.log1p(y),
-                    "wis": s["wis"], "cov50": s["coverage_50"],
-                    "cov90": s["coverage_90"], "national": loc == "CD",
-                })
-            rows.append({"model": name, "rho_day": rho_day, "origin": origin,
-                         "gate_low": int(low.sum())})
+                rows.append(
+                    {
+                        "model": name,
+                        "rho_day": rho_day,
+                        "origin": origin,
+                        "location": loc,
+                        "week": week,
+                        "log_bias": np.log1p(med) - np.log1p(y),
+                        "wis": s["wis"],
+                        "cov50": s["coverage_50"],
+                        "cov90": s["coverage_90"],
+                        "national": loc == "CD",
+                    }
+                )
+            rows.append(
+                {
+                    "model": name,
+                    "rho_day": rho_day,
+                    "origin": origin,
+                    "gate_low": int(low.sum()),
+                }
+            )
 t = pd.DataFrame(rows)
 cells = t.dropna(subset=["wis"])
 out = cells.groupby(["model", "rho_day"]).agg(
-    n=("wis", "size"), log_bias=("log_bias", "mean"), wis=("wis", "mean"),
-    cov50=("cov50", "mean"), cov90=("cov90", "mean"),
+    n=("wis", "size"),
+    log_bias=("log_bias", "mean"),
+    wis=("wis", "mean"),
+    cov50=("cov50", "mean"),
+    cov90=("cov90", "mean"),
 )
 nat = cells.loc[cells["national"]].groupby(["model", "rho_day"])
 out["wis_national"] = nat["wis"].mean()

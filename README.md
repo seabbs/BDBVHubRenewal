@@ -17,3 +17,9 @@ Arms:
 - `rolling_w25`: the rolling copula, with the prior worth 25 pairs.
 
 The Chronos-2 marginal draws come from `scripts/evidence.py draws`, and the German samples from `scripts/rolling.py`. Both ran on archie's CPU.
+
+## Pairing on and off (#253)
+
+Made at copula-pairing c3277b2f2 (zones: 0003752c7) with `BDBV_CHRONOS_FT=6b7aaa8d4f55` (r3 n1000), 1,000 draws and the configs' seeds, by `scripts/pairing_germany.py`, `scripts/pairing_bdbv.py` and `scripts/pairing_zones.py` (launched with `scripts/pairing_run.sh`), summarised by `scripts/pairing_summary.py` into `results/pairing/pairing-table.md` and the two figures.
+Arms: `off` (no pairing), `fixed` (the prior, which for the daily Chronos-2 model pairs its days by 0.985), `rolling` (as shipped).
+The German Chronos-2 draws were made at fm-copula-rolling 3b508d330 and checked bit for bit against copula-pairing for 2021-11-22.

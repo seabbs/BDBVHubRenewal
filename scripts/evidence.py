@@ -37,8 +37,11 @@ from bdbvhubrenewal.forecasters.copula import (
 from bdbvhubrenewal.forecasters.foundation import chronos_sampler
 
 MODELS = [
-    *(f"fm_chronos_{s}_{lay}" for s in ("weekly", "daily")
-      for lay in ("complete", "ragged")),
+    *(
+        f"fm_chronos_{s}_{lay}"
+        for s in ("weekly", "daily")
+        for lay in ("complete", "ragged")
+    ),
     "fm_chronos_weekly_ragged_ft",
     "fm_chronos_daily_ragged_ft",
 ]
@@ -133,7 +136,8 @@ def sums(rows, by):
     s = rows.groupby([*by, "sample"])["value"].sum().rename("value")
     t = (
         rows.drop_duplicates([*by, "location", "target_end_date"])
-        .groupby(by)["truth"].sum()
+        .groupby(by)["truth"]
+        .sum()
     )
     return s.reset_index().merge(t.reset_index(), on=by)
 
@@ -142,8 +146,12 @@ def covered(rows, by):
     g = sums(rows, by).groupby(by)
     return g.apply(
         lambda x: pd.Series(
-            {f"cov{int(lv * 100)}": coverage(x["value"], x["truth"].iloc[0], lv)
-             for lv in (0.5, 0.9)}
+            {
+                f"cov{int(lv * 100)}": coverage(
+                    x["value"], x["truth"].iloc[0], lv
+                )
+                for lv in (0.5, 0.9)
+            }
         ),
         include_groups=False,
     ).mean()
@@ -154,47 +162,63 @@ def joint(rows):
     res = []
     for origin, x in rows.groupby("origin"):
         wide = x.pivot_table(
-            index="sample", columns=["location", "target_end_date"],
+            index="sample",
+            columns=["location", "target_end_date"],
             values="value",
         )
         obs = (
             x.drop_duplicates(["location", "target_end_date"])
             .set_index(["location", "target_end_date"])["truth"]
-            .reindex(wide.columns).to_numpy()
+            .reindex(wide.columns)
+            .to_numpy()
         )
         f = wide.to_numpy()
-        res.append({
-            "es": float(sr.energy_score(obs, f)),
-            "es_log": float(sr.energy_score(np.log1p(obs), np.log1p(f))),
-            "vs": float(sr.variogram_score(obs, f, p=0.5)),
-            "vs_log": float(
-                sr.variogram_score(np.log1p(obs), np.log1p(f), p=0.5)
-            ),
-        })
+        res.append(
+            {
+                "es": float(sr.energy_score(obs, f)),
+                "es_log": float(sr.energy_score(np.log1p(obs), np.log1p(f))),
+                "vs": float(sr.variogram_score(obs, f, p=0.5)),
+                "vs_log": float(
+                    sr.variogram_score(np.log1p(obs), np.log1p(f), p=0.5)
+                ),
+            }
+        )
     return pd.DataFrame(res).mean()
 
 
 table, wis = [], {}
 keys = ["model", "origin", "location", "target_end_date"]
 for arm, rows in arms.items():
-    rows = rows.assign(kind="real", vintage=rows["origin"],
-                       reference_date=rows["origin"])
-    s = score_forecasts(
-        rows.drop(columns="truth").assign(horizon=0), truth,
-        keys=["model", "kind", "vintage", "reference_date", "location",
-              "target_end_date"],
+    rows = rows.assign(
+        kind="real", vintage=rows["origin"], reference_date=rows["origin"]
     )
-    wis[arm] = s.set_index(
-        ["model", "vintage", "location", "target_end_date"]
-    )["wis"]
+    s = score_forecasts(
+        rows.drop(columns="truth").assign(horizon=0),
+        truth,
+        keys=[
+            "model",
+            "kind",
+            "vintage",
+            "reference_date",
+            "location",
+            "target_end_date",
+        ],
+    )
+    wis[arm] = s.set_index(["model", "vintage", "location", "target_end_date"])[
+        "wis"
+    ]
     for model, m in rows.groupby("model"):
         prov = m.loc[m["location"] != NATIONAL]
         nat = m.loc[m["location"] == NATIONAL]
-        row = {"model": model, "arm": arm,
-               "wis": s.loc[s["model"] == model, "wis"].mean()}
+        row = {
+            "model": model,
+            "arm": arm,
+            "wis": s.loc[s["model"] == model, "wis"].mean(),
+        }
         row |= covered(m, ["origin", "location"]).add_prefix("weeks_")
         row |= covered(prov, ["origin", "target_end_date"]).add_prefix(
-            "provsum_")
+            "provsum_"
+        )
         # National's draws against the sum of the provinces' truths.
         prov_truth = (
             prov.drop_duplicates(["origin", "location", "target_end_date"])
@@ -211,14 +235,18 @@ for arm, rows in arms.items():
         table.append(row)
 
 table = pd.DataFrame(table)
-diff = pd.concat(
-    [(wis[k] - wis["independent"]).abs() for k in arms]
-).groupby("model").max()
+diff = (
+    pd.concat([(wis[k] - wis["independent"]).abs() for k in arms])
+    .groupby("model")
+    .max()
+)
 same = {}
 for model in models:
     a, *rest = (
-        arms[k].loc[arms[k]["model"] == model]
-        .sort_values([*keys, "value"])["value"].to_numpy()
+        arms[k]
+        .loc[arms[k]["model"] == model]
+        .sort_values([*keys, "value"])["value"]
+        .to_numpy()
         for k in arms
     )
     same[model] = all(np.array_equal(a, x) for x in rest)

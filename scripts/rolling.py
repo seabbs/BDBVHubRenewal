@@ -43,14 +43,19 @@ def covered(rows, by):
     s = rows.groupby([*by, "sample"])["value"].sum().rename("value")
     t = (
         rows.drop_duplicates([*by, "location", "target_end_date"])
-        .groupby(by)["truth"].sum()
+        .groupby(by)["truth"]
+        .sum()
     )
     x = s.reset_index().merge(t.reset_index(), on=by)
     res = x.groupby(by).apply(
-        lambda g: pd.Series({
-            f"cov{int(lv * 100)}": coverage(g["value"], g["truth"].iloc[0], lv)
-            for lv in (0.5, 0.9)
-        }),
+        lambda g: pd.Series(
+            {
+                f"cov{int(lv * 100)}": coverage(
+                    g["value"], g["truth"].iloc[0], lv
+                )
+                for lv in (0.5, 0.9)
+            }
+        ),
         include_groups=False,
     )
     return pd.Series({**res.mean().to_dict(), "n": len(res)})
@@ -60,21 +65,25 @@ def joint(rows):
     res = []
     for _, x in rows.groupby(["model", "origin"]):
         wide = x.pivot_table(
-            index="sample", columns=["location", "target_end_date"],
+            index="sample",
+            columns=["location", "target_end_date"],
             values="value",
         )
         obs = (
             x.drop_duplicates(["location", "target_end_date"])
             .set_index(["location", "target_end_date"])["truth"]
-            .reindex(wide.columns).to_numpy()
+            .reindex(wide.columns)
+            .to_numpy()
         )
         f = wide.to_numpy()
         lo, lf = np.log1p(obs), np.log1p(f)
-        res.append({
-            "es": float(sr.energy_score(obs, f)),
-            "es_log": float(sr.energy_score(lo, lf)),
-            "vs_log": float(sr.variogram_score(lo, lf, p=0.5)),
-        })
+        res.append(
+            {
+                "es": float(sr.energy_score(obs, f)),
+                "es_log": float(sr.energy_score(lo, lf)),
+                "vs_log": float(sr.variogram_score(lo, lf, p=0.5)),
+            }
+        )
     return pd.DataFrame(res).mean()
 
 
@@ -102,18 +111,25 @@ def metrics(arms, truth, national, group_of=lambda m: m):
                 "model": group,
                 "arm": arm,
                 "wis_places": sm.loc[sm["location"] != national, "wis"].mean(),
-                "wis_national": sm.loc[sm["location"] == national, "wis"].mean(),
+                "wis_national": sm.loc[
+                    sm["location"] == national, "wis"
+                ].mean(),
             }
             row |= covered(m, ["model", "origin", "location"]).add_prefix(
-                "weeks_")
-            row |= covered(prov, ["model", "origin", "target_end_date"]
-                           ).add_prefix("provsum_")
+                "weeks_"
+            )
+            row |= covered(
+                prov, ["model", "origin", "target_end_date"]
+            ).add_prefix("provsum_")
             if not nat.empty:
                 prov_truth = (
-                    prov.drop_duplicates(["model", "origin", "location",
-                                          "target_end_date"])
-                    .groupby(["model", "origin", "target_end_date"],
-                             as_index=False)["truth"].sum()
+                    prov.drop_duplicates(
+                        ["model", "origin", "location", "target_end_date"]
+                    )
+                    .groupby(
+                        ["model", "origin", "target_end_date"], as_index=False
+                    )["truth"]
+                    .sum()
                 )
                 row |= covered(
                     nat.drop(columns="truth").merge(
@@ -125,12 +141,15 @@ def metrics(arms, truth, national, group_of=lambda m: m):
             # Each place's draws, compared with the independent arm's.
             mine = m.loc[~is_nat]
             ref = base.assign(group=base["model"].map(group_of))
-            ref = ref.loc[(ref["group"] == group)
-                          & (ref["location"] != national)]
+            ref = ref.loc[
+                (ref["group"] == group) & (ref["location"] != national)
+            ]
             a = mine.sort_values([*keys, "value"])["value"].to_numpy()
-            b = ref.merge(
-                mine[keys].drop_duplicates(), on=keys
-            ).sort_values([*keys, "value"])["value"].to_numpy()
+            b = (
+                ref.merge(mine[keys].drop_duplicates(), on=keys)
+                .sort_values([*keys, "value"])["value"]
+                .to_numpy()
+            )
             row["places_identical"] = bool(np.array_equal(a, b))
             table.append(row)
     return pd.DataFrame(table)
@@ -176,24 +195,28 @@ if case == "bdbv":
                 continue
             model = get_model(name)
             model = dataclasses.replace(
-                model, sample=partial(cached, path, model.checkpoint),
+                model,
+                sample=partial(cached, path, model.checkpoint),
                 copula=copula,
             )
-            frames.append(model.forecast(task).assign(model=name,
-                                                      origin=origin))
+            frames.append(
+                model.forecast(task).assign(model=name, origin=origin)
+            )
         return pd.concat(frames, ignore_index=True)
 
     models = sorted({p.stem.rsplit("_", 1)[0] for p in draws.glob("*.npy")})
     rwnc = run_forecasts([get_model("randomwalknowcast")], tasks.values())
     rwnc = rwnc.loc[rwnc["as_of"].isna()].rename(columns={"vintage": "origin"})
-    rwnc = rwnc[["model", "origin", "location", "target_end_date", "sample",
-                 "value"]]
+    rwnc = rwnc[
+        ["model", "origin", "location", "target_end_date", "sample", "value"]
+    ]
     independent = pd.concat(
         [rwnc, *(chronos(m, GaussianCopula()) for m in models)],
         ignore_index=True,
     )
-    fixed_chronos = pd.concat([chronos(m, PRIOR) for m in models],
-                              ignore_index=True)
+    fixed_chronos = pd.concat(
+        [chronos(m, PRIOR) for m in models], ignore_index=True
+    )
     rng = np.random.default_rng(SEED)
     fixed_rwnc = pd.concat(
         [pair_samples(r, PRIOR, rng) for _, r in rwnc.groupby("origin")],
@@ -202,10 +225,15 @@ if case == "bdbv":
     fixed = pd.concat([fixed_rwnc, fixed_chronos], ignore_index=True)
     rolling_in = pd.concat([rwnc, fixed_chronos], ignore_index=True)
     rolled, fits = RollingCopula(PRIOR).pair(rolling_in, truth, seed=SEED)
-    w25, _ = RollingCopula(PRIOR, weight=25.0).pair(rolling_in, truth,
-                                                     seed=SEED)
-    arms = {"independent": independent, "fixed": fixed, "rolling": rolled,
-            "rolling_w25": w25}
+    w25, _ = RollingCopula(PRIOR, weight=25.0).pair(
+        rolling_in, truth, seed=SEED
+    )
+    arms = {
+        "independent": independent,
+        "fixed": fixed,
+        "rolling": rolled,
+        "rolling_w25": w25,
+    }
     report(arms, truth, NATIONAL, fits)
 
 if case == "germany":
@@ -245,11 +273,14 @@ if case == "germany":
                 continue
             h = hub_forecasts(s, task, date)
             ages = h["location"].isin(AGE_GROUPS).any()
-            frames.append(h.assign(
-                model=f"randomwalknowcast|{'ages' if ages else 'states'}"
-            ))
+            frames.append(
+                h.assign(
+                    model=f"randomwalknowcast|{'ages' if ages else 'states'}"
+                )
+            )
         pd.concat(frames, ignore_index=True).rename(
-            columns={"forecast_date": "origin"}).to_pickle(path)
+            columns={"forecast_date": "origin"}
+        ).to_pickle(path)
         print(date, flush=True)
     if part:
         sys.exit()
@@ -257,14 +288,17 @@ if case == "germany":
         [pd.read_pickle(cache / f"{d}.pkl") for d in dates],
         ignore_index=True,
     )
-    samples = samples[["model", "origin", "location", "target_end_date",
-                       "sample", "value"]]
+    samples = samples[
+        ["model", "origin", "location", "target_end_date", "sample", "value"]
+    ]
     ends = sorted(set(samples["target_end_date"]))
     truth = rolling_truth(hub_target(triangle, ends), cfg.truth_delay)
     rng = np.random.default_rng(SEED)
     fixed = pd.concat(
-        [pair_samples(r, PRIOR, rng, national=GERMANY)
-         for _, r in samples.groupby(["model", "origin"])],
+        [
+            pair_samples(r, PRIOR, rng, national=GERMANY)
+            for _, r in samples.groupby(["model", "origin"])
+        ],
         ignore_index=True,
     )
     rolled, fits = RollingCopula(PRIOR, national=GERMANY).pair(
@@ -273,6 +307,10 @@ if case == "germany":
     w25, _ = RollingCopula(PRIOR, weight=25.0, national=GERMANY).pair(
         samples, truth, seed=SEED
     )
-    arms = {"independent": samples, "fixed": fixed, "rolling": rolled,
-            "rolling_w25": w25}
+    arms = {
+        "independent": samples,
+        "fixed": fixed,
+        "rolling": rolled,
+        "rolling_w25": w25,
+    }
     report(arms, truth, GERMANY, fits)
