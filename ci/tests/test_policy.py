@@ -20,7 +20,7 @@ SLOWEST = 29 + SETUP
 def test_chain_runs_from_most_to_least_complex() -> None:
     # renewalbvd, renewalsp, renewal, then the random walks, with no
     # refit. Each fitted leg names the model it runs.
-    pol = load_policy(POLICY_PATH)
+    pol = load_policy(POLICY_PATH).for_model("renewalbvd")
     assert [(c.id, c.kind, c.model) for c in pol.chain()] == [
         ("bvd", "main", "renewalbvd"),
         ("renewalsp", "fallback", "renewalsp"),
@@ -29,6 +29,8 @@ def test_chain_runs_from_most_to_least_complex() -> None:
         ("randomwalk", "randomwalk", ""),
     ]
     assert pol.for_model("renewalbvd") == pol
+    raw = load_policy(POLICY_PATH)
+    assert pol.candidates == [c for c in raw.candidates if c.kind != "direct"]
     # Both baselines need no fit and are built in `prepare`.
     assert [c.id for c in pol.stage("baseline")] == [
         "randomwalknowcast",
@@ -132,3 +134,23 @@ def test_whole_chain_fits_from_the_last_tuesday_start() -> None:
     assert timeout >= SLOWEST
     # A fit that runs to its timeout still leaves the gate its time.
     assert window - PREPARE - timeout >= pol.timing.reserve_minutes
+
+
+def test_chronos_is_a_hub_model_of_its_own() -> None:
+    pol = load_policy(POLICY_PATH)
+    for model in ("fm_chronos_daily_ragged_ft", "fm_chronos_weekly_ragged_ft"):
+        only = pol.for_model(model, only=True)
+        (c,) = only.chain()
+        assert (c.model, c.kind) == (model, "direct")
+    # Never in another model's chain, and never built in `prepare`.
+    for model in ("renewalbvd", "renewal", "randomwalknowcast", "randomwalk"):
+        chained = pol.for_model(model)
+        assert all(c.kind != "direct" for c in chained.chain())
+        assert all(c.kind != "direct" for c in chained.stage("baseline"))
+        assert all(c.kind != "direct" for c in chained.candidates)
+
+
+def test_the_raw_policy_chain_has_no_direct_candidate() -> None:
+    pol = load_policy(POLICY_PATH)
+    assert all(c.kind != "direct" for c in pol.chain())
+    assert all(c.kind != "direct" for c in pol.stage("baseline"))

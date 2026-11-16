@@ -27,6 +27,7 @@ nav:
       - Data: methods/data.md
       - Baseline models: methods/baselines.md
       - Renewal models: methods/model.md
+      - Foundation models: methods/foundation.md
       - Evaluation: methods/evaluation.md
       - Implementation: methods/implementation.md
   - Results:
@@ -36,6 +37,7 @@ nav:
       - Simulation checks: simulation.md
       - Comparison with hub forecasts: comparison.md
       - German nowcast benchmark: germany.md
+  - Paper: paper.md
   - Submission:
       - Submission log: submission/rounds/index.md
       - Opting in: submission/opting-in.md

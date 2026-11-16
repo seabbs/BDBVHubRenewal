@@ -22,6 +22,8 @@ Commands:
 - `coherence`: compare the national data with the sum of the provinces.
 - `validate`: run the hub's checks on files (`submission.validate`).
 - `metadata`: write and check a model's metadata YAML.
+- `finetuned-checkpoint`: print the settings hash of the fine-tuned
+  checkpoint the `_ft` models load, resolved once for a run's jobs.
 - `compare-hub`: score our forecasts against the hub's submitted ones.
 - `report`: make the docs figures and tables.
 
@@ -42,6 +44,7 @@ import sys
 from collections.abc import Sequence
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
+from typing import Any
 
 import pandas as pd
 
@@ -325,7 +328,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--models",
         nargs="*",
         default=None,
-        help="Defaults to the benchmark's models in the config.",
+        help=(
+            "Defaults to the benchmark's models in the config, with its "
+            "held_out_models on the held-out half."
+        ),
     )
     gbt.add_argument(
         "--chunk", default=None, help=_CHUNK_HELP.format(what="nowcast dates")
@@ -535,6 +541,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Defaults to every real backtest vintage.",
     )
 
+    sub.add_parser(
+        "finetuned-checkpoint",
+        help="Print the fine-tuned checkpoint's settings hash, for "
+        "BDBV_CHRONOS_FT.",
+    )
     hid = sub.add_parser(
         "hub-id", help="Print the hub model id that submissions use."
     )
@@ -1200,7 +1211,7 @@ def _hub_forecast(
     fit: Path | str | None = None,
     forecast: Forecast | None = None,
     forecast_date: str | None = None,
-) -> tuple[pd.DataFrame, Forecast, pd.DataFrame | None, str]:
+) -> tuple[pd.DataFrame, Forecast, pd.DataFrame | None, str, Any]:
     """Return the hub table `nowcast` writes, with its forecast and zones.
 
     A `forecast` given is used as it is. Otherwise, with `config` it
@@ -1210,15 +1221,19 @@ def _hub_forecast(
     Returns
     -------
     tuple
-        The hub table, the forecast, the zone samples (or None) and why
-        there are no zones ("" if there are).
+        The hub table, the forecast, the zone samples (or None), why
+        there are no zones ("" if there are) and the fine-tuned checkpoint
+        the model loaded (or None).
     """
+    checkpoint = None
     if forecast is not None:
         result = forecast
     elif config:
         result = run_forecast(get_config(config), task, fit)
     else:
-        samples = get_model(str(model)).forecast(task)
+        loaded = get_model(str(model))
+        checkpoint = getattr(loaded, "checkpoint", None)
+        samples = loaded.forecast(task)
         check_samples(samples, task)
         result = Forecast(samples)
     name = get_config(config).model if config else model
@@ -1230,7 +1245,7 @@ def _hub_forecast(
         zones=zones,
         forecast_date=forecast_date,
     )
-    return table, result, zones, zone_note
+    return table, result, zones, zone_note, checkpoint
 
 
 def _fit_store_archive(args: argparse.Namespace) -> int:
@@ -1306,7 +1321,7 @@ def _nowcast(args: argparse.Namespace) -> int:
     host_devices(int(sampler_settings()["num_chains"]))
     try:
         task, handled = _task(args)
-        table, result, zones, zone_note = _hub_forecast(
+        table, result, zones, zone_note, checkpoint = _hub_forecast(
             task,
             data=args.data,
             model=args.model,
@@ -1317,7 +1332,7 @@ def _nowcast(args: argparse.Namespace) -> int:
         if zone_note:
             handled.append(zone_note)
         path = write_submission(table, args.out, model_id(_abbr(args)))
-    except (KeyError, ValueError, OSError) as err:
+    except (LookupError, ValueError, OSError) as err:
         print(f"ERROR: {err}", file=sys.stderr)
         return 1
     _write_national_sidecar(Path(args.out), task, result)
@@ -1327,6 +1342,15 @@ def _nowcast(args: argparse.Namespace) -> int:
     n_zones = 0 if zones is None else int(zones["location"].nunique())
     zone_record = {"zones": n_zones > 0, "n_zones": n_zones, "note": zone_note}
     (Path(args.out) / "zones.json").write_text(json.dumps(zone_record) + "\n")
+    # The fine-tuned checkpoint the model loaded, for the PR body.
+    if checkpoint is not None:
+        record = {
+            "tag": f"chronos-ft-{checkpoint.hash}",
+            "sha256": dict(checkpoint.sha256),
+        }
+        (Path(args.out) / "checkpoint.json").write_text(
+            json.dumps(record) + "\n"
+        )
     for note in handled:
         print(f"Handled: {note}")
     print(f"Wrote {path} ({len(table)} rows, locations incl. {NATIONAL}).")
@@ -1533,11 +1557,18 @@ def _print_coherence(summary: dict[str, object]) -> None:
 
 def _metadata(args: argparse.Namespace) -> int:
     text = MODEL_METADATA[args.model]
+    methods_long = text["methods_long"]
+    if "{release}" in methods_long:
+        # The release of the checkpoint the model loads now.
+        checkpoint = get_model(args.model).checkpoint  # type: ignore[attr-defined]
+        methods_long = methods_long.format(
+            release=f"chronos-ft-{checkpoint.hash}"
+        )
     record = render_model_metadata(
         _abbr(args),
         model_name=text["model_name"],
         methods=text["methods"],
-        methods_long=text["methods_long"],
+        methods_long=methods_long,
         data_inputs=text["data_inputs"],
     )
     path = write_model_metadata(record, args.out)
@@ -1667,7 +1698,11 @@ def _germany_backtest(args: argparse.Namespace) -> int:
     dates = de.nowcast_dates(config, held_out=args.held_out)
     if args.chunk:
         dates = chunk(dates, args.chunk)
-    models = config.models if args.models is None else args.models
+    models = (
+        de.run_models(config, args.held_out)
+        if args.models is None
+        else args.models
+    )
     triangle = hub_triangle(Path(args.data) / Path(config.triangle).name)
     forecasts = de.with_truth(
         de.germany_forecasts(
@@ -1856,6 +1891,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _metadata(args)
     if args.command == "bvd":  # pragma: no cover - network
         return _bvd(args)
+    if args.command == "finetuned-checkpoint":
+        from bdbvhubrenewal.forecasters.foundation import (
+            finetuned_spec,
+            resolve_checkpoint,
+        )
+
+        print(resolve_checkpoint(finetuned_spec()).hash)
+        return 0
     if args.command == "hub-id":
         print(model_id(model_abbr_for(args.model, args.hub_toml)))
         return 0

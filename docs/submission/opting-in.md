@@ -3,13 +3,14 @@
 The steps to start submitting a hub model.
 { .page-subtitle }
 
-There are three hub models.
+There are four hub models.
 Each is opted in on its own in `config/hub.toml`.
 
 | hub model | model | falls back to | needs |
 | --- | --- | --- | --- |
 | `seabbs-rwnowcast` | random walk on a nowcast (`randomwalknowcast`) | nothing (round skipped) | nothing more |
 | `seabbs-randomwalk` | the random walk (`randomwalk`) | nothing | nothing more |
+| `seabbs-chronos2_ft` | fine-tuned Chronos-2, the model its table in `config/hub.toml` names (`fm_chronos_daily_ragged_ft` or `fm_chronos_weekly_ragged_ft`) | nothing (round skipped) | nothing more |
 | `seabbs-renewal` | the renewal chain | the next model in the chain in `ci/policy.toml` | `[submission] model` in `config/hub.toml` |
 
 `DRY_RUN` is the global switch.

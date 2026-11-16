@@ -1584,13 +1584,16 @@ def _fit_settings() -> dict[str, dict[str, Any]]:
     """Return each stored model's sampler settings.
 
     The renewal variants use their table in `ci/policy.toml`; a model with
-    none (`pprandomwalknowcast`) uses its own.
+    none (`pprandomwalknowcast`) uses its own. A model with no sampler,
+    such as the Chronos-2 models, has none.
     """
     settings = samplers()
     for name in stored_models():
-        if name not in settings:
-            model: Any = get_model(name)
-            settings[name] = dataclasses.asdict(model.sampler)
+        if name in settings:
+            continue
+        sampler = getattr(get_model(name), "sampler", None)
+        if sampler is not None:
+            settings[name] = dataclasses.asdict(sampler)
     return settings
 
 
