@@ -51,11 +51,21 @@ def test_values_are_read_from_the_simulator() -> None:
     assert "max_delay" in values
 
 
+def test_size_bounds_are_read_from_the_simulator() -> None:
+    bounds = synthetic_grid.parse_bounds(TEXT)
+    assert bounds == {
+        "min_size": "10",
+        "max_size": "1e5 * design$n_places * design$n_ages",
+        "max_independent": "8L",
+    }
+
+
 def test_every_setting_has_a_label() -> None:
     names = [
         *synthetic_grid.parse_factors(TEXT),
         *synthetic_grid.DERIVED,
         *synthetic_grid.parse_values(TEXT),
+        *synthetic_grid.parse_bounds(TEXT),
     ]
     missing = [n for n in names if n not in synthetic_grid.LABELS]
     assert not missing
@@ -79,6 +89,7 @@ def test_the_si_table_has_every_setting() -> None:
         *synthetic_grid.parse_factors(TEXT),
         *synthetic_grid.DERIVED,
         *synthetic_grid.parse_values(TEXT),
+        *synthetic_grid.parse_bounds(TEXT),
     ]
     assert list(table["setting"]) == names
 
