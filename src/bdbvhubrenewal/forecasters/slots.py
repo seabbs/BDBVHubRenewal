@@ -154,7 +154,9 @@ def attach(model: Any, n_slots: int = N_SLOTS) -> None:
     if has_slots(model):
         raise ValueError("the model already has slots")
     d_model = model.config.d_model
-    setattr(model, SLOT_MODULE, _slots_module(n_slots, d_model))
+    weight = next(model.input_patch_embedding.parameters())
+    module = _slots_module(n_slots, d_model).to(weight.device, weight.dtype)
+    setattr(model, SLOT_MODULE, module)
     setattr(model, _STATE, {"ids": None})
 
     def add(_module: Any, _args: Any, output: Any) -> Any:
