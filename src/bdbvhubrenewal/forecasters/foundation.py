@@ -584,6 +584,38 @@ def _chronos_input(group: Series) -> dict[str, Any]:
     return {k: v for k, v in group.items() if k != "places"}
 
 
+def _group_rows(group: Series) -> np.ndarray:
+    """Return each of a group's rows' place and parent, `[2, rows]`.
+
+    In Chronos-2's row order, as `_group_slots`: the targets, then the
+    covariates by sorted name, past-only ones before known-future ones.
+    Places are numbered in target order (`series_bias`).
+
+    Raises
+    ------
+    ValueError
+        If a covariate names no target place, or the places do not match
+        the targets.
+    """
+    past = list(group.get("past_covariates", {}))
+    known = set(group.get("future_covariates", {}))
+    n_targets = np.atleast_2d(group["target"]).shape[0]
+    named = dict.fromkeys(n.rsplit("_lag_", 1)[0] for n in past)
+    places = list(group.get("places") or named)
+    if len(places) != n_targets:
+        raise ValueError(f"{len(places)} places for {n_targets} targets")
+    rows = sorted(n for n in past if n not in known)
+    rows += sorted(n for n in past if n in known)
+    at = {p: i for i, p in enumerate(places)}
+    try:
+        owner = [at[n.rsplit("_lag_", 1)[0]] for n in rows]
+    except KeyError as err:
+        raise ValueError(f"covariate of no target place: {err}") from err
+    place = np.concatenate([np.arange(n_targets), owner]).astype(int)
+    parent = np.asarray(slots.parents_of(places), dtype=int)
+    return np.stack([place, parent[place]])
+
+
 def _group_slots(
     group: Series, n_slots: int, parent: bool = True
 ) -> np.ndarray:
