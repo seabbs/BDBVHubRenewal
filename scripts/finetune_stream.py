@@ -561,6 +561,19 @@ def forward(model, batch: dict, accepted, device=None):
         return model(**inputs)
 
 
+def train_step(model, batch: dict, accepted, device, share: float) -> float:
+    """Accumulate a batch's gradients, scaled by `share`; return its loss.
+
+    Forward and backward both run with the rows' places assigned, so a
+    block recomputed in backward (`checkpoint_large_batches`) gets the
+    same series bias.
+    """
+    with series_bias.assigned(model, batch.get("series_rows")):
+        loss = forward(model, batch, accepted, device).loss
+        (loss * share).backward()
+    return float(loss.detach())
+
+
 def block_rows(blocks: list[dict]) -> np.ndarray:
     """Return the places and parents of the rows of blocks batched together.
 
@@ -1320,10 +1333,8 @@ def main() -> None:
     def backward(part: list[int], share: float) -> float:
         """Accumulate the gradients of part of a batch."""
         batch = data._build_batch(part)
-        loss = forward(model, batch, accepted, device).loss
-        (loss * share).backward()
-        value = float(loss.detach())
-        del batch, loss
+        value = train_step(model, batch, accepted, device, share)
+        del batch
         return value
 
     def skip(i: int) -> None:

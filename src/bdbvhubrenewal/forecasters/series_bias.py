@@ -192,7 +192,11 @@ def attach(model: Any) -> None:
 
 @contextmanager
 def assigned(model: Any, rows: Any) -> Iterator[None]:
-    """Give the next batches these rows' places; no-op without the bias."""
+    """Give the next batches these rows' places; no-op without the bias.
+
+    The rows must stay assigned through backward, which recomputes a
+    checkpointed block's bias from them (`attach`).
+    """
     import torch
 
     base = _base(model)
@@ -200,11 +204,13 @@ def assigned(model: Any, rows: Any) -> Iterator[None]:
         yield
         return
     state = getattr(base, _STATE)
+    before = state["rows"]
     state["rows"] = torch.as_tensor(np.asarray(rows), dtype=torch.long)
     try:
         yield
     finally:
-        state["rows"] = None
+        # Nested uses (a step around its forward) get back the outer rows.
+        state["rows"] = before
 
 
 def adapter_has_bias(adapter: Path | str) -> bool:
