@@ -282,6 +282,55 @@ def _backtest_at(path: Path, vintages: list[str]) -> Path:
     return path
 
 
+def test_ebola_development_keeps_releases_of_earlier_rounds(
+    hub, tmp_path
+) -> None:
+    # Round 2026-10-31 closes on 2026-10-27; the 2026-10-29 release feeds
+    # it, so a development run that stops before it leaves the release out.
+    sources = Sources(
+        hub=hub,
+        ebola_data=_data(tmp_path / "data"),
+        ebola_backtest=_backtest_at(
+            tmp_path / "q.csv", ["2026-10-20", "2026-10-29"]
+        ),
+    )
+    fc = run_forecasts(
+        "ebola",
+        before=pd.Timestamp("2026-10-31"),
+        sources=sources,
+        source="real",
+        baseline="randomwalknowcast",
+    )
+    assert set(fc["origin_date"]) == {pd.Timestamp("2026-10-20")}
+
+
+def test_ebola_scores_each_round_from_the_last_release_before_it_closed(
+    hub, tmp_path
+) -> None:
+    # Releases 2026-10-25 and 2026-10-27 both feed round 2026-10-31 (it
+    # closes on 2026-10-27); the later one is the round's forecast, dated
+    # by the round. 2026-10-20 feeds round 2026-10-24, before the split.
+    sources = Sources(
+        hub=hub,
+        ebola_data=_data(tmp_path / "data"),
+        ebola_backtest=_backtest_at(
+            tmp_path / "q.csv", ["2026-10-20", "2026-10-25", "2026-10-27"]
+        ),
+    )
+    fc = run_forecasts(
+        "ebola",
+        split=pd.Timestamp("2026-10-31"),
+        sources=sources,
+        source="real",
+        baseline="randomwalknowcast",
+    )
+    rw = fc.loc[fc["model"] == "randomwalknowcast"]
+    assert sorted(rw["origin_date"]) == [
+        pd.Timestamp("2026-10-20"),
+        pd.Timestamp("2026-10-31"),
+    ]
+
+
 def test_ebola_development_keeps_rounds_and_releases_before_the_split(
     hub, tmp_path
 ) -> None:
@@ -320,7 +369,11 @@ def test_ebola_scores_prospective_rounds_from_the_split(hub, tmp_path) -> None:
         baseline="randomwalknowcast",
     )
     backtest = fc.loc[fc["model"] == "randomwalknowcast"]
-    assert set(backtest["origin_date"]) == {pd.Timestamp("2026-10-20")}
+    # 2026-11-03 feeds round 2026-11-07, so it is that round's forecast.
+    assert set(backtest["origin_date"]) == {
+        pd.Timestamp("2026-10-20"),
+        pd.Timestamp("2026-11-07"),
+    }
     # Prospective rounds from the split join, even before the hub's
     # baseline can be scored.
     team = fc.loc[fc["model"] == "team-a"]
