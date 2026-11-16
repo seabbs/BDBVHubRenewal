@@ -141,6 +141,24 @@ def should_pause(
     return any(lb != current and lb in fresh and lb not in zero for lb in slots)
 
 
+HOLD = Path.home() / "ckpt-scores" / "hold-slots-run"
+"""While this file exists, the slots run's checkpoints wait (its adapters
+carry parent_scale, which slots.py drops until bdbv-covariates' fix)."""
+
+
+HELD: dict[str, list[str]] = {"labels": []}
+"""The checkpoints last reported as held, so each is said once."""
+
+
+def unheld(queue: list[str], zero_init: set[str], hold: Path = HOLD) -> list[str]:
+    """Return the queue less the slots run's checkpoints while `hold` exists."""
+    if not hold.exists():
+        return list(queue)
+    return [
+        lb for lb in queue if not lb.startswith("slots-") or lb in zero_init
+    ]
+
+
 def zero_init_labels(cache: Path) -> set[str]:
     """Return the scored slots checkpoints of the zero-init run."""
     out = set()
@@ -529,8 +547,13 @@ def main(cache: Path) -> None:
             log("progress: idle, every published checkpoint scored")
             time.sleep(POLL_SECONDS)
             continue
-        fresh = fresh_slots(cache, queue)
         zero = zero_init_labels(cache)
+        held = [lb for lb in queue if lb not in unheld(queue, zero)]
+        if held and held != HELD["labels"]:
+            say(f"held until the parent_scale fix is merged: {', '.join(held)}")
+        HELD["labels"] = held
+        queue = unheld(queue, zero)
+        fresh = fresh_slots(cache, queue)
         job = next_job(
             queue, not (cache / cs.COMPLETE_STAMP).exists(), fresh, zero
         )
@@ -543,6 +566,7 @@ def main(cache: Path) -> None:
                 labels = cs.checkpoint_queue(releases(), scored)
             except (subprocess.CalledProcessError, ValueError):
                 return False
+            labels = unheld(labels, zero_init_labels(cache))
             return should_pause(
                 current or "",
                 labels,
