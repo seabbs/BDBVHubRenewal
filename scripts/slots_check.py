@@ -61,8 +61,20 @@ import finetune_stream as fs
 from bdbvhubrenewal.forecasters import slots
 from bdbvhubrenewal.forecasters.finetune import AHEAD_WEEKS
 
-CONDITIONS = ("given", "swap_places", "removed", "shuffle_places")
-"""Conditions scored; the change in output is taken from `given`."""
+CONDITIONS = (
+    "given",
+    "swap_places",
+    "removed",
+    "shuffle_places",
+    "swap_parents",
+)
+"""Conditions scored; the change in output is taken from `given`.
+`swap_parents` keeps the content and gives places another place's label
+as their parent's (`wrong_parents`); it is scored for a slots model with
+the parent link only."""
+
+PARENT_SWAP = "swap_parents"
+"""The condition that moves parent labels, not content."""
 
 AHEAD_STEPS = {"weekly": AHEAD_WEEKS, "daily": 7 * AHEAD_WEEKS}
 """Forecast steps after the nowcast steps of a German block."""
@@ -89,16 +101,60 @@ output by more than this many times the larger of the zero-shot and
 no-slots swaps on the same block (their rounding)."""
 
 
-def model_ids(model, block: dict) -> np.ndarray | None:
+def block_parents(block: dict) -> list[int]:
+    """Return each target's parent in a block, -1 for none.
+
+    As the trainer: `slots.parents_of` the block's `places`, else, by its
+    levels, every place under the country when the block holds it.
+    """
+    if block.get("places"):
+        return slots.parents_of(list(block["places"]))
+    levels = list(block.get("levels") or [])
+    root = levels.index("national") if "national" in levels else -1
+    n = block["n_targets"]
+    return [-1 if i == root else root for i in range(n)]
+
+
+def wrong_parents(parents: list[int], rng: np.random.Generator) -> list[int]:
+    """Return a wrong parent for each place that has one.
+
+    Each place with a parent gets another place of the block, neither
+    itself nor its parent, drawn with `rng`; it keeps its own parent when
+    there is no other. A place with no parent keeps none.
+    """
+    out = []
+    for i, q in enumerate(parents):
+        others = [j for j in range(len(parents)) if j not in (i, q)]
+        out.append(int(rng.choice(others)) if q >= 0 and others else q)
+    return out
+
+
+def model_ids(
+    model, block: dict, rng: np.random.Generator | None = None
+) -> np.ndarray | None:
     """Return each row's slot as inference assigns it, None without slots.
 
     The slots depend only on the block's shape, the targets then each
     place's lags in turn, so they stay with the rows' positions whatever
-    content a condition moved into them.
+    content a condition moved into them. With the parent link each row
+    also carries its place's parent's label, `[2, rows]`; with `rng`
+    those parents are wrong ones (`wrong_parents`).
     """
     if not slots.has_slots(model):
         return None
-    return fs.block_slots([block], slots.n_slots(model))
+    n = slots.n_slots(model)
+    if not slots.has_parent_link(model):
+        return fs.block_slots([block], n)
+    parents = block_parents(block)
+    if rng is not None:
+        parents = wrong_parents(parents, rng)
+    return slots.slot_ids(
+        block["n_targets"],
+        block.get("n_covariates", 0),
+        np.random.default_rng(slots.EVAL_SEED),
+        n,
+        parents=parents,
+    )
 
 
 def _batch(block: dict) -> dict:
@@ -144,16 +200,17 @@ def _scaled(model, batch: dict, out):
     return p
 
 
-def predict(model, block: dict):
+def predict(model, block: dict, parent_rng: np.random.Generator | None = None):
     """Return the loss `[n, P]` and the scaled quantiles `[n, Q, P]`.
 
     The loss is Chronos-2's: twice the pinball loss summed over its
-    quantile levels, on the target scaled by its own context.
+    quantile levels, on the target scaled by its own context. With
+    `parent_rng`, places get wrong parent labels (`model_ids`).
     """
     import torch
 
     batch = _batch(block)
-    with slots.assigned(model, model_ids(model, block)):
+    with slots.assigned(model, model_ids(model, block, parent_rng)):
         out = _forward(model, batch)
     p = _scaled(model, batch, out)
     n = batch["n_targets"]
@@ -360,9 +417,16 @@ def phase_work(phase: str, has_comparator: bool) -> set[tuple[str, str]]:
     none. "rest" is everything else, so the two phases cover the run once.
     """
     models = ["zero-shot", "slots"] + (["no-slots"] if has_comparator else [])
-    every = {(m, c) for m in models for c in CONDITIONS}
+    every = {
+        (m, c)
+        for m in models
+        for c in CONDITIONS
+        if c != PARENT_SWAP or m == "slots"
+    }
     other = "no-slots" if has_comparator else "zero-shot"
-    first = {(m, c) for m in ("slots", other) for c in HEADLINE_CONDITIONS}
+    first = {(m, c) for m in ("slots", other) for c in HEADLINE_CONDITIONS} | {
+        ("slots", PARENT_SWAP)
+    }
     if phase == "headline":
         return first
     if phase == "rest":
@@ -505,10 +569,20 @@ def score(args) -> None:
         d, h = ca.lag_of(block), block["horizon"]
         given = {}
         for cond in CONDITIONS:
-            rng = np.random.default_rng(
-                [block["key"], ca.CONDITIONS.index(cond)]
+            # The other conditions keep the ablation's seeds.
+            index = (
+                len(ca.CONDITIONS)
+                if cond == PARENT_SWAP
+                else ca.CONDITIONS.index(cond)
             )
-            x = ca.condition(block, cond, rng)
+            rng = np.random.default_rng([block["key"], index])
+            parent_rng = None
+            if cond == PARENT_SWAP:
+                # The content as given; only the parent labels move.
+                x = ca.condition(block, "given", rng)
+                parent_rng = rng
+            else:
+                x = ca.condition(block, cond, rng)
             if x is None:
                 continue
             for name, model in models.items():
@@ -516,8 +590,10 @@ def score(args) -> None:
                     cond != "given" or not any(m == name for m, _ in work)
                 ):
                     continue
+                if cond == PARENT_SWAP and not slots.has_parent_link(model):
+                    continue
                 t1 = time.time()
-                loss, p = predict(model, x)
+                loss, p = predict(model, x, parent_rng)
                 loss = loss.numpy()
                 if cond == "given":
                     given[name] = p
@@ -732,6 +808,18 @@ def headline(s: pd.DataFrame) -> str:
             for r in part.itertuples()
         ]
         out.append(f"{group} nowcast swap/given: " + "; ".join(cells))
+    parent = s[
+        (s["condition"] == PARENT_SWAP)
+        & (s["model"] == "slots")
+        & (s["window"] == "nowcast")
+    ]
+    for r in parent.itertuples():
+        if r.set not in ("sims multi-place", "germany states"):
+            continue
+        out.append(
+            f"{r.set} nowcast wrong-parent/given: slots x{r.ratio:.2f} "
+            f"({r.ci_low:.2f}-{r.ci_high:.2f}), {int(r.n_blocks)} blocks"
+        )
     given = s[(s["condition"] == "given") & (s["model"] == "slots")]
     for (group, window), part in given.groupby(["set", "window"], sort=False):
         if group not in (

@@ -429,13 +429,16 @@ def test_headline_work_comes_first_with_a_comparator():
     assert first == {
         ("slots", "given"),
         ("slots", "swap_places"),
+        ("slots", "swap_parents"),
         ("no-slots", "given"),
         ("no-slots", "swap_places"),
     }
+    # The parent swap is the linked slots model's alone.
     every = {
         (m, c)
         for m in ("zero-shot", "no-slots", "slots")
         for c in sc.CONDITIONS
+        if c != "swap_parents" or m == "slots"
     }
     assert first | rest == every
     assert not first & rest
@@ -447,7 +450,12 @@ def test_headline_work_without_a_comparator_uses_zero_shot():
     assert ("zero-shot", "given") in first
     assert ("slots", "swap_places") in first
     assert all(m != "no-slots" for m, _ in first | rest)
-    every = {(m, c) for m in ("zero-shot", "slots") for c in sc.CONDITIONS}
+    every = {
+        (m, c)
+        for m in ("zero-shot", "slots")
+        for c in sc.CONDITIONS
+        if c != "swap_parents" or m == "slots"
+    }
     assert first | rest == every
 
 
@@ -568,3 +576,30 @@ def test_parent_swap_is_scored_for_the_slots_model_only():
         work = sc.phase_work(phase, True)
         assert all(m == "slots" for m, c in work if c == "swap_parents")
     assert ("slots", "swap_parents") in sc.phase_work("headline", True)
+
+
+def test_headline_reports_the_parent_swap_beside_the_lag_swap():
+    row = {
+        "model": "slots",
+        "window": "nowcast",
+        "ratio": 1.2,
+        "ci_low": 1.1,
+        "ci_high": 1.3,
+        "n_blocks": 40,
+        "n_above_floor": 30,
+        "n_unchanged": 0,
+        "slot_sd": 0.02,
+        "against": "given",
+        "loss": 0.1,
+    }
+    s = pd.DataFrame(
+        [
+            {**row, "set": "sims multi-place", "condition": "swap_places"},
+            {**row, "set": "sims multi-place", "condition": "swap_parents"},
+            {**row, "set": "germany states", "condition": "swap_parents"},
+        ]
+    )
+    text = sc.headline(s)
+    assert "sims multi-place nowcast swap/given" in text
+    assert "sims multi-place nowcast wrong-parent/given: slots x1.20" in text
+    assert "germany states nowcast wrong-parent/given" in text
