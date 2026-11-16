@@ -25,7 +25,7 @@
 # config/germany.toml, fetched once into AGG_ROOT.
 # Resumes from AGG_ROOT/cache/LABEL. --dry fits one BDBV origin, one German
 # date and the daily model only, into AGG_ROOT/cache/dry-LABEL, and never
-# commits or pushes.
+# commits or pushes. The dry origin, 2026-10-17, has every level scored.
 set -Eeuo pipefail
 
 label=${1:?usage: run_finetuned.sh LABEL [--dry]}
@@ -45,7 +45,7 @@ dates=()
 run=$label
 if [ "$dry" = "--dry" ]; then
   models=(fm_chronos_daily_ragged_ft)
-  origins=(2026-11-01)
+  origins=(2026-10-17)
   dates=(2022-02-09)
   run=dry-$label
 elif [ -n "$dry" ]; then
@@ -124,9 +124,9 @@ progress() {
     say "progress: $b BDBV and $g German fits done"
   done
 }
-progress &
+progress 8>&- &
 watcher=$!
-trap 'kill $watcher 2> /dev/null || true' EXIT
+trap 'pkill -P $watcher 2> /dev/null; kill $watcher 2> /dev/null || true' EXIT
 
 existing=$here/results/agg/aggregation-scores.csv.gz
 git show "origin/evidence/fm-agg:results/agg/aggregation-scores.csv.gz" \
