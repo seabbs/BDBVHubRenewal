@@ -198,7 +198,7 @@ def test_german_blocks_see_what_the_ragged_model_sees(
 
 
 def test_german_fine_tune_uses_only_the_development_half():
-    from finetune_germany import AS_OF, FIRST_CUT, cut_dates, truth_until
+    from finetune_realdata import AS_OF, FIRST_CUT, cut_dates, truth_until
 
     # The development half ends the day before the held-out half starts.
     assert AS_OF == "2022-02-09"
@@ -211,10 +211,122 @@ def test_german_fine_tune_uses_only_the_development_half():
 
 
 def test_the_latest_cuts_are_held_out_not_trained_on():
-    from finetune_germany import HELD_OUT_DAYS, split_held_out
+    from finetune_realdata import HELD_OUT_DAYS, split_held_out
 
     days = [f"2021-11-{d:02d}" for d in range(1, 31)]
     blocks = [{"cut": d, "source": "daily"} for d in days]
     train, held = split_held_out(blocks)
     assert len(held) == HELD_OUT_DAYS
     assert max(b["cut"] for b in train) < min(b["cut"] for b in held)
+
+
+def _bdbv_daily() -> pd.DataFrame:
+    """Daily releases of two provinces and the country, their sum."""
+    rng = np.random.default_rng(3)
+    cutoffs = pd.date_range("2026-08-05", "2026-11-05", freq="7D")
+    onsets = pd.date_range("2026-06-01", "2026-11-05", freq="D")
+    rows = []
+    base = {p: rng.poisson(4.0, len(onsets)) for p in ("CD-IT", "CD-NK")}
+    for cut in cutoffs:
+        for p, counts in base.items():
+            for o, n in zip(onsets, counts, strict=True):
+                if o > cut:
+                    continue
+                age = (cut - o).days
+                seen = int(n * min(1.0, (age + 1) / 20))
+                rows.append((cut, p, o, seen))
+    df = pd.DataFrame(rows, columns=["cutoff", "location", "onset", "n"])
+    nat = df.groupby(["cutoff", "onset"], as_index=False)["n"].sum()
+    df = pd.concat([df, nat.assign(location="CD")], ignore_index=True)
+    day = df["cutoff"].dt.date.astype(str)
+    return pd.DataFrame(
+        {
+            "vintage": day,
+            "location": df["location"],
+            "onset_date": df["onset"].dt.date.astype(str),
+            "observed": df["n"],
+            "imputed": 0,
+            "cutoff": day,
+        }
+    )
+
+
+def test_bdbv_daily_blocks_see_what_the_ragged_model_sees():
+    from finetune_chronos import CONTEXT, bdbv_daily_blocks
+
+    from bdbvhubrenewal.forecasters.foundation import (
+        hub_triangle,
+        layout_block,
+    )
+
+    rows = _bdbv_daily()
+    cut = "2026-09-30"
+    block = next(
+        b
+        for b in bdbv_daily_blocks(rows, "2026-10-31", lags=(28,), cuts=[cut])
+        if b["places"] == "provinces"
+    )
+    seen = rows.loc[rows["cutoff"] <= cut]
+    places = ("CD", "CD-IT", "CD-NK")
+    tri = hub_triangle(seen, "daily", places, cut, max_lag=28)
+    group = layout_block(tri, "ragged", places, tri.n_context)
+    start, n = tri.n_context, 3
+    keep = min(start, CONTEXT)
+    ctx = block["context"]
+    assert np.array_equal(
+        ctx[:n, CONTEXT - keep : CONTEXT], group["target"][:, start - keep :]
+    )
+    past = np.stack(list(group["past_covariates"].values()))
+    assert np.array_equal(
+        ctx[n:, CONTEXT - keep : CONTEXT],
+        past[:, start - keep :],
+        equal_nan=True,
+    )
+
+
+def test_bdbv_truth_after_the_truth_date_is_masked():
+    from finetune_chronos import bdbv_daily_blocks
+
+    rows = _bdbv_daily()
+    truth_until = "2026-10-01"
+    blocks = bdbv_daily_blocks(rows, truth_until)
+    assert blocks
+    for b in blocks:
+        assert b["truth_end"] <= truth_until
+        times = b["times"]
+        n = b["n_targets"]
+        late = [i for i, t in enumerate(times) if t > truth_until]
+        assert np.isnan(b["context"][:n, late]).all()
+    # A cut whose every truth step is too young gives no block.
+    assert not bdbv_daily_blocks(rows, truth_until, cuts=["2026-11-04"])
+
+
+def test_bdbv_weekly_blocks_take_every_lag_and_mask_young_truth():
+    from finetune_chronos import GERMAN_LAGS, bdbv_weekly_blocks
+
+    rows = []
+    for week in pd.date_range("2026-03-07", "2026-10-31", freq="7D"):
+        for place, n in (("CD-IT", 6), ("CD-NK", 3)):
+            for k in range(n):
+                rows.append((place, week.date().isoformat(), 2 + 3 * k))
+    line_list = pd.DataFrame(rows, columns=["location", "onset_week", "delay"])
+    blocks = bdbv_weekly_blocks(line_list, "2026-11-05", "2026-10-01")
+    assert {b["lag"] for b in blocks} == set(GERMAN_LAGS["weekly"])
+    assert {b["places"] for b in blocks} == {"national", "provinces"}
+    assert {b["data"] for b in blocks} == {"bdbv"}
+    assert max(b["truth_end"] for b in blocks) <= "2026-10-01"
+    # Cases reported after the release's cut-off are not seen.
+    assert all(b["cut"] <= "2026-11-05" for b in blocks)
+
+
+def test_held_out_cuts_are_taken_per_dataset():
+    from finetune_realdata import split_held_out
+
+    german = [
+        {"cut": f"2021-11-{d:02d}", "data": "germany"} for d in range(1, 31)
+    ]
+    bdbv = [{"cut": f"2026-10-{d:02d}", "data": "bdbv"} for d in (3, 10)]
+    train, held = split_held_out(german + bdbv)
+    assert {b["data"] for b in held} == {"germany"}
+    assert len(held) == 14
+    assert all(b in train for b in bdbv)
