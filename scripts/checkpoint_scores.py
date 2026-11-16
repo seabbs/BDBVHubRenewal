@@ -156,11 +156,15 @@ def scored_checkpoints(evidence: pd.DataFrame) -> set[str]:
 
 
 def run_of(settings: Mapping[str, Any]) -> str:
-    """Return a checkpoint's run: `slots`, `slots-zeroinit` or `no-slots`.
+    """Return a checkpoint's run: `bias`, `slots`, `slots-zeroinit` or
+    `no-slots`.
 
     The first slots run's slots started at zero and did not learn; the
-    slots run restarted with random slots at their own learning rate.
+    slots run restarted with random slots at their own learning rate. The
+    attention-bias run (`series_bias` in its settings) replaced both.
     """
+    if settings.get("series_bias"):
+        return "bias"
     slots = settings.get("series_slots")
     if not slots:
         return "no-slots"
