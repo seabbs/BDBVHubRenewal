@@ -30,6 +30,7 @@ import datetime as dt
 import logging
 import zlib
 from collections.abc import Sequence
+from pathlib import Path
 from typing import Final
 
 import numpy as np
@@ -631,3 +632,27 @@ def first_draws(counts: pd.DataFrame, draw: int = 1) -> pd.DataFrame:
     parts = counts["outbreak"].astype(str).str.split("-")
     keep = (parts.str.len() == 3) & (parts.str[2] == str(draw))
     return counts.loc[keep].reset_index(drop=True)
+
+
+def simulation_files(
+    sim_dir: Path, seeds: Sequence[int]
+) -> tuple[list[Path], list[Path]]:
+    """Return the simulator's counts and settings files of `seeds`.
+
+    A simulation folder may hold other seeds, such as a round's training
+    batches beside its held-out ones; only `seeds` are read.
+
+    Raises
+    ------
+    FileNotFoundError
+        If a seed's counts or settings file is missing.
+    """
+    sim_dir = Path(sim_dir)
+    counts = [sim_dir / f"counts-{s}.csv.gz" for s in seeds]
+    settings = [sim_dir / f"settings-{s}.csv" for s in seeds]
+    absent = [p.name for p in [*counts, *settings] if not p.exists()]
+    if absent:
+        raise FileNotFoundError(
+            f"No simulations in {sim_dir}: {', '.join(absent)}."
+        )
+    return counts, settings

@@ -125,6 +125,6 @@ def test_the_si_notes_name_every_level_and_the_held_out_seeds() -> None:
     heldout = synthetic_grid.heldout_note(config)
     seeds = config["heldout_seeds"]
     assert f"{seeds[0]} to {seeds[-1]}" in heldout
-    assert all(str(b) in heldout for b in config["blocks"])
+    assert all(str(b) in heldout for b in config.get("blocks") or [])
     # One sentence per line.
     assert all(line.count(". ") == 0 for line in heldout.splitlines() if line)

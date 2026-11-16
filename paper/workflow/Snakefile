@@ -237,7 +237,45 @@ def source_files(w):
         extra = ebola_extra(w.mode)
         target = f"{EBOLA['data']}/target.csv"
         return [hub, target, EBOLA["backtest"], *extra]
+    if w.study == "synthetic" and synthetic_simulations(w.mode):
+        return [SYNTHETIC["forecasts"][w.mode]]
     return []
+
+
+def synthetic_simulations(mode):
+    """The simulator's files of a run's seeds, or [] if any is missing."""
+    folder = SYNTHETIC["simulations"][mode]
+    seeds = run_settings(config, mode).synthetic_seeds
+    files = [
+        f"{folder}/{kind}-{seed}.{ext}"
+        for seed in seeds
+        for kind, ext in (("counts", "csv.gz"), ("settings", "csv"))
+    ]
+    return files if all(Path(f).exists() for f in files) else []
+
+
+# The synthetic runner forecasts each run's simulated outbreaks once they
+# exist (`scripts/run_synthetic.py`), with 1,000 draws per forecast.
+for _mode in MODES:
+
+    rule:
+        name:
+            f"synthetic_forecasts_{_mode}"
+        input:
+            synthetic_simulations(_mode),
+        output:
+            SYNTHETIC["forecasts"][_mode],
+        params:
+            sims=SYNTHETIC["simulations"][_mode],
+            seeds=" ".join(
+                str(s) for s in run_settings(config, _mode).synthetic_seeds
+            ),
+        resources:
+            heavy=1,
+        shell:
+            "PYTHONPATH=. {PYTHON} scripts/run_synthetic.py {params.sims} "
+            "{output} --seeds {params.seeds} --samples 1000 --device cpu "
+            "--threads 1"
 
 
 def limits(w):

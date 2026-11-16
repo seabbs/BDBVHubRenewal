@@ -1,27 +1,17 @@
-"""Run the models on the held-out synthetic outbreaks (`paper.synthetic`).
+"""Run the models on a set of simulated outbreaks for the synthetic study.
 
-Simulate the held-out outbreaks first, with seeds the fine-tune did not
-use:
+The workflow's `synthetic_forecasts_<mode>` rule runs it from `paper/` on
+the run's seeds (`workflow/config.yaml`):
 
-    for s in 9001 9002 9003 9004; do
-      Rscript scripts/finetune_simulate.R 25 $s output/finetune/heldout
-    done
+    PYTHONPATH=. python scripts/run_synthetic.py SIM_DIR OUT --seeds S...
 
-The held-out set is kept for the final evaluation (`paper/si/heldout-set.md`).
-During development, check the pipeline on the validation set instead
-(seed 7001, `output/finetune/validation`). Then, from the repo root:
-
-    uv run --group chronos python -m paper.run_synthetic \
-        output/finetune/heldout output/paper/synthetic.csv --device cpu
-
-Writes the long sample table, as parquet if `out` ends `.parquet`.
-Beside it go the observations as of each release (`-observations.csv`),
-each series' outbreak settings (`-factors.csv`) and each model's seconds
-per outbreak (`-timings.csv`).
-A model that is not registered stops the run. The fine-tuned
-models fetch their checkpoint's release from GitHub, so give the run a
-token, `GH_TOKEN=$(gh auth token)`, as anonymous requests are rate limited;
-a checkpoint that cannot be fetched stops the run.
+SIM_DIR holds the simulator's `counts-<seed>.csv.gz` and
+`settings-<seed>.csv`; only `--seeds` are read. OUT is the long sample
+table (`schema.md`); beside it go the observations as of each release,
+each series' grid cell and 98% delay, and each model's seconds per
+outbreak, named as `paperdata.synthetic.outputs` reads them. A model that
+is not registered stops the run, and so does a fine-tuned checkpoint that
+cannot be fetched, so give the run a token, `GH_TOKEN=$(gh auth token)`.
 """
 
 from __future__ import annotations
@@ -33,6 +23,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from paperdata.synthetic import outputs
 from paperdata.synthetic_runner import (
     COLUMNS,
     MODELS,
@@ -42,6 +33,7 @@ from paperdata.synthetic_runner import (
     hub_codes,
     models_by_name,
     observation_table,
+    simulation_files,
 )
 
 
@@ -63,6 +55,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("sim_dir", type=Path)
     parser.add_argument("out", type=Path)
+    parser.add_argument("--seeds", type=int, nargs="+", required=True)
     parser.add_argument("--models", nargs="+", default=list(MODELS))
     parser.add_argument("--outbreaks", type=int, default=None)
     parser.add_argument("--origins", type=int, default=4)
@@ -76,15 +69,9 @@ def main() -> None:
     if args.device == "cpu":
         _cpu(args.threads)
 
+    count_files, settings_files = simulation_files(args.sim_dir, args.seeds)
     counts = first_draws(
-        hub_codes(
-            pd.concat(
-                [
-                    pd.read_csv(p)
-                    for p in sorted(args.sim_dir.glob("counts-*.csv.gz"))
-                ]
-            )
-        ),
+        hub_codes(pd.concat([pd.read_csv(p) for p in count_files])),
         args.draw,
     )
     ids = sorted(counts["outbreak"].unique())[: args.outbreaks]
@@ -92,9 +79,7 @@ def main() -> None:
     if skipped:
         raise SystemExit(f"Models not registered: {', '.join(skipped)}.")
 
-    settings = pd.concat(
-        [pd.read_csv(p) for p in sorted(args.sim_dir.glob("settings-*.csv"))]
-    )
+    settings = pd.concat([pd.read_csv(p) for p in settings_files])
     tables, timings, observed, factors = [], [], [], []
     for outbreak in ids:
         rows = counts.loc[counts["outbreak"] == outbreak]
@@ -124,18 +109,17 @@ def main() -> None:
     out = pd.concat(tables, ignore_index=True) if tables else None
     if out is None or out.empty:
         out = pd.DataFrame(columns=list(COLUMNS))
-    if args.out.suffix == ".parquet":
-        out.to_parquet(args.out, index=False)
-    else:
-        out.to_csv(args.out, index=False)
+    out.to_csv(args.out, index=False)
+    _, observations_file, factors_file = outputs(args.out)
     pd.concat(observed, ignore_index=True).to_csv(
-        args.out.with_name(args.out.stem + "-observations.csv"), index=False
+        observations_file, index=False
     )
-    pd.concat(factors, ignore_index=True).to_csv(
-        args.out.with_name(args.out.stem + "-factors.csv"), index=False
-    )
+    pd.concat(factors, ignore_index=True).to_csv(factors_file, index=False)
     pd.DataFrame(timings).to_csv(
-        args.out.with_name(args.out.stem + "-timings.csv"), index=False
+        factors_file.with_name(
+            factors_file.name.replace("-factors", "-timings")
+        ),
+        index=False,
     )
 
 

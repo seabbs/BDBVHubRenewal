@@ -16,17 +16,18 @@ synthetic:
   # The simulator, whose code gives the grid tables and SI notes
   # (`evidence` below), and the held-out set's design.
   simulator: simulator
-  grid: r3
+  grid: r4
   simulations_per_seed: 25
-  blocks: [1670, 1671]
   draw: 1
   # The synthetic runner's protocol, quoted in the SI note.
   protocol: {min_releases: 6, horizon_weeks: 5, horizons: [-4, 3]}
   # The simulations of each run's seeds, whose settings give the grid's
   # realised values.
   simulations:
-    development: ../output/finetune/pilot-r3
-    paper: ../output/finetune/heldout
+    development: ../output/finetune/development
+    # Simulation round 1's folder (~/bdbv-rounds/rounds/r1/sims on
+    # archie), whose held-out batches are the held-out set.
+    paper: ../output/rounds/r1/sims
   # The synthetic runner's forecasts of them, with its
   # observations and factors beside them.
   forecasts:
@@ -175,7 +176,8 @@ development:
 # Only the `paper` target reads them.
 heldout:
   # Outbreaks simulated with seeds the fine-tune never saw.
-  synthetic_seeds: [8016, 8017, 8018, 8019, 8020, 8021, 8022, 8023, 8024, 8025]
+  # The held-out batches of simulation round 1 on the final grid.
+  synthetic_seeds: [30140, 30141, 30142, 30143]
   # First held-out German nowcast date.
   # The benchmark's dates run from 2021-11-22 to 2022-04-29.
   # The first 80 are the development half.
