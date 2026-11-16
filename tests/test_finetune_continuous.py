@@ -79,3 +79,35 @@ def test_n1000_must_beat_zero_shot_on_both(tmp_path):
         )
         results[name] = out.returncode == 0
     assert results == {"better": True, "worse_sims": False, "worse_real": False}
+
+
+def _source(tmp_path, env: str, command: str):
+    return subprocess.run(
+        ["bash", "-c", f'{env} source "{SCRIPT}"; {command}'],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+    )
+
+
+def test_a_slots_run_trains_with_slots_into_its_own_folders(tmp_path):
+    plain = _source(tmp_path, "", "slots_args; echo; remote_checkpoints")
+    assert plain.returncode == 0
+    assert plain.stdout.split() == ["checkpoints"]
+    on = _source(
+        tmp_path,
+        f"export SERIES_SLOTS=128 HERE={tmp_path}/slots;",
+        "slots_args; echo; remote_checkpoints",
+    )
+    assert on.returncode == 0
+    assert on.stdout.split() == [
+        "--series-slots",
+        "128",
+        "checkpoints/slots",
+    ]
+
+
+def test_a_slots_run_refuses_the_no_slots_runs_folder(tmp_path):
+    out = _source(tmp_path, "export SERIES_SLOTS=128;", "slots_args")
+    assert out.returncode != 0
+    assert "HERE" in out.stderr
