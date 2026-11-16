@@ -76,6 +76,12 @@ GERMANY = Path("~/germany-ft/realdata/germany.pkl")
 
 WINDOWS = ("nowcast", "forecast")
 
+UNCHANGED = 1e-4
+"""Largest change in the scaled quantiles counted as no change. Moving
+rows changes the order Chronos-2 sums them in, so a swap without slots
+can move the output by rounding, about 1e-6; a slot that matters moves
+it by 1e-2 or more."""
+
 
 def model_ids(model, block: dict) -> np.ndarray | None:
     """Return each row's slot as inference assigns it, None without slots.
@@ -450,7 +456,9 @@ def summarise_rows(d: pd.DataFrame, n_boot: int = 2000) -> pd.DataFrame:
     Ratio = mean loss under the condition / mean under `given`, over the
     blocks scored under both; CI = 90% bootstrap over blocks; share_worse
     = share of blocks whose loss rose; output_change_max and _mean = the
-    largest and the mean absolute change in the scaled quantiles.
+    largest and the mean absolute change in the scaled quantiles;
+    n_identical and n_unchanged = blocks whose largest change is zero or
+    under `UNCHANGED`.
     """
     rng = np.random.default_rng(1)
     d = groups(d)
@@ -482,9 +490,10 @@ def summarise_rows(d: pd.DataFrame, n_boot: int = 2000) -> pd.DataFrame:
                     "ratio": c.mean() / g.mean(),
                     "ci_low": np.quantile(boot, 0.05),
                     "ci_high": np.quantile(boot, 0.95),
-                    "share_worse": float((c > g + 1e-9).mean()),
+                    "share_worse": float((c > g * (1 + 1e-6)).mean()),
                     "n_blocks": len(g),
                     "n_identical": int((change_max == 0).sum()),
+                    "n_unchanged": int((change_max < UNCHANGED).sum()),
                     "output_change_max": float(change_max.max()),
                     "output_change_mean": float(
                         part[f"change_{window}_mean"].to_numpy()[ok].mean()
@@ -515,7 +524,7 @@ def headline(s: pd.DataFrame) -> str:
             continue
         cells = [
             f"{r.model} x{r.ratio:.2f} ({r.ci_low:.2f}-{r.ci_high:.2f}) "
-            f"identical {r.n_identical}/{r.n_blocks} "
+            f"unchanged {r.n_unchanged}/{r.n_blocks} "
             f"change max {r.output_change_max:.3g}"
             for r in part.itertuples()
         ]

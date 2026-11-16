@@ -211,5 +211,5 @@ git push -q origin "$BRANCH" || {
 sha=$(git rev-parse HEAD)
 remote=$(git ls-remote origin "refs/heads/$BRANCH" | cut -f1)
 [ "$remote" = "$sha" ] || fail "origin/$BRANCH is $remote, not $sha"
-mail "-> bdbv-paper: finished ${label} in ${minutes} min, ${sha:0:9} on origin/${BRANCH}: ${csv} and ${blocks}. Swap of whole lag series between places (ratio of loss to given, 90% CI; identical = blocks with bit-identical output): ${headline//$'\n'/ | }"
+mail "-> bdbv-paper: finished ${label} in ${minutes} min, ${sha:0:9} on origin/${BRANCH}: ${csv} and ${blocks}. Swap of whole lag series between places (ratio of loss to given, 90% CI; unchanged = blocks whose scaled quantiles moved by under 1e-4, i.e. only by rounding): ${headline//$'\n'/ | }"
 log "done: $sha"
