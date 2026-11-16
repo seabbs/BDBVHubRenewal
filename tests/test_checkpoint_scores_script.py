@@ -259,3 +259,49 @@ def test_the_paper_reads_the_new_rows(cs, monkeypatch) -> None:
     rows["outbreaks"] = rows["outbreaks"].fillna(0).astype(int)
     paper.checkpoint_numbers(rows)
     paper.checkpoint_figure(rows)
+
+
+def test_jax_compile_caches_are_freed_after_each_german_date(
+    cs, tmp_path, monkeypatch
+) -> None:
+    # A long unit compiles JAX functions of new shapes at each date; kept,
+    # they filled the unit's 6 GB scope ("LLVM compilation error: Cannot
+    # allocate memory") after 29 of 80 dates.
+    from bdbvhubrenewal.data import germany as data_de
+    from bdbvhubrenewal.evaluation import germany as de
+
+    events: list[str] = []
+    config = type("C", (), {"triangle": "t.csv", "n_samples": 10,
+                            "seed": 1, "truth_delay": 40})()  # fmt: skip
+    monkeypatch.setattr(de, "load_germany_config", lambda _: config)
+    monkeypatch.setattr(data_de, "hub_triangle", lambda _: None)
+    monkeypatch.setattr(
+        de, "nowcast_dates", lambda *_, **__: ["2021-11-22", "2021-11-23"]
+    )
+
+    def forecasts(_models, _triangle, dates, _n, _seed):
+        events.append(f"forecast {dates[0]}")
+        return pd.DataFrame({"value": [1.0]})
+
+    monkeypatch.setattr(de, "germany_forecasts", forecasts)
+    monkeypatch.setattr(de, "with_truth", lambda fc, *_: fc)
+    monkeypatch.setattr(cs, "free_caches", lambda: events.append("free"))
+    monkeypatch.delenv("BDBV_CHRONOS_FT", raising=False)
+    cs.germany_unit(tmp_path, cs.REFERENCE)
+    assert events == [
+        "forecast 2021-11-22",
+        "free",
+        "forecast 2021-11-23",
+        "free",
+    ]
+
+
+def test_freeing_caches_clears_jax_s_compiled_functions(cs) -> None:
+    import jax
+    import jax.numpy as jnp
+
+    f = jax.jit(lambda x: x + 1)
+    f(jnp.ones(3))
+    assert f._cache_size() == 1
+    cs.free_caches()
+    assert f._cache_size() == 0
