@@ -37,6 +37,7 @@ import numpy as np
 import pandas as pd
 
 from bdbvhubrenewal.data.dates import as_date, epiweek_end
+from bdbvhubrenewal.forecasters import slots
 from bdbvhubrenewal.forecasters.base import (
     NATIONAL,
     SAMPLE_COLUMNS,
@@ -58,6 +59,7 @@ __all__ = [
     "FINETUNED_URL",
     "LAYOUTS",
     "MAX_LAG",
+    "SLOTS_PREFIX",
     "SOURCES",
     "SUMS_FILE",
     "Checkpoint",
@@ -71,6 +73,7 @@ __all__ = [
     "hub_triangle",
     "layout_block",
     "quantile_draws",
+    "release_tag",
     "resolve_checkpoint",
 ]
 
@@ -122,6 +125,23 @@ ADAPTER_FILES: Final = ("adapter_config.json", "adapter_model.safetensors")
 FINETUNED_CACHE: Final = "~/.cache/bdbvhubrenewal"
 """Directory each downloaded checkpoint is kept in, as
 `chronos-ft-<hash>`."""
+
+SLOTS_PREFIX: Final = "slots-"
+"""Prefix of the spec of a checkpoint with per-series slots
+(`forecasters.slots`). Such a checkpoint is released as
+`chronos-slots-<hash>`, so the `latest` lookup, which takes only
+`chronos-ft-*` releases, never gives it to code without slots."""
+
+
+def release_tag(spec: str) -> str:
+    """Return the release tag of a checkpoint.
+
+    `chronos-ft-<hash>`, or `chronos-slots-<hash>` for `slots-<hash>`.
+    """
+    if spec.startswith(SLOTS_PREFIX):
+        return f"chronos-{spec}"
+    return f"chronos-ft-{spec}"
+
 
 Series = Mapping[str, Any]
 """One group for Chronos-2: `target` `[V, S]`, and optionally
@@ -285,7 +305,7 @@ def resolve_checkpoint(spec: str) -> Checkpoint:
         if not tags:
             raise LookupError("No chronos-ft-* release holds a checkpoint.")
         checkpoint = tags[-1][1].removeprefix("chronos-ft-")
-    tag = f"chronos-ft-{checkpoint}"
+    tag = release_tag(checkpoint)
     url = f"{FINETUNED_URL}/{tag}/{SUMS_FILE}"
     try:
         text = _get(url).decode()
@@ -486,7 +506,7 @@ def finetuned_adapter(checkpoint: Checkpoint) -> Path:
         If the release's settings hash or an adapter file's SHA-256 is not
         the checkpoint's.
     """
-    tag = f"chronos-ft-{checkpoint.hash}"
+    tag = release_tag(checkpoint.hash)
     cache = Path(FINETUNED_CACHE).expanduser()
     out = cache / tag
     if out.is_dir():
@@ -512,7 +532,7 @@ def finetuned_adapter(checkpoint: Checkpoint) -> Path:
                     ) from err
                 raise _unreachable(url, err) from err
         found = json.loads((tmp / "settings.json").read_text()).get("hash")
-        if found != checkpoint.hash:
+        if found != checkpoint.hash.removeprefix(SLOTS_PREFIX):
             raise ValueError(
                 f"The release {tag} holds the checkpoint with settings "
                 f"hash {found}."
@@ -553,10 +573,8 @@ def _chronos(checkpoint: Checkpoint | None = None) -> Any:
     )
     if adapter is None:
         return pipeline
-    from peft import PeftModel
-
-    model = PeftModel.from_pretrained(pipeline.model, adapter)
-    return Chronos2Pipeline(model=model.merge_and_unload())
+    # Slots, if the adapter holds them, load with it.
+    return Chronos2Pipeline(model=slots.load_adapter(pipeline.model, adapter))
 
 
 def chronos_sampler(
@@ -605,11 +623,32 @@ def chronos_sampler(
     pipeline = _chronos(checkpoint)
     levels = np.asarray(pipeline.quantiles, dtype=float)
     rng = np.random.default_rng(seed)
-    quantiles, _ = pipeline.predict_quantiles(
-        [dict(g) for g in groups],
-        prediction_length=horizon,
-        quantile_levels=levels.tolist(),
-    )
+    model = getattr(pipeline, "model", None)
+    if model is not None and slots.has_slots(model):
+        # Each group is predicted on its own, so its rows are one batch
+        # and each place's series share the slot drawn with the fixed
+        # seed, as in held-out losses.
+        quantiles = []
+        for g in groups:
+            ids = slots.slot_ids(
+                np.atleast_2d(g["target"]).shape[0],
+                len(g.get("past_covariates", {})),
+                np.random.default_rng(slots.EVAL_SEED),
+                slots.n_slots(model),
+            )
+            with slots.assigned(model, ids):
+                q, _ = pipeline.predict_quantiles(
+                    [dict(g)],
+                    prediction_length=horizon,
+                    quantile_levels=levels.tolist(),
+                )
+            quantiles.extend(q)
+    else:
+        quantiles, _ = pipeline.predict_quantiles(
+            [dict(g) for g in groups],
+            prediction_length=horizon,
+            quantile_levels=levels.tolist(),
+        )
     out = []
     for q in quantiles:
         q = q.float().cpu().numpy()  # [V, horizon, Q]
