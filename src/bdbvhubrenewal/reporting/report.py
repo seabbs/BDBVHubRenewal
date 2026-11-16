@@ -2141,9 +2141,7 @@ def _comparison_page(
         "marked main build is the current main branch's forecast for every "
         "round, so a round we did not submit to shows only the main "
         "build.\n"
-        "Each row's n is beside the hub cells scored in its round. "
-        "Fitted models are not run at health zone level, so they cover "
-        "only the hub's national and province cells.\n",
+        "Each row's n is beside the hub cells scored in its round.\n",
     )
     scores_path = cmp_dir / "scores.csv"
     scores = (

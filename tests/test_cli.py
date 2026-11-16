@@ -216,7 +216,9 @@ def test_stored_samples_keep_numeric_values_without_our_forecasts(
     from bdbvhubrenewal.evaluation.scoring import energy_scores
     from bdbvhubrenewal.forecasters.renewal import DELAY_SUMMARY_FILE
 
-    args = argparse.Namespace(data=str(DATA), results=str(tmp_path))
+    args = argparse.Namespace(
+        data=str(DATA), results=str(tmp_path), store=str(tmp_path / "none")
+    )
     # With no fits loaded and no hub files there are no stored samples or
     # delays, and the empty samples are still numeric.
     empty, none = _stored(args, load_target(DATA), run_forecasts([], []))
@@ -924,3 +926,45 @@ def test_stored_samples_take_every_week_of_the_stored_fit(
     args.store = str(tmp_path / "missing")
     stored, _ = _stored(args, load_target(DATA), trimmed)
     assert sorted(stored["target_end_date"].astype(str)) == weeks[2:]
+
+
+def test_hub_comparison_takes_the_whole_fits_of_its_rounds() -> None:
+    # compare-hub keeps the whole fits of the hub rounds only, for models
+    # it does not run live, in its sample columns, and they replace the
+    # stored rows of the same model and round.
+    from bdbvhubrenewal.cli import _comparison_stored
+
+    whole = pd.DataFrame(
+        {
+            "model": ["renewal", "renewal", "randomwalk"],
+            "kind": "real",
+            "vintage": "2026-10-17",
+            "reference_date": pd.to_datetime(
+                ["2026-10-24", "2026-10-31", "2026-10-24"]
+            ),
+            "location": "CD",
+            "target_end_date": "2026-09-12",
+            "sample": 1,
+            "value": 5.0,
+            "as_of": None,
+            "horizon": -6,
+        }
+    )
+    stored = pd.DataFrame(
+        {
+            "model": ["renewal", "renewalsp"],
+            "source": "real",
+            "reference_date": "2026-10-24",
+            "location": "CD",
+            "target_end_date": "2026-09-26",
+            "sample": 1,
+            "value": 1.0,
+        }
+    )
+    out = _comparison_stored(stored, whole, ["2026-10-24"], ["randomwalk"])
+    assert list(out.columns) == list(stored.columns)
+    assert set(out["source"]) == {"real"}
+    assert set(out["reference_date"]) == {"2026-10-24"}
+    renewal = out.loc[out["model"] == "renewal"]
+    assert list(renewal["target_end_date"]) == ["2026-09-12"]
+    assert set(out["model"]) == {"renewal", "renewalsp"}
