@@ -207,12 +207,23 @@ tasks:
         uv run --group docs jupytext --to ipynb --execute --run-path .
         docs/getting-started.py
 
+  paper:
+    desc: Run the paper workflow (TARGET=development by default, or paper) and render the paper into docs/paper/, as CI does (scripts/paper.sh)
+    cmds:
+      - CORES={{.CORES | default 4}} scripts/paper.sh {{.TARGET | default "development"}}
+
+  paper:render:
+    desc: Alias of `task paper`
+    cmds:
+      - task: paper
+
   docs:
     desc: Build the docs site into _site/
     cmds:
       - task: results
       - task: plots
       - task: getting-started
+      - task: paper
       - uv run mkdocs build --strict
 
   serve:

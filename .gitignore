@@ -32,6 +32,9 @@ tests/results/
 # from docs/getting-started.py (`task getting-started`).
 docs/getting-started.ipynb
 docs/assets/getting-started/
+# The rendered paper: copied in from paper/ at docs build time
+# (`task paper:render`).
+docs/paper/
 # mkdocs-jupyter execution cache.
 .cache/
 docs/figures/*.json

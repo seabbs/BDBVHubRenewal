@@ -130,6 +130,8 @@ DASHES: Final[dict[str, str]] = {
     "dashdot": "6 3 1.5 3",
     "longdash": "12 4",
     "dashdotdot": "6 3 1.5 3 1.5 3",
+    "shortdash": "3 3",
+    "longdashdot": "12 4 1.5 4",
 }
 """Line dash patterns as SVG `stroke-dasharray` values, solid first."""
 
@@ -146,6 +148,8 @@ MODEL_STYLE: Final[dict[str, tuple[int, str]]] = {
     "fm_chronos_daily_ragged": (6, "dashdot"),
     "fm_chronos_weekly_ragged_ft": (6, "longdash"),
     "fm_chronos_daily_ragged_ft": (6, "dashdotdot"),
+    "fm_chronos_weekly_ragged_real": (6, "shortdash"),
+    "fm_chronos_daily_ragged_real": (6, "longdashdot"),
 }
 """Each model's place in `MODEL_COLOURS` and its dash in `DASHES`.
 

@@ -332,7 +332,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--models",
         nargs="*",
         default=None,
-        help="Defaults to the benchmark's models in the config.",
+        help=(
+            "Defaults to the benchmark's models in the config, with its "
+            "held_out_models on the held-out half."
+        ),
     )
     gbt.add_argument(
         "--chunk", default=None, help=_CHUNK_HELP.format(what="nowcast dates")
@@ -1602,7 +1605,11 @@ def _germany_backtest(args: argparse.Namespace) -> int:
     dates = de.nowcast_dates(config, held_out=args.held_out)
     if args.chunk:
         dates = chunk(dates, args.chunk)
-    models = config.models if args.models is None else args.models
+    models = (
+        de.run_models(config, args.held_out)
+        if args.models is None
+        else args.models
+    )
     triangle = hub_triangle(Path(args.data) / Path(config.triangle).name)
     forecasts = de.with_truth(
         de.germany_forecasts(

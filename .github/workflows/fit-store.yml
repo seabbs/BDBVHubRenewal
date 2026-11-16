@@ -22,11 +22,13 @@ on:
     branches: [main]
     paths:
       - 'src/bdbvhubrenewal/__init__.py'
+      - 'src/bdbvhubrenewal/cli.py'
       - 'src/bdbvhubrenewal/devices.py'
       - 'src/bdbvhubrenewal/baselinenowcast/**'
       - 'src/bdbvhubrenewal/data/**'
       - 'src/bdbvhubrenewal/evaluation/__init__.py'
       - 'src/bdbvhubrenewal/evaluation/backtest.py'
+      - 'src/bdbvhubrenewal/evaluation/digest.py'
       - 'src/bdbvhubrenewal/evaluation/nowcast.py'
       - 'src/bdbvhubrenewal/evaluation/ppc.py'
       - 'src/bdbvhubrenewal/evaluation/scoring.py'
@@ -39,6 +41,7 @@ on:
       - 'config/backtest.toml'
       - 'config/finetune.toml'
       - 'ci/policy.toml'
+      - 'pyproject.toml'
       - 'uv.lock'
       - '.python-version'
       - 'scripts/fit-store.sh'
@@ -48,11 +51,13 @@ on:
   pull_request:
     paths:
       - 'src/bdbvhubrenewal/__init__.py'
+      - 'src/bdbvhubrenewal/cli.py'
       - 'src/bdbvhubrenewal/devices.py'
       - 'src/bdbvhubrenewal/baselinenowcast/**'
       - 'src/bdbvhubrenewal/data/**'
       - 'src/bdbvhubrenewal/evaluation/__init__.py'
       - 'src/bdbvhubrenewal/evaluation/backtest.py'
+      - 'src/bdbvhubrenewal/evaluation/digest.py'
       - 'src/bdbvhubrenewal/evaluation/nowcast.py'
       - 'src/bdbvhubrenewal/evaluation/ppc.py'
       - 'src/bdbvhubrenewal/evaluation/scoring.py'
@@ -65,6 +70,7 @@ on:
       - 'config/backtest.toml'
       - 'config/finetune.toml'
       - 'ci/policy.toml'
+      - 'pyproject.toml'
       - 'uv.lock'
       - '.python-version'
       - 'scripts/fit-store.sh'
