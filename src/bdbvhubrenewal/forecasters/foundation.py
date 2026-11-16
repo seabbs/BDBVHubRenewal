@@ -41,7 +41,7 @@ import numpy as np
 import pandas as pd
 
 from bdbvhubrenewal.data.dates import as_date, epiweek_end
-from bdbvhubrenewal.forecasters import slots
+from bdbvhubrenewal.forecasters import series_bias, slots
 from bdbvhubrenewal.forecasters.base import (
     NATIONAL,
     SAMPLE_COLUMNS,
@@ -651,7 +651,13 @@ def _chronos(checkpoint: Checkpoint | None = None) -> Any:
     if adapter is None:
         return pipeline
     # Slots, if the adapter holds them, load with it.
-    return Chronos2Pipeline(model=slots.load_adapter(pipeline.model, adapter))
+    # An attention-bias checkpoint loads with its bias; a slots one
+    # (the zero-init comparison run) with its slots.
+    if series_bias.adapter_has_bias(adapter):
+        model = series_bias.load_adapter(pipeline.model, adapter)
+    else:
+        model = slots.load_adapter(pipeline.model, adapter)
+    return Chronos2Pipeline(model=model)
 
 
 def _chronos_input(group: Series) -> dict[str, Any]:
@@ -695,6 +701,38 @@ def _group_slots(group: Series, n_slots: int) -> np.ndarray:
     return np.concatenate([chosen, chosen[owner]]).astype(int)
 
 
+def _group_rows(group: Series) -> np.ndarray:
+    """Return each of a group's rows' place and parent, `[2, rows]`.
+
+    In Chronos-2's row order: the targets, then the
+    covariates by sorted name, past-only ones before known-future ones.
+    Places are numbered in target order (`series_bias`).
+
+    Raises
+    ------
+    ValueError
+        If a covariate names no target place, or the places do not match
+        the targets.
+    """
+    past = list(group.get("past_covariates", {}))
+    known = set(group.get("future_covariates", {}))
+    n_targets = np.atleast_2d(group["target"]).shape[0]
+    named = dict.fromkeys(n.rsplit("_lag_", 1)[0] for n in past)
+    places = list(group.get("places") or named)
+    if len(places) != n_targets:
+        raise ValueError(f"{len(places)} places for {n_targets} targets")
+    rows = sorted(n for n in past if n not in known)
+    rows += sorted(n for n in past if n in known)
+    at = {p: i for i, p in enumerate(places)}
+    try:
+        owner = [at[n.rsplit("_lag_", 1)[0]] for n in rows]
+    except KeyError as err:
+        raise ValueError(f"covariate of no target place: {err}") from err
+    place = np.concatenate([np.arange(n_targets), owner]).astype(int)
+    parent = np.asarray(series_bias.parents_of(places), dtype=int)
+    return np.stack([place, parent[place]])
+
+
 def _predict(
     pipeline: Any, groups: Sequence[Series], horizon: int, levels: np.ndarray
 ) -> list[Any]:
@@ -705,6 +743,18 @@ def _predict(
     losses.
     """
     model = getattr(pipeline, "model", None)
+    if model is not None and series_bias.has_bias(model):
+        # One group a batch, its rows' places and parents by name.
+        biased = []
+        for g in groups:
+            with series_bias.assigned(model, _group_rows(g)):
+                q, _ = pipeline.predict_quantiles(
+                    [_chronos_input(g)],
+                    prediction_length=horizon,
+                    quantile_levels=levels.tolist(),
+                )
+            biased.extend(q)
+        return biased
     if model is None or not slots.has_slots(model):
         quantiles, _ = pipeline.predict_quantiles(
             [_chronos_input(g) for g in groups],
