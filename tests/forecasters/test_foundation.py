@@ -314,6 +314,30 @@ def test_draws_are_paired_by_the_copula(name: str, task: ForecastTask) -> None:
         assert wide[last].std() > 1.1 * flat[last].std()
 
 
+def test_the_copula_knows_each_series_as_country_province_or_zone(
+    task: ForecastTask,
+) -> None:
+    seen: list = []
+
+    @dataclasses.dataclass(frozen=True)
+    class Recording:
+        def couple(self, draws, *_, locations=None, **__):
+            seen.append(locations)
+            return draws
+
+    model = dataclasses.replace(
+        get_model("fm_chronos_weekly_ragged"),
+        sample=_independent,
+        copula=Recording(),
+    )
+    model.forecast(task)
+    (locations,) = seen
+    assert locations is not None
+    assert locations[0] == NATIONAL
+    assert set(task.locations) <= set(locations)
+    assert set(_zones(task)) <= set(locations)
+
+
 def test_own_quantiles_are_not_paired(
     task: ForecastTask, monkeypatch: pytest.MonkeyPatch
 ) -> None:
