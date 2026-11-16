@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The full paper run on a shared host, as a detached job: wait for the
 # held-out inputs, then run scripts/paper.sh paper single-threaded and
-# niced, reporting each stage to the archie mailbox.
+# niced, reporting each stage to the mailbox (MAILBOX in config/local.env).
 #
 # Usage (from anywhere): nohup paper/scripts/paper_local.sh [TARGET] &
 #
@@ -15,9 +15,11 @@
 set -uo pipefail
 target=${1:-paper}
 root=$(cd "$(dirname "$0")/../.." && pwd)
-mb=${MAILBOX:-$HOME/bdbv-archie-mailbox.md}
-log=$HOME/paper-jobs/paper-local-$target.log
-mkdir -p "$HOME/paper-jobs"
+setting() { python3 "$root/workflow/flowlib/localconfig.py" "$1"; }
+mb=$(setting MAILBOX)
+logs=$(setting PAPER_LOGS)
+log=$logs/paper-local-$target.log
+mkdir -p "$logs"
 say() { echo "$(date '+%F %H:%M') paper: local $target run: $*" >> "$mb"; }
 cd "$root"
 export PATH="$root/.venv/bin:${QUARTO_BIN:+$(dirname "$QUARTO_BIN"):}$PATH"
@@ -31,9 +33,11 @@ import sys
 from pathlib import Path
 import yaml
 sys.path.insert(0, "paper")
+sys.path.append("workflow")
+from flowlib import localconfig
 from paperpipe.config import run_settings
 config = yaml.safe_load(Path("paper/workflow/config.yaml").read_text())
-sims = Path("paper") / config["synthetic"]["simulations"]["paper"]
+sims = Path("paper") / localconfig.expand(config["synthetic"]["simulations"]["paper"])
 seeds = run_settings(config, "paper").synthetic_seeds
 # The simulation set writes READY beside sims/ once every batch is
 # simulated, recorded and reviewed.

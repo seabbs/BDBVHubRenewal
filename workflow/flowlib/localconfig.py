@@ -8,6 +8,9 @@ is not upper case are skipped. A value may use `$NAME` or `${NAME}` of
 the environment or of an earlier line, and one pair of surrounding
 quotes is dropped. A variable set in the environment wins over the
 file. With no file everything runs on this machine.
+
+Shell scripts without `scripts/local_config.sh` read one setting with
+`python3 workflow/flowlib/localconfig.py KEY`.
 """
 
 from __future__ import annotations
@@ -48,6 +51,8 @@ DEFAULTS = (
     # Memory and disk a job leaves free when it starts (GB).
     ("MIN_FREE_GB", "20"),
     ("MIN_DISK_GB", "16"),
+    # Logs of the paper's detached jobs (paper/scripts).
+    ("PAPER_LOGS", "$HOME/paper-jobs"),
 )
 """Each setting and its default, in order, as later ones use earlier."""
 
@@ -113,3 +118,25 @@ def read(
             value = _expand(default, names, quoted=False)
         names[key] = out[key] = value
     return out
+
+
+def expand(value: str, settings: Mapping[str, str] | None = None) -> str:
+    """Return `value` with `$NAME` or `${NAME}` filled from the settings.
+
+    Parameters
+    ----------
+    value
+        A path or other value, such as `$ROOT/rounds/r1/sims`.
+    settings
+        The machine settings; by default `read()`.
+    """
+    names = read() if settings is None else settings
+    return Template(value).safe_substitute(names)
+
+
+if __name__ == "__main__":
+    import sys
+
+    cfg = read()
+    for key in sys.argv[1:]:
+        print(cfg.get(key, ""))
