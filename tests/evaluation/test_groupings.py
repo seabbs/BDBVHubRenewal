@@ -482,8 +482,12 @@ def test_a_done_or_older_checkpoint_runs_nothing() -> None:
     done = {"slots-bbbbbbbbbbbb"}
     assert choose_checkpoint("slots-bbbbbbbbbbbb", releases, done)[0] is None
     assert choose_checkpoint("slots-aaaaaaaaaaaa", releases, done)[0] is None
-    # A newer one than the done one is run, whatever the label called.
+    # An old label exits at once even with a newer one waiting; the run
+    # that finishes asks for the next one (no label) and takes it.
     releases.append(_rel("slots-cccccccccccc", "normal", 1000))
-    assert choose_checkpoint("slots-aaaaaaaaaaaa", releases, done)[0] == (
-        "slots-cccccccccccc"
+    assert choose_checkpoint("slots-aaaaaaaaaaaa", releases, done)[0] is None
+    assert choose_checkpoint(None, releases, done)[0] == "slots-cccccccccccc"
+    assert (
+        choose_checkpoint(None, releases, done | {"slots-cccccccccccc"})[0]
+        is None
     )
