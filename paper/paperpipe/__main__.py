@@ -212,7 +212,7 @@ def _germany_extra(a: argparse.Namespace) -> None:
 
 def _summary(a: argparse.Namespace) -> None:
     studies = {
-        read_meta(m)["study"]: study_summary(read_meta(m), pd.read_csv(t))
+        read_meta(m)["study"]: study_summary(read_meta(m), pd.read_csv(t), a.mode)
         for m, t in zip(a.meta, a.scores, strict=True)
     }
     write_summary(a.out, a.mode, studies)

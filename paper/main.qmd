@@ -154,8 +154,8 @@ The estimator, its window and the evidence for it are in the SI.
 ::: {.callout-note title="Plan"}
 - Compared with the other submissions, relative to the hub's own baseline.
 - The hub's rounds from 21 November 2026 are scored. Earlier rounds, and the release backtest from releases before that date, were used for development and are shown in the SI.
-- Sample forecasts scored with CRPS and log-scale CRPS on 1,000 draws with common random numbers, bias, and coverage, with D the empirical 98% point of the hub data's reporting delay.
-- Our models' forecasts are saved prospectively, alongside the main submissions as they were made.
+- Sample forecasts scored with CRPS and log-scale CRPS, bias, and coverage, with D the empirical 98% point of the hub data's reporting delay. Our models are scored on 1,000 draws with common random numbers, and hub submissions on their submitted trajectories.
+- Our submitted models are scored on their submissions. Each other model of ours forecasts each scored round from the last data release before the round closed, as the release backtest runs it, so it uses only data available at the time. The fine-tuned models use the final checkpoint, which was trained on simulations only.
 - Key references: [@bdbv_modeling_hub_2026; @Viboud2018; @funkAssessingPerformanceRealtime2019].
 :::
 
@@ -205,7 +205,7 @@ Held-out synthetic data: nowcasts of one held-out outbreak, drawn with the workf
 Held-out synthetic data. (A, B) CRPS relative to `randomwalknowcast` on the natural and log scales; (C) bias; (D) 50% and 90% coverage; (E) relative CRPS by scenario factor; (F) relative CRPS by horizon. {{< meta results.synthetic.label >}} {{< meta results.synthetic.note >}}
 :::
 
-The best model was {{< meta results.synthetic.best_model >}}, with a relative score of {{< meta results.synthetic.best_rel_score >}} and {{< meta results.synthetic.best_rel_log_score >}} on the log scale, against {{< meta results.synthetic.baseline >}}.
+On the {{< meta results.synthetic.scope >}}, the best model was {{< meta results.synthetic.best_model >}}, with a relative score of {{< meta results.synthetic.best_rel_score >}} and {{< meta results.synthetic.best_rel_log_score >}} on the log scale, against {{< meta results.synthetic.baseline >}}.
 
 ::: {#tbl-synthetic-scores}
 {{< include build/tables/main/synthetic-scores.md >}}
@@ -239,7 +239,7 @@ German nowcast hub: national nowcasts, one column per model and one row per orig
 German nowcast hub. (A, B) WIS relative to `KIT-frozen_baseline` on the natural and log scales; (C) bias; (D) 50% and 95% coverage; (E) relative WIS by location; (F) by age group; (G) by horizon. {{< meta results.germany.label >}} {{< meta results.germany.note >}}
 :::
 
-On the held-out half, the best model was {{< meta results.germany.best_model >}}, with a relative score of {{< meta results.germany.best_rel_score >}} and {{< meta results.germany.best_rel_log_score >}} on the log scale, against {{< meta results.germany.baseline >}}, and {{< meta results.germany.best_rel_score_randomwalknowcast >}} against `randomwalknowcast`, as the hub's baseline is a point forecast with no coverage.
+On the {{< meta results.germany.scope >}}, the best model was {{< meta results.germany.best_model >}}, with a relative score of {{< meta results.germany.best_rel_score >}} and {{< meta results.germany.best_rel_log_score >}} on the log scale, against {{< meta results.germany.baseline >}}, and {{< meta results.germany.best_rel_score_randomwalknowcast >}} against `randomwalknowcast`, as the hub's baseline is a point forecast with no coverage.
 
 ::: {#tbl-germany-scores}
 {{< include build/tables/main/germany-scores.md >}}
@@ -266,7 +266,7 @@ Ebola: national nowcasts, one column per model and one row per origin. Black is 
 Ebola: sample forecasts of the hub's rounds from 21 November 2026 (scored), after the release backtest from earlier releases (development), split by a dotted line. (A, B) CRPS relative to {{< meta results.ebola.baseline >}} on the natural and log scales, on the forecasts each model shares with it, with the share of forecasts a model made in its label where it missed some; (C) bias; (D) 50% and 90% coverage; (E) relative CRPS by location; (F) by horizon. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
 :::
 
-{{< meta results.ebola.status >}} On the scored rounds, the best model was {{< meta results.ebola.best_model >}}, with a relative score of {{< meta results.ebola.best_rel_score >}} and {{< meta results.ebola.best_rel_log_score >}} on the log scale, against {{< meta results.ebola.baseline >}}.
+{{< meta results.ebola.status >}} On the {{< meta results.ebola.scope >}}, the best model was {{< meta results.ebola.best_model >}}, with a relative score of {{< meta results.ebola.best_rel_score >}} and {{< meta results.ebola.best_rel_log_score >}} on the log scale, against {{< meta results.ebola.baseline >}}.
 
 ::: {#tbl-ebola-scores}
 {{< include build/tables/main/ebola-scores.md >}}
