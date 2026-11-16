@@ -138,6 +138,34 @@ def _checkpoint(tmp_path, n):
     (where / "state" / "state.json").write_text(f'{{"done": {n}}}')
 
 
+def test_the_live_run_switches_over_without_retraining(tmp_path):
+    # The laptop's slots run: n250 to n750 saved without state of their
+    # own, the trainer's state part way to n1000, and a seed list that
+    # reaches 1,500 outbreaks so far.
+    train = tmp_path / "checkpoints" / "slots" / "train"
+    for n in (250, 500, 750):
+        where = train / f"n{n}"
+        (where / "finetuned-ckpt").mkdir(parents=True)
+        (where / "settings.json").write_text("{}")
+        (where / "finetuned-ckpt" / "adapter_model.safetensors").write_text("")
+    (train / "state").mkdir()
+    (train / "state" / "state.json").write_text('{"done": 875}')
+    seeds = tmp_path / "seeds.txt"
+    seeds.write_text("".join(f"{30100 + i}\n" for i in range(60)))
+    config = {
+        **FT,
+        "finetune": {
+            **FT["finetune"],
+            "prefixes": [250, 500, 750, 1000, 2000],
+            "outbreaks": 2000,
+            "seed_file": str(seeds),
+        },
+    }
+    jobs = dry(tmp_path, "finetune", config=config)
+    # Only n1000: n2000 needs more seeds than the list has.
+    assert jobs["train_segment"] == 1
+
+
 def test_publish_verifies_then_releases_each_checkpoint(tmp_path):
     for n in (250, 500):
         _checkpoint(tmp_path, n)

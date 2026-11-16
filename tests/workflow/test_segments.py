@@ -83,7 +83,7 @@ def _state(path, done):
 def test_a_segment_starts_from_the_prefix_before(tmp_path):
     run, prev = tmp_path / "state", tmp_path / "n250" / "state"
     _state(prev, 250)
-    assert segments.resume_state(run, prev) == "copied"
+    assert segments.resume_state(run, prev, 250) == "copied"
     assert (run / "state.json").read_text() == '{"done": 250}'
 
 
@@ -92,7 +92,7 @@ def test_a_state_further_on_is_kept(tmp_path):
     run, prev = tmp_path / "state", tmp_path / "n250" / "state"
     _state(prev, 250)
     _state(run, 375)
-    assert segments.resume_state(run, prev) == "kept"
+    assert segments.resume_state(run, prev, 250) == "kept"
     assert (run / "state.json").read_text() == '{"done": 375}'
 
 
@@ -100,12 +100,33 @@ def test_a_state_behind_is_replaced(tmp_path):
     run, prev = tmp_path / "state", tmp_path / "n500" / "state"
     _state(prev, 500)
     _state(run, 250)
-    assert segments.resume_state(run, prev) == "copied"
+    assert segments.resume_state(run, prev, 500) == "copied"
     assert (run / "state.json").read_text() == '{"done": 500}'
 
 
+def test_a_run_state_alone_is_enough(tmp_path):
+    # The live run's checkpoints have no state of their own.
+    run = tmp_path / "state"
+    _state(run, 875)
+    assert segments.resume_state(run, tmp_path / "n750" / "state", 750) == (
+        "kept"
+    )
+
+
+def test_no_state_to_resume_from_is_an_error(tmp_path):
+    with pytest.raises(ValueError, match="n750"):
+        segments.resume_state(
+            tmp_path / "state", tmp_path / "n750" / "state", 750
+        )
+
+
 def test_the_first_segment_starts_from_base(tmp_path):
-    assert segments.resume_state(tmp_path / "state", None) == "base"
+    assert segments.resume_state(tmp_path / "state", None, None) == "base"
+
+
+def test_reachable_prefixes_fit_the_seed_list():
+    assert segments.reachable(500, [1] * 21, lambda _s: 25)
+    assert not segments.reachable(2000, [1] * 21, lambda _s: 25)
 
 
 def test_exclusions_are_gathered_into_one_file(tmp_path):
