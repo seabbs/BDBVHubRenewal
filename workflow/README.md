@@ -1,0 +1,126 @@
+# The workflow
+
+One Snakemake workflow simulates outbreaks, fine-tunes Chronos-2 on them, publishes the checkpoints and scores them.
+The paper's workflow (`paper/workflow/Snakefile`) runs beside it for now and joins as a module next (#257).
+This page walks through it in order, with the command for each piece, from a whole target down to one file.
+
+## Running it
+
+High level, one Taskfile task per target:
+
+| Task | Target | Does | Writes outside this machine |
+|---|---|---|---|
+| `task all` | `all` | simulate, fine-tune and score | no |
+| `task simulate ROUNDS="4 5"` | `simulate` | simulation rounds, with QC and manifests | no |
+| `task release ROUNDS=4` | `release` | each batch to its `sims-r<N>` release | GitHub releases |
+| `task finetune` | `finetune` | every checkpoint prefix of the run | no |
+| `task publish` | `publish` | verify and release each checkpoint | GitHub releases |
+| `task score` | `score` | score each released checkpoint, then its follow-ups | no |
+| `task land` | `land` | commit the score tables to `evidence/` and push | git push |
+| `task paper` | (paper workflow) | the paper, as now | no |
+
+Pass Snakemake options after `--`: `task score -- -n` is a dry run, and a file path builds just that output.
+Low level, any output file, for example:
+
+```sh
+uv run --group paper snakemake <ROOT>/rounds/r4/sims/counts-30421.csv.gz  # one batch
+uv run --group paper snakemake <RUN>/train/n1000/settings.json            # one checkpoint
+uv run --group paper snakemake <SCORE_CACHE>/germany/slots-<hash>.done    # one checkpoint's German scores
+```
+
+Helpers: `task dag` draws the rule graph, `task progress` lists what exists and what would run, `task report` writes Snakemake's HTML report, and `task workflow:check` runs the tests and dry runs CI runs.
+
+## Machine settings
+
+Paths and host details are in `config/local.env`, which git ignores; `config/local.env.example` lists every key.
+The same file is read by the Taskfile (`dotenv`), by the shell scripts (`scripts/local_config.sh`) and by the workflow (`workflow/flowlib/localconfig.py`).
+A variable in the environment wins, and with no file everything runs on this machine.
+The workflow uses:
+
+- paths: `ROOT` (rounds), `RUN` (the fine-tuning run), `SCORE_CACHE`, `NOSLOTS_RUN` and `GERMANY_BLOCKS` (the slots check's);
+- what this machine does: `TARGETS` (what `all` runs; by default `simulate finetune score`, so archie sets `simulate score` and the laptop `finetune`), `SIMS_FROM` (`local` or `release`), `PUBLISH` (release each checkpoint as it is trained);
+- resources: `JOB_PREFIX` (a per-job memory cap such as a `systemd-run` scope; `{mem}` becomes the job's budget), `MIN_FREE_GB` and `MIN_DISK_GB` (room a heavy job waits for), and the Taskfile's `CORES`, `MEM_MB` and `SIM_SLOTS`;
+- `HOST_NAME`, and `NOTIFY` with `MAILBOX`: with `NOTIFY` set, a mailbox line when a round is ready, a checkpoint is saved or published, the checked checkpoint misses zero-shot, scores land or a run fails.
+
+Task reads `config/local.env` itself, not `$LOCAL_CONFIG`.
+
+Profiles in `workflow/profiles/` hold resources only and are named by role: `cpu` (simulate, score), `gpu` (fine-tune, publish) and `ci`.
+All of them rerun a step only when an input is newer (`rerun-triggers: mtime`), so editing a script does not reschedule finished work.
+Settings that are the same on every machine are in `workflow/config.yaml`; override them with `--config` or `--configfile`.
+
+Two machines share only GitHub releases: simulation batches (`sims-r<N>`, one asset per batch) and checkpoints (`chronos-slots-<hash>`, `chronos-ft-<hash>`).
+Each machine reruns its task on a timer as releases land.
+
+## 1. Simulate (`rules/simulate.smk`)
+
+Round r is 40 training and 4 held-out batches of 25 outbreaks, seeds from 30000 + 100 r, each with exactly 10 observation draws.
+
+- `simulate_batch`: one batch of `scripts/finetune_simulate.R`, under `JOB_PREFIX` at nice 19, once there is memory and disk to spare (`workflow/scripts/wait_for_room.sh`). A batch that fails is retried once at the higher cap. The simulator must be the committed one.
+- `batch_record`: the batch's manifest row (sha256 of each file, memory, time, grid, commit, host), keeping a row the round's manifest already holds.
+- `round_manifest`: the round's `manifest.csv`, rows in seed order.
+- `sim_qc`: the recorded sim-QC review (`scripts/sim_qc.py`), whose exclusions (`qc/excluded.csv`) the trainer skips. Nothing is deleted.
+- `round_ready`: the seed lists and `READY`, last.
+- `simulate`: the rounds in `rounds`. At most `sim_slots` batches run at once (2 by default).
+- `release_batch`, `release_qc`, `release`: opt-in, each batch and the round's QC exclusions to its round's release.
+
+Outputs are in `<ROOT>/rounds/r<N>/`.
+
+## 2. Fine-tune (`rules/finetune.smk`)
+
+One continuous run of `scripts/finetune_stream.py` from base Chronos-2, cut into one segment per checkpoint prefix (250, 500, 750, 1,000, 2,000, 4,000, 8,000).
+Segment N resumes from the state kept with the prefix before and stops once `n<N>` is saved (`--until N`).
+The state carries the learning-rate schedule, the step, the batch position and torch's random state, so the segments in turn are the run that never stopped.
+
+- `seed_list`: the training seeds in order, the rounds' in seed order or a fixed `seed_file`.
+- `fetch_batch`: a batch into `<RUN>/sims/`, hard linked from this machine's rounds or downloaded from its release (`sims_from`).
+- `real_validation`: the BDBV pseudo-origin blocks each checkpoint is scored on (`scripts/finetune_real_validation.py`).
+- `train_segment`: one segment on the GPU. Its inputs are the batches that hold its first N outbreaks after QC exclusions, one spare, and the held-out batches. A finished checkpoint is final and is never retrained.
+- `checkpoint_check`: a report of whether checkpoint `check_at` (1,000) beats zero-shot on the held-out simulations and the pseudo-origins. It never stops training.
+- `finetune`: every prefix.
+
+Outputs are in `<RUN>/train/n<N>/`.
+
+## 3. Publish (`rules/publish.smk`)
+
+- `verify_checkpoint`: the checkpoint's hash recomputes from its commit (`scripts/finetune_verify.py`).
+- `publish_checkpoint`: opt-in, the release `chronos-slots-<hash>` or `chronos-ft-<hash>` (`workflow/scripts/publish_checkpoint.py`).
+- `publish`: every checkpoint.
+
+## 4. Score (`rules/score.smk`, `rules/followups.smk`)
+
+- `release_list`: the repository's releases, the only rule that reads the network; `task score` reruns it. The checkpoints scored are the slots ones first, then the others, oldest first, from `published_from`, or `score.labels`.
+- `bdbv_data`: the hub's data (`bdbvhubrenewal data`), or `task data`. Newer data reruns the BDBV units, which add only the new origins.
+- `score_bdbv`, `score_germany`, `score_heldout`: the units of `scripts/checkpoint_scores.py` for each checkpoint and the references. BDBV units run before German ones. Each caches one file per origin or date and resumes from it.
+- `score_table`: the rows of every checkpoint in `<SCORE_CACHE>/tables/`, keeping other rules' rows of the committed tables.
+- `land`: opt-in, commit the tables to `evidence/` and push, only from the evidence branch (`score.branch`), never main.
+
+After each slots checkpoint's scores:
+
+- `fetch_adapter`: its adapter from the release, checked against `sha256sums.txt`.
+- `slots_check_shard`, `slots_check_summary`: the slots check (`scripts/slots_check.py`) against zero-shot and the no-slots checkpoint of its size.
+- `agg_data`, `agg_sanity`, `agg_fit`, `agg_rows`: the aggregation arms (`scripts/agg/`), with the data pinned to the zero-shot rows' hub commit and a sanity check that a zero-shot arm reproduces its rows, once per package version.
+- `followups`: all of these; `score` includes them.
+
+## 5. Dashboard (`workflow/flowlib/dashboard/`)
+
+`task dashboard` serves a page for a running fine-tune on 127.0.0.1 (`PORT=8765`); it is not a Snakemake job, so it never holds the workflow's lock.
+`task dashboard:static` builds the rule `dashboard`, a static render of the same page in `<RUN>/reports/dashboard.html`.
+
+- Runs are configured, not coded: `dashboard.runs` in `workflow/config.yaml` (release-prefix runs, which need no paths), then `DASHBOARD_RUNS` in `config/local.env` (runs with a local folder), then `--run` (`task dashboard -- --run realdata=realdata-ft-,colour=#0d9488`). A spec is `name=<folder|prefix>[,label=..][,colour=..][,live][,base=..][,prefix=..][,hashes=h1+h2][,n=h1:250+h2:500]`; any run can be compared with any other.
+- References (zero-shot ragged, complete-only, randomwalknowcast) are `dashboard.references`, matched on rows by model and checkpoint, with `--ref` to add or replace one.
+- Scores and German forecasts come from `SCORE_CACHE`, or, with `REMOTE` set, a read-only rsync mirror of `REMOTE:REMOTE_ROOT/scores` (or `REMOTE_SCORE_CACHE`) in `dashboard.mirror`.
+- German nowcasts use the paper panels' quantile levels, bands and truth ink (`paperfigs.plots`, through `flowlib/dashboard/paperstyle.py`, with a test that fails if the paper's bands change), so the dashboard and the paper's nowcast figures look alike.
+- The mailbox section shows `MAILBOX`'s last lines matching `dashboard.mail_filter`.
+
+## CI
+
+| Target | On CI | Why |
+|---|---|---|
+| tests and dry runs of every target (`task workflow:check`) | yes | fast, no network |
+| the paper and its figures and tables | yes, as now (Pages) | from stored forecasts and pinned evidence |
+| `score_table` from stored caches | yes, once the paper module lands | cheap |
+| checkpoint forecasts, slots check, aggregation fits | no | hours, needs the checkpoints |
+| `simulate`, `finetune` | never | heavy R, GPU |
+| `release`, `publish`, `land` | never | outward-facing |
+
+`all` is the default target.

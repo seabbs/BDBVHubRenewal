@@ -330,21 +330,23 @@ def test_a_silent_place_is_not_nowcast(runs) -> None:
     assert (sk.loc[sk["target_end_date"] <= start["CD-SK"], "value"] == 0).all()
 
 
-def test_a_place_with_no_week_to_start_from_draws_introductions(
+def test_a_place_with_no_week_to_start_from_starts_late_and_stays_small(
     task: ForecastTask,
 ) -> None:
     # Sud Ubangi has 2 cases ever, in the week of 10-03, so no week has
-    # enough cases to start a walk from. It takes the silent places' path
-    # from its latest complete week, so even a wide walk spread, as
-    # pprandomwalknowcast fits it, keeps its draws small: hundreds at most,
-    # where a walk from week 0 reached millions (#138).
+    # enough cases to start a walk from. It walks from its mean count from
+    # its latest complete week (#187), so even a wide walk spread, as
+    # pprandomwalknowcast fits it, keeps its draws small: a 0.9 spread over
+    # a few weeks reaches thousands at most, where a walk from week 0
+    # reached millions (#138).
     model = RandomWalkNowcast()
     origin = model.origin_at(task, errors=True)
     i = list(origin.snap.locations).index("CD-SU")
     origin.sigma[i] = 0.9
     values, _ = model.trajectories(origin, task, origin.point)
     su = values[:, i, :]
-    assert su.max() < 1000
+    assert su.max() < 10_000
+    assert np.median(su[:, -1]) < 5
     # Weeks with data keep at least the count reported.
     n_data = origin.reported.shape[1]
     assert (su[:, :n_data] >= origin.reported[i]).all()
@@ -396,25 +398,53 @@ def test_the_start_week_search_reaches_back_over_the_nowcast_window(
     assert _start_weeks(origin)[i] == origin.start[i]
 
 
-def test_a_quiet_place_with_recent_cases_draws_introductions(
+def _quiet_trajectories(
     target: pd.DataFrame,
     delays: pd.DataFrame,
     daily: pd.DataFrame,
     daily_zones: pd.DataFrame,
-) -> None:
+    vintage: str,
+    zone: str,
+):
     task = dataclasses.replace(
-        _task(target, delays, daily, "2026-11-08"),
-        locations=("CD-IT-17",),
+        _task(target, delays, daily, vintage),
+        locations=(zone,),
         daily_history=pd.concat([daily, daily_zones]),
         n_samples=400,
     )
     model = RandomWalkNowcast()
     origin = model.origin_at(task, errors=True)
     values, _ = model.trajectories(origin, task, origin.point)
-    i = origin.snap.locations.index("CD-IT-17")
-    cw = origin.snap.cut_week(origin.o)
-    # Kilo is quiet but not silent. Weeks with data keep at least what is
-    # reported, and most samples have no introduction yet the week after.
-    seen = values[:, i, : cw + 1]
-    assert (seen >= origin.reported[i, : cw + 1] - 1e-9).all()
-    assert (values[:, i, cw + 1] == 0).mean() > 0.5
+    i = origin.snap.locations.index(zone)
+    return origin, values[:, i], origin.snap.cut_week(origin.o), i
+
+
+@pytest.mark.parametrize(
+    ("vintage", "zone"),
+    [("2026-11-08", "CD-IT-17"), ("2026-11-01", "CD-TO-15")],
+)
+def test_a_place_with_recent_cases_below_the_start_rule_walks_on(
+    target: pd.DataFrame,
+    delays: pd.DataFrame,
+    daily: pd.DataFrame,
+    daily_zones: pd.DataFrame,
+    vintage: str,
+    zone: str,
+) -> None:
+    from bdbvhubrenewal.forecasters.randomwalk import _quiet, start_window
+
+    origin, x, cw, i = _quiet_trajectories(
+        target, delays, daily, daily_zones, vintage, zone
+    )
+    # Not silent, but no week with 5 cases to start from (#187).
+    assert _quiet(origin)[i]
+    assert not origin.silent[i]
+    # Weeks with data keep at least what is reported.
+    assert (x[:, : cw + 1] >= origin.reported[i, : cw + 1] - 1e-9).all()
+    # It walks from its own mean count over the start window, not from
+    # the pooled re-introduction rate, so the weeks ahead are not all 0.
+    s = int(origin.start[i])
+    level = origin.reported[i, s - start_window(origin.settings) + 1 : s + 1]
+    ahead = x[:, cw + 1 :]
+    assert (ahead > 0).mean() > 0.3
+    assert np.median(ahead.mean(axis=0)) == pytest.approx(level.mean(), rel=1)

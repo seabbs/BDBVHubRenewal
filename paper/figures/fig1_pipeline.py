@@ -13,8 +13,8 @@ The panels are:
   (`scripts/finetune_simulate.R`), one box per stage;
 - B, the reporting triangle laid out as ragged series for Chronos-2
   (`forecasters.foundation.layout_block`), each place's count and lag
-  series sharing one series slot (`forecasters.slots`), all places in
-  one group;
+  series joined by a learned attention bias for rows of the same place,
+  and another for a place and its parent, all places in one group;
 - C, a training block cut from a simulated release history
   (`forecasters.finetune.training_block`) and the LoRA adapters;
 - D, forecasting with the fine-tuned model
@@ -47,8 +47,10 @@ COV_SOFT = "#f5e5c8"
 HATCH = "#a3aabb"
 TRUTH = "#1b7f5f"
 TRUTH_SOFT = "#d4eee3"
-# One colour per place's series slot (panel B).
+# One colour per place's rows, which share the same-place attention bias
+# (panel B), and one for the bias between a place and its parent.
 SLOTS = ("#6f42c1", "#c0397a")
+PARENT_SLOT = "#2f7d4f"
 
 # Body text, small notes and headings, in points.
 BODY = 7.5
@@ -484,13 +486,15 @@ def panel_b(g: Svg, oy: float) -> float:
             anchor="end",
             weight="bold",
         )
-        # The place's slot, shared by its target and its lag series.
+        # The place's rows, joined by the same-place bias, and beside them
+        # the bias between the place and its parent.
         colour = SLOTS[p - 1]
         g.rect(bx - 35, y0, 3.2, bottom - y0, fill=colour, rx=1.6)
+        g.rect(bx - 30.5, y0, 2.2, bottom - y0, fill=PARENT_SLOT, rx=1.1)
         g.text(
             bx - 40,
             (y0 + bottom) / 2 + 9,
-            f"slot {p}",
+            "+ parent bias",
             size=SMALL,
             anchor="end",
             fill=colour,
@@ -563,17 +567,114 @@ def panel_b(g: Svg, oy: float) -> float:
         ("future", "to forecast"),
         ("none", "no release"),
         ("unseen", "not yet reported"),
-        ("slot", "one slot per place"),
+        ("slot", "same-place bias"),
+        ("parent", "parent bias"),
     ]
     x = 0.0
     for kind, name in items:
         if kind == "slot":
             g.rect(x + 3, lgy - 7, 3.2, 8.5, fill=SLOTS[0], rx=1.6)
+        elif kind == "parent":
+            g.rect(x + 3.5, lgy - 7, 2.2, 8.5, fill=PARENT_SLOT, rx=1.1)
         else:
             cell(g, x, lgy - 6.5, 9, 7.5, kind)
         g.text(x + 12, lgy, name, size=SMALL)
         x += 12 + 3.6 * len(name) + 12
     return lgy + 3
+
+
+# The attention-bias relations (panel B, lower part), each with its colour.
+RELATIONS = (
+    ("self", "self", ACCENT),
+    ("same", "same place", SLOTS[0]),
+    ("up", "up (child \u2192 parent)", PARENT_SLOT),
+    ("down", "down (parent \u2192 child)", COV),
+    ("none", "unrelated (no bias)", CELL),
+)
+
+
+def _relation(row: tuple[str, int], col: tuple[str, int]) -> str:
+    """Return the relation of a query row to a key column of the toy block.
+
+    Places A and B are children of the country C.
+    """
+    (p, i), (q, j) = row, col
+    if (p, i) == (q, j):
+        return "self"
+    if p == q:
+        return "same"
+    if q == "C":
+        return "up"
+    if p == "C":
+        return "down"
+    return "none"
+
+
+def panel_b_bias(g: Svg, oy: float) -> float:
+    """Draw the lower part of panel B, the group-attention biases."""
+    places = ("C", "A", "B")
+    names = ("count", "lag 1", "lag 2")
+    rows = [(p, k) for p in places for k in range(len(names))]
+    cs = 9.0
+    gx, gy = 70.0, oy + 22
+    g.text(
+        gx + cs * len(rows) / 2,
+        oy + 8,
+        "group attention at one step: rows attend to columns",
+        size=SMALL,
+        anchor="middle",
+        fill=MUTED,
+    )
+    colour = {key: c for key, _, c in RELATIONS}
+    for a, row in enumerate(rows):
+        for b, col in enumerate(rows):
+            g.rect(
+                gx + b * cs + 0.4,
+                gy + a * cs + 0.4,
+                cs - 0.8,
+                cs - 0.8,
+                fill=colour[_relation(row, col)],
+                rx=1,
+            )
+    # Places over the columns, and places and series beside the rows.
+    for k, p in enumerate(places):
+        mid = len(names) * cs * (k + 0.5)
+        g.text(
+            gx + mid, gy - 2.5, p, size=SMALL, anchor="middle", weight="bold"
+        )
+        g.text(
+            gx - 40,
+            gy + mid + 2.5,
+            p,
+            size=SMALL,
+            anchor="middle",
+            weight="bold",
+        )
+        for n, name in enumerate(names):
+            y = gy + (k * len(names) + n) * cs + cs - 2.2
+            g.text(gx - 3, y, name, size=SMALL - 1, anchor="end", fill=MUTED)
+    bottom = gy + len(rows) * cs
+    # The relations, one a line, beside the grid.
+    lx = gx + len(rows) * cs + 24
+    for k, (_, name, c) in enumerate(RELATIONS):
+        y = gy + 4 + k * 12
+        g.rect(lx, y - 7, 9, 7.5, fill=c, rx=1)
+        g.text(lx + 13, y, name, size=SMALL)
+    g.text(
+        lx,
+        gy + 4 + len(RELATIONS) * 12 + 4,
+        "learned bias per relation, layer and head, added to the",
+        size=SMALL,
+        fill=MUTED,
+    )
+    g.text(
+        lx,
+        gy + 4 + len(RELATIONS) * 12 + 13,
+        "attention scores; zero at the start",
+        size=SMALL,
+        fill=MUTED,
+    )
+    return bottom + 3
 
 
 def panel_c(g: Svg, oy: float) -> float:
@@ -660,17 +761,6 @@ def panel_c(g: Svg, oy: float) -> float:
     g.text(
         mx + mw / 2, y0 + 9.3, "input embedding", size=SMALL, anchor="middle"
     )
-    # The series slots, added to every token of a place's series.
-    g.rect(mx + mw + 4, y0, aw, 13, fill=ACCENT_SOFT, stroke=ACCENT, sw=0.9)
-    g.text(
-        mx + mw + 4 + aw / 2,
-        y0 + 9.3,
-        "slot",
-        size=SMALL,
-        anchor="middle",
-        fill=ACCENT,
-        weight="bold",
-    )
     g.rect(
         mx - 4,
         y0 + 17,
@@ -685,10 +775,20 @@ def panel_c(g: Svg, oy: float) -> float:
     g.rect(mx, y0 + 21, mw, 17, fill=CELL, rx=2)
     g.text(
         mx + mw / 2,
-        y0 + 32.3,
+        y0 + 28.6,
         "time and group attention",
         size=SMALL,
         anchor="middle",
+    )
+    # The place and parent biases, trained, inside group attention.
+    g.text(
+        mx + mw / 2,
+        y0 + 35.6,
+        "+ place and parent biases",
+        size=SMALL,
+        anchor="middle",
+        fill=ACCENT,
+        weight="bold",
     )
     g.rect(mx, y0 + 41, mw, 13, fill=CELL, rx=2)
     g.text(mx + mw / 2, y0 + 50.3, "feed-forward", size=SMALL, anchor="middle")
@@ -793,7 +893,7 @@ def panel_d(g: Svg, oy: float) -> float:
     g.text(
         x2 + w2 / 2,
         top + 34.5,
-        "+ adapter \u00b7 slots",
+        "+ adapter \u00b7 biases",
         size=SMALL,
         anchor="middle",
         fill=ACCENT,
@@ -872,6 +972,7 @@ def build() -> str:
     g = Svg()
     y = panel_a(g, 0.0)
     y = panel_b(g, y + 10)
+    y = panel_b_bias(g, y + 4)
     y = panel_c(g, y + 10)
     y = panel_d(g, y + 10)
     return g.render(round(y + 3))
