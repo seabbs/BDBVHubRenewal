@@ -13,7 +13,7 @@ they need no codes, no table and no scale, for any number of places.
 Chronos-2's encoder builds one additive group mask, `(time, 1, q, k)`
 over the batch axis (`Chronos2Encoder._construct_and_invert_group_time_mask`),
 which each layer's `GroupSelfAttention` adds to its scores. `attach`
-hooks each encoder block to add its layer's bias to that mask,
+hooks each `GroupSelfAttention` to add its layer's bias to that mask,
 from the rows' places and parents set by `assigned`. Rows are the ragged
 layout's order: the targets, then each place's lags in turn
 (`slots.row_places`); rows that Chronos-2 repeats for long horizons
@@ -127,13 +127,16 @@ def has_bias(model: Any) -> bool:
 
 
 def attach(model: Any) -> None:
-    """Add a zero bias to a Chronos-2 model and hook its encoder blocks.
+    """Add a zero bias to a Chronos-2 model and hook its group attention.
 
-    Each encoder block's forward pre-hook adds its layer's bias to the
-    group mask the block hands its group attention. The bias goes in as
-    the block's input, so a block recomputed in backward (gradient
-    checkpointing) recomputes it with the bias.
+    Each `GroupSelfAttention`'s forward pre-hook adds its layer's bias to
+    the group mask, from the rows set by `assigned`. A block recomputed in
+    backward (gradient checkpointing) recomputes the bias from the same
+    rows, so they must stay assigned until backward is done; the bias is
+    then never held per layer between forward and backward.
     """
+    from chronos.chronos2.layers import GroupSelfAttention
+
     if has_bias(model):
         raise ValueError("the model already has the series bias")
     config = model.config
@@ -141,10 +144,10 @@ def attach(model: Any) -> None:
     module = _bias_module(config.num_layers, config.num_heads)
     setattr(model, BIAS_MODULE, module.to(weight.device, weight.dtype))
     setattr(model, _STATE, {"rows": None})
-    blocks = list(model.encoder.block)
-    if len(blocks) != config.num_layers:
+    groups = [m for m in model.modules() if isinstance(m, GroupSelfAttention)]
+    if len(groups) != config.num_layers:
         raise ValueError(
-            f"{len(blocks)} encoder blocks, not {config.num_layers}"
+            f"{len(groups)} group attention layers, not {config.num_layers}"
         )
 
     def hook(layer: int) -> Callable[..., Any]:
@@ -155,7 +158,7 @@ def attach(model: Any) -> None:
             if rows is None:
                 return None
             hidden = args[0]
-            mask = kwargs["group_time_mask"]
+            mask = kwargs["attention_mask"]
             n_rows, n = hidden.shape[0], rows.shape[-1]
             if n_rows % n:
                 raise ValueError(f"{n_rows} rows but places for {n}")
@@ -164,13 +167,13 @@ def attach(model: Any) -> None:
             bias = getattr(model, BIAS_MODULE)(layer, same, linked)
             return args, {
                 **kwargs,
-                "group_time_mask": mask + bias[None].to(mask.dtype),
+                "attention_mask": mask + bias[None].to(mask.dtype),
             }
 
         return add
 
-    for layer, block in enumerate(blocks):
-        block.register_forward_pre_hook(hook(layer), with_kwargs=True)
+    for layer, group in enumerate(groups):
+        group.register_forward_pre_hook(hook(layer), with_kwargs=True)
 
 
 @contextmanager

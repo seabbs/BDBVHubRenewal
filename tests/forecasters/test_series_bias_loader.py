@@ -205,8 +205,8 @@ def test_inference_gives_a_bias_model_its_rows_by_name(monkeypatch, tmp_path):
 
 def test_the_bias_survives_gradient_checkpointing(monkeypatch):
     # The trainer recomputes large batches' encoder blocks in backward
-    # (finetune_stream.checkpoint_large_batches), after the rows are
-    # unset; the bias must reach that recompute as an input.
+    # (finetune_stream.checkpoint_large_batches); with the rows still
+    # assigned, the recompute adds the same bias.
     import sys
     from pathlib import Path
 
@@ -238,7 +238,7 @@ def test_the_bias_survives_gradient_checkpointing(monkeypatch):
                 num_output_patches=batch["num_output_patches"],
                 future_target=batch["future_target"],
             ).loss
-        loss.backward()
+            loss.backward()
         return module.same.grad, module.parent.grad
 
     plain, checked = grads(False), grads(True)
