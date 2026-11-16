@@ -148,7 +148,11 @@ def test_model_styles_are_fixed_by_name() -> None:
     from bdbvhubrenewal.forecasters import list_models
 
     registered = {s.name for s in list_models()}
-    assert set(plots.MODEL_STYLE) == registered
+    # The real-data models are registered only once their release is
+    # pinned, but keep their style either way.
+    pending = {f"fm_chronos_{s}_ragged_real" for s in ("daily", "weekly")}
+    assert registered <= set(plots.MODEL_STYLE)
+    assert set(plots.MODEL_STYLE) - registered <= pending
     # Each colour and dash pair belongs to one model.
     pairs = list(plots.MODEL_STYLE.values())
     assert len(set(pairs)) == len(pairs)
