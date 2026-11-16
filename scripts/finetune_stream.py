@@ -200,10 +200,17 @@ def param_groups(model, lr: float, bias_lr: float = 0.0) -> list[dict]:
     for name, p in model.named_parameters():
         if p.requires_grad:
             (bias if series_bias.BIAS_MODULE in name else adapter).append(p)
-    groups = [{"params": adapter, "lr": lr, "base_lr": lr}]
+    groups = [{"params": adapter, "lr": lr, "base_lr": lr, "name": "lora"}]
     if bias:
-        groups.append({"params": bias, "lr": bias_lr, "base_lr": bias_lr})
+        groups.append(
+            {"params": bias, "lr": bias_lr, "base_lr": bias_lr, "name": "bias"}
+        )
     return groups
+
+
+def group_rates(optimiser) -> dict:
+    """Return each optimiser group's current rate by its name."""
+    return {g["name"]: g["lr"] for g in optimiser.param_groups}
 
 
 def set_learning_rates(optimiser, step: int, steps: int) -> None:
@@ -1507,6 +1514,7 @@ def main() -> None:
                         model, val, args.batch_size, ft.EVAL_BLOCKS
                     )
                     described = f"by source {_by_source(entry['by_source'])}, "
+                entry["lr"] = group_rates(optimiser)
                 bias = bias_summary(model)
                 if bias:
                     entry["bias"] = bias
