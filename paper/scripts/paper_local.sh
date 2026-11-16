@@ -7,7 +7,8 @@
 #
 # Waits for (each checked every 10 minutes, for up to 24 h):
 # - the held-out synthetic simulations of the paper run's seeds, in the
-#   folder `synthetic.simulations.paper` of the workflow config names;
+#   folder `synthetic.simulations.paper` of the workflow config names,
+#   with the set's READY file beside it;
 # - the German held-out half, results/germany/held-out/paper-forecasts.csv.gz
 #   (paper/scripts/gather_heldout.sh brings it from a dispatched CI run).
 # QUARTO_BIN picks a Quarto (default: quarto on PATH).
@@ -34,8 +35,11 @@ from paperpipe.config import run_settings
 config = yaml.safe_load(Path("paper/workflow/config.yaml").read_text())
 sims = Path("paper") / config["synthetic"]["simulations"]["paper"]
 seeds = run_settings(config, "paper").synthetic_seeds
-need = [sims / f"{k}-{s}.{e}" for s in seeds
-        for k, e in (("counts", "csv.gz"), ("settings", "csv"))]
+# The simulation set writes READY beside sims/ once every batch is
+# simulated, recorded and reviewed.
+need = [sims.parent / "READY"]
+need += [sims / f"{k}-{s}.{e}" for s in seeds
+         for k, e in (("counts", "csv.gz"), ("settings", "csv"))]
 need.append(Path("results/germany/held-out/paper-forecasts.csv.gz"))
 missing = [str(p) for p in need if not p.exists()]
 print(", ".join(missing))
