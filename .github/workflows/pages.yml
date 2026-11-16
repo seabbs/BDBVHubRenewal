@@ -443,7 +443,8 @@ jobs:
           EXPECTED_LOCATIONS: ${{ vars.EXPECTED_LOCATIONS }}
         run: |
           # Until the hub opens the detected round, review the newest round
-          # its tasks.json has, so the file is checked against a round.
+          # its tasks.json has, so the file is checked against a round. With
+          # no round on or before it, the detected round is kept.
           REFERENCE_DATE=$(python3 - "$REFERENCE_DATE" << 'PY'
           import json, sys
           want = sys.argv[1]
@@ -458,7 +459,7 @@ jobs:
                   for x in o:
                       yield from dates(x)
           have = set(dates(json.load(open("output/hub-clone/hub-config/tasks.json"))))
-          print(want if want in have else max(d for d in have if d <= want))
+          print(want if want in have else max((d for d in have if d <= want), default=want))
           PY
           )
           export REFERENCE_DATE
@@ -471,13 +472,12 @@ jobs:
           TRACK_MODEL=$(uv run python -c 'import tomllib
           m = tomllib.load(open("config/hub.toml", "rb"))["models"]
           print(next(k for k, v in m.items() if v["model_abbr"] == "chronos2_ft"))')
-          # The model's stored fits at past origins pair its draws. Until
-          # Fit store holds them (once this model is on main), fit the
-          # missing ones into this job's copy of the store.
-          # The other source's model, to show beside it.
+          # The other Chronos-2 source's model, to show beside it.
           OTHER=fm_chronos_weekly_ragged_ft
           [ "$TRACK_MODEL" = "$OTHER" ] && OTHER=fm_chronos_daily_ragged_ft
           echo "other=$OTHER" >> "$GITHUB_OUTPUT"
+          # The copula pairs each model's draws using its fits at past
+          # origins: fit any the store lacks into this job's copy of it.
           uv run bdbvhubrenewal fit-store plan --store output/fit-store \
             --models "$TRACK_MODEL" "$OTHER" --out "$RUNNER_TEMP/plan.json"
           jq -r '.include[] | "\(.model) \(.origin)"' "$RUNNER_TEMP/plan.json" \
@@ -501,10 +501,16 @@ jobs:
           echo "seconds=$((SECONDS - start))" >> "$GITHUB_OUTPUT"
           echo "model=$TRACK_MODEL" >> "$GITHUB_OUTPUT"
           # The latest seabbs-renewal file on the hub, to show beside it.
+          # Without one the page leaves it out, so a failure here is not
+          # fatal.
           prev=$(gh api "repos/InsightNet-US/BDBV-Modeling-Hub/contents/model-output/seabbs-renewal" \
-            --jq '[.[] | select(.name | endswith(".csv")) | .name] | sort | last')
-          curl -fsSL "https://raw.githubusercontent.com/InsightNet-US/BDBV-Modeling-Hub/main/model-output/seabbs-renewal/$prev" \
-            -o "$RUNNER_TEMP/seabbs-renewal.csv"
+            --jq '[.[] | select(.name | endswith(".csv")) | .name] | sort | last // empty' \
+            || true)
+          if [ -n "$prev" ]; then
+            curl -fsSL "https://raw.githubusercontent.com/InsightNet-US/BDBV-Modeling-Hub/main/model-output/seabbs-renewal/$prev" \
+              -o "$RUNNER_TEMP/seabbs-renewal.csv" \
+              || rm -f "$RUNNER_TEMP/seabbs-renewal.csv"
+          fi
       - name: Write the submission review page
         if: steps.review.outcome == 'success'
         env:
@@ -518,9 +524,7 @@ jobs:
             --compare randomwalknowcast=output/ci/candidates/randomwalknowcast/submission \
             --compare "$OTHER=$RUNNER_TEMP/other" \
             --compare "seabbs-renewal (submitted)=$RUNNER_TEMP/seabbs-renewal.csv" \
-            --table "Release backtest, rolling truth, checkpoint r1 2c2b22a03107 (evidence/fm-chronos)=ci/review-tables/rolling.csv" \
-            --table "Groupings (fm-agg)=ci/review-tables/fm-agg.md" \
-            --table "Rolling copula (fm-copula)=ci/review-tables/fm-copula.md" \
+            --table "Release backtest against randomwalknowcast, rolling truth, checkpoint r1 2c2b22a03107 (evidence/fm-chronos)=ci/review-tables/rolling.csv" \
             --seconds "$SECONDS_TAKEN" --log "$RUNNER_TEMP/track.log" \
             --out docs/submission/review
       - name: Build the site into _site
