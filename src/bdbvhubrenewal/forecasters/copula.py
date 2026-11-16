@@ -220,6 +220,7 @@ class GaussianCopula:
         days: np.ndarray | None = None,
         national: bool = True,
         locations: Sequence[str] | None = None,
+        country: str = NATIONAL,
     ) -> np.ndarray:
         """Return the trajectory each cell's draws go to.
 
@@ -235,6 +236,8 @@ class GaussianCopula:
             Whether the first place is the country.
         locations : sequence of str, optional
             The places' codes (`normals`).
+        country : str
+            The country's code in `locations`.
 
         Returns
         -------
@@ -246,7 +249,7 @@ class GaussianCopula:
         n, n_places, n_steps = draws.shape
         if days is None:
             days = 7 * np.arange(n_steps)
-        z = self.normals(rng, n, n_places, days, national, locations)
+        z = self.normals(rng, n, n_places, days, national, locations, country)
         rank = np.argsort(np.argsort(z, axis=0), axis=0)
         by_value = np.argsort(draws, axis=0, kind="stable")
         return np.take_along_axis(by_value, rank, axis=0)
@@ -258,6 +261,7 @@ class GaussianCopula:
         days: np.ndarray | None = None,
         national: bool = True,
         locations: Sequence[str] | None = None,
+        country: str = NATIONAL,
     ) -> np.ndarray:
         """Pair independent draws into trajectories (`order`).
 
@@ -273,13 +277,15 @@ class GaussianCopula:
             Whether the first place is the country.
         locations : sequence of str, optional
             The places' codes (`normals`).
+        country : str
+            The country's code in `locations`.
 
         Returns
         -------
         numpy.ndarray
             The same draws of each cell, reordered across trajectories.
         """
-        index = self.order(draws, rng, days, national, locations)
+        index = self.order(draws, rng, days, national, locations, country)
         return np.take_along_axis(draws, index, axis=0)
 
 
@@ -374,7 +380,7 @@ def pair_samples(
     ).reindex(columns=pd.MultiIndex.from_product([places, weeks]))
     draws = wide.to_numpy().reshape(len(wide), len(places), len(weeks))
     days = (pd.to_datetime(weeks) - pd.Timestamp(weeks[0])).days.to_numpy()
-    index = copula.order(draws, rng, days, locations=places)
+    index = copula.order(draws, rng, days, locations=places, country=national)
     ids = wide.index.to_numpy()
     moves = pd.DataFrame(
         {
