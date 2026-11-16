@@ -789,6 +789,7 @@ def load_state(where: Path, model, optimiser) -> dict | None:
 
 def main() -> None:
     """Train on the chunks as they are simulated."""
+    global CHUNK, DRAWS_PER_PASS, SUBSET_SEED
     import torch
     from chronos import Chronos2Pipeline
     from chronos.chronos2.dataset import DatasetMode
@@ -849,7 +850,6 @@ def main() -> None:
     # Processes cutting blocks a chunk ahead; they do not change the blocks.
     parser.add_argument("--cut-workers", type=int, default=3)
     args = parser.parse_args()
-    global CHUNK
     CHUNK = args.chunk
     ft.SOURCES = tuple(args.sources)
     ft.UNIVARIATE_SHARE = args.univariate_share
