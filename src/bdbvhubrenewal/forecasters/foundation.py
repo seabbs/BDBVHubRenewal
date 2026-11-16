@@ -299,9 +299,10 @@ def resolve_checkpoint(spec: str) -> Checkpoint:
         raise _unreachable(url, err) from err
     sums = {}
     for line in text.splitlines():
-        if line.strip():
-            sha, name = line.split(maxsplit=1)
-            sums[name.lstrip("*").strip()] = sha
+        parts = line.split(maxsplit=1)
+        # A line that is not `<sha> <name>` is left to the check below.
+        if len(parts) == 2:
+            sums[parts[1].lstrip("*").strip()] = parts[0]
     missing = [f for f in ADAPTER_FILES if f not in sums]
     if missing:
         raise ValueError(
@@ -408,7 +409,6 @@ def hub_triangle(
     partial = np.full((len(places), n_times, lags), np.nan)
     final = np.zeros((len(places), n_times))
     last = 0
-    # The latest release gives the final counts and the last step.
     for release in sorted(set(rows["vintage"])):
         mine = (rows["vintage"] == release).to_numpy()
         cutoff = str(rows.loc[mine, "cutoff"].iloc[0])
@@ -423,6 +423,7 @@ def hub_triangle(
         for d in range(lags):
             if 0 <= at - d < n_times:
                 partial[:, at - d, d] = counts[:, at - d]
+        # Sorted, so the last release's counts and cut-off are the latest.
         final, last = counts, at
     return HubTriangle(times, final, partial, last)
 
@@ -785,7 +786,14 @@ class FoundationModel:
         tri = hub_triangle(rows, self.source, places, weeks[-1])
         start = tri.n_context
         if self.layout == "complete":
-            start = tri.times.index(_walk_start(task)) + 1
+            walk = _walk_start(task)
+            if walk not in tri.times:
+                raise ModelUnavailableError(
+                    f"{self.name} starts from the randomwalk week {walk}, "
+                    f"which the task for {task.vintage} has no "
+                    f"{self.source} release of."
+                )
+            start = tri.times.index(walk) + 1
         if start < 2:
             raise ModelUnavailableError(
                 f"{self.name} needs two steps of context, and the task for "
@@ -858,7 +866,7 @@ for _source in SOURCES:
     register_model(
         f"fm_chronos_{_source}_ragged_ft",
         partial(_finetuned, f"fm_chronos_{_source}_ragged_ft", _source),
-        f"Chronos-2 fine-tuned on simulated outbreaks, on the hub target's "
+        "Chronos-2 fine-tuned on simulated outbreaks, on the hub target's "
         f"{_source} releases, ragged layout.",
         fitted=True,
     )
