@@ -79,6 +79,7 @@ It fits and stores the newest origin first, then the other origins, so a backfil
 A push never cancels a running refit: the latest push waits and runs after it.
 The fit jobs are read-only, and one job with no project code pushes their files and prunes the branch.
 It keeps the current key's file and the newest good fit of older code for each model and origin.
+It deletes the folder of a model no longer registered (`fit-store plan --registered`), but keeps models a dispatch with `models` leaves out.
 A fit that fails is stored as failed, and is fitted again only when its inputs change or a dispatch sets `retry_failed`.
 On a pull request the workflow only lists the fits the change needs.
 Only `main` writes to `fit-store`.

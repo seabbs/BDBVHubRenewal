@@ -8,14 +8,16 @@
 #       copy the branch's files into DIR (empty if there is no branch),
 #       with the commit fetched in DIR/.commit, and fail if the remote
 #       cannot be read
-#   scripts/fit-store.sh push DIR KEYS PLAN
+#   scripts/fit-store.sh push DIR KEYS PLAN [REGISTERED]
 #       add DIR's planned fits to the branch, prune it and push
 #
-# KEYS is the JSON list of current keys, `<model>/<origin>/<key>`, and
-# PLAN the matrix of planned fits, as `fit-store plan --keys --out` write
+# KEYS is the JSON list of current keys, `<model>/<origin>/<key>`, PLAN
+# the matrix of planned fits and REGISTERED the list of registered
+# stored models, as `fit-store plan --keys --out --registered` write
 # them. Only planned files are copied. For each pair in KEYS the push
 # keeps the current key's file and the newest good fit of older code,
-# and deletes the rest. FIT_STORE_BRANCH names the branch (default
+# and deletes the rest. With REGISTERED, it also deletes each top-level
+# model folder not in it: a model removed from the registry. FIT_STORE_BRANCH names the branch (default
 # fit-store). Uses git and Python's standard library only.
 set -euo pipefail
 
@@ -65,6 +67,10 @@ case "$action" in
     dir=$(cd "$2" && pwd)
     keys=$(cd "$(dirname "$3")" && pwd)/$(basename "$3")
     plan=$(cd "$(dirname "$4")" && pwd)/$(basename "$4")
+    registered=""
+    if [ -n "${5:-}" ]; then
+      registered=$(cd "$(dirname "$5")" && pwd)/$(basename "$5")
+    fi
     work=$(mktemp -d "${TMPDIR:-/tmp}/fit-store.XXXXXX")
     for attempt in 1 2 3 4 5; do
       if fetch_tip; then
@@ -73,7 +79,7 @@ case "$action" in
         git worktree add -q --detach "$work"
         git -C "$work" switch -q --orphan "$branch-new"
       fi
-      msg=$(python3 -I - "$work" "$dir" "$keys" "$plan" << 'EOF'
+      msg=$(python3 -I - "$work" "$dir" "$keys" "$plan" "$registered" << 'EOF'
 import gzip
 import json
 import shutil
@@ -103,7 +109,18 @@ for entry in keys:
     for _, _, path in older:
         if path != keep:
             path.unlink()
-print("Store " + " ".join(stored))
+removed = []
+if sys.argv[5]:
+    registered = set(json.loads(Path(sys.argv[5]).read_text()))
+    for path in sorted(work.iterdir()):
+        if path.is_dir() and not path.name.startswith("."):
+            if path.name not in registered:
+                shutil.rmtree(path)
+                removed.append(path.name)
+msg = "Store " + " ".join(stored)
+if removed:
+    msg += "; prune removed models " + " ".join(removed)
+print(msg)
 EOF
       )
       git -C "$work" add -A
@@ -129,7 +146,7 @@ EOF
     exit 1
     ;;
   *)
-    echo "usage: $0 guard EVENT REF SCRATCH | fetch DIR | push DIR KEYS PLAN" >&2
+    echo "usage: $0 guard EVENT REF SCRATCH | fetch DIR | push DIR KEYS PLAN [REGISTERED]" >&2
     exit 2
     ;;
 esac

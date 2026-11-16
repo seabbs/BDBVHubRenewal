@@ -176,7 +176,8 @@ jobs:
           ORIGINS: ${{ inputs.origins }}
           RETRY: ${{ inputs.retry_failed }}
         run: |
-          args=(--store "$STORE" --out matrix.json --keys keys.json)
+          args=(--store "$STORE" --out matrix.json --keys keys.json
+            --registered registered.json)
           # shellcheck disable=SC2206
           [ -n "$MODELS" ] && args+=(--models $MODELS)
           # shellcheck disable=SC2206
@@ -220,6 +221,7 @@ jobs:
           name: plan
           path: |
             keys.json
+            registered.json
             current.json
             rest.json
           retention-days: 3
@@ -315,7 +317,7 @@ jobs:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: plan
-      - run: scripts/fit-store.sh push new keys.json current.json
+      - run: scripts/fit-store.sh push new keys.json current.json registered.json
 
   # With the longest fits first, 8 runners finish a full refit as soon
   # as 12 (the longest fit, about 4 h). The rest of the 20 are left for
@@ -354,7 +356,7 @@ jobs:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: plan
-      - run: scripts/fit-store.sh push new keys.json rest.json
+      - run: scripts/fit-store.sh push new keys.json rest.json registered.json
 
   pages:
     name: Rebuild the docs from the store

@@ -530,6 +530,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="With `plan`: write every current key here, for pruning.",
     )
+    fst.add_argument(
+        "--registered",
+        default=None,
+        help="With `plan`: write every registered stored model here, "
+        "whatever `--models` picks, so the push prunes removed models.",
+    )
 
     plot = sub.add_parser("plot-submission", help="Plot a submitted hub file.")
     plot.add_argument("--submission", required=True)

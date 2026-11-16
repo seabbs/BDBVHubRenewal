@@ -1065,6 +1065,10 @@ def command(args: argparse.Namespace) -> int:
             Path(args.keys).write_text(
                 json.dumps([f"{m}/{o}/{k}" for (m, o), k in keys.items()])
             )
+        if getattr(args, "registered", None):
+            Path(args.registered).write_text(
+                json.dumps(sorted(stored_models()))
+            )
         return 0
     for s in load(
         args.store, keys, args.results, config.min_horizon, config.max_horizon
