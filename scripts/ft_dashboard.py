@@ -30,24 +30,44 @@ DATASETS = [
 #   dir              local run folder (train.log, train/, trainer.pid)
 #   hashes           explicit checkpoint hashes, or None to use the hashes in
 #                    the saved train/n*/settings.json of "dir"
-#   prefix           mirror folder prefix, e.g. slots-<hash> on archie
+#   prefix           mirror folder prefix, e.g. slots-<hash> on archie. A run
+#                    with prefix None only owns the hashes in its own saved
+#                    settings (or its explicit list), whatever the mirror
+#                    folders are called.
 #   live             the run the status tiles follow (exactly one)
 #   n                optional hash -> simulations, when settings lack it
 #   base_from        optional key of a run whose step-0 losses are the base
 #                    model's (use for runs whose labels change the step-0
 #                    loss); default is the run's own step 0
 RUNS = [
-    {"key": "slots", "label": "slots", "hue": 217, "live": True,
-     "dir": RUN, "hashes": None, "prefix": "slots", "n": {},
+    {"key": "attention bias", "label": "attention bias", "hue": 217,
+     "live": True, "dir": RUN, "hashes": None, "prefix": None, "n": {},
      "base_from": "slots zeroinit"},
     {"key": "slots zeroinit", "label": "slots (zero init)", "hue": 330,
      "live": False, "dir": ROOT / "output/finetune/continuous-slots-zeroinit",
-     "hashes": ["7d7c5d9f247e", "06dbdcc2b48d"], "prefix": "slots-zeroinit",
+     "hashes": ["7d7c5d9f247e", "06dbdcc2b48d"], "prefix": None,
      "n": {"7d7c5d9f247e": 250, "06dbdcc2b48d": 500}},
     {"key": "no slots", "label": "no slots", "hue": 25, "live": False,
      "dir": PREV, "hashes": ["de129103cacc", "7962fd718a47"], "prefix": None,
      "n": {"de129103cacc": 1000, "7962fd718a47": 2000}},
 ]
+
+
+# Checkpoints that never appear anywhere (plots, tables, the mirror, the
+# scores CSV), even when a prefix would match: explicit hashes, plus every hash
+# in the saved settings of the folders in "dirs".
+EXCLUDE = {"hashes": ["85babc01767c", "ea31bba0123e"],
+           "dirs": [ROOT / "output/finetune/continuous-slots-labels"]}
+
+
+def excluded_hashes():
+    out = set(EXCLUDE["hashes"])
+    for d in EXCLUDE["dirs"]:
+        for f in Path(d).glob("train/n*/settings.json"):
+            s = JC.get(str(f))
+            if isinstance(s, dict) and s.get("hash"):
+                out.add(str(s["hash"]))
+    return out
 
 
 def live_cfg():
@@ -451,6 +471,8 @@ def run_hashes(cfg):
 
 def hash_run(h, pref=None):
     """Run key for a checkpoint hash, or None to ignore it."""
+    if h in excluded_hashes():
+        return None
     for cfg in RUNS:
         if cfg["hashes"] is not None and h in cfg["hashes"]:
             return cfg["key"]
@@ -1157,6 +1179,249 @@ REFRESH_JS = r"""
 
 ONCE = {"on": False}
 
+# ---------- attention bias module (same / parent, [layers, heads]) ----------
+# The series bias holds one [layers, heads] tensor per relation (the trainer's
+# series_bias.PAIRS): self, same place, child to parent, parent to child.
+BIAS_PAIRS = [("self", "self"), ("same", "same"),
+              ("up", "up (child to parent)"),
+              ("down", "down (parent to child)")]
+BIAS_COL = {"self": "#6b7280", "same": "#2563eb", "up": "#16a34a",
+            "down": "#ea580c"}
+BIAS_RE = re.compile(r"(?:^|[._/])(self_?|same|up|down)$")
+TORCH_SCRIPT = r"""
+import json, sys, torch
+sd = torch.load(sys.argv[1], map_location="cpu", weights_only=True)
+out = {}
+def walk(o, p):
+    if isinstance(o, dict):
+        for k, v in o.items():
+            walk(v, f"{p}.{k}" if p else str(k))
+    elif hasattr(o, "shape") and len(o.shape) == 2:
+        out[p] = o.float().tolist()
+walk(sd, "")
+print(json.dumps(out))
+"""
+BIAS = {"cache": {}}
+
+
+def st_tensors(path):
+    """2-D float tensors of a safetensors file as {name: rows} (stdlib)."""
+    import array
+    import struct
+    out = {}
+    with open(path, "rb") as f:
+        n = int.from_bytes(f.read(8), "little")
+        hdr = json.loads(f.read(n))
+        for name, info in hdr.items():
+            if name == "__metadata__" or len(info.get("shape", [])) != 2 \
+                    or not BIAS_RE.search(name):
+                continue
+            a, b = info["data_offsets"]
+            f.seek(8 + n + a)
+            raw = f.read(b - a)
+            dt = info["dtype"]
+            if dt == "F32":
+                v = array.array("f", raw)
+            elif dt == "F64":
+                v = array.array("d", raw)
+            elif dt == "F16":
+                v = struct.unpack(f"<{len(raw)//2}e", raw)
+            elif dt == "BF16":
+                v = [struct.unpack("<f", b"\0\0" + raw[i:i + 2])[0]
+                     for i in range(0, len(raw), 2)]
+            else:
+                continue
+            r, c = info["shape"]
+            out[name] = [list(map(float, v[i * c:(i + 1) * c]))
+                         for i in range(r)]
+    return out
+
+
+def pt_tensors(path):
+    """Same for a torch file, via the repo venv's python (cached)."""
+    py = ROOT / ".venv/bin/python"
+    if not py.exists():
+        raise RuntimeError("no .venv python to read torch files")
+    r = subprocess.run([str(py), "-c", TORCH_SCRIPT, str(path)],
+                       capture_output=True, text=True, timeout=180)
+    if r.returncode != 0:
+        raise RuntimeError(r.stderr[-150:])
+    return {k: v for k, v in json.loads(r.stdout.splitlines()[-1]).items()
+            if BIAS_RE.search(k)}
+
+
+def bias_file(path):
+    """{'same': rows, 'parent': rows} from one adapter file, or None."""
+    try:
+        st = Path(path).stat()
+    except OSError:
+        return None
+    key = (str(path), st.st_mtime_ns)
+    if key not in BIAS["cache"]:
+        try:
+            ts = pt_tensors(path) if str(path).endswith((".pt", ".bin")) \
+                else st_tensors(path)
+        except Exception:
+            ts = {}
+        res = {}
+        for k, _ in BIAS_PAIRS:
+            c = [n for n in ts if BIAS_RE.search(n).group(1).rstrip("_") == k
+                 and "bias" in n.lower()]
+            c.sort(key=lambda n: ("modules_to_save" not in n,
+                                  "original" in n, n))
+            if c:
+                res[k] = ts[c[0]]
+        BIAS["cache"][key] = res or None
+    return BIAS["cache"][key]
+
+
+def bias_stats(rows):
+    flat = [x for r in rows for x in r]
+    return {"mean": sum(flat) / len(flat), "min": min(flat), "max": max(flat)}
+
+
+def bias_data(rundir, hist, cur_step):
+    """Per-step stats and the latest [layers, heads] matrices of a run."""
+    pts = {k: {} for k, _ in BIAS_PAIRS}
+    latest = None
+    # The trainer logs history entries {"step", "bias": {pair: {mean, min,
+    # max, values[layers][heads]}}} at each eval.
+    for h in hist if isinstance(hist, list) else []:
+        if not isinstance(h, dict) or "step" not in h or \
+                not isinstance(h.get("bias"), dict):
+            continue
+        for key, v in h["bias"].items():
+            k = key.rstrip("_")
+            if k not in pts:
+                continue
+            vals = v.get("values") if isinstance(v, dict) else v
+            if isinstance(vals, list) and vals and isinstance(vals[0], list):
+                pts[k][h["step"]] = (
+                    {x: v[x] for x in ("mean", "min", "max")}
+                    if isinstance(v, dict) and {"mean", "min", "max"} <= set(v)
+                    else bias_stats(vals))
+                if not latest or h["step"] > latest["step"]:
+                    latest = {"step": h["step"]}
+                if latest["step"] == h["step"]:
+                    latest[k] = vals
+    files = []
+    for d in Path(rundir).glob("train/n*"):
+        s = JC.get(str(d / "settings.json"))
+        step = (s or {}).get("steps")
+        if step is None:
+            continue
+        for f in sorted((d / "finetuned-ckpt").glob("*.safetensors")) + \
+                sorted((d / "finetuned-ckpt").glob("*.pt")):
+            files.append((step, f))
+    st = Path(rundir) / "train/state"
+    for f in ([st / "adapter.pt"] if (st / "adapter.pt").is_file() else
+              sorted(st.glob("adapter*.safetensors"))):
+        files.append((cur_step if cur_step is not None else 10 ** 9, f))
+    for step, f in sorted(files, key=lambda x: x[0]):
+        b = bias_file(f)
+        if not b:
+            continue
+        for k, rows in b.items():
+            pts[k].setdefault(step, bias_stats(rows))
+        if not latest or step >= latest.get("step", -1):
+            latest = {"step": step, **b}
+    if not any(pts.values()) and not latest:
+        return None
+    return {"pts": {k: sorted(v.items()) for k, v in pts.items()},
+            "latest": latest}
+
+
+def heat_svg(rows, title):
+    flat = [x for r in rows for x in r]
+    lo, hi = min(flat), max(flat)
+    div = lo < 0 < hi
+    amp = max(abs(lo), abs(hi)) or 1
+    cw = 16
+    h = [f'<svg viewBox="0 0 {len(rows[0]) * cw + 4} {len(rows) * cw + 4}" '
+         f'width="{min(100, len(rows[0]) * cw)}%" style="max-width:'
+         f'{len(rows[0]) * cw * 2}px">']
+    for i, r in enumerate(rows):
+        for j, v in enumerate(r):
+            if div:
+                a = abs(v) / amp
+                col = (f"rgba(220,38,38,{a:.2f})" if v > 0
+                       else f"rgba(37,99,235,{a:.2f})")
+            else:
+                a = (v - lo) / ((hi - lo) or 1)
+                col = f"rgba(37,99,235,{0.08 + 0.92 * a:.2f})"
+            h.append(f'<rect x="{2 + j * cw}" y="{2 + i * cw}" '
+                     f'width="{cw - 1}" height="{cw - 1}" fill="{col}">'
+                     f'<title>{title} layer {i} head {j}: {v:.4g}</title>'
+                     f'</rect>')
+    h.append("</svg>")
+    return "".join(h) + (f'<div class=mut>{lo:.3g} to {hi:.3g}; rows are '
+                         f'layers, columns are heads</div>')
+
+
+def bias_html(rundir, label, hist, cur_step):
+    d = bias_data(rundir, hist, cur_step)
+    if not d:
+        return f"<p class=mut>no bias module in the {html.escape(label)} run</p>"
+    W, H, L, R, T, B = 640, 300, 52, 14, 10, 36
+    allp = [(s, v) for k in d["pts"] for s, v in d["pts"][k]]
+    lines, cols = [], BIAS_COL
+    if allp:
+        xs = [s for s, _ in allp]
+        x0, x1 = min(xs), max(max(xs), min(xs) + 1)
+        ys = [v[k] for _, v in allp for k in ("min", "max")]
+        y0, y1 = min(ys), max(ys)
+        pad = (y1 - y0) * 0.1 or 0.1
+        y0, y1 = y0 - pad, y1 + pad
+        sx = lambda x: L + (x - x0) / (x1 - x0) * (W - L - R)
+        sy = lambda y: T + (1 - (y - y0) / (y1 - y0)) * (H - T - B)
+        lines.append(f'<svg viewBox="0 0 {W} {H}" width="100%">')
+        for tk in nice(y0, y1):
+            if y0 <= tk <= y1:
+                lines.append(f'<line x1="{L}" x2="{W-R}" y1="{sy(tk):.1f}" '
+                             f'y2="{sy(tk):.1f}" class=grid /><text x="{L-5}" '
+                             f'y="{sy(tk)+3:.1f}" text-anchor=end class=ax>'
+                             f'{tk:.3g}</text>')
+        for tk in nice(x0, x1):
+            if x0 <= tk <= x1:
+                lines.append(f'<text x="{sx(tk):.1f}" y="{H-B+14}" '
+                             f'text-anchor=middle class=ax>{tk:g}</text>')
+        lines.append(f'<text x="{W/2}" y="{H-6}" text-anchor=middle '
+                     f'class=ax>step</text>')
+        if y0 < 0 < y1:
+            lines.append(f'<line x1="{L}" x2="{W-R}" y1="{sy(0):.1f}" '
+                         f'y2="{sy(0):.1f}" class=mark />')
+        for k, pts in d["pts"].items():
+            if not pts:
+                continue
+            c = cols[k]
+            up = " ".join(f"{sx(s):.1f},{sy(v['max']):.1f}" for s, v in pts)
+            dn = " ".join(f"{sx(s):.1f},{sy(v['min']):.1f}"
+                          for s, v in reversed(pts))
+            lines.append(f'<polygon points="{up} {dn}" fill="{c}" '
+                         f'opacity=".18" />')
+            lines.append(f'<polyline points="' + " ".join(
+                f"{sx(s):.1f},{sy(v['mean']):.1f}" for s, v in pts)
+                + f'" fill=none stroke="{c}" stroke-width=2 />')
+            for s, v in pts:
+                lines.append(
+                    f'<circle cx="{sx(s):.1f}" cy="{sy(v["mean"]):.1f}" r=3 '
+                    f'fill="{c}"><title>{k} step {s}: mean {v["mean"]:.4g}, '
+                    f'range {v["min"]:.4g} to {v["max"]:.4g}</title></circle>')
+        lines.append("</svg>")
+    names = dict(BIAS_PAIRS)
+    leg = "".join(
+        f'<span><i style="background:{cols[k]}"></i>{names[k]}</span>'
+        for k in d["pts"] if d["pts"][k])
+    chart_h = (f'<div class=card><h3>Mean and range across heads</h3>'
+               f'{"".join(lines)}<div class=leg>{leg}</div></div>')
+    lt = d["latest"] or {}
+    heats = "".join(
+        f'<div class=card><h3>{names[k]}, step {lt.get("step")}</h3>'
+        f'{heat_svg(lt[k], k)}</div>' for k, _ in BIAS_PAIRS if k in lt)
+    return (f'<div class=plots>{chart_h}</div>'
+            f'<div class=plots4>{heats}</div>')
+
+
 # ---------- page ----------
 def fmt(v, n=4):
     return "" if v is None else (f"{v:.{n}f}" if isinstance(v, float) else
@@ -1407,6 +1672,7 @@ def build():
         {str(s.get("hash")): s.get("n_outbreaks")
          for v in cks.values() for _, s, _ in v}, ONCE["on"])
 
+    bias_h = bias_html(RUN, LC["label"], hist, step)
     modebar = (
         '<div class="sctl modebar"><span class=mut>Loss scale</span>'
         '<button class=tog data-mode=raw>raw</button>'
@@ -1451,7 +1717,8 @@ font-size:12px}
 .tog.on{background:var(--c1);color:#fff;border-color:var(--c1)}
 .sctl .mut{margin-left:10px}.lg{display:inline-flex;align-items:center;gap:6px;margin-right:14px}
 .leg2{font-size:12px;display:flex;flex-wrap:wrap;gap:4px 18px}.glocs{margin:6px 0}.glocs .tog{margin:1px}.panels{display:grid;gap:8px}
-.panels h4{margin:0 0 2px;font-size:12px}.gck i{display:inline-block;width:10px;height:10px;border-radius:2px;
+.panels h4{margin:0 0 2px;font-size:12px}.plots4{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px;margin-top:8px}
+.gck i{display:inline-block;width:10px;height:10px;border-radius:2px;
 margin:0 4px}select,button{font:inherit}
 pre{white-space:pre-wrap;background:var(--card);padding:10px;border-radius:8px;
 font-size:12px}.wrap{overflow-x:auto}"""
@@ -1468,6 +1735,7 @@ own first 20 steps for both. Reference line is 1.</p>{plots_h}
 <div id=cksrc class=sctl></div><div class=card><div id=ckplot></div></div>
 <script type="application/json" id=cdata>{ck_payload(cks, info)}</script>
 <script>{CK_JS}</script>
+<h2>Attention bias ({html.escape(LC["label"])} run)</h2>{bias_h}
 <h2>Performance on real data</h2>{sc_h}{md_h}
 <h2>German nowcasts by checkpoint</h2>{rv_h}
 <h2>Recent activity (archie mailbox)</h2>{mh}
@@ -1529,6 +1797,9 @@ def main():
     OVERRIDE["germany"] = a.germany_dir
     if a.runs_config:
         cfgs = json.loads(Path(a.runs_config).read_text())
+        if isinstance(cfgs, dict):
+            EXCLUDE.update(cfgs.get("exclude", {}))
+            cfgs = cfgs["runs"]
         for c in cfgs:
             c["dir"] = Path(c["dir"])
         RUNS[:] = cfgs
