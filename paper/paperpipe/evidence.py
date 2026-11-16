@@ -38,6 +38,8 @@ __all__ = [
     "checkpoint_figure",
     "checkpoint_numbers",
     "checkpoint_rows",
+    "comparison_figure",
+    "comparison_table",
     "copula_table",
     "cost_table",
     "diseases_table",
@@ -618,7 +620,16 @@ EVIDENCE: Final = {
     "lag_bdbv_before": "the BDBV scores with the 4-week lag horizon",
     "lag_bdbv_after": "the BDBV scores with lags to the truth delay",
     "slots_check": "slots-check's slots against no slots and lag-swap test",
+    "compare_slots": "the slots and no-slots runs' scores by checkpoint",
+    "compare_delays": "the full and no-delay runs' scores by checkpoint",
+    "compare_realdata": "the real-data and synthetic fine-tunes' scores",
 }
+"""Each evidence file and what it is, for the notes of what is pending.
+
+The `compare_*` files share one layout: `set` (a held-out source, or a
+case study and level), `run`, `outbreaks` (the run's checkpoint) and
+`score` (held-out loss, or relative WIS or CRPS against
+`randomwalknowcast`)."""
 """Each evidence input and what it waits on until set."""
 
 
@@ -735,6 +746,67 @@ def slots_scores_table(
     )
 
 
+def comparison_table(rows: pd.DataFrame) -> pd.DataFrame:
+    """Return a fine-tuning comparison with each run's score side by side.
+
+    One row per set and checkpoint, one column per run, for the
+    checkpoints every run reached.
+    """
+    wide = rows.pivot_table(
+        index=["set", "outbreaks"], columns="run", values="score"
+    ).dropna()
+    wide = wide.reset_index().rename(
+        columns={"set": "Set", "outbreaks": "Outbreaks"}
+    )
+    wide.columns.name = None
+    return wide.sort_values(["Set", "Outbreaks"]).reset_index(drop=True)
+
+
+def comparison_figure(rows: pd.DataFrame) -> Figure:
+    """Plot a fine-tuning comparison: each run's score by checkpoint.
+
+    One panel per set, in the order the rows give, one line per run on a
+    log axis of outbreaks.
+    """
+    sets = list(dict.fromkeys(rows["set"]))
+    runs = sorted(rows["run"].unique())
+    colours = {r: f"C{i}" for i, r in enumerate(runs)}
+    ncol = min(3, len(sets))
+    nrow = int(np.ceil(len(sets) / ncol))
+    fig, axes = plt.subplots(
+        nrow,
+        ncol,
+        figsize=(3.6 * ncol, 2.6 * nrow),
+        layout="constrained",
+        squeeze=False,
+    )
+    axes = axes.ravel()
+    for ax, name in zip(axes, sets, strict=False):
+        one = rows.loc[rows["set"] == name]
+        for run, g in one.groupby("run"):
+            g = g.sort_values("outbreaks")
+            ax.plot(
+                g["outbreaks"],
+                g["score"],
+                marker="o",
+                ms=3,
+                color=colours[run],
+                label=run,
+            )
+        ax.set_xscale("log")
+        ticks = sorted(one["outbreaks"].unique())
+        ax.set_xticks(ticks, [f"{t:,.0f}" for t in ticks], fontsize=7)
+        ax.minorticks_off()
+        ax.set_title(name, fontsize=9)
+        ax.set_xlabel("Fine-tuning outbreaks")
+        ax.set_ylabel("Score")
+    for ax in axes[len(sets) :]:
+        ax.set_visible(False)
+    handles, labels = axes[0].get_legend_handles_labels()
+    fig.legend(handles, labels, loc="outside lower center", ncol=len(runs))
+    return fig
+
+
 def _read(paths: Mapping[str, Path | None], name: str) -> pd.DataFrame | None:
     path = paths.get(name)
     if path is None:
@@ -849,6 +921,18 @@ def write_evidence(
         else slots_scores_table(data["checkpoint_scores"], checkpoints),
         ["checkpoint_scores"],
     )
+    for name in ("slots", "delays", "realdata"):
+        rows = data[f"compare_{name}"]
+        figure(
+            f"compare-{name}",
+            None if rows is None else comparison_figure(rows),
+            [f"compare_{name}"],
+        )
+        table(
+            f"compare-{name}",
+            None if rows is None else comparison_table(rows),
+            [f"compare_{name}"],
+        )
     curve = data["finetune_heldout"]
     figure(
         "finetune-heldout",

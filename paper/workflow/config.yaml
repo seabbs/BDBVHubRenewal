@@ -161,6 +161,11 @@ evidence:
   # lag-swap test (slots-check), for its newest checked checkpoint.
   # Pending: the final slots run's first checked checkpoint.
   slots_check: null
+  # Each fine-tuning comparison's scores by checkpoint (paperpipe.evidence:
+  # set, run, outbreaks, score). Pending: the runs' checkpoints.
+  compare_slots: null
+  compare_delays: null
+  compare_realdata: null
   # Pending: the final run's held-out loss curve.
   finetune_heldout: null
   # Pending: summaries of the final grid's simulations.
