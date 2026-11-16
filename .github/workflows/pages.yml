@@ -497,10 +497,9 @@ jobs:
           - {model: fm_chronos_weekly_ragged, chunk: 1/4, group: chronos}
           - {model: fm_chronos_weekly_ragged, chunk: 2/4, group: chronos}
           - {model: fm_chronos_weekly_ragged, chunk: 3/4, group: chronos}
-          - {model: fm_chronos_daily_ragged_ft, chunk: 0/4, group: chronos}
-          - {model: fm_chronos_daily_ragged_ft, chunk: 1/4, group: chronos}
-          - {model: fm_chronos_daily_ragged_ft, chunk: 2/4, group: chronos}
-          - {model: fm_chronos_daily_ragged_ft, chunk: 3/4, group: chronos}
+          # Not fm_chronos_daily_ragged_ft: the site shows its stored
+          # development forecasts only, and the paper's held-out run waits
+          # for the final checkpoint.
           - {model: fm_chronos_weekly_ragged_ft, chunk: 0/4, group: chronos}
           - {model: fm_chronos_weekly_ragged_ft, chunk: 1/4, group: chronos}
           - {model: fm_chronos_weekly_ragged_ft, chunk: 2/4, group: chronos}

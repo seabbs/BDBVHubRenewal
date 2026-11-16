@@ -143,6 +143,33 @@ def _development(frame: pd.DataFrame, config: GermanyConfig) -> pd.DataFrame:
     return frame.loc[frame["origin"].astype(str) < config.split_date]
 
 
+_CELL: Final = (
+    "target",
+    "origin",
+    "truth_vintage",
+    "location",
+    "target_end_date",
+)
+"""Columns that identify a scored nowcast, as `relative_scores` matches."""
+
+
+def _shared_cells(scores: pd.DataFrame) -> pd.DataFrame:
+    """Keep, at each level, the nowcasts every model scored there made.
+
+    So every row of a level has the same n, and a model is never ranked
+    on nowcasts others lack. A model with no score at a level, such as a
+    team that nowcast Germany only, does not narrow it.
+    """
+    keep = []
+    for _, rows in scores.groupby("pool", sort=False):
+        cells = rows[[*_CELL, "model"]].astype(str).drop_duplicates()
+        count = cells.groupby(list(_CELL)).size()
+        common = count[count == cells["model"].nunique()].index
+        key = pd.MultiIndex.from_frame(rows[list(_CELL)].astype(str))
+        keep.append(rows.loc[key.isin(common)])
+    return pd.concat(keep) if keep else scores
+
+
 def _refuse_held_out(frame: pd.DataFrame, split_date: str) -> None:
     """Raise if a nowcast or target end date is on or after the split."""
     for col in ("origin", "target_end_date"):
@@ -350,7 +377,7 @@ def germany_page(
         return
     scores = _read(results, ("scores.csv.gz", "teams.csv.gz"))
     assert scores is not None
-    scores = _development(scores, config)
+    scores = _shared_cells(_development(scores, config))
     _refuse_held_out(scores, config.split_date)
     forecasts = _read(results, ("forecasts.csv.gz", "teams-forecasts.csv.gz"))
     run = set(scores["model"])
