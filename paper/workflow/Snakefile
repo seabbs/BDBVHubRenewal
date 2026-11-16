@@ -222,6 +222,10 @@ def sources(w):
         if EBOLA.get("extra"):
             files = " ".join(ebola_extra(w.mode))
             args.append(f"--ebola-extra {files}")
+        if EBOLA.get("n_samples"):
+            models = " ".join(EBOLA["backtest_models"])
+            args.append(f"--ebola-draws {EBOLA_DRAWS}")
+            args.append(f"--ebola-draws-models {models}")
         if EBOLA["candidates"]:
             files = " ".join(shlex.quote(c) for c in EBOLA["candidates"])
             args.append(f"--candidates {files}")
@@ -241,7 +245,8 @@ def source_files(w):
         hub = f"{EBOLA['hub']}/target-data/time-series.csv"
         extra = ebola_extra(w.mode)
         target = f"{EBOLA['data']}/target.csv"
-        return [hub, target, EBOLA["backtest"], *extra]
+        draws = [EBOLA_DRAWS] if EBOLA.get("n_samples") else []
+        return [hub, target, EBOLA["backtest"], *extra, *draws]
     if w.study == "synthetic" and synthetic_simulations(w.mode):
         return [SYNTHETIC["forecasts"][w.mode]]
     return []
@@ -413,6 +418,33 @@ rule ebola_hub:
 
 # The release backtest of the models on main, from every past release. CI
 # has run it by the paper step, so this rule then has nothing to do.
+# The paper's own release backtest of `backtest_models` at its number of
+# draws, from a copy of the backtest config with only `n_samples` changed.
+EBOLA_DRAWS = f"{R}/ebola-backtest/forecasts.csv.gz"
+
+
+rule ebola_backtest_draws:
+    input:
+        f"{EBOLA['data']}/target.csv",
+    output:
+        EBOLA_DRAWS,
+    params:
+        models=" ".join(EBOLA["backtest_models"]),
+        n=EBOLA.get("n_samples", 100),
+        folder=lambda w: os.path.abspath(f"{R}/ebola-backtest"),
+        config=EBOLA["config"],
+    resources:
+        heavy=1,
+    shell:
+        "mkdir -p {params.folder} && "
+        "sed 's/^n_samples = .*/n_samples = {params.n}/' {params.config} "
+        "> {params.folder}/backtest.toml && "
+        "grep -q '^n_samples = {params.n}$' {params.folder}/backtest.toml && "
+        "cd .. && {BDBV} backtest --config {params.folder}/backtest.toml "
+        "--models {params.models} --no-recovery "
+        "--results {params.folder}/results --output {params.folder}"
+
+
 rule ebola_backtest:
     output:
         EBOLA["backtest"],

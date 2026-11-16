@@ -92,6 +92,8 @@ def _sources(a: argparse.Namespace) -> Sources:
         ebola_config=a.ebola_config,
         ebola_backtest=a.ebola_backtest,
         ebola_extra=tuple(a.ebola_extra),
+        ebola_draws=a.ebola_draws,
+        ebola_draws_models=tuple(a.ebola_draws_models),
         candidates=tuple(a.candidates),
         store=a.store,
         store_ref=a.store_ref,
@@ -247,6 +249,8 @@ def _limits(p: argparse.ArgumentParser) -> None:
     p.add_argument("--ebola-config", type=Path, default=None)
     p.add_argument("--ebola-backtest", type=Path, default=None)
     p.add_argument("--ebola-extra", type=Path, nargs="*", default=[])
+    p.add_argument("--ebola-draws", type=Path, default=None)
+    p.add_argument("--ebola-draws-models", nargs="*", default=[])
     p.add_argument("--candidates", type=Path, nargs="*", default=[])
     p.add_argument("--store", type=Path, default=None)
     p.add_argument("--store-ref", default="origin/fit-store")

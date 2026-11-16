@@ -87,6 +87,11 @@ class Sources:
         The release backtest's samples (`results/forecasts.csv.gz`).
     ebola_extra : tuple of pathlib.Path
         Further models' release-backtest samples in the same layout.
+    ebola_draws : pathlib.Path, optional
+        The paper's own release backtest of `ebola_draws_models` at its
+        number of draws, whose rows replace theirs in `ebola_backtest`.
+    ebola_draws_models : tuple of str
+        The models of `ebola_draws`.
     candidates : tuple of pathlib.Path
         Files of our stored Ebola forecasts.
     store : pathlib.Path, optional
@@ -103,6 +108,8 @@ class Sources:
     ebola_config: Path | None = None
     ebola_backtest: Path | None = None
     ebola_extra: tuple[Path, ...] = ()
+    ebola_draws: Path | None = None
+    ebola_draws_models: tuple[str, ...] = ()
     candidates: tuple[Path, ...] = ()
     store: Path | None = None
     store_ref: str = "origin/fit-store"
@@ -316,7 +323,15 @@ def _ebola_forecasts(
     round their release feeds (`_by_round`), and rounds before `before`.
     """
     assert sources.ebola_backtest is not None
-    parts = [ebola.backtest_samples(sources.ebola_backtest)]
+    main = ebola.backtest_samples(sources.ebola_backtest)
+    parts = [main]
+    if sources.ebola_draws is not None:
+        own = list(sources.ebola_draws_models)
+        draws = ebola.backtest_samples(sources.ebola_draws)
+        parts = [
+            main.loc[~main["model"].isin(own)],
+            draws.loc[draws["model"].isin(own)],
+        ]
     parts += [ebola.backtest_samples(p) for p in sources.ebola_extra]
     parts = [_by_round(p, before, split) for p in parts]
     if (with_hub or split is not None) and sources.hub is not None:

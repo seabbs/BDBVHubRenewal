@@ -72,6 +72,10 @@ ebola:
     - evidence: ebola_chronos
       models: ".*_n1000$"
   backtest_models: [randomwalk, randomwalknowcast]
+  # Draws per forecast of the paper's own run of `backtest_models`, with
+  # the backtest's seed shared by every model (common random numbers).
+  # Their rows replace the site backtest's, which keeps its own number.
+  n_samples: 1000
   hub: ../data/raw/bdbv-hub
   hub_repo: https://github.com/InsightNet-US/BDBV-Modeling-Hub.git
   candidates: [../data/candidate-forecasts.csv.gz]
