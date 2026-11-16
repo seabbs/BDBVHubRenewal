@@ -204,7 +204,7 @@ def test_the_stored_ft_model_is_scored_on_the_baselines_cells(
     res = tmp_path / "germany"
     _scores(res)
     _with_ft(res)
-    # A team missing one national cell keeps its smaller n.
+    # A team missing one national cell narrows every national row.
     teams = pd.read_csv(res / "teams.csv.gz", dtype=str)
     gap = _rows((("SU", 3.0),)).astype(str)
     gap = gap.loc[~((gap["pool"] == "national") & (gap["horizon"] == "-7"))]
@@ -221,11 +221,8 @@ def test_the_stored_ft_model_is_scored_on_the_baselines_cells(
     got = pd.DataFrame(body, columns=head)
     ns = got.pivot(index="pool", columns="model", values="n").astype(int)
     assert FT in ns.columns
-    # Pairwise with the baseline: the stored model, as every one of ours,
-    # has the baseline's n at each level.
-    for model in (FT, "randomwalk"):
-        assert (ns[model] == ns["randomwalknowcast"]).all(), ns
-    assert ns.loc["national", "SU"] == ns.loc["national", FT] - 1
+    # Every row of a level scores the cells all its models share.
+    assert (ns.nunique(axis=1) == 1).all(), ns
     rel = got.loc[got["model"] == FT].set_index("pool")["rel_wis"]
     assert set(rel.astype(float)) == {0.5}
     data = json.loads((fig / "explorer-germany.json").read_text())
@@ -276,10 +273,8 @@ def test_the_leak_check_finds_held_out_dates(tmp_path: Path) -> None:
 
     split = CONFIG.split_date
     ok = tmp_path / "ok.json"
-    # Truth vintages (`releases`) are report dates of the truth of
-    # development sums, so they may fall after the split.
     ok.write_text(
-        json.dumps({"origins": ["2022-02-09"], "releases": ["2022-03-21"]})
+        json.dumps({"origins": ["2022-02-09"], "releases": ["40-day truth"]})
     )
     bad = tmp_path / "scoresummary-germany-latest.json"
     bad.write_text(json.dumps({"origins": ["2022-02-09", split]}))
@@ -347,3 +342,22 @@ def test_every_row_scores_the_cells_all_its_models_share(
         if pool[r[3]] == "national"
     }
     assert national == {0}
+
+
+def test_the_summary_names_no_truth_vintage(tmp_path: Path) -> None:
+    res = tmp_path / "germany"
+    _scores(res)
+    fig, gen = tmp_path / "figures", tmp_path / "generated"
+    germany_page(fig, gen, res, CONFIG)
+    data = json.loads((fig / "scoresummary-germany-latest.json").read_text())
+    # The truth's report dates fall up to 40 days after the last nowcast
+    # date, in the held-out half, so the page names the truth instead.
+    assert data["releases"] == ["40-day truth"]
+
+
+def test_the_leak_check_covers_truth_vintages(tmp_path: Path) -> None:
+    from bdbvhubrenewal.reporting.germany import held_out_leaks
+
+    path = tmp_path / "scoresummary-germany-latest.json"
+    path.write_text(json.dumps({"releases": ["2022-03-21"]}))
+    assert held_out_leaks([path], CONFIG.split_date)
