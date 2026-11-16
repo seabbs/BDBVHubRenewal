@@ -591,6 +591,12 @@ def hash_run(h, pref=None):
     return None
 
 
+def base_src(model):
+    """daily or weekly from a model name, None for other models."""
+    return "daily" if "daily" in model else \
+        "weekly" if "weekly" in model else None
+
+
 def norm_hash(name):
     """'chronos-slots-abc', 'slots-abc' and 'abc' -> ('abc', 'slots'|None)."""
     m = re.match(r"^(?:chronos-)?(?:([a-z][a-z-]*?)-)?([0-9a-f]{6,}.*)$", name)
@@ -624,6 +630,8 @@ def score_classify(r):
 def score_payload(rows, local):
     """Rows for the client-side score chart and not-yet-scored markers."""
     out, seen_h, seen_n = [], set(), {}
+    variants, vbase, targets = {}, {}, {}
+    run_keys = {c["key"] for c in RUNS}
     for r in rows:
         if r.get("rule") != RULE or r["study"] not in ("germany", "ebola"):
             continue
@@ -631,15 +639,20 @@ def score_payload(rows, local):
         v = num(r["rel_wis" if r["study"] == "germany" else "rel_crps"])
         if ser is None or v is None:
             continue
-        src = "daily" if "daily" in r["model"] else \
-            "weekly" if "weekly" in r["model"] else None
-        if src is None:
+        base = base_src(r["model"])
+        if base is None:
             continue
+        src = base
         h = norm_hash(r["checkpoint"])[0]
         n = int(num(r.get("outbreaks")) or 0)
+        tgt = (r.get("target") or "").strip()
         out.append([r["study"], r["level"], src, ser, n,
                     "" if r["checkpoint"] == "zero-shot" else h,
-                    round(v, 4)])
+                    round(v, 4), tgt])
+        targets.setdefault(r["study"], set()).add(tgt)
+        if ser in run_keys:
+            variants.setdefault(r["study"], set()).add(src)
+        vbase[src] = base
         seen_h.add(h)
         seen_n.setdefault(ser, set()).add(n)
     pending = []
@@ -655,6 +668,9 @@ def score_payload(rows, local):
         {"key": "rw", "label": "randomwalknowcast", "color": REF_COL["rw"]}]
     return {"rows": out, "pending": pending, "xt": XT, "series": series,
             "col": {s["key"]: s["color"] for s in series},
+            "variants": {k: sorted(v) for k, v in variants.items()},
+            "targets": {k: sorted(v) for k, v in targets.items()},
+            "vbase": vbase,
             "defaults": [next((c["key"] for c in RUNS if c["key"] in seen_n),
                               live_cfg()["key"]), "zero", "rw"]}
 
@@ -689,9 +705,10 @@ var $=function(i){return document.getElementById(i)};
 var SERS=P.series.map(function(s){return [s.key,s.label]}),RUNK=P.series.filter(function(s){return s.run}).map(function(s){return s.key});
 var LV={germany:[["national","national"],["states","states"],["age","ages"]],ebola:[["national","national"],["provinces","provinces"]]};
 var MK=["circle","square","triangle","diamond"];
-var S={study:"germany",src:"daily",lv:["national"],cmp:false,log:false,ser:P.defaults.slice()};
-try{var sv=JSON.parse(sessionStorage.getItem("fts3")||"null");if(sv)S=sv}catch(e){}
-function save(){try{sessionStorage.setItem("fts3",JSON.stringify(S))}catch(e){}}
+var VDASH=["","6 3","2 3","8 3 2 3"],REFK=["zero","complete","rw"];
+var S={study:"germany",vars:null,target:null,lv:["national"],cmp:false,log:false,ser:P.defaults.slice()};
+try{var sv=JSON.parse(sessionStorage.getItem("fts4")||"null");if(sv)S=sv}catch(e){}
+function save(){try{sessionStorage.setItem("fts4",JSON.stringify(S))}catch(e){}}
 function mark(k,x,y,c,t){var r=3.6,s="";
  if(k=="circle")s='<circle cx="'+x+'" cy="'+y+'" r="'+r+'" fill="'+c+'">';
  else if(k=="square")s='<rect x="'+(x-r)+'" y="'+(y-r)+'" width="'+2*r+'" height="'+2*r+'" fill="'+c+'">';
@@ -699,17 +716,27 @@ function mark(k,x,y,c,t){var r=3.6,s="";
  else s='<polygon points="'+x+','+(y-r-1)+' '+(x+r+1)+','+y+' '+x+','+(y+r+1)+' '+(x-r-1)+','+y+'" fill="'+c+'">';
  return s+'<title>'+t+'</title>'+(k=="circle"?"</circle>":k=="square"?"</rect>":"</polygon>")}
 function btn(id,label,on,sty){return '<button data-id="'+id+'" class="tog'+(on?" on":"")+'"'+(sty?' style="'+sty+'"':"")+'>'+label+'</button>'}
+function TGTS(){return P.targets[S.study]||[]}
+function TGT(){var a=TGTS();return a.indexOf(S.target)>=0?S.target:(a.indexOf("7day")>=0?"7day":a[0]||"")}
+function tlab(v){return v=="7day"?"7-day":(v||"all")}
+function VARS(){return P.variants[S.study]||[]}
+function baseOf(v){return P.vbase[v]||v}
+function curVars(){var av=VARS(),sel=(S.vars||[]).filter(function(v){return av.indexOf(v)>=0});
+ if(!sel.length)sel=av.indexOf("daily")>=0?["daily"]:av.slice(0,1);
+ return sel}
 function controls(){
  var lv=LV[S.study];
  $("sctl").innerHTML=[["germany","Germany"],["ebola","BDBV"]].map(function(a){return btn("study:"+a[0],a[1],S.study==a[0])}).join("")
- +'<span class=sep></span>'+["daily","weekly"].map(function(a){return btn("src:"+a,a,S.src==a)}).join("")
+ +(TGTS().length>1?'<span class=sep></span><span class=mut>target</span>'+TGTS().map(function(a){return btn("tgt:"+a,tlab(a),TGT()==a)}).join(""):"")
+ +'<span class=sep></span><span class=mut>source</span>'+VARS().map(function(a){return btn("var:"+a,a,curVars().indexOf(a)>=0)}).join("")
  +'<span class=sep></span>'+lv.map(function(a){return btn("lv:"+a[0],a[1],S.lv.indexOf(a[0])>=0)}).join("")+btn("cmp","compare levels",S.cmp)
  +'<span class=sep></span>'+SERS.map(function(a){return btn("ser:"+a[0],a[1],S.ser.indexOf(a[0])>=0,"border-left:4px solid "+P.col[a[0]])}).join("")
  +'<span class=sep></span>'+btn("log","log scale",S.log)}
 function tick(arr,v){var i=arr.indexOf(v);if(i>=0)arr.splice(i,1);else arr.push(v)}
 $("sctl").onclick=function(e){var b=e.target.closest("button");if(!b)return;var p=b.dataset.id.split(":"),k=p[0],v=p[1];
  if(k=="study"){S.study=v;S.lv=S.lv.filter(function(l){return LV[v].some(function(a){return a[0]==l})});if(!S.lv.length)S.lv=["national"]}
- else if(k=="src")S.src=v;
+ else if(k=="tgt")S.target=v;
+ else if(k=="var"){var cv=curVars().slice();var i=cv.indexOf(v);if(i>=0){if(cv.length>1)cv.splice(i,1)}else cv.push(v);S.vars=cv}
  else if(k=="lv"){if(S.cmp){tick(S.lv,v);if(!S.lv.length)S.lv=[v]}else S.lv=[v]}
  else if(k=="cmp"){S.cmp=!S.cmp;if(!S.cmp)S.lv=[S.lv[0]]}
  else if(k=="log")S.log=!S.log;
@@ -721,7 +748,10 @@ function niceTicks(lo,hi){var st=(hi-lo)/4,m=Math.pow(10,Math.floor(Math.log10(s
 function draw(){
  controls();
  var lv=LV[S.study].filter(function(a){return S.lv.indexOf(a[0])>=0});
- var rows=P.rows.filter(function(r){return r[0]==S.study&&r[2]==S.src});
+ var vs=curVars();
+ var TG=TGT();
+ function rowsFor(v){return P.rows.filter(function(r){return r[0]==S.study&&(r[7]==TG||r[7]=="")&&(r[2]==v||(REFK.indexOf(r[3])>=0&&r[2]==baseOf(v)))})}
+ var rows=[];vs.forEach(function(v){rowsFor(v).forEach(function(r){if(rows.indexOf(r)<0)rows.push(r)})});
  var shown=rows.filter(function(r){return S.ser.indexOf(r[3])>=0&&r[3]!="rw"&&lv.some(function(l){return l[0]==r[1]})});
  var W=640,H=320,L=44,R=16,T=10,B=44;
  var ns=shown.filter(function(r){return r[4]>0}).map(function(r){return r[4]});
@@ -740,32 +770,36 @@ function draw(){
  h+='<text x="'+(W/2)+'" y="'+(H-6)+'" text-anchor=middle class=ax>simulations (log2)</text>';
  P.pending.forEach(function(p){if(p.n<=nmax*1.18&&p.n>=zx){h+='<line x1="'+sx(p.n)+'" x2="'+sx(p.n)+'" y1="'+T+'" y2="'+(H-B)+'" class=mark /><text x="'+(sx(p.n)+3)+'" y="'+(T+10)+'" class=ax>n'+p.n+' scoring</text>'}});
  if(S.ser.indexOf("rw")>=0)h+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+sy(1)+'" y2="'+sy(1)+'" stroke="'+P.col.rw+'" stroke-width=2 ><title>randomwalknowcast = 1</title></line>';
- var any=false,sum=[];
+ var any=false,sum=[],drawn={};
  lv.forEach(function(l,li){var mk=MK[li];
   RUNK.concat(["zero","complete"]).forEach(function(s){
    if(S.ser.indexOf(s)<0)return;
-   var rs=rows.filter(function(r){return r[1]==l[0]&&r[3]==s}).sort(function(a,b){return a[4]-b[4]});
-   if(!rs.length)return;any=true;var c=P.col[s];
-   var lab=SERS.find(function(x){return x[0]==s})[1];
-   if(s=="zero"||s=="complete"){var v=rs[0][6];
-    h+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+sy(v)+'" y2="'+sy(v)+'" stroke="'+c+'" stroke-width=1.5 stroke-dasharray="'+(s=="zero"?"6 3":"2 3")+'" />';
-    h+=mark(mk,sx(zx),sy(v),c,l[1]+", "+lab+": "+fmt(v))}
-   else{
-    var zs=rows.filter(function(r){return r[1]==l[0]&&r[3]=="zero"})[0];
-    var pts=(zs?[[zx,zs[6]]]:[]).concat(rs.map(function(r){return [r[4],r[6]]}));
-    h+='<polyline points="'+pts.map(function(p){return sx(p[0])+","+sy(p[1])}).join(" ")+'" fill=none stroke="'+c+'" stroke-width=1.8 />';
-    rs.forEach(function(r){h+=mark(mk,sx(r[4]),sy(r[6]),c,l[1]+", "+lab+" n"+r[4]+" "+r[5]+": "+fmt(r[6]));
-     if(s==RUNK[0]&&lv.length==1)h+='<text x="'+(sx(r[4])+6)+'" y="'+(sy(r[6])-6)+'" class=ax>'+fmt(r[6])+'</text>'});
-    if(RUNK.indexOf(s)>=0){var last=rs[rs.length-1];
-     sum.push((lv.length>1?l[1]+": ":"")+lab+" n"+last[4]+": "+fmt(last[6])+(zs?" vs zero-shot "+fmt(zs[6])+", "+((last[6]/zs[6]-1)*100>=0?"+":"")+((last[6]/zs[6]-1)*100).toFixed(0)+"%":""))}}})});
+   var lab=SERS.find(function(x){return x[0]==s})[1],c=P.col[s];
+   vs.forEach(function(v,vi){
+    var rowsV=rowsFor(v);
+    var rs=rowsV.filter(function(r){return r[1]==l[0]&&r[3]==s}).sort(function(a,b){return a[4]-b[4]});
+    if(!rs.length)return;any=true;
+    var vtag=vs.length>1?" ["+v+"]":"",dash=vs.length>1&&VDASH[vi%4]?' stroke-dasharray="'+VDASH[vi%4]+'"':"";
+    if(s=="zero"||s=="complete"){var val=rs[0][6],key=l[0]+s+val;if(drawn[key])return;drawn[key]=1;
+     h+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+sy(val)+'" y2="'+sy(val)+'" stroke="'+c+'" stroke-width=1.5 stroke-dasharray="'+(s=="zero"?"6 3":"2 3")+'" />';
+     h+=mark(mk,sx(zx),sy(val),c,l[1]+", "+lab+": "+fmt(val))}
+    else{
+     var zs=rowsV.filter(function(r){return r[1]==l[0]&&r[3]=="zero"})[0];
+     var pts=(zs?[[zx,zs[6]]]:[]).concat(rs.map(function(r){return [r[4],r[6]]}));
+     h+='<polyline points="'+pts.map(function(p){return sx(p[0])+","+sy(p[1])}).join(" ")+'" fill=none stroke="'+c+'" stroke-width=1.8'+dash+' />';
+     rs.forEach(function(r){h+=mark(mk,sx(r[4]),sy(r[6]),c,l[1]+", "+lab+vtag+" n"+r[4]+" "+r[5]+": "+fmt(r[6]));
+      if(s==RUNK[0]&&lv.length==1&&vs.length==1)h+='<text x="'+(sx(r[4])+6)+'" y="'+(sy(r[6])-6)+'" class=ax>'+fmt(r[6])+'</text>'});
+     if(RUNK.indexOf(s)>=0){var last=rs[rs.length-1];
+      sum.push((lv.length>1?l[1]+": ":"")+lab+vtag+" n"+last[4]+": "+fmt(last[6])+(zs?" vs zero-shot "+fmt(zs[6])+", "+((last[6]/zs[6]-1)*100>=0?"+":"")+((last[6]/zs[6]-1)*100).toFixed(0)+"%":""))}}})})});
  h+='</svg>';
  var leg=SERS.filter(function(s){return S.ser.indexOf(s[0])>=0}).map(function(s){return '<span><i style="background:'+P.col[s[0]]+'"></i>'+s[1]+(s[0]=="zero"?" (dashed)":s[0]=="complete"?" (dotted)":"")+'</span>'}).join("");
+ if(vs.length>1)leg+=vs.map(function(v,i){return '<span><svg width=26 height=8 viewBox="0 0 26 8"><line x1=0 x2=26 y1=4 y2=4 stroke="var(--fg)" stroke-width=2'+(VDASH[i%4]?' stroke-dasharray="'+VDASH[i%4]+'"':"")+' /></svg>'+v+'</span>'}).join("");
  if(lv.length>1)leg+=lv.map(function(l,i){return '<span><svg width=12 height=12 viewBox="0 0 12 12">'+mark(MK[i],6,6,"var(--fg)","")+'</svg>'+l[1]+'</span>'}).join("");
  var note="";
  if(S.ser.indexOf("complete")>=0&&!rows.some(function(r){return r[3]=="complete"}))note+="<p class=mut>complete-only pending</p>";
  if(P.pending.length)note+='<p class=mut>Scoring on archie, not yet in the scores: '+P.pending.map(function(p){return p.run+" n"+p.n+(p.hash?" "+p.hash:"")}).join(", ")+'.</p>';
  if(!any)note+="<p class=mut>No rows for this selection.</p>";
- $("splot").innerHTML='<div class=sum>'+(sum.join("; ")||"")+'</div>'+h+'<div class=leg>'+leg+'</div>'+note+'<p class=mut>Relative to randomwalknowcast ('+(S.study=="germany"?"WIS":"CRPS")+', below 1 is better). Marker shape shows level.</p>';
+ $("splot").innerHTML='<div class=sum>'+(sum.join("; ")||"")+'</div>'+h+'<div class=leg>'+leg+'</div>'+note+'<p class=mut>Relative to randomwalknowcast ('+(S.study=="germany"?"WIS":"CRPS")+', below 1 is better'+(TGTS().length>1?', target '+tlab(TG):'')+'). Marker shape shows level'+(vs.length>1?', line style the variant':'')+'.</p>';
 }
 draw();
 })();
@@ -834,16 +868,20 @@ def parse_ger_file(path):
     with gzip.open(path, "rt") as f:
         for r in csv.DictReader(f):
             mdl = r["model"]
-            srcs = ["daily", "weekly"] if mdl == "randomwalknowcast" else \
-                ["daily"] if "daily" in mdl else \
-                ["weekly"] if "weekly" in mdl else []
+            special = ("rw" if mdl == "randomwalknowcast"
+                       else "complete-only" if mdl.endswith("_complete")
+                       else None)
+            srcs = ["daily"] if "daily" in mdl else \
+                ["weekly"] if "weekly" in mdl else \
+                ["daily", "weekly"]
+            if special is None and "daily" not in mdl and "weekly" not in mdl:
+                special = "hub:" + mdl  # other models, e.g. hub teams
+            tgt = (r.get("target") or "").strip()
             q = num(r["value"])
             if r["quantile"] not in QS or q is None:
                 continue
             for s in srcs:
-                k = (r["location"], "rw" if mdl == "randomwalknowcast"
-                     else "complete-only" if mdl.endswith("_complete")
-                     else None, s)
+                k = (r["location"], special, s, tgt)
                 e = out.setdefault(k, {}).setdefault(
                     r["target_end_date"], {"q": {}, "y": None, "v": ""})
                 e["q"][r["quantile"]] = q
@@ -872,6 +910,7 @@ def ger_build(ds):
         return G["built"]
     cache = G["files"]
     series, wis, truth, origins = {}, {}, {}, set()
+    targets = set()
     prefix = {}
     for setid, origin, f, mt in files:
         key = str(f)
@@ -886,7 +925,10 @@ def ger_build(ds):
             continue
         if setid != "reference":
             prefix[sid] = norm_hash(setid)[1]
-        for (loc, rw, src), dates in cache[key][1].items():
+        for (loc, rw, src, tgt), dates in cache[key][1].items():
+            if rw and rw.startswith("hub:") and setid != "reference":
+                continue
+            targets.add(tgt)
             s = rw or sid
             ds = sorted(dates)
             qm, ts = [], []
@@ -896,25 +938,25 @@ def ger_build(ds):
                     qm.append([round(e["q"][k], 1) for k in QS])
                     ts.append(dte)
                     if e["y"] is not None:
-                        tv = truth.setdefault(loc, {})
+                        tv = truth.setdefault(loc, {}).setdefault(tgt, {})
                         if dte not in tv or e["v"] >= tv[dte][0]:
                             tv[dte] = (e["v"], e["y"])
             if not ts:
                 continue
             series.setdefault(loc, {}).setdefault(s, {}).setdefault(
-                src, {})[origin] = {"t": ts, "q": qm}
+                tgt, {}).setdefault(src, {})[origin] = {"t": ts, "q": qm}
             ws = [wis_row(q, dates[t]["y"]) for q, t in zip(qm, ts)
                   if dates[t]["y"] is not None]
             if ws:
                 wis.setdefault(loc, {}).setdefault(s, {}).setdefault(
-                    src, {})[origin] = round(sum(ws) / len(ws), 2)
+                    tgt, {}).setdefault(src, {})[origin] = round(
+                        sum(ws) / len(ws), 2)
     sets = sorted({s for l in series.values() for s in l})
     locs = sorted(series, key=lambda l: (
         0 if l == "DE" else 1 if l.startswith("DE-") else 2, l))
-    built = {"prefix": prefix, "series": series, "wis": wis, "truth": truth, "sets": sets,
-             "locs": locs, "origins": sorted(origins or {
-                 o for l in series.values() for s in l.values()
-                 for src in s.values() for o in src})}
+    built = {"prefix": prefix, "series": series, "wis": wis, "truth": truth,
+             "sets": sets, "locs": locs, "targets": sorted(targets),
+             "origins": sorted(origins)}
     G["sig"], G["built"], G["loc_json"] = sig, built, {}
     return built
 
@@ -925,11 +967,13 @@ def ger_loc_json(ds, loc):
         return "{}"
     G = gs(ds)
     if loc not in G["loc_json"]:
-        tv = sorted(b["truth"].get(loc, {}).items())
+        truth = {}
+        for tgt, tvd in b["truth"].get(loc, {}).items():
+            tv = sorted(tvd.items())
+            truth[tgt] = {"t": [d for d, _ in tv], "y": [v[1] for _, v in tv]}
         G["loc_json"][loc] = json.dumps({
             "series": b["series"][loc], "wis": b["wis"].get(loc, {}),
-            "truth": {"t": [d for d, _ in tv], "y": [v[1] for _, v in tv]}},
-            separators=(",", ":"))
+            "truth": truth}, separators=(",", ":"))
     return G["loc_json"][loc]
 
 
@@ -950,6 +994,8 @@ def ger_meta(b, known_n):
             meta.append(dict(id=s, label="complete-only", run="ref", n=2))
         elif s == "rw":
             meta.append(dict(id=s, label="randomwalknowcast", run="ref", n=1))
+        elif s.startswith("hub:"):
+            meta.append(dict(id=s, label=s[4:], run="ref", n=3))
         else:
             cfg = next(c for c in RUNS if c["key"] == hash_run(
                 s, b["prefix"].get(s)))
@@ -998,7 +1044,7 @@ var D=JSON.parse(document.getElementById("gdata").textContent);
 var DSS=D.datasets,RUNS=D.runs;
 var $=function(i){return document.getElementById(i)};
 var DASH=["","6 3","8 3 2 3","2 3"],MK=["circle","square","triangle","diamond"];
-var S={ds:DSS[0].key,locs:["DE"],src:"daily",oi:null,latest:true,nd:1,step:2,on:null,chk:{}};
+var S={ds:DSS[0].key,locs:["DE"],src:"daily",target:null,oi:null,latest:true,nd:1,step:2,on:null,chk:{}};
 var KEY="ftg4";
 try{var sv=JSON.parse(sessionStorage.getItem(KEY)||"null");if(sv)Object.keys(sv).forEach(function(k){S[k]=sv[k]})}catch(e){}
 function cur(){return DSS.find(function(d){return d.key==S.ds})||DSS[0]}
@@ -1006,11 +1052,13 @@ var C=cur();S.ds=C.key;
 function ofRun(k){return C.meta.filter(function(m){return m.run==k}).sort(function(a,b){return a.n-b.n})}
 function refs(){return C.meta.filter(function(m){return m.run=="ref"})}
 function ORI(){return C.origins}
+function TGT(){var a=C.targets||[];return a.indexOf(S.target)>=0?S.target:(a.indexOf("7day")>=0?"7day":a[0]||"")}
+function tlab(v){return v=="7day"?"7-day":(v||"all")}
 S.locs=(S.locs||[]).filter(function(l){return C.locs.indexOf(l)>=0});if(!S.locs.length)S.locs=[C.locs[0]];
 if(S.latest||ORI().indexOf(S.origin)<0){S.oi=ORI().length-1;S.latest=true}else S.oi=ORI().indexOf(S.origin);
 if(!S.on){var r0=RUNS.find(function(r){return ofRun(r.key).length})||RUNS[0];
  S.on=[r0?r0.key:"","zero-shot"].filter(function(x){return x})}
-function save(){try{sessionStorage.setItem(KEY,JSON.stringify({ds:S.ds,locs:S.locs,src:S.src,latest:S.latest,origin:ORI()[S.oi],nd:S.nd,step:S.step,on:S.on,chk:S.chk}))}catch(e){}}
+function save(){try{sessionStorage.setItem(KEY,JSON.stringify({ds:S.ds,locs:S.locs,src:S.src,target:S.target,latest:S.latest,origin:ORI()[S.oi],nd:S.nd,step:S.step,on:S.on,chk:S.chk}))}catch(e){}}
 function chosen(k){var all=ofRun(k),ids=(S.chk[k]||[]).filter(function(i){return all.some(function(m){return m.id==i})});
  if(!ids.length&&all.length)ids=[all[all.length-1].id];return ids}
 function effective(){var o=[];
@@ -1043,10 +1091,10 @@ function mark(k,x,y,c,t,r){r=r||3;var s="";
 function panel(d,loc,ds,eff,small){
  var W=small?300:640,H=small?200:320,L=small?36:48,R=8,T=small?8:10,B=small?24:34,ymax=1,i;
  var t0=ms(ds[0])-70*864e5,t1=ms(ds[ds.length-1])+35*864e5;
- var tr=d.truth,pts=[];
+ var tr=d.truth[TGT()]||{t:[],y:[]},pts=[];
  for(i=0;i<tr.t.length;i++){var x=ms(tr.t[i]);if(x>=t0&&x<=t1){pts.push([x,tr.y[i]]);ymax=Math.max(ymax,tr.y[i])}}
  var fs=[];
- eff.forEach(function(e){ds.forEach(function(o,di){var s=(d.series[e.id]||{})[S.src],f=s&&s[o];
+ eff.forEach(function(e){ds.forEach(function(o,di){var s=((d.series[e.id]||{})[TGT()]||{})[S.src],f=s&&s[o];
   if(f){fs.push({e:e,f:f,di:di,o:o});f.q.forEach(function(q){ymax=Math.max(ymax,q[6])})}})});
  var runBands=eff.some(function(e){return e.run!="ref"&&fs.some(function(z){return z.e===e})});
  ymax*=1.06;
@@ -1088,19 +1136,20 @@ function plots(){
   h+='</div>'+legend(eff,ds);
   var ms_=Object.keys(miss);
   if(ms_.length)h+='<p class=mut>No forecast for some nowcast dates: '+ms_.join(", ")+'</p>';
-  h+='<p class=mut>Weekly counts by target week. Colour is the run. Line style runs from dotted (earliest) to solid (latest selected checkpoint). Bands (50% dark, 95% light) are drawn for the latest checkpoint of each run. Truth: '+C.truth+'.'+(ds.length>1?' Marker shape shows the nowcast date, and each nowcast ends at its date.':'')+'</p>';
+  h+='<p class=mut>'+(TGT()=="7day"||!TGT()?"7-day counts by target week":tlab(TGT())+" counts by target day")+'. Colour is the run. Line style runs from dotted (earliest) to solid (latest selected checkpoint). Bands (50% dark, 95% light) are drawn for the latest checkpoint of each run. Truth: '+C.truth+'.'+(ds.length>1?' Marker shape shows the nowcast date, and each nowcast ends at its date.':'')+'</p>';
   $("gplot").innerHTML=h;
   wisChart(all[0],eff)}).catch(function(){$("gplot").innerHTML='<p class=mut>Could not load data.</p>'})}
 function wisChart(d,eff){
- var sel=eff.map(function(e){return e.id}).filter(function(id){return d.wis[id]&&d.wis[id][S.src]});
+ var W_=function(id){return ((d.wis[id]||{})[TGT()]||{})[S.src]};
+ var sel=eff.map(function(e){return e.id}).filter(function(id){return W_(id)});
  if(!sel.length){$("gwis").innerHTML='<p class=mut>No WIS available.</p>';return}
- var com=Object.keys(d.wis[sel[0]][S.src]).filter(function(o){return sel.every(function(id){return d.wis[id][S.src][o]!==undefined})});
+ var com=Object.keys(W_(sel[0])).filter(function(o){return sel.every(function(id){return W_(id)[o]!==undefined})});
  if(!com.length){$("gwis").innerHTML='<p class=mut>No nowcast dates common to the selected checkpoints.</p>';return}
- var vals=sel.map(function(id){var a=com.map(function(o){return d.wis[id][S.src][o]});return a.reduce(function(x,y){return x+y},0)/a.length});
+ var vals=sel.map(function(id){var a=com.map(function(o){return W_(id)[o]});return a.reduce(function(x,y){return x+y},0)/a.length});
  var W=520,H=60+sel.length*26,L=230,mx=Math.max.apply(null,vals)*1.05,h='<svg viewBox="0 0 '+W+' '+H+'" width="100%">';
  sel.forEach(function(id,i){var y=10+i*26,w=vals[i]/mx*(W-L-60);
   h+='<text x="'+(L-6)+'" y="'+(y+14)+'" text-anchor=end class=ax>'+id2lab(id)+'</text><rect x="'+L+'" y="'+y+'" width="'+w+'" height="18" fill="'+colour(id)+'" /><text x="'+(L+w+4)+'" y="'+(y+14)+'" class=ax>'+fmt(vals[i])+'</text>'});
- $("gwis").innerHTML=h+'</svg><p class=mut>Mean WIS for '+S.locs[0]+' ('+S.src+' source) over '+com.length+' nowcast dates common to the selected checkpoints. Lower is better.</p>';
+ $("gwis").innerHTML=h+'</svg><p class=mut>Mean WIS for '+S.locs[0]+' ('+S.src+' source, '+tlab(TGT())+' target) over '+com.length+' nowcast dates common to the selected checkpoints. Lower is better.</p>';
 }
 function chips(){var h='';
  RUNS.forEach(function(r){if(S.on.indexOf(r.key)<0)return;var all=ofRun(r.key),ch=chosen(r.key);
@@ -1115,12 +1164,15 @@ function locBtns(){
 function draw(){
  $("gdate").textContent=ORI()[S.oi]+(S.latest?" (latest)":"");
  $("gsl").value=S.oi;$("gnd").value=S.nd;$("gstep").value=S.step;$("gsrc").value=S.src;
+ $("gtgtl").hidden=(C.targets||[]).length<2;
+ $("gtgt").innerHTML=(C.targets||[]).map(function(v){return '<option value="'+v+'"'+(v==TGT()?' selected':'')+'>'+tlab(v)+'</option>'}).join("");
  runBtns();chips();locBtns();plots();save()}
 function build(){
  if(DSS.length>1){$("gdsl").hidden=false;$("gds").innerHTML=DSS.map(function(d){return '<option value="'+d.key+'"'+(d.key==S.ds?' selected':'')+'>'+d.label+'</option>'}).join("");
   $("gds").onchange=function(){S.ds=this.value;C=cur();S.locs=[C.locs[0]];S.oi=ORI().length-1;S.latest=true;$("gsl").max=S.oi;draw()}}
  $("gsl").min=0;$("gsl").max=ORI().length-1;
  $("gsrc").onchange=function(){S.src=this.value;draw()};
+ $("gtgt").onchange=function(){S.target=this.value;draw()};
  $("gnd").onchange=function(){S.nd=+this.value;draw()};
  $("gstep").onchange=function(){S.step=+this.value;draw()};
  var pl=timePlayer({id:"german",btn:$("gplay"),speed:$("gspd"),len:function(){return ORI().length},
@@ -1155,6 +1207,7 @@ def germany_html(known_n, once):
         dss.append({
             "key": ds["key"], "label": ds["label"], "truth": ds["truth"],
             "meta": meta, "locs": b["locs"], "origins": b["origins"],
+            "targets": b["targets"],
             "preload": pre,
             "groups": [{"name": n, "locs": [l for l in b["locs"]
                                             if re.match(rx, l)]}
@@ -1170,6 +1223,7 @@ def germany_html(known_n, once):
     return (note("germany", "German forecasts") + f"""
 <div class=gctl>
 <label id=gdsl hidden>Dataset <select id=gds></select></label>
+<label id=gtgtl hidden>Target <select id=gtgt></select></label>
 <label>Source <select id=gsrc><option value=daily>daily</option>
 <option value=weekly>weekly</option></select></label>
 <label class=gwide>Nowcast date <button id=gprev>&lt;</button>
@@ -1188,7 +1242,7 @@ def germany_html(known_n, once):
 <div id=glocs></div></details>
 <div id=gruns class=gck></div>
 <div id=gck class=gck></div>
-<div class=plots><div class=card><h3>Nowcasts, weekly counts</h3>
+<div class=plots><div class=card><h3>Nowcasts</h3>
 <div id=gplot></div></div>
 <div class=card><h3>WIS by checkpoint</h3><div id=gwis></div></div></div>
 <script type="application/json" id=gdata>{payload}</script>
