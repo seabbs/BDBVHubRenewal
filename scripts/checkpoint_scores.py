@@ -53,13 +53,16 @@ import pandas as pd
 
 TAG_PREFIX = "chronos-ft-"
 BACKLOG = (
-    "2c2b22a03107",
-    "0cea0acef1ce",
     "6b7aaa8d4f55",
     "3d3bc724bbfa",
     "e8a1f5ae338b",
+    "0cea0acef1ce",
+    "2c2b22a03107",
 )
-"""Checkpoints published before this job, scored after any new one."""
+"""Checkpoints published before this job, scored after any new one: the
+r3 run's first, then the earlier runs'."""
+REFERENCE_PIN = "e8a1f5ae338b"
+"""The checkpoint the reference runs pin, which they never load."""
 RULE = "own-quantile-wis_crps-1000-common"
 """Sam's rule of 2026-11-16."""
 OLD_RULE = "samples-100"
@@ -261,7 +264,7 @@ def _pin(label: str) -> None:
     if label != REFERENCE:
         os.environ["BDBV_CHRONOS_FT"] = label
     elif not os.environ.get("BDBV_CHRONOS_FT"):
-        os.environ["BDBV_CHRONOS_FT"] = BACKLOG[-1]
+        os.environ["BDBV_CHRONOS_FT"] = REFERENCE_PIN
 
 
 def _write(frame: pd.DataFrame, path: Path) -> None:

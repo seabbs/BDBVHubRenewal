@@ -46,7 +46,7 @@ def test_new_checkpoints_come_first_by_publish_date(cs) -> None:
     queue = cs.checkpoint_queue(RELEASES, scored=set())
     assert queue[:2] == ["aaaaaaaaaaaa", "bbbbbbbbbbbb"]
     # The backlog follows, in its own order, and only published tags.
-    assert queue[2:] == ["2c2b22a03107", "e8a1f5ae338b"]
+    assert queue[2:] == ["e8a1f5ae338b", "2c2b22a03107"]
 
 
 def test_scored_and_foreign_tags_are_left_out(cs) -> None:
