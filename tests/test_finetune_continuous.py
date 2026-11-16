@@ -103,7 +103,7 @@ def test_a_slots_run_trains_with_slots_into_its_own_folders(tmp_path):
     assert on.stdout.split() == [
         "--series-slots",
         "128",
-        "checkpoints-slots128",
+        "checkpoints/slots",
     ]
 
 

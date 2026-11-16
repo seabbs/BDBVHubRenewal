@@ -46,7 +46,8 @@ CHUNK=${CHUNK:-250}
 REAL_VALIDATION=${REAL_VALIDATION:-output/finetune/real-validation.pkl}
 # Per-series slots (src/bdbvhubrenewal/forecasters/slots.py): 0 trains
 # without them; N trains N slots beside the adapter. A slots run keeps to
-# its own HERE and archie checkpoint folder, so the run without slots is
+# its own HERE and archie checkpoint folder (checkpoints/slots/, the
+# paper's finetune_run name), so the run without slots is
 # never touched, and its releases are chronos-slots-<hash>.
 SERIES_SLOTS=${SERIES_SLOTS:-0}
 
@@ -99,7 +100,7 @@ slots_args() {
 remote_checkpoints() {
   # The archie folder this run copies its checkpoints to.
   if [ "$SERIES_SLOTS" -gt 0 ]; then
-    echo "checkpoints-slots$SERIES_SLOTS"
+    echo checkpoints/slots
   else
     echo checkpoints
   fi
