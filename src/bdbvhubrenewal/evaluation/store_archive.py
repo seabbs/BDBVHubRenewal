@@ -30,6 +30,7 @@ import datetime as dt
 import sys
 import tempfile
 import tomllib
+import traceback
 from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any, Final
@@ -290,6 +291,7 @@ def archive(
                 )
         except Exception as err:
             print(f"{model} not archived: {err!r}.", file=sys.stderr)
+            print(traceback.format_exc(), file=sys.stderr)
             continue
         rows.append(table.assign(model=model, vintage=task.vintage))
     return pd.concat(rows, ignore_index=True)[list(COLUMNS)]
