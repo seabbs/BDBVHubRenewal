@@ -118,9 +118,63 @@ def test_lora_config_saves_the_slots_with_the_adapter():
 
 def test_slot_settings_enter_the_hash_only_when_on():
     assert fs.slot_settings(0) == {}
-    on = fs.slot_settings(128)
+    on = fs.slot_settings(128, init_std=0.02, init_seed=1, lr=1e-4)
     assert on["series_slots"]["n"] == 128
-    assert on["series_slots"]["init"] == "zero"
+    assert on["series_slots"]["init"] == "normal"
+    assert on["series_slots"]["init_std"] == 0.02
+    assert on["series_slots"]["init_seed"] == 1
+    assert on["series_slots"]["learning_rate"] == 1e-4
+
+
+def test_the_slots_train_in_their_own_group_at_their_own_rate():
+    from peft import get_peft_model
+    from test_series_slots import lora
+
+    model = tiny_model()
+    slots.attach(model, 8, init_std=0.02, seed=1)
+    model = get_peft_model(model, lora())
+    opt = torch.optim.AdamW(fs.param_groups(model, 1e-5, 1e-4))
+    assert [g["lr"] for g in opt.param_groups] == [1e-5, 1e-4]
+    slot_params = {
+        id(p)
+        for n, p in model.named_parameters()
+        if slots.SLOT_MODULE in n and p.requires_grad
+    }
+    assert {id(p) for p in opt.param_groups[1]["params"]} == slot_params
+    assert not slot_params & {id(p) for p in opt.param_groups[0]["params"]}
+    # Both decay linearly to zero over the same steps.
+    fs.set_learning_rates(opt, 50, 100)
+    assert [g["lr"] for g in opt.param_groups] == [
+        fs.learning_rate(50, 1e-5, 100),
+        fs.learning_rate(50, 1e-4, 100),
+    ]
+
+
+def test_random_slots_round_trip_through_the_trainer_state(tmp_path):
+    from peft import get_peft_model
+    from test_series_slots import lora
+
+    model = tiny_model()
+    slots.attach(model, 8, init_std=0.02, seed=1)
+    model = get_peft_model(model, lora())
+    opt = torch.optim.AdamW(fs.param_groups(model, 1e-5, 1e-4))
+    fs.save_state(tmp_path / "state", model, opt, {"step": 0})
+    fresh = tiny_model()
+    slots.attach(fresh, 8)
+    fresh = get_peft_model(fresh, lora())
+    opt2 = torch.optim.AdamW(fs.param_groups(fresh, 1e-5, 1e-4))
+    fs.load_state(tmp_path / "state", fresh, opt2)
+
+    def slot_weight(m):
+        return next(
+            p
+            for n, p in m.named_parameters()
+            if slots.SLOT_MODULE in n and p.requires_grad
+        )
+
+    assert float(slot_weight(model).abs().sum()) > 0
+    assert torch.equal(slot_weight(model), slot_weight(fresh))
+    assert [g["lr"] for g in opt2.param_groups] == [1e-5, 1e-4]
 
 
 def test_trainer_state_round_trips_the_slots(tmp_path):

@@ -250,3 +250,15 @@ def test_slots_are_made_on_the_models_device():
     slots.attach(model, 4)
     for p in getattr(model, slots.SLOT_MODULE).parameters():
         assert p.device.type == "meta"
+
+
+def test_slots_can_start_as_distinct_random_codes():
+    model = tiny_model()
+    slots.attach(model, 8, init_std=0.02, seed=3)
+    w = getattr(model, slots.SLOT_MODULE).embedding.weight.detach()
+    assert torch.all(w.abs().sum(1) > 0)
+    assert len({tuple(row.tolist()) for row in w}) == 8
+    assert abs(float(w.std()) - 0.02) < 0.005
+    again = tiny_model()
+    slots.attach(again, 8, init_std=0.02, seed=3)
+    assert torch.equal(w, getattr(again, slots.SLOT_MODULE).embedding.weight)
