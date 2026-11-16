@@ -260,7 +260,8 @@ def training_block(
         first and then the lag series, `future_covariates` `[V, H]`,
         `n_targets`, `n_covariates` and `n_future_covariates`, and the
         `start` $S$ and `horizon` $H$. None if no release up to the cut
-        has a row for any of `places`, as for strata with no cases.
+        has a row for any of `places`, as for strata with no cases, or, for a
+        binned source, if no whole bin ends at the cut-off.
     """
     cut = cutoffs[-1]
     end = epiweek_end(cut) + dt.timedelta(weeks=ahead_weeks)
@@ -273,6 +274,8 @@ def training_block(
         daily = hub_triangle(
             rows, "daily", places, end.isoformat(), max_lag=k * max_lag
         )
+        if daily.last < k - 1:
+            return None
         tri = aggregate_triangle(daily, k, max_lag)
         days = final_counts(counts, "daily", places, daily.times, totals)
         truth = _sum_bins(days, bin_ends(daily, k), k)
