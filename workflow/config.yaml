@@ -105,13 +105,16 @@ dashboard:
   # [,prefix=..][,hashes=h1+h2][,n=h1:250+h2:500].
   runs: []
   # Reference series, matched on rows by model and checkpoint; --ref adds
-  # or replaces one (name=MODEL_REGEX[,checkpoint=..][,label=..][,colour=..]).
+  # or replaces one (name=MODEL_REGEX[,checkpoint=..][,label=..][,colour=..]
+  # [,role=..]). Role: baseline (scores are relative to it), start (each
+  # run's curve starts from it, dashed) or other (dotted, the default).
   references:
     - key: zero
       label: zero-shot ragged
       colour: "#16a34a"
       model: "^(?!randomwalknowcast$)(?!.*_complete$)"
       checkpoint: zero-shot
+      role: start
     - key: complete
       label: complete-only
       colour: "#9333ea"
@@ -121,6 +124,7 @@ dashboard:
       label: randomwalknowcast
       colour: "#6b7280"
       model: "^randomwalknowcast$"
+      role: baseline
   # The checkpoint scores' rule shown.
   rule: own-quantile-wis_crps-1000-common
   # Mailbox lines shown (a regular expression).

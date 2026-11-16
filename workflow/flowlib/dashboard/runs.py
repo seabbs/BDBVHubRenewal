@@ -18,7 +18,8 @@ One run is `live`, the one the status follows; by default the first.
 References (zero-shot ragged, complete-data only, randomwalknowcast)
 match score and forecast rows by a model regex and, optionally, a
 checkpoint value, in the same layers: `dashboard.references`, then
-`--ref` specs `name=MODEL_REGEX[,checkpoint=C][,label=L][,colour=C]`.
+`--ref` specs
+`name=MODEL_REGEX[,checkpoint=C][,label=L][,colour=C][,role=R]`.
 """
 
 from __future__ import annotations
@@ -33,7 +34,11 @@ PALETTE = ("#2563eb", "#db2777", "#ea580c", "#0d9488", "#7c3aed", "#65a30d")
 """Colours of runs that name none, in order."""
 
 RUN_FIELDS = {"label", "colour", "live", "base", "prefix", "hashes", "n"}
-REF_FIELDS = {"label", "colour", "checkpoint"}
+REF_FIELDS = {"label", "colour", "checkpoint", "role"}
+ROLES = {"baseline", "start", "other"}
+"""A reference's role on the score panels: the series scores are relative
+to (not drawn), the one each run's curve starts from (dashed), or other
+(dotted)."""
 
 
 @dataclass(frozen=True)
@@ -60,6 +65,7 @@ class Reference:
     colour: str
     model: str
     checkpoint: str | None = None
+    role: str = "other"
 
     def matches(self, row: Mapping[str, str]) -> bool:
         """Whether a score or forecast row is this reference's."""
@@ -147,6 +153,12 @@ def load_runs(
     ]
 
 
+def _role(role: str) -> str:
+    if role not in ROLES:
+        raise ValueError(f"role {role!r} is not one of {sorted(ROLES)}")
+    return role
+
+
 def parse_reference(spec: str) -> Reference:
     """Return the reference of a `name=MODEL_REGEX[,...]` spec."""
     name, model, o = _split(spec, REF_FIELDS)
@@ -156,6 +168,7 @@ def parse_reference(spec: str) -> Reference:
         colour=o.get("colour", "#6b7280"),
         model=model,
         checkpoint=o.get("checkpoint"),
+        role=_role(o.get("role", "other")),
     )
 
 
@@ -171,6 +184,7 @@ def load_references(
             colour=e.get("colour", "#6b7280"),
             model=e["model"],
             checkpoint=e.get("checkpoint"),
+            role=_role(e.get("role", "other")),
         )
     for s in cli:
         r = parse_reference(s)

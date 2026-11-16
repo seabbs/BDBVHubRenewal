@@ -1,5 +1,8 @@
 (function(){
 var P=JSON.parse(document.getElementById("sdata").textContent);
+// A reference's role: baseline (scores are relative to it), start (where
+// each run's curve starts, dashed) or other (dotted).
+var ROLE=P.roles||{};
 var $=function(i){return document.getElementById(i)};
 var SERS=P.series.map(function(s){return [s.key,s.label]}),RUNK=P.series.filter(function(s){return s.run}).map(function(s){return s.key});
 var LV={germany:[["national","national"],["states","states"],["age","ages"]],ebola:[["national","national"],["provinces","provinces"]]};
@@ -37,7 +40,7 @@ function draw(){
  controls();
  var lv=LV[S.study].filter(function(a){return S.lv.indexOf(a[0])>=0});
  var rows=P.rows.filter(function(r){return r[0]==S.study&&r[2]==S.src});
- var shown=rows.filter(function(r){return S.ser.indexOf(r[3])>=0&&r[3]!="rw"&&lv.some(function(l){return l[0]==r[1]})});
+ var shown=rows.filter(function(r){return S.ser.indexOf(r[3])>=0&&ROLE[r[3]]!="baseline"&&lv.some(function(l){return l[0]==r[1]})});
  var W=640,H=320,L=44,R=16,T=10,B=44;
  var ns=shown.filter(function(r){return r[4]>0}).map(function(r){return r[4]});
  var nmin=ns.length?Math.min.apply(null,ns):250,nmax=ns.length?Math.max.apply(null,ns):250;
@@ -54,19 +57,19 @@ function draw(){
  xt.forEach(function(t){h+='<line x1="'+sx(t[0])+'" x2="'+sx(t[0])+'" y1="'+T+'" y2="'+(H-B)+'" class=grid /><text x="'+sx(t[0])+'" y="'+(H-B+14)+'" text-anchor=middle class=ax>'+t[1]+'</text>'});
  h+='<text x="'+(W/2)+'" y="'+(H-6)+'" text-anchor=middle class=ax>simulations (log2)</text>';
  P.pending.forEach(function(p){if(p.n<=nmax*1.18&&p.n>=zx){h+='<line x1="'+sx(p.n)+'" x2="'+sx(p.n)+'" y1="'+T+'" y2="'+(H-B)+'" class=mark /><text x="'+(sx(p.n)+3)+'" y="'+(T+10)+'" class=ax>n'+p.n+' scoring</text>'}});
- if(S.ser.indexOf("rw")>=0)h+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+sy(1)+'" y2="'+sy(1)+'" stroke="'+P.col.rw+'" stroke-width=2 ><title>randomwalknowcast = 1</title></line>';
+ SERS.forEach(function(b){if(ROLE[b[0]]=="baseline"&&S.ser.indexOf(b[0])>=0)h+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+sy(1)+'" y2="'+sy(1)+'" stroke="'+P.col[b[0]]+'" stroke-width=2 ><title>'+b[1]+' = 1</title></line>'});
  var any=false,sum=[];
  lv.forEach(function(l,li){var mk=MK[li];
-  RUNK.concat(["zero","complete"]).forEach(function(s){
+  RUNK.concat(SERS.map(function(a){return a[0]}).filter(function(k){return ROLE[k]&&ROLE[k]!="baseline"})).forEach(function(s){
    if(S.ser.indexOf(s)<0)return;
    var rs=rows.filter(function(r){return r[1]==l[0]&&r[3]==s}).sort(function(a,b){return a[4]-b[4]});
    if(!rs.length)return;any=true;var c=P.col[s];
    var lab=SERS.find(function(x){return x[0]==s})[1];
-   if(s=="zero"||s=="complete"){var v=rs[0][6];
-    h+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+sy(v)+'" y2="'+sy(v)+'" stroke="'+c+'" stroke-width=1.5 stroke-dasharray="'+(s=="zero"?"6 3":"2 3")+'" />';
+   if(ROLE[s]){var v=rs[0][6];
+    h+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+sy(v)+'" y2="'+sy(v)+'" stroke="'+c+'" stroke-width=1.5 stroke-dasharray="'+(ROLE[s]=="start"?"6 3":"2 3")+'" />';
     h+=mark(mk,sx(zx),sy(v),c,l[1]+", "+lab+": "+fmt(v))}
    else{
-    var zs=rows.filter(function(r){return r[1]==l[0]&&r[3]=="zero"})[0];
+    var zs=rows.filter(function(r){return r[1]==l[0]&&ROLE[r[3]]=="start"})[0];
     var pts=(zs?[[zx,zs[6]]]:[]).concat(rs.map(function(r){return [r[4],r[6]]}));
     h+='<polyline points="'+pts.map(function(p){return sx(p[0])+","+sy(p[1])}).join(" ")+'" fill=none stroke="'+c+'" stroke-width=1.8 />';
     rs.forEach(function(r){h+=mark(mk,sx(r[4]),sy(r[6]),c,l[1]+", "+lab+" n"+r[4]+" "+r[5]+": "+fmt(r[6]));
@@ -74,10 +77,10 @@ function draw(){
     if(RUNK.indexOf(s)>=0){var last=rs[rs.length-1];
      sum.push((lv.length>1?l[1]+": ":"")+lab+" n"+last[4]+": "+fmt(last[6])+(zs?" vs zero-shot "+fmt(zs[6])+", "+((last[6]/zs[6]-1)*100>=0?"+":"")+((last[6]/zs[6]-1)*100).toFixed(0)+"%":""))}}})});
  h+='</svg>';
- var leg=SERS.filter(function(s){return S.ser.indexOf(s[0])>=0}).map(function(s){return '<span><i style="background:'+P.col[s[0]]+'"></i>'+s[1]+(s[0]=="zero"?" (dashed)":s[0]=="complete"?" (dotted)":"")+'</span>'}).join("");
+ var leg=SERS.filter(function(s){return S.ser.indexOf(s[0])>=0}).map(function(s){return '<span><i style="background:'+P.col[s[0]]+'"></i>'+s[1]+(ROLE[s[0]]=="start"?" (dashed)":ROLE[s[0]]=="other"?" (dotted)":"")+'</span>'}).join("");
  if(lv.length>1)leg+=lv.map(function(l,i){return '<span><svg width=12 height=12 viewBox="0 0 12 12">'+mark(MK[i],6,6,"var(--fg)","")+'</svg>'+l[1]+'</span>'}).join("");
  var note="";
- if(S.ser.indexOf("complete")>=0&&!rows.some(function(r){return r[3]=="complete"}))note+="<p class=mut>complete-only pending</p>";
+ SERS.forEach(function(s){if(ROLE[s[0]]&&ROLE[s[0]]!="baseline"&&S.ser.indexOf(s[0])>=0&&!rows.some(function(r){return r[3]==s[0]}))note+="<p class=mut>"+s[1]+" pending</p>"});
  if(P.pending.length)note+='<p class=mut>Saved, not yet in the scores: '+P.pending.map(function(p){return p.run+" n"+p.n+(p.hash?" "+p.hash:"")}).join(", ")+'.</p>';
  if(!any)note+="<p class=mut>No rows for this selection.</p>";
  $("splot").innerHTML='<div class=sum>'+(sum.join("; ")||"")+'</div>'+h+'<div class=leg>'+leg+'</div>'+note+'<p class=mut>Relative to randomwalknowcast ('+(S.study=="germany"?"WIS":"CRPS")+', below 1 is better). Marker shape shows level.</p>';
