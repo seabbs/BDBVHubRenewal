@@ -289,3 +289,140 @@ def test_checkpoint_models_keep_one_colour_across_panels() -> None:
         colours[("ebola, national (n = 400)", "b")]
         == colours[("germany, national (n = 400)", "b")]
     )
+
+
+def test_checkpoint_rows_keep_one_grid_and_the_current_rule() -> None:
+    from paperpipe.evidence import CHECKPOINT_RULE, checkpoint_rows
+
+    base = {"level": "national", "model": "fm_chronos_daily_ragged", "n": 9}
+    rows = pd.DataFrame(
+        [
+            {
+                **base,
+                "study": "germany",
+                "checkpoint": "zero-shot",
+                "outbreaks": 0,
+                "grid": None,
+                "rule": CHECKPOINT_RULE,
+                "rel_wis": 2.0,
+                "rel_crps": None,
+            },
+            {
+                **base,
+                "study": "germany",
+                "checkpoint": "a",
+                "outbreaks": 1000,
+                "grid": "r3",
+                "rule": CHECKPOINT_RULE,
+                "rel_wis": 1.5,
+                "rel_crps": None,
+            },
+            {
+                **base,
+                "study": "germany",
+                "checkpoint": "b",
+                "outbreaks": 1000,
+                "grid": "r4",
+                "rule": CHECKPOINT_RULE,
+                "rel_wis": 1.2,
+                "rel_crps": None,
+            },
+            {
+                **base,
+                "study": "germany",
+                "checkpoint": "b",
+                "outbreaks": 1000,
+                "grid": "r4",
+                "rule": "samples-100",
+                "rel_wis": 9.0,
+                "rel_crps": None,
+            },
+            {
+                **base,
+                "study": "ebola",
+                "checkpoint": "b",
+                "outbreaks": 1000,
+                "grid": "r4",
+                "rule": CHECKPOINT_RULE,
+                "rel_wis": None,
+                "rel_crps": 0.8,
+            },
+            {
+                **base,
+                "study": "held_out",
+                "checkpoint": "b",
+                "outbreaks": 1000,
+                "grid": "r4",
+                "rule": CHECKPOINT_RULE,
+                "rel_wis": None,
+                "rel_crps": None,
+            },
+        ]
+    )
+    out = checkpoint_rows(rows, checkpoints=("b",))
+    assert set(out["study"]) == {"germany", "ebola"}
+    assert sorted(out["checkpoint"]) == ["b", "b", "zero-shot"]
+    assert out.set_index("study").loc["ebola", "rel_wis"] == 0.8
+    # Old tables, with no grid or rule, give the zero-shot rows only.
+    old = rows.drop(columns=["grid", "rule", "rel_crps"]).iloc[:2]
+    assert list(checkpoint_rows(old, checkpoints=("b",))["checkpoint"]) == [
+        "zero-shot"
+    ]
+
+
+def test_checkpoint_rows_of_other_runs_leave_only_zero_shot() -> None:
+    from paperpipe.evidence import checkpoint_rows
+
+    rows = pd.DataFrame(
+        {
+            "study": ["germany", "germany"],
+            "level": "national",
+            "model": "fm_chronos_daily_ragged",
+            "checkpoint": ["zero-shot", "6b7aaa8d4f55"],
+            "outbreaks": [0, 1000],
+            "n": 9,
+            "rel_wis": [2.0, 1.5],
+        }
+    )
+    out = checkpoint_rows(rows, checkpoints=("b",))
+    assert list(out["checkpoint"]) == ["zero-shot"]
+
+
+def test_checkpoint_rows_keep_only_the_final_run() -> None:
+    from paperpipe.evidence import checkpoint_rows
+
+    rows = pd.DataFrame(
+        {
+            "study": "germany",
+            "level": "national",
+            "model": "fm_chronos_daily_ragged",
+            "checkpoint": ["a", "b", "c"],
+            "outbreaks": [1000, 2000, 4000],
+            "n": 9,
+            "rel_wis": 1.0,
+            "grid": ["r4", "r4.1", "r3"],
+        }
+    )
+    # Only the final run's checkpoints, whatever their grid.
+    assert list(checkpoint_rows(rows, checkpoints=("b",))["checkpoint"]) == [
+        "b"
+    ]
+
+
+def test_joint_evidence_leaves_out_fine_tuned_rows_of_earlier_runs() -> None:
+    from paperpipe.evidence import drop_finetuned
+
+    rows = pd.DataFrame(
+        {
+            "model": [
+                "fm_chronos_daily_ragged",
+                "fm_chronos_daily_ragged_ft",
+                "fm_chronos_daily_ragged_ft_n1000",
+                "randomwalknowcast",
+            ]
+        }
+    )
+    assert list(drop_finetuned(rows)["model"]) == [
+        "fm_chronos_daily_ragged",
+        "randomwalknowcast",
+    ]

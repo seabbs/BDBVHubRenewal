@@ -35,6 +35,7 @@ from paperfigs.truth import attach_truth, rolling_truth
 from paperpipe.config import (
     check_no_heldout,
     check_no_heldout_releases,
+    keep_finetuned,
     run_settings,
 )
 from paperpipe.evidence import EVIDENCE, write_evidence
@@ -92,6 +93,8 @@ def _sources(a: argparse.Namespace) -> Sources:
         ebola_config=a.ebola_config,
         ebola_backtest=a.ebola_backtest,
         ebola_extra=tuple(a.ebola_extra),
+        ebola_draws=a.ebola_draws,
+        ebola_draws_models=tuple(a.ebola_draws_models),
         candidates=tuple(a.candidates),
         store=a.store,
         store_ref=a.store_ref,
@@ -139,13 +142,15 @@ def _forecasts(a: argparse.Namespace) -> None:
         sources=_sources(a),
         source=read_meta(a.meta)["source"],
         baseline=read_meta(a.meta).get("baseline"),
+        split=_date(a.split),
     )
     _write(fc, a.out)
 
 
 def _table(a: argparse.Namespace) -> None:
-    fc = validate_forecasts(_read(a.raw))
-    check_no_heldout(fc, run_settings(json.loads(a.config), a.mode))
+    config = json.loads(a.config)
+    fc = keep_finetuned(validate_forecasts(_read(a.raw)), config)
+    check_no_heldout(fc, run_settings(config, a.mode))
     _write(fc, a.out)
 
 
@@ -188,7 +193,9 @@ def _joint(a: argparse.Namespace) -> None:
 
 def _evidence(a: argparse.Namespace) -> None:
     paths = {name: getattr(a, name) for name in EVIDENCE}
-    numbers = write_evidence(paths, a.si_dir, a.fig_dir, a.out)
+    numbers = write_evidence(
+        paths, a.si_dir, a.fig_dir, a.out, checkpoints=tuple(a.checkpoints)
+    )
     if a.mode == "paper" and numbers["evidence"]["waiting"]:
         raise ValueError(
             "The paper run cannot leave SI results out; it waits on "
@@ -210,11 +217,11 @@ def _germany_extra(a: argparse.Namespace) -> None:
 
 
 def _summary(a: argparse.Namespace) -> None:
-    studies = {
-        read_meta(m)["study"]: study_summary(read_meta(m), pd.read_csv(t))
-        for m, t in zip(a.meta, a.scores, strict=True)
-    }
-    write_summary(a.out, a.mode, studies)
+    studies = {}
+    for m, t in zip(a.meta, a.scores, strict=True):
+        meta = read_meta(m)
+        studies[meta["study"]] = study_summary(meta, pd.read_csv(t), a.mode)
+    write_summary(a.out, a.mode, studies, finetuned=a.finetuned)
 
 
 def _score_tables(a: argparse.Namespace) -> None:
@@ -226,6 +233,7 @@ def _score_tables(a: argparse.Namespace) -> None:
         a.si_dir,
         split=_date(a.split),
         baseline=baseline_of(read_meta(a.meta)),
+        after=a.realdata_after,
     )
 
 
@@ -233,6 +241,7 @@ def _limits(p: argparse.ArgumentParser) -> None:
     p.add_argument("study")
     p.add_argument("--seeds", type=int, nargs="*", default=[])
     p.add_argument("--before", default=None)
+    p.add_argument("--split", default=None)
     p.add_argument("--meta", type=Path, required=True)
     p.add_argument("--synthetic-forecasts", type=Path, default=None)
     p.add_argument("--germany-forecasts", type=Path, nargs="*", default=[])
@@ -242,6 +251,8 @@ def _limits(p: argparse.ArgumentParser) -> None:
     p.add_argument("--ebola-config", type=Path, default=None)
     p.add_argument("--ebola-backtest", type=Path, default=None)
     p.add_argument("--ebola-extra", type=Path, nargs="*", default=[])
+    p.add_argument("--ebola-draws", type=Path, default=None)
+    p.add_argument("--ebola-draws-models", nargs="*", default=[])
     p.add_argument("--candidates", type=Path, nargs="*", default=[])
     p.add_argument("--store", type=Path, default=None)
     p.add_argument("--store-ref", default="origin/fit-store")
@@ -313,6 +324,8 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("score-tables")
     _outputs(p)
     p.add_argument("--meta", type=Path, required=True)
+    # The last BDBV release the real-data models trained on.
+    p.add_argument("--realdata-after", default=None)
     p.set_defaults(run=_score_tables)
 
     p = sub.add_parser("joint-scores")
@@ -330,6 +343,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--si-dir", type=Path, required=True)
     p.add_argument("--fig-dir", type=Path, required=True)
     p.add_argument("--out", type=Path, required=True)
+    p.add_argument("--checkpoints", nargs="*", default=[])
     p.set_defaults(run=_evidence)
 
     p = sub.add_parser("ebola-extra")
@@ -351,6 +365,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--meta", type=Path, nargs="+", required=True)
     p.add_argument("--scores", type=Path, nargs="+", required=True)
     p.add_argument("--out", type=Path, required=True)
+    p.add_argument("--finetuned", default=None)
     p.set_defaults(run=_summary)
     return parser
 

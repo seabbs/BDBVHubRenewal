@@ -6,6 +6,15 @@ build: build
 # The run `render` publishes first: development or paper.
 render: development
 studies: [synthetic, germany, ebola]
+# The final fine-tuning run (with series slots) writes each checkpoint to
+# `finetune_run`/n<outbreaks>/ and publishes it as `chronos-ft-<hash>`.
+# `finetuned` is the newest published one, which every `_ft` model of the
+# workflow loads and the paper names, and `final_checkpoints` all of
+# them, which the checkpoint curve shows. scripts/follow_checkpoint.py
+# sets both. Null and empty leave the fine-tuned rows pending.
+finetune_run: ../output/checkpoints/slots
+finetuned: null
+final_checkpoints: []
 # Samples per forecast for the studies scored on samples.
 n_samples: 100
 
@@ -16,17 +25,18 @@ synthetic:
   # The simulator, whose code gives the grid tables and SI notes
   # (`evidence` below), and the held-out set's design.
   simulator: simulator
-  grid: r3
+  grid: r4
   simulations_per_seed: 25
-  blocks: [1670, 1671]
   draw: 1
   # The synthetic runner's protocol, quoted in the SI note.
   protocol: {min_releases: 6, horizon_weeks: 5, horizons: [-4, 3]}
   # The simulations of each run's seeds, whose settings give the grid's
   # realised values.
   simulations:
-    development: ../output/finetune/pilot-r3
-    paper: ../output/finetune/heldout
+    development: ../output/finetune/development
+    # Simulation round 1's folder (~/bdbv-rounds/rounds/r1/sims on
+    # archie), whose held-out batches are the held-out set.
+    paper: ../output/rounds/r1/sims
   # The synthetic runner's forecasts of them, with its
   # observations and factors beside them.
   forecasts:
@@ -47,9 +57,8 @@ germany:
   # them, and `backtest` reads a `germany-backtest` table. A development
   # run fails if one holds a held-out date.
   # `provisional` notes what is to be redone, in every German caption.
-  extra:
-    - evidence: germany_chronos
-      models: "^fm_chronos_"
+  # The Chronos-2 models are in config/germany.toml.
+  extra: []
 
 # The Ebola study: samples of the release backtest of `backtest_models`
 # from every past release, with the stored fits' (`bdbvhubrenewal
@@ -63,15 +72,14 @@ ebola:
   # backtest config, which sets D, as the release backtest takes them.
   data: ../data
   config: ../config/backtest.toml
-  # Further models' release-backtest samples from evidence rows (`evidence`
-  # below), in the backtest's layout, kept to `models`: the Chronos-2
-  # models fine-tuned on 1,000 outbreaks, as submitted (one joint block),
-  # until the fit store holds them. The other Chronos-2 models come from
-  # the fit store.
-  extra:
-    - evidence: ebola_chronos
-      models: ".*_n1000$"
+  # Further models' release-backtest samples from evidence rows
+  # (`evidence` below), in the backtest's layout, kept to `models`.
+  extra: []
   backtest_models: [randomwalk, randomwalknowcast]
+  # Draws per forecast of the paper's own run of `backtest_models`, with
+  # the backtest's seed shared by every model (common random numbers).
+  # Their rows replace the site backtest's, which keeps its own number.
+  n_samples: 1000
   hub: ../data/raw/bdbv-hub
   hub_repo: https://github.com/InsightNet-US/BDBV-Modeling-Hub.git
   candidates: [../data/candidate-forecasts.csv.gz]
@@ -101,36 +109,31 @@ nowcasts:
       - randomwalknowcast
       - fm_chronos_daily_ragged
       - fm_chronos_daily_ragged_ft
-      - fm_chronos_daily_ragged_ft_n1000
       - MeanEnsemble
       - hub_ensemble
     ebola:
       - randomwalknowcast
       - fm_chronos_weekly_ragged
       - fm_chronos_weekly_ragged_ft
-      - fm_chronos_weekly_ragged_ft_n1000
 
 # SI results kept as rows committed to evidence
 # branches (`paperpipe.evidence`). Each is `{ref: <commit>, path: <file>}`;
 # null leaves a note of what it waits on in a development run and fails a
 # paper run.
 evidence:
-  # scripts/finetune_simulate.R of the r3 fine-tune (#235). Read from main,
-  # with no pin, once #235 merges.
+  # scripts/finetune_simulate.R of the r4 grid that the simulation rounds
+  # and the final fine-tune use.
   simulator:
-    ref: 6bcb6f2fa4a2f2f5978271a7d3d30e613ea3f939
+    ref: c77f5a241afef356430c5a587623f8fa0d03f9b5
     path: scripts/finetune_simulate.R
-  germany_chronos:
-    ref: e0323a7d19794f06b50ccc5f0118f85e58b16af5
-    path: evidence/paper-forecasts-chronos.csv.gz
-  # Scores of each r3 checkpoint on the case studies (germany-chronos2).
+  # Scores of the final run's checkpoints on the case studies (ckpt-scores).
   checkpoint_scores:
     ref: a0ccfc67bc1471a2405eb4af3254310b087c92c3
     path: evidence/checkpoint-scores.csv
-  # The scale-floor test (fm-finetune3).
-  scale_floor:
-    ref: 500fe77caed9fdf846cfac9270b0be4179e742ee
-    path: results/finetune/scale-floor.csv
+    # The rows carry the scoring rule; only `CHECKPOINT_RULE`'s are shown,
+    # for the final run's checkpoints (`final_checkpoints`).
+  # Pending: the scale-floor test on the final run's checkpoints.
+  scale_floor: null
   # The lag-horizon test of the ragged layout (germany-chronos2).
   lag_germany:
     ref: e4f4d7a49773a3050a9529df5c70d7cc8504dafc
@@ -151,24 +154,17 @@ evidence:
   aggregation_scores:
     ref: 5a3e0440880f54751fd8dccbfa14133a2a74ba81
     path: results/agg/aggregation-scores.csv.gz
-  ebola_chronos:
-    ref: 5a3e0440880f54751fd8dccbfa14133a2a74ba81
-    path: results/agg/bdbv-joint-samples.csv.gz
   aggregation_cost:
     ref: 5a3e0440880f54751fd8dccbfa14133a2a74ba81
     path: results/agg/aggregation-cost.csv
-  finetune_heldout:
-    ref: 31ea2bf4c687f5c0ea85d9a880fa0f6cfcb3dce3
-    path: results/finetune/finetune-heldout.csv
-  sim_summaries:
-    ref: 31ea2bf4c687f5c0ea85d9a880fa0f6cfcb3dce3
-    path: results/finetune/sim-summaries-r3-pilot.csv
-  sim_realism:
-    ref: 31ea2bf4c687f5c0ea85d9a880fa0f6cfcb3dce3
-    path: results/finetune/sim-realism-r3-pilot.csv
-  sim_diseases:
-    ref: 31ea2bf4c687f5c0ea85d9a880fa0f6cfcb3dce3
-    path: results/finetune/sim-diseases-r3-pilot.csv
+  # Pending: the final run's held-out loss curve.
+  finetune_heldout: null
+  # Pending: summaries of the final grid's simulations.
+  sim_summaries: null
+  # Pending: the final grid's realism comparison.
+  sim_realism: null
+  # Pending: the final grid's ranges against published values.
+  sim_diseases: null
 
 # Data the development runs use.
 development:
@@ -179,11 +175,16 @@ development:
 # Only the `paper` target reads them.
 heldout:
   # Outbreaks simulated with seeds the fine-tune never saw.
-  synthetic_seeds: [8016, 8017, 8018, 8019, 8020, 8021, 8022, 8023, 8024, 8025]
+  # The held-out batches of simulation round 1 on the final grid.
+  synthetic_seeds: [30140, 30141, 30142, 30143]
   # First held-out German nowcast date.
   # The benchmark's dates run from 2021-11-22 to 2022-04-29.
   # The first 80 are the development half.
   germany_from: "2022-02-10"
+  # First scored Ebola round (its reference date, a Saturday). Earlier
+  # rounds and the release backtest from earlier releases are the
+  # development part; prospective rounds from this one are scored.
+  ebola_from: "2026-11-21"
 
 # Studies whose truth is the first release on or after D days, as the
 # release backtest takes it, rather than the last release before.

@@ -23,7 +23,17 @@ from paperpipe.meta import DUMMY_LABEL, baseline_of
 __all__ = ["study_summary", "write_summary"]
 
 
-def study_summary(meta: Mapping[str, Any], scores: pd.DataFrame) -> dict:
+SCOPES: dict[str, tuple[str, str]] = {
+    "germany": ("development half", "held-out half"),
+    "ebola": ("release backtest before the scored rounds", "scored rounds"),
+    "synthetic": ("development simulations", "held-out simulations"),
+}
+"""Each study's development and scored parts, as the text names them."""
+
+
+def study_summary(
+    meta: Mapping[str, Any], scores: pd.DataFrame, mode: str | None = None
+) -> dict:
     """Return the quoted numbers of one study.
 
     Parameters
@@ -32,6 +42,8 @@ def study_summary(meta: Mapping[str, Any], scores: pd.DataFrame) -> dict:
         The study's run notes (`paperpipe.meta`).
     scores : pandas.DataFrame
         The study's main-text score table (`paperpipe.outputs`).
+    mode : str, optional
+        The run's mode, which names the synthetic study's part.
 
     Returns
     -------
@@ -39,9 +51,17 @@ def study_summary(meta: Mapping[str, Any], scores: pd.DataFrame) -> dict:
         `source`, `label` (empty for real data), `note` (what is
         provisional), `baseline`, `n_models`, `best_model`,
         `best_rel_score`, `best_rel_log_score` and, where the baseline is
-        another model, `best_rel_score_randomwalknowcast`.
+        another model, `best_rel_score_randomwalknowcast`, and `status`,
+        which says when the scored part has no scores yet and is empty
+        otherwise, and `scope`, the part the numbers come from (`SCOPES`).
     """
     baseline = baseline_of(meta)
+    dev, scored = SCOPES.get(meta["study"], ("", ""))
+    # The synthetic study has no split: a paper run is all held out.
+    if meta["study"] == "synthetic":
+        scope = scored if mode == "paper" else dev
+    else:
+        scope = scored if "period" in scores.columns else dev
     if "period" in scores.columns:
         scores = scores.loc[scores["period"] == PERIODS[-1]]
     others = scores.loc[scores["model"] != baseline].dropna(
@@ -66,11 +86,28 @@ def study_summary(meta: Mapping[str, Any], scores: pd.DataFrame) -> dict:
         "best_rel_score_randomwalknowcast": value(
             "rel_score_randomwalknowcast"
         ),
+        "scope": scope,
+        "status": (
+            ""
+            if len(scores)
+            else "There are no scored forecasts yet, as no forecast of "
+            "the scored part has its truth reported."
+        ),
     }
 
 
-def write_summary(path: Path, mode: str, studies: Mapping[str, dict]) -> None:
-    """Write every study's numbers as Quarto metadata under `results`."""
-    doc = {"results": {"mode": mode, **studies}}
+def write_summary(
+    path: Path,
+    mode: str,
+    studies: Mapping[str, dict],
+    finetuned: str | None = None,
+) -> None:
+    """Write every study's numbers as Quarto metadata under `results`.
+
+    `finetuned` is the fine-tuned checkpoint the `_ft` models loaded, or
+    `pending` while the final run has published none.
+    """
+    pin = finetuned or "pending"
+    doc = {"results": {"mode": mode, "finetuned": pin, **studies}}
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(yaml.safe_dump(doc, sort_keys=False))

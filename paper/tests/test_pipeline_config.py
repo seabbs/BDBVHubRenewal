@@ -50,8 +50,9 @@ def test_unknown_mode_raises() -> None:
 
 def test_overlapping_seeds_raise() -> None:
     cfg = _config()
-    cfg["development"]["synthetic_seeds"] = [8016]
-    with pytest.raises(ValueError, match="8016"):
+    held = cfg["heldout"]["synthetic_seeds"][0]
+    cfg["development"]["synthetic_seeds"] = [held]
+    with pytest.raises(ValueError, match=str(held)):
         run_settings(cfg, "development")
 
 
@@ -99,7 +100,8 @@ def test_guard_rejects_heldout_german_dates() -> None:
 
 def test_guard_rejects_heldout_seeds() -> None:
     dev = run_settings(_config(), "development")
-    bad = _table("synthetic", synthetic_location(8017, "sim01"), "2024-03-01")
+    held = _config()["heldout"]["synthetic_seeds"][-1]
+    bad = _table("synthetic", synthetic_location(held, "sim01"), "2024-03-01")
     with pytest.raises(ValueError, match="held-out"):
         check_no_heldout(bad, dev)
 
@@ -129,3 +131,46 @@ def test_development_reads_releases_up_to_d_days_after_the_split() -> None:
         check_no_heldout_releases(_obs("2022-02-10", "2022-03-01"), dev, 40)
     paper = run_settings(_config(), "paper")
     check_no_heldout_releases(_obs("2022-04-01", "2022-06-01"), paper, 40)
+
+
+def test_development_leaves_out_the_scored_ebola_rounds() -> None:
+    cfg = _config()
+    first = pd.Timestamp(cfg["heldout"]["ebola_from"])
+    dev = run_settings(cfg, "development")
+    paper = run_settings(cfg, "paper")
+    assert (dev.ebola_before, dev.ebola_split) == (first, None)
+    assert (paper.ebola_before, paper.ebola_split) == (None, first)
+
+
+def test_guard_rejects_scored_ebola_rounds() -> None:
+    cfg = _config()
+    dev = run_settings(cfg, "development")
+    first = pd.Timestamp(cfg["heldout"]["ebola_from"])
+    before = first - pd.Timedelta(days=7)
+    check_no_heldout(_table("ebola", "CD", f"{before:%Y-%m-%d}"), dev)
+    with pytest.raises(ValueError, match="Ebola"):
+        check_no_heldout(_table("ebola", "CD", f"{first:%Y-%m-%d}"), dev)
+
+
+def test_fine_tuned_rows_wait_for_a_checkpoint_of_the_final_run() -> None:
+    from paperpipe.config import keep_finetuned
+
+    fc = pd.DataFrame(
+        {
+            "model": [
+                "randomwalknowcast",
+                "fm_chronos_daily_ragged",
+                "fm_chronos_daily_ragged_ft",
+                "fm_chronos_weekly_ragged_ft_n1000",
+                "fm_chronos_daily_ragged_real",
+            ]
+        }
+    )
+    pending = keep_finetuned(fc, {"finetuned": None})
+    assert list(pending["model"]) == [
+        "randomwalknowcast",
+        "fm_chronos_daily_ragged",
+        "fm_chronos_daily_ragged_real",
+    ]
+    pinned = keep_finetuned(fc, {"finetuned": "abcdef123456"})
+    assert len(pinned) == len(fc)

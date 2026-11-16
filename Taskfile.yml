@@ -113,10 +113,11 @@ tasks:
       - uv run bdbvhubrenewal nowcast {{.CLI_ARGS}}
 
   metadata:
-    desc: Write and check the metadata of both hub models in hub/model-metadata/
+    desc: Write and check the metadata of the hub models in hub/model-metadata/
     cmds:
       - uv run bdbvhubrenewal metadata --model randomwalk --out hub/model-metadata
       - uv run bdbvhubrenewal metadata --model randomwalknowcast --out hub/model-metadata
+      - uv run bdbvhubrenewal metadata --model fm_chronos_daily_ragged_ft --out hub/model-metadata
 
   validate-hub:
     desc: Check the nowcast file and metadata with hub_validate (Python) and hubValidations (R)
@@ -206,17 +207,15 @@ tasks:
         uv run --group docs jupytext --to ipynb --execute --run-path .
         docs/getting-started.py
 
-  # As the paper step of .github/workflows/pages.yml; keep the two in
-  # step.
-  paper:render:
-    desc: Run the paper workflow's development target, render the paper (HTML and PDF) and copy it into docs/paper/ for the site
-    dir: paper
+  paper:
+    desc: Run the paper workflow (TARGET=development by default, or paper) and render the paper into docs/paper/, as CI does (scripts/paper.sh)
     cmds:
-      - uv run --group paper snakemake -s workflow/Snakefile render --cores {{.CORES | default 4}} --resources heavy=1
-      - mkdir -p ../docs/paper/figures ../docs/paper/build
-      - cp -R main.html main.pdf main_files si.html si.pdf si_files ../docs/paper/
-      - cp figures/*.svg figures/*.pdf ../docs/paper/figures/
-      - cp -R build/figures ../docs/paper/build/
+      - CORES={{.CORES | default 4}} scripts/paper.sh {{.TARGET | default "development"}}
+
+  paper:render:
+    desc: Alias of `task paper`
+    cmds:
+      - task: paper
 
   docs:
     desc: Build the docs site into _site/
@@ -224,7 +223,7 @@ tasks:
       - task: results
       - task: plots
       - task: getting-started
-      - task: paper:render
+      - task: paper
       - uv run mkdocs build --strict
 
   serve:

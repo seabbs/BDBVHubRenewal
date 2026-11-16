@@ -14,7 +14,18 @@ from typing import Final
 
 import pandas as pd
 
-__all__ = ["SEP", "checkpoint_of", "drop_checkpoints"]
+__all__ = [
+    "REAL_DATA",
+    "SEP",
+    "checkpoint_of",
+    "drop_checkpoints",
+    "drop_real_data",
+]
+
+REAL_DATA: Final = "_real"
+"""Suffix of the models fine-tuned on real data alone (the German
+development half and BDBV to date), compared with the simulation-trained
+models in the SI only."""
 
 SEP: Final = "@"
 """Separates a fine-tuned model from its number of training outbreaks."""
@@ -31,4 +42,10 @@ def checkpoint_of(model: str) -> tuple[str, int] | None:
 def drop_checkpoints(df: pd.DataFrame) -> pd.DataFrame:
     """Return the rows of models that are not checkpoints."""
     keep = [checkpoint_of(m) is None for m in df["model"]]
+    return df.loc[keep].reset_index(drop=True)
+
+
+def drop_real_data(df: pd.DataFrame) -> pd.DataFrame:
+    """Return the rows of models not fine-tuned on real data."""
+    keep = ~df["model"].astype(str).str.endswith(REAL_DATA)
     return df.loc[keep].reset_index(drop=True)

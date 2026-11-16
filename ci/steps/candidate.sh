@@ -21,6 +21,9 @@ CAND_LABEL=${CAND_LABEL:-$CAND_ID}
 # one.
 model=${CAND_MODEL:-$MODEL}
 [ "$CAND_KIND" = randomwalk ] && model=${CAND_MODEL:-randomwalk}
+# A random walk or a `direct` model runs here, with no fit.
+unfitted=false
+case "$CAND_KIND" in randomwalk | direct) unfitted=true ;; esac
 inputs="$WORK/inputs"
 [ -f "$inputs/context.json" ] || { echo "::error::run prepare.sh first"; exit 1; }
 ctx() { python3 -c "import json,sys; print(json.load(open('$inputs/context.json'))['$1'])"; }
@@ -38,7 +41,7 @@ cp "$inputs/coherence-summary.json" "$out/" 2> /dev/null || true
 note "### Candidate \`$CAND_ID\`: $CAND_LABEL"
 
 fit_ok=true
-if [ "$CAND_KIND" = "randomwalk" ]; then
+if $unfitted; then
   : # no fit
 elif [ "${FIT_SOURCE:-fit}" = "store" ]; then
   # The stored fit of the same code and data: the fit the docs and the
@@ -92,7 +95,7 @@ else
   note "Fit took $(( SECONDS - start )) s."
 fi
 
-if [ "$CAND_KIND" = "randomwalk" ]; then
+if $unfitted; then
   cli nowcast --model "$model" --vintage "$AS_OF" \
     --reference-date "$REFERENCE_DATE" \
     --out "$out/submission" || echo "::warning::$model nowcast failed"
@@ -104,7 +107,7 @@ elif $fit_ok; then
 fi
 sub=$(find "$out/submission" -name '*.csv' 2> /dev/null | sort | head -n 1)
 
-if [ "$CAND_KIND" != "randomwalk" ]; then
+if ! $unfitted; then
   cp "$fit/diagnostics.json" "$out/" 2> /dev/null || true
   sci summarise-fit --id "$CAND_ID" --diagnostics "$out/diagnostics.json" \
     --out "$out" --policy "$POLICY" --no-fail
@@ -115,7 +118,7 @@ fi
 # fit that wrote none.
 ppc_args=(--id "$CAND_ID" --kind "$CAND_KIND" --ppc "$out/ppc.json"
   --out "$out" --policy "$POLICY" --no-fail)
-if [ "$CAND_KIND" != "randomwalk" ]; then
+if ! $unfitted; then
   cp "$fit/ppc.json" "$out/" 2> /dev/null || true
   ppc_args+=(--diagnostics "$out/diagnostics.json")
 fi
@@ -159,9 +162,14 @@ fi
 
 store="null"
 [ -f "$out/store.json" ] && store=$(cat "$out/store.json")
+# The fine-tuned checkpoint the nowcast loaded, if any.
+checkpoint="null"
+[ -f "$out/submission/checkpoint.json" ] \
+  && checkpoint=$(cat "$out/submission/checkpoint.json")
 cat > "$out/run.json" << EOF
 {"candidate": "$CAND_ID", "kind": "$CAND_KIND", "label": "$CAND_LABEL",
  "store": $store,
+ "checkpoint": $checkpoint,
  "model": "$model",
  "config": "$CAND_CONFIG", "sampler": $CAND_SAMPLER,
  "package_version": "$(cli --version 2> /dev/null || echo unknown)",

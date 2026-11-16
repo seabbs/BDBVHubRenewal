@@ -52,3 +52,41 @@ def test_markdown_tables_round_numbers_and_escape_pipes() -> None:
     lines = md.splitlines()
     assert lines[0] == "| model | x |"
     assert lines[2] == "| a\\|b | 0.123 |"
+
+
+def test_summary_says_when_the_scored_part_has_no_scores_yet() -> None:
+    scores = _scores(period="development")
+    out = study_summary({"study": "ebola", "source": "real"}, scores)
+    assert out["best_model"] == ""
+    assert out["n_models"] == 0
+    assert "no scored forecasts yet" in out["status"].lower()
+    scored = study_summary({"study": "germany", "source": "real"}, _scores())
+    assert scored["status"] == ""
+
+
+def test_summary_says_which_part_its_numbers_come_from() -> None:
+    germany = {"study": "germany", "source": "real"}
+    ebola = {"study": "ebola", "source": "real"}
+    assert study_summary(germany, _scores())["scope"] == "development half"
+    held = _scores(period="held out")
+    assert study_summary(germany, held)["scope"] == "held-out half"
+    assert study_summary(ebola, _scores())["scope"] == (
+        "release backtest before the scored rounds"
+    )
+    assert study_summary(ebola, held)["scope"] == "scored rounds"
+    synthetic = {"study": "synthetic", "source": "real"}
+    assert study_summary(synthetic, _scores(), mode="development")["scope"] == (
+        "development simulations"
+    )
+    assert study_summary(synthetic, _scores(), mode="paper")["scope"] == (
+        "held-out simulations"
+    )
+
+
+def test_summary_records_the_fine_tuned_checkpoint(tmp_path) -> None:
+    path = tmp_path / "results.yml"
+    write_summary(path, "paper", {}, finetuned="e8a1f5ae338b")
+    doc = yaml.safe_load(path.read_text())["results"]
+    assert doc["finetuned"] == "e8a1f5ae338b"
+    write_summary(path, "paper", {})
+    assert yaml.safe_load(path.read_text())["results"]["finetuned"] == "pending"

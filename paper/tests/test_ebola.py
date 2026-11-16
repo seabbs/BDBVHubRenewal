@@ -176,3 +176,13 @@ def test_release_observations_date_each_release_by_its_cutoff(tmp_path):
         "2026-11-08",
     ]
     assert obs["value"].tolist() == [10.0, 12.0]
+
+
+def test_a_release_feeds_the_first_round_still_open_on_its_day() -> None:
+    from paperdata.ebola import round_of
+
+    # Round 2026-11-21 closes on Tuesday 2026-11-17.
+    assert round_of(pd.Timestamp("2026-11-17")) == pd.Timestamp("2026-11-21")
+    assert round_of(pd.Timestamp("2026-11-11")) == pd.Timestamp("2026-11-21")
+    assert round_of(pd.Timestamp("2026-11-10")) == pd.Timestamp("2026-11-14")
+    assert round_of(pd.Timestamp("2026-11-18")) == pd.Timestamp("2026-11-28")

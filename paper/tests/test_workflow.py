@@ -1,5 +1,6 @@
 """The Snakemake DAG stays valid and the development target runs."""
 
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -160,3 +161,207 @@ def test_dry_run_with_real_data_runs_the_benchmark(tmp_path: Path) -> None:
     assert "rule germany_heldout" not in log
     paper = _snakemake("paper", "-n", "--configfile", base, str(cfg))
     assert "rule germany_heldout" in paper.stdout + paper.stderr
+
+
+def test_ebola_runs_split_at_the_first_scored_round(tmp_path: Path) -> None:
+    first = CONFIG["heldout"]["ebola_from"]
+    base = str(PAPER / "workflow" / "config.yaml")
+    for target, flag in (("development", "--before"), ("paper", "--split")):
+        res = _snakemake(
+            target, "-n", "-p", "--configfile", base, str(_offline(tmp_path))
+        )
+        assert res.returncode == 0, res.stderr
+        lines = (res.stdout + res.stderr).splitlines()
+        ebola = [
+            line
+            for line in lines
+            if "paperpipe forecasts ebola" in line
+            or "paperpipe figures ebola" in line
+        ]
+        assert ebola
+        for line in ebola:
+            if target == "paper" or "paperpipe forecasts" in line:
+                assert f"{flag} {first}" in line, line
+
+
+def test_benchmark_commands_run_from_the_repository_root(
+    tmp_path: Path,
+) -> None:
+    # The models read config/ relative to the working directory
+    # (config/finetune.toml), so a local run from paper/ must cd first.
+    cfg = tmp_path / "real.yaml"
+    cfg.write_text(yaml.safe_dump({"results": str(tmp_path / "results")}))
+    base = str(PAPER / "workflow" / "config.yaml")
+    paper = _snakemake(
+        "paper", "-n", "-p", "--forceall", "--configfile", base, str(cfg)
+    )
+    assert paper.returncode == 0, paper.stderr
+    commands = [
+        line.strip().removeprefix("Shell command:").strip()
+        for line in (paper.stdout + paper.stderr).splitlines()
+        if "germany-backtest" in line
+    ]
+    assert len(commands) == 2
+    for line in commands:
+        assert line.startswith("cd .. && ")
+        assert "--config config/germany.toml" in line
+        assert "--data data/raw/germany" in line
+
+
+def test_the_synthetic_runner_runs_once_the_simulations_exist(
+    tmp_path: Path,
+) -> None:
+    sims = tmp_path / "sims"
+    sims.mkdir()
+    seeds = CONFIG["development"]["synthetic_seeds"]
+    extra = {
+        "synthetic": {
+            **CONFIG["synthetic"],
+            "simulations": {"development": str(sims), "paper": str(sims)},
+            "forecasts": {
+                "development": str(tmp_path / "out" / "synthetic-dev.csv.gz"),
+                "paper": str(tmp_path / "out" / "synthetic.csv.gz"),
+            },
+        }
+    }
+    base = str(PAPER / "workflow" / "config.yaml")
+    absent = _snakemake(
+        "development",
+        "-n",
+        "--configfile",
+        base,
+        str(_offline(tmp_path, **extra)),
+    )
+    assert absent.returncode == 0, absent.stderr
+    assert "rule synthetic_forecasts" not in absent.stdout + absent.stderr
+    for seed in seeds:
+        (sims / f"counts-{seed}.csv.gz").write_text("")
+        (sims / f"settings-{seed}.csv").write_text("")
+    present = _snakemake(
+        "development",
+        "-n",
+        "-p",
+        "--configfile",
+        base,
+        str(_offline(tmp_path, **extra)),
+    )
+    assert present.returncode == 0, present.stderr
+    log = present.stdout + present.stderr
+    assert "rule synthetic_forecasts_development" in log
+    assert "--seeds " + " ".join(str(s) for s in seeds) in log
+
+
+def test_ebola_outputs_hold_while_no_scored_round_has_truth(
+    development: Path, tmp_path: Path
+) -> None:
+    # Until the first scored round's truth is reported, every Ebola score
+    # is before the split, so the scored part is empty.
+    d = development
+    late = "2099-01-01"
+    common = [
+        "--scores",
+        str(d / "scores" / "ebola.csv.gz"),
+        "--locations",
+        str(d / "data" / "ebola-locations.csv"),
+        "--meta",
+        str(d / "data" / "ebola-meta.json"),
+        "--main-dir",
+        str(tmp_path / "main"),
+        "--si-dir",
+        str(tmp_path / "si"),
+        "--split",
+        late,
+    ]
+    figures = [
+        "figures",
+        "ebola",
+        "--forecasts",
+        str(d / "forecasts" / "ebola.csv.gz"),
+        "--observations",
+        str(d / "data" / "ebola-observations.csv.gz"),
+        "--truth",
+        str(d / "truth" / "ebola.csv.gz"),
+        "--config",
+        json.dumps(CONFIG),
+        *common,
+    ]
+    for args in (figures, ["score-tables", "ebola", *common]):
+        res = subprocess.run(
+            [sys.executable, "-m", "paperpipe", *args],
+            cwd=PAPER,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert res.returncode == 0, res.stderr
+    assert (tmp_path / "main" / "ebola-results.png").is_file()
+    assert (tmp_path / "main" / "ebola-scores.csv").is_file()
+
+
+def test_the_paper_runs_its_ebola_models_at_its_own_draws(
+    tmp_path: Path,
+) -> None:
+    cfg = tmp_path / "real.yaml"
+    cfg.write_text(
+        yaml.safe_dump(
+            {
+                "results": str(tmp_path / "results"),
+                "build": str(tmp_path / "build"),
+                "germany": {"real": False},
+                "ebola": {**CONFIG["ebola"], "hub": str(tmp_path / "hub")},
+            }
+        )
+    )
+    base = str(PAPER / "workflow" / "config.yaml")
+    res = _snakemake("development", "-n", "-p", "--configfile", base, str(cfg))
+    assert res.returncode == 0, res.stderr
+    log = res.stdout + res.stderr
+    assert "rule ebola_backtest_draws" in log
+    assert f"n_samples = {CONFIG['ebola']['n_samples']}" in log
+    assert CONFIG["ebola"]["n_samples"] == 1000
+
+
+def test_the_workflow_pins_and_records_the_fine_tuned_checkpoint(
+    tmp_path: Path,
+) -> None:
+    base = str(PAPER / "workflow" / "config.yaml")
+    sims = tmp_path / "sims"
+    sims.mkdir()
+    for seed in CONFIG["development"]["synthetic_seeds"]:
+        (sims / f"counts-{seed}.csv.gz").write_text("")
+        (sims / f"settings-{seed}.csv").write_text("")
+    synthetic = {
+        **CONFIG["synthetic"],
+        "simulations": {"development": str(sims), "paper": str(sims)},
+        "forecasts": {
+            "development": str(tmp_path / "out" / "synthetic-dev.csv.gz"),
+            "paper": str(tmp_path / "out" / "synthetic.csv.gz"),
+        },
+    }
+    # Until the final run publishes a checkpoint, the fine-tuned models
+    # are pending: not run, and no checkpoint recorded.
+    assert CONFIG["finetuned"] is None
+    pending = _snakemake(
+        "development",
+        "-n",
+        "-p",
+        "--configfile",
+        base,
+        str(_offline(tmp_path, synthetic=synthetic)),
+    )
+    assert pending.returncode == 0, pending.stderr
+    log = pending.stdout + pending.stderr
+    assert "--finetuned" not in log
+    runner = [line for line in log.splitlines() if "run_synthetic.py" in line]
+    assert runner
+    assert all("_ft" not in line for line in runner)
+    pinned = _snakemake(
+        "development",
+        "-n",
+        "-p",
+        "--configfile",
+        base,
+        str(_offline(tmp_path, synthetic=synthetic, finetuned="abcdef123456")),
+    )
+    assert pinned.returncode == 0, pinned.stderr
+    assert "--finetuned abcdef123456" in pinned.stdout + pinned.stderr

@@ -66,6 +66,19 @@ LABELS: Final = {
     ),
     "observation": ("Observation model", "`enw_obs(family)`"),
     "strata": ("Strata", "`enw_preprocess_data(by)`"),
+    "spread": ("How cases spread over strata", "`stratum_seed()`"),
+    "place_rt": ("How places' growth paths relate", "`place_growth()`"),
+    "seeding": ("When places start", "`late_strata()`"),
+    "mixing": ("How places infect each other", "`place_mixing()`"),
+    "mixing_strength": (
+        "Strength of mixing between places",
+        "`place_mixing()`",
+    ),
+    "imports": ("Imported cases", "`stratum_imports()`"),
+    "shocks": ("Reporting shocks in one or two places", "`shock_window()`"),
+    "delay_places": ("How places' delays relate", "`delay_parameters()`"),
+    "obs_strata": ("Observation noise across strata", "`observe()`"),
+    "strata_link": ("Linked or independent strata", "`simulate_independent()`"),
     # Derived from the cell.
     "n_places": ("Places", "`enw_preprocess_data(by)`"),
     "n_ages": ("Age groups", "`enw_preprocess_data(by)`"),
@@ -169,6 +182,40 @@ LABELS: Final = {
         "`(1 | day_of_week)` of `enw_report()`",
     ),
     "sqrt_phi": ("Overdispersion on the NB2 scale", "`enw_obs()`"),
+    "place_rho": (
+        "Correlation of places' growth deviations",
+        "`place_growth()`",
+    ),
+    "place_sd": ("Sd of places' daily growth deviations", "`place_growth()`"),
+    "place_lags": (
+        "Lag of each place's growth path (days)",
+        "`place_growth()`",
+    ),
+    "late_at": ("Time a late place starts, as a share", "`late_strata()`"),
+    "late_days": ("Days over which a late place starts", "`late_strata()`"),
+    "shock_at": ("Time of a reporting shock, as a share", "`shock_window()`"),
+    "shock_weeks": ("Length of a reporting shock (weeks)", "`shock_window()`"),
+    "shock_mult": ("Delay multiplier of a backlog", "`shock_window()`"),
+    "mixing_eps": ("Share of infections from other places", "`place_mixing()`"),
+    "mixing_order": (
+        "Order of places for asymmetric mixing",
+        "`place_mixing()`",
+    ),
+    "mixing_x": ("Places' x coordinates", "`place_mixing()`"),
+    "mixing_y": ("Places' y coordinates", "`place_mixing()`"),
+    "mixing_range": ("Range of distance-based mixing", "`place_mixing()`"),
+    "mixing_switch": ("Whether mixing switches on or off", "`place_mixing()`"),
+    "mixing_switch_at": (
+        "Time mixing switches, as a share",
+        "`place_mixing()`",
+    ),
+    "mixing_switch_days": (
+        "Days over which mixing switches",
+        "`place_mixing()`",
+    ),
+    "import_rate": ("Daily rate of imported cases", "`stratum_imports()`"),
+    "import_at": ("Times of import pulses, as shares", "`stratum_imports()`"),
+    "import_size": ("Size of import pulses", "`stratum_imports()`"),
     "max_delay": (
         "Longest delay (days), from the delay's 99th centile",
         "`enw_preprocess_data(max_delay)`",
@@ -416,19 +463,25 @@ def heldout_note(config: dict) -> str:
     horizons = protocol["horizons"]
     seeds = config["heldout_seeds"]
     n = config["simulations_per_seed"]
-    blocks = config["blocks"]
+    blocks = config.get("blocks") or []
     dev = config["development_seeds"]
+    cover = (
+        [
+            f"These cover the complete balanced blocks {blocks[0]} to"
+            f" {blocks[-1]}, and simulations outside them are not used."
+        ]
+        if blocks
+        else []
+    )
     lines = [
         "#### The held-out synthetic set",
         "",
         f"The held-out set is simulated on grid `{config['grid']}` with"
         f" {_seeds(seeds)}, {n} simulations each.",
-        f"These cover the complete balanced blocks {blocks[0]} to"
-        f" {blocks[-1]}, and simulations outside them are not used.",
+        *cover,
         f"We evaluate draw {config['draw']} of each simulation, so the"
         " outbreaks are independent.",
-        "The seeds are disjoint from the fine-tune's training and held-out"
-        " seeds (`config/finetune/r3.env`).",
+        "The fine-tune never trains on these seeds.",
         f"The simulations are written to `{config['simulations']['paper']}`,"
         " and the workflow config records them.",
         "The synthetic runner runs the models on the set.",

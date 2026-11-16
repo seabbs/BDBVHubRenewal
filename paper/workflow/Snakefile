@@ -37,12 +37,16 @@ from snakemake.exceptions import WorkflowError
 PAPER = Path(workflow.basedir).parent
 sys.path.insert(0, str(PAPER))
 
+from paperdata.synthetic_runner import (  # noqa: E402
+    MODELS as SYNTHETIC_MODELS,
+)
 from paperpipe.config import MODES, run_settings  # noqa: E402
 from paperpipe.evidence import EVIDENCE as EVIDENCE_NAMES  # noqa: E402
 from paperpipe.outputs import (  # noqa: E402
     JOINT_STUDIES,
     MAIN_TABLES,
     SI_TABLES,
+    STUDY_SI_TABLES,
     figure_names,
 )
 
@@ -60,9 +64,28 @@ STUDIES = config["studies"]
 PYTHON = shlex.quote(sys.executable)
 BDBV = shlex.quote(str(Path(sys.executable).parent / "bdbvhubrenewal"))
 GERMANY = config["germany"]
+
+# The last BDBV release the SI's real-data models trained on
+# (config/finetune.toml); their BDBV comparison scores later rounds only.
+with open("../config/finetune.toml", "rb") as f:
+    REALDATA_AFTER = tomllib.load(f)["realdata_bdbv"]["release"]
 EBOLA = config["ebola"]
+# The fine-tuned checkpoint every `_ft` model the workflow runs loads, so
+# each study uses the same one; recorded in results.yml.
+if config.get("finetuned"):
+    os.environ["BDBV_CHRONOS_FT"] = str(config["finetuned"])
 SYNTHETIC = config["synthetic"]
 TRIANGLE = f"{GERMANY['data']}/COVID-19_hospitalizations.csv"
+
+
+def at_root(path):
+    """Return a path from paper/ as one from the repository root."""
+    return os.path.relpath(PAPER / path, PAPER.parent)
+
+
+# The benchmark's commands run from the repository root, as the models
+# read config/ (config/finetune.toml) relative to the working directory.
+GERMANY_ROOT = {k: at_root(GERMANY[k]) for k in ("config", "data", "results")}
 
 # The benchmark's command line holds out the dates from its own split.
 with open(GERMANY["config"], "rb") as f:
@@ -206,6 +229,10 @@ def sources(w):
         if EBOLA.get("extra"):
             files = " ".join(ebola_extra(w.mode))
             args.append(f"--ebola-extra {files}")
+        if EBOLA.get("n_samples"):
+            models = " ".join(EBOLA["backtest_models"])
+            args.append(f"--ebola-draws {EBOLA_DRAWS}")
+            args.append(f"--ebola-draws-models {models}")
         if EBOLA["candidates"]:
             files = " ".join(shlex.quote(c) for c in EBOLA["candidates"])
             args.append(f"--candidates {files}")
@@ -225,8 +252,54 @@ def source_files(w):
         hub = f"{EBOLA['hub']}/target-data/time-series.csv"
         extra = ebola_extra(w.mode)
         target = f"{EBOLA['data']}/target.csv"
-        return [hub, target, EBOLA["backtest"], *extra]
+        draws = [EBOLA_DRAWS] if EBOLA.get("n_samples") else []
+        return [hub, target, EBOLA["backtest"], *extra, *draws]
+    if w.study == "synthetic" and synthetic_simulations(w.mode):
+        return [SYNTHETIC["forecasts"][w.mode]]
     return []
+
+
+def synthetic_simulations(mode):
+    """The simulator's files of a run's seeds, or [] if any is missing."""
+    folder = SYNTHETIC["simulations"][mode]
+    seeds = run_settings(config, mode).synthetic_seeds
+    files = [
+        f"{folder}/{kind}-{seed}.{ext}"
+        for seed in seeds
+        for kind, ext in (("counts", "csv.gz"), ("settings", "csv"))
+    ]
+    return files if all(Path(f).exists() for f in files) else []
+
+
+# The synthetic runner forecasts each run's simulated outbreaks once they
+# exist (`scripts/run_synthetic.py`), with 1,000 draws per forecast.
+for _mode in MODES:
+
+    rule:
+        name:
+            f"synthetic_forecasts_{_mode}"
+        input:
+            synthetic_simulations(_mode),
+        output:
+            SYNTHETIC["forecasts"][_mode],
+        params:
+            sims=SYNTHETIC["simulations"][_mode],
+            seeds=" ".join(
+                str(s) for s in run_settings(config, _mode).synthetic_seeds
+            ),
+            # The fine-tuned models wait for the final run's checkpoint.
+            models=(
+                ""
+                if config.get("finetuned")
+                else "--models "
+                + " ".join(m for m in SYNTHETIC_MODELS if "_ft" not in m)
+            ),
+        resources:
+            heavy=1,
+        shell:
+            "PYTHONPATH=. {PYTHON} scripts/run_synthetic.py {params.sims} "
+            "{output} --seeds {params.seeds} --samples 1000 --device cpu "
+            "--threads 1 {params.models}"
 
 
 def limits(w):
@@ -236,7 +309,9 @@ def limits(w):
         return "--seeds " + " ".join(str(x) for x in s.synthetic_seeds)
     if w.study == "germany" and s.germany_before is not None:
         return f"--before {s.germany_before:%Y-%m-%d}"
-    return ""
+    if w.study == "ebola" and s.ebola_before is not None:
+        return f"--before {s.ebola_before:%Y-%m-%d}"
+    return study_split(w.mode, w.study)
 
 
 def figures(mode, study):
@@ -250,7 +325,8 @@ def figures(mode, study):
 def tables(mode, study):
     main = [*MAIN_TABLES, *(["grid"] if study == "synthetic" else [])]
     return [f"{R}/{mode}/tables/main/{study}-{n}.csv" for n in main] + [
-        f"{R}/{mode}/tables/si/{study}-{n}.csv" for n in SI_TABLES
+        f"{R}/{mode}/tables/si/{study}-{n}.csv"
+        for n in (*SI_TABLES, *STUDY_SI_TABLES.get(study, ()))
     ]
 
 
@@ -313,12 +389,13 @@ rule germany_development:
     output:
         f"{GERMANY['results']}/paper-forecasts.csv.gz",
     params:
-        args=f"--config {GERMANY['config']} --data {GERMANY['data']}",
-        out=GERMANY["results"],
+        args=f"--config {GERMANY_ROOT['config']} --data {GERMANY_ROOT['data']}",
+        out=GERMANY_ROOT["results"],
     shell:
+        "cd .. && "
         "{BDBV} germany-backtest {params.args} --out {params.out} && "
         "{BDBV} germany-teams {params.args} --out {params.out} && "
-        "{BDBV} germany-paper --config {GERMANY[config]} "
+        "{BDBV} germany-paper --config {GERMANY_ROOT[config]} "
         "--results {params.out}"
 
 
@@ -329,13 +406,14 @@ rule germany_heldout:
     output:
         f"{GERMANY['results']}/held-out/paper-forecasts.csv.gz",
     params:
-        args=f"--config {GERMANY['config']} --data {GERMANY['data']}",
-        out=GERMANY["results"],
+        args=f"--config {GERMANY_ROOT['config']} --data {GERMANY_ROOT['data']}",
+        out=GERMANY_ROOT["results"],
     shell:
+        "cd .. && "
         "{BDBV} germany-backtest {params.args} --held-out "
         "--out {params.out} && "
         "{BDBV} germany-teams {params.args} --held-out --out {params.out} && "
-        "{BDBV} germany-paper --config {GERMANY[config]} "
+        "{BDBV} germany-paper --config {GERMANY_ROOT[config]} "
         "--results {params.out}/held-out"
 
 
@@ -354,6 +432,33 @@ rule ebola_hub:
 
 # The release backtest of the models on main, from every past release. CI
 # has run it by the paper step, so this rule then has nothing to do.
+# The paper's own release backtest of `backtest_models` at its number of
+# draws, from a copy of the backtest config with only `n_samples` changed.
+EBOLA_DRAWS = f"{R}/ebola-backtest/forecasts.csv.gz"
+
+
+rule ebola_backtest_draws:
+    input:
+        f"{EBOLA['data']}/target.csv",
+    output:
+        EBOLA_DRAWS,
+    params:
+        models=" ".join(EBOLA["backtest_models"]),
+        n=EBOLA.get("n_samples", 100),
+        folder=lambda w: os.path.abspath(f"{R}/ebola-backtest"),
+        config=EBOLA["config"],
+    resources:
+        heavy=1,
+    shell:
+        "mkdir -p {params.folder} && "
+        "sed 's/^n_samples = .*/n_samples = {params.n}/' {params.config} "
+        "> {params.folder}/backtest.toml && "
+        "grep -q '^n_samples = {params.n}$' {params.folder}/backtest.toml && "
+        "cd .. && {BDBV} backtest --config {params.folder}/backtest.toml "
+        "--models {params.models} --no-recovery "
+        "--results {params.folder}/results --output {params.folder}"
+
+
 rule ebola_backtest:
     output:
         EBOLA["backtest"],
@@ -476,6 +581,8 @@ def study_split(mode, study):
     s = run_settings(config, mode)
     if study == "germany" and s.germany_split is not None:
         return f"--split {s.germany_split:%Y-%m-%d}"
+    if study == "ebola" and s.ebola_split is not None:
+        return f"--split {s.ebola_split:%Y-%m-%d}"
     return ""
 
 
@@ -534,7 +641,8 @@ for study in STUDIES:
             "{PYTHON} -m paperpipe score-tables {params.study} "
             "--scores {input.scores} --locations {input.locations} "
             "--meta {input.meta} "
-            "--main-dir {params.main} --si-dir {params.si} {params.split}"
+            "--main-dir {params.main} --si-dir {params.si} {params.split} "
+            f"--realdata-after {REALDATA_AFTER}"
 
 
 def grid_config(mode):
@@ -588,9 +696,16 @@ rule evidence:
         ),
         si=f"{R}/{{mode}}/tables/si",
         fig=f"{R}/{{mode}}/figures/si",
+        # The final run's published checkpoints, which the curve shows.
+        checkpoints=(
+            "--checkpoints " + " ".join(config["final_checkpoints"])
+            if config.get("final_checkpoints")
+            else ""
+        ),
     shell:
         "{PYTHON} -m paperpipe evidence {params.args} --mode {wildcards.mode} "
-        "--si-dir {params.si} --fig-dir {params.fig} --out {output.yml}"
+        "--si-dir {params.si} --fig-dir {params.fig} --out {output.yml} "
+        "{params.checkpoints}"
 
 
 rule summary:
@@ -601,7 +716,8 @@ rule summary:
         f"{R}/{{mode}}/results.yml",
     shell:
         "{PYTHON} -m paperpipe summary --mode {wildcards.mode} "
-        "--meta {input.meta} --scores {input.scores} --out {output}"
+        "--meta {input.meta} --scores {input.scores} --out {output} "
+        + (f"--finetuned {config['finetuned']}" if config.get("finetuned") else "")
 
 
 # The paper reads `build`, so it shows the last run published.

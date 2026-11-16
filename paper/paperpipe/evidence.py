@@ -37,9 +37,11 @@ __all__ = [
     "aggregation_table",
     "checkpoint_figure",
     "checkpoint_numbers",
+    "checkpoint_rows",
     "copula_table",
     "cost_table",
     "diseases_table",
+    "drop_finetuned",
     "heldout_figure",
     "lag_numbers",
     "realism_figure",
@@ -273,6 +275,57 @@ def lag_numbers(
         if m in a.index and m.startswith("fm_chronos")
     }
     return {"germany": de, "bdbv": bdbv}
+
+
+CHECKPOINT_RULE: Final = "own-quantile-wis_crps-1000-common"
+"""The scoring rule of the checkpoint rows the paper shows: WIS on each
+model's own quantiles for Germany, and CRPS on 1,000 draws with common
+random numbers for BDBV."""
+
+
+def checkpoint_rows(
+    scores: pd.DataFrame, checkpoints: tuple[str, ...] = ()
+) -> pd.DataFrame:
+    """Return the final run's checkpoint rows, under one scoring rule.
+
+    Rows of `CHECKPOINT_RULE` are kept where the table records a rule, and
+    the case studies' rows only (not the held-out loss). Of the fine-tuned
+    rows, only the final run's `checkpoints` are kept, with the zero-shot
+    model; before the run publishes one, only zero-shot is left.
+    BDBV's relative CRPS fills `rel_wis` where that is empty, so one
+    column holds each study's relative score.
+    """
+    out = scores
+    if "rule" in out:
+        out = out.loc[out["rule"] == CHECKPOINT_RULE]
+    out = out.loc[out["study"].isin(["germany", "ebola"])]
+    keep = (out["checkpoint"] == "zero-shot") | out["checkpoint"].isin(
+        list(checkpoints)
+    )
+    out = out.loc[keep]
+    if "rel_crps" in out:
+        out = out.assign(rel_wis=out["rel_wis"].fillna(out["rel_crps"]))
+        if "rel_log_crps" in out and "rel_log_wis" in out:
+            out = out.assign(
+                rel_log_wis=out["rel_log_wis"].fillna(out["rel_log_crps"])
+            )
+    return out.reset_index(drop=True)
+
+
+FINETUNED_EVIDENCE: Final = (
+    "copula_scores",
+    "copula_rho",
+    "aggregation_scores",
+    "aggregation_cost",
+)
+"""Evidence of both zero-shot and fine-tuned models, whose fine-tuned rows
+come from earlier fine-tunes than the paper's and are left out."""
+
+
+def drop_finetuned(rows: pd.DataFrame) -> pd.DataFrame:
+    """Leave out the fine-tuned models' rows (`_ft`, `_ft_n<k>`)."""
+    fine = rows["model"].astype(str).str.contains(r"_ft(_|$)")
+    return rows.loc[~fine].reset_index(drop=True)
 
 
 MIN_CELLS: Final = 5
@@ -564,6 +617,7 @@ def write_evidence(
     si_dir: Path,
     fig_dir: Path,
     out_yml: Path,
+    checkpoints: tuple[str, ...] = (),
 ) -> dict:
     """Write every evidence table and figure, and the numbers they quote.
 
@@ -575,6 +629,9 @@ def write_evidence(
         Folders for the SI tables and figures.
     out_yml : pathlib.Path
         The quoted numbers, as Quarto metadata under `evidence`.
+    checkpoints : tuple of str
+        The final run's published checkpoints, which the curve shows
+        (`checkpoint_rows`).
 
     Returns
     -------
@@ -584,6 +641,9 @@ def write_evidence(
     si_dir.mkdir(parents=True, exist_ok=True)
     fig_dir.mkdir(parents=True, exist_ok=True)
     data = {name: _read(paths, name) for name in EVIDENCE}
+    for name in FINETUNED_EVIDENCE:
+        if data.get(name) is not None and "model" in data[name]:
+            data[name] = drop_finetuned(data[name])
 
     def table(name: str, frame: pd.DataFrame | None, needs: list[str]) -> None:
         # Rows for another study only still leave this one waiting.
@@ -634,6 +694,8 @@ def write_evidence(
         ["sim_diseases"],
     )
     ckpt = data["checkpoint_scores"]
+    if ckpt is not None:
+        ckpt = checkpoint_rows(ckpt, checkpoints)
     figure(
         "checkpoint-curve",
         None if ckpt is None else checkpoint_figure(ckpt),

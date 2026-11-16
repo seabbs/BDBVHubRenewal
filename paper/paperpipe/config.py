@@ -1,11 +1,13 @@
 """Run settings of the workflow, and the guard that keeps held-out data out.
 
 The workflow config (`workflow/config.yaml`) names the held-out sets in its
-`heldout` block: the German nowcast dates from `germany_from` on, and the
-synthetic outbreaks of `synthetic_seeds`. `run_settings` turns the config
-into the settings of one run. A `development` run gets the development
-seeds and only the German dates before `germany_from`. A `paper` run gets
-the held-out seeds and every German date, split at `germany_from`.
+`heldout` block: the German nowcast dates from `germany_from` on, the
+Ebola rounds from `ebola_from` on, and the synthetic outbreaks of
+`synthetic_seeds`. `run_settings` turns the config into the settings of
+one run. A `development` run gets the development seeds and only the
+German dates before `germany_from` and Ebola rounds before `ebola_from`.
+A `paper` run gets the held-out seeds and every date, split at
+`germany_from` and `ebola_from`.
 `check_no_heldout` fails if a development forecast table holds held-out
 rows.
 """
@@ -24,6 +26,7 @@ __all__ = [
     "RunSettings",
     "check_no_heldout",
     "check_no_heldout_releases",
+    "keep_finetuned",
     "last_release",
     "run_settings",
     "seed_of",
@@ -56,6 +59,15 @@ class RunSettings:
         Seeds a development run must not use.
     heldout_from : pandas.Timestamp
         First held-out German nowcast date.
+    ebola_before : pandas.Timestamp or None
+        Ebola rounds and release-backtest origins are kept before this
+        date. None keeps every round.
+    ebola_split : pandas.Timestamp or None
+        First scored Ebola round, to split scores into the release
+        backtest before it and the prospective rounds from it. None when
+        the run has only the development part.
+    ebola_from : pandas.Timestamp
+        First scored Ebola round.
     """
 
     mode: str
@@ -64,6 +76,9 @@ class RunSettings:
     germany_split: pd.Timestamp | None
     heldout_seeds: tuple[int, ...]
     heldout_from: pd.Timestamp
+    ebola_before: pd.Timestamp | None
+    ebola_split: pd.Timestamp | None
+    ebola_from: pd.Timestamp
 
 
 def _entry(block: Mapping[str, Any], name: str, key: str) -> Any:
@@ -101,6 +116,7 @@ def run_settings(config: Mapping[str, Any], mode: str) -> RunSettings:
         int(s) for s in _entry(held, "heldout", "synthetic_seeds")
     )
     held_from = pd.Timestamp(_entry(held, "heldout", "germany_from"))
+    ebola_from = pd.Timestamp(_entry(held, "heldout", "ebola_from"))
     dev_seeds = tuple(
         int(s) for s in _entry(dev, "development", "synthetic_seeds")
     )
@@ -112,9 +128,27 @@ def run_settings(config: Mapping[str, Any], mode: str) -> RunSettings:
         raise ValueError(f"Seeds both development and held out: {seeds}.")
     if mode == "development":
         return RunSettings(
-            mode, dev_seeds, held_from, None, held_seeds, held_from
+            mode,
+            dev_seeds,
+            held_from,
+            None,
+            held_seeds,
+            held_from,
+            ebola_from,
+            None,
+            ebola_from,
         )
-    return RunSettings(mode, held_seeds, None, held_from, held_seeds, held_from)
+    return RunSettings(
+        mode,
+        held_seeds,
+        None,
+        held_from,
+        held_seeds,
+        held_from,
+        None,
+        ebola_from,
+        ebola_from,
+    )
 
 
 def synthetic_location(seed: int, name: str) -> str:
@@ -193,7 +227,8 @@ def check_no_heldout(forecasts: pd.DataFrame, settings: RunSettings) -> None:
     Raises
     ------
     ValueError
-        If a German origin is on or after the held-out date, or a synthetic
+        If a German origin is on or after the held-out date, an Ebola
+        origin is on or after the first scored round, or a synthetic
         location comes from a held-out seed.
     """
     if settings.mode != "development":
@@ -207,8 +242,34 @@ def check_no_heldout(forecasts: pd.DataFrame, settings: RunSettings) -> None:
             f"{len(late)} German rows are from held-out dates "
             f"(from {settings.heldout_from:%Y-%m-%d})."
         )
+    ebola = forecasts.loc[forecasts["study"] == "ebola"]
+    scored = ebola.loc[
+        pd.to_datetime(ebola["origin_date"]) >= settings.ebola_from
+    ]
+    if not scored.empty:
+        raise ValueError(
+            f"{len(scored)} Ebola rows are from scored rounds "
+            f"(from {settings.ebola_from:%Y-%m-%d})."
+        )
     synthetic = forecasts.loc[forecasts["study"] == "synthetic"]
     seeds = synthetic["location"].map(seed_of)
     bad = sorted(set(seeds.dropna().astype(int)) & set(settings.heldout_seeds))
     if bad:
         raise ValueError(f"Synthetic rows from held-out seeds: {bad}.")
+
+
+_FINETUNED = re.compile(r"_ft(_|$)")
+
+
+def keep_finetuned(
+    forecasts: pd.DataFrame, config: Mapping[str, Any]
+) -> pd.DataFrame:
+    """Leave out the fine-tuned models until a checkpoint is pinned.
+
+    The paper's fine-tuned models are the final run's (`finetuned` in the
+    config). While it has no published checkpoint, their rows are pending.
+    """
+    if config.get("finetuned"):
+        return forecasts
+    fine = forecasts["model"].astype(str).str.contains(_FINETUNED)
+    return forecasts.loc[~fine].reset_index(drop=True)

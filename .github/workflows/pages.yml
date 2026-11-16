@@ -84,8 +84,16 @@ jobs:
       # stored new fits. `load` writes them into results/ with a record of
       # the fits used, which each page with their results states.
       - name: Load the stored fits
+        env:
+          # The fine-tuned models list the releases for their checkpoint.
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           scripts/fit-store.sh fetch output/fit-store
+          # Stopgap until #192 merges: the Chronos-2 fits its pull request
+          # stored on a scratch store join main's (#231).
+          FIT_STORE_BRANCH=fit-store-scratch-fm-chronos \
+            scripts/fit-store.sh fetch output/fit-store-chronos
+          cp -R output/fit-store-chronos/fm_chronos_* output/fit-store/
           uv run bdbvhubrenewal fit-store load --store output/fit-store
       # The store too, as the Getting started notebook reads a stored fit.
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -163,6 +171,150 @@ jobs:
             run: >-
               uv run bdbvhubrenewal germany-backtest --models randomwalk
               --chunk 1/2 --out output/parts/germany
+          - cell: germany-fm_chronos_daily_complete-0
+            model: fm_chronos_daily_complete
+            germany: true
+            run: >-
+              uv run --group chronos bdbvhubrenewal germany-backtest
+              --models fm_chronos_daily_complete --chunk 0/4 --out output/parts/germany
+          - cell: germany-fm_chronos_daily_complete-1
+            model: fm_chronos_daily_complete
+            germany: true
+            run: >-
+              uv run --group chronos bdbvhubrenewal germany-backtest
+              --models fm_chronos_daily_complete --chunk 1/4 --out output/parts/germany
+          - cell: germany-fm_chronos_daily_complete-2
+            model: fm_chronos_daily_complete
+            germany: true
+            run: >-
+              uv run --group chronos bdbvhubrenewal germany-backtest
+              --models fm_chronos_daily_complete --chunk 2/4 --out output/parts/germany
+          - cell: germany-fm_chronos_daily_complete-3
+            model: fm_chronos_daily_complete
+            germany: true
+            run: >-
+              uv run --group chronos bdbvhubrenewal germany-backtest
+              --models fm_chronos_daily_complete --chunk 3/4 --out output/parts/germany
+          - cell: germany-fm_chronos_weekly_complete-0
+            model: fm_chronos_weekly_complete
+            germany: true
+            run: >-
+              uv run --group chronos bdbvhubrenewal germany-backtest
+              --models fm_chronos_weekly_complete --chunk 0/4 --out output/parts/germany
+          - cell: germany-fm_chronos_weekly_complete-1
+            model: fm_chronos_weekly_complete
+            germany: true
+            run: >-
+              uv run --group chronos bdbvhubrenewal germany-backtest
+              --models fm_chronos_weekly_complete --chunk 1/4 --out output/parts/germany
+          - cell: germany-fm_chronos_weekly_complete-2
+            model: fm_chronos_weekly_complete
+            germany: true
+            run: >-
+              uv run --group chronos bdbvhubrenewal germany-backtest
+              --models fm_chronos_weekly_complete --chunk 2/4 --out output/parts/germany
+          - cell: germany-fm_chronos_weekly_complete-3
+            model: fm_chronos_weekly_complete
+            germany: true
+            run: >-
+              uv run --group chronos bdbvhubrenewal germany-backtest
+              --models fm_chronos_weekly_complete --chunk 3/4 --out output/parts/germany
+          - cell: germany-fm_chronos_daily_ragged-0
+            model: fm_chronos_daily_ragged
+            germany: true
+            run: >-
+              uv run --group chronos bdbvhubrenewal germany-backtest
+              --models fm_chronos_daily_ragged --chunk 0/4 --out output/parts/germany
+          - cell: germany-fm_chronos_daily_ragged-1
+            model: fm_chronos_daily_ragged
+            germany: true
+            run: >-
+              uv run --group chronos bdbvhubrenewal germany-backtest
+              --models fm_chronos_daily_ragged --chunk 1/4 --out output/parts/germany
+          - cell: germany-fm_chronos_daily_ragged-2
+            model: fm_chronos_daily_ragged
+            germany: true
+            run: >-
+              uv run --group chronos bdbvhubrenewal germany-backtest
+              --models fm_chronos_daily_ragged --chunk 2/4 --out output/parts/germany
+          - cell: germany-fm_chronos_daily_ragged-3
+            model: fm_chronos_daily_ragged
+            germany: true
+            run: >-
+              uv run --group chronos bdbvhubrenewal germany-backtest
+              --models fm_chronos_daily_ragged --chunk 3/4 --out output/parts/germany
+          - cell: germany-fm_chronos_weekly_ragged-0
+            model: fm_chronos_weekly_ragged
+            germany: true
+            run: >-
+              uv run --group chronos bdbvhubrenewal germany-backtest
+              --models fm_chronos_weekly_ragged --chunk 0/4 --out output/parts/germany
+          - cell: germany-fm_chronos_weekly_ragged-1
+            model: fm_chronos_weekly_ragged
+            germany: true
+            run: >-
+              uv run --group chronos bdbvhubrenewal germany-backtest
+              --models fm_chronos_weekly_ragged --chunk 1/4 --out output/parts/germany
+          - cell: germany-fm_chronos_weekly_ragged-2
+            model: fm_chronos_weekly_ragged
+            germany: true
+            run: >-
+              uv run --group chronos bdbvhubrenewal germany-backtest
+              --models fm_chronos_weekly_ragged --chunk 2/4 --out output/parts/germany
+          - cell: germany-fm_chronos_weekly_ragged-3
+            model: fm_chronos_weekly_ragged
+            germany: true
+            run: >-
+              uv run --group chronos bdbvhubrenewal germany-backtest
+              --models fm_chronos_weekly_ragged --chunk 3/4 --out output/parts/germany
+          - cell: germany-fm_chronos_daily_ragged_ft-0
+            model: fm_chronos_daily_ragged_ft
+            germany: true
+            run: >-
+              uv run --group chronos bdbvhubrenewal germany-backtest
+              --models fm_chronos_daily_ragged_ft --chunk 0/4 --out output/parts/germany
+          - cell: germany-fm_chronos_daily_ragged_ft-1
+            model: fm_chronos_daily_ragged_ft
+            germany: true
+            run: >-
+              uv run --group chronos bdbvhubrenewal germany-backtest
+              --models fm_chronos_daily_ragged_ft --chunk 1/4 --out output/parts/germany
+          - cell: germany-fm_chronos_daily_ragged_ft-2
+            model: fm_chronos_daily_ragged_ft
+            germany: true
+            run: >-
+              uv run --group chronos bdbvhubrenewal germany-backtest
+              --models fm_chronos_daily_ragged_ft --chunk 2/4 --out output/parts/germany
+          - cell: germany-fm_chronos_daily_ragged_ft-3
+            model: fm_chronos_daily_ragged_ft
+            germany: true
+            run: >-
+              uv run --group chronos bdbvhubrenewal germany-backtest
+              --models fm_chronos_daily_ragged_ft --chunk 3/4 --out output/parts/germany
+          - cell: germany-fm_chronos_weekly_ragged_ft-0
+            model: fm_chronos_weekly_ragged_ft
+            germany: true
+            run: >-
+              uv run --group chronos bdbvhubrenewal germany-backtest
+              --models fm_chronos_weekly_ragged_ft --chunk 0/4 --out output/parts/germany
+          - cell: germany-fm_chronos_weekly_ragged_ft-1
+            model: fm_chronos_weekly_ragged_ft
+            germany: true
+            run: >-
+              uv run --group chronos bdbvhubrenewal germany-backtest
+              --models fm_chronos_weekly_ragged_ft --chunk 1/4 --out output/parts/germany
+          - cell: germany-fm_chronos_weekly_ragged_ft-2
+            model: fm_chronos_weekly_ragged_ft
+            germany: true
+            run: >-
+              uv run --group chronos bdbvhubrenewal germany-backtest
+              --models fm_chronos_weekly_ragged_ft --chunk 2/4 --out output/parts/germany
+          - cell: germany-fm_chronos_weekly_ragged_ft-3
+            model: fm_chronos_weekly_ragged_ft
+            germany: true
+            run: >-
+              uv run --group chronos bdbvhubrenewal germany-backtest
+              --models fm_chronos_weekly_ragged_ft --chunk 3/4 --out output/parts/germany
           - cell: recovery-randomwalknowcast-0
             model: randomwalknowcast
             run: >-
@@ -285,6 +437,24 @@ jobs:
       - name: Fetch the German benchmark data
         if: matrix.germany && steps.cache.outputs.cache-hit != 'true'
         run: uv run bdbvhubrenewal germany-fetch
+      # The Chronos-2 models need their dependency group and checkpoints,
+      # as in the Fit store workflow.
+      - name: Install Chronos-2
+        if: startsWith(matrix.model, 'fm_chronos_') && steps.cache.outputs.cache-hit != 'true'
+        run: uv sync --frozen --group chronos
+      - name: Cache the Chronos-2 checkpoint
+        if: startsWith(matrix.model, 'fm_chronos_') && steps.cache.outputs.cache-hit != 'true'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/huggingface
+          key: chronos-2-29ec3766d36d6f73f0696f85560a422f50e8498c
+      - name: Cache the fine-tuned checkpoints
+        if: endsWith(matrix.model, '_ft') && steps.cache.outputs.cache-hit != 'true'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/bdbvhubrenewal
+          key: chronos-ft-${{ github.run_id }}
+          restore-keys: chronos-ft-
       - name: Run
         if: steps.cache.outputs.cache-hit != 'true'
         # Fine-tuned models list the releases to find their checkpoint,
@@ -331,6 +501,30 @@ jobs:
           - {model: randomwalknowcast, chunk: 3/4}
           - {model: randomwalk, chunk: 0/2}
           - {model: randomwalk, chunk: 1/2}
+          - {model: fm_chronos_daily_complete, chunk: 0/4, group: chronos}
+          - {model: fm_chronos_daily_complete, chunk: 1/4, group: chronos}
+          - {model: fm_chronos_daily_complete, chunk: 2/4, group: chronos}
+          - {model: fm_chronos_daily_complete, chunk: 3/4, group: chronos}
+          - {model: fm_chronos_weekly_complete, chunk: 0/4, group: chronos}
+          - {model: fm_chronos_weekly_complete, chunk: 1/4, group: chronos}
+          - {model: fm_chronos_weekly_complete, chunk: 2/4, group: chronos}
+          - {model: fm_chronos_weekly_complete, chunk: 3/4, group: chronos}
+          - {model: fm_chronos_daily_ragged, chunk: 0/4, group: chronos}
+          - {model: fm_chronos_daily_ragged, chunk: 1/4, group: chronos}
+          - {model: fm_chronos_daily_ragged, chunk: 2/4, group: chronos}
+          - {model: fm_chronos_daily_ragged, chunk: 3/4, group: chronos}
+          - {model: fm_chronos_weekly_ragged, chunk: 0/4, group: chronos}
+          - {model: fm_chronos_weekly_ragged, chunk: 1/4, group: chronos}
+          - {model: fm_chronos_weekly_ragged, chunk: 2/4, group: chronos}
+          - {model: fm_chronos_weekly_ragged, chunk: 3/4, group: chronos}
+          - {model: fm_chronos_daily_ragged_ft, chunk: 0/4, group: chronos}
+          - {model: fm_chronos_daily_ragged_ft, chunk: 1/4, group: chronos}
+          - {model: fm_chronos_daily_ragged_ft, chunk: 2/4, group: chronos}
+          - {model: fm_chronos_daily_ragged_ft, chunk: 3/4, group: chronos}
+          - {model: fm_chronos_weekly_ragged_ft, chunk: 0/4, group: chronos}
+          - {model: fm_chronos_weekly_ragged_ft, chunk: 1/4, group: chronos}
+          - {model: fm_chronos_weekly_ragged_ft, chunk: 2/4, group: chronos}
+          - {model: fm_chronos_weekly_ragged_ft, chunk: 3/4, group: chronos}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -339,13 +533,31 @@ jobs:
         with:
           jax-scope: pages-${{ matrix.model }}
           save-jax: 'false'
+      - name: Cache the Chronos-2 checkpoint
+        if: startsWith(matrix.model, 'fm_chronos_')
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/huggingface
+          key: chronos-2-29ec3766d36d6f73f0696f85560a422f50e8498c
+      - name: Cache the fine-tuned checkpoints
+        if: endsWith(matrix.model, '_ft')
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/bdbvhubrenewal
+          key: chronos-ft-${{ github.run_id }}
+          restore-keys: chronos-ft-
       - name: Run
         env:
           MODEL: ${{ matrix.model }}
           CHUNK: ${{ matrix.chunk }}
+          GROUP: ${{ matrix.group }}
+          # Fine-tuned models list the releases to find their checkpoint.
+          GH_TOKEN: ${{ github.token }}
         run: |
+          groups=()
+          if [ -n "$GROUP" ]; then groups=(--group "$GROUP"); fi
           uv run bdbvhubrenewal germany-fetch
-          uv run bdbvhubrenewal germany-backtest --held-out \
+          uv run "${groups[@]}" bdbvhubrenewal germany-backtest --held-out \
             --models "$MODEL" --chunk "$CHUNK" --out output/parts/germany
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -489,23 +701,10 @@ jobs:
       # reads the held-out data; the paper target runs only on dispatch.
       # As `task paper`; keep the two in step.
       - name: Run the paper workflow and render the paper
-        working-directory: paper
         env:
           TARGET: ${{ inputs.paper_target || 'development' }}
-        run: |
-          # The Ebola study reads our stored fits from the fit store's
-          # history.
-          git fetch -q --no-tags origin \
-            +refs/heads/fit-store:refs/remotes/origin/fit-store
-          uv run --group paper snakemake -s workflow/Snakefile render \
-            --config render="$TARGET" --cores 4 --resources heavy=1 \
-            --rerun-triggers mtime
-          mkdir -p ../docs/paper
-          mkdir -p ../docs/paper/figures ../docs/paper/build
-          cp -R main.html main.pdf main_files si.html si.pdf si_files \
-            ../docs/paper/
-          cp figures/*.svg figures/*.pdf ../docs/paper/figures/
-          cp -R build/figures ../docs/paper/build/
+        # The same command as `task paper` (scripts/paper.sh).
+        run: scripts/paper.sh "$TARGET"
       - name: Build the site into _site
         run: uv run mkdocs build --strict
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
