@@ -90,7 +90,8 @@ Four or more flat places are grouped into regions, with region totals.
 A block's targets are all levels, leaves and the national total, leaves only, or the national total only, in equal shares.
 Sixteen blocks are sampled from each simulation's draws, cut-offs and sources.
 
-Training runs in one pass while the outbreaks are simulated, at a constant learning rate of $10^{-4}$ (`scripts/finetune_stream.py`, run by `scripts/finetune_driver.sh` with `config/finetune/r3.env`).
+Training runs in one pass while the outbreaks are simulated, at a constant learning rate of $10^{-4}$ (`scripts/finetune_stream.py`).
+The r3 checkpoints were trained by `scripts/finetune_driver.sh` with `config/finetune/r3.env`, both removed after commit eae369693.
 Blocks are packed into batches by size within a memory budget, which also sets the largest block.
 A checkpoint is saved after 1,000, 2,000, 4,000 and each further doubling of outbreaks.
 Each is scored on held-out blocks from separate simulations, by level, and published.
