@@ -14,7 +14,7 @@ say() { echo "$(date '+%F %H:%M') paper: $name: $*" >> "$mb"; }
 export OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1
 cd "$paper"
 say "started at $(git rev-parse --short=9 HEAD) (log $log)"
-if nice -n 19 uv run --group paper snakemake -s workflow/Snakefile \
+if nice -n 19 "$paper/../.venv/bin/python" -m snakemake -s workflow/Snakefile \
     --cores 1 --resources heavy=1 --rerun-triggers mtime "$@" > "$log" 2>&1; then
   say "done"
 else
