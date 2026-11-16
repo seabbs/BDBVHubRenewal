@@ -101,6 +101,7 @@ COLUMNS = [
     "rel_log_crps",
     "loss",
     "loss_zero_shot",
+    "run",
 ]
 HELD_OUT_LEVELS = ("leaf", "national", "intermediate")
 
@@ -152,6 +153,18 @@ def scored_checkpoints(evidence: pd.DataFrame) -> set[str]:
 
 
 # Rows ------------------------------------------------------------------
+
+
+def run_of(settings: Mapping[str, Any]) -> str:
+    """Return a checkpoint's run: `slots`, `slots-zeroinit` or `no-slots`.
+
+    The first slots run's slots started at zero and did not learn; the
+    slots run restarted with random slots at their own learning rate.
+    """
+    slots = settings.get("series_slots")
+    if not slots:
+        return "no-slots"
+    return "slots-zeroinit" if slots.get("init") == "zero" else "slots"
 
 
 def checkpoints_with_rows(evidence: pd.DataFrame) -> set[str]:
@@ -605,6 +618,8 @@ def table(
     new["outbreaks"] = new["checkpoint"].map({h: m[1] for h, m in meta.items()})
     new["outbreaks"] = new["outbreaks"].fillna(0).astype(int)
     new["grid"] = new["checkpoint"].map({h: m[2] for h, m in meta.items()})
+    runs = {h: run_of(m[0]) for h, m in meta.items()}
+    new["run"] = new["checkpoint"].map(runs).fillna("zero-shot")
     old = pd.read_csv(evidence, dtype={"checkpoint": str})
     merge_evidence(old, new).round(4).to_csv(evidence, index=False)
     ck = pd.read_csv(checkpoints, dtype={"checkpoint": str})

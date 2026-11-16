@@ -101,28 +101,56 @@ COMPLETE_JOB = "complete-data reference"
 
 
 def next_job(
-    queue: list[str], complete_pending: bool, fresh: set[str] | None = None
+    queue: list[str],
+    complete_pending: bool,
+    fresh: set[str] | None = None,
+    zero_init: set[str] | None = None,
 ) -> str | None:
     """Return what to run next.
 
-    Slots checkpoints whose held-out and BDBV units have not run
-    (`fresh`) first, then other slots checkpoints, then the complete-data
-    reference, then the no-slots checkpoints.
+    The slots run's checkpoints whose held-out and BDBV units have not run
+    (`fresh`) first, then its other checkpoints, then the complete-data
+    reference, then the no-slots checkpoints, and last the zero-init slots
+    run (`zero_init`), which runs only with spare capacity.
     """
-    for label in queue:
-        if label.startswith("slots-") and label in (fresh or set()):
+    fresh, zero = fresh or set(), zero_init or set()
+    slots = [lb for lb in queue if lb.startswith("slots-") and lb not in zero]
+    for label in slots:
+        if label in fresh:
             return label
-    if queue and queue[0].startswith("slots-"):
-        return queue[0]
+    if slots:
+        return slots[0]
     if complete_pending:
         return COMPLETE_JOB
+    rest = [lb for lb in queue if lb not in zero]
+    if rest:
+        return rest[0]
     return queue[0] if queue else None
 
 
-def should_pause(current: str, slots: list[str], fresh: set[str]) -> bool:
-    """Whether to pause `current`'s German run for a newer slots
-    checkpoint whose held-out and BDBV units have not run."""
-    return any(lb != current and lb in fresh for lb in slots)
+def should_pause(
+    current: str,
+    slots: list[str],
+    fresh: set[str],
+    zero_init: set[str] | None = None,
+) -> bool:
+    """Whether to pause `current`'s German run for another slots
+    checkpoint whose held-out and BDBV units have not run, never for one of
+    the zero-init run."""
+    zero = zero_init or set()
+    return any(lb != current and lb in fresh and lb not in zero for lb in slots)
+
+
+def zero_init_labels(cache: Path) -> set[str]:
+    """Return the scored slots checkpoints of the zero-init run."""
+    out = set()
+    for f in (cache / "heldout").glob("slots-*.json"):
+        if f.name.endswith("-release.json"):
+            continue
+        settings = json.loads(f.read_text())
+        if cs.run_of(settings) == "slots-zeroinit":
+            out.add(f.stem)
+    return out
 
 
 def fresh_slots(cache: Path, labels: list[str]) -> set[str]:
@@ -502,7 +530,10 @@ def main(cache: Path) -> None:
             time.sleep(POLL_SECONDS)
             continue
         fresh = fresh_slots(cache, queue)
-        job = next_job(queue, not (cache / cs.COMPLETE_STAMP).exists(), fresh)
+        zero = zero_init_labels(cache)
+        job = next_job(
+            queue, not (cache / cs.COMPLETE_STAMP).exists(), fresh, zero
+        )
         if job == COMPLETE_JOB:
             log(f"progress: {COMPLETE_JOB} started")
             units = [("bdbv", cs.COMPLETE_LABEL), ("germany", cs.COMPLETE_LABEL)]
@@ -523,17 +554,17 @@ def main(cache: Path) -> None:
         checkpoint = job
         log(f"progress: {checkpoint} started, {len(queue)} waiting")
         units = units_for(checkpoint, scored)
-        if checkpoint.startswith("slots-"):
-            fast, _ = split_fast(units)
+        fast, _ = split_fast(units)
+        fast_due = any(not cs.unit_done(cache, *u) for u in fast)
+        if checkpoint.startswith("slots-") and fast_due:
             if run_units(cache, fast, checkpoint):
                 sha = land(cache, sorted(keep | {checkpoint}),
                            f"{checkpoint} held-out and BDBV (German running)")  # fmt: skip
                 note = interim_note(checkpoint, sha or "", LANDED["changed"])
                 if sha is not None and note is not None:
                     say(note)
-            # An older slots checkpoint's paused German run goes on first.
-            if queue[0] != checkpoint:
-                continue
+            # The loop picks what goes on next (an older German run, say).
+            continue
         paused: list[str] = []
 
         def newer_slots(current: str = checkpoint) -> bool:
@@ -542,7 +573,10 @@ def main(cache: Path) -> None:
             except (subprocess.CalledProcessError, ValueError):
                 return False
             return should_pause(
-                current, labels, fresh_slots(cache, labels)
+                current,
+                labels,
+                fresh_slots(cache, labels),
+                zero_init_labels(cache),
             )
 
         pause = newer_slots if checkpoint.startswith("slots-") else None
