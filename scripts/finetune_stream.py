@@ -99,6 +99,32 @@ def real_share(real: list, chunk: int, chunks: int) -> list:
     return real[chunk::chunks]
 
 
+BLOCK_KEYS = ("context", "n_targets", "prediction_length", "levels")
+"""Keys every block the trainer reads must have."""
+
+
+def load_blocks(path: Path) -> list[dict]:
+    """Return the blocks pickled at `path`, refusing stale ones.
+
+    A block cut by older code may lack a key the trainer reads only at a
+    checkpoint, hours later; this fails at once instead.
+
+    Raises
+    ------
+    ValueError
+        If a block lacks one of `BLOCK_KEYS`.
+    """
+    with path.open("rb") as f:
+        blocks = pickle.load(f)
+    for i, block in enumerate(blocks):
+        missing = [k for k in BLOCK_KEYS if k not in block]
+        if missing:
+            raise ValueError(
+                f"{path} block {i} has no {', '.join(missing)}: cut it again"
+            )
+    return blocks
+
+
 def read_seed_list(path: Path) -> list[int]:
     """Return the training seeds a file lists, one a line, in its order."""
     return [int(x) for x in path.read_text().split()]
@@ -1080,9 +1106,11 @@ def main() -> None:
 
     real_training: list[dict] = []
     if args.real_training:
-        with args.real_training.open("rb") as f:
-            real_training = pickle.load(f)
+        real_training = load_blocks(args.real_training)
         log(f"{len(real_training)} real-data training blocks")
+    real_validation = (
+        load_blocks(args.real_validation) if args.real_validation else []
+    )
     t0 = time.perf_counter()
     while done < args.outbreaks:
         hi = min(done + CHUNK, args.outbreaks)
@@ -1241,8 +1269,7 @@ def main() -> None:
                 model, val, args.batch_size
             )
             if args.real_validation:
-                with args.real_validation.open("rb") as f:
-                    real = pickle.load(f)
+                real = real_validation
                 settings["real_validation_sha256"] = ft._sha256(
                     args.real_validation
                 )

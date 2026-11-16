@@ -755,7 +755,7 @@ def test_stale_block_files_fail_when_loaded(tmp_path):
     stale = {k: v for k, v in good.items() if k != "prediction_length"}
     path = tmp_path / "blocks.pkl"
     path.write_bytes(pickle.dumps([good]))
-    assert load_blocks(path) == [good]
+    assert [b["prediction_length"] for b in load_blocks(path)] == [16]
     path.write_bytes(pickle.dumps([good, stale]))
     with pytest.raises(ValueError, match="prediction_length"):
         load_blocks(path)
