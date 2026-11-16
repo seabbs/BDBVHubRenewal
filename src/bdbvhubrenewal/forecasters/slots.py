@@ -347,14 +347,20 @@ def load_adapter(
     Slots are attached first when the adapter holds them, so PEFT loads
     their trained values. Fixed, untrained labels are not in the adapter:
     they are rebuilt from the checkpoint's `series_slots` settings (`n`,
-    `init_std`, `init_seed`), as the trainer drew them. A checkpoint
-    without slots loads as before.
+    `init_std`, `init_seed`), as the trainer drew them. An adapter with
+    the attention bias (`series_bias`) gets it attached first. A
+    checkpoint without either loads as before.
     `parent` says whether the slots carry the parent link; by default it
     is read from the checkpoint's settings (`adapter_parent_link`). Every
     weight in the adapter's file must reach the model (`_check_loaded`).
     """
     from peft import PeftModel
 
+    from bdbvhubrenewal.forecasters import series_bias
+
+    if series_bias.adapter_has_bias(adapter):
+        # The attention bias (`series_bias`), saved with the adapter.
+        series_bias.attach(model)
     n = adapter_slots(adapter)
     spec = checkpoint_slots(adapter)
     if n is not None:

@@ -37,7 +37,7 @@ import numpy as np
 import pandas as pd
 
 from bdbvhubrenewal.data.dates import as_date, epiweek_end
-from bdbvhubrenewal.forecasters import slots
+from bdbvhubrenewal.forecasters import series_bias, slots
 from bdbvhubrenewal.forecasters.base import (
     NATIONAL,
     SAMPLE_COLUMNS,
@@ -671,9 +671,22 @@ def _predict(
 
     With a slots adapter each group is predicted on its own, so its rows
     are one batch, with its rows' slots (`_group_slots`), as in held-out
-    losses.
+    losses; with the series bias, with its rows' places and parents
+    (`_group_rows`).
     """
     model = getattr(pipeline, "model", None)
+    if model is not None and series_bias.has_bias(model):
+        # One group a batch, its rows' places and parents by name.
+        biased = []
+        for g in groups:
+            with series_bias.assigned(model, _group_rows(g)):
+                q, _ = pipeline.predict_quantiles(
+                    [_chronos_input(g)],
+                    prediction_length=horizon,
+                    quantile_levels=levels.tolist(),
+                )
+            biased.extend(q)
+        return biased
     if model is None or not slots.has_slots(model):
         quantiles, _ = pipeline.predict_quantiles(
             [_chronos_input(g) for g in groups],
