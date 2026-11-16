@@ -24,17 +24,36 @@ DATASETS = [
      "groups": [("national", r"^DE$"), ("states", r"^DE-"),
                 ("ages", r"^(\d\d-\d\d|80\+)$")]},
 ]
-# Runs shown on the dashboard. Any other hash in the archie mirror or the
-# scores CSV is ignored. "hashes" lists a run's checkpoints explicitly; None
-# means the run in "dir" (its saved settings.json hashes, plus mirror folders
-# named slots-<hash>).
+# Runs shown on the dashboard, in plot order. Any other hash in the archie
+# mirror or the scores CSV is ignored.
+#   key, label, hue  identity and colour
+#   dir              local run folder (train.log, train/, trainer.pid)
+#   hashes           explicit checkpoint hashes, or None to use the hashes in
+#                    the saved train/n*/settings.json of "dir"
+#   prefix           mirror folder prefix, e.g. slots-<hash> on archie
+#   live             the run the status tiles follow (exactly one)
+#   n                optional hash -> simulations, when settings lack it
 RUNS = [
-    {"key": "slots", "label": "slots", "dir": RUN, "hashes": None, "prefix": "slots", "hue": 217,
-     "n": {}},
-    {"key": "no slots", "label": "no slots", "dir": PREV,
-     "hashes": ["de129103cacc", "7962fd718a47"], "hue": 25,
+    {"key": "slots", "label": "slots", "hue": 217, "live": True,
+     "dir": RUN, "hashes": None, "prefix": "slots", "n": {}},
+    {"key": "slots zeroinit", "label": "slots (zero init)", "hue": 330,
+     "live": False, "dir": ROOT / "output/finetune/continuous-slots-zeroinit",
+     "hashes": ["7d7c5d9f247e", "06dbdcc2b48d"], "prefix": "slots-zeroinit",
+     "n": {"7d7c5d9f247e": 250, "06dbdcc2b48d": 500}},
+    {"key": "no slots", "label": "no slots", "hue": 25, "live": False,
+     "dir": PREV, "hashes": ["de129103cacc", "7962fd718a47"], "prefix": None,
      "n": {"de129103cacc": 1000, "7962fd718a47": 2000}},
 ]
+
+
+def live_cfg():
+    return next((c for c in RUNS if c.get("live")), RUNS[0])
+
+
+def live_dir():
+    return Path(live_cfg()["dir"])
+
+
 CKPTS = [250, 500, 750, 1000, 2000, 4000, 8000]  # fallback prefixes
 TARGET_SIMS, LR0, LR_STEPS = 8000, 1e-5, 36500
 STEPS_PER_SIM = LR_STEPS / TARGET_SIMS  # 4.5625
@@ -105,7 +124,15 @@ class Cache:
         return self.d[p][1]
 
 
-LOGS = {"slots": Log(RUN / "train.log"), "prev": Log(PREV / "train.log")}
+LOGS = {}
+
+
+def run_log(cfg):
+    d = str(Path(cfg["dir"]) / "train.log")
+    if d not in LOGS:
+        LOGS[d] = Log(d)
+    LOGS[d].update()
+    return LOGS[d].sorted()
 JC = Cache()
 MAIL = {"t": 0.0, "lines": [], "ok": None, "busy": False}
 
@@ -152,11 +179,11 @@ def checkpoints(base):
     return out
 
 
-def trainer_prefixes():
+def trainer_prefixes(rundir):
     """Checkpoint sizes: trainer's --prefixes, else saved folders, else
     the default list."""
     try:
-        pid = int((RUN / "trainer.pid").read_text().split()[0])
+        pid = int((rundir / "trainer.pid").read_text().split()[0])
         r = subprocess.run(["ps", "-p", str(pid), "-o", "args="],
                            capture_output=True, text=True, timeout=5)
         m = re.search(r"--prefixes((?:\s+\d+)+)", r.stdout)
@@ -165,12 +192,12 @@ def trainer_prefixes():
     except Exception:
         pass
     done = [int(re.sub(r"\D", "", d.name)) for d in
-            RUN.glob("train/n*") if re.sub(r"\D", "", d.name)]
+            rundir.glob("train/n*") if re.sub(r"\D", "", d.name)]
     return sorted(set(CKPTS) | set(done))
 
 
-def pid_state():
-    pf = RUN / "trainer.pid"
+def pid_state(rundir):
+    pf = rundir / "trainer.pid"
     try:
         pid = int(pf.read_text().split()[0])
         try:
@@ -432,7 +459,7 @@ def hash_run(h, pref=None):
 
 def norm_hash(name):
     """'chronos-slots-abc', 'slots-abc' and 'abc' -> ('abc', 'slots'|None)."""
-    m = re.match(r"^(?:chronos-)?(?:([a-z]+)-)?([0-9a-f]{6,}.*)$", name)
+    m = re.match(r"^(?:chronos-)?(?:([a-z][a-z-]*?)-)?([0-9a-f]{6,}.*)$", name)
     if not m:
         return name, None
     return m.group(2), (m.group(1) if m.group(1) != "ft" else None)
@@ -494,7 +521,8 @@ def score_payload(rows, local):
         {"key": "rw", "label": "randomwalknowcast", "color": REF_COL["rw"]}]
     return {"rows": out, "pending": pending, "xt": XT, "series": series,
             "col": {s["key"]: s["color"] for s in series},
-            "defaults": [RUNS[0]["key"], "zero", "rw"]}
+            "defaults": [next((c["key"] for c in RUNS if c["key"] in seen_n),
+                              live_cfg()["key"]), "zero", "rw"]}
 
 
 def heldout_chart(rows):
@@ -771,7 +799,7 @@ def ger_loc_json(ds, loc):
     return G["loc_json"][loc]
 
 
-def ger_meta(b, slot_n, prev_n):
+def ger_meta(b, known_n):
     """Label each folder by run, n and hash."""
     csv_n = {}
     for r in read_scores():
@@ -792,7 +820,7 @@ def ger_meta(b, slot_n, prev_n):
             cfg = next(c for c in RUNS if c["key"] == hash_run(
                 s, b["prefix"].get(s)))
             run = cfg["key"]
-            n = (slot_n.get(s) if run == RUNS[0]["key"] else prev_n.get(s)) \
+            n = known_n.get(s) \
                 or cfg["n"].get(s) or csv_n.get(s)
             meta.append(dict(id=s, run=run, n=n or 0, label=(
                 f"{cfg['label']} n{n} {s}" if n else f"{cfg['label']} {s}")))
@@ -978,13 +1006,13 @@ build();
 '''
 
 
-def germany_html(slot_n, prev_n, once):
+def germany_html(known_n, once):
     dss = []
     for ds in DATASETS:
         b = ger_build(ds)
         if not b or not b["origins"]:
             continue
-        meta = ger_meta(b, slot_n, prev_n)
+        meta = ger_meta(b, known_n)
         for m in meta:
             m["count"] = max((len(src) for src in b["series"].get(
                 "DE", {}).get(m["id"], {}).values()), default=0)
@@ -1056,9 +1084,10 @@ def dur(s):
 
 def build():
     now = time.time()
-    for lg in LOGS.values():
-        lg.update()
-    sl, pv = LOGS["slots"].sorted(), LOGS["prev"].sorted()
+    LC = live_cfg()
+    RUN = live_dir()
+    logs = {c["key"]: run_log(c) for c in RUNS}
+    sl = logs[LC["key"]]
     status = JC.get(str(RUN / "train/stream-status.json")) or {}
     hist = JC.get(str(RUN / "train/history.json")) or []
     step = sl[-1]["step"] if sl else None
@@ -1068,7 +1097,7 @@ def build():
     if len(recent) >= 2 and recent[-1]["t"] > recent[0]["t"]:
         rate = (recent[-1]["step"] - recent[0]["step"]) / (
             recent[-1]["t"] - recent[0]["t"])
-    prefixes = trainer_prefixes()
+    prefixes = trainer_prefixes(RUN)
     saved = {n for n in prefixes if (RUN / f"train/n{n}/settings.json").exists()}
     scoring = [n for n in prefixes if n not in saved
                and (RUN / f"train/n{n}/finetuned-ckpt").exists()]
@@ -1080,7 +1109,7 @@ def build():
                      dur((tstep(n) - step) / rate))
     ntrained = step / STEPS_PER_SIM if step is not None else None
     lr = LR0 * max(0.0, 1 - step / LR_STEPS) if step is not None else None
-    pidtxt, alive = pid_state()
+    pidtxt, alive = pid_state(RUN)
     age = now - last_t if last_t else None
     stale = age is not None and age > 600
     cls = lambda ok: "ok" if ok else "bad"
@@ -1116,10 +1145,9 @@ def build():
     sub = (f"stage: {html.escape(str(stage))}; stream status "
            f"{html.escape(str(status.get('time', '')))}" if status else "")
 
-    cks_s = checkpoints(RUN)
-    cks_p = checkpoints(PREV)
+    cks = {c["key"]: checkpoints(Path(c["dir"])) for c in RUNS}
     marks = []
-    for name, s, _ in cks_s:
+    for name, s, _ in cks[LC["key"]]:
         n = int(re.sub(r"\D", "", name) or 0)
         marks.append((s.get("steps") or tstep(n), name))
     marks += [(tstep(n), f"n{n}?") for n in scoring]
@@ -1127,31 +1155,41 @@ def build():
              if isinstance(h, dict) and "loss" in h and "step" in h]
     if not train:
         train = [(r["step"], r["loss"]) for r in sl]
-    ph = JC.get(str(PREV / "train/history.json"))
-    ptrain = [(h["step"], h["loss"]) for h in ph or []
-              if isinstance(h, dict) and "loss" in h and "step" in h]
-    if not ptrain:
-        ptrain = [(r["step"], r["loss"]) for r in pv]
-    smax = max([x for x, _ in train] + [1])
-    ptrain = [p for p in ptrain if p[0] <= smax]
-    held_s = [(r["step"], r["held"]) for r in sl]
-    held_p = [(r["step"], r["held"]) for r in pv]
+    smax = max([x for x, _ in train] + [1000])
+    tr_series = [(f"{LC['label']} raw", run_colour(LC["key"]), train, "dots"),
+                 (f"{LC['label']} rolling mean", run_colour(LC["key"]),
+                  rolling(train, 20), "line")]
+    held = []
+    bysrc = []
+    SRC_COL = {"weekly": PAL[0], "daily": PAL[1], "3day": PAL[2]}
+    styles = [None, "dash", "dd", "dot"]
+    for i, c in enumerate(RUNS):
+        rows = logs[c["key"]]
+        col = run_colour(c["key"])
+        if c is not LC:
+            ph = JC.get(str(Path(c["dir"]) / "train/history.json"))
+            pt = [(h["step"], h["loss"]) for h in ph or []
+                  if isinstance(h, dict) and "loss" in h and "step" in h]
+            if not pt:
+                pt = [(r["step"], r["loss"]) for r in rows]
+            pt = [q for q in pt if q[0] <= smax]
+            tr_series.append((f"{c['label']} rolling mean", col,
+                              rolling(pt, 20), "faint"))
+        held.append((c["label"], col, [(r["step"], r["held"])
+                                       for r in rows], "pts"))
+        for k in ("weekly", "daily", "3day"):
+            pts = [(r["step"], r["src"][k]) for r in rows]
+            if any(v is not None for _, v in pts):
+                s = (f"{k} ({c['label']})", SRC_COL[k], pts, "pts")
+                bysrc.append(s + (styles[i % 4],) if styles[i % 4] else s)
     # Logged held-out losses are over the first 100 blocks; history's step-0
     # value is over all held-out blocks, so it is not on the same scale.
     plots = [
-        chart("Training loss (rolling mean of 20 logged points)",
-              [("slots raw", PAL[0], train, "dots"),
-               ("slots rolling mean", PAL[1], rolling(train, 20), "line"),
-               ("no slots (r4) rolling mean", PAL[2], rolling(ptrain, 20),
-                "faint")],
+        chart("Training loss (rolling mean of 20 logged points)", tr_series,
               marks, ylog=True),
-        chart("Held-out pooled loss, slots vs no slots",
-              [("slots", PAL[0], held_s, "pts"),
-               ("no slots (r4)", PAL[2], held_p, "pts")], marks, ylog=True),
-        chart("Held-out loss by source, slots run",
-              [(k, PAL[i], [(r["step"], r["src"][k]) for r in sl], "pts")
-               for i, k in enumerate(["weekly", "daily", "3day"])], marks,
-              ylog=True),
+        chart("Held-out pooled loss by run", held, marks, ylog=True),
+        chart("Held-out loss by source (colour is the source, style the run)",
+              bysrc, marks, ylog=True),
     ]
 
     def cktable(rows, run):
@@ -1171,7 +1209,7 @@ def build():
                 else ""]) + "</tr>")
         return "".join(o) + "</table>"
 
-    ck_h = cktable(cks_s, "slots") + cktable(cks_p, "no slots (r4)")
+    ck_h = "".join(cktable(cks[c["key"]], c["label"]) for c in RUNS)
     cmp_h = "<p class=mut>output/finetune/slots-vs-noslots.csv not present</p>"
     if CSV.exists():
         try:
@@ -1197,7 +1235,7 @@ def build():
         rem_kick(k)
     srows = read_scores()
     local = []
-    for run, base in [(c["key"], c["dir"]) for c in RUNS]:
+    for run, base in [(c["key"], Path(c["dir"])) for c in RUNS]:
         for d in base.glob("train/n*"):
             n = int(re.sub(r"\D", "", d.name) or 0)
             st = jload(d / "settings.json") if (d / "settings.json").exists() \
@@ -1217,9 +1255,8 @@ def build():
             "</summary><pre>" + html.escape(md_txt) + "</pre></details>"
             if md_txt else "")
     rv_h = germany_html(
-        {str(s.get("hash")): s.get("n_outbreaks") for _, s, _ in cks_s},
-        {str(s.get("hash")): s.get("n_outbreaks") for _, s, _ in cks_p},
-        ONCE["on"])
+        {str(s.get("hash")): s.get("n_outbreaks")
+         for v in cks.values() for _, s, _ in v}, ONCE["on"])
 
     css = """
 :root{--bg:#fff;--fg:#1d2127;--mut:#6b7280;--card:#f6f7f9;--line:#d9dde3;
@@ -1319,10 +1356,16 @@ def main():
     ap.add_argument("--once", metavar="FILE")
     ap.add_argument("--scores-csv", help="local checkpoint-scores.csv (test)")
     ap.add_argument("--review-dir", help="local copy of ~/bdbv-ckpt-review")
+    ap.add_argument("--runs-config", help="JSON list replacing RUNS (test)")
     ap.add_argument("--germany-dir", help="local mirror of germany/ (test)")
     a = ap.parse_args()
     OVERRIDE["scores"], OVERRIDE["review_dir"] = a.scores_csv, a.review_dir
     OVERRIDE["germany"] = a.germany_dir
+    if a.runs_config:
+        cfgs = json.loads(Path(a.runs_config).read_text())
+        for c in cfgs:
+            c["dir"] = Path(c["dir"])
+        RUNS[:] = cfgs
     if a.once:
         ONCE["on"] = True
         mail_kick(wait=True)
