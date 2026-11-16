@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any, Final
 
 from bdbvhubrenewal.evaluation.store import STATUS_FILE
+from bdbvhubrenewal.reporting.site import site_models
 
 __all__ = ["store_note", "write_store_note"]
 
@@ -37,10 +38,33 @@ def _pairs(rows: Sequence[Mapping[str, Any]]) -> str:
     )
 
 
+def _preview_line(
+    head: str,
+    stale: Sequence[Mapping[str, Any]],
+    absent: Sequence[Mapping[str, Any]],
+) -> str:
+    """Count a preview's missing fits in one line."""
+    n = len(stale) + len(absent)
+    shown = []
+    if stale:
+        shown.append(f"older fits are shown for {len(stale)}")
+    if absent:
+        shown.append(
+            f"{len(absent)} {'has' if len(absent) == 1 else 'have'} none"
+        )
+    return (
+        f"This preview's code ({_commit(head)}) changes {n} "
+        f"fit{'s' if n != 1 else ''}, which only main makes: "
+        + " and ".join(shown)
+        + " until it merges.\n"
+    )
+
+
 def store_note(
     status: Sequence[Mapping[str, Any]],
     build: str | None = None,
     running: str | None = None,
+    preview: str | None = None,
 ) -> str:
     """Write the note for a page.
 
@@ -52,12 +76,17 @@ def store_note(
         The commit this site is built from.
     running : str, optional
         The URL of a Fit store run in progress, if there is one.
+    preview : str, optional
+        The head commit of the pull request this build previews. Only
+        main fits, so a preview whose code moves fit keys lacks them; it
+        says so in one line instead of listing them.
 
     Returns
     -------
     str
         Markdown: the fit commits, then an admonition listing the fits
-        not made for this build's code, if there are any.
+        not made for this build's code, if there are any, or for a
+        preview one line counting them.
     """
     used = sorted({str(s["commit"]) for s in status if s["commit"]})
     if not used:
@@ -74,6 +103,8 @@ def store_note(
     failed = [s for s in status if s["failed"]]
     if not (stale or absent):
         return "\n".join(lines) + "\n"
+    if preview:
+        return "\n".join([*lines, "", _preview_line(preview, stale, absent)])
     code = f"this build's code ({_commit(build)})" if build else "this code"
     pending = [s for s in stale + absent if not s["failed"]]
     body = []
@@ -95,8 +126,9 @@ def store_note(
 def write_store_note(results: Path | str, generated: Path | str) -> None:
     """Write `fit-store.md` from the results' store record.
 
-    The build commit is `$GITHUB_SHA` and a Fit store run in progress is
-    `$FIT_STORE_RUN`, which the Pages workflow sets.
+    The build commit is `$GITHUB_SHA`, a Fit store run in progress is
+    `$FIT_STORE_RUN` and a pull request's head is `$PREVIEW_HEAD`, which
+    the Pages workflow sets.
 
     Parameters
     ----------
@@ -107,6 +139,9 @@ def write_store_note(results: Path | str, generated: Path | str) -> None:
     """
     path = Path(results) / STATUS_FILE
     status = json.loads(path.read_text()) if path.exists() else []
+    # Models the site hides are not on its pages, so not in the note.
+    shown = set(site_models({str(s["model"]) for s in status}))
+    status = [s for s in status if str(s["model"]) in shown]
     out = Path(generated) / "fit-store.md"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(
@@ -114,5 +149,6 @@ def write_store_note(results: Path | str, generated: Path | str) -> None:
             status,
             os.environ.get("GITHUB_SHA"),
             os.environ.get("FIT_STORE_RUN") or None,
+            os.environ.get("PREVIEW_HEAD") or None,
         )
     )

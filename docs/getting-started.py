@@ -182,7 +182,7 @@ panels
 # `randomwalk` is scored on its samples as they are, with no delay.
 # `release_backtest` maps each other model's forecast of final counts to the counts a later release would report, using the model's own modelled delay.
 # It scores the samples with the weighted interval score (WIS) and interval coverage.
-# The table gives each model's mean WIS relative to `randomwalk`, for the national total and over the provinces.
+# The table gives each model's mean WIS relative to `randomwalknowcast`, the site's baseline, for the national total and over the provinces.
 
 # %%
 result = release_backtest(
@@ -199,16 +199,17 @@ scores = scores.assign(
         lambda x: "National" if x == NATIONAL else "Province"
     )
 )
-relative_wis(scores, by=["level"]).round(2)
+relative_wis(scores, by=["level"], baseline="randomwalknowcast").round(2)
 
 # %% [markdown]
 # The [energy score](../methods/evaluation/#energy-score) scores each scale's forecast of every place and week at once, from the same samples.
-# The table gives it and its log version relative to `randomwalk`, with $n$ the releases scored.
+# The table gives it and its log version relative to `randomwalknowcast`, with $n$ the releases scored.
 
 # %%
 energy = result.energy.loc[result.energy["target"] == "reported"]
 relative_skill(
     energy,
+    baseline="randomwalknowcast",
     by=("scale",),
     metrics=("energy", "log_energy"),
     match_on=("origin", "truth_vintage"),
