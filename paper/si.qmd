@@ -48,10 +48,16 @@ In each training block the places are assigned to slots by a random permutation,
 The slot embeddings start as random codes drawn from a normal distribution with standard deviation 0.02, so each slot is distinct from the first step.
 They are trained in their own parameter group at a learning rate of $10^{-4}$ with linear decay, while the LoRA adapter keeps Chronos-2's recipe and its learning rate of $10^{-5}$.
 
+**Training blocks.**
+A simulation gives daily counts by onset and report date, and a release counts every case reported by its cut-off, one cut-off a week.
+Each simulation gives 10 observation draws, and at each of 16 cut-offs 2 of the 10 draws are sampled, so one simulation gives 32 blocks.
+Each block takes daily steps, or sums the days to 3-day or weekly steps, at random.
+Four in five blocks are multivariate, holding several of the simulation's strata with or without the country and their totals, and one in five is univariate, the country or a single stratum.
+Each block's prediction length is its horizon, and the LoRA learning rate falls linearly from $10^{-5}$ to zero at 8,000 simulations, with checkpoints at 1,000, 2,000, 4,000 and 8,000.
+
 **Order of the training data.**
 The grid is a crossed factorial design balanced in every block of 120 simulations, with each factor's levels shuffled independently, as in a Latin hypercube.
 Training takes the simulations in chunks of 250, about two balanced blocks.
-Each block's source (daily, 3-day or weekly), draws and cut-offs are drawn at random.
 A chunk gives about 6,700 training blocks, which are shuffled and packed into about 1,250 steps of up to 256 series each.
 So every checkpoint has seen the whole grid, and no factor level comes in a run of its own.
 
