@@ -1,4 +1,11 @@
-"""One fine-tuned Chronos-2 for every frequency: daily rows plus totals."""
+"""Fine-tuned Chronos-2 on daily releases: daily rows plus weekly totals.
+
+The weekly and daily fine-tuned models share one adapter. The weekly one
+is a weekly-steps block of the weekly releases, as the zero-shot weekly
+model. The daily one adds, per place, a row of its weekly totals summed
+from its own daily counts, and reads the weekly forecast from that row;
+the two sources are never mixed.
+"""
 
 import dataclasses
 
@@ -11,7 +18,6 @@ from bdbvhubrenewal.forecasters import (
     ForecastTask,
     foundation,
     get_model,
-    list_models,
     series_bias,
 )
 from bdbvhubrenewal.forecasters.foundation import (
@@ -56,7 +62,7 @@ def test_week_rows_put_each_weeks_total_on_its_saturday():
 
 def test_a_period_block_adds_one_total_row_per_place_after_the_daily_rows():
     tri, start = daily_tri(), 10
-    rows = week_rows(tri, weekly_tri())
+    rows = week_rows(tri)
     group = layout_block(tri, "ragged", PLACES, start, period=rows)
     target = group["target"]
     assert target.shape == (4, start)
@@ -95,9 +101,7 @@ def test_a_total_row_joins_its_places_bias_group():
 
 def test_inference_rows_carry_the_total_rows_places():
     tri = daily_tri()
-    group = layout_block(
-        tri, "ragged", PLACES, 10, period=week_rows(tri, weekly_tri())
-    )
+    group = layout_block(tri, "ragged", PLACES, 10, period=week_rows(tri))
     place, parent = foundation._group_rows(group)
     assert list(place[:4]) == [0, 1, 0, 1]
     assert list(parent[:4]) == [-1, 0, -1, 0]
@@ -107,12 +111,13 @@ def test_inference_rows_carry_the_total_rows_places():
         assert place[4 + k] == PLACES.index(name.rsplit("_lag_", 1)[0])
 
 
-def test_one_finetuned_model_replaces_the_daily_and_weekly_ones():
-    names = {s.name for s in list_models()}
-    assert "fm_chronos_ft" in names
-    assert not {n for n in names if n.endswith("_ragged_ft")}
-    for name in ("fm_chronos_weekly_ragged", "fm_chronos_daily_ragged"):
-        assert name in names
+def test_the_weekly_and_daily_finetuned_models_share_one_adapter(ft):
+    weekly = get_model("fm_chronos_weekly_ragged_ft")
+    assert weekly.checkpoint == ft.checkpoint
+    assert (weekly.source, weekly.weekly_totals) == ("weekly", False)
+    assert (ft.source, ft.weekly_totals) == ("daily", True)
+    # The zero-shot daily model has no total rows.
+    assert not get_model("fm_chronos_daily_ragged").weekly_totals
 
 
 def _aggregate_sampler(store: list):
@@ -146,7 +151,7 @@ def task(
 
 @pytest.fixture
 def ft(fake_checkpoint):  # noqa: ARG001 (the fake release)
-    return get_model("fm_chronos_ft")
+    return get_model("fm_chronos_daily_ragged_ft")
 
 
 def test_weekly_forecasts_are_read_from_the_total_rows(
@@ -158,7 +163,8 @@ def test_weekly_forecasts_are_read_from_the_total_rows(
     group = store[-1]
     n_places = len(group["places"])
     assert np.atleast_2d(group["target"]).shape[0] == 2 * n_places
-    # Weeks whose Saturday is past the context come from the totals.
+    # Weeks whose Saturday is past the context come from the totals,
+    # which are summed from the same daily releases.
     tri = foundation.hub_triangle(
         task.daily_history, "daily", group["places"], task.target_end_dates[-1]
     )
