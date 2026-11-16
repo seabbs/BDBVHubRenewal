@@ -69,7 +69,7 @@ def block() -> dict:
 def with_slots(seed: int | None = 3, scale: float = 0.1):
     """A tiny model with slots: random nonzero ones, or zero if no seed."""
     model = tiny_model()
-    slots.attach(model, n_slots=N_SLOTS)
+    slots.attach(model, n_slots=N_SLOTS, parent=False)
     if seed is not None:
         gen = torch.Generator().manual_seed(seed)
         weight = getattr(model, slots.SLOT_MODULE).embedding.weight
@@ -175,7 +175,11 @@ def test_slots_match_the_trainer_and_inference(monkeypatch, name):
     x = b["context"]
     k = b["n_covariates"]
     names = [f"p{p}_lag_{d}" for p in range(N_PLACES) for d in range(LAG)]
-    group = {"target": x[:N_PLACES, :T]}
+    # layout_block names each group's places, as the slots need them.
+    group = {
+        "target": x[:N_PLACES, :T],
+        "places": [f"p{p}" for p in range(N_PLACES)],
+    }
     if k:
         group["past_covariates"] = dict(
             zip(names, x[N_PLACES:, :T], strict=True)
@@ -192,25 +196,12 @@ def test_no_slots_gives_no_ids():
     assert sc.model_ids(tiny_model(), block()) is None
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "chronos 2.3.2 sorts dict covariate keys, so CD-* lag rows come "
-        "before CD's while this branch's chronos_sampler gives slots in "
-        "input order; fixed upstream by _group_slots (checkpoint-scoring "
-        "1e124b859, slots-loader-roworder 9bca8068c)"
-    ),
-)
 def test_inference_rows_keep_their_place_slot(monkeypatch):
     """Each prepared row gets its own place's slot at inference.
 
-    Fails on this branch's `foundation.chronos_sampler`. The fix
-    (`_group_slots`, which reads the group's "places") is on
-    checkpoint-scoring 1e124b859 and slots-loader-roworder 9bca8068c, so
-    this test is expected to XPASS, and so fail as strict, once that code
-    is merged here; then drop the marker. The check itself scores tensor
-    blocks in the trainer's order and is not affected.
+    `_group_slots` reads the group's "places", so lag rows Chronos-2
+    sorts by name keep their place's slot. The check itself scores tensor
+    blocks in the trainer's order.
     """
     from chronos import Chronos2Pipeline
 
