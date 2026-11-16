@@ -209,6 +209,12 @@ leaves only, the country only, or one leaf only. The last two are
 univariate series from the same outbreaks. All levels need nested strata
 (regions of places, or places by ages)."""
 
+PARENT_MIX = ("exact", "unallocated", "late_parent")
+"""How the country of a block with places relates to them, drawn evenly:
+their sum, more than their sum (cases with no place), or reported through
+a later stream (`finetune.country_counts`). A block of some of the
+places is also not their sum. Parent means belongs to, not sums to."""
+
 UNIVARIATE_SHARE = 0.2
 """Share of blocks that are one series, the country or one leaf; the rest
 are multivariate, shared evenly among their mixes."""
@@ -355,6 +361,12 @@ def outbreak_blocks(
                 fits = MAX_SERIES // (lag + 1) - 1
                 budget = min(round(size / (lag + 1)) - 1, fits)
                 places, mix = choose_places(provinces, budget, rng)
+            # How the country relates to its places, drawn from a child
+            # generator, so the other draws are as without it.
+            parent_rng = rng.spawn(1)[0]
+            parent = "exact"
+            if len(places) > 1 and places[0] == NATIONAL:
+                parent = str(parent_rng.choice(PARENT_MIX))
             block = training_block(
                 counts,
                 source,
@@ -362,6 +374,8 @@ def outbreak_blocks(
                 cutoffs[: cut + 1],
                 max_lag=lag,
                 totals=any("-" in p for p in provinces),
+                parent=parent,
+                rng=parent_rng,
             )
             if block is None:
                 if empty is not None:
@@ -371,6 +385,8 @@ def outbreak_blocks(
                 continue
             padded = _pad(block, CONTEXT)
             padded["levels"] = target_levels(places)
+            padded["places"] = tuple(places)
+            padded["parent"] = parent
             padded["mix"] = mix
             padded["source"] = source
             out.append(padded)
@@ -502,6 +518,7 @@ def real_blocks(
         )
         padded = _pad(block, CONTEXT)
         padded["levels"] = target_levels(places)
+        padded["places"] = tuple(places)
         padded["mix"] = "real"
         padded["source"] = "weekly"
         out.append(padded)

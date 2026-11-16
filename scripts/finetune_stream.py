@@ -182,6 +182,13 @@ def slot_settings(
             "init_std": init_std,
             "init_seed": init_seed,
             "learning_rate": lr,
+            "parent": {
+                "link": "own slot plus a learned share of the parent's own "
+                "slot, from the same table",
+                "scale_init": slots.PARENT_SCALE,
+                "rule": "nearest '-' prefix in the block, else the country "
+                f"({', '.join(slots.COUNTRIES)})",
+            },
             "module": slots.SLOT_MODULE,
             "assignment": (
                 "a fresh random permutation per block each time it is "
@@ -572,10 +579,25 @@ def block_slots(blocks: list[dict], n_slots: int, rng=None) -> np.ndarray:
                 if rng is not None
                 else np.random.default_rng(slots.EVAL_SEED),
                 n_slots,
+                parents=block_parents(b),
             )
             for b in blocks
-        ]
+        ],
+        axis=-1,
     )
+
+
+def block_parents(block: dict) -> list[int]:
+    """Return each target's parent in a block (`slots.parents_of`).
+
+    A block without place names links every place to the country, when
+    it holds it, by its levels.
+    """
+    if "places" in block:
+        return slots.parents_of(block["places"])
+    levels = list(block["levels"])
+    root = levels.index("national") if "national" in levels else -1
+    return [-1 if i == root else root for i in range(len(levels))]
 
 
 def tensors(block: dict) -> dict:
@@ -1193,6 +1215,7 @@ def main() -> None:
         "chunk": CHUNK,
         "blocks_per_simulation": k,
         "univariate_share": ft.UNIVARIATE_SHARE,
+        "parent_mix": list(ft.PARENT_MIX),
         **(
             {
                 "draws_per_simulation": DRAWS_PER_PASS,
@@ -1492,6 +1515,9 @@ def main() -> None:
         mix = seen.setdefault("mix", {})
         for block in blocks:
             mix[block["mix"]] = mix.get(block["mix"], 0) + 1
+            parents = seen.setdefault("parents", {})
+            kind = block.get("parent", "exact")
+            parents[kind] = parents.get(kind, 0) + 1
         # Blocks of strata with no cases by their cut are not laid out.
         mix["empty"] = mix.get("empty", 0) + len(empty)
         if done in prefixes:

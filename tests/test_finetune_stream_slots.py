@@ -48,7 +48,8 @@ def test_batches_carry_slots_paired_by_place():
         slot_rng=np.random.default_rng(0),
     )
     batch = data._build_batch([0, 1])
-    ids = np.asarray(batch["slot_ids"])
+    # Own slots; the second row is each place's parent's.
+    ids = np.asarray(batch["slot_ids"])[0]
     per = N_PLACES * (1 + LAG)
     assert len(ids) == len(batch["context"]) == 2 * per
     places = slots.row_places(N_PLACES, N_PLACES * LAG)
@@ -58,7 +59,8 @@ def test_batches_carry_slots_paired_by_place():
             assert set(mine[places == p]) == {mine[p]}
     # Training draws a fresh permutation each time a block is batched.
     draws = {
-        tuple(np.asarray(data._build_batch([0])["slot_ids"])) for _ in range(10)
+        tuple(np.asarray(data._build_batch([0])["slot_ids"])[0])
+        for _ in range(10)
     }
     assert len(draws) > 1
 
