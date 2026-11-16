@@ -174,3 +174,134 @@ def test_sample_coverage_is_the_central_interval() -> None:
     assert out["cover95"].tolist() == [0.0]
     out = sample_coverage(samples, truth.assign(truth=50.0), 0.95)
     assert out["cover95"].tolist() == [1.0]
+
+
+def _paper_rows(
+    model: str, option: str, wis: float, n: int = 2
+) -> pd.DataFrame:
+    """Rows of the paper's aggregation table, without a checkpoint."""
+    return pd.DataFrame(
+        {
+            "study": "ebola",
+            "model": model,
+            "option": option,
+            "level": "national",
+            "location": "CD",
+            "origin_date": "2026-10-17",
+            "target_date": [f"2026-10-{d:02d}" for d in range(3, 3 + 7 * n, 7)],
+            "wis": wis,
+            "log_wis": wis / 10,
+            "cover50": 1.0,
+            "cover95": 1.0,
+        }
+    )
+
+
+@pytest.mark.parametrize(
+    ("label", "env", "tag"),
+    [
+        (
+            "slots-0123456789ab",
+            "slots-0123456789ab",
+            "chronos-slots-0123456789ab",
+        ),
+        ("de129103cacc", "de129103cacc", "chronos-ft-de129103cacc"),
+    ],
+)
+def test_a_checkpoint_label_gives_its_env_and_release(
+    label: str, env: str, tag: str
+) -> None:
+    from bdbvhubrenewal.evaluation.groupings import checkpoint_label
+
+    assert checkpoint_label(label) == (env, tag)
+
+
+@pytest.mark.parametrize("label", ["latest", "slots-", "chronos-ft-abc", ""])
+def test_a_label_that_is_no_checkpoint_fails(label: str) -> None:
+    from bdbvhubrenewal.evaluation.groupings import checkpoint_label
+
+    with pytest.raises(ValueError, match="checkpoint"):
+        checkpoint_label(label)
+
+
+def test_checkpoint_rows_name_the_model_and_keep_the_reference_cells() -> None:
+    from bdbvhubrenewal.evaluation.groupings import (
+        AGGREGATION_COLUMNS,
+        checkpoint_rows,
+    )
+
+    reference = _paper_rows("randomwalknowcast", "reference", 2.0, n=1)
+    m = "fm_chronos_daily_ragged_ft"
+    scores = pd.DataFrame(
+        {
+            "model": f"{m}@slots-abc:paired",
+            "origin": "2026-10-17",
+            "location": "CD",
+            "target_end_date": ["2026-10-03", "2026-10-10"],
+            "level": "national",
+            "wis": [1.0, 5.0],
+            "log_wis": [0.1, 0.5],
+            "cover50": 1.0,
+            "cover95": 0.0,
+        }
+    )
+    out = checkpoint_rows(scores, reference, "ebola", "slots-abc")
+    assert list(out.columns) == [*AGGREGATION_COLUMNS, "checkpoint"]
+    assert out["target_date"].tolist() == ["2026-10-03"]
+    assert out["model"].tolist() == [m]
+    assert out["option"].tolist() == ["zones_copula"]
+    assert out["checkpoint"].tolist() == ["slots-abc"]
+
+
+def test_merged_rows_keep_zero_shot_and_replace_old_finetunes() -> None:
+    from bdbvhubrenewal.evaluation.groupings import merge_checkpoint_rows
+
+    existing = pd.concat(
+        [
+            _paper_rows("randomwalknowcast", "reference", 2.0),
+            _paper_rows("fm_chronos_daily_ragged", "joint", 1.0),
+            _paper_rows("fm_chronos_daily_ragged_ft", "joint", 9.0),
+            _paper_rows("fm_chronos_daily_ragged_ft_n1000", "joint", 9.0),
+        ],
+        ignore_index=True,
+    )
+    new = _paper_rows("fm_chronos_daily_ragged_ft", "joint", 0.5).assign(
+        checkpoint="slots-abc"
+    )
+    out = merge_checkpoint_rows(existing, new, "slots-abc")
+    zero = out.loc[out["checkpoint"] == "zero-shot"]
+    assert set(zero["model"]) == {
+        "randomwalknowcast",
+        "fm_chronos_daily_ragged",
+    }
+    pd.testing.assert_frame_equal(
+        zero.drop(columns="checkpoint").reset_index(drop=True),
+        existing.iloc[:4].reset_index(drop=True),
+    )
+    ft = out.loc[out["checkpoint"] == "slots-abc"]
+    assert ft["wis"].tolist() == [0.5, 0.5]
+    # A second run of the same label replaces its rows; others are kept.
+    other = new.assign(checkpoint="slots-def", wis=0.7)
+    again = merge_checkpoint_rows(
+        merge_checkpoint_rows(out, other, "slots-def"), new, "slots-abc"
+    )
+    assert again.groupby("checkpoint").size().to_dict() == {
+        "slots-abc": 2,
+        "slots-def": 2,
+        "zero-shot": 4,
+    }
+
+
+def test_rows_must_match_the_reference_in_number() -> None:
+    from bdbvhubrenewal.evaluation.groupings import check_checkpoint_rows
+
+    rows = pd.concat(
+        [
+            _paper_rows("randomwalknowcast", "reference", 2.0),
+            _paper_rows("fm_chronos_daily_ragged_ft", "joint", 0.5),
+        ],
+        ignore_index=True,
+    ).assign(checkpoint=["zero-shot"] * 2 + ["slots-abc"] * 2)
+    check_checkpoint_rows(rows)
+    with pytest.raises(ValueError, match="slots-abc"):
+        check_checkpoint_rows(rows.iloc[:3])
