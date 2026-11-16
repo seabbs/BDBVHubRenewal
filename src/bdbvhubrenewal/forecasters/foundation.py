@@ -582,8 +582,13 @@ def _chronos_input(group: Series) -> dict[str, Any]:
     return {k: v for k, v in group.items() if k != "places"}
 
 
-def _group_slots(group: Series, n_slots: int) -> np.ndarray:
-    """Return each of a group's rows' slot, in Chronos-2's row order.
+def _group_slots(
+    group: Series, n_slots: int, parent: bool = True
+) -> np.ndarray:
+    """Return each of a group's rows' own and parent slots, `[2, rows]`.
+
+    Without `parent` (slots trained without the parent link), own slots
+    only, `[rows]`; a place's parent is `slots.parents_of`'s, -1 for none.
 
     Chronos-2's dict path puts the targets first, then the covariates by
     sorted name, past-only ones before known-future ones, not in input
@@ -612,10 +617,17 @@ def _group_slots(group: Series, n_slots: int) -> np.ndarray:
         owner = [at[n.rsplit("_lag_", 1)[0]] for n in rows]
     except KeyError as err:
         raise ValueError(f"covariate of no target place: {err}") from err
-    chosen = slots.slot_ids(
-        n_targets, 0, np.random.default_rng(slots.EVAL_SEED), n_slots
+    own, up = slots.slot_ids(
+        n_targets,
+        0,
+        np.random.default_rng(slots.EVAL_SEED),
+        n_slots,
+        parents=slots.parents_of(places),
     )
-    return np.concatenate([chosen, chosen[owner]]).astype(int)
+    index = np.concatenate([np.arange(n_targets), owner]).astype(int)
+    if not parent:
+        return np.asarray(own[index])
+    return np.stack([own[index], up[index]])
 
 
 def _predict(
@@ -637,7 +649,9 @@ def _predict(
         return list(quantiles)
     out = []
     for g in groups:
-        ids = _group_slots(g, slots.n_slots(model))
+        ids = _group_slots(
+            g, slots.n_slots(model), slots.has_parent_link(model)
+        )
         with slots.assigned(model, ids):
             q, _ = pipeline.predict_quantiles(
                 [_chronos_input(g)],
