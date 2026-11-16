@@ -45,6 +45,9 @@ Chronos-2's group attention has no notion of which series is which, so on its ow
 The fine-tuned model adds a learned slot embedding, shared by each place's count series and its lag series.
 The places of a block take distinct slots, so the model ties each place's covariates to its counts while seeing all places at once.
 In each training block the places are assigned to slots by a random permutation, so a slot carries no meaning of its own beyond marking which series go together.
+Each place's embedding is its own slot plus its parent's slot, from the same table, so children carry their parent's identity, and deeper levels add the grandparent's.
+Training includes blocks in which children do not sum to their parent: subsets of the children, unallocated residuals and parents reported separately.
+So the link means that a place belongs to its parent, not that it sums to it.
 The slot embeddings start as random codes drawn from a normal distribution with standard deviation 0.02, so each slot is distinct from the first step.
 They are trained in their own parameter group at a learning rate of $10^{-4}$ with linear decay, while the LoRA adapter keeps Chronos-2's recipe and its learning rate of $10^{-5}$.
 
