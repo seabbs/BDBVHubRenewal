@@ -362,11 +362,11 @@ def test_complete_forecasts_merge_into_the_reference_files(cs, tmp_path):
     assert (tmp_path / cs.COMPLETE_STAMP).exists()
 
 
-def test_a_slots_cache_is_also_reachable_by_its_bare_hash(cs, tmp_path):
-    # The dashboard mirrors cache/<study>/<hash>/ as dates finish.
+def test_a_slots_cache_has_one_folder_named_by_its_label(cs, tmp_path):
+    # One folder per checkpoint, slots-<hash>, which the dashboard mirrors.
     root = cs.unit_root(tmp_path, "germany", "slots-abcdef123456")
     assert root == tmp_path / "germany" / "slots-abcdef123456"
-    assert (tmp_path / "germany" / "abcdef123456").resolve() == root.resolve()
+    assert [p.name for p in (tmp_path / "germany").iterdir()] == [root.name]
 
 
 def test_rows_are_built_only_from_finished_units(cs, tmp_path):

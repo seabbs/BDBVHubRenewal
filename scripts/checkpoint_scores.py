@@ -329,17 +329,13 @@ def germany_dates() -> list[str]:
 
 
 def unit_root(cache: Path, study: str, label: str) -> Path:
-    """Return a unit's cache folder, made if needed.
+    """Return a unit's cache folder, `<study>/<label>`, made if needed.
 
-    A slots checkpoint's folder (`slots-<hash>`) is also reachable as
-    `<hash>`, the name the dashboard's mirror reads as dates finish.
+    One folder per checkpoint: a slots checkpoint's is `slots-<hash>`.
+    Each date or origin is written there as it finishes.
     """
     root = cache / study / label
     root.mkdir(parents=True, exist_ok=True)
-    if label.startswith("slots-"):
-        alias = cache / study / label.removeprefix("slots-")
-        if not alias.exists() and not alias.is_symlink():
-            alias.symlink_to(label)
     return root
 
 
