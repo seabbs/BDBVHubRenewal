@@ -258,3 +258,42 @@ def test_where_batches_come_from_is_the_machine_s(tmp_path):
     _local(tmp_path, "SIMS_FROM=release")
     jobs = dry(tmp_path, "finetune", config=FT)
     assert "simulate_batch" not in jobs
+
+
+def test_scores_follow_the_data(tmp_path):
+    jobs = dry(tmp_path, "score", config={"score": {"labels": ["aaa"]}})
+    assert jobs["bdbv_data"] == 1
+
+
+def test_release_carries_each_round_s_exclusions(tmp_path):
+    jobs = dry(tmp_path, "release", config={"rounds": [4]})
+    assert jobs["release_qc"] == 1
+
+
+def test_at_most_two_simulations_run_at_once(tmp_path):
+    local = tmp_path / "local.env"
+    local.write_text(f"ROOT={tmp_path}\n")
+    out = subprocess.run(
+        [
+            str(SNAKEMAKE),
+            "simulate",
+            "-n",
+            "-p",
+            "--cores",
+            "8",
+            "--workflow-profile",
+            "workflow/profiles/cpu",
+            "--config",
+            "rounds=[4]",
+        ],
+        cwd=ROOT,
+        env={
+            "PATH": str(SNAKEMAKE.parent) + ":/usr/bin:/bin",
+            "HOME": str(tmp_path),
+            "LOCAL_CONFIG": str(local),
+        },
+        capture_output=True,
+        text=True,
+    )
+    assert out.returncode == 0, out.stderr + out.stdout
+    assert "sim_slots=1" in out.stdout
