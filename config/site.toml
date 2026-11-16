@@ -1,0 +1,7 @@
+# Docs site settings. Read by `bdbvhubrenewal.reporting.site` only, so
+# nothing here reaches a fit or the paper.
+
+[scores]
+# The model every scoring plot and table on the site is relative to by
+# default. Tables that offer each baseline start on this one.
+baseline = "randomwalknowcast"

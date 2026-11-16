@@ -7,11 +7,11 @@ import inspect
 from pathlib import Path
 
 import pandas as pd
-from bdbvhubrenewal.reporting.site import load_site_config, site_baseline
 
 from bdbvhubrenewal.evaluation import checks, zones
 from bdbvhubrenewal.evaluation.hubcompare import load_comparison_config
 from bdbvhubrenewal.reporting import nowcast_plots, plots, report, scoresummary
+from bdbvhubrenewal.reporting.site import load_site_config, site_baseline
 
 ROOT = Path(__file__).parents[2]
 
