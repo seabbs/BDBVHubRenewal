@@ -6,14 +6,15 @@ build: build
 # The run `render` publishes first: development or paper.
 render: development
 studies: [synthetic, germany, ebola]
-# The fine-tuned Chronos-2 checkpoint (`chronos-ft-<hash>`) every `_ft`
-# model of the workflow loads, the same in each study, and that the paper
-# names: the newest published checkpoint of the final run, whose
-# settings.json grid is `finetune_grid` or a revision of it
-# (scripts/follow_checkpoint.py). Null leaves the fine-tuned rows out as
-# pending until the run publishes its first checkpoint.
+# The final fine-tuning run (with series slots) writes each checkpoint to
+# `finetune_run`/n<outbreaks>/ and publishes it as `chronos-ft-<hash>`.
+# `finetuned` is the newest published one, which every `_ft` model of the
+# workflow loads and the paper names, and `final_checkpoints` all of
+# them, which the checkpoint curve shows. scripts/follow_checkpoint.py
+# sets both. Null and empty leave the fine-tuned rows pending.
+finetune_run: ../output/checkpoints/slots
 finetuned: null
-finetune_grid: r4
+final_checkpoints: []
 # Samples per forecast for the studies scored on samples.
 n_samples: 100
 
@@ -129,9 +130,8 @@ evidence:
   checkpoint_scores:
     ref: a0ccfc67bc1471a2405eb4af3254310b087c92c3
     path: evidence/checkpoint-scores.csv
-    # The final run's grid, whose checkpoints the curve shows; the rows
-    # also carry the scoring rule, and only `CHECKPOINT_RULE`'s are shown.
-    grid: r4
+    # The rows carry the scoring rule; only `CHECKPOINT_RULE`'s are shown,
+    # for the final run's checkpoints (`final_checkpoints`).
   # Pending: the scale-floor test on the final run's checkpoints.
   scale_floor: null
   # The lag-horizon test of the ragged layout (germany-chronos2).

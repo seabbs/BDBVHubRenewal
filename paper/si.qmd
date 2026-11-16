@@ -40,6 +40,13 @@ One SI section per paper section.
 - Key references: [@Ansari2025; @Hu2021].
 :::
 
+**Series slots.**
+Chronos-2's group attention has no notion of which series is which, so on its own it can link a lag series to its place's counts only by matching their values.
+The fine-tuned model adds a learned series-identity embedding, one per slot, so that series sharing a slot are marked as belonging together.
+Each place's count series and all its lag series share one slot, and the places of a block take distinct slots.
+In each training block the places are assigned to slots by a random permutation, so a slot carries no meaning of its own beyond marking which series go together.
+The slot embeddings start at zero, so before training the model is base Chronos-2, and they are trained with the LoRA adapter under Chronos-2's fine-tuning recipe.
+
 Chronos-2 divides a flat context by a scale of $10^{-5}$, and we apply no floor to that scale at inference.
 A floor of one count at inference only hurts small series, of five counts or fewer, on held-out simulations.
 At 4,000 outbreaks their median loss is {{< meta evidence.scale_floor.sims.n4000.small.median_loss.none >}} without it and {{< meta evidence.scale_floor.sims.n4000.small.median_loss.floor >}} with it, and the share of 99% quantiles over 100 times the truth is {{< meta evidence.scale_floor.sims.n4000.small.q99_over_100x.none >}}% and {{< meta evidence.scale_floor.sims.n4000.small.q99_over_100x.floor >}}%.

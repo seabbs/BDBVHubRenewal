@@ -194,7 +194,7 @@ def _joint(a: argparse.Namespace) -> None:
 def _evidence(a: argparse.Namespace) -> None:
     paths = {name: getattr(a, name) for name in EVIDENCE}
     numbers = write_evidence(
-        paths, a.si_dir, a.fig_dir, a.out, checkpoint_grid=a.checkpoint_grid
+        paths, a.si_dir, a.fig_dir, a.out, checkpoints=tuple(a.checkpoints)
     )
     if a.mode == "paper" and numbers["evidence"]["waiting"]:
         raise ValueError(
@@ -343,7 +343,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--si-dir", type=Path, required=True)
     p.add_argument("--fig-dir", type=Path, required=True)
     p.add_argument("--out", type=Path, required=True)
-    p.add_argument("--checkpoint-grid", default=None)
+    p.add_argument("--checkpoints", nargs="*", default=[])
     p.set_defaults(run=_evidence)
 
     p = sub.add_parser("ebola-extra")

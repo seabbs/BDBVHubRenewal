@@ -1,12 +1,14 @@
 """Pin the workflow to the final fine-tuning run's newest checkpoint.
 
-Lists the published `chronos-ft-*` releases, keeps those whose
-settings.json `grid` is GRID or a revision of it (`r4`, `r4.1`), and
-prints the newest one's hash and outbreaks. With `--write`, sets
-`finetuned` in the workflow config to it. Prints nothing and leaves the
-config alone while the run has no published checkpoint.
+The final run writes each checkpoint to `<run>/n<outbreaks>/` with its
+settings.json, and publishes it as a `chronos-ft-<hash>` release whose
+settings.json records the same `consumed_sha256`. This matches each
+local checkpoint to its release and, with `--write`, sets `finetuned` to
+the newest published one and `final_checkpoints` to all of them, in the
+workflow config. Before the run has published a checkpoint it prints
+nothing and leaves the config alone.
 
-Usage: python scripts/follow_checkpoint.py GRID [--write CONFIG]
+Usage: python scripts/follow_checkpoint.py RUN_DIR [--write CONFIG]
 """
 
 from __future__ import annotations
@@ -27,8 +29,8 @@ def _gh(*args: str) -> str:
     ).stdout
 
 
-def releases() -> list[tuple[str, str, str | None, int | None]]:
-    """Return each `chronos-ft-*` release's tag, date, grid and outbreaks."""
+def releases() -> dict[str, str]:
+    """Return each published release's hash by its `consumed_sha256`."""
     listing = json.loads(
         _gh(
             "release",
@@ -38,18 +40,19 @@ def releases() -> list[tuple[str, str, str | None, int | None]]:
             "--limit",
             "200",
             "--json",
-            "tagName,publishedAt,isDraft",
+            "tagName,isDraft",
         )
     )
-    out = []
+    out: dict[str, str] = {}
     for r in listing:
-        if r["isDraft"] or not r["tagName"].startswith(PREFIX):
+        tag = r["tagName"]
+        if r["isDraft"] or not tag.startswith(PREFIX):
             continue
         settings = json.loads(
             _gh(
                 "release",
                 "download",
-                r["tagName"],
+                tag,
                 "-R",
                 REPO,
                 "-p",
@@ -58,58 +61,50 @@ def releases() -> list[tuple[str, str, str | None, int | None]]:
                 "-",
             )
         )
-        out.append(
-            (
-                r["tagName"],
-                r["publishedAt"],
-                settings.get("grid"),
-                settings.get("n_outbreaks"),
-            )
-        )
+        if settings.get("consumed_sha256"):
+            out[settings["consumed_sha256"]] = tag.removeprefix(PREFIX)
     return out
 
 
-def newest(
-    rows: list[tuple[str, str, str | None, int | None]], grid: str
-) -> tuple[str, int | None] | None:
-    """Return the newest checkpoint of `grid` or its revisions, or None."""
-    keep = [
-        r
-        for r in rows
-        if r[0].startswith(PREFIX)
-        and r[2] is not None
-        and (r[2] == grid or str(r[2]).startswith(f"{grid}."))
-    ]
-    if not keep:
-        return None
-    tag, _, _, outbreaks = max(keep, key=lambda r: r[1])
-    return tag.removeprefix(PREFIX), outbreaks
+def published(run: Path, by_consumed: dict[str, str]) -> list[tuple[str, int]]:
+    """Return the run's published checkpoints, by outbreaks, as (hash, n)."""
+    out = []
+    for d in Path(run).glob("n*/settings.json"):
+        settings = json.loads(d.read_text())
+        found = by_consumed.get(settings.get("consumed_sha256", ""))
+        if found is not None:
+            out.append((found, int(settings["n_outbreaks"])))
+    return sorted(out, key=lambda r: r[1])
 
 
-def write_pin(config: Path, checkpoint: str) -> None:
-    """Set `finetuned` in the workflow config, leaving the rest as it is."""
+def write_pins(config: Path, checkpoints: list[tuple[str, int]]) -> None:
+    """Set `finetuned` and `final_checkpoints`, leaving the rest as it is."""
     text = config.read_text()
-    new, n = re.subn(
-        r"^finetuned:.*$", f"finetuned: {checkpoint}", text, flags=re.M
-    )
-    if n != 1:
-        raise ValueError(f"{config} has no single `finetuned` entry.")
-    config.write_text(new)
+    hashes = ", ".join(h for h, _ in checkpoints)
+    for key, value in (
+        ("finetuned", checkpoints[-1][0]),
+        ("final_checkpoints", f"[{hashes}]"),
+    ):
+        text, n = re.subn(
+            rf"^{key}:.*$", f"{key}: {value}", text, flags=re.MULTILINE
+        )
+        if n != 1:
+            raise ValueError(f"{config} has no single `{key}` entry.")
+    config.write_text(text)
 
 
 def main() -> None:
-    """Print, and optionally write, the newest checkpoint of the run."""
+    """Print, and optionally write, the run's published checkpoints."""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("grid")
+    parser.add_argument("run", type=Path)
     parser.add_argument("--write", type=Path, default=None)
     args = parser.parse_args()
-    found = newest(releases(), args.grid)
-    if found is None:
+    found = published(args.run, releases()) if args.run.exists() else []
+    if not found:
         return
-    checkpoint, outbreaks = found
-    print(checkpoint, outbreaks)
+    print(" ".join(f"{h}:{n}" for h, n in found))
     if args.write is not None:
-        write_pin(args.write, checkpoint)
+        write_pins(args.write, found)
 
 
 if __name__ == "__main__":
