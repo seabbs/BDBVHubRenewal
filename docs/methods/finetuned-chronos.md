@@ -24,7 +24,9 @@ Set `GH_TOKEN` or `GITHUB_TOKEN` to a GitHub token if you list releases often, a
 `chronos_ft.load` takes `"latest"`, the newest `chronos-ft-*` release by publish date, or a settings hash, which pins that release.
 It downloads the adapter once to `~/.cache/bdbvhubrenewal/chronos-ft-<hash>`.
 It checks each adapter file against the release's `sha256sums.txt`, on download and on every later use, and fails if one differs.
-Pin a hash for reproducible work.
+The check catches a damaged download, not a release whose files were replaced, as the sums come from the same release.
+Pin a hash for reproducible work, and record the SHA-256 in `model.checkpoint.sha256` with your results.
+A process resolves `"latest"` once, so restart it to pick up a newer release.
 
 ```python
 from bdbvhubrenewal import chronos_ft
@@ -37,7 +39,7 @@ model.checkpoint.hash, model.adapter
 
 `chronos_ft.forecast_triangle` takes a data frame with one row per reference time and one column per delay from 0.
 Each cell is the count first reported at that delay.
-The rows must be consecutive and equally spaced, and the last row's cut-off sets what is known: row $t$ of $T$ is reported up to delay $T - 1 - t$.
+The rows must be in increasing, equally spaced order, the columns the delays 0, 1, 2 and so on, and the last row's cut-off sets what is known: row $t$ of $T$ is reported up to delay $T - 1 - t$.
 Cells after that are ignored, so they may be NaN.
 A missing cell before it is an error; give 0 where nothing was reported.
 The last delay is taken as final.

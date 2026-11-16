@@ -42,7 +42,9 @@ class FineTunedChronos:
     checkpoint : Checkpoint
         Its settings hash and the SHA-256 of each adapter file.
     adapter : pathlib.Path
-        The LoRA adapter's directory in the local cache.
+        The LoRA adapter's directory in the local cache, for inspection.
+        `forecast_triangle` loads it from there by its checkpoint, checking
+        its SHA-256 again.
     """
 
     checkpoint: Checkpoint
@@ -62,6 +64,11 @@ def load(spec: str = "latest") -> FineTunedChronos:
     Returns
     -------
     FineTunedChronos
+
+    Notes
+    -----
+    A process resolves each spec once, so `"latest"` keeps the release it
+    first found until the process restarts.
 
     Raises
     ------
@@ -95,8 +102,25 @@ def _as_triangle(
     Row t is reported up to delay T - 1 - t, so the latest cut-off is the
     last row, and the count at lag d is the sum of delays 0 to d.
     """
+    if not triangles:
+        raise ValueError("The triangle mapping has no places.")
     first = next(iter(triangles.values()))
     index, delays = first.index, first.columns
+    if not (index.is_monotonic_increasing and index.is_unique):
+        raise ValueError(
+            "The triangle's rows must be in increasing order of reference time."
+        )
+    try:
+        widths = set(index[1:] - index[:-1])
+    except TypeError:
+        widths = set()  # Labels with no differences, such as strings.
+    if len(widths) > 1:
+        raise ValueError("The triangle's rows must be equally spaced.")
+    if not delays.equals(pd.RangeIndex(len(delays))):
+        raise ValueError(
+            "The triangle's columns must be the delays 0, 1, ..., "
+            f"{len(delays) - 1} in order; they are {list(delays)}."
+        )
     for place, tri in triangles.items():
         if not (tri.index.equals(index) and tri.columns.equals(delays)):
             raise ValueError(
@@ -191,11 +215,22 @@ def forecast_triangle(
     Raises
     ------
     ValueError
-        If a reported cell is NaN, places differ in rows or delays, or
-        fewer than two rows are reported at every delay.
+        If the rows are not in increasing, equally spaced order, the
+        columns are not the delays 0, 1, ..., a reported cell is NaN,
+        places differ in rows or delays, fewer than two rows are reported
+        at every delay, there are no places, or `horizon` is not a whole
+        number from 0.
     ImportError
         If Chronos-2 is not installed (`uv sync --group chronos`).
     """
+    if (
+        isinstance(horizon, bool)
+        or not isinstance(horizon, int | np.integer)
+        or horizon < 0
+    ):
+        raise ValueError(
+            f"horizon must be a whole number of rows from 0, not {horizon!r}."
+        )
     triangles = (
         {"series": triangle}
         if isinstance(triangle, pd.DataFrame)
@@ -205,13 +240,14 @@ def forecast_triangle(
     places = list(triangles)
     start = tri.n_context
     group = foundation.layout_block(tri, "ragged", places, start)
-    checkpoint = load(model).checkpoint if isinstance(model, str) else model
-    pipeline = _pipeline(
-        checkpoint.checkpoint
-        if isinstance(checkpoint, FineTunedChronos)
-        else checkpoint
+    if isinstance(model, str):
+        model = load(model)
+    checkpoint = (
+        model.checkpoint if isinstance(model, FineTunedChronos) else model
     )
-    levels = list(
+    pipeline = _pipeline(checkpoint)
+    # Sorted, so the quantiles (sorted below) keep their levels.
+    levels = sorted(
         pipeline.quantiles if quantile_levels is None else quantile_levels
     )
     length = len(tri.times) - start
@@ -237,5 +273,5 @@ def forecast_triangle(
     )
     if isinstance(index, pd.DatetimeIndex):
         out["reference"] = pd.to_datetime(out["reference"])
-    out.attrs["checkpoint"] = getattr(checkpoint, "checkpoint", checkpoint)
+    out.attrs["checkpoint"] = None if checkpoint is None else checkpoint.hash
     return out[list(COLUMNS)]
