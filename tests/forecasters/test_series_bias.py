@@ -43,47 +43,47 @@ def test_zero_bias_is_base_chronos_bit_for_bit():
     assert torch.equal(predict(model, block, toy_rows()), predict(base, block))
 
 
-def masks(place, parent):
-    return series_bias.pair_masks(
-        torch.as_tensor(place), torch.as_tensor(parent)
-    )
+def masks(rows):
+    return series_bias.pair_masks(*(torch.as_tensor(r) for r in rows))
 
 
-def test_pairs_mark_self_same_place_child_to_parent_and_back():
-    # More places than the old 128 labels: no limit.
-    n = 300
-    me, same, up, down = masks(
-        *series_bias.block_rows(n, 0, [-1] + [0] * (n - 1))
-    )
-    assert me.shape == same.shape == up.shape == down.shape == (n, n)
-    assert torch.equal(me, torch.eye(n, dtype=torch.bool))
-    assert not same.any()  # one row per place: no other row of it
-    assert bool(up[1, 0])  # a child's row attends to its parent's
-    assert bool(down[0, 1])  # and the parent's to its child's
-    assert not bool(up[0, 1])
-    assert not bool(down[1, 0])
-    assert not bool(up[1, 2])
-    assert not bool(down[1, 2])
-    # Each place's lags are its own: same with each other and its count.
+def test_five_relations_tie_a_places_rows_and_its_parents():
     par = series_bias.parents_of(HIER)
-    rows = series_bias.row_places(len(HIER), 2 * len(HIER))
-    me, same, up, down = masks(
-        *series_bias.block_rows(len(HIER), 2 * len(HIER), par)
-    )
-    for i, p in enumerate(rows):
-        for j, q in enumerate(rows):
-            assert bool(me[i, j]) == (i == j)
-            assert bool(same[i, j]) == (p == q and i != j)
+    n = len(HIER)
+    rows = series_bias.block_rows(n, 2 * n, par)
+    place, _, role = rows
+    count_lag, lag_count, lag_lag, up, down = masks(rows)
+    for i in range(len(place)):
+        for j in range(len(place)):
+            p, q = place[i], place[j]
+            same = p == q and i != j
+            assert bool(count_lag[i, j]) == (
+                same and role[i] == 0 and role[j] == 1
+            )
+            assert bool(lag_count[i, j]) == (
+                same and role[i] == 1 and role[j] == 0
+            )
+            assert bool(lag_lag[i, j]) == (
+                same and role[i] == 1 and role[j] == 1
+            )
             assert bool(up[i, j]) == (par[p] == q)
             assert bool(down[i, j]) == (par[q] == p)
+    # The diagonal keeps base Chronos-2: no relation holds there.
+    for m in (count_lag, lag_count, lag_lag, up, down):
+        assert not m.diagonal().any()
+    # Any number of places: one row each, so no same-place pairs.
+    big = series_bias.block_rows(300, 0, [-1] + [0] * 299)
+    count_lag, lag_count, lag_lag, up, down = masks(big)
+    assert not (count_lag | lag_count | lag_lag).any()
+    assert int(up.sum()) == int(down.sum()) == 299
 
 
-def test_the_four_biases_are_zero_fp32_scalars_per_layer_and_head():
+def test_the_five_biases_are_zero_fp32_scalars_per_layer_and_head():
     model = tiny_model().to(torch.bfloat16)
     series_bias.attach(model)
     module = getattr(model, series_bias.BIAS_MODULE)
     names = dict(module.named_parameters())
-    assert set(names) == {"self_", "same", "up", "down"}
+    assert set(names) == {"count_lag", "lag_count", "lag_lag", "up", "down"}
     for p in names.values():
         assert p.shape == (model.config.num_layers, model.config.num_heads)
         assert p.dtype == torch.float32
@@ -93,9 +93,10 @@ def test_the_four_biases_are_zero_fp32_scalars_per_layer_and_head():
 def test_blocks_batched_together_keep_their_own_places():
     a = series_bias.block_rows(2, 2, [-1, 0])
     rows = series_bias.batch_rows([a, a])
-    place, parent = rows
+    place, parent, role = rows
     assert list(place) == [0, 1, 0, 1, 2, 3, 2, 3]
     assert list(parent) == [-1, 0, -1, 0, -1, 2, -1, 2]
+    assert list(role) == [0, 0, 1, 1, 0, 0, 1, 1]
 
 
 def test_the_bias_trains_moves_the_output_and_saves(tmp_path):
@@ -159,7 +160,8 @@ def test_inference_rows_follow_chronos_order_by_name():
         "future_covariates": {n: np.zeros(2) for n in names},
         "places": HIER,
     }
-    place, parent = _group_rows(group)
+    place, parent, role = _group_rows(group)
+    assert list(role) == [0] * len(HIER) + [1] * len(names)
     par = series_bias.parents_of(HIER)
     at = {p: i for i, p in enumerate(HIER)}
     assert list(place[: len(HIER)]) == list(range(len(HIER)))

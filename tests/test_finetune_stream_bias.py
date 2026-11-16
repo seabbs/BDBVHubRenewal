@@ -36,7 +36,7 @@ def test_batches_carry_each_rows_place_and_parent():
     blocks = [padded(toy_block(0)), padded(toy_block(1))]
     data = fs.ByLength(blocks, 100, DatasetMode.TRAIN, bias=True)
     batch = data._build_batch([0, 1])
-    place, parent = np.asarray(batch["series_rows"])
+    place, parent, _ = np.asarray(batch["series_rows"])
     per = N_PLACES * (1 + LAG)
     assert len(place) == len(batch["context"]) == 2 * per
     rows = series_bias.row_places(N_PLACES, N_PLACES * LAG)
@@ -51,7 +51,7 @@ def test_batches_carry_each_rows_place_and_parent():
 
 def test_block_parents_come_from_place_names():
     block = {"n_targets": len(HIER), "n_covariates": 0, "places": HIER}
-    _, parent = fs.block_rows([block])
+    _, parent, _ = fs.block_rows([block])
     assert list(parent) == series_bias.parents_of(HIER)
 
 
@@ -140,12 +140,12 @@ def test_bias_summary_gives_each_pairs_values_by_layer_and_head():
     series_bias.attach(model)
     model = fs.lora_model(model, fs.lora_config(True), None)
     for n, p in model.named_parameters():
-        if n.endswith(".same") and p.requires_grad:
+        if n.endswith(".lag_lag") and p.requires_grad:
             with torch.no_grad():
                 p.copy_(torch.arange(p.numel(), dtype=p.dtype).view_as(p))
     summary = fs.bias_summary(model)
     assert set(summary) == set(series_bias.PAIRS)
-    same = summary["same"]
+    same = summary["lag_lag"]
     n = len(same["values"]) * len(same["values"][0])
     assert same["min"] == 0.0
     assert same["max"] == float(n - 1)

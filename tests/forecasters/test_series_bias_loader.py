@@ -61,14 +61,20 @@ def test_germany_pairs_by_name():
     parents = series_bias.parents_of(places)
     assert parents == [-1, 0, 0, 0, 0]
     rows = series_bias.block_rows(len(places), 2 * len(places), parents)
-    me, same, up, down = series_bias.pair_masks(
-        torch.as_tensor(rows[0]), torch.as_tensor(rows[1])
+    count_lag, lag_count, lag_lag, up, down = series_bias.pair_masks(
+        *(torch.as_tensor(r) for r in rows)
     )
-    place = rows[0]
+    place, _, role = rows
     for q in range(len(place)):
         for k in range(len(place)):
-            assert bool(me[q, k]) == (q == k)
-            assert bool(same[q, k]) == (place[q] == place[k] and q != k)
+            same = place[q] == place[k] and q != k
+            assert bool(count_lag[q, k]) == (same and role[q] == 0)
+            assert bool(lag_count[q, k]) == (
+                same and role[q] == 1 and role[k] == 0
+            )
+            assert bool(lag_lag[q, k]) == (
+                same and role[q] == 1 and role[k] == 1
+            )
             assert bool(up[q, k]) == (place[q] != 0 and place[k] == 0)
             assert bool(down[q, k]) == (place[q] == 0 and place[k] != 0)
     # States and ages are siblings, not linked to each other.
@@ -105,11 +111,10 @@ def test_bdbv_pairs_by_name_beyond_128_places(n):
             assert parents[i] == at[p.rsplit("-", 1)[0]]
     rows = series_bias.block_rows(n, 0, parents)
     assert rows[0].max() == n - 1
-    me, same, up, down = series_bias.pair_masks(
-        torch.as_tensor(rows[0]), torch.as_tensor(rows[1])
+    count_lag, lag_count, lag_lag, up, down = series_bias.pair_masks(
+        *(torch.as_tensor(r) for r in rows)
     )
-    assert int(me.sum()) == n
-    assert not same.any()
+    assert not (count_lag | lag_count | lag_lag).any()
     # Each place with a parent points up to it, and it down to the place.
     assert int(up.sum()) == int(down.sum()) == sum(q >= 0 for q in parents)
     assert torch.equal(up, down.T)
@@ -138,9 +143,7 @@ def test_a_block_with_no_parents_links_nothing():
     parents = series_bias.parents_of(places)
     assert parents == [-1, -1, -1]
     rows = series_bias.block_rows(3, 6, parents)
-    _, _, up, down = series_bias.pair_masks(
-        torch.as_tensor(rows[0]), torch.as_tensor(rows[1])
-    )
+    *_, up, down = series_bias.pair_masks(*(torch.as_tensor(r) for r in rows))
     assert not up.any()
     assert not down.any()
 
@@ -200,7 +203,7 @@ def test_inference_gives_a_bias_model_its_rows_by_name(monkeypatch, tmp_path):
         "places": places,
     }
     foundation.chronos_sampler([group], H, 5, 1)
-    place, parent = seen[-1]
+    place, parent, _ = seen[-1]
     assert list(place[:N_PLACES]) == [0, 1, 2]
     assert list(parent[:N_PLACES]) == [-1, 0, 1]
     # Lags in Chronos-2's sorted row order carry their own place.
@@ -227,8 +230,9 @@ def test_the_bias_survives_gradient_checkpointing(monkeypatch):
         model.train()
         module = getattr(model, series_bias.BIAS_MODULE)
         with torch.no_grad():
-            module.self_.fill_(0.2)
-            module.same.fill_(0.5)
+            module.count_lag.fill_(0.2)
+            module.lag_count.fill_(0.5)
+            module.lag_lag.fill_(-0.2)
             module.up.fill_(-0.3)
             module.down.fill_(0.4)
         if checkpointed:
