@@ -451,6 +451,7 @@ def test_an_adapter_weight_the_model_drops_is_an_error(tmp_path, monkeypatch):
     # A loader that builds no slots would drop the slot weights; that must
     # fail, not load silently.
     monkeypatch.setattr(slots, "adapter_slots", lambda _a: None)
+    (tmp_path / "linked" / "settings.json").unlink()
     with pytest.raises(ValueError, match="has no place"):
         slots.load_adapter(tiny_model(), tmp_path / "linked")
 

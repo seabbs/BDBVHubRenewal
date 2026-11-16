@@ -43,6 +43,7 @@ __all__ = [
     "adapter_slots",
     "assigned",
     "attach",
+    "checkpoint_slots",
     "has_parent_link",
     "has_slots",
     "load_adapter",
@@ -218,7 +219,7 @@ def attach(
     The slots start at zero, so the model is unchanged, or with
     `init_std` as distinct codes drawn from a normal with that sd, seeded
     by `seed`. Loading an adapter that holds slots replaces them. With
-    `parent`, each place also adds a learned share of its parent's slot.
+    `parent`, each place also adds its parent's own slot, a plain sum.
     """
     import torch
 
@@ -294,27 +295,41 @@ def has_parent_link(model: Any) -> bool:
     )
 
 
-def adapter_parent_link(adapter: Path | str) -> bool:
-    """Whether a slots adapter was trained with the parent link.
+def checkpoint_slots(adapter: Path | str) -> dict[str, Any] | None:
+    """Return a checkpoint's `series_slots` settings, None if it has none.
 
-    The link adds no weight, so it is read from the checkpoint's
-    `settings.json` (`series_slots.parent`), beside the adapter files as
-    in a release, or one folder up as in a local `nK/finetuned-ckpt`.
-
-    Raises
-    ------
-    ValueError
-        If neither place holds a `settings.json`.
+    They are in its `settings.json`, beside the adapter files as in a
+    release, or one folder up as in a local `nK/finetuned-ckpt`. None
+    also when neither place holds a `settings.json`.
     """
     adapter = Path(adapter)
     for where in (adapter / "settings.json", adapter.parent / "settings.json"):
         if where.exists():
-            settings = json.loads(where.read_text())
-            return "parent" in (settings.get("series_slots") or {})
-    raise ValueError(
-        f"{adapter} holds slots but no settings.json says whether they "
-        "carry the parent link"
-    )
+            out = json.loads(where.read_text()).get("series_slots")
+            return dict(out) if out else None
+    return None
+
+
+def adapter_parent_link(adapter: Path | str) -> bool:
+    """Whether a slots checkpoint was trained with the parent link.
+
+    The link adds no weight, so it is read from the checkpoint's settings
+    (`checkpoint_slots`, `series_slots.parent`).
+
+    Raises
+    ------
+    ValueError
+        If the checkpoint has no `settings.json`.
+    """
+    adapter = Path(adapter)
+    if not any(
+        (w / "settings.json").exists() for w in (adapter, adapter.parent)
+    ):
+        raise ValueError(
+            f"{adapter} holds slots but no settings.json says whether they "
+            "carry the parent link"
+        )
+    return "parent" in (checkpoint_slots(adapter) or {})
 
 
 def load_adapter(
@@ -323,7 +338,10 @@ def load_adapter(
     """Return Chronos-2 `model` with an adapter merged, slots included.
 
     Slots are attached first when the adapter holds them, so PEFT loads
-    their trained values; an adapter without slots loads as before.
+    their trained values. Fixed, untrained labels are not in the adapter:
+    they are rebuilt from the checkpoint's `series_slots` settings (`n`,
+    `init_std`, `init_seed`), as the trainer drew them. A checkpoint
+    without slots loads as before.
     `parent` says whether the slots carry the parent link; by default it
     is read from the checkpoint's settings (`adapter_parent_link`). Every
     weight in the adapter's file must reach the model (`_check_loaded`).
@@ -331,10 +349,25 @@ def load_adapter(
     from peft import PeftModel
 
     n = adapter_slots(adapter)
+    spec = checkpoint_slots(adapter)
     if n is not None:
+        # Slots trained beside the adapter, saved in its files.
         if parent is None:
             parent = adapter_parent_link(adapter)
         attach(model, n, parent=parent)
+    elif spec is not None:
+        # Fixed labels, not trained: rebuilt from their seed.
+        if not spec.get("init_std"):
+            raise ValueError(f"{adapter}: fixed slot labels need an init_std")
+        attach(
+            model,
+            int(spec["n"]),
+            init_std=float(spec["init_std"]),
+            seed=int(spec["init_seed"]),
+            parent="parent" in spec if parent is None else parent,
+        )
+        for p in getattr(model, SLOT_MODULE).parameters():
+            p.requires_grad_(False)
     with warnings.catch_warnings():
         # PEFT only warns when an adapter weight has no file entry.
         warnings.filterwarnings("error", message="Found missing adapter keys")
