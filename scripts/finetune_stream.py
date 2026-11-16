@@ -168,14 +168,19 @@ def lora_config(n_slots: int):
     )
 
 
-def slot_settings(n_slots: int) -> dict:
+def slot_settings(
+    n_slots: int, init_std: float = 0.0, init_seed: int = 0, lr: float = 0.0
+) -> dict:
     """Return the slots' entry of a checkpoint's settings, none if off."""
     if not n_slots:
         return {}
     return {
         "series_slots": {
             "n": n_slots,
-            "init": "zero",
+            "init": "normal" if init_std else "zero",
+            "init_std": init_std,
+            "init_seed": init_seed,
+            "learning_rate": lr,
             "module": slots.SLOT_MODULE,
             "assignment": (
                 "a fresh random permutation per block each time it is "
@@ -184,6 +189,28 @@ def slot_settings(n_slots: int) -> dict:
             ),
         }
     }
+
+
+def param_groups(model, lr: float, slot_lr: float) -> list[dict]:
+    """Return the optimiser's groups: the adapter at `lr`, the slots at theirs.
+
+    Each group keeps its starting rate as `base_lr`, which
+    `set_learning_rates` decays.
+    """
+    adapter, slot = [], []
+    for name, p in model.named_parameters():
+        if p.requires_grad:
+            (slot if slots.SLOT_MODULE in name else adapter).append(p)
+    groups = [{"params": adapter, "lr": lr, "base_lr": lr}]
+    if slot:
+        groups.append({"params": slot, "lr": slot_lr, "base_lr": slot_lr})
+    return groups
+
+
+def set_learning_rates(optimiser, step: int, steps: int) -> None:
+    """Set each group's rate at `step`: linear from its base to zero."""
+    for group in optimiser.param_groups:
+        group["lr"] = learning_rate(step, group["base_lr"], steps)
 
 
 def lora_model(base, config, init: Path | None):
@@ -1020,6 +1047,11 @@ def main() -> None:
     # zero-initialised vector shared by a place's count and lag series,
     # trained beside the adapter; 0 trains without them.
     parser.add_argument("--series-slots", type=int, default=0)
+    # Slots start as distinct codes and train at their own rate: new
+    # parameters outside Chronos-2's recipe, which the adapter keeps.
+    parser.add_argument("--slot-init-std", type=float, default=0.02)
+    parser.add_argument("--slot-init-seed", type=int, default=1)
+    parser.add_argument("--slot-lr", type=float, default=1e-4)
     args = parser.parse_args()
     CHUNK = args.chunk
     ft.SOURCES = tuple(args.sources)
@@ -1108,12 +1140,19 @@ def main() -> None:
         CHRONOS_MODEL, revision=CHRONOS_REVISION, device_map=device
     )
     if args.series_slots:
-        slots.attach(pipeline.model, args.series_slots)
+        slots.attach(
+            pipeline.model,
+            args.series_slots,
+            init_std=args.slot_init_std,
+            seed=args.slot_init_seed,
+        )
     lora = lora_config(args.series_slots)
     model = lora_model(pipeline.model, lora, args.init_adapter)
     model.train()
     params = [p for p in model.parameters() if p.requires_grad]
-    optimiser = torch.optim.AdamW(params, lr=args.learning_rate)
+    optimiser = torch.optim.AdamW(
+        param_groups(model, args.learning_rate, args.slot_lr)
+    )
     accepted = inspect.signature(Chronos2Model.forward).parameters
     base = {
         "grid": args.grid,
@@ -1161,7 +1200,12 @@ def main() -> None:
                 else {}
             ),
         },
-        **slot_settings(args.series_slots),
+        **slot_settings(
+            args.series_slots,
+            args.slot_init_std,
+            args.slot_init_seed,
+            args.slot_lr,
+        ),
         "learning_rate": args.learning_rate,
         **(
             {
@@ -1375,10 +1419,7 @@ def main() -> None:
             while pause.exists():
                 report(stage="paused")
                 time.sleep(30)
-            for group in optimiser.param_groups:
-                group["lr"] = learning_rate(
-                    step, args.learning_rate, args.lr_steps
-                )
+            set_learning_rates(optimiser, step, args.lr_steps)
             value = accumulate(list(indices), backward, zero, skip)
             if not finite_step(params, optimiser, value):
                 log(f"step {step + 1}: no update (loss {value})")

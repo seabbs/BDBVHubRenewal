@@ -149,13 +149,27 @@ def has_slots(model: Any) -> bool:
     return _base(model) is not None
 
 
-def attach(model: Any, n_slots: int = N_SLOTS) -> None:
-    """Add zero slots to a Chronos-2 model and hook its embeddings."""
+def attach(
+    model: Any, n_slots: int = N_SLOTS, init_std: float = 0.0, seed: int = 0
+) -> None:
+    """Add slots to a Chronos-2 model and hook its embeddings.
+
+    The slots start at zero, so the model is unchanged, or with
+    `init_std` as distinct codes drawn from a normal with that sd, seeded
+    by `seed`. Loading an adapter that holds slots replaces them.
+    """
+    import torch
+
     if has_slots(model):
         raise ValueError("the model already has slots")
     d_model = model.config.d_model
     weight = next(model.input_patch_embedding.parameters())
-    module = _slots_module(n_slots, d_model).to(weight.device, weight.dtype)
+    module = _slots_module(n_slots, d_model)
+    if init_std:
+        generator = torch.Generator().manual_seed(seed)
+        with torch.no_grad():
+            module.embedding.weight.normal_(0.0, init_std, generator=generator)
+    module = module.to(weight.device, weight.dtype)
     setattr(model, SLOT_MODULE, module)
     setattr(model, _STATE, {"ids": None})
 
