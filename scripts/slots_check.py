@@ -311,11 +311,32 @@ def load_models(noslots: Path, slotted: Path) -> dict:
     return models
 
 
-def score(args) -> None:
-    """Score the blocks of one shard under every condition and model."""
-    import torch
+def all_blocks(args) -> list[dict]:
+    """Return every block of the run, each with its `key`, cached.
 
-    torch.set_num_threads(1)
+    Cutting the simulations takes minutes, so the blocks are kept in
+    `args.cache` with the arguments that chose them, and cut again only
+    if those differ.
+    """
+    chosen = {
+        k: str(getattr(args, k))
+        for k in (
+            "sim_dir",
+            "held",
+            "sims",
+            "per_source",
+            "max_rows",
+            "germany",
+            "germany_per_source",
+            "germany_max_rows",
+            "seed",
+        )
+    }
+    cache = Path(args.cache).expanduser() if args.cache else None
+    if cache is not None and cache.exists():
+        saved = pickle.loads(cache.read_bytes())
+        if saved["chosen"] == chosen:
+            return saved["blocks"]
     blocks = []
     if args.sims:
         blocks += sim_sample(
@@ -330,6 +351,19 @@ def score(args) -> None:
         )
     for k, b in enumerate(blocks):
         b["key"] = k
+    if cache is not None:
+        tmp = cache.with_suffix(".tmp")
+        tmp.write_bytes(pickle.dumps({"chosen": chosen, "blocks": blocks}))
+        tmp.replace(cache)
+    return blocks
+
+
+def score(args) -> None:
+    """Score the blocks of one shard under every condition and model."""
+    import torch
+
+    torch.set_num_threads(1)
+    blocks = all_blocks(args)
     i, k = args.shard
     blocks = blocks[i::k]
     if args.limit:
@@ -523,6 +557,7 @@ def main() -> None:
     p.add_argument("--seed", type=int, default=1)
     p.add_argument("--shard", type=int, nargs=2, default=(0, 1))
     p.add_argument("--limit", type=int, default=0)
+    p.add_argument("--cache", default="")
     p.set_defaults(run=score)
     p = sub.add_parser("synthetic")
     p.add_argument("out", type=Path)
