@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import runpy
+from collections.abc import Iterator
 from pathlib import Path
 
 import numpy as np
@@ -24,7 +25,7 @@ EXAMPLE = Path(__file__).parents[1] / "docs" / "examples" / "chronos_ft.py"
 @pytest.fixture
 def releases(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, write_release
-) -> Path:
+) -> Iterator[Path]:
     """Fake releases `chronos-ft-old` and `chronos-ft-new`, the newest."""
     root = tmp_path / "releases"
     root.mkdir()
@@ -203,3 +204,42 @@ def test_the_docs_example_runs() -> None:
     assert {"place", "reference", "step", "quantile_level", "value"} <= set(
         out.columns
     )
+
+
+@pytest.mark.usefixtures("fake")
+def test_levels_in_any_order_keep_their_quantiles() -> None:
+    tri = _triangle()
+    out = chronos_ft.forecast_triangle(
+        tri, horizon=1, model=None, quantile_levels=(0.9, 0.1, 0.5)
+    )
+    ahead = out.loc[out["step"] == 1].set_index("quantile_level")["value"]
+    # The fake's values rise with the levels' sorted order.
+    assert ahead[0.1] < ahead[0.5] < ahead[0.9]
+
+
+@pytest.mark.usefixtures("fake")
+@pytest.mark.parametrize(
+    ("change", "message"),
+    [
+        (lambda t: t.iloc[::-1], "increasing"),
+        (lambda t: t.drop(t.index[2]), "equally spaced"),
+        (lambda t: t.set_axis([0, 7, 14], axis=1), "delays 0, 1"),
+        (lambda t: t[[1, 0, 2]], "delays 0, 1"),
+    ],
+)
+def test_rows_and_delays_must_be_in_order(change, message: str) -> None:
+    with pytest.raises(ValueError, match=message):
+        chronos_ft.forecast_triangle(change(_triangle()), model=None)
+
+
+@pytest.mark.usefixtures("fake")
+@pytest.mark.parametrize("horizon", [-1, 1.5])
+def test_horizon_must_be_a_whole_number_of_rows(horizon) -> None:
+    with pytest.raises(ValueError, match="horizon"):
+        chronos_ft.forecast_triangle(_triangle(), horizon=horizon, model=None)
+
+
+@pytest.mark.usefixtures("fake")
+def test_no_places_fails() -> None:
+    with pytest.raises(ValueError, match="no places"):
+        chronos_ft.forecast_triangle({}, model=None)
