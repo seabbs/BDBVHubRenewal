@@ -826,6 +826,28 @@ def finite_step(params: list, optimiser, value: float) -> bool:
     return finite
 
 
+def held_out_by_source(
+    model, blocks: list[dict], batch_size: int, n: int | None = None
+) -> dict:
+    """Return held-out loss by source (weekly, daily, 3day).
+
+    Each source's loss is on its first `n` blocks, or all of them, so a
+    source's curve compares across runs that cut it alike.
+    """
+    by: dict[str, list[dict]] = {}
+    for block in blocks:
+        by.setdefault(block["source"], []).append(block)
+    return {
+        source: held_out_loss(model, group[:n], batch_size)
+        for source, group in sorted(by.items())
+    }
+
+
+def _by_source(losses: dict) -> str:
+    """Describe losses by source for the log."""
+    return ", ".join(f"{s} {v:.4f}" for s, v in losses.items())
+
+
 def held_out_by_level(model, blocks: list[dict], n: int) -> dict:
     """Return held-out loss by level (national, intermediate, leaf).
 
@@ -1185,10 +1207,21 @@ def main() -> None:
         consumed.write_text("")
         start_loss = held_out_loss(model, val, args.batch_size)
         by_level = held_out_by_level(model, val, LEVEL_BLOCKS)
+        by_source = held_out_by_source(
+            model, val, args.batch_size, ft.EVAL_BLOCKS
+        )
         history = [
-            {"step": 0, "held_out_loss": start_loss, "by_level": by_level}
+            {
+                "step": 0,
+                "held_out_loss": start_loss,
+                "by_level": by_level,
+                "by_source": by_source,
+            }
         ]
-        log(f"held-out loss at the start {start_loss:.4f}")
+        log(
+            f"held-out loss at the start {start_loss:.4f}; first "
+            f"{ft.EVAL_BLOCKS} blocks by source {_by_source(by_source)}"
+        )
     else:
         step, done, position = state["step"], state["done"], state["position"]
         start_loss, history = state["start_loss"], state["history"]
@@ -1371,11 +1404,17 @@ def main() -> None:
                 monitor = held_out_loss(
                     model, val[: ft.EVAL_BLOCKS], args.batch_size
                 )
+                by_source = held_out_by_source(
+                    model, val, args.batch_size, ft.EVAL_BLOCKS
+                )
                 split["eval_s"] += time.perf_counter() - since
-                history.append({"step": step, "eval_loss": monitor})
+                history.append(
+                    {"step": step, "eval_loss": monitor, "by_source": by_source}
+                )
                 log(
                     f"step {step}: loss {value:.4f}, held-out "
                     f"(first {ft.EVAL_BLOCKS} blocks) {monitor:.4f}, "
+                    f"by source {_by_source(by_source)}, "
                     f"{time.perf_counter() - t0:.0f} s; {memory()}"
                 )
                 (out / "history.json").write_text(json.dumps(history))
@@ -1438,6 +1477,9 @@ def main() -> None:
                 )
             settings["held_out_loss_by_level"] = held_out_by_level(
                 model, val, LEVEL_BLOCKS
+            )
+            settings["held_out_loss_by_source"] = held_out_by_source(
+                model, val, args.batch_size
             )
             settings["seconds"] = time.perf_counter() - t0
             (where / "settings.json").write_text(json.dumps(settings, indent=1))
