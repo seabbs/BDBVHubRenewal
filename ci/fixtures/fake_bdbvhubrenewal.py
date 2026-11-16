@@ -492,6 +492,7 @@ def main() -> int:
     n.add_argument("--fit", default=None)
     n.add_argument("--vintage", required=True)
     n.add_argument("--reference-date", default=None)
+    n.add_argument("--store", default=None)
     n.add_argument("--out", required=True)
     pl = sub.add_parser("plot-submission")
     pl.add_argument("--submission", required=True)

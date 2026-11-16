@@ -12,8 +12,9 @@ is the ragged model with the checkpoint fine-tuned on real data alone
 `scripts/finetune_realdata.py`), pinned in `config/finetune.toml` and
 released as `realdata-ft-<hash>`, which the latest lookup never takes.
 `hub_triangle` lays out the hub target by place, time and release lag,
-`FoundationModel` gives it to Chronos-2 as one group of series, and
-`chronos_sampler` draws trajectories from Chronos-2's quantiles.
+`FoundationModel` gives it to Chronos-2 as one group of series,
+`chronos_sampler` draws each series and step from Chronos-2's quantiles,
+and `CHRONOS_COPULA` pairs the draws into trajectories.
 Chronos-2 is an optional dependency group (`uv sync --group chronos`).
 Without it, or without the fine-tuned checkpoint's release, a fit raises
 and the fit store stores it as failed.
@@ -49,10 +50,14 @@ from bdbvhubrenewal.forecasters.base import (
     register_model,
 )
 from bdbvhubrenewal.forecasters.chain import start_weeks
+from bdbvhubrenewal.forecasters.copula import PRIOR, GaussianCopula
 from bdbvhubrenewal.forecasters.randomwalk import RandomWalk
 
 __all__ = [
     "ADAPTER_FILES",
+    "CHRONOS_COPULA",
+    "CHRONOS_DAILY_COPULA",
+    "CHRONOS_DAY_RHO",
     "CHRONOS_MODEL",
     "CHRONOS_REVISION",
     "FINETUNED_CACHE",
@@ -100,6 +105,22 @@ CHRONOS_MODEL: Final = "amazon/chronos-2"
 
 CHRONOS_REVISION: Final = "29ec3766d36d6f73f0696f85560a422f50e8498c"
 """The checkpoint's commit, pinned so runs are reproducible."""
+
+CHRONOS_COPULA: Final = PRIOR
+"""The copula pairing the weekly Chronos-2 models' draws into
+trajectories."""
+
+CHRONOS_DAY_RHO: Final = 0.985
+"""The daily models' correlation between adjacent days, before the days
+are summed to weeks. Chosen on the release backtest from 0, 0.3, 0.5,
+0.7, 0.9 and 0.985, where it gave the lowest WIS and weekly median bias.
+Weekly errors cannot estimate it, as each is of a week's sum."""
+
+CHRONOS_DAILY_COPULA: Final = replace(PRIOR, rho_time=CHRONOS_DAY_RHO**7)
+"""The daily models' copula: days d apart have correlation
+`CHRONOS_DAY_RHO` to the power d."""
+
+_COPULAS: Final = {"weekly": CHRONOS_COPULA, "daily": CHRONOS_DAILY_COPULA}
 
 FINETUNED_CONFIG: Final = Path("config/finetune.toml")
 """Which fine-tuned checkpoint the `_ft` models load: `hash`, `"latest"`
@@ -376,7 +397,11 @@ def resolve_checkpoint(spec: str, prefix: str = FINETUNED_PREFIX) -> Checkpoint:
 def _finetuned(name: str, source: str) -> FoundationModel:
     """Build a fine-tuned model with the checkpoint `finetuned_spec` names."""
     return FoundationModel(
-        name, source, "ragged", resolve_checkpoint(finetuned_spec())
+        name,
+        source,
+        "ragged",
+        resolve_checkpoint(finetuned_spec()),
+        copula=_COPULAS[source],
     )
 
 
@@ -639,11 +664,12 @@ def chronos_sampler(
     seed: int,
     checkpoint: Checkpoint | None = None,
 ) -> list[np.ndarray]:
-    """Draw trajectories from Chronos-2's quantiles.
+    """Draw each series and step from Chronos-2's quantiles.
 
     Every series and step draws its own uniform level, so draws are
-    independent across series and steps. Runs on a CUDA or Apple GPU when
-    torch sees one.
+    independent across series and steps until `FoundationModel` pairs them
+    (`GaussianCopula.couple`). Runs on a CUDA or Apple GPU when torch sees
+    one.
 
     Parameters
     ----------
@@ -755,11 +781,14 @@ class FoundationModel:
         The fine-tuned checkpoint Chronos-2 loads, or None for the
         pretrained model.
     sample : Sampler or None
-        Draws the trajectories, Chronos-2 with `checkpoint` by default.
+        Draws each series and step, Chronos-2 with `checkpoint` by
+        default.
     stream : str or None
         The task's random stream the draws are seeded from, the model's
         name by default. Models given one stream draw the same random
         numbers (`bdbvhubrenewal.evaluation.marginals.forecast_quantiles`).
+    copula : GaussianCopula
+        Pairs the draws into trajectories over places and steps.
     """
 
     name: str
@@ -768,6 +797,7 @@ class FoundationModel:
     checkpoint: Checkpoint | None = None
     sample: Sampler | None = field(default=None, repr=False)
     stream: str | None = field(default=None, repr=False)
+    copula: GaussianCopula = CHRONOS_COPULA
 
     @property
     def needs_snapshots(self) -> bool:
@@ -830,12 +860,17 @@ class FoundationModel:
                 f"{task.vintage} has {max(start, 0)}."
             )
         horizon = len(tri.times) - start
-        seed = int(task.rng(self.stream or self.name).integers(0, 2**31 - 1))
+        rng = task.rng(self.stream or self.name)
+        seed = int(rng.integers(0, 2**31 - 1))
         group = layout_block(tri, self.layout, places, start)
         sample = self.sample or partial(
             chronos_sampler, checkpoint=self.checkpoint
         )
-        draws = sample([group], horizon, task.n_samples, seed)[0]
+        draws = self.copula.couple(
+            sample([group], horizon, task.n_samples, seed)[0],
+            rng,
+            days=np.arange(horizon) * (7 if weekly else 1),
+        )
         final = tri.final
         steps = np.broadcast_to(final, (task.n_samples, *final.shape)).copy()
         drawn = np.maximum(np.round(draws), 0.0)
@@ -955,10 +990,17 @@ for _source in SOURCES:
         _name = f"fm_chronos_{_source}_{_layout}"
         register_model(
             _name,
-            partial(FoundationModel, _name, _source, _layout),
+            partial(
+                FoundationModel,
+                _name,
+                _source,
+                _layout,
+                copula=_COPULAS[_source],
+            ),
             f"Chronos-2 on the hub target's {_source} releases, {_layout} "
             "layout, the country and provinces in one block.",
             fitted=True,
+            paired=True,
         )
     register_model(
         f"fm_chronos_{_source}_ragged_ft",
@@ -966,6 +1008,7 @@ for _source in SOURCES:
         "Chronos-2 fine-tuned on simulated outbreaks, on the hub target's "
         f"{_source} releases, ragged layout.",
         fitted=True,
+        paired=True,
     )
 
 

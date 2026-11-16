@@ -526,7 +526,7 @@ def test_score_scores_the_complete_target_on_the_truth_delay(
         del args
         seen.update(kwargs)
         empty = pd.DataFrame()
-        return ReleaseBacktest(empty, empty, empty, empty, empty)
+        return ReleaseBacktest(empty, empty, empty, empty, empty, empty)
 
     monkeypatch.setattr(
         cli, "_stored", lambda *_: (pd.DataFrame(), pd.DataFrame())
@@ -706,6 +706,49 @@ def test_cli_germany_backtest_scores_a_block_of_dates(tmp_path: Path) -> None:
     assert set(forecasts["origin"]) == {"2021-10-05"}
 
 
+def test_cli_germany_paired_blocks_are_scored_together(tmp_path: Path) -> None:
+    data, config = _germany_data(tmp_path)
+    parts = []
+    for block in ("0/2", "1/2"):
+        part = tmp_path / f"part-{block[0]}"
+        assert main(["germany-backtest", "--config", str(config), "--data",
+                     str(data), "--models", "randomwalk", "randomwalknowcast",
+                     "--chunk", block, "--out", str(part)]) == 0  # fmt: skip
+        # A block scores its unpaired models and leaves the paired ones'
+        # samples to germany-score, so the copula sees every block.
+        scored = pd.read_csv(part / "scores.csv.gz")
+        assert set(scored["model"]) == {"randomwalk"}
+        drawn = pd.read_csv(part / "samples.csv.gz")
+        assert set(drawn["model"]) == {"randomwalknowcast"}
+        parts.append(str(part))
+    out = tmp_path / "results"
+    assert main(["concat-results", "--out", str(out), *parts]) == 0
+    for _ in range(2):  # a rerun gives the same tables
+        assert main(["germany-score", "--config", str(config), "--data",
+                     str(data), "--out", str(out), *parts]) == 0  # fmt: skip
+        scores = pd.read_csv(out / "scores.csv.gz")
+        assert set(scores["model"]) == {"randomwalk", "randomwalknowcast"}
+        assert set(scores["origin"]) == {"2021-10-04", "2021-10-05"}
+        assert not scores.duplicated(
+            ["model", "origin", "location", "target_end_date"]
+        ).any()
+    copulas = pd.read_csv(out / "copulas.csv.gz")
+    assert set(copulas["origin"]) == {"2021-10-04", "2021-10-05"}
+
+
+def test_cli_germany_backtest_of_every_date_pairs_and_scores_them(
+    tmp_path: Path,
+) -> None:
+    data, config = _germany_data(tmp_path)
+    out = tmp_path / "results"
+    assert main(["germany-backtest", "--config", str(config), "--data",
+                 str(data), "--models", "randomwalk", "randomwalknowcast",
+                 "--out", str(out)]) == 0  # fmt: skip
+    scores = pd.read_csv(out / "scores.csv.gz")
+    assert set(scores["model"]) == {"randomwalk", "randomwalknowcast"}
+    assert (out / "copulas.csv.gz").exists()
+
+
 def test_cli_germany_teams_scores_the_hub_teams(tmp_path: Path) -> None:
     data, config = _germany_data(tmp_path)
     rows = [
@@ -839,3 +882,22 @@ def test_cli_germany_asof_writes_the_data_each_date_saw(
                  str(data), "--out", str(out)]) == 0  # fmt: skip
     asof = pd.read_csv(out / "asof.csv.gz")
     assert set(asof["origin"]) == {"2021-10-04", "2021-10-05"}
+
+
+@pytest.mark.usefixtures("in_root")
+def test_cli_nowcast_pairs_a_paired_model_and_records_it(
+    tmp_path: Path,
+) -> None:
+    out, none = tmp_path / "sub", tmp_path / "no-store"
+    assert main(["nowcast", "--model", "randomwalknowcast", "--store",
+                 str(none), "--out", str(out)]) == 0  # fmt: skip
+    record = json.loads((out / "copula.json").read_text())
+    assert record["model"] == "randomwalknowcast"
+    assert isinstance(record["n_scores"], int)
+    assert isinstance(record["rho_time"], float)
+    assert {"rho_time", "rho_provinces", "rho_national", "n_scores"} <= set(
+        record
+    )
+    plain = tmp_path / "plain"
+    assert main(["nowcast", "--model", "randomwalk", "--out", str(plain)]) == 0
+    assert not (plain / "copula.json").exists()

@@ -140,6 +140,16 @@ The estimator, its window and the evidence for it are in the SI.
 - Key references: [@bracherEvaluatingEpidemicForecasts2021; @Bosse2023-sx; @gneitingStrictlyProperScoring2007; @gneitingProbabilisticForecastsCalibration2007; @sherrattPredictivePerformanceMultimodel2023].
 :::
 
+### Correlated trajectories
+
+::: {.callout-note title="Plan"}
+- Chronos-2 and `randomwalknowcast` draw each place and week on their own, so sums over weeks and places are too narrow.
+- A Gaussian copula pairs the draws into trajectories by reordering each place and week's draws across samples, so every per-week forecast is unchanged.
+- Correlations: $\rho_t$ between consecutive weeks, $\rho_p$ between provinces and $\rho_n$ between the country and a province.
+- At each origin they are estimated from normal scores of the model's matured errors in the last 8 weeks, shrunk towards a fixed prior worth $w = 100$ pairs (SI).
+- Checked by coverage of sums, energy and variogram scores, with a sensitivity check at $w = 25$.
+:::
+
 ### Case study 1: German nowcast hub
 
 ::: {.callout-note title="Plan"}

@@ -358,3 +358,31 @@ def test_names_the_checkpoint_a_model_loaded(tmp_path: Path) -> None:
         "Checkpoint: release `chronos-ft-2c2b22a03107` of "
         "seabbs/BDBVHubRenewal, adapter SHA-256 `3459d83a8855`."
     ) in lines
+
+
+def test_names_the_copula_a_models_draws_were_paired_by(
+    tmp_path: Path,
+) -> None:
+    g = gate(tmp_path)
+    prov = read_json(g / "provenance.json")
+    assert not any(
+        line.startswith("Pairing:")
+        for line in visible(body(g, provenance=prov))
+    )
+    prov["run"].update(
+        copula={
+            "model": "randomwalknowcast",
+            "origin": "2026-11-08",
+            "n_scores": 120,
+            "rho_time": 0.812,
+            "rho_provinces": 0.5,
+            "rho_national": 0.6,
+            "source": "recomputed+store",
+        }
+    )
+    lines = visible(body(g, provenance=prov))
+    assert (
+        "Pairing: draws paired by a Gaussian copula with rho_t 0.81, "
+        "rho_p 0.50 and rho_n 0.60, from 120 scored past forecasts "
+        "(recomputed+store)."
+    ) in lines

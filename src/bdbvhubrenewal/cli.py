@@ -43,6 +43,7 @@ import sys
 from collections.abc import Sequence
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pandas as pd
 
@@ -78,6 +79,7 @@ from bdbvhubrenewal.forecasters.base import (
     NATIONAL,
     ForecastModel,
     ForecastTask,
+    ModelSpec,
     check_samples,
     get_model,
     list_models,
@@ -108,6 +110,9 @@ from bdbvhubrenewal.submission.validate import (
     validate_submission,
 )
 from bdbvhubrenewal.submission.validate import main as validate_main
+
+if TYPE_CHECKING:
+    from bdbvhubrenewal.evaluation.germany import GermanyConfig
 
 __all__ = ["build_parser", "chunk", "host_devices", "main"]
 
@@ -278,6 +283,13 @@ def build_parser() -> argparse.ArgumentParser:
     now.add_argument(
         "--fit", default=None, help="Fit directory written by `fit`."
     )
+    now.add_argument(
+        "--store",
+        default=None,
+        help="A fit store checkout, for a paired model's past forecasts, "
+        "whose errors give the copula its draws are paired by "
+        "(`submission.pairing`). Without one, they are forecast again.",
+    )
     now.add_argument("--out", default="output/submission")
     now.add_argument(
         "--forecast-date",
@@ -340,6 +352,19 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Run the held-out half of the dates, for the paper, into "
         "OUT/held-out.",
+    )
+
+    gsc = sub.add_parser(
+        "germany-score",
+        help="Pair and score the paired models' German samples of every "
+        "block (`germany-backtest --chunk`) together, adding them to OUT's "
+        "forecasts and scores.",
+    )
+    gsc.add_argument("--config", default="config/germany.toml")
+    gsc.add_argument("--data", default=f"{data_dir}/raw/germany")
+    gsc.add_argument("--out", default="results/germany")
+    gsc.add_argument(
+        "parts", nargs="+", help="Directories with a samples.csv.gz."
     )
 
     gtm = sub.add_parser(
@@ -1057,6 +1082,7 @@ def _write_release(out: ReleaseBacktest, results: Path, delay: int) -> None:
         ("energy", out.energy),
         ("origins", out.origins),
         ("fits", out.fits),
+        ("copulas", out.copulas),
     ):
         write_csv(table, results / f"nowcast-{name}.csv")
     (results / "nowcast-truth.json").write_text(
@@ -1177,6 +1203,45 @@ def _zones(
     return zones, ""
 
 
+def _spec(name: str) -> ModelSpec:
+    """Return a registered model's entry."""
+    return {s.name: s for s in list_models()}[name]
+
+
+def _pair(
+    name: str, task: ForecastTask, result: Forecast, args: argparse.Namespace
+) -> tuple[Forecast, dict[str, object]]:
+    """Pair a paired model's draws by the copula of its recent errors."""
+    from bdbvhubrenewal.submission.pairing import pair_submission
+
+    config = bt.load_config(args.backtest_config)
+    target = load_target(args.data)
+    delay = resolve_truth_delay(config, target)
+    # The backtest's origins: those before this one give the copula's
+    # errors, and a model with no stored fit there is forecast again.
+    past = list(
+        store.origin_tasks(
+            target, load_delays(args.data), config, load_daily(args.data)
+        ).values()
+    )
+    samples, record = pair_submission(
+        name,
+        result.samples,
+        task,
+        delay,
+        args.store,
+        past,
+        config.max_horizon,
+    )
+    print(
+        f"Pairing {name}: rho_t {record['rho_time']:.2f}, rho_p "
+        f"{record['rho_provinces']:.2f}, rho_n {record['rho_national']:.2f} "
+        f"from {record['n_scores']} scores; past forecasts by origin: "
+        + ", ".join(f"{o} {s}" for o, s in record["sources"].items())
+    )
+    return dataclasses.replace(result, samples=samples), record
+
+
 def _nowcast(args: argparse.Namespace) -> int:
     from bdbvhubrenewal.forecasters.renewal import sampler_settings
 
@@ -1195,6 +1260,10 @@ def _nowcast(args: argparse.Namespace) -> int:
             samples = model.forecast(task)
             check_samples(samples, task)
             result = Forecast(samples)
+        name = get_config(args.config).model if args.config else args.model
+        copula = None
+        if name is not None and _spec(name).paired:
+            result, copula = _pair(name, task, result, args)
         zones, zone_note = _zones(args, task, result.samples, hub_config)
         if zone_note:
             handled.append(zone_note)
@@ -1216,6 +1285,11 @@ def _nowcast(args: argparse.Namespace) -> int:
     n_zones = 0 if zones is None else int(zones["location"].nunique())
     zone_record = {"zones": n_zones > 0, "n_zones": n_zones, "note": zone_note}
     (Path(args.out) / "zones.json").write_text(json.dumps(zone_record) + "\n")
+    # The copula a paired model's draws were paired by, for the PR body.
+    if copula is not None:
+        (Path(args.out) / "copula.json").write_text(
+            json.dumps(copula, default=str) + "\n"
+        )
     # The fine-tuned checkpoint the model loaded, for the PR body.
     if checkpoint is not None:
         record = {
@@ -1578,19 +1652,78 @@ def _germany_backtest(args: argparse.Namespace) -> int:
         else args.models
     )
     triangle = hub_triangle(Path(args.data) / Path(config.triangle).name)
-    forecasts = de.with_truth(
-        de.germany_forecasts(
-            models, triangle, dates, config.n_samples, config.seed
-        ),
-        triangle,
-        config.truth_delay,
+    quantiles, samples = de.germany_forecasts(
+        models, triangle, dates, config.n_samples, config.seed
     )
+    forecasts = de.with_truth(quantiles, triangle, config.truth_delay)
     scores = de.score_germany(forecasts, config.truth_delay)
     out = Path(args.out) / ("held-out" if args.held_out else "")
     out.mkdir(parents=True, exist_ok=True)
     write_csv(forecasts, out / "forecasts.csv.gz")
     write_csv(scores, out / "scores.csv.gz")
+    write_csv(samples, out / "samples.csv.gz")
     print(f"German benchmark: {len(scores)} scored nowcasts in {out}.")
+    if args.chunk:
+        # A block's copula would see only its own dates, so the paired
+        # models' samples are scored together (`germany-score`).
+        print(f"Samples of the paired models left to germany-score in {out}.")
+        return 0
+    return _germany_score(samples, triangle, config, out)
+
+
+def _germany_scores(args: argparse.Namespace) -> int:
+    from bdbvhubrenewal.data.germany import hub_triangle
+    from bdbvhubrenewal.evaluation import germany as de
+
+    config = de.load_germany_config(args.config)
+    triangle = hub_triangle(Path(args.data) / Path(config.triangle).name)
+    files = [Path(p) / "samples.csv.gz" for p in args.parts]
+    parts = [
+        t for f in files if f.exists() and not (t := _read_or_empty(f)).empty
+    ]
+    samples = (
+        pd.concat(parts, ignore_index=True).astype(
+            {"origin": str, "target_end_date": str}
+        )
+        if parts
+        else pd.DataFrame()
+    )
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+    return _germany_score(samples, triangle, config, out)
+
+
+def _germany_score(
+    samples: pd.DataFrame,
+    triangle: pd.DataFrame,
+    config: GermanyConfig,
+    out: Path,
+) -> int:
+    """Pair, take quantiles of and score German samples, adding to `out`.
+
+    Rows of the paired models already in `out`'s forecasts and scores are
+    replaced, so a rerun gives the same tables.
+    """
+    from bdbvhubrenewal.evaluation import germany as de
+
+    quantiles, copulas = de.pair_quantiles(
+        samples, triangle, config.truth_delay, config.seed
+    )
+    forecasts = de.with_truth(quantiles, triangle, config.truth_delay)
+    scores = de.score_germany(forecasts, config.truth_delay)
+    paired = set(forecasts["model"])
+    for name, table in (("forecasts", forecasts), ("scores", scores)):
+        path = out / f"{name}.csv.gz"
+        old = _read_or_empty(path) if path.exists() else pd.DataFrame()
+        if not old.empty:
+            old = old.loc[~old["model"].isin(paired)]
+            table = pd.concat([old, table], ignore_index=True)
+        write_csv(table, path)
+    write_csv(copulas, out / "copulas.csv.gz")
+    print(
+        f"German benchmark: {len(scores)} scored nowcasts of paired models "
+        f"({', '.join(sorted(paired)) or 'none'}) added in {out}."
+    )
     return 0
 
 
@@ -1738,6 +1871,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
     if args.command == "germany-backtest":
         return _germany_backtest(args)
+    if args.command == "germany-score":
+        return _germany_scores(args)
     if args.command == "germany-teams":
         return _germany_teams(args)
     if args.command == "germany-asof":

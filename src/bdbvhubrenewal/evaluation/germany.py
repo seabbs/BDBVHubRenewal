@@ -17,6 +17,13 @@ held out for the paper (`nowcast_dates`).
 14, 21 and 28 days back (`HORIZONS`), and keeps their quantiles at
 `QUANTILE_LEVELS`: a model's own where it gives them, else those of its
 samples (`bdbvhubrenewal.evaluation.marginals.forecast_quantiles`).
+The samples of models that draw each place and week on their own are
+kept instead, and `pair_quantiles` pairs them into trajectories by the
+rolling copula fitted to their errors at earlier dates
+(`bdbvhubrenewal.forecasters.copula.pair_registered`), for the states and
+the age groups apart, before taking their quantiles.
+Pairing leaves each place's forecast as it is, and widens Germany's, the
+sum of the states.
 `team_forecasts` takes the hub teams' submitted quantiles at the same
 horizons.
 `with_truth` adds each sum's truth, its count in the data $D$ days after
@@ -43,6 +50,7 @@ import pandas as pd
 from scipy.stats import norm
 
 from bdbvhubrenewal.data.germany import (
+    AGE_GROUPS,
     ALL_AGES,
     GERMANY,
     HORIZONS,
@@ -53,10 +61,16 @@ from bdbvhubrenewal.data.germany import (
     level,
     nowcast_tasks,
 )
-from bdbvhubrenewal.evaluation.marginals import forecast_quantiles
+from bdbvhubrenewal.evaluation.marginals import (
+    forecast_draws,
+    forecast_quantiles,
+    own_quantiles,
+)
 from bdbvhubrenewal.evaluation.nowcast import rolling_truth
 from bdbvhubrenewal.evaluation.scoring import relative_skill, score_quantiles
 from bdbvhubrenewal.forecasters import get_model, list_models
+from bdbvhubrenewal.forecasters.copula import pair_registered
+from bdbvhubrenewal.reporting.hubtables import hub_quantiles
 
 log = logging.getLogger(__name__)
 
@@ -71,6 +85,7 @@ __all__ = [
     "germany_forecasts",
     "load_germany_config",
     "nowcast_dates",
+    "pair_quantiles",
     "paper_forecasts",
     "read_submissions",
     "relative_scores",
@@ -142,6 +157,18 @@ _RKI_ERROR: Final = 1e6
 
 _KEYS = ("model", "target", "origin", "truth_vintage", "location")
 """Columns that, with the week, identify a scored forecast."""
+
+_SAMPLE_COLUMNS = (
+    "model",
+    "task",
+    "origin",
+    "location",
+    "target_end_date",
+    "horizon",
+    "sample",
+    "value",
+)
+"""Columns of the samples `germany_forecasts` gives."""
 
 
 @dataclass(frozen=True)
@@ -373,8 +400,14 @@ def germany_forecasts(
     dates: Sequence[str],
     n_samples: int,
     seed: int,
-) -> pd.DataFrame:
-    """Nowcast each date with each model, as quantiles at the hub's levels.
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Nowcast each date with each model: quantiles, and samples to pair.
+
+    A model's own quantiles are kept where it gives them. A model
+    registered as `paired` that draws gives its draws, to be paired over
+    every date (`pair_quantiles`). Every other model gives its draws'
+    quantiles. Draws are as `forecast_quantiles` takes them, so with no
+    pairing the quantiles are the same.
 
     Parameters
     ----------
@@ -391,20 +424,40 @@ def germany_forecasts(
 
     Returns
     -------
-    pandas.DataFrame
+    tuple of pandas.DataFrame
         One row per quantile: `model`, `origin` (the nowcast date),
         `location` (the place), `target_end_date`, `horizon` (days),
-        `quantile` and `value`, at `QUANTILE_LEVELS`
-        (`bdbvhubrenewal.evaluation.marginals.forecast_quantiles`).
+        `quantile` and `value`, at `QUANTILE_LEVELS`. Then one row per
+        sample of the models to pair: `model`, `task` (`states`, with
+        Germany, or `ages`), `origin`, `location`, `target_end_date`,
+        `horizon`, `sample` and `value`.
     """
-    built = [get_model(m) for m in models]
     keys = ["model", "origin", "location", "target_end_date", "horizon"]
-    frames = []
+    paired = {s.name for s in list_models() if s.paired}
+    built = [get_model(m) for m in models]
+    frames, drawn = [], []
     for date in dates:
         for task in nowcast_tasks(triangle, date, n_samples, seed):
             for model in built:
-                at = forecast_quantiles(
-                    model, task, QUANTILE_LEVELS, n_samples, seed
+                own = own_quantiles(model, task, QUANTILE_LEVELS)
+                if own is None and model.name in paired:
+                    draws = forecast_draws(model, task, n_samples, seed)
+                    if draws.empty:
+                        continue
+                    moved = hub_forecasts(draws, task, date)
+                    ages = moved["location"].isin(AGE_GROUPS).any()
+                    drawn.append(
+                        moved.rename(
+                            columns={"forecast_date": "origin"}
+                        ).assign(task="ages" if ages else "states")
+                    )
+                    continue
+                at = (
+                    own
+                    if own is not None
+                    else forecast_quantiles(
+                        model, task, QUANTILE_LEVELS, n_samples, seed
+                    )
                 )
                 if at.empty:
                     continue
@@ -421,12 +474,77 @@ def germany_forecasts(
                         }
                     )
                 )
+    samples = (
+        pd.concat(drawn, ignore_index=True)[list(_SAMPLE_COLUMNS)]
+        if drawn
+        else pd.DataFrame(columns=_SAMPLE_COLUMNS)
+    )
     if not frames:
-        return pd.DataFrame(columns=[*keys, "quantile", "value"])
+        return pd.DataFrame(columns=[*keys, "quantile", "value"]), samples
     out = pd.concat(frames, ignore_index=True)
-    return out.sort_values([*keys, "quantile"], kind="stable")[
+    quantiles = out.sort_values([*keys, "quantile"], kind="stable")[
         [*keys, "quantile", "value"]
     ].reset_index(drop=True)
+    return quantiles, samples
+
+
+def pair_quantiles(
+    samples: pd.DataFrame,
+    triangle: pd.DataFrame,
+    truth_delay: int,
+    seed: int,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Pair the samples, then take their quantiles at the hub's levels.
+
+    The models registered as `paired` are paired by the rolling copula,
+    from their errors against the truth $D$ days on (`rolling_truth`), for
+    each task apart.
+
+    Parameters
+    ----------
+    samples : pandas.DataFrame
+        The samples of `germany_forecasts` of every date, so each date's
+        copula sees the earlier dates.
+    triangle : pandas.DataFrame
+        Counts by Meldedatum and report date.
+    truth_delay : int
+        $D$, the days after a sum ends that its truth is reported by.
+    seed : int
+        Seed of the pairing.
+
+    Returns
+    -------
+    tuple of pandas.DataFrame
+        One row per quantile: `model`, `origin`, `location`,
+        `target_end_date`, `horizon` (days), `quantile` and `value`, the
+        samples' quantiles at `QUANTILE_LEVELS` (`hub_quantiles`). Then
+        each paired model's copula by `task` and `origin`.
+    """
+    keys = ["model", "origin", "location", "target_end_date", "horizon"]
+    out_cols = [*keys, "quantile", "value"]
+    if samples.empty:
+        return pd.DataFrame(columns=out_cols), pd.DataFrame()
+    ends = sorted(set(samples["target_end_date"]))
+    truth = rolling_truth(hub_target(triangle, ends), truth_delay)
+    paired, copulas = [], []
+    for task, rows in samples.groupby("task"):
+        drawn, fits = pair_registered(
+            rows.drop(columns="task"), truth, seed, national=GERMANY
+        )
+        paired.append(drawn)
+        copulas.append(fits.assign(task=task))
+    table = (
+        pd.concat(paired, ignore_index=True)
+        .rename(columns={"sample": "output_type_id"})
+        .assign(output_type="sample")[
+            [*keys, "output_type", "output_type_id", "value"]
+        ]
+    )
+    out = hub_quantiles(table, QUANTILE_LEVELS)
+    out = out.drop(columns="output_type").rename(
+        columns={"output_type_id": "quantile"}
+    )[out_cols]
+    return out, pd.concat(copulas, ignore_index=True)
 
 
 def with_truth(

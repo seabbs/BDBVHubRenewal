@@ -31,6 +31,8 @@ Paths to the tidy data default to `$BDBV_DATA_DIR` or `data/`.
 | `digest [--with PATH...] [--text TEXT] [--model M]` | Print a hash of what a backtest reads, which keys its cached outputs in the Pages workflow. With `--model`, only that model's code (its import closure, less the other models' modules) with the data. |
 | `backtest --forecast-only`, `zone-backtest --forecast-only` | Forecast without scoring and write the forecasts to `--parts`, so each model can run apart. |
 | `score PART...` | Score the forecasts of `--forecast-only` runs, every model together, and write the results files one run of each backtest writes. |
+| `germany-backtest [--chunk K/N]` | Nowcast the German benchmark's dates and score the models that are not paired. The paired models' samples are written too; with every date they are also paired and scored. With `--chunk`, only block K of N, whose paired samples `germany-score` scores. |
+| `germany-score --out DIR PART...` | Pair the paired models' German samples of every block together by the rolling copula, take their quantiles, score them and add them to DIR's forecasts and scores. |
 | `concat-results --out DIR [--dedupe FILE...] PART...` | Stack the results files of runs made apart, such as blocks of dates, in the order given. `--dedupe` keeps one copy of rows every part writes in full. |
 
 `--version` prints the package version.
