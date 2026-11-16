@@ -13,9 +13,9 @@ pytest.importorskip("peft")
 sys.path.insert(0, str(Path(__file__).parent / "forecasters"))
 sys.path.insert(0, str(Path(__file__).parents[1] / "scripts"))
 import finetune_stream as fs  # noqa: E402
-from test_series_slots import HIER, LAG, N_PLACES, tiny_model, toy_block  # noqa: E402
+from chronos_toy import HIER, LAG, N_PLACES, tiny_model, toy_block  # noqa: E402
 
-from bdbvhubrenewal.forecasters import series_bias, slots  # noqa: E402
+from bdbvhubrenewal.forecasters import series_bias  # noqa: E402
 
 
 def padded(block: dict) -> dict:
@@ -39,7 +39,7 @@ def test_batches_carry_each_rows_place_and_parent():
     place, parent = np.asarray(batch["series_rows"])
     per = N_PLACES * (1 + LAG)
     assert len(place) == len(batch["context"]) == 2 * per
-    rows = slots.row_places(N_PLACES, N_PLACES * LAG)
+    rows = series_bias.row_places(N_PLACES, N_PLACES * LAG)
     assert list(place[:per]) == list(rows)
     assert list(place[per:]) == list(rows + N_PLACES)
     # Levels give the country as every other place's parent.
@@ -52,7 +52,7 @@ def test_batches_carry_each_rows_place_and_parent():
 def test_block_parents_come_from_place_names():
     block = {"n_targets": len(HIER), "n_covariates": 0, "places": HIER}
     _, parent = fs.block_rows([block])
-    assert list(parent) == slots.parents_of(HIER)
+    assert list(parent) == series_bias.parents_of(HIER)
 
 
 @pytest.mark.usefixtures("short_context")

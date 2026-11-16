@@ -13,8 +13,8 @@ pytest.importorskip("peft")
 sys.path.insert(0, str(Path(__file__).parent / "forecasters"))
 sys.path.insert(0, str(Path(__file__).parents[1] / "scripts"))
 import finetune_stream as fs  # noqa: E402
+from chronos_toy import batch_of, tiny_model, toy_block  # noqa: E402
 from test_series_bias import toy_rows  # noqa: E402
-from test_series_slots import batch_of, tiny_model, toy_block  # noqa: E402
 
 from bdbvhubrenewal.forecasters import series_bias  # noqa: E402
 

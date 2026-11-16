@@ -37,7 +37,7 @@ import numpy as np
 import pandas as pd
 
 from bdbvhubrenewal.data.dates import as_date, epiweek_end
-from bdbvhubrenewal.forecasters import series_bias, slots
+from bdbvhubrenewal.forecasters import series_bias
 from bdbvhubrenewal.forecasters.base import (
     NATIONAL,
     SAMPLE_COLUMNS,
@@ -127,10 +127,11 @@ FINETUNED_CACHE: Final = "~/.cache/bdbvhubrenewal"
 `chronos-ft-<hash>`."""
 
 SLOTS_PREFIX: Final = "slots-"
-"""Prefix of the spec of a checkpoint with per-series slots
-(`forecasters.slots`). Such a checkpoint is released as
-`chronos-slots-<hash>`, so the `latest` lookup, which takes only
-`chronos-ft-*` releases, never gives it to code without slots."""
+"""Prefix of the spec of a checkpoint with the series bias
+(`forecasters.series_bias`). Such a checkpoint is released as
+`chronos-slots-<hash>`, the paper's name for the run, so the `latest`
+lookup, which takes only `chronos-ft-*` releases, never gives it to code
+without the bias."""
 
 
 def release_tag(spec: str) -> str:
@@ -576,7 +577,9 @@ def _chronos(checkpoint: Checkpoint | None = None) -> Any:
     if adapter is None:
         return pipeline
     # Slots, if the adapter holds them, load with it.
-    return Chronos2Pipeline(model=slots.load_adapter(pipeline.model, adapter))
+    return Chronos2Pipeline(
+        model=series_bias.load_adapter(pipeline.model, adapter)
+    )
 
 
 def _chronos_input(group: Series) -> dict[str, Any]:
@@ -587,7 +590,7 @@ def _chronos_input(group: Series) -> dict[str, Any]:
 def _group_rows(group: Series) -> np.ndarray:
     """Return each of a group's rows' place and parent, `[2, rows]`.
 
-    In Chronos-2's row order, as `_group_slots`: the targets, then the
+    In Chronos-2's row order: the targets, then the
     covariates by sorted name, past-only ones before known-future ones.
     Places are numbered in target order (`series_bias`).
 
@@ -612,56 +615,8 @@ def _group_rows(group: Series) -> np.ndarray:
     except KeyError as err:
         raise ValueError(f"covariate of no target place: {err}") from err
     place = np.concatenate([np.arange(n_targets), owner]).astype(int)
-    parent = np.asarray(slots.parents_of(places), dtype=int)
+    parent = np.asarray(series_bias.parents_of(places), dtype=int)
     return np.stack([place, parent[place]])
-
-
-def _group_slots(
-    group: Series, n_slots: int, parent: bool = True
-) -> np.ndarray:
-    """Return each of a group's rows' own and parent slots, `[2, rows]`.
-
-    Without `parent` (slots trained without the parent link), own slots
-    only, `[rows]`; a place's parent is `slots.parents_of`'s, -1 for none.
-
-    Chronos-2's dict path puts the targets first, then the covariates by
-    sorted name, past-only ones before known-future ones, not in input
-    order. Each place gets a distinct slot drawn with `slots.EVAL_SEED`
-    in target order, and each lag series `<place>_lag_<d>` its place's.
-    The places are the group's `places`, else the order in which the
-    covariates name them.
-
-    Raises
-    ------
-    ValueError
-        If a covariate names no target place, or the places do not match
-        the targets.
-    """
-    past = list(group.get("past_covariates", {}))
-    known = set(group.get("future_covariates", {}))
-    n_targets = np.atleast_2d(group["target"]).shape[0]
-    named = dict.fromkeys(n.rsplit("_lag_", 1)[0] for n in past)
-    places = list(group.get("places") or named)
-    if len(places) != n_targets:
-        raise ValueError(f"{len(places)} places for {n_targets} targets")
-    rows = sorted(n for n in past if n not in known)
-    rows += sorted(n for n in past if n in known)
-    at = {p: i for i, p in enumerate(places)}
-    try:
-        owner = [at[n.rsplit("_lag_", 1)[0]] for n in rows]
-    except KeyError as err:
-        raise ValueError(f"covariate of no target place: {err}") from err
-    own, up = slots.slot_ids(
-        n_targets,
-        0,
-        np.random.default_rng(slots.EVAL_SEED),
-        n_slots,
-        parents=slots.parents_of(places),
-    )
-    index = np.concatenate([np.arange(n_targets), owner]).astype(int)
-    if not parent:
-        return np.asarray(own[index])
-    return np.stack([own[index], up[index]])
 
 
 def _predict(
@@ -669,10 +624,9 @@ def _predict(
 ) -> list[Any]:
     """Return Chronos-2's quantiles at `levels` for each group.
 
-    With a slots adapter each group is predicted on its own, so its rows
-    are one batch, with its rows' slots (`_group_slots`), as in held-out
-    losses; with the series bias, with its rows' places and parents
-    (`_group_rows`).
+    With the series bias each group is predicted on its own, so its rows
+    are one batch, with its rows' places and parents (`_group_rows`), as
+    in held-out losses.
     """
     model = getattr(pipeline, "model", None)
     if model is not None and series_bias.has_bias(model):
@@ -687,26 +641,12 @@ def _predict(
                 )
             biased.extend(q)
         return biased
-    if model is None or not slots.has_slots(model):
-        quantiles, _ = pipeline.predict_quantiles(
-            [_chronos_input(g) for g in groups],
-            prediction_length=horizon,
-            quantile_levels=levels.tolist(),
-        )
-        return list(quantiles)
-    out = []
-    for g in groups:
-        ids = _group_slots(
-            g, slots.n_slots(model), slots.has_parent_link(model)
-        )
-        with slots.assigned(model, ids):
-            q, _ = pipeline.predict_quantiles(
-                [_chronos_input(g)],
-                prediction_length=horizon,
-                quantile_levels=levels.tolist(),
-            )
-        out.extend(q)
-    return out
+    quantiles, _ = pipeline.predict_quantiles(
+        [_chronos_input(g) for g in groups],
+        prediction_length=horizon,
+        quantile_levels=levels.tolist(),
+    )
+    return list(quantiles)
 
 
 def chronos_sampler(

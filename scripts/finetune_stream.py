@@ -46,7 +46,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from bdbvhubrenewal.forecasters import series_bias, slots
+from bdbvhubrenewal.forecasters import series_bias
 from bdbvhubrenewal.forecasters.foundation import (
     CHRONOS_MODEL,
     CHRONOS_REVISION,
@@ -148,10 +148,7 @@ LORA_TARGETS = (
 """Modules the LoRA adapter trains."""
 
 
-BIAS_CODE = (
-    "src/bdbvhubrenewal/forecasters/series_bias.py",
-    "src/bdbvhubrenewal/forecasters/slots.py",
-)
+BIAS_CODE = ("src/bdbvhubrenewal/forecasters/series_bias.py",)
 """The series bias's code and its parent rule, hashed into its settings."""
 
 
@@ -185,7 +182,7 @@ def bias_settings(bias: bool, lr: float = 0.0) -> dict:
             "init": "zero",
             "learning_rate": lr,
             "parent_rule": "nearest '-' prefix in the block, else the "
-            f"country ({', '.join(slots.COUNTRIES)})",
+            f"country ({', '.join(series_bias.COUNTRIES)})",
             "module": series_bias.BIAS_MODULE,
         }
     }
@@ -620,13 +617,13 @@ def block_rows(blocks: list[dict]) -> np.ndarray:
 
 
 def block_parents(block: dict) -> list[int]:
-    """Return each target's parent in a block (`slots.parents_of`).
+    """Return each target's parent in a block (`series_bias.parents_of`).
 
     A block without place names links every place to the country, when
     it holds it, by its levels.
     """
     if "places" in block:
-        return slots.parents_of(block["places"])
+        return series_bias.parents_of(block["places"])
     levels = list(block["levels"])
     root = levels.index("national") if "national" in levels else -1
     return [-1 if i == root else root for i in range(len(levels))]

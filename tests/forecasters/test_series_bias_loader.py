@@ -7,16 +7,16 @@ torch = pytest.importorskip("torch")
 pytest.importorskip("chronos")
 pytest.importorskip("peft")
 
+from chronos_toy import LAG, N_PLACES, H, T, tiny_model, toy_block  # noqa: E402
 from test_series_bias import predict, toy_rows  # noqa: E402
-from test_series_slots import LAG, N_PLACES, H, T, tiny_model, toy_block  # noqa: E402
 
-from bdbvhubrenewal.forecasters import series_bias, slots  # noqa: E402
+from bdbvhubrenewal.forecasters import series_bias  # noqa: E402
 
 
 def trained_bias(steps: int = 5):
     """A tiny model whose bias and LoRA trained a few steps."""
+    from chronos_toy import batch_of
     from peft import LoraConfig, get_peft_model
-    from test_series_slots import batch_of
 
     model = tiny_model()
     series_bias.attach(model)
@@ -58,7 +58,7 @@ def test_zero_bias_is_base_chronos_on_both_attention_paths(attn):
 def test_germany_pairs_by_name():
     # Germany at inference: CD, CD-<state>, CD-A<i> (data/germany.py).
     places = ["CD", "CD-BY", "CD-BE", "CD-A0", "CD-A5"]
-    parents = slots.parents_of(places)
+    parents = series_bias.parents_of(places)
     assert parents == [-1, 0, 0, 0, 0]
     rows = series_bias.block_rows(len(places), 2 * len(places), parents)
     me, same, up, down = series_bias.pair_masks(
@@ -94,7 +94,7 @@ def bdbv_places(n: int) -> list[str]:
 @pytest.mark.parametrize("n", [600, 1000])
 def test_bdbv_pairs_by_name_beyond_128_places(n):
     places = bdbv_places(n)
-    parents = slots.parents_of(places)
+    parents = series_bias.parents_of(places)
     at = {p: i for i, p in enumerate(places)}
     for i, p in enumerate(places):
         if p == "CD":
@@ -127,7 +127,7 @@ def test_a_1000_place_block_runs_with_the_bias():
         "n_future_covariates": 0,
         "prediction_length": H,
     }
-    rows = series_bias.block_rows(n, 0, slots.parents_of(bdbv_places(n)))
+    rows = series_bias.block_rows(n, 0, series_bias.parents_of(bdbv_places(n)))
     out = predict(model, block, rows)
     assert out.shape[0] == n
     assert torch.isfinite(out).all()
@@ -135,7 +135,7 @@ def test_a_1000_place_block_runs_with_the_bias():
 
 def test_a_block_with_no_parents_links_nothing():
     places = ["R1", "R2", "R3"]
-    parents = slots.parents_of(places)
+    parents = series_bias.parents_of(places)
     assert parents == [-1, -1, -1]
     rows = series_bias.block_rows(3, 6, parents)
     _, _, up, down = series_bias.pair_masks(
@@ -148,7 +148,7 @@ def test_a_block_with_no_parents_links_nothing():
 def test_a_bias_adapter_loads_through_the_strict_loader(tmp_path):
     model = trained_bias()
     model.save_pretrained(tmp_path / "bias")
-    loaded = slots.load_adapter(tiny_model(), tmp_path / "bias")
+    loaded = series_bias.load_adapter(tiny_model(), tmp_path / "bias")
     assert series_bias.has_bias(loaded)
     block = toy_block()
     want = predict(model, block, toy_rows())
@@ -161,7 +161,7 @@ def test_a_dropped_bias_weight_is_an_error(tmp_path, monkeypatch):
     # A loader that does not attach the bias would drop it silently.
     monkeypatch.setattr(series_bias, "adapter_has_bias", lambda _a: False)
     with pytest.raises(ValueError, match="has no place"):
-        slots.load_adapter(tiny_model(), tmp_path / "bias")
+        series_bias.load_adapter(tiny_model(), tmp_path / "bias")
 
 
 def test_inference_gives_a_bias_model_its_rows_by_name(monkeypatch, tmp_path):
@@ -173,7 +173,7 @@ def test_inference_gives_a_bias_model_its_rows_by_name(monkeypatch, tmp_path):
 
     model = trained_bias()
     model.save_pretrained(tmp_path / "bias")
-    loaded = slots.load_adapter(tiny_model(), tmp_path / "bias")
+    loaded = series_bias.load_adapter(tiny_model(), tmp_path / "bias")
     monkeypatch.setattr(
         foundation,
         "_chronos",
@@ -216,7 +216,7 @@ def test_the_bias_survives_gradient_checkpointing(monkeypatch):
     from pathlib import Path
 
     from chronos.chronos2.model import Chronos2EncoderBlock
-    from test_series_slots import batch_of
+    from chronos_toy import batch_of
 
     sys.path.insert(0, str(Path(__file__).parents[2] / "scripts"))
     import finetune_stream as fs

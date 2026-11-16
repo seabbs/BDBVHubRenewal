@@ -7,7 +7,7 @@ This adds learned biases to the group attention scores of every encoder
 layer, per head, one for each kind of row pair (`pair_masks`): a row and
 itself, $b_\text{self}$; a row and another of its place (its count series
 and all its lag series), $b_\text{same}$; a child's row and its parent's
-(`slots.parents_of`), $b_\text{up}$; and a parent's row and its child's,
+(`parents_of`), $b_\text{up}$; and a parent's row and its child's,
 $b_\text{down}$. The biases start at zero, so a model with them starts
 exactly as base Chronos-2, are kept in fp32, and need no codes, no table
 and no scale, for any number of places.
@@ -18,7 +18,7 @@ which each layer's `GroupSelfAttention` adds to its scores. `attach`
 hooks each `GroupSelfAttention` to add its layer's bias to that mask,
 from the rows' places and parents set by `assigned`. Rows are the ragged
 layout's order: the targets, then each place's lags in turn
-(`slots.row_places`); rows that Chronos-2 repeats for long horizons
+(`row_places`); rows that Chronos-2 repeats for long horizons
 repeat their place. The biases train beside the LoRA adapter as one of
 PEFT's `modules_to_save`, so they are saved in, and loaded from, the
 adapter's files.
@@ -34,10 +34,9 @@ from typing import Any, Final
 
 import numpy as np
 
-from bdbvhubrenewal.forecasters import slots
-
 __all__ = [
     "BIAS_MODULE",
+    "COUNTRIES",
     "PAIRS",
     "adapter_has_bias",
     "assigned",
@@ -47,6 +46,8 @@ __all__ = [
     "has_bias",
     "load_adapter",
     "pair_masks",
+    "parents_of",
+    "row_places",
 ]
 
 BIAS_MODULE: Final = "series_bias"
@@ -54,6 +55,58 @@ BIAS_MODULE: Final = "series_bias"
 
 _STATE: Final = "_series_bias_state"
 """Attribute of a model with the bias holding the next batch's rows."""
+
+
+COUNTRIES: Final = ("CD", "DE")
+"""Codes of the whole country (BDBV, Germany): the parent of a place with
+no nearer parent in its block."""
+
+
+def row_places(n_targets: int, n_covariates: int) -> np.ndarray:
+    """Return the place of each row of a ragged block.
+
+    Rows are the `n_targets` targets, then each place's lag series in
+    turn, `n_covariates // n_targets` per place.
+
+    Raises
+    ------
+    ValueError
+        If the covariates do not split evenly over the places.
+    """
+    if n_covariates % n_targets:
+        raise ValueError(
+            f"{n_covariates} covariates do not split over {n_targets} places"
+        )
+    lags = n_covariates // n_targets
+    return np.concatenate(
+        [np.arange(n_targets), np.repeat(np.arange(n_targets), lags)]
+    )
+
+
+def parents_of(places: Sequence[str]) -> list[int]:
+    """Return the index of each place's parent in `places`, -1 for none.
+
+    A place's parent is its nearest prefix in the block, cut at a "-"
+    (`R1-P03` in `R1`, `CD-NK-03` in `CD-NK`), else the country
+    (`COUNTRIES`) when the block holds it, as for provinces, states, age
+    groups and age totals. The country has none. Parent means belongs to:
+    a parent need not be the sum of its children.
+    """
+    at = {p: i for i, p in enumerate(places)}
+    root = next((at[c] for c in COUNTRIES if c in at), -1)
+    out = []
+    for p in places:
+        parts = p.split("-")
+        near = next(
+            (
+                at["-".join(parts[:k])]
+                for k in range(len(parts) - 1, 0, -1)
+                if "-".join(parts[:k]) in at
+            ),
+            None,
+        )
+        out.append(near if near is not None else -1 if at[p] == root else root)
+    return out
 
 
 def block_rows(
@@ -64,7 +117,7 @@ def block_rows(
     Places are numbered in target order; a parent is -1 for none.
     """
     rows = (
-        slots.row_places(n_targets, n_covariates)
+        row_places(n_targets, n_covariates)
         if n_covariates
         else np.arange(n_targets)
     )
@@ -220,9 +273,56 @@ def adapter_has_bias(adapter: Path | str) -> bool:
 
 
 def load_adapter(model: Any, adapter: Path | str) -> Any:
-    """Return Chronos-2 `model` with an adapter merged, its bias included."""
+    """Return Chronos-2 `model` with an adapter merged, its bias included.
+
+    The bias is attached first when the adapter holds it, so PEFT loads
+    its trained values; an adapter without it loads as before. Every
+    weight in the adapter's file must reach the model (`_check_loaded`).
+    """
+    import warnings
+
     from peft import PeftModel
 
     if adapter_has_bias(adapter):
         attach(model)
-    return PeftModel.from_pretrained(model, str(adapter)).merge_and_unload()
+    with warnings.catch_warnings():
+        # PEFT only warns when an adapter weight has no file entry.
+        warnings.filterwarnings("error", message="Found missing adapter keys")
+        peft_model = PeftModel.from_pretrained(model, str(adapter))
+    _check_loaded(peft_model, adapter)
+    return peft_model.merge_and_unload()
+
+
+def _check_loaded(peft_model: Any, adapter: Path | str) -> None:
+    """Raise unless every weight in an adapter's file reached the model.
+
+    PEFT drops a file entry the model has no parameter for without a
+    word, as it would the bias for a model built without it.
+
+    Raises
+    ------
+    ValueError
+        If an adapter weight is not in the model or differs from the file.
+    """
+    import torch
+    from safetensors.torch import load_file
+
+    def plain(name: str) -> str:
+        name = name.replace(".modules_to_save.default", "")
+        return name.replace(".default", "")
+
+    loaded = {
+        plain(n): p
+        for n, p in [
+            *peft_model.named_parameters(),
+            *peft_model.named_buffers(),
+        ]
+    }
+    for key, value in load_file(
+        str(Path(adapter) / "adapter_model.safetensors")
+    ).items():
+        have = loaded.get(key)
+        if have is None:
+            raise ValueError(f"{adapter}: adapter weight {key} has no place")
+        if not torch.equal(have.detach().cpu().to(value.dtype), value):
+            raise ValueError(f"{adapter}: adapter weight {key} did not load")

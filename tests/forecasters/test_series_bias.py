@@ -7,7 +7,7 @@ torch = pytest.importorskip("torch")
 pytest.importorskip("chronos")
 pytest.importorskip("peft")
 
-from test_series_slots import (  # noqa: E402
+from chronos_toy import (  # noqa: E402
     HIER,
     LAG,
     N_PLACES,
@@ -16,7 +16,7 @@ from test_series_slots import (  # noqa: E402
     toy_block,
 )
 
-from bdbvhubrenewal.forecasters import series_bias, slots  # noqa: E402
+from bdbvhubrenewal.forecasters import series_bias  # noqa: E402
 
 
 def predict(model, block, rows=None):
@@ -65,8 +65,8 @@ def test_pairs_mark_self_same_place_child_to_parent_and_back():
     assert not bool(up[1, 2])
     assert not bool(down[1, 2])
     # Each place's lags are its own: same with each other and its count.
-    par = slots.parents_of(HIER)
-    rows = slots.row_places(len(HIER), 2 * len(HIER))
+    par = series_bias.parents_of(HIER)
+    rows = series_bias.row_places(len(HIER), 2 * len(HIER))
     me, same, up, down = masks(
         *series_bias.block_rows(len(HIER), 2 * len(HIER), par)
     )
@@ -160,7 +160,7 @@ def test_inference_rows_follow_chronos_order_by_name():
         "places": HIER,
     }
     place, parent = _group_rows(group)
-    par = slots.parents_of(HIER)
+    par = series_bias.parents_of(HIER)
     at = {p: i for i, p in enumerate(HIER)}
     assert list(place[: len(HIER)]) == list(range(len(HIER)))
     assert list(parent[: len(HIER)]) == par
