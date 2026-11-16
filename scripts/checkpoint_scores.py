@@ -419,6 +419,18 @@ def bdbv_origins() -> list[str]:
     return [v for v in real[:-1] if v not in config.skip_origins]
 
 
+def origin_draws(frames: list[pd.DataFrame], origin: str) -> pd.DataFrame:
+    """Return one origin's draws of every model, empty if none forecast."""
+    cols = ["location", "target_end_date", "sample", "value", "model"]
+    out = (
+        pd.concat(frames, ignore_index=True)
+        if frames
+        else pd.DataFrame(columns=cols)
+    ).assign(origin=origin)
+    out["value"] = out["value"].astype("float32")
+    return out
+
+
 def bdbv_unit(cache: Path, label: str) -> None:
     """Draw 1,000 final-count samples per origin for each model."""
     from bdbvhubrenewal.data import load_daily
@@ -457,8 +469,7 @@ def bdbv_unit(cache: Path, label: str) -> None:
             if "as_of" in drawn:
                 drawn = drawn.loc[drawn["as_of"].isna()].drop(columns="as_of")
             frames.append(add_national(drawn).assign(model=model.name))
-        out = pd.concat(frames, ignore_index=True).assign(origin=origin)
-        out["value"] = out["value"].astype("float32")
+        out = origin_draws(frames, origin)
         _write(out, path)
         free_caches()
         print(f"bdbv {label} {origin}", flush=True)
