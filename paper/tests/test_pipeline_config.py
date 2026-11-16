@@ -129,3 +129,22 @@ def test_development_reads_releases_up_to_d_days_after_the_split() -> None:
         check_no_heldout_releases(_obs("2022-02-10", "2022-03-01"), dev, 40)
     paper = run_settings(_config(), "paper")
     check_no_heldout_releases(_obs("2022-04-01", "2022-06-01"), paper, 40)
+
+
+def test_development_leaves_out_the_scored_ebola_rounds() -> None:
+    cfg = _config()
+    first = pd.Timestamp(cfg["heldout"]["ebola_from"])
+    dev = run_settings(cfg, "development")
+    paper = run_settings(cfg, "paper")
+    assert (dev.ebola_before, dev.ebola_split) == (first, None)
+    assert (paper.ebola_before, paper.ebola_split) == (None, first)
+
+
+def test_guard_rejects_scored_ebola_rounds() -> None:
+    cfg = _config()
+    dev = run_settings(cfg, "development")
+    first = pd.Timestamp(cfg["heldout"]["ebola_from"])
+    before = first - pd.Timedelta(days=7)
+    check_no_heldout(_table("ebola", "CD", f"{before:%Y-%m-%d}"), dev)
+    with pytest.raises(ValueError, match="Ebola"):
+        check_no_heldout(_table("ebola", "CD", f"{first:%Y-%m-%d}"), dev)

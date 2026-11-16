@@ -261,3 +261,67 @@ def test_a_development_run_may_use_labelled_dummy_data(tmp_path) -> None:
     ]
     main(args)
     assert read_meta(out / "m.json")["source"] == "dummy"
+
+
+def _backtest_at(path: Path, vintages: list[str]) -> Path:
+    """Release-backtest samples of randomwalknowcast from `vintages`."""
+    pd.DataFrame(
+        {
+            "model": "randomwalknowcast",
+            "kind": "real",
+            "vintage": vintages,
+            "reference_date": vintages,
+            "location": "CD",
+            "target_end_date": "2026-10-24",
+            "sample": 1,
+            "value": 4.0,
+            "as_of": None,
+            "horizon": -2,
+        }
+    ).to_csv(path, index=False)
+    return path
+
+
+def test_ebola_development_keeps_rounds_and_releases_before_the_split(
+    hub, tmp_path
+) -> None:
+    sources = Sources(
+        hub=hub,
+        ebola_data=_data(tmp_path / "data"),
+        ebola_backtest=_backtest_at(
+            tmp_path / "q.csv", ["2026-10-20", "2026-11-03"]
+        ),
+    )
+    fc = run_forecasts(
+        "ebola",
+        before=pd.Timestamp("2026-10-31"),
+        sources=sources,
+        source="real",
+        baseline="randomwalknowcast",
+    )
+    assert set(fc["origin_date"]) == {pd.Timestamp("2026-10-20")}
+
+
+def test_ebola_scores_prospective_rounds_from_the_split(hub, tmp_path) -> None:
+    # The hub's team-a forecasts the 2026-10-31 round; the backtest has a
+    # release before and one after the split.
+    sources = Sources(
+        hub=hub,
+        ebola_data=_data(tmp_path / "data"),
+        ebola_backtest=_backtest_at(
+            tmp_path / "q.csv", ["2026-10-20", "2026-11-03"]
+        ),
+    )
+    fc = run_forecasts(
+        "ebola",
+        split=pd.Timestamp("2026-10-31"),
+        sources=sources,
+        source="real",
+        baseline="randomwalknowcast",
+    )
+    backtest = fc.loc[fc["model"] == "randomwalknowcast"]
+    assert set(backtest["origin_date"]) == {pd.Timestamp("2026-10-20")}
+    # Prospective rounds from the split join, even before the hub's
+    # baseline can be scored.
+    team = fc.loc[fc["model"] == "team-a"]
+    assert set(team["origin_date"]) == {pd.Timestamp("2026-10-31")}
