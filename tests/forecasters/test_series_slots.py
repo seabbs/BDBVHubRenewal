@@ -120,7 +120,7 @@ def trained(steps: int = 30):
     from peft import get_peft_model
 
     model = tiny_model()
-    slots.attach(model, n_slots=8)
+    slots.attach(model, n_slots=8, parent=False)
     peft_model = get_peft_model(model, lora())
     params = [p for p in peft_model.parameters() if p.requires_grad]
     opt = torch.optim.Adam(params, lr=0.05)
@@ -440,10 +440,15 @@ def test_an_adapter_without_the_parent_link_still_loads(tmp_path):
 
 
 def test_a_slots_adapter_with_no_settings_is_an_error(tmp_path):
-    linked_adapter(tmp_path)
-    (tmp_path / "linked" / "settings.json").unlink()
+    # Without the trainer's marker only settings.json can say whether the
+    # slots carry the link.
+    from peft import get_peft_model
+
+    model = tiny_model()
+    slots.attach(model, 8, init_std=0.02, seed=1, parent=False)
+    get_peft_model(model, lora()).save_pretrained(tmp_path / "bare")
     with pytest.raises(ValueError, match=r"settings\.json"):
-        slots.load_adapter(tiny_model(), tmp_path / "linked")
+        slots.load_adapter(tiny_model(), tmp_path / "bare")
 
 
 def test_an_adapter_weight_the_model_drops_is_an_error(tmp_path, monkeypatch):

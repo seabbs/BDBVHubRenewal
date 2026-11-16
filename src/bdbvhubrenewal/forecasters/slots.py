@@ -161,12 +161,14 @@ def _slots_module(n_slots: int, d_model: int, parent: bool = True) -> Any:
             super().__init__()
             self.embedding = nn.Embedding(n_slots, d_model)
             nn.init.zeros_(self.embedding.weight)
-            # Not a weight: whether rows add their parent's slot.
-            self.parent_link = parent
+            if parent:
+                # Marks slots that add each place's parent's, as the
+                # trainer marks them; saved with the adapter, not trained.
+                self.register_buffer("parent_link", torch.ones(()))
 
         def forward(self, ids: torch.Tensor) -> torch.Tensor:
             """Own slots `[rows]`, or own and parents' `[2, rows]`."""
-            if ids.ndim == 2 and not self.parent_link:
+            if ids.ndim == 2 and not hasattr(self, "parent_link"):
                 ids = ids[0]
             if ids.ndim == 1:
                 out: torch.Tensor = self.embedding(ids)
@@ -288,10 +290,9 @@ def has_parent_link(model: Any) -> bool:
     base = _base(model)
     if base is None:
         return False
-    # PEFT wraps the module while it trains; its copies keep the flag.
+    # PEFT wraps the module while it trains; its copies keep the marker.
     return any(
-        getattr(m, "parent_link", False)
-        for m in getattr(base, SLOT_MODULE).modules()
+        hasattr(m, "parent_link") for m in getattr(base, SLOT_MODULE).modules()
     )
 
 
@@ -313,8 +314,9 @@ def checkpoint_slots(adapter: Path | str) -> dict[str, Any] | None:
 def adapter_parent_link(adapter: Path | str) -> bool:
     """Whether a slots checkpoint was trained with the parent link.
 
-    The link adds no weight, so it is read from the checkpoint's settings
-    (`checkpoint_slots`, `series_slots.parent`).
+    Trained slots carry a `parent_link` buffer in the adapter; otherwise
+    the link is read from the checkpoint's settings (`checkpoint_slots`,
+    `series_slots.parent`).
 
     Raises
     ------
@@ -322,6 +324,11 @@ def adapter_parent_link(adapter: Path | str) -> bool:
         If the checkpoint has no `settings.json`.
     """
     adapter = Path(adapter)
+    from safetensors import safe_open
+
+    with safe_open(adapter / "adapter_model.safetensors", "pt") as f:
+        if any("parent_link" in key for key in f.keys()):  # noqa: SIM118
+            return True
     if not any(
         (w / "settings.json").exists() for w in (adapter, adapter.parent)
     ):
@@ -394,7 +401,13 @@ def _check_loaded(peft_model: Any, adapter: Path | str) -> None:
         name = name.replace(".modules_to_save.default", "")
         return name.replace(".default", "")
 
-    loaded = {plain(n): p for n, p in peft_model.named_parameters()}
+    loaded = {
+        plain(n): p
+        for n, p in [
+            *peft_model.named_parameters(),
+            *peft_model.named_buffers(),
+        ]
+    }
     for key, value in load_file(
         str(Path(adapter) / "adapter_model.safetensors")
     ).items():
