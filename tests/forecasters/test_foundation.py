@@ -398,6 +398,19 @@ def test_no_daily_releases_is_unavailable(task: ForecastTask) -> None:
         model.forecast(bare)
 
 
+@pytest.mark.parametrize("source", SOURCES)
+def test_complete_with_a_walk_start_off_the_grid_is_unavailable(
+    source: str, task: ForecastTask, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A walk that starts before the first release step is off the grid.
+    monkeypatch.setattr(foundation, "_walk_start", lambda _: "1900-01-06")
+    model = dataclasses.replace(
+        get_model(f"fm_chronos_{source}_complete"), sample=_constant(0.0)
+    )
+    with pytest.raises(ModelUnavailableError, match="1900-01-06"):
+        model.forecast(task)
+
+
 class _FakePipeline:
     """Quantiles that grow with the level and the week."""
 
@@ -543,6 +556,30 @@ def test_checksums_must_cover_the_adapter(
             line + "\n"
             for line in sums.read_text().splitlines()
             if "adapter_config" not in line
+        )
+    )
+    with pytest.raises(ValueError, match=r"adapter_config\.json"):
+        foundation.resolve_checkpoint("abc")
+
+
+def test_a_checksum_line_with_one_token_is_skipped(
+    releases: Path, write_release
+) -> None:
+    write_release(releases, "abc", _ADAPTER, "abc")
+    sums = releases / "chronos-ft-abc" / "sha256sums.txt"
+    sums.write_text("sha256sums\n" + sums.read_text())
+    assert foundation.resolve_checkpoint("abc") == _checkpoint("abc")
+
+
+def test_a_truncated_checksum_line_names_the_missing_file(
+    releases: Path, write_release
+) -> None:
+    write_release(releases, "abc", _ADAPTER, "abc")
+    sums = releases / "chronos-ft-abc" / "sha256sums.txt"
+    sums.write_text(
+        "".join(
+            (line.split()[0] if "adapter_config" in line else line) + "\n"
+            for line in sums.read_text().splitlines()
         )
     )
     with pytest.raises(ValueError, match=r"adapter_config\.json"):
