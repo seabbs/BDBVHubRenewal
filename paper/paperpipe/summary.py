@@ -39,7 +39,9 @@ def study_summary(meta: Mapping[str, Any], scores: pd.DataFrame) -> dict:
         `source`, `label` (empty for real data), `note` (what is
         provisional), `baseline`, `n_models`, `best_model`,
         `best_rel_score`, `best_rel_log_score` and, where the baseline is
-        another model, `best_rel_score_randomwalknowcast`.
+        another model, `best_rel_score_randomwalknowcast`, and `status`,
+        which says when the scored part has no scores yet and is empty
+        otherwise.
     """
     baseline = baseline_of(meta)
     if "period" in scores.columns:
@@ -65,6 +67,12 @@ def study_summary(meta: Mapping[str, Any], scores: pd.DataFrame) -> dict:
         "best_rel_log_score": value("rel_log_score"),
         "best_rel_score_randomwalknowcast": value(
             "rel_score_randomwalknowcast"
+        ),
+        "status": (
+            ""
+            if len(scores)
+            else "There are no scored forecasts yet, as no forecast of "
+            "the scored part has its truth reported."
         ),
     }
 
