@@ -612,3 +612,17 @@ def test_the_prior_pairs_zones_and_fits_record_rho_zones() -> None:
         seed=1,
     )
     assert fits["rho_zones"].tolist() == [pytest.approx(0.7)]
+
+
+def test_another_countrys_own_series_is_paired_as_the_country() -> None:
+    # A country forecast as its own series pairs with its places by
+    # rho_n, whatever its code (Germany's DE, not the default CD).
+    samples = _samples(n=3000).replace({"location": {NATIONAL: "DE"}})
+    samples["location"] = samples["location"].str.replace("CD-", "DE-")
+    copula = GaussianCopula(0.0, 0.1, 0.8)
+    out = pair_samples(samples, copula, np.random.default_rng(30), "DE")
+    wide = _wide(out)
+    w = "2026-10-17"
+    assert _rank_corr(wide[("DE", w)], wide[("DE-A", w)]) == pytest.approx(
+        6 / np.pi * np.arcsin(0.8 / 2), abs=0.05
+    )
