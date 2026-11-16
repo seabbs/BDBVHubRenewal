@@ -224,3 +224,37 @@ def test_score_runs_the_follow_ups_of_slots_checkpoints_only(tmp_path):
     assert jobs["agg_rows"] == 1
     assert jobs["agg_sanity"] == 1
     assert jobs["fetch_adapter"] == 1
+
+
+def _local(tmp_path, *lines):
+    (tmp_path / "local.env").write_text(
+        "\n".join([f"ROOT={tmp_path}", "HOST_NAME=test-host", *lines]) + "\n"
+    )
+
+
+def test_publish_takes_only_checkpoints_already_saved(tmp_path):
+    _checkpoint(tmp_path, 250)
+    jobs = dry(tmp_path, "publish", config=FT)
+    assert jobs["publish_checkpoint"] == 1
+    assert "train_segment" not in jobs
+
+
+def test_a_machine_can_publish_as_it_trains(tmp_path):
+    _local(tmp_path, "PUBLISH=1")
+    jobs = dry(tmp_path, "finetune", config=FT)
+    assert jobs["publish_checkpoint"] == 2
+
+
+def test_a_machine_runs_only_its_own_targets(tmp_path):
+    _local(tmp_path, "TARGETS=score")
+    config = {**FT, "score": {"labels": ["aaa"]}}
+    jobs = dry(tmp_path, "all", config=config)
+    assert "train_segment" not in jobs
+    assert "simulate_batch" not in jobs
+    assert jobs["score_table"] == 1
+
+
+def test_where_batches_come_from_is_the_machine_s(tmp_path):
+    _local(tmp_path, "SIMS_FROM=release")
+    jobs = dry(tmp_path, "finetune", config=FT)
+    assert "simulate_batch" not in jobs
