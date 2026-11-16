@@ -52,3 +52,13 @@ def test_markdown_tables_round_numbers_and_escape_pipes() -> None:
     lines = md.splitlines()
     assert lines[0] == "| model | x |"
     assert lines[2] == "| a\\|b | 0.123 |"
+
+
+def test_summary_says_when_the_scored_part_has_no_scores_yet() -> None:
+    scores = _scores(period="development")
+    out = study_summary({"study": "ebola", "source": "real"}, scores)
+    assert out["best_model"] == ""
+    assert out["n_models"] == 0
+    assert "no scored forecasts yet" in out["status"].lower()
+    scored = study_summary({"study": "germany", "source": "real"}, _scores())
+    assert scored["status"] == ""
