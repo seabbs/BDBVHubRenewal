@@ -3,18 +3,19 @@ r"""Per-series slots: tie each place's lag series to its count series.
 
 Chronos-2's group attention has no series identity, so in the ragged
 layout's joint block it cannot tell which place a lag series belongs to.
-A slot is a learned vector, one of `N_SLOTS`, added to every token of a
-series (its context patches, its future patches and its [REG] token). A
-place's count series and all its lag series share one slot. Slots are
-drawn as a fresh random permutation per block in training, so the model
-learns which series pair rather than fixed identities; at inference and
-in held-out losses they are drawn the same way with the fixed seed
-`EVAL_SEED`.
+A slot is a label, one of `N_SLOTS` fixed random vectors (`attach`
+with `init_std`), added to every token of a series (its context patches,
+its future patches and its [REG] token). A place's count series and all
+its lag series share one label, plus its parent's label (`parents_of`),
+so siblings share their parent's. Labels are drawn as a fresh random
+permutation per block in training, so the model learns which series pair
+rather than fixed identities; at inference and in held-out losses they
+are drawn the same way with the fixed seed `EVAL_SEED`.
 
-The slots are a module of the model, `series_slots`, initialised at zero,
-so a model with slots starts exactly as base Chronos-2. It trains beside
-the LoRA adapter as one of PEFT's `modules_to_save`, so it is saved in,
-and loaded from, the adapter's files (`load_adapter`).
+The labels are a module of the model, `series_slots`, saved in, and
+loaded from, the adapter's files as one of PEFT's `modules_to_save`
+(`load_adapter`); the trainer keeps them fixed while LoRA learns to read
+them. Zero labels leave the model exactly as base Chronos-2.
 
 `attach` adds the slots to a Chronos-2 model and hooks its input patch
 embedding and [REG] embedding. `assigned` sets the slot of each row of

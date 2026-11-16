@@ -23,8 +23,9 @@ HERE=${HERE:-output/finetune/continuous}
 OUTBREAKS=${OUTBREAKS:-8000}
 # Each round simulates 100 held-out outbreaks.
 HOLDOUT=${HOLDOUT:-100}
-# Early checkpoints at 250, 500 and 750 compare runs as they train.
-PREFIXES=${PREFIXES:-250 500 750 1000 2000 4000 8000}
+# Early checkpoints at 125 to 750 compare runs as they train; each lands
+# on a chunk's end.
+PREFIXES=${PREFIXES:-125 250 500 750 1000 2000 4000 8000}
 # Two draws at each of 16 snapshots, sampled across the 10: 32 blocks, about
 # 2.2 h per 1,000 simulations on an M-series laptop (2026-11-16 probe:
 # 22,820 steps per 1,000 at 160 blocks, 1.75 s a step). The learning rate
@@ -40,7 +41,7 @@ SOURCES=${SOURCES:-weekly daily 3day}
 UNIVARIATE_SHARE=${UNIVARIATE_SHARE:-0.2}
 # Simulations per training chunk: training starts once this many have
 # landed, in seed order.
-CHUNK=${CHUNK:-250}
+CHUNK=${CHUNK:-125}
 REAL_VALIDATION=${REAL_VALIDATION:-output/finetune/real-validation.pkl}
 # Per-series slots (src/bdbvhubrenewal/forecasters/slots.py): 0 trains
 # without them; N trains N slots beside the adapter. A slots run keeps to
