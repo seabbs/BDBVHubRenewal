@@ -141,7 +141,7 @@ def test_the_triangle_is_laid_out_as_the_ragged_block(
     assert future[0] == counts[4, :2].sum()
     assert np.isnan(future[1:]).all()
     assert set(group["past_covariates"]) == {
-        f"series_lag_{d}" for d in range(3)
+        f"series_lag_{d}" for d in range(2)
     }
 
 
@@ -178,7 +178,7 @@ def test_places_share_one_block(fake: _FakePipeline) -> None:
     )
     (group,) = fake.calls[0]["inputs"]
     assert group["target"].shape == (2, 4)
-    assert "south_lag_2" in group["past_covariates"]
+    assert "south_lag_1" in group["past_covariates"]
     assert set(out["place"]) == {"north", "south"}
 
 
