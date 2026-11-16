@@ -5,6 +5,7 @@ from __future__ import annotations
 import dataclasses
 import hashlib
 import importlib.util
+import tomllib
 from pathlib import Path
 
 import numpy as np
@@ -845,7 +846,17 @@ def test_the_simulation_checkpoints_keep_their_fit_keys() -> None:
     assert _checkpoint("abc").tag == "chronos-ft-abc"
 
 
-def test_the_german_checkpoint_is_pinned_to_a_hash() -> None:
-    spec = foundation.germany_spec()
-    assert spec != "latest"
-    assert len(spec) == 12
+def test_the_german_checkpoint_is_pinned_to_a_hash_or_pending() -> None:
+    # Pending ("") until the germany-ft release is published.
+    text = Path(foundation.FINETUNED_CONFIG).read_text()
+    pin = tomllib.loads(text)["germany"]
+    assert pin == "" or (pin != "latest" and len(pin) == 12)
+
+
+def test_a_pending_german_checkpoint_names_what_is_missing(
+    tmp_path: Path,
+) -> None:
+    config = tmp_path / "finetune.toml"
+    config.write_text('hash = "latest"\ngermany = ""\n')
+    with pytest.raises(ValueError, match="germany-ft"):
+        foundation.germany_spec(config)
