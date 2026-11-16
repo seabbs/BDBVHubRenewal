@@ -4,21 +4,19 @@ r"""Attention bias that ties a place's series together and to its parent.
 Chronos-2's group attention has no series identity, so in the ragged
 layout's joint block it cannot tell which place a lag series belongs to.
 This adds learned biases to the group attention scores of every encoder
-layer, per head, one for each kind of row pair (`pair_masks`). Within a
-place: its count series attending to one of its lag series,
-$b_\text{count-lag}$; a lag to its count, $b_\text{lag-count}$; and a lag
-to another lag, $b_\text{lag-lag}$. Between places: a child's row to its
-parent's (`parents_of`), $b_\text{up}$; and a parent's row to its child's,
-$b_\text{down}$. A row and itself gets none, so the diagonal keeps base
-Chronos-2's attention. The biases start at zero, so a model with them
-starts exactly as base Chronos-2, are kept in fp32, and need no codes,
-no table and no scale, for any number of places.
+layer, per head, one for each kind of row pair (`pair_masks`): a row and
+itself, $b_\text{self}$; a row and another of its place (its count series
+and all its lag series), $b_\text{same}$; a child's row and its parent's
+(`parents_of`), $b_\text{up}$; and a parent's row and its child's,
+$b_\text{down}$. The biases start at zero, so a model with them starts
+exactly as base Chronos-2, are kept in fp32, and need no codes, no table
+and no scale, for any number of places.
 
 Chronos-2's encoder builds one additive group mask, `(time, 1, q, k)`
 over the batch axis (`Chronos2Encoder._construct_and_invert_group_time_mask`),
 which each layer's `GroupSelfAttention` adds to its scores. `attach`
 hooks each `GroupSelfAttention` to add its layer's bias to that mask,
-from the rows' places, parents and roles set by `assigned`. Rows are the ragged
+from the rows' places and parents set by `assigned`. Rows are the ragged
 layout's order: the targets, then each place's lags in turn
 (`row_places`); rows that Chronos-2 repeats for long horizons
 repeat their place. The biases train beside the LoRA adapter as one of
@@ -114,10 +112,9 @@ def parents_of(places: Sequence[str]) -> list[int]:
 def block_rows(
     n_targets: int, n_covariates: int, parents: Sequence[int]
 ) -> np.ndarray:
-    """Return each row's place, its place's parent and role, `[3, rows]`.
+    """Return each row's place and its place's parent, `[2, rows]`.
 
-    Places are numbered in target order; a parent is -1 for none. The
-    role is 0 for a place's count series (the targets) and 1 for a lag.
+    Places are numbered in target order; a parent is -1 for none.
     """
     rows = (
         row_places(n_targets, n_covariates)
@@ -125,49 +122,38 @@ def block_rows(
         else np.arange(n_targets)
     )
     parent = np.asarray(parents, dtype=int)
-    role = (np.arange(len(rows)) >= n_targets).astype(int)
-    return np.stack([rows, parent[rows], role])
+    return np.stack([rows, parent[rows]])
 
 
 def batch_rows(blocks: Sequence[np.ndarray]) -> np.ndarray:
     """Return the rows of blocks batched together, places kept apart."""
     out, offset = [], 0
-    for place, parent, role in blocks:
+    for place, parent in blocks:
         out.append(
             np.stack(
-                [
-                    place + offset,
-                    np.where(parent >= 0, parent + offset, -1),
-                    role,
-                ]
+                [place + offset, np.where(parent >= 0, parent + offset, -1)]
             )
         )
         offset += int(place.max()) + 1 if len(place) else 0
     return np.concatenate(out, axis=1)
 
 
-def pair_masks(place: Any, parent: Any, role: Any) -> tuple[Any, ...]:
-    """Return the five kinds of row pair, each `[rows, rows]`, query first.
+def pair_masks(place: Any, parent: Any) -> tuple[Any, Any, Any, Any]:
+    """Return the four kinds of row pair, each `[rows, rows]`, query first.
 
-    Within a place (two different rows): its count attending to one of
-    its lags, a lag to its count, and a lag to another lag. Between
-    places: a child's row to its parent's (up) and a parent's row to its
-    child's (down). A row and itself is none of them, so the diagonal
-    keeps base Chronos-2's attention. A parent of -1 links nothing.
+    A row and itself; a row and another row of its place (its count and
+    lag series); a child's row and its parent's (up); and a parent's row
+    and its child's (down). A parent of -1 links nothing.
     """
     import torch
 
     me = torch.eye(len(place), dtype=torch.bool, device=place.device)
     same = (place[:, None] == place[None, :]) & ~me
-    lag = role == 1
-    count_lag = same & ~lag[:, None] & lag[None, :]
-    lag_count = same & lag[:, None] & ~lag[None, :]
-    lag_lag = same & lag[:, None] & lag[None, :]
     up = (parent[:, None] == place[None, :]) & (parent[:, None] >= 0)
-    return count_lag, lag_count, lag_lag, up, up.T
+    return me, same, up, up.T
 
 
-PAIRS: Final = ("count_lag", "lag_count", "lag_lag", "up", "down")
+PAIRS: Final = ("self_", "same", "up", "down")
 """The biases, one per kind of pair (`pair_masks`), in its order."""
 
 
@@ -244,7 +230,7 @@ def attach(model: Any) -> None:
             if n_rows % n:
                 raise ValueError(f"{n_rows} rows but places for {n}")
             rows = rows.to(hidden.device).repeat_interleave(n_rows // n, dim=-1)
-            masks = pair_masks(rows[0], rows[1], rows[2])
+            masks = pair_masks(rows[0], rows[1])
             bias = getattr(model, BIAS_MODULE)(layer, masks)
             return args, {
                 **kwargs,
