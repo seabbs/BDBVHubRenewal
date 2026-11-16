@@ -1156,6 +1156,8 @@ def _zones(
     A model that forecast the zones itself (`own`: the zone renewal fits,
     from the fit directory or the model) gives its zone samples, for the
     hub's zones. Otherwise the zones come from `zones_for_model`.
+    Zone samples with none of the hub's zones or target dates (a stale
+    `ZONES_FILE`) give no zones, and a note.
     """
     if own is not None:
         codes = set(hub_zones(hub_config))
@@ -1163,6 +1165,11 @@ def _zones(
             own["location"].isin(codes)
             & own["target_end_date"].astype(str).isin(task.target_end_dates)
         ]
+        if own.empty:
+            return None, (
+                "the fit's zone samples have none of the hub's zones or "
+                "target dates, so the file has no health zones"
+            )
         return own.reset_index(drop=True), ""
     try:
         daily = load_daily_zones(args.data)
