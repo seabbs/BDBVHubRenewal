@@ -6,7 +6,7 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
-<meta name="dcterms.date" content="2026-11-15">
+<meta name="dcterms.date" content="2026-11-16">
 
 <title>Supporting Information: title to be chosen</title>
 <style>
@@ -135,7 +135,7 @@ window.Quarto = {
     <div>
     <div class="quarto-title-meta-heading">Published</div>
     <div class="quarto-title-meta-contents">
-      <p class="date">November 15, 2026</p>
+      <p class="date">November 16, 2026</p>
     </div>
   </div>
   
@@ -629,7 +629,7 @@ Figure&nbsp;3: WIS relative to <code>randomwalknowcast</code> of the ragged Chro
 </section>
 <section id="the-held-out-synthetic-set" class="level4">
 <h4 class="anchored" data-anchor-id="the-held-out-synthetic-set">The held-out synthetic set</h4>
-<p>The held-out set is simulated on grid <code>r3</code> with seeds 8016 to 8025, 25 simulations each. These cover the complete balanced blocks 1670 to 1671, and simulations outside them are not used. We evaluate draw 1 of each simulation, so the outbreaks are independent. The seeds are disjoint from the fine-tune’s training and held-out seeds (<code>config/finetune/r3.env</code>). The simulations are written to <code>../output/finetune/heldout</code>, and the workflow config records them. The synthetic runner of #192 runs the models on the set.</p>
+<p>The held-out set is simulated on grid <code>r3</code> with seeds 8016 to 8025, 25 simulations each. These cover the complete balanced blocks 1670 to 1671, and simulations outside them are not used. We evaluate draw 1 of each simulation, so the outbreaks are independent. The seeds are disjoint from the fine-tune’s training and held-out seeds (<code>config/finetune/r3.env</code>). The simulations are written to <code>../output/finetune/heldout</code>, and the workflow config records them. The synthetic runner runs the models on the set.</p>
 <p>The held-out set was reserved for the final evaluation. No model was scored on it during development. We checked the pipeline on the r3 pilot seeds 9501 to 9504, whose forecasts are not results.</p>
 <section id="protocol" class="level5">
 <h5 class="anchored" data-anchor-id="protocol">Protocol</h5>
