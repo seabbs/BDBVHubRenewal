@@ -721,3 +721,12 @@ def test_univariate_share_gives_single_series_blocks(tmp_path, monkeypatch):
         assert len(block["levels"]) == 1
     monkeypatch.setattr(finetune_chronos, "UNIVARIATE_SHARE", 0.0)
     assert all(b["mix"] != "univariate" for _, b in cut(tmp_path, ids, 1, 4))
+
+
+def test_excluded_simulations_are_not_read(tmp_path, monkeypatch):
+    import finetune_stream
+
+    _sim_dir(tmp_path)
+    monkeypatch.setattr(finetune_stream, "_READY", {})
+    monkeypatch.setattr(finetune_stream, "EXCLUDED", {"6001-0001"})
+    assert finetune_stream.batch_outbreaks(tmp_path, 6001) == ["6001-0002"]
