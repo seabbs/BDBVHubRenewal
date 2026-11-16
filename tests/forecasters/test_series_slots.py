@@ -243,3 +243,10 @@ def test_inference_assigns_slots_by_place(monkeypatch, tmp_path):
     b = foundation.chronos_sampler([group(swapped(block))], H, 50, 1)[0]
     assert np.array_equal(a, again)
     assert not np.allclose(a, b)
+
+
+def test_slots_are_made_on_the_models_device():
+    model = tiny_model().to("meta")
+    slots.attach(model, 4)
+    for p in getattr(model, slots.SLOT_MODULE).parameters():
+        assert p.device.type == "meta"
