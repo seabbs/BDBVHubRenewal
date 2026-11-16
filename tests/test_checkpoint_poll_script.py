@@ -69,3 +69,12 @@ def test_the_zero_shot_reference_lands_before_any_checkpoint(poll, tmp_path):
     # Once landed (its stamp written), the reference is not pending.
     (tmp_path / poll.REFERENCE_STAMP).write_text("abc\n")
     assert poll.reference_pending(tmp_path) == []
+
+
+def test_only_slots_checkpoints_start_the_follow_up_jobs(poll) -> None:
+    # The aggregation arms and the slots check run for the final run only.
+    cmd = poll.follow_ups("slots-dddddddddddd")
+    assert cmd is not None
+    assert cmd[-1] == "slots-dddddddddddd"
+    assert Path(cmd[0]).name == "slots_followups.sh"
+    assert poll.follow_ups("aaaaaaaaaaaa") is None

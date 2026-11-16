@@ -305,3 +305,23 @@ def test_freeing_caches_clears_jax_s_compiled_functions(cs) -> None:
     assert f._cache_size() == 1
     cs.free_caches()
     assert f._cache_size() == 0
+
+
+def test_slots_checkpoints_are_scored_first_under_their_paper_label(
+    cs,
+) -> None:
+    # The paper's evidence comes from the final slots run: its releases are
+    # chronos-slots-<hash>, pinned and named slots-<hash>, ahead of the
+    # no-slots run's.
+    releases = [
+        *RELEASES,
+        _release("chronos-slots-dddddddddddd", "2026-11-17T12:00:00Z"),
+        _release("chronos-slots-eeeeeeeeeeee", "2026-11-17T10:00:00Z"),
+    ]
+    queue = cs.checkpoint_queue(releases, scored={"slots-eeeeeeeeeeee"})
+    assert queue == ["slots-dddddddddddd", "aaaaaaaaaaaa", "bbbbbbbbbbbb"]
+
+
+def test_each_checkpoint_label_maps_to_its_release(cs) -> None:
+    assert cs.release_of("slots-dddddddddddd") == "chronos-slots-dddddddddddd"
+    assert cs.release_of("aaaaaaaaaaaa") == "chronos-ft-aaaaaaaaaaaa"
