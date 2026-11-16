@@ -5,7 +5,10 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from bdbvhubrenewal.forecasters.introductions import introduction_rates
+from bdbvhubrenewal.forecasters.introductions import (
+    _depth,
+    introduction_rates,
+)
 
 # Country 0, provinces 1 and 2, zones 3 and 4 in province 1 and zones 5
 # and 6 in province 2.
@@ -35,15 +38,17 @@ def test_first_cases_and_reintroductions_have_their_own_rates() -> None:
     np.testing.assert_allclose(q[:3], 1 / 2)
 
 
-def test_a_zone_with_no_introduction_among_its_siblings_takes_the_rest():
+def test_a_zone_with_no_introduction_among_its_siblings_takes_the_rest() -> (
+    None
+):
     q = introduction_rates(_reported(), np.full(7, 11), PARENT, 3)
     # Province 1's zones have no re-introduction in weeks 9 to 11. The
     # zones of province 2 have 1 in 2 weeks at risk, so the global term
     # gives them 1 / 2 rather than 0.
     np.testing.assert_allclose(q[3:5], 1 / 2)
-    # Zone 5 has no first case among its siblings in the window, and the
-    # whole history no longer stands in. Zone 4's first case in week 10,
-    # after weeks 9 and 10 with none, gives the global 1 / 2.
+    # Zone 5 has no first case among its siblings in the window. Zone 4's
+    # first case in week 10, after weeks 9 and 10 with none, gives the
+    # global 1 / 2.
     assert q[5] == pytest.approx(1 / 2)
 
 
@@ -61,7 +66,23 @@ def test_local_and_global_pressures_combine_as_independent_sources() -> None:
 
 
 def test_the_rate_is_0_only_when_the_whole_level_has_no_introduction() -> None:
-    # Starting at week 8 no place has a case in weeks 6 to 8, and the
-    # whole history does not stand in, so every rate is 0.
+    # Starting at week 8 no place has a case in weeks 6 to 8, so no pool
+    # has an introduction and every rate is 0.
     early = introduction_rates(_reported(), np.full(7, 8), PARENT, 3)
     np.testing.assert_allclose(early, 0.0)
+
+
+def test_places_at_different_depths_never_pool_as_one_level() -> None:
+    # Country 0, provinces 1 and 2, and one zone, 3, in province 1 only.
+    parent = np.array([-1, 0, 0, 1])
+    np.testing.assert_array_equal(_depth(parent), [0, 1, 1, 2])
+    reported = np.zeros((4, 12))
+    reported[3, 1] = 1  # zone 3: seen early, silent since
+    reported[2, [2, 10]] = 1  # province 2: back in the window
+    reported[1] = reported[3]
+    reported[0] = reported[1] + reported[2]
+    q = introduction_rates(reported, np.full(4, 11), parent, 3)
+    # Province 2's re-introduction is not the zone's pressure: zone 3 has
+    # no sibling and no other zone, so its rate is 0.
+    assert q[3] == 0
+    assert q[2] > 0

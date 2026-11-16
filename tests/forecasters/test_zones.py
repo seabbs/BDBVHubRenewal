@@ -25,6 +25,7 @@ from bdbvhubrenewal.forecasters.zones import (
     _apportion,
     check_zone_coherence,
     reconcile_zones,
+    walks_own_zones,
     zone_forecast,
     zone_task,
     zones_for_model,
@@ -468,7 +469,9 @@ def test_zone_hub_table_validates_with_the_zone_models_own_draws(
     prov = model.forecast(open_task)
     got = zone_forecast(model, open_task, open_counts, zones, daily_zones)
     ref = open_task.reference_date
-    table = to_hub_table(prov, ref, zones=got, forecast_date=ref)
+    table = to_hub_table(
+        prov, ref, zones=got, forecast_date=ref, zones_sum=False
+    )
     keys = ["location", "output_type_id", "target_end_date"]
     zone_rows = table.loc[table["location"].str.count("-") == 2]
     # The zone rows are the zone model's draws, not a split of provinces.
@@ -489,7 +492,7 @@ def test_zone_hub_table_validates_with_the_zone_models_own_draws(
     assert _hub_failures(path) == []
 
 
-def test_zones_need_not_sum_to_their_provinces_in_the_hub_table(
+def test_hub_table_checks_zone_sums_unless_told_not_to(
     open_task: ForecastTask, open_counts: pd.DataFrame, zones: tuple[str, ...]
 ) -> None:
     prov = RandomWalk().forecast(open_task)
@@ -498,8 +501,23 @@ def test_zones_need_not_sum_to_their_provinces_in_the_hub_table(
     alloc.loc[alloc.index[0], "value"] += 1
     assert check_zone_coherence(prov, alloc)
     ref = open_task.reference_date
-    table = to_hub_table(prov, ref, zones=alloc, forecast_date=ref)
+    # A split model's zones must sum to its provinces.
+    with pytest.raises(ValueError, match="zone"):
+        to_hub_table(prov, ref, zones=alloc, forecast_date=ref)
+    # The random walks' own zone draws need not.
+    table = to_hub_table(
+        prov, ref, zones=alloc, forecast_date=ref, zones_sum=False
+    )
     assert set(alloc["location"]) <= set(table["location"])
+
+
+def test_only_the_random_walks_forecast_their_own_zones() -> None:
+    assert walks_own_zones("randomwalk")
+    assert walks_own_zones("randomwalknowcast")
+    assert not walks_own_zones("renewal")
+    assert not walks_own_zones("pprandomwalknowcast")
+    assert not walks_own_zones(None)
+    assert not walks_own_zones("not-a-model")
 
 
 def test_walk_models_take_their_zone_draws_and_others_the_split(
