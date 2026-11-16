@@ -28,7 +28,10 @@ def _sync(tmp_path, remote):
             "-c",
             f'source "{SCRIPT}"; HERE={tmp_path}/local; '
             f'remote_ls() {{ ls "{remote}"; }}; '
-            f'pull() {{ mkdir -p "$3"; cp -R "{remote}/$1/$2" "$3"; }}; '
+            # GNU and BSD cp agree on a folder's contents only as `src/.`.
+            f'pull() {{ mkdir -p "$3"; s="{remote}/$1/$2"; '
+            'if [ -d "$s" ]; then cp -R "$s/." "$3"; '
+            'else cp "$s" "$3"; fi; }; '
             "sync_rounds; cat $HERE/seeds.txt",
         ],
         cwd=tmp_path,
