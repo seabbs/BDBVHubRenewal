@@ -74,7 +74,11 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
 - Fine-tuned on synthetic data on a laptop from the base Chronos-2 weights, with Chronos-2's default LoRA settings and loss, and a prediction length equal to each block's horizon. The learning rate starts at $10^{-5}$ and falls linearly to zero at 8,000 simulations.
 - Each simulation gives 10 observation draws. At each of 16 cut-offs, 2 of the 10 draws are sampled, so one simulation gives 32 blocks. Blocks are cut from weekly, daily and 3-day releases, and a fifth of them are single-stratum series from the same simulations, so training sees multivariate and univariate series from one pool.
 - Training runs continuously up to 8,000 simulations, with checkpoints at 1,000, 2,000, 4,000 and 8,000.
-- Levels: Chronos-2 forecasts the country, provinces and health zones as separate series in one joint block, so each level is forecast directly and not summed. The alternatives, each level in its own block or the lowest level summed up with its draws paired at random or by the copula, are compared in the SI. The copula only pairs draws across weeks and places, for joint scores and sums, and leaves every marginal forecast unchanged.
+- Levels: Chronos-2 forecasts the country, provinces and health zones as separate series in one joint block, so each level is forecast directly and not summed. The copula only pairs draws across weeks and places, for joint scores and sums, and leaves every marginal forecast unchanged.
+- SI, aggregation options: the joint block against each level in its own block, and against the lowest level summed up with its draws paired at random or by the copula.
+- SI, lag cap: the lag series stop at 4 weeks or 28 days, compared with lags run to the truth delay.
+- SI, checkpoint curve: scores of each checkpoint against the number of simulations it was trained on.
+- SI, real data: Chronos-2 fine-tuned on real data, compared with the model fine-tuned on simulations on the German held-out half and the scored BDBV rounds.
 - Compared with Chronos-2 given only complete data points, to show what the ragged structure and fine-tuning add.
 - Figure 1, a multi-panel schematic of our pipeline: (A) the assumptions in the epinowcast simulations, (B) the reporting triangle laid out as ragged series for Chronos-2, (C) training blocks and LoRA fine-tuning, and why it is fast, and (D) forecasting with the fine-tuned model.
 - Key references: [@Ansari2025; @Ansari2024; @Hu2021; @Das2024b].
@@ -130,12 +134,13 @@ An origin with no matured errors takes the prior.
 We score the paired trajectories with the energy score [@Gneiting2008] and the variogram score of order 0.5 [@Scheuerer2015] on $\log(x + 1)$ counts.
 Both are proper scores for joint forecasts [@gneitingStrictlyProperScoring2007], and the energy score has been used for epidemic trajectories from forecast hubs [@Bay2026].
 We also report the coverage of sums over weeks and over places.
-The estimator, its window and the evidence for it are in the SI.
+The SI gives the copula in full, its estimator and window, and the scores of paired against unpaired trajectories.
 
 ### Evaluation on held-out synthetic data
 
 ::: {.callout-note title="Plan"}
 - A held-out set of simulations was not used during development.
+- SI, held-out set: its seeds, size and grid.
 - Sample forecasts scored with CRPS and log-scale CRPS, bias, and coverage, relative to `randomwalknowcast`.
 - Scored against a rolling evaluation set of the data as reported D days later, with D each outbreak's 98% delay.
 - Key references: [@bracherEvaluatingEpidemicForecasts2021; @Bosse2023-sx; @gneitingStrictlyProperScoring2007; @gneitingProbabilisticForecastsCalibration2007; @sherrattPredictivePerformanceMultimodel2023].
