@@ -184,9 +184,8 @@ def slot_settings(
             "learning_rate": lr,
             "weight_decay": 0.01,
             "parent": {
-                "link": "own slot plus a learned share of the parent's own "
-                "slot, from the same table",
-                "scale_init": slots.PARENT_SCALE,
+                "link": "own slot plus the parent's own slot, from the same "
+                "table",
                 "rule": "nearest '-' prefix in the block, else the country "
                 f"({', '.join(slots.COUNTRIES)})",
             },

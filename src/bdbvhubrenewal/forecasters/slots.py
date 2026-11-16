@@ -64,10 +64,6 @@ EVAL_SEED: Final = 0
 _STATE: Final = "_series_slot_state"
 """Attribute of a model with slots holding the next batch's slots."""
 
-PARENT_SCALE: Final = 0.5
-"""Starting share of a place's parent's slot added to its own. Learned;
-below 1, so a child's own slot and its parent's are not interchangeable."""
-
 COUNTRIES: Final = ("CD", "DE")
 """Codes of the whole country (BDBV, Germany): the parent of a place with
 no nearer parent in its block."""
@@ -164,11 +160,12 @@ def _slots_module(n_slots: int, d_model: int, parent: bool = True) -> Any:
             self.embedding = nn.Embedding(n_slots, d_model)
             nn.init.zeros_(self.embedding.weight)
             if parent:
-                self.parent_scale = nn.Parameter(torch.tensor(PARENT_SCALE))
+                # Marks slots that add each place's parent's; not trained.
+                self.register_buffer("parent_link", torch.ones(()))
 
         def forward(self, ids: torch.Tensor) -> torch.Tensor:
             """Own slots `[rows]`, or own and parents' `[2, rows]`."""
-            if ids.ndim == 2 and not hasattr(self, "parent_scale"):
+            if ids.ndim == 2 and not hasattr(self, "parent_link"):
                 ids = ids[0]
             if ids.ndim == 1:
                 out: torch.Tensor = self.embedding(ids)
@@ -176,7 +173,7 @@ def _slots_module(n_slots: int, d_model: int, parent: bool = True) -> Any:
             own, parent = ids
             linked = (parent >= 0).unsqueeze(-1)
             vectors = self.embedding(parent.clamp(min=0)) * linked
-            return self.embedding(own) + self.parent_scale * vectors
+            return self.embedding(own) + vectors
 
     return SeriesSlots()
 
@@ -220,7 +217,7 @@ def attach(
     The slots start at zero, so the model is unchanged, or with
     `init_std` as distinct codes drawn from a normal with that sd, seeded
     by `seed`. Loading an adapter that holds slots replaces them. With
-    `parent`, each place also adds a learned share of its parent's slot.
+    `parent`, each place also adds its parent's slot.
     """
     import torch
 
@@ -285,22 +282,19 @@ def adapter_slots(adapter: Path | str) -> int | None:
 
 
 def has_parent_link(model: Any) -> bool:
-    """Whether a model's slots add a share of each place's parent's."""
+    """Whether a model's slots add each place's parent's."""
     base = _base(model)
     if base is None:
         return False
-    return any(
-        "parent_scale" in n
-        for n, _ in getattr(base, SLOT_MODULE).named_parameters()
-    )
+    return hasattr(getattr(base, SLOT_MODULE), "parent_link")
 
 
 def adapter_parent_link(adapter: Path | str) -> bool:
-    """Whether an adapter's slots hold the parent link (`parent_scale`)."""
+    """Whether an adapter's slots hold the parent link (`parent_link`)."""
     from safetensors import safe_open
 
     with safe_open(Path(adapter) / "adapter_model.safetensors", "pt") as f:
-        return any("parent_scale" in key for key in f.keys())  # noqa: SIM118
+        return any("parent_link" in key for key in f.keys())  # noqa: SIM118
 
 
 def load_adapter(model: Any, adapter: Path | str) -> Any:
