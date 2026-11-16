@@ -434,3 +434,43 @@ def test_aggregation_options_name_the_lowest_level_not_zones() -> None:
 
     assert OPTIONS["zones_summed"] == "Lowest level summed"
     assert OPTIONS["zones_copula"] == "Lowest level summed after pairing"
+
+
+def test_checkpoint_curves_show_the_untuned_models_as_lines() -> None:
+    # The fine-tuned checkpoints are the curve; zero-shot Chronos-2 on the
+    # ragged layout and on complete data only are horizontal lines, and
+    # randomwalknowcast is the line at 1.
+    from paperpipe.evidence import checkpoint_figure
+
+    rows = pd.DataFrame(
+        {
+            "study": "germany",
+            "level": "national",
+            "model": [
+                "fm_chronos_daily_ragged",
+                "fm_chronos_daily_ragged",
+                "fm_chronos_daily_ragged",
+                "fm_chronos_daily_complete",
+            ],
+            "checkpoint": ["zero-shot", "a", "b", "zero-shot"],
+            "outbreaks": [0, 1000, 2000, 0],
+            "n": 400,
+            "rel_wis": [2.0, 1.5, 1.2, 1.7],
+        }
+    )
+    fig = checkpoint_figure(rows)
+    ax = [a for a in fig.axes if a.get_visible()][0]
+    lines = {line.get_label(): line for line in ax.get_lines()}
+    curve = lines["fm_chronos_daily_ragged, fine-tuned"]
+    assert list(curve.get_xdata()) == [1000, 2000]
+    zero = lines["fm_chronos_daily_ragged, zero-shot"]
+    complete = lines["fm_chronos_daily_complete, complete data only"]
+    assert set(zero.get_ydata()) == {2.0}
+    assert set(complete.get_ydata()) == {1.7}
+    # One colour per source, the references in other line styles.
+    assert zero.get_color() == curve.get_color() == complete.get_color()
+    assert len({zero.get_linestyle(), complete.get_linestyle()}) == 2
+    assert set(lines["randomwalknowcast"].get_ydata()) == {1}
+    legend = [t.get_text() for t in fig.legends[0].get_texts()]
+    assert "fm_chronos_daily_complete, complete data only" in legend
+    assert "randomwalknowcast" in legend
