@@ -1,0 +1,622 @@
+"""The paper's evaluation, from each study's data to the rendered paper.
+
+Run from `paper/` with `task pipeline:dev`, `task pipeline:paper` or
+`task paper`. Every step is `python -m paperpipe <step>` or the
+`bdbvhubrenewal` command line, run with the Python that runs the
+workflow. Outputs go to `<results>/<mode>/`, so development and paper
+runs never share a file, and `publish` copies a run's figures, tables and
+numbers to `build/`, which `main.qmd` and `si.qmd` read.
+
+Targets:
+
+- `development`: the development seeds and the German first half only;
+- `paper`: the held-out seeds and both German halves, split by half;
+- `render`: the paper as HTML and PDF from the last published run.
+
+The held-out sets are the `heldout` block of `config.yaml`.
+`paperpipe.config.run_settings` keeps them out of a development run and
+the German held-out benchmark rule runs only for a paper run. The `data`
+rule fails if development German data hold a held-out target date or a
+release later than its truth needs, and the `table` rule if a development
+forecast table holds any held-out row.
+
+In a development run, a study without its real data runs on dummy data,
+labelled as such on every figure and in the paper. A paper run fails
+instead, naming the study and what is missing (`paperpipe.studies`).
+"""
+
+import json
+import os
+import shlex
+import sys
+import tomllib
+from pathlib import Path
+
+from snakemake.exceptions import WorkflowError
+
+PAPER = Path(workflow.basedir).parent
+sys.path.insert(0, str(PAPER))
+
+from paperpipe.config import MODES, run_settings  # noqa: E402
+from paperpipe.evidence import EVIDENCE as EVIDENCE_NAMES  # noqa: E402
+from paperpipe.outputs import (  # noqa: E402
+    JOINT_STUDIES,
+    MAIN_TABLES,
+    SI_TABLES,
+    figure_names,
+)
+
+
+configfile: str(PAPER / "workflow" / "config.yaml")
+
+
+workdir: str(PAPER)
+
+
+R = config["results"]
+BUILD = config["build"]
+STUDIES = config["studies"]
+# Run each step with the Python running the workflow.
+PYTHON = shlex.quote(sys.executable)
+BDBV = shlex.quote(str(Path(sys.executable).parent / "bdbvhubrenewal"))
+GERMANY = config["germany"]
+EBOLA = config["ebola"]
+SYNTHETIC = config["synthetic"]
+TRIANGLE = f"{GERMANY['data']}/COVID-19_hospitalizations.csv"
+
+# The benchmark's command line holds out the dates from its own split.
+with open(GERMANY["config"], "rb") as f:
+    _split = tomllib.load(f)["nowcast"]["split_date"]
+if str(_split) != str(config["heldout"]["germany_from"]):
+    raise WorkflowError(
+        f"{GERMANY['config']} splits at {_split} but `heldout.germany_from` "
+        f"is {config['heldout']['germany_from']}."
+    )
+
+
+# Rows from evidence branches, pinned by commit in `evidence` (config).
+EVIDENCE = {
+    name: entry
+    for name, entry in (config.get("evidence") or {}).items()
+    if entry
+}
+
+
+def evidence_file(name):
+    """The extracted file, named by its commit so a new pin extracts anew."""
+    entry = EVIDENCE[name]
+    suffix = "".join(Path(entry["path"]).suffixes)
+    return f"{R}/evidence/{name}-{entry['ref'][:12]}{suffix}"
+
+
+for name, entry in EVIDENCE.items():
+
+    rule:
+        name:
+            f"evidence_{name}"
+        output:
+            evidence_file(name),
+        params:
+            ref=entry["ref"],
+            path=entry["path"],
+        shell:
+            "(git cat-file -e {params.ref}^{{commit}} 2>/dev/null || "
+            "git fetch -q origin {params.ref}) && "
+            "git show {params.ref}:{params.path} > {output}"
+
+
+def provisional(study):
+    """What is provisional in a study's further forecasts, if anything."""
+    block = {"germany": GERMANY, "ebola": EBOLA}.get(study, {})
+    notes = [e.get("provisional") for e in block.get("extra") or []]
+    return " ".join(dict.fromkeys(n for n in notes if n))
+
+
+def ebola_extra(mode):
+    """Further Ebola samples, each kept to its models."""
+    return [
+        f"{R}/evidence/ebola-extra-{i}.csv.gz"
+        for i in range(len(EBOLA.get("extra") or []))
+    ]
+
+
+def extra_args(entry):
+    """The `germany-extra` options of a `germany.extra` entry."""
+    args = []
+    if entry.get("models"):
+        args.append(f"--models {shlex.quote(entry['models'])}")
+    if entry.get("suffix"):
+        args.append(f"--suffix {shlex.quote(entry['suffix'])}")
+    if entry.get("backtest"):
+        args.append("--backtest")
+    return " ".join(args)
+
+
+# Further Ebola samples from evidence rows, kept to their models.
+for i, entry in enumerate(EBOLA.get("extra") or []):
+
+    rule:
+        name:
+            f"ebola_extra_{i}"
+        input:
+            evidence_file(entry["evidence"]),
+        output:
+            f"{R}/evidence/ebola-extra-{i}.csv.gz",
+        params:
+            models=shlex.quote(entry.get("models") or "."),
+        shell:
+            "{PYTHON} -m paperpipe ebola-extra --input {input} "
+            "--models {params.models} --out {output}"
+
+
+# Further German forecasts from evidence rows, as paper tables.
+for i, entry in enumerate(GERMANY.get("extra") or []):
+
+    rule:
+        name:
+            f"germany_extra_{i}"
+        input:
+            evidence_file(entry["evidence"]),
+        output:
+            f"{R}/evidence/germany-extra-{i}.csv.gz",
+        params:
+            args=extra_args(entry),
+        shell:
+            "{PYTHON} -m paperpipe germany-extra --input {input} "
+            "{params.args} --out {output}"
+
+
+wildcard_constraints:
+    mode="|".join(MODES),
+    study="|".join(STUDIES),
+
+
+def settings(w):
+    return run_settings(config, w.mode)
+
+
+def germany_tables(mode):
+    """The German benchmark's paper tables a run reads."""
+    if not GERMANY["real"]:
+        return []
+    halves = [""] if mode == "development" else ["", "held-out/"]
+    tables = [f"{GERMANY['results']}/{h}paper-forecasts.csv.gz" for h in halves]
+    extra = [
+        f"{R}/evidence/germany-extra-{i}.csv.gz"
+        for i in range(len(GERMANY.get("extra") or []))
+    ]
+    return tables + extra
+
+
+def sources(w):
+    """A study's real data, as command line arguments."""
+    if w.study == "synthetic":
+        fc = SYNTHETIC["forecasts"][w.mode]
+        return f"--synthetic-forecasts {shlex.quote(fc)}" if fc else ""
+    if w.study == "germany" and GERMANY["real"]:
+        tables = " ".join(germany_tables(w.mode))
+        return f"--germany-forecasts {tables} --germany-triangle {TRIANGLE}"
+    if w.study == "ebola" and EBOLA["hub"]:
+        args = [
+            f"--hub {shlex.quote(EBOLA['hub'])}",
+            f"--ebola-data {shlex.quote(EBOLA['data'])}",
+            f"--ebola-config {shlex.quote(EBOLA['config'])}",
+            f"--ebola-backtest {shlex.quote(EBOLA['backtest'])}",
+        ]
+        if EBOLA.get("extra"):
+            files = " ".join(ebola_extra(w.mode))
+            args.append(f"--ebola-extra {files}")
+        if EBOLA["candidates"]:
+            files = " ".join(shlex.quote(c) for c in EBOLA["candidates"])
+            args.append(f"--candidates {files}")
+        if EBOLA["store"]:
+            args.append(f"--store {shlex.quote(EBOLA['store'])}")
+            args.append(f"--store-ref {EBOLA['store_ref']}")
+        return " ".join(args)
+    return ""
+
+
+def source_files(w):
+    """Files a study's real data come from, built by the rules below."""
+    if w.study == "germany":
+        triangle = [TRIANGLE] if GERMANY["real"] else []
+        return [*germany_tables(w.mode), *triangle]
+    if w.study == "ebola" and EBOLA["hub"]:
+        hub = f"{EBOLA['hub']}/target-data/time-series.csv"
+        extra = ebola_extra(w.mode)
+        target = f"{EBOLA['data']}/target.csv"
+        return [hub, target, EBOLA["backtest"], *extra]
+    return []
+
+
+def limits(w):
+    """Data limits of a study's loader, as command line arguments."""
+    s = settings(w)
+    if w.study == "synthetic":
+        return "--seeds " + " ".join(str(x) for x in s.synthetic_seeds)
+    if w.study == "germany" and s.germany_before is not None:
+        return f"--before {s.germany_before:%Y-%m-%d}"
+    return ""
+
+
+def figures(mode, study):
+    return [
+        f"{R}/{mode}/figures/{part}/{study}-{name}.png"
+        for part in ("main", "si")
+        for name in figure_names(study, part)
+    ]
+
+
+def tables(mode, study):
+    main = [*MAIN_TABLES, *(["grid"] if study == "synthetic" else [])]
+    return [f"{R}/{mode}/tables/main/{study}-{n}.csv" for n in main] + [
+        f"{R}/{mode}/tables/si/{study}-{n}.csv" for n in SI_TABLES
+    ]
+
+
+def outputs(mode):
+    design = [
+        f"{R}/{mode}/tables/main/synthetic-design.md",
+        *(
+            f"{R}/{mode}/tables/si/{n}.md"
+            for n in ("synthetic-design", "epinowcast-model", "heldout-set")
+        ),
+    ]
+    evidence = [f"{R}/{mode}/evidence.yml"]
+    joint = [
+        f"{R}/{mode}/tables/main/{study}-joint.md"
+        for study in STUDIES
+        if study in JOINT_STUDIES
+    ]
+    return evidence + design + joint + [
+        path
+        for study in STUDIES
+        for path in [*figures(mode, study), *tables(mode, study)]
+    ]
+
+
+rule development:
+    input:
+        f"{R}/development/published",
+
+
+rule paper:
+    input:
+        f"{R}/paper/published",
+
+
+rule render:
+    input:
+        f"{R}/{config['render']}/published",
+        "main.qmd",
+        "si.qmd",
+    output:
+        "main.html",
+        "main.pdf",
+        "si.html",
+        "si.pdf",
+    shell:
+        "quarto render main.qmd && quarto render si.qmd"
+
+
+rule germany_fetch:
+    output:
+        TRIANGLE,
+    shell:
+        "{BDBV} germany-fetch --config {GERMANY[config]} "
+        "--out {GERMANY[data]}"
+
+
+rule germany_development:
+    input:
+        TRIANGLE,
+    output:
+        f"{GERMANY['results']}/paper-forecasts.csv.gz",
+    params:
+        args=f"--config {GERMANY['config']} --data {GERMANY['data']}",
+        out=GERMANY["results"],
+    shell:
+        "{BDBV} germany-backtest {params.args} --out {params.out} && "
+        "{BDBV} germany-teams {params.args} --out {params.out} && "
+        "{BDBV} germany-paper --config {GERMANY[config]} "
+        "--results {params.out}"
+
+
+# Only a paper run asks for this, so development never runs it.
+rule germany_heldout:
+    input:
+        TRIANGLE,
+    output:
+        f"{GERMANY['results']}/held-out/paper-forecasts.csv.gz",
+    params:
+        args=f"--config {GERMANY['config']} --data {GERMANY['data']}",
+        out=GERMANY["results"],
+    shell:
+        "{BDBV} germany-backtest {params.args} --held-out "
+        "--out {params.out} && "
+        "{BDBV} germany-teams {params.args} --held-out --out {params.out} && "
+        "{BDBV} germany-paper --config {GERMANY[config]} "
+        "--results {params.out}/held-out"
+
+
+rule ebola_hub:
+    output:
+        f"{EBOLA['hub']}/target-data/time-series.csv",
+    params:
+        repo=EBOLA["hub_repo"],
+        hub=EBOLA["hub"],
+    # Snakemake makes the output's folders first, so clone beside them.
+    shell:
+        "rm -rf {params.hub}.clone && "
+        "git clone --quiet --depth 1 {params.repo} {params.hub}.clone && "
+        "rm -rf {params.hub} && mv {params.hub}.clone {params.hub}"
+
+
+# The release backtest of the models on main, from every past release. CI
+# has run it by the paper step, so this rule then has nothing to do.
+rule ebola_backtest:
+    output:
+        EBOLA["backtest"],
+        f"{EBOLA['data']}/target.csv",
+    params:
+        models=" ".join(EBOLA["backtest_models"]),
+    shell:
+        "cd .. && {BDBV} data && "
+        "{BDBV} backtest --models {params.models} --no-recovery"
+
+
+rule data:
+    input:
+        source_files,
+    output:
+        observations=f"{R}/{{mode}}/data/{{study}}-observations.csv.gz",
+        locations=f"{R}/{{mode}}/data/{{study}}-locations.csv",
+        meta=f"{R}/{{mode}}/data/{{study}}-meta.json",
+    params:
+        limits=limits,
+        sources=sources,
+        delay=lambda w: (
+            f"--delay {config['truth_delay'][w.study]}"
+            if w.study in config.get("truth_delay", {})
+            else ""
+        ),
+        note=lambda w: (
+            f"--note {shlex.quote(provisional(w.study))}"
+            if provisional(w.study)
+            else ""
+        ),
+        config=shlex.quote(json.dumps(config)),
+    shell:
+        "{PYTHON} -m paperpipe data {wildcards.study} {params.limits} "
+        "{params.sources} {params.delay} {params.note} "
+        "--mode {wildcards.mode} "
+        "--config {params.config} "
+        "--observations {output.observations} "
+        "--locations {output.locations} --meta {output.meta}"
+
+
+rule forecasts:
+    input:
+        observations=rules.data.output.observations,
+        meta=rules.data.output.meta,
+    output:
+        f"{R}/{{mode}}/raw/{{study}}.csv.gz",
+    params:
+        limits=limits,
+        sources=sources,
+        n_samples=config["n_samples"],
+    shell:
+        "{PYTHON} -m paperpipe forecasts {wildcards.study} {params.limits} "
+        "{params.sources} --meta {input.meta} "
+        "--n-samples {params.n_samples} --out {output}"
+
+
+rule table:
+    input:
+        rules.forecasts.output,
+    output:
+        f"{R}/{{mode}}/forecasts/{{study}}.csv.gz",
+    params:
+        config=shlex.quote(json.dumps(config)),
+    shell:
+        "{PYTHON} -m paperpipe table --raw {input} --mode {wildcards.mode} "
+        "--config {params.config} --out {output}"
+
+
+rule truth:
+    input:
+        observations=rules.data.output.observations,
+        locations=rules.data.output.locations,
+    output:
+        f"{R}/{{mode}}/truth/{{study}}.csv.gz",
+    params:
+        rule=lambda w: (
+            "--first-after"
+            if w.study in config.get("truth_first_after", [])
+            else ""
+        ),
+    shell:
+        "{PYTHON} -m paperpipe truth {params.rule} "
+        "--observations {input.observations} "
+        "--locations {input.locations} --out {output}"
+
+
+rule scores:
+    input:
+        forecasts=rules.table.output,
+        truth=rules.truth.output,
+    output:
+        f"{R}/{{mode}}/scores/{{study}}.csv.gz",
+    # One memory-heavy step at a time with `--resources heavy=1`.
+    resources:
+        heavy=1,
+    shell:
+        "{PYTHON} -m paperpipe scores --forecasts {input.forecasts} "
+        "--truth {input.truth} --out {output}"
+
+
+rule joint_scores:
+    input:
+        forecasts=rules.table.output,
+        truth=rules.truth.output,
+        meta=rules.data.output.meta,
+    output:
+        scores=f"{R}/{{mode}}/scores/{{study}}-joint.csv.gz",
+        table=f"{R}/{{mode}}/tables/main/{{study}}-joint.md",
+    # One memory-heavy step at a time with `--resources heavy=1`.
+    resources:
+        heavy=1,
+    shell:
+        "{PYTHON} -m paperpipe joint-scores --forecasts {input.forecasts} "
+        "--meta {input.meta} "
+        "--truth {input.truth} --out {output.scores} --table {output.table}"
+
+
+def study_split(mode, study):
+    s = run_settings(config, mode)
+    if study == "germany" and s.germany_split is not None:
+        return f"--split {s.germany_split:%Y-%m-%d}"
+    return ""
+
+
+def study_files(study):
+    """A study's data, forecasts and scores, with `{mode}` left open."""
+    return {
+        "forecasts": f"{R}/{{mode}}/forecasts/{study}.csv.gz",
+        "observations": f"{R}/{{mode}}/data/{study}-observations.csv.gz",
+        "locations": f"{R}/{{mode}}/data/{study}-locations.csv",
+        "meta": f"{R}/{{mode}}/data/{study}-meta.json",
+        "scores": f"{R}/{{mode}}/scores/{study}.csv.gz",
+        "truth": f"{R}/{{mode}}/truth/{study}.csv.gz",
+    }
+
+
+# Each study has its own figures and tables, so each gets its own rules.
+for study in STUDIES:
+
+    rule:
+        name:
+            f"figures_{study}"
+        input:
+            **study_files(study),
+        output:
+            figures("{mode}", study),
+        params:
+            study=study,
+            split=lambda w, study=study: study_split(w.mode, study),
+            config=shlex.quote(json.dumps(config)),
+            main=f"{R}/{{mode}}/figures/main",
+            si=f"{R}/{{mode}}/figures/si",
+        shell:
+            "{PYTHON} -m paperpipe figures {params.study} "
+            "--forecasts {input.forecasts} "
+            "--observations {input.observations} "
+            "--scores {input.scores} --locations {input.locations} "
+            "--meta {input.meta} --truth {input.truth} "
+            "--config {params.config} "
+            "--main-dir {params.main} --si-dir {params.si} {params.split}"
+
+    rule:
+        name:
+            f"score_tables_{study}"
+        input:
+            locations=study_files(study)["locations"],
+            scores=study_files(study)["scores"],
+            meta=study_files(study)["meta"],
+        output:
+            tables("{mode}", study),
+        params:
+            study=study,
+            split=lambda w, study=study: study_split(w.mode, study),
+            main=f"{R}/{{mode}}/tables/main",
+            si=f"{R}/{{mode}}/tables/si",
+        shell:
+            "{PYTHON} -m paperpipe score-tables {params.study} "
+            "--scores {input.scores} --locations {input.locations} "
+            "--meta {input.meta} "
+            "--main-dir {params.main} --si-dir {params.si} {params.split}"
+
+
+def grid_config(mode):
+    """The `synthetic` block with the run's seeds, for the SI notes."""
+    s = run_settings(config, "paper")
+    d = run_settings(config, "development")
+    return {
+        **SYNTHETIC,
+        "heldout_seeds": list(s.synthetic_seeds),
+        "development_seeds": list(d.synthetic_seeds),
+    }
+
+
+def grid_settings(w):
+    """Simulations whose settings give the realised values, if they exist."""
+    sims = SYNTHETIC["simulations"][w.mode]
+    return f"--settings {shlex.quote(sims)}" if os.path.isdir(sims) else ""
+
+
+# The grid tables and SI notes, read from the simulator's code
+# (`papertables.synthetic_grid`).
+rule grid_tables:
+    input:
+        simulator=evidence_file(SYNTHETIC["simulator"]),
+    output:
+        main=f"{R}/{{mode}}/tables/main/synthetic-design.md",
+        si=f"{R}/{{mode}}/tables/si/synthetic-design.md",
+        model=f"{R}/{{mode}}/tables/si/epinowcast-model.md",
+        heldout=f"{R}/{{mode}}/tables/si/heldout-set.md",
+    params:
+        config=lambda w: shlex.quote(json.dumps(grid_config(w.mode))),
+        settings=grid_settings,
+        main=f"{R}/{{mode}}/tables/main",
+        si=f"{R}/{{mode}}/tables/si",
+    shell:
+        "{PYTHON} -m papertables.synthetic_grid --simulator {input.simulator} "
+        "--config {params.config} {params.settings} "
+        "--main-dir {params.main} --si-dir {params.si}"
+
+
+rule evidence:
+    input:
+        **{n: evidence_file(n) for n in EVIDENCE if n in EVIDENCE_NAMES},
+    output:
+        yml=f"{R}/{{mode}}/evidence.yml",
+    params:
+        args=" ".join(
+            f"--{n.replace('_', '-')} {evidence_file(n)}"
+            for n in EVIDENCE
+            if n in EVIDENCE_NAMES
+        ),
+        si=f"{R}/{{mode}}/tables/si",
+        fig=f"{R}/{{mode}}/figures/si",
+    shell:
+        "{PYTHON} -m paperpipe evidence {params.args} --mode {wildcards.mode} "
+        "--si-dir {params.si} --fig-dir {params.fig} --out {output.yml}"
+
+
+rule summary:
+    input:
+        meta=[study_files(s)["meta"] for s in STUDIES],
+        scores=[f"{R}/{{mode}}/tables/main/{s}-scores.csv" for s in STUDIES],
+    output:
+        f"{R}/{{mode}}/results.yml",
+    shell:
+        "{PYTHON} -m paperpipe summary --mode {wildcards.mode} "
+        "--meta {input.meta} --scores {input.scores} --out {output}"
+
+
+# The paper reads `build`, so it shows the last run published.
+rule publish:
+    input:
+        outputs=lambda w: outputs(w.mode),
+        summary=rules.summary.output,
+    output:
+        # Outside `build`, which each publish replaces.
+        touch(f"{R}/{{mode}}/published"),
+    params:
+        run=f"{R}/{{mode}}",
+        build=BUILD,
+    shell:
+        "rm -rf {params.build} && mkdir -p {params.build} && "
+        "cp -R {params.run}/figures {params.run}/tables {params.build}/ && "
+        "cp {input.summary} {params.build}/results.yml && "
+        "cp {params.run}/evidence.yml {params.build}/evidence.yml"

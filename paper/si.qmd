@@ -3,12 +3,19 @@ title: "Supporting Information: title to be chosen"
 date: today
 format:
   html:
+    # The site serves the paper at /paper/, so ../ is its home page.
+    include-before-body:
+      - text: '<p class="back-to-site"><a href="../">Back to the site</a></p>'
     toc: true
     number-sections: false
   pdf:
     toc: true
     number-sections: false
 bibliography: reference.bib
+# The evaluation workflow's numbers, as in main.qmd.
+metadata-files:
+  - build/results.yml
+  - build/evidence.yml
 ---
 
 <!--
@@ -33,12 +40,103 @@ One SI section per paper section.
 - Key references: [@Ansari2025; @Hu2021].
 :::
 
+Chronos-2 divides a flat context by a scale of $10^{-5}$.
+We tested a floor of one count on that scale at inference only, for the zero-shot model and each fine-tuned checkpoint.
+On held-out simulations it hurt small series, of five counts or fewer.
+At 4,000 outbreaks their median loss went from {{< meta evidence.scale_floor.sims.n4000.small.median_loss.none >}} to {{< meta evidence.scale_floor.sims.n4000.small.median_loss.floor >}}, and the share of 99% quantiles over 100 times the truth from {{< meta evidence.scale_floor.sims.n4000.small.q99_over_100x.none >}}% to {{< meta evidence.scale_floor.sims.n4000.small.q99_over_100x.floor >}}%.
+Large series were unchanged, with median loss {{< meta evidence.scale_floor.sims.n4000.large.median_loss.none >}} and {{< meta evidence.scale_floor.sims.n4000.large.median_loss.floor >}}.
+On the BDBV release backtest the floor improved relative WIS at every fine-tuned checkpoint, and that of the weekly model at 4,000 outbreaks on provinces went from {{< meta evidence.scale_floor.bdbv.provinces.weekly.n4000.none >}} to {{< meta evidence.scale_floor.bdbv.provinces.weekly.n4000.floor >}}.
+We use no floor at inference only, and the next fine-tune trains with it.
+Chronos-2's widest interval is from 1% to 99%, as it has no 2.5% or 97.5% quantiles.
+
+We tested the ragged layout's lag horizon.
+Running the lags to the truth delay, rather than 4 weeks or 28 days, hurt with short release histories.
+On the German development half, the national WIS relative to `randomwalknowcast` went from {{< meta evidence.lag.germany.fm_chronos_daily_ragged.capped >}} to {{< meta evidence.lag.germany.fm_chronos_daily_ragged.longer >}} for the daily zero-shot model and from {{< meta evidence.lag.germany.fm_chronos_weekly_ragged.capped >}} to {{< meta evidence.lag.germany.fm_chronos_weekly_ragged.longer >}} for the weekly one.
+On the BDBV release backtest it went from {{< meta evidence.lag.bdbv.fm_chronos_daily_ragged.capped >}} to {{< meta evidence.lag.bdbv.fm_chronos_daily_ragged.longer >}} for the daily zero-shot model and from {{< meta evidence.lag.bdbv.fm_chronos_weekly_ragged.capped >}} to {{< meta evidence.lag.bdbv.fm_chronos_weekly_ragged.longer >}} for the weekly one.
+BDBV's zones have few weekly releases, so with the longer horizon no recent lag of a zone falls in the model's context.
+
 ### Synthetic data generation
 
 ::: {.callout-note title="Plan"}
 - Synthetic data generation in full, with an overview of the epinowcast model used.
+- The full factor table and the realism comparison against published disease parameters.
 - Key references: [@abbottepinowcast; @lison2024; @Park2024; @abbottprimarycensored].
 :::
+
+{{< include build/tables/si/epinowcast-model.md >}}
+
+::: {#tbl-synthetic-grid-si}
+{{< include build/tables/si/synthetic-design.md >}}
+
+Every setting of the simulation grid: the crossed factors and their levels, the settings derived from a cell, and the values drawn within it, with the R expression that draws them and the epinowcast function each enters through, read from the simulator's code. Realised values are over the run's simulations where they exist.
+:::
+
+The grid has two limitations.
+Simulated strata are less sparse than BDBV's provinces: the share of stratum-weeks with no cases reaches {{< meta evidence.realism.zero_share.sim_q95 >}} at the 95% point of the simulations, against {{< meta evidence.realism.zero_share.BDBV >}} for BDBV.
+Simulated delays are shorter than the German data's, whose 99% point is {{< meta evidence.realism.delay_q99.Germany_states >}} days against {{< meta evidence.realism.delay_q99.sim_q95 >}} at the 95% point of the simulations.
+
+![How the simulated outbreaks (grey histograms) compare with the BDBV data and the German data by state and by age: outbreak size, weekly peak, growth, the share of stratum-weeks with no cases, dispersion, the reporting delay and the share reported within 0, 7, 14 and 28 days.](build/figures/si/sim-realism.png){#fig-sim-realism}
+
+::: {#tbl-sim-diseases}
+{{< include build/tables/si/sim-diseases.md >}}
+
+The simulated outbreaks' ranges against published values for several diseases, the case studies among them.
+:::
+
+![Held-out loss of the fine-tune against the number of simulated outbreaks it has seen.](build/figures/si/finetune-heldout.png){#fig-finetune-heldout}
+
+![WIS relative to `randomwalknowcast` of the ragged Chronos-2 models against the number of simulated outbreaks each r3 checkpoint was fine-tuned on, with the zero-shot model at the left, on the case studies by level. Each panel gives n, the fewest matched cells of its points, and the forecast origins they come from, and panels with fewer than 5 are grey. On BDBV's provinces (n = {{< meta evidence.checkpoints.ebola.provinces.n >}} cells from {{< meta evidence.checkpoints.ebola.provinces.n_origins >}} origin) the daily model goes from {{< meta evidence.checkpoints.ebola.provinces.fm_chronos_daily_ragged.zero-shot >}} zero-shot to {{< meta evidence.checkpoints.ebola.provinces.fm_chronos_daily_ragged.n1000 >}} at 1,000 and {{< meta evidence.checkpoints.ebola.provinces.fm_chronos_daily_ragged.n2000 >}} at 2,000 outbreaks, then worsens to {{< meta evidence.checkpoints.ebola.provinces.fm_chronos_daily_ragged.n4000 >}} at 4,000; the weekly model worsens throughout, from {{< meta evidence.checkpoints.ebola.provinces.fm_chronos_weekly_ragged.zero-shot >}} to {{< meta evidence.checkpoints.ebola.provinces.fm_chronos_weekly_ragged.n4000 >}}. BDBV's national panel has n = {{< meta evidence.checkpoints.ebola.national.n >}}, so it is grey. German checkpoints join as they are scored.](build/figures/si/checkpoint-curve.png){#fig-checkpoint-curve}
+
+{{< include build/tables/si/heldout-set.md >}}
+
+### Correlated trajectories
+
+The copula pairs the draws of models that give each place and week only its own draws.
+These are the Chronos-2 models and `randomwalknowcast`.
+Hub teams' samples are joint across weeks within a place, so their pairing across places is left as submitted.
+
+**The copula.**
+With $P$ places and steps on days $d_1, \dots, d_S$, each trajectory draws $z \sim \mathrm{N}(0, \Sigma)$ with $\Sigma = \Sigma_p \otimes \Sigma_t$.
+The week correlation is $(\Sigma_t)_{jk} = \rho_t^{|d_j - d_k| / 7}$.
+The place correlation is $\rho_p$ between two provinces and $\rho_n$ between the country and a province.
+Where $\rho_p$ and $\rho_n$ give no valid correlation matrix, we set its negative eigenvalues to zero and rescale it to unit diagonal.
+For each place-week, the $m$ draws are sorted and the $k$th trajectory takes the draw whose rank matches the rank of $z_k$ in that cell.
+Each cell keeps exactly its own draws [@Clark2004; @Schefzik2013].
+A country forecast as its own series, as by Chronos-2, is paired as one more place.
+A country that is the sum of its provinces is not paired but summed again from the paired provinces, so its forecast widens.
+
+**The estimator.**
+For a forecast with $m$ draws, $b$ of them below the truth and $e$ equal to it, the randomised PIT is $u = (b + U(e + 1)) / (m + 1)$ with $U \sim \mathrm{U}(0, 1)$.
+Its normal score is $\Phi^{-1}(u)$.
+A forecast whose draws are all equal gives no score.
+Truth is the count as reported $D$ days after the week, so a week's error matures only once that release exists.
+At an origin, we use forecasts made at earlier origins whose truth was released by the origin, from the 8 latest such weeks.
+$\rho_t$ is estimated from pairs of consecutive weeks of one place in one forecast.
+$\rho_p$ is estimated from pairs of provinces in the same week of one forecast, and $\rho_n$ from the country and a province.
+With $n$ pairs whose Pearson correlation is $r$, the estimate is $(n r + w \rho_0) / (n + w)$, with $w = 100$ and $\rho_0$ the prior.
+It is then kept within $[0, 0.95]$.
+Where the pairs give no correlation, the estimate is the prior.
+The prior $(\rho_t, \rho_p, \rho_n) = (0.9, 0.7, 0.7)$ was chosen by the energy score of the Chronos-2 models on the Ebola release backtest, so it is tuned in sample.
+As a sensitivity analysis we give the prior less weight, $w = 25$.
+
+**Scores.**
+We score the trajectories with the energy score [@Gneiting2008] and the variogram score of order $p = 0.5$ [@Scheuerer2015], both on $\log(x + 1)$ counts.
+We also report the 50% and 90% coverage of each place's sum over weeks and of the sum over provinces in each week.
+WIS of each place and week is unchanged by pairing, except for a country summed from its provinces.
+We compare three versions of each model.
+Unpaired forecasts keep the sample indices the model gave.
+Fixed forecasts are paired with the prior at every origin.
+Rolling forecasts are paired with the copula estimated at each origin.
+
+### Aggregation options
+
+Chronos-2 can forecast every level of a place hierarchy in one block, or each level on its own.
+We compare four options for the zero-shot and fine-tuned models, daily and weekly (#222):
+(a) all levels in one joint block;
+(b) each level in its own block;
+(c) the lowest level only, summed up to the others with draws paired at random;
+(d) the lowest level only, summed up after pairing its draws with the rolling copula.
+Option (d) tests whether the copula rescues aggregation.
 
 ### Scoring
 
@@ -62,10 +160,192 @@ One SI section per paper section.
 - Held-out synthetic scores by number of fine-tuning outbreaks.
 :::
 
+
+### Impact of correlated trajectories
+
+Pairing changes no marginal forecast, so it shows in the joint scores and in the coverage of sums over weeks and over places.
+@tbl-copula-ebola and @tbl-copula-germany compare unpaired forecasts with the fixed and rolling copula for every model that uses it.
+The rolling estimates have median $\rho_t$ {{< meta evidence.rho.germany.states.randomwalknowcast.rho_t >}} and $\rho_p$ {{< meta evidence.rho.germany.states.randomwalknowcast.rho_p >}} by German state, and $\rho_t$ {{< meta evidence.rho.germany.ages.randomwalknowcast.rho_t >}} and $\rho_p$ {{< meta evidence.rho.germany.ages.randomwalknowcast.rho_p >}} by age group, for `randomwalknowcast`.
+
+::: {#tbl-copula-ebola}
+{{< include build/tables/si/copula-ebola.md >}}
+
+Ebola release backtest: energy score (ES) and variogram score (VS) on the log scale, 50% and 90% coverage of each place's sum over weeks and of the sum over provinces, and WIS of the provinces and the country, for each model unpaired and paired by the fixed or rolling copula.
+:::
+
+::: {#tbl-copula-germany}
+{{< include build/tables/si/copula-germany.md >}}
+
+German nowcast hub, development half: as @tbl-copula-ebola, by state and by age group, with the sum over places taken over states or age groups.
+:::
+
+### Joint block or aggregation
+
+The submission uses the joint block.
+On BDBV it is best or tied at provinces and zones for every model, and at the national level for the zero-shot models.
+At the national level, level by level is better for the daily fine-tuned models and the weekly model fine-tuned on 1,000 outbreaks, with relative WIS {{< meta evidence.aggregation.ebola.national.fm_chronos_daily_ragged_ft.level >}} against {{< meta evidence.aggregation.ebola.national.fm_chronos_daily_ragged_ft.joint >}} for round 1.
+On the German development half, the joint block is best at the national level with the daily checkpoint fine-tuned on 1,000 outbreaks ({{< meta evidence.aggregation.germany.national.fm_chronos_daily_ragged_ft_n1000.joint >}} against {{< meta evidence.aggregation.germany.national.fm_chronos_daily_ragged_ft_n1000.level >}} level by level).
+Level by level is competitive on Germany for the daily zero-shot and round-1 models ({{< meta evidence.aggregation.germany.national.fm_chronos_daily_ragged.level >}} against {{< meta evidence.aggregation.germany.national.fm_chronos_daily_ragged.joint >}} for zero-shot at the national level) and for age groups.
+Summing the lowest level loses at every level above it, with or without the copula: at BDBV's national level the daily zero-shot model scores {{< meta evidence.aggregation.ebola.national.fm_chronos_daily_ragged.zones_summed >}} summed and {{< meta evidence.aggregation.ebola.national.fm_chronos_daily_ragged.zones_copula >}} summed after pairing, against {{< meta evidence.aggregation.ebola.national.fm_chronos_daily_ragged.joint >}} for the joint block.
+All WIS are relative to `randomwalknowcast` on the same targets.
+@tbl-aggregation-ebola and @tbl-aggregation-germany give every model and level, and @tbl-aggregation-cost what each option costs.
+
+::: {#tbl-aggregation-ebola}
+{{< include build/tables/si/aggregation-ebola.md >}}
+
+Ebola release backtest: WIS of each option relative to `randomwalknowcast` on the same targets (log scale in brackets), 50% and 95% coverage and the number of targets, by level (national, provinces, zones).
+:::
+
+::: {#tbl-aggregation-germany}
+{{< include build/tables/si/aggregation-germany.md >}}
+
+German nowcast hub, development half: as @tbl-aggregation-ebola, by level (national, states, age groups).
+:::
+
+::: {#tbl-aggregation-cost}
+{{< include build/tables/si/aggregation-cost.md >}}
+
+The cost of each option: series per block, memory and time.
+:::
+
 ### Held-out synthetic data
+
+::: {#tbl-synthetic-evaluated}
+{{< include build/tables/main/synthetic-grid.md >}}
+
+The share of evaluated outbreaks in each level of each grid factor, as each simulation recorded its cell. {{< meta results.synthetic.label >}} {{< meta results.synthetic.note >}}
+:::
+
+::: {#fig-synthetic-si-nowcasts}
+![](build/figures/si/synthetic-si-nowcasts.png)
+
+Held-out synthetic data: nowcasts of outbreaks drawn to cover the levels of the trajectory, delay form, observation model and strata, one row per outbreak labelled by its cell, one column per model. Black is the rolling truth, grey dashed the data as of the origin, and blue the model's median with its 50% and 95% intervals. {{< meta results.synthetic.label >}} {{< meta results.synthetic.note >}}
+:::
+
+::: {#fig-synthetic-si-factors}
+![](build/figures/si/synthetic-si-factors.png)
+
+Held-out synthetic data: relative CRPS by level of each scenario factor. {{< meta results.synthetic.label >}} {{< meta results.synthetic.note >}}
+:::
+
+::: {#fig-synthetic-si-factors-log}
+![](build/figures/si/synthetic-si-factors-log.png)
+
+Held-out synthetic data: relative CRPS on the log scale by level of each scenario factor. {{< meta results.synthetic.label >}} {{< meta results.synthetic.note >}}
+:::
+
+::: {#fig-synthetic-si-wis-over-time}
+![](build/figures/si/synthetic-si-wis-over-time.png)
+
+Held-out synthetic data: CRPS over time. {{< meta results.synthetic.label >}} {{< meta results.synthetic.note >}}
+:::
+
+::: {#fig-synthetic-si-finetune-size}
+![](build/figures/si/synthetic-si-finetune-size.png)
+
+Held-out synthetic data: relative CRPS of each fine-tuning checkpoint, at doublings from 1,000 outbreaks, against the number of simulated outbreaks it was trained on (log scale). {{< meta results.synthetic.label >}} {{< meta results.synthetic.note >}}
+:::
+
+::: {#tbl-synthetic-horizon}
+{{< include build/tables/si/synthetic-scores-by-horizon.md >}}
+
+Held-out synthetic data scores by horizon. {{< meta results.synthetic.label >}} {{< meta results.synthetic.note >}}
+:::
+
+::: {#tbl-synthetic-location}
+{{< include build/tables/si/synthetic-scores-by-location.md >}}
+
+Held-out synthetic data scores by location and stratum. {{< meta results.synthetic.label >}} {{< meta results.synthetic.note >}}
+:::
 
 ### German nowcast hub
 
+::: {#fig-germany-si-nowcasts}
+![](build/figures/si/germany-si-nowcasts.png)
+
+German nowcast hub: nowcasts for places picked by a rule in the workflow config (the largest, median and smallest by recent count, and the most rising and most falling), one row per place labelled with why it was picked, at the last origin shown in the main text, one column per model. Black is the rolling truth, grey dashed the data as of the origin, and blue the model's median with its 50% and 95% intervals. {{< meta results.germany.label >}} {{< meta results.germany.note >}}
+:::
+
+::: {#fig-germany-si-places}
+![](build/figures/si/germany-si-places.png)
+
+German nowcast hub: WIS of every place relative to {{< meta results.germany.baseline >}}, one dot per model. {{< meta results.germany.label >}} {{< meta results.germany.note >}}
+:::
+
+
+::: {#fig-germany-si-location-horizon}
+![](build/figures/si/germany-si-location-horizon.png)
+
+German nowcast hub: relative WIS by location and horizon. {{< meta results.germany.label >}} {{< meta results.germany.note >}}
+:::
+
+::: {#fig-germany-si-location-horizon-log}
+![](build/figures/si/germany-si-location-horizon-log.png)
+
+German nowcast hub: relative WIS on the log scale by location and horizon. {{< meta results.germany.label >}} {{< meta results.germany.note >}}
+:::
+
+::: {#fig-germany-si-wis-over-time}
+![](build/figures/si/germany-si-wis-over-time.png)
+
+German nowcast hub: WIS over time, with a dotted line at the split. {{< meta results.germany.label >}} {{< meta results.germany.note >}}
+:::
+
+::: {#tbl-germany-horizon}
+{{< include build/tables/si/germany-scores-by-horizon.md >}}
+
+German nowcast hub scores by horizon. {{< meta results.germany.label >}} {{< meta results.germany.note >}}
+:::
+
+::: {#tbl-germany-location}
+{{< include build/tables/si/germany-scores-by-location.md >}}
+
+German nowcast hub scores by location and stratum. {{< meta results.germany.label >}} {{< meta results.germany.note >}}
+:::
+
 ### Ebola hub submissions
+
+::: {#fig-ebola-si-nowcasts}
+![](build/figures/si/ebola-si-nowcasts.png)
+
+Ebola: nowcasts for places picked by a rule in the workflow config (the largest, median and smallest by recent count, and the most rising and most falling), one row per place labelled with why it was picked, at the last origin shown in the main text, one column per model. Black is the rolling truth, grey dashed the data as of the origin, and blue the model's median with its 50% and 95% intervals. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
+:::
+
+::: {#fig-ebola-si-places}
+![](build/figures/si/ebola-si-places.png)
+
+Ebola: CRPS of every place relative to {{< meta results.ebola.baseline >}}, one dot per model. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
+:::
+
+
+::: {#fig-ebola-si-location-horizon}
+![](build/figures/si/ebola-si-location-horizon.png)
+
+Ebola: relative CRPS by location and horizon. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
+:::
+
+::: {#fig-ebola-si-location-horizon-log}
+![](build/figures/si/ebola-si-location-horizon-log.png)
+
+Ebola: relative CRPS on the log scale by location and horizon. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
+:::
+
+::: {#fig-ebola-si-wis-over-time}
+![](build/figures/si/ebola-si-wis-over-time.png)
+
+Ebola: CRPS over time. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
+:::
+
+::: {#tbl-ebola-horizon}
+{{< include build/tables/si/ebola-scores-by-horizon.md >}}
+
+Ebola hub submissions scores by horizon. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
+:::
+
+::: {#tbl-ebola-location}
+{{< include build/tables/si/ebola-scores-by-location.md >}}
+
+Ebola hub submissions scores by location and stratum. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
+:::
 
 ## References {.unnumbered}

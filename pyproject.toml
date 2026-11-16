@@ -73,6 +73,9 @@ docs = [
   "mkdocs-material>=9.5",
   "mkdocstrings[python]>=0.26",
 ]
+paper = [
+  "snakemake>=9.27,<10",
+]
 
 [tool.uv]
 default-groups = ["dev"]
