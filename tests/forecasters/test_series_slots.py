@@ -262,3 +262,103 @@ def test_slots_can_start_as_distinct_random_codes():
     again = tiny_model()
     slots.attach(again, 8, init_std=0.02, seed=3)
     assert torch.equal(w, getattr(again, slots.SLOT_MODULE).embedding.weight)
+
+
+# National first and names out of sort order: regions of places, a place
+# by ages and an age total across places, as training blocks hold them.
+HIER = ("CD", "R2", "R1", "R2-P01", "R1-P03", "A1", "P05", "P05-A1")
+
+
+def test_each_place_links_to_its_nearest_parent_in_the_block():
+    parents = slots.parents_of(HIER)
+    named = {
+        p: (HIER[i] if i >= 0 else None)
+        for p, i in zip(HIER, parents, strict=True)
+    }
+    assert named == {
+        "CD": None,
+        "R2": "CD",
+        "R1": "CD",
+        "R2-P01": "R2",
+        "R1-P03": "R1",
+        "A1": "CD",
+        "P05": "CD",
+        "P05-A1": "P05",
+    }
+    # Germany's states and age groups, and BDBV's provinces and zones.
+    assert slots.parents_of(("DE", "DE-BY", "DE-BB")) == [-1, 0, 0]
+    assert slots.parents_of(("DE", "80+", "00-04")) == [-1, 0, 0]
+    assert slots.parents_of(("CD", "CD-NK", "CD-NK-03", "CD-IT-01")) == [
+        -1,
+        0,
+        1,
+        0,
+    ]
+    # A block without its country links leaves to their own parents only.
+    assert slots.parents_of(("R1-P03", "R1")) == [1, -1]
+
+
+def test_a_parents_slot_is_what_its_children_carry():
+    n_t, lags = len(HIER), 2
+    ids = slots.slot_ids(
+        n_t,
+        n_t * lags,
+        np.random.default_rng(0),
+        16,
+        parents=slots.parents_of(HIER),
+    )
+    own, parent = ids
+    assert ids.shape == (2, n_t * (1 + lags))
+    # Every row of a place carries its own slot and its parent's own slot.
+    for p, q in enumerate(slots.parents_of(HIER)):
+        rows = slots.row_places(n_t, n_t * lags) == p
+        assert set(own[rows]) == {own[p]}
+        assert set(parent[rows]) == {own[q] if q >= 0 else -1}
+    assert len(set(own[:n_t])) == n_t
+
+
+def test_the_parent_term_is_a_learned_share_of_the_parents_slot():
+    model = tiny_model()
+    slots.attach(model, 8, init_std=0.02, seed=1)
+    module = getattr(model, slots.SLOT_MODULE)
+    table = module.embedding.weight.detach()
+    ids = torch.tensor([[3, 5], [5, -1]])
+    out = module(ids).detach()
+    scale = float(module.parent_scale)
+    assert 0 < scale < 1
+    assert torch.allclose(out[0], table[3] + scale * table[5])
+    assert torch.allclose(out[1], table[5])
+    # Own slots alone, as before.
+    assert torch.allclose(module(torch.tensor([3, 5])).detach(), table[[3, 5]])
+
+
+def test_inference_slots_follow_chronos_row_order_by_name():
+    from bdbvhubrenewal.forecasters.foundation import _group_slots
+
+    lags = 11  # lag 10 sorts before lag 2
+    names = [f"{p}_lag_{d}" for p in HIER for d in range(lags)]
+    cov = {n: np.zeros(4) for n in names}
+    group = {
+        "target": np.zeros((len(HIER), 4)),
+        "past_covariates": cov,
+        "future_covariates": {n: np.zeros(2) for n in names},
+        "places": HIER,
+    }
+    own, parent = _group_slots(group, 16)
+    chosen = slots.slot_ids(
+        len(HIER), 0, np.random.default_rng(slots.EVAL_SEED), 16
+    )
+    parents = slots.parents_of(HIER)
+    at = {p: i for i, p in enumerate(HIER)}
+
+    def want_parent(i):
+        return chosen[parents[i]] if parents[i] >= 0 else -1
+
+    assert list(own[: len(HIER)]) == list(chosen)
+    assert list(parent[: len(HIER)]) == [
+        want_parent(i) for i in range(len(HIER))
+    ]
+    for k, name in enumerate(sorted(names)):
+        i = at[name.rsplit("_lag_", 1)[0]]
+        assert own[len(HIER) + k] == chosen[i]
+        assert parent[len(HIER) + k] == want_parent(i)

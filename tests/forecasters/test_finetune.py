@@ -234,3 +234,56 @@ def test_three_day_block_with_no_whole_bin_by_its_cut_is_none() -> None:
     assert (
         training_block(counts, "3day", (NATIONAL,), cutoffs, max_lag=2) is None
     )
+
+
+def _two_places() -> pd.DataFrame:
+    """Two places, onsets over five weeks, reported 0 and 3 days on."""
+    rows = []
+    for onset in pd.date_range("2026-09-01", "2026-10-05"):
+        for place, n in (("A", 3), ("B", 5)):
+            for delay in (0, 3):
+                rows.append((place, onset, onset + pd.Timedelta(days=delay), n))
+    return pd.DataFrame(
+        rows, columns=["location", "reference_date", "report_date", "count"]
+    )
+
+
+def test_a_parent_need_not_be_the_sum_of_its_children() -> None:
+    from bdbvhubrenewal.forecasters.finetune import country_counts
+
+    counts = _two_places()
+    rng = np.random.default_rng(1)
+    same, total = country_counts(counts, "exact", rng)
+    assert same.equals(counts)
+    assert total.equals(counts)
+    # Unallocated cases are in the country's count but in no place's.
+    places, total = country_counts(counts, "unallocated", rng)
+    assert total.equals(counts)
+    assert 0 < places["count"].sum() < counts["count"].sum()
+    # The country reported through its own, later stream.
+    places, total = country_counts(counts, "late_parent", rng)
+    assert places.equals(counts)
+    lag = pd.to_datetime(total["report_date"]) - pd.to_datetime(
+        counts["report_date"]
+    )
+    assert lag.nunique() == 1
+    assert lag.iloc[0] > pd.Timedelta(0)
+
+
+def test_blocks_carry_a_parent_that_does_not_sum() -> None:
+    counts = _two_places()
+    cutoffs = ["2026-09-23", "2026-09-30"]
+    places = (NATIONAL, "A", "B")
+    exact = training_block(counts, "weekly", places, cutoffs, max_lag=2)
+    loose = training_block(
+        counts,
+        "weekly",
+        places,
+        cutoffs,
+        max_lag=2,
+        parent="unallocated",
+        rng=np.random.default_rng(1),
+    )
+    t = exact["start"] - 1
+    assert exact["context"][0, t] == exact["context"][1:3, t].sum()
+    assert loose["context"][0, t] > loose["context"][1:3, t].sum()

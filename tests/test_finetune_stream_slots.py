@@ -214,3 +214,53 @@ def test_continuing_without_slots_in_the_adapter_is_refused(tmp_path):
     slots.attach(model, n_slots=8)
     with pytest.raises(ValueError, match="slots"):
         fs.lora_model(model, fs.lora_config(8), tmp_path / "round0")
+
+
+def test_training_slots_link_each_place_to_its_parent():
+    from test_series_slots import HIER
+
+    block = {
+        "n_targets": len(HIER),
+        "n_covariates": 2 * len(HIER),
+        "places": HIER,
+    }
+    own, parent = fs.block_slots([block, block], 16)
+    n = 3 * len(HIER)
+    assert own.shape == parent.shape == (2 * n,)
+    first = own[: len(HIER)]
+    for i, q in enumerate(slots.parents_of(HIER)):
+        assert parent[i] == (first[q] if q >= 0 else -1)
+
+
+def test_parent_link_settings_enter_the_hash():
+    on = fs.slot_settings(128, init_std=0.02, init_seed=1, lr=1e-4)
+    assert on["series_slots"]["parent"]["scale_init"] == slots.PARENT_SCALE
+    assert "nearest" in on["series_slots"]["parent"]["rule"]
+
+
+def test_the_parent_share_round_trips_through_the_trainer_state(tmp_path):
+    from peft import get_peft_model
+    from test_series_slots import lora
+
+    model = tiny_model()
+    slots.attach(model, 8, init_std=0.02, seed=1)
+    model = get_peft_model(model, lora())
+    for n, p in model.named_parameters():
+        if "parent_scale" in n and p.requires_grad:
+            p.data.fill_(0.3)
+    opt = torch.optim.AdamW(fs.param_groups(model, 1e-5, 1e-4))
+    fs.save_state(tmp_path / "state", model, opt, {"step": 0})
+    fresh = tiny_model()
+    slots.attach(fresh, 8)
+    fresh = get_peft_model(fresh, lora())
+    fs.load_state(
+        tmp_path / "state",
+        fresh,
+        torch.optim.AdamW(fs.param_groups(fresh, 1e-5, 1e-4)),
+    )
+    got = [
+        float(p)
+        for n, p in fresh.named_parameters()
+        if "parent_scale" in n and p.requires_grad
+    ]
+    assert got == pytest.approx([0.3])
