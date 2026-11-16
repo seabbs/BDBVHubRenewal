@@ -17,8 +17,6 @@ def _jobs() -> dict:
 
 def test_the_held_out_matrix_covers_every_german_model() -> None:
     config = tomllib.loads((ROOT / "config" / "germany.toml").read_text())
-    # The stored fine-tuned model is shown on the development half only:
-    # the paper's held-out run waits for the final (slots) checkpoint.
     models = set(config["nowcast"]["models"])
     matrix = _jobs()["germany-heldout"]["strategy"]["matrix"]["include"]
     held = {row["model"] for row in matrix}
