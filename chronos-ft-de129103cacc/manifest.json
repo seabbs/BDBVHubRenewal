@@ -1,11 +1,14 @@
 {
   "tag": "chronos-ft-de129103cacc",
   "label": "de129103cacc",
-  "model": "fm_chronos_daily_ragged_ft",
+  "models": [
+    "fm_chronos_daily_ragged_ft",
+    "fm_chronos_weekly_ragged_ft"
+  ],
   "split_date": "2022-02-10",
   "first_origin": "2021-11-22",
   "last_origin": "2022-02-09",
   "origins": 80,
-  "rows": 64400,
+  "rows": 128800,
   "source": "checkpoint_scores.py germany cache, label de129103cacc"
 }
