@@ -334,3 +334,12 @@ def test_held_out_cuts_are_taken_per_dataset():
     assert {b["data"] for b in held} == {"germany"}
     assert len(held) == 14
     assert all(b in train for b in bdbv)
+
+
+def test_the_trainer_runs_on_the_device_asked_or_the_best_one():
+    from finetune_realdata import pick_device
+
+    assert pick_device("auto", cuda=False, mps=True) == "mps"
+    assert pick_device("auto", cuda=True, mps=True) == "cuda"
+    assert pick_device("auto", cuda=False, mps=False) == "cpu"
+    assert pick_device("cpu", cuda=False, mps=True) == "cpu"
