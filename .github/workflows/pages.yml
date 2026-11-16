@@ -344,6 +344,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           GH_TOKEN: ${{ github.token }}
+          # A preview's store note names the pull request's head, not the
+          # merge commit, in one line; empty outside pull requests.
+          PREVIEW_HEAD: ${{ github.event.pull_request.head.sha }}
         run: |
           FIT_STORE_RUN=$(gh run list -R "$GITHUB_REPOSITORY" \
             -w fit-store.yml -b main -s in_progress -L 1 \
