@@ -37,7 +37,7 @@ import numpy as np
 import pandas as pd
 
 from bdbvhubrenewal.data.dates import as_date, epiweek_end
-from bdbvhubrenewal.forecasters import slots
+from bdbvhubrenewal.forecasters import series_bias, slots
 from bdbvhubrenewal.forecasters.base import (
     NATIONAL,
     SAMPLE_COLUMNS,
@@ -574,14 +574,34 @@ def _chronos(checkpoint: Checkpoint | None = None) -> Any:
     )
     if adapter is None:
         return pipeline
-    # Slots, if the adapter holds them, load with it.
-    return Chronos2Pipeline(model=slots.load_adapter(pipeline.model, adapter))
+    return Chronos2Pipeline(model=_load_adapter(pipeline.model, adapter))
 
 
 def _chronos_input(group: Series) -> dict:
     """Return the parts of a group Chronos-2's dict path reads."""
     keys = ("target", "past_covariates", "future_covariates")
     return {k: group[k] for k in keys if k in group}
+
+
+def _load_adapter(model: Any, adapter: Any) -> Any:
+    """Return Chronos-2 `model` with an adapter merged.
+
+    The series bias or slots load with it when the adapter holds them.
+    """
+    if series_bias.adapter_has_bias(adapter):
+        return series_bias.load_adapter(model, adapter)
+    return slots.load_adapter(model, adapter)
+
+
+def _group_ids(model: Any, group: Series) -> np.ndarray | None:
+    """Return a group's rows' places and parents (bias) or slots."""
+    if series_bias.has_bias(model):
+        return _group_rows(group)
+    if slots.has_slots(model):
+        return _group_slots(
+            group, slots.n_slots(model), slots.has_parent_link(model)
+        )
+    return None
 
 
 def _group_rows(group: Series) -> np.ndarray:
@@ -712,16 +732,20 @@ def chronos_sampler(
     levels = np.asarray(pipeline.quantiles, dtype=float)
     rng = np.random.default_rng(seed)
     model = getattr(pipeline, "model", None)
-    if model is not None and slots.has_slots(model):
+    if model is not None and (
+        series_bias.has_bias(model) or slots.has_slots(model)
+    ):
         # Each group is predicted on its own, so its rows are one batch
-        # and each place's series share the slot drawn with the fixed
-        # seed, as in held-out losses.
+        # with their places and parents (or slots), as in held-out losses.
         quantiles = []
         for g in groups:
-            ids = _group_slots(
-                g, slots.n_slots(model), slots.has_parent_link(model)
+            ids = _group_ids(model, g)
+            assign = (
+                series_bias.assigned
+                if series_bias.has_bias(model)
+                else slots.assigned
             )
-            with slots.assigned(model, ids):
+            with assign(model, ids):
                 q, _ = pipeline.predict_quantiles(
                     [_chronos_input(g)],
                     prediction_length=horizon,
