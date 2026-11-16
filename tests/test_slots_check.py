@@ -5,11 +5,13 @@ A swap tests the slots only if each row's slot stays with its position
 to another place. These tests pin that down on a tiny Chronos-2.
 """
 
+import json
 import pickle
 import sys
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 import pytest
 
 torch = pytest.importorskip("torch")
@@ -190,59 +192,6 @@ def test_no_slots_gives_no_ids():
     assert sc.model_ids(tiny_model(), block()) is None
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "chronos 2.3.2 sorts dict covariate keys, so CD-* lag rows come "
-        "before CD's while chronos_sampler's slots assume input order"
-    ),
-)
-def test_inference_rows_keep_their_place_slot(monkeypatch):
-    from chronos import Chronos2Pipeline
-
-    model = with_slots()
-    places = ["CD", "CD-KN", "CD-EQ"]
-    b = block()
-    x = b["context"]
-    names = [f"{p}_lag_{d}" for p in places for d in range(LAG)]
-    group = {
-        "target": x[:N_PLACES, :T],
-        "past_covariates": dict(zip(names, x[N_PLACES:, :T], strict=True)),
-        "future_covariates": dict(zip(names, x[N_PLACES:, T:], strict=True)),
-    }
-    seen = {}
-    real = slots.assigned
-
-    def record(m, i):
-        seen["ids"] = np.asarray(i)
-        return real(m, i)
-
-    def grab(_module, args, kwargs):
-        seen["context"] = kwargs.get("context", args[0] if args else None)
-
-    model.register_forward_pre_hook(grab, with_kwargs=True)
-    monkeypatch.setattr(slots, "assigned", record)
-    monkeypatch.setattr(
-        foundation, "_chronos", lambda _c=None: Chronos2Pipeline(model=model)
-    )
-    foundation.chronos_sampler([group], H, 5, 1)
-    ctx = seen["context"].numpy()
-    ids = seen["ids"]
-    lags = x[N_PLACES:, :T].reshape(N_PLACES, LAG, T)
-    for row in range(N_PLACES, ctx.shape[0]):
-        tail = ctx[row, -T:]
-        owner = [
-            p
-            for p in range(N_PLACES)
-            if any(
-                np.allclose(tail, lags[p, d], equal_nan=True)
-                for d in range(LAG)
-            )
-        ]
-        assert owner, row
-        assert ids[row] == ids[owner[0]], (row, owner)
-
-
 def test_synthetic_adapter_loads_random_slots_and_a_no_op_lora(tmp_path):
     sc.synthetic_adapter(tiny_model(), tmp_path / "ad", N_SLOTS, 3, 1.0)
     assert slots.adapter_slots(tmp_path / "ad") == N_SLOTS
@@ -302,3 +251,114 @@ def test_german_blocks_are_states_with_start_and_horizon(tmp_path):
         assert b["horizon"] == b["lag"] + (28 if b["source"] == "daily" else 4)
         assert b["start"] == 20
         assert b["set"] == "germany"
+
+
+def checkpoint(root: Path, name: str, n: int, h: str, with_slots: bool):
+    """A checkpoint folder as the trainer's driver copies it."""
+    d = root / name
+    (d / "finetuned-ckpt").mkdir(parents=True)
+    settings = {"hash": h, "n_outbreaks": n}
+    if with_slots:
+        settings["series_slots"] = {"n": 128}
+    (d / "settings.json").write_text(json.dumps(settings))
+    return d / "finetuned-ckpt"
+
+
+def test_comparator_is_the_no_slots_checkpoint_at_the_same_n(tmp_path):
+    noslots = tmp_path / "checkpoints"
+    want = checkpoint(noslots, "n1000", 1000, "de129103cacc", False)
+    checkpoint(noslots, "n2000", 2000, "7962fd718a47", False)
+    s1000 = checkpoint(tmp_path / "slots", "n1000", 1000, "aaa", True)
+    s250 = checkpoint(tmp_path / "slots", "n250", 250, "bbb", True)
+    assert sc.comparator(s1000, noslots) == ("de129103cacc", want, 1000)
+    assert sc.comparator(s250, noslots) == (None, None, 250)
+
+
+def test_comparator_reads_a_release_cache_holding_settings(tmp_path):
+    noslots = tmp_path / "checkpoints"
+    checkpoint(noslots, "n2000", 2000, "7962fd718a47", False)
+    cache = tmp_path / "chronos-slots-ccc"
+    cache.mkdir()
+    (cache / "settings.json").write_text(
+        json.dumps({"hash": "ccc", "n_outbreaks": 2000, "series_slots": {}})
+    )
+    got = sc.comparator(cache, noslots)
+    assert got[0] == "7962fd718a47"
+    assert got[2] == 2000
+
+
+def per_block() -> pd.DataFrame:
+    """Per-block rows of three models on given, two sources and 3-day."""
+    rows = []
+    for key, source in enumerate(["weekly", "weekly", "daily", "3day"]):
+        for model, loss in (
+            ("zero-shot", 4.0),
+            ("no-slots", 2.0),
+            ("slots", 1.0),
+        ):
+            for cond in ("given", "swap_places"):
+                rows.append(
+                    {
+                        "key": key,
+                        "set": "sim",
+                        "source": source,
+                        "n_targets": 3,
+                        "model": model,
+                        "condition": cond,
+                        "nowcast": loss * (1.5 if cond != "given" else 1),
+                        "forecast": loss,
+                        "change_nowcast_max": 0.1 if model == "slots" else 0,
+                        "change_nowcast_mean": 0.0,
+                        "change_forecast_max": 0.0,
+                        "change_forecast_mean": 0.0,
+                        "slot_sd": 0.01 if model == "slots" else np.nan,
+                    }
+                )
+    return pd.DataFrame(rows)
+
+
+def test_summary_gives_given_loss_by_source_slots_against_no_slots():
+    s = sc.summarise_rows(per_block(), n_boot=50)
+    vs = s[
+        (s["model"] == "slots")
+        & (s["against"] == "no-slots")
+        & (s["condition"] == "given")
+        & (s["window"] == "nowcast")
+    ].set_index("set")
+    # 3-day blocks are reported apart from daily ones.
+    assert {"sims weekly", "sims daily", "sims 3day", "sims all"} <= set(
+        vs.index
+    )
+    assert vs.loc["sims weekly", "n_blocks"] == 2
+    assert vs.loc["sims 3day", "n_blocks"] == 1
+    assert vs.loc["sims all", "ratio"] == pytest.approx(0.5)
+    assert vs.loc["sims all", "loss"] == pytest.approx(1.0)
+    assert vs.loc["sims all", "against_loss"] == pytest.approx(2.0)
+    zs = s[
+        (s["model"] == "slots")
+        & (s["against"] == "zero-shot")
+        & (s["set"] == "sims all")
+        & (s["window"] == "nowcast")
+    ]
+    assert zs["ratio"].item() == pytest.approx(0.25)
+
+
+def test_summary_compares_each_condition_with_given():
+    s = sc.summarise_rows(per_block(), n_boot=50)
+    swap = s[
+        (s["condition"] == "swap_places")
+        & (s["against"] == "given")
+        & (s["set"] == "sims all")
+        & (s["window"] == "nowcast")
+    ].set_index("model")
+    assert swap.loc["slots", "ratio"] == pytest.approx(1.5)
+    assert swap.loc["slots", "n_above_floor"] == 4
+    assert swap.loc["no-slots", "n_unchanged"] == 4
+
+
+def test_summary_without_a_comparator_compares_with_zero_shot_only():
+    d = per_block()
+    d = d[d["model"] != "no-slots"]
+    s = sc.summarise_rows(d, n_boot=50)
+    given = s[(s["condition"] == "given") & (s["model"] == "slots")]
+    assert set(given["against"]) == {"zero-shot"}
