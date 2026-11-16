@@ -13,8 +13,8 @@ The panels are:
   (`scripts/finetune_simulate.R`), one box per stage;
 - B, the reporting triangle laid out as ragged series for Chronos-2
   (`forecasters.foundation.layout_block`), each place's count and lag
-  series sharing one series slot (`forecasters.slots`) and carrying
-  their parent's slot, all places in one group;
+  series sharing one fixed random label (`forecasters.slots`) and
+  carrying their parent's label, all places in one group;
 - C, a training block cut from a simulated release history
   (`forecasters.finetune.training_block`) and the LoRA adapters;
 - D, forecasting with the fine-tuned model
@@ -47,8 +47,8 @@ COV_SOFT = "#f5e5c8"
 HATCH = "#a3aabb"
 TRUTH = "#1b7f5f"
 TRUTH_SOFT = "#d4eee3"
-# One colour per place's series slot (panel B), and the slot of the
-# places' parent, which each place's series also carry.
+# One colour per place's label (panel B), and the label of the places'
+# parent, which each place's series also carry.
 SLOTS = ("#6f42c1", "#c0397a")
 PARENT_SLOT = "#2f7d4f"
 
@@ -486,15 +486,15 @@ def panel_b(g: Svg, oy: float) -> float:
             anchor="end",
             weight="bold",
         )
-        # The place's slot, shared by its target and its lag series, and
-        # beside it the parent's slot, which the place's series also carry.
+        # The place's label, shared by its target and its lag series, and
+        # beside it the parent's label, which the place's series also carry.
         colour = SLOTS[p - 1]
         g.rect(bx - 35, y0, 3.2, bottom - y0, fill=colour, rx=1.6)
         g.rect(bx - 30.5, y0, 2.2, bottom - y0, fill=PARENT_SLOT, rx=1.1)
         g.text(
             bx - 40,
             (y0 + bottom) / 2 + 9,
-            f"slot {p} + \u00bd parent",
+            f"label {p} + parent",
             size=SMALL,
             anchor="end",
             fill=colour,
@@ -567,8 +567,8 @@ def panel_b(g: Svg, oy: float) -> float:
         ("future", "to forecast"),
         ("none", "no release"),
         ("unseen", "not yet reported"),
-        ("slot", "place slot"),
-        ("parent", "parent slot"),
+        ("slot", "place label"),
+        ("parent", "parent label"),
     ]
     x = 0.0
     for kind, name in items:
@@ -667,16 +667,14 @@ def panel_c(g: Svg, oy: float) -> float:
     g.text(
         mx + mw / 2, y0 + 9.3, "input embedding", size=SMALL, anchor="middle"
     )
-    # The series slots, added to every token of a place's series.
-    g.rect(mx + mw + 4, y0, aw, 13, fill=ACCENT_SOFT, stroke=ACCENT, sw=0.9)
+    # The fixed place labels, added to every token of a place's series.
+    g.rect(mx + mw + 4, y0, aw, 13, fill=CELL, rx=2)
     g.text(
         mx + mw + 4 + aw / 2,
         y0 + 9.3,
-        "slot",
+        "labels",
         size=SMALL,
         anchor="middle",
-        fill=ACCENT,
-        weight="bold",
     )
     g.rect(
         mx - 4,
@@ -800,7 +798,7 @@ def panel_d(g: Svg, oy: float) -> float:
     g.text(
         x2 + w2 / 2,
         top + 34.5,
-        "+ adapter \u00b7 slots",
+        "+ adapter \u00b7 labels",
         size=SMALL,
         anchor="middle",
         fill=ACCENT,
