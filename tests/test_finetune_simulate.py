@@ -788,3 +788,47 @@ cat("rows", nrow(s), "cols", ncol(s), "\\n")
         tmp_path,
     )
     assert out.split() == ["rows", "2", "cols", "3"]
+
+
+@needs_r
+def test_sizes_reach_thirty_thousand_cases_per_active_stratum(tmp_path):
+    out = run_r(
+        """
+set.seed(8)
+ratio <- c()
+fits <- TRUE
+for (want in list(
+  list(strata = "single"),
+  list(strata = "places", spread = "even"),
+  list(strata = "places", spread = "concentrated")
+)) {
+  g <- 0L
+  repeat {
+    cell <- cell_for(g)
+    if (all(vapply(names(want), function(k) cell[[k]] == want[[k]], TRUE))) break
+    g <- g + 1L
+  }
+  d <- draw_design(g)
+  for (k in 1:300) {
+    v <- draw_values(d)
+    active <- max(1, (d$n_places - length(v$quiet_places)) * d$n_ages)
+    ratio <- c(ratio, v$target_size / active)
+    fits <- fits && max_size(d) >= 3 * v$target_size
+  }
+}
+cat("range", min(ratio), max(ratio), "\\n")
+cat("upper_share", mean(ratio > 1e4), "\\n")
+cat("fits", fits, "\\n")
+cat("grid", grid_name, "\\n")
+""",
+        tmp_path,
+    )
+    rows = {x.split()[0]: x.split()[1:] for x in out.splitlines() if x}
+    lo, hi = map(float, rows["range"])
+    assert lo >= 30
+    assert hi <= 30000
+    assert hi > 20000
+    # Log-uniform on 30 to 30,000: about a sixth above 10,000.
+    assert float(rows["upper_share"][0]) > 0.08
+    assert rows["fits"] == ["TRUE"]
+    assert rows["grid"] == ["r4.1"]
