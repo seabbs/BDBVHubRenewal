@@ -79,6 +79,7 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
 - Levels: Chronos-2 forecasts the country, provinces and health zones as separate series in one joint block, so each level is forecast directly and not summed. The copula only pairs draws across weeks and places, for joint scores and sums, and leaves every marginal forecast unchanged.
 - SI, aggregation options: the joint block against each level in its own block, and against the lowest level summed up with its draws paired at random or by the copula.
 - SI, lag cap: the lag series stop at 4 weeks or 28 days, compared with lags run to the truth delay.
+- TODO: replace the SI's dashboard screenshot with a static render of the finished run from the workflow (#256).
 - SI, series slots: the slots run is compared with a run without slots on the same recipe, grid and checkpoints.
 - SI, real data: Chronos-2 fine-tuned on real data, compared with the model fine-tuned on simulations on the German held-out half and the scored BDBV rounds.
 - Compared with Chronos-2 given only complete data points and with zero-shot Chronos-2 on the ragged layout, to show what the ragged structure and fine-tuning add. The SI's checkpoint curve shows each checkpoint's scores against the number of simulations it was trained on, with both as reference lines.
@@ -203,6 +204,7 @@ Key references: the Methods references, with [@bracherEvaluatingEpidemicForecast
 - See SI, checkpoint curve: scores of each checkpoint by the number of simulations it was trained on.
 - See SI, held-out set: its seeds, size and grid.
 - See SI, per-series slots against no slots.
+- See SI, monitoring fine-tuning: the dashboard used to review training as it ran.
 :::
 
 ::: {#fig-synthetic-nowcasts}

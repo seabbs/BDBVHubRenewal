@@ -79,6 +79,15 @@ Truth was the latest release's counts, left out after 2026-10-01, so every count
 Training followed Chronos-2's recipe as the simulation fine-tune does, from base Chronos-2, for its default 1,000 steps.
 The last 14 German nowcast dates were held out to monitor the loss.
 
+### Monitoring fine-tuning
+
+A local dashboard, part of the fine-tuning workflow, was used to review training as it ran (@fig-dashboard).
+It showed the training and held-out loss by source, each checkpoint's scores against `randomwalknowcast` with the zero-shot and complete-only references, and the German nowcasts by checkpoint.
+Reviewing it led to the complete-only reference in the checkpoint curve (@fig-checkpoint-curve).
+The dashboard was built with the help of a large language model.
+
+![The fine-tuning dashboard on 16 November 2026 at 17:29, with the slots run at 500 simulations: training and held-out loss by source, checkpoint scores against `randomwalknowcast` with the zero-shot and complete-only references, and German nowcasts by checkpoint.](figures/dashboard-2026-11-16.png){#fig-dashboard}
+
 ### Synthetic data generation
 
 ::: {.callout-note title="Plan"}
