@@ -213,16 +213,17 @@
   color: var(--md-default-fg-color--light);
 }
 
-.tablefilter-sort {
+/* Sortable headers (tablesort.js). */
+.tablesort-head {
   cursor: pointer;
   user-select: none;
 }
 
-.tablefilter-sort[aria-sort="ascending"]::after {
+.tablesort-head[aria-sort="ascending"]::after {
   content: " ▲";
 }
 
-.tablefilter-sort[aria-sort="descending"]::after {
+.tablesort-head[aria-sort="descending"]::after {
   content: " ▼";
 }
 

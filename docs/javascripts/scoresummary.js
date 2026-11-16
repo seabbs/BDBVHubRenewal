@@ -12,6 +12,8 @@
   var summariseEnergy = window.bdbvSummariseEnergy;
 
   function fmt(v, dp) { return v === null || v === undefined || isNaN(v) ? "–" : v.toFixed(dp); }
+  // The full value a cell sorts by, empty when missing (sorted last).
+  function sortKey(v) { return v === null || v === undefined || isNaN(v) ? "" : String(v); }
   // Lower-case the first letter of a label, but not of an acronym (WIS).
   function lower(s) {
     return /^[A-Z]{2}/.test(s) ? s : s.charAt(0).toLowerCase() + s.slice(1);
@@ -46,11 +48,18 @@
       if (!isOn(r.model)) return;
       var tr = h("tr", {}, body);
       h("td", {}, tr, d.models[r.model].name);
-      h("td", {}, tr, String(r.n));
-      cols.forEach(function (c) { h("td", {}, tr, fmt(c.get(r), 3)); });
+      h("td", { "data-sort": String(r.n) }, tr, String(r.n));
+      cols.forEach(function (c) {
+        h("td", { "data-sort": sortKey(c.get(r)) }, tr, fmt(c.get(r), 3));
+      });
       var e = extra.length ? extraFor(r.model) : null;
-      extra.forEach(function (c) { h("td", {}, tr, e ? fmt(c.get(e), c.dp) : "–"); });
+      extra.forEach(function (c) {
+        h("td", { "data-sort": e ? sortKey(c.get(e)) : "" }, tr, e ? fmt(c.get(e), c.dp) : "–");
+      });
     });
+    // The container keeps the viewer's sort across redraws.
+    container.bdbvSort = container.bdbvSort || { col: -1, dir: 1 };
+    window.bdbvTableSort.sortable(tbl, container.bdbvSort);
   }
   window.bdbvSummaryTable = summaryTable;
 
