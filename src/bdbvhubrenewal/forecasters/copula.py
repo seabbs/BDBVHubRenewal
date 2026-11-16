@@ -281,8 +281,6 @@ def pair_samples(
     pandas.DataFrame
         `samples` with the sample ids of each cell reordered.
     """
-    # A zone (`CD-IT-01`) is not paired: its draws move with its
-    # province's, so each draw's zones still sum to the province.
     zone = samples["location"].str.count("-") >= 2
     is_final = _final(samples)
     final = samples.loc[is_final & ~zone]

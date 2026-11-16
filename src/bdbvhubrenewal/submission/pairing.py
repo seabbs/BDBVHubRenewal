@@ -1,22 +1,11 @@
 # Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
 """Pairing a submission's draws by the model's own recent errors.
 
-A model registered as `paired` draws each place and week on its own.
-Before its hub table is made, its draws are paired into trajectories by
-the rolling copula (`bdbvhubrenewal.forecasters.copula.RollingCopula`),
-as the release backtest pairs them, so the scored and submitted
-forecasts are the same.
-The copula is estimated from the model's forecasts at earlier origins,
-against the truth the releases up to the forecast give.
-Those forecasts come from where the backtest takes them: the fit
-store's fits of the model's own settings (`stored_forecasts`), else the
-model forecast again at the earlier releases.
-The ledger's archive of each round's candidates (`archived_forecasts`)
-gives an origin neither has.
-A model whose earlier origins give no forecasts from any of these
-fails, rather than be paired by the prior alone. Only where the backtest
-has none either, with no earlier origin or none the model can forecast
-from, is it paired by the prior.
+A model registered as `paired` has its draws paired into trajectories
+by the rolling copula (`forecasters.copula.RollingCopula`), as the
+release backtest pairs them, before its hub table is made.
+The copula is estimated from the model's forecasts at earlier origins
+(`past_forecasts`).
 """
 
 from __future__ import annotations
@@ -24,7 +13,7 @@ from __future__ import annotations
 import re
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Any, Final
+from typing import Any
 
 import pandas as pd
 
@@ -32,6 +21,7 @@ from bdbvhubrenewal.data.dates import as_date
 from bdbvhubrenewal.evaluation import store as fit_store
 from bdbvhubrenewal.evaluation.backtest import BacktestConfig
 from bdbvhubrenewal.evaluation.nowcast import rolling_truth
+from bdbvhubrenewal.evaluation.store_archive import FILE as ARCHIVE_FILE
 from bdbvhubrenewal.forecasters.base import (
     ForecastTask,
     ModelUnavailableError,
@@ -42,16 +32,11 @@ from bdbvhubrenewal.forecasters.base import (
 from bdbvhubrenewal.forecasters.copula import WINDOW_WEEKS, RollingCopula
 
 __all__ = [
-    "ARCHIVE_FILE",
     "archived_forecasts",
     "pair_submission",
     "past_forecasts",
     "stored_forecasts",
 ]
-
-ARCHIVE_FILE: Final = "candidates.csv.gz"
-"""A round's archive of its candidates' hub tables, in the ledger's
-`archive/<reference_date>/<run>/`."""
 
 _COLUMNS = ["model", "origin", "location", "target_end_date", "sample", "value"]
 
@@ -292,8 +277,6 @@ def pair_submission(
     )
     recent = [t for t in past_tasks if as_date(t.vintage) >= oldest]
     past, unavailable = past_forecasts(model, origin, archive, store, recent)
-    # The prior applies only where the backtest has no past forecast
-    # either: no earlier origin, or none the model can forecast from.
     earlier = {t.vintage for t in recent if t.vintage < origin} - unavailable
     if past.empty and earlier:
         raise LookupError(
