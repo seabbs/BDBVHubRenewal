@@ -54,6 +54,8 @@ def test_workflow_paths_default_under_the_rounds_folder(tmp_path):
     cfg = localconfig.read(path, {"HOME": str(tmp_path)})
     assert cfg["RUN"] == "/data/rounds/checkpoints/slots"
     assert cfg["SCORE_CACHE"] == "/data/rounds/scores"
+    assert cfg["NOSLOTS_RUN"] == "/data/rounds/checkpoints"
+    assert cfg["GERMANY_BLOCKS"] == "/data/rounds/germany/germany.pkl"
 
 
 def test_the_path_comes_from_local_config_when_set(tmp_path):
