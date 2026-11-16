@@ -14,15 +14,20 @@ Fitted models are slow, so `stored_forecasts` takes theirs from the
 backtest forecast files for the same round.
 The `source` column says which (`real` or `hub`).
 
-`score_comparison` scores every model on the weeks the latest real
-vintage reports in full, from the vintage serving its round
+`score_comparison` scores every model on the hub teams' cells only: the
+rounds, places and weeks any hub team forecast (`hub_cells`). Our models
+forecast every place and week of their task, and rounds no team
+forecast, and those extra cells are not scored.
+Each cell is scored on the weeks the latest real vintage reports in
+full, from the vintage serving its round
 (`bdbvhubrenewal.evaluation.nowcast.release_backtest`). Hub teams have no
 modelled delay we can see, so no model is scored on the counts later
 vintages report.
 A round is pending until a real vintage later than its matching vintage
 exists.
 `summarise_comparison` gives WIS relative to a baseline on the weeks both
-forecast, by round and target.
+forecast, by round and target, with `n` beside the hub cells scored, so a
+model that missed some shows it.
 """
 
 from __future__ import annotations
@@ -68,6 +73,7 @@ __all__ = [
     "attribution",
     "fetch_hub_submissions",
     "forecast_quantiles",
+    "hub_cells",
     "load_comparison_config",
     "load_hub_submissions",
     "load_team_metadata",
@@ -627,6 +633,35 @@ def zone_truth(
     ]
 
 
+CELL: Final = ("reference_date", "location", "target_end_date")
+"""Columns of a forecast cell in the comparison."""
+
+
+def hub_cells(forecasts: pd.DataFrame) -> pd.DataFrame:
+    """Return the cells any hub team forecast.
+
+    Parameters
+    ----------
+    forecasts : pandas.DataFrame
+        Samples with `source`, `hub` for the teams' submissions.
+
+    Returns
+    -------
+    pandas.DataFrame
+        One row per round, place and week (`CELL`) a team forecast.
+    """
+    hub = forecasts.loc[forecasts["source"] == "hub", list(CELL)]
+    return hub.astype(str).drop_duplicates().reset_index(drop=True)
+
+
+def _on_hub_cells(forecasts: pd.DataFrame) -> pd.DataFrame:
+    """Keep the teams' forecasts and ours on the cells a team forecast."""
+    keys = forecasts[list(CELL)].astype(str)
+    cells = pd.MultiIndex.from_frame(hub_cells(forecasts))
+    on = pd.MultiIndex.from_frame(keys).isin(cells)
+    return forecasts.loc[on | (forecasts["source"] == "hub").to_numpy()]
+
+
 def score_comparison(
     forecasts: pd.DataFrame,
     target: pd.DataFrame,
@@ -635,7 +670,10 @@ def score_comparison(
     daily: pd.DataFrame,
     zones: pd.DataFrame,
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    """Score every model on the weeks the latest real vintage completes.
+    """Score every model on the hub cells the latest real vintage completes.
+
+    Only the cells a hub team forecast (`hub_cells`) are scored, so our
+    models are scored on the same rounds, places and weeks as the teams.
 
     Parameters
     ----------
@@ -660,6 +698,7 @@ def score_comparison(
         `reference_date` and `source`), and the pending rounds with
         columns `reference_date`, `vintage` and `models`.
     """
+    forecasts = _on_hub_cells(forecasts)
     real = target.loc[target["kind"] == "real"]
     vintages = sorted(set(real["vintage"]))
     rounds, tasks, stored, pending = {}, [], [], []
@@ -720,13 +759,22 @@ def summarise_comparison(scores: pd.DataFrame, baseline: str) -> pd.DataFrame:
     Returns
     -------
     pandas.DataFrame
-        Columns `reference_date`, `target`, `model`, `source`, `n`, `wis`,
-        `log_wis`, `relative_wis` and `relative_log_wis` (on the weeks
-        shared with the baseline; missing if none), `coverage_50`,
-        `coverage_90` and `bias`.
+        Columns `reference_date`, `target`, `model`, `source`, `n`,
+        `hub_cells` (the cells the hub teams forecast that are scored, so
+        `n` below it is a model that missed some), `wis`, `log_wis`,
+        `relative_wis` and `relative_log_wis` (on the weeks shared with
+        the baseline; missing if none), `coverage_50`, `coverage_90` and
+        `bias`.
     """
     by = ("reference_date", "target")
     out = summarise_scores(scores, by=(*by, "model", "source"))
+    cell = [*by, "truth_vintage", "location", "target_end_date"]
+    hub = scores.loc[scores["source"] == "hub", cell].drop_duplicates()
+    out = out.merge(
+        hub.groupby(list(by)).size().rename("hub_cells").reset_index(),
+        on=list(by),
+        how="left",
+    )
     rel = relative_skill(
         scores,
         baseline=baseline,
@@ -744,6 +792,7 @@ def summarise_comparison(scores: pd.DataFrame, baseline: str) -> pd.DataFrame:
         "model",
         "source",
         "n",
+        "hub_cells",
         "wis",
         "log_wis",
         "relative_wis",

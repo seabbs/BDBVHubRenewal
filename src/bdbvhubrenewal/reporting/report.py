@@ -135,7 +135,11 @@ from bdbvhubrenewal.reporting.scoresummary import (
     targets_attr,
 )
 from bdbvhubrenewal.reporting.store_note import write_store_note
-from bdbvhubrenewal.reporting.tables import filter_table
+from bdbvhubrenewal.reporting.tables import (
+    filter_table,
+    markdown_table,
+    sortable_table,
+)
 from bdbvhubrenewal.reporting.zone_nowcast import (
     place_chart_data,
     zone_counts,
@@ -146,7 +150,7 @@ __all__ = ["make_report"]
 
 
 def _table(df: pd.DataFrame, digits: int = 2) -> str:
-    return df.round(digits).to_markdown(index=False) + "\n"
+    return sortable_table(df, digits)
 
 
 def _dropdown(body: str, title: str = "Tables") -> str:
@@ -567,7 +571,9 @@ def _release_section(
     _write(
         gen / "scores-location.md",
         filter_table(
-            _table(relative_wis(pooled, ("target", "pool", "location"))),
+            markdown_table(
+                relative_wis(pooled, ("target", "pool", "location"))
+            ),
             ["target", "pool", "model"],
         ),
     )
@@ -640,7 +646,7 @@ def _release_section(
         + "\n"
         + _dropdown(
             filter_table(
-                _table(
+                markdown_table(
                     _by_baseline(
                         overall_for,
                         [m for m in names if m in set(pooled["model"])],
@@ -1953,7 +1959,7 @@ def _checks_section(
         "</div>\n\n"
         + _dropdown(
             filter_table(
-                _table(summary),
+                markdown_table(summary),
                 ["baseline", "scale", "split", "model"],
                 {"baseline": "randomwalk"},
             ),
@@ -2122,14 +2128,18 @@ def _comparison_page(
     ]
     _write(
         gen / "comparison-lead.md",
-        "Scores on the weeks the latest release reports in full, from "
-        "the release serving each round "
+        "Scores on the hub teams' cells only, the rounds, places and "
+        "weeks any team forecast, on the weeks the latest release reports "
+        "in full, from the release serving each round "
         "([how scoring works]"
         "(methods/evaluation.md#comparison-with-hub-forecasts)).\n"
         "A series marked submitted is the file we sent to a round, and one "
         "marked main build is the current main branch's forecast for every "
         "round, so a round we did not submit to shows only the main "
-        "build.\n",
+        "build.\n"
+        "Each row's n is beside the hub cells scored in its round. "
+        "Fitted models are not run at health zone level, so they cover "
+        "only the hub's national and province cells.\n",
     )
     scores_path = cmp_dir / "scores.csv"
     scores = (
@@ -2312,7 +2322,7 @@ def _comparison_summary(
         + "\n"
         + _dropdown(
             filter_table(
-                _table(
+                markdown_table(
                     _by_baseline(
                         lambda b: relative_wis(rows, ("pool",), baseline=b),
                         models,
