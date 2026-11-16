@@ -186,7 +186,7 @@ def main(argv: list[str] | None = None) -> int:
         )
     with tempfile.TemporaryDirectory() as tmp:
         tree = args.out or Path(tmp)
-        source = str(args.cache / "germany" / args.label)
+        source = f"checkpoint_scores.py germany cache, label {args.label}"
         out = write_stored(
             tree, tag, frame, config.split_date, args.label, source=source
         )
