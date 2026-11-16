@@ -64,6 +64,9 @@ LEVEL_BLOCKS = 300
 """Held-out blocks scored by level at each checkpoint."""
 
 SAVE_EVERY = 50
+BY_SOURCE_EVERY = 200
+"""Steps between held-out losses by source, which cost three monitor
+evals."""
 """Steps between saves of the trainer's state, which a restarted trainer
 resumes from."""
 
@@ -1404,18 +1407,19 @@ def main() -> None:
                 monitor = held_out_loss(
                     model, val[: ft.EVAL_BLOCKS], args.batch_size
                 )
-                by_source = held_out_by_source(
-                    model, val, args.batch_size, ft.EVAL_BLOCKS
-                )
+                entry = {"step": step, "eval_loss": monitor}
+                described = ""
+                if step % BY_SOURCE_EVERY == 0:
+                    entry["by_source"] = held_out_by_source(
+                        model, val, args.batch_size, ft.EVAL_BLOCKS
+                    )
+                    described = f"by source {_by_source(entry['by_source'])}, "
                 split["eval_s"] += time.perf_counter() - since
-                history.append(
-                    {"step": step, "eval_loss": monitor, "by_source": by_source}
-                )
+                history.append(entry)
                 log(
                     f"step {step}: loss {value:.4f}, held-out "
                     f"(first {ft.EVAL_BLOCKS} blocks) {monitor:.4f}, "
-                    f"by source {_by_source(by_source)}, "
-                    f"{time.perf_counter() - t0:.0f} s; {memory()}"
+                    f"{described}{time.perf_counter() - t0:.0f} s; {memory()}"
                 )
                 (out / "history.json").write_text(json.dumps(history))
             if step % SAVE_EVERY == 0:

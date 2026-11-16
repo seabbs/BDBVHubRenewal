@@ -26,8 +26,8 @@ HERE=${HERE:-output/finetune/continuous}
 OUTBREAKS=${OUTBREAKS:-8000}
 # Each round simulates 100 held-out outbreaks.
 HOLDOUT=${HOLDOUT:-100}
-# Early checkpoints at 250 and 500 compare runs as they train.
-PREFIXES=${PREFIXES:-250 500 1000 2000 4000 8000}
+# Early checkpoints at 250, 500 and 750 compare runs as they train.
+PREFIXES=${PREFIXES:-250 500 750 1000 2000 4000 8000}
 # Two draws at each of 16 snapshots, sampled across the 10: 32 blocks, about
 # 2.2 h per 1,000 simulations on an M-series laptop (2026-11-16 probe:
 # 22,820 steps per 1,000 at 160 blocks, 1.75 s a step). The learning rate
