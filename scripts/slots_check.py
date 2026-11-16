@@ -330,10 +330,37 @@ def comparator(
     return None, None, n
 
 
-def load_models(noslots: Path | None, slotted: Path) -> dict:
+HEADLINE_CONDITIONS = ("given", "swap_places")
+"""Conditions of the headline, scored first."""
+
+
+def phase_work(phase: str, has_comparator: bool) -> set[tuple[str, str]]:
+    """Return the (model, condition) pairs a phase of the run scores.
+
+    The headline comes first: `given` and `swap_places` for the slots
+    checkpoint and its no-slots comparator, or zero-shot where there is
+    none. "rest" is everything else, so the two phases cover the run once.
+    """
+    models = ["zero-shot", "slots"] + (["no-slots"] if has_comparator else [])
+    every = {(m, c) for m in models for c in CONDITIONS}
+    other = "no-slots" if has_comparator else "zero-shot"
+    first = {(m, c) for m in ("slots", other) for c in HEADLINE_CONDITIONS}
+    if phase == "headline":
+        return first
+    if phase == "rest":
+        return every - first
+    if phase == "all":
+        return every
+    raise ValueError(phase)
+
+
+def load_models(
+    noslots: Path | None, slotted: Path, names: set[str] | None = None
+) -> dict:
     """Return zero-shot Chronos-2 and the adapters merged into it.
 
-    `no-slots` is left out when there is no comparator.
+    Only the models in `names`, if given; `no-slots` is left out when
+    there is no comparator.
     """
     from chronos import Chronos2Pipeline
 
@@ -347,15 +374,19 @@ def load_models(noslots: Path | None, slotted: Path) -> dict:
             CHRONOS_MODEL, revision=CHRONOS_REVISION, device_map="cpu"
         ).model
 
-    models = {"zero-shot": base().eval()}
-    if noslots is not None:
+    names = names or {"zero-shot", "no-slots", "slots"}
+    models = {}
+    if "zero-shot" in names:
+        models["zero-shot"] = base().eval()
+    if noslots is not None and "no-slots" in names:
         models["no-slots"] = slots.load_adapter(base(), noslots).eval()
         if slots.has_slots(models["no-slots"]):
             raise ValueError(f"{noslots} holds slots")
-    models["slots"] = slots.load_adapter(base(), slotted).eval()
-    if not slots.has_slots(models["slots"]):
-        raise ValueError(f"{slotted} holds no slots")
-    _slot_weight_check(models["slots"], slotted)
+    if "slots" in names:
+        models["slots"] = slots.load_adapter(base(), slotted).eval()
+        if not slots.has_slots(models["slots"]):
+            raise ValueError(f"{slotted} holds no slots")
+        _slot_weight_check(models["slots"], slotted)
     return models
 
 
@@ -440,12 +471,15 @@ def score(args) -> None:
         f"{against or 'none (zero-shot only)'}",
         flush=True,
     )
-    models = load_models(noslots, slotted)
+    work = phase_work(args.phase, noslots is not None)
+    models = load_models(noslots, slotted, {m for m, _ in work})
     # How far the slots are from zero init: Chronos-2's patch tokens have
     # an sd of about 0.03.
-    weight = getattr(models["slots"], slots.SLOT_MODULE).embedding.weight
-    slot_sd = float(weight.detach().std())
-    slot_absmax = float(weight.detach().abs().max())
+    slot_sd = slot_absmax = np.nan
+    if "slots" in models:
+        weight = getattr(models["slots"], slots.SLOT_MODULE).embedding.weight
+        slot_sd = float(weight.detach().std())
+        slot_absmax = float(weight.detach().abs().max())
     print(f"slots sd {slot_sd:.3g}, max |w| {slot_absmax:.3g}", flush=True)
     rows = []
     t0 = time.time()
@@ -460,11 +494,18 @@ def score(args) -> None:
             if x is None:
                 continue
             for name, model in models.items():
+                if (name, cond) not in work and (
+                    cond != "given" or not any(m == name for m, _ in work)
+                ):
+                    continue
                 t1 = time.time()
                 loss, p = predict(model, x)
                 loss = loss.numpy()
                 if cond == "given":
                     given[name] = p
+                if (name, cond) not in work:
+                    # Scored only as the base of this model's changes.
+                    continue
                 change = output_change(given[name], p, d, h)
                 rows.append(
                     {
@@ -634,7 +675,7 @@ def summarise_rows(d: pd.DataFrame, n_boot: int = 2000) -> pd.DataFrame:
 
 def summarise(args) -> None:
     """Write the summary and per-block CSVs of a run's shards."""
-    shards = sorted(Path(args.shard_dir).glob("shard-*.csv"))
+    shards = sorted(Path(args.shard_dir).glob("*shard-*.csv"))
     d = pd.concat((pd.read_csv(f) for f in shards), ignore_index=True)
     d = d.assign(checkpoint=args.label, commit=args.commit)
     s = summarise_rows(d).assign(
@@ -644,6 +685,7 @@ def summarise(args) -> None:
         if "comparator" in d
         else "",
         commit=args.commit,
+        stage=args.stage,
     )
     for path in (args.csv, *args.copy):
         Path(path).parent.mkdir(parents=True, exist_ok=True)
@@ -734,6 +776,9 @@ def main() -> None:
     p.add_argument("--shard", type=int, nargs=2, default=(0, 1))
     p.add_argument("--limit", type=int, default=0)
     p.add_argument("--cache", default="")
+    p.add_argument(
+        "--phase", choices=("headline", "rest", "all"), default="all"
+    )
     p.set_defaults(run=score)
     p = sub.add_parser("synthetic")
     p.add_argument("out", type=Path)
@@ -749,6 +794,8 @@ def main() -> None:
     p.add_argument("--csv", type=Path, required=True)
     p.add_argument("--blocks", type=Path, required=True)
     p.add_argument("--copy", type=Path, nargs="*", default=[])
+    # "interim" after the headline phase, "final" at the end.
+    p.add_argument("--stage", choices=("interim", "final"), default="final")
     p.set_defaults(run=summarise)
     args = parser.parse_args()
     args.run(args)
