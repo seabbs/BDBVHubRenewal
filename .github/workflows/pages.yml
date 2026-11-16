@@ -42,8 +42,17 @@ on:
       - 'uv.lock'
       - '.github/workflows/pages.yml'
       - '.github/actions/setup-forecast-env/**'
+  # A dispatch from main rebuilds and deploys the site. From another
+  # branch it builds the site as an artifact only, which is how a branch
+  # is checked against a scratch fit store (`store_branch`).
   workflow_dispatch:
     inputs:
+      store_branch:
+        description: >-
+          Fit store branch to read (blank for fit-store); a scratch store
+          such as fit-store-scratch-fm-chronos checks a branch's fits
+        type: string
+        default: ''
       paper_target:
         description: >-
           The paper workflow's target. `paper` reads the held-out data,
@@ -87,6 +96,7 @@ jobs:
       # the fits used, which each page with their results states.
       - name: Load the stored fits
         env:
+          FIT_STORE_BRANCH: ${{ inputs.store_branch || 'fit-store' }}
           # The fine-tuned models list the releases for their checkpoint.
           GITHUB_TOKEN: ${{ github.token }}
         run: |
@@ -593,6 +603,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           GH_TOKEN: ${{ github.token }}
+          # A preview's store note names the pull request's head, not the
+          # merge commit, in one line; empty outside pull requests.
+          PREVIEW_HEAD: ${{ github.event.pull_request.head.sha }}
         run: |
           FIT_STORE_RUN=$(gh run list -R "$GITHUB_REPOSITORY" \
             -w fit-store.yml -b main -s in_progress -L 1 \
@@ -700,11 +713,14 @@ jobs:
             !data/raw
           retention-days: 3
 
+  # Only main deploys: a dispatch from another branch would otherwise
+  # replace the site with that branch's build.
   deploy:
     needs: build
     if: >-
       !cancelled() && needs.build.result == 'success'
       && github.event_name != 'pull_request'
+      && github.ref == 'refs/heads/main'
       && inputs.paper_target != 'paper'
     # A `paper` build holds the held-out half, which waits for the paper.
     runs-on: ubuntu-latest

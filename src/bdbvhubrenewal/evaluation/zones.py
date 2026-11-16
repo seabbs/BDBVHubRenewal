@@ -76,7 +76,7 @@ __all__ = [
     "zone_relative_skill",
 ]
 
-ZONE_BASELINE = "randomwalk"
+ZONE_BASELINE = "randomwalknowcast"
 """Name of the zone baseline in the scores."""
 
 SUMMED = " (summed to provinces)"

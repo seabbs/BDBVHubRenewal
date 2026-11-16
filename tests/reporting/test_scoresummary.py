@@ -76,7 +76,7 @@ def test_browser_summary_matches_relative_wis(pool: str) -> None:
     scores = _scores()
     depth = scores["location"].str.count("-")
     scores["pool"] = depth.map({0: "national", 1: "provinces", 2: "zones"})
-    data = summary_rows(scores, MODELS, COLOURS, {})
+    data = summary_rows(scores, MODELS, COLOURS, {}, baseline="randomwalk")
     places = [i for i, p in enumerate(data["places"]) if p["pool"] == pool]
     got = _node(data, f"function (r) {{ return {places}.includes(r[3]); }}")
     want = relative_wis(scores, by=("pool",)).set_index(["pool", "model"])
@@ -94,7 +94,9 @@ def test_browser_summary_matches_relative_wis(pool: str) -> None:
 
 def test_summary_rows_index_every_key() -> None:
     names = {"CD-IT": "Ituri", "CD-NK": "Nord Kivu"}
-    data = summary_rows(_scores(), MODELS, COLOURS, names)
+    data = summary_rows(
+        _scores(), MODELS, COLOURS, names, baseline="randomwalk"
+    )
     assert data["baseline"] == 0
     assert [p["id"] for p in data["pools"]] == [
         "national",
@@ -148,7 +150,9 @@ def _energy() -> pd.DataFrame:
 @pytest.mark.parametrize("pool", ["national", "provinces", "zones"])
 def test_browser_energy_matches_relative_energy(pool: str) -> None:
     energy = _energy()
-    data = summary_rows(_scores(), MODELS, COLOURS, {}, energy=energy)
+    data = summary_rows(
+        _scores(), MODELS, COLOURS, {}, energy=energy, baseline="randomwalk"
+    )
     ids = [p["id"] for p in data["pools"]]
     script = (
         f"const s = require({json.dumps(str(ENERGY_JS))});"
@@ -178,7 +182,7 @@ def test_a_zero_baseline_gives_no_relative_score() -> None:
     scores = _scores()
     base = (scores["model"] == "randomwalk") & (scores["location"] == "CD")
     scores.loc[base, ["wis", "log_wis"]] = 0.0
-    data = summary_rows(scores, MODELS, COLOURS, {})
+    data = summary_rows(scores, MODELS, COLOURS, {}, baseline="randomwalk")
     got = _node(data, "function (r) { return r[3] === 0; }")
     assert data["places"][0]["id"] == "CD"
     assert all(r["rel"]["wis"] is None for r in got)
@@ -188,7 +192,7 @@ def test_a_zero_baseline_gives_no_relative_score() -> None:
 
 def test_browser_summary_by_horizon_matches_relative_wis() -> None:
     scores = _scores()
-    data = summary_rows(scores, MODELS, COLOURS, {})
+    data = summary_rows(scores, MODELS, COLOURS, {}, baseline="randomwalk")
     got = _node(data, "function (r, i) { return d.horizons[i] === 0; }")
     want = relative_wis(scores, by=("horizon",)).set_index(["horizon", "model"])
     for row in got:
@@ -204,7 +208,7 @@ def test_browser_relative_scores_are_mean_over_mean_like_relative_skill() -> (
     # relative_skill both leave it out and divide mean by mean. The mean of
     # per-forecast ratios would differ.
     scores = _scores()
-    data = summary_rows(scores, MODELS, COLOURS, {})
+    data = summary_rows(scores, MODELS, COLOURS, {}, baseline="randomwalk")
     got = _node(data, "function () { return true; }")
     want = relative_skill(
         scores,
@@ -273,7 +277,7 @@ def test_browser_summary_takes_any_model_as_the_baseline(pool: str) -> None:
     scores = scores.loc[~drop]
     depth = scores["location"].str.count("-")
     scores["pool"] = depth.map({0: "national", 1: "provinces", 2: "zones"})
-    data = summary_rows(scores, MODELS, COLOURS, {})
+    data = summary_rows(scores, MODELS, COLOURS, {}, baseline="randomwalk")
     places = [i for i, p in enumerate(data["places"]) if p["pool"] == pool]
     keep = f"function (r) {{ return {places}.includes(r[3]); }}"
     got = _node_with(SUMMARISE, data, keep, MODELS.index("a"))
@@ -296,7 +300,9 @@ def test_browser_summary_takes_any_model_as_the_baseline(pool: str) -> None:
 @pytest.mark.parametrize("pool", ["national", "provinces", "zones"])
 def test_browser_energy_takes_any_model_as_the_baseline(pool: str) -> None:
     energy = _energy()
-    data = summary_rows(_scores(), MODELS, COLOURS, {}, energy=energy)
+    data = summary_rows(
+        _scores(), MODELS, COLOURS, {}, energy=energy, baseline="randomwalk"
+    )
     ids = [p["id"] for p in data["pools"]]
     keep = f"function (r) {{ return r[3] === {ids.index(pool)}; }}"
     got = _node_with(ENERGY_JS, data, keep, MODELS.index("b"))
@@ -315,7 +321,9 @@ def test_browser_energy_takes_any_model_as_the_baseline(pool: str) -> None:
 def test_a_zero_energy_baseline_gives_no_relative_score() -> None:
     energy = _energy()
     energy.loc[energy["model"] == "a", ["energy", "log_energy"]] = 0.0
-    data = summary_rows(_scores(), MODELS, COLOURS, {}, energy=energy)
+    data = summary_rows(
+        _scores(), MODELS, COLOURS, {}, energy=energy, baseline="randomwalk"
+    )
     got = _node_with(ENERGY_JS, data, "function () { return true; }", 1)
     assert isinstance(got, dict)
     assert all(r["rel"]["energy"] is None for r in got.values())
@@ -355,7 +363,7 @@ def _check_against(got: list[dict[str, object]], scores: pd.DataFrame) -> None:
 
 def test_one_round_scores_as_that_round_alone() -> None:
     scores = _scores()
-    data = summary_rows(scores, MODELS, COLOURS, {})
+    data = summary_rows(scores, MODELS, COLOURS, {}, baseline="randomwalk")
     first = data["origins"].index("2026-10-24")
     got = _node_rounds(data, f"[{first}]")
     alone = scores.loc[scores["origin"] == "2026-10-24"]
@@ -366,7 +374,7 @@ def test_one_round_scores_as_that_round_alone() -> None:
 
 def test_several_rounds_pool_their_cells() -> None:
     scores = _scores()
-    data = summary_rows(scores, MODELS, COLOURS, {})
+    data = summary_rows(scores, MODELS, COLOURS, {}, baseline="randomwalk")
     both = [data["origins"].index(o) for o in ("2026-10-17", "2026-10-24")]
     got = _node_rounds(data, json.dumps(both))
     # Recomputed over the union of the rounds' cells, not a mean of each
@@ -377,5 +385,5 @@ def test_several_rounds_pool_their_cells() -> None:
 
 def test_all_rounds_keeps_every_row() -> None:
     scores = _scores()
-    data = summary_rows(scores, MODELS, COLOURS, {})
+    data = summary_rows(scores, MODELS, COLOURS, {}, baseline="randomwalk")
     _check_against(_node_rounds(data, "null"), scores)

@@ -249,7 +249,11 @@ def test_by_model_view_marks_breaks_and_names_commits(sh) -> None:
     assert rw[3 + keys.index("rel_wis")] == pytest.approx(40 / 35, rel=1e-3)
 
 
-def test_by_week_view_draws_a_line_per_week_for_one_model(sh) -> None:
+def test_by_week_view_draws_a_line_per_week_for_one_model(
+    sh, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The fixture's baseline is randomwalk.
+    monkeypatch.setattr(sh, "DEFAULT_BASELINE", "randomwalk")
     hist = sh.history(
         [
             ("a" * 40, "2026-11-04T10:00", "p1", "latest", _summary()),

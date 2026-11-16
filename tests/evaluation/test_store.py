@@ -7,16 +7,25 @@ import shutil
 import tomllib
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import pytest
 
+from bdbvhubrenewal.data.zones import ZoneData, load_zone_data
 from bdbvhubrenewal.evaluation import store
-from bdbvhubrenewal.evaluation.backtest import BacktestConfig, real_vintages
-from bdbvhubrenewal.forecasters import ForecastTask
+from bdbvhubrenewal.evaluation.backtest import (
+    BacktestConfig,
+    make_tasks,
+    real_vintages,
+    vintage_task,
+)
+from bdbvhubrenewal.forecasters import ForecastTask, get_model
 from bdbvhubrenewal.forecasters.base import NATIONAL, SAMPLE_COLUMNS
 from bdbvhubrenewal.submission.fitting import Forecast
 
 ROOT = Path(__file__).resolve().parents[2]
+
+DATA = Path(__file__).resolve().parents[2] / "tests" / "fixtures" / "data"
 
 
 @pytest.fixture
@@ -128,12 +137,16 @@ def test_zone_code_keys_only_the_zone_fits(tmp_path: Path) -> None:
         path.write_text(path.read_text() + "\n_EDITED = 1\n")
 
     before = digests()
+    own = store.code_digest("fm_chronos_weekly_ragged", root)
     edit("evaluation/zones.py")
     assert digests() == before
+    assert store.code_digest("fm_chronos_weekly_ragged", root) == own
     edit("forecasters/zones.py")
     after = digests()
     assert after["renewal"] != before["renewal"]
     assert after["pprandomwalknowcast"] == before["pprandomwalknowcast"]
+    # A model that forecasts the zones itself runs the split in its fit.
+    assert store.code_digest("fm_chronos_weekly_ragged", root) != own
     before = after
     # Introductions are drawn in the fit, for provinces with no recent case.
     edit("forecasters/introductions.py")
@@ -640,6 +653,89 @@ def test_load_writes_the_zone_fits_zone_samples(tmp_path: Path) -> None:
     ].to_numpy().tolist() == [["renewal", "2026-10-17", "CD-IT-01", 3.0]]
 
 
+@pytest.mark.usefixtures("in_root", "offline_bvd")
+def test_zone_data_keys_only_the_models_that_read_it(
+    target: pd.DataFrame,
+    delays: pd.DataFrame,
+    daily: pd.DataFrame,
+    daily_zones: pd.DataFrame,
+    health_zones: pd.DataFrame,
+    config: BacktestConfig,
+    tasks: dict[str, ForecastTask],
+) -> None:
+    zoned = store.origin_tasks(
+        target,
+        delays,
+        config,
+        daily,
+        ZoneData(health_zones, daily_zones, ("CD-IT-01", "CD-NK-01")),
+    )
+    latest = real_vintages(target)[-1]
+    assert zoned[latest].zone_history is not None
+    assert zoned[latest].zone_daily_history is not None
+    assert zoned[latest].zone_codes == ("CD-IT-01", "CD-NK-01")
+    sampler = store.samplers()
+    plain = ["renewal", "pprandomwalknowcast"]
+    assert store.current_keys(zoned, plain, sampler, "c") == (
+        store.current_keys(tasks, plain, sampler, "c")
+    )
+    reads = ["fm_chronos_weekly_complete"]
+    assert store.current_keys(zoned, reads, sampler, "c") != (
+        store.current_keys(tasks, reads, sampler, "c")
+    )
+
+
+def _block_size(groups, horizon, n, _seed):
+    """A sampler whose every draw is the number of series in the block."""
+    return [
+        np.full((n, len(g["target"]), horizon), float(len(g["target"])))
+        for g in groups
+    ]
+
+
+@pytest.mark.usefixtures("in_root")
+def test_a_live_run_forecasts_the_provinces_as_the_stored_fit(
+    target: pd.DataFrame,
+    delays: pd.DataFrame,
+    daily: pd.DataFrame,
+    config: BacktestConfig,
+) -> None:
+    zones = load_zone_data(DATA)
+    latest = real_vintages(target)[-1]
+    stored = store.origin_tasks(target, delays, config, daily, zones)[latest]
+    # The live paths: a submission (`vintage_task`) and the docs and the
+    # hub comparison (`make_tasks`).
+    real = target.loc[target["kind"] == "real"]
+    live = [
+        vintage_task(target, delays, config, latest, daily, zones=zones)[0],
+        make_tasks(
+            real.loc[real["vintage"] == latest],
+            delays,
+            config,
+            history=real,
+            daily=daily,
+            zones=zones,
+        )[0],
+    ]
+    model = dataclasses.replace(
+        get_model("fm_chronos_weekly_ragged"), sample=_block_size
+    )
+
+    def provinces(task: ForecastTask) -> pd.Series:
+        out = model.forecast(task)
+        out = out.loc[out["location"].isin(task.locations)]
+        return out.set_index(["location", "target_end_date", "sample"])["value"]
+
+    want = provinces(stored)
+    for task in live:
+        got = provinces(task)
+        pd.testing.assert_series_equal(got, want.reindex(got.index))
+    # Without the zones the block is smaller, and so are the draws.
+    plain = vintage_task(target, delays, config, latest, daily)[0]
+    got = provinces(plain)
+    assert not got.equals(want.reindex(got.index))
+
+
 class _Hub:
     """A stand-in for `cli._hub_forecast`, recording each call."""
 
@@ -886,3 +982,29 @@ def test_the_policy_candidates_are_the_policy_models() -> None:
     assert set(candidates) == want
     assert {"renewal", "randomwalk", "randomwalknowcast"} <= want
     assert set(candidates) <= set(store_archive.candidate_models(policy))
+
+
+@pytest.mark.usefixtures("in_root", "offline_bvd")
+def test_the_archive_s_store_task_keys_zone_models_as_the_store(
+    target: pd.DataFrame,
+    delays: pd.DataFrame,
+    daily: pd.DataFrame,
+    daily_zones: pd.DataFrame,
+    health_zones: pd.DataFrame,
+    config: BacktestConfig,
+) -> None:
+    # Models that read the zones are keyed on them, so the archive's task
+    # needs them to find their stored fits.
+    from bdbvhubrenewal.evaluation import store_archive
+
+    zones = ZoneData(health_zones, daily_zones, ("CD-IT-01", "CD-NK-01"))
+    latest = real_vintages(target)[-1]
+    stored = store.origin_tasks(target, delays, config, daily, zones)[latest]
+    task = store_archive.store_task(
+        target, delays, config, daily, latest, zones=zones
+    )
+    sampler = store.samplers()
+    reads = ["fm_chronos_weekly_complete"]
+    assert store.current_keys({latest: task}, reads, sampler, "c") == (
+        store.current_keys({latest: stored}, reads, sampler, "c")
+    )

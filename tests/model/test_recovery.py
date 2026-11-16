@@ -42,17 +42,21 @@ def truth(outbreak, column, location="CD-IT"):
     return par.loc[par["location"] == location, column].to_numpy()
 
 
-def on_sim_days(model, outbreak, data, site, subpop=True):
-    """Posterior median of a daily site, indexed by simulation day.
+def on_sim_days(
+    model, outbreak, data, site, location="CD-IT", groups_first=False
+):
+    """Posterior median of a daily site for one province, by simulation day.
 
-    The model axis starts at `data.start_date` (the first-case week), not
-    at the simulation start, so days before it are NaN.
+    Sites are `(draw, day, province)`, or `(draw, province, day)` with
+    `groups_first` (the delay sites). The model axis starts at
+    `data.start_date` (the first-case week), not at the simulation start,
+    so days before it are NaN.
     """
     n_init = model.latent.n_initialization_points
-    draws = np.asarray(model.mcmc.get_samples()[site])[:, n_init:]
-    if subpop:
-        draws = draws[..., 0]
-    est = np.median(draws, axis=0)[: data.cutoff + 1]
+    j = list(data.names).index(location)
+    draws = np.asarray(model.mcmc.get_samples()[site])
+    draws = draws[:, j] if groups_first else draws[..., j]
+    est = np.median(draws[:, n_init:], axis=0)[: data.cutoff + 1]
     offset = (data.start_date - outbreak.settings.start).days
     out = np.full(offset + data.cutoff + 1, np.nan)
     out[offset:] = est
@@ -89,7 +93,7 @@ def test_recovery(fitted, outbreak, sim_vintage):
     }
     if "delay_mean" in smp:
         dm = on_sim_days(
-            model, outbreak, sim_vintage, "delay_mean", subpop=False
+            model, outbreak, sim_vintage, "delay_mean", groups_first=True
         )
         summary["delay_true"] = np.round(
             truth(outbreak, "delay_mean")[[42, 168]], 1
@@ -146,7 +150,8 @@ def test_forecast_trajectories(fitted, outbreak, sim_vintage):
     draws = forecast_trajectories(model, sim_vintage, n_trajectories=100)
     seconds = time.perf_counter() - start
     n_weeks = sim_vintage.n_weeks + sim_vintage.horizon_weeks
-    assert draws["province"].shape == (100, n_weeks, 4)
+    n_prov = len(sim_vintage.names)
+    assert draws["province"].shape == (100, n_weeks, n_prov)
     assert np.all(draws["province"] >= 0)
     # Coherence: national sample k is the sum of the provinces' sample k.
     np.testing.assert_array_equal(
@@ -154,7 +159,7 @@ def test_forecast_trajectories(fitted, outbreak, sim_vintage):
         draws["province"].sum(axis=2),
     )
     # Final truth for the last data week and the 3 forecast weeks, for the
-    # nation and each modelled province: 20 intervals, so the check does
+    # nation and each modelled province: 28 intervals, so the check does
     # not hang on one or two weeks.
     true = outbreak.truth().set_index(["location", "target_end_date"])["truth"]
     weeks = [
@@ -189,7 +194,7 @@ def test_forecast_trajectories(fitted, outbreak, sim_vintage):
     }
     out.write_text(json.dumps(summary, indent=2))
     print(summary)
-    # 90% intervals over 20 cells: below 0.7 has under 2% chance if they
+    # 90% intervals over 28 cells: below 0.7 has under 2% chance if they
     # are calibrated.
     assert forecast90 >= 0.7, summary
     assert 0.8 <= coverage["ppc90_province"] <= 1.0
