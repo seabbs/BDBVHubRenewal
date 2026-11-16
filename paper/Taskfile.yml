@@ -1,5 +1,8 @@
 version: "3"
 
+# Machine settings, such as CORES (config/local.env).
+dotenv: ["../config/local.env"]
+
 tasks:
   test:
     desc: Run the paper tests
