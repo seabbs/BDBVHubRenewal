@@ -619,7 +619,8 @@ def test_another_countrys_own_series_is_paired_as_the_country() -> None:
     # rho_n, whatever its code (Germany's DE, not the default CD).
     samples = _samples(n=3000).replace({"location": {NATIONAL: "DE"}})
     samples["location"] = samples["location"].str.replace("CD-", "DE-")
-    copula = GaussianCopula(0.0, 0.1, 0.8)
+    # rho_p 0.6 keeps the matrix valid while rho_n 0.8 stays distinct.
+    copula = GaussianCopula(0.0, 0.6, 0.8)
     out = pair_samples(samples, copula, np.random.default_rng(30), "DE")
     wide = _wide(out)
     w = "2026-10-17"
