@@ -32,7 +32,7 @@ def predict(model, block, rows=None):
 
 
 def toy_rows():
-    return series_bias.block_rows(N_PLACES, N_PLACES * LAG, [-1, 0, 0])
+    return series_bias.block_rows(range(N_PLACES), N_PLACES * LAG, [-1, 0, 0])
 
 
 def test_zero_bias_is_base_chronos_bit_for_bit():
@@ -53,7 +53,7 @@ def test_pairs_mark_self_same_place_child_to_parent_and_back():
     # More places than the old 128 labels: no limit.
     n = 300
     me, same, up, down = masks(
-        *series_bias.block_rows(n, 0, [-1] + [0] * (n - 1))
+        *series_bias.block_rows(range(n), 0, [-1] + [0] * (n - 1))
     )
     assert me.shape == same.shape == up.shape == down.shape == (n, n)
     assert torch.equal(me, torch.eye(n, dtype=torch.bool))
@@ -68,7 +68,7 @@ def test_pairs_mark_self_same_place_child_to_parent_and_back():
     par = series_bias.parents_of(HIER)
     rows = series_bias.row_places(len(HIER), 2 * len(HIER))
     me, same, up, down = masks(
-        *series_bias.block_rows(len(HIER), 2 * len(HIER), par)
+        *series_bias.block_rows(range(len(HIER)), 2 * len(HIER), par)
     )
     for i, p in enumerate(rows):
         for j, q in enumerate(rows):
@@ -91,7 +91,7 @@ def test_the_four_biases_are_zero_fp32_scalars_per_layer_and_head():
 
 
 def test_blocks_batched_together_keep_their_own_places():
-    a = series_bias.block_rows(2, 2, [-1, 0])
+    a = series_bias.block_rows(range(2), 2, [-1, 0])
     rows = series_bias.batch_rows([a, a])
     place, parent = rows
     assert list(place) == [0, 1, 0, 1, 2, 3, 2, 3]

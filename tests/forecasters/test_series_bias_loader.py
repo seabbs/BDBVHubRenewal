@@ -60,7 +60,7 @@ def test_germany_pairs_by_name():
     places = ["CD", "CD-BY", "CD-BE", "CD-A0", "CD-A5"]
     parents = series_bias.parents_of(places)
     assert parents == [-1, 0, 0, 0, 0]
-    rows = series_bias.block_rows(len(places), 2 * len(places), parents)
+    rows = series_bias.block_rows(range(len(places)), 2 * len(places), parents)
     me, same, up, down = series_bias.pair_masks(
         torch.as_tensor(rows[0]), torch.as_tensor(rows[1])
     )
@@ -103,7 +103,7 @@ def test_bdbv_pairs_by_name_beyond_128_places(n):
             assert parents[i] == at["CD"]
         else:
             assert parents[i] == at[p.rsplit("-", 1)[0]]
-    rows = series_bias.block_rows(n, 0, parents)
+    rows = series_bias.block_rows(range(n), 0, parents)
     assert rows[0].max() == n - 1
     me, same, up, down = series_bias.pair_masks(
         torch.as_tensor(rows[0]), torch.as_tensor(rows[1])
@@ -127,7 +127,9 @@ def test_a_1000_place_block_runs_with_the_bias():
         "n_future_covariates": 0,
         "prediction_length": H,
     }
-    rows = series_bias.block_rows(n, 0, series_bias.parents_of(bdbv_places(n)))
+    rows = series_bias.block_rows(
+        range(n), 0, series_bias.parents_of(bdbv_places(n))
+    )
     out = predict(model, block, rows)
     assert out.shape[0] == n
     assert torch.isfinite(out).all()
@@ -137,7 +139,7 @@ def test_a_block_with_no_parents_links_nothing():
     places = ["R1", "R2", "R3"]
     parents = series_bias.parents_of(places)
     assert parents == [-1, -1, -1]
-    rows = series_bias.block_rows(3, 6, parents)
+    rows = series_bias.block_rows(range(3), 6, parents)
     _, _, up, down = series_bias.pair_masks(
         torch.as_tensor(rows[0]), torch.as_tensor(rows[1])
     )
