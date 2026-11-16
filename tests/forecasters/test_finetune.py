@@ -225,3 +225,12 @@ def test_three_day_blocks_are_cut_like_daily_ones() -> None:
     target = block["context"][0]
     # Every full bin of three days holds 21 cases.
     assert target[block["start"] - 1] == 21.0
+
+
+def test_three_day_block_with_no_whole_bin_by_its_cut_is_none() -> None:
+    # Cases start the day before the cut-off: no 3-day bin ends there.
+    counts = _longer_counts()
+    cutoffs = ["2026-09-02"]
+    assert (
+        training_block(counts, "3day", (NATIONAL,), cutoffs, max_lag=2) is None
+    )
