@@ -929,6 +929,30 @@ def check_until(until: int | None, prefixes: list[int]) -> None:
         raise ValueError(f"--until {until} is not a prefix of {prefixes}")
 
 
+def until_start(done: int, until: int | None, have_prefix: bool) -> str:
+    """Return what a segment does with the state it resumes from.
+
+    "train" while the state is short of `until`; "kept" if it is at
+    `until` and prefix `until` is saved, so only the state is kept with
+    it. A state past `until`, or at it without the prefix, cannot make
+    that prefix again, so the segment stops with an error rather than
+    train past it.
+    """
+    if until is None or done < until:
+        return "train"
+    if done > until:
+        raise SystemExit(
+            f"the state is at {done} outbreaks, past n{until}: that prefix "
+            "cannot be made from it"
+        )
+    if not have_prefix:
+        raise SystemExit(
+            f"the state is at n{until} but n{until} is missing; retrain it "
+            "from the state of the prefix before"
+        )
+    return "kept"
+
+
 def keep_state(state: Path, where: Path) -> None:
     """Copy the trainer's state to `where/state`, replacing any there."""
     kept = where / "state"
@@ -1373,7 +1397,11 @@ def main() -> None:
         load_blocks(args.real_validation) if args.real_validation else []
     )
     t0 = time.perf_counter()
-    # A segment stops at its prefix, at once if a rerun's state is there.
+    # A segment stops at its prefix; one whose state is already there
+    # only keeps it, and one past it fails (`until_start`).
+    until_start(
+        done, args.until, (out / f"n{args.until}" / "settings.json").exists()
+    )
     stop = args.outbreaks if args.until is None else args.until
     while done < stop:
         hi = min(done + CHUNK, args.outbreaks)
