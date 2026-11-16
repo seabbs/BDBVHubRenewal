@@ -236,33 +236,6 @@ def test_training_slots_link_each_place_to_its_parent():
 
 def test_parent_link_settings_enter_the_hash():
     on = fs.slot_settings(128, init_std=0.02, init_seed=1, lr=1e-4)
-    assert on["series_slots"]["parent"]["scale_init"] == slots.PARENT_SCALE
+    assert "scale_init" not in on["series_slots"]["parent"]
+    assert "plus the parent's own slot" in on["series_slots"]["parent"]["link"]
     assert "nearest" in on["series_slots"]["parent"]["rule"]
-
-
-def test_the_parent_share_round_trips_through_the_trainer_state(tmp_path):
-    from peft import get_peft_model
-    from test_series_slots import lora
-
-    model = tiny_model()
-    slots.attach(model, 8, init_std=0.02, seed=1)
-    model = get_peft_model(model, lora())
-    for n, p in model.named_parameters():
-        if "parent_scale" in n and p.requires_grad:
-            p.data.fill_(0.3)
-    opt = torch.optim.AdamW(fs.param_groups(model, 1e-5, 1e-4))
-    fs.save_state(tmp_path / "state", model, opt, {"step": 0})
-    fresh = tiny_model()
-    slots.attach(fresh, 8)
-    fresh = get_peft_model(fresh, lora())
-    fs.load_state(
-        tmp_path / "state",
-        fresh,
-        torch.optim.AdamW(fs.param_groups(fresh, 1e-5, 1e-4)),
-    )
-    got = [
-        float(p)
-        for n, p in fresh.named_parameters()
-        if "parent_scale" in n and p.requires_grad
-    ]
-    assert got == pytest.approx([0.3])

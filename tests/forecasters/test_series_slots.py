@@ -317,17 +317,16 @@ def test_a_parents_slot_is_what_its_children_carry():
     assert len(set(own[:n_t])) == n_t
 
 
-def test_the_parent_term_is_a_learned_share_of_the_parents_slot():
+def test_a_place_adds_its_parents_slot_exactly():
     model = tiny_model()
     slots.attach(model, 8, init_std=0.02, seed=1)
     module = getattr(model, slots.SLOT_MODULE)
     table = module.embedding.weight.detach()
-    ids = torch.tensor([[3, 5], [5, -1]])
-    out = module(ids).detach()
-    scale = float(module.parent_scale)
-    assert 0 < scale < 1
-    assert torch.allclose(out[0], table[3] + scale * table[5])
+    out = module(torch.tensor([[3, 5], [5, -1]])).detach()
+    assert torch.allclose(out[0], table[3] + table[5])
     assert torch.allclose(out[1], table[5])
+    # The slot table is the only parameter.
+    assert [n for n, _ in module.named_parameters()] == ["embedding.weight"]
     # Own slots alone, as before.
     assert torch.allclose(module(torch.tensor([3, 5])).detach(), table[[3, 5]])
 
