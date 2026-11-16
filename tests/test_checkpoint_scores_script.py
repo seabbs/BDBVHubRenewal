@@ -373,3 +373,16 @@ def test_rows_are_built_only_from_finished_units(cs, tmp_path):
     (tmp_path / "heldout").mkdir()
     ready = cs.ready_labels(tmp_path, "germany", ["reference", "abc"])
     assert ready == []
+
+
+def test_interim_rows_are_kept_when_rows_are_rebuilt(cs) -> None:
+    # A slots checkpoint with BDBV rows only is not scored, but a rebuild
+    # must carry it, or its rows would be dropped.
+    rows = pd.DataFrame(
+        {
+            "study": ["ebola", "held_out", "germany", "ebola", "ebola"],
+            "checkpoint": ["slots-a", "slots-a", "zero-shot", "zero-shot", "x"],
+            "rule": [cs.RULE] * 4 + [cs.OLD_RULE],
+        }
+    )
+    assert cs.checkpoints_with_rows(rows) == {"slots-a"}

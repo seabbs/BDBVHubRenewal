@@ -69,6 +69,14 @@ BASELINE = "randomwalknowcast"
 REFERENCE = "reference"
 ZERO_SHOT = ("fm_chronos_daily_ragged", "fm_chronos_weekly_ragged")
 FINETUNED = tuple(f"{m}_ft" for m in ZERO_SHOT)
+COMPLETE = ("fm_chronos_daily_complete", "fm_chronos_weekly_complete")
+"""Chronos-2 given only complete data points (no lags), zero-shot: a
+reference beside the ragged zero-shot models (Sam, 2026-11-16 16:55)."""
+COMPLETE_LABEL = "reference-complete"
+"""The complete-data models' own run, merged into the reference files
+once every date and origin is in (`merge_complete`)."""
+COMPLETE_STAMP = "complete.merged"
+"""In the cache: written once the complete-data forecasts are merged."""
 N_DRAWS = 1000
 GERMANY_CELL = ["origin", "location", "target_end_date"]
 BDBV_CELL = ["origin", "truth_vintage", "location", "target_end_date"]
@@ -144,6 +152,14 @@ def scored_checkpoints(evidence: pd.DataFrame) -> set[str]:
 
 
 # Rows ------------------------------------------------------------------
+
+
+def checkpoints_with_rows(evidence: pd.DataFrame) -> set[str]:
+    """Return the checkpoints with any rule rows, scored or not."""
+    if "rule" not in evidence:
+        return set()
+    rule = evidence.loc[evidence["rule"] == RULE, "checkpoint"].astype(str)
+    return set(rule) - {"zero-shot"}
 
 
 def outbreaks_and_grid(
@@ -266,12 +282,16 @@ def common(model: Any) -> Any:
 
 def label_models(label: str) -> tuple[str, ...]:
     """Return the models a label runs."""
-    return (BASELINE, *ZERO_SHOT) if label == REFERENCE else FINETUNED
+    if label == REFERENCE:
+        return (BASELINE, *ZERO_SHOT, *COMPLETE)
+    if label == COMPLETE_LABEL:
+        return COMPLETE
+    return FINETUNED
 
 
 def _pin(label: str) -> None:
     """Pin the checkpoint, so no process resolves "latest" mid-run."""
-    if label != REFERENCE:
+    if label not in (REFERENCE, COMPLETE_LABEL):
         os.environ["BDBV_CHRONOS_FT"] = label
     elif not os.environ.get("BDBV_CHRONOS_FT"):
         os.environ["BDBV_CHRONOS_FT"] = REFERENCE_PIN
@@ -308,6 +328,48 @@ def germany_dates() -> list[str]:
     return de.nowcast_dates(config, held_out=False)
 
 
+def unit_root(cache: Path, study: str, label: str) -> Path:
+    """Return a unit's cache folder, made if needed.
+
+    A slots checkpoint's folder (`slots-<hash>`) is also reachable as
+    `<hash>`, the name the dashboard's mirror reads as dates finish.
+    """
+    root = cache / study / label
+    root.mkdir(parents=True, exist_ok=True)
+    if label.startswith("slots-"):
+        alias = cache / study / label.removeprefix("slots-")
+        if not alias.exists() and not alias.is_symlink():
+            alias.symlink_to(label)
+    return root
+
+
+def merge_complete(cache: Path) -> None:
+    """Add the complete-data forecasts to the reference files, once.
+
+    Each reference file gains the `COMPLETE_LABEL` file's rows of models
+    it does not hold yet, so a second merge adds nothing. Then
+    `COMPLETE_STAMP` is written.
+    """
+    read = {"dtype": {"origin": str, "target_end_date": str}}
+    for study in ("germany", "bdbv"):
+        for f in sorted((cache / study / COMPLETE_LABEL).glob("*.csv.gz")):
+            ref = cache / study / REFERENCE / f.name
+            new = pd.read_csv(f, **read)
+            if ref.exists():
+                old = pd.read_csv(ref, **read)
+                new = new.loc[~new["model"].isin(set(old["model"]))]
+                if new.empty:
+                    continue
+                new = pd.concat([old, new], ignore_index=True)
+            _write(new, ref)
+    (cache / COMPLETE_STAMP).write_text("merged\n")
+
+
+def ready_labels(cache: Path, study: str, labels: Sequence[str]) -> list[str]:
+    """Return the labels whose `study` unit is complete."""
+    return [lb for lb in labels if unit_done(cache, study, lb)]
+
+
 def germany_unit(cache: Path, label: str) -> None:
     """Nowcast each development date, as own quantiles with truth."""
     from bdbvhubrenewal.data.germany import hub_triangle
@@ -318,8 +380,7 @@ def germany_unit(cache: Path, label: str) -> None:
     triangle = hub_triangle(
         Path("data/raw/germany") / Path(config.triangle).name
     )
-    root = cache / "germany" / label
-    root.mkdir(parents=True, exist_ok=True)
+    root = unit_root(cache, "germany", label)
     dates = de.nowcast_dates(config, held_out=False)
     for i, date in enumerate(dates, 1):
         path = root / f"{date}.csv.gz"
@@ -369,8 +430,7 @@ def bdbv_unit(cache: Path, label: str) -> None:
     )
     origins = bdbv_origins()
     built = [common(get_model(m)) for m in label_models(label)]
-    root = cache / "bdbv" / label
-    root.mkdir(parents=True, exist_ok=True)
+    root = unit_root(cache, "bdbv", label)
     for origin in origins:
         path = root / f"{origin}.csv.gz"
         if path.exists():
@@ -469,7 +529,9 @@ def cell_scores(samples: pd.DataFrame, truth: pd.DataFrame) -> pd.DataFrame:
 def _tag(rows: pd.DataFrame, label: str) -> pd.DataFrame:
     """Name each run's rows by checkpoint, the `_ft` suffix dropped."""
     return rows.assign(
-        checkpoint="zero-shot" if label == REFERENCE else label,
+        checkpoint=(
+            "zero-shot" if label in (REFERENCE, COMPLETE_LABEL) else label
+        ),
         model=rows["model"].str.removesuffix("_ft"),
     )
 
@@ -533,11 +595,13 @@ def table(
             (cache / "heldout" / f"{h}-release.json").read_text()
         )
         meta[h] = (settings, *outbreaks_and_grid(settings, release))
+    # Each study's rows come from the labels whose unit is finished, so a
+    # slots checkpoint's BDBV rows land before its German run ends.
     labels = [REFERENCE, *hashes]
     new = pd.concat(
         [
-            germany_rows(cache, labels),
-            bdbv_rows(cache, labels),
+            germany_rows(cache, ready_labels(cache, "germany", labels)),
+            bdbv_rows(cache, ready_labels(cache, "bdbv", labels)),
             *(held_out_rows(h, m[0]) for h, m in meta.items()),
         ],
         ignore_index=True,

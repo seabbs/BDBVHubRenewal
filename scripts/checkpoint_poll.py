@@ -94,6 +94,28 @@ def units_for(checkpoint: str, scored: set[str]) -> list[tuple[str, str]]:
     ]
 
 
+COMPLETE_JOB = "complete-data reference"
+"""The job that adds the complete-data models to the zero-shot reference."""
+
+
+def next_job(queue: list[str], complete_pending: bool) -> str | None:
+    """Return what to run next: slots checkpoints, then the complete-data
+    reference, then the no-slots checkpoints."""
+    if queue and queue[0].startswith("slots-"):
+        return queue[0]
+    if complete_pending:
+        return COMPLETE_JOB
+    return queue[0] if queue else None
+
+
+def split_fast(
+    units: list[tuple[str, str]],
+) -> tuple[list[tuple[str, str]], list[tuple[str, str]]]:
+    """Split units into the fast ones (held-out, BDBV) and the German."""
+    fast = [u for u in units if u[0] != "germany"]
+    return fast, [u for u in units if u[0] == "germany"]
+
+
 def reference_pending(cache: Path) -> list[tuple[str, str]]:
     """Return the zero-shot reference's units, until its rows have landed."""
     if (cache / REFERENCE_STAMP).exists():
@@ -387,12 +409,14 @@ def main(cache: Path) -> None:
             continue
         evidence = cs.pd.read_csv(EVIDENCE, dtype={"checkpoint": str})
         scored = cs.scored_checkpoints(evidence)
+        # Every rebuild carries each checkpoint with rows, scored or not.
+        keep = scored | cs.checkpoints_with_rows(evidence)
         queue = [
             h
             for h in cs.checkpoint_queue(listed, scored)
             if failures.get(h, 0) < MAX_FAILURES
         ]
-        if not queue:
+        if not queue and (cache / cs.COMPLETE_STAMP).exists():
             stale = [
                 s
                 for s in [cs.REFERENCE, *sorted(scored)]
@@ -401,22 +425,50 @@ def main(cache: Path) -> None:
             if stale and scored:
                 units = [("bdbv", s) for s in stale]
                 if run_units(cache, units, "new BDBV origins"):
-                    land(cache, sorted(scored), "BDBV rows to new origins")
+                    land(cache, sorted(keep), "BDBV rows to new origins")
                 else:
                     time.sleep(POLL_SECONDS)
                 continue
             log("progress: idle, every published checkpoint scored")
             time.sleep(POLL_SECONDS)
             continue
-        checkpoint = queue[0]
+        job = next_job(queue, not (cache / cs.COMPLETE_STAMP).exists())
+        if job == COMPLETE_JOB:
+            log(f"progress: {COMPLETE_JOB} started")
+            units = [("bdbv", cs.COMPLETE_LABEL), ("germany", cs.COMPLETE_LABEL)]
+            if not run_units(cache, units, COMPLETE_JOB):
+                say(f"FAILED the {COMPLETE_JOB}; retrying later")
+                time.sleep(POLL_SECONDS)
+                continue
+            cs.merge_complete(cache)
+            sha = land(cache, sorted(keep), COMPLETE_JOB)
+            if sha is not None:
+                say(f"bdbv-paper: {COMPLETE_JOB} landed at {sha} on origin/"
+                    f"{BRANCH} (verified): fm_chronos_daily_complete and "
+                    "fm_chronos_weekly_complete, checkpoint 'zero-shot', "
+                    "German first half (rel_wis) and BDBV (rel_crps), on the "
+                    "cells every model and checkpoint made; bump "
+                    "`checkpoint_scores` to it")  # fmt: skip
+            continue
+        checkpoint = job
         log(f"progress: {checkpoint} started, {len(queue)} waiting")
-        if not run_units(cache, units_for(checkpoint, scored), checkpoint):
+        units = units_for(checkpoint, scored)
+        if checkpoint.startswith("slots-"):
+            fast, _ = split_fast(units)
+            if run_units(cache, fast, checkpoint):
+                sha = land(cache, sorted(keep | {checkpoint}),
+                           f"{checkpoint} held-out and BDBV (German running)")  # fmt: skip
+                if sha is not None:
+                    say(f"bdbv-paper: {checkpoint} held-out and BDBV rows "
+                        f"landed at {sha} on origin/{BRANCH}; German first "
+                        "half follows, written per date to the cache")  # fmt: skip
+        if not run_units(cache, units, checkpoint):
             failures[checkpoint] = failures.get(checkpoint, 0) + 1
             if failures[checkpoint] >= MAX_FAILURES:
                 say(f"FAILED scoring {checkpoint} twice; skipped until "
                     f"restart. Logs in {cache.parent / 'log'}")  # fmt: skip
             continue
-        sha = land(cache, sorted(scored | {checkpoint}), checkpoint)
+        sha = land(cache, sorted(keep | {checkpoint}), checkpoint)
         if sha is None:
             failures[checkpoint] = MAX_FAILURES
             continue
