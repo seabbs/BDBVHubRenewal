@@ -583,6 +583,100 @@ def panel_b(g: Svg, oy: float) -> float:
     return lgy + 3
 
 
+# The attention-bias relations (panel B, lower part), each with its colour.
+RELATIONS = (
+    ("self", "self", ACCENT),
+    ("same", "same place", SLOTS[0]),
+    ("up", "up (child \u2192 parent)", PARENT_SLOT),
+    ("down", "down (parent \u2192 child)", COV),
+    ("none", "unrelated (no bias)", CELL),
+)
+
+
+def _relation(row: tuple[str, int], col: tuple[str, int]) -> str:
+    """Return the relation of a query row to a key column of the toy block.
+
+    Places A and B are children of the country C.
+    """
+    (p, i), (q, j) = row, col
+    if (p, i) == (q, j):
+        return "self"
+    if p == q:
+        return "same"
+    if q == "C":
+        return "up"
+    if p == "C":
+        return "down"
+    return "none"
+
+
+def panel_b_bias(g: Svg, oy: float) -> float:
+    """Draw the lower part of panel B, the group-attention biases."""
+    places = ("C", "A", "B")
+    names = ("count", "lag 1", "lag 2")
+    rows = [(p, k) for p in places for k in range(len(names))]
+    cs = 9.0
+    gx, gy = 70.0, oy + 22
+    g.text(
+        gx + cs * len(rows) / 2,
+        oy + 8,
+        "group attention at one step: rows attend to columns",
+        size=SMALL,
+        anchor="middle",
+        fill=MUTED,
+    )
+    colour = {key: c for key, _, c in RELATIONS}
+    for a, row in enumerate(rows):
+        for b, col in enumerate(rows):
+            g.rect(
+                gx + b * cs + 0.4,
+                gy + a * cs + 0.4,
+                cs - 0.8,
+                cs - 0.8,
+                fill=colour[_relation(row, col)],
+                rx=1,
+            )
+    # Places over the columns, and places and series beside the rows.
+    for k, p in enumerate(places):
+        mid = len(names) * cs * (k + 0.5)
+        g.text(
+            gx + mid, gy - 2.5, p, size=SMALL, anchor="middle", weight="bold"
+        )
+        g.text(
+            gx - 40,
+            gy + mid + 2.5,
+            p,
+            size=SMALL,
+            anchor="middle",
+            weight="bold",
+        )
+        for n, name in enumerate(names):
+            y = gy + (k * len(names) + n) * cs + cs - 2.2
+            g.text(gx - 3, y, name, size=SMALL - 1, anchor="end", fill=MUTED)
+    bottom = gy + len(rows) * cs
+    # The relations, one a line, beside the grid.
+    lx = gx + len(rows) * cs + 24
+    for k, (_, name, c) in enumerate(RELATIONS):
+        y = gy + 4 + k * 12
+        g.rect(lx, y - 7, 9, 7.5, fill=c, rx=1)
+        g.text(lx + 13, y, name, size=SMALL)
+    g.text(
+        lx,
+        gy + 4 + len(RELATIONS) * 12 + 4,
+        "learned bias per relation, layer and head, added to the",
+        size=SMALL,
+        fill=MUTED,
+    )
+    g.text(
+        lx,
+        gy + 4 + len(RELATIONS) * 12 + 13,
+        "attention scores; zero at the start",
+        size=SMALL,
+        fill=MUTED,
+    )
+    return bottom + 3
+
+
 def panel_c(g: Svg, oy: float) -> float:
     """Draw panel C, a training block and the LoRA adapters."""
     g.label(0, oy + 9, "C", "Training blocks and LoRA fine-tuning")
@@ -878,6 +972,7 @@ def build() -> str:
     g = Svg()
     y = panel_a(g, 0.0)
     y = panel_b(g, y + 10)
+    y = panel_b_bias(g, y + 4)
     y = panel_c(g, y + 10)
     y = panel_d(g, y + 10)
     return g.render(round(y + 3))
