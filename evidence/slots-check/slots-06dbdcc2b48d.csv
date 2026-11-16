@@ -1,0 +1,105 @@
+set,model,condition,against,window,loss,against_loss,ratio,ci_low,ci_high,share_worse,n_blocks,n_identical,n_unchanged,n_above_floor,output_change_max,output_change_mean,slot_sd,checkpoint,n_outbreaks,comparator,commit,stage
+sims all,zero-shot,swap_places,given,nowcast,9.93926,9.93926,1,1,1,0,13,0,13,0,2.86102e-06,9.70107e-08,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+sims all,slots,swap_places,given,nowcast,8.39333,8.40254,0.998904,0.993334,1.00137,0.692308,13,0,0,13,0.170201,0.0130708,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+sims all,zero-shot,removed,given,nowcast,11.8164,9.98487,1.18343,1.08344,1.31137,0.7,30,0,0,0,7.16341,0.289978,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+sims all,slots,removed,given,nowcast,11.2407,6.61587,1.69905,1.37035,2.25702,0.9,30,0,0,0,9.03122,0.53082,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+sims all,zero-shot,shuffle_places,given,nowcast,10.8274,9.93926,1.08935,1.02133,1.18481,0.615385,13,0,0,0,4.64011,0.193935,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+sims all,slots,shuffle_places,given,nowcast,9.63168,8.40254,1.14628,1.03612,1.33772,0.769231,13,0,0,0,2.26942,0.283602,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+sims weekly,zero-shot,swap_places,given,nowcast,18.4177,18.4177,1,1,1,0,4,0,4,0,2.86102e-06,1.2544e-07,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+sims weekly,slots,swap_places,given,nowcast,15.9858,16.0367,0.996826,0.973936,1.00059,0.5,4,0,0,4,0.170201,0.0204651,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+sims daily,zero-shot,swap_places,given,nowcast,6.46468,6.46468,1,1,1,0,6,0,6,0,1.90735e-06,7.38874e-08,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+sims daily,slots,swap_places,given,nowcast,5.59521,5.58738,1.0014,0.999078,1.00412,0.666667,6,0,0,6,0.124781,0.0101212,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+sims 3day,zero-shot,swap_places,given,nowcast,5.58383,5.58383,1,1,1,0,3,0,3,0,1.90735e-06,1.05351e-07,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+sims 3day,slots,swap_places,given,nowcast,3.86625,3.85395,1.00319,1.00275,1.00678,1,3,0,0,3,0.103381,0.00911063,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+sims weekly,zero-shot,removed,given,nowcast,16.7085,13.7596,1.21432,1.05017,1.53195,0.9,10,0,0,0,7.16341,0.355855,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+sims weekly,slots,removed,given,nowcast,16.1791,10.6896,1.51354,1.17371,2.46108,0.9,10,0,0,0,2.70704,0.639495,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+sims weekly,zero-shot,shuffle_places,given,nowcast,21.4843,18.4177,1.1665,1.07217,1.47683,1,4,0,0,0,4.64011,0.525795,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+sims weekly,slots,shuffle_places,given,nowcast,18.7277,16.0367,1.1678,0.989635,1.71945,0.75,4,0,0,0,2.26942,0.634207,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+sims daily,zero-shot,removed,given,nowcast,5.92154,6.03232,0.981635,0.883879,1.05111,0.5,10,0,0,0,4.77137,0.178474,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+sims daily,slots,removed,given,nowcast,5.83269,4.65864,1.25202,1.09681,1.67477,0.8,10,0,0,0,9.03122,0.260415,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+sims daily,zero-shot,shuffle_places,given,nowcast,6.43583,6.46468,0.995538,0.956319,1.00872,0.5,6,0,0,0,0.642988,0.0276952,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+sims daily,slots,shuffle_places,given,nowcast,6.46489,5.58738,1.15705,1.03502,1.2363,0.833333,6,0,0,0,1.3702,0.106425,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+sims 3day,zero-shot,removed,given,nowcast,12.8191,10.1627,1.26139,1.10461,1.40989,0.7,10,0,0,0,2.37703,0.335606,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+sims 3day,slots,removed,given,nowcast,11.7103,4.49941,2.60262,1.68488,3.92458,1,10,0,0,0,4.72755,0.692549,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+sims 3day,zero-shot,shuffle_places,given,nowcast,5.40119,5.58383,0.967291,0.960727,0.988266,0.333333,3,0,0,0,1.18022,0.0839356,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+sims 3day,slots,shuffle_places,given,nowcast,3.83717,3.85395,0.995644,0.94406,1.40211,0.666667,3,0,0,0,2.08407,0.170483,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+sims multi-place,zero-shot,swap_places,given,nowcast,9.93926,9.93926,1,1,1,0,13,0,13,0,2.86102e-06,9.70107e-08,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+sims multi-place,slots,swap_places,given,nowcast,8.39333,8.40254,0.998904,0.993013,1.00148,0.692308,13,0,0,13,0.170201,0.0130708,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+sims univariate,zero-shot,removed,given,nowcast,12.7783,10.0198,1.27531,1.12707,1.462,0.705882,17,0,0,0,4.77137,0.317895,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+sims univariate,slots,removed,given,nowcast,11.9018,5.2496,2.26718,1.63909,3.22315,0.882353,17,0,0,0,3.35121,0.582001,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+sims multi-place,zero-shot,removed,given,nowcast,10.5585,9.93926,1.0623,0.988239,1.18652,0.692308,13,0,0,0,7.16341,0.253471,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+sims multi-place,slots,removed,given,nowcast,10.3762,8.40254,1.23489,1.04927,1.74869,0.923077,13,0,0,0,9.03122,0.463891,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+sims multi-place,zero-shot,shuffle_places,given,nowcast,10.8274,9.93926,1.08935,1.02248,1.18775,0.615385,13,0,0,0,4.64011,0.193935,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+sims multi-place,slots,shuffle_places,given,nowcast,9.63168,8.40254,1.14628,1.03571,1.33353,0.769231,13,0,0,0,2.26942,0.283602,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+germany states,zero-shot,swap_places,given,nowcast,3.32592,3.32592,1,1,1,0,4,0,4,0,7.15256e-07,8.42216e-08,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+germany states,slots,swap_places,given,nowcast,2.43781,2.43624,1.00064,0.996375,1.00834,0.5,4,0,0,4,0.0218565,0.00267411,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+germany states,zero-shot,removed,given,nowcast,3.71785,3.32592,1.11784,1.0465,1.15464,1,4,0,0,0,0.655785,0.0759239,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+germany states,slots,removed,given,nowcast,3.85041,2.43624,1.58047,1.09674,1.8602,0.75,4,0,0,0,1.2387,0.192112,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+germany states,zero-shot,shuffle_places,given,nowcast,3.31269,3.32592,0.996023,0.971374,1.05015,0.5,4,0,0,0,0.493609,0.050079,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+germany states,slots,shuffle_places,given,nowcast,3.06575,2.43624,1.25839,0.985345,1.40273,0.75,4,0,0,0,0.992951,0.135728,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+germany states weekly,zero-shot,swap_places,given,nowcast,3.32592,3.32592,1,1,1,0,4,0,4,0,7.15256e-07,8.42216e-08,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+germany states weekly,slots,swap_places,given,nowcast,2.43781,2.43624,1.00064,0.996375,1.00834,0.5,4,0,0,4,0.0218565,0.00267411,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+germany states weekly,zero-shot,removed,given,nowcast,3.71785,3.32592,1.11784,1.0465,1.15464,1,4,0,0,0,0.655785,0.0759239,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+germany states weekly,slots,removed,given,nowcast,3.85041,2.43624,1.58047,1.09674,1.89788,0.75,4,0,0,0,1.2387,0.192112,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+germany states weekly,zero-shot,shuffle_places,given,nowcast,3.31269,3.32592,0.996023,0.954817,1.05015,0.5,4,0,0,0,0.493609,0.050079,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+germany states weekly,slots,shuffle_places,given,nowcast,3.06575,2.43624,1.25839,0.985345,1.40273,0.75,4,0,0,0,0.992951,0.135728,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+germany states,slots,given,zero-shot,nowcast,2.43624,3.32592,0.732502,0.620627,0.909748,0,4,,,,,,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+germany states weekly,slots,given,zero-shot,nowcast,2.43624,3.32592,0.732502,0.648727,0.909748,0,4,,,,,,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+sims 3day,slots,given,zero-shot,nowcast,4.49941,10.1627,0.442737,0.3074,0.628213,0,10,,,,,,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+sims all,slots,given,zero-shot,nowcast,6.61587,9.98487,0.66259,0.523823,0.774326,0.0666667,30,,,,,,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+sims daily,slots,given,zero-shot,nowcast,4.65864,6.03232,0.772281,0.566594,0.901245,0.1,10,,,,,,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+sims multi-place,slots,given,zero-shot,nowcast,8.40254,9.93926,0.845388,0.669734,0.936526,0.0769231,13,,,,,,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+sims univariate,slots,given,zero-shot,nowcast,5.2496,10.0198,0.523925,0.395329,0.640589,0.0588235,17,,,,,,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+sims weekly,slots,given,zero-shot,nowcast,10.6896,13.7596,0.776882,0.60069,0.896781,0.1,10,,,,,,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+sims all,zero-shot,swap_places,given,forecast,11.6465,11.6465,1,1,1,0,13,0,13,0,3.8147e-06,1.0687e-07,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+sims all,slots,swap_places,given,forecast,12.2778,12.2896,0.999041,0.991466,1.00677,0.307692,13,0,0,13,0.183481,0.0149015,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+sims all,zero-shot,removed,given,forecast,15.6464,15.0706,1.03821,0.946471,1.12869,0.6,30,0,0,0,7.17425,0.317404,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+sims all,slots,removed,given,forecast,15.2151,11.2204,1.35602,1.07645,1.74626,0.666667,30,0,0,0,10.5276,0.617008,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+sims all,zero-shot,shuffle_places,given,forecast,11.3556,11.6465,0.975028,0.912745,1.03705,0.461538,13,0,0,0,4.84626,0.167265,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+sims all,slots,shuffle_places,given,forecast,11.3969,12.2896,0.927363,0.766845,1.11076,0.384615,13,0,0,1,2.37186,0.287237,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+sims weekly,zero-shot,swap_places,given,forecast,19.3775,19.3775,1,1,1,0,4,0,4,0,3.8147e-06,1.22439e-07,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+sims weekly,slots,swap_places,given,forecast,23.8885,23.7856,1.00433,0.995096,1.01467,0.5,4,0,0,4,0.162215,0.0190168,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+sims daily,zero-shot,swap_places,given,forecast,8.69803,8.69804,1,1,1,0,6,0,6,0,1.90735e-06,8.33819e-08,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+sims daily,slots,swap_places,given,forecast,7.96288,8.05032,0.989138,0.979375,0.994203,0,6,0,0,6,0.183481,0.0142887,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+sims 3day,zero-shot,swap_places,given,forecast,7.23529,7.23529,1,1,1,0,3,0,3,0,3.8147e-06,1.33089e-07,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+sims 3day,slots,swap_places,given,forecast,5.4268,5.44026,0.997527,0.994365,1.01002,0.666667,3,0,0,3,0.119511,0.0106401,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+sims weekly,zero-shot,removed,given,forecast,17.8126,17.1394,1.03928,0.901618,1.17532,0.7,10,0,0,0,7.17425,0.331209,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+sims weekly,slots,removed,given,forecast,17.7875,16.9305,1.05062,0.791501,1.34433,0.6,10,0,0,0,2.83444,0.607881,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+sims weekly,zero-shot,shuffle_places,given,forecast,18.58,19.3775,0.958844,0.828525,1.10967,0.5,4,0,0,0,4.84626,0.428897,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+sims weekly,slots,shuffle_places,given,forecast,18.4588,23.7856,0.776049,0.678594,0.966199,0.25,4,0,0,0,2.37186,0.56994,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+sims daily,zero-shot,removed,given,forecast,8.23733,8.44974,0.974862,0.901446,1.02272,0.4,10,0,0,0,4.41807,0.211125,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+sims daily,slots,removed,given,forecast,8.08806,6.50256,1.24383,1.02901,1.80382,0.7,10,0,0,0,10.5276,0.390468,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+sims daily,zero-shot,shuffle_places,given,forecast,8.65089,8.69804,0.994579,0.976764,1.00245,0.5,6,0,0,0,0.573442,0.0429368,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+sims daily,slots,shuffle_places,given,forecast,9.77596,8.05032,1.21436,0.992378,1.29854,0.5,6,0,0,1,1.30181,0.162307,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+sims 3day,zero-shot,removed,given,forecast,20.8893,19.6226,1.06455,0.8643,1.21273,0.7,10,0,0,0,2.64551,0.409877,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+sims 3day,slots,removed,given,forecast,19.7697,10.2283,1.93284,1.23362,3.27424,0.7,10,0,0,0,4.83586,0.852676,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+sims 3day,zero-shot,shuffle_places,given,forecast,7.13261,7.23529,0.985809,0.981291,0.999504,0.333333,3,0,0,0,1.18816,0.0670799,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+sims 3day,slots,shuffle_places,given,forecast,5.22309,5.44026,0.960082,0.88919,1.1007,0.333333,3,0,0,0,2.1344,0.160159,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+sims multi-place,zero-shot,swap_places,given,forecast,11.6465,11.6465,1,1,1,0,13,0,13,0,3.8147e-06,1.0687e-07,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+sims multi-place,slots,swap_places,given,forecast,12.2778,12.2896,0.999041,0.9912,1.00715,0.307692,13,0,0,13,0.183481,0.0149015,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+sims univariate,zero-shot,removed,given,forecast,19.0552,17.689,1.07723,0.938309,1.19205,0.647059,17,0,0,0,4.41807,0.349611,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+sims univariate,slots,removed,given,forecast,18.5687,10.4028,1.78497,1.3306,2.48568,0.764706,17,0,0,0,3.25685,0.68971,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+sims multi-place,zero-shot,removed,given,forecast,11.1888,11.6465,0.960699,0.839584,1.04594,0.538462,13,0,0,0,7.17425,0.275286,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+sims multi-place,slots,removed,given,forecast,10.8296,12.2896,0.8812,0.73653,1.07955,0.538462,13,0,0,0,10.5276,0.521937,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+sims multi-place,zero-shot,shuffle_places,given,forecast,11.3556,11.6465,0.975028,0.914072,1.03458,0.461538,13,0,0,0,4.84626,0.167265,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+sims multi-place,slots,shuffle_places,given,forecast,11.3969,12.2896,0.927363,0.768398,1.12995,0.384615,13,0,0,1,2.37186,0.287237,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+germany states,zero-shot,swap_places,given,forecast,10.4199,10.4199,1,1,1,0,4,0,4,0,9.53674e-07,9.87684e-08,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+germany states,slots,swap_places,given,forecast,9.52365,9.51083,1.00135,0.998054,1.00363,0.5,4,0,0,4,0.0266782,0.00325614,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+germany states,zero-shot,removed,given,forecast,10.415,10.4199,0.999529,0.98091,1.04238,0.25,4,0,0,0,1.00835,0.113716,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+germany states,slots,removed,given,forecast,10.34,9.51083,1.08719,0.939762,1.24196,0.75,4,0,0,0,1.10466,0.217204,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+germany states,zero-shot,shuffle_places,given,forecast,9.8998,10.4199,0.95009,0.925468,1.01732,0.5,4,0,0,0,0.490141,0.0606098,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+germany states,slots,shuffle_places,given,forecast,9.38754,9.51083,0.987036,0.86913,1.1572,0.5,4,0,0,0,1.15551,0.150307,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+germany states weekly,zero-shot,swap_places,given,forecast,10.4199,10.4199,1,1,1,0,4,0,4,0,9.53674e-07,9.87684e-08,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+germany states weekly,slots,swap_places,given,forecast,9.52365,9.51083,1.00135,0.998054,1.00363,0.5,4,0,0,4,0.0266782,0.00325614,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+germany states weekly,zero-shot,removed,given,forecast,10.415,10.4199,0.999529,0.98091,1.04238,0.25,4,0,0,0,1.00835,0.113716,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+germany states weekly,slots,removed,given,forecast,10.34,9.51083,1.08719,0.934581,1.24196,0.75,4,0,0,0,1.10466,0.217204,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+germany states weekly,zero-shot,shuffle_places,given,forecast,9.8998,10.4199,0.95009,0.925468,1.01044,0.5,4,0,0,0,0.490141,0.0606098,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+germany states weekly,slots,shuffle_places,given,forecast,9.38754,9.51083,0.987036,0.86913,1.1572,0.5,4,0,0,0,1.15551,0.150307,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+germany states,slots,given,zero-shot,forecast,9.51083,10.4199,0.91276,0.73269,1.23131,0.5,4,,,,,,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+germany states weekly,slots,given,zero-shot,forecast,9.51083,10.4199,0.91276,0.73269,1.19139,0.5,4,,,,,,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+sims 3day,slots,given,zero-shot,forecast,10.2283,19.6226,0.521251,0.308955,0.770743,0.2,10,,,,,,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+sims all,slots,given,zero-shot,forecast,11.2204,15.0706,0.744526,0.594469,0.895881,0.266667,30,,,,,,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+sims daily,slots,given,zero-shot,forecast,6.50256,8.44974,0.769558,0.550527,0.932356,0.2,10,,,,,,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+sims multi-place,slots,given,zero-shot,forecast,12.2896,11.6465,1.05522,0.906804,1.22236,0.461538,13,,,,,,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+sims univariate,slots,given,zero-shot,forecast,10.4028,17.689,0.588096,0.417743,0.754565,0.117647,17,,,,,,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
+sims weekly,slots,given,zero-shot,forecast,16.9305,17.1394,0.98781,0.839433,1.19119,0.4,10,,,,,,0.000452608,slots-06dbdcc2b48d,500,,1e075fffca8c2562bc773245bb7f000a875fccdb,final
