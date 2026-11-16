@@ -16,10 +16,12 @@ from finetune_chronos import (
 STRATA = [f"P{p}-A{a}" for p in range(1, 5) for a in range(1, 4)]
 
 
-def test_level_mix_is_about_a_fifth_each_for_nested_strata():
+def test_univariate_blocks_are_about_their_share():
+    import finetune_chronos
+
     rng = np.random.default_rng(0)
     mixes = []
-    for _ in range(2000):
+    for _ in range(3000):
         places, mix = choose_places(STRATA, int(rng.integers(4, 20)), rng)
         levels = set(target_levels(places))
         expected = {
@@ -31,15 +33,18 @@ def test_level_mix_is_about_a_fifth_each_for_nested_strata():
         }[mix]
         assert levels == expected
         mixes.append(mix)
-    shares = {m: mixes.count(m) / len(mixes) for m in set(mixes)}
-    assert all(abs(share - 0.2) < 0.04 for share in shares.values())
-    assert len(shares) == 5
+    univariate = sum(m in ("national", "single") for m in mixes) / len(mixes)
+    assert finetune_chronos.UNIVARIATE_SHARE == 0.2
+    assert abs(univariate - 0.2) < 0.03
+    # The multivariate mixes share the rest about evenly.
+    for m in ("all_levels", "leaves_national", "leaves"):
+        assert abs(mixes.count(m) / len(mixes) - 0.8 / 3) < 0.04
 
 
 def test_flat_strata_have_no_intermediate_level():
     rng = np.random.default_rng(1)
     flat = [f"P{i:02d}" for i in range(1, 9)]
-    mixes = {choose_places(flat, 10, rng)[1] for _ in range(200)}
+    mixes = {choose_places(flat, 10, rng)[1] for _ in range(400)}
     assert mixes == {"leaves_national", "leaves", "national", "single"}
 
 
