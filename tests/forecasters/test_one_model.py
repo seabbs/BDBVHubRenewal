@@ -196,3 +196,44 @@ def test_the_weekly_finetuned_model_uses_the_weekly_block_alone(
     assert np.atleast_2d(group["target"]).shape[0] == len(group["places"])
     n_lags = len(group["places"]) * foundation.MAX_LAG["weekly"]
     assert len(group["past_covariates"]) == n_lags
+
+
+def test_one_forecast_gives_daily_draws_from_the_count_rows_too(
+    ft: FoundationModel, task: ForecastTask
+) -> None:
+    store: list = []
+    model = dataclasses.replace(ft, sample=_aggregate_sampler(store))
+    weekly, daily = model.forecast_both(task)
+    assert len(store) == 1  # one draw gives both
+    pd.testing.assert_frame_equal(weekly, model.forecast(task))
+    assert list(daily.columns) == ["location", "date", "sample", "value"]
+    group = store[0]
+    tri = foundation.hub_triangle(
+        task.daily_history, "daily", group["places"], task.target_end_dates[-1]
+    )
+    future = set(tri.times[tri.n_context :])
+    late = daily.loc[daily["date"].isin(future)]
+    assert not late.empty
+    # The count rows drew 1, the total rows 1000 and up: daily values come
+    # from the count rows, floored at the counts reported.
+    assert (late["value"] < 1000).all()
+    final = dict(zip(group["places"], tri.final, strict=True))
+    for row in late.itertuples():
+        reported = final[row.location][tri.times.index(row.date)]
+        assert row.value == max(1.0, reported)
+    # Every day of the target weeks is there, for every place and sample.
+    first = pd.Timestamp(task.target_end_dates[0]) - pd.Timedelta(days=6)
+    days = pd.date_range(first, task.target_end_dates[-1]).strftime("%Y-%m-%d")
+    assert set(daily["date"]) == set(days)
+    assert len(daily) == len(days) * len(group["places"]) * task.n_samples
+
+
+def test_german_7_day_totals_end_on_the_nowcast_date():
+    # German tasks move every date to the next Saturday, so the weekly
+    # total rows end on the nowcast date and every 7 days back.
+    from bdbvhubrenewal.data.germany import HORIZONS, _shift
+
+    nowcast = "2021-11-17"  # a Wednesday
+    shifted = pd.Timestamp(nowcast) + _shift(nowcast)
+    assert shifted.day_name() == "Saturday"
+    assert all(h % 7 == 0 for h in HORIZONS)
