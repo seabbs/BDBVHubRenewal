@@ -18,6 +18,7 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
+from .rows import num, sources
 from .runs import Classifier, Reference, Run, split_label
 
 WIS_LEVELS = ("0.025", "0.1", "0.25", "0.5", "0.75", "0.9", "0.975")
@@ -52,22 +53,6 @@ def wis(q: Sequence[float], y: float) -> float:
     return total / 3.5
 
 
-def _num(x: Any) -> float | None:
-    try:
-        return float(x)
-    except (TypeError, ValueError):
-        return None
-
-
-def _sources(model: str) -> list[str]:
-    if "daily" in model:
-        return ["daily"]
-    if "weekly" in model:
-        return ["weekly"]
-    # A model with no source (randomwalknowcast) is drawn on both.
-    return ["daily", "weekly"]
-
-
 def read_file(
     path: Path, folder: str, which: Classifier
 ) -> dict[tuple[str, str, str], dict[str, dict[str, Any]]]:
@@ -95,17 +80,17 @@ def read_file(
             series = by_model[model]
             if series is None:
                 continue
-            value = _num(r["value"])
+            value = num(r["value"])
             if r["quantile"] not in WIS_LEVELS or value is None:
                 continue
-            for source in _sources(r["model"]):
+            for source in sources(r["model"]):
                 entry = out.setdefault(
                     (r["location"], series, source), {}
                 ).setdefault(
                     r["target_end_date"], {"q": {}, "y": None, "v": ""}
                 )
                 entry["q"][r["quantile"]] = value
-                y = _num(r.get("truth"))
+                y = num(r.get("truth"))
                 if y is not None:
                     entry["y"], entry["v"] = y, r.get("truth_vintage") or ""
     return out

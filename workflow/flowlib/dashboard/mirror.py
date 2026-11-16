@@ -9,7 +9,6 @@ mirror with rsync. Nothing is ever written back.
 
 from __future__ import annotations
 
-import contextlib
 import subprocess
 from collections.abc import Mapping
 from pathlib import Path
@@ -96,9 +95,15 @@ class Source:
             return f"mirror failed: {err}"
         if out.returncode != 0:
             return f"mirror failed: {out.stderr.strip()[:200]}"
+        status = f"mirrored from {self.remote}"
         box = self.mailbox_command()
         if box:
-            # A missing mailbox leaves the page's section empty, no more.
-            with contextlib.suppress(OSError, subprocess.SubprocessError):
-                subprocess.run(box, capture_output=True, text=True, timeout=60)
-        return f"mirrored from {self.remote}"
+            try:
+                got = subprocess.run(
+                    box, capture_output=True, text=True, timeout=60
+                )
+            except (OSError, subprocess.SubprocessError) as err:
+                return f"{status}; mailbox failed: {err}"
+            if got.returncode != 0:
+                return f"{status}; mailbox failed: {got.stderr.strip()[:200]}"
+        return status

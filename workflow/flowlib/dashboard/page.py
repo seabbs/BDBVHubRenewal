@@ -100,6 +100,12 @@ def _size(name: str) -> int:
     return int(digits) if digits else 0
 
 
+def _styled(series: tuple, i: int) -> tuple:
+    """Return a series with the dash of the `i`th run (none for the first)."""
+    dash = DASH_BY_RUN[i % len(DASH_BY_RUN)]
+    return (*series, dash) if dash else series
+
+
 def _checkpoints(run: Run) -> list[tuple[str, dict, float | None]]:
     return [] if run.folder is None else logs.checkpoints(run.folder)
 
@@ -321,7 +327,6 @@ def loss_plots(ctx: Context, info: Mapping, live: Run, mode: str) -> str:
                     if s.get("held_out_loss")
                 ]
                 held.append((r.label, r.colour, pts, "pts"))
-        dash = DASH_BY_RUN[i % len(DASH_BY_RUN)]
         for src in SOURCES:
             pts = [(x["step"], x["src"][src]) for x in rows]
             if not any(v is not None for _, v in pts):
@@ -333,8 +338,9 @@ def loss_plots(ctx: Context, info: Mapping, live: Run, mode: str) -> str:
                 z = it["src0"].get(src)
                 pts = ([(0, z)] if z else []) + pts
                 pts = [(x, v / den) for x, v in pts if v is not None]
-            s = (f"{src} ({r.label})", colour[src], pts, "pts")
-            by_source.append((*s, dash) if dash else s)
+            by_source.append(
+                _styled((f"{src} ({r.label})", colour[src], pts, "pts"), i)
+            )
     held_title = (
         "Held-out pooled loss by run (first 100 blocks)"
         if mode == "raw"
@@ -460,20 +466,23 @@ def heldout_chart(ctx: Context, rows: Sequence[Mapping[str, str]]) -> str:
             and r.get("loss")
         ]
         for i, run in enumerate(ctx.runs):
-            pts = sorted(
-                (x(r), float(r["loss"]))
+            sized = [
+                (x(r), r)
                 for r in rs
-                if x(r) and which.run_of(r["checkpoint"]) == run.key
-            )
+                if which.run_of(r["checkpoint"]) == run.key
+            ]
+            pts = sorted((n, float(r["loss"])) for n, r in sized if n)
             zero = [
                 (125, float(r["loss_zero_shot"]))
                 for r in rs
                 if r.get("loss_zero_shot")
             ][:1]
             if pts:
-                s = (f"{lvl}, {run.label}", colour, zero + pts, "pts")
-                dash = DASH_BY_RUN[i % len(DASH_BY_RUN)]
-                series.append((*s, dash) if dash else s)
+                series.append(
+                    _styled(
+                        (f"{lvl}, {run.label}", colour, zero + pts, "pts"), i
+                    )
+                )
     return svg.chart(
         "Held-out loss (all blocks; real validation)",
         series,
@@ -599,7 +608,15 @@ def mail_section(ctx: Context) -> str:
 
 
 def build(ctx: Context) -> str:
-    """Return the dashboard page."""
+    """Return the dashboard page.
+
+    Raises
+    ------
+    ValueError
+        If no run is configured.
+    """
+    if not ctx.runs:
+        raise ValueError("no runs to show: configure at least one run")
     live = next((r for r in ctx.runs if r.live), ctx.runs[0])
     rows = ctx.log(live)
     status = (

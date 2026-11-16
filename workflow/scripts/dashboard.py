@@ -15,6 +15,7 @@ import argparse
 import sys
 import threading
 import time
+import traceback
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote
@@ -64,8 +65,10 @@ def handler(ctx: page.Context) -> type[BaseHTTPRequestHandler]:
                 with LOCK:
                     body = page.build(ctx).encode()
                 self._send(200, body, "text/html; charset=utf-8")
-            except Exception as err:
-                self._send(500, f"error: {err}".encode(), "text/plain")
+            except Exception:
+                # The detail goes to the server's log, not the browser.
+                traceback.print_exc(file=sys.stderr)
+                self._send(500, b"error: see the server's log", "text/plain")
 
         def log_message(self, *_args) -> None:
             pass
