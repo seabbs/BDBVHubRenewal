@@ -167,7 +167,9 @@ simulate_round() {
       if running "$s" "$dir"; then
         while running "$s" "$dir"; do sleep 60; done
         reconcile "$dir"
-        continue
+        # A batch an earlier driver left that then failed is run again.
+        recorded "$s" "$dir" && continue
+        say "round $ROUND batch $s, left running by an earlier driver, failed; running it again"
       fi
       wait_for_room
       if ! run_batch "$s" "$dir" "$SLOT_MEM"; then
