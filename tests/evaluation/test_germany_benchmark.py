@@ -94,10 +94,7 @@ def test_german_trained_models_run_on_the_held_out_half_only() -> None:
     # They join once their checkpoint is pinned and so registered.
     known = {s.name for s in list_models()}
     joined = tuple(m for m in german if m in known)
-    # The stored fine-tuned model is shown on the development half only.
-    stored = {"fm_chronos_daily_ragged_ft", "fm_chronos_weekly_ragged_ft"}
-    ours = tuple(m for m in config.models if m not in stored)
-    assert run_models(config, held_out=True) == (*ours, *joined)
+    assert run_models(config, held_out=True) == (*config.models, *joined)
 
 
 def test_the_later_half_of_the_dates_is_held_out() -> None:
@@ -374,7 +371,5 @@ def test_held_out_models_wait_until_they_are_registered(caplog) -> None:
     )
     with caplog.at_level("WARNING"):
         held = run_models(config, held_out=True)
-    stored = {"fm_chronos_daily_ragged_ft", "fm_chronos_weekly_ragged_ft"}
-    ours = tuple(m for m in config.models if m not in stored)
-    assert held == (*ours, "randomwalk")
+    assert held == (*config.models, "randomwalk")
     assert "not_registered_de" in caplog.text
