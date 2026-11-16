@@ -19,9 +19,10 @@ and loaded from, the adapter's files (`load_adapter`).
 `attach` adds the slots to a Chronos-2 model and hooks its input patch
 embedding and [REG] embedding. `assigned` sets the slot of each row of
 the next batch; with no slots set, or none attached, the model is
-unchanged. Rows are the ragged layout's order: the targets, then each
-place's lags in turn (`row_places`). Chronos-2's long-horizon unrolling
-repeats each row, and the slots repeat with it.
+unchanged, and a row with slot -1 has no slot vector. Rows are the
+ragged layout's order: the targets, then each place's lags in turn
+(`row_places`). Chronos-2's long-horizon unrolling repeats each row,
+and the slots repeat with it.
 """
 
 from __future__ import annotations
@@ -165,7 +166,9 @@ def attach(model: Any, n_slots: int = N_SLOTS) -> None:
         if rows % len(ids):
             raise ValueError(f"{rows} rows but slots for {len(ids)}")
         ids = ids.to(output.device).repeat_interleave(rows // len(ids))
-        vectors = getattr(model, SLOT_MODULE)(ids)
+        # Slot -1 is no slot: a zero vector, as base Chronos-2.
+        vectors = getattr(model, SLOT_MODULE)(ids.clamp(min=0))
+        vectors = vectors * (ids >= 0)[:, None].to(vectors.dtype)
         return output + vectors[:, None, :].to(output.dtype)
 
     model.input_patch_embedding.register_forward_hook(add)

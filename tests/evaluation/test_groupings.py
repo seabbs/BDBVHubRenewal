@@ -246,7 +246,12 @@ def test_checkpoint_rows_name_the_model_and_keep_the_reference_cells() -> None:
         }
     )
     out = checkpoint_rows(scores, reference, "ebola", "slots-abc")
-    assert list(out.columns) == [*AGGREGATION_COLUMNS, "checkpoint"]
+    assert list(out.columns) == [
+        *AGGREGATION_COLUMNS,
+        "checkpoint",
+        "slots_rule",
+    ]
+    assert out["slots_rule"].tolist() == ["cased"]
     assert out["target_date"].tolist() == ["2026-10-03"]
     assert out["model"].tolist() == [m]
     assert out["option"].tolist() == ["zones_copula"]
@@ -275,9 +280,10 @@ def test_merged_rows_keep_zero_shot_and_replace_old_finetunes() -> None:
         "fm_chronos_daily_ragged",
     }
     pd.testing.assert_frame_equal(
-        zero.drop(columns="checkpoint").reset_index(drop=True),
+        zero.drop(columns=["checkpoint", "slots_rule"]).reset_index(drop=True),
         existing.iloc[:4].reset_index(drop=True),
     )
+    assert set(zero["slots_rule"]) == {"none"}
     ft = out.loc[out["checkpoint"] == "slots-abc"]
     assert ft["wis"].tolist() == [0.5, 0.5]
     # A second run of the same label replaces its rows; others are kept.

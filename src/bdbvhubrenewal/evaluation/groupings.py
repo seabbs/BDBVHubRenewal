@@ -24,6 +24,7 @@ Arms are named `<model>:<grouping>` (`arm_name`).
 from __future__ import annotations
 
 import dataclasses
+import functools
 import re
 from collections.abc import Callable, Sequence
 from typing import Final
@@ -37,12 +38,14 @@ from bdbvhubrenewal.evaluation.nowcast import (
     ReleaseForecasts,
     forecast_releases,
 )
-from bdbvhubrenewal.forecasters import get_model
+from bdbvhubrenewal.forecasters import get_model, slots
 from bdbvhubrenewal.forecasters.base import NATIONAL, ForecastTask
 from bdbvhubrenewal.forecasters.copula import RollingCopula
 from bdbvhubrenewal.forecasters.foundation import (
     SLOTS_PREFIX,
     FoundationModel,
+    Series,
+    chronos_sampler,
     release_tag,
     resolve_checkpoint,
 )
@@ -53,9 +56,12 @@ __all__ = [
     "FITTED_GROUPINGS",
     "GROUPING_ARMS",
     "OPTIONS",
+    "SLOTS_RULE",
+    "SLOTS_RULES",
     "ZERO_SHOT",
     "aggregation_rows",
     "arm_name",
+    "cased_group_slots",
     "check_checkpoint_rows",
     "checkpoint_label",
     "checkpoint_rows",
@@ -67,6 +73,7 @@ __all__ = [
     "release_grouping_forecasts",
     "rolling_zone_truth",
     "sample_coverage",
+    "slots_rule",
     "split_arm",
 ]
 
@@ -110,6 +117,19 @@ CHECKPOINT: Final = "checkpoint"
 ZERO_SHOT: Final = "zero-shot"
 """The `CHECKPOINT` of the zero-shot models' and the reference's rows."""
 
+SLOTS_RULE: Final = "slots_rule"
+"""Column of how a row's blocks gave out slots (`SLOTS_RULES`)."""
+
+SLOTS_RULES: Final = {
+    "none": "no slots: zero-shot, the reference, or a checkpoint without",
+    "all": "every place of each block has a slot, as in forecasting",
+    "cased": (
+        "a block had more places than slots, so only places with cases in "
+        "its context have slots, the others none (`cased_group_slots`)"
+    ),
+}
+"""The values of `SLOTS_RULE`."""
+
 _LABEL = re.compile(rf"^(?:{SLOTS_PREFIX})?[0-9a-f]{{12}}$")
 
 
@@ -140,10 +160,23 @@ def grouping_model(
     -------
     FoundationModel
     """
-    built = dataclasses.replace(get_model(model), grouping=grouping)
+    base = get_model(model)
+    if not isinstance(base, FoundationModel):
+        raise TypeError(f"{model} is not a Chronos-2 model")
+    built = dataclasses.replace(base, grouping=grouping)
     if checkpoint is not None:
         built = dataclasses.replace(
             built, checkpoint=resolve_checkpoint(checkpoint)
+        )
+    if built.checkpoint is not None and built.sample is None:
+        # A slots checkpoint gives blocks over its slots `cased_group_slots`.
+        built = dataclasses.replace(
+            built,
+            sample=functools.partial(
+                chronos_sampler,
+                checkpoint=built.checkpoint,
+                group_slots=cased_group_slots,
+            ),
         )
     return built
 
@@ -551,8 +584,8 @@ def checkpoint_rows(
     Returns
     -------
     pandas.DataFrame
-        `AGGREGATION_COLUMNS` and `CHECKPOINT`, the model named without
-        `@<checkpoint>`.
+        `AGGREGATION_COLUMNS`, `CHECKPOINT` and `SLOTS_RULE`, the model
+        named without `@<checkpoint>`.
     """
     cell = ["origin_date", "location", "target_date"]
     ref = reference.loc[
@@ -569,7 +602,9 @@ def checkpoint_rows(
         option=split.str[1],
         **{CHECKPOINT: checkpoint},
     )
-    return out[[*AGGREGATION_COLUMNS, CHECKPOINT]].reset_index(drop=True)
+    out[SLOTS_RULE] = slots_rule(out, checkpoint.startswith(SLOTS_PREFIX))
+    cols = [*AGGREGATION_COLUMNS, CHECKPOINT, SLOTS_RULE]
+    return out[cols].reset_index(drop=True)
 
 
 def merge_checkpoint_rows(
@@ -578,7 +613,8 @@ def merge_checkpoint_rows(
     """Return the paper's rows with one checkpoint's rows put in.
 
     Rows with no `CHECKPOINT` (the file as fm-agg wrote it) are the
-    zero-shot models' and the reference's, `ZERO_SHOT`; its fine-tuned
+    zero-shot models' and the reference's, `ZERO_SHOT`, with no slots
+    (`SLOTS_RULE` `none`); its fine-tuned
     rows (`_ft`, `_ft_n<k>`), of older checkpoints, are dropped. Rows of
     `checkpoint` are replaced by `new`; other checkpoints' rows are kept.
 
@@ -594,14 +630,18 @@ def merge_checkpoint_rows(
     Returns
     -------
     pandas.DataFrame
-        `AGGREGATION_COLUMNS` and `CHECKPOINT`.
+        `AGGREGATION_COLUMNS`, `CHECKPOINT` and `SLOTS_RULE`.
     """
     old = existing
     if CHECKPOINT not in old:
         fine = old["model"].astype(str).str.contains(r"_ft(?:_|$)")
         old = old.loc[~fine].assign(**{CHECKPOINT: ZERO_SHOT})
+    if SLOTS_RULE not in old:
+        old = old.assign(**{SLOTS_RULE: "none"})
+    if SLOTS_RULE not in new:
+        new = new.assign(**{SLOTS_RULE: "none"})
     old = old.loc[old[CHECKPOINT] != checkpoint]
-    cols = [*AGGREGATION_COLUMNS, CHECKPOINT]
+    cols = [*AGGREGATION_COLUMNS, CHECKPOINT, SLOTS_RULE]
     return pd.concat([old[cols], new[cols]], ignore_index=True)
 
 
@@ -633,3 +673,85 @@ def check_checkpoint_rows(rows: pd.DataFrame) -> None:
     ]
     if bad:
         raise ValueError("rows do not match the reference: " + "; ".join(bad))
+
+
+def cased_group_slots(group: Series, n_slots: int) -> np.ndarray:
+    """Return each row's slot, as `_group_slots`, even over the slots.
+
+    A block with at most `n_slots` places takes the usual slots
+    (`forecasters.foundation._group_slots`). A larger block, beyond what
+    the slots were trained on, gives a slot only to places with a case in
+    its context (the target rows), drawn as there with
+    `slots.EVAL_SEED`; the others, and their lag series, get -1, no slot,
+    as base Chronos-2. Rows are in Chronos-2's order: the targets, then
+    the covariates by sorted name, past-only ones first.
+
+    Parameters
+    ----------
+    group : Series
+        A ragged group with `places`.
+    n_slots : int
+        Slots of the model.
+
+    Returns
+    -------
+    numpy.ndarray
+        Each row's slot, -1 for none.
+
+    Raises
+    ------
+    ValueError
+        If more places have cases than there are slots.
+    """
+    from bdbvhubrenewal.forecasters.foundation import _group_slots
+
+    target = np.atleast_2d(group["target"])
+    if target.shape[0] <= n_slots:
+        return _group_slots(group, n_slots)
+    places = list(group["places"])
+    cased = np.flatnonzero(np.nansum(target, axis=1) > 0)
+    if len(cased) > n_slots:
+        raise ValueError(
+            f"{len(cased)} places with cases but only {n_slots} slots"
+        )
+    chosen = slots.slot_ids(
+        len(cased), 0, np.random.default_rng(slots.EVAL_SEED), n_slots
+    )
+    ids = np.full(len(places), -1)
+    ids[cased] = chosen
+    past = list(group.get("past_covariates", {}))
+    known = set(group.get("future_covariates", {}))
+    rows = sorted(n for n in past if n not in known)
+    rows += sorted(n for n in past if n in known)
+    at = {p: i for i, p in enumerate(places)}
+    owner = [at[n.rsplit("_lag_", 1)[0]] for n in rows]
+    return np.concatenate([ids, ids[owner]]).astype(int)
+
+
+def slots_rule(rows: pd.DataFrame, slots: bool) -> pd.Series:
+    """Return how each row's blocks gave out slots (`SLOTS_RULES`).
+
+    On BDBV the joint block, the zones' block of `level` and the zones of
+    `bottom` (summed, or paired and summed, to the levels above) hold
+    over 128 places, so `cased`; every other block, and every German one,
+    `all`. Without slots, `none`.
+
+    Parameters
+    ----------
+    rows : pandas.DataFrame
+        The paper's rows: `study`, `option` and `level`.
+    slots : bool
+        Whether the checkpoint has slots.
+
+    Returns
+    -------
+    pandas.Series
+        `none`, `all` or `cased`, on `rows`' index.
+    """
+    if not slots:
+        return pd.Series("none", index=rows.index)
+    big = (rows["study"] == "ebola") & (
+        rows["option"].isin(["joint", "zones_summed", "zones_copula"])
+        | ((rows["option"] == "level") & (rows["level"] == "zones"))
+    )
+    return pd.Series(np.where(big, "cased", "all"), index=rows.index)
