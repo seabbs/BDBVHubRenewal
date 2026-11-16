@@ -32,7 +32,9 @@ BATCH=${BATCH:-25}
 ROUND_BATCHES=${ROUND_BATCHES:-40}
 HELD_BATCHES=${HELD_BATCHES:-4}
 DRAWS=10
-SLOTS=${SLOTS:-2}
+SLOTS=${SLOTS:-3}
+MIN_FREE_GB=${MIN_FREE_GB:-20}
+SLOT_STAGGER=${SLOT_STAGGER:-120}
 SLOT_MEM=${SLOT_MEM:-16G}
 RETRY_MEM=${RETRY_MEM:-20G}
 SEED_BASE=${SEED_BASE:-30000}
@@ -72,25 +74,69 @@ manifest_row() {
   echo "$ROUND,$seed,$kind,$GRID,$COMMIT,$DRAWS,$BATCH,$(sha "$dir/sims/counts-$seed.csv.gz"),$(sha "$dir/sims/settings-$seed.csv"),$(sha "$dir/sims/failures-$seed.csv"),${rss:-},${wall:-},$(hostname),$(date -u +%FT%TZ)" >> "$dir/manifest.csv"
 }
 
-# Run the seeds of round dir $1 in $SLOTS parallel queues.
+# Seeds another host claims in the mailbox (lines with "claim" naming
+# seeds, as 30123 or 30120-30125), which this host skips.
+claimed_seeds() {
+  grep -i 'claim' "$MAILBOX" 2> /dev/null | grep -v 'archie' \
+    | grep -oE '\b[0-9]{5}(-[0-9]{5})?\b' | while read -r r; do
+      if [[ $r == *-* ]]; then seq "${r%-*}" "${r#*-}"; else echo "$r"; fi
+    done | sort -u
+}
+
+# Whether batch seed $1 of round dir $2 is recorded in the manifest.
+recorded() { grep -q "^$ROUND,$1," "$2/manifest.csv"; }
+
+# Available memory in GB.
+free_gb() { awk '/MemAvailable/ {print int($2 / 1048576)}' /proc/meminfo; }
+
+# Whether a simulation of seed $1 into round dir $2 is already running
+# (a batch left by an earlier driver).
+running() { pgrep -f "finetune_simulate.R $BATCH $1 $2/sims" > /dev/null; }
+
+# Record a finished batch left by an earlier driver.
+reconcile() {
+  local dir=$1 k s kind
+  for k in "${!seeds[@]}"; do
+    s=${seeds[$k]}
+    kind=train
+    [ "$k" -ge "$ROUND_BATCHES" ] && kind=held-out
+    recorded "$s" "$dir" && continue
+    if [ -s "$dir/sims/settings-$s.csv" ] && \
+        grep -q 'peak_rss_kb' "$dir/sims/logs/$s.log" 2> /dev/null && \
+        gzip -t "$dir/sims/counts-$s.csv.gz" 2> /dev/null; then
+      manifest_row "$s" "$dir" "$kind"
+    fi
+  done
+}
+
+# Run the seeds of round dir $1 with $SLOTS slots. Each slot takes the
+# next seed no slot holds (an atomic lock directory), skips seeds the
+# laptop claims, and starts a batch only with $MIN_FREE_GB GB available.
 simulate_round() {
-  local dir=$1 seeds kind total
+  local dir=$1 total
   mapfile -t seeds < <(round_seeds "$ROUND")
   total=${#seeds[@]}
+  # Locks of an earlier driver are stale, except for batches still running.
+  rm -rf "$dir"/sims/.lock-*
   slot() {
-    local q=$1 s k
+    local s k kind n
     for k in "${!seeds[@]}"; do
-      [ $((k % SLOTS)) -eq "$q" ] || continue
       s=${seeds[$k]}
       kind=train
       [ "$k" -ge "$ROUND_BATCHES" ] && kind=held-out
-      if [ -f "$dir/sims/settings-$s.csv" ] && \
-          grep -q ",$s,$kind," "$dir/manifest.csv"; then
+      recorded "$s" "$dir" && continue
+      if claimed_seeds | grep -qx "$s"; then continue; fi
+      mkdir "$dir/sims/.lock-$s" 2> /dev/null || continue
+      if running "$s" "$dir"; then
+        while running "$s" "$dir"; do sleep 60; done
+        reconcile "$dir"
         continue
       fi
+      while [ "$(free_gb)" -lt "$MIN_FREE_GB" ]; do sleep 60; done
       if ! run_batch "$s" "$dir" "$SLOT_MEM"; then
         say "round $ROUND batch $s failed at $SLOT_MEM; retrying at $RETRY_MEM ($(tail -n 2 "$dir/sims/logs/$s.log" | tr '\n' ' ' | cut -c1-200))"
         mv "$dir/sims/logs/$s.log" "$dir/sims/logs/$s.first.log"
+        while [ "$(free_gb)" -lt "$MIN_FREE_GB" ]; do sleep 60; done
         if ! run_batch "$s" "$dir" "$RETRY_MEM"; then
           say "round $ROUND batch $s failed again; skipped (log $dir/sims/logs/$s.log)"
           continue
@@ -103,8 +149,13 @@ simulate_round() {
       fi
     done
   }
-  for q in $(seq 0 $((SLOTS - 1))); do slot "$q" & done
+  for _ in $(seq 1 "$SLOTS"); do
+    slot &
+    # Stagger the slots so each sees the memory the last one took.
+    sleep "$SLOT_STAGGER"
+  done
   wait
+  reconcile "$dir"
 }
 
 first=$1
@@ -146,5 +197,7 @@ for ((ROUND = first; ROUND <= last; ROUND++)); do
   printf '%s\n' "${seeds[@]:0:ROUND_BATCHES}" > "$dir/seeds.txt"
   echo "${seeds[ROUND_BATCHES]} ${seeds[-1]}" > "$dir/held-out.txt"
   date -u +%FT%TZ > "$dir/READY"
+  claimed=$(claimed_seeds | grep -xF -f <(round_seeds "$ROUND") | tr '\n' ' ')
+  [ -n "$claimed" ] && say "round $ROUND: seeds claimed by another host, not simulated here: $claimed"
   say "round $ROUND ready for training: $n_sims simulations in $(( ($(date +%s) - t0) / 60 )) min, $(cat "$dir/qc/summary.txt" 2> /dev/null); seeds $dir/seeds.txt, held-out $(cat "$dir/held-out.txt")"
 done
