@@ -130,7 +130,7 @@ from bdbvhubrenewal.reporting.scoresummary import (
     summary_rows,
     targets_attr,
 )
-from bdbvhubrenewal.reporting.site import site_baseline
+from bdbvhubrenewal.reporting.site import site_baseline, site_models
 from bdbvhubrenewal.reporting.store_note import write_store_note
 from bdbvhubrenewal.reporting.tables import filter_table
 from bdbvhubrenewal.reporting.zone_nowcast import (
@@ -300,8 +300,8 @@ def make_report(
         fig / "simulation.svg",
     )
 
-    # Backtest and comparison pages.
-    names = [s.name for s in list_models()]
+    # Backtest and comparison pages: the models the site shows.
+    names = _page_models()
     summaries = _release_section(fig, gen, res, real, names)
     _backtest_page(
         fig, gen, res, out, config, target, names, data_dir, summaries
@@ -451,6 +451,26 @@ def _downward_table(real: pd.DataFrame, zones: pd.DataFrame) -> str:
 def _model_colours(models: Sequence[str]) -> dict[str, tuple[str, str, str]]:
     """Each model's light colour, dark colour and dash, from `model_style`."""
     return {m: model_style(m, models) for m in models}
+
+
+def _page_models() -> list[str]:
+    """Return the registered models the site shows (`config/site.toml`)."""
+    return site_models(s.name for s in list_models())
+
+
+def _site_rows(frame: pd.DataFrame) -> pd.DataFrame:
+    """Drop the rows of models the site hides, before any scoring.
+
+    Hub teams' rows pass, as no pattern of `config/site.toml` matches
+    them. Filtering first keeps hidden models from deciding which cells
+    the shown ones are scored on.
+    """
+    if "model" not in frame.columns:
+        return frame
+    shown = set(site_models(frame["model"].astype(str).unique()))
+    return frame.loc[frame["model"].astype(str).isin(shown)].reset_index(
+        drop=True
+    )
 
 
 def _ours(frame: pd.DataFrame, names: Sequence[str]) -> pd.DataFrame:
@@ -2106,7 +2126,7 @@ def _comparison_page(
     truth, k = summary["truth_vintage"], summary["complete_after_weeks"]
     baseline = summary["baseline"]
     hub_ids = summary.get("hub_ids", {})
-    quantiles = pd.read_csv(cmp_dir / "quantiles.csv.gz")
+    quantiles = _site_rows(pd.read_csv(cmp_dir / "quantiles.csv.gz"))
     source = quantiles["source"]
     registry = [spec.name for spec in list_models()]
     built = sorted(
@@ -2137,7 +2157,7 @@ def _comparison_page(
     )
     scores_path = cmp_dir / "scores.csv"
     scores = (
-        pd.read_csv(scores_path)
+        _site_rows(pd.read_csv(scores_path))
         if scores_path.stat().st_size > 1
         else pd.DataFrame()
     )
@@ -2146,7 +2166,7 @@ def _comparison_page(
         fig,
         gen,
         scores,
-        pd.read_csv(cmp_dir / "energy.csv"),
+        _site_rows(pd.read_csv(cmp_dir / "energy.csv")),
         baseline,
         on,
         colours,
@@ -2194,7 +2214,9 @@ def _comparison_page(
             colours,
             truth_vintage=truth,
             hidden=hidden,
-            samples=_label_comparison(pd.read_csv(cmp_dir / "samples.csv.gz")),
+            samples=_label_comparison(
+                _site_rows(pd.read_csv(cmp_dir / "samples.csv.gz"))
+            ),
         ),
     )
     tabs = []

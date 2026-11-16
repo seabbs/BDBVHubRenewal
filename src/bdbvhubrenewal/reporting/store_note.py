@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any, Final
 
 from bdbvhubrenewal.evaluation.store import STATUS_FILE
+from bdbvhubrenewal.reporting.site import site_models
 
 __all__ = ["store_note", "write_store_note"]
 
@@ -107,6 +108,9 @@ def write_store_note(results: Path | str, generated: Path | str) -> None:
     """
     path = Path(results) / STATUS_FILE
     status = json.loads(path.read_text()) if path.exists() else []
+    # Models the site hides are not on its pages, so not in the note.
+    shown = set(site_models({str(s["model"]) for s in status}))
+    status = [s for s in status if str(s["model"]) in shown]
     out = Path(generated) / "fit-store.md"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(

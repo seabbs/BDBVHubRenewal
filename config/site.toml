@@ -5,3 +5,11 @@
 # The model every scoring plot and table on the site is relative to by
 # default. Tables that offer each baseline start on this one.
 baseline = "randomwalknowcast"
+
+[models]
+# Models left off the site: any matching a pattern in `hide`, unless named
+# in `show`. They are still fitted, scored and written to results/, so the
+# paper keeps them. The site shows one Chronos-2 model, the fine-tuned
+# daily one; any Chronos-2 model added later is hidden until listed.
+hide = ["fm_chronos_*"]
+show = ["fm_chronos_daily_ragged_ft"]
