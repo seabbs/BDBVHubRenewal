@@ -59,6 +59,7 @@ import pandas as pd
 
 from bdbvhubrenewal.data import load_daily, load_delays, load_target
 from bdbvhubrenewal.data.tidy import write_csv
+from bdbvhubrenewal.data.zones import ZoneData, load_zone_data
 from bdbvhubrenewal.evaluation.backtest import (
     BacktestConfig,
     _fit_rows,
@@ -117,9 +118,10 @@ STORE_SKIP: Final = (
 )
 """Modules `STORE_ENTRIES` import but a fit does not call.
 
-The zone split: a stored fit holds national and province samples only,
+The zone split: a stored fit holds national and province samples,
 and its zones are split from them at load
-(`forecasters.zones.zones_for_model`). `fit_code`'s own helper
+(`forecasters.zones.zones_for_model`). A model that forecasts the zones
+itself imports the split, so it is in its code. `fit_code`'s own helper
 (`evaluation.digest`), and the plots `evaluation.ppc` imports for
 `plot_ppc`, which a fit does not draw.
 """
@@ -138,6 +140,10 @@ UNPACKED_FILE: Final = "store.json"
 NEXT_ROUND_WEEKS: Final = 1
 """Weeks a stored fit forecasts past `[forecast] max_horizon`, so a round
 with no new release is forecast from the last release's stored fit."""
+
+ZONE_FIELDS: Final = ("zone_history", "zone_daily_history", "zone_codes")
+"""Task fields in the fit key of a model only if it reads zones
+(`reads_zones`), so zone data never refits the others."""
 
 COMMIT_FILE: Final = ".commit"
 """The store branch commit, written by `scripts/fit-store.sh fetch`."""
@@ -242,8 +248,8 @@ def fit_code(model: str, root: Path | str = ".") -> list[str]:
 
     The import closure of the model's module and `STORE_ENTRIES`
     (`evaluation.digest.model_code`), without the other models' modules
-    and the modules a fit does not call (`STORE_SKIP`), and the package's
-    data files (`STORE_DATA`).
+    and the modules a fit does not call (`STORE_SKIP`) unless the model's
+    own module imports them, and the package's data files (`STORE_DATA`).
 
     Parameters
     ----------
@@ -337,6 +343,7 @@ def origin_tasks(
     delays: pd.DataFrame,
     config: BacktestConfig,
     daily: pd.DataFrame,
+    zones: ZoneData | None = None,
 ) -> dict[str, ForecastTask]:
     """Build the task of every real origin, as the store fits it.
 
@@ -354,6 +361,8 @@ def origin_tasks(
         The tidy tables.
     config : BacktestConfig
         Horizons, samples and seed (`[forecast]`).
+    zones : ZoneData, optional
+        The health-zone tables, for the models that read zones.
 
     Returns
     -------
@@ -361,7 +370,15 @@ def origin_tasks(
         Task by origin (the vintage date), in date order.
     """
     return {
-        v: vintage_task(target, delays, config, v, daily, NEXT_ROUND_WEEKS)[0]
+        v: vintage_task(
+            target,
+            delays,
+            config,
+            v,
+            daily,
+            NEXT_ROUND_WEEKS,
+            zones=zones,
+        )[0]
         for v in real_vintages(target)
         if v not in config.skip_origins
     }
@@ -392,6 +409,9 @@ def _settings(model: ForecastModel) -> str:
 def fit_key(model: ForecastModel, task: ForecastTask, code: str) -> str:
     """Hash the inputs of one stored fit.
 
+    The task's zone data (`ZONE_FIELDS`) are hashed only for a model that
+    reads them.
+
     Parameters
     ----------
     model : ForecastModel
@@ -407,6 +427,7 @@ def fit_key(model: ForecastModel, task: ForecastTask, code: str) -> str:
         The first 16 hex digits of a SHA-256 hash.
     """
     digest = hashlib.sha256()
+    zones = getattr(model, "reads_zones", False)
     head = {
         "model": _settings(model),
         "code": code,
@@ -414,6 +435,8 @@ def fit_key(model: ForecastModel, task: ForecastTask, code: str) -> str:
     }
     digest.update(json.dumps(head, sort_keys=True).encode())
     for f in fields(task):
+        if f.name in ZONE_FIELDS and not zones:
+            continue
         value = getattr(task, f.name)
         digest.update(f.name.encode())
         if isinstance(value, pd.DataFrame):
@@ -974,6 +997,7 @@ def command(args: argparse.Namespace) -> int:
         load_delays(args.data),
         config,
         load_daily(args.data),
+        load_zone_data(args.data),
     )
     models = args.models or stored_models()
     one = args.action in ("fit", "unpack")

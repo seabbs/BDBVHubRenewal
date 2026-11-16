@@ -49,6 +49,7 @@ from bdbvhubrenewal.data.simulate import (
     simulate_outbreak,
 )
 from bdbvhubrenewal.data.tidy import delays_for_vintage
+from bdbvhubrenewal.data.zones import ZoneData
 from bdbvhubrenewal.evaluation.nowcast import TRUTH_LEVEL
 from bdbvhubrenewal.evaluation.scoring import energy_scores, score_forecasts
 from bdbvhubrenewal.forecasters.base import (
@@ -293,6 +294,7 @@ def make_tasks(
     report_by: Sequence[str] = (),
     history: pd.DataFrame | None = None,
     daily: pd.DataFrame | None = None,
+    zones: ZoneData | None = None,
 ) -> list[ForecastTask]:
     """Build one task per vintage in a target table.
 
@@ -318,6 +320,10 @@ def make_tasks(
         `observed` and `imputed` columns, and optionally `kind`. Each task
         gets the rows of its kind on or before its vintage as
         `daily_history`.
+    zones : ZoneData, optional
+        The health-zone tables. A real task gets the weekly and daily rows
+        on or before its vintage as `zone_history` and
+        `zone_daily_history`, and the codes as `zone_codes`.
 
     Returns
     -------
@@ -375,6 +381,7 @@ def make_tasks(
                 delay_history=history,
                 target_history=past_target if not past_target.empty else None,
                 daily_history=_daily_for(daily, str(kind), str(vintage)),
+                **_zone_fields(zones, str(kind), str(vintage)),
                 locations=forecast_locations(rows),
                 target_end_dates=forecast_weeks(ref, config),
                 n_samples=config.n_samples,
@@ -402,6 +409,8 @@ def vintage_task(
     vintage: str,
     daily: pd.DataFrame | None = None,
     extra_weeks: int = 0,
+    *,
+    zones: ZoneData | None = None,
 ) -> tuple[ForecastTask, str]:
     """Build the task of one real vintage, as the submission fits it.
 
@@ -423,6 +432,8 @@ def vintage_task(
     extra_weeks : int
         Weeks to forecast past `[forecast] max_horizon`. The store adds
         one, so its fit also covers the next round's weeks.
+    zones : ZoneData, optional
+        The health-zone tables (`make_tasks`).
 
     Returns
     -------
@@ -437,7 +448,14 @@ def vintage_task(
     real = target.loc[target["kind"] == "real"]
     rows = real.loc[real["vintage"] == vintage]
     used, note = delays_for_vintage(delays, vintage)
-    task = make_tasks(rows, used, config, history=real, daily=daily)[0]
+    task = make_tasks(
+        rows,
+        used,
+        config,
+        history=real,
+        daily=daily,
+        zones=zones,
+    )[0]
     return task, note
 
 
@@ -784,6 +802,19 @@ def truth_changes(
     ).reset_index(drop=True)
 
 
+def _zone_fields(
+    zones: ZoneData | None, kind: str, vintage: str
+) -> dict[str, Any]:
+    """Return a task's zone fields: the releases on or before `vintage`."""
+    if zones is None:
+        return {}
+    return {
+        "zone_history": _daily_for(zones.weekly, kind, vintage),
+        "zone_daily_history": _daily_for(zones.daily, kind, vintage),
+        "zone_codes": zones.codes,
+    }
+
+
 def _daily_for(
     daily: pd.DataFrame | None, kind: str, vintage: str
 ) -> pd.DataFrame | None:
@@ -805,6 +836,7 @@ def development_tasks(
     config: BacktestConfig,
     *,
     daily: pd.DataFrame | None = None,
+    zones: ZoneData | None = None,
 ) -> list[ForecastTask]:
     """Build the development tasks: every real vintage but the latest.
 
@@ -824,6 +856,8 @@ def development_tasks(
         `observed` and `imputed` columns, and optionally `kind`. Each task
         gets the rows of its kind on or before its vintage as
         `daily_history`.
+    zones : ZoneData, optional
+        The health-zone tables (`make_tasks`).
 
     Returns
     -------
@@ -840,6 +874,7 @@ def development_tasks(
             config,
             real_vintages(real),
             daily=daily,
+            zones=zones,
         )
         if t.vintage < latest and t.vintage not in config.skip_origins
     ]
@@ -854,6 +889,7 @@ def run_development(
     fits: list[pd.DataFrame] | None = None,
     learnt: list[pd.DataFrame] | None = None,
     daily: pd.DataFrame | None = None,
+    zones: ZoneData | None = None,
 ) -> pd.DataFrame:
     """Forecast from every real vintage before the latest.
 
@@ -876,13 +912,15 @@ def run_development(
         Collects learnt delays, as for `run_forecasts`.
     daily : pandas.DataFrame, optional
         Daily onsets by release, as for `development_tasks`.
+    zones : ZoneData, optional
+        The health-zone tables, as for `development_tasks`.
 
     Returns
     -------
     pandas.DataFrame
         Output of `run_forecasts`.
     """
-    tasks = development_tasks(target, delays, config, daily=daily)
+    tasks = development_tasks(target, delays, config, daily=daily, zones=zones)
     return run_forecasts(models, tasks, fits, learnt)
 
 
