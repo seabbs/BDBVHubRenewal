@@ -4,8 +4,10 @@ import sys
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 sys.path.insert(0, str(Path(__file__).parents[1] / "scripts"))
+import finetune_chronos as ft
 from finetune_chronos import (
     choose_places,
     plan_batches,
@@ -759,3 +761,16 @@ def test_stale_block_files_fail_when_loaded(tmp_path):
     path.write_bytes(pickle.dumps([good, stale]))
     with pytest.raises(ValueError, match="prediction_length"):
         load_blocks(path)
+
+
+def test_every_source_is_native_or_binned():
+    ft.check_sources(("weekly", "daily", "3day"))
+    # A source with no binning would be cut as daily: refuse it.
+    with pytest.raises(ValueError, match="5day"):
+        ft.check_sources(("weekly", "5day"))
+
+
+def test_the_package_must_be_this_worktrees(tmp_path):
+    ft.check_package(Path(__file__).parents[1])
+    with pytest.raises(RuntimeError, match="not this worktree"):
+        ft.check_package(tmp_path)
