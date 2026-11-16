@@ -614,3 +614,26 @@ def test_slots_scores_pair_the_runs_at_matched_checkpoints() -> None:
     assert list(out["Outbreaks"]) == [1000, 1000]
     assert list(out["Slots"]) == [0.7, 0.9]
     assert list(out["No slots"]) == [0.75, 1.0]
+
+
+def test_slots_scores_keep_only_the_final_run_s_checkpoints() -> None:
+    # An earlier slots run's checkpoints are not the paper's.
+    from paperpipe.evidence import CHECKPOINT_RULE, slots_scores_table
+
+    base = {
+        "study": "germany",
+        "level": "national",
+        "model": "fm_chronos_daily_ragged",
+        "rule": CHECKPOINT_RULE,
+        "outbreaks": 1000,
+    }
+    rows = pd.DataFrame(
+        [
+            {**base, "checkpoint": "slots-old", "rel_wis": 0.8},
+            {**base, "checkpoint": "slots-new", "rel_wis": 0.9},
+            {**base, "checkpoint": "plain", "rel_wis": 1.0},
+        ]
+    )
+    out = slots_scores_table(rows, ("slots-new",))
+    assert list(out["Slots"]) == [0.9]
+    assert slots_scores_table(rows, ()).empty
