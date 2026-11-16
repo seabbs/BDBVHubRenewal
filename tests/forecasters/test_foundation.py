@@ -862,6 +862,27 @@ def test_zone_samples_are_the_models_own_summed_to_its_provinces(
     assert not a.equals(b)
 
 
+@pytest.mark.parametrize("layout", LAYOUTS)
+def test_daily_zones_keep_their_counts_with_no_weekly_zone_releases(
+    layout: str, task: ForecastTask, daily_zones: pd.DataFrame
+) -> None:
+    bare = dataclasses.replace(task, zone_history=None)
+    model = dataclasses.replace(
+        get_model(f"fm_chronos_daily_{layout}"), sample=_constant(-50.0)
+    )
+    out = model.forecast(bare)
+    check_samples(out, bare)
+    own = out.loc[out["location"].map(is_zone)]
+    assert set(own["location"]) == set(_zones(task))
+    # Reconciling keeps each zone's published count, so the zones are
+    # floored with no weekly zone release to floor them before.
+    counts = weekly_zone_counts(daily_zones, task.vintage)
+    keys = ["location", "target_end_date"]
+    floor = own.merge(counts, on=keys, how="left")["total"].fillna(0)
+    assert (own["value"].to_numpy() >= floor.to_numpy()).all()
+    assert floor.sum() > 0
+
+
 def test_a_passing_github_error_is_retried(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
