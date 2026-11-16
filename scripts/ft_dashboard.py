@@ -1525,12 +1525,12 @@ def build():
         return [
             chart("Training loss (rolling mean of 20 logged points)"
                   + suffix, tr_series, marks, ylog=True, hlines=ref,
-                  xmax=xlim if zoom else None),
+                  xmax=xlim if zoom else None, W=440, H=280),
             chart(ttl[mode] + suffix, held, marks, ylog=True, hlines=ref,
-                  xmax=xlim if zoom else None),
+                  xmax=xlim if zoom else None, W=440, H=280),
             chart("Held-out loss by source (colour is the source, style the "
                   "run)" + suffix, bysrc, marks, ylog=True, hlines=ref,
-                  xmax=xlim if zoom else None)]
+                  xmax=xlim if zoom else None, W=440, H=280)]
 
     # x range: the live run's steps (to 1.2x the latest, at least the next
     # checkpoint), unless "full range" is chosen.
@@ -1538,7 +1538,7 @@ def build():
     xlim = max([1.2 * (step or 0), 300] + (
         [tstep(next_ck)] if next_ck else []))
     plots_h = "".join(
-        f'<div class="mode m-{m} rng r-{z}"><div class=plots>'
+        f'<div class="mode m-{m} rng r-{z}"><div class=plots3>'
         + "".join(make_plots(m, z == "zoom")) + "</div></div>"
         for m in ("raw", "start", "base") for z in ("zoom", "full"))
 
@@ -1667,7 +1667,9 @@ font-size:12px}
 .tog.on{background:var(--c1);color:#fff;border-color:var(--c1)}
 .sctl .mut{margin-left:10px}.lg{display:inline-flex;align-items:center;gap:6px;margin-right:14px}
 .leg2{font-size:12px;display:flex;flex-wrap:wrap;gap:4px 18px}.glocs{margin:6px 0}.glocs .tog{margin:1px}.panels{display:grid;gap:8px}
-.panels h4{margin:0 0 2px;font-size:12px}.biasrow{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-start}
+.panels h4{margin:0 0 2px;font-size:12px}.plots3{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,400px),1fr));gap:8px}
+.plots3 .leg{font-size:11px;gap:2px 8px}
+.biasrow{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-start}
 .biasrow .card{padding:4px;line-height:0}.tiles4{display:flex;gap:6px}
 .tile4 .mut{font-size:11px;line-height:1.3}.tile4 svg{display:block}
 .rel .band{opacity:0;pointer-events:none}.rel:hover .band{opacity:.22}
