@@ -379,8 +379,11 @@ def outbreak_blocks(
             mix = "national"
             if len(provinces) > 1:
                 size = np.exp(rng.uniform(0, np.log(MAX_SERIES)))
-                fits = MAX_SERIES // (lag + 1) - 1
-                budget = min(round(size / (lag + 1)) - 1, fits)
+                # A place's rows: its counts, its lags and, with period
+                # totals, one more.
+                rows = lag + 1 + (source in MIXED)
+                fits = MAX_SERIES // rows - 1
+                budget = min(round(size / rows) - 1, fits)
                 places, mix = choose_places(provinces, budget, rng)
             # How the country relates to its places, drawn from a child
             # generator, so the other draws are as without it.
