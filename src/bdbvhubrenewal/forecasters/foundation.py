@@ -78,7 +78,9 @@ __all__ = [
     "layout_block",
     "native_sampler",
     "quantile_draws",
+    "realdata_pinned",
     "realdata_spec",
+    "register_realdata_models",
     "resolve_checkpoint",
 ]
 
@@ -118,7 +120,7 @@ FINETUNED_PREFIX: Final = "chronos-ft"
 ones `"latest"` takes."""
 
 REALDATA_PREFIX: Final = "realdata-ft"
-"""Tag prefix of the German-trained checkpoints' releases."""
+"""Tag prefix of the real-data checkpoints' releases."""
 
 FINETUNED_ENV: Final = "BDBV_CHRONOS_FT"
 """Environment variable with the settings hash a run resolved once, which
@@ -379,7 +381,7 @@ def _finetuned(name: str, source: str) -> FoundationModel:
 
 
 def _real_data(name: str, source: str) -> FoundationModel:
-    """Build a model with the German-trained checkpoint `realdata_spec`."""
+    """Build a model with the real-data checkpoint `realdata_spec`."""
     return FoundationModel(
         name,
         source,
@@ -965,10 +967,40 @@ for _source in SOURCES:
         f"{_source} releases, ragged layout.",
         fitted=True,
     )
-    register_model(
-        f"fm_chronos_{_source}_ragged_real",
-        partial(_real_data, f"fm_chronos_{_source}_ragged_real", _source),
-        f"Chronos-2 fine-tuned on real data (German and BDBV), on the hub "
-        f"target's {_source} releases, ragged layout (SI only).",
-        fitted=True,
-    )
+
+
+def realdata_pinned(path: Path | str = FINETUNED_CONFIG) -> bool:
+    """Whether `path` pins the real-data checkpoint.
+
+    Parameters
+    ----------
+    path : pathlib.Path or str
+        A TOML file with `realdata`.
+
+    Returns
+    -------
+    bool
+    """
+    return bool(tomllib.loads(Path(path).read_text()).get("realdata"))
+
+
+def register_realdata_models() -> None:
+    """Register the `_real` models, fine-tuned on real data alone.
+
+    The module registers them only once `realdata_pinned`, so while the
+    pin is pending no store plan or backtest resolves their checkpoint.
+    """
+    for source in SOURCES:
+        name = f"fm_chronos_{source}_ragged_real"
+        register_model(
+            name,
+            partial(_real_data, name, source),
+            f"Chronos-2 fine-tuned on real data (German and BDBV), on the "
+            f"hub target's {source} releases, ragged layout (SI only).",
+            fitted=True,
+            replace=True,
+        )
+
+
+if Path(FINETUNED_CONFIG).exists() and realdata_pinned():
+    register_realdata_models()

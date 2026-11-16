@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import logging
 import tomllib
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -55,7 +56,9 @@ from bdbvhubrenewal.data.germany import (
 from bdbvhubrenewal.evaluation.marginals import forecast_quantiles
 from bdbvhubrenewal.evaluation.nowcast import rolling_truth
 from bdbvhubrenewal.evaluation.scoring import relative_skill, score_quantiles
-from bdbvhubrenewal.forecasters import get_model
+from bdbvhubrenewal.forecasters import get_model, list_models
+
+log = logging.getLogger(__name__)
 
 __all__ = [
     "PAPER_COLUMNS",
@@ -200,6 +203,9 @@ class GermanyConfig:
 def run_models(config: GermanyConfig, held_out: bool) -> tuple[str, ...]:
     """Return the models a half runs: `held_out_models` join the held-out.
 
+    A held-out model that is not registered yet, such as one whose
+    checkpoint is still pending, is left out with a warning.
+
     Parameters
     ----------
     config : GermanyConfig
@@ -211,7 +217,17 @@ def run_models(config: GermanyConfig, held_out: bool) -> tuple[str, ...]:
     -------
     tuple of str
     """
-    return (*config.models, *(config.held_out_models if held_out else ()))
+    if not held_out:
+        return config.models
+    known = {s.name for s in list_models()}
+    waiting = [m for m in config.held_out_models if m not in known]
+    if waiting:
+        log.warning(
+            "Held-out models not registered yet, left out: %s.",
+            ", ".join(waiting),
+        )
+    extra = tuple(m for m in config.held_out_models if m in known)
+    return (*config.models, *extra)
 
 
 def load_germany_config(

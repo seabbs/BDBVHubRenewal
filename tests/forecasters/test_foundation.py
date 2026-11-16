@@ -18,6 +18,7 @@ from bdbvhubrenewal.forecasters import (
     ForecastTask,
     FoundationModel,
     ModelUnavailableError,
+    base,
     check_samples,
     foundation,
     get_model,
@@ -862,6 +863,9 @@ def test_realdata_models_load_their_pinned_release(
 ) -> None:
     write_release(releases, "de", _ADAPTER, "de", prefix="realdata-ft")
     monkeypatch.setattr(foundation, "realdata_spec", lambda: "de")
+    # Registered on a copy of the registry, as a pinned config would.
+    monkeypatch.setattr(base, "_REGISTRY", dict(base._REGISTRY))
+    foundation.register_realdata_models()
     # The simulation checkpoint's override does not reach them.
     monkeypatch.setenv(foundation.FINETUNED_ENV, "other")
     model = get_model(name)
@@ -896,3 +900,15 @@ def test_a_pending_realdata_checkpoint_names_what_is_missing(
     config.write_text('hash = "latest"\nrealdata = ""\n')
     with pytest.raises(ValueError, match="realdata-ft"):
         foundation.realdata_spec(config)
+
+
+def test_the_realdata_models_wait_for_their_pin() -> None:
+    # While the pin is pending they are not registered, so neither the
+    # BDBV fit store nor a backtest resolves their checkpoint.
+    from bdbvhubrenewal.evaluation.store import stored_models
+
+    if foundation.realdata_pinned():
+        pytest.skip("the realdata-ft release is pinned")
+    names = {s.name for s in list_models()}
+    assert not {m for m in names if m.endswith("_real")}
+    assert not [m for m in stored_models() if m.endswith("_real")]

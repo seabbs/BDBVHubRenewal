@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import importlib.util
 from pathlib import Path
 
@@ -27,6 +28,7 @@ from bdbvhubrenewal.evaluation.germany import (
     with_truth,
 )
 from bdbvhubrenewal.evaluation.nowcast import rolling_truth
+from bdbvhubrenewal.forecasters import list_models
 
 ROOT = Path(__file__).resolve().parents[2]
 FIXTURE = (
@@ -89,7 +91,10 @@ def test_german_trained_models_run_on_the_held_out_half_only() -> None:
     assert config.held_out_models == german
     # They were fine-tuned on the development half, so never score on it.
     assert not set(german) & set(run_models(config, held_out=False))
-    assert run_models(config, held_out=True) == (*config.models, *german)
+    # They join once their checkpoint is pinned and so registered.
+    known = {s.name for s in list_models()}
+    joined = tuple(m for m in german if m in known)
+    assert run_models(config, held_out=True) == (*config.models, *joined)
 
 
 def test_the_later_half_of_the_dates_is_held_out() -> None:
@@ -357,3 +362,14 @@ def test_a_sample_model_s_german_quantiles_use_the_draws_given(
     ]
     pd.testing.assert_frame_equal(runs[0], runs[1])
     assert not np.array_equal(runs[0]["value"], runs[2]["value"])
+
+
+def test_held_out_models_wait_until_they_are_registered(caplog) -> None:
+    config = load_germany_config(ROOT / "config" / "germany.toml")
+    config = dataclasses.replace(
+        config, held_out_models=("randomwalk", "not_registered_de")
+    )
+    with caplog.at_level("WARNING"):
+        held = run_models(config, held_out=True)
+    assert held == (*config.models, "randomwalk")
+    assert "not_registered_de" in caplog.text
