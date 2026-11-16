@@ -96,7 +96,7 @@ def test_a_slots_run_trains_with_slots_into_its_own_folders(tmp_path):
     assert plain.stdout.split() == ["checkpoints"]
     on = _source(
         tmp_path,
-        f"SERIES_SLOTS=128 HERE={tmp_path}/slots",
+        f"export SERIES_SLOTS=128 HERE={tmp_path}/slots;",
         "slots_args; echo; remote_checkpoints",
     )
     assert on.returncode == 0
@@ -108,6 +108,6 @@ def test_a_slots_run_trains_with_slots_into_its_own_folders(tmp_path):
 
 
 def test_a_slots_run_refuses_the_no_slots_runs_folder(tmp_path):
-    out = _source(tmp_path, "SERIES_SLOTS=128", "slots_args")
+    out = _source(tmp_path, "export SERIES_SLOTS=128;", "slots_args")
     assert out.returncode != 0
     assert "HERE" in out.stderr
