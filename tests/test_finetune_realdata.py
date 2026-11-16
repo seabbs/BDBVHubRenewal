@@ -334,3 +334,20 @@ def test_held_out_cuts_are_taken_per_dataset():
     assert {b["data"] for b in held} == {"germany"}
     assert len(held) == 14
     assert all(b in train for b in bdbv)
+
+
+def test_device_auto_takes_a_gpu_when_there_is_one():
+    import pytest
+
+    torch = pytest.importorskip("torch")
+    from finetune_realdata import pick_device
+
+    assert pick_device("cpu") == "cpu"
+    want = (
+        "cuda"
+        if torch.cuda.is_available()
+        else "mps"
+        if torch.backends.mps.is_available()
+        else "cpu"
+    )
+    assert pick_device("auto") == want
