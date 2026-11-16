@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib.util
 from pathlib import Path
 
 import numpy as np
@@ -20,6 +21,7 @@ from bdbvhubrenewal.evaluation.germany import (
     nowcast_dates,
     paper_forecasts,
     relative_scores,
+    run_models,
     score_germany,
     team_forecasts,
     with_truth,
@@ -54,33 +56,6 @@ def scores(forecasts: pd.DataFrame) -> pd.DataFrame:
     return score_germany(forecasts, truth_delay=10)
 
 
-def test_chronos_lags_reach_the_german_truth_delay(
-    triangle: pd.DataFrame, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    # The ragged series run to the D of the German truth, so counts are
-    # partial until the age they are scored at.
-    from bdbvhubrenewal.forecasters import foundation
-
-    seen: list = []
-
-    def sample(groups, horizon, n, _seed, checkpoint=None):  # noqa: ARG001
-        seen.append(groups[0])
-        return [np.zeros((n, g["target"].shape[0], horizon)) for g in groups]
-
-    monkeypatch.setattr(foundation, "chronos_sampler", sample)
-    germany_forecasts(
-        ["fm_chronos_daily_ragged"],
-        triangle,
-        ["2021-10-04"],
-        n_samples=5,
-        seed=1,
-        truth_delay=12,
-    )
-    for group in seen:
-        n_places = group["target"].shape[0]
-        assert len(group["future_covariates"]) == n_places * 12
-
-
 def test_config_gives_the_paper_s_dates_and_an_explicit_model_set() -> None:
     config = load_germany_config(ROOT / "config" / "germany.toml")
     every = nowcast_dates(config, held_out=False) + nowcast_dates(
@@ -91,11 +66,30 @@ def test_config_gives_the_paper_s_dates_and_an_explicit_model_set() -> None:
         "2022-04-29",
         159,
     )
-    assert config.models == ("randomwalk", "randomwalknowcast")
+    assert config.models == (
+        "randomwalk",
+        "randomwalknowcast",
+        *(
+            f"fm_chronos_{source}_{layout}"
+            for layout in ("complete", "ragged")
+            for source in ("daily", "weekly")
+        ),
+        "fm_chronos_daily_ragged_ft",
+        "fm_chronos_weekly_ragged_ft",
+    )
     assert config.truth_delay == 40
     assert config.submissions
     assert config.baseline == "randomwalknowcast"
     assert config.paper_baseline == "KIT-frozen_baseline"
+
+
+def test_german_trained_models_run_on_the_held_out_half_only() -> None:
+    config = load_germany_config(ROOT / "config" / "germany.toml")
+    german = ("fm_chronos_daily_ragged_de", "fm_chronos_weekly_ragged_de")
+    assert config.held_out_models == german
+    # They were fine-tuned on the development half, so never score on it.
+    assert not set(german) & set(run_models(config, held_out=False))
+    assert run_models(config, held_out=True) == (*config.models, *german)
 
 
 def test_the_later_half_of_the_dates_is_held_out() -> None:
@@ -309,3 +303,57 @@ def test_asof_sums_are_the_data_each_nowcast_date_saw(
     both = got.merge(want, on=["location", "target_end_date"])
     assert len(both) == len(got) == len(want)
     assert (both["total_x"] == both["total_y"]).all()
+
+
+@pytest.mark.skipif(
+    importlib.util.find_spec("torch") is None, reason="needs torch"
+)
+def test_a_quantile_model_s_german_scores_do_not_depend_on_the_seed(
+    triangle: pd.DataFrame, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from bdbvhubrenewal.forecasters import foundation
+
+    class Pipeline:
+        quantiles = (0.01, 0.05, 0.1, 0.5, 0.9, 0.95, 0.99)
+
+        def predict_quantiles(self, groups, prediction_length, quantile_levels):
+            import torch
+
+            level = 1000 * torch.tensor(quantile_levels, dtype=torch.float32)
+            return [
+                level[None, None, :].expand(
+                    np.atleast_2d(g["target"]).shape[0], prediction_length, -1
+                )
+                for g in groups
+            ], None
+
+    monkeypatch.setattr(foundation, "_chronos", lambda *_: Pipeline())
+    runs = [
+        germany_forecasts(
+            ["fm_chronos_weekly_ragged"],
+            triangle,
+            ["2021-10-04"],
+            n_samples=30,
+            seed=seed,
+        )
+        for seed in (1, 2)
+    ]
+    assert not runs[0].empty
+    pd.testing.assert_frame_equal(*runs)
+
+
+def test_a_sample_model_s_german_quantiles_use_the_draws_given(
+    triangle: pd.DataFrame,
+) -> None:
+    runs = [
+        germany_forecasts(
+            ["randomwalknowcast"],
+            triangle,
+            ["2021-10-04"],
+            n_samples=30,
+            seed=seed,
+        )
+        for seed in (1, 1, 2)
+    ]
+    pd.testing.assert_frame_equal(runs[0], runs[1])
+    assert not np.array_equal(runs[0]["value"], runs[2]["value"])

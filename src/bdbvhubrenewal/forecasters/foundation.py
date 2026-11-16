@@ -6,7 +6,11 @@ Each pair of a source (`SOURCES`) and a layout (`LAYOUTS`) is one
 registered model, `fm_chronos_<source>_<layout>`, and each source's
 ragged model with a fine-tuned checkpoint (`resolve_checkpoint`, the
 latest release unless `config/finetune.toml` pins one) is
-`fm_chronos_<source>_ragged_ft`.
+`fm_chronos_<source>_ragged_ft`. For the SI, `fm_chronos_<source>_ragged_de`
+is the ragged model with the checkpoint fine-tuned on the German data's
+development half alone (`scripts/finetune_germany.py`), pinned in
+`config/finetune.toml` and released as `germany-ft-<hash>`, which the
+latest lookup never takes.
 `hub_triangle` lays out the hub target by place, time and release lag,
 `FoundationModel` gives it to Chronos-2 as one group of series, and
 `chronos_sampler` draws trajectories from Chronos-2's quantiles.
@@ -17,7 +21,6 @@ and the fit store stores it as failed.
 
 from __future__ import annotations
 
-import dataclasses
 import datetime as dt
 import hashlib
 import http.client
@@ -29,7 +32,7 @@ import time
 import tomllib
 import urllib.request
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from functools import cache, partial
 from pathlib import Path
 from typing import Any, Final
@@ -55,9 +58,12 @@ __all__ = [
     "FINETUNED_CACHE",
     "FINETUNED_CONFIG",
     "FINETUNED_ENV",
+    "FINETUNED_PREFIX",
     "FINETUNED_RELEASES",
     "FINETUNED_URL",
+    "GERMANY_PREFIX",
     "LAYOUTS",
+    "MAX_LAG",
     "SOURCES",
     "SUMS_FILE",
     "Checkpoint",
@@ -68,9 +74,10 @@ __all__ = [
     "finetuned_adapter",
     "finetuned_releases",
     "finetuned_spec",
+    "germany_spec",
     "hub_triangle",
-    "lag_steps",
     "layout_block",
+    "native_sampler",
     "quantile_draws",
     "resolve_checkpoint",
 ]
@@ -82,9 +89,9 @@ SOURCES: Final = ("weekly", "daily")
 LAYOUTS: Final = ("complete", "ragged")
 """The ways the releases are given to Chronos-2."""
 
-TRUTH_CONFIG: Final = Path("config/backtest.toml")
-"""The release backtest's settings, whose truth delay $D$ the models
-take (`truth_settings`)."""
+MAX_LAG: Final = {"weekly": 4, "daily": 28}
+"""Release lag $D$, in the source's steps, from which a count is taken as
+final."""
 
 CHRONOS_MODEL: Final = "amazon/chronos-2"
 """The Hugging Face checkpoint."""
@@ -105,6 +112,13 @@ FINETUNED_RELEASES: Final = (
     "https://api.github.com/repos/seabbs/BDBVHubRenewal/releases"
 )
 """The repository's releases, listed to find the latest checkpoint."""
+
+FINETUNED_PREFIX: Final = "chronos-ft"
+"""Tag prefix of the simulation-trained checkpoints' releases, the only
+ones `"latest"` takes."""
+
+GERMANY_PREFIX: Final = "germany-ft"
+"""Tag prefix of the German-trained checkpoints' releases."""
 
 FINETUNED_ENV: Final = "BDBV_CHRONOS_FT"
 """Environment variable with the settings hash a run resolved once, which
@@ -138,13 +152,23 @@ class Checkpoint:
     ----------
     hash : str
         Settings hash from `scripts/finetune_chronos.py train`. The release
-        is `chronos-ft-<hash>`.
+        is `<prefix>-<hash>`.
     sha256 : tuple of (str, str)
         SHA-256 of each of `ADAPTER_FILES`, by file name.
+    prefix : str
+        The release's tag prefix, `FINETUNED_PREFIX` or `GERMANY_PREFIX`.
+        Left out of the repr, which keys stored fits; the hash tells the
+        checkpoints apart.
     """
 
     hash: str
     sha256: tuple[tuple[str, str], ...]
+    prefix: str = field(default=FINETUNED_PREFIX, repr=False)
+
+    @property
+    def tag(self) -> str:
+        """The checkpoint's release tag."""
+        return f"{self.prefix}-{self.hash}"
 
 
 def finetuned_spec(path: Path | str = FINETUNED_CONFIG) -> str:
@@ -246,18 +270,50 @@ def finetuned_releases() -> list[dict[str, Any]]:
     return out
 
 
+def germany_spec(path: Path | str = FINETUNED_CONFIG) -> str:
+    """Return the settings hash the `_de` models load.
+
+    No environment variable overrides it, so a run that pins the
+    simulation-trained checkpoint leaves it as it is.
+
+    Parameters
+    ----------
+    path : pathlib.Path or str
+        A TOML file with `germany`.
+
+    Returns
+    -------
+    str
+
+    Raises
+    ------
+    ValueError
+        If the pin is pending (empty) until the release is published.
+    """
+    spec = str(tomllib.loads(Path(path).read_text())["germany"])
+    if not spec:
+        raise ValueError(
+            f"No {GERMANY_PREFIX} release is pinned yet: set `germany` in "
+            f"{path} to its settings hash."
+        )
+    return spec
+
+
 @cache
-def resolve_checkpoint(spec: str) -> Checkpoint:
+def resolve_checkpoint(spec: str, prefix: str = FINETUNED_PREFIX) -> Checkpoint:
     """Return a fine-tuned checkpoint from its release.
 
     `"latest"` is the newest published `chronos-ft-*` release by publish
-    date. The release's `SUMS_FILE` gives the SHA-256 of its adapter
+    date; releases of other prefixes, such as `germany-ft-*`, are never
+    taken. The release's `SUMS_FILE` gives the SHA-256 of its adapter
     files. Each process resolves once.
 
     Parameters
     ----------
     spec : str
         `"latest"` or a settings hash.
+    prefix : str
+        The release's tag prefix. `"latest"` needs `FINETUNED_PREFIX`.
 
     Returns
     -------
@@ -275,18 +331,20 @@ def resolve_checkpoint(spec: str) -> Checkpoint:
         If `SUMS_FILE` lacks an adapter file.
     """
     checkpoint = spec
+    if spec == "latest" and prefix != FINETUNED_PREFIX:
+        raise ValueError(f"Only {FINETUNED_PREFIX} releases resolve latest.")
     if spec == "latest":
         tags = sorted(
             (r["published_at"], r["tag_name"])
             for r in finetuned_releases()
-            if str(r["tag_name"]).startswith("chronos-ft-")
+            if str(r["tag_name"]).startswith(f"{FINETUNED_PREFIX}-")
             and not r.get("draft")
             and r.get("published_at")
         )
         if not tags:
             raise LookupError("No chronos-ft-* release holds a checkpoint.")
-        checkpoint = tags[-1][1].removeprefix("chronos-ft-")
-    tag = f"chronos-ft-{checkpoint}"
+        checkpoint = tags[-1][1].removeprefix(f"{FINETUNED_PREFIX}-")
+    tag = f"{prefix}-{checkpoint}"
     url = f"{FINETUNED_URL}/{tag}/{SUMS_FILE}"
     try:
         text = _get(url).decode()
@@ -298,71 +356,35 @@ def resolve_checkpoint(spec: str) -> Checkpoint:
         raise _unreachable(url, err) from err
     sums = {}
     for line in text.splitlines():
-        if line.strip():
-            sha, name = line.split(maxsplit=1)
-            sums[name.lstrip("*").strip()] = sha
+        parts = line.split(maxsplit=1)
+        # A line that is not `<sha> <name>` is left to the check below.
+        if len(parts) == 2:
+            sums[parts[1].lstrip("*").strip()] = parts[0]
     missing = [f for f in ADAPTER_FILES if f not in sums]
     if missing:
         raise ValueError(
             f"{SUMS_FILE} of the release {tag} has no SHA-256 of "
             f"{', '.join(missing)}."
         )
-    return Checkpoint(checkpoint, tuple((f, sums[f]) for f in ADAPTER_FILES))
-
-
-def truth_settings(
-    path: Path | str = TRUTH_CONFIG, data: Path | str | None = None
-) -> tuple[int | None, float, tuple[str, ...]]:
-    """Return the release backtest's truth delay, level and skipped releases.
-
-    Parameters
-    ----------
-    path : pathlib.Path or str
-        The backtest settings.
-    data : pathlib.Path or str, optional
-        The tidy data (`data.load_target`), from which an "auto"
-        `truth_delay` is resolved as the release backtest resolves it
-        (`evaluation.nowcast.resolve_truth_delay`).
-
-    Returns
-    -------
-    tuple
-        $D$ in days, `truth_level` and `skip_origins`. $D$ is None if it
-        is "auto" and the data are missing or never reach `truth_level`;
-        the models then estimate it at each origin.
-    """
-    from bdbvhubrenewal.data import load_target
-    from bdbvhubrenewal.evaluation.backtest import load_config
-    from bdbvhubrenewal.evaluation.nowcast import resolve_truth_delay
-
-    config = load_config(path)
-    delay = config.truth_delay
-    if delay is None:
-        try:
-            delay = resolve_truth_delay(config, load_target(data))
-        except (FileNotFoundError, ValueError):
-            delay = None
-    return delay, config.truth_level, config.skip_origins
-
-
-def _model(name: str, source: str, layout: str) -> FoundationModel:
-    """Build a model with the release backtest's truth delay."""
-    delay, level, skip = truth_settings()
-    return FoundationModel(
-        name,
-        source,
-        layout,
-        truth_delay=delay,
-        truth_level=level,
-        truth_skip=skip,
+    return Checkpoint(
+        checkpoint, tuple((f, sums[f]) for f in ADAPTER_FILES), prefix
     )
 
 
 def _finetuned(name: str, source: str) -> FoundationModel:
     """Build a fine-tuned model with the checkpoint `finetuned_spec` names."""
-    return dataclasses.replace(
-        _model(name, source, "ragged"),
-        checkpoint=resolve_checkpoint(finetuned_spec()),
+    return FoundationModel(
+        name, source, "ragged", resolve_checkpoint(finetuned_spec())
+    )
+
+
+def _german(name: str, source: str) -> FoundationModel:
+    """Build a model with the German-trained checkpoint `germany_spec`."""
+    return FoundationModel(
+        name,
+        source,
+        "ragged",
+        resolve_checkpoint(germany_spec(), GERMANY_PREFIX),
     )
 
 
@@ -400,25 +422,6 @@ class HubTriangle:
         return self.last - int(self.partial.shape[2]) + 1
 
 
-def lag_steps(source: str, delay: int) -> int:
-    """Return the release lags, in the source's steps, that reach $D$.
-
-    Parameters
-    ----------
-    source : str
-        One of `SOURCES`.
-    delay : int
-        $D$, in days.
-
-    Returns
-    -------
-    int
-        $D$ in days, or in weeks rounded up.
-    """
-    width = 7 if source == "weekly" else 1
-    return -(-delay // width)
-
-
 def _step(source: str, day: str) -> dt.date:
     """Return the step holding a day: its week's Saturday, or the day."""
     return epiweek_end(day) if source == "weekly" else as_date(day)
@@ -429,7 +432,7 @@ def hub_triangle(
     source: str,
     places: Sequence[str],
     last_time: str,
-    max_lag: int,
+    max_lag: int | None = None,
 ) -> HubTriangle:
     """Lay out the hub target of every release by place, step and lag.
 
@@ -446,9 +449,8 @@ def hub_triangle(
         Places, in the order of the output.
     last_time : str
         Last step of the grid.
-    max_lag : int
-        Release lag $D$, in the source's steps, from which a count is
-        taken as final (`lag_steps`).
+    max_lag : int, optional
+        Release lag $D$, `MAX_LAG` of the source by default.
 
     Returns
     -------
@@ -472,11 +474,10 @@ def hub_triangle(
     place = rows["location"].map({c: i for i, c in enumerate(places)})
     days = (pd.to_datetime(rows[time_col]) - pd.Timestamp(first)).dt.days
     step = days.to_numpy() // width
-    lags = max_lag
+    lags = MAX_LAG[source] if max_lag is None else max_lag
     partial = np.full((len(places), n_times, lags), np.nan)
     final = np.zeros((len(places), n_times))
     last = 0
-    # The latest release gives the final counts and the last step.
     for release in sorted(set(rows["vintage"])):
         mine = (rows["vintage"] == release).to_numpy()
         cutoff = str(rows.loc[mine, "cutoff"].iloc[0])
@@ -491,6 +492,7 @@ def hub_triangle(
         for d in range(lags):
             if 0 <= at - d < n_times:
                 partial[:, at - d, d] = counts[:, at - d]
+        # Sorted, so the last release's counts and cut-off are the latest.
         final, last = counts, at
     return HubTriangle(times, final, partial, last)
 
@@ -529,7 +531,7 @@ def quantile_draws(
 def finetuned_adapter(checkpoint: Checkpoint) -> Path:
     """Return a fine-tuned checkpoint's LoRA adapter, downloading it once.
 
-    The release `chronos-ft-<hash>` at `FINETUNED_URL` holds
+    The release `<prefix>-<hash>` at `FINETUNED_URL` holds
     `ADAPTER_FILES` and `settings.json`. They are kept in
     `FINETUNED_CACHE` only once all are downloaded, the settings hash
     matches and each adapter file has its SHA-256. A cached copy is
@@ -555,7 +557,7 @@ def finetuned_adapter(checkpoint: Checkpoint) -> Path:
         If the release's settings hash or an adapter file's SHA-256 is not
         the checkpoint's.
     """
-    tag = f"chronos-ft-{checkpoint.hash}"
+    tag = checkpoint.tag
     cache = Path(FINETUNED_CACHE).expanduser()
     out = cache / tag
     if out.is_dir():
@@ -750,55 +752,20 @@ class FoundationModel:
     checkpoint : Checkpoint or None
         The fine-tuned checkpoint Chronos-2 loads, or None for the
         pretrained model.
-    truth_delay : int or None
-        $D$, in days: counts reported up to $D$ days late are partial and
-        those older are final, as in the truth they are scored on. None
-        estimates it at the origin (`delay_days`).
-    truth_level, truth_skip
-        The share of the count reported by $D$, and the releases left out,
-        when $D$ is estimated.
     sample : Sampler or None
         Draws the trajectories, Chronos-2 with `checkpoint` by default.
+    stream : str or None
+        The task's random stream the draws are seeded from, the model's
+        name by default. Models given one stream draw the same random
+        numbers (`bdbvhubrenewal.evaluation.marginals.forecast_quantiles`).
     """
 
     name: str
     source: str
     layout: str
     checkpoint: Checkpoint | None = None
-    truth_delay: int | None = None
-    truth_level: float = 0.98
-    truth_skip: tuple[str, ...] = ()
     sample: Sampler | None = field(default=None, repr=False)
-
-    def delay_days(self, task: ForecastTask) -> int:
-        """Return $D$, in days, for a task.
-
-        `truth_delay` if set, else the age by which `truth_level` of the
-        national count is reported in the task's releases, which hold
-        only those up to the origin
-        (`evaluation.nowcast.reporting_delay`).
-
-        Raises
-        ------
-        ModelUnavailableError
-            If $D$ is estimated and no age reaches `truth_level`.
-        """
-        if self.truth_delay is not None:
-            return self.truth_delay
-        from bdbvhubrenewal.evaluation.nowcast import reporting_delay
-
-        rows = task.target_history
-        delay = None
-        if rows is not None and not rows.empty:
-            real = rows.loc[rows["kind"] == "real"] if "kind" in rows else rows
-            delay = reporting_delay(real, self.truth_level, self.truth_skip)
-        if delay is None:
-            raise ModelUnavailableError(
-                f"{self.name} needs the truth delay, and no age of the "
-                f"releases to {task.vintage} has {self.truth_level:.0%} of "
-                "the national count reported."
-            )
-        return delay
+    stream: str | None = field(default=None, repr=False)
 
     @property
     def needs_snapshots(self) -> bool:
@@ -844,23 +811,24 @@ class FoundationModel:
             )
         places = (NATIONAL, *task.locations)
         weeks = list(task.target_end_dates)
-        # Only the ragged layout gives Chronos-2 the lags.
-        lags = (
-            lag_steps(self.source, self.delay_days(task))
-            if self.layout == "ragged"
-            else 1
-        )
-        tri = hub_triangle(rows, self.source, places, weeks[-1], lags)
+        tri = hub_triangle(rows, self.source, places, weeks[-1])
         start = tri.n_context
         if self.layout == "complete":
-            start = tri.times.index(_walk_start(task)) + 1
+            walk = _walk_start(task)
+            if walk not in tri.times:
+                raise ModelUnavailableError(
+                    f"{self.name} starts from the randomwalk week {walk}, "
+                    f"which the task for {task.vintage} has no "
+                    f"{self.source} release of."
+                )
+            start = tri.times.index(walk) + 1
         if start < 2:
             raise ModelUnavailableError(
                 f"{self.name} needs two steps of context, and the task for "
                 f"{task.vintage} has {max(start, 0)}."
             )
         horizon = len(tri.times) - start
-        seed = int(task.rng(self.name).integers(0, 2**31 - 1))
+        seed = int(task.rng(self.stream or self.name).integers(0, 2**31 - 1))
         group = layout_block(tri, self.layout, places, start)
         sample = self.sample or partial(
             chronos_sampler, checkpoint=self.checkpoint
@@ -899,13 +867,93 @@ class FoundationModel:
             }
         )[list(SAMPLE_COLUMNS)]
 
+    def quantiles(
+        self, task: ForecastTask, levels: Sequence[float]
+    ) -> pd.DataFrame | None:
+        """Return Chronos-2's own quantiles where each target is one step.
+
+        Each week of the weekly source is one of Chronos-2's steps, so its
+        quantiles are Chronos-2's native quantiles read at `levels` by
+        linear interpolation between the native levels (`native_sampler`).
+        They pass through `forecast` as one trajectory per level; every
+        step after the draws (rounding, the floors at the reported counts)
+        is monotone, so trajectory `k` is the quantile at level `k`.
+        A week of the daily source is a sum of steps, which has no native
+        quantile.
+
+        Parameters
+        ----------
+        task : ForecastTask
+            The data and weeks to forecast.
+        levels : sequence of float
+            Increasing quantile levels.
+
+        Returns
+        -------
+        pandas.DataFrame or None
+            Columns `location`, `target_end_date`, `quantile` and `value`,
+            or None for the daily source.
+        """
+        if self.source != "weekly":
+            return None
+        at = np.asarray(levels, dtype=float)
+        run = replace(self, sample=native_sampler(at, self.checkpoint))
+        out = run.forecast(replace(task, n_samples=len(at)))
+        out["quantile"] = at[out["sample"].to_numpy() - 1]
+        return out[["location", "target_end_date", "quantile", "value"]]
+
+
+def native_sampler(
+    levels: np.ndarray, checkpoint: Checkpoint | None = None
+) -> Sampler:
+    """Return a sampler giving Chronos-2's quantiles at `levels` as paths.
+
+    Parameters
+    ----------
+    levels : numpy.ndarray
+        Increasing quantile levels, `[K]`.
+    checkpoint : Checkpoint, optional
+        The fine-tuned checkpoint, the pretrained model by default.
+
+    Returns
+    -------
+    Sampler
+        Gives `[K, V, horizon]` per group: path `k` is each series and
+        step's quantile at `levels[k]`, linear between Chronos-2's native
+        levels and flat beyond them. It draws no random numbers.
+    """
+
+    def sample(
+        groups: Sequence[Series],
+        horizon: int,
+        n: int,  # noqa: ARG001
+        seed: int,  # noqa: ARG001
+    ) -> list[np.ndarray]:
+        pipeline = _chronos(checkpoint)
+        native = np.asarray(pipeline.quantiles, dtype=float)
+        quantiles, _ = pipeline.predict_quantiles(
+            [dict(g) for g in groups],
+            prediction_length=horizon,
+            quantile_levels=native.tolist(),
+        )
+        out = []
+        for q in quantiles:
+            q = np.sort(q.float().cpu().numpy(), axis=-1)  # [V, H, Q]
+            at = np.apply_along_axis(
+                lambda v: np.interp(levels, native, v), -1, q
+            )  # [V, H, K]
+            out.append(np.moveaxis(at, -1, 0))  # [K, V, H]
+        return out
+
+    return sample
+
 
 for _source in SOURCES:
     for _layout in LAYOUTS:
         _name = f"fm_chronos_{_source}_{_layout}"
         register_model(
             _name,
-            partial(_model, _name, _source, _layout),
+            partial(FoundationModel, _name, _source, _layout),
             f"Chronos-2 on the hub target's {_source} releases, {_layout} "
             "layout, the country and provinces in one block.",
             fitted=True,
@@ -913,7 +961,14 @@ for _source in SOURCES:
     register_model(
         f"fm_chronos_{_source}_ragged_ft",
         partial(_finetuned, f"fm_chronos_{_source}_ragged_ft", _source),
-        f"Chronos-2 fine-tuned on simulated outbreaks, on the hub target's "
+        "Chronos-2 fine-tuned on simulated outbreaks, on the hub target's "
         f"{_source} releases, ragged layout.",
+        fitted=True,
+    )
+    register_model(
+        f"fm_chronos_{_source}_ragged_de",
+        partial(_german, f"fm_chronos_{_source}_ragged_de", _source),
+        f"Chronos-2 fine-tuned on the German data's development half, on "
+        f"the hub target's {_source} releases, ragged layout (SI only).",
         fitted=True,
     )

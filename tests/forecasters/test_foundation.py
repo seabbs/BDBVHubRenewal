@@ -5,21 +5,14 @@ from __future__ import annotations
 import dataclasses
 import hashlib
 import importlib.util
+import tomllib
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.evaluation.backtest import (
-    BacktestConfig,
-    load_config,
-    make_tasks,
-)
-from bdbvhubrenewal.evaluation.nowcast import (
-    reporting_delay,
-    resolve_truth_delay,
-)
+from bdbvhubrenewal.evaluation.backtest import BacktestConfig, make_tasks
 from bdbvhubrenewal.forecasters import (
     NATIONAL,
     ForecastTask,
@@ -33,10 +26,10 @@ from bdbvhubrenewal.forecasters import (
 from bdbvhubrenewal.forecasters.chain import NoWalkSpread
 from bdbvhubrenewal.forecasters.foundation import (
     LAYOUTS,
+    MAX_LAG,
     SOURCES,
     chronos_sampler,
     hub_triangle,
-    lag_steps,
     quantile_draws,
 )
 from bdbvhubrenewal.forecasters.randomwalk import RandomWalk
@@ -104,81 +97,23 @@ def test_registered_as_fitted_models() -> None:
         assert "0x" not in repr(model)
 
 
-def _ragged_lags(model: FoundationModel, task: ForecastTask) -> int:
-    """Return the release lags a ragged model gives Chronos-2 per place."""
-    store: list = []
-    dataclasses.replace(model, sample=_recording(store)).forecast(task)
-    (groups, _) = store[0]
-    return len(groups[0]["future_covariates"]) // (1 + len(task.locations))
-
-
-@pytest.mark.parametrize(("source", "steps"), [("daily", 35), ("weekly", 5)])
-def test_ragged_lags_reach_the_truth_delay(
+@pytest.mark.parametrize(("source", "steps"), [("daily", 28), ("weekly", 4)])
+def test_ragged_lags_stop_below_the_truth_delay(
     source: str, steps: int, task: ForecastTask
 ) -> None:
-    # Counts reported up to D days late are still partial, so the lag
-    # series run to D days: 35 days, or 5 weeks.
+    # The lag series stop at 28 days or 4 weeks, short of the truth delay,
+    # because the zones' release histories are short: with longer lags no
+    # early lag of a zone falls in the context, and Chronos-2 reads partial
+    # counts as levels.
+    store: list = []
     model = dataclasses.replace(
-        get_model(f"fm_chronos_{source}_ragged"), truth_delay=35
+        get_model(f"fm_chronos_{source}_ragged"), sample=_recording(store)
     )
-    assert _ragged_lags(model, task) == steps
-
-
-def test_lag_steps_round_up_to_whole_steps() -> None:
-    assert lag_steps("daily", 40) == 40
-    assert lag_steps("weekly", 35) == 5
-    assert lag_steps("weekly", 40) == 6
-
-
-@pytest.mark.parametrize("name", MODELS)
-def test_the_models_take_the_backtest_truth(name: str) -> None:
-    # D comes from the config the release backtest scores on, so the two
-    # cannot drift apart.
-    config = load_config()
-    model = get_model(name)
-    assert (model.truth_delay, model.truth_level, model.truth_skip) == (
-        foundation.truth_settings()
-    )
-    assert model.truth_level == config.truth_level
-    assert model.truth_skip == config.skip_origins
-
-
-def test_auto_truth_delay_is_the_one_the_backtest_scores_on(
-    target: pd.DataFrame, tmp_path: Path
-) -> None:
-    # "auto" resolves D from the tidy data as the release backtest does,
-    # so the models' D is the scoring truth's.
-    text = Path("config/backtest.toml").read_text()
-    config = tmp_path / "backtest.toml"
-    config.write_text(text.replace("truth_level = 0.98", "truth_level = 0.9"))
-    target.to_csv(tmp_path / "target.csv", index=False)
-    delay, level, _ = foundation.truth_settings(config, data=tmp_path)
-    assert level == 0.9
-    assert delay == resolve_truth_delay(load_config(config), target)
-    # With no tidy data, D is left to be estimated at each origin.
-    empty = tmp_path / "none"
-    assert foundation.truth_settings(config, data=empty)[0] is None
-
-
-@pytest.mark.parametrize("source", SOURCES)
-def test_auto_truth_delay_is_estimated_at_the_origin(
-    source: str, task: ForecastTask
-) -> None:
-    # With truth_delay "auto", D is the reporting delay of the releases up
-    # to the origin, as the backtest estimates it from all releases.
-    model = dataclasses.replace(
-        get_model(f"fm_chronos_{source}_ragged"),
-        truth_delay=None,
-        truth_level=0.9,
-        truth_skip=(),
-    )
-    history = task.target_history
-    assert history is not None
-    real = history.loc[history["kind"] == "real"]
-    delay = reporting_delay(real, 0.9)
-    assert delay is not None
-    assert model.delay_days(task) == delay
-    assert _ragged_lags(model, task) == lag_steps(source, delay)
+    model.forecast(task)
+    groups, _ = store[0]
+    n_places = 1 + len(task.locations)
+    assert len(groups[0]["future_covariates"]) == n_places * steps
+    assert MAX_LAG[source] == steps
 
 
 def _history() -> pd.DataFrame:
@@ -201,12 +136,12 @@ def _history() -> pd.DataFrame:
 
 
 def test_weekly_triangle_puts_each_release_at_its_lag() -> None:
-    tri = hub_triangle(_history(), "weekly", ("A",), "2026-10-31", max_lag=4)
+    tri = hub_triangle(_history(), "weekly", ("A",), "2026-10-31")
     assert tri.times == ["2026-10-10", "2026-10-17", "2026-10-24", "2026-10-31"]
     assert tri.last == 2
     assert tri.final[0].tolist() == [7.0, 4.0, 2.0, 0.0]
     partial = tri.partial[0]
-    assert partial.shape == (4, 4)
+    assert partial.shape == (4, MAX_LAG["weekly"])
     # Week 10-10 was 5 at lag 1 and 7 at lag 2; 10-17 1 then 4.
     assert partial[0, 1] == 5.0
     assert partial[0, 2] == 7.0
@@ -216,7 +151,7 @@ def test_weekly_triangle_puts_each_release_at_its_lag() -> None:
     # No release saw week 10-10 at lag 0, or any week after the data.
     assert np.isnan(partial[0, 0])
     assert np.isnan(partial[3]).all()
-    assert tri.n_context == tri.last - 4 + 1
+    assert tri.n_context == tri.last - MAX_LAG["weekly"] + 1
 
 
 def test_daily_triangle_lags_are_days() -> None:
@@ -230,7 +165,7 @@ def test_daily_triangle_lags_are_days() -> None:
             "cutoff": ["2026-10-16", "2026-10-23", "2026-10-23"],
         }
     )
-    tri = hub_triangle(daily, "daily", ("A",), "2026-10-24", max_lag=28)
+    tri = hub_triangle(daily, "daily", ("A",), "2026-10-24")
     # The latest release gives the final counts and the last step.
     assert tri.times[0] == "2026-10-15"
     assert tri.times[-1] == "2026-10-24"
@@ -287,7 +222,7 @@ def test_gives_no_delay(name: str, task: ForecastTask) -> None:
 
 @pytest.mark.parametrize("source", SOURCES)
 def test_one_block_holds_every_target(source: str, task: ForecastTask) -> None:
-    lags = lag_steps(source, 35)
+    lags = MAX_LAG[source]
     # The country and the provinces are each a target.
     n_places = 1 + len(task.locations)
     seen: dict[str, tuple] = {}
@@ -296,7 +231,6 @@ def test_one_block_holds_every_target(source: str, task: ForecastTask) -> None:
         model = dataclasses.replace(
             get_model(f"fm_chronos_{source}_{layout}"),
             sample=_recording(store),
-            truth_delay=35,
         )
         model.forecast(task)
         groups, horizon = store[0]
@@ -399,6 +333,19 @@ def test_no_daily_releases_is_unavailable(task: ForecastTask) -> None:
     )
     with pytest.raises(ModelUnavailableError):
         model.forecast(bare)
+
+
+@pytest.mark.parametrize("source", SOURCES)
+def test_complete_with_a_walk_start_off_the_grid_is_unavailable(
+    source: str, task: ForecastTask, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A walk that starts before the first release step is off the grid.
+    monkeypatch.setattr(foundation, "_walk_start", lambda _: "1900-01-06")
+    model = dataclasses.replace(
+        get_model(f"fm_chronos_{source}_complete"), sample=_constant(0.0)
+    )
+    with pytest.raises(ModelUnavailableError, match="1900-01-06"):
+        model.forecast(task)
 
 
 class _FakePipeline:
@@ -546,6 +493,30 @@ def test_checksums_must_cover_the_adapter(
             line + "\n"
             for line in sums.read_text().splitlines()
             if "adapter_config" not in line
+        )
+    )
+    with pytest.raises(ValueError, match=r"adapter_config\.json"):
+        foundation.resolve_checkpoint("abc")
+
+
+def test_a_checksum_line_with_one_token_is_skipped(
+    releases: Path, write_release
+) -> None:
+    write_release(releases, "abc", _ADAPTER, "abc")
+    sums = releases / "chronos-ft-abc" / "sha256sums.txt"
+    sums.write_text("sha256sums\n" + sums.read_text())
+    assert foundation.resolve_checkpoint("abc") == _checkpoint("abc")
+
+
+def test_a_truncated_checksum_line_names_the_missing_file(
+    releases: Path, write_release
+) -> None:
+    write_release(releases, "abc", _ADAPTER, "abc")
+    sums = releases / "chronos-ft-abc" / "sha256sums.txt"
+    sums.write_text(
+        "".join(
+            (line.split()[0] if "adapter_config" in line else line) + "\n"
+            for line in sums.read_text().splitlines()
         )
     )
     with pytest.raises(ValueError, match=r"adapter_config\.json"):
@@ -864,3 +835,64 @@ def test_too_many_requests_is_retried_a_bounded_number_of_times(
     with pytest.raises(ConnectionError, match="GH_TOKEN"):
         foundation.finetuned_adapter(_checkpoint("abc"))
     assert len(calls) == len(foundation.RETRY_SECONDS) + 1
+
+
+GERMAN_MODELS = tuple(f"fm_chronos_{s}_ragged_de" for s in SOURCES)
+
+
+def test_latest_never_takes_a_german_release(
+    releases: Path, monkeypatch: pytest.MonkeyPatch, write_release
+) -> None:
+    write_release(releases, "old", _ADAPTER, "old")
+    write_release(releases, "de", _ADAPTER, "de", prefix="germany-ft")
+    listing = _listing(
+        ("chronos-ft-old", "2026-11-01T00:00:00Z", False),
+        ("germany-ft-de", "2026-11-20T00:00:00Z", False),
+    )
+    monkeypatch.setattr(foundation, "finetuned_releases", lambda: listing)
+    assert foundation.resolve_checkpoint("latest") == _checkpoint("old")
+
+
+@pytest.mark.parametrize("name", GERMAN_MODELS)
+def test_german_models_load_their_pinned_german_release(
+    name: str,
+    releases: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    write_release,
+) -> None:
+    write_release(releases, "de", _ADAPTER, "de", prefix="germany-ft")
+    monkeypatch.setattr(foundation, "germany_spec", lambda: "de")
+    # The simulation checkpoint's override does not reach them.
+    monkeypatch.setenv(foundation.FINETUNED_ENV, "other")
+    model = get_model(name)
+    ragged = get_model(name.removesuffix("_de"))
+    assert model.checkpoint.hash == "de"
+    assert model.checkpoint.tag == "germany-ft-de"
+    assert model.checkpoint.sha256 == _checkpoint("de").sha256
+    assert (model.source, model.layout) == (ragged.source, "ragged")
+    assert "'de'" in repr(model)
+    adapter = foundation.finetuned_adapter(model.checkpoint)
+    assert adapter.name == "germany-ft-de"
+    assert (adapter / "adapter_model.safetensors").read_bytes() == b"weights"
+
+
+def test_the_simulation_checkpoints_keep_their_fit_keys() -> None:
+    # A tag prefix must not enter the repr, which keys stored fits.
+    assert "prefix" not in repr(_checkpoint("abc"))
+    assert _checkpoint("abc").tag == "chronos-ft-abc"
+
+
+def test_the_german_checkpoint_is_pinned_to_a_hash_or_pending() -> None:
+    # Pending ("") until the germany-ft release is published.
+    text = Path(foundation.FINETUNED_CONFIG).read_text()
+    pin = tomllib.loads(text)["germany"]
+    assert pin == "" or (pin != "latest" and len(pin) == 12)
+
+
+def test_a_pending_german_checkpoint_names_what_is_missing(
+    tmp_path: Path,
+) -> None:
+    config = tmp_path / "finetune.toml"
+    config.write_text('hash = "latest"\ngermany = ""\n')
+    with pytest.raises(ValueError, match="germany-ft"):
+        foundation.germany_spec(config)
