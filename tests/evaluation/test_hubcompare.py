@@ -546,3 +546,51 @@ def test_comparison_colours_are_fixed_per_model() -> None:
     assert {got[t][1] for t in teams} <= set(HUB_GREYS["dark"])
     # A team keeps its grey whichever of our models are shown.
     assert comparison_colours({}, {}, teams)["teamB"] == got["teamB"]
+
+
+def _cells(frame: pd.DataFrame) -> set[tuple[str, ...]]:
+    keys = ["reference_date", "target", "location", "target_end_date"]
+    return set(frame[keys].astype(str).itertuples(index=False, name=None))
+
+
+def test_our_models_are_scored_only_on_the_hub_cells(
+    tmp_path: Path,
+    target: pd.DataFrame,
+    delays: pd.DataFrame,
+    daily: pd.DataFrame,
+) -> None:
+    # Our run forecasts every place and week of its task, and a round no
+    # hub team forecast. Only the hub teams' cells are scored, so a model
+    # that forecast all of them has the hub's n.
+    _write_hub(tmp_path)
+    ours = our_forecasts(
+        ["2026-10-24", "2026-10-31"],
+        target,
+        delays,
+        _CONFIG,
+        ["flat"],
+        daily,
+        ZONE_DATA,
+        min_horizon=-6,
+    )
+    hub = load_hub_submissions(tmp_path)
+    scores, energy, _ = score_comparison(
+        pd.concat([hub, ours]), target, delays, _CONFIG, daily, NO_ZONES
+    )
+    hub_scores = scores.loc[scores["source"] == "hub"]
+    full = scores.loc[scores["model"] == "teamA-weekly"]
+    flat = scores.loc[scores["model"] == "flat"]
+    assert _cells(scores) == _cells(hub_scores)
+    assert _cells(flat) == _cells(full)
+    assert set(flat["reference_date"]) == {"2026-10-24"}
+    assert len(flat) == len(full)
+    # The energy score sees the same cells: our model's matches teamA's.
+    joint = energy.set_index(["model", "scale"])["n_cells"]
+    for scale in set(energy["scale"]):
+        assert joint[("flat", scale)] == joint[("teamA-weekly", scale)]
+    table = summarise_comparison(scores, "flat").set_index("model")
+    assert table.loc["flat", "n"] == table.loc["teamA-weekly", "n"]
+    # Each row shows the hub's cells, so a team that missed some shows it.
+    assert (table["hub_cells"] == len(full)).all()
+    late = table.loc[table.index == "teamB-late"]
+    assert (late["n"] < late["hub_cells"]).all()

@@ -161,6 +161,58 @@
     };
   }
 
+  // A Rounds picker: a drop-down of tick boxes, All rounds and one per
+  // round in labels. initial is null (all rounds) or a list of indices.
+  // Ticking a round shows the rounds ticked; ticking All rounds, or
+  // unticking the last round, shows all. selected() is null for all, else
+  // the sorted indices; indices() is always the indices shown. onChange
+  // runs on a change.
+  function roundPicker(controls, labels, initial, onChange) {
+    var box = h("details", { class: "roundpicker" }, controls);
+    var summary = h("summary", {}, box);
+    var list = h("div", { class: "roundpicker-list" }, box);
+    var picked = initial === null ? null : initial.slice();
+    function tick(text) {
+      var l = h("label", {}, list);
+      var cb = h("input", { type: "checkbox" }, l);
+      h("span", {}, l, " " + text);
+      return cb;
+    }
+    var all = tick("All rounds");
+    var boxes = labels.map(function (r) { return tick(r); });
+    function paint() {
+      all.checked = picked === null;
+      boxes.forEach(function (cb, i) { cb.checked = picked !== null && picked.indexOf(i) >= 0; });
+      summary.textContent = "Rounds: " + (picked === null ? "all" :
+        picked.length === 1 ? labels[picked[0]] : picked.length + " of " + labels.length);
+    }
+    all.addEventListener("change", function () {
+      picked = null;
+      paint();
+      onChange();
+    });
+    boxes.forEach(function (cb) {
+      cb.addEventListener("change", function () {
+        var on = [];
+        boxes.forEach(function (b, i) { if (b.checked) on.push(i); });
+        picked = on.length ? on : null;
+        paint();
+        onChange();
+      });
+    });
+    // A click outside the drop-down closes it.
+    document.addEventListener("click", function (e) {
+      if (box.open && !box.contains(e.target)) box.open = false;
+    });
+    paint();
+    return {
+      selected: function () { return picked === null ? null : picked.slice(); },
+      indices: function () {
+        return picked !== null ? picked.slice() : labels.map(function (_, i) { return i; });
+      },
+    };
+  }
+
   // A Map tick box, ticked when on. onChange(ticked) runs on a change.
   function mapToggle(controls, on, onChange) {
     var l = h("label", { class: "map-toggle" }, controls);
@@ -173,5 +225,5 @@
 
   window.bdbvToggles = { h: h, el: el, getJSON: getJSON, legend: legend, hatch: hatch, onTheme: onTheme,
     viewSelect: viewSelect, fullscreen: fullscreen, mapToggle: mapToggle,
-    targetSelect: targetSelect, baselineSelect: baselineSelect };
+    targetSelect: targetSelect, baselineSelect: baselineSelect, roundPicker: roundPicker };
 })();
