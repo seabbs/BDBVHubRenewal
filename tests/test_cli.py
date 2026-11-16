@@ -216,7 +216,9 @@ def test_stored_samples_keep_numeric_values_without_our_forecasts(
     from bdbvhubrenewal.evaluation.scoring import energy_scores
     from bdbvhubrenewal.forecasters.renewal import DELAY_SUMMARY_FILE
 
-    args = argparse.Namespace(data=str(DATA), results=str(tmp_path))
+    args = argparse.Namespace(
+        data=str(DATA), results=str(tmp_path), store=str(tmp_path / "none")
+    )
     # With no fits loaded and no hub files there are no stored samples or
     # delays, and the empty samples are still numeric.
     empty, none = _stored(args, load_target(DATA), run_forecasts([], []))
