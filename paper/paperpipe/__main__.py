@@ -227,6 +227,7 @@ def _score_tables(a: argparse.Namespace) -> None:
         a.si_dir,
         split=_date(a.split),
         baseline=baseline_of(read_meta(a.meta)),
+        after=a.realdata_after,
     )
 
 
@@ -315,6 +316,8 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("score-tables")
     _outputs(p)
     p.add_argument("--meta", type=Path, required=True)
+    # The last BDBV release the real-data models trained on.
+    p.add_argument("--realdata-after", default=None)
     p.set_defaults(run=_score_tables)
 
     p = sub.add_parser("joint-scores")

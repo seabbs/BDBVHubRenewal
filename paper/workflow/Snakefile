@@ -61,6 +61,11 @@ STUDIES = config["studies"]
 PYTHON = shlex.quote(sys.executable)
 BDBV = shlex.quote(str(Path(sys.executable).parent / "bdbvhubrenewal"))
 GERMANY = config["germany"]
+
+# The last BDBV release the SI's real-data models trained on
+# (config/finetune.toml); their BDBV comparison scores later rounds only.
+with open("../config/finetune.toml", "rb") as f:
+    REALDATA_AFTER = tomllib.load(f)["realdata_bdbv"]["release"]
 EBOLA = config["ebola"]
 SYNTHETIC = config["synthetic"]
 TRIANGLE = f"{GERMANY['data']}/COVID-19_hospitalizations.csv"
@@ -540,7 +545,8 @@ for study in STUDIES:
             "{PYTHON} -m paperpipe score-tables {params.study} "
             "--scores {input.scores} --locations {input.locations} "
             "--meta {input.meta} "
-            "--main-dir {params.main} --si-dir {params.si} {params.split}"
+            "--main-dir {params.main} --si-dir {params.si} {params.split} "
+            f"--realdata-after {REALDATA_AFTER}"
 
 
 def grid_config(mode):

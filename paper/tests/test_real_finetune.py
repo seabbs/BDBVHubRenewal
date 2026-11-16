@@ -142,3 +142,16 @@ def test_ebola_score_tables_add_the_comparison_pending_until_rounds_score(
     table = tmp_path / "si" / "ebola-real-finetune.csv"
     assert table in written
     assert "Pending" in table.with_suffix(".md").read_text()
+
+
+def test_the_si_text_states_the_bdbv_cut_in_config() -> None:
+    import tomllib
+
+    root = Path(__file__).parents[2]
+    cut = tomllib.loads((root / "config" / "finetune.toml").read_text())[
+        "realdata_bdbv"
+    ]
+    text = (root / "paper" / "si.qmd").read_text()
+    for key in ("release", "cutoff", "truth_until"):
+        assert cut[key] in text
+    assert f"{cut['truth_delay']} days" in text
