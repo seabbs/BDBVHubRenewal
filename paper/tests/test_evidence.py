@@ -426,3 +426,11 @@ def test_joint_evidence_leaves_out_fine_tuned_rows_of_earlier_runs() -> None:
         "fm_chronos_daily_ragged",
         "randomwalknowcast",
     ]
+
+
+def test_aggregation_options_name_the_lowest_level_not_zones() -> None:
+    # Germany's lowest level is states or age groups, not zones.
+    from paperpipe.evidence import OPTIONS
+
+    assert OPTIONS["zones_summed"] == "Lowest level summed"
+    assert OPTIONS["zones_copula"] == "Lowest level summed after pairing"

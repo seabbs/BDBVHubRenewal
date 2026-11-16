@@ -266,7 +266,8 @@ def model_code(
     imports every model, but a model's forecasts do not run the others'
     code. With `cli`, the CLI module is added as a file, without
     following its imports, which reach every command. The modules in
-    `skip` are left out, with what only they import.
+    `skip` are left out, with what only they import, unless the model's
+    own module imports them itself.
 
     Parameters
     ----------
@@ -301,6 +302,8 @@ def model_code(
     # A model defined outside the package (a test's stand-in) has only the
     # shared code.
     stop = {base / s for s in skip}
+    if start is not None:
+        stop -= _imports(start, src)
     seen = set() if start is None else _closure(src, [start], stop, start)
     # Then the shared forecasting code, which reaches every model through
     # the registry: there the other models' modules are left out.

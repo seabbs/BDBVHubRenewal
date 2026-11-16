@@ -65,7 +65,13 @@ from bdbvhubrenewal.data.dates import as_date
 from bdbvhubrenewal.data.releases import cutoff_lags
 from bdbvhubrenewal.data.simulate import SCENARIO_RT_SCALE
 from bdbvhubrenewal.data.tidy import write_csv
-from bdbvhubrenewal.data.zones import hub_zones, weekly_zone_counts
+from bdbvhubrenewal.data.zones import (
+    ZoneData,
+    hub_zones,
+    is_zone,
+    load_zone_data,
+    weekly_zone_counts,
+)
 from bdbvhubrenewal.devices import host_devices
 from bdbvhubrenewal.evaluation import backtest as bt
 from bdbvhubrenewal.evaluation import store, store_archive
@@ -683,6 +689,14 @@ def _vintage(target_vintages: Sequence[str], vintage: str | None) -> str:
     return vintage
 
 
+def _zone_data(data: Path | str) -> ZoneData | None:
+    """Return the zone tables, or None if the data has none."""
+    try:
+        return load_zone_data(data)
+    except FileNotFoundError:
+        return None
+
+
 def _task(args: argparse.Namespace) -> tuple[ForecastTask, list[str]]:
     """Build the forecast task, and notes on any stream that stood in."""
     return _round_task(
@@ -692,6 +706,7 @@ def _task(args: argparse.Namespace) -> tuple[ForecastTask, list[str]]:
         bt.load_config(args.backtest_config),
         args.vintage,
         args.reference_date,
+        zones=_zone_data(args.data),
     )
 
 
@@ -702,11 +717,17 @@ def _round_task(
     config: bt.BacktestConfig,
     vintage: str | None,
     reference_date: str | None,
+    zones: ZoneData | None = None,
 ) -> tuple[ForecastTask, list[str]]:
-    """Build a round's task, moved to `reference_date` if one is given."""
+    """Build a round's task, moved to `reference_date` if one is given.
+
+    `zones` puts the health zones in the task, for models that read them.
+    """
     real = target.loc[target["kind"] == "real"]
     vintage = _vintage([str(v) for v in real["vintage"].unique()], vintage)
-    task, note = bt.vintage_task(target, delays, config, vintage, daily)
+    task, note = bt.vintage_task(
+        target, delays, config, vintage, daily, zones=zones
+    )
     notes = [note] if note else []
     if reference_date and as_date(reference_date) != task.reference_date:
         ref = as_date(reference_date)
@@ -829,6 +850,7 @@ def _backtest(args: argparse.Namespace) -> int:
         fits=fits,
         learnt=learnt,
         daily=load_daily(args.data),
+        zones=_zone_data(args.data),
     )
     _write_fits(fits, results / "backtest-fits.csv")
     _write_fits(learnt, output / DELAY_SUMMARY_FILE)
@@ -904,7 +926,7 @@ def _forecast_parts(
         learnt: list[pd.DataFrame] = []
         forecasts = bt.run_development(
             models, target, delays, config, fits=fits, learnt=learnt,
-            daily=daily,
+            daily=daily, zones=_zone_data(args.data),
         )  # fmt: skip
         write_csv(forecasts, parts / "forecasts.csv.gz")
         for name, frames in (
@@ -913,7 +935,11 @@ def _forecast_parts(
         ):
             table = pd.concat(frames, ignore_index=True) if frames else None
             write_csv(pd.DataFrame() if table is None else table, parts / name)
-        tasks = list(store.origin_tasks(target, delays, config, daily).values())
+        tasks = list(
+            store.origin_tasks(
+                target, delays, config, daily, _zone_data(args.data)
+            ).values()
+        )
         forecast_releases(tasks, target, models).write(parts)
     print(f"Forecasts of {[m.name for m in models]} written to {parts}.")
     return 0
@@ -1071,7 +1097,11 @@ def _release_backtest(
     The fitted models' final-count forecasts are taken from `forecasts`.
     """
     daily = load_daily(args.data)
-    tasks = list(store.origin_tasks(target, delays, config, daily).values())
+    tasks = list(
+        store.origin_tasks(
+            target, delays, config, daily, _zone_data(args.data)
+        ).values()
+    )
     stored, learnt = _stored(args, target, forecasts)
     delay = resolve_truth_delay(config, target)
     out = release_backtest(
@@ -1097,7 +1127,11 @@ def _release_scores(
 ) -> None:
     """Score stacked release forecasts with the stored models'."""
     daily = load_daily(args.data)
-    tasks = list(store.origin_tasks(target, delays, config, daily).values())
+    tasks = list(
+        store.origin_tasks(
+            target, delays, config, daily, _zone_data(args.data)
+        ).values()
+    )
     stored, learnt = _stored(args, target, forecasts)
     delay = resolve_truth_delay(config, target)
     out = score_releases(
@@ -1205,6 +1239,7 @@ def _stored(
             forecasts["model"].isin(fitted)
             & (forecasts["kind"] == "real")
             & forecasts["as_of"].isna()
+            & ~forecasts["location"].map(is_zone)
         ],
         _fit_store_forecasts(args),
         "vintage",
@@ -1326,8 +1361,10 @@ def _hub_forecast(
         result = Forecast(samples)
     name = get_config(config).model if config else model
     zones, zone_note = _zones(data, name, task, result.samples)
+    # A model that forecasts zones itself gives them through `zones`.
+    own_zones = result.samples["location"].map(is_zone)
     table = to_hub_table(
-        result.samples,
+        result.samples.loc[~own_zones],
         task.reference_date,
         unassigned=result.unassigned,
         zones=zones,
@@ -1350,13 +1387,19 @@ def _fit_store_archive(args: argparse.Namespace) -> int:
     daily, config = load_daily(args.data), bt.load_config(args.config)
     try:
         task, _ = _round_task(
-            target, delays, daily, config, args.origin, args.reference_date
+            target,
+            delays,
+            daily,
+            config,
+            args.origin,
+            args.reference_date,
+            zones=_zone_data(args.data),
         )
     except (KeyError, ValueError, OSError) as err:
         print(f"ERROR: {err}", file=sys.stderr)
         return 1
     stored_task = store_archive.store_task(
-        target, delays, config, daily, task.vintage
+        target, delays, config, daily, task.vintage, zones=_zone_data(args.data)
     )
 
     def hub(
@@ -1719,8 +1762,7 @@ def _compare_hub(args: argparse.Namespace) -> int:
         config,
         live,
         daily,
-        load_daily_zones(args.data),
-        codes,
+        load_zone_data(args.data),
         min_horizon=min(int(horizons.min()), config.min_horizon)
         if len(hub)
         else None,
