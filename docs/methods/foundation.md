@@ -13,7 +13,7 @@ The hub model `seabbs-chronos2_ft` is set up to submit `fm_chronos_daily_ragged_
 In brief, each model:
 
 1. lays out the hub target of every release by place, step and release lag ([Releases](#releases));
-2. puts the country and every province, each as its own hub-target series, in one block that Chronos-2 forecasts jointly ([Layouts](#layouts));
+2. puts every hub target, the country, the provinces and their health zones, each as its own series, in one block that Chronos-2 forecasts jointly ([Layouts](#layouts));
 3. draws 100 trajectories from Chronos-2's quantiles ([Trajectories](#trajectories));
 4. rounds the draws to counts no lower than the count already reported ([Counts](#counts)).
 
@@ -22,7 +22,7 @@ In brief, each model:
 The target is the hub's: confirmed cases by onset week, known and imputed onsets together.
 Two sources give it with its updates.
 
-- **Weekly** (`fm_chronos_weekly_*`): the weekly counts of each release of the target data.
+- **Weekly** (`fm_chronos_weekly_*`): the weekly counts of each release of the target data, for the country, the provinces and the zones.
   A step is an onset week.
 - **Daily** (`fm_chronos_daily_*`): the daily counts of each release, known plus imputed onsets.
   A step is an onset day.
@@ -34,17 +34,20 @@ $X_{p,t}$ is the count of step $t$ at the vintage, with cut-off step $c$.
 
 ## Layouts
 
-The country and all 26 provinces are each a series in one block, each the hub target itself, so the country is not the sum of the provinces.
+Every hub target is a series in one block: the country, all 26 provinces, and every health zone of those provinces.
+Each is the hub target itself, so the country is not the sum of the provinces and the zones are not split from them.
+Zone counts are zero before the zone releases start.
 Chronos-2 forecasts every target series in the block jointly, from one shared last step of context, $t^*$, which each layout sets differently.
-Health zones are split from the provinces as for the other fitted models ([Health zones](baselines.md#health-zones)).
 
 - **Complete** (`*_complete`): the targets $X_{p,t}$ for $t \le t^*$.
   $t^*$ is the earliest over places of the week `randomwalk` starts its walk from, the latest week 95% complete under its delay ([Baseline models](baselines.md#forecast)).
   It comes from the delay alone, so it needs no walk spread.
-- **Ragged** (`*_ragged`): the same targets, with one lag series per place and lag $d < D$, indexed by onset step as in a regression nowcast.
+- **Ragged** (`*_ragged`): the same targets, with one lag series per place with cases and lag $d < D$, indexed by onset step as in a regression nowcast.
   Lag series $d$ holds $Y_{p,t,d}$, missing where it is not yet reported, and Chronos-2 masks the missing values.
   $t^* = c - D$, the last step whose count is at lag $D$ or more, with $D = 4$ weeks or $D = 28$ days.
   The lag series run past $t^*$ as known future values, which is how recent counts reach the nowcast.
+  A place with no cases has no lag series, as they would be all zero.
+  So the daily block, where 75 of 546 places have cases, fits in memory.
 
 Chronos-2 standardises each series and takes its arcsinh, so counts go in as they are.
 
@@ -69,6 +72,13 @@ The context is every step from the first onset in the releases to $t^*$.
 
 The models forecast final counts and model no delay.
 So the release backtest scores them on the complete target only, each week against the first release the truth delay after it ends ([Evaluation](evaluation.md#real-releases)).
+
+## Health zones
+
+The models forecast the zones themselves, as series of the block.
+Each model makes its zones sum to its provinces sample by sample, with each zone keeping its published count (`forecasters.zones.reconcile_zones`, [Health zones](baselines.md#health-zones)).
+So the stored forecasts, the hub file and the scores all have the zones as submitted.
+The other fitted models split their provinces across the zones instead ([Health zones](baselines.md#health-zones)).
 
 ## Fine-tuning
 
@@ -98,7 +108,7 @@ Such fits are retried by running the Fit store workflow with `retry_failed` (`gh
 
 - The zero-shot models use Chronos-2 as pretrained. It has not seen these data or outbreaks like them.
 - The fine-tuned models have seen only simulated outbreaks, whose delays and dynamics may not match these data.
-- The daily fine-tuned model was trained on blocks of at most five provinces but forecasts all 26 in one block.
+- The fine-tuned models were trained on blocks of at most 26 provinces, five for the daily one, but forecast all 546 hub targets in one block.
 - Draws are independent across steps and places, so every weekly value of the daily models, a sum of seven daily draws, is too narrow, as are sums over weeks or places.
 
 [^chronos2]: Ansari A F et al. (2025) Chronos-2: From univariate to universal forecasting. arXiv:2510.15821. Code: <https://github.com/amazon-science/chronos-forecasting>.

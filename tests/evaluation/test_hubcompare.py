@@ -9,9 +9,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.data import load_daily_zones
 from bdbvhubrenewal.data.dates import reference_date_for_vintage
-from bdbvhubrenewal.data.zones import hub_zones
+from bdbvhubrenewal.data.zones import hub_zones, load_zone_data
 from bdbvhubrenewal.evaluation.backtest import BacktestConfig
 from bdbvhubrenewal.evaluation.hubcompare import (
     ATTRIBUTION,
@@ -35,8 +34,8 @@ ROOT = Path(__file__).resolve().parents[2]
 pytestmark = pytest.mark.usefixtures("flat_model")
 WEEKS = ["2026-09-19", "2026-09-26", "2026-10-03", "2026-10-10"]
 DATA = ROOT / "tests" / "fixtures" / "data"
-DAILY_ZONES = load_daily_zones(DATA)
 ZONES = hub_zones(DATA / "hub-config" / "tasks.json")
+ZONE_DATA = load_zone_data(DATA)
 NO_ZONES = pd.DataFrame(
     {
         **{c: pd.Series(dtype=str) for c in ("kind", "vintage", "location")},
@@ -118,8 +117,7 @@ def _ours(
         config,
         ["flat"],
         daily,
-        DAILY_ZONES,
-        ZONES,
+        ZONE_DATA,
         min_horizon=-4,
     )
 
@@ -158,7 +156,7 @@ def test_attribution_names_the_hub() -> None:
 
 def test_load_comparison_config() -> None:
     cfg = load_comparison_config(ROOT / "config" / "hub-comparison.toml")
-    assert cfg.baseline == "randomwalk"
+    assert cfg.baseline == "randomwalknowcast"
     assert cfg.submitted == "data/our-submissions"
     assert "CD" in cfg.locations
 
@@ -191,8 +189,7 @@ def test_our_forecasts_cover_the_hub_weeks(
         config,
         ["flat"],
         daily,
-        DAILY_ZONES,
-        ZONES,
+        ZONE_DATA,
         min_horizon=-5,
     )
     assert set(fc["model"]) == {"flat"}
@@ -573,8 +570,7 @@ def test_our_models_are_scored_only_on_the_hub_cells(
         _CONFIG,
         ["flat"],
         daily,
-        DAILY_ZONES,
-        ZONES,
+        ZONE_DATA,
         min_horizon=-6,
     )
     hub = load_hub_submissions(tmp_path)

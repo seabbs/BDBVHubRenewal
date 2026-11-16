@@ -312,7 +312,7 @@ CHART_METRICS: tuple[tuple[str, str, float | None, bool], ...] = (
 
 POOLS = ("national", "provinces", "zones")
 
-DEFAULT_BASELINE = "randomwalk"
+DEFAULT_BASELINE = "randomwalknowcast"
 """The baseline listed first, which the charts open with."""
 
 

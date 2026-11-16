@@ -1,5 +1,5 @@
 // Score summary: per-forecast scores (summary_rows) summarised in the
-// browser for the selected scale, round and models, as a score chart
+// browser for the selected scale, rounds and models, as a score chart
 // (scorechart.js) and a table. data-view="overall" draws one group of bars
 // for the scale; data-view="place" draws one group per place, and a place
 // picker narrows the table; data-view="horizon" draws a line per model by
@@ -40,7 +40,7 @@
     });
     var tbl = h("table", {}, container);
     var head = h("tr", {}, h("thead", {}, tbl));
-    ["Model", "n"].concat(cols.map(function (c) { return c.label; }))
+    ["Model", "Cells"].concat(cols.map(function (c) { return c.label; }))
       .concat(extra.map(function (c) { return c.label; }))
       .forEach(function (c) { h("th", {}, head, c); });
     var body = h("tbody", {}, tbl);
@@ -100,9 +100,7 @@
       if (byPlace && p.id === "national") return;
       h("option", { value: p.id }, selScale, p.label);
     });
-    var selRound = h("select", {}, h("label", {}, controls, "Round "));
-    h("option", { value: "all" }, selRound, "All rounds");
-    d.origins.forEach(function (o, i) { h("option", { value: i }, selRound, o); });
+    var rounds = T.roundPicker(controls, d.origins, null, function () { update(); });
     var selPlace = null;
     if (byPlace) selPlace = h("select", {}, h("label", {}, controls, "Table for "));
     T.fullscreen(controls, root);
@@ -110,8 +108,10 @@
     var mapOn = hasMap ? T.mapToggle(controls, false, function () { drawMap(); }) : null;
     var note = h("p", { class: "explorer-note" }, root);
     function sayBaseline() {
-      note.textContent = "Relative scores divide by " + d.models[baseline].name +
-        " on the same forecasts, and n counts those.";
+      note.textContent = "Cells counts the scores pooled for a model: one per place, " +
+        "target week, round and release that both it and " + d.models[baseline].name +
+        " forecast. Relative scores divide by " + d.models[baseline].name +
+        " on those cells. Scores over several rounds pool their cells.";
     }
     sayBaseline();
     var panes = h("div", { class: "chart-map" }, root);
@@ -168,9 +168,9 @@
     });
     function joint() {
       var pool = d.pools.map(function (p) { return p.id; }).indexOf(selScale.value);
-      var round = selRound.value === "all" ? null : +selRound.value;
+      var inRounds = summarise.inRounds(rounds.selected());
       return summariseEnergy(d, function (r) {
-        return r[3] === pool && (round === null || r[1] === round);
+        return r[3] === pool && inRounds(r);
       }, baseline);
     }
 
@@ -179,9 +179,9 @@
         .filter(function (x) { return x.p.pool === selScale.value; });
     }
     function keep(placeSet, horizon) {
-      var round = selRound.value === "all" ? null : +selRound.value;
+      var inRounds = summarise.inRounds(rounds.selected());
       return function (r, i) {
-        return placeSet[r[3]] && (round === null || r[1] === round) &&
+        return placeSet[r[3]] && inRounds(r) &&
           (horizon === undefined || d.horizons[i] === horizon);
       };
     }
@@ -230,7 +230,7 @@
       return { rows: rows, x: x };
     }
 
-    var jointCols = [{ label: "n energy", dp: 0, get: function (e) { return e.n; } }];
+    var jointCols = [{ label: "Energy forecasts", dp: 0, get: function (e) { return e.n; } }];
     energy.forEach(function (m) {
       jointCols.push({ label: m.label, dp: 3, get: function (e) { return e.mean[m.key]; } });
       jointCols.push({ label: "Relative " + lower(m.label), dp: 3, get: function (e) { return e.rel[m.key]; } });
@@ -300,7 +300,6 @@
       update();
     }
     selScale.addEventListener("change", function () { fillPlaces(); update(); });
-    selRound.addEventListener("change", update);
     if (byPlace) selPlace.addEventListener("change", update);
   }
 

@@ -1,18 +1,31 @@
 from __future__ import annotations
 
+import base64
 import dataclasses
 import json
 import shutil
+import tomllib
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import pytest
 
+from bdbvhubrenewal.data.zones import ZoneData, load_zone_data
 from bdbvhubrenewal.evaluation import store
-from bdbvhubrenewal.evaluation.backtest import BacktestConfig, real_vintages
-from bdbvhubrenewal.forecasters import ForecastTask
+from bdbvhubrenewal.evaluation.backtest import (
+    BacktestConfig,
+    make_tasks,
+    real_vintages,
+    vintage_task,
+)
+from bdbvhubrenewal.forecasters import ForecastTask, get_model
+from bdbvhubrenewal.forecasters.base import NATIONAL, SAMPLE_COLUMNS
+from bdbvhubrenewal.submission.fitting import Forecast
 
 ROOT = Path(__file__).resolve().parents[2]
+
+DATA = Path(__file__).resolve().parents[2] / "tests" / "fixtures" / "data"
 
 
 @pytest.fixture
@@ -118,9 +131,12 @@ def test_the_zone_split_does_not_key_a_fit(tmp_path: Path) -> None:
         path.write_text(path.read_text() + "\n_EDITED = 1\n")
 
     before = digests()
+    own = store.code_digest("fm_chronos_weekly_ragged", root)
     for rel in ("forecasters/zones.py", "evaluation/zones.py"):
         edit(rel)
         assert digests() == before, rel
+    # A model that forecasts the zones itself runs the split in its fit.
+    assert store.code_digest("fm_chronos_weekly_ragged", root) != own
     # Introductions are drawn in the fit, for provinces with no recent case.
     edit("forecasters/introductions.py")
     after = digests()
@@ -566,3 +582,360 @@ def test_a_model_with_no_config_stores_no_files(
 ) -> None:
     stored = store.fit(fitted_flat, tasks[sorted(tasks)[-1]], {}, "c")
     assert stored.files == {}
+
+
+@pytest.mark.usefixtures("in_root", "offline_bvd")
+def test_zone_data_keys_only_the_models_that_read_it(
+    target: pd.DataFrame,
+    delays: pd.DataFrame,
+    daily: pd.DataFrame,
+    daily_zones: pd.DataFrame,
+    health_zones: pd.DataFrame,
+    config: BacktestConfig,
+    tasks: dict[str, ForecastTask],
+) -> None:
+    zoned = store.origin_tasks(
+        target,
+        delays,
+        config,
+        daily,
+        ZoneData(health_zones, daily_zones, ("CD-IT-01", "CD-NK-01")),
+    )
+    latest = real_vintages(target)[-1]
+    assert zoned[latest].zone_history is not None
+    assert zoned[latest].zone_daily_history is not None
+    assert zoned[latest].zone_codes == ("CD-IT-01", "CD-NK-01")
+    sampler = store.samplers()
+    plain = ["renewal", "pprandomwalknowcast"]
+    assert store.current_keys(zoned, plain, sampler, "c") == (
+        store.current_keys(tasks, plain, sampler, "c")
+    )
+    reads = ["fm_chronos_weekly_complete"]
+    assert store.current_keys(zoned, reads, sampler, "c") != (
+        store.current_keys(tasks, reads, sampler, "c")
+    )
+
+
+def _block_size(groups, horizon, n, _seed):
+    """A sampler whose every draw is the number of series in the block."""
+    return [
+        np.full((n, len(g["target"]), horizon), float(len(g["target"])))
+        for g in groups
+    ]
+
+
+@pytest.mark.usefixtures("in_root")
+def test_a_live_run_forecasts_the_provinces_as_the_stored_fit(
+    target: pd.DataFrame,
+    delays: pd.DataFrame,
+    daily: pd.DataFrame,
+    config: BacktestConfig,
+) -> None:
+    zones = load_zone_data(DATA)
+    latest = real_vintages(target)[-1]
+    stored = store.origin_tasks(target, delays, config, daily, zones)[latest]
+    # The live paths: a submission (`vintage_task`) and the docs and the
+    # hub comparison (`make_tasks`).
+    real = target.loc[target["kind"] == "real"]
+    live = [
+        vintage_task(target, delays, config, latest, daily, zones=zones)[0],
+        make_tasks(
+            real.loc[real["vintage"] == latest],
+            delays,
+            config,
+            history=real,
+            daily=daily,
+            zones=zones,
+        )[0],
+    ]
+    model = dataclasses.replace(
+        get_model("fm_chronos_weekly_ragged"), sample=_block_size
+    )
+
+    def provinces(task: ForecastTask) -> pd.Series:
+        out = model.forecast(task)
+        out = out.loc[out["location"].isin(task.locations)]
+        return out.set_index(["location", "target_end_date", "sample"])["value"]
+
+    want = provinces(stored)
+    for task in live:
+        got = provinces(task)
+        pd.testing.assert_series_equal(got, want.reindex(got.index))
+    # Without the zones the block is smaller, and so are the draws.
+    plain = vintage_task(target, delays, config, latest, daily)[0]
+    got = provinces(plain)
+    assert not got.equals(want.reindex(got.index))
+
+
+class _Hub:
+    """A stand-in for `cli._hub_forecast`, recording each call."""
+
+    def __init__(self, fail: str | None = None) -> None:
+        self.calls: dict[str, dict] = {}
+        self.fail = fail
+
+    def __call__(
+        self,
+        model: str,
+        *,
+        config: str | None = None,
+        fit_dir: Path | None = None,
+        forecast: Forecast | None = None,
+    ) -> pd.DataFrame:
+        from bdbvhubrenewal.submission.hub import HUB_COLUMNS
+
+        if model == self.fail:
+            raise ValueError("no forecast")
+        files = sorted(p.name for p in fit_dir.iterdir()) if fit_dir else []
+        self.calls[model] = {
+            "config": config,
+            "files": files,
+            "forecast": forecast,
+        }
+        row = dict.fromkeys(HUB_COLUMNS, "x") | {"location": "CD"}
+        return pd.DataFrame([row])
+
+
+def _plain(fitted_flat: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Register `plain`, a model the store does not hold."""
+    from bdbvhubrenewal.forecasters import base
+
+    factory = base._REGISTRY[fitted_flat].factory
+    monkeypatch.setitem(
+        base._REGISTRY, "plain", base.ModelSpec("plain", factory, "Not fitted.")
+    )
+
+
+def test_the_archive_holds_the_fit_the_store_holds_at_record_time(
+    fitted_flat: str,
+    tasks: dict[str, ForecastTask],
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    from bdbvhubrenewal.evaluation import store_archive
+
+    _plain(fitted_flat, monkeypatch)
+    root = tmp_path / "store"
+    origin = sorted(tasks)[-1]
+    task = tasks[origin]
+    models = {fitted_flat: None, "plain": None}
+
+    def code(_: str) -> str:
+        return "c"
+
+    # Only a fit of older code: it is archived, and is not current.
+    old = store.fit(fitted_flat, task, {}, "old")
+    store.write_fit(root, old)
+    hub = _Hub()
+    table = store_archive.archive(root, task, task, models, {}, hub, code)
+    assert list(table.columns) == list(store_archive.COLUMNS)
+    got = table.set_index("model")
+    assert got.loc[fitted_flat, "key"] == old.meta["key"]
+    assert got.loc[fitted_flat, "fitted_at"] == old.meta["fitted_at"]
+    assert not got.loc[fitted_flat, "current"]
+    assert set(got["vintage"]) == {origin}
+    # A stored model that is no candidate submits its stored samples, for
+    # the round's weeks only.
+    samples = hub.calls[fitted_flat]["forecast"].samples
+    assert list(samples.columns) == list(SAMPLE_COLUMNS)
+    weeks = {str(d) for d in task.target_end_dates}
+    assert set(samples["target_end_date"].astype(str)) == weeks
+    # The model the store does not hold is forecast now and not stored.
+    assert hub.calls["plain"] == {
+        "config": None,
+        "files": [],
+        "forecast": None,
+    }
+    assert bool(got.loc["plain", "current"])
+    assert not (root / "plain").exists()
+
+    # The fit of the current code, with a fit directory, as a candidate:
+    # it forecasts from that directory with the candidate's config.
+    now = store.fit(fitted_flat, task, {}, "c")
+    body = base64.b64encode(b"{}").decode()
+    store.write_fit(root, dataclasses.replace(now, files={"fit.json": body}))
+    hub = _Hub()
+    models = {fitted_flat: "flatconfig"}
+    table = store_archive.archive(root, task, task, models, {}, hub, code)
+    assert hub.calls[fitted_flat]["config"] == "flatconfig"
+    assert hub.calls[fitted_flat]["files"] == ["fit.json"]
+    got = table.set_index("model").loc[fitted_flat]
+    assert got["key"] == now.meta["key"]
+    assert bool(got["current"])
+
+    # With nothing to archive, the table still has its columns.
+    empty = store_archive.archive(root, task, task, {}, {}, hub, code)
+    assert empty.empty
+    assert list(empty.columns) == list(store_archive.COLUMNS)
+
+
+def test_a_model_that_fails_leaves_the_others_archived(
+    fitted_flat: str,
+    tasks: dict[str, ForecastTask],
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    from bdbvhubrenewal.evaluation import store_archive
+    from bdbvhubrenewal.forecasters import base
+
+    _plain(fitted_flat, monkeypatch)
+
+    # As a fine-tuned model whose checkpoint's release cannot be read.
+    def broken() -> object:
+        raise ConnectionError("no release")
+
+    monkeypatch.setitem(
+        base._REGISTRY,
+        "broken",
+        base.ModelSpec("broken", broken, "Broken.", fitted=True),
+    )
+    monkeypatch.setitem(
+        base._REGISTRY,
+        "nocode",
+        base.ModelSpec("nocode", base._REGISTRY[fitted_flat].factory, "",
+                       fitted=True),
+    )  # fmt: skip
+    monkeypatch.setitem(base._REGISTRY, "fails", base._REGISTRY["plain"])
+    task = tasks[sorted(tasks)[-1]]
+    root = tmp_path / "store"
+    store.write_fit(root, store.fit(fitted_flat, task, {}, "c"))
+
+    def code(model: str) -> str:
+        if model == "nocode":
+            raise KeyError("nocode has no fit code")
+        return "c"
+
+    models = dict.fromkeys(
+        ["broken", "nocode", "fails", "missing", fitted_flat, "plain"]
+    )
+    monkeypatch.setitem(
+        base._REGISTRY,
+        "missing",
+        base.ModelSpec("missing", base._REGISTRY[fitted_flat].factory, "",
+                       fitted=True),
+    )  # fmt: skip
+    hub = _Hub(fail="fails")
+    table = store_archive.archive(root, task, task, models, {}, hub, code)
+    assert set(table["model"]) == {fitted_flat, "plain"}
+    err = capsys.readouterr().err
+    assert "broken not archived: ConnectionError('no release')" in err
+    assert "nocode not archived: KeyError" in err
+    assert "fails not archived: ValueError('no forecast')" in err
+    assert "missing not archived: LookupError" in err
+    # Each failure prints its traceback, so a bug can be told from a
+    # missing fit.
+    assert err.count("Traceback (most recent call last)") == 4
+    # No store task at the origin: the stored models are reported.
+    table = store_archive.archive(root, task, None, models, {}, hub, code)
+    assert set(table["model"]) == {"plain"}
+    assert f"{fitted_flat} not archived" in capsys.readouterr().err
+
+
+def test_the_candidate_models_are_the_policy_and_the_stored_models() -> None:
+    from bdbvhubrenewal.evaluation import store_archive
+
+    models = store_archive.candidate_models(ROOT / "ci/policy.toml")
+    # A random walk candidate runs its model, as `candidate.sh` does.
+    assert models["randomwalk"] is None
+    assert models["randomwalknowcast"] is None
+    # Any other candidate forecasts with its fit config.
+    policy = tomllib.loads((ROOT / "ci/policy.toml").read_text())
+    for c in policy["candidates"]:
+        if c["kind"] != "randomwalk":
+            assert models[c["model"]] == c["config"]
+    assert set(store.stored_models()) <= set(models)
+
+
+def test_stored_samples_keep_the_unassigned_national_part(
+    fitted_flat: str,
+    tasks: dict[str, ForecastTask],
+    tmp_path: Path,
+) -> None:
+    from bdbvhubrenewal.evaluation import store_archive
+
+    task = tasks[sorted(tasks)[-1]]
+    fit = store.fit(fitted_flat, task, {}, "c")
+    rows = fit.forecasts
+    # The model fits the nation on its own: 5 cases no province holds.
+    national = rows["location"] == NATIONAL
+    rows.loc[national, "value"] = rows.loc[national, "value"] + 5
+    # A nowcast of an earlier report date, which is no forecast.
+    nowcast = rows.loc[~national].assign(as_of="2026-01-01")
+    rows = pd.concat([rows, nowcast], ignore_index=True)
+    root = tmp_path / "store"
+    store.write_fit(root, dataclasses.replace(fit, forecasts=rows))
+    hub = _Hub()
+    store_archive.archive(
+        root, task, task, {fitted_flat: None}, {}, hub, lambda _: "c"
+    )
+    forecast = hub.calls[fitted_flat]["forecast"]
+    assert NATIONAL not in set(forecast.samples["location"])
+    assert not forecast.samples.duplicated(
+        ["location", "target_end_date", "sample"]
+    ).any()
+    assert (forecast.unassigned["value"] == 5).all()
+    n_weeks = len(task.target_end_dates)
+    n_samples = forecast.samples["sample"].nunique()
+    assert len(forecast.unassigned) == n_weeks * n_samples
+
+
+def test_stored_samples_missing_a_week_are_not_archived(
+    fitted_flat: str,
+    tasks: dict[str, ForecastTask],
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    from bdbvhubrenewal.evaluation import store_archive
+
+    task = tasks[sorted(tasks)[-1]]
+    fit = store.fit(fitted_flat, task, {}, "c")
+    last = max(fit.forecasts["target_end_date"])
+    rows = fit.forecasts.loc[fit.forecasts["target_end_date"] != last]
+    root = tmp_path / "store"
+    store.write_fit(root, dataclasses.replace(fit, forecasts=rows))
+    table = store_archive.archive(
+        root, task, task, {fitted_flat: None}, {}, _Hub(), lambda _: "c"
+    )
+    assert table.empty
+    assert f"{fitted_flat} not archived: ValueError" in capsys.readouterr().err
+
+
+def test_the_policy_candidates_are_the_policy_models() -> None:
+    from bdbvhubrenewal.evaluation import store_archive
+
+    policy = ROOT / "ci/policy.toml"
+    candidates = store_archive.policy_candidates(policy)
+    # Every candidate's model, and the random walk a candidate that names
+    # none runs, whatever candidates the policy holds.
+    raw = tomllib.loads(policy.read_text())["candidates"]
+    want = {c.get("model", store_archive.RANDOM_WALK) for c in raw}
+    assert set(candidates) == want
+    assert {"renewal", "randomwalk", "randomwalknowcast"} <= want
+    assert set(candidates) <= set(store_archive.candidate_models(policy))
+
+
+@pytest.mark.usefixtures("in_root", "offline_bvd")
+def test_the_archive_s_store_task_keys_zone_models_as_the_store(
+    target: pd.DataFrame,
+    delays: pd.DataFrame,
+    daily: pd.DataFrame,
+    daily_zones: pd.DataFrame,
+    health_zones: pd.DataFrame,
+    config: BacktestConfig,
+) -> None:
+    # Models that read the zones are keyed on them, so the archive's task
+    # needs them to find their stored fits.
+    from bdbvhubrenewal.evaluation import store_archive
+
+    zones = ZoneData(health_zones, daily_zones, ("CD-IT-01", "CD-NK-01"))
+    latest = real_vintages(target)[-1]
+    stored = store.origin_tasks(target, delays, config, daily, zones)[latest]
+    task = store_archive.store_task(
+        target, delays, config, daily, latest, zones=zones
+    )
+    sampler = store.samplers()
+    reads = ["fm_chronos_weekly_complete"]
+    assert store.current_keys({latest: task}, reads, sampler, "c") == (
+        store.current_keys({latest: stored}, reads, sampler, "c")
+    )

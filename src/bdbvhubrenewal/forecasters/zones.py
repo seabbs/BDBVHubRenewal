@@ -47,6 +47,24 @@ release snapshots (`zone_task`), with the zone, then province, then
 national pooling of `pooling`.
 Their zone samples are the zone model's own draws, and need not sum to
 the province samples (`zone_forecast`).
+
+A model that forecasts the zones itself, as Chronos-2 does, has its zone
+samples made to sum to its province samples (`reconcile_zones`).
+Each zone keeps what it has published, and the rest of province sample
+$Y^{(k)}(w)$ is apportioned over the zones in proportion to the zone
+model's own sample $x^{(k)}_z(w)$ above that, by largest remainders, so
+the values are whole numbers that sum exactly to $Y^{(k)}(w)$:
+
+$$
+y^{(k)}_z(w) \approx o_z(w) +
+  \big(Y^{(k)}(w) - O(w)\big)\, \frac{\max(x^{(k)}_z(w) - o_z(w), 0)}
+  {\sum_{z'} \max(x^{(k)}_{z'}(w) - o_{z'}(w), 0)}.
+$$
+
+Where no zone sample is above its published count the split uses the
+Dirichlet mean shares of the allocator above.
+If a sample is below the published total, it is apportioned by the
+published counts.
 """
 
 from __future__ import annotations
@@ -58,7 +76,7 @@ import numpy as np
 import pandas as pd
 
 from bdbvhubrenewal.data.dates import as_date
-from bdbvhubrenewal.data.zones import province_of
+from bdbvhubrenewal.data.zones import is_zone, province_of
 from bdbvhubrenewal.forecasters.base import (
     NATIONAL,
     SAMPLE_COLUMNS,
@@ -72,6 +90,7 @@ from bdbvhubrenewal.forecasters.randomwalk import RandomWalk
 __all__ = [
     "ZoneAllocator",
     "check_zone_coherence",
+    "reconcile_zones",
     "zone_forecast",
     "zone_task",
     "zones_for_model",
@@ -283,6 +302,114 @@ def _zone_frame(
     )
 
 
+def _apportion(total: np.ndarray, weights: np.ndarray) -> np.ndarray:
+    """Split whole `total` of shape `[S, W]` over the last axis of `weights`.
+
+    Largest remainders, so the parts are whole numbers that sum to `total`.
+    Rows of weights must sum to more than 0.
+    """
+    quota = total[..., None] * weights / weights.sum(axis=-1, keepdims=True)
+    base = np.floor(quota)
+    left = total - base.sum(axis=-1)
+    rank = np.argsort(np.argsort(-(quota - base), axis=-1, kind="stable"), -1)
+    out: np.ndarray = (base + (rank < left[..., None])).astype(np.int64)
+    return out
+
+
+def reconcile_zones(
+    zone_samples: pd.DataFrame,
+    province_samples: pd.DataFrame,
+    task: ForecastTask,
+    counts: pd.DataFrame,
+    zones: tuple[str, ...],
+    allocator: ZoneAllocator | None = None,
+) -> pd.DataFrame:
+    """Make zone samples sum to their province samples.
+
+    Each zone keeps its published count, and the rest of each province
+    sample is apportioned over the province's zones in proportion to the
+    zone model's own sample of the same id and week above that count. A
+    province sample below the published total is apportioned by the
+    published counts.
+
+    Parameters
+    ----------
+    zone_samples : pandas.DataFrame
+        A model's output for the zone task (`zone_task`).
+    province_samples : pandas.DataFrame
+        The same model's output for `task`. National rows and `as_of`
+        rows are ignored.
+    task : ForecastTask
+        The province task.
+    counts : pandas.DataFrame
+        Weekly zone counts at the task's vintage
+        (`weekly_zone_counts`), which set the split where all the zone
+        samples of a week are 0.
+    zones : tuple of str
+        Zone codes to cover. Each province in `province_samples` gets all
+        of its zones here.
+    allocator : ZoneAllocator, optional
+        The fallback split. Defaults to `ZoneAllocator()`.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Columns `SAMPLE_COLUMNS`, one row per zone, week and sample, with
+        zones summing to their province (`check_zone_coherence`).
+    """
+    allocator = allocator or ZoneAllocator()
+    final = _final(province_samples)
+    final = final.loc[final["location"] != NATIONAL]
+    weeks = list(task.target_end_dates)
+    ids = np.arange(1, task.n_samples + 1)
+    shape = {"index": "sample", "columns": "target_end_date", "values": "value"}
+    seen = counts.set_index(["location", "target_end_date"])["total"]
+    frames = []
+    for prov in sorted(set(final["location"])):
+        mine = tuple(z for z in zones if province_of(z) == prov)
+        if not mine:
+            continue
+        totals = (
+            final.loc[final["location"] == prov]
+            .pivot(**shape)
+            .reindex(index=ids, columns=weeks)
+            .clip(lower=0)
+            .round()
+            .to_numpy(dtype=np.int64)
+        )
+        weight = np.zeros((len(ids), len(weeks), len(mine)))
+        for i, z in enumerate(mine):
+            rows = zone_samples.loc[zone_samples["location"] == z]
+            if not rows.empty:
+                weight[:, :, i] = (
+                    rows.pivot(**shape)
+                    .reindex(index=ids, columns=weeks)
+                    .clip(lower=0)
+                    .fillna(0.0)
+                    .to_numpy()
+                )
+        published = np.array(
+            [[int(seen.get((z, w), 0)) for z in mine] for w in weeks]
+        )  # [W, Z]
+        # Each zone keeps what it has published; the rest is split by
+        # each zone's sample above its published count.
+        weight = np.clip(weight - published, 0.0, None)
+        empty = weight.sum(axis=-1) <= 0
+        weight[empty] = allocator.alpha(counts, mine, task.vintage)
+        extra = totals - published.sum(axis=-1)
+        values = published + _apportion(np.maximum(extra, 0), weight)
+        # A sample below the published total is split by the published
+        # counts.
+        short = extra < 0
+        values[short] = _apportion(
+            totals[short], np.broadcast_to(published, values.shape)[short]
+        )
+        frames.append(_zone_frame(mine, weeks, ids, values))
+    if not frames:
+        return pd.DataFrame(columns=list(SAMPLE_COLUMNS))
+    return pd.concat(frames, ignore_index=True)[list(SAMPLE_COLUMNS)]
+
+
 def zone_forecast(
     model: ForecastModel,
     task: ForecastTask,
@@ -441,9 +568,12 @@ def zones_for_model(
 ) -> pd.DataFrame:
     """Return a model's health-zone samples.
 
-    A random walk model with no fit is run on the zones (`zone_forecast`).
-    Any other model's province samples, a fitted model's included, are
-    split across the zones by `ZoneAllocator`, so no model is fitted here.
+    A model that forecasts the zones itself gives zone rows in `samples`
+    that already sum to its provinces (`reconcile_zones`), and they are
+    used as they are. A random walk model with no fit is run on the zones
+    (`zone_forecast`). Any other model's province samples, a fitted
+    model's included, are split across the zones by `ZoneAllocator`, so
+    no model is fitted here.
 
     Parameters
     ----------
@@ -452,7 +582,8 @@ def zones_for_model(
     task : ForecastTask
         The province task.
     samples : pandas.DataFrame
-        The model's province samples for `task`.
+        The model's samples for `task`: provinces, and zones if it
+        forecasts them.
     counts : pandas.DataFrame
         Weekly zone counts at the task's vintage (`weekly_zone_counts`).
     zones : tuple of str
@@ -465,6 +596,9 @@ def zones_for_model(
     pandas.DataFrame
         Zone samples with `SAMPLE_COLUMNS`.
     """
+    own = samples["location"].map(is_zone)
+    if own.any():
+        return samples.loc[own, list(SAMPLE_COLUMNS)].reset_index(drop=True)
     fitted = {s.name for s in list_models() if s.fitted}
     model = None if name is None else get_model(name)
     if isinstance(model, RandomWalk) and name not in fitted:

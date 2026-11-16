@@ -28,13 +28,13 @@ nav:
       - Baseline models: methods/baselines.md
       - Renewal models: methods/model.md
       - Foundation models: methods/foundation.md
+      - Using the fine-tuned Chronos-2: methods/finetuned-chronos.md
       - Evaluation: methods/evaluation.md
       - Implementation: methods/implementation.md
   - Results:
       - Data: data.md
       - Nowcast: nowcast.md
       - Backtest: backtest.md
-      - Simulation checks: simulation.md
       - Comparison with hub forecasts: comparison.md
       - German nowcast benchmark: germany.md
   - Paper: paper.md

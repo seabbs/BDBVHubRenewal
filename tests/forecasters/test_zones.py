@@ -22,7 +22,9 @@ from bdbvhubrenewal.forecasters import (
 )
 from bdbvhubrenewal.forecasters.zones import (
     ZoneAllocator,
+    _apportion,
     check_zone_coherence,
+    reconcile_zones,
     zone_forecast,
     zone_task,
     zones_for_model,
@@ -515,3 +517,119 @@ def test_walk_models_take_their_zone_draws_and_others_the_split(
     pd.testing.assert_frame_equal(
         got.reset_index(drop=True), want.reset_index(drop=True)
     )
+
+
+def test_reconcile_keeps_each_zones_published_count(
+    task: ForecastTask, counts: pd.DataFrame, zones: tuple[str, ...]
+) -> None:
+    prov = RandomWalk().forecast(task)
+    provinces = prov.loc[prov["location"].isin(task.locations)]
+    mine = tuple(z for z in zones if province_of(z) in task.locations)
+    # Zone samples of 0 everywhere but one zone per province, so without
+    # the floor the other zones would get nothing.
+    keep = {
+        p: next(z for z in mine if province_of(z) == p)
+        for p in task.locations
+        if any(province_of(z) == p for z in mine)
+    }
+    own = pd.concat(
+        [
+            provinces.loc[provinces["location"] == province_of(z)].assign(
+                location=z, value=float(z in keep.values())
+            )
+            for z in mine
+        ],
+        ignore_index=True,
+    )
+    got = reconcile_zones(own, provinces, task, counts, mine)
+    assert check_zone_coherence(provinces, got) == []
+    zone_keys = ["location", "target_end_date"]
+    rows = got.merge(counts, on=zone_keys, how="left").fillna({"total": 0})
+    rows["province"] = rows["location"].map(province_of)
+    published = rows.groupby(["province", "target_end_date", "sample"])[
+        "total"
+    ].transform("sum")
+    whole = rows.groupby(["province", "target_end_date", "sample"])[
+        "value"
+    ].transform("sum")
+    # Where the province sample covers what its zones have published,
+    # every zone keeps its own published count.
+    covered = whole >= published
+    assert covered.any()
+    assert (rows.loc[covered, "value"] >= rows.loc[covered, "total"]).all()
+    floored = (
+        covered
+        & (rows["total"] > 0)
+        & ~rows["location"].isin(set(keep.values()))
+    )
+    assert floored.any()
+
+
+def test_reconcile_works_draw_by_draw(
+    task: ForecastTask, counts: pd.DataFrame, zones: tuple[str, ...]
+) -> None:
+    # Reordering the draws of provinces and zones together, as a copula's
+    # pairing does, reorders the reconciled zones the same way.
+    prov = RandomWalk().forecast(task)
+    provinces = prov.loc[prov["location"].isin(task.locations)]
+    mine = tuple(z for z in zones if province_of(z) in task.locations)
+    rng = np.random.default_rng(1)
+    own = pd.concat(
+        [
+            provinces.loc[provinces["location"] == province_of(z)].assign(
+                location=z,
+                value=lambda d: rng.integers(0, 5, len(d)).astype(float),
+            )
+            for z in mine
+        ],
+        ignore_index=True,
+    )
+    order = dict(
+        zip(
+            range(1, task.n_samples + 1),
+            rng.permutation(task.n_samples) + 1,
+            strict=True,
+        )
+    )
+
+    def shuffled(rows: pd.DataFrame) -> pd.DataFrame:
+        return rows.assign(sample=rows["sample"].map(order))
+
+    keys = ["location", "target_end_date", "sample"]
+    once = reconcile_zones(own, provinces, task, counts, mine)
+    again = reconcile_zones(
+        shuffled(own), shuffled(provinces), task, counts, mine
+    )
+    pd.testing.assert_series_equal(
+        again.set_index(keys)["value"].sort_index(),
+        shuffled(once).set_index(keys)["value"].sort_index(),
+    )
+
+
+def test_apportion_sums_to_the_total_in_whole_numbers() -> None:
+    total = np.array([[7, 0], [3, 10]])
+    weight = np.array(
+        [[[1.0, 1.0, 1.0], [2.0, 1.0, 1.0]], [[0.0, 5.0, 0.0], [1.0, 3.0, 6.0]]]
+    )
+    out = _apportion(total, weight)
+    assert (out.sum(axis=-1) == total).all()
+    assert (out >= 0).all()
+    assert out[1, 0].tolist() == [0, 3, 0]
+    assert out[1, 1].tolist() == [1, 3, 6]
+    assert out[0, 1].tolist() == [0, 0, 0]
+    assert out[0, 0].tolist() == [3, 2, 2]
+
+
+def test_reconcile_falls_back_to_the_allocator_shares(
+    task: ForecastTask, counts: pd.DataFrame, zones: tuple[str, ...]
+) -> None:
+    # A province with cases, so its random walk draws are not all zero.
+    rows = task.target.loc[task.target["location"].isin(task.locations)]
+    cases = rows.groupby("location")["total"].sum()
+    first = str(cases.index[cases > 0][0])
+    sub = dataclasses.replace(task, locations=(first,))
+    prov = RandomWalk().forecast(sub)
+    empty = pd.DataFrame(columns=list(prov.columns))
+    got = reconcile_zones(empty, prov, sub, counts, zones)
+    assert check_zone_coherence(prov, got) == []
+    assert got["value"].sum() > 0

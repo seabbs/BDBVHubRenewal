@@ -41,6 +41,7 @@ from bdbvhubrenewal.data import (
 )
 from bdbvhubrenewal.data.delays import delay_summary
 from bdbvhubrenewal.forecasters.base import NATIONAL
+from bdbvhubrenewal.reporting.site import site_baseline
 
 __all__ = [
     "DASHES",
@@ -2088,7 +2089,7 @@ def plot_scores(
             f"{kind}: {s[['vintage']].nunique().iloc[0]} vintages, n {len(s)}"
         )
         ax.set_xlabel(by.capitalize())
-    axes[0].set_ylabel(_METRIC_LABELS.get(metric, metric))
+    axes[0].set_ylabel(_metric_label(metric))
     axes[0].legend()
     return fig
 
@@ -2149,7 +2150,7 @@ def plot_scenarios(
                 )
         ax.set_title(scenario.removeprefix("calibrated_"))
         ax.set_xlabel("Horizon")
-    axes[0].set_ylabel(_METRIC_LABELS.get(metric, metric))
+    axes[0].set_ylabel(_metric_label(metric))
     axes[0].legend(fontsize=7)
     return fig
 
@@ -2201,7 +2202,7 @@ def plot_scores_by_truth(
         ax.set_title(m)
         ax.set_xlabel("Truth vintage")
         ax.xaxis.set_major_formatter(mdates.DateFormatter("%d %b"))
-    axes[0].set_ylabel(_METRIC_LABELS.get(metric, metric))
+    axes[0].set_ylabel(_metric_label(metric))
     axes[0].legend(fontsize=7)
     return fig
 
@@ -2212,6 +2213,14 @@ _METRIC_LABELS: Final[dict[str, str]] = {
     "coverage_50": "50% interval coverage",
     "coverage_90": "90% interval coverage",
     "bias": "Mean bias",
-    "relative_wis": "WIS relative to randomwalk",
-    "relative_log_wis": "WIS on the log scale relative to randomwalk",
 }
+
+
+def _metric_label(metric: str) -> str:
+    """Return a metric's axis label; relative ones name the site baseline."""
+    base = site_baseline()
+    return {
+        **_METRIC_LABELS,
+        "relative_wis": f"WIS relative to {base}",
+        "relative_log_wis": f"WIS on the log scale relative to {base}",
+    }.get(metric, metric)
