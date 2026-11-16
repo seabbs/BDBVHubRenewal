@@ -624,13 +624,12 @@ EVIDENCE: Final = {
     "compare_delays": "the full and no-delay runs' scores by checkpoint",
     "compare_realdata": "the real-data and synthetic fine-tunes' scores",
 }
-"""Each evidence file and what it is, for the notes of what is pending.
+"""Each evidence input and what it waits on until set.
 
 The `compare_*` files share one layout: `set` (a held-out source, or a
 case study and level), `run`, `outbreaks` (the run's checkpoint) and
 `score` (held-out loss, or relative WIS or CRPS against
 `randomwalknowcast`)."""
-"""Each evidence input and what it waits on until set."""
 
 
 NOT_YET: Final = "(not yet available)"
