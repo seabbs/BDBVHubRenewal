@@ -303,6 +303,7 @@ The fine-tuned model is trained on simulations only, so it never sees the BDBV t
   - Weakness: we did not compare against epinowcast, or, for the synthetic study, against the data-generating model itself.
   - Strengths: both retrospective and real-time case studies, and synthetic data that are easy to tune to a setting.
   - Strength: fine-tuning ran locally on consumer hardware (a laptop), so it is accessible.
+  - Limitation: the BDBV hub's published counts include cases whose symptom-onset dates the hub imputed from the observed reporting delays [@bdbv_modeling_hub_2026], described in the Methods (Data). Error in that imputation can make the Ebola data smoother than the process that generated them, so their release histories may not match what an epinowcast-style reporting model, and our epinowcast simulations, assume. This may disadvantage models built on that structure, the fine-tuned Chronos-2 among them.
   - Weakness: fine-tuning used the laptop's GPU, which made it several times faster, and not everyone has one. On a laptop CPU alone it would still run in hours.
   - Key references: [@Kalahasti2026; @Meyer2025].
 - **Domain knowledge through synthetic data.**
