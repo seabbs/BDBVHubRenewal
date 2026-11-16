@@ -53,7 +53,7 @@ def _run_key(path: Path) -> tuple[str, int, str]:
 
 
 def archived_forecasts(archive: Path | str | None, model: str) -> pd.DataFrame:
-    """Return a model's archived forecasts of the country and provinces.
+    """Return a model's archived province forecasts.
 
     Parameters
     ----------
@@ -68,8 +68,9 @@ def archived_forecasts(archive: Path | str | None, model: str) -> pd.DataFrame:
     pandas.DataFrame
         `model`, `origin` (the release forecast from), `location`,
         `target_end_date`, `sample`, `value` and `source`, of the
-        provinces only, as a hub table's country is their sum. Of an
-        origin archived by more than one run, the latest run's.
+        provinces only. The archived country is not used, as it can
+        hold unassigned cases beyond the province sum. Of an origin
+        archived by more than one run, the latest run's.
     """
     if archive is None or not Path(archive).is_dir():
         return _empty()
