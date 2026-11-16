@@ -16,7 +16,7 @@ from finetune_chronos import (
 STRATA = [f"P{p}-A{a}" for p in range(1, 5) for a in range(1, 4)]
 
 
-def test_level_mix_is_about_a_quarter_each_for_nested_strata():
+def test_level_mix_is_about_a_fifth_each_for_nested_strata():
     rng = np.random.default_rng(0)
     mixes = []
     for _ in range(2000):
@@ -27,19 +27,20 @@ def test_level_mix_is_about_a_quarter_each_for_nested_strata():
             "leaves_national": {"national", "leaf"},
             "leaves": {"leaf"},
             "national": {"national"},
+            "single": {"leaf"},
         }[mix]
         assert levels == expected
         mixes.append(mix)
     shares = {m: mixes.count(m) / len(mixes) for m in set(mixes)}
-    assert all(abs(share - 0.25) < 0.04 for share in shares.values())
-    assert len(shares) == 4
+    assert all(abs(share - 0.2) < 0.04 for share in shares.values())
+    assert len(shares) == 5
 
 
 def test_flat_strata_have_no_intermediate_level():
     rng = np.random.default_rng(1)
     flat = [f"P{i:02d}" for i in range(1, 9)]
     mixes = {choose_places(flat, 10, rng)[1] for _ in range(200)}
-    assert mixes == {"leaves_national", "leaves", "national"}
+    assert mixes == {"leaves_national", "leaves", "national", "single"}
 
 
 def test_places_stay_within_the_budget():

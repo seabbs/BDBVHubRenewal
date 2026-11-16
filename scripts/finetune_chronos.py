@@ -61,8 +61,9 @@ up to it. With gradient checkpointing a block of 2,400 series fits the
 laptop's GPU memory (64 GB) but peaks at about 56 GB in training, so
 2,000 leaves headroom."""
 
-CUTS = 8
-"""Cut-off slots of each source (weekly, daily) per observation draw."""
+CUTS = 16
+"""Snapshots (cut-off slots) of each observation draw, spread over its
+course."""
 
 MEMORY_COST = {False: (0.0, 6.7e-5), True: (6.25e-3, 3.35e-6)}
 """GPU memory of one training step in GB per series and per series
@@ -166,11 +167,12 @@ def strata(settings: pd.Series) -> list[str]:
     return ages if len(ages) > 1 else places
 
 
-LEVEL_MIX = ("all_levels", "leaves_national", "leaves", "national")
-"""The blocks of an outbreak with strata, a quarter each: the country,
+LEVEL_MIX = ("all_levels", "leaves_national", "leaves", "national", "single")
+"""The blocks of an outbreak with strata, a fifth each: the country,
 intermediate totals and leaves (as the deployed block: national,
-provinces, zones), leaves and the country, leaves only, or the country
-only. All levels need nested strata (regions of places, or places by
+provinces, zones), leaves and the country, leaves only, the country only,
+or one leaf only. The last two are univariate series from the same
+outbreaks. All levels need nested strata (regions of places, or places by
 ages)."""
 
 REGIONS = 1.0
@@ -220,6 +222,8 @@ def choose_places(
     budget = max(budget, 2 if mix == "all_levels" else 1)
     if mix == "national":
         return (NATIONAL,), mix
+    if mix == "single":
+        return (str(rng.choice(provinces)),), mix
     if mix in ("leaves_national", "leaves"):
         k = min(budget, len(provinces))
         leaves = tuple(str(p) for p in sorted(rng.choice(provinces, k, False)))

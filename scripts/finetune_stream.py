@@ -247,6 +247,21 @@ def next_chunk(
     return None
 
 
+def snapshots(draws: list[str], rng: np.random.Generator) -> list[tuple]:
+    """Return each draw at each of `CUTS` snapshots, with a source each.
+
+    Every observation draw is cut once at each snapshot, so a simulation
+    of 10 draws gives 160 blocks; each block's source is drawn from
+    `SOURCES`.
+    """
+    sources = rng.choice(ft.SOURCES, size=(len(draws), ft.CUTS))
+    return [
+        (draw, str(sources[i, j]), j)
+        for i, draw in enumerate(draws)
+        for j in range(ft.CUTS)
+    ]
+
+
 def cut(
     sim_dir: Path,
     ids: list[str],
@@ -277,13 +292,8 @@ def cut(
         days = row.get("max_delay", np.nan)
         weeks = ft.SIM_DELAY_WEEKS if pd.isna(days) else int(days) // 7
         draws = dict(tuple(by[simulation].groupby("outbreak")))
-        candidates = [
-            (outbreak, source, j)
-            for outbreak in sorted(draws)
-            for source in ft.SOURCES
-            for j in range(ft.CUTS)
-        ]
         rng = np.random.default_rng([seed, zlib.crc32(simulation.encode())])
+        candidates = snapshots(sorted(draws), rng)
         k = min(per_simulation, len(candidates))
         chosen = [candidates[i] for i in rng.choice(len(candidates), k, False)]
         for outbreak in sorted(draws):
