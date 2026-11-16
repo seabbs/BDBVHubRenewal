@@ -148,3 +148,39 @@ def test_inference_rows_follow_chronos_order_by_name():
         i = at[name.rsplit("_lag_", 1)[0]]
         assert place[len(HIER) + k] == i
         assert parent[len(HIER) + k] == par[i]
+
+
+def test_inference_loads_the_bias_and_gives_each_group_its_rows(tmp_path):
+    from peft import LoraConfig, get_peft_model
+
+    from bdbvhubrenewal.forecasters import foundation
+
+    model = tiny_model()
+    series_bias.attach(model)
+    config = LoraConfig(
+        r=2,
+        lora_alpha=4,
+        target_modules=["self_attention.q"],
+        modules_to_save=[series_bias.BIAS_MODULE],
+    )
+    get_peft_model(model, config).save_pretrained(tmp_path / "ad")
+    loaded = foundation._load_adapter(tiny_model(), tmp_path / "ad")
+    assert series_bias.has_bias(loaded)
+    seen = []
+    real = series_bias.assigned
+
+    def spy(m, rows):
+        seen.append(None if rows is None else np.asarray(rows))
+        return real(m, rows)
+
+    names = [f"{p}_lag_0" for p in ("CD", "CD-NK")]
+    group = {
+        "target": np.ones((2, 40)),
+        "past_covariates": {n: np.ones(40) for n in names},
+        "places": ("CD", "CD-NK"),
+    }
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(series_bias, "assigned", spy)
+        rows = foundation._group_ids(loaded, group)
+    assert seen == []
+    assert rows.shape == (2, 4)
