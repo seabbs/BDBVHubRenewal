@@ -76,3 +76,42 @@ def test_batches_already_simulated_are_kept(tmp_path):
         (sims / f"settings-{seed}.csv").write_text("outbreak\n")
     jobs = dry(tmp_path, "simulate", config=["rounds=[4]"])
     assert jobs["simulate_batch"] == 42
+
+
+FT = [
+    "rounds=[1]",
+    "finetune={'prefixes': [250, 500], 'outbreaks': 500, 'rounds': [1], "
+    "'held_round': 1, 'sims_from': 'local'}",
+]
+
+
+def test_finetune_trains_one_segment_per_prefix(tmp_path):
+    jobs = dry(tmp_path, "finetune", config=FT)
+    assert jobs["train_segment"] == 2
+    # 500 outbreaks are 20 batches, one spare, and 4 held-out batches.
+    assert jobs["fetch_batch"] == 25
+    # On one machine the batches are simulated here.
+    assert jobs["simulate_batch"] == 25
+
+
+def test_finetune_takes_batches_from_releases(tmp_path):
+    config = [FT[0], FT[1].replace("'local'", "'release'")]
+    jobs = dry(tmp_path, "finetune", config=config)
+    assert jobs["fetch_batch"] == 25
+    assert "simulate_batch" not in jobs
+
+
+def test_finetune_never_publishes(tmp_path):
+    jobs = dry(tmp_path, "finetune", config=FT)
+    assert not any(k.startswith("publish") for k in jobs)
+
+
+def test_finished_checkpoints_are_kept(tmp_path):
+    n250 = tmp_path / "checkpoints" / "slots" / "train" / "n250"
+    (n250 / "finetuned-ckpt").mkdir(parents=True)
+    (n250 / "state").mkdir()
+    (n250 / "settings.json").write_text("{}")
+    (n250 / "finetuned-ckpt" / "adapter_model.safetensors").write_text("")
+    (n250 / "state" / "state.json").write_text('{"done": 250}')
+    jobs = dry(tmp_path, "finetune", config=FT)
+    assert jobs["train_segment"] == 1
