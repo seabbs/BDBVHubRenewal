@@ -839,3 +839,88 @@ def test_cli_germany_asof_writes_the_data_each_date_saw(
                  str(data), "--out", str(out)]) == 0  # fmt: skip
     asof = pd.read_csv(out / "asof.csv.gz")
     assert set(asof["origin"]) == {"2021-10-04", "2021-10-05"}
+
+
+def _stored_fit(store: Path, weeks: list[str]) -> None:
+    from bdbvhubrenewal.evaluation import store as st
+
+    rows = pd.DataFrame(
+        {
+            "model": "renewal",
+            "kind": "real",
+            "vintage": "2026-10-17",
+            "reference_date": "2026-10-24",
+            "location": "CD",
+            "target_end_date": weeks,
+            "sample": 1,
+            "value": 5.0,
+            "as_of": None,
+            "horizon": range(len(weeks)),
+        }
+    )
+    meta = {"model": "renewal", "origin": "2026-10-17", "key": "k1"}
+    st.write_fit(
+        store,
+        st.StoredFit(
+            {**meta, "commit": "c", "status": "ok"},
+            rows,
+            pd.DataFrame(),
+            pd.DataFrame(),
+        ),
+    )
+
+
+def test_stored_samples_take_every_week_of_the_stored_fit(
+    tmp_path: Path,
+) -> None:
+    # The fit store fits the whole origin task (six weeks back and the next
+    # round), and `fit-store load` cuts forecasts.csv.gz to the backtest's
+    # weeks. The release backtest runs the baselines on the whole task, so
+    # it must score the fitted models on their whole fit too.
+    import argparse
+    import json
+
+    from bdbvhubrenewal.cli import _stored
+    from bdbvhubrenewal.data import load_target
+
+    weeks = ["2026-09-12", "2026-09-19", "2026-09-26", "2026-10-03"]
+    store = tmp_path / "store"
+    _stored_fit(store, weeks)
+    results = tmp_path / "results"
+    results.mkdir()
+    (results / "fit-store.json").write_text(
+        json.dumps(
+            [
+                {
+                    "model": "renewal",
+                    "origin": "2026-10-17",
+                    "key": "k1",
+                    "used": "k1",
+                    "commit": "c",
+                    "current": True,
+                    "failed": [],
+                }
+            ]
+        )
+    )
+    trimmed = pd.DataFrame(
+        {
+            "model": "renewal",
+            "kind": "real",
+            "vintage": "2026-10-17",
+            "location": "CD",
+            "target_end_date": weeks[2:],
+            "sample": 1,
+            "value": 5.0,
+            "as_of": None,
+        }
+    )
+    args = argparse.Namespace(
+        data=str(DATA), results=str(results), store=str(store)
+    )
+    stored, _ = _stored(args, load_target(DATA), trimmed)
+    assert sorted(stored["target_end_date"].astype(str)) == weeks
+    # With no store checked out, the backtest forecasts are used.
+    args.store = str(tmp_path / "missing")
+    stored, _ = _stored(args, load_target(DATA), trimmed)
+    assert sorted(stored["target_end_date"].astype(str)) == weeks[2:]
