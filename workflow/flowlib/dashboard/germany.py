@@ -80,14 +80,21 @@ def read_file(
     checkpoint = "zero-shot" if is_ref else folder
     run_hash = None if is_ref else split_label(folder)[0]
     out: dict[tuple[str, str, str], dict[str, dict[str, Any]]] = {}
+    refs = {ref.key for ref in which.references}
+    by_model: dict[str, str | None] = {}
     with gzip.open(path, "rt") as f:
         for r in csv.DictReader(f):
-            row = {"model": r["model"], "checkpoint": checkpoint}
-            series = which.series(row)
+            model = r["model"]
+            if model not in by_model:
+                series = which.series(
+                    {"model": model, "checkpoint": checkpoint}
+                )
+                if series is not None and series not in refs:
+                    series = run_hash
+                by_model[model] = series
+            series = by_model[model]
             if series is None:
                 continue
-            if series not in {ref.key for ref in which.references}:
-                series = run_hash
             value = _num(r["value"])
             if r["quantile"] not in WIS_LEVELS or value is None:
                 continue
@@ -114,11 +121,15 @@ def build(
     run_list: Sequence[Run],
     references: Sequence[Reference],
     levels: Sequence[float] = PAGE_LEVELS,
+    files: dict | None = None,
 ) -> dict[str, Any] | None:
     """Return every location's nowcasts by series, source and origin.
 
-    Returns None if the cache folder does not exist.
+    `files` keeps each file's parsed rows by its time and size, so a
+    rebuild parses only new or changed files. Returns None if the cache
+    folder does not exist.
     """
+    files = {} if files is None else files
     cache = Path(cache)
     if not cache.is_dir():
         return None
@@ -136,9 +147,14 @@ def build(
             origin = path.name.removesuffix(".csv.gz")
             if is_ref:
                 origins.add(origin)
-            for (loc, sid, source), dates in read_file(
-                path, folder.name, which
-            ).items():
+            try:
+                st = path.stat()
+            except OSError:
+                continue
+            key = (st.st_mtime_ns, st.st_size)
+            if str(path) not in files or files[str(path)][0] != key:
+                files[str(path)] = (key, read_file(path, folder.name, which))
+            for (loc, sid, source), dates in files[str(path)][1].items():
                 times, quantiles, ws = [], [], []
                 for day in sorted(dates):
                     e = dates[day]
@@ -211,7 +227,9 @@ def cached_build(
     cache = Path(cache)
     sig = (_signature(cache) if cache.is_dir() else None, tuple(levels))
     if store.get("sig") != sig or "built" not in store:
-        store["built"] = build(cache, run_list, references, levels)
+        store["built"] = build(
+            cache, run_list, references, levels, store.setdefault("files", {})
+        )
         store["sig"] = sig
     return store["built"]
 

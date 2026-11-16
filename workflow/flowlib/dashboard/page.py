@@ -498,9 +498,7 @@ def scores_section(ctx: Context, rows: list, local: list) -> str:
 
 def germany_payload(ctx: Context, sizes: Mapping[str, int]) -> dict | None:
     """Return the German nowcast panels' data, or None if there is none."""
-    built = germany.build(
-        ctx.source.germany, ctx.runs, ctx.references, levels=ctx.style["levels"]
-    )
+    built = ctx.germany()
     if not built or not built["origins"]:
         return None
     meta = germany.meta(built, ctx.runs, ctx.references, sizes)
