@@ -923,6 +923,51 @@ def skipped_lines(skipped: list[dict]) -> list[str]:
     ]
 
 
+def check_until(until: int | None, prefixes: list[int]) -> None:
+    """Raise if `--until` is not one of the run's prefixes."""
+    if until is not None and until not in prefixes:
+        raise ValueError(f"--until {until} is not a prefix of {prefixes}")
+
+
+def keep_state(state: Path, where: Path) -> None:
+    """Copy the trainer's state to `where/state`, replacing any there."""
+    kept = where / "state"
+    shutil.rmtree(kept, ignore_errors=True)
+    shutil.copytree(state, kept)
+
+
+def save_rng(where: Path) -> None:
+    """Save torch's random state (CPU and any GPU) to `where/rng.pt`.
+
+    Chronos-2 trains with dropout, so a resumed run matches the run that
+    did not stop only with the random state it stopped at.
+    """
+    import torch
+
+    rng = {"cpu": torch.get_rng_state()}
+    if torch.cuda.is_available():
+        rng["cuda"] = torch.cuda.get_rng_state_all()
+    if torch.backends.mps.is_available():
+        rng["mps"] = torch.mps.get_rng_state()
+    torch.save(rng, where / "rng.pt")
+
+
+def load_rng(where: Path) -> bool:
+    """Restore torch's random state from `where/rng.pt`, if saved."""
+    import torch
+
+    path = where / "rng.pt"
+    if not path.exists():
+        return False
+    rng = torch.load(path, weights_only=True)
+    torch.set_rng_state(rng["cpu"])
+    if "cuda" in rng and torch.cuda.is_available():
+        torch.cuda.set_rng_state_all(rng["cuda"])
+    if "mps" in rng and torch.backends.mps.is_available():
+        torch.mps.set_rng_state(rng["mps"])
+    return True
+
+
 def save_state(where: Path, model, optimiser, state: dict) -> None:
     """Save the trainer's state: adapter, optimiser and position."""
     import torch
@@ -933,6 +978,7 @@ def save_state(where: Path, model, optimiser, state: dict) -> None:
     torch.save(get_peft_model_state_dict(model), tmp / "adapter.pt")
     torch.save(optimiser.state_dict(), tmp / "optimiser.pt")
     (tmp / "state.json").write_text(json.dumps(state))
+    save_rng(tmp)
     # The last state is kept until the new one is in place.
     old = where.with_suffix(".old")
     if where.exists():
@@ -960,6 +1006,8 @@ def load_state(where: Path, model, optimiser) -> dict | None:
     optimiser.load_state_dict(
         torch.load(where / "optimiser.pt", weights_only=True)
     )
+    # States saved before the random state was kept resume without it.
+    load_rng(where)
     return json.loads((where / "state.json").read_text())
 
 
@@ -974,14 +1022,8 @@ def code_commit() -> str:
     ).stdout.strip()
 
 
-def main() -> None:
-    """Train on the chunks as they are simulated."""
-    global CHUNK, DRAWS_PER_PASS, SUBSET_SEED
-    import torch
-    from chronos import Chronos2Pipeline
-    from chronos.chronos2.dataset import DatasetMode
-    from chronos.chronos2.model import Chronos2Model
-
+def parser() -> argparse.ArgumentParser:
+    """Return the trainer's argument parser."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("sim_dir", type=Path)
     parser.add_argument("out", type=Path)
@@ -1040,7 +1082,22 @@ def main() -> None:
     # zero-initialised vector shared by a place's count and lag series,
     # trained beside the adapter; 0 trains without them.
     parser.add_argument("--series-slots", type=int, default=0)
-    args = parser.parse_args()
+    # One segment of a continuous run: stop once prefix N is saved, with
+    # the trainer's state beside it (`n<N>/state`), which the next
+    # segment resumes from (workflow/rules/finetune.smk).
+    parser.add_argument("--until", type=int)
+    return parser
+
+
+def main() -> None:
+    """Train on the chunks as they are simulated."""
+    global CHUNK, DRAWS_PER_PASS, SUBSET_SEED
+    import torch
+    from chronos import Chronos2Pipeline
+    from chronos.chronos2.dataset import DatasetMode
+    from chronos.chronos2.model import Chronos2Model
+
+    args = parser().parse_args()
     CHUNK = args.chunk
     ft.SOURCES = tuple(args.sources)
     ft.check_sources(ft.SOURCES)
@@ -1078,6 +1135,7 @@ def main() -> None:
     held_seeds = range(args.held_out_seeds[0], args.held_out_seeds[1] + 1)
     prefixes = [p for p in args.prefixes if p < args.outbreaks]
     prefixes.append(args.outbreaks)
+    check_until(args.until, prefixes)
     k = args.blocks_per_simulation
 
     # Held-out outbreaks first.
@@ -1315,7 +1373,9 @@ def main() -> None:
         load_blocks(args.real_validation) if args.real_validation else []
     )
     t0 = time.perf_counter()
-    while done < args.outbreaks:
+    # A segment stops at its prefix, at once if a rerun's state is there.
+    stop = args.outbreaks if args.until is None else args.until
+    while done < stop:
         hi = min(done + CHUNK, args.outbreaks)
         split = {"wait_s": 0.0, "cut_s": 0.0, "train_s": 0.0, "eval_s": 0.0}
         tick = time.perf_counter()
@@ -1540,6 +1600,13 @@ def main() -> None:
         snapshot()
         report(stage="training", step=step, outbreaks=done, split=split)
     pool.shutdown(cancel_futures=True)
+    if args.until is not None and done == args.until:
+        # A segment: the next one resumes from the state kept with n<N>.
+        snapshot()
+        keep_state(state_dir, out / f"n{done}")
+        report(stage=f"stopped at n{done}", step=step, outbreaks=done)
+        log(f"stopped at n{done} (--until)")
+        return
     report(stage="finished", step=step, outbreaks=done)
     log("finished")
 
