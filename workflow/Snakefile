@@ -45,3 +45,14 @@ include: "rules/finetune.smk"
 include: "rules/publish.smk"
 include: "rules/score.smk"
 include: "rules/followups.smk"
+
+
+rule all:
+    # Everything that writes nothing outside this machine: simulate,
+    # fine-tune and score. Releases and evidence pushes are their own
+    # targets (`release`, `publish`, `land`).
+    input:
+        rules.simulate.input,
+        rules.finetune.input,
+        rules.score.input,
+    default_target: True

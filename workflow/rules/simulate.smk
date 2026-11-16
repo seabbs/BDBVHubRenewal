@@ -194,7 +194,6 @@ rule release_batch:
 rule simulate:
     input:
         expand(f"{ROUNDS_DIR}/r{{round}}/READY", round=config["rounds"]),
-    default_target: True
 
 
 rule release:

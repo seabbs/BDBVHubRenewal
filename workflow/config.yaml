@@ -50,6 +50,7 @@ finetune:
   # The real validation blocks (scripts/finetune_real_validation.py) and
   # the delay table they are cut from; null leaves them out.
   real_validation: output/finetune/real-validation.pkl
+  # `task data` writes it.
   delays: data/delays.csv.gz
   # Zero-shot Chronos-2's loss on them, which n1000 should beat.
   zero_shot_real: 4.147

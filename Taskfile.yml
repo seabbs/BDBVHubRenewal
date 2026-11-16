@@ -1,5 +1,12 @@
 version: "3"
 
+# Machine settings (config/local.env, see config/local.env.example) are
+# read here too, so CORES and MEM_MB are set once for Task and Snakemake.
+dotenv: ["config/local.env"]
+
+vars:
+  SNAKEMAKE: uv run --group paper snakemake
+
 env:
   UV_CACHE_DIR: '{{.UV_CACHE_DIR | default (printf "%s/uvcache" (env "TMPDIR" | default "/tmp"))}}'
   MPLCONFIGDIR: '{{.MPLCONFIGDIR | default (printf "%s/mplconfig" (env "TMPDIR" | default "/tmp"))}}'
@@ -206,6 +213,85 @@ tasks:
       - >-
         uv run --group docs jupytext --to ipynb --execute --run-path .
         docs/getting-started.py
+
+  # The top-level workflow (workflow/Snakefile, workflow/README.md). Each
+  # task runs a target; pass more Snakemake options after `--`, such as
+  # `task score -- -n` for a dry run or a file to build one output.
+  wf:
+    internal: true
+    cmds:
+      - >-
+        {{.SNAKEMAKE}} {{.WF_TARGET}}
+        --workflow-profile workflow/profiles/{{.PROFILE}}
+        --cores {{.CORES | default 1}}
+        --resources mem_mb={{.MEM_MB | default 16384}} gpu=1
+        {{.CLI_ARGS}}
+
+  all:
+    desc: Run every workflow target that writes nothing outside this machine (simulate, finetune, score)
+    cmds:
+      - task: wf
+        vars: {PROFILE: cpu, WF_TARGET: all}
+
+  simulate:
+    desc: Simulate the rounds in ROUNDS (for example ROUNDS=4 or ROUNDS="4 5"), with QC and manifests
+    cmds:
+      - task: wf
+        vars:
+          PROFILE: cpu
+          WF_TARGET: 'simulate --config "rounds=[{{.ROUNDS | default "" | splitList " " | join ","}}]"'
+
+  release:
+    desc: Upload each simulated batch of ROUNDS to its sims-r<N> release (writes GitHub releases)
+    cmds:
+      - task: wf
+        vars:
+          PROFILE: cpu
+          WF_TARGET: 'release --config "rounds=[{{.ROUNDS | default "" | splitList " " | join ","}}]"'
+
+  finetune:
+    desc: Train every checkpoint prefix of the fine-tuning run, one segment at a time on the GPU
+    cmds:
+      - task: wf
+        vars: {PROFILE: gpu, WF_TARGET: finetune}
+
+  publish:
+    desc: Verify and release every finished checkpoint (writes GitHub releases)
+    cmds:
+      - task: wf
+        vars: {PROFILE: gpu, WF_TARGET: publish}
+
+  score:
+    desc: Score every released checkpoint (German, BDBV, held-out), then the slots check and aggregation rows
+    cmds:
+      - task: wf
+        vars: {PROFILE: cpu, WF_TARGET: "score --forcerun release_list"}
+
+  land:
+    desc: Commit the checkpoint score tables to evidence/ and push (writes to GitHub)
+    cmds:
+      - task: wf
+        vars: {PROFILE: cpu, WF_TARGET: land}
+
+  dag:
+    desc: Draw the workflow's rule graph (TARGET=all by default) as workflow-dag.svg
+    cmds:
+      - "{{.SNAKEMAKE}} {{.TARGET | default \"all\"}} --rulegraph | dot -Tsvg > workflow-dag.svg"
+
+  progress:
+    desc: Show which workflow outputs exist and which would run (TARGET=all by default)
+    cmds:
+      - "{{.SNAKEMAKE}} {{.TARGET | default \"all\"}} --summary"
+
+  report:
+    desc: Write Snakemake's browsable HTML report of the workflow (workflow-report.html)
+    cmds:
+      - "{{.SNAKEMAKE}} {{.TARGET | default \"all\"}} --report workflow-report.html"
+
+  workflow:check:
+    desc: Test the workflow's helpers and dry-run every target, as CI does
+    cmds:
+      - uv run --group paper pytest -q tests/workflow
 
   paper:
     desc: Run the paper workflow (TARGET=development by default, or paper) and render the paper into docs/paper/, as CI does (scripts/paper.sh)
