@@ -160,3 +160,27 @@ def test_dry_run_with_real_data_runs_the_benchmark(tmp_path: Path) -> None:
     assert "rule germany_heldout" not in log
     paper = _snakemake("paper", "-n", "--configfile", base, str(cfg))
     assert "rule germany_heldout" in paper.stdout + paper.stderr
+
+
+def test_benchmark_commands_run_from_the_repository_root(
+    tmp_path: Path,
+) -> None:
+    # The models read config/ relative to the working directory
+    # (config/finetune.toml), so a local run from paper/ must cd first.
+    cfg = tmp_path / "real.yaml"
+    cfg.write_text(yaml.safe_dump({"results": str(tmp_path / "results")}))
+    base = str(PAPER / "workflow" / "config.yaml")
+    paper = _snakemake(
+        "paper", "-n", "-p", "--forceall", "--configfile", base, str(cfg)
+    )
+    assert paper.returncode == 0, paper.stderr
+    commands = [
+        line.strip().removeprefix("Shell command:").strip()
+        for line in (paper.stdout + paper.stderr).splitlines()
+        if "germany-backtest" in line
+    ]
+    assert len(commands) == 2
+    for line in commands:
+        assert line.startswith("cd .. && ")
+        assert "--config config/germany.toml" in line
+        assert "--data data/raw/germany" in line
