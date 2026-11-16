@@ -913,3 +913,29 @@ def test_the_policy_candidates_are_the_policy_models() -> None:
     assert set(candidates) == want
     assert {"renewal", "randomwalk", "randomwalknowcast"} <= want
     assert set(candidates) <= set(store_archive.candidate_models(policy))
+
+
+@pytest.mark.usefixtures("in_root", "offline_bvd")
+def test_the_archive_s_store_task_keys_zone_models_as_the_store(
+    target: pd.DataFrame,
+    delays: pd.DataFrame,
+    daily: pd.DataFrame,
+    daily_zones: pd.DataFrame,
+    health_zones: pd.DataFrame,
+    config: BacktestConfig,
+) -> None:
+    # Models that read the zones are keyed on them, so the archive's task
+    # needs them to find their stored fits.
+    from bdbvhubrenewal.evaluation import store_archive
+
+    zones = ZoneData(health_zones, daily_zones, ("CD-IT-01", "CD-NK-01"))
+    latest = real_vintages(target)[-1]
+    stored = store.origin_tasks(target, delays, config, daily, zones)[latest]
+    task = store_archive.store_task(
+        target, delays, config, daily, latest, zones=zones
+    )
+    sampler = store.samplers()
+    reads = ["fm_chronos_weekly_complete"]
+    assert store.current_keys({latest: task}, reads, sampler, "c") == (
+        store.current_keys({latest: stored}, reads, sampler, "c")
+    )
