@@ -177,3 +177,16 @@ def test_a_static_page_does_not_reload(tmp_path):
     assert "location.reload" not in page.build(ctx)
     ctx.once = False
     assert "location.reload" in page.build(ctx) or "reload" in page.build(ctx)
+
+
+def test_checkpoint_sizes_also_come_from_the_score_table(tmp_path):
+    ctx = _machine(tmp_path)
+    # A run known only by its release prefix, sized in the score table.
+    ctx.runs = list(ctx.runs) + list(runs.load_runs([], "other=other-ft-", []))
+    sizes = page.checkpoint_sizes(
+        ctx,
+        page.run_info(ctx),
+        [{"checkpoint": "other-ft-bbbbbb", "outbreaks": "500"}],
+    )
+    assert sizes["bbbbbb"] == 500
+    assert sizes["aaaaaa"] == 250

@@ -21,7 +21,7 @@ from typing import Any
 
 from . import germany, logs, scores, svg
 from .mirror import Source
-from .runs import Classifier, Reference, Run
+from .runs import Classifier, Reference, Run, split_label
 
 ASSETS = Path(__file__).with_name("page")
 MODES = ("raw", "start", "base")
@@ -555,6 +555,26 @@ def germany_section(ctx: Context, sizes: Mapping[str, int]) -> str:
     )
 
 
+def checkpoint_sizes(
+    ctx: Context, info: Mapping, score_rows: Sequence[Mapping[str, str]]
+) -> dict[str, int]:
+    """Return each checkpoint hash's size: saved settings, then scores."""
+    sizes: dict[str, int] = {}
+    for row in score_rows:
+        key = split_label(row.get("checkpoint", ""))[0]
+        try:
+            n = int(float(row.get("outbreaks") or 0))
+        except ValueError:
+            n = 0
+        if n and key:
+            sizes.setdefault(key, n)
+    for r in ctx.runs:
+        for _, s, _ in info[r.key]["ck"]:
+            if s.get("n_outbreaks"):
+                sizes[str(s.get("hash"))] = int(s["n_outbreaks"])
+    return sizes
+
+
 def mail_section(ctx: Context) -> str:
     """Return the mailbox's last matching lines, if a mailbox is set."""
     if not ctx.mailbox or not ctx.mailbox.exists():
@@ -601,13 +621,8 @@ def build(ctx: Context) -> str:
         for nm, s, _ in info[r.key]["ck"]
         if _size(nm)
     ]
-    sizes = {
-        str(s.get("hash")): s.get("n_outbreaks")
-        for r in ctx.runs
-        for _, s, _ in info[r.key]["ck"]
-        if s.get("n_outbreaks")
-    }
     score_rows = scores.read(ctx.source.scores)
+    sizes = checkpoint_sizes(ctx, info, score_rows)
     modebar = (
         '<div class="sctl modebar"><span class=mut>Loss scale</span>'
         "<button class=tog data-mode=raw>raw</button>"

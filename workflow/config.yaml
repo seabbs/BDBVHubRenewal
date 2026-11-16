@@ -96,3 +96,43 @@ agg:
   zero_shot: origin/evidence/fm-agg:results/agg/aggregation-scores.csv.gz
   existing: origin/agg-slots:results/agg/aggregation-scores.csv.gz
   mem_mb: 6144
+
+dashboard:
+  # The fine-tuning dashboard (task dashboard; workflow/flowlib/dashboard).
+  # Runs on every machine: release-prefix runs need no paths. Runs with a
+  # local folder go in DASHBOARD_RUNS in config/local.env or --run, as
+  # name=<folder|prefix>[,label=..][,colour=..][,live][,base=..]
+  # [,prefix=..][,hashes=h1+h2][,n=h1:250+h2:500].
+  runs: []
+  # Reference series, matched on rows by model and checkpoint; --ref adds
+  # or replaces one (name=MODEL_REGEX[,checkpoint=..][,label=..][,colour=..]).
+  references:
+    - key: zero
+      label: zero-shot ragged
+      colour: "#16a34a"
+      model: "^(?!randomwalknowcast$)(?!.*_complete$)"
+      checkpoint: zero-shot
+    - key: complete
+      label: complete-only
+      colour: "#9333ea"
+      model: "_complete$"
+      checkpoint: zero-shot
+    - key: rw
+      label: randomwalknowcast
+      colour: "#6b7280"
+      model: "^randomwalknowcast$"
+  # The checkpoint scores' rule shown.
+  rule: own-quantile-wis_crps-1000-common
+  # Mailbox lines shown (a regular expression).
+  mail_filter: "slots|ckpt-scores|agg-slots|slots-check|fm-finetune|sim round|workflow:"
+  # Where scores are mirrored to when REMOTE is set.
+  mirror: output/dashboard/mirror
+  # The datasets of the nowcast panels and their location groups.
+  datasets:
+    - key: germany
+      label: Germany
+      truth: latest vintage of the forecast files
+      groups:
+        - {name: national, match: "^DE$"}
+        - {name: states, match: "^DE-"}
+        - {name: ages, match: "^(\\d\\d-\\d\\d|80\\+)$"}

@@ -42,6 +42,9 @@ DEFAULTS = (
     ("PUBLISH", ""),
     ("TARGETS", "simulate finetune score"),
     ("SIMS_FROM", ""),
+    # Dashboard runs with a local folder (flowlib.dashboard.runs specs,
+    # separated by `;`).
+    ("DASHBOARD_RUNS", ""),
     # Memory and disk a job leaves free when it starts (GB).
     ("MIN_FREE_GB", "20"),
     ("MIN_DISK_GB", "16"),

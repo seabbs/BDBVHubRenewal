@@ -274,6 +274,17 @@ tasks:
       - task: wf
         vars: {PROFILE: cpu, WF_TARGET: land}
 
+  dashboard:
+    desc: Serve the fine-tuning dashboard on 127.0.0.1 (PORT=8765); runs from workflow/config.yaml, DASHBOARD_RUNS and `-- --run name=<folder|prefix>`
+    cmds:
+      - uv run --group paper python workflow/scripts/dashboard.py --port {{.PORT | default 8765}} {{.CLI_ARGS}}
+
+  dashboard:static:
+    desc: Write the dashboard once as a static page (<RUN>/reports/dashboard.html)
+    cmds:
+      - task: wf
+        vars: {PROFILE: cpu, WF_TARGET: "dashboard --forcerun dashboard"}
+
   dag:
     desc: Draw the workflow's rule graph (TARGET=all by default) as workflow-dag.svg
     cmds:

@@ -28,7 +28,8 @@ PAGE_LEVELS = (0.025, 0.25, 0.5, 0.75, 0.975)
 """The levels drawn when none are given; `paperstyle.LEVELS` in use."""
 
 REFERENCE = "reference"
-"""The cache folder of the references."""
+"""The cache folders of the references start with this (`reference`,
+`reference-complete`)."""
 
 
 def wis(q: Sequence[float], y: float) -> float:
@@ -75,8 +76,9 @@ def read_file(
     The series is the reference a row matches, else the checkpoint hash
     of a folder a run claims; rows of neither are left out.
     """
-    checkpoint = "zero-shot" if folder == REFERENCE else folder
-    run_hash = None if folder == REFERENCE else split_label(folder)[0]
+    is_ref = folder.startswith(REFERENCE)
+    checkpoint = "zero-shot" if is_ref else folder
+    run_hash = None if is_ref else split_label(folder)[0]
     out: dict[tuple[str, str, str], dict[str, dict[str, Any]]] = {}
     with gzip.open(path, "rt") as f:
         for r in csv.DictReader(f):
@@ -127,11 +129,12 @@ def build(
     truth: dict[str, dict[str, tuple[str, float]]] = {}
     origins: set[str] = set()
     for folder in sorted(p for p in cache.iterdir() if p.is_dir()):
-        if folder.name != REFERENCE and which.run_of(folder.name) is None:
+        is_ref = folder.name.startswith(REFERENCE)
+        if not is_ref and which.run_of(folder.name) is None:
             continue
         for path in sorted(folder.glob("*.csv.gz")):
             origin = path.name.removesuffix(".csv.gz")
-            if folder.name == REFERENCE:
+            if is_ref:
                 origins.add(origin)
             for (loc, sid, source), dates in read_file(
                 path, folder.name, which
@@ -177,7 +180,7 @@ def build(
         "folders": {
             split_label(p.name)[0]: p.name
             for p in cache.iterdir()
-            if p.is_dir() and p.name != REFERENCE
+            if p.is_dir() and not p.name.startswith(REFERENCE)
         },
     }
 
