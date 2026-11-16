@@ -108,6 +108,55 @@ def test_push_copies_planned_fits_and_prunes(tmp_path: Path) -> None:
     assert (got / ".commit").read_text().strip() == tip
 
 
+def test_push_prunes_models_no_longer_registered(tmp_path: Path) -> None:
+    _git("init", "-q", "--bare", "remote.git", cwd=tmp_path)
+    _git("clone", "-q", "remote.git", "clone", cwd=tmp_path)
+    clone = tmp_path / "clone"
+    for key, value in (("user.name", "t"), ("user.email", "t@t")):
+        _git("config", key, value, cwd=clone)
+    _git("commit", "-q", "--allow-empty", "-m", "init", cwd=clone)
+    _git("push", "-q", "origin", "HEAD:main", cwd=clone)
+
+    def push(new: Path, keys: list[str], plan: list[str], *extra: str) -> None:
+        (tmp_path / "keys.json").write_text(json.dumps(keys))
+        include = [
+            dict(zip(("model", "origin", "key"), p.split("/"), strict=True))
+            for p in plan
+        ]
+        (tmp_path / "plan.json").write_text(json.dumps({"include": include}))
+        out = _run(
+            "push",
+            str(new),
+            str(tmp_path / "keys.json"),
+            str(tmp_path / "plan.json"),
+            *extra,
+            cwd=clone,
+        )
+        assert out.returncode == 0, out.stderr
+
+    first = tmp_path / "first"
+    _fit(first, "m/o/a", "ok", "2026-11-01")
+    _fit(first, "n/o/b", "ok", "2026-11-01")
+    _fit(first, "gone/o/c", "ok", "2026-11-01")
+    push(first, [], ["m/o/a", "n/o/b", "gone/o/c"])
+    # A run with `--models m`: n is outside it but still registered, and
+    # `gone` has left the registry.
+    second = tmp_path / "second"
+    _fit(second, "m/o/a2", "ok", "2026-11-02")
+    (tmp_path / "registered.json").write_text(json.dumps(["m", "n"]))
+    push(
+        second,
+        ["m/o/a2"],
+        ["m/o/a2"],
+        str(tmp_path / "registered.json"),
+    )
+
+    got = tmp_path / "got"
+    assert _run("fetch", str(got), cwd=clone).returncode == 0
+    files = sorted(p.relative_to(got).as_posix() for p in got.rglob("*.gz"))
+    assert files == ["m/o/a.json.gz", "m/o/a2.json.gz", "n/o/b.json.gz"]
+
+
 def test_fetch_leaves_the_store_empty_when_there_is_no_branch(
     tmp_path: Path,
 ) -> None:

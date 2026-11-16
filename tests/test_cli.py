@@ -637,6 +637,36 @@ def test_fit_store_plan_takes_origins(tmp_path: Path) -> None:
     ]
 
 
+def test_fit_store_plan_writes_every_registered_stored_model(
+    tmp_path: Path,
+) -> None:
+    # The push prunes model folders not in this list, so it must hold
+    # every stored model, whatever `--models` picks.
+    from bdbvhubrenewal.cli import main
+    from bdbvhubrenewal.evaluation.store import stored_models
+
+    registered = tmp_path / "registered.json"
+    rc = main(
+        [
+            "fit-store",
+            "plan",
+            "--store",
+            str(tmp_path / "store"),
+            "--models",
+            "renewal",
+            "--origins",
+            "2026-11-08",
+            "--registered",
+            str(registered),
+        ]
+    )
+    assert rc == 0
+    got = json.loads(registered.read_text())
+    assert got == sorted(stored_models())
+    assert "renewalbvd" in got
+    assert "pprandomwalknowcast" not in got
+
+
 def test_fit_store_plan_refuses_an_origin_it_does_not_fit(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
