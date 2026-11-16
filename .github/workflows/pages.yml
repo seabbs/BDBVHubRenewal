@@ -19,6 +19,7 @@ on:
       - 'scripts/fit-store.sh'
       - 'scripts/results-release.sh'
       - 'scripts/score_history.py'
+      - 'scripts/check_germany_site.py'
       - 'pyproject.toml'
       - 'uv.lock'
       - '.github/workflows/pages.yml'
@@ -36,6 +37,7 @@ on:
       - 'scripts/fit-store.sh'
       - 'scripts/results-release.sh'
       - 'scripts/score_history.py'
+      - 'scripts/check_germany_site.py'
       - 'pyproject.toml'
       - 'uv.lock'
       - '.github/workflows/pages.yml'
@@ -131,6 +133,8 @@ jobs:
       matrix:
         # Longest first, so the short ones fill in behind them.
         include:
+          # fm_chronos_daily_ragged_ft has no cells: its forecasts come
+          # from the checkpoint scorer's store (`germany-ft-load` in build).
           # The German benchmark reads none of the hub data, so its cells
           # run without the inputs and are keyed on its own code and
           # config/germany.toml, which pins its data. A nowcast date takes
@@ -267,30 +271,6 @@ jobs:
             run: >-
               uv run --group chronos bdbvhubrenewal germany-backtest
               --models fm_chronos_weekly_ragged --chunk 3/4 --out output/parts/germany
-          - cell: germany-fm_chronos_daily_ragged_ft-0
-            model: fm_chronos_daily_ragged_ft
-            germany: true
-            run: >-
-              uv run --group chronos bdbvhubrenewal germany-backtest
-              --models fm_chronos_daily_ragged_ft --chunk 0/4 --out output/parts/germany
-          - cell: germany-fm_chronos_daily_ragged_ft-1
-            model: fm_chronos_daily_ragged_ft
-            germany: true
-            run: >-
-              uv run --group chronos bdbvhubrenewal germany-backtest
-              --models fm_chronos_daily_ragged_ft --chunk 1/4 --out output/parts/germany
-          - cell: germany-fm_chronos_daily_ragged_ft-2
-            model: fm_chronos_daily_ragged_ft
-            germany: true
-            run: >-
-              uv run --group chronos bdbvhubrenewal germany-backtest
-              --models fm_chronos_daily_ragged_ft --chunk 2/4 --out output/parts/germany
-          - cell: germany-fm_chronos_daily_ragged_ft-3
-            model: fm_chronos_daily_ragged_ft
-            germany: true
-            run: >-
-              uv run --group chronos bdbvhubrenewal germany-backtest
-              --models fm_chronos_daily_ragged_ft --chunk 3/4 --out output/parts/germany
           - cell: germany-fm_chronos_weekly_ragged_ft-0
             model: fm_chronos_weekly_ragged_ft
             germany: true
@@ -614,6 +594,24 @@ jobs:
             "$p"-zones-{randomwalk,randomwalknowcast} \
             "$p"-zones-pprandomwalknowcast-{0,1} \
             "$p"-scenario-{randomwalk,randomwalknowcast}-{falling,flat,rising}
+      # fm_chronos_daily_ragged_ft's German forecasts, as the checkpoint
+      # scorer made them, from the germany-ft-forecasts branch
+      # (scripts/germany_ft_store.py): the newest stored final-run
+      # (chronos-slots-*) checkpoint, else the one config/finetune.toml
+      # pins. Development dates only. `concat-results` below stacks them
+      # with the other models, so they are scored on the same cells.
+      - name: Load the stored fine-tuned German forecasts
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p output/germany-ft-store
+          if git fetch -q --depth 1 origin germany-ft-forecasts; then
+            git archive FETCH_HEAD | tar -x -C output/germany-ft-store
+          fi
+          uv run bdbvhubrenewal germany-ft-load \
+            --store output/germany-ft-store \
+            --out output/parts/parts-germany-fm_chronos_daily_ragged_ft/germany \
+            --note results/germany/ft-checkpoint.json
       - name: Compare with hub forecasts, then the docs figures and tables
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -707,6 +705,9 @@ jobs:
         run: scripts/paper.sh "$TARGET"
       - name: Build the site into _site
         run: uv run mkdocs build --strict
+      # The German page and its data name no held-out nowcast date.
+      - name: Check the German page for held-out dates
+        run: uv run python scripts/check_germany_site.py _site
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: site

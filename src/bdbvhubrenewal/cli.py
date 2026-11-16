@@ -11,6 +11,8 @@ Commands:
 - `zone-backtest`: score the random walk models run at zone level.
 - `digest`: hash what a backtest reads, to key its cached outputs.
 - `concat-results`: stack the results files of runs made apart.
+- `germany-ft-load`: write the stored German forecasts of the fine-tuned
+  model's checkpoint, for the Pages build.
 - `score`: score the forecasts of `--forecast-only` runs together.
 - `fit`: fit a configuration and write the fit directory and its
   `diagnostics.json`, for the submission CI.
@@ -376,6 +378,25 @@ def build_parser() -> argparse.ArgumentParser:
     )
     gpp.add_argument("--config", default="config/germany.toml")
     gpp.add_argument("--results", default="results/germany")
+
+    gft = sub.add_parser(
+        "germany-ft-load",
+        help="Write the stored German forecasts of the fine-tuned model's "
+        "checkpoint, for the Pages build (`evaluation.germany_store`).",
+    )
+    gft.add_argument("--config", default="config/germany.toml")
+    gft.add_argument("--finetune", default="config/finetune.toml")
+    gft.add_argument(
+        "--store", required=True, help="The germany-ft-forecasts tree."
+    )
+    gft.add_argument(
+        "--out", required=True, help="A germany-backtest results directory."
+    )
+    gft.add_argument(
+        "--note",
+        required=True,
+        help="JSON naming the checkpoint shown, which the page reads.",
+    )
 
     dig = sub.add_parser(
         "digest",
@@ -1734,6 +1755,40 @@ def _germany_paper(args: argparse.Namespace) -> int:
     return 0
 
 
+def _germany_ft_load(args: argparse.Namespace) -> int:
+    from bdbvhubrenewal.evaluation import germany as de
+    from bdbvhubrenewal.evaluation import germany_store as gs
+    from bdbvhubrenewal.forecasters import foundation
+
+    config = de.load_germany_config(args.config)
+    spec = foundation.finetuned_spec(args.finetune)
+    stored = gs.stored_tags(args.store)
+    tag, pinned = gs.choose_checkpoint(
+        stored, foundation.finetuned_releases(), spec
+    )
+    note = Path(args.note)
+    note.parent.mkdir(parents=True, exist_ok=True)
+    meta = {"tag": tag, "pinned": pinned, "model": gs.STORED_MODEL}
+    note.write_text(json.dumps(meta, indent=2) + "\n")
+    if tag is None:
+        print(
+            f"No stored German forecasts of {gs.STORED_MODEL} for {pinned} "
+            f"or any other checkpoint ({len(stored)} stored)."
+        )
+        return 0
+    forecasts = gs.load_stored(args.store, tag, config.split_date)
+    scores = de.score_germany(forecasts, config.truth_delay)
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+    write_csv(forecasts, out / "forecasts.csv.gz")
+    write_csv(scores, out / "scores.csv.gz")
+    print(
+        f"{gs.STORED_MODEL} at {tag} (pinned {pinned}): {len(scores)} "
+        f"scored nowcasts in {out}."
+    )
+    return 0
+
+
 def _data_root() -> Path:
     """Return the tidy data directory, `$BDBV_DATA_DIR` or `data/`."""
     return Path(os.environ.get("BDBV_DATA_DIR") or "data")
@@ -1822,6 +1877,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _germany_asof(args)
     if args.command == "germany-paper":
         return _germany_paper(args)
+    if args.command == "germany-ft-load":
+        return _germany_ft_load(args)
     if args.command == "digest":
         from bdbvhubrenewal.evaluation.digest import (
             backtest_digest,
