@@ -24,7 +24,9 @@
 # The data are the hub at ad1bb4af13bf (2026-11-14, the zero-shot rows'
 # data: the 2026-11-08 release, D = 35) and the German hub at the commit in
 # config/germany.toml, fetched once into AGG_ROOT.
-# Resumes from AGG_ROOT/cache/LABEL. --dry fits one BDBV origin, one German
+# Runs queue on AGG_ROOT/lock, one checkpoint after another; each adds or
+# replaces its own rows and keeps the others'. Resumes from
+# AGG_ROOT/cache/LABEL. --dry fits one BDBV origin, one German
 # date and the daily model only, into AGG_ROOT/cache/dry-LABEL, and never
 # commits or pushes. The dry origin, 2026-10-17, has every level scored.
 set -Eeuo pipefail
@@ -64,10 +66,13 @@ say() {
 }
 trap 'say "FAILED at line $LINENO (exit $?); log $logfile"' ERR
 
-exec 8> "$cache/.lock"
+# One run at a time over every checkpoint: later ones queue here, so
+# each checkpoint the slots run publishes runs in turn.
+mkdir -p "$root"
+exec 8> "$root/lock"
 if ! flock -n 8; then
-  echo "another run of $run holds $cache/.lock" >&2
-  exit 1
+  say "queued behind another run (lock $root/lock)"
+  flock 8
 fi
 
 read -r env tag < <("$py" -c "
@@ -213,4 +218,10 @@ if [ "$remote" != "$sha" ]; then
   say "FAILED: pushed $sha but origin/agg-slots is $remote"
   exit 1
 fi
-say "finished: commit $sha on agg-slots; results/agg/aggregation-scores.csv.gz (evidence key aggregation_scores; keep rows with checkpoint in final_checkpoints, here checkpoint == '$label', plus checkpoint == 'zero-shot'); aggregation_cost unchanged at results/agg/aggregation-cost.csv"
+rule="every arm with slots_rule none (no slots)"
+case $label in
+  slots-*)
+    rule="slots_rule cased on BDBV joint, bottom (zones_summed, zones_copula) and level's zones: those blocks hold over 128 places, so only places with cases have slots, outside the slots' training range (training blocks held about 95 targets); slots_rule all elsewhere"
+    ;;
+esac
+say "finished: commit $sha on agg-slots; results/agg/aggregation-scores.csv.gz (evidence key aggregation_scores; keep rows with checkpoint in final_checkpoints, here checkpoint == '$label', plus checkpoint == 'zero-shot'; other checkpoints' rows are kept); $rule; aggregation_cost unchanged at results/agg/aggregation-cost.csv (no checkpoint column; keep dropping its _ft rows)"

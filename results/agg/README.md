@@ -31,6 +31,14 @@ The pairing used fm-copula-rolling's copula at c83d85461, before its per-cell se
 
 `aggregation-scores.csv.gz` has a `checkpoint` column: `zero-shot` for the zero-shot models and randomwalknowcast, and a checkpoint's label (`slots-<hash>`, or a plain settings hash) for `fm_chronos_<source>_ragged_ft`.
 The zero-shot and reference rows are those above, unchanged.
+A `slots_rule` column says how a checkpoint with per-series slots gave them out.
+`none`: no slots (zero-shot, the reference, or a checkpoint without slots).
+`all`: every place of each block has a slot, as in forecasting; Germany's blocks and BDBV's country and province blocks of `level`.
+`cased`: a block held more places than the 128 slots, so only places with cases in its context have slots and the others none (slot -1, a zero vector, as base Chronos-2; `groupings.cased_group_slots`).
+That is BDBV's `joint` (546 places), `zones_summed` and `zones_copula` (519 zones), and the zone rows of `level`.
+These blocks are outside the slots' training range: training blocks held about 95 targets.
+Slots follow Chronos-2's row order (`foundation._group_slots`, from slots-loader-roworder).
+Runs queue, one checkpoint at a time; each adds or replaces its own rows and keeps every other checkpoint's.
 The round-1 and n1000 fine-tuned rows are dropped, as their checkpoints are not the paper's.
 `aggregation-cost.csv` is unchanged: a fit's cost depends on the block sizes and Chronos-2's size, which the LoRA adapter does not change (the round-1 rows above match the zero-shot ones).
 `scripts/agg/run_finetuned.sh LABEL` fits, scores and adds one checkpoint's rows, on the same data as the zero-shot rows: the hub at ad1bb4af13bf (the 2026-11-08 release, D = 35), BDBV origins 2026-10-09 to 2026-11-01, the German development half and its 40-day truth.
