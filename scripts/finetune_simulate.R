@@ -27,6 +27,8 @@
 #   weekdays;
 # - reference day-of-week effect on expected counts: no or yes;
 # - observation: "negbin" (NB2), "negbin1d" (NB1) or "poisson";
+# - strata linked through the factors above, or independent: separate
+#   single-stratum simulations with their own cells, combined as strata;
 # - observation across strata: shared, dispersion per stratum, or family
 #   and dispersion per stratum, drawn in R from epinowcast's expected
 #   reports (`observe`);
@@ -131,7 +133,12 @@ factors <- list(
   # Observation noise across strata: the outbreak's family and dispersion
   # everywhere; dispersion drawn per stratum around the outbreak's; or a
   # family and dispersion per stratum (`observe`).
-  obs_strata = c("shared", "dispersion", "families")
+  obs_strata = c("shared", "dispersion", "families"),
+  # Linked strata share an epidemic model (trajectory, delays and noise
+  # tied through the factors above); independent strata are separate
+  # single-stratum simulations, each with its own cell, combined as strata
+  # (`simulate_independent`), at most `max_independent` of them.
+  strata_link = c("linked", "independent")
 )
 
 # Simulations per balanced block: a multiple of every factor's levels.
@@ -386,6 +393,16 @@ draw_design <- function(g) {
       ages[sample.int(length(ages), 1)]
     }
   )
+  if (cell$strata_link == "independent") {
+    # Each independent stratum is a simulation of its own, so at most
+    # `max_independent` strata.
+    if (cell$strata == "places") n_places <- min(n_places, max_independent)
+    if (cell$strata == "ages") n_ages <- min(n_ages, max_independent)
+    if (cell$strata == "places_ages") {
+      n_places <- 2L
+      n_ages <- min(n_ages, max_independent %/% 2L)
+    }
+  }
   days <- c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday")
   c(
     list(grid = grid_name, cell_index = g %% block, cell_block = g %/% block),
@@ -894,6 +911,7 @@ simulate_outbreak <- function(design, v) {
 # Simulations outside `min_size` to `max_size` cases (the draws' mean) are
 # drawn again; many strata allow larger outbreaks.
 min_size <- 10
+max_independent <- 8L
 max_size <- function(design) {
   300000 * max(1, design$n_places * design$n_ages / 26)
 }
@@ -916,6 +934,10 @@ build_stack <- function(lib) {
 # runs and its size per draw is in range. Returns the outbreak (or NULL)
 # and a failure row per failed try.
 simulate_cell <- function(design, id = NA_character_) {
+  if (design$strata_link == "independent" &&
+      design$n_places * design$n_ages > 1) {
+    return(simulate_independent(design, id))
+  }
   failures <- list()
   for (try in 1:5) {
     v <- draw_values(design)
@@ -940,6 +962,70 @@ simulate_cell <- function(design, id = NA_character_) {
     )
   }
   list(out = NULL, failures = failures)
+}
+
+# Independent strata: each stratum is a single-stratum simulation with a
+# cell of its own (drawn from the grid at a random index), run through
+# `simulate_cell`, and the strata are combined into one outbreak. A
+# stratum that gives no outbreak in five tries is drawn again from a new
+# cell, up to five cells; then the outbreak fails. The outbreak's values
+# are the first stratum's, with each stratum's cell index, trajectory,
+# delay family, observation family and size as ";" text.
+simulate_independent <- function(design, id = NA_character_) {
+  place_ids <- sprintf("P%02d", seq_len(design$n_places))
+  age_ids <- sprintf("A%d", seq_len(design$n_ages))
+  labels <- if (design$n_places > 1 && design$n_ages > 1) {
+    as.vector(outer(place_ids, age_ids, paste, sep = "-"))
+  } else if (design$n_ages > 1) {
+    age_ids
+  } else {
+    place_ids
+  }
+  failures <- list()
+  parts <- list()
+  record <- list()
+  for (s in seq_along(labels)) {
+    run <- NULL
+    for (attempt in 1:5) {
+      g <- sample.int(1e6, 1)
+      one <- draw_design(g)
+      one$strata <- "single"
+      one$n_places <- 1L
+      one$n_ages <- 1L
+      one$spread <- "even"
+      one$seeding <- "start"
+      one$mixing <- "none"
+      one$strata_link <- "linked"
+      res <- simulate_cell(one, paste(id, labels[s], sep = "/"))
+      failures <- c(failures, res$failures)
+      if (!is.null(res$out)) {
+        run <- res$out
+        break
+      }
+    }
+    if (is.null(run)) return(list(out = NULL, failures = failures))
+    run$counts[, location := labels[s]]
+    parts[[s]] <- run$counts
+    record[[s]] <- list(
+      cell = g, trajectory = one$trajectory,
+      delay_family = one$delay_family, observation = one$observation,
+      size = sum(run$counts$count) / draws, max_delay = run$values$max_delay
+    )
+    if (s == 1L) values <- run$values
+  }
+  join <- function(k) paste(vapply(record, function(r) {
+    as.character(r[[k]])
+  }, ""), collapse = ";")
+  values$stratum_cells <- join("cell")
+  values$stratum_trajectory <- join("trajectory")
+  values$stratum_delay_family <- join("delay_family")
+  values$stratum_observation <- join("observation")
+  values$stratum_size <- join("size")
+  values$max_delay <- max(vapply(record, function(r) r$max_delay, 1))
+  list(
+    out = list(values = values, counts = rbindlist(parts, use.names = TRUE)),
+    failures = failures
+  )
 }
 
 if (sys.nframe() == 0L) {
