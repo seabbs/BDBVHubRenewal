@@ -1036,3 +1036,40 @@ def test_stored_samples_take_every_week_of_the_stored_fit(
     args.store = str(tmp_path / "missing")
     stored, _ = _stored(args, load_target(DATA), trimmed)
     assert sorted(stored["target_end_date"].astype(str)) == weeks[2:]
+
+
+@pytest.mark.usefixtures("in_root")
+def test_a_paired_models_own_zones_are_paired_with_its_provinces(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # randomwalknowcast forecasts zones from their own data, so the copula
+    # must see them, and the hub file must hold the paired zone draws.
+    from bdbvhubrenewal import cli
+
+    seen: dict[str, pd.DataFrame] = {}
+    real = cli._pair
+
+    def recording(name, task, result, **kw):
+        seen["in"] = result.samples
+        out, record = real(name, task, result, **kw)
+        seen["out"] = out.samples
+        return out, record
+
+    monkeypatch.setattr(cli, "_pair", recording)
+    out = tmp_path / "sub"
+    assert main(["nowcast", "--model", "randomwalknowcast", "--out",
+                 str(out)]) == 0  # fmt: skip
+    zone_in = seen["in"].loc[seen["in"]["location"].str.count("-") == 2]
+    assert not zone_in.empty
+    (path,) = out.glob("*.csv")
+    table = pd.read_csv(path)
+    zone = table.loc[table["location"].str.count("-") == 2]
+    paired = seen["out"].loc[seen["out"]["location"].str.count("-") == 2]
+    keys = ["location", "target_end_date", "output_type_id"]
+    got = zone.set_index(keys)["value"].sort_index()
+    want = (
+        paired.rename(columns={"sample": "output_type_id"})
+        .set_index(keys)["value"]
+        .reindex(got.index)
+    )
+    assert (got == want.round().clip(lower=0)).all()
