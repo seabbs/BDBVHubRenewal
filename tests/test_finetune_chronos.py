@@ -285,6 +285,22 @@ def test_publish_is_done_when_the_release_matches(tmp_path):
     assert "upload" not in [c[2] for c in gh.calls]
 
 
+def test_publish_releases_slots_checkpoints_apart(tmp_path):
+    from finetune_stream import publish
+
+    where = _checkpoint(tmp_path)
+    commands = []
+    gh = _Gh()
+
+    def run(command, **kwargs):
+        commands.append(command)
+        return gh(command, **kwargs)
+
+    publish(where, "slots-abc", run=run)
+    create = next(c for c in commands if c[2] == "create")
+    assert create[3] == "chronos-slots-abc"
+
+
 def test_publish_uploads_only_missing_assets(tmp_path):
     from finetune_stream import publish
 
