@@ -48,6 +48,8 @@ from bdbvhubrenewal.forecasters import slots
 from bdbvhubrenewal.forecasters.foundation import (
     CHRONOS_MODEL,
     CHRONOS_REVISION,
+    SLOTS_PREFIX,
+    release_tag,
 )
 
 sys.path.insert(0, str(Path(__file__).parent))
@@ -139,6 +141,10 @@ LORA_TARGETS = (
     "output_patch_embedding.output_layer",
 )
 """Modules the LoRA adapter trains."""
+
+
+SLOTS_CODE = "src/bdbvhubrenewal/forecasters/slots.py"
+"""The per-series slots' code, hashed into a slots checkpoint's settings."""
 
 
 def lora_config(n_slots: int):
@@ -710,7 +716,7 @@ def publish(where: Path, key: str, run=subprocess.run) -> None:
     one missing assets gets them uploaded, and one whose sums differ is an
     error.
     """
-    tag = f"chronos-ft-{key}"
+    tag = release_tag(key)
     files = [
         where / "finetuned-ckpt" / "adapter_config.json",
         where / "finetuned-ckpt" / "adapter_model.safetensors",
@@ -1074,6 +1080,12 @@ def main() -> None:
         "code_sha256": {
             **{p: ft._sha256(Path(p)) for p in ft.CODE},
             "scripts/finetune_stream.py": ft._sha256(Path(__file__)),
+            # The slots' code shapes a slots checkpoint, so it is hashed.
+            **(
+                {SLOTS_CODE: ft._sha256(Path(SLOTS_CODE))}
+                if args.series_slots
+                else {}
+            ),
             **{
                 f"foundation.{f.__name__}": hashlib.sha256(
                     inspect.getsource(f).encode()
@@ -1434,8 +1446,10 @@ def main() -> None:
             if mismatch:
                 log(f"n{done} not published: {'; '.join(mismatch)}")
             elif args.publish:
-                publish(where, key)
-                report(last_release=f"chronos-ft-{key}")
+                # Slots checkpoints are released apart (`release_tag`).
+                spec = f"{SLOTS_PREFIX}{key}" if args.series_slots else key
+                publish(where, spec)
+                report(last_release=release_tag(spec))
             # From `stop_from` on, go on only while the last doubling cut
             # held-out loss by more than `min_gain`.
             losses.append(settings["held_out_loss"])

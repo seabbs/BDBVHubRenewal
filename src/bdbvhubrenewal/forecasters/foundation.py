@@ -59,6 +59,7 @@ __all__ = [
     "FINETUNED_URL",
     "LAYOUTS",
     "MAX_LAG",
+    "SLOTS_PREFIX",
     "SOURCES",
     "SUMS_FILE",
     "Checkpoint",
@@ -72,6 +73,7 @@ __all__ = [
     "hub_triangle",
     "layout_block",
     "quantile_draws",
+    "release_tag",
     "resolve_checkpoint",
 ]
 
@@ -123,6 +125,23 @@ ADAPTER_FILES: Final = ("adapter_config.json", "adapter_model.safetensors")
 FINETUNED_CACHE: Final = "~/.cache/bdbvhubrenewal"
 """Directory each downloaded checkpoint is kept in, as
 `chronos-ft-<hash>`."""
+
+SLOTS_PREFIX: Final = "slots-"
+"""Prefix of the spec of a checkpoint with per-series slots
+(`forecasters.slots`). Such a checkpoint is released as
+`chronos-slots-<hash>`, so the `latest` lookup, which takes only
+`chronos-ft-*` releases, never gives it to code without slots."""
+
+
+def release_tag(spec: str) -> str:
+    """Return the release tag of a checkpoint.
+
+    `chronos-ft-<hash>`, or `chronos-slots-<hash>` for `slots-<hash>`.
+    """
+    if spec.startswith(SLOTS_PREFIX):
+        return f"chronos-{spec}"
+    return f"chronos-ft-{spec}"
+
 
 Series = Mapping[str, Any]
 """One group for Chronos-2: `target` `[V, S]`, and optionally
@@ -286,7 +305,7 @@ def resolve_checkpoint(spec: str) -> Checkpoint:
         if not tags:
             raise LookupError("No chronos-ft-* release holds a checkpoint.")
         checkpoint = tags[-1][1].removeprefix("chronos-ft-")
-    tag = f"chronos-ft-{checkpoint}"
+    tag = release_tag(checkpoint)
     url = f"{FINETUNED_URL}/{tag}/{SUMS_FILE}"
     try:
         text = _get(url).decode()
@@ -488,7 +507,7 @@ def finetuned_adapter(checkpoint: Checkpoint) -> Path:
         If the release's settings hash or an adapter file's SHA-256 is not
         the checkpoint's.
     """
-    tag = f"chronos-ft-{checkpoint.hash}"
+    tag = release_tag(checkpoint.hash)
     cache = Path(FINETUNED_CACHE).expanduser()
     out = cache / tag
     if out.is_dir():
@@ -514,7 +533,7 @@ def finetuned_adapter(checkpoint: Checkpoint) -> Path:
                     ) from err
                 raise _unreachable(url, err) from err
         found = json.loads((tmp / "settings.json").read_text()).get("hash")
-        if found != checkpoint.hash:
+        if found != checkpoint.hash.removeprefix(SLOTS_PREFIX):
             raise ValueError(
                 f"The release {tag} holds the checkpoint with settings "
                 f"hash {found}."
