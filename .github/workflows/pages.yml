@@ -38,7 +38,17 @@ on:
       - 'uv.lock'
       - '.github/workflows/pages.yml'
       - '.github/actions/setup-forecast-env/**'
+  # A dispatch from main rebuilds and deploys the site. From another
+  # branch it builds the site as an artifact only, which is how a branch
+  # is checked against a scratch fit store (`store_branch`).
   workflow_dispatch:
+    inputs:
+      store_branch:
+        description: >-
+          Fit store branch to read (blank for fit-store); a scratch store
+          such as fit-store-scratch-fm-chronos checks a branch's fits
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -74,6 +84,8 @@ jobs:
       # stored new fits. `load` writes them into results/ with a record of
       # the fits used, which each page with their results states.
       - name: Load the stored fits
+        env:
+          FIT_STORE_BRANCH: ${{ inputs.store_branch || 'fit-store' }}
         run: |
           scripts/fit-store.sh fetch output/fit-store
           uv run bdbvhubrenewal fit-store load --store output/fit-store
@@ -410,9 +422,11 @@ jobs:
             !data/raw
           retention-days: 3
 
+  # Only main deploys: a dispatch from another branch would otherwise
+  # replace the site with that branch's build.
   deploy:
     needs: build
-    if: github.event_name != 'pull_request'
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: write

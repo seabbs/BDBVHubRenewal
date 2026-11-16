@@ -130,6 +130,7 @@ from bdbvhubrenewal.reporting.scoresummary import (
     summary_rows,
     targets_attr,
 )
+from bdbvhubrenewal.reporting.site import site_baseline, site_models
 from bdbvhubrenewal.reporting.store_note import write_store_note
 from bdbvhubrenewal.reporting.tables import filter_table
 from bdbvhubrenewal.reporting.zone_nowcast import (
@@ -299,8 +300,8 @@ def make_report(
         fig / "simulation.svg",
     )
 
-    # Backtest and comparison pages.
-    names = [s.name for s in list_models()]
+    # Backtest and comparison pages: the models the site shows.
+    names = _page_models()
     summaries = _release_section(fig, gen, res, real, names)
     _backtest_page(
         fig, gen, res, out, config, target, names, data_dir, summaries
@@ -378,7 +379,7 @@ def _summaries(
     colours: Mapping[str, tuple[str, str, str]],
     names: Mapping[str, str],
     default_on: Sequence[str],
-    baseline: str = "randomwalk",
+    baseline: str | None = None,
 ) -> dict[str, str]:
     """Write the score summary of each target and return their URLs.
 
@@ -387,6 +388,7 @@ def _summaries(
     the baseline yet, such as the latest release before a round has a
     later one, is not offered.
     """
+    baseline = baseline or site_baseline()
     shown = {
         target: frame
         for target, frame in frames.items()
@@ -451,6 +453,26 @@ def _model_colours(models: Sequence[str]) -> dict[str, tuple[str, str, str]]:
     return {m: model_style(m, models) for m in models}
 
 
+def _page_models() -> list[str]:
+    """Return the registered models the site shows (`config/site.toml`)."""
+    return site_models(s.name for s in list_models())
+
+
+def _site_rows(frame: pd.DataFrame) -> pd.DataFrame:
+    """Drop the rows of models the site hides, before any scoring.
+
+    Hub teams' rows pass, as no pattern of `config/site.toml` matches
+    them. Filtering first keeps hidden models from deciding which cells
+    the shown ones are scored on.
+    """
+    if "model" not in frame.columns:
+        return frame
+    shown = set(site_models(frame["model"].astype(str).unique()))
+    return frame.loc[frame["model"].astype(str).isin(shown)].reset_index(
+        drop=True
+    )
+
+
 def _ours(frame: pd.DataFrame, names: Sequence[str]) -> pd.DataFrame:
     """Keep our models, without the hub teams."""
     return frame.loc[frame["model"].isin(names)]
@@ -503,10 +525,13 @@ def _release_section(
             joint, on=["target", "pool", "model"], how="left"
         )
 
-    overall = overall_for("randomwalk")
-    by_pool = relative_wis(pooled, ("target", "pool", "origin"))
+    base = site_baseline()
+    overall = overall_for(base)
+    by_pool = relative_wis(pooled, ("target", "pool", "origin"), baseline=base)
     scores["target"] = scores["target"].map(_TARGET_LABELS)
-    by_place = relative_wis(scores, ("target", "origin", "location"))
+    by_place = relative_wis(
+        scores, ("target", "origin", "location"), baseline=base
+    )
     reported = overall.loc[overall["target"] == _TARGET_LABELS["reported"]]
     ours = list(names)
     colours = _model_colours(ours)
@@ -533,12 +558,12 @@ def _release_section(
         ours,
         colours,
         _location_names(real),
-        default_on=[m for m in ours if m != "randomwalk"],
+        default_on=[m for m in ours if m != base],
     )
     save_light_dark(
         partial(
             plot_place_summary,
-            relative_wis(rep, ("pool", "location")),
+            relative_wis(rep, ("pool", "location"), baseline=base),
             ours,
             colours,
             _location_names(real),
@@ -557,7 +582,11 @@ def _release_section(
     _write(
         gen / "scores-location.md",
         filter_table(
-            _table(relative_wis(pooled, ("target", "pool", "location"))),
+            _table(
+                relative_wis(
+                    pooled, ("target", "pool", "location"), baseline=base
+                )
+            ),
             ["target", "pool", "model"],
         ),
     )
@@ -637,7 +666,7 @@ def _release_section(
                     )
                 ),
                 ["baseline", "target", "pool", "model"],
-                {"baseline": "randomwalk"},
+                {"baseline": site_baseline()},
             ),
             "Scores by target and pool, over every origin",
         ),
@@ -660,8 +689,9 @@ def _release_section(
     return srcs
 
 
-def _scored_on(reported: pd.DataFrame, baseline: str = "randomwalk") -> str:
+def _scored_on(reported: pd.DataFrame, baseline: str | None = None) -> str:
     """Say how many origin and release pairs and forecasts are scored."""
+    baseline = baseline or site_baseline()
     pairs = reported[["origin", "truth_vintage"]].drop_duplicates()
     own = reported.loc[reported["model"] == baseline]
     n = own.groupby("pool").size()
@@ -1253,22 +1283,23 @@ def _horizon_table(
 ) -> None:
     """Write the relative WIS and coverage by horizon table, reported target.
 
-    Only the forecasts random walk also made are shown.
+    Only the forecasts the site baseline also made are shown.
     """
+    baseline = site_baseline()
     ours = reported.loc[reported["model"].isin(names)]
-    base = ours.loc[ours["model"] == "randomwalk", _RELEASE_MATCH]
+    base = ours.loc[ours["model"] == baseline, _RELEASE_MATCH]
     both = ours.merge(base, on=_RELEASE_MATCH)
     if both["model"].nunique() < 2:
         _write(gen / "backtest-summary.md", "")
         return
-    table = relative_wis(both, ("horizon",))
+    table = relative_wis(both, ("horizon",), baseline=baseline)
     table["model"] = pd.Categorical(table["model"], list(names), ordered=True)
     table = table.sort_values(["model", "horizon"]).reset_index(drop=True)
     origins = ", ".join(sorted(set(both["origin"].astype(str))))
     _write(
         gen / "backtest-summary.md",
         _dropdown(
-            "Mean WIS divided by that of random walk, and interval "
+            f"Mean WIS divided by that of {baseline}, and interval "
             "coverage, on the counts each later release reported, over the "
             f"forecasts both made from the origins {origins}.\n"
             "Horizons after the latest release have no score yet.\n\n"
@@ -1382,9 +1413,10 @@ def _by_baseline(
 
 
 def _without_baseline(
-    rel: pd.DataFrame, baseline: str = "randomwalk"
+    rel: pd.DataFrame, baseline: str | None = None
 ) -> pd.DataFrame:
     """Drop the baseline's own rows, whose relative scores are all 1."""
+    baseline = baseline or site_baseline()
     return rel.loc[rel["model"] != baseline].reset_index(drop=True)
 
 
@@ -1476,7 +1508,7 @@ def _simulated_summary(
         models,
         _model_colours(models),
         labels,
-        default_on=[m for m in models if m != "randomwalk"],
+        default_on=[m for m in models if m != site_baseline()],
     )
 
 
@@ -1673,7 +1705,13 @@ def _backtest_page(
     )
     _write(
         gen / "scores-by-truth.md",
-        _table(relative_wis(scores, ("target", "origin", "truth_vintage"))),
+        _table(
+            relative_wis(
+                scores,
+                ("target", "origin", "truth_vintage"),
+                baseline=site_baseline(),
+            )
+        ),
     )
     weeks = sorted(set(reported["target_end_date"].astype(str)))
     changes = truth_changes(target, locations=(NATIONAL,))
@@ -1940,7 +1978,7 @@ def _checks_section(
             filter_table(
                 _table(summary),
                 ["baseline", "scale", "split", "model"],
-                {"baseline": "randomwalk"},
+                {"baseline": site_baseline()},
             ),
             "Table",
         )
@@ -1958,7 +1996,7 @@ _CHECK_METRICS: Final = (
 def _checks_chart(
     summaries: Mapping[str, pd.DataFrame],
     names: Sequence[str],
-    baseline: str = "randomwalk",
+    baseline: str | None = None,
 ) -> dict[str, object]:
     """Return the checks summaries as `scorechart.js` rows.
 
@@ -1967,6 +2005,7 @@ def _checks_chart(
     the one shown first. Models keep the colours of the other Backtest
     charts.
     """
+    baseline = baseline or site_baseline()
     first = summaries[baseline]
     models = [m for m in names if m in set(first["model"])]
     colours = _model_colours(names)
@@ -2087,7 +2126,7 @@ def _comparison_page(
     truth, k = summary["truth_vintage"], summary["complete_after_weeks"]
     baseline = summary["baseline"]
     hub_ids = summary.get("hub_ids", {})
-    quantiles = pd.read_csv(cmp_dir / "quantiles.csv.gz")
+    quantiles = _site_rows(pd.read_csv(cmp_dir / "quantiles.csv.gz"))
     source = quantiles["source"]
     registry = [spec.name for spec in list_models()]
     built = sorted(
@@ -2118,7 +2157,7 @@ def _comparison_page(
     )
     scores_path = cmp_dir / "scores.csv"
     scores = (
-        pd.read_csv(scores_path)
+        _site_rows(pd.read_csv(scores_path))
         if scores_path.stat().st_size > 1
         else pd.DataFrame()
     )
@@ -2127,7 +2166,7 @@ def _comparison_page(
         fig,
         gen,
         scores,
-        pd.read_csv(cmp_dir / "energy.csv"),
+        _site_rows(pd.read_csv(cmp_dir / "energy.csv")),
         baseline,
         on,
         colours,
@@ -2175,7 +2214,9 @@ def _comparison_page(
             colours,
             truth_vintage=truth,
             hidden=hidden,
-            samples=_label_comparison(pd.read_csv(cmp_dir / "samples.csv.gz")),
+            samples=_label_comparison(
+                _site_rows(pd.read_csv(cmp_dir / "samples.csv.gz"))
+            ),
         ),
     )
     tabs = []
@@ -2228,8 +2269,9 @@ def _comparison_summary(
     They are laid out as the Backtest page's summaries, on the hub
     rounds' weeks the latest release completes. The hub teams and our
     series in `on` are ticked at first,
-    and randomwalk is the reference for relative scores. Our series come
-    in the order of `colours`. Returns each target's score summary URL.
+    and the comparison's baseline is the reference for relative scores.
+    Our series come in the order of `colours`. Returns each target's
+    score summary URL.
     """
     if scores.empty:
         for name in (

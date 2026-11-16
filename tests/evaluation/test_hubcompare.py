@@ -158,7 +158,7 @@ def test_attribution_names_the_hub() -> None:
 
 def test_load_comparison_config() -> None:
     cfg = load_comparison_config(ROOT / "config" / "hub-comparison.toml")
-    assert cfg.baseline == "randomwalk"
+    assert cfg.baseline == "randomwalknowcast"
     assert cfg.submitted == "data/our-submissions"
     assert "CD" in cfg.locations
 
