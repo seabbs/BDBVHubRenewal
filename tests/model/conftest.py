@@ -20,7 +20,7 @@ from bdbvhubrenewal.model.inputs import vintage_from_tables  # noqa: E402
 VINTAGE_DAYS = (166, 206)
 FIXTURE_DATA = Path(__file__).resolve().parents[1] / "fixtures" / "data"
 MAIN_REPO_DATA = Path(os.environ.get("BDBV_DATA", str(FIXTURE_DATA)))
-# Two provinces with no cases, which the model leaves out.
+# Two provinces with no cases, modelled with importation only.
 SIM_LOCATIONS = ("CD-IT", "CD-NK", "CD-HU", "CD-TO", "CD-BU", "CD-SK")
 
 

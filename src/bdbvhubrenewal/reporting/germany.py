@@ -49,6 +49,7 @@ from bdbvhubrenewal.reporting.plots import (
 )
 from bdbvhubrenewal.reporting.scorechart import write_score_chart
 from bdbvhubrenewal.reporting.scoresummary import summary_html, summary_rows
+from bdbvhubrenewal.reporting.site import site_models
 from bdbvhubrenewal.reporting.tables import sortable_table
 
 __all__ = [
@@ -251,14 +252,23 @@ def _ft_note(results: Path) -> str:
 
 
 def _read(results: Path, names: tuple[str, ...]) -> pd.DataFrame | None:
-    """Stack the result files that exist, or None if none does."""
+    """Stack the result files that exist, or None if none does.
+
+    Models the site hides (`config/site.toml`) are left out.
+    """
     dtype = {"origin": str, "truth_vintage": str, "target_end_date": str}
     frames = [
         pd.read_csv(results / n, dtype=dtype)
         for n in names
         if (results / n).exists()
     ]
-    return pd.concat(frames, ignore_index=True) if frames else None
+    if not frames:
+        return None
+    rows = pd.concat(frames, ignore_index=True)
+    if "model" not in rows.columns:
+        return rows
+    shown = set(site_models(rows["model"].unique()))
+    return rows.loc[rows["model"].isin(shown)].reset_index(drop=True)
 
 
 def germany_explorer(
