@@ -574,6 +574,36 @@ def train_step(model, batch: dict, accepted, device, share: float) -> float:
     return float(loss.detach())
 
 
+def bias_summary(model) -> dict:
+    """Return each series bias pair's values, by layer and head, and range.
+
+    Empty for a model without the bias.
+    """
+    out = {}
+    for name, p in model.named_parameters():
+        pair = name.rsplit(".", 1)[-1]
+        if series_bias.BIAS_MODULE not in name or pair not in series_bias.PAIRS:
+            continue
+        if not p.requires_grad:
+            continue
+        values = p.detach().float().cpu()
+        out[pair] = {
+            "mean": float(values.mean()),
+            "min": float(values.min()),
+            "max": float(values.max()),
+            "values": values.tolist(),
+        }
+    return out
+
+
+def _bias_range(summary: dict) -> str:
+    """Describe the bias pairs' means and ranges for the log."""
+    return ", ".join(
+        f"{k} {v['mean']:+.3f} [{v['min']:+.3f}, {v['max']:+.3f}]"
+        for k, v in summary.items()
+    )
+
+
 def block_rows(blocks: list[dict]) -> np.ndarray:
     """Return the places and parents of the rows of blocks batched together.
 
@@ -1480,6 +1510,10 @@ def main() -> None:
                         model, val, args.batch_size, ft.EVAL_BLOCKS
                     )
                     described = f"by source {_by_source(entry['by_source'])}, "
+                bias = bias_summary(model)
+                if bias:
+                    entry["bias"] = bias
+                    described += f"bias {_bias_range(bias)}, "
                 split["eval_s"] += time.perf_counter() - since
                 history.append(entry)
                 log(
