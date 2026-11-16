@@ -73,3 +73,46 @@ def test_excluded_reads_a_list_or_a_csv(tmp_path):
     assert segments.excluded(plain) == {"30101-0002", "30101-0003"}
     assert segments.excluded(table) == {"30101-0004"}
     assert segments.excluded(tmp_path / "none.txt") == set()
+
+
+def _state(path, done):
+    path.mkdir(parents=True)
+    (path / "state.json").write_text(f'{{"done": {done}}}')
+
+
+def test_a_segment_starts_from_the_prefix_before(tmp_path):
+    run, prev = tmp_path / "state", tmp_path / "n250" / "state"
+    _state(prev, 250)
+    assert segments.resume_state(run, prev) == "copied"
+    assert (run / "state.json").read_text() == '{"done": 250}'
+
+
+def test_a_state_further_on_is_kept(tmp_path):
+    # A segment that stopped part way resumes from its own saves.
+    run, prev = tmp_path / "state", tmp_path / "n250" / "state"
+    _state(prev, 250)
+    _state(run, 375)
+    assert segments.resume_state(run, prev) == "kept"
+    assert (run / "state.json").read_text() == '{"done": 375}'
+
+
+def test_a_state_behind_is_replaced(tmp_path):
+    run, prev = tmp_path / "state", tmp_path / "n500" / "state"
+    _state(prev, 500)
+    _state(run, 250)
+    assert segments.resume_state(run, prev) == "copied"
+    assert (run / "state.json").read_text() == '{"done": 500}'
+
+
+def test_the_first_segment_starts_from_base(tmp_path):
+    assert segments.resume_state(tmp_path / "state", None) == "base"
+
+
+def test_exclusions_are_gathered_into_one_file(tmp_path):
+    a = tmp_path / "a.csv"
+    a.write_text("simulation,reason,evidence\n30101-0002,flat,x\n")
+    b = tmp_path / "b.csv"
+    b.write_text("simulation,reason,evidence\n")
+    out = tmp_path / "excluded.csv"
+    segments.gather_exclusions([a, b, tmp_path / "none.csv"], out)
+    assert segments.excluded(out) == {"30101-0002"}
