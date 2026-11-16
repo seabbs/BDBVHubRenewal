@@ -23,6 +23,8 @@ REMOTE_MAILBOX=${REMOTE_MAILBOX:-bdbv-archie-mailbox.md}
 MAILBOX=${MAILBOX:-}
 HERE=${HERE:-output/finetune/continuous}
 OUTBREAKS=${OUTBREAKS:-8000}
+# Each round simulates 100 held-out outbreaks.
+HOLDOUT=${HOLDOUT:-100}
 PREFIXES=${PREFIXES:-1000 2000 4000 8000}
 # Two draws at each of 16 snapshots, sampled across the 10: 32 blocks, about
 # 2.2 h per 1,000 simulations on an M-series laptop (2026-11-16 probe:
@@ -92,7 +94,8 @@ while true; do
     HF_HOME=output/finetune/hf HF_HUB_OFFLINE=1 MPLCONFIGDIR="${TMPDIR:-/tmp}" \
       nohup .venv/bin/python scripts/finetune_stream.py \
       "$HERE/sims" "$HERE/train" --grid r4 --seed-list "$HERE/seeds.txt" \
-      --held-out-seeds "${held[0]}" "${held[1]}" --outbreaks "$OUTBREAKS" \
+      --held-out-seeds "${held[0]}" "${held[1]}" --holdout "$HOLDOUT" \
+      --outbreaks "$OUTBREAKS" \
       --prefixes $PREFIXES --stop-from "$((OUTBREAKS + 1))" \
       --blocks-per-simulation $((16 * DRAWS)) --draws-per-simulation "$DRAWS" \
       --subset-seed "$SUBSET_SEED" --learning-rate 1e-5 --lr-steps "$LR_STEPS" \
