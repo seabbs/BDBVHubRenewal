@@ -613,22 +613,21 @@ def _bias_range(summary: dict) -> str:
 def block_rows(blocks: list[dict]) -> np.ndarray:
     """Return the places and parents of the rows of blocks batched together.
 
-    A block's rows are its targets, each of its place (`target_places`, a
-    place's daily counts and its period totals alike), then each place's
-    lags in turn; each block's places are its own
+    A block's targets are at its `target_places` (a place's daily counts
+    and its period totals alike), then each place's lags
+    (`series_bias.block_rows`); each block's places are its own
     (`series_bias.batch_rows`).
     """
-    out = []
-    for b in blocks:
-        targets = np.asarray(
-            b.get("target_places", range(int(b["n_targets"]))), dtype=int
-        )
-        n_places = int(targets.max()) + 1
-        lags = int(b["n_covariates"]) // n_places
-        place = np.concatenate([targets, np.repeat(np.arange(n_places), lags)])
-        parent = np.asarray(block_parents(b), dtype=int)[place]
-        out.append(np.stack([place, parent]))
-    return series_bias.batch_rows(out)
+    return series_bias.batch_rows(
+        [
+            series_bias.block_rows(
+                b.get("target_places", range(int(b["n_targets"]))),
+                int(b["n_covariates"]),
+                block_parents(b),
+            )
+            for b in blocks
+        ]
+    )
 
 
 def block_parents(block: dict) -> list[int]:
