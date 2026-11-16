@@ -18,6 +18,7 @@ from bdbvhubrenewal.forecasters import (
     ForecastTask,
     FoundationModel,
     ModelUnavailableError,
+    base,
     check_samples,
     foundation,
     get_model,
@@ -862,6 +863,9 @@ def test_german_models_load_their_pinned_german_release(
 ) -> None:
     write_release(releases, "de", _ADAPTER, "de", prefix="germany-ft")
     monkeypatch.setattr(foundation, "germany_spec", lambda: "de")
+    # Registered on a copy of the registry, as a pinned config would.
+    monkeypatch.setattr(base, "_REGISTRY", dict(base._REGISTRY))
+    foundation.register_german_models()
     # The simulation checkpoint's override does not reach them.
     monkeypatch.setenv(foundation.FINETUNED_ENV, "other")
     model = get_model(name)
@@ -896,3 +900,15 @@ def test_a_pending_german_checkpoint_names_what_is_missing(
     config.write_text('hash = "latest"\ngermany = ""\n')
     with pytest.raises(ValueError, match="germany-ft"):
         foundation.germany_spec(config)
+
+
+def test_the_german_trained_models_wait_for_their_pin() -> None:
+    # While the pin is pending they are not registered, so neither the
+    # BDBV fit store nor a backtest resolves their checkpoint.
+    from bdbvhubrenewal.evaluation.store import stored_models
+
+    if foundation.germany_pinned():
+        pytest.skip("the germany-ft release is pinned")
+    names = {s.name for s in list_models()}
+    assert not {m for m in names if m.endswith("_de")}
+    assert not [m for m in stored_models() if m.endswith("_de")]
