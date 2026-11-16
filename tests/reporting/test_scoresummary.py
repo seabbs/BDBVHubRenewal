@@ -321,3 +321,26 @@ def test_a_zero_energy_baseline_gives_no_relative_score() -> None:
     assert all(r["rel"]["energy"] is None for r in got.values())
     rel = relative_energy(energy, by=(), baseline="a")
     assert rel["rel_energy"].isna().all()
+
+
+@pytest.mark.parametrize("baseline", MODELS)
+def test_browser_summary_scores_every_model_on_the_common_cells(
+    baseline: str,
+) -> None:
+    # "b" has no forecast for CD-IT in one week. Every model is scored on
+    # the cells all of them forecast, whatever the baseline, so each row of
+    # a table has the same n and no means mix cell sets.
+    scores = _scores()
+    drop = (scores["model"] == "b") & (scores["location"] == "CD-IT")
+    drop &= scores["target_end_date"] == "2026-10-10"
+    scores = scores.loc[~drop]
+    data = summary_rows(scores, MODELS, COLOURS, {})
+    places = [i for i, p in enumerate(data["places"]) if p["pool"] != "zones"]
+    keep = f"function (r) {{ return {places}.includes(r[3]); }}"
+    got = _node_with(SUMMARISE, data, keep, MODELS.index(baseline))
+    assert isinstance(got, list)
+    assert len(got) == len(MODELS)
+    ns = {row["n"] for row in got}
+    # 2 provinces and the country, 2 weeks, 3 origin-release pairs, less
+    # the CD-IT week "b" lacks and the CD-NK week randomwalk lacks.
+    assert ns == {3 * (3 * 2 - 2)}
