@@ -860,3 +860,31 @@ def test_the_code_commit_is_the_scripts_repository(tmp_path, monkeypatch):
     subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
     monkeypatch.chdir(tmp_path)
     assert code_commit() == here
+
+
+def test_mixed_blocks_keep_each_target_rows_place_and_level(monkeypatch):
+    import finetune_chronos as ft
+    import pandas as pd
+
+    rows = [
+        (place, onset, onset + pd.Timedelta(days=d), n)
+        for onset in pd.date_range("2026-01-03", periods=140)
+        for place, n in (("P01", 5), ("P02", 3))
+        for d in (0, 2, 6)
+    ]
+    counts = pd.DataFrame(
+        rows, columns=["location", "reference_date", "report_date", "count"]
+    )
+    counts["reference_date"] = counts["reference_date"].dt.date.astype(str)
+    counts["report_date"] = counts["report_date"].dt.date.astype(str)
+    monkeypatch.setattr(ft, "SOURCES", ("daily+weekly",))
+    monkeypatch.setattr(ft, "UNIVARIATE_SHARE", 0.0)
+    seen = 0
+    for seed in range(5):
+        rng = np.random.default_rng(seed)
+        for b in ft.outbreak_blocks(counts, ["P01", "P02"], rng, 3):
+            n = len(b["places"])
+            assert list(b["target_places"]) == [*range(n), *range(n)]
+            assert len(b["levels"]) == b["n_targets"] == 2 * n
+            seen += 1
+    assert seen

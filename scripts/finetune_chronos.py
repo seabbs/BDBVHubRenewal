@@ -411,6 +411,7 @@ def outbreak_blocks(
             levels = target_levels(places)
             padded["levels"] = tuple(levels[i] for i in block["target_places"])
             padded["places"] = tuple(places)
+            padded["target_places"] = list(block["target_places"])
             padded["parent"] = parent
             padded["mix"] = mix
             padded["source"] = source
