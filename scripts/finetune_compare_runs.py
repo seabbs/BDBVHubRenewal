@@ -10,8 +10,8 @@ curve (`history.json`, by source where the trainer logged it) is added
 by step. Rows are appended to the CSV once per run, checkpoint and source.
 
     python scripts/finetune_compare_runs.py \\
-        slots=output/finetune/continuous-slots \\
-        no-slots=../fm-finetune-r4/output/finetune/continuous \\
+        bias=output/finetune/continuous-slots \\
+        plain=../fm-finetune-r4/output/finetune/continuous \\
         --out output/finetune/slots-vs-noslots.csv
 """
 
@@ -58,11 +58,10 @@ def held_out_blocks(run: Path, sources: tuple[str, ...]) -> list[dict]:
 
 
 def load(checkpoint: Path):
-    """Return base Chronos-2 with a checkpoint's adapter (and slots)."""
+    """Return base Chronos-2 with a checkpoint's adapter, bias included."""
     from chronos import Chronos2Pipeline
-    from peft import PeftModel
 
-    from bdbvhubrenewal.forecasters import slots
+    from bdbvhubrenewal.forecasters import series_bias
     from bdbvhubrenewal.forecasters.foundation import (
         CHRONOS_MODEL,
         CHRONOS_REVISION,
@@ -72,13 +71,8 @@ def load(checkpoint: Path):
     pipeline = Chronos2Pipeline.from_pretrained(
         CHRONOS_MODEL, revision=CHRONOS_REVISION, device_map="cpu"
     )
-    n_slots = settings.get("series_slots", {}).get("n", 0)
-    if n_slots:
-        slots.attach(pipeline.model, n_slots)
-    model = PeftModel.from_pretrained(
-        pipeline.model, checkpoint / "finetuned-ckpt"
-    )
-    return model.eval(), settings
+    adapter = checkpoint / "finetuned-ckpt"
+    return series_bias.load_adapter(pipeline.model, adapter).eval(), settings
 
 
 def done(out: Path) -> set[tuple[str, str, str, str]]:

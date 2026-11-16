@@ -37,7 +37,7 @@ import numpy as np
 import pandas as pd
 
 from bdbvhubrenewal.data.dates import as_date, epiweek_end
-from bdbvhubrenewal.forecasters import slots
+from bdbvhubrenewal.forecasters import series_bias
 from bdbvhubrenewal.forecasters.base import (
     NATIONAL,
     SAMPLE_COLUMNS,
@@ -127,10 +127,11 @@ FINETUNED_CACHE: Final = "~/.cache/bdbvhubrenewal"
 `chronos-ft-<hash>`."""
 
 SLOTS_PREFIX: Final = "slots-"
-"""Prefix of the spec of a checkpoint with per-series slots
-(`forecasters.slots`). Such a checkpoint is released as
-`chronos-slots-<hash>`, so the `latest` lookup, which takes only
-`chronos-ft-*` releases, never gives it to code without slots."""
+"""Prefix of the spec of a checkpoint with the series bias
+(`forecasters.series_bias`). Such a checkpoint is released as
+`chronos-slots-<hash>`, the paper's name for the run, so the `latest`
+lookup, which takes only `chronos-ft-*` releases, never gives it to code
+without the bias."""
 
 
 def release_tag(spec: str) -> str:
@@ -317,9 +318,10 @@ def resolve_checkpoint(spec: str) -> Checkpoint:
         raise _unreachable(url, err) from err
     sums = {}
     for line in text.splitlines():
-        if line.strip():
-            sha, name = line.split(maxsplit=1)
-            sums[name.lstrip("*").strip()] = sha
+        parts = line.split(maxsplit=1)
+        # A line that is not `<sha> <name>` is left to the check below.
+        if len(parts) == 2:
+            sums[parts[1].lstrip("*").strip()] = parts[0]
     missing = [f for f in ADAPTER_FILES if f not in sums]
     if missing:
         raise ValueError(
@@ -428,7 +430,6 @@ def hub_triangle(
     partial = np.full((len(places), n_times, lags), np.nan)
     final = np.zeros((len(places), n_times))
     last = 0
-    # The latest release gives the final counts and the last step.
     for release in sorted(set(rows["vintage"])):
         mine = (rows["vintage"] == release).to_numpy()
         cutoff = str(rows.loc[mine, "cutoff"].iloc[0])
@@ -443,6 +444,7 @@ def hub_triangle(
         for d in range(lags):
             if 0 <= at - d < n_times:
                 partial[:, at - d, d] = counts[:, at - d]
+        # Sorted, so the last release's counts and cut-off are the latest.
         final, last = counts, at
     return HubTriangle(times, final, partial, last)
 
@@ -575,29 +577,22 @@ def _chronos(checkpoint: Checkpoint | None = None) -> Any:
     if adapter is None:
         return pipeline
     # Slots, if the adapter holds them, load with it.
-    return Chronos2Pipeline(model=slots.load_adapter(pipeline.model, adapter))
+    return Chronos2Pipeline(
+        model=series_bias.load_adapter(pipeline.model, adapter)
+    )
 
 
 def _chronos_input(group: Series) -> dict[str, Any]:
-    """Return the parts of a group Chronos-2's dict path reads."""
-    keys = ("target", "past_covariates", "future_covariates")
-    return {k: group[k] for k in keys if k in group}
+    """Return a group as Chronos-2 takes it, without its `places`."""
+    return {k: v for k, v in group.items() if k != "places"}
 
 
-def _group_slots(
-    group: Series, n_slots: int, parent: bool = True
-) -> np.ndarray:
-    """Return each of a group's rows' own and parent slots, `[2, rows]`.
+def _group_rows(group: Series) -> np.ndarray:
+    """Return each of a group's rows' place and parent, `[2, rows]`.
 
-    Without `parent` (slots trained without the parent link), own slots
-    only, `[rows]`.
-
-    Chronos-2's dict path puts the targets first, then the covariates by
-    sorted name, past-only ones before known-future ones, not in input
-    order. Each place gets a distinct slot drawn with `slots.EVAL_SEED`
-    in target order, and its parent's (`slots.parents_of`), and each lag
-    series `<place>_lag_<d>` its place's. The places are the group's
-    `places`, else the order in which the covariates name them.
+    In Chronos-2's row order: the targets, then the
+    covariates by sorted name, past-only ones before known-future ones.
+    Places are numbered in target order (`series_bias`).
 
     Raises
     ------
@@ -619,18 +614,39 @@ def _group_slots(
         owner = [at[n.rsplit("_lag_", 1)[0]] for n in rows]
     except KeyError as err:
         raise ValueError(f"covariate of no target place: {err}") from err
-    link = parent
-    own, up = slots.slot_ids(
-        n_targets,
-        0,
-        np.random.default_rng(slots.EVAL_SEED),
-        n_slots,
-        parents=slots.parents_of(places),
+    place = np.concatenate([np.arange(n_targets), owner]).astype(int)
+    parent = np.asarray(series_bias.parents_of(places), dtype=int)
+    return np.stack([place, parent[place]])
+
+
+def _predict(
+    pipeline: Any, groups: Sequence[Series], horizon: int, levels: np.ndarray
+) -> list[Any]:
+    """Return Chronos-2's quantiles at `levels` for each group.
+
+    With the series bias each group is predicted on its own, so its rows
+    are one batch, with its rows' places and parents (`_group_rows`), as
+    in held-out losses.
+    """
+    model = getattr(pipeline, "model", None)
+    if model is not None and series_bias.has_bias(model):
+        # One group a batch, its rows' places and parents by name.
+        biased = []
+        for g in groups:
+            with series_bias.assigned(model, _group_rows(g)):
+                q, _ = pipeline.predict_quantiles(
+                    [_chronos_input(g)],
+                    prediction_length=horizon,
+                    quantile_levels=levels.tolist(),
+                )
+            biased.extend(q)
+        return biased
+    quantiles, _ = pipeline.predict_quantiles(
+        [_chronos_input(g) for g in groups],
+        prediction_length=horizon,
+        quantile_levels=levels.tolist(),
     )
-    index = np.concatenate([np.arange(n_targets), owner]).astype(int)
-    if not link:
-        return np.asarray(own[index])
-    return np.stack([own[index], up[index]])
+    return list(quantiles)
 
 
 def chronos_sampler(
@@ -679,29 +695,7 @@ def chronos_sampler(
     pipeline = _chronos(checkpoint)
     levels = np.asarray(pipeline.quantiles, dtype=float)
     rng = np.random.default_rng(seed)
-    model = getattr(pipeline, "model", None)
-    if model is not None and slots.has_slots(model):
-        # Each group is predicted on its own, so its rows are one batch
-        # and each place's series share the slot drawn with the fixed
-        # seed, as in held-out losses.
-        quantiles = []
-        for g in groups:
-            ids = _group_slots(
-                g, slots.n_slots(model), slots.has_parent_link(model)
-            )
-            with slots.assigned(model, ids):
-                q, _ = pipeline.predict_quantiles(
-                    [_chronos_input(g)],
-                    prediction_length=horizon,
-                    quantile_levels=levels.tolist(),
-                )
-            quantiles.extend(q)
-    else:
-        quantiles, _ = pipeline.predict_quantiles(
-            [_chronos_input(g) for g in groups],
-            prediction_length=horizon,
-            quantile_levels=levels.tolist(),
-        )
+    quantiles = _predict(pipeline, groups, horizon, levels)
     out = []
     for q in quantiles:
         q = q.float().cpu().numpy()  # [V, horizon, Q]
@@ -744,6 +738,7 @@ def layout_block(
         "target": target,
         "past_covariates": dict(zip(names, cells[:, :start], strict=True)),
         "future_covariates": dict(zip(names, cells[:, start:], strict=True)),
+        "places": list(places),
     }
 
 
@@ -830,7 +825,14 @@ class FoundationModel:
         tri = hub_triangle(rows, self.source, places, weeks[-1])
         start = tri.n_context
         if self.layout == "complete":
-            start = tri.times.index(_walk_start(task)) + 1
+            walk = _walk_start(task)
+            if walk not in tri.times:
+                raise ModelUnavailableError(
+                    f"{self.name} starts from the randomwalk week {walk}, "
+                    f"which the task for {task.vintage} has no "
+                    f"{self.source} release of."
+                )
+            start = tri.times.index(walk) + 1
         if start < 2:
             raise ModelUnavailableError(
                 f"{self.name} needs two steps of context, and the task for "
@@ -890,7 +892,7 @@ for _source in SOURCES:
     register_model(
         f"fm_chronos_{_source}_ragged_ft",
         partial(_finetuned, f"fm_chronos_{_source}_ragged_ft", _source),
-        f"Chronos-2 fine-tuned on simulated outbreaks, on the hub target's "
+        "Chronos-2 fine-tuned on simulated outbreaks, on the hub target's "
         f"{_source} releases, ragged layout.",
         fitted=True,
     )

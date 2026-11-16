@@ -46,7 +46,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from bdbvhubrenewal.forecasters import slots
+from bdbvhubrenewal.forecasters import series_bias
 from bdbvhubrenewal.forecasters.foundation import (
     CHRONOS_MODEL,
     CHRONOS_REVISION,
@@ -148,15 +148,15 @@ LORA_TARGETS = (
 """Modules the LoRA adapter trains."""
 
 
-SLOTS_CODE = "src/bdbvhubrenewal/forecasters/slots.py"
-"""The per-series slots' code, hashed into a slots checkpoint's settings."""
+BIAS_CODE = ("src/bdbvhubrenewal/forecasters/series_bias.py",)
+"""The series bias's code and its parent rule, hashed into its settings."""
 
 
-def lora_config(n_slots: int):
-    """Return the LoRA config, saving the per-series slots if `n_slots`.
+def lora_config(bias: bool):
+    """Return the LoRA config, saving the series bias if `bias`.
 
-    The slots (`bdbvhubrenewal.forecasters.slots`) train beside the
-    adapter as one of PEFT's `modules_to_save`, so they are saved in the
+    The bias (`bdbvhubrenewal.forecasters.series_bias`) trains beside the
+    adapter as one of PEFT's `modules_to_save`, so it is saved in the
     adapter's files and published and loaded with it.
     """
     from peft import LoraConfig
@@ -165,47 +165,45 @@ def lora_config(n_slots: int):
         r=8,
         lora_alpha=16,
         target_modules=list(LORA_TARGETS),
-        modules_to_save=[slots.SLOT_MODULE] if n_slots else None,
+        modules_to_save=[series_bias.BIAS_MODULE] if bias else None,
     )
 
 
-def slot_settings(
-    n_slots: int, init_std: float = 0.0, init_seed: int = 0
-) -> dict:
-    """Return the slots' entry of a checkpoint's settings, none if off."""
-    if not n_slots:
+def bias_settings(bias: bool, lr: float = 0.0) -> dict:
+    """Return the series bias's entry of a checkpoint's settings."""
+    if not bias:
         return {}
     return {
-        "series_slots": {
-            "n": n_slots,
-            "init": "normal" if init_std else "zero",
-            "init_std": init_std,
-            "init_seed": init_seed,
-            "trained": False,
-            "parent": {
-                "link": "own slot plus the parent's own slot, from the same "
-                "table",
-                "rule": "nearest '-' prefix in the block, else the country "
-                f"({', '.join(slots.COUNTRIES)})",
-            },
-            "module": slots.SLOT_MODULE,
-            "assignment": (
-                "a fresh random permutation per block each time it is "
-                "batched in training; seeded by EVAL_SEED "
-                f"({slots.EVAL_SEED}) in held-out losses and at inference"
-            ),
+        "series_bias": {
+            "pairs": "same place (count and lag series); parent and child "
+            "either way round",
+            "per": "encoder layer and head, added to the group attention "
+            "scores",
+            "init": "zero",
+            "learning_rate": lr,
+            "parent_rule": "nearest '-' prefix in the block, else the "
+            f"country ({', '.join(series_bias.COUNTRIES)})",
+            "module": series_bias.BIAS_MODULE,
         }
     }
 
 
-def param_groups(model, lr: float) -> list[dict]:
-    """Return the optimiser's one group: the trainable adapter at `lr`.
+def param_groups(model, lr: float, bias_lr: float = 0.0) -> list[dict]:
+    """Return the optimiser's groups: the adapter at `lr`, the bias at its own.
 
-    It keeps its starting rate as `base_lr`, which `set_learning_rates`
-    decays. The slots' labels are fixed, so they are not in it.
+    Each keeps its starting rate as `base_lr`, which `set_learning_rates`
+    decays. A few hundred bias scalars moving at Adam's step of about `lr`
+    would reach only about 0.2 by the end at 1e-5, small against the
+    attention scores, so they have their own rate.
     """
-    trainable = [p for p in model.parameters() if p.requires_grad]
-    return [{"params": trainable, "lr": lr, "base_lr": lr}]
+    adapter, bias = [], []
+    for name, p in model.named_parameters():
+        if p.requires_grad:
+            (bias if series_bias.BIAS_MODULE in name else adapter).append(p)
+    groups = [{"params": adapter, "lr": lr, "base_lr": lr}]
+    if bias:
+        groups.append({"params": bias, "lr": bias_lr, "base_lr": bias_lr})
+    return groups
 
 
 def set_learning_rates(optimiser, step: int, steps: int) -> None:
@@ -218,22 +216,19 @@ def lora_model(base, config, init: Path | None):
     """Return `base` with a LoRA adapter to train.
 
     A fresh adapter from `config`, or, to continue a round, the adapter
-    saved at `init`, still trainable. A base with slots continues only
-    from an adapter that holds them.
+    saved at `init`, still trainable. A base with the series bias
+    continues only from an adapter that holds it.
     """
     from peft import PeftModel, get_peft_model
 
     if init is None:
         model = get_peft_model(base, config)
     else:
-        if slots.has_slots(base) and slots.adapter_slots(init) is None:
-            raise ValueError(f"{init} holds no slots to continue training")
+        if series_bias.has_bias(base) and not series_bias.adapter_has_bias(
+            init
+        ):
+            raise ValueError(f"{init} holds no series bias to continue")
         model = PeftModel.from_pretrained(base, init, is_trainable=True)
-    # The slots' labels are fixed random codes: saved with the adapter,
-    # never trained; LoRA learns to read them.
-    for name, p in model.named_parameters():
-        if slots.SLOT_MODULE in name:
-            p.requires_grad_(False)
     return model
 
 
@@ -551,7 +546,7 @@ def _join(
 
 
 def forward(model, batch: dict, accepted, device=None):
-    """Run the model on a batch, its rows given their slots if any."""
+    """Run the model on a batch, its rows given their places if any."""
     import torch
 
     inputs = {
@@ -559,42 +554,76 @@ def forward(model, batch: dict, accepted, device=None):
         for k, v in batch.items()
         if k in accepted
     }
-    with slots.assigned(model, batch.get("slot_ids")):
+    with series_bias.assigned(model, batch.get("series_rows")):
         return model(**inputs)
 
 
-def block_slots(blocks: list[dict], n_slots: int, rng=None) -> np.ndarray:
-    """Return the slots of the rows of blocks batched together.
+def train_step(model, batch: dict, accepted, device, share: float) -> float:
+    """Accumulate a batch's gradients, scaled by `share`; return its loss.
 
-    Each block draws its own permutation: from `rng` in training, from
-    `slots.EVAL_SEED` otherwise, so a block's slots in a held-out loss do
-    not depend on its batch.
+    Forward and backward both run with the rows' places assigned, so a
+    block recomputed in backward (`checkpoint_large_batches`) gets the
+    same series bias.
     """
-    return np.concatenate(
+    with series_bias.assigned(model, batch.get("series_rows")):
+        loss = forward(model, batch, accepted, device).loss
+        (loss * share).backward()
+    return float(loss.detach())
+
+
+def bias_summary(model) -> dict:
+    """Return each series bias pair's values, by layer and head, and range.
+
+    Empty for a model without the bias.
+    """
+    out = {}
+    for name, p in model.named_parameters():
+        pair = name.rsplit(".", 1)[-1]
+        if series_bias.BIAS_MODULE not in name or pair not in series_bias.PAIRS:
+            continue
+        if not p.requires_grad:
+            continue
+        values = p.detach().float().cpu()
+        out[pair] = {
+            "mean": float(values.mean()),
+            "min": float(values.min()),
+            "max": float(values.max()),
+            "values": values.tolist(),
+        }
+    return out
+
+
+def _bias_range(summary: dict) -> str:
+    """Describe the bias pairs' means and ranges for the log."""
+    return ", ".join(
+        f"{k} {v['mean']:+.3f} [{v['min']:+.3f}, {v['max']:+.3f}]"
+        for k, v in summary.items()
+    )
+
+
+def block_rows(blocks: list[dict]) -> np.ndarray:
+    """Return the places and parents of the rows of blocks batched together.
+
+    Each block's places are its own (`series_bias.batch_rows`).
+    """
+    return series_bias.batch_rows(
         [
-            slots.slot_ids(
-                int(b["n_targets"]),
-                int(b["n_covariates"]),
-                rng
-                if rng is not None
-                else np.random.default_rng(slots.EVAL_SEED),
-                n_slots,
-                parents=block_parents(b),
+            series_bias.block_rows(
+                int(b["n_targets"]), int(b["n_covariates"]), block_parents(b)
             )
             for b in blocks
-        ],
-        axis=-1,
+        ]
     )
 
 
 def block_parents(block: dict) -> list[int]:
-    """Return each target's parent in a block (`slots.parents_of`).
+    """Return each target's parent in a block (`series_bias.parents_of`).
 
     A block without place names links every place to the country, when
     it holds it, by its levels.
     """
     if "places" in block:
-        return slots.parents_of(block["places"])
+        return series_bias.parents_of(block["places"])
     levels = list(block["levels"])
     root = levels.index("national") if "national" in levels else -1
     return [-1 if i == root else root for i in range(len(levels))]
@@ -652,16 +681,14 @@ class ByLength:
         blocks: list[dict],
         batch_size: int,
         mode,
-        n_slots: int = 0,
-        slot_rng: np.random.Generator | None = None,
+        bias: bool = False,
     ) -> None:
         from chronos.chronos2.dataset import Chronos2Dataset, DatasetMode
 
-        # With slots, each batch carries its rows' slots (`block_slots`),
-        # drawn afresh from `slot_rng` in training.
-        self.n_slots = n_slots
+        # With the series bias, each batch carries its rows' places and
+        # parents (`block_rows`).
+        self.bias = bias
         self.batch_size = batch_size
-        self.slot_rng = slot_rng if mode == DatasetMode.TRAIN else None
         self.inputs = [tensors(b) for b in blocks]
         self.lengths = [b["prediction_length"] for b in blocks]
         self.local: dict[int, int] = {}
@@ -687,10 +714,8 @@ class ByLength:
         """Return the batch of blocks `indices`, all of one length."""
         length = self.lengths[indices[0]]
         batch = self.data[length]._build_batch([self.local[i] for i in indices])
-        if self.n_slots:
-            batch["slot_ids"] = block_slots(
-                [self.inputs[i] for i in indices], self.n_slots, self.slot_rng
-            )
+        if self.bias:
+            batch["series_rows"] = block_rows([self.inputs[i] for i in indices])
         return batch
 
     def indices(self):
@@ -723,8 +748,9 @@ def held_out_loss(model, blocks: list[dict], batch_size: int) -> float:
     from chronos.chronos2.dataset import DatasetMode
     from chronos.chronos2.model import Chronos2Model
 
-    n_slots = slots.n_slots(model) if slots.has_slots(model) else 0
-    data = ByLength(blocks, batch_size, DatasetMode.VALIDATION, n_slots)
+    data = ByLength(
+        blocks, batch_size, DatasetMode.VALIDATION, series_bias.has_bias(model)
+    )
     accepted = inspect.signature(Chronos2Model.forward).parameters
     training = model.training
     model.eval()
@@ -931,7 +957,7 @@ def held_out_by_level(model, blocks: list[dict], n: int) -> dict:
     from chronos.chronos2.model import Chronos2Model
 
     accepted = inspect.signature(Chronos2Model.forward).parameters
-    n_slots = slots.n_slots(model) if slots.has_slots(model) else 0
+    bias = series_bias.has_bias(model)
     training = model.training
     model.eval()
     losses: dict[str, list[float]] = {}
@@ -946,8 +972,8 @@ def held_out_by_level(model, blocks: list[dict], n: int) -> dict:
                 mode=DatasetMode.VALIDATION,
             )
             batch = next(iter(data))
-            if n_slots:
-                batch["slot_ids"] = block_slots([block], n_slots)
+            if bias:
+                batch["series_rows"] = block_rows([block])
             levels = np.array(block["levels"])
             for level in sorted(set(levels)):
                 target = batch["future_target"].clone()
@@ -1085,13 +1111,10 @@ def main() -> None:
     parser.add_argument("--memory-gb", type=float, default=ft.MEMORY_GB)
     # Processes cutting blocks a chunk ahead; they do not change the blocks.
     parser.add_argument("--cut-workers", type=int, default=3)
-    # Per-series slots (bdbvhubrenewal.forecasters.slots): a fixed random
-    # label shared by a place's count and lag series, plus its parent's;
-    # 0 trains without them.
-    parser.add_argument("--series-slots", type=int, default=0)
-    # Slots are fixed random labels, distinct codes from the start.
-    parser.add_argument("--slot-init-std", type=float, default=0.02)
-    parser.add_argument("--slot-init-seed", type=int, default=1)
+    # The series bias (bdbvhubrenewal.forecasters.series_bias): learned
+    # group attention bias for same-place and parent-child pairs.
+    parser.add_argument("--series-bias", action="store_true")
+    parser.add_argument("--bias-lr", type=float, default=1e-3)
     args = parser.parse_args()
     CHUNK = args.chunk
     ft.SOURCES = tuple(args.sources)
@@ -1173,18 +1196,15 @@ def main() -> None:
     pipeline = Chronos2Pipeline.from_pretrained(
         CHRONOS_MODEL, revision=CHRONOS_REVISION, device_map=device
     )
-    if args.series_slots:
-        slots.attach(
-            pipeline.model,
-            args.series_slots,
-            init_std=args.slot_init_std,
-            seed=args.slot_init_seed,
-        )
-    lora = lora_config(args.series_slots)
+    if args.series_bias:
+        series_bias.attach(pipeline.model)
+    lora = lora_config(args.series_bias)
     model = lora_model(pipeline.model, lora, args.init_adapter)
     model.train()
     params = [p for p in model.parameters() if p.requires_grad]
-    optimiser = torch.optim.AdamW(param_groups(model, args.learning_rate))
+    optimiser = torch.optim.AdamW(
+        param_groups(model, args.learning_rate, args.bias_lr)
+    )
     accepted = inspect.signature(Chronos2Model.forward).parameters
     base = {
         "grid": args.grid,
@@ -1192,10 +1212,10 @@ def main() -> None:
         "code_sha256": {
             **{p: ft._sha256(Path(p)) for p in ft.CODE},
             "scripts/finetune_stream.py": ft._sha256(Path(__file__)),
-            # The slots' code shapes a slots checkpoint, so it is hashed.
+            # The bias's code shapes a bias checkpoint, so it is hashed.
             **(
-                {SLOTS_CODE: ft._sha256(Path(SLOTS_CODE))}
-                if args.series_slots
+                {c: ft._sha256(Path(c)) for c in BIAS_CODE}
+                if args.series_bias
                 else {}
             ),
             **{
@@ -1228,16 +1248,12 @@ def main() -> None:
             "r": 8,
             "alpha": 16,
             **(
-                {"modules_to_save": [slots.SLOT_MODULE]}
-                if args.series_slots
+                {"modules_to_save": [series_bias.BIAS_MODULE]}
+                if args.series_bias
                 else {}
             ),
         },
-        **slot_settings(
-            args.series_slots,
-            args.slot_init_std,
-            args.slot_init_seed,
-        ),
+        **bias_settings(args.series_bias, args.bias_lr),
         "learning_rate": args.learning_rate,
         **(
             {
@@ -1275,9 +1291,13 @@ def main() -> None:
     consumed = out / "consumed.txt"
     state_dir = out / "state"
     state = load_state(state_dir, model, optimiser)
-    # The rate is this run's, as hashed, not the saved state's.
-    for group in optimiser.param_groups:
-        group["base_lr"] = args.learning_rate
+    # The rates are this run's, as hashed, not the saved state's.
+    for group, base_lr in zip(
+        optimiser.param_groups,
+        (args.learning_rate, args.bias_lr),
+        strict=False,
+    ):
+        group["base_lr"] = base_lr
     step, done, position = 0, 0, 0
     # The outbreaks trained on, in order, and those of the current chunk.
     trained: list[str] = []
@@ -1340,10 +1360,8 @@ def main() -> None:
     def backward(part: list[int], share: float) -> float:
         """Accumulate the gradients of part of a batch."""
         batch = data._build_batch(part)
-        loss = forward(model, batch, accepted, device).loss
-        (loss * share).backward()
-        value = float(loss.detach())
-        del batch, loss
+        value = train_step(model, batch, accepted, device, share)
+        del batch
         return value
 
     def skip(i: int) -> None:
@@ -1442,8 +1460,7 @@ def main() -> None:
             blocks,
             args.batch_size,
             DatasetMode.TRAIN,
-            args.series_slots,
-            np.random.default_rng([args.seed, done, 2]),
+            args.series_bias,
         )
         log(
             f"outbreaks {done + 1}-{hi}: {len(blocks)} blocks, "
@@ -1490,6 +1507,10 @@ def main() -> None:
                         model, val, args.batch_size, ft.EVAL_BLOCKS
                     )
                     described = f"by source {_by_source(entry['by_source'])}, "
+                bias = bias_summary(model)
+                if bias:
+                    entry["bias"] = bias
+                    described += f"bias {_bias_range(bias)}, "
                 split["eval_s"] += time.perf_counter() - since
                 history.append(entry)
                 log(
@@ -1587,8 +1608,8 @@ def main() -> None:
             if mismatch:
                 log(f"n{done} not published: {'; '.join(mismatch)}")
             elif args.publish:
-                # Slots checkpoints are released apart (`release_tag`).
-                spec = f"{SLOTS_PREFIX}{key}" if args.series_slots else key
+                # Bias checkpoints are released apart (`release_tag`).
+                spec = f"{SLOTS_PREFIX}{key}" if args.series_bias else key
                 publish(where, spec)
                 report(last_release=release_tag(spec))
             # From `stop_from` on, go on only while the last doubling cut

@@ -43,12 +43,12 @@ UNIVARIATE_SHARE=${UNIVARIATE_SHARE:-0.2}
 # landed, in seed order.
 CHUNK=${CHUNK:-125}
 REAL_VALIDATION=${REAL_VALIDATION:-output/finetune/real-validation.pkl}
-# Per-series slots (src/bdbvhubrenewal/forecasters/slots.py): 0 trains
-# without them; N trains N slots beside the adapter. A slots run keeps to
-# its own HERE and checkpoint folder (checkpoints/slots/, the
-# paper's finetune_run name), so the run without slots is
-# never touched, and its releases are chronos-slots-<hash>.
-SERIES_SLOTS=${SERIES_SLOTS:-0}
+# The series bias (src/bdbvhubrenewal/forecasters/series_bias.py): 1 trains
+# a learned group attention bias for same-place and parent-child series
+# beside the adapter. Such a run keeps to its own HERE and checkpoint
+# folder (checkpoints/slots/, the paper's finetune_run name), so the run
+# without it is never touched, and its releases are chronos-slots-<hash>.
+SERIES_BIAS=${SERIES_BIAS:-0}
 
 remote_ls() { on_rounds "ls $REMOTE_ROOT/rounds" 2> /dev/null; }
 # Copy a round's file or folder ($2, "sims/" for its simulations) to $3.
@@ -86,19 +86,19 @@ PY
   done
 }
 
-slots_args() {
-  # The trainer's slot arguments; a slots run must not use the default HERE.
-  [ "$SERIES_SLOTS" -gt 0 ] || return 0
+bias_args() {
+  # The trainer's bias argument; a bias run must not use the default HERE.
+  [ "$SERIES_BIAS" = 1 ] || return 0
   if [ "$HERE" = output/finetune/continuous ]; then
-    echo "SERIES_SLOTS needs its own HERE, not $HERE" >&2
+    echo "SERIES_BIAS needs its own HERE, not $HERE" >&2
     return 1
   fi
-  echo "--series-slots $SERIES_SLOTS"
+  echo "--series-bias"
 }
 
 remote_checkpoints() {
   # The folder under REMOTE_ROOT this run copies its checkpoints to.
-  if [ "$SERIES_SLOTS" -gt 0 ]; then
+  if [ "$SERIES_BIAS" = 1 ]; then
     echo checkpoints/slots
   else
     echo checkpoints
@@ -121,7 +121,7 @@ sys.exit(0 if ok else 1)
 
 alert() { post "continuous: $*"; }
 
-slots=$(slots_args) || exit 1
+bias=$(bias_args) || exit 1
 ckpts=$(remote_checkpoints)
 if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
   echo "the worktree has uncommitted changes; commit them to train" >&2
@@ -133,7 +133,7 @@ while true; do
   sync_rounds || echo "$(date) sync failed; trying again"
   if [ -z "$trainer" ] && [ -s "$HERE/rounds/r1/held-out.txt" ]; then
     read -r -a held < "$HERE/rounds/r1/held-out.txt"
-    # $slots is empty or two words, so it is left unquoted.
+    # $bias is empty or one word, so it is left unquoted.
     # shellcheck disable=SC2086
     PYTORCH_MPS_HIGH_WATERMARK_RATIO=${MPS_HIGH_WATERMARK:-0.85} \
     PYTORCH_MPS_LOW_WATERMARK_RATIO=0.6 \
@@ -148,7 +148,7 @@ while true; do
       --sources $SOURCES --univariate-share "$UNIVARIATE_SHARE" \
       --real-validation "$REAL_VALIDATION" --note "continuous r4" --publish \
       --chunk "$CHUNK" --wait-for-seeds \
-      --exclude "$HERE/excluded.txt" $slots \
+      --exclude "$HERE/excluded.txt" $bias \
       >> "$HERE/train.log" 2>&1 < /dev/null &
     trainer=$!
     echo "$trainer" > "$HERE/trainer.pid"
@@ -162,7 +162,7 @@ while true; do
     on_rounds "mkdir -p $REMOTE_ROOT/$ckpts" \
       && rsync -a "$dir/" "$(at_rounds "$REMOTE_ROOT/$ckpts/$n/")" || continue
     key=$(python3 -c "import json;print(json.load(open('$ckpt'))['hash'])")
-    alert "checkpoint $n ($slots) hash $key at $REMOTE_ROOT/$ckpts/$n"
+    alert "checkpoint $n ($bias) hash $key at $REMOTE_ROOT/$ckpts/$n"
     published="$published $n"
     if [ "$n" = n1000 ] && ! beats_zero_shot "$ckpt"; then
       alert "ALERT n1000 does not beat zero-shot on held-out sims and pseudo-origins; training goes on, check before n2000"
