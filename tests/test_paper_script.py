@@ -46,6 +46,12 @@ def repo(tmp_path: Path) -> Path:
     for tool in ("uv", "git", "quarto"):
         (bin_dir / tool).write_text(STUB)
         (bin_dir / tool).chmod(0o755)
+    # uv also logs the token its steps get; gh hands out one.
+    (bin_dir / "uv").write_text(
+        STUB.replace("exit 0", 'echo "token=$GITHUB_TOKEN" >> "$CALLS"\nexit 0')
+    )
+    (bin_dir / "gh").write_text("#!/bin/sh\necho gh-token\n")
+    (bin_dir / "gh").chmod(0o755)
     return tmp_path
 
 
@@ -57,7 +63,8 @@ def _run(
         "PATH": f"{repo / 'bin'}:{os.environ['PATH']}",
         "CALLS": str(repo / "calls.log"),
     }
-    env.pop("CORES", None)
+    for name in ("CORES", "GITHUB_TOKEN", "GH_TOKEN"):
+        env.pop(name, None)
     if cores is not None:
         env["CORES"] = cores
     return subprocess.run(
@@ -125,3 +132,10 @@ def test_pages_and_the_taskfile_run_the_script() -> None:
     assert "snakemake" not in paper["run"]
     tasks = yaml.safe_load((ROOT / "Taskfile.yml").read_text())["tasks"]
     assert any("scripts/paper.sh" in str(c) for c in tasks["paper"]["cmds"])
+
+
+def test_the_steps_get_a_github_token(repo: Path) -> None:
+    # CI passes one; locally it is gh's, so the hub data downloads are not
+    # rate limited.
+    assert _run(repo).returncode == 0
+    assert "token=gh-token" in _calls(repo)
