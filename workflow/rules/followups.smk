@@ -62,6 +62,10 @@ rule slots_check_shard:
         prefix=lambda wc, resources: job_prefix(resources.mem_mb),
         shards=SLC["shards"],
         blocks=f"{CACHE}/slots-check/blocks.pkl",
+        held=lambda wc: f"{held_seeds()[0]} {held_seeds()[-1]}",
+        sims=f"{ROUNDS_DIR}/r{FT['held_round']}/sims",
+        noslots=LOCAL["NOSLOTS_RUN"],
+        germany=LOCAL["GERMANY_BLOCKS"],
     threads: 1
     resources:
         mem_mb=SLC["mem_mb"],
@@ -70,7 +74,8 @@ rule slots_check_shard:
         + "uv run --group chronos python -u scripts/slots_check.py score "
         "{output.csv} --slots {input.adapter} --label {wildcards.label} "
         "--shard {wildcards.shard} {params.shards} --cache {params.blocks} "
-        "> {log} 2>&1"
+        "--noslots-root {params.noslots} --sim-dir {params.sims} "
+        "--held {params.held} --germany {params.germany} > {log} 2>&1"
 
 
 rule slots_check_summary:

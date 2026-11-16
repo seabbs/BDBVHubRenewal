@@ -29,6 +29,9 @@ DEFAULTS = (
     # The workflow's own settings.
     ("RUN", "$ROOT/checkpoints/slots"),
     ("SCORE_CACHE", "$ROOT/scores"),
+    # The slots check's no-slots run and German blocks.
+    ("NOSLOTS_RUN", "$ROOT/checkpoints"),
+    ("GERMANY_BLOCKS", "$ROOT/germany/germany.pkl"),
     ("JOB_PREFIX", ""),
     # Memory and disk a job leaves free when it starts (GB).
     ("MIN_FREE_GB", "20"),
