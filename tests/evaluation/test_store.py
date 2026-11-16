@@ -13,6 +13,8 @@ import pytest
 from bdbvhubrenewal.evaluation import store
 from bdbvhubrenewal.evaluation.backtest import BacktestConfig, real_vintages
 from bdbvhubrenewal.forecasters import ForecastTask
+from bdbvhubrenewal.forecasters.base import NATIONAL, SAMPLE_COLUMNS
+from bdbvhubrenewal.submission.fitting import Forecast
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -526,7 +528,7 @@ class _Hub:
         *,
         config: str | None = None,
         fit_dir: Path | None = None,
-        samples: pd.DataFrame | None = None,
+        forecast: Forecast | None = None,
     ) -> pd.DataFrame:
         from bdbvhubrenewal.submission.hub import HUB_COLUMNS
 
@@ -536,7 +538,7 @@ class _Hub:
         self.calls[model] = {
             "config": config,
             "files": files,
-            "samples": samples,
+            "forecast": forecast,
         }
         row = dict.fromkeys(HUB_COLUMNS, "x") | {"location": "CD"}
         return pd.DataFrame([row])
@@ -582,15 +584,15 @@ def test_the_archive_holds_the_fit_the_store_holds_at_record_time(
     assert set(got["vintage"]) == {origin}
     # A stored model that is no candidate submits its stored samples, for
     # the round's weeks only.
-    samples = hub.calls[fitted_flat]["samples"]
-    assert list(samples.columns) == list(store_archive.SAMPLE_COLUMNS)
+    samples = hub.calls[fitted_flat]["forecast"].samples
+    assert list(samples.columns) == list(SAMPLE_COLUMNS)
     weeks = {str(d) for d in task.target_end_dates}
-    assert set(samples["target_end_date"].astype(str)) <= weeks
+    assert set(samples["target_end_date"].astype(str)) == weeks
     # The model the store does not hold is forecast now and not stored.
     assert hub.calls["plain"] == {
         "config": None,
         "files": [],
-        "samples": None,
+        "forecast": None,
     }
     assert bool(got.loc["plain", "current"])
     assert not (root / "plain").exists()
@@ -669,6 +671,9 @@ def test_a_model_that_fails_leaves_the_others_archived(
     assert "nocode not archived: KeyError" in err
     assert "fails not archived: ValueError('no forecast')" in err
     assert "missing not archived: LookupError" in err
+    # Each failure prints its traceback, so a bug can be told from a
+    # missing fit.
+    assert err.count("Traceback (most recent call last)") == 4
     # No store task at the origin: the stored models are reported.
     table = store_archive.archive(root, task, None, models, {}, hub, code)
     assert set(table["model"]) == {"plain"}
@@ -688,3 +693,71 @@ def test_the_candidate_models_are_the_policy_and_the_stored_models() -> None:
         if c["kind"] != "randomwalk":
             assert models[c["model"]] == c["config"]
     assert set(store.stored_models()) <= set(models)
+
+
+def test_stored_samples_keep_the_unassigned_national_part(
+    fitted_flat: str,
+    tasks: dict[str, ForecastTask],
+    tmp_path: Path,
+) -> None:
+    from bdbvhubrenewal.evaluation import store_archive
+
+    task = tasks[sorted(tasks)[-1]]
+    fit = store.fit(fitted_flat, task, {}, "c")
+    rows = fit.forecasts
+    # The model fits the nation on its own: 5 cases no province holds.
+    national = rows["location"] == NATIONAL
+    rows.loc[national, "value"] = rows.loc[national, "value"] + 5
+    # A nowcast of an earlier report date, which is no forecast.
+    nowcast = rows.loc[~national].assign(as_of="2026-01-01")
+    rows = pd.concat([rows, nowcast], ignore_index=True)
+    root = tmp_path / "store"
+    store.write_fit(root, dataclasses.replace(fit, forecasts=rows))
+    hub = _Hub()
+    store_archive.archive(
+        root, task, task, {fitted_flat: None}, {}, hub, lambda _: "c"
+    )
+    forecast = hub.calls[fitted_flat]["forecast"]
+    assert NATIONAL not in set(forecast.samples["location"])
+    assert not forecast.samples.duplicated(
+        ["location", "target_end_date", "sample"]
+    ).any()
+    assert (forecast.unassigned["value"] == 5).all()
+    n_weeks = len(task.target_end_dates)
+    n_samples = forecast.samples["sample"].nunique()
+    assert len(forecast.unassigned) == n_weeks * n_samples
+
+
+def test_stored_samples_missing_a_week_are_not_archived(
+    fitted_flat: str,
+    tasks: dict[str, ForecastTask],
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    from bdbvhubrenewal.evaluation import store_archive
+
+    task = tasks[sorted(tasks)[-1]]
+    fit = store.fit(fitted_flat, task, {}, "c")
+    last = max(fit.forecasts["target_end_date"])
+    rows = fit.forecasts.loc[fit.forecasts["target_end_date"] != last]
+    root = tmp_path / "store"
+    store.write_fit(root, dataclasses.replace(fit, forecasts=rows))
+    table = store_archive.archive(
+        root, task, task, {fitted_flat: None}, {}, _Hub(), lambda _: "c"
+    )
+    assert table.empty
+    assert f"{fitted_flat} not archived: ValueError" in capsys.readouterr().err
+
+
+def test_the_policy_candidates_are_the_policy_models() -> None:
+    from bdbvhubrenewal.evaluation import store_archive
+
+    policy = ROOT / "ci/policy.toml"
+    candidates = store_archive.policy_candidates(policy)
+    # Every candidate's model, and the random walk a candidate that names
+    # none runs, whatever candidates the policy holds.
+    raw = tomllib.loads(policy.read_text())["candidates"]
+    want = {c.get("model", store_archive.RANDOM_WALK) for c in raw}
+    assert set(candidates) == want
+    assert {"renewal", "randomwalk", "randomwalknowcast"} <= want
+    assert set(candidates) <= set(store_archive.candidate_models(policy))
