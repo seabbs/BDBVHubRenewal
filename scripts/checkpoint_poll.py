@@ -50,6 +50,9 @@ POLL_SECONDS = 30 * 60
 TICK_SECONDS = 60
 MAX_UNITS = 3
 SCOPE_GB = 6
+UNIT_PEAK_GB = 5
+"""A unit's measured peak resident memory, which the gate keeps beside
+`KEEP_FREE_GB`; `SCOPE_GB` stays its hard cap."""
 KEEP_FREE_GB = 16
 MIN_DISK_GB = 3
 DATA_HOURS = 6
@@ -71,22 +74,22 @@ def can_launch(
     return (
         budget.get("verdict") != "red"
         and free_core
-        and mem_avail_gb >= KEEP_FREE_GB + SCOPE_GB
+        and mem_avail_gb >= KEEP_FREE_GB + UNIT_PEAK_GB
     )
 
 
 def units_for(checkpoint: str, scored: set[str]) -> list[tuple[str, str]]:
-    """Return a checkpoint's units: held-out first, then the long ones.
+    """Return a checkpoint's units: held-out, BDBV (fast), then Germany.
 
     BDBV units of scored checkpoints are included so their rows cover
     the same origins; finished units return at once from the cache.
     """
     return [
         ("heldout", checkpoint),
-        ("germany", cs.REFERENCE),
-        ("germany", checkpoint),
         ("bdbv", cs.REFERENCE),
         ("bdbv", checkpoint),
+        ("germany", cs.REFERENCE),
+        ("germany", checkpoint),
         *(("bdbv", s) for s in sorted(scored)),
     ]
 

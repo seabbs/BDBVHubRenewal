@@ -39,7 +39,10 @@ def test_a_unit_starts_only_with_a_free_core_and_memory(poll) -> None:
     assert not poll.can_launch(_budget("red", 0), mem_avail_gb=30, running=0)
     assert not poll.can_launch(_budget("red", 3), mem_avail_gb=30)
     # 16 GB must stay free beside the unit's 6 GB scope.
-    assert not poll.can_launch(_budget("green", 2), mem_avail_gb=21)
+    # The gate uses a unit's measured peak (about 5 GB), the 6 GB scope
+    # staying its hard cap.
+    assert not poll.can_launch(_budget("green", 2), mem_avail_gb=20.9)
+    assert poll.can_launch(_budget("green", 2), mem_avail_gb=21)
     assert poll.can_launch(_budget("amber", 1), mem_avail_gb=22)
 
 
@@ -54,9 +57,10 @@ def test_a_checkpoint_needs_its_runs_the_reference_and_old_bdbv(poll) -> None:
         ("germany", "reference"),
         ("germany", "bbbbbbbbbbbb"),
     }
-    # The long German runs start first, so they overlap the short ones.
+    # BDBV first: its few origins give rows within minutes, then the long
+    # German runs, which write each date to the cache as it finishes.
     order = [u for u in units if u[0] != "heldout"]
-    assert order[:2] == [("germany", "reference"), ("germany", "bbbbbbbbbbbb")]
+    assert order[:2] == [("bdbv", "reference"), ("bdbv", "bbbbbbbbbbbb")]
 
 
 def test_mailbox_lines_carry_the_label(poll) -> None:
