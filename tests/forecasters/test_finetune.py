@@ -287,3 +287,17 @@ def test_blocks_carry_a_parent_that_does_not_sum() -> None:
     t = exact["start"] - 1
     assert exact["context"][0, t] == exact["context"][1:3, t].sum()
     assert loose["context"][0, t] > loose["context"][1:3, t].sum()
+
+
+def test_a_late_country_keeps_its_late_reports_in_its_truth() -> None:
+    counts = _two_places()
+    country = counts.assign(
+        report_date=pd.to_datetime(counts["report_date"]) + pd.Timedelta(days=9)
+    )
+    days = sorted(
+        pd.to_datetime(counts["reference_date"])
+        .dt.strftime("%Y-%m-%d")
+        .unique()
+    )
+    truth = final_counts(counts, "daily", (NATIONAL,), days, False, country)
+    assert truth.sum() == counts["count"].sum()

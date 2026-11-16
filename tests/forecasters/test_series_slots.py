@@ -317,17 +317,16 @@ def test_a_parents_slot_is_what_its_children_carry():
     assert len(set(own[:n_t])) == n_t
 
 
-def test_the_parent_term_is_a_learned_share_of_the_parents_slot():
+def test_a_place_adds_its_parents_slot_exactly():
     model = tiny_model()
     slots.attach(model, 8, init_std=0.02, seed=1)
     module = getattr(model, slots.SLOT_MODULE)
     table = module.embedding.weight.detach()
-    ids = torch.tensor([[3, 5], [5, -1]])
-    out = module(ids).detach()
-    scale = float(module.parent_scale)
-    assert 0 < scale < 1
-    assert torch.allclose(out[0], table[3] + scale * table[5])
+    out = module(torch.tensor([[3, 5], [5, -1]])).detach()
+    assert torch.allclose(out[0], table[3] + table[5])
     assert torch.allclose(out[1], table[5])
+    # The slot table is the only parameter.
+    assert [n for n, _ in module.named_parameters()] == ["embedding.weight"]
     # Own slots alone, as before.
     assert torch.allclose(module(torch.tensor([3, 5])).detach(), table[[3, 5]])
 
@@ -362,3 +361,31 @@ def test_inference_slots_follow_chronos_row_order_by_name():
         i = at[name.rsplit("_lag_", 1)[0]]
         assert own[len(HIER) + k] == chosen[i]
         assert parent[len(HIER) + k] == want_parent(i)
+
+
+def test_slots_without_a_parent_link_ignore_parent_ids(tmp_path):
+    from peft import get_peft_model
+
+    from bdbvhubrenewal.forecasters.foundation import _group_slots
+
+    model = tiny_model()
+    slots.attach(model, 8, init_std=0.02, seed=1, parent=False)
+    module = getattr(model, slots.SLOT_MODULE)
+    table = module.embedding.weight.detach()
+    out = module(torch.tensor([[3], [5]])).detach()
+    assert torch.allclose(out[0], table[3])
+    assert not slots.has_parent_link(model)
+    # An adapter saved without the link loads without it.
+    get_peft_model(model, lora()).save_pretrained(tmp_path / "plain")
+    assert slots.adapter_parent_link(tmp_path / "plain") is False
+    with_link = tiny_model()
+    slots.attach(with_link, 8, init_std=0.02, seed=1)
+    get_peft_model(with_link, lora()).save_pretrained(tmp_path / "linked")
+    assert slots.adapter_parent_link(tmp_path / "linked") is True
+    names = [f"{p}_lag_0" for p in ("CD", "CD-NK")]
+    group = {
+        "target": np.zeros((2, 4)),
+        "past_covariates": {n: np.zeros(4) for n in names},
+        "places": ("CD", "CD-NK"),
+    }
+    assert _group_slots(group, 8, parent=False).ndim == 1

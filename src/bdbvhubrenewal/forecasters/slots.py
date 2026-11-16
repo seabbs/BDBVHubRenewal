@@ -3,18 +3,19 @@ r"""Per-series slots: tie each place's lag series to its count series.
 
 Chronos-2's group attention has no series identity, so in the ragged
 layout's joint block it cannot tell which place a lag series belongs to.
-A slot is a learned vector, one of `N_SLOTS`, added to every token of a
-series (its context patches, its future patches and its [REG] token). A
-place's count series and all its lag series share one slot. Slots are
-drawn as a fresh random permutation per block in training, so the model
-learns which series pair rather than fixed identities; at inference and
-in held-out losses they are drawn the same way with the fixed seed
-`EVAL_SEED`.
+A slot is a label, one of `N_SLOTS` fixed random vectors (`attach`
+with `init_std`), added to every token of a series (its context patches,
+its future patches and its [REG] token). A place's count series and all
+its lag series share one label, plus its parent's label (`parents_of`),
+so siblings share their parent's. Labels are drawn as a fresh random
+permutation per block in training, so the model learns which series pair
+rather than fixed identities; at inference and in held-out losses they
+are drawn the same way with the fixed seed `EVAL_SEED`.
 
-The slots are a module of the model, `series_slots`, initialised at zero,
-so a model with slots starts exactly as base Chronos-2. It trains beside
-the LoRA adapter as one of PEFT's `modules_to_save`, so it is saved in,
-and loaded from, the adapter's files (`load_adapter`).
+The labels are a module of the model, `series_slots`, saved in, and
+loaded from, the adapter's files as one of PEFT's `modules_to_save`
+(`load_adapter`); the trainer keeps them fixed while LoRA learns to read
+them. Zero labels leave the model exactly as base Chronos-2.
 
 `attach` adds the slots to a Chronos-2 model and hooks its input patch
 embedding and [REG] embedding. `assigned` sets the slot of each row of
@@ -27,7 +28,7 @@ repeats each row, and the slots repeat with it.
 from __future__ import annotations
 
 import json
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Final
@@ -38,12 +39,15 @@ __all__ = [
     "EVAL_SEED",
     "N_SLOTS",
     "SLOT_MODULE",
+    "adapter_parent_link",
     "adapter_slots",
     "assigned",
     "attach",
+    "has_parent_link",
     "has_slots",
     "load_adapter",
     "n_slots",
+    "parents_of",
     "row_places",
     "slot_ids",
 ]
@@ -60,6 +64,10 @@ EVAL_SEED: Final = 0
 
 _STATE: Final = "_series_slot_state"
 """Attribute of a model with slots holding the next batch's slots."""
+
+COUNTRIES: Final = ("CD", "DE")
+"""Codes of the whole country (BDBV, Germany): the parent of a place with
+no nearer parent in its block."""
 
 
 def row_places(n_targets: int, n_covariates: int) -> np.ndarray:
@@ -83,13 +91,43 @@ def row_places(n_targets: int, n_covariates: int) -> np.ndarray:
     )
 
 
+def parents_of(places: Sequence[str]) -> list[int]:
+    """Return the index of each place's parent in `places`, -1 for none.
+
+    A place's parent is its nearest prefix in the block, cut at a "-"
+    (`R1-P03` in `R1`, `CD-NK-03` in `CD-NK`), else the country
+    (`COUNTRIES`) when the block holds it, as for provinces, states, age
+    groups and age totals. The country has none. Parent means belongs to:
+    a parent need not be the sum of its children.
+    """
+    at = {p: i for i, p in enumerate(places)}
+    root = next((at[c] for c in COUNTRIES if c in at), -1)
+    out = []
+    for p in places:
+        parts = p.split("-")
+        near = next(
+            (
+                at["-".join(parts[:k])]
+                for k in range(len(parts) - 1, 0, -1)
+                if "-".join(parts[:k]) in at
+            ),
+            None,
+        )
+        out.append(near if near is not None else -1 if at[p] == root else root)
+    return out
+
+
 def slot_ids(
     n_targets: int,
     n_covariates: int,
     rng: np.random.Generator,
     n_slots: int = N_SLOTS,
+    parents: Sequence[int] | None = None,
 ) -> np.ndarray:
     """Return each row's slot: a random distinct slot per place.
+
+    With `parents` (`parents_of`), each row also carries its place's
+    parent's own slot, -1 for none: `[2, rows]`, own then parent.
 
     Raises
     ------
@@ -99,11 +137,19 @@ def slot_ids(
     if n_targets > n_slots:
         raise ValueError(f"{n_targets} places but only {n_slots} slots")
     chosen = np.asarray(rng.permutation(n_slots))[:n_targets]
-    out: np.ndarray = chosen[row_places(n_targets, n_covariates)]
-    return out
+    rows = (
+        row_places(n_targets, n_covariates)
+        if n_covariates
+        else np.arange(n_targets)
+    )
+    own: np.ndarray = chosen[rows]
+    if parents is None:
+        return own
+    parent = np.array([chosen[q] if q >= 0 else -1 for q in parents], dtype=int)
+    return np.stack([own, parent[rows]])
 
 
-def _slots_module(n_slots: int, d_model: int) -> Any:
+def _slots_module(n_slots: int, d_model: int, parent: bool = True) -> Any:
     import torch
     from torch import nn
 
@@ -114,10 +160,21 @@ def _slots_module(n_slots: int, d_model: int) -> Any:
             super().__init__()
             self.embedding = nn.Embedding(n_slots, d_model)
             nn.init.zeros_(self.embedding.weight)
+            if parent:
+                # Marks slots that add each place's parent's; not trained.
+                self.register_buffer("parent_link", torch.ones(()))
 
         def forward(self, ids: torch.Tensor) -> torch.Tensor:
-            out: torch.Tensor = self.embedding(ids)
-            return out
+            """Own slots `[rows]`, or own and parents' `[2, rows]`."""
+            if ids.ndim == 2 and not hasattr(self, "parent_link"):
+                ids = ids[0]
+            if ids.ndim == 1:
+                out: torch.Tensor = self.embedding(ids)
+                return out
+            own, parent = ids
+            linked = (parent >= 0).unsqueeze(-1)
+            vectors = self.embedding(parent.clamp(min=0)) * linked
+            return self.embedding(own) + vectors
 
     return SeriesSlots()
 
@@ -150,13 +207,18 @@ def has_slots(model: Any) -> bool:
 
 
 def attach(
-    model: Any, n_slots: int = N_SLOTS, init_std: float = 0.0, seed: int = 0
+    model: Any,
+    n_slots: int = N_SLOTS,
+    init_std: float = 0.0,
+    seed: int = 0,
+    parent: bool = True,
 ) -> None:
     """Add slots to a Chronos-2 model and hook its embeddings.
 
     The slots start at zero, so the model is unchanged, or with
     `init_std` as distinct codes drawn from a normal with that sd, seeded
-    by `seed`. Loading an adapter that holds slots replaces them.
+    by `seed`. Loading an adapter that holds slots replaces them. With
+    `parent`, each place also adds its parent's slot.
     """
     import torch
 
@@ -164,7 +226,7 @@ def attach(
         raise ValueError("the model already has slots")
     d_model = model.config.d_model
     weight = next(model.input_patch_embedding.parameters())
-    module = _slots_module(n_slots, d_model)
+    module = _slots_module(n_slots, d_model, parent)
     if init_std:
         generator = torch.Generator().manual_seed(seed)
         with torch.no_grad():
@@ -177,10 +239,10 @@ def attach(
         ids = getattr(model, _STATE)["ids"]
         if ids is None:
             return output
-        rows = output.shape[0]
-        if rows % len(ids):
-            raise ValueError(f"{rows} rows but slots for {len(ids)}")
-        ids = ids.to(output.device).repeat_interleave(rows // len(ids))
+        rows, n = output.shape[0], ids.shape[-1]
+        if rows % n:
+            raise ValueError(f"{rows} rows but slots for {n}")
+        ids = ids.to(output.device).repeat_interleave(rows // n, dim=-1)
         vectors = getattr(model, SLOT_MODULE)(ids)
         return output + vectors[:, None, :].to(output.dtype)
 
@@ -220,6 +282,22 @@ def adapter_slots(adapter: Path | str) -> int | None:
     raise ValueError(f"{adapter} lists {SLOT_MODULE} but holds no weights")
 
 
+def has_parent_link(model: Any) -> bool:
+    """Whether a model's slots add each place's parent's."""
+    base = _base(model)
+    if base is None:
+        return False
+    return hasattr(getattr(base, SLOT_MODULE), "parent_link")
+
+
+def adapter_parent_link(adapter: Path | str) -> bool:
+    """Whether an adapter's slots hold the parent link (`parent_link`)."""
+    from safetensors import safe_open
+
+    with safe_open(Path(adapter) / "adapter_model.safetensors", "pt") as f:
+        return any("parent_link" in key for key in f.keys())  # noqa: SIM118
+
+
 def load_adapter(model: Any, adapter: Path | str) -> Any:
     """Return Chronos-2 `model` with an adapter merged, slots included.
 
@@ -230,5 +308,5 @@ def load_adapter(model: Any, adapter: Path | str) -> Any:
 
     n = adapter_slots(adapter)
     if n is not None:
-        attach(model, n)
+        attach(model, n, parent=adapter_parent_link(adapter))
     return PeftModel.from_pretrained(model, str(adapter)).merge_and_unload()

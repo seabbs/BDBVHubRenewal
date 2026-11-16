@@ -47,6 +47,7 @@ def releases(
     source: str,
     cutoffs: Sequence[str],
     totals: bool = False,
+    country: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
     """Return the hub target of each release of a simulated outbreak.
 
@@ -68,6 +69,9 @@ def releases(
         The releases' cut-offs, ISO format.
     totals : bool
         Add each place's total of its strata.
+    country : pandas.DataFrame, optional
+        The counts the country is summed from, as `counts`, when it is not
+        the sum of the places (`country_counts`).
 
     Returns
     -------
@@ -76,11 +80,17 @@ def releases(
         `target_end_date` and `total` (weekly) or `onset_date`, `observed`
         and `imputed` (daily).
     """
-    counts = counts.assign(
-        reference_date=pd.to_datetime(counts["reference_date"]),
-        report_date=pd.to_datetime(counts["report_date"]),
+
+    def dated(frame: pd.DataFrame) -> pd.DataFrame:
+        return frame.assign(
+            reference_date=pd.to_datetime(frame["reference_date"]),
+            report_date=pd.to_datetime(frame["report_date"]),
+        )
+
+    counts = dated(counts)
+    country = dated(counts if country is None else country).assign(
+        location=NATIONAL
     )
-    country = counts.assign(location=NATIONAL)
     if len(counts["location"].unique()) > 1:
         frames = [country, counts]
         if totals:
@@ -123,6 +133,7 @@ def final_counts(
     places: Sequence[str],
     times: Sequence[str],
     totals: bool = False,
+    country: pd.DataFrame | None = None,
 ) -> np.ndarray:
     """Return each place's count of each step with every report in.
 
@@ -138,14 +149,19 @@ def final_counts(
         Steps of the grid.
     totals : bool
         As `releases`.
+    country : pandas.DataFrame, optional
+        As `releases`.
 
     Returns
     -------
     numpy.ndarray
         `[L, T]`.
     """
-    last = str(pd.to_datetime(counts["report_date"]).max().date())
-    rows = releases(counts, source, [last], totals)
+    reported = pd.to_datetime(counts["report_date"])
+    if country is not None:
+        reported = pd.concat([reported, pd.to_datetime(country["report_date"])])
+    last = str(reported.max().date())
+    rows = releases(counts, source, [last], totals, country)
     tri = hub_triangle(rows, source, places, times[-1], max_lag=1)
     at = {t: i for i, t in enumerate(tri.times)}
     out = np.zeros((len(places), len(times)))
@@ -220,6 +236,39 @@ def aggregate_triangle(tri: HubTriangle, k: int, lags: int) -> HubTriangle:
     )
 
 
+PARENTS: Final = ("exact", "unallocated", "late_parent")
+"""How a block's country relates to its places (`country_counts`)."""
+
+
+def country_counts(
+    counts: pd.DataFrame, parent: str, rng: np.random.Generator
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Return the counts the places and the country are made from.
+
+    `exact`: both the outbreak's, so the country is the sum of its places.
+    `unallocated`: a share of 5% to 30% of cases has no place, so it is
+    in the country's count only, as cases of unknown province or age.
+    `late_parent`: the country is reported through its own stream, 3 to
+    14 days after its places.
+
+    Raises
+    ------
+    ValueError
+        If `parent` is none of `PARENTS`.
+    """
+    if parent == "exact":
+        return counts, counts
+    if parent == "unallocated":
+        keep = 1 - rng.uniform(0.05, 0.3)
+        kept = rng.binomial(counts["count"].to_numpy(dtype=int), keep)
+        return counts.assign(count=kept), counts
+    if parent == "late_parent":
+        days = pd.Timedelta(days=int(rng.integers(3, 15)))
+        later = pd.to_datetime(counts["report_date"]) + days
+        return counts, counts.assign(report_date=later)
+    raise ValueError(f"parent {parent!r} is none of {PARENTS}")
+
+
 def training_block(
     counts: pd.DataFrame,
     source: str,
@@ -228,6 +277,8 @@ def training_block(
     max_lag: int,
     ahead_weeks: int = AHEAD_WEEKS,
     totals: bool = False,
+    parent: str = "exact",
+    rng: np.random.Generator | None = None,
 ) -> dict[str, Any] | None:
     """Return one training block, cut at the last of `cutoffs`.
 
@@ -252,6 +303,11 @@ def training_block(
         Weeks after the cut-off's week to the last step.
     totals : bool
         As `releases`, so `places` may hold a place's total and its strata.
+    parent : str
+        How the country relates to its places (`country_counts`), drawn
+        with `rng`.
+    rng : numpy.random.Generator, optional
+        Draws the `parent` cases; a fixed seed by default.
 
     Returns
     -------
@@ -265,25 +321,30 @@ def training_block(
     """
     cut = cutoffs[-1]
     end = epiweek_end(cut) + dt.timedelta(weeks=ahead_weeks)
-    rows = releases(counts, source, cutoffs, totals)
+    counts, country = country_counts(
+        counts, parent, rng or np.random.default_rng(0)
+    )
+    rows = releases(counts, source, cutoffs, totals, country)
     if not rows["location"].isin(places).any():
         return None
     if source in BINNED:
         k = BINNED[source]
-        rows = releases(counts, "daily", cutoffs, totals)
+        rows = releases(counts, "daily", cutoffs, totals, country)
         daily = hub_triangle(
             rows, "daily", places, end.isoformat(), max_lag=k * max_lag
         )
         if daily.last < k - 1:
             return None
         tri = aggregate_triangle(daily, k, max_lag)
-        days = final_counts(counts, "daily", places, daily.times, totals)
+        days = final_counts(
+            counts, "daily", places, daily.times, totals, country
+        )
         truth = _sum_bins(days, bin_ends(daily, k), k)
     else:
         tri = hub_triangle(
             rows, source, places, end.isoformat(), max_lag=max_lag
         )
-        truth = final_counts(counts, source, places, tri.times, totals)
+        truth = final_counts(counts, source, places, tri.times, totals, country)
     start = tri.n_context
     horizon = len(tri.times) - start
     group = layout_block(tri, "ragged", places, start)

@@ -65,11 +65,11 @@ LEVEL_BLOCKS = 300
 """Held-out blocks scored by level at each checkpoint."""
 
 SAVE_EVERY = 50
+"""Steps between saves of the trainer's state, which a restarted trainer
+resumes from."""
 BY_SOURCE_EVERY = 200
 """Steps between held-out losses by source, which cost three monitor
 evals."""
-"""Steps between saves of the trainer's state, which a restarted trainer
-resumes from."""
 
 POLL = 60
 """Seconds between checks for a chunk's simulations."""
@@ -170,7 +170,7 @@ def lora_config(n_slots: int):
 
 
 def slot_settings(
-    n_slots: int, init_std: float = 0.0, init_seed: int = 0, lr: float = 0.0
+    n_slots: int, init_std: float = 0.0, init_seed: int = 0
 ) -> dict:
     """Return the slots' entry of a checkpoint's settings, none if off."""
     if not n_slots:
@@ -181,7 +181,13 @@ def slot_settings(
             "init": "normal" if init_std else "zero",
             "init_std": init_std,
             "init_seed": init_seed,
-            "learning_rate": lr,
+            "trained": False,
+            "parent": {
+                "link": "own slot plus the parent's own slot, from the same "
+                "table",
+                "rule": "nearest '-' prefix in the block, else the country "
+                f"({', '.join(slots.COUNTRIES)})",
+            },
             "module": slots.SLOT_MODULE,
             "assignment": (
                 "a fresh random permutation per block each time it is "
@@ -192,20 +198,14 @@ def slot_settings(
     }
 
 
-def param_groups(model, lr: float, slot_lr: float) -> list[dict]:
-    """Return the optimiser's groups: the adapter at `lr`, the slots at theirs.
+def param_groups(model, lr: float) -> list[dict]:
+    """Return the optimiser's one group: the trainable adapter at `lr`.
 
-    Each group keeps its starting rate as `base_lr`, which
-    `set_learning_rates` decays.
+    It keeps its starting rate as `base_lr`, which `set_learning_rates`
+    decays. The slots' labels are fixed, so they are not in it.
     """
-    adapter, slot = [], []
-    for name, p in model.named_parameters():
-        if p.requires_grad:
-            (slot if slots.SLOT_MODULE in name else adapter).append(p)
-    groups = [{"params": adapter, "lr": lr, "base_lr": lr}]
-    if slot:
-        groups.append({"params": slot, "lr": slot_lr, "base_lr": slot_lr})
-    return groups
+    trainable = [p for p in model.parameters() if p.requires_grad]
+    return [{"params": trainable, "lr": lr, "base_lr": lr}]
 
 
 def set_learning_rates(optimiser, step: int, steps: int) -> None:
@@ -224,10 +224,17 @@ def lora_model(base, config, init: Path | None):
     from peft import PeftModel, get_peft_model
 
     if init is None:
-        return get_peft_model(base, config)
-    if slots.has_slots(base) and slots.adapter_slots(init) is None:
-        raise ValueError(f"{init} holds no slots to continue training")
-    return PeftModel.from_pretrained(base, init, is_trainable=True)
+        model = get_peft_model(base, config)
+    else:
+        if slots.has_slots(base) and slots.adapter_slots(init) is None:
+            raise ValueError(f"{init} holds no slots to continue training")
+        model = PeftModel.from_pretrained(base, init, is_trainable=True)
+    # The slots' labels are fixed random codes: saved with the adapter,
+    # never trained; LoRA learns to read them.
+    for name, p in model.named_parameters():
+        if slots.SLOT_MODULE in name:
+            p.requires_grad_(False)
+    return model
 
 
 def learning_rate(step: int, base: float, steps: int) -> float:
@@ -572,10 +579,25 @@ def block_slots(blocks: list[dict], n_slots: int, rng=None) -> np.ndarray:
                 if rng is not None
                 else np.random.default_rng(slots.EVAL_SEED),
                 n_slots,
+                parents=block_parents(b),
             )
             for b in blocks
-        ]
+        ],
+        axis=-1,
     )
+
+
+def block_parents(block: dict) -> list[int]:
+    """Return each target's parent in a block (`slots.parents_of`).
+
+    A block without place names links every place to the country, when
+    it holds it, by its levels.
+    """
+    if "places" in block:
+        return slots.parents_of(block["places"])
+    levels = list(block["levels"])
+    root = levels.index("national") if "national" in levels else -1
+    return [-1 if i == root else root for i in range(len(levels))]
 
 
 def tensors(block: dict) -> dict:
@@ -1063,15 +1085,13 @@ def main() -> None:
     parser.add_argument("--memory-gb", type=float, default=ft.MEMORY_GB)
     # Processes cutting blocks a chunk ahead; they do not change the blocks.
     parser.add_argument("--cut-workers", type=int, default=3)
-    # Per-series slots (bdbvhubrenewal.forecasters.slots): a learned,
-    # zero-initialised vector shared by a place's count and lag series,
-    # trained beside the adapter; 0 trains without them.
+    # Per-series slots (bdbvhubrenewal.forecasters.slots): a fixed random
+    # label shared by a place's count and lag series, plus its parent's;
+    # 0 trains without them.
     parser.add_argument("--series-slots", type=int, default=0)
-    # Slots start as distinct codes and train at their own rate: new
-    # parameters outside Chronos-2's recipe, which the adapter keeps.
+    # Slots are fixed random labels, distinct codes from the start.
     parser.add_argument("--slot-init-std", type=float, default=0.02)
     parser.add_argument("--slot-init-seed", type=int, default=1)
-    parser.add_argument("--slot-lr", type=float, default=1e-4)
     args = parser.parse_args()
     CHUNK = args.chunk
     ft.SOURCES = tuple(args.sources)
@@ -1164,9 +1184,7 @@ def main() -> None:
     model = lora_model(pipeline.model, lora, args.init_adapter)
     model.train()
     params = [p for p in model.parameters() if p.requires_grad]
-    optimiser = torch.optim.AdamW(
-        param_groups(model, args.learning_rate, args.slot_lr)
-    )
+    optimiser = torch.optim.AdamW(param_groups(model, args.learning_rate))
     accepted = inspect.signature(Chronos2Model.forward).parameters
     base = {
         "grid": args.grid,
@@ -1193,6 +1211,7 @@ def main() -> None:
         "chunk": CHUNK,
         "blocks_per_simulation": k,
         "univariate_share": ft.UNIVARIATE_SHARE,
+        "parent_mix": list(ft.PARENT_MIX),
         **(
             {
                 "draws_per_simulation": DRAWS_PER_PASS,
@@ -1218,7 +1237,6 @@ def main() -> None:
             args.series_slots,
             args.slot_init_std,
             args.slot_init_seed,
-            args.slot_lr,
         ),
         "learning_rate": args.learning_rate,
         **(
@@ -1257,6 +1275,9 @@ def main() -> None:
     consumed = out / "consumed.txt"
     state_dir = out / "state"
     state = load_state(state_dir, model, optimiser)
+    # The rate is this run's, as hashed, not the saved state's.
+    for group in optimiser.param_groups:
+        group["base_lr"] = args.learning_rate
     step, done, position = 0, 0, 0
     # The outbreaks trained on, in order, and those of the current chunk.
     trained: list[str] = []
@@ -1492,6 +1513,9 @@ def main() -> None:
         mix = seen.setdefault("mix", {})
         for block in blocks:
             mix[block["mix"]] = mix.get(block["mix"], 0) + 1
+            parents = seen.setdefault("parents", {})
+            kind = block.get("parent", "exact")
+            parents[kind] = parents.get(kind, 0) + 1
         # Blocks of strata with no cases by their cut are not laid out.
         mix["empty"] = mix.get("empty", 0) + len(empty)
         if done in prefixes:

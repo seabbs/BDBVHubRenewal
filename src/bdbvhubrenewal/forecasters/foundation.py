@@ -578,6 +578,61 @@ def _chronos(checkpoint: Checkpoint | None = None) -> Any:
     return Chronos2Pipeline(model=slots.load_adapter(pipeline.model, adapter))
 
 
+def _chronos_input(group: Series) -> dict:
+    """Return the parts of a group Chronos-2's dict path reads."""
+    keys = ("target", "past_covariates", "future_covariates")
+    return {k: group[k] for k in keys if k in group}
+
+
+def _group_slots(
+    group: Series, n_slots: int, parent: bool = True
+) -> np.ndarray:
+    """Return each of a group's rows' own and parent slots, `[2, rows]`.
+
+    Without `parent` (slots trained without the parent link), own slots
+    only, `[rows]`.
+
+    Chronos-2's dict path puts the targets first, then the covariates by
+    sorted name, past-only ones before known-future ones, not in input
+    order. Each place gets a distinct slot drawn with `slots.EVAL_SEED`
+    in target order, and its parent's (`slots.parents_of`), and each lag
+    series `<place>_lag_<d>` its place's. The places are the group's
+    `places`, else the order in which the covariates name them.
+
+    Raises
+    ------
+    ValueError
+        If a covariate names no target place, or the places do not match
+        the targets.
+    """
+    past = list(group.get("past_covariates", {}))
+    known = set(group.get("future_covariates", {}))
+    n_targets = np.atleast_2d(group["target"]).shape[0]
+    named = dict.fromkeys(n.rsplit("_lag_", 1)[0] for n in past)
+    places = list(group.get("places") or named)
+    if len(places) != n_targets:
+        raise ValueError(f"{len(places)} places for {n_targets} targets")
+    rows = sorted(n for n in past if n not in known)
+    rows += sorted(n for n in past if n in known)
+    at = {p: i for i, p in enumerate(places)}
+    try:
+        owner = [at[n.rsplit("_lag_", 1)[0]] for n in rows]
+    except KeyError as err:
+        raise ValueError(f"covariate of no target place: {err}") from err
+    link = parent
+    own, up = slots.slot_ids(
+        n_targets,
+        0,
+        np.random.default_rng(slots.EVAL_SEED),
+        n_slots,
+        parents=slots.parents_of(places),
+    )
+    index = np.concatenate([np.arange(n_targets), owner]).astype(int)
+    if not link:
+        return own[index]
+    return np.stack([own[index], up[index]])
+
+
 def chronos_sampler(
     groups: Sequence[Series],
     horizon: int,
@@ -631,22 +686,19 @@ def chronos_sampler(
         # seed, as in held-out losses.
         quantiles = []
         for g in groups:
-            ids = slots.slot_ids(
-                np.atleast_2d(g["target"]).shape[0],
-                len(g.get("past_covariates", {})),
-                np.random.default_rng(slots.EVAL_SEED),
-                slots.n_slots(model),
+            ids = _group_slots(
+                g, slots.n_slots(model), slots.has_parent_link(model)
             )
             with slots.assigned(model, ids):
                 q, _ = pipeline.predict_quantiles(
-                    [dict(g)],
+                    [_chronos_input(g)],
                     prediction_length=horizon,
                     quantile_levels=levels.tolist(),
                 )
             quantiles.extend(q)
     else:
         quantiles, _ = pipeline.predict_quantiles(
-            [dict(g) for g in groups],
+            [_chronos_input(g) for g in groups],
             prediction_length=horizon,
             quantile_levels=levels.tolist(),
         )
