@@ -14,12 +14,22 @@ RUN = ROOT / "output/finetune/continuous-slots"
 PREV = Path("/Users/lshsa2/code/seabbs/bdbv-hub-baseline-forecasts/"
             ".worktrees/fm-finetune-r4/output/finetune/continuous")
 CSV = ROOT / "output/finetune/slots-vs-noslots.csv"
+# Datasets for the nowcast plot. "mirror" is the folder under
+# ckpt-scores/cache/ on archie and under output/finetune/dashboard-cache/.
+# "groups" are (name, regex on location) pairs that fill the location picker.
+# "truth" says where the truth line comes from (shown in the caption).
+DATASETS = [
+    {"key": "germany", "label": "Germany", "mirror": "germany",
+     "truth": "latest vintage of the forecast files",
+     "groups": [("national", r"^DE$"), ("states", r"^DE-"),
+                ("ages", r"^(\d\d-\d\d|80\+)$")]},
+]
 # Runs shown on the dashboard. Any other hash in the archie mirror or the
 # scores CSV is ignored. "hashes" lists a run's checkpoints explicitly; None
 # means the run in "dir" (its saved settings.json hashes, plus mirror folders
 # named slots-<hash>).
 RUNS = [
-    {"key": "slots", "label": "slots", "dir": RUN, "hashes": None, "hue": 217,
+    {"key": "slots", "label": "slots", "dir": RUN, "hashes": None, "prefix": "slots", "hue": 217,
      "n": {}},
     {"key": "no slots", "label": "no slots", "dir": PREV,
      "hashes": ["de129103cacc", "7962fd718a47"], "hue": 25,
@@ -393,8 +403,7 @@ def num(x):
         return None
 
 
-SER_COL = {"slots": "#2563eb", "noslots": "#ea580c", "zero": "#16a34a",
-           "complete": "#9333ea", "rw": "#6b7280"}
+REF_COL = {"zero": "#16a34a", "complete": "#9333ea", "rw": "#6b7280"}
 XT = [(125, "zero-shot"), (250, "250"), (500, "500"), (1000, "1000"),
       (2000, "2000"), (4000, "4000"), (8000, "8000")]
 RULE = "own-quantile-wis_crps-1000-common"
@@ -409,28 +418,31 @@ def run_hashes(cfg):
             if isinstance(s, dict) and s.get("hash")}
 
 
-def hash_run(h, pref=False):
+def hash_run(h, pref=None):
     """Run key for a checkpoint hash, or None to ignore it."""
     for cfg in RUNS:
         if cfg["hashes"] is not None and h in cfg["hashes"]:
             return cfg["key"]
     for cfg in RUNS:
-        if cfg["hashes"] is None and (pref or h in run_hashes(cfg)):
+        if cfg["hashes"] is None and (
+                (pref and pref == cfg.get("prefix")) or h in run_hashes(cfg)):
             return cfg["key"]
     return None
 
 
 def norm_hash(name):
-    """('slots-abc', 'chronos-slots-abc' and 'abc') -> ('abc', is_slots)."""
-    m = re.match(r"^(?:chronos-)?(slots-|ft-)?(.*)$", name)
-    return m.group(2), m.group(1) == "slots-"
+    """'chronos-slots-abc', 'slots-abc' and 'abc' -> ('abc', 'slots'|None)."""
+    m = re.match(r"^(?:chronos-)?(?:([a-z]+)-)?([0-9a-f]{6,}.*)$", name)
+    if not m:
+        return name, None
+    return m.group(2), (m.group(1) if m.group(1) != "ft" else None)
 
 
-def run_colour(run, rank, count):
+def run_colour(run, rank=0, count=1):
     hue = next((c["hue"] for c in RUNS if c["key"] == run), None)
     if hue is None:
         return "#6b7280"
-    light = 48 if count < 2 else 66 - 28 * rank / (count - 1)
+    light = 46 if count < 2 else 66 - 28 * rank / (count - 1)
     return f"hsl({hue},80%,{light:.0f}%)"
 
 
@@ -444,15 +456,13 @@ def score_classify(r):
     if ck == "zero-shot":
         return "zero"
     h, pref = norm_hash(ck)
-    run = hash_run(h, pref)
-    if run:
-        return run.replace(" ", "")
+    return hash_run(h, pref)
     return None
 
 
 def score_payload(rows, local):
     """Rows for the client-side score chart and not-yet-scored markers."""
-    out, seen_h, seen_slot_n = [], set(), set()
+    out, seen_h, seen_n = [], set(), {}
     for r in rows:
         if r.get("rule") != RULE or r["study"] not in ("germany", "ebola"):
             continue
@@ -470,15 +480,21 @@ def score_payload(rows, local):
                     "" if r["checkpoint"] == "zero-shot" else h,
                     round(v, 4)])
         seen_h.add(h)
-        if ser == "slots":
-            seen_slot_n.add(n)
+        seen_n.setdefault(ser, set()).add(n)
     pending = []
     for run, n, h in local:
-        scored = (h in seen_h) if h else (
-            run != "slots" or n in seen_slot_n)
+        scored = (h in seen_h) if h else (n in seen_n.get(run, set()))
         if not scored:
             pending.append({"run": run, "n": n, "hash": h or ""})
-    return {"rows": out, "pending": pending, "col": SER_COL, "xt": XT}
+    series = [{"key": c["key"], "label": c["label"], "run": True,
+               "color": run_colour(c["key"])} for c in RUNS] + [
+        {"key": "zero", "label": "zero-shot ragged", "color": REF_COL["zero"]},
+        {"key": "complete", "label": "complete-only",
+         "color": REF_COL["complete"]},
+        {"key": "rw", "label": "randomwalknowcast", "color": REF_COL["rw"]}]
+    return {"rows": out, "pending": pending, "xt": XT, "series": series,
+            "col": {s["key"]: s["color"] for s in series},
+            "defaults": [RUNS[0]["key"], "zero", "rw"]}
 
 
 def heldout_chart(rows):
@@ -486,11 +502,12 @@ def heldout_chart(rows):
     xval = lambda r: 125 if r["checkpoint"] == "zero-shot" else (
         num(r.get("outbreaks")) or None)
     rows = [r for r in rows if r.get("rule") == RULE]
-    for lvl, colour in (("all", SER_COL["slots"]),
-                        ("real_validation", SER_COL["complete"])):
+    for lvl, colour in (("all", run_colour(RUNS[0]["key"])),
+                        ("real_validation", REF_COL["complete"])):
         rs = [r for r in rows if r["study"] == "held_out"
               and r["level"] == lvl and num(r.get("loss")) is not None]
-        for run, dash in (("slots", None), ("no slots", "dash")):
+        for run, dash in [(c["key"], None if i == 0 else "dash")
+                          for i, c in enumerate(RUNS)]:
             pts = sorted((xval(r), num(r["loss"])) for r in rs
                          if xval(r) and hash_run(*norm_hash(
                              r["checkpoint"])) == run)
@@ -507,12 +524,12 @@ SC_JS = r"""
 (function(){
 var P=JSON.parse(document.getElementById("sdata").textContent);
 var $=function(i){return document.getElementById(i)};
-var SERS=[["slots","slots"],["noslots","no slots"],["zero","zero-shot"],["complete","complete-only"],["rw","randomwalk"]];
+var SERS=P.series.map(function(s){return [s.key,s.label]}),RUNK=P.series.filter(function(s){return s.run}).map(function(s){return s.key});
 var LV={germany:[["national","national"],["states","states"],["age","ages"]],ebola:[["national","national"],["provinces","provinces"]]};
 var MK=["circle","square","triangle","diamond"];
-var S={study:"germany",src:"daily",lv:["national"],cmp:false,log:false,ser:["slots","zero","rw"]};
-try{var sv=JSON.parse(sessionStorage.getItem("fts2")||"null");if(sv)S=sv}catch(e){}
-function save(){try{sessionStorage.setItem("fts2",JSON.stringify(S))}catch(e){}}
+var S={study:"germany",src:"daily",lv:["national"],cmp:false,log:false,ser:P.defaults.slice()};
+try{var sv=JSON.parse(sessionStorage.getItem("fts3")||"null");if(sv)S=sv}catch(e){}
+function save(){try{sessionStorage.setItem("fts3",JSON.stringify(S))}catch(e){}}
 function mark(k,x,y,c,t){var r=3.6,s="";
  if(k=="circle")s='<circle cx="'+x+'" cy="'+y+'" r="'+r+'" fill="'+c+'">';
  else if(k=="square")s='<rect x="'+(x-r)+'" y="'+(y-r)+'" width="'+2*r+'" height="'+2*r+'" fill="'+c+'">';
@@ -563,7 +580,7 @@ function draw(){
  if(S.ser.indexOf("rw")>=0)h+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+sy(1)+'" y2="'+sy(1)+'" stroke="'+P.col.rw+'" stroke-width=2 ><title>randomwalknowcast = 1</title></line>';
  var any=false,sum=[];
  lv.forEach(function(l,li){var mk=MK[li];
-  ["slots","noslots","zero","complete"].forEach(function(s){
+  RUNK.concat(["zero","complete"]).forEach(function(s){
    if(S.ser.indexOf(s)<0)return;
    var rs=rows.filter(function(r){return r[1]==l[0]&&r[3]==s}).sort(function(a,b){return a[4]-b[4]});
    if(!rs.length)return;any=true;var c=P.col[s];
@@ -576,9 +593,9 @@ function draw(){
     var pts=(zs?[[zx,zs[6]]]:[]).concat(rs.map(function(r){return [r[4],r[6]]}));
     h+='<polyline points="'+pts.map(function(p){return sx(p[0])+","+sy(p[1])}).join(" ")+'" fill=none stroke="'+c+'" stroke-width=1.8 />';
     rs.forEach(function(r){h+=mark(mk,sx(r[4]),sy(r[6]),c,l[1]+", "+lab+" n"+r[4]+" "+r[5]+": "+fmt(r[6]));
-     if(s=="slots"&&lv.length==1)h+='<text x="'+(sx(r[4])+6)+'" y="'+(sy(r[6])-6)+'" class=ax>'+fmt(r[6])+'</text>'});
-    if(s=="slots"){var last=rs[rs.length-1];
-     sum.push((lv.length>1?l[1]+": ":"")+"slots n"+last[4]+": "+fmt(last[6])+(zs?" vs zero-shot "+fmt(zs[6])+", "+((last[6]/zs[6]-1)*100>=0?"+":"")+((last[6]/zs[6]-1)*100).toFixed(0)+"%":""))}}})});
+     if(s==RUNK[0]&&lv.length==1)h+='<text x="'+(sx(r[4])+6)+'" y="'+(sy(r[6])-6)+'" class=ax>'+fmt(r[6])+'</text>'});
+    if(RUNK.indexOf(s)>=0){var last=rs[rs.length-1];
+     sum.push((lv.length>1?l[1]+": ":"")+lab+" n"+last[4]+": "+fmt(last[6])+(zs?" vs zero-shot "+fmt(zs[6])+", "+((last[6]/zs[6]-1)*100>=0?"+":"")+((last[6]/zs[6]-1)*100).toFixed(0)+"%":""))}}})});
  h+='</svg>';
  var leg=SERS.filter(function(s){return S.ser.indexOf(s[0])>=0}).map(function(s){return '<span><i style="background:'+P.col[s[0]]+'"></i>'+s[1]+(s[0]=="zero"?" (dashed)":s[0]=="complete"?" (dotted)":"")+'</span>'}).join("");
  if(lv.length>1)leg+=lv.map(function(l,i){return '<span><svg width=12 height=12 viewBox="0 0 12 12">'+mark(MK[i],6,6,"var(--fg)","")+'</svg>'+l[1]+'</span>'}).join("");
@@ -604,27 +621,35 @@ def scores_html(rows, local):
 
 
 # ---------- German nowcasts: mirrored per-checkpoint forecasts ----------
-GER_REMOTE = "archie:ckpt-scores/cache/germany/"
+GER_REMOTE = "archie:ckpt-scores/cache/{}/"
 QS = ["0.025", "0.1", "0.25", "0.5", "0.75", "0.9", "0.975"]
-GER = {"files": {}, "sig": None, "built": None, "loc_json": {}}
+GER = {}
 
 
-def ger_dir():
-    return Path(OVERRIDE["germany"]) if OVERRIDE["germany"] \
-        else CACHE / "germany"
+def gs(ds):
+    return GER.setdefault(ds["key"], {"files": {}, "sig": None,
+                                      "built": None, "loc_json": {}})
+
+
+def ger_dir(ds):
+    if OVERRIDE["germany"] and ds is DATASETS[0]:
+        return Path(OVERRIDE["germany"])
+    return CACHE / ds["mirror"]
 
 
 def job_germany():
-    if OVERRIDE["germany"]:
-        return
-    d = ger_dir()
-    d.mkdir(parents=True, exist_ok=True)
-    r = subprocess.run(
-        ["rsync", "-a", "-e", "ssh -o ConnectTimeout=10 -o BatchMode=yes",
-         GER_REMOTE, str(d) + "/"], capture_output=True, text=True,
-        timeout=300)
-    if r.returncode != 0:
-        raise RuntimeError(r.stderr[-200:].strip() or f"rsync {r.returncode}")
+    for ds in DATASETS:
+        if OVERRIDE["germany"] and ds is DATASETS[0]:
+            continue
+        d = ger_dir(ds)
+        d.mkdir(parents=True, exist_ok=True)
+        r = subprocess.run(
+            ["rsync", "-a", "-e", "ssh -o ConnectTimeout=10 -o BatchMode=yes",
+             GER_REMOTE.format(ds["mirror"]), str(d) + "/"],
+            capture_output=True, text=True, timeout=300)
+        if r.returncode != 0:
+            raise RuntimeError(r.stderr[-200:].strip()
+                               or f"rsync {r.returncode}")
 
 
 JOBS["germany"] = job_germany
@@ -666,9 +691,10 @@ def parse_ger_file(path):
     return out
 
 
-def ger_build():
+def ger_build(ds):
     """Assemble per-location data from the mirrored files (cached)."""
-    base = ger_dir()
+    base = ger_dir(ds)
+    G = gs(ds)
     if not base.is_dir():
         return None
     files = []
@@ -680,10 +706,11 @@ def ger_build():
             except OSError:
                 pass
     sig = tuple((a, b, m) for a, b, _, m in files)
-    if sig == GER["sig"]:
-        return GER["built"]
-    cache = GER["files"]
+    if sig == G["sig"]:
+        return G["built"]
+    cache = G["files"]
     series, wis, truth, origins = {}, {}, {}, set()
+    prefix = {}
     for setid, origin, f, mt in files:
         key = str(f)
         if key not in cache or cache[key][0] != mt:
@@ -695,6 +722,8 @@ def ger_build():
         sid = "zero-shot" if setid == "reference" else norm_hash(setid)[0]
         if setid != "reference" and not hash_run(*norm_hash(setid)):
             continue
+        if setid != "reference":
+            prefix[sid] = norm_hash(setid)[1]
         for (loc, rw, src), dates in cache[key][1].items():
             s = rw or sid
             ds = sorted(dates)
@@ -720,25 +749,26 @@ def ger_build():
     sets = sorted({s for l in series.values() for s in l})
     locs = sorted(series, key=lambda l: (
         0 if l == "DE" else 1 if l.startswith("DE-") else 2, l))
-    built = {"series": series, "wis": wis, "truth": truth, "sets": sets,
+    built = {"prefix": prefix, "series": series, "wis": wis, "truth": truth, "sets": sets,
              "locs": locs, "origins": sorted(origins or {
                  o for l in series.values() for s in l.values()
                  for src in s.values() for o in src})}
-    GER["sig"], GER["built"], GER["loc_json"] = sig, built, {}
+    G["sig"], G["built"], G["loc_json"] = sig, built, {}
     return built
 
 
-def ger_loc_json(loc):
-    b = ger_build()
+def ger_loc_json(ds, loc):
+    b = ger_build(ds)
     if not b or loc not in b["series"]:
         return "{}"
-    if loc not in GER["loc_json"]:
+    G = gs(ds)
+    if loc not in G["loc_json"]:
         tv = sorted(b["truth"].get(loc, {}).items())
-        GER["loc_json"][loc] = json.dumps({
+        G["loc_json"][loc] = json.dumps({
             "series": b["series"][loc], "wis": b["wis"].get(loc, {}),
             "truth": {"t": [d for d, _ in tv], "y": [v[1] for _, v in tv]}},
             separators=(",", ":"))
-    return GER["loc_json"][loc]
+    return G["loc_json"][loc]
 
 
 def ger_meta(b, slot_n, prev_n):
@@ -759,16 +789,17 @@ def ger_meta(b, slot_n, prev_n):
         elif s == "rw":
             meta.append(dict(id=s, label="randomwalknowcast", run="ref", n=1))
         else:
-            cfg = next(c for c in RUNS if c["key"] == hash_run(s, True))
+            cfg = next(c for c in RUNS if c["key"] == hash_run(
+                s, b["prefix"].get(s)))
             run = cfg["key"]
-            n = (slot_n.get(s) if run == "slots" else prev_n.get(s)) \
+            n = (slot_n.get(s) if run == RUNS[0]["key"] else prev_n.get(s)) \
                 or cfg["n"].get(s) or csv_n.get(s)
             meta.append(dict(id=s, run=run, n=n or 0, label=(
                 f"{cfg['label']} n{n} {s}" if n else f"{cfg['label']} {s}")))
     order = {"ref": 0, **{c["key"]: i + 1 for i, c in enumerate(RUNS)}}
     meta.sort(key=lambda m: (order.get(m["run"], 4), m["n"]))
-    fixed = {"zero-shot": SER_COL["zero"], "complete-only": SER_COL["complete"],
-             "rw": SER_COL["rw"]}
+    fixed = {"zero-shot": REF_COL["zero"], "complete-only": REF_COL["complete"],
+             "rw": REF_COL["rw"]}
     for run in [c["key"] for c in RUNS]:
         grp = [m for m in meta if m["run"] == run]
         for i, m in enumerate(grp):
@@ -781,61 +812,104 @@ def ger_meta(b, slot_n, prev_n):
 GER_JS = r'''
 (function(){
 var D=JSON.parse(document.getElementById("gdata").textContent);
-var META=D.meta,LOCS=D.locs,ORI=D.origins,PRE=D.preload||{};
-var COL=["#2563eb","#ea580c","#16a34a","#9333ea","#db2777","#0891b2","#ca8a04","#64748b","#0d9488","#b91c1c"];
+var DSS=D.datasets,RUNS=D.runs;
 var $=function(i){return document.getElementById(i)};
-var S={loc:"DE",src:"daily",oi:ORI.length-1,latest:true,sel:null};
-var KEY="ftg2";
-try{var sv=JSON.parse(sessionStorage.getItem(KEY)||"null");
- if(sv){S.loc=LOCS.indexOf(sv.loc)>=0?sv.loc:"DE";S.src=sv.src||"daily";
-  S.latest=sv.latest!==false;S.sel=sv.sel;
-  if(!S.latest){var k=ORI.indexOf(sv.origin);if(k>=0)S.oi=k;else S.latest=true}}}catch(e){}
-if(!S.sel){S.sel=["zero-shot"];["slots"].forEach(function(r){
- var m=META.filter(function(x){return x.run==r});if(m.length)S.sel.push(m[m.length-1].id)})}
-function save(){try{sessionStorage.setItem(KEY,JSON.stringify({loc:S.loc,src:S.src,
- latest:S.latest,origin:ORI[S.oi],sel:S.sel}))}catch(e){}}
-var cache={};
-function load(loc){
- if(PRE[loc])return Promise.resolve(PRE[loc]);
- if(cache[loc])return Promise.resolve(cache[loc]);
- return fetch("/data/"+encodeURIComponent(loc)+".json").then(function(r){return r.json()})
-  .then(function(j){cache[loc]=j;return j})}
+var DASH=["","6 3","8 3 2 3","2 3"],MK=["circle","square","triangle","diamond"];
+var S={ds:DSS[0].key,locs:["DE"],src:"daily",oi:null,latest:true,nd:1,step:2,on:null,chk:{}};
+var KEY="ftg4";
+try{var sv=JSON.parse(sessionStorage.getItem(KEY)||"null");if(sv)Object.keys(sv).forEach(function(k){S[k]=sv[k]})}catch(e){}
+function cur(){return DSS.find(function(d){return d.key==S.ds})||DSS[0]}
+var C=cur();S.ds=C.key;
+function ofRun(k){return C.meta.filter(function(m){return m.run==k}).sort(function(a,b){return a.n-b.n})}
+function refs(){return C.meta.filter(function(m){return m.run=="ref"})}
+function ORI(){return C.origins}
+S.locs=(S.locs||[]).filter(function(l){return C.locs.indexOf(l)>=0});if(!S.locs.length)S.locs=[C.locs[0]];
+if(S.latest||ORI().indexOf(S.origin)<0){S.oi=ORI().length-1;S.latest=true}else S.oi=ORI().indexOf(S.origin);
+if(!S.on){var r0=RUNS.find(function(r){return ofRun(r.key).length})||RUNS[0];
+ S.on=[r0?r0.key:"","zero-shot"].filter(function(x){return x})}
+function save(){try{sessionStorage.setItem(KEY,JSON.stringify({ds:S.ds,locs:S.locs,src:S.src,latest:S.latest,origin:ORI()[S.oi],nd:S.nd,step:S.step,on:S.on,chk:S.chk}))}catch(e){}}
+function chosen(k){var all=ofRun(k),ids=(S.chk[k]||[]).filter(function(i){return all.some(function(m){return m.id==i})});
+ if(!ids.length&&all.length)ids=[all[all.length-1].id];return ids}
+function effective(){var o=[];
+ RUNS.forEach(function(r){if(S.on.indexOf(r.key)>=0){var ids=chosen(r.key);
+  ids.forEach(function(id,i){o.push({id:id,run:r.key,rank:ids.length-1-i})})}});
+ refs().forEach(function(m){if(S.on.indexOf(m.id)>=0)o.push({id:m.id,run:"ref",rank:0})});
+ return o}
 function ms(s){return Date.parse(s+"T00:00:00Z")}
-function colour(id){var m=META.find(function(x){return x.id==id});return m?m.color:"#64748b"}
-function el(h){return h}
+function dates(){var O=ORI(),out=[];
+ for(var k=0;k<S.nd;k++){var tg=ms(O[S.oi])-k*S.step*7*864e5,j=-1;
+  for(var i=0;i<O.length;i++){if(ms(O[i])<=tg)j=i}
+  if(j>=0&&out.indexOf(O[j])<0)out.unshift(O[j])}
+ return out}
+var cache={};
+function load(loc){var pre=C.preload||{};
+ if(pre[loc])return Promise.resolve(pre[loc]);
+ var k=C.key+"/"+loc;if(cache[k])return Promise.resolve(cache[k]);
+ return fetch("/data/"+encodeURIComponent(C.key)+"/"+encodeURIComponent(loc)+".json").then(function(r){return r.json()})
+  .then(function(j){cache[k]=j;return j})}
+function colour(id){var m=C.meta.find(function(x){return x.id==id});return m?m.color:"#64748b"}
+function id2lab(id){var m=C.meta.find(function(x){return x.id==id});return m?m.label:id}
 function fmt(v){return v>=1000?Math.round(v).toLocaleString("en-GB"):(+v).toPrecision(3)}
-function plot(d){
- var o=ORI[S.oi],t0=ms(o)-70*864e5,t1=ms(o)+35*864e5;
- var W=640,H=320,L=48,R=12,T=10,B=34,ymax=1,i;
- var tr=d.truth;var pts=[];
+function dashAttr(rank){var d=DASH[rank%4];return d?' stroke-dasharray="'+d+'"':""}
+function mark(k,x,y,c,t,r){r=r||3;var s="";
+ if(k=="circle")s='<circle cx="'+x+'" cy="'+y+'" r="'+r+'" fill="'+c+'">';
+ else if(k=="square")s='<rect x="'+(x-r)+'" y="'+(y-r)+'" width="'+2*r+'" height="'+2*r+'" fill="'+c+'">';
+ else if(k=="triangle")s='<polygon points="'+x+','+(y-r-1)+' '+(x+r+1)+','+(y+r)+' '+(x-r-1)+','+(y+r)+'" fill="'+c+'">';
+ else s='<polygon points="'+x+','+(y-r-1)+' '+(x+r+1)+','+y+' '+x+','+(y+r+1)+' '+(x-r-1)+','+y+'" fill="'+c+'">';
+ return s+'<title>'+t+'</title>'+(k=="circle"?"</circle>":k=="square"?"</rect>":"</polygon>")}
+function panel(d,loc,ds,eff,small){
+ var W=small?300:640,H=small?200:320,L=small?36:48,R=8,T=small?8:10,B=small?24:34,ymax=1,i;
+ var t0=ms(ds[0])-70*864e5,t1=ms(ds[ds.length-1])+35*864e5;
+ var tr=d.truth,pts=[];
  for(i=0;i<tr.t.length;i++){var x=ms(tr.t[i]);if(x>=t0&&x<=t1){pts.push([x,tr.y[i]]);ymax=Math.max(ymax,tr.y[i])}}
  var fs=[];
- S.sel.forEach(function(id){
-  var s=(d.series[id]||{})[S.src];var f=s&&s[o];
-  if(f){fs.push({id:id,f:f});f.q.forEach(function(q){ymax=Math.max(ymax,q[6])})}});
+ eff.forEach(function(e){ds.forEach(function(o,di){var s=(d.series[e.id]||{})[S.src],f=s&&s[o];
+  if(f){fs.push({e:e,f:f,di:di,o:o});f.q.forEach(function(q){ymax=Math.max(ymax,q[6])})}})});
+ var runBands=eff.some(function(e){return e.run!="ref"&&fs.some(function(z){return z.e===e})});
  ymax*=1.06;
  var sx=function(x){return L+(x-t0)/(t1-t0)*(W-L-R)},sy=function(y){return T+(1-y/ymax)*(H-T-B)};
  var h='<svg viewBox="0 0 '+W+' '+H+'" width="100%">';
  var step=Math.pow(10,Math.floor(Math.log10(ymax/4)));
- var m=[1,2,2.5,5,10].find(function(k){return k*step>=ymax/5})*step;
- for(var v=0;v<=ymax;v+=m)h+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+sy(v)+'" y2="'+sy(v)+'" class=grid /><text x="'+(L-6)+'" y="'+(sy(v)+4)+'" text-anchor=end class=ax>'+fmt(v)+'</text>';
- for(var x=t0;x<=t1;x+=14*864e5){h+='<text x="'+sx(x)+'" y="'+(H-14)+'" text-anchor=middle class=ax>'+new Date(x).toISOString().slice(5,10)+'</text>'}
- h+='<line x1="'+sx(ms(o))+'" x2="'+sx(ms(o))+'" y1="'+T+'" y2="'+(H-B)+'" class=mark /><text x="'+(sx(ms(o))+3)+'" y="'+(T+10)+'" class=ax>nowcast date</text>';
- fs.forEach(function(e){
-  var c=colour(e.id),n=e.f.t.length,P=function(k){return e.f.t.map(function(d,j){return sx(ms(d))+","+sy(e.f.q[j][k])})};
-  function band(a,b,op){h+='<polygon points="'+P(a).concat(P(b).reverse()).join(" ")+'" fill="'+c+'" opacity="'+op+'" />'}
-  band(0,6,.10);band(2,4,.22);
-  h+='<polyline points="'+P(3).join(" ")+'" fill=none stroke="'+c+'" stroke-width=2 />';
-  e.f.t.forEach(function(d,j){h+='<circle cx="'+sx(ms(d))+'" cy="'+sy(e.f.q[j][3])+'" r=3 fill="'+c+'"><title>'+id2lab(e.id)+' '+d+' median '+fmt(e.f.q[j][3])+' (50%: '+fmt(e.f.q[j][2])+' to '+fmt(e.f.q[j][4])+'; 95%: '+fmt(e.f.q[j][0])+' to '+fmt(e.f.q[j][6])+')</title></circle>'})});
- if(pts.length){h+='<polyline points="'+pts.map(function(p){return sx(p[0])+","+sy(p[1])}).join(" ")+'" fill=none stroke="var(--fg)" stroke-width=1.6 />';
-  pts.forEach(function(p){h+='<circle cx="'+sx(p[0])+'" cy="'+sy(p[1])+'" r=2.4 fill="var(--fg)"><title>truth '+new Date(p[0]).toISOString().slice(0,10)+': '+fmt(p[1])+'</title></circle>'})}
- h+='</svg>';
- var miss=S.sel.filter(function(id){return !fs.some(function(e){return e.id==id})}).map(id2lab);
- $("gplot").innerHTML=h+'<div class=leg><span><i style="background:var(--fg)"></i>truth (latest vintage)</span>'+fs.map(function(e){return '<span><i style="background:'+colour(e.id)+'"></i>'+id2lab(e.id)+'</span>'}).join("")+'</div>'+(miss.length?'<p class=mut>No forecast for '+o+': '+miss.join(", ")+'</p>':"")+'<p class=mut>Weekly counts by target week. Line is the median, dark band 50%, light band 95%.</p>';
+ var m=[1,2,2.5,5,10].find(function(k){return k*step>=ymax/(small?3:5)})*step;
+ for(var v=0;v<=ymax;v+=m)h+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+sy(v)+'" y2="'+sy(v)+'" class=grid /><text x="'+(L-4)+'" y="'+(sy(v)+3)+'" text-anchor=end class=ax>'+fmt(v)+'</text>';
+ var xs=small?28:14;
+ for(var x=t0;x<=t1;x+=xs*864e5)h+='<text x="'+sx(x)+'" y="'+(H-B+12)+'" text-anchor=middle class=ax>'+new Date(x).toISOString().slice(5,10)+'</text>';
+ ds.forEach(function(o){h+='<line x1="'+sx(ms(o))+'" x2="'+sx(ms(o))+'" y1="'+T+'" y2="'+(H-B)+'" class=mark />'});
+ fs.forEach(function(z){var e=z.e,f=z.f,c=colour(e.id);
+  var P=function(k){return f.t.map(function(d,j){return sx(ms(d))+","+sy(f.q[j][k])})};
+  var latest=eff.filter(function(q){return q.run==e.run}).every(function(q){return q.rank>=e.rank});
+  if(e.rank==0&&(e.run!="ref"||!runBands)){var op=ds.length>1?.5:1;
+   h+='<polygon points="'+P(0).concat(P(6).reverse()).join(" ")+'" fill="'+c+'" opacity="'+.10*op+'" />';
+   h+='<polygon points="'+P(2).concat(P(4).reverse()).join(" ")+'" fill="'+c+'" opacity="'+.22*op+'" />'}
+  h+='<polyline points="'+P(3).join(" ")+'" fill=none stroke="'+c+'" stroke-width='+(small?1.5:2)+dashAttr(e.run=="ref"?0:e.rank)+' />';
+  f.t.forEach(function(d,j){h+=mark(MK[z.di%4],sx(ms(d)),sy(f.q[j][3]),c,id2lab(e.id)+' (nowcast '+z.o+') '+d+' median '+fmt(f.q[j][3])+' (50%: '+fmt(f.q[j][2])+' to '+fmt(f.q[j][4])+'; 95%: '+fmt(f.q[j][0])+' to '+fmt(f.q[j][6])+')',small?2.2:2.8)})});
+ if(pts.length){h+='<polyline points="'+pts.map(function(p){return sx(p[0])+","+sy(p[1])}).join(" ")+'" fill=none stroke="var(--fg)" stroke-width=1.4 />';
+  pts.forEach(function(p){h+='<circle cx="'+sx(p[0])+'" cy="'+sy(p[1])+'" r=1.8 fill="var(--fg)"><title>truth '+new Date(p[0]).toISOString().slice(0,10)+': '+fmt(p[1])+'</title></circle>'})}
+ return {svg:h+'</svg>',miss:eff.filter(function(e){return !fs.some(function(z){return z.e===e})}).map(function(e){return id2lab(e.id)})};
 }
-function id2lab(id){var m=META.find(function(x){return x.id==id});return m?m.label:id}
-function wisChart(d){
- var sel=S.sel.filter(function(id){return d.wis[id]&&d.wis[id][S.src]});
+function legend(eff,ds){
+ function sw(c,rank){return '<svg width=26 height=8 viewBox="0 0 26 8"><line x1=0 x2=26 y1=4 y2=4 stroke="'+c+'" stroke-width=2'+dashAttr(rank)+' /></svg>'}
+ var leg='<div class=lg><b>truth</b> '+sw("var(--fg)",0)+'</div>';
+ RUNS.forEach(function(r){var g=eff.filter(function(e){return e.run==r.key});if(!g.length)return;
+  leg+='<div class=lg><b style="color:'+r.color+'">'+r.label+'</b> '+g.map(function(e){return sw(colour(e.id),e.rank)+"n"+C.meta.find(function(x){return x.id==e.id}).n}).join(" ")+'</div>'});
+ var rf=eff.filter(function(e){return e.run=="ref"});
+ if(rf.length)leg+='<div class=lg><b>reference</b> '+rf.map(function(e){return sw(colour(e.id),0)+id2lab(e.id)}).join(" ")+'</div>';
+ if(ds.length>1)leg+='<div class=lg><b>nowcast date</b> '+ds.map(function(o,i){return '<svg width=12 height=12 viewBox="0 0 12 12">'+mark(MK[i%4],6,6,"var(--fg)","",3)+'</svg>'+o}).join(" ")+'</div>';
+ return '<div class=leg2>'+leg+'</div>'}
+function plots(){
+ var eff=effective(),ds=dates(),small=S.locs.length>1;
+ Promise.all(S.locs.map(load)).then(function(all){
+  var miss={},h='<div class=panels style="grid-template-columns:repeat('+(small?"auto-fit,minmax(260px,1fr)":"1,1fr")+')">';
+  all.forEach(function(d,i){var p=panel(d,S.locs[i],ds,eff,small);p.miss.forEach(function(m){miss[m]=1});
+   h+='<div>'+(small?'<h4>'+S.locs[i]+'</h4>':"")+p.svg+'</div>'});
+  h+='</div>'+legend(eff,ds);
+  var ms_=Object.keys(miss);
+  if(ms_.length)h+='<p class=mut>No forecast for some nowcast dates: '+ms_.join(", ")+'</p>';
+  h+='<p class=mut>Weekly counts by target week. Colour is the run. Line style runs from dotted (earliest) to solid (latest selected checkpoint). Bands (50% dark, 95% light) are drawn for the latest checkpoint of each run. Truth: '+C.truth+'.'+(ds.length>1?' Marker shape shows the nowcast date, and each nowcast ends at its date.':'')+'</p>';
+  $("gplot").innerHTML=h;
+  wisChart(all[0],eff)}).catch(function(){$("gplot").innerHTML='<p class=mut>Could not load data.</p>'})}
+function wisChart(d,eff){
+ var sel=eff.map(function(e){return e.id}).filter(function(id){return d.wis[id]&&d.wis[id][S.src]});
  if(!sel.length){$("gwis").innerHTML='<p class=mut>No WIS available.</p>';return}
  var com=Object.keys(d.wis[sel[0]][S.src]).filter(function(o){return sel.every(function(id){return d.wis[id][S.src][o]!==undefined})});
  if(!com.length){$("gwis").innerHTML='<p class=mut>No nowcast dates common to the selected checkpoints.</p>';return}
@@ -843,54 +917,89 @@ function wisChart(d){
  var W=520,H=60+sel.length*26,L=230,mx=Math.max.apply(null,vals)*1.05,h='<svg viewBox="0 0 '+W+' '+H+'" width="100%">';
  sel.forEach(function(id,i){var y=10+i*26,w=vals[i]/mx*(W-L-60);
   h+='<text x="'+(L-6)+'" y="'+(y+14)+'" text-anchor=end class=ax>'+id2lab(id)+'</text><rect x="'+L+'" y="'+y+'" width="'+w+'" height="18" fill="'+colour(id)+'" /><text x="'+(L+w+4)+'" y="'+(y+14)+'" class=ax>'+fmt(vals[i])+'</text>'});
- $("gwis").innerHTML=h+'</svg><p class=mut>Mean WIS for '+S.loc+' ('+S.src+' source) over '+com.length+' nowcast dates common to the selected checkpoints. Lower is better.</p>';
+ $("gwis").innerHTML=h+'</svg><p class=mut>Mean WIS for '+S.locs[0]+' ('+S.src+' source) over '+com.length+' nowcast dates common to the selected checkpoints. Lower is better.</p>';
 }
+function chips(){var h='';
+ RUNS.forEach(function(r){if(S.on.indexOf(r.key)<0)return;var all=ofRun(r.key),ch=chosen(r.key);
+  h+='<span class=lg><b style="color:'+r.color+'">'+r.label+'</b> '+(all.length?all.map(function(m){var on=ch.indexOf(m.id)>=0;return '<button class="tog'+(on?' on':'')+'" data-chip="'+r.key+'|'+m.id+'" title="'+m.id+' ('+m.count+' dates)" style="'+(on?'background:'+r.color+';border-color:'+r.color:'')+'">n'+m.n+'</button>'}).join(""):'<span class=mut>no checkpoints scored yet</span>')+'</span>'});
+ $("gck").innerHTML=h}
+function runBtns(){
+ $("gruns").innerHTML=RUNS.map(function(r){return '<button class="tog'+(S.on.indexOf(r.key)>=0?' on':'')+'" data-run="'+r.key+'" style="border-left:4px solid '+r.color+'">'+r.label+'</button>'}).join("")
+  +refs().map(function(m){return '<button class="tog'+(S.on.indexOf(m.id)>=0?' on':'')+'" data-run="'+m.id+'" style="border-left:4px solid '+m.color+'">'+m.label+'</button>'}).join("")}
+function locBtns(){
+ $("glocs").innerHTML=C.groups.filter(function(g){return g.locs.length}).map(function(g){return '<div><span class=mut>'+g.name+'</span> '+g.locs.map(function(l){return '<button class="tog'+(S.locs.indexOf(l)>=0?' on':'')+'" data-loc="'+l+'">'+l+'</button>'}).join("")+'</div>'}).join("");
+ $("gsum").textContent="Locations: "+S.locs.join(", ")}
 function draw(){
- $("gdate").textContent=ORI[S.oi]+(S.latest?" (latest)":"");
- $("gsl").value=S.oi;
- load(S.loc).then(function(d){plot(d);wisChart(d)}).catch(function(){$("gplot").innerHTML='<p class=mut>Could not load data for '+S.loc+'.</p>'});
- save()}
+ $("gdate").textContent=ORI()[S.oi]+(S.latest?" (latest)":"");
+ $("gsl").value=S.oi;$("gnd").value=S.nd;$("gstep").value=S.step;$("gsrc").value=S.src;
+ runBtns();chips();locBtns();plots();save()}
 function build(){
- $("gloc").innerHTML=LOCS.map(function(l){return '<option'+(l==S.loc?' selected':'')+'>'+l+'</option>'}).join("");
- $("gsrc").value=S.src;
- var sl=$("gsl");sl.min=0;sl.max=ORI.length-1;
- $("gck").innerHTML=META.map(function(m){return '<label><input type=checkbox value="'+m.id+'"'+(S.sel.indexOf(m.id)>=0?' checked':'')+'><i style="background:'+colour(m.id)+'"></i>'+m.label+' <span class=mut>('+m.count+' dates)</span></label>'}).join("");
- $("gloc").onchange=function(){S.loc=this.value;draw()};
+ if(DSS.length>1){$("gdsl").hidden=false;$("gds").innerHTML=DSS.map(function(d){return '<option value="'+d.key+'"'+(d.key==S.ds?' selected':'')+'>'+d.label+'</option>'}).join("");
+  $("gds").onchange=function(){S.ds=this.value;C=cur();S.locs=[C.locs[0]];S.oi=ORI().length-1;S.latest=true;$("gsl").max=S.oi;draw()}}
+ $("gsl").min=0;$("gsl").max=ORI().length-1;
  $("gsrc").onchange=function(){S.src=this.value;draw()};
- sl.oninput=function(){S.oi=+this.value;S.latest=S.oi==ORI.length-1;draw()};
+ $("gnd").onchange=function(){S.nd=+this.value;draw()};
+ $("gstep").onchange=function(){S.step=+this.value;draw()};
+ $("gsl").oninput=function(){S.oi=+this.value;S.latest=S.oi==ORI().length-1;draw()};
  $("gprev").onclick=function(){S.oi=Math.max(0,S.oi-1);S.latest=false;draw()};
- $("gnext").onclick=function(){S.oi=Math.min(ORI.length-1,S.oi+1);S.latest=S.oi==ORI.length-1;draw()};
- $("gck").onchange=function(){S.sel=[].slice.call(this.querySelectorAll("input:checked")).map(function(i){return i.value});draw()};
+ $("gnext").onclick=function(){S.oi=Math.min(ORI().length-1,S.oi+1);S.latest=S.oi==ORI().length-1;draw()};
+ $("glocs").onclick=function(e){var b=e.target.closest("button");if(!b)return;var l=b.dataset.loc,i=S.locs.indexOf(l);
+  if(i>=0){if(S.locs.length>1)S.locs.splice(i,1)}else S.locs.push(l);draw()};
+ $("gruns").onclick=function(e){var b=e.target.closest("button");if(!b)return;var k=b.dataset.run,i=S.on.indexOf(k);
+  if(i>=0)S.on.splice(i,1);else{S.on.push(k);delete S.chk[k]}draw()};
+ $("gck").onclick=function(e){var b=e.target.closest("button");if(!b)return;var p=b.dataset.chip.split("|"),k=p[0],id=p[1];
+  var ids=chosen(k).slice(),i=ids.indexOf(id);if(i>=0){if(ids.length>1)ids.splice(i,1)}else ids.push(id);S.chk[k]=ids;draw()};
  draw()}
-if(!ORI.length)$("gplot").innerHTML='<p class=mut>No German forecasts mirrored yet.</p>';else build();
+build();
 })();
 '''
 
 
 def germany_html(slot_n, prev_n, once):
-    b = ger_build()
-    if not b or not b["origins"]:
+    dss = []
+    for ds in DATASETS:
+        b = ger_build(ds)
+        if not b or not b["origins"]:
+            continue
+        meta = ger_meta(b, slot_n, prev_n)
+        for m in meta:
+            m["count"] = max((len(src) for src in b["series"].get(
+                "DE", {}).get(m["id"], {}).values()), default=0)
+        pre = {l: json.loads(ger_loc_json(ds, l)) for l in b["locs"]} \
+            if once else {}
+        dss.append({
+            "key": ds["key"], "label": ds["label"], "truth": ds["truth"],
+            "meta": meta, "locs": b["locs"], "origins": b["origins"],
+            "preload": pre,
+            "groups": [{"name": n, "locs": [l for l in b["locs"]
+                                            if re.match(rx, l)]}
+                       for n, rx in ds["groups"]]})
+    if not dss:
         return note("germany", "German forecasts") or \
             "<p class=mut>No German forecasts mirrored yet.</p>"
-    meta = ger_meta(b, slot_n, prev_n)
-    for m in meta:
-        m["count"] = max((len(src) for src in b["series"].get(
-            "DE", {}).get(m["id"], {}).values()), default=0)
-    pre = {l: json.loads(ger_loc_json(l)) for l in b["locs"]} if once \
-        else {}
-    payload = json.dumps({"meta": meta, "locs": b["locs"],
-                          "origins": b["origins"], "preload": pre},
-                         separators=(",", ":")).replace("</", "<\\/")
+    payload = json.dumps(
+        {"datasets": dss,
+         "runs": [{"key": c["key"], "label": c["label"],
+                   "color": run_colour(c["key"])} for c in RUNS]},
+        separators=(",", ":")).replace("</", "<\\/")
     return (note("germany", "German forecasts") + f"""
 <div class=gctl>
-<label>Location <select id=gloc></select></label>
+<label id=gdsl hidden>Dataset <select id=gds></select></label>
 <label>Source <select id=gsrc><option value=daily>daily</option>
 <option value=weekly>weekly</option></select></label>
 <label class=gwide>Nowcast date <button id=gprev>&lt;</button>
 <input type=range id=gsl><button id=gnext>&gt;</button>
-<b id=gdate></b></label></div>
+<b id=gdate></b></label>
+<label>Dates overlaid <select id=gnd><option>1</option><option>2</option>
+<option>3</option><option>4</option></select></label>
+<label>every <select id=gstep><option value=1>1 week</option>
+<option value=2>2 weeks</option><option value=4>4 weeks</option></select>
+</label></div>
+<details class=glocs><summary id=gsum>Locations</summary>
+<div id=glocs></div></details>
+<div id=gruns class=gck></div>
 <div id=gck class=gck></div>
-<div class=plots><div class=card><h3>Nowcast, weekly counts</h3>
+<div class=plots><div class=card><h3>Nowcasts, weekly counts</h3>
 <div id=gplot></div></div>
 <div class=card><h3>WIS by checkpoint</h3><div id=gwis></div></div></div>
 <script type="application/json" id=gdata>{payload}</script>
@@ -1114,7 +1223,9 @@ align-items:start}.tog{border:1px solid var(--line);background:var(--card);
 color:var(--fg);border-radius:6px;padding:2px 8px;cursor:pointer;
 font-size:12px}
 .tog.on{background:var(--c1);color:#fff;border-color:var(--c1)}
-.sctl .mut{margin-left:10px}.gck i{display:inline-block;width:10px;height:10px;border-radius:2px;
+.sctl .mut{margin-left:10px}.lg{display:inline-flex;align-items:center;gap:6px;margin-right:14px}
+.leg2{font-size:12px;display:flex;flex-wrap:wrap;gap:4px 18px}.glocs{margin:6px 0}.glocs .tog{margin:1px}.panels{display:grid;gap:8px}
+.panels h4{margin:0 0 2px;font-size:12px}.gck i{display:inline-block;width:10px;height:10px;border-radius:2px;
 margin:0 4px}select,button{font:inherit}
 pre{white-space:pre-wrap;background:var(--card);padding:10px;border-radius:8px;
 font-size:12px}.wrap{overflow-x:auto}"""
@@ -1141,9 +1252,11 @@ class H(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path.startswith("/data/"):
             from urllib.parse import unquote
-            loc = unquote(self.path[6:].split("?")[0])[:-5]
+            parts = unquote(self.path[6:].split("?")[0])[:-5].split("/", 1)
+            ds = next((d for d in DATASETS if d["key"] == parts[0]), None)
             with LOCK:
-                b = ger_loc_json(loc).encode()
+                b = (ger_loc_json(ds, parts[1]) if ds and len(parts) == 2
+                     else "{}").encode()
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(b)))
