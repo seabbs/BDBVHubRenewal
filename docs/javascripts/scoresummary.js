@@ -42,15 +42,27 @@
       .concat(extra.map(function (c) { return c.label; }))
       .forEach(function (c) { h("th", {}, head, c); });
     var body = h("tbody", {}, tbl);
-    s.forEach(function (r) {
+    // Full rows first, all with the baseline's n, then the models that
+    // lack some of the baseline's forecasts, apart and marked.
+    var full = s.filter(function (r) { return !r.partial; });
+    var part = s.filter(function (r) { return r.partial; });
+    full.concat(part).forEach(function (r) {
       if (!isOn(r.model)) return;
-      var tr = h("tr", {}, body);
-      h("td", {}, tr, d.models[r.model].name);
+      var tr = h("tr", r.partial ? { class: "partial" } : {}, body);
+      h("td", {}, tr, d.models[r.model].name +
+        (r.partial ? " (partial: " + r.n + " of " + r.cells + ")" : ""));
       h("td", {}, tr, String(r.n));
       cols.forEach(function (c) { h("td", {}, tr, fmt(c.get(r), 3)); });
       var e = extra.length ? extraFor(r.model) : null;
       extra.forEach(function (c) { h("td", {}, tr, e ? fmt(c.get(e), c.dp) : "–"); });
     });
+    var shownPart = part.filter(function (r) { return isOn(r.model); });
+    if (shownPart.length) {
+      h("p", { class: "explorer-note" }, container,
+        "Partial rows lack some of the baseline's forecasts, so their " +
+        "scores are on fewer forecasts than the rows above and are not " +
+        "read beside them.");
+    }
   }
   window.bdbvSummaryTable = summaryTable;
 

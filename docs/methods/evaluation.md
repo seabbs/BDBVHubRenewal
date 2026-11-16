@@ -34,6 +34,8 @@ Relative WIS on the log scale is the same ratio of mean WIS on the log scale.
 The baseline is `randomwalk`.
 The interactive summaries and the checks chart have a Relative to picker that makes any model the baseline, and the overall score tables a baseline filter.
 In the summaries a new baseline changes which forecasts are matched, so $n$ and the means change too.
+A model with every one of the baseline's forecasts has the baseline's $n$, so those rows are read side by side.
+A model with fewer is marked partial, with its $n$ of the baseline's, and comes after them, as its scores are on fewer forecasts.
 Coverage is whether $y$ falls in the central 50% and 90% sample intervals.
 
 ### Energy score
