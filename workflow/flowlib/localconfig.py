@@ -1,6 +1,8 @@
-"""Machine settings from `config/local.env`, as `scripts/local_config.sh`.
+"""Machine settings from `config/local.env`.
 
-The file is untracked and holds `KEY=VALUE` lines (see
+The file is the source of truth. The shell scripts read it with
+`scripts/local_config.sh` (with the fine-tuning scripts), and this must
+read it the same way. The file is untracked and holds `KEY=VALUE` lines (see
 `config/local.env.example`). Blank lines, comments and lines whose key
 is not upper case are skipped. A value may use `$NAME` or `${NAME}` of
 the environment or of an earlier line, and one pair of surrounding

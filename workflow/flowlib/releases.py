@@ -1,9 +1,9 @@
 """Checkpoint labels from the repository's releases.
 
-As `checkpoint_scores.checkpoint_queue` on the checkpoint-scoring branch:
-releases published from a cut-off, the final run's `chronos-slots-<hash>`
+Releases published from a cut-off, the final run's `chronos-slots-<hash>`
 first as `slots-<hash>`, then `chronos-ft-<hash>` as `<hash>`, each group
-oldest first. Other releases are left out.
+oldest first. Other releases are left out. The labels must be the ones
+`scripts/checkpoint_scores.py` takes.
 """
 
 from __future__ import annotations

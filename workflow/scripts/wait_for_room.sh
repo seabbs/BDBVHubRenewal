@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Wait until MIN_FREE_GB of memory is available and MIN_DISK_GB of disk is
-# free at PATH, so a job
-# on a shared machine starts only with room to spare.
+# Wait until MIN_FREE_GB of memory is available and MIN_DISK_GB of disk
+# is free at PATH, so a job on a shared machine starts only with room
+# to spare.
 #
 #   workflow/scripts/wait_for_room.sh MIN_FREE_GB MIN_DISK_GB PATH
 #

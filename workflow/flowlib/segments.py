@@ -15,6 +15,8 @@ are simulated.
 
 from __future__ import annotations
 
+import json
+import shutil
 from collections.abc import Callable, Iterable, Sequence
 from pathlib import Path
 
@@ -43,9 +45,7 @@ def round_seeds(
 ) -> tuple[list[int], list[int]]:
     """Return a round's training and held-out batch seeds.
 
-    Must match the seeds of rounds already simulated: round r takes the
-    seeds from
-    `base + 100 r`, its `train` training batches then `held` held-out.
+    Must match the seeds of rounds already simulated.
     """
     first = base + 100 * round_
     seeds = list(range(first, first + train + held))
@@ -96,8 +96,6 @@ def kept_outbreaks(settings: Path | str, skip: set[str]) -> int:
 
 
 def _done(state: Path) -> int:
-    import json
-
     return int(json.loads((state / "state.json").read_text())["done"])
 
 
@@ -122,8 +120,6 @@ def resume_state(
     ValueError
         If there is no state at or past the prefix before.
     """
-    import shutil
-
     run = Path(run)
     if prev_n is None:
         return "base"
