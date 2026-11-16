@@ -272,10 +272,13 @@ DASHES = {"dash": ("5 3", "dashed"), "dot": ("1.5 3", "dotted"),
           "dd": ("8 3 1.5 3", "dash-dot")}
 
 
-def chart(title, series, marks=(), ylog=False, W=620, H=300,
-          xticks=None, hlines=(), xlabel="step", note=""):
+def chart(title, series, marks=(), ylog=False, W=640, H=320,
+          xticks=None, hlines=(), xlabel="step", note="", xmax=None):
     """series: list of (label, colour, points[(x,y)], kind) kind line|dots"""
     import math
+    if xmax is not None:
+        series = [s[:2] + ([p for p in s[2] if p[0] <= xmax],) + s[3:]
+                  for s in series]
     pts = [p for s in series for p in s[2] if p[1] is not None]
     if not pts:
         return f"<div class=card><h3>{title}</h3><p class=mut>no data</p></div>"
@@ -283,6 +286,8 @@ def chart(title, series, marks=(), ylog=False, W=620, H=300,
     xs = [p[0] for p in pts]
     ys = [f(p[1]) for p in pts]
     x0, x1 = 0, max(max(xs), 1)
+    if xmax is not None:
+        x1 = xmax
     if xticks:
         x0, x1 = math.log2(xticks[0][0]), math.log2(xticks[-1][0])
         xs = [math.log2(x) for x in xs]
@@ -1088,88 +1093,18 @@ def germany_html(known_n, once):
 
 
 # Reload every 60 s, but wait while any time slider is playing.
-CK_JS = r"""
-(function(){
-var P=JSON.parse(document.getElementById("cdata").textContent);
-var $=function(i){return document.getElementById(i)};
-var SRCS=[["all","all"],["weekly","weekly"],["daily","daily"],["3day","3-day"]];
-var S={src:"all"};
-try{var sv=JSON.parse(sessionStorage.getItem("ftck")||"null");if(sv)S=sv}catch(e){}
-function fmt(v){return (+v).toPrecision(4)}
-function draw(){
- var mode=window.ftMode||"start";
- $("cksrc").innerHTML='<span class=mut>Source</span>'+SRCS.map(function(a){return '<button class="tog'+(S.src==a[0]?" on":"")+'" data-s="'+a[0]+'">'+a[1]+'</button>'}).join("");
- var rel=mode!="raw",bad=rel&&S.src!="all";
- var runs=P.runs.map(function(r){
-  var den=mode=="start"?r.full0:r.bfull,pts=[];
-  if(!rel||den){
-   if(S.src=="all"&&r.full0)pts.push({n:0,v:rel?r.full0/den:r.full0,t:"start (step 0): "+fmt(r.full0)});
-   r.points.forEach(function(p){var v=p[S.src];if(v==null)return;
-    pts.push({n:p.n,v:rel?v/den:v,t:r.label+" n"+p.n+" "+p.hash+", step "+p.step+": "+fmt(v)+(rel?" ("+fmt(v/den)+" relative)":"")+(p.real!=null?"; real-validation "+fmt(p.real):"")})})}
-  return {r:r,pts:pts}});
- var all=[].concat.apply([],runs.map(function(x){return x.pts}));
- if(bad||!all.length){$("ckplot").innerHTML='<p class=mut>'+(bad?"Per-source start losses are not recorded on the full held-out set, so relative values are only available for all sources. Choose raw.":"No scored checkpoints yet.")+'</p>';return}
- var ns=Array.from(new Set(all.filter(function(p){return p.n>0}).map(function(p){return p.n}))).sort(function(a,b){return a-b});
- var zx=ns[0]/2,W=640,H=320,L=48,R=16,T=12,B=40;
- var x0=Math.log2(zx),x1=Math.log2(ns[ns.length-1]*1.15);
- var sx=function(n){return L+(Math.log2(n||zx)-x0)/(x1-x0)*(W-L-R)};
- var vs=all.map(function(p){return p.v});if(rel)vs.push(1);
- var lo=Math.min.apply(null,vs),hi=Math.max.apply(null,vs),pd=(hi-lo||0.05)*0.1;lo-=pd;hi+=pd;
- var sy=function(v){return T+(1-(v-lo)/(hi-lo))*(H-T-B)};
- var h='<svg viewBox="0 0 '+W+' '+H+'" width="100%">';
- var st=(hi-lo)/4,m=Math.pow(10,Math.floor(Math.log10(st))),k=[1,2,2.5,5,10].find(function(x){return x*m>=st})*m;
- for(var v=Math.ceil(lo/k)*k;v<=hi;v+=k)h+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+sy(v)+'" y2="'+sy(v)+'" class=grid /><text x="'+(L-5)+'" y="'+(sy(v)+3)+'" text-anchor=end class=ax>'+(+v.toFixed(4))+'</text>';
- [[zx,"start"]].concat(ns.map(function(n){return [n,""+n]})).forEach(function(t){h+='<line x1="'+sx(t[0])+'" x2="'+sx(t[0])+'" y1="'+T+'" y2="'+(H-B)+'" class=grid /><text x="'+sx(t[0])+'" y="'+(H-B+14)+'" text-anchor=middle class=ax>'+t[1]+'</text>'});
- h+='<text x="'+(W/2)+'" y="'+(H-6)+'" text-anchor=middle class=ax>simulations (log2)</text>';
- if(rel&&1>=lo&&1<=hi)h+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+sy(1)+'" y2="'+sy(1)+'" class=mark />';
- runs.forEach(function(x){if(!x.pts.length)return;var c=x.r.color;
-  h+='<polyline points="'+x.pts.map(function(p){return sx(p.n)+","+sy(p.v)}).join(" ")+'" fill=none stroke="'+c+'" stroke-width=1.8 />';
-  x.pts.forEach(function(p){h+='<circle cx="'+sx(p.n)+'" cy="'+sy(p.v)+'" r=3.4 fill="'+c+'"><title>'+p.t+'</title></circle>';
-   h+='<text x="'+(sx(p.n)+5)+'" y="'+(sy(p.v)-5)+'" class=ax>'+(+p.v.toPrecision(3))+'</text>'})});
- h+='</svg>';
- var leg=runs.map(function(x){return '<span><i style="background:'+x.r.color+'"></i>'+x.r.label+'</span>'}).join("");
- $("ckplot").innerHTML=h+'<div class=leg>'+leg+'</div><p class=mut>Held-out loss on the full held-out set at each saved checkpoint'+(rel?', '+(mode=="start"?"divided by the run\'s own step-0 loss":"divided by the base Chronos-2 loss on the same blocks")+'. Reference line is 1':'')+'. Hover for hash, step and real-validation loss.</p>';
-}
-$("cksrc").onclick=function(e){var b=e.target.closest("button");if(!b)return;S.src=b.dataset.s;try{sessionStorage.setItem("ftck",JSON.stringify(S))}catch(x){}draw()};
-window.addEventListener("ftmode",draw);
-draw();
-})();
-"""
-
-
-def ck_payload(cks, info):
-    runs = []
-    for c in RUNS:
-        I = info[c["key"]]
-        pts = []
-        for nm, s, _ in cks[c["key"]]:
-            bs = s.get("held_out_loss_by_source") or {}
-            n = s.get("n_outbreaks") or int(re.sub(r"\D", "", nm) or 0)
-            pts.append({"n": n, "step": s.get("steps"),
-                        "hash": str(s.get("hash", "")),
-                        "all": s.get("held_out_loss"),
-                        "weekly": bs.get("weekly"), "daily": bs.get("daily"),
-                        "3day": bs.get("3day"),
-                        "real": s.get("real_validation_loss")})
-        pts.sort(key=lambda p: p["n"])
-        runs.append({"key": c["key"], "label": c["label"],
-                     "color": run_colour(c["key"]), "full0": I["full0"],
-                     "bfull": I["bfull"], "points": pts})
-    return json.dumps({"runs": runs}, separators=(",", ":")).replace(
-        "</", "<\\\\/")
-
-
 MODE_JS = r"""
-(function(){var m="start";
- try{m=sessionStorage.getItem("ftmode")||m}catch(e){}
- function set(v){m=v;document.body.className=document.body.className.replace(/\bm-\w+/g,"")+" m-"+v;
-  window.ftMode=v;
-  [].forEach.call(document.querySelectorAll(".modebar button"),function(b){b.classList.toggle("on",b.dataset.mode==v)});
-  try{sessionStorage.setItem("ftmode",v)}catch(e){}
-  window.dispatchEvent(new Event("ftmode"))}
+(function(){var m="start",r="zoom";
+ try{m=sessionStorage.getItem("ftmode")||m;r=sessionStorage.getItem("ftrng")||r}catch(e){}
+ function paint(){var c=document.body.className.replace(/\b[mr]-\w+/g,"").trim();
+  document.body.className=c+" m-"+m+" r-"+r;
+  [].forEach.call(document.querySelectorAll(".modebar button"),function(b){
+   b.classList.toggle("on",b.dataset.mode==m||b.dataset.rng==r)});
+  try{sessionStorage.setItem("ftmode",m);sessionStorage.setItem("ftrng",r)}catch(e){}}
  [].forEach.call(document.querySelectorAll(".modebar"),function(bar){
-  bar.onclick=function(e){var b=e.target.closest("button");if(b)set(b.dataset.mode)}});
- set(m)})();
+  bar.onclick=function(e){var b=e.target.closest("button");if(!b)return;
+   if(b.dataset.mode)m=b.dataset.mode;if(b.dataset.rng)r=b.dataset.rng;paint()}});
+ paint()})();
 """
 
 REFRESH_JS = r"""
@@ -1179,7 +1114,7 @@ REFRESH_JS = r"""
 
 ONCE = {"on": False}
 
-# ---------- attention bias module (same / parent, [layers, heads]) ----------
+# ---------- attention bias module (self, same, up, down; [layers, heads]) ----------
 # The series bias holds one [layers, heads] tensor per relation (the trainer's
 # series_bias.PAIRS): self, same place, child to parent, parent to child.
 BIAS_PAIRS = [("self", "self"), ("same", "same"),
@@ -1331,15 +1266,13 @@ def bias_data(rundir, hist, cur_step):
             "latest": latest}
 
 
-def heat_svg(rows, title):
-    flat = [x for r in rows for x in r]
-    lo, hi = min(flat), max(flat)
+def heat_svg(rows, title, lo, hi, size=140):
+    """One layer-by-head tile on a colour scale shared across tiles."""
     div = lo < 0 < hi
     amp = max(abs(lo), abs(hi)) or 1
-    cw = 16
-    h = [f'<svg viewBox="0 0 {len(rows[0]) * cw + 4} {len(rows) * cw + 4}" '
-         f'width="{min(100, len(rows[0]) * cw)}%" style="max-width:'
-         f'{len(rows[0]) * cw * 2}px">']
+    nr, nc = len(rows), len(rows[0])
+    cw = size / max(nr, nc)
+    h = [f'<svg viewBox="0 0 {size} {size}" width="{size}" height="{size}">']
     for i, r in enumerate(rows):
         for j, v in enumerate(r):
             if div:
@@ -1349,77 +1282,81 @@ def heat_svg(rows, title):
             else:
                 a = (v - lo) / ((hi - lo) or 1)
                 col = f"rgba(37,99,235,{0.08 + 0.92 * a:.2f})"
-            h.append(f'<rect x="{2 + j * cw}" y="{2 + i * cw}" '
-                     f'width="{cw - 1}" height="{cw - 1}" fill="{col}">'
-                     f'<title>{title} layer {i} head {j}: {v:.4g}</title>'
-                     f'</rect>')
+            h.append(f'<rect x="{j * cw:.1f}" y="{i * cw:.1f}" '
+                     f'width="{cw - 0.5:.1f}" height="{cw - 0.5:.1f}" '
+                     f'fill="{col}"><title>{title} layer {i} head {j}: '
+                     f'{v:.4g}</title></rect>')
     h.append("</svg>")
-    return "".join(h) + (f'<div class=mut>{lo:.3g} to {hi:.3g}; rows are '
-                         f'layers, columns are heads</div>')
+    return "".join(h)
 
 
 def bias_html(rundir, label, hist, cur_step):
     d = bias_data(rundir, hist, cur_step)
     if not d:
         return f"<p class=mut>no bias module in the {html.escape(label)} run</p>"
-    W, H, L, R, T, B = 640, 300, 52, 14, 10, 36
+    W, H, L, R, T, B = 480, 280, 44, 10, 8, 28
+    names = dict(BIAS_PAIRS)
     allp = [(s, v) for k in d["pts"] for s, v in d["pts"][k]]
-    lines, cols = [], BIAS_COL
+    svg = []
     if allp:
         xs = [s for s, _ in allp]
         x0, x1 = min(xs), max(max(xs), min(xs) + 1)
-        ys = [v[k] for _, v in allp for k in ("min", "max")]
+        ys = [v["mean"] for _, v in allp]  # bands may run past the axes
         y0, y1 = min(ys), max(ys)
-        pad = (y1 - y0) * 0.1 or 0.1
+        pad = (y1 - y0) * 0.25 or 0.01
         y0, y1 = y0 - pad, y1 + pad
         sx = lambda x: L + (x - x0) / (x1 - x0) * (W - L - R)
         sy = lambda y: T + (1 - (y - y0) / (y1 - y0)) * (H - T - B)
-        lines.append(f'<svg viewBox="0 0 {W} {H}" width="100%">')
+        svg.append(f'<svg viewBox="0 0 {W} {H}" width="{W}" height="{H}">')
         for tk in nice(y0, y1):
             if y0 <= tk <= y1:
-                lines.append(f'<line x1="{L}" x2="{W-R}" y1="{sy(tk):.1f}" '
-                             f'y2="{sy(tk):.1f}" class=grid /><text x="{L-5}" '
-                             f'y="{sy(tk)+3:.1f}" text-anchor=end class=ax>'
-                             f'{tk:.3g}</text>')
+                svg.append(f'<line x1="{L}" x2="{W-R}" y1="{sy(tk):.1f}" '
+                           f'y2="{sy(tk):.1f}" class=grid /><text x="{L-5}" '
+                           f'y="{sy(tk)+3:.1f}" text-anchor=end class=ax>'
+                           f'{tk:.3g}</text>')
         for tk in nice(x0, x1):
             if x0 <= tk <= x1:
-                lines.append(f'<text x="{sx(tk):.1f}" y="{H-B+14}" '
-                             f'text-anchor=middle class=ax>{tk:g}</text>')
-        lines.append(f'<text x="{W/2}" y="{H-6}" text-anchor=middle '
-                     f'class=ax>step</text>')
+                svg.append(f'<text x="{sx(tk):.1f}" y="{H-B+13}" '
+                           f'text-anchor=middle class=ax>{tk:g}</text>')
+        svg.append(f'<text x="{(L+W-R)/2}" y="{H-3}" text-anchor=middle '
+                   f'class=ax>step (hover a line for its min-max band)</text>')
         if y0 < 0 < y1:
-            lines.append(f'<line x1="{L}" x2="{W-R}" y1="{sy(0):.1f}" '
-                         f'y2="{sy(0):.1f}" class=mark />')
-        for k, pts in d["pts"].items():
+            svg.append(f'<line x1="{L}" x2="{W-R}" y1="{sy(0):.1f}" '
+                       f'y2="{sy(0):.1f}" class=mark />')
+        for n, (k, pts) in enumerate(d["pts"].items()):
             if not pts:
                 continue
-            c = cols[k]
+            c = BIAS_COL[k]
             up = " ".join(f"{sx(s):.1f},{sy(v['max']):.1f}" for s, v in pts)
             dn = " ".join(f"{sx(s):.1f},{sy(v['min']):.1f}"
                           for s, v in reversed(pts))
-            lines.append(f'<polygon points="{up} {dn}" fill="{c}" '
-                         f'opacity=".18" />')
-            lines.append(f'<polyline points="' + " ".join(
-                f"{sx(s):.1f},{sy(v['mean']):.1f}" for s, v in pts)
-                + f'" fill=none stroke="{c}" stroke-width=2 />')
-            for s, v in pts:
-                lines.append(
-                    f'<circle cx="{sx(s):.1f}" cy="{sy(v["mean"]):.1f}" r=3 '
-                    f'fill="{c}"><title>{k} step {s}: mean {v["mean"]:.4g}, '
-                    f'range {v["min"]:.4g} to {v["max"]:.4g}</title></circle>')
-        lines.append("</svg>")
-    names = dict(BIAS_PAIRS)
-    leg = "".join(
-        f'<span><i style="background:{cols[k]}"></i>{names[k]}</span>'
-        for k in d["pts"] if d["pts"][k])
-    chart_h = (f'<div class=card><h3>Mean and range across heads</h3>'
-               f'{"".join(lines)}<div class=leg>{leg}</div></div>')
+            mean = " ".join(f"{sx(s):.1f},{sy(v['mean']):.1f}"
+                            for s, v in pts)
+            svg.append(
+                f'<g class=rel><polygon class=band points="{up} {dn}" '
+                f'fill="{c}" /><polyline points="{mean}" fill=none '
+                f'stroke="{c}" stroke-width=2 /><polyline points="{mean}" '
+                f'fill=none stroke="transparent" stroke-width=12 />'
+                + "".join(
+                    f'<circle cx="{sx(s):.1f}" cy="{sy(v["mean"]):.1f}" r=2.6 '
+                    f'fill="{c}"><title>{names[k]} step {s}: mean '
+                    f'{v["mean"]:.4g}, range {v["min"]:.4g} to '
+                    f'{v["max"]:.4g}</title></circle>' for s, v in pts)
+                + f'<text x="{L+6}" y="{T+12+n*12}" class=ax fill="{c}" '
+                f'style="fill:{c}">{names[k]}</text></g>')
+        svg.append("</svg>")
     lt = d["latest"] or {}
-    heats = "".join(
-        f'<div class=card><h3>{names[k]}, step {lt.get("step")}</h3>'
-        f'{heat_svg(lt[k], k)}</div>' for k, _ in BIAS_PAIRS if k in lt)
-    return (f'<div class=plots>{chart_h}</div>'
-            f'<div class=plots4>{heats}</div>')
+    keys = [k for k, _ in BIAS_PAIRS if k in lt]
+    flat = [x for k in keys for r in lt[k] for x in r]
+    lo, hi = (min(flat), max(flat)) if flat else (0, 1)
+    tiles = "".join(
+        f'<div class=tile4><div class=mut>{k} (step {lt.get("step")})</div>'
+        f'{heat_svg(lt[k], k, lo, hi)}</div>' for k in keys)
+    right = (f'<div><div class=tiles4>{tiles}</div><div class=mut>colour '
+             f'scale {lo:.3g} to {hi:.3g}, shared; rows are layers, columns '
+             f'are heads</div></div>' if tiles else "")
+    return (f'<div class=biasrow><div class=card>{"".join(svg)}</div>'
+            f'{right}</div>')
 
 
 # ---------- page ----------
@@ -1535,7 +1472,7 @@ def build():
         b = info.get(c.get("base_from") or c["key"], info[c["key"]])
         info[c["key"]]["bfull"], info[c["key"]]["bsrc"] = b["full0"], b["src0"]
 
-    def make_plots(mode):
+    def make_plots(mode, zoom):
         rel = mode != "raw"
         suffix = {"raw": "", "start": ", relative to start",
                   "base": ", relative to base Chronos-2"}[mode]
@@ -1587,15 +1524,23 @@ def build():
                "base": "Held-out pooled loss by run (checkpoints, full set)"}
         return [
             chart("Training loss (rolling mean of 20 logged points)"
-                  + suffix, tr_series, marks, ylog=True, hlines=ref),
-            chart(ttl[mode] + suffix, held, marks, ylog=True, hlines=ref),
+                  + suffix, tr_series, marks, ylog=True, hlines=ref,
+                  xmax=xlim if zoom else None),
+            chart(ttl[mode] + suffix, held, marks, ylog=True, hlines=ref,
+                  xmax=xlim if zoom else None),
             chart("Held-out loss by source (colour is the source, style the "
-                  "run)" + suffix, bysrc, marks, ylog=True, hlines=ref)]
+                  "run)" + suffix, bysrc, marks, ylog=True, hlines=ref,
+                  xmax=xlim if zoom else None)]
 
+    # x range: the live run's steps (to 1.2x the latest, at least the next
+    # checkpoint), unless "full range" is chosen.
+    next_ck = next((n for n in prefixes if n not in saved), None)
+    xlim = max([1.2 * (step or 0), 300] + (
+        [tstep(next_ck)] if next_ck else []))
     plots_h = "".join(
-        f'<div class="mode m-{m}"><div class=plots>'
-        + "".join(make_plots(m)) + "</div></div>"
-        for m in ("raw", "start", "base"))
+        f'<div class="mode m-{m} rng r-{z}"><div class=plots>'
+        + "".join(make_plots(m, z == "zoom")) + "</div></div>"
+        for m in ("raw", "start", "base") for z in ("zoom", "full"))
 
     def cktable(rows, run, key, mode):
         if not rows:
@@ -1678,7 +1623,9 @@ def build():
         '<button class=tog data-mode=raw>raw</button>'
         '<button class=tog data-mode=start>relative to start</button>'
         '<button class=tog data-mode=base>relative to base Chronos-2</button>'
-        '</div>')
+        '<span class=sep></span><span class=mut>x range</span>'
+        '<button class=tog data-rng=zoom>live run</button>'
+        '<button class=tog data-rng=full>full range</button></div>')
     css = """
 :root{--bg:#fff;--fg:#1d2127;--mut:#6b7280;--card:#f6f7f9;--line:#d9dde3;
 --c1:#2563eb;--c2:#ea580c;--c3:#16a34a;--c4:#9333ea;--bad:#dc2626;--ok:#15803d}
@@ -1694,7 +1641,7 @@ gap:8px}.tile,.card{background:var(--card);border-radius:8px;padding:10px}
 .k{font-size:11px;color:var(--mut)}.v{font-size:18px;font-weight:600;
 font-variant-numeric:tabular-nums}.s{font-size:11px;color:var(--mut)}
 .tile.ok .v{color:var(--ok)}.tile.bad .v{color:var(--bad)}
-.plots{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));
+.plots{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,520px),1fr));
 gap:8px}svg{display:block}.grid{stroke:var(--line);stroke-width:1}
 .mark{stroke:var(--mut);stroke-dasharray:3 3;stroke-width:1}
 .ax{fill:var(--mut);font-size:10px}.leg{font-size:12px;display:flex;gap:12px;
@@ -1706,23 +1653,30 @@ border-bottom:1px solid var(--line);font-size:12px}
 .gctl{display:flex;flex-wrap:wrap;gap:12px;align-items:center;
 margin-bottom:8px}.gwide input{width:200px;vertical-align:middle}
 .gck{display:flex;flex-wrap:wrap;gap:6px 16px;margin-bottom:8px}
-.mode{display:none}body.m-raw .m-raw,body.m-start .m-start,
-body.m-base .m-base{display:block}.sctl{display:flex;flex-wrap:wrap;gap:4px;align-items:center;
+.mode{display:none}body.m-raw .m-raw:not(.rng),body.m-start .m-start:not(.rng),
+body.m-base .m-base:not(.rng){display:block}
+body.m-raw.r-zoom .m-raw.r-zoom,body.m-raw.r-full .m-raw.r-full,
+body.m-start.r-zoom .m-start.r-zoom,body.m-start.r-full .m-start.r-full,
+body.m-base.r-zoom .m-base.r-zoom,body.m-base.r-full .m-base.r-full{display:block}.sctl{display:flex;flex-wrap:wrap;gap:4px;align-items:center;
 margin-bottom:8px}.sep{width:10px}.sum{font-size:13px;font-weight:600;
 min-height:1.3em;margin-bottom:4px}.plots2{display:grid;
-grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:8px;
+grid-template-columns:repeat(auto-fill,minmax(min(100%,520px),1fr));gap:8px;
 align-items:start}.tog{border:1px solid var(--line);background:var(--card);
 color:var(--fg);border-radius:6px;padding:2px 8px;cursor:pointer;
 font-size:12px}
 .tog.on{background:var(--c1);color:#fff;border-color:var(--c1)}
 .sctl .mut{margin-left:10px}.lg{display:inline-flex;align-items:center;gap:6px;margin-right:14px}
 .leg2{font-size:12px;display:flex;flex-wrap:wrap;gap:4px 18px}.glocs{margin:6px 0}.glocs .tog{margin:1px}.panels{display:grid;gap:8px}
-.panels h4{margin:0 0 2px;font-size:12px}.plots4{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px;margin-top:8px}
+.panels h4{margin:0 0 2px;font-size:12px}.biasrow{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-start}
+.biasrow .card{padding:4px;line-height:0}.tiles4{display:flex;gap:6px}
+.tile4 .mut{font-size:11px;line-height:1.3}.tile4 svg{display:block}
+.rel .band{opacity:0;pointer-events:none}.rel:hover .band{opacity:.22}
+.rel{pointer-events:all}
 .gck i{display:inline-block;width:10px;height:10px;border-radius:2px;
 margin:0 4px}select,button{font:inherit}
 pre{white-space:pre-wrap;background:var(--card);padding:10px;border-radius:8px;
 font-size:12px}.wrap{overflow-x:auto}"""
-    body = f"""<h1>Chronos-2 fine-tuning: slots run</h1>
+    body = f"""<h1>Chronos-2 fine-tuning: {html.escape(LC["label"])} run</h1>
 <div class=mut>{datetime.now():%Y-%m-%d %H:%M:%S}; auto-refresh 60 s; {sub}</div>
 <h2>Status</h2><div class=tiles>{tiles_h}</div>
 <h2>Loss plots</h2>{modebar}
@@ -1731,10 +1685,6 @@ font-size:12px}.wrap{overflow-x:auto}"""
 with base_from in RUNS for runs that start with labels). Training loss uses its
 own first 20 steps for both. Reference line is 1.</p>{plots_h}
 <p class=mut>Dashed lines mark published checkpoints of the live run.</p>
-<h2>Held-out loss by checkpoint</h2>{modebar}
-<div id=cksrc class=sctl></div><div class=card><div id=ckplot></div></div>
-<script type="application/json" id=cdata>{ck_payload(cks, info)}</script>
-<script>{CK_JS}</script>
 <h2>Attention bias ({html.escape(LC["label"])} run)</h2>{bias_h}
 <h2>Performance on real data</h2>{sc_h}{md_h}
 <h2>German nowcasts by checkpoint</h2>{rv_h}
