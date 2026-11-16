@@ -809,6 +809,27 @@ def ger_meta(b, slot_n, prev_n):
     return meta
 
 
+# Reusable play/loop helper for any time slider. Usage:
+#   timePlayer({id, btn, speed, len: () => n, get: () => i, set: i => ...})
+# btn is a button element and speed a <select> of 0.5/1/2. It steps one index
+# per second, loops at the end, and sets window.ftPlaying while running so
+# the page refresh waits. Returns {play, pause, playing}.
+PLAYER_JS = r'''
+window.timePlayer=function(o){
+ var P={playing:false},timer=null;
+ function sync(){o.btn.textContent=P.playing?"Pause":"Play";
+  window.ftPlayers=window.ftPlayers||{};window.ftPlayers[o.id]=P.playing;
+  window.ftPlaying=Object.keys(window.ftPlayers).some(function(k){return window.ftPlayers[k]})}
+ function rate(){return +(o.speed&&o.speed.value)||1}
+ function arm(){clearInterval(timer);timer=setInterval(function(){o.set((o.get()+1)%o.len())},1000/rate())}
+ P.play=function(){if(P.playing)return;P.playing=true;sync();arm()};
+ P.pause=function(){if(!P.playing)return;P.playing=false;clearInterval(timer);sync()};
+ o.btn.onclick=function(){P.playing?P.pause():P.play()};
+ if(o.speed)o.speed.onchange=function(){if(P.playing)arm()};
+ sync();return P};
+'''
+
+
 GER_JS = r'''
 (function(){
 var D=JSON.parse(document.getElementById("gdata").textContent);
@@ -940,7 +961,9 @@ function build(){
  $("gsrc").onchange=function(){S.src=this.value;draw()};
  $("gnd").onchange=function(){S.nd=+this.value;draw()};
  $("gstep").onchange=function(){S.step=+this.value;draw()};
- $("gsl").oninput=function(){S.oi=+this.value;S.latest=S.oi==ORI().length-1;draw()};
+ var pl=timePlayer({id:"german",btn:$("gplay"),speed:$("gspd"),len:function(){return ORI().length},
+  get:function(){return S.oi},set:function(i){S.oi=i;S.latest=i==ORI().length-1;draw()}});
+ $("gsl").oninput=function(){pl.pause();S.oi=+this.value;S.latest=S.oi==ORI().length-1;draw()};
  $("gprev").onclick=function(){S.oi=Math.max(0,S.oi-1);S.latest=false;draw()};
  $("gnext").onclick=function(){S.oi=Math.min(ORI().length-1,S.oi+1);S.latest=S.oi==ORI().length-1;draw()};
  $("glocs").onclick=function(e){var b=e.target.closest("button");if(!b)return;var l=b.dataset.loc,i=S.locs.indexOf(l);
@@ -990,6 +1013,10 @@ def germany_html(slot_n, prev_n, once):
 <label class=gwide>Nowcast date <button id=gprev>&lt;</button>
 <input type=range id=gsl><button id=gnext>&gt;</button>
 <b id=gdate></b></label>
+<label class=gwide><button id=gplay>Play</button>
+<select id=gspd><option value=0.5>0.5x</option>
+<option value=1 selected>1x</option><option value=2>2x</option></select>
+</label>
 <label>Dates overlaid <select id=gnd><option>1</option><option>2</option>
 <option>3</option><option>4</option></select></label>
 <label>every <select id=gstep><option value=1>1 week</option>
@@ -1005,6 +1032,12 @@ def germany_html(slot_n, prev_n, once):
 <script type="application/json" id=gdata>{payload}</script>
 <script>{GER_JS}</script>""")
 
+
+# Reload every 60 s, but wait while any time slider is playing.
+REFRESH_JS = r"""
+(function tick(){setTimeout(function(){
+ if(window.ftPlaying)tick();else location.reload()},60000)})();
+"""
 
 ONCE = {"on": False}
 
@@ -1241,8 +1274,9 @@ font-size:12px}.wrap{overflow-x:auto}"""
 <h2>Recent activity (archie mailbox)</h2>{mh}"""
     return (f'<!doctype html><html><head><meta charset=utf-8>'
             f'<meta name=viewport content="width=device-width,initial-scale=1">'
-            f'<meta http-equiv=refresh content=60><title>FT dashboard</title>'
-            f'<style>{css}</style></head><body>{body}</body></html>')
+            f'<title>FT dashboard</title>'
+            f'<style>{css}</style><script>{PLAYER_JS}</script></head>'
+            f'<body>{body}<script>{REFRESH_JS}</script></body></html>')
 
 
 LOCK = threading.Lock()
