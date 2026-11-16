@@ -123,8 +123,7 @@ and its zones are split from them at load
 (`forecasters.zones.zones_for_model`). `fit_code`'s own helper
 (`evaluation.digest`), and the plots `evaluation.ppc` imports for
 `plot_ppc`, which a fit does not draw. The model registry
-(`forecasters/__init__.py`): what a fit takes from it is keyed by the
-module that defines it, so adding or removing a model refits no other.
+(`forecasters/__init__.py`): adding a model must not refit the others.
 """
 
 STORE_DATA: Final = "src/bdbvhubrenewal/data/*.csv"
