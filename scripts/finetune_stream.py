@@ -44,9 +44,12 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from bdbvhubrenewal.forecasters import slots
 from bdbvhubrenewal.forecasters.foundation import (
     CHRONOS_MODEL,
     CHRONOS_REVISION,
+    SLOTS_PREFIX,
+    release_tag,
 )
 
 sys.path.insert(0, str(Path(__file__).parent))
@@ -130,16 +133,68 @@ def read_seed_list(path: Path) -> list[int]:
     return [int(x) for x in path.read_text().split()]
 
 
+LORA_TARGETS = (
+    "self_attention.q",
+    "self_attention.v",
+    "self_attention.k",
+    "self_attention.o",
+    "output_patch_embedding.output_layer",
+)
+"""Modules the LoRA adapter trains."""
+
+
+SLOTS_CODE = "src/bdbvhubrenewal/forecasters/slots.py"
+"""The per-series slots' code, hashed into a slots checkpoint's settings."""
+
+
+def lora_config(n_slots: int):
+    """Return the LoRA config, saving the per-series slots if `n_slots`.
+
+    The slots (`bdbvhubrenewal.forecasters.slots`) train beside the
+    adapter as one of PEFT's `modules_to_save`, so they are saved in the
+    adapter's files and published and loaded with it.
+    """
+    from peft import LoraConfig
+
+    return LoraConfig(
+        r=8,
+        lora_alpha=16,
+        target_modules=list(LORA_TARGETS),
+        modules_to_save=[slots.SLOT_MODULE] if n_slots else None,
+    )
+
+
+def slot_settings(n_slots: int) -> dict:
+    """Return the slots' entry of a checkpoint's settings, none if off."""
+    if not n_slots:
+        return {}
+    return {
+        "series_slots": {
+            "n": n_slots,
+            "init": "zero",
+            "module": slots.SLOT_MODULE,
+            "assignment": (
+                "a fresh random permutation per block each time it is "
+                "batched in training; seeded by EVAL_SEED "
+                f"({slots.EVAL_SEED}) in held-out losses and at inference"
+            ),
+        }
+    }
+
+
 def lora_model(base, config, init: Path | None):
     """Return `base` with a LoRA adapter to train.
 
     A fresh adapter from `config`, or, to continue a round, the adapter
-    saved at `init`, still trainable.
+    saved at `init`, still trainable. A base with slots continues only
+    from an adapter that holds them.
     """
     from peft import PeftModel, get_peft_model
 
     if init is None:
         return get_peft_model(base, config)
+    if slots.has_slots(base) and slots.adapter_slots(init) is None:
+        raise ValueError(f"{init} holds no slots to continue training")
     return PeftModel.from_pretrained(base, init, is_trainable=True)
 
 
@@ -456,6 +511,41 @@ def _join(
     return pairs, empty
 
 
+def forward(model, batch: dict, accepted, device=None):
+    """Run the model on a batch, its rows given their slots if any."""
+    import torch
+
+    inputs = {
+        k: v.to(device or model.device) if torch.is_tensor(v) else v
+        for k, v in batch.items()
+        if k in accepted
+    }
+    with slots.assigned(model, batch.get("slot_ids")):
+        return model(**inputs)
+
+
+def block_slots(blocks: list[dict], n_slots: int, rng=None) -> np.ndarray:
+    """Return the slots of the rows of blocks batched together.
+
+    Each block draws its own permutation: from `rng` in training, from
+    `slots.EVAL_SEED` otherwise, so a block's slots in a held-out loss do
+    not depend on its batch.
+    """
+    return np.concatenate(
+        [
+            slots.slot_ids(
+                int(b["n_targets"]),
+                int(b["n_covariates"]),
+                rng
+                if rng is not None
+                else np.random.default_rng(slots.EVAL_SEED),
+                n_slots,
+            )
+            for b in blocks
+        ]
+    )
+
+
 def tensors(block: dict) -> dict:
     """Return a block with its arrays as the tensors Chronos-2 reads."""
     import torch
@@ -503,9 +593,21 @@ class ByLength:
     (`finetune_chronos.plan_by_length`), as `Chronos2Dataset` does.
     """
 
-    def __init__(self, blocks: list[dict], batch_size: int, mode) -> None:
+    def __init__(
+        self,
+        blocks: list[dict],
+        batch_size: int,
+        mode,
+        n_slots: int = 0,
+        slot_rng: np.random.Generator | None = None,
+    ) -> None:
         from chronos.chronos2.dataset import Chronos2Dataset, DatasetMode
 
+        # With slots, each batch carries its rows' slots (`block_slots`),
+        # drawn afresh from `slot_rng` in training.
+        self.n_slots = n_slots
+        self.batch_size = batch_size
+        self.slot_rng = slot_rng if mode == DatasetMode.TRAIN else None
         self.inputs = [tensors(b) for b in blocks]
         self.lengths = [b["prediction_length"] for b in blocks]
         self.local: dict[int, int] = {}
@@ -530,12 +632,35 @@ class ByLength:
     def _build_batch(self, indices: list[int]) -> dict:
         """Return the batch of blocks `indices`, all of one length."""
         length = self.lengths[indices[0]]
-        return self.data[length]._build_batch([self.local[i] for i in indices])
+        batch = self.data[length]._build_batch([self.local[i] for i in indices])
+        if self.n_slots:
+            batch["slot_ids"] = block_slots(
+                [self.inputs[i] for i in indices], self.n_slots, self.slot_rng
+            )
+        return batch
+
+    def indices(self):
+        """Yield every block's index once, in batches of one length.
+
+        Batches are those Chronos-2's sequential batches make: blocks in
+        order until a batch holds `batch_size` series.
+        """
+        for length in self.data:
+            idx = [i for i, n in enumerate(self.lengths) if n == length]
+            batch, rows = [], 0
+            for i in idx:
+                batch.append(i)
+                rows += int(self.inputs[i]["context"].shape[0])
+                if rows >= self.batch_size:
+                    yield batch
+                    batch, rows = [], 0
+            if batch:
+                yield batch
 
     def batches(self):
         """Yield every block once, in batches of one length."""
-        for data in self.data.values():
-            yield from data
+        for indices in self.indices():
+            yield self._build_batch(indices)
 
 
 def held_out_loss(model, blocks: list[dict], batch_size: int) -> float:
@@ -544,19 +669,16 @@ def held_out_loss(model, blocks: list[dict], batch_size: int) -> float:
     from chronos.chronos2.dataset import DatasetMode
     from chronos.chronos2.model import Chronos2Model
 
-    data = ByLength(blocks, batch_size, DatasetMode.VALIDATION)
+    n_slots = slots.n_slots(model) if slots.has_slots(model) else 0
+    data = ByLength(blocks, batch_size, DatasetMode.VALIDATION, n_slots)
     accepted = inspect.signature(Chronos2Model.forward).parameters
     training = model.training
     model.eval()
     losses, weights = [], []
     with torch.no_grad():
-        for batch in data.batches():
-            batch = {
-                k: v.to(model.device) if torch.is_tensor(v) else v
-                for k, v in batch.items()
-                if k in accepted
-            }
-            losses.append(float(model(**batch).loss))
+        for indices in data.indices():
+            batch = data._build_batch(indices)
+            losses.append(float(forward(model, batch, accepted).loss))
             weights.append(len(batch["context"]))
     model.train(training)
     return float(np.average(losses, weights=weights))
@@ -594,7 +716,7 @@ def publish(where: Path, key: str, run=subprocess.run) -> None:
     one missing assets gets them uploaded, and one whose sums differ is an
     error.
     """
-    tag = f"chronos-ft-{key}"
+    tag = release_tag(key)
     files = [
         where / "finetuned-ckpt" / "adapter_config.json",
         where / "finetuned-ckpt" / "adapter_model.safetensors",
@@ -715,6 +837,7 @@ def held_out_by_level(model, blocks: list[dict], n: int) -> dict:
     from chronos.chronos2.model import Chronos2Model
 
     accepted = inspect.signature(Chronos2Model.forward).parameters
+    n_slots = slots.n_slots(model) if slots.has_slots(model) else 0
     training = model.training
     model.eval()
     losses: dict[str, list[float]] = {}
@@ -729,18 +852,19 @@ def held_out_by_level(model, blocks: list[dict], n: int) -> dict:
                 mode=DatasetMode.VALIDATION,
             )
             batch = next(iter(data))
+            if n_slots:
+                batch["slot_ids"] = block_slots([block], n_slots)
             levels = np.array(block["levels"])
             for level in sorted(set(levels)):
                 target = batch["future_target"].clone()
                 keep = torch.zeros(len(target), dtype=torch.bool)
                 keep[: len(levels)] = torch.from_numpy(levels == level)
                 target[~keep] = float("nan")
-                inputs = {
-                    k: v.to(model.device) if torch.is_tensor(v) else v
-                    for k, v in {**batch, "future_target": target}.items()
-                    if k in accepted
-                }
-                loss = float(model(**inputs).loss)
+                loss = float(
+                    forward(
+                        model, {**batch, "future_target": target}, accepted
+                    ).loss
+                )
                 losses.setdefault(level, []).append(loss)
     model.train(training)
     return {k: float(np.mean(v)) for k, v in losses.items()}
@@ -794,7 +918,6 @@ def main() -> None:
     from chronos import Chronos2Pipeline
     from chronos.chronos2.dataset import DatasetMode
     from chronos.chronos2.model import Chronos2Model
-    from peft import LoraConfig
 
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("sim_dir", type=Path)
@@ -849,6 +972,10 @@ def main() -> None:
     parser.add_argument("--memory-gb", type=float, default=ft.MEMORY_GB)
     # Processes cutting blocks a chunk ahead; they do not change the blocks.
     parser.add_argument("--cut-workers", type=int, default=3)
+    # Per-series slots (bdbvhubrenewal.forecasters.slots): a learned,
+    # zero-initialised vector shared by a place's count and lag series,
+    # trained beside the adapter; 0 trains without them.
+    parser.add_argument("--series-slots", type=int, default=0)
     args = parser.parse_args()
     CHUNK = args.chunk
     ft.SOURCES = tuple(args.sources)
@@ -941,17 +1068,9 @@ def main() -> None:
     pipeline = Chronos2Pipeline.from_pretrained(
         CHRONOS_MODEL, revision=CHRONOS_REVISION, device_map=device
     )
-    lora = LoraConfig(
-        r=8,
-        lora_alpha=16,
-        target_modules=[
-            "self_attention.q",
-            "self_attention.v",
-            "self_attention.k",
-            "self_attention.o",
-            "output_patch_embedding.output_layer",
-        ],
-    )
+    if args.series_slots:
+        slots.attach(pipeline.model, args.series_slots)
+    lora = lora_config(args.series_slots)
     model = lora_model(pipeline.model, lora, args.init_adapter)
     model.train()
     params = [p for p in model.parameters() if p.requires_grad]
@@ -963,6 +1082,12 @@ def main() -> None:
         "code_sha256": {
             **{p: ft._sha256(Path(p)) for p in ft.CODE},
             "scripts/finetune_stream.py": ft._sha256(Path(__file__)),
+            # The slots' code shapes a slots checkpoint, so it is hashed.
+            **(
+                {SLOTS_CODE: ft._sha256(Path(SLOTS_CODE))}
+                if args.series_slots
+                else {}
+            ),
             **{
                 f"foundation.{f.__name__}": hashlib.sha256(
                     inspect.getsource(f).encode()
@@ -988,7 +1113,16 @@ def main() -> None:
             f"{k} of each simulation's draws x {ft.CUTS} cut-off slots x "
             "2 sources, seeded by the simulation"
         ),
-        "lora": {"r": 8, "alpha": 16},
+        "lora": {
+            "r": 8,
+            "alpha": 16,
+            **(
+                {"modules_to_save": [slots.SLOT_MODULE]}
+                if args.series_slots
+                else {}
+            ),
+        },
+        **slot_settings(args.series_slots),
         "learning_rate": args.learning_rate,
         **(
             {
@@ -1076,12 +1210,8 @@ def main() -> None:
 
     def backward(part: list[int], share: float) -> float:
         """Accumulate the gradients of part of a batch."""
-        batch = {
-            k: v.to(device) if torch.is_tensor(v) else v
-            for k, v in data._build_batch(part).items()
-            if k in accepted
-        }
-        loss = model(**batch).loss
+        batch = data._build_batch(part)
+        loss = forward(model, batch, accepted, device).loss
         (loss * share).backward()
         value = float(loss.detach())
         del batch, loss
@@ -1179,7 +1309,13 @@ def main() -> None:
         plan = ft.plan_by_length(
             lengths, sizes, args.batch_size, rng, ft.MAX_SERIES
         )
-        data = ByLength(blocks, args.batch_size, DatasetMode.TRAIN)
+        data = ByLength(
+            blocks,
+            args.batch_size,
+            DatasetMode.TRAIN,
+            args.series_slots,
+            np.random.default_rng([args.seed, done, 2]),
+        )
         log(
             f"outbreaks {done + 1}-{hi}: {len(blocks)} blocks, "
             f"{sizes.sum()} series, {len(plan)} steps"
@@ -1312,8 +1448,10 @@ def main() -> None:
             if mismatch:
                 log(f"n{done} not published: {'; '.join(mismatch)}")
             elif args.publish:
-                publish(where, key)
-                report(last_release=f"chronos-ft-{key}")
+                # Slots checkpoints are released apart (`release_tag`).
+                spec = f"{SLOTS_PREFIX}{key}" if args.series_slots else key
+                publish(where, spec)
+                report(last_release=release_tag(spec))
             # From `stop_from` on, go on only while the last doubling cut
             # held-out loss by more than `min_gain`.
             losses.append(settings["held_out_loss"])
