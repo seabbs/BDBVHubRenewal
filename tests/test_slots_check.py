@@ -192,6 +192,74 @@ def test_no_slots_gives_no_ids():
     assert sc.model_ids(tiny_model(), block()) is None
 
 
+@pytest.mark.xfail(
+    strict=True,
+    raises=AssertionError,
+    reason=(
+        "chronos 2.3.2 sorts dict covariate keys, so CD-* lag rows come "
+        "before CD's while this branch's chronos_sampler gives slots in "
+        "input order; fixed upstream by _group_slots (checkpoint-scoring "
+        "1e124b859, slots-loader-roworder 9bca8068c)"
+    ),
+)
+def test_inference_rows_keep_their_place_slot(monkeypatch):
+    """Each prepared row gets its own place's slot at inference.
+
+    Fails on this branch's `foundation.chronos_sampler`. The fix
+    (`_group_slots`, which reads the group's "places") is on
+    checkpoint-scoring 1e124b859 and slots-loader-roworder 9bca8068c, so
+    this test is expected to XPASS, and so fail as strict, once that code
+    is merged here; then drop the marker. The check itself scores tensor
+    blocks in the trainer's order and is not affected.
+    """
+    from chronos import Chronos2Pipeline
+
+    model = with_slots()
+    places = ["CD", "CD-KN", "CD-EQ"]
+    b = block()
+    x = b["context"]
+    names = [f"{p}_lag_{d}" for p in places for d in range(LAG)]
+    group = {
+        "target": x[:N_PLACES, :T],
+        "past_covariates": dict(zip(names, x[N_PLACES:, :T], strict=True)),
+        "future_covariates": dict(zip(names, x[N_PLACES:, T:], strict=True)),
+    }
+    if hasattr(foundation, "_group_slots"):
+        # The fixed sampler reads the places layout_block now sets.
+        group["places"] = places
+    seen = {}
+    real = slots.assigned
+
+    def record(m, i):
+        seen["ids"] = np.asarray(i)
+        return real(m, i)
+
+    def grab(_module, args, kwargs):
+        seen["context"] = kwargs.get("context", args[0] if args else None)
+
+    model.register_forward_pre_hook(grab, with_kwargs=True)
+    monkeypatch.setattr(slots, "assigned", record)
+    monkeypatch.setattr(
+        foundation, "_chronos", lambda _c=None: Chronos2Pipeline(model=model)
+    )
+    foundation.chronos_sampler([group], H, 5, 1)
+    ctx = seen["context"].numpy()
+    ids = seen["ids"]
+    lags = x[N_PLACES:, :T].reshape(N_PLACES, LAG, T)
+    for row in range(N_PLACES, ctx.shape[0]):
+        tail = ctx[row, -T:]
+        owner = [
+            p
+            for p in range(N_PLACES)
+            if any(
+                np.allclose(tail, lags[p, d], equal_nan=True)
+                for d in range(LAG)
+            )
+        ]
+        assert owner, row
+        assert ids[row] == ids[owner[0]], (row, owner)
+
+
 def test_synthetic_adapter_loads_random_slots_and_a_no_op_lora(tmp_path):
     sc.synthetic_adapter(tiny_model(), tmp_path / "ad", N_SLOTS, 3, 1.0)
     assert slots.adapter_slots(tmp_path / "ad") == N_SLOTS
@@ -362,3 +430,45 @@ def test_summary_without_a_comparator_compares_with_zero_shot_only():
     s = sc.summarise_rows(d, n_boot=50)
     given = s[(s["condition"] == "given") & (s["model"] == "slots")]
     assert set(given["against"]) == {"zero-shot"}
+
+
+def test_headline_work_comes_first_with_a_comparator():
+    first = sc.phase_work("headline", has_comparator=True)
+    rest = sc.phase_work("rest", has_comparator=True)
+    assert first == {
+        ("slots", "given"),
+        ("slots", "swap_places"),
+        ("no-slots", "given"),
+        ("no-slots", "swap_places"),
+    }
+    every = {
+        (m, c)
+        for m in ("zero-shot", "no-slots", "slots")
+        for c in sc.CONDITIONS
+    }
+    assert first | rest == every
+    assert not first & rest
+
+
+def test_headline_work_without_a_comparator_uses_zero_shot():
+    first = sc.phase_work("headline", has_comparator=False)
+    rest = sc.phase_work("rest", has_comparator=False)
+    assert ("zero-shot", "given") in first
+    assert ("slots", "swap_places") in first
+    assert all(m != "no-slots" for m, _ in first | rest)
+    every = {(m, c) for m in ("zero-shot", "slots") for c in sc.CONDITIONS}
+    assert first | rest == every
+
+
+def test_interim_summary_has_slots_against_no_slots_only():
+    d = per_block()
+    d = d[(d["model"] != "zero-shot")]
+    s = sc.summarise_rows(d, n_boot=50)
+    given = s[(s["condition"] == "given") & (s["model"] == "slots")]
+    assert set(given["against"]) == {"no-slots"}
+    swap = s[
+        (s["condition"] == "swap_places")
+        & (s["model"] == "slots")
+        & (s["window"] == "nowcast")
+    ]
+    assert (swap["n_above_floor"] > 0).all()
