@@ -111,7 +111,8 @@ def copula_arms(
         The country's location code.
     fixed : pandas.DataFrame, optional
         The `fixed` arm, as `unpaired`, for a model that pairs by the
-        prior inside itself. By default `unpaired` paired by the prior. The rolling arms pair it again.
+        prior inside itself. By default `unpaired` paired by the prior.
+        The rolling arms pair it again.
 
     Returns
     -------

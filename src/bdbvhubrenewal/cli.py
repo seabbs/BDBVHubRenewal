@@ -1439,8 +1439,8 @@ def _hub_forecast(
     A `forecast` given is used as it is. Otherwise, with `config` it
     forecasts from the fit directory `fit`, else `model` forecasts. A
     model registered as `paired` has its draws paired (`_pair`, with
-    `backtest_config`, `fit_store` and `history`). The zones come from
-    `_zones`, after pairing.
+    `backtest_config`, `fit_store` and `history`), its zones from `_zones`
+    with them.
 
     Returns
     -------
@@ -1461,18 +1461,30 @@ def _hub_forecast(
         check_samples(samples, task)
         result = Forecast(samples)
     name = get_config(config).model if config else model
+    zones, zone_note = _zones(data, name, task, result.samples)
     copula = None
     if name is not None and _spec(name).paired:
-        result, copula = _pair(
+        # Zones forecast from their own data are paired with the provinces.
+        own = result.samples.loc[~result.samples["location"].map(is_zone)]
+        both = own if zones is None else pd.concat([own, zones])
+        paired, copula = _pair(
             name,
             task,
-            result,
+            dataclasses.replace(result, samples=both.reset_index(drop=True)),
             data=data,
             backtest_config=backtest_config,
             fit_store=fit_store,
             history=history,
         )
-    zones, zone_note = _zones(data, name, task, result.samples)
+        drawn = paired.samples["location"].map(is_zone)
+        if zones is not None:
+            zones = paired.samples.loc[drawn, list(zones.columns)]
+            zones = zones.astype(
+                {"sample": "int64"} if "sample" in zones else {}
+            ).reset_index(drop=True)
+        result = dataclasses.replace(
+            paired, samples=paired.samples.loc[~drawn].reset_index(drop=True)
+        )
     # A model that forecasts zones itself gives them through `zones`.
     own_zones = result.samples["location"].map(is_zone)
     table = to_hub_table(

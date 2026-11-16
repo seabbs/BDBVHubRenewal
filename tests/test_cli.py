@@ -1061,7 +1061,7 @@ def test_a_paired_models_own_zones_are_paired_with_its_provinces(
                  str(out)]) == 0  # fmt: skip
     zone_in = seen["in"].loc[seen["in"]["location"].str.count("-") == 2]
     assert not zone_in.empty
-    (path,) = out.glob("*.csv")
+    (path,) = out.rglob("*.csv")
     table = pd.read_csv(path)
     zone = table.loc[table["location"].str.count("-") == 2]
     paired = seen["out"].loc[seen["out"]["location"].str.count("-") == 2]
