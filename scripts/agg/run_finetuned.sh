@@ -11,7 +11,8 @@
 # Waits for the release and its sha256sums.txt, then, one process at a
 # time, each in a memory-capped scope at nice 19 with one thread:
 #   1. the sanity check: zero-shot fm_chronos_daily_ragged, joint, at BDBV
-#      origin 2026-11-01, against its existing rows (once per AGG_ROOT);
+#      origins 2026-10-17 and 2026-11-01, against its existing rows (once
+#      per AGG_ROOT; 10-17 is the origin with scored zones);
 #   2. joint, level and bottom for fm_chronos_{daily,weekly}_ragged_ft on
 #      the BDBV release-backtest origins 2026-10-09 to 2026-11-01 and the
 #      80 German development dates;
@@ -136,7 +137,7 @@ sane=$root/cache/zero-shot-sanity
 if [ ! -f "$sane/ok" ]; then
   heavy "$cap_bdbv_daily" bdbv-fit --data "$root/data" \
     --model fm_chronos_daily_ragged --groupings joint \
-    --origins 2026-11-01 --out "$sane/fits"
+    --origins 2026-10-17 2026-11-01 --out "$sane/fits"
   heavy "$cap" bdbv-score --data "$root/data" --fits "$sane/fits" \
     --out "$sane/scores.csv"
   heavy "$cap" sanity --existing "$root/zero-shot-scores.csv.gz" \

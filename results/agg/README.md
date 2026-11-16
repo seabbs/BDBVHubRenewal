@@ -36,6 +36,6 @@ The round-1 and n1000 fine-tuned rows are dropped, as their checkpoints are not 
 `scripts/agg/run_finetuned.sh LABEL` fits, scores and adds one checkpoint's rows, on the same data as the zero-shot rows: the hub at ad1bb4af13bf (the 2026-11-08 release, D = 35), BDBV origins 2026-10-09 to 2026-11-01, the German development half and its 40-day truth.
 randomwalknowcast is not rerun; each new arm keeps the cells it has here, and the runner checks every arm has all of them.
 The paired arm uses `forecasters/copula.py` as at fm-copula-rolling's c83d85461, before its per-cell seeding; the file on this branch is that version byte for byte.
-Before it fits, the runner refits zero-shot `fm_chronos_daily_ragged`, joint, at origin 2026-11-01 and compares its rows with those here.
+Before it fits, the runner refits zero-shot `fm_chronos_daily_ragged`, joint, at origins 2026-10-17 (every level scored, zones included) and 2026-11-01, and compares its rows with those here.
 
 Checkpoints added:

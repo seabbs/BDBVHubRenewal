@@ -250,8 +250,11 @@ def bdbv_scores(fits: list[Path], data: str) -> pd.DataFrame:
         on=["location", "target_end_date"],
     )
     zs = zs.loc[zs["truth_vintage"] > zs["origin"]]
-    ref = zs["origin"].map(
-        lambda v: pd.Timestamp(bt.reference_date_for_vintage(v))
+    # An origin with no matured zone-week leaves no zone rows.
+    ref = pd.to_datetime(
+        zs["origin"].map(
+            lambda v: pd.Timestamp(bt.reference_date_for_vintage(v))
+        )
     )
     zs = zs.assign(
         horizon=(pd.to_datetime(zs["target_end_date"]) - ref).dt.days // 7,
