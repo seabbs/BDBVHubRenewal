@@ -341,3 +341,9 @@ def test_the_check_follows_the_configured_prefix(tmp_path):
     }
     jobs = dry(tmp_path, "finetune", config=config)
     assert jobs["checkpoint_check"] == 1
+
+
+def test_the_dashboard_render_is_its_own_target(tmp_path):
+    assert dry(tmp_path, "dashboard") == {"dashboard": 1}
+    jobs = dry(tmp_path, "all", config={**FT, "score": {"labels": ["aaa"]}})
+    assert "dashboard" not in jobs
