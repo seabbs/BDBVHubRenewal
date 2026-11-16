@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 
 import pytest
+import yaml
 
 pytest.importorskip("snakemake")
 
@@ -14,11 +15,16 @@ ROOT = Path(__file__).parents[2]
 SNAKEMAKE = Path(sys.executable).parent / "snakemake"
 
 
-def dry(tmp_path, *targets, config=()):
-    """Return the jobs per rule of a dry run of `targets`."""
+def dry(tmp_path, *targets, config=None):
+    """Return the jobs per rule of a dry run of `targets`.
+
+    `config` is merged into workflow/config.yaml.
+    """
     local = tmp_path / "local.env"
     if not local.exists():
         local.write_text(f"ROOT={tmp_path}\nHOST_NAME=test-host\n")
+    overlay = tmp_path / "overlay.yaml"
+    overlay.write_text(yaml.safe_dump(config or {}))
     out = subprocess.run(
         [
             str(SNAKEMAKE),
@@ -32,7 +38,7 @@ def dry(tmp_path, *targets, config=()):
             "1",
             "--workflow-profile",
             "workflow/profiles/ci",
-            *(["--config", *config] if config else []),
+            *(["--configfile", str(overlay)] if config else []),
         ],
         cwd=ROOT,
         env={
@@ -49,7 +55,7 @@ def dry(tmp_path, *targets, config=()):
 
 
 def test_simulate_runs_every_batch_of_a_round(tmp_path):
-    jobs = dry(tmp_path, "simulate", config=["rounds=[4]"])
+    jobs = dry(tmp_path, "simulate", config={"rounds": [4]})
     assert jobs["simulate_batch"] == 44
     assert jobs["batch_record"] == 44
     assert jobs["round_manifest"] == 1
@@ -58,12 +64,12 @@ def test_simulate_runs_every_batch_of_a_round(tmp_path):
 
 
 def test_simulate_never_releases(tmp_path):
-    jobs = dry(tmp_path, "simulate", config=["rounds=[4]"])
+    jobs = dry(tmp_path, "simulate", config={"rounds": [4]})
     assert not any(k.startswith("release") for k in jobs)
 
 
 def test_release_is_its_own_target(tmp_path):
-    jobs = dry(tmp_path, "release", config=["rounds=[4]"])
+    jobs = dry(tmp_path, "release", config={"rounds": [4]})
     assert jobs["release_batch"] == 44
 
 
@@ -74,15 +80,21 @@ def test_batches_already_simulated_are_kept(tmp_path):
         with gzip.open(sims / f"counts-{seed}.csv.gz", "wt") as f:
             f.write("x\n")
         (sims / f"settings-{seed}.csv").write_text("outbreak\n")
-    jobs = dry(tmp_path, "simulate", config=["rounds=[4]"])
+    jobs = dry(tmp_path, "simulate", config={"rounds": [4]})
     assert jobs["simulate_batch"] == 42
 
 
-FT = [
-    "rounds=[1]",
-    "finetune={'prefixes': [250, 500], 'outbreaks': 500, 'rounds': [1], "
-    "'held_round': 1, 'sims_from': 'local'}",
-]
+FT = {
+    "rounds": [1],
+    "finetune": {
+        "prefixes": [250, 500],
+        "outbreaks": 500,
+        "rounds": [1],
+        "held_round": 1,
+        "sims_from": "local",
+        "real_validation": None,
+    },
+}
 
 
 def test_finetune_trains_one_segment_per_prefix(tmp_path):
@@ -95,7 +107,7 @@ def test_finetune_trains_one_segment_per_prefix(tmp_path):
 
 
 def test_finetune_takes_batches_from_releases(tmp_path):
-    config = [FT[0], FT[1].replace("'local'", "'release'")]
+    config = {**FT, "finetune": {**FT["finetune"], "sims_from": "release"}}
     jobs = dry(tmp_path, "finetune", config=config)
     assert jobs["fetch_batch"] == 25
     assert "simulate_batch" not in jobs

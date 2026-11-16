@@ -20,3 +20,36 @@ simulate:
   retry_mem_mb: 20480
   # GitHub repository of the `sims-r<N>` releases.
   repo: seabbs/BDBVHubRenewal
+
+finetune:
+  # The continuous run (was scripts/finetune_continuous.sh), one training
+  # segment per prefix (`--until`), in <RUN>/train/n<N>/.
+  prefixes: [250, 500, 750, 1000, 2000, 4000, 8000]
+  outbreaks: 8000
+  # Training seeds: the rounds' training batches in seed order, or a
+  # fixed list from `seed_file` (one seed a line, in order). The held-out
+  # batches are those of `held_round`.
+  rounds: [1, 2, 3, 4, 5, 6, 7, 8]
+  seed_file: null
+  held_round: 1
+  holdout: 100
+  # Where the batches come from: `local` (this machine's rounds) or
+  # `release` (the sims-r<N> releases).
+  sims_from: local
+  # Chronos-2's recipe, as the continuous driver ran it.
+  grid: r4
+  draws: 2
+  subset_seed: 1
+  learning_rate: 1.0e-5
+  lr_steps: 36500
+  sources: [weekly, daily, 3day]
+  univariate_share: 0.2
+  chunk: 250
+  series_slots: 128
+  note: continuous r4
+  # The real validation blocks (scripts/finetune_real_validation.py) and
+  # the delay table they are cut from; null leaves them out.
+  real_validation: output/finetune/real-validation.pkl
+  delays: data/delays.csv.gz
+  # Zero-shot Chronos-2's loss on them, which n1000 should beat.
+  zero_shot_real: 4.147
