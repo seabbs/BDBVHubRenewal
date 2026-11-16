@@ -46,12 +46,19 @@ pull() { rsync -a "$REMOTE:$REMOTE_ROOT/rounds/$1/" "$2/"; }
 sync_rounds() {
   # Copy each new round, in order, once; its seeds join the seed list.
   mkdir -p "$HERE/sims" "$HERE/rounds"
-  touch "$HERE/seeds.txt"
+  touch "$HERE/seeds.txt" "$HERE/excluded.txt"
   local n
   for n in $(remote_ls | sed -n 's/^r\([0-9]*\)$/\1/p' | sort -n); do
     [ -e "$HERE/rounds/r$n.done" ] && continue
     pull "r$n" "$HERE/rounds/r$n" || return 1
+    # A round is pulled for training once archie marks it READY (simulated
+    # and reviewed); its QC exclusions join the list the trainer skips.
+    [ -e "$HERE/rounds/r$n/READY" ] || return 0
     [ -s "$HERE/rounds/r$n/seeds.txt" ] || return 0
+    if [ -s "$HERE/rounds/r$n/qc/excluded.csv" ]; then
+      tail -n +2 "$HERE/rounds/r$n/qc/excluded.csv" | cut -d, -f1 \
+        >> "$HERE/excluded.txt"
+    fi
     cp -R "$HERE/rounds/r$n/sims/." "$HERE/sims/"
     cat "$HERE/rounds/r$n/seeds.txt" >> "$HERE/seeds.txt"
     touch "$HERE/rounds/r$n.done"
@@ -101,6 +108,7 @@ while true; do
       --subset-seed "$SUBSET_SEED" --learning-rate 1e-5 --lr-steps "$LR_STEPS" \
       --sources $SOURCES --univariate-share "$UNIVARIATE_SHARE" \
       --real-validation "$REAL_VALIDATION" --note "continuous r4" --publish \
+      --exclude "$HERE/excluded.txt" \
       >> "$HERE/train.log" 2>&1 < /dev/null &
     trainer=$!
     echo "$trainer" > "$HERE/trainer.pid"

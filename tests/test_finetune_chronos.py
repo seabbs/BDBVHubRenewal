@@ -707,6 +707,22 @@ def test_level_mix_includes_single_series():
     assert all(len(places) == 1 and places[0] in STRATA for places in single)
 
 
+def test_excluded_simulations_are_not_read(tmp_path, monkeypatch):
+    import finetune_stream
+
+    sims = tmp_path / "sims"
+    sims.mkdir()
+    _sim_dir(sims)
+    exclude = tmp_path / "excluded.txt"
+    monkeypatch.setattr(finetune_stream, "_READY", {})
+    monkeypatch.setattr(finetune_stream, "EXCLUDE_FILE", exclude)
+    exclude.write_text("6001-0001\n")
+    assert finetune_stream.batch_outbreaks(sims, 6001) == ["6001-0002"]
+    # Exclusions that arrive later apply to batches read later.
+    exclude.write_text("simulation,reason\n6001-0001,r\n6002-0002,r\n")
+    assert finetune_stream.batch_outbreaks(sims, 6002) == ["6002-0001"]
+
+
 def test_a_pass_samples_draws_across_every_snapshot():
     from finetune_stream import snapshots
 

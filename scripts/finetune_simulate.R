@@ -27,6 +27,8 @@
 #   weekdays;
 # - reference day-of-week effect on expected counts: no or yes;
 # - observation: "negbin" (NB2), "negbin1d" (NB1) or "poisson";
+# - strata linked through the factors above, or independent: separate
+#   single-stratum simulations with their own cells, combined as strata;
 # - observation across strata: shared, dispersion per stratum, or family
 #   and dispersion per stratum, drawn in R from epinowcast's expected
 #   reports (`observe`);
@@ -67,7 +69,9 @@
 #   Rscript scripts/finetune_simulate.R <n> <seed> <out_dir>
 
 epinowcast_sha <- "e084b080"
-grid_name <- "r4"
+# r4.1: cases per stratum with cases 30 to 30,000 (r4: 30 to 3,000 in
+# concentrated outbreaks, 30 to 1e5 over all strata in even ones).
+grid_name <- "r4.1"
 args <- commandArgs(trailingOnly = TRUE)
 n_outbreaks <- as.integer(args[[1]])
 seed <- as.integer(args[[2]])
@@ -131,7 +135,12 @@ factors <- list(
   # Observation noise across strata: the outbreak's family and dispersion
   # everywhere; dispersion drawn per stratum around the outbreak's; or a
   # family and dispersion per stratum (`observe`).
-  obs_strata = c("shared", "dispersion", "families")
+  obs_strata = c("shared", "dispersion", "families"),
+  # Linked strata share an epidemic model (trajectory, delays and noise
+  # tied through the factors above); independent strata are separate
+  # single-stratum simulations, each with its own cell, combined as strata
+  # (`simulate_independent`), at most `max_independent` of them.
+  strata_link = c("linked", "independent")
 )
 
 # Simulations per balanced block: a multiple of every factor's levels.
@@ -386,6 +395,20 @@ draw_design <- function(g) {
       ages[sample.int(length(ages), 1)]
     }
   )
+  if (cell$strata_link == "independent") {
+    # Each independent stratum is a simulation of its own, so at most
+    # `max_independent` strata.
+    # Concentrated outbreaks keep their many places: only the active ones
+    # are simulated (`simulate_independent`).
+    if (cell$strata == "places" && cell$spread != "concentrated") {
+      n_places <- min(n_places, max_independent)
+    }
+    if (cell$strata == "ages") n_ages <- min(n_ages, max_independent)
+    if (cell$strata == "places_ages") {
+      n_places <- 2L
+      n_ages <- min(n_ages, max_independent %/% 2L)
+    }
+  }
   days <- c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday")
   c(
     list(grid = grid_name, cell_index = g %% block, cell_block = g %/% block),
@@ -472,14 +495,11 @@ draw_values <- function(design) {
     phase = runif(1, 0, 2 * pi),
     waves = sample(2:3, 1),
     noise_sd = runif(1, 0.002, 0.01),
-    # Even outbreaks grow with their strata; concentrated ones with their
-    # active places, each small, so active places also have weeks without
-    # cases.
-    target_size = if (design$spread == "even") {
-      log_uniform(30, 1e5) * max(1, design$n_places * design$n_ages / 26)
-    } else {
-      log_uniform(30, 3000) * active
-    },
+    # Cases per stratum with cases, log-uniform from 30 to 30,000, so
+    # outbreaks span small clusters to national epidemics (Germany's
+    # 2021/22 hospitalisations, cholera); the target is this times the
+    # strata with cases, set once the quiet places are drawn.
+    size_per_stratum = log_uniform(30, 3e4),
     delay_median = log_uniform(1, 10),
     delay_sdlog = runif(1, 0.5, 2.5),
     delay_mean = log_uniform(2, 21),
@@ -511,6 +531,8 @@ draw_values <- function(design) {
   quiet <- which(runif(design$n_places) < v$quiet)
   if (length(quiet) == design$n_places) quiet <- setdiff(quiet, 1L)
   v$quiet_places <- quiet
+  v$target_size <- v$size_per_stratum *
+    max(1, (design$n_places - length(quiet)) * design$n_ages)
   # Places seeded mid-outbreak: one to three places with cases, after the
   # first place with cases, which starts at the outset.
   active <- setdiff(seq_len(design$n_places), quiet)[-1]
@@ -894,8 +916,9 @@ simulate_outbreak <- function(design, v) {
 # Simulations outside `min_size` to `max_size` cases (the draws' mean) are
 # drawn again; many strata allow larger outbreaks.
 min_size <- 10
+max_independent <- 8L
 max_size <- function(design) {
-  300000 * max(1, design$n_places * design$n_ages / 26)
+  1e5 * design$n_places * design$n_ages
 }
 
 # The software a batch ran on, recorded with each simulation: the same
@@ -912,10 +935,18 @@ build_stack <- function(lib) {
   )
 }
 
+# One settings table from a batch's rows: independent strata add their
+# `stratum_*` columns, which linked outbreaks leave empty.
+settings_table <- function(rows) rbindlist(rows, fill = TRUE)
+
 # Simulate one design: up to five draws of its values, each kept if it
 # runs and its size per draw is in range. Returns the outbreak (or NULL)
 # and a failure row per failed try.
 simulate_cell <- function(design, id = NA_character_) {
+  if (design$strata_link == "independent" &&
+      design$n_places * design$n_ages > 1) {
+    return(simulate_independent(design, id))
+  }
   failures <- list()
   for (try in 1:5) {
     v <- draw_values(design)
@@ -940,6 +971,77 @@ simulate_cell <- function(design, id = NA_character_) {
     )
   }
   list(out = NULL, failures = failures)
+}
+
+# Independent strata: each stratum is a single-stratum simulation with a
+# cell of its own (drawn from the grid at a random index), run through
+# `simulate_cell`, and the strata are combined into one outbreak. A
+# stratum that gives no outbreak in five tries is drawn again from a new
+# cell, up to five cells; then the outbreak fails. The outbreak's values
+# are the first stratum's, with each stratum's cell index, trajectory,
+# delay family, observation family and size as ";" text.
+simulate_independent <- function(design, id = NA_character_) {
+  place_ids <- sprintf("P%02d", seq_len(design$n_places))
+  age_ids <- sprintf("A%d", seq_len(design$n_ages))
+  labels <- if (design$n_places > 1 && design$n_ages > 1) {
+    as.vector(outer(place_ids, age_ids, paste, sep = "-"))
+  } else if (design$n_ages > 1) {
+    age_ids
+  } else {
+    place_ids
+  }
+  # Quiet places (a concentrated outbreak's many) have no cases, so only
+  # the strata of places with cases are simulated.
+  quiet <- draw_values(design)$quiet_places
+  place_of <- match(sub("-.*", "", labels), place_ids)
+  active <- which(!(place_of %in% quiet))
+  failures <- list()
+  parts <- list()
+  record <- list()
+  for (s in active) {
+    run <- NULL
+    for (attempt in 1:5) {
+      g <- sample.int(1e6, 1)
+      one <- draw_design(g)
+      one$strata <- "single"
+      one$n_places <- 1L
+      one$n_ages <- 1L
+      one$spread <- "even"
+      one$seeding <- "start"
+      one$mixing <- "none"
+      one$strata_link <- "linked"
+      res <- simulate_cell(one, paste(id, labels[s], sep = "/"))
+      failures <- c(failures, res$failures)
+      if (!is.null(res$out)) {
+        run <- res$out
+        break
+      }
+    }
+    if (is.null(run)) return(list(out = NULL, failures = failures))
+    run$counts[, location := labels[s]]
+    parts[[length(parts) + 1L]] <- run$counts
+    record[[s]] <- list(
+      cell = g, trajectory = one$trajectory,
+      delay_family = one$delay_family, observation = one$observation,
+      size = sum(run$counts$count) / draws, max_delay = run$values$max_delay
+    )
+    if (s == active[1]) values <- run$values
+  }
+  record <- Filter(Negate(is.null), record)
+  join <- function(k) paste(vapply(record, function(r) {
+    as.character(r[[k]])
+  }, ""), collapse = ";")
+  values$stratum_cells <- join("cell")
+  values$stratum_trajectory <- join("trajectory")
+  values$stratum_delay_family <- join("delay_family")
+  values$stratum_observation <- join("observation")
+  values$stratum_size <- join("size")
+  values$max_delay <- max(vapply(record, function(r) r$max_delay, 1))
+  values$quiet_places <- quiet
+  list(
+    out = list(values = values, counts = rbindlist(parts, use.names = TRUE)),
+    failures = failures
+  )
 }
 
 if (sys.nframe() == 0L) {
@@ -990,5 +1092,5 @@ if (sys.nframe() == 0L) {
     write_atomic(rbindlist(failures, fill = TRUE), "failures")
   }
   write_atomic(rbindlist(counts), "counts")
-  write_atomic(rbindlist(settings), "settings")
+  write_atomic(settings_table(settings), "settings")
 }

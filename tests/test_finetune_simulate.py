@@ -126,9 +126,10 @@ for (i in 1:50) {
   d <- draw_design(g)
   v <- draw_values(d)
   active <- d$n_places * (1 - v$quiet)
+  cases <- d$n_places - length(v$quiet_places)
   cat(d$n_places >= 15, active >= 1 - 1e-9, active <= 4 + 1e-9,
-    v$stratum_sd >= 2.5, v$target_size >= 30 * round(active),
-    v$target_size <= 3000 * round(active), "\\n")
+    v$stratum_sd >= 2.5, v$target_size >= 30 * cases,
+    v$target_size <= 3e4 * cases, "\\n")
 }
 """,
         tmp_path,
@@ -704,3 +705,132 @@ def test_obs_strata_is_a_balanced_factor(tmp_path):
         tmp_path,
     )
     assert out.split() == ["shared", "dispersion", "families", "0"]
+
+
+@needs_r
+def test_independent_strata_are_separate_simulations(tmp_path):
+    out = run_r(
+        """
+g <- 0L
+repeat {
+  cell <- cell_for(g)
+  if (cell$strata == "places" && cell$strata_link == "independent" &&
+      cell$spread == "even") break
+  g <- g + 1L
+}
+set.seed(2)
+design <- draw_design(g)
+res <- simulate_cell(design)
+c <- res$out$counts
+v <- res$out$values
+cat("n", design$n_places, "\\n")
+cat("locations", sort(unique(c$location)), "\\n")
+cat("cells", length(strsplit(v$stratum_cells, ";")[[1]]), "\\n")
+cat("trajectories", length(strsplit(v$stratum_trajectory, ";")[[1]]), "\\n")
+""",
+        tmp_path,
+    )
+    rows = {x.split()[0]: x.split()[1:] for x in out.splitlines() if x}
+    n = int(rows["n"][0])
+    assert 2 <= n <= 8
+    # One simulation per place with cases (quiet places have none).
+    assert 1 <= len(rows["locations"]) <= n
+    assert int(rows["cells"][0]) == len(rows["locations"])
+    assert int(rows["trajectories"][0]) == len(rows["locations"])
+
+
+@needs_r
+def test_strata_link_is_a_balanced_factor(tmp_path):
+    out = run_r(
+        'f <- factors$strata_link\ncat(f, block %% length(f), "\\n")',
+        tmp_path,
+    )
+    assert out.split() == ["linked", "independent", "0"]
+
+
+@needs_r
+def test_concentrated_independent_strata_simulate_only_active_places(tmp_path):
+    out = run_r(
+        """
+g <- 0L
+repeat {
+  cell <- cell_for(g)
+  if (cell$strata == "places" && cell$strata_link == "independent" &&
+      cell$spread == "concentrated") break
+  g <- g + 1L
+}
+set.seed(4)
+design <- draw_design(g)
+res <- simulate_cell(design)
+c <- res$out$counts
+cat("n", design$n_places, "\\n")
+cat("active", length(unique(c$location)), "\\n")
+cat("cells", length(strsplit(res$out$values$stratum_cells, ";")[[1]]), "\\n")
+""",
+        tmp_path,
+    )
+    rows = {x.split()[0]: x.split()[1:] for x in out.splitlines() if x}
+    assert int(rows["n"][0]) >= 15
+    assert 1 <= int(rows["active"][0]) <= 4
+    assert int(rows["cells"][0]) == int(rows["active"][0])
+
+
+@needs_r
+def test_a_batch_writes_settings_of_linked_and_independent_outbreaks(tmp_path):
+    out = run_r(
+        """
+linked <- flat_values(list(outbreak = "1-0001", strata = "places"))
+independent <- flat_values(list(
+  outbreak = "1-0002", strata = "places", stratum_cells = "4;9"
+))
+s <- settings_table(list(linked, independent))
+cat("rows", nrow(s), "cols", ncol(s), "\\n")
+""",
+        tmp_path,
+    )
+    assert out.split() == ["rows", "2", "cols", "3"]
+
+
+@needs_r
+def test_sizes_reach_thirty_thousand_cases_per_active_stratum(tmp_path):
+    out = run_r(
+        """
+set.seed(8)
+ratio <- c()
+fits <- TRUE
+for (want in list(
+  list(strata = "single"),
+  list(strata = "places", spread = "even"),
+  list(strata = "places", spread = "concentrated")
+)) {
+  g <- 0L
+  repeat {
+    cell <- cell_for(g)
+    ok <- vapply(names(want), function(k) cell[[k]] == want[[k]], TRUE)
+    if (all(ok)) break
+    g <- g + 1L
+  }
+  d <- draw_design(g)
+  for (k in 1:300) {
+    v <- draw_values(d)
+    active <- max(1, (d$n_places - length(v$quiet_places)) * d$n_ages)
+    ratio <- c(ratio, v$target_size / active)
+    fits <- fits && max_size(d) >= 3 * v$target_size
+  }
+}
+cat("range", min(ratio), max(ratio), "\\n")
+cat("upper_share", mean(ratio > 1e4), "\\n")
+cat("fits", fits, "\\n")
+cat("grid", grid_name, "\\n")
+""",
+        tmp_path,
+    )
+    rows = {x.split()[0]: x.split()[1:] for x in out.splitlines() if x}
+    lo, hi = map(float, rows["range"])
+    assert lo >= 30
+    assert hi <= 30000
+    assert hi > 20000
+    # Log-uniform on 30 to 30,000: about a sixth above 10,000.
+    assert float(rows["upper_share"][0]) > 0.08
+    assert rows["fits"] == ["TRUE"]
+    assert rows["grid"] == ["r4.1"]
