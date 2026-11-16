@@ -22,6 +22,7 @@ candidate id the step script exports as `CAND_ID`. Scenarios:
 
 `fit-store unpack` writes what `fit` would, as the stored fit's
 directory, with `store.json`. `fit-store plan` lists nothing to fit.
+`fit-store archive` writes a stored and an unfitted model's hub rows.
 
 Unknown candidates default to `pass`. `randomwalk=implausible` breaks
 the random walk baseline too, which is how the dry run reaches a skip.
@@ -32,6 +33,7 @@ from __future__ import annotations
 import argparse
 import csv
 import datetime as dt
+import gzip
 import json
 import math
 import os
@@ -224,7 +226,54 @@ def cmd_fit(args: argparse.Namespace, stored: bool = False) -> int:
 
 
 def cmd_fit_store(args: argparse.Namespace) -> int:
-    """`fit-store plan` lists nothing; `unpack` writes a stored fit."""
+    """`fit-store plan` lists nothing; `unpack` writes a stored fit;
+    `archive` writes two models' hub rows, a zone's included."""
+    if args.action == "archive":
+        out = Path(args.out)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        with gzip.open(out, "wt", newline="") as fh:
+            w = csv.writer(fh)
+            w.writerow(
+                [
+                    "model",
+                    "vintage",
+                    "reference_date",
+                    "forecast_date",
+                    "target",
+                    "target_end_date",
+                    "location",
+                    "output_type",
+                    "output_type_id",
+                    "value",
+                    "key",
+                    "commit",
+                    "fitted_at",
+                    "current",
+                ]
+            )
+            key, commit = "0123456789abcdef", "c0ffee0" * 5 + "c"
+            ref = args.reference_date or args.origin
+            for model in ("renewal", "randomwalk"):
+                for location in ("CD", "CD-KN", "CD-KN-ZS01"):
+                    w.writerow(
+                        [
+                            model,
+                            args.origin,
+                            ref,
+                            ref,
+                            "wk inc confirmed cases",
+                            ref,
+                            location,
+                            "sample",
+                            1,
+                            10,
+                            key if model == "renewal" else "",
+                            commit,
+                            "2026-11-02T08:00:00+00:00",
+                            True,
+                        ]
+                    )
+        return 0
     if args.action == "plan":
         if args.out:
             Path(args.out).write_text(json.dumps({"include": []}))
@@ -490,9 +539,10 @@ def main() -> int:
     n.add_argument("--model", required=True)
     n.add_argument("--config", default="main")
     n.add_argument("--fit", default=None)
+    n.add_argument("--history", default=None)
+    n.add_argument("--store", default=None)
     n.add_argument("--vintage", required=True)
     n.add_argument("--reference-date", default=None)
-    n.add_argument("--store", default=None)
     n.add_argument("--out", required=True)
     pl = sub.add_parser("plot-submission")
     pl.add_argument("--submission", required=True)
@@ -513,12 +563,14 @@ def main() -> int:
     fr.add_argument("--ledger", required=True)
     fr.add_argument("--round", required=True)
     fs = sub.add_parser("fit-store")
-    fs.add_argument("action", choices=["plan", "unpack"])
+    fs.add_argument("action", choices=["plan", "unpack", "archive"])
     fs.add_argument("--store", default="output/fit-store")
+    fs.add_argument("--history", default=None)
     fs.add_argument("--model", default=None)
     fs.add_argument("--models", nargs="*", default=None)
     fs.add_argument("--origin", default=None)
     fs.add_argument("--origins", nargs="*", default=None)
+    fs.add_argument("--reference-date", default=None)
     fs.add_argument("--out", default=None)
     fs.add_argument("--keys", default=None)
     co = sub.add_parser("coherence")

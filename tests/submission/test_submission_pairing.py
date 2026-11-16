@@ -12,10 +12,67 @@ from bdbvhubrenewal.evaluation import store
 from bdbvhubrenewal.evaluation.backtest import BacktestConfig, make_tasks
 from bdbvhubrenewal.forecasters import NATIONAL, get_model
 from bdbvhubrenewal.submission.pairing import (
+    archived_forecasts,
     pair_submission,
     past_forecasts,
     stored_forecasts,
 )
+
+
+def _hub(origin: str, value: float, model: str = "m") -> pd.DataFrame:
+    """A hub table of two places, a zone and two weeks, as archived."""
+    rows = []
+    for loc in (NATIONAL, "CD-IT", "CD-IT-01"):
+        for week in ("2026-10-10", "2026-10-17"):
+            for sample in (1, 2):
+                rows.append(
+                    {
+                        "model": model,
+                        "vintage": origin,
+                        "reference_date": "2026-10-24",
+                        "location": loc,
+                        "target_end_date": week,
+                        "output_type": "sample",
+                        "output_type_id": sample,
+                        "value": value + sample,
+                    }
+                )
+    return pd.DataFrame(rows)
+
+
+def _archive(root: Path, ref: str, run: str, table: pd.DataFrame) -> None:
+    path = root / ref / run
+    path.mkdir(parents=True)
+    table.to_csv(path / "candidates.csv.gz", index=False)
+
+
+def test_archive_gives_each_origins_latest_run(tmp_path: Path) -> None:
+    _archive(tmp_path, "2026-10-17", "100", _hub("2026-10-17", 1.0))
+    _archive(tmp_path, "2026-10-24", "200", _hub("2026-10-24", 5.0))
+    _archive(tmp_path, "2026-10-24", "300", _hub("2026-10-24", 9.0))
+    _archive(
+        tmp_path, "2026-10-24", "301", _hub("2026-10-24", 0.0, model="other")
+    )
+    out = archived_forecasts(tmp_path, "m")
+    assert set(out.columns) >= {
+        "model",
+        "origin",
+        "location",
+        "target_end_date",
+        "sample",
+        "value",
+    }
+    assert set(out["origin"]) == {"2026-10-17", "2026-10-24"}
+    # Zones and the country, the sum of the provinces in a hub table, are
+    # left out, and a round run twice gives its latest run.
+    assert set(out["location"]) == {"CD-IT"}
+    late = out.loc[out["origin"] == "2026-10-24", "value"]
+    assert set(late) == {10.0, 11.0}
+
+
+def test_no_archive_gives_no_forecasts(tmp_path: Path) -> None:
+    assert archived_forecasts(tmp_path / "none", "m").empty
+    assert archived_forecasts(None, "m").empty
 
 
 def _stored(
@@ -55,6 +112,29 @@ def test_store_gives_each_origins_latest_good_fit(tmp_path: Path) -> None:
     out = stored_forecasts(tmp_path, "m")
     assert set(out["origin"]) == {"2026-10-17"}
     assert set(out["value"]) == {7.0, 8.0}
+
+
+def test_past_forecasts_take_the_store_then_the_archive(
+    tmp_path: Path,
+) -> None:
+    archive, root = tmp_path / "archive", tmp_path / "store"
+    _archive(archive, "2026-10-17", "1", _hub("2026-10-17", 50.0))
+    _archive(archive, "2026-10-24", "1", _hub("2026-10-24", 5.0))
+    _stored(root, "2026-10-24", "2026-10-25T00:00:00", 99.0)
+    out, _ = past_forecasts("m", "2026-10-31", archive=archive, store=root)
+    sources = out.drop_duplicates("origin").set_index("origin")["source"]
+    # The store's forecast, as the backtest scores it, wins, and the
+    # archive fills an origin the store lacks.
+    assert sources.to_dict() == {"2026-10-24": "store", "2026-10-17": "archive"}
+    assert 5.0 + 1 not in set(out["value"])
+    # Only origins before the forecast's.
+    early, _ = past_forecasts("m", "2026-10-24", archive=archive, store=root)
+    assert set(early["origin"]) == {"2026-10-17"}
+
+
+def test_archived_national_rows_are_left_out(tmp_path: Path) -> None:
+    _archive(tmp_path, "2026-10-17", "1", _hub("2026-10-17", 1.0))
+    assert NATIONAL not in set(archived_forecasts(tmp_path, "m")["location"])
 
 
 @pytest.fixture(scope="module")
@@ -253,13 +333,41 @@ def test_a_fitted_paired_model_is_forecast_again_where_nothing_is_kept(
     assert set(out["origin"]) <= {t.vintage for t in tasks}
 
 
-def test_past_forecasts_take_the_store_and_only_earlier_origins(
-    tmp_path: Path,
+def test_archived_origins_alone_give_rho_national_its_prior(
+    tasks: list, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _stored(tmp_path, "2026-10-17", "2026-10-18T00:00:00", 50.0)
-    _stored(tmp_path, "2026-10-24", "2026-10-25T00:00:00", 99.0)
-    out, _ = past_forecasts("m", "2026-10-31", store=tmp_path)
-    assert set(out["source"]) == {"store"}
-    assert set(out["origin"]) == {"2026-10-17", "2026-10-24"}
-    early, _ = past_forecasts("m", "2026-10-24", store=tmp_path)
-    assert set(early["origin"]) == {"2026-10-17"}
+    # An archive holds provinces only, so origins taken from it give no
+    # country scores: rho_national is the prior's, while the provinces
+    # are estimated. This pins the current behaviour.
+    from bdbvhubrenewal.forecasters import ModelUnavailableError
+    from bdbvhubrenewal.forecasters.copula import PRIOR
+    from bdbvhubrenewal.submission import pairing
+
+    task = tasks[-1]
+    model = get_model("randomwalknowcast")
+    for past in tasks[-9:-1]:
+        try:
+            drawn = model.forecast(past)
+        except ModelUnavailableError:
+            continue
+        hub = drawn.rename(columns={"sample": "output_type_id"}).assign(
+            model="randomwalknowcast",
+            vintage=past.vintage,
+            output_type="sample",
+        )
+        _archive(tmp_path, past.vintage, "1", hub)
+    monkeypatch.setattr(
+        pairing, "_recomputed", lambda *_: (pairing._empty(), set())
+    )
+    _, fit = pair_submission(
+        "randomwalknowcast",
+        model.forecast(task),
+        task,
+        truth_delay=7,
+        archive=tmp_path,
+        past_tasks=tasks,
+    )
+    assert fit["source"] == "archive"
+    assert fit["n_scores"] > 0
+    assert fit["rho_national"] == pytest.approx(PRIOR.rho_national)
+    assert fit["rho_provinces"] != pytest.approx(PRIOR.rho_provinces)

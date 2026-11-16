@@ -689,7 +689,10 @@ jobs:
       needs.prepare.outputs.baseline == 'true' ||
       needs.prepare.outputs.chronos == 'true') }}
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 30
+    outputs:
+      # The archive step's outcome: skipped when its setup failed.
+      archive: ${{ steps.archive.outcome }}
     permissions:
       contents: write
       # To rebuild the docs, so the round's page that the PR links to
@@ -754,6 +757,35 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh workflow run pages.yml --ref main -R "$GITHUB_REPOSITORY"
+      # Every candidate model's forecasts for the round, beside the
+      # round's files (candidates.csv.gz). After the record and the docs,
+      # and apart from them, so a failure here never stops a round being
+      # recorded or its page being built. The outcome job reports it.
+      - uses: ./.github/actions/setup-forecast-env
+        id: forecast-env
+        continue-on-error: true
+        timeout-minutes: 8
+        with:
+          save-jax: 'false'
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        id: inputs
+        continue-on-error: true
+        timeout-minutes: 2
+        with:
+          name: inputs
+          path: ${{ env.WORK }}
+      - name: Archive every candidate's forecasts
+        id: archive
+        if: >-
+          steps.forecast-env.outcome == 'success' &&
+          steps.inputs.outcome == 'success'
+        continue-on-error: true
+        timeout-minutes: 15
+        env:
+          AS_OF: ${{ needs.detect.outputs.as_of }}
+          # To list releases, such as a fine-tuned model's checkpoint.
+          GITHUB_TOKEN: ${{ github.token }}
+        run: ci/steps/archive_candidates.sh
 
   outcome:
     name: Submission outcome
@@ -783,9 +815,19 @@ jobs:
           REF: ${{ needs.detect.outputs.reference_date }}
           DRY_RUN: ${{ needs.detect.outputs.dry_run }}
           RESULTS: ${{ toJSON(needs) }}
+          RECORD: ${{ needs.record.result }}
+          ARCHIVE: ${{ needs.record.outputs.archive }}
         run: |
           failed=$(echo "$RESULTS" | jq -r \
             'to_entries[] | select(.value.result == "failure") | .key' | xargs)
+          # The candidates' archive: a step that failed, timed out or did
+          # not run, or a record job that was cancelled or timed out.
+          archive=""
+          if [ "$RECORD" = cancelled ]; then
+            archive="the record job was cancelled or timed out"
+          elif [ "$RECORD" = success ] && [ "$ARCHIVE" != success ]; then
+            archive="the archive step's outcome was ${ARCHIVE:-skipped}"
+          fi
           {
             echo "## Round $REF"
             echo
@@ -807,15 +849,16 @@ jobs:
               [ "$DRY_RUN" = true ] && echo "Dry run: nothing was pushed."
             fi
             [ -n "$failed" ] && echo "Failed jobs: $failed"
+            [ -n "$archive" ] && echo "Candidates not archived: $archive."
           } >> "$GITHUB_STEP_SUMMARY"
-          if [ "$RENEWAL" = true ] && [ -z "$SELECTED" ]; then
-            echo "::error::round $REF skipped: every candidate was ruled out"
-            exit 1
-          fi
-          if [ -n "$failed" ]; then
-            echo "::error::jobs failed: $failed"
-            exit 1
-          fi
+          # Every error is annotated, then the run fails once.
+          errors=()
+          [ "$RENEWAL" = true ] && [ -z "$SELECTED" ] \
+            && errors+=("round $REF skipped: every candidate was ruled out")
+          [ -n "$failed" ] && errors+=("jobs failed: $failed")
+          [ -n "$archive" ] && errors+=("candidates not archived: $archive")
           case "$ACTION $BASELINE_PR $CHRONOS_PR" in
-            *skipped-*) echo "::error::PR not submitted: $ACTION $BASELINE_PR $CHRONOS_PR"; exit 1 ;;
+            *skipped-*) errors+=("PR not submitted: $ACTION $BASELINE_PR $CHRONOS_PR") ;;
           esac
+          for e in "${errors[@]}"; do echo "::error::$e"; done
+          [ "${#errors[@]}" -eq 0 ] || exit 1

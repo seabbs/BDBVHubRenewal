@@ -10,6 +10,7 @@ The copula is estimated from the model's forecasts at earlier origins
 
 from __future__ import annotations
 
+import re
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
@@ -20,6 +21,7 @@ from bdbvhubrenewal.data.dates import as_date
 from bdbvhubrenewal.evaluation import store as fit_store
 from bdbvhubrenewal.evaluation.backtest import BacktestConfig
 from bdbvhubrenewal.evaluation.nowcast import rolling_truth
+from bdbvhubrenewal.evaluation.store_archive import FILE as ARCHIVE_FILE
 from bdbvhubrenewal.forecasters.base import (
     ForecastTask,
     ModelUnavailableError,
@@ -30,6 +32,7 @@ from bdbvhubrenewal.forecasters.base import (
 from bdbvhubrenewal.forecasters.copula import WINDOW_WEEKS, RollingCopula
 
 __all__ = [
+    "archived_forecasts",
     "pair_submission",
     "past_forecasts",
     "stored_forecasts",
@@ -40,6 +43,55 @@ _COLUMNS = ["model", "origin", "location", "target_end_date", "sample", "value"]
 
 def _empty() -> pd.DataFrame:
     return pd.DataFrame(columns=[*_COLUMNS, "source"])
+
+
+def _run_key(path: Path) -> tuple[str, int, str]:
+    """Order archive files by round, then run number."""
+    run = path.parent.name
+    number = int(run) if re.fullmatch(r"\d+", run) else -1
+    return (path.parent.parent.name, number, run)
+
+
+def archived_forecasts(archive: Path | str | None, model: str) -> pd.DataFrame:
+    """Return a model's archived province forecasts.
+
+    Parameters
+    ----------
+    archive : pathlib.Path or str or None
+        The ledger's `archive` directory, with
+        `<reference_date>/<run>/candidates.csv.gz`.
+    model : str
+        The model.
+
+    Returns
+    -------
+    pandas.DataFrame
+        `model`, `origin` (the release forecast from), `location`,
+        `target_end_date`, `sample`, `value` and `source`, of the
+        provinces only. The archived country is not used, as it can
+        hold unassigned cases beyond the province sum. Of an origin
+        archived by more than one run, the latest run's.
+    """
+    if archive is None or not Path(archive).is_dir():
+        return _empty()
+    files = sorted(Path(archive).glob(f"*/*/{ARCHIVE_FILE}"), key=_run_key)
+    by_origin: dict[str, pd.DataFrame] = {}
+    for path in files:
+        table = pd.read_csv(path, dtype={"vintage": str})
+        rows = table.loc[
+            (table["model"] == model)
+            & (table["output_type"] == "sample")
+            & (table["location"].str.count("-") == 1)
+        ]
+        for origin, own in rows.groupby("vintage"):
+            by_origin[str(origin)] = own
+    if not by_origin:
+        return _empty()
+    out = pd.concat(by_origin.values(), ignore_index=True).rename(
+        columns={"vintage": "origin", "output_type_id": "sample"}
+    )
+    out["sample"] = out["sample"].astype(int)
+    return out[_COLUMNS].assign(source="archive")
 
 
 def stored_forecasts(
@@ -60,9 +112,7 @@ def stored_forecasts(
     Returns
     -------
     pandas.DataFrame
-        `model`, `origin` (the release forecast from), `location`,
-        `target_end_date`, `sample`, `value` and `source`, of final
-        counts.
+        As `archived_forecasts`, of final counts.
     """
     if store is None or not (Path(store) / model).is_dir():
         return _empty()
@@ -119,6 +169,7 @@ def _recomputed(
 def past_forecasts(
     model: str,
     origin: str,
+    archive: Path | str | None = None,
     store: Path | str | None = None,
     past_tasks: Sequence[ForecastTask] = (),
 ) -> tuple[pd.DataFrame, set[str]]:
@@ -126,7 +177,7 @@ def past_forecasts(
 
     Each origin takes the store's fit of the model's own settings, as the
     release backtest scores, else a forecast made again with the model at
-    the task's release.
+    the task's release. The archive gives an origin neither has.
 
     Parameters
     ----------
@@ -134,15 +185,15 @@ def past_forecasts(
         The model.
     origin : str
         The forecast's origin. Only earlier origins are returned.
-    store : pathlib.Path or str, optional
-        As for `stored_forecasts`.
+    archive, store : pathlib.Path or str, optional
+        As for `archived_forecasts` and `stored_forecasts`.
     past_tasks : sequence of ForecastTask
         Tasks of earlier releases to forecast again from.
 
     Returns
     -------
     tuple
-        The forecasts, as `stored_forecasts` with each row's `source`,
+        The forecasts, as `archived_forecasts` with each row's `source`,
         and the origins a model forecast again cannot forecast from.
     """
     spec = {s.name: s for s in list_models()}.get(model)
@@ -163,6 +214,7 @@ def past_forecasts(
         tasks = [t for t in past_tasks if t.vintage < origin]
         recomputed, unavailable = _recomputed(model, tasks, have)
         add(recomputed)
+    add(archived_forecasts(archive, model))
     frames = [f for f in frames if len(f)]
     if not frames:
         return _empty(), unavailable
@@ -174,6 +226,7 @@ def pair_submission(
     samples: pd.DataFrame,
     task: ForecastTask,
     truth_delay: int,
+    archive: Path | str | None = None,
     store: Path | str | None = None,
     past_tasks: Sequence[ForecastTask] = (),
     max_horizon: int = BacktestConfig().max_horizon,
@@ -192,7 +245,7 @@ def pair_submission(
     truth_delay : int
         $D$: each week's truth is its count in the first release $D$ days
         after it (`rolling_truth`).
-    store, past_tasks : optional
+    archive, store, past_tasks : optional
         Where the past forecasts come from (`past_forecasts`). Only the
         tasks of releases that can still give errors in the copula's
         window are forecast again.
@@ -205,7 +258,7 @@ def pair_submission(
     tuple
         The paired samples, and a record of the copula: `model`,
         `origin`, `n_scores`, the three correlations, `sources`, each past
-        origin's source (`store` or `recomputed`),
+        origin's source (`archive`, `store` or `recomputed`),
         `source`, the sources used joined by `+` (or `none`), and
         `unavailable`, the earlier origins the model cannot forecast from.
 
@@ -224,12 +277,13 @@ def pair_submission(
         days=truth_delay + 7 * (WINDOW_WEEKS + max_horizon + 1)
     )
     recent = [t for t in past_tasks if as_date(t.vintage) >= oldest]
-    past, unavailable = past_forecasts(model, origin, store, recent)
+    past, unavailable = past_forecasts(model, origin, archive, store, recent)
     earlier = {t.vintage for t in recent if t.vintage < origin} - unavailable
     if past.empty and earlier:
         raise LookupError(
-            f"{model} has no past forecasts before {origin} in the fit store "
-            f"({store}) or forecast again, so its draws cannot be paired."
+            f"{model} has no past forecasts before {origin} in the archive "
+            f"({archive}), the fit store ({store}) or forecast again, so its "
+            "draws cannot be paired."
         )
     history = task.target_history
     truth = (
