@@ -34,6 +34,8 @@
 #   drawn order), by distance, or by distance switching on or off, weak
 #   or strong;
 # - imports into strata with cases: none, constant or pulses.
+# - delays across places: shared, shifted from a shared delay, or each
+#   place's own (crossed with shocks: a shared delay with local backlogs);
 #
 # The latent infections (a multi-place renewal with imports) are run in
 # R and injected into epinowcast through its growth model, whose growth
@@ -117,7 +119,12 @@ factors <- list(
   # Reporting shocks in one or two places, on top of `delay_change`: none,
   # a backlog (mean delay x2-5 for 1-4 weeks) or an outage (no reports for
   # 1-4 weeks, then the held cases at once).
-  shocks = c("none", "backlog", "outage")
+  shocks = c("none", "backlog", "outage"),
+  # How places' delays relate: one delay everywhere; each place's mean
+  # shifted from a shared delay; or each place's mean and spread its own.
+  # Crossed with `shocks`, a shared delay with a backlog or outage in one
+  # or two places is the shared baseline with temporary shocks.
+  delay_places = c("shared", "shifted", "independent")
 )
 
 # Simulations per balanced block: a multiple of every factor's levels.
@@ -675,8 +682,9 @@ simulate_outbreak <- function(design, v) {
     drift = v$drift, step = v$step, periodic = v$periodic, 0
   )
   if (design$shocks == "backlog") change_terms <- c(change_terms, "backlog")
+  place_delays <- multi_place && design$delay_places != "shared"
   stratum_terms <- c(
-    if (multi_place) "(1 | place)", if (multi_age) "(1 | age)"
+    if (place_delays) "(1 | place)", if (multi_age) "(1 | age)"
   )
   hazard <- design$delay_form != "parametric"
   family <- if (parametric) design$delay_family else "none"
@@ -717,7 +725,12 @@ simulate_outbreak <- function(design, v) {
     sds <- effect_sds(rd$refp_rdesign, stratum_sd)
     if (length(sds)) {
       parameters$refp_mean_beta_sd <- sds
-      parameters$refp_sd_beta_sd <- array(sds / 2)
+      # A shifted place moves its mean, its spread half as much; an
+      # independent place moves both alike.
+      spread <- if (design$delay_places == "independent") 1 else 0.5
+      parameters$refp_sd_beta_sd <- effect_sds(rd$refp_rdesign, list(
+        place = spread * v$delay_place_sd, age = v$delay_age_sd / 2
+      ))
     }
     if (family != "exponential") {
       parameters$refp_sd_int <- delay$sd_int
