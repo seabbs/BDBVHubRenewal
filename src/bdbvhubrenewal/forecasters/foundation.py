@@ -842,6 +842,46 @@ def _weekly_from_totals(
     return np.stack(out, axis=2)
 
 
+DAILY_COLUMNS: Final = ("location", "date", "sample", "value")
+"""Columns of the daily trajectories (`FoundationModel.forecast_both`)."""
+
+
+def _daily_frame(
+    drawn: np.ndarray,
+    tri: HubTriangle,
+    start: int,
+    places: Sequence[str],
+    weeks: Sequence[str],
+) -> pd.DataFrame:
+    """Return each day of the target weeks from the daily count rows.
+
+    A day past the context takes its count row's draw, no lower than the
+    count reported; an earlier day the count reported. `drawn` is
+    `[S, V, horizon]`, the count rows first.
+    """
+    first = as_date(weeks[0]) - dt.timedelta(days=6)
+    days = [t for t in tri.times if first <= as_date(t) <= as_date(weeks[-1])]
+    n, n_loc = drawn.shape[0], len(places)
+    cols = []
+    for day in days:
+        t = tri.times.index(day)
+        final = np.broadcast_to(tri.final[:, t], (n, n_loc))
+        cols.append(
+            np.maximum(drawn[:, :n_loc, t - start], final)
+            if t >= start
+            else final
+        )
+    values = np.stack(cols, axis=2)  # [S, L, D]
+    return pd.DataFrame(
+        {
+            "location": np.repeat(list(places), n * len(days)),
+            "date": np.tile(days, n * n_loc),
+            "sample": np.tile(np.repeat(np.arange(1, n + 1), len(days)), n_loc),
+            "value": values.transpose(1, 0, 2).reshape(-1),
+        }
+    )[list(DAILY_COLUMNS)]
+
+
 @dataclass
 class FoundationModel:
     """Chronos-2 on one source and layout of the hub target's releases.
@@ -877,8 +917,14 @@ class FoundationModel:
         """Whether the model reads release snapshots: `complete` does."""
         return self.layout == "complete"
 
-    def forecast(self, task: ForecastTask) -> pd.DataFrame:
-        """Return trajectories of the country and the task's provinces.
+    def forecast_both(
+        self, task: ForecastTask
+    ) -> tuple[pd.DataFrame, pd.DataFrame]:
+        """Return the weekly and the daily trajectories of one draw.
+
+        The weekly ones are `forecast`'s. The daily ones are the daily
+        source's count rows, each day of the target weeks, floored at the
+        counts reported; empty for the weekly source.
 
         Parameters
         ----------
@@ -888,9 +934,11 @@ class FoundationModel:
 
         Returns
         -------
-        pandas.DataFrame
-            Columns `location`, `target_end_date`, `sample`, `value`, for
-            the country and the provinces, each its own series.
+        tuple of pandas.DataFrame
+            The weekly trajectories, columns `location`, `target_end_date`,
+            `sample`, `value`, for the country and the provinces, each its
+            own series; and the daily ones, columns `location`, `date`,
+            `sample`, `value`.
 
         Raises
         ------
@@ -971,7 +1019,7 @@ class FoundationModel:
         )
         values = np.maximum(values, reported)  # [S, L, W]
         n, n_loc = task.n_samples, len(places)
-        return pd.DataFrame(
+        weekly_out = pd.DataFrame(
             {
                 "location": np.repeat(list(places), n * len(weeks)),
                 "target_end_date": np.tile(weeks, n * n_loc),
@@ -981,6 +1029,16 @@ class FoundationModel:
                 "value": values.transpose(1, 0, 2).reshape(-1),
             }
         )[list(SAMPLE_COLUMNS)]
+        if self.source != "daily":
+            return weekly_out, pd.DataFrame(columns=list(DAILY_COLUMNS))
+        return weekly_out, _daily_frame(drawn, tri, start, places, weeks)
+
+    def forecast(self, task: ForecastTask) -> pd.DataFrame:
+        """Return trajectories of the country and the task's provinces.
+
+        The weekly part of `forecast_both`, which says what is raised.
+        """
+        return self.forecast_both(task)[0]
 
 
 for _source in SOURCES:
