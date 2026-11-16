@@ -261,6 +261,22 @@ def _pin(label: str) -> None:
         os.environ["BDBV_CHRONOS_FT"] = REFERENCE_PIN
 
 
+def free_caches() -> None:
+    """Free JAX's compiled functions and collect garbage.
+
+    Each date or origin compiles JAX functions of new shapes (the
+    random walk's sampling among them). Kept, they grew a unit past its
+    6 GB scope, where LLVM could not allocate memory to compile the next
+    (the zero-shot reference, 2026-11-16, after 29 of 80 German dates).
+    """
+    import gc
+
+    import jax
+
+    jax.clear_caches()
+    gc.collect()
+
+
 def _write(frame: pd.DataFrame, path: Path) -> None:
     """Write a gzipped CSV atomically, so a stopped run leaves no part."""
     tmp = path.with_name(path.name + ".tmp")
@@ -301,6 +317,7 @@ def germany_unit(cache: Path, label: str) -> None:
             config.seed,
         )
         _write(de.with_truth(fc, triangle, config.truth_delay), path)
+        free_caches()
         print(f"germany {label} {date} ({i}/{len(dates)})", flush=True)
     print(f"germany {label} done", flush=True)
 
@@ -358,6 +375,7 @@ def bdbv_unit(cache: Path, label: str) -> None:
         out = pd.concat(frames, ignore_index=True).assign(origin=origin)
         out["value"] = out["value"].astype("float32")
         _write(out, path)
+        free_caches()
         print(f"bdbv {label} {origin}", flush=True)
     print(f"bdbv {label} done", flush=True)
 
