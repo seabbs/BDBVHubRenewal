@@ -382,93 +382,179 @@ def num(x):
         return None
 
 
-def score_charts(rows, slot_hashes, r4_hashes):
-    """Relative-score charts against checkpoint (simulations, log2 axis)."""
-    import math
-    rows = [r for r in rows if r.get("rule") == RULE]
-    xt = [(125, "zero-shot"), (250, "250"), (500, "500"), (1000, "1000"),
-          (2000, "2000"), (4000, "4000"), (8000, "8000")]
+SER_COL = {"slots": "#2563eb", "noslots": "#ea580c", "zero": "#16a34a",
+           "complete": "#9333ea", "rw": "#6b7280"}
+XT = [(125, "zero-shot"), (250, "250"), (500, "500"), (1000, "1000"),
+      (2000, "2000"), (4000, "4000"), (8000, "8000")]
+RULE = "own-quantile-wis_crps-1000-common"
 
-    def run_of(r):
-        h = re.sub(r"^chronos-(slots|ft)-", "", r["checkpoint"])
-        if h in r4_hashes or r.get("grid") == "r4":
-            return "no slots"
+
+def norm_hash(name):
+    """('slots-abc', 'chronos-slots-abc' and 'abc') -> ('abc', is_slots)."""
+    m = re.match(r"^(?:chronos-)?(slots-|ft-)?(.*)$", name)
+    return m.group(2), m.group(1) == "slots-"
+
+
+def run_colour(run, rank, count):
+    hue = {"slots": 217, "no slots": 25, "older run": 330}.get(run)
+    if hue is None:
+        return "#6b7280"
+    light = 48 if count < 2 else 66 - 28 * rank / (count - 1)
+    return f"hsl({hue},80%,{light:.0f}%)"
+
+
+def score_classify(r, slot_set, r4_set):
+    """Series key for a scores row, or None to skip."""
+    mdl, ck = r["model"], r["checkpoint"]
+    if mdl == "randomwalknowcast":
+        return "rw"
+    if mdl.endswith("_complete"):
+        return "complete" if ck == "zero-shot" else None
+    if ck == "zero-shot":
+        return "zero"
+    h, pref = norm_hash(ck)
+    if h in r4_set or r.get("grid") == "r4":
+        return "noslots"
+    if pref or h in slot_set:
         return "slots"
+    return None
 
-    def xval(r):
-        if r["checkpoint"] == "zero-shot":
-            return 125
-        n = num(r.get("outbreaks"))
-        return n if n and n > 0 else None
 
-    def lines(study, level_cols, model, col):
-        ser = []
-        cmodel = model.replace("_ragged", "_complete")
-        for lvl, colour in level_cols:
-            rs = [r for r in rows if r["study"] == study
-                  and r["level"] == lvl and r["model"] == model
-                  and num(r.get(col)) is not None and xval(r)]
-            zs = [(125, num(r[col])) for r in rs
-                  if r["checkpoint"] == "zero-shot"]
-            for run, dash in (("slots", None), ("no slots", "dash")):
-                pts = sorted(zs + [(xval(r), num(r[col])) for r in rs
-                                   if r["checkpoint"] != "zero-shot"
-                                   and run_of(r) == run])
-                if len(pts) > 1 or (pts and run == "slots" and not zs):
-                    s = (f"{lvl}, {run}", colour, pts, "pts")
-                    ser.append(s + (dash,) if dash else s)
-            if zs:
-                ser.append((f"{lvl}, zero-shot ragged", colour,
-                            [(125, zs[0][1]), (8000, zs[0][1])], "line",
-                            "dot"))
-            cs = [num(r[col]) for r in rows if r["study"] == study
-                  and r["level"] == lvl and r["model"] == cmodel
-                  and r["checkpoint"] == "zero-shot"
-                  and num(r.get(col)) is not None]
-            if cs:
-                ser.append((f"{lvl}, complete-only", colour,
-                            [(125, cs[0]), (8000, cs[0])], "line", "dd"))
-        ser.append(("randomwalknowcast (1)", "var(--mut)",
-                    [(125, 1.0), (8000, 1.0)], "line"))
-        return ser
+def score_payload(rows, slot_set, r4_set, local):
+    """Rows for the client-side score chart and not-yet-scored markers."""
+    out, seen_h, seen_slot_n = [], set(), set()
+    for r in rows:
+        if r.get("rule") != RULE or r["study"] not in ("germany", "ebola"):
+            continue
+        ser = score_classify(r, slot_set, r4_set)
+        v = num(r["rel_wis" if r["study"] == "germany" else "rel_crps"])
+        if ser is None or v is None:
+            continue
+        src = "daily" if "daily" in r["model"] else \
+            "weekly" if "weekly" in r["model"] else None
+        if src is None:
+            continue
+        h = norm_hash(r["checkpoint"])[0]
+        n = int(num(r.get("outbreaks")) or 0)
+        out.append([r["study"], r["level"], src, ser, n,
+                    "" if r["checkpoint"] == "zero-shot" else h,
+                    round(v, 4)])
+        seen_h.add(h)
+        if ser == "slots":
+            seen_slot_n.add(n)
+    pending = []
+    for run, n, h in local:
+        scored = (h in seen_h) if h else (
+            run != "slots" or n in seen_slot_n)
+        if not scored:
+            pending.append({"run": run, "n": n, "hash": h or ""})
+    return {"rows": out, "pending": pending, "col": SER_COL, "xt": XT}
 
-    def has_complete(study, model):
-        cm = model.replace("_ragged", "_complete")
-        return any(r["study"] == study and r["model"] == cm
-                   and r["checkpoint"] == "zero-shot" for r in rows)
 
-    ger = [("national", PAL[0]), ("states", PAL[1]), ("age", PAL[2])]
-    bd = [("national", PAL[0]), ("provinces", PAL[1])]
-    out = []
-    for study, cols, col, lab in (
-            ("germany", ger, "rel_wis", "Germany first half, rel WIS"),
-            ("ebola", bd, "rel_crps", "BDBV, rel CRPS")):
-        for model, nm in (("fm_chronos_daily_ragged", "daily"),
-                          ("fm_chronos_weekly_ragged", "weekly")):
-            out.append(chart(
-                f"{lab} vs randomwalknowcast, {nm}",
-                lines(study, cols, model, col), ylog=True, xticks=xt,
-                xlabel="simulations (log2)",
-                note="" if has_complete(study, model) else
-                "<p class=mut>complete-only pending</p>"))
+def heldout_chart(rows, slot_set, r4_set):
     ho = []
-    for lvl, colour in (("all", PAL[0]), ("real_validation", PAL[3])):
+    xval = lambda r: 125 if r["checkpoint"] == "zero-shot" else (
+        num(r.get("outbreaks")) or None)
+    rows = [r for r in rows if r.get("rule") == RULE]
+    for lvl, colour in (("all", SER_COL["slots"]),
+                        ("real_validation", SER_COL["complete"])):
         rs = [r for r in rows if r["study"] == "held_out"
               and r["level"] == lvl and num(r.get("loss")) is not None]
         for run, dash in (("slots", None), ("no slots", "dash")):
             pts = sorted((xval(r), num(r["loss"])) for r in rs
-                         if run_of(r) == run and xval(r))
+                         if xval(r) and (norm_hash(r["checkpoint"])[0]
+                                         in r4_set or r.get("grid") == "r4")
+                         == (run == "no slots"))
             z = [(125, num(r["loss_zero_shot"])) for r in rs
                  if num(r.get("loss_zero_shot")) is not None][:1]
             if pts:
                 s = (f"{lvl}, {run}", colour, z + pts, "pts")
                 ho.append(s + (dash,) if dash else s)
-    out.append(chart("Held-out loss (all blocks; real validation)", ho,
-                     ylog=True, xticks=xt, xlabel="simulations (log2)"))
-    return out
+    return chart("Held-out loss (all blocks; real validation)", ho,
+                 ylog=True, xticks=XT, xlabel="simulations (log2)")
 
 
-RULE = "own-quantile-wis_crps-1000-common"
+SC_JS = r"""
+(function(){
+var P=JSON.parse(document.getElementById("sdata").textContent);
+var $=function(i){return document.getElementById(i)};
+var SERS=[["slots","slots"],["noslots","no slots"],["zero","zero-shot ragged"],["complete","complete-only"],["rw","randomwalknowcast"]];
+var LV={germany:[["national","national"],["states","states"],["age","ages"]],ebola:[["national","national"],["provinces","provinces"]]};
+var MK=["circle","square","triangle","diamond"];
+var S={study:"germany",src:"daily",lv:["national"],ser:SERS.map(function(s){return s[0]})};
+try{var sv=JSON.parse(sessionStorage.getItem("fts")||"null");if(sv)S=sv}catch(e){}
+function save(){try{sessionStorage.setItem("fts",JSON.stringify(S))}catch(e){}}
+function mark(k,x,y,c,t){var r=4.2,s="";
+ if(k=="circle")s='<circle cx="'+x+'" cy="'+y+'" r="'+r+'" fill="'+c+'">';
+ else if(k=="square")s='<rect x="'+(x-r)+'" y="'+(y-r)+'" width="'+2*r+'" height="'+2*r+'" fill="'+c+'">';
+ else if(k=="triangle")s='<polygon points="'+x+','+(y-r-1)+' '+(x+r+1)+','+(y+r)+' '+(x-r-1)+','+(y+r)+'" fill="'+c+'">';
+ else s='<polygon points="'+x+','+(y-r-1)+' '+(x+r+1)+','+y+' '+x+','+(y+r+1)+' '+(x-r-1)+','+y+'" fill="'+c+'">';
+ return s+'<title>'+t+'</title>'+(k=="circle"?"</circle>":k=="square"?"</rect>":"</polygon>")}
+function btn(id,label,on,cls){return '<button data-id="'+id+'" class="tog'+(on?" on":"")+'"'+(cls?' style="'+cls+'"':"")+'>'+label+'</button>'}
+function controls(){
+ var lv=LV[S.study];
+ $("sctl").innerHTML='<span class=mut>Study</span>'+[["germany","Germany"],["ebola","BDBV"]].map(function(a){return btn("study:"+a[0],a[1],S.study==a[0])}).join("")
+ +'<span class=mut>Source</span>'+["daily","weekly"].map(function(a){return btn("src:"+a,a,S.src==a)}).join("")
+ +'<span class=mut>Level</span>'+lv.map(function(a){return btn("lv:"+a[0],a[1],S.lv.indexOf(a[0])>=0)}).join("")
+ +'<span class=mut>Series</span>'+SERS.map(function(a){return btn("ser:"+a[0],a[1],S.ser.indexOf(a[0])>=0,"border-left:4px solid "+P.col[a[0]])}).join("")}
+function tick(arr,v){var i=arr.indexOf(v);if(i>=0)arr.splice(i,1);else arr.push(v)}
+$("sctl").onclick=function(e){var b=e.target.closest("button");if(!b)return;var p=b.dataset.id.split(":"),k=p[0],v=p[1];
+ if(k=="study"){S.study=v;S.lv=S.lv.filter(function(l){return LV[v].some(function(a){return a[0]==l})});if(!S.lv.length)S.lv=["national"]}
+ else if(k=="src")S.src=v;else if(k=="lv"){tick(S.lv,v);if(!S.lv.length)S.lv=[v]}else tick(S.ser,v);
+ save();draw()};
+function fmt(v){return (+v).toPrecision(3)}
+function draw(){
+ controls();
+ var lv=LV[S.study].filter(function(a){return S.lv.indexOf(a[0])>=0});
+ var rows=P.rows.filter(function(r){return r[0]==S.study&&r[2]==S.src});
+ var W=900,H=430,L=56,R=16,T=12,B=40,xmin=Math.log2(125),xmax=Math.log2(8000);
+ var sx=function(n){return L+(Math.log2(n||125)-xmin)/(xmax-xmin)*(W-L-R)};
+ var ys=rows.filter(function(r){return S.ser.indexOf(r[3])>=0&&r[3]!="rw"}).map(function(r){return r[6]}).concat([1]);
+ var lo=Math.log(Math.min.apply(null,ys)/1.08),hi=Math.log(Math.max.apply(null,ys)*1.08);
+ var sy=function(v){return T+(1-(Math.log(v)-lo)/(hi-lo))*(H-T-B)};
+ var h='<svg viewBox="0 0 '+W+' '+H+'" width="100%">';
+ [0.3,0.4,0.5,0.7,1,1.5,2,3,4,6,8,12].forEach(function(v){if(Math.log(v)>=lo&&Math.log(v)<=hi)h+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+sy(v)+'" y2="'+sy(v)+'" class=grid /><text x="'+(L-6)+'" y="'+(sy(v)+4)+'" text-anchor=end class=ax>'+v+'</text>'});
+ P.xt.forEach(function(t){h+='<line x1="'+sx(t[0])+'" x2="'+sx(t[0])+'" y1="'+T+'" y2="'+(H-B)+'" class=grid /><text x="'+sx(t[0])+'" y="'+(H-22)+'" text-anchor=middle class=ax>'+t[1]+'</text>'});
+ h+='<text x="'+(W/2)+'" y="'+(H-4)+'" text-anchor=middle class=ax>simulations (log2)</text>';
+ P.pending.forEach(function(p){h+='<line x1="'+sx(p.n)+'" x2="'+sx(p.n)+'" y1="'+T+'" y2="'+(H-B)+'" class=mark /><text x="'+(sx(p.n)+3)+'" y="'+(T+10)+'" class=ax>n'+p.n+' scoring</text>'});
+ if(S.ser.indexOf("rw")>=0)h+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+sy(1)+'" y2="'+sy(1)+'" stroke="'+P.col.rw+'" stroke-width=2 ><title>randomwalknowcast = 1</title></line>';
+ var any=false;
+ lv.forEach(function(l,li){var mk=MK[li];
+  ["slots","noslots","zero","complete"].forEach(function(s){
+   if(S.ser.indexOf(s)<0)return;
+   var rs=rows.filter(function(r){return r[1]==l[0]&&r[3]==s}).sort(function(a,b){return a[4]-b[4]});
+   if(!rs.length)return;any=true;var c=P.col[s];
+   var lab=SERS.find(function(x){return x[0]==s})[1];
+   if(s=="zero"||s=="complete"){var v=rs[0][6];
+    h+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+sy(v)+'" y2="'+sy(v)+'" stroke="'+c+'" stroke-width=1.6 stroke-dasharray="'+(s=="zero"?"6 3":"2 3")+'" />';
+    [125,8000].forEach(function(x){h+=mark(mk,sx(x),sy(v),c,l[1]+", "+lab+": "+fmt(v))})}
+   else{
+    var zs=rows.filter(function(r){return r[1]==l[0]&&r[3]=="zero"})[0];
+    var pts=(zs?[[125,zs[6]]]:[]).concat(rs.map(function(r){return [r[4],r[6]]}));
+    h+='<polyline points="'+pts.map(function(p){return sx(p[0])+","+sy(p[1])}).join(" ")+'" fill=none stroke="'+c+'" stroke-width=1.8 />';
+    rs.forEach(function(r){h+=mark(mk,sx(r[4]),sy(r[6]),c,l[1]+", "+lab+" n"+r[4]+" "+r[5]+": "+fmt(r[6]))})}})});
+ h+='</svg>';
+ var leg=SERS.filter(function(s){return S.ser.indexOf(s[0])>=0}).map(function(s){return '<span><i style="background:'+P.col[s[0]]+'"></i>'+s[1]+(s[0]=="zero"?" (dashed)":s[0]=="complete"?" (dotted)":"")+'</span>'}).join("");
+ if(lv.length>1)leg+=lv.map(function(l,i){return '<span><svg width=12 height=12 viewBox="0 0 12 12">'+mark(MK[i],6,6,"var(--fg)","")+'</svg>'+l[1]+'</span>'}).join("");
+ var note="";
+ if(S.ser.indexOf("complete")>=0&&!rows.some(function(r){return r[3]=="complete"}))note+="<p class=mut>complete-only pending</p>";
+ if(P.pending.length)note+='<p class=mut>Scoring on archie, not yet in the scores: '+P.pending.map(function(p){return p.run+" n"+p.n+(p.hash?" "+p.hash:"")}).join(", ")+'.</p>';
+ if(!any)note+="<p class=mut>No rows for this selection.</p>";
+ $("splot").innerHTML=h+'<div class=leg>'+leg+'</div>'+note+'<p class=mut>Relative to randomwalknowcast ('+(S.study=="germany"?"WIS":"CRPS")+', below 1 is better). Marker shape shows level.</p>';
+}
+draw();
+})();
+"""
+
+
+def scores_html(rows, slot_set, r4_set, local):
+    pay = json.dumps(score_payload(rows, slot_set, r4_set, local),
+                     separators=(",", ":")).replace("</", "<\\/")
+    return (f'<div class=card><div id=sctl class=sctl></div><div id=splot>'
+            f'</div></div>'
+            f'<div class=plots>{heldout_chart(rows, slot_set, r4_set)}</div>'
+            f'<script type="application/json" id=sdata>{pay}</script>'
+            f'<script>{SC_JS}</script>')
 
 
 # ---------- German nowcasts: mirrored per-checkpoint forecasts ----------
@@ -552,6 +638,7 @@ def ger_build():
         return GER["built"]
     cache = GER["files"]
     series, wis, truth, origins = {}, {}, {}, set()
+    slots_pref = set()
     for setid, origin, f, mt in files:
         key = str(f)
         if key not in cache or cache[key][0] != mt:
@@ -560,7 +647,9 @@ def ger_build():
             except Exception:
                 continue
         origins.add(origin) if setid == "reference" else None
-        sid = "zero-shot" if setid == "reference" else setid
+        sid = "zero-shot" if setid == "reference" else norm_hash(setid)[0]
+        if norm_hash(setid)[1]:
+            slots_pref.add(sid)
         for (loc, rw, src), dates in cache[key][1].items():
             s = rw or sid
             ds = sorted(dates)
@@ -586,7 +675,7 @@ def ger_build():
     sets = sorted({s for l in series.values() for s in l})
     locs = sorted(series, key=lambda l: (
         0 if l == "DE" else 1 if l.startswith("DE-") else 2, l))
-    built = {"series": series, "wis": wis, "truth": truth, "sets": sets,
+    built = {"slots_pref": slots_pref, "series": series, "wis": wis, "truth": truth, "sets": sets,
              "locs": locs, "origins": sorted(origins or {
                  o for l in series.values() for s in l.values()
                  for src in s.values() for o in src})}
@@ -611,7 +700,7 @@ def ger_meta(b, slot_n, prev_n):
     """Label each folder by run, n and hash."""
     csv_n = {}
     for r in read_scores():
-        h = re.sub(r"^chronos-(slots|ft)-", "", r["checkpoint"])
+        h = norm_hash(r["checkpoint"])[0]
         n = num(r.get("outbreaks"))
         if n:
             csv_n.setdefault(h, int(n))
@@ -625,8 +714,8 @@ def ger_meta(b, slot_n, prev_n):
         elif s == "rw":
             meta.append(dict(id=s, label="randomwalknowcast", run="ref", n=1))
         else:
-            if s in slot_n:
-                run, n = "slots", slot_n[s]
+            if s in slot_n or s in b["slots_pref"]:
+                run, n = "slots", slot_n.get(s) or csv_n.get(s)
             elif s in prev_n or s in ("de129103cacc", "7962fd718a47"):
                 run, n = "no slots", prev_n.get(s) or csv_n.get(s) or {
                     "de129103cacc": 1000, "7962fd718a47": 2000}.get(s)
@@ -636,6 +725,14 @@ def ger_meta(b, slot_n, prev_n):
                 f"{run} n{n} {s}" if n else f"{run} {s}")))
     order = {"ref": 0, "slots": 1, "no slots": 2, "older run": 3}
     meta.sort(key=lambda m: (order.get(m["run"], 4), m["n"]))
+    fixed = {"zero-shot": SER_COL["zero"], "complete-only": SER_COL["complete"],
+             "rw": SER_COL["rw"]}
+    for run in ("slots", "no slots", "older run"):
+        grp = [m for m in meta if m["run"] == run]
+        for i, m in enumerate(grp):
+            m["color"] = run_colour(run, i, len(grp))
+    for m in meta:
+        m.setdefault("color", fixed.get(m["id"], "#6b7280"))
     return meta
 
 
@@ -661,7 +758,7 @@ function load(loc){
  return fetch("/data/"+encodeURIComponent(loc)+".json").then(function(r){return r.json()})
   .then(function(j){cache[loc]=j;return j})}
 function ms(s){return Date.parse(s+"T00:00:00Z")}
-function colour(id){return COL[META.findIndex(function(m){return m.id==id})%COL.length]}
+function colour(id){var m=META.find(function(x){return x.id==id});return m?m.color:"#64748b"}
 function el(h){return h}
 function fmt(v){return v>=1000?Math.round(v).toLocaleString("en-GB"):(+v).toPrecision(3)}
 function plot(d){
@@ -913,17 +1010,21 @@ def build():
 
     for k in ("scores", "md", "germany"):
         rem_kick(k)
-    slot_hashes = {str(s.get("hash")) for _, s, _ in cks_s}
-    r4_hashes = {str(s.get("hash")) for _, s, _ in cks_p} | {
+    r4_set = {str(s.get("hash")) for _, s, _ in cks_p} | {
         "de129103cacc", "7962fd718a47"}
+    slot_set = {str(s.get("hash")) for _, s, _ in cks_s} - r4_set
     srows = read_scores()
+    local = []
+    for run, base in (("slots", RUN), ("no slots", PREV)):
+        for d in base.glob("train/n*"):
+            n = int(re.sub(r"\D", "", d.name) or 0)
+            st = jload(d / "settings.json") if (d / "settings.json").exists() \
+                else None
+            if n and (st or (d / "finetuned-ckpt").exists()):
+                local.append((run, n, str((st or {}).get("hash") or "")))
     sc_h = note("scores", "Scores")
     if srows:
-        sc_h += ('<p class=mut>Relative to randomwalknowcast (below 1 is '
-                 'better; dashed line is 1). Rule own-quantile-wis_crps-'
-                 '1000-common. Solid is slots, dashed is no slots.</p>'
-                 '<div class=plots>' + "".join(
-                     score_charts(srows, slot_hashes, r4_hashes)) + "</div>")
+        sc_h += scores_html(srows, slot_set, r4_set, local)
     elif not sc_h:
         sc_h = "<p class=mut>no checkpoint scores yet</p>"
     try:
@@ -965,7 +1066,11 @@ border-bottom:1px solid var(--line);font-size:12px}
 .gctl{display:flex;flex-wrap:wrap;gap:12px;align-items:center;
 margin-bottom:8px}.gwide input{width:320px;vertical-align:middle}
 .gck{display:flex;flex-wrap:wrap;gap:6px 16px;margin-bottom:8px}
-.gck i{display:inline-block;width:10px;height:10px;border-radius:2px;
+.sctl{display:flex;flex-wrap:wrap;gap:6px;align-items:center;
+margin-bottom:8px}.tog{border:1px solid var(--line);background:var(--card);
+color:var(--fg);border-radius:6px;padding:3px 10px;cursor:pointer}
+.tog.on{background:var(--c1);color:#fff;border-color:var(--c1)}
+.sctl .mut{margin-left:10px}.gck i{display:inline-block;width:10px;height:10px;border-radius:2px;
 margin:0 4px}select,button{font:inherit}
 pre{white-space:pre-wrap;background:var(--card);padding:10px;border-radius:8px;
 font-size:12px}.wrap{overflow-x:auto}"""
