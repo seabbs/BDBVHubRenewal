@@ -28,15 +28,15 @@ One SI section per paper section.
 ### Baselines
 
 ::: {.callout-note title="Plan"}
-- `randomwalk` and `randomwalknowcast` in full.
+- We describe `randomwalk` and `randomwalknowcast` in full.
 - Key references: [@Johnson2025].
 :::
 
 ### Foundation model setup and fine-tuning
 
 ::: {.callout-note title="Plan"}
-- How Chronos-2 and LoRA work, in brief, with schematics.
-- Foundation model setup and fine-tuning settings.
+- We describe how Chronos-2 and LoRA work, with schematics.
+- We give every setting of the model and the fine-tune.
 - Key references: [@Ansari2025; @Hu2021].
 :::
 
@@ -98,8 +98,8 @@ The dashboard was built with the help of a large language model.
 ### Synthetic data generation
 
 ::: {.callout-note title="Plan"}
-- Synthetic data generation in full, with an overview of the epinowcast model used.
-- The full factor table and the realism comparison against published disease parameters.
+- We describe the simulation in full, with the epinowcast model it uses.
+- We give the full factor table and compare the simulations with published disease parameters.
 - Key references: [@abbottepinowcast; @lison2024; @Park2024; @abbottprimarycensored].
 :::
 
@@ -172,28 +172,28 @@ We compare four options for the zero-shot and fine-tuned models, daily and weekl
 (b) each level in its own block;
 (c) the lowest level only, summed up to the others with draws paired at random;
 (d) the lowest level only, summed up after pairing its draws with the rolling copula.
-Option (d) tests whether the copula rescues aggregation.
+Option (d) tests whether pairing the draws with the copula before summing narrows the gap to the joint block.
 
 ### Scoring
 
 ::: {.callout-note title="Plan"}
-- Scoring, and its check against scoringutils.
+- We describe the scores and check them against scoringutils.
 - Key references: [@bosse2022scoringutils; @jordanEvaluatingProbabilisticForecasts2019; @zanetta_scoringrules_2024].
 :::
 
 ### Implementation
 
 ::: {.callout-note title="Plan"}
-- The tools we used, each cited: Python, PyTorch on the laptop GPU, chronos-forecasting, PEFT for LoRA, R and epinowcast for simulation, and scoringrules for scoring, checked against scoringutils.
-- The evaluation runs as a Snakemake workflow, so every result can be reproduced from the raw data.
+- We used Python, PyTorch, chronos-forecasting, PEFT for LoRA, R and epinowcast for simulation, and scoringrules for scoring, checked against scoringutils.
+- A Snakemake workflow runs the evaluation from the raw data to every figure and table.
 :::
 
 ## Results
 
 ::: {.callout-note title="Plan"}
-- Score breakdowns by location and horizon for each case study.
-- WIS over time for each case study.
-- Held-out synthetic scores by number of fine-tuning outbreaks.
+- We break down each case study's scores by location and horizon.
+- We show each case study's WIS over time.
+- We show held-out synthetic scores by the number of fine-tuning outbreaks.
 :::
 
 
@@ -244,7 +244,7 @@ The cost of each option: series per block, memory and time.
 
 ### Checkpoint curve
 
-- The checkpoints of the final run differ in the number of simulations each was fine-tuned on.
+- We compare the final run's checkpoints, fine-tuned on 1,000, 2,000, 4,000 and 8,000 simulations.
 - They share the grid, the data order and the recipe, as checkpoints of one run.
 - @fig-finetune-heldout gives the held-out loss by source.
 - @fig-checkpoint-curve gives German first-half and BDBV relative scores at each checkpoint, with zero-shot Chronos-2 on the ragged layout and on complete data only as reference lines.
@@ -256,12 +256,13 @@ The cost of each option: series per block, memory and time.
 
 ### Per-series slots against no slots
 
-- The slots run gives each place's series a learned slot, and the no-slots run does not.
+- We compare the slots run with a run that gives places no slots.
 - Both runs share the grid, the data order, the LoRA recipe and the checkpoints.
 - @tbl-slots-loss gives held-out loss by source, and @tbl-slots-scores German first-half and BDBV relative scores at checkpoints of the same size.
-- @tbl-slots-swap gives the lag-swap test, in which whole lag series move to another place, and a ratio of 1 means the model does not tell which place a lag series belongs to.
+- @tbl-slots-swap gives the loss when whole lag series move to another place, relative to the loss as given.
+- A ratio of 1 means the model does not tell which place a lag series belongs to.
 - @fig-compare-slots shows both runs by checkpoint.
-- The no-slots run built its 3-day blocks as daily steps, so 3-day blocks are compared with zero-shot only, and weekly and daily blocks with both.
+- The no-slots run built its 3-day blocks as daily steps, so we compare 3-day blocks with zero-shot only.
 
 ![Slots against no slots: held-out loss by source and German first-half and BDBV relative scores, by checkpoint.](build/figures/si/compare-slots.png){#fig-compare-slots}
 
@@ -285,7 +286,7 @@ Lag-swap test: loss with whole lag series moved between places, as a ratio of th
 
 ### Delays against no delays
 
-- The no-delay run is fine-tuned on complete counts only, with slots and without lag series, and the ragged run on the full layout.
+- We fine-tune a run on complete counts only, with slots and without lag series, and compare it with the ragged run.
 - Both runs share the grid, the data order, the recipe and the checkpoints.
 - @tbl-compare-delays gives held-out loss by source and German first-half and BDBV relative scores at checkpoints of the same size.
 - @fig-compare-delays shows both runs by checkpoint.
@@ -301,11 +302,13 @@ The full and no-delay runs at matched checkpoints: held-out loss by source, rela
 
 ### Real-data fine-tune against synthetic
 
-- The real-data model is fine-tuned on the German development half and BDBV releases, and the synthetic model on simulations.
+- We fine-tune a model on the German development half and BDBV releases, and compare it with the model fine-tuned on simulations.
 - Both use the same recipe and the ragged layout.
-- @tbl-germany-real-finetune gives scores on the German held-out half, and @tbl-ebola-real-finetune on BDBV rounds after the last release the real-data model trained on, against zero-shot Chronos-2 and the synthetic model.
+- @tbl-germany-real-finetune gives scores on the German held-out half, against zero-shot Chronos-2 and the synthetic model.
+- @tbl-ebola-real-finetune gives scores on BDBV rounds after the last release the real-data model trained on.
 - @fig-compare-realdata shows both.
-- The real-data model saw the German development half, so it is scored on the held-out half only, and it is left out of every other table and figure.
+- The real-data model saw the German development half, so we score it on the held-out half only.
+- We leave it out of every other table and figure.
 
 ![Real-data fine-tune against synthetic: German held-out and BDBV relative scores.](build/figures/si/compare-realdata.png){#fig-compare-realdata}
 
