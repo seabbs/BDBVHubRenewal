@@ -1,5 +1,6 @@
 """The Snakemake DAG stays valid and the development target runs."""
 
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -248,3 +249,50 @@ def test_the_synthetic_runner_runs_once_the_simulations_exist(
     log = present.stdout + present.stderr
     assert "rule synthetic_forecasts_development" in log
     assert "--seeds " + " ".join(str(s) for s in seeds) in log
+
+
+def test_ebola_outputs_hold_while_no_scored_round_has_truth(
+    development: Path, tmp_path: Path
+) -> None:
+    # Until the first scored round's truth is reported, every Ebola score
+    # is before the split, so the scored part is empty.
+    d = development
+    late = "2099-01-01"
+    common = [
+        "--scores",
+        str(d / "scores" / "ebola.csv.gz"),
+        "--locations",
+        str(d / "data" / "ebola-locations.csv"),
+        "--meta",
+        str(d / "data" / "ebola-meta.json"),
+        "--main-dir",
+        str(tmp_path / "main"),
+        "--si-dir",
+        str(tmp_path / "si"),
+        "--split",
+        late,
+    ]
+    figures = [
+        "figures",
+        "ebola",
+        "--forecasts",
+        str(d / "forecasts" / "ebola.csv.gz"),
+        "--observations",
+        str(d / "data" / "ebola-observations.csv.gz"),
+        "--truth",
+        str(d / "truth" / "ebola.csv.gz"),
+        "--config",
+        json.dumps(CONFIG),
+        *common,
+    ]
+    for args in (figures, ["score-tables", "ebola", *common]):
+        res = subprocess.run(
+            [sys.executable, "-m", "paperpipe", *args],
+            cwd=PAPER,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert res.returncode == 0, res.stderr
+    assert (tmp_path / "main" / "ebola-results.png").is_file()
+    assert (tmp_path / "main" / "ebola-scores.csv").is_file()
