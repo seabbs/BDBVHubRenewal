@@ -29,10 +29,19 @@ rule publish_checkpoint:
         where=f"{TRAIN}/n{{n}}",
     localrule: True
     shell:
-        "uv run python workflow/scripts/publish_checkpoint.py "
-        "{params.where} {output}"
+        """
+        uv run python workflow/scripts/publish_checkpoint.py {params.where} {output}
+        python workflow/scripts/notify.py "checkpoint n{wildcards.n} published:" \
+          "$(cat {output})"
+        """
 
 
 rule publish:
+    # The checkpoints saved so far, so it never schedules training and can
+    # run beside a training run.
     input:
-        expand(f"{TRAIN}/n{{n}}/published.json", n=FT["prefixes"]),
+        lambda wc: [
+            f"{TRAIN}/n{n}/published.json"
+            for n in FT["prefixes"]
+            if Path(f"{TRAIN}/n{n}/settings.json").exists()
+        ],

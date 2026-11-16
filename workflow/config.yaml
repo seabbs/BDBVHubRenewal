@@ -68,6 +68,8 @@ score:
   # The evidence tables the scores merge into, kept rows of other rules.
   evidence: evidence/checkpoint-scores.csv
   checkpoints: evidence/checkpoints.csv
+  # The only branch `land` commits and pushes the tables on.
+  branch: checkpoint-scoring
 
 slots_check:
   # Each slots checkpoint against zero-shot Chronos-2 and the no-slots

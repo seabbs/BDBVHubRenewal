@@ -33,6 +33,13 @@ DEFAULTS = (
     ("NOSLOTS_RUN", "$ROOT/checkpoints"),
     ("GERMANY_BLOCKS", "$ROOT/germany/germany.pkl"),
     ("JOB_PREFIX", ""),
+    # Mailbox lines (any value turns them on), publishing as it trains,
+    # the targets `all` runs here, and where batches come from (empty:
+    # workflow/config.yaml's `finetune.sims_from`).
+    ("NOTIFY", ""),
+    ("PUBLISH", ""),
+    ("TARGETS", "simulate finetune score"),
+    ("SIMS_FROM", ""),
     # Memory and disk a job leaves free when it starts (GB).
     ("MIN_FREE_GB", "20"),
     ("MIN_DISK_GB", "16"),

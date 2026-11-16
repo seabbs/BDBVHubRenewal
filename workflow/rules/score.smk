@@ -122,8 +122,8 @@ rule score_table:
 
 
 rule land:
-    # Opt-in: commit the tables to evidence/ on this branch and push,
-    # checking the commit reached origin.
+    # Opt-in: commit the tables to evidence/ on the evidence branch only
+    # (never main) and push, checking the commit reached origin.
     input:
         rules.score_table.output,
     output:
@@ -131,17 +131,30 @@ rule land:
     params:
         evidence=SC["evidence"],
         checkpoints=SC["checkpoints"],
+        branch=SC["branch"],
     localrule: True
-    shell:
-        """
-        cp {input[0]} {params.evidence}
-        cp {input[1]} {params.checkpoints}
-        git add {params.evidence} {params.checkpoints}
-        git diff --cached --quiet || git commit -q -m "evidence: checkpoint scores"
-        git push -q
-        git fetch -q origin
-        [ "$(git rev-parse HEAD)" = "$(git rev-parse @{{u}})" ]
-        """
+    run:
+        import shutil
+
+        def git(*args):
+            return subprocess.run(
+                ["git", *args], check=True, capture_output=True, text=True
+            ).stdout.strip()
+
+        notify.check_branch(
+            git("rev-parse", "--abbrev-ref", "HEAD"), params.branch
+        )
+        shutil.copy(input[0], params.evidence)
+        shutil.copy(input[1], params.checkpoints)
+        git("add", params.evidence, params.checkpoints)
+        if git("diff", "--cached", "--name-only"):
+            git("commit", "-q", "-m", "evidence: checkpoint scores")
+        git("push", "-q", "origin", params.branch)
+        git("fetch", "-q", "origin", params.branch)
+        head = git("rev-parse", "HEAD")
+        if head != git("rev-parse", f"origin/{params.branch}"):
+            raise SystemExit(f"{head} is not on origin/{params.branch}")
+        say(f"checkpoint scores landed at {head[:9]} on origin/{params.branch}")
 
 
 rule score:

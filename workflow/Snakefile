@@ -14,7 +14,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(workflow.basedir)))
 
-from flowlib import localconfig  # noqa: E402
+from flowlib import localconfig, notify  # noqa: E402
 
 
 configfile: str(Path(workflow.basedir) / "config.yaml")
@@ -23,6 +23,11 @@ configfile: str(Path(workflow.basedir) / "config.yaml")
 LOCAL = localconfig.read()
 HOST = LOCAL["HOST_NAME"]
 ROUNDS_DIR = f"{LOCAL['ROOT']}/rounds"
+
+
+def say(message):
+    """A mailbox line, when NOTIFY is set in config/local.env."""
+    notify.post(message, LOCAL)
 
 
 def job_prefix(mem_mb):
@@ -47,12 +52,19 @@ include: "rules/score.smk"
 include: "rules/followups.smk"
 
 
+TARGETS = LOCAL["TARGETS"].split()
+
+
 rule all:
-    # Everything that writes nothing outside this machine: simulate,
-    # fine-tune and score. Releases and evidence pushes are their own
-    # targets (`release`, `publish`, `land`).
+    # This machine's targets (TARGETS in config/local.env; by default
+    # simulate, finetune and score). Releases and evidence pushes are
+    # their own targets (`release`, `publish`, `land`).
     input:
-        rules.simulate.input,
-        rules.finetune.input,
-        rules.score.input,
+        rules.simulate.input if "simulate" in TARGETS else [],
+        rules.finetune.input if "finetune" in TARGETS else [],
+        rules.score.input if "score" in TARGETS else [],
     default_target: True
+
+
+onerror:
+    say(f"FAILED, see {log}")

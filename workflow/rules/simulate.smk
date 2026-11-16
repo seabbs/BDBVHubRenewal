@@ -164,6 +164,11 @@ rule round_ready:
         Path(output.ready).write_text(
             dt.datetime.now(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ") + "\n"
         )
+        qc = Path(input[0]).read_text().strip()
+        say(
+            f"round {wildcards.round} ready for training: {len(train)} "
+            f"training and {len(held)} held-out batches; {qc}"
+        )
 
 
 rule release_batch:

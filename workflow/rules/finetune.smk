@@ -12,6 +12,9 @@
 # <RUN>/train/n<N>/settings.json. Publishing is the publish module's.
 
 FT = config["finetune"]
+# Where batches come from is this machine's choice when set.
+if LOCAL["SIMS_FROM"]:
+    FT["sims_from"] = LOCAL["SIMS_FROM"]
 RUN = LOCAL["RUN"]
 TRAIN = f"{RUN}/train"
 
@@ -196,6 +199,8 @@ segments.gather_exclusions(glob.glob('{ROUNDS_DIR}/r*/qc/excluded.csv') \
           --note "{FT[note]}" --chunk {FT[chunk]} \
           --exclude {RUN}/excluded.csv {params.slots} \
           --until {wildcards.n} >> {log} 2>&1
+        python workflow/scripts/notify.py "checkpoint n{wildcards.n} saved," \
+          "hash $(python -c "import json; print(json.load(open('{output.settings}'))['hash'])")"
         """
 
 
@@ -216,12 +221,14 @@ rule n1000_check:
         real = s.get("real_validation_loss", float("inf"))
         held = s["held_out_loss"] < s["held_out_loss_start"]
         ok = held and real < params.zero_shot
-        Path(output[0]).write_text(
+        text = (
             f"n1000 {'beats' if ok else 'does NOT beat'} zero-shot: "
             f"held-out {s['held_out_loss']:.4f} vs "
             f"{s['held_out_loss_start']:.4f}, real {real:.4f} vs "
-            f"{params.zero_shot}\n"
+            f"{params.zero_shot}"
         )
+        Path(output[0]).write_text(text + "\n")
+        say(text if ok else f"ALERT {text}; training goes on, check before n2000")
 
 
 def trainable():
@@ -241,4 +248,8 @@ def trainable():
 rule finetune:
     input:
         lambda wc: expand(f"{TRAIN}/n{{n}}/settings.json", n=trainable()),
+        # A machine that publishes as it trains (PUBLISH in local.env).
+        lambda wc: expand(f"{TRAIN}/n{{n}}/published.json", n=trainable())
+        if LOCAL["PUBLISH"]
+        else [],
         [f"{RUN}/reports/n1000-check.txt"] if 1000 in FT["prefixes"] else [],
