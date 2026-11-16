@@ -65,6 +65,16 @@ EBOLA = config["ebola"]
 SYNTHETIC = config["synthetic"]
 TRIANGLE = f"{GERMANY['data']}/COVID-19_hospitalizations.csv"
 
+
+def at_root(path):
+    """Return a path from paper/ as one from the repository root."""
+    return os.path.relpath(PAPER / path, PAPER.parent)
+
+
+# The benchmark's commands run from the repository root, as the models
+# read config/ (config/finetune.toml) relative to the working directory.
+GERMANY_ROOT = {k: at_root(GERMANY[k]) for k in ("config", "data", "results")}
+
 # The benchmark's command line holds out the dates from its own split.
 with open(GERMANY["config"], "rb") as f:
     _split = tomllib.load(f)["nowcast"]["split_date"]
@@ -317,12 +327,13 @@ rule germany_development:
     output:
         f"{GERMANY['results']}/paper-forecasts.csv.gz",
     params:
-        args=f"--config {GERMANY['config']} --data {GERMANY['data']}",
-        out=GERMANY["results"],
+        args=f"--config {GERMANY_ROOT['config']} --data {GERMANY_ROOT['data']}",
+        out=GERMANY_ROOT["results"],
     shell:
+        "cd .. && "
         "{BDBV} germany-backtest {params.args} --out {params.out} && "
         "{BDBV} germany-teams {params.args} --out {params.out} && "
-        "{BDBV} germany-paper --config {GERMANY[config]} "
+        "{BDBV} germany-paper --config {GERMANY_ROOT[config]} "
         "--results {params.out}"
 
 
@@ -333,13 +344,14 @@ rule germany_heldout:
     output:
         f"{GERMANY['results']}/held-out/paper-forecasts.csv.gz",
     params:
-        args=f"--config {GERMANY['config']} --data {GERMANY['data']}",
-        out=GERMANY["results"],
+        args=f"--config {GERMANY_ROOT['config']} --data {GERMANY_ROOT['data']}",
+        out=GERMANY_ROOT["results"],
     shell:
+        "cd .. && "
         "{BDBV} germany-backtest {params.args} --held-out "
         "--out {params.out} && "
         "{BDBV} germany-teams {params.args} --held-out --out {params.out} && "
-        "{BDBV} germany-paper --config {GERMANY[config]} "
+        "{BDBV} germany-paper --config {GERMANY_ROOT[config]} "
         "--results {params.out}/held-out"
 
 
