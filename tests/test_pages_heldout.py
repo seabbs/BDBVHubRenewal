@@ -17,10 +17,13 @@ def _jobs() -> dict:
 
 def test_the_held_out_matrix_covers_every_german_model() -> None:
     config = tomllib.loads((ROOT / "config" / "germany.toml").read_text())
-    models = set(config["nowcast"]["models"])
+    # The stored fine-tuned model is shown on the development half only:
+    # the paper's held-out run waits for the final (slots) checkpoint.
+    models = set(config["nowcast"]["models"]) - {"fm_chronos_daily_ragged_ft"}
     matrix = _jobs()["germany-heldout"]["strategy"]["matrix"]["include"]
     held = {row["model"] for row in matrix}
     assert models <= held, sorted(models - held)
+    assert "fm_chronos_daily_ragged_ft" not in held
     # The Chronos-2 models need the chronos group.
     for row in matrix:
         if row["model"].startswith("fm_chronos"):
