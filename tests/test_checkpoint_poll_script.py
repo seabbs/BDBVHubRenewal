@@ -101,3 +101,16 @@ def test_slots_checkpoints_land_bdbv_before_germany(poll) -> None:
     fast, slow = poll.split_fast(units)
     assert {u[0] for u in fast} == {"heldout", "bdbv"}
     assert {u[0] for u in slow} == {"germany"}
+
+
+def test_a_new_slots_checkpoint_s_bdbv_goes_before_an_older_german_run(
+    poll,
+) -> None:
+    # n500 publishes while n250's German run is going: n500's held-out and
+    # BDBV run first (minutes), then n250's German run resumes.
+    queue = ["slots-a", "slots-b", "c"]
+    assert poll.next_job(queue, False, fresh={"slots-b"}) == "slots-b"
+    assert poll.next_job(queue, False, fresh=set()) == "slots-a"
+    assert poll.should_pause("slots-a", ["slots-a", "slots-b"], {"slots-b"})
+    assert not poll.should_pause("slots-a", ["slots-a"], {"slots-a"})
+    assert not poll.should_pause("slots-b", ["slots-a", "slots-b"], set())
