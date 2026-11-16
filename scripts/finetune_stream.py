@@ -260,26 +260,28 @@ def snapshots(
     n_draws: int | None = None,
     subset_seed: int = 0,
 ) -> list[tuple]:
-    """Return each draw at each of `CUTS` snapshots, with a source each.
+    """Return the draws cut at each of `CUTS` snapshots, with a source each.
 
     Every observation draw is cut once at each snapshot, so a simulation
     of 10 draws gives 160 blocks; each block's source is drawn from
-    `SOURCES`. With `n_draws`, a pass trains only that many draws, picked
-    by `subset_seed` and the simulation alone, so a later pass with
-    another seed can take the others.
+    `SOURCES`. With `n_draws`, a pass cuts only that many draws at each
+    snapshot, sampled across all the draws by `subset_seed`, the
+    simulation and the snapshot, so a later pass with another seed can
+    take the others.
     """
-    if n_draws is not None and n_draws < len(draws):
-        simulation = draws[0].rsplit("-", 1)[0]
-        pick = np.random.default_rng(
-            [subset_seed, zlib.crc32(simulation.encode())]
-        ).choice(len(draws), n_draws, replace=False)
-        draws = [draws[i] for i in sorted(pick)]
-    sources = rng.choice(ft.SOURCES, size=(len(draws), ft.CUTS))
-    return [
-        (draw, str(sources[i, j]), j)
-        for i, draw in enumerate(draws)
-        for j in range(ft.CUTS)
-    ]
+    simulation = draws[0].rsplit("-", 1)[0] if draws else ""
+    out = []
+    for j in range(ft.CUTS):
+        chosen = range(len(draws))
+        if n_draws is not None and n_draws < len(draws):
+            chosen = sorted(
+                np.random.default_rng(
+                    [subset_seed, zlib.crc32(simulation.encode()), j]
+                ).choice(len(draws), n_draws, replace=False)
+            )
+        for i in chosen:
+            out.append((draws[i], str(rng.choice(ft.SOURCES)), j))
+    return out
 
 
 def cut(

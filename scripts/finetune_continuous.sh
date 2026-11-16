@@ -24,7 +24,7 @@ MAILBOX=${MAILBOX:-}
 HERE=${HERE:-output/finetune/continuous}
 OUTBREAKS=${OUTBREAKS:-8000}
 PREFIXES=${PREFIXES:-1000 2000 4000 8000}
-# Two of each simulation's 10 draws at all 16 snapshots: 32 blocks, about
+# Two draws at each of 16 snapshots, sampled across the 10: 32 blocks, about
 # 2.2 h per 1,000 simulations on an M-series laptop (2026-11-16 probe:
 # 22,820 steps per 1,000 at 160 blocks, 1.75 s a step). The learning rate
 # reaches zero at OUTBREAKS: 8 x 4,564 steps.
