@@ -70,7 +70,9 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
 
 ::: {.callout-note title="Plan"}
 - Chronos-2, given the reporting triangle as series: one series per place and reporting delay, each missing until reported. Introduced alongside the reporting triangle, with Figure 1B.
-- Fine-tuned on synthetic data on a laptop, with checkpoints at doublings of simulated outbreaks from 1,000 upwards, each outbreak giving several forecast origins and 10 observation draws, continuing while held-out loss keeps falling. The last is the main model.
+- Fine-tuned on synthetic data on a laptop from the base Chronos-2 weights, with Chronos-2's default LoRA settings and loss, a learning rate of $10^{-5}$ with linear decay, and a prediction length equal to each block's horizon.
+- Each simulation gives 10 observation draws, and each draw is cut at 16 dates, so one simulation gives 160 multivariate blocks. Single-stratum series cut from the same simulations are mixed in, so training sees multivariate and univariate series from one pool.
+- Training runs continuously up to 32,000 simulations, with a checkpoint published at every doubling from 1,000 (1,000, 2,000, 4,000, 8,000, 16,000 and 32,000).
 - Compared with Chronos-2 given only complete data points, to show what the ragged structure and fine-tuning add.
 - Figure 1, a multi-panel schematic of our pipeline: (A) the assumptions in the epinowcast simulations, (B) the reporting triangle laid out as ragged series for Chronos-2, (C) training blocks and LoRA fine-tuning, and why it is fast, and (D) forecasting with the fine-tuned model.
 - Key references: [@Ansari2025; @Ansari2024; @Hu2021; @Das2024b].
@@ -112,7 +114,7 @@ $\Sigma$ is a place correlation times a week correlation.
 Two steps $\delta$ days apart have correlation $\rho_t^{\delta/7}$.
 Two provinces have correlation $\rho_p$, and the country and a province have correlation $\rho_n$.
 The daily models also pair the days of a week, with correlation $\rho_d^{|d - d'|}$ between days $d$ and $d'$.
-$\rho_d = 0.985$ was chosen on the Ebola release backtest by the weekly WIS, median bias and coverage of the daily models, not estimated, as each matured error is of a week's sum (#239).
+$\rho_d = 0.985$ is fixed rather than estimated, as each matured error is of a week's sum. It gives the best weekly WIS, median bias and coverage of the daily models on the Ebola release backtest.
 Where the country is the sum of its provinces, as for `randomwalknowcast`, it is summed again from the paired provinces.
 Copulas have been used before to give joint forecasts of seasonal influenza [@Ray2018; @Brooks2018].
 
@@ -141,6 +143,7 @@ The estimator, its window and the evidence for it are in the SI.
 ::: {.callout-note title="Plan"}
 - Compared with the hub's models, relative to the hub's own baseline, and evaluated as the hub did.
 - Quantile forecasts scored with WIS and log-scale WIS, bias, and coverage, against a rolling evaluation set of the data as reported D days later [@Wolffram2023].
+- Each model is scored on its own quantiles at the hub's levels, interpolated linearly where it lacks a level. Models that give samples are scored on the quantiles of 1,000 draws with common random numbers, as are sums over days.
 - Daily and weekly versions may not both make sense here.
 - The nowcast dates are split in half. We developed our setup on the first half only, and the second half is held out for the results.
 - Key references: [@Wolffram2023; @Johnson2025; @amaralPostprocessingWeightedCombination2025].
@@ -150,7 +153,8 @@ The estimator, its window and the evidence for it are in the SI.
 
 ::: {.callout-note title="Plan"}
 - Compared with the other submissions, relative to the hub's own baseline.
-- Scored as for the held-out synthetic data, with D the empirical 98% point of the hub data's reporting delay.
+- The hub's rounds from 21 November 2026 are scored. Earlier rounds, and the release backtest from releases before that date, were used for development and are shown in the SI.
+- Sample forecasts scored with CRPS and log-scale CRPS on 1,000 draws with common random numbers, bias, and coverage, with D the empirical 98% point of the hub data's reporting delay.
 - Our models' forecasts are saved prospectively, alongside the main submissions as they were made.
 - Key references: [@bdbv_modeling_hub_2026; @Viboud2018; @funkAssessingPerformanceRealtime2019].
 :::
@@ -173,7 +177,7 @@ Each panel shows:
 - bias;
 - 50% and 90% coverage;
 - score variation by location and horizon, supported by SI plots.
-- for Germany, a dotted line marking the split between the development and held-out halves, with scores split by half.
+- for Germany and Ebola, a dotted line marking the split between the development and scored parts, with scores split by part.
 
 The plots in primarycensored-paper are a model for these.
 Each section has two paragraphs, one on visual performance and one summarising scores.
@@ -201,7 +205,7 @@ Held-out synthetic data: nowcasts of one held-out outbreak, drawn with the workf
 Held-out synthetic data. (A, B) CRPS relative to `randomwalknowcast` on the natural and log scales; (C) bias; (D) 50% and 90% coverage; (E) relative CRPS by scenario factor; (F) relative CRPS by horizon. {{< meta results.synthetic.label >}} {{< meta results.synthetic.note >}}
 :::
 
-Placeholder summary from the workflow: the best model was {{< meta results.synthetic.best_model >}}, with a relative score of {{< meta results.synthetic.best_rel_score >}} and {{< meta results.synthetic.best_rel_log_score >}} on the log scale, against {{< meta results.synthetic.baseline >}}.
+The best model was {{< meta results.synthetic.best_model >}}, with a relative score of {{< meta results.synthetic.best_rel_score >}} and {{< meta results.synthetic.best_rel_log_score >}} on the log scale, against {{< meta results.synthetic.baseline >}}.
 
 ::: {#tbl-synthetic-scores}
 {{< include build/tables/main/synthetic-scores.md >}}
@@ -235,7 +239,7 @@ German nowcast hub: national nowcasts, one column per model and one row per orig
 German nowcast hub. (A, B) WIS relative to `KIT-frozen_baseline` on the natural and log scales; (C) bias; (D) 50% and 95% coverage; (E) relative WIS by location; (F) by age group; (G) by horizon. {{< meta results.germany.label >}} {{< meta results.germany.note >}}
 :::
 
-Placeholder summary from the workflow: the best model was {{< meta results.germany.best_model >}}, with a relative score of {{< meta results.germany.best_rel_score >}} and {{< meta results.germany.best_rel_log_score >}} on the log scale, against {{< meta results.germany.baseline >}}, and {{< meta results.germany.best_rel_score_randomwalknowcast >}} against `randomwalknowcast`, as the hub's baseline is a point forecast with no coverage.
+On the held-out half, the best model was {{< meta results.germany.best_model >}}, with a relative score of {{< meta results.germany.best_rel_score >}} and {{< meta results.germany.best_rel_log_score >}} on the log scale, against {{< meta results.germany.baseline >}}, and {{< meta results.germany.best_rel_score_randomwalknowcast >}} against `randomwalknowcast`, as the hub's baseline is a point forecast with no coverage.
 
 ::: {#tbl-germany-scores}
 {{< include build/tables/main/germany-scores.md >}}
@@ -253,16 +257,16 @@ German nowcast hub: mean scores, coverage and number of forecasts of each model,
 ::: {#fig-ebola-nowcasts}
 ![](build/figures/main/ebola-nowcasts.png)
 
-Ebola: national nowcasts from past releases, one column per model and one row per origin. Black is the rolling truth, grey dashed the data as of the origin, and blue the model's median with its 50% and 95% intervals; each column gives the model's CRPS relative to `randomwalknowcast`. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
+Ebola: national nowcasts, one column per model and one row per origin. Black is the rolling truth, grey dashed the data as of the origin, and blue the model's median with its 50% and 95% intervals; each column gives the model's CRPS relative to `randomwalknowcast`. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
 :::
 
 ::: {#fig-ebola}
 ![](build/figures/main/ebola-results.png)
 
-Ebola: sample forecasts from past releases (release backtest), joined by the hub's forecasts as they can be scored. (A, B) CRPS relative to {{< meta results.ebola.baseline >}} on the natural and log scales, on the forecasts each model shares with it, with the share of forecasts a model made in its label where it missed some; (C) bias; (D) 50% and 90% coverage; (E) relative CRPS by location; (F) by horizon. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
+Ebola: sample forecasts of the hub's rounds from 21 November 2026 (scored), after the release backtest from earlier releases (development), split by a dotted line. (A, B) CRPS relative to {{< meta results.ebola.baseline >}} on the natural and log scales, on the forecasts each model shares with it, with the share of forecasts a model made in its label where it missed some; (C) bias; (D) 50% and 90% coverage; (E) relative CRPS by location; (F) by horizon. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
 :::
 
-Placeholder summary from the workflow: the best model was {{< meta results.ebola.best_model >}}, with a relative score of {{< meta results.ebola.best_rel_score >}} and {{< meta results.ebola.best_rel_log_score >}} on the log scale, against {{< meta results.ebola.baseline >}}.
+{{< meta results.ebola.status >}} On the scored rounds, the best model was {{< meta results.ebola.best_model >}}, with a relative score of {{< meta results.ebola.best_rel_score >}} and {{< meta results.ebola.best_rel_log_score >}} on the log scale, against {{< meta results.ebola.baseline >}}.
 
 ::: {#tbl-ebola-scores}
 {{< include build/tables/main/ebola-scores.md >}}

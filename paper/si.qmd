@@ -40,19 +40,17 @@ One SI section per paper section.
 - Key references: [@Ansari2025; @Hu2021].
 :::
 
-Chronos-2 divides a flat context by a scale of $10^{-5}$.
-We tested a floor of one count on that scale at inference only, for the zero-shot model and each fine-tuned checkpoint.
-On held-out simulations it hurt small series, of five counts or fewer.
-At 4,000 outbreaks their median loss went from {{< meta evidence.scale_floor.sims.n4000.small.median_loss.none >}} to {{< meta evidence.scale_floor.sims.n4000.small.median_loss.floor >}}, and the share of 99% quantiles over 100 times the truth from {{< meta evidence.scale_floor.sims.n4000.small.q99_over_100x.none >}}% to {{< meta evidence.scale_floor.sims.n4000.small.q99_over_100x.floor >}}%.
-Large series were unchanged, with median loss {{< meta evidence.scale_floor.sims.n4000.large.median_loss.none >}} and {{< meta evidence.scale_floor.sims.n4000.large.median_loss.floor >}}.
-On the BDBV release backtest the floor improved relative WIS at every fine-tuned checkpoint, and that of the weekly model at 4,000 outbreaks on provinces went from {{< meta evidence.scale_floor.bdbv.provinces.weekly.n4000.none >}} to {{< meta evidence.scale_floor.bdbv.provinces.weekly.n4000.floor >}}.
-We use no floor at inference only, and the next fine-tune trains with it.
+Chronos-2 divides a flat context by a scale of $10^{-5}$, and we apply no floor to that scale at inference.
+A floor of one count at inference only hurts small series, of five counts or fewer, on held-out simulations.
+At 4,000 outbreaks their median loss is {{< meta evidence.scale_floor.sims.n4000.small.median_loss.none >}} without it and {{< meta evidence.scale_floor.sims.n4000.small.median_loss.floor >}} with it, and the share of 99% quantiles over 100 times the truth is {{< meta evidence.scale_floor.sims.n4000.small.q99_over_100x.none >}}% and {{< meta evidence.scale_floor.sims.n4000.small.q99_over_100x.floor >}}%.
+Large series are unchanged, with median loss {{< meta evidence.scale_floor.sims.n4000.large.median_loss.none >}} and {{< meta evidence.scale_floor.sims.n4000.large.median_loss.floor >}}.
+On the BDBV release backtest the floor gives a lower relative WIS at every fine-tuned checkpoint, {{< meta evidence.scale_floor.bdbv.provinces.weekly.n4000.floor >}} against {{< meta evidence.scale_floor.bdbv.provinces.weekly.n4000.none >}} for the weekly model at 4,000 outbreaks on provinces.
 Chronos-2's widest interval is from 1% to 99%, as it has no 2.5% or 97.5% quantiles.
 
-We tested the ragged layout's lag horizon.
-Running the lags to the truth delay, rather than 4 weeks or 28 days, hurt with short release histories.
-On the German development half, the national WIS relative to `randomwalknowcast` went from {{< meta evidence.lag.germany.fm_chronos_daily_ragged.capped >}} to {{< meta evidence.lag.germany.fm_chronos_daily_ragged.longer >}} for the daily zero-shot model and from {{< meta evidence.lag.germany.fm_chronos_weekly_ragged.capped >}} to {{< meta evidence.lag.germany.fm_chronos_weekly_ragged.longer >}} for the weekly one.
-On the BDBV release backtest it went from {{< meta evidence.lag.bdbv.fm_chronos_daily_ragged.capped >}} to {{< meta evidence.lag.bdbv.fm_chronos_daily_ragged.longer >}} for the daily zero-shot model and from {{< meta evidence.lag.bdbv.fm_chronos_weekly_ragged.capped >}} to {{< meta evidence.lag.bdbv.fm_chronos_weekly_ragged.longer >}} for the weekly one.
+The ragged layout's lag series run to 4 weeks or 28 days.
+Lags run to the truth delay do worse with short release histories.
+On the German development half, the national WIS relative to `randomwalknowcast` is {{< meta evidence.lag.germany.fm_chronos_daily_ragged.capped >}} with the 4-week cap and {{< meta evidence.lag.germany.fm_chronos_daily_ragged.longer >}} with lags to the truth delay for the daily zero-shot model, and {{< meta evidence.lag.germany.fm_chronos_weekly_ragged.capped >}} and {{< meta evidence.lag.germany.fm_chronos_weekly_ragged.longer >}} for the weekly one.
+On the BDBV release backtest it is {{< meta evidence.lag.bdbv.fm_chronos_daily_ragged.capped >}} and {{< meta evidence.lag.bdbv.fm_chronos_daily_ragged.longer >}} for the daily zero-shot model, and {{< meta evidence.lag.bdbv.fm_chronos_weekly_ragged.capped >}} and {{< meta evidence.lag.bdbv.fm_chronos_weekly_ragged.longer >}} for the weekly one.
 BDBV's zones have few weekly releases, so with the longer horizon no recent lag of a zone falls in the model's context.
 
 To compare training on simulations with training on real data, we also fine-tuned Chronos-2 on the German data alone (`fm_chronos_daily_ragged_de` and `fm_chronos_weekly_ragged_de`).
@@ -93,7 +91,7 @@ The simulated outbreaks' ranges against published values for several diseases, t
 
 ![Held-out loss of the fine-tune against the number of simulated outbreaks it has seen.](build/figures/si/finetune-heldout.png){#fig-finetune-heldout}
 
-![WIS relative to `randomwalknowcast` of the ragged Chronos-2 models against the number of simulated outbreaks each r3 checkpoint was fine-tuned on, with the zero-shot model at the left, on the case studies by level. Each panel gives n, the fewest matched cells of its points, and the forecast origins they come from, and panels with fewer than 5 are grey. On BDBV's provinces (n = {{< meta evidence.checkpoints.ebola.provinces.n >}} cells from {{< meta evidence.checkpoints.ebola.provinces.n_origins >}} origin) the daily model goes from {{< meta evidence.checkpoints.ebola.provinces.fm_chronos_daily_ragged.zero-shot >}} zero-shot to {{< meta evidence.checkpoints.ebola.provinces.fm_chronos_daily_ragged.n1000 >}} at 1,000 and {{< meta evidence.checkpoints.ebola.provinces.fm_chronos_daily_ragged.n2000 >}} at 2,000 outbreaks, then worsens to {{< meta evidence.checkpoints.ebola.provinces.fm_chronos_daily_ragged.n4000 >}} at 4,000; the weekly model worsens throughout, from {{< meta evidence.checkpoints.ebola.provinces.fm_chronos_weekly_ragged.zero-shot >}} to {{< meta evidence.checkpoints.ebola.provinces.fm_chronos_weekly_ragged.n4000 >}}. BDBV's national panel has n = {{< meta evidence.checkpoints.ebola.national.n >}}, so it is grey. German checkpoints join as they are scored.](build/figures/si/checkpoint-curve.png){#fig-checkpoint-curve}
+![WIS relative to `randomwalknowcast` of the ragged Chronos-2 models against the number of simulated outbreaks each checkpoint was fine-tuned on, with the zero-shot model at the left, on the case studies by level. Each panel gives n, the fewest matched cells of its points, and the forecast origins they come from, and panels with fewer than 5 are grey.](build/figures/si/checkpoint-curve.png){#fig-checkpoint-curve}
 
 {{< include build/tables/si/heldout-set.md >}}
 
@@ -124,7 +122,7 @@ $\rho_p$ is estimated from pairs of provinces in the same week of one forecast, 
 With $n$ pairs whose Pearson correlation is $r$, the estimate is $(n r + w \rho_0) / (n + w)$, with $w = 100$ and $\rho_0$ the prior.
 It is then kept within $[0, 0.95]$.
 Where the pairs give no correlation, the estimate is the prior.
-The prior $(\rho_t, \rho_p, \rho_n) = (0.9, 0.7, 0.7)$ was chosen by the energy score of the Chronos-2 models on the Ebola release backtest, so it is tuned in sample.
+The prior $(\rho_t, \rho_p, \rho_n) = (0.9, 0.7, 0.7)$ is set by the energy score of the Chronos-2 models on the Ebola release backtest, so it is tuned in sample.
 As a sensitivity analysis we give the prior less weight, $w = 25$.
 
 **Scores.**
@@ -139,7 +137,7 @@ Rolling forecasts are paired with the copula estimated at each origin.
 ### Aggregation options
 
 Chronos-2 can forecast every level of a place hierarchy in one block, or each level on its own.
-We compare four options for the zero-shot and fine-tuned models, daily and weekly (#222):
+We compare four options for the zero-shot and fine-tuned models, daily and weekly:
 (a) all levels in one joint block;
 (b) each level in its own block;
 (c) the lowest level only, summed up to the others with draws paired at random;
