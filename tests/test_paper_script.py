@@ -28,6 +28,7 @@ OUTPUTS = (
     "si_files/b.js",
     "figures/f.svg",
     "figures/f.pdf",
+    "figures/shot.png",
     "build/figures/g.png",
 )
 
@@ -116,6 +117,8 @@ def test_the_rendered_paper_is_copied_into_the_docs(repo: Path) -> None:
         assert (docs / name).is_file()
     assert (docs / "figures" / "f.svg").is_file()
     assert (docs / "figures" / "f.pdf").is_file()
+    # Image inputs, such as a screenshot, are figures too.
+    assert (docs / "figures" / "shot.png").is_file()
     assert (docs / "build" / "figures" / "g.png").is_file()
 
 
