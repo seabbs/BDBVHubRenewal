@@ -26,6 +26,7 @@ from bdbvhubrenewal.forecasters import foundation
 from bdbvhubrenewal.forecasters.base import NATIONAL
 from bdbvhubrenewal.forecasters.finetune import (
     AHEAD_WEEKS,
+    BINNED,
     training_block,
     weekly_cutoffs,
 )
@@ -49,6 +50,40 @@ DAYS_PER_STEP = {"weekly": 7, "daily": 1, "3day": 3}
 SOURCES = ("weekly", "daily")
 """Sources blocks are cut from; one of them trains an adapter for that
 source alone."""
+
+
+def check_sources(sources: tuple[str, ...]) -> None:
+    """Raise unless every source has its own triangle or is binned.
+
+    A source neither in `foundation.SOURCES` nor in `BINNED` would be cut
+    as daily without notice.
+    """
+    bad = [
+        s
+        for s in sources
+        if (s not in foundation.SOURCES and s not in BINNED)
+        or s not in DAYS_PER_STEP
+        or s not in MAX_LAGS
+    ]
+    if bad:
+        raise ValueError(f"sources {bad} are neither native nor binned")
+
+
+def check_package(root: Path) -> None:
+    """Raise unless `bdbvhubrenewal` is imported from `root`'s src.
+
+    A venv linked from another worktree imports that worktree's package,
+    whose blocks may differ from this one's.
+    """
+    import bdbvhubrenewal
+
+    where = Path(bdbvhubrenewal.__file__).resolve()
+    if not where.is_relative_to((Path(root) / "src").resolve()):
+        raise RuntimeError(
+            f"bdbvhubrenewal is imported from {where}, not this worktree "
+            f"({Path(root).resolve()})"
+        )
+
 
 MEMORY_GB = 36.0
 """The GPU memory budget of a training step, in GB: the trainer's cap on
