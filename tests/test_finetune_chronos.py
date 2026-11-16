@@ -669,3 +669,12 @@ def test_a_round_continues_from_the_previous_adapter(tmp_path):
     assert all(torch.equal(loaded[n], trained[n]) for n in trained)
     # The loaded adapter trains on.
     assert all(p.requires_grad for p in loaded.values())
+
+
+def test_real_training_blocks_spread_evenly_over_the_chunks():
+    from finetune_stream import real_share
+
+    real = list(range(10))
+    parts = [real_share(real, chunk, 4) for chunk in range(4)]
+    assert sorted(x for p in parts for x in p) == real
+    assert {len(p) for p in parts} <= {2, 3}

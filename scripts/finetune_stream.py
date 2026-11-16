@@ -90,6 +90,15 @@ def read_ids(path: Path) -> pd.Series:
         return pd.Series([], dtype=str)
 
 
+def real_share(real: list, chunk: int, chunks: int) -> list:
+    """Return the real-data blocks trained with chunk `chunk` of `chunks`.
+
+    The blocks are spread evenly and in order over the round's chunks, so
+    real data is seen throughout training, not only at its end.
+    """
+    return real[chunk::chunks]
+
+
 def read_seed_list(path: Path) -> list[int]:
     """Return the training seeds a file lists, one a line, in its order."""
     return [int(x) for x in path.read_text().split()]
@@ -712,6 +721,9 @@ def main() -> None:
     # and the adapter it continues from.
     parser.add_argument("--seed-list", type=Path)
     parser.add_argument("--init-adapter", type=Path)
+    # Real-data training blocks (for example the German data's first 40%,
+    # cut with `finetune_chronos` functions), spread over the chunks.
+    parser.add_argument("--real-training", type=Path)
     parser.add_argument("--held-out-seeds", type=int, nargs=2, required=True)
     parser.add_argument("--outbreaks", type=int, default=ft.PREFIXES[-1])
     parser.add_argument("--holdout", type=int, default=150)
@@ -871,6 +883,11 @@ def main() -> None:
             if args.seed_list
             else {}
         ),
+        **(
+            {"real_training_sha256": ft._sha256(args.real_training)}
+            if args.real_training
+            else {}
+        ),
         **({"lr_steps": args.lr_steps} if args.lr_steps else {}),
         **(
             {"sources": list(ft.SOURCES)}
@@ -975,6 +992,11 @@ def main() -> None:
                 pool, sim_dir, ids, args.seed, k, args.cut_workers
             )
 
+    real_training: list[dict] = []
+    if args.real_training:
+        with args.real_training.open("rb") as f:
+            real_training = pickle.load(f)
+        log(f"{len(real_training)} real-data training blocks")
     t0 = time.perf_counter()
     while done < args.outbreaks:
         hi = min(done + CHUNK, args.outbreaks)
@@ -1016,6 +1038,14 @@ def main() -> None:
                 pool, sim_dir, chunk, args.seed, k, args.cut_workers
             )
         pairs, empty = _join(ahead.pop(tuple(chunk)))
+        pairs += [
+            (f"real-{i}", b)
+            for i, b in real_share(
+                list(enumerate(real_training)),
+                done // CHUNK,
+                -(-args.outbreaks // CHUNK),
+            )
+        ]
         split["cut_s"] = time.perf_counter() - tick
         tick = time.perf_counter()
         blocks = [b for _, b in pairs]
