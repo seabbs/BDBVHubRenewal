@@ -72,3 +72,33 @@ def test_an_explicit_label_waits_for_a_check_in_progress(tmp_path):
     out, _ = proc.communicate(timeout=20)
     assert proc.returncode == 0
     assert "already checked" in out
+
+
+def test_an_explicit_label_held_for_the_parent_scale_fix_exits(tmp_path):
+    import hashlib
+    import json
+
+    ckpt = tmp_path / "none" / "n250"
+    (ckpt / "finetuned-ckpt").mkdir(parents=True)
+    (ckpt / "settings.json").write_text(
+        json.dumps(
+            {
+                "hash": "abc123",
+                "n_outbreaks": 250,
+                "series_slots": {"init": "x"},
+            }
+        )
+    )
+    digest = hashlib.sha256((ckpt / "settings.json").read_bytes()).hexdigest()
+    (ckpt / "sha256sums.txt").write_text(f"{digest}  settings.json\n")
+    (tmp_path / "hold").touch()
+    out = subprocess.run(
+        ["bash", str(SCRIPT), "slots-abc123"],
+        env={**env(tmp_path), "HOLD": str(tmp_path / "hold")},
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    assert out.returncode == 0
+    assert "held: slots-abc123 (parent_scale fix pending)" in out.stdout
+    assert not (tmp_path / "runs" / "slots-abc123").exists()

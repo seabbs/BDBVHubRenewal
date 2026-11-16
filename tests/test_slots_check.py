@@ -472,3 +472,35 @@ def test_interim_summary_has_slots_against_no_slots_only():
         & (s["window"] == "nowcast")
     ]
     assert (swap["n_above_floor"] > 0).all()
+
+
+HOLD_SETTINGS = {
+    "zero": {"hash": "z", "n_outbreaks": 250, "series_slots": {"init": "zero"}},
+    "random": {
+        "hash": "r",
+        "n_outbreaks": 250,
+        "series_slots": {"init": "normal(0, 0.02)", "parent_scale": True},
+    },
+}
+
+
+@pytest.mark.parametrize(
+    ("init", "hold", "expected"),
+    [
+        ("zero", True, False),
+        ("random", True, True),
+        ("random", False, False),
+    ],
+)
+def test_a_non_zero_init_checkpoint_is_held_while_the_hold_file_exists(
+    tmp_path, init, hold, expected
+):
+    adapter = tmp_path / "n250" / "finetuned-ckpt"
+    adapter.mkdir(parents=True)
+    (tmp_path / "n250" / "settings.json").write_text(
+        json.dumps(HOLD_SETTINGS[init])
+    )
+    hold_file = tmp_path / "hold-slots-run"
+    if hold:
+        hold_file.touch()
+    assert sc.held(adapter, hold_file) is expected
