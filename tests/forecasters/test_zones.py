@@ -380,18 +380,6 @@ def test_hub_table_with_zones_validates(
     assert _hub_failures(path) == []
 
 
-def test_hub_table_rejects_incoherent_zones(
-    task: ForecastTask,
-    alloc_run: tuple[pd.DataFrame, pd.DataFrame],
-) -> None:
-    prov, alloc = alloc_run
-    bad = alloc.copy()
-    bad.loc[bad.index[0], "value"] += 1
-    assert check_zone_coherence(prov, bad)
-    with pytest.raises(ValueError, match="zone"):
-        to_hub_table(prov, task.reference_date, zones=bad)
-
-
 def test_allocation_reads_final_rows_only(
     task: ForecastTask,
     counts: pd.DataFrame,

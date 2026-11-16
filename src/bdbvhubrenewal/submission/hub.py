@@ -168,9 +168,9 @@ def to_hub_table(
         It is added to the national sum. Missing rows count as zero.
     zones : pandas.DataFrame, optional
         Health-zone samples (columns as `samples`), such as from
-        `forecasters.zones.ZoneAllocator`. They must sum to the rounded
-        province samples, sample by sample, and are not added to the
-        national value.
+        `forecasters.zones.zones_for_model`. The hub does not require them
+        to sum to the provinces, and they are not added to the national
+        value.
     n_samples : int
         Number of samples each location must have.
     forecast_date : datetime.date or str, optional
@@ -189,8 +189,7 @@ def to_hub_table(
     ------
     ValueError
         If a province or zone does not have sample ids `1..n_samples`, a
-        sample lacks a week, locations cover different weeks, or the
-        zones do not sum to their provinces.
+        sample lacks a week, or locations cover different weeks.
 
     Examples
     --------
@@ -264,19 +263,14 @@ def to_hub_table(
 
 
 def _zone_rows(prov: pd.DataFrame, zones: pd.DataFrame | None) -> pd.DataFrame:
-    """Tidy zone samples and check they sum to the province samples."""
+    """Tidy zone samples, rounded and clipped at zero as the provinces."""
     if zones is None or zones.empty:
         return prov.iloc[:0]
-    from bdbvhubrenewal.forecasters.zones import check_zone_coherence
-
     zone = zones[list(prov.columns)].copy()
     zone["target_end_date"] = zone["target_end_date"].astype(str)
     zone["location"] = zone["location"].astype(str)
     zone["sample"] = zone["sample"].astype("int64")
     zone["value"] = zone["value"].clip(lower=0).round()
-    gaps = check_zone_coherence(prov, zone)
-    if gaps:
-        raise ValueError(f"{len(gaps)} zone sums differ: {gaps[0]}.")
     return zone
 
 

@@ -1247,7 +1247,7 @@ def _zones(
     samples: pd.DataFrame,
     hub_config: Path,
 ) -> tuple[pd.DataFrame | None, str]:
-    """Forecast the zones to sum to the provinces, or say why not.
+    """Forecast the zones, or say why not.
 
     The zones come from `zones_for_model`.
     """

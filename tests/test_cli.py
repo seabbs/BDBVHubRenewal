@@ -41,7 +41,7 @@ def _written(out: Path) -> pd.DataFrame:
 
 
 @pytest.mark.usefixtures("in_root")
-def test_cli_nowcast_writes_coherent_zones(tmp_path: Path) -> None:
+def test_cli_nowcast_writes_zones(tmp_path: Path) -> None:
     args = ["nowcast", "--out", str(tmp_path / "sub")]
     assert main([*args, "--forecast-date", "2026-07-31"]) == 0
     table = _written(tmp_path / "sub")
@@ -54,14 +54,8 @@ def test_cli_nowcast_writes_coherent_zones(tmp_path: Path) -> None:
     assert side["zones"] is True
     assert side["n_zones"] == zones["location"].nunique()
     assert side["note"] == ""
+    # Zones need not sum to their provinces; national is their sum.
     keys = ["output_type_id", "target_end_date"]
-    summed = (
-        zones.assign(location=zones["location"].str.slice(0, 5))
-        .groupby(["location", *keys])["value"]
-        .sum()
-    )
-    want = provs.set_index(["location", *keys])["value"]
-    assert (summed.reindex(want.index) == want).all()
     nat = table.loc[level == 0].set_index(keys)["value"]
     assert (nat == provs.groupby(keys)["value"].sum().reindex(nat.index)).all()
 

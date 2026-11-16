@@ -73,7 +73,6 @@ from bdbvhubrenewal.evaluation.nowcast import (
 )
 from bdbvhubrenewal.evaluation.scoring import summarise_scores
 from bdbvhubrenewal.evaluation.store import samplers, stored_models
-from bdbvhubrenewal.evaluation.zones import SUMMED
 from bdbvhubrenewal.forecasters.base import (
     NATIONAL,
     ForecastTask,
@@ -481,9 +480,7 @@ def _release_section(
     origins = _ours(pd.read_csv(paths["origins"]).fillna(""), names)
     national = scores["location"] == NATIONAL
     scores["pool"] = national.map({True: "national", False: "provinces"})
-    zones = _as_submitted(
-        pd.read_csv(res / "zone-scores.csv", low_memory=False)
-    )
+    zones = pd.read_csv(res / "zone-scores.csv", low_memory=False)
     complete = _complete_on(scores, zones, int(truth["truth_delay"]))
     pooled = pd.concat([scores, zones.assign(pool="zones")])
     pooled["target"] = pooled["target"].map(_TARGET_LABELS)
@@ -491,7 +488,7 @@ def _release_section(
         pd.concat(
             [
                 pd.read_csv(res / "nowcast-energy.csv"),
-                _as_submitted(pd.read_csv(res / "zone-energy.csv")),
+                pd.read_csv(res / "zone-energy.csv"),
             ]
         ),
         names,
@@ -842,10 +839,7 @@ def _zone_nowcast_section(
         (forecasts["vintage"] == task.vintage)
         & (forecasts["location"] != NATIONAL)
     ]
-    ran = [
-        zone_nowcast(m, task, prov.loc[prov["model"] == m], daily_zones, zones)
-        for m in quick
-    ]
+    ran = [zone_nowcast(m, task, daily_zones, zones) for m in quick]
     ref = str(task.reference_date)
     stored = stored_forecasts(
         load_comparison_config().stored, [ref], exclude=quick
@@ -1178,16 +1172,6 @@ def _zone_truth_changes(
             f"    ![{alt}](figures/{path.stem}-dark.svg#only-dark)\n"
         )
     return "\n".join(tabs)
-
-
-def _as_submitted(zones: pd.DataFrame) -> pd.DataFrame:
-    """Keep the zone rows made to sum to the provinces, as submitted.
-
-    They are named by their model, so `randomwalk` is the summed
-    baseline.
-    """
-    summed = zones.loc[zones["model"].str.endswith(SUMMED)]
-    return summed.assign(model=summed["model"].str.removesuffix(SUMMED))
 
 
 BACKTEST_LOCATIONS: tuple[str, ...] = (NATIONAL, "CD-IT", "CD-NK")
@@ -1890,9 +1874,7 @@ def _checks_section(
     every = every.assign(
         scale=national.map({True: "national", False: "provinces"})
     )
-    zones = _as_submitted(
-        pd.read_csv(res / "zone-scores.csv", low_memory=False)
-    )
+    zones = pd.read_csv(res / "zone-scores.csv", low_memory=False)
     every = pd.concat([every, zones.assign(scale="zones")])
     every = every.loc[every["model"].isin(names)]
     origins = sorted(set(every["origin"].astype(str)))
