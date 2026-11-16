@@ -229,12 +229,20 @@ A pooled $\sigma_p$ uses the changes and noise of all the places in the pool tog
 
 A place with no case in the 9 weeks to $c_o$ stays at 0 until a new introduction, which starts its walk from a Poisson(1) count given at least 1.
 An introduction occurs each week after the latest complete week with probability $q_p$, times the share of the week not yet reported.
-$q_p$ is estimated over the 9 weeks to the place's start week, the weeks that set its walk spread, from the place and its siblings.
+$q_p$ is estimated over the 9 weeks to the place's start week, the weeks that set its walk spread.
 A place with no case yet takes the rate of a first case: the share of weeks with a case among the weeks with no case before them.
 A place seen before takes the rate of a re-introduction: the share of weeks with a case among the weeks with an earlier case but none in the 9 weeks before.
-If the siblings have no introduction of that kind in the 9 weeks, all weeks to the start week count instead.
+Each rate has two sources, taken as independent:
+
+$$
+q_p = 1 - (1 - q_{\text{local}})(1 - q_{\text{global}}),
+$$
+
+with $q_{\text{local}}$ pooled over the place and its siblings, and $q_{\text{global}}$ over the other places of its level, the zones of the other provinces for a zone.
+Provinces and the country have no other places of their level, so their $q_{\text{global}} = 0$.
+$q_p$ is 0 only where no place of the level has an introduction of that kind in the window.
 Without this rule a silent place would walk from a nowcast near 0, with baselinenowcast's $+1$ and a pooled spread, and so forecast a few cases every week.
-Most zones and several provinces are silent at any origin, and their truth is almost always 0, so the rule keeps them at exactly 0 unless a case is likely from what their siblings show.
+Most zones and several provinces are silent at any origin, and their truth is almost always 0, so the rule keeps them at exactly 0 unless a case is likely from what their siblings and the rest of the country show.
 
 ## Start from the latest complete week
 
