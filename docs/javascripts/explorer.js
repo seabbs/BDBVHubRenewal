@@ -21,10 +21,7 @@
 
   function build(root, d, summary, targets) {
     root.textContent = "";
-    var state = {
-      loc: d.locations[0].id,
-      round: root.dataset.round === "all" ? "all" : d.rounds.length - 1,
-    };
+    var state = { loc: d.locations[0].id };
     var controls = h("div", { class: "explorer-controls" }, root);
     var lab1 = h("label", {}, controls, "Location ");
     var selLoc = h("select", {}, lab1);
@@ -36,11 +33,8 @@
         h("option", { value: l.id }, g, l.name + " (" + l.id + ")");
       });
     });
-    var lab2 = h("label", {}, controls, "Round ");
-    var selRound = h("select", {}, lab2);
-    d.rounds.forEach(function (r, i) { h("option", { value: i }, selRound, r); });
-    h("option", { value: "all" }, selRound, "All rounds");
-    selRound.value = String(state.round);
+    var picker = T.roundPicker(controls, d.rounds,
+      root.dataset.round === "all" ? null : [d.rounds.length - 1], function () { draw(); });
     var hasTraj = d.models.some(function (m) { return m.trajectories; });
     var view = T.viewSelect(controls, hasTraj, function () { draw(); });
     var zoom = window.bdbvZoom.create(controls, function () { draw(); });
@@ -64,15 +58,10 @@
     var table = h("div", { class: "explorer-table" }, root);
 
     selLoc.addEventListener("change", function () { state.loc = selLoc.value; draw(); });
-    selRound.addEventListener("change", function () {
-      state.round = selRound.value === "all" ? "all" : +selRound.value;
-      draw();
-    });
 
     function draw() {
       legend.paint();
-      var rounds = state.round === "all"
-        ? d.rounds.map(function (_, i) { return i; }) : [state.round];
+      var rounds = picker.indices();
       var models = d.models.map(function (_, i) { return i; })
         .filter(function (i) { return legend.on[i]; });
       var rows = d.q.filter(function (r) {
