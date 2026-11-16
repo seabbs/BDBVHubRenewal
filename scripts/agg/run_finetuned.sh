@@ -122,6 +122,9 @@ heavy() {
 
 # Progress, at most hourly, while the fits run.
 progress() {
+  # Best effort: a failed count never stops the watcher or the run.
+  trap - ERR
+  set +eE +o pipefail
   while sleep 3600; do
     local b g
     b=$(find "$cache/bdbv-fits" -name release-samples.csv.gz 2> /dev/null |
@@ -132,7 +135,7 @@ progress() {
 }
 progress 8>&- &
 watcher=$!
-trap 'pkill -P $watcher 2> /dev/null; kill $watcher 2> /dev/null || true' EXIT
+trap 'trap - ERR; pkill -P $watcher 2> /dev/null || true; kill $watcher 2> /dev/null || true' EXIT
 
 existing=$here/results/agg/aggregation-scores.csv.gz
 git show "origin/evidence/fm-agg:results/agg/aggregation-scores.csv.gz" \
