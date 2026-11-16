@@ -65,11 +65,11 @@ LEVEL_BLOCKS = 300
 """Held-out blocks scored by level at each checkpoint."""
 
 SAVE_EVERY = 50
+"""Steps between saves of the trainer's state, which a restarted trainer
+resumes from."""
 BY_SOURCE_EVERY = 200
 """Steps between held-out losses by source, which cost three monitor
 evals."""
-"""Steps between saves of the trainer's state, which a restarted trainer
-resumes from."""
 
 POLL = 60
 """Seconds between checks for a chunk's simulations."""
@@ -182,6 +182,7 @@ def slot_settings(
             "init_std": init_std,
             "init_seed": init_seed,
             "learning_rate": lr,
+            "weight_decay": 0.01,
             "parent": {
                 "link": "own slot plus a learned share of the parent's own "
                 "slot, from the same table",
@@ -1280,6 +1281,13 @@ def main() -> None:
     consumed = out / "consumed.txt"
     state_dir = out / "state"
     state = load_state(state_dir, model, optimiser)
+    # The rates are this run's, as hashed, not the saved state's.
+    for group, base_lr in zip(
+        optimiser.param_groups,
+        (args.learning_rate, args.slot_lr),
+        strict=False,
+    ):
+        group["base_lr"] = base_lr
     step, done, position = 0, 0, 0
     # The outbreaks trained on, in order, and those of the current chunk.
     trained: list[str] = []

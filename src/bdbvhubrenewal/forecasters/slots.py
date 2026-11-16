@@ -38,9 +38,11 @@ __all__ = [
     "EVAL_SEED",
     "N_SLOTS",
     "SLOT_MODULE",
+    "adapter_parent_link",
     "adapter_slots",
     "assigned",
     "attach",
+    "has_parent_link",
     "has_slots",
     "load_adapter",
     "n_slots",
@@ -150,7 +152,7 @@ def slot_ids(
     return np.stack([own, parent[rows]])
 
 
-def _slots_module(n_slots: int, d_model: int) -> Any:
+def _slots_module(n_slots: int, d_model: int, parent: bool = True) -> Any:
     import torch
     from torch import nn
 
@@ -161,10 +163,13 @@ def _slots_module(n_slots: int, d_model: int) -> Any:
             super().__init__()
             self.embedding = nn.Embedding(n_slots, d_model)
             nn.init.zeros_(self.embedding.weight)
-            self.parent_scale = nn.Parameter(torch.tensor(PARENT_SCALE))
+            if parent:
+                self.parent_scale = nn.Parameter(torch.tensor(PARENT_SCALE))
 
         def forward(self, ids: torch.Tensor) -> torch.Tensor:
             """Own slots `[rows]`, or own and parents' `[2, rows]`."""
+            if ids.ndim == 2 and not hasattr(self, "parent_scale"):
+                ids = ids[0]
             if ids.ndim == 1:
                 out: torch.Tensor = self.embedding(ids)
                 return out
@@ -204,13 +209,18 @@ def has_slots(model: Any) -> bool:
 
 
 def attach(
-    model: Any, n_slots: int = N_SLOTS, init_std: float = 0.0, seed: int = 0
+    model: Any,
+    n_slots: int = N_SLOTS,
+    init_std: float = 0.0,
+    seed: int = 0,
+    parent: bool = True,
 ) -> None:
     """Add slots to a Chronos-2 model and hook its embeddings.
 
     The slots start at zero, so the model is unchanged, or with
     `init_std` as distinct codes drawn from a normal with that sd, seeded
-    by `seed`. Loading an adapter that holds slots replaces them.
+    by `seed`. Loading an adapter that holds slots replaces them. With
+    `parent`, each place also adds a learned share of its parent's slot.
     """
     import torch
 
@@ -218,7 +228,7 @@ def attach(
         raise ValueError("the model already has slots")
     d_model = model.config.d_model
     weight = next(model.input_patch_embedding.parameters())
-    module = _slots_module(n_slots, d_model)
+    module = _slots_module(n_slots, d_model, parent)
     if init_std:
         generator = torch.Generator().manual_seed(seed)
         with torch.no_grad():
@@ -274,6 +284,25 @@ def adapter_slots(adapter: Path | str) -> int | None:
     raise ValueError(f"{adapter} lists {SLOT_MODULE} but holds no weights")
 
 
+def has_parent_link(model: Any) -> bool:
+    """Whether a model's slots add a share of each place's parent's."""
+    base = _base(model)
+    if base is None:
+        return False
+    return any(
+        "parent_scale" in n
+        for n, _ in getattr(base, SLOT_MODULE).named_parameters()
+    )
+
+
+def adapter_parent_link(adapter: Path | str) -> bool:
+    """Whether an adapter's slots hold the parent link (`parent_scale`)."""
+    from safetensors import safe_open
+
+    with safe_open(Path(adapter) / "adapter_model.safetensors", "pt") as f:
+        return any("parent_scale" in key for key in f.keys())  # noqa: SIM118
+
+
 def load_adapter(model: Any, adapter: Path | str) -> Any:
     """Return Chronos-2 `model` with an adapter merged, slots included.
 
@@ -284,5 +313,5 @@ def load_adapter(model: Any, adapter: Path | str) -> Any:
 
     n = adapter_slots(adapter)
     if n is not None:
-        attach(model, n)
+        attach(model, n, parent=adapter_parent_link(adapter))
     return PeftModel.from_pretrained(model, str(adapter)).merge_and_unload()

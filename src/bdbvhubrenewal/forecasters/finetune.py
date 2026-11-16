@@ -157,7 +157,10 @@ def final_counts(
     numpy.ndarray
         `[L, T]`.
     """
-    last = str(pd.to_datetime(counts["report_date"]).max().date())
+    reported = pd.to_datetime(counts["report_date"])
+    if country is not None:
+        reported = pd.concat([reported, pd.to_datetime(country["report_date"])])
+    last = str(reported.max().date())
     rows = releases(counts, source, [last], totals, country)
     tri = hub_triangle(rows, source, places, times[-1], max_lag=1)
     at = {t: i for i, t in enumerate(tri.times)}

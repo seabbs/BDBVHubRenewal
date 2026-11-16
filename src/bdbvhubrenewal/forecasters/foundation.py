@@ -584,8 +584,13 @@ def _chronos_input(group: Series) -> dict:
     return {k: group[k] for k in keys if k in group}
 
 
-def _group_slots(group: Series, n_slots: int) -> np.ndarray:
+def _group_slots(
+    group: Series, n_slots: int, parent: bool = True
+) -> np.ndarray:
     """Return each of a group's rows' own and parent slots, `[2, rows]`.
+
+    Without `parent` (slots trained without the parent link), own slots
+    only, `[rows]`.
 
     Chronos-2's dict path puts the targets first, then the covariates by
     sorted name, past-only ones before known-future ones, not in input
@@ -614,7 +619,8 @@ def _group_slots(group: Series, n_slots: int) -> np.ndarray:
         owner = [at[n.rsplit("_lag_", 1)[0]] for n in rows]
     except KeyError as err:
         raise ValueError(f"covariate of no target place: {err}") from err
-    own, parent = slots.slot_ids(
+    link = parent
+    own, up = slots.slot_ids(
         n_targets,
         0,
         np.random.default_rng(slots.EVAL_SEED),
@@ -622,7 +628,9 @@ def _group_slots(group: Series, n_slots: int) -> np.ndarray:
         parents=slots.parents_of(places),
     )
     index = np.concatenate([np.arange(n_targets), owner]).astype(int)
-    return np.stack([own[index], parent[index]])
+    if not link:
+        return own[index]
+    return np.stack([own[index], up[index]])
 
 
 def chronos_sampler(
@@ -678,7 +686,9 @@ def chronos_sampler(
         # seed, as in held-out losses.
         quantiles = []
         for g in groups:
-            ids = _group_slots(g, slots.n_slots(model))
+            ids = _group_slots(
+                g, slots.n_slots(model), slots.has_parent_link(model)
+            )
             with slots.assigned(model, ids):
                 q, _ = pipeline.predict_quantiles(
                     [_chronos_input(g)],
