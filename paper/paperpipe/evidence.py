@@ -48,6 +48,9 @@ __all__ = [
     "realism_numbers",
     "rho_medians",
     "scale_floor_numbers",
+    "slots_loss_table",
+    "slots_scores_table",
+    "slots_swap_table",
     "waiting",
     "write_evidence",
 ]
@@ -614,6 +617,7 @@ EVIDENCE: Final = {
     "lag_germany": "germany-chronos2's German lag-horizon scores",
     "lag_bdbv_before": "the BDBV scores with the 4-week lag horizon",
     "lag_bdbv_after": "the BDBV scores with lags to the truth delay",
+    "slots_check": "slots-check's slots against no slots and lag-swap test",
 }
 """Each evidence input and what it waits on until set."""
 
@@ -634,6 +638,96 @@ QUOTED: Final = {
     },
 }
 """The numbers the paper quotes, as they read until their rows exist."""
+
+
+def _ratio_ci(rows: pd.DataFrame) -> list[str]:
+    return [
+        f"{r:.2f} ({lo:.2f} to {hi:.2f})"
+        for r, lo, hi in zip(
+            rows["ratio"], rows["ci_low"], rows["ci_high"], strict=True
+        )
+    ]
+
+
+def slots_loss_table(check: pd.DataFrame) -> pd.DataFrame:
+    """Return the slots run's loss against each comparator, by source.
+
+    The slots check's `given` rows: the slots run's mean loss against
+    zero-shot Chronos-2 and against the no-slots run at the same
+    checkpoint, with the paired ratio and its 90% interval. The no-slots
+    run built its 3-day blocks as daily, so 3-day blocks against no slots
+    are left out.
+    """
+    rows = check.loc[
+        (check["model"] == "slots") & (check["condition"] == "given")
+    ]
+    rows = rows.loc[
+        ~(rows["set"].str.contains("3day") & (rows["against"] == "no-slots"))
+    ]
+    return pd.DataFrame(
+        {
+            "Set": rows["set"],
+            "Window": rows["window"],
+            "Against": rows["against"],
+            "Slots loss": rows["loss"].round(2),
+            "Against loss": rows["against_loss"].round(2),
+            "Ratio (90% CI)": _ratio_ci(rows),
+        }
+    ).reset_index(drop=True)
+
+
+def slots_swap_table(check: pd.DataFrame) -> pd.DataFrame:
+    """Return each model's loss with lag series swapped between places.
+
+    The ratio of loss with whole lag series moved to another place to the
+    loss as given, with its 90% interval; 1 means the model does not tell
+    which place a lag series belongs to.
+    """
+    rows = check.loc[check["condition"] == "swap_places"]
+    return pd.DataFrame(
+        {
+            "Set": rows["set"],
+            "Window": rows["window"],
+            "Model": rows["model"],
+            "Ratio (90% CI)": _ratio_ci(rows),
+        }
+    ).reset_index(drop=True)
+
+
+def slots_scores_table(scores: pd.DataFrame) -> pd.DataFrame:
+    """Return the case studies' relative scores of both runs, matched.
+
+    Rows of `CHECKPOINT_RULE` for Germany's first half and BDBV: each
+    checkpoint of the slots run (`slots-<hash>`) beside the no-slots
+    run's checkpoint fine-tuned on as many outbreaks. Relative WIS for
+    Germany and relative CRPS for BDBV, against `randomwalknowcast`.
+    """
+    rows = scores
+    if "rule" in rows:
+        rows = rows.loc[rows["rule"] == CHECKPOINT_RULE]
+    rows = rows.loc[
+        rows["study"].isin(["germany", "ebola"]) & (rows["outbreaks"] > 0)
+    ]
+    if "rel_crps" in rows:
+        rows = rows.assign(rel_wis=rows["rel_wis"].fillna(rows["rel_crps"]))
+    slots = rows["checkpoint"].astype(str).str.startswith("slots-")
+    keys = ["study", "level", "model", "outbreaks"]
+    pairs = rows.loc[slots, [*keys, "rel_wis"]].merge(
+        rows.loc[~slots, [*keys, "rel_wis"]],
+        on=keys,
+        suffixes=("_slots", "_none"),
+    )
+    pairs = pairs.sort_values(keys).reset_index(drop=True)
+    return pd.DataFrame(
+        {
+            "Study": pairs["study"],
+            "Level": pairs["level"],
+            "Model": pairs["model"],
+            "Outbreaks": pairs["outbreaks"],
+            "Slots": pairs["rel_wis_slots"],
+            "No slots": pairs["rel_wis_none"],
+        }
+    )
 
 
 def _read(paths: Mapping[str, Path | None], name: str) -> pd.DataFrame | None:
@@ -730,6 +824,24 @@ def write_evidence(
     figure(
         "checkpoint-curve",
         None if ckpt is None else checkpoint_figure(ckpt),
+        ["checkpoint_scores"],
+    )
+    check = data["slots_check"]
+    table(
+        "slots-loss",
+        None if check is None else slots_loss_table(check),
+        ["slots_check"],
+    )
+    table(
+        "slots-swap",
+        None if check is None else slots_swap_table(check),
+        ["slots_check"],
+    )
+    table(
+        "slots-scores",
+        None
+        if data["checkpoint_scores"] is None
+        else slots_scores_table(data["checkpoint_scores"]),
         ["checkpoint_scores"],
     )
     curve = data["finetune_heldout"]
