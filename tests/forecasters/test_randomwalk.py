@@ -330,21 +330,23 @@ def test_a_silent_place_is_not_nowcast(runs) -> None:
     assert (sk.loc[sk["target_end_date"] <= start["CD-SK"], "value"] == 0).all()
 
 
-def test_a_place_with_no_week_to_start_from_draws_introductions(
+def test_a_place_with_no_week_to_start_from_starts_late_and_stays_small(
     task: ForecastTask,
 ) -> None:
     # Sud Ubangi has 2 cases ever, in the week of 10-03, so no week has
-    # enough cases to start a walk from. It takes the silent places' path
-    # from its latest complete week, so even a wide walk spread, as
-    # pprandomwalknowcast fits it, keeps its draws small: hundreds at most,
-    # where a walk from week 0 reached millions (#138).
+    # enough cases to start a walk from. It walks from its mean count from
+    # its latest complete week (#187), so even a wide walk spread, as
+    # pprandomwalknowcast fits it, keeps its draws small: a 0.9 spread over
+    # a few weeks reaches thousands at most, where a walk from week 0
+    # reached millions (#138).
     model = RandomWalkNowcast()
     origin = model.origin_at(task, errors=True)
     i = list(origin.snap.locations).index("CD-SU")
     origin.sigma[i] = 0.9
     values, _ = model.trajectories(origin, task, origin.point)
     su = values[:, i, :]
-    assert su.max() < 1000
+    assert su.max() < 10_000
+    assert np.median(su[:, -1]) < 5
     # Weeks with data keep at least the count reported.
     n_data = origin.reported.shape[1]
     assert (su[:, :n_data] >= origin.reported[i]).all()
