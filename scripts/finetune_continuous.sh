@@ -52,7 +52,7 @@ SERIES_SLOTS=${SERIES_SLOTS:-0}
 remote_ls() { on_rounds "ls $REMOTE_ROOT/rounds" 2> /dev/null; }
 # Copy a round's file or folder ($2, "sims/" for its simulations) to $3.
 pull() {
-  rsync -a --exclude '.tmp-*' "$(at_rounds "$REMOTE_ROOT/rounds/$1/$2")" "$3/"
+  rsync -a --exclude '.tmp-*' --exclude 'tmp/' "$(at_rounds "$REMOTE_ROOT/rounds/$1/$2")" "$3/"
 }
 
 sync_rounds() {
