@@ -150,3 +150,27 @@ def test_guard_rejects_scored_ebola_rounds() -> None:
     check_no_heldout(_table("ebola", "CD", f"{before:%Y-%m-%d}"), dev)
     with pytest.raises(ValueError, match="Ebola"):
         check_no_heldout(_table("ebola", "CD", f"{first:%Y-%m-%d}"), dev)
+
+
+def test_fine_tuned_rows_wait_for_a_checkpoint_of_the_final_run() -> None:
+    from paperpipe.config import keep_finetuned
+
+    fc = pd.DataFrame(
+        {
+            "model": [
+                "randomwalknowcast",
+                "fm_chronos_daily_ragged",
+                "fm_chronos_daily_ragged_ft",
+                "fm_chronos_weekly_ragged_ft_n1000",
+                "fm_chronos_daily_ragged_real",
+            ]
+        }
+    )
+    pending = keep_finetuned(fc, {"finetuned": None})
+    assert list(pending["model"]) == [
+        "randomwalknowcast",
+        "fm_chronos_daily_ragged",
+        "fm_chronos_daily_ragged_real",
+    ]
+    pinned = keep_finetuned(fc, {"finetuned": "abcdef123456"})
+    assert len(pinned) == len(fc)

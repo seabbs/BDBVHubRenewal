@@ -366,3 +366,58 @@ def test_checkpoint_rows_keep_one_grid_and_the_current_rule() -> None:
     # Old tables, with no grid or rule, pass as they are.
     old = rows.drop(columns=["grid", "rule", "rel_crps"]).iloc[:2]
     assert len(checkpoint_rows(old, grid="r4")) == 2
+
+
+def test_checkpoint_rows_without_a_grid_keep_only_zero_shot() -> None:
+    from paperpipe.evidence import checkpoint_rows
+
+    rows = pd.DataFrame(
+        {
+            "study": ["germany", "germany"],
+            "level": "national",
+            "model": "fm_chronos_daily_ragged",
+            "checkpoint": ["zero-shot", "6b7aaa8d4f55"],
+            "outbreaks": [0, 1000],
+            "n": 9,
+            "rel_wis": [2.0, 1.5],
+        }
+    )
+    out = checkpoint_rows(rows, grid="r4")
+    assert list(out["checkpoint"]) == ["zero-shot"]
+
+
+def test_grids_match_their_revisions() -> None:
+    from paperpipe.evidence import checkpoint_rows
+
+    rows = pd.DataFrame(
+        {
+            "study": "germany",
+            "level": "national",
+            "model": "fm_chronos_daily_ragged",
+            "checkpoint": ["a", "b", "c"],
+            "outbreaks": [1000, 2000, 4000],
+            "n": 9,
+            "rel_wis": 1.0,
+            "grid": ["r4", "r4.1", "r3"],
+        }
+    )
+    assert list(checkpoint_rows(rows, grid="r4")["checkpoint"]) == ["a", "b"]
+
+
+def test_joint_evidence_leaves_out_fine_tuned_rows_of_earlier_runs() -> None:
+    from paperpipe.evidence import drop_finetuned
+
+    rows = pd.DataFrame(
+        {
+            "model": [
+                "fm_chronos_daily_ragged",
+                "fm_chronos_daily_ragged_ft",
+                "fm_chronos_daily_ragged_ft_n1000",
+                "randomwalknowcast",
+            ]
+        }
+    )
+    assert list(drop_finetuned(rows)["model"]) == [
+        "fm_chronos_daily_ragged",
+        "randomwalknowcast",
+    ]
