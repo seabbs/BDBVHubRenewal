@@ -12,9 +12,11 @@ draws, so each cell keeps exactly the draws it had.
 
 The correlation of $z$ is a place correlation times a step correlation.
 Two steps $\delta$ days apart have correlation $\rho_t^{\delta / 7}$.
-Between places it is $\rho_p$ for two provinces and $\rho_n$ for the
-country and a province.
-`estimate_copula` estimates the three from the normal scores of matured
+Between places it is $\rho_p$ for two provinces, $\rho_n$ for the
+country and a province, and $\rho_z$ for two health zones of one
+province or a zone and its province. Zones of different provinces take
+$\rho_p$, and a zone and the country $\rho_n$.
+`estimate_copula` estimates the four from the normal scores of matured
 weeks at past origins (`normal_scores`), shrunk towards a prior.
 
 `pair_samples` pairs one forecast table, and `RollingCopula` pairs a
@@ -22,14 +24,16 @@ model's forecasts at every origin, each with the copula estimated from
 the model's own recent matured errors.
 `pair_registered` pairs the models registered as `paired`, those that
 draw each place and week on their own.
-A country that is the sum of its provinces is summed again from the
-paired provinces.
+Zones are paired in their own right. A province that is the sum of its
+zones is summed again from the paired zones, and a country that is the
+sum of its provinces from the paired provinces.
 """
 
 from __future__ import annotations
 
 import dataclasses
 import zlib
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Final
 
@@ -70,7 +74,18 @@ _FIT_COLUMNS = [
     "rho_time",
     "rho_provinces",
     "rho_national",
+    "rho_zones",
 ]
+
+
+def _is_zone(location: pd.Series) -> pd.Series:
+    """Return whether each location is a health zone (`CD-XX-YY`)."""
+    return location.astype(str).str.count("-") >= 2
+
+
+def _province(code: str) -> str:
+    """Return a zone's province, or the code itself."""
+    return code.rsplit("-", 1)[0] if code.count("-") >= 2 else code
 
 
 def _factor(corr: np.ndarray) -> np.ndarray:
@@ -99,16 +114,20 @@ class GaussianCopula:
     rho_provinces : float
         $\rho_p$, between two provinces in a week.
     rho_national : float
-        $\rho_n$, between the country and a province in a week.
+        $\rho_n$, between the country and a province or zone in a week.
+    rho_zones : float
+        $\rho_z$, between two zones of one province, or a zone and its
+        province, in a week.
     """
 
     rho_time: float = 0.0
     rho_provinces: float = 0.0
     rho_national: float = 0.0
+    rho_zones: float = 0.0
 
     def __post_init__(self) -> None:
         """Check each correlation is in [0, 1)."""
-        for name in ("rho_time", "rho_provinces", "rho_national"):
+        for name in ("rho_time", "rho_provinces", "rho_national", "rho_zones"):
             if not 0.0 <= getattr(self, name) < 1.0:
                 raise ValueError(f"{name} must be between 0 and 1 (not 1).")
 
@@ -119,11 +138,13 @@ class GaussianCopula:
         n_places: int,
         days: np.ndarray,
         national: bool = True,
+        locations: Sequence[str] | None = None,
+        country: str = NATIONAL,
     ) -> np.ndarray:
         r"""Draw correlated standard normals over places and steps.
 
-        Where $\rho_p$ and $\rho_n$ give no correlation matrix, a nearby
-        one is used (`_factor`).
+        Where the correlations give no correlation matrix, a nearby one is
+        used (`_factor`).
 
         Parameters
         ----------
@@ -137,17 +158,20 @@ class GaussianCopula:
             Day of each step.
         national : bool
             Whether the first place is the country. Otherwise every place
-            is a province.
+            is a province. Ignored with `locations`.
+        locations : sequence of str, optional
+            The places' codes, which say which is the country (`country`),
+            a province or a zone (`CD-XX-YY`). By default the first place
+            is the country if `national` and the others are provinces.
+        country : str
+            The country's code in `locations`.
 
         Returns
         -------
         numpy.ndarray
             `[n, n_places, len(days)]`.
         """
-        place = np.full((n_places, n_places), self.rho_provinces)
-        if national:
-            place[0, :] = place[:, 0] = self.rho_national
-        np.fill_diagonal(place, 1.0)
+        place = self.places(n_places, national, locations, country)
         days = np.asarray(days, dtype=float)
         step = self.rho_time ** (np.abs(np.subtract.outer(days, days)) / 7)
         e = rng.standard_normal((n, n_places, len(days)))
@@ -161,12 +185,41 @@ class GaussianCopula:
             )
         )
 
+    def places(
+        self,
+        n_places: int,
+        national: bool = True,
+        locations: Sequence[str] | None = None,
+        country: str = NATIONAL,
+    ) -> np.ndarray:
+        """Return the correlation between places, as `normals` uses it."""
+        if locations is None:
+            place = np.full((n_places, n_places), self.rho_provinces)
+            if national:
+                place[0, :] = place[:, 0] = self.rho_national
+            np.fill_diagonal(place, 1.0)
+            return place
+        codes = np.asarray(list(locations), dtype=object)
+        is_country = codes == country
+        zone = np.array([c.count("-") >= 2 for c in codes]) & ~is_country
+        parent = np.array([_province(c) for c in codes], dtype=object)
+        place = np.full((len(codes), len(codes)), self.rho_provinces)
+        same = (parent[:, None] == parent[None, :]) & (
+            zone[:, None] | zone[None, :]
+        )
+        place[same] = self.rho_zones
+        place[is_country, :] = self.rho_national
+        place[:, is_country] = self.rho_national
+        np.fill_diagonal(place, 1.0)
+        return place
+
     def order(
         self,
         draws: np.ndarray,
         rng: np.random.Generator,
         days: np.ndarray | None = None,
         national: bool = True,
+        locations: Sequence[str] | None = None,
     ) -> np.ndarray:
         """Return the trajectory each cell's draws go to.
 
@@ -180,6 +233,8 @@ class GaussianCopula:
             Day of each step, weekly steps by default.
         national : bool
             Whether the first place is the country.
+        locations : sequence of str, optional
+            The places' codes (`normals`).
 
         Returns
         -------
@@ -191,7 +246,7 @@ class GaussianCopula:
         n, n_places, n_steps = draws.shape
         if days is None:
             days = 7 * np.arange(n_steps)
-        z = self.normals(rng, n, n_places, days, national)
+        z = self.normals(rng, n, n_places, days, national, locations)
         rank = np.argsort(np.argsort(z, axis=0), axis=0)
         by_value = np.argsort(draws, axis=0, kind="stable")
         return np.take_along_axis(by_value, rank, axis=0)
@@ -202,6 +257,7 @@ class GaussianCopula:
         rng: np.random.Generator,
         days: np.ndarray | None = None,
         national: bool = True,
+        locations: Sequence[str] | None = None,
     ) -> np.ndarray:
         """Pair independent draws into trajectories (`order`).
 
@@ -215,19 +271,24 @@ class GaussianCopula:
             Day of each step, weekly steps by default.
         national : bool
             Whether the first place is the country.
+        locations : sequence of str, optional
+            The places' codes (`normals`).
 
         Returns
         -------
         numpy.ndarray
             The same draws of each cell, reordered across trajectories.
         """
-        index = self.order(draws, rng, days, national)
+        index = self.order(draws, rng, days, national, locations)
         return np.take_along_axis(draws, index, axis=0)
 
 
-PRIOR: Final = GaussianCopula(rho_time=0.9, rho_provinces=0.7, rho_national=0.7)
-"""The correlations estimates are shrunk towards, chosen on the Chronos-2
-models' release backtest energy score."""
+PRIOR: Final = GaussianCopula(
+    rho_time=0.9, rho_provinces=0.7, rho_national=0.7, rho_zones=0.7
+)
+"""The correlations estimates are shrunk towards. The first three were
+chosen on the Chronos-2 models' release backtest energy score; the zones'
+is set to the provinces' (no zone errors had matured to choose it)."""
 
 
 def _final(samples: pd.DataFrame) -> pd.Series:
@@ -238,14 +299,32 @@ def _final(samples: pd.DataFrame) -> pd.Series:
 
 
 def _summed(final: pd.DataFrame, national: str) -> bool:
-    """Whether the country is in `final` as the sum of the other places."""
+    """Whether the country is in `final` as the sum of the provinces."""
     is_nat = final["location"] == national
-    if not is_nat.any():
+    provinces = ~is_nat & ~_is_zone(final["location"])
+    return _sum_of(final, is_nat, provinces)
+
+
+def _sum_of(final: pd.DataFrame, parent: pd.Series, parts: pd.Series) -> bool:
+    """Whether the rows `parent` are, draw by draw, the sum of `parts`."""
+    if not parent.any() or not parts.any():
         return False
     keys = ["target_end_date", "sample"]
-    total = final.loc[~is_nat].groupby(keys)["value"].sum()
-    own = final.loc[is_nat].set_index(keys)["value"]
+    total = final.loc[parts].groupby(keys)["value"].sum()
+    own = final.loc[parent].set_index(keys)["value"]
     return bool(np.allclose(own.to_numpy(), total.reindex(own.index)))
+
+
+def _summed_provinces(final: pd.DataFrame) -> set[str]:
+    """Return the provinces in `final` that are the sum of their zones."""
+    zone = _is_zone(final["location"])
+    parents = final.loc[zone, "location"].map(_province)
+    out = set()
+    for prov in set(parents):
+        mine = zone & (final["location"].map(_province) == prov)
+        if _sum_of(final, final["location"] == prov, mine):
+            out.add(prov)
+    return out
 
 
 def pair_samples(
@@ -258,10 +337,10 @@ def pair_samples(
 
     Each place and week keeps its draws, and every row of a draw, such as
     its counts as a later release reports them (`as_of`), moves with it.
-    A health zone's draws move with its province's, so a draw's zones
-    still sum to its province.
-    A country that is the sum of the other places is not paired but
-    summed again from them.
+    Health zones are paired in their own right (`rho_zones`).
+    A province that is the sum of its zones is not paired but summed
+    again from them, and a country that is the sum of the provinces is
+    summed again from those.
 
     Parameters
     ----------
@@ -281,21 +360,21 @@ def pair_samples(
     pandas.DataFrame
         `samples` with the sample ids of each cell reordered.
     """
-    zone = samples["location"].str.count("-") >= 2
-    is_final = _final(samples)
-    final = samples.loc[is_final & ~zone]
+    final = samples.loc[_final(samples)]
     summed = _summed(final, national)
-    places = sorted(set(final["location"]) - {national})
+    sums = _summed_provinces(final)
+    places = sorted(set(final["location"]) - {national} - sums)
     own = not summed and bool((final["location"] == national).any())
     if own:
         places = [national, *places]
+    final = final.loc[final["location"].isin(places)]
     weeks = sorted(set(final["target_end_date"]))
     wide = final.pivot(
         index="sample", columns=["location", "target_end_date"], values="value"
     ).reindex(columns=pd.MultiIndex.from_product([places, weeks]))
     draws = wide.to_numpy().reshape(len(wide), len(places), len(weeks))
     days = (pd.to_datetime(weeks) - pd.Timestamp(weeks[0])).days.to_numpy()
-    index = copula.order(draws, rng, days, national=own)
+    index = copula.order(draws, rng, days, locations=places)
     ids = wide.index.to_numpy()
     moves = pd.DataFrame(
         {
@@ -306,22 +385,16 @@ def pair_samples(
         }
     )
     keys = ["location", "target_end_date", "sample"]
-    province = samples["location"].where(
-        ~zone, samples["location"].str.rsplit("-", n=1).str[0]
-    )
-    out = (
-        samples.assign(_place=province)
-        .merge(
-            moves.rename(columns={"location": "_place"}),
-            on=["_place", *keys[1:]],
-            how="left",
-        )
-        .drop(columns="_place")
-    )
+    out = samples.merge(moves, on=keys, how="left")
     out["sample"] = (
         out["paired"].fillna(out["sample"]).astype(samples["sample"].dtype)
     )
     out = out.drop(columns="paired")
+    for prov in sorted(sums):
+        mine = _is_zone(out["location"]) & (
+            out["location"].map(_province) == prov
+        )
+        out = _sum_into(out, out["location"] == prov, mine)
     if summed:
         out = _sum_country(out, national)
     return out[list(samples.columns)].reset_index(drop=True)
@@ -329,19 +402,27 @@ def pair_samples(
 
 def _sum_country(samples: pd.DataFrame, national: str) -> pd.DataFrame:
     """Set the country's rows to the sum of its provinces' rows."""
+    province = samples["location"].str.count("-") == 1
+    return _sum_into(samples, samples["location"] == national, province)
+
+
+def _sum_into(
+    samples: pd.DataFrame, parent: pd.Series, parts: pd.Series
+) -> pd.DataFrame:
+    """Set the rows `parent` to the sum of the rows `parts`, by draw."""
     keys = ["target_end_date", "sample"]
     if "as_of" in samples:
         keys.append("as_of")
-    is_nat = samples["location"] == national
-    province = samples["location"].str.count("-") == 1
     total = (
-        samples.loc[province]
+        samples.loc[parts]
         .groupby(keys, dropna=False)["value"]
         .sum()
         .rename("total")
     )
-    nat = samples.loc[is_nat].join(total, on=keys)
-    samples.loc[is_nat, "value"] = nat["total"].to_numpy()
+    rows = samples.loc[parent].join(total, on=keys)
+    have = rows["total"].notna().to_numpy()
+    idx = rows.index[have]
+    samples.loc[idx, "value"] = rows.loc[idx, "total"].to_numpy()
     return samples
 
 
@@ -417,7 +498,8 @@ def estimate_copula(
 
     Each is the correlation $r$ of the scores of pairs from one forecast:
     $\rho_t$ of a place's consecutive weeks, $\rho_p$ of two provinces in a
-    week, and $\rho_n$ of the country and a province in a week.
+    week, $\rho_n$ of the country and a province in a week, and $\rho_z$
+    of two zones of one province, or a zone and its province, in a week.
     With $n$ such pairs and the prior's $\rho_0$ each is
     $(n r + w \rho_0) / (n + w)$, the prior's where the pairs give no
     $r$, then floored at zero and capped at `MAX_RHO`.
@@ -448,13 +530,19 @@ def estimate_copula(
     same = scores.merge(scores, on=[*forecast, "week"], suffixes=("_a", "_b"))
     a_national = same["location_a"] == national
     b_national = same["location_b"] == national
+    a_zone = _is_zone(same["location_a"]) & ~a_national
+    b_zone = _is_zone(same["location_b"]) & ~b_national
+    ordered = same["location_a"] < same["location_b"]
     provinces = same.loc[
-        ~a_national & ~b_national & (same["location_a"] < same["location_b"])
+        ~a_national & ~b_national & ~a_zone & ~b_zone & ordered
     ]
+    kin = same["location_a"].map(_province) == same["location_b"].map(_province)
+    zones = same.loc[(a_zone | b_zone) & kin & ordered]
     pairs = {
         "rho_time": time,
         "rho_provinces": provinces,
-        "rho_national": same.loc[a_national & ~b_national],
+        "rho_national": same.loc[a_national & ~b_national & ~b_zone],
+        "rho_zones": zones,
     }
     out = {}
     for name, rows in pairs.items():
@@ -539,7 +627,7 @@ class RollingCopula:
         -------
         tuple of pandas.DataFrame
             The paired forecasts, and each model and origin's fit:
-            `model`, `origin`, `n_scores` and the three correlations.
+            `model`, `origin`, `n_scores` and the four correlations.
         """
         cells = ["location", "target_end_date"]
         released = truth[[*cells, "truth_vintage"]]
