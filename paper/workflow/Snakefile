@@ -644,9 +644,16 @@ rule evidence:
         ),
         si=f"{R}/{{mode}}/tables/si",
         fig=f"{R}/{{mode}}/figures/si",
+        # The fine-tuning grid whose checkpoints the curve shows.
+        grid=(
+            f"--checkpoint-grid {(EVIDENCE.get('checkpoint_scores') or {})['grid']}"
+            if (EVIDENCE.get("checkpoint_scores") or {}).get("grid")
+            else ""
+        ),
     shell:
         "{PYTHON} -m paperpipe evidence {params.args} --mode {wildcards.mode} "
-        "--si-dir {params.si} --fig-dir {params.fig} --out {output.yml}"
+        "--si-dir {params.si} --fig-dir {params.fig} --out {output.yml} "
+        "{params.grid}"
 
 
 rule summary:

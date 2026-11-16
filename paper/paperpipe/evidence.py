@@ -37,6 +37,7 @@ __all__ = [
     "aggregation_table",
     "checkpoint_figure",
     "checkpoint_numbers",
+    "checkpoint_rows",
     "copula_table",
     "cost_table",
     "diseases_table",
@@ -273,6 +274,37 @@ def lag_numbers(
         if m in a.index and m.startswith("fm_chronos")
     }
     return {"germany": de, "bdbv": bdbv}
+
+
+CHECKPOINT_RULE: Final = "own-quantile-wis_crps-1000-common"
+"""The scoring rule of the checkpoint rows the paper shows: WIS on each
+model's own quantiles for Germany, and CRPS on 1,000 draws with common
+random numbers for BDBV."""
+
+
+def checkpoint_rows(scores: pd.DataFrame, grid: str | None) -> pd.DataFrame:
+    """Return the checkpoint rows of one fine-tuning grid, under one rule.
+
+    Rows of `CHECKPOINT_RULE` are kept where the table records a rule, and
+    the case studies' rows only (not the held-out loss). Where it records
+    a grid, the checkpoints of `grid` are kept, with the zero-shot model.
+    BDBV's relative CRPS fills `rel_wis` where that is empty, so one
+    column holds each study's relative score.
+    """
+    out = scores
+    if "rule" in out:
+        out = out.loc[out["rule"] == CHECKPOINT_RULE]
+    out = out.loc[out["study"].isin(["germany", "ebola"])]
+    if "grid" in out and grid is not None:
+        keep = (out["checkpoint"] == "zero-shot") | (out["grid"] == grid)
+        out = out.loc[keep]
+    if "rel_crps" in out:
+        out = out.assign(rel_wis=out["rel_wis"].fillna(out["rel_crps"]))
+        if "rel_log_crps" in out and "rel_log_wis" in out:
+            out = out.assign(
+                rel_log_wis=out["rel_log_wis"].fillna(out["rel_log_crps"])
+            )
+    return out.reset_index(drop=True)
 
 
 MIN_CELLS: Final = 5
@@ -564,6 +596,7 @@ def write_evidence(
     si_dir: Path,
     fig_dir: Path,
     out_yml: Path,
+    checkpoint_grid: str | None = None,
 ) -> dict:
     """Write every evidence table and figure, and the numbers they quote.
 
@@ -575,6 +608,9 @@ def write_evidence(
         Folders for the SI tables and figures.
     out_yml : pathlib.Path
         The quoted numbers, as Quarto metadata under `evidence`.
+    checkpoint_grid : str, optional
+        The fine-tuning grid whose checkpoints the curve shows
+        (`checkpoint_rows`).
 
     Returns
     -------
@@ -634,6 +670,8 @@ def write_evidence(
         ["sim_diseases"],
     )
     ckpt = data["checkpoint_scores"]
+    if ckpt is not None:
+        ckpt = checkpoint_rows(ckpt, checkpoint_grid)
     figure(
         "checkpoint-curve",
         None if ckpt is None else checkpoint_figure(ckpt),

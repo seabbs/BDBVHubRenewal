@@ -189,7 +189,9 @@ def _joint(a: argparse.Namespace) -> None:
 
 def _evidence(a: argparse.Namespace) -> None:
     paths = {name: getattr(a, name) for name in EVIDENCE}
-    numbers = write_evidence(paths, a.si_dir, a.fig_dir, a.out)
+    numbers = write_evidence(
+        paths, a.si_dir, a.fig_dir, a.out, checkpoint_grid=a.checkpoint_grid
+    )
     if a.mode == "paper" and numbers["evidence"]["waiting"]:
         raise ValueError(
             "The paper run cannot leave SI results out; it waits on "
@@ -211,10 +213,10 @@ def _germany_extra(a: argparse.Namespace) -> None:
 
 
 def _summary(a: argparse.Namespace) -> None:
-    studies = {
-        read_meta(m)["study"]: study_summary(read_meta(m), pd.read_csv(t), a.mode)
-        for m, t in zip(a.meta, a.scores, strict=True)
-    }
+    studies = {}
+    for m, t in zip(a.meta, a.scores, strict=True):
+        meta = read_meta(m)
+        studies[meta["study"]] = study_summary(meta, pd.read_csv(t), a.mode)
     write_summary(a.out, a.mode, studies)
 
 
@@ -332,6 +334,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--si-dir", type=Path, required=True)
     p.add_argument("--fig-dir", type=Path, required=True)
     p.add_argument("--out", type=Path, required=True)
+    p.add_argument("--checkpoint-grid", default=None)
     p.set_defaults(run=_evidence)
 
     p = sub.add_parser("ebola-extra")

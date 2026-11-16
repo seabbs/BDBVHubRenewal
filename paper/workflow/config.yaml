@@ -124,6 +124,9 @@ evidence:
   checkpoint_scores:
     ref: a0ccfc67bc1471a2405eb4af3254310b087c92c3
     path: evidence/checkpoint-scores.csv
+    # The fine-tuning grid whose checkpoints the curve shows; the rows
+    # also carry the scoring rule, and only `CHECKPOINT_RULE`'s are shown.
+    grid: r3
   # The scale-floor test (fm-finetune3).
   scale_floor:
     ref: 500fe77caed9fdf846cfac9270b0be4179e742ee
