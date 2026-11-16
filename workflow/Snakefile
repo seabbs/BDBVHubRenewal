@@ -43,3 +43,4 @@ def git_commit():
 include: "rules/simulate.smk"
 include: "rules/finetune.smk"
 include: "rules/publish.smk"
+include: "rules/score.smk"

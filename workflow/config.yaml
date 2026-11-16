@@ -53,3 +53,17 @@ finetune:
   delays: data/delays.csv.gz
   # Zero-shot Chronos-2's loss on them, which n1000 should beat.
   zero_shot_real: 4.147
+
+score:
+  # Checkpoints to score, as labels (`<hash>`, `slots-<hash>`); null takes
+  # every checkpoint released from `published_from` (rule release_list).
+  labels: null
+  published_from: "2026-11-16T09:00:00Z"
+  # Labels scored beside every checkpoint: randomwalknowcast and zero-shot
+  # Chronos-2.
+  reference: [reference]
+  # A unit's memory cap (MB), at its measured 5 GB peak.
+  mem_mb: 6144
+  # The evidence tables the scores merge into, kept rows of other rules.
+  evidence: evidence/checkpoint-scores.csv
+  checkpoints: evidence/checkpoints.csv

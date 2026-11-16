@@ -155,3 +155,33 @@ def test_verify_alone_never_releases(tmp_path):
         config=FT,
     )
     assert jobs == {"verify_checkpoint": 1}
+
+
+def test_score_runs_three_units_a_checkpoint_and_the_reference(tmp_path):
+    config = {"score": {"labels": ["slots-aaa", "bbb"]}}
+    jobs = dry(tmp_path, "score", config=config)
+    assert jobs["score_bdbv"] == 3
+    assert jobs["score_germany"] == 3
+    assert jobs["score_heldout"] == 2
+    assert jobs["score_table"] == 1
+    assert "land" not in jobs
+
+
+def test_score_takes_checkpoints_from_the_release_list(tmp_path):
+    cache = tmp_path / "scores"
+    cache.mkdir()
+    (cache / "releases.json").write_text(
+        '[{"tagName": "chronos-slots-aaa",'
+        ' "publishedAt": "2026-11-16T12:00:00Z"}]'
+    )
+    jobs = dry(tmp_path, "score")
+    assert jobs["score_heldout"] == 1
+    assert "release_list" not in jobs
+
+
+def test_finished_units_are_kept(tmp_path):
+    (tmp_path / "scores" / "bdbv").mkdir(parents=True)
+    (tmp_path / "scores" / "bdbv" / "reference.done").write_text("")
+    config = {"score": {"labels": ["aaa"]}}
+    jobs = dry(tmp_path, "score", config=config)
+    assert jobs["score_bdbv"] == 1
