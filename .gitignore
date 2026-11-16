@@ -41,3 +41,4 @@ results/delay-summary.csv
 
 # Machine settings (scripts/local_config.sh); see config/local.env.example.
 config/local.env
+/.venv
