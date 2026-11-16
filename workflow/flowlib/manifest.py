@@ -1,8 +1,9 @@
-"""A round's manifest, one row per batch, as `scripts/sim_rounds.sh` wrote.
+"""A round's manifest, one row per batch.
 
 Each batch gets its row in a file of its own, and the round's
-`manifest.csv` joins them in seed order. A row the old driver already
-wrote is kept as it is, so switching to the workflow keeps its record.
+`manifest.csv` joins them in seed order. The columns must match the
+manifests of rounds already simulated, and a row a manifest already
+holds is kept as it is.
 """
 
 from __future__ import annotations

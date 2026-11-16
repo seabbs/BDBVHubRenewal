@@ -1,6 +1,5 @@
-# The slots checkpoints' follow-ups (were scripts/slots_check.sh,
-# scripts/agg/run_finetuned.sh and scripts/slots_followups.sh), each
-# after that checkpoint's main scores.
+# The slots checkpoints' follow-ups, each after that checkpoint's main
+# scores.
 #
 # Targets: part of `score`; one checkpoint's slots check,
 # <SCORE_CACHE>/slots-check/<label>/summary.csv, or aggregation rows,

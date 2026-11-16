@@ -7,7 +7,7 @@
 rounds: []
 
 simulate:
-  # As scripts/sim_rounds.sh: round r is `train_batches` training then
+  # Round r is `train_batches` training then
   # `held_batches` held-out batches from seed `seed_base` + 100 r, each
   # `batch` outbreaks with exactly `draws` observation draws.
   seed_base: 30000
@@ -22,7 +22,7 @@ simulate:
   repo: seabbs/BDBVHubRenewal
 
 finetune:
-  # The continuous run (was scripts/finetune_continuous.sh), one training
+  # The continuous run, one training
   # segment per prefix (`--until`), in <RUN>/train/n<N>/.
   prefixes: [250, 500, 750, 1000, 2000, 4000, 8000]
   outbreaks: 8000
@@ -36,7 +36,7 @@ finetune:
   # Where the batches come from: `local` (this machine's rounds) or
   # `release` (the sims-r<N> releases).
   sims_from: local
-  # Chronos-2's recipe, as the continuous driver ran it.
+  # Chronos-2's recipe.
   grid: r4
   draws: 2
   subset_seed: 1
@@ -52,7 +52,8 @@ finetune:
   real_validation: output/finetune/real-validation.pkl
   # `task data` writes it.
   delays: data/delays.csv.gz
-  # Zero-shot Chronos-2's loss on them, which n1000 should beat.
+  # The checkpoint checked against zero-shot Chronos-2's loss on them.
+  check_at: 1000
   zero_shot_real: 4.147
 
 score:
@@ -81,8 +82,8 @@ slots_check:
   mem_mb: 6144
 
 agg:
-  # The aggregation arms of each slots checkpoint (scripts/agg/), as
-  # scripts/agg/run_finetuned.sh ran them: data pinned to the hub at
+  # The aggregation arms of each slots checkpoint (scripts/agg/): data
+  # pinned to the hub at
   # `hub_ref`, the models' fits at the BDBV origins and every German
   # development date (`dates: []`), the paired arm, scores and rows.
   run: true

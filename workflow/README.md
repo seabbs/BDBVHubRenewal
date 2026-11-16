@@ -40,7 +40,7 @@ The workflow uses:
 - paths: `ROOT` (rounds), `RUN` (the fine-tuning run), `SCORE_CACHE`, `NOSLOTS_RUN` and `GERMANY_BLOCKS` (the slots check's);
 - what this machine does: `TARGETS` (what `all` runs; by default `simulate finetune score`, so archie sets `simulate score` and the laptop `finetune`), `SIMS_FROM` (`local` or `release`), `PUBLISH` (release each checkpoint as it is trained);
 - resources: `JOB_PREFIX` (a per-job memory cap such as a `systemd-run` scope; `{mem}` becomes the job's budget), `MIN_FREE_GB` and `MIN_DISK_GB` (room a heavy job waits for), and the Taskfile's `CORES`, `MEM_MB` and `SIM_SLOTS`;
-- `HOST_NAME`, and `NOTIFY` with `MAILBOX`: with `NOTIFY` set, a mailbox line when a round is ready, a checkpoint is saved or published, n1000 misses zero-shot, scores land or a run fails.
+- `HOST_NAME`, and `NOTIFY` with `MAILBOX`: with `NOTIFY` set, a mailbox line when a round is ready, a checkpoint is saved or published, the checked checkpoint misses zero-shot, scores land or a run fails.
 
 Task reads `config/local.env` itself, not `$LOCAL_CONFIG`.
 
@@ -56,7 +56,7 @@ Each machine reruns its task on a timer as releases land.
 Round r is 40 training and 4 held-out batches of 25 outbreaks, seeds from 30000 + 100 r, each with exactly 10 observation draws.
 
 - `simulate_batch`: one batch of `scripts/finetune_simulate.R`, under `JOB_PREFIX` at nice 19, once there is memory and disk to spare (`workflow/scripts/wait_for_room.sh`). A batch that fails is retried once at the higher cap. The simulator must be the committed one.
-- `batch_record`: the batch's manifest row (sha256 of each file, memory, time, grid, commit, host), keeping a row the old driver wrote.
+- `batch_record`: the batch's manifest row (sha256 of each file, memory, time, grid, commit, host), keeping a row the round's manifest already holds.
 - `round_manifest`: the round's `manifest.csv`, rows in seed order.
 - `sim_qc`: the recorded sim-QC review (`scripts/sim_qc.py`), whose exclusions (`qc/excluded.csv`) the trainer skips. Nothing is deleted.
 - `round_ready`: the seed lists and `READY`, last.
@@ -75,7 +75,7 @@ The state carries the learning-rate schedule, the step, the batch position and t
 - `fetch_batch`: a batch into `<RUN>/sims/`, hard linked from this machine's rounds or downloaded from its release (`sims_from`).
 - `real_validation`: the BDBV pseudo-origin blocks each checkpoint is scored on (`scripts/finetune_real_validation.py`).
 - `train_segment`: one segment on the GPU. Its inputs are the batches that hold its first N outbreaks after QC exclusions, one spare, and the held-out batches. A finished checkpoint is final and is never retrained.
-- `n1000_check`: a report of whether n1000 beats zero-shot on the held-out simulations and the pseudo-origins. It never stops training.
+- `checkpoint_check`: a report of whether checkpoint `check_at` (1,000) beats zero-shot on the held-out simulations and the pseudo-origins. It never stops training.
 - `finetune`: every prefix.
 
 Outputs are in `<RUN>/train/n<N>/`.

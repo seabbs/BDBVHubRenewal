@@ -1,4 +1,4 @@
-# Fine-tuning (was scripts/finetune_continuous.sh).
+# Fine-tuning.
 #
 # One continuous run of scripts/finetune_stream.py from base Chronos-2,
 # cut into one segment per checkpoint prefix: segment N resumes from the
@@ -152,10 +152,23 @@ rule train_segment:
     log:
         f"{TRAIN}/n{{n}}.log",
     params:
-        prev=lambda wc: (
-            f"{TRAIN}/n{PREV[int(wc.n)]}/state" if PREV[int(wc.n)] else ""
+        prev_args=lambda wc: (
+            f"--prev {TRAIN}/n{PREV[int(wc.n)]}/state "
+            f"--prev-n {PREV[int(wc.n)]}"
+            if PREV[int(wc.n)]
+            else ""
         ),
-        prev_n=lambda wc: PREV[int(wc.n)] or "None",
+        # The released exclusions of the rounds this segment trains on.
+        release_args=lambda wc: (
+            "--release-rounds "
+            + " ".join(
+                str(r)
+                for r in sorted({round_of(s) for s in segment_seeds(int(wc.n))})
+            )
+            + f" --repo {SIM['repo']}"
+            if FT["sims_from"] == "release"
+            else ""
+        ),
         held=lambda wc: f"{held_seeds()[0]} {held_seeds()[-1]}",
         prefixes=" ".join(str(p) for p in FT["prefixes"]),
         stop_from=FT["outbreaks"] + 1,
@@ -168,9 +181,6 @@ rule train_segment:
         if FT["series_slots"]
         else "",
         device=LOCAL.get("DEVICE") or os.environ.get("DEVICE", "auto"),
-        from_releases=FT["sims_from"] == "release",
-        rounds=" ".join(str(r) for r in FT["rounds"]),
-        repo=SIM["repo"],
         hf_home=LOCAL.get("HF_HOME", "output/finetune/hf"),
         watermark=LOCAL.get("MPS_HIGH_WATERMARK", "0.85"),
     resources:
@@ -179,21 +189,8 @@ rule train_segment:
         # The run's own state resumes it; the state kept with the prefix
         # before replaces it if missing or behind (flowlib.segments).
         """
-        python -c "import sys; sys.path.insert(0, 'workflow'); \
-from flowlib import segments; \
-print(segments.resume_state('{TRAIN}/state', '{params.prev}' or None, \
-{params.prev_n}))" > {log}
-        if [ "{params.from_releases}" = True ]; then
-          mkdir -p {RUN}/excluded-releases
-          for r in {params.rounds}; do
-            gh release download sims-r$r -R {params.repo} --clobber \
-              -D {RUN}/excluded-releases -p "excluded-r$r.csv" 2> /dev/null || true
-          done
-        fi
-        python -c "import sys, glob; sys.path.insert(0, 'workflow'); \
-from flowlib import segments; \
-segments.gather_exclusions(glob.glob('{ROUNDS_DIR}/r*/qc/excluded.csv') \
-+ glob.glob('{RUN}/excluded-releases/*.csv'), '{RUN}/excluded.csv')"
+        uv run python workflow/scripts/prepare_segment.py {TRAIN} {RUN} \
+          {ROUNDS_DIR} {params.prev_args} {params.release_args} > {log}
         DEVICE={params.device} HF_HOME={params.hf_home} HF_HUB_OFFLINE=1 \
         PYTORCH_MPS_HIGH_WATERMARK_RATIO={params.watermark} \
         PYTORCH_MPS_LOW_WATERMARK_RATIO=0.6 MPLCONFIGDIR="${{TMPDIR:-/tmp}}" \
@@ -210,18 +207,22 @@ segments.gather_exclusions(glob.glob('{ROUNDS_DIR}/r*/qc/excluded.csv') \
           --note "{FT[note]}" --chunk {FT[chunk]} \
           --exclude {RUN}/excluded.csv {params.slots} \
           --until {wildcards.n} >> {log} 2>&1
-        python workflow/scripts/notify.py "checkpoint n{wildcards.n} saved," \
-          "hash $(python -c "import json; print(json.load(open('{output.settings}'))['hash'])")"
+        uv run python workflow/scripts/segment_saved.py {output.settings} \
+          {wildcards.n}
         """
 
 
-rule n1000_check:
-    # A report, never a gate: does n1000 beat zero-shot on the held-out
-    # simulations and the BDBV pseudo-origins?
+CHECK = FT.get("check_at", 1000)
+AFTER = [n for n in sorted(FT["prefixes"]) if n > CHECK]
+
+
+rule checkpoint_check:
+    # A report, never a gate: does checkpoint `check_at` beat zero-shot on
+    # the held-out simulations and the BDBV pseudo-origins?
     input:
-        f"{TRAIN}/n1000/settings.json",
+        f"{TRAIN}/n{CHECK}/settings.json",
     output:
-        f"{RUN}/reports/n1000-check.txt",
+        f"{RUN}/reports/n{CHECK}-check.txt",
     params:
         zero_shot=FT["zero_shot_real"],
     localrule: True
@@ -233,13 +234,14 @@ rule n1000_check:
         held = s["held_out_loss"] < s["held_out_loss_start"]
         ok = held and real < params.zero_shot
         text = (
-            f"n1000 {'beats' if ok else 'does NOT beat'} zero-shot: "
+            f"n{CHECK} {'beats' if ok else 'does NOT beat'} zero-shot: "
             f"held-out {s['held_out_loss']:.4f} vs "
             f"{s['held_out_loss_start']:.4f}, real {real:.4f} vs "
             f"{params.zero_shot}"
         )
         Path(output[0]).write_text(text + "\n")
-        say(text if ok else f"ALERT {text}; training goes on, check before n2000")
+        nxt = f", check before n{AFTER[0]}" if AFTER else ""
+        say(text if ok else f"ALERT {text}; training goes on{nxt}")
 
 
 def trainable():
@@ -263,4 +265,4 @@ rule finetune:
         lambda wc: expand(f"{TRAIN}/n{{n}}/published.json", n=trainable())
         if LOCAL["PUBLISH"]
         else [],
-        [f"{RUN}/reports/n1000-check.txt"] if 1000 in FT["prefixes"] else [],
+        [f"{RUN}/reports/n{CHECK}-check.txt"] if CHECK in FT["prefixes"] else [],

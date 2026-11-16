@@ -43,7 +43,8 @@ def round_seeds(
 ) -> tuple[list[int], list[int]]:
     """Return a round's training and held-out batch seeds.
 
-    As `scripts/sim_rounds.sh`: round r takes the seeds from
+    Must match the seeds of rounds already simulated: round r takes the
+    seeds from
     `base + 100 r`, its `train` training batches then `held` held-out.
     """
     first = base + 100 * round_

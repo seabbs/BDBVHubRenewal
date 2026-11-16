@@ -68,4 +68,4 @@ rule all:
 
 
 onerror:
-    say(f"FAILED, see {log}")
+    say(f"FAILED; the failing rule and its error are in the Snakemake log {log}")

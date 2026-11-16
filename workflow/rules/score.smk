@@ -1,4 +1,4 @@
-# Checkpoint scoring (was scripts/checkpoint_poll.py).
+# Checkpoint scoring.
 #
 # Each checkpoint label gets three units of scripts/checkpoint_scores.py:
 # `germany` (WIS on the German development half), `bdbv` (sample CRPS on

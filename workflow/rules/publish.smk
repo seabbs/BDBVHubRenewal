@@ -1,4 +1,4 @@
-# Publishing checkpoints (was the trainer's `--publish`).
+# Publishing checkpoints.
 #
 # `verify_checkpoint` checks that a checkpoint's hash recomputes from its
 # commit (scripts/finetune_verify.py); `publish_checkpoint` releases a
@@ -31,7 +31,7 @@ rule publish_checkpoint:
     shell:
         """
         uv run python workflow/scripts/publish_checkpoint.py {params.where} {output}
-        python workflow/scripts/notify.py "checkpoint n{wildcards.n} published:" \
+        uv run python workflow/scripts/notify.py "checkpoint n{wildcards.n} published:" \
           "$(cat {output})"
         """
 

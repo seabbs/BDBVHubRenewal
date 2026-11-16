@@ -1,4 +1,4 @@
-# Simulation rounds (was scripts/sim_rounds.sh).
+# Simulation rounds.
 #
 # Round r is the batches of `flowlib.segments.round_seeds`, each
 # scripts/finetune_simulate.R with exactly `draws` observation draws, into
