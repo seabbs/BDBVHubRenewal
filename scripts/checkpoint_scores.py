@@ -52,15 +52,10 @@ import numpy as np
 import pandas as pd
 
 TAG_PREFIX = "chronos-ft-"
-BACKLOG = (
-    "6b7aaa8d4f55",
-    "3d3bc724bbfa",
-    "e8a1f5ae338b",
-    "0cea0acef1ce",
-    "2c2b22a03107",
-)
-"""Checkpoints published before this job, scored after any new one: the
-r3 run's first, then the earlier runs'."""
+PUBLISHED_FROM = "2026-11-16T09:00:00Z"
+"""The first publish time scored: the paper uses only the checkpoints of
+the continuous run the laptop trainer publishes from about 09:30 that
+day; r3's and earlier runs' checkpoints are never scored."""
 REFERENCE_PIN = "e8a1f5ae338b"
 """The checkpoint the reference runs pin, which they never load."""
 RULE = "own-quantile-wis_crps-1000-common"
@@ -105,22 +100,21 @@ HELD_OUT_LEVELS = ("leaf", "national", "intermediate")
 def checkpoint_queue(
     releases: Iterable[Mapping[str, str]],
     scored: set[str],
-    backlog: Sequence[str] = BACKLOG,
+    published_from: str = PUBLISHED_FROM,
 ) -> list[str]:
-    """Return the checkpoints to score, in the order to score them.
+    """Return the checkpoints to score, oldest published first.
 
-    Checkpoints not in `backlog` come first, oldest published first,
-    then the backlog in its own order. Scored checkpoints and releases
-    of other prefixes are left out.
+    Only releases published from `published_from` are taken. Scored
+    checkpoints and releases of other prefixes are left out.
     """
     published = {
         r["tagName"].removeprefix(TAG_PREFIX): r["publishedAt"]
         for r in releases
         if r["tagName"].startswith(TAG_PREFIX)
+        and r["publishedAt"] >= published_from
     }
     todo = {h: t for h, t in published.items() if h not in scored}
-    new = sorted((h for h in todo if h not in backlog), key=todo.__getitem__)
-    return new + [h for h in backlog if h in todo]
+    return sorted(todo, key=todo.__getitem__)
 
 
 def scored_checkpoints(evidence: pd.DataFrame) -> set[str]:

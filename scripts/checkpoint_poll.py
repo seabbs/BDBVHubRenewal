@@ -1,8 +1,10 @@
 """Score each chronos-ft checkpoint as it is published, for good.
 
 Every `POLL_SECONDS` the poller lists the repository's releases and takes
-the first checkpoint `checkpoint_scores.checkpoint_queue` gives: new
-releases first, then the backlog published before it started. It runs
+the first checkpoint `checkpoint_scores.checkpoint_queue` gives: the new
+continuous run's releases, oldest first (published from
+`checkpoint_scores.PUBLISHED_FROM`). Before any, it scores and lands the
+zero-shot reference (randomwalknowcast and base Chronos-2). It runs
 the checkpoint's units (`units_for`, each a `checkpoint_scores.py`
 process in its own systemd scope of `SCOPE_GB`, at nice 19 with one
 thread), starting one only while `can_launch` allows, rebuilds the
@@ -52,6 +54,8 @@ KEEP_FREE_GB = 16
 MIN_DISK_GB = 3
 DATA_HOURS = 6
 MAX_FAILURES = 2
+REFERENCE_STAMP = "reference.landed"
+"""In the cache: the commit the zero-shot reference rows landed at."""
 
 
 def can_launch(budget: Mapping[str, Any], mem_avail_gb: float) -> bool:
@@ -77,6 +81,13 @@ def units_for(checkpoint: str, scored: set[str]) -> list[tuple[str, str]]:
         ("bdbv", checkpoint),
         *(("bdbv", s) for s in sorted(scored)),
     ]
+
+
+def reference_pending(cache: Path) -> list[tuple[str, str]]:
+    """Return the zero-shot reference's units, until its rows have landed."""
+    if (cache / REFERENCE_STAMP).exists():
+        return []
+    return [("germany", cs.REFERENCE), ("bdbv", cs.REFERENCE)]
 
 
 def mailbox_line(text: str, when: str | None = None) -> str:
@@ -338,6 +349,20 @@ def main(cache: Path) -> None:
             log(f"release list failed: {err}")
             time.sleep(POLL_SECONDS)
             continue
+        pending = reference_pending(cache)
+        if pending:
+            log("progress: zero-shot reference started")
+            if not run_units(cache, pending, "zero-shot reference"):
+                say("FAILED the zero-shot reference run; retrying later")
+                time.sleep(POLL_SECONDS)
+                continue
+            sha = land(cache, [], "zero-shot reference")
+            if sha is None:
+                raise SystemExit(1)
+            (cache / REFERENCE_STAMP).write_text(sha + "\n")
+            say(f"zero-shot reference rows landed at {sha[:9]} on "
+                f"{BRANCH}; scoring works end to end")  # fmt: skip
+            continue
         evidence = cs.pd.read_csv(EVIDENCE, dtype={"checkpoint": str})
         scored = cs.scored_checkpoints(evidence)
         queue = [
@@ -362,8 +387,7 @@ def main(cache: Path) -> None:
             time.sleep(POLL_SECONDS)
             continue
         checkpoint = queue[0]
-        kind = "backlog" if checkpoint in cs.BACKLOG else "new"
-        log(f"progress: {checkpoint} ({kind}) started, {len(queue)} waiting")
+        log(f"progress: {checkpoint} started, {len(queue)} waiting")
         if not run_units(cache, units_for(checkpoint, scored), checkpoint):
             failures[checkpoint] = failures.get(checkpoint, 0) + 1
             if failures[checkpoint] >= MAX_FAILURES:
