@@ -34,6 +34,7 @@ HELD_BATCHES=${HELD_BATCHES:-4}
 DRAWS=10
 SLOTS=${SLOTS:-3}
 MIN_FREE_GB=${MIN_FREE_GB:-20}
+MIN_DISK_GB=${MIN_DISK_GB:-16}
 SLOT_STAGGER=${SLOT_STAGGER:-120}
 SLOT_MEM=${SLOT_MEM:-16G}
 RETRY_MEM=${RETRY_MEM:-20G}
@@ -52,15 +53,23 @@ round_seeds() {
 sha() { if [ -f "$1" ]; then sha256sum "$1" | cut -d' ' -f1; fi; }
 
 # Run batch seed $1 of round dir $2 at memory $3; 0 if the run exited
-# cleanly and wrote readable counts and settings.
+# cleanly and wrote readable counts and settings. R and Stan write their
+# temporary files (standata up to 1 GB) to a TMPDIR of the batch's own,
+# removed when the batch ends however it ends, so a batch killed at its
+# memory cap leaves nothing behind.
 run_batch() {
-  local seed=$1 dir=$2 mem=$3 log
+  local seed=$1 dir=$2 mem=$3 log tmp rc=0
   log=$dir/sims/logs/$seed.log
-  ENW_DRAWS=$DRAWS systemd-run --user --scope -q -p MemoryMax="$mem" \
-    -p MemorySwapMax=0 /usr/bin/time -f "peak_rss_kb %M wall_s %e" \
+  tmp=$dir/sims/tmp/$seed
+  rm -rf "$tmp"
+  mkdir -p "$tmp"
+  TMPDIR=$tmp ENW_DRAWS=$DRAWS systemd-run --user --scope -q \
+    -p MemoryMax="$mem" -p MemorySwapMax=0 \
+    /usr/bin/time -f "peak_rss_kb %M wall_s %e" \
     nice -n 19 Rscript scripts/finetune_simulate.R "$BATCH" "$seed" \
-    "$dir/sims" > "$log" 2>&1 || return 1
-  [ -s "$dir/sims/settings-$seed.csv" ] && \
+    "$dir/sims" > "$log" 2>&1 || rc=1
+  rm -rf "$tmp"
+  [ "$rc" = 0 ] && [ -s "$dir/sims/settings-$seed.csv" ] && \
     [ -s "$dir/sims/counts-$seed.csv.gz" ] && \
     gzip -t "$dir/sims/counts-$seed.csv.gz" 2> /dev/null
 }
@@ -89,6 +98,28 @@ recorded() { grep -q "^$ROUND,$1," "$2/manifest.csv"; }
 # Available memory in GB.
 free_gb() { awk '/MemAvailable/ {print int($2 / 1048576)}' /proc/meminfo; }
 
+# Free disk in GB where the rounds are written.
+disk_gb() { df -Pk "$ROOT" | awk 'NR == 2 {print int($4 / 1048576)}'; }
+
+# Whether there is room for a batch: memory and disk.
+room() {
+  [ "$(free_gb)" -ge "$MIN_FREE_GB" ] && [ "$(disk_gb)" -ge "$MIN_DISK_GB" ]
+}
+
+# Wait for room, saying once when the disk is why.
+wait_for_room() {
+  local said=0
+  until room; do
+    if [ "$(disk_gb)" -lt "$MIN_DISK_GB" ] && [ "$said" = 0 ]; then
+      say "round $ROUND: launching paused, $(disk_gb) GB disk free (below $MIN_DISK_GB GB)"
+      said=1
+    fi
+    sleep 60
+  done
+  [ "$said" = 1 ] && say "round $ROUND: launching resumed, $(disk_gb) GB disk free"
+  return 0
+}
+
 # Whether a simulation of seed $1 into round dir $2 is already running
 # (a batch left by an earlier driver).
 running() { pgrep -f "finetune_simulate.R $BATCH $1 $2/sims" > /dev/null; }
@@ -111,13 +142,19 @@ reconcile() {
 
 # Run the seeds of round dir $1 with $SLOTS slots. Each slot takes the
 # next seed no slot holds (an atomic lock directory), skips seeds the
-# laptop claims, and starts a batch only with $MIN_FREE_GB GB available.
+# laptop claims, and starts a batch only with $MIN_FREE_GB GB of memory
+# and $MIN_DISK_GB GB of disk available.
 simulate_round() {
   local dir=$1 total
   mapfile -t seeds < <(round_seeds "$ROUND")
   total=${#seeds[@]}
   # Locks of an earlier driver are stale, except for batches still running.
   rm -rf "$dir"/sims/.lock-*
+  # So are the temporary folders of batches no longer running.
+  for tmp in "$dir"/sims/tmp/*; do
+    [ -d "$tmp" ] || continue
+    running "$(basename "$tmp")" "$dir" || rm -rf "$tmp"
+  done
   slot() {
     local s k kind n
     for k in "${!seeds[@]}"; do
@@ -132,11 +169,11 @@ simulate_round() {
         reconcile "$dir"
         continue
       fi
-      while [ "$(free_gb)" -lt "$MIN_FREE_GB" ]; do sleep 60; done
+      wait_for_room
       if ! run_batch "$s" "$dir" "$SLOT_MEM"; then
         say "round $ROUND batch $s failed at $SLOT_MEM; retrying at $RETRY_MEM ($(tail -n 2 "$dir/sims/logs/$s.log" | tr '\n' ' ' | cut -c1-200))"
         mv "$dir/sims/logs/$s.log" "$dir/sims/logs/$s.first.log"
-        while [ "$(free_gb)" -lt "$MIN_FREE_GB" ]; do sleep 60; done
+        wait_for_room
         if ! run_batch "$s" "$dir" "$RETRY_MEM"; then
           say "round $ROUND batch $s failed again; skipped (log $dir/sims/logs/$s.log)"
           continue
@@ -157,6 +194,8 @@ simulate_round() {
   wait
   reconcile "$dir"
 }
+
+[[ "${BASH_SOURCE[0]}" != "$0" ]] && return 0
 
 first=$1
 last=${2:-1000000}
