@@ -1,4 +1,4 @@
-"""Score each chronos-ft checkpoint as it is published, for good.
+"""Score each published checkpoint (slots run first), for good.
 
 Every `POLL_SECONDS` the poller lists the repository's releases and takes
 the first checkpoint `checkpoint_scores.checkpoint_queue` gives: the new
@@ -88,6 +88,17 @@ def reference_pending(cache: Path) -> list[tuple[str, str]]:
     if (cache / REFERENCE_STAMP).exists():
         return []
     return [("germany", cs.REFERENCE), ("bdbv", cs.REFERENCE)]
+
+
+FOLLOW_UPS = Path(__file__).parent / "slots_followups.sh"
+"""Started, detached, once a slots checkpoint's rows land."""
+
+
+def follow_ups(checkpoint: str) -> list[str] | None:
+    """Return the follow-up jobs' command for a slots checkpoint, or None."""
+    if not checkpoint.startswith("slots-"):
+        return None
+    return [str(FOLLOW_UPS), checkpoint]
 
 
 def mailbox_line(text: str, when: str | None = None) -> str:
@@ -400,6 +411,16 @@ def main(cache: Path) -> None:
             continue
         log(f"progress: {checkpoint} landed at {sha}")
         note_paper(sha, checkpoint, cache)
+        cmd = follow_ups(checkpoint)
+        if cmd is not None:
+            out = cache.parent / "log" / f"followups-{checkpoint}.log"
+            with out.open("a") as f:
+                subprocess.Popen(
+                    cmd, stdout=f, stderr=f, stdin=subprocess.DEVNULL,
+                    start_new_session=True,
+                )  # fmt: skip
+            say(f"{checkpoint}: started the aggregation arms and the "
+                f"slots check ({cmd[0]}); log {out}")  # fmt: skip
 
 
 if __name__ == "__main__":

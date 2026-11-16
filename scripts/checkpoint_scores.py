@@ -52,6 +52,9 @@ import numpy as np
 import pandas as pd
 
 TAG_PREFIX = "chronos-ft-"
+SLOTS_TAG_PREFIX = "chronos-slots-"
+"""The final run's releases (series slots), named `slots-<hash>` as the
+paper pins them (`foundation.release_tag`)."""
 PUBLISHED_FROM = "2026-11-16T09:00:00Z"
 """The first publish time scored: the paper uses only the checkpoints of
 the continuous run the laptop trainer publishes from about 09:30 that
@@ -102,19 +105,32 @@ def checkpoint_queue(
     scored: set[str],
     published_from: str = PUBLISHED_FROM,
 ) -> list[str]:
-    """Return the checkpoints to score, oldest published first.
+    """Return the checkpoints to score: slots ones first, oldest first.
 
-    Only releases published from `published_from` are taken. Scored
+    Only releases published from `published_from` are taken. The final
+    run's `chronos-slots-<hash>` releases come first, as `slots-<hash>`,
+    then the no-slots run's `chronos-ft-<hash>` ones, as `<hash>`. Scored
     checkpoints and releases of other prefixes are left out.
     """
-    published = {
-        r["tagName"].removeprefix(TAG_PREFIX): r["publishedAt"]
-        for r in releases
-        if r["tagName"].startswith(TAG_PREFIX)
-        and r["publishedAt"] >= published_from
-    }
+    published = {}
+    for r in releases:
+        tag = r["tagName"]
+        if r["publishedAt"] < published_from:
+            continue
+        if tag.startswith(SLOTS_TAG_PREFIX):
+            label = "slots-" + tag.removeprefix(SLOTS_TAG_PREFIX)
+            published[label] = (0, r["publishedAt"])
+        elif tag.startswith(TAG_PREFIX):
+            published[tag.removeprefix(TAG_PREFIX)] = (1, r["publishedAt"])
     todo = {h: t for h, t in published.items() if h not in scored}
     return sorted(todo, key=todo.__getitem__)
+
+
+def release_of(label: str) -> str:
+    """Return a checkpoint label's release tag."""
+    from bdbvhubrenewal.forecasters.foundation import release_tag
+
+    return release_tag(label)
 
 
 def scored_checkpoints(evidence: pd.DataFrame) -> set[str]:
@@ -384,7 +400,7 @@ def held_out_unit(cache: Path, checkpoint: str) -> None:
     """Fetch a release's settings.json and its title and body."""
     root = cache / "heldout"
     root.mkdir(parents=True, exist_ok=True)
-    tag = f"{TAG_PREFIX}{checkpoint}"
+    tag = release_of(checkpoint)
     repo = ["-R", "seabbs/BDBVHubRenewal"]
     out = str(root / f"{checkpoint}.json")
     get = ["gh", "release", "download", tag, *repo, "-p", "settings.json"]
