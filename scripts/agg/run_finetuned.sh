@@ -9,10 +9,14 @@
 # scripts/slots_followups.sh starts this from this worktree once a slots
 # checkpoint's scores land.
 #
-# Runs queue on AGG_ROOT/lock, one at a time. A slots run takes the newest
-# chronos-slots release when it starts, skipping older ones (said in the
-# mailbox); a run in progress is never interrupted. Each checkpoint adds or
-# replaces its own rows and keeps every other checkpoint's.
+# One run at a time on AGG_ROOT/lock; a caller that finds it held exits 0.
+# A slots run takes the newest eligible chronos-slots release when it
+# starts: random-init slots (settings series_slots.init != "zero"), most
+# n_outbreaks. Older and zero-init ones are skipped and named in the
+# mailbox; a label already done, or older than one done, exits 0. A run in
+# progress is never interrupted; when it finishes it runs itself again as
+# `next`, to take any newer checkpoint. Each checkpoint adds or replaces
+# its own rows and keeps every other checkpoint's.
 #
 # Waits for the release and its sha256sums.txt, then, one process at a
 # time, each in a memory-capped scope at nice 19 with one thread:
@@ -36,7 +40,7 @@
 # AGG_GROUPINGS (default "joint level bottom") limits the fitted arms.
 set -Eeuo pipefail
 
-label=${1:?usage: run_finetuned.sh LABEL [--dry]}
+label=${1:?usage: run_finetuned.sh LABEL|next [--dry]}
 dry=${2:-}
 here=$(cd "$(dirname "$0")/../.." && pwd)
 cd "$here"
@@ -73,34 +77,32 @@ say() {
 }
 trap 'say "FAILED at line $LINENO (exit $?); log $root/cache/$run/log"' ERR
 
-# One run at a time over every checkpoint: later ones queue here.
+# One run at a time. A caller that finds the lock held leaves at once:
+# the run holding it takes the newest checkpoint when it finishes.
 exec 8> "$root/lock"
 if ! flock -n 8; then
-  say "queued behind another run (lock $root/lock)"
-  flock 8
+  say "queued behind $(cat "$root/running" 2> /dev/null || echo another run); the newest checkpoint is taken when it frees"
+  exit 0
 fi
 
-# The newest slots checkpoint when this run starts; older ones are skipped.
-if [ -z "$dry" ] && [[ $label == slots-* ]]; then
-  newest=$(gh release list -R seabbs/BDBVHubRenewal --limit 100 \
-    --json tagName,publishedAt --jq '[.[] |
-      select(.tagName | startswith("chronos-slots-"))] |
-      sort_by(.publishedAt) | last | .tagName // ""')
-  newest=${newest#chronos-}
-  if [ -n "$newest" ] && [ "$newest" != "$label" ]; then
-    if [ -f "$root/done/$newest" ]; then
-      say "skipped: the newest checkpoint, $newest, is already done"
-      exit 0
-    fi
-    say "skipping $label (and any older checkpoint) for the newest, $newest"
-    label=$newest
-    run=$label
+# The newest eligible slots checkpoint (random-init slots, most
+# outbreaks) when this run starts, whatever label it was called with.
+if [ -z "$dry" ] && [[ $label == slots-* || $label == next ]]; then
+  mapfile -t choice < <("$py" scripts/agg/finetuned.py choose \
+    --label "$label" --done "$root/done" --settings "$root/settings")
+  for note in "${choice[@]:1}"; do
+    say "$note"
+  done
+  if [ "${choice[0]:--}" = - ]; then
+    exit 0
   fi
-fi
-if [ -z "$dry" ] && [ -f "$root/done/$label" ]; then
+  label=${choice[0]}
+  run=$label
+elif [ -z "$dry" ] && [ -f "$root/done/$label" ]; then
   say "skipped: already done ($root/done/$label)"
   exit 0
 fi
+echo "$run" > "$root/running"
 
 cache=$root/cache/$run
 mkdir -p "$cache/log"
@@ -167,7 +169,7 @@ progress() {
 }
 progress 8>&- &
 watcher=$!
-trap 'trap - ERR; pkill -P $watcher 2> /dev/null || true; kill $watcher 2> /dev/null || true' EXIT
+trap 'trap - ERR; rm -f "$root/running"; pkill -P $watcher 2> /dev/null || true; kill $watcher 2> /dev/null || true' EXIT
 
 git show "origin/evidence/fm-agg:results/agg/aggregation-scores.csv.gz" \
   > "$root/zero-shot-scores.csv.gz"
@@ -255,7 +257,7 @@ heavy "$cap" export --existing "$out" --checkpoint "$label" \
   --bdbv "$cache/scores/bdbv.csv" "${subset[@]}" --out "$out"
 if [ -z "$dry" ]; then
   sha=$(publish "BDBV arms; the German half follows")
-  say "interim: BDBV rows of $label in commit $sha on agg-slots ($filter; German rows follow); $rule"
+  say "-> bdbv-paper: interim: BDBV rows of $label in commit $sha on agg-slots; path results/agg/aggregation-scores.csv.gz; filter checkpoint == '$label' or 'zero-shot' ($filter; German rows follow); $rule"
 fi
 
 # 3. Germany: the fitted arms, scores with the paired arm, final rows.
@@ -279,4 +281,12 @@ cat >> results/agg/README.md << EOF
 EOF
 sha=$(publish "BDBV and the German development half")
 touch "$root/done/$label"
-say "finished: commit $sha on agg-slots ($filter); $rule; aggregation_cost unchanged at results/agg/aggregation-cost.csv (no checkpoint column; keep dropping its _ft rows)"
+say "-> bdbv-paper: finished: commit $sha on agg-slots; path results/agg/aggregation-scores.csv.gz; filter checkpoint == '$label' or 'zero-shot' ($filter); $rule; aggregation_cost unchanged at results/agg/aggregation-cost.csv (no checkpoint column; keep dropping its _ft rows)"
+
+# Carry on with the newest checkpoint published meanwhile, if any.
+trap - EXIT ERR
+pkill -P "$watcher" 2> /dev/null || true
+kill "$watcher" 2> /dev/null || true
+rm -f "$root/running"
+exec 8>&-
+exec "$here/scripts/agg/run_finetuned.sh" next

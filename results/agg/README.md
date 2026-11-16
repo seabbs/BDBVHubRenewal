@@ -39,7 +39,9 @@ That is BDBV's `joint` (546 places), `zones_summed` and `zones_copula` (519 zone
 These blocks are outside the slots' training range: training blocks held about 95 targets.
 Slots follow Chronos-2's row order (`foundation._group_slots`, from slots-loader-roworder).
 Runs queue, one checkpoint at a time; each adds or replaces its own rows and keeps every other checkpoint's.
-A run takes the newest slots checkpoint published when it starts and skips older ones, so not every published checkpoint gets rows.
+A run takes the newest eligible slots checkpoint when it starts and skips older ones, so not every published checkpoint gets rows.
+Eligible checkpoints come from the slots run with random-init slots (settings `series_slots.init` other than `zero`); the zero-init run's checkpoints (chronos-slots-7d7c5d9f247e, chronos-slots-06dbdcc2b48d) are not run. Newest means the most `n_outbreaks`.
+Places with cases are those with a case in their counts or in their lag series, so a place whose cases are all in the newest, partly reported weeks keeps a slot.
 Each run commits its BDBV rows first (interim, about 2 h), then the German rows.
 The round-1 and n1000 fine-tuned rows are dropped, as their checkpoints are not the paper's.
 `aggregation-cost.csv` is unchanged: a fit's cost depends on the block sizes and Chronos-2's size, which the LoRA adapter does not change (the round-1 rows above match the zero-shot ones).

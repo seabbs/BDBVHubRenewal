@@ -491,3 +491,30 @@ def test_a_done_or_older_checkpoint_runs_nothing() -> None:
         choose_checkpoint(None, releases, done | {"slots-cccccccccccc"})[0]
         is None
     )
+
+
+def test_interim_bdbv_rows_then_final_rows_of_one_checkpoint() -> None:
+    from bdbvhubrenewal.evaluation.groupings import (
+        check_checkpoint_rows,
+        merge_checkpoint_rows,
+    )
+
+    ref = _paper_rows("randomwalknowcast", "reference", 2.0)
+    existing = pd.concat(
+        [ref, ref.assign(study="germany")], ignore_index=True
+    ).assign(checkpoint="zero-shot", slots_rule="none")
+    ft = _paper_rows("fm_chronos_daily_ragged_ft", "joint", 0.5).assign(
+        checkpoint="slots-abc", slots_rule="cases-only"
+    )
+    interim = merge_checkpoint_rows(existing, ft, "slots-abc")
+    check_checkpoint_rows(interim)
+    both = pd.concat([ft, ft.assign(study="germany", slots_rule="all")])
+    final = merge_checkpoint_rows(interim, both, "slots-abc")
+    check_checkpoint_rows(final)
+    n = final.groupby(["study", "checkpoint"]).size().to_dict()
+    assert n == {
+        ("ebola", "slots-abc"): 2,
+        ("ebola", "zero-shot"): 2,
+        ("germany", "slots-abc"): 2,
+        ("germany", "zero-shot"): 2,
+    }

@@ -445,6 +445,50 @@ def sanity(args: argparse.Namespace) -> None:
         raise SystemExit("sanity: the scores differ beyond the tolerance")
 
 
+def choose(args: argparse.Namespace) -> None:
+    """Print the slots checkpoint to run (or `-`), then mailbox lines.
+
+    Each chronos-slots release's settings.json is read once (cached in
+    --settings) for its `series_slots.init` and `n_outbreaks`.
+    """
+    import json
+
+    cache = Path(args.settings)
+    cache.mkdir(parents=True, exist_ok=True)
+    tags = subprocess.run(
+        ["gh", "release", "list", "-R", "seabbs/BDBVHubRenewal",
+         "--limit", "200", "--json", "tagName", "--jq",
+         '.[].tagName | select(startswith("chronos-slots-"))'],
+        capture_output=True, text=True, check=True,
+    ).stdout.split()  # fmt: skip
+    releases = []
+    for tag in tags:
+        path = cache / f"{tag}.json"
+        if not path.exists():
+            got = subprocess.run(
+                ["gh", "release", "download", tag, "-R",
+                 "seabbs/BDBVHubRenewal", "-p", "settings.json", "-O", "-"],
+                capture_output=True, text=True, check=False,
+            )  # fmt: skip
+            if got.returncode != 0:
+                continue  # not published in full yet
+            path.write_text(got.stdout)
+        settings = json.loads(path.read_text())
+        releases.append(
+            {
+                "label": tag.removeprefix("chronos-"),
+                "init": (settings.get("series_slots") or {}).get("init"),
+                "n_outbreaks": settings.get("n_outbreaks", 0),
+            }
+        )
+    done = {p.name for p in Path(args.done).glob("slots-*")}
+    label = None if args.label == "next" else args.label
+    chosen, notes = gr.choose_checkpoint(label, releases, done)
+    print(chosen or "-")
+    for note in notes:
+        print(note)
+
+
 def main() -> None:
     """Run one step."""
     parser = argparse.ArgumentParser()
@@ -484,8 +528,13 @@ def main() -> None:
     p.add_argument("--scores", required=True)
     p.add_argument("--tolerance", type=float, default=0.0)
     p.add_argument("--out", required=True)
+    p = sub.add_parser("choose")
+    p.add_argument("--label", required=True, help="a slots label, or next")
+    p.add_argument("--done", required=True)
+    p.add_argument("--settings", required=True)
     args = parser.parse_args()
     step = {
+        "choose": choose,
         "bdbv-fit": bdbv_fit,
         "germany-fit": germany_fit,
         "bdbv-score": bdbv_score,
