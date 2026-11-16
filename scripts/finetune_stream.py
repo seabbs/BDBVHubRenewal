@@ -284,6 +284,26 @@ def cut(
             for j in range(ft.CUTS)
         ]
         rng = np.random.default_rng([seed, zlib.crc32(simulation.encode())])
+        if ft.ALL_DRAWS:
+            # `per_simulation` snapshots, each in its own stretch of the
+            # outbreak with a source of its own, cut from every draw with
+            # the same cut-off, lag and places.
+            sources = rng.choice(ft.SOURCES, per_simulation)
+            picks = {(str(s), j) for j, s in enumerate(sources)}
+            for outbreak in sorted(draws):
+                blocks = ft.outbreak_blocks(
+                    draws[outbreak],
+                    ft.strata(row),
+                    np.random.default_rng(
+                        [seed, zlib.crc32(simulation.encode()), 1]
+                    ),
+                    weeks,
+                    cuts=per_simulation,
+                    picks=picks,
+                    empty=empty,
+                )
+                out.extend((outbreak, block) for block in blocks)
+            continue
         k = min(per_simulation, len(candidates))
         chosen = [candidates[i] for i in rng.choice(len(candidates), k, False)]
         for outbreak in sorted(draws):
@@ -309,9 +329,12 @@ def init_worker(
     max_series: int,
     lags: dict[str, tuple[int, ...]],
     sources: tuple[str, ...],
+    all_draws: bool = False,
+    univariate_share: float = 0.0,
 ) -> None:
     """Give a cutting worker the trainer's block settings."""
     ft.MAX_SERIES, ft.MAX_LAGS, ft.SOURCES = max_series, lags, sources
+    ft.ALL_DRAWS, ft.UNIVARIATE_SHARE = all_draws, univariate_share
 
 
 def _cut_part(
@@ -743,6 +766,11 @@ def main() -> None:
     parser.add_argument("--grid", required=True)
     parser.add_argument("--publish", action="store_true")
     parser.add_argument("--blocks-per-simulation", type=int, default=12)
+    # Cut each simulation's snapshots alike from every draw: with 16
+    # snapshots and 10 draws, 160 blocks a simulation.
+    parser.add_argument("--all-draws", action="store_true")
+    # Share of blocks that are one series (`ft.UNIVARIATE_SHARE`).
+    parser.add_argument("--univariate-share", type=float, default=0.0)
     parser.add_argument(
         "--prefixes", type=int, nargs="+", default=list(ft.PREFIXES)
     )
@@ -788,6 +816,7 @@ def main() -> None:
     prefixes = [p for p in args.prefixes if p < args.outbreaks]
     prefixes.append(args.outbreaks)
     k = args.blocks_per_simulation
+    ft.ALL_DRAWS, ft.UNIVARIATE_SHARE = args.all_draws, args.univariate_share
 
     # Held-out outbreaks first.
     report(stage="waiting for held-out simulations")
@@ -807,7 +836,13 @@ def main() -> None:
         args.cut_workers,
         mp_context=multiprocessing.get_context("spawn"),
         initializer=init_worker,
-        initargs=(ft.MAX_SERIES, ft.MAX_LAGS, ft.SOURCES),
+        initargs=(
+            ft.MAX_SERIES,
+            ft.MAX_LAGS,
+            ft.SOURCES,
+            ft.ALL_DRAWS,
+            ft.UNIVARIATE_SHARE,
+        ),
     )
     held_pairs, empty = cut_in_workers(
         pool, sim_dir, held, args.seed, k, args.cut_workers
@@ -864,9 +899,15 @@ def main() -> None:
         "chunk": CHUNK,
         "blocks_per_simulation": k,
         "block_sampling": (
-            f"{k} of each simulation's draws x {ft.CUTS} cut-off slots x "
-            "2 sources, seeded by the simulation"
+            f"{k} snapshots, each with one source, cut alike from every "
+            f"draw; {ft.UNIVARIATE_SHARE:g} of blocks one series; seeded "
+            "by the simulation"
+            if ft.ALL_DRAWS
+            else f"{k} of each simulation's draws x {ft.CUTS} cut-off slots"
+            " x 2 sources, seeded by the simulation"
         ),
+        "all_draws": ft.ALL_DRAWS,
+        "univariate_share": ft.UNIVARIATE_SHARE,
         "lora": {"r": 8, "alpha": 16},
         "learning_rate": args.learning_rate,
         **(

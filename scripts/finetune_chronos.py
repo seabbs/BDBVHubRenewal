@@ -64,6 +64,15 @@ laptop's GPU memory (64 GB) but peaks at about 56 GB in training, so
 CUTS = 8
 """Cut-off slots of each source (weekly, daily) per observation draw."""
 
+ALL_DRAWS = False
+"""Whether a simulation's snapshots are cut alike from every draw: each of
+`per_simulation` cut-off slots gets one source, and every observation
+draw is cut there with the same cut-off, lag and places (`cut`)."""
+
+UNIVARIATE_SHARE = 0.0
+"""Share of blocks that are one series: a random stratum, group total or
+the country, cut from the same pool as the other blocks."""
+
 MEMORY_COST = {False: (0.0, 6.7e-5), True: (6.25e-3, 3.35e-6)}
 """GPU memory of one training step in GB per series and per series
 squared, without and with gradient checkpointing: fitted to 800 series
@@ -306,7 +315,12 @@ def outbreak_blocks(
             cut = least + int(share * (len(cutoffs) - least))
             places: tuple[str, ...] = (NATIONAL,)
             mix = "national"
-            if len(provinces) > 1:
+            if UNIVARIATE_SHARE > 0 and rng.random() < UNIVARIATE_SHARE:
+                places, mix = (
+                    (str(rng.choice(univariate_levels(provinces))),),
+                    "univariate",
+                )
+            elif len(provinces) > 1:
                 size = np.exp(rng.uniform(0, np.log(MAX_SERIES)))
                 fits = MAX_SERIES // (lag + 1) - 1
                 budget = min(round(size / (lag + 1)) - 1, fits)
@@ -331,6 +345,19 @@ def outbreak_blocks(
             padded["source"] = source
             out.append(padded)
     return out
+
+
+def univariate_levels(provinces: list[str]) -> list[str]:
+    """Return every series a univariate block can be.
+
+    These are the country, each stratum and, for places by ages, each
+    place's and each age's total.
+    """
+    levels = [NATIONAL, *provinces]
+    if any("-" in p for p in provinces):
+        levels += sorted({p.split("-")[0] for p in provinces})
+        levels += sorted({p.split("-")[1] for p in provinces})
+    return levels
 
 
 def size_class(n: int) -> int:

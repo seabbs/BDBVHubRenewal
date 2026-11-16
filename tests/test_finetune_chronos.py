@@ -697,13 +697,14 @@ def test_all_draws_cuts_the_same_snapshots_from_every_draw(
         # Both draws, each cut at the same snapshots.
         assert len(by_draw) == 2
         one, two = by_draw.values()
-        assert len(one) == len(two) == 4
+        # Snapshots too early for their lag are skipped, alike in both.
+        assert 1 <= len(one) == len(two) <= 4
         for a, b in zip(one, two, strict=True):
             assert a["source"] == b["source"]
             assert a["levels"] == b["levels"]
-            assert np.asarray(a["context"]).shape == np.asarray(
-                b["context"]
-            ).shape
+            assert (
+                np.asarray(a["context"]).shape == np.asarray(b["context"]).shape
+            )
 
 
 def test_univariate_share_gives_single_series_blocks(tmp_path, monkeypatch):
