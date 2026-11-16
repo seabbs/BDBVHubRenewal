@@ -49,6 +49,7 @@ __all__ = [
     "load",
     "release_observations",
     "round_close",
+    "round_of",
     "store_samples",
     "truth_delay",
 ]
@@ -81,6 +82,16 @@ def round_close(origin_date: pd.Timestamp) -> pd.Timestamp:
     """Return when a round closes: 22:59 UTC on the Tuesday before."""
     day = pd.Timestamp(origin_date).normalize() - pd.Timedelta(days=4)
     return (day + pd.Timedelta(hours=22, minutes=59)).tz_localize("UTC")
+
+
+def round_of(release: pd.Timestamp) -> pd.Timestamp:
+    """Return the round a release feeds: the first still open on its day.
+
+    A round closes on the Tuesday four days before its Saturday
+    (`round_close`), so a release on or before that Tuesday feeds it.
+    """
+    day = pd.Timestamp(release).normalize() + pd.Timedelta(days=4)
+    return day + pd.Timedelta(days=(5 - day.weekday()) % 7)
 
 
 def _samples(frame: pd.DataFrame) -> pd.DataFrame:

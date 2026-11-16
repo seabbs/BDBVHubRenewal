@@ -268,6 +268,37 @@ def _germany_forecasts(
     return fc
 
 
+def _by_round(
+    backtest: pd.DataFrame,
+    before: pd.Timestamp | None,
+    split: pd.Timestamp | None,
+) -> pd.DataFrame:
+    """Keep release-backtest forecasts by the round each release feeds.
+
+    Releases of rounds before `before` are kept as they are. From
+    `split`, each round keeps the last release before it closed, dated
+    by the round, as the forecast the model would have made for it.
+    """
+    if backtest.empty:
+        return backtest
+    rounds = backtest["origin_date"].map(ebola.round_of)
+    if before is not None:
+        return backtest.loc[rounds < before].reset_index(drop=True)
+    if split is None:
+        return backtest
+    early = backtest.loc[rounds < split]
+    late = backtest.loc[rounds >= split].assign(_round=rounds)
+    last = late.groupby(["model", "_round"])["origin_date"].transform("max")
+    late = late.loc[late["origin_date"] == last]
+    late = late.assign(origin_date=late["_round"]).drop(columns="_round")
+    late = late.assign(
+        horizon=(
+            (late["target_date"] - late["origin_date"]).dt.days // 7
+        ).astype(int)
+    )
+    return pd.concat([early, late], ignore_index=True)
+
+
 def _ebola_forecasts(
     sources: Sources,
     with_hub: bool,
@@ -281,14 +312,13 @@ def _ebola_forecasts(
     models' samples in its layout. The prospective rounds' forecasts (the
     hub's, our stored and candidate forecasts, by round) join once the
     hub's baseline can be scored, and from `split` on in any case, as
-    they are the scored part. Release-backtest origins are kept before
-    `split` or `before`, and rounds before `before`.
+    they are the scored part. Release-backtest forecasts are kept by the
+    round their release feeds (`_by_round`), and rounds before `before`.
     """
     assert sources.ebola_backtest is not None
     parts = [ebola.backtest_samples(sources.ebola_backtest)]
     parts += [ebola.backtest_samples(p) for p in sources.ebola_extra]
-    end = split if split is not None else before
-    parts = [_before(p, "origin_date", end) for p in parts]
+    parts = [_by_round(p, before, split) for p in parts]
     if (with_hub or split is not None) and sources.hub is not None:
         store = sources.store
         if store is not None and not _has_ref(store, sources.store_ref):
