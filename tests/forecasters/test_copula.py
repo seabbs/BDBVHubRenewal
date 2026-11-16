@@ -10,6 +10,7 @@ from scipy.stats import spearmanr
 
 from bdbvhubrenewal.forecasters import NATIONAL
 from bdbvhubrenewal.forecasters.copula import (
+    PRIOR,
     GaussianCopula,
     RollingCopula,
     estimate_copula,
@@ -490,32 +491,124 @@ def test_a_cells_normal_score_does_not_depend_on_other_cells() -> None:
     assert normal_scores(one, truth, seed=5)["z"].iloc[0] != a["CD"]
 
 
-def test_zones_move_with_their_province() -> None:
-    samples = _samples(n=300)
-    prov = samples.loc[samples["location"] == "CD-A"]
-    half = (prov["value"] // 2).to_numpy()
-    zones = pd.concat(
-        [
-            prov.assign(location="CD-A-01", value=half),
-            prov.assign(location="CD-A-02", value=prov["value"] - half),
-        ],
-        ignore_index=True,
+def _zoned(n: int = 2000, summed: bool = False) -> pd.DataFrame:
+    """Independent draws of two provinces' zones over three weeks.
+
+    Province CD-A has zones CD-A-01 to CD-A-03, CD-B has CD-B-01 and
+    CD-B-02. Each province is its own forecast, or the sum of its zones.
+    """
+    rng = np.random.default_rng(20)
+    weeks = ["2026-10-10", "2026-10-17", "2026-10-24"]
+    zones = {"CD-A": ["CD-A-01", "CD-A-02", "CD-A-03"],
+             "CD-B": ["CD-B-01", "CD-B-02"]}  # fmt: skip
+    rows = []
+
+    def add(loc: str, week: str, values: np.ndarray) -> None:
+        rows.append(
+            pd.DataFrame(
+                {
+                    "location": loc,
+                    "target_end_date": week,
+                    "sample": np.arange(1, n + 1),
+                    "value": values,
+                }
+            )
+        )
+
+    for prov, own in zones.items():
+        for w in weeks:
+            parts = [rng.gamma(2.0, 10.0, size=n).round() for _ in own]
+            for z, v in zip(own, parts, strict=True):
+                add(z, w, v)
+            total = sum(parts) if summed else rng.gamma(4.0, 10.0, size=n)
+            add(prov, w, np.asarray(total).round())
+    return pd.concat(rows, ignore_index=True)
+
+
+ZONED = GaussianCopula(0.8, 0.3, 0.6, rho_zones=0.7)
+
+
+def test_zones_are_paired_in_their_own_right() -> None:
+    samples = _zoned()
+    out = pair_samples(samples, ZONED, np.random.default_rng(21))
+    pd.testing.assert_series_equal(_cells(out), _cells(samples))
+    wide = _wide(out)
+    w1, w2 = "2026-10-10", "2026-10-17"
+
+    def rank(r: float) -> float:
+        return 6 / np.pi * np.arcsin(r / 2)
+
+    # Two zones of a province, and a zone and its province: rho_zones.
+    assert _rank_corr(wide[("CD-A-01", w1)], wide[("CD-A-02", w1)]) == (
+        pytest.approx(rank(0.7), abs=0.05)
     )
-    both = pd.concat([samples, zones], ignore_index=True)
-    out = pair_samples(
-        both, GaussianCopula(0.8, 0.5, 0.6), np.random.default_rng(15)
+    assert _rank_corr(wide[("CD-A-01", w1)], wide[("CD-A", w1)]) == (
+        pytest.approx(rank(0.7), abs=0.05)
     )
-    keys = ["target_end_date", "sample"]
-    is_zone = out["location"].str.count("-") == 2
-    summed = out.loc[is_zone].groupby(keys)["value"].sum()
-    province = out.loc[out["location"] == "CD-A"].set_index(keys)["value"]
-    # Each draw's zones still sum to its province.
+    # Zones of different provinces: rho_p. Weeks of a zone: rho_t.
+    assert _rank_corr(wide[("CD-A-01", w1)], wide[("CD-B-01", w1)]) == (
+        pytest.approx(rank(0.3), abs=0.05)
+    )
+    assert _rank_corr(wide[("CD-B-02", w1)], wide[("CD-B-02", w2)]) == (
+        pytest.approx(rank(0.8), abs=0.05)
+    )
+
+
+def test_a_province_that_sums_its_zones_is_summed_again() -> None:
+    samples = _zoned(n=500, summed=True)
+    out = pair_samples(samples, ZONED, np.random.default_rng(22))
+    zone = out["location"].str.count("-") == 2
     pd.testing.assert_series_equal(
-        summed.sort_index(), province.sort_index(), check_names=False
+        _cells(out.loc[zone]), _cells(samples.loc[samples["location"]
+                                                  .str.count("-") == 2])
+    )  # fmt: skip
+    keys = ["target_end_date", "sample"]
+    for prov in ("CD-A", "CD-B"):
+        own = out.loc[out["location"].str.startswith(prov + "-")]
+        total = own.groupby(keys)["value"].sum()
+        got = out.loc[out["location"] == prov].set_index(keys)["value"]
+        pd.testing.assert_series_equal(
+            got.sort_index(), total.sort_index(), check_names=False
+        )
+    # Paired zones make a wider province than independent ones.
+    before = samples.loc[samples["location"] == "CD-A", "value"].std()
+    after = out.loc[out["location"] == "CD-A", "value"].std()
+    assert after > 1.1 * before
+
+
+def test_zone_correlation_is_estimated_from_zone_pairs() -> None:
+    rng = np.random.default_rng(23)
+    places = [NATIONAL, "CD-A", "CD-B", "CD-A-01", "CD-A-02", "CD-B-01"]
+    weeks = [f"2026-10-{d:02d}" for d in (3, 10, 17)]
+    copula = GaussianCopula(0.6, 0.2, 0.4, rho_zones=0.75)
+    rows = []
+    for origin in range(1500):
+        z = copula.normals(
+            rng, 1, len(places), 7 * np.arange(len(weeks)), locations=places
+        )
+        for i, loc in enumerate(places):
+            for h, week in enumerate(weeks):
+                rows.append(("m", str(origin), loc, week, z[0, i, h]))
+    scores = pd.DataFrame(
+        rows, columns=["model", "origin", "location", "target_end_date", "z"]
     )
-    pd.testing.assert_series_equal(_cells(out.loc[~is_zone]), _cells(samples))
-    # Each zone keeps its draws, moved by its province's permutation: a
-    # draw's first zone is still half of that draw's province.
-    pd.testing.assert_series_equal(_cells(out.loc[is_zone]), _cells(zones))
-    first = out.loc[out["location"] == "CD-A-01"].set_index(keys)["value"]
-    assert (first == (province // 2).reindex(first.index)).all()
+    got = estimate_copula(scores)
+    assert got.rho_zones == pytest.approx(0.75, abs=0.04)
+    # Only the two provinces give rho_p, not zones of different provinces.
+    assert got.rho_provinces == pytest.approx(0.2, abs=0.06)
+    assert got.rho_time == pytest.approx(0.6, abs=0.04)
+
+
+def test_the_prior_pairs_zones_and_fits_record_rho_zones() -> None:
+    assert PRIOR.rho_zones == pytest.approx(0.7)
+    with pytest.raises(ValueError, match="rho_zones"):
+        GaussianCopula(rho_zones=1.0)
+    samples = _zoned(n=200).assign(model="m", origin="2026-10-01")
+    _, fits = RollingCopula().pair(
+        samples,
+        pd.DataFrame(
+            columns=["location", "target_end_date", "truth", "truth_vintage"]
+        ),
+        seed=1,
+    )
+    assert fits["rho_zones"].tolist() == [pytest.approx(0.7)]
