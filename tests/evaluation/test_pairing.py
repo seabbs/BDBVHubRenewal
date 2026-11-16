@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import dataclasses
-
 import numpy as np
 import pandas as pd
 import pytest
@@ -22,16 +20,6 @@ from bdbvhubrenewal.forecasters.copula import (
 )
 
 
-def _independent(groups, horizon, n, seed):
-    rng = np.random.default_rng(seed)
-    return [
-        rng.gamma(
-            2.0, 1e3, size=(n, np.atleast_2d(g["target"]).shape[0], horizon)
-        )
-        for g in groups
-    ]
-
-
 @pytest.fixture(scope="module")
 def forecasts(
     target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
@@ -41,13 +29,7 @@ def forecasts(
     tasks = make_tasks(
         rows, delays, BacktestConfig(seed=3), history=real, daily=daily
     )
-    models = [
-        get_model("randomwalknowcast"),
-        dataclasses.replace(
-            get_model("fm_chronos_weekly_ragged"), sample=_independent
-        ),
-    ]
-    out = run_forecasts(models, tasks)
+    out = run_forecasts([get_model("randomwalknowcast")], tasks)
     return out.loc[out["as_of"].isna()].rename(columns={"vintage": "origin"})
 
 
@@ -63,20 +45,16 @@ def _cells(rows: pd.DataFrame) -> pd.Series:
     )
 
 
-@pytest.mark.parametrize(
-    "model", ["randomwalknowcast", "fm_chronos_weekly_ragged"]
-)
 def test_rolling_pairing_keeps_each_weeks_forecast(
-    model: str, forecasts: pd.DataFrame, truth: pd.DataFrame
+    forecasts: pd.DataFrame, truth: pd.DataFrame
 ) -> None:
-    mine = forecasts.loc[forecasts["model"] == model]
+    mine = forecasts.loc[forecasts["model"] == "randomwalknowcast"]
     paired, fits = RollingCopula(PRIOR).pair(mine, truth, seed=1)
     assert len(paired) == len(mine)
-    summed = model == "randomwalknowcast"
-    kept = paired["location"] != NATIONAL if summed else slice(None)
-    before = mine["location"] != NATIONAL if summed else slice(None)
+    # The country is the provinces' sum, so only the provinces keep theirs.
+    kept = paired["location"] != NATIONAL
     pd.testing.assert_series_equal(
-        _cells(paired.loc[kept]), _cells(mine.loc[before])
+        _cells(paired.loc[kept]), _cells(mine.loc[mine["location"] != NATIONAL])
     )
     assert list(fits["origin"]) == ["2026-10-17", "2026-10-24"]
     assert fits["n_scores"].iloc[0] == 0
@@ -103,9 +81,10 @@ def test_randomwalknowcast_country_stays_the_sum_of_its_provinces(
 def test_models_with_draws_per_cell_are_registered_as_paired() -> None:
     specs = {s.name: s for s in list_models()}
     assert specs["randomwalknowcast"].paired
+    # Chronos-2 forecasts each week's total directly, so it is not paired.
     for source in ("weekly", "daily"):
         for layout in ("complete", "ragged", "ragged_ft"):
-            assert specs[f"fm_chronos_{source}_{layout}"].paired
+            assert not specs[f"fm_chronos_{source}_{layout}"].paired
     assert not specs["randomwalk"].paired
 
 
@@ -123,10 +102,7 @@ def test_only_paired_models_are_paired(
         walk.reset_index(drop=True),
         other.sort_values(keys).reset_index(drop=True),
     )
-    assert set(fits["model"]) == {
-        "randomwalknowcast",
-        "fm_chronos_weekly_ragged",
-    }
+    assert set(fits["model"]) == {"randomwalknowcast"}
 
 
 def test_release_backtest_pairs_with_the_rolling_truth(

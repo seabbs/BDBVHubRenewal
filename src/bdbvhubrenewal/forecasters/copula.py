@@ -2,7 +2,7 @@
 r"""A Gaussian copula that pairs a model's marginal draws into trajectories.
 
 A model that gives each place and step only its marginal, such as
-Chronos-2's quantiles, draws each cell independently.
+`randomwalknowcast`, draws each cell independently.
 `GaussianCopula.couple` pairs those draws into trajectories: each
 trajectory draws one correlated normal vector $z$ over places and steps,
 and every cell's draws are reordered across trajectories so they rank as
@@ -292,9 +292,8 @@ class GaussianCopula:
 PRIOR: Final = GaussianCopula(
     rho_time=0.9, rho_provinces=0.7, rho_national=0.7, rho_zones=0.7
 )
-"""The correlations estimates are shrunk towards. The first three were
-chosen on the Chronos-2 models' release backtest energy score; the zones'
-is set to the provinces' (no zone errors had matured to choose it)."""
+"""The correlations estimates are shrunk towards. The zones' is set to
+the provinces' (no zone errors had matured to choose it)."""
 
 
 def _final(samples: pd.DataFrame) -> pd.Series:

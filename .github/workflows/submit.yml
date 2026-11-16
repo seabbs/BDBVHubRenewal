@@ -645,10 +645,6 @@ jobs:
           gh auth setup-git
           git config --global user.name "seabbs-bot"
           git config --global user.email "signin@samabbott.co.uk"
-      # The stored fits of the model's past origins, for the copula that
-      # pairs its draws.
-      - name: Fetch the fit store
-        run: scripts/fit-store.sh fetch output/fit-store
       - name: Check and submit
         id: track
         env:

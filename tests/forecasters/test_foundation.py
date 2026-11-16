@@ -35,10 +35,7 @@ from bdbvhubrenewal.forecasters import (
     list_models,
 )
 from bdbvhubrenewal.forecasters.chain import NoWalkSpread
-from bdbvhubrenewal.forecasters.copula import GaussianCopula
 from bdbvhubrenewal.forecasters.foundation import (
-    CHRONOS_COPULA,
-    CHRONOS_DAY_RHO,
     LAYOUTS,
     MAX_LAG,
     SOURCES,
@@ -71,17 +68,6 @@ def _constant(value: float):
         ]
 
     return sample
-
-
-def _independent(groups, horizon, n, seed):
-    """A sampler of independent, widely spread draws."""
-    rng = np.random.default_rng(seed)
-    return [
-        rng.gamma(
-            2.0, 1e3, size=(n, np.atleast_2d(g["target"]).shape[0], horizon)
-        )
-        for g in groups
-    ]
 
 
 def _recording(store: list):
@@ -270,109 +256,6 @@ def test_draws_are_counts_at_least_the_reported(
     high = dataclasses.replace(get_model(name), sample=_constant(1e4))
     out = high.forecast(task)
     assert (out["value"].to_numpy() > _reported(task, out)).any()
-
-
-def _wide(out: pd.DataFrame) -> pd.DataFrame:
-    return out.pivot_table(
-        index="sample",
-        columns=["location", "target_end_date"],
-        values="value",
-    )
-
-
-@pytest.mark.parametrize("name", MODELS)
-def test_draws_are_paired_by_the_copula(name: str, task: ForecastTask) -> None:
-    model = get_model(name)
-    if "_weekly_" in name:
-        assert model.copula == CHRONOS_COPULA
-    else:
-        # Days apart by one are paired by the daily prior.
-        per_day = model.copula.rho_time ** (1 / 7)
-        assert per_day == pytest.approx(CHRONOS_DAY_RHO)
-        assert model.copula.rho_provinces == CHRONOS_COPULA.rho_provinces
-    paired = dataclasses.replace(model, sample=_independent).forecast(task)
-    unpaired = dataclasses.replace(
-        model, sample=_independent, copula=GaussianCopula()
-    ).forecast(task)
-    wide, flat = _wide(paired), _wide(unpaired)
-    weeks = sorted(paired["target_end_date"].unique())
-    nat = [(NATIONAL, w) for w in weeks[-2:]]
-    corr = wide[nat].corr(method="spearman").iloc[0, 1]
-    assert corr > flat[nat].corr(method="spearman").iloc[0, 1] + 0.1
-    if name.startswith("fm_chronos_weekly"):
-        # Each weekly draw of the country and provinces is kept, only
-        # paired anew. Zones, if any, are then reconciled to their
-        # province draw by draw.
-        places = [c for c in wide.columns if c[0].count("-") < 2]
-        assert np.array_equal(
-            np.sort(wide[places].to_numpy(), axis=0),
-            np.sort(flat[places].to_numpy(), axis=0),
-        )
-    else:
-        # Days of a week are paired, so the week's sum is wider.
-        last = (NATIONAL, weeks[-1])
-        assert wide[last].std() > 1.1 * flat[last].std()
-
-
-def test_the_copula_knows_each_series_as_country_province_or_zone(
-    task: ForecastTask,
-) -> None:
-    seen: list = []
-
-    @dataclasses.dataclass(frozen=True)
-    class Recording:
-        def couple(self, draws, *_, locations=None, **__):
-            seen.append(locations)
-            return draws
-
-    model = dataclasses.replace(
-        get_model("fm_chronos_weekly_ragged"),
-        sample=_independent,
-        copula=Recording(),
-    )
-    model.forecast(task)
-    (locations,) = seen
-    assert locations is not None
-    assert locations[0] == NATIONAL
-    assert set(task.locations) <= set(locations)
-    assert set(_zones(task)) <= set(locations)
-
-
-def test_own_quantiles_are_not_paired(
-    task: ForecastTask, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    # Path k of the native sampler is the quantile at level k, so pairing
-    # must not reorder the paths: each cell's quantiles rise with level.
-    def native(levels, checkpoint=None):  # noqa: ARG001
-        def sample(groups, horizon, n, seed):  # noqa: ARG001
-            k = np.arange(len(levels), dtype=float)[:, None, None]
-            return [
-                np.broadcast_to(
-                    1e5 * (1 + k),
-                    (len(levels), np.atleast_2d(g["target"]).shape[0], horizon),
-                ).copy()
-                for g in groups
-            ]
-
-        return sample
-
-    monkeypatch.setattr(foundation, "native_sampler", native)
-    model = get_model("fm_chronos_weekly_ragged")
-    out = model.quantiles(task, [0.1, 0.5, 0.9])
-    assert out is not None
-    by_cell = out.sort_values("quantile").groupby(
-        ["location", "target_end_date"]
-    )["value"]
-    assert by_cell.apply(lambda v: v.is_monotonic_increasing).all()
-    assert (by_cell.nunique() == 3).all()
-
-
-@pytest.mark.parametrize("name", MODELS)
-def test_paired_forecasts_are_reproducible(
-    name: str, task: ForecastTask
-) -> None:
-    model = dataclasses.replace(get_model(name), sample=_independent)
-    pd.testing.assert_frame_equal(model.forecast(task), model.forecast(task))
 
 
 @pytest.mark.parametrize("name", MODELS)

@@ -187,7 +187,7 @@ def test_a_model_with_no_past_forecasts_fails(
     )
     with pytest.raises(LookupError, match="no past forecasts"):
         pair_submission(
-            "fm_chronos_weekly_ragged",
+            "randomwalknowcast",
             samples,
             task,
             truth_delay=7,
@@ -200,7 +200,7 @@ def test_the_first_origin_takes_the_prior(tasks: list) -> None:
     task = tasks[-1]
     samples = get_model("randomwalknowcast").forecast(task)
     paired, fit = pair_submission(
-        "fm_chronos_weekly_ragged",
+        "randomwalknowcast",
         samples,
         task,
         truth_delay=7,
@@ -312,25 +312,6 @@ def test_only_fits_of_the_models_own_settings_are_used(
     assert sources["2026-10-17"] == "store"
     assert sources["2026-10-24"] == "recomputed"
     assert 99.5 not in set(out["value"])
-
-
-def test_a_fitted_paired_model_is_forecast_again_where_nothing_is_kept(
-    tasks: list, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    from bdbvhubrenewal.forecasters import foundation
-
-    def zeros(groups, horizon, n, _seed, checkpoint=None):  # noqa: ARG001
-        return [
-            np.zeros((n, np.atleast_2d(g["target"]).shape[0], horizon))
-            for g in groups
-        ]
-
-    monkeypatch.setattr(foundation, "chronos_sampler", zeros)
-    out, _ = past_forecasts(
-        "fm_chronos_weekly_ragged", "2026-11-08", past_tasks=tasks
-    )
-    assert set(out["source"]) == {"recomputed"}
-    assert set(out["origin"]) <= {t.vintage for t in tasks}
 
 
 def test_archived_origins_alone_give_rho_national_its_prior(
