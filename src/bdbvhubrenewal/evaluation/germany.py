@@ -53,7 +53,6 @@ from bdbvhubrenewal.data.germany import (
     level,
     nowcast_tasks,
 )
-from bdbvhubrenewal.evaluation.germany_store import STORED_MODELS
 from bdbvhubrenewal.evaluation.marginals import forecast_quantiles
 from bdbvhubrenewal.evaluation.nowcast import rolling_truth
 from bdbvhubrenewal.evaluation.scoring import relative_skill, score_quantiles
@@ -204,9 +203,6 @@ class GermanyConfig:
 def run_models(config: GermanyConfig, held_out: bool) -> tuple[str, ...]:
     """Return the models a half runs: `held_out_models` join the held-out.
 
-    The fine-tuned models (`germany_store.STORED_MODELS`) leave it: the
-    site shows their stored development forecasts only.
-
     A held-out model that is not registered yet, such as one whose
     checkpoint is still pending, is left out with a warning.
 
@@ -223,10 +219,6 @@ def run_models(config: GermanyConfig, held_out: bool) -> tuple[str, ...]:
     """
     if not held_out:
         return config.models
-    # Their German forecasts are stored from the checkpoint scorer for the
-    # development half only (`germany_store`); the paper's held-out run
-    # waits for the final checkpoint.
-    ours = tuple(m for m in config.models if m not in STORED_MODELS)
     known = {s.name for s in list_models()}
     waiting = [m for m in config.held_out_models if m not in known]
     if waiting:
@@ -235,7 +227,7 @@ def run_models(config: GermanyConfig, held_out: bool) -> tuple[str, ...]:
             ", ".join(waiting),
         )
     extra = tuple(m for m in config.held_out_models if m in known)
-    return (*ours, *extra)
+    return (*config.models, *extra)
 
 
 def load_germany_config(

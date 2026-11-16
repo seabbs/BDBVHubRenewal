@@ -474,9 +474,14 @@ jobs:
           - {model: fm_chronos_weekly_ragged, chunk: 1/4, group: chronos}
           - {model: fm_chronos_weekly_ragged, chunk: 2/4, group: chronos}
           - {model: fm_chronos_weekly_ragged, chunk: 3/4, group: chronos}
-          # Not the fine-tuned models (fm_chronos_*_ragged_ft): the site
-          # shows their stored development forecasts only, and the paper's
-          # held-out run waits for the final checkpoint.
+          - {model: fm_chronos_daily_ragged_ft, chunk: 0/4, group: chronos}
+          - {model: fm_chronos_daily_ragged_ft, chunk: 1/4, group: chronos}
+          - {model: fm_chronos_daily_ragged_ft, chunk: 2/4, group: chronos}
+          - {model: fm_chronos_daily_ragged_ft, chunk: 3/4, group: chronos}
+          - {model: fm_chronos_weekly_ragged_ft, chunk: 0/4, group: chronos}
+          - {model: fm_chronos_weekly_ragged_ft, chunk: 1/4, group: chronos}
+          - {model: fm_chronos_weekly_ragged_ft, chunk: 2/4, group: chronos}
+          - {model: fm_chronos_weekly_ragged_ft, chunk: 3/4, group: chronos}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
