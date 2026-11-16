@@ -389,9 +389,13 @@ def test_all_rounds_keeps_every_row() -> None:
     _check_against(_node_rounds(data, "null"), scores)
 
 
-@pytest.mark.parametrize("baseline", ["randomwalk", "a"])
+@pytest.mark.parametrize(
+    ("baseline", "partial"),
+    # randomwalk also lacks one CD-NK week, which "a" has.
+    [("randomwalk", {"b"}), ("a", {"b", "randomwalk"})],
+)
 def test_browser_summary_puts_a_model_lacking_cells_apart(
-    baseline: str,
+    baseline: str, partial: set[str]
 ) -> None:
     # "b" has no forecast for CD-IT in one week. Every model with all the
     # baseline's cells has the baseline's n, and "b", with fewer, is
@@ -408,8 +412,7 @@ def test_browser_summary_puts_a_model_lacking_cells_apart(
     rows = {MODELS[r["model"]]: r for r in got}
     base_n = rows[baseline]["n"]
     assert all(r["cells"] == base_n for r in got)
-    assert rows["b"]["partial"]
-    assert rows["b"]["n"] < base_n
-    full = [r for m, r in rows.items() if m != "b"]
-    assert not any(r["partial"] for r in full)
+    assert {m for m, r in rows.items() if r["partial"]} == partial
+    assert all(rows[m]["n"] < base_n for m in partial)
+    full = [r for m, r in rows.items() if m not in partial]
     assert {r["n"] for r in full} == {base_n}

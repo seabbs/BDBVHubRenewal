@@ -73,7 +73,9 @@ from bdbvhubrenewal.evaluation.hubcompare import (
 )
 from bdbvhubrenewal.evaluation.nowcast import (
     relative_energy,
-    relative_wis,
+)
+from bdbvhubrenewal.evaluation.nowcast import (
+    relative_wis as _relative_wis,
 )
 from bdbvhubrenewal.evaluation.scoring import summarise_scores
 from bdbvhubrenewal.evaluation.store import samplers, stored_models
@@ -129,6 +131,7 @@ from bdbvhubrenewal.reporting.scorechart import (
     write_score_chart,
 )
 from bdbvhubrenewal.reporting.scoresummary import (
+    mark_partial,
     summary_html,
     summary_rows,
     targets_attr,
@@ -147,6 +150,25 @@ from bdbvhubrenewal.reporting.zone_nowcast import (
 )
 
 __all__ = ["make_report"]
+
+
+def relative_wis(
+    scores: pd.DataFrame,
+    by: Sequence[str] = ("target",),
+    baseline: str = "randomwalk",
+) -> pd.DataFrame:
+    """`nowcast.relative_wis`, with each model lacking cells marked.
+
+    Each row gets `cells`, the baseline's n in its group, and `partial`
+    (`mark_partial`). Full rows all have the baseline's n, and partial
+    rows come after them in each group, so the tables never set a model
+    scored on fewer forecasts among the others.
+    """
+    out = mark_partial(_relative_wis(scores, by, baseline), by, baseline)
+    keys = [c for c in by if c in out.columns]
+    return out.sort_values([*keys, "partial"], kind="stable").reset_index(
+        drop=True
+    )
 
 
 def _table(df: pd.DataFrame, digits: int = 2) -> str:
