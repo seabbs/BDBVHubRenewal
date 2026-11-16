@@ -28,10 +28,15 @@ from typing import Any
 from .common import set_outputs
 from .window import minutes_left, parse_now
 
-KINDS = ("main", "fallback", "randomwalk", "shadow")
+KINDS = ("main", "fallback", "randomwalk", "shadow", "direct")
 """A `shadow` candidate is fitted and checked with its stage but is never
 part of the chain, so it is never submitted. It lets a variant run weekly
-before it is chosen."""
+before it is chosen. A `direct` candidate is a hub model of its own, run
+in its job with no fit and never in another model's chain."""
+
+UNFITTED = ("randomwalk", "direct")
+"""Kinds that run their model with no fit, so have no diagnostics."""
+
 STAGES = ("primary", "baseline")
 
 
@@ -67,10 +72,20 @@ class Policy:
     checks: dict[str, Any]
     ppc: dict[str, Any]
     timing: Timing
+    own: bool = False
+    """A hub model of its own (`for_model` with `only`), whose chain may
+    be a `direct` candidate."""
 
     def chain(self) -> list[Candidate]:
-        """Candidates in submission order."""
-        return [c for c in self.candidates if c.kind != "shadow"]
+        """Candidates in submission order.
+
+        `direct` candidates are in no chain but their own.
+        """
+        return [
+            c
+            for c in self.candidates
+            if c.kind != "shadow" and (self.own or c.kind != "direct")
+        ]
 
     def stage(self, name: str) -> list[Candidate]:
         """Candidates fitted in one stage, shadows included."""
@@ -87,21 +102,23 @@ class Policy:
         With `only`, the chain is that candidate alone, for a hub model
         that must never be submitted as anything else. The others are
         still built as shadows, as references for the checks, and are
-        never selected.
+        never selected. Without it, `direct` candidates are left out.
         """
-        chain = self.chain()
+        pool = (
+            self.candidates
+            if only
+            else [c for c in self.candidates if c.kind != "direct"]
+        )
+        chain = replace(self, candidates=pool, own=only).chain()
         names = [c.model or c.id for c in chain]
         if model not in names:
             if only:
                 raise ValueError(f"{model!r} has no candidate")
-            return self
+            return replace(self, candidates=pool)
         start = names.index(model)
         kept = {c.id for c in chain[start : start + 1 if only else None]}
-        cands = [
-            c if c.id in kept else replace(c, kind="shadow")
-            for c in self.candidates
-        ]
-        return replace(self, candidates=cands)
+        cands = [c if c.id in kept else replace(c, kind="shadow") for c in pool]
+        return replace(self, candidates=cands, own=only)
 
     def get(self, cid: str) -> Candidate:
         """Look up a candidate by id."""
