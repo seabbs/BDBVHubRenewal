@@ -49,15 +49,17 @@ round_seeds() {
 
 sha() { if [ -f "$1" ]; then sha256sum "$1" | cut -d' ' -f1; fi; }
 
-# Run batch seed $1 of round dir $2 at memory $3; 0 if it wrote counts.
+# Run batch seed $1 of round dir $2 at memory $3; 0 if the run exited
+# cleanly and wrote readable counts and settings.
 run_batch() {
   local seed=$1 dir=$2 mem=$3 log
   log=$dir/sims/logs/$seed.log
   ENW_DRAWS=$DRAWS systemd-run --user --scope -q -p MemoryMax="$mem" \
     -p MemorySwapMax=0 /usr/bin/time -f "peak_rss_kb %M wall_s %e" \
     nice -n 19 Rscript scripts/finetune_simulate.R "$BATCH" "$seed" \
-    "$dir/sims" > "$log" 2>&1
-  [ -s "$dir/sims/counts-$seed.csv.gz" ] && \
+    "$dir/sims" > "$log" 2>&1 || return 1
+  [ -s "$dir/sims/settings-$seed.csv" ] && \
+    [ -s "$dir/sims/counts-$seed.csv.gz" ] && \
     gzip -t "$dir/sims/counts-$seed.csv.gz" 2> /dev/null
 }
 
@@ -82,7 +84,7 @@ simulate_round() {
       s=${seeds[$k]}
       kind=train
       [ "$k" -ge "$ROUND_BATCHES" ] && kind=held-out
-      if [ -f "$dir/sims/counts-$s.csv.gz" ] && \
+      if [ -f "$dir/sims/settings-$s.csv" ] && \
           grep -q ",$s,$kind," "$dir/manifest.csv"; then
         continue
       fi

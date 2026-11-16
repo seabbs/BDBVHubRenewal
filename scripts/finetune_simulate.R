@@ -934,6 +934,10 @@ build_stack <- function(lib) {
   )
 }
 
+# One settings table from a batch's rows: independent strata add their
+# `stratum_*` columns, which linked outbreaks leave empty.
+settings_table <- function(rows) rbindlist(rows, fill = TRUE)
+
 # Simulate one design: up to five draws of its values, each kept if it
 # runs and its size per draw is in range. Returns the outbreak (or NULL)
 # and a failure row per failed try.
@@ -1087,5 +1091,5 @@ if (sys.nframe() == 0L) {
     write_atomic(rbindlist(failures, fill = TRUE), "failures")
   }
   write_atomic(rbindlist(counts), "counts")
-  write_atomic(rbindlist(settings), "settings")
+  write_atomic(settings_table(settings), "settings")
 }
