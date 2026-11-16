@@ -309,7 +309,12 @@ def pair_submission(
         "n_scores": int(row["n_scores"]),
         **{
             name: float(row[name])
-            for name in ("rho_time", "rho_provinces", "rho_national")
+            for name in (
+                "rho_time",
+                "rho_provinces",
+                "rho_national",
+                "rho_zones",
+            )
         },
     }
     by_origin = past.drop_duplicates("origin").sort_values("origin")

@@ -81,6 +81,7 @@ RHO_COLUMNS: Final = (
     "rho_t",
     "rho_p",
     "rho_n",
+    "rho_z",
 )
 """Columns of `copula_rho`."""
 
@@ -135,6 +136,7 @@ def copula_arms(
             rho_time=PRIOR.rho_time,
             rho_provinces=PRIOR.rho_provinces,
             rho_national=PRIOR.rho_national,
+            rho_zones=PRIOR.rho_zones,
         )
     )
     rolling, fits = RollingCopula(national=national).pair(fixed, truth, seed)
@@ -271,6 +273,7 @@ def copula_rho(fits: pd.DataFrame, study: str, strata: str) -> pd.DataFrame:
             "rho_time": "rho_t",
             "rho_provinces": "rho_p",
             "rho_national": "rho_n",
+            "rho_zones": "rho_z",
         }
     ).assign(study=study, strata=strata)
     return out[list(RHO_COLUMNS)].reset_index(drop=True)
