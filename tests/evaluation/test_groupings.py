@@ -432,3 +432,58 @@ def test_a_place_with_lags_but_no_cases_in_its_counts_has_a_slot() -> None:
     assert ids[0] >= 0
     assert ids[1] >= 0
     assert ids[2] == -1
+
+
+def _rel(label: str, init: str, n: int) -> dict:
+    return {"label": label, "init": init, "n_outbreaks": n}
+
+
+def test_the_newest_random_init_checkpoint_is_run_not_a_newer_zero_init() -> (
+    None
+):
+    from bdbvhubrenewal.evaluation.groupings import choose_checkpoint
+
+    releases = [
+        _rel("slots-aaaaaaaaaaaa", "normal", 250),
+        _rel("slots-bbbbbbbbbbbb", "zero", 500),
+        _rel("slots-cccccccccccc", "normal", 1000),
+    ]
+    chosen, notes = choose_checkpoint("slots-aaaaaaaaaaaa", releases, set())
+    assert chosen == "slots-cccccccccccc"
+    text = " ".join(notes)
+    assert "slots-aaaaaaaaaaaa" in text
+    assert "zero-init" in text
+    # A zero-init release with the most outbreaks is still not taken.
+    releases.append(_rel("slots-dddddddddddd", "zero", 8000))
+    assert choose_checkpoint("slots-dddddddddddd", releases, set())[0] == (
+        "slots-cccccccccccc"
+    )
+
+
+def test_only_zero_init_checkpoints_run_nothing() -> None:
+    from bdbvhubrenewal.evaluation.groupings import choose_checkpoint
+
+    releases = [
+        _rel("slots-aaaaaaaaaaaa", "zero", 250),
+        _rel("slots-bbbbbbbbbbbb", "zero", 500),
+    ]
+    chosen, notes = choose_checkpoint("slots-bbbbbbbbbbbb", releases, set())
+    assert chosen is None
+    assert notes == ["no slots-run checkpoint yet (zero-init ones skipped)"]
+
+
+def test_a_done_or_older_checkpoint_runs_nothing() -> None:
+    from bdbvhubrenewal.evaluation.groupings import choose_checkpoint
+
+    releases = [
+        _rel("slots-aaaaaaaaaaaa", "normal", 250),
+        _rel("slots-bbbbbbbbbbbb", "normal", 500),
+    ]
+    done = {"slots-bbbbbbbbbbbb"}
+    assert choose_checkpoint("slots-bbbbbbbbbbbb", releases, done)[0] is None
+    assert choose_checkpoint("slots-aaaaaaaaaaaa", releases, done)[0] is None
+    # A newer one than the done one is run, whatever the label called.
+    releases.append(_rel("slots-cccccccccccc", "normal", 1000))
+    assert choose_checkpoint("slots-aaaaaaaaaaaa", releases, done)[0] == (
+        "slots-cccccccccccc"
+    )
