@@ -33,9 +33,13 @@ DATASETS = [
 #   prefix           mirror folder prefix, e.g. slots-<hash> on archie
 #   live             the run the status tiles follow (exactly one)
 #   n                optional hash -> simulations, when settings lack it
+#   base_from        optional key of a run whose step-0 losses are the base
+#                    model's (use for runs whose labels change the step-0
+#                    loss); default is the run's own step 0
 RUNS = [
     {"key": "slots", "label": "slots", "hue": 217, "live": True,
-     "dir": RUN, "hashes": None, "prefix": "slots", "n": {}},
+     "dir": RUN, "hashes": None, "prefix": "slots", "n": {},
+     "base_from": "slots zeroinit"},
     {"key": "slots zeroinit", "label": "slots (zero init)", "hue": 330,
      "live": False, "dir": ROOT / "output/finetune/continuous-slots-zeroinit",
      "hashes": ["7d7c5d9f247e", "06dbdcc2b48d"], "prefix": "slots-zeroinit",
@@ -1062,6 +1066,90 @@ def germany_html(known_n, once):
 
 
 # Reload every 60 s, but wait while any time slider is playing.
+CK_JS = r"""
+(function(){
+var P=JSON.parse(document.getElementById("cdata").textContent);
+var $=function(i){return document.getElementById(i)};
+var SRCS=[["all","all"],["weekly","weekly"],["daily","daily"],["3day","3-day"]];
+var S={src:"all"};
+try{var sv=JSON.parse(sessionStorage.getItem("ftck")||"null");if(sv)S=sv}catch(e){}
+function fmt(v){return (+v).toPrecision(4)}
+function draw(){
+ var mode=window.ftMode||"start";
+ $("cksrc").innerHTML='<span class=mut>Source</span>'+SRCS.map(function(a){return '<button class="tog'+(S.src==a[0]?" on":"")+'" data-s="'+a[0]+'">'+a[1]+'</button>'}).join("");
+ var rel=mode!="raw",bad=rel&&S.src!="all";
+ var runs=P.runs.map(function(r){
+  var den=mode=="start"?r.full0:r.bfull,pts=[];
+  if(!rel||den){
+   if(S.src=="all"&&r.full0)pts.push({n:0,v:rel?r.full0/den:r.full0,t:"start (step 0): "+fmt(r.full0)});
+   r.points.forEach(function(p){var v=p[S.src];if(v==null)return;
+    pts.push({n:p.n,v:rel?v/den:v,t:r.label+" n"+p.n+" "+p.hash+", step "+p.step+": "+fmt(v)+(rel?" ("+fmt(v/den)+" relative)":"")+(p.real!=null?"; real-validation "+fmt(p.real):"")})})}
+  return {r:r,pts:pts}});
+ var all=[].concat.apply([],runs.map(function(x){return x.pts}));
+ if(bad||!all.length){$("ckplot").innerHTML='<p class=mut>'+(bad?"Per-source start losses are not recorded on the full held-out set, so relative values are only available for all sources. Choose raw.":"No scored checkpoints yet.")+'</p>';return}
+ var ns=Array.from(new Set(all.filter(function(p){return p.n>0}).map(function(p){return p.n}))).sort(function(a,b){return a-b});
+ var zx=ns[0]/2,W=640,H=320,L=48,R=16,T=12,B=40;
+ var x0=Math.log2(zx),x1=Math.log2(ns[ns.length-1]*1.15);
+ var sx=function(n){return L+(Math.log2(n||zx)-x0)/(x1-x0)*(W-L-R)};
+ var vs=all.map(function(p){return p.v});if(rel)vs.push(1);
+ var lo=Math.min.apply(null,vs),hi=Math.max.apply(null,vs),pd=(hi-lo||0.05)*0.1;lo-=pd;hi+=pd;
+ var sy=function(v){return T+(1-(v-lo)/(hi-lo))*(H-T-B)};
+ var h='<svg viewBox="0 0 '+W+' '+H+'" width="100%">';
+ var st=(hi-lo)/4,m=Math.pow(10,Math.floor(Math.log10(st))),k=[1,2,2.5,5,10].find(function(x){return x*m>=st})*m;
+ for(var v=Math.ceil(lo/k)*k;v<=hi;v+=k)h+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+sy(v)+'" y2="'+sy(v)+'" class=grid /><text x="'+(L-5)+'" y="'+(sy(v)+3)+'" text-anchor=end class=ax>'+(+v.toFixed(4))+'</text>';
+ [[zx,"start"]].concat(ns.map(function(n){return [n,""+n]})).forEach(function(t){h+='<line x1="'+sx(t[0])+'" x2="'+sx(t[0])+'" y1="'+T+'" y2="'+(H-B)+'" class=grid /><text x="'+sx(t[0])+'" y="'+(H-B+14)+'" text-anchor=middle class=ax>'+t[1]+'</text>'});
+ h+='<text x="'+(W/2)+'" y="'+(H-6)+'" text-anchor=middle class=ax>simulations (log2)</text>';
+ if(rel&&1>=lo&&1<=hi)h+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+sy(1)+'" y2="'+sy(1)+'" class=mark />';
+ runs.forEach(function(x){if(!x.pts.length)return;var c=x.r.color;
+  h+='<polyline points="'+x.pts.map(function(p){return sx(p.n)+","+sy(p.v)}).join(" ")+'" fill=none stroke="'+c+'" stroke-width=1.8 />';
+  x.pts.forEach(function(p){h+='<circle cx="'+sx(p.n)+'" cy="'+sy(p.v)+'" r=3.4 fill="'+c+'"><title>'+p.t+'</title></circle>';
+   h+='<text x="'+(sx(p.n)+5)+'" y="'+(sy(p.v)-5)+'" class=ax>'+(+p.v.toPrecision(3))+'</text>'})});
+ h+='</svg>';
+ var leg=runs.map(function(x){return '<span><i style="background:'+x.r.color+'"></i>'+x.r.label+'</span>'}).join("");
+ $("ckplot").innerHTML=h+'<div class=leg>'+leg+'</div><p class=mut>Held-out loss on the full held-out set at each saved checkpoint'+(rel?', '+(mode=="start"?"divided by the run\'s own step-0 loss":"divided by the base Chronos-2 loss on the same blocks")+'. Reference line is 1':'')+'. Hover for hash, step and real-validation loss.</p>';
+}
+$("cksrc").onclick=function(e){var b=e.target.closest("button");if(!b)return;S.src=b.dataset.s;try{sessionStorage.setItem("ftck",JSON.stringify(S))}catch(x){}draw()};
+window.addEventListener("ftmode",draw);
+draw();
+})();
+"""
+
+
+def ck_payload(cks, info):
+    runs = []
+    for c in RUNS:
+        I = info[c["key"]]
+        pts = []
+        for nm, s, _ in cks[c["key"]]:
+            bs = s.get("held_out_loss_by_source") or {}
+            n = s.get("n_outbreaks") or int(re.sub(r"\D", "", nm) or 0)
+            pts.append({"n": n, "step": s.get("steps"),
+                        "hash": str(s.get("hash", "")),
+                        "all": s.get("held_out_loss"),
+                        "weekly": bs.get("weekly"), "daily": bs.get("daily"),
+                        "3day": bs.get("3day"),
+                        "real": s.get("real_validation_loss")})
+        pts.sort(key=lambda p: p["n"])
+        runs.append({"key": c["key"], "label": c["label"],
+                     "color": run_colour(c["key"]), "full0": I["full0"],
+                     "bfull": I["bfull"], "points": pts})
+    return json.dumps({"runs": runs}, separators=(",", ":")).replace(
+        "</", "<\\\\/")
+
+
+MODE_JS = r"""
+(function(){var m="start";
+ try{m=sessionStorage.getItem("ftmode")||m}catch(e){}
+ function set(v){m=v;document.body.className=document.body.className.replace(/\bm-\w+/g,"")+" m-"+v;
+  window.ftMode=v;
+  [].forEach.call(document.querySelectorAll(".modebar button"),function(b){b.classList.toggle("on",b.dataset.mode==v)});
+  try{sessionStorage.setItem("ftmode",v)}catch(e){}
+  window.dispatchEvent(new Event("ftmode"))}
+ [].forEach.call(document.querySelectorAll(".modebar"),function(bar){
+  bar.onclick=function(e){var b=e.target.closest("button");if(b)set(b.dataset.mode)}});
+ set(m)})();
+"""
+
 REFRESH_JS = r"""
 (function tick(){setTimeout(function(){
  if(window.ftPlaying)tick();else location.reload()},60000)})();
@@ -1156,52 +1244,110 @@ def build():
     if not train:
         train = [(r["step"], r["loss"]) for r in sl]
     smax = max([x for x, _ in train] + [1000])
-    tr_series = [(f"{LC['label']} raw", run_colour(LC["key"]), train, "dots"),
-                 (f"{LC['label']} rolling mean", run_colour(LC["key"]),
-                  rolling(train, 20), "line")]
-    held = []
-    bysrc = []
     SRC_COL = {"weekly": PAL[0], "daily": PAL[1], "3day": PAL[2]}
     styles = [None, "dash", "dd", "dot"]
-    for i, c in enumerate(RUNS):
-        rows = logs[c["key"]]
-        col = run_colour(c["key"])
-        if c is not LC:
-            ph = JC.get(str(Path(c["dir"]) / "train/history.json"))
-            pt = [(h["step"], h["loss"]) for h in ph or []
-                  if isinstance(h, dict) and "loss" in h and "step" in h]
-            if not pt:
-                pt = [(r["step"], r["loss"]) for r in rows]
-            pt = [q for q in pt if q[0] <= smax]
-            tr_series.append((f"{c['label']} rolling mean", col,
-                              rolling(pt, 20), "faint"))
-        held.append((c["label"], col, [(r["step"], r["held"])
-                                       for r in rows], "pts"))
-        for k in ("weekly", "daily", "3day"):
-            pts = [(r["step"], r["src"][k]) for r in rows]
-            if any(v is not None for _, v in pts):
-                s = (f"{k} ({c['label']})", SRC_COL[k], pts, "pts")
-                bysrc.append(s + (styles[i % 4],) if styles[i % 4] else s)
-    # Logged held-out losses are over the first 100 blocks; history's step-0
-    # value is over all held-out blocks, so it is not on the same scale.
-    plots = [
-        chart("Training loss (rolling mean of 20 logged points)", tr_series,
-              marks, ylog=True),
-        chart("Held-out pooled loss by run", held, marks, ylog=True),
-        chart("Held-out loss by source (colour is the source, style the run)",
-              bysrc, marks, ylog=True),
-    ]
+    info = {}
+    for c in RUNS:
+        d = Path(c["dir"])
+        hh = JC.get(str(d / "train/history.json")) or []
+        h0 = next((h for h in hh if isinstance(h, dict)
+                   and h.get("step") == 0 and "held_out_loss" in h), {})
+        ck = cks[c["key"]]
+        full0 = h0.get("held_out_loss") or next(
+            (s.get("held_out_loss_start") for _, s, _ in ck
+             if s.get("held_out_loss_start")), None)
+        if c is LC:
+            tr = train
+        else:
+            tr = [(h["step"], h["loss"]) for h in hh if isinstance(h, dict)
+                  and "loss" in h and "step" in h] or [
+                (r["step"], r["loss"]) for r in logs[c["key"]]]
+        info[c["key"]] = {"full0": full0, "src0": h0.get("by_source") or {},
+                          "train": tr, "ck": ck,
+                          "tr0": (sum(v for _, v in tr[:20]) / len(tr[:20])
+                                  if tr else None)}
+    for c in RUNS:  # base model: own step-0 unless the run starts with labels
+        b = info.get(c.get("base_from") or c["key"], info[c["key"]])
+        info[c["key"]]["bfull"], info[c["key"]]["bsrc"] = b["full0"], b["src0"]
 
-    def cktable(rows, run):
+    def make_plots(mode):
+        rel = mode != "raw"
+        suffix = {"raw": "", "start": ", relative to start",
+                  "base": ", relative to base Chronos-2"}[mode]
+        ref = (1.0,) if rel else ()
+        tr_series, held, bysrc = [], [], []
+        for i, c in enumerate(RUNS):
+            k, col, I = c["key"], run_colour(c["key"]), info[c["key"]]
+            rows = logs[k]
+            tr = [q for q in I["train"] if c is LC or q[0] <= smax]
+            if rel and I["tr0"]:
+                tr = [(x, y / I["tr0"]) for x, y in tr]
+            if c is LC:
+                tr_series += [(f"{c['label']} raw", col, tr, "dots"),
+                              (f"{c['label']} rolling mean", col,
+                               rolling(tr, 20), "line")]
+            else:
+                tr_series.append((f"{c['label']} rolling mean", col,
+                                  rolling(tr, 20), "faint"))
+            if not rel:
+                held.append((c["label"], col, [(r["step"], r["held"])
+                                               for r in rows], "pts"))
+            else:
+                den = I["full0"] if mode == "start" else I["bfull"]
+                if den and I["full0"]:
+                    pts = [(0, I["full0"] / den)] + [
+                        (s.get("steps") or tstep(int(re.sub(
+                            r"\D", "", nm) or 0)),
+                         s["held_out_loss"] / den)
+                        for nm, s, _ in I["ck"] if s.get("held_out_loss")]
+                    held.append((c["label"], col, pts, "pts"))
+            for src in ("weekly", "daily", "3day"):
+                pts = [(r["step"], r["src"][src]) for r in rows]
+                if not any(v is not None for _, v in pts):
+                    continue
+                if rel:
+                    den = (I["src0"] if mode == "start" else I["bsrc"]).get(src)
+                    if not den:
+                        continue
+                    z = I["src0"].get(src)
+                    pts = ([(0, z)] if z else []) + pts
+                    pts = [(x, v / den) for x, v in pts if v is not None]
+                s = (f"{src} ({c['label']})", SRC_COL[src], pts, "pts")
+                bysrc.append(s + (styles[i % 4],) if styles[i % 4] else s)
+        # Logged held-out losses are over the first 100 blocks. The pooled
+        # relative charts use the checkpoints' full-set losses instead,
+        # because the step-0 first-100 pooled loss is not logged.
+        ttl = {"raw": "Held-out pooled loss by run (first 100 blocks)",
+               "start": "Held-out pooled loss by run (checkpoints, full set)",
+               "base": "Held-out pooled loss by run (checkpoints, full set)"}
+        return [
+            chart("Training loss (rolling mean of 20 logged points)"
+                  + suffix, tr_series, marks, ylog=True, hlines=ref),
+            chart(ttl[mode] + suffix, held, marks, ylog=True, hlines=ref),
+            chart("Held-out loss by source (colour is the source, style the "
+                  "run)" + suffix, bysrc, marks, ylog=True, hlines=ref)]
+
+    plots_h = "".join(
+        f'<div class="mode m-{m}"><div class=plots>'
+        + "".join(make_plots(m)) + "</div></div>"
+        for m in ("raw", "start", "base"))
+
+    def cktable(rows, run, key, mode):
         if not rows:
             return f"<p class=mut>no checkpoints yet for {run}</p>"
-        o = ["<table><tr><th>run<th>ckpt<th>hash<th>held-out<th>held-out "
+        I = info[key]
+        hd = {"raw": "held-out", "start": "held-out / start",
+              "base": "held-out / base"}[mode]
+        o = [f"<table><tr><th>run<th>ckpt<th>hash<th>{hd}<th>held-out "
              "start<th>real-val<th>weekly<th>daily<th>3day<th>saved</tr>"]
         for name, s, mt in rows:
             bs = s.get("held_out_loss_by_source") or {}
+            ho = s.get("held_out_loss")
+            den = {"raw": 1, "start": I["full0"], "base": I["bfull"]}[mode]
+            hv = ho / den if ho and den else None
             o.append("<tr>" + "".join(f"<td>{c}" for c in [
                 run, name, html.escape(str(s.get("hash", ""))),
-                fmt(s.get("held_out_loss")), fmt(s.get("held_out_loss_start")),
+                fmt(hv) or "n/a", fmt(s.get("held_out_loss_start")),
                 fmt(s.get("real_validation_loss")),
                 fmt(bs.get("weekly")) or "n/a", fmt(bs.get("daily")) or "n/a",
                 fmt(bs.get("3day")) or "n/a",
@@ -1209,7 +1355,10 @@ def build():
                 else ""]) + "</tr>")
         return "".join(o) + "</table>"
 
-    ck_h = "".join(cktable(cks[c["key"]], c["label"]) for c in RUNS)
+    ck_h = "".join(
+        f'<div class="mode m-{m}">' + "".join(
+            cktable(cks[c["key"]], c["label"], c["key"], m) for c in RUNS)
+        + "</div>" for m in ("raw", "start", "base"))
     cmp_h = "<p class=mut>output/finetune/slots-vs-noslots.csv not present</p>"
     if CSV.exists():
         try:
@@ -1258,6 +1407,12 @@ def build():
         {str(s.get("hash")): s.get("n_outbreaks")
          for v in cks.values() for _, s, _ in v}, ONCE["on"])
 
+    modebar = (
+        '<div class="sctl modebar"><span class=mut>Loss scale</span>'
+        '<button class=tog data-mode=raw>raw</button>'
+        '<button class=tog data-mode=start>relative to start</button>'
+        '<button class=tog data-mode=base>relative to base Chronos-2</button>'
+        '</div>')
     css = """
 :root{--bg:#fff;--fg:#1d2127;--mut:#6b7280;--card:#f6f7f9;--line:#d9dde3;
 --c1:#2563eb;--c2:#ea580c;--c3:#16a34a;--c4:#9333ea;--bad:#dc2626;--ok:#15803d}
@@ -1285,7 +1440,8 @@ border-bottom:1px solid var(--line);font-size:12px}
 .gctl{display:flex;flex-wrap:wrap;gap:12px;align-items:center;
 margin-bottom:8px}.gwide input{width:200px;vertical-align:middle}
 .gck{display:flex;flex-wrap:wrap;gap:6px 16px;margin-bottom:8px}
-.sctl{display:flex;flex-wrap:wrap;gap:4px;align-items:center;
+.mode{display:none}body.m-raw .m-raw,body.m-start .m-start,
+body.m-base .m-base{display:block}.sctl{display:flex;flex-wrap:wrap;gap:4px;align-items:center;
 margin-bottom:8px}.sep{width:10px}.sum{font-size:13px;font-weight:600;
 min-height:1.3em;margin-bottom:4px}.plots2{display:grid;
 grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:8px;
@@ -1302,18 +1458,28 @@ font-size:12px}.wrap{overflow-x:auto}"""
     body = f"""<h1>Chronos-2 fine-tuning: slots run</h1>
 <div class=mut>{datetime.now():%Y-%m-%d %H:%M:%S}; auto-refresh 60 s; {sub}</div>
 <h2>Status</h2><div class=tiles>{tiles_h}</div>
-<h2>Plots</h2><div class=plots>{''.join(plots)}</div>
-<p class=mut>Dashed lines mark published checkpoints of the slots run.</p>
-<h2>Checkpoints</h2><div class=wrap>{ck_h}</div>
-<h2>Slots vs no slots (matched checkpoints)</h2><div class=wrap>{cmp_h}</div>
+<h2>Loss plots</h2>{modebar}
+<p class=mut>Relative values divide by the run's own step-0 held-out loss
+(start), or by the base model's held-out loss on the same blocks (base, set
+with base_from in RUNS for runs that start with labels). Training loss uses its
+own first 20 steps for both. Reference line is 1.</p>{plots_h}
+<p class=mut>Dashed lines mark published checkpoints of the live run.</p>
+<h2>Held-out loss by checkpoint</h2>{modebar}
+<div id=cksrc class=sctl></div><div class=card><div id=ckplot></div></div>
+<script type="application/json" id=cdata>{ck_payload(cks, info)}</script>
+<script>{CK_JS}</script>
 <h2>Performance on real data</h2>{sc_h}{md_h}
 <h2>German nowcasts by checkpoint</h2>{rv_h}
-<h2>Recent activity (archie mailbox)</h2>{mh}"""
+<h2>Recent activity (archie mailbox)</h2>{mh}
+<details class=tbls><summary><b>Tables</b></summary>
+<h3>Checkpoints</h3><div class=wrap>{ck_h}</div>
+<h3>Slots vs no slots (matched checkpoints)</h3><div class=wrap>{cmp_h}</div>
+</details>"""
     return (f'<!doctype html><html><head><meta charset=utf-8>'
             f'<meta name=viewport content="width=device-width,initial-scale=1">'
             f'<title>FT dashboard</title>'
             f'<style>{css}</style><script>{PLAYER_JS}</script></head>'
-            f'<body>{body}<script>{REFRESH_JS}</script></body></html>')
+            f'<body>{body}<script>{MODE_JS}\n{REFRESH_JS}</script></body></html>')
 
 
 LOCK = threading.Lock()
