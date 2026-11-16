@@ -86,3 +86,18 @@ def test_only_slots_checkpoints_start_the_follow_up_jobs(poll) -> None:
     assert cmd[-1] == "slots-dddddddddddd"
     assert Path(cmd[0]).name == "slots_followups.sh"
     assert poll.follow_ups("aaaaaaaaaaaa") is None
+
+
+def test_slots_first_then_the_complete_reference_then_no_slots(poll) -> None:
+    assert poll.next_job(["slots-a", "b"], complete_pending=True) == "slots-a"
+    assert poll.next_job(["b"], complete_pending=True) == poll.COMPLETE_JOB
+    assert poll.next_job([], complete_pending=True) == poll.COMPLETE_JOB
+    assert poll.next_job(["b"], complete_pending=False) == "b"
+    assert poll.next_job([], complete_pending=False) is None
+
+
+def test_slots_checkpoints_land_bdbv_before_germany(poll) -> None:
+    units = poll.units_for("slots-a", scored=set())
+    fast, slow = poll.split_fast(units)
+    assert {u[0] for u in fast} == {"heldout", "bdbv"}
+    assert {u[0] for u in slow} == {"germany"}

@@ -325,3 +325,51 @@ def test_slots_checkpoints_are_scored_first_under_their_paper_label(
 def test_each_checkpoint_label_maps_to_its_release(cs) -> None:
     assert cs.release_of("slots-dddddddddddd") == "chronos-slots-dddddddddddd"
     assert cs.release_of("aaaaaaaaaaaa") == "chronos-ft-aaaaaaaaaaaa"
+
+
+def test_the_complete_data_models_are_a_zero_shot_reference(cs) -> None:
+    # Sam 16:55: Chronos-2 given only complete data points, zero-shot.
+    assert cs.COMPLETE == (
+        "fm_chronos_daily_complete",
+        "fm_chronos_weekly_complete",
+    )
+    assert set(cs.COMPLETE) <= set(cs.label_models(cs.REFERENCE))
+    assert cs.label_models(cs.COMPLETE_LABEL) == cs.COMPLETE
+    rows = pd.DataFrame({"model": ["fm_chronos_daily_complete"]})
+    assert cs._tag(rows, cs.COMPLETE_LABEL)["checkpoint"].item() == "zero-shot"
+
+
+def test_complete_forecasts_merge_into_the_reference_files(cs, tmp_path):
+    for study in ("germany", "bdbv"):
+        ref = tmp_path / study / cs.REFERENCE
+        new = tmp_path / study / cs.COMPLETE_LABEL
+        ref.mkdir(parents=True)
+        new.mkdir(parents=True)
+        pd.DataFrame({"model": ["randomwalknowcast"], "value": [1.0]}).to_csv(
+            ref / "d1.csv.gz", index=False
+        )
+        pd.DataFrame(
+            {"model": ["fm_chronos_daily_complete"], "value": [2.0]}
+        ).to_csv(new / "d1.csv.gz", index=False)
+    cs.merge_complete(tmp_path)
+    cs.merge_complete(tmp_path)  # a second merge adds nothing
+    for study in ("germany", "bdbv"):
+        out = pd.read_csv(tmp_path / study / cs.REFERENCE / "d1.csv.gz")
+        assert out["model"].tolist() == [
+            "randomwalknowcast",
+            "fm_chronos_daily_complete",
+        ]
+    assert (tmp_path / cs.COMPLETE_STAMP).exists()
+
+
+def test_a_slots_cache_is_also_reachable_by_its_bare_hash(cs, tmp_path):
+    # The dashboard mirrors cache/<study>/<hash>/ as dates finish.
+    root = cs.unit_root(tmp_path, "germany", "slots-abcdef123456")
+    assert root == tmp_path / "germany" / "slots-abcdef123456"
+    assert (tmp_path / "germany" / "abcdef123456").resolve() == root.resolve()
+
+
+def test_rows_are_built_only_from_finished_units(cs, tmp_path):
+    (tmp_path / "heldout").mkdir()
+    ready = cs.ready_labels(tmp_path, "germany", ["reference", "abc"])
+    assert ready == []
