@@ -265,3 +265,14 @@ def test_forecast_share_counts_missing_forecasts() -> None:
     assert share.loc["a", "share"] == 1.0
     assert share.loc["b", "share"] == 0.5
     assert share.loc["b", "missing"] == 1
+
+
+def test_blocks_stay_apart_when_their_hashes_collide(monkeypatch) -> None:
+    import paperfigs.scores as scores
+
+    three = _rows("m", Q, 5.0, location="b")
+    three = three.loc[three["quantile_level"].isin([0.05, 0.5, 0.95])]
+    df = pd.concat([_rows("m", Q, 5.0), three], ignore_index=True)
+    want = score_forecasts(df)
+    monkeypatch.setattr(scores, "hash", lambda _: 0, raising=False)
+    pd.testing.assert_frame_equal(score_forecasts(df), want)
