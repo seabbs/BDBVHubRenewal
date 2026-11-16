@@ -114,10 +114,10 @@ nowcasts:
 # null leaves a note of what it waits on in a development run and fails a
 # paper run.
 evidence:
-  # scripts/finetune_simulate.R of the r3 fine-tune (#235). Read from main,
-  # with no pin, once #235 merges.
+  # scripts/finetune_simulate.R of the r4 grid that the simulation rounds
+  # and the final fine-tune use.
   simulator:
-    ref: 6bcb6f2fa4a2f2f5978271a7d3d30e613ea3f939
+    ref: c77f5a241afef356430c5a587623f8fa0d03f9b5
     path: scripts/finetune_simulate.R
   # Scores of each r3 checkpoint on the case studies (germany-chronos2).
   checkpoint_scores:
