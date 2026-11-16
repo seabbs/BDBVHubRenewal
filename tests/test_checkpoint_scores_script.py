@@ -394,6 +394,8 @@ def test_each_checkpoint_s_rows_name_its_run(cs) -> None:
     assert cs.run_of(zero) == "slots-zeroinit"
     assert cs.run_of(rand) == "slots"
     assert cs.run_of({}) == "no-slots"
+    # The attention-bias run (attn-bias) is its own run.
+    assert cs.run_of({"series_bias": {"init": "zero"}}) == "bias"
     assert "run" in cs.COLUMNS
 
 
