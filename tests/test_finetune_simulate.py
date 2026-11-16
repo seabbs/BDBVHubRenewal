@@ -634,7 +634,8 @@ d$delay_form <- "parametric"; d$delay_family <- "lognormal"
 d$reporting <- "daily"; d$report_days <- "all"; d$delay_places <- "shared"
 d$observation <- "negbin"; d$obs_strata <- "{level}"
 v <- draw_values(d)
-v$weeks <- 16L; v$target_size <- 40000; v$quiet_places <- integer(0)
+v$stratum_sd <- 0
+v$weeks <- 16L; v$target_size <- 2e5; v$quiet_places <- integer(0)
 v$delay_median <- 3; v$delay_sdlog <- 0.6; v$flat <- 0
 {set_values}
 out <- simulate_outbreak(d, v)
@@ -645,7 +646,7 @@ full <- CJ(location = unique(c$location), reference_date =
 c <- c[full, on = .(location, reference_date, report_date, draw)]
 c[is.na(count), count := 0L]
 s <- c[, .(m = mean(count), v = var(count)),
-  by = .(location, reference_date, report_date)][m > 20]
+  by = .(location, reference_date, report_date)][m > 10]
 r <- s[, .(ratio = median((v - m) / m^2)), by = location][order(location)]
 cat("excess", r$ratio, "\\n")
 cat("families", out$values$obs_family, "\\n")

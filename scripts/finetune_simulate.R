@@ -27,6 +27,9 @@
 #   weekdays;
 # - reference day-of-week effect on expected counts: no or yes;
 # - observation: "negbin" (NB2), "negbin1d" (NB1) or "poisson";
+# - observation across strata: shared, dispersion per stratum, or family
+#   and dispersion per stratum, drawn in R from epinowcast's expected
+#   reports (`observe`);
 # - strata: one, 2 to 26 places, 2 to 8 ages, or places by ages (at most
 #   60), sharing their trajectory and delay through random effects;
 # - seeding: every place at the outset, or some imported mid-outbreak;
@@ -124,7 +127,11 @@ factors <- list(
   # shifted from a shared delay; or each place's mean and spread its own.
   # Crossed with `shocks`, a shared delay with a backlog or outage in one
   # or two places is the shared baseline with temporary shocks.
-  delay_places = c("shared", "shifted", "independent")
+  delay_places = c("shared", "shifted", "independent"),
+  # Observation noise across strata: the outbreak's family and dispersion
+  # everywhere; dispersion drawn per stratum around the outbreak's; or a
+  # family and dispersion per stratum (`observe`).
+  obs_strata = c("shared", "dispersion", "families")
 )
 
 # Simulations per balanced block: a multiple of every factor's levels.
@@ -519,7 +526,46 @@ draw_values <- function(design) {
   } else {
     cases[sample.int(length(cases), min(length(cases), sample(1:2, 1)))]
   }
+  # Observation family and dispersion per stratum (`.group` order: places
+  # then ages within each).
+  n_s <- design$n_places * design$n_ages
+  v$obs_phi_sd <- runif(1, 0.3, 1)
+  v$obs_sqrt_phi <- if (design$obs_strata == "shared") {
+    rep(v$sqrt_phi, n_s)
+  } else {
+    v$sqrt_phi * exp(rnorm(n_s, 0, v$obs_phi_sd))
+  }
+  v$obs_family <- if (design$obs_strata == "families") {
+    sample(c("negbin", "negbin1d", "poisson"), n_s, replace = TRUE)
+  } else {
+    rep(design$observation, n_s)
+  }
   v
+}
+
+# Expected reports are linear in the latent infections, so epinowcast is
+# run once with the infections scaled by `expected_scale` and Poisson
+# reports: the counts over the scale estimate the expected reports without
+# bias, adding only mean / scale to the variance. The observation draws are
+# then drawn here, with a family and dispersion per stratum, which
+# epinowcast's observation model (one dispersion) cannot do.
+expected_scale <- 1000
+
+# Draws of the reports with mean `mu` in stratum `group`: NB2 with
+# phi = 1 / sqrt_phi^2, NB1 with variance mu (1 + 1 / phi) on the NB2
+# scale (epinowcast #937), or Poisson.
+observe <- function(mu, group, family, sqrt_phi_obs) {
+  f <- family[group]
+  phi <- 1 / sqrt_phi_obs[group]^2
+  out <- numeric(length(mu))
+  on <- mu > 0
+  pois <- on & f == "poisson"
+  nb2 <- on & f == "negbin"
+  nb1 <- on & f == "negbin1d"
+  out[pois] <- rpois(sum(pois), mu[pois])
+  out[nb2] <- rnbinom(sum(nb2), size = phi[nb2], mu = mu[nb2])
+  out[nb1] <- rnbinom(sum(nb1), size = mu[nb1] * phi[nb1], mu = mu[nb1])
+  out
 }
 
 # The first and last reference dates of a reporting shock in `counts`.
@@ -801,24 +847,20 @@ simulate_outbreak <- function(design, v) {
     parameters$rep_beta <- array(rnorm(report$data$rep_fncol))
     parameters$rep_beta_sd <- array(v$dow_sd)
   }
-  parameters$expr_lelatent_int <- latent$lelatent
+  parameters$expr_lelatent_int <- latent$lelatent + log(expected_scale)
 
-  # Observations: the NB1 dispersion on the NB2 scale (epinowcast #937).
+  # Observations: the NB1 dispersion on the NB2 scale (epinowcast #937),
+  # per stratum.
   v$lambda_hat <- max(1, median(onsets[onsets >= 1]), na.rm = TRUE)
   v$sum_p2 <- sum(delay$pmf^2)
-  v$sqrt_phi_obs <- switch(design$observation,
-    negbin = v$sqrt_phi,
-    negbin1d = v$sqrt_phi * sqrt(v$lambda_hat * v$sum_p2),
-    poisson = NA_real_
+  v$sqrt_phi_obs <- ifelse(v$obs_family == "negbin1d",
+    v$obs_sqrt_phi * sqrt(v$lambda_hat * v$sum_p2), v$obs_sqrt_phi
   )
-  if (design$observation != "poisson") {
-    parameters$sqrt_phi <- array(v$sqrt_phi_obs)
-  }
   sims <- suppressMessages(suppressWarnings(enw_simulate(
     pobs, growth_rate = latent$growth_rate, parameters = parameters,
     reference = reference, report = report, expectation = expectation,
-    obs = enw_obs(family = design$observation, data = pobs), model = model,
-    seed = sample.int(.Machine$integer.max, 1), draws = draws,
+    obs = enw_obs(family = "poisson", data = pobs), model = model,
+    seed = sample.int(.Machine$integer.max, 1), draws = 1L,
     show_messages = debug, show_exceptions = debug, refresh = 0
   )))
   # The draws in the order `enw_pp_summary` binds them to the triangle,
@@ -826,9 +868,11 @@ simulate_outbreak <- function(design, v) {
   cells <- data.table::copy(sims$new_confirm[[1]])
   data.table::setorderv(cells, c(".group", "reference_date"))
   obs <- sims$fit[[1]]$draws("pp_obs", format = "matrix")
-  pp <- rbindlist(lapply(seq_len(nrow(obs)), function(k) {
+  mu <- as.numeric(obs[1, ]) / expected_scale
+  pp <- rbindlist(lapply(seq_len(draws), function(k) {
     cells[, .(.group, place, age, reference_date, report_date,
-      draw = k, mean = as.numeric(obs[k, ])
+      draw = k,
+      mean = observe(mu, .group, v$obs_family, v$sqrt_phi_obs)
     )]
   }))
   pp[, location := if (multi_place && multi_age) {
