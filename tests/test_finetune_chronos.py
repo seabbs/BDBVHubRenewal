@@ -1,5 +1,6 @@
 """Places of the fine-tune's training blocks."""
 
+import json
 import sys
 from pathlib import Path
 
@@ -464,3 +465,56 @@ def test_blocks_are_cut_without_torch(tmp_path):
     )
     assert out.returncode == 0, out.stderr
     assert int(out.stdout.split()[-1]) > 0
+
+
+def _fake_torch(monkeypatch):
+    import types
+
+    torch = types.ModuleType("torch")
+    torch.save = lambda obj, path: Path(path).write_text(json.dumps(obj))
+    torch.load = lambda path, **_: json.loads(Path(path).read_text())
+    peft = types.ModuleType("peft")
+    peft.get_peft_model_state_dict = lambda model: model["adapter"]
+    peft.set_peft_model_state_dict = lambda model, sd: model.update(adapter=sd)
+    monkeypatch.setitem(sys.modules, "torch", torch)
+    monkeypatch.setitem(sys.modules, "peft", peft)
+
+
+class _Optimiser:
+    def __init__(self, step):
+        self.step = step
+
+    def state_dict(self):
+        return {"step": self.step}
+
+    def load_state_dict(self, sd):
+        self.step = sd["step"]
+
+
+def test_a_crash_while_saving_state_keeps_the_last_state(tmp_path, monkeypatch):
+    import pytest
+    from finetune_stream import load_state, save_state
+
+    _fake_torch(monkeypatch)
+    where = tmp_path / "state"
+    save_state(where, {"adapter": [1]}, _Optimiser(1), {"step": 50})
+    rename = Path.rename
+
+    def crash(self, target):
+        if self.name == "state.tmp":
+            raise OSError("crash")
+        return rename(self, target)
+
+    monkeypatch.setattr(Path, "rename", crash)
+    with pytest.raises(OSError, match="crash"):
+        save_state(where, {"adapter": [2]}, _Optimiser(2), {"step": 100})
+    monkeypatch.setattr(Path, "rename", rename)
+    # The restarted trainer resumes from the last state that was saved.
+    model, optimiser = {"adapter": None}, _Optimiser(0)
+    assert load_state(where, model, optimiser) == {"step": 50}
+    assert model["adapter"] == [1]
+    assert optimiser.step == 1
+    # The next save replaces it and leaves no old copy.
+    save_state(where, {"adapter": [3]}, _Optimiser(3), {"step": 150})
+    assert load_state(where, model, optimiser) == {"step": 150}
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["state"]
