@@ -95,10 +95,20 @@ def test_held_out_loss_uses_the_slots():
     assert fs.held_out_loss(zero, [block], 100) == fs.held_out_loss(
         plain, [block], 100
     )
-    model = trained()
-    assert fs.held_out_loss(model, [block], 100) != pytest.approx(
-        fs.held_out_loss(model, [swap], 100), abs=1e-4
-    )
+    # A model with slots scores each block with its fixed slots.
+    model, seen = trained(), []
+    real = slots.assigned
+
+    def spy(m, ids):
+        seen.append(None if ids is None else np.asarray(ids))
+        return real(m, ids)
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(fs.slots, "assigned", spy)
+        fs.held_out_loss(model, [block, swap], 100)
+    want = fs.block_slots([block, swap], 8)
+    assert len(seen) == 1
+    assert np.array_equal(seen[0], want)
 
 
 def test_lora_config_saves_the_slots_with_the_adapter():
