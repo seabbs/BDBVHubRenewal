@@ -121,16 +121,13 @@ for ((ROUND = first; ROUND <= last; ROUND++)); do
   say "round $ROUND started: $((ROUND_BATCHES * BATCH)) training and $((HELD_BATCHES * BATCH)) held-out simulations, $DRAWS draws each, grid $GRID at ${COMMIT:0:9}, $SLOTS slots of $SLOT_MEM, into $dir"
   t0=$(date +%s)
   simulate_round "$dir"
-  mapfile -t seeds < <(round_seeds "$ROUND")
-  printf '%s\n' "${seeds[@]:0:ROUND_BATCHES}" > "$dir/seeds.txt"
-  echo "${seeds[ROUND_BATCHES]} ${seeds[-1]}" > "$dir/held-out.txt"
   n_sims=$(cat "$dir"/sims/settings-*.csv 2> /dev/null | grep -vc '^outbreak')
   if ! uv run python scripts/sim_qc.py "$dir" > "$dir/qc/run.log" 2>&1; then
     say "round $ROUND: sim QC failed ($(tail -n 1 "$dir/qc/run.log" | cut -c1-200)); round not marked ready"
     continue
   fi
   if [ "$ARCHIVE" = 1 ]; then
-    tar -C "$dir" -czf "$dir.tar.gz" sims manifest.csv seeds.txt held-out.txt qc
+    tar -C "$dir" -czf "$dir.tar.gz" sims manifest.csv qc
     if gh release view "sims-r$ROUND" -R "$REPO" > /dev/null 2>&1 || \
         gh release create "sims-r$ROUND" -R "$REPO" --prerelease \
           --title "Simulations, round $ROUND" \
@@ -141,6 +138,11 @@ for ((ROUND = first; ROUND <= last; ROUND++)); do
       say "round $ROUND: could not create release sims-r$ROUND; the files stay in $dir"
     fi
   fi
+  # The seed lists come last, with READY: the trainer pulls a round once
+  # they exist, so it never trains on an unreviewed round.
+  mapfile -t seeds < <(round_seeds "$ROUND")
+  printf '%s\n' "${seeds[@]:0:ROUND_BATCHES}" > "$dir/seeds.txt"
+  echo "${seeds[ROUND_BATCHES]} ${seeds[-1]}" > "$dir/held-out.txt"
   date -u +%FT%TZ > "$dir/READY"
   say "round $ROUND ready for training: $n_sims simulations in $(( ($(date +%s) - t0) / 60 )) min, $(cat "$dir/qc/summary.txt" 2> /dev/null); seeds $dir/seeds.txt, held-out $(cat "$dir/held-out.txt")"
 done

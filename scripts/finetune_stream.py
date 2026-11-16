@@ -190,8 +190,20 @@ def seed_done(sim_dir: Path, seed: int) -> bool:
     return True
 
 
-EXCLUDED: set[str] = set()
-"""Simulations the sim QC excluded (`--exclude`), never read."""
+EXCLUDE_FILE: Path | None = None
+"""Simulations the sim QC excluded (`--exclude`), one a line or a CSV
+with a `simulation` column. It is read again before each new batch, as a
+continuous run's rounds bring their exclusions with them."""
+
+
+def excluded() -> set[str]:
+    """Return the simulations in `EXCLUDE_FILE`, if any."""
+    if EXCLUDE_FILE is None or not EXCLUDE_FILE.exists():
+        return set()
+    lines = [x.strip() for x in EXCLUDE_FILE.read_text().splitlines()]
+    if lines and lines[0].startswith("simulation"):
+        lines = [x.split(",")[0] for x in lines[1:]]
+    return {x for x in lines if x}
 
 
 def batch_outbreaks(sim_dir: Path, seed: int) -> list[str] | None:
@@ -203,7 +215,8 @@ def batch_outbreaks(sim_dir: Path, seed: int) -> list[str] | None:
         if not seed_done(sim_dir, seed):
             return None
         ids = read_ids(sim_dir / f"settings-{seed}.csv")
-        ids = [i for i in ids if i not in EXCLUDED]
+        skip = excluded()
+        ids = [i for i in ids if i not in skip]
         _READY[sim_dir, seed] = sorted(ids, key=ft._order)
     return _READY[sim_dir, seed]
 
@@ -252,6 +265,21 @@ def next_chunk(
     return None
 
 
+def snapshots(draws: list[str], rng: np.random.Generator) -> list[tuple]:
+    """Return each draw at each of `CUTS` snapshots, with a source each.
+
+    Every observation draw is cut once at each snapshot, so a simulation
+    of 10 draws gives 160 blocks; each block's source is drawn from
+    `SOURCES`.
+    """
+    sources = rng.choice(ft.SOURCES, size=(len(draws), ft.CUTS))
+    return [
+        (draw, str(sources[i, j]), j)
+        for i, draw in enumerate(draws)
+        for j in range(ft.CUTS)
+    ]
+
+
 def cut(
     sim_dir: Path,
     ids: list[str],
@@ -282,33 +310,8 @@ def cut(
         days = row.get("max_delay", np.nan)
         weeks = ft.SIM_DELAY_WEEKS if pd.isna(days) else int(days) // 7
         draws = dict(tuple(by[simulation].groupby("outbreak")))
-        candidates = [
-            (outbreak, source, j)
-            for outbreak in sorted(draws)
-            for source in ft.SOURCES
-            for j in range(ft.CUTS)
-        ]
         rng = np.random.default_rng([seed, zlib.crc32(simulation.encode())])
-        if ft.ALL_DRAWS:
-            # `per_simulation` snapshots, each in its own stretch of the
-            # outbreak with a source of its own, cut from every draw with
-            # the same cut-off, lag and places.
-            sources = rng.choice(ft.SOURCES, per_simulation)
-            picks = {(str(s), j) for j, s in enumerate(sources)}
-            for outbreak in sorted(draws):
-                blocks = ft.outbreak_blocks(
-                    draws[outbreak],
-                    ft.strata(row),
-                    np.random.default_rng(
-                        [seed, zlib.crc32(simulation.encode()), 1]
-                    ),
-                    weeks,
-                    cuts=per_simulation,
-                    picks=picks,
-                    empty=empty,
-                )
-                out.extend((outbreak, block) for block in blocks)
-            continue
+        candidates = snapshots(sorted(draws), rng)
         k = min(per_simulation, len(candidates))
         chosen = [candidates[i] for i in rng.choice(len(candidates), k, False)]
         for outbreak in sorted(draws):
@@ -334,12 +337,11 @@ def init_worker(
     max_series: int,
     lags: dict[str, tuple[int, ...]],
     sources: tuple[str, ...],
-    all_draws: bool = False,
-    univariate_share: float = 0.0,
+    univariate: float = ft.UNIVARIATE_SHARE,
 ) -> None:
     """Give a cutting worker the trainer's block settings."""
     ft.MAX_SERIES, ft.MAX_LAGS, ft.SOURCES = max_series, lags, sources
-    ft.ALL_DRAWS, ft.UNIVARIATE_SHARE = all_draws, univariate_share
+    ft.UNIVARIATE_SHARE = univariate
 
 
 def _cut_part(
@@ -762,6 +764,10 @@ def main() -> None:
     # Sources to train on: weekly, daily, and 3-day blocks summed from the
     # daily triangle; one of them trains an adapter for it alone.
     parser.add_argument("--sources", nargs="+", default=list(ft.SOURCES))
+    # Share of blocks that are one series (the country or one leaf).
+    parser.add_argument(
+        "--univariate-share", type=float, default=ft.UNIVARIATE_SHARE
+    )
     # Real validation blocks (scripts/finetune_real_validation.py), scored
     # at each checkpoint to choose among them; not trained on.
     parser.add_argument("--real-validation", type=Path)
@@ -771,12 +777,7 @@ def main() -> None:
     parser.add_argument("--grid", required=True)
     parser.add_argument("--publish", action="store_true")
     parser.add_argument("--blocks-per-simulation", type=int, default=12)
-    # Cut each simulation's snapshots alike from every draw: with 16
-    # snapshots and 10 draws, 160 blocks a simulation.
-    parser.add_argument("--all-draws", action="store_true")
-    # Share of blocks that are one series (`ft.UNIVARIATE_SHARE`).
-    parser.add_argument("--univariate-share", type=float, default=0.0)
-    # Sim QC exclusions (scripts/sim_qc.py: qc/excluded.csv).
+    # Sim QC exclusions (scripts/sim_qc.py), read before each new batch.
     parser.add_argument("--exclude", type=Path)
     parser.add_argument(
         "--prefixes", type=int, nargs="+", default=list(ft.PREFIXES)
@@ -788,6 +789,9 @@ def main() -> None:
     parser.add_argument("--cut-workers", type=int, default=3)
     args = parser.parse_args()
     ft.SOURCES = tuple(args.sources)
+    ft.UNIVARIATE_SHARE = args.univariate_share
+    global EXCLUDE_FILE
+    EXCLUDE_FILE = args.exclude
     out, sim_dir = args.out, args.sim_dir
     # The commit this trainer runs, read once: the worktree may move on.
     commit = subprocess.run(
@@ -823,9 +827,6 @@ def main() -> None:
     prefixes = [p for p in args.prefixes if p < args.outbreaks]
     prefixes.append(args.outbreaks)
     k = args.blocks_per_simulation
-    ft.ALL_DRAWS, ft.UNIVARIATE_SHARE = args.all_draws, args.univariate_share
-    if args.exclude is not None and args.exclude.exists():
-        EXCLUDED.update(pd.read_csv(args.exclude)["simulation"].astype(str))
 
     # Held-out outbreaks first.
     report(stage="waiting for held-out simulations")
@@ -849,7 +850,6 @@ def main() -> None:
             ft.MAX_SERIES,
             ft.MAX_LAGS,
             ft.SOURCES,
-            ft.ALL_DRAWS,
             ft.UNIVARIATE_SHARE,
         ),
     )
@@ -907,17 +907,11 @@ def main() -> None:
         "n_validation": len(val),
         "chunk": CHUNK,
         "blocks_per_simulation": k,
-        "block_sampling": (
-            f"{k} snapshots, each with one source, cut alike from every "
-            f"draw; {ft.UNIVARIATE_SHARE:g} of blocks one series; seeded "
-            "by the simulation"
-            if ft.ALL_DRAWS
-            else f"{k} of each simulation's draws x {ft.CUTS} cut-off slots"
-            " x 2 sources, seeded by the simulation"
-        ),
-        "all_draws": ft.ALL_DRAWS,
         "univariate_share": ft.UNIVARIATE_SHARE,
-        "excluded": sorted(EXCLUDED),
+        "block_sampling": (
+            f"{k} of each simulation's draws x {ft.CUTS} cut-off slots x "
+            "2 sources, seeded by the simulation"
+        ),
         "lora": {"r": 8, "alpha": 16},
         "learning_rate": args.learning_rate,
         **(

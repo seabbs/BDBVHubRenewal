@@ -16,10 +16,12 @@ from finetune_chronos import (
 STRATA = [f"P{p}-A{a}" for p in range(1, 5) for a in range(1, 4)]
 
 
-def test_level_mix_is_about_a_quarter_each_for_nested_strata():
+def test_univariate_blocks_are_about_their_share():
+    import finetune_chronos
+
     rng = np.random.default_rng(0)
     mixes = []
-    for _ in range(2000):
+    for _ in range(3000):
         places, mix = choose_places(STRATA, int(rng.integers(4, 20)), rng)
         levels = set(target_levels(places))
         expected = {
@@ -27,19 +29,23 @@ def test_level_mix_is_about_a_quarter_each_for_nested_strata():
             "leaves_national": {"national", "leaf"},
             "leaves": {"leaf"},
             "national": {"national"},
+            "single": {"leaf"},
         }[mix]
         assert levels == expected
         mixes.append(mix)
-    shares = {m: mixes.count(m) / len(mixes) for m in set(mixes)}
-    assert all(abs(share - 0.25) < 0.04 for share in shares.values())
-    assert len(shares) == 4
+    univariate = sum(m in ("national", "single") for m in mixes) / len(mixes)
+    assert finetune_chronos.UNIVARIATE_SHARE == 0.2
+    assert abs(univariate - 0.2) < 0.03
+    # The multivariate mixes share the rest about evenly.
+    for m in ("all_levels", "leaves_national", "leaves"):
+        assert abs(mixes.count(m) / len(mixes) - 0.8 / 3) < 0.04
 
 
 def test_flat_strata_have_no_intermediate_level():
     rng = np.random.default_rng(1)
     flat = [f"P{i:02d}" for i in range(1, 9)]
-    mixes = {choose_places(flat, 10, rng)[1] for _ in range(200)}
-    assert mixes == {"leaves_national", "leaves", "national"}
+    mixes = {choose_places(flat, 10, rng)[1] for _ in range(400)}
+    assert mixes == {"leaves_national", "leaves", "national", "single"}
 
 
 def test_places_stay_within_the_budget():
@@ -680,53 +686,38 @@ def test_real_training_blocks_spread_evenly_over_the_chunks():
     assert {len(p) for p in parts} <= {2, 3}
 
 
-def test_all_draws_cuts_the_same_snapshots_from_every_draw(
-    tmp_path, monkeypatch
-):
-    import finetune_chronos
-    from finetune_stream import cut
+def test_each_draw_is_cut_at_every_snapshot_once():
+    from finetune_chronos import CUTS, SOURCES
+    from finetune_stream import snapshots
 
-    ids = _sim_dir(tmp_path)
-    monkeypatch.setattr(finetune_chronos, "ALL_DRAWS", True)
-    pairs = cut(tmp_path, ids, 1, 4)
-    for simulation in ids:
-        by_draw = {}
-        for outbreak, block in pairs:
-            if outbreak.rsplit("-", 1)[0] == simulation:
-                by_draw.setdefault(outbreak, []).append(block)
-        # Both draws, each cut at the same snapshots.
-        assert len(by_draw) == 2
-        one, two = by_draw.values()
-        # Snapshots too early for their lag are skipped, alike in both.
-        assert 1 <= len(one) == len(two) <= 4
-        for a, b in zip(one, two, strict=True):
-            assert a["source"] == b["source"]
-            assert a["levels"] == b["levels"]
-            assert (
-                np.asarray(a["context"]).shape == np.asarray(b["context"]).shape
-            )
+    draws = [f"9001-0001-{d}" for d in range(1, 11)]
+    picks = snapshots(draws, np.random.default_rng(0))
+    # 10 draws x 16 cut-offs: 160 blocks, one source each.
+    assert CUTS == 16
+    assert len(picks) == 160
+    assert len({(o, j) for o, _, j in picks}) == 160
+    assert {s for _, s, _ in picks} <= set(SOURCES)
 
 
-def test_univariate_share_gives_single_series_blocks(tmp_path, monkeypatch):
-    import finetune_chronos
-    from finetune_stream import cut
-
-    ids = _sim_dir(tmp_path)
-    monkeypatch.setattr(finetune_chronos, "ALL_DRAWS", True)
-    monkeypatch.setattr(finetune_chronos, "UNIVARIATE_SHARE", 1.0)
-    pairs = cut(tmp_path, ids, 1, 4)
-    assert pairs
-    for _, block in pairs:
-        assert block["mix"] == "univariate"
-        assert len(block["levels"]) == 1
-    monkeypatch.setattr(finetune_chronos, "UNIVARIATE_SHARE", 0.0)
-    assert all(b["mix"] != "univariate" for _, b in cut(tmp_path, ids, 1, 4))
+def test_level_mix_includes_single_series():
+    rng = np.random.default_rng(0)
+    mixes = [choose_places(STRATA, 10, rng) for _ in range(400)]
+    single = [places for places, mix in mixes if mix == "single"]
+    assert single
+    assert all(len(places) == 1 and places[0] in STRATA for places in single)
 
 
 def test_excluded_simulations_are_not_read(tmp_path, monkeypatch):
     import finetune_stream
 
-    _sim_dir(tmp_path)
+    sims = tmp_path / "sims"
+    sims.mkdir()
+    _sim_dir(sims)
+    exclude = tmp_path / "excluded.txt"
     monkeypatch.setattr(finetune_stream, "_READY", {})
-    monkeypatch.setattr(finetune_stream, "EXCLUDED", {"6001-0001"})
-    assert finetune_stream.batch_outbreaks(tmp_path, 6001) == ["6001-0002"]
+    monkeypatch.setattr(finetune_stream, "EXCLUDE_FILE", exclude)
+    exclude.write_text("6001-0001\n")
+    assert finetune_stream.batch_outbreaks(sims, 6001) == ["6001-0002"]
+    # Exclusions that arrive later apply to batches read later.
+    exclude.write_text("simulation,reason\n6001-0001,r\n6002-0002,r\n")
+    assert finetune_stream.batch_outbreaks(sims, 6002) == ["6002-0001"]

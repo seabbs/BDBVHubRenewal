@@ -61,17 +61,9 @@ up to it. With gradient checkpointing a block of 2,400 series fits the
 laptop's GPU memory (64 GB) but peaks at about 56 GB in training, so
 2,000 leaves headroom."""
 
-CUTS = 8
-"""Cut-off slots of each source (weekly, daily) per observation draw."""
-
-ALL_DRAWS = False
-"""Whether a simulation's snapshots are cut alike from every draw: each of
-`per_simulation` cut-off slots gets one source, and every observation
-draw is cut there with the same cut-off, lag and places (`cut`)."""
-
-UNIVARIATE_SHARE = 0.0
-"""Share of blocks that are one series: a random stratum, group total or
-the country, cut from the same pool as the other blocks."""
+CUTS = 16
+"""Snapshots (cut-off slots) of each observation draw, spread over its
+course."""
 
 MEMORY_COST = {False: (0.0, 6.7e-5), True: (6.25e-3, 3.35e-6)}
 """GPU memory of one training step in GB per series and per series
@@ -175,12 +167,16 @@ def strata(settings: pd.Series) -> list[str]:
     return ages if len(ages) > 1 else places
 
 
-LEVEL_MIX = ("all_levels", "leaves_national", "leaves", "national")
-"""The blocks of an outbreak with strata, a quarter each: the country,
-intermediate totals and leaves (as the deployed block: national,
-provinces, zones), leaves and the country, leaves only, or the country
-only. All levels need nested strata (regions of places, or places by
-ages)."""
+LEVEL_MIX = ("all_levels", "leaves_national", "leaves", "national", "single")
+"""A block's levels: the country, intermediate totals and leaves (as the
+deployed block: national, provinces, zones), leaves and the country,
+leaves only, the country only, or one leaf only. The last two are
+univariate series from the same outbreaks. All levels need nested strata
+(regions of places, or places by ages)."""
+
+UNIVARIATE_SHARE = 0.2
+"""Share of blocks that are one series, the country or one leaf; the rest
+are multivariate, shared evenly among their mixes."""
 
 REGIONS = 1.0
 """Chance an outbreak of four or more flat places is grouped into 2 to 6
@@ -222,13 +218,17 @@ def choose_places(
     ages, the age groups' totals) and the leaves.
     """
     nested = any("-" in p for p in provinces)
-    mixes = LEVEL_MIX if nested else LEVEL_MIX[1:]
-    mix = str(rng.choice(mixes))
+    if rng.random() < UNIVARIATE_SHARE:
+        mix = str(rng.choice(LEVEL_MIX[3:]))
+    else:
+        mix = str(rng.choice(LEVEL_MIX[:3] if nested else LEVEL_MIX[1:3]))
     # A block's size gives way to its level mix: leaves need at least one
     # place below the country, all levels a group's total and a leaf.
     budget = max(budget, 2 if mix == "all_levels" else 1)
     if mix == "national":
         return (NATIONAL,), mix
+    if mix == "single":
+        return (str(rng.choice(provinces)),), mix
     if mix in ("leaves_national", "leaves"):
         k = min(budget, len(provinces))
         leaves = tuple(str(p) for p in sorted(rng.choice(provinces, k, False)))
@@ -315,12 +315,7 @@ def outbreak_blocks(
             cut = least + int(share * (len(cutoffs) - least))
             places: tuple[str, ...] = (NATIONAL,)
             mix = "national"
-            if UNIVARIATE_SHARE > 0 and rng.random() < UNIVARIATE_SHARE:
-                places, mix = (
-                    (str(rng.choice(univariate_levels(provinces))),),
-                    "univariate",
-                )
-            elif len(provinces) > 1:
+            if len(provinces) > 1:
                 size = np.exp(rng.uniform(0, np.log(MAX_SERIES)))
                 fits = MAX_SERIES // (lag + 1) - 1
                 budget = min(round(size / (lag + 1)) - 1, fits)
@@ -345,19 +340,6 @@ def outbreak_blocks(
             padded["source"] = source
             out.append(padded)
     return out
-
-
-def univariate_levels(provinces: list[str]) -> list[str]:
-    """Return every series a univariate block can be.
-
-    These are the country, each stratum and, for places by ages, each
-    place's and each age's total.
-    """
-    levels = [NATIONAL, *provinces]
-    if any("-" in p for p in provinces):
-        levels += sorted({p.split("-")[0] for p in provinces})
-        levels += sorted({p.split("-")[1] for p in provinces})
-    return levels
 
 
 def size_class(n: int) -> int:

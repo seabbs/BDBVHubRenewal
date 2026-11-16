@@ -32,10 +32,6 @@ LEARNING_RATE=${LEARNING_RATE:-1e-5}
 GRID=${GRID:-r4}
 SOURCES=${SOURCES:-weekly daily 3day}
 REAL_VALIDATION=${REAL_VALIDATION:-output/finetune/real-validation.pkl}
-# 16 snapshots of each simulation, cut alike from all 10 draws (160
-# blocks), with UNIVARIATE_SHARE of them one series.
-SNAPSHOTS=${SNAPSHOTS:-16}
-UNIVARIATE_SHARE=${UNIVARIATE_SHARE:-0.2}
 
 # The trainer's arguments for round $1 from adapter $2 ("none" for none).
 trainer_args() {
@@ -45,8 +41,7 @@ trainer_args() {
     --grid "$GRID" --seed-list "$ROUND_LOCAL/seeds.txt"
     --held-out-seeds "${held[0]}" "${held[1]}"
     --outbreaks "$OUTBREAKS" --prefixes "$OUTBREAKS"
-    --stop-from "$((OUTBREAKS + 1))" --blocks-per-simulation "$SNAPSHOTS" --all-draws
-    --univariate-share "$UNIVARIATE_SHARE"
+    --stop-from "$((OUTBREAKS + 1))" --blocks-per-simulation 16
     --exclude "$ROUND_LOCAL/qc/excluded.csv"
     --learning-rate "$LEARNING_RATE" --lr-steps "$LR_STEPS"
     --sources $SOURCES --real-validation "$REAL_VALIDATION"
