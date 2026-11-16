@@ -114,3 +114,10 @@ def test_a_new_slots_checkpoint_s_bdbv_goes_before_an_older_german_run(
     assert poll.should_pause("slots-a", ["slots-a", "slots-b"], {"slots-b"})
     assert not poll.should_pause("slots-a", ["slots-a"], {"slots-a"})
     assert not poll.should_pause("slots-b", ["slots-a", "slots-b"], set())
+
+
+def test_a_rebuild_with_no_change_tells_bdbv_paper_nothing(poll) -> None:
+    assert poll.interim_note("slots-a", "abc", changed=False) is None
+    note = poll.interim_note("slots-a", "abc", changed=True)
+    assert note is not None
+    assert "abc" in note
