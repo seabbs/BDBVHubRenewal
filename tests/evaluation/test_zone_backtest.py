@@ -194,3 +194,10 @@ def test_zone_forecasts_read_skips_an_empty_part(tmp_path: Path) -> None:
     run = ZoneForecasts.read([tmp_path / "a", tmp_path / "b"])
     assert list(run.samples.columns) == ["key", "origin", "value"]
     assert len(run.runs) == 1
+
+
+def test_zone_relative_skill_scores_crps(scores: pd.DataFrame) -> None:
+    rel = zone_relative_skill(scores).set_index("model")
+    assert rel.loc[ZONE_BASELINE, "relative_crps"] == pytest.approx(1.0)
+    assert rel.loc[ZONE_BASELINE, "relative_log_crps"] == pytest.approx(1.0)
+    assert "relative_wis" not in rel.columns

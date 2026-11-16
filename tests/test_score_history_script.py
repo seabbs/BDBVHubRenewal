@@ -395,3 +395,25 @@ def test_common_sets_are_found_per_target(sh) -> None:
     )
     common = out.loc[out["common"]]
     assert set(common["target"]) == {"latest", "complete"}
+
+
+def test_chart_shows_crps_and_old_wis_deploys_as_missing(sh) -> None:
+    # Deploys before the switch to CRPS carry WIS only, which is not
+    # relabelled: their CRPS points are missing.
+    keys = [c for c, *_ in sh.CHART_METRICS]
+    assert keys[:2] == ["rel_crps", "crps"]
+    assert not any("wis" in k for k in keys)
+    old = _summary()
+    new = json.loads(json.dumps(old).replace('"wis"', '"crps"'))
+    deploys = [
+        ("a" * 40, "2026-11-04T10:00:00+00:00", "p1", "latest", old),
+        ("b" * 40, "2026-11-05T10:00:00+00:00", "p2", "latest", new),
+    ]
+    charts = sh.chart_data(sh.history(deploys), {"good": ("#111", "#222", "")})
+    nat = charts["model"]["latest"]["sets"][
+        "randomwalk|national|week 2026-10-24"
+    ]
+    good = [r for r in nat["rows"] if r[0] == 1]
+    at = 3 + keys.index("rel_crps")
+    assert good[0][at] is None
+    assert good[1][at] == pytest.approx(35 / 40)

@@ -49,3 +49,19 @@ def test_full_rows_share_n_and_a_model_lacking_cells_is_marked() -> None:
     # renewal has 2 of them, so its row is apart and says so.
     assert bool(table.loc["renewal", "partial"])
     assert table.loc["renewal", "n"] == 2
+
+
+def test_report_relative_crps_marks_partial_rows() -> None:
+    from bdbvhubrenewal.reporting.report import relative_crps
+
+    rows = _rows()
+    rows["crps"] = rows["wis"]
+    rows["log_crps"] = rows["log_wis"]
+    table = relative_crps(
+        rows, by=("pool",), baseline="randomwalknowcast"
+    ).set_index("model")
+    assert {"rel_crps", "rel_log_crps", "cells", "partial"} <= set(
+        table.columns
+    )
+    assert table.loc["randomwalknowcast", "rel_crps"] == 1.0
+    assert bool(table.loc["renewal", "partial"])

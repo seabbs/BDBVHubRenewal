@@ -522,3 +522,40 @@ def test_complete_target_has_no_week_before_a_release_d_days_on(
     assert set(out.scores["target"]) == {"reported"}
     assert (out.origins["n_complete"] == 0).all()
     assert (out.origins["n_reported"] > 0).any()
+
+
+def test_relative_crps_scores_crps_and_log_crps() -> None:
+    from bdbvhubrenewal.evaluation.nowcast import relative_crps
+
+    def row(model: str, week: str, crps: float) -> dict[str, object]:
+        return {
+            "model": model,
+            "target": "reported",
+            "origin": "2026-10-17",
+            "truth_vintage": "2026-10-24",
+            "location": "CD",
+            "target_end_date": week,
+            "crps": crps,
+            "log_crps": crps / 10,
+            # WIS stays in the score tables but is not what is compared.
+            "wis": 1.0,
+            "log_wis": 1.0,
+            "coverage_50": 1.0,
+            "coverage_90": 1.0,
+            "bias": 0.5,
+        }
+
+    scores = pd.DataFrame(
+        [
+            row("randomwalk", "2026-10-17", 2.0),
+            row("randomwalk", "2026-10-24", 4.0),
+            row("a", "2026-10-17", 1.0),
+            row("a", "2026-10-24", 1.0),
+        ]
+    )
+    rel = relative_crps(scores).set_index("model")
+    assert rel.loc["a", "rel_crps"] == pytest.approx(2 / 6)
+    assert rel.loc["a", "rel_log_crps"] == pytest.approx(2 / 6)
+    assert rel.loc["a", "crps"] == pytest.approx(1.0)
+    assert rel.loc["a", "base_crps"] == pytest.approx(3.0)
+    assert not any("wis" in c for c in rel.columns)

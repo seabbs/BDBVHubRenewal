@@ -350,3 +350,25 @@ def test_browser_summary_puts_a_model_lacking_cells_apart(
     assert all(rows[m]["n"] < base_n for m in partial)
     full = [r for m, r in rows.items() if m not in partial]
     assert {r["n"] for r in full} == {base_n}
+
+
+def test_bdbv_summaries_and_labels_say_crps() -> None:
+    from bdbvhubrenewal.evaluation.checks import _METRICS
+    from bdbvhubrenewal.reporting.plots import _METRIC_LABELS
+    from bdbvhubrenewal.reporting.scorechart import OVERALL_METRICS
+    from bdbvhubrenewal.reporting.scoresummary import SUMMARY_METRICS
+
+    keys = {m[0]: m[1] for m in SUMMARY_METRICS}
+    assert keys["crps"] == "CRPS"
+    assert keys["log_crps"] == "CRPS on the log scale"
+    assert "wis" not in keys
+    assert "log_wis" not in keys
+    assert OVERALL_METRICS["rel_crps"][0] == "Relative CRPS"
+    assert OVERALL_METRICS["rel_log_crps"][0] == (
+        "Relative CRPS on the log scale"
+    )
+    assert not any("wis" in k for k in OVERALL_METRICS)
+    assert _METRIC_LABELS["crps"] == "Mean CRPS"
+    assert _METRIC_LABELS["log_crps"] == "Mean CRPS, log scale"
+    assert set(_METRICS) == {"crps", "log_crps", "coverage_90"}
+    assert not any("WIS" in v for v in _METRICS.values())

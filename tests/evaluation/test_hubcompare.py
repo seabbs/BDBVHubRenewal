@@ -598,3 +598,25 @@ def test_our_models_are_scored_only_on_the_hub_cells(
     assert (table["hub_cells"] == len(full)).all()
     late = table.loc[table.index == "teamB-late"]
     assert (late["n"] < late["hub_cells"]).all()
+
+
+def test_summarise_comparison_scores_crps(
+    tmp_path: Path,
+    target: pd.DataFrame,
+    delays: pd.DataFrame,
+    daily: pd.DataFrame,
+) -> None:
+    _write_hub(tmp_path)
+    forecasts = pd.concat(
+        [load_hub_submissions(tmp_path), _ours(target, delays, daily)]
+    )
+    scores, _, _ = score_comparison(
+        forecasts, target, delays, _CONFIG, daily, NO_ZONES
+    )
+    assert {"crps", "log_crps"} <= set(scores.columns)
+    table = summarise_comparison(scores, "flat")
+    rows = table.set_index("model")
+    assert rows.loc["flat", "rel_crps"] == pytest.approx(1)
+    assert rows.loc["flat", "rel_log_crps"] == pytest.approx(1)
+    assert {"crps", "log_crps"} <= set(table.columns)
+    assert not any("wis" in c for c in table.columns)

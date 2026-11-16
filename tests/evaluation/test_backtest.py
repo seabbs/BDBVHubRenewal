@@ -689,3 +689,40 @@ def test_scenarios_forecast_apart_by_model_score_as_one_run(
     )
     for got, want in zip(out, whole[1:], strict=True):
         pd.testing.assert_frame_equal(got, want, check_dtype=False)
+
+
+def test_models_run_here_take_score_samples_draws(tmp_path: Path) -> None:
+    # The paper scores 1,000 draws of the models it runs itself, with the
+    # backtest's seed shared by every model; stored fits keep n_samples.
+    from bdbvhubrenewal.evaluation.backtest import (
+        for_scoring,
+        tasks_for_scoring,
+    )
+
+    cfg = load_config(ROOT / "config" / "backtest.toml")
+    assert cfg.n_samples == 100
+    assert cfg.score_samples == 1000
+    scored = for_scoring(cfg)
+    assert scored.n_samples == 1000
+    assert replace(scored, n_samples=cfg.n_samples) == cfg
+    text = (ROOT / "config" / "backtest.toml").read_text()
+    path = tmp_path / "backtest.toml"
+    path.write_text(
+        "\n".join(
+            line
+            for line in text.splitlines()
+            if not line.startswith("score_samples")
+        )
+    )
+    assert load_config(path).score_samples == 100
+    target = pd.read_csv(DATA / "target.csv")
+    delays = pd.read_csv(DATA / "delays.csv.gz")
+    tasks = make_tasks(target.loc[target["kind"] == "real"], delays, cfg)
+    drawn = tasks_for_scoring(tasks, cfg)
+    assert {t.n_samples for t in tasks} == {100}
+    assert {t.n_samples for t in drawn} == {1000}
+    # The same seed, so each model's stream is the same in both.
+    assert [t.seed for t in drawn] == [t.seed for t in tasks]
+    a = drawn[0].rng("randomwalk").random(3)
+    b = tasks[0].rng("randomwalk").random(3)
+    assert np.array_equal(a, b)

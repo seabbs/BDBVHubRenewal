@@ -259,3 +259,64 @@ def test_relative_skill_is_mean_over_mean_on_the_matched_set() -> None:
     assert rel.loc["a", "wis"] == pytest.approx(5.0)
     assert rel.loc["a", "base_wis"] == pytest.approx(2.5)
     assert rel.loc["a", "bias"] == pytest.approx(0.3)
+
+
+def test_log_crps_is_the_crps_of_log1p_counts() -> None:
+    # As the paper scores Ebola: sample CRPS of log(1 + y) against
+    # log(1 + x), with scoringrules' "nrg" estimator.
+    from bdbvhubrenewal.evaluation.scoring import SCORE_COLUMNS, score_sample
+
+    assert "log_crps" in SCORE_COLUMNS
+    samples = np.random.default_rng(5).poisson(25, 1000).astype(float)
+    for obs in (0.0, 12.0, 80.0):
+        got = score_sample(obs, samples)
+        want = crps_sample(float(np.log1p(obs)), np.log1p(samples))
+        assert got["log_crps"] == pytest.approx(want)
+        nrg = sr.crps_ensemble(
+            np.log1p(obs), np.log1p(samples), estimator="nrg"
+        )
+        assert got["log_crps"] == pytest.approx(float(nrg))
+        assert got["crps"] == pytest.approx(crps_sample(obs, samples))
+
+
+def test_score_forecasts_gives_log_crps() -> None:
+    rows = [
+        {
+            "model": "m",
+            "kind": "real",
+            "vintage": "2026-08-18",
+            "reference_date": "2026-08-22",
+            "location": "CD-IT",
+            "target_end_date": "2026-09-05",
+            "horizon": 2,
+            "sample": i + 1,
+            "value": float(v),
+        }
+        for i, v in enumerate([3, 8, 15, 22, 40])
+    ]
+    truth = pd.DataFrame(
+        {"location": ["CD-IT"], "target_end_date": ["2026-09-05"], "truth": [9]}
+    )
+    scores = score_forecasts(pd.DataFrame(rows), truth)
+    want = crps_sample(float(np.log1p(9)), np.log1p([3, 8, 15, 22, 40]))
+    assert scores["log_crps"].iloc[0] == pytest.approx(want)
+
+
+def test_german_quantile_scores_stay_wis() -> None:
+    # The German benchmark scores quantile forecasts, so it keeps WIS.
+    from bdbvhubrenewal.evaluation import germany
+
+    assert "wis" in germany.SCORE_COLUMNS
+    assert "crps" not in germany.SCORE_COLUMNS
+    quantiles = pd.DataFrame(
+        {
+            "id": [0] * 3,
+            "quantile": [0.25, 0.5, 0.75],
+            "value": [4.0, 6.0, 9.0],
+        }
+    )
+    assert "wis" in wis_quantile(
+        np.array([5.0]),
+        quantiles["value"].to_numpy()[None, :],
+        quantiles["quantile"].to_numpy(),
+    )
