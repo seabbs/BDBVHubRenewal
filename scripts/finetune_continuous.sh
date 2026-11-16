@@ -34,8 +34,9 @@ DRAWS=${DRAWS:-2}
 SUBSET_SEED=${SUBSET_SEED:-1}
 LR_STEPS=${LR_STEPS:-36500}
 # Zero-shot Chronos-2's loss on the BDBV pseudo-origins
-# (scripts/finetune_real_validation.py), which n1000 must beat.
-ZERO_SHOT_REAL=${ZERO_SHOT_REAL:-0.666}
+# (scripts/finetune_real_validation.py, blocks with their own 16-step
+# prediction length), which n1000 must beat.
+ZERO_SHOT_REAL=${ZERO_SHOT_REAL:-4.147}
 SOURCES=${SOURCES:-weekly daily 3day}
 UNIVARIATE_SHARE=${UNIVARIATE_SHARE:-0.2}
 REAL_VALIDATION=${REAL_VALIDATION:-output/finetune/real-validation.pkl}
