@@ -69,7 +69,9 @@
 #   Rscript scripts/finetune_simulate.R <n> <seed> <out_dir>
 
 epinowcast_sha <- "e084b080"
-grid_name <- "r4"
+# r4.1: cases per stratum with cases 30 to 30,000 (r4: 30 to 3,000 in
+# concentrated outbreaks, 30 to 1e5 over all strata in even ones).
+grid_name <- "r4.1"
 args <- commandArgs(trailingOnly = TRUE)
 n_outbreaks <- as.integer(args[[1]])
 seed <- as.integer(args[[2]])
@@ -493,14 +495,11 @@ draw_values <- function(design) {
     phase = runif(1, 0, 2 * pi),
     waves = sample(2:3, 1),
     noise_sd = runif(1, 0.002, 0.01),
-    # Even outbreaks grow with their strata; concentrated ones with their
-    # active places, each small, so active places also have weeks without
-    # cases.
-    target_size = if (design$spread == "even") {
-      log_uniform(30, 1e5) * max(1, design$n_places * design$n_ages / 26)
-    } else {
-      log_uniform(30, 3000) * active
-    },
+    # Cases per stratum with cases, log-uniform from 30 to 30,000, so
+    # outbreaks span small clusters to national epidemics (Germany's
+    # 2021/22 hospitalisations, cholera); the target is this times the
+    # strata with cases, set once the quiet places are drawn.
+    size_per_stratum = log_uniform(30, 3e4),
     delay_median = log_uniform(1, 10),
     delay_sdlog = runif(1, 0.5, 2.5),
     delay_mean = log_uniform(2, 21),
@@ -532,6 +531,8 @@ draw_values <- function(design) {
   quiet <- which(runif(design$n_places) < v$quiet)
   if (length(quiet) == design$n_places) quiet <- setdiff(quiet, 1L)
   v$quiet_places <- quiet
+  v$target_size <- v$size_per_stratum *
+    max(1, (design$n_places - length(quiet)) * design$n_ages)
   # Places seeded mid-outbreak: one to three places with cases, after the
   # first place with cases, which starts at the outset.
   active <- setdiff(seq_len(design$n_places), quiet)[-1]
@@ -917,7 +918,7 @@ simulate_outbreak <- function(design, v) {
 min_size <- 10
 max_independent <- 8L
 max_size <- function(design) {
-  300000 * max(1, design$n_places * design$n_ages / 26)
+  1e5 * design$n_places * design$n_ages
 }
 
 # The software a batch ran on, recorded with each simulation: the same

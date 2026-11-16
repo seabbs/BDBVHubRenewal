@@ -126,9 +126,10 @@ for (i in 1:50) {
   d <- draw_design(g)
   v <- draw_values(d)
   active <- d$n_places * (1 - v$quiet)
+  cases <- d$n_places - length(v$quiet_places)
   cat(d$n_places >= 15, active >= 1 - 1e-9, active <= 4 + 1e-9,
-    v$stratum_sd >= 2.5, v$target_size >= 30 * round(active),
-    v$target_size <= 3000 * round(active), "\\n")
+    v$stratum_sd >= 2.5, v$target_size >= 30 * cases,
+    v$target_size <= 3e4 * cases, "\\n")
 }
 """,
         tmp_path,
@@ -805,7 +806,8 @@ for (want in list(
   g <- 0L
   repeat {
     cell <- cell_for(g)
-    if (all(vapply(names(want), function(k) cell[[k]] == want[[k]], TRUE))) break
+    ok <- vapply(names(want), function(k) cell[[k]] == want[[k]], TRUE)
+    if (all(ok)) break
     g <- g + 1L
   }
   d <- draw_design(g)
