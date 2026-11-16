@@ -665,9 +665,9 @@ def headline(s: pd.DataFrame) -> str:
             f"{r.model} x{r.ratio:.2f} ({r.ci_low:.2f}-{r.ci_high:.2f}) "
             + (
                 f"changed beyond {FLOOR_FACTOR}x no-slots rounding "
-                f"{r.n_above_floor}/{r.n_blocks}"
+                f"{int(r.n_above_floor)}/{int(r.n_blocks)}"
                 if r.model == "slots"
-                else f"unchanged {r.n_unchanged}/{r.n_blocks}"
+                else f"unchanged {int(r.n_unchanged)}/{int(r.n_blocks)}"
             )
             for r in part.itertuples()
         ]
