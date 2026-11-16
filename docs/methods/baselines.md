@@ -263,7 +263,9 @@ Where no week reaches 0.95, `randomwalknowcast` takes the first week as the late
    The start week is looked for only in the 9 weeks to $c_o$, $1.5 D$ and the nowcast's own window, counting the week holding $c_o$.
 4. The weeks after it are the walk's draws from the sample's completed value of that week, $\log(1 + y)$ plus the walk's steps.
 5. A place with no case in the 9 weeks to $c_o$, or with no start week in those 9 weeks, starts at the latest complete week instead.
-   After it the place stays at 0 until an introduction, as above, floored at the counts reported.
+   A place with no case in those 9 weeks then stays at 0 until an introduction, as above.
+   A place with cases but no start week walks on from its mean reported count over the 9 weeks to its latest complete week.
+   Both are floored at the counts reported.
 
 ## Health zones
 
