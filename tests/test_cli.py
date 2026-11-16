@@ -734,6 +734,8 @@ def test_cli_germany_paired_blocks_are_scored_together(tmp_path: Path) -> None:
         ).any()
     copulas = pd.read_csv(out / "copulas.csv.gz")
     assert set(copulas["origin"]) == {"2021-10-04", "2021-10-05"}
+    # The raw draws are consumed, not published with the results.
+    assert not (out / "samples.csv.gz").exists()
 
 
 def test_cli_germany_backtest_of_every_date_pairs_and_scores_them(
@@ -747,6 +749,7 @@ def test_cli_germany_backtest_of_every_date_pairs_and_scores_them(
     scores = pd.read_csv(out / "scores.csv.gz")
     assert set(scores["model"]) == {"randomwalk", "randomwalknowcast"}
     assert (out / "copulas.csv.gz").exists()
+    assert not (out / "samples.csv.gz").exists()
 
 
 def test_cli_germany_teams_scores_the_hub_teams(tmp_path: Path) -> None:
