@@ -27,7 +27,8 @@ repeats each row, and the slots repeat with it.
 from __future__ import annotations
 
 import json
-from collections.abc import Iterator
+import warnings
+from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Final
@@ -38,12 +39,16 @@ __all__ = [
     "EVAL_SEED",
     "N_SLOTS",
     "SLOT_MODULE",
+    "adapter_parent_link",
     "adapter_slots",
     "assigned",
     "attach",
+    "checkpoint_slots",
+    "has_parent_link",
     "has_slots",
     "load_adapter",
     "n_slots",
+    "parents_of",
     "row_places",
     "slot_ids",
 ]
@@ -60,6 +65,10 @@ EVAL_SEED: Final = 0
 
 _STATE: Final = "_series_slot_state"
 """Attribute of a model with slots holding the next batch's slots."""
+
+COUNTRIES: Final = ("CD", "DE")
+"""Codes of the whole country (BDBV, Germany): the parent of a place with
+no nearer parent in its block."""
 
 
 def row_places(n_targets: int, n_covariates: int) -> np.ndarray:
@@ -83,13 +92,43 @@ def row_places(n_targets: int, n_covariates: int) -> np.ndarray:
     )
 
 
+def parents_of(places: Sequence[str]) -> list[int]:
+    """Return the index of each place's parent in `places`, -1 for none.
+
+    A place's parent is its nearest prefix in the block, cut at a "-"
+    (`R1-P03` in `R1`, `CD-NK-03` in `CD-NK`), else the country
+    (`COUNTRIES`) when the block holds it, as for provinces, states, age
+    groups and age totals. The country has none. Parent means belongs to:
+    a parent need not be the sum of its children.
+    """
+    at = {p: i for i, p in enumerate(places)}
+    root = next((at[c] for c in COUNTRIES if c in at), -1)
+    out = []
+    for p in places:
+        parts = p.split("-")
+        near = next(
+            (
+                at["-".join(parts[:k])]
+                for k in range(len(parts) - 1, 0, -1)
+                if "-".join(parts[:k]) in at
+            ),
+            None,
+        )
+        out.append(near if near is not None else -1 if at[p] == root else root)
+    return out
+
+
 def slot_ids(
     n_targets: int,
     n_covariates: int,
     rng: np.random.Generator,
     n_slots: int = N_SLOTS,
+    parents: Sequence[int] | None = None,
 ) -> np.ndarray:
     """Return each row's slot: a random distinct slot per place.
+
+    With `parents` (`parents_of`), each row also carries its place's
+    parent's own slot, -1 for none: `[2, rows]`, own then parent.
 
     Raises
     ------
@@ -99,25 +138,44 @@ def slot_ids(
     if n_targets > n_slots:
         raise ValueError(f"{n_targets} places but only {n_slots} slots")
     chosen = np.asarray(rng.permutation(n_slots))[:n_targets]
-    out: np.ndarray = chosen[row_places(n_targets, n_covariates)]
-    return out
+    rows = (
+        row_places(n_targets, n_covariates)
+        if n_covariates
+        else np.arange(n_targets)
+    )
+    own: np.ndarray = chosen[rows]
+    if parents is None:
+        return own
+    parent = np.array([chosen[q] if q >= 0 else -1 for q in parents], dtype=int)
+    return np.stack([own, parent[rows]])
 
 
-def _slots_module(n_slots: int, d_model: int) -> Any:
+def _slots_module(n_slots: int, d_model: int, parent: bool = True) -> Any:
     import torch
     from torch import nn
 
-    class SeriesSlots(nn.Module):  # type: ignore[misc]
+    class SeriesSlots(nn.Module):
         """One learned vector per slot, zero at the start."""
 
         def __init__(self) -> None:
             super().__init__()
             self.embedding = nn.Embedding(n_slots, d_model)
             nn.init.zeros_(self.embedding.weight)
+            # Not a weight: whether rows add their parent's slot.
+            self.parent_link = parent
 
         def forward(self, ids: torch.Tensor) -> torch.Tensor:
-            out: torch.Tensor = self.embedding(ids)
-            return out
+            """Own slots `[rows]`, or own and parents' `[2, rows]`."""
+            if ids.ndim == 2 and not self.parent_link:
+                ids = ids[0]
+            if ids.ndim == 1:
+                out: torch.Tensor = self.embedding(ids)
+                return out
+            own, parent = ids
+            linked = (parent >= 0).unsqueeze(-1)
+            vectors = self.embedding(parent.clamp(min=0)) * linked
+            both: torch.Tensor = self.embedding(own) + vectors
+            return both
 
     return SeriesSlots()
 
@@ -149,22 +207,43 @@ def has_slots(model: Any) -> bool:
     return _base(model) is not None
 
 
-def attach(model: Any, n_slots: int = N_SLOTS) -> None:
-    """Add zero slots to a Chronos-2 model and hook its embeddings."""
+def attach(
+    model: Any,
+    n_slots: int = N_SLOTS,
+    init_std: float = 0.0,
+    seed: int = 0,
+    parent: bool = True,
+) -> None:
+    """Add slots to a Chronos-2 model and hook its embeddings.
+
+    The slots start at zero, so the model is unchanged, or with
+    `init_std` as distinct codes drawn from a normal with that sd, seeded
+    by `seed`. Loading an adapter that holds slots replaces them. With
+    `parent`, each place also adds its parent's own slot, a plain sum.
+    """
+    import torch
+
     if has_slots(model):
         raise ValueError("the model already has slots")
     d_model = model.config.d_model
-    setattr(model, SLOT_MODULE, _slots_module(n_slots, d_model))
+    weight = next(model.input_patch_embedding.parameters())
+    module = _slots_module(n_slots, d_model, parent)
+    if init_std:
+        generator = torch.Generator().manual_seed(seed)
+        with torch.no_grad():
+            module.embedding.weight.normal_(0.0, init_std, generator=generator)
+    module = module.to(weight.device, weight.dtype)
+    setattr(model, SLOT_MODULE, module)
     setattr(model, _STATE, {"ids": None})
 
     def add(_module: Any, _args: Any, output: Any) -> Any:
         ids = getattr(model, _STATE)["ids"]
         if ids is None:
             return output
-        rows = output.shape[0]
-        if rows % len(ids):
-            raise ValueError(f"{rows} rows but slots for {len(ids)}")
-        ids = ids.to(output.device).repeat_interleave(rows // len(ids))
+        rows, n = output.shape[0], ids.shape[-1]
+        if rows % n:
+            raise ValueError(f"{rows} rows but slots for {n}")
+        ids = ids.to(output.device).repeat_interleave(rows // n, dim=-1)
         vectors = getattr(model, SLOT_MODULE)(ids)
         return output + vectors[:, None, :].to(output.dtype)
 
@@ -195,7 +274,7 @@ def adapter_slots(adapter: Path | str) -> int | None:
     config = json.loads((adapter / "adapter_config.json").read_text())
     if SLOT_MODULE not in (config.get("modules_to_save") or []):
         return None
-    from safetensors import safe_open  # type: ignore[import-not-found]
+    from safetensors import safe_open
 
     with safe_open(adapter / "adapter_model.safetensors", "pt") as f:
         for key in f.keys():  # noqa: SIM118
@@ -204,15 +283,123 @@ def adapter_slots(adapter: Path | str) -> int | None:
     raise ValueError(f"{adapter} lists {SLOT_MODULE} but holds no weights")
 
 
-def load_adapter(model: Any, adapter: Path | str) -> Any:
+def has_parent_link(model: Any) -> bool:
+    """Whether a model's slots add each place's parent's slot."""
+    base = _base(model)
+    if base is None:
+        return False
+    # PEFT wraps the module while it trains; its copies keep the flag.
+    return any(
+        getattr(m, "parent_link", False)
+        for m in getattr(base, SLOT_MODULE).modules()
+    )
+
+
+def checkpoint_slots(adapter: Path | str) -> dict[str, Any] | None:
+    """Return a checkpoint's `series_slots` settings, None if it has none.
+
+    They are in its `settings.json`, beside the adapter files as in a
+    release, or one folder up as in a local `nK/finetuned-ckpt`. None
+    also when neither place holds a `settings.json`.
+    """
+    adapter = Path(adapter)
+    for where in (adapter / "settings.json", adapter.parent / "settings.json"):
+        if where.exists():
+            out = json.loads(where.read_text()).get("series_slots")
+            return dict(out) if out else None
+    return None
+
+
+def adapter_parent_link(adapter: Path | str) -> bool:
+    """Whether a slots checkpoint was trained with the parent link.
+
+    The link adds no weight, so it is read from the checkpoint's settings
+    (`checkpoint_slots`, `series_slots.parent`).
+
+    Raises
+    ------
+    ValueError
+        If the checkpoint has no `settings.json`.
+    """
+    adapter = Path(adapter)
+    if not any(
+        (w / "settings.json").exists() for w in (adapter, adapter.parent)
+    ):
+        raise ValueError(
+            f"{adapter} holds slots but no settings.json says whether they "
+            "carry the parent link"
+        )
+    return "parent" in (checkpoint_slots(adapter) or {})
+
+
+def load_adapter(
+    model: Any, adapter: Path | str, parent: bool | None = None
+) -> Any:
     """Return Chronos-2 `model` with an adapter merged, slots included.
 
     Slots are attached first when the adapter holds them, so PEFT loads
-    their trained values; an adapter without slots loads as before.
+    their trained values. Fixed, untrained labels are not in the adapter:
+    they are rebuilt from the checkpoint's `series_slots` settings (`n`,
+    `init_std`, `init_seed`), as the trainer drew them. A checkpoint
+    without slots loads as before.
+    `parent` says whether the slots carry the parent link; by default it
+    is read from the checkpoint's settings (`adapter_parent_link`). Every
+    weight in the adapter's file must reach the model (`_check_loaded`).
     """
     from peft import PeftModel
 
     n = adapter_slots(adapter)
+    spec = checkpoint_slots(adapter)
     if n is not None:
-        attach(model, n)
-    return PeftModel.from_pretrained(model, str(adapter)).merge_and_unload()
+        # Slots trained beside the adapter, saved in its files.
+        if parent is None:
+            parent = adapter_parent_link(adapter)
+        attach(model, n, parent=parent)
+    elif spec is not None:
+        # Fixed labels, not trained: rebuilt from their seed.
+        if not spec.get("init_std"):
+            raise ValueError(f"{adapter}: fixed slot labels need an init_std")
+        attach(
+            model,
+            int(spec["n"]),
+            init_std=float(spec["init_std"]),
+            seed=int(spec["init_seed"]),
+            parent="parent" in spec if parent is None else parent,
+        )
+        for p in getattr(model, SLOT_MODULE).parameters():
+            p.requires_grad_(False)
+    with warnings.catch_warnings():
+        # PEFT only warns when an adapter weight has no file entry.
+        warnings.filterwarnings("error", message="Found missing adapter keys")
+        peft_model = PeftModel.from_pretrained(model, str(adapter))
+    _check_loaded(peft_model, adapter)
+    return peft_model.merge_and_unload()
+
+
+def _check_loaded(peft_model: Any, adapter: Path | str) -> None:
+    """Raise unless every weight in an adapter's file reached the model.
+
+    PEFT drops a file entry the model has no parameter for without a
+    word, as it would slot weights for a model built without slots.
+
+    Raises
+    ------
+    ValueError
+        If an adapter weight is not in the model or differs from the file.
+    """
+    import torch
+    from safetensors.torch import load_file
+
+    def plain(name: str) -> str:
+        name = name.replace(".modules_to_save.default", "")
+        return name.replace(".default", "")
+
+    loaded = {plain(n): p for n, p in peft_model.named_parameters()}
+    for key, value in load_file(
+        str(Path(adapter) / "adapter_model.safetensors")
+    ).items():
+        have = loaded.get(key)
+        if have is None:
+            raise ValueError(f"{adapter}: adapter weight {key} has no place")
+        if not torch.equal(have.detach().cpu().to(value.dtype), value):
+            raise ValueError(f"{adapter}: adapter weight {key} did not load")

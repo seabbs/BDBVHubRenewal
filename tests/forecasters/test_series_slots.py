@@ -1,5 +1,7 @@
 """Per-series slots: a place's count and lag series share a learned slot."""
 
+import json
+
 import numpy as np
 import pytest
 
@@ -199,7 +201,7 @@ def test_slots_round_trip_through_the_adapter(tmp_path):
     want = predict(model, block, ids)
     model.save_pretrained(tmp_path / "ckpt")
     assert slots.adapter_slots(tmp_path / "ckpt") == 8
-    loaded = slots.load_adapter(tiny_model(), tmp_path / "ckpt")
+    loaded = slots.load_adapter(tiny_model(), tmp_path / "ckpt", parent=False)
     assert torch.allclose(predict(loaded, block, ids), want, atol=1e-5)
 
 
@@ -209,7 +211,7 @@ def test_an_adapter_without_slots_loads_as_before(tmp_path):
     config = LoraConfig(r=2, lora_alpha=4, target_modules=["self_attention.q"])
     get_peft_model(tiny_model(), config).save_pretrained(tmp_path / "ckpt")
     assert slots.adapter_slots(tmp_path / "ckpt") is None
-    loaded = slots.load_adapter(tiny_model(), tmp_path / "ckpt")
+    loaded = slots.load_adapter(tiny_model(), tmp_path / "ckpt", parent=False)
     assert not slots.has_slots(loaded)
 
 
@@ -220,7 +222,7 @@ def test_inference_assigns_slots_by_place(monkeypatch, tmp_path):
 
     model = trained()
     model.save_pretrained(tmp_path / "ckpt")
-    loaded = slots.load_adapter(tiny_model(), tmp_path / "ckpt")
+    loaded = slots.load_adapter(tiny_model(), tmp_path / "ckpt", parent=False)
     monkeypatch.setattr(
         foundation,
         "_chronos",
@@ -261,7 +263,7 @@ def test_inference_slots_follow_chronos_row_order(
 
     model = trained()
     model.save_pretrained(tmp_path / "ckpt")
-    loaded = slots.load_adapter(tiny_model(), tmp_path / "ckpt")
+    loaded = slots.load_adapter(tiny_model(), tmp_path / "ckpt", parent=False)
     monkeypatch.setattr(
         foundation,
         "_chronos",
@@ -316,6 +318,226 @@ def test_forecast_groups_name_their_places():
     assert group["places"] == ["CD", "CD-KN"]
 
 
+def test_slots_are_made_on_the_models_device():
+    model = tiny_model().to("meta")
+    slots.attach(model, 4)
+    for p in getattr(model, slots.SLOT_MODULE).parameters():
+        assert p.device.type == "meta"
+
+
+def save_with_settings(model, where, parent: bool) -> None:
+    """Save an adapter with the settings.json a checkpoint has beside it."""
+    model.save_pretrained(where)
+    slot = {
+        "n": 8,
+        **({"parent": {"link": "own plus parent"}} if parent else {}),
+    }
+    (where / "settings.json").write_text(json.dumps({"series_slots": slot}))
+
+
+def linked_adapter(tmp_path):
+    """Save an adapter whose slots carry the parent link; return it and ids."""
+    from peft import get_peft_model
+
+    model = tiny_model()
+    slots.attach(model, 8, init_std=0.02, seed=1)
+    peft_model = get_peft_model(model, lora()).eval()
+    save_with_settings(peft_model, tmp_path / "linked", parent=True)
+    ids = slots.slot_ids(
+        N_PLACES,
+        N_PLACES * LAG,
+        np.random.default_rng(slots.EVAL_SEED),
+        8,
+        parents=slots.parents_of(["CD", "CD-NK", "CD-NK-01"]),
+    )
+    return peft_model, ids
+
+
+def test_a_parent_linked_adapter_forecasts_with_its_parents(tmp_path):
+    model, ids = linked_adapter(tmp_path)
+    assert ids.shape == (2, N_PLACES * (1 + LAG))
+    block = toy_block()
+    want = predict(model, block, ids)
+    loaded = slots.load_adapter(tiny_model(), tmp_path / "linked")
+    assert slots.has_parent_link(loaded)
+    assert not any("parent_scale" in n for n, _ in loaded.named_parameters())
+    assert torch.allclose(predict(loaded, block, ids), want, atol=1e-5)
+    # Own plus parent exactly: the parent term changes the forecast.
+    assert not torch.allclose(predict(loaded, block, ids[0]), want, atol=1e-5)
+    module = getattr(loaded, slots.SLOT_MODULE)
+    table = module.embedding.weight.detach()
+    out = module(torch.tensor([[3, 4], [5, -1]])).detach()
+    assert torch.allclose(out[0], table[3] + table[5])
+    assert torch.allclose(out[1], table[4])
+
+
+def test_inference_gives_a_linked_model_its_parents(tmp_path, monkeypatch):
+    from contextlib import contextmanager
+
+    from chronos import Chronos2Pipeline
+
+    from bdbvhubrenewal.forecasters import foundation
+
+    linked_adapter(tmp_path)
+    loaded = slots.load_adapter(tiny_model(), tmp_path / "linked")
+    monkeypatch.setattr(
+        foundation,
+        "_chronos",
+        lambda _checkpoint=None: Chronos2Pipeline(model=loaded),
+    )
+    seen = []
+    real = slots.assigned
+
+    @contextmanager
+    def spy(m, ids):
+        seen.append(np.asarray(ids))
+        with real(m, ids):
+            yield
+
+    monkeypatch.setattr(slots, "assigned", spy)
+    places = ["CD", "CD-NK", "CD-NK-01"]
+    x = toy_block()["context"]
+    names = [f"{p}_lag_{d}" for p in places for d in range(LAG)]
+    rows = dict(zip(names, x[N_PLACES:], strict=True))
+    group = {
+        "target": x[:N_PLACES, :T],
+        "past_covariates": {k: v[:T] for k, v in rows.items()},
+        "future_covariates": {k: v[T:] for k, v in rows.items()},
+        "places": places,
+    }
+    foundation.chronos_sampler([group], H, 5, 1)
+    own, parent = seen[-1]
+    # CD has no parent; CD-NK's is CD; CD-NK-01's is CD-NK.
+    assert parent[0] == -1
+    assert parent[1] == own[0]
+    assert parent[2] == own[1]
+
+
+def test_an_adapter_without_the_parent_link_still_loads(tmp_path):
+    from peft import get_peft_model
+
+    model = tiny_model()
+    slots.attach(model, 8, init_std=0.02, seed=1, parent=False)
+    save_with_settings(
+        get_peft_model(model, lora()), tmp_path / "plain", parent=False
+    )
+    assert slots.adapter_parent_link(tmp_path / "plain") is False
+    loaded = slots.load_adapter(tiny_model(), tmp_path / "plain")
+    assert slots.has_slots(loaded)
+    assert not slots.has_parent_link(loaded)
+    # Parent ids are ignored by slots trained without the link.
+    block = toy_block()
+    ids = slots.slot_ids(
+        N_PLACES,
+        N_PLACES * LAG,
+        np.random.default_rng(0),
+        8,
+        parents=[-1, 0, 1],
+    )
+    assert torch.equal(
+        predict(loaded, block, ids), predict(loaded, block, ids[0])
+    )
+
+
+def test_a_slots_adapter_with_no_settings_is_an_error(tmp_path):
+    linked_adapter(tmp_path)
+    (tmp_path / "linked" / "settings.json").unlink()
+    with pytest.raises(ValueError, match=r"settings\.json"):
+        slots.load_adapter(tiny_model(), tmp_path / "linked")
+
+
+def test_an_adapter_weight_the_model_drops_is_an_error(tmp_path, monkeypatch):
+    linked_adapter(tmp_path)
+    # A loader that builds no slots would drop the slot weights; that must
+    # fail, not load silently.
+    monkeypatch.setattr(slots, "adapter_slots", lambda _a: None)
+    (tmp_path / "linked" / "settings.json").unlink()
+    with pytest.raises(ValueError, match="has no place"):
+        slots.load_adapter(tiny_model(), tmp_path / "linked")
+
+
+FIXED = {
+    "n": 8,
+    "init": "normal",
+    "init_std": 0.02,
+    "init_seed": 1,
+    "trained": False,
+    "parent": {"link": "own label plus the parent's own label"},
+}
+"""A fixed-label checkpoint's `series_slots` settings."""
+
+
+def fixed_label_checkpoint(tmp_path):
+    """Save a LoRA adapter trained beside fixed, untrained labels."""
+    from peft import LoraConfig, get_peft_model
+
+    model = tiny_model()
+    slots.attach(model, 8, init_std=0.02, seed=1, parent=True)
+    for p in getattr(model, slots.SLOT_MODULE).parameters():
+        p.requires_grad_(False)
+    config = LoraConfig(
+        r=2,
+        lora_alpha=4,
+        target_modules=["self_attention.q", "self_attention.v"],
+        init_lora_weights=False,
+    )
+    peft_model = get_peft_model(model, config).eval()
+    where = tmp_path / "fixed"
+    peft_model.save_pretrained(where)
+    (where / "settings.json").write_text(json.dumps({"series_slots": FIXED}))
+    return peft_model, where
+
+
+def test_fixed_labels_are_rebuilt_from_the_settings(tmp_path):
+    from safetensors import safe_open
+
+    model, where = fixed_label_checkpoint(tmp_path)
+    with safe_open(where / "adapter_model.safetensors", "pt") as f:
+        assert not [k for k in f.keys() if slots.SLOT_MODULE in k]  # noqa: SIM118
+    table = getattr(model.base_model.model, slots.SLOT_MODULE).embedding.weight
+    loaded = slots.load_adapter(tiny_model(), where)
+    assert slots.has_slots(loaded)
+    assert slots.has_parent_link(loaded)
+    module = getattr(loaded, slots.SLOT_MODULE)
+    assert torch.equal(module.embedding.weight, table)
+    assert not any(p.requires_grad for p in module.parameters())
+    # A place's vector is its own label plus its parent's, a plain sum;
+    # a place with no parent carries its own only.
+    out = module(torch.tensor([[3, 4], [5, -1]])).detach()
+    assert torch.allclose(out[0], table[3] + table[5])
+    assert torch.allclose(out[1], table[4])
+    ids = slots.slot_ids(
+        N_PLACES,
+        N_PLACES * LAG,
+        np.random.default_rng(slots.EVAL_SEED),
+        8,
+        parents=slots.parents_of(["CD", "CD-NK", "CD-NK-01"]),
+    )
+    block = toy_block()
+    want = predict(model, block, ids)
+    assert torch.allclose(predict(loaded, block, ids), want, atol=1e-5)
+    assert not torch.allclose(predict(loaded, block, ids[0]), want, atol=1e-5)
+
+
+def test_fixed_labels_need_their_seed(tmp_path):
+    _, where = fixed_label_checkpoint(tmp_path)
+    settings = {"series_slots": {**FIXED, "init_seed": 2}}
+    (where / "settings.json").write_text(json.dumps(settings))
+    model, _ = fixed_label_checkpoint(tmp_path / "again")
+    block = toy_block()
+    ids = slots.slot_ids(
+        N_PLACES,
+        N_PLACES * LAG,
+        np.random.default_rng(0),
+        8,
+        parents=[-1, 0, 1],
+    )
+    other = slots.load_adapter(tiny_model(), where)
+    assert not torch.allclose(
+        predict(other, block, ids), predict(model, block, ids), atol=1e-5
+    )
+
+
 def test_native_quantiles_use_the_slots(monkeypatch, tmp_path):
     # The weekly models' own quantiles (native_sampler) go through the same
     # slot assignment as the draws, not the bare model.
@@ -325,7 +547,7 @@ def test_native_quantiles_use_the_slots(monkeypatch, tmp_path):
 
     model = trained()
     model.save_pretrained(tmp_path / "ckpt")
-    loaded = slots.load_adapter(tiny_model(), tmp_path / "ckpt")
+    loaded = slots.load_adapter(tiny_model(), tmp_path / "ckpt", parent=False)
     monkeypatch.setattr(
         foundation,
         "_chronos",
