@@ -207,8 +207,9 @@ rule train_segment:
           --note "{FT[note]}" --chunk {FT[chunk]} \
           --exclude {RUN}/excluded.csv {params.slots} \
           --until {wildcards.n} >> {log} 2>&1
+        # An optional notification line; it never fails the rule.
         uv run python workflow/scripts/segment_saved.py {output.settings} \
-          {wildcards.n}
+          {wildcards.n} || true
         """
 
 

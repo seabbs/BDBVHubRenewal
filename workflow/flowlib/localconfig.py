@@ -29,7 +29,8 @@ KEY = re.compile(r"^[A-Z_][A-Z0-9_]*$")
 DEFAULTS = (
     ("HOST_NAME", None),
     ("ROOT", "$HOME/bdbv-rounds"),
-    ("MAILBOX", "$HOME/bdbv-mailbox.md"),
+    # An optional local file of one-line notes (off unless NOTIFY is set).
+    ("MAILBOX", ""),
     ("INBOX", ""),
     # The workflow's own settings.
     ("RUN", "$ROOT/checkpoints/slots"),
