@@ -13,8 +13,8 @@ The panels are:
   (`scripts/finetune_simulate.R`), one box per stage;
 - B, the reporting triangle laid out as ragged series for Chronos-2
   (`forecasters.foundation.layout_block`), each place's count and lag
-  series sharing one fixed random label (`forecasters.slots`) and
-  carrying their parent's label, all places in one group;
+  series joined by a learned attention bias for rows of the same place,
+  and another for a place and its parent, all places in one group;
 - C, a training block cut from a simulated release history
   (`forecasters.finetune.training_block`) and the LoRA adapters;
 - D, forecasting with the fine-tuned model
@@ -47,8 +47,8 @@ COV_SOFT = "#f5e5c8"
 HATCH = "#a3aabb"
 TRUTH = "#1b7f5f"
 TRUTH_SOFT = "#d4eee3"
-# One colour per place's label (panel B), and the label of the places'
-# parent, which each place's series also carry.
+# One colour per place's rows, which share the same-place attention bias
+# (panel B), and one for the bias between a place and its parent.
 SLOTS = ("#6f42c1", "#c0397a")
 PARENT_SLOT = "#2f7d4f"
 
@@ -486,15 +486,15 @@ def panel_b(g: Svg, oy: float) -> float:
             anchor="end",
             weight="bold",
         )
-        # The place's label, shared by its target and its lag series, and
-        # beside it the parent's label, which the place's series also carry.
+        # The place's rows, joined by the same-place bias, and beside them
+        # the bias between the place and its parent.
         colour = SLOTS[p - 1]
         g.rect(bx - 35, y0, 3.2, bottom - y0, fill=colour, rx=1.6)
         g.rect(bx - 30.5, y0, 2.2, bottom - y0, fill=PARENT_SLOT, rx=1.1)
         g.text(
             bx - 40,
             (y0 + bottom) / 2 + 9,
-            f"label {p} + parent",
+            "+ parent bias",
             size=SMALL,
             anchor="end",
             fill=colour,
@@ -567,8 +567,8 @@ def panel_b(g: Svg, oy: float) -> float:
         ("future", "to forecast"),
         ("none", "no release"),
         ("unseen", "not yet reported"),
-        ("slot", "place label"),
-        ("parent", "parent label"),
+        ("slot", "same-place bias"),
+        ("parent", "parent bias"),
     ]
     x = 0.0
     for kind, name in items:
@@ -667,15 +667,6 @@ def panel_c(g: Svg, oy: float) -> float:
     g.text(
         mx + mw / 2, y0 + 9.3, "input embedding", size=SMALL, anchor="middle"
     )
-    # The fixed place labels, added to every token of a place's series.
-    g.rect(mx + mw + 4, y0, aw, 13, fill=CELL, rx=2)
-    g.text(
-        mx + mw + 4 + aw / 2,
-        y0 + 9.3,
-        "labels",
-        size=SMALL,
-        anchor="middle",
-    )
     g.rect(
         mx - 4,
         y0 + 17,
@@ -690,10 +681,20 @@ def panel_c(g: Svg, oy: float) -> float:
     g.rect(mx, y0 + 21, mw, 17, fill=CELL, rx=2)
     g.text(
         mx + mw / 2,
-        y0 + 32.3,
+        y0 + 28.6,
         "time and group attention",
         size=SMALL,
         anchor="middle",
+    )
+    # The place and parent biases, trained, inside group attention.
+    g.text(
+        mx + mw / 2,
+        y0 + 35.6,
+        "+ place and parent biases",
+        size=SMALL,
+        anchor="middle",
+        fill=ACCENT,
+        weight="bold",
     )
     g.rect(mx, y0 + 41, mw, 13, fill=CELL, rx=2)
     g.text(mx + mw / 2, y0 + 50.3, "feed-forward", size=SMALL, anchor="middle")
@@ -798,7 +799,7 @@ def panel_d(g: Svg, oy: float) -> float:
     g.text(
         x2 + w2 / 2,
         top + 34.5,
-        "+ adapter \u00b7 labels",
+        "+ adapter \u00b7 biases",
         size=SMALL,
         anchor="middle",
         fill=ACCENT,

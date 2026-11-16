@@ -40,13 +40,15 @@ One SI section per paper section.
 - Key references: [@Ansari2025; @Hu2021].
 :::
 
-**Place labels.**
+**Attention biases.**
 Chronos-2's group attention has no notion of which series is which, so on its own it can link a lag series to its place's counts only by matching their values.
-We give each place a fixed random label, which its count series and its lag series share.
-We reshuffle the labels for every training block, so a label marks which series go together and carries no meaning of its own.
-Each place also carries its parent's label, and a place with no parent carries only its own.
-The link means that a place belongs to its parent, not that it sums to it, as training blocks include countries that do not equal the sum of their places.
-We train only the LoRA adapter, at Chronos-2's learning rate of $10^{-5}$, and the labels stay fixed.
+We add a learned bias to the group-attention scores between rows of the same place, its count series and its lag series.
+We add a second learned bias between rows of a place and rows of its parent or its children.
+Each bias is set per layer and head.
+The link to the parent means that a place belongs to its parent, not that it sums to it, as training blocks include countries that do not equal the sum of their places.
+The biases start at zero, so before training the model is base Chronos-2.
+They train at a learning rate of BIASLR, while the LoRA adapter keeps Chronos-2's recipe and its learning rate of $10^{-5}$.
+Moirai's any-variate attention uses a related learned bias for whether two tokens belong to the same variate [@Woo2024].
 
 **Training blocks.**
 A simulation gives daily counts by onset and report date, and a release counts every case reported by its cut-off, one cut-off a week.
@@ -257,39 +259,39 @@ The cost of each option: series per block, memory and time.
 
 ![WIS (Germany, on each model's own quantiles) and CRPS (BDBV, on 1,000 draws with common random numbers) relative to `randomwalknowcast` of the fine-tuned ragged Chronos-2 models against the number of simulated outbreaks each checkpoint was fine-tuned on, on the case studies by level. Horizontal lines give the models with no fine-tuning: zero-shot Chronos-2 on the ragged layout (dashed) and on complete data only (dotted), each in its source's colour, and `randomwalknowcast` at 1. Each panel gives n, the fewest matched cells of its points, and the forecast origins they come from, and panels with fewer than 5 are grey.](build/figures/si/checkpoint-curve.png){#fig-checkpoint-curve}
 
-### Place labels against no labels
+### Attention biases for place and parent against none
 
-- We compare the labelled run with a run that gives places no labels.
+- We compare the run with attention biases with a run without them.
 - Both runs share the grid, the data order, the LoRA recipe and the checkpoints.
 - @tbl-slots-loss gives held-out loss by source, and @tbl-slots-scores German first-half and BDBV relative scores at checkpoints of the same size.
 - @tbl-slots-swap gives the loss when whole lag series move to another place, relative to the loss as given.
 - A ratio of 1 means the model does not tell which place a lag series belongs to.
 - @fig-compare-slots shows both runs by checkpoint.
-- The no-label run built its 3-day blocks as daily steps, so we compare 3-day blocks with zero-shot only.
+- The run without biases built its 3-day blocks as daily steps, so we compare 3-day blocks with zero-shot only.
 
-![Labels against no labels: held-out loss by source and German first-half and BDBV relative scores, by checkpoint.](build/figures/si/compare-slots.png){#fig-compare-slots}
+![Attention biases against none: held-out loss by source and German first-half and BDBV relative scores, by checkpoint.](build/figures/si/compare-slots.png){#fig-compare-slots}
 
 ::: {#tbl-slots-loss}
 {{< include build/tables/si/slots-loss.md >}}
 
-Held-out loss of the labelled run by source and window (nowcast or forecast steps), against the no-label run at the same checkpoint and against zero-shot Chronos-2, with the paired ratio and its 90% interval over blocks.
+Held-out loss of the run with attention biases by source and window (nowcast or forecast steps), against the run without them at the same checkpoint and against zero-shot Chronos-2, with the paired ratio and its 90% interval over blocks.
 :::
 
 ::: {#tbl-slots-scores}
 {{< include build/tables/si/slots-scores.md >}}
 
-Relative WIS on the German first half and relative CRPS on the BDBV release backtest, both against `randomwalknowcast`, of the labelled and no-label runs at checkpoints fine-tuned on the same number of outbreaks.
+Relative WIS on the German first half and relative CRPS on the BDBV release backtest, both against `randomwalknowcast`, of the runs with and without attention biases at checkpoints fine-tuned on the same number of outbreaks.
 :::
 
 ::: {#tbl-slots-swap}
 {{< include build/tables/si/slots-swap.md >}}
 
-Lag-swap test: loss with whole lag series moved between places, as a ratio of the loss as given, with its 90% interval over blocks, for zero-shot Chronos-2 and the labelled run.
+Lag-swap test: loss with whole lag series moved between places, as a ratio of the loss as given, with its 90% interval over blocks, for zero-shot Chronos-2 and the run with attention biases.
 :::
 
 ### Delays against no delays
 
-- We fine-tune a run on complete counts only, with labels and without lag series, and compare it with the ragged run.
+- We fine-tune a run on complete counts only, with the attention biases and without lag series, and compare it with the ragged run.
 - Both runs share the grid, the data order, the recipe and the checkpoints.
 - @tbl-compare-delays gives held-out loss by source and German first-half and BDBV relative scores at checkpoints of the same size.
 - @fig-compare-delays shows both runs by checkpoint.
