@@ -171,10 +171,12 @@ def test_model_code_keeps_a_skipped_module_its_model_imports() -> None:
             model_code(model, ROOT, STORE_ENTRIES, cli=False, skip=STORE_SKIP)
         )
 
-    # Chronos-2's module imports the zone split, so its key holds it.
-    assert zones in code("fm_chronos_weekly_ragged")
+    # Chronos-2's module and the zone fits of the renewal models import the
+    # zone split, so their keys hold it.
+    for model in ("fm_chronos_weekly_ragged", "renewal", "renewalbvd"):
+        assert zones in code(model)
     # Models whose modules do not import it still leave it out.
-    for model in ("randomwalk", "randomwalknowcast", "renewal"):
+    for model in ("randomwalk", "randomwalknowcast"):
         assert zones not in code(model)
 
 

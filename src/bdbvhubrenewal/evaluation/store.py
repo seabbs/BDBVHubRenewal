@@ -115,6 +115,7 @@ STORE_ENTRIES: Final = (
 STORE_SKIP: Final = (
     "src/bdbvhubrenewal/evaluation/digest.py",
     "src/bdbvhubrenewal/evaluation/zones.py",
+    "src/bdbvhubrenewal/forecasters/zones.py",
     "src/bdbvhubrenewal/reporting/plots.py",
 )
 """Modules `STORE_ENTRIES` import but a fit does not call.
@@ -122,11 +123,10 @@ STORE_SKIP: Final = (
 The zone split: a stored fit holds national and province samples,
 and its zones are split from them at load
 (`forecasters.zones.zones_for_model`). A model that forecasts the zones
-itself imports the split, so it is in its code. The zone backtest, which
-a fit does not run (the zone fits of `renewal` and `renewalbvd` call
-`forecasters.zones`, so it is in their keys only), `fit_code`'s own
-helper (`evaluation.digest`), and the plots `evaluation.ppc` imports for
-`plot_ppc`, which a fit does not draw.
+itself imports the split, so it is in its code, as it is for the zone
+fits of `renewal` and `renewalbvd`. The zone backtest, which a fit does
+not run, `fit_code`'s own helper (`evaluation.digest`), and the plots
+`evaluation.ppc` imports for `plot_ppc`, which a fit does not draw.
 """
 
 STORE_DATA: Final = "src/bdbvhubrenewal/data/*.csv"
