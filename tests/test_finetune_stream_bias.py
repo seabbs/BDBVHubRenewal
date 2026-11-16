@@ -132,3 +132,22 @@ def test_continuing_without_the_bias_in_the_adapter_is_refused(tmp_path):
     series_bias.attach(model)
     with pytest.raises(ValueError, match="bias"):
         fs.lora_model(model, fs.lora_config(True), tmp_path / "round0")
+
+
+def test_bias_summary_gives_each_pairs_values_by_layer_and_head():
+    model = tiny_model()
+    assert fs.bias_summary(model) == {}
+    series_bias.attach(model)
+    model = fs.lora_model(model, fs.lora_config(True), None)
+    for n, p in model.named_parameters():
+        if n.endswith(".same") and p.requires_grad:
+            with torch.no_grad():
+                p.copy_(torch.arange(p.numel(), dtype=p.dtype).view_as(p))
+    summary = fs.bias_summary(model)
+    assert set(summary) == set(series_bias.PAIRS)
+    same = summary["same"]
+    n = len(same["values"]) * len(same["values"][0])
+    assert same["min"] == 0.0
+    assert same["max"] == float(n - 1)
+    assert same["mean"] == pytest.approx((n - 1) / 2)
+    assert summary["up"]["max"] == 0.0
