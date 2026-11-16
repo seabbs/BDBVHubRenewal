@@ -335,10 +335,9 @@ def test_a_place_with_no_week_to_start_from_starts_late_and_stays_small(
 ) -> None:
     # Sud Ubangi has 2 cases ever, in the week of 10-03, so no week has
     # enough cases to start a walk from. It walks from its mean count from
-    # its latest complete week (#187), so even a wide walk spread, as
-    # pprandomwalknowcast fits it, keeps its draws small: a 0.9 spread over
-    # a few weeks reaches thousands at most, where a walk from week 0
-    # reached millions (#138).
+    # its latest complete week, so even a wide walk spread, as
+    # pprandomwalknowcast fits it, keeps its draws in the thousands at
+    # most.
     model = RandomWalkNowcast()
     origin = model.origin_at(task, errors=True)
     i = list(origin.snap.locations).index("CD-SU")
@@ -423,7 +422,7 @@ def _quiet_trajectories(
     ("vintage", "zone"),
     [("2026-11-08", "CD-IT-17"), ("2026-11-01", "CD-TO-15")],
 )
-def test_a_place_with_recent_cases_below_the_start_rule_walks_on(
+def test_a_quiet_place_with_recent_cases_walks_from_its_level(
     target: pd.DataFrame,
     delays: pd.DataFrame,
     daily: pd.DataFrame,
@@ -431,20 +430,31 @@ def test_a_place_with_recent_cases_below_the_start_rule_walks_on(
     vintage: str,
     zone: str,
 ) -> None:
-    from bdbvhubrenewal.forecasters.randomwalk import _quiet, start_window
+    from bdbvhubrenewal.forecasters.randomwalk import _level, _quiet
 
     origin, x, cw, i = _quiet_trajectories(
         target, delays, daily, daily_zones, vintage, zone
     )
-    # Not silent, but no week with 5 cases to start from (#187).
+    # No week with 5 cases to start from, but cases in the window.
     assert _quiet(origin)[i]
     assert not origin.silent[i]
     # Weeks with data keep at least what is reported.
     assert (x[:, : cw + 1] >= origin.reported[i, : cw + 1] - 1e-9).all()
-    # It walks from its own mean count over the start window, not from
-    # the pooled re-introduction rate, so the weeks ahead are not all 0.
-    s = int(origin.start[i])
-    level = origin.reported[i, s - start_window(origin.settings) + 1 : s + 1]
-    ahead = x[:, cw + 1 :]
-    assert (ahead > 0).mean() > 0.3
-    assert np.median(ahead.mean(axis=0)) == pytest.approx(level.mean(), rel=1)
+    # The first week ahead is a Poisson draw at about its mean count.
+    level = float(_level(origin)[i])
+    assert x[:, cw + 1].mean() == pytest.approx(level, rel=0.3)
+    assert (x[:, cw + 1] == 0).mean() == pytest.approx(np.exp(-level), abs=0.1)
+
+
+def test_a_silent_place_stays_at_0_until_an_introduction(
+    target: pd.DataFrame,
+    delays: pd.DataFrame,
+    daily: pd.DataFrame,
+    daily_zones: pd.DataFrame,
+) -> None:
+    # Goma has no case in the window, so it draws introductions only.
+    origin, x, cw, i = _quiet_trajectories(
+        target, delays, daily, daily_zones, "2026-11-08", "CD-NK-08"
+    )
+    assert origin.silent[i]
+    assert (x[:, cw + 1] == 0).mean() > 0.9

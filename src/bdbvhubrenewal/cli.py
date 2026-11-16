@@ -94,7 +94,7 @@ from bdbvhubrenewal.forecasters.base import (
 )
 from bdbvhubrenewal.forecasters.renewal import DELAY_SUMMARY_FILE
 from bdbvhubrenewal.forecasters.zonerenewal import ZONES_FILE
-from bdbvhubrenewal.forecasters.zones import zones_for_model
+from bdbvhubrenewal.forecasters.zones import walks_own_zones, zones_for_model
 from bdbvhubrenewal.submission.fitting import (
     Forecast,
     get_config,
@@ -1394,6 +1394,7 @@ def _hub_forecast(
         unassigned=result.unassigned,
         zones=zones,
         forecast_date=forecast_date,
+        zones_sum=not walks_own_zones(name),
     )
     return table, result, zones, zone_note, checkpoint
 
