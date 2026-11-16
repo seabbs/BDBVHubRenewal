@@ -90,9 +90,6 @@ _PAGES: Final = (
 
 _DATE = re.compile(r"\b\d{4}-\d{2}-\d{2}\b")
 
-_TRUTH_KEYS: Final = frozenset({"releases"})
-"""JSON keys of truth vintages: report dates of the truth of development
-sums, 40 days after them, so they may fall after the split date."""
 
 _RELEASES: Final = "https://github.com/seabbs/BDBVHubRenewal/releases/tag"
 
@@ -184,8 +181,7 @@ def _json_dates(obj: object, path: str) -> Iterable[tuple[str, str]]:
     """Yield each ISO date string in a JSON value, with its key path."""
     if isinstance(obj, dict):
         for key, value in obj.items():
-            if key not in _TRUTH_KEYS:
-                yield from _json_dates(value, f"{path}.{key}")
+            yield from _json_dates(value, f"{path}.{key}")
     elif isinstance(obj, list):
         for value in obj:
             yield from _json_dates(value, f"{path}[]")
@@ -197,10 +193,9 @@ def _json_dates(obj: object, path: str) -> Iterable[tuple[str, str]]:
 def held_out_leaks(paths: Iterable[Path], split_date: str) -> list[str]:
     """Return the held-out dates the German page's files name.
 
-    A JSON file may name no date on or after the split date, other than
-    its truth vintages (`releases`). A text file (Markdown or HTML) may
-    name the split date itself, as the page's prose does, but no later
-    date.
+    A JSON file may name no date on or after the split date. A text
+    file (Markdown or HTML) may name the split date itself, as the page's
+    prose does, but no later date.
 
     Parameters
     ----------
@@ -381,6 +376,10 @@ def germany_page(
     assert scores is not None
     scores = _shared_cells(_development(scores, config))
     _refuse_held_out(scores, config.split_date)
+    # Each sum has one truth, reported `truth_delay` days after it ends,
+    # up to 40 days into the held-out half. The page names the truth,
+    # not its report date.
+    scores = scores.assign(truth_vintage=f"{config.truth_delay}-day truth")
     forecasts = _read(results, ("forecasts.csv.gz", "teams-forecasts.csv.gz"))
     run = set(scores["model"])
     if forecasts is not None:
