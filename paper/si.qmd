@@ -43,16 +43,17 @@ One SI section per paper section.
 **Attention biases.**
 Chronos-2's group attention has no notion of which series is which, so on its own it can link a lag series to its place's counts only by matching their values.
 
-- We add learned biases to Chronos-2's group attention.
-- One bias applies between rows of the same place, its counts and its lags.
-- The other applies between parent and child places.
-- Each bias is set per layer and head.
-- The biases start at zero, so fine-tuning starts from base Chronos-2.
+- We add four learned scalars to the group-attention scores of each layer and head.
+- One applies from a row to itself.
+- One applies between rows of the same place, its counts and its lags.
+- One applies from a child place to its parent, and one from a parent to its child.
+- All four start at zero, so fine-tuning starts from base Chronos-2, as for the relation biases TableFormer adds to a pretrained model [@Yang2022].
 - The biases train at a learning rate of $10^{-3}$ and the LoRA adapter at Chronos-2's $10^{-5}$, both falling linearly to zero at 8,000 outbreaks.
 - We identify places by name within each block, with no limit on the number of places.
 - A place's parent is the nearest prefix of its name in the block, else the country.
 - Training blocks include countries equal to, above or later than the sum of their places, so a place belongs to its parent without summing to it.
 - We build on Moirai's any-variate attention, which learns a bias per layer and head for whether two tokens belong to the same variate [@Woo2024].
+- In Moirai's ablation, additive learned variate embeddings gave a normalised MAE of 0.904 on the Monash benchmark, against 0.655 with the attention bias [@Woo2024].
 
 **Training blocks.**
 A simulation gives daily counts by onset and report date, and a release counts every case reported by its cut-off, one cut-off a week.
