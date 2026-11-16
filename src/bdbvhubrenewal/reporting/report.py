@@ -155,15 +155,18 @@ __all__ = ["make_report"]
 def relative_wis(
     scores: pd.DataFrame,
     by: Sequence[str] = ("target",),
-    baseline: str = "randomwalk",
+    baseline: str | None = None,
 ) -> pd.DataFrame:
     """`nowcast.relative_wis`, with each model lacking cells marked.
+
+    The baseline defaults to the site's (`site_baseline`).
 
     Each row gets `cells`, the baseline's n in its group, and `partial`
     (`mark_partial`). Full rows all have the baseline's n, and partial
     rows come after them in each group, so the tables never set a model
     scored on fewer forecasts among the others.
     """
+    baseline = baseline or site_baseline()
     out = mark_partial(_relative_wis(scores, by, baseline), by, baseline)
     keys = [c for c in by if c in out.columns]
     return out.sort_values([*keys, "partial"], kind="stable").reset_index(

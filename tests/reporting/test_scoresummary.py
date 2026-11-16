@@ -404,7 +404,7 @@ def test_browser_summary_puts_a_model_lacking_cells_apart(
     drop = (scores["model"] == "b") & (scores["location"] == "CD-IT")
     drop &= scores["target_end_date"] == "2026-10-10"
     scores = scores.loc[~drop]
-    data = summary_rows(scores, MODELS, COLOURS, {})
+    data = summary_rows(scores, MODELS, COLOURS, {}, baseline="randomwalk")
     places = [i for i, p in enumerate(data["places"]) if p["pool"] != "zones"]
     keep = f"function (r) {{ return {places}.includes(r[3]); }}"
     got = _node_with(SUMMARISE, data, keep, MODELS.index(baseline))
