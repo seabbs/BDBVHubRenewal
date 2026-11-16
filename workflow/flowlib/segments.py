@@ -92,3 +92,41 @@ def kept_outbreaks(settings: Path | str, skip: set[str]) -> int:
     rows = Path(settings).read_text().splitlines()[1:]
     ids = {r.split(",")[0] for r in rows if r.strip()}
     return len(ids - skip)
+
+
+def _done(state: Path) -> int:
+    import json
+
+    return int(json.loads((state / "state.json").read_text())["done"])
+
+
+def resume_state(run: Path | str, prev: Path | str | None) -> str:
+    """Put the state a segment resumes from in the trainer's `run` folder.
+
+    The trainer resumes from `run` (its `OUT/state`). If that is missing
+    or behind the state kept with the prefix before (`prev`, `n<P>/state`),
+    `prev` is copied in; a state further on is kept, as a segment that
+    stopped part way resumes from its own saves.
+
+    Returns
+    -------
+    str
+        "base" (first segment, no state), "copied" or "kept".
+    """
+    import shutil
+
+    run = Path(run)
+    if prev is None:
+        return "base"
+    prev = Path(prev)
+    if (run / "state.json").exists() and _done(run) >= _done(prev):
+        return "kept"
+    shutil.rmtree(run, ignore_errors=True)
+    shutil.copytree(prev, run)
+    return "copied"
+
+
+def gather_exclusions(paths: Iterable[Path | str], out: Path | str) -> None:
+    """Write the sim-QC exclusions of several rounds as one CSV."""
+    rows = sorted(set().union(*(excluded(p) for p in paths)))
+    Path(out).write_text("".join(["simulation\n", *(f"{r}\n" for r in rows)]))
