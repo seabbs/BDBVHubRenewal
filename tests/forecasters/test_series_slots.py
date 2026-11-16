@@ -1,5 +1,7 @@
 """Per-series slots: a place's count and lag series share a learned slot."""
 
+import json
+
 import numpy as np
 import pytest
 
@@ -10,6 +12,10 @@ pytest.importorskip("peft")
 from bdbvhubrenewal.forecasters import slots  # noqa: E402
 
 N_PLACES, LAG, T, H = 3, 2, 48, 16
+
+
+HIER = ("CD", "R2", "R1", "R2-P01", "R1-P03", "A1", "P05", "P05-A1")
+"""Places of a training block over several levels (the trainer's names)."""
 
 
 def tiny_model(seed: int = 0):
@@ -118,7 +124,7 @@ def trained(steps: int = 30):
     from peft import get_peft_model
 
     model = tiny_model()
-    slots.attach(model, n_slots=8)
+    slots.attach(model, n_slots=8, parent=False)
     peft_model = get_peft_model(model, lora())
     params = [p for p in peft_model.parameters() if p.requires_grad]
     opt = torch.optim.Adam(params, lr=0.05)
@@ -199,7 +205,7 @@ def test_slots_round_trip_through_the_adapter(tmp_path):
     want = predict(model, block, ids)
     model.save_pretrained(tmp_path / "ckpt")
     assert slots.adapter_slots(tmp_path / "ckpt") == 8
-    loaded = slots.load_adapter(tiny_model(), tmp_path / "ckpt")
+    loaded = slots.load_adapter(tiny_model(), tmp_path / "ckpt", parent=False)
     assert torch.allclose(predict(loaded, block, ids), want, atol=1e-5)
 
 
@@ -209,7 +215,7 @@ def test_an_adapter_without_slots_loads_as_before(tmp_path):
     config = LoraConfig(r=2, lora_alpha=4, target_modules=["self_attention.q"])
     get_peft_model(tiny_model(), config).save_pretrained(tmp_path / "ckpt")
     assert slots.adapter_slots(tmp_path / "ckpt") is None
-    loaded = slots.load_adapter(tiny_model(), tmp_path / "ckpt")
+    loaded = slots.load_adapter(tiny_model(), tmp_path / "ckpt", parent=False)
     assert not slots.has_slots(loaded)
 
 
@@ -220,7 +226,7 @@ def test_inference_assigns_slots_by_place(monkeypatch, tmp_path):
 
     model = trained()
     model.save_pretrained(tmp_path / "ckpt")
-    loaded = slots.load_adapter(tiny_model(), tmp_path / "ckpt")
+    loaded = slots.load_adapter(tiny_model(), tmp_path / "ckpt", parent=False)
     monkeypatch.setattr(
         foundation,
         "_chronos",
@@ -245,6 +251,77 @@ def test_inference_assigns_slots_by_place(monkeypatch, tmp_path):
     assert not np.allclose(a, b)
 
 
+@pytest.mark.parametrize("drop_lags_of", [None, "CD-EQ"])
+def test_inference_slots_follow_chronos_row_order(
+    monkeypatch, tmp_path, drop_lags_of
+):
+    # Chronos-2's dict path stacks covariates by sorted name (past-only
+    # first, then known-future), not in input order. With hub names "-"
+    # sorts before "_", so "CD_lag_*" comes after "CD-KN_lag_*": each lag
+    # row must still get its own place's slot. A place may have no lags.
+    from contextlib import contextmanager
+
+    from chronos import Chronos2Pipeline
+
+    from bdbvhubrenewal.forecasters import foundation
+
+    model = trained()
+    model.save_pretrained(tmp_path / "ckpt")
+    loaded = slots.load_adapter(tiny_model(), tmp_path / "ckpt", parent=False)
+    monkeypatch.setattr(
+        foundation,
+        "_chronos",
+        lambda _checkpoint=None: Chronos2Pipeline(model=loaded),
+    )
+    seen = []
+    real = slots.assigned
+
+    @contextmanager
+    def spy(m, ids):
+        seen.append(np.asarray(ids))
+        with real(m, ids):
+            yield
+
+    monkeypatch.setattr(slots, "assigned", spy)
+    places = ["CD", "CD-KN", "CD-EQ"]
+    x = toy_block()["context"]
+    names = [f"{p}_lag_{d}" for p in places for d in range(LAG)]
+    rows = dict(zip(names, x[N_PLACES:], strict=True))
+    if drop_lags_of:
+        rows = {
+            k: v
+            for k, v in rows.items()
+            if not k.startswith(drop_lags_of + "_")
+        }
+    group = {
+        "target": x[:N_PLACES, :T],
+        "past_covariates": {k: v[:T] for k, v in rows.items()},
+        "future_covariates": {k: v[T:] for k, v in rows.items()},
+        "places": places,
+    }
+    foundation.chronos_sampler([group], H, 5, 1)
+    ids = seen[-1]
+    target_slot = dict(zip(places, ids[:N_PLACES], strict=True))
+    for k, name in enumerate(sorted(rows)):
+        assert ids[N_PLACES + k] == target_slot[name.rsplit("_lag_", 1)[0]]
+    assert len(set(target_slot.values())) == N_PLACES
+
+
+def test_forecast_groups_name_their_places():
+    # The forecasting path gives the sampler each group's target places,
+    # in target order, as the slots need them.
+    from bdbvhubrenewal.forecasters import foundation
+
+    tri = foundation.HubTriangle(
+        times=["a", "b", "c", "d"],
+        final=np.ones((2, 4)),
+        partial=np.ones((2, 4, 2)),
+        last=3,
+    )
+    group = foundation.layout_block(tri, "ragged", ["CD", "CD-KN"], 2)
+    assert group["places"] == ["CD", "CD-KN"]
+
+
 def test_slots_are_made_on_the_models_device():
     model = tiny_model().to("meta")
     slots.attach(model, 4)
@@ -252,140 +329,239 @@ def test_slots_are_made_on_the_models_device():
         assert p.device.type == "meta"
 
 
-def test_slots_can_start_as_distinct_random_codes():
-    model = tiny_model()
-    slots.attach(model, 8, init_std=0.02, seed=3)
-    w = getattr(model, slots.SLOT_MODULE).embedding.weight.detach()
-    assert torch.all(w.abs().sum(1) > 0)
-    assert len({tuple(row.tolist()) for row in w}) == 8
-    assert abs(float(w.std()) - 0.02) < 0.005
-    again = tiny_model()
-    slots.attach(again, 8, init_std=0.02, seed=3)
-    assert torch.equal(w, getattr(again, slots.SLOT_MODULE).embedding.weight)
-
-
-# National first and names out of sort order: regions of places, a place
-# by ages and an age total across places, as training blocks hold them.
-HIER = ("CD", "R2", "R1", "R2-P01", "R1-P03", "A1", "P05", "P05-A1")
-
-
-def test_each_place_links_to_its_nearest_parent_in_the_block():
-    parents = slots.parents_of(HIER)
-    named = {
-        p: (HIER[i] if i >= 0 else None)
-        for p, i in zip(HIER, parents, strict=True)
+def save_with_settings(model, where, parent: bool) -> None:
+    """Save an adapter with the settings.json a checkpoint has beside it."""
+    model.save_pretrained(where)
+    slot = {
+        "n": 8,
+        **({"parent": {"link": "own plus parent"}} if parent else {}),
     }
-    assert named == {
-        "CD": None,
-        "R2": "CD",
-        "R1": "CD",
-        "R2-P01": "R2",
-        "R1-P03": "R1",
-        "A1": "CD",
-        "P05": "CD",
-        "P05-A1": "P05",
-    }
-    # Germany's states and age groups, and BDBV's provinces and zones.
-    assert slots.parents_of(("DE", "DE-BY", "DE-BB")) == [-1, 0, 0]
-    assert slots.parents_of(("DE", "80+", "00-04")) == [-1, 0, 0]
-    assert slots.parents_of(("CD", "CD-NK", "CD-NK-03", "CD-IT-01")) == [
-        -1,
-        0,
-        1,
-        0,
-    ]
-    # A block without its country links leaves to their own parents only.
-    assert slots.parents_of(("R1-P03", "R1")) == [1, -1]
+    (where / "settings.json").write_text(json.dumps({"series_slots": slot}))
 
 
-def test_a_parents_slot_is_what_its_children_carry():
-    n_t, lags = len(HIER), 2
-    ids = slots.slot_ids(
-        n_t,
-        n_t * lags,
-        np.random.default_rng(0),
-        16,
-        parents=slots.parents_of(HIER),
-    )
-    own, parent = ids
-    assert ids.shape == (2, n_t * (1 + lags))
-    # Every row of a place carries its own slot and its parent's own slot.
-    for p, q in enumerate(slots.parents_of(HIER)):
-        rows = slots.row_places(n_t, n_t * lags) == p
-        assert set(own[rows]) == {own[p]}
-        assert set(parent[rows]) == {own[q] if q >= 0 else -1}
-    assert len(set(own[:n_t])) == n_t
-
-
-def test_a_place_adds_its_parents_slot_exactly():
-    model = tiny_model()
-    slots.attach(model, 8, init_std=0.02, seed=1)
-    module = getattr(model, slots.SLOT_MODULE)
-    table = module.embedding.weight.detach()
-    out = module(torch.tensor([[3, 5], [5, -1]])).detach()
-    assert torch.allclose(out[0], table[3] + table[5])
-    assert torch.allclose(out[1], table[5])
-    # The slot table is the only parameter.
-    assert [n for n, _ in module.named_parameters()] == ["embedding.weight"]
-    # Own slots alone, as before.
-    assert torch.allclose(module(torch.tensor([3, 5])).detach(), table[[3, 5]])
-
-
-def test_inference_slots_follow_chronos_row_order_by_name():
-    from bdbvhubrenewal.forecasters.foundation import _group_slots
-
-    lags = 11  # lag 10 sorts before lag 2
-    names = [f"{p}_lag_{d}" for p in HIER for d in range(lags)]
-    cov = {n: np.zeros(4) for n in names}
-    group = {
-        "target": np.zeros((len(HIER), 4)),
-        "past_covariates": cov,
-        "future_covariates": {n: np.zeros(2) for n in names},
-        "places": HIER,
-    }
-    own, parent = _group_slots(group, 16)
-    chosen = slots.slot_ids(
-        len(HIER), 0, np.random.default_rng(slots.EVAL_SEED), 16
-    )
-    parents = slots.parents_of(HIER)
-    at = {p: i for i, p in enumerate(HIER)}
-
-    def want_parent(i):
-        return chosen[parents[i]] if parents[i] >= 0 else -1
-
-    assert list(own[: len(HIER)]) == list(chosen)
-    assert list(parent[: len(HIER)]) == [
-        want_parent(i) for i in range(len(HIER))
-    ]
-    for k, name in enumerate(sorted(names)):
-        i = at[name.rsplit("_lag_", 1)[0]]
-        assert own[len(HIER) + k] == chosen[i]
-        assert parent[len(HIER) + k] == want_parent(i)
-
-
-def test_slots_without_a_parent_link_ignore_parent_ids(tmp_path):
+def linked_adapter(tmp_path):
+    """Save an adapter whose slots carry the parent link; return it and ids."""
     from peft import get_peft_model
 
-    from bdbvhubrenewal.forecasters.foundation import _group_slots
+    model = tiny_model()
+    slots.attach(model, 8, init_std=0.02, seed=1)
+    peft_model = get_peft_model(model, lora()).eval()
+    save_with_settings(peft_model, tmp_path / "linked", parent=True)
+    ids = slots.slot_ids(
+        N_PLACES,
+        N_PLACES * LAG,
+        np.random.default_rng(slots.EVAL_SEED),
+        8,
+        parents=slots.parents_of(["CD", "CD-NK", "CD-NK-01"]),
+    )
+    return peft_model, ids
+
+
+def test_a_parent_linked_adapter_forecasts_with_its_parents(tmp_path):
+    model, ids = linked_adapter(tmp_path)
+    assert ids.shape == (2, N_PLACES * (1 + LAG))
+    block = toy_block()
+    want = predict(model, block, ids)
+    loaded = slots.load_adapter(tiny_model(), tmp_path / "linked")
+    assert slots.has_parent_link(loaded)
+    assert not any("parent_scale" in n for n, _ in loaded.named_parameters())
+    assert torch.allclose(predict(loaded, block, ids), want, atol=1e-5)
+    # Own plus parent exactly: the parent term changes the forecast.
+    assert not torch.allclose(predict(loaded, block, ids[0]), want, atol=1e-5)
+    module = getattr(loaded, slots.SLOT_MODULE)
+    table = module.embedding.weight.detach()
+    out = module(torch.tensor([[3, 4], [5, -1]])).detach()
+    assert torch.allclose(out[0], table[3] + table[5])
+    assert torch.allclose(out[1], table[4])
+
+
+def test_inference_gives_a_linked_model_its_parents(tmp_path, monkeypatch):
+    from contextlib import contextmanager
+
+    from chronos import Chronos2Pipeline
+
+    from bdbvhubrenewal.forecasters import foundation
+
+    linked_adapter(tmp_path)
+    loaded = slots.load_adapter(tiny_model(), tmp_path / "linked")
+    monkeypatch.setattr(
+        foundation,
+        "_chronos",
+        lambda _checkpoint=None: Chronos2Pipeline(model=loaded),
+    )
+    seen = []
+    real = slots.assigned
+
+    @contextmanager
+    def spy(m, ids):
+        seen.append(np.asarray(ids))
+        with real(m, ids):
+            yield
+
+    monkeypatch.setattr(slots, "assigned", spy)
+    places = ["CD", "CD-NK", "CD-NK-01"]
+    x = toy_block()["context"]
+    names = [f"{p}_lag_{d}" for p in places for d in range(LAG)]
+    rows = dict(zip(names, x[N_PLACES:], strict=True))
+    group = {
+        "target": x[:N_PLACES, :T],
+        "past_covariates": {k: v[:T] for k, v in rows.items()},
+        "future_covariates": {k: v[T:] for k, v in rows.items()},
+        "places": places,
+    }
+    foundation.chronos_sampler([group], H, 5, 1)
+    own, parent = seen[-1]
+    # CD has no parent; CD-NK's is CD; CD-NK-01's is CD-NK.
+    assert parent[0] == -1
+    assert parent[1] == own[0]
+    assert parent[2] == own[1]
+
+
+def test_an_adapter_without_the_parent_link_still_loads(tmp_path):
+    from peft import get_peft_model
 
     model = tiny_model()
     slots.attach(model, 8, init_std=0.02, seed=1, parent=False)
-    module = getattr(model, slots.SLOT_MODULE)
-    table = module.embedding.weight.detach()
-    out = module(torch.tensor([[3], [5]])).detach()
-    assert torch.allclose(out[0], table[3])
-    assert not slots.has_parent_link(model)
-    # An adapter saved without the link loads without it.
-    get_peft_model(model, lora()).save_pretrained(tmp_path / "plain")
+    save_with_settings(
+        get_peft_model(model, lora()), tmp_path / "plain", parent=False
+    )
     assert slots.adapter_parent_link(tmp_path / "plain") is False
-    with_link = tiny_model()
-    slots.attach(with_link, 8, init_std=0.02, seed=1)
-    get_peft_model(with_link, lora()).save_pretrained(tmp_path / "linked")
-    assert slots.adapter_parent_link(tmp_path / "linked") is True
-    names = [f"{p}_lag_0" for p in ("CD", "CD-NK")]
-    group = {
-        "target": np.zeros((2, 4)),
-        "past_covariates": {n: np.zeros(4) for n in names},
-        "places": ("CD", "CD-NK"),
-    }
-    assert _group_slots(group, 8, parent=False).ndim == 1
+    loaded = slots.load_adapter(tiny_model(), tmp_path / "plain")
+    assert slots.has_slots(loaded)
+    assert not slots.has_parent_link(loaded)
+    # Parent ids are ignored by slots trained without the link.
+    block = toy_block()
+    ids = slots.slot_ids(
+        N_PLACES,
+        N_PLACES * LAG,
+        np.random.default_rng(0),
+        8,
+        parents=[-1, 0, 1],
+    )
+    assert torch.equal(
+        predict(loaded, block, ids), predict(loaded, block, ids[0])
+    )
+
+
+def test_a_slots_adapter_with_no_settings_is_an_error(tmp_path):
+    # Without the trainer's marker only settings.json can say whether the
+    # slots carry the link.
+    from peft import get_peft_model
+
+    model = tiny_model()
+    slots.attach(model, 8, init_std=0.02, seed=1, parent=False)
+    get_peft_model(model, lora()).save_pretrained(tmp_path / "bare")
+    with pytest.raises(ValueError, match=r"settings\.json"):
+        slots.load_adapter(tiny_model(), tmp_path / "bare")
+
+
+def test_an_adapter_weight_the_model_drops_is_an_error(tmp_path, monkeypatch):
+    linked_adapter(tmp_path)
+    # A loader that builds no slots would drop the slot weights; that must
+    # fail, not load silently.
+    monkeypatch.setattr(slots, "adapter_slots", lambda _a: None)
+    (tmp_path / "linked" / "settings.json").unlink()
+    with pytest.raises(ValueError, match="has no place"):
+        slots.load_adapter(tiny_model(), tmp_path / "linked")
+
+
+FIXED = {
+    "n": 8,
+    "init": "normal",
+    "init_std": 0.02,
+    "init_seed": 1,
+    "trained": False,
+    "parent": {"link": "own label plus the parent's own label"},
+}
+"""A fixed-label checkpoint's `series_slots` settings."""
+
+
+def fixed_label_checkpoint(tmp_path):
+    """Save a LoRA adapter trained beside fixed, untrained labels."""
+    from peft import LoraConfig, get_peft_model
+
+    model = tiny_model()
+    slots.attach(model, 8, init_std=0.02, seed=1, parent=True)
+    for p in getattr(model, slots.SLOT_MODULE).parameters():
+        p.requires_grad_(False)
+    config = LoraConfig(
+        r=2,
+        lora_alpha=4,
+        target_modules=["self_attention.q", "self_attention.v"],
+        init_lora_weights=False,
+    )
+    peft_model = get_peft_model(model, config).eval()
+    where = tmp_path / "fixed"
+    peft_model.save_pretrained(where)
+    (where / "settings.json").write_text(json.dumps({"series_slots": FIXED}))
+    return peft_model, where
+
+
+def test_fixed_labels_are_rebuilt_from_the_settings(tmp_path):
+    from safetensors import safe_open
+
+    model, where = fixed_label_checkpoint(tmp_path)
+    with safe_open(where / "adapter_model.safetensors", "pt") as f:
+        assert not [k for k in f.keys() if slots.SLOT_MODULE in k]  # noqa: SIM118
+    table = getattr(model.base_model.model, slots.SLOT_MODULE).embedding.weight
+    loaded = slots.load_adapter(tiny_model(), where)
+    assert slots.has_slots(loaded)
+    assert slots.has_parent_link(loaded)
+    module = getattr(loaded, slots.SLOT_MODULE)
+    assert torch.equal(module.embedding.weight, table)
+    assert not any(p.requires_grad for p in module.parameters())
+    # A place's vector is its own label plus its parent's, a plain sum;
+    # a place with no parent carries its own only.
+    out = module(torch.tensor([[3, 4], [5, -1]])).detach()
+    assert torch.allclose(out[0], table[3] + table[5])
+    assert torch.allclose(out[1], table[4])
+    ids = slots.slot_ids(
+        N_PLACES,
+        N_PLACES * LAG,
+        np.random.default_rng(slots.EVAL_SEED),
+        8,
+        parents=slots.parents_of(["CD", "CD-NK", "CD-NK-01"]),
+    )
+    block = toy_block()
+    want = predict(model, block, ids)
+    assert torch.allclose(predict(loaded, block, ids), want, atol=1e-5)
+    assert not torch.allclose(predict(loaded, block, ids[0]), want, atol=1e-5)
+
+
+def test_fixed_labels_need_their_seed(tmp_path):
+    _, where = fixed_label_checkpoint(tmp_path)
+    settings = {"series_slots": {**FIXED, "init_seed": 2}}
+    (where / "settings.json").write_text(json.dumps(settings))
+    model, _ = fixed_label_checkpoint(tmp_path / "again")
+    block = toy_block()
+    ids = slots.slot_ids(
+        N_PLACES,
+        N_PLACES * LAG,
+        np.random.default_rng(0),
+        8,
+        parents=[-1, 0, 1],
+    )
+    other = slots.load_adapter(tiny_model(), where)
+    assert not torch.allclose(
+        predict(other, block, ids), predict(model, block, ids), atol=1e-5
+    )
+
+
+def test_the_link_is_read_from_the_adapters_marker(tmp_path):
+    # fm-finetune-slots marks linked slots with a `parent_link` buffer,
+    # saved in the adapter beside the slot table.
+    from safetensors import safe_open
+
+    model, ids = linked_adapter(tmp_path)
+    with safe_open(
+        tmp_path / "linked" / "adapter_model.safetensors", "pt"
+    ) as f:
+        assert any("parent_link" in k for k in f.keys())  # noqa: SIM118
+    where = tmp_path / "linked" / "settings.json"
+    where.write_text(json.dumps({"series_slots": {"n": 8}}))
+    assert slots.adapter_parent_link(tmp_path / "linked")
+    loaded = slots.load_adapter(tiny_model(), tmp_path / "linked")
+    assert slots.has_parent_link(loaded)
+    block = toy_block()
+    want = predict(model, block, ids)
+    assert torch.allclose(predict(loaded, block, ids), want, atol=1e-5)

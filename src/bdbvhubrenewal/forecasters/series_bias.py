@@ -25,7 +25,7 @@ adapter's files.
 from __future__ import annotations
 
 import json
-from collections.abc import Iterator, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Final
@@ -143,8 +143,10 @@ def attach(model: Any) -> None:
             f"{len(groups)} group attention layers, not {config.num_layers}"
         )
 
-    def hook(layer: int):
-        def add(_module: Any, args: tuple, kwargs: dict) -> Any:
+    def hook(layer: int) -> Callable[..., Any]:
+        def add(
+            _module: Any, args: tuple[Any, ...], kwargs: dict[str, Any]
+        ) -> Any:
             rows = getattr(model, _STATE)["rows"]
             if rows is None:
                 return None
