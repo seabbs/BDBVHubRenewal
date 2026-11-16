@@ -637,3 +637,45 @@ def test_slots_scores_keep_only_the_final_run_s_checkpoints() -> None:
     out = slots_scores_table(rows, ("slots-new",))
     assert list(out["Slots"]) == [0.9]
     assert slots_scores_table(rows, ()).empty
+
+
+def _comparison() -> pd.DataFrame:
+    """Rows of a fine-tuning comparison: two runs scored by set."""
+    return pd.DataFrame(
+        {
+            "set": ["held-out weekly"] * 4 + ["germany national"] * 2,
+            "run": [
+                "full",
+                "full",
+                "no delays",
+                "no delays",
+                "full",
+                "no delays",
+            ],
+            "outbreaks": [1000, 2000, 1000, 2000, 1000, 1000],
+            "score": [0.5, 0.4, 0.7, 0.6, 0.9, 1.1],
+        }
+    )
+
+
+def test_a_comparison_table_puts_each_run_beside_the_other() -> None:
+    from paperpipe.evidence import comparison_table
+
+    out = comparison_table(_comparison())
+    assert list(out.columns) == ["Set", "Outbreaks", "full", "no delays"]
+    first = out.iloc[0]
+    assert (first["Set"], first["Outbreaks"]) == ("germany national", 1000)
+    assert (first["full"], first["no delays"]) == (0.9, 1.1)
+
+
+def test_a_comparison_figure_draws_each_run_by_checkpoint() -> None:
+    from paperpipe.evidence import comparison_figure
+
+    fig = comparison_figure(_comparison())
+    axes = [ax for ax in fig.axes if ax.get_visible()]
+    assert [ax.get_title() for ax in axes] == [
+        "held-out weekly",
+        "germany national",
+    ]
+    lines = {line.get_label(): line for line in axes[0].get_lines()}
+    assert list(lines["no delays"].get_xdata()) == [1000, 2000]
