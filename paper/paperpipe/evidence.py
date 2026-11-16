@@ -1,7 +1,7 @@
-"""SI tables and figures from results of code not yet on main.
+"""SI tables and figures from results kept on evidence branches.
 
-The copula (#221), the aggregation options (#222) and the fine-tuning
-runs (#192) write their results as rows to evidence branches (see
+The copula, the aggregation options and the fine-tuning runs write
+their results as rows to evidence branches (see
 `workflow/config.yaml`, block `evidence`). This module turns those rows
 into the SI's tables, figures and quoted numbers, so nothing is typed into
 the paper. A result whose rows are not set yet gets a note saying what it
@@ -64,7 +64,7 @@ OPTIONS: Final = {
     "zones_summed": "Zones summed",
     "zones_copula": "Zones summed after pairing",
 }
-"""Aggregation options of #222, in table order."""
+"""Aggregation options, in table order."""
 
 
 def waiting(what: str) -> str:
@@ -74,7 +74,7 @@ def waiting(what: str) -> str:
 
 def _pair(a: pd.Series, b: pd.Series) -> list[str]:
     return [
-        "" if pd.isna(x) else f"{x:.2f} / {y:.2f}"
+        "" if pd.isna(x) or pd.isna(y) else f"{x:.2f} / {y:.2f}"
         for x, y in zip(a, b, strict=True)
     ]
 
@@ -314,7 +314,9 @@ def checkpoint_figure(scores: pd.DataFrame) -> Figure:
     # Zero-shot sits at half the first checkpoint on the log axis.
     zero = sizes[0] / 2 if sizes else 500
     ticks = [zero, *sizes]
-    labels = ["zero-shot", *(f"{n:,.0f}" for n in sizes)]
+    ticklabels = ["zero-shot", *(f"{n:,.0f}" for n in sizes)]
+    # One colour per model across panels, so the shared legend holds.
+    colours = {m: f"C{i}" for i, m in enumerate(sorted(sc["model"].unique()))}
     panels = list(sc.groupby(["study", "level"], sort=False).groups)
     ncol = min(3, len(panels))
     nrow = int(np.ceil(len(panels) / ncol))
@@ -332,10 +334,10 @@ def checkpoint_figure(scores: pd.DataFrame) -> Figure:
         thin = n < MIN_CELLS
         k = int(one["n_origins"].min()) if "n_origins" in one else None
         origins = "" if k is None else f", {k} origin{'s' if k != 1 else ''}"
-        for i, (model, g) in enumerate(one.groupby("model")):
+        for model, g in one.groupby("model"):
             g = g.sort_values("outbreaks")
             x = g["outbreaks"].where(g["outbreaks"] > 0, zero)
-            colour = "#bbbbbb" if thin else f"C{i}"
+            colour = "#bbbbbb" if thin else colours[model]
             ax.plot(
                 x, g["rel_wis"], marker="o", ms=3, color=colour, label=model
             )
@@ -350,7 +352,7 @@ def checkpoint_figure(scores: pd.DataFrame) -> Figure:
             )
         ax.set_xscale("log")
         ax.set_xlim(ticks[0] / 1.5, ticks[-1] * 1.5)
-        ax.set_xticks(ticks, labels, rotation=45, fontsize=7)
+        ax.set_xticks(ticks, ticklabels, rotation=45, fontsize=7)
         ax.minorticks_off()
         ax.axhline(1, color="#888888", ls="--", lw=1)
         ax.set_title(f"{study}, {level} (n = {n}{origins})", fontsize=9)
@@ -358,9 +360,14 @@ def checkpoint_figure(scores: pd.DataFrame) -> Figure:
         ax.set_ylabel("Relative WIS")
     for ax in axes[len(panels) :]:
         ax.set_visible(False)
-    # The legend from a panel drawn in colour.
+    # The legend from the panels drawn in colour, one entry per model.
     shown = [ax for ax in axes if ax.get_visible() and ax.texts == []]
-    handles, labels = (shown or axes)[0].get_legend_handles_labels()
+    entries = {}
+    for ax in shown or axes[:1]:
+        for h, label in zip(*ax.get_legend_handles_labels(), strict=True):
+            entries.setdefault(label, h)
+    labels = sorted(entries)
+    handles = [entries[label] for label in labels]
     fig.legend(handles, labels, loc="outside lower center", ncol=len(labels))
     return fig
 
@@ -510,11 +517,11 @@ def diseases_table(diseases: pd.DataFrame) -> pd.DataFrame:
 
 
 EVIDENCE: Final = {
-    "copula_scores": "fm-copula's per-forecast copula scores (#221)",
-    "copula_rho": "fm-copula's rolling correlation estimates (#221)",
-    "aggregation_scores": "fm-agg's per-target aggregation scores (#222)",
-    "aggregation_cost": "fm-agg's cost of each option (#222)",
-    "finetune_heldout": "fm-finetune3's held-out loss curve (#192)",
+    "copula_scores": "fm-copula's per-forecast copula scores",
+    "copula_rho": "fm-copula's rolling correlation estimates",
+    "aggregation_scores": "fm-agg's per-target aggregation scores",
+    "aggregation_cost": "fm-agg's cost of each option",
+    "finetune_heldout": "fm-finetune3's held-out loss curve",
     "sim_summaries": "fm-finetune3's per-outbreak r3 pilot summaries",
     "sim_realism": "fm-finetune3's data reference values",
     "sim_diseases": "fm-finetune3's published disease values",

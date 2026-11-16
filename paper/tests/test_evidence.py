@@ -255,3 +255,37 @@ def test_scale_floor_numbers_split_simulations_and_bdbv() -> None:
         "none": 4.2,
         "floor": 2.94,
     }
+
+
+def test_pair_is_blank_when_either_value_is_missing() -> None:
+    from paperpipe.evidence import _pair
+
+    a = pd.Series([0.5, np.nan, 0.5])
+    b = pd.Series([0.25, 0.25, np.nan])
+    assert _pair(a, b) == ["0.50 / 0.25", "", ""]
+
+
+def test_checkpoint_models_keep_one_colour_across_panels() -> None:
+    from paperpipe.evidence import checkpoint_figure
+
+    rows = pd.DataFrame(
+        {
+            "study": ["ebola"] * 4 + ["germany"] * 2,
+            "level": "national",
+            "model": ["a", "a", "b", "b", "b", "b"],
+            "outbreaks": [0, 1000] * 3,
+            "n": 400,
+            "rel_wis": [2.0, 1.5, 1.8, 1.2, 1.1, 0.9],
+        }
+    )
+    fig = checkpoint_figure(rows)
+    colours = {
+        (ax.get_title(), line.get_label()): line.get_color()
+        for ax in fig.axes
+        for line in ax.get_lines()
+        if line.get_label() in {"a", "b"}
+    }
+    assert (
+        colours[("ebola, national (n = 400)", "b")]
+        == colours[("germany, national (n = 400)", "b")]
+    )
