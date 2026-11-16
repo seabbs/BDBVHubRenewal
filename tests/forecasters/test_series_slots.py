@@ -343,3 +343,14 @@ def test_forecast_groups_name_their_places():
     )
     group = foundation.layout_block(tri, "ragged", ["CD", "CD-KN"], 2)
     assert group["places"] == ["CD", "CD-KN"]
+
+
+def test_slot_minus_one_is_a_zero_vector():
+    # A place given slot -1 has no slot vector: as base Chronos-2.
+    model, block = trained(), toy_block()
+    rows = N_PLACES + N_PLACES * LAG
+    none = predict(model, block)
+    blank = predict(model, block, np.full(rows, -1))
+    assert torch.equal(blank, none)
+    ids = slots.slot_ids(N_PLACES, N_PLACES * LAG, np.random.default_rng(0), 8)
+    assert not torch.equal(predict(model, block, ids), none)

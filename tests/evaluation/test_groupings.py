@@ -305,3 +305,65 @@ def test_rows_must_match_the_reference_in_number() -> None:
     check_checkpoint_rows(rows)
     with pytest.raises(ValueError, match="slots-abc"):
         check_checkpoint_rows(rows.iloc[:3])
+
+
+def _block(cased: list[bool], lagged: list[str], steps: int = 6) -> dict:
+    """A ragged group of places p0, p1, ...; `cased` ones have counts."""
+    places = [f"p{i}" for i in range(len(cased))]
+    target = np.array([[float(c)] * steps for c in cased])
+    names = [f"{p}_lag_{d}" for p in lagged for d in range(2)]
+    return {
+        "target": target,
+        "past_covariates": {n: np.zeros(steps) for n in names},
+        "future_covariates": {n: np.zeros(2) for n in names},
+        "places": places,
+    }
+
+
+def test_slots_of_a_block_within_the_slots_are_the_usual_ones() -> None:
+    from bdbvhubrenewal.evaluation.groupings import cased_group_slots
+    from bdbvhubrenewal.forecasters.foundation import _group_slots
+
+    group = _block([True, False, True], ["p2", "p0"])
+    assert (
+        cased_group_slots(group, 8).tolist() == _group_slots(group, 8).tolist()
+    )
+
+
+def test_a_block_over_the_slots_gives_slots_to_places_with_cases_only() -> None:
+    from bdbvhubrenewal.evaluation.groupings import cased_group_slots
+
+    group = _block([False, True, False, True, False], ["p3", "p1"])
+    ids = cased_group_slots(group, 3)
+    targets, lags = ids[:5], ids[5:]
+    assert (targets[[0, 2, 4]] == -1).all()
+    assert targets[1] >= 0
+    assert targets[3] >= 0
+    assert targets[1] != targets[3]
+    # Chronos-2's rows: the lags by sorted name, p1's then p3's.
+    assert lags.tolist() == [targets[1]] * 2 + [targets[3]] * 2
+
+
+def test_more_places_with_cases_than_slots_fails() -> None:
+    from bdbvhubrenewal.evaluation.groupings import cased_group_slots
+
+    with pytest.raises(ValueError, match="slots"):
+        cased_group_slots(_block([True] * 4, []), 3)
+
+
+def test_slots_rule_of_each_row() -> None:
+    from bdbvhubrenewal.evaluation.groupings import slots_rule
+
+    rows = pd.DataFrame(
+        {
+            "study": ["ebola"] * 5 + ["germany"],
+            "option": ["joint", "level", "level", "zones_summed",
+                       "zones_copula", "joint"],
+            "level": ["national", "provinces", "zones", "national",
+                      "provinces", "national"],
+        }
+    )  # fmt: skip
+    assert slots_rule(rows, slots=True).tolist() == [
+        "cased", "all", "cased", "cased", "cased", "all",
+    ]  # fmt: skip
+    assert set(slots_rule(rows, slots=False)) == {"none"}
