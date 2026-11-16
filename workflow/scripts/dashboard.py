@@ -57,13 +57,7 @@ def handler(ctx: page.Context) -> type[BaseHTTPRequestHandler]:
                 parts = unquote(self.path[6:].split("?")[0])
                 loc = parts.removesuffix(".json").split("/", 1)[-1]
                 with LOCK:
-                    built = germany.build(
-                        ctx.source.germany,
-                        ctx.runs,
-                        ctx.references,
-                        levels=ctx.style["levels"],
-                    )
-                    data = page._json(germany.location(built, loc))
+                    data = page._json(germany.location(ctx.germany(), loc))
                 self._send(200, data.encode(), "application/json")
                 return
             try:
