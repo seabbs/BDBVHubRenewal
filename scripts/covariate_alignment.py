@@ -47,15 +47,15 @@ def recorded_blocks(sim_dir: Path, seed: int, n: int) -> list[dict]:
         )
         if block is not None:
             calls.append(
-                dict(
-                    counts=counts,
-                    source=source,
-                    places=places,
-                    cutoffs=list(cutoffs),
-                    lag=max_lag,
-                    totals=totals,
-                    block=block,
-                )
+                {
+                    "counts": counts,
+                    "source": source,
+                    "places": places,
+                    "cutoffs": list(cutoffs),
+                    "lag": max_lag,
+                    "totals": totals,
+                    "block": block,
+                }
             )
         return block
 
@@ -143,9 +143,9 @@ def brute(call: dict) -> dict:
     at = {s: i for i, s in enumerate(steps)}
     last = at[cut_step]
     start = last - lag + 1
-    L, T = len(places), len(steps)
-    target = np.full((L, T), np.nan)
-    lagged = np.full((L, lag, T), np.nan)
+    n_l, n_t = len(places), len(steps)
+    target = np.full((n_l, n_t), np.nan)
+    lagged = np.full((n_l, lag, n_t), np.nan)
     for i, p in enumerate(places):
         mine = rows[rows["location"] == p]
         for t, s in enumerate(steps):
@@ -161,13 +161,13 @@ def brute(call: dict) -> dict:
                     lagged[i, d, t] = ref.loc[
                         ref["report_date"] <= c, "count"
                     ].sum()
-    return dict(
-        target=target,
-        lagged=lagged.reshape(L * lag, T),
-        start=start,
-        last=last,
-        steps=steps,
-    )
+    return {
+        "target": target,
+        "lagged": lagged.reshape(n_l * lag, n_t),
+        "start": start,
+        "last": last,
+        "steps": steps,
+    }
 
 
 def check(call: dict) -> dict:
@@ -175,14 +175,14 @@ def check(call: dict) -> dict:
     from chronos.chronos2.dataset import Chronos2Dataset, DatasetMode
 
     block, want = call["block"], brute(call)
-    L, lag = len(call["places"]), call["lag"]
+    n_l, lag = len(call["places"]), call["lag"]
     start, h = block["start"], block["horizon"]
     ctx = block["context"]
-    T = ctx.shape[1]
+    n_t = ctx.shape[1]
     # Align the brute grid's end with the block's end.
-    off = len(want["steps"]) - T
+    off = len(want["steps"]) - n_t
     wt, wl = want["target"][:, off:], want["lagged"][:, off:]
-    got_t, got_l = ctx[:L], ctx[L:]
+    got_t, got_l = ctx[:n_l], ctx[n_l:]
     same_t = np.allclose(got_t, wt, equal_nan=True)
     same_l = np.allclose(got_l, wl, equal_nan=True)
     # Chronos-2's validation slice of the padded block.
@@ -199,14 +199,14 @@ def check(call: dict) -> dict:
     c = b["context"].numpy()
     ft_ = b["future_target"].numpy()
     fc = b["future_covariates"].numpy()
-    ctx_last = c[:L, -1]
+    ctx_last = c[:n_l, -1]
     keep = min(start, ft.CONTEXT)
     return {
         "source": call["source"],
-        "places": L,
+        "places": n_l,
         "lag D": lag,
         "cut-off": call["cutoffs"][-1],
-        "steps": T,
+        "steps": n_t,
         "start": start,
         "horizon": h,
         "nowcast steps": want["last"] - off - start + 1,
@@ -217,17 +217,17 @@ def check(call: dict) -> dict:
             ctx_last, got_t[:, start - 1], equal_nan=True
         ),
         "context target cells == as-of-cut counts": np.allclose(
-            c[:L, ft.CONTEXT - keep :],
+            c[:n_l, ft.CONTEXT - keep :],
             wt[:, start - keep : start],
             equal_nan=True,
         ),
         "nowcast/forecast truth only in future_target": np.allclose(
-            ft_[:L, :h], wt[:, start : start + h], equal_nan=True
+            ft_[:n_l, :h], wt[:, start : start + h], equal_nan=True
         ),
-        "future_target covariate rows all NaN": bool(np.isnan(ft_[L:]).all()),
-        "future_covariates target rows all NaN": bool(np.isnan(fc[:L]).all()),
+        "future_target covariate rows all NaN": bool(np.isnan(ft_[n_l:]).all()),
+        "future_covariates target rows all NaN": bool(np.isnan(fc[:n_l]).all()),
         "future_covariates == lag rows over horizon": np.allclose(
-            fc[L:, :h], wl[:, start : start + h], equal_nan=True
+            fc[n_l:, :h], wl[:, start : start + h], equal_nan=True
         ),
         "max non-NaN future lag cell index vs (last - d)": [
             int(np.max(np.where(~np.isnan(wl[d::lag][0]))[0], initial=-1))
@@ -252,6 +252,7 @@ def check(call: dict) -> dict:
 
 
 def main() -> None:
+    """Print the checks for one simulation's blocks."""
     sim_dir, seed = Path(sys.argv[1]), int(sys.argv[2])
     n = int(sys.argv[3]) if len(sys.argv) > 3 else 6
     global ANY_RELEASE
@@ -268,12 +269,17 @@ def main() -> None:
             want = brute(call)
             got = call["block"]["context"][len(call["places"]) :]
             wl = want["lagged"][:, len(want["steps"]) - got.shape[1] :]
+            last = dt.date.fromisoformat(call["cutoffs"][-1])
+            used = [
+                c
+                for c in call["cutoffs"]
+                if (last - dt.date.fromisoformat(c)).days % 3 == 0
+            ]
             print(
                 "3day, any release in the bin counts: non-NaN lag cells "
                 f"{int((~np.isnan(wl)).sum())} vs block's "
                 f"{int((~np.isnan(got)).sum())}; releases used by block "
-                f"{len({c for c in call['cutoffs'] if (dt.date.fromisoformat(call['cutoffs'][-1]) - dt.date.fromisoformat(c)).days % 3 == 0})}"
-                f" of {len(call['cutoffs'])}"
+                f"{len(used)} of {len(call['cutoffs'])}"
             )
 
 

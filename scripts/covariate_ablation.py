@@ -1,5 +1,5 @@
 # Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
-"""Score Chronos-2 with the lag covariates given, removed or shuffled.
+r"""Score Chronos-2 with the lag covariates given, removed or shuffled.
 
 Blocks are held-out simulations cut as the trainer cuts them
 (`finetune_stream.cut`, seed 1, two draws of each of 16 snapshots) and
@@ -50,9 +50,7 @@ CONDITIONS = (
 )
 
 
-def sim_blocks(
-    sim_dir: Path, seeds: list[int], n_sims: int
-) -> list[dict]:
+def sim_blocks(sim_dir: Path, seeds: list[int], n_sims: int) -> list[dict]:
     """Cut held-out simulations' blocks as the trainer does."""
     fs.init_worker(
         min(ft.MAX_SERIES, ft.max_series(ft.MEMORY_GB)),
@@ -200,8 +198,7 @@ def losses(model, block: dict):
     q = model.quantiles.float()[None, :, None]
     t = t[:, None, :]
     ql = 2 * torch.abs((t - p) * ((t <= p).float() - q))
-    per_step = ql.sum(dim=1)  # [n, P]
-    return per_step
+    return ql.sum(dim=1)  # [n, P]
 
 
 def main() -> None:
@@ -237,8 +234,7 @@ def main() -> None:
         mine = [
             b
             for b in sims
-            if b["source"] == source
-            and b["context"].shape[0] <= args.max_rows
+            if b["source"] == source and b["context"].shape[0] <= args.max_rows
         ]
         take = rng.choice(
             len(mine), min(args.per_source, len(mine)), replace=False
@@ -256,12 +252,16 @@ def main() -> None:
         CHRONOS_MODEL, revision=CHRONOS_REVISION, device_map="cpu"
     )
     base = pipeline.model.eval()
-    tuned = PeftModel.from_pretrained(
-        Chronos2Pipeline.from_pretrained(
-            CHRONOS_MODEL, revision=CHRONOS_REVISION, device_map="cpu"
-        ).model,
-        args.adapter,
-    ).merge_and_unload().eval()
+    tuned = (
+        PeftModel.from_pretrained(
+            Chronos2Pipeline.from_pretrained(
+                CHRONOS_MODEL, revision=CHRONOS_REVISION, device_map="cpu"
+            ).model,
+            args.adapter,
+        )
+        .merge_and_unload()
+        .eval()
+    )
     rows = []
     t0 = time.time()
     for i, block in enumerate(blocks):
