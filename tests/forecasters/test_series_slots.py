@@ -453,3 +453,85 @@ def test_an_adapter_weight_the_model_drops_is_an_error(tmp_path, monkeypatch):
     monkeypatch.setattr(slots, "adapter_slots", lambda _a: None)
     with pytest.raises(ValueError, match="has no place"):
         slots.load_adapter(tiny_model(), tmp_path / "linked")
+
+
+FIXED = {
+    "n": 8,
+    "init": "normal",
+    "init_std": 0.02,
+    "init_seed": 1,
+    "trained": False,
+    "parent": {"link": "own label plus the parent's own label"},
+}
+"""A fixed-label checkpoint's `series_slots` settings."""
+
+
+def fixed_label_checkpoint(tmp_path):
+    """Save a LoRA adapter trained beside fixed, untrained labels."""
+    from peft import LoraConfig, get_peft_model
+
+    model = tiny_model()
+    slots.attach(model, 8, init_std=0.02, seed=1, parent=True)
+    for p in getattr(model, slots.SLOT_MODULE).parameters():
+        p.requires_grad_(False)
+    config = LoraConfig(
+        r=2,
+        lora_alpha=4,
+        target_modules=["self_attention.q", "self_attention.v"],
+        init_lora_weights=False,
+    )
+    peft_model = get_peft_model(model, config).eval()
+    where = tmp_path / "fixed"
+    peft_model.save_pretrained(where)
+    (where / "settings.json").write_text(json.dumps({"series_slots": FIXED}))
+    return peft_model, where
+
+
+def test_fixed_labels_are_rebuilt_from_the_settings(tmp_path):
+    from safetensors import safe_open
+
+    model, where = fixed_label_checkpoint(tmp_path)
+    with safe_open(where / "adapter_model.safetensors", "pt") as f:
+        assert not [k for k in f.keys() if slots.SLOT_MODULE in k]  # noqa: SIM118
+    table = getattr(model.base_model.model, slots.SLOT_MODULE).embedding.weight
+    loaded = slots.load_adapter(tiny_model(), where)
+    assert slots.has_slots(loaded)
+    assert slots.has_parent_link(loaded)
+    module = getattr(loaded, slots.SLOT_MODULE)
+    assert torch.equal(module.embedding.weight, table)
+    assert not any(p.requires_grad for p in module.parameters())
+    # A place's vector is its own label plus its parent's, a plain sum;
+    # a place with no parent carries its own only.
+    out = module(torch.tensor([[3, 4], [5, -1]])).detach()
+    assert torch.allclose(out[0], table[3] + table[5])
+    assert torch.allclose(out[1], table[4])
+    ids = slots.slot_ids(
+        N_PLACES,
+        N_PLACES * LAG,
+        np.random.default_rng(slots.EVAL_SEED),
+        8,
+        parents=slots.parents_of(["CD", "CD-NK", "CD-NK-01"]),
+    )
+    block = toy_block()
+    want = predict(model, block, ids)
+    assert torch.allclose(predict(loaded, block, ids), want, atol=1e-5)
+    assert not torch.allclose(predict(loaded, block, ids[0]), want, atol=1e-5)
+
+
+def test_fixed_labels_need_their_seed(tmp_path):
+    _, where = fixed_label_checkpoint(tmp_path)
+    settings = {"series_slots": {**FIXED, "init_seed": 2}}
+    (where / "settings.json").write_text(json.dumps(settings))
+    model, _ = fixed_label_checkpoint(tmp_path / "again")
+    block = toy_block()
+    ids = slots.slot_ids(
+        N_PLACES,
+        N_PLACES * LAG,
+        np.random.default_rng(0),
+        8,
+        parents=[-1, 0, 1],
+    )
+    other = slots.load_adapter(tiny_model(), where)
+    assert not torch.allclose(
+        predict(other, block, ids), predict(model, block, ids), atol=1e-5
+    )
