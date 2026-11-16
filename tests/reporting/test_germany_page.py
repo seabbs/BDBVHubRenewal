@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
 from bdbvhubrenewal.evaluation.germany import (
     SCORE_COLUMNS,
@@ -172,3 +173,125 @@ def test_every_model_has_its_own_colour_and_dash() -> None:
     assert set(styles) == set(models)
     pairs = [(light, dash) for light, _, dash in styles.values()]
     assert len(set(pairs)) == len(models)
+
+
+FT = "fm_chronos_daily_ragged_ft"
+
+
+def _with_ft(res: Path, tag: str | None = "chronos-ft-bbb") -> None:
+    """Add the stored fine-tuned model, as `germany-ft-load` does."""
+    fc = pd.read_csv(res / "forecasts.csv.gz", dtype=str)
+    ft = _forecasts((FT,))
+    ft = ft.loc[ft["origin"] < CONFIG.split_date]
+    pd.concat([fc, ft.astype(str)]).to_csv(
+        res / "forecasts.csv.gz", index=False
+    )
+    sc = pd.read_csv(res / "scores.csv.gz", dtype=str)
+    pd.concat([sc, _rows(((FT, 2.5),)).astype(str)]).to_csv(
+        res / "scores.csv.gz", index=False
+    )
+    meta = {"tag": tag, "pinned": "chronos-ft-bbb", "model": FT}
+    (res / "ft-checkpoint.json").write_text(json.dumps(meta))
+
+
+def test_the_stored_ft_model_is_scored_on_the_baselines_cells(
+    tmp_path: Path,
+) -> None:
+    res = tmp_path / "germany"
+    _scores(res)
+    _with_ft(res)
+    fig, gen = tmp_path / "figures", tmp_path / "generated"
+    germany_page(fig, gen, res, CONFIG)
+    table = (gen / "germany-scores.md").read_text()
+    rows = [
+        [c.strip() for c in line.strip("|").split("|")]
+        for line in table.splitlines()
+        if line.startswith("|") and "---" not in line
+    ]
+    head, body = rows[0], rows[1:]
+    got = pd.DataFrame(body, columns=head)
+    ns = got.pivot(index="pool", columns="model", values="n")
+    assert FT in ns.columns
+    # Every model on the page has the same n at each level.
+    assert (ns.nunique(axis=1) == 1).all(), ns
+    rel = got.loc[got["model"] == FT].set_index("pool")["rel_wis"]
+    assert set(rel.astype(float)) == {0.5}
+    data = json.loads((fig / "explorer-germany.json").read_text())
+    assert FT in {m["name"] for m in data["models"]}
+
+
+def test_the_page_names_the_ft_checkpoint(tmp_path: Path) -> None:
+    res = tmp_path / "germany"
+    _scores(res)
+    _with_ft(res)
+    fig, gen = tmp_path / "figures", tmp_path / "generated"
+    germany_page(fig, gen, res, CONFIG)
+    note = (gen / "germany-ft.md").read_text()
+    assert "chronos-ft-bbb" in note
+    assert FT in note
+    assert "releases/tag/chronos-ft-bbb" in note
+
+
+def test_the_page_says_when_no_ft_checkpoint_is_stored(
+    tmp_path: Path,
+) -> None:
+    res = tmp_path / "germany"
+    _scores(res)
+    _with_ft(res, tag=None)
+    fig, gen = tmp_path / "figures", tmp_path / "generated"
+    germany_page(fig, gen, res, CONFIG)
+    assert "not stored yet" in (gen / "germany-ft.md").read_text()
+
+
+def test_the_page_writes_no_held_out_date(tmp_path: Path) -> None:
+    from bdbvhubrenewal.reporting.germany import held_out_leaks
+
+    res = tmp_path / "germany"
+    _scores(res)
+    _with_ft(res)
+    fig, gen = tmp_path / "figures", tmp_path / "generated"
+    germany_page(fig, gen, res, CONFIG)
+    files = [*fig.glob("*germany*.json"), *gen.glob("germany-*.md")]
+    assert len(files) >= 7
+    assert held_out_leaks(files, CONFIG.split_date) == []
+
+
+def test_the_leak_check_finds_held_out_dates(tmp_path: Path) -> None:
+    from bdbvhubrenewal.reporting.germany import held_out_leaks
+
+    split = CONFIG.split_date
+    ok = tmp_path / "ok.json"
+    # Truth vintages (`releases`) are report dates of the truth of
+    # development sums, so they may fall after the split.
+    ok.write_text(
+        json.dumps({"origins": ["2022-02-09"], "releases": ["2022-03-21"]})
+    )
+    bad = tmp_path / "scoresummary-germany-latest.json"
+    bad.write_text(json.dumps({"origins": ["2022-02-09", split]}))
+    page = tmp_path / "index.html"
+    # The split date itself is named in the page's prose.
+    page.write_text(f"<p>Nowcast dates before {split} only.</p>")
+    leaky = tmp_path / "leaky.html"
+    leaky.write_text("<td>2022-02-11</td>")
+    assert held_out_leaks([ok, page], split) == []
+    found = held_out_leaks([ok, bad, page, leaky], split)
+    assert len(found) == 2
+    assert any("2022-02-11" in f for f in found)
+    assert any(split in f and "origins" in f for f in found)
+
+
+def test_the_page_refuses_to_write_a_held_out_date(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from bdbvhubrenewal.reporting import germany as page
+
+    res = tmp_path / "germany"
+    _scores(res)
+    # Were the development filter to fail, the guard stops the page.
+    monkeypatch.setattr(
+        page, "_development", lambda frame, _config: frame, raising=True
+    )
+    with pytest.raises(ValueError, match="held-out"):
+        page.germany_page(
+            tmp_path / "figures", tmp_path / "generated", res, CONFIG
+        )
