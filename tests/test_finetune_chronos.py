@@ -678,3 +678,45 @@ def test_real_training_blocks_spread_evenly_over_the_chunks():
     parts = [real_share(real, chunk, 4) for chunk in range(4)]
     assert sorted(x for p in parts for x in p) == real
     assert {len(p) for p in parts} <= {2, 3}
+
+
+def test_all_draws_cuts_the_same_snapshots_from_every_draw(
+    tmp_path, monkeypatch
+):
+    import finetune_chronos
+    from finetune_stream import cut
+
+    ids = _sim_dir(tmp_path)
+    monkeypatch.setattr(finetune_chronos, "ALL_DRAWS", True)
+    pairs = cut(tmp_path, ids, 1, 4)
+    for simulation in ids:
+        by_draw = {}
+        for outbreak, block in pairs:
+            if outbreak.rsplit("-", 1)[0] == simulation:
+                by_draw.setdefault(outbreak, []).append(block)
+        # Both draws, each cut at the same snapshots.
+        assert len(by_draw) == 2
+        one, two = by_draw.values()
+        assert len(one) == len(two) == 4
+        for a, b in zip(one, two, strict=True):
+            assert a["source"] == b["source"]
+            assert a["levels"] == b["levels"]
+            assert np.asarray(a["context"]).shape == np.asarray(
+                b["context"]
+            ).shape
+
+
+def test_univariate_share_gives_single_series_blocks(tmp_path, monkeypatch):
+    import finetune_chronos
+    from finetune_stream import cut
+
+    ids = _sim_dir(tmp_path)
+    monkeypatch.setattr(finetune_chronos, "ALL_DRAWS", True)
+    monkeypatch.setattr(finetune_chronos, "UNIVARIATE_SHARE", 1.0)
+    pairs = cut(tmp_path, ids, 1, 4)
+    assert pairs
+    for _, block in pairs:
+        assert block["mix"] == "univariate"
+        assert len(block["levels"]) == 1
+    monkeypatch.setattr(finetune_chronos, "UNIVARIATE_SHARE", 0.0)
+    assert all(b["mix"] != "univariate" for _, b in cut(tmp_path, ids, 1, 4))
