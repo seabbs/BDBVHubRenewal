@@ -135,9 +135,7 @@ def test_load_hub_submissions_keeps_weekly_samples(tmp_path: Path) -> None:
 def test_load_hub_submissions_keeps_latest_resubmission(
     tmp_path: Path,
 ) -> None:
-    # A team resubmitted a round by appending a second forecast to the
-    # same file, with a later forecast_date (ACCIDDA-Chromantis,
-    # 2026-11-14), so every sample appears twice.
+    # A resubmission appends a later forecast_date to the same file.
     first = _hub_rows().assign(forecast_date="2026-10-20")
     again = first.assign(forecast_date="2026-10-21", value=first["value"] + 1)
     out = tmp_path / "model-output" / "teamA-weekly"
@@ -152,6 +150,22 @@ def test_load_hub_submissions_keeps_latest_resubmission(
     assert (hub["value"].to_numpy() == expected).all()
 
 
+def test_load_hub_submissions_ignores_rows_with_no_forecast_date(
+    tmp_path: Path,
+) -> None:
+    # A row with no forecast_date must not count as the latest one.
+    first = _hub_rows().assign(forecast_date=np.nan)
+    dated = first.assign(forecast_date="2026-10-21", value=first["value"] + 1)
+    out = tmp_path / "model-output" / "teamA-weekly"
+    out.mkdir(parents=True)
+    pd.concat([first, dated]).to_csv(
+        out / "2026-10-24-teamA-weekly.csv", index=False
+    )
+    hub = load_hub_submissions(tmp_path)
+    assert len(hub) == len(first)
+    assert (hub["value"].to_numpy() == dated["value"].to_numpy()).all()
+
+
 def test_load_hub_submissions_stops_on_repeated_samples(
     tmp_path: Path,
 ) -> None:
@@ -161,6 +175,22 @@ def test_load_hub_submissions_stops_on_repeated_samples(
     pd.concat([rows, rows]).to_csv(
         out / "2026-10-24-teamA-weekly.csv", index=False
     )
+    # `_hub_rows` has no forecast_date column, as older hub files do, so
+    # both copies are read and the repeat stops the load.
+    with pytest.raises(ValueError, match="teamA-weekly has"):
+        load_hub_submissions(tmp_path)
+
+
+def test_load_hub_submissions_stops_on_a_round_in_two_files(
+    tmp_path: Path,
+) -> None:
+    # The same round as `.csv` and `.csv.gz` in one model directory.
+    rows = _hub_rows()
+    out = tmp_path / "model-output" / "teamA-weekly"
+    out.mkdir(parents=True)
+    rows.to_csv(out / "2026-10-24-teamA-weekly.csv", index=False)
+    with gzip.open(out / "2026-10-24-teamA-weekly.csv.gz", "wt") as fh:
+        rows.to_csv(fh, index=False)
     with pytest.raises(ValueError, match="teamA-weekly has"):
         load_hub_submissions(tmp_path)
 

@@ -372,11 +372,9 @@ def fetch_hub_submissions(  # pragma: no cover - network
 def load_hub_submissions(*roots: Path | str) -> pd.DataFrame:
     """Read the weekly-round sample forecasts in some directories.
 
-    A team may resubmit a round by adding a second forecast to the same
-    file with a later `forecast_date` (ACCIDDA-Chromantis did for
-    2026-11-14, in hub commit 555492761 "resubmission (forecast_date
-    2026-11-11)"). The resubmission supersedes the first, so only the
-    rows of a file's latest `forecast_date` are read.
+    A file may hold a resubmission with a later `forecast_date`. Only the
+    rows of the latest `forecast_date` in each file are read; rows with
+    no `forecast_date` count only when no row has one.
 
     Parameters
     ----------
@@ -394,7 +392,9 @@ def load_hub_submissions(*roots: Path | str) -> pd.DataFrame:
     ------
     ValueError
         If a model still has two rows of one round, place, week and
-        sample.
+        sample, for example one round in both a `.csv` and a `.csv.gz`.
+        This stops the comparison on purpose: which copy to score is not
+        known, and dropping the model would hide it.
     """
     frames = []
     for root in roots:
@@ -407,8 +407,9 @@ def load_hub_submissions(*roots: Path | str) -> pd.DataFrame:
             if rows.empty:
                 continue
             if "forecast_date" in rows:
-                dates = rows["forecast_date"].astype(str)
-                rows = rows.loc[dates == dates.max()]
+                dates = pd.to_datetime(rows["forecast_date"], errors="coerce")
+                if dates.notna().any():
+                    rows = rows.loc[dates == dates.max()]
             frames.append(
                 pd.DataFrame(
                     {
