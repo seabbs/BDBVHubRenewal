@@ -534,10 +534,28 @@ def main(cache: Path) -> None:
         job = next_job(
             queue, not (cache / cs.COMPLETE_STAMP).exists(), fresh, zero
         )
+        paused: list[str] = []
+
+        def newer_slots(current: str | None = job) -> bool:
+            # Any long job yields to a slots-run checkpoint whose held-out
+            # and BDBV units have not run.
+            try:
+                labels = cs.checkpoint_queue(releases(), scored)
+            except (subprocess.CalledProcessError, ValueError):
+                return False
+            return should_pause(
+                current or "",
+                labels,
+                fresh_slots(cache, labels),
+                zero_init_labels(cache),
+            )
+
         if job == COMPLETE_JOB:
             log(f"progress: {COMPLETE_JOB} started")
             units = [("bdbv", cs.COMPLETE_LABEL), ("germany", cs.COMPLETE_LABEL)]
-            if not run_units(cache, units, COMPLETE_JOB):
+            if not run_units(cache, units, COMPLETE_JOB, newer_slots, paused):
+                if paused:
+                    continue
                 say(f"FAILED the {COMPLETE_JOB}; retrying later")
                 time.sleep(POLL_SECONDS)
                 continue
@@ -565,22 +583,7 @@ def main(cache: Path) -> None:
                     say(note)
             # The loop picks what goes on next (an older German run, say).
             continue
-        paused: list[str] = []
-
-        def newer_slots(current: str = checkpoint) -> bool:
-            try:
-                labels = cs.checkpoint_queue(releases(), scored)
-            except (subprocess.CalledProcessError, ValueError):
-                return False
-            return should_pause(
-                current,
-                labels,
-                fresh_slots(cache, labels),
-                zero_init_labels(cache),
-            )
-
-        pause = newer_slots if checkpoint.startswith("slots-") else None
-        if not run_units(cache, units, checkpoint, pause, paused):
+        if not run_units(cache, units, checkpoint, newer_slots, paused):
             if paused:
                 continue
             failures[checkpoint] = failures.get(checkpoint, 0) + 1
