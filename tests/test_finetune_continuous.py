@@ -6,43 +6,50 @@ from pathlib import Path
 SCRIPT = Path(__file__).parents[1] / "scripts" / "finetune_continuous.sh"
 
 
-def test_each_new_round_is_synced_once_in_order(tmp_path):
-    remote = tmp_path / "remote" / "rounds"
-    for n, seeds in ((1, "20001\n20002\n"), (2, "21001\n"), (3, "22001\n")):
-        (remote / f"r{n}" / "sims").mkdir(parents=True)
-        (remote / f"r{n}" / "seeds.txt").write_text(seeds)
-        (remote / f"r{n}" / "held-out.txt").write_text("29901 29902\n")
-        (remote / f"r{n}" / "sims" / f"settings-{n}.csv").write_text("x")
-        # Round 3 is still being reviewed: not READY, so not synced.
-        if n < 3:
-            (remote / f"r{n}" / "READY").write_text("t")
-    (remote / "r1" / "qc").mkdir()
-    (remote / "r1" / "qc" / "excluded.csv").write_text(
-        "simulation,reason,evidence\n20001-0003,r,e\n"
+HEADER = "round,seed,kind,grid\n"
+
+
+def _round(remote, n, rows):
+    """A remote round with these finished manifest rows (seed, kind)."""
+    r = remote / f"r{n}"
+    (r / "sims").mkdir(parents=True, exist_ok=True)
+    (r / "manifest.csv").write_text(
+        HEADER + "".join(f"{n},{s},{k},r4\n" for s, k in rows)
     )
+    for s, _ in rows:
+        (r / "sims" / f"settings-{s}.csv").write_text("x")
+    return r
+
+
+def _sync(tmp_path, remote):
     out = subprocess.run(
         [
             "bash",
             "-c",
             f'source "{SCRIPT}"; HERE={tmp_path}/local; '
-            # The remote is a local folder here.
             f'remote_ls() {{ ls "{remote}"; }}; '
-            f'pull() {{ cp -R "{remote}/$1" "$2"; }}; '
-            "sync_rounds; sync_rounds; cat $HERE/seeds.txt; ls $HERE/sims; "
-            "echo excluded; cat $HERE/excluded.txt",
+            f'pull() {{ mkdir -p "$3"; cp -R "{remote}/$1/$2" "$3"; }}; '
+            "sync_rounds; cat $HERE/seeds.txt",
         ],
         cwd=tmp_path,
         capture_output=True,
         text=True,
         check=True,
     )
-    lines = out.stdout.split()
-    assert lines[:3] == ["20001", "20002", "21001"]
-    assert "settings-1.csv" in lines
-    assert "settings-2.csv" in lines
-    assert "22001" not in lines
-    assert "settings-3.csv" not in lines
-    assert lines[lines.index("excluded") + 1 :] == ["20001-0003"]
+    return out.stdout.split()
+
+
+def test_finished_batches_stream_in_before_their_round_is_ready(tmp_path):
+    remote = tmp_path / "remote"
+    _round(remote, 1, [(20001, "train"), (20002, "train"), (29901, "held_out")])
+    (remote / "r1" / "held-out.txt").write_text("29901 29901\n")
+    _round(remote, 2, [(30201, "train")])
+    assert _sync(tmp_path, remote) == ["20001", "20002", "30201"]
+    # A batch finishing later joins once, after the others.
+    _round(remote, 2, [(30201, "train"), (30200, "train")])
+    assert _sync(tmp_path, remote) == ["20001", "20002", "30201", "30200"]
+    assert (tmp_path / "local" / "sims" / "settings-30200.csv").exists()
+    assert (tmp_path / "local" / "sims" / "settings-29901.csv").exists()
 
 
 def test_n1000_must_beat_zero_shot_on_both(tmp_path):
