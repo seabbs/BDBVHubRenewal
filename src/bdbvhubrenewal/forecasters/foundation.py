@@ -588,7 +588,7 @@ def _chronos_input(group: Series) -> dict[str, Any]:
 
 
 def _group_rows(group: Series) -> np.ndarray:
-    """Return each of a group's rows' place and parent, `[2, rows]`.
+    """Return each of a group's rows' place, parent and role, `[3, rows]`.
 
     In Chronos-2's row order: the targets, then the
     covariates by sorted name, past-only ones before known-future ones.
@@ -616,7 +616,8 @@ def _group_rows(group: Series) -> np.ndarray:
         raise ValueError(f"covariate of no target place: {err}") from err
     place = np.concatenate([np.arange(n_targets), owner]).astype(int)
     parent = np.asarray(series_bias.parents_of(places), dtype=int)
-    return np.stack([place, parent[place]])
+    role = (np.arange(len(place)) >= n_targets).astype(int)
+    return np.stack([place, parent[place], role])
 
 
 def _predict(

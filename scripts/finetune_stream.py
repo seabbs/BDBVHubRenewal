@@ -175,8 +175,10 @@ def bias_settings(bias: bool, lr: float = 0.0) -> dict:
         return {}
     return {
         "series_bias": {
-            "pairs": "same place (count and lag series); parent and child "
-            "either way round",
+            "pairs": list(series_bias.PAIRS),
+            "pair_rule": "within a place, count to own lag, lag to own "
+            "count, lag to another lag; up child to parent, down parent "
+            "to child; none on the diagonal",
             "per": "encoder layer and head, added to the group attention "
             "scores",
             "init": "zero",
