@@ -28,29 +28,52 @@ One SI section per paper section.
 ### Baselines
 
 ::: {.callout-note title="Plan"}
-- `randomwalk` and `randomwalknowcast` in full.
+- We describe `randomwalk` and `randomwalknowcast` in full.
 - Key references: [@Johnson2025].
 :::
 
 ### Foundation model setup and fine-tuning
 
 ::: {.callout-note title="Plan"}
-- How Chronos-2 and LoRA work, in brief, with schematics.
-- Foundation model setup and fine-tuning settings.
+- We describe how Chronos-2 and LoRA work, with schematics.
+- We give every setting of the model and the fine-tune.
 - Key references: [@Ansari2025; @Hu2021].
 :::
 
-**Series slots.**
+**Attention biases.**
 Chronos-2's group attention has no notion of which series is which, so on its own it can link a lag series to its place's counts only by matching their values.
-The fine-tuned model adds a learned slot embedding, shared by each place's count series and its lag series.
-The places of a block take distinct slots, so the model ties each place's covariates to its counts while seeing all places at once.
-In each training block the places are assigned to slots by a random permutation, so a slot carries no meaning of its own beyond marking which series go together.
-The slot embeddings start at zero, so before training the model is base Chronos-2, and they are trained with the LoRA adapter under Chronos-2's fine-tuning recipe.
+
+- We add four learned biases to Chronos-2's group-attention scores (@tbl-attention-biases).
+- They start at zero, so fine-tuning starts from base Chronos-2, as for the relation biases TableFormer adds to a pretrained model [@Yang2022].
+- The biases train at a learning rate of $10^{-3}$ and the LoRA adapter at $10^{-5}$, both falling linearly to zero at 8,000 outbreaks.
+- We identify places by name within each block, with no limit on the number of places.
+- A place's parent is the nearest prefix of its name in the block, else the country.
+- Training blocks include countries equal to, above or later than the sum of their places, so a place belongs to its parent without summing to it.
+- The biases follow Moirai's any-variate attention bias [@Woo2024], and the relative position biases of T5 [@Raffel2020] and the structural biases of Graphormer [@Ying2021].
+- In Moirai's ablation, additive learned variate embeddings gave a normalised MAE of 0.904 on the Monash benchmark, against 0.655 with the attention bias [@Woo2024].
+
+::: {#tbl-attention-biases}
+| Relation | Pairs of series | Parameters |
+|---|---|---|
+| Self | A series attending to itself | One scalar per layer and head, starting at zero |
+| Same place | A series attending to another series of its place, its count or a lag | One scalar per layer and head, starting at zero |
+| Up | A child place's series attending to its parent's series | One scalar per layer and head, starting at zero |
+| Down | A parent place's series attending to its children's series | One scalar per layer and head, starting at zero |
+
+The learned biases added to Chronos-2's group-attention scores.
+:::
+
+**Training blocks.**
+A simulation gives daily counts by onset and report date, and a release counts every case reported by its cut-off, one cut-off a week.
+Each simulation gives 10 observation draws, and at each of 16 cut-offs 2 of the 10 draws are sampled, so one simulation gives 32 blocks.
+Each block takes daily steps, or sums the days to 3-day or weekly steps, at random.
+Four in five blocks are multivariate, holding several of the simulation's strata with or without the country and their totals, and one in five is univariate, the country or a single stratum.
+Of the blocks with places, a third each have a country equal to the sum of its places, a country above it (cases not allocated to a place), and a country reported later than its places (its own stream).
+Each block's prediction length is its horizon, and the LoRA learning rate falls linearly from $10^{-5}$ to zero at 8,000 simulations, with checkpoints at 1,000, 2,000, 4,000 and 8,000.
 
 **Order of the training data.**
 The grid is a crossed factorial design balanced in every block of 120 simulations, with each factor's levels shuffled independently, as in a Latin hypercube.
 Training takes the simulations in chunks of 250, about two balanced blocks.
-Each block's source (daily, 3-day or weekly), draws and cut-offs are drawn at random.
 A chunk gives about 6,700 training blocks, which are shuffled and packed into about 1,250 steps of up to 256 series each.
 So every checkpoint has seen the whole grid, and no factor level comes in a run of its own.
 
@@ -79,11 +102,20 @@ Truth was the latest release's counts, left out after 2026-10-01, so every count
 Training followed Chronos-2's recipe as the simulation fine-tune does, from base Chronos-2, for its default 1,000 steps.
 The last 14 German nowcast dates were held out to monitor the loss.
 
+### Monitoring fine-tuning
+
+A local dashboard, part of the fine-tuning workflow, was used to review training as it ran (@fig-dashboard).
+It showed the training and held-out loss by source, each checkpoint's scores against `randomwalknowcast` with the zero-shot and complete-only references, and the German nowcasts by checkpoint.
+Reviewing it led to the complete-only reference in the checkpoint curve (@fig-checkpoint-curve).
+The dashboard was built with the help of a large language model.
+
+![The fine-tuning dashboard on 16 November 2026 at 17:29, with a run at 500 simulations: training and held-out loss by source, checkpoint scores against `randomwalknowcast` with the zero-shot and complete-only references, and German nowcasts by checkpoint.](figures/dashboard-2026-11-16.png){#fig-dashboard}
+
 ### Synthetic data generation
 
 ::: {.callout-note title="Plan"}
-- Synthetic data generation in full, with an overview of the epinowcast model used.
-- The full factor table and the realism comparison against published disease parameters.
+- We describe the simulation in full, with the epinowcast model it uses.
+- We give the full factor table and compare the simulations with published disease parameters.
 - Key references: [@abbottepinowcast; @lison2024; @Park2024; @abbottprimarycensored].
 :::
 
@@ -107,11 +139,9 @@ Simulated delays are shorter than the German data's, whose 99% point is {{< meta
 The simulated outbreaks' ranges against published values for several diseases, the case studies among them.
 :::
 
-![Held-out loss of the fine-tune against the number of simulated outbreaks it has seen.](build/figures/si/finetune-heldout.png){#fig-finetune-heldout}
-
-![WIS (Germany, on each model's own quantiles) and CRPS (BDBV, on 1,000 draws with common random numbers) relative to `randomwalknowcast` of the ragged Chronos-2 models against the number of simulated outbreaks each checkpoint was fine-tuned on, with the zero-shot model at the left, on the case studies by level. Each panel gives n, the fewest matched cells of its points, and the forecast origins they come from, and panels with fewer than 5 are grey.](build/figures/si/checkpoint-curve.png){#fig-checkpoint-curve}
-
 {{< include build/tables/si/heldout-set.md >}}
+
+The training blocks cut from these simulations include countries that equal, exceed or lag the sum of their places, a third of the blocks with places each (Foundation model setup).
 
 ### Correlated trajectories
 
@@ -160,28 +190,28 @@ We compare four options for the zero-shot and fine-tuned models, daily and weekl
 (b) each level in its own block;
 (c) the lowest level only, summed up to the others with draws paired at random;
 (d) the lowest level only, summed up after pairing its draws with the rolling copula.
-Option (d) tests whether the copula rescues aggregation.
+Option (d) tests whether pairing the draws with the copula before summing narrows the gap to the joint block.
 
 ### Scoring
 
 ::: {.callout-note title="Plan"}
-- Scoring, and its check against scoringutils.
+- We describe the scores and check them against scoringutils.
 - Key references: [@bosse2022scoringutils; @jordanEvaluatingProbabilisticForecasts2019; @zanetta_scoringrules_2024].
 :::
 
 ### Implementation
 
 ::: {.callout-note title="Plan"}
-- The tools we used, each cited: Python, PyTorch on the laptop GPU, chronos-forecasting, PEFT for LoRA, R and epinowcast for simulation, and scoringrules for scoring, checked against scoringutils.
-- The evaluation runs as a Snakemake workflow, so every result can be reproduced from the raw data.
+- We used Python, PyTorch, chronos-forecasting, PEFT for LoRA, R and epinowcast for simulation, and scoringrules for scoring, checked against scoringutils.
+- A Snakemake workflow runs the evaluation from the raw data to every figure and table.
 :::
 
 ## Results
 
 ::: {.callout-note title="Plan"}
-- Score breakdowns by location and horizon for each case study.
-- WIS over time for each case study.
-- Held-out synthetic scores by number of fine-tuning outbreaks.
+- We break down each case study's scores by location and horizon.
+- We show each case study's WIS over time.
+- We show held-out synthetic scores by the number of fine-tuning outbreaks.
 :::
 
 
@@ -228,6 +258,88 @@ German nowcast hub, development half: as @tbl-aggregation-ebola, by level (natio
 {{< include build/tables/si/aggregation-cost.md >}}
 
 The cost of each option: series per block, memory and time.
+:::
+
+### Checkpoint curve
+
+- We compare the final run's checkpoints, fine-tuned on 1,000, 2,000, 4,000 and 8,000 simulations.
+- They share the grid, the data order and the recipe, as checkpoints of one run.
+- @fig-finetune-heldout gives the held-out loss by source.
+- @fig-checkpoint-curve gives German first-half and BDBV relative scores at each checkpoint, with zero-shot Chronos-2 on the ragged layout and on complete data only as reference lines.
+- A later checkpoint has also trained for more steps, at a learning rate that falls to zero at 8,000 simulations.
+
+![Held-out loss of the fine-tune against the number of simulated outbreaks it has seen.](build/figures/si/finetune-heldout.png){#fig-finetune-heldout}
+
+![WIS (Germany, on each model's own quantiles) and CRPS (BDBV, on 1,000 draws with common random numbers) relative to `randomwalknowcast` of the fine-tuned ragged Chronos-2 models against the number of simulated outbreaks each checkpoint was fine-tuned on, on the case studies by level. Horizontal lines give the models with no fine-tuning: zero-shot Chronos-2 on the ragged layout (dashed) and on complete data only (dotted), each in its source's colour, and `randomwalknowcast` at 1. Each panel gives n, the fewest matched cells of its points, and the forecast origins they come from, and panels with fewer than 5 are grey.](build/figures/si/checkpoint-curve.png){#fig-checkpoint-curve}
+
+### Attention biases for place and parent against none
+
+- We compare the run with attention biases with a run without them.
+- Both runs share the grid, the data order, the LoRA recipe and the checkpoints.
+- @tbl-slots-loss gives held-out loss by source, and @tbl-slots-scores German first-half and BDBV relative scores at checkpoints of the same size.
+- @tbl-slots-swap gives the loss when whole lag series move to another place, relative to the loss as given.
+- A ratio of 1 means the model does not tell which place a lag series belongs to.
+- @fig-compare-slots shows both runs by checkpoint.
+- The run without biases built its 3-day blocks as daily steps, so we compare 3-day blocks with zero-shot only.
+
+![Attention biases against none: held-out loss by source and German first-half and BDBV relative scores, by checkpoint.](build/figures/si/compare-slots.png){#fig-compare-slots}
+
+::: {#tbl-slots-loss}
+{{< include build/tables/si/slots-loss.md >}}
+
+Held-out loss of the run with attention biases by source and window (nowcast or forecast steps), against the run without them at the same checkpoint and against zero-shot Chronos-2, with the paired ratio and its 90% interval over blocks.
+:::
+
+::: {#tbl-slots-scores}
+{{< include build/tables/si/slots-scores.md >}}
+
+Relative WIS on the German first half and relative CRPS on the BDBV release backtest, both against `randomwalknowcast`, of the runs with and without attention biases at checkpoints fine-tuned on the same number of outbreaks.
+:::
+
+::: {#tbl-slots-swap}
+{{< include build/tables/si/slots-swap.md >}}
+
+Lag-swap test: loss with whole lag series moved between places, as a ratio of the loss as given, with its 90% interval over blocks, for zero-shot Chronos-2 and the run with attention biases.
+:::
+
+### Delays against no delays
+
+- We fine-tune a run on complete counts only, with the attention biases and without lag series, and compare it with the ragged run.
+- Both runs share the grid, the data order, the recipe and the checkpoints.
+- @tbl-compare-delays gives held-out loss by source and German first-half and BDBV relative scores at checkpoints of the same size.
+- @fig-compare-delays shows both runs by checkpoint.
+- Without lag series the no-delay model has no counts after the last complete step, so its context ends there.
+
+![Delays against no delays: held-out loss by source and German first-half and BDBV relative scores, by checkpoint.](build/figures/si/compare-delays.png){#fig-compare-delays}
+
+::: {#tbl-compare-delays}
+{{< include build/tables/si/compare-delays.md >}}
+
+The full and no-delay runs at matched checkpoints: held-out loss by source, relative WIS on the German first half and relative CRPS on BDBV, against `randomwalknowcast`.
+:::
+
+### Real-data fine-tune against synthetic
+
+- We fine-tune a model on the German development half and BDBV releases, and compare it with the model fine-tuned on simulations.
+- Both use the same recipe and the ragged layout.
+- @tbl-germany-real-finetune gives scores on the German held-out half, against zero-shot Chronos-2 and the synthetic model.
+- @tbl-ebola-real-finetune gives scores on BDBV rounds after the last release the real-data model trained on.
+- @fig-compare-realdata shows both.
+- The real-data model saw the German development half, so we score it on the held-out half only.
+- We leave it out of every other table and figure.
+
+![Real-data fine-tune against synthetic: German held-out and BDBV relative scores.](build/figures/si/compare-realdata.png){#fig-compare-realdata}
+
+::: {#tbl-germany-real-finetune}
+{{< include build/tables/si/germany-real-finetune.md >}}
+
+German nowcast hub held-out half: Chronos-2 zero-shot (`_ragged`), fine-tuned on simulations (`_ft`) and fine-tuned on real data (`_real`), overall (`all`) and by level, with WIS relative to `randomwalknowcast`. {{< meta results.germany.label >}} {{< meta results.germany.note >}}
+:::
+
+::: {#tbl-ebola-real-finetune}
+{{< include build/tables/si/ebola-real-finetune.md >}}
+
+BDBV scored rounds (from 21 November 2026, after every release the real-data model trained on): Chronos-2 zero-shot (`_ragged`), fine-tuned on simulations (`_ft`) and fine-tuned on real data (`_real`), overall (`all`) and by level, with CRPS relative to `randomwalknowcast`. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
 :::
 
 ### Held-out synthetic data
@@ -323,24 +435,6 @@ German nowcast hub scores by horizon. {{< meta results.germany.label >}} {{< met
 {{< include build/tables/si/germany-scores-by-location.md >}}
 
 German nowcast hub scores by location and stratum. {{< meta results.germany.label >}} {{< meta results.germany.note >}}
-:::
-
-#### Fine-tuning on real data
-
-@tbl-germany-real-finetune compares Chronos-2 fine-tuned on real data with the zero-shot model and the model fine-tuned on simulations, on the German held-out half only, as the real-data model saw the development half.
-@tbl-ebola-real-finetune makes the same comparison on BDBV, from the first round after the last release it trained on, so it is scored prospectively.
-The real-data model is left out of every other table and figure.
-
-::: {#tbl-germany-real-finetune}
-{{< include build/tables/si/germany-real-finetune.md >}}
-
-German nowcast hub held-out half: Chronos-2 zero-shot (`_ragged`), fine-tuned on simulations (`_ft`) and fine-tuned on real data (`_real`), overall (`all`) and by level, with WIS relative to `randomwalknowcast`. {{< meta results.germany.label >}} {{< meta results.germany.note >}}
-:::
-
-::: {#tbl-ebola-real-finetune}
-{{< include build/tables/si/ebola-real-finetune.md >}}
-
-BDBV scored rounds (from 21 November 2026, after every release the real-data model trained on): Chronos-2 zero-shot (`_ragged`), fine-tuned on simulations (`_ft`) and fine-tuned on real data (`_real`), overall (`all`) and by level, with CRPS relative to `randomwalknowcast`. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
 :::
 
 ### Ebola hub submissions
