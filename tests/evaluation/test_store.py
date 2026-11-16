@@ -84,7 +84,7 @@ def test_code_digest_ignores_docstrings_and_comments(tmp_path: Path) -> None:
 
 def test_code_digest_follows_each_models_own_code(tmp_path: Path) -> None:
     root = _copy_repo(tmp_path)
-    models = ("renewal", "renewalsp", "pprandomwalknowcast")
+    models = ("renewal", "renewalsp", "randomwalknowcast")
 
     def digests() -> dict[str, str]:
         return {m: store.code_digest(m, root) for m in models}
@@ -97,11 +97,11 @@ def test_code_digest_follows_each_models_own_code(tmp_path: Path) -> None:
     before = digests()
     # The three renewal variants share a module, so share a key.
     assert before["renewal"] == before["renewalsp"]
-    assert before["renewal"] != before["pprandomwalknowcast"]
-    edit(f"{src}/forecasters/pprandomwalk.py")
+    assert before["renewal"] != before["randomwalknowcast"]
+    edit(f"{src}/forecasters/renewal.py")
     after = digests()
-    assert after["renewal"] == before["renewal"]
-    assert after["pprandomwalknowcast"] != before["pprandomwalknowcast"]
+    assert after["randomwalknowcast"] == before["randomwalknowcast"]
+    assert after["renewal"] != before["renewal"]
     before = after
     edit(f"{src}/model/observation.py")
     after = digests()
@@ -121,36 +121,57 @@ def test_the_zone_split_does_not_key_a_fit(tmp_path: Path) -> None:
     # split from them at load (`zones_for_model`), so the zone code is not
     # fit code.
     root = _copy_repo(tmp_path)
-    models = ("renewal", "pprandomwalknowcast")
-
-    def digests() -> dict[str, str]:
-        return {m: store.code_digest(m, root) for m in models}
 
     def edit(rel: str) -> None:
         path = root / "src/bdbvhubrenewal" / rel
         path.write_text(path.read_text() + "\n_EDITED = 1\n")
 
-    before = digests()
+    before = store.code_digest("renewal", root)
     own = store.code_digest("fm_chronos_weekly_ragged", root)
     for rel in ("forecasters/zones.py", "evaluation/zones.py"):
         edit(rel)
-        assert digests() == before, rel
+        assert store.code_digest("renewal", root) == before, rel
     # A model that forecasts the zones itself runs the split in its fit.
     assert store.code_digest("fm_chronos_weekly_ragged", root) != own
     # Introductions are drawn in the fit, for provinces with no recent case.
     edit("forecasters/introductions.py")
-    after = digests()
-    assert all(after[m] != before[m] for m in models)
+    assert store.code_digest("renewal", root) != before
+
+
+def test_adding_or_removing_a_model_does_not_key_a_fit(
+    tmp_path: Path,
+) -> None:
+    root = _copy_repo(tmp_path)
+    pkg = root / "src/bdbvhubrenewal/forecasters"
+    before = {m: store.code_digest(m, root) for m in store.stored_models()}
+    init = pkg / "__init__.py"
+    (pkg / "extra.py").write_text(
+        "from bdbvhubrenewal.forecasters.base import register_model\n"
+    )
+    init.write_text(
+        init.read_text()
+        + "from bdbvhubrenewal.forecasters.extra import register_model\n"
+    )
+    assert {m: store.code_digest(m, root) for m in before} == before
+    text = init.read_text()
+    init.write_text(text.replace("    RandomWalkNowcast,\n", "", 1))
+    assert init.read_text() != text
+    assert {m: store.code_digest(m, root) for m in before} == before
+
+
+def test_every_stored_model_has_a_sampler() -> None:
+    assert set(store.stored_models()) <= set(
+        store.samplers(ROOT / "ci/policy.toml")
+    )
 
 
 def test_fit_code_has_the_store_and_no_other_model() -> None:
     renewal = set(store.fit_code("renewal", ROOT))
     assert "src/bdbvhubrenewal/evaluation/store.py" in renewal
     assert "src/bdbvhubrenewal/model/observation.py" in renewal
-    assert "src/bdbvhubrenewal/forecasters/pprandomwalk.py" not in renewal
-    pp = set(store.fit_code("pprandomwalknowcast", ROOT))
-    assert "src/bdbvhubrenewal/forecasters/renewal.py" not in pp
-    assert "src/bdbvhubrenewal/evaluation/store.py" in pp
+    walk = set(store.fit_code("randomwalknowcast", ROOT))
+    assert "src/bdbvhubrenewal/forecasters/renewal.py" not in walk
+    assert "src/bdbvhubrenewal/evaluation/store.py" in walk
 
 
 def test_fit_time_data_files_key_a_fit(tmp_path: Path) -> None:
@@ -166,16 +187,11 @@ def test_report_code_does_not_key_a_fit(tmp_path: Path) -> None:
     # `fit_code` runs `digest.model_code`, so a change to its import
     # closure can move a key. Its own source is not hashed (`STORE_SKIP`).
     root = _copy_repo(tmp_path)
-    models = ("renewal", "pprandomwalknowcast")
-
-    def digests() -> dict[str, str]:
-        return {m: store.code_digest(m, root) for m in models}
-
-    before = digests()
+    before = store.code_digest("renewal", root)
     for rel in ("evaluation/digest.py", "reporting/plots.py"):
         path = root / "src/bdbvhubrenewal" / rel
         path.write_text(path.read_text() + "\n_EDITED = 1\n")
-        assert digests() == before, rel
+        assert store.code_digest("renewal", root) == before, rel
 
 
 def _workflow_paths(event: str) -> list[str]:
@@ -606,7 +622,7 @@ def test_zone_data_keys_only_the_models_that_read_it(
     assert zoned[latest].zone_daily_history is not None
     assert zoned[latest].zone_codes == ("CD-IT-01", "CD-NK-01")
     sampler = store.samplers()
-    plain = ["renewal", "pprandomwalknowcast"]
+    plain = ["renewal", "renewalbvd"]
     assert store.current_keys(zoned, plain, sampler, "c") == (
         store.current_keys(tasks, plain, sampler, "c")
     )

@@ -142,7 +142,6 @@ MODEL_STYLE: Final[dict[str, tuple[int, str]]] = {
     "renewal": (2, "solid"),
     "renewalbvd": (3, "solid"),
     "renewalsp": (4, "solid"),
-    "pprandomwalknowcast": (5, "solid"),
     "fm_chronos_weekly_complete": (6, "solid"),
     "fm_chronos_weekly_ragged": (6, "dashed"),
     "fm_chronos_daily_complete": (6, "dotted"),

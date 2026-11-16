@@ -113,6 +113,7 @@ STORE_ENTRIES: Final = (
 STORE_SKIP: Final = (
     "src/bdbvhubrenewal/evaluation/digest.py",
     "src/bdbvhubrenewal/evaluation/zones.py",
+    "src/bdbvhubrenewal/forecasters/__init__.py",
     "src/bdbvhubrenewal/forecasters/zones.py",
     "src/bdbvhubrenewal/reporting/plots.py",
 )
@@ -123,7 +124,8 @@ and its zones are split from them at load
 (`forecasters.zones.zones_for_model`). A model that forecasts the zones
 itself imports the split, so it is in its code. `fit_code`'s own helper
 (`evaluation.digest`), and the plots `evaluation.ppc` imports for
-`plot_ppc`, which a fit does not draw.
+`plot_ppc`, which a fit does not draw. The model registry
+(`forecasters/__init__.py`): adding a model must not refit the others.
 """
 
 STORE_DATA: Final = "src/bdbvhubrenewal/data/*.csv"
@@ -174,8 +176,7 @@ def samplers(policy: Path | str = "ci/policy.toml") -> dict[str, Any]:
     Returns
     -------
     dict
-        Sampler table by model name. A fitted model with no candidate
-        (`pprandomwalknowcast`) is absent and uses its own settings.
+        Sampler table by model name.
 
     Raises
     ------
@@ -203,7 +204,7 @@ def build_model(name: str, sampler: Mapping[str, Any]) -> ForecastModel:
     name : str
         The model name.
     sampler : mapping
-        `samplers`. A model absent from it keeps its own settings.
+        `samplers`.
 
     Returns
     -------

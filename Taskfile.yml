@@ -94,7 +94,7 @@ tasks:
       - uv run bdbvhubrenewal backtest --scenarios-only {{.CLI_ARGS}}
 
   backtest-zones:
-    desc: Score randomwalk, randomwalknowcast and pprandomwalknowcast at health-zone level (writes results/zone-scores.csv)
+    desc: Score randomwalk and randomwalknowcast at health-zone level (writes results/zone-scores.csv)
     cmds:
       - uv run bdbvhubrenewal zone-backtest {{.CLI_ARGS}}
 

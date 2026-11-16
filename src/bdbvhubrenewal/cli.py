@@ -309,7 +309,8 @@ def build_parser() -> argparse.ArgumentParser:
     zb.add_argument(
         "--models",
         nargs="*",
-        default=["randomwalk", "randomwalknowcast", "pprandomwalknowcast"],
+        default=None,
+        help="Models to forecast (default: the zone models).",
     )
     zb.add_argument(
         "--chunk", default=None, help=_CHUNK_HELP.format(what="origins")
@@ -1519,6 +1520,7 @@ def _zone_backtest(args: argparse.Namespace) -> int:
     from bdbvhubrenewal.evaluation.zones import zone_backtest
 
     hub_config = Path(args.data) / "hub-config" / "tasks.json"
+    models = {} if args.models is None else {"models": args.models}
     if args.forecast_only:
         from bdbvhubrenewal.evaluation.zones import zone_forecasts
 
@@ -1528,10 +1530,10 @@ def _zone_backtest(args: argparse.Namespace) -> int:
             load_daily(args.data),
             load_daily_zones(args.data),
             hub_zones(hub_config),
-            models=args.models,
             origins=_zone_origins(args),
+            **models,
         ).write(args.parts)
-        print(f"Zone forecasts of {args.models} written to {args.parts}.")
+        print(f"Zone forecasts written to {args.parts}.")
         return 0
     scores, energy, forecasts = zone_backtest(
         load_target(args.data),
@@ -1539,8 +1541,8 @@ def _zone_backtest(args: argparse.Namespace) -> int:
         load_daily(args.data),
         load_daily_zones(args.data),
         hub_zones(hub_config),
-        models=args.models,
         origins=_zone_origins(args),
+        **models,
     )
     _write_zone_results(
         scores,

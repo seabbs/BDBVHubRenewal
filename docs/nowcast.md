@@ -41,7 +41,7 @@ How both are fitted is on the [Baseline models](methods/baselines.md#nowcast) pa
 ![Growth to final by age, and the dispersion of new reports by weeks back, at the latest release.](figures/delay-check.svg#only-light)
 ![Growth to final by age, and the dispersion of new reports by weeks back, at the latest release.](figures/delay-check-dark.svg#only-dark)
 
-The renewal models fit the onset-to-report delay with the cases ([delays](methods/model.md#delays)), and `pprandomwalknowcast` fits a log-normal delay ([Baseline models](methods/baselines.md#partially-pooled-variant)).
+The renewal models fit the onset-to-report delay with the cases ([delays](methods/model.md#delays)).
 Each row is a place, the renewal models' shared delay first and then each place with a delay of its own.
 Each line is one model's fit at its latest origin.
 The left panel gives the share of onsets in the last week reported by each day since onset, with 90% intervals for the renewal models.

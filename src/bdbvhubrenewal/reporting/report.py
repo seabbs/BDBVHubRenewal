@@ -1636,8 +1636,8 @@ def _scenario_section(
 def _fit_settings() -> dict[str, dict[str, Any]]:
     """Return each stored model's sampler settings.
 
-    The renewal variants use their table in `ci/policy.toml`; a model with
-    none (`pprandomwalknowcast`) uses its own. A model with no sampler,
+    The renewal variants use their table in `ci/policy.toml`; any other
+    stored model with a sampler uses its own. A model with no sampler,
     such as the Chronos-2 models, has none.
     """
     settings = samplers()
@@ -1689,8 +1689,7 @@ def _sampler_section(
     ).reset_index()
     return (
         "## Sampler\n\n"
-        "Stored fits use these settings. "
-        "The renewal variants use the submission's.\n\n"
+        "Stored fits use the submission's settings.\n\n"
         + sub
         + "\n"
         + _dropdown(

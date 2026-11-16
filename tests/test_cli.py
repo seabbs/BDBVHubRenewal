@@ -255,7 +255,7 @@ def test_stored_samples_keep_numeric_values_without_our_forecasts(
 def test_backtest_of_fitted_models_only_points_to_the_fit_store(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    args = ["backtest", "--data", str(DATA), "--models", "pprandomwalknowcast"]
+    args = ["backtest", "--data", str(DATA), "--models", "renewal"]
     out = ["--results", str(tmp_path), "--output", str(tmp_path)]
     assert main([*args, *out]) == 1
     assert "task fit-store" in capsys.readouterr().err
@@ -604,7 +604,7 @@ def test_digest_of_one_model(capsys: pytest.CaptureFixture[str]) -> None:
     assert main(["digest", "--root", str(ROOT), "--model", "randomwalk"]) == 0
     key = capsys.readouterr().out.strip()
     assert key == model_digest("randomwalk", ROOT)
-    assert key != model_digest("pprandomwalknowcast", ROOT)
+    assert key != model_digest("renewal", ROOT)
 
 
 def test_fit_store_plan_takes_origins(tmp_path: Path) -> None:
