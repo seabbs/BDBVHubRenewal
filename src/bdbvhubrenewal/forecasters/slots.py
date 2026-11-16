@@ -3,19 +3,18 @@ r"""Per-series slots: tie each place's lag series to its count series.
 
 Chronos-2's group attention has no series identity, so in the ragged
 layout's joint block it cannot tell which place a lag series belongs to.
-A slot is a label, one of `N_SLOTS` fixed random vectors (`attach`
-with `init_std`), added to every token of a series (its context patches,
-its future patches and its [REG] token). A place's count series and all
-its lag series share one label, plus its parent's label (`parents_of`),
-so siblings share their parent's. Labels are drawn as a fresh random
-permutation per block in training, so the model learns which series pair
-rather than fixed identities; at inference and in held-out losses they
-are drawn the same way with the fixed seed `EVAL_SEED`.
+A slot is a learned vector, one of `N_SLOTS`, added to every token of a
+series (its context patches, its future patches and its [REG] token). A
+place's count series and all its lag series share one slot. Slots are
+drawn as a fresh random permutation per block in training, so the model
+learns which series pair rather than fixed identities; at inference and
+in held-out losses they are drawn the same way with the fixed seed
+`EVAL_SEED`.
 
-The labels are a module of the model, `series_slots`, saved in, and
-loaded from, the adapter's files as one of PEFT's `modules_to_save`
-(`load_adapter`); the trainer keeps them fixed while LoRA learns to read
-them. Zero labels leave the model exactly as base Chronos-2.
+The slots are a module of the model, `series_slots`, initialised at zero,
+so a model with slots starts exactly as base Chronos-2. It trains beside
+the LoRA adapter as one of PEFT's `modules_to_save`, so it is saved in,
+and loaded from, the adapter's files (`load_adapter`).
 
 `attach` adds the slots to a Chronos-2 model and hooks its input patch
 embedding and [REG] embedding. `assigned` sets the slot of each row of
@@ -28,6 +27,7 @@ repeats each row, and the slots repeat with it.
 from __future__ import annotations
 
 import json
+import warnings
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from pathlib import Path
@@ -43,6 +43,7 @@ __all__ = [
     "adapter_slots",
     "assigned",
     "attach",
+    "checkpoint_slots",
     "has_parent_link",
     "has_slots",
     "load_adapter",
@@ -161,7 +162,8 @@ def _slots_module(n_slots: int, d_model: int, parent: bool = True) -> Any:
             self.embedding = nn.Embedding(n_slots, d_model)
             nn.init.zeros_(self.embedding.weight)
             if parent:
-                # Marks slots that add each place's parent's; not trained.
+                # Marks slots that add each place's parent's, as the
+                # trainer marks them; saved with the adapter, not trained.
                 self.register_buffer("parent_link", torch.ones(()))
 
         def forward(self, ids: torch.Tensor) -> torch.Tensor:
@@ -174,7 +176,8 @@ def _slots_module(n_slots: int, d_model: int, parent: bool = True) -> Any:
             own, parent = ids
             linked = (parent >= 0).unsqueeze(-1)
             vectors = self.embedding(parent.clamp(min=0)) * linked
-            return self.embedding(own) + vectors
+            both: torch.Tensor = self.embedding(own) + vectors
+            return both
 
     return SeriesSlots()
 
@@ -218,7 +221,7 @@ def attach(
     The slots start at zero, so the model is unchanged, or with
     `init_std` as distinct codes drawn from a normal with that sd, seeded
     by `seed`. Loading an adapter that holds slots replaces them. With
-    `parent`, each place also adds its parent's slot.
+    `parent`, each place also adds its parent's own slot, a plain sum.
     """
     import torch
 
@@ -283,30 +286,133 @@ def adapter_slots(adapter: Path | str) -> int | None:
 
 
 def has_parent_link(model: Any) -> bool:
-    """Whether a model's slots add each place's parent's."""
+    """Whether a model's slots add each place's parent's slot."""
     base = _base(model)
     if base is None:
         return False
-    return hasattr(getattr(base, SLOT_MODULE), "parent_link")
+    # PEFT wraps the module while it trains; its copies keep the marker.
+    return any(
+        hasattr(m, "parent_link") for m in getattr(base, SLOT_MODULE).modules()
+    )
+
+
+def checkpoint_slots(adapter: Path | str) -> dict[str, Any] | None:
+    """Return a checkpoint's `series_slots` settings, None if it has none.
+
+    They are in its `settings.json`, beside the adapter files as in a
+    release, or one folder up as in a local `nK/finetuned-ckpt`. None
+    also when neither place holds a `settings.json`.
+    """
+    adapter = Path(adapter)
+    for where in (adapter / "settings.json", adapter.parent / "settings.json"):
+        if where.exists():
+            out = json.loads(where.read_text()).get("series_slots")
+            return dict(out) if out else None
+    return None
 
 
 def adapter_parent_link(adapter: Path | str) -> bool:
-    """Whether an adapter's slots hold the parent link (`parent_link`)."""
+    """Whether a slots checkpoint was trained with the parent link.
+
+    Trained slots carry a `parent_link` buffer in the adapter; otherwise
+    the link is read from the checkpoint's settings (`checkpoint_slots`,
+    `series_slots.parent`).
+
+    Raises
+    ------
+    ValueError
+        If the checkpoint has no `settings.json`.
+    """
+    adapter = Path(adapter)
     from safetensors import safe_open
 
-    with safe_open(Path(adapter) / "adapter_model.safetensors", "pt") as f:
-        return any("parent_link" in key for key in f.keys())  # noqa: SIM118
+    with safe_open(adapter / "adapter_model.safetensors", "pt") as f:
+        if any("parent_link" in key for key in f.keys()):  # noqa: SIM118
+            return True
+    if not any(
+        (w / "settings.json").exists() for w in (adapter, adapter.parent)
+    ):
+        raise ValueError(
+            f"{adapter} holds slots but no settings.json says whether they "
+            "carry the parent link"
+        )
+    return "parent" in (checkpoint_slots(adapter) or {})
 
 
-def load_adapter(model: Any, adapter: Path | str) -> Any:
+def load_adapter(
+    model: Any, adapter: Path | str, parent: bool | None = None
+) -> Any:
     """Return Chronos-2 `model` with an adapter merged, slots included.
 
     Slots are attached first when the adapter holds them, so PEFT loads
-    their trained values; an adapter without slots loads as before.
+    their trained values. Fixed, untrained labels are not in the adapter:
+    they are rebuilt from the checkpoint's `series_slots` settings (`n`,
+    `init_std`, `init_seed`), as the trainer drew them. A checkpoint
+    without slots loads as before.
+    `parent` says whether the slots carry the parent link; by default it
+    is read from the checkpoint's settings (`adapter_parent_link`). Every
+    weight in the adapter's file must reach the model (`_check_loaded`).
     """
     from peft import PeftModel
 
     n = adapter_slots(adapter)
+    spec = checkpoint_slots(adapter)
     if n is not None:
-        attach(model, n, parent=adapter_parent_link(adapter))
-    return PeftModel.from_pretrained(model, str(adapter)).merge_and_unload()
+        # Slots trained beside the adapter, saved in its files.
+        if parent is None:
+            parent = adapter_parent_link(adapter)
+        attach(model, n, parent=parent)
+    elif spec is not None:
+        # Fixed labels, not trained: rebuilt from their seed.
+        if not spec.get("init_std"):
+            raise ValueError(f"{adapter}: fixed slot labels need an init_std")
+        attach(
+            model,
+            int(spec["n"]),
+            init_std=float(spec["init_std"]),
+            seed=int(spec["init_seed"]),
+            parent="parent" in spec if parent is None else parent,
+        )
+        for p in getattr(model, SLOT_MODULE).parameters():
+            p.requires_grad_(False)
+    with warnings.catch_warnings():
+        # PEFT only warns when an adapter weight has no file entry.
+        warnings.filterwarnings("error", message="Found missing adapter keys")
+        peft_model = PeftModel.from_pretrained(model, str(adapter))
+    _check_loaded(peft_model, adapter)
+    return peft_model.merge_and_unload()
+
+
+def _check_loaded(peft_model: Any, adapter: Path | str) -> None:
+    """Raise unless every weight in an adapter's file reached the model.
+
+    PEFT drops a file entry the model has no parameter for without a
+    word, as it would slot weights for a model built without slots.
+
+    Raises
+    ------
+    ValueError
+        If an adapter weight is not in the model or differs from the file.
+    """
+    import torch
+    from safetensors.torch import load_file
+
+    def plain(name: str) -> str:
+        name = name.replace(".modules_to_save.default", "")
+        return name.replace(".default", "")
+
+    loaded = {
+        plain(n): p
+        for n, p in [
+            *peft_model.named_parameters(),
+            *peft_model.named_buffers(),
+        ]
+    }
+    for key, value in load_file(
+        str(Path(adapter) / "adapter_model.safetensors")
+    ).items():
+        have = loaded.get(key)
+        if have is None:
+            raise ValueError(f"{adapter}: adapter weight {key} has no place")
+        if not torch.equal(have.detach().cpu().to(value.dtype), value):
+            raise ValueError(f"{adapter}: adapter weight {key} did not load")

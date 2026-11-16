@@ -198,7 +198,8 @@ def test_trainer_state_round_trips_the_slots(tmp_path):
     opt = torch.optim.Adam([p for p in model.parameters() if p.requires_grad])
     fs.save_state(tmp_path / "state", model, opt, {"step": 3})
     fresh = tiny_model()
-    slots.attach(fresh, n_slots=8)
+    # As `trained`: slots without the parent link.
+    slots.attach(fresh, n_slots=8, parent=False)
     from peft import get_peft_model
     from test_series_slots import lora
 
