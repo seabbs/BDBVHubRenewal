@@ -101,11 +101,10 @@ def test_registered_as_fitted_models() -> None:
 def test_ragged_lags_stop_below_the_truth_delay(
     source: str, steps: int, task: ForecastTask
 ) -> None:
-    # The lag series stop at 28 days or 4 weeks, short of the 35-day truth
-    # delay. Running them to the truth delay (e43eda80c) was reverted: zone
-    # releases began on 2026-10-09, so at 5 weeks no lag 0 to 2 value of a
-    # zone fell in the context, Chronos-2 read partial counts as levels,
-    # and the forecasts and scores were worse.
+    # The lag series stop at 28 days or 4 weeks, short of the truth delay,
+    # because the zones' release histories are short: with longer lags no
+    # early lag of a zone falls in the context, and Chronos-2 reads partial
+    # counts as levels.
     store: list = []
     model = dataclasses.replace(
         get_model(f"fm_chronos_{source}_ragged"), sample=_recording(store)
@@ -336,6 +335,19 @@ def test_no_daily_releases_is_unavailable(task: ForecastTask) -> None:
         model.forecast(bare)
 
 
+@pytest.mark.parametrize("source", SOURCES)
+def test_complete_with_a_walk_start_off_the_grid_is_unavailable(
+    source: str, task: ForecastTask, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A walk that starts before the first release step is off the grid.
+    monkeypatch.setattr(foundation, "_walk_start", lambda _: "1900-01-06")
+    model = dataclasses.replace(
+        get_model(f"fm_chronos_{source}_complete"), sample=_constant(0.0)
+    )
+    with pytest.raises(ModelUnavailableError, match="1900-01-06"):
+        model.forecast(task)
+
+
 class _FakePipeline:
     """Quantiles that grow with the level and the week."""
 
@@ -481,6 +493,30 @@ def test_checksums_must_cover_the_adapter(
             line + "\n"
             for line in sums.read_text().splitlines()
             if "adapter_config" not in line
+        )
+    )
+    with pytest.raises(ValueError, match=r"adapter_config\.json"):
+        foundation.resolve_checkpoint("abc")
+
+
+def test_a_checksum_line_with_one_token_is_skipped(
+    releases: Path, write_release
+) -> None:
+    write_release(releases, "abc", _ADAPTER, "abc")
+    sums = releases / "chronos-ft-abc" / "sha256sums.txt"
+    sums.write_text("sha256sums\n" + sums.read_text())
+    assert foundation.resolve_checkpoint("abc") == _checkpoint("abc")
+
+
+def test_a_truncated_checksum_line_names_the_missing_file(
+    releases: Path, write_release
+) -> None:
+    write_release(releases, "abc", _ADAPTER, "abc")
+    sums = releases / "chronos-ft-abc" / "sha256sums.txt"
+    sums.write_text(
+        "".join(
+            (line.split()[0] if "adapter_config" in line else line) + "\n"
+            for line in sums.read_text().splitlines()
         )
     )
     with pytest.raises(ValueError, match=r"adapter_config\.json"):

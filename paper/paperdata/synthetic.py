@@ -1,6 +1,6 @@
 """Load the synthetic study from the synthetic runner's outputs.
 
-The runner of #192 forecasts the simulated outbreaks of a set of seeds
+The runner forecasts the simulated outbreaks of a set of seeds
 and writes, beside its forecasts `<stem>.csv.gz` in the paper's schema,
 `<stem>-observations.csv` (every weekly release and the final count) and
 `<stem>-factors.csv` (each location's grid cell and `delay_q98`, its

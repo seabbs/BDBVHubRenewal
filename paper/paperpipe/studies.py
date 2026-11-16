@@ -26,7 +26,7 @@ functions return dummy data from `paperfigs.dummy`:
   `randomwalknowcast` (`study_baseline`).
 - The synthetic study reads the synthetic runner's forecasts of the
   simulated outbreaks and its observations and factors beside them
-  (`paperdata.synthetic`, #192). Its dummy data are one dummy study,
+  (`paperdata.synthetic`). Its dummy data are one dummy study,
   for the run's first seed, so a dummy run stays small.
 
 `missing` says why a study cannot use its real data. A development run

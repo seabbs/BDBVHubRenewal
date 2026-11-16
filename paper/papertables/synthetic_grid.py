@@ -431,7 +431,7 @@ def heldout_note(config: dict) -> str:
         " seeds (`config/finetune/r3.env`).",
         f"The simulations are written to `{config['simulations']['paper']}`,"
         " and the workflow config records them.",
-        "The synthetic runner of #192 runs the models on the set.",
+        "The synthetic runner runs the models on the set.",
         "",
         "The held-out set was reserved for the final evaluation.",
         "No model was scored on it during development.",
