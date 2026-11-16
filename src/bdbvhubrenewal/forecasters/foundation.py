@@ -74,11 +74,13 @@ __all__ = [
     "finetuned_adapter",
     "finetuned_releases",
     "finetuned_spec",
+    "germany_pinned",
     "germany_spec",
     "hub_triangle",
     "layout_block",
     "native_sampler",
     "quantile_draws",
+    "register_german_models",
     "resolve_checkpoint",
 ]
 
@@ -965,10 +967,41 @@ for _source in SOURCES:
         f"{_source} releases, ragged layout.",
         fitted=True,
     )
-    register_model(
-        f"fm_chronos_{_source}_ragged_de",
-        partial(_german, f"fm_chronos_{_source}_ragged_de", _source),
-        f"Chronos-2 fine-tuned on the German data's development half, on "
-        f"the hub target's {_source} releases, ragged layout (SI only).",
-        fitted=True,
-    )
+
+
+def germany_pinned(path: Path | str = FINETUNED_CONFIG) -> bool:
+    """Whether `path` pins the German-trained checkpoint.
+
+    Parameters
+    ----------
+    path : pathlib.Path or str
+        A TOML file with `germany`.
+
+    Returns
+    -------
+    bool
+    """
+    return bool(tomllib.loads(Path(path).read_text()).get("germany"))
+
+
+def register_german_models() -> None:
+    """Register the `_de` models, fine-tuned on the German development half.
+
+    The module registers them only once `germany_pinned`, so while the
+    pin is pending no store plan or backtest resolves their checkpoint.
+    """
+    for source in SOURCES:
+        name = f"fm_chronos_{source}_ragged_de"
+        register_model(
+            name,
+            partial(_german, name, source),
+            f"Chronos-2 fine-tuned on the German data's development half, "
+            f"on the hub target's {source} releases, ragged layout (SI "
+            "only).",
+            fitted=True,
+            replace=True,
+        )
+
+
+if Path(FINETUNED_CONFIG).exists() and germany_pinned():
+    register_german_models()
