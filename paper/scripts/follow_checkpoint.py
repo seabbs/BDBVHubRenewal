@@ -1,12 +1,13 @@
 """Pin the workflow to the final fine-tuning run's newest checkpoint.
 
 The final run writes each checkpoint to `<run>/n<outbreaks>/` with its
-settings.json, and publishes it as a `chronos-ft-<hash>` release whose
-settings.json records the same `consumed_sha256`. This matches each
-local checkpoint to its release and, with `--write`, sets `finetuned` to
-the newest published one and `final_checkpoints` to all of them, in the
-workflow config. Before the run has published a checkpoint it prints
-nothing and leaves the config alone.
+settings.json, and publishes it as a release whose settings.json records
+the same `consumed_sha256`: `chronos-slots-<hash>` for the series-slots
+run, pinned as `slots-<hash>`, or `chronos-ft-<hash>`, pinned as its hash.
+This matches each local checkpoint to its release and, with `--write`,
+sets `finetuned` to the newest published one and `final_checkpoints` to
+all of them, in the workflow config. Before the run has published a
+checkpoint it prints nothing and leaves the config alone.
 
 Usage: python scripts/follow_checkpoint.py RUN_DIR [--write CONFIG]
 """
@@ -20,7 +21,16 @@ import subprocess
 from pathlib import Path
 
 REPO = "seabbs/BDBVHubRenewal"
-PREFIX = "chronos-ft-"
+# Release tag prefix -> the spec prefix the loader takes for it.
+PREFIXES = {"chronos-slots-": "slots-", "chronos-ft-": ""}
+
+
+def spec_of(tag: str) -> str | None:
+    """Return the loader's spec of a fine-tuned release tag, or None."""
+    for prefix, spec in PREFIXES.items():
+        if tag.startswith(prefix):
+            return spec + tag.removeprefix(prefix)
+    return None
 
 
 def _gh(*args: str) -> str:
@@ -30,7 +40,7 @@ def _gh(*args: str) -> str:
 
 
 def releases() -> dict[str, str]:
-    """Return each published release's hash by its `consumed_sha256`."""
+    """Return each published release's spec by its `consumed_sha256`."""
     listing = json.loads(
         _gh(
             "release",
@@ -46,7 +56,7 @@ def releases() -> dict[str, str]:
     out: dict[str, str] = {}
     for r in listing:
         tag = r["tagName"]
-        if r["isDraft"] or not tag.startswith(PREFIX):
+        if r["isDraft"] or spec_of(tag) is None:
             continue
         settings = json.loads(
             _gh(
@@ -62,7 +72,7 @@ def releases() -> dict[str, str]:
             )
         )
         if settings.get("consumed_sha256"):
-            out[settings["consumed_sha256"]] = tag.removeprefix(PREFIX)
+            out[settings["consumed_sha256"]] = spec_of(tag)
     return out
 
 
