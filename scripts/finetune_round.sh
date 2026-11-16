@@ -47,6 +47,7 @@ trainer_args() {
     --outbreaks "$OUTBREAKS" --prefixes "$OUTBREAKS"
     --stop-from "$((OUTBREAKS + 1))" --blocks-per-simulation "$SNAPSHOTS" --all-draws
     --univariate-share "$UNIVARIATE_SHARE"
+    --exclude "$ROUND_LOCAL/qc/excluded.csv"
     --learning-rate "$LEARNING_RATE" --lr-steps "$LR_STEPS"
     --sources $SOURCES --real-validation "$REAL_VALIDATION"
     --note "round $1" --publish)
@@ -69,7 +70,11 @@ fi
 mkdir -p "$ROUND_LOCAL"
 rsync -a "$REMOTE:$remote_round/seeds.txt" "$REMOTE:$remote_round/held-out.txt" \
   "$ROUND_LOCAL/" || { echo "round $round inputs not on $REMOTE" >&2; exit 1; }
+# Only a round archie marked READY (simulated and reviewed) is trained.
+ssh "$REMOTE" test -f "$remote_round/READY" \
+  || { echo "round $round is not ready on $REMOTE" >&2; exit 1; }
 rsync -a "$REMOTE:$remote_round/sims/" "$ROUND_LOCAL/sims/" || exit 1
+rsync -a "$REMOTE:$remote_round/qc/" "$ROUND_LOCAL/qc/" || exit 1
 if [ "${USE_REAL_TRAINING:-0}" = 1 ]; then
   rsync -a "$REMOTE:$remote_round/real-training.pkl" "$ROUND_LOCAL/" || exit 1
 fi

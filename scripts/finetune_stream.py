@@ -190,6 +190,10 @@ def seed_done(sim_dir: Path, seed: int) -> bool:
     return True
 
 
+EXCLUDED: set[str] = set()
+"""Simulations the sim QC excluded (`--exclude`), never read."""
+
+
 def batch_outbreaks(sim_dir: Path, seed: int) -> list[str] | None:
     """Return a finished batch's outbreaks in order, or None if not done.
 
@@ -199,6 +203,7 @@ def batch_outbreaks(sim_dir: Path, seed: int) -> list[str] | None:
         if not seed_done(sim_dir, seed):
             return None
         ids = read_ids(sim_dir / f"settings-{seed}.csv")
+        ids = [i for i in ids if i not in EXCLUDED]
         _READY[sim_dir, seed] = sorted(ids, key=ft._order)
     return _READY[sim_dir, seed]
 
@@ -771,6 +776,8 @@ def main() -> None:
     parser.add_argument("--all-draws", action="store_true")
     # Share of blocks that are one series (`ft.UNIVARIATE_SHARE`).
     parser.add_argument("--univariate-share", type=float, default=0.0)
+    # Sim QC exclusions (scripts/sim_qc.py: qc/excluded.csv).
+    parser.add_argument("--exclude", type=Path)
     parser.add_argument(
         "--prefixes", type=int, nargs="+", default=list(ft.PREFIXES)
     )
@@ -817,6 +824,8 @@ def main() -> None:
     prefixes.append(args.outbreaks)
     k = args.blocks_per_simulation
     ft.ALL_DRAWS, ft.UNIVARIATE_SHARE = args.all_draws, args.univariate_share
+    if args.exclude is not None and args.exclude.exists():
+        EXCLUDED.update(pd.read_csv(args.exclude)["simulation"].astype(str))
 
     # Held-out outbreaks first.
     report(stage="waiting for held-out simulations")
@@ -908,6 +917,7 @@ def main() -> None:
         ),
         "all_draws": ft.ALL_DRAWS,
         "univariate_share": ft.UNIVARIATE_SHARE,
+        "excluded": sorted(EXCLUDED),
         "lora": {"r": 8, "alpha": 16},
         "learning_rate": args.learning_rate,
         **(
