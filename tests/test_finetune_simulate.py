@@ -713,7 +713,8 @@ def test_independent_strata_are_separate_simulations(tmp_path):
 g <- 0L
 repeat {
   cell <- cell_for(g)
-  if (cell$strata == "places" && cell$strata_link == "independent") break
+  if (cell$strata == "places" && cell$strata_link == "independent" &&
+      cell$spread == "even") break
   g <- g + 1L
 }
 set.seed(2)
@@ -731,9 +732,10 @@ cat("trajectories", length(strsplit(v$stratum_trajectory, ";")[[1]]), "\\n")
     rows = {x.split()[0]: x.split()[1:] for x in out.splitlines() if x}
     n = int(rows["n"][0])
     assert 2 <= n <= 8
-    assert len(rows["locations"]) == n
-    assert int(rows["cells"][0]) == n
-    assert int(rows["trajectories"][0]) == n
+    # One simulation per place with cases (quiet places have none).
+    assert 1 <= len(rows["locations"]) <= n
+    assert int(rows["cells"][0]) == len(rows["locations"])
+    assert int(rows["trajectories"][0]) == len(rows["locations"])
 
 
 @needs_r

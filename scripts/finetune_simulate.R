@@ -396,7 +396,11 @@ draw_design <- function(g) {
   if (cell$strata_link == "independent") {
     # Each independent stratum is a simulation of its own, so at most
     # `max_independent` strata.
-    if (cell$strata == "places") n_places <- min(n_places, max_independent)
+    # Concentrated outbreaks keep their many places: only the active ones
+    # are simulated (`simulate_independent`).
+    if (cell$strata == "places" && cell$spread != "concentrated") {
+      n_places <- min(n_places, max_independent)
+    }
     if (cell$strata == "ages") n_ages <- min(n_ages, max_independent)
     if (cell$strata == "places_ages") {
       n_places <- 2L
@@ -981,10 +985,15 @@ simulate_independent <- function(design, id = NA_character_) {
   } else {
     place_ids
   }
+  # Quiet places (a concentrated outbreak's many) have no cases, so only
+  # the strata of places with cases are simulated.
+  quiet <- draw_values(design)$quiet_places
+  place_of <- match(sub("-.*", "", labels), place_ids)
+  active <- which(!(place_of %in% quiet))
   failures <- list()
   parts <- list()
   record <- list()
-  for (s in seq_along(labels)) {
+  for (s in active) {
     run <- NULL
     for (attempt in 1:5) {
       g <- sample.int(1e6, 1)
@@ -1005,14 +1014,15 @@ simulate_independent <- function(design, id = NA_character_) {
     }
     if (is.null(run)) return(list(out = NULL, failures = failures))
     run$counts[, location := labels[s]]
-    parts[[s]] <- run$counts
+    parts[[length(parts) + 1L]] <- run$counts
     record[[s]] <- list(
       cell = g, trajectory = one$trajectory,
       delay_family = one$delay_family, observation = one$observation,
       size = sum(run$counts$count) / draws, max_delay = run$values$max_delay
     )
-    if (s == 1L) values <- run$values
+    if (s == active[1]) values <- run$values
   }
+  record <- Filter(Negate(is.null), record)
   join <- function(k) paste(vapply(record, function(r) {
     as.character(r[[k]])
   }, ""), collapse = ";")
@@ -1022,6 +1032,7 @@ simulate_independent <- function(design, id = NA_character_) {
   values$stratum_observation <- join("observation")
   values$stratum_size <- join("size")
   values$max_delay <- max(vapply(record, function(r) r$max_delay, 1))
+  values$quiet_places <- quiet
   list(
     out = list(values = values, counts = rbindlist(parts, use.names = TRUE)),
     failures = failures
