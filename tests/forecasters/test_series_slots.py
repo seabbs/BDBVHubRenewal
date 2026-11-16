@@ -120,7 +120,7 @@ def trained(steps: int = 30):
     from peft import get_peft_model
 
     model = tiny_model()
-    slots.attach(model, n_slots=8)
+    slots.attach(model, n_slots=8, parent=False)
     peft_model = get_peft_model(model, lora())
     params = [p for p in peft_model.parameters() if p.requires_grad]
     opt = torch.optim.Adam(params, lr=0.05)
@@ -440,10 +440,15 @@ def test_an_adapter_without_the_parent_link_still_loads(tmp_path):
 
 
 def test_a_slots_adapter_with_no_settings_is_an_error(tmp_path):
-    linked_adapter(tmp_path)
-    (tmp_path / "linked" / "settings.json").unlink()
+    # Without the trainer's marker only settings.json can say whether the
+    # slots carry the link.
+    from peft import get_peft_model
+
+    model = tiny_model()
+    slots.attach(model, 8, init_std=0.02, seed=1, parent=False)
+    get_peft_model(model, lora()).save_pretrained(tmp_path / "bare")
     with pytest.raises(ValueError, match=r"settings\.json"):
-        slots.load_adapter(tiny_model(), tmp_path / "linked")
+        slots.load_adapter(tiny_model(), tmp_path / "bare")
 
 
 def test_an_adapter_weight_the_model_drops_is_an_error(tmp_path, monkeypatch):
@@ -536,3 +541,23 @@ def test_fixed_labels_need_their_seed(tmp_path):
     assert not torch.allclose(
         predict(other, block, ids), predict(model, block, ids), atol=1e-5
     )
+
+
+def test_the_link_is_read_from_the_adapters_marker(tmp_path):
+    # fm-finetune-slots marks linked slots with a `parent_link` buffer,
+    # saved in the adapter beside the slot table.
+    from safetensors import safe_open
+
+    model, ids = linked_adapter(tmp_path)
+    with safe_open(
+        tmp_path / "linked" / "adapter_model.safetensors", "pt"
+    ) as f:
+        assert any("parent_link" in k for k in f.keys())  # noqa: SIM118
+    where = tmp_path / "linked" / "settings.json"
+    where.write_text(json.dumps({"series_slots": {"n": 8}}))
+    assert slots.adapter_parent_link(tmp_path / "linked")
+    loaded = slots.load_adapter(tiny_model(), tmp_path / "linked")
+    assert slots.has_parent_link(loaded)
+    block = toy_block()
+    want = predict(model, block, ids)
+    assert torch.allclose(predict(loaded, block, ids), want, atol=1e-5)
