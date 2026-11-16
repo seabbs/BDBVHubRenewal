@@ -26,8 +26,7 @@
 # root of a clean worktree pinned to the grid's commit.
 set -uo pipefail
 
-ROOT=${ROOT:-$HOME/bdbv-rounds}
-MAILBOX=${MAILBOX:-$HOME/bdbv-archie-mailbox.md}
+source "$(dirname "${BASH_SOURCE[0]}")/local_config.sh"
 BATCH=${BATCH:-25}
 ROUND_BATCHES=${ROUND_BATCHES:-40}
 HELD_BATCHES=${HELD_BATCHES:-4}
@@ -42,7 +41,7 @@ SEED_BASE=${SEED_BASE:-30000}
 ARCHIVE=${ARCHIVE:-1}
 REPO=${REPO:-seabbs/BDBVHubRenewal}
 
-say() { echo "$(date '+%F %H:%M') archie: sim rounds: $*" >> "$MAILBOX"; }
+say() { echo "$(date '+%F %H:%M') $HOST_NAME sim rounds: $*" >> "$MAILBOX"; }
 
 # Seeds of round $1: training then held-out, unique across rounds.
 round_seeds() {
@@ -50,7 +49,7 @@ round_seeds() {
   seq "$first" $((first + ROUND_BATCHES + HELD_BATCHES - 1))
 }
 
-sha() { if [ -f "$1" ]; then sha256sum "$1" | cut -d' ' -f1; fi; }
+sha() { if [ -f "$1" ]; then sha256 "$1"; fi; }
 
 # Run batch seed $1 of round dir $2 at memory $3; 0 if the run exited
 # cleanly and wrote readable counts and settings. R and Stan write their
@@ -86,7 +85,8 @@ manifest_row() {
 # Seeds another host claims in the mailbox (lines with "claim" naming
 # seeds, as 30123 or 30120-30125), which this host skips.
 claimed_seeds() {
-  grep -i 'claim' "$MAILBOX" 2> /dev/null | grep -v 'archie' \
+  grep -i 'claim' "$MAILBOX" 2> /dev/null \
+    | grep -v -E "^[0-9-]+ [0-9:]+ $HOST_NAME[ :(]" \
     | grep -oE '\b[0-9]{5}(-[0-9]{5})?\b' | while read -r r; do
       if [[ $r == *-* ]]; then seq "${r%-*}" "${r#*-}"; else echo "$r"; fi
     done | sort -u

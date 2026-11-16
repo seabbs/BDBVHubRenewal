@@ -33,7 +33,9 @@ import hashlib
 import inspect
 import json
 import multiprocessing
+import os
 import pickle
+import shutil
 import subprocess
 import sys
 import time
@@ -65,6 +67,9 @@ LEVEL_BLOCKS = 300
 SAVE_EVERY = 50
 """Steps between saves of the trainer's state, which a restarted trainer
 resumes from."""
+BY_SOURCE_EVERY = 200
+"""Steps between held-out losses by source, which cost three monitor
+evals."""
 
 POLL = 60
 """Seconds between checks for a chunk's simulations."""
@@ -164,14 +169,25 @@ def lora_config(n_slots: int):
     )
 
 
-def slot_settings(n_slots: int) -> dict:
+def slot_settings(
+    n_slots: int, init_std: float = 0.0, init_seed: int = 0
+) -> dict:
     """Return the slots' entry of a checkpoint's settings, none if off."""
     if not n_slots:
         return {}
     return {
         "series_slots": {
             "n": n_slots,
-            "init": "zero",
+            "init": "normal" if init_std else "zero",
+            "init_std": init_std,
+            "init_seed": init_seed,
+            "trained": False,
+            "parent": {
+                "link": "own slot plus the parent's own slot, from the same "
+                "table",
+                "rule": "nearest '-' prefix in the block, else the country "
+                f"({', '.join(slots.COUNTRIES)})",
+            },
             "module": slots.SLOT_MODULE,
             "assignment": (
                 "a fresh random permutation per block each time it is "
@@ -180,6 +196,22 @@ def slot_settings(n_slots: int) -> dict:
             ),
         }
     }
+
+
+def param_groups(model, lr: float) -> list[dict]:
+    """Return the optimiser's one group: the trainable adapter at `lr`.
+
+    It keeps its starting rate as `base_lr`, which `set_learning_rates`
+    decays. The slots' labels are fixed, so they are not in it.
+    """
+    trainable = [p for p in model.parameters() if p.requires_grad]
+    return [{"params": trainable, "lr": lr, "base_lr": lr}]
+
+
+def set_learning_rates(optimiser, step: int, steps: int) -> None:
+    """Set each group's rate at `step`: linear from its base to zero."""
+    for group in optimiser.param_groups:
+        group["lr"] = learning_rate(step, group["base_lr"], steps)
 
 
 def lora_model(base, config, init: Path | None):
@@ -192,10 +224,17 @@ def lora_model(base, config, init: Path | None):
     from peft import PeftModel, get_peft_model
 
     if init is None:
-        return get_peft_model(base, config)
-    if slots.has_slots(base) and slots.adapter_slots(init) is None:
-        raise ValueError(f"{init} holds no slots to continue training")
-    return PeftModel.from_pretrained(base, init, is_trainable=True)
+        model = get_peft_model(base, config)
+    else:
+        if slots.has_slots(base) and slots.adapter_slots(init) is None:
+            raise ValueError(f"{init} holds no slots to continue training")
+        model = PeftModel.from_pretrained(base, init, is_trainable=True)
+    # The slots' labels are fixed random codes: saved with the adapter,
+    # never trained; LoRA learns to read them.
+    for name, p in model.named_parameters():
+        if slots.SLOT_MODULE in name:
+            p.requires_grad_(False)
+    return model
 
 
 def learning_rate(step: int, base: float, steps: int) -> float:
@@ -540,10 +579,25 @@ def block_slots(blocks: list[dict], n_slots: int, rng=None) -> np.ndarray:
                 if rng is not None
                 else np.random.default_rng(slots.EVAL_SEED),
                 n_slots,
+                parents=block_parents(b),
             )
             for b in blocks
-        ]
+        ],
+        axis=-1,
     )
+
+
+def block_parents(block: dict) -> list[int]:
+    """Return each target's parent in a block (`slots.parents_of`).
+
+    A block without place names links every place to the country, when
+    it holds it, by its levels.
+    """
+    if "places" in block:
+        return slots.parents_of(block["places"])
+    levels = list(block["levels"])
+    root = levels.index("national") if "national" in levels else -1
+    return [-1 if i == root else root for i in range(len(levels))]
 
 
 def tensors(block: dict) -> dict:
@@ -682,6 +736,24 @@ def held_out_loss(model, blocks: list[dict], batch_size: int) -> float:
             weights.append(len(batch["context"]))
     model.train(training)
     return float(np.average(losses, weights=weights))
+
+
+def pick_device(device: str = "auto") -> str:
+    """Return the torch device to train on.
+
+    `auto` takes CUDA, then MPS, then the CPU; any other name is used as
+    given. The device is a machine setting (`DEVICE` in the local config),
+    kept out of the checkpoint hash.
+    """
+    import torch
+
+    if device != "auto":
+        return device
+    if torch.cuda.is_available():
+        return "cuda"
+    if torch.backends.mps.is_available():
+        return "mps"
+    return "cpu"
 
 
 def free_memory() -> None:
@@ -825,6 +897,28 @@ def finite_step(params: list, optimiser, value: float) -> bool:
     return finite
 
 
+def held_out_by_source(
+    model, blocks: list[dict], batch_size: int, n: int | None = None
+) -> dict:
+    """Return held-out loss by source (weekly, daily, 3day).
+
+    Each source's loss is on its first `n` blocks, or all of them, so a
+    source's curve compares across runs that cut it alike.
+    """
+    by: dict[str, list[dict]] = {}
+    for block in blocks:
+        by.setdefault(block["source"], []).append(block)
+    return {
+        source: held_out_loss(model, group[:n], batch_size)
+        for source, group in sorted(by.items())
+    }
+
+
+def _by_source(losses: dict) -> str:
+    """Describe losses by source for the log."""
+    return ", ".join(f"{s} {v:.4f}" for s, v in losses.items())
+
+
 def held_out_by_level(model, blocks: list[dict], n: int) -> dict:
     """Return held-out loss by level (national, intermediate, leaf).
 
@@ -888,18 +982,25 @@ def save_state(where: Path, model, optimiser, state: dict) -> None:
     torch.save(get_peft_model_state_dict(model), tmp / "adapter.pt")
     torch.save(optimiser.state_dict(), tmp / "optimiser.pt")
     (tmp / "state.json").write_text(json.dumps(state))
+    # The last state is kept until the new one is in place.
+    old = where.with_suffix(".old")
     if where.exists():
-        for f in where.iterdir():
-            f.unlink()
-        where.rmdir()
+        shutil.rmtree(old, ignore_errors=True)
+        where.rename(old)
     tmp.rename(where)
+    shutil.rmtree(old, ignore_errors=True)
 
 
 def load_state(where: Path, model, optimiser) -> dict | None:
-    """Load the trainer's saved state into the model and optimiser."""
+    """Load the trainer's saved state into the model and optimiser.
+
+    If a save stopped between its renames, the last state is in `.old`.
+    """
     import torch
     from peft import set_peft_model_state_dict
 
+    if not (where / "state.json").exists():
+        where = where.with_suffix(".old")
     if not (where / "state.json").exists():
         return None
     set_peft_model_state_dict(
@@ -909,6 +1010,17 @@ def load_state(where: Path, model, optimiser) -> dict | None:
         torch.load(where / "optimiser.pt", weights_only=True)
     )
     return json.loads((where / "state.json").read_text())
+
+
+def code_commit() -> str:
+    """Return the commit of the repository holding this script."""
+    return subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=Path(__file__).parent,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
 
 
 def main() -> None:
@@ -957,6 +1069,7 @@ def main() -> None:
     # at each checkpoint to choose among them; not trained on.
     parser.add_argument("--real-validation", type=Path)
     parser.add_argument("--batch-size", type=int, default=256)
+    parser.add_argument("--device", default=os.environ.get("DEVICE", "auto"))
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--note", default="")
     parser.add_argument("--grid", required=True)
@@ -972,25 +1085,25 @@ def main() -> None:
     parser.add_argument("--memory-gb", type=float, default=ft.MEMORY_GB)
     # Processes cutting blocks a chunk ahead; they do not change the blocks.
     parser.add_argument("--cut-workers", type=int, default=3)
-    # Per-series slots (bdbvhubrenewal.forecasters.slots): a learned,
-    # zero-initialised vector shared by a place's count and lag series,
-    # trained beside the adapter; 0 trains without them.
+    # Per-series slots (bdbvhubrenewal.forecasters.slots): a fixed random
+    # label shared by a place's count and lag series, plus its parent's;
+    # 0 trains without them.
     parser.add_argument("--series-slots", type=int, default=0)
+    # Slots are fixed random labels, distinct codes from the start.
+    parser.add_argument("--slot-init-std", type=float, default=0.02)
+    parser.add_argument("--slot-init-seed", type=int, default=1)
     args = parser.parse_args()
     CHUNK = args.chunk
     ft.SOURCES = tuple(args.sources)
+    ft.check_sources(ft.SOURCES)
+    ft.check_package(Path(__file__).parents[1])
     ft.UNIVARIATE_SHARE = args.univariate_share
     global EXCLUDE_FILE, DRAWS_PER_PASS, SUBSET_SEED
     EXCLUDE_FILE = args.exclude
     DRAWS_PER_PASS, SUBSET_SEED = args.draws_per_simulation, args.subset_seed
     out, sim_dir = args.out, args.sim_dir
-    # The commit this trainer runs, read once: the worktree may move on.
-    commit = subprocess.run(
-        ["git", "rev-parse", "HEAD"],
-        capture_output=True,
-        text=True,
-        check=True,
-    ).stdout.strip()
+    # Read once at start: the worktree may move on while training.
+    commit = code_commit()
     out.mkdir(parents=True, exist_ok=True)
     pause = out.parent / "PAUSE"
     status_file = out / "stream-status.json"
@@ -1056,23 +1169,22 @@ def main() -> None:
     )
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)  # noqa: NPY002
-    device = (
-        "cuda"
-        if torch.cuda.is_available()
-        else "mps"
-        if torch.backends.mps.is_available()
-        else "cpu"
-    )
+    device = pick_device(args.device)
     pipeline = Chronos2Pipeline.from_pretrained(
         CHRONOS_MODEL, revision=CHRONOS_REVISION, device_map=device
     )
     if args.series_slots:
-        slots.attach(pipeline.model, args.series_slots)
+        slots.attach(
+            pipeline.model,
+            args.series_slots,
+            init_std=args.slot_init_std,
+            seed=args.slot_init_seed,
+        )
     lora = lora_config(args.series_slots)
     model = lora_model(pipeline.model, lora, args.init_adapter)
     model.train()
     params = [p for p in model.parameters() if p.requires_grad]
-    optimiser = torch.optim.AdamW(params, lr=args.learning_rate)
+    optimiser = torch.optim.AdamW(param_groups(model, args.learning_rate))
     accepted = inspect.signature(Chronos2Model.forward).parameters
     base = {
         "grid": args.grid,
@@ -1099,6 +1211,7 @@ def main() -> None:
         "chunk": CHUNK,
         "blocks_per_simulation": k,
         "univariate_share": ft.UNIVARIATE_SHARE,
+        "parent_mix": list(ft.PARENT_MIX),
         **(
             {
                 "draws_per_simulation": DRAWS_PER_PASS,
@@ -1120,7 +1233,11 @@ def main() -> None:
                 else {}
             ),
         },
-        **slot_settings(args.series_slots),
+        **slot_settings(
+            args.series_slots,
+            args.slot_init_std,
+            args.slot_init_seed,
+        ),
         "learning_rate": args.learning_rate,
         **(
             {
@@ -1158,6 +1275,9 @@ def main() -> None:
     consumed = out / "consumed.txt"
     state_dir = out / "state"
     state = load_state(state_dir, model, optimiser)
+    # The rate is this run's, as hashed, not the saved state's.
+    for group in optimiser.param_groups:
+        group["base_lr"] = args.learning_rate
     step, done, position = 0, 0, 0
     # The outbreaks trained on, in order, and those of the current chunk.
     trained: list[str] = []
@@ -1169,10 +1289,21 @@ def main() -> None:
         consumed.write_text("")
         start_loss = held_out_loss(model, val, args.batch_size)
         by_level = held_out_by_level(model, val, LEVEL_BLOCKS)
+        by_source = held_out_by_source(
+            model, val, args.batch_size, ft.EVAL_BLOCKS
+        )
         history = [
-            {"step": 0, "held_out_loss": start_loss, "by_level": by_level}
+            {
+                "step": 0,
+                "held_out_loss": start_loss,
+                "by_level": by_level,
+                "by_source": by_source,
+            }
         ]
-        log(f"held-out loss at the start {start_loss:.4f}")
+        log(
+            f"held-out loss at the start {start_loss:.4f}; first "
+            f"{ft.EVAL_BLOCKS} blocks by source {_by_source(by_source)}"
+        )
     else:
         step, done, position = state["step"], state["done"], state["position"]
         start_loss, history = state["start_loss"], state["history"]
@@ -1323,10 +1454,7 @@ def main() -> None:
             while pause.exists():
                 report(stage="paused")
                 time.sleep(30)
-            for group in optimiser.param_groups:
-                group["lr"] = learning_rate(
-                    step, args.learning_rate, args.lr_steps
-                )
+            set_learning_rates(optimiser, step, args.lr_steps)
             value = accumulate(list(indices), backward, zero, skip)
             if not finite_step(params, optimiser, value):
                 log(f"step {step + 1}: no update (loss {value})")
@@ -1355,12 +1483,19 @@ def main() -> None:
                 monitor = held_out_loss(
                     model, val[: ft.EVAL_BLOCKS], args.batch_size
                 )
+                entry = {"step": step, "eval_loss": monitor}
+                described = ""
+                if step % BY_SOURCE_EVERY == 0:
+                    entry["by_source"] = held_out_by_source(
+                        model, val, args.batch_size, ft.EVAL_BLOCKS
+                    )
+                    described = f"by source {_by_source(entry['by_source'])}, "
                 split["eval_s"] += time.perf_counter() - since
-                history.append({"step": step, "eval_loss": monitor})
+                history.append(entry)
                 log(
                     f"step {step}: loss {value:.4f}, held-out "
                     f"(first {ft.EVAL_BLOCKS} blocks) {monitor:.4f}, "
-                    f"{time.perf_counter() - t0:.0f} s; {memory()}"
+                    f"{described}{time.perf_counter() - t0:.0f} s; {memory()}"
                 )
                 (out / "history.json").write_text(json.dumps(history))
             if step % SAVE_EVERY == 0:
@@ -1378,6 +1513,9 @@ def main() -> None:
         mix = seen.setdefault("mix", {})
         for block in blocks:
             mix[block["mix"]] = mix.get(block["mix"], 0) + 1
+            parents = seen.setdefault("parents", {})
+            kind = block.get("parent", "exact")
+            parents[kind] = parents.get(kind, 0) + 1
         # Blocks of strata with no cases by their cut are not laid out.
         mix["empty"] = mix.get("empty", 0) + len(empty)
         if done in prefixes:
@@ -1422,6 +1560,9 @@ def main() -> None:
                 )
             settings["held_out_loss_by_level"] = held_out_by_level(
                 model, val, LEVEL_BLOCKS
+            )
+            settings["held_out_loss_by_source"] = held_out_by_source(
+                model, val, args.batch_size
             )
             settings["seconds"] = time.perf_counter() - t0
             (where / "settings.json").write_text(json.dumps(settings, indent=1))

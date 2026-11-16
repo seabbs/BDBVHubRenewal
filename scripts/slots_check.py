@@ -144,7 +144,13 @@ def model_ids(
         return None
     n = slots.n_slots(model)
     if not slots.has_parent_link(model):
-        return fs.block_slots([block], n)
+        # Own slots only, the trainer's first row.
+        return slots.slot_ids(
+            block["n_targets"],
+            block.get("n_covariates", 0),
+            np.random.default_rng(slots.EVAL_SEED),
+            n,
+        )
     parents = block_parents(block)
     if rng is not None:
         parents = wrong_parents(parents, rng)
@@ -347,7 +353,11 @@ def _slot_weight_check(model, adapter: Path) -> None:
 
     weight = getattr(model, slots.SLOT_MODULE).embedding.weight.detach()
     with safe_open(Path(adapter) / "adapter_model.safetensors", "pt") as f:
-        key = next(k for k in f.keys() if slots.SLOT_MODULE in k)  # noqa: SIM118
+        key = next(
+            k
+            for k in f.keys()  # noqa: SIM118
+            if slots.SLOT_MODULE in k and k.endswith("embedding.weight")
+        )
         saved = f.get_tensor(key)
     if not np.array_equal(weight.numpy(), saved.numpy()):
         raise ValueError(f"{adapter}: loaded slots differ from the file's")

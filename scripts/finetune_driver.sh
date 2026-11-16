@@ -78,6 +78,7 @@
 # output/finetune/PAUSE (no new simulations, the trainer waits) and
 # resume by removing it.
 set -uo pipefail
+source "$(dirname "${BASH_SOURCE[0]}")/local_config.sh"
 source "$1"
 LOG=output/finetune/driver.log
 TRAINER_LOG=output/finetune/trainer.log

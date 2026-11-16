@@ -14,6 +14,10 @@ from bdbvhubrenewal.forecasters import slots  # noqa: E402
 N_PLACES, LAG, T, H = 3, 2, 48, 16
 
 
+HIER = ("CD", "R2", "R1", "R2-P01", "R1-P03", "A1", "P05", "P05-A1")
+"""Places of a training block over several levels (the trainer's names)."""
+
+
 def tiny_model(seed: int = 0):
     """A small, randomly initialised Chronos-2 with no dropout."""
     from chronos.chronos2.config import Chronos2CoreConfig

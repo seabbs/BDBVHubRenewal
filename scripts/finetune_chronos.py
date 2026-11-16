@@ -26,6 +26,7 @@ from bdbvhubrenewal.forecasters import foundation
 from bdbvhubrenewal.forecasters.base import NATIONAL
 from bdbvhubrenewal.forecasters.finetune import (
     AHEAD_WEEKS,
+    BINNED,
     training_block,
     weekly_cutoffs,
 )
@@ -49,6 +50,40 @@ DAYS_PER_STEP = {"weekly": 7, "daily": 1, "3day": 3}
 SOURCES = ("weekly", "daily")
 """Sources blocks are cut from; one of them trains an adapter for that
 source alone."""
+
+
+def check_sources(sources: tuple[str, ...]) -> None:
+    """Raise unless every source has its own triangle or is binned.
+
+    A source neither in `foundation.SOURCES` nor in `BINNED` would be cut
+    as daily without notice.
+    """
+    bad = [
+        s
+        for s in sources
+        if (s not in foundation.SOURCES and s not in BINNED)
+        or s not in DAYS_PER_STEP
+        or s not in MAX_LAGS
+    ]
+    if bad:
+        raise ValueError(f"sources {bad} are neither native nor binned")
+
+
+def check_package(root: Path) -> None:
+    """Raise unless `bdbvhubrenewal` is imported from `root`'s src.
+
+    A venv linked from another worktree imports that worktree's package,
+    whose blocks may differ from this one's.
+    """
+    import bdbvhubrenewal
+
+    where = Path(bdbvhubrenewal.__file__).resolve()
+    if not where.is_relative_to((Path(root) / "src").resolve()):
+        raise RuntimeError(
+            f"bdbvhubrenewal is imported from {where}, not this worktree "
+            f"({Path(root).resolve()})"
+        )
+
 
 MEMORY_GB = 36.0
 """The GPU memory budget of a training step, in GB: the trainer's cap on
@@ -173,6 +208,12 @@ deployed block: national, provinces, zones), leaves and the country,
 leaves only, the country only, or one leaf only. The last two are
 univariate series from the same outbreaks. All levels need nested strata
 (regions of places, or places by ages)."""
+
+PARENT_MIX = ("exact", "unallocated", "late_parent")
+"""How the country of a block with places relates to them, drawn evenly:
+their sum, more than their sum (cases with no place), or reported through
+a later stream (`finetune.country_counts`). A block of some of the
+places is also not their sum. Parent means belongs to, not sums to."""
 
 UNIVARIATE_SHARE = 0.2
 """Share of blocks that are one series, the country or one leaf; the rest
@@ -320,6 +361,12 @@ def outbreak_blocks(
                 fits = MAX_SERIES // (lag + 1) - 1
                 budget = min(round(size / (lag + 1)) - 1, fits)
                 places, mix = choose_places(provinces, budget, rng)
+            # How the country relates to its places, drawn from a child
+            # generator, so the other draws are as without it.
+            parent_rng = rng.spawn(1)[0]
+            parent = "exact"
+            if len(places) > 1 and places[0] == NATIONAL:
+                parent = str(parent_rng.choice(PARENT_MIX))
             block = training_block(
                 counts,
                 source,
@@ -327,6 +374,8 @@ def outbreak_blocks(
                 cutoffs[: cut + 1],
                 max_lag=lag,
                 totals=any("-" in p for p in provinces),
+                parent=parent,
+                rng=parent_rng,
             )
             if block is None:
                 if empty is not None:
@@ -336,6 +385,8 @@ def outbreak_blocks(
                 continue
             padded = _pad(block, CONTEXT)
             padded["levels"] = target_levels(places)
+            padded["places"] = tuple(places)
+            padded["parent"] = parent
             padded["mix"] = mix
             padded["source"] = source
             out.append(padded)
@@ -467,6 +518,7 @@ def real_blocks(
         )
         padded = _pad(block, CONTEXT)
         padded["levels"] = target_levels(places)
+        padded["places"] = tuple(places)
         padded["mix"] = "real"
         padded["source"] = "weekly"
         out.append(padded)

@@ -159,7 +159,11 @@ def test_slots_match_the_trainer_and_inference(monkeypatch, name):
     model = with_slots()
     b = ca.condition(block(), name, np.random.default_rng(0))
     ids = sc.model_ids(model, b)
-    assert np.array_equal(ids, fs.block_slots([b], N_SLOTS))
+    # The trainer's own slots (its first row; the second is parents').
+    trainer = fs.block_slots(
+        [{**b, "levels": ["national"] * N_PLACES}], N_SLOTS
+    )
+    assert np.array_equal(ids, trainer[0] if trainer.ndim == 2 else trainer)
     # The ids chronos_sampler gives the same group.
     seen = []
     real = slots.assigned
@@ -603,3 +607,14 @@ def test_headline_reports_the_parent_swap_beside_the_lag_swap():
     assert "sims multi-place nowcast swap/given" in text
     assert "sims multi-place nowcast wrong-parent/given: slots x1.20" in text
     assert "germany states nowcast wrong-parent/given" in text
+
+
+def test_weight_check_reads_the_label_table_beside_the_link_marker(tmp_path):
+    # The run's adapters hold series_slots.parent_link beside the table.
+    from peft import get_peft_model
+    from test_series_slots import lora
+
+    model = with_linked_labels()
+    get_peft_model(model, lora()).save_pretrained(tmp_path / "ckpt")
+    loaded = slots.load_adapter(tiny_model(), tmp_path / "ckpt")
+    sc._slot_weight_check(loaded, tmp_path / "ckpt")
