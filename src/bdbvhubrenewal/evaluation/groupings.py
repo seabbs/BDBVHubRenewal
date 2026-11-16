@@ -681,7 +681,8 @@ def cased_group_slots(group: Series, n_slots: int) -> np.ndarray:
     A block with at most `n_slots` places takes the usual slots
     (`forecasters.foundation._group_slots`). A larger block, beyond what
     the slots were trained on, gives a slot only to places with a case in
-    its context (the target rows), drawn as there with
+    its context (in the target rows or, for cases in the newest weeks
+    only, the place's lag series), drawn as there with
     `slots.EVAL_SEED`; the others, and their lag series, get -1, no slot,
     as base Chronos-2. Rows are in Chronos-2's order: the targets, then
     the covariates by sorted name, past-only ones first.
@@ -709,7 +710,13 @@ def cased_group_slots(group: Series, n_slots: int) -> np.ndarray:
     if target.shape[0] <= n_slots:
         return _group_slots(group, n_slots)
     places = list(group["places"])
-    cased = np.flatnonzero(np.nansum(target, axis=1) > 0)
+    past = list(group.get("past_covariates", {}))
+    # Places with cases in the context: in their counts, or, for cases in
+    # the newest weeks only, in their lag series (`_lags_of` keeps those of
+    # places with cases only).
+    lagged = {n.rsplit("_lag_", 1)[0] for n in past}
+    has = (np.nansum(target, axis=1) > 0) | np.isin(places, list(lagged))
+    cased = np.flatnonzero(has)
     if len(cased) > n_slots:
         raise ValueError(
             f"{len(cased)} places with cases but only {n_slots} slots"
@@ -719,7 +726,6 @@ def cased_group_slots(group: Series, n_slots: int) -> np.ndarray:
     )
     ids = np.full(len(places), -1)
     ids[cased] = chosen
-    past = list(group.get("past_covariates", {}))
     known = set(group.get("future_covariates", {}))
     rows = sorted(n for n in past if n not in known)
     rows += sorted(n for n in past if n in known)
