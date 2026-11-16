@@ -87,3 +87,58 @@ def test_german_score_tables_add_the_comparison_and_leave_it_out_elsewhere(
         if path != table:
             models = set(pd.read_csv(path)["model"])
             assert "fm_chronos_daily_ragged_real" not in models
+
+
+def _ebola_scores() -> pd.DataFrame:
+    rows = []
+    for model, score in MODELS.items():
+        for origin in ("2026-11-08", "2026-11-15"):
+            for location in ("CD", "CD-NK", "CD-NK-14"):
+                rows.append(
+                    {
+                        "study": "ebola",
+                        "model": model,
+                        "location": location,
+                        "stratum": "all",
+                        "origin_date": pd.Timestamp(origin),
+                        "target_date": pd.Timestamp(origin),
+                        "horizon": 0,
+                        "metric": "crps",
+                        "score": score if origin > "2026-11-08" else 0.1,
+                        "log_score": 0.1,
+                        "bias": 0.0,
+                        "coverage_50": 1.0,
+                        "coverage_90": 1.0,
+                    }
+                )
+    return pd.DataFrame(rows)
+
+
+def test_bdbv_scores_only_rounds_after_the_last_release_trained_on() -> None:
+    table = real_finetune_table(_ebola_scores(), None, after="2026-11-08")
+    assert set(table["level"]) == {"all", "national", "provinces", "zones"}
+    real = table.loc[
+        (table["model"] == "fm_chronos_daily_ragged_real")
+        & (table["level"] == "all")
+    ]
+    assert real["rel_score"].item() == 0.5
+    assert real["n"].item() == 3
+
+
+def test_ebola_score_tables_add_the_comparison_pending_until_rounds_score(
+    tmp_path: Path,
+) -> None:
+    scores = _ebola_scores()
+    early = scores.loc[scores["origin_date"] <= "2026-11-08"]
+    written = score_tables(
+        "ebola",
+        early,
+        pd.DataFrame(),
+        tmp_path / "main",
+        tmp_path / "si",
+        baseline="randomwalknowcast",
+        after="2026-11-08",
+    )
+    table = tmp_path / "si" / "ebola-real-finetune.csv"
+    assert table in written
+    assert "Pending" in table.with_suffix(".md").read_text()
