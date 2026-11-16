@@ -1,6 +1,7 @@
-"""`scripts/follow_checkpoint.py` picks the final run's newest checkpoint."""
+"""`scripts/follow_checkpoint.py` pins the final run's newest checkpoint."""
 
 import importlib.util
+import json
 from pathlib import Path
 
 SCRIPT = Path(__file__).parents[1] / "scripts" / "follow_checkpoint.py"
@@ -9,20 +10,33 @@ follow = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(follow)
 
 
-def test_the_newest_release_of_the_grid_wins() -> None:
-    releases = [
-        ("chronos-ft-e8a1f5ae338b", "2026-11-15T16:21:13Z", "r3", 4000),
-        ("chronos-ft-aaaaaaaaaaaa", "2026-11-16T10:00:00Z", "r4", 1000),
-        ("chronos-ft-bbbbbbbbbbbb", "2026-11-16T20:00:00Z", "r4.1", 2000),
-        ("realdata-ft-cccccccccccc", "2026-11-17T00:00:00Z", "r4", 0),
-    ]
-    assert follow.newest(releases, "r4") == ("bbbbbbbbbbbb", 2000)
-    assert follow.newest(releases[:1], "r4") is None
+def _run(root: Path, sizes: list[int]) -> Path:
+    """A run folder with `nK` checkpoints, each with its settings."""
+    for k in sizes:
+        d = root / f"n{k}"
+        d.mkdir(parents=True)
+        (d / "settings.json").write_text(
+            json.dumps({"n_outbreaks": k, "consumed_sha256": f"c{k}"})
+        )
+    return root
 
 
-def test_the_pin_is_written_into_the_config(tmp_path: Path) -> None:
+def test_local_checkpoints_are_matched_to_their_releases(tmp_path) -> None:
+    run = _run(tmp_path / "slots", [1000, 2000, 4000])
+    releases = {"c1000": "aaaaaaaaaaaa", "c2000": "bbbbbbbbbbbb"}
+    found = follow.published(run, releases)
+    # 4,000 has no release yet, so it is not pinned.
+    assert found == [("aaaaaaaaaaaa", 1000), ("bbbbbbbbbbbb", 2000)]
+    assert follow.published(tmp_path / "absent", releases) == []
+
+
+def test_the_pin_and_the_run_s_checkpoints_are_written(tmp_path) -> None:
     config = tmp_path / "config.yaml"
-    config.write_text("render: development\nfinetuned: null\nn: 1\n")
-    follow.write_pin(config, "bbbbbbbbbbbb")
-    assert "finetuned: bbbbbbbbbbbb\n" in config.read_text()
-    assert config.read_text().startswith("render: development\n")
+    config.write_text(
+        "render: development\nfinetuned: null\nfinal_checkpoints: []\nn: 1\n"
+    )
+    follow.write_pins(config, [("aaaaaaaaaaaa", 1000), ("bbbbbbbbbbbb", 2000)])
+    text = config.read_text()
+    assert "finetuned: bbbbbbbbbbbb\n" in text
+    assert "final_checkpoints: [aaaaaaaaaaaa, bbbbbbbbbbbb]\n" in text
+    assert text.startswith("render: development\n")

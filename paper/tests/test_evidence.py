@@ -359,16 +359,18 @@ def test_checkpoint_rows_keep_one_grid_and_the_current_rule() -> None:
             },
         ]
     )
-    out = checkpoint_rows(rows, grid="r4")
+    out = checkpoint_rows(rows, checkpoints=("b",))
     assert set(out["study"]) == {"germany", "ebola"}
     assert sorted(out["checkpoint"]) == ["b", "b", "zero-shot"]
     assert out.set_index("study").loc["ebola", "rel_wis"] == 0.8
     # Old tables, with no grid or rule, give the zero-shot rows only.
     old = rows.drop(columns=["grid", "rule", "rel_crps"]).iloc[:2]
-    assert list(checkpoint_rows(old, grid="r4")["checkpoint"]) == ["zero-shot"]
+    assert list(checkpoint_rows(old, checkpoints=("b",))["checkpoint"]) == [
+        "zero-shot"
+    ]
 
 
-def test_checkpoint_rows_without_a_grid_keep_only_zero_shot() -> None:
+def test_checkpoint_rows_of_other_runs_leave_only_zero_shot() -> None:
     from paperpipe.evidence import checkpoint_rows
 
     rows = pd.DataFrame(
@@ -382,11 +384,11 @@ def test_checkpoint_rows_without_a_grid_keep_only_zero_shot() -> None:
             "rel_wis": [2.0, 1.5],
         }
     )
-    out = checkpoint_rows(rows, grid="r4")
+    out = checkpoint_rows(rows, checkpoints=("b",))
     assert list(out["checkpoint"]) == ["zero-shot"]
 
 
-def test_grids_match_their_revisions() -> None:
+def test_checkpoint_rows_keep_only_the_final_run() -> None:
     from paperpipe.evidence import checkpoint_rows
 
     rows = pd.DataFrame(
@@ -401,7 +403,10 @@ def test_grids_match_their_revisions() -> None:
             "grid": ["r4", "r4.1", "r3"],
         }
     )
-    assert list(checkpoint_rows(rows, grid="r4")["checkpoint"]) == ["a", "b"]
+    # Only the final run's checkpoints, whatever their grid.
+    assert list(checkpoint_rows(rows, checkpoints=("b",))["checkpoint"]) == [
+        "b"
+    ]
 
 
 def test_joint_evidence_leaves_out_fine_tuned_rows_of_earlier_runs() -> None:
