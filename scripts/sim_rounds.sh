@@ -11,7 +11,7 @@
 #
 #   sims/          counts-<seed>.csv.gz, settings-<seed>.csv,
 #                  failures-<seed>.csv and logs/<seed>.log
-#   seeds.txt      training seeds, one a line (scripts/finetune_round.sh)
+#   seeds.txt      training seeds, one a line (scripts/finetune_continuous.sh)
 #   held-out.txt   first and last held-out seed
 #   manifest.csv   one row per batch: seed, kind, grid and its commit,
 #                  draws, sha256 of each file, memory and time
