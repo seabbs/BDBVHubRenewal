@@ -5,7 +5,7 @@ One Snakemake workflow runs its evaluation, from each study's data to the figure
 
 ## Reproducing the paper
 
-From the repository root, with [uv](https://docs.astral.sh/uv/), [Task](https://taskfile.dev), [Quarto](https://quarto.org) and git:
+From the repository root, with [uv](https://docs.astral.sh/uv/), [Task](https://taskfile.dev), [Quarto](https://quarto.org), git and a GitHub token (`GITHUB_TOKEN`, `GH_TOKEN` or a `gh` login):
 
 ```sh
 task paper                 # the development run, without the held-out data

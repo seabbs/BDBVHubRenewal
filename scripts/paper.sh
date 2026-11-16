@@ -12,7 +12,8 @@
 # the fit-store branch is fetched first. Snakemake then runs the target's
 # missing steps (`--rerun-triggers mtime` reuses the backtest forecasts
 # CI has already made) and renders main.qmd and si.qmd, which are copied
-# into docs/paper/ for the site. Needs uv, git and Quarto.
+# into docs/paper/ for the site. Needs uv, git and Quarto, and a GitHub
+# token (GITHUB_TOKEN, GH_TOKEN or a gh login).
 set -euo pipefail
 
 target=${1:-development}
@@ -24,6 +25,13 @@ case $target in
     ;;
 esac
 cd "$(dirname "$0")/.."
+
+# The data steps call the GitHub API, which rate limits anonymous calls.
+# CI sets GITHUB_TOKEN; locally take GH_TOKEN or gh's login.
+if [ -z "${GITHUB_TOKEN:-}" ]; then
+  GITHUB_TOKEN=${GH_TOKEN:-$(gh auth token 2>/dev/null || true)}
+  export GITHUB_TOKEN
+fi
 
 git fetch -q --no-tags origin \
   +refs/heads/fit-store:refs/remotes/origin/fit-store
