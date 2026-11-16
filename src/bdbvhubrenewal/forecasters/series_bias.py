@@ -200,11 +200,13 @@ def assigned(model: Any, rows: Any) -> Iterator[None]:
         yield
         return
     state = getattr(base, _STATE)
+    # Nested use (a step around its forward) restores the outer rows.
+    before = state["rows"]
     state["rows"] = torch.as_tensor(np.asarray(rows), dtype=torch.long)
     try:
         yield
     finally:
-        state["rows"] = None
+        state["rows"] = before
 
 
 def adapter_has_bias(adapter: Path | str) -> bool:
