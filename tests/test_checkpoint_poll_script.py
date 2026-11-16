@@ -31,8 +31,12 @@ def _budget(verdict: str, max_parallel: int) -> dict:
 
 def test_a_unit_starts_only_with_a_free_core_and_memory(poll) -> None:
     assert poll.can_launch(_budget("green", 2), mem_avail_gb=30)
-    # The budget says green but no core is free (load near the cores).
-    assert not poll.can_launch(_budget("green", 0), mem_avail_gb=30)
+    # The budget says green but no core is free (load near the cores):
+    # one nice-19, one-thread unit still runs, so scoring never stalls
+    # behind the simulation rounds, but no second one.
+    assert poll.can_launch(_budget("green", 0), mem_avail_gb=30, running=0)
+    assert not poll.can_launch(_budget("green", 0), mem_avail_gb=30, running=1)
+    assert not poll.can_launch(_budget("red", 0), mem_avail_gb=30, running=0)
     assert not poll.can_launch(_budget("red", 3), mem_avail_gb=30)
     # 16 GB must stay free beside the unit's 6 GB scope.
     assert not poll.can_launch(_budget("green", 2), mem_avail_gb=21)

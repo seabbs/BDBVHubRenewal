@@ -58,11 +58,19 @@ REFERENCE_STAMP = "reference.landed"
 """In the cache: the commit the zero-shot reference rows landed at."""
 
 
-def can_launch(budget: Mapping[str, Any], mem_avail_gb: float) -> bool:
-    """Whether a unit may start: a free core, and memory to keep free."""
+def can_launch(
+    budget: Mapping[str, Any], mem_avail_gb: float, running: int = 0
+) -> bool:
+    """Whether a unit may start: memory to keep free, and a free core.
+
+    With no free core but the box not red, one unit still runs at a time
+    (nice 19, one thread), so scoring never stalls for good behind the
+    simulation rounds.
+    """
+    free_core = int(budget.get("max_parallel", 0)) >= 1 or running == 0
     return (
         budget.get("verdict") != "red"
-        and int(budget.get("max_parallel", 0)) >= 1
+        and free_core
         and mem_avail_gb >= KEEP_FREE_GB + SCOPE_GB
     )
 
@@ -231,7 +239,7 @@ def run_units(cache: Path, units: list[tuple[str, str]], name: str) -> bool:
                 f"{total - left}/{total} units")  # fmt: skip
         if pending and len(running) < MAX_UNITS:
             if pending[0][0] == "heldout" or can_launch(
-                budget(), mem_avail_gb()
+                budget(), mem_avail_gb(), len(running)
             ):
                 unit = pending.pop(0)
                 running[unit] = launch(cache, unit)
