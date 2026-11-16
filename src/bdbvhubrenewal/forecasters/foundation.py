@@ -578,7 +578,7 @@ def _chronos(checkpoint: Checkpoint | None = None) -> Any:
     return Chronos2Pipeline(model=slots.load_adapter(pipeline.model, adapter))
 
 
-def _chronos_input(group: Series) -> dict:
+def _chronos_input(group: Series) -> dict[str, Any]:
     """Return the parts of a group Chronos-2's dict path reads."""
     keys = ("target", "past_covariates", "future_covariates")
     return {k: group[k] for k in keys if k in group}
@@ -629,7 +629,7 @@ def _group_slots(
     )
     index = np.concatenate([np.arange(n_targets), owner]).astype(int)
     if not link:
-        return own[index]
+        return np.asarray(own[index])
     return np.stack([own[index], up[index]])
 
 
