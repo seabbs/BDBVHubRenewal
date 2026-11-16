@@ -10,9 +10,10 @@
 #
 # Waits for the release and its sha256sums.txt, then, one process at a
 # time, each in a memory-capped scope at nice 19 with one thread:
-#   1. the sanity check: zero-shot fm_chronos_daily_ragged, joint, at BDBV
-#      origins 2026-10-17 and 2026-11-01, against its existing rows (once
-#      per AGG_ROOT; 10-17 is the origin with scored zones);
+#   1. the sanity check, once per version of src/: zero-shot
+#      fm_chronos_daily_ragged, joint, at BDBV
+#      origins 2026-10-17 and 2026-11-01, against its existing rows
+#      (10-17 is the origin with scored zones);
 #   2. joint, level and bottom for fm_chronos_{daily,weekly}_ragged_ft on
 #      the BDBV release-backtest origins 2026-10-09 to 2026-11-01 and the
 #      80 German development dates;
@@ -133,7 +134,9 @@ git show "origin/evidence/fm-agg:results/agg/aggregation-scores.csv.gz" \
   > "$root/zero-shot-scores.csv.gz"
 
 # 1. Sanity: a zero-shot arm reproduces its existing rows.
-sane=$root/cache/zero-shot-sanity
+# Rerun whenever the package code changes; its fits are kept per version.
+code=$(git rev-parse --short HEAD:src)
+sane=$root/cache/zero-shot-sanity/$code
 if [ ! -f "$sane/ok" ]; then
   heavy "$cap_bdbv_daily" bdbv-fit --data "$root/data" \
     --model fm_chronos_daily_ragged --groupings joint \
