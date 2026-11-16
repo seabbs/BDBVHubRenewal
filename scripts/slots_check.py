@@ -58,10 +58,16 @@ import covariate_ablation as ca
 import finetune_chronos as ft
 import finetune_stream as fs
 
-from bdbvhubrenewal.forecasters import slots
+from bdbvhubrenewal.forecasters import series_bias, slots
 from bdbvhubrenewal.forecasters.finetune import AHEAD_WEEKS
 
-CONDITIONS = ("given", "swap_places", "removed", "shuffle_places")
+ID_SWAPS = ("wrong_place", "wrong_parent")
+"""Conditions that keep the content as given and move an attention-bias
+model's ids: a place's lag rows get another place's id (`wrong_place`),
+or places get a wrong parent (`wrong_parent`). Scored for the bias model
+only."""
+
+CONDITIONS = ("given", "swap_places", "removed", "shuffle_places", *ID_SWAPS)
 """Conditions scored; the change in output is taken from `given`."""
 
 AHEAD_STEPS = {"weekly": AHEAD_WEEKS, "daily": 7 * AHEAD_WEEKS}
@@ -89,13 +95,73 @@ output by more than this many times the larger of the zero-shot and
 no-slots swaps on the same block (their rounding)."""
 
 
-def model_ids(model, block: dict) -> np.ndarray | None:
-    """Return each row's slot as inference assigns it, None without slots.
+def block_parents(block: dict) -> list[int]:
+    """Return each target's parent in a block, -1 for none.
 
-    The slots depend only on the block's shape, the targets then each
-    place's lags in turn, so they stay with the rows' positions whatever
-    content a condition moved into them.
+    As the trainer: `series_bias.parents_of` the block's `places`, else,
+    by its levels, every place under the country when the block holds it.
     """
+    if block.get("places"):
+        return series_bias.parents_of(list(block["places"]))
+    levels = list(block.get("levels") or [])
+    root = levels.index("national") if "national" in levels else -1
+    return [-1 if i == root else root for i in range(block["n_targets"])]
+
+
+def _others(n: int, avoid: set[int], rng: np.random.Generator) -> int | None:
+    """Return a place of `n` not in `avoid`, drawn with `rng`, or None."""
+    choice = [j for j in range(n) if j not in avoid]
+    return int(rng.choice(choice)) if choice else None
+
+
+def wrong_parents(parents: list[int], rng: np.random.Generator) -> list[int]:
+    """Return a wrong parent for each place that has one.
+
+    Another place of the block, neither itself nor its parent; a place
+    keeps its parent when there is no other, and none if it has none.
+    """
+    out = []
+    for i, q in enumerate(parents):
+        other = _others(len(parents), {i, q}, rng) if q >= 0 else None
+        out.append(q if other is None else other)
+    return out
+
+
+def _bias_ids(
+    block: dict, wrong: str | None, rng: np.random.Generator | None
+) -> np.ndarray:
+    """Return a block's place and parent ids, `[2, rows]`, maybe wrong."""
+    n = int(block["n_targets"])
+    parents = block_parents(block)
+    if wrong == "wrong_parent":
+        parents = wrong_parents(parents, rng)
+    rows = series_bias.block_rows(n, int(block.get("n_covariates", 0)), parents)
+    if wrong == "wrong_place" and n > 1:
+        # Each place's lag rows go to one other place, with its parent.
+        to = {p: _others(n, {p}, rng) for p in range(n)}
+        lags = rows[0, n:]
+        moved = np.array([to[p] for p in lags], dtype=int)
+        rows = rows.copy()
+        rows[0, n:] = moved
+        rows[1, n:] = np.asarray(parents, dtype=int)[moved]
+    return rows
+
+
+def model_ids(
+    model,
+    block: dict,
+    wrong: str | None = None,
+    rng: np.random.Generator | None = None,
+) -> np.ndarray | None:
+    """Return each row's ids as inference assigns them, None without any.
+
+    Slots or bias ids depend only on the block's shape and places, the
+    targets then each place's lags in turn, so they stay with the rows'
+    positions whatever content a condition moved into them. For a bias
+    model, `wrong` (one of `ID_SWAPS`, drawn with `rng`) moves the ids.
+    """
+    if series_bias.has_bias(model):
+        return _bias_ids(block, wrong, rng)
     if not slots.has_slots(model):
         return None
     return fs.block_slots([block], slots.n_slots(model))
@@ -144,16 +210,24 @@ def _scaled(model, batch: dict, out):
     return p
 
 
-def predict(model, block: dict):
+def predict(
+    model,
+    block: dict,
+    wrong: str | None = None,
+    rng: np.random.Generator | None = None,
+):
     """Return the loss `[n, P]` and the scaled quantiles `[n, Q, P]`.
 
     The loss is Chronos-2's: twice the pinball loss summed over its
-    quantile levels, on the target scaled by its own context.
+    quantile levels, on the target scaled by its own context. `wrong`
+    moves a bias model's ids (`model_ids`).
     """
     import torch
 
     batch = _batch(block)
-    with slots.assigned(model, model_ids(model, block)):
+    ids = model_ids(model, block, wrong, rng)
+    owner = series_bias if series_bias.has_bias(model) else slots
+    with owner.assigned(model, ids):
         out = _forward(model, batch)
     p = _scaled(model, batch, out)
     n = batch["n_targets"]
@@ -320,8 +394,11 @@ def held(adapter: Path, hold: Path = HOLD) -> bool:
     """
     if not Path(hold).expanduser().exists():
         return False
-    init = (_settings(adapter).get("series_slots") or {}).get("init")
-    return init != "zero"
+    slotted = _settings(adapter).get("series_slots")
+    # An attention-bias checkpoint has no slots to hold.
+    if slotted is None:
+        return False
+    return slotted.get("init") != "zero"
 
 
 def comparator(
@@ -360,9 +437,16 @@ def phase_work(phase: str, has_comparator: bool) -> set[tuple[str, str]]:
     none. "rest" is everything else, so the two phases cover the run once.
     """
     models = ["zero-shot", "slots"] + (["no-slots"] if has_comparator else [])
-    every = {(m, c) for m in models for c in CONDITIONS}
+    every = {
+        (m, c)
+        for m in models
+        for c in CONDITIONS
+        if c not in ID_SWAPS or m == "slots"
+    }
     other = "no-slots" if has_comparator else "zero-shot"
-    first = {(m, c) for m in ("slots", other) for c in HEADLINE_CONDITIONS}
+    first = {(m, c) for m in ("slots", other) for c in HEADLINE_CONDITIONS} | {
+        ("slots", c) for c in ID_SWAPS
+    }
     if phase == "headline":
         return first
     if phase == "rest":
@@ -400,7 +484,10 @@ def load_models(
         models["no-slots"] = slots.load_adapter(base(), noslots).eval()
         if slots.has_slots(models["no-slots"]):
             raise ValueError(f"{noslots} holds slots")
-    if "slots" in names:
+    if "slots" in names and series_bias.adapter_has_bias(slotted):
+        # An attention-bias checkpoint, scored in the slots model's place.
+        models["slots"] = series_bias.load_adapter(base(), slotted).eval()
+    elif "slots" in names:
         models["slots"] = slots.load_adapter(base(), slotted).eval()
         if not slots.has_slots(models["slots"]):
             raise ValueError(f"{slotted} holds no slots")
@@ -494,7 +581,19 @@ def score(args) -> None:
     # How far the slots are from zero init: Chronos-2's patch tokens have
     # an sd of about 0.03.
     slot_sd = slot_absmax = np.nan
-    if "slots" in models:
+    if "slots" in models and series_bias.has_bias(models["slots"]):
+        # For a bias model, the spread and size of its learned biases.
+        weight = torch.cat(
+            [
+                p.detach().flatten()
+                for p in getattr(
+                    models["slots"], series_bias.BIAS_MODULE
+                ).parameters()
+            ]
+        )
+        slot_sd = float(weight.std())
+        slot_absmax = float(weight.abs().max())
+    elif "slots" in models:
         weight = getattr(models["slots"], slots.SLOT_MODULE).embedding.weight
         slot_sd = float(weight.detach().std())
         slot_absmax = float(weight.detach().abs().max())
@@ -505,10 +604,15 @@ def score(args) -> None:
         d, h = ca.lag_of(block), block["horizon"]
         given = {}
         for cond in CONDITIONS:
-            rng = np.random.default_rng(
-                [block["key"], ca.CONDITIONS.index(cond)]
+            # The content conditions keep the ablation's seeds.
+            index = (
+                len(ca.CONDITIONS) + ID_SWAPS.index(cond)
+                if cond in ID_SWAPS
+                else ca.CONDITIONS.index(cond)
             )
-            x = ca.condition(block, cond, rng)
+            rng = np.random.default_rng([block["key"], index])
+            wrong = cond if cond in ID_SWAPS else None
+            x = ca.condition(block, "given" if wrong else cond, rng)
             if x is None:
                 continue
             for name, model in models.items():
@@ -516,8 +620,10 @@ def score(args) -> None:
                     cond != "given" or not any(m == name for m, _ in work)
                 ):
                     continue
+                if wrong and not series_bias.has_bias(model):
+                    continue
                 t1 = time.time()
-                loss, p = predict(model, x)
+                loss, p = predict(model, x, wrong, rng)
                 loss = loss.numpy()
                 if cond == "given":
                     given[name] = p
@@ -732,6 +838,18 @@ def headline(s: pd.DataFrame) -> str:
             for r in part.itertuples()
         ]
         out.append(f"{group} nowcast swap/given: " + "; ".join(cells))
+    moved = s[
+        s["condition"].isin(ID_SWAPS)
+        & (s["model"] == "slots")
+        & (s["window"] == "nowcast")
+    ]
+    for r in moved.itertuples():
+        if r.set not in ("sims multi-place", "germany states"):
+            continue
+        out.append(
+            f"{r.set} nowcast {r.condition}/given: slots x{r.ratio:.2f} "
+            f"({r.ci_low:.2f}-{r.ci_high:.2f}), {int(r.n_blocks)} blocks"
+        )
     given = s[(s["condition"] == "given") & (s["model"] == "slots")]
     for (group, window), part in given.groupby(["set", "window"], sort=False):
         if group not in (

@@ -438,13 +438,17 @@ def test_headline_work_comes_first_with_a_comparator():
     assert first == {
         ("slots", "given"),
         ("slots", "swap_places"),
+        ("slots", "wrong_place"),
+        ("slots", "wrong_parent"),
         ("no-slots", "given"),
         ("no-slots", "swap_places"),
     }
+    # The id swaps are the bias model's alone.
     every = {
         (m, c)
         for m in ("zero-shot", "no-slots", "slots")
         for c in sc.CONDITIONS
+        if c not in sc.ID_SWAPS or m == "slots"
     }
     assert first | rest == every
     assert not first & rest
@@ -456,7 +460,12 @@ def test_headline_work_without_a_comparator_uses_zero_shot():
     assert ("zero-shot", "given") in first
     assert ("slots", "swap_places") in first
     assert all(m != "no-slots" for m, _ in first | rest)
-    every = {(m, c) for m in ("zero-shot", "slots") for c in sc.CONDITIONS}
+    every = {
+        (m, c)
+        for m in ("zero-shot", "slots")
+        for c in sc.CONDITIONS
+        if c not in sc.ID_SWAPS or m == "slots"
+    }
     assert first | rest == every
 
 
