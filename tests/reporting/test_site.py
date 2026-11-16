@@ -81,3 +81,92 @@ def test_comparisons_zones_and_history_use_randomwalknowcast() -> None:
 def test_no_table_filter_defaults_to_randomwalk() -> None:
     source = (ROOT / "src/bdbvhubrenewal/reporting/report.py").read_text()
     assert '{"baseline": "randomwalk"}' not in source
+
+
+def test_the_site_shows_one_chronos_model() -> None:
+    from bdbvhubrenewal.reporting.site import site_models
+
+    names = [
+        "randomwalk",
+        "renewal",
+        "fm_chronos_daily_ragged_ft",
+        "fm_chronos_weekly_ragged_ft",
+        "fm_chronos_daily_ragged",
+        "fm_chronos_daily_complete",
+        # A Chronos model added later is hidden too.
+        "fm_chronos_daily_ragged_de",
+    ]
+    assert site_models(names) == [
+        "randomwalk",
+        "renewal",
+        "fm_chronos_daily_ragged_ft",
+    ]
+
+
+def test_a_site_config_sets_the_shown_models(tmp_path: Path) -> None:
+    path = tmp_path / "site.toml"
+    path.write_text(
+        '[scores]\nbaseline = "randomwalk"\n'
+        '[models]\nhide = ["renewal*"]\nshow = ["renewalsp"]\n'
+    )
+    cfg = load_site_config(path)
+    assert cfg.shows("renewalsp")
+    assert not cfg.shows("renewal")
+    assert cfg.shows("randomwalk")
+
+
+def test_the_pages_list_only_shown_models() -> None:
+    assert "fm_chronos_daily_ragged" not in report._page_models()
+    assert "randomwalknowcast" in report._page_models()
+
+
+def test_hidden_models_leave_the_germany_page(tmp_path: Path) -> None:
+    from bdbvhubrenewal.reporting import germany
+
+    pd.DataFrame(
+        {
+            "model": ["fm_chronos_daily_ragged", "fm_chronos_daily_ragged_ft"],
+            "origin": ["2021-12-01", "2021-12-01"],
+        }
+    ).to_csv(tmp_path / "scores.csv.gz", index=False)
+    got = germany._read(tmp_path, ("scores.csv.gz",))
+    assert got is not None
+    assert list(got["model"]) == ["fm_chronos_daily_ragged_ft"]
+
+
+def test_hidden_models_leave_the_comparison_rows() -> None:
+    rows = pd.DataFrame(
+        {
+            "model": ["fm_chronos_weekly_ragged", "renewal", "teamA-weekly"],
+            "source": ["real", "real", "hub"],
+        }
+    )
+    assert list(report._site_rows(rows)["model"]) == [
+        "renewal",
+        "teamA-weekly",
+    ]
+
+
+def test_hidden_models_leave_the_store_note(tmp_path: Path) -> None:
+    import json
+
+    from bdbvhubrenewal.reporting.store_note import write_store_note
+
+    def row(model: str) -> dict:
+        return {
+            "model": model,
+            "origin": "2026-11-01",
+            "key": "k",
+            "used": None,
+            "commit": None,
+            "current": False,
+            "failed": False,
+        }
+
+    (tmp_path / "fit-store.json").write_text(
+        json.dumps([row("fm_chronos_weekly_ragged"), row("renewal")])
+    )
+    write_store_note(tmp_path, tmp_path / "gen")
+    text = (tmp_path / "gen" / "fit-store.md").read_text()
+    assert "`renewal`" in text
+    assert "fm_chronos_weekly_ragged" not in text
