@@ -41,6 +41,7 @@ from bdbvhubrenewal.reporting.plots import (
 )
 from bdbvhubrenewal.reporting.scorechart import write_score_chart
 from bdbvhubrenewal.reporting.scoresummary import summary_html, summary_rows
+from bdbvhubrenewal.reporting.tables import sortable_table
 
 __all__ = [
     "LEVELS",
@@ -280,8 +281,7 @@ def germany_page(
         "is held out for the paper.\n\n"
         + summary_html(srcs, "Overall scores by level")
         + "\n"
-        + table.round(3).to_markdown(index=False)
-        + "\n",
+        + sortable_table(table, digits=3),
     )
     if forecasts is None:
         _write(gen / "germany-nowcasts.md", "Not run yet: `task germany`.\n")

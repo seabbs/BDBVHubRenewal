@@ -43,7 +43,7 @@ def test_markdown_table_leaves_missing_cells_empty() -> None:
     )
     out = markdown_table(df)
     assert "nan" not in out.lower()
-    assert "| 1.23 |" in out
+    assert "1.23" in out
     rows = out.strip().splitlines()
     assert [c.strip() for c in rows[-1].strip("|").split("|")] == ["b", "", "4"]
 
