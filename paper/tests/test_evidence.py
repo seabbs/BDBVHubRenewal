@@ -283,11 +283,11 @@ def test_checkpoint_models_keep_one_colour_across_panels() -> None:
         (ax.get_title(), line.get_label()): line.get_color()
         for ax in fig.axes
         for line in ax.get_lines()
-        if line.get_label() in {"a", "b"}
+        if line.get_label() in {"a, fine-tuned", "b, fine-tuned"}
     }
     assert (
-        colours[("ebola, national (n = 400)", "b")]
-        == colours[("germany, national (n = 400)", "b")]
+        colours[("ebola, national (n = 400)", "b, fine-tuned")]
+        == colours[("germany, national (n = 400)", "b, fine-tuned")]
     )
 
 
@@ -459,7 +459,7 @@ def test_checkpoint_curves_show_the_untuned_models_as_lines() -> None:
         }
     )
     fig = checkpoint_figure(rows)
-    ax = [a for a in fig.axes if a.get_visible()][0]
+    ax = next(a for a in fig.axes if a.get_visible())
     lines = {line.get_label(): line for line in ax.get_lines()}
     curve = lines["fm_chronos_daily_ragged, fine-tuned"]
     assert list(curve.get_xdata()) == [1000, 2000]

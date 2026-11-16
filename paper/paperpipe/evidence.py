@@ -353,23 +353,36 @@ def checkpoint_numbers(scores: pd.DataFrame) -> dict:
     return out
 
 
+PLANNED_CHECKPOINTS: Final = (1000, 2000, 4000, 8000)
+"""The final run's checkpoints, which set the axis before any lands."""
+
+
+def _source_of(model: str) -> str:
+    """Return the model's source (daily or weekly), which sets its colour."""
+    for source in ("daily", "weekly"):
+        if f"_{source}_" in model:
+            return source
+    return model
+
+
 def checkpoint_figure(scores: pd.DataFrame) -> Figure:
     """Plot each model's relative WIS against the fine-tune's outbreaks.
 
     One panel per study and level, titled with its n of matched cells and
-    greyed when n is under `MIN_CELLS`, one line per model, on a log axis
-    of outbreaks with the zero-shot model left of the first checkpoint.
-    `scores` has one row per study, level, model and checkpoint, with
-    `outbreaks` and `rel_wis` against `randomwalknowcast`.
+    greyed when n is under `MIN_CELLS`. Each fine-tuned model is a line
+    over its checkpoints on a log axis of outbreaks. The models with no
+    fine-tuning are horizontal lines in the same colour: zero-shot
+    Chronos-2 on the ragged layout (dashed) and on complete data only
+    (dotted, the `_complete` models), with `randomwalknowcast` the line at
+    1. `scores` has one row per study, level, model and checkpoint, with
+    `outbreaks` (0 for zero-shot) and `rel_wis` against `randomwalknowcast`.
     """
     sc = scores.loc[scores["model"] != "randomwalknowcast"]
     sizes = sorted(sc.loc[sc["outbreaks"] > 0, "outbreaks"].unique())
-    # Zero-shot sits at half the first checkpoint on the log axis.
-    zero = sizes[0] / 2 if sizes else 500
-    ticks = [zero, *sizes]
-    ticklabels = ["zero-shot", *(f"{n:,.0f}" for n in sizes)]
-    # One colour per model across panels, so the shared legend holds.
-    colours = {m: f"C{i}" for i, m in enumerate(sorted(sc["model"].unique()))}
+    ticks = sizes or list(PLANNED_CHECKPOINTS)
+    # One colour per source across panels, so the shared legend holds.
+    sources = sorted({_source_of(m) for m in sc["model"]})
+    colours = {s: f"C{i}" for i, s in enumerate(sources)}
     panels = list(sc.groupby(["study", "level"], sort=False).groups)
     ncol = min(3, len(panels))
     nrow = int(np.ceil(len(panels) / ncol))
@@ -388,12 +401,30 @@ def checkpoint_figure(scores: pd.DataFrame) -> Figure:
         k = int(one["n_origins"].min()) if "n_origins" in one else None
         origins = "" if k is None else f", {k} origin{'s' if k != 1 else ''}"
         for model, g in one.groupby("model"):
-            g = g.sort_values("outbreaks")
-            x = g["outbreaks"].where(g["outbreaks"] > 0, zero)
-            colour = "#bbbbbb" if thin else colours[model]
-            ax.plot(
-                x, g["rel_wis"], marker="o", ms=3, color=colour, label=model
-            )
+            colour = "#bbbbbb" if thin else colours[_source_of(model)]
+            tuned = g.loc[g["outbreaks"] > 0].sort_values("outbreaks")
+            if not tuned.empty:
+                ax.plot(
+                    tuned["outbreaks"],
+                    tuned["rel_wis"],
+                    marker="o",
+                    ms=3,
+                    color=colour,
+                    label=f"{model}, fine-tuned",
+                )
+            complete = "_complete" in model
+            for value in g.loc[g["outbreaks"] == 0, "rel_wis"]:
+                ax.axhline(
+                    value,
+                    color=colour,
+                    ls=":" if complete else "--",
+                    lw=1.2,
+                    label=(
+                        f"{model}, complete data only"
+                        if complete
+                        else f"{model}, zero-shot"
+                    ),
+                )
         if thin:
             ax.text(
                 0.5,
@@ -405,15 +436,15 @@ def checkpoint_figure(scores: pd.DataFrame) -> Figure:
             )
         ax.set_xscale("log")
         ax.set_xlim(ticks[0] / 1.5, ticks[-1] * 1.5)
-        ax.set_xticks(ticks, ticklabels, rotation=45, fontsize=7)
+        ax.set_xticks(ticks, [f"{t:,.0f}" for t in ticks], fontsize=7)
         ax.minorticks_off()
-        ax.axhline(1, color="#888888", ls="--", lw=1)
+        ax.axhline(1, color="#888888", ls="-", lw=1, label="randomwalknowcast")
         ax.set_title(f"{study}, {level} (n = {n}{origins})", fontsize=9)
         ax.set_xlabel("Fine-tuning outbreaks")
         ax.set_ylabel("Relative WIS")
     for ax in axes[len(panels) :]:
         ax.set_visible(False)
-    # The legend from the panels drawn in colour, one entry per model.
+    # The legend from the panels drawn in colour, one entry per line.
     shown = [ax for ax in axes if ax.get_visible() and ax.texts == []]
     entries = {}
     for ax in shown or axes[:1]:
@@ -421,7 +452,7 @@ def checkpoint_figure(scores: pd.DataFrame) -> Figure:
             entries.setdefault(label, h)
     labels = sorted(entries)
     handles = [entries[label] for label in labels]
-    fig.legend(handles, labels, loc="outside lower center", ncol=len(labels))
+    fig.legend(handles, labels, loc="outside lower center", ncol=2, fontsize=7)
     return fig
 
 
