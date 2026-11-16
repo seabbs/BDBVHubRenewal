@@ -420,3 +420,15 @@ def test_the_runner_checkpoint_overrides_the_pin(monkeypatch) -> None:
             assert built.sample.keywords["group_slots"] is (
                 groupings.cased_group_slots
             )
+
+
+def test_a_place_with_lags_but_no_cases_in_its_counts_has_a_slot() -> None:
+    # Cases only in the newest, partly reported weeks show in the lag
+    # series alone; such a place keeps a slot.
+    from bdbvhubrenewal.evaluation.groupings import cased_group_slots
+
+    group = _block([True, False, False], ["p0", "p1"])
+    ids = cased_group_slots(group, 2)
+    assert ids[0] >= 0
+    assert ids[1] >= 0
+    assert ids[2] == -1
