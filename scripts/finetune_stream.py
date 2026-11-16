@@ -952,14 +952,42 @@ def code_commit() -> str:
     ).stdout.strip()
 
 
-def main() -> None:
-    """Train on the chunks as they are simulated."""
-    global CHUNK, DRAWS_PER_PASS, SUBSET_SEED
-    import torch
-    from chronos import Chronos2Pipeline
-    from chronos.chronos2.dataset import DatasetMode
-    from chronos.chronos2.model import Chronos2Model
+def stop_at(step: int, stop_step: int | None) -> bool:
+    """Whether a replay stops after step `step` (from 1)."""
+    return stop_step is not None and step == stop_step
 
+
+def replay_dir(out: Path, label: int) -> Path:
+    """Return the folder of a replay's stop checkpoint, apart from `nK`."""
+    return out / f"replay-n{label}"
+
+
+def replay_settings(
+    stop_step: int, label: int, chunk_steps: int, chunk_outbreaks: int
+) -> dict:
+    """Return the settings that mark a stop checkpoint as a replay.
+
+    A replay keeps the run's chunks, so its blocks are a share of a whole
+    chunk's, drawn from all of that chunk's outbreaks.
+    """
+    return {
+        "n_outbreaks": label,
+        "replay": {
+            "stop_step": stop_step,
+            "chunk_steps": chunk_steps,
+            "chunk_outbreaks": chunk_outbreaks,
+            "note": (
+                f"replay n{label} of the run: stopped at step {stop_step} "
+                f"of a {chunk_steps}-step chunk, so it holds that share of "
+                f"the chunk's blocks, shuffled from all {chunk_outbreaks} "
+                f"of its outbreaks, not {label} whole outbreaks"
+            ),
+        },
+    }
+
+
+def parser() -> argparse.ArgumentParser:
+    """Return the trainer's argument parser."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("sim_dir", type=Path)
     parser.add_argument("out", type=Path)
@@ -1017,7 +1045,24 @@ def main() -> None:
     # zero-initialised vector shared by a place's count and lag series,
     # trained beside the adapter; 0 trains without them.
     parser.add_argument("--series-slots", type=int, default=0)
-    args = parser.parse_args()
+    # A replay of a run: stop after this step with a checkpoint labelled
+    # `--stop-label` outbreaks in `replay-n<label>/`, never published.
+    parser.add_argument("--stop-step", type=int)
+    parser.add_argument("--stop-label", type=int)
+    return parser
+
+
+def main() -> None:
+    """Train on the chunks as they are simulated."""
+    global CHUNK, DRAWS_PER_PASS, SUBSET_SEED
+    import torch
+    from chronos import Chronos2Pipeline
+    from chronos.chronos2.dataset import DatasetMode
+    from chronos.chronos2.model import Chronos2Model
+
+    args = parser().parse_args()
+    if (args.stop_step is None) != (args.stop_label is None):
+        raise SystemExit("give both or neither of --stop-step and --stop-label")
     CHUNK = args.chunk
     ft.SOURCES = tuple(args.sources)
     ft.check_sources(ft.SOURCES)
@@ -1041,7 +1086,7 @@ def main() -> None:
     extended = out / "train-last.txt"
 
     if (args.seed_list is None) == (args.train_seeds is None):
-        parser.error("give one of --train-seeds and --seed-list")
+        raise SystemExit("give one of --train-seeds and --seed-list")
 
     def training_seeds() -> range | list[int]:
         if args.seed_list is not None:
@@ -1297,7 +1342,60 @@ def main() -> None:
     real_validation = (
         load_blocks(args.real_validation) if args.real_validation else []
     )
+
+    def checkpoint(where: Path, outbreaks: list[str], extra: dict) -> dict:
+        """Save the adapter and settings at `where`; return the settings.
+
+        `extra` sets `n_outbreaks` and may override the counts.
+        """
+        where.mkdir(parents=True, exist_ok=True)
+        # The release lists its outbreaks in the order trained, and any
+        # block skipped.
+        lines = [*outbreaks, *skipped_lines(skipped)]
+        (where / "outbreaks.txt").write_text("\n".join(lines) + "\n")
+        (where / "consumed.txt").write_text(consumed.read_text())
+        model.save_pretrained(where / "finetuned-ckpt")
+        settings = {
+            **base,
+            "outbreaks_sha256": ft._sha256(where / "outbreaks.txt"),
+            "consumed_sha256": ft._sha256(where / "consumed.txt"),
+            "steps": step,
+            "blocks": seen["blocks"],
+            "series": seen["series"],
+            "level_mix": seen.get("mix", {}),
+            "tokens": seen.get("tokens", 0),
+            "skipped_blocks": skipped,
+            "memory_gb": args.memory_gb,
+            **extra,
+        }
+        key = ft._settings_hash(settings)
+        settings["hash"] = key
+        # The commit the trainer ran from, outside the hash: the
+        # checkpoint is rebuilt from it to the same hash.
+        settings["code_commit"] = commit
+        settings["device"] = device
+        settings["held_out_loss_start"] = start_loss
+        settings["held_out_loss"] = held_out_loss(model, val, args.batch_size)
+        if args.real_validation:
+            real = real_validation
+            settings["real_validation_sha256"] = ft._sha256(
+                args.real_validation
+            )
+            settings["real_validation_loss"] = held_out_loss(
+                model, real, args.batch_size
+            )
+        settings["held_out_loss_by_level"] = held_out_by_level(
+            model, val, LEVEL_BLOCKS
+        )
+        settings["held_out_loss_by_source"] = held_out_by_source(
+            model, val, args.batch_size
+        )
+        settings["seconds"] = time.perf_counter() - t0
+        (where / "settings.json").write_text(json.dumps(settings, indent=1))
+        return settings
+
     t0 = time.perf_counter()
+    stopped = False
     while done < args.outbreaks:
         hi = min(done + CHUNK, args.outbreaks)
         split = {"wait_s": 0.0, "cut_s": 0.0, "train_s": 0.0, "eval_s": 0.0}
@@ -1420,6 +1518,30 @@ def main() -> None:
                 (out / "history.json").write_text(json.dumps(history))
             if step % SAVE_EVERY == 0:
                 snapshot()
+            if stop_at(step, args.stop_step):
+                used = [i for _, idx in plan[:position] for i in idx]
+                where = replay_dir(out, args.stop_label)
+                settings = checkpoint(
+                    where,
+                    trained + chunk,
+                    {
+                        **replay_settings(
+                            step, args.stop_label, len(plan), len(chunk)
+                        ),
+                        "blocks": seen["blocks"] + len(used),
+                        "series": seen["series"] + int(sizes[used].sum()),
+                    },
+                )
+                log(
+                    f"replay stop at step {step}: {where.name}, hash "
+                    f"{settings['hash']}, held-out loss "
+                    f"{settings['held_out_loss']:.4f} (start "
+                    f"{start_loss:.4f}); not published"
+                )
+                stopped = True
+                break
+        if stopped:
+            break
         trained.extend(chunk)
         chunk = []
         done, position = len(trained), 0
@@ -1437,52 +1559,8 @@ def main() -> None:
         mix["empty"] = mix.get("empty", 0) + len(empty)
         if done in prefixes:
             where = out / f"n{done}"
-            where.mkdir(parents=True, exist_ok=True)
-            # The release lists its outbreaks in the order trained, and
-            # any block skipped.
-            lines = [*trained, *skipped_lines(skipped)]
-            (where / "outbreaks.txt").write_text("\n".join(lines) + "\n")
-            (where / "consumed.txt").write_text(consumed.read_text())
-            model.save_pretrained(where / "finetuned-ckpt")
-            settings = {
-                **base,
-                "n_outbreaks": done,
-                "outbreaks_sha256": ft._sha256(where / "outbreaks.txt"),
-                "consumed_sha256": ft._sha256(where / "consumed.txt"),
-                "steps": step,
-                "blocks": seen["blocks"],
-                "series": seen["series"],
-                "level_mix": seen.get("mix", {}),
-                "tokens": seen.get("tokens", 0),
-                "skipped_blocks": skipped,
-                "memory_gb": args.memory_gb,
-            }
-            key = ft._settings_hash(settings)
-            settings["hash"] = key
-            # The commit the trainer ran from, outside the hash: the
-            # checkpoint is rebuilt from it to the same hash.
-            settings["code_commit"] = commit
-            settings["device"] = device
-            settings["held_out_loss_start"] = start_loss
-            settings["held_out_loss"] = held_out_loss(
-                model, val, args.batch_size
-            )
-            if args.real_validation:
-                real = real_validation
-                settings["real_validation_sha256"] = ft._sha256(
-                    args.real_validation
-                )
-                settings["real_validation_loss"] = held_out_loss(
-                    model, real, args.batch_size
-                )
-            settings["held_out_loss_by_level"] = held_out_by_level(
-                model, val, LEVEL_BLOCKS
-            )
-            settings["held_out_loss_by_source"] = held_out_by_source(
-                model, val, args.batch_size
-            )
-            settings["seconds"] = time.perf_counter() - t0
-            (where / "settings.json").write_text(json.dumps(settings, indent=1))
+            settings = checkpoint(where, trained, {"n_outbreaks": done})
+            key = settings["hash"]
             history.append(
                 {
                     "step": step,
