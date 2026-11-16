@@ -295,3 +295,40 @@ def test_the_page_refuses_to_write_a_held_out_date(
         page.germany_page(
             tmp_path / "figures", tmp_path / "generated", res, CONFIG
         )
+
+
+def test_every_row_scores_the_cells_all_its_models_share(
+    tmp_path: Path,
+) -> None:
+    res = tmp_path / "germany"
+    _scores(res)
+    _with_ft(res)
+    # A team missing one national cell: every model's national row drops
+    # it, so each row of a level has the same n.
+    teams = pd.read_csv(res / "teams.csv.gz", dtype=str)
+    gap = _rows((("SU", 3.0),)).astype(str)
+    gap = gap.loc[~((gap["pool"] == "national") & (gap["horizon"] == "-7"))]
+    pd.concat([teams, gap]).to_csv(res / "teams.csv.gz", index=False)
+    fig, gen = tmp_path / "figures", tmp_path / "generated"
+    germany_page(fig, gen, res, CONFIG)
+    table = (gen / "germany-scores.md").read_text()
+    rows = [
+        [c.strip() for c in line.strip("|").split("|")]
+        for line in table.splitlines()
+        if line.startswith("|") and "---" not in line
+    ]
+    got = pd.DataFrame(rows[1:], columns=rows[0])
+    n = got.pivot(index="pool", columns="model", values="n").astype(int)
+    assert "SU" in n.columns
+    assert (n.nunique(axis=1) == 1).all(), n
+    assert n.loc["national"].iloc[0] == 1
+    assert n.loc["states"].iloc[0] == 2
+    data = json.loads((fig / "scoresummary-germany-latest.json").read_text())
+    pool = [p["pool"] for p in data["places"]]
+    # The summary's national rows hold the shared cell only (horizon 0).
+    national = {
+        h
+        for r, h in zip(data["rows"], data["horizons"], strict=True)
+        if pool[r[3]] == "national"
+    }
+    assert national == {0}
