@@ -367,9 +367,11 @@ def score(args) -> None:
     i, k = args.shard
     blocks = blocks[i::k]
     if args.limit:
+        # A dry run: the first blocks of each set, multi-place ones first,
+        # since a swap needs two places.
         by_set: dict[str, int] = {}
         keep = []
-        for b in blocks:
+        for b in sorted(blocks, key=lambda b: b["n_targets"] == 1):
             if by_set.get(b["set"], 0) < args.limit:
                 keep.append(b)
                 by_set[b["set"]] = by_set.get(b["set"], 0) + 1
@@ -562,7 +564,9 @@ def main() -> None:
     p = sub.add_parser("synthetic")
     p.add_argument("out", type=Path)
     p.add_argument("--seed", type=int, default=1)
-    p.add_argument("--scale", type=float, default=1.0)
+    # Chronos-2's patch tokens have an sd of about 0.03; slots of a third
+    # of that leave the loss near base's, larger ones swamp the tokens.
+    p.add_argument("--scale", type=float, default=0.01)
     p.set_defaults(run=synthetic)
     p = sub.add_parser("summarise")
     p.add_argument("shard_dir", type=Path)
