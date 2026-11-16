@@ -407,7 +407,6 @@ def hub_triangle(
     partial = np.full((len(places), n_times, lags), np.nan)
     final = np.zeros((len(places), n_times))
     last = 0
-    # The latest release gives the final counts and the last step.
     for release in sorted(set(rows["vintage"])):
         mine = (rows["vintage"] == release).to_numpy()
         cutoff = str(rows.loc[mine, "cutoff"].iloc[0])
@@ -422,6 +421,7 @@ def hub_triangle(
         for d in range(lags):
             if 0 <= at - d < n_times:
                 partial[:, at - d, d] = counts[:, at - d]
+        # Sorted, so the last release's counts and cut-off are the latest.
         final, last = counts, at
     return HubTriangle(times, final, partial, last)
 
@@ -805,7 +805,7 @@ for _source in SOURCES:
     register_model(
         f"fm_chronos_{_source}_ragged_ft",
         partial(_finetuned, f"fm_chronos_{_source}_ragged_ft", _source),
-        f"Chronos-2 fine-tuned on simulated outbreaks, on the hub target's "
+        "Chronos-2 fine-tuned on simulated outbreaks, on the hub target's "
         f"{_source} releases, ragged layout.",
         fitted=True,
     )
