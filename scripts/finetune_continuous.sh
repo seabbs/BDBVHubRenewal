@@ -13,7 +13,7 @@
 # over LR_STEPS, each block's horizon as its prediction length, every draw
 # cut at 16 snapshots. The trainer checks and publishes a checkpoint at each
 # doubling from 1,000, whatever its scores, and waits for rounds as they
-# land. Each checkpoint is copied to `$REMOTE_ROOT/$REMOTE_CKPT/` with a
+# land. Each checkpoint is copied to `$REMOTE_ROOT/checkpoints/` with a
 # line in the remote's mailbox; a stopped trainer is an alert in the
 # mailbox and the local INBOX. Run from the repo root of a clean worktree.
 set -uo pipefail
@@ -21,8 +21,6 @@ set -uo pipefail
 REMOTE=${REMOTE:-archie}
 REMOTE_ROOT=${REMOTE_ROOT:-bdbv-rounds}
 REMOTE_MAILBOX=${REMOTE_MAILBOX:-bdbv-archie-mailbox.md}
-# Where checkpoints go under REMOTE_ROOT, one folder per run.
-REMOTE_CKPT=${REMOTE_CKPT:-checkpoints}
 MAILBOX=${MAILBOX:-}
 HERE=${HERE:-output/finetune/continuous}
 OUTBREAKS=${OUTBREAKS:-8000}
@@ -46,6 +44,12 @@ UNIVARIATE_SHARE=${UNIVARIATE_SHARE:-0.2}
 # landed, in seed order.
 CHUNK=${CHUNK:-250}
 REAL_VALIDATION=${REAL_VALIDATION:-output/finetune/real-validation.pkl}
+# Per-series slots (src/bdbvhubrenewal/forecasters/slots.py): 0 trains
+# without them; N trains N slots beside the adapter. A slots run keeps to
+# its own HERE and archie checkpoint folder (checkpoints/slots/, the
+# paper's finetune_run name), so the run without slots is
+# never touched, and its releases are chronos-slots-<hash>.
+SERIES_SLOTS=${SERIES_SLOTS:-0}
 
 remote_ls() { ssh -o ConnectTimeout=20 "$REMOTE" "ls $REMOTE_ROOT/rounds" 2> /dev/null; }
 # Copy a round's file or folder ($2, "sims/" for its simulations) to $3.
@@ -83,6 +87,25 @@ PY
   done
 }
 
+slots_args() {
+  # The trainer's slot arguments; a slots run must not use the default HERE.
+  [ "$SERIES_SLOTS" -gt 0 ] || return 0
+  if [ "$HERE" = output/finetune/continuous ]; then
+    echo "SERIES_SLOTS needs its own HERE, not $HERE" >&2
+    return 1
+  fi
+  echo "--series-slots $SERIES_SLOTS"
+}
+
+remote_checkpoints() {
+  # The archie folder this run copies its checkpoints to.
+  if [ "$SERIES_SLOTS" -gt 0 ]; then
+    echo checkpoints/slots
+  else
+    echo checkpoints
+  fi
+}
+
 beats_zero_shot() {
   # Whether checkpoint settings $1 improve on zero-shot on both the
   # held-out simulations and the BDBV pseudo-origins.
@@ -104,6 +127,8 @@ alert() {
   ssh "$REMOTE" "echo \"$line\" >> $REMOTE_MAILBOX"
 }
 
+slots=$(slots_args) || exit 1
+ckpts=$(remote_checkpoints)
 if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
   echo "the worktree has uncommitted changes; commit them to train" >&2
   exit 1
@@ -114,6 +139,8 @@ while true; do
   sync_rounds || echo "$(date) sync failed; trying again"
   if [ -z "$trainer" ] && [ -s "$HERE/rounds/r1/held-out.txt" ]; then
     read -r -a held < "$HERE/rounds/r1/held-out.txt"
+    # $slots is empty or two words, so it is left unquoted.
+    # shellcheck disable=SC2086
     PYTORCH_MPS_HIGH_WATERMARK_RATIO=${MPS_HIGH_WATERMARK:-0.85} \
     PYTORCH_MPS_LOW_WATERMARK_RATIO=0.6 \
     HF_HOME=output/finetune/hf HF_HUB_OFFLINE=1 MPLCONFIGDIR="${TMPDIR:-/tmp}" \
@@ -127,21 +154,21 @@ while true; do
       --sources $SOURCES --univariate-share "$UNIVARIATE_SHARE" \
       --real-validation "$REAL_VALIDATION" --note "continuous r4" --publish \
       --chunk "$CHUNK" --wait-for-seeds \
-      --exclude "$HERE/excluded.txt" \
+      --exclude "$HERE/excluded.txt" $slots \
       >> "$HERE/train.log" 2>&1 < /dev/null &
     trainer=$!
     echo "$trainer" > "$HERE/trainer.pid"
-    alert "started training from base Chronos-2 into $HERE (pid $trainer)"
+    alert "started training from base Chronos-2 (pid $trainer)"
   fi
   for ckpt in "$HERE"/train/n*/settings.json; do
     [ -e "$ckpt" ] || continue
     dir=$(dirname "$ckpt")
     n=$(basename "$dir")
     [[ " $published " == *" $n "* ]] && continue
-    ssh "$REMOTE" "mkdir -p $REMOTE_ROOT/$REMOTE_CKPT" \
-      && rsync -a "$dir/" "$REMOTE:$REMOTE_ROOT/$REMOTE_CKPT/$n/" || continue
+    ssh "$REMOTE" "mkdir -p $REMOTE_ROOT/$ckpts" \
+      && rsync -a "$dir/" "$REMOTE:$REMOTE_ROOT/$ckpts/$n/" || continue
     key=$(python3 -c "import json;print(json.load(open('$ckpt'))['hash'])")
-    alert "checkpoint $n chronos-ft-$key at $REMOTE_ROOT/$REMOTE_CKPT/$n"
+    alert "checkpoint $n ($slots) hash $key at $REMOTE_ROOT/$ckpts/$n"
     published="$published $n"
     if [ "$n" = n1000 ] && ! beats_zero_shot "$ckpt"; then
       alert "ALERT n1000 does not beat zero-shot on held-out sims and pseudo-origins; training goes on, check before n2000"
