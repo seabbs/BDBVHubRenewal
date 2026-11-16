@@ -919,7 +919,10 @@ class FoundationModel:
         draws = sample([group], horizon, task.n_samples, seed)[0]
         if self.copula is not None:
             draws = self.copula.couple(
-                draws, rng, days=np.arange(horizon) * (7 if weekly else 1)
+                draws,
+                rng,
+                days=np.arange(horizon) * (7 if weekly else 1),
+                locations=places,
             )
         final = tri.final
         steps = np.broadcast_to(final, (task.n_samples, *final.shape)).copy()
