@@ -23,6 +23,7 @@ from typing import Any, Final
 import pandas as pd
 
 from bdbvhubrenewal.data.dates import as_date
+from bdbvhubrenewal.data.zones import ZoneData
 from bdbvhubrenewal.evaluation import store
 from bdbvhubrenewal.evaluation.backtest import BacktestConfig, vintage_task
 from bdbvhubrenewal.forecasters import ForecastTask
@@ -126,6 +127,7 @@ def store_task(
     config: BacktestConfig,
     daily: pd.DataFrame,
     origin: str,
+    zones: ZoneData | None = None,
 ) -> ForecastTask | None:
     """Return the stored fits' task at one origin, as `store.origin_tasks`.
 
@@ -137,6 +139,8 @@ def store_task(
         The backtest configuration.
     origin : str
         A real vintage.
+    zones : ZoneData, optional
+        The zone tables, as `store.origin_tasks` takes them.
 
     Returns
     -------
@@ -147,7 +151,9 @@ def store_task(
     if origin in config.skip_origins:
         return None
     weeks = store.NEXT_ROUND_WEEKS
-    return vintage_task(target, delays, config, origin, daily, weeks)[0]
+    return vintage_task(
+        target, delays, config, origin, daily, weeks, zones=zones
+    )[0]
 
 
 def _stored_forecast(rows: pd.DataFrame, task: ForecastTask) -> Forecast:
