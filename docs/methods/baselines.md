@@ -18,7 +18,7 @@ In brief, `randomwalknowcast`:
 5. takes the walk's variance net of Poisson noise ([Forecast](#forecast));
 6. shares the delay, size and walk variance with a parent where a place has fewer than 10 cases a week ([Own or pooled estimates](#own-or-pooled-estimates)).
 
-Two further rules keep places with few or no cases sensible: introductions for places with no recent case ([Forecast](#forecast)), and zone samples that sum to their province's ([Health zones](#health-zones)).
+A further rule keeps places with no recent case sensible: introductions ([Forecast](#forecast)).
 
 ## Structure
 
@@ -269,16 +269,10 @@ Where no week reaches 0.95, `randomwalknowcast` takes the first week as the late
 
 `randomwalk` and `randomwalknowcast` run on each zone's own release snapshots in the same way as for provinces.
 Each zone takes its delay, size and walk spread by the rules [above](#own-or-pooled-estimates).
-Province sample $Y^{(i)}(w)$ is apportioned over the zones in proportion to the zone model's own sample $x^{(i)}_z(w)$ of the same id and week:
-
-$$
-y^{(i)}_z(w) \approx Y^{(i)}(w)\, \frac{x^{(i)}_z(w)}{\sum_{z'} x^{(i)}_{z'}(w)}.
-$$
-
-Largest remainders make the values whole numbers that sum to $Y^{(i)}(w)$, so zone samples sum to their province's samples ([Renewal models](model.md#health-zones)).
-Where every $x^{(i)}_z(w)$ is 0 the split uses the Dirichlet mean shares of the [Renewal models](model.md#split-of-province-samples) page.
-Zones are reconciled because their own walks are noisy and do not sum to their province's, which pools more data.
-The split keeps each zone's share from its own sample, and the province sets the total, so the zone, province and national forecasts describe one set of trajectories.
+A zone with no case in the 9 weeks to $c_o$ stays at 0 until an introduction ([Forecast](#forecast)).
+The zone samples are these draws.
+No province sample is split over the zones, so zones need not sum to their province.
+The hub does not require them to.
 
 ## Partially pooled variant
 
@@ -367,7 +361,7 @@ A later day of the week holding $c_o$ is an NB draw with mean $\lambda_{p,w(t)} 
 Later weeks continue the walk from the draw's last $\lambda$ with its $\sigma_p$, and their counts are NB with mean $\lambda$ and size $7 \phi_p$, the sum of seven days.
 Weeks before the 16 fitted weeks are the counts reported.
 National is the sum of the provinces by sample.
-In the zone backtest it also runs on the zones, which are reconciled to its provinces as for `randomwalknowcast` ([Health zones](#health-zones)).
+In the zone backtest it also runs on the zones, and its zone draws are scored as they are ([Health zones](#health-zones)).
 Elsewhere, as in the hub tables, its province samples are split across the zones as for the renewal models ([Renewal models](model.md#split-of-province-samples)).
 
 **Silent places.**
