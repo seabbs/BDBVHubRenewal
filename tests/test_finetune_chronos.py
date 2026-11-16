@@ -678,3 +678,24 @@ def test_real_training_blocks_spread_evenly_over_the_chunks():
     parts = [real_share(real, chunk, 4) for chunk in range(4)]
     assert sorted(x for p in parts for x in p) == real
     assert {len(p) for p in parts} <= {2, 3}
+
+
+def test_each_draw_is_cut_at_every_snapshot_once():
+    from finetune_chronos import CUTS, SOURCES
+    from finetune_stream import snapshots
+
+    draws = [f"9001-0001-{d}" for d in range(1, 11)]
+    picks = snapshots(draws, np.random.default_rng(0))
+    # 10 draws x 16 cut-offs: 160 blocks, one source each.
+    assert CUTS == 16
+    assert len(picks) == 160
+    assert len({(o, j) for o, _, j in picks}) == 160
+    assert {s for _, s, _ in picks} <= set(SOURCES)
+
+
+def test_level_mix_includes_single_series():
+    rng = np.random.default_rng(0)
+    mixes = [choose_places(STRATA, 10, rng) for _ in range(400)]
+    single = [places for places, mix in mixes if mix == "single"]
+    assert single
+    assert all(len(places) == 1 and places[0] in STRATA for places in single)
