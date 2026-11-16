@@ -1049,6 +1049,9 @@ def parser() -> argparse.ArgumentParser:
     # `--stop-label` outbreaks in `replay-n<label>/`, never published.
     parser.add_argument("--stop-step", type=int)
     parser.add_argument("--stop-label", type=int)
+    # Series above which a step uses gradient checkpointing, in place of
+    # the threshold from --memory-gb; it does not change the blocks.
+    parser.add_argument("--checkpoint-above", type=int)
     return parser
 
 
@@ -1114,7 +1117,11 @@ def main() -> None:
     (out / "outbreaks-held-out.txt").write_text("\n".join(held) + "\n")
     # Checkpointing and the largest block follow from the memory budget,
     # so held-out blocks are cut to the same size as training blocks.
-    checkpoint_large_batches(ft.checkpoint_above(args.memory_gb))
+    checkpoint_large_batches(
+        ft.checkpoint_above(args.memory_gb)
+        if args.checkpoint_above is None
+        else args.checkpoint_above
+    )
     ft.MAX_SERIES = min(ft.MAX_SERIES, ft.max_series(args.memory_gb))
     pool = ProcessPoolExecutor(
         args.cut_workers,
