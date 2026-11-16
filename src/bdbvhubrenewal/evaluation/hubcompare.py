@@ -11,7 +11,9 @@ For each hub round, `our_forecasts` runs our unfitted models from the
 latest real vintage that serves the round.
 Rounds with no such vintage are skipped.
 Fitted models are slow, so `stored_forecasts` takes theirs from the
-backtest forecast files for the same round.
+backtest forecast files for the same round, and `compare-hub` puts the
+fit store's whole fits of the round in their place, as those files hold
+only the backtest's weeks.
 The `source` column says which (`real` or `hub`).
 
 `score_comparison` scores every model on the hub teams' cells only: the
