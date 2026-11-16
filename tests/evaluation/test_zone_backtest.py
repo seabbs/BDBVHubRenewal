@@ -8,7 +8,6 @@ import pytest
 from bdbvhubrenewal.data import load_daily, load_daily_zones
 from bdbvhubrenewal.data.zones import hub_zones
 from bdbvhubrenewal.evaluation.zones import (
-    SUMMED,
     ZONE_BASELINE,
     zone_backtest,
     zone_relative_skill,
@@ -54,7 +53,8 @@ def test_both_baselines_are_scored_at_zone_level(
     scores: pd.DataFrame, vintages: list[str]
 ) -> None:
     names = {"randomwalk", "randomwalknowcast"}
-    assert set(scores["model"]) == names | {n + SUMMED for n in names}
+    # Each model is scored as it runs, with no reconciliation.
+    assert set(scores["model"]) == names
     assert (scores["location"].str.count("-") == 2).all()
     # Each origin is scored on what every later release reported, and on
     # the latest release's complete weeks.
@@ -99,16 +99,14 @@ def test_relative_skill_is_against_the_zone_randomwalk(
     assert mine.index.min() == -4
 
 
-def test_zone_forecasts_are_the_summed_forms_by_origin(
+def test_zone_forecasts_are_the_scored_forms_by_origin(
     result: tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame],
 ) -> None:
     scores, _, forecasts = result
     assert set(forecasts["model"]) == {"randomwalk", "randomwalknowcast"}
     assert set(forecasts["origin"]) == set(scores["origin"])
     assert (forecasts["location"].str.count("-") == 2).all()
-    # The summed forms are the ones scored under the SUMMED names.
-    summed = scores.loc[scores["model"].str.endswith(SUMMED)]
-    assert set(forecasts["location"]) == set(summed["location"])
+    assert set(forecasts["location"]) == set(scores["location"])
 
 
 def test_zone_backtest_by_origin_chunk_matches_one_run(
