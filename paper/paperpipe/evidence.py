@@ -694,13 +694,16 @@ def slots_swap_table(check: pd.DataFrame) -> pd.DataFrame:
     ).reset_index(drop=True)
 
 
-def slots_scores_table(scores: pd.DataFrame) -> pd.DataFrame:
+def slots_scores_table(
+    scores: pd.DataFrame, checkpoints: tuple[str, ...] = ()
+) -> pd.DataFrame:
     """Return the case studies' relative scores of both runs, matched.
 
-    Rows of `CHECKPOINT_RULE` for Germany's first half and BDBV: each
-    checkpoint of the slots run (`slots-<hash>`) beside the no-slots
-    run's checkpoint fine-tuned on as many outbreaks. Relative WIS for
-    Germany and relative CRPS for BDBV, against `randomwalknowcast`.
+    Rows of `CHECKPOINT_RULE` for Germany's first half and BDBV: each of
+    the final slots run's `checkpoints` beside the no-slots run's
+    checkpoint fine-tuned on as many outbreaks. Other slots runs'
+    checkpoints (`slots-<hash>`) are left out. Relative WIS for Germany
+    and relative CRPS for BDBV, against `randomwalknowcast`.
     """
     rows = scores
     if "rule" in rows:
@@ -710,10 +713,12 @@ def slots_scores_table(scores: pd.DataFrame) -> pd.DataFrame:
     ]
     if "rel_crps" in rows:
         rows = rows.assign(rel_wis=rows["rel_wis"].fillna(rows["rel_crps"]))
-    slots = rows["checkpoint"].astype(str).str.startswith("slots-")
+    ids = rows["checkpoint"].astype(str)
+    slots = ids.isin(list(checkpoints))
+    plain = ~ids.str.startswith("slots-")
     keys = ["study", "level", "model", "outbreaks"]
     pairs = rows.loc[slots, [*keys, "rel_wis"]].merge(
-        rows.loc[~slots, [*keys, "rel_wis"]],
+        rows.loc[plain, [*keys, "rel_wis"]],
         on=keys,
         suffixes=("_slots", "_none"),
     )
@@ -841,7 +846,7 @@ def write_evidence(
         "slots-scores",
         None
         if data["checkpoint_scores"] is None
-        else slots_scores_table(data["checkpoint_scores"]),
+        else slots_scores_table(data["checkpoint_scores"], checkpoints),
         ["checkpoint_scores"],
     )
     curve = data["finetune_heldout"]

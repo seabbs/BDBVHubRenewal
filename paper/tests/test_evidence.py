@@ -610,7 +610,7 @@ def test_slots_scores_pair_the_runs_at_matched_checkpoints() -> None:
             },
         ]
     )
-    out = slots_scores_table(rows)
+    out = slots_scores_table(rows, ("slots-aaa", "slots-ccc"))
     assert list(out["Outbreaks"]) == [1000, 1000]
     assert list(out["Slots"]) == [0.7, 0.9]
     assert list(out["No slots"]) == [0.75, 1.0]
