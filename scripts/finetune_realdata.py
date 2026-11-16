@@ -203,6 +203,17 @@ def split_held_out(blocks: list[dict]) -> tuple[list[dict], list[dict]]:
     return train, held
 
 
+def pick_device(requested: str, cuda: bool, mps: bool) -> str:
+    """Return the device to train on.
+
+    `requested`, or with `"auto"` the best there is (CUDA, then MPS, then
+    CPU), as `finetune_stream` does.
+    """
+    if requested != "auto":
+        return requested
+    return "cuda" if cuda else "mps" if mps else "cpu"
+
+
 def train(args: argparse.Namespace) -> None:
     """Train the adapter on the German blocks and save, verify, publish."""
     import torch
@@ -212,6 +223,12 @@ def train(args: argparse.Namespace) -> None:
     from peft import LoraConfig
 
     torch.set_num_threads(args.threads)
+    device = pick_device(
+        args.device,
+        torch.cuda.is_available(),
+        torch.backends.mps.is_available(),
+    )
+    log(f"training on {device}")
     out: Path = args.out
     out.mkdir(parents=True, exist_ok=True)
     commit = subprocess.run(
@@ -232,7 +249,7 @@ def train(args: argparse.Namespace) -> None:
     most = ft.max_series(args.memory_gb)
     torch.manual_seed(args.seed)
     pipeline = Chronos2Pipeline.from_pretrained(
-        CHRONOS_MODEL, revision=CHRONOS_REVISION, device_map="cpu"
+        CHRONOS_MODEL, revision=CHRONOS_REVISION, device_map=device
     )
     lora = LoraConfig(
         r=8,
@@ -324,7 +341,9 @@ def train(args: argparse.Namespace) -> None:
 
     def backward(part: list[int], share: float) -> float:
         batch = {
-            k: v for k, v in data._build_batch(part).items() if k in accepted
+            k: v.to(device) if torch.is_tensor(v) else v
+            for k, v in data._build_batch(part).items()
+            if k in accepted
         }
         loss = model(**batch).loss
         (loss * share).backward()
@@ -385,7 +404,7 @@ def train(args: argparse.Namespace) -> None:
     key = ft._settings_hash(settings)
     settings["hash"] = key
     settings["code_commit"] = commit
-    settings["device"] = "cpu"
+    settings["device"] = device
     settings["held_out_loss_start"] = state["start_loss"]
     settings["held_out_loss"] = fs.held_out_loss(model, held, args.batch_size)
     if args.real_validation:
@@ -453,6 +472,9 @@ def main() -> None:
     # out of 14 GB without it and an 850-series block peaks at 7.6 GB with.
     run.add_argument("--checkpoint-above", type=int, default=None)
     run.add_argument("--threads", type=int, default=6)
+    # "auto" takes CUDA, then MPS, then CPU. The device is not in the
+    # settings hash (as for the simulation trainer).
+    run.add_argument("--device", default="auto")
     run.add_argument("--seed", type=int, default=1)
     run.add_argument("--real-validation", type=Path)
     run.add_argument("--note", default="")
