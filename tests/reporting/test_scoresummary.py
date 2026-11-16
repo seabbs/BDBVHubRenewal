@@ -329,3 +329,61 @@ def test_a_zero_energy_baseline_gives_no_relative_score() -> None:
     assert all(r["rel"]["energy"] is None for r in got.values())
     rel = relative_energy(energy, by=(), baseline="a")
     assert rel["rel_energy"].isna().all()
+
+
+def _node_rounds(
+    data: dict[str, object], rounds: str
+) -> list[dict[str, object]]:
+    """Summarise in node over the rounds (origin indices, or null) given."""
+    script = (
+        f"const s = require({json.dumps(str(SUMMARISE))});"
+        "const d = JSON.parse(require('fs').readFileSync(0, 'utf8'));"
+        f"process.stdout.write(JSON.stringify(s(d, s.inRounds({rounds}))));"
+    )
+    out = subprocess.run(
+        ["node", "-e", script],
+        input=json.dumps(data),
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return json.loads(out.stdout)
+
+
+def _check_against(got: list[dict[str, object]], scores: pd.DataFrame) -> None:
+    want = relative_wis(scores, by=()).set_index("model")
+    assert len(got) == len(MODELS)
+    for row in got:
+        exp = want.loc[MODELS[row["model"]]]
+        assert row["n"] == exp["n"]
+        assert row["rel"]["wis"] == pytest.approx(exp["rel_wis"], abs=1e-6)
+        for col in ("wis", "coverage_50", "coverage_90", "bias"):
+            assert row["mean"][col] == pytest.approx(exp[col], abs=1e-6)
+
+
+def test_one_round_scores_as_that_round_alone() -> None:
+    scores = _scores()
+    data = summary_rows(scores, MODELS, COLOURS, {})
+    first = data["origins"].index("2026-10-24")
+    got = _node_rounds(data, f"[{first}]")
+    alone = scores.loc[scores["origin"] == "2026-10-24"]
+    _check_against(got, alone)
+    # One round, one release, 4 places and 2 weeks, less randomwalk's gap.
+    assert {row["n"] for row in got} == {7}
+
+
+def test_several_rounds_pool_their_cells() -> None:
+    scores = _scores()
+    data = summary_rows(scores, MODELS, COLOURS, {})
+    both = [data["origins"].index(o) for o in ("2026-10-17", "2026-10-24")]
+    got = _node_rounds(data, json.dumps(both))
+    # Recomputed over the union of the rounds' cells, not a mean of each
+    # round's scores.
+    _check_against(got, scores)
+    assert {row["n"] for row in got} == {21}
+
+
+def test_all_rounds_keeps_every_row() -> None:
+    scores = _scores()
+    data = summary_rows(scores, MODELS, COLOURS, {})
+    _check_against(_node_rounds(data, "null"), scores)
