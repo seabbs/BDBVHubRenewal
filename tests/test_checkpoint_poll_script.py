@@ -58,3 +58,14 @@ def test_a_checkpoint_needs_its_runs_the_reference_and_old_bdbv(poll) -> None:
 def test_mailbox_lines_carry_the_label(poll) -> None:
     line = poll.mailbox_line("rows landed", when="2026-11-16 12:00")
     assert line == "2026-11-16 12:00 archie: ckpt-scores: rows landed\n"
+
+
+def test_the_zero_shot_reference_lands_before_any_checkpoint(poll, tmp_path):
+    # Nothing run yet: the reference's German and BDBV units come first.
+    assert poll.reference_pending(tmp_path) == [
+        ("germany", "reference"),
+        ("bdbv", "reference"),
+    ]
+    # Once landed (its stamp written), the reference is not pending.
+    (tmp_path / poll.REFERENCE_STAMP).write_text("abc\n")
+    assert poll.reference_pending(tmp_path) == []

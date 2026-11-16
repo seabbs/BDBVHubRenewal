@@ -42,18 +42,18 @@ RELEASES = [
 ]
 
 
-def test_new_checkpoints_come_first_by_publish_date(cs) -> None:
+def test_only_the_new_run_s_checkpoints_are_scored_oldest_first(cs) -> None:
+    # The paper uses only the continuous run from 2026-11-16 09:00 UTC:
+    # r3 and earlier checkpoints are never scored.
+    assert cs.PUBLISHED_FROM == "2026-11-16T09:00:00Z"
     queue = cs.checkpoint_queue(RELEASES, scored=set())
-    assert queue[:2] == ["aaaaaaaaaaaa", "bbbbbbbbbbbb"]
-    # The backlog follows, in its own order, and only published tags.
-    assert queue[2:] == ["e8a1f5ae338b", "2c2b22a03107"]
+    assert queue == ["aaaaaaaaaaaa", "bbbbbbbbbbbb"]
+    assert not hasattr(cs, "BACKLOG")
 
 
 def test_scored_and_foreign_tags_are_left_out(cs) -> None:
-    queue = cs.checkpoint_queue(
-        RELEASES, scored={"aaaaaaaaaaaa", "2c2b22a03107"}
-    )
-    assert queue == ["bbbbbbbbbbbb", "e8a1f5ae338b"]
+    queue = cs.checkpoint_queue(RELEASES, scored={"aaaaaaaaaaaa"})
+    assert queue == ["bbbbbbbbbbbb"]
     assert "cccccccccccc" not in queue
 
 
