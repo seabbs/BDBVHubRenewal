@@ -536,3 +536,23 @@ def test_fixed_labels_need_their_seed(tmp_path):
     assert not torch.allclose(
         predict(other, block, ids), predict(model, block, ids), atol=1e-5
     )
+
+
+def test_the_link_is_read_from_the_adapters_marker(tmp_path):
+    # fm-finetune-slots marks linked slots with a `parent_link` buffer,
+    # saved in the adapter beside the slot table.
+    from safetensors import safe_open
+
+    model, ids = linked_adapter(tmp_path)
+    with safe_open(
+        tmp_path / "linked" / "adapter_model.safetensors", "pt"
+    ) as f:
+        assert any("parent_link" in k for k in f.keys())  # noqa: SIM118
+    where = tmp_path / "linked" / "settings.json"
+    where.write_text(json.dumps({"series_slots": {"n": 8}}))
+    assert slots.adapter_parent_link(tmp_path / "linked")
+    loaded = slots.load_adapter(tiny_model(), tmp_path / "linked")
+    assert slots.has_parent_link(loaded)
+    block = toy_block()
+    want = predict(model, block, ids)
+    assert torch.allclose(predict(loaded, block, ids), want, atol=1e-5)
