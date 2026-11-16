@@ -296,3 +296,26 @@ def test_ebola_outputs_hold_while_no_scored_round_has_truth(
         assert res.returncode == 0, res.stderr
     assert (tmp_path / "main" / "ebola-results.png").is_file()
     assert (tmp_path / "main" / "ebola-scores.csv").is_file()
+
+
+def test_the_paper_runs_its_ebola_models_at_its_own_draws(
+    tmp_path: Path,
+) -> None:
+    cfg = tmp_path / "real.yaml"
+    cfg.write_text(
+        yaml.safe_dump(
+            {
+                "results": str(tmp_path / "results"),
+                "build": str(tmp_path / "build"),
+                "germany": {"real": False},
+                "ebola": {**CONFIG["ebola"], "hub": str(tmp_path / "hub")},
+            }
+        )
+    )
+    base = str(PAPER / "workflow" / "config.yaml")
+    res = _snakemake("development", "-n", "-p", "--configfile", base, str(cfg))
+    assert res.returncode == 0, res.stderr
+    log = res.stdout + res.stderr
+    assert "rule ebola_backtest_draws" in log
+    assert f"n_samples {CONFIG['ebola']['n_samples']}" in log
+    assert CONFIG["ebola"]["n_samples"] == 1000

@@ -378,3 +378,28 @@ def test_ebola_scores_prospective_rounds_from_the_split(hub, tmp_path) -> None:
     # baseline can be scored.
     team = fc.loc[fc["model"] == "team-a"]
     assert set(team["origin_date"]) == {pd.Timestamp("2026-10-31")}
+
+
+def test_ebola_takes_its_own_models_from_the_draws_backtest(
+    hub, tmp_path
+) -> None:
+    # The site's backtest has 100 draws; the paper's own run of its
+    # models has more, and replaces their rows.
+    main = _backtest_at(tmp_path / "q.csv", ["2026-10-20"])
+    draws = tmp_path / "draws.csv"
+    frame = pd.read_csv(main)
+    pd.concat(
+        [frame.assign(sample=k, value=float(k)) for k in range(1, 5)]
+    ).to_csv(draws, index=False)
+    sources = Sources(
+        hub=hub,
+        ebola_data=_data(tmp_path / "data"),
+        ebola_backtest=main,
+        ebola_draws=draws,
+        ebola_draws_models=("randomwalknowcast",),
+    )
+    fc = run_forecasts(
+        "ebola", sources=sources, source="real", baseline="randomwalknowcast"
+    )
+    rw = fc.loc[fc["model"] == "randomwalknowcast"]
+    assert sorted(rw["sample_id"]) == [1, 2, 3, 4]
