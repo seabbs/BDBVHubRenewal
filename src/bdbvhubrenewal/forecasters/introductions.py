@@ -8,8 +8,9 @@ An introduction comes each week with probability $q$ times the share of
 the week not yet reported (`introduction_rates`).
 $q$ is the rate of a first case for a place with none yet, and of a
 re-introduction for a place seen before, over the `k` weeks to the
-place's start week, or all weeks to it where the pool has no
-introduction in them, pooled over the place and its siblings.
+place's start week. It combines a local rate, pooled over the place and
+its siblings, and a global rate, pooled over the other places of its
+level, as independent sources: $q = 1 - (1 - q_l)(1 - q_g)$.
 It brings a count drawn from Poisson(1) given at least 1, and the place
 then walks on $\log(1 + y)$ with its walk spread (`silent_trajectories`).
 """
@@ -54,21 +55,22 @@ def silent_places(reported: np.ndarray, cut_week: int, k: int) -> np.ndarray:
 def introduction_rates(
     reported: np.ndarray, start: np.ndarray, parent: np.ndarray, k: int
 ) -> np.ndarray:
-    """Return each place's weekly probability of an introduction.
+    r"""Return each place's weekly probability of an introduction.
 
     A place with no case yet takes the rate of a first case: the weeks
     with a case over the weeks with none before them.
     A place seen before takes the rate of a re-introduction: the weeks
     with a case over the weeks with an earlier case but none in the `k`
     weeks before them.
-    Each rate pools the place and its siblings, the children of its
-    parent, so zones pool within their province.
-    The country has no siblings, so it is a group of its own.
     Each rate counts the `k` weeks to each place's start week, the weeks
-    that set the spread of the walk.
-    Where the pool has no introduction of that kind in them, all weeks to
-    the start week count instead.
-    Only complete weeks before the origin are used.
+    that set the spread of the walk. Only complete weeks before the
+    origin are used.
+    The local rate $q_l$ pools the place and its siblings, the children
+    of its parent, so zones pool within their province. The global rate
+    $q_g$ pools the other places of the same level (zones of the other
+    provinces); provinces and the country have none, so their $q_g = 0$.
+    The two are independent sources, $q = 1 - (1 - q_l)(1 - q_g)$, so $q$
+    is 0 only where the whole level has no introduction of that kind.
 
     Parameters
     ----------
@@ -84,7 +86,7 @@ def introduction_rates(
     Returns
     -------
     numpy.ndarray
-        `[L]`, 0 where the pool has no week at risk.
+        `[L]`, 0 where neither pool has a week at risk with a case.
     """
     pos = reported > 0
     before = np.cumsum(np.pad(pos, ((0, 0), (1, 0))), axis=1)[:, :-1]
@@ -94,30 +96,41 @@ def introduction_rates(
     quiet = np.zeros_like(pos)
     quiet[:, k:] = before[:, k:] == before[:, :-k]
     fresh, seen = upto & (before == 0), upto & quiet & (before > 0)
-    first = _pooled(fresh & window, fresh, pos, parent)
-    again = _pooled(seen & window, seen, pos, parent)
-    return np.where(pos.any(axis=1), again, first)
+    first = _pooled(fresh & window, pos, parent)
+    again = _pooled(seen & window, pos, parent)
+    out: np.ndarray = np.where(pos.any(axis=1), again, first)
+    return out
+
+
+def _depth(parent: np.ndarray) -> np.ndarray:
+    """Return each place's level, its steps from the root, `[L]`."""
+    depth = np.zeros(parent.size, dtype=int)
+    up = parent.copy()
+    while (up >= 0).any():
+        depth += up >= 0
+        up = np.where(up >= 0, parent[np.maximum(up, 0)], -1)
+    return depth
 
 
 def _pooled(
-    recent: np.ndarray, every: np.ndarray, pos: np.ndarray, parent: np.ndarray
+    risk: np.ndarray, pos: np.ndarray, parent: np.ndarray
 ) -> np.ndarray:
-    """Pool the introductions over the weeks at risk of siblings.
+    """Combine the sibling pool's rate with the rest of the level's.
 
-    The rate over the weeks at risk in `recent`, or over those in `every`
-    where the pool has no introduction in `recent`.
+    `risk` `[L, W]` marks each place's weeks at risk in the window.
     """
     n = parent.size
     group = np.where(parent >= 0, parent, n + np.arange(n))
-
-    def rate(risk: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-        hits = np.bincount(group, (risk & pos).sum(axis=1), 2 * n)[group]
-        weeks = np.bincount(group, risk.sum(axis=1), 2 * n)[group]
-        return hits, hits / np.maximum(weeks, 1)
-
-    hits, short = rate(recent)
-    _, long = rate(every)
-    out: np.ndarray = np.where(hits > 0, short, long)
+    hits_p = (risk & pos).sum(axis=1).astype(float)
+    weeks_p = risk.sum(axis=1).astype(float)
+    hits = np.bincount(group, hits_p, 2 * n)[group]
+    weeks = np.bincount(group, weeks_p, 2 * n)[group]
+    local = hits / np.maximum(weeks, 1)
+    level = _depth(parent)
+    hits_l = np.bincount(level, hits_p)[level] - hits
+    weeks_l = np.bincount(level, weeks_p)[level] - weeks
+    rest = hits_l / np.maximum(weeks_l, 1)
+    out: np.ndarray = 1 - (1 - local) * (1 - rest)
     return out
 
 
