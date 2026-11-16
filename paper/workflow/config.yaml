@@ -10,7 +10,7 @@ studies: [synthetic, germany, ebola]
 n_samples: 100
 
 # The simulated outbreaks of each run's seeds (`paperdata.synthetic`), and
-# the models' forecasts of them, which the synthetic runner of #192
+# the models' forecasts of them, which the synthetic runner
 # writes as the paper's long table.
 synthetic:
   # The simulator, whose code gives the grid tables and SI notes
@@ -27,7 +27,7 @@ synthetic:
   simulations:
     development: ../output/finetune/pilot-r3
     paper: ../output/finetune/heldout
-  # The synthetic runner's forecasts of them (#192), with its
+  # The synthetic runner's forecasts of them, with its
   # observations and factors beside them.
   forecasts:
     development: ../output/paper/synthetic-dev.csv.gz
@@ -110,7 +110,7 @@ nowcasts:
       - fm_chronos_weekly_ragged_ft
       - fm_chronos_weekly_ragged_ft_n1000
 
-# SI results from code not yet on main, as rows committed to evidence
+# SI results kept as rows committed to evidence
 # branches (`paperpipe.evidence`). Each is `{ref: <commit>, path: <file>}`;
 # null leaves a note of what it waits on in a development run and fails a
 # paper run.
@@ -141,7 +141,7 @@ evidence:
   lag_bdbv_after:
     ref: e4f4d7a49773a3050a9529df5c70d7cc8504dafc
     path: evidence/bdbv-lagfix/fm-summary-after.csv
-  # The copula's arms scored by `evaluation.trajectories` (#237).
+  # The copula's arms scored by `evaluation.trajectories`.
   copula_scores:
     ref: addbf7d86d01aca10f2a7ae8e63792c741cb5668
     path: results/copula-scores.csv.gz

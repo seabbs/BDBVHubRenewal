@@ -1,7 +1,7 @@
-"""SI tables and figures from results of code not yet on main.
+"""SI tables and figures from results kept on evidence branches.
 
-The copula (#221), the aggregation options (#222) and the fine-tuning
-runs (#192) write their results as rows to evidence branches (see
+The copula, the aggregation options and the fine-tuning runs write
+their results as rows to evidence branches (see
 `workflow/config.yaml`, block `evidence`). This module turns those rows
 into the SI's tables, figures and quoted numbers, so nothing is typed into
 the paper. A result whose rows are not set yet gets a note saying what it
@@ -64,7 +64,7 @@ OPTIONS: Final = {
     "zones_summed": "Zones summed",
     "zones_copula": "Zones summed after pairing",
 }
-"""Aggregation options of #222, in table order."""
+"""Aggregation options, in table order."""
 
 
 def waiting(what: str) -> str:
@@ -517,11 +517,11 @@ def diseases_table(diseases: pd.DataFrame) -> pd.DataFrame:
 
 
 EVIDENCE: Final = {
-    "copula_scores": "fm-copula's per-forecast copula scores (#221)",
-    "copula_rho": "fm-copula's rolling correlation estimates (#221)",
-    "aggregation_scores": "fm-agg's per-target aggregation scores (#222)",
-    "aggregation_cost": "fm-agg's cost of each option (#222)",
-    "finetune_heldout": "fm-finetune3's held-out loss curve (#192)",
+    "copula_scores": "fm-copula's per-forecast copula scores",
+    "copula_rho": "fm-copula's rolling correlation estimates",
+    "aggregation_scores": "fm-agg's per-target aggregation scores",
+    "aggregation_cost": "fm-agg's cost of each option",
+    "finetune_heldout": "fm-finetune3's held-out loss curve",
     "sim_summaries": "fm-finetune3's per-outbreak r3 pilot summaries",
     "sim_realism": "fm-finetune3's data reference values",
     "sim_diseases": "fm-finetune3's published disease values",
