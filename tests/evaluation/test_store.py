@@ -671,6 +671,9 @@ def test_a_model_that_fails_leaves_the_others_archived(
     assert "nocode not archived: KeyError" in err
     assert "fails not archived: ValueError('no forecast')" in err
     assert "missing not archived: LookupError" in err
+    # Each failure prints its traceback, so a bug can be told from a
+    # missing fit.
+    assert err.count("Traceback (most recent call last)") == 4
     # No store task at the origin: the stored models are reported.
     table = store_archive.archive(root, task, None, models, {}, hub, code)
     assert set(table["model"]) == {"plain"}
