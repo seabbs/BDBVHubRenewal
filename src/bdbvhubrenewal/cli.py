@@ -198,6 +198,12 @@ def build_parser() -> argparse.ArgumentParser:
     back.add_argument("--models", nargs="*", default=None)
     back.add_argument("--results", default="results")
     back.add_argument(
+        "--store",
+        default="output/fit-store",
+        help="The fit store checkout (`fit-store load` read it). The "
+        "fitted models' samples are taken from its fits, every week.",
+    )
+    back.add_argument(
         "--output",
         default="results",
         help="Where the forecasts go. The fitted models' rows there come "
@@ -399,6 +405,12 @@ def build_parser() -> argparse.ArgumentParser:
     sc.add_argument("--config", default="config/backtest.toml")
     sc.add_argument("--data", default=data_dir)
     sc.add_argument("--results", default="results")
+    sc.add_argument(
+        "--store",
+        default="output/fit-store",
+        help="The fit store checkout (`fit-store load` read it). The "
+        "fitted models' samples are taken from its fits, every week.",
+    )
     sc.add_argument("--output", default="results")
     sc.add_argument(
         "parts",
@@ -561,6 +573,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Uncommitted hub files, for other licences.",
     )
     cmp.add_argument("--out", default="results/hub-comparison")
+    cmp.add_argument(
+        "--store",
+        default="output/fit-store",
+        help="The fit store checkout (`fit-store load` read it). The "
+        "fitted models' samples are taken from its fits, every week.",
+    )
     cmp.add_argument(
         "--models",
         nargs="*",
@@ -1070,12 +1088,57 @@ def _write_release(out: ReleaseBacktest, results: Path, delay: int) -> None:
     )
 
 
+def _fit_store_forecasts(args: argparse.Namespace) -> pd.DataFrame:
+    """Return the real forecasts of every fit `fit-store load` used.
+
+    `fit-store load` cuts the forecasts it writes to the backtest's weeks,
+    but a stored fit forecasts its whole origin task, as the release
+    backtest runs the baselines. These are the whole fits, read from the
+    store (`--store`) by the keys in the results' `STATUS_FILE`. Empty if
+    either is missing.
+    """
+    status = Path(getattr(args, "results", "results")) / store.STATUS_FILE
+    root = Path(getattr(args, "store", "output/fit-store"))
+    if not status.exists() or not root.is_dir():
+        return pd.DataFrame()
+    frames = []
+    for entry in json.loads(status.read_text()):
+        if not entry.get("used"):
+            continue
+        path = store.store_path(
+            root, entry["model"], entry["origin"], entry["used"]
+        )
+        if not path.exists():
+            continue
+        fc = store.read_fit(path).forecasts
+        frames.append(fc.loc[(fc["kind"] == "real") & fc["as_of"].isna()])
+    frames = [f for f in frames if not f.empty]
+    return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
+
+
+def _with_whole_fits(
+    rows: pd.DataFrame, whole: pd.DataFrame, by: str
+) -> pd.DataFrame:
+    """Replace each model and `by`'s rows with the whole fit's, if any."""
+    if whole.empty:
+        return rows
+    have = set(zip(whole["model"], whole[by].astype(str), strict=True))
+    keep = [
+        (m, str(v)) not in have
+        for m, v in zip(rows["model"], rows[by], strict=True)
+    ]
+    cols = [c for c in rows.columns if c in whole.columns]
+    return pd.concat([whole[cols], rows.loc[keep, cols]], ignore_index=True)
+
+
 def _stored(
     args: argparse.Namespace, target: pd.DataFrame, forecasts: pd.DataFrame
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Final-count samples and delays of the models not run here.
 
-    The fitted models' samples come from the backtest forecasts and their
+    The fitted models' samples come from their stored fits, every week
+    of the origin task as the baselines forecast it (`_fit_store_forecasts`),
+    or from the backtest forecasts if no store is checked out. Their
     delays from the delay summaries `fit-store load` writes to the
     results, none if it loaded no fits. Hub teams' forecasts are matched
     to the real vintage serving their round, and have no delay.
@@ -1091,11 +1154,15 @@ def _stored(
         "value",
     ]
     fitted = [s.name for s in list_models() if s.fitted]
-    ours = forecasts.loc[
-        forecasts["model"].isin(fitted)
-        & (forecasts["kind"] == "real")
-        & forecasts["as_of"].isna()
-    ]
+    ours = _with_whole_fits(
+        forecasts.loc[
+            forecasts["model"].isin(fitted)
+            & (forecasts["kind"] == "real")
+            & forecasts["as_of"].isna()
+        ],
+        _fit_store_forecasts(args),
+        "vintage",
+    )
     data = Path(args.data)
     hub = hc.load_hub_submissions(
         data / "hub-submissions", data / "raw" / "hub-submissions"
@@ -1516,6 +1583,17 @@ def _compare_hub(args: argparse.Namespace) -> int:
         rounds,
         exclude=live,
     )
+    # The fitted models' whole fits, as for the release backtest, so the
+    # hub teams' weeks the backtest's weeks leave out are covered too.
+    whole = _fit_store_forecasts(args)
+    if not whole.empty:
+        whole = whole.assign(reference_date=whole["reference_date"].astype(str))
+        whole = whole.loc[
+            whole["reference_date"].isin(rounds) & ~whole["model"].isin(live)
+        ].rename(columns={"kind": "source"})
+        stored = _with_whole_fits(
+            stored, whole[list(hc.SAMPLE_COLUMNS)], "reference_date"
+        )
     hub_ids = hc.own_hub_ids()
     forecasts = hc.with_submissions(
         pd.concat(
