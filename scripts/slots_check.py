@@ -306,6 +306,24 @@ def _settings(adapter: Path) -> dict:
     raise FileNotFoundError(f"no settings.json in or beside {adapter}")
 
 
+HOLD = Path("~/ckpt-scores/hold-slots-run")
+"""While this file exists, slots checkpoints not zero-initialised are held:
+their adapters carry a parent_scale that this slots.py would drop. The
+checkpoint scorer reads the same file."""
+
+
+def held(adapter: Path, hold: Path = HOLD) -> bool:
+    """Whether a slots checkpoint waits for the parent_scale fix.
+
+    True while `hold` exists, for a checkpoint whose settings'
+    `series_slots.init` is not "zero" (or missing).
+    """
+    if not Path(hold).expanduser().exists():
+        return False
+    init = (_settings(adapter).get("series_slots") or {}).get("init")
+    return init != "zero"
+
+
 def comparator(
     slotted: Path, root: Path = NOSLOTS_ROOT
 ) -> tuple[str | None, Path | None, int]:
@@ -750,10 +768,19 @@ def synthetic(args) -> None:
     print(f"synthetic slots adapter in {args.out}")
 
 
+def is_held(args) -> None:
+    """Exit 0 if a checkpoint is held, 1 if it may be checked."""
+    sys.exit(0 if held(Path(args.adapter), Path(args.hold)) else 1)
+
+
 def main() -> None:
     """Run a subcommand."""
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
+    p = sub.add_parser("held")
+    p.add_argument("adapter", type=Path)
+    p.add_argument("--hold", default=str(HOLD))
+    p.set_defaults(run=is_held)
     p = sub.add_parser("score")
     p.add_argument("out", type=Path)
     p.add_argument("--slots", required=True)

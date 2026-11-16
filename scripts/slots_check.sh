@@ -19,6 +19,9 @@
 # label whose final summary exists is skipped: an explicit LABEL already
 # checked exits 0 at once, one being checked waits for that check and
 # then exits 0, and the auto watcher passes over both.
+# While $HOLD exists, checkpoints whose series_slots.init is not "zero"
+# are held (their parent_scale needs a slots.py fix): logged once as
+# "held: LABEL", left unmarked, and checked once the hold is lifted.
 # In auto mode a failed checkpoint is marked (`failed` in its run folder)
 # and skipped, and the watcher goes on with the next.
 #
@@ -74,7 +77,8 @@ REPO=seabbs/BDBVHubRenewal
 BRANCH=slots-check
 BUDGET=$HOME/.claude/hooks/compute-budget.sh
 LOCKS=$RUN_ROOT/locks
-mkdir -p "$LOCKS"
+HOLD=${HOLD:-$HOME/ckpt-scores/hold-slots-run}
+mkdir -p "$LOCKS" "$RUN_ROOT/held"
 
 want=${label#chronos-}
 want=${want#slots-}
@@ -156,6 +160,17 @@ candidates() {
   done
 }
 
+held() {
+  # Whether checkpoint $1 at $2 waits for the parent_scale fix; logs it
+  # once per label, and leaves the label unmarked so it runs later.
+  PYTHONPATH=src "$PY" scripts/slots_check.py held "$2" --hold "$HOLD" \
+    2> /dev/null || { rm -f "$RUN_ROOT/held/slots-$1"; return 1; }
+  if [ ! -f "$RUN_ROOT/held/slots-$1" ]; then
+    log "held: slots-$1 (parent_scale fix pending)"
+    touch "$RUN_ROOT/held/slots-$1"
+  fi
+}
+
 download() {
   # The adapter folder of release chronos-slots-<hash>, checked.
   PYTHONPATH=src "$PY" -c '
@@ -181,6 +196,7 @@ next_checkpoint() {
     if [ "$where" = release ]; then
       where=$(download "$h") && [ -d "$where" ] || continue
     fi
+    held "$h" "$where" >&2 && continue
     echo "$h $where"
     return 0
   done < <(candidates)
@@ -327,6 +343,16 @@ if [ -n "$want" ] && locked "$want"; then
     log "slots-$want is already checked"
     exit 0
   fi
+fi
+if [ -n "$want" ]; then
+  # An explicit label on hold returns at once; the watcher runs it later.
+  while read -r h where; do
+    [ "$h" = "$want" ] && [ "$where" != release ] || continue
+    if held "$h" "$where"; then
+      log "held: slots-$h (parent_scale fix pending)"
+      exit 0
+    fi
+  done < <(candidates)
 fi
 preflight || exit 1
 commit=$(git rev-parse HEAD)
