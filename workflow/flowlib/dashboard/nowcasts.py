@@ -136,6 +136,46 @@ def read_file(
     return out
 
 
+def digest(
+    rows: Mapping[tuple[str, str, str, str], Mapping[str, Mapping[str, Any]]],
+    picks: Sequence[int],
+) -> list[tuple]:
+    """Return one file's series, stats, score, truth and latest by key.
+
+    Kept with the file (`build`'s `files`), so a rebuild after a new
+    file only assembles these.
+    """
+    out = []
+    for (loc, sid, src, tgt), dates in rows.items():
+        times, drawn, scored = [], [], []
+        seen: dict[str, tuple[str, float]] = {}
+        last: dict[str, float] = {}
+        for day in sorted(dates):
+            e = dates[day]
+            if not all(k in e["q"] for k in SEVEN):
+                continue
+            seven = [e["q"][k] for k in SEVEN]
+            times.append(day)
+            drawn.append([round(seven[i], 1) for i in picks])
+            if e["y"] is not None:
+                scored.append((seven, e["y"], e["s"]))
+                seen[day] = (e["v"], e["y"])
+            if e["l"] is not None:
+                last[day] = e["l"]
+        entry: dict[str, Any] | None = None
+        if times:
+            entry = {"series": {"t": times, "q": drawn}}
+            if scored:
+                entry["stats"] = stats([(q, y) for q, y, _ in scored])
+                entry["score"] = round(
+                    sum(s if s is not None else wis(q, y) for q, y, s in scored)
+                    / len(scored),
+                    2,
+                )
+        out.append((loc, sid, src, tgt, entry, seen, last))
+    return out
+
+
 def _put(d: dict, keys: Sequence[str], value: Any) -> None:
     for k in keys[:-1]:
         d = d.setdefault(k, {})
@@ -153,10 +193,10 @@ def build(
 ) -> dict[str, Any] | None:
     """Return every location's nowcasts by series, target, source, origin.
 
-    `files` keeps each file's parsed rows by its time and size, so a
-    rebuild parses only new or changed files; `order` is the location
-    groups, (name, regex), locations are sorted by. Returns None if the
-    folder does not exist.
+    `files` keeps each file's computed rows (`digest`) by its time and
+    size, so a rebuild reads and computes only new or changed files.
+    `order` is the location groups, (name, regex), locations are sorted
+    by. Returns None if the folder does not exist.
     """
     import re
 
@@ -185,44 +225,25 @@ def build(
                 st = path.stat()
             except OSError:
                 continue
-            key = (st.st_mtime_ns, st.st_size)
+            key = (st.st_mtime_ns, st.st_size, tuple(picks))
             if str(path) not in files or files[str(path)][0] != key:
-                files[str(path)] = (key, read_file(path, folder.name, which))
-            for (loc, sid, src, tgt), dates in files[str(path)][1].items():
+                rows = read_file(path, folder.name, which)
+                files[str(path)] = (key, digest(rows, picks))
+            for loc, sid, src, tgt, entry, seen, last in files[str(path)][1]:
                 targets.add(tgt)
-                times, drawn, scored = [], [], []
-                for day in sorted(dates):
-                    e = dates[day]
-                    if not all(k in e["q"] for k in SEVEN):
-                        continue
-                    seven = [e["q"][k] for k in SEVEN]
-                    times.append(day)
-                    drawn.append([round(seven[i], 1) for i in picks])
-                    if e["y"] is not None:
-                        scored.append((seven, e["y"], e["s"]))
-                        seen = truth.setdefault(loc, {}).setdefault(tgt, {})
-                        if day not in seen or e["v"] >= seen[day][0]:
-                            seen[day] = (e["v"], e["y"])
-                    if e["l"] is not None:
-                        _put(latest, [loc, tgt, day], e["l"])
-                if not times:
+                for day, (vintage, y) in seen.items():
+                    known = truth.setdefault(loc, {}).setdefault(tgt, {})
+                    if day not in known or vintage >= known[day][0]:
+                        known[day] = (vintage, y)
+                for day, v in last.items():
+                    _put(latest, [loc, tgt, day], v)
+                if entry is None:
                     continue
                 keys = [loc, sid, tgt, src, origin]
-                _put(series, keys, {"t": times, "q": drawn})
-                if scored:
-                    _put(stat, keys, stats([(q, y) for q, y, _ in scored]))
-                    _put(
-                        score,
-                        keys,
-                        round(
-                            sum(
-                                s if s is not None else wis(q, y)
-                                for q, y, s in scored
-                            )
-                            / len(scored),
-                            2,
-                        ),
-                    )
+                _put(series, keys, entry["series"])
+                if "stats" in entry:
+                    _put(stat, keys, entry["stats"])
+                    _put(score, keys, entry["score"])
 
     def rank(loc: str) -> tuple[int, str]:
         hit = (i for i, (_, rx) in enumerate(order) if re.match(rx, loc))

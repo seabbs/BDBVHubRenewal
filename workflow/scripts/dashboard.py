@@ -97,6 +97,9 @@ def keep_mirrored(ctx: page.Context, every: float) -> None:
             ctx.summarise()
             with LOCK:
                 ctx.mirror_status = status
+                # Warm each dataset's nowcasts, so pages do not build them.
+                for ds in ctx.datasets:
+                    ctx.nowcasts(ds["key"])
             time.sleep(every)
 
     threading.Thread(target=loop, daemon=True).start()
