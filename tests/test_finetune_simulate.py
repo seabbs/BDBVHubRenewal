@@ -686,28 +686,12 @@ def test_dispersion_differs_by_stratum_as_set(tmp_path):
 
 
 @needs_r
-def test_families_differ_by_stratum_and_are_recorded(tmp_path):
-    rows = _obs(
-        "families",
-        'v$obs_family <- c("poisson", "negbin", "poisson", "negbin")\n'
-        "v$obs_sqrt_phi <- rep(1, 4)",
-        tmp_path,
-    )
-    excess = [float(x) for x in rows["excess"]]
-    assert rows["families"] == ["poisson", "negbin", "poisson", "negbin"]
-    assert abs(excess[0]) < 0.1
-    assert abs(excess[2]) < 0.1
-    assert excess[1] > 0.6
-    assert excess[3] > 0.6
-
-
-@needs_r
 def test_obs_strata_is_a_balanced_factor(tmp_path):
     out = run_r(
         'f <- factors$obs_strata\ncat(f, block %% length(f), "\\n")',
         tmp_path,
     )
-    assert out.split() == ["shared", "dispersion", "families", "0"]
+    assert out.split() == ["shared", "dispersion", "0"]
 
 
 @needs_r
@@ -731,6 +715,7 @@ cat("locations", sort(unique(c$location)), "\\n")
 cat("cells", length(strsplit(v$stratum_cells, ";")[[1]]), "\\n")
 cat("trajectories", length(strsplit(v$stratum_trajectory, ";")[[1]]), "\\n")
 cat("observation", strsplit(v$stratum_observation, ";")[[1]], "\\n")
+cat("family", design$observation, "\\n")
 cat("drawn", vapply(res$strata_values, function(x) x$obs_family, ""), "\\n")
 """,
         tmp_path,
@@ -742,8 +727,9 @@ cat("drawn", vapply(res$strata_values, function(x) x$obs_family, ""), "\\n")
     assert 1 <= len(rows["locations"]) <= n
     assert int(rows["cells"][0]) == len(rows["locations"])
     assert int(rows["trajectories"][0]) == len(rows["locations"])
-    # The family each stratum drew, not its cell's level.
+    # The family each stratum drew: the outbreak's, in every stratum.
     assert rows["observation"] == rows["drawn"]
+    assert set(rows["observation"]) == {rows["family"][0]}
 
 
 @needs_r
@@ -851,10 +837,9 @@ set.seed(5)
 cat("levels", round(table(rep_len(factors$observation, block)) / block, 2),
   names(table(factors$observation)), "\\n")
 d <- draw_design(1L)
-d$n_places <- 50L; d$n_ages <- 1L; d$obs_strata <- "families"
-fam <- unlist(lapply(1:40, function(i) draw_values(d)$obs_family))
-cat("families", sort(unique(fam)), "\\n")
-cat("nb1_share", mean(fam == "negbin1d"), "\\n")
+d$n_places <- 50L; d$n_ages <- 1L; d$obs_strata <- "dispersion"
+d$observation <- "poisson"
+cat("families", unique(draw_values(d)$obs_family), "\\n")
 phi <- vapply(1:3000, function(i) draw_values(d)$sqrt_phi, 1)
 cat("sqrt_phi", min(phi), max(phi), mean(phi < 0.1), "\\n")
 """,
@@ -862,8 +847,8 @@ cat("sqrt_phi", min(phi), max(phi), mean(phi < 0.1), "\\n")
     )
     rows = {x.split()[0]: x.split()[1:] for x in out.splitlines() if x}
     assert rows["levels"] == ["0.8", "0.2", "negbin1d", "poisson"]
-    assert rows["families"] == ["negbin1d", "poisson"]
-    assert 0.75 < float(rows["nb1_share"][0]) < 0.85
+    # One family per outbreak.
+    assert rows["families"] == ["poisson"]
     lo, hi, low = map(float, rows["sqrt_phi"])
     # Log-uniform on 0.02 to 1: about 41% below 0.1.
     assert lo >= 0.02
@@ -1019,3 +1004,89 @@ cat("low", out$values$low_start_days, "\\n")
     low = int(out.split("low")[-1].split()[0])
     # Doubling weekly to 100 cases in a year starts far below one a day.
     assert low > 100
+
+
+@needs_r
+def test_enw_weeks_fixes_every_run_s_length_for_a_pilot(tmp_path):
+    out = run_r(
+        """
+Sys.setenv(ENW_WEEKS = "52")
+d <- lapply(0:200, draw_design)
+cat("weeks", unique(vapply(d, `[[`, 1, "weeks")), "\\n")
+pa <- Filter(function(x) x$strata == "places_ages", d)
+cat("most", max(vapply(pa, function(x) x$n_places * x$n_ages, 1)), "\\n")
+""",
+        tmp_path,
+    )
+    rows = {x.split()[0]: x.split()[1:] for x in out.splitlines() if x}
+    assert rows["weeks"] == ["52"]
+    assert int(rows["most"][0]) <= 32
+
+
+@needs_r
+def test_mixing_strength_is_log_uniform_from_one_to_fifty_percent(tmp_path):
+    out = run_r(
+        """
+set.seed(4)
+cat("factor", "mixing_strength" %in% names(factors), "\\n")
+d <- draw_design(1L)
+eps <- vapply(1:3000, function(i) draw_values(d)$mixing_eps, 1)
+cat("eps", min(eps), max(eps), mean(eps < 0.05), "\\n")
+""",
+        tmp_path,
+    )
+    rows = {x.split()[0]: x.split()[1:] for x in out.splitlines() if x}
+    assert rows["factor"] == ["FALSE"]
+    lo, hi, low = map(float, rows["eps"])
+    assert lo >= 0.01
+    assert hi <= 0.5
+    # Log-uniform: log(5) / log(50), about 41%, below 0.05.
+    assert 0.35 < low < 0.47
+
+
+@needs_r
+def test_one_to_three_places_each_get_one_to_three_shocks(tmp_path):
+    out = run_r(
+        """
+set.seed(6)
+d <- draw_design(1L)
+d$strata <- "places"; d$n_places <- 10L; d$spread <- "even"
+d$shocks <- "backlog"
+for (i in 1:300) {
+  v <- draw_values(d)
+  cases <- setdiff(seq_len(d$n_places), v$quiet_places)
+  n <- table(v$shock_places)
+  cat(length(n) >= 1, length(n) <= min(3, length(cases)),
+    all(n >= 1 & n <= 3), all(v$shock_places %in% cases),
+    length(v$shock_at) == length(v$shock_places),
+    length(v$shock_mult) == length(v$shock_places),
+    all(v$shock_weeks >= 1 & v$shock_weeks <= 4), "\\n")
+}
+""",
+        tmp_path,
+    )
+    assert out.split()
+    assert all(x == "TRUE" for x in out.split())
+
+
+@needs_r
+def test_each_of_a_place_s_outages_stops_its_reports(tmp_path):
+    out = run_r(
+        SHOCK.replace("{level}", "outage")
+        .replace(
+            "v$shock_places <- 1L; v$shock_at <- 0.4; v$shock_weeks <- 3L",
+            "v$shock_places <- c(1L, 1L); v$shock_at <- c(0.2, 0.6)\n"
+            "v$shock_weeks <- c(1L, 2L)",
+        )
+        .replace("v$shock_mult <- 4", "v$shock_mult <- c(4, 2)")
+        + """
+for (k in 1:2) {
+  w <- shock_window(out$counts, v, k)
+  cat("window", k, c[report_date >= w[1] & report_date <= w[2], sum(count)],
+    "\\n")
+}
+""",
+        tmp_path,
+    )
+    rows = [x.split() for x in out.splitlines() if x.startswith("window")]
+    assert [r[2] for r in rows] == ["0", "0"]
