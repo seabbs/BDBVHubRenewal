@@ -7,7 +7,10 @@ config/germany.toml) each model forecasts the hub's 7-day sums ending 7,
 14, 21 and 28 days after the nowcast date (`HORIZON_WEEKS`), from the
 same data and tasks as the nowcasts (`forecast_tasks`: the nowcast tasks
 with their weeks moved 1 to 4 weeks past the nowcast's last week).
-A date on or after the split is refused (`check_dates`).
+A date on or after the split is refused (`check_dates`), and so is any
+target week ending on or after it (Sam: never the second half), so the
+horizons have 73, 66, 59 and 52 origins (`origins_per_horizon`). Set
+`KEEP_SECOND_HALF_TARGETS` to True (and rerun the units) to keep them.
 
 No model is refitted or changed for this. `randomwalknowcast` walks on
 from each sample's completed cut-off week (`RandomWalkNowcast._paths`),
@@ -24,10 +27,15 @@ Truth is the nowcasts' rule (`with_truth`): each sum's count in the data
 so every forecast has one.
 
 The models: `randomwalknowcast` and zero-shot Chronos-2 (`reference`),
-and the `_ft` models of one checkpoint, by default the live run's newest
-whose German nowcasts are done (`latest_checkpoint`). Forecasts are
-cached in `<cache>/germany_forecast/<label>/<date>.csv.gz`, one file per
-date as it finishes.
+and the `_ft` models of one checkpoint: the live run's newest whose
+German nowcasts are done (`latest_checkpoint`) when the job first starts.
+That label is pinned in `<cache>/germany_forecast/label.txt` (`PIN`) and
+newer checkpoints are never forecast while the file exists; remove it by
+hand to forecast the newest. The poller's gate (`units`) waits for every
+live German nowcast it can still finish: labels held, superseded or
+failed too often (`skip`) do not block it. Forecasts are cached in
+`<cache>/germany_forecast/<label>/<date>.csv.gz`, one file per date as
+it finishes.
 
 Rows: study `germany_forecast`, so readers of the other studies pass
 them by, with `horizon_weeks` (1 to 4). WIS and log WIS by level
@@ -42,7 +50,7 @@ import datetime as dt
 import json
 import sys
 import time
-from collections.abc import Mapping, Sequence
+from collections.abc import Collection, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -57,6 +65,10 @@ HORIZON_WEEKS = (1, 2, 3, 4)
 """Weeks from the nowcast date's hub week to each forecast week."""
 REFERENCE_MODELS = (cs.BASELINE, *cs.ZERO_SHOT)
 """The reference run's models: no complete-data models, to save time."""
+KEEP_SECOND_HALF_TARGETS = False
+"""Keep target weeks ending on or after the split (False: dropped)."""
+PIN = "label.txt"
+"""In `<cache>/germany_forecast/`: the checkpoint the job forecasts."""
 ZERO_SHOT = "zero-shot"
 """`rel_to` of rows divided by the same model zero-shot."""
 CONFIG = "config/germany.toml"
@@ -149,7 +161,29 @@ def forecasts(
     fc = de.germany_forecasts(
         models, triangle, [date], n_samples, seed, make_tasks=tasks
     )
+    fc = first_half(fc, split_date)
     return fc.assign(horizon_weeks=fc["horizon"] // 7)
+
+
+def first_half(fc: pd.DataFrame, split_date: str) -> pd.DataFrame:
+    """Drop target weeks ending on or after the split, unless kept."""
+    if KEEP_SECOND_HALF_TARGETS:
+        return fc
+    return fc.loc[fc["target_end_date"] < split_date].reset_index(drop=True)
+
+
+def origins_per_horizon(
+    dates: Sequence[str], split_date: str
+) -> dict[int, int]:
+    """Return the origins each horizon keeps (`first_half`)."""
+    out = {}
+    for h in HORIZON_WEEKS:
+        ends = [
+            (dt.date.fromisoformat(d) + dt.timedelta(weeks=h)).isoformat()
+            for d in dates
+        ]
+        out[h] = sum(KEEP_SECOND_HALF_TARGETS or e < split_date for e in ends)
+    return out
 
 
 def with_truth(
@@ -243,19 +277,38 @@ def latest_checkpoint(
     return max(finished, key=lambda lb: (_outbreaks(cache, lb), lb))
 
 
-def units(
-    cache: Path, runs: Mapping[str, str], done: Any = None
-) -> list[tuple[str, str]]:
-    """Return the forecast units still to run.
+def pinned(cache: Path) -> str | None:
+    """Return the pinned checkpoint (`PIN`), or None."""
+    pin = cache / STUDY / PIN
+    return pin.read_text().strip() or None if pin.exists() else None
 
-    None while any live German nowcast is not done, then the reference's
-    and the latest checkpoint's. `done` is `cs.unit_done` by default.
+
+def units(
+    cache: Path,
+    runs: Mapping[str, str],
+    done: Any = None,
+    skip: Collection[str] = (),
+) -> list[tuple[str, str]]:
+    """Return the forecast units still to run, pinning the label.
+
+    With a pinned label (`PIN`), the reference's and its units. Else none
+    while a live German nowcast not in `skip` (labels the poller cannot
+    finish) is not done; then the reference's and the latest checkpoint's,
+    which is pinned here as the job starts. `done` is `cs.unit_done` by
+    default.
     """
     done = done or cs.unit_done
-    if any(not done(cache, "germany", lb) for lb in live_labels(runs)):
-        return []
-    latest = latest_checkpoint(cache, runs, done)
-    labels = [cs.REFERENCE, *([latest] if latest else [])]
+    label = pinned(cache)
+    if label is None:
+        live = [lb for lb in live_labels(runs) if lb not in set(skip)]
+        if any(not done(cache, "germany", lb) for lb in live):
+            return []
+        label = latest_checkpoint(cache, runs, done)
+        if label is not None:
+            root = cache / STUDY
+            root.mkdir(parents=True, exist_ok=True)
+            (root / PIN).write_text(label + "\n")
+    labels = [cs.REFERENCE, *([label] if label else [])]
     return [(STUDY, lb) for lb in labels if not done(cache, STUDY, lb)]
 
 
@@ -345,7 +398,9 @@ def rows(
     for label in ready:
         files = [cache / STUDY / label / f"{d}.csv.gz" for d in want]
         fc = pd.concat([cs.read_cache(f) for f in files], ignore_index=True)
-        fc = fc.loc[fc["origin"] < config.split_date]
+        fc = first_half(
+            fc.loc[fc["origin"] < config.split_date], config.split_date
+        )
         sc = scores(fc.drop(columns="target"), config.truth_delay)
         parts.append(cs._tag(sc, label).assign(target="7day"))
     sc = pd.concat(parts, ignore_index=True).rename(columns={"pool": "level"})

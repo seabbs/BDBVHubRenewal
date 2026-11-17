@@ -14,11 +14,10 @@ branch, checks the commit is on origin, and writes a mailbox line for
 bdbv-paper. When no checkpoint is waiting it extends the scored
 checkpoints' BDBV rows to origins new releases add, and then runs the
 health zones (`zone_units`), each label landed as its unit ends, and
-then the German 1 to 4 week forecasts (`forecast_units`, once the live
-run's German nowcasts are done: the reference, then its latest
-checkpoint), then the daily target (`daily_units`): the reference's first (about
+then the daily target (`daily_units`): the reference's first (about
 4.5 h), then the one-model checkpoints', each landed again with its
-daily rows. The German job runs the zone units too, after the held-out
+daily rows, and last the German 1 to 4 week forecasts (`forecast_units`:
+the reference and one pinned live checkpoint, SI only). The German job runs the zone units too, after the held-out
 scores (`german_units`). Units
 run with the 7-day target only otherwise, so 7-day rows never wait.
 Units resume from the cache, so a restart loses only the forecasts in
@@ -304,7 +303,7 @@ def zone_units(cache: Path, runs: Mapping[str, str]) -> list[Unit]:
 FORECAST_JOB = "German forecasts"
 """The idle-time job: 1 to 4 week German forecasts of the reference and
 the live run's latest checkpoint (`forecast_units`), SI only."""
-IDLE_JOBS = ("new BDBV origins", ZONE_JOB, FORECAST_JOB, DAILY_JOB)
+IDLE_JOBS = ("new BDBV origins", ZONE_JOB, DAILY_JOB, FORECAST_JOB)
 """The idle path's jobs, in the order they run."""
 
 
@@ -315,14 +314,25 @@ def _forecasts():
     return germany_forecast
 
 
-def forecast_units(cache: Path, runs: Mapping[str, str]) -> list[Unit]:
+def forecast_units(
+    cache: Path,
+    runs: Mapping[str, str],
+    failures: Mapping[str, int] | None = None,
+    hold: Path = HOLD,
+) -> list[Unit]:
     """Return the German forecast units still to run.
 
     None while any of the live run's German nowcasts is not done, so they
     never wait for these; then the reference's and the latest live
-    checkpoint's (most outbreaks), only (`germany_forecast.units`).
+    checkpoint's (most outbreaks), pinned when the job first starts
+    (`germany_forecast.units`). Live labels the poller cannot finish do
+    not block it: held (`unheld`), or failed `MAX_FAILURES` times.
     """
-    return list(_forecasts().units(cache, runs, cs.unit_done))
+    labels = sorted(runs)
+    kept = set(unheld(labels, zero_init_labels(cache), hold))
+    skip = {lb for lb in labels if lb not in kept}
+    skip |= {lb for lb, n in (failures or {}).items() if n >= MAX_FAILURES}
+    return list(_forecasts().units(cache, runs, cs.unit_done, skip))
 
 
 def german_units(pick: list[str], zones: list[Unit]) -> list[Unit]:
@@ -895,7 +905,20 @@ def main(cache: Path) -> None:
                         f"{cache.parent / 'log'}")  # fmt: skip
                     time.sleep(POLL_SECONDS)
                 continue
-            ahead = forecast_units(cache, runs)
+            daily = daily_units(cache, sorted(scored), runs)
+            if daily and failures.get(DAILY_JOB, 0) < MAX_FAILURES:
+                labels = sorted({u[1] for u in daily})
+                log(f"progress: {DAILY_JOB} started: {', '.join(labels)}")
+                if run_units(cache, daily, DAILY_JOB, newer_slots, paused):
+                    land(cache, sorted(keep),
+                         f"daily target of {', '.join(labels)}")  # fmt: skip
+                elif not paused:
+                    failures[DAILY_JOB] = failures.get(DAILY_JOB, 0) + 1
+                    say(f"FAILED the {DAILY_JOB} ({', '.join(labels)}); "
+                        f"logs in {cache.parent / 'log'}")  # fmt: skip
+                    time.sleep(POLL_SECONDS)
+                continue
+            ahead = forecast_units(cache, runs, failures)
             if ahead and failures.get(FORECAST_JOB, 0) < MAX_FAILURES:
                 log(f"progress: {FORECAST_JOB} started: "
                     f"{', '.join(u[1] for u in ahead)}")  # fmt: skip
@@ -908,19 +931,6 @@ def main(cache: Path) -> None:
                     failures[FORECAST_JOB] = failures.get(FORECAST_JOB, 0) + 1
                     say(f"FAILED the {FORECAST_JOB}; logs in "
                         f"{cache.parent / 'log'}")  # fmt: skip
-                    time.sleep(POLL_SECONDS)
-                continue
-            daily = daily_units(cache, sorted(scored), runs)
-            if daily and failures.get(DAILY_JOB, 0) < MAX_FAILURES:
-                labels = sorted({u[1] for u in daily})
-                log(f"progress: {DAILY_JOB} started: {', '.join(labels)}")
-                if run_units(cache, daily, DAILY_JOB, newer_slots, paused):
-                    land(cache, sorted(keep),
-                         f"daily target of {', '.join(labels)}")  # fmt: skip
-                elif not paused:
-                    failures[DAILY_JOB] = failures.get(DAILY_JOB, 0) + 1
-                    say(f"FAILED the {DAILY_JOB} ({', '.join(labels)}); "
-                        f"logs in {cache.parent / 'log'}")  # fmt: skip
                     time.sleep(POLL_SECONDS)
                 continue
             log("progress: idle, every published checkpoint scored")
