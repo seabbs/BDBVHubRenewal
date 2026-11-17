@@ -20,6 +20,7 @@ from bdbvhubrenewal.data.zones import (
 )
 from bdbvhubrenewal.evaluation.backtest import BacktestConfig, make_tasks
 from bdbvhubrenewal.forecasters import RandomWalk, RandomWalkNowcast
+from bdbvhubrenewal.forecasters.zones import check_zone_coherence
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "scripts"
@@ -136,15 +137,36 @@ def test_a_model_s_own_zone_rows_are_kept_as_cached(made, draws) -> None:
     assert np.array_equal(got.to_numpy(), want.to_numpy())
 
 
-def test_a_model_with_no_zone_rows_and_no_zone_run_is_skipped(
+def test_a_model_with_no_zone_rows_is_split_from_its_provinces(
     bz, task, draws, counts, zones, daily_zones
 ) -> None:
+    # As the old poller scored: the backtest tasks carry no zone data,
+    # so a Chronos-2 checkpoint's zones are its province draws split.
     other = draws.loc[
         (draws["model"] == "randomwalknowcast")
         & ~draws["location"].map(is_zone)
     ].assign(model="fm_chronos_weekly_ragged_ft")
     got = bz.origin_zones(task, other, counts, zones, daily_zones)
-    assert got.empty
+    assert set(got["zone_method"]) == {"split"}
+    zone = got[["location", "target_end_date", "sample", "value"]]
+    assert (
+        check_zone_coherence(
+            _provinces(other, "fm_chronos_weekly_ragged_ft"), zone
+        )
+        == []
+    )
+
+
+def test_an_origin_with_no_zones_at_all_stops_the_unit(
+    bz, task, draws, zones, daily_zones
+) -> None:
+    empty = pd.DataFrame(columns=["location", "target_end_date", "count"])
+    other = draws.loc[
+        (draws["model"] == "randomwalknowcast")
+        & ~draws["location"].map(is_zone)
+    ].assign(model="fm_chronos_weekly_ragged_ft")
+    with pytest.raises(ValueError, match="no zone draws"):
+        bz.origin_zones(task, other, empty, zones, daily_zones)
 
 
 def test_zones_cover_only_the_forecast_provinces(made, task, zones) -> None:
