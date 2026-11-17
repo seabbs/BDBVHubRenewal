@@ -103,3 +103,16 @@ def test_the_evidence_has_the_compact_tables_and_labels(tmp_path) -> None:
     assert live["germany"]["label"] == (
         "Preliminary: fine-tuned on 1,000 of 8,000 simulations."
     )
+
+
+def test_the_runs_are_compared_at_matched_sizes() -> None:
+    from paperpipe.evidence import slots_summary
+
+    extra = _scores()
+    extra = extra.loc[extra["run"] == "no-slots"].assign(
+        checkpoint="plain2", outbreaks=2000, rel_crps=0.1, loss=0.01
+    )
+    out = slots_summary(pd.concat([_scores(), extra]), "one-model")
+    # Both runs reached 1,000, so both rows give 1,000, not 2,000.
+    assert out.iloc[2]["BDBV CRPS"] == "1.00 / 1.00 (1,000)"
+    assert out.iloc[1]["BDBV CRPS"] == "1.00 / 1.00 (1,000)"

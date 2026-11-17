@@ -218,6 +218,12 @@ Each section has two paragraphs, one on visual performance and one summarising s
 Key references: the Methods references, with [@bracherEvaluatingEpidemicForecasts2021; @Bosse2023-sx] for the natural- and log-scale panels.
 :::
 
+::: {#tbl-live-summary}
+{{< include build/tables/si/live-summary.md >}}
+
+Zero-shot Chronos-2 and the newest scored checkpoint of the fine-tuned model: national WIS on the German first half and CRPS and log CRPS on the BDBV release backtest, relative to `randomwalknowcast` (daily / weekly model), and the trainer's held-out loss, with each cell's simulations in brackets. The SI gives every checkpoint (Checkpoint curve). {{< meta evidence.live.label >}} Development data only.
+:::
+
 ### Held-out synthetic data
 
 ::: {.callout-note title="Plan"}

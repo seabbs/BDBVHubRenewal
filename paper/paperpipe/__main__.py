@@ -26,6 +26,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 import pandas as pd
+from bdbvhubrenewal.reporting.live_checkpoint import LIVE_RUN
 
 from paperdata import germany
 from paperfigs.joint import joint_scores
@@ -193,9 +194,7 @@ def _joint(a: argparse.Namespace) -> None:
 
 def _evidence(a: argparse.Namespace) -> None:
     paths = {name: getattr(a, name) for name in EVIDENCE}
-    numbers = write_evidence(
-        paths, a.si_dir, a.fig_dir, a.out, checkpoints=tuple(a.checkpoints)
-    )
+    numbers = write_evidence(paths, a.si_dir, a.fig_dir, a.out, run=a.live_run)
     if a.mode == "paper" and numbers["evidence"]["waiting"]:
         raise ValueError(
             "The paper run cannot leave SI results out; it waits on "
@@ -343,7 +342,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--si-dir", type=Path, required=True)
     p.add_argument("--fig-dir", type=Path, required=True)
     p.add_argument("--out", type=Path, required=True)
-    p.add_argument("--checkpoints", nargs="*", default=[])
+    p.add_argument(
+        "--live-run",
+        default=LIVE_RUN,
+        help="The live fine-tuning run, by the checkpoint scores' `run`.",
+    )
     p.set_defaults(run=_evidence)
 
     p = sub.add_parser("ebola-extra")

@@ -8,13 +8,16 @@ render: development
 studies: [synthetic, germany, ebola]
 # The final fine-tuning run (with series slots) writes each checkpoint to
 # `finetune_run`/n<outbreaks>/ and publishes it as `chronos-ft-<hash>`.
-# `finetuned` is the newest published one, which every `_ft` model of the
-# workflow loads and the paper names, and `final_checkpoints` all of
-# them, which the checkpoint curve shows. scripts/follow_checkpoint.py
-# sets both. Null and empty leave the fine-tuned rows pending.
+# `finetuned` is the checkpoint every `_ft` model of the workflow loads;
+# null leaves the fine-tuned forecasts pending. scripts/follow_checkpoint.py
+# sets it.
 finetune_run: ../output/checkpoints/slots
 finetuned: null
 final_checkpoints: []
+# The live fine-tuning run (the checkpoint scores' `run`) whose newest
+# scored checkpoints the SI curve, comparisons and tables show as
+# preliminary, from `evidence.checkpoint_scores` at its branch head.
+live_run: one-model
 # Samples per forecast for the studies scored on samples.
 n_samples: 100
 
@@ -127,11 +130,12 @@ evidence:
     ref: c77f5a241afef356430c5a587623f8fa0d03f9b5
     path: scripts/finetune_simulate.R
   # Scores of the final run's checkpoints on the case studies (ckpt-scores).
+  # Followed at the branch head, never pinned: each run shows the live
+  # run's newest scored checkpoints (bdbvhubrenewal.reporting.
+  # live_checkpoint), as preliminary.
   checkpoint_scores:
-    ref: 73a2780b4ff0013d0fab97da8a22beba03008bcf
+    branch: checkpoint-scoring
     path: evidence/checkpoint-scores.csv
-    # The rows carry the scoring rule; only `CHECKPOINT_RULE`'s are shown,
-    # for the final run's checkpoints (`final_checkpoints`).
   # Pending: the scale-floor test on the final run's checkpoints.
   scale_floor: null
   # The lag-horizon test of the ragged layout (germany-chronos2).
@@ -157,10 +161,6 @@ evidence:
   aggregation_cost:
     ref: 5a3e0440880f54751fd8dccbfa14133a2a74ba81
     path: results/agg/aggregation-cost.csv
-  # The slots run's check against no slots and zero-shot, with the
-  # lag-swap test (slots-check), for its newest checked checkpoint.
-  # Pending: the final slots run's first checked checkpoint.
-  slots_check: null
   # Each fine-tuning comparison's scores by checkpoint (paperpipe.evidence:
   # set, run, outbreaks, score). Pending: the runs' checkpoints.
   compare_slots: null
@@ -171,9 +171,6 @@ evidence:
   # Pending: fm-finetune3's realised shares of each combination of block
   # layout and options.
   block_combinations: null
-  # Pending: held-out synthetic scores by block layout and target, from
-  # fm-finetune3's manifest of each held-out block.
-  heldout_layout: null
   # Pending: the final run's held-out loss curve.
   finetune_heldout: null
   # Pending: summaries of the final grid's simulations.
