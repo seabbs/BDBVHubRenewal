@@ -314,6 +314,11 @@ def build_parser() -> argparse.ArgumentParser:
     zb.add_argument("--energy-out", default="results/zone-energy.csv")
     zb.add_argument("--quantiles-out", default="results/zone-quantiles.csv")
     zb.add_argument("--draws-out", default="results/zone-draws.csv.gz")
+    zb.add_argument(
+        "--backtest-config",
+        default="config/backtest.toml",
+        help="Gives `score_samples`, the draws per zone forecast.",
+    )
 
     gfe = sub.add_parser(
         "germany-fetch",
@@ -736,7 +741,7 @@ def _backtest(args: argparse.Namespace) -> int:
         as_of, dates = _scenario_dates(args, target)
         sforecasts, sscores, senergy, struth = bt.run_scenarios(
             models,
-            config,
+            bt.for_scoring(config),
             target,
             delays,
             load_health_zones(args.data),
@@ -834,7 +839,7 @@ def _forecast_parts(
         as_of, dates = _scenario_dates(args, target)
         forecasts, zones = bt.scenario_forecasts(
             models,
-            config,
+            bt.for_scoring(config),
             target,
             delays,
             load_health_zones(args.data),
@@ -850,7 +855,7 @@ def _forecast_parts(
             dates = chunk(config.simulated_dates, args.chunk)
             config = dataclasses.replace(config, simulated_dates=tuple(dates))
         forecasts = bt.recovery_forecasts(
-            models, config, lags=cutoff_lags(daily)
+            models, bt.for_scoring(config), lags=cutoff_lags(daily)
         )
         write_csv(forecasts, parts / "recovery-forecasts.csv.gz")
     else:
@@ -868,7 +873,9 @@ def _forecast_parts(
             table = pd.concat(frames, ignore_index=True) if frames else None
             write_csv(pd.DataFrame() if table is None else table, parts / name)
         tasks = list(store.origin_tasks(target, delays, config, daily).values())
-        forecast_releases(tasks, target, models).write(parts)
+        forecast_releases(
+            bt.tasks_for_scoring(tasks, config), target, models
+        ).write(parts)
     print(f"Forecasts of {[m.name for m in models]} written to {parts}.")
     return 0
 
@@ -1001,7 +1008,7 @@ def _recovery(
 ) -> pd.DataFrame:
     """Run the recovery check, write its files and return its scores."""
     rforecasts, rscores, renergy = bt.run_recovery(
-        models, config, lags=cutoff_lags(load_daily(args.data))
+        models, bt.for_scoring(config), lags=cutoff_lags(load_daily(args.data))
     )
     for table, path in (
         (rforecasts, output / "recovery-forecasts.csv.gz"),
@@ -1028,8 +1035,10 @@ def _release_backtest(
     tasks = list(store.origin_tasks(target, delays, config, daily).values())
     stored, learnt = _stored(args, target, forecasts)
     delay = resolve_truth_delay(config, target)
+    # The baselines run here take `score_samples` draws; the stored fits
+    # keep theirs.
     out = release_backtest(
-        tasks,
+        bt.tasks_for_scoring(tasks, config),
         daily,
         target,
         stored=stored,
@@ -1055,7 +1064,7 @@ def _release_scores(
     stored, learnt = _stored(args, target, forecasts)
     delay = resolve_truth_delay(config, target)
     out = score_releases(
-        tasks,
+        bt.tasks_for_scoring(tasks, config),
         daily,
         target,
         run,
@@ -1329,6 +1338,10 @@ def _zone_backtest(args: argparse.Namespace) -> int:
     from bdbvhubrenewal.evaluation.zones import zone_backtest
 
     hub_config = Path(args.data) / "hub-config" / "tasks.json"
+    # The zone backtest keeps its own default horizons and seed, with
+    # `score_samples` draws.
+    draws = bt.load_config(args.backtest_config).score_samples
+    config = dataclasses.replace(bt.BacktestConfig(), n_samples=draws)
     if args.forecast_only:
         from bdbvhubrenewal.evaluation.zones import zone_forecasts
 
@@ -1339,6 +1352,7 @@ def _zone_backtest(args: argparse.Namespace) -> int:
             load_daily_zones(args.data),
             hub_zones(hub_config),
             models=args.models,
+            config=config,
             origins=_zone_origins(args),
         ).write(args.parts)
         print(f"Zone forecasts of {args.models} written to {args.parts}.")
@@ -1350,6 +1364,7 @@ def _zone_backtest(args: argparse.Namespace) -> int:
         load_daily_zones(args.data),
         hub_zones(hub_config),
         models=args.models,
+        config=config,
         origins=_zone_origins(args),
     )
     _write_zone_results(
@@ -1569,7 +1584,7 @@ def _compare_hub(args: argparse.Namespace) -> int:
         rounds,
         target,
         delays,
-        config,
+        bt.for_scoring(config),
         live,
         daily,
         load_daily_zones(args.data),

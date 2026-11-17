@@ -3,7 +3,7 @@
 
 The page embeds one row per model, origin, release, place and week, and
 `docs/javascripts/summarise.js` summarises any selection of them as
-`relative_wis` does: over the forecasts the baseline also made, the mean
+`relative_crps` does: over the forecasts the baseline also made, the mean
 of each metric and, for relative metrics, the model's mean over the
 baseline's. A model with fewer of the baseline's forecasts than the
 baseline is marked partial (`mark_partial`), so its row is read apart
@@ -30,8 +30,8 @@ __all__ = [
 ]
 
 SUMMARY_METRICS: tuple[tuple[str, str, float | None, bool], ...] = (
-    ("wis", "WIS", None, True),
-    ("log_wis", "WIS on the log scale", None, True),
+    ("crps", "CRPS", None, True),
+    ("log_crps", "CRPS on the log scale", None, True),
     ("coverage_50", "50% coverage", 0.5, False),
     ("coverage_90", "90% coverage", 0.9, False),
     ("bias", "Bias", 0.0, False),
@@ -60,7 +60,7 @@ def mark_partial(
     Parameters
     ----------
     table : pandas.DataFrame
-        `relative_wis` or `relative_energy` output, with `model`, the `by`
+        `relative_crps` or `relative_energy` output, with `model`, the `by`
         columns and `n` (or `n_energy`).
     by : sequence of str
         Columns of a row other than `model`.

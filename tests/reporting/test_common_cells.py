@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from bdbvhubrenewal.evaluation.nowcast import relative_wis
+from bdbvhubrenewal.evaluation.nowcast import relative_crps
 from bdbvhubrenewal.reporting.scoresummary import mark_partial
 
 
@@ -25,8 +25,8 @@ def _rows() -> pd.DataFrame:
                         "location": loc,
                         "target_end_date": "2026-10-03",
                         "pool": "all",
-                        "wis": 1.0 + len(model),
-                        "log_wis": 0.1,
+                        "crps": 1.0 + len(model),
+                        "log_crps": 0.1,
                         "coverage_50": 1.0,
                         "coverage_90": 1.0,
                         "bias": 0.0,
@@ -37,7 +37,7 @@ def _rows() -> pd.DataFrame:
 
 def test_full_rows_share_n_and_a_model_lacking_cells_is_marked() -> None:
     table = mark_partial(
-        relative_wis(_rows(), by=("pool",), baseline="randomwalknowcast"),
+        relative_crps(_rows(), by=("pool",), baseline="randomwalknowcast"),
         by=("pool",),
         baseline="randomwalknowcast",
     ).set_index("model")
@@ -54,11 +54,8 @@ def test_full_rows_share_n_and_a_model_lacking_cells_is_marked() -> None:
 def test_report_relative_crps_marks_partial_rows() -> None:
     from bdbvhubrenewal.reporting.report import relative_crps
 
-    rows = _rows()
-    rows["crps"] = rows["wis"]
-    rows["log_crps"] = rows["log_wis"]
     table = relative_crps(
-        rows, by=("pool",), baseline="randomwalknowcast"
+        _rows(), by=("pool",), baseline="randomwalknowcast"
     ).set_index("model")
     assert {"rel_crps", "rel_log_crps", "cells", "partial"} <= set(
         table.columns

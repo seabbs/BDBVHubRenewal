@@ -68,10 +68,10 @@ from bdbvhubrenewal.evaluation.hubcompare import (
     summarise_comparison,
 )
 from bdbvhubrenewal.evaluation.nowcast import (
-    relative_energy,
+    relative_crps as _relative_crps,
 )
 from bdbvhubrenewal.evaluation.nowcast import (
-    relative_wis as _relative_wis,
+    relative_energy,
 )
 from bdbvhubrenewal.evaluation.scoring import summarise_scores
 from bdbvhubrenewal.evaluation.store import samplers, stored_models
@@ -144,19 +144,19 @@ from bdbvhubrenewal.reporting.zone_nowcast import (
 __all__ = ["make_report"]
 
 
-def relative_wis(
+def relative_crps(
     scores: pd.DataFrame,
     by: Sequence[str] = ("target",),
     baseline: str = "randomwalk",
 ) -> pd.DataFrame:
-    """`nowcast.relative_wis`, with each model lacking cells marked.
+    """`nowcast.relative_crps`, with each model lacking cells marked.
 
     Each row gets `cells`, the baseline's n in its group, and `partial`
     (`mark_partial`). Full rows all have the baseline's n, and partial
     rows come after them in each group, so the tables never set a model
     scored on fewer forecasts among the others.
     """
-    out = mark_partial(_relative_wis(scores, by, baseline), by, baseline)
+    out = mark_partial(_relative_crps(scores, by, baseline), by, baseline)
     keys = [c for c in by if c in out.columns]
     return out.sort_values([*keys, "partial"], kind="stable").reset_index(
         drop=True
@@ -521,14 +521,14 @@ def _release_section(
         joint = relative_energy(energy, baseline=base).rename(
             columns={"scale": "pool"}
         )
-        return relative_wis(pooled, ("target", "pool"), baseline=base).merge(
+        return relative_crps(pooled, ("target", "pool"), baseline=base).merge(
             joint, on=["target", "pool", "model"], how="left"
         )
 
     overall = overall_for("randomwalk")
-    by_pool = relative_wis(pooled, ("target", "pool", "origin"))
+    by_pool = relative_crps(pooled, ("target", "pool", "origin"))
     scores["target"] = scores["target"].map(_TARGET_LABELS)
-    by_place = relative_wis(scores, ("target", "origin", "location"))
+    by_place = relative_crps(scores, ("target", "origin", "location"))
     reported = overall.loc[overall["target"] == _TARGET_LABELS["reported"]]
     ours = list(names)
     colours = _model_colours(ours)
@@ -560,7 +560,7 @@ def _release_section(
     save_light_dark(
         partial(
             plot_place_summary,
-            relative_wis(rep, ("pool", "location")),
+            relative_crps(rep, ("pool", "location")),
             ours,
             colours,
             _location_names(real),
@@ -579,7 +579,7 @@ def _release_section(
     _write(
         gen / "scores-location.md",
         filter_table(
-            _table(relative_wis(pooled, ("target", "pool", "location"))),
+            _table(relative_crps(pooled, ("target", "pool", "location"))),
             ["target", "pool", "model"],
         ),
     )
@@ -700,7 +700,7 @@ def _scored_on(reported: pd.DataFrame, baseline: str = "randomwalk") -> str:
         "release pairs.\n"
         f"The {baseline} baseline has {listed}{counts[-1]} forecasts.\n"
         f"{zero} of them are of a place and week with no case, where every "
-        "model's WIS is close to 0, so mean WIS is lower than over places "
+        "model's CRPS is close to 0, so mean CRPS is lower than over places "
         "with cases.\n"
         "The renewal models are not scored at health zones.\n"
     )
@@ -1141,7 +1141,7 @@ def _lopo_section(path: Path) -> str:
     if scores.empty:
         return ""
     table = summarise_scores(scores, by=("model", "masked"))
-    cols = ["n", "wis", "log_wis", "coverage_50", "coverage_90", "bias"]
+    cols = ["n", "crps", "log_crps", "coverage_50", "coverage_90", "bias"]
     return (
         "## Leave one province out\n\n"
         "Each province with cases is forecast with its own counts left out "
@@ -1230,8 +1230,8 @@ def _with_horizon(scores: pd.DataFrame) -> pd.DataFrame:
 
 
 _METRIC_TABS: Final = (
-    ("wis", "WIS", ""),
-    ("log_wis", "WIS on the log scale", "-log-wis"),
+    ("crps", "CRPS", ""),
+    ("log_crps", "CRPS on the log scale", "-log-crps"),
 )
 """Score metrics shown as tabs, with their tab label and file suffix."""
 
@@ -1250,7 +1250,7 @@ def _metric_tabs(stem: str, alt: str) -> str:
     """Tabs of one figure per metric, as `_save_metric_figures` saves."""
     tabs = []
     for _, label, suffix in _METRIC_TABS:
-        what = alt.replace("WIS", label)
+        what = alt.replace("CRPS", label)
         tabs.append(
             f'=== "{label}"\n\n'
             f"    ![{what}](figures/{stem}{suffix}.svg#only-light)\n"
@@ -1273,7 +1273,7 @@ def _horizon_table(
     reported: pd.DataFrame,
     names: Sequence[str],
 ) -> None:
-    """Write the relative WIS and coverage by horizon table, reported target.
+    """Write the relative CRPS and coverage by horizon table, reported target.
 
     Only the forecasts random walk also made are shown.
     """
@@ -1283,14 +1283,14 @@ def _horizon_table(
     if both["model"].nunique() < 2:
         _write(gen / "backtest-summary.md", "")
         return
-    table = relative_wis(both, ("horizon",))
+    table = relative_crps(both, ("horizon",))
     table["model"] = pd.Categorical(table["model"], list(names), ordered=True)
     table = table.sort_values(["model", "horizon"]).reset_index(drop=True)
     origins = ", ".join(sorted(set(both["origin"].astype(str))))
     _write(
         gen / "backtest-summary.md",
         _dropdown(
-            "Mean WIS divided by that of random walk, and interval "
+            "Mean CRPS divided by that of random walk, and interval "
             "coverage, on the counts each later release reported, over the "
             f"forecasts both made from the origins {origins}.\n"
             "Horizons after the latest release have no score yet.\n\n"
@@ -1367,7 +1367,7 @@ def _energy_means(energy: pd.DataFrame, by: Sequence[str]) -> str:
 
 def _recovery_section(srcs: Mapping[str, str], energy: pd.DataFrame) -> str:
     """Return the recovery section, with the summaries of `srcs`."""
-    alt = "Mean WIS by horizon on simulated vintages."
+    alt = "Mean CRPS by horizon on simulated vintages."
     views = _summary_views(srcs, "(simulated vintages)")
     return (
         "## Recovery on simulated vintages\n\n"
@@ -1382,8 +1382,8 @@ def _recovery_section(srcs: Mapping[str, str], energy: pd.DataFrame) -> str:
         + views["place"]
         + "\n"
         + _dropdown(
-            f"![{alt}](figures/recovery-wis-horizon.svg#only-light)\n"
-            f"![{alt}](figures/recovery-wis-horizon-dark.svg#only-dark)\n\n"
+            f"![{alt}](figures/recovery-crps-horizon.svg#only-light)\n"
+            f"![{alt}](figures/recovery-crps-horizon-dark.svg#only-dark)\n\n"
             + _energy_means(energy, ["scale"]),
             "Static figure and energy scores",
         )
@@ -1425,8 +1425,8 @@ def _scenario_scores(path: Path, energy_path: Path) -> str:
             scores.loc[keep]
             .groupby(["scenario", "level", "model"], sort=False)
             .agg(
-                wis=("wis", "mean"),
-                log_wis=("log_wis", "mean"),
+                crps=("crps", "mean"),
+                log_crps=("log_crps", "mean"),
                 coverage_50=("coverage_50", "mean"),
                 coverage_90=("coverage_90", "mean"),
                 bias=("bias", "mean"),
@@ -1434,8 +1434,8 @@ def _scenario_scores(path: Path, energy_path: Path) -> str:
             .reset_index()
             .rename(
                 columns={
-                    "wis": "mean WIS",
-                    "log_wis": "mean WIS on the log scale",
+                    "crps": "mean CRPS",
+                    "log_crps": "mean CRPS on the log scale",
                     "coverage_50": "50% coverage",
                     "coverage_90": "90% coverage",
                     "bias": "mean bias",
@@ -1457,8 +1457,8 @@ def _scenario_scores(path: Path, energy_path: Path) -> str:
 
 def _scenario_figure() -> str:
     """Return the scenario figure links."""
-    alt = "Mean WIS by horizon on the simulated scenarios."
-    return _metric_tabs("scenario-wis-horizon", alt)
+    alt = "Mean CRPS by horizon on the simulated scenarios."
+    return _metric_tabs("scenario-crps-horizon", alt)
 
 
 _SCENARIOS: Final = {
@@ -1687,7 +1687,7 @@ def _backtest_page(
     reported = scores.loc[scores["target"] == "reported"]
     save_light_dark(
         partial(
-            plot_scores, reported, by="horizon", metric="wis", models=names
+            plot_scores, reported, by="horizon", metric="crps", models=names
         ),
         fig / "scores-horizon.svg",
     )
@@ -1698,7 +1698,7 @@ def _backtest_page(
     )
     _write(
         gen / "scores-by-truth.md",
-        _table(relative_wis(scores, ("target", "origin", "truth_vintage"))),
+        _table(relative_crps(scores, ("target", "origin", "truth_vintage"))),
     )
     weeks = sorted(set(reported["target_end_date"].astype(str)))
     changes = truth_changes(target, locations=(NATIONAL,))
@@ -1859,7 +1859,7 @@ def _backtest_page(
         lambda mode: plot_scores(
             rscores, by="horizon", models=names, mode=mode
         ),
-        fig / "recovery-wis-horizon.svg",
+        fig / "recovery-crps-horizon.svg",
     )
     scen_path = res / "scenario-scores.csv.gz"
     _write(
@@ -1874,7 +1874,7 @@ def _backtest_page(
     sscores = pd.read_csv(scen_path, low_memory=False)
     _save_metric_figures(
         fig,
-        "scenario-wis-horizon",
+        "scenario-crps-horizon",
         partial(
             plot_scenarios,
             sscores,
@@ -1973,8 +1973,8 @@ def _checks_section(
 
 
 _CHECK_METRICS: Final = (
-    ("relative WIS", "Relative WIS", 1.0, True),
-    ("WIS", "WIS", None, False),
+    ("relative CRPS", "Relative CRPS", 1.0, True),
+    ("CRPS", "CRPS", None, False),
     ("90% coverage", "90% coverage", 0.9, False),
 )
 """Checks chart metrics: column, label, reference line and log axis."""
@@ -2303,7 +2303,7 @@ def _comparison_summary(
         default_on=[*hub, *(m for m in ours if m in on)],
         baseline=base,
     )
-    overall = relative_wis(rows, ("pool",), baseline=base)
+    overall = relative_crps(rows, ("pool",), baseline=base)
     save_light_dark(
         partial(
             plot_relative_overall,
@@ -2328,7 +2328,7 @@ def _comparison_summary(
             filter_table(
                 _table(
                     _by_baseline(
-                        lambda b: relative_wis(rows, ("pool",), baseline=b),
+                        lambda b: relative_crps(rows, ("pool",), baseline=b),
                         models,
                     )
                 ),
@@ -2343,7 +2343,7 @@ def _comparison_summary(
             plot_scores,
             rows,
             by="horizon",
-            metric="wis",
+            metric="crps",
             models=models,
             colours=colours,
         ),
@@ -2361,7 +2361,7 @@ def _comparison_summary(
     save_light_dark(
         partial(
             plot_place_summary,
-            relative_wis(rows, ("pool", "location"), baseline=base),
+            relative_crps(rows, ("pool", "location"), baseline=base),
             models,
             colours,
             names,

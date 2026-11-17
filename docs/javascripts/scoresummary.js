@@ -12,7 +12,7 @@
   var summariseEnergy = window.bdbvSummariseEnergy;
 
   function fmt(v, dp) { return v === null || v === undefined || isNaN(v) ? "–" : v.toFixed(dp); }
-  // Lower-case the first letter of a label, but not of an acronym (WIS).
+  // Lower-case the first letter of a label, but not of an acronym (CRPS).
   function lower(s) {
     return /^[A-Z]{2}/.test(s) ? s : s.charAt(0).toLowerCase() + s.slice(1);
   }

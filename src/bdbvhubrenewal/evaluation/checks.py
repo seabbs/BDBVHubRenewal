@@ -48,7 +48,11 @@ RECENT_WEEKS = Settings().walk_weeks
 SMALL_MAX = 5
 """Largest recent weekly count of a small place."""
 
-_METRICS = {"wis": "WIS", "log_wis": "log WIS", "coverage_90": "90% coverage"}
+_METRICS = {
+    "crps": "CRPS",
+    "log_crps": "log CRPS",
+    "coverage_90": "90% coverage",
+}
 _ORDER = ("silent", "small", "larger", "no flag", "collapse", "blow-up")
 
 
@@ -159,31 +163,31 @@ def check_summary(
     flagged : pandas.DataFrame
         From `flags`.
     baseline : str
-        The model relative WIS divides by. Its WIS is taken on the same
-        scored weeks, whatever its own flag there. Relative WIS is
-        missing where the baseline's WIS sums to 0.
+        The model relative CRPS divides by. Its CRPS is taken on the same
+        scored weeks, whatever its own flag there. Relative CRPS is
+        missing where the baseline's CRPS sums to 0.
 
     Returns
     -------
     pandas.DataFrame
         Columns `scale`, `split` (`place type` or `flag`), `group`,
-        `model`, `n`, the mean of each metric and `relative WIS`.
+        `model`, `n`, the mean of each metric and `relative CRPS`.
     """
     keyed = scores.merge(types, on=["origin", "location"], how="left").merge(
         flagged, on=["model", "origin", "location"], how="left"
     )
     week = ["origin", "truth_vintage", "location", "target_end_date"]
-    base = scores.loc[scores["model"] == baseline, [*week, "wis"]]
+    base = scores.loc[scores["model"] == baseline, [*week, "crps"]]
     keyed = keyed.merge(
-        base.rename(columns={"wis": "base_wis"}), on=week, how="left"
+        base.rename(columns={"crps": "base_crps"}), on=week, how="left"
     )
     parts = []
     for split, col in (("place type", "place_type"), ("flag", "flag")):
         by = ["scale", col, "model"]
-        sums = keyed.groupby(by)[["wis", "base_wis"]].sum()
-        # A zero baseline gives no relative WIS, as in `relative_skill`.
-        base_sum = sums["base_wis"].where(sums["base_wis"] > 0)
-        rel = (sums["wis"] / base_sum).rename("relative WIS")
+        sums = keyed.groupby(by)[["crps", "base_crps"]].sum()
+        # A zero baseline gives no relative CRPS, as in `relative_skill`.
+        base_sum = sums["base_crps"].where(sums["base_crps"] > 0)
+        rel = (sums["crps"] / base_sum).rename("relative CRPS")
         parts.append(
             summarise_scores(keyed, by=by)
             .join(rel, on=by)
@@ -202,7 +206,7 @@ def check_summary(
         "group",
         "model",
         "n",
-        "relative WIS",
+        "relative CRPS",
         *_METRICS.values(),
     ]
     return out[cols].reset_index(drop=True)

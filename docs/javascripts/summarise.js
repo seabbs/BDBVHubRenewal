@@ -1,4 +1,4 @@
-// Summarise per-forecast scores for a selection, as relative_wis does in
+// Summarise per-forecast scores for a selection, as relative_crps does in
 // Python: each model over the forecasts the baseline also made (same
 // origin, release, place and week), with n, the mean of every metric and,
 // for relative metrics, the model's mean over the baseline's. Metric

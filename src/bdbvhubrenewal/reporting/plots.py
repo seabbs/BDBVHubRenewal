@@ -2008,7 +2008,7 @@ def plot_submission(
 def plot_scores(
     scores: pd.DataFrame,
     by: str = "horizon",
-    metric: str = "wis",
+    metric: str = "crps",
     models: Sequence[str] | None = None,
     mode: str = "light",
     colours: Mapping[str, tuple[str, str, str]] | None = None,
@@ -2022,7 +2022,7 @@ def plot_scores(
     by : str
         `"horizon"` or `"location"`.
     metric : str
-        A score column, such as `"wis"`, `"log_wis"`, `"coverage_90"` or
+        A score column, such as `"crps"`, `"log_crps"`, `"coverage_90"` or
         `"bias"`.
     models : sequence of str, optional
         Models in registry order.
@@ -2097,15 +2097,15 @@ def plot_scenarios(
     scores: pd.DataFrame,
     models: Sequence[str] | None = None,
     mode: str = "light",
-    metric: str = "wis",
+    metric: str = "crps",
 ) -> Figure:
-    """Plot mean WIS by horizon on the simulated scenarios.
+    """Plot mean CRPS by horizon on the simulated scenarios.
 
     Parameters
     ----------
     scores : pandas.DataFrame
         Scenario scores with `scenario`, `location`, `model`, `horizon`,
-        `wis`, `truth_view` and `complete`.
+        `crps`, `truth_view` and `complete`.
     models : sequence of str, optional
         Models in registry order.
     mode : str
@@ -2156,7 +2156,7 @@ def plot_scenarios(
 
 def plot_scores_by_truth(
     scores: pd.DataFrame,
-    metric: str = "wis",
+    metric: str = "crps",
     models: Sequence[str] | None = None,
     mode: str = "light",
 ) -> Figure:
@@ -2207,11 +2207,11 @@ def plot_scores_by_truth(
 
 
 _METRIC_LABELS: Final[dict[str, str]] = {
-    "wis": "Mean WIS",
-    "log_wis": "Mean WIS, log scale",
+    "crps": "Mean CRPS",
+    "log_crps": "Mean CRPS, log scale",
     "coverage_50": "50% interval coverage",
     "coverage_90": "90% interval coverage",
     "bias": "Mean bias",
-    "relative_wis": "WIS relative to randomwalk",
-    "relative_log_wis": "WIS on the log scale relative to randomwalk",
+    "relative_crps": "CRPS relative to randomwalk",
+    "relative_log_crps": "CRPS on the log scale relative to randomwalk",
 }

@@ -385,9 +385,9 @@ def test_summarise_comparison(
     )
     table = summarise_comparison(scores, "flat")
     rows = table.set_index("model")
-    assert rows.loc["flat", "relative_wis"] == pytest.approx(1)
+    assert rows.loc["flat", "rel_crps"] == pytest.approx(1)
     assert rows.loc["teamA-weekly", "n"] > 0
-    assert {"coverage_50", "coverage_90", "bias", "wis"} <= set(table.columns)
+    assert {"coverage_50", "coverage_90", "bias", "crps"} <= set(table.columns)
 
 
 def test_trajectory_samples_keep_open_teams_and_first_draws() -> None:

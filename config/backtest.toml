@@ -7,6 +7,10 @@
 min_horizon = -4
 max_horizon = 3
 n_samples = 100
+# Draws per forecast of the models run here, not the stored fits, which
+# keep n_samples. The paper scores the models it runs itself on 1,000
+# draws too. Every model shares the seed (common random numbers).
+score_samples = 1000
 seed = 20261027
 
 [split]

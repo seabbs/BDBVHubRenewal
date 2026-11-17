@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.evaluation.nowcast import relative_energy, relative_wis
+from bdbvhubrenewal.evaluation.nowcast import relative_crps, relative_energy
 from bdbvhubrenewal.evaluation.scoring import relative_skill
 from bdbvhubrenewal.reporting.scoresummary import summary_html, summary_rows
 
@@ -44,8 +44,8 @@ def _scores() -> pd.DataFrame:
                             "location": loc,
                             "target_end_date": week,
                             "horizon": -1 if week == "2026-10-10" else 0,
-                            "wis": rng.gamma(2, 5),
-                            "log_wis": rng.gamma(2, 0.1),
+                            "crps": rng.gamma(2, 5),
+                            "log_crps": rng.gamma(2, 0.1),
                             "coverage_50": float(rng.random() < 0.5),
                             "coverage_90": float(rng.random() < 0.9),
                             "bias": rng.uniform(-1, 1),
@@ -72,22 +72,22 @@ def _node(data: dict[str, object], keep: str) -> list[dict[str, object]]:
 
 
 @pytest.mark.parametrize("pool", ["national", "provinces", "zones"])
-def test_browser_summary_matches_relative_wis(pool: str) -> None:
+def test_browser_summary_matches_relative_crps(pool: str) -> None:
     scores = _scores()
     depth = scores["location"].str.count("-")
     scores["pool"] = depth.map({0: "national", 1: "provinces", 2: "zones"})
     data = summary_rows(scores, MODELS, COLOURS, {})
     places = [i for i, p in enumerate(data["places"]) if p["pool"] == pool]
     got = _node(data, f"function (r) {{ return {places}.includes(r[3]); }}")
-    want = relative_wis(scores, by=("pool",)).set_index(["pool", "model"])
+    want = relative_crps(scores, by=("pool",)).set_index(["pool", "model"])
     for row in got:
         exp = want.loc[(pool, MODELS[row["model"]])]
         assert row["n"] == exp["n"]
-        assert row["rel"]["wis"] == pytest.approx(exp["rel_wis"], abs=1e-3)
-        assert row["rel"]["log_wis"] == pytest.approx(
-            exp["rel_log_wis"], abs=1e-3
+        assert row["rel"]["crps"] == pytest.approx(exp["rel_crps"], abs=1e-3)
+        assert row["rel"]["log_crps"] == pytest.approx(
+            exp["rel_log_crps"], abs=1e-3
         )
-        for col in ("wis", "coverage_50", "coverage_90", "bias"):
+        for col in ("crps", "coverage_50", "coverage_90", "bias"):
             assert row["mean"][col] == pytest.approx(exp[col], abs=1e-3)
     assert len(got) == len(MODELS)
 
@@ -177,24 +177,26 @@ def test_browser_energy_matches_relative_energy(pool: str) -> None:
 def test_a_zero_baseline_gives_no_relative_score() -> None:
     scores = _scores()
     base = (scores["model"] == "randomwalk") & (scores["location"] == "CD")
-    scores.loc[base, ["wis", "log_wis"]] = 0.0
+    scores.loc[base, ["crps", "log_crps"]] = 0.0
     data = summary_rows(scores, MODELS, COLOURS, {})
     got = _node(data, "function (r) { return r[3] === 0; }")
     assert data["places"][0]["id"] == "CD"
-    assert all(r["rel"]["wis"] is None for r in got)
-    rel = relative_wis(scores.loc[scores["location"] == "CD"])
-    assert rel["rel_wis"].isna().all()
+    assert all(r["rel"]["crps"] is None for r in got)
+    rel = relative_crps(scores.loc[scores["location"] == "CD"])
+    assert rel["rel_crps"].isna().all()
 
 
-def test_browser_summary_by_horizon_matches_relative_wis() -> None:
+def test_browser_summary_by_horizon_matches_relative_crps() -> None:
     scores = _scores()
     data = summary_rows(scores, MODELS, COLOURS, {})
     got = _node(data, "function (r, i) { return d.horizons[i] === 0; }")
-    want = relative_wis(scores, by=("horizon",)).set_index(["horizon", "model"])
+    want = relative_crps(scores, by=("horizon",)).set_index(
+        ["horizon", "model"]
+    )
     for row in got:
         exp = want.loc[(0, MODELS[row["model"]])]
         assert row["n"] == exp["n"]
-        assert row["rel"]["wis"] == pytest.approx(exp["rel_wis"], abs=1e-3)
+        assert row["rel"]["crps"] == pytest.approx(exp["rel_crps"], abs=1e-3)
 
 
 def test_browser_relative_scores_are_mean_over_mean_like_relative_skill() -> (
@@ -208,7 +210,7 @@ def test_browser_relative_scores_are_mean_over_mean_like_relative_skill() -> (
     got = _node(data, "function () { return true; }")
     want = relative_skill(
         scores,
-        metrics=("wis", "log_wis"),
+        metrics=("crps", "log_crps"),
         match_on=("origin", "truth_vintage", "location", "target_end_date"),
     ).set_index("model")
     pair = scores.merge(
@@ -216,17 +218,19 @@ def test_browser_relative_scores_are_mean_over_mean_like_relative_skill() -> (
         on=["origin", "truth_vintage", "location", "target_end_date"],
         suffixes=("", "_base"),
     )
-    ratios = (pair["wis"] / pair["wis_base"]).groupby(pair["model"]).mean()
+    ratios = (pair["crps"] / pair["crps_base"]).groupby(pair["model"]).mean()
     for row in got:
         model = MODELS[row["model"]]
         exp = want.loc[model]
         assert row["n"] == exp["n"]
-        assert row["rel"]["wis"] == pytest.approx(exp["relative_wis"], abs=1e-6)
-        assert row["rel"]["log_wis"] == pytest.approx(
-            exp["relative_log_wis"], abs=1e-6
+        assert row["rel"]["crps"] == pytest.approx(
+            exp["relative_crps"], abs=1e-6
+        )
+        assert row["rel"]["log_crps"] == pytest.approx(
+            exp["relative_log_crps"], abs=1e-6
         )
         if model != "randomwalk":
-            assert row["rel"]["wis"] != pytest.approx(ratios[model], abs=1e-3)
+            assert row["rel"]["crps"] != pytest.approx(ratios[model], abs=1e-3)
 
 
 def test_summary_html_offers_a_map_only_when_given_one() -> None:
@@ -278,18 +282,18 @@ def test_browser_summary_takes_any_model_as_the_baseline(pool: str) -> None:
     keep = f"function (r) {{ return {places}.includes(r[3]); }}"
     got = _node_with(SUMMARISE, data, keep, MODELS.index("a"))
     assert isinstance(got, list)
-    want = relative_wis(scores, by=("pool",), baseline="a").set_index(
+    want = relative_crps(scores, by=("pool",), baseline="a").set_index(
         ["pool", "model"]
     )
     assert len(got) == len(MODELS)
     for row in got:
         exp = want.loc[(pool, MODELS[row["model"]])]
         assert row["n"] == exp["n"]
-        assert row["rel"]["wis"] == pytest.approx(exp["rel_wis"], abs=1e-3)
-        assert row["rel"]["log_wis"] == pytest.approx(
-            exp["rel_log_wis"], abs=1e-3
+        assert row["rel"]["crps"] == pytest.approx(exp["rel_crps"], abs=1e-3)
+        assert row["rel"]["log_crps"] == pytest.approx(
+            exp["rel_log_crps"], abs=1e-3
         )
-        for col in ("wis", "coverage_50", "coverage_90", "bias"):
+        for col in ("crps", "coverage_50", "coverage_90", "bias"):
             assert row["mean"][col] == pytest.approx(exp[col], abs=1e-3)
 
 

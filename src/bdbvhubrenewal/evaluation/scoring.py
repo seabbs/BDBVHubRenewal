@@ -15,8 +15,12 @@ epiforecasts/BVDOutbreakSize (`src/scoring.jl`).
   `score_quantiles` scores those by WIS, the absolute error of the median
   and the coverage of each central interval.
 - **Log WIS**: WIS of $\log(1 + y)$ against $\log(1 + x)$ for the samples.
+- **CRPS** of the empirical sample distribution,
+  $E|X - y| - E|X - X'|/2$, as scoringrules' `crps_ensemble` with
+  `estimator="nrg"`. The BDBV pages score by CRPS, as the hub takes
+  samples; the German benchmark scores quantiles by WIS.
+- **Log CRPS**: CRPS of $\log(1 + y)$ against $\log(1 + x)$.
   It scores relative error, so large provinces do not dominate.
-- **CRPS** of the empirical sample distribution, for reference.
 - **Coverage** of the central 50% and 90% sample intervals.
 - **Bias** $1 - (P(X \le y) + P(X \le y - 1))$ for counts, in $[-1, 1]$.
   Positive means overprediction.
@@ -73,6 +77,7 @@ SCORE_COLUMNS: Final = (
     "underprediction",
     "log_wis",
     "crps",
+    "log_crps",
     "ae_median",
     "coverage_50",
     "coverage_90",
@@ -342,6 +347,7 @@ def score_sample(obs: float, samples: ArrayLike) -> dict[str, float]:
     out = wis_sample(obs, x)
     out["log_wis"] = wis_sample(float(np.log1p(obs)), np.log1p(x))["wis"]
     out["crps"] = crps_sample(obs, x)
+    out["log_crps"] = crps_sample(float(np.log1p(obs)), np.log1p(x))
     out["ae_median"] = float(abs(np.median(x) - obs))
     out["coverage_50"] = float(coverage_sample(obs, x, 0.5))
     out["coverage_90"] = float(coverage_sample(obs, x, 0.9))

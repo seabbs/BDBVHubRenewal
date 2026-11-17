@@ -17,9 +17,10 @@ stores new fits, and every build refreshes the hub data. Scores can
 therefore move without a code change. `break` is true where the origins,
 releases or number of forecasts scored for a model differ from its
 previous deploy, so a jump there is not a model effect. A change in the
-baseline itself shows in `base_wis`. Deploys before 2026-11-09 have one summary,
-`scoresummary-backtest.json`, scored on each later release as reported,
-which is read as the `latest` target.
+baseline itself shows in `base_crps`. Deploys before the switch to CRPS
+score WIS only, so their CRPS is missing. Deploys before 2026-11-09 have
+one summary, `scoresummary-backtest.json`, scored on each later release
+as reported, which is read as the `latest` target.
 
 Usage::
 
@@ -303,8 +304,8 @@ def current_deploys(figures: Path, sha: str, time: str) -> Iterator[Deploy]:
 
 
 CHART_METRICS: tuple[tuple[str, str, float | None, bool], ...] = (
-    ("rel_wis", "Relative WIS", 1.0, True),
-    ("wis", "WIS", None, False),
+    ("rel_crps", "Relative CRPS", 1.0, True),
+    ("crps", "CRPS", None, False),
     ("coverage_50", "50% coverage", 0.5, False),
     ("coverage_90", "90% coverage", 0.9, False),
 )

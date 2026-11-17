@@ -91,11 +91,11 @@ def test_relative_skill_is_against_the_zone_randomwalk(
     scores: pd.DataFrame,
 ) -> None:
     rel = zone_relative_skill(scores).set_index("model")
-    assert rel.loc[ZONE_BASELINE, "relative_wis"] == pytest.approx(1.0)
-    assert (rel["relative_wis"] > 0).all()
+    assert rel.loc[ZONE_BASELINE, "relative_crps"] == pytest.approx(1.0)
+    assert (rel["relative_crps"] > 0).all()
     by = zone_relative_skill(scores, by=("horizon",))
     mine = by.loc[by["model"] == "randomwalknowcast"].set_index("horizon")
-    assert (mine["relative_wis"] > 0).all()
+    assert (mine["relative_crps"] > 0).all()
     assert mine.index.min() == -4
 
 

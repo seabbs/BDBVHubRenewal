@@ -68,6 +68,7 @@ __all__ = [
     "check_distinct",
     "development_tasks",
     "energy_tasks",
+    "for_scoring",
     "forecast_locations",
     "forecast_weeks",
     "joint_order",
@@ -88,6 +89,7 @@ __all__ = [
     "score_recovery",
     "score_scenarios",
     "score_tasks",
+    "tasks_for_scoring",
     "truth_changes",
     "truth_from_vintage",
     "vintage_task",
@@ -123,7 +125,11 @@ class BacktestConfig:
     min_horizon, max_horizon : int
         Range of horizons in each forecast, in weeks.
     n_samples : int
-        Samples per forecast.
+        Samples per forecast. The fit store fits with this many.
+    score_samples : int
+        Samples per forecast of the models run in this process, not the
+        stored fits (`for_scoring`). More draws give a sample CRPS closer
+        to that of the forecast distribution.
     seed : int
         Random seed shared by all tasks.
     simulated_dates : tuple of str
@@ -152,6 +158,7 @@ class BacktestConfig:
     min_horizon: int = -4
     max_horizon: int = 3
     n_samples: int = 100
+    score_samples: int = 100
     seed: int = 0
     simulated_dates: tuple[str, ...] = ()
     complete_after_weeks: int = 0
@@ -160,6 +167,48 @@ class BacktestConfig:
     skip_origins: tuple[str, ...] = ()
     truth_delay: int | None = None
     truth_level: float = TRUTH_LEVEL
+
+
+def for_scoring(config: BacktestConfig) -> BacktestConfig:
+    """Return the config of the models run here, with `score_samples` draws.
+
+    Only `n_samples` changes. The seed is kept, so each model draws from
+    the same stream as with `n_samples` (common random numbers).
+
+    Parameters
+    ----------
+    config : BacktestConfig
+        The backtest settings.
+
+    Returns
+    -------
+    BacktestConfig
+        `config` with `n_samples` set to `score_samples`.
+    """
+    return replace(config, n_samples=config.score_samples)
+
+
+def tasks_for_scoring(
+    tasks: Sequence[ForecastTask], config: BacktestConfig
+) -> list[ForecastTask]:
+    """Return copies of tasks with `score_samples` draws, as `for_scoring`.
+
+    The fit store keys its fits on the tasks it is given, so it keeps the
+    originals and only the models run here take these.
+
+    Parameters
+    ----------
+    tasks : sequence of ForecastTask
+        Tasks, such as `store.origin_tasks` gives.
+    config : BacktestConfig
+        Gives `score_samples`.
+
+    Returns
+    -------
+    list of ForecastTask
+        The tasks with `n_samples` set to `score_samples`.
+    """
+    return [replace(t, n_samples=config.score_samples) for t in tasks]
 
 
 def apply_sampler(config: BacktestConfig) -> None:
@@ -216,6 +265,7 @@ def load_config(path: Path | str = "config/backtest.toml") -> BacktestConfig:
         min_horizon=int(fc["min_horizon"]),
         max_horizon=int(fc["max_horizon"]),
         n_samples=int(fc["n_samples"]),
+        score_samples=int(fc.get("score_samples", fc["n_samples"])),
         seed=int(fc["seed"]),
         complete_after_weeks=int(sp["complete_after_weeks"]),
         sampler=dict(raw["sampler"]),
