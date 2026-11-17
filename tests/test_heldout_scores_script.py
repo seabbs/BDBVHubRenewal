@@ -90,7 +90,16 @@ def toy_sims(root: Path, seed: int = 5001, n: int = 2) -> list[str]:
                         )
     pd.DataFrame(rows).to_csv(root / f"counts-{seed}.csv.gz", index=False)
     pd.DataFrame(
-        {"outbreak": ids, "n_places": 3, "n_ages": 1, "max_delay": 21}
+        {
+            "outbreak": ids,
+            "n_places": 3,
+            "n_ages": 1,
+            "max_delay": 21,
+            # Two of grid r5's factors, a level each simulation.
+            "process": ["growth", "renewal_7"] * (n // 2)
+            + ["growth"] * (n % 2),
+            "shocks": "none",
+        }
     ).to_csv(root / f"settings-{seed}.csv", index=False)
     return ids
 
@@ -372,3 +381,109 @@ def test_the_unit_scores_every_block_for_each_label_and_resumes(
 
 def test_checkpoint_scores_dispatch_the_unit(cs, tmp_path) -> None:
     assert not cs.unit_done(tmp_path, "heldout_scores", "reference")
+
+
+# Grid r5's held-out round ----------------------------------------------
+
+
+def test_the_r5_set_is_round_9_whole(hs) -> None:
+    r5 = hs.SETS["r5"]
+    assert r5.sim_dir == Path("~/bdbv-rounds/rounds/r9/sims")
+    assert r5.seeds == (30900, 30939)
+    assert r5.holdout == 840
+    # The trainer monitors the first 90; every simulation is scored.
+    assert r5.checked == 90
+    assert r5.sizes is None
+    assert r5.draws == 1
+    # Its own cache folder and rows, so the r4 set's cache is untouched.
+    r4 = hs.SETS["r4"]
+    assert r4.name == "heldout_scores"
+    assert r5.name != r4.name
+    assert (r4.study, r5.study) == ("heldout", "heldout_r5")
+
+
+def test_a_whole_set_keeps_every_block_and_checks_the_trainer_s_ids(
+    hs, sims, tmp_path
+) -> None:
+    root, ids = sims
+    held = hs.HeldSet(
+        name="toy", sim_dir=root, seeds=(5001, 5001), holdout=len(ids),
+        checked=1, draws=2, sizes=None, study="heldout_toy",
+    )  # fmt: skip
+    every = hs.cut_blocks(root, ids, per_simulation=64)
+    got = hs.prepare(
+        tmp_path, held=held, ids=ids, sha=_sha(ids[:1]), per_simulation=64
+    )
+    assert [b["index"] for b in got] == list(range(len(every)))
+    assert (tmp_path / "toy" / "sample.json").exists()
+    assert not (tmp_path / "heldout_scores").exists()
+    with pytest.raises(ValueError, match="held-out"):
+        hs.prepare(
+            tmp_path / "x", held=held, ids=ids, sha=_sha(ids),
+            per_simulation=64,
+        )  # fmt: skip
+
+
+def test_the_factors_are_the_simulator_s() -> None:
+    import re
+
+    hs = _load("heldout_scores")
+    text = (SCRIPTS / "finetune_simulate.R").read_text()
+    body = text[
+        text.index("factors <- list(") : text.index(
+            "\n)\n", text.index("factors <- list(")
+        )
+    ]
+    names = re.findall(r"^  (\w+) = c\(", body, flags=re.M)
+    assert tuple(names) == hs.FACTORS
+
+
+def test_factor_rows_split_each_cell_by_the_simulations_levels(
+    hs, sims, tmp_path
+) -> None:
+    root, ids = sims
+    held = hs.HeldSet(
+        name="toy", sim_dir=root, seeds=(5001, 5001), holdout=len(ids),
+        checked=len(ids), draws=2, sizes=None, study="heldout_toy",
+    )  # fmt: skip
+    blocks = hs.prepare(
+        tmp_path, held=held, ids=ids, sha=_sha(ids), per_simulation=16
+    )
+    native = np.array([0.01, *np.round(np.arange(0.05, 0.951, 0.05), 2), 0.99])
+
+    def chronos(scale):
+        def predict(block):
+            n, h = block["n_targets"], block["meta"]["horizon"]
+            q = np.broadcast_to(scale * native, (n, h, len(native)))
+            return native, q
+
+        return predict
+
+    hs.unit(
+        tmp_path, "reference", {"fm_chronos": chronos(10)}, blocks, held=held
+    )
+    hs.unit(tmp_path, "abc", {"fm_chronos": chronos(20)}, blocks, held=held)
+    assert set(hs.label_scores(tmp_path, "abc", held)["outbreak"]) <= set(ids)
+    factors = hs.factor_table(root, ids)
+    assert list(factors.loc[ids[0]][["process", "shocks"]]) == [
+        "growth",
+        "none",
+    ]
+    rows = hs.rows(tmp_path, ["reference", "abc"], "reference", held)
+    assert set(rows["study"]) == {"heldout_toy"}
+    by = rows.loc[rows["factor"] == "process"]
+    assert set(by["factor_level"]) == {"growth", "renewal_7"}
+    # Factor rows are over every level and window of a (layout, target).
+    assert set(by["level"]) == {"all"}
+    assert set(by["window"]) == {"all"}
+    whole = rows.loc[rows["factor"].isna()]
+    assert not whole.empty
+    # The levels' blocks add up to the cell's.
+    cell = by.loc[(by["layout"] == "weekly") & (by["checkpoint"] == "abc")]
+    all_ = whole.loc[
+        (whole["layout"] == "weekly") & (whole["checkpoint"] == "abc")
+        & (whole["level"] == "all") & (whole["window"] == "all")
+    ]  # fmt: skip
+    assert cell["n"].sum() == all_["n"].sum()
+    base = rows.loc[rows["checkpoint"] == "zero-shot", "rel_wis"]
+    assert np.allclose(base, 1.0)
