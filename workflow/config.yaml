@@ -39,16 +39,14 @@ finetune:
   # `release` (the sims-r<N> releases).
   sims_from: local
   # Chronos-2's recipe: one draw of each simulation cut at `cuts`
-  # cut-offs, the learning rate falling linearly to zero over `lr_steps`,
-  # and the series bias at its own rate `bias_lr`. `lr_steps` is 36,500
-  # steps per 8,000 outbreaks (4.5625 a simulation) at 8,400.
+  # cut-offs, the learning rate falling linearly to zero over the
+  # `outbreaks` simulations, and the series bias at its own rate `bias_lr`.
   grid: r5
   draws: 1
   cuts: 32
   subset_seed: 1
   learning_rate: 1.0e-5
   bias_lr: 1.0e-3
-  lr_steps: 38325
   sources: [daily, weekly, 3day, daily+weekly, daily+3day]
   univariate_share: 0.2
   chunk: 250

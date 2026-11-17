@@ -201,7 +201,7 @@ rule train_segment:
           --stop-from {params.stop_from} \
           --blocks-per-simulation {params.blocks} \
           --draws-per-simulation {FT[draws]} --subset-seed {FT[subset_seed]} \
-          --learning-rate {FT[learning_rate]} --lr-steps {FT[lr_steps]} \
+          --learning-rate {FT[learning_rate]} \
           --sources {params.sources} \
           --univariate-share {FT[univariate_share]} {params.real} \
           --note "{FT[note]}" --chunk {FT[chunk]} \

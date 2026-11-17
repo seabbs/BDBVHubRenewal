@@ -108,7 +108,8 @@ Round 9, the first round of grid `r5`, is the held-out block.
 Training runs in one pass over the next ten rounds, ten whole blocks of 8,400 simulations, in seed order while they are simulated (`scripts/finetune_stream.py`, `workflow/rules/finetune.smk`).
 The trainer monitors its loss on the first 90 simulations of the held-out block, a random sample of its cells.
 LoRA trains beside learned attention biases for related series (`forecasters.series_bias`).
-The adapter's learning rate starts at $10^{-5}$ and the biases' at $10^{-3}$, both falling linearly to zero at 38,325 steps, at 8,400 simulations.
+The adapter's learning rate starts at $10^{-5}$ and the biases' at $10^{-3}$, both falling linearly to zero over the 8,400 simulations.
+The rate follows the simulations trained, interpolated within a chunk by its steps, so it reaches zero with the last simulation's last batch however the blocks are packed.
 There is no warmup and no weight decay, and training is in full (fp32) precision.
 The r3 checkpoints were trained by `scripts/finetune_driver.sh` with `config/finetune/r3.env`, both removed after commit eae369693.
 Blocks are packed into batches by size within a memory budget, which also sets the largest block.

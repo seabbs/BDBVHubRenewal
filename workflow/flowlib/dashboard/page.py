@@ -52,7 +52,6 @@ class Context:
     rule: str
     outbreaks: int
     learning_rate: float
-    lr_steps: int
     datasets: Sequence[Mapping[str, Any]] = ()
     mailbox: Path | None = None
     mail_filter: str = ""
@@ -215,6 +214,7 @@ def live_status(live: Run, rows: list[dict[str, Any]]) -> Status:
         if folder
         else {
             "lr_steps": 0,
+            "lr_outbreaks": 0,
             "groups": {},
             "current": {},
             "logged": {},
@@ -264,11 +264,13 @@ def status_tiles(st: Status, live: Run) -> tuple[str, str]:
         next_s = f"step {st.at(st.nxt)}, ETA {st.eta(st.nxt)}" if st.nxt else ""
     p = st.params
     rates = "\n".join(f"{g} {v:.2e}" for g, v in p["current"].items()) or "n/a"
-    decay = (
-        f"linear decay to 0 at step {p['lr_steps']}"
-        if p["lr_steps"]
-        else "constant"
-    ) + (", from history" if p["logged"] else "")
+    if p["lr_steps"]:
+        decay = f"linear decay to 0 at step {p['lr_steps']}"
+    elif p["lr_outbreaks"]:
+        decay = f"linear decay to 0 at {p['lr_outbreaks']} simulations"
+    else:
+        decay = "constant"
+    decay += ", from history" if p["logged"] else ""
     tiles = [
         (
             "Step",

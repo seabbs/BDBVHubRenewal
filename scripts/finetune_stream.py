@@ -7,12 +7,13 @@ batch it needs has finished (`scripts/finetune_simulate.R`), and the
 trainer waits for it otherwise. Within a chunk the blocks
 (`finetune_chronos.outbreak_blocks`, seeded per outbreak) are shuffled
 and packed by size (`finetune_chronos.plan_batches`). The learning rate
-is constant, so the checkpoint after the first N outbreaks
-(`finetune_chronos.PREFIXES`) is Chronos-2 fine-tuned on those N in one
-pass. Each is saved in `OUT/n<N>` with its consumed order and settings
-hash, and published as the release `chronos-ft-<hash>` when `--publish`
-is set. Held-out loss is on the first `--holdout` outbreaks of the
-held-out seeds, simulated first.
+falls linearly to zero over the run's `--outbreaks` simulations
+(`sims_done`), so the checkpoint after the first N outbreaks is
+Chronos-2 fine-tuned on those N in one pass of that schedule. Each is
+saved in `OUT/n<N>` with its consumed order and settings hash, and
+published as the release `chronos-ft-<hash>` when `--publish` is set.
+Held-out loss is on the first `--holdout` outbreaks of the held-out
+seeds, simulated first.
 
     uv run --group chronos python scripts/finetune_stream.py SIM_DIR OUT \
         --grid r3 --train-seeds FIRST LAST --held-out-seeds FIRST LAST \
@@ -221,10 +222,10 @@ def group_rates(optimiser) -> dict:
     return {g["name"]: g["lr"] for g in optimiser.param_groups}
 
 
-def set_learning_rates(optimiser, step: int, steps: int) -> None:
-    """Set each group's rate at `step`: linear from its base to zero."""
+def set_learning_rates(optimiser, sims: float, outbreaks: int) -> None:
+    """Set each group's rate at `sims` simulations of `outbreaks`."""
     for group in optimiser.param_groups:
-        group["lr"] = learning_rate(step, group["base_lr"], steps)
+        group["lr"] = learning_rate(sims, group["base_lr"], outbreaks)
 
 
 def lora_model(base, config, init: Path | None):
@@ -247,15 +248,24 @@ def lora_model(base, config, init: Path | None):
     return model
 
 
-def learning_rate(step: int, base: float, steps: int) -> float:
-    """Return the learning rate of step `step` (from 0).
+def learning_rate(sims: float, base: float, outbreaks: int) -> float:
+    """Return the learning rate once `sims` simulations are trained.
 
-    It falls linearly from `base` to zero over `steps` steps, as
-    Chronos-2's own fine-tuning does, and stays constant if `steps` is 0.
+    It falls linearly from `base` to zero over the run's `outbreaks`
+    simulations, so it reaches zero as the last simulation's last batch
+    is trained, however the blocks are packed into steps.
     """
-    if steps <= 0:
-        return base
-    return base * max(0.0, 1 - step / steps)
+    return base * max(0.0, 1 - sims / outbreaks)
+
+
+def sims_done(done: int, size: int, position: int, steps: int) -> float:
+    """Return the simulations trained before step `position` of a chunk.
+
+    `done` simulations before the chunk of `size`, planned as `steps`
+    steps: within the chunk, its share of steps taken, so the rate falls
+    smoothly.
+    """
+    return done + size * position / steps
 
 
 def should_stop(
@@ -1164,9 +1174,6 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--outbreaks", type=int, default=ft.PREFIXES[-1])
     parser.add_argument("--holdout", type=int, default=150)
     parser.add_argument("--learning-rate", type=float, default=1e-4)
-    # Steps over which the learning rate falls linearly to zero; 0 keeps
-    # it constant.
-    parser.add_argument("--lr-steps", type=int, default=0)
     # Sources to train on: weekly, daily, and 3-day blocks summed from the
     # daily triangle; one of them trains an adapter for it alone.
     parser.add_argument("--sources", nargs="+", default=list(ft.SOURCES))
@@ -1378,7 +1385,7 @@ def main() -> None:
             if args.real_training
             else {}
         ),
-        **({"lr_steps": args.lr_steps} if args.lr_steps else {}),
+        "lr_decay": "linear to zero over the outbreaks",
         **(
             {"sources": list(ft.SOURCES)}
             if ft.SOURCES != ("weekly", "daily")
@@ -1572,7 +1579,11 @@ def main() -> None:
             while pause.exists():
                 report(stage="paused")
                 time.sleep(30)
-            set_learning_rates(optimiser, step, args.lr_steps)
+            set_learning_rates(
+                optimiser,
+                sims_done(done, len(chunk), position, len(plan)),
+                args.outbreaks,
+            )
             value = accumulate(list(indices), backward, zero, skip)
             if not finite_step(params, optimiser, value):
                 log(f"step {step + 1}: no update (loss {value})")
@@ -1656,6 +1667,7 @@ def main() -> None:
                 "outbreaks_sha256": ft._sha256(where / "outbreaks.txt"),
                 "consumed_sha256": ft._sha256(where / "consumed.txt"),
                 "steps": step,
+                "sims_done": done,
                 "blocks": seen["blocks"],
                 "series": seen["series"],
                 "level_mix": seen.get("mix", {}),

@@ -12,7 +12,7 @@
 # seed order, from
 # base Chronos-2 to OUTBREAKS with Chronos-2's recipe
 # (scripts/finetune_stream.py): learning rate 1e-5 for the adapter and
-# 1e-3 for the attention biases, falling linearly to zero over LR_STEPS,
+# 1e-3 for the attention biases, falling linearly to zero over OUTBREAKS,
 # each block's horizon as its prediction length, one draw of each
 # simulation cut at 32 snapshots. The trainer checks and publishes a
 # checkpoint at each of PREFIXES, whatever its scores, and waits for
@@ -46,8 +46,6 @@ ROUND_BATCHES=${ROUND_BATCHES:-40}
 DRAWS=${DRAWS:-1}
 CUTS=${CUTS:-32}
 SUBSET_SEED=${SUBSET_SEED:-1}
-# 36,500 steps per 8,000 simulations (4.5625 a simulation) at OUTBREAKS.
-LR_STEPS=${LR_STEPS:-38325}
 # Zero-shot Chronos-2's loss on the BDBV pseudo-origins
 # (scripts/finetune_real_validation.py, blocks with their own 16-step
 # prediction length), which n1000 must beat.
@@ -164,7 +162,7 @@ while true; do
       --outbreaks "$OUTBREAKS" \
       --prefixes $PREFIXES --stop-from "$((OUTBREAKS + 1))" \
       --blocks-per-simulation $((CUTS * DRAWS)) --draws-per-simulation "$DRAWS" \
-      --subset-seed "$SUBSET_SEED" --learning-rate 1e-5 --lr-steps "$LR_STEPS" \
+      --subset-seed "$SUBSET_SEED" --learning-rate 1e-5 \
       --sources $SOURCES --univariate-share "$UNIVARIATE_SHARE" \
       --real-validation "$REAL_VALIDATION" --note "continuous r5" --publish \
       --chunk "$CHUNK" --wait-for-seeds \
