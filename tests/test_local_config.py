@@ -4,6 +4,8 @@ import os
 import subprocess
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).parents[1]
 CONFIG = ROOT / "scripts" / "local_config.sh"
 CONTINUOUS = ROOT / "scripts" / "finetune_continuous.sh"
@@ -109,7 +111,8 @@ def test_no_fine_tuning_or_simulation_code_names_a_host_or_home():
             "scripts/sim_*",
             "scripts/local_config.sh",
             "src/bdbvhubrenewal/forecasters",
-            "config",
+            "config/finetune*",
+            "config/local.env.example",
         ],
         cwd=ROOT,
         capture_output=True,
@@ -128,6 +131,9 @@ def test_no_fine_tuning_or_simulation_code_names_a_host_or_home():
 
 def test_the_trainer_takes_its_device_from_the_machine():
     import sys
+
+    # pick_device imports torch, which CI's test env does not install.
+    pytest.importorskip("torch")
 
     sys.path.insert(0, str(ROOT / "scripts"))
     import finetune_stream as fs

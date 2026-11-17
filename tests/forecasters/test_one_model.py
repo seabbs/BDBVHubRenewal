@@ -89,7 +89,7 @@ def test_a_total_row_joins_its_places_bias_group():
     place, parent = rows
     assert list(place) == [0, 1, 0, 1, 0, 0, 0, 1, 1, 1]
     assert list(parent) == [-1, 0, -1, 0, -1, -1, -1, 0, 0, 0]
-    import torch
+    torch = pytest.importorskip("torch")
 
     _, same, up, _ = series_bias.pair_masks(
         torch.as_tensor(place), torch.as_tensor(parent)
