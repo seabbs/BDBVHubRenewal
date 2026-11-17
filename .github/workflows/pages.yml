@@ -682,6 +682,16 @@ jobs:
             [ -e "$f" ] && cp "$f" results/pairing/
           done
           uv run bdbvhubrenewal report --ledger output/ledger
+          # The live fine-tuning run's newest scored checkpoint, read at
+          # the checkpoint-scoring branch's head (never a pinned commit).
+          mkdir -p output/live
+          if git fetch -q --depth 1 origin checkpoint-scoring; then
+            git show FETCH_HEAD:evidence/checkpoint-scores.csv \
+              > output/live/checkpoint-scores.csv || true
+          fi
+          uv run bdbvhubrenewal live-checkpoint \
+            --scores output/live/checkpoint-scores.csv \
+            --out docs/generated/ft-preliminary.md
       # Scores at each deploy from main, read from the gh-pages branch,
       # with this build's scores last. Only the trees are fetched, and the
       # few distinct summaries as they are read. Without the branch the

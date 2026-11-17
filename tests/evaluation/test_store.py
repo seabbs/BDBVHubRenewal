@@ -116,10 +116,9 @@ def test_code_digest_follows_each_models_own_code(tmp_path: Path) -> None:
     assert all(after[m] != before[m] for m in models)
 
 
-def test_the_zone_split_does_not_key_a_fit(tmp_path: Path) -> None:
-    # A stored fit holds national and province samples only. Zones are
-    # split from them at load (`zones_for_model`), so the zone code is not
-    # fit code.
+def test_the_zone_split_keys_the_province_models_fits(tmp_path: Path) -> None:
+    # A province model splits its zones in its forecast (`with_zones`), so
+    # the split is fit code. The zone backtest is not.
     root = _copy_repo(tmp_path)
     models = ("renewal", "pprandomwalknowcast")
 
@@ -132,11 +131,14 @@ def test_the_zone_split_does_not_key_a_fit(tmp_path: Path) -> None:
 
     before = digests()
     own = store.code_digest("fm_chronos_weekly_ragged", root)
-    for rel in ("forecasters/zones.py", "evaluation/zones.py"):
-        edit(rel)
-        assert digests() == before, rel
-    # A model that forecasts the zones itself runs the split in its fit.
+    edit("evaluation/zones.py")
+    assert digests() == before
+    edit("forecasters/zones.py")
+    split = digests()
+    assert all(split[m] != before[m] for m in models)
+    # A model that forecasts the zones itself reconciles them in its fit.
     assert store.code_digest("fm_chronos_weekly_ragged", root) != own
+    before = split
     # Introductions are drawn in the fit, for provinces with no recent case.
     edit("forecasters/introductions.py")
     after = digests()
@@ -384,7 +386,9 @@ def test_the_stored_task_covers_the_submissions_rounds(
     from bdbvhubrenewal.evaluation.backtest import load_config
 
     config = load_config("config/backtest.toml")
-    tasks = store.origin_tasks(target, delays, config, daily)
+    # With the zone data, as the store's fits read it (`cli._zone_data`).
+    zones = cli._zone_data(tasks_json.parents[1])
+    tasks = store.origin_tasks(target, delays, config, daily, zones)
     sampler = store.samplers()
     models = {m: store.build_model(m, sampler) for m in sampler}
     assert tasks
@@ -606,11 +610,9 @@ def test_zone_data_keys_only_the_models_that_read_it(
     assert zoned[latest].zone_daily_history is not None
     assert zoned[latest].zone_codes == ("CD-IT-01", "CD-NK-01")
     sampler = store.samplers()
-    plain = ["renewal", "pprandomwalknowcast"]
-    assert store.current_keys(zoned, plain, sampler, "c") == (
-        store.current_keys(tasks, plain, sampler, "c")
-    )
-    reads = ["fm_chronos_weekly_complete"]
+    # Every stored model reads them: the province models split their
+    # zones in their forecast, and Chronos-2 forecasts them.
+    reads = ["renewal", "pprandomwalknowcast", "fm_chronos_weekly_complete"]
     assert store.current_keys(zoned, reads, sampler, "c") != (
         store.current_keys(tasks, reads, sampler, "c")
     )

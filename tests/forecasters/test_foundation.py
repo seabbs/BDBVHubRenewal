@@ -144,10 +144,11 @@ def test_registered_as_fitted_models() -> None:
 def test_ragged_lags_stop_below_the_truth_delay(
     source: str, steps: int, task: ForecastTask
 ) -> None:
-    # The lag series stop at 28 days or 4 weeks, short of the truth delay,
-    # because the zones' release histories are short: with longer lags no
-    # early lag of a zone falls in the context, and Chronos-2 reads partial
-    # counts as levels.
+    # The lag series stop at 28 days or 4 weeks, short of the 35-day truth
+    # delay. Running them to the truth delay (e43eda80c) was reverted: zone
+    # releases began on 2026-10-09, so at 5 weeks no lag 0 to 2 value of a
+    # zone fell in the context, Chronos-2 read partial counts as levels,
+    # and the forecasts and scores were worse.
     store: list = []
     model = dataclasses.replace(
         get_model(f"fm_chronos_{source}_ragged"), sample=_recording(store)
@@ -1030,6 +1031,29 @@ def test_too_many_requests_is_retried_a_bounded_number_of_times(
     assert len(calls) == len(foundation.RETRY_SECONDS) + 1
 
 
+def test_slots_checkpoints_have_their_own_releases(
+    releases: Path, monkeypatch: pytest.MonkeyPatch, write_release
+) -> None:
+    # A checkpoint with per-series slots is released as chronos-slots-<hash>,
+    # so code without slots, taking the latest chronos-ft-* release, never
+    # loads it; it is pinned as "slots-<hash>".
+    assert foundation.release_tag("abc") == "chronos-ft-abc"
+    assert foundation.release_tag("slots-abc") == "chronos-slots-abc"
+    write_release(releases, "abc", _ADAPTER, "abc")
+    (releases / "chronos-ft-abc").rename(releases / "chronos-slots-abc")
+    write_release(releases, "old", _ADAPTER, "old")
+    listing = _listing(
+        ("chronos-ft-old", "2026-11-01T00:00:00Z", False),
+        ("chronos-slots-abc", "2026-11-20T00:00:00Z", False),
+    )
+    monkeypatch.setattr(foundation, "finetuned_releases", lambda: listing)
+    assert foundation.resolve_checkpoint("latest") == _checkpoint("old")
+    pinned = foundation.resolve_checkpoint("slots-abc")
+    assert pinned == _checkpoint("slots-abc")
+    adapter = foundation.finetuned_adapter(pinned)
+    assert adapter.name == "chronos-slots-abc"
+
+
 REALDATA_MODELS = tuple(f"fm_chronos_{s}_ragged_real" for s in SOURCES)
 
 
@@ -1104,3 +1128,43 @@ def test_the_realdata_models_wait_for_their_pin() -> None:
     names = {s.name for s in list_models()}
     assert not {m for m in names if m.endswith("_real")}
     assert not [m for m in stored_models() if m.endswith("_real")]
+
+
+def test_native_quantiles_pass_chronos_only_its_keys(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # A block carries `target_places` for the series bias; Chronos-2's
+    # predict_quantiles rejects any key but target and the covariates.
+    allowed = {"target", "past_covariates", "future_covariates"}
+    seen = []
+
+    class Tensor:
+        def __init__(self, values: np.ndarray) -> None:
+            self.values = values
+
+        def float(self) -> Tensor:
+            return self
+
+        def cpu(self) -> Tensor:
+            return self
+
+        def numpy(self) -> np.ndarray:
+            return self.values
+
+    class Pipeline:
+        quantiles = (0.1, 0.5, 0.9)
+
+        def predict_quantiles(self, inputs, prediction_length, quantile_levels):
+            seen.extend(inputs)
+            n = len(quantile_levels)
+            shape = (prediction_length, n)
+            return [
+                Tensor(np.zeros((g["target"].shape[0], *shape))) for g in inputs
+            ], None
+
+    monkeypatch.setattr(foundation, "_chronos", lambda *_: Pipeline())
+    group = {"target": np.ones((2, 5)), "target_places": [0, 1]}
+    out = foundation.native_sampler([0.5])([group], 3, 1, 0)
+    assert len(seen) == 1
+    assert set(seen[0]) <= allowed
+    assert out[0].shape == (1, 2, 3)

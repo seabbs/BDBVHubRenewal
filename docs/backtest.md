@@ -7,6 +7,10 @@ Forecasts made at past vintages, scored on what each later release reported.
 
 --8<-- "release-headline.md"
 
+## Fine-tuned checkpoint
+
+--8<-- "ft-preliminary.md"
+
 ## By horizon
 
 By weeks from the reference week ([horizon](methods/evaluation.md#reading-the-figures)), at the scale chosen.

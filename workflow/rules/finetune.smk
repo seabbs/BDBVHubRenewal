@@ -172,13 +172,13 @@ rule train_segment:
         held=lambda wc: f"{held_seeds()[0]} {held_seeds()[-1]}",
         prefixes=" ".join(str(p) for p in FT["prefixes"]),
         stop_from=FT["outbreaks"] + 1,
-        blocks=16 * FT["draws"],
+        blocks=FT["cuts"] * FT["draws"],
         sources=" ".join(FT["sources"]),
         real=f"--real-validation {FT['real_validation']}"
         if FT["real_validation"]
         else "",
-        slots=f"--series-slots {FT['series_slots']}"
-        if FT["series_slots"]
+        bias=f"--series-bias --bias-lr {FT['bias_lr']}"
+        if FT["series_bias"]
         else "",
         device=LOCAL.get("DEVICE") or os.environ.get("DEVICE", "auto"),
         hf_home=LOCAL.get("HF_HOME", "output/finetune/hf"),
@@ -205,7 +205,7 @@ rule train_segment:
           --sources {params.sources} \
           --univariate-share {FT[univariate_share]} {params.real} \
           --note "{FT[note]}" --chunk {FT[chunk]} \
-          --exclude {RUN}/excluded.csv {params.slots} \
+          --exclude {RUN}/excluded.csv {params.bias} \
           --until {wildcards.n} >> {log} 2>&1
         # An optional notification line; it never fails the rule.
         uv run python workflow/scripts/segment_saved.py {output.settings} \

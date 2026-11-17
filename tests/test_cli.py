@@ -821,12 +821,22 @@ def test_cli_fit_store_archives_what_each_model_submits(
 ) -> None:
     from bdbvhubrenewal.evaluation import store
     from bdbvhubrenewal.forecasters import base
+    from bdbvhubrenewal.forecasters.zones import with_zones
 
-    factory = base._REGISTRY[flat_model].factory
+    flat = base._REGISTRY[flat_model].factory
+
+    class Zoned(flat):  # type: ignore[misc, valid-type]
+        """A province model, which splits its zones in its forecast."""
+
+        reads_zones = True
+
+        def forecast(self, task):  # type: ignore[no-untyped-def]
+            return with_zones(super().forecast(task), task)
+
     monkeypatch.setitem(
         base._REGISTRY,
         "flat",
-        base.ModelSpec("flat", factory, "Fitted.", fitted=True),
+        base.ModelSpec("flat", Zoned, "Fitted.", fitted=True),
     )
     monkeypatch.setattr(store, "code_digest", lambda *_: "c")
     origin, ref = "2026-10-24", "2026-10-31"
