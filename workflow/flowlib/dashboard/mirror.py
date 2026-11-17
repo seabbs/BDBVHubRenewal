@@ -41,6 +41,7 @@ class Source:
         scores: str | None = None,
         mailbox: Mapping[str, Any] | None = None,
         root: Path | str = ".",
+        extras: Sequence[str] = (),
     ) -> None:
         self.root = Path(mirror)
         self.base = Path(root)
@@ -65,10 +66,12 @@ class Source:
         )
         for ds in datasets:
             key = ds["key"]
+            # A samples dataset's copy is kept apart from its summaries.
+            local = f"{key}-samples" if ds.get("format") == "samples" else key
             self._add(
                 f"dataset:{key}",
                 ds.get("source") or f"{cache}/{key}",
-                key,
+                local,
                 folder=True,
             )
             if ds.get("truth_source"):
@@ -86,6 +89,16 @@ class Source:
         if box:
             self._add(
                 "mailbox", box, "mailbox.md", folder=False, required=False
+            )
+        # Optional files shown as they are (tables, notes); a failed copy
+        # is reported but does not fail the page.
+        for i, path in enumerate(extras):
+            self._add(
+                f"extra:{i}",
+                path,
+                f"extra-{i}-{Path(path).name}",
+                folder=False,
+                required=False,
             )
         self.mailbox_lines = int((mailbox or {}).get("lines") or 400)
 
@@ -128,6 +141,10 @@ class Source:
     def truth(self, key: str) -> Path | None:
         """Return a dataset's truth table, if it has one."""
         return self._path(f"truth:{key}")
+
+    def extra(self, i: int) -> Path | None:
+        """Return the `i`th extra file (a table or note)."""
+        return self._path(f"extra:{i}")
 
     @property
     def mailbox(self) -> Path | None:

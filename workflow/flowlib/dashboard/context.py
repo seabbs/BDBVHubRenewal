@@ -79,6 +79,10 @@ def build(
         scores=dash.get("scores"),
         mailbox=dash.get("mailbox"),
         root=root,
+        extras=[
+            e["path"]
+            for e in [*(dash.get("tables") or []), *(dash.get("notes") or [])]
+        ],
     )
     excluded = exclusions(
         [config["dashboard"].get("exclude") or {}, extra.get("exclude") or {}],
@@ -103,16 +107,16 @@ def build(
             "levels": dash.get("levels") or [],
             "defaults": dash.get("score_defaults") or {},
         },
-        tables=[_rooted(t, root) for t in dash.get("tables") or []],
-        notes=[_rooted(t, root) for t in dash.get("notes") or []],
+        tables=[
+            {**t, "path": str(source.extra(i))}
+            for i, t in enumerate(dash.get("tables") or [])
+        ],
+        notes=[
+            {**t, "path": str(source.extra(len(dash.get("tables") or []) + i))}
+            for i, t in enumerate(dash.get("notes") or [])
+        ],
         excluded=excluded,
     )
-
-
-def _rooted(entry: Mapping[str, str], root: Path) -> dict[str, str]:
-    """Return a table or note entry with its path from the repository."""
-    path = Path(entry["path"]).expanduser()
-    return {**entry, "path": str(path if path.is_absolute() else root / path)}
 
 
 def merge_datasets(

@@ -505,10 +505,11 @@ def heldout_chart(ctx: Context, rows: Sequence[Mapping[str, str]]) -> str:
         if pts:
             series.append((run.label, run.colour, zero + pts, "pts"))
     return svg.chart(
-        "Held-out loss (all blocks)" + tip("heldperf"),
+        "Held-out loss (all blocks)",
         series,
         xticks=scores.TICKS,
         xlabel="simulations (log2)",
+        info=tip("heldperf"),
     )
 
 

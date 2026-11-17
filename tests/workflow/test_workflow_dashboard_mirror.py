@@ -110,3 +110,32 @@ def test_refresh_reports_each_failed_copy(tmp_path, monkeypatch):
     assert status.startswith("mirrored")
     assert "mailbox.md failed" in status
     assert src.failed
+
+
+def test_a_samples_dataset_is_mirrored_apart_from_its_summaries(tmp_path):
+    datasets = [{"key": "bdbv", "format": "samples", "source": "h:cache/bdbv/"}]
+    src = mirror.Source(
+        {"REMOTE": "", "SCORE_CACHE": "/x", "MAILBOX": ""},
+        tmp_path,
+        datasets=datasets,
+        root=tmp_path,
+    )
+    assert src.dataset("bdbv") == tmp_path / "bdbv-samples"
+
+
+def test_notes_and_tables_may_be_remote(tmp_path):
+    src = mirror.Source(
+        {"REMOTE": "", "SCORE_CACHE": "/x", "MAILBOX": ""},
+        tmp_path / "m",
+        root=tmp_path,
+        extras=["h:review/notes.md", "out/t.csv"],
+    )
+    assert src.extra(0) == tmp_path / "m" / "extra-0-notes.md"
+    assert src.extra(1) == tmp_path / "out" / "t.csv"
+    assert [
+        "rsync",
+        "-a",
+        "--timeout=60",
+        "h:review/notes.md",
+        str(tmp_path / "m" / "extra-0-notes.md"),
+    ] in src.commands()
