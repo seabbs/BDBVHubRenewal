@@ -1,0 +1,115 @@
+"""The workflow's fine-tune settings are the agreed design (17 Nov 2026)."""
+
+import shlex
+import subprocess
+import sys
+from pathlib import Path
+
+import pytest
+import yaml
+
+ROOT = Path(__file__).parents[2]
+CONFIG = yaml.safe_load((ROOT / "workflow" / "config.yaml").read_text())
+
+DESIGN = {
+    "rounds": list(range(9, 18)),
+    "held_round": 9,
+    "holdout": 90,
+    "outbreaks": 8000,
+    "prefixes": [250, 500, 750, 1000, 2000, 4000, 8000],
+    "grid": "r5",
+    "draws": 1,
+    "cuts": 32,
+    "learning_rate": 1e-5,
+    "bias_lr": 1e-3,
+    "series_bias": True,
+    "lr_steps": 36500,
+    "sources": ["daily", "weekly", "3day", "daily+weekly", "daily+3day"],
+    "univariate_share": 0.2,
+    "chunk": 250,
+    "subset_seed": 1,
+}
+
+
+@pytest.mark.parametrize("key", sorted(DESIGN))
+def test_finetune_config_is_the_agreed_design(key):
+    assert CONFIG["finetune"][key] == DESIGN[key]
+
+
+def test_rounds_are_simulated_with_one_draw():
+    assert CONFIG["simulate"]["draws"] == 1
+    assert CONFIG["simulate"]["seed_base"] == 30000
+
+
+def _trainer_args(tmp_path):
+    """The trainer's arguments in the dry run of segment n250."""
+    pytest.importorskip("snakemake")
+    snakemake = Path(sys.executable).parent / "snakemake"
+    local = tmp_path / "local.env"
+    local.write_text(f"ROOT={tmp_path}\nHOST_NAME=test-host\n")
+    target = tmp_path / "checkpoints" / "slots" / "train" / "n250"
+    # The real validation blocks are made from data a test run lacks.
+    real = tmp_path / "real-validation.pkl"
+    real.write_text("")
+    overlay = tmp_path / "overlay.yaml"
+    overlay.write_text(
+        yaml.safe_dump({"finetune": {"real_validation": str(real)}})
+    )
+    out = subprocess.run(
+        [
+            str(snakemake),
+            str(target / "settings.json"),
+            "-s",
+            "workflow/Snakefile",
+            "-n",
+            "-p",
+            "--cores",
+            "1",
+            "--workflow-profile",
+            "workflow/profiles/ci",
+            "--configfile",
+            str(overlay),
+        ],
+        cwd=ROOT,
+        env={
+            "PATH": str(snakemake.parent) + ":/usr/bin:/bin",
+            "HOME": str(tmp_path),
+            "LOCAL_CONFIG": str(local),
+        },
+        capture_output=True,
+        text=True,
+    )
+    assert out.returncode == 0, out.stderr + out.stdout
+    text = out.stdout.replace("\\\n", " ")
+    line = next(
+        ln for ln in text.splitlines() if "scripts/finetune_stream.py" in ln
+    )
+    words = shlex.split(line.split("scripts/finetune_stream.py", 1)[1])
+    return words[: words.index(">>")]
+
+
+def test_the_trainer_gets_the_agreed_design(tmp_path):
+    pytest.importorskip("pandas")
+    sys.path.insert(0, str(ROOT / "scripts"))
+    import finetune_stream as fs
+
+    args, rest = fs.build_parser().parse_known_args(_trainer_args(tmp_path))
+    # The segment's stop, which the trainer on main does not yet take.
+    assert rest == ["--until", "250"]
+    assert args.grid == "r5"
+    # Round 9's held-out batches, seeds 30940 to 30943.
+    assert args.held_out_seeds == [30940, 30943]
+    assert args.holdout == 90
+    assert args.outbreaks == 8000
+    assert args.prefixes == [250, 500, 750, 1000, 2000, 4000, 8000]
+    assert args.stop_from == 8001
+    assert args.draws_per_simulation == 1
+    assert args.blocks_per_simulation == 32
+    assert args.subset_seed == 1
+    assert args.learning_rate == 1e-5
+    assert args.lr_steps == 36500
+    assert args.series_bias
+    assert args.bias_lr == 1e-3
+    assert args.sources == DESIGN["sources"]
+    assert args.univariate_share == 0.2
+    assert args.chunk == 250

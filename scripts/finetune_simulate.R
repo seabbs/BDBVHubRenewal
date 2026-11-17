@@ -102,7 +102,7 @@ enw_set_cache(
 model <- suppressMessages(enw_model(threads = FALSE))
 
 # Observation draws per simulation, sharing its costly setup.
-draws <- as.integer(Sys.getenv("ENW_DRAWS", "10"))
+draws <- as.integer(Sys.getenv("ENW_DRAWS", "1"))
 # Set ENW_DEBUG to see Stan's messages.
 debug <- nzchar(Sys.getenv("ENW_DEBUG"))
 

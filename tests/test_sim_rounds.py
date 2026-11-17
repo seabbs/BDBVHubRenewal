@@ -88,4 +88,12 @@ def test_draws_per_simulation_are_set_by_the_launcher():
     script = (
         Path(__file__).parents[1] / "scripts" / "sim_rounds.sh"
     ).read_text()
-    assert "DRAWS=${DRAWS:-10}" in script
+    assert "DRAWS=${DRAWS:-1}\n" in script
+
+
+def test_every_simulation_has_one_observation_draw():
+    scripts = Path(__file__).parents[1] / "scripts"
+    laptop = (scripts / "sim_rounds_laptop.sh").read_text()
+    assert "\nDRAWS=1\n" in laptop
+    simulate = (scripts / "finetune_simulate.R").read_text()
+    assert 'Sys.getenv("ENW_DRAWS", "1")' in simulate
