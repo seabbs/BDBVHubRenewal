@@ -393,61 +393,49 @@ Summing the lowest level loses at every level above it, with or without the copu
 
 - We compare the final run's checkpoints, fine-tuned on 250, 500, 750, 1,000, 2,000, 4,000 and 8,000 simulations.
 - They share the grid, the data order and the recipe, as checkpoints of one run.
-- @fig-finetune-heldout gives the held-out loss by source.
+- @fig-finetune-heldout gives the trainer's held-out loss by level, for transparency, not to select a checkpoint.
 - @fig-checkpoint-curve gives German first-half and BDBV relative scores at each checkpoint, with zero-shot Chronos-2 on the ragged layout and on complete data only as reference lines.
+- @tbl-checkpoints gives the headline scores of each checkpoint.
 - A later checkpoint has also trained for more steps.
 - The learning rate falls linearly to zero at 8,000 simulations, so the earlier checkpoints are taken at 97% (250) to 50% (4,000) of the starting rate, and only the 8,000 checkpoint is annealed.
 
-![Held-out loss of the fine-tune against the number of simulated outbreaks it has seen.](build/figures/si/finetune-heldout.png){#fig-finetune-heldout}
+![The trainer's held-out loss of the fine-tune by level (national, intermediate and leaf) against the number of simulated outbreaks it has seen. {{< meta evidence.live.label >}} Development data only.](build/figures/si/finetune-heldout.png){#fig-finetune-heldout}
 
-![WIS (Germany, on each model's own quantiles) and CRPS (BDBV, on 1,000 draws with common random numbers) relative to `randomwalknowcast` of the fine-tuned ragged Chronos-2 models against the number of simulated outbreaks each checkpoint was fine-tuned on, on the case studies by level. Horizontal lines give the models with no fine-tuning: zero-shot Chronos-2 on the ragged layout (dashed) and on complete data only (dotted), each in its source's colour, and `randomwalknowcast` at 1. Each panel gives n, the fewest matched cells of its points, and the forecast origins they come from, and panels with fewer than 5 are grey.](build/figures/si/checkpoint-curve.png){#fig-checkpoint-curve}
+![WIS (Germany, on each model's own quantiles) and CRPS (BDBV, on 1,000 draws with common random numbers) relative to `randomwalknowcast` of the fine-tuned ragged Chronos-2 models against the number of simulated outbreaks each checkpoint was fine-tuned on, by level. Horizontal lines give the models with no fine-tuning: zero-shot Chronos-2 on the ragged layout (dashed) and on complete data only (dotted), each in its source's colour, and `randomwalknowcast` at 1. Each panel gives n, the fewest matched cells of its points, and the forecast origins they come from, and panels with fewer than 5 are grey. {{< meta evidence.live.label >}} Development data only.](build/figures/si/checkpoint-curve.png){#fig-checkpoint-curve}
+
+::: {#tbl-checkpoints}
+{{< include build/tables/si/checkpoint-table.md >}}
+
+Zero-shot Chronos-2, then each checkpoint by the simulations it was fine-tuned on: national WIS on the German first half and CRPS and log CRPS on the BDBV release backtest, relative to `randomwalknowcast` (daily / weekly model), and the trainer's held-out loss. Blank cells are not yet scored. {{< meta evidence.live.label >}} Development data only.
+:::
 
 ### Attention biases for place and parent against none
 
 - We compare the run with attention biases with a run without them.
 - Both runs share the grid, the data order, the LoRA recipe and the checkpoints.
-- @tbl-slots-loss gives held-out loss by source, and @tbl-slots-scores German first-half and BDBV relative scores at checkpoints of the same size.
-- @tbl-slots-swap gives the loss when whole lag series move to another place, relative to the loss as given.
+- @fig-compare-slots shows the trainer's held-out loss and German first-half and BDBV relative scores of both runs by checkpoint and level.
+- @tbl-slots-summary gives each run's newest checkpoint.
+- The lag-swap test moves whole lag series to another place.
 - A ratio above 1 means the model's forecast depends on which place's lags sit with a target.
 - Zero-shot Chronos-2 can also match lags to targets by value, so the comparison with the run without biases, not the ratio alone, tests the biases.
-- @fig-compare-slots shows both runs by checkpoint.
-- The run without biases built its 3-day blocks as daily steps, so we compare 3-day blocks with zero-shot only.
+- The lag-swap test is not yet scored for this run.
 
-![Attention biases against none: held-out loss by source and German first-half and BDBV relative scores, by checkpoint.](build/figures/si/compare-slots.png){#fig-compare-slots}
+![Attention biases against none: the trainer's held-out loss and German first-half and BDBV relative scores, by checkpoint and level. {{< meta evidence.live.label >}} Development data only.](build/figures/si/compare-slots.png){#fig-compare-slots}
 
-::: {#tbl-slots-loss}
-{{< include build/tables/si/slots-loss.md >}}
+::: {#tbl-slots-summary}
+{{< include build/tables/si/slots-summary.md >}}
 
-Held-out loss of the run with attention biases by source and window (nowcast or forecast steps), against the run without them at the same checkpoint and against zero-shot Chronos-2, with the paired ratio and its 90% bootstrap interval, resampling blocks.
-:::
-
-::: {#tbl-slots-scores}
-{{< include build/tables/si/slots-scores.md >}}
-
-Relative WIS on the German first half and relative CRPS on the BDBV release backtest, both against `randomwalknowcast`, of the runs with and without attention biases at checkpoints fine-tuned on the same number of outbreaks.
-:::
-
-::: {#tbl-slots-swap}
-{{< include build/tables/si/slots-swap.md >}}
-
-Lag-swap test: loss with whole lag series moved between places, as a ratio of the loss as given, with its 90% bootstrap interval, resampling blocks, for zero-shot Chronos-2 and the run with attention biases.
+Zero-shot Chronos-2 and the newest checkpoint of the runs with and without attention biases: national WIS on the German first half and CRPS and log CRPS on the BDBV release backtest, relative to `randomwalknowcast` (daily / weekly model), and the trainer's held-out loss, with each cell's simulations in brackets. {{< meta evidence.live.label >}} Development data only.
 :::
 
 ### Delays against no delays
 
 - We fine-tune a run on complete counts only, with the attention biases and without lag series, and compare it with the ragged run.
 - Both runs share the grid, the data order, the recipe and the checkpoints.
-- @tbl-compare-delays gives held-out loss by source and German first-half and BDBV relative scores at checkpoints of the same size.
 - @fig-compare-delays shows both runs by checkpoint.
 - Without lag series the no-delay model has no counts after the last complete step, so its context ends there.
 
 ![Delays against no delays: held-out loss by source and German first-half and BDBV relative scores, by checkpoint.](build/figures/si/compare-delays.png){#fig-compare-delays}
-
-::: {#tbl-compare-delays}
-{{< include build/tables/si/compare-delays.md >}}
-
-The full and no-delay runs at matched checkpoints: held-out loss by source, relative WIS on the German first half and relative CRPS on BDBV, against `randomwalknowcast`.
-:::
 
 ### Real-data fine-tune against synthetic
 
@@ -471,17 +459,10 @@ Chronos-2 zero-shot (`_ragged`), fine-tuned on simulations (`_ft`) and fine-tune
 - We score our models' daily counts in both case studies directly from the daily rows, not summed.
 - The main text scores the hub targets, 7-day counts for Germany and weekly counts for BDBV.
 - Hub teams give no daily forecasts, so we compare our models with `randomwalknowcast` only.
-- @tbl-compare-daily gives German and BDBV relative scores on daily counts and on the hub targets at each checkpoint.
 - @fig-compare-daily shows both.
 - @fig-germany-si-results-daily repeats the German results figure for daily counts.
 
 ![Daily nowcasts: German and BDBV relative scores on daily counts and on the hub targets, by checkpoint.](build/figures/si/compare-daily.png){#fig-compare-daily}
-
-::: {#tbl-compare-daily}
-{{< include build/tables/si/compare-daily.md >}}
-
-Our models' relative scores on daily counts and on the hub targets at matched checkpoints: relative WIS for Germany and relative CRPS for BDBV, against `randomwalknowcast`.
-:::
 
 ::: {#fig-germany-si-results-daily}
 ![](build/figures/si/germany-si-results-daily.png)
@@ -490,15 +471,6 @@ German nowcast hub, daily counts: the panels of the German results figure, with 
 :::
 
 ### Held-out synthetic data
-
-- We report held-out scores by block layout, and by target where the layout has it: the weekly or 3-day totals from the aggregate row, and the daily counts.
-- @tbl-heldout-layout gives them.
-
-::: {#tbl-heldout-layout}
-{{< include build/tables/si/heldout-layout.md >}}
-
-Held-out synthetic data: CRPS relative to `randomwalknowcast` by block layout and target. {{< meta results.synthetic.label >}} {{< meta results.synthetic.note >}}
-:::
 
 ::: {#tbl-synthetic-evaluated}
 {{< include build/tables/main/synthetic-grid.md >}}

@@ -26,6 +26,16 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import yaml
+from bdbvhubrenewal.reporting.live_checkpoint import (
+    LIVE_RUN,
+    checkpoint_table,
+    newest,
+    summary_table,
+    tidy,
+)
+from bdbvhubrenewal.reporting.live_checkpoint import (
+    label as checkpoint_label,
+)
 from matplotlib.figure import Figure
 
 from paperpipe.outputs import to_markdown
@@ -33,26 +43,26 @@ from paperpipe.outputs import to_markdown
 __all__ = [
     "ARMS",
     "EVIDENCE",
-    "THREE_DAY",
     "aggregation_figure",
     "aggregation_numbers",
+    "branch_head",
     "checkpoint_figure",
     "checkpoint_numbers",
     "checkpoint_rows",
     "comparison_figure",
-    "comparison_table",
     "copula_table",
     "diseases_table",
     "drop_finetuned",
     "heldout_figure",
+    "heldout_rows",
     "lag_numbers",
+    "live_numbers",
     "realism_figure",
     "realism_numbers",
     "rho_medians",
     "scale_floor_numbers",
-    "slots_loss_table",
-    "slots_scores_table",
-    "slots_swap_table",
+    "slots_rows",
+    "slots_summary",
     "waiting",
     "write_evidence",
 ]
@@ -315,23 +325,141 @@ def _case_study_rows(scores: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
-def checkpoint_rows(
-    scores: pd.DataFrame, checkpoints: tuple[str, ...] = ()
-) -> pd.DataFrame:
-    """Return the final run's checkpoint rows, under one scoring rule.
+def checkpoint_rows(scores: pd.DataFrame, run: str = LIVE_RUN) -> pd.DataFrame:
+    """Return zero-shot and the live run's checkpoint rows, by level.
 
-    Rows of `CHECKPOINT_RULE` are kept where the table records a rule, and
-    the case studies' rows only (not the held-out loss). Of the fine-tuned
-    rows, only the final run's `checkpoints` are kept, with the zero-shot
-    model; before the run publishes one, only zero-shot is left.
-    BDBV's relative CRPS fills `rel_wis` where that is empty, so one
-    column holds each study's relative score.
+    Rows of `CHECKPOINT_RULE` and the hub target on the case studies'
+    development data (`live_checkpoint.tidy`), at every level, each for
+    its own panel. BDBV's relative CRPS fills `rel_wis`, so one column
+    holds each study's relative score.
     """
-    out = _case_study_rows(scores)
-    keep = (out["checkpoint"] == "zero-shot") | out["checkpoint"].isin(
-        list(checkpoints)
-    )
+    out = tidy(scores)
+    out = out.loc[out["study"].isin(["germany", "ebola"])]
+    out = out.assign(rel_wis=out["rel"], rel_log_wis=out["rel_log"])
+    live = out["run"] == run if "run" in out else False
+    keep = (out["checkpoint"] == "zero-shot") | live
     return out.loc[keep].reset_index(drop=True)
+
+
+HELDOUT_LEVELS: Final = ("national", "intermediate", "leaf")
+"""Levels of the trainer's held-out loss, each reported on its own."""
+
+WITHOUT_BIASES: Final = "no-slots"
+"""The run fine-tuned without attention biases, by the scores' `run`."""
+
+
+def slots_rows(
+    scores: pd.DataFrame, run: str = LIVE_RUN, without: str = WITHOUT_BIASES
+) -> pd.DataFrame:
+    """Return the runs with and without attention biases, by checkpoint.
+
+    Sets are, one per level, the trainer's held-out loss and the relative
+    scores of each model on the German first half and the BDBV release backtest,
+    in the layout of `comparison_figure` (`set`, `run`, `outbreaks`,
+    `score`).
+    """
+    rows = tidy(scores)
+    names = {run: "attention biases", without: "no biases"}
+    rows = rows.loc[rows["run"].isin(names) & (rows["outbreaks"] > 0)]
+    loss = rows.loc[
+        (rows["study"] == "held_out") & rows["level"].isin(HELDOUT_LEVELS)
+    ]
+    out = [
+        pd.DataFrame(
+            {
+                "set": "Held-out loss, " + loss["level"],
+                "run": loss["run"].map(names),
+                "outbreaks": loss["outbreaks"],
+                "score": loss["loss"],
+            }
+        )
+    ]
+    case = rows.loc[rows["study"].isin(["germany", "ebola"])]
+    study = case["study"].map({"germany": "German", "ebola": "BDBV"})
+    source = case["model"].str.extract(r"_(daily|weekly)_")[0]
+    out.append(
+        pd.DataFrame(
+            {
+                "set": study + " " + case["level"] + ", " + source,
+                "run": case["run"].map(names),
+                "outbreaks": case["outbreaks"],
+                "score": case["rel"],
+            }
+        )
+    )
+    return pd.concat(out, ignore_index=True).dropna(subset=["score"])
+
+
+def slots_summary(
+    scores: pd.DataFrame, run: str = LIVE_RUN, without: str = WITHOUT_BIASES
+) -> pd.DataFrame:
+    """Return zero-shot and both runs at the largest size both reached.
+
+    Per study, each run keeps only checkpoints up to the largest number
+    of simulations both runs were scored at, so the rows compare like
+    with like; a study with no shared size is blank.
+    """
+    rows = tidy(scores)
+    both = rows.loc[rows["run"].isin([run, without])]
+    keep = pd.Series(True, index=scores.index)
+    for study, g in both.groupby("study"):
+        sizes = [set(g.loc[g["run"] == r, "outbreaks"]) for r in (run, without)]
+        shared = sizes[0] & sizes[1]
+        top = max(shared) if shared else -1
+        drop = (
+            (scores["study"] == study)
+            & scores["run"].isin([run, without])
+            & (scores["outbreaks"] > top)
+        )
+        keep &= ~drop
+    matched = scores.loc[keep]
+    live = summary_table(matched, run)
+    none = summary_table(matched, without)
+    out = pd.concat([live, none.iloc[[1]]], ignore_index=True)
+    out = out.rename(columns={"Simulations": "Run"})
+    out["Run"] = ["Zero-shot", "attention biases", "no biases"]
+    return out
+
+
+def heldout_rows(scores: pd.DataFrame, run: str = LIVE_RUN) -> pd.DataFrame:
+    """Return the trainer's held-out loss of the live run by checkpoint.
+
+    In the layout of `heldout_figure`, on the trainer's held-out set, one
+    line per level (`HELDOUT_LEVELS`).
+    """
+    rows = tidy(scores)
+    rows = rows.loc[
+        (rows["study"] == "held_out")
+        & rows["level"].isin(HELDOUT_LEVELS)
+        & (rows["run"] == run)
+    ]
+    return pd.DataFrame(
+        {
+            "run": run,
+            "blocks": rows["level"],
+            "outbreaks_seen": rows["outbreaks"],
+            "heldout_loss": rows["loss"],
+        }
+    )
+
+
+def live_numbers(scores: pd.DataFrame | None, run: str = LIVE_RUN) -> dict:
+    """Return each study's newest checkpoint of the live run and its label.
+
+    `label` is the newest over the studies, for captions; it says the
+    scores are not yet available before any checkpoint is scored.
+    """
+    top = {} if scores is None else newest(scores, run)
+    out: dict = {
+        study: {"checkpoint": ck, "outbreaks": n, "label": checkpoint_label(n)}
+        for study, (ck, n) in top.items()
+    }
+    out["label"] = (
+        checkpoint_label(max(n for _, n in top.values()))
+        if top
+        else "Fine-tuned checkpoint scores are not yet available."
+    )
+    return out
 
 
 FINETUNED_EVIDENCE: Final = (
@@ -634,7 +762,6 @@ EVIDENCE: Final = {
     "lag_germany": "germany-chronos2's German lag-horizon scores",
     "lag_bdbv_before": "the BDBV scores with the 4-week lag horizon",
     "lag_bdbv_after": "the BDBV scores with lags to the truth delay",
-    "slots_check": "slots-check's slots against no slots and lag-swap test",
     "compare_slots": "the slots and no-slots runs' scores by checkpoint",
     "compare_delays": "the full and no-delay runs' scores by checkpoint",
     "compare_realdata": "the real-data and synthetic fine-tunes' scores",
@@ -642,7 +769,6 @@ EVIDENCE: Final = {
     "block_combinations": (
         "fm-finetune3's realised shares of block layouts and options"
     ),
-    "heldout_layout": "held-out synthetic scores by block layout and target",
 }
 """Each evidence input and what it waits on until set.
 
@@ -668,122 +794,6 @@ QUOTED: Final = {
     },
 }
 """The numbers the paper quotes, as they read until their rows exist."""
-
-
-THREE_DAY: Final = "3day"
-"""How the slots check names its 3-day sets."""
-
-
-def _ratio_ci(rows: pd.DataFrame) -> list[str]:
-    """Return each ratio and its 90% interval as `r (lo to hi)`, 2 d.p."""
-    return [
-        f"{r:.2f} ({lo:.2f} to {hi:.2f})"
-        for r, lo, hi in zip(
-            rows["ratio"], rows["ci_low"], rows["ci_high"], strict=True
-        )
-    ]
-
-
-def slots_loss_table(check: pd.DataFrame) -> pd.DataFrame:
-    """Return the slots run's loss against each comparator, by source.
-
-    The slots check's `given` rows: the slots run's mean loss against
-    zero-shot Chronos-2 and against the no-slots run at the same
-    checkpoint, with the paired ratio and its 90% interval. The no-slots
-    run built its 3-day blocks as daily, so 3-day blocks against no slots
-    are left out.
-    """
-    rows = check.loc[
-        (check["model"] == "slots") & (check["condition"] == "given")
-    ]
-    rows = rows.loc[
-        ~(rows["set"].str.contains(THREE_DAY) & (rows["against"] == "no-slots"))
-    ]
-    return pd.DataFrame(
-        {
-            "Set": rows["set"],
-            "Window": rows["window"],
-            "Against": rows["against"],
-            "Slots loss": rows["loss"].round(2),
-            "Against loss": rows["against_loss"].round(2),
-            "Ratio (90% CI)": _ratio_ci(rows),
-        }
-    ).reset_index(drop=True)
-
-
-def slots_swap_table(check: pd.DataFrame) -> pd.DataFrame:
-    """Return each model's loss with lag series swapped between places.
-
-    The ratio of loss with whole lag series moved to another place to the
-    loss as given, with its 90% interval; 1 means the model does not tell
-    which place a lag series belongs to.
-    """
-    rows = check.loc[check["condition"] == "swap_places"]
-    return pd.DataFrame(
-        {
-            "Set": rows["set"],
-            "Window": rows["window"],
-            "Model": rows["model"],
-            "Ratio (90% CI)": _ratio_ci(rows),
-        }
-    ).reset_index(drop=True)
-
-
-def slots_scores_table(
-    scores: pd.DataFrame, checkpoints: tuple[str, ...] = ()
-) -> pd.DataFrame:
-    """Return the case studies' relative scores of both runs, matched.
-
-    Rows of `CHECKPOINT_RULE` for Germany's first half and BDBV: each of
-    the final slots run's `checkpoints` beside the no-slots run's
-    checkpoint fine-tuned on as many outbreaks. Other slots runs'
-    checkpoints (`slots-<hash>`) are left out. Relative WIS for Germany
-    and relative CRPS for BDBV, against `randomwalknowcast`.
-    """
-    rows = _case_study_rows(scores)
-    rows = rows.loc[rows["outbreaks"] > 0]
-    ids = rows["checkpoint"].astype(str)
-    slots = ids.isin(list(checkpoints))
-    plain = ~ids.str.startswith("slots-")
-    keys = ["study", "level", "model", "outbreaks"]
-    twice = rows.loc[plain].duplicated(keys, keep=False)
-    if twice.any():
-        names = sorted(set(rows.loc[plain].loc[twice, "checkpoint"]))
-        raise ValueError(
-            f"More than one no-slots checkpoint per size: {', '.join(names)}."
-        )
-    pairs = rows.loc[slots, [*keys, "rel_wis"]].merge(
-        rows.loc[plain, [*keys, "rel_wis"]],
-        on=keys,
-        suffixes=("_slots", "_none"),
-    )
-    pairs = pairs.sort_values(keys).reset_index(drop=True)
-    return pd.DataFrame(
-        {
-            "Study": pairs["study"],
-            "Level": pairs["level"],
-            "Model": pairs["model"],
-            "Outbreaks": pairs["outbreaks"],
-            "Slots": pairs["rel_wis_slots"],
-            "No slots": pairs["rel_wis_none"],
-        }
-    )
-
-
-def comparison_table(rows: pd.DataFrame) -> pd.DataFrame:
-    """Return a fine-tuning comparison with each run's score side by side.
-
-    One row per set and checkpoint, one column per run, for the
-    checkpoints every run reached.
-    """
-    wide = rows.pivot_table(
-        index=["set", "outbreaks"], columns="run", values="score"
-    ).dropna()
-    wide = wide.reset_index().rename(
-        columns={"set": "Set", "outbreaks": "Outbreaks"}
-    )
-    wide.columns.name = None
-    return wide.sort_values(["Set", "Outbreaks"]).reset_index(drop=True)
 
 
 def comparison_figure(rows: pd.DataFrame) -> Figure:
@@ -831,6 +841,31 @@ def comparison_figure(rows: pd.DataFrame) -> Figure:
     return fig
 
 
+def branch_head(branch: str, repo: Path | str = ".") -> str:
+    """Return the commit at the head of an evidence branch on `origin`.
+
+    The branch is fetched first, so each workflow run reads its newest
+    rows; an evidence file named by this commit is extracted anew when
+    the branch moves. Offline, the branch as last fetched is used.
+    """
+    import subprocess
+
+    def git(*args: str) -> str:
+        return subprocess.run(
+            ["git", "-C", str(repo), *args],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+
+    try:
+        git("fetch", "-q", "origin", branch)
+        return git("rev-parse", "FETCH_HEAD")
+    except subprocess.CalledProcessError:
+        # Offline: the branch as last fetched.
+        return git("rev-parse", f"origin/{branch}")
+
+
 def _read(paths: Mapping[str, Path | None], name: str) -> pd.DataFrame | None:
     path = paths.get(name)
     if path is None:
@@ -843,7 +878,7 @@ def write_evidence(
     si_dir: Path,
     fig_dir: Path,
     out_yml: Path,
-    checkpoints: tuple[str, ...] = (),
+    run: str = LIVE_RUN,
 ) -> dict:
     """Write every evidence table and figure, and the numbers they quote.
 
@@ -855,9 +890,9 @@ def write_evidence(
         Folders for the SI tables and figures.
     out_yml : pathlib.Path
         The quoted numbers, as Quarto metadata under `evidence`.
-    checkpoints : tuple of str
-        The final run's published checkpoints, which the curve shows
-        (`checkpoint_rows`).
+    run : str
+        The live fine-tuning run, whose scored checkpoints the curve, the
+        tables and the comparisons show as preliminary.
 
     Returns
     -------
@@ -913,30 +948,26 @@ def write_evidence(
         None if dis is None else diseases_table(dis),
         ["sim_diseases"],
     )
-    ckpt = data["checkpoint_scores"]
-    if ckpt is not None:
-        ckpt = checkpoint_rows(ckpt, checkpoints)
+    raw = data["checkpoint_scores"]
+    ckpt = None if raw is None else checkpoint_rows(raw, run)
     figure(
         "checkpoint-curve",
         None if ckpt is None else checkpoint_figure(ckpt),
         ["checkpoint_scores"],
     )
-    check = data["slots_check"]
     table(
-        "slots-loss",
-        None if check is None else slots_loss_table(check),
-        ["slots_check"],
+        "checkpoint-table",
+        None if raw is None else checkpoint_table(raw, run),
+        ["checkpoint_scores"],
     )
     table(
-        "slots-swap",
-        None if check is None else slots_swap_table(check),
-        ["slots_check"],
+        "live-summary",
+        None if raw is None else summary_table(raw, run),
+        ["checkpoint_scores"],
     )
     table(
-        "slots-scores",
-        None
-        if data["checkpoint_scores"] is None
-        else slots_scores_table(data["checkpoint_scores"], checkpoints),
+        "slots-summary",
+        None if raw is None else slots_summary(raw, run),
         ["checkpoint_scores"],
     )
     table(
@@ -944,7 +975,8 @@ def write_evidence(
         data["block_combinations"],
         ["block_combinations"],
     )
-    table("heldout-layout", data["heldout_layout"], ["heldout_layout"])
+    if data["compare_slots"] is None and raw is not None:
+        data["compare_slots"] = slots_rows(raw, run)
     for name in ("slots", "delays", "realdata", "daily"):
         rows = data[f"compare_{name}"]
         figure(
@@ -952,15 +984,12 @@ def write_evidence(
             None if rows is None else comparison_figure(rows),
             [f"compare_{name}"],
         )
-        table(
-            f"compare-{name}",
-            None if rows is None else comparison_table(rows),
-            [f"compare_{name}"],
-        )
     curve = data["finetune_heldout"]
+    if curve is None and raw is not None:
+        curve = heldout_rows(raw, run)
     figure(
         "finetune-heldout",
-        None if curve is None else heldout_figure(curve),
+        None if curve is None or curve.empty else heldout_figure(curve),
         ["finetune_heldout"],
     )
     sims, ref = data["sim_summaries"], data["sim_realism"]
@@ -995,6 +1024,7 @@ def write_evidence(
                 else scale_floor_numbers(data["scale_floor"])
             ),
             "checkpoints": (None if ckpt is None else checkpoint_numbers(ckpt)),
+            "live": live_numbers(raw, run),
             "aggregation": (None if agg is None else aggregation_numbers(agg)),
             "realism": (
                 QUOTED["realism"] if ref is None else realism_numbers(ref)

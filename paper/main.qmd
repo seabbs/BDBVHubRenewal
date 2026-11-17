@@ -81,6 +81,7 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
 - A block is daily, 3-day or weekly, or daily with one weekly or 3-day total row per place.
 - Four in five blocks are multivariate and one in five univariate.
 - We save checkpoints at 250, 500, 750, 1,000, 2,000, 4,000 and 8,000 simulations.
+- We report the final checkpoint, at 8,000 simulations, where the learning rate reaches zero, and select no checkpoint on real data.
 - Training draws simulations from a balanced, shuffled design, so every checkpoint has seen the whole grid.
 - Chronos-2 forecasts the country, provinces and health zones as separate series in one joint block.
 - The copula only pairs draws, for joint scores and sums, and leaves marginals unchanged.
@@ -208,6 +209,12 @@ The plots in primarycensored-paper are a model for these.
 Each section has two paragraphs, one on visual performance and one summarising scores.
 
 Key references: the Methods references, with [@bracherEvaluatingEpidemicForecasts2021; @Bosse2023-sx] for the natural- and log-scale panels.
+:::
+
+::: {#tbl-live-summary}
+{{< include build/tables/si/live-summary.md >}}
+
+Zero-shot Chronos-2 and the newest scored checkpoint of the fine-tuned model: national WIS on the German first half and CRPS and log CRPS on the BDBV release backtest, relative to `randomwalknowcast` (daily / weekly model), and the trainer's held-out loss, with each cell's simulations in brackets. The SI gives every checkpoint (Checkpoint curve). {{< meta evidence.live.label >}} Development data only.
 :::
 
 ### Held-out synthetic data

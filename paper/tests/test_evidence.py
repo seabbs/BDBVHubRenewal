@@ -302,6 +302,7 @@ def test_checkpoint_rows_keep_one_grid_and_the_current_rule() -> None:
                 **base,
                 "study": "germany",
                 "checkpoint": "a",
+                "run": "other",
                 "outbreaks": 1000,
                 "grid": "r3",
                 "rule": CHECKPOINT_RULE,
@@ -312,6 +313,7 @@ def test_checkpoint_rows_keep_one_grid_and_the_current_rule() -> None:
                 **base,
                 "study": "germany",
                 "checkpoint": "b",
+                "run": "one-model",
                 "outbreaks": 1000,
                 "grid": "r4",
                 "rule": CHECKPOINT_RULE,
@@ -322,6 +324,7 @@ def test_checkpoint_rows_keep_one_grid_and_the_current_rule() -> None:
                 **base,
                 "study": "germany",
                 "checkpoint": "b",
+                "run": "one-model",
                 "outbreaks": 1000,
                 "grid": "r4",
                 "rule": "samples-100",
@@ -332,6 +335,7 @@ def test_checkpoint_rows_keep_one_grid_and_the_current_rule() -> None:
                 **base,
                 "study": "ebola",
                 "checkpoint": "b",
+                "run": "one-model",
                 "outbreaks": 1000,
                 "grid": "r4",
                 "rule": CHECKPOINT_RULE,
@@ -342,6 +346,7 @@ def test_checkpoint_rows_keep_one_grid_and_the_current_rule() -> None:
                 **base,
                 "study": "held_out",
                 "checkpoint": "b",
+                "run": "one-model",
                 "outbreaks": 1000,
                 "grid": "r4",
                 "rule": CHECKPOINT_RULE,
@@ -350,13 +355,13 @@ def test_checkpoint_rows_keep_one_grid_and_the_current_rule() -> None:
             },
         ]
     )
-    out = checkpoint_rows(rows, checkpoints=("b",))
+    out = checkpoint_rows(rows, "one-model")
     assert set(out["study"]) == {"germany", "ebola"}
     assert sorted(out["checkpoint"]) == ["b", "b", "zero-shot"]
     assert out.set_index("study").loc["ebola", "rel_wis"] == 0.8
-    # Old tables, with no grid or rule, give the zero-shot rows only.
-    old = rows.drop(columns=["grid", "rule", "rel_crps"]).iloc[:2]
-    assert list(checkpoint_rows(old, checkpoints=("b",))["checkpoint"]) == [
+    # Old tables, with no run, grid or rule, give the zero-shot rows only.
+    old = rows.drop(columns=["run", "grid", "rule", "rel_crps"]).iloc[:2]
+    assert list(checkpoint_rows(old, "one-model")["checkpoint"]) == [
         "zero-shot"
     ]
 
@@ -375,11 +380,11 @@ def test_checkpoint_rows_of_other_runs_leave_only_zero_shot() -> None:
             "rel_wis": [2.0, 1.5],
         }
     )
-    out = checkpoint_rows(rows, checkpoints=("b",))
+    out = checkpoint_rows(rows, "one-model")
     assert list(out["checkpoint"]) == ["zero-shot"]
 
 
-def test_checkpoint_rows_keep_only_the_final_run() -> None:
+def test_checkpoint_rows_keep_only_the_live_run() -> None:
     from paperpipe.evidence import checkpoint_rows
 
     rows = pd.DataFrame(
@@ -392,12 +397,11 @@ def test_checkpoint_rows_keep_only_the_final_run() -> None:
             "n": 9,
             "rel_wis": 1.0,
             "grid": ["r4", "r4.1", "r3"],
+            "run": ["other", "one-model", "slots-zeroinit"],
         }
     )
-    # Only the final run's checkpoints, whatever their grid.
-    assert list(checkpoint_rows(rows, checkpoints=("b",))["checkpoint"]) == [
-        "b"
-    ]
+    # Only the live run's checkpoints, whatever their grid.
+    assert list(checkpoint_rows(rows, "one-model")["checkpoint"]) == ["b"]
 
 
 def test_joint_evidence_leaves_out_fine_tuned_rows_of_earlier_runs() -> None:
@@ -466,169 +470,6 @@ def test_checkpoint_curves_show_the_untuned_models_as_lines() -> None:
     assert "randomwalknowcast" in legend
 
 
-def _slots_check() -> pd.DataFrame:
-    """Rows in the slots check's layout: slots against zero-shot and no
-    slots, and the lag-swap test."""
-    base = {"window": "nowcast", "ci_low": 0.8, "ci_high": 0.95}
-    return pd.DataFrame(
-        [
-            {
-                **base,
-                "set": "sims weekly",
-                "model": "slots",
-                "condition": "given",
-                "against": "zero-shot",
-                "loss": 8.0,
-                "against_loss": 10.0,
-                "ratio": 0.8,
-            },
-            {
-                **base,
-                "set": "sims weekly",
-                "model": "slots",
-                "condition": "given",
-                "against": "no-slots",
-                "loss": 8.0,
-                "against_loss": 9.0,
-                "ratio": 0.89,
-            },
-            {
-                **base,
-                "set": "sims 3day",
-                "model": "slots",
-                "condition": "given",
-                "against": "no-slots",
-                "loss": 4.0,
-                "against_loss": 5.0,
-                "ratio": 0.8,
-            },
-            {
-                **base,
-                "set": "sims weekly",
-                "model": "slots",
-                "condition": "swap_places",
-                "against": "given",
-                "loss": 8.4,
-                "against_loss": 8.0,
-                "ratio": 1.05,
-            },
-            {
-                **base,
-                "set": "sims weekly",
-                "model": "zero-shot",
-                "condition": "swap_places",
-                "against": "given",
-                "loss": 10.0,
-                "against_loss": 10.0,
-                "ratio": 1.0,
-            },
-        ]
-    )
-
-
-def test_slots_loss_leaves_out_3_day_blocks_against_no_slots() -> None:
-    # The no-slots run built its 3-day blocks as daily, so only weekly and
-    # daily blocks compare cleanly with it.
-    from paperpipe.evidence import slots_loss_table
-
-    out = slots_loss_table(_slots_check())
-    assert list(out["Against"]) == ["zero-shot", "no-slots"]
-    assert set(out["Set"]) == {"sims weekly"}
-    assert out["Ratio (90% CI)"].iloc[0] == "0.80 (0.80 to 0.95)"
-
-
-def test_slots_swap_gives_each_model_s_lag_swap_ratio() -> None:
-    from paperpipe.evidence import slots_swap_table
-
-    out = slots_swap_table(_slots_check())
-    assert list(out["Model"]) == ["slots", "zero-shot"]
-    assert list(out["Ratio (90% CI)"]) == [
-        "1.05 (0.80 to 0.95)",
-        "1.00 (0.80 to 0.95)",
-    ]
-
-
-def test_slots_scores_pair_the_runs_at_matched_checkpoints() -> None:
-    from paperpipe.evidence import CHECKPOINT_RULE, slots_scores_table
-
-    base = {
-        "level": "national",
-        "model": "fm_chronos_daily_ragged",
-        "rule": CHECKPOINT_RULE,
-        "grid": "r4",
-        "rel_crps": None,
-    }
-    rows = pd.DataFrame(
-        [
-            {
-                **base,
-                "study": "germany",
-                "checkpoint": "slots-aaa",
-                "outbreaks": 1000,
-                "rel_wis": 0.9,
-            },
-            {
-                **base,
-                "study": "germany",
-                "checkpoint": "bbb",
-                "outbreaks": 1000,
-                "rel_wis": 1.0,
-            },
-            # No no-slots checkpoint at 250, so no pair.
-            {
-                **base,
-                "study": "germany",
-                "checkpoint": "slots-ccc",
-                "outbreaks": 250,
-                "rel_wis": 1.1,
-            },
-            {
-                **base,
-                "study": "ebola",
-                "checkpoint": "slots-aaa",
-                "outbreaks": 1000,
-                "rel_wis": None,
-                "rel_crps": 0.7,
-            },
-            {
-                **base,
-                "study": "ebola",
-                "checkpoint": "bbb",
-                "outbreaks": 1000,
-                "rel_wis": None,
-                "rel_crps": 0.75,
-            },
-        ]
-    )
-    out = slots_scores_table(rows, ("slots-aaa", "slots-ccc"))
-    assert list(out["Outbreaks"]) == [1000, 1000]
-    assert list(out["Slots"]) == [0.7, 0.9]
-    assert list(out["No slots"]) == [0.75, 1.0]
-
-
-def test_slots_scores_keep_only_the_final_run_s_checkpoints() -> None:
-    # An earlier slots run's checkpoints are not the paper's.
-    from paperpipe.evidence import CHECKPOINT_RULE, slots_scores_table
-
-    base = {
-        "study": "germany",
-        "level": "national",
-        "model": "fm_chronos_daily_ragged",
-        "rule": CHECKPOINT_RULE,
-        "outbreaks": 1000,
-    }
-    rows = pd.DataFrame(
-        [
-            {**base, "checkpoint": "slots-old", "rel_wis": 0.8},
-            {**base, "checkpoint": "slots-new", "rel_wis": 0.9},
-            {**base, "checkpoint": "plain", "rel_wis": 1.0},
-        ]
-    )
-    out = slots_scores_table(rows, ("slots-new",))
-    assert list(out["Slots"]) == [0.9]
-    assert slots_scores_table(rows, ()).empty
-
-
 def _comparison() -> pd.DataFrame:
     """Rows of a fine-tuning comparison: two runs scored by set."""
     return pd.DataFrame(
@@ -648,16 +489,6 @@ def _comparison() -> pd.DataFrame:
     )
 
 
-def test_a_comparison_table_puts_each_run_beside_the_other() -> None:
-    from paperpipe.evidence import comparison_table
-
-    out = comparison_table(_comparison())
-    assert list(out.columns) == ["Set", "Outbreaks", "full", "no delays"]
-    first = out.iloc[0]
-    assert (first["Set"], first["Outbreaks"]) == ("germany national", 1000)
-    assert (first["full"], first["no delays"]) == (0.9, 1.1)
-
-
 def test_a_comparison_figure_draws_each_run_by_checkpoint() -> None:
     from paperpipe.evidence import comparison_figure
 
@@ -669,37 +500,6 @@ def test_a_comparison_figure_draws_each_run_by_checkpoint() -> None:
     ]
     lines = {line.get_label(): line for line in axes[0].get_lines()}
     assert list(lines["no delays"].get_xdata()) == [1000, 2000]
-
-
-def test_two_no_slots_checkpoints_of_one_size_fail() -> None:
-    from paperpipe.evidence import CHECKPOINT_RULE, slots_scores_table
-
-    base = {
-        "study": "germany",
-        "level": "national",
-        "model": "fm_chronos_daily_ragged",
-        "rule": CHECKPOINT_RULE,
-        "outbreaks": 1000,
-    }
-    rows = pd.DataFrame(
-        [
-            {**base, "checkpoint": "slots-new", "rel_wis": 0.9},
-            {**base, "checkpoint": "plain-a", "rel_wis": 1.0},
-            {**base, "checkpoint": "plain-b", "rel_wis": 1.1},
-        ]
-    )
-    with pytest.raises(ValueError, match="plain-a"):
-        slots_scores_table(rows, ("slots-new",))
-
-
-def test_the_3_day_label_matches_the_slots_check_s_sets() -> None:
-    from paperpipe.evidence import THREE_DAY, slots_loss_table
-
-    check = _slots_check()
-    assert check["set"].str.contains(THREE_DAY).any()
-    # Every 3-day row against no slots is dropped.
-    out = slots_loss_table(check)
-    assert not out["Set"].str.contains(THREE_DAY).any()
 
 
 def test_the_block_combinations_table_waits_then_shows_its_rows(
@@ -722,33 +522,59 @@ def test_the_block_combinations_table_waits_then_shows_its_rows(
     assert "daily" in table.read_text()
 
 
-def test_the_daily_nowcasts_have_a_figure_and_a_table(tmp_path) -> None:
+def test_the_daily_nowcasts_have_a_figure(tmp_path) -> None:
     rows = tmp_path / "daily.csv"
     _comparison().to_csv(rows, index=False)
     paths = dict.fromkeys(EVIDENCE) | {"compare_daily": rows}
     write_evidence(paths, tmp_path / "si", tmp_path / "fig", tmp_path / "e.yml")
     assert (tmp_path / "fig" / "compare-daily.png").is_file()
-    assert (
-        "germany national" in (tmp_path / "si" / "compare-daily.md").read_text()
-    )
 
 
-def test_the_heldout_layout_table_waits_then_shows_its_rows(tmp_path) -> None:
-    write_evidence(
-        dict.fromkeys(EVIDENCE),
-        tmp_path / "si",
-        tmp_path / "fig",
-        tmp_path / "e.yml",
+def test_an_evidence_branch_resolves_to_its_head(tmp_path) -> None:
+    import subprocess
+
+    from paperpipe.evidence import branch_head
+
+    origin = tmp_path / "origin"
+
+    def git(*args, cwd=origin):
+        return subprocess.run(
+            ["git", *args], cwd=cwd, check=True, capture_output=True, text=True
+        ).stdout.strip()
+
+    origin.mkdir()
+    git("init", "-q", "-b", "main")
+    git(
+        "-c",
+        "user.name=t",
+        "-c",
+        "user.email=t@t",
+        "commit",
+        "-q",
+        "--allow-empty",
+        "-m",
+        "a",
     )
-    table = tmp_path / "si" / "heldout-layout.md"
-    assert "waits on" in table.read_text()
-    rows = tmp_path / "layout.csv"
-    pd.DataFrame(
-        {"layout": ["daily_weekly"], "target": ["weekly"], "rel_crps": [0.8]}
-    ).to_csv(rows, index=False)
-    paths = dict.fromkeys(EVIDENCE) | {"heldout_layout": rows}
-    write_evidence(paths, tmp_path / "si", tmp_path / "fig", tmp_path / "e.yml")
-    assert "daily_weekly" in table.read_text()
+    git("branch", "scores")
+    clone = tmp_path / "clone"
+    git("clone", "-q", str(origin), str(clone), cwd=tmp_path)
+    first = branch_head("scores", clone)
+    assert first == git("rev-parse", "scores")
+    git("checkout", "-q", "scores")
+    git(
+        "-c",
+        "user.name=t",
+        "-c",
+        "user.email=t@t",
+        "commit",
+        "-q",
+        "--allow-empty",
+        "-m",
+        "b",
+    )
+    # A new commit on the branch gives a new head, so the file is new.
+    assert branch_head("scores", clone) == git("rev-parse", "scores")
+    assert branch_head("scores", clone) != first
 
 
 def test_the_aggregation_figure_has_a_panel_per_study_and_level() -> None:

@@ -45,6 +45,7 @@ from paperdata.synthetic_runner import (  # noqa: E402
 )
 from paperpipe.config import MODES, run_settings  # noqa: E402
 from paperpipe.evidence import EVIDENCE as EVIDENCE_NAMES  # noqa: E402
+from paperpipe.evidence import branch_head  # noqa: E402
 from paperpipe.outputs import (  # noqa: E402
     JOINT_STUDIES,
     MAIN_TABLES,
@@ -105,12 +106,17 @@ if str(_split) != str(config["heldout"]["germany_from"]):
     )
 
 
-# Rows from evidence branches, pinned by commit in `evidence` (config).
+# Rows from evidence branches, pinned by commit in `evidence` (config),
+# or followed: an entry naming a `branch` reads its head, resolved here so
+# a new commit there extracts the file anew.
 EVIDENCE = {
     name: entry
     for name, entry in (config.get("evidence") or {}).items()
     if entry
 }
+for _entry in EVIDENCE.values():
+    if "branch" in _entry:
+        _entry["ref"] = branch_head(_entry["branch"], PAPER.parent)
 
 
 def evidence_file(name):
@@ -735,16 +741,15 @@ rule evidence:
         ),
         si=f"{R}/{{mode}}/tables/si",
         fig=f"{R}/{{mode}}/figures/si",
-        # The final run's published checkpoints, which the curve shows.
-        checkpoints=(
-            "--checkpoints " + " ".join(config["final_checkpoints"])
-            if config.get("final_checkpoints")
-            else ""
+        # The live fine-tuning run, whose newest scored checkpoints are
+        # shown as preliminary.
+        live=(
+            f"--live-run {config['live_run']}" if config.get("live_run") else ""
         ),
     shell:
         "{PYTHON} -m paperpipe evidence {params.args} --mode {wildcards.mode} "
         "--si-dir {params.si} --fig-dir {params.fig} --out {output.yml} "
-        "{params.checkpoints}"
+        "{params.live}"
 
 
 rule summary:
