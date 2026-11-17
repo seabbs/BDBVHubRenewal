@@ -63,13 +63,109 @@ Chronos-2's group attention has no notion of which series is which, so on its ow
 The learned biases added to Chronos-2's group-attention scores.
 :::
 
+#### Group attention
+
+- Chronos-2 attends over time within each series, then over the series of a block at each time step, which is group attention [@Ansari2025].
+- At one time step, row $i$ of a block (a place's count or one of its lag series) attends to row $j$ with weight
+$$
+a_{ij} = \operatorname{softmax}_j\!\left(q_i^\top k_j + M_{ij}\right),
+$$
+where $q_i$ and $k_j$ are the query and key vectors of one head in one layer, and $M_{ij}$ is the group mask, $0$ when rows $i$ and $j$ are in the same block and $-\infty$ otherwise.
+- Chronos-2 does not divide the scores by the square root of the key dimension.
+
+#### Attention biases
+
+- Each row $i$ belongs to a place $P(i)$, and each place $p$ has a parent $\pi(p)$ in the block, or none.
+- We add a learned bias for each relation $r$ to the scores:
+$$
+a_{ij} = \operatorname{softmax}_j\!\left(q_i^\top k_j + M_{ij} + \sum_{r} b_r^{(l,h)}\,\mathbb{1}\!\left[(i,j) \in R_r\right]\right),
+$$
+with one scalar $b_r^{(l,h)}$ per relation $r$, layer $l$ and head $h$, and $b_r^{(l,h)} = 0$ at the start.
+- The relations are the pairs of rows in @tbl-attention-biases:
+$$
+\begin{aligned}
+R_\text{self} &= \{(i, j) : i = j\},\\
+R_\text{same} &= \{(i, j) : i \neq j,\ P(i) = P(j)\},\\
+R_\text{up} &= \{(i, j) : P(j) = \pi(P(i))\},\\
+R_\text{down} &= \{(i, j) : P(i) = \pi(P(j))\}.
+\end{aligned}
+$$
+- A pair in no relation gets no bias, as in Moirai's any-variate attention [@Woo2024] and TableFormer's relation biases [@Yang2022].
+
+#### Mixed-frequency blocks
+
+- One fine-tuned Chronos-2 model forecasts daily, 3-day and weekly data.
+- A training block is daily, 3-day or weekly, or daily with one aggregate row per place (@tbl-block-layouts).
+- A place's aggregate row holds its 3-day or weekly totals,
+$$
+y^{(k)}_{p,t} = \begin{cases} \sum_{s=t-k+1}^{t} y_{p,s} & \text{if day } t \text{ ends a period of } k \text{ days},\\ \text{missing} & \text{otherwise,} \end{cases}
+$$
+where $y_{p,s}$ is place $p$'s daily count on day $s$ and $k = 7$ for weekly or $k = 3$ for 3-day totals.
+- The aggregate row has no lag series of its own.
+- It belongs to its place, so it is in that place's same-place relation.
+- The loss counts the aggregate row only on period-end days, where $m_{n,t} = 1$, and its missing days have $m_{n,t} = 0$.
+
+#### LoRA
+
+- LoRA replaces a weight matrix $W \in \mathbb{R}^{d_\text{out} \times d_\text{in}}$ with
+$$
+W' = W + \frac{\alpha}{r} B A,
+$$
+where $A \in \mathbb{R}^{r \times d_\text{in}}$ and $B \in \mathbb{R}^{d_\text{out} \times r}$ are trained and $W$ is frozen [@Hu2021].
+- We use rank $r = 8$ and $\alpha = 16$.
+- We apply it to the query, key, value and output projections of the time and group attention of all 12 layers, and to the output layer.
+- $B$ starts at zero, so $W' = W$ at the start.
+
+#### Loss
+
+- Chronos-2 scales each row by the mean $\mu_n$ and standard deviation $\sigma_n$ of its context, then applies $\operatorname{arcsinh}$, so a target $y_{n,t}$ becomes $\tilde y_{n,t} = \operatorname{arcsinh}\!\left((y_{n,t} - \mu_n)/\sigma_n\right)$.
+- The model gives a quantile $\hat q_{n,t,k}$ at each of 21 levels $\tau_k \in \{0.01, 0.05, 0.10, \dots, 0.95, 0.99\}$.
+- The loss is the quantile (pinball) loss, averaged over the $H$ steps and the $N$ rows of a batch and summed over levels:
+$$
+L = \frac{1}{N} \sum_{n=1}^{N} \frac{1}{H} \sum_{t=1}^{H} m_{n,t} \sum_{k=1}^{21} 2 \left| \left(\tilde y_{n,t} - \hat q_{n,t,k}\right) \left(\mathbb{1}\!\left[\tilde y_{n,t} \le \hat q_{n,t,k}\right] - \tau_k\right) \right|,
+$$
+where $m_{n,t}$ is 1 for a target step to forecast and 0 for a missing target or a lag series' known future value.
+
+#### Learning rates
+
+- The learning rate at step $t$ falls linearly from $\eta_0$ to zero:
+$$
+\eta_t = \eta_0 \left(1 - \frac{t}{T}\right),
+$$
+with $T = 36{,}500$ steps, which is reached at 8,000 simulations.
+- $\eta_0 = 10^{-5}$ for the LoRA adapter, as in Chronos-2, and $\eta_0 = 10^{-3}$ for the attention biases.
+
 **Training blocks.**
 A simulation gives daily counts by onset and report date, and a release counts every case reported by its cut-off, one cut-off a week.
 Each simulation gives 10 observation draws, and at each of 16 cut-offs 2 of the 10 draws are sampled, so one simulation gives 32 blocks.
-Each block takes daily steps, or sums the days to 3-day or weekly steps, at random.
-Four in five blocks are multivariate, holding several of the simulation's strata with or without the country and their totals, and one in five is univariate, the country or a single stratum.
-Of the blocks with places, a third each have a country equal to the sum of its places, a country above it (cases not allocated to a place), and a country reported later than its places (its own stream).
 Each block's prediction length is its horizon, and the LoRA learning rate falls linearly from $10^{-5}$ to zero at 8,000 simulations, with checkpoints at 1,000, 2,000, 4,000 and 8,000.
+
+::: {#tbl-block-layouts}
+| Layout | Share of blocks |
+|---|---|
+| Daily | 25% |
+| Weekly | 25% |
+| 3-day | 15% |
+| Daily with a weekly row per place | 25% |
+| Daily with a 3-day row per place | 10% |
+
+The layouts of the training blocks and their shares.
+:::
+
+- We apply further options on top of the layout, each drawn independently.
+- 10% of the blocks hold every report to one randomly chosen weekday, so reference dates stay daily and reports arrive in weekly batches, as in weekly surveillance reporting.
+- 20% of the blocks hold a single series, the country or one place.
+- The other blocks hold a random set of places, with or without the country.
+- Where a block holds the country and some of its places, a third each have a country equal to the sum of its places, above it (with cases not assigned to a place), or later than it (its own stream).
+- The options combine, so a block can be, for example, daily with a weekly row, batched and non-summing.
+- Non-summing parents apply only where a block holds both the country and its places.
+- @tbl-block-combinations gives the realised share of each combination.
+
+::: {#tbl-block-combinations}
+{{< include build/tables/si/block-combinations.md >}}
+
+The realised shares of the combinations of layout and options in the training blocks.
+:::
 
 **Order of the training data.**
 The grid is a crossed factorial design balanced in every block of 120 simulations, with each factor's levels shuffled independently, as in a Latin hypercube.
@@ -147,7 +243,9 @@ The simulated outbreaks' ranges against published values for several diseases, t
 
 {{< include build/tables/si/heldout-set.md >}}
 
-The training blocks cut from these simulations include countries that equal, exceed or lag the sum of their places, a third of the blocks with places each (Foundation model setup).
+We cut the held-out simulations into blocks as in training, with the five layouts, report batching and non-summing parents (@tbl-block-layouts), using a fixed seed.
+A manifest records each held-out block's layout and options.
+The paper's test set, 100 simulations outside training, is cut the same way.
 
 ### Correlated trajectories
 
@@ -204,6 +302,23 @@ Option (d) tests whether pairing the draws with the copula before summing narrow
 - We describe the scores and check them against scoringutils.
 - We compute the WIS from scoringrules' `interval_score` and the absolute error of the median, as its `weighted_interval_score` (0.11) adds the median itself ([scoringrules#140](https://github.com/frazane/scoringrules/issues/140)).
 - Key references: [@bosse2022scoringutils; @jordanEvaluatingProbabilisticForecasts2019; @zanetta_scoringrules_2024].
+:::
+
+### Choices tuned on development data
+
+@tbl-tuned-choices lists each choice we tuned and the data it was set on, none of which is in a scored set.
+
+::: {#tbl-tuned-choices}
+| Choice | Value | Set on |
+|---|---|---|
+| Floor on Chronos-2's scale at inference | None | Held-out simulations and the BDBV release backtest |
+| Lag cap of the ragged layout | 4 weeks or 28 days | German first half and the BDBV release backtest |
+| Copula prior $(\rho_t, \rho_p, \rho_n)$ | $(0.9, 0.7, 0.7)$ | Ebola release backtest |
+| Copula day correlation $\rho_d$ | 0.985 | Ebola release backtest |
+| Checkpoint of the submitted fine-tuned model | 1,000 simulations | BDBV release backtest, the plausibility check of the 14 November 2026 round, and the German first half |
+| Realism checks of the simulation grid | Grid ranges | BDBV releases and German data reported by 2022-02-09 |
+
+Choices tuned on development data, with their values and the data they were set on.
 :::
 
 ### Implementation
@@ -273,7 +388,8 @@ The cost of each option: series per block, memory and time.
 - They share the grid, the data order and the recipe, as checkpoints of one run.
 - @fig-finetune-heldout gives the held-out loss by source.
 - @fig-checkpoint-curve gives German first-half and BDBV relative scores at each checkpoint, with zero-shot Chronos-2 on the ragged layout and on complete data only as reference lines.
-- A later checkpoint has also trained for more steps, at a learning rate that falls to zero at 8,000 simulations.
+- A later checkpoint has also trained for more steps.
+- The learning rate falls linearly to zero at 8,000 simulations, so the 1,000, 2,000 and 4,000 checkpoints are taken at 88%, 75% and 50% of the starting rate, and only the 8,000 checkpoint is annealed.
 
 ![Held-out loss of the fine-tune against the number of simulated outbreaks it has seen.](build/figures/si/finetune-heldout.png){#fig-finetune-heldout}
 
@@ -285,7 +401,8 @@ The cost of each option: series per block, memory and time.
 - Both runs share the grid, the data order, the LoRA recipe and the checkpoints.
 - @tbl-slots-loss gives held-out loss by source, and @tbl-slots-scores German first-half and BDBV relative scores at checkpoints of the same size.
 - @tbl-slots-swap gives the loss when whole lag series move to another place, relative to the loss as given.
-- A ratio of 1 means the model does not tell which place a lag series belongs to.
+- A ratio above 1 means the model's forecast depends on which place's lags sit with a target.
+- Zero-shot Chronos-2 can also match lags to targets by value, so the comparison with the run without biases, not the ratio alone, tests the biases.
 - @fig-compare-slots shows both runs by checkpoint.
 - The run without biases built its 3-day blocks as daily steps, so we compare 3-day blocks with zero-shot only.
 
@@ -294,7 +411,7 @@ The cost of each option: series per block, memory and time.
 ::: {#tbl-slots-loss}
 {{< include build/tables/si/slots-loss.md >}}
 
-Held-out loss of the run with attention biases by source and window (nowcast or forecast steps), against the run without them at the same checkpoint and against zero-shot Chronos-2, with the paired ratio and its 90% interval over blocks.
+Held-out loss of the run with attention biases by source and window (nowcast or forecast steps), against the run without them at the same checkpoint and against zero-shot Chronos-2, with the paired ratio and its 90% bootstrap interval, resampling blocks.
 :::
 
 ::: {#tbl-slots-scores}
@@ -306,7 +423,7 @@ Relative WIS on the German first half and relative CRPS on the BDBV release back
 ::: {#tbl-slots-swap}
 {{< include build/tables/si/slots-swap.md >}}
 
-Lag-swap test: loss with whole lag series moved between places, as a ratio of the loss as given, with its 90% interval over blocks, for zero-shot Chronos-2 and the run with attention biases.
+Lag-swap test: loss with whole lag series moved between places, as a ratio of the loss as given, with its 90% bootstrap interval, resampling blocks, for zero-shot Chronos-2 and the run with attention biases.
 :::
 
 ### Delays against no delays
@@ -349,7 +466,39 @@ German nowcast hub held-out half: Chronos-2 zero-shot (`_ragged`), fine-tuned on
 BDBV scored rounds (from 21 November 2026, after every release the real-data model trained on): Chronos-2 zero-shot (`_ragged`), fine-tuned on simulations (`_ft`) and fine-tuned on real data (`_real`), overall (`all`) and by level, with CRPS relative to `randomwalknowcast`. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
 :::
 
+### Daily nowcasts
+
+- We score our models' daily counts in both case studies directly from the daily rows, not summed.
+- The main text scores the hub targets, 7-day counts for Germany and weekly counts for BDBV.
+- Hub teams give no daily forecasts, so we compare our models with `randomwalknowcast` only.
+- @tbl-compare-daily gives German and BDBV relative scores on daily counts and on the hub targets at each checkpoint.
+- @fig-compare-daily shows both.
+- @fig-germany-si-results-daily repeats the German results figure for daily counts.
+
+![Daily nowcasts: German and BDBV relative scores on daily counts and on the hub targets, by checkpoint.](build/figures/si/compare-daily.png){#fig-compare-daily}
+
+::: {#tbl-compare-daily}
+{{< include build/tables/si/compare-daily.md >}}
+
+Our models' relative scores on daily counts and on the hub targets at matched checkpoints: relative WIS for Germany and relative CRPS for BDBV, against `randomwalknowcast`.
+:::
+
+::: {#fig-germany-si-results-daily}
+![](build/figures/si/germany-si-results-daily.png)
+
+German nowcast hub, daily counts: the panels of the German results figure, with daily nowcasts against the daily truth and WIS on daily counts, without the hub teams. {{< meta results.germany.label >}} {{< meta results.germany.note >}}
+:::
+
 ### Held-out synthetic data
+
+- We report held-out scores by block layout, and by target where the layout has it: the weekly or 3-day totals from the aggregate row, and the daily counts.
+- @tbl-heldout-layout gives them.
+
+::: {#tbl-heldout-layout}
+{{< include build/tables/si/heldout-layout.md >}}
+
+Held-out synthetic data: CRPS relative to `randomwalknowcast` by block layout and target. {{< meta results.synthetic.label >}} {{< meta results.synthetic.note >}}
+:::
 
 ::: {#tbl-synthetic-evaluated}
 {{< include build/tables/main/synthetic-grid.md >}}

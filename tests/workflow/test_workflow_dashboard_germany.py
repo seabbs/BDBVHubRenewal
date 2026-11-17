@@ -3,6 +3,7 @@
 import csv
 import gzip
 
+import numpy as np
 import pytest
 from flowlib.dashboard import germany, runs
 
@@ -75,6 +76,18 @@ def test_wis_from_seven_quantiles():
     assert germany.wis(q, 11) == pytest.approx(
         (0.5 * 0 + 0.025 * 6 + 0.1 * 4 + 0.25 * 2) / 3.5
     )
+
+
+def test_wis_is_the_package_s_quantile_wis():
+    from bdbvhubrenewal.evaluation.scoring import wis_quantile
+
+    rng = np.random.default_rng(1)
+    levels = [float(v) for v in germany.WIS_LEVELS]
+    for _ in range(20):
+        q = np.sort(rng.gamma(2.0, 10.0, size=len(levels)))
+        y = float(rng.poisson(20))
+        want = wis_quantile([y], q[None, :], levels)["wis"][0]
+        assert germany.wis(list(q), y) == pytest.approx(want)
 
 
 def test_series_are_the_configured_references_and_runs(tmp_path):

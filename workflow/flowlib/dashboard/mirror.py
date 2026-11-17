@@ -86,8 +86,8 @@ class Source:
         cmd = self.command()
         if cmd is None:
             return "local"
-        self.root.mkdir(parents=True, exist_ok=True)
         try:
+            self.root.mkdir(parents=True, exist_ok=True)
             out = subprocess.run(
                 cmd, capture_output=True, text=True, timeout=300
             )

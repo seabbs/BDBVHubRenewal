@@ -24,3 +24,17 @@ def test_waits_then_fails_without_room(tmp_path):
     out = run(tmp_path, 0, 10**9)
     assert out.returncode == 1
     assert "disk" in out.stderr
+
+
+def test_fails_at_once_when_it_cannot_read_the_room(tmp_path):
+    # A path df cannot read gives no number, which must not read as "no
+    # room": without ROOM_TRIES that would wait forever.
+    out = subprocess.run(
+        ["bash", str(SCRIPT), "0", "0", str(tmp_path / "missing")],
+        env={"PATH": "/usr/bin:/bin", "ROOM_POLL": "1"},
+        capture_output=True,
+        text=True,
+        timeout=5,
+    )
+    assert out.returncode == 2
+    assert "cannot read" in out.stderr

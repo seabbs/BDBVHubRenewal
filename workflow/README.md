@@ -38,9 +38,11 @@ A variable in the environment wins, and with no file everything runs on this mac
 The workflow uses:
 
 - paths: `ROOT` (rounds), `RUN` (the fine-tuning run), `SCORE_CACHE`, `NOSLOTS_RUN` and `GERMANY_BLOCKS` (the slots check's);
-- what this machine does: `TARGETS` (what `all` runs; by default `simulate finetune score`, so archie sets `simulate score` and the laptop `finetune`), `SIMS_FROM` (`local` or `release`), `PUBLISH` (release each checkpoint as it is trained);
+- what this machine does: `TARGETS` (what `all` runs; by default `simulate finetune score`, so a CPU machine sets `simulate score` and a GPU machine `finetune`), `SIMS_FROM` (`local` or `release`), `PUBLISH` (release each checkpoint as it is trained);
 - resources: `JOB_PREFIX` (a per-job memory cap such as a `systemd-run` scope; `{mem}` becomes the job's budget), `MIN_FREE_GB` and `MIN_DISK_GB` (room a heavy job waits for), and the Taskfile's `CORES`, `MEM_MB` and `SIM_SLOTS`;
-- `HOST_NAME`, and `NOTIFY` with `MAILBOX`: with `NOTIFY` set, a mailbox line when a round is ready, a checkpoint is saved or published, the checked checkpoint misses zero-shot, scores land or a run fails.
+- `HOST_NAME`.
+
+Nothing in the workflow needs a notes file. As an optional local extra, setting both `NOTIFY` and `MAILBOX` appends a one-line note to the file `MAILBOX` when a round is ready, a checkpoint is saved or published, the checked checkpoint misses zero-shot, scores land or a run fails. Both are empty by default, a note that cannot be written is only a warning, and no rule's output or success depends on it. The optional detached-job helpers in `tools/` use the same switch.
 
 Task reads `config/local.env` itself, not `$LOCAL_CONFIG`.
 
@@ -110,7 +112,7 @@ After each slots checkpoint's scores:
 - References (zero-shot ragged, complete-only, randomwalknowcast) are `dashboard.references`, matched on rows by model and checkpoint, with `--ref` to add or replace one.
 - Scores and German forecasts come from `SCORE_CACHE`, or, with `REMOTE` set, a read-only rsync mirror of `REMOTE:REMOTE_ROOT/scores` (or `REMOTE_SCORE_CACHE`) in `dashboard.mirror`.
 - German nowcasts use the paper panels' quantile levels, bands and truth ink (`paperfigs.plots`, through `flowlib/dashboard/paperstyle.py`, with a test that fails if the paper's bands change), so the dashboard and the paper's nowcast figures look alike.
-- The mailbox section shows `MAILBOX`'s last lines matching `dashboard.mail_filter`.
+- With a notes file configured (`MAILBOX`, or `REMOTE_MAILBOX` when mirroring), a section shows its last lines matching `dashboard.mail_filter`; without one the section is not shown.
 
 ## CI
 

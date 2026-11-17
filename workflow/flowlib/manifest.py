@@ -19,15 +19,15 @@ HEADER = (
 )
 
 
-def _sha(path: Path) -> str:
-    if not path.is_file():
+def _sha(path: Path, optional: bool = False) -> str:
+    """Return a file's SHA-256; empty for a missing `optional` file."""
+    if optional and not path.is_file():
         return ""
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def _last(log: Path, name: str) -> str:
-    if not log.is_file():
-        return ""
+    """Return the last `name` value in a log, empty if it records none."""
     found = re.findall(rf"{name} ([0-9.]+)", log.read_text())
     return found[-1] if found else ""
 
@@ -48,7 +48,9 @@ def row(
     """Return a batch's manifest row (no newline).
 
     The memory and time are the last `/usr/bin/time` record in the
-    batch's log, so a retried batch gives its last attempt's.
+    batch's log, so a retried batch gives its last attempt's. Only the
+    failures file may be missing; a missing counts, settings or log file
+    raises `FileNotFoundError`.
     """
     sims = Path(sims)
     log = sims / "logs" / f"{seed}.log"
@@ -62,7 +64,7 @@ def row(
         batch,
         _sha(sims / f"counts-{seed}.csv.gz"),
         _sha(sims / f"settings-{seed}.csv"),
-        _sha(sims / f"failures-{seed}.csv"),
+        _sha(sims / f"failures-{seed}.csv", optional=True),
         _last(log, "peak_rss_kb"),
         _last(log, "wall_s"),
         host,

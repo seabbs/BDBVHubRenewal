@@ -67,6 +67,7 @@ __all__ = [
     "STUDY_HORIZON_BIN",
     "nowcast_panels",
     "results_panel",
+    "rows_of_target",
     "si_place_dots",
     "si_scores_by_factor",
     "si_scores_by_finetune_size",
@@ -629,6 +630,26 @@ def _factor_points(
         )
 
 
+HUB_TARGETS: Final = {"germany": "7day", "ebola": "weekly"}
+"""Each case study's hub target, which the main text scores."""
+
+DAILY: Final = "daily"
+"""The daily target, scored in the SI only."""
+
+
+def rows_of_target(df: pd.DataFrame, target: str | None) -> pd.DataFrame:
+    """Return the rows of one target, or every row if `target` is None.
+
+    A table with no `target` column holds the hub's target only, so it
+    has no rows for `DAILY` and every row for any other target.
+    """
+    if target is None:
+        return df
+    if "target" not in df:
+        return df.iloc[0:0] if target == DAILY else df
+    return df.loc[df["target"] == target]
+
+
 def results_panel(
     forecasts: pd.DataFrame,
     observations: pd.DataFrame,
@@ -642,6 +663,7 @@ def results_panel(
     origins: Sequence[pd.Timestamp] | None = None,
     truth: pd.DataFrame | None = None,
     nowcast: bool = True,
+    target: str | None = None,
 ) -> Figure:
     """Plot the results panel for one study.
 
@@ -682,6 +704,9 @@ def results_panel(
         Origins of panel A. Defaults to evenly spaced ones.
     truth : pandas.DataFrame, optional
         The rolling truth, drawn in panel A in place of the latest data.
+    target : str, optional
+        Keep only the rows of this target (`rows_of_target`), such as
+        `daily` or the hub's `7day`; None keeps every row.
     nowcast : bool
         Whether to draw panel A. Without it the panels start at the
         relative score, for a study whose nowcasts have their own figure
@@ -697,6 +722,11 @@ def results_panel(
     ValueError
         If the forecasts span more than one study.
     """
+    forecasts = rows_of_target(forecasts, target)
+    observations = rows_of_target(observations, target)
+    scores = rows_of_target(scores, target)
+    if truth is not None:
+        truth = rows_of_target(truth, target)
     study = _one_study(forecasts)
     obs = observations.loc[observations["study"] == study]
     sc = add_period(scores.loc[scores["study"] == study], split)

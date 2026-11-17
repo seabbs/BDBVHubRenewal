@@ -31,8 +31,9 @@ rule publish_checkpoint:
     shell:
         """
         uv run python workflow/scripts/publish_checkpoint.py {params.where} {output}
+        # An optional notification line; it never fails the rule.
         uv run python workflow/scripts/notify.py "checkpoint n{wildcards.n} published:" \
-          "$(cat {output})"
+          "$(cat {output})" || true
         """
 
 

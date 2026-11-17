@@ -18,7 +18,7 @@ import time
 import traceback
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import unquote
+from urllib.parse import unquote, urlsplit
 
 import yaml
 
@@ -54,23 +54,31 @@ def handler(ctx: page.Context) -> type[BaseHTTPRequestHandler]:
             self.wfile.write(body)
 
         def do_GET(self) -> None:
-            if self.path.startswith("/data/"):
-                parts = unquote(self.path[6:].split("?")[0])
-                loc = parts.removesuffix(".json").split("/", 1)[-1]
-                with LOCK:
-                    data = page._json(germany.location(ctx.germany(), loc))
-                self._send(200, data.encode(), "application/json")
-                return
+            path = unquote(urlsplit(self.path).path)
             try:
-                with LOCK:
-                    body = page.build(ctx).encode()
-                self._send(200, body, "text/html; charset=utf-8")
+                if path.startswith("/data/"):
+                    self._data(path.removeprefix("/data/"))
+                elif path in ("/", "/index.html"):
+                    with LOCK:
+                        body = page.build(ctx).encode()
+                    self._send(200, body, "text/html; charset=utf-8")
+                else:
+                    self._send(404, b"not found", "text/plain")
             except Exception:
                 # The detail goes to the server's log, not the browser.
                 traceback.print_exc(file=sys.stderr)
                 self._send(500, b"error: see the server's log", "text/plain")
 
-        def log_message(self, *_args) -> None:
+        def _data(self, name: str) -> None:
+            loc = name.removesuffix(".json").split("/", 1)[-1]
+            with LOCK:
+                found = germany.location(ctx.germany(), loc)
+            if not found:
+                self._send(404, b"{}", "application/json")
+                return
+            self._send(200, page._json(found).encode(), "application/json")
+
+        def log_message(self, *_args: object) -> None:
             pass
 
     return Handler
@@ -89,6 +97,21 @@ def keep_mirrored(ctx: page.Context, every: float) -> None:
     threading.Thread(target=loop, daemon=True).start()
 
 
+def write_once(ctx: page.Context, out: Path) -> int:
+    """Refresh the mirror and write the page to `out`.
+
+    Returns 1 if the score mirror failed, so the page shows the failure
+    and the caller fails too, else 0. A failed mailbox copy is shown on
+    the page but does not fail it, as the mailbox is optional.
+    """
+    ctx.mirror_status = ctx.source.refresh()
+    print(ctx.mirror_status)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(page.build(ctx))
+    print("wrote", out)
+    return int(ctx.mirror_status.startswith("mirror failed"))
+
+
 def main() -> None:
     """Serve the dashboard or write it once."""
     a = parser().parse_args()
@@ -97,11 +120,7 @@ def main() -> None:
         config, localconfig.read(), runs=a.run, refs=a.ref, once=bool(a.once)
     )
     if a.once:
-        print(ctx.source.refresh())
-        a.once.parent.mkdir(parents=True, exist_ok=True)
-        a.once.write_text(page.build(ctx))
-        print("wrote", a.once)
-        return
+        sys.exit(write_once(ctx, a.once))
     if ctx.source.command():
         keep_mirrored(ctx, float(config["dashboard"].get("mirror_every", 300)))
     server = ThreadingHTTPServer(("127.0.0.1", a.port), handler(ctx))

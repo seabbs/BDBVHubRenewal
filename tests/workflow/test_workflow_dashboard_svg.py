@@ -36,3 +36,17 @@ def test_a_log2_axis_takes_the_given_ticks():
 def test_rolling_means_and_nice_ticks():
     assert svg.rolling([(0, 1), (1, 3), (2, 5)], 2) == [(0, 1), (1, 2), (2, 4)]
     assert svg.nice(0, 1)[:3] == [0, 0.2, 0.4]
+
+
+def test_text_and_colours_are_escaped():
+    out = svg.chart(
+        "R&D <loss>",
+        [('a<b & "c"', '#111" onload="x', [(0, 1.0), (10, 0.5)], "pts")],
+        marks=[(5, "<n>")],
+        xlabel="x&y",
+    )
+    for raw in ("R&D <loss>", "a<b &", '#111" onload', "<n>", ">x&y<"):
+        assert raw not in out
+    assert "R&amp;D &lt;loss&gt;" in out
+    assert "a&lt;b &amp; &quot;c&quot;" in out
+    assert "&lt;n&gt;" in out
