@@ -234,13 +234,33 @@ tasks:
       - task: wf
         vars: {PROFILE: cpu, WF_TARGET: all}
 
+  # A machine with SIM_PROFILE set (config/local.env) simulates with that
+  # host's profile (workflow/profiles/<host>), which holds its cores and
+  # resources; otherwise with the cpu profile and CORES, MEM_MB, SIM_SLOTS.
+  wf-sim:
+    internal: true
+    cmds:
+      - >-
+        {{.SNAKEMAKE}} {{.WF_TARGET}}
+        --workflow-profile workflow/profiles/{{.SIM_PROFILE | default "cpu"}}
+        {{if not .SIM_PROFILE}}--cores {{.CORES | default 1}}
+        --resources mem_mb={{.MEM_MB | default 32768}}
+        sim_slots={{.SIM_SLOTS | default 2}} awaiting=1{{end}}
+        {{.CLI_ARGS}}
+
   simulate:
     desc: Simulate the rounds in ROUNDS (for example ROUNDS=4 or ROUNDS="4 5"), with QC and manifests
     cmds:
-      - task: wf
+      - task: wf-sim
         vars:
-          PROFILE: cpu
           WF_TARGET: 'simulate --config "rounds=[{{.ROUNDS | default "" | splitList " " | join ","}}]"'
+
+  push:
+    desc: Simulate this host's seeds (simulate.hosts) of ROUNDS and push each batch to the rounds host (REMOTE)
+    cmds:
+      - task: wf-sim
+        vars:
+          WF_TARGET: 'push --config "rounds=[{{.ROUNDS | default "" | splitList " " | join ","}}]"'
 
   release:
     desc: Upload each simulated batch of ROUNDS to its sims-r<N> release (writes GitHub releases)

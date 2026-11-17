@@ -62,6 +62,7 @@ rule all:
     # their own targets (`release`, `publish`, `land`).
     input:
         rules.simulate.input if "simulate" in TARGETS else [],
+        rules.push.input if "push" in TARGETS else [],
         rules.finetune.input if "finetune" in TARGETS else [],
         rules.score.input if "score" in TARGETS else [],
     default_target: True
