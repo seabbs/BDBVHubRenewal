@@ -51,3 +51,4 @@ The paired arm uses `forecasters/copula.py` as at fm-copula-rolling's c83d85461,
 Before it fits, the runner refits zero-shot `fm_chronos_daily_ragged`, joint, at origins 2026-10-17 (every level scored, zones included) and 2026-11-01, and compares its rows with those here.
 
 Checkpoints added:
+- `slots-ea31bba0123e` (release `chronos-slots-ea31bba0123e`): rows added 2026-11-17 by `scripts/agg/run_finetuned.sh slots-ea31bba0123e` from code at d181232c4.
