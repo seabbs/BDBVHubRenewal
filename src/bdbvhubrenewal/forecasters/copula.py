@@ -40,6 +40,7 @@ from typing import Final
 import numpy as np
 import pandas as pd
 from scipy.special import ndtri
+from statsmodels.stats.correlation_tools import corr_nearest
 
 from bdbvhubrenewal.forecasters.base import NATIONAL, list_models
 
@@ -89,18 +90,15 @@ def _province(code: str) -> str:
 
 
 def _factor(corr: np.ndarray) -> np.ndarray:
-    """Return $A$ with $A A^T$ a correlation matrix near `corr`.
+    """Return the Cholesky factor $L$ of the correlation matrix nearest `corr`.
 
-    Negative eigenvalues are set to zero and the rows rescaled to unit
-    length. A row left with no length keeps its own unit normal.
+    A valid correlation matrix is used as it is. Otherwise it is replaced
+    by the nearest correlation matrix (Higham 2002), as statsmodels'
+    `corr_nearest` gives it.
     """
-    values, vectors = np.linalg.eigh(corr)
-    a = vectors * np.sqrt(np.clip(values, 0.0, None))
-    norm = np.linalg.norm(a, axis=1, keepdims=True)
-    empty = norm[:, 0] == 0.0
-    a[empty] = np.eye(len(a))[empty]
-    norm[empty] = 1.0
-    return np.asarray(a / norm)
+    if np.linalg.eigvalsh(corr).min() <= 0:
+        corr = corr_nearest(corr, threshold=1e-10)
+    return np.asarray(np.linalg.cholesky(corr))
 
 
 @dataclass(frozen=True)
