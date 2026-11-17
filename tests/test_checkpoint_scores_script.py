@@ -760,3 +760,18 @@ def test_a_daily_unit_needs_the_7_day_forecasts_first(
     with pytest.raises(SystemExit, match="7-day"):
         cs.germany_unit(tmp_path, cs.REFERENCE, ("daily",))
     assert events == []
+
+
+def test_bdbv_origins_stop_before_the_first_scored_round(cs) -> None:
+    # The paper keeps scored rounds (from 2026-11-21) out of fine-tuned
+    # results, and drops any ebola row whose last origin is on or after it.
+    assert cs.BDBV_SCORED_FROM == "2026-11-21"
+    vintages = [
+        "2026-10-09",
+        "2026-11-15",
+        "2026-11-21",
+        "2026-11-28",
+        "2026-12-05",
+    ]
+    got = cs.development_origins(vintages, skip=("2026-10-09",))
+    assert got == ["2026-11-15"]
