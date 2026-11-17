@@ -364,7 +364,8 @@ def check_plausible(
     `plausible_median_ratio` times the base, the 97.5% quantile within
     `plausible_q975_ratio` times it, and, where the recent maximum is at
     least the floor, the median above the maximum over
-    `plausible_low_ratio`. Locations without observed data (the health
+    `plausible_low_ratio` unless it is at least the count already
+    observed for that week. Locations without observed data (the health
     zones) are skipped. Any breach fails, so the chain moves on.
     """
     n_recent = int(c["plausible_recent_weeks"])
@@ -404,7 +405,11 @@ def check_plausible(
                         f"{fmt(tail)} times the recent maximum {fmt(base)}",
                     )
                 )
-            elif top >= floor and med < top / lo:
+            elif (
+                top >= floor
+                and med < top / lo
+                and med < series.get(w, math.inf)
+            ):
                 found.append(
                     (
                         "fail",
