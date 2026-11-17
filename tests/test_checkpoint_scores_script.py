@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import sys
 from pathlib import Path
 
@@ -418,3 +419,278 @@ def test_an_origin_no_model_can_forecast_is_cached_empty(cs) -> None:
     got = cs.origin_draws([one], "2026-10-09")
     assert got["origin"].tolist() == ["2026-10-09"]
     assert got["value"].dtype == "float32"
+
+
+# The daily target ---------------------------------------------------------
+
+
+def test_evidence_rows_carry_a_target_and_old_rows_are_7day(cs) -> None:
+    assert cs.TARGETS == ("7day", "daily")
+    assert "target" in cs.COLUMNS
+    old = pd.DataFrame(
+        {"study": ["germany"], "model": ["m"], "checkpoint": ["a"]}
+    )
+    merged = cs.merge_evidence(old, cs.held_out_rows("e8a1f5ae338b", R3))
+    assert set(merged["target"]) == {"7day"}
+
+
+def test_a_cache_file_with_no_target_column_is_7day(cs, tmp_path) -> None:
+    path = tmp_path / "2021-11-22.csv.gz"
+    pd.DataFrame({"model": ["m"], "value": [1.0]}).to_csv(path, index=False)
+    assert cs.cached_targets(path) == {"7day"}
+    assert cs.read_cache(path)["target"].tolist() == ["7day"]
+    assert cs.cached_targets(tmp_path / "missing.csv.gz") == set()
+    both = pd.DataFrame({"model": ["m", "m"], "target": ["7day", "daily"]})
+    both.to_csv(path, index=False)
+    assert cs.cached_targets(path) == {"7day", "daily"}
+
+
+def test_the_daily_target_runs_our_daily_models_only(cs) -> None:
+    assert cs.label_models(cs.REFERENCE, "daily") == (
+        "randomwalknowcast",
+        "fm_chronos_daily_ragged",
+    )
+    assert cs.label_models("slots-abc", "daily") == (
+        "fm_chronos_daily_ragged_ft",
+    )
+    # The weekly models have no daily target, nor do the complete ones.
+    assert cs.label_models(cs.COMPLETE_LABEL, "daily") == ()
+    for label in (cs.REFERENCE, "slots-abc"):
+        assert not any("weekly" in m for m in cs.label_models(label, "daily"))
+    # The 7-day target is as before.
+    assert cs.label_models("slots-abc") == cs.FINETUNED
+    assert cs.label_models("slots-abc", "7day") == cs.FINETUNED
+
+
+def test_the_reference_and_the_new_run_take_the_daily_target(
+    cs, tmp_path
+) -> None:
+    held = tmp_path / "heldout"
+    held.mkdir()
+    runs = {
+        "slots-new": {"series_slots": {"n": 128, "init": "normal"}},
+        "slots-zero": {"series_slots": {"n": 128, "init": "zero"}},
+        "old": {},
+    }
+    for label, settings in runs.items():
+        (held / f"{label}.json").write_text(json.dumps(settings))
+    assert cs.targets_for(tmp_path, cs.REFERENCE) == ("7day", "daily")
+    assert cs.targets_for(tmp_path, "slots-new") == ("7day", "daily")
+    # Old runs take it only when asked (`germany CACHE LABEL daily`).
+    assert cs.targets_for(tmp_path, "slots-zero") == ("7day",)
+    assert cs.targets_for(tmp_path, "old") == ("7day",)
+    assert cs.targets_for(tmp_path, cs.COMPLETE_LABEL) == ("7day",)
+    # A checkpoint whose settings are not fetched yet is 7-day only.
+    assert cs.targets_for(tmp_path, "slots-unknown") == ("7day",)
+
+
+def _unit_stubs(cs, monkeypatch, events: list[str]) -> None:
+    from bdbvhubrenewal.data import germany as data_de
+    from bdbvhubrenewal.evaluation import germany as de
+
+    config = type("C", (), {"triangle": "t.csv", "n_samples": 10,
+                            "seed": 1, "truth_delay": 40})()  # fmt: skip
+    monkeypatch.setattr(de, "load_germany_config", lambda _: config)
+    monkeypatch.setattr(data_de, "hub_triangle", lambda _: None)
+    monkeypatch.setattr(
+        de, "nowcast_dates", lambda *_, **__: ["2021-11-22", "2021-11-23"]
+    )
+
+    def weekly(models, _triangle, dates, _n, _seed):
+        events.append(f"7day {dates[0]} {','.join(models)}")
+        return pd.DataFrame({"model": list(models), "value": 7.0})
+
+    def daily(models, _triangle, dates, _n, _seed):
+        events.append(f"daily {dates[0]} {','.join(models)}")
+        return pd.DataFrame({"model": list(models), "value": 1.0})
+
+    def truth(fc, _triangle, _delay, window=7):
+        return fc.assign(truth=float(window))
+
+    monkeypatch.setattr(de, "germany_forecasts", weekly)
+    monkeypatch.setattr(de, "germany_daily_forecasts", daily)
+    monkeypatch.setattr(de, "with_truth", truth)
+    monkeypatch.setattr(cs, "free_caches", lambda: None)
+    monkeypatch.delenv("BDBV_CHRONOS_FT", raising=False)
+
+
+def test_a_unit_adds_only_the_missing_target(cs, tmp_path, monkeypatch):
+    events: list[str] = []
+    _unit_stubs(cs, monkeypatch, events)
+    root = tmp_path / "germany" / cs.REFERENCE
+    root.mkdir(parents=True)
+    # Cached before the daily target: no target column, all 7-day.
+    old = pd.DataFrame({"model": ["randomwalknowcast"], "value": [3.0]})
+    for d in ("2021-11-22", "2021-11-23"):
+        old.to_csv(root / f"{d}.csv.gz", index=False)
+    assert cs.unit_done(tmp_path, "germany", cs.REFERENCE)
+    assert not cs.unit_done(tmp_path, "germany", cs.REFERENCE, "daily")
+    cs.germany_unit(tmp_path, cs.REFERENCE, ("7day", "daily"))
+    models = "randomwalknowcast,fm_chronos_daily_ragged"
+    assert events == [
+        f"daily 2021-11-22 {models}",
+        f"daily 2021-11-23 {models}",
+    ]
+    got = cs.read_cache(root / "2021-11-22.csv.gz")
+    seven = got.loc[got["target"] == "7day"]
+    assert seven["value"].tolist() == [3.0]  # the cached forecasts are kept
+    day = got.loc[got["target"] == "daily"]
+    assert set(day["model"]) == set(models.split(","))
+    assert (day["truth"] == 1.0).all()  # the one-day window's truth
+    assert cs.unit_done(tmp_path, "germany", cs.REFERENCE, "daily")
+    # A second run has nothing to add.
+    cs.germany_unit(tmp_path, cs.REFERENCE, ("7day", "daily"))
+    assert len(events) == 2
+
+
+def test_a_new_unit_writes_both_targets_in_one_file(cs, tmp_path, monkeypatch):
+    events: list[str] = []
+    _unit_stubs(cs, monkeypatch, events)
+    cs.germany_unit(tmp_path, "slots-abc", ("7day", "daily"))
+    assert [e.split()[0] for e in events] == ["7day", "daily"] * 2
+    got = cs.read_cache(
+        tmp_path / "germany" / "slots-abc" / "2021-11-22.csv.gz"
+    )
+    assert got.groupby("target")["truth"].first().to_dict() == {
+        "7day": 7.0,
+        "daily": 1.0,
+    }
+    # 7-day only, as the poller runs it, is unchanged: no daily rows.
+    events.clear()
+    cs.germany_unit(tmp_path, "old", ("7day",))
+    assert all(e.startswith("7day") for e in events)
+
+
+def _target_cells(model: str, target: str, crps: float) -> pd.DataFrame:
+    out = _cells(model, "zero-shot", crps).assign(target=target)
+    if target == "daily":
+        out["target_end_date"] = "2026-10-08"  # a day, not a Saturday
+    return out
+
+
+def test_relative_scores_divide_by_the_baseline_of_their_target(cs) -> None:
+    cells = pd.concat(
+        [
+            _target_cells("randomwalknowcast", "7day", 2.0),
+            _target_cells("fm_chronos_daily_ragged", "7day", 4.0),
+            _target_cells("randomwalknowcast", "daily", 1.0),
+            _target_cells("fm_chronos_daily_ragged", "daily", 4.0),
+        ]
+    )
+    rows = cs.relative(cells, "ebola", ("crps", "log_crps"))
+    assert list(rows.columns) == cs.COLUMNS
+    by = rows.set_index(["target", "level", "model"])["rel_crps"]
+    assert by[("7day", "national", "fm_chronos_daily_ragged")] == 2.0
+    assert by[("daily", "national", "fm_chronos_daily_ragged")] == 4.0
+    assert by[("daily", "national", "randomwalknowcast")] == 1.0
+    # Cells with no target are the 7-day target's.
+    plain = cs.relative(
+        pd.concat(
+            [
+                _cells("randomwalknowcast", "zero-shot", 2.0),
+                _cells("fm_chronos_daily_ragged", "zero-shot", 4.0),
+            ]
+        ),
+        "ebola",
+        ("crps", "log_crps"),
+    )
+    assert set(plain["target"]) == {"7day"}
+
+
+def test_cells_are_matched_within_each_target(cs) -> None:
+    # The weekly model has 7-day cells only; the daily target's cells are
+    # matched over the models it has.
+    cells = pd.concat(
+        [
+            _target_cells("randomwalknowcast", "7day", 2.0),
+            _target_cells("fm_chronos_weekly_ragged", "7day", 3.0),
+            _target_cells("randomwalknowcast", "daily", 1.0),
+            _target_cells("fm_chronos_daily_ragged", "daily", 4.0),
+        ]
+    )
+    out = cs.matched(cells, cs.BDBV_CELL)
+    assert len(out) == len(cells)
+    assert set(out.loc[out["target"] == "daily", "model"]) == {
+        "randomwalknowcast",
+        "fm_chronos_daily_ragged",
+    }
+
+
+def _quantile_file(
+    models: list[str], target: str, horizon: int
+) -> pd.DataFrame:
+    from bdbvhubrenewal.evaluation.germany import QUANTILE_LEVELS
+
+    rows = []
+    for i, m in enumerate(models):
+        for q in QUANTILE_LEVELS:
+            rows.append(
+                {
+                    "model": m,
+                    "origin": "2021-11-22",
+                    "location": "DE",
+                    "target_end_date": "2021-11-20",
+                    "horizon": horizon,
+                    "quantile": q,
+                    "value": 100.0 + 10 * i + 50 * q,
+                    "truth": 120.0,
+                    "truth_vintage": "2021-12-30",
+                    "target": target,
+                }
+            )
+    return pd.DataFrame(rows)
+
+
+def test_hub_teams_take_no_part_in_the_daily_target(cs, tmp_path) -> None:
+    root = tmp_path / "germany" / cs.REFERENCE
+    root.mkdir(parents=True)
+    ours = ["randomwalknowcast", "fm_chronos_daily_ragged"]
+    pd.concat(
+        [
+            _quantile_file([*ours, "MeanEnsemble"], "7day", -2),
+            _quantile_file([*ours, "MeanEnsemble"], "daily", -2),
+        ]
+    ).to_csv(root / "2021-11-22.csv.gz", index=False)
+    rows = cs.germany_rows(tmp_path, [cs.REFERENCE], [cs.REFERENCE])
+    seven = rows.loc[rows["target"] == "7day"]
+    daily = rows.loc[rows["target"] == "daily"]
+    assert set(seven["model"]) == {*ours, "MeanEnsemble"}
+    assert set(daily["model"]) == set(ours)
+    base = daily.set_index("model").loc["randomwalknowcast", "rel_wis"]
+    assert base == 1.0
+    # With no daily labels there are no daily rows.
+    only = cs.germany_rows(tmp_path, [cs.REFERENCE])
+    assert set(only["target"]) == {"7day"}
+
+
+def test_bdbv_daily_truth_is_each_day_in_the_first_release_d_days_on(
+    cs,
+) -> None:
+    # Releases list only days with a case: a day a release covers with no
+    # row is 0 in that release.
+    daily = pd.DataFrame(
+        {
+            "vintage": ["r1", "r1", "r2", "r3"],
+            "location": ["CD-KN"] * 4,
+            "onset_date": [
+                "2026-09-01",
+                "2026-09-02",
+                "2026-09-02",
+                "2026-09-01",
+            ],
+            "observed": [1, 2, 3, 9],
+            "imputed": [0, 0, 1, 0],
+            "cutoff": ["2026-09-05", "2026-09-05", "2026-09-12", "2026-09-30"],
+        }
+    )
+    truth = cs.bdbv_daily_truth(daily, 10)
+    by = truth.set_index(["location", "target_end_date"])
+    # 09-01 + 10 days is 09-11: release r2 (cut-off 09-12) has no row for
+    # it, so its truth is 0, not r3's 9.
+    assert by.loc[("CD-KN", "2026-09-01"), "truth"] == 0
+    assert by.loc[("CD-KN", "2026-09-01"), "truth_vintage"] == "r2"
+    assert by.loc[("CD-KN", "2026-09-02"), "truth"] == 4
+    # The country is the sum of the provinces.
+    assert by.loc[("CD", "2026-09-02"), "truth"] == 4
+    # A day no release reaches D days on has no truth.
+    assert ("CD-KN", "2026-09-25") not in by.index
