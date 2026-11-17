@@ -97,3 +97,15 @@ def test_every_simulation_has_one_observation_draw():
     assert "\nDRAWS=1\n" in laptop
     simulate = (scripts / "finetune_simulate.R").read_text()
     assert 'Sys.getenv("ENW_DRAWS", "1")' in simulate
+
+
+def test_a_round_is_one_grid_block_of_40_batches_of_21():
+    scripts = Path(__file__).parents[1] / "scripts"
+    rounds = (scripts / "sim_rounds.sh").read_text()
+    assert "BATCH=${BATCH:-21}\n" in rounds
+    assert "ROUND_BATCHES=${ROUND_BATCHES:-40}\n" in rounds
+    assert "HELD_BATCHES" not in rounds
+    assert "ENW_SEED_BASE=$SEED_BASE" in rounds
+    laptop = (scripts / "sim_rounds_laptop.sh").read_text()
+    assert "BATCH=${BATCH:-21}\n" in laptop
+    assert "held" not in laptop

@@ -12,7 +12,7 @@ ROOT = Path(__file__).parents[2]
 CONFIG = yaml.safe_load((ROOT / "workflow" / "config.yaml").read_text())
 
 DESIGN = {
-    "rounds": list(range(9, 18)),
+    "rounds": list(range(10, 20)),
     "held_round": 9,
     "holdout": 90,
     "outbreaks": 8400,
@@ -46,6 +46,17 @@ def test_finetune_config_is_the_agreed_design(key):
 def test_rounds_are_simulated_with_one_draw():
     assert CONFIG["simulate"]["draws"] == 1
     assert CONFIG["simulate"]["seed_base"] == 30000
+
+
+def test_a_round_is_one_grid_block_of_840():
+    sim = CONFIG["simulate"]
+    assert sim["batches"] * sim["batch"] == 840
+    assert (sim["batches"], sim["batch"]) == (40, 21)
+    assert "held_batches" not in sim
+    # Ten training rounds, after the held-out round, are the 8,400.
+    rounds = CONFIG["finetune"]["rounds"]
+    assert len(rounds) * 840 == CONFIG["finetune"]["outbreaks"]
+    assert CONFIG["finetune"]["held_round"] not in rounds
 
 
 def _trainer_args(tmp_path):
@@ -103,8 +114,8 @@ def test_the_trainer_gets_the_agreed_design(tmp_path):
     args = fs.build_parser().parse_args(_trainer_args(tmp_path))
     assert args.until == 250
     assert args.grid == "r5"
-    # Round 9's held-out batches, seeds 30940 to 30943.
-    assert args.held_out_seeds == [30940, 30943]
+    # The held-out round 9, every batch: seeds 30900 to 30939.
+    assert args.held_out_seeds == [30900, 30939]
     assert args.holdout == 90
     assert args.outbreaks == 8400
     assert args.prefixes == [250, 500, 750, 1000, 2000, 4000, 8400]

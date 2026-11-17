@@ -1090,3 +1090,47 @@ for (k in 1:2) {
     )
     rows = [x.split() for x in out.splitlines() if x.startswith("window")]
     assert [r[2] for r in rows] == ["0", "0"]
+
+
+# Loads only the simulator's grid index, which needs no R packages.
+INDEX = r"""
+for (e in parse("scripts/finetune_simulate.R")) {
+  txt <- paste(deparse(e), collapse = "")
+  if (grepl("^(block|grid_index) <- ", txt)) eval(e, globalenv())
+}
+"""
+
+
+def run_index(script: str, tmp_path: Path) -> subprocess.CompletedProcess:
+    path = tmp_path / "index.R"
+    path.write_text(INDEX + script)
+    return subprocess.run(
+        ["Rscript", str(path)], cwd=ROOT, capture_output=True, text=True
+    )
+
+
+@pytest.mark.skipif(shutil.which("Rscript") is None, reason="needs R")
+def test_a_round_of_40_batches_of_21_is_exactly_its_grid_block(tmp_path):
+    out = run_index(
+        """
+g <- unlist(lapply(30900:30939, function(s) {
+  vapply(1:21, function(i) grid_index(s, 21L, i, 30000L), 0)
+}))
+cat(block, length(g), length(unique(g)), min(g), max(g),
+  all(g %/% block == 9), "\\n")
+cat(grid_index(31000, 21L, 1L, 30000L), "\\n")
+""",
+        tmp_path,
+    )
+    assert out.returncode == 0, out.stderr
+    first, second = out.stdout.strip().splitlines()
+    assert first.split() == ["840", "840", "840", "7560", "8399", "TRUE"]
+    # Round 10 is the next block.
+    assert second.split() == ["8400"]
+
+
+@pytest.mark.skipif(shutil.which("Rscript") is None, reason="needs R")
+def test_a_batch_past_its_round_s_block_is_refused(tmp_path):
+    out = run_index("grid_index(30940, 21L, 1L, 30000L)\n", tmp_path)
+    assert out.returncode != 0
+    assert "block" in out.stderr

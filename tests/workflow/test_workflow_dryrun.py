@@ -56,8 +56,8 @@ def dry(tmp_path, *targets, config=None):
 
 def test_simulate_runs_every_batch_of_a_round(tmp_path):
     jobs = dry(tmp_path, "simulate", config={"rounds": [4]})
-    assert jobs["simulate_batch"] == 44
-    assert jobs["batch_record"] == 44
+    assert jobs["simulate_batch"] == 40
+    assert jobs["batch_record"] == 40
     assert jobs["round_manifest"] == 1
     assert jobs["sim_qc"] == 1
     assert jobs["round_ready"] == 1
@@ -70,7 +70,7 @@ def test_simulate_never_releases(tmp_path):
 
 def test_release_is_its_own_target(tmp_path):
     jobs = dry(tmp_path, "release", config={"rounds": [4]})
-    assert jobs["release_batch"] == 44
+    assert jobs["release_batch"] == 40
 
 
 def test_batches_already_simulated_are_kept(tmp_path):
@@ -81,15 +81,15 @@ def test_batches_already_simulated_are_kept(tmp_path):
             f.write("x\n")
         (sims / f"settings-{seed}.csv").write_text("outbreak\n")
     jobs = dry(tmp_path, "simulate", config={"rounds": [4]})
-    assert jobs["simulate_batch"] == 42
+    assert jobs["simulate_batch"] == 38
 
 
 FT = {
-    "rounds": [1],
+    "rounds": [1, 2],
     "finetune": {
         "prefixes": [250, 500],
         "outbreaks": 500,
-        "rounds": [1],
+        "rounds": [2],
         "held_round": 1,
         "sims_from": "local",
         "real_validation": None,
@@ -100,16 +100,17 @@ FT = {
 def test_finetune_trains_one_segment_per_prefix(tmp_path):
     jobs = dry(tmp_path, "finetune", config=FT)
     assert jobs["train_segment"] == 2
-    # 500 outbreaks are 20 batches, one spare, and 4 held-out batches.
-    assert jobs["fetch_batch"] == 25
+    # 500 outbreaks are 24 batches of 21, one spare, and the held-out
+    # round's 40 batches.
+    assert jobs["fetch_batch"] == 65
     # On one machine the batches are simulated here.
-    assert jobs["simulate_batch"] == 25
+    assert jobs["simulate_batch"] == 65
 
 
 def test_finetune_takes_batches_from_releases(tmp_path):
     config = {**FT, "finetune": {**FT["finetune"], "sims_from": "release"}}
     jobs = dry(tmp_path, "finetune", config=config)
-    assert jobs["fetch_batch"] == 25
+    assert jobs["fetch_batch"] == 65
     assert "simulate_batch" not in jobs
 
 
