@@ -93,7 +93,8 @@ def test_the_layer_tables_split_the_factors_with_their_draws() -> None:
         assert list(table.columns) == ["setting", "factor", "levels", "draws"]
     epi = tables["epidemic"].set_index("setting")
     rep = tables["reporting"].set_index("setting")
-    assert "mixing" in epi.index and "shocks" in rep.index
+    assert "mixing" in epi.index
+    assert "shocks" in rep.index
     assert "80%" in rep.loc["observation", "levels"]
     assert "log-uniform(0.01, 0.5)" in epi.loc["mixing", "draws"]
     assert "U(2, 5)" in rep.loc["shocks", "draws"]
