@@ -334,7 +334,7 @@ def lr_card(P, step, small=(190, 150)):
                    f'</span>')
     o.append("</svg>")
     return (f'<div class=card style="padding:4px;line-height:1.2">'
-            f'<div class=mut style="font-size:11px">learning rate vs step'
+            f'<div class=mut style="font-size:11px">learning rate vs step{tip("lr")}'
             f'</div>{"".join(o)}<div class=leg style="font-size:11px">'
             f'{"".join(leg)}</div></div>')
 
@@ -389,6 +389,38 @@ def nice(lo, hi, n=5):
 
 DASHES = {"dash": ("5 3", "dashed"), "dot": ("1.5 3", "dotted"),
           "dd": ("8 3 1.5 3", "dash-dot")}
+
+
+# Plain-language notes shown by the Explain toggle (hover or tap the marker).
+EXPLAIN = {
+    "runs": "Choose which runs and references appear in every chart. References only apply to the performance and nowcast charts.",
+    "lossscale": "Raw shows the loss as logged. Relative divides each run's loss by its own starting loss (start) or by base Chronos-2 on the same blocks (base). Live run zooms the x range to the current run.",
+    "train": "Quantile (pinball) loss on the training batches, as a rolling mean of 20 logged points. Lower is better. Faint dots are single logged values.",
+    "held": "The same loss on held-out simulated blocks the model never trains on. Lower is better. The relative views use each saved checkpoint's loss on the full held-out set.",
+    "bysrc": "Held-out loss split by data layout (weekly, daily, 3-day). Colour is the layout and line style is the run.",
+    "biasline": "The mean of each relation's 144 values (12 layers x 12 heads) at each step. Hover a line to see its min to max range across heads.",
+    "biasheat": "One square per layer (row) x head (column). Red means that head attends more than base Chronos-2 to that kind of pair, blue less. A bias of 1 weights those pairs x2.7.",
+    "relations": "self = a row with itself. same = a place's counts, lags and totals. up = a place to its country. down = a country to its places.",
+    "lr": "Learning rate of each optimiser group against step. Rates fall linearly to zero at the final step. The dot marks the current step.",
+    "perf": "WIS or CRPS relative to randomwalknowcast. Below 1 is better. One line per run across checkpoints, with the zero-shot and randomwalknowcast references.",
+    "heldperf": "Held-out loss on the full held-out set at each saved checkpoint. Lower is better.",
+    "nowcast": "Median and 50% and 95% bands of each ticked run for the chosen nowcast date, against the truth. Line style runs from dotted (earliest checkpoint) to solid (latest).",
+    "wis": "Mean weighted interval score over the nowcast dates the ticked runs have in common. Lower is better.",
+    "coverage": "Share of truths inside the 50% and 95% intervals. The dashed lines mark the nominal 0.5 and 0.95.",
+    "biasscore": "Mean of 1 minus 2 times the forecast CDF at the truth, from -1 (forecast too low) to +1 (too high). 0 is unbiased.",
+    "t_step": "The trainer's current optimiser step, and how many simulations that is.",
+    "t_rate": "Training speed over the last 30 minutes.",
+    "t_next": "The next saved checkpoint and when it is due. While a checkpoint is being scored it shows scoring since the time it was saved.",
+    "t_eta": "Time to the final checkpoint at the recent training speed.",
+    "t_lr": "Current learning rate of each optimiser group.",
+    "t_trainer": "Whether the trainer process is running.",
+    "t_log": "Time of the last training log line. It turns red after 10 minutes.",
+}
+
+
+def tip(key):
+    return (f'<span class=info tabindex=0 data-tip="'
+            f'{html.escape(EXPLAIN[key], quote=True)}">\u24d8</span>')
 
 
 def chart(title, series, marks=(), ylog=False, W=640, H=320,
@@ -727,7 +759,7 @@ def heldout_chart(rows):
              if num(r.get("loss_zero_shot")) is not None][:1]
         if pts:
             ho.append((c["label"], run_colour(c["key"]), z + pts, "pts"))
-    return chart("Held-out loss (all blocks)", ho, xticks=XT,
+    return chart("Held-out loss (all blocks)" + tip("heldperf"), ho, xticks=XT,
                  xlabel="simulations (log2)")
 
 
@@ -845,7 +877,7 @@ function draw(){
  if(SEL().indexOf("complete")>=0&&!rows.some(function(r){return r[3]=="complete"}))note+="<p class=mut>complete-only pending</p>";
  if(P.pending.length)note+='<p class=mut>Scoring on archie, not yet in the scores: '+P.pending.map(function(p){return p.run+" n"+p.n+(p.hash?" "+p.hash:"")}).join(", ")+'.</p>';
  if(!any)note+="<p class=mut>No rows for this selection.</p>";
- $("splot").innerHTML='<div class=sum><span class=mut>rel. '+MM.toUpperCase()+' vs randomwalknowcast</span> '+(sum.join("; ")||"")+'</div>'+h+'<div class=leg>'+leg+'</div>'+note;
+ $("splot").innerHTML='<div class=sum><span class=mut>rel. '+MM.toUpperCase()+' vs randomwalknowcast</span>'+ftInfo("perf")+' '+(sum.join("; ")||"")+'</div>'+h+'<div class=leg>'+leg+'</div>'+note;
 }
 window.addEventListener("ftsel",draw);
 draw();
@@ -896,6 +928,24 @@ def job_germany():
 
 
 JOBS["germany"] = job_germany
+
+
+LEVELS_Q = [0.025, 0.1, 0.25, 0.5, 0.75, 0.9, 0.975]
+
+
+def cdf_at(q, y):
+    """Predictive CDF at y, interpolated linearly between the quantiles."""
+    if y <= q[0]:
+        return 0.0125
+    if y >= q[-1]:
+        return 0.9875
+    for i in range(len(q) - 1):
+        if q[i] <= y <= q[i + 1]:
+            if q[i + 1] == q[i]:
+                return (LEVELS_Q[i] + LEVELS_Q[i + 1]) / 2
+            return LEVELS_Q[i] + (LEVELS_Q[i + 1] - LEVELS_Q[i]) * (
+                y - q[i]) / (q[i + 1] - q[i])
+    return 0.5
 
 
 def wis_row(q, y):
@@ -958,6 +1008,7 @@ def ger_build(ds):
     cache = G["files"]
     series, wis, truth, origins = {}, {}, {}, set()
     targets = set()
+    stats = {}
     prefix = {}
     for setid, origin, f, mt in files:
         key = str(f)
@@ -994,6 +1045,15 @@ def ger_build(ds):
                 tgt, {}).setdefault(src, {})[origin] = {"t": ts, "q": qm}
             ws = [wis_row(q, dates[t]["y"]) for q, t in zip(qm, ts)
                   if dates[t]["y"] is not None]
+            ok = [(q, dates[t]["y"]) for q, t in zip(qm, ts)
+                  if dates[t]["y"] is not None]
+            if ok:
+                stats.setdefault(loc, {}).setdefault(s, {}).setdefault(
+                    tgt, {}).setdefault(src, {})[origin] = [
+                    round(sum(q[2] <= y <= q[4] for q, y in ok) / len(ok), 3),
+                    round(sum(q[0] <= y <= q[6] for q, y in ok) / len(ok), 3),
+                    round(sum(1 - 2 * cdf_at(q, y) for q, y in ok) / len(ok),
+                          3)]
             if ws:
                 wis.setdefault(loc, {}).setdefault(s, {}).setdefault(
                     tgt, {}).setdefault(src, {})[origin] = round(
@@ -1002,7 +1062,7 @@ def ger_build(ds):
     locs = sorted(series, key=lambda l: (
         0 if l == "DE" else 1 if l.startswith("DE-") else 2, l))
     built = {"prefix": prefix, "series": series, "wis": wis, "truth": truth,
-             "sets": sets, "locs": locs, "targets": sorted(targets),
+             "stats": stats, "sets": sets, "locs": locs, "targets": sorted(targets),
              "origins": sorted(origins)}
     G["sig"], G["built"], G["loc_json"] = sig, built, {}
     return built
@@ -1020,6 +1080,7 @@ def ger_loc_json(ds, loc):
             truth[tgt] = {"t": [d for d, _ in tv], "y": [v[1] for _, v in tv]}
         G["loc_json"][loc] = json.dumps({
             "series": b["series"][loc], "wis": b["wis"].get(loc, {}),
+            "stats": b["stats"].get(loc, {}),
             "truth": truth}, separators=(",", ":"))
     return G["loc_json"][loc]
 
@@ -1191,16 +1252,35 @@ function plots(){
   wisChart(all[0],eff)}).catch(function(){$("gplot").innerHTML='<p class=mut>Could not load data.</p>'})}
 function wisChart(d,eff){
  var W_=function(id){return ((d.wis[id]||{})[TGT()]||{})[S.src]};
- var sel=eff.map(function(e){return e.id}).filter(function(id){return W_(id)});
- if(!sel.length){$("gwis").innerHTML='<p class=mut>No WIS available.</p>';return}
- var com=Object.keys(W_(sel[0])).filter(function(o){return sel.every(function(id){return W_(id)[o]!==undefined})});
+ var X_=function(id){return (((d.stats||{})[id]||{})[TGT()]||{})[S.src]};
+ var sel=eff.map(function(e){return e.id}).filter(function(id){return W_(id)&&X_(id)});
+ if(!sel.length){$("gwis").innerHTML='<p class=mut>No scores available.</p>';return}
+ var com=Object.keys(W_(sel[0])).filter(function(o){return sel.every(function(id){return W_(id)[o]!==undefined&&X_(id)[o]!==undefined})});
  if(!com.length){$("gwis").innerHTML='<p class=mut>No nowcast dates common to the selected checkpoints.</p>';return}
- var vals=sel.map(function(id){var a=com.map(function(o){return W_(id)[o]});return a.reduce(function(x,y){return x+y},0)/a.length});
- var W=260,H=12+sel.length*34,mx=Math.max.apply(null,vals)*1.05,h='<svg viewBox="0 0 '+W+' '+H+'" width="100%">';
+ var mean=function(f){return sel.map(function(id){var a=com.map(function(o){return f(id,o)});return a.reduce(function(x,y){return x+y},0)/a.length})};
+ var wis=mean(function(id,o){return W_(id)[o]}),c50=mean(function(id,o){return X_(id)[o][0]}),c95=mean(function(id,o){return X_(id)[o][1]}),bias=mean(function(id,o){return X_(id)[o][2]});
  function shortLab(id){var m=C.meta.find(function(x){return x.id==id});if(!m)return id;var r=RUNS.find(function(r){return r.key==m.run});return r?r.label+" n"+m.n:m.label}
- sel.forEach(function(id,i){var y=4+i*34,w=vals[i]/mx*(W-48);
-  h+='<text x="0" y="'+(y+9)+'" class=ax>'+shortLab(id)+'</text><rect x="0" y="'+(y+13)+'" width="'+w+'" height="14" fill="'+colour(id)+'" /><text x="'+(w+4)+'" y="'+(y+24)+'" class=ax>'+fmt(vals[i])+'</text>'});
- $("gwis").innerHTML=h+'</svg>';
+ var W=260,RH=30;
+ function rows(title,body,H,k){return '<h3>'+title+ftInfo(k)+'</h3><svg viewBox="0 0 '+W+' '+H+'" width="100%">'+body+'</svg>'}
+ // mean WIS
+ var mx=Math.max.apply(null,wis)*1.05,h1='';
+ sel.forEach(function(id,i){var y=2+i*RH,w=wis[i]/mx*(W-48);
+  h1+='<text x="0" y="'+(y+9)+'" class=ax>'+shortLab(id)+'</text><rect x="0" y="'+(y+12)+'" width="'+w+'" height="12" fill="'+colour(id)+'" /><text x="'+(w+4)+'" y="'+(y+22)+'" class=ax>'+fmt(wis[i])+'</text>'});
+ // coverage of the 50% and 95% intervals, nominal lines at 0.5 and 0.95
+ var cw=W-36,h2='';
+ sel.forEach(function(id,i){var y=2+i*RH;
+  h2+='<text x="0" y="'+(y+9)+'" class=ax>'+shortLab(id)+'</text>'
+   +'<rect x="0" y="'+(y+12)+'" width="'+c50[i]*cw+'" height="7" fill="'+colour(id)+'"><title>50% interval: '+c50[i].toFixed(2)+'</title></rect><text x="'+(c50[i]*cw+3)+'" y="'+(y+19)+'" class=ax>'+c50[i].toFixed(2)+'</text>'
+   +'<rect x="0" y="'+(y+20)+'" width="'+c95[i]*cw+'" height="7" fill="'+colour(id)+'" opacity=".55"><title>95% interval: '+c95[i].toFixed(2)+'</title></rect><text x="'+(c95[i]*cw+3)+'" y="'+(y+27)+'" class=ax>'+c95[i].toFixed(2)+'</text>'});
+ var H2=4+sel.length*RH;
+ h2+='<line x1="'+0.5*cw+'" x2="'+0.5*cw+'" y1="0" y2="'+H2+'" class=mark /><line x1="'+0.95*cw+'" x2="'+0.95*cw+'" y1="0" y2="'+H2+'" class=mark />';
+ // bias, -1 to 1 with 0 marked
+ var bw=W,h3='';
+ sel.forEach(function(id,i){var y=2+i*RH,x0=bw/2,w=Math.abs(bias[i])*(bw/2-34);
+  h3+='<text x="0" y="'+(y+9)+'" class=ax>'+shortLab(id)+'</text><rect x="'+(bias[i]>=0?x0:x0-w)+'" y="'+(y+12)+'" width="'+w+'" height="12" fill="'+colour(id)+'"><title>bias '+bias[i].toFixed(3)+' (positive: forecast above truth)</title></rect><text x="'+(bias[i]>=0?x0+w+3:x0-w-3)+'" y="'+(y+22)+'" text-anchor="'+(bias[i]>=0?"start":"end")+'" class=ax>'+bias[i].toFixed(2)+'</text>'});
+ h3+='<line x1="'+bw/2+'" x2="'+bw/2+'" y1="0" y2="'+H2+'" stroke="var(--fg)" stroke-width="1" />';
+ $("gwis").innerHTML=rows("mean WIS",h1,H2,"wis")+rows("coverage 50% and 95% (dashed: nominal)",h2,H2,"coverage")+rows("bias (+: forecast above truth)",h3,H2,"biasscore")
+  +'<div class=mut style="font-size:11px">'+com.length+' common nowcast dates</div>';
 }
 function chips(){var h='';
  RUNS.forEach(function(r){if(!isOn(r.key))return;var all=ofRun(r.key),ch=chosen(r.key);
@@ -1288,8 +1368,8 @@ def germany_html(known_n, once):
 <details class=glocs><summary id=gsum>Locations</summary>
 <div id=glocs></div></details>
 <div id=gck class=gck></div>
-<div class=gwrap id=gwrap><div class=card><div id=gplot></div></div>
-<div class=card><h3>mean WIS</h3><div id=gwis></div></div></div>
+<div class=gwrap id=gwrap><div class=card><div class=cardinfo>{tip("nowcast")}</div><div id=gplot></div></div>
+<div class=card><div id=gwis></div></div></div>
 <script type="application/json" id=gdata>{payload}</script>
 <script>{GER_JS}</script>""")
 
@@ -1299,7 +1379,7 @@ SEL_JS = r"""
 (function(){var D=null,on=[];
  function render(){var el=document.getElementById("selbar");if(!el||!D)return;
   function b(x){return '<button class="tog'+(on.indexOf(x.key)>=0?' on':'')+'" data-k="'+x.key+'" style="border-left:4px solid '+x.color+'">'+x.label+'</button>'}
-  el.innerHTML='<span class=mut>runs</span>'+D.runs.map(b).join("")+'<span class=sep></span><span class=mut>references</span>'+D.refs.map(b).join("");
+  el.innerHTML='<b>Show runs:</b>'+ftInfo("runs")+D.runs.map(b).join("")+'<span class=sep></span><span class=mut title="used by the performance and nowcast charts; the loss and attention-bias panels show runs only">references</span>'+D.refs.map(b).join("")+'<span class=mut style="margin-left:10px">applies to every chart</span>';
   el.onclick=function(e){var bt=e.target.closest("button");if(!bt)return;window.ftSel.toggle(bt.dataset.k)}}
  function save(){try{sessionStorage.setItem("ftsel",JSON.stringify(on))}catch(e){}}
  window.ftSel={
@@ -1308,6 +1388,7 @@ SEL_JS = r"""
    on=(Array.isArray(s)?s:d.defaults.slice()).filter(function(k){return all.indexOf(k)>=0});
    if(!on.length)on=d.defaults.slice();render()},
   get:function(){return on.slice()},
+  refsOn:function(){return D.refs.filter(function(r){return on.indexOf(r.key)>=0})},
   toggle:function(k){var i=on.indexOf(k);if(i>=0){if(on.length>1)on.splice(i,1)}else on.push(k);
    save();render();window.dispatchEvent(new Event("ftsel"))}}})();
 """
@@ -1323,6 +1404,63 @@ NAV_JS = r"""
 """
 
 # Reload every 60 s, but wait while any time slider is playing.
+LOSS_JS = r"""
+(function(){
+var D=JSON.parse(document.getElementById("ldata").textContent);
+var $=function(i){return document.getElementById(i)};
+var SRC={weekly:"#2563eb",daily:"#ea580c","3day":"#16a34a"},STY=["","6 3","8 3 2 3","2 3"];
+function roll(p,k){var o=[],a=[];p.forEach(function(q){a.push(q[1]);if(a.length>k)a.shift();o.push([q[0],a.reduce(function(x,y){return x+y},0)/a.length])});return o}
+function lticks(lo,hi){var o=[];for(var e=Math.floor(lo)-1;e<=Math.ceil(hi);e++)[1,2,3,5,7].forEach(function(m){var v=m*Math.pow(10,e),l=Math.log10(v);if(l>=lo&&l<=hi)o.push(v)});
+ while(o.length>6){o=o.filter(function(v,i){return i%2==0})}return o}
+function fmtT(v){return +v.toPrecision(2)}
+function chart(o){
+ var W=440,H=280,L=40,R=8,T=8,B=26,xs=[],ys=[];
+ var ser=o.series.map(function(s){var p=s.pts.filter(function(q){return q[1]!=null&&q[1]>0&&(o.xmax==null||q[0]<=o.xmax)});return {label:s.label,color:s.color,kind:s.kind,dash:s.dash,pts:p}}).filter(function(s){return s.pts.length});
+ if(!ser.length)return '<div class=card><h3>'+o.title+'</h3><p class=mut>no data for the selected runs</p></div>';
+ ser.forEach(function(s){s.pts.forEach(function(q){xs.push(q[0]);ys.push(Math.log10(q[1]))})});
+ var x1=o.xmax!=null?o.xmax:Math.max.apply(null,xs.concat([1])),y0=Math.min.apply(null,ys),y1=Math.max.apply(null,ys);
+ if(o.hl){y0=Math.min(y0,0);y1=Math.max(y1,0)}
+ var pd=(y1-y0)*0.06||0.1;y0-=pd;y1+=pd;
+ var sx=function(x){return L+x/x1*(W-L-R)},sy=function(v){return T+(1-(Math.log10(v)-y0)/(y1-y0))*(H-T-B)};
+ var h='<svg viewBox="0 0 '+W+' '+H+'" width="100%">';
+ lticks(y0,y1).forEach(function(v){h+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+sy(v)+'" y2="'+sy(v)+'" class=grid /><text x="'+(L-4)+'" y="'+(sy(v)+3)+'" text-anchor=end class=ax>'+fmtT(v)+'</text>'});
+ var st=Math.pow(10,Math.floor(Math.log10(x1/4)));st=[1,2,2.5,5,10].map(function(m){return m*st}).find(function(v){return v>=x1/5});
+ for(var x=0;x<=x1;x+=st)h+='<text x="'+sx(x)+'" y="'+(H-B+12)+'" text-anchor=middle class=ax>'+x+'</text>';
+ h+='<text x="'+(W/2)+'" y="'+(H-2)+'" text-anchor=middle class=ax>step</text>';
+ if(o.hl)h+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+sy(1)+'" y2="'+sy(1)+'" class=mark />';
+ (D.marks||[]).forEach(function(m){if(m[0]<=x1)h+='<line x1="'+sx(m[0])+'" x2="'+sx(m[0])+'" y1="'+T+'" y2="'+(H-B)+'" class=mark /><text x="'+(sx(m[0])+2)+'" y="'+(T+9)+'" class=ax>'+m[1]+'</text>'});
+ ser.forEach(function(s){var d=s.dash?' stroke-dasharray="'+s.dash+'"':"";
+  if(s.kind=="dots")s.pts.forEach(function(q){h+='<circle cx="'+sx(q[0])+'" cy="'+sy(q[1])+'" r=1.8 fill="'+s.color+'" opacity=".35" />'});
+  else{var pl=s.pts.map(function(q){return sx(q[0])+","+sy(q[1])}).join(" ");
+   h+='<polyline points="'+pl+'" fill=none stroke="'+s.color+'" stroke-width=1.6'+d+(s.kind=="faint"?' opacity=".4"':'')+' />';
+   if(s.kind=="pts")s.pts.forEach(function(q){h+='<circle cx="'+sx(q[0])+'" cy="'+sy(q[1])+'" r=2.2 fill="'+s.color+'"><title>'+s.label+' step '+q[0]+': '+(+q[1].toPrecision(4))+'</title></circle>'})}});
+ var leg=ser.map(function(s){return '<span><i style="background:'+s.color+'"></i>'+s.label+(s.dash?" (dashed)":"")+'</span>'}).join("");
+ return '<div class=card><h3>'+o.title+ftInfo(o.info)+'</h3>'+h+'</svg><div class=leg>'+leg+'</div></div>'}
+function draw(){
+ var mode=window.ftMode||"start",rng=window.ftRng||"zoom",on=ftSel.get(),rel=mode!="raw";
+ var xmax=rng=="zoom"?D.xlim:null,runs=D.runs.filter(function(r){return on.indexOf(r.key)>=0});
+ var suf={raw:"",start:", relative to start",base:", relative to base Chronos-2"}[mode],hl=rel;
+ var tr=[],held=[],by=[];
+ runs.forEach(function(r){var i=D.runs.indexOf(r);
+  var p=r.train.filter(function(q){return r.live||q[0]<=D.smax});if(rel&&r.tr0)p=p.map(function(q){return [q[0],q[1]/r.tr0]});
+  if(r.live)tr.push({label:r.label+" raw",color:r.color,pts:p,kind:"dots"},{label:r.label+" rolling mean",color:r.color,pts:roll(p,20),kind:"line"});
+  else tr.push({label:r.label+" rolling mean",color:r.color,pts:roll(p,20),kind:"faint"});
+  if(!rel)held.push({label:r.label,color:r.color,pts:r.held,kind:"pts"});
+  else{var den=mode=="start"?r.full0:r.bfull;if(den&&r.full0)held.push({label:r.label,color:r.color,pts:[[0,r.full0/den]].concat(r.ck.map(function(q){return [q[0],q[1]/den]})),kind:"pts"})}
+  ["weekly","daily","3day"].forEach(function(s){var pts=(r.bysrc[s]||[]);if(!pts.length)return;
+   if(rel){var d=(mode=="start"?r.src0:r.bsrc)[s];if(!d)return;var z=r.src0[s];pts=(z?[[0,z]]:[]).concat(pts).map(function(q){return [q[0],q[1]/d]})}
+   by.push({label:s+" ("+r.label+")",color:SRC[s],pts:pts,kind:"pts",dash:STY[i%4]})})});
+ var ttl=mode=="raw"?"Held-out pooled loss (first 100 blocks)":"Held-out pooled loss (checkpoints, full set)";
+ $("lossplots").innerHTML=chart({title:"Training loss (rolling mean of 20)"+suf,info:"train",series:tr,xmax:xmax,hl:hl})+chart({title:ttl+suf,info:"held",series:held,xmax:xmax,hl:hl})+chart({title:"Held-out loss by source (colour source, style run)"+suf,info:"bysrc",series:by,xmax:xmax,hl:hl});
+ var refs=ftSel.refsOn();
+ $("lossrefs").innerHTML=refs.map(function(r){return '<span class="tog dis" title="'+r.label+' is a reference with no training or held-out loss">'+r.label+'</span>'}).join("");
+}
+window.addEventListener("ftsel",draw);window.addEventListener("ftmode",draw);
+draw();
+})();
+"""
+
+
 MODE_JS = r"""
 (function(){var m="start",r="zoom";
  try{m=sessionStorage.getItem("ftmode")||m;r=sessionStorage.getItem("ftrng")||r}catch(e){}
@@ -1330,7 +1468,8 @@ MODE_JS = r"""
   document.body.className=c+" m-"+m+" r-"+r;
   [].forEach.call(document.querySelectorAll(".modebar button"),function(b){
    b.classList.toggle("on",b.dataset.mode==m||b.dataset.rng==r)});
-  try{sessionStorage.setItem("ftmode",m);sessionStorage.setItem("ftrng",r)}catch(e){}}
+  try{sessionStorage.setItem("ftmode",m);sessionStorage.setItem("ftrng",r)}catch(e){}
+  window.ftMode=m;window.ftRng=r;window.dispatchEvent(new Event("ftmode"))}
  [].forEach.call(document.querySelectorAll(".modebar"),function(bar){
   bar.onclick=function(e){var b=e.target.closest("button");if(!b)return;
    if(b.dataset.mode)m=b.dataset.mode;if(b.dataset.rng)r=b.dataset.rng;paint()}});
@@ -1481,7 +1620,8 @@ def bias_data(rundir, hist, cur_step):
     st = Path(rundir) / "train/state"
     for f in ([st / "adapter.pt"] if (st / "adapter.pt").is_file() else
               sorted(st.glob("adapter*.safetensors"))):
-        files.append((cur_step if cur_step is not None else 10 ** 9, f))
+        if cur_step is not None:  # only the live run's state is current
+            files.append((cur_step, f))
     for step, f in sorted(files, key=lambda x: x[0]):
         b = bias_file(f)
         if not b:
@@ -1496,99 +1636,80 @@ def bias_data(rundir, hist, cur_step):
             "latest": latest}
 
 
-def heat_svg(rows, title, lo, hi, size=140):
-    """One layer-by-head tile on a colour scale shared across tiles."""
-    div = lo < 0 < hi
-    amp = max(abs(lo), abs(hi)) or 1
-    nr, nc = len(rows), len(rows[0])
-    cw = size / max(nr, nc)
-    h = [f'<svg viewBox="0 0 {size} {size}" width="{size}" height="{size}">']
-    for i, r in enumerate(rows):
-        for j, v in enumerate(r):
-            if div:
-                a = abs(v) / amp
-                col = (f"rgba(220,38,38,{a:.2f})" if v > 0
-                       else f"rgba(37,99,235,{a:.2f})")
-            else:
-                a = (v - lo) / ((hi - lo) or 1)
-                col = f"rgba(37,99,235,{0.08 + 0.92 * a:.2f})"
-            h.append(f'<rect x="{j * cw:.1f}" y="{i * cw:.1f}" '
-                     f'width="{cw - 0.5:.1f}" height="{cw - 0.5:.1f}" '
-                     f'fill="{col}"><title>{title} layer {i} head {j}: '
-                     f'{v:.4g}</title></rect>')
-    h.append("</svg>")
-    return "".join(h)
+BIAS_JS = r"""
+(function(){
+var D=JSON.parse(document.getElementById("bdata").textContent);
+var $=function(i){return document.getElementById(i)};
+var PAIRS=D.pairs,COL=D.col,sel0=null;
+function nice(lo,hi){var st=(hi-lo)/4,m=Math.pow(10,Math.floor(Math.log10(st))),k=[1,2,2.5,5,10].find(function(x){return x*m>=st})*m,o=[];
+ for(var v=Math.ceil(lo/k)*k;v<=hi+1e-9;v+=k)o.push(+v.toFixed(6));return o}
+function heat(rows,title,lo,hi){var div=lo<0&&hi>0,amp=Math.max(Math.abs(lo),Math.abs(hi))||1,nr=rows.length,nc=rows[0].length,cw=140/Math.max(nr,nc);
+ var h='<svg viewBox="0 0 140 140" width="140" height="140">';
+ rows.forEach(function(r,i){r.forEach(function(v,j){var col;
+  if(div){var a=Math.abs(v)/amp;col=v>0?"rgba(220,38,38,"+a.toFixed(2)+")":"rgba(37,99,235,"+a.toFixed(2)+")"}
+  else{var a2=(v-lo)/((hi-lo)||1);col="rgba(37,99,235,"+(0.08+0.92*a2).toFixed(2)+")"}
+  h+='<rect x="'+(j*cw).toFixed(1)+'" y="'+(i*cw).toFixed(1)+'" width="'+(cw-0.5).toFixed(1)+'" height="'+(cw-0.5).toFixed(1)+'" fill="'+col+'"><title>'+title+' layer '+i+' head '+j+': '+(+v.toPrecision(4))+'</title></rect>'})});
+ return h+'</svg>'}
+function lineplot(run){
+ var W=480,H=280,L=44,R=10,T=8,B=28,all=[];
+ PAIRS.forEach(function(k){(run.pts[k.key]||[]).forEach(function(p){all.push(p)})});
+ if(!all.length)return "";
+ var xs=all.map(function(p){return p[0]}),x0=Math.min.apply(null,xs),x1=Math.max(Math.max.apply(null,xs),x0+1);
+ var ys=all.map(function(p){return p[1]}),y0=Math.min.apply(null,ys),y1=Math.max.apply(null,ys),pd=(y1-y0)*0.25||0.01;y0-=pd;y1+=pd;
+ var sx=function(x){return L+(x-x0)/(x1-x0)*(W-L-R)},sy=function(y){return T+(1-(y-y0)/(y1-y0))*(H-T-B)};
+ var s='<svg viewBox="0 0 '+W+' '+H+'" width="'+W+'" height="'+H+'">';
+ nice(y0,y1).forEach(function(v){if(v>=y0&&v<=y1)s+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+sy(v)+'" y2="'+sy(v)+'" class=grid /><text x="'+(L-5)+'" y="'+(sy(v)+3)+'" text-anchor=end class=ax>'+(+v.toPrecision(3))+'</text>'});
+ nice(x0,x1).forEach(function(v){if(v>=x0&&v<=x1)s+='<text x="'+sx(v)+'" y="'+(H-B+13)+'" text-anchor=middle class=ax>'+v+'</text>'});
+ s+='<text x="'+(L+W-R)/2+'" y="'+(H-3)+'" text-anchor=middle class=ax>step</text>';
+ if(y0<0&&y1>0)s+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+sy(0)+'" y2="'+sy(0)+'" class=mark />';
+ PAIRS.forEach(function(k,n){var pts=run.pts[k.key]||[];if(!pts.length)return;var c=COL[k.key];
+  var up=pts.map(function(p){return sx(p[0])+","+sy(p[3])}).join(" "),dn=pts.slice().reverse().map(function(p){return sx(p[0])+","+sy(p[2])}).join(" "),mean=pts.map(function(p){return sx(p[0])+","+sy(p[1])}).join(" ");
+  s+='<g class=rel><polygon class=band points="'+up+" "+dn+'" fill="'+c+'" /><polyline points="'+mean+'" fill=none stroke="'+c+'" stroke-width=2 /><polyline points="'+mean+'" fill=none stroke="transparent" stroke-width=12 />';
+  pts.forEach(function(p){s+='<circle cx="'+sx(p[0])+'" cy="'+sy(p[1])+'" r=2.6 fill="'+c+'"><title>'+k.label+' step '+p[0]+': mean '+(+p[1].toPrecision(4))+', range '+(+p[2].toPrecision(4))+' to '+(+p[3].toPrecision(4))+'</title></circle>'});
+  s+='<text x="'+(L+6)+'" y="'+(T+12+n*12)+'" class=ax style="fill:'+c+'">'+k.label+'</text></g>'});
+ return s+'</svg>'}
+function draw(){
+ var on=ftSel.get(),runs=D.runs.filter(function(r){return on.indexOf(r.key)>=0});
+ var el=$("biasdyn");
+ $("biasrefs").innerHTML=ftSel.refsOn().map(function(r){return '<span class="tog dis" title="'+r.label+' is a reference with no attention bias">'+r.label+'</span>'}).join("");
+ var lr=document.getElementById("lrcard");if(lr)lr.style.display=on.indexOf(lr.dataset.run)>=0?"":"none";
+ if(!runs.length){el.innerHTML='<p class=mut style="line-height:1.4">none of the selected runs has an attention bias module</p>';return}
+ if(!sel0||!runs.some(function(r){return r.key==sel0}))sel0=runs[0].key;
+ var run=runs.find(function(r){return r.key==sel0});
+ var lat=run.latest||{},keys=PAIRS.filter(function(k){return lat[k.key]}),flat=[];
+ keys.forEach(function(k){lat[k.key].forEach(function(r){r.forEach(function(v){flat.push(v)})})});
+ var lo=flat.length?Math.min.apply(null,flat):0,hi=flat.length?Math.max.apply(null,flat):1;
+ var tiles=keys.map(function(k){return '<div class=tile4><div class=mut title="'+k.label+'">'+k.key+'</div>'+heat(lat[k.key],k.key,lo,hi)+'</div>'}).join("");
+ var tabs=runs.length>1?'<div class=sctl style="margin:0 0 4px">'+runs.map(function(r){return '<button class="tog'+(r.key==sel0?" on":"")+'" data-b="'+r.key+'" style="border-left:4px solid '+r.color+'">'+r.label+'</button>'}).join("")+'</div>':"";
+ el.innerHTML=(tabs?'<div class=biastabs>'+tabs+'</div>':"")+'<div class="card biasline"><div class=cardinfo>'+ftInfo("biasline")+'</div>'+lineplot(run)+'</div>'+(tiles?'<div><div class=tiles4>'+tiles+'</div><div class=mut>'+ftInfo("biasheat")+ftInfo("relations")+' step '+lat.step+', colour scale '+(+lo.toPrecision(3))+' to '+(+hi.toPrecision(3))+', shared; rows layers, columns heads</div></div>':"");
+ var tb=el.querySelector(".sctl");if(tb)tb.onclick=function(e){var b=e.target.closest("button");if(b){sel0=b.dataset.b;draw()}}}
+window.addEventListener("ftsel",draw);
+draw();
+})();
+"""
 
 
-def bias_html(rundir, label, hist, cur_step, lr_h=""):
-    d = bias_data(rundir, hist, cur_step)
-    if not d:
-        return (f"<p class=mut>no bias module in the {html.escape(label)} "
-                f"run</p>" + (f'<div class=biasrow>{lr_h}</div>' if lr_h
-                              else ""))
-    W, H, L, R, T, B = 480, 280, 44, 10, 8, 28
-    names = dict(BIAS_PAIRS)
-    allp = [(s, v) for k in d["pts"] for s, v in d["pts"][k]]
-    svg = []
-    if allp:
-        xs = [s for s, _ in allp]
-        x0, x1 = min(xs), max(max(xs), min(xs) + 1)
-        ys = [v["mean"] for _, v in allp]  # bands may run past the axes
-        y0, y1 = min(ys), max(ys)
-        pad = (y1 - y0) * 0.25 or 0.01
-        y0, y1 = y0 - pad, y1 + pad
-        sx = lambda x: L + (x - x0) / (x1 - x0) * (W - L - R)
-        sy = lambda y: T + (1 - (y - y0) / (y1 - y0)) * (H - T - B)
-        svg.append(f'<svg viewBox="0 0 {W} {H}" width="{W}" height="{H}">')
-        for tk in nice(y0, y1):
-            if y0 <= tk <= y1:
-                svg.append(f'<line x1="{L}" x2="{W-R}" y1="{sy(tk):.1f}" '
-                           f'y2="{sy(tk):.1f}" class=grid /><text x="{L-5}" '
-                           f'y="{sy(tk)+3:.1f}" text-anchor=end class=ax>'
-                           f'{tk:.3g}</text>')
-        for tk in nice(x0, x1):
-            if x0 <= tk <= x1:
-                svg.append(f'<text x="{sx(tk):.1f}" y="{H-B+13}" '
-                           f'text-anchor=middle class=ax>{tk:g}</text>')
-        svg.append(f'<text x="{(L+W-R)/2}" y="{H-3}" text-anchor=middle '
-                   f'class=ax>step (hover a line for its min-max band)</text>')
-        if y0 < 0 < y1:
-            svg.append(f'<line x1="{L}" x2="{W-R}" y1="{sy(0):.1f}" '
-                       f'y2="{sy(0):.1f}" class=mark />')
-        for n, (k, pts) in enumerate(d["pts"].items()):
-            if not pts:
-                continue
-            c = BIAS_COL[k]
-            up = " ".join(f"{sx(s):.1f},{sy(v['max']):.1f}" for s, v in pts)
-            dn = " ".join(f"{sx(s):.1f},{sy(v['min']):.1f}"
-                          for s, v in reversed(pts))
-            mean = " ".join(f"{sx(s):.1f},{sy(v['mean']):.1f}"
-                            for s, v in pts)
-            svg.append(
-                f'<g class=rel><polygon class=band points="{up} {dn}" '
-                f'fill="{c}" /><polyline points="{mean}" fill=none '
-                f'stroke="{c}" stroke-width=2 /><polyline points="{mean}" '
-                f'fill=none stroke="transparent" stroke-width=12 />'
-                + "".join(
-                    f'<circle cx="{sx(s):.1f}" cy="{sy(v["mean"]):.1f}" r=2.6 '
-                    f'fill="{c}"><title>{names[k]} step {s}: mean '
-                    f'{v["mean"]:.4g}, range {v["min"]:.4g} to '
-                    f'{v["max"]:.4g}</title></circle>' for s, v in pts)
-                + f'<text x="{L+6}" y="{T+12+n*12}" class=ax fill="{c}" '
-                f'style="fill:{c}">{names[k]}</text></g>')
-        svg.append("</svg>")
-    lt = d["latest"] or {}
-    keys = [k for k, _ in BIAS_PAIRS if k in lt]
-    flat = [x for k in keys for r in lt[k] for x in r]
-    lo, hi = (min(flat), max(flat)) if flat else (0, 1)
-    tiles = "".join(
-        f'<div class=tile4><div class=mut>{k} (step {lt.get("step")})</div>'
-        f'{heat_svg(lt[k], k, lo, hi)}</div>' for k in keys)
-    right = (f'<div><div class=tiles4>{tiles}</div><div class=mut>colour '
-             f'scale {lo:.3g} to {hi:.3g}, shared; rows are layers, columns '
-             f'are heads</div></div>' if tiles else "")
-    return (f'<div class=biasrow><div class=card>{"".join(svg)}</div>'
-            f'{right}{lr_h}</div>')
+def bias_payload(live_key, live_step):
+    """Per-run bias statistics and latest matrices, for runs that have them."""
+    out = []
+    for c in RUNS:
+        d = Path(c["dir"])
+        hist = JC.get(str(d / "train/history.json")) or []
+        data = bias_data(d, hist, live_step if c["key"] == live_key else None)
+        if not data:
+            continue
+        lt = data["latest"] or {}
+        out.append({
+            "key": c["key"], "label": c["label"],
+            "color": run_colour(c["key"]),
+            "pts": {k: [[s, v["mean"], v["min"], v["max"]] for s, v in pts]
+                    for k, pts in data["pts"].items()},
+            "latest": {"step": lt.get("step"), **{
+                k: lt[k] for k, _ in BIAS_PAIRS if k in lt}}})
+    return json.dumps({
+        "runs": out, "col": BIAS_COL,
+        "pairs": [{"key": k, "label": n} for k, n in BIAS_PAIRS]},
+        separators=(",", ":")).replace("</", "<\\/")
 
 
 # ---------- page ----------
@@ -1648,15 +1769,24 @@ def build():
     next_sub = ((f"then n{nxt} at step {tstep(nxt)}, ETA {eta(nxt)}" if nxt
                  else "") if scoring else
                 f"step {tstep(nxt)}, ETA {eta(nxt)}" if nxt else "")
+    TILE_KEYS = {"Step": "t_step", "Steps / s (30 min)": "t_rate",
+                 "Next checkpoint": "t_next", f"ETA n{target}": "t_eta",
+                 "Learning rates": "t_lr", "Trainer": "t_trainer",
+                 "Last log line": "t_log"}
     tiles = [
+        ("Step", f"{step}" if step is not None else "n/a",
+         f"n{ntrained:.0f} of {target} simulations trained"
+         if ntrained is not None else ""),
         ("Steps / s (30 min)", f"{rate:.3f}" if rate else "n/a",
          f"{rate*60:.1f} steps/min" if rate else ""),
+        ("Next checkpoint", next_txt, next_sub),
         (f"ETA n{target}", eta(target), f"step {tstep(target)}"),
         ("Learning rates",
          "\n".join(f"{g} {v:.2e}" for g, v in P["current"].items())
          or "n/a",
          (f"linear decay to 0 at step {P['lr_steps']}" if P["lr_steps"]
           else "constant") + (", from history" if P["logged"] else "")),
+        ("Trainer", pidtxt, ""),
         ("Last log line",
          datetime.fromtimestamp(last_t).strftime("%H:%M:%S") if last_t
          else "n/a",
@@ -1664,19 +1794,17 @@ def build():
                                         else "") if age is not None else ""),
     ]
     tiles_h = "".join(
-        f'<div class="tile{" bad" if k == "Last log line" and stale else ""}">'
-        f'<div class=k>{k}</div><div class="v{" vl" if "\n" in v else ""}">'
+        f'<div class="tile{" bad" if k == "Last log line" and stale else ""}'
+        f'{" ok" if k == "Trainer" and alive else ""}'
+        f'{" bad" if k == "Trainer" and alive is False else ""}">'
+        f'<div class=k>{k}{tip(TILE_KEYS[k])}</div><div class="v{" vl" if "\n" in v else ""}">'
         f'{html.escape(v).replace(chr(10), "<br>")}</div>'
         f'<div class=s>{html.escape(s)}</div></div>'
         for k, v, s in tiles)
     bar_tiles = (
-        f'<span class=bt><span class=k>step</span> <b>{step if step is not None else "n/a"}</b>'
-        f' <span class=mut>n{ntrained:.0f}/{target}</span></span>'
-        if ntrained is not None else "") + (
-        f'<span class=bt><span class=k>next</span> <b>{html.escape(next_txt)}</b>'
-        f' <span class=mut>{html.escape(next_sub)}</span></span>'
-        f'<span class="bt {"ok" if alive else "bad" if alive is False else ""}">'
-        f'<span class=k>trainer</span> <b>{html.escape(pidtxt)}</b></span>')
+        f'<span class=bt><span class=k>step</span> <b>{step}</b> '
+        f'<span class=k>next</span> <b>{html.escape(next_txt)}</b></span>'
+        if step is not None else "")
     stage = status.get("stage")
     sub = (f"stage: {html.escape(str(stage))}; stream status "
            f"{html.escape(str(status.get('time', '')))}" if status else "")
@@ -1718,75 +1846,34 @@ def build():
         b = info.get(c.get("base_from") or c["key"], info[c["key"]])
         info[c["key"]]["bfull"], info[c["key"]]["bsrc"] = b["full0"], b["src0"]
 
-    def make_plots(mode, zoom):
-        rel = mode != "raw"
-        suffix = {"raw": "", "start": ", relative to start",
-                  "base": ", relative to base Chronos-2"}[mode]
-        ref = (1.0,) if rel else ()
-        tr_series, held, bysrc = [], [], []
-        for i, c in enumerate(RUNS):
-            k, col, I = c["key"], run_colour(c["key"]), info[c["key"]]
-            rows = logs[k]
-            tr = [q for q in I["train"] if c is LC or q[0] <= smax]
-            if rel and I["tr0"]:
-                tr = [(x, y / I["tr0"]) for x, y in tr]
-            if c is LC:
-                tr_series += [(f"{c['label']} raw", col, tr, "dots"),
-                              (f"{c['label']} rolling mean", col,
-                               rolling(tr, 20), "line")]
-            else:
-                tr_series.append((f"{c['label']} rolling mean", col,
-                                  rolling(tr, 20), "faint"))
-            if not rel:
-                held.append((c["label"], col, [(r["step"], r["held"])
-                                               for r in rows], "pts"))
-            else:
-                den = I["full0"] if mode == "start" else I["bfull"]
-                if den and I["full0"]:
-                    pts = [(0, I["full0"] / den)] + [
-                        (s.get("steps") or tstep(int(re.sub(
-                            r"\D", "", nm) or 0)),
-                         s["held_out_loss"] / den)
-                        for nm, s, _ in I["ck"] if s.get("held_out_loss")]
-                    held.append((c["label"], col, pts, "pts"))
-            for src in ("weekly", "daily", "3day"):
-                pts = [(r["step"], r["src"][src]) for r in rows]
-                if not any(v is not None for _, v in pts):
-                    continue
-                if rel:
-                    den = (I["src0"] if mode == "start" else I["bsrc"]).get(src)
-                    if not den:
-                        continue
-                    z = I["src0"].get(src)
-                    pts = ([(0, z)] if z else []) + pts
-                    pts = [(x, v / den) for x, v in pts if v is not None]
-                s = (f"{src} ({c['label']})", SRC_COL[src], pts, "pts")
-                bysrc.append(s + (styles[i % 4],) if styles[i % 4] else s)
-        # Logged held-out losses are over the first 100 blocks. The pooled
-        # relative charts use the checkpoints' full-set losses instead,
-        # because the step-0 first-100 pooled loss is not logged.
-        ttl = {"raw": "Held-out pooled loss by run (first 100 blocks)",
-               "start": "Held-out pooled loss by run (checkpoints, full set)",
-               "base": "Held-out pooled loss by run (checkpoints, full set)"}
-        return [
-            chart("Training loss (rolling mean of 20 logged points)"
-                  + suffix, tr_series, marks, ylog=True, hlines=ref,
-                  xmax=xlim if zoom else None, W=440, H=280),
-            chart(ttl[mode] + suffix, held, marks, ylog=True, hlines=ref,
-                  xmax=xlim if zoom else None, W=440, H=280),
-            chart("Held-out loss by source (colour is the source, style the "
-                  "run)" + suffix, bysrc, marks, ylog=True, hlines=ref,
-                  xmax=xlim if zoom else None, W=440, H=280)]
-
     # x range: the live run's steps (to 1.2x the latest, at least the next
     # checkpoint), unless "full range" is chosen.
     next_ck = next((n for n in prefixes if n not in saved), None)
     xlim = max([1.2 * (step or 0), 300] + (
         [tstep(next_ck)] if next_ck else []))
-    plots_h = "".join(
-        f'<div class="mode m-{m} rng r-{z}"><div class=plots3>'
-        + "".join(make_plots(m, z == "zoom")) + "</div></div>"
-        for m in ("raw", "start", "base") for z in ("zoom", "full"))
+    loss_runs = []
+    for c in RUNS:
+        I, rows = info[c["key"]], logs[c["key"]]
+        by = {s: [[r["step"], r["src"][s]] for r in rows
+                  if r["src"].get(s) is not None]
+              for s in ("weekly", "daily", "3day")}
+        loss_runs.append({
+            "key": c["key"], "label": c["label"],
+            "color": run_colour(c["key"]), "live": c is LC,
+            "train": [[x, round(y, 4)] for x, y in I["train"]],
+            "tr0": I["tr0"], "held": [[r["step"], r["held"]] for r in rows],
+            "ck": [[s.get("steps") or tstep(int(re.sub(r"\D", "", nm) or 0)),
+                    s["held_out_loss"]] for nm, s, _ in I["ck"]
+                   if s.get("held_out_loss")],
+            "full0": I["full0"], "bfull": I["bfull"], "src0": I["src0"],
+            "bsrc": I["bsrc"], "bysrc": by})
+    ldata = json.dumps({"runs": loss_runs, "marks": marks, "xlim": xlim,
+                        "smax": smax}, separators=(",", ":")).replace(
+        "</", "<\\/")
+    plots_h = (f'<div id=lossrefs class=refnote></div>'
+               f'<div class=plots3 id=lossplots></div>'
+               f'<script type="application/json" id=ldata>{ldata}</script>'
+               f'<script>{LOSS_JS}</script>')
 
     def cktable(rows, run, key, mode):
         if not rows:
@@ -1870,7 +1957,12 @@ def build():
         {str(s.get("hash")): s.get("n_outbreaks")
          for v in cks.values() for _, s, _ in v}, ONCE["on"])
 
-    bias_h = bias_html(RUN, LC["label"], hist, step, lr_card(P, step))
+    lr_h = lr_card(P, step).replace(
+        '<div class=card ', f'<div class=card id=lrcard data-run="{LC["key"]}" ', 1)
+    bias_h = (f'<div id=biasrefs class=refnote></div><div class=biasrow>'
+              f'<div id=biasdyn class=biasdyn></div>{lr_h}</div>'
+              f'<script type="application/json" id=bdata>{bias_payload(LC["key"], step)}'
+              f'</script><script>{BIAS_JS}</script>')
     modebar = (
         '<div class="sctl modebar"><span class=mut>Loss scale</span>'
         '<button class=tog data-mode=raw>raw</button>'
@@ -1878,7 +1970,8 @@ def build():
         '<button class=tog data-mode=base title="divided by base Chronos-2 on the same blocks (base_from in RUNS)">relative to base Chronos-2</button>'
         '<span class=sep></span><span class=mut>x range</span>'
         '<button class=tog data-rng=zoom>live run</button>'
-        '<button class=tog data-rng=full>full range</button></div>')
+        '<button class=tog data-rng=full>full range</button>'
+        + tip("lossscale") + '</div>')
     sc_pay = score_payload(srows, local) if srows else {}
     refs = [{"key": "zero", "label": "zero-shot", "color": REF_COL["zero"]},
             {"key": "complete", "label": "complete-only",
@@ -1894,7 +1987,7 @@ def build():
         "runs": [{"key": c["key"], "label": c["label"],
                   "color": run_colour(c["key"])} for c in RUNS],
         "refs": refs,
-        "defaults": sc_pay.get("defaults") or [LC["key"], "zero", "rw"]},
+        "defaults": [c["key"] for c in RUNS] + ["zero", "rw"]},
         separators=(",", ":")).replace("</", "<\\/")
     sections = [("status", "Status"), ("loss", "Loss"),
                 ("bias", "Attention bias"), ("performance", "Performance"),
@@ -1940,11 +2033,18 @@ align-items:start}.tog{border:1px solid var(--line);background:var(--card);
 color:var(--fg);border-radius:6px;padding:2px 8px;cursor:pointer;
 font-size:12px}
 .tog.on{background:var(--c1);color:#fff;border-color:var(--c1)}
+.info{display:inline-block;margin-left:4px;color:var(--c1);cursor:help;font-size:12px;position:relative;font-weight:400}
+.info:hover::after,.info:focus::after{content:attr(data-tip);position:absolute;z-index:40;left:0;top:1.5em;width:270px;background:var(--fg);color:var(--bg);padding:6px 8px;border-radius:6px;font-size:12px;line-height:1.35;white-space:normal;text-align:left}
+.cardinfo{position:absolute;top:4px;right:8px;line-height:1}.card{position:relative}
+.tog.dis{opacity:.55;cursor:help;background:transparent;border-style:dashed}
+.refnote{display:flex;gap:4px;min-height:0;margin-bottom:2px}
 .sctl .mut{margin-left:10px}.lg{display:inline-flex;align-items:center;gap:6px;margin-right:14px}
 .leg2{font-size:12px;display:flex;flex-wrap:wrap;gap:4px 18px}.glocs{margin:6px 0}.glocs .tog{margin:1px}.panels{display:grid;gap:8px}
 .panels h4{margin:0 0 2px;font-size:12px}.plots3{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,290px),1fr));gap:8px}
 .plots3 .leg{font-size:11px;gap:2px 8px}
 .biasrow{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-start}
+.biasdyn{display:contents}
+.biastabs{flex-basis:100%}
 .topbar{position:sticky;top:0;z-index:20;background:var(--bg);padding:6px 0 4px;
 border-bottom:1px solid var(--line);margin-bottom:6px}
 .navrow{display:flex;flex-wrap:wrap;gap:4px 16px;align-items:center}
@@ -1960,9 +2060,9 @@ details.sec{scroll-margin-top:92px}details.sec h2{margin:10px 0 6px}
 .gwrap{display:grid;grid-template-columns:minmax(0,720px) 260px;gap:8px;align-items:start}
 .gwrap.wide{grid-template-columns:minmax(0,1fr) 260px}
 @media(max-width:900px){.gwrap{grid-template-columns:1fr}}
-@media(max-width:1250px){.tiles4{flex-wrap:wrap;width:292px}.biasrow>div:not(.card){max-width:292px}}
+@media(max-width:1250px){.tiles4{flex-wrap:wrap;width:292px}#biasdyn>div:not(.card):not(.biastabs){max-width:292px}}
 .biasrow .card{padding:4px;line-height:0}
-.biasrow>.card:first-child{flex:1 1 300px;max-width:480px}.biasrow>.card:first-child svg{width:100%;height:auto}.tiles4{display:flex;gap:6px}
+.biasline{flex:1 1 300px;max-width:480px}.biasline svg{width:100%;height:auto}.tiles4{display:flex;gap:6px}
 .tile4 .mut{font-size:11px;line-height:1.3}.tile4 svg{display:block}
 .rel .band{opacity:0;pointer-events:none}.rel:hover .band{opacity:.22}
 .rel{pointer-events:all}
@@ -1992,7 +2092,7 @@ font-size:12px;margin:4px 0}.wrap{overflow-x:auto}"""
     return (f'<!doctype html><html><head><meta charset=utf-8>'
             f'<meta name=viewport content="width=device-width,initial-scale=1">'
             f'<title>FT dashboard</title>'
-            f'<style>{css}</style><script>{PLAYER_JS}\n{SEL_JS}</script></head>'
+            f'<style>{css}</style><script>window.ftExplain={json.dumps(EXPLAIN)};window.ftInfo=function(k){{var t=window.ftExplain[k];return t?\'<span class=info tabindex=0 data-tip="\'+t.replace(/"/g,"&quot;")+\'">\\u24d8</span>\':""}};</script><script>{PLAYER_JS}\n{SEL_JS}</script></head>'
             f'<body>{body}<script>{MODE_JS}\n{NAV_JS}\n{REFRESH_JS}</script></body></html>')
 
 
