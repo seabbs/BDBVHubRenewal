@@ -43,12 +43,8 @@ Every stored fit is 2 chains of 500 warm-up, run in parallel, with no refit.
 Each takes 750 draws, `renewalbvd` at target acceptance 0.95 and the others at 0.9.
 The wait for the store stops against the window's close (`[timing]` in `ci/policy.toml`).
 
-`randomwalknowcast` draws each place and week on its own.
-Before its hub table is made, its draws are paired by the rolling copula, as the release backtest pairs them ([Correlated trajectories](../methods/evaluation.md#correlated-trajectories)).
-The copula is estimated from the model's forecasts at earlier rounds, taken as the backtest takes them: the fit store's fits of the model's own settings, else the model forecast again at the earlier releases (`bdbvhubrenewal nowcast --store`).
-The ledger's archive of each round's candidates fills any round neither has (`--history`).
-Each round's source is logged, and the run fails if a paired model has no past forecasts at all.
-Each pairing is recorded in the round's `copula.json`.
+`randomwalk` and `randomwalknowcast` pair their draws inside their forecast ([Correlated trajectories](../methods/evaluation.md#correlated-trajectories)), so a submission uses the same paired draws as the backtest.
+Each round's copula, the pairs behind each correlation and any fall-back to the prior are recorded in the round's `copula.json`.
 
 ## Checks
 

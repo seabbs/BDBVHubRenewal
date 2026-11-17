@@ -412,7 +412,7 @@ The chain ladder treats reporting speed as fixed by age and step, but speed and 
 The observation model is learnt from the earlier releases, which may be few.
 Counts include the hub's imputed onsets, which are re-drawn as cases gain onsets, so changes between releases mix reporting with imputation.
 Places are sampled independently, so a shock to a whole release is not shared, and the national band is a sum of independent provincial bands.
-So its draws are paired across places and weeks by a copula fitted to its errors ([Correlated trajectories](evaluation.md#correlated-trajectories)).
+So it pairs its draws across places and the nowcast weeks by a copula fitted to its own errors ([Correlated trajectories](evaluation.md#correlated-trajectories)).
 The walk has no drift, and its spread comes from 8 weekly changes, net of a delta-method Poisson noise term that assumes no extra dispersion in the reported counts.
 `pprandomwalknowcast`'s delay is log-normal, so it cannot take the shape of an irregular delay as the chain ladder can.
 
