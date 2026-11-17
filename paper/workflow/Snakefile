@@ -339,12 +339,14 @@ def tables(mode, study):
 
 
 def outputs(mode):
-    design = [
-        f"{R}/{mode}/tables/main/synthetic-design.md",
-        *(
-            f"{R}/{mode}/tables/si/{n}.md"
-            for n in ("synthetic-design", "epinowcast-model", "heldout-set")
-        ),
+    design = [f"{R}/{mode}/figures/si/sim-examples.png"] + [
+        f"{R}/{mode}/tables/si/{n}.md"
+        for n in (
+            "grid-epidemic",
+            "grid-reporting",
+            "epinowcast-model",
+            "heldout-set",
+        )
     ]
     evidence = [f"{R}/{mode}/evidence.yml"]
     joint = [
@@ -666,10 +668,23 @@ def grid_config(mode):
     }
 
 
-def grid_settings(w):
-    """Simulations whose settings give the realised values, if they exist."""
-    sims = SYNTHETIC["simulations"][w.mode]
-    return f"--settings {shlex.quote(sims)}" if os.path.isdir(sims) else ""
+# Example simulations of the grid, from pilot simulations on an evidence
+# branch (`paperfigs.sim_examples`).
+rule sim_examples:
+    output:
+        f"{R}/{{mode}}/figures/si/sim-examples.png",
+    params:
+        ref=SYNTHETIC["examples"]["ref"],
+        path=SYNTHETIC["examples"]["path"],
+        picks=shlex.quote(json.dumps(SYNTHETIC["examples"]["picks"])),
+        tmp=f"{R}/{{mode}}/sim-examples",
+    shell:
+        "(git -C .. cat-file -e {params.ref}^{{commit}} 2>/dev/null || "
+        "git -C .. fetch -q origin {params.ref}) && "
+        "rm -rf {params.tmp} && mkdir -p {params.tmp} && "
+        "git -C .. archive {params.ref} {params.path} | tar -x -C {params.tmp} "
+        "&& {PYTHON} -m paperfigs.sim_examples --sims {params.tmp}/{params.path} "
+        "--picks {params.picks} --out {output}"
 
 
 # The grid tables and SI notes, read from the simulator's code
@@ -678,19 +693,16 @@ rule grid_tables:
     input:
         simulator=evidence_file(SYNTHETIC["simulator"]),
     output:
-        main=f"{R}/{{mode}}/tables/main/synthetic-design.md",
-        si=f"{R}/{{mode}}/tables/si/synthetic-design.md",
+        epidemic=f"{R}/{{mode}}/tables/si/grid-epidemic.md",
+        reporting=f"{R}/{{mode}}/tables/si/grid-reporting.md",
         model=f"{R}/{{mode}}/tables/si/epinowcast-model.md",
         heldout=f"{R}/{{mode}}/tables/si/heldout-set.md",
     params:
         config=lambda w: shlex.quote(json.dumps(grid_config(w.mode))),
-        settings=grid_settings,
-        main=f"{R}/{{mode}}/tables/main",
         si=f"{R}/{{mode}}/tables/si",
     shell:
         "{PYTHON} -m papertables.synthetic_grid --simulator {input.simulator} "
-        "--config {params.config} {params.settings} "
-        "--main-dir {params.main} --si-dir {params.si}"
+        "--config {params.config} --si-dir {params.si}"
 
 
 rule evidence:

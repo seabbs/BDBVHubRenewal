@@ -25,11 +25,23 @@ synthetic:
   # The simulator, whose code gives the grid tables and SI notes
   # (`evidence` below), and the held-out set's design.
   simulator: simulator
-  grid: r4
+  grid: r5
   simulations_per_seed: 25
   draw: 1
   # The synthetic runner's protocol, quoted in the SI note.
   protocol: {min_releases: 6, horizon_weeks: 5, horizons: [-4, 3]}
+  # Example simulations for the SI figure (`paperfigs.sim_examples`): pilot
+  # simulations of the grid on an evidence branch, each with its label.
+  examples:
+    ref: 5e99233c5ca4eed4de3dcf26139d26f676a79e5d
+    path: pilot/sims
+    picks:
+      - [90004-0001, Multi-wave over 52 weeks]
+      - [90003-0002, Concentrated spread]
+      - [90002-0002, Bunched reports]
+      - [90002-0003, Delay slowdown]
+      - [90001-0001, Places by age groups]
+      - [90003-0003, Poisson observations]
   # The simulations of each run's seeds, whose settings give the grid's
   # realised values.
   simulations:
@@ -121,10 +133,10 @@ nowcasts:
 # null leaves a note of what it waits on in a development run and fails a
 # paper run.
 evidence:
-  # scripts/finetune_simulate.R of the r4 grid that the simulation rounds
-  # and the final fine-tune use.
+  # scripts/finetune_simulate.R of the r5 grid that the simulation rounds
+  # (from round 9) and the final fine-tune use.
   simulator:
-    ref: c77f5a241afef356430c5a587623f8fa0d03f9b5
+    ref: 147218b1f0c633c0828d51b582ad0e104adcbe92
     path: scripts/finetune_simulate.R
   # Scores of the final run's checkpoints on the case studies (ckpt-scores).
   checkpoint_scores:
