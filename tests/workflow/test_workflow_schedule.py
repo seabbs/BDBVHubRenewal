@@ -1,0 +1,108 @@
+"""Scheduled workflow runs: what a tick runs, and the timer that runs it."""
+
+import plistlib
+
+import pytest
+from flowlib import schedule
+
+
+def test_a_tick_runs_this_machine_s_targets_in_order():
+    cfg = {
+        "SCHEDULE_TARGETS": "score land",
+        "CORES": "4",
+        "MEM_MB": "32768",
+        "SIM_SLOTS": "2",
+    }
+    got = schedule.plan(cfg)
+    assert [t for t, _ in got] == ["score", "land"]
+    score = got[0][1]
+    assert score[:3] == ["nice", "-n", "19"]
+    assert "--forcerun" in score
+    assert "release_list" in score
+    assert "workflow/profiles/cpu" in score
+    assert score[score.index("--cores") :][:2] == ["--cores", "4"]
+    assert "mem_mb=32768" in score
+
+
+def test_training_targets_use_the_gpu_profile():
+    got = schedule.plan({"SCHEDULE_TARGETS": "finetune publish"})
+    assert all("workflow/profiles/gpu" in cmd for _, cmd in got)
+
+
+def test_no_targets_means_nothing_runs():
+    assert schedule.plan({"SCHEDULE_TARGETS": ""}) == []
+
+
+def test_unknown_targets_are_an_error():
+    with pytest.raises(ValueError, match="nope"):
+        schedule.plan({"SCHEDULE_TARGETS": "score nope"})
+
+
+def test_a_tick_waits_for_room(tmp_path):
+    meminfo = tmp_path / "meminfo"
+    meminfo.write_text("MemAvailable:   1048576 kB\n")  # 1 GB
+    cfg = {"MIN_FREE_GB": "20", "MIN_DISK_GB": "0"}
+    ok, why = schedule.room(cfg, tmp_path, meminfo)
+    assert not ok
+    assert "memory" in why
+    ok, _ = schedule.room(
+        {"MIN_FREE_GB": "0", "MIN_DISK_GB": "0"}, tmp_path, meminfo
+    )
+    assert ok
+
+
+def test_no_meminfo_skips_the_memory_check(tmp_path):
+    ok, _ = schedule.room(
+        {"MIN_FREE_GB": "999", "MIN_DISK_GB": "0"}, tmp_path, tmp_path / "none"
+    )
+    assert ok
+
+
+def test_runs_never_overlap(tmp_path):
+    lock = tmp_path / "tick.lock"
+    with schedule.locked(lock) as first:
+        assert first
+        with schedule.locked(lock) as second:
+            assert not second
+    with schedule.locked(lock) as again:
+        assert again
+
+
+def test_the_interval_becomes_a_cron_line(tmp_path):
+    assert schedule.cron_spec(30) == "*/30 * * * *"
+    assert schedule.cron_spec(120) == "7 */2 * * *"
+    assert schedule.cron_spec(60) == "7 * * * *"
+    line = schedule.cron_line(tmp_path, 30)
+    assert line.startswith("*/30 * * * * cd ")
+    assert str(tmp_path) in line
+    assert line.endswith(schedule.MARK)
+
+
+def test_installing_cron_keeps_other_lines_and_replaces_its_own(tmp_path):
+    old = "0 1 * * * backup\n*/5 * * * * cd /x && tick " + schedule.MARK + "\n"
+    new = schedule.merge_crontab(old, schedule.cron_line(tmp_path, 30))
+    assert "0 1 * * * backup" in new
+    assert new.count(schedule.MARK) == 1
+    assert schedule.merge_crontab(new, None).count(schedule.MARK) == 0
+
+
+def test_systemd_user_units(tmp_path):
+    service, timer = schedule.systemd_units(tmp_path, 45)
+    assert f"WorkingDirectory={tmp_path}" in service
+    assert "workflow/scripts/tick.py" in service
+    assert "OnUnitActiveSec=45min" in timer
+    assert "Persistent=true" in timer
+
+
+def test_a_launchd_agent(tmp_path):
+    data = plistlib.loads(schedule.launchd_plist(tmp_path, 60))
+    assert data["StartInterval"] == 3600
+    assert data["WorkingDirectory"] == str(tmp_path)
+    assert data["ProgramArguments"][-1] == "workflow/scripts/tick.py"
+
+
+def test_the_timer_kind_follows_the_platform():
+    assert schedule.timer_kind({"SCHEDULE_KIND": "cron"}, "linux") == "cron"
+    assert schedule.timer_kind({}, "darwin") == "launchd"
+    assert schedule.timer_kind({}, "linux", has_systemd=True) == "systemd"
+    assert schedule.timer_kind({}, "linux", has_systemd=False) == "cron"
