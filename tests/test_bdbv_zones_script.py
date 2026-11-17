@@ -317,3 +317,38 @@ def test_checkpoint_scores_knows_the_zone_unit(cs, tmp_path) -> None:
     assert "zone_method" in cs.COLUMNS
     assert cs.COLUMNS[-1] == "zone_method"
     assert not cs.unit_done(tmp_path, "bdbv_zones", "reference", "daily")
+
+
+def test_zone_rows_stay_while_a_rewritten_province_file_waits(
+    bz, tmp_path
+) -> None:
+    # The daily target rewrites a province file: the unit runs again,
+    # but the label keeps its zone rows meanwhile.
+    origins = ["2026-10-17"]
+    _touch(tmp_path / "bdbv" / "slots-abc" / "2026-10-17.csv.gz", 3000)
+    _touch(tmp_path / "bdbv_zones" / "slots-abc" / "2026-10-17.csv.gz", 2000)
+    assert not bz.unit_done(tmp_path, "slots-abc", origins)
+    assert bz.has_zones(tmp_path, "slots-abc", origins)
+    assert not bz.has_zones(tmp_path, "slots-abc", [*origins, "2026-10-24"])
+
+
+def test_zone_rows_score_frames_one_at_a_time(bz) -> None:
+    cells = [("CD-AA-01", "2026-09-05")]
+    truth = pd.DataFrame(
+        {
+            "location": ["CD-AA-01"],
+            "target_end_date": ["2026-09-05"],
+            "truth": [3.0],
+            "truth_vintage": "v3",
+        }
+    )
+    seen = []
+
+    def frames():
+        for origin in ("v1", "v2"):
+            seen.append(origin)
+            yield _cell_draws("randomwalknowcast", cells, 3, origin)
+
+    rows = bz.score_rows({"reference": frames()}, truth)
+    assert seen == ["v1", "v2"]
+    assert rows["n_origins"].tolist() == [2]

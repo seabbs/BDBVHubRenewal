@@ -32,7 +32,7 @@ from __future__ import annotations
 import dataclasses
 import sys
 import time
-from collections.abc import Collection, Mapping, Sequence
+from collections.abc import Collection, Iterable, Iterator, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -169,6 +169,19 @@ def unit_done(
     return True
 
 
+def has_zones(
+    cache: Path, label: str, origins: Sequence[str] | None = None
+) -> bool:
+    """Whether every origin has a zone file, fresh or not.
+
+    The rows read these, so a province file rewritten (the daily target
+    added, say) keeps the label's zone rows until its zones are redone.
+    """
+    origins = cs.bdbv_origins() if origins is None else origins
+    out = cache / STUDY / label
+    return all((out / f"{o}.csv.gz").exists() for o in origins)
+
+
 def unit(cache: Path, label: str) -> None:
     """Write zone draws for each origin of a label's cached draws."""
     import resource
@@ -272,9 +285,12 @@ def zone_truth(
 
 
 def score_rows(
-    draws: Mapping[str, Sequence[pd.DataFrame]], truth: pd.DataFrame
+    draws: Mapping[str, Iterable[pd.DataFrame]], truth: pd.DataFrame
 ) -> pd.DataFrame:
     """Return the zone rows of each label's zone draws.
+
+    Each frame is scored as it comes and only its cell scores are kept,
+    so frames read lazily are held one at a time.
 
     Parameters
     ----------
@@ -307,12 +323,12 @@ def score_rows(
 def rows(
     cache: Path, labels: Sequence[str], origins: Sequence[str] | None = None
 ) -> pd.DataFrame:
-    """Return the zone rows of the labels whose zone unit is done.
+    """Return the zone rows of the labels with zones at every origin.
 
-    None until the reference's is: every row divides by its
-    `randomwalknowcast`.
+    None until the reference has: every row divides by its
+    `randomwalknowcast`. Each file is read and scored in turn.
     """
-    ready = [lb for lb in labels if unit_done(cache, lb, origins)]
+    ready = [lb for lb in labels if has_zones(cache, lb, origins)]
     if cs.REFERENCE not in ready:
         return pd.DataFrame(columns=cs.COLUMNS)
     from bdbvhubrenewal.data import load_daily_zones
@@ -325,15 +341,25 @@ def rows(
     cutoffs = real.groupby("vintage")["cutoff"].first().astype(str).to_dict()
     delay = resolve_truth_delay(config, target)
     truth = zone_truth(load_daily_zones(Path("data")), cutoffs, delay)
-    read = {"dtype": {"origin": str, "target_end_date": str}}
-    draws = {
-        lb: [
-            pd.read_csv(f, **read)
-            for f in sorted((cache / STUDY / lb).glob("*.csv.gz"))
-        ]
-        for lb in ready
-    }
-    return score_rows(draws, truth)
+    want = set(cs.bdbv_origins() if origins is None else origins)
+
+    def read(label: str) -> Iterator[pd.DataFrame]:
+        for f in sorted((cache / STUDY / label).glob("*.csv.gz")):
+            if f.name.removesuffix(".csv.gz") not in want:
+                continue
+            yield pd.read_csv(
+                f,
+                usecols=[*SAMPLE, "model", "origin"],
+                dtype={
+                    "origin": str,
+                    "target_end_date": str,
+                    "location": "category",
+                    "model": "category",
+                    "value": "float32",
+                },
+            ).astype({"location": str, "model": str})
+
+    return score_rows({lb: read(lb) for lb in ready}, truth)
 
 
 def main(argv: Sequence[str]) -> None:
