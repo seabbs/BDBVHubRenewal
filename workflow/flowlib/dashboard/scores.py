@@ -20,6 +20,9 @@ from .runs import Classifier, Reference, Run, split_label
 VALUE = {"rel_wis": "wis", "rel_crps": "crps"}
 """The relative score columns and the metric each gives."""
 
+AXIS0 = "zero-shot"
+"""The label of the checkpoint axis' left end, before any training."""
+
 TICKS = [
     (125, "zero-shot"),
     (250, "250"),
@@ -178,4 +181,5 @@ def payload(
         "studies": sorted({r[0] for r in out}, key=rank(study_order)),
         "studylab": dict(view.get("studies") or {}),
         "view_defaults": dict(view.get("defaults") or {}),
+        "axis0": AXIS0,
     }
