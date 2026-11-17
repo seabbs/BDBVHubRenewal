@@ -340,11 +340,13 @@ def tables(mode, study):
 
 def outputs(mode):
     design = [
-        f"{R}/{mode}/tables/main/synthetic-design.md",
-        *(
-            f"{R}/{mode}/tables/si/{n}.md"
-            for n in ("synthetic-design", "epinowcast-model", "heldout-set")
-        ),
+        f"{R}/{mode}/tables/si/{n}.md"
+        for n in (
+            "grid-epidemic",
+            "grid-reporting",
+            "epinowcast-model",
+            "heldout-set",
+        )
     ]
     evidence = [f"{R}/{mode}/evidence.yml"]
     joint = [
@@ -678,19 +680,16 @@ rule grid_tables:
     input:
         simulator=evidence_file(SYNTHETIC["simulator"]),
     output:
-        main=f"{R}/{{mode}}/tables/main/synthetic-design.md",
-        si=f"{R}/{{mode}}/tables/si/synthetic-design.md",
+        epidemic=f"{R}/{{mode}}/tables/si/grid-epidemic.md",
+        reporting=f"{R}/{{mode}}/tables/si/grid-reporting.md",
         model=f"{R}/{{mode}}/tables/si/epinowcast-model.md",
         heldout=f"{R}/{{mode}}/tables/si/heldout-set.md",
     params:
         config=lambda w: shlex.quote(json.dumps(grid_config(w.mode))),
-        settings=grid_settings,
-        main=f"{R}/{{mode}}/tables/main",
         si=f"{R}/{{mode}}/tables/si",
     shell:
         "{PYTHON} -m papertables.synthetic_grid --simulator {input.simulator} "
-        "--config {params.config} {params.settings} "
-        "--main-dir {params.main} --si-dir {params.si}"
+        "--config {params.config} --si-dir {params.si}"
 
 
 rule evidence:

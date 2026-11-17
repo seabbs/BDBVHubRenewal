@@ -1,21 +1,20 @@
 """The synthetic scenario grid tables and SI notes, read from the simulator.
 
-`scripts/finetune_simulate.R` defines the r3 grid: a crossed design of
-`factors`, each level balanced in every block of simulations, and
+`scripts/finetune_simulate.R` defines the grid: a crossed design of
+`factors`, with levels balanced or repeated for their shares, and
 continuous settings drawn within a cell by `draw_values`. Everything here
 is read from that code, so the tables and notes cannot drift from it;
-`LABELS` only names each setting and the epinowcast function it enters
-through, and a test fails if a setting has no label.
+`LABELS` names each setting, `FACTOR_OF` and `LAYER` place it, and
+`SUMMARIES` gives plain text for draws that are not a simple call, each
+failing if its R changes.
 
-- `main_table`: one row per factor, with its levels (main text);
-- `si_table`: every factor, derived setting and drawn value, with the R
-  expression that draws it, and the size bounds a simulation must fall
-  within (SI);
+- `layer_tables`: the SI's two grid tables, epidemic and places, and
+  reporting and observation, with each factor's levels and continuous
+  draws;
 - `model_note` and `heldout_note`: the SI notes on the epinowcast model
   and on the held-out set (the `synthetic` block of the workflow config).
 
-The workflow's `grid_tables` rule runs it, with the simulations whose
-settings give the realised values when they exist.
+The workflow's `grid_tables` rule runs it.
 """
 
 from __future__ import annotations
@@ -32,15 +31,13 @@ import pandas as pd
 __all__ = [
     "DERIVED",
     "LABELS",
-    "MAIN_HEADERS",
-    "SI_HEADERS",
     "heldout_note",
-    "main_table",
+    "layer_tables",
     "model_note",
     "parse_bounds",
     "parse_factors",
+    "parse_shares",
     "parse_values",
-    "si_table",
     "to_markdown",
 ]
 
@@ -77,7 +74,7 @@ LABELS: Final = {
         "`place_mixing()`",
     ),
     "imports": ("Imported cases", "`stratum_imports()`"),
-    "shocks": ("Reporting shocks in one or two places", "`shock_window()`"),
+    "shocks": ("Reporting shocks", "`shock_window()`"),
     "delay_places": ("How places' delays relate", "`delay_parameters()`"),
     "obs_strata": ("Observation noise across strata", "`observe()`"),
     "strata_link": ("Linked or independent strata", "`simulate_independent()`"),
@@ -196,6 +193,19 @@ LABELS: Final = {
     "late_at": ("Time a late place starts, as a share", "`late_strata()`"),
     "late_days": ("Days over which a late place starts", "`late_strata()`"),
     "shock_at": ("Time of a reporting shock, as a share", "`shock_window()`"),
+    "shock_places": (
+        "Places with shocks, and shocks in each",
+        "`shock_window()`",
+    ),
+    "wave_scale": ("Relative size of each wave", "`enw_simulate(growth_rate)`"),
+    "size_per_stratum": ("Expected cases per stratum", "`expected_scale`"),
+    "bunch_every": ("Weeks between bunched reports", "`enw_reference()`"),
+    "bunch_at": ("Times of bunched reports, as shares", "`enw_report()`"),
+    "bunch_len": ("Report dates held in a bunch", "`enw_report()`"),
+    "slow_at": ("Time of a slowdown, as a share", "`enw_reference()`"),
+    "slow_weeks": ("Length of a slowdown (weeks)", "`enw_reference()`"),
+    "slow_mult": ("Delay multiplier in a slowdown", "`enw_reference()`"),
+    "obs_phi_sd": ("Sd of strata's log overdispersion", "`observe()`"),
     "shock_weeks": ("Length of a reporting shock (weeks)", "`shock_window()`"),
     "shock_mult": ("Delay multiplier of a backlog", "`shock_window()`"),
     "mixing_eps": ("Share of infections from other places", "`place_mixing()`"),
@@ -238,36 +248,52 @@ LABELS: Final = {
 }
 """Each setting's label and the epinowcast function it enters through."""
 
-MAIN_HEADERS: Final = {
-    "factor": "Factor",
-    "levels": "Levels",
-    "epinowcast": "Enters through",
-    "realised": "Realised",
-}
-"""Headers of the main-text table."""
 
-SI_HEADERS: Final = {
-    "factor": "Setting",
-    "drawn": "Drawn as",
-    "epinowcast": "Enters through",
-    "realised": "Realised, median [min, max] or shares",
-}
-"""Headers of the SI table."""
+def _factor_items(text: str) -> dict[str, list[str]]:
+    """Return each factor's levels as listed, repeats included."""
+    body = text[text.index("factors <- list(") :]
+    body = body[: body.index("\n)\n")]
+    out = {}
+    for m in re.finditer(r"(\w+) = c\(", body):
+        depth, k = 1, m.end()
+        while depth:
+            depth += {"(": 1, ")": -1}.get(body[k], 0)
+            k += 1
+        items: list[str] = []
+        for rep_level, times, level in re.findall(
+            r'rep\("([^"]+)",\s*(\d+)\)|"([^"]+)"', body[m.end() : k - 1]
+        ):
+            items += [rep_level] * int(times) if rep_level else [level]
+        out[m.group(1)] = items
+    return out
 
 
 def parse_factors(text: str) -> dict[str, list[str]]:
     """Return the simulator's design factors and their levels, in order."""
-    body = text[text.index("factors <- list(") :]
-    body = body[: body.index("\n)\n")]
     return {
-        name: re.findall(r'"([^"]+)"', levels)
-        for name, levels in re.findall(r"(\w+) = c\(([^)]*)\)", body)
+        name: list(dict.fromkeys(items))
+        for name, items in _factor_items(text).items()
+    }
+
+
+def parse_shares(text: str) -> dict[str, dict[str, float]]:
+    """Return each factor's levels and their shares of the design."""
+    return {
+        name: {
+            level: items.count(level) / len(items)
+            for level in dict.fromkeys(items)
+        }
+        for name, items in _factor_items(text).items()
     }
 
 
 def _function(text: str, name: str) -> str:
     body = text[text.index(f"{name} <- function") :]
     return body[: body.index("\n}\n")]
+
+
+DRAW: Final = r"\b(runif|rnorm|sample|log_uniform)\("
+"""R calls that make an expression a random draw."""
 
 
 def parse_values(text: str) -> dict[str, str]:
@@ -290,6 +316,10 @@ def parse_values(text: str) -> dict[str, str]:
     m = re.search(r"v\$max_delay <- (.*)\n", body)
     if m:
         values["max_delay"] = m.group(1).strip()
+    # Draws set after the list, one line each.
+    for name, expr in re.findall(r"^  v\$(\w+) <- (.+)$", body, flags=re.M):
+        if name not in values and re.search(DRAW, expr):
+            values[name] = expr.strip()
     return values
 
 
@@ -333,68 +363,326 @@ def _number(x: float) -> str:
     )
 
 
-def _realised(name: str, settings: pd.DataFrame) -> str:
-    """Return a setting's realised values over simulations, or ''."""
-    if name not in settings:
-        return ""
-    values = settings[name].dropna()
-    if values.empty:
-        return ""
-    if name == "report_days":
-        return f"{(values.astype(str) == 'all').mean():.0%} every day"
-    if not pd.api.types.is_numeric_dtype(values):
-        shares = values.astype(str).value_counts(normalize=True)
-        return ", ".join(f"{k} {v:.0%}" for k, v in shares.items())
-    out = (
-        f"{_number(values.median())} "
-        f"[{_number(values.min())}, {_number(values.max())}]"
-    )
-    if name == "n_places":
-        out += f"; {(values == 1).mean():.0%} one place"
-    return out
+LAYER: Final = {
+    **dict.fromkeys(
+        (
+            "process",
+            "gt_shape",
+            "trajectory",
+            "strata",
+            "spread",
+            "place_rt",
+            "seeding",
+            "mixing",
+            "imports",
+            "strata_link",
+        ),
+        "epidemic",
+    ),
+    **dict.fromkeys(
+        (
+            "delay_family",
+            "delay_form",
+            "delay_change",
+            "reporting",
+            "reference_dow",
+            "shocks",
+            "delay_places",
+            "observation",
+            "obs_strata",
+        ),
+        "reporting",
+    ),
+}
+"""The SI table each design factor is in: epidemic and places, or reporting
+and observation."""
+
+FACTOR_OF: Final = {
+    **{name: name for name in LAYER},
+    **dict.fromkeys(("n_places", "n_ages", "min_size", "max_size"), "strata"),
+    "size_per_stratum": "strata",
+    "stratum_sd": "strata",
+    "report_days": "reporting",
+    "offset": "reporting",
+    "dow_sd": "reporting",
+    "gt_mean": "gt_shape",
+    **dict.fromkeys(
+        (
+            "weeks",
+            "rate",
+            "flat",
+            "peak",
+            "amplitude",
+            "period",
+            "phase",
+            "waves",
+            "wave_scale",
+            "noise_sd",
+        ),
+        "trajectory",
+    ),
+    "quiet": "spread",
+    **dict.fromkeys(
+        ("coupling", "place_rho", "place_sd", "place_lags"), "place_rt"
+    ),
+    "max_independent": "strata_link",
+    **dict.fromkeys(("late_at", "late_days"), "seeding"),
+    **dict.fromkeys(
+        (
+            "mixing_eps",
+            "mixing_order",
+            "mixing_x",
+            "mixing_y",
+            "mixing_range",
+            "mixing_switch",
+            "mixing_switch_at",
+            "mixing_switch_days",
+        ),
+        "mixing",
+    ),
+    **dict.fromkeys(("import_rate", "import_at", "import_size"), "imports"),
+    **dict.fromkeys(
+        ("delay_median", "delay_sdlog", "delay_mean", "delay_cv", "max_delay"),
+        "delay_family",
+    ),
+    "hazard_sd": "delay_form",
+    **dict.fromkeys(
+        (
+            "drift",
+            "step",
+            "step_at",
+            "periodic",
+            "periodic_weeks",
+            "walk_sd",
+            "hazard_walk_sd",
+            "bunch_every",
+            "bunch_at",
+            "bunch_len",
+            "slow_at",
+            "slow_weeks",
+            "slow_mult",
+        ),
+        "delay_change",
+    ),
+    "reference_dow_sd": "reference_dow",
+    **dict.fromkeys(
+        ("shock_places", "shock_at", "shock_weeks", "shock_mult"), "shocks"
+    ),
+    **dict.fromkeys(("delay_place_sd", "delay_age_sd"), "delay_places"),
+    "sqrt_phi": "observation",
+    "obs_phi_sd": "obs_strata",
+}
+"""The design factor each derived setting, draw and bound belongs to."""
+
+HEADERS: Final = {
+    "factor": "Factor",
+    "levels": "Levels",
+    "draws": "Continuous draws",
+}
+"""Headers of the SI grid tables."""
 
 
-def main_table(text: str, settings: pd.DataFrame) -> pd.DataFrame:
-    """Return one row per design factor, with its levels and shares."""
-    rows = []
-    for name, levels in parse_factors(text).items():
-        label, enters = LABELS[name]
-        listed = ", ".join(f"`{level}`" for level in levels)
-        rows.append(
-            {
-                "setting": name,
-                "factor": label,
-                "levels": f"{listed}; balanced, 1/{len(levels)} each",
-                "epinowcast": enters,
-                "realised": _realised(name, settings),
-            }
-        )
-    return pd.DataFrame(rows)
+SUMMARIES: Final = {
+    "n_places": (
+        (
+            "switch(cell$strata, single = 1L, ages = 1L, # Concentrated o"
+            "utbreaks spread over many places, as BDBV's provinces. place"
+            's = if (cell$spread == "concentrated") { sample(15:26, 1) } '
+            "else { sample(2:26, 1) }, places_ages = { places <- 6:min(16"
+            "L, cap %/% 3L) places[sample.int(length(places), 1)] } )"
+        ),
+        (
+            "1 for single or ages; {15, ..., 26} concentrated or {2, ...,"
+            " 26} even for places; {6, ..., 16} for places and ages, with"
+            "in the strata cap"
+        ),
+    ),
+    "n_ages": (
+        (
+            "switch(cell$strata, single = 1L, places = 1L, ages = sample("
+            "2:8, 1), # At most `max_strata`; `sample` on a single number"
+            " n draws from 1:n, # so the range is indexed instead. places"
+            "_ages = { ages <- 3:max(3L, min(7L, cap %/% n_places)) ages["
+            "sample.int(length(ages), 1)] } )"
+        ),
+        (
+            "1 for single or places; {2, ..., 8} for ages; {3, ..., 7} fo"
+            "r places and ages, within the strata cap"
+        ),
+    ),
+    "report_days": (
+        (
+            'if (cell$reporting == "weekdays") { paste(sort(sample(days, '
+            'sample(1:3, 1))), collapse = ";") } else { "all" }'
+        ),
+        "every day, or {1, ..., 3} weekdays",
+    ),
+    "weeks": (
+        ("if (is.null(design$weeks)) sample(16:52, 1) else design$weeks"),
+        "{16, ..., 52}",
+    ),
+    "quiet": (
+        (
+            'if (design$spread == "concentrated") { 1 - active / design$n'
+            "_places } else { runif(1, 0, 0.9) }"
+        ),
+        "all but the active places if concentrated; U(0, 0.9) if even",
+    ),
+    "place_lags": (
+        "c(0L, sample(1:28, design$n_places - 1L, replace = TRUE))",
+        "0 for the first place, {1, ..., 28} for the others",
+    ),
+    "mixing_order": (
+        "sample.int(design$n_places)",
+        "a random order",
+    ),
+    "mixing_x": (
+        "runif(design$n_places)",
+        "U(0, 1) each",
+    ),
+    "mixing_y": (
+        "runif(design$n_places)",
+        "U(0, 1) each",
+    ),
+    "mixing_switch": (
+        'sample(c("on", "off"), 1)',
+        "on or off",
+    ),
+    "import_at": (
+        "sort(runif(sample(1:4, 1)))",
+        "{1, ..., 4} times, U(0, 1) each",
+    ),
+    "stratum_sd": (
+        (
+            'if (design$spread == "concentrated") { runif(1, 2.5, 4) } el'
+            "se { runif(1, 0.5, 2) }"
+        ),
+        "U(2.5, 4) if concentrated; U(0.5, 2) if even",
+    ),
+    "gt_mean": (
+        (
+            'if (renewal) { as.numeric(sub("renewal_", "", design$process'
+            ")) * exp(runif(1, -0.2, 0.2)) } else { NA_real_ }"
+        ),
+        "the process's mean (3, 7 or 15) times exp(U(-0.2, 0.2))",
+    ),
+    "waves": (
+        "waves <- sample(2:3, 1)",
+        "{2, 3}",
+    ),
+    "wave_scale": (
+        "exp(runif(waves + 1L, log(0.2), 0))",
+        "exp(U(log 0.2, 0)) each",
+    ),
+    "drift": (
+        "sample(c(-1, 1), 1) * runif(1, 0.1, 0.4)",
+        "±U(0.1, 0.4)",
+    ),
+    "step": (
+        "sample(c(-1, 1), 1) * runif(1, 0.2, 0.5)",
+        "±U(0.2, 0.5)",
+    ),
+    "max_delay": (
+        "max_delay_for(delay_parameters(family, v)$q99)",
+        "the delay's 99th centile",
+    ),
+    "bunch_at": (
+        "sort(runif(n_bunch, 0.05, 0.95))",
+        "U(0.05, 0.95) each, one per bunch",
+    ),
+    "shock_places": (
+        "rep(places, sample(1:3, length(places), replace = TRUE))",
+        "{1, ..., 3} places with cases, {1, ..., 3} shocks each",
+    ),
+    "min_size": (
+        "10",
+        "10",
+    ),
+    "max_size": (
+        "1e5 * design$n_places * design$n_ages",
+        "10^5 per stratum",
+    ),
+    "max_independent": (
+        "8L",
+        "8",
+    ),
+}
+"""Plain summaries of the draws whose R is not a simple call, each with the
+exact expression it summarises, so a changed draw fails until its summary
+is updated."""
 
 
-def si_table(text: str, settings: pd.DataFrame) -> pd.DataFrame:
-    """Return every factor, derived setting and drawn value."""
-    drawn = {
-        **{
-            name: "One of " + ", ".join(f"`{x}`" for x in levels)
-            for name, levels in parse_factors(text).items()
-        },
-        **{k: f"`{v}`" for k, v in _derived(text).items()},
-        **{k: f"`{v}`" for k, v in parse_values(text).items()},
-        **{k: f"`{v}`" for k, v in parse_bounds(text).items()},
+def describe(name: str, expr: str) -> str:
+    """Return a draw in short notation, or its plain summary.
+
+    Raises
+    ------
+    ValueError
+        If the simulator's expression differs from the one summarised.
+    """
+    if name not in SUMMARIES:
+        return compact(expr)
+    expected, text = SUMMARIES[name]
+    if " ".join(expr.split()) != expected:
+        raise ValueError(f"{name}'s draw changed; update SUMMARIES")
+    return text
+
+
+def compact(expr: str) -> str:
+    """Return a draw's R expression in short notation where it is simple."""
+    num = r"([-\w.()/*+ ]+?)"
+    for pattern, out in (
+        (rf"^runif\(\w+, {num}, {num}\)$", "U({0}, {1})"),
+        (rf"^log_uniform\({num}, {num}\)$", "log-uniform({0}, {1})"),
+        (rf"^rnorm\(\w+, {num}, {num}\)$", "N({0}, {1})"),
+        (
+            r"^sample\((\d+):(\d+), \w+(?:, replace = TRUE)?\)$",
+            "{{{0}, ..., {1}}}",
+        ),
+    ):
+        m = re.match(pattern, expr)
+        if m:
+            return out.format(*m.groups())
+    return f"`{expr}`"
+
+
+def _levels(shares: dict[str, float]) -> str:
+    listed = ", ".join(f"`{level}`" for level in shares)
+    if len(set(shares.values())) == 1:
+        return listed
+    return ", ".join(f"`{lv}` {share:.0%}" for lv, share in shares.items())
+
+
+def layer_tables(text: str) -> dict[str, pd.DataFrame]:
+    """Return the grid's two SI tables, epidemic and reporting.
+
+    One row per design factor, with its levels (and their shares where
+    they differ) and its continuous draws, each as `FACTOR_OF` assigns
+    them. A factor or draw with no layer fails, so a new one is placed.
+    """
+    draws: dict[str, list[str]] = {}
+    exprs = {
+        **_derived(text),
+        **parse_values(text),
+        **parse_bounds(text),
     }
-    return pd.DataFrame(
-        [
+    for name, expr in exprs.items():
+        if name not in FACTOR_OF:
+            raise KeyError(f"{name} has no factor in FACTOR_OF")
+        draws.setdefault(FACTOR_OF[name], []).append(
+            f"{LABELS[name][0]}: {describe(name, expr)}"
+        )
+    tables: dict[str, list[dict]] = {"epidemic": [], "reporting": []}
+    for name, shares in parse_shares(text).items():
+        tables[LAYER[name]].append(
             {
                 "setting": name,
                 "factor": LABELS[name][0],
-                "drawn": how,
-                "epinowcast": LABELS[name][1],
-                "realised": _realised(name, settings),
+                "levels": _levels(shares),
+                "draws": "; ".join(draws.get(name, [])),
             }
-            for name, how in drawn.items()
-        ]
-    )
+        )
+    return {k: pd.DataFrame(v) for k, v in tables.items()}
 
 
 def to_markdown(table: pd.DataFrame, headers: dict[str, str]) -> str:
@@ -550,27 +838,14 @@ def main() -> None:
     parser.add_argument(
         "--config", required=True, help="The `synthetic` block as JSON."
     )
-    parser.add_argument("--settings", type=Path, default=None)
-    parser.add_argument("--main-dir", type=Path, required=True)
     parser.add_argument("--si-dir", type=Path, required=True)
     args = parser.parse_args()
     text = args.simulator.read_text()
-    files = (
-        sorted(args.settings.glob("settings-*.csv")) if args.settings else []
-    )
-    settings = (
-        pd.concat([pd.read_csv(p) for p in files])
-        if files
-        else pd.DataFrame({"outbreak": []})
-    )
-    for folder in (args.main_dir, args.si_dir):
-        folder.mkdir(parents=True, exist_ok=True)
-    tables = (
-        (args.main_dir / "synthetic-design.md", main_table, MAIN_HEADERS),
-        (args.si_dir / "synthetic-design.md", si_table, SI_HEADERS),
-    )
-    for path, build, headers in tables:
-        path.write_text(to_markdown(build(text, settings), headers))
+    args.si_dir.mkdir(parents=True, exist_ok=True)
+    for layer, table in layer_tables(text).items():
+        (args.si_dir / f"grid-{layer}.md").write_text(
+            to_markdown(table, HEADERS)
+        )
     (args.si_dir / "epinowcast-model.md").write_text(model_note(text))
     config = json.loads(args.config)
     (args.si_dir / "heldout-set.md").write_text(heldout_note(config))
