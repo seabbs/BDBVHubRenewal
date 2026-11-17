@@ -38,14 +38,14 @@ def get(url):
 def test_the_page_is_served(server):
     status, body = get(server + "/")
     assert status == 200
-    assert "<h2>German nowcasts by checkpoint" in body
+    assert "<h2>Nowcasts</h2>" in body
 
 
 def test_one_location_s_data_is_served(server):
     status, body = get(server + "/data/germany/DE.json")
     assert status == 200
     data = json.loads(body)
-    assert set(data) == {"series", "wis", "truth"}
+    assert set(data) == {"series", "score", "stats", "truth", "latest"}
 
 
 def status_of(url):
@@ -64,7 +64,7 @@ def test_a_failing_data_request_is_a_server_error(server, monkeypatch):
     def broken(*_args):
         raise ValueError("bad cache")
 
-    monkeypatch.setattr(dashboard.germany, "location", broken)
+    monkeypatch.setattr(dashboard.nowcasts, "location", broken)
     assert status_of(server + "/data/germany/DE.json") == 500
 
 
