@@ -42,16 +42,12 @@ def test_remote_sources_are_mirrored_read_only(tmp_path):
     assert src.mailbox == tmp_path / "m" / "mailbox.md"
     cmds = src.commands()
     assert [
-        "rsync",
-        "-a",
-        "--timeout=60",
+        *mirror.RSYNC,
         "h:cache/germany/",
         f"{tmp_path / 'm' / 'germany'}/",
     ] in cmds
     assert [
-        "rsync",
-        "-a",
-        "--timeout=60",
+        *mirror.RSYNC,
         "h:box.md",
         str(tmp_path / "m" / "mailbox.md"),
     ] in cmds
@@ -83,9 +79,7 @@ def test_the_old_remote_keys_still_mirror_the_scoring_cache(tmp_path):
     )
     assert src.dataset("germany") == tmp_path / "germany"
     assert [
-        "rsync",
-        "-a",
-        "--timeout=60",
+        *mirror.RSYNC,
         "h:r/scores/germany/",
         f"{tmp_path / 'germany'}/",
     ] in src.commands()
@@ -133,9 +127,7 @@ def test_notes_and_tables_may_be_remote(tmp_path):
     assert src.extra(0) == tmp_path / "m" / "extra-0-notes.md"
     assert src.extra(1) == tmp_path / "out" / "t.csv"
     assert [
-        "rsync",
-        "-a",
-        "--timeout=60",
+        *mirror.RSYNC,
         "h:review/notes.md",
         str(tmp_path / "m" / "extra-0-notes.md"),
     ] in src.commands()

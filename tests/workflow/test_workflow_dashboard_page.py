@@ -247,3 +247,11 @@ def test_samples_are_summarised_outside_page_builds(tmp_path, monkeypatch):
     ctx.summarise()  # nothing changed: the summaries are not redone
     assert len(calls) == 1
     assert ctx.delays["b"] == 14
+
+
+def test_checkpoint_tables_have_a_column_per_source(tmp_path):
+    ctx = _machine(tmp_path)
+    out = page.build(ctx)
+    tables = out.split("<h2>Tables</h2>")[1]
+    assert "<th>weekly<th>daily" in tables or "<th>daily<th>weekly" in tables
+    assert "<td>0.2000" in tables

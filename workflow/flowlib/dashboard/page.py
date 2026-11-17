@@ -457,8 +457,13 @@ def bias_section(ctx: Context, live: Run, st: Status) -> str:
     )
 
 
-def checkpoint_table(run: Run, info: Mapping[str, Any], mode: str) -> str:
-    """Return one run's checkpoint table at one loss scale."""
+def checkpoint_table(
+    run: Run, info: Mapping[str, Any], mode: str, sources: Sequence[str] = ()
+) -> str:
+    """Return one run's checkpoint table at one loss scale.
+
+    `sources` are the held-out sources given a column each.
+    """
     rows = info["ck"]
     if not rows:
         label = html.escape(run.label)
@@ -469,9 +474,10 @@ def checkpoint_table(run: Run, info: Mapping[str, Any], mode: str) -> str:
         "base": "held-out / base",
     }[mode]
     den = {"raw": 1, "start": info["full0"], "base": info["bfull"]}[mode]
+    by_head = "".join(f"<th>{html.escape(src)}" for src in sources)
     out = [
         f"<table><tr><th>run<th>ckpt<th>hash<th>{head}<th>held-out "
-        "start<th>real-val<th>by source<th>saved</tr>"
+        f"start<th>real-val{by_head}<th>saved</tr>"
     ]
     for name, s, mtime in rows:
         by = s.get("held_out_loss_by_source") or {}
@@ -483,7 +489,7 @@ def checkpoint_table(run: Run, info: Mapping[str, Any], mode: str) -> str:
             _fmt(ho / den if ho and den else None) or "n/a",
             _fmt(s.get("held_out_loss_start")),
             _fmt(s.get("real_validation_loss")),
-            html.escape(", ".join(f"{k} {v:.4f}" for k, v in by.items())),
+            *(_fmt(by.get(src)) or "n/a" for src in sources),
             datetime.fromtimestamp(mtime).strftime("%m-%d %H:%M")
             if mtime
             else "",
@@ -703,10 +709,20 @@ def mail_section(ctx: Context) -> str:
 
 def tables_section(ctx: Context, info: Mapping[str, Any]) -> str:
     """Return the checkpoint tables and any configured tables (CSV files)."""
+    sources = sorted(
+        {
+            src
+            for r in ctx.runs
+            for _, s, _ in info[r.key]["ck"]
+            for src in (s.get("held_out_loss_by_source") or {})
+        }
+    )
     out = ["<h3>Checkpoints</h3><div class=wrap>"]
     out += [
         f'<div class="mode m-{m}">'
-        + "".join(checkpoint_table(r, info[r.key], m) for r in ctx.runs)
+        + "".join(
+            checkpoint_table(r, info[r.key], m, sources) for r in ctx.runs
+        )
         + "</div>"
         for m in MODES
     ]

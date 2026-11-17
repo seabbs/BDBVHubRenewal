@@ -24,6 +24,15 @@ TABLE = "tables/checkpoint-scores.csv"
 REMOTE = re.compile(r"^[\w.-]+:")
 """A `host:path` source."""
 
+RSYNC = [
+    "rsync",
+    "-a",
+    "--timeout=60",
+    "-e",
+    "ssh -o BatchMode=yes -o ConnectTimeout=10",
+]
+"""rsync over ssh that never waits on a password or host-key prompt."""
+
 
 def is_remote(source: str) -> bool:
     """Return whether a source is `host:path`."""
@@ -159,7 +168,7 @@ class Source:
                 continue
             src = source.rstrip("/") + "/" if folder else source
             dst = f"{path}/" if folder else str(path)
-            out.append(["rsync", "-a", "--timeout=60", src, dst])
+            out.append([*RSYNC, src, dst])
         return out
 
     def refresh(self) -> str:
@@ -177,9 +186,7 @@ class Source:
                 continue
             (path if folder else path.parent).mkdir(parents=True, exist_ok=True)
             cmd = [
-                "rsync",
-                "-a",
-                "--timeout=60",
+                *RSYNC,
                 source.rstrip("/") + "/" if folder else source,
                 f"{path}/" if folder else str(path),
             ]
