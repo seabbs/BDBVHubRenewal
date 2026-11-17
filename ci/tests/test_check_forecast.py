@@ -181,6 +181,20 @@ def test_national_unassigned_component_adds_up(tmp_path: Path) -> None:
     )
 
 
+def test_a_models_own_national_skips_the_sum(tmp_path: Path) -> None:
+    # A model that forecasts the country itself (Chronos-2) writes its own
+    # national rows; the hub does not require them to sum (hub-spec.md).
+    path = sub(tmp_path, mutate=_bump_national(weeks()[0], 7, 5.0))
+    side = _sidecar(national_source="own")
+    c = _checks(path, national_sidecar=side)["national_sum"]
+    assert c.status == "skip"
+    assert "own" in c.summary
+    side = _sidecar(national_source="sum")
+    assert _checks(path, national_sidecar=side)["national_sum"].status == (
+        "fail"
+    )
+
+
 def test_cli_reads_national_sidecar(tmp_path: Path) -> None:
     w = weeks()[-1]
     path = sub(tmp_path, mutate=_bump_national(w, 3, 4.0))

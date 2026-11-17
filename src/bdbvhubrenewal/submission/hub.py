@@ -40,6 +40,7 @@ __all__ = [
     "TEAM_ABBR",
     "model_abbr_for",
     "model_id",
+    "own_national",
     "render_model_metadata",
     "run_date",
     "submission_path",
@@ -145,14 +146,18 @@ def to_hub_table(
     n_samples: int = 100,
     forecast_date: dt.date | str | None = None,
     zones_sum: bool = True,
+    national: str = "sum",
 ) -> pd.DataFrame:
     """Turn forecast samples into the hub's submission table.
 
     The table meets every guarantee in `docs/submission/hub-spec.md`:
     sample ids `1..n_samples` reused in every location, one row per id for every
     week, the same weeks for every location, whole non-negative counts
-    and the national value as the sum of the provinces for each sample.
-    Any national rows in `samples` are replaced.
+    and, by default, the national value as the sum of the provinces for
+    each sample, replacing any national rows in `samples`. A model that
+    forecasts the country itself (`own_national`, the Chronos-2 models)
+    keeps its own national rows with `national="own"`. The hub does not
+    require the sum (`docs/submission/hub-spec.md`).
 
     Parameters
     ----------
@@ -183,6 +188,11 @@ def to_hub_table(
         own zone draws (`forecasters.zones.walks_own_zones`); the hub
         does not require the sum (its `model-output/README.md` allows
         any subset of locations).
+    national : {"sum", "own"}
+        `"sum"` writes each sample's national value as the sum of its
+        provinces, plus `unassigned`. `"own"` writes the national rows in
+        `samples` as they are, checked like any location; `unassigned`
+        must then be empty.
 
     Returns
     -------
@@ -196,7 +206,8 @@ def to_hub_table(
     ValueError
         If a province or zone does not have sample ids `1..n_samples`, a
         sample lacks a week, locations cover different weeks, or, with
-        `zones_sum`, the zones do not sum to their provinces.
+        `zones_sum`, the zones do not sum to their provinces, or, with
+        `national="own"`, `samples` has no complete national rows.
 
     Examples
     --------
@@ -207,19 +218,24 @@ def to_hub_table(
     >>> table = to_hub_table(samples, task.reference_date)
     >>> write_submission(table, "output/submission", model_id("rwnowcast"))
     """
+    if national not in ("sum", "own"):
+        raise ValueError(f"national must be 'sum' or 'own', not {national!r}.")
     ref = as_date(reference_date).isoformat()
     fdate = as_date(forecast_date or run_date()).isoformat()
-    prov = samples.loc[samples["location"] != NATIONAL].copy()
+    own = _tidy(samples.loc[samples["location"] == NATIONAL])
+    if national == "own":
+        if own.empty:
+            raise ValueError("No national rows to keep (national='own').")
+        if unassigned is not None and not unassigned.empty:
+            raise ValueError("An unassigned component needs national='sum'.")
+    prov = _tidy(samples.loc[samples["location"] != NATIONAL])
     if prov.empty:
         raise ValueError("No province samples to write.")
-    prov["target_end_date"] = prov["target_end_date"].astype(str)
-    prov["location"] = prov["location"].astype(str)
-    prov["sample"] = prov["sample"].astype("int64")
-    prov["value"] = prov["value"].clip(lower=0).round()
     zone = _zone_rows(prov, zones, zones_sum)
     ids = set(range(1, n_samples + 1))
     weeks = sorted(set(prov["target_end_date"]))
-    for loc, rows in pd.concat([prov, zone]).groupby("location"):
+    checked = [prov, zone, own] if national == "own" else [prov, zone]
+    for loc, rows in pd.concat(checked).groupby("location"):
         if set(rows["sample"]) != ids:
             raise ValueError(
                 f"{loc}: sample ids must be 1 to {n_samples}, the same in "
@@ -234,7 +250,10 @@ def to_hub_table(
             raise ValueError(
                 f"{loc}: every sample needs exactly one row for each week."
             )
-    national = (
+    if national == "own":
+        both = pd.concat([prov, own, zone], ignore_index=True)
+        return _hub_rows(both, ref, fdate, target)
+    national_rows = (
         prov.groupby(["target_end_date", "sample"])["value"].sum().reset_index()
     )
     if unassigned is not None and not unassigned.empty:
@@ -247,11 +266,28 @@ def to_hub_table(
             .groupby(["target_end_date", "sample"])["value"]
             .sum()
         )
-        national = national.set_index(["target_end_date", "sample"])
-        national["value"] = national["value"].add(extra, fill_value=0)
-        national = national.reset_index()
-    national["location"] = NATIONAL
-    both = pd.concat([prov, national, zone], ignore_index=True)
+        national_rows = national_rows.set_index(["target_end_date", "sample"])
+        national_rows["value"] = national_rows["value"].add(extra, fill_value=0)
+        national_rows = national_rows.reset_index()
+    national_rows["location"] = NATIONAL
+    both = pd.concat([prov, national_rows, zone], ignore_index=True)
+    return _hub_rows(both, ref, fdate, target)
+
+
+def _tidy(rows: pd.DataFrame) -> pd.DataFrame:
+    """Return sample rows with string keys and whole non-negative values."""
+    rows = rows.copy()
+    rows["target_end_date"] = rows["target_end_date"].astype(str)
+    rows["location"] = rows["location"].astype(str)
+    rows["sample"] = rows["sample"].astype("int64")
+    rows["value"] = rows["value"].clip(lower=0).round()
+    return rows
+
+
+def _hub_rows(
+    both: pd.DataFrame, ref: str, fdate: str, target: str
+) -> pd.DataFrame:
+    """Lay out tidy sample rows as the hub's columns, sorted."""
     out = pd.DataFrame(
         {
             "reference_date": ref,
@@ -267,6 +303,32 @@ def to_hub_table(
     return out.sort_values(
         ["location", "output_type_id", "target_end_date"]
     ).reset_index(drop=True)[list(HUB_COLUMNS)]
+
+
+def own_national(name: str | None) -> bool:
+    """Return whether model `name` forecasts the country itself.
+
+    The Chronos-2 models forecast the country as one series of their
+    joint block, so their national draws are written as they are
+    (`to_hub_table(..., national="own")`). Every other model's national
+    value is the per-sample sum of its provinces.
+    """
+    if name is None:
+        return False
+    import typing
+
+    from bdbvhubrenewal.forecasters import list_models
+    from bdbvhubrenewal.forecasters.foundation import FoundationModel
+
+    specs = {s.name: s for s in list_models()}
+    if name not in specs:
+        return False
+    # Decided from the registered factory, so no model (and no fine-tuned
+    # checkpoint) is built: FoundationModel itself, or a builder of one.
+    func = getattr(specs[name].factory, "func", specs[name].factory)
+    if isinstance(func, type):
+        return issubclass(func, FoundationModel)
+    return typing.get_type_hints(func).get("return") is FoundationModel
 
 
 def _zone_rows(

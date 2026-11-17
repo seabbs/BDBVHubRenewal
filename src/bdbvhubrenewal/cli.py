@@ -105,6 +105,7 @@ from bdbvhubrenewal.submission.hub import (
     SUBMISSION_CONFIG,
     model_abbr_for,
     model_id,
+    own_national,
     render_model_metadata,
     to_hub_table,
     write_model_metadata,
@@ -1456,6 +1457,7 @@ def _hub_forecast(
         zones=zones,
         forecast_date=forecast_date,
         zones_sum=not walks_own_zones(name),
+        national="own" if own_national(name) else "sum",
     )
     return table, result, zones, zone_note, checkpoint, copula
 
@@ -1553,7 +1555,9 @@ def _nowcast(args: argparse.Namespace) -> int:
     except (LookupError, ValueError, OSError) as err:
         print(f"ERROR: {err}", file=sys.stderr)
         return 1
-    _write_national_sidecar(Path(args.out), task, result)
+    name = get_config(args.config).model if args.config else args.model
+    source = "own" if own_national(name) else "sum"
+    _write_national_sidecar(Path(args.out), task, result, source)
     # Problems handled on the way, for the PR's `Handled:` line.
     (Path(args.out) / "handled.json").write_text(json.dumps(handled) + "\n")
     # Whether the file has health zones, for the CI's zone check.
@@ -1689,9 +1693,13 @@ def _write_zone_results(
 
 
 def _write_national_sidecar(
-    out: Path, task: ForecastTask, result: Forecast
+    out: Path, task: ForecastTask, result: Forecast, source: str = "sum"
 ) -> Path:
-    """Write `national.json`, which the CI's national check reads."""
+    """Write `national.json`, which the CI's national check reads.
+
+    `source` is `"own"` when the national rows are the model's own
+    forecast (`own_national`), which the check does not sum.
+    """
     unassigned = []
     if result.unassigned is not None:
         unassigned = [
@@ -1711,6 +1719,7 @@ def _write_national_sidecar(
             task.locations if result.modelled is None else result.modelled
         ),
         "unassigned": unassigned,
+        "national_source": source,
     }
     path.write_text(json.dumps(record, indent=2) + "\n")
     return path
