@@ -53,7 +53,6 @@ class Context:
     outbreaks: int
     learning_rate: float
     lr_steps: int
-    style: Mapping[str, Any]
     datasets: Sequence[Mapping[str, Any]] = ()
     mailbox: Path | None = None
     mail_filter: str = ""

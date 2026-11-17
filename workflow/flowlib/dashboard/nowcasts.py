@@ -40,7 +40,7 @@ SEVEN = ("0.025", "0.1", "0.25", "0.5", "0.75", "0.9", "0.975")
 LEVELS = tuple(float(q) for q in SEVEN)
 
 PAGE_LEVELS = (0.025, 0.25, 0.5, 0.75, 0.975)
-"""The levels drawn when none are given; `paperstyle.LEVELS` in use."""
+"""Default levels of `build`; the page draws all seven (`LEVELS`)."""
 
 REFERENCE = "reference"
 """Reference folders start with this (`reference`, `reference-complete`)."""

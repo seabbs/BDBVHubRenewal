@@ -8,7 +8,7 @@ import pytest
 
 pytest.importorskip("matplotlib")
 
-from flowlib.dashboard import mirror, page, paperstyle, runs
+from flowlib.dashboard import mirror, page, runs
 
 LINE = "2026-11-16 16:{m:02d}:00 [train] step {s}: loss {l}, held-out (x) {h}"
 
@@ -139,7 +139,6 @@ def _machine(tmp_path):
         outbreaks=8000,
         learning_rate=1e-5,
         lr_steps=36500,
-        style=paperstyle.page_style(),
         mailbox=box,
         mail_filter="slots",
         once=True,

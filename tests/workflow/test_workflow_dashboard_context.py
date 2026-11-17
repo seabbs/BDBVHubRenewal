@@ -52,7 +52,6 @@ def test_runs_come_from_all_three_layers(tmp_path):
         ctx.source.scores == tmp_path / "s" / "tables" / "checkpoint-scores.csv"
     )
     assert ctx.mailbox == tmp_path / "m"
-    assert ctx.style["levels"] == [0.025, 0.25, 0.5, 0.75, 0.975]
 
 
 def test_a_remote_machine_reads_a_mirror(tmp_path):

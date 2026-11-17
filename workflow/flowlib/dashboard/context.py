@@ -96,7 +96,6 @@ def build(
         outbreaks=int(ft["outbreaks"]),
         learning_rate=float(ft["learning_rate"]),
         lr_steps=int(ft["lr_steps"]),
-        style=paperstyle.page_style(),
         datasets=dash.get("datasets") or [],
         mailbox=source.mailbox,
         mail_filter=dash.get("mail_filter", ""),
