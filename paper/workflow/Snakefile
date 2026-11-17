@@ -339,7 +339,7 @@ def tables(mode, study):
 
 
 def outputs(mode):
-    design = [
+    design = [f"{R}/{mode}/figures/si/sim-examples.png"] + [
         f"{R}/{mode}/tables/si/{n}.md"
         for n in (
             "grid-epidemic",
@@ -666,6 +666,25 @@ def grid_config(mode):
         "heldout_seeds": list(s.synthetic_seeds),
         "development_seeds": list(d.synthetic_seeds),
     }
+
+
+# Example simulations of the grid, from pilot simulations on an evidence
+# branch (`paperfigs.sim_examples`).
+rule sim_examples:
+    output:
+        f"{R}/{{mode}}/figures/si/sim-examples.png",
+    params:
+        ref=SYNTHETIC["examples"]["ref"],
+        path=SYNTHETIC["examples"]["path"],
+        picks=shlex.quote(json.dumps(SYNTHETIC["examples"]["picks"])),
+        tmp=f"{R}/{{mode}}/sim-examples",
+    shell:
+        "(git -C .. cat-file -e {params.ref}^{{commit}} 2>/dev/null || "
+        "git -C .. fetch -q origin {params.ref}) && "
+        "rm -rf {params.tmp} && mkdir -p {params.tmp} && "
+        "git -C .. archive {params.ref} {params.path} | tar -x -C {params.tmp} "
+        "&& {PYTHON} -m paperfigs.sim_examples --sims {params.tmp}/{params.path} "
+        "--picks {params.picks} --out {output}"
 
 
 # The grid tables and SI notes, read from the simulator's code

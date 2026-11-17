@@ -30,6 +30,18 @@ synthetic:
   draw: 1
   # The synthetic runner's protocol, quoted in the SI note.
   protocol: {min_releases: 6, horizon_weeks: 5, horizons: [-4, 3]}
+  # Example simulations for the SI figure (`paperfigs.sim_examples`): pilot
+  # simulations of the grid on an evidence branch, each with its label.
+  examples:
+    ref: 5e99233c5ca4eed4de3dcf26139d26f676a79e5d
+    path: pilot/sims
+    picks:
+      - [90004-0001, Multi-wave over 52 weeks]
+      - [90003-0002, Concentrated spread]
+      - [90002-0002, Bunched reports]
+      - [90002-0003, Delay slowdown]
+      - [90001-0001, Places by age groups]
+      - [90003-0003, Poisson observations]
   # The simulations of each run's seeds, whose settings give the grid's
   # realised values.
   simulations:

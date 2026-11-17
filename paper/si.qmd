@@ -140,8 +140,9 @@ with $T = 36{,}500$ steps, which is reached at 8,000 simulations.
 
 **Training blocks.**
 A simulation gives daily counts by onset and report date, and a release counts every case reported by its cut-off, one cut-off a week.
-Each simulation gives 10 observation draws, and at each of 16 cut-offs 2 of the 10 draws are sampled, so one simulation gives 32 blocks.
-Each block's prediction length is its horizon, and the LoRA learning rate falls linearly from $10^{-5}$ to zero at 8,000 simulations, with checkpoints at 1,000, 2,000, 4,000 and 8,000.
+Each simulation gives one observation draw, cut at 32 cut-offs, one drawn at random within each of 32 equal stretches of its weekly cut-offs, so one simulation gives 32 blocks.
+Each block has up to 364 steps of context, and its prediction length is its horizon.
+We train on 8,000 simulations, with checkpoints at 250, 500, 750, 1,000, 2,000, 4,000 and 8,000.
 
 ::: {#tbl-block-layouts}
 | Layout | Share of blocks |
@@ -156,11 +157,10 @@ The layouts of the training blocks and their shares.
 :::
 
 - We apply further options on top of the layout, each drawn independently.
-- 10% of the blocks hold every report to one randomly chosen weekday, so reference dates stay daily and reports arrive in weekly batches, as in weekly surveillance reporting.
 - 20% of the blocks hold a single series, the country or one place.
 - The other blocks hold a random set of places, with or without the country.
 - Where a block holds the country and some of its places, a third each have a country equal to the sum of its places, above it (with cases not assigned to a place), or later than it (its own stream).
-- The options combine, so a block can be, for example, daily with a weekly row, batched and non-summing.
+- The options combine, so a block can be, for example, daily with a weekly row and non-summing.
 - Non-summing parents apply only where a block holds both the country and its places.
 - @tbl-block-combinations gives the realised share of each combination.
 
@@ -214,17 +214,25 @@ The dashboard was built with the help of a large language model.
 
 ::: {.callout-note title="Plan"}
 - We describe the simulation in full, with the epinowcast model it uses.
-- We give the full factor table and compare the simulations with published disease parameters.
+- We give the grid in two tables, epidemic and reporting, with six example simulations, and compare the simulations with published disease parameters.
 - Key references: [@abbottepinowcast; @lison2024; @Park2024; @abbottprimarycensored].
 :::
 
 {{< include build/tables/si/epinowcast-model.md >}}
 
-::: {#tbl-synthetic-grid-si}
-{{< include build/tables/si/synthetic-design.md >}}
+::: {#tbl-grid-epidemic}
+{{< include build/tables/si/grid-epidemic.md >}}
 
-Every setting of the simulation grid: the crossed factors and their levels, the settings derived from a cell, the values drawn within it, and the bounds on outbreak size (a simulation outside them is drawn again), with the R expression that draws them and the epinowcast function each enters through, read from the simulator's code. Realised values are over the run's simulations where they exist.
+The simulation grid, epidemic and places: each crossed factor's levels and the continuous values drawn within a cell, read from the simulator's code.
 :::
+
+::: {#tbl-grid-reporting}
+{{< include build/tables/si/grid-reporting.md >}}
+
+The simulation grid, reporting and observation: as @tbl-grid-epidemic.
+:::
+
+![Six contrasting simulations of the grid, from pilot simulations: the final daily counts (black) and the counts known at releases 40%, 65% and 90% of the way through each outbreak (dashed), summed over strata.](build/figures/si/sim-examples.png){#fig-sim-examples}
 
 The grid has two limitations.
 Simulated strata are less sparse than BDBV's provinces: the share of stratum-weeks with no cases reaches {{< meta evidence.realism.zero_share.sim_q95 >}} at the 95% point of the simulations, against {{< meta evidence.realism.zero_share.BDBV >}} for BDBV.
@@ -246,7 +254,7 @@ The simulated outbreaks' ranges against published values for several diseases, t
 
 {{< include build/tables/si/heldout-set.md >}}
 
-We cut the held-out simulations into blocks as in training, with the five layouts, report batching and non-summing parents (@tbl-block-layouts), using a fixed seed.
+We cut the held-out simulations into blocks as in training, with the five layouts and non-summing parents (@tbl-block-layouts), using a fixed seed.
 A manifest records each held-out block's layout and options.
 The paper's test set, 100 simulations outside training, is cut the same way.
 
@@ -396,12 +404,12 @@ The cost of each option: series per block, memory and time.
 
 ### Checkpoint curve
 
-- We compare the final run's checkpoints, fine-tuned on 1,000, 2,000, 4,000 and 8,000 simulations.
+- We compare the final run's checkpoints, fine-tuned on 250, 500, 750, 1,000, 2,000, 4,000 and 8,000 simulations.
 - They share the grid, the data order and the recipe, as checkpoints of one run.
 - @fig-finetune-heldout gives the held-out loss by source.
 - @fig-checkpoint-curve gives German first-half and BDBV relative scores at each checkpoint, with zero-shot Chronos-2 on the ragged layout and on complete data only as reference lines.
 - A later checkpoint has also trained for more steps.
-- The learning rate falls linearly to zero at 8,000 simulations, so the 1,000, 2,000 and 4,000 checkpoints are taken at 88%, 75% and 50% of the starting rate, and only the 8,000 checkpoint is annealed.
+- The learning rate falls linearly to zero at 8,000 simulations, so the earlier checkpoints are taken at 97% (250) to 50% (4,000) of the starting rate, and only the 8,000 checkpoint is annealed.
 
 ![Held-out loss of the fine-tune against the number of simulated outbreaks it has seen.](build/figures/si/finetune-heldout.png){#fig-finetune-heldout}
 
