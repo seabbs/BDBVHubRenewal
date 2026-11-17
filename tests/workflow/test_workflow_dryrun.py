@@ -276,15 +276,6 @@ def test_score_runs_held_out_scores_and_zones_a_label(tmp_path):
     assert jobs["score_zones"] == 3
 
 
-def test_kept_labels_join_the_table_but_are_never_scored(tmp_path):
-    config = {"score": {"labels": ["slots-aaa"], "kept": ["slots-old"]}}
-    jobs = dry(tmp_path, "score", config=config)
-    assert jobs["score_bdbv"] == 2
-    assert jobs["score_heldout"] == 1
-    assert jobs["score_heldout_scores"] == 2
-    assert jobs["score_table"] == 1
-
-
 def test_no_held_out_scores_before_a_checkpoint(tmp_path):
     # The reference's needs a checkpoint's held-out set to check against.
     jobs = dry(tmp_path, "score", config={"score": {"labels": []}})

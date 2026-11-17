@@ -822,3 +822,21 @@ def test_no_german_forecast_rows_without_its_script(cs, tmp_path) -> None:
     rows = cs.germany_forecast_rows(tmp_path, [cs.REFERENCE])
     assert rows.empty
     assert list(rows.columns) == cs.COLUMNS
+
+
+def test_the_bdbv_tasks_carry_the_zones_as_a_submission_does(cs) -> None:
+    # Sam (#314): Chronos-2 sees provinces, zones and national in its
+    # block, so the tasks hold the zone tables and codes.
+    from bdbvhubrenewal.evaluation import backtest as bt
+
+    data = Path(__file__).parent / "fixtures" / "data"
+    tasks = cs.bdbv_tasks(data, bt.load_config())
+    task = next(iter(tasks.values()))
+    assert task.zone_codes
+    assert task.zone_daily_history is not None
+
+
+def test_a_missing_score_table_starts_empty(cs, tmp_path) -> None:
+    rows = cs.existing_rows(tmp_path / "none.csv", cs.COLUMNS)
+    assert rows.empty
+    assert list(rows.columns) == cs.COLUMNS
