@@ -320,3 +320,77 @@ def test_german_quantile_scores_stay_wis() -> None:
         quantiles["value"].to_numpy()[None, :],
         quantiles["quantile"].to_numpy(),
     )
+
+
+def _two_models_same_samples() -> tuple[pd.DataFrame, pd.DataFrame]:
+    rng = np.random.default_rng(8)
+    draws = rng.poisson(30, (100, 2, 2)).astype(float)
+    rows = [
+        {
+            "model": model,
+            "kind": "real",
+            "vintage": "2026-10-17",
+            "reference_date": "2026-10-24",
+            "origin": "2026-10-17",
+            "location": loc,
+            "target_end_date": week,
+            "horizon": 0,
+            "sample": s + 1,
+            "value": draws[s, i, j],
+        }
+        for model in ("renewal", "teamA-hub")
+        for s in range(100)
+        for i, loc in enumerate(("CD-IT", "CD-NK"))
+        for j, week in enumerate(("2026-10-17", "2026-10-24"))
+    ]
+    truth = pd.DataFrame(
+        {
+            "location": ["CD-IT", "CD-IT", "CD-NK", "CD-NK"],
+            "target_end_date": ["2026-10-17", "2026-10-24"] * 2,
+            "truth": [25, 31, 40, 12],
+        }
+    )
+    return pd.DataFrame(rows), truth
+
+
+@pytest.mark.parametrize("fair", [True, False])
+def test_same_samples_score_the_same_whoever_made_them(fair: bool) -> None:
+    # Ours or a hub team's: one estimator for every model.
+    forecasts, truth = _two_models_same_samples()
+    scores = score_forecasts(forecasts, truth).set_index(
+        ["model", "location", "target_end_date"]
+    )
+    for col in ("crps", "log_crps"):
+        a = scores.loc["renewal", col].sort_index()
+        b = scores.loc["teamA-hub", col].sort_index()
+        assert np.allclose(a.to_numpy(), b.to_numpy())
+    energy = energy_scores(forecasts, truth, unit=["origin"], fair=fair)
+    by = energy.set_index("model")
+    for col in ("energy", "log_energy"):
+        assert by.loc["renewal", col] == pytest.approx(by.loc["teamA-hub", col])
+
+
+def test_plain_and_fair_energy_follow_their_formulas() -> None:
+    # Two draws, 0 and 2, of an observed 1: E|X - y| = 1 and the pair
+    # distance sums to 2 over i != j. Fair divides by 2m(m - 1) = 4,
+    # plain by 2m^2 = 8, over all pairs including i = j.
+    x, y = np.array([[0.0], [2.0]]), np.array([1.0])
+    assert energy_sample(y, x, fair=True) == pytest.approx(1 - 4 / 4)
+    assert energy_sample(y, x, fair=False) == pytest.approx(1 - 4 / 8)
+    # In one dimension plain is the nrg CRPS and fair the fair CRPS.
+    s = np.random.default_rng(9).gamma(2, 10, 50)
+    plain = energy_sample(np.array([20.0]), s[:, None], fair=False)
+    assert plain == pytest.approx(crps_sample(20.0, s))
+    fair = energy_sample(np.array([20.0]), s[:, None], fair=True)
+    want = sr.crps_ensemble(20.0, s, estimator="fair")
+    assert fair == pytest.approx(float(want))
+
+
+def test_energy_stays_fair_by_default() -> None:
+    import inspect
+
+    x = np.random.default_rng(10).normal(0, 1, (30, 3))
+    y = np.zeros(3)
+    assert energy_sample(y, x) == pytest.approx(energy_sample(y, x, fair=True))
+    assert energy_sample(y, x) != pytest.approx(energy_sample(y, x, fair=False))
+    assert inspect.signature(energy_scores).parameters["fair"].default is True

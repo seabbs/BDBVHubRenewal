@@ -421,3 +421,11 @@ def test_chart_shows_crps_and_old_wis_deploys_as_missing(sh) -> None:
     at = 3 + keys.index("rel_crps")
     assert good[0][at] is None
     assert good[1][at] == pytest.approx(35 / 40)
+
+
+def test_page_names_the_configured_draws(sh) -> None:
+    root = Path(__file__).resolve().parents[1]
+    n = sh.backtest_samples(root / "config" / "backtest.toml")
+    assert n == 1000
+    page = sh.page_markdown(_two_deploys(sh), samples=n)
+    assert "1,000 draws" in page

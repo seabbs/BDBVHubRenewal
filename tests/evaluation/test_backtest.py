@@ -691,38 +691,30 @@ def test_scenarios_forecast_apart_by_model_score_as_one_run(
         pd.testing.assert_frame_equal(got, want, check_dtype=False)
 
 
-def test_models_run_here_take_score_samples_draws(tmp_path: Path) -> None:
-    # The paper scores 1,000 draws of the models it runs itself, with the
-    # backtest's seed shared by every model; stored fits keep n_samples.
-    from bdbvhubrenewal.evaluation.backtest import (
-        for_scoring,
-        tasks_for_scoring,
-    )
+def test_sample_counts_come_from_the_config(
+    tmp_path: Path,
+    target: pd.DataFrame,
+    delays: pd.DataFrame,
+    daily: pd.DataFrame,
+) -> None:
+    # Backtest pages score 1,000 draws of every model, the stored fits
+    # included, and the hub comparison 100, as the hub teams submit.
+    from bdbvhubrenewal.evaluation import store
 
-    cfg = load_config(ROOT / "config" / "backtest.toml")
-    assert cfg.n_samples == 100
-    assert cfg.score_samples == 1000
-    scored = for_scoring(cfg)
-    assert scored.n_samples == 1000
-    assert replace(scored, n_samples=cfg.n_samples) == cfg
     text = (ROOT / "config" / "backtest.toml").read_text()
+    assert "[samples]" in text
+    cfg = load_config(ROOT / "config" / "backtest.toml")
+    assert cfg.n_samples == 1000
+    assert cfg.comparison_samples == 100
     path = tmp_path / "backtest.toml"
     path.write_text(
-        "\n".join(
-            line
-            for line in text.splitlines()
-            if not line.startswith("score_samples")
+        text.replace("backtest = 1000", "backtest = 7").replace(
+            "comparison = 100", "comparison = 3"
         )
     )
-    assert load_config(path).score_samples == 100
-    target = pd.read_csv(DATA / "target.csv")
-    delays = pd.read_csv(DATA / "delays.csv.gz")
-    tasks = make_tasks(target.loc[target["kind"] == "real"], delays, cfg)
-    drawn = tasks_for_scoring(tasks, cfg)
-    assert {t.n_samples for t in tasks} == {100}
-    assert {t.n_samples for t in drawn} == {1000}
-    # The same seed, so each model's stream is the same in both.
-    assert [t.seed for t in drawn] == [t.seed for t in tasks]
-    a = drawn[0].rng("randomwalk").random(3)
-    b = tasks[0].rng("randomwalk").random(3)
-    assert np.array_equal(a, b)
+    small = load_config(path)
+    assert (small.n_samples, small.comparison_samples) == (7, 3)
+    tasks = store.origin_tasks(target, delays, cfg, daily)
+    assert tasks
+    assert {t.n_samples for t in tasks.values()} == {1000}
+    assert {t.seed for t in tasks.values()} == {cfg.seed}

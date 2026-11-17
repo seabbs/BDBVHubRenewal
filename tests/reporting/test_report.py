@@ -59,6 +59,11 @@ def test_comparison_page(tmp_path: Path, target: pd.DataFrame) -> None:
     # Other teams are named as the hub names them.
     assert "teamA-weekly" in teams
     assert "CC0-1.0" in teams
+    # The page names the comparison's configured draws per forecast.
+    from bdbvhubrenewal.evaluation.backtest import load_config
+
+    n = load_config(ROOT / "config" / "backtest.toml").comparison_samples
+    assert f"{n:,} draws" in (gen / "comparison-lead.md").read_text()
     assert "teamA-weekly" in scores
     figures = (gen / "comparison-figures.md").read_text()
     assert "2026-10-24" in figures
@@ -599,3 +604,16 @@ def test_complete_target_text_names_models_with_no_complete_score() -> None:
     assert "So `renewal` have no complete-week scores yet" in text
     full = report._complete_on(scores.iloc[[0, 2]], zones, 56)
     assert "no complete-week scores" not in full
+
+
+def test_backtest_and_nowcast_pages_name_the_backtest_draws() -> None:
+    from bdbvhubrenewal.evaluation.backtest import load_config
+
+    n = load_config(ROOT / "config" / "backtest.toml").n_samples
+    assert f"{n:,} draws" in report.draws_note(n)
+    assert "[samples] backtest" in report.draws_note(n)
+    meta = report._nowcast_meta("2026-11-08", ["renewal"], n)
+    assert f"{n:,} draws" in meta
+    assert "2026-11-08" in meta
+    lead = report._release_intro(n)
+    assert f"{n:,} draws" in lead

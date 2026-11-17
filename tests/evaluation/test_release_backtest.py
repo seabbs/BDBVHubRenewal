@@ -559,3 +559,15 @@ def test_relative_crps_scores_crps_and_log_crps() -> None:
     assert rel.loc["a", "crps"] == pytest.approx(1.0)
     assert rel.loc["a", "base_crps"] == pytest.approx(3.0)
     assert not any("wis" in c for c in rel.columns)
+
+
+def test_backtest_energy_is_fair_by_default() -> None:
+    import inspect
+
+    from bdbvhubrenewal.evaluation.nowcast import (
+        release_backtest,
+        score_releases,
+    )
+
+    for func in (release_backtest, score_releases):
+        assert inspect.signature(func).parameters["fair"].default is True
