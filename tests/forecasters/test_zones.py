@@ -651,3 +651,18 @@ def test_reconcile_falls_back_to_the_allocator_shares(
     got = reconcile_zones(empty, prov, sub, counts, zones)
     assert check_zone_coherence(prov, got) == []
     assert got["value"].sum() > 0
+
+
+def test_no_zones_are_split_outside_the_model(
+    open_task: ForecastTask,
+    open_counts: pd.DataFrame,
+    zones: tuple[str, ...],
+    daily_zones: pd.DataFrame,
+) -> None:
+    # A province model splits its zones in its own forecast, so samples
+    # with none get none here.
+    prov = RandomWalk().forecast(open_task)
+    got = zones_for_model(
+        "renewal", open_task, prov, open_counts, zones, daily_zones
+    )
+    assert got.empty
