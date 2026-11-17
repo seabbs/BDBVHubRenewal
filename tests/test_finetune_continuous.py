@@ -21,12 +21,12 @@ def _round(remote, n, rows):
     return r
 
 
-def _sync(tmp_path, remote):
+def _sync(tmp_path, remote, first=1):
     out = subprocess.run(
         [
             "bash",
             "-c",
-            f'source "{SCRIPT}"; HERE={tmp_path}/local; '
+            f'source "{SCRIPT}"; HERE={tmp_path}/local; FIRST_ROUND={first}; '
             f'remote_ls() {{ ls "{remote}"; }}; '
             # GNU and BSD cp agree on a folder's contents only as `src/.`.
             f'pull() {{ mkdir -p "$3"; s="{remote}/$1/$2"; '
@@ -110,3 +110,28 @@ def test_a_bias_run_refuses_the_no_bias_runs_folder(tmp_path):
     out = _source(tmp_path, "export SERIES_BIAS=1;", "bias_args")
     assert out.returncode != 0
     assert "HERE" in out.stderr
+
+
+def test_the_restart_trains_on_grid_r5_with_one_draw_of_32_blocks(tmp_path):
+    out = _source(tmp_path, "", 'echo "$DRAWS $CUTS $CHUNK"')
+    assert out.returncode == 0
+    assert out.stdout.split() == ["1", "32", "250"]
+    script = SCRIPT.read_text()
+    assert "--grid r5" in script
+    assert "--blocks-per-simulation $((CUTS * DRAWS))" in script
+
+
+def test_the_restart_streams_only_rounds_from_the_first_r5_round(tmp_path):
+    remote = tmp_path / "remote"
+    _round(remote, 8, [(30801, "train")])
+    _round(remote, 9, [(30900, "train"), (30940, "held_out")])
+    assert _sync(tmp_path, remote, first=9) == ["30900"]
+    out = _source(tmp_path, "", 'echo "$FIRST_ROUND"')
+    assert out.stdout.split() == ["9"]
+
+
+def test_the_held_out_default_leaves_room_for_skipped_simulations(tmp_path):
+    # Round 9 has 100 held-out simulations of one draw; 90 tolerates a
+    # few skipped ones.
+    out = _source(tmp_path, "", 'echo "$HOLDOUT"')
+    assert out.stdout.split() == ["90"]

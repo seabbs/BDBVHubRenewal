@@ -208,6 +208,17 @@ def param_groups(model, lr: float, bias_lr: float = 0.0) -> list[dict]:
     return groups
 
 
+def make_optimiser(model, lr: float, bias_lr: float = 0.0):
+    """Return AdamW over `param_groups`, with no weight decay in any group.
+
+    As Chronos-2's own fit (the HF Trainer's default weight decay of 0,
+    a linear schedule and no warmup).
+    """
+    import torch
+
+    return torch.optim.AdamW(param_groups(model, lr, bias_lr), weight_decay=0.0)
+
+
 def group_rates(optimiser) -> dict:
     """Return each optimiser group's current rate by its name."""
     return {g["name"]: g["lr"] for g in optimiser.param_groups}
@@ -1063,14 +1074,13 @@ def code_commit() -> str:
     ).stdout.strip()
 
 
-def main() -> None:
-    """Train on the chunks as they are simulated."""
-    global CHUNK, DRAWS_PER_PASS, SUBSET_SEED
-    import torch
-    from chronos import Chronos2Pipeline
-    from chronos.chronos2.dataset import DatasetMode
-    from chronos.chronos2.model import Chronos2Model
+BIAS_LR = 1e-3
+"""The series bias's starting learning rate, decaying to zero with the
+adapter's."""
 
+
+def build_parser() -> argparse.ArgumentParser:
+    """Return the trainer's command-line parser."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("sim_dir", type=Path)
     parser.add_argument("out", type=Path)
@@ -1128,7 +1138,19 @@ def main() -> None:
     # The series bias (bdbvhubrenewal.forecasters.series_bias): learned
     # group attention bias for same-place and parent-child pairs.
     parser.add_argument("--series-bias", action="store_true")
-    parser.add_argument("--bias-lr", type=float, default=1e-3)
+    parser.add_argument("--bias-lr", type=float, default=BIAS_LR)
+    return parser
+
+
+def main() -> None:
+    """Train on the chunks as they are simulated."""
+    global CHUNK, DRAWS_PER_PASS, SUBSET_SEED
+    import torch
+    from chronos import Chronos2Pipeline
+    from chronos.chronos2.dataset import DatasetMode
+    from chronos.chronos2.model import Chronos2Model
+
+    parser = build_parser()
     args = parser.parse_args()
     CHUNK = args.chunk
     ft.SOURCES = tuple(args.sources)
@@ -1216,9 +1238,7 @@ def main() -> None:
     model = lora_model(pipeline.model, lora, args.init_adapter)
     model.train()
     params = [p for p in model.parameters() if p.requires_grad]
-    optimiser = torch.optim.AdamW(
-        param_groups(model, args.learning_rate, args.bias_lr)
-    )
+    optimiser = make_optimiser(model, args.learning_rate, args.bias_lr)
     accepted = inspect.signature(Chronos2Model.forward).parameters
     base = {
         "grid": args.grid,
@@ -1247,7 +1267,6 @@ def main() -> None:
         "univariate_share": ft.UNIVARIATE_SHARE,
         "parent_mix": list(ft.PARENT_MIX),
         "source_shares": ft.SOURCE_SHARES,
-        "report_batch_share": ft.REPORT_BATCH_SHARE,
         "aggregate_end": ft.AGGREGATE_END,
         **(
             {

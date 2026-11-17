@@ -7,7 +7,7 @@
 # each factor's levels are spread evenly over every block of `block`
 # simulations, independently shuffled per factor, so every factor and
 # (nearly) every pair of levels is balanced (a Latin hypercube over the
-# factors). Each simulation's cell is in its settings, one column per
+# factors). A level listed k times takes k shares of the block. Each simulation's cell is in its settings, one column per
 # factor; continuous values are drawn within the cell (`draw_values`).
 #
 # - process: daily growth r(t), or a renewal process whose Rt(t) gives
@@ -16,29 +16,39 @@
 #   CV 0.6 (renewal only);
 # - trajectory of r(t): steady growth, steady decline, flat, rise then
 #   fall (sharp or gradual), fall then rise, oscillating, or two to three
-#   waves, with small weekly noise, within -0.1 to 0.1 a day;
+#   waves of uneven size, with small weekly noise, within -0.1 to 0.1 a
+#   day;
 # - delay family: lognormal, gamma or exponential;
 # - delay form: parametric, non-parametric (a smooth walk over delays and
 #   an iid part, with distribution "none"; the family is not used), or
 #   both (the walk and iid part as a deviation from the family);
-# - delay over time: static, drift, a step, periodic, or a weekly walk
-#   (iid weekly hazard effects when the delay is non-parametric only);
+# - delay over time: static, drift, a step, periodic, a weekly walk (iid
+#   weekly hazard effects when the delay is non-parametric only),
+#   bunching (now and then one to three report days with no reports in
+#   any place, the held cases reported on the next report day), or a
+#   slowdown (the mean delay in every place x1.5-3 for 2-6 weeks, then as
+#   before);
 # - reporting: every day with day-of-week effects, or on one to three
 #   weekdays;
 # - reference day-of-week effect on expected counts: no or yes;
-# - observation: "negbin" (NB2), "negbin1d" (NB1) or "poisson";
+# - observation: "negbin1d" (NB1) in four simulations of five, or
+#   "poisson";
 # - strata linked through the factors above, or independent: separate
-#   single-stratum simulations with their own cells, combined as strata;
-# - observation across strata: shared, dispersion per stratum, or family
-#   and dispersion per stratum, drawn in R from epinowcast's expected
-#   reports (`observe`);
+#   single-stratum simulations with their own cells and the outbreak's
+#   family, combined as strata;
+# - observation across strata: one family per outbreak, with its
+#   dispersion shared or drawn per stratum around the outbreak's, drawn
+#   in R from epinowcast's expected reports (`observe`);
 # - strata: one, 2 to 26 places, 2 to 8 ages, or places by ages (at most
-#   60), sharing their trajectory and delay through random effects;
+#   60, fewer in runs past 28 weeks: `max_strata`), sharing their
+#   trajectory and delay through random effects;
 # - seeding: every place at the outset, or some imported mid-outbreak;
 # - mixing between places: none, symmetric, asymmetric (one way, in a
-#   drawn order), by distance, or by distance switching on or off, weak
-#   or strong;
-# - imports into strata with cases: none, constant or pulses.
+#   drawn order), by distance, or by distance switching on or off, with
+#   a share of pressure from other places log-uniform on 0.01 to 0.5;
+# - imports into strata with cases: none, constant or pulses;
+# - reporting shocks: none, backlogs or outages, one to three in each of
+#   one to three places with cases;
 # - delays across places: shared, shifted from a shared delay, or each
 #   place's own (crossed with shocks: a shared delay with local backlogs);
 #
@@ -46,11 +56,12 @@
 # R and injected into epinowcast through its growth model, whose growth
 # rate is set to their daily change in log (`latent_expectation`).
 #
-# The seed is scaled so the expected size is a drawn target, and the
-# longest delay is the shortest of 3, 4, 6, 8 and 12 weeks at or above the
-# delay's 99th centile. The NB1 dispersion matches the NB2 scale
+# Outbreaks run 16 to 52 weeks. The seed is scaled so the expected size
+# is a drawn target, and the longest delay is the shortest of 3, 4, 6, 8 and 12 weeks at or above the
+# delay's 99th centile. The NB1 dispersion is on the NB2 scale
 # (epinowcast #937): sqrt_phi * sqrt(lambda_hat * sum(p_d^2)), with
-# lambda_hat the median stratum-day with at least one expected onset.
+# sqrt_phi log-uniform on 0.02 to 1 and lambda_hat the median
+# stratum-day with at least one expected onset.
 # A draw that fails or is out of size is drawn again in the same cell, up
 # to five times; then the cell is logged and skipped.
 #
@@ -69,9 +80,10 @@
 #   Rscript scripts/finetune_simulate.R <n> <seed> <out_dir>
 
 epinowcast_sha <- "e084b080"
-# r4.1: cases per stratum with cases 30 to 30,000 (r4: 30 to 3,000 in
-# concentrated outbreaks, 30 to 1e5 over all strata in even ones).
-grid_name <- "r4.1"
+# r5: NB1 and Poisson only (4:1), NB1 sqrt_phi from 0.02, 16 to 52
+# weeks for every strata structure, uneven waves, and bunching and
+# slowdowns among the delay's changes over time.
+grid_name <- "r5"
 args <- commandArgs(trailingOnly = TRUE)
 n_outbreaks <- as.integer(args[[1]])
 seed <- as.integer(args[[2]])
@@ -104,10 +116,13 @@ factors <- list(
   ),
   delay_family = c("lognormal", "gamma", "exponential"),
   delay_form = c("parametric", "non_parametric", "both"),
-  delay_change = c("static", "drift", "step", "periodic", "walk"),
+  delay_change = c(
+    "static", "drift", "step", "periodic", "walk", "bunching", "slowdown"
+  ),
   reporting = c("daily", "weekdays"),
   reference_dow = c("no", "yes"),
-  observation = c("negbin", "negbin1d", "poisson"),
+  # NB1 four times as often as Poisson.
+  observation = c(rep("negbin1d", 4), "poisson"),
   strata = c("single", "places", "ages", "places_ages"),
   # How cases spread over strata: "concentrated" puts nearly all in a few,
   # as in BDBV, where most provinces report no case in most weeks.
@@ -118,24 +133,24 @@ factors <- list(
   place_rt = c("shared", "independent", "correlated", "lagged"),
   # When places start: all at the outset, or some imported mid-outbreak.
   seeding = c("start", "mid"),
-  # How places infect each other (`place_mixing`), and how strongly.
+  # How places infect each other (`place_mixing`).
   mixing = c("none", "symmetric", "asymmetric", "distance", "time_varying"),
-  mixing_strength = c("weak", "strong"),
   # Imports into strata with cases: none, a constant trickle, or pulses.
   imports = c("none", "constant", "pulses"),
-  # Reporting shocks in one or two places, on top of `delay_change`: none,
-  # a backlog (mean delay x2-5 for 1-4 weeks) or an outage (no reports for
-  # 1-4 weeks, then the held cases at once).
+  # Reporting shocks, on top of `delay_change`, in one to three places
+  # with cases, one to three in each, each with its own timing, length
+  # (1-4 weeks) and size: none, backlogs (mean delay x2-5) or outages (no
+  # reports, then the held cases at once).
   shocks = c("none", "backlog", "outage"),
   # How places' delays relate: one delay everywhere; each place's mean
   # shifted from a shared delay; or each place's mean and spread its own.
-  # Crossed with `shocks`, a shared delay with a backlog or outage in one
-  # or two places is the shared baseline with temporary shocks.
+  # Crossed with `shocks`, a shared delay with backlogs or outages in a
+  # few places is the shared baseline with temporary shocks.
   delay_places = c("shared", "shifted", "independent"),
-  # Observation noise across strata: the outbreak's family and dispersion
-  # everywhere; dispersion drawn per stratum around the outbreak's; or a
-  # family and dispersion per stratum (`observe`).
-  obs_strata = c("shared", "dispersion", "families"),
+  # Observation noise across strata, in the outbreak's family: its
+  # dispersion everywhere, or drawn per stratum around the outbreak's
+  # (partial pooling, `observe`).
+  obs_strata = c("shared", "dispersion"),
   # Linked strata share an epidemic model (trajectory, delays and noise
   # tied through the factors above); independent strata are separate
   # single-stratum simulations, each with its own cell, combined as strata
@@ -143,8 +158,16 @@ factors <- list(
   strata_link = c("linked", "independent")
 )
 
-# Simulations per balanced block: a multiple of every factor's levels.
-block <- 120L
+# Simulations per balanced block: a multiple of every factor's levels
+# (8, 7 and 5 among them).
+block <- 840L
+
+# The most strata of places by ages in a run of `weeks`: 60 up to 28
+# weeks, then fewer, so the reporting triangle (strata by days by delays)
+# and the batch's memory stay about as at 28 weeks.
+max_strata <- function(weeks) {
+  min(60L, as.integer(60 * 28 / weeks))
+}
 
 # The cell of simulation `g`: each factor's level from its shuffled,
 # balanced sequence over the block holding `g`, seeded by block and
@@ -199,7 +222,12 @@ trajectory_path <- function(n, kind, v) {
     rise_fall_gradual = v$rate * tilt,
     fall_rise = -v$rate * tilt,
     oscillating = v$amplitude * sin(2 * pi * seq_len(n) / v$period + v$phase),
-    multi_wave = v$amplitude * sin(2 * pi * v$waves * t + v$phase)
+    # Each cycle (a rise then a fall) has its own scale, so a small wave
+    # can be followed by a much larger one.
+    multi_wave = {
+      wave <- floor(v$waves * t + v$phase / (2 * pi)) + 1
+      v$amplitude * v$wave_scale[wave] * sin(2 * pi * v$waves * t + v$phase)
+    }
   )
   pmin(pmax(r + weekly_noise(n, v$noise_sd), -0.1), 0.1)
 }
@@ -375,6 +403,10 @@ max_delay_for <- function(q99) {
 # A simulation's design: its cell and the categorical choices within it.
 draw_design <- function(g) {
   cell <- cell_for(g)
+  # Up to a year, for contexts of 364 days; ENW_WEEKS fixes it (pilots).
+  fixed <- Sys.getenv("ENW_WEEKS")
+  weeks <- if (nzchar(fixed)) as.integer(fixed) else sample(16:52, 1)
+  cap <- max_strata(weeks)
   n_places <- switch(cell$strata,
     single = 1L, ages = 1L,
     # Concentrated outbreaks spread over many places, as BDBV's provinces.
@@ -383,15 +415,18 @@ draw_design <- function(g) {
     } else {
       sample(2:26, 1)
     },
-    places_ages = sample(6:16, 1)
+    places_ages = {
+      places <- 6:min(16L, cap %/% 3L)
+      places[sample.int(length(places), 1)]
+    }
   )
   n_ages <- switch(cell$strata,
     single = 1L, places = 1L,
     ages = sample(2:8, 1),
-    # At most 60 strata; `sample` on a single number n draws from 1:n,
+    # At most `max_strata`; `sample` on a single number n draws from 1:n,
     # so the range is indexed instead.
     places_ages = {
-      ages <- 3:max(3L, min(7L, 60L %/% n_places))
+      ages <- 3:max(3L, min(7L, cap %/% n_places))
       ages[sample.int(length(ages), 1)]
     }
   )
@@ -414,6 +449,7 @@ draw_design <- function(g) {
     list(grid = grid_name, cell_index = g %% block, cell_block = g %/% block),
     cell,
     list(
+      weeks = weeks,
       n_places = n_places,
       n_ages = n_ages,
       report_days = if (cell$reporting == "weekdays") {
@@ -433,9 +469,7 @@ draw_values <- function(design) {
   # Places with cases in a concentrated outbreak.
   active <- sample(1:min(4, design$n_places), 1)
   v <- list(
-    # Long enough for contexts of BDBV's 40 weeks; places by ages, the
-    # largest in memory, stop at 28.
-    weeks = if (places_ages) sample(16:28, 1) else sample(16:44, 1),
+    weeks = if (is.null(design$weeks)) sample(16:52, 1) else design$weeks,
     offset = sample(0:6, 1),
     # Places with no cases: concentrated outbreaks leave one to four
     # places active, so most series stay at zero.
@@ -451,19 +485,11 @@ draw_values <- function(design) {
     place_sd = runif(1, 0.01, 0.03),
     place_lags = c(0L, sample(1:28, design$n_places - 1L, replace = TRUE)),
     late_at = runif(1, 0.2, 0.6),
-    # Reporting shocks: when, how long and how large.
-    shock_at = runif(1, 0.3, 0.8),
-    shock_weeks = sample(1:4, 1),
-    shock_mult = runif(1, 2, 5),
     late_days = sample(7:14, 1),
     # Mixing: the share of pressure from other places, the asymmetric
     # order, places' positions and the kernel's range, and the
     # time-varying switch.
-    mixing_eps = if (design$mixing_strength == "weak") {
-      runif(1, 0.02, 0.1)
-    } else {
-      runif(1, 0.2, 0.5)
-    },
+    mixing_eps = log_uniform(0.01, 0.5),
     mixing_order = sample.int(design$n_places),
     mixing_x = runif(design$n_places),
     mixing_y = runif(design$n_places),
@@ -493,7 +519,9 @@ draw_values <- function(design) {
     amplitude = runif(1, 0.02, 0.08),
     period = runif(1, 28, 120),
     phase = runif(1, 0, 2 * pi),
-    waves = sample(2:3, 1),
+    waves = waves <- sample(2:3, 1),
+    # Each cycle's scale on the amplitude, log-uniform on 0.2 to 1.
+    wave_scale = exp(runif(waves + 1L, log(0.2), 0)),
     noise_sd = runif(1, 0.002, 0.01),
     # Cases per stratum with cases, log-uniform from 30 to 30,000, so
     # outbreaks span small clusters to national epidemics (Germany's
@@ -519,8 +547,18 @@ draw_values <- function(design) {
     walk_sd = runif(1, 0.03, 0.1),
     reference_dow_sd = runif(1, 0.1, 0.5),
     dow_sd = runif(1, 0.1, 0.6),
-    sqrt_phi = log_uniform(0.1, 1)
+    sqrt_phi = log_uniform(0.02, 1),
+    # Bunching: one episode every 4 to 13 weeks, each one to three report
+    # days with no reports, at shares of the way through.
+    bunch_every = runif(1, 4, 13),
+    # A slowdown: when, how long and how large.
+    slow_at = runif(1, 0.2, 0.8),
+    slow_weeks = sample(2:6, 1),
+    slow_mult = runif(1, 1.5, 3)
   )
+  n_bunch <- max(1L, round(v$weeks / v$bunch_every))
+  v$bunch_at <- sort(runif(n_bunch, 0.05, 0.95))
+  v$bunch_len <- sample(1:3, n_bunch, replace = TRUE)
   family <- if (design$delay_form == "non_parametric") {
     "none"
   } else {
@@ -541,13 +579,19 @@ draw_values <- function(design) {
   } else {
     integer(0)
   }
-  # Places with a reporting shock: one or two places with cases.
+  # Reporting shocks, one entry each: its place (one to three places with
+  # cases, one to three shocks in each), when, how long and how large.
   cases <- setdiff(seq_len(design$n_places), quiet)
-  v$shock_places <- if (design$shocks == "none") {
+  places <- if (design$shocks == "none") {
     integer(0)
   } else {
-    cases[sample.int(length(cases), min(length(cases), sample(1:2, 1)))]
+    cases[sample.int(length(cases), min(length(cases), sample(1:3, 1)))]
   }
+  v$shock_places <- rep(places, sample(1:3, length(places), replace = TRUE))
+  n_shocks <- length(v$shock_places)
+  v$shock_at <- runif(n_shocks, 0.1, 0.9)
+  v$shock_weeks <- sample(1:4, n_shocks, replace = TRUE)
+  v$shock_mult <- runif(n_shocks, 2, 5)
   # Observation family and dispersion per stratum (`.group` order: places
   # then ages within each).
   n_s <- design$n_places * design$n_ages
@@ -557,11 +601,7 @@ draw_values <- function(design) {
   } else {
     v$sqrt_phi * exp(rnorm(n_s, 0, v$obs_phi_sd))
   }
-  v$obs_family <- if (design$obs_strata == "families") {
-    sample(c("negbin", "negbin1d", "poisson"), n_s, replace = TRUE)
-  } else {
-    rep(design$observation, n_s)
-  }
+  v$obs_family <- rep(design$observation, n_s)
   v
 }
 
@@ -590,10 +630,28 @@ observe <- function(mu, group, family, sqrt_phi_obs) {
   out
 }
 
-# The first and last reference dates of a reporting shock in `counts`.
-shock_window <- function(counts, v) {
-  start <- min(counts$reference_date) + round(v$shock_at * v$weeks * 7)
-  c(start, start + 7L * v$shock_weeks - 1L)
+# The first and last reference dates of reporting shock `k` in `counts`.
+shock_window <- function(counts, v, k = 1L) {
+  start <- min(counts$reference_date) + round(v$shock_at[k] * v$weeks * 7)
+  c(start, start + 7L * v$shock_weeks[k] - 1L)
+}
+
+# The first and last reference dates of a slowdown in `counts`.
+slowdown_window <- function(counts, v) {
+  start <- min(counts$reference_date) + round(v$slow_at * v$weeks * 7)
+  c(start, start + 7L * v$slow_weeks - 1L)
+}
+
+# Report dates held by bunching: from each share `bunch_at` of the way
+# through, the next `bunch_len` dates that report (`report` 1 in
+# `structural`) in every stratum.
+bunch_dates <- function(structural, v) {
+  days <- sort(unique(structural[report == 1L, report_date]))
+  start <- min(structural$date) + round(v$bunch_at * v$weeks * 7)
+  held <- unlist(lapply(seq_along(start), function(i) {
+    head(days[days >= start[i]], v$bunch_len[i])
+  }))
+  sort(unique(as.IDate(held)))
 }
 
 # A rejected try's row: its design and values, flat.
@@ -720,6 +778,13 @@ simulate_outbreak <- function(design, v) {
   onsets <- expected_onsets(
     size, gt, log_r, mixing = mixing, imports = v$seed_size * imports
   )
+  # Days before the outbreak first expects one onset a day.
+  total <- rowSums(onsets)
+  v$low_start_days <- if (any(total >= 1)) {
+    which(total >= 1)[1] - 1L
+  } else {
+    length(total)
+  }
   latent <- latent_expectation(
     pobs, onsets,
     observation = if (reference_dow) ~ (1 | day_of_week) else ~1
@@ -734,17 +799,31 @@ simulate_outbreak <- function(design, v) {
   set(meta, j = "step", value = as.numeric(meta$week >= v$step_at * n_weeks))
   set(meta, j = "periodic",
       value = sin(2 * pi * meta$week / v$periodic_weeks))
-  window <- shock_window(data.table(reference_date = meta$date), v)
-  shocked <- sprintf("P%02d", v$shock_places)
-  set(meta, j = "backlog", value = as.numeric(
-    meta$place %in% shocked & meta$date >= window[1] & meta$date <= window[2]
+  # A backlog's covariate is the log of its multiplier, so shocks of
+  # different sizes share one effect (1, or -1 on the logit hazard).
+  ref_dates <- data.table(reference_date = meta$date)
+  windows <- lapply(seq_along(v$shock_places), function(k) {
+    shock_window(ref_dates, v, k)
+  })
+  backlog <- numeric(nrow(meta))
+  for (k in seq_along(windows)) {
+    w <- windows[[k]]
+    on <- meta$place == sprintf("P%02d", v$shock_places[k]) &
+      meta$date >= w[1] & meta$date <= w[2]
+    backlog[on] <- backlog[on] + log(v$shock_mult[k])
+  }
+  set(meta, j = "backlog", value = backlog)
+  slow <- slowdown_window(data.table(reference_date = meta$date), v)
+  set(meta, j = "slowdown", value = as.numeric(
+    meta$date >= slow[1] & meta$date <= slow[2]
   ))
   parametric <- design$delay_form != "non_parametric"
   # epinowcast allows one walk per formula, so a hazard with no parametric
   # part, which already walks over delays, changes by week as iid effects.
   change_terms <- switch(design$delay_change,
     static = NULL, drift = "trend", step = "step", periodic = "periodic",
-    walk = if (parametric) "rw(week)" else "(1 | week)"
+    walk = if (parametric) "rw(week)" else "(1 | week)",
+    bunching = NULL, slowdown = "slowdown"
   )
   change_beta <- switch(design$delay_change,
     drift = v$drift, step = v$step, periodic = v$periodic, 0
@@ -782,8 +861,9 @@ simulate_outbreak <- function(design, v) {
     beta[cols %in% c("trend", "step", "periodic")] <- change_beta
     # A backlog multiplies the mean delay: log of it on the location, or
     # its negative on the logit hazard.
-    beta[cols == "backlog"] <- log(v$shock_mult) *
-      if (prefix == "refp_mean") 1 else -1
+    sign <- if (prefix == "refp_mean") 1 else -1
+    beta[cols == "backlog"] <- sign
+    beta[cols == "slowdown"] <- log(v$slow_mult) * sign
     parameters[[paste0(prefix, "_beta")]] <<- array(beta)
   }
   if (parametric) {
@@ -854,12 +934,23 @@ simulate_outbreak <- function(design, v) {
       structural <- enw_structural_reporting_metadata(pobs)
       structural[, report := 1L]
     }
-    groups <- strata[place %in% shocked, .group]
-    structural[
-      .group %in% groups & report_date >= window[1] &
-        report_date <= window[2],
-      report := 0L
-    ]
+    for (k in seq_along(windows)) {
+      w <- windows[[k]]
+      groups <- strata[place == sprintf("P%02d", v$shock_places[k]), .group]
+      structural[
+        .group %in% groups & report_date >= w[1] & report_date <= w[2],
+        report := 0L
+      ]
+    }
+  }
+  if (design$delay_change == "bunching") {
+    if (is.null(structural)) {
+      structural <- enw_structural_reporting_metadata(pobs)
+      structural[, report := 1L]
+    }
+    held <- bunch_dates(structural, v)
+    structural[report_date %in% held, report := 0L]
+    v$bunch_dates <- as.character(held)
   }
   report <- enw_report(
     non_parametric = as_formula(FALSE, report_terms),
@@ -998,6 +1089,7 @@ simulate_independent <- function(design, id = NA_character_) {
   failures <- list()
   parts <- list()
   record <- list()
+  strata_values <- list()
   for (s in active) {
     run <- NULL
     for (attempt in 1:5) {
@@ -1010,6 +1102,8 @@ simulate_independent <- function(design, id = NA_character_) {
       one$seeding <- "start"
       one$mixing <- "none"
       one$strata_link <- "linked"
+      # One family per outbreak.
+      one$observation <- design$observation
       res <- simulate_cell(one, paste(id, labels[s], sep = "/"))
       failures <- c(failures, res$failures)
       if (!is.null(res$out)) {
@@ -1022,9 +1116,11 @@ simulate_independent <- function(design, id = NA_character_) {
     parts[[length(parts) + 1L]] <- run$counts
     record[[s]] <- list(
       cell = g, trajectory = one$trajectory,
-      delay_family = one$delay_family, observation = one$observation,
+      delay_family = one$delay_family,
+      observation = run$values$obs_family[1],
       size = sum(run$counts$count) / draws, max_delay = run$values$max_delay
     )
+    strata_values[[length(strata_values) + 1L]] <- run$values
     if (s == active[1]) values <- run$values
   }
   record <- Filter(Negate(is.null), record)
@@ -1040,7 +1136,8 @@ simulate_independent <- function(design, id = NA_character_) {
   values$quiet_places <- quiet
   list(
     out = list(values = values, counts = rbindlist(parts, use.names = TRUE)),
-    failures = failures
+    failures = failures,
+    strata_values = strata_values
   )
 }
 
