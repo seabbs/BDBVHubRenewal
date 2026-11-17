@@ -590,15 +590,31 @@ def germany_unit(
     print(f"germany {label} done", flush=True)
 
 
+BDBV_SCORED_FROM = "2026-11-21"
+"""The first scored BDBV round (the paper's heldout.ebola_from). Origins
+on or after it are never scored here, so fine-tuned results keep the
+scored rounds out, as the paper requires."""
+
+
+def development_origins(
+    vintages: Sequence[str],
+    skip: Sequence[str] = (),
+    scored_from: str = BDBV_SCORED_FROM,
+) -> list[str]:
+    """Return the origins: releases with a later one, before `scored_from`."""
+    return [
+        v for v in vintages[:-1] if v not in skip and v < scored_from
+    ]
+
+
 def bdbv_origins() -> list[str]:
-    """Return the release backtest's origins: releases with a later one."""
+    """Return the release backtest's development origins."""
     from bdbvhubrenewal.evaluation import backtest as bt
     from bdbvhubrenewal.evaluation.backtest import real_vintages
 
     config = bt.load_config()
     target = pd.read_csv("data/target.csv", dtype={"kind": str})
-    real = real_vintages(target)
-    return [v for v in real[:-1] if v not in config.skip_origins]
+    return development_origins(real_vintages(target), config.skip_origins)
 
 
 def origin_draws(frames: list[pd.DataFrame], origin: str) -> pd.DataFrame:
@@ -940,6 +956,8 @@ def bdbv_rows(
     parts = []
     for label, targets in _by_target(labels, daily_labels).items():
         for f in sorted((cache / "bdbv" / label).glob("*.csv.gz")):
+            if f.name.removesuffix(".csv.gz") >= BDBV_SCORED_FROM:
+                continue
             draws = read_cache(f)
             for t in targets:
                 part = draws.loc[draws["target"] == t].drop(columns="target")
