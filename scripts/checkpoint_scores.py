@@ -1110,6 +1110,18 @@ def heldout_rows(
     return pd.concat(parts, ignore_index=True)
 
 
+def germany_forecast_rows(cache: Path, labels: Sequence[str]) -> pd.DataFrame:
+    """Return the `germany_forecast` rows, none without its script.
+
+    scripts/germany_forecast.py (an opt-in SI study) is not on main.
+    """
+    try:
+        mod = _germany_forecast()
+    except ModuleNotFoundError:
+        return pd.DataFrame(columns=COLUMNS)
+    return mod.rows(cache, labels)
+
+
 def table(
     cache: Path, evidence: Path, checkpoints: Path, hashes: Sequence[str]
 ) -> pd.DataFrame:
@@ -1141,7 +1153,7 @@ def table(
                 cache, labels, {h: held_set_of(m[0]) for h, m in meta.items()}
             ),
             _zones().rows(cache, labels),
-            _germany_forecast().rows(cache, labels),
+            germany_forecast_rows(cache, labels),
         ],
         ignore_index=True,
     )
