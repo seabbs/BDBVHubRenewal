@@ -2012,7 +2012,9 @@ def _live_checkpoint(args: argparse.Namespace) -> int:
     from bdbvhubrenewal.reporting.live_checkpoint import LIVE_RUN, docs_page
 
     path = Path(args.scores)
-    scores = pd.read_csv(path) if path.is_file() else None
+    # The Pages step leaves an empty file when the branch has no table.
+    has = path.is_file() and path.stat().st_size > 0
+    scores = pd.read_csv(path) if has else None
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(docs_page(scores, args.run or LIVE_RUN))

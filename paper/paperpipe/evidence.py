@@ -320,13 +320,14 @@ def _case_study_rows(scores: pd.DataFrame) -> pd.DataFrame:
 def checkpoint_rows(scores: pd.DataFrame, run: str = LIVE_RUN) -> pd.DataFrame:
     """Return zero-shot and the live run's checkpoint rows, nationally.
 
-    Rows of `CHECKPOINT_RULE` on the case studies' development data
-    (`live_checkpoint.tidy`), at the national level only, as the levels
-    show the same. BDBV's relative CRPS fills `rel_wis`, so one column
+    Rows of `CHECKPOINT_RULE` and the hub target on the case studies'
+    development data (`live_checkpoint.tidy`), at the national level only,
+    as the levels show the same. BDBV's relative CRPS fills `rel_wis`, so one column
     holds each study's relative score.
     """
-    tidy(scores)  # refuses scored BDBV rounds
-    out = _case_study_rows(scores)
+    out = tidy(scores)
+    out = out.loc[out["study"].isin(["germany", "ebola"])]
+    out = out.assign(rel_wis=out["rel"], rel_log_wis=out["rel_log"])
     live = out["run"] == run if "run" in out else False
     keep = (out["checkpoint"] == "zero-shot") | live
     out = out.loc[keep & (out["level"] == "national")]

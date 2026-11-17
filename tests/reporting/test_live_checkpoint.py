@@ -136,3 +136,16 @@ def test_the_docs_page_waits_without_scores(tmp_path) -> None:
         main(["live-checkpoint", "--scores", missing, "--out", str(out)]) == 0
     )
     assert "not yet" in out.read_text()
+
+
+def test_an_empty_scores_file_also_waits(tmp_path) -> None:
+    from bdbvhubrenewal.cli import main
+
+    empty = tmp_path / "scores.csv"
+    empty.write_text("")
+    out = tmp_path / "ft-preliminary.md"
+    assert (
+        main(["live-checkpoint", "--scores", str(empty), "--out", str(out)])
+        == 0
+    )
+    assert "not yet" in out.read_text()

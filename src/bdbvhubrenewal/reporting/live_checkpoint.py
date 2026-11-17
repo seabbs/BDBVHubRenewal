@@ -9,13 +9,14 @@ table at the branch head, never a pinned checkpoint, and take each
 study's newest checkpoint of the live run (`run`), labelled as
 preliminary with the number of simulations it was fine-tuned on.
 
-Only development data are shown. `tidy` refuses BDBV rows from the
+Only development data are shown. `tidy` drops BDBV rows that reach the
 scored hub rounds (`SCORED_FROM`); the scorer never reads the German
 second half.
 """
 
 from __future__ import annotations
 
+import warnings
 from typing import Final
 
 import pandas as pd
@@ -63,10 +64,8 @@ def tidy(scores: pd.DataFrame) -> pd.DataFrame:
     trainer's held-out loss. `rel` and `rel_log` hold Germany's WIS and
     BDBV's CRPS relative to `randomwalknowcast`.
 
-    Raises
-    ------
-    ValueError
-        If a BDBV row reaches the scored hub rounds.
+    BDBV rows that reach the scored hub rounds are dropped, with a
+    warning.
     """
     out = scores.loc[scores["study"].isin(STUDIES)].copy()
     if "rule" in out:
@@ -79,10 +78,13 @@ def tidy(scores: pd.DataFrame) -> pd.DataFrame:
             out["last_origin"].astype(str) >= SCORED_FROM
         )
         if late.any():
-            raise ValueError(
-                f"BDBV rows reach the scored hub rounds (from {SCORED_FROM}), "
-                "which stay out of fine-tuned results."
+            warnings.warn(
+                f"Dropped {int(late.sum())} BDBV rows that reach the scored "
+                f"hub rounds (from {SCORED_FROM}), which stay out of "
+                "fine-tuned results.",
+                stacklevel=2,
             )
+            out = out.loc[~late]
 
     def col(name: str) -> pd.Series:
         return out[name] if name in out else pd.Series(float("nan"), out.index)
