@@ -69,12 +69,13 @@ def _scores() -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def test_the_curve_keeps_zero_shot_and_the_live_run_nationally() -> None:
+def test_the_curve_keeps_zero_shot_and_the_live_run_by_level() -> None:
     from paperpipe.evidence import checkpoint_rows
 
     out = checkpoint_rows(_scores(), "one-model")
     assert set(out["checkpoint"]) == {"zero-shot", "slots-a", "slots-b"}
-    assert set(out["level"]) == {"national"}
+    # Each level is kept, for its own panel.
+    assert set(out["level"]) == {"national", "provinces"}
 
 
 def test_the_attention_bias_comparison_comes_from_checkpoint_scores() -> None:
@@ -82,7 +83,9 @@ def test_the_attention_bias_comparison_comes_from_checkpoint_scores() -> None:
 
     out = slots_rows(_scores(), "one-model")
     assert set(out["run"]) == {"attention biases", "no biases"}
-    assert "Held-out loss" in set(out["set"])
+    # One set per study and level, not pooled.
+    assert {"BDBV national, daily", "BDBV provinces, daily"} <= set(out["set"])
+    assert "Held-out loss, all" not in set(out["set"])
     assert set(out.columns) >= {"set", "run", "outbreaks", "score"}
 
 
