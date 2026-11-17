@@ -19,14 +19,14 @@ def test_a_tick_runs_this_machine_s_targets_in_order():
     assert score[:3] == ["nice", "-n", "19"]
     assert "--forcerun" in score
     assert "release_list" in score
-    assert "workflow/profiles/cpu" in score
+    assert "workflow/profiles/default" in score
     assert score[score.index("--cores") :][:2] == ["--cores", "4"]
     assert "mem_mb=32768" in score
 
 
-def test_training_targets_use_the_gpu_profile():
-    got = schedule.plan({"SCHEDULE_TARGETS": "finetune publish"})
-    assert all("workflow/profiles/gpu" in cmd for _, cmd in got)
+def test_every_target_uses_the_default_profile():
+    got = schedule.plan({"SCHEDULE_TARGETS": "simulate finetune publish"})
+    assert all("workflow/profiles/default" in cmd for _, cmd in got)
 
 
 def test_no_targets_means_nothing_runs():

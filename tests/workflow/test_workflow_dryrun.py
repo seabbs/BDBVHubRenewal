@@ -118,7 +118,7 @@ def test_a_host_can_take_whole_rounds(tmp_path):
 
 def test_no_host_is_named_in_the_committed_workflow():
     profiles = (ROOT / "workflow" / "profiles").iterdir()
-    assert sorted(p.name for p in profiles) == ["ci", "cpu", "gpu"]
+    assert sorted(p.name for p in profiles) == ["ci", "default"]
     for path in [
         ROOT / "workflow" / "config.yaml",
         ROOT / "workflow" / "README.md",
@@ -358,7 +358,7 @@ def test_at_most_two_simulations_run_at_once(tmp_path):
             "--cores",
             "8",
             "--workflow-profile",
-            "workflow/profiles/cpu",
+            "workflow/profiles/default",
             "--config",
             "rounds=[4]",
         ],
