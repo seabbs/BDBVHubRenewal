@@ -759,3 +759,59 @@ def test_the_heldout_layout_table_waits_then_shows_its_rows(tmp_path) -> None:
     paths = dict.fromkeys(EVIDENCE) | {"heldout_layout": rows}
     write_evidence(paths, tmp_path / "si", tmp_path / "fig", tmp_path / "e.yml")
     assert "daily_weekly" in table.read_text()
+
+
+def _si_copula() -> pd.DataFrame:
+    """Rows of the rolling copula's impact: off and rolling, by level."""
+    rows = []
+    for study, levels in [
+        ("germany_dev", ["national", "states", "age"]),
+        ("bdbv_backtest", ["national", "provinces", "zones"]),
+    ]:
+        for level in levels:
+            for copula, value in (("off", 2.0), ("rolling", 1.0)):
+                for target, metric in (
+                    ("summed", "energy"),
+                    ("summed", "cover90_sum"),
+                    ("cell", "wis"),
+                ):
+                    rows.append(
+                        {
+                            "study": study,
+                            "level": level,
+                            "model": "randomwalknowcast",
+                            "copula": copula,
+                            "target": target,
+                            "metric": metric,
+                            "value": value,
+                            "n": 10,
+                        }
+                    )
+    return pd.DataFrame(rows)
+
+
+def test_the_copula_figure_has_one_panel_per_study_and_level() -> None:
+    from paperpipe.evidence import copula_figure
+
+    fig = copula_figure(_si_copula())
+    drawn = [ax for ax in fig.axes if ax.get_visible() and ax.has_data()]
+    assert len(drawn) == 6
+    assert {ax.get_title().split(" (")[0] for ax in drawn} >= {
+        "Germany, national",
+        "BDBV, zones",
+    }
+
+
+def test_the_copula_figure_waits_then_draws(tmp_path) -> None:
+    write_evidence(
+        dict.fromkeys(EVIDENCE),
+        tmp_path / "si",
+        tmp_path / "fig",
+        tmp_path / "e.yml",
+    )
+    assert (tmp_path / "fig" / "copula-impact.png").is_file()
+    rows = tmp_path / "si-copula.csv"
+    _si_copula().to_csv(rows, index=False)
+    paths = dict.fromkeys(EVIDENCE) | {"si_copula": rows}
+    write_evidence(paths, tmp_path / "si", tmp_path / "fig", tmp_path / "e.yml")
+    assert (tmp_path / "fig" / "copula-impact.png").stat().st_size > 20000
