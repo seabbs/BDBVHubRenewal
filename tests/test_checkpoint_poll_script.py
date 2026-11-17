@@ -157,3 +157,17 @@ def test_slots_run_checkpoints_are_held_while_the_hold_file_exists(
     assert poll.unheld(queue, zero, hold) == queue
     hold.write_text("pending\n")
     assert poll.unheld(queue, zero, hold) == ["slots-z", "c"]
+
+
+def test_only_current_run_slots_checkpoints_are_scored(poll) -> None:
+    # This code loads the one-model run's adapters only; superseded slots
+    # runs (zero-init, random slots, the attention-bias trials) are
+    # skipped, and unclassified ones wait for their settings.
+    runs = {
+        "slots-a": "one-model",
+        "slots-b": "attn-bias",
+        "slots-z": "slots-zeroinit",
+    }
+    queue = ["slots-z", "slots-b", "slots-a", "slots-new", "c"]
+    assert poll.scoreable(queue, runs) == ["slots-a", "c"]
+    assert poll.unclassified(queue, runs) == ["slots-new"]

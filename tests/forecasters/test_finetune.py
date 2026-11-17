@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from bdbvhubrenewal.forecasters import NATIONAL
 from bdbvhubrenewal.forecasters.finetune import (
@@ -101,3 +102,302 @@ def test_block_is_the_ragged_layout_with_final_counts_ahead() -> None:
     assert np.array_equal(
         block["future_covariates"], context[:, start:], equal_nan=True
     )
+
+
+def test_releases_add_each_place_total_of_its_strata() -> None:
+    counts = _counts()
+    counts["location"] = counts["location"].map({"A": "P1-A1", "B": "P1-A2"})
+    rows = releases(counts, "daily", ["2026-10-30"], totals=True)
+    by = rows.groupby("location")["observed"].sum()
+    # P1 is the sum of its two strata, and the country counts them once.
+    assert by["P1"] == by["P1-A1"] + by["P1-A2"]
+    assert by[NATIONAL] == by["P1"]
+
+
+def test_three_level_block_has_country_place_and_strata() -> None:
+    counts = _counts()
+    counts["location"] = counts["location"].map({"A": "P1-A1", "B": "P1-A2"})
+    cutoffs = weekly_cutoffs("2026-10-05", "2026-10-21", 2)
+    places = (NATIONAL, "P1", "P1-A1", "P1-A2")
+    block = training_block(
+        counts, "daily", places, cutoffs, max_lag=3, totals=True
+    )
+    assert block["n_targets"] == 4
+    start = block["start"]
+    target = block["context"][:4, start:]
+    # The country and P1 are both the sum of the strata.
+    np.testing.assert_array_equal(target[0], target[1])
+    np.testing.assert_array_equal(target[1], target[2] + target[3])
+
+
+def test_totals_sum_strata_by_place_and_by_age_exactly() -> None:
+    counts = _counts()
+    counts = pd.concat(
+        [
+            counts.assign(
+                location=counts["location"].map({"A": "P1-A1", "B": "P1-A2"})
+            ),
+            counts.assign(
+                location=counts["location"].map({"A": "P2-A1", "B": "P2-A2"})
+            ),
+        ]
+    )
+    rows = releases(counts, "daily", ["2026-10-09", "2026-10-30"], totals=True)
+    wide = rows.pivot_table(
+        index=["vintage", "onset_date"],
+        columns="location",
+        values="observed",
+        aggfunc="sum",
+        fill_value=0,
+    )
+    leaves = ["P1-A1", "P1-A2", "P2-A1", "P2-A2"]
+    assert (wide[NATIONAL] == wide[leaves].sum(axis=1)).all()
+    assert (wide["P1"] == wide["P1-A1"] + wide["P1-A2"]).all()
+    assert (wide["A1"] == wide["P1-A1"] + wide["P2-A1"]).all()
+
+
+def test_regions_of_places_total_their_places_exactly() -> None:
+    counts = _counts()
+    counts["location"] = counts["location"].map({"A": "R1-P01", "B": "R1-P02"})
+    rows = releases(counts, "weekly", ["2026-10-30"], totals=True)
+    wide = rows.pivot_table(
+        index="target_end_date",
+        columns="location",
+        values="total",
+        aggfunc="sum",
+        fill_value=0,
+    )
+    assert (wide["R1"] == wide["R1-P01"] + wide["R1-P02"]).all()
+    # A region's places are not age groups: no total by their second part.
+    assert "P01" not in wide.columns
+
+
+def test_block_of_places_with_no_release_rows_is_none() -> None:
+    # Only place A had cases, so its releases hold the country alone.
+    counts = _counts().query("location == 'A'")
+    cutoffs = ["2026-10-17", "2026-10-24"]
+    assert training_block(counts, "daily", ("A",), cutoffs, max_lag=3) is None
+    assert training_block(counts, "daily", ("B",), cutoffs, max_lag=3) is None
+
+
+def _longer_counts() -> pd.DataFrame:
+    """One place, the country, onsets over five weeks, reported 0, 2 and
+    5 days on."""
+    rows = []
+    for onset in pd.date_range("2026-09-01", "2026-10-05"):
+        for delay, n in ((0, 1), (2, 2), (5, 4)):
+            rows.append(("A", onset, onset + pd.Timedelta(days=delay), n))
+    return pd.DataFrame(
+        rows, columns=["location", "reference_date", "report_date", "count"]
+    )
+
+
+def test_three_day_triangle_sums_daily_reports_by_each_release() -> None:
+    from bdbvhubrenewal.forecasters.finetune import aggregate_triangle
+
+    counts = _longer_counts()
+    cutoffs = ["2026-09-23", "2026-09-30"]
+    rows = releases(counts, "daily", cutoffs)
+    daily = hub_triangle(rows, "daily", (NATIONAL,), "2026-10-05", max_lag=6)
+    three = aggregate_triangle(daily, 3, 2)
+    ref = pd.to_datetime(counts["reference_date"])
+    rep = pd.to_datetime(counts["report_date"])
+    # Bins end on the latest cut-off and every 3 days either side of it.
+    assert three.times[three.last] == "2026-09-30"
+    for j, end in enumerate(three.times):
+        e = pd.Timestamp(end)
+        days = (ref > e - pd.Timedelta(days=3)) & (ref <= e)
+        for k in range(2):
+            release = e + pd.Timedelta(days=3 * k)
+            got = three.partial[0, j, k]
+            if release.date().isoformat() not in cutoffs:
+                assert np.isnan(got)
+                continue
+            # Lag k: the release 3k days after the bin, for all its days.
+            assert got == counts.loc[days & (rep <= release), "count"].sum()
+
+
+def test_three_day_blocks_are_cut_like_daily_ones() -> None:
+    counts = _longer_counts()
+    cutoffs = ["2026-09-23", "2026-09-30"]
+    block = training_block(counts, "3day", (NATIONAL,), cutoffs, max_lag=2)
+    assert block["n_targets"] == 1
+    assert block["n_covariates"] == 2
+    target = block["context"][0]
+    # Every full bin of three days holds 21 cases.
+    assert target[block["start"] - 1] == 21.0
+
+
+def test_three_day_block_with_no_whole_bin_by_its_cut_is_none() -> None:
+    # Cases start the day before the cut-off: no 3-day bin ends there.
+    counts = _longer_counts()
+    cutoffs = ["2026-09-02"]
+    assert (
+        training_block(counts, "3day", (NATIONAL,), cutoffs, max_lag=2) is None
+    )
+
+
+def _two_places() -> pd.DataFrame:
+    """Two places, onsets over five weeks, reported 0 and 3 days on."""
+    rows = []
+    for onset in pd.date_range("2026-09-01", "2026-10-05"):
+        for place, n in (("A", 3), ("B", 5)):
+            for delay in (0, 3):
+                rows.append((place, onset, onset + pd.Timedelta(days=delay), n))
+    return pd.DataFrame(
+        rows, columns=["location", "reference_date", "report_date", "count"]
+    )
+
+
+def test_a_parent_need_not_be_the_sum_of_its_children() -> None:
+    from bdbvhubrenewal.forecasters.finetune import country_counts
+
+    counts = _two_places()
+    rng = np.random.default_rng(1)
+    same, total = country_counts(counts, "exact", rng)
+    assert same.equals(counts)
+    assert total.equals(counts)
+    # Unallocated cases are in the country's count but in no place's.
+    places, total = country_counts(counts, "unallocated", rng)
+    assert total.equals(counts)
+    assert 0 < places["count"].sum() < counts["count"].sum()
+    # The country reported through its own, later stream.
+    places, total = country_counts(counts, "late_parent", rng)
+    assert places.equals(counts)
+    lag = pd.to_datetime(total["report_date"]) - pd.to_datetime(
+        counts["report_date"]
+    )
+    assert lag.nunique() == 1
+    assert lag.iloc[0] > pd.Timedelta(0)
+
+
+def test_blocks_carry_a_parent_that_does_not_sum() -> None:
+    counts = _two_places()
+    cutoffs = ["2026-09-23", "2026-09-30"]
+    places = (NATIONAL, "A", "B")
+    exact = training_block(counts, "weekly", places, cutoffs, max_lag=2)
+    loose = training_block(
+        counts,
+        "weekly",
+        places,
+        cutoffs,
+        max_lag=2,
+        parent="unallocated",
+        rng=np.random.default_rng(1),
+    )
+    t = exact["start"] - 1
+    assert exact["context"][0, t] == exact["context"][1:3, t].sum()
+    assert loose["context"][0, t] > loose["context"][1:3, t].sum()
+
+
+def test_a_late_country_keeps_its_late_reports_in_its_truth() -> None:
+    counts = _two_places()
+    country = counts.assign(
+        report_date=pd.to_datetime(counts["report_date"]) + pd.Timedelta(days=9)
+    )
+    days = sorted(
+        pd.to_datetime(counts["reference_date"])
+        .dt.strftime("%Y-%m-%d")
+        .unique()
+    )
+    truth = final_counts(counts, "daily", (NATIONAL,), days, False, country)
+    assert truth.sum() == counts["count"].sum()
+
+
+@pytest.mark.parametrize(
+    ("source", "width"), [("daily+weekly", 7), ("daily+3day", 3)]
+)
+def test_a_mixed_block_adds_each_places_period_totals_on_daily_steps(
+    source, width
+) -> None:
+    counts = _two_places()
+    cutoffs = ["2026-09-23", "2026-09-30"]
+    places = (NATIONAL, "A", "B")
+    block = training_block(counts, source, places, cutoffs, max_lag=3)
+    daily = training_block(counts, "daily", places, cutoffs, max_lag=3)
+    n = len(places)
+    # Daily counts, then one aggregate row per place, then daily lags.
+    assert block["n_targets"] == 2 * n
+    assert list(block["target_places"]) == [*range(n), *range(n)]
+    assert block["places"] == places
+    assert block["n_covariates"] == daily["n_covariates"]
+    x, d = block["context"], daily["context"]
+    assert np.array_equal(x[:n], d[:n], equal_nan=True)
+    assert np.array_equal(x[2 * n :], d[n:], equal_nan=True)
+    agg = x[n : 2 * n]
+    ends = np.flatnonzero(~np.isnan(agg[0]))
+    # A value on each period's last day only, the period's total.
+    assert len(ends) > 1
+    assert set(np.diff(ends)) == {width}
+    assert np.isnan(agg[:, ends[0] + 1 : ends[1]]).all()
+    for e in ends:
+        assert np.allclose(agg[:, e], d[:n, e - width + 1 : e + 1].sum(1))
+
+
+def test_a_mixed_blocks_periods_can_end_on_any_day() -> None:
+    from bdbvhubrenewal.forecasters.finetune import period_totals
+
+    times = [
+        d.date().isoformat() for d in pd.date_range("2026-09-01", periods=30)
+    ]
+    days = np.ones((1, 30))
+    for weekday in range(7):
+        out = period_totals(days, times, "weekly", end=weekday)
+        ends = [
+            pd.Timestamp(times[e]).weekday()
+            for e in np.flatnonzero(~np.isnan(out[0]))
+        ]
+        assert set(ends) == {weekday}
+        assert np.nansum(out) == 7 * len(ends)
+    offsets = set()
+    for k in range(3):
+        out = period_totals(days, times, "3day", end=k)
+        ends = np.flatnonzero(~np.isnan(out[0]))
+        assert set(np.diff(ends)) == {3}
+        offsets.add(int(ends[0] % 3))
+    assert offsets == {0, 1, 2}
+
+
+def test_batched_reports_land_only_on_one_weekday() -> None:
+    from bdbvhubrenewal.forecasters.finetune import batch_reports
+
+    counts = _two_places()
+    batched = batch_reports(counts, 2)
+    report = pd.to_datetime(batched["report_date"])
+    before = pd.to_datetime(counts["report_date"])
+    assert set(report.dt.weekday) == {2}
+    assert ((report - before).dt.days.between(0, 6)).all()
+    # Every case is still reported, against its reference date.
+    totals = batched.groupby(["location", "reference_date"])["count"].sum()
+    assert totals.equals(
+        counts.groupby(["location", "reference_date"])["count"].sum()
+    )
+    # Cut-offs between batch days see no new reports.
+    cutoffs = ["2026-09-17", "2026-09-18", "2026-09-19", "2026-09-23"]
+    rows = releases(batched, "daily", cutoffs)
+    seen = rows.groupby("cutoff")["observed"].sum()
+    assert seen["2026-09-17"] == seen["2026-09-18"] == seen["2026-09-19"]
+    assert seen["2026-09-23"] > seen["2026-09-19"]
+
+
+def test_a_mixed_blocks_totals_in_the_context_are_the_releases_counts() -> None:
+    # Late reports (20 days on) are past the release for recent onsets, so
+    # the daily row's context is short of the truth there. The total row
+    # must sum the same counts the daily row shows, not the truth.
+    counts = _two_places()
+    late = counts.assign(
+        report_date=counts["report_date"] + pd.Timedelta(days=20)
+    )
+    counts = pd.concat([counts, late], ignore_index=True)
+    cutoffs = ["2026-09-23", "2026-09-30"]
+    places = (NATIONAL, "A", "B")
+    block = training_block(counts, "daily+weekly", places, cutoffs, max_lag=3)
+    n, start = len(places), block["start"]
+    x = block["context"]
+    daily, agg = x[:n], x[n : 2 * n]
+    ends = [e for e in np.flatnonzero(~np.isnan(agg[0])) if e < start]
+    assert ends
+    for e in ends:
+        assert np.allclose(agg[:, e], daily[:, e - 6 : e + 1].sum(1))
+    truth = training_block(counts, "daily", places, ["2026-12-31"], max_lag=3)
+    assert truth is not None

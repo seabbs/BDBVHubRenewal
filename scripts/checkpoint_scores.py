@@ -89,9 +89,10 @@ DAILY_ZERO_SHOT = ("fm_chronos_daily_ragged",)
 """The zero-shot models with a daily target; the weekly ones have none."""
 FINETUNED_DAILY = ("fm_chronos_daily_ragged_ft",)
 """The fine-tuned models scored on the daily target. A model plugs in
-here if it has `quantiles(task, levels, target="daily")` or `daily(task)`
-(`bdbvhubrenewal.evaluation.marginals.daily_quantiles`)."""
-DAILY_RUNS = ("slots",)
+here if it has `quantiles(task, levels, target="daily")`, `daily(task)` or
+`forecast_both(task)` (`bdbvhubrenewal.evaluation.marginals.daily_quantiles`).
+"""
+DAILY_RUNS = ("one-model",)
 """Runs (`run_of`) whose checkpoints take the daily target by default."""
 DAILY_DONE = "daily.done"
 """In a unit's folder: written once every date holds the daily target."""
@@ -187,12 +188,20 @@ def scored_checkpoints(evidence: pd.DataFrame) -> set[str]:
 # Rows ------------------------------------------------------------------
 
 
-def run_of(settings: Mapping[str, Any]) -> str:
-    """Return a checkpoint's run: `slots`, `slots-zeroinit` or `no-slots`.
+CURRENT_RUNS = {"one-model"}
+"""Runs whose adapters this code loads (series bias, mixed layouts)."""
 
-    The first slots run's slots started at zero and did not learn; the
-    slots run restarted with random slots at their own learning rate.
+
+def run_of(settings: Mapping[str, Any]) -> str:
+    """Return a checkpoint's run from its settings.
+
+    `one-model`: the series bias with mixed-frequency layouts (a source
+    such as `daily+weekly`); `attn-bias`: the earlier series-bias trials;
+    `slots-zeroinit` and `slots`: the superseded slots runs; `no-slots`.
     """
+    if settings.get("series_bias"):
+        mixed = any("+" in str(s) for s in settings.get("sources", []))
+        return "one-model" if mixed else "attn-bias"
     slots = settings.get("series_slots")
     if not slots:
         return "no-slots"
@@ -574,6 +583,7 @@ def bdbv_unit(
     from bdbvhubrenewal.data import load_daily
     from bdbvhubrenewal.evaluation import backtest as bt
     from bdbvhubrenewal.evaluation import store
+    from bdbvhubrenewal.evaluation.marginals import daily_draws
     from bdbvhubrenewal.forecasters import get_model
     from bdbvhubrenewal.forecasters.base import (
         ModelUnavailableError,
@@ -609,7 +619,7 @@ def bdbv_unit(
                     if target == "7day":
                         drawn = model.forecast(task)
                     else:
-                        drawn = model.daily(task)
+                        drawn = daily_draws(model, task)
                 except ModelUnavailableError as err:
                     print(f"{model.name} at {origin}: {err}", flush=True)
                     continue

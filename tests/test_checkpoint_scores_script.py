@@ -468,7 +468,12 @@ def test_the_reference_and_the_new_run_take_the_daily_target(
     held = tmp_path / "heldout"
     held.mkdir()
     runs = {
-        "slots-new": {"series_slots": {"n": 128, "init": "normal"}},
+        "slots-new": {
+            "series_bias": {"init": "zero"},
+            "sources": ["daily", "weekly", "daily+weekly"],
+        },
+        "slots-bias": {"series_bias": {"init": "zero"}},
+        "slots-old": {"series_slots": {"n": 128, "init": "normal"}},
         "slots-zero": {"series_slots": {"n": 128, "init": "zero"}},
         "old": {},
     }
@@ -478,6 +483,8 @@ def test_the_reference_and_the_new_run_take_the_daily_target(
     assert cs.targets_for(tmp_path, "slots-new") == ("7day", "daily")
     # Old runs take it only when asked (`germany CACHE LABEL daily`).
     assert cs.targets_for(tmp_path, "slots-zero") == ("7day",)
+    assert cs.targets_for(tmp_path, "slots-old") == ("7day",)
+    assert cs.targets_for(tmp_path, "slots-bias") == ("7day",)
     assert cs.targets_for(tmp_path, "old") == ("7day",)
     assert cs.targets_for(tmp_path, cs.COMPLETE_LABEL) == ("7day",)
     # A checkpoint whose settings are not fetched yet is 7-day only.
@@ -694,3 +701,14 @@ def test_bdbv_daily_truth_is_each_day_in_the_first_release_d_days_on(
     assert by.loc[("CD", "2026-09-02"), "truth"] == 4
     # A day no release reaches D days on has no truth.
     assert ("CD-KN", "2026-09-25") not in by.index
+
+
+def test_the_one_model_run_is_told_from_the_superseded_ones(cs) -> None:
+    bias = {"series_bias": {"init": "zero"}}
+    one = {**bias, "sources": ["daily", "weekly", "3day", "daily+weekly"]}
+    assert cs.run_of(one) == "one-model"
+    assert cs.run_of({**bias, "sources": ["weekly", "daily"]}) == "attn-bias"
+    assert cs.run_of({"series_slots": {"init": "zero"}}) == "slots-zeroinit"
+    assert cs.run_of({"series_slots": {"init": "normal"}}) == "slots"
+    assert cs.run_of({}) == "no-slots"
+    assert {"one-model"} == cs.CURRENT_RUNS

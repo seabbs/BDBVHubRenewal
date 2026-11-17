@@ -13,7 +13,7 @@ numbers (common random numbers).
 
 `daily_quantiles` does the same for the daily target, each day's count:
 a model's own daily quantiles (`quantiles(task, levels, target="daily")`)
-where it gives them, else the quantiles of its daily draws (`daily(task)`).
+where it gives them, else the quantiles of its daily draws (`daily_draws`).
 A model with neither has no daily target.
 """
 
@@ -36,7 +36,13 @@ from bdbvhubrenewal.forecasters.base import (
     add_national,
 )
 
-__all__ = ["COMMON_STREAM", "N_DRAWS", "daily_quantiles", "forecast_quantiles"]
+__all__ = [
+    "COMMON_STREAM",
+    "N_DRAWS",
+    "daily_draws",
+    "daily_quantiles",
+    "forecast_quantiles",
+]
 
 N_DRAWS: Final = 1000
 """Draws per forecast where the quantiles come from draws."""
@@ -145,12 +151,11 @@ def daily_quantiles(
             return own.assign(model=model.name, as_of=np.nan)[
                 list(DAILY_COLUMNS)
             ]
-        daily = getattr(model, "daily", None)
-        if not callable(daily):
-            return None
         if hasattr(model, "stream"):
-            daily = _with_stream(model).daily
-        drawn = daily(dataclasses.replace(task, n_samples=n_draws, seed=seed))
+            model = _with_stream(model)
+        drawn = daily_draws(
+            model, dataclasses.replace(task, n_samples=n_draws, seed=seed)
+        )
     except ModelUnavailableError as err:
         log.warning("%s skipped %s: %s", model.name, task.vintage, err)
         return pd.DataFrame(columns=list(DAILY_COLUMNS))
@@ -165,6 +170,38 @@ def daily_quantiles(
         .reset_index()
     )
     return out.assign(model=model.name, as_of=np.nan)[list(DAILY_COLUMNS)]
+
+
+def daily_draws(model: Any, task: ForecastTask) -> pd.DataFrame | None:
+    """Return a model's daily draws, or None if it has no daily target.
+
+    From `daily(task)` (`randomwalknowcast`) or the daily part of
+    `forecast_both(task)` (Chronos-2's count rows), which is empty for a
+    model with no daily rows.
+
+    Parameters
+    ----------
+    model : object
+        The model.
+    task : ForecastTask
+        The task.
+
+    Returns
+    -------
+    pandas.DataFrame or None
+        `SAMPLE_COLUMNS`, the day in `target_end_date`.
+    """
+    daily = getattr(model, "daily", None)
+    if callable(daily):
+        out: pd.DataFrame | None = daily(task)
+        return out
+    both = getattr(model, "forecast_both", None)
+    if not callable(both):
+        return None
+    drawn: pd.DataFrame = both(task)[1]
+    if drawn.empty:
+        return None
+    return drawn.rename(columns={"date": "target_end_date"})
 
 
 def _own_daily(

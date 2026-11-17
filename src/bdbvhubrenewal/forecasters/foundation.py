@@ -41,7 +41,7 @@ import numpy as np
 import pandas as pd
 
 from bdbvhubrenewal.data.dates import as_date, epiweek_end
-from bdbvhubrenewal.forecasters import slots
+from bdbvhubrenewal.forecasters import series_bias
 from bdbvhubrenewal.forecasters.base import (
     NATIONAL,
     SAMPLE_COLUMNS,
@@ -147,10 +147,11 @@ FINETUNED_CACHE: Final = "~/.cache/bdbvhubrenewal"
 `chronos-ft-<hash>`."""
 
 SLOTS_PREFIX: Final = "slots-"
-"""Prefix of the spec of a checkpoint with per-series slots
-(`forecasters.slots`). Such a checkpoint is released as
-`chronos-slots-<hash>`, so the `latest` lookup, which takes only
-`chronos-ft-*` releases, never gives it to code without slots."""
+"""Prefix of the spec of a checkpoint with the series bias
+(`forecasters.series_bias`). Such a checkpoint is released as
+`chronos-slots-<hash>`, the paper's name for the run, so the `latest`
+lookup, which takes only `chronos-ft-*` releases, never gives it to code
+without the bias."""
 
 
 def release_tag(spec: str) -> str:
@@ -176,7 +177,7 @@ class Checkpoint:
     Attributes
     ----------
     hash : str
-        Settings hash from `scripts/finetune_chronos.py train`. The release
+        Settings hash from `scripts/finetune_stream.py`. The release
         is `<prefix>-<hash>`.
     sha256 : tuple of (str, str)
         SHA-256 of each of `ADAPTER_FILES`, by file name.
@@ -403,9 +404,17 @@ def resolve_checkpoint(spec: str, prefix: str = FINETUNED_PREFIX) -> Checkpoint:
 
 
 def _finetuned(name: str, source: str) -> FoundationModel:
-    """Build a fine-tuned model with the checkpoint `finetuned_spec` names."""
+    """Build a fine-tuned model with the checkpoint `finetuned_spec` names.
+
+    The weekly and daily models share the checkpoint; the daily one reads
+    its weekly forecast from per-place weekly total rows, as trained.
+    """
     return FoundationModel(
-        name, source, "ragged", resolve_checkpoint(finetuned_spec())
+        name,
+        source,
+        "ragged",
+        resolve_checkpoint(finetuned_spec()),
+        weekly_totals=source == "daily",
     )
 
 
@@ -458,6 +467,40 @@ def _step(source: str, day: str) -> dt.date:
     return epiweek_end(day) if source == "weekly" else as_date(day)
 
 
+@dataclass(frozen=True)
+class PeriodRows:
+    """Each place's period totals on a daily grid, for its total row.
+
+    Attributes
+    ----------
+    ends : numpy.ndarray
+        Whether each day of the grid ends a whole period, `[T]`.
+    totals : numpy.ndarray
+        Each place's total over the period ending on each such day, NaN on
+        every other day, `[L, T]`.
+    """
+
+    ends: np.ndarray
+    totals: np.ndarray
+
+
+def week_rows(tri: HubTriangle) -> PeriodRows:
+    """Return each place's weekly totals of a daily triangle's counts.
+
+    Each week (Sunday to Saturday) whose seven days are all on the grid is
+    summed from the daily counts at the latest release and put on its
+    Saturday; a week the grid cuts has no total.
+    """
+    days = [as_date(t) for t in tri.times]
+    ends = np.array(
+        [epiweek_end(d.isoformat()) == d and i >= 6 for i, d in enumerate(days)]
+    )
+    totals = np.full(tri.final.shape, np.nan)
+    for t in np.flatnonzero(ends):
+        totals[:, t] = tri.final[:, t - 6 : t + 1].sum(axis=1)
+    return PeriodRows(ends, totals)
+
+
 def hub_triangle(
     rows: pd.DataFrame,
     source: str,
@@ -491,6 +534,8 @@ def hub_triangle(
     width = 7 if source == "weekly" else 1
     time_col = "target_end_date" if source == "weekly" else "onset_date"
     rows = rows.loc[rows["location"].isin(places)]
+    if rows.empty:
+        raise ValueError(f"no release rows for {list(places)}")
     value = (
         rows["total"]
         if source == "weekly"
@@ -656,37 +701,44 @@ def _chronos(checkpoint: Checkpoint | None = None) -> Any:
     if adapter is None:
         return pipeline
     # Slots, if the adapter holds them, load with it.
-    return Chronos2Pipeline(model=slots.load_adapter(pipeline.model, adapter))
+    return Chronos2Pipeline(
+        model=series_bias.load_adapter(pipeline.model, adapter)
+    )
+
+
+CHRONOS_KEYS: Final = ("target", "past_covariates", "future_covariates")
+"""The parts of a group Chronos-2 reads; the rest name its rows' places."""
 
 
 def _chronos_input(group: Series) -> dict[str, Any]:
-    """Return a group as Chronos-2 takes it, without its `places`."""
-    return {k: v for k, v in group.items() if k != "places"}
+    """Return the parts of a group Chronos-2 reads (`CHRONOS_KEYS`)."""
+    return {k: group[k] for k in CHRONOS_KEYS if k in group}
 
 
-def _group_slots(group: Series, n_slots: int) -> np.ndarray:
-    """Return each of a group's rows' slot, in Chronos-2's row order.
+def _group_rows(group: Series) -> np.ndarray:
+    """Return each of a group's rows' place and parent, `[2, rows]`.
 
-    Chronos-2's dict path puts the targets first, then the covariates by
-    sorted name, past-only ones before known-future ones, not in input
-    order. Each place gets a distinct slot drawn with `slots.EVAL_SEED`
-    in target order, and each lag series `<place>_lag_<d>` its place's.
-    The places are the group's `places`, else the order in which the
-    covariates name them.
+    In Chronos-2's row order: the targets, then the covariates by sorted
+    name, past-only ones before known-future ones. Places are numbered in
+    the group's `places` order; a target row's place is its
+    `target_places` entry, one row per place by default.
 
     Raises
     ------
     ValueError
-        If a covariate names no target place, or the places do not match
-        the targets.
+        If a covariate names no place, or the target rows do not match
+        their places.
     """
     past = list(group.get("past_covariates", {}))
     known = set(group.get("future_covariates", {}))
     n_targets = np.atleast_2d(group["target"]).shape[0]
     named = dict.fromkeys(n.rsplit("_lag_", 1)[0] for n in past)
     places = list(group.get("places") or named)
-    if len(places) != n_targets:
-        raise ValueError(f"{len(places)} places for {n_targets} targets")
+    target_places = list(group.get("target_places", range(len(places))))
+    if len(target_places) != n_targets:
+        raise ValueError(
+            f"{len(target_places)} target places for {n_targets} targets"
+        )
     rows = sorted(n for n in past if n not in known)
     rows += sorted(n for n in past if n in known)
     at = {p: i for i, p in enumerate(places)}
@@ -694,10 +746,9 @@ def _group_slots(group: Series, n_slots: int) -> np.ndarray:
         owner = [at[n.rsplit("_lag_", 1)[0]] for n in rows]
     except KeyError as err:
         raise ValueError(f"covariate of no target place: {err}") from err
-    chosen = slots.slot_ids(
-        n_targets, 0, np.random.default_rng(slots.EVAL_SEED), n_slots
-    )
-    return np.concatenate([chosen, chosen[owner]]).astype(int)
+    place = np.concatenate([target_places, owner]).astype(int)
+    parent = np.asarray(series_bias.parents_of(places), dtype=int)
+    return np.stack([place, parent[place]])
 
 
 def _predict(
@@ -705,29 +756,29 @@ def _predict(
 ) -> list[Any]:
     """Return Chronos-2's quantiles at `levels` for each group.
 
-    With a slots adapter each group is predicted on its own, so its rows
-    are one batch, with its rows' slots (`_group_slots`), as in held-out
-    losses.
+    With the series bias each group is predicted on its own, so its rows
+    are one batch, with its rows' places and parents (`_group_rows`), as
+    in held-out losses.
     """
     model = getattr(pipeline, "model", None)
-    if model is None or not slots.has_slots(model):
-        quantiles, _ = pipeline.predict_quantiles(
-            [_chronos_input(g) for g in groups],
-            prediction_length=horizon,
-            quantile_levels=levels.tolist(),
-        )
-        return list(quantiles)
-    out = []
-    for g in groups:
-        ids = _group_slots(g, slots.n_slots(model))
-        with slots.assigned(model, ids):
-            q, _ = pipeline.predict_quantiles(
-                [_chronos_input(g)],
-                prediction_length=horizon,
-                quantile_levels=levels.tolist(),
-            )
-        out.extend(q)
-    return out
+    if model is not None and series_bias.has_bias(model):
+        # One group a batch, its rows' places and parents by name.
+        biased = []
+        for g in groups:
+            with series_bias.assigned(model, _group_rows(g)):
+                q, _ = pipeline.predict_quantiles(
+                    [_chronos_input(g)],
+                    prediction_length=horizon,
+                    quantile_levels=levels.tolist(),
+                )
+            biased.extend(q)
+        return biased
+    quantiles, _ = pipeline.predict_quantiles(
+        [_chronos_input(g) for g in groups],
+        prediction_length=horizon,
+        quantile_levels=levels.tolist(),
+    )
+    return list(quantiles)
 
 
 def chronos_sampler(
@@ -788,7 +839,11 @@ def chronos_sampler(
 
 
 def layout_block(
-    tri: HubTriangle, layout: str, places: Sequence[str], start: int
+    tri: HubTriangle,
+    layout: str,
+    places: Sequence[str],
+    start: int,
+    period: PeriodRows | None = None,
 ) -> Series:
     """Return the one block of every place's series, split at `start`.
 
@@ -802,16 +857,25 @@ def layout_block(
         Places, in the order of `tri`.
     start : int
         Steps of context, the first `start` steps of `tri`.
+    period : PeriodRows, optional
+        Each place's period totals on `tri`'s grid. With them each place
+        has a second target row, of its totals, after the count rows; it
+        has no lags.
 
     Returns
     -------
     Series
-        The targets' context, and for `ragged` each place's lag series
-        as past and future covariates.
+        The targets' context, the place of each target row
+        (`target_places`, indices into `places`), and for `ragged` each
+        place's lag series as past and future covariates.
     """
     target = tri.final[:, :start]
+    target_places = list(range(len(places)))
+    if period is not None:
+        target = np.concatenate([target, period.totals[:, :start]])
+        target_places += target_places
     if layout == "complete":
-        return {"target": target}
+        return {"target": target, "target_places": target_places}
     lags = tri.partial.shape[2]
     names = [f"{p}_lag_{d}" for p in places for d in range(lags)]
     cells = tri.partial.transpose(0, 2, 1).reshape(len(names), -1)
@@ -820,6 +884,7 @@ def layout_block(
         "past_covariates": dict(zip(names, cells[:, :start], strict=True)),
         "future_covariates": dict(zip(names, cells[:, start:], strict=True)),
         "places": list(places),
+        "target_places": target_places,
     }
 
 
@@ -832,6 +897,71 @@ def _walk_start(task: ForecastTask) -> str:
     walk = RandomWalk()
     snap = walk.snapshots(task)
     return str(snap.week_ends[int(start_weeks(snap, walk.settings).min())])
+
+
+def _weekly_from_totals(
+    drawn: np.ndarray,
+    period: PeriodRows,
+    tri: HubTriangle,
+    start: int,
+    weeks: Sequence[str],
+) -> np.ndarray:
+    """Return weekly draws `[S, L, W]` read from the total rows.
+
+    A week whose Saturday is past the context takes its total row's draw
+    there; an earlier week takes its total summed from the daily counts.
+    `drawn` is `[S, 2L, horizon]`, the count rows then the total rows.
+    """
+    n_places = period.totals.shape[0]
+    out = []
+    for week in weeks:
+        t = tri.times.index(week)
+        if t >= start:
+            out.append(drawn[:, n_places:, t - start])
+        else:
+            total = np.nan_to_num(period.totals[:, t])
+            out.append(np.broadcast_to(total, drawn[:, :n_places, 0].shape))
+    return np.stack(out, axis=2)
+
+
+DAILY_COLUMNS: Final = ("location", "date", "sample", "value")
+"""Columns of the daily trajectories (`FoundationModel.forecast_both`)."""
+
+
+def _daily_frame(
+    drawn: np.ndarray,
+    tri: HubTriangle,
+    start: int,
+    places: Sequence[str],
+    weeks: Sequence[str],
+) -> pd.DataFrame:
+    """Return each day of the target weeks from the daily count rows.
+
+    A day past the context takes its count row's draw, no lower than the
+    count reported; an earlier day the count reported. `drawn` is
+    `[S, V, horizon]`, the count rows first.
+    """
+    first = as_date(weeks[0]) - dt.timedelta(days=6)
+    days = [t for t in tri.times if first <= as_date(t) <= as_date(weeks[-1])]
+    n, n_loc = drawn.shape[0], len(places)
+    cols = []
+    for day in days:
+        t = tri.times.index(day)
+        final = np.broadcast_to(tri.final[:, t], (n, n_loc))
+        cols.append(
+            np.maximum(drawn[:, :n_loc, t - start], final)
+            if t >= start
+            else final
+        )
+    values = np.stack(cols, axis=2)  # [S, L, D]
+    return pd.DataFrame(
+        {
+            "location": np.repeat(list(places), n * len(days)),
+            "date": np.tile(days, n * n_loc),
+            "sample": np.tile(np.repeat(np.arange(1, n + 1), len(days)), n_loc),
+            "value": values.transpose(1, 0, 2).reshape(-1),
+        }
+    )[list(DAILY_COLUMNS)]
 
 
 @dataclass
@@ -849,6 +979,10 @@ class FoundationModel:
     checkpoint : Checkpoint or None
         The fine-tuned checkpoint Chronos-2 loads, or None for the
         pretrained model.
+    weekly_totals : bool
+        For the daily source: give each place a row of its weekly totals,
+        summed from its daily counts (`week_rows`), and read the weekly
+        forecast from that row. As the fine-tuned model was trained.
     sample : Sampler or None
         Draws the trajectories, Chronos-2 with `checkpoint` by default.
     stream : str or None
@@ -861,6 +995,7 @@ class FoundationModel:
     source: str
     layout: str
     checkpoint: Checkpoint | None = None
+    weekly_totals: bool = False
     sample: Sampler | None = field(default=None, repr=False)
     stream: str | None = field(default=None, repr=False)
 
@@ -869,8 +1004,14 @@ class FoundationModel:
         """Whether the model reads release snapshots: `complete` does."""
         return self.layout == "complete"
 
-    def forecast(self, task: ForecastTask) -> pd.DataFrame:
-        """Return trajectories of the country and the task's provinces.
+    def forecast_both(
+        self, task: ForecastTask
+    ) -> tuple[pd.DataFrame, pd.DataFrame]:
+        """Return the weekly and the daily trajectories of one draw.
+
+        The weekly ones are `forecast`'s. The daily ones are the daily
+        source's count rows, each day of the target weeks, floored at the
+        counts reported; empty for the weekly source.
 
         Parameters
         ----------
@@ -880,9 +1021,11 @@ class FoundationModel:
 
         Returns
         -------
-        pandas.DataFrame
-            Columns `location`, `target_end_date`, `sample`, `value`, for
-            the country and the provinces, each its own series.
+        tuple of pandas.DataFrame
+            The weekly trajectories, columns `location`, `target_end_date`,
+            `sample`, `value`, for the country and the provinces, each its
+            own series; and the daily ones, columns `location`, `date`,
+            `sample`, `value`.
 
         Raises
         ------
@@ -898,45 +1041,6 @@ class FoundationModel:
             If GitHub cannot be reached.
         ValueError
             If the release holds another checkpoint or adapter.
-        """
-        steps, times = self._steps(task)
-        places = (NATIONAL, *task.locations)
-        weeks = list(task.target_end_dates)
-        # The hub's target is weekly, so the daily source is summed to weeks.
-        week_of = np.array([_step("weekly", t).isoformat() for t in times])
-        values = np.stack(
-            [steps[:, :, week_of == w].sum(axis=2) for w in weeks], axis=2
-        )
-        reported = (
-            task.target.pivot_table(
-                index="location",
-                columns="target_end_date",
-                values="total",
-                aggfunc="sum",
-            )
-            .reindex(index=list(places), columns=weeks)
-            .fillna(0.0)
-            .to_numpy()
-        )
-        values = np.maximum(values, reported)  # [S, L, W]
-        n, n_loc = task.n_samples, len(places)
-        return pd.DataFrame(
-            {
-                "location": np.repeat(list(places), n * len(weeks)),
-                "target_end_date": np.tile(weeks, n * n_loc),
-                "sample": np.tile(
-                    np.repeat(np.arange(1, n + 1), len(weeks)), n_loc
-                ),
-                "value": values.transpose(1, 0, 2).reshape(-1),
-            }
-        )[list(SAMPLE_COLUMNS)]
-
-    def _steps(self, task: ForecastTask) -> tuple[np.ndarray, list[str]]:
-        """Return the draws of every step, `[S, L, T]`, and the steps.
-
-        Steps in the context are the latest release's counts. Later steps
-        are Chronos-2's draws, rounded and floored at those counts. The
-        places are the country, then the task's provinces.
         """
         weekly = self.source == "weekly"
         rows = task.target_history if weekly else task.daily_history
@@ -965,44 +1069,63 @@ class FoundationModel:
             )
         horizon = len(tri.times) - start
         seed = int(task.rng(self.stream or self.name).integers(0, 2**31 - 1))
-        group = layout_block(tri, self.layout, places, start)
+        period = week_rows(tri) if self.weekly_totals else None
+        group = layout_block(tri, self.layout, places, start, period)
         sample = self.sample or partial(
             chronos_sampler, checkpoint=self.checkpoint
         )
         draws = sample([group], horizon, task.n_samples, seed)[0]
-        final = tri.final
-        steps = np.broadcast_to(final, (task.n_samples, *final.shape)).copy()
         drawn = np.maximum(np.round(draws), 0.0)
-        steps[:, :, start:] = np.maximum(drawn, final[:, start:])
-        return steps, tri.times
-
-    def daily(self, task: ForecastTask) -> pd.DataFrame | None:
-        """Return the daily source's draws of each day of the target weeks.
-
-        These are the daily steps `forecast` sums to weeks, not summed: the
-        daily target. The weekly source has no days.
-
-        Parameters
-        ----------
-        task : ForecastTask
-            The data and weeks to forecast.
-
-        Returns
-        -------
-        pandas.DataFrame or None
-            Columns `location`, `target_end_date` (the day), `sample` and
-            `value`, for the country and the provinces, or None for the
-            weekly source.
-
-        Raises
-        ------
-        ModelUnavailableError
-            As `forecast`.
-        """
+        if period is not None:
+            values = _weekly_from_totals(drawn, period, tri, start, weeks)
+        else:
+            final = tri.final
+            steps = np.broadcast_to(
+                final, (task.n_samples, *final.shape)
+            ).copy()
+            steps[:, :, start:] = np.maximum(
+                drawn[:, : len(places)], final[:, start:]
+            )
+            # The hub's target is weekly: the daily source is summed to it.
+            week_of = np.array(
+                [_step("weekly", t).isoformat() for t in tri.times]
+            )
+            values = np.stack(
+                [steps[:, :, week_of == w].sum(axis=2) for w in weeks], axis=2
+            )
+        reported = (
+            task.target.pivot_table(
+                index="location",
+                columns="target_end_date",
+                values="total",
+                aggfunc="sum",
+            )
+            .reindex(index=list(places), columns=weeks)
+            .fillna(0.0)
+            .to_numpy()
+        )
+        values = np.maximum(values, reported)  # [S, L, W]
+        n, n_loc = task.n_samples, len(places)
+        weekly_out = pd.DataFrame(
+            {
+                "location": np.repeat(list(places), n * len(weeks)),
+                "target_end_date": np.tile(weeks, n * n_loc),
+                "sample": np.tile(
+                    np.repeat(np.arange(1, n + 1), len(weeks)), n_loc
+                ),
+                "value": values.transpose(1, 0, 2).reshape(-1),
+            }
+        )[list(SAMPLE_COLUMNS)]
         if self.source != "daily":
-            return None
-        steps, times = self._steps(task)
-        return _day_rows(task, steps, times)
+            return weekly_out, pd.DataFrame(columns=list(DAILY_COLUMNS))
+        return weekly_out, _daily_frame(drawn, tri, start, places, weeks)
+
+    def forecast(self, task: ForecastTask) -> pd.DataFrame:
+        """Return trajectories of the country and the task's provinces.
+
+        The weekly part of `forecast_both`, which says what is raised.
+        """
+        return self.forecast_both(task)[0]
 
     def quantiles(
         self,
@@ -1012,16 +1135,18 @@ class FoundationModel:
     ) -> pd.DataFrame | None:
         """Return Chronos-2's own quantiles where each target is one step.
 
-        Each week of the weekly source is one of Chronos-2's steps, so its
-        quantiles are Chronos-2's native quantiles read at `levels` by
-        linear interpolation between the native levels (`native_sampler`).
-        They pass through `forecast` as one trajectory per level; every
-        step after the draws (rounding, the floors at the reported counts)
-        is monotone, so trajectory `k` is the quantile at level `k`.
-        A week of the daily source is a sum of steps, which has no native
-        quantile. For the daily target (`target="daily"`) each day of the
-        daily source is one step, so its quantiles are native in the same
-        way, and the weekly source has none.
+        Each week of the weekly source is one of Chronos-2's steps, and so
+        is each Saturday of a daily model's weekly total rows
+        (`weekly_totals`), so their 7-day quantiles are Chronos-2's native
+        quantiles read at `levels` by linear interpolation between the
+        native levels (`native_sampler`). They pass through
+        `forecast_both` as one trajectory per level; every step after the
+        draws (rounding, the floors at the reported counts) is monotone,
+        so trajectory `k` is the quantile at level `k`. A week of the
+        daily source without total rows is a sum of steps, which has no
+        native quantile. For the daily target (`target="daily"`) each day
+        of the daily source is one step, its count row's, so its
+        quantiles are native in the same way; the weekly source has none.
 
         Parameters
         ----------
@@ -1030,8 +1155,8 @@ class FoundationModel:
         levels : sequence of float
             Increasing quantile levels.
         target : str
-            `7day`, the hub's weekly target, or `daily`, each day of the
-            target weeks.
+            One of `TARGETS`: `7day`, the hub's weekly target, or `daily`,
+            each day of the target weeks.
 
         Returns
         -------
@@ -1039,43 +1164,30 @@ class FoundationModel:
             Columns `location`, `target_end_date` (the week's Saturday, or
             the day for the daily target), `quantile` and `value`, or None
             where the target has no native quantiles.
+
+        Raises
+        ------
+        ValueError
+            If `target` is not one of `TARGETS`.
         """
         if target not in TARGETS:
             raise ValueError(f"target must be one of {TARGETS}, not {target}")
-        native = "weekly" if target == "7day" else "daily"
-        if self.source != native:
+        if target == "7day":
+            native = self.source == "weekly" or self.weekly_totals
+        else:
+            native = self.source == "daily"
+        if not native:
             return None
         at = np.asarray(levels, dtype=float)
         run = replace(self, sample=native_sampler(at, self.checkpoint))
-        one = replace(task, n_samples=len(at))
-        if target == "7day":
-            out = run.forecast(one)
-        else:
-            out = _day_rows(one, *run._steps(one))
+        weekly, daily = run.forecast_both(replace(task, n_samples=len(at)))
+        out = (
+            weekly
+            if target == "7day"
+            else daily.rename(columns={"date": "target_end_date"})
+        )
         out["quantile"] = at[out["sample"].to_numpy() - 1]
         return out[["location", "target_end_date", "quantile", "value"]]
-
-
-def _day_rows(
-    task: ForecastTask, steps: np.ndarray, times: list[str]
-) -> pd.DataFrame:
-    """Return daily steps `[S, L, T]` of the target weeks' days as rows."""
-    weeks = set(task.target_end_dates)
-    keep = np.array([_step("weekly", t).isoformat() in weeks for t in times])
-    days = np.asarray(times)[keep]
-    values = steps[:, :, keep]  # [S, L, D]
-    places = (NATIONAL, *task.locations)
-    n = values.shape[0]
-    return pd.DataFrame(
-        {
-            "location": np.repeat(list(places), n * days.size),
-            "target_end_date": np.tile(days, n * len(places)),
-            "sample": np.tile(
-                np.repeat(np.arange(1, n + 1), days.size), len(places)
-            ),
-            "value": values.transpose(1, 0, 2).reshape(-1),
-        }
-    )[list(SAMPLE_COLUMNS)]
 
 
 def native_sampler(

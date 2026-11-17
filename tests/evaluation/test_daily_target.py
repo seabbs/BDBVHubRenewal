@@ -25,7 +25,7 @@ from bdbvhubrenewal.evaluation.germany import (
     germany_forecasts,
     with_truth,
 )
-from bdbvhubrenewal.evaluation.marginals import daily_quantiles
+from bdbvhubrenewal.evaluation.marginals import daily_draws, daily_quantiles
 from bdbvhubrenewal.evaluation.nowcast import rolling_truth
 from bdbvhubrenewal.forecasters import NATIONAL, add_national, get_model
 
@@ -275,7 +275,7 @@ def test_weekly_chronos_has_no_daily_target(pins) -> None:
     task = pins.bdbv_tasks()["2026-10-24"]
     model = get_model("fm_chronos_weekly_ragged")
     assert model.quantiles(task, QUANTILE_LEVELS, target="daily") is None
-    assert model.daily(task) is None
+    assert daily_draws(model, task) is None
     got = daily_quantiles(model, task, QUANTILE_LEVELS, 20, 1)
     assert got is None
 
@@ -285,7 +285,7 @@ def test_weekly_chronos_has_no_daily_target(pins) -> None:
 def test_chronos_daily_draws_sum_to_its_weekly_draws(pins) -> None:
     task = pins.bdbv_tasks()["2026-10-24"]
     model = get_model("fm_chronos_daily_ragged")
-    daily = model.daily(task)
+    daily = daily_draws(model, task)
     weekly = model.forecast(task)
     both = _weekly_of(daily).merge(
         weekly, on=["location", "target_end_date", "sample"]
