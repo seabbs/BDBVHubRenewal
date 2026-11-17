@@ -1,17 +1,21 @@
 #!/usr/bin/env bash
-# Run workflow targets as a detached job that reports to the mailbox
-# (MAILBOX in config/local.env): a start line, then done or FAILED with the log's tail.
-# Single-threaded and niced, for shared hosts.
+# Optional: run paper workflow targets as a detached job on a shared
+# host, single-threaded and niced, with a start line and then done or
+# FAILED with the log's tail on its output. With NOTIFY and MAILBOX set in
+# config/local.env those lines are also appended to MAILBOX
+# (workflow/scripts/notify.sh). Not needed to run the workflow: `task
+# paper` does the same in the foreground.
 #
-# Usage (from anywhere): paper/scripts/run_target.sh NAME TARGET... [SNAKEMAKE ARGS]
+# Usage (from anywhere): tools/run_target.sh NAME TARGET... [SNAKEMAKE ARGS]
 # Start it with nohup; the log is NAME.log in PAPER_LOGS.
 set -uo pipefail
 name=$1; shift
-paper=$(cd "$(dirname "$0")/.." && pwd)
+paper=$(cd "$(dirname "$0")/../paper" && pwd)
 setting() { python3 "$paper/../workflow/flowlib/localconfig.py" "$1"; }
-mb=$(setting MAILBOX)
 logs=$(setting PAPER_LOGS); mkdir -p "$logs"; log=$logs/$name.log
-say() { echo "$(date '+%F %H:%M') paper: $name: $*" >> "$mb"; }
+SAY_PREFIX="paper: $name"
+# shellcheck source=workflow/scripts/notify.sh
+source "$paper/../workflow/scripts/notify.sh"
 export OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1
 cd "$paper"
 say "started at $(git rev-parse --short=9 HEAD) (log $log)"

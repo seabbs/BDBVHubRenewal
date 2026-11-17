@@ -70,3 +70,10 @@ def test_a_local_mailbox_is_read_where_it_is(tmp_path):
     src = mirror.Source(cfg, tmp_path / "m")
     assert src.mailbox == Path("/b.md")
     assert src.mailbox_command() is None
+
+
+def test_a_mirror_folder_that_cannot_be_made_is_a_failed_mirror(tmp_path):
+    (tmp_path / "file").write_text("")
+    cfg = {"REMOTE": "h", "REMOTE_ROOT": "r", "SCORE_CACHE": "/x"}
+    src = mirror.Source(cfg, tmp_path / "file" / "mirror")
+    assert src.refresh().startswith("mirror failed:")

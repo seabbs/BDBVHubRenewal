@@ -632,6 +632,11 @@ EVIDENCE: Final = {
     "compare_slots": "the slots and no-slots runs' scores by checkpoint",
     "compare_delays": "the full and no-delay runs' scores by checkpoint",
     "compare_realdata": "the real-data and synthetic fine-tunes' scores",
+    "compare_daily": "our models' daily and hub-target scores by checkpoint",
+    "block_combinations": (
+        "fm-finetune3's realised shares of block layouts and options"
+    ),
+    "heldout_layout": "held-out synthetic scores by block layout and target",
 }
 """Each evidence input and what it waits on until set.
 
@@ -934,7 +939,13 @@ def write_evidence(
         else slots_scores_table(data["checkpoint_scores"], checkpoints),
         ["checkpoint_scores"],
     )
-    for name in ("slots", "delays", "realdata"):
+    table(
+        "block-combinations",
+        data["block_combinations"],
+        ["block_combinations"],
+    )
+    table("heldout-layout", data["heldout_layout"], ["heldout_layout"])
+    for name in ("slots", "delays", "realdata", "daily"):
         rows = data[f"compare_{name}"]
         figure(
             f"compare-{name}",

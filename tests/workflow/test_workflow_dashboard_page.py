@@ -190,3 +190,9 @@ def test_checkpoint_sizes_also_come_from_the_score_table(tmp_path):
     )
     assert sizes["bbbbbb"] == 500
     assert sizes["aaaaaa"] == 250
+
+
+def test_the_mailbox_section_is_hidden_without_a_mailbox(tmp_path):
+    ctx = _machine(tmp_path)
+    ctx.mailbox = None
+    assert "Recent activity" not in page.build(ctx)

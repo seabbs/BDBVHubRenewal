@@ -17,9 +17,14 @@ Quantile forecasts (`metric` is `wis`):
 
 Sample forecasts (`metric` is `crps`):
 
-- **CRPS** from scoringrules' `crps_ensemble` with the `nrg` estimator,
-  $E|X - y| - E|X - X'|/2$ over the empirical distribution, which is
-  scoringRules' `crps_sample` that scoringutils calls.
+- **CRPS** from scoringrules' `crps_ensemble` with the `fair` estimator
+  (Ferro 2014), $\frac{1}{m}\sum_i |x_i - y| -
+  \frac{1}{2m(m - 1)}\sum_{i \ne j} |x_i - x_j|$, whose expectation does
+  not depend on the number of draws $m$. Hub teams give 100 draws and our
+  models 1,000, and the `nrg` form, $E|X - y| - E|X - X'|/2$ over the
+  empirical distribution, overstates the score by $E|X - X'|/(2m)$.
+  `crps_estimator="nrg"` gives scoringRules' `crps_sample`, which
+  scoringutils calls, for the parity test.
 - **Bias** as scoringutils' `bias_sample`. For counts it is
   $1 - (P(X \le y) + P(X \le y - 1))$, otherwise $1 - 2P(X \le y)$.
   Whether a study forecasts counts is set in `STUDY_COUNTS`; scoringutils
@@ -191,9 +196,17 @@ def _score_quantile_block(
 # --------------------------------------------------------------------------
 
 
-def _crps(x: np.ndarray, y: np.ndarray) -> np.ndarray:
+CRPS_ESTIMATOR = "fair"
+"""scoringrules' CRPS estimator for sample forecasts; `nrg` is
+scoringutils'."""
+
+
+def _crps(
+    x: np.ndarray, y: np.ndarray, estimator: str = CRPS_ESTIMATOR
+) -> np.ndarray:
     return np.asarray(
-        sr.crps_ensemble(y, x, estimator="nrg", backend="numpy"), dtype=float
+        sr.crps_ensemble(y, x, estimator=estimator, backend="numpy"),
+        dtype=float,
     ).reshape(y.shape)
 
 
@@ -212,7 +225,10 @@ def _coverage_sample(x: np.ndarray, y: np.ndarray, width: float) -> np.ndarray:
 
 
 def _score_sample_block(
-    block: pd.DataFrame, widths: tuple[float, ...], counts: bool
+    block: pd.DataFrame,
+    widths: tuple[float, ...],
+    counts: bool,
+    estimator: str = CRPS_ESTIMATOR,
 ) -> pd.DataFrame:
     """Score sample forecasts that share one number of samples."""
     keys = list(FORECAST_KEYS)
@@ -222,8 +238,8 @@ def _score_sample_block(
     x = ordered["value"].to_numpy(dtype=float).reshape(len(out), -1)
     y = out["truth"].to_numpy(dtype=float)
     out["metric"] = "crps"
-    out["score"] = _crps(x, y)
-    out["log_score"] = _crps(np.log1p(x), np.log1p(y))
+    out["score"] = _crps(x, y, estimator)
+    out["log_score"] = _crps(np.log1p(x), np.log1p(y), estimator)
     out["bias"] = _bias_sample(x, y, counts)
     for w in widths:
         out[coverage_column(w)] = _coverage_sample(x, y, w)
@@ -249,6 +265,7 @@ def score_forecasts(
     forecasts: pd.DataFrame,
     coverage: tuple[float, ...] | None = None,
     counts: bool | None = None,
+    crps_estimator: str = CRPS_ESTIMATOR,
 ) -> pd.DataFrame:
     """Score each forecast with a known truth.
 
@@ -264,6 +281,10 @@ def score_forecasts(
     counts : bool, optional
         Whether sample forecasts are of counts, which picks the bias form.
         Defaults to `STUDY_COUNTS` for each study.
+    crps_estimator : str
+        scoringrules' CRPS estimator for sample forecasts: `fair`, whose
+        expectation does not depend on the number of draws, or `nrg`,
+        scoringutils' form.
 
     Returns
     -------
@@ -287,7 +308,7 @@ def score_forecasts(
             for b in _blocks(one[is_q], "quantile_level")
         ]
         parts += [
-            _score_sample_block(b, widths, is_count)
+            _score_sample_block(b, widths, is_count, crps_estimator)
             for b in _blocks(one[~is_q], "sample_id")
         ]
     if not parts:

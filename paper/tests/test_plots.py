@@ -310,3 +310,23 @@ def test_place_dots_have_a_row_per_place() -> None:
     places = {(loc, st) for loc, st in fc[["location", "stratum"]].to_numpy()}
     assert len(ax.get_yticks()) == len(places)
     plt.close(fig)
+
+
+def test_rows_of_a_target_keep_that_target_only() -> None:
+    from paperfigs.plots import rows_of_target
+
+    df = pd.DataFrame(
+        {"model": ["a", "a", "hub"], "target": ["daily", "7day", "7day"]}
+    )
+    assert list(rows_of_target(df, "daily")["model"]) == ["a"]
+    assert len(rows_of_target(df, None)) == 3
+    # Tables with no target column hold the hub's target only.
+    plain = df.drop(columns="target")
+    assert rows_of_target(plain, "daily").empty
+    assert len(rows_of_target(plain, "7day")) == 3
+
+
+def test_germany_has_a_daily_target_si_figure() -> None:
+    from paperpipe.outputs import FIGURES
+
+    assert "si-results-daily" in FIGURES["germany"]["si"]

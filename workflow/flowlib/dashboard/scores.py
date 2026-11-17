@@ -33,11 +33,14 @@ TICKS = [
 
 
 def read(path: Path | str) -> list[dict[str, str]]:
-    """Return a score table's rows, or none if it cannot be read."""
+    """Return a score table's rows, or none if there is no table yet.
+
+    Any other error reading it, such as a folder in its place, raises.
+    """
     try:
         with Path(path).open() as f:
             return list(csv.DictReader(f))
-    except OSError:
+    except FileNotFoundError:
         return []
 
 
@@ -106,7 +109,6 @@ def payload(
     return {
         "rows": out,
         "pending": pending,
-        "xt": TICKS,
         "series": series_list,
         "col": {s["key"]: s["color"] for s in series_list},
         "defaults": [k for k in [first, *(r.key for r in references)] if k],

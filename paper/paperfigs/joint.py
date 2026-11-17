@@ -3,10 +3,12 @@
 A sample forecast's draws with one `sample_id` form a trajectory over its
 target dates. `joint_scores` scores each forecast (model, location,
 stratum and origin) over its targets with known truth, at least two, with
-the energy score and the variogram score of order 0.5, on log(x + 1) counts
-(scoringrules). Unlike the per-target scores, these see whether the
-draws are paired into trajectories. `relative_joint_scores` divides each
-model's mean by the study baseline's on the forecasts both made.
+the energy score, in its fair form (Ferro 2014), whose expectation does
+not depend on the number of draws, and the variogram score of order 0.5,
+on log(x + 1) counts (scoringrules). Unlike the per-target scores, these
+see whether the draws are paired into trajectories.
+`relative_joint_scores` divides each model's mean by the study
+baseline's on the forecasts both made.
 """
 
 from __future__ import annotations
@@ -60,7 +62,7 @@ def joint_scores(forecasts: pd.DataFrame) -> pd.DataFrame:
             (
                 *key,
                 x.shape[1],
-                float(sr.es_ensemble(y, x)),
+                float(sr.es_ensemble(y, x, estimator="fair")),
                 float(sr.vs_ensemble(y, x, p=0.5)),
             )
         )
