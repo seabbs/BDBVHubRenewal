@@ -733,3 +733,30 @@ def test_daily_baseline_rows_name_their_provisional_rule(cs) -> None:
     assert cs.DAILY_RULE == "week-split"
     assert pd.isna(rule[("7day", "randomwalknowcast")])
     assert pd.isna(rule[("daily", "fm_chronos_daily_ragged")])
+
+
+def test_a_daily_unit_is_done_for_the_dates_it_wrote(
+    cs, tmp_path, monkeypatch
+) -> None:
+    # New BDBV origins arrive after a daily unit finished: it is not done
+    # until they have the daily target too, though their files exist.
+    monkeypatch.setattr(cs, "bdbv_origins", lambda: ["o1", "o2"])
+    root = tmp_path / "bdbv" / "reference"
+    root.mkdir(parents=True)
+    for o in ("o1", "o2"):
+        (root / f"{o}.csv.gz").write_text("")
+    (root / cs.DAILY_DONE).write_text("o1\n")
+    assert cs.unit_done(tmp_path, "bdbv", "reference")
+    assert not cs.unit_done(tmp_path, "bdbv", "reference", "daily")
+    (root / cs.DAILY_DONE).write_text("o1\no2\n")
+    assert cs.unit_done(tmp_path, "bdbv", "reference", "daily")
+
+
+def test_a_daily_unit_needs_the_7_day_forecasts_first(
+    cs, tmp_path, monkeypatch
+) -> None:
+    events: list[str] = []
+    _unit_stubs(cs, monkeypatch, events)
+    with pytest.raises(SystemExit, match="7-day"):
+        cs.germany_unit(tmp_path, cs.REFERENCE, ("daily",))
+    assert events == []

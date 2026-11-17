@@ -197,3 +197,78 @@ def test_new_bdbv_origins_skip_what_this_code_cannot_load(poll) -> None:
     }
     labels = ["reference", "a", "slots-z", "slots-o"]
     assert poll.extendable(labels, runs) == ["reference", "a", "slots-o"]
+
+
+# The daily target --------------------------------------------------------
+
+
+def _settings(cache: Path, label: str, run: str) -> None:
+    import json
+
+    held = cache / "heldout"
+    held.mkdir(exist_ok=True)
+    settings = {
+        "one-model": {
+            "series_bias": {"init": "zero"},
+            "sources": ["daily", "daily+weekly"],
+        },
+        "attn-bias": {"series_bias": {"init": "zero"}},
+        "no-slots": {},
+    }[run]
+    (held / f"{label}.json").write_text(json.dumps(settings))
+
+
+def test_units_name_their_target_on_the_command_line(poll, tmp_path) -> None:
+    # A 7-day unit must not pick up the label's default targets (the
+    # reference's include the daily one), so the target is always given.
+    cmd = poll.unit_command(tmp_path, ("germany", "reference"))
+    assert cmd[-4:] == ["germany", str(tmp_path), "reference", "7day"]
+    daily = poll.unit_command(tmp_path, ("bdbv", "slots-a", "daily"))
+    assert daily[-4:] == ["bdbv", str(tmp_path), "slots-a", "daily"]
+
+
+def test_a_checkpoint_s_units_are_7day_only(poll) -> None:
+    # The 7-day rows never wait for the daily ones.
+    units = poll.units_for("slots-a", {"slots-b"})
+    assert all(len(u) == 2 or u[2] == "7day" for u in units)
+
+
+def test_the_reference_daily_run_comes_first_when_idle(poll, tmp_path) -> None:
+    _settings(tmp_path, "slots-a", "one-model")
+    runs = poll.runs_of(tmp_path)
+    jobs = poll.daily_units(tmp_path, ["slots-a"], runs)
+    assert jobs == [
+        ("bdbv", "reference", "daily"),
+        ("germany", "reference", "daily"),
+    ]
+
+
+def test_checkpoints_daily_units_wait_for_the_reference_s(
+    poll, monkeypatch, tmp_path
+) -> None:
+    _settings(tmp_path, "slots-a", "one-model")
+    _settings(tmp_path, "slots-old", "attn-bias")
+    _settings(tmp_path, "aaaa", "no-slots")
+    _settings(tmp_path, "slots-done", "one-model")
+    runs = poll.runs_of(tmp_path)
+    done = {
+        ("bdbv", "reference", "daily"),
+        ("germany", "reference", "daily"),
+        ("bdbv", "slots-done", "daily"),
+        ("germany", "slots-done", "daily"),
+    }
+    monkeypatch.setattr(
+        poll.cs,
+        "unit_done",
+        lambda _c, study, label, target="7day": (study, label, target) in done,
+    )
+    labels = ["aaaa", "slots-a", "slots-done", "slots-old"]
+    jobs = poll.daily_units(tmp_path, labels, runs)
+    # Only the one-model run takes the daily target by default; the
+    # superseded runs and finished units are left out.
+    assert jobs == [
+        ("bdbv", "slots-a", "daily"),
+        ("germany", "slots-a", "daily"),
+    ]
+    done |= set(jobs)
+    assert poll.daily_units(tmp_path, labels, runs) == []
