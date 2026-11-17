@@ -24,6 +24,8 @@ DATE = "2021-09-15"
 RUN_DATE = "2021-09-25"
 """The first fixture date the random walk has a spread at in both tasks."""
 SPLIT = "2021-10-01"
+LATE_SPLIT = "2021-11-01"
+"""A split after every week RUN_DATE forecasts."""
 
 
 def _load(name: str):
@@ -60,7 +62,7 @@ def triangle() -> pd.DataFrame:
 @pytest.fixture(scope="module")
 def forecasts(gf, triangle) -> pd.DataFrame:
     return gf.forecasts(
-        ["randomwalknowcast"], triangle, RUN_DATE, 30, 1, split_date=SPLIT
+        ["randomwalknowcast"], triangle, RUN_DATE, 30, 1, split_date=LATE_SPLIT
     )
 
 
@@ -95,6 +97,23 @@ def test_forecasts_end_7_to_28_days_after_the_nowcast_date(forecasts):
     assert forecasts["location"].nunique() == 9
     assert set(forecasts["model"]) == {"randomwalknowcast"}
     assert forecasts["quantile"].nunique() == 7
+
+
+def test_target_weeks_ending_on_or_after_the_split_are_dropped(gf, triangle):
+    # RUN_DATE's weeks end 2021-10-02, -09, -16 and -23: the last two are
+    # in the second half of a split on 2021-10-16.
+    fc = gf.forecasts(
+        ["randomwalknowcast"], triangle, RUN_DATE, 30, 1, "2021-10-16"
+    )
+    assert set(fc["horizon_weeks"]) == {1, 2}
+    assert (fc["target_end_date"] < "2021-10-16").all()
+    assert gf.KEEP_SECOND_HALF_TARGETS is False
+
+
+def test_the_development_half_s_origins_per_horizon(gf):
+    config = load_germany_config(ROOT / "config" / "germany.toml")
+    n = gf.origins_per_horizon(gf.dev_dates(), config.split_date)
+    assert n == {1: 73, 2: 66, 3: 59, 4: 52}
 
 
 def test_models_are_randomwalknowcast_zero_shot_and_the_checkpoint(gf, cs):
@@ -325,12 +344,55 @@ def test_forecasts_run_the_reference_then_the_newest_checkpoint_only(
     assert poll.forecast_units(cache, runs) == []
 
 
-def test_the_forecast_job_comes_after_the_zones_before_the_daily_target(
-    poll,
-):
+def test_the_forecast_job_comes_last_after_the_daily_target(poll):
     order = poll.IDLE_JOBS
-    assert order.index(poll.ZONE_JOB) < order.index(poll.FORECAST_JOB)
-    assert order.index(poll.FORECAST_JOB) < order.index(poll.DAILY_JOB)
+    assert order.index(poll.ZONE_JOB) < order.index(poll.DAILY_JOB)
+    assert order[-1] == poll.FORECAST_JOB
+
+
+def test_the_label_is_pinned_when_the_job_first_starts(poll, live, monkeypatch):
+    cache, runs = live
+    done = {("germany", lb) for lb in ("slots-a", "slots-b", "slots-c")}
+    _done(monkeypatch, poll, done)
+    assert poll.forecast_units(cache, runs)[-1] == (
+        "germany_forecast",
+        "slots-b",
+    )
+    pin = cache / "germany_forecast" / "label.txt"
+    assert pin.read_text().strip() == "slots-b"
+    # A newer checkpoint, even one still nowcasting, changes nothing.
+    _settings(cache, "slots-d", "one-model", 2000)
+    runs = poll.runs_of(cache)
+    done.add(("germany", "slots-d"))
+    assert poll.forecast_units(cache, runs)[-1] == (
+        "germany_forecast",
+        "slots-b",
+    )
+    done.add(("germany_forecast", "reference"))
+    done.add(("germany_forecast", "slots-b"))
+    assert poll.forecast_units(cache, runs) == []
+    # Only removing the pin by hand reruns it, for the newest.
+    pin.unlink()
+    assert poll.forecast_units(cache, runs) == [("germany_forecast", "slots-d")]
+
+
+def test_labels_the_poller_cannot_finish_do_not_block_the_gate(
+    poll, live, monkeypatch
+):
+    cache, runs = live
+    # slots-b never finishes its German nowcasts.
+    _done(monkeypatch, poll, {("germany", "slots-a"), ("germany", "slots-c")})
+    assert poll.forecast_units(cache, runs, {"slots-b": 1}) == []
+    failed = poll.forecast_units(cache, runs, {"slots-b": poll.MAX_FAILURES})
+    assert failed == [
+        ("germany_forecast", "reference"),
+        ("germany_forecast", "slots-c"),
+    ]
+    (cache / "germany_forecast" / "label.txt").unlink()
+    hold = cache / "hold"
+    hold.write_text("")
+    held = poll.forecast_units(cache, runs, hold=hold)
+    assert held == failed
 
 
 def test_forecast_units_name_their_study_on_the_command_line(poll, tmp_path):
