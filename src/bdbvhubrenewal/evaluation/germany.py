@@ -19,6 +19,10 @@ held out for the paper (`nowcast_dates`).
 samples (`bdbvhubrenewal.evaluation.marginals.forecast_quantiles`).
 `team_forecasts` takes the hub teams' submitted quantiles at the same
 horizons.
+`germany_daily_forecasts` does the same for the daily target, each day's
+count by Meldedatum from 28 days back to the nowcast date
+(`DAILY_HORIZONS`), for the models with daily forecasts
+(`bdbvhubrenewal.evaluation.marginals.daily_quantiles`).
 `with_truth` adds each sum's truth, its count in the data $D$ days after
 it ends, the paper's 40-day truth (`rolling_truth`).
 `score_germany` scores both by `score_quantiles`, and `relative_scores`
@@ -52,12 +56,16 @@ from bdbvhubrenewal.data.germany import (
     level,
     nowcast_tasks,
 )
-from bdbvhubrenewal.evaluation.marginals import forecast_quantiles
+from bdbvhubrenewal.evaluation.marginals import (
+    daily_quantiles,
+    forecast_quantiles,
+)
 from bdbvhubrenewal.evaluation.nowcast import rolling_truth
 from bdbvhubrenewal.evaluation.scoring import relative_skill, score_quantiles
 from bdbvhubrenewal.forecasters import get_model
 
 __all__ = [
+    "DAILY_HORIZONS",
     "PAPER_COLUMNS",
     "QUANTILE_LEVELS",
     "SCORE_COLUMNS",
@@ -65,6 +73,7 @@ __all__ = [
     "GermanyConfig",
     "asof_sums",
     "fetch_germany",
+    "germany_daily_forecasts",
     "germany_forecasts",
     "load_germany_config",
     "nowcast_dates",
@@ -79,6 +88,10 @@ __all__ = [
 
 QUANTILE_LEVELS: Final = (0.025, 0.1, 0.25, 0.5, 0.75, 0.9, 0.975)
 """The quantile levels the hub collected."""
+
+DAILY_HORIZONS: Final = tuple(range(min(HORIZONS), 1))
+"""Days from the nowcast date to each day of the daily target, the days
+the 7-day target's sums cover from its last back to 28 days."""
 
 SCORE_COLUMNS: Final = (
     "wis",
@@ -413,10 +426,74 @@ def germany_forecasts(
     ].reset_index(drop=True)
 
 
+def germany_daily_forecasts(
+    models: Sequence[str],
+    triangle: pd.DataFrame,
+    dates: Sequence[str],
+    n_samples: int,
+    seed: int,
+) -> pd.DataFrame:
+    """Nowcast each day of each date, as quantiles at the hub's levels.
+
+    The daily target: each day's count by Meldedatum, from 28 days before
+    the nowcast date to it (`DAILY_HORIZONS`). Models with no daily
+    forecasts (`daily_quantiles` gives None) have no rows.
+
+    Parameters
+    ----------
+    models : sequence of str
+        Registered model names.
+    triangle : pandas.DataFrame
+        Counts by Meldedatum and report date.
+    dates : sequence of str
+        Nowcast dates.
+    n_samples, seed : int
+        Samples per forecast where the quantiles come from samples, and
+        their seed, the same for every model.
+
+    Returns
+    -------
+    pandas.DataFrame
+        As `germany_forecasts`, with the day in `target_end_date` and
+        `horizon` the days from the nowcast date to it.
+    """
+    built = [get_model(m) for m in models]
+    keys = ["model", "origin", "location", "target_end_date", "horizon"]
+    frames = []
+    for date in dates:
+        for task in nowcast_tasks(triangle, date, n_samples, seed):
+            for model in built:
+                at = daily_quantiles(
+                    model, task, QUANTILE_LEVELS, n_samples, seed
+                )
+                if at is None or at.empty:
+                    continue
+                moved = hub_forecasts(
+                    at.rename(columns={"quantile": "sample"}), task, date
+                ).rename(
+                    columns={"forecast_date": "origin", "sample": "quantile"}
+                )
+                frames.append(
+                    moved.loc[moved["horizon"].isin(set(DAILY_HORIZONS))]
+                )
+    if not frames:
+        return pd.DataFrame(columns=[*keys, "quantile", "value"])
+    out = pd.concat(frames, ignore_index=True)
+    return out.sort_values([*keys, "quantile"], kind="stable")[
+        [*keys, "quantile", "value"]
+    ].reset_index(drop=True)
+
+
 def with_truth(
-    forecasts: pd.DataFrame, triangle: pd.DataFrame, truth_delay: int
+    forecasts: pd.DataFrame,
+    triangle: pd.DataFrame,
+    truth_delay: int,
+    window: int = 7,
 ) -> pd.DataFrame:
     """Add each forecast's truth: the sum as reported $D$ days after it ends.
+
+    With `window` 1 the truth is each day's count reported $D$ days after
+    it, the daily target's.
 
     Parameters
     ----------
@@ -426,6 +503,8 @@ def with_truth(
         Counts by Meldedatum and report date.
     truth_delay : int
         $D$, the days after a sum ends that its truth is reported by.
+    window : int
+        Days in each sum, 7 for the hub's target and 1 for the daily one.
 
     Returns
     -------
@@ -436,7 +515,7 @@ def with_truth(
     ends = sorted(set(forecasts["target_end_date"]))
     if not ends:
         return forecasts.assign(truth=np.nan, truth_vintage=None)
-    truth = rolling_truth(hub_target(triangle, ends), truth_delay)
+    truth = rolling_truth(hub_target(triangle, ends, window), truth_delay)
     return forecasts.merge(
         truth, on=["location", "target_end_date"], how="left"
     )

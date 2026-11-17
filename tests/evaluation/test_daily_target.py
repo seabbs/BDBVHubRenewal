@@ -27,7 +27,7 @@ from bdbvhubrenewal.evaluation.germany import (
 )
 from bdbvhubrenewal.evaluation.marginals import daily_quantiles
 from bdbvhubrenewal.evaluation.nowcast import rolling_truth
-from bdbvhubrenewal.forecasters import NATIONAL, get_model
+from bdbvhubrenewal.forecasters import NATIONAL, add_national, get_model
 
 ROOT = Path(__file__).resolve().parents[2]
 PINS = ROOT / "tests" / "fixtures" / "pins"
@@ -301,7 +301,9 @@ def test_daily_quantiles_of_a_sample_model_come_from_its_draws(pins) -> None:
     model = get_model("randomwalknowcast")
     q = daily_quantiles(model, task, QUANTILE_LEVELS, 30, 5)
     assert q is not None
-    draws = model.daily(dataclasses.replace(task, n_samples=30, seed=5))
+    draws = add_national(
+        model.daily(dataclasses.replace(task, n_samples=30, seed=5))
+    )
     want = draws.groupby(["location", "target_end_date"])["value"].quantile(0.5)
     got = q.loc[q["quantile"] == 0.5].set_index(
         ["location", "target_end_date"]

@@ -68,6 +68,7 @@ __all__ = [
     "SLOTS_PREFIX",
     "SOURCES",
     "SUMS_FILE",
+    "TARGETS",
     "Checkpoint",
     "FoundationModel",
     "HubTriangle",
@@ -88,6 +89,10 @@ __all__ = [
 SOURCES: Final = ("weekly", "daily")
 """The hub target's releases by onset week (`target.csv`) or onset day
 (`daily.csv`)."""
+
+TARGETS: Final = ("7day", "daily")
+"""Targets `FoundationModel.quantiles` gives: the hub's 7-day one and
+each day's count."""
 
 LAYOUTS: Final = ("complete", "ragged")
 """The ways the releases are given to Chronos-2."""
@@ -894,6 +899,45 @@ class FoundationModel:
         ValueError
             If the release holds another checkpoint or adapter.
         """
+        steps, times = self._steps(task)
+        places = (NATIONAL, *task.locations)
+        weeks = list(task.target_end_dates)
+        # The hub's target is weekly, so the daily source is summed to weeks.
+        week_of = np.array([_step("weekly", t).isoformat() for t in times])
+        values = np.stack(
+            [steps[:, :, week_of == w].sum(axis=2) for w in weeks], axis=2
+        )
+        reported = (
+            task.target.pivot_table(
+                index="location",
+                columns="target_end_date",
+                values="total",
+                aggfunc="sum",
+            )
+            .reindex(index=list(places), columns=weeks)
+            .fillna(0.0)
+            .to_numpy()
+        )
+        values = np.maximum(values, reported)  # [S, L, W]
+        n, n_loc = task.n_samples, len(places)
+        return pd.DataFrame(
+            {
+                "location": np.repeat(list(places), n * len(weeks)),
+                "target_end_date": np.tile(weeks, n * n_loc),
+                "sample": np.tile(
+                    np.repeat(np.arange(1, n + 1), len(weeks)), n_loc
+                ),
+                "value": values.transpose(1, 0, 2).reshape(-1),
+            }
+        )[list(SAMPLE_COLUMNS)]
+
+    def _steps(self, task: ForecastTask) -> tuple[np.ndarray, list[str]]:
+        """Return the draws of every step, `[S, L, T]`, and the steps.
+
+        Steps in the context are the latest release's counts. Later steps
+        are Chronos-2's draws, rounded and floored at those counts. The
+        places are the country, then the task's provinces.
+        """
         weekly = self.source == "weekly"
         rows = task.target_history if weekly else task.daily_history
         if rows is None or rows.empty:
@@ -930,37 +974,41 @@ class FoundationModel:
         steps = np.broadcast_to(final, (task.n_samples, *final.shape)).copy()
         drawn = np.maximum(np.round(draws), 0.0)
         steps[:, :, start:] = np.maximum(drawn, final[:, start:])
-        # The hub's target is weekly, so the daily source is summed to weeks.
-        week_of = np.array([_step("weekly", t).isoformat() for t in tri.times])
-        values = np.stack(
-            [steps[:, :, week_of == w].sum(axis=2) for w in weeks], axis=2
-        )
-        reported = (
-            task.target.pivot_table(
-                index="location",
-                columns="target_end_date",
-                values="total",
-                aggfunc="sum",
-            )
-            .reindex(index=list(places), columns=weeks)
-            .fillna(0.0)
-            .to_numpy()
-        )
-        values = np.maximum(values, reported)  # [S, L, W]
-        n, n_loc = task.n_samples, len(places)
-        return pd.DataFrame(
-            {
-                "location": np.repeat(list(places), n * len(weeks)),
-                "target_end_date": np.tile(weeks, n * n_loc),
-                "sample": np.tile(
-                    np.repeat(np.arange(1, n + 1), len(weeks)), n_loc
-                ),
-                "value": values.transpose(1, 0, 2).reshape(-1),
-            }
-        )[list(SAMPLE_COLUMNS)]
+        return steps, tri.times
+
+    def daily(self, task: ForecastTask) -> pd.DataFrame | None:
+        """Return the daily source's draws of each day of the target weeks.
+
+        These are the daily steps `forecast` sums to weeks, not summed: the
+        daily target. The weekly source has no days.
+
+        Parameters
+        ----------
+        task : ForecastTask
+            The data and weeks to forecast.
+
+        Returns
+        -------
+        pandas.DataFrame or None
+            Columns `location`, `target_end_date` (the day), `sample` and
+            `value`, for the country and the provinces, or None for the
+            weekly source.
+
+        Raises
+        ------
+        ModelUnavailableError
+            As `forecast`.
+        """
+        if self.source != "daily":
+            return None
+        steps, times = self._steps(task)
+        return _day_rows(task, steps, times)
 
     def quantiles(
-        self, task: ForecastTask, levels: Sequence[float]
+        self,
+        task: ForecastTask,
+        levels: Sequence[float],
+        target: str = "7day",
     ) -> pd.DataFrame | None:
         """Return Chronos-2's own quantiles where each target is one step.
 
@@ -971,7 +1019,9 @@ class FoundationModel:
         step after the draws (rounding, the floors at the reported counts)
         is monotone, so trajectory `k` is the quantile at level `k`.
         A week of the daily source is a sum of steps, which has no native
-        quantile.
+        quantile. For the daily target (`target="daily"`) each day of the
+        daily source is one step, so its quantiles are native in the same
+        way, and the weekly source has none.
 
         Parameters
         ----------
@@ -979,20 +1029,53 @@ class FoundationModel:
             The data and weeks to forecast.
         levels : sequence of float
             Increasing quantile levels.
+        target : str
+            `7day`, the hub's weekly target, or `daily`, each day of the
+            target weeks.
 
         Returns
         -------
         pandas.DataFrame or None
-            Columns `location`, `target_end_date`, `quantile` and `value`,
-            or None for the daily source.
+            Columns `location`, `target_end_date` (the week's Saturday, or
+            the day for the daily target), `quantile` and `value`, or None
+            where the target has no native quantiles.
         """
-        if self.source != "weekly":
+        if target not in TARGETS:
+            raise ValueError(f"target must be one of {TARGETS}, not {target}")
+        native = "weekly" if target == "7day" else "daily"
+        if self.source != native:
             return None
         at = np.asarray(levels, dtype=float)
         run = replace(self, sample=native_sampler(at, self.checkpoint))
-        out = run.forecast(replace(task, n_samples=len(at)))
+        one = replace(task, n_samples=len(at))
+        if target == "7day":
+            out = run.forecast(one)
+        else:
+            out = _day_rows(one, *run._steps(one))
         out["quantile"] = at[out["sample"].to_numpy() - 1]
         return out[["location", "target_end_date", "quantile", "value"]]
+
+
+def _day_rows(
+    task: ForecastTask, steps: np.ndarray, times: list[str]
+) -> pd.DataFrame:
+    """Return daily steps `[S, L, T]` of the target weeks' days as rows."""
+    weeks = set(task.target_end_dates)
+    keep = np.array([_step("weekly", t).isoformat() in weeks for t in times])
+    days = np.asarray(times)[keep]
+    values = steps[:, :, keep]  # [S, L, D]
+    places = (NATIONAL, *task.locations)
+    n = values.shape[0]
+    return pd.DataFrame(
+        {
+            "location": np.repeat(list(places), n * days.size),
+            "target_end_date": np.tile(days, n * len(places)),
+            "sample": np.tile(
+                np.repeat(np.arange(1, n + 1), days.size), len(places)
+            ),
+            "value": values.transpose(1, 0, 2).reshape(-1),
+        }
+    )[list(SAMPLE_COLUMNS)]
 
 
 def native_sampler(

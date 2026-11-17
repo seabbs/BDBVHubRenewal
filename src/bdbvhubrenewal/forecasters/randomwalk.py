@@ -478,6 +478,37 @@ class RandomWalkNowcast(RandomWalk):
         )
         return frame(task, weeks, values, self.rows(origin, task))
 
+    def daily(self, task: ForecastTask) -> pd.DataFrame:
+        """Return daily draws of each target week up to the cut-off week.
+
+        The model nowcasts hub weeks. Each draw's days are its weeks split
+        by `split_days`, so they sum to the draws `forecast` gives, which
+        they leave unchanged.
+
+        Parameters
+        ----------
+        task : ForecastTask
+            The data and weeks to forecast. Its `daily_history` holds the
+            release snapshots.
+
+        Returns
+        -------
+        pandas.DataFrame
+            Columns `location`, `target_end_date` (the onset day),
+            `sample` and `value`, for the task's provinces and the days of
+            its target weeks up to the week holding the cut-off.
+
+        Raises
+        ------
+        ModelUnavailableError
+            If the task has no snapshots, or no pair of releases within
+            the delay window.
+        """
+        origin = self.origin_at(task, errors=True)
+        values, weeks, part = self._paths(origin, task, origin.point)
+        rng = task.rng(self.name, "daily")
+        return split_days(origin, task, values, weeks, part, rng)
+
     def trajectories(
         self, origin: Origin, task: ForecastTask, point: np.ndarray
     ) -> tuple[np.ndarray, list[str]]:
@@ -499,6 +530,17 @@ class RandomWalkNowcast(RandomWalk):
         tuple
             Samples `[S, L, H]` for every hub week from the first data
             week to the last target, and those weeks.
+        """
+        values, weeks, _ = self._paths(origin, task, point)
+        return values, weeks
+
+    def _paths(
+        self, origin: Origin, task: ForecastTask, point: np.ndarray
+    ) -> tuple[np.ndarray, list[str], np.ndarray]:
+        """Return `trajectories` and the cut-off week's missing-day draws.
+
+        The draws for the days after the cut-off are `[L, S]`, 0 where the
+        cut-off week is full. They are in the trajectories already.
         """
         snap = origin.snap
         assert origin.size is not None
@@ -574,7 +616,127 @@ class RandomWalkNowcast(RandomWalk):
             values[:, loc, :cw] = nowcast[:, loc, :cw]
             values[:, loc, cw] = done[loc]
             values[:, loc, cw + 1 :] = ahead[loc]
-        return values, weeks
+        return values, weeks, np.where(miss > 0, part, 0.0)
+
+
+def _shares(
+    primary: np.ndarray, fallback: np.ndarray, on: np.ndarray
+) -> np.ndarray:
+    """Return day shares `[..., 7]`: `primary`, else `fallback`, else even.
+
+    Each set of weights counts on the days in `on` only. Where its sum is
+    0 the next is taken, and where both are 0 the days in `on` share
+    evenly.
+    """
+    out = np.zeros(on.shape)
+    left = np.ones(on.shape[:-1], dtype=bool)
+    for w in (primary, fallback, on.astype(float)):
+        w = np.where(on, w, 0.0)
+        total = w.sum(-1, keepdims=True)
+        use = left[..., None] & (total > 0)
+        out = np.where(use, w / np.where(total > 0, total, 1.0), out)
+        left &= ~use[..., 0]
+    return out
+
+
+def split_days(
+    origin: Origin,
+    task: ForecastTask,
+    values: np.ndarray,
+    weeks: list[str],
+    part: np.ndarray,
+    rng: np.random.Generator,
+) -> pd.DataFrame:
+    r"""Split each draw's weeks into days, so the days sum to the weeks.
+
+    A week's draw is its reported count $Y_w$ plus new reports. Each day
+    keeps its own reported count $Y_t$, and the new reports are split over
+    the week's days by a multinomial draw with shares proportional to each
+    day's chain-ladder count still to come, $Y_t (G_t - 1)$ (`Origin.growth`).
+    Where the week has none, the shares are each day's share not yet
+    reported, $1 - 1 / G_t$, and where that is 0 too, even.
+    The days of the cut-off week after the cut-off take that week's
+    missing-day draw (`part`), split evenly, as the walk's rate is one
+    rate for the week. A quiet place's draws beyond its reported counts
+    are introductions, split over all the week's days the same way, a
+    day after the cut-off counting as wholly unreported.
+
+    Parameters
+    ----------
+    origin : Origin
+        The fit.
+    task : ForecastTask
+        The task.
+    values : numpy.ndarray
+        Trajectories, `[S, L, H]` over `weeks` (`RandomWalkNowcast._paths`).
+    weeks : list of str
+        Their hub weeks.
+    part : numpy.ndarray
+        The cut-off week's missing-day draws, `[L, S]`.
+    rng : numpy.random.Generator
+        Draws the splits.
+
+    Returns
+    -------
+    pandas.DataFrame
+        `SAMPLE_COLUMNS`, with each day of the task's target weeks up to
+        the cut-off week in `target_end_date`, for the task's places.
+    """
+    snap, o = origin.snap, origin.o
+    cw = snap.cut_week(o)
+    targets = [w for w in task.target_end_dates if w in weeks[: cw + 1]]
+    cols = np.array([weeks.index(w) for w in targets], dtype=int)
+    rows = [snap.locations.index(c) for c in task.locations]
+    n_days = snap.week.size
+    # Day index of each slot of each week, -1 where the week has no such
+    # day (the first data week may start after its Sunday).
+    slot = np.full((len(cols), 7), -1)
+    for j, w in enumerate(cols):
+        days = np.flatnonzero(snap.week == w)
+        slot[j, 7 - days.size :] = days
+    has = slot >= 0
+    at = np.clip(slot, 0, n_days - 1)
+    seen = has & snap.observed[o][at]
+    counts = np.where(seen, snap.counts[:, o, :][:, at], 0.0)  # [L, J, 7]
+    g = origin.growth[:, at]
+    todo = np.where(seen, counts * (g - 1.0), 0.0)
+    unreported = np.where(seen, 1.0 - 1.0 / g, 1.0)
+    quiet = _quiet(origin)
+    # Non-quiet places' new reports go to the observed days only.
+    observed_only = np.broadcast_to(seen, counts.shape) & ~quiet[:, None, None]
+    on = np.where(quiet[:, None, None], has, observed_only)
+    shares = _shares(todo, unreported, on)  # [L, J, 7]
+    drawn = np.maximum(np.round(values[:, :, cols]), 0.0)  # [S, L, J]
+    reported = counts.sum(-1)  # [L, J]
+    missing = np.zeros(drawn.shape)
+    at_cw = cols == cw
+    if at_cw.any():
+        missing[:, :, at_cw] = np.where(quiet[None, :], 0.0, part.T)[..., None]
+    extra = np.maximum(drawn - reported[None] - missing, 0.0)
+    split = rng.multinomial(extra.astype(np.int64), shares)  # [S, L, J, 7]
+    after = has & ~seen
+    n_after = after.sum(-1)  # [J]
+    even = np.where(after, 1.0 / np.maximum(n_after, 1)[:, None], 0.0)
+    tail = np.zeros(split.shape)
+    if at_cw.any():
+        tail = rng.multinomial(missing.astype(np.int64), even).astype(float)
+    daily = counts[None] + split + tail  # [S, L, J, 7]
+    day = snap.days.strftime("%Y-%m-%d").to_numpy()[at]  # [J, 7]
+    n = values.shape[0]
+    frames = []
+    for loc, row in zip(task.locations, rows, strict=True):
+        picked = daily[:, row][:, has]  # [S, D]
+        frames.append(
+            pd.DataFrame(
+                {
+                    "location": loc,
+                    "target_end_date": np.tile(day[has], n),
+                    "sample": np.repeat(np.arange(1, n + 1), picked.shape[1]),
+                    "value": picked.reshape(-1),
+                }
+            )
+        )
+    return pd.concat(frames, ignore_index=True)[list(SAMPLE_COLUMNS)]
 
 
 register_model(

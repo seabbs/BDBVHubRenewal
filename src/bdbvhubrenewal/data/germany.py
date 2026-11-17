@@ -414,8 +414,13 @@ def hub_forecasts(
     )
 
 
-def hub_target(triangle: pd.DataFrame, ends: Sequence[str]) -> pd.DataFrame:
+def hub_target(
+    triangle: pd.DataFrame, ends: Sequence[str], window: int = 7
+) -> pd.DataFrame:
     """Return 7-day sums as each report date gives them, as a target table.
+
+    With `window` 1 each row is one day's count by Meldedatum, the daily
+    target.
 
     Parameters
     ----------
@@ -423,6 +428,8 @@ def hub_target(triangle: pd.DataFrame, ends: Sequence[str]) -> pd.DataFrame:
         Counts by Meldedatum and report date (`read_triangle`).
     ends : sequence of str
         Last days of the 7-day sums.
+    window : int
+        Days in each sum, 7 for the hub's target.
 
     Returns
     -------
@@ -437,7 +444,7 @@ def hub_target(triangle: pd.DataFrame, ends: Sequence[str]) -> pd.DataFrame:
     keep = places.isin(set(PLACE_NAMES)) & (
         (triangle["age_group"] == ALL_AGES) | (triangle["location"] == GERMANY)
     )
-    first = (as_date(min(ends)) - dt.timedelta(days=6)).isoformat()
+    first = (as_date(min(ends)) - dt.timedelta(days=window - 1)).isoformat()
     rows = triangle.loc[keep & (triangle["reference_date"] >= first)]
     reports = sorted(set(rows["report_date"]) | set(ends))
     days = pd.date_range(first, max(ends), freq="D").date.astype(str)
@@ -455,7 +462,7 @@ def hub_target(triangle: pd.DataFrame, ends: Sequence[str]) -> pd.DataFrame:
             .ffill(axis=1)
             .fillna(0.0)
         )
-        sums = counts.rolling(7).sum()
+        sums = counts.rolling(window).sum()
         for end in ends:
             total = sums.loc[end]
             total = total.loc[total.index >= end]
