@@ -166,9 +166,6 @@ evidence:
   aggregation_scores:
     ref: 5a3e0440880f54751fd8dccbfa14133a2a74ba81
     path: results/agg/aggregation-scores.csv.gz
-  aggregation_cost:
-    ref: 5a3e0440880f54751fd8dccbfa14133a2a74ba81
-    path: results/agg/aggregation-cost.csv
   # The slots run's check against no slots and zero-shot, with the
   # lag-swap test (slots-check), for its newest checked checkpoint.
   # Pending: the final slots run's first checked checkpoint.
