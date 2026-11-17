@@ -30,6 +30,7 @@ __all__ = [
     "checkpoint_table",
     "docs_page",
     "label",
+    "live_tags",
     "newest",
     "summary_table",
     "tidy",
@@ -106,6 +107,18 @@ def newest(scores: pd.DataFrame, run: str) -> dict[str, tuple[str, int]]:
         top = g.sort_values("outbreaks").iloc[-1]
         out[str(study)] = (str(top["checkpoint"]), int(top["outbreaks"]))
     return out
+
+
+def live_tags(scores: pd.DataFrame, run: str = LIVE_RUN) -> dict[str, int]:
+    """Return each release tag of the live run with its simulations."""
+    from bdbvhubrenewal.evaluation.germany_store import release_tag
+
+    rows = scores.loc[scores["run"] == run, ["checkpoint", "outbreaks"]]
+    rows = rows.drop_duplicates("checkpoint")
+    return {
+        release_tag(str(c)): int(n)
+        for c, n in zip(rows["checkpoint"], rows["outbreaks"], strict=True)
+    }
 
 
 def label(outbreaks: int) -> str:

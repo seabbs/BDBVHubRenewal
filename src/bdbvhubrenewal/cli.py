@@ -401,6 +401,13 @@ def build_parser() -> argparse.ArgumentParser:
         "--out", required=True, help="A germany-backtest results directory."
     )
     gft.add_argument(
+        "--checkpoint-scores",
+        default=None,
+        help="evidence/checkpoint-scores.csv from the checkpoint-scoring "
+        "branch: only the live run's checkpoints are shown, labelled "
+        "preliminary (`reporting.live_checkpoint`).",
+    )
+    gft.add_argument(
         "--note",
         required=True,
         help="JSON naming the checkpoint shown, which the page reads.",
@@ -1973,16 +1980,25 @@ def _germany_ft_load(args: argparse.Namespace) -> int:
     from bdbvhubrenewal.evaluation import germany as de
     from bdbvhubrenewal.evaluation import germany_store as gs
     from bdbvhubrenewal.forecasters import foundation
+    from bdbvhubrenewal.reporting import live_checkpoint as lc
 
     config = de.load_germany_config(args.config)
     spec = foundation.finetuned_spec(args.finetune)
     stored = gs.stored_tags(args.store)
+    live = None
+    path = Path(args.checkpoint_scores) if args.checkpoint_scores else None
+    if path is not None and path.is_file() and path.stat().st_size > 0:
+        live = lc.live_tags(pd.read_csv(path))
     tag, pinned = gs.choose_checkpoint(
-        stored, foundation.finetuned_releases(), spec
+        stored, foundation.finetuned_releases(), spec, live
     )
     note = Path(args.note)
     note.parent.mkdir(parents=True, exist_ok=True)
     meta = {"tag": tag, "pinned": pinned, "models": list(gs.STORED_MODELS)}
+    if live is not None:
+        meta["live_run"] = lc.LIVE_RUN
+        if tag in live:
+            meta["label"] = lc.label(live[tag])
     note.write_text(json.dumps(meta, indent=2) + "\n")
     if tag is None:
         print(
