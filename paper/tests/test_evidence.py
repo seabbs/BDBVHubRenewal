@@ -6,7 +6,6 @@ import yaml
 from paperpipe.evidence import (
     EVIDENCE,
     aggregation_numbers,
-    aggregation_table,
     copula_table,
     rho_medians,
     write_evidence,
@@ -102,10 +101,6 @@ def test_aggregation_is_relative_to_the_reference_on_shared_targets() -> None:
             "log_wis": 2.0,
         },
     ]
-    t = aggregation_table(pd.DataFrame(rows), "ebola")
-    assert t["Option"].tolist() == ["Joint block", "Level by level"]
-    assert t["Relative WIS (log)"].tolist() == ["0.50 (0.50)", "2.00 (2.00)"]
-    assert t["n"].tolist() == [1, 1]
     numbers = aggregation_numbers(pd.DataFrame(rows))
     assert numbers["ebola"]["national"]["fm"] == {"joint": 0.5, "level": 2.0}
 
@@ -163,12 +158,8 @@ def test_a_study_without_rows_still_waits(tmp_path) -> None:
     ).to_csv(rows, index=False)
     paths = dict.fromkeys(EVIDENCE) | {"aggregation_scores": rows}
     write_evidence(paths, tmp_path / "si", tmp_path / "fig", tmp_path / "e.yml")
-    assert (
-        "Joint block" in (tmp_path / "si" / "aggregation-ebola.md").read_text()
-    )
-    assert (
-        "waits on" in (tmp_path / "si" / "aggregation-germany.md").read_text()
-    )
+    assert (tmp_path / "fig" / "aggregation.png").is_file()
+    assert not (tmp_path / "si" / "aggregation-cost.md").exists()
 
 
 def test_lag_numbers_pair_each_model_with_its_longer_horizon() -> None:
@@ -432,8 +423,7 @@ def test_aggregation_options_name_the_lowest_level_not_zones() -> None:
     # Germany's lowest level is states or age groups, not zones.
     from paperpipe.evidence import OPTIONS
 
-    assert OPTIONS["zones_summed"] == "Lowest level summed"
-    assert OPTIONS["zones_copula"] == "Lowest level summed after pairing"
+    assert not any("zone" in label.lower() for label in OPTIONS.values())
 
 
 def test_checkpoint_curves_show_the_untuned_models_as_lines() -> None:
@@ -759,3 +749,41 @@ def test_the_heldout_layout_table_waits_then_shows_its_rows(tmp_path) -> None:
     paths = dict.fromkeys(EVIDENCE) | {"heldout_layout": rows}
     write_evidence(paths, tmp_path / "si", tmp_path / "fig", tmp_path / "e.yml")
     assert "daily_weekly" in table.read_text()
+
+
+def test_the_aggregation_figure_has_a_panel_per_study_and_level() -> None:
+    from paperpipe.evidence import aggregation_figure
+
+    rows = []
+    for study, levels in [
+        ("ebola", ["national", "provinces", "zones"]),
+        ("germany", ["national", "states", "age groups"]),
+    ]:
+        for level in levels:
+            for model, option in [
+                ("randomwalknowcast", "joint"),
+                ("fm_chronos_daily_ragged", "joint"),
+                ("fm_chronos_daily_ragged", "weekly_row"),
+                ("fm_chronos_daily_ragged", "days_copula"),
+                ("fm_chronos_daily_ragged", "days_summed"),
+            ]:
+                rows.append(
+                    {
+                        "study": study,
+                        "model": model,
+                        "option": option,
+                        "level": level,
+                        "location": "X",
+                        "origin_date": "2026-10-01",
+                        "target_date": "2026-09-26",
+                        "wis": 1.0 if model == "randomwalknowcast" else 0.8,
+                        "log_wis": 1.0,
+                        "cover50": 1,
+                        "cover95": 1,
+                    }
+                )
+    fig = aggregation_figure(pd.DataFrame(rows))
+    drawn = [ax for ax in fig.axes if ax.get_visible() and ax.has_data()]
+    assert len(drawn) == 6
+    labels = {t.get_text() for t in drawn[0].get_xticklabels()}
+    assert {"(a)", "(e) weekly row", "(e) days, copula"} <= labels

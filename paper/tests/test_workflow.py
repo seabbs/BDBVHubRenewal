@@ -96,9 +96,9 @@ def test_development_writes_main_and_si_outputs(development: Path) -> None:
     for study in ("synthetic", "ebola"):
         joint = development / "tables" / "main" / f"{study}-joint.md"
         assert "rel_energy_log" in joint.read_text()
-    for part in ("main", "si"):
-        design = development / "tables" / part / "synthetic-design.md"
-        assert "Generative process" in design.read_text()
+    design = development / "tables" / "si" / "grid-epidemic.md"
+    assert "Generative process" in design.read_text()
+    assert (development / "figures" / "si" / "sim-examples.png").is_file()
 
 
 def test_development_never_reads_heldout_data(development: Path) -> None:

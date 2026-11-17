@@ -75,7 +75,7 @@ import numpy as np
 import pandas as pd
 
 from bdbvhubrenewal.data.dates import as_date
-from bdbvhubrenewal.data.zones import is_zone, province_of
+from bdbvhubrenewal.data.zones import is_zone, province_of, weekly_zone_counts
 from bdbvhubrenewal.forecasters.base import (
     NATIONAL,
     SAMPLE_COLUMNS,
@@ -91,6 +91,7 @@ __all__ = [
     "check_zone_coherence",
     "reconcile_zones",
     "walks_own_zones",
+    "with_zones",
     "zone_draws",
     "zone_forecast",
     "zone_task",
@@ -411,6 +412,43 @@ def reconcile_zones(
     return pd.concat(frames, ignore_index=True)[list(SAMPLE_COLUMNS)]
 
 
+def with_zones(samples: pd.DataFrame, task: ForecastTask) -> pd.DataFrame:
+    """Return a province model's samples with its zones split from them.
+
+    Each province sample is split across the province's zones by
+    `ZoneAllocator`, from the task's zone counts at its vintage. This is
+    the one place a province-level model gets its zones, so every
+    consumer reads the zones it submits. Samples are returned as they are
+    when the task has no zone data, or when they already hold zones (a
+    model that forecasts the zones itself).
+
+    Parameters
+    ----------
+    samples : pandas.DataFrame
+        The model's output for `task`, provinces and optionally national,
+        with `as_of` rows if any.
+    task : ForecastTask
+        The task, with `zone_daily_history` and `zone_codes`.
+
+    Returns
+    -------
+    pandas.DataFrame
+        `samples` with the zone rows added (no `as_of` rows for zones).
+    """
+    daily = task.zone_daily_history
+    if not task.zone_codes or daily is None or daily.empty:
+        return samples
+    if samples["location"].map(is_zone).any():
+        return samples
+    counts = weekly_zone_counts(daily, task.vintage)
+    zones = ZoneAllocator().allocate(samples, task, counts, task.zone_codes)
+    if zones.empty:
+        return samples
+    if "as_of" in samples:
+        zones = zones.assign(as_of=np.nan)
+    return pd.concat([samples, zones], ignore_index=True)
+
+
 def zone_draws(samples: pd.DataFrame) -> pd.DataFrame:
     """Return a zone task's final-count zone rows, `SAMPLE_COLUMNS` only."""
     final = _final(samples)
@@ -586,12 +624,10 @@ def zones_for_model(
 ) -> pd.DataFrame:
     """Return a model's health-zone samples.
 
-    A model that forecasts the zones itself gives zone rows in `samples`
-    that already sum to its provinces (`reconcile_zones`), and they are
-    used as they are. A random walk model with no fit is run on the zones
-    (`zone_forecast`). Any other model's province samples, a fitted
-    model's included, are split across the zones by `ZoneAllocator`, so
-    no model is fitted here.
+    A model's own zone rows in `samples` are used as they are: a
+    province-level model splits its zones in its forecast (`with_zones`),
+    and Chronos-2 forecasts them. A random walk model with no fit is run on
+    the zones (`zone_forecast`). Other samples have no zones.
 
     Parameters
     ----------
@@ -620,4 +656,4 @@ def zones_for_model(
     if walks_own_zones(name):
         model = get_model(str(name))
         return zone_forecast(model, task, counts, zones, daily_zones)
-    return ZoneAllocator().allocate(samples, task, counts, zones)
+    return pd.DataFrame(columns=list(SAMPLE_COLUMNS))

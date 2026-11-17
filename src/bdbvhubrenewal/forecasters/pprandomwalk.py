@@ -86,7 +86,7 @@ from __future__ import annotations
 import datetime as dt
 import time
 from dataclasses import dataclass, field, replace
-from typing import Any
+from typing import Any, ClassVar
 
 import jax
 import jax.numpy as jnp
@@ -124,6 +124,7 @@ from bdbvhubrenewal.forecasters.randomwalk import (
     _clear_caches,
     frame,
 )
+from bdbvhubrenewal.forecasters.zones import with_zones
 
 __all__ = [
     "NoRecentCases",
@@ -706,6 +707,7 @@ class PPRandomWalkNowcast(RandomWalkNowcast):
     name: str = "pprandomwalknowcast"
     sampler: Sampler = field(default_factory=Sampler)
     fit_weeks: int = FIT_WEEKS
+    reads_zones: ClassVar[bool] = True
 
     def forecast(self, task: ForecastTask) -> pd.DataFrame:
         """Return posterior predictive trajectories for a task.
@@ -780,20 +782,20 @@ class PPRandomWalkNowcast(RandomWalkNowcast):
         rows = [snap.locations.index(c) for c in task.locations]
         out = frame(task, weeks, values, rows)
         quiet = [c for c in task.locations if silent[snap.locations.index(c)]]
-        if not quiet:
-            return out
-        # As renewalsp does, a silent place takes randomwalknowcast's
-        # draws: exactly 0 until an introduction, then its walk.
-        walk = RandomWalkNowcast(settings=self.settings).forecast(
-            replace(task, report_by={})
-        )
-        return pd.concat(
-            [
-                out.loc[~out["location"].isin(quiet)],
-                walk.loc[walk["location"].isin(quiet), list(out.columns)],
-            ],
-            ignore_index=True,
-        )
+        if quiet:
+            # As renewalsp does, a silent place takes randomwalknowcast's
+            # draws: exactly 0 until an introduction, then its walk.
+            walk = RandomWalkNowcast(settings=self.settings).forecast(
+                replace(task, report_by={})
+            )
+            out = pd.concat(
+                [
+                    out.loc[~out["location"].isin(quiet)],
+                    walk.loc[walk["location"].isin(quiet), list(out.columns)],
+                ],
+                ignore_index=True,
+            )
+        return with_zones(out, task)
 
     def predict(
         self,

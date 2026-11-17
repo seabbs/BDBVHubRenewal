@@ -229,7 +229,7 @@ def panel_a(g: Svg, oy: float) -> float:
         ("Expected onsets", ["places \u00b7 ages", "places \u00d7 ages"]),
         ("Reporting delay", ["parametric \u00b7 hazard", "drift \u00b7 steps"]),
         ("Report days", ["weekday effects", "set weekdays"]),
-        ("Observation", ["NB2 \u00b7 NB1", "Poisson"]),
+        ("Observation", ["NB1", "Poisson"]),
     ]
     height = 66.0
     x = 0.0
