@@ -37,9 +37,13 @@ FAKE_CHECKPOINT = "fakefake0001"
 
 
 def _write_checkpoint_release(
-    root: Path, tag_hash: str, adapter: dict[str, bytes], settings_hash: str
+    root: Path,
+    tag_hash: str,
+    adapter: dict[str, bytes],
+    settings_hash: str,
+    prefix: str = "chronos-ft",
 ) -> None:
-    """Write a fake release `chronos-ft-<tag_hash>` under `root`.
+    """Write a fake release `<prefix>-<tag_hash>` under `root`.
 
     Its assets are the adapter files, `settings.json` and their
     `sha256sums.txt`, as `scripts/finetune_stream.py` writes them.
@@ -47,7 +51,7 @@ def _write_checkpoint_release(
     import hashlib
     import json
 
-    assets = root / f"chronos-ft-{tag_hash}"
+    assets = root / f"{prefix}-{tag_hash}"
     assets.mkdir(parents=True)
     files = {**adapter, "settings.json": json.dumps({"hash": settings_hash})}
     for name, data in files.items():

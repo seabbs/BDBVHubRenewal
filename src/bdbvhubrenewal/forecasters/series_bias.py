@@ -171,7 +171,7 @@ def _bias_module(n_layers: int, n_heads: int) -> Any:
     import torch
     from torch import nn
 
-    class SeriesBias(nn.Module):
+    class SeriesBias(nn.Module):  # type: ignore[misc]
         """Per layer and head, the bias of each kind of row pair, fp32."""
 
         def __init__(self) -> None:
@@ -315,7 +315,7 @@ def _check_loaded(peft_model: Any, adapter: Path | str) -> None:
         If an adapter weight is not in the model or differs from the file.
     """
     import torch
-    from safetensors.torch import load_file
+    from safetensors.torch import load_file  # type: ignore[import-not-found]
 
     def plain(name: str) -> str:
         name = name.replace(".modules_to_save.default", "")

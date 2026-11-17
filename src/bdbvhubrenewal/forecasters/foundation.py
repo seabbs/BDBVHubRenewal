@@ -6,7 +6,11 @@ Each pair of a source (`SOURCES`) and a layout (`LAYOUTS`) is one
 registered model, `fm_chronos_<source>_<layout>`, and each source's
 ragged model with a fine-tuned checkpoint (`resolve_checkpoint`, the
 latest release unless `config/finetune.toml` pins one) is
-`fm_chronos_<source>_ragged_ft`.
+`fm_chronos_<source>_ragged_ft`. For the SI, `fm_chronos_<source>_ragged_de`
+is the ragged model with the checkpoint fine-tuned on the German data's
+development half alone (`scripts/finetune_germany.py`), pinned in
+`config/finetune.toml` and released as `germany-ft-<hash>`, which the
+latest lookup never takes.
 `hub_triangle` lays out the hub target by place, time and release lag,
 `FoundationModel` gives it to Chronos-2 as one group of series, and
 `chronos_sampler` draws trajectories from Chronos-2's quantiles.
@@ -28,7 +32,7 @@ import time
 import tomllib
 import urllib.request
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from functools import cache, partial
 from pathlib import Path
 from typing import Any, Final
@@ -55,8 +59,10 @@ __all__ = [
     "FINETUNED_CACHE",
     "FINETUNED_CONFIG",
     "FINETUNED_ENV",
+    "FINETUNED_PREFIX",
     "FINETUNED_RELEASES",
     "FINETUNED_URL",
+    "GERMANY_PREFIX",
     "LAYOUTS",
     "MAX_LAG",
     "SLOTS_PREFIX",
@@ -70,8 +76,10 @@ __all__ = [
     "finetuned_adapter",
     "finetuned_releases",
     "finetuned_spec",
+    "germany_spec",
     "hub_triangle",
     "layout_block",
+    "native_sampler",
     "quantile_draws",
     "release_tag",
     "resolve_checkpoint",
@@ -107,6 +115,13 @@ FINETUNED_RELEASES: Final = (
     "https://api.github.com/repos/seabbs/BDBVHubRenewal/releases"
 )
 """The repository's releases, listed to find the latest checkpoint."""
+
+FINETUNED_PREFIX: Final = "chronos-ft"
+"""Tag prefix of the simulation-trained checkpoints' releases, the only
+ones `"latest"` takes."""
+
+GERMANY_PREFIX: Final = "germany-ft"
+"""Tag prefix of the German-trained checkpoints' releases."""
 
 FINETUNED_ENV: Final = "BDBV_CHRONOS_FT"
 """Environment variable with the settings hash a run resolved once, which
@@ -158,13 +173,25 @@ class Checkpoint:
     ----------
     hash : str
         Settings hash from `scripts/finetune_stream.py`. The release
-        is `chronos-ft-<hash>`.
+        is `<prefix>-<hash>`.
     sha256 : tuple of (str, str)
         SHA-256 of each of `ADAPTER_FILES`, by file name.
+    prefix : str
+        The release's tag prefix, `FINETUNED_PREFIX` or `GERMANY_PREFIX`.
+        Left out of the repr, which keys stored fits; the hash tells the
+        checkpoints apart.
     """
 
     hash: str
     sha256: tuple[tuple[str, str], ...]
+    prefix: str = field(default=FINETUNED_PREFIX, repr=False)
+
+    @property
+    def tag(self) -> str:
+        """The checkpoint's release tag (`release_tag` for `_ft` ones)."""
+        if self.prefix == FINETUNED_PREFIX:
+            return release_tag(self.hash)
+        return f"{self.prefix}-{self.hash}"
 
 
 def finetuned_spec(path: Path | str = FINETUNED_CONFIG) -> str:
@@ -266,18 +293,50 @@ def finetuned_releases() -> list[dict[str, Any]]:
     return out
 
 
+def germany_spec(path: Path | str = FINETUNED_CONFIG) -> str:
+    """Return the settings hash the `_de` models load.
+
+    No environment variable overrides it, so a run that pins the
+    simulation-trained checkpoint leaves it as it is.
+
+    Parameters
+    ----------
+    path : pathlib.Path or str
+        A TOML file with `germany`.
+
+    Returns
+    -------
+    str
+
+    Raises
+    ------
+    ValueError
+        If the pin is pending (empty) until the release is published.
+    """
+    spec = str(tomllib.loads(Path(path).read_text())["germany"])
+    if not spec:
+        raise ValueError(
+            f"No {GERMANY_PREFIX} release is pinned yet: set `germany` in "
+            f"{path} to its settings hash."
+        )
+    return spec
+
+
 @cache
-def resolve_checkpoint(spec: str) -> Checkpoint:
+def resolve_checkpoint(spec: str, prefix: str = FINETUNED_PREFIX) -> Checkpoint:
     """Return a fine-tuned checkpoint from its release.
 
     `"latest"` is the newest published `chronos-ft-*` release by publish
-    date. The release's `SUMS_FILE` gives the SHA-256 of its adapter
+    date; releases of other prefixes, such as `germany-ft-*`, are never
+    taken. The release's `SUMS_FILE` gives the SHA-256 of its adapter
     files. Each process resolves once.
 
     Parameters
     ----------
     spec : str
         `"latest"` or a settings hash.
+    prefix : str
+        The release's tag prefix. `"latest"` needs `FINETUNED_PREFIX`.
 
     Returns
     -------
@@ -295,18 +354,24 @@ def resolve_checkpoint(spec: str) -> Checkpoint:
         If `SUMS_FILE` lacks an adapter file.
     """
     checkpoint = spec
+    if spec == "latest" and prefix != FINETUNED_PREFIX:
+        raise ValueError(f"Only {FINETUNED_PREFIX} releases resolve latest.")
     if spec == "latest":
         tags = sorted(
             (r["published_at"], r["tag_name"])
             for r in finetuned_releases()
-            if str(r["tag_name"]).startswith("chronos-ft-")
+            if str(r["tag_name"]).startswith(f"{FINETUNED_PREFIX}-")
             and not r.get("draft")
             and r.get("published_at")
         )
         if not tags:
             raise LookupError("No chronos-ft-* release holds a checkpoint.")
-        checkpoint = tags[-1][1].removeprefix("chronos-ft-")
-    tag = release_tag(checkpoint)
+        checkpoint = tags[-1][1].removeprefix(f"{FINETUNED_PREFIX}-")
+    tag = (
+        release_tag(checkpoint)
+        if prefix == FINETUNED_PREFIX
+        else f"{prefix}-{checkpoint}"
+    )
     url = f"{FINETUNED_URL}/{tag}/{SUMS_FILE}"
     try:
         text = _get(url).decode()
@@ -328,7 +393,9 @@ def resolve_checkpoint(spec: str) -> Checkpoint:
             f"{SUMS_FILE} of the release {tag} has no SHA-256 of "
             f"{', '.join(missing)}."
         )
-    return Checkpoint(checkpoint, tuple((f, sums[f]) for f in ADAPTER_FILES))
+    return Checkpoint(
+        checkpoint, tuple((f, sums[f]) for f in ADAPTER_FILES), prefix
+    )
 
 
 def _finetuned(name: str, source: str) -> FoundationModel:
@@ -343,6 +410,16 @@ def _finetuned(name: str, source: str) -> FoundationModel:
         "ragged",
         resolve_checkpoint(finetuned_spec()),
         weekly_totals=source == "daily",
+    )
+
+
+def _german(name: str, source: str) -> FoundationModel:
+    """Build a model with the German-trained checkpoint `germany_spec`."""
+    return FoundationModel(
+        name,
+        source,
+        "ragged",
+        resolve_checkpoint(germany_spec(), GERMANY_PREFIX),
     )
 
 
@@ -525,7 +602,7 @@ def quantile_draws(
 def finetuned_adapter(checkpoint: Checkpoint) -> Path:
     """Return a fine-tuned checkpoint's LoRA adapter, downloading it once.
 
-    The release `chronos-ft-<hash>` at `FINETUNED_URL` holds
+    The release `<prefix>-<hash>` at `FINETUNED_URL` holds
     `ADAPTER_FILES` and `settings.json`. They are kept in
     `FINETUNED_CACHE` only once all are downloaded, the settings hash
     matches and each adapter file has its SHA-256. A cached copy is
@@ -551,7 +628,7 @@ def finetuned_adapter(checkpoint: Checkpoint) -> Path:
         If the release's settings hash or an adapter file's SHA-256 is not
         the checkpoint's.
     """
-    tag = release_tag(checkpoint.hash)
+    tag = checkpoint.tag
     cache = Path(FINETUNED_CACHE).expanduser()
     out = cache / tag
     if out.is_dir():
@@ -903,6 +980,10 @@ class FoundationModel:
         forecast from that row. As the fine-tuned model was trained.
     sample : Sampler or None
         Draws the trajectories, Chronos-2 with `checkpoint` by default.
+    stream : str or None
+        The task's random stream the draws are seeded from, the model's
+        name by default. Models given one stream draw the same random
+        numbers (`bdbvhubrenewal.evaluation.marginals.forecast_quantiles`).
     """
 
     name: str
@@ -911,6 +992,7 @@ class FoundationModel:
     checkpoint: Checkpoint | None = None
     weekly_totals: bool = False
     sample: Sampler | None = field(default=None, repr=False)
+    stream: str | None = field(default=None, repr=False)
 
     @property
     def needs_snapshots(self) -> bool:
@@ -981,7 +1063,7 @@ class FoundationModel:
                 f"{task.vintage} has {max(start, 0)}."
             )
         horizon = len(tri.times) - start
-        seed = int(task.rng(self.name).integers(0, 2**31 - 1))
+        seed = int(task.rng(self.stream or self.name).integers(0, 2**31 - 1))
         period = week_rows(tri) if self.weekly_totals else None
         group = layout_block(tri, self.layout, places, start, period)
         sample = self.sample or partial(
@@ -1040,6 +1122,82 @@ class FoundationModel:
         """
         return self.forecast_both(task)[0]
 
+    def quantiles(
+        self, task: ForecastTask, levels: Sequence[float]
+    ) -> pd.DataFrame | None:
+        """Return Chronos-2's own quantiles where each target is one step.
+
+        Each week of the weekly source is one of Chronos-2's steps, so its
+        quantiles are Chronos-2's native quantiles read at `levels` by
+        linear interpolation between the native levels (`native_sampler`).
+        They pass through `forecast` as one trajectory per level; every
+        step after the draws (rounding, the floors at the reported counts)
+        is monotone, so trajectory `k` is the quantile at level `k`.
+        A week of the daily source is a sum of steps, which has no native
+        quantile.
+
+        Parameters
+        ----------
+        task : ForecastTask
+            The data and weeks to forecast.
+        levels : sequence of float
+            Increasing quantile levels.
+
+        Returns
+        -------
+        pandas.DataFrame or None
+            Columns `location`, `target_end_date`, `quantile` and `value`,
+            or None for the daily source.
+        """
+        if self.source != "weekly":
+            return None
+        at = np.asarray(levels, dtype=float)
+        run = replace(self, sample=native_sampler(at, self.checkpoint))
+        out = run.forecast(replace(task, n_samples=len(at)))
+        out["quantile"] = at[out["sample"].to_numpy() - 1]
+        return out[["location", "target_end_date", "quantile", "value"]]
+
+
+def native_sampler(
+    levels: np.ndarray, checkpoint: Checkpoint | None = None
+) -> Sampler:
+    """Return a sampler giving Chronos-2's quantiles at `levels` as paths.
+
+    Parameters
+    ----------
+    levels : numpy.ndarray
+        Increasing quantile levels, `[K]`.
+    checkpoint : Checkpoint, optional
+        The fine-tuned checkpoint, the pretrained model by default.
+
+    Returns
+    -------
+    Sampler
+        Gives `[K, V, horizon]` per group: path `k` is each series and
+        step's quantile at `levels[k]`, linear between Chronos-2's native
+        levels and flat beyond them. It draws no random numbers.
+    """
+
+    def sample(
+        groups: Sequence[Series],
+        horizon: int,
+        n: int,  # noqa: ARG001
+        seed: int,  # noqa: ARG001
+    ) -> list[np.ndarray]:
+        pipeline = _chronos(checkpoint)
+        native = np.asarray(pipeline.quantiles, dtype=float)
+        quantiles = _predict(pipeline, groups, horizon, native)
+        out = []
+        for q in quantiles:
+            q = np.sort(q.float().cpu().numpy(), axis=-1)  # [V, H, Q]
+            at = np.apply_along_axis(
+                lambda v: np.interp(levels, native, v), -1, q
+            )  # [V, H, K]
+            out.append(np.moveaxis(at, -1, 0))  # [K, V, H]
+        return out
+
+    return sample
+
 
 for _source in SOURCES:
     for _layout in LAYOUTS:
@@ -1056,5 +1214,12 @@ for _source in SOURCES:
         partial(_finetuned, f"fm_chronos_{_source}_ragged_ft", _source),
         "Chronos-2 fine-tuned on simulated outbreaks, on the hub target's "
         f"{_source} releases, ragged layout.",
+        fitted=True,
+    )
+    register_model(
+        f"fm_chronos_{_source}_ragged_de",
+        partial(_german, f"fm_chronos_{_source}_ragged_de", _source),
+        f"Chronos-2 fine-tuned on the German data's development half, on "
+        f"the hub target's {_source} releases, ragged layout (SI only).",
         fitted=True,
     )

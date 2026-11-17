@@ -7,11 +7,22 @@ title: "Title to be chosen"
 date: today
 format:
   html:
+    # The site serves the paper at /paper/, so ../ is its home page.
+    include-before-body:
+      - text: '<p class="back-to-site"><a href="../">Back to the site</a></p>'
     toc: false
     number-sections: false
+    other-links:
+      - text: Supporting information
+        href: si.html
   pdf:
     number-sections: false
 bibliography: reference.bib
+# The evaluation workflow's numbers (`task pipeline:dev` or
+# `task pipeline:paper`), quoted with the meta shortcode.
+metadata-files:
+  - build/results.yml
+  - build/evidence.yml
 ---
 
 <!--
@@ -59,7 +70,9 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
 
 ::: {.callout-note title="Plan"}
 - Chronos-2, given the reporting triangle as series: one series per place and reporting delay, each missing until reported. Introduced alongside the reporting triangle, with Figure 1B.
-- Fine-tuned on synthetic data on a laptop, with checkpoints after 1,000, 2,000, 4,000, 6,000 and 8,000 simulated outbreaks. The largest is the main model.
+- Fine-tuned on synthetic data on a laptop from the base Chronos-2 weights, with Chronos-2's default LoRA settings and loss, a learning rate of $10^{-5}$ with linear decay, and a prediction length equal to each block's horizon.
+- Each simulation gives 10 observation draws, and each draw is cut at 16 dates, so one simulation gives 160 multivariate blocks. Single-stratum series cut from the same simulations are mixed in, so training sees multivariate and univariate series from one pool.
+- Training runs continuously up to 32,000 simulations, with a checkpoint published at every doubling from 1,000 (1,000, 2,000, 4,000, 8,000, 16,000 and 32,000).
 - Compared with Chronos-2 given only complete data points, to show what the ragged structure and fine-tuning add.
 - Figure 1, a multi-panel schematic of our pipeline: (A) the assumptions in the epinowcast simulations, (B) the reporting triangle laid out as ragged series for Chronos-2, (C) training blocks and LoRA fine-tuning, and why it is fast, and (D) forecasting with the fine-tuned model.
 - Key references: [@Ansari2025; @Ansari2024; @Hu2021; @Das2024b].
@@ -74,21 +87,47 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
 ### Synthetic data generation
 
 ::: {.callout-note title="Plan"}
-- Simulated with epinowcast over a grid of outbreak, delay and noise settings.
+- Simulated with epinowcast over a crossed factorial grid: epidemic process (growth-rate based, or renewal at several generation times), trajectory, delay family and form, delay over time, reporting, observation model and strata.
+- Ranges reflect realistic infectious diseases, checked against published values for several diseases, with the case studies among them.
 - A table in the main text gives the grid of synthetic scenarios.
 - The full process and an overview of the epinowcast model used are in the SI.
 - Key references: [@abbottepinowcast; @lison2024; @Park2024; @Ansari2024; @Dooley2023; @Muller2022; @Hollmann2025].
 :::
 
 ::: {#tbl-synthetic-grid}
-| Setting  | Values |
-|----------|--------|
-| Outbreak |        |
-| Delay    |        |
-| Noise    |        |
+{{< include build/tables/main/synthetic-design.md >}}
 
-Placeholder: grid of synthetic scenarios.
+The crossed factors of the simulation grid and their levels, each balanced within every block of simulations, read from the simulator's code.
+The full settings are in the SI.
 :::
+
+### Correlated trajectories
+
+Chronos-2 and `randomwalknowcast` draw each place and week on its own.
+Paired at random, their draws give sums over weeks or places that are too narrow.
+We pair them into trajectories with a Gaussian copula over weeks and places.
+Each trajectory draws a vector $z$ from a multivariate normal with correlation matrix $\Sigma$.
+Each place-week's draws are then reordered across trajectories so that they rank as $z$ does.
+This is an empirical copula reordering in the style of the Schaake shuffle [@Clark2004] and ensemble copula coupling [@Schefzik2013].
+Each place-week keeps its own draws, so every marginal forecast and every per-week score is unchanged.
+$\Sigma$ is a place correlation times a week correlation.
+Two steps $\delta$ days apart have correlation $\rho_t^{\delta/7}$.
+Two provinces have correlation $\rho_p$, and the country and a province have correlation $\rho_n$.
+The daily models also pair the days of a week, with correlation $\rho_d^{|d - d'|}$ between days $d$ and $d'$.
+$\rho_d = 0.985$ is fixed rather than estimated, as each matured error is of a week's sum. It gives the best weekly WIS, median bias and coverage of the daily models on the Ebola release backtest.
+Where the country is the sum of its provinces, as for `randomwalknowcast`, it is summed again from the paired provinces.
+Copulas have been used before to give joint forecasts of seasonal influenza [@Ray2018; @Brooks2018].
+
+At each forecast origin we estimate the three correlations from the model's own matured errors.
+For each forecast made at an earlier origin whose truth had been released by this origin, we take the randomised probability integral transform (PIT) of the truth in the forecast's draws and map it to a normal score.
+We use the scores of the 8 latest matured weeks.
+Each correlation is the Pearson correlation of pairs of scores from the same forecast.
+We shrink it towards a fixed prior, $(\rho_t, \rho_p, \rho_n) = (0.9, 0.7, 0.7)$, with the prior worth 100 pairs, and keep it between 0 and 0.95.
+An origin with no matured errors takes the prior.
+We score the paired trajectories with the energy score [@Gneiting2008] and the variogram score of order 0.5 [@Scheuerer2015] on $\log(x + 1)$ counts.
+Both are proper scores for joint forecasts [@gneitingStrictlyProperScoring2007], and the energy score has been used for epidemic trajectories from forecast hubs [@Bay2026].
+We also report the coverage of sums over weeks and over places.
+The estimator, its window and the evidence for it are in the SI.
 
 ### Evaluation on held-out synthetic data
 
@@ -104,6 +143,7 @@ Placeholder: grid of synthetic scenarios.
 ::: {.callout-note title="Plan"}
 - Compared with the hub's models, relative to the hub's own baseline, and evaluated as the hub did.
 - Quantile forecasts scored with WIS and log-scale WIS, bias, and coverage, against a rolling evaluation set of the data as reported D days later [@Wolffram2023].
+- Each model is scored on its own quantiles at the hub's levels, interpolated linearly where it lacks a level. Models that give samples are scored on the quantiles of 1,000 draws with common random numbers, as are sums over days.
 - Daily and weekly versions may not both make sense here.
 - The nowcast dates are split in half. We developed our setup on the first half only, and the second half is held out for the results.
 - Key references: [@Wolffram2023; @Johnson2025; @amaralPostprocessingWeightedCombination2025].
@@ -113,7 +153,8 @@ Placeholder: grid of synthetic scenarios.
 
 ::: {.callout-note title="Plan"}
 - Compared with the other submissions, relative to the hub's own baseline.
-- Scored as for the held-out synthetic data, with D the empirical 98% point of the hub data's reporting delay.
+- The hub's rounds from 21 November 2026 are scored. Earlier rounds, and the release backtest from releases before that date, were used for development and are shown in the SI.
+- Sample forecasts scored with CRPS and log-scale CRPS on 1,000 draws with common random numbers, bias, and coverage, with D the empirical 98% point of the hub data's reporting delay.
 - Our models' forecasts are saved prospectively, alongside the main submissions as they were made.
 - Key references: [@bdbv_modeling_hub_2026; @Viboud2018; @funkAssessingPerformanceRealtime2019].
 :::
@@ -136,7 +177,7 @@ Each panel shows:
 - bias;
 - 50% and 90% coverage;
 - score variation by location and horizon, supported by SI plots.
-- for Germany, a dotted line marking the split between the development and held-out halves, with scores split by half.
+- for Germany and Ebola, a dotted line marking the split between the development and scored parts, with scores split by part.
 
 The plots in primarycensored-paper are a model for these.
 Each section has two paragraphs, one on visual performance and one summarising scores.
@@ -149,13 +190,33 @@ Key references: the Methods references, with [@bracherEvaluatingEpidemicForecast
 ::: {.callout-note title="Plan"}
 - Visual performance of the candidate models against `randomwalk` and `randomwalknowcast`.
 - A summary of score performance.
-- How scores change with the amount of fine-tuning data (1,000 to 8,000 outbreaks), as an SI figure.
+- How scores change with the amount of fine-tuning data (doublings from 1,000 outbreaks), as an SI figure.
+:::
+
+::: {#fig-synthetic-nowcasts}
+![](build/figures/main/synthetic-nowcasts.png)
+
+Held-out synthetic data: nowcasts of one held-out outbreak, drawn with the workflow's seed, one column per model and one row per origin. Black is the rolling truth, grey dashed the data as of the origin, and blue the model's median with its 50% and 95% intervals; each column gives the model's score relative to `randomwalknowcast`. {{< meta results.synthetic.label >}} {{< meta results.synthetic.note >}}
 :::
 
 ::: {#fig-synthetic}
-Figure to come.
+![](build/figures/main/synthetic-results.png)
 
-Placeholder: held-out synthetic data results panel.
+Held-out synthetic data. (A, B) CRPS relative to `randomwalknowcast` on the natural and log scales; (C) bias; (D) 50% and 90% coverage; (E) relative CRPS by scenario factor; (F) relative CRPS by horizon. {{< meta results.synthetic.label >}} {{< meta results.synthetic.note >}}
+:::
+
+The best model was {{< meta results.synthetic.best_model >}}, with a relative score of {{< meta results.synthetic.best_rel_score >}} and {{< meta results.synthetic.best_rel_log_score >}} on the log scale, against {{< meta results.synthetic.baseline >}}.
+
+::: {#tbl-synthetic-scores}
+{{< include build/tables/main/synthetic-scores.md >}}
+
+Held-out synthetic data: mean scores, coverage and number of forecasts of each model, with scores relative to {{< meta results.synthetic.baseline >}}. {{< meta results.synthetic.label >}} {{< meta results.synthetic.note >}}
+:::
+
+::: {#tbl-synthetic-joint}
+{{< include build/tables/main/synthetic-joint.md >}}
+
+Held-out synthetic data: mean energy and variogram scores of each model's trajectories on log(x + 1) counts, and their ratio to {{< meta results.synthetic.baseline >}} on the forecasts both made. {{< meta results.synthetic.label >}} {{< meta results.synthetic.note >}}
 :::
 
 ### German nowcast hub
@@ -166,10 +227,24 @@ Placeholder: held-out synthetic data results panel.
 - Key references: [@Wolffram2023; @amaralPostprocessingWeightedCombination2025].
 :::
 
-::: {#fig-germany}
-Figure to come.
+::: {#fig-germany-nowcasts}
+![](build/figures/main/germany-nowcasts.png)
 
-Placeholder: German nowcast hub results panel.
+German nowcast hub: national nowcasts, one column per model and one row per origin. Black is the rolling truth, grey dashed the data as of the origin, and blue the model's median with its 50% and 95% intervals; each column gives the model's WIS relative to `randomwalknowcast`. {{< meta results.germany.label >}} {{< meta results.germany.note >}}
+:::
+
+::: {#fig-germany}
+![](build/figures/main/germany-results.png)
+
+German nowcast hub. (A, B) WIS relative to `KIT-frozen_baseline` on the natural and log scales; (C) bias; (D) 50% and 95% coverage; (E) relative WIS by location; (F) by age group; (G) by horizon. {{< meta results.germany.label >}} {{< meta results.germany.note >}}
+:::
+
+On the held-out half, the best model was {{< meta results.germany.best_model >}}, with a relative score of {{< meta results.germany.best_rel_score >}} and {{< meta results.germany.best_rel_log_score >}} on the log scale, against {{< meta results.germany.baseline >}}, and {{< meta results.germany.best_rel_score_randomwalknowcast >}} against `randomwalknowcast`, as the hub's baseline is a point forecast with no coverage.
+
+::: {#tbl-germany-scores}
+{{< include build/tables/main/germany-scores.md >}}
+
+German nowcast hub: mean scores, coverage and number of forecasts of each model, with scores relative to {{< meta results.germany.baseline >}}. {{< meta results.germany.label >}} {{< meta results.germany.note >}}
 :::
 
 ### Ebola hub submissions
@@ -179,10 +254,30 @@ Placeholder: German nowcast hub results panel.
 - A summary of score performance.
 :::
 
-::: {#fig-ebola}
-Figure to come.
+::: {#fig-ebola-nowcasts}
+![](build/figures/main/ebola-nowcasts.png)
 
-Placeholder: Ebola hub submissions results panel.
+Ebola: national nowcasts, one column per model and one row per origin. Black is the rolling truth, grey dashed the data as of the origin, and blue the model's median with its 50% and 95% intervals; each column gives the model's CRPS relative to `randomwalknowcast`. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
+:::
+
+::: {#fig-ebola}
+![](build/figures/main/ebola-results.png)
+
+Ebola: sample forecasts of the hub's rounds from 21 November 2026 (scored), after the release backtest from earlier releases (development), split by a dotted line. (A, B) CRPS relative to {{< meta results.ebola.baseline >}} on the natural and log scales, on the forecasts each model shares with it, with the share of forecasts a model made in its label where it missed some; (C) bias; (D) 50% and 90% coverage; (E) relative CRPS by location; (F) by horizon. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
+:::
+
+{{< meta results.ebola.status >}} On the scored rounds, the best model was {{< meta results.ebola.best_model >}}, with a relative score of {{< meta results.ebola.best_rel_score >}} and {{< meta results.ebola.best_rel_log_score >}} on the log scale, against {{< meta results.ebola.baseline >}}.
+
+::: {#tbl-ebola-scores}
+{{< include build/tables/main/ebola-scores.md >}}
+
+Ebola hub submissions: mean scores, coverage and number of forecasts of each model, with scores relative to {{< meta results.ebola.baseline >}}. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
+:::
+
+::: {#tbl-ebola-joint}
+{{< include build/tables/main/ebola-joint.md >}}
+
+Ebola hub submissions: mean energy and variogram scores of each model's trajectories on log(x + 1) counts, and their ratio to {{< meta results.ebola.baseline >}} on the forecasts both made. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
 :::
 
 ## Discussion
