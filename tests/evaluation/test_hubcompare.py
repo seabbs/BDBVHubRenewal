@@ -9,9 +9,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.data import load_daily_zones
 from bdbvhubrenewal.data.dates import reference_date_for_vintage
-from bdbvhubrenewal.data.zones import hub_zones
+from bdbvhubrenewal.data.zones import hub_zones, load_zone_data
 from bdbvhubrenewal.evaluation.backtest import BacktestConfig
 from bdbvhubrenewal.evaluation.hubcompare import (
     ATTRIBUTION,
@@ -35,8 +34,8 @@ ROOT = Path(__file__).resolve().parents[2]
 pytestmark = pytest.mark.usefixtures("flat_model")
 WEEKS = ["2026-09-19", "2026-09-26", "2026-10-03", "2026-10-10"]
 DATA = ROOT / "tests" / "fixtures" / "data"
-DAILY_ZONES = load_daily_zones(DATA)
 ZONES = hub_zones(DATA / "hub-config" / "tasks.json")
+ZONE_DATA = load_zone_data(DATA)
 NO_ZONES = pd.DataFrame(
     {
         **{c: pd.Series(dtype=str) for c in ("kind", "vintage", "location")},
@@ -118,8 +117,7 @@ def _ours(
         config,
         ["flat"],
         daily,
-        DAILY_ZONES,
-        ZONES,
+        ZONE_DATA,
         min_horizon=-4,
     )
 
@@ -132,6 +130,69 @@ def test_load_hub_submissions_keeps_weekly_samples(tmp_path: Path) -> None:
     assert set(weekly["source"]) == {"hub"}
     # Reads several roots, as the committed and cached files are apart.
     assert len(load_hub_submissions(tmp_path, tmp_path / "none")) == len(weekly)
+
+
+def test_load_hub_submissions_keeps_latest_resubmission(
+    tmp_path: Path,
+) -> None:
+    # A resubmission appends a later forecast_date to the same file.
+    first = _hub_rows().assign(forecast_date="2026-10-20")
+    again = first.assign(forecast_date="2026-10-21", value=first["value"] + 1)
+    out = tmp_path / "model-output" / "teamA-weekly"
+    out.mkdir(parents=True)
+    with gzip.open(out / "2026-10-24-teamA-weekly.csv.gz", "wt") as fh:
+        pd.concat([first, again]).to_csv(fh, index=False)
+    hub = load_hub_submissions(tmp_path)
+    keys = ["model", "reference_date", "location", "target_end_date", "sample"]
+    assert not hub.duplicated(keys).any()
+    assert len(hub) == len(first)
+    expected = again["value"].to_numpy()
+    assert (hub["value"].to_numpy() == expected).all()
+
+
+def test_load_hub_submissions_ignores_rows_with_no_forecast_date(
+    tmp_path: Path,
+) -> None:
+    # A row with no forecast_date must not count as the latest one.
+    first = _hub_rows().assign(forecast_date=np.nan)
+    dated = first.assign(forecast_date="2026-10-21", value=first["value"] + 1)
+    out = tmp_path / "model-output" / "teamA-weekly"
+    out.mkdir(parents=True)
+    pd.concat([first, dated]).to_csv(
+        out / "2026-10-24-teamA-weekly.csv", index=False
+    )
+    hub = load_hub_submissions(tmp_path)
+    assert len(hub) == len(first)
+    assert (hub["value"].to_numpy() == dated["value"].to_numpy()).all()
+
+
+def test_load_hub_submissions_stops_on_repeated_samples(
+    tmp_path: Path,
+) -> None:
+    rows = _hub_rows()
+    out = tmp_path / "model-output" / "teamA-weekly"
+    out.mkdir(parents=True)
+    pd.concat([rows, rows]).to_csv(
+        out / "2026-10-24-teamA-weekly.csv", index=False
+    )
+    # `_hub_rows` has no forecast_date column, as older hub files do, so
+    # both copies are read and the repeat stops the load.
+    with pytest.raises(ValueError, match="teamA-weekly has"):
+        load_hub_submissions(tmp_path)
+
+
+def test_load_hub_submissions_stops_on_a_round_in_two_files(
+    tmp_path: Path,
+) -> None:
+    # The same round as `.csv` and `.csv.gz` in one model directory.
+    rows = _hub_rows()
+    out = tmp_path / "model-output" / "teamA-weekly"
+    out.mkdir(parents=True)
+    rows.to_csv(out / "2026-10-24-teamA-weekly.csv", index=False)
+    with gzip.open(out / "2026-10-24-teamA-weekly.csv.gz", "wt") as fh:
+        rows.to_csv(fh, index=False)
+    with pytest.raises(ValueError, match="teamA-weekly has"):
+        load_hub_submissions(tmp_path)
 
 
 def test_load_team_metadata(tmp_path: Path) -> None:
@@ -158,7 +219,7 @@ def test_attribution_names_the_hub() -> None:
 
 def test_load_comparison_config() -> None:
     cfg = load_comparison_config(ROOT / "config" / "hub-comparison.toml")
-    assert cfg.baseline == "randomwalk"
+    assert cfg.baseline == "randomwalknowcast"
     assert cfg.submitted == "data/our-submissions"
     assert "CD" in cfg.locations
 
@@ -191,8 +252,7 @@ def test_our_forecasts_cover_the_hub_weeks(
         config,
         ["flat"],
         daily,
-        DAILY_ZONES,
-        ZONES,
+        ZONE_DATA,
         min_horizon=-5,
     )
     assert set(fc["model"]) == {"flat"}
@@ -385,9 +445,9 @@ def test_summarise_comparison(
     )
     table = summarise_comparison(scores, "flat")
     rows = table.set_index("model")
-    assert rows.loc["flat", "relative_wis"] == pytest.approx(1)
+    assert rows.loc["flat", "rel_crps"] == pytest.approx(1)
     assert rows.loc["teamA-weekly", "n"] > 0
-    assert {"coverage_50", "coverage_90", "bias", "wis"} <= set(table.columns)
+    assert {"coverage_50", "coverage_90", "bias", "crps"} <= set(table.columns)
 
 
 def test_trajectory_samples_keep_open_teams_and_first_draws() -> None:
@@ -549,3 +609,73 @@ def test_comparison_colours_are_fixed_per_model() -> None:
     assert {got[t][1] for t in teams} <= set(HUB_GREYS["dark"])
     # A team keeps its grey whichever of our models are shown.
     assert comparison_colours({}, {}, teams)["teamB"] == got["teamB"]
+
+
+def _cells(frame: pd.DataFrame) -> set[tuple[str, ...]]:
+    keys = ["reference_date", "target", "location", "target_end_date"]
+    return set(frame[keys].astype(str).itertuples(index=False, name=None))
+
+
+def test_our_models_are_scored_only_on_the_hub_cells(
+    tmp_path: Path,
+    target: pd.DataFrame,
+    delays: pd.DataFrame,
+    daily: pd.DataFrame,
+) -> None:
+    # Our run forecasts every place and week of its task, and a round no
+    # hub team forecast. Only the hub teams' cells are scored, so a model
+    # that forecast all of them has the hub's n.
+    _write_hub(tmp_path)
+    ours = our_forecasts(
+        ["2026-10-24", "2026-10-31"],
+        target,
+        delays,
+        _CONFIG,
+        ["flat"],
+        daily,
+        ZONE_DATA,
+        min_horizon=-6,
+    )
+    hub = load_hub_submissions(tmp_path)
+    scores, energy, _ = score_comparison(
+        pd.concat([hub, ours]), target, delays, _CONFIG, daily, NO_ZONES
+    )
+    hub_scores = scores.loc[scores["source"] == "hub"]
+    full = scores.loc[scores["model"] == "teamA-weekly"]
+    flat = scores.loc[scores["model"] == "flat"]
+    assert _cells(scores) == _cells(hub_scores)
+    assert _cells(flat) == _cells(full)
+    assert set(flat["reference_date"]) == {"2026-10-24"}
+    assert len(flat) == len(full)
+    # The energy score sees the same cells: our model's matches teamA's.
+    joint = energy.set_index(["model", "scale"])["n_cells"]
+    for scale in set(energy["scale"]):
+        assert joint[("flat", scale)] == joint[("teamA-weekly", scale)]
+    table = summarise_comparison(scores, "flat").set_index("model")
+    assert table.loc["flat", "n"] == table.loc["teamA-weekly", "n"]
+    # Each row shows the hub's cells, so a team that missed some shows it.
+    assert (table["hub_cells"] == len(full)).all()
+    late = table.loc[table.index == "teamB-late"]
+    assert (late["n"] < late["hub_cells"]).all()
+
+
+def test_summarise_comparison_scores_crps(
+    tmp_path: Path,
+    target: pd.DataFrame,
+    delays: pd.DataFrame,
+    daily: pd.DataFrame,
+) -> None:
+    _write_hub(tmp_path)
+    forecasts = pd.concat(
+        [load_hub_submissions(tmp_path), _ours(target, delays, daily)]
+    )
+    scores, _, _ = score_comparison(
+        forecasts, target, delays, _CONFIG, daily, NO_ZONES
+    )
+    assert {"crps", "log_crps"} <= set(scores.columns)
+    table = summarise_comparison(scores, "flat")
+    rows = table.set_index("model")
+    assert rows.loc["flat", "rel_crps"] == pytest.approx(1)
+    assert rows.loc["flat", "rel_log_crps"] == pytest.approx(1)
+    assert {"crps", "log_crps"} <= set(table.columns)
+    assert not any("wis" in c for c in table.columns)

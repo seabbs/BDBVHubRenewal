@@ -3,9 +3,12 @@
 
 The page embeds one row per model, origin, release, place and week, and
 `docs/javascripts/summarise.js` summarises any selection of them as
-`relative_wis` does: over the forecasts the baseline also made, the mean
+`relative_crps` does: over the forecasts the baseline also made, the mean
 of each metric and, for relative metrics, the model's mean over the
-baseline's. A new metric is a score column and a label.
+baseline's. A model with fewer of the baseline's forecasts than the
+baseline is marked partial (`mark_partial`), so its row is read apart
+from the full rows, which all have the baseline's n. A new metric is a
+score column and a label.
 """
 
 from __future__ import annotations
@@ -16,18 +19,20 @@ from collections.abc import Callable, Mapping, Sequence
 import pandas as pd
 
 from bdbvhubrenewal.forecasters import NATIONAL
+from bdbvhubrenewal.reporting.site import site_baseline
 
 __all__ = [
     "ENERGY_SUMMARY",
     "SUMMARY_METRICS",
+    "mark_partial",
     "summary_html",
     "summary_rows",
     "targets_attr",
 ]
 
 SUMMARY_METRICS: tuple[tuple[str, str, float | None, bool], ...] = (
-    ("wis", "WIS", None, True),
-    ("log_wis", "WIS on the log scale", None, True),
+    ("crps", "CRPS", None, True),
+    ("log_crps", "CRPS on the log scale", None, True),
     ("coverage_50", "50% coverage", 0.5, False),
     ("coverage_90", "90% coverage", 0.9, False),
     ("bias", "Bias", 0.0, False),
@@ -41,6 +46,46 @@ ENERGY_SUMMARY: tuple[tuple[str, str], ...] = (
 )
 """Energy score columns and labels. There is one score per model, origin,
 release and pool, so they show in the overall view only."""
+
+
+def mark_partial(
+    table: pd.DataFrame, by: Sequence[str], baseline: str
+) -> pd.DataFrame:
+    """Mark the rows of models that lack some of the baseline's cells.
+
+    Relative scores are on the forecasts the baseline also made, so `n`
+    of a model with every one of the baseline's cells is the baseline's,
+    and those rows can be read side by side. A model with fewer is
+    partial: its scores are on other forecasts and are read apart.
+
+    Parameters
+    ----------
+    table : pandas.DataFrame
+        `relative_crps` or `relative_energy` output, with `model`, the `by`
+        columns and `n` (or `n_energy`).
+    by : sequence of str
+        Columns of a row other than `model`.
+    baseline : str
+        The baseline of `table`.
+
+    Returns
+    -------
+    pandas.DataFrame
+        `table` with `cells`, the baseline's n in the row's group, and
+        `partial`, whether the model has fewer.
+    """
+    n = "n" if "n" in table.columns else "n_energy"
+    by = [c for c in by if c in table.columns]
+    base = table.loc[table["model"] == baseline, [*by, n]]
+    base = base.rename(columns={n: "cells"})
+    out = (
+        table.merge(base, on=by, how="left")
+        if by
+        else table.assign(cells=base["cells"].iloc[0] if len(base) else None)
+    )
+    out["partial"] = (out[n] < out["cells"]).fillna(False).astype(bool)
+    return out
+
 
 _POOLS = {
     "national": "National",
@@ -60,7 +105,7 @@ def summary_rows(
     models: Sequence[str],
     colours: Mapping[str, tuple[str, str, str]],
     names: Mapping[str, str],
-    baseline: str = "randomwalk",
+    baseline: str | None = None,
     metrics: Sequence[tuple[str, str, float | None, bool]] = SUMMARY_METRICS,
     default_on: Sequence[str] | None = None,
     energy: pd.DataFrame | None = None,
@@ -103,6 +148,7 @@ def summary_rows(
         label) and `rows` of model, origin, release and pool indices, then
         each energy score.
     """
+    baseline = baseline or site_baseline()
     shown = [m for m in models if m in set(scores["model"])]
     s = scores.loc[scores["model"].isin(shown)]
     origins = sorted(set(s["origin"].astype(str)))

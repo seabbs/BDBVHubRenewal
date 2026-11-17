@@ -49,6 +49,7 @@ from bdbvhubrenewal.data.simulate import (
     simulate_outbreak,
 )
 from bdbvhubrenewal.data.tidy import delays_for_vintage
+from bdbvhubrenewal.data.zones import ZoneData
 from bdbvhubrenewal.evaluation.nowcast import TRUTH_LEVEL
 from bdbvhubrenewal.evaluation.scoring import energy_scores, score_forecasts
 from bdbvhubrenewal.forecasters.base import (
@@ -68,6 +69,7 @@ __all__ = [
     "check_distinct",
     "development_tasks",
     "energy_tasks",
+    "for_scoring",
     "forecast_locations",
     "forecast_weeks",
     "joint_order",
@@ -88,6 +90,7 @@ __all__ = [
     "score_recovery",
     "score_scenarios",
     "score_tasks",
+    "tasks_for_scoring",
     "truth_changes",
     "truth_from_vintage",
     "vintage_task",
@@ -123,7 +126,11 @@ class BacktestConfig:
     min_horizon, max_horizon : int
         Range of horizons in each forecast, in weeks.
     n_samples : int
-        Samples per forecast.
+        Samples per forecast, `[forecast] n_samples`. The fit store, the
+        submission and the hub comparison draw this many.
+    score_samples : int
+        Samples per forecast of the models the backtest runs itself,
+        `[samples] backtest` (`for_scoring`).
     seed : int
         Random seed shared by all tasks.
     simulated_dates : tuple of str
@@ -152,6 +159,7 @@ class BacktestConfig:
     min_horizon: int = -4
     max_horizon: int = 3
     n_samples: int = 100
+    score_samples: int = 100
     seed: int = 0
     simulated_dates: tuple[str, ...] = ()
     complete_after_weeks: int = 0
@@ -160,6 +168,49 @@ class BacktestConfig:
     skip_origins: tuple[str, ...] = ()
     truth_delay: int | None = None
     truth_level: float = TRUTH_LEVEL
+
+
+def for_scoring(config: BacktestConfig) -> BacktestConfig:
+    """Return the config of the models run here, with `score_samples` draws.
+
+    Only `n_samples` changes. The seed is kept, so every model draws from
+    the shared seed (common random numbers).
+
+    Parameters
+    ----------
+    config : BacktestConfig
+        The backtest settings.
+
+    Returns
+    -------
+    BacktestConfig
+        `config` with `n_samples` set to `score_samples`.
+    """
+    return replace(config, n_samples=config.score_samples)
+
+
+def tasks_for_scoring(
+    tasks: Sequence[ForecastTask], config: BacktestConfig
+) -> list[ForecastTask]:
+    """Return copies of tasks with `score_samples` draws, as `for_scoring`.
+
+    The fit store and the submission key their fits on the tasks they are
+    given, so they keep the originals and only the models run here take
+    these.
+
+    Parameters
+    ----------
+    tasks : sequence of ForecastTask
+        Tasks, such as `store.origin_tasks` gives.
+    config : BacktestConfig
+        Gives `score_samples`.
+
+    Returns
+    -------
+    list of ForecastTask
+        The tasks with `n_samples` set to `score_samples`.
+    """
+    return [replace(t, n_samples=config.score_samples) for t in tasks]
 
 
 def apply_sampler(config: BacktestConfig) -> None:
@@ -216,6 +267,9 @@ def load_config(path: Path | str = "config/backtest.toml") -> BacktestConfig:
         min_horizon=int(fc["min_horizon"]),
         max_horizon=int(fc["max_horizon"]),
         n_samples=int(fc["n_samples"]),
+        score_samples=int(
+            raw.get("samples", {}).get("backtest", fc["n_samples"])
+        ),
         seed=int(fc["seed"]),
         complete_after_weeks=int(sp["complete_after_weeks"]),
         sampler=dict(raw["sampler"]),
@@ -293,6 +347,7 @@ def make_tasks(
     report_by: Sequence[str] = (),
     history: pd.DataFrame | None = None,
     daily: pd.DataFrame | None = None,
+    zones: ZoneData | None = None,
 ) -> list[ForecastTask]:
     """Build one task per vintage in a target table.
 
@@ -318,6 +373,10 @@ def make_tasks(
         `observed` and `imputed` columns, and optionally `kind`. Each task
         gets the rows of its kind on or before its vintage as
         `daily_history`.
+    zones : ZoneData, optional
+        The health-zone tables. A real task gets the weekly and daily rows
+        on or before its vintage as `zone_history` and
+        `zone_daily_history`, and the codes as `zone_codes`.
 
     Returns
     -------
@@ -375,6 +434,7 @@ def make_tasks(
                 delay_history=history,
                 target_history=past_target if not past_target.empty else None,
                 daily_history=_daily_for(daily, str(kind), str(vintage)),
+                **_zone_fields(zones, str(kind), str(vintage)),
                 locations=forecast_locations(rows),
                 target_end_dates=forecast_weeks(ref, config),
                 n_samples=config.n_samples,
@@ -402,6 +462,8 @@ def vintage_task(
     vintage: str,
     daily: pd.DataFrame | None = None,
     extra_weeks: int = 0,
+    *,
+    zones: ZoneData | None = None,
 ) -> tuple[ForecastTask, str]:
     """Build the task of one real vintage, as the submission fits it.
 
@@ -423,6 +485,8 @@ def vintage_task(
     extra_weeks : int
         Weeks to forecast past `[forecast] max_horizon`. The store adds
         one, so its fit also covers the next round's weeks.
+    zones : ZoneData, optional
+        The health-zone tables (`make_tasks`).
 
     Returns
     -------
@@ -437,7 +501,14 @@ def vintage_task(
     real = target.loc[target["kind"] == "real"]
     rows = real.loc[real["vintage"] == vintage]
     used, note = delays_for_vintage(delays, vintage)
-    task = make_tasks(rows, used, config, history=real, daily=daily)[0]
+    task = make_tasks(
+        rows,
+        used,
+        config,
+        history=real,
+        daily=daily,
+        zones=zones,
+    )[0]
     return task, note
 
 
@@ -784,6 +855,19 @@ def truth_changes(
     ).reset_index(drop=True)
 
 
+def _zone_fields(
+    zones: ZoneData | None, kind: str, vintage: str
+) -> dict[str, Any]:
+    """Return a task's zone fields: the releases on or before `vintage`."""
+    if zones is None:
+        return {}
+    return {
+        "zone_history": _daily_for(zones.weekly, kind, vintage),
+        "zone_daily_history": _daily_for(zones.daily, kind, vintage),
+        "zone_codes": zones.codes,
+    }
+
+
 def _daily_for(
     daily: pd.DataFrame | None, kind: str, vintage: str
 ) -> pd.DataFrame | None:
@@ -805,6 +889,7 @@ def development_tasks(
     config: BacktestConfig,
     *,
     daily: pd.DataFrame | None = None,
+    zones: ZoneData | None = None,
 ) -> list[ForecastTask]:
     """Build the development tasks: every real vintage but the latest.
 
@@ -824,6 +909,8 @@ def development_tasks(
         `observed` and `imputed` columns, and optionally `kind`. Each task
         gets the rows of its kind on or before its vintage as
         `daily_history`.
+    zones : ZoneData, optional
+        The health-zone tables (`make_tasks`).
 
     Returns
     -------
@@ -840,6 +927,7 @@ def development_tasks(
             config,
             real_vintages(real),
             daily=daily,
+            zones=zones,
         )
         if t.vintage < latest and t.vintage not in config.skip_origins
     ]
@@ -854,6 +942,7 @@ def run_development(
     fits: list[pd.DataFrame] | None = None,
     learnt: list[pd.DataFrame] | None = None,
     daily: pd.DataFrame | None = None,
+    zones: ZoneData | None = None,
 ) -> pd.DataFrame:
     """Forecast from every real vintage before the latest.
 
@@ -876,13 +965,15 @@ def run_development(
         Collects learnt delays, as for `run_forecasts`.
     daily : pandas.DataFrame, optional
         Daily onsets by release, as for `development_tasks`.
+    zones : ZoneData, optional
+        The health-zone tables, as for `development_tasks`.
 
     Returns
     -------
     pandas.DataFrame
         Output of `run_forecasts`.
     """
-    tasks = development_tasks(target, delays, config, daily=daily)
+    tasks = development_tasks(target, delays, config, daily=daily, zones=zones)
     return run_forecasts(models, tasks, fits, learnt)
 
 

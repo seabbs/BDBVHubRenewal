@@ -43,7 +43,11 @@ from bdbvhubrenewal.data.zone_map import (
     zone_boundaries,
     zone_names,
 )
-from bdbvhubrenewal.data.zones import hub_zones, weekly_zone_counts
+from bdbvhubrenewal.data.zones import (
+    hub_zones,
+    load_zone_data,
+    weekly_zone_counts,
+)
 from bdbvhubrenewal.evaluation.backtest import (
     BacktestConfig,
     check_distinct,
@@ -68,12 +72,13 @@ from bdbvhubrenewal.evaluation.hubcompare import (
     summarise_comparison,
 )
 from bdbvhubrenewal.evaluation.nowcast import (
+    relative_crps as _relative_crps,
+)
+from bdbvhubrenewal.evaluation.nowcast import (
     relative_energy,
-    relative_wis,
 )
 from bdbvhubrenewal.evaluation.scoring import summarise_scores
 from bdbvhubrenewal.evaluation.store import samplers, stored_models
-from bdbvhubrenewal.evaluation.zones import SUMMED
 from bdbvhubrenewal.forecasters.base import (
     NATIONAL,
     ForecastTask,
@@ -126,12 +131,18 @@ from bdbvhubrenewal.reporting.scorechart import (
     write_score_chart,
 )
 from bdbvhubrenewal.reporting.scoresummary import (
+    mark_partial,
     summary_html,
     summary_rows,
     targets_attr,
 )
+from bdbvhubrenewal.reporting.site import site_baseline, site_models
 from bdbvhubrenewal.reporting.store_note import write_store_note
-from bdbvhubrenewal.reporting.tables import filter_table
+from bdbvhubrenewal.reporting.tables import (
+    filter_table,
+    markdown_table,
+    sortable_table,
+)
 from bdbvhubrenewal.reporting.zone_nowcast import (
     place_chart_data,
     zone_counts,
@@ -141,8 +152,30 @@ from bdbvhubrenewal.reporting.zone_nowcast import (
 __all__ = ["make_report"]
 
 
+def relative_crps(
+    scores: pd.DataFrame,
+    by: Sequence[str] = ("target",),
+    baseline: str | None = None,
+) -> pd.DataFrame:
+    """`nowcast.relative_crps`, with each model lacking cells marked.
+
+    The baseline defaults to the site's (`site_baseline`).
+
+    Each row gets `cells`, the baseline's n in its group, and `partial`
+    (`mark_partial`). Full rows all have the baseline's n, and partial
+    rows come after them in each group, so the tables never set a model
+    scored on fewer forecasts among the others.
+    """
+    baseline = baseline or site_baseline()
+    out = mark_partial(_relative_crps(scores, by, baseline), by, baseline)
+    keys = [c for c in by if c in out.columns]
+    return out.sort_values([*keys, "partial"], kind="stable").reset_index(
+        drop=True
+    )
+
+
 def _table(df: pd.DataFrame, digits: int = 2) -> str:
-    return df.round(digits).to_markdown(index=False) + "\n"
+    return sortable_table(df, digits)
 
 
 def _dropdown(body: str, title: str = "Tables") -> str:
@@ -299,9 +332,11 @@ def make_report(
         fig / "simulation.svg",
     )
 
-    # Backtest and comparison pages.
-    names = [s.name for s in list_models()]
-    summaries = _release_section(fig, gen, res, real, names)
+    # Backtest and comparison pages: the models the site shows.
+    names = _page_models()
+    summaries = _release_section(
+        fig, gen, res, real, names, config.score_samples, config.n_samples
+    )
     _backtest_page(
         fig, gen, res, out, config, target, names, data_dir, summaries
     )
@@ -310,7 +345,10 @@ def make_report(
 
     # Nowcast page: latest real vintage, every registered model.
     rows = real.loc[real["vintage"] == latest]
-    tasks = make_tasks(rows, delays, config, history=real, daily=daily)
+    zone_data = load_zone_data(data_dir)
+    tasks = make_tasks(
+        rows, delays, config, history=real, daily=daily, zones=zone_data
+    )
     forecasts_now = _nowcast_forecasts(tasks, latest, res)
     _nowcast_page(fig, gen, target, forecasts_now, names, config, latest)
     _zone_nowcast_section(
@@ -319,8 +357,6 @@ def make_report(
     # Every model's hub tables at every real origin, for the round
     # releases, so a round released after later hub releases still gets
     # its own.
-    daily_zones = load_daily_zones(data_dir)
-    zone_codes = hub_zones(Path(data_dir) / "hub-config" / "tasks.json")
     for vintage in sorted(set(real["vintage"]) - set(config.skip_origins)):
         if vintage == latest:
             task, at = tasks[0], forecasts_now
@@ -331,10 +367,11 @@ def make_report(
                 config,
                 history=real,
                 daily=daily,
+                zones=zone_data,
             )[0]
             at = _stored_at(res, vintage)
         write_hub_tables(
-            hub_tables(at, task, daily_zones, zone_codes),
+            hub_tables(at, task, zone_data.daily, zone_data.codes),
             res / "hub" / str(vintage),
         )
     groups = _nowcast_groups(target, sorted(set(forecasts_now["location"])))
@@ -378,7 +415,7 @@ def _summaries(
     colours: Mapping[str, tuple[str, str, str]],
     names: Mapping[str, str],
     default_on: Sequence[str],
-    baseline: str = "randomwalk",
+    baseline: str | None = None,
 ) -> dict[str, str]:
     """Write the score summary of each target and return their URLs.
 
@@ -387,6 +424,7 @@ def _summaries(
     the baseline yet, such as the latest release before a round has a
     later one, is not offered.
     """
+    baseline = baseline or site_baseline()
     shown = {
         target: frame
         for target, frame in frames.items()
@@ -451,9 +489,90 @@ def _model_colours(models: Sequence[str]) -> dict[str, tuple[str, str, str]]:
     return {m: model_style(m, models) for m in models}
 
 
+def _page_models() -> list[str]:
+    """Return the registered models the site shows (`config/site.toml`)."""
+    return site_models(s.name for s in list_models())
+
+
+def _site_rows(frame: pd.DataFrame) -> pd.DataFrame:
+    """Drop the rows of models the site hides, before any scoring.
+
+    Hub teams' rows pass, as no pattern of `config/site.toml` matches
+    them. Filtering first keeps hidden models from deciding which cells
+    the shown ones are scored on.
+    """
+    if "model" not in frame.columns:
+        return frame
+    shown = set(site_models(frame["model"].astype(str).unique()))
+    return frame.loc[frame["model"].astype(str).isin(shown)].reset_index(
+        drop=True
+    )
+
+
+def _real_forecasts(
+    forecasts: pd.DataFrame, names: Sequence[str]
+) -> pd.DataFrame:
+    """Keep the real backtest forecasts of the models the site shows."""
+    return forecasts.loc[
+        (forecasts["kind"] == "real") & forecasts["model"].isin(names)
+    ]
+
+
 def _ours(frame: pd.DataFrame, names: Sequence[str]) -> pd.DataFrame:
     """Keep our models, without the hub teams."""
     return frame.loc[frame["model"].isin(names)]
+
+
+_FAIR_NOTE: Final = (
+    "CRPS, log CRPS and the energy score use the fair estimators, so "
+    "scores on different numbers of draws compare "
+    "([scores](methods/evaluation.md#scores)).\n"
+)
+
+
+def draws_note(n: int, stored: int) -> str:
+    """Say how many draws per forecast the backtest pages score.
+
+    `n` is `[samples] backtest`, the draws of the models run here, and
+    `stored` is `[forecast] n_samples`, the stored fits' draws, both from
+    `config/backtest.toml`.
+    """
+    return (
+        f"The models run here are scored on {n:,} draws per forecast "
+        "(`[samples] backtest` in `config/backtest.toml`) and the stored "
+        f"fits on their {stored:,} (`[forecast] n_samples`), with common "
+        "random numbers. " + _FAIR_NOTE
+    )
+
+
+def comparison_draws_note(n: int) -> str:
+    """Say how many draws per forecast the hub comparison scores."""
+    return (
+        f"Our models are scored on their {n:,} draws per forecast "
+        "(`[forecast] n_samples` in `config/backtest.toml`) and the hub "
+        "teams on their samples as submitted. " + _FAIR_NOTE
+    )
+
+
+def _release_intro(samples: int, stored: int) -> str:
+    """Return the lead of the Backtest page's overall scores."""
+    return (
+        "Scores on the complete weeks, or on what each later release "
+        "reported, as picked "
+        "([how scoring works](methods/evaluation.md#real-releases), "
+        "[metrics](methods/evaluation.md#scores)).\n"
+        + draws_note(samples, stored)
+    )
+
+
+def _nowcast_meta(latest: str, shown: Sequence[str], samples: int) -> str:
+    """Return the Nowcast page's lead: the vintage, models and draws."""
+    return (
+        f"Latest vintage **{latest}**, models "
+        f"{', '.join(f'`{n}`' for n in shown)}.\n"
+        f"Each forecast has {samples:,} draws "
+        "(`[forecast] n_samples` in `config/backtest.toml`).\n"
+    )
 
 
 def _release_section(
@@ -462,8 +581,13 @@ def _release_section(
     res: Path,
     real: pd.DataFrame,
     names: Sequence[str],
+    samples: int,
+    stored: int,
 ) -> dict[str, str]:
     """Write the real-release evaluation tables and figure.
+
+    `samples` is the draws per forecast of the models run here,
+    `[samples] backtest`, and `stored` the stored fits'.
 
     The tables hold the number of forecasts, $n$, in every row, for our
     models only. Returns each target's score summary URL.
@@ -477,9 +601,7 @@ def _release_section(
     origins = _ours(pd.read_csv(paths["origins"]).fillna(""), names)
     national = scores["location"] == NATIONAL
     scores["pool"] = national.map({True: "national", False: "provinces"})
-    zones = _as_submitted(
-        pd.read_csv(res / "zone-scores.csv", low_memory=False)
-    )
+    zones = pd.read_csv(res / "zone-scores.csv", low_memory=False)
     complete = _complete_on(scores, zones, int(truth["truth_delay"]))
     pooled = pd.concat([scores, zones.assign(pool="zones")])
     pooled["target"] = pooled["target"].map(_TARGET_LABELS)
@@ -487,7 +609,7 @@ def _release_section(
         pd.concat(
             [
                 pd.read_csv(res / "nowcast-energy.csv"),
-                _as_submitted(pd.read_csv(res / "zone-energy.csv")),
+                pd.read_csv(res / "zone-energy.csv"),
             ]
         ),
         names,
@@ -499,14 +621,17 @@ def _release_section(
         joint = relative_energy(energy, baseline=base).rename(
             columns={"scale": "pool"}
         )
-        return relative_wis(pooled, ("target", "pool"), baseline=base).merge(
+        return relative_crps(pooled, ("target", "pool"), baseline=base).merge(
             joint, on=["target", "pool", "model"], how="left"
         )
 
-    overall = overall_for("randomwalk")
-    by_pool = relative_wis(pooled, ("target", "pool", "origin"))
+    base = site_baseline()
+    overall = overall_for(base)
+    by_pool = relative_crps(pooled, ("target", "pool", "origin"), baseline=base)
     scores["target"] = scores["target"].map(_TARGET_LABELS)
-    by_place = relative_wis(scores, ("target", "origin", "location"))
+    by_place = relative_crps(
+        scores, ("target", "origin", "location"), baseline=base
+    )
     reported = overall.loc[overall["target"] == _TARGET_LABELS["reported"]]
     ours = list(names)
     colours = _model_colours(ours)
@@ -533,12 +658,12 @@ def _release_section(
         ours,
         colours,
         _location_names(real),
-        default_on=[m for m in ours if m != "randomwalk"],
+        default_on=[m for m in ours if m != base],
     )
     save_light_dark(
         partial(
             plot_place_summary,
-            relative_wis(rep, ("pool", "location")),
+            relative_crps(rep, ("pool", "location"), baseline=base),
             ours,
             colours,
             _location_names(real),
@@ -557,7 +682,11 @@ def _release_section(
     _write(
         gen / "scores-location.md",
         filter_table(
-            _table(relative_wis(pooled, ("target", "pool", "location"))),
+            markdown_table(
+                relative_crps(
+                    pooled, ("target", "pool", "location"), baseline=base
+                )
+            ),
             ["target", "pool", "model"],
         ),
     )
@@ -613,10 +742,7 @@ def _release_section(
     _write(
         gen / "release-headline.md",
         "## Overall\n\n"
-        "Scores on the complete weeks, or on what each later release "
-        "reported, as picked "
-        "([how scoring works](methods/evaluation.md#real-releases), "
-        "[metrics](methods/evaluation.md#scores)).\n"
+        + _release_intro(samples, stored)
         + _scored_on(rep)
         + complete
         + "The [energy score](methods/evaluation.md#energy-score) scores each "
@@ -630,14 +756,14 @@ def _release_section(
         + "\n"
         + _dropdown(
             filter_table(
-                _table(
+                markdown_table(
                     _by_baseline(
                         overall_for,
                         [m for m in names if m in set(pooled["model"])],
                     )
                 ),
                 ["baseline", "target", "pool", "model"],
-                {"baseline": "randomwalk"},
+                {"baseline": site_baseline()},
             ),
             "Scores by target and pool, over every origin",
         ),
@@ -660,8 +786,9 @@ def _release_section(
     return srcs
 
 
-def _scored_on(reported: pd.DataFrame, baseline: str = "randomwalk") -> str:
+def _scored_on(reported: pd.DataFrame, baseline: str | None = None) -> str:
     """Say how many origin and release pairs and forecasts are scored."""
+    baseline = baseline or site_baseline()
     pairs = reported[["origin", "truth_vintage"]].drop_duplicates()
     own = reported.loc[reported["model"] == baseline]
     n = own.groupby("pool").size()
@@ -678,7 +805,7 @@ def _scored_on(reported: pd.DataFrame, baseline: str = "randomwalk") -> str:
         "release pairs.\n"
         f"The {baseline} baseline has {listed}{counts[-1]} forecasts.\n"
         f"{zero} of them are of a place and week with no case, where every "
-        "model's WIS is close to 0, so mean WIS is lower than over places "
+        "model's CRPS is close to 0, so mean CRPS is lower than over places "
         "with cases.\n"
         "The renewal models are not scored at health zones.\n"
     )
@@ -806,9 +933,7 @@ def _nowcast_page(
     for stem, _, _ in kinds:
         _write(gen / f"{stem}-tabs.md", "\n".join(pages[stem]))
     _write(
-        gen / "nowcast-meta.md",
-        f"Latest vintage **{latest}**, models "
-        f"{', '.join(f'`{n}`' for n in shown)}.\n",
+        gen / "nowcast-meta.md", _nowcast_meta(latest, shown, config.n_samples)
     )
 
 
@@ -836,10 +961,7 @@ def _zone_nowcast_section(
         (forecasts["vintage"] == task.vintage)
         & (forecasts["location"] != NATIONAL)
     ]
-    ran = [
-        zone_nowcast(m, task, prov.loc[prov["model"] == m], daily_zones, zones)
-        for m in quick
-    ]
+    ran = [zone_nowcast(m, task, daily_zones, zones) for m in quick]
     ref = str(task.reference_date)
     stored = stored_forecasts(
         load_comparison_config().stored, [ref], exclude=quick
@@ -1119,7 +1241,7 @@ def _lopo_section(path: Path) -> str:
     if scores.empty:
         return ""
     table = summarise_scores(scores, by=("model", "masked"))
-    cols = ["n", "wis", "log_wis", "coverage_50", "coverage_90", "bias"]
+    cols = ["n", "crps", "log_crps", "coverage_50", "coverage_90", "bias"]
     return (
         "## Leave one province out\n\n"
         "Each province with cases is forecast with its own counts left out "
@@ -1174,16 +1296,6 @@ def _zone_truth_changes(
     return "\n".join(tabs)
 
 
-def _as_submitted(zones: pd.DataFrame) -> pd.DataFrame:
-    """Keep the zone rows made to sum to the provinces, as submitted.
-
-    They are named by their model, so `randomwalk` is the summed
-    baseline.
-    """
-    summed = zones.loc[zones["model"].str.endswith(SUMMED)]
-    return summed.assign(model=summed["model"].str.removesuffix(SUMMED))
-
-
 BACKTEST_LOCATIONS: tuple[str, ...] = (NATIONAL, "CD-IT", "CD-NK")
 """Locations with forecast plots on the Backtest page."""
 
@@ -1208,8 +1320,8 @@ def _with_horizon(scores: pd.DataFrame) -> pd.DataFrame:
 
 
 _METRIC_TABS: Final = (
-    ("wis", "WIS", ""),
-    ("log_wis", "WIS on the log scale", "-log-wis"),
+    ("crps", "CRPS", ""),
+    ("log_crps", "CRPS on the log scale", "-log-crps"),
 )
 """Score metrics shown as tabs, with their tab label and file suffix."""
 
@@ -1228,7 +1340,7 @@ def _metric_tabs(stem: str, alt: str) -> str:
     """Tabs of one figure per metric, as `_save_metric_figures` saves."""
     tabs = []
     for _, label, suffix in _METRIC_TABS:
-        what = alt.replace("WIS", label)
+        what = alt.replace("CRPS", label)
         tabs.append(
             f'=== "{label}"\n\n'
             f"    ![{what}](figures/{stem}{suffix}.svg#only-light)\n"
@@ -1251,24 +1363,25 @@ def _horizon_table(
     reported: pd.DataFrame,
     names: Sequence[str],
 ) -> None:
-    """Write the relative WIS and coverage by horizon table, reported target.
+    """Write the relative CRPS and coverage by horizon table, reported target.
 
-    Only the forecasts random walk also made are shown.
+    Only the forecasts the site baseline also made are shown.
     """
+    baseline = site_baseline()
     ours = reported.loc[reported["model"].isin(names)]
-    base = ours.loc[ours["model"] == "randomwalk", _RELEASE_MATCH]
+    base = ours.loc[ours["model"] == baseline, _RELEASE_MATCH]
     both = ours.merge(base, on=_RELEASE_MATCH)
     if both["model"].nunique() < 2:
         _write(gen / "backtest-summary.md", "")
         return
-    table = relative_wis(both, ("horizon",))
+    table = relative_crps(both, ("horizon",), baseline=baseline)
     table["model"] = pd.Categorical(table["model"], list(names), ordered=True)
     table = table.sort_values(["model", "horizon"]).reset_index(drop=True)
     origins = ", ".join(sorted(set(both["origin"].astype(str))))
     _write(
         gen / "backtest-summary.md",
         _dropdown(
-            "Mean WIS divided by that of random walk, and interval "
+            f"Mean CRPS divided by that of {baseline}, and interval "
             "coverage, on the counts each later release reported, over the "
             f"forecasts both made from the origins {origins}.\n"
             "Horizons after the latest release have no score yet.\n\n"
@@ -1345,7 +1458,7 @@ def _energy_means(energy: pd.DataFrame, by: Sequence[str]) -> str:
 
 def _recovery_section(srcs: Mapping[str, str], energy: pd.DataFrame) -> str:
     """Return the recovery section, with the summaries of `srcs`."""
-    alt = "Mean WIS by horizon on simulated vintages."
+    alt = "Mean CRPS by horizon on simulated vintages."
     views = _summary_views(srcs, "(simulated vintages)")
     return (
         "## Recovery on simulated vintages\n\n"
@@ -1360,8 +1473,8 @@ def _recovery_section(srcs: Mapping[str, str], energy: pd.DataFrame) -> str:
         + views["place"]
         + "\n"
         + _dropdown(
-            f"![{alt}](figures/recovery-wis-horizon.svg#only-light)\n"
-            f"![{alt}](figures/recovery-wis-horizon-dark.svg#only-dark)\n\n"
+            f"![{alt}](figures/recovery-crps-horizon.svg#only-light)\n"
+            f"![{alt}](figures/recovery-crps-horizon-dark.svg#only-dark)\n\n"
             + _energy_means(energy, ["scale"]),
             "Static figure and energy scores",
         )
@@ -1382,9 +1495,10 @@ def _by_baseline(
 
 
 def _without_baseline(
-    rel: pd.DataFrame, baseline: str = "randomwalk"
+    rel: pd.DataFrame, baseline: str | None = None
 ) -> pd.DataFrame:
     """Drop the baseline's own rows, whose relative scores are all 1."""
+    baseline = baseline or site_baseline()
     return rel.loc[rel["model"] != baseline].reset_index(drop=True)
 
 
@@ -1403,8 +1517,8 @@ def _scenario_scores(path: Path, energy_path: Path) -> str:
             scores.loc[keep]
             .groupby(["scenario", "level", "model"], sort=False)
             .agg(
-                wis=("wis", "mean"),
-                log_wis=("log_wis", "mean"),
+                crps=("crps", "mean"),
+                log_crps=("log_crps", "mean"),
                 coverage_50=("coverage_50", "mean"),
                 coverage_90=("coverage_90", "mean"),
                 bias=("bias", "mean"),
@@ -1412,8 +1526,8 @@ def _scenario_scores(path: Path, energy_path: Path) -> str:
             .reset_index()
             .rename(
                 columns={
-                    "wis": "mean WIS",
-                    "log_wis": "mean WIS on the log scale",
+                    "crps": "mean CRPS",
+                    "log_crps": "mean CRPS on the log scale",
                     "coverage_50": "50% coverage",
                     "coverage_90": "90% coverage",
                     "bias": "mean bias",
@@ -1435,8 +1549,8 @@ def _scenario_scores(path: Path, energy_path: Path) -> str:
 
 def _scenario_figure() -> str:
     """Return the scenario figure links."""
-    alt = "Mean WIS by horizon on the simulated scenarios."
-    return _metric_tabs("scenario-wis-horizon", alt)
+    alt = "Mean CRPS by horizon on the simulated scenarios."
+    return _metric_tabs("scenario-crps-horizon", alt)
 
 
 _SCENARIOS: Final = {
@@ -1476,7 +1590,7 @@ def _simulated_summary(
         models,
         _model_colours(models),
         labels,
-        default_on=[m for m in models if m != "randomwalk"],
+        default_on=[m for m in models if m != site_baseline()],
     )
 
 
@@ -1543,7 +1657,9 @@ def _scenario_section(
             labels,
         )
         shown_views = _summary_views(srcs, f"({title})")
-        drawn = samples.loc[samples["scenario"] == key]
+        drawn = samples.loc[
+            (samples["scenario"] == key) & samples["model"].isin(names)
+        ]
         shown = [m for m in names if m in set(drawn["model"])]
         target = (
             truth.loc[truth["scenario"] == key]
@@ -1665,7 +1781,7 @@ def _backtest_page(
     reported = scores.loc[scores["target"] == "reported"]
     save_light_dark(
         partial(
-            plot_scores, reported, by="horizon", metric="wis", models=names
+            plot_scores, reported, by="horizon", metric="crps", models=names
         ),
         fig / "scores-horizon.svg",
     )
@@ -1676,7 +1792,13 @@ def _backtest_page(
     )
     _write(
         gen / "scores-by-truth.md",
-        _table(relative_wis(scores, ("target", "origin", "truth_vintage"))),
+        _table(
+            relative_crps(
+                scores,
+                ("target", "origin", "truth_vintage"),
+                baseline=site_baseline(),
+            )
+        ),
     )
     weeks = sorted(set(reported["target_end_date"].astype(str)))
     changes = truth_changes(target, locations=(NATIONAL,))
@@ -1713,7 +1835,7 @@ def _backtest_page(
         forecasts = pd.read_csv(fc_path, dtype={"as_of": object})
         if "as_of" in forecasts:
             forecasts = forecasts.loc[forecasts["as_of"].isna()]
-        real_fc = forecasts.loc[forecasts["kind"] == "real"]
+        real_fc = _real_forecasts(forecasts, names)
         shown = [m for m in names if m in set(real_fc["model"])]
         for m in shown:
             for loc in BACKTEST_LOCATIONS:
@@ -1837,7 +1959,7 @@ def _backtest_page(
         lambda mode: plot_scores(
             rscores, by="horizon", models=names, mode=mode
         ),
-        fig / "recovery-wis-horizon.svg",
+        fig / "recovery-crps-horizon.svg",
     )
     scen_path = res / "scenario-scores.csv.gz"
     _write(
@@ -1852,7 +1974,7 @@ def _backtest_page(
     sscores = pd.read_csv(scen_path, low_memory=False)
     _save_metric_figures(
         fig,
-        "scenario-wis-horizon",
+        "scenario-crps-horizon",
         partial(
             plot_scenarios,
             sscores,
@@ -1884,9 +2006,7 @@ def _checks_section(
     every = every.assign(
         scale=national.map({True: "national", False: "provinces"})
     )
-    zones = _as_submitted(
-        pd.read_csv(res / "zone-scores.csv", low_memory=False)
-    )
+    zones = pd.read_csv(res / "zone-scores.csv", low_memory=False)
     every = pd.concat([every, zones.assign(scale="zones")])
     every = every.loc[every["model"].isin(names)]
     origins = sorted(set(every["origin"].astype(str)))
@@ -1941,9 +2061,9 @@ def _checks_section(
         "</div>\n\n"
         + _dropdown(
             filter_table(
-                _table(summary),
+                markdown_table(summary),
                 ["baseline", "scale", "split", "model"],
-                {"baseline": "randomwalk"},
+                {"baseline": site_baseline()},
             ),
             "Table",
         )
@@ -1951,8 +2071,8 @@ def _checks_section(
 
 
 _CHECK_METRICS: Final = (
-    ("relative WIS", "Relative WIS", 1.0, True),
-    ("WIS", "WIS", None, False),
+    ("relative CRPS", "Relative CRPS", 1.0, True),
+    ("CRPS", "CRPS", None, False),
     ("90% coverage", "90% coverage", 0.9, False),
 )
 """Checks chart metrics: column, label, reference line and log axis."""
@@ -1961,7 +2081,7 @@ _CHECK_METRICS: Final = (
 def _checks_chart(
     summaries: Mapping[str, pd.DataFrame],
     names: Sequence[str],
-    baseline: str = "randomwalk",
+    baseline: str | None = None,
 ) -> dict[str, object]:
     """Return the checks summaries as `scorechart.js` rows.
 
@@ -1970,6 +2090,7 @@ def _checks_chart(
     the one shown first. Models keep the colours of the other Backtest
     charts.
     """
+    baseline = baseline or site_baseline()
     first = summaries[baseline]
     models = [m for m in names if m in set(first["model"])]
     colours = _model_colours(names)
@@ -2090,7 +2211,7 @@ def _comparison_page(
     truth, k = summary["truth_vintage"], summary["complete_after_weeks"]
     baseline = summary["baseline"]
     hub_ids = summary.get("hub_ids", {})
-    quantiles = pd.read_csv(cmp_dir / "quantiles.csv.gz")
+    quantiles = _site_rows(pd.read_csv(cmp_dir / "quantiles.csv.gz"))
     source = quantiles["source"]
     registry = [spec.name for spec in list_models()]
     built = sorted(
@@ -2110,18 +2231,23 @@ def _comparison_page(
     ]
     _write(
         gen / "comparison-lead.md",
-        "Scores on the weeks the latest release reports in full, from "
-        "the release serving each round "
+        "Scores on the hub teams' cells only, the rounds, places and "
+        "weeks any team forecast, on the weeks the latest release reports "
+        "in full, from the release serving each round "
         "([how scoring works]"
         "(methods/evaluation.md#comparison-with-hub-forecasts)).\n"
         "A series marked submitted is the file we sent to a round, and one "
         "marked main build is the current main branch's forecast for every "
         "round, so a round we did not submit to shows only the main "
-        "build.\n",
+        "build.\n"
+        "Each row's n is beside the hub cells scored in its round.\n"
+        + comparison_draws_note(
+            int(summary.get("samples", load_config().n_samples))
+        ),
     )
     scores_path = cmp_dir / "scores.csv"
     scores = (
-        pd.read_csv(scores_path)
+        _site_rows(pd.read_csv(scores_path))
         if scores_path.stat().st_size > 1
         else pd.DataFrame()
     )
@@ -2130,7 +2256,7 @@ def _comparison_page(
         fig,
         gen,
         scores,
-        pd.read_csv(cmp_dir / "energy.csv"),
+        _site_rows(pd.read_csv(cmp_dir / "energy.csv")),
         baseline,
         on,
         colours,
@@ -2178,7 +2304,9 @@ def _comparison_page(
             colours,
             truth_vintage=truth,
             hidden=hidden,
-            samples=_label_comparison(pd.read_csv(cmp_dir / "samples.csv.gz")),
+            samples=_label_comparison(
+                _site_rows(pd.read_csv(cmp_dir / "samples.csv.gz"))
+            ),
         ),
     )
     tabs = []
@@ -2231,8 +2359,9 @@ def _comparison_summary(
     They are laid out as the Backtest page's summaries, on the hub
     rounds' weeks the latest release completes. The hub teams and our
     series in `on` are ticked at first,
-    and randomwalk is the reference for relative scores. Our series come
-    in the order of `colours`. Returns each target's score summary URL.
+    and the comparison's baseline is the reference for relative scores.
+    Our series come in the order of `colours`. Returns each target's
+    score summary URL.
     """
     if scores.empty:
         for name in (
@@ -2277,7 +2406,7 @@ def _comparison_summary(
         default_on=[*hub, *(m for m in ours if m in on)],
         baseline=base,
     )
-    overall = relative_wis(rows, ("pool",), baseline=base)
+    overall = relative_crps(rows, ("pool",), baseline=base)
     save_light_dark(
         partial(
             plot_relative_overall,
@@ -2300,9 +2429,9 @@ def _comparison_summary(
         + "\n"
         + _dropdown(
             filter_table(
-                _table(
+                markdown_table(
                     _by_baseline(
-                        lambda b: relative_wis(rows, ("pool",), baseline=b),
+                        lambda b: relative_crps(rows, ("pool",), baseline=b),
                         models,
                     )
                 ),
@@ -2317,7 +2446,7 @@ def _comparison_summary(
             plot_scores,
             rows,
             by="horizon",
-            metric="wis",
+            metric="crps",
             models=models,
             colours=colours,
         ),
@@ -2335,7 +2464,7 @@ def _comparison_summary(
     save_light_dark(
         partial(
             plot_place_summary,
-            relative_wis(rows, ("pool", "location"), baseline=base),
+            relative_crps(rows, ("pool", "location"), baseline=base),
             models,
             colours,
             names,

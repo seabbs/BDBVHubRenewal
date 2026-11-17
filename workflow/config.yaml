@@ -1,0 +1,144 @@
+# Settings of the top-level workflow (workflow/Snakefile) that are the
+# same on every machine. Machine settings (paths, host name, memory caps)
+# are in config/local.env (see config/local.env.example), never here.
+# Override any of these with `--config key=value`.
+
+# Simulation rounds to make or read, as round numbers.
+rounds: []
+
+simulate:
+  # Round r is `train_batches` training then
+  # `held_batches` held-out batches from seed `seed_base` + 100 r, each
+  # `batch` outbreaks with exactly `draws` observation draws.
+  seed_base: 30000
+  train_batches: 40
+  held_batches: 4
+  batch: 25
+  draws: 10
+  # A batch's memory, and its one retry's (MB).
+  mem_mb: 16384
+  retry_mem_mb: 20480
+  # GitHub repository of the `sims-r<N>` releases.
+  repo: seabbs/BDBVHubRenewal
+
+finetune:
+  # The continuous run, one training
+  # segment per prefix (`--until`), in <RUN>/train/n<N>/.
+  prefixes: [250, 500, 750, 1000, 2000, 4000, 8000]
+  outbreaks: 8000
+  # Training seeds: the rounds' training batches in seed order, or a
+  # fixed list from `seed_file` (one seed a line, in order). The held-out
+  # batches are those of `held_round`.
+  rounds: [1, 2, 3, 4, 5, 6, 7, 8]
+  seed_file: null
+  held_round: 1
+  holdout: 100
+  # Where the batches come from: `local` (this machine's rounds) or
+  # `release` (the sims-r<N> releases).
+  sims_from: local
+  # Chronos-2's recipe.
+  grid: r4
+  draws: 2
+  subset_seed: 1
+  learning_rate: 1.0e-5
+  lr_steps: 36500
+  sources: [weekly, daily, 3day]
+  univariate_share: 0.2
+  chunk: 250
+  series_slots: 128
+  note: continuous r4
+  # The real validation blocks (scripts/finetune_real_validation.py) and
+  # the delay table they are cut from; null leaves them out.
+  real_validation: output/finetune/real-validation.pkl
+  # `task data` writes it.
+  delays: data/delays.csv.gz
+  # The checkpoint checked against zero-shot Chronos-2's loss on them.
+  check_at: 1000
+  zero_shot_real: 4.147
+
+score:
+  # Checkpoints to score, as labels (`<hash>`, `slots-<hash>`); null takes
+  # every checkpoint released from `published_from` (rule release_list).
+  labels: null
+  published_from: "2026-11-16T09:00:00Z"
+  # Labels scored beside every checkpoint: randomwalknowcast and zero-shot
+  # Chronos-2.
+  reference: [reference]
+  # The BDBV data the units read; newer data reruns them.
+  data: data/target.csv
+  # A unit's memory cap (MB), at its measured 5 GB peak.
+  mem_mb: 6144
+  # The evidence tables the scores merge into, kept rows of other rules.
+  evidence: evidence/checkpoint-scores.csv
+  checkpoints: evidence/checkpoints.csv
+  # The only branch `land` commits and pushes the tables on.
+  branch: checkpoint-scoring
+
+slots_check:
+  # Each slots checkpoint against zero-shot Chronos-2 and the no-slots
+  # checkpoint of its size (scripts/slots_check.py), in `shards` parts.
+  run: true
+  shards: 2
+  mem_mb: 6144
+
+agg:
+  # The aggregation arms of each slots checkpoint (scripts/agg/): data
+  # pinned to the hub at
+  # `hub_ref`, the models' fits at the BDBV origins and every German
+  # development date (`dates: []`), the paired arm, scores and rows.
+  run: true
+  hub_ref: ad1bb4af13bf
+  models: [fm_chronos_daily_ragged_ft, fm_chronos_weekly_ragged_ft]
+  origins: ["2026-10-09", "2026-10-17", "2026-10-24", "2026-11-01"]
+  dates: []
+  # The zero-shot rows the sanity check reproduces, and the table the
+  # checkpoint's rows join.
+  zero_shot: origin/evidence/fm-agg:results/agg/aggregation-scores.csv.gz
+  existing: origin/agg-slots:results/agg/aggregation-scores.csv.gz
+  mem_mb: 6144
+
+dashboard:
+  # The fine-tuning dashboard (task dashboard; workflow/flowlib/dashboard).
+  # Runs on every machine: release-prefix runs need no paths. Runs with a
+  # local folder go in DASHBOARD_RUNS in config/local.env or --run, as
+  # name=<folder|prefix>[,label=..][,colour=..][,live][,base=..]
+  # [,prefix=..][,hashes=h1+h2][,n=h1:250+h2:500].
+  runs: []
+  # Reference series, matched on rows by model and checkpoint; --ref adds
+  # or replaces one (name=MODEL_REGEX[,checkpoint=..][,label=..][,colour=..]
+  # [,role=..]). Role: baseline (scores are relative to it), start (each
+  # run's curve starts from it, dashed) or other (dotted, the default).
+  references:
+    - key: zero
+      label: zero-shot ragged
+      colour: "#16a34a"
+      model: "^(?!randomwalknowcast$)(?!.*_complete$)"
+      checkpoint: zero-shot
+      role: start
+    - key: complete
+      label: complete-only
+      colour: "#9333ea"
+      model: "_complete$"
+      checkpoint: zero-shot
+    - key: rw
+      label: randomwalknowcast
+      # Its colour in the paper figures (paperfigs.style).
+      paper_model: randomwalknowcast
+      model: "^randomwalknowcast$"
+      role: baseline
+  # The checkpoint scores' rule shown.
+  rule: own-quantile-wis_crps-1000-common
+  # Mailbox lines shown (a regular expression).
+  mail_filter: "slots|ckpt-scores|agg-slots|slots-check|fm-finetune|sim round|workflow:"
+  # Where scores are mirrored to when REMOTE is set, and how often (s).
+  mirror: output/dashboard/mirror
+  mirror_every: 300
+  # The datasets of the nowcast panels and their location groups.
+  datasets:
+    - key: germany
+      label: Germany
+      truth: latest vintage of the forecast files
+      groups:
+        - {name: national, match: "^DE$"}
+        - {name: states, match: "^DE-"}
+        - {name: ages, match: "^(\\d\\d-\\d\\d|80\\+)$"}

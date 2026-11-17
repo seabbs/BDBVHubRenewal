@@ -14,7 +14,7 @@ task paper TARGET=paper    # the paper run, with the held-out data
 
 This is the command CI runs ([`scripts/paper.sh`](../scripts/paper.sh)).
 It fetches the fit store, runs the target's missing steps, renders the paper as HTML and PDF and copies it into `docs/paper/`.
-`CORES=8 task paper` sets Snakemake's cores (4 by default).
+`CORES=8 task paper`, or `CORES` in `config/local.env`, sets Snakemake's cores (4 by default).
 From `paper/`, `task pipeline:dev`, `task pipeline:paper` and `task render` run the steps one at a time.
 
 ```mermaid
@@ -23,7 +23,7 @@ flowchart LR
 ```
 
 Simulation and fine-tuning run locally, not on CI, and publish each checkpoint as a `chronos-ft-<hash>` release (#192).
-A round's simulations are made on a CPU host and trained on a GPU with `scripts/finetune_round.sh ROUND INIT` (on the `fm-finetune-r4` branch until it merges), whose header lists its inputs.
+A round's simulations are made on a CPU host (`task simulate`) and trained on a GPU (`task finetune`) by the Snakemake workflow in [`workflow/`](../workflow/README.md).
 Everything from forecasting on runs in this workflow, locally or on CI.
 
 <details>
@@ -68,6 +68,7 @@ Settings, data paths and the held-out sets are in [`workflow/config.yaml`](workf
 - Development German data stop at the split, with releases up to D days after it for the truth of the last dates.
 - CI runs the development target.
   The `paper` target runs only when the Pages workflow is dispatched with `paper_target: paper`.
+  That build is never deployed to the site or attached to a release.
 - No held-out data or results are committed.
   `results/` and `build/` are ignored.
   The SI note on the held-out set is generated with the grid tables ([`papertables/synthetic_grid.py`](papertables/synthetic_grid.py)).

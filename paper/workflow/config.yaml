@@ -34,9 +34,9 @@ synthetic:
   # realised values.
   simulations:
     development: ../output/finetune/development
-    # Simulation round 1's folder (~/bdbv-rounds/rounds/r1/sims on
-    # archie), whose held-out batches are the held-out set.
-    paper: ../output/rounds/r1/sims
+    # Simulation round 1's folder under the rounds folder (ROOT in
+    # config/local.env), whose held-out batches are the held-out set.
+    paper: $ROOT/rounds/r1/sims
   # The synthetic runner's forecasts of them, with its
   # observations and factors beside them.
   forecasts:
@@ -128,7 +128,7 @@ evidence:
     path: scripts/finetune_simulate.R
   # Scores of the final run's checkpoints on the case studies (ckpt-scores).
   checkpoint_scores:
-    ref: a0ccfc67bc1471a2405eb4af3254310b087c92c3
+    ref: 73a2780b4ff0013d0fab97da8a22beba03008bcf
     path: evidence/checkpoint-scores.csv
     # The rows carry the scoring rule; only `CHECKPOINT_RULE`'s are shown,
     # for the final run's checkpoints (`final_checkpoints`).
@@ -157,6 +157,23 @@ evidence:
   aggregation_cost:
     ref: 5a3e0440880f54751fd8dccbfa14133a2a74ba81
     path: results/agg/aggregation-cost.csv
+  # The slots run's check against no slots and zero-shot, with the
+  # lag-swap test (slots-check), for its newest checked checkpoint.
+  # Pending: the final slots run's first checked checkpoint.
+  slots_check: null
+  # Each fine-tuning comparison's scores by checkpoint (paperpipe.evidence:
+  # set, run, outbreaks, score). Pending: the runs' checkpoints.
+  compare_slots: null
+  compare_delays: null
+  compare_realdata: null
+  # Pending: daily and hub-target scores from the target column.
+  compare_daily: null
+  # Pending: fm-finetune3's realised shares of each combination of block
+  # layout and options.
+  block_combinations: null
+  # Pending: held-out synthetic scores by block layout and target, from
+  # fm-finetune3's manifest of each held-out block.
+  heldout_layout: null
   # Pending: the final run's held-out loss curve.
   finetune_heldout: null
   # Pending: summaries of the final grid's simulations.

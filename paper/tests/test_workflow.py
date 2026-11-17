@@ -317,7 +317,9 @@ def test_the_paper_runs_its_ebola_models_at_its_own_draws(
     assert res.returncode == 0, res.stderr
     log = res.stdout + res.stderr
     assert "rule ebola_backtest_draws" in log
-    assert f"n_samples = {CONFIG['ebola']['n_samples']}" in log
+    # The draws of the models the backtest runs itself, `[samples]
+    # backtest`; the stored fits keep `[forecast] n_samples`.
+    assert f"backtest = {CONFIG['ebola']['n_samples']}" in log
     assert CONFIG["ebola"]["n_samples"] == 1000
 
 

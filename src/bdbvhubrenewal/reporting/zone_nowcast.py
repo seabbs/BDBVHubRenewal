@@ -1,8 +1,8 @@
 # Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
 """Health-zone nowcasts at the latest release, for the Nowcast page.
 
-The random walk models are run on each zone and summed to its provinces
-(`zone_forecast`), as in the submitted file. The page's interactive
+The random walk models are run on each zone (`zone_forecast`), as in
+the submitted file. The page's interactive
 charts show every zone with a forecast or recent cases, beside the
 country and provinces (`place_chart_data`).
 A week with no onsets in a zone has a count of 0.
@@ -33,11 +33,10 @@ _QCOLS = ("q5", "q25", "q50", "q75", "q95")
 def zone_nowcast(
     model: str,
     task: ForecastTask,
-    province_samples: pd.DataFrame,
     daily_zones: pd.DataFrame,
     zones: tuple[str, ...],
 ) -> pd.DataFrame:
-    """Forecast every zone at the task's release, summed to the provinces.
+    """Forecast every zone at the task's release.
 
     Parameters
     ----------
@@ -45,8 +44,6 @@ def zone_nowcast(
         A registered model.
     task : ForecastTask
         The province task at the latest release.
-    province_samples : pandas.DataFrame
-        `model`'s province samples for `task`.
     daily_zones : pandas.DataFrame
         The daily zone table (`load_daily_zones`).
     zones : tuple of str
@@ -59,14 +56,7 @@ def zone_nowcast(
         `horizon` in weeks from the reference date, as `run_forecasts`.
     """
     counts = weekly_zone_counts(daily_zones, task.vintage)
-    samples = zone_forecast(
-        get_model(model),
-        task,
-        province_samples[["location", "target_end_date", "sample", "value"]],
-        counts,
-        zones,
-        daily_zones,
-    )
+    samples = zone_forecast(get_model(model), task, counts, zones, daily_zones)
     ref = pd.Timestamp(task.reference_date)
     weeks = (pd.to_datetime(samples["target_end_date"]) - ref).dt.days // 7
     return samples.assign(

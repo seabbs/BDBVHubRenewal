@@ -73,9 +73,9 @@ OUT = Path(__file__).parents[1] / "results"
 def run_nuts(model, data, sampler):
     """`forecasters.renewal.run_nuts` with vectorised chains.
 
-    Parallel (pmap) chains leak memory on Linux CPU (about 0.7 GB per
-    30 s on archie), so the ladder runs chains vectorised until the
-    adapter does. It also replaces the adapter's own function, so the
+    Parallel (pmap) chains leak memory on Linux CPU (about 0.7 GB
+    per 30 s on a 16-core host), so the ladder runs chains vectorised until
+    the adapter does. It also replaces the adapter's own function, so the
     rungs run the same way.
     """
     from jax import random as jrandom

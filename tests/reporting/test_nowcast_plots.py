@@ -14,26 +14,28 @@ def test_plot_relative_overall_skips_models_missing_from_a_pool() -> None:
         {
             "pool": ["national", "national", "zones"],
             "model": ["randomwalk", "renewal", "randomwalk"],
-            "rel_wis": [1.0, 0.8, 1.0],
-            "rel_log_wis": [1.0, 0.9, 1.0],
+            "rel_crps": [1.0, 0.8, 1.0],
+            "rel_log_crps": [1.0, 0.9, 1.0],
             "coverage_50": [0.5, 0.4, 0.45],
             "coverage_90": [0.9, 0.7, 0.85],
             "bias": [0.1, -0.2, 0.0],
         }
     )
-    fig = plot_relative_overall(table, ["randomwalk", "renewal"])
+    fig = plot_relative_overall(
+        table, ["randomwalk", "renewal"], baseline="randomwalk"
+    )
     shown = [ax for ax in fig.axes if ax.get_visible()]
     assert [ax.get_ylabel() for ax in shown] == [
-        "Relative WIS to randomwalk",
-        "Relative WIS on the log scale to randomwalk",
+        "Relative CRPS to randomwalk",
+        "Relative CRPS on the log scale to randomwalk",
         "50% coverage",
         "90% coverage",
         "Bias",
     ]
-    wis, cover = shown[0], shown[3]
+    crps, cover = shown[0], shown[3]
     # Three bars, as renewal has no zones.
-    assert len(wis.patches) == 3
-    assert [t.get_text() for t in wis.get_xticklabels()] == [
+    assert len(crps.patches) == 3
+    assert [t.get_text() for t in crps.get_xticklabels()] == [
         "National",
         "Zones",
     ]
@@ -70,7 +72,7 @@ def test_plot_place_summary_has_a_row_per_place_by_scale() -> None:
             "pool": ["provinces", "provinces", "zones", "national"],
             "location": ["CD-NK", "CD-IT", "CD-IT-01", "CD"],
             "model": ["a", "a", "a", "a"],
-            "rel_wis": [0.8, 1.2, 0.9, 1.0],
+            "rel_crps": [0.8, 1.2, 0.9, 1.0],
         }
     )
     fig = plot_place_summary(
@@ -89,7 +91,7 @@ def test_plot_place_summary_is_on_a_log_axis_without_zeros() -> None:
             "pool": ["provinces"] * 3,
             "location": ["CD-NK", "CD-IT", "CD-NU"],
             "model": ["a"] * 3,
-            "rel_wis": [1.3, 0.0, 27.0],
+            "rel_crps": [1.3, 0.0, 27.0],
         }
     )
     fig = plot_place_summary(

@@ -26,6 +26,7 @@ from bdbvhubrenewal.reporting.plots import (
     point_style,
 )
 from bdbvhubrenewal.reporting.scorechart import OVERALL_METRICS
+from bdbvhubrenewal.reporting.site import site_baseline
 
 __all__ = [
     "plot_place_summary",
@@ -141,7 +142,7 @@ def plot_release_nowcasts(
 def plot_relative_overall(
     table: pd.DataFrame,
     models: Sequence[str],
-    baseline: str = "randomwalk",
+    baseline: str | None = None,
     mode: str = "light",
     x: str = "pool",
     metrics: Mapping[str, tuple[str, float | None]] = OVERALL_METRICS,
@@ -152,11 +153,11 @@ def plot_relative_overall(
     Parameters
     ----------
     table : pandas.DataFrame
-        `relative_wis` output by `x`, for one target.
+        `relative_crps` output by `x`, for one target.
     models : sequence of str
         Models in registry order. Those absent from a pool are skipped.
     baseline : str
-        The model WIS is relative to, named in the labels.
+        The model CRPS is relative to, named in the labels.
     mode : str
         `"light"` or `"dark"`.
     x : str
@@ -174,6 +175,7 @@ def plot_relative_overall(
         A panel of bars grouped by pool per metric, each with a dotted line
         at its reference.
     """
+    baseline = baseline or site_baseline()
     ink = THEMES[mode]
     pick = 0 if mode == "light" else 1
     have_pools = set(table[x])
@@ -322,7 +324,7 @@ def plot_place_summary(
     names: Mapping[str, str],
     mode: str = "light",
 ) -> Figure:
-    """Plot relative WIS per place and model, a row per place, by scale.
+    """Plot relative CRPS per place and model, a row per place, by scale.
 
     The axis is on the log scale, so places whose scores are near zero do
     not set it. Scores of 0 are left out.
@@ -330,7 +332,7 @@ def plot_place_summary(
     Parameters
     ----------
     table : pandas.DataFrame
-        `relative_wis` output by `pool` and `location`.
+        `relative_crps` output by `pool` and `location`.
     models : sequence of str
         Models in order. Those absent from a place are skipped.
     colours : mapping of str to (str, str, str)
@@ -363,11 +365,11 @@ def plot_place_summary(
         places = sorted(set(sub["location"]), key=lambda x: names.get(x, x))
         y = {loc: i for i, loc in enumerate(places)}
         for m in models:
-            own = sub.loc[(sub["model"] == m) & (sub["rel_wis"] > 0)]
+            own = sub.loc[(sub["model"] == m) & (sub["rel_crps"] > 0)]
             if own.empty:
                 continue
             ax.plot(
-                own["rel_wis"],
+                own["rel_crps"],
                 own["location"].map(y),
                 "o",
                 ms=4,
@@ -381,7 +383,7 @@ def plot_place_summary(
         ax.set_yticks(range(len(places)), [names.get(p, p) for p in places])
         ax.set_ylim(len(places) - 0.5, -0.5)
         ax.set_title(titles[pool], fontsize=9)
-        ax.set_xlabel("Relative WIS")
+        ax.set_xlabel("Relative CRPS")
         ax.set_axisbelow(True)
     handles: dict[str, Artist] = {}
     for ax in axes[0]:

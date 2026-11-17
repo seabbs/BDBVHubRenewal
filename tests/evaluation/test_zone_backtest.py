@@ -8,7 +8,6 @@ import pytest
 from bdbvhubrenewal.data import load_daily, load_daily_zones
 from bdbvhubrenewal.data.zones import hub_zones
 from bdbvhubrenewal.evaluation.zones import (
-    SUMMED,
     ZONE_BASELINE,
     zone_backtest,
     zone_relative_skill,
@@ -54,7 +53,7 @@ def test_both_baselines_are_scored_at_zone_level(
     scores: pd.DataFrame, vintages: list[str]
 ) -> None:
     names = {"randomwalk", "randomwalknowcast"}
-    assert set(scores["model"]) == names | {n + SUMMED for n in names}
+    assert set(scores["model"]) == names
     assert (scores["location"].str.count("-") == 2).all()
     # Each origin is scored on what every later release reported, and on
     # the latest release's complete weeks.
@@ -91,24 +90,22 @@ def test_relative_skill_is_against_the_zone_randomwalk(
     scores: pd.DataFrame,
 ) -> None:
     rel = zone_relative_skill(scores).set_index("model")
-    assert rel.loc[ZONE_BASELINE, "relative_wis"] == pytest.approx(1.0)
-    assert (rel["relative_wis"] > 0).all()
+    assert rel.loc[ZONE_BASELINE, "relative_crps"] == pytest.approx(1.0)
+    assert (rel["relative_crps"] > 0).all()
     by = zone_relative_skill(scores, by=("horizon",))
     mine = by.loc[by["model"] == "randomwalknowcast"].set_index("horizon")
-    assert (mine["relative_wis"] > 0).all()
+    assert (mine["relative_crps"] > 0).all()
     assert mine.index.min() == -4
 
 
-def test_zone_forecasts_are_the_summed_forms_by_origin(
+def test_zone_forecasts_are_the_scored_forms_by_origin(
     result: tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame],
 ) -> None:
     scores, _, forecasts = result
     assert set(forecasts["model"]) == {"randomwalk", "randomwalknowcast"}
     assert set(forecasts["origin"]) == set(scores["origin"])
     assert (forecasts["location"].str.count("-") == 2).all()
-    # The summed forms are the ones scored under the SUMMED names.
-    summed = scores.loc[scores["model"].str.endswith(SUMMED)]
-    assert set(forecasts["location"]) == set(summed["location"])
+    assert set(forecasts["location"]) == set(scores["location"])
 
 
 def test_zone_backtest_by_origin_chunk_matches_one_run(
@@ -194,3 +191,10 @@ def test_zone_forecasts_read_skips_an_empty_part(tmp_path: Path) -> None:
     run = ZoneForecasts.read([tmp_path / "a", tmp_path / "b"])
     assert list(run.samples.columns) == ["key", "origin", "value"]
     assert len(run.runs) == 1
+
+
+def test_zone_relative_skill_scores_crps(scores: pd.DataFrame) -> None:
+    rel = zone_relative_skill(scores).set_index("model")
+    assert rel.loc[ZONE_BASELINE, "relative_crps"] == pytest.approx(1.0)
+    assert rel.loc[ZONE_BASELINE, "relative_log_crps"] == pytest.approx(1.0)
+    assert "relative_wis" not in rel.columns

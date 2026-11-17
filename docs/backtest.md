@@ -36,8 +36,8 @@ Pick a place to narrow the table.
 
 Each origin's forecasts scored on the counts each later release reported.
 
-![Mean WIS of each origin's forecasts against each later release.](figures/scores-by-truth.svg#only-light)
-![Mean WIS of each origin's forecasts against each later release.](figures/scores-by-truth-dark.svg#only-dark)
+![Mean CRPS of each origin's forecasts against each later release.](figures/scores-by-truth.svg#only-light)
+![Mean CRPS of each origin's forecasts against each later release.](figures/scores-by-truth-dark.svg#only-dark)
 
 ??? note "Tables"
 

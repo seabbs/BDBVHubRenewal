@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
+import datetime as dt
 import hashlib
 import importlib.util
 import tomllib
@@ -12,12 +13,21 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from bdbvhubrenewal.data.dates import as_date
+from bdbvhubrenewal.data.zones import (
+    ZoneData,
+    hub_zones,
+    is_zone,
+    province_of,
+    weekly_zone_counts,
+)
 from bdbvhubrenewal.evaluation.backtest import BacktestConfig, make_tasks
 from bdbvhubrenewal.forecasters import (
     NATIONAL,
     ForecastTask,
     FoundationModel,
     ModelUnavailableError,
+    add_national,
     base,
     check_samples,
     foundation,
@@ -34,6 +44,11 @@ from bdbvhubrenewal.forecasters.foundation import (
     quantile_draws,
 )
 from bdbvhubrenewal.forecasters.randomwalk import RandomWalk
+from bdbvhubrenewal.forecasters.zones import (
+    ZoneAllocator,
+    check_zone_coherence,
+    zones_for_model,
+)
 
 FINETUNED_MODELS = tuple(f"fm_chronos_{s}_ragged_ft" for s in SOURCES)
 MODELS = (
@@ -67,23 +82,50 @@ def _recording(store: list):
 
 @pytest.fixture(scope="module")
 def task(
-    target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
+    target: pd.DataFrame,
+    delays: pd.DataFrame,
+    daily: pd.DataFrame,
+    daily_zones: pd.DataFrame,
+    health_zones: pd.DataFrame,
+    tasks_json,
 ) -> ForecastTask:
     rows = target.loc[target["vintage"] == "2026-10-24"]
     real = target.loc[target["kind"] == "real"]
     return make_tasks(
-        rows, delays, BacktestConfig(seed=3), history=real, daily=daily
+        rows,
+        delays,
+        BacktestConfig(seed=3),
+        history=real,
+        daily=daily,
+        zones=ZoneData(health_zones, daily_zones, hub_zones(tasks_json)),
     )[0]
+
+
+def _zones(task: ForecastTask) -> list[str]:
+    return [z for z in task.zone_codes if province_of(z) in task.locations]
 
 
 def _reported(task: ForecastTask, out: pd.DataFrame) -> np.ndarray:
     keys = pd.MultiIndex.from_frame(out[["location", "target_end_date"]])
+    assert task.zone_history is not None
+    zones = task.zone_history.loc[task.zone_history["vintage"] == task.vintage]
+    rows = pd.concat([task.target, zones])
     return (
-        task.target.set_index(["location", "target_end_date"])["total"]
+        rows.groupby(["location", "target_end_date"])["total"]
+        .sum()
         .reindex(keys)
         .fillna(0.0)
         .to_numpy()
     )
+
+
+def _with_cases(task: ForecastTask) -> set[str]:
+    """The task's places with a case in its release."""
+    assert task.zone_history is not None
+    zones = task.zone_history.loc[task.zone_history["vintage"] == task.vintage]
+    rows = pd.concat([task.target, zones])
+    places = {NATIONAL, *task.locations, *_zones(task)}
+    return set(rows.loc[rows["total"] > 0, "location"]) & places
 
 
 def test_registered_as_fitted_models() -> None:
@@ -113,8 +155,8 @@ def test_ragged_lags_stop_below_the_truth_delay(
     )
     model.forecast(task)
     groups, _ = store[0]
-    n_places = 1 + len(task.locations)
-    assert len(groups[0]["future_covariates"]) == n_places * steps
+    names = groups[0]["future_covariates"]
+    assert len({name.rsplit("_lag_", 1)[1] for name in names}) == steps
     assert MAX_LAG[source] == steps
 
 
@@ -199,7 +241,11 @@ def test_draws_are_counts_at_least_the_reported(
         model = dataclasses.replace(get_model(name), sample=_constant(value))
         out = model.forecast(task)
         check_samples(out, task)
-        assert set(out["location"]) == {NATIONAL, *task.locations}
+        assert set(out["location"]) == {
+            NATIONAL,
+            *task.locations,
+            *_zones(task),
+        }
         values = out["value"].to_numpy()
         assert (values >= 0).all()
         assert np.array_equal(values, np.round(values))
@@ -225,8 +271,8 @@ def test_gives_no_delay(name: str, task: ForecastTask) -> None:
 @pytest.mark.parametrize("source", SOURCES)
 def test_one_block_holds_every_target(source: str, task: ForecastTask) -> None:
     lags = MAX_LAG[source]
-    # The country and the provinces are each a target.
-    n_places = 1 + len(task.locations)
+    # The country, the provinces and their zones are each a target.
+    n_places = 1 + len(task.locations) + len(_zones(task))
     seen: dict[str, tuple] = {}
     for layout in LAYOUTS:
         store: list = []
@@ -243,10 +289,14 @@ def test_one_block_holds_every_target(source: str, task: ForecastTask) -> None:
     assert "future_covariates" not in complete
     ragged, horizon = seen["ragged"]
     # The targets are the hub-target series only; the lag series are
-    # covariates, with no copy of a target.
+    # covariates, with no copy of a target, of the places with cases.
     assert ragged["target"].shape[0] == n_places
     future = ragged["future_covariates"]
-    assert len(future) == n_places * lags
+    assert ragged["past_covariates"].keys() == future.keys()
+    lagged = {name.rsplit("_lag_", 1)[0] for name in future}
+    assert lagged == _with_cases(task)
+    assert len(lagged) < n_places
+    assert len(future) == len(lagged) * lags
     for name, values in future.items():
         d = int(name.rsplit("_", 1)[1])
         assert len(values) == horizon
@@ -739,6 +789,103 @@ def test_a_failed_lookup_says_how_to_set_a_token(
         foundation.finetuned_releases()
 
 
+def _by_series(groups, horizon, n, _seed):
+    """A sampler whose draws of series $i$ are $i$, so each differs."""
+    return [
+        np.broadcast_to(
+            np.arange(len(g["target"]), dtype=float)[None, :, None],
+            (n, len(g["target"]), horizon),
+        ).copy()
+        for g in groups
+    ]
+
+
+@pytest.fixture(scope="module")
+def zoned(task: ForecastTask) -> pd.DataFrame:
+    """Samples with the zones, from a stand-in that draws each series apart."""
+    model = dataclasses.replace(
+        get_model("fm_chronos_weekly_ragged"), sample=_by_series
+    )
+    return model.forecast(task)
+
+
+def _provinces(samples: pd.DataFrame) -> pd.DataFrame:
+    return samples.loc[
+        ~samples["location"].map(is_zone) & (samples["location"] != NATIONAL)
+    ]
+
+
+def test_samples_hold_every_zone_of_the_tasks_provinces(
+    task: ForecastTask, zoned: pd.DataFrame
+) -> None:
+    check_samples(zoned, task)
+    zone = zoned["location"].map(is_zone)
+    assert set(zoned.loc[zone, "location"]) == set(_zones(task))
+    first = zoned.loc[zone, "location"].iloc[0]
+    stray = zoned.copy()
+    stray.loc[stray["location"] == first, "location"] = "CD-XX-01"
+    with pytest.raises(ValueError, match="zones"):
+        check_samples(stray, task)
+    missing = zoned.loc[zoned["location"] != first]
+    with pytest.raises(ValueError, match="zones"):
+        check_samples(missing, task)
+
+
+def test_national_sums_provinces_not_zones(zoned: pd.DataFrame) -> None:
+    rows = zoned.loc[zoned["location"] != NATIONAL]
+    out = add_national(rows)
+    national = out.loc[out["location"] == NATIONAL, "value"].sum()
+    assert national == _provinces(rows)["value"].sum()
+
+
+def test_zone_samples_are_the_models_own_summed_to_its_provinces(
+    task: ForecastTask,
+    zoned: pd.DataFrame,
+    daily_zones: pd.DataFrame,
+    tasks_json,
+) -> None:
+    zones = hub_zones(tasks_json)
+    counts = weekly_zone_counts(daily_zones, task.vintage)
+    own = zoned.loc[zoned["location"].map(is_zone)]
+    provinces = _provinces(zoned)
+    # The model's zones sum to its provinces and keep the published counts.
+    assert not check_zone_coherence(provinces, own)
+    keys = ["location", "target_end_date"]
+    floor = own.merge(counts, on=keys, how="left")["total"].fillna(0).to_numpy()
+    assert (own["value"].to_numpy() >= floor).all()
+    # The hub file takes them as they are.
+    split = zones_for_model(
+        "fm_chronos_weekly_ragged", task, zoned, counts, zones, daily_zones
+    )
+    keys = ["location", "target_end_date", "sample"]
+    a = split.set_index(keys)["value"].sort_index()
+    pd.testing.assert_series_equal(a, own.set_index(keys)["value"].sort_index())
+    allocated = ZoneAllocator().allocate(provinces, task, counts, zones)
+    b = allocated.set_index(keys)["value"].sort_index()
+    assert not a.equals(b)
+
+
+@pytest.mark.parametrize("layout", LAYOUTS)
+def test_daily_zones_keep_their_counts_with_no_weekly_zone_releases(
+    layout: str, task: ForecastTask, daily_zones: pd.DataFrame
+) -> None:
+    bare = dataclasses.replace(task, zone_history=None)
+    model = dataclasses.replace(
+        get_model(f"fm_chronos_daily_{layout}"), sample=_constant(-50.0)
+    )
+    out = model.forecast(bare)
+    check_samples(out, bare)
+    own = out.loc[out["location"].map(is_zone)]
+    assert set(own["location"]) == set(_zones(task))
+    # Reconciling keeps each zone's published count, so the zones are
+    # floored with no weekly zone release to floor them before.
+    counts = weekly_zone_counts(daily_zones, task.vintage)
+    keys = ["location", "target_end_date"]
+    floor = own.merge(counts, on=keys, how="left")["total"].fillna(0)
+    assert (own["value"].to_numpy() >= floor.to_numpy()).all()
+    assert floor.sum() > 0
+
+
 def test_a_passing_github_error_is_retried(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -790,6 +937,51 @@ def test_a_missing_asset_is_not_retried(
     with pytest.raises(FileNotFoundError):
         foundation.resolve_checkpoint("abc")
     assert len(calls) == 1
+
+
+def test_zone_releases_without_a_target_release_add_no_lag_cells(
+    target: pd.DataFrame,
+    delays: pd.DataFrame,
+    daily: pd.DataFrame,
+    health_zones: pd.DataFrame,
+    daily_zones: pd.DataFrame,
+    tasks_json,
+) -> None:
+    # With no history, the task has one weekly target release but every
+    # zone release, as the hub comparison builds it.
+    rows = target.loc[target["vintage"] == "2026-10-24"]
+    task = make_tasks(
+        rows,
+        delays,
+        BacktestConfig(seed=3),
+        daily=daily,
+        zones=ZoneData(health_zones, daily_zones, hub_zones(tasks_json)),
+    )[0]
+    store: list = []
+    model = dataclasses.replace(
+        get_model("fm_chronos_weekly_ragged"), sample=_recording(store)
+    )
+    model.forecast(task)
+    group = store[0][0][0]
+    for name, past in group["past_covariates"].items():
+        cells = np.concatenate([past, group["future_covariates"][name]])
+        # One release gives each lag one cell.
+        assert np.sum(~np.isnan(cells)) <= 1, name
+
+
+def test_weeks_before_the_first_onset_are_forecast(
+    task: ForecastTask,
+) -> None:
+    first = min(task.target_end_dates)
+    early = (as_date(first) - dt.timedelta(weeks=60)).isoformat()
+    longer = dataclasses.replace(
+        task, target_end_dates=(early, *task.target_end_dates)
+    )
+    model = dataclasses.replace(
+        get_model("fm_chronos_weekly_ragged"), sample=_constant(0.0)
+    )
+    out = model.forecast(longer)
+    assert set(out.loc[out["target_end_date"] == early, "value"]) == {0.0}
 
 
 def _http_error(code: int):  # type: ignore[no-untyped-def]

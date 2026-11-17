@@ -39,7 +39,7 @@ import pandas as pd
 from bdbvhubrenewal.data import load_daily, load_delays, load_target
 from bdbvhubrenewal.evaluation import backtest as bt
 from bdbvhubrenewal.evaluation import store
-from bdbvhubrenewal.evaluation.nowcast import relative_wis, release_backtest
+from bdbvhubrenewal.evaluation.nowcast import relative_crps, release_backtest
 from bdbvhubrenewal.evaluation.scoring import relative_skill
 from bdbvhubrenewal.forecasters import NATIONAL, get_model
 from bdbvhubrenewal.reporting.plots import plot_location_grid, save_light_dark
@@ -181,8 +181,8 @@ panels
 # Each forecast is scored on what each later release reported ([how scoring works](../methods/evaluation/#real-releases)).
 # `randomwalk` is scored on its samples as they are, with no delay.
 # `release_backtest` maps each other model's forecast of final counts to the counts a later release would report, using the model's own modelled delay.
-# It scores the samples with the weighted interval score (WIS) and interval coverage.
-# The table gives each model's mean WIS relative to `randomwalk`, for the national total and over the provinces.
+# It scores the samples with the continuous ranked probability score (CRPS), on the counts and on the log scale, and interval coverage.
+# The table gives each model's mean CRPS relative to `randomwalknowcast`, the site's baseline, for the national total and over the provinces.
 
 # %%
 result = release_backtest(
@@ -199,16 +199,17 @@ scores = scores.assign(
         lambda x: "National" if x == NATIONAL else "Province"
     )
 )
-relative_wis(scores, by=["level"]).round(2)
+relative_crps(scores, by=["level"], baseline="randomwalknowcast").round(2)
 
 # %% [markdown]
 # The [energy score](../methods/evaluation/#energy-score) scores each scale's forecast of every place and week at once, from the same samples.
-# The table gives it and its log version relative to `randomwalk`, with $n$ the releases scored.
+# The table gives it and its log version relative to `randomwalknowcast`, with $n$ the releases scored.
 
 # %%
 energy = result.energy.loc[result.energy["target"] == "reported"]
 relative_skill(
     energy,
+    baseline="randomwalknowcast",
     by=("scale",),
     metrics=("energy", "log_energy"),
     match_on=("origin", "truth_vintage"),

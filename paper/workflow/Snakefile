@@ -36,6 +36,9 @@ from snakemake.exceptions import WorkflowError
 
 PAPER = Path(workflow.basedir).parent
 sys.path.insert(0, str(PAPER))
+sys.path.append(str(PAPER.parent / "workflow"))
+
+from flowlib import localconfig  # noqa: E402
 
 from paperdata.synthetic_runner import (  # noqa: E402
     MODELS as SYNTHETIC_MODELS,
@@ -75,6 +78,11 @@ EBOLA = config["ebola"]
 if config.get("finetuned"):
     os.environ["BDBV_CHRONOS_FT"] = str(config["finetuned"])
 SYNTHETIC = config["synthetic"]
+# Simulation folders may name machine settings, such as $ROOT.
+SYNTHETIC["simulations"] = {
+    mode: localconfig.expand(folder)
+    for mode, folder in SYNTHETIC["simulations"].items()
+}
 TRIANGLE = f"{GERMANY['data']}/COVID-19_hospitalizations.csv"
 
 
@@ -433,7 +441,9 @@ rule ebola_hub:
 # The release backtest of the models on main, from every past release. CI
 # has run it by the paper step, so this rule then has nothing to do.
 # The paper's own release backtest of `backtest_models` at its number of
-# draws, from a copy of the backtest config with only `n_samples` changed.
+# draws, from a copy of the backtest config with only `[samples] backtest`
+# changed: the draws of the models the backtest runs itself. The stored
+# fits keep `[forecast] n_samples`.
 EBOLA_DRAWS = f"{R}/ebola-backtest/forecasts.csv.gz"
 
 
@@ -451,9 +461,9 @@ rule ebola_backtest_draws:
         heavy=1,
     shell:
         "mkdir -p {params.folder} && "
-        "sed 's/^n_samples = .*/n_samples = {params.n}/' {params.config} "
+        "sed 's/^backtest = .*/backtest = {params.n}/' {params.config} "
         "> {params.folder}/backtest.toml && "
-        "grep -q '^n_samples = {params.n}$' {params.folder}/backtest.toml && "
+        "grep -q '^backtest = {params.n}$' {params.folder}/backtest.toml && "
         "cd .. && {BDBV} backtest --config {params.folder}/backtest.toml "
         "--models {params.models} --no-recovery "
         "--results {params.folder}/results --output {params.folder}"

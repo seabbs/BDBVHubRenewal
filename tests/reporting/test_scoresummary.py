@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.evaluation.nowcast import relative_energy, relative_wis
+from bdbvhubrenewal.evaluation.nowcast import relative_crps, relative_energy
 from bdbvhubrenewal.evaluation.scoring import relative_skill
 from bdbvhubrenewal.reporting.scoresummary import summary_html, summary_rows
 
@@ -44,8 +44,8 @@ def _scores() -> pd.DataFrame:
                             "location": loc,
                             "target_end_date": week,
                             "horizon": -1 if week == "2026-10-10" else 0,
-                            "wis": rng.gamma(2, 5),
-                            "log_wis": rng.gamma(2, 0.1),
+                            "crps": rng.gamma(2, 5),
+                            "log_crps": rng.gamma(2, 0.1),
                             "coverage_50": float(rng.random() < 0.5),
                             "coverage_90": float(rng.random() < 0.9),
                             "bias": rng.uniform(-1, 1),
@@ -72,29 +72,31 @@ def _node(data: dict[str, object], keep: str) -> list[dict[str, object]]:
 
 
 @pytest.mark.parametrize("pool", ["national", "provinces", "zones"])
-def test_browser_summary_matches_relative_wis(pool: str) -> None:
+def test_browser_summary_matches_relative_crps(pool: str) -> None:
     scores = _scores()
     depth = scores["location"].str.count("-")
     scores["pool"] = depth.map({0: "national", 1: "provinces", 2: "zones"})
-    data = summary_rows(scores, MODELS, COLOURS, {})
+    data = summary_rows(scores, MODELS, COLOURS, {}, baseline="randomwalk")
     places = [i for i, p in enumerate(data["places"]) if p["pool"] == pool]
     got = _node(data, f"function (r) {{ return {places}.includes(r[3]); }}")
-    want = relative_wis(scores, by=("pool",)).set_index(["pool", "model"])
+    want = relative_crps(scores, by=("pool",)).set_index(["pool", "model"])
     for row in got:
         exp = want.loc[(pool, MODELS[row["model"]])]
         assert row["n"] == exp["n"]
-        assert row["rel"]["wis"] == pytest.approx(exp["rel_wis"], abs=1e-3)
-        assert row["rel"]["log_wis"] == pytest.approx(
-            exp["rel_log_wis"], abs=1e-3
+        assert row["rel"]["crps"] == pytest.approx(exp["rel_crps"], abs=1e-3)
+        assert row["rel"]["log_crps"] == pytest.approx(
+            exp["rel_log_crps"], abs=1e-3
         )
-        for col in ("wis", "coverage_50", "coverage_90", "bias"):
+        for col in ("crps", "coverage_50", "coverage_90", "bias"):
             assert row["mean"][col] == pytest.approx(exp[col], abs=1e-3)
     assert len(got) == len(MODELS)
 
 
 def test_summary_rows_index_every_key() -> None:
     names = {"CD-IT": "Ituri", "CD-NK": "Nord Kivu"}
-    data = summary_rows(_scores(), MODELS, COLOURS, names)
+    data = summary_rows(
+        _scores(), MODELS, COLOURS, names, baseline="randomwalk"
+    )
     assert data["baseline"] == 0
     assert [p["id"] for p in data["pools"]] == [
         "national",
@@ -148,7 +150,9 @@ def _energy() -> pd.DataFrame:
 @pytest.mark.parametrize("pool", ["national", "provinces", "zones"])
 def test_browser_energy_matches_relative_energy(pool: str) -> None:
     energy = _energy()
-    data = summary_rows(_scores(), MODELS, COLOURS, {}, energy=energy)
+    data = summary_rows(
+        _scores(), MODELS, COLOURS, {}, energy=energy, baseline="randomwalk"
+    )
     ids = [p["id"] for p in data["pools"]]
     script = (
         f"const s = require({json.dumps(str(ENERGY_JS))});"
@@ -177,24 +181,26 @@ def test_browser_energy_matches_relative_energy(pool: str) -> None:
 def test_a_zero_baseline_gives_no_relative_score() -> None:
     scores = _scores()
     base = (scores["model"] == "randomwalk") & (scores["location"] == "CD")
-    scores.loc[base, ["wis", "log_wis"]] = 0.0
-    data = summary_rows(scores, MODELS, COLOURS, {})
+    scores.loc[base, ["crps", "log_crps"]] = 0.0
+    data = summary_rows(scores, MODELS, COLOURS, {}, baseline="randomwalk")
     got = _node(data, "function (r) { return r[3] === 0; }")
     assert data["places"][0]["id"] == "CD"
-    assert all(r["rel"]["wis"] is None for r in got)
-    rel = relative_wis(scores.loc[scores["location"] == "CD"])
-    assert rel["rel_wis"].isna().all()
+    assert all(r["rel"]["crps"] is None for r in got)
+    rel = relative_crps(scores.loc[scores["location"] == "CD"])
+    assert rel["rel_crps"].isna().all()
 
 
-def test_browser_summary_by_horizon_matches_relative_wis() -> None:
+def test_browser_summary_by_horizon_matches_relative_crps() -> None:
     scores = _scores()
-    data = summary_rows(scores, MODELS, COLOURS, {})
+    data = summary_rows(scores, MODELS, COLOURS, {}, baseline="randomwalk")
     got = _node(data, "function (r, i) { return d.horizons[i] === 0; }")
-    want = relative_wis(scores, by=("horizon",)).set_index(["horizon", "model"])
+    want = relative_crps(scores, by=("horizon",)).set_index(
+        ["horizon", "model"]
+    )
     for row in got:
         exp = want.loc[(0, MODELS[row["model"]])]
         assert row["n"] == exp["n"]
-        assert row["rel"]["wis"] == pytest.approx(exp["rel_wis"], abs=1e-3)
+        assert row["rel"]["crps"] == pytest.approx(exp["rel_crps"], abs=1e-3)
 
 
 def test_browser_relative_scores_are_mean_over_mean_like_relative_skill() -> (
@@ -204,11 +210,11 @@ def test_browser_relative_scores_are_mean_over_mean_like_relative_skill() -> (
     # relative_skill both leave it out and divide mean by mean. The mean of
     # per-forecast ratios would differ.
     scores = _scores()
-    data = summary_rows(scores, MODELS, COLOURS, {})
+    data = summary_rows(scores, MODELS, COLOURS, {}, baseline="randomwalk")
     got = _node(data, "function () { return true; }")
     want = relative_skill(
         scores,
-        metrics=("wis", "log_wis"),
+        metrics=("crps", "log_crps"),
         match_on=("origin", "truth_vintage", "location", "target_end_date"),
     ).set_index("model")
     pair = scores.merge(
@@ -216,17 +222,19 @@ def test_browser_relative_scores_are_mean_over_mean_like_relative_skill() -> (
         on=["origin", "truth_vintage", "location", "target_end_date"],
         suffixes=("", "_base"),
     )
-    ratios = (pair["wis"] / pair["wis_base"]).groupby(pair["model"]).mean()
+    ratios = (pair["crps"] / pair["crps_base"]).groupby(pair["model"]).mean()
     for row in got:
         model = MODELS[row["model"]]
         exp = want.loc[model]
         assert row["n"] == exp["n"]
-        assert row["rel"]["wis"] == pytest.approx(exp["relative_wis"], abs=1e-6)
-        assert row["rel"]["log_wis"] == pytest.approx(
-            exp["relative_log_wis"], abs=1e-6
+        assert row["rel"]["crps"] == pytest.approx(
+            exp["relative_crps"], abs=1e-6
+        )
+        assert row["rel"]["log_crps"] == pytest.approx(
+            exp["relative_log_crps"], abs=1e-6
         )
         if model != "randomwalk":
-            assert row["rel"]["wis"] != pytest.approx(ratios[model], abs=1e-3)
+            assert row["rel"]["crps"] != pytest.approx(ratios[model], abs=1e-3)
 
 
 def test_summary_html_offers_a_map_only_when_given_one() -> None:
@@ -273,30 +281,32 @@ def test_browser_summary_takes_any_model_as_the_baseline(pool: str) -> None:
     scores = scores.loc[~drop]
     depth = scores["location"].str.count("-")
     scores["pool"] = depth.map({0: "national", 1: "provinces", 2: "zones"})
-    data = summary_rows(scores, MODELS, COLOURS, {})
+    data = summary_rows(scores, MODELS, COLOURS, {}, baseline="randomwalk")
     places = [i for i, p in enumerate(data["places"]) if p["pool"] == pool]
     keep = f"function (r) {{ return {places}.includes(r[3]); }}"
     got = _node_with(SUMMARISE, data, keep, MODELS.index("a"))
     assert isinstance(got, list)
-    want = relative_wis(scores, by=("pool",), baseline="a").set_index(
+    want = relative_crps(scores, by=("pool",), baseline="a").set_index(
         ["pool", "model"]
     )
     assert len(got) == len(MODELS)
     for row in got:
         exp = want.loc[(pool, MODELS[row["model"]])]
         assert row["n"] == exp["n"]
-        assert row["rel"]["wis"] == pytest.approx(exp["rel_wis"], abs=1e-3)
-        assert row["rel"]["log_wis"] == pytest.approx(
-            exp["rel_log_wis"], abs=1e-3
+        assert row["rel"]["crps"] == pytest.approx(exp["rel_crps"], abs=1e-3)
+        assert row["rel"]["log_crps"] == pytest.approx(
+            exp["rel_log_crps"], abs=1e-3
         )
-        for col in ("wis", "coverage_50", "coverage_90", "bias"):
+        for col in ("crps", "coverage_50", "coverage_90", "bias"):
             assert row["mean"][col] == pytest.approx(exp[col], abs=1e-3)
 
 
 @pytest.mark.parametrize("pool", ["national", "provinces", "zones"])
 def test_browser_energy_takes_any_model_as_the_baseline(pool: str) -> None:
     energy = _energy()
-    data = summary_rows(_scores(), MODELS, COLOURS, {}, energy=energy)
+    data = summary_rows(
+        _scores(), MODELS, COLOURS, {}, energy=energy, baseline="randomwalk"
+    )
     ids = [p["id"] for p in data["pools"]]
     keep = f"function (r) {{ return r[3] === {ids.index(pool)}; }}"
     got = _node_with(ENERGY_JS, data, keep, MODELS.index("b"))
@@ -315,9 +325,120 @@ def test_browser_energy_takes_any_model_as_the_baseline(pool: str) -> None:
 def test_a_zero_energy_baseline_gives_no_relative_score() -> None:
     energy = _energy()
     energy.loc[energy["model"] == "a", ["energy", "log_energy"]] = 0.0
-    data = summary_rows(_scores(), MODELS, COLOURS, {}, energy=energy)
+    data = summary_rows(
+        _scores(), MODELS, COLOURS, {}, energy=energy, baseline="randomwalk"
+    )
     got = _node_with(ENERGY_JS, data, "function () { return true; }", 1)
     assert isinstance(got, dict)
     assert all(r["rel"]["energy"] is None for r in got.values())
     rel = relative_energy(energy, by=(), baseline="a")
     assert rel["rel_energy"].isna().all()
+
+
+def _node_rounds(
+    data: dict[str, object], rounds: str
+) -> list[dict[str, object]]:
+    """Summarise in node over the rounds (origin indices, or null) given."""
+    script = (
+        f"const s = require({json.dumps(str(SUMMARISE))});"
+        "const d = JSON.parse(require('fs').readFileSync(0, 'utf8'));"
+        f"process.stdout.write(JSON.stringify(s(d, s.inRounds({rounds}))));"
+    )
+    out = subprocess.run(
+        ["node", "-e", script],
+        input=json.dumps(data),
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return json.loads(out.stdout)
+
+
+def _check_against(got: list[dict[str, object]], scores: pd.DataFrame) -> None:
+    want = relative_crps(scores, by=()).set_index("model")
+    assert len(got) == len(MODELS)
+    for row in got:
+        exp = want.loc[MODELS[row["model"]]]
+        assert row["n"] == exp["n"]
+        assert row["rel"]["crps"] == pytest.approx(exp["rel_crps"], abs=1e-6)
+        for col in ("crps", "coverage_50", "coverage_90", "bias"):
+            assert row["mean"][col] == pytest.approx(exp[col], abs=1e-6)
+
+
+def test_one_round_scores_as_that_round_alone() -> None:
+    scores = _scores()
+    data = summary_rows(scores, MODELS, COLOURS, {}, baseline="randomwalk")
+    first = data["origins"].index("2026-10-24")
+    got = _node_rounds(data, f"[{first}]")
+    alone = scores.loc[scores["origin"] == "2026-10-24"]
+    _check_against(got, alone)
+    # One round, one release, 4 places and 2 weeks, less randomwalk's gap.
+    assert {row["n"] for row in got} == {7}
+
+
+def test_several_rounds_pool_their_cells() -> None:
+    scores = _scores()
+    data = summary_rows(scores, MODELS, COLOURS, {}, baseline="randomwalk")
+    both = [data["origins"].index(o) for o in ("2026-10-17", "2026-10-24")]
+    got = _node_rounds(data, json.dumps(both))
+    # Recomputed over the union of the rounds' cells, not a mean of each
+    # round's scores.
+    _check_against(got, scores)
+    assert {row["n"] for row in got} == {21}
+
+
+def test_all_rounds_keeps_every_row() -> None:
+    scores = _scores()
+    data = summary_rows(scores, MODELS, COLOURS, {}, baseline="randomwalk")
+    _check_against(_node_rounds(data, "null"), scores)
+
+
+@pytest.mark.parametrize(
+    ("baseline", "partial"),
+    # randomwalk also lacks one CD-NK week, which "a" has.
+    [("randomwalk", {"b"}), ("a", {"b", "randomwalk"})],
+)
+def test_browser_summary_puts_a_model_lacking_cells_apart(
+    baseline: str, partial: set[str]
+) -> None:
+    # "b" has no forecast for CD-IT in one week. Every model with all the
+    # baseline's cells has the baseline's n, and "b", with fewer, is
+    # marked partial so its row is not read beside the others.
+    scores = _scores()
+    drop = (scores["model"] == "b") & (scores["location"] == "CD-IT")
+    drop &= scores["target_end_date"] == "2026-10-10"
+    scores = scores.loc[~drop]
+    data = summary_rows(scores, MODELS, COLOURS, {}, baseline="randomwalk")
+    places = [i for i, p in enumerate(data["places"]) if p["pool"] != "zones"]
+    keep = f"function (r) {{ return {places}.includes(r[3]); }}"
+    got = _node_with(SUMMARISE, data, keep, MODELS.index(baseline))
+    assert isinstance(got, list)
+    rows = {MODELS[r["model"]]: r for r in got}
+    base_n = rows[baseline]["n"]
+    assert all(r["cells"] == base_n for r in got)
+    assert {m for m, r in rows.items() if r["partial"]} == partial
+    assert all(rows[m]["n"] < base_n for m in partial)
+    full = [r for m, r in rows.items() if m not in partial]
+    assert {r["n"] for r in full} == {base_n}
+
+
+def test_bdbv_summaries_and_labels_say_crps() -> None:
+    from bdbvhubrenewal.evaluation.checks import _METRICS
+    from bdbvhubrenewal.reporting.plots import _METRIC_LABELS
+    from bdbvhubrenewal.reporting.scorechart import OVERALL_METRICS
+    from bdbvhubrenewal.reporting.scoresummary import SUMMARY_METRICS
+
+    keys = {m[0]: m[1] for m in SUMMARY_METRICS}
+    assert keys["crps"] == "CRPS"
+    assert keys["log_crps"] == "CRPS on the log scale"
+    assert "wis" not in keys
+    assert "log_wis" not in keys
+    assert OVERALL_METRICS["rel_crps"][0] == "Relative CRPS"
+    assert OVERALL_METRICS["rel_log_crps"][0] == (
+        "Relative CRPS on the log scale"
+    )
+    assert not any("wis" in k for k in OVERALL_METRICS)
+    assert _METRIC_LABELS["crps"] == "Mean CRPS"
+    assert _METRIC_LABELS["log_crps"] == "Mean CRPS, log scale"
+    assert set(_METRICS) == {"crps", "log_crps", "coverage_90"}
+    assert not any("WIS" in v for v in _METRICS.values())

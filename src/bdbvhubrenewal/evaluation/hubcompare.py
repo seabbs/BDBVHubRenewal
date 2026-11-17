@@ -11,18 +11,25 @@ For each hub round, `our_forecasts` runs our unfitted models from the
 latest real vintage that serves the round.
 Rounds with no such vintage are skipped.
 Fitted models are slow, so `stored_forecasts` takes theirs from the
-backtest forecast files for the same round.
+backtest forecast files for the same round, and `compare-hub` puts the
+fit store's whole fits of the round in their place, as those files hold
+only the backtest's weeks.
 The `source` column says which (`real` or `hub`).
 
-`score_comparison` scores every model on the weeks the latest real
-vintage reports in full, from the vintage serving its round
+`score_comparison` scores every model on the hub teams' cells only: the
+rounds, places and weeks any hub team forecast (`hub_cells`). Our models
+forecast every place and week of their task, and rounds no team
+forecast, and those extra cells are not scored.
+Each cell is scored on the weeks the latest real vintage reports in
+full, from the vintage serving its round
 (`bdbvhubrenewal.evaluation.nowcast.release_backtest`). Hub teams have no
 modelled delay we can see, so no model is scored on the counts later
 vintages report.
 A round is pending until a real vintage later than its matching vintage
 exists.
-`summarise_comparison` gives WIS relative to a baseline on the weeks both
-forecast, by round and target.
+`summarise_comparison` gives CRPS relative to a baseline on the weeks both
+forecast, by round and target, with `n` beside the hub cells scored, so a
+model that missed some shows it.
 """
 
 from __future__ import annotations
@@ -43,7 +50,7 @@ import pandas as pd
 import yaml
 
 from bdbvhubrenewal.data.dates import as_date, reference_date_for_vintage
-from bdbvhubrenewal.data.zones import weekly_zone_counts
+from bdbvhubrenewal.data.zones import ZoneData, is_zone, weekly_zone_counts
 from bdbvhubrenewal.evaluation.backtest import (
     BacktestConfig,
     make_tasks,
@@ -68,6 +75,7 @@ __all__ = [
     "attribution",
     "fetch_hub_submissions",
     "forecast_quantiles",
+    "hub_cells",
     "load_comparison_config",
     "load_hub_submissions",
     "load_team_metadata",
@@ -128,7 +136,7 @@ class ComparisonConfig:
     Attributes
     ----------
     baseline : str
-        Model that WIS is relative to, if registered
+        Model that CRPS is relative to, if registered
         (`resolve_baseline`).
     stored : tuple of str
         Forecast files to take fitted models' forecasts from.
@@ -366,6 +374,10 @@ def fetch_hub_submissions(  # pragma: no cover - network
 def load_hub_submissions(*roots: Path | str) -> pd.DataFrame:
     """Read the weekly-round sample forecasts in some directories.
 
+    A file may hold a resubmission with a later `forecast_date`. Only the
+    rows of the latest `forecast_date` in each file are read; rows with
+    no `forecast_date` count only when no row has one.
+
     Parameters
     ----------
     *roots : pathlib.Path or str
@@ -377,6 +389,14 @@ def load_hub_submissions(*roots: Path | str) -> pd.DataFrame:
     pandas.DataFrame
         Columns `model`, `source` (`hub`), `reference_date`, `location`,
         `target_end_date`, `sample` and `value`.
+
+    Raises
+    ------
+    ValueError
+        If a model still has two rows of one round, place, week and
+        sample, for example one round in both a `.csv` and a `.csv.gz`.
+        This stops the comparison on purpose: which copy to score is not
+        known, and dropping the model would hide it.
     """
     frames = []
     for root in roots:
@@ -388,6 +408,10 @@ def load_hub_submissions(*roots: Path | str) -> pd.DataFrame:
             ]
             if rows.empty:
                 continue
+            if "forecast_date" in rows:
+                dates = pd.to_datetime(rows["forecast_date"], errors="coerce")
+                if dates.notna().any():
+                    rows = rows.loc[dates == dates.max()]
             frames.append(
                 pd.DataFrame(
                     {
@@ -405,7 +429,17 @@ def load_hub_submissions(*roots: Path | str) -> pd.DataFrame:
             )
     if not frames:
         return pd.DataFrame(columns=list(SAMPLE_COLUMNS))
-    return pd.concat(frames, ignore_index=True)
+    out = pd.concat(frames, ignore_index=True)
+    keys = ["model", "reference_date", "location", "target_end_date", "sample"]
+    twice = out.duplicated(keys)
+    if twice.any():
+        first = out.loc[twice].iloc[0]
+        raise ValueError(
+            f"{first['model']} has {int(twice.sum())} repeated sample rows, "
+            f"such as round {first['reference_date']}, {first['location']}, "
+            f"week {first['target_end_date']}, sample {first['sample']}."
+        )
+    return out
 
 
 def load_team_metadata(root: Path | str) -> pd.DataFrame:
@@ -470,8 +504,7 @@ def our_forecasts(
     config: BacktestConfig,
     models: Sequence[str],
     daily: pd.DataFrame,
-    daily_zones: pd.DataFrame,
-    zones: Sequence[str],
+    zones: ZoneData,
     min_horizon: int | None = None,
 ) -> pd.DataFrame:
     """Run our models for hub rounds from the matching vintages.
@@ -479,6 +512,8 @@ def our_forecasts(
     Each model runs on the country and provinces, and again on the health
     zones with cases at the vintage, as the zone backtest runs them. Only
     the zones are kept from the zone run, as it also gives the country.
+    A model that forecasts the zones itself (`reads_zones`) has no zone
+    run, and only its zones with cases are kept.
 
     Parameters
     ----------
@@ -492,10 +527,8 @@ def our_forecasts(
         Registered model names that run at zone level.
     daily : pandas.DataFrame
         Daily onsets by release of the country and provinces.
-    daily_zones : pandas.DataFrame
-        Daily onsets by release of the health zones (`load_daily_zones`).
-    zones : sequence of str
-        The hub's zone codes (`hub_zones`).
+    zones : ZoneData
+        The health-zone tables and codes (`load_zone_data`).
     min_horizon : int, optional
         First week, in weeks from the reference date, to cover the weeks
         the hub forecasts did. Defaults to `config.min_horizon`.
@@ -517,20 +550,21 @@ def our_forecasts(
         if vintage is None or not built:
             continue
         rows = real.loc[real["vintage"] == vintage]
-        tasks = make_tasks(rows, delays, config, daily=daily)
-        counts = weekly_zone_counts(daily_zones, vintage)
-        here = tuple(z for z in zones if z in set(counts["location"]))
-        history = pd.concat([daily, daily_zones])
-        zone = run_forecasts(
-            built, [zone_task(t, counts, here, history) for t in tasks]
-        )
-        fc = pd.concat(
-            [
-                run_forecasts(built, tasks),
-                zone.loc[zone["location"].isin(here)],
-            ],
-            ignore_index=True,
-        )
+        tasks = make_tasks(rows, delays, config, daily=daily, zones=zones)
+        counts = weekly_zone_counts(zones.daily, vintage)
+        here = tuple(z for z in zones.codes if z in set(counts["location"]))
+        history = pd.concat([daily, zones.daily])
+        walks = [m for m in built if not getattr(m, "reads_zones", False)]
+        fc = run_forecasts(built, tasks)
+        # Every model's zones are those with cases, as the walks run on.
+        fc = fc.loc[~fc["location"].map(is_zone) | fc["location"].isin(here)]
+        if walks:
+            zone = run_forecasts(
+                walks, [zone_task(t, counts, here, history) for t in tasks]
+            )
+            fc = pd.concat(
+                [fc, zone.loc[zone["location"].isin(here)]], ignore_index=True
+            )
         fc["source"] = "real"
         frames.append(fc)
     if not frames:
@@ -627,6 +661,35 @@ def zone_truth(
     ]
 
 
+CELL: Final = ("reference_date", "location", "target_end_date")
+"""Columns of a forecast cell in the comparison."""
+
+
+def hub_cells(forecasts: pd.DataFrame) -> pd.DataFrame:
+    """Return the cells any hub team forecast.
+
+    Parameters
+    ----------
+    forecasts : pandas.DataFrame
+        Samples with `source`, `hub` for the teams' submissions.
+
+    Returns
+    -------
+    pandas.DataFrame
+        One row per round, place and week (`CELL`) a team forecast.
+    """
+    hub = forecasts.loc[forecasts["source"] == "hub", list(CELL)]
+    return hub.astype(str).drop_duplicates().reset_index(drop=True)
+
+
+def _on_hub_cells(forecasts: pd.DataFrame) -> pd.DataFrame:
+    """Keep the teams' forecasts and ours on the cells a team forecast."""
+    keys = forecasts[list(CELL)].astype(str)
+    cells = pd.MultiIndex.from_frame(hub_cells(forecasts))
+    on = pd.MultiIndex.from_frame(keys).isin(cells)
+    return forecasts.loc[on | (forecasts["source"] == "hub").to_numpy()]
+
+
 def score_comparison(
     forecasts: pd.DataFrame,
     target: pd.DataFrame,
@@ -635,7 +698,12 @@ def score_comparison(
     daily: pd.DataFrame,
     zones: pd.DataFrame,
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    """Score every model on the weeks the latest real vintage completes.
+    """Score every model on the hub cells the latest real vintage completes.
+
+    Only the cells a hub team forecast (`hub_cells`) are scored, so our
+    models are scored on the same rounds, places and weeks as the teams.
+    Every model, ours and the hub teams', is scored on its own samples
+    by the fair CRPS and energy score, so counts that differ compare.
 
     Parameters
     ----------
@@ -660,6 +728,7 @@ def score_comparison(
         `reference_date` and `source`), and the pending rounds with
         columns `reference_date`, `vintage` and `models`.
     """
+    forecasts = _on_hub_cells(forecasts)
     real = target.loc[target["kind"] == "real"]
     vintages = sorted(set(real["vintage"]))
     rounds, tasks, stored, pending = {}, [], [], []
@@ -715,27 +784,41 @@ def summarise_comparison(scores: pd.DataFrame, baseline: str) -> pd.DataFrame:
     scores : pandas.DataFrame
         Output of `score_comparison`.
     baseline : str
-        Model that WIS is relative to.
+        Model that CRPS is relative to.
 
     Returns
     -------
     pandas.DataFrame
-        Columns `reference_date`, `target`, `model`, `source`, `n`, `wis`,
-        `log_wis`, `relative_wis` and `relative_log_wis` (on the weeks
-        shared with the baseline; missing if none), `coverage_50`,
-        `coverage_90` and `bias`.
+        Columns `reference_date`, `target`, `model`, `source`, `n`,
+        `hub_cells` (the cells the hub teams forecast that are scored, so
+        `n` below it is a model that missed some), `crps`, `log_crps`,
+        `rel_crps` and `rel_log_crps` (on the weeks shared with
+        the baseline; missing if none), `coverage_50`, `coverage_90` and
+        `bias`.
     """
     by = ("reference_date", "target")
     out = summarise_scores(scores, by=(*by, "model", "source"))
+    cell = [*by, "truth_vintage", "location", "target_end_date"]
+    hub = scores.loc[scores["source"] == "hub", cell].drop_duplicates()
+    out = out.merge(
+        hub.groupby(list(by)).size().rename("hub_cells").reset_index(),
+        on=list(by),
+        how="left",
+    )
     rel = relative_skill(
         scores,
         baseline=baseline,
         by=by,
-        metrics=("wis", "log_wis"),
+        metrics=("crps", "log_crps"),
         match_on=(*by, "truth_vintage", "location", "target_end_date"),
+    ).rename(
+        columns={
+            "relative_crps": "rel_crps",
+            "relative_log_crps": "rel_log_crps",
+        }
     )
     out = out.merge(
-        rel[[*by, "model", "relative_wis", "relative_log_wis"]],
+        rel[[*by, "model", "rel_crps", "rel_log_crps"]],
         on=[*by, "model"],
         how="left",
     )
@@ -744,15 +827,16 @@ def summarise_comparison(scores: pd.DataFrame, baseline: str) -> pd.DataFrame:
         "model",
         "source",
         "n",
-        "wis",
-        "log_wis",
-        "relative_wis",
-        "relative_log_wis",
+        "hub_cells",
+        "crps",
+        "log_crps",
+        "rel_crps",
+        "rel_log_crps",
         "coverage_50",
         "coverage_90",
         "bias",
     ]
-    return out[cols].sort_values([*by, "wis"]).reset_index(drop=True)
+    return out[cols].sort_values([*by, "crps"]).reset_index(drop=True)
 
 
 def trajectory_samples(

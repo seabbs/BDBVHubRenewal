@@ -18,13 +18,13 @@ __all__ = [
 ]
 
 OVERALL_METRICS: Mapping[str, tuple[str, float | None]] = {
-    "rel_wis": ("Relative WIS", 1.0),
-    "rel_log_wis": ("Relative WIS on the log scale", 1.0),
+    "rel_crps": ("Relative CRPS", 1.0),
+    "rel_log_crps": ("Relative CRPS on the log scale", 1.0),
     "coverage_50": ("50% coverage", 0.5),
     "coverage_90": ("90% coverage", 0.9),
     "bias": ("Bias", 0.0),
 }
-"""Columns of `relative_wis` in the overall figures, with each label and
+"""Columns of `relative_crps` in the overall figures, with each label and
 the line of a perfect or baseline score. Bias is in -1 to 1."""
 
 ENERGY_METRICS: Mapping[str, tuple[str, float | None]] = {
