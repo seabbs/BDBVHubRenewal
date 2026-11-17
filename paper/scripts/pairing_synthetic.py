@@ -9,9 +9,9 @@ Each outbreak's tasks are the synthetic runner's (`outbreak_tasks`, the
 same origins and horizons), with the strata in the hub's codes, so the
 country, the intermediate level (provinces) and the leaves (zones) are
 scored apart. Each walk model forecasts each task once and its draws are
-scored with every pairing (`bdbvhubrenewal.evaluation.pairing`) against
-the outbreak's final counts. OUT is the `variant_scores` table, with
-`study` `synthetic`.
+scored with no pairing and with the rolling rho_p
+(`bdbvhubrenewal.evaluation.pairing`) against the outbreak's final
+counts. OUT is the `variant_scores` table, with `study` `synthetic`.
 """
 
 from __future__ import annotations
@@ -41,7 +41,7 @@ from paperdata.synthetic_runner import (
 
 
 def main() -> None:
-    """Score each held-out outbreak with every pairing."""
+    """Score each held-out outbreak with and without pairing."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("sim_dir", type=Path)
     parser.add_argument("out", type=Path)

@@ -44,7 +44,7 @@ Each takes 750 draws, `renewalbvd` at target acceptance 0.95 and the others at 0
 The wait for the store stops against the window's close (`[timing]` in `ci/policy.toml`).
 
 `randomwalk` and `randomwalknowcast` pair their draws inside their forecast ([Correlated trajectories](../methods/evaluation.md#correlated-trajectories)), so a submission uses the same paired draws as the backtest.
-Each round's copula, the pairs behind each correlation and any fall-back to the prior are recorded in the round's `copula.json`.
+Each round's $\rho_p$, the pairs behind it and any fall-back to the prior are recorded in the round's `copula.json`.
 
 ## Checks
 

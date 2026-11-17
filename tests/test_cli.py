@@ -1033,4 +1033,6 @@ def test_cli_nowcast_records_a_walk_models_copula(tmp_path: Path) -> None:
     assert 0.0 <= record["rho_provinces"] <= 0.95
     assert isinstance(record["n_pairs"], int)
     assert isinstance(record["fallback"], bool)
-    assert not any(k.startswith(("rho_t", "rho_n", "rho_z")) for k in record)
+    assert set(record) == {
+        "model", "origin", "n_scores", "rho_provinces", "n_pairs", "fallback"
+    }  # fmt: skip

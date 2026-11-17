@@ -10,8 +10,8 @@
   the PyRenew model in `bdbvhubrenewal.model`.
 - `foundation`: the pretrained Chronos-2 model on two layouts of the hub
   target's releases.
-- `copula`: a Gaussian copula that pairs a model's marginal draws into
-  trajectories over places and steps.
+- `copula`: a Gaussian copula that pairs the walk models' province draws
+  within each week.
 - `zones`: health-zone forecasts split from any model's province samples.
 
 Importing this package registers the built-in models.

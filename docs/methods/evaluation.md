@@ -71,7 +71,7 @@ The draws of `renewal` and `renewalbvd` are joint across provinces, one posterio
 `renewalsp` fits each province on its own, so its provinces are independent.
 Zones split each province draw, so zones are joint within a province for every renewal model.
 `pprandomwalknowcast` takes one posterior draw of its pooled parameters per sample index, so its places share that draw.
-`randomwalk` and `randomwalknowcast` pair their draws across places, zones and the weeks before their walk by a rolling copula inside their forecast ([Correlated trajectories](#correlated-trajectories)).
+`randomwalk` and `randomwalknowcast` pair their province draws within each week by a rolling copula inside their forecast; their zones are not paired ([Correlated trajectories](#correlated-trajectories)).
 Hub teams' samples are joint across weeks within a place only, as the hub's sample format sets, so pairing their indices across places scores them as independent across places.
 
 ## Backtest design
@@ -142,23 +142,29 @@ The run stops if an origin has no release snapshots or two models run here give 
 
 ## Correlated trajectories
 
-`randomwalk` and `randomwalknowcast` draw each place on its own, and `randomwalknowcast` also draws each nowcast week on its own, so their sums over weeks, provinces and zones would be too narrow.
-Each pairs its draws inside its own forecast (`forecasters.copula.pair_walks`), so the fit store, every page, the backtests and the submissions read the same paired draws.
+`randomwalk` and `randomwalknowcast` draw each province on its own, so the country, the sum of the provinces, would be too narrow.
+Each pairs its province draws inside its own forecast (`forecasters.copula.pair_walks`), so the fit store, every page, the backtests and the submissions read the same paired draws.
 The renewal models' draws are already joint trajectories (zones from a Dirichlet split of joint province draws), so they are left as they are: reordering would break their real dependence.
 
-The pairing is a Gaussian copula applied by rank reordering, the Schaake shuffle[^clark] as ensemble copula coupling uses it[^schefzik].
-Each trajectory draws one correlated normal vector over places and weeks, and each cell's draws are reordered across samples to rank as the normals do, so every per-week forecast and its scores are unchanged.
-Weeks before a place's walk are reordered cell by cell.
-From its start, a place's walk is already a joint trajectory, so it moves as a whole, ranked by its total over the walk weeks.
-The country, the sum of the provinces, is summed after pairing, so its forecast widens.
-Zones are forecast from their own data in their own call and are paired among themselves.
+Provinces are their own forecasts.
+The country is the sum of the provinces in each sample.
+Zones are their own forecasts, and are neither summed nor paired.
+The copula pairs province draws with each other within a week only, by one correlation, $\rho_p$.
 
-The normals' correlation is $\rho_t^{\delta/7}$ between weeks $\delta$ days apart, $\rho_p$ between two provinces (or zones of different provinces) and $\rho_z$ between two zones of a province.
-At each forecast they are estimated from the model's own matured errors: each earlier release's nowcast of the count still to come, against what the origin release reports, over releases in the last 8 weeks.
-Each error's randomised PIT under the model's negative binomial nowcast is mapped to a normal score, and each correlation is the Pearson correlation of the scores of its pairs ($\rho_t$: consecutive weeks of a place; $\rho_p$: two provinces in a week; $\rho_z$: two zones of a province in a week).
-With $n$ pairs and correlation $r$ the estimate is $(n r + w \rho_0)/(n + w)$, capped at 0.95, with $w = 10$ chosen on the release backtest ([Pairing sensitivity](../pairing.md)) so the estimate dominates; the prior $(\rho_t, \rho_p, \rho_z) = (0.9, 0.7, 0.7)$ only guards thin windows.
-Each forecast's correlations, the pairs behind each and whether it fell back to the prior are recorded (a submission's `copula.json`).
-$\rho_n$, between the country and a province, does not enter, as the country is summed.
+The pairing is a Gaussian copula applied by rank reordering, the Schaake shuffle[^clark] as ensemble copula coupling uses it[^schefzik].
+Each week, each trajectory draws one normal per province, with correlation $\rho_p$ between any two, and each cell's draws are reordered across samples to rank as the normals do.
+So every per-week forecast and its scores are unchanged.
+Weeks before a province's walk are reordered cell by cell.
+From its start, a province's walk is already a joint trajectory, so it moves as a whole, ranked by its total over the walk weeks against the normals of the latest week any province's walk starts.
+So the walks are paired with each other in every week from then on.
+
+At each forecast $\rho_p$ is estimated from the model's own matured errors: each earlier release's nowcast of the count still to come, against what the origin release reports, over releases in the last 8 weeks.
+Each error's randomised PIT under the model's negative binomial nowcast is mapped to a normal score.
+$r$ is the Pearson correlation of the scores of two provinces in the same week of one release.
+With $n$ such pairs the estimate is $(n r + w \rho_0)/(n + w)$, floored at 0 and capped at 0.95, with $w = 10$ chosen on the release backtest so the estimate dominates.
+The prior $\rho_0 = 0.7$ only guards thin windows.
+Each forecast's $\rho_p$, the pairs behind it and whether it fell back to the prior are recorded (a submission's `copula.json`).
+How much pairing matters is on the [Pairing sensitivity](../pairing.md) page.
 
 ## Reading the figures
 
