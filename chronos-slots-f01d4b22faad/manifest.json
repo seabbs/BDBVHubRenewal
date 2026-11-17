@@ -1,0 +1,18 @@
+{
+ "label": "slots-f01d4b22faad",
+ "tag": "chronos-slots-f01d4b22faad",
+ "models": [
+  "fm_chronos_daily_ragged_ft",
+  "fm_chronos_weekly_ragged_ft"
+ ],
+ "origins": [
+  "2026-10-09",
+  "2026-10-17",
+  "2026-10-24",
+  "2026-11-01",
+  "2026-11-08"
+ ],
+ "rows": 68310,
+ "levels": "reporting.hubtables.HUB_QUANTILE_LEVELS",
+ "truth": "first release D days after each week (rolling_truth)"
+}
