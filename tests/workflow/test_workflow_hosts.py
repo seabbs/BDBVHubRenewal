@@ -10,34 +10,38 @@ from flowlib import hosts, manifest
 ROOT = Path(__file__).parents[2]
 CAP = ROOT / "workflow" / "scripts" / "mem_cap.sh"
 TIMED = ROOT / "workflow" / "scripts" / "timed.sh"
-SPLIT = {"laptop": ["31005", "31007", "31900-31939"]}
 
 
-def test_seed_specs_are_seeds_and_ranges():
-    assert hosts.seeds(["31005", 31007, "31900-31902"]) == {
+def _round(r):
+    return range(30000 + 100 * r, 30000 + 100 * r + 3)
+
+
+def test_seed_specs_are_seeds_ranges_and_rounds():
+    assert hosts.seeds("31005 31900-31902 r2", _round) == {
         31005,
-        31007,
         31900,
         31901,
         31902,
+        30200,
+        30201,
+        30202,
     }
 
 
-def test_a_listed_host_simulates_only_its_seeds():
-    assert hosts.simulates(31005, "laptop", SPLIT)
-    assert hosts.simulates(31939, "laptop", SPLIT)
-    assert not hosts.simulates(31006, "laptop", SPLIT)
+def test_a_host_with_seeds_simulates_only_those():
+    mine = hosts.seeds("31005 31900-31939", _round)
+    assert hosts.simulates(31005, mine)
+    assert hosts.simulates(31939, mine)
+    assert not hosts.simulates(31006, mine)
 
 
-def test_any_other_host_simulates_every_seed_not_listed():
-    assert hosts.simulates(31006, "archie", SPLIT)
-    assert not hosts.simulates(31005, "archie", SPLIT)
-    assert hosts.simulates(31005, "archie", {})
+def test_a_host_with_no_seeds_simulates_every_seed():
+    assert hosts.simulates(31006, hosts.seeds("", _round))
 
 
-def test_a_seed_listed_for_two_hosts_is_an_error():
-    with pytest.raises(ValueError, match="31005"):
-        hosts.check({"a": ["31005"], "b": ["31000-31010"]})
+def test_a_bad_seed_spec_is_an_error():
+    with pytest.raises(ValueError, match="x12"):
+        hosts.seeds("31005 x12", _round)
 
 
 def _batch(sims: Path, seed: int) -> None:
@@ -51,7 +55,7 @@ def test_a_pushed_batch_lands_before_its_manifest_row(tmp_path):
     sims = tmp_path / "here" / "r10" / "sims"
     _batch(sims, 31005)
     there = tmp_path / "there" / "r10"
-    row = "10,31005,block,r5,abc,1,21,x,y,,10,2,laptop,now"
+    row = "10,31005,block,r5,abc,1,21,x,y,,10,2,helper,now"
     hosts.push(sims, 31005, there, row, remote="")
     assert (there / "sims" / "counts-31005.csv.gz").read_bytes() == b"counts"
     assert (there / "sims" / "settings-31005.csv").exists()
@@ -75,7 +79,7 @@ def test_the_row_of_a_pushed_batch_hashes_its_files(tmp_path):
         commit="abc",
         draws=1,
         batch=21,
-        host="laptop",
+        host="helper",
         finished="now",
     )
     assert row.split(",")[7] == hashlib.sha256(b"counts").hexdigest()

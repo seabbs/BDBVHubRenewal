@@ -84,13 +84,17 @@ def test_batches_already_simulated_are_kept(tmp_path):
     assert jobs["simulate_batch"] == 38
 
 
-SPLIT = {
-    "rounds": [10],
-    "simulate": {"hosts": {"laptop": ["31005", "31007"]}},
-}
+SPLIT = {"rounds": [10]}
+
+
+def _host(tmp_path, seeds):
+    (tmp_path / "local.env").write_text(
+        f"ROOT={tmp_path}\nHOST_NAME=test-host\nSIM_SEEDS={seeds}\n"
+    )
 
 
 def test_a_round_shared_with_another_host_waits_for_its_seeds(tmp_path):
+    _host(tmp_path, '"31000-31004 31006 31008-31039"')
     jobs = dry(tmp_path, "simulate", config=SPLIT)
     assert jobs["simulate_batch"] == 38
     assert jobs["await_batch"] == 2
@@ -98,12 +102,32 @@ def test_a_round_shared_with_another_host_waits_for_its_seeds(tmp_path):
 
 
 def test_a_second_host_simulates_and_pushes_only_its_seeds(tmp_path):
-    (tmp_path / "local.env").write_text(f"ROOT={tmp_path}\nHOST_NAME=laptop\n")
+    _host(tmp_path, '"31005 31007"')
     jobs = dry(tmp_path, "push", config=SPLIT)
     assert jobs["simulate_batch"] == 2
     assert jobs["push_batch"] == 2
     assert "batch_record" not in jobs
     assert "await_batch" not in jobs
+
+
+def test_a_host_can_take_whole_rounds(tmp_path):
+    _host(tmp_path, "r10")
+    jobs = dry(tmp_path, "push", config={"rounds": [10, 11]})
+    assert jobs["push_batch"] == 40
+
+
+def test_no_host_is_named_in_the_committed_workflow():
+    for path in [
+        ROOT / "workflow" / "config.yaml",
+        ROOT / "workflow" / "README.md",
+        ROOT / "config" / "local.env.example",
+        *(ROOT / "workflow" / "profiles").rglob("*"),
+        *(ROOT / "workflow" / "rules").glob("*.smk"),
+    ]:
+        if path.is_file():
+            text = path.read_text().lower()
+            for word in ("archie", "laptop"):
+                assert word not in text, f"{path} names {word}"
 
 
 FT = {
