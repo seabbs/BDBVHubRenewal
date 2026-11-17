@@ -171,3 +171,29 @@ def test_only_current_run_slots_checkpoints_are_scored(poll) -> None:
     queue = ["slots-z", "slots-b", "slots-a", "slots-new", "c"]
     assert poll.scoreable(queue, runs) == ["slots-a", "c"]
     assert poll.unclassified(queue, runs) == ["slots-new"]
+
+
+def test_a_queue_of_only_held_or_superseded_checkpoints_is_idle(
+    poll, tmp_path
+) -> None:
+    # At 01:04 every queued checkpoint was held, and the loop crashed on
+    # None; nothing to score must mean idle.
+    hold = tmp_path / "hold"
+    hold.write_text("x\n")
+    runs = {"slots-a": "one-model", "slots-b": "attn-bias"}
+    queue = ["slots-a", "slots-b"]
+    assert poll.choose(queue, runs, set(), hold, False, set()) is None
+    assert poll.choose([], {}, set(), hold, False, set()) is None
+    assert poll.choose(queue, runs, set(), tmp_path / "none", False, set()) == (
+        "slots-a"
+    )
+
+
+def test_new_bdbv_origins_skip_what_this_code_cannot_load(poll) -> None:
+    runs = {
+        "a": "no-slots",
+        "slots-z": "slots-zeroinit",
+        "slots-o": "one-model",
+    }
+    labels = ["reference", "a", "slots-z", "slots-o"]
+    assert poll.extendable(labels, runs) == ["reference", "a", "slots-o"]

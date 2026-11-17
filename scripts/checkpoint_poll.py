@@ -187,6 +187,30 @@ def runs_of(cache: Path) -> dict[str, str]:
     return out
 
 
+def choose(
+    queue: list[str],
+    runs: Mapping[str, str],
+    zero_init: set[str],
+    hold: Path,
+    complete_pending: bool,
+    fresh: set[str],
+) -> str | None:
+    """Return the next job, or None when nothing may run (idle).
+
+    The queue loses checkpoints this code cannot load (`scoreable`) and
+    held ones (`unheld`) before `next_job` picks.
+    """
+    left = unheld(scoreable(queue, runs), zero_init, hold)
+    return next_job(left, complete_pending, fresh & set(left), zero_init)
+
+
+def extendable(labels: list[str], runs: Mapping[str, str]) -> list[str]:
+    """Return the labels whose BDBV rows may grow to new origins here:
+    the reference, no-slots checkpoints and the current run's."""
+    ok = cs.CURRENT_RUNS | {"no-slots"}
+    return [lb for lb in labels if lb == cs.REFERENCE or runs.get(lb) in ok]
+
+
 def zero_init_labels(cache: Path) -> set[str]:
     """Return the scored slots checkpoints of the zero-init run."""
     out = set()
@@ -559,22 +583,6 @@ def main(cache: Path) -> None:
             for h in cs.checkpoint_queue(listed, scored)
             if failures.get(h, 0) < MAX_FAILURES
         ]
-        if not queue and (cache / cs.COMPLETE_STAMP).exists():
-            stale = [
-                s
-                for s in [cs.REFERENCE, *sorted(scored)]
-                if not cs.unit_done(cache, "bdbv", s)
-            ]
-            if stale and scored:
-                units = [("bdbv", s) for s in stale]
-                if run_units(cache, units, "new BDBV origins"):
-                    land(cache, sorted(keep), "BDBV rows to new origins")
-                else:
-                    time.sleep(POLL_SECONDS)
-                continue
-            log("progress: idle, every published checkpoint scored")
-            time.sleep(POLL_SECONDS)
-            continue
         runs = runs_of(cache)
         new = unclassified(queue, runs)
         if new:
@@ -592,11 +600,32 @@ def main(cache: Path) -> None:
         if held and held != HELD["labels"]:
             say(f"held until the parent_scale fix is merged: {', '.join(held)}")
         HELD["labels"] = held
-        queue = unheld(queue, zero)
         fresh = fresh_slots(cache, queue)
-        job = next_job(
-            queue, not (cache / cs.COMPLETE_STAMP).exists(), fresh, zero
+        job = choose(
+            queue,
+            runs,
+            zero,
+            HOLD,
+            not (cache / cs.COMPLETE_STAMP).exists(),
+            fresh,
         )
+        queue = unheld(queue, zero)
+        if job is None:
+            stale = [
+                s
+                for s in extendable([cs.REFERENCE, *sorted(scored)], runs)
+                if not cs.unit_done(cache, "bdbv", s)
+            ]
+            if stale and scored:
+                units = [("bdbv", s) for s in stale]
+                if run_units(cache, units, "new BDBV origins"):
+                    land(cache, sorted(keep), "BDBV rows to new origins")
+                else:
+                    time.sleep(POLL_SECONDS)
+                continue
+            log("progress: idle, every published checkpoint scored")
+            time.sleep(POLL_SECONDS)
+            continue
         paused: list[str] = []
 
         def newer_slots(current: str | None = job) -> bool:
