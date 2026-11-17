@@ -43,13 +43,16 @@ def run_r(script: str, tmp_path: Path) -> str:
 
 
 @needs_r
-def test_every_factor_level_appears_equally_in_a_block(tmp_path):
+def test_every_factor_level_appears_at_its_weight_in_a_block(tmp_path):
+    # A level listed k times in its factor takes k shares of the block.
     out = run_r(
         """
 cells <- lapply(0:(block - 1L), cell_for)
 for (f in names(factors)) {
-  counts <- table(vapply(cells, `[[`, "", f))
-  cat(f, length(unique(counts)) == 1L, "\\n")
+  got <- table(vapply(cells, `[[`, "", f))
+  want <- table(rep_len(factors[[f]], block))
+  cat(f, block %% length(factors[[f]]) == 0L &&
+    identical(as.vector(got[names(want)]), as.vector(want)), "\\n")
 }
 """,
         tmp_path,
@@ -83,7 +86,8 @@ ok <- TRUE
 for (g in 0:2000) {
   d <- draw_design(g)
   if (d$strata == "places_ages") {
-    ok <- ok && d$n_ages >= 3 && d$n_places * d$n_ages <= 60
+    ok <- ok && d$n_ages >= 3 &&
+      d$n_places * d$n_ages <= max_strata(d$weeks)
   }
 }
 cat("ok", ok, "\\n")
@@ -143,7 +147,7 @@ def test_outbreaks_run_long_enough_for_deployed_contexts(tmp_path):
     out = run_r(
         """
 set.seed(2)
-weeks <- vapply(0:239, function(g) {
+weeks <- vapply(0:839, function(g) {
   d <- draw_design(g)
   c(d$strata == "places_ages", draw_values(d)$weeks)
 }, numeric(2))
@@ -153,10 +157,9 @@ cat(max(weeks[2, weeks[1, ] == 0]), max(weeks[2, weeks[1, ] == 1]),
         tmp_path,
     )
     longest, longest_by_ages, shortest = map(int, out.split())
-    # BDBV's contexts reach 40 weeks: blocks are cut up to a week before
-    # the end of the onsets, so outbreaks run to 44 weeks.
-    assert longest == 44
-    assert longest_by_ages == 28
+    # Every strata structure runs up to a year, for contexts of 364 days.
+    assert longest == 52
+    assert longest_by_ages == 52
     assert shortest == 16
 
 
@@ -727,6 +730,8 @@ cat("n", design$n_places, "\\n")
 cat("locations", sort(unique(c$location)), "\\n")
 cat("cells", length(strsplit(v$stratum_cells, ";")[[1]]), "\\n")
 cat("trajectories", length(strsplit(v$stratum_trajectory, ";")[[1]]), "\\n")
+cat("observation", strsplit(v$stratum_observation, ";")[[1]], "\\n")
+cat("drawn", vapply(res$strata_values, function(x) x$obs_family, ""), "\\n")
 """,
         tmp_path,
     )
@@ -737,6 +742,8 @@ cat("trajectories", length(strsplit(v$stratum_trajectory, ";")[[1]]), "\\n")
     assert 1 <= len(rows["locations"]) <= n
     assert int(rows["cells"][0]) == len(rows["locations"])
     assert int(rows["trajectories"][0]) == len(rows["locations"])
+    # The family each stratum drew, not its cell's level.
+    assert rows["observation"] == rows["drawn"]
 
 
 @needs_r
@@ -833,4 +840,182 @@ cat("grid", grid_name, "\\n")
     # Log-uniform on 30 to 30,000: about a sixth above 10,000.
     assert float(rows["upper_share"][0]) > 0.08
     assert rows["fits"] == ["TRUE"]
-    assert rows["grid"] == ["r4.1"]
+    assert rows["grid"] == ["r5"]
+
+
+@needs_r
+def test_observation_is_nb1_four_times_as_often_as_poisson(tmp_path):
+    out = run_r(
+        """
+set.seed(5)
+cat("levels", round(table(rep_len(factors$observation, block)) / block, 2),
+  names(table(factors$observation)), "\\n")
+d <- draw_design(1L)
+d$n_places <- 50L; d$n_ages <- 1L; d$obs_strata <- "families"
+fam <- unlist(lapply(1:40, function(i) draw_values(d)$obs_family))
+cat("families", sort(unique(fam)), "\\n")
+cat("nb1_share", mean(fam == "negbin1d"), "\\n")
+phi <- vapply(1:3000, function(i) draw_values(d)$sqrt_phi, 1)
+cat("sqrt_phi", min(phi), max(phi), mean(phi < 0.1), "\\n")
+""",
+        tmp_path,
+    )
+    rows = {x.split()[0]: x.split()[1:] for x in out.splitlines() if x}
+    assert rows["levels"] == ["0.8", "0.2", "negbin1d", "poisson"]
+    assert rows["families"] == ["negbin1d", "poisson"]
+    assert 0.75 < float(rows["nb1_share"][0]) < 0.85
+    lo, hi, low = map(float, rows["sqrt_phi"])
+    # Log-uniform on 0.02 to 1: about 41% below 0.1.
+    assert lo >= 0.02
+    assert hi <= 1
+    assert 0.35 < low < 0.47
+
+
+@needs_r
+def test_multi_wave_waves_differ_in_size(tmp_path):
+    out = run_r(
+        """
+set.seed(1)
+d <- draw_design(1L)
+v <- draw_values(d)
+v$waves <- 2L; v$phase <- 0; v$noise_sd <- 0; v$amplitude <- 0.08
+v$wave_scale <- c(0.25, 1, 1)
+r <- trajectory_path(364L, "multi_wave", v)
+half <- 364 / 2
+cat("rise", sum(pmax(r[1:half], 0)), sum(pmax(r[(half + 1):364], 0)), "\\n")
+w <- vapply(1:500, function(i) {
+  x <- draw_values(d)$wave_scale
+  max(x) / min(x)
+}, 1)
+cat("spread", mean(w > 2.5), "\\n")
+""",
+        tmp_path,
+    )
+    rows = {x.split()[0]: x.split()[1:] for x in out.splitlines() if x}
+    first, second = map(float, rows["rise"])
+    # The second wave climbs four times as far in log as the first.
+    assert 3.5 < second / first < 4.5
+    # Waves often differ by more than x2.5 in their growth rates.
+    assert float(rows["spread"][0]) > 0.3
+
+
+# Two places on a flat path, daily reporting, with a reporting irregularity
+# (`delay_change`) everywhere: report days with no reports, or a slowdown.
+IRREGULAR = """
+set.seed(7)
+d <- draw_design(1L)
+d$strata <- "places"; d$n_places <- 2L; d$n_ages <- 1L
+d$spread <- "even"; d$seeding <- "start"; d$place_rt <- "shared"
+d$mixing <- "none"; d$imports <- "none"
+d$trajectory <- "flat"; d$delay_change <- "{level}"
+d$delay_form <- "parametric"; d$delay_family <- "lognormal"
+d$reporting <- "daily"; d$shocks <- "none"; d$delay_places <- "shared"
+v <- draw_values(d)
+v$weeks <- 20L; v$target_size <- 20000; v$quiet_places <- integer(0)
+v$delay_median <- 3; v$delay_sdlog <- 0.6; v$flat <- 0
+v$bunch_at <- c(0.3, 0.6); v$bunch_len <- c(2L, 3L)
+v$slow_at <- 0.4; v$slow_weeks <- 4L; v$slow_mult <- 3
+out <- simulate_outbreak(d, v)
+c <- out$counts[draw == 1]
+by_day <- c[, .(n = sum(count)), by = .(location, report_date)]
+held <- as.IDate(out$values$bunch_dates)
+cat("held", nrow(held_rows <- by_day[report_date %in% held]),
+  sum(held_rows$n), "\\n")
+first <- min(held)
+after <- by_day[report_date == first + 2L, sum(n)]
+before <- by_day[report_date == first - 2L, sum(n)]
+cat("catch_up", after / before, "\\n")
+w <- slowdown_window(c, v)
+delay <- function(x) {
+  x[, sum(count * as.numeric(report_date - reference_date)) / sum(count)]
+}
+for (p in sort(unique(c$location))) {
+  x <- c[location == p]
+  cat("delay", p, delay(x[reference_date >= w[1] & reference_date <= w[2]]),
+    delay(x[reference_date < w[1] - 14]), "\\n")
+}
+"""
+
+
+def _irregular(level: str, tmp_path: Path) -> list[list[str]]:
+    out = run_r(IRREGULAR.replace("{level}", level), tmp_path)
+    return [x.split() for x in out.splitlines() if x]
+
+
+@needs_r
+def test_bunching_holds_reports_everywhere_then_catches_up(tmp_path):
+    rows = _irregular("bunching", tmp_path)
+    held = next(r for r in rows if r[0] == "held")
+    # No place reports on the five held report days.
+    assert held[2] == "0"
+    catch_up = next(r for r in rows if r[0] == "catch_up")
+    # The two days held arrive on the next report day, with its own.
+    assert float(catch_up[1]) > 2
+
+
+@needs_r
+def test_a_slowdown_lengthens_every_place_s_delays_for_a_while(tmp_path):
+    rows = _irregular("slowdown", tmp_path)
+    delays = [r for r in rows if r[0] == "delay"]
+    assert len(delays) == 2
+    for _, _, inside, outside in delays:
+        assert float(inside) > 1.8 * float(outside)
+
+
+@needs_r
+def test_bunching_and_slowdown_are_delay_change_levels(tmp_path):
+    out = run_r(
+        """
+set.seed(3)
+cat("levels", factors$delay_change, "\\n")
+d <- draw_design(1L)
+d$delay_change <- "bunching"
+v <- replicate(300, draw_values(d), simplify = FALSE)
+n <- vapply(v, function(x) length(x$bunch_at), 1)
+len <- unlist(lapply(v, `[[`, "bunch_len"))
+cat("bunches", min(n), max(n), min(len), max(len), "\\n")
+s <- vapply(v, function(x) c(x$slow_weeks, x$slow_mult), numeric(2))
+cat("slow", min(s[1, ]), max(s[1, ]), min(s[2, ]), max(s[2, ]), "\\n")
+""",
+        tmp_path,
+    )
+    rows = {x.split()[0]: x.split()[1:] for x in out.splitlines() if x}
+    assert rows["levels"] == [
+        "static",
+        "drift",
+        "step",
+        "periodic",
+        "walk",
+        "bunching",
+        "slowdown",
+    ]
+    lo, hi, len_lo, len_hi = map(float, rows["bunches"])
+    assert lo >= 1
+    assert hi <= 13
+    assert (len_lo, len_hi) == (1, 3)
+    w_lo, w_hi, m_lo, m_hi = map(float, rows["slow"])
+    assert (w_lo, w_hi) == (2, 6)
+    assert m_lo >= 1.5
+    assert m_hi <= 3
+
+
+@needs_r
+def test_settings_record_the_days_before_one_expected_onset(tmp_path):
+    out = run_r(
+        """
+set.seed(2)
+d <- draw_design(1L)
+d$strata <- "single"; d$n_places <- 1L; d$n_ages <- 1L
+d$trajectory <- "growth"; d$process <- "growth"; d$delay_change <- "static"
+d$reporting <- "daily"; d$shocks <- "none"; d$seeding <- "start"
+d$imports <- "none"
+v <- draw_values(d)
+v$weeks <- 52L; v$target_size <- 100; v$rate <- log(2) / 7
+out <- simulate_outbreak(d, v)
+cat("low", out$values$low_start_days, "\\n")
+""",
+        tmp_path,
+    )
+    low = int(out.split("low")[-1].split()[0])
+    # Doubling weekly to 100 cases in a year starts far below one a day.
+    assert low > 100
