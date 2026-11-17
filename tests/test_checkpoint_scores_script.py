@@ -805,3 +805,13 @@ def test_the_german_daily_target_is_refused_without_its_code(
     monkeypatch.delattr(de, "germany_daily_forecasts", raising=False)
     with pytest.raises(SystemExit, match="germany_daily_forecasts"):
         cs.germany_unit(tmp_path, cs.REFERENCE, ("7day", "daily"))
+
+
+def test_the_bdbv_daily_target_is_refused_without_its_code(
+    cs, tmp_path, monkeypatch
+) -> None:
+    from bdbvhubrenewal.evaluation import marginals
+
+    monkeypatch.delattr(marginals, "daily_draws", raising=False)
+    with pytest.raises(SystemExit, match="daily_draws"):
+        cs.bdbv_unit(tmp_path, cs.REFERENCE, ("7day", "daily"))
