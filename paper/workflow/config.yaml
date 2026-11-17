@@ -25,7 +25,7 @@ synthetic:
   # The simulator, whose code gives the grid tables and SI notes
   # (`evidence` below), and the held-out set's design.
   simulator: simulator
-  grid: r4
+  grid: r5
   simulations_per_seed: 25
   draw: 1
   # The synthetic runner's protocol, quoted in the SI note.
@@ -121,10 +121,10 @@ nowcasts:
 # null leaves a note of what it waits on in a development run and fails a
 # paper run.
 evidence:
-  # scripts/finetune_simulate.R of the r4 grid that the simulation rounds
-  # and the final fine-tune use.
+  # scripts/finetune_simulate.R of the r5 grid that the simulation rounds
+  # (from round 9) and the final fine-tune use.
   simulator:
-    ref: c77f5a241afef356430c5a587623f8fa0d03f9b5
+    ref: 147218b1f0c633c0828d51b582ad0e104adcbe92
     path: scripts/finetune_simulate.R
   # Scores of the final run's checkpoints on the case studies (ckpt-scores).
   checkpoint_scores:
