@@ -578,49 +578,15 @@ def forward(model, batch: dict, accepted, device=None):
         return model(**inputs)
 
 
-def fp32_loss(model) -> None:
-    """Make each Chronos-2 module of `model` reduce its loss in fp32.
-
-    Its `_compute_loss` runs outside autocast on fp32 predictions, so a
-    bf16 forward (`train_step`) still reduces the loss in fp32. Applied
-    once per module; the class's method is looked up at each call.
-    """
-    import torch
-
-    for m in model.modules():
-        if not hasattr(type(m), "_compute_loss") or "_compute_loss" in vars(m):
-            continue
-
-        def compute(_m=m, **kwargs):
-            preds = kwargs["quantile_preds"]
-            kwargs["quantile_preds"] = preds.float()
-            kwargs["loc_scale"] = tuple(t.float() for t in kwargs["loc_scale"])
-            with torch.autocast(device_type=preds.device.type, enabled=False):
-                return type(_m)._compute_loss(_m, **kwargs)
-
-        m._compute_loss = compute
-
-
-def train_step(
-    model, batch: dict, accepted, device, share: float, bf16: bool = False
-) -> float:
+def train_step(model, batch: dict, accepted, device, share: float) -> float:
     """Accumulate a batch's gradients, scaled by `share`; return its loss.
 
     Forward and backward both run with the rows' places assigned, so a
     block recomputed in backward (`checkpoint_large_batches`) gets the
-    same series bias. With `bf16`, the forward pass alone runs under bf16
-    autocast; the weights, the optimiser's state and the loss's reduction
-    (`fp32_loss`) stay fp32.
+    same series bias.
     """
-    import torch
-
-    if bf16:
-        fp32_loss(model)
-    kind = torch.device(device).type
     with series_bias.assigned(model, batch.get("series_rows")):
-        with torch.autocast(kind, dtype=torch.bfloat16, enabled=bf16):
-            loss = forward(model, batch, accepted, device).loss
-        loss = loss.float()
+        loss = forward(model, batch, accepted, device).loss
         (loss * share).backward()
     return float(loss.detach())
 
@@ -1173,11 +1139,6 @@ def build_parser() -> argparse.ArgumentParser:
     # group attention bias for same-place and parent-child pairs.
     parser.add_argument("--series-bias", action="store_true")
     parser.add_argument("--bias-lr", type=float, default=BIAS_LR)
-    # bf16 autocast around the forward pass alone (`train_step`); the
-    # held-out evaluation stays fp32.
-    parser.add_argument(
-        "--bf16", action=argparse.BooleanOptionalAction, default=True
-    )
     return parser
 
 
@@ -1330,7 +1291,6 @@ def main() -> None:
         },
         **bias_settings(args.series_bias, args.bias_lr),
         "learning_rate": args.learning_rate,
-        "bf16": args.bf16,
         **(
             {
                 "init_adapter_sha256": ft._sha256(
@@ -1436,7 +1396,7 @@ def main() -> None:
     def backward(part: list[int], share: float) -> float:
         """Accumulate the gradients of part of a batch."""
         batch = data._build_batch(part)
-        value = train_step(model, batch, accepted, device, share, args.bf16)
+        value = train_step(model, batch, accepted, device, share)
         del batch
         return value
 
