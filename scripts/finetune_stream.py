@@ -1023,6 +1023,75 @@ def skipped_lines(skipped: list[dict]) -> list[str]:
     ]
 
 
+def check_until(until: int | None, prefixes: list[int]) -> None:
+    """Raise if `--until` is not one of the run's prefixes."""
+    if until is not None and until not in prefixes:
+        raise ValueError(f"--until {until} is not a prefix of {prefixes}")
+
+
+def until_start(done: int, until: int | None, have_prefix: bool) -> str:
+    """Return what a segment does with the state it resumes from.
+
+    "train" while the state is short of `until`; "kept" if it is at
+    `until` and prefix `until` is saved, so only the state is kept with
+    it. A state past `until`, or at it without the prefix, cannot make
+    that prefix again, so the segment stops with an error rather than
+    train past it.
+    """
+    if until is None or done < until:
+        return "train"
+    if done > until:
+        raise SystemExit(
+            f"the state is at {done} outbreaks, past n{until}: that prefix "
+            "cannot be made from it"
+        )
+    if not have_prefix:
+        raise SystemExit(
+            f"the state is at n{until} but n{until} is missing; retrain it "
+            "from the state of the prefix before"
+        )
+    return "kept"
+
+
+def keep_state(state: Path, where: Path) -> None:
+    """Copy the trainer's state to `where/state`, replacing any there."""
+    kept = where / "state"
+    shutil.rmtree(kept, ignore_errors=True)
+    shutil.copytree(state, kept)
+
+
+def save_rng(where: Path) -> None:
+    """Save torch's random state (CPU and any GPU) to `where/rng.pt`.
+
+    Chronos-2 trains with dropout, so a resumed run matches the run that
+    did not stop only with the random state it stopped at.
+    """
+    import torch
+
+    rng = {"cpu": torch.get_rng_state()}
+    if torch.cuda.is_available():
+        rng["cuda"] = torch.cuda.get_rng_state_all()
+    if torch.backends.mps.is_available():
+        rng["mps"] = torch.mps.get_rng_state()
+    torch.save(rng, where / "rng.pt")
+
+
+def load_rng(where: Path) -> bool:
+    """Restore torch's random state from `where/rng.pt`, if saved."""
+    import torch
+
+    path = where / "rng.pt"
+    if not path.exists():
+        return False
+    rng = torch.load(path, weights_only=True)
+    torch.set_rng_state(rng["cpu"])
+    if "cuda" in rng and torch.cuda.is_available():
+        torch.cuda.set_rng_state_all(rng["cuda"])
+    if "mps" in rng and torch.backends.mps.is_available():
+        torch.mps.set_rng_state(rng["mps"])
+    return True
+
+
 def save_state(where: Path, model, optimiser, state: dict) -> None:
     """Save the trainer's state: adapter, optimiser and position."""
     import torch
@@ -1033,6 +1102,7 @@ def save_state(where: Path, model, optimiser, state: dict) -> None:
     torch.save(get_peft_model_state_dict(model), tmp / "adapter.pt")
     torch.save(optimiser.state_dict(), tmp / "optimiser.pt")
     (tmp / "state.json").write_text(json.dumps(state))
+    save_rng(tmp)
     # The last state is kept until the new one is in place.
     old = where.with_suffix(".old")
     if where.exists():
@@ -1060,6 +1130,8 @@ def load_state(where: Path, model, optimiser) -> dict | None:
     optimiser.load_state_dict(
         torch.load(where / "optimiser.pt", weights_only=True)
     )
+    # A state saved without the random state resumes without it.
+    load_rng(where)
     return json.loads((where / "state.json").read_text())
 
 
@@ -1139,6 +1211,10 @@ def build_parser() -> argparse.ArgumentParser:
     # group attention bias for same-place and parent-child pairs.
     parser.add_argument("--series-bias", action="store_true")
     parser.add_argument("--bias-lr", type=float, default=BIAS_LR)
+    # One segment of a continuous run: stop once prefix N is saved, with
+    # the trainer's state beside it (`n<N>/state`), which the next
+    # segment resumes from (workflow/rules/finetune.smk).
+    parser.add_argument("--until", type=int)
     return parser
 
 
@@ -1189,6 +1265,7 @@ def main() -> None:
     held_seeds = range(args.held_out_seeds[0], args.held_out_seeds[1] + 1)
     prefixes = [p for p in args.prefixes if p < args.outbreaks]
     prefixes.append(args.outbreaks)
+    check_until(args.until, prefixes)
     k = args.blocks_per_simulation
 
     # Held-out outbreaks first.
@@ -1434,7 +1511,13 @@ def main() -> None:
         load_blocks(args.real_validation) if args.real_validation else []
     )
     t0 = time.perf_counter()
-    while done < args.outbreaks:
+    # A segment stops at its prefix; one whose state is already there
+    # only keeps it, and one past it fails (`until_start`).
+    until_start(
+        done, args.until, (out / f"n{args.until}" / "settings.json").exists()
+    )
+    stop = args.outbreaks if args.until is None else args.until
+    while done < stop:
         hi = min(done + CHUNK, args.outbreaks)
         split = {"wait_s": 0.0, "cut_s": 0.0, "train_s": 0.0, "eval_s": 0.0}
         tick = time.perf_counter()
@@ -1663,6 +1746,13 @@ def main() -> None:
         snapshot()
         report(stage="training", step=step, outbreaks=done, split=split)
     pool.shutdown(cancel_futures=True)
+    if args.until is not None and done == args.until:
+        # A segment: the next one resumes from the state kept with n<N>.
+        snapshot()
+        keep_state(state_dir, out / f"n{done}")
+        report(stage=f"stopped at n{done}", step=step, outbreaks=done)
+        log(f"stopped at n{done} (--until)")
+        return
     report(stage="finished", step=step, outbreaks=done)
     log("finished")
 
