@@ -12,6 +12,7 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts" / "paper.sh"
+LOCALCONFIG = ROOT / "workflow" / "flowlib" / "localconfig.py"
 
 # Stand-ins that log each call to $CALLS.
 STUB = """#!/bin/sh
@@ -38,6 +39,10 @@ def repo(tmp_path: Path) -> Path:
     """A tree with the script, stand-in tools and rendered outputs."""
     (tmp_path / "scripts").mkdir()
     shutil.copy(SCRIPT, tmp_path / "scripts" / "paper.sh")
+    # The script reads CORES from config/local.env through this helper.
+    flowlib = tmp_path / "workflow" / "flowlib"
+    flowlib.mkdir(parents=True)
+    shutil.copy(LOCALCONFIG, flowlib / "localconfig.py")
     for name in OUTPUTS:
         path = tmp_path / "paper" / name
         path.parent.mkdir(parents=True, exist_ok=True)
