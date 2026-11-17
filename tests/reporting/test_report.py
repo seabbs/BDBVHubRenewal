@@ -10,6 +10,9 @@ from bdbvhubrenewal.reporting import report
 
 ROOT = Path(__file__).resolve().parents[2]
 FIXTURES = Path(__file__).parent / "fixtures"
+"""Score tables for the page tests. They keep no samples, so their
+`log_crps` column is a stand-in copied from `log_wis`, not a CRPS score:
+read it only as page input."""
 
 
 def test_comparison_page(tmp_path: Path, target: pd.DataFrame) -> None:
