@@ -81,6 +81,48 @@
       "run": "",
       "status": "submitted",
       "updated": "2026-11-10T23:01:34.370279+00:00"
+    },
+    "2026-11-21": {
+      "as_of": "2026-11-15",
+      "code_commit": "6632d962ebefb48571eda53845834024b1fdc382",
+      "data_commit": "c4f0d6dd491204991039790c619e9d29e7dd2f13",
+      "history": [
+        {
+          "as_of": "2026-11-15",
+          "code_commit": "6632d962ebefb48571eda53845834024b1fdc382",
+          "data_commit": "c4f0d6dd491204991039790c619e9d29e7dd2f13",
+          "pr_url": "https://github.com/InsightNet-US/BDBV-Modeling-Hub/pull/136",
+          "produced_by": "BVDOutbreakSize-informed renewal model",
+          "run": "https://github.com/seabbs/BDBVHubRenewal/actions/runs/44169712191",
+          "status": "submitted",
+          "updated": "2026-11-17T22:27:24.126624+00:00"
+        }
+      ],
+      "models": {
+        "seabbs-renewal": {
+          "archive": "archive/2026-11-21/44169712191",
+          "code_commit": "6632d962ebefb48571eda53845834024b1fdc382",
+          "pr_url": "https://github.com/InsightNet-US/BDBV-Modeling-Hub/pull/136",
+          "produced_by": "BVDOutbreakSize-informed renewal model",
+          "run": "https://github.com/seabbs/BDBVHubRenewal/actions/runs/44169712191",
+          "status": "submitted",
+          "updated": "2026-11-17T22:27:24.314402+00:00"
+        },
+        "seabbs-rwnowcast": {
+          "archive": "archive/2026-11-21/44169712191/baseline",
+          "code_commit": "6632d962ebefb48571eda53845834024b1fdc382",
+          "pr_url": "https://github.com/InsightNet-US/BDBV-Modeling-Hub/pull/133",
+          "produced_by": "random walk on a nowcast",
+          "run": "https://github.com/seabbs/BDBVHubRenewal/actions/runs/44169712191",
+          "status": "submitted",
+          "updated": "2026-11-17T22:27:24.402499+00:00"
+        }
+      },
+      "pr_url": "https://github.com/InsightNet-US/BDBV-Modeling-Hub/pull/136",
+      "produced_by": "BVDOutbreakSize-informed renewal model",
+      "run": "https://github.com/seabbs/BDBVHubRenewal/actions/runs/44169712191",
+      "status": "submitted",
+      "updated": "2026-11-17T22:27:24.126624+00:00"
     }
   },
   "schema_version": 1

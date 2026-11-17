@@ -1,0 +1,14 @@
+{"candidate": "bvd", "kind": "main", "label": "BVDOutbreakSize-informed renewal model",
+ "store": {
+ "model": "renewalbvd",
+ "origin": "2026-11-15",
+ "key": "f768ffa886241712",
+ "commit": "af90a37c5b2487a7ee30b07ca38e550c783d1f10",
+ "fitted_at": "2026-11-17T19:09:35+00:00",
+ "store_commit": "aacdf2b25105fc080944b2793e329c15a0214219"
+},
+ "checkpoint": null,
+ "model": "renewalbvd",
+ "config": "bvd", "sampler": {"chain_method": "parallel", "max_tree_depth": 10, "num_chains": 2, "num_samples": 750, "num_warmup": 500, "seed": 1, "target_accept": 0.95},
+ "package_version": "0.1.0",
+ "as_of": "2026-11-15", "reference_date": "2026-11-21"}

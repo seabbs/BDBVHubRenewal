@@ -1,0 +1,83 @@
+{
+  "checks": [
+    {
+      "details": [],
+      "name": "schema",
+      "status": "pass",
+      "summary": "format matches the hub's round"
+    },
+    {
+      "details": [],
+      "name": "values",
+      "status": "pass",
+      "summary": "all values finite and non-negative"
+    },
+    {
+      "details": [],
+      "name": "samples",
+      "status": "pass",
+      "summary": "100 full trajectories per location"
+    },
+    {
+      "details": [],
+      "name": "coverage",
+      "status": "pass",
+      "summary": "546 locations, weeks 2026-10-31 to 2026-12-12"
+    },
+    {
+      "details": [],
+      "name": "zones",
+      "status": "pass",
+      "summary": "519 zones in 26 provinces"
+    },
+    {
+      "details": [],
+      "name": "national_sum",
+      "status": "pass",
+      "summary": "CD is the exact sum (national.json: 26 modelled provinces)"
+    },
+    {
+      "details": [],
+      "name": "bounds",
+      "status": "pass",
+      "summary": "trajectories within the bounds"
+    },
+    {
+      "details": [],
+      "name": "plausible",
+      "status": "pass",
+      "summary": "within range of the recent data"
+    },
+    {
+      "details": [],
+      "name": "growth",
+      "status": "pass",
+      "summary": "forecast growth within the cap"
+    },
+    {
+      "details": [],
+      "name": "observed",
+      "status": "pass",
+      "summary": "close to observed (2026-11-15)"
+    },
+    {
+      "details": [
+        "WARN: CD-IT-26: median 17.5 against random walk baseline 198 over 2026-11-28 to 2026-12-12 (ratio 0.111)"
+      ],
+      "name": "baseline",
+      "status": "warn",
+      "summary": "CD-IT-26: median 17.5 against random walk baseline 198 over 2026-11-28 to 2026-12-12 (ratio 0.111)"
+    },
+    {
+      "details": [
+        "WARN: CD-IT-17: median 15 against last week's submission 2 over 2026-10-10 to 2026-12-05 (ratio 2.86)",
+        "WARN: CD-IT-34: median 17 against last week's submission 54.5 over 2026-10-10 to 2026-12-05 (ratio 0.37)"
+      ],
+      "name": "previous",
+      "status": "warn",
+      "summary": "CD-IT-17: median 15 against last week's submission 2 over 2026-10-10 to 2026-12-05 (ratio 2.86) (and 1 more)"
+    }
+  ],
+  "id": "bvd",
+  "status": "warn"
+}

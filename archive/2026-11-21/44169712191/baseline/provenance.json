@@ -1,0 +1,46 @@
+{
+  "attempts": [
+    {
+      "checks": "warn",
+      "fit": "skip",
+      "handled": [],
+      "id": "randomwalknowcast",
+      "kind": "randomwalk",
+      "label": "random walk on a nowcast",
+      "ppc": "skip",
+      "reasons": [],
+      "status": "warn",
+      "validation": "pass",
+      "warnings": [
+        "zones: 519 zones; 6115 province sample-weeks differ from the sum of their zones",
+        "bounds: CD-IT-21: 95th centile 146 is 5.41 times the bound base 27 (and 1 more)",
+        "previous: CD-HU-12: median 46 against last week's submission 101 over 2026-10-10 to 2026-12-05 (ratio 0.481) (and 6 more)"
+      ]
+    }
+  ],
+  "handled": [],
+  "kind": "randomwalk",
+  "produced_by": "random walk on a nowcast",
+  "reason": "The random walk on a nowcast cleared every check, with warnings.",
+  "run": {
+    "as_of": "2026-11-15",
+    "candidate": "randomwalknowcast",
+    "checkpoint": null,
+    "config": "randomwalknowcast",
+    "kind": "randomwalk",
+    "label": "random walk on a nowcast",
+    "model": "randomwalknowcast",
+    "package_version": "0.1.0",
+    "reference_date": "2026-11-21",
+    "sampler": {},
+    "store": null
+  },
+  "selected": "randomwalknowcast",
+  "shadows": [],
+  "status": "warn",
+  "warnings": [
+    "zones: 519 zones; 6115 province sample-weeks differ from the sum of their zones",
+    "bounds: CD-IT-21: 95th centile 146 is 5.41 times the bound base 27 (and 1 more)",
+    "previous: CD-HU-12: median 46 against last week's submission 101 over 2026-10-10 to 2026-12-05 (ratio 0.481) (and 6 more)"
+  ]
+}

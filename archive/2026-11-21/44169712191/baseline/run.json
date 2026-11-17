@@ -1,0 +1,7 @@
+{"candidate": "randomwalknowcast", "kind": "randomwalk", "label": "random walk on a nowcast",
+ "store": null,
+ "checkpoint": null,
+ "model": "randomwalknowcast",
+ "config": "randomwalknowcast", "sampler": {},
+ "package_version": "0.1.0",
+ "as_of": "2026-11-15", "reference_date": "2026-11-21"}

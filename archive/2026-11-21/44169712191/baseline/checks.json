@@ -1,0 +1,89 @@
+{
+  "checks": [
+    {
+      "details": [],
+      "name": "schema",
+      "status": "pass",
+      "summary": "format matches the hub's round"
+    },
+    {
+      "details": [],
+      "name": "values",
+      "status": "pass",
+      "summary": "all values finite and non-negative"
+    },
+    {
+      "details": [],
+      "name": "samples",
+      "status": "pass",
+      "summary": "100 full trajectories per location"
+    },
+    {
+      "details": [],
+      "name": "coverage",
+      "status": "pass",
+      "summary": "546 locations, weeks 2026-10-31 to 2026-12-12"
+    },
+    {
+      "details": [],
+      "name": "zones",
+      "status": "warn",
+      "summary": "519 zones; 6115 province sample-weeks differ from the sum of their zones"
+    },
+    {
+      "details": [],
+      "name": "national_sum",
+      "status": "pass",
+      "summary": "CD is the exact sum (national.json: 26 modelled provinces)"
+    },
+    {
+      "details": [
+        "WARN: CD-IT-21: 95th centile 146 is 5.41 times the bound base 27",
+        "WARN: CD-NK-26: 95th centile 148 is 7.39 times the bound base 20"
+      ],
+      "name": "bounds",
+      "status": "warn",
+      "summary": "CD-IT-21: 95th centile 146 is 5.41 times the bound base 27 (and 1 more)"
+    },
+    {
+      "details": [],
+      "name": "plausible",
+      "status": "pass",
+      "summary": "within range of the recent data"
+    },
+    {
+      "details": [],
+      "name": "growth",
+      "status": "pass",
+      "summary": "forecast growth within the cap"
+    },
+    {
+      "details": [],
+      "name": "observed",
+      "status": "pass",
+      "summary": "close to observed (2026-11-15)"
+    },
+    {
+      "details": [],
+      "name": "baseline",
+      "status": "skip",
+      "summary": "this is the baseline"
+    },
+    {
+      "details": [
+        "WARN: CD-HU-12: median 46 against last week's submission 101 over 2026-10-10 to 2026-12-05 (ratio 0.481)",
+        "WARN: CD-IT-11: median 16 against last week's submission 1 over 2026-10-10 to 2026-12-05 (ratio 3.5)",
+        "WARN: CD-IT-13: median 32 against last week's submission 8 over 2026-10-10 to 2026-12-05 (ratio 2.85)",
+        "WARN: CD-IT-14: median 8 against last week's submission 1 over 2026-10-10 to 2026-12-05 (ratio 2.17)",
+        "WARN: CD-IT-17: median 11 against last week's submission 2 over 2026-10-10 to 2026-12-05 (ratio 2.29)",
+        "WARN: CD-IT-36: median 28.5 against last week's submission 10 over 2026-10-10 to 2026-12-05 (ratio 2.23)",
+        "WARN: CD-NK-14: median 148 against last week's submission 308 over 2026-10-10 to 2026-12-05 (ratio 0.49)"
+      ],
+      "name": "previous",
+      "status": "warn",
+      "summary": "CD-HU-12: median 46 against last week's submission 101 over 2026-10-10 to 2026-12-05 (ratio 0.481) (and 6 more)"
+    }
+  ],
+  "id": "randomwalknowcast",
+  "status": "warn"
+}

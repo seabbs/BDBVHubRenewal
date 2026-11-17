@@ -1,0 +1,113 @@
+{
+  "attempts": [
+    {
+      "checks": "warn",
+      "fit": "warn",
+      "handled": [],
+      "id": "bvd",
+      "kind": "main",
+      "label": "BVDOutbreakSize-informed renewal model",
+      "ppc": "pass",
+      "reasons": [],
+      "status": "warn",
+      "validation": "pass",
+      "warnings": [
+        "convergence: min tail ESS is 75.4, past the warning threshold 100",
+        "baseline: CD-IT-26: median 17.5 against random walk baseline 198 over 2026-11-28 to 2026-12-12 (ratio 0.111)",
+        "previous: CD-IT-17: median 15 against last week's submission 2 over 2026-10-10 to 2026-12-05 (ratio 2.86) (and 1 more)"
+      ]
+    },
+    {
+      "checks": "n/a",
+      "fit": "n/a",
+      "handled": [],
+      "id": "renewalsp",
+      "kind": "fallback",
+      "label": "single-patch province renewal models",
+      "ppc": "n/a",
+      "reasons": [],
+      "status": "not needed",
+      "validation": "not run",
+      "warnings": []
+    },
+    {
+      "checks": "n/a",
+      "fit": "n/a",
+      "handled": [],
+      "id": "main",
+      "kind": "fallback",
+      "label": "province renewal model",
+      "ppc": "n/a",
+      "reasons": [],
+      "status": "not needed",
+      "validation": "not run",
+      "warnings": []
+    },
+    {
+      "checks": "n/a",
+      "fit": "n/a",
+      "handled": [],
+      "id": "randomwalknowcast",
+      "kind": "randomwalk",
+      "label": "random walk on a nowcast",
+      "ppc": "n/a",
+      "reasons": [],
+      "status": "not needed",
+      "validation": "not run",
+      "warnings": []
+    },
+    {
+      "checks": "n/a",
+      "fit": "n/a",
+      "handled": [],
+      "id": "randomwalk",
+      "kind": "randomwalk",
+      "label": "random walk baseline",
+      "ppc": "n/a",
+      "reasons": [],
+      "status": "not needed",
+      "validation": "not run",
+      "warnings": []
+    }
+  ],
+  "handled": [],
+  "kind": "main",
+  "produced_by": "BVDOutbreakSize-informed renewal model",
+  "reason": "The BVDOutbreakSize-informed renewal model cleared every check, with warnings.",
+  "run": {
+    "as_of": "2026-11-15",
+    "candidate": "bvd",
+    "checkpoint": null,
+    "config": "bvd",
+    "kind": "main",
+    "label": "BVDOutbreakSize-informed renewal model",
+    "model": "renewalbvd",
+    "package_version": "0.1.0",
+    "reference_date": "2026-11-21",
+    "sampler": {
+      "chain_method": "parallel",
+      "max_tree_depth": 10,
+      "num_chains": 2,
+      "num_samples": 750,
+      "num_warmup": 500,
+      "seed": 1,
+      "target_accept": 0.95
+    },
+    "store": {
+      "commit": "af90a37c5b2487a7ee30b07ca38e550c783d1f10",
+      "fitted_at": "2026-11-17T19:09:35+00:00",
+      "key": "f768ffa886241712",
+      "model": "renewalbvd",
+      "origin": "2026-11-15",
+      "store_commit": "aacdf2b25105fc080944b2793e329c15a0214219"
+    }
+  },
+  "selected": "bvd",
+  "shadows": [],
+  "status": "warn",
+  "warnings": [
+    "convergence: min tail ESS is 75.4, past the warning threshold 100",
+    "baseline: CD-IT-26: median 17.5 against random walk baseline 198 over 2026-11-28 to 2026-12-12 (ratio 0.111)",
+    "previous: CD-IT-17: median 15 against last week's submission 2 over 2026-10-10 to 2026-12-05 (ratio 2.86) (and 1 more)"
+  ]
+}
