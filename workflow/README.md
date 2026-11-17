@@ -69,7 +69,7 @@ Outputs are in `<ROOT>/rounds/r<N>/`.
 
 ## 2. Fine-tune (`rules/finetune.smk`)
 
-One continuous run of `scripts/finetune_stream.py` from base Chronos-2, cut into one segment per checkpoint prefix (250, 500, 750, 1,000, 2,000, 4,000, 8,000).
+One continuous run of `scripts/finetune_stream.py` from base Chronos-2, cut into one segment per checkpoint prefix (250, 500, 750, 1,000, 2,000, 4,000, 8,400).
 Segment N resumes from the state kept with the prefix before and stops once `n<N>` is saved (`--until N`).
 The state carries the learning-rate schedule, the step, the batch position and torch's random state, so the segments in turn are the run that never stopped.
 

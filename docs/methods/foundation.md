@@ -103,16 +103,16 @@ The other blocks' targets are all levels, leaves and the national total, or leav
 Each simulation is cut at 32 cut-offs, one block each, with up to 364 steps of context.
 A block is daily (25%), weekly (25%), 3-day (15%), daily with a weekly row per place (25%), or daily with a 3-day row per place (10%).
 
-Training runs in one pass over 8,000 simulations from round 9 on, the first round of grid `r5`, while the outbreaks are simulated (`scripts/finetune_stream.py`, `workflow/rules/finetune.smk`).
+Training runs in one pass over 8,400 simulations, ten blocks' worth of the grid, from round 9 on, the first round of grid `r5`, while the outbreaks are simulated (`scripts/finetune_stream.py`, `workflow/rules/finetune.smk`).
 It is scored on 90 held-out simulations of round 9.
 LoRA trains beside learned attention biases for related series (`forecasters.series_bias`).
-The adapter's learning rate starts at $10^{-5}$ and the biases' at $10^{-3}$, both falling linearly to zero at 36,500 steps.
+The adapter's learning rate starts at $10^{-5}$ and the biases' at $10^{-3}$, both falling linearly to zero at 38,325 steps, at 8,400 simulations.
 There is no warmup and no weight decay, and training is in full (fp32) precision.
 The r3 checkpoints were trained by `scripts/finetune_driver.sh` with `config/finetune/r3.env`, both removed after commit eae369693.
 Blocks are packed into batches by size within a memory budget, which also sets the largest block.
-A checkpoint is saved at 250, 500, 750, 1,000, 2,000, 4,000 and 8,000 simulations.
+A checkpoint is saved at 250, 500, 750, 1,000, 2,000, 4,000 and 8,400 simulations.
 Each is scored on held-out blocks from separate simulations, by level, and published.
-Training stops at 8,000 simulations.
+Training stops at 8,400 simulations.
 
 A checkpoint is named by its settings hash, of the blocks, the code and the training settings.
 The first release, `chronos-ft-2c2b22a03107`, was trained from earlier code, so its hash cannot be reproduced from this repository.
