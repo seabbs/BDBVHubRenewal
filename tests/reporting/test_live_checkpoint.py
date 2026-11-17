@@ -80,12 +80,14 @@ def test_the_label_names_n_of_the_planned_simulations() -> None:
     )
 
 
-def test_scored_bdbv_rounds_are_refused() -> None:
+def test_scored_bdbv_rounds_are_dropped_with_a_warning() -> None:
     from bdbvhubrenewal.reporting.live_checkpoint import tidy
 
     late = _rows().assign(last_origin="2026-11-28")
-    with pytest.raises(ValueError, match="scored"):
-        tidy(late)
+    with pytest.warns(UserWarning, match="scored"):
+        out = tidy(late)
+    assert not (out["study"] == "ebola").any()
+    assert (out["study"] == "germany").any()
 
 
 def test_the_checkpoint_table_has_zero_shot_first_then_each_checkpoint() -> (
