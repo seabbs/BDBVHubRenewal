@@ -624,3 +624,46 @@ def test_the_copula_figure_waits_then_draws(tmp_path) -> None:
     paths = dict.fromkeys(EVIDENCE) | {"si_copula": rows}
     write_evidence(paths, tmp_path / "si", tmp_path / "fig", tmp_path / "e.yml")
     assert (tmp_path / "fig" / "copula-impact.png").stat().st_size > 20000
+
+
+def _copula_rho() -> pd.DataFrame:
+    """Rows of the walk models' `copula.json`, one per model and origin."""
+    return pd.DataFrame(
+        {
+            "model": ["randomwalknowcast"] * 3 + ["randomwalk"] * 2,
+            "origin": ["2026-10-04", "2026-10-11", "2026-10-18"] * 1
+            + ["2026-10-04", "2026-10-11"],
+            "n_scores": [40, 44, 0, 40, 44],
+            "rho_provinces": [0.5, 0.7, 0.7, 0.3, 0.4],
+            "n_pairs": [120, 130, 0, 120, 130],
+            "fallback": [False, False, True, False, False],
+        }
+    )
+
+
+def test_rho_medians_give_rho_p_only_without_fallbacks() -> None:
+    from paperpipe.evidence import rho_medians
+
+    out = rho_medians(_copula_rho())
+    assert out == {
+        "randomwalknowcast": {"rho_p": 0.6, "origins": 3, "fallback": 1},
+        "randomwalk": {"rho_p": 0.35, "origins": 2, "fallback": 0},
+    }
+
+
+def test_rho_p_is_quoted_once_its_rows_exist(tmp_path) -> None:
+    out = write_evidence(
+        dict.fromkeys(EVIDENCE),
+        tmp_path / "si",
+        tmp_path / "fig",
+        tmp_path / "e.yml",
+    )
+    rho = out["evidence"]["rho"]["randomwalknowcast"]
+    assert rho["rho_p"] == "(not yet available)"
+    rows = tmp_path / "copula-rho.csv"
+    _copula_rho().to_csv(rows, index=False)
+    paths = dict.fromkeys(EVIDENCE) | {"copula_rho": rows}
+    out = write_evidence(
+        paths, tmp_path / "si", tmp_path / "fig", tmp_path / "e.yml"
+    )
+    assert out["evidence"]["rho"]["randomwalk"]["rho_p"] == 0.35
