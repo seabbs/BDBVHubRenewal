@@ -10,6 +10,9 @@
 #
 # Targets: `score`, or one unit, <SCORE_CACHE>/germany/<label>.done.
 # `land` (opt-in) commits the tables to evidence/ and pushes.
+# `germany_forecast` (opt-in, `score.germany_forecast.enabled`) runs the
+# German 1 to 4 week forecasts of the reference and one checkpoint, each
+# after its German nowcasts; with it on, `score` takes them too.
 
 import json
 
@@ -108,6 +111,33 @@ rule score_heldout:
         "{wildcards.label} > {log} 2>&1 && touch {output}"
 
 
+rule score_germany_forecast:
+    # Opt-in (`score.germany_forecast`): never part of `score` unless on.
+    input:
+        f"{CACHE}/germany/{{label}}.done",
+    output:
+        f"{CACHE}/germany_forecast/{{label}}.done",
+    log:
+        f"{CACHE}/log/germany_forecast-{{label}}.log",
+    params:
+        prefix=lambda wc, resources: job_prefix(resources.mem_mb),
+    priority: 1
+    threads: 1
+    resources:
+        mem_mb=SC["mem_mb"],
+    shell:
+        unit_shell("germany_forecast")
+
+
+def forecast_inputs(wc=None):
+    """The German forecast units, none unless switched on."""
+    fc = SC.get("germany_forecast") or {}
+    if not fc.get("enabled"):
+        return []
+    labels = [*SC["reference"], *([fc["label"]] if fc.get("label") else [])]
+    return expand(f"{CACHE}/germany_forecast/{{label}}.done", label=labels)
+
+
 def table_inputs(wc):
     labels = checkpoint_labels()
     every = [*SC["reference"], *labels]
@@ -115,6 +145,7 @@ def table_inputs(wc):
         "bdbv": expand(f"{CACHE}/bdbv/{{label}}.done", label=every),
         "germany": expand(f"{CACHE}/germany/{{label}}.done", label=every),
         "heldout": expand(f"{CACHE}/heldout/{{label}}.done", label=labels),
+        "forecast": forecast_inputs(),
     }
 
 
@@ -173,6 +204,12 @@ rule land:
         if head != git("rev-parse", f"origin/{params.branch}"):
             raise SystemExit(f"{head} is not on origin/{params.branch}")
         say(f"checkpoint scores landed at {head[:9]} on origin/{params.branch}")
+
+
+rule germany_forecast:
+    # Opt-in target: the German forecast units alone.
+    input:
+        forecast_inputs,
 
 
 rule score:

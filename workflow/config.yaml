@@ -73,6 +73,13 @@ score:
   checkpoints: evidence/checkpoints.csv
   # The only branch `land` commits and pushes the tables on.
   branch: checkpoint-scoring
+  # Opt-in, for the SI: 1 to 4 week forecasts of the German development
+  # half (scripts/germany_forecast.py), study `germany_forecast`, for the
+  # reference and `label`, the live run's latest checkpoint (null: the
+  # reference alone). Each runs after its own German nowcasts.
+  germany_forecast:
+    enabled: false
+    label: null
 
 slots_check:
   # Each slots checkpoint against zero-shot Chronos-2 and the no-slots
