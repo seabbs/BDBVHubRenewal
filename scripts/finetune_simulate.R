@@ -86,6 +86,8 @@ epinowcast_sha <- "e084b080"
 grid_name <- "r5"
 args <- commandArgs(trailingOnly = TRUE)
 n_outbreaks <- as.integer(args[[1]])
+# The rounds' first seed (scripts/sim_rounds.sh, workflow/config.yaml).
+seed_base <- as.integer(Sys.getenv("ENW_SEED_BASE", "30000"))
 seed <- as.integer(args[[2]])
 out_dir <- args[[3]]
 lib <- Sys.getenv("ENW_LIB", "output/finetune/rlib")
@@ -161,6 +163,20 @@ factors <- list(
 # Simulations per balanced block: a multiple of every factor's levels
 # (8, 7 and 5 among them).
 block <- 840L
+
+# The grid index of simulation `i` of the batch of `n` with seed `seed`.
+# Round r's batches are seeds `seed_base` + 100 r on, so round r is block
+# r: its batch at position k holds indices r * block + k * n onwards, and
+# 40 batches of 21 are the whole block. A batch past its round's block
+# is refused, so no two rounds share a block.
+grid_index <- function(seed, n, i, seed_base) {
+  round <- (seed - seed_base) %/% 100L
+  at <- ((seed - seed_base) %% 100L) * n + i - 1L
+  if (at >= block) {
+    stop("batch ", seed, " of ", n, " runs past its round's block of ", block)
+  }
+  round * block + at
+}
 
 # The most strata of places by ages in a run of `weeks`: 60 up to 28
 # weeks, then fewer, so the reporting triangle (strata by days by delays)
@@ -1151,7 +1167,7 @@ if (sys.nframe() == 0L) {
   failures <- list()
   for (i in seq_len(n_outbreaks)) {
     id <- sprintf("%d-%04d", seed, i)
-    design <- draw_design(seed * n_outbreaks + i - 1L)
+    design <- draw_design(grid_index(seed, n_outbreaks, i, seed_base))
     t1 <- Sys.time()
     cell_run <- simulate_cell(design, id)
     out <- cell_run$out

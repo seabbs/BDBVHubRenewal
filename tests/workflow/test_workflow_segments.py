@@ -22,10 +22,17 @@ def test_prefixes_must_end_chunks():
         segments.check_chunks([250, 600], 250)
 
 
-def test_round_seeds_split_training_and_held_out():
-    train, held = segments.round_seeds(4, base=30000, train=40, held=4)
-    assert train == list(range(30400, 30440))
-    assert held == [30440, 30441, 30442, 30443]
+def test_the_last_prefix_ends_the_run_s_last_chunk():
+    # The trainer's last chunk ends at the run's outbreaks, 8,400 = 33.6
+    # chunks of 250.
+    segments.check_chunks([250, 4000, 8400], 250, outbreaks=8400)
+    with pytest.raises(ValueError, match="8400"):
+        segments.check_chunks([250, 8400], 250, outbreaks=9000)
+
+
+def test_a_round_is_its_batches_seeds():
+    seeds = segments.round_seeds(4, base=30000, batches=40)
+    assert seeds == list(range(30400, 30440))
 
 
 def test_seeds_for_counts_kept_outbreaks_in_list_order():

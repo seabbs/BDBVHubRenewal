@@ -12,23 +12,28 @@ ROOT = Path(__file__).parents[2]
 CONFIG = yaml.safe_load((ROOT / "workflow" / "config.yaml").read_text())
 
 DESIGN = {
-    "rounds": list(range(9, 18)),
+    "rounds": list(range(10, 20)),
     "held_round": 9,
     "holdout": 90,
-    "outbreaks": 8000,
-    "prefixes": [250, 500, 750, 1000, 2000, 4000, 8000],
+    "outbreaks": 8400,
+    "prefixes": [250, 500, 750, 1000, 2000, 4000, 8400],
     "grid": "r5",
     "draws": 1,
     "cuts": 32,
     "learning_rate": 1e-5,
     "bias_lr": 1e-3,
     "series_bias": True,
-    "lr_steps": 36500,
     "sources": ["daily", "weekly", "3day", "daily+weekly", "daily+3day"],
     "univariate_share": 0.2,
     "chunk": 250,
     "subset_seed": 1,
 }
+
+
+def test_the_run_is_ten_grid_blocks():
+    assert DESIGN["outbreaks"] == 10 * 840
+    # The rate falls to zero over the simulations, not a step count.
+    assert "lr_steps" not in CONFIG["finetune"]
 
 
 @pytest.mark.parametrize("key", sorted(DESIGN))
@@ -39,6 +44,17 @@ def test_finetune_config_is_the_agreed_design(key):
 def test_rounds_are_simulated_with_one_draw():
     assert CONFIG["simulate"]["draws"] == 1
     assert CONFIG["simulate"]["seed_base"] == 30000
+
+
+def test_a_round_is_one_grid_block_of_840():
+    sim = CONFIG["simulate"]
+    assert sim["batches"] * sim["batch"] == 840
+    assert (sim["batches"], sim["batch"]) == (40, 21)
+    assert "held_batches" not in sim
+    # Ten training rounds, after the held-out round, are the 8,400.
+    rounds = CONFIG["finetune"]["rounds"]
+    assert len(rounds) * 840 == CONFIG["finetune"]["outbreaks"]
+    assert CONFIG["finetune"]["held_round"] not in rounds
 
 
 def _trainer_args(tmp_path):
@@ -93,21 +109,19 @@ def test_the_trainer_gets_the_agreed_design(tmp_path):
     sys.path.insert(0, str(ROOT / "scripts"))
     import finetune_stream as fs
 
-    args, rest = fs.build_parser().parse_known_args(_trainer_args(tmp_path))
-    # The segment's stop, which the trainer on main does not yet take.
-    assert rest == ["--until", "250"]
+    args = fs.build_parser().parse_args(_trainer_args(tmp_path))
+    assert args.until == 250
     assert args.grid == "r5"
-    # Round 9's held-out batches, seeds 30940 to 30943.
-    assert args.held_out_seeds == [30940, 30943]
+    # The held-out round 9, every batch: seeds 30900 to 30939.
+    assert args.held_out_seeds == [30900, 30939]
     assert args.holdout == 90
-    assert args.outbreaks == 8000
-    assert args.prefixes == [250, 500, 750, 1000, 2000, 4000, 8000]
-    assert args.stop_from == 8001
+    assert args.outbreaks == 8400
+    assert args.prefixes == [250, 500, 750, 1000, 2000, 4000, 8400]
+    assert args.stop_from == 8401
     assert args.draws_per_simulation == 1
     assert args.blocks_per_simulation == 32
     assert args.subset_seed == 1
     assert args.learning_rate == 1e-5
-    assert args.lr_steps == 36500
     assert args.series_bias
     assert args.bias_lr == 1e-3
     assert args.sources == DESIGN["sources"]

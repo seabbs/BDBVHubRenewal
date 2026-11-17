@@ -40,7 +40,7 @@ def test_manifest_row_matches_archie_and_reads_macos_time(tmp_path):
     ).strip()
     fields = row.split(",")
     assert len(fields) == len(HEADER.split(","))
-    assert fields[:7] == ["3", "30324", "train", "r4.1", "abc", "1", "25"]
+    assert fields[:7] == ["3", "30324", "train", "r4.1", "abc", "1", "21"]
     # No failures file: its hash is empty, as archie writes it.
     assert fields[9] == ""
     assert fields[10:13] == ["2097152", "1034.12", "laptop-x"]

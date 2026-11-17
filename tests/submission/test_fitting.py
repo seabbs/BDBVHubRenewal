@@ -98,6 +98,8 @@ def test_fit_then_nowcast_from_the_fit(tmp_path: Path, plain: Path) -> None:
     side = json.loads((out / "national.json").read_text())
     assert sorted(side["modelled_provinces"]) == sorted(provinces)
     assert side["unassigned"] == []
+    # The random walk's national rows are its provinces' sum.
+    assert side["national_source"] == "sum"
 
     # The plain random walk nowcast gives the same samples.
     (csv2,) = plain.rglob("*.csv")
