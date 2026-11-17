@@ -195,6 +195,34 @@ def test_score_runs_three_units_a_checkpoint_and_the_reference(tmp_path):
     assert "land" not in jobs
 
 
+def test_german_forecasts_are_off_by_default(tmp_path):
+    config = {"score": {"labels": ["slots-aaa", "bbb"]}}
+    jobs = dry(tmp_path, "score", config=config)
+    assert "score_germany_forecast" not in jobs
+    assert "score_germany_forecast" not in dry(
+        tmp_path, "germany_forecast", config=config
+    )
+
+
+def test_german_forecasts_run_the_reference_and_one_checkpoint(tmp_path):
+    forecast = {"enabled": True, "label": "slots-aaa"}
+    config = {
+        "score": {"labels": ["slots-aaa", "bbb"], "germany_forecast": forecast}
+    }
+    jobs = dry(tmp_path, "germany_forecast", config=config)
+    assert jobs["score_germany_forecast"] == 2
+    # Each after its own German nowcasts.
+    assert jobs["score_germany"] == 2
+    assert dry(tmp_path, "score", config=config)["score_germany_forecast"] == 2
+
+
+def test_german_forecasts_of_the_reference_alone(tmp_path):
+    forecast = {"enabled": True, "label": None}
+    config = {"score": {"labels": ["bbb"], "germany_forecast": forecast}}
+    jobs = dry(tmp_path, "germany_forecast", config=config)
+    assert jobs["score_germany_forecast"] == 1
+
+
 def test_score_takes_checkpoints_from_the_release_list(tmp_path):
     cache = tmp_path / "scores"
     cache.mkdir()
@@ -347,3 +375,44 @@ def test_the_dashboard_render_is_its_own_target(tmp_path):
     assert dry(tmp_path, "dashboard") == {"dashboard": 1}
     jobs = dry(tmp_path, "all", config={**FT, "score": {"labels": ["aaa"]}})
     assert "dashboard" not in jobs
+
+
+def _scored(tmp_path):
+    import os
+    import time
+
+    data = tmp_path / "target.csv"
+    data.write_text("x\n")
+    cache = tmp_path / "scores"
+    for study in ("bdbv", "germany", "heldout"):
+        (cache / study).mkdir(parents=True, exist_ok=True)
+    stamps = [
+        cache / "bdbv" / "reference.done",
+        cache / "germany" / "reference.done",
+        cache / "bdbv" / "aaa.done",
+        cache / "germany" / "aaa.done",
+        cache / "heldout" / "aaa.done",
+    ]
+    for f in stamps:
+        f.write_text("")
+    (cache / "tables").mkdir()
+    for f in ("checkpoint-scores.csv", "checkpoints.csv", "landed"):
+        (cache / "tables" / f).write_text("")
+    old = time.time() - 3600
+    os.utime(data, (old, old))
+    for f in stamps:
+        os.utime(f, (old + 60, old + 60))
+    return {
+        "score": {"labels": ["aaa"], "data": str(data)},
+        "slots_check": {"run": False},
+        "agg": {"run": False},
+    }, stamps
+
+
+def test_land_runs_only_when_the_tables_changed(tmp_path):
+    config, stamps = _scored(tmp_path)
+    assert dry(tmp_path, "land", config=config) == {}
+    stamps[2].write_text("")  # a unit finished again: newer than the table
+    jobs = dry(tmp_path, "land", config=config)
+    assert jobs["score_table"] == 1
+    assert jobs["land"] == 1

@@ -50,3 +50,12 @@ def test_text_and_colours_are_escaped():
     assert "R&amp;D &lt;loss&gt;" in out
     assert "a&lt;b &amp; &quot;c&quot;" in out
     assert "&lt;n&gt;" in out
+
+
+def test_an_info_marker_follows_the_escaped_title():
+    out = svg.chart(
+        "a <b>",
+        [("x", "#111", [(0, 1.0)], "pts")],
+        info="<span class=info>i</span>",
+    )
+    assert "<h3>a &lt;b&gt;<span class=info>i</span></h3>" in out

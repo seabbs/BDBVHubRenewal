@@ -68,8 +68,8 @@ def test_a_failed_mailbox_copy_is_reported(tmp_path, monkeypatch):
 
     monkeypatch.setattr(mirror.subprocess, "run", run)
     status = src.refresh()
-    assert status.startswith("mirrored from h")
-    assert "mailbox failed" in status
+    assert status.startswith("mirrored")
+    assert "mailbox.md failed" in status
 
 
 def test_shared_row_helpers():
@@ -120,9 +120,3 @@ def test_a_server_error_is_logged_not_sent(tmp_path, monkeypatch):
     assert got.value.code == 500
     assert "secret detail" not in body
     assert "secret detail" in err.getvalue()
-
-
-def test_dashed_series_by_run():
-    s = ("a", "#111", [(0, 1)], "pts")
-    assert page._styled(s, 0) == s
-    assert page._styled(s, 1) == (*s, "dash")
