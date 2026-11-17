@@ -165,8 +165,8 @@ Each real vintage before the latest is forecast, and origins with no pair of rel
 Zones are scored on the reported target as for [real releases](#real-releases), with the zone delays fitted at the origin, so a zone count is never scored against a count still being reported.
 Relative CRPS is against `randomwalknowcast`.
 `pprandomwalknowcast` is fitted here on the zones and on the provinces.
-On the Nowcast page only `randomwalk` and `randomwalknowcast` are shown at zone level.
-The fitted models are shown at the country and provinces, from their stored forecasts.
+On the Nowcast page every model is shown at zone level: the random walks from their zone runs, and the fitted models from the zone samples of their stored forecasts ([Renewal models](model.md#health-zones)).
+The Comparison with the hub scores every model's zone samples on the zone cells the hub teams forecast.
 
 ## Scores by place type and plausibility { #checks }
 

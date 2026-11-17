@@ -80,7 +80,8 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
 - Each simulation gives 32 training blocks.
 - A block is daily, 3-day or weekly, or daily with one weekly or 3-day total row per place.
 - Four in five blocks are multivariate and one in five univariate.
-- We save checkpoints at 1,000, 2,000, 4,000 and 8,000 simulations.
+- We save checkpoints at 250, 500, 750, 1,000, 2,000, 4,000 and 8,000 simulations.
+- We report the final checkpoint, at 8,000 simulations, where the learning rate reaches zero, and select no checkpoint on real data.
 - Training draws simulations from a balanced, shuffled design, so every checkpoint has seen the whole grid.
 - Chronos-2 forecasts the country, provinces and health zones as separate series in one joint block.
 - We compare the joint block with forecasting each level alone and with summing the lowest level (SI).
@@ -107,18 +108,10 @@ Beside it, one place's daily rows carry a weekly total row, missing until the la
 ### Synthetic data generation
 
 ::: {.callout-note title="Plan"}
-- We simulate outbreaks with epinowcast over a crossed factorial grid of epidemic process, trajectory, delay, reporting, observation model and strata.
+- We simulate outbreaks of up to 52 weeks with epinowcast over a crossed grid of epidemic process, trajectory, places and age groups, reporting delays and their changes, report days, reporting shocks and observation noise (SI).
+- The outbreaks range from one wave to several, with cases spread over many places or concentrated in a few, delays that drift, step, bunch or slow down, and NB1 or Poisson noise.
 - We checked the grid's ranges against published values for several diseases, the case studies among them.
-- @tbl-synthetic-grid gives the grid's factors and levels.
-- The SI gives the full simulation process and the epinowcast model.
 - Key references: [@abbottepinowcast; @lison2024; @Park2024; @Ansari2024; @Dooley2023; @Muller2022; @Hollmann2025].
-:::
-
-::: {#tbl-synthetic-grid}
-{{< include build/tables/main/synthetic-design.md >}}
-
-The crossed factors of the simulation grid and their levels, each balanced within every block of simulations, read from the simulator's code.
-The full settings are in the SI.
 :::
 
 ### Correlated trajectories
@@ -193,6 +186,12 @@ The plots in primarycensored-paper are a model for these.
 Each section has two paragraphs, one on visual performance and one summarising scores.
 
 Key references: the Methods references, with [@bracherEvaluatingEpidemicForecasts2021; @Bosse2023-sx] for the natural- and log-scale panels.
+:::
+
+::: {#tbl-live-summary}
+{{< include build/tables/si/live-summary.md >}}
+
+Zero-shot Chronos-2 and the newest scored checkpoint of the fine-tuned model: national WIS on the German first half and CRPS and log CRPS on the BDBV release backtest, relative to `randomwalknowcast` (daily / weekly model), and the trainer's held-out loss, with each cell's simulations in brackets. The SI gives every checkpoint (Checkpoint curve). {{< meta evidence.live.label >}} Development data only.
 :::
 
 ### Held-out synthetic data
@@ -315,7 +314,7 @@ The fine-tuned model is trained on simulations only, so it never sees the BDBV t
   - Fine-tuning ran on a laptop, so it needs no shared compute.
   - The BDBV hub imputes missing onset dates from reporting delays, which can over-smooth its data (Methods, Data) [@bdbv_modeling_hub_2026].
   - Smoothed release histories mismatch the epinowcast reporting structure our simulations assume, which may disadvantage the fine-tuned Chronos-2.
-  - We fine-tuned on blocks of at most 288 steps of history but forecast with all available data.
+  - We fine-tuned on blocks of at most 364 steps of history but forecast with all available data.
   - We did not test whether this affects Chronos-2's handling of longer histories, which matters most for long series such as the German daily data.
   - Fine-tuning used the laptop's GPU, which made it several times faster than its CPU.
   - On a laptop CPU alone it would run in hours.

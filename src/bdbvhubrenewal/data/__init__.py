@@ -48,6 +48,7 @@ from bdbvhubrenewal.data.tidy import (
     tidy_target,
     vintages,
     write_csv,
+    zone_coherence,
 )
 
 __all__ = [
@@ -84,4 +85,5 @@ __all__ = [
     "tidy_target",
     "vintages",
     "write_csv",
+    "zone_coherence",
 ]

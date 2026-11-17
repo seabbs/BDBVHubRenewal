@@ -294,3 +294,71 @@ def test_the_load_command_writes_nothing_without_a_stored_checkpoint(
 
 def test_both_fine_tuned_models_are_stored() -> None:
     assert STORED_MODELS == (DAILY, WEEKLY)
+
+
+def test_only_the_live_run_s_checkpoints_are_shown() -> None:
+    releases = [
+        *RELEASES,
+        _release("chronos-slots-live1", "2026-11-17T10:00:00Z"),
+        _release("chronos-slots-other", "2026-11-18T10:00:00Z"),
+    ]
+    stored = {"chronos-ft-bbb", "chronos-slots-live1", "chronos-slots-other"}
+    live = {"chronos-slots-live1", "chronos-slots-live2"}
+    # The other run is newer but not live, so the live checkpoint wins.
+    assert choose_checkpoint(stored, releases, "latest", live) == (
+        "chronos-slots-live1",
+        "chronos-ft-bbb",
+    )
+    # With no live checkpoint stored, nothing is shown, not the pin.
+    assert choose_checkpoint(
+        stored - {"chronos-slots-live1"}, releases, "latest", live
+    ) == (None, "chronos-ft-bbb")
+
+
+def test_the_load_command_shows_the_live_run_with_its_label(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from bdbvhubrenewal import cli
+    from bdbvhubrenewal.forecasters import foundation
+
+    releases = [
+        *RELEASES,
+        _release("chronos-slots-abcdef", "2026-11-17T10:00:00Z"),
+        _release("chronos-slots-fedcba", "2026-11-18T10:00:00Z"),
+    ]
+    store = tmp_path / "store"
+    for tag in ("chronos-slots-abcdef", "chronos-slots-fedcba"):
+        write_stored(store, tag, _cache(("2021-11-22",)), SPLIT, label=tag)
+    monkeypatch.setattr(foundation, "finetuned_releases", lambda: releases)
+    monkeypatch.delenv(foundation.FINETUNED_ENV, raising=False)
+    scores = tmp_path / "checkpoint-scores.csv"
+    pd.DataFrame(
+        {
+            "checkpoint": ["slots-abcdef", "slots-fedcba"],
+            "run": ["one-model", "slots-zeroinit"],
+            "outbreaks": [500, 750],
+        }
+    ).to_csv(scores, index=False)
+    note = tmp_path / "results" / "ft-checkpoint.json"
+    args = [
+        "germany-ft-load",
+        "--config",
+        str(ROOT / "config" / "germany.toml"),
+        "--finetune",
+        str(ROOT / "config" / "finetune.toml"),
+        "--store",
+        str(store),
+        "--out",
+        str(tmp_path / "parts" / "germany"),
+        "--note",
+        str(note),
+        "--checkpoint-scores",
+        str(scores),
+    ]
+    assert cli.main(args) == 0
+    meta = json.loads(note.read_text())
+    # The newer checkpoint is another run's, so the live one is shown.
+    assert meta["tag"] == "chronos-slots-abcdef"
+    assert meta["label"] == (
+        "Preliminary: fine-tuned on 500 of 8,000 simulations."
+    )

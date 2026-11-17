@@ -106,6 +106,7 @@ def choose_checkpoint(
     stored: Collection[str],
     releases: Iterable[Mapping[str, Any]],
     spec: str,
+    live: Collection[str] | None = None,
 ) -> tuple[str | None, str | None]:
     """Return the checkpoint whose stored forecasts the page shows.
 
@@ -125,6 +126,10 @@ def choose_checkpoint(
         and `draft` (`foundation.finetuned_releases`).
     spec : str
         `hash` of config/finetune.toml: `"latest"` or a settings hash.
+    live : collection of str, optional
+        The live fine-tuning run's release tags
+        (`live_checkpoint.live_tags`). When given, only its newest stored
+        checkpoint is shown, and none while it has none stored.
 
     Returns
     -------
@@ -134,6 +139,8 @@ def choose_checkpoint(
     """
     releases = list(releases)
     slots = [t for t in _published(releases, SLOTS_PREFIX) if t in stored]
+    if live is not None:
+        slots = [t for t in slots if t in live]
     ft = _published(releases, FT_PREFIX)
     if spec == "latest":
         pinned = ft[-1] if ft else None
@@ -141,6 +148,8 @@ def choose_checkpoint(
         pinned = f"{FT_PREFIX}-{spec}"
     if slots:
         return slots[-1], pinned
+    if live is not None:
+        return None, pinned
     if pinned in stored:
         return pinned, pinned
     fallback = [t for t in ft if t in stored]
