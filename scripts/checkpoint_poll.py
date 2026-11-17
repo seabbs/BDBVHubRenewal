@@ -81,15 +81,22 @@ def can_launch(
 
 
 def units_for(checkpoint: str, scored: set[str]) -> list[tuple[str, str]]:
-    """Return a checkpoint's units: held-out, BDBV (fast), then Germany.
+    """Return a checkpoint's units: fast ones first, then the slow.
+
+    Held-out settings and BDBV are fast; the held-out proper scores and
+    Germany are slow.
 
     BDBV units of scored checkpoints are included so their rows cover
-    the same origins; finished units return at once from the cache.
+    the same origins; finished units return at once from the cache. The
+    reference's held-out proper scores are here too, as a cache whose
+    reference landed before them never runs `reference_pending`.
     """
     return [
         ("heldout", checkpoint),
         ("bdbv", cs.REFERENCE),
         ("bdbv", checkpoint),
+        ("heldout_scores", cs.REFERENCE),
+        ("heldout_scores", checkpoint),
         ("germany", cs.REFERENCE),
         ("germany", checkpoint),
         *(("bdbv", s) for s in sorted(scored)),
@@ -150,7 +157,9 @@ HELD: dict[str, list[str]] = {"labels": []}
 """The checkpoints last reported as held, so each is said once."""
 
 
-def unheld(queue: list[str], zero_init: set[str], hold: Path = HOLD) -> list[str]:
+def unheld(
+    queue: list[str], zero_init: set[str], hold: Path = HOLD
+) -> list[str]:
     """Return the queue less the slots run's checkpoints while `hold` exists."""
     if not hold.exists():
         return list(queue)
@@ -211,19 +220,31 @@ def fresh_slots(cache: Path, labels: list[str]) -> set[str]:
     }
 
 
+FAST = ("heldout", "bdbv")
+"""Studies whose units take minutes."""
+
+
 def split_fast(
     units: list[tuple[str, str]],
 ) -> tuple[list[tuple[str, str]], list[tuple[str, str]]]:
-    """Split units into the fast ones (held-out, BDBV) and the German."""
-    fast = [u for u in units if u[0] != "germany"]
-    return fast, [u for u in units if u[0] == "germany"]
+    """Split units into the fast ones (held-out, BDBV) and the slow.
+
+    The held-out proper scores take about 45 minutes a checkpoint, so they
+    run with the German units, after the interim BDBV rows land.
+    """
+    fast = [u for u in units if u[0] in FAST]
+    return fast, [u for u in units if u[0] not in FAST]
 
 
 def reference_pending(cache: Path) -> list[tuple[str, str]]:
     """Return the zero-shot reference's units, until its rows have landed."""
     if (cache / REFERENCE_STAMP).exists():
         return []
-    return [("germany", cs.REFERENCE), ("bdbv", cs.REFERENCE)]
+    return [
+        ("germany", cs.REFERENCE),
+        ("bdbv", cs.REFERENCE),
+        ("heldout_scores", cs.REFERENCE),
+    ]
 
 
 FOLLOW_UPS = Path(__file__).parent / "slots_followups.sh"
@@ -618,7 +639,10 @@ def main(cache: Path) -> None:
 
         if job == COMPLETE_JOB:
             log(f"progress: {COMPLETE_JOB} started")
-            units = [("bdbv", cs.COMPLETE_LABEL), ("germany", cs.COMPLETE_LABEL)]
+            units = [
+                ("bdbv", cs.COMPLETE_LABEL),
+                ("germany", cs.COMPLETE_LABEL),
+            ]
             if not run_units(cache, units, COMPLETE_JOB, newer_slots, paused):
                 if paused:
                     continue

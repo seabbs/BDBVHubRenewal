@@ -18,6 +18,12 @@ rows in `evidence/checkpoint-scores.csv` with `rule` = `RULE`:
   release's settings.json (`held_out_loss`, by level, and
   `real_validation_loss` where given); `loss_zero_shot` is the base
   model's loss on the same set (`held_out_loss_start`).
+- `heldout`: proper scores on a fixed sample of the held-out simulation
+  blocks (scripts/heldout_scores.py), WIS on Chronos-2's own quantiles
+  and sample CRPS of randomwalknowcast's draws, by `layout` and `target`,
+  relative to randomwalknowcast where it forecast and to zero-shot
+  Chronos-2 elsewhere (`rel_to`). Not the trainer's loss: `held_out`
+  rows are that, read from settings.json.
 
 Relative scores divide by `randomwalknowcast` on the cells every model
 and checkpoint of a level made. Each run of the models is a "label":
@@ -29,6 +35,7 @@ Usage:
   python scripts/checkpoint_scores.py germany CACHE LABEL
   python scripts/checkpoint_scores.py bdbv CACHE LABEL
   python scripts/checkpoint_scores.py heldout CACHE HASH
+  python scripts/checkpoint_scores.py heldout_scores CACHE LABEL
   python scripts/checkpoint_scores.py table CACHE EVIDENCE CHECKPOINTS HASH...
 
 `table` rebuilds the rule's rows for the hashes given from the cache and
@@ -102,7 +109,16 @@ COLUMNS = [
     "loss",
     "loss_zero_shot",
     "run",
+    "layout",
+    "target",
+    "window",
+    "rel_to",
+    "wis",
+    "crps",
+    "n_blocks",
 ]
+"""Rows' columns; `layout` to `n_blocks` are the `heldout` study's and
+empty for the others."""
 HELD_OUT_LEVELS = ("leaf", "national", "intermediate")
 
 
@@ -503,10 +519,31 @@ def held_out_unit(cache: Path, checkpoint: str) -> None:
     print(f"heldout {checkpoint} done", flush=True)
 
 
+def _heldout_scores():
+    """Import scripts/heldout_scores.py (Chronos-2's cut code with it)."""
+    sys.path.insert(0, str(Path(__file__).parent))
+    import heldout_scores
+
+    return heldout_scores
+
+
+def heldout_scores_unit(cache: Path, label: str) -> None:
+    """Score a label on the held-out simulation blocks, one thread."""
+    import torch
+
+    torch.set_num_threads(1)
+    _pin(label)
+    hs = _heldout_scores()
+    hs.ft.check_package(Path(__file__).parents[1])
+    hs.unit(cache, label, reference=label == REFERENCE)
+
+
 def unit_done(cache: Path, study: str, label: str) -> bool:
     """Whether a unit's cache is complete."""
     if study == "heldout":
         return (cache / "heldout" / f"{label}-release.json").exists()
+    if study == "heldout_scores":
+        return bool(_heldout_scores().unit_done(cache, label))
     want = germany_dates() if study == "germany" else bdbv_origins()
     files = (cache / study / label).glob("*.csv.gz")
     have = {p.name.removesuffix(".csv.gz") for p in files}
@@ -612,6 +649,15 @@ def bdbv_rows(cache: Path, labels: Sequence[str]) -> pd.DataFrame:
     return relative(matched(sc, BDBV_CELL), "ebola", ("crps", "log_crps"))
 
 
+def heldout_rows(cache: Path, labels: Sequence[str]) -> pd.DataFrame:
+    """Return the finished labels' `heldout` rows, none without the reference."""
+    ready = ready_labels(cache, "heldout_scores", labels)
+    if REFERENCE not in ready:
+        return pd.DataFrame(columns=COLUMNS)
+    rows = _heldout_scores().rows(cache, ready, REFERENCE)
+    return rows.assign(rule=RULE).reindex(columns=COLUMNS)
+
+
 def table(
     cache: Path, evidence: Path, checkpoints: Path, hashes: Sequence[str]
 ) -> pd.DataFrame:
@@ -631,6 +677,7 @@ def table(
             germany_rows(cache, ready_labels(cache, "germany", labels)),
             bdbv_rows(cache, ready_labels(cache, "bdbv", labels)),
             *(held_out_rows(h, m[0]) for h, m in meta.items()),
+            heldout_rows(cache, labels),
         ],
         ignore_index=True,
     )
@@ -663,6 +710,8 @@ def main(argv: Sequence[str]) -> None:
         bdbv_unit(cache, argv[2])
     elif study == "heldout":
         held_out_unit(cache, argv[2])
+    elif study == "heldout_scores":
+        heldout_scores_unit(cache, argv[2])
     elif study == "table":
         new = table(cache, Path(argv[2]), Path(argv[3]), argv[4:])
         print(new.round(3).to_string(index=False), flush=True)
