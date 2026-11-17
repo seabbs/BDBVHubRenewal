@@ -116,3 +116,13 @@ def test_the_runs_are_compared_at_matched_sizes() -> None:
     # Both runs reached 1,000, so both rows give 1,000, not 2,000.
     assert out.iloc[2]["BDBV CRPS"] == "1.00 / 1.00 (1,000)"
     assert out.iloc[1]["BDBV CRPS"] == "1.00 / 1.00 (1,000)"
+
+
+def test_the_curve_keeps_the_hub_target_only() -> None:
+    from paperpipe.evidence import checkpoint_rows
+
+    rows = _scores()
+    daily = rows.assign(target="daily", rel_crps=9.0, rel_wis=9.0)
+    out = checkpoint_rows(pd.concat([rows, daily]), "one-model")
+    assert (out["rel_wis"] < 9).all()
+    assert not out.duplicated(["study", "model", "checkpoint"]).any()
