@@ -275,3 +275,10 @@ def test_checkpoints_daily_units_wait_for_the_reference_s(
     ]
     done |= set(jobs)
     assert poll.daily_units(tmp_path, labels, runs) == []
+
+
+def test_bdbv_paper_is_told_the_target_and_run_filters(poll) -> None:
+    note = poll.paper_note("abc", "slots-x", 125, "r4", "one-model")
+    assert "target == '7day'" in note
+    assert "run == 'one-model'" in note
+    assert "abc" in note
