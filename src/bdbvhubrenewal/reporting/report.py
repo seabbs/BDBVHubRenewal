@@ -73,7 +73,9 @@ from bdbvhubrenewal.evaluation.hubcompare import (
 )
 from bdbvhubrenewal.evaluation.nowcast import (
     relative_energy,
-    relative_wis,
+)
+from bdbvhubrenewal.evaluation.nowcast import (
+    relative_wis as _relative_wis,
 )
 from bdbvhubrenewal.evaluation.scoring import summarise_scores
 from bdbvhubrenewal.evaluation.store import (
@@ -133,6 +135,7 @@ from bdbvhubrenewal.reporting.scorechart import (
     write_score_chart,
 )
 from bdbvhubrenewal.reporting.scoresummary import (
+    mark_partial,
     summary_html,
     summary_rows,
     targets_attr,
@@ -151,6 +154,28 @@ from bdbvhubrenewal.reporting.zone_nowcast import (
 )
 
 __all__ = ["make_report"]
+
+
+def relative_wis(
+    scores: pd.DataFrame,
+    by: Sequence[str] = ("target",),
+    baseline: str | None = None,
+) -> pd.DataFrame:
+    """`nowcast.relative_wis`, with each model lacking cells marked.
+
+    The baseline defaults to the site's (`site_baseline`).
+
+    Each row gets `cells`, the baseline's n in its group, and `partial`
+    (`mark_partial`). Full rows all have the baseline's n, and partial
+    rows come after them in each group, so the tables never set a model
+    scored on fewer forecasts among the others.
+    """
+    baseline = baseline or site_baseline()
+    out = mark_partial(_relative_wis(scores, by, baseline), by, baseline)
+    keys = [c for c in by if c in out.columns]
+    return out.sort_values([*keys, "partial"], kind="stable").reset_index(
+        drop=True
+    )
 
 
 def _table(df: pd.DataFrame, digits: int = 2) -> str:
@@ -2175,9 +2200,7 @@ def _comparison_page(
         "marked main build is the current main branch's forecast for every "
         "round, so a round we did not submit to shows only the main "
         "build.\n"
-        "Each row's n is beside the hub cells scored in its round. "
-        "Fitted models are not run at health zone level, so they cover "
-        "only the hub's national and province cells.\n",
+        "Each row's n is beside the hub cells scored in its round.\n",
     )
     scores_path = cmp_dir / "scores.csv"
     scores = (
