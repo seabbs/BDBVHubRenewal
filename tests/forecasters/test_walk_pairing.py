@@ -102,3 +102,31 @@ def test_randomwalknowcast_records_its_copula_from_its_own_errors(
     off = dataclasses.replace(get_model("randomwalknowcast"), pairing="off")
     off.forecast(task)
     assert off.copula_fit is None
+
+
+def test_the_copula_record_names_the_pairs_behind_each_correlation(
+    task,
+) -> None:
+    model = get_model("randomwalknowcast")
+    model.forecast(task)
+    fit = model.copula_fit
+    for name in ("time", "provinces", "zones"):
+        assert isinstance(fit[f"n_{name}"], int)
+        assert isinstance(fit[f"prior_{name}"], bool)
+    # Places of one forecast give pairs of provinces, so rho_p is estimated.
+    assert fit["n_provinces"] > 0
+    assert not fit["prior_provinces"]
+    # A province task has no zones, so rho_z falls back to the prior.
+    assert fit["n_zones"] == 0
+    assert fit["prior_zones"]
+
+
+def test_shrinkage_strength_is_a_setting(task) -> None:
+    weak = dataclasses.replace(get_model("randomwalknowcast"), prior_weight=0)
+    strong = dataclasses.replace(
+        get_model("randomwalknowcast"), prior_weight=1e9
+    )
+    weak.forecast(task)
+    strong.forecast(task)
+    assert strong.copula_fit["rho_provinces"] == pytest.approx(0.7)
+    assert weak.copula_fit["rho_provinces"] != pytest.approx(0.7)
