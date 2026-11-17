@@ -293,6 +293,8 @@ rule delay_learning:
         run attention {params.out} --adapter {input.adapter} \
           --blocks {params.blocks} --germany {input.germany} \
           --dates {params.dates} --limit {params.limit} >> {log} 2>&1
+        run real {params.out} --adapter {input.adapter} \
+          --germany {input.germany} --dates {params.dates} >> {log} 2>&1
         """
 
 

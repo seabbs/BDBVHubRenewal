@@ -21,6 +21,10 @@ cut-off is its final count over the count reported by the cut-off:
 - parts: the nowcast loss of the fine-tuned model with its biases zeroed
   (LoRA kept) and with its LoRA removed (biases kept).
 
+`real` scores German development nowcasts with and without their lag
+rows (WIS of the 7-day target, leaving out the -28 sum, which every model
+takes as known), where the true delay is unknown.
+
 `attention` reads the group attention: the learned biases by layer and
 head, and on held-out simulated blocks and the German development data's
 input blocks, the share of each count row's attention going to itself,
@@ -554,19 +558,116 @@ def attention(args) -> None:
     fig.savefig(out / "lag-use.png", dpi=200)
 
 
+def real(args) -> None:
+    """Score German development nowcasts with and without their lag rows.
+
+    Zero-shot (`fm_chronos_daily_ragged`) and the fine-tuned daily model
+    (with its weekly totals rows) on the same dates; WIS of the 7-day
+    target on its truth, as the German benchmark scores it.
+    """
+    import torch
+    from chronos import Chronos2Pipeline
+
+    from bdbvhubrenewal.data.germany import (
+        hub_forecasts,
+        hub_triangle,
+        nowcast_tasks,
+    )
+    from bdbvhubrenewal.evaluation import germany as de
+    from bdbvhubrenewal.forecasters import foundation, series_bias
+    from bdbvhubrenewal.reporting.hubtables import hub_quantiles
+
+    torch.set_num_threads(1)
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+    config = de.load_germany_config("config/germany.toml")
+    tri_df = hub_triangle(args.germany)
+    built = models(Path(args.adapter))
+    real_input = foundation._chronos_input
+
+    real_rows = foundation._group_rows
+
+    def bare(group):
+        g = real_input(group)
+        return {"target": g["target"]}
+
+    def bare_rows(group):
+        # The target rows only, each with its place and parent.
+        place = np.asarray(group["target_places"], dtype=int)
+        parent = np.asarray(series_bias.parents_of(group["places"]))[place]
+        return np.stack([place, parent])
+
+    keys = ["model", "origin", "location", "target_end_date", "horizon"]
+    rows = []
+    for name, totals in (("zero-shot", False), ("fine-tuned", True)):
+        pipe = Chronos2Pipeline(model=built[name])
+        foundation._chronos = lambda _c=None, p=pipe: p
+        model = foundation.FoundationModel(
+            name, "daily", "ragged", None, weekly_totals=totals
+        )
+        for lags in (True, False):
+            foundation._chronos_input = real_input if lags else bare
+            foundation._group_rows = real_rows if lags else bare_rows
+            frames = []
+            for date in args.dates:
+                for task in nowcast_tasks(tri_df, date, 100, 1):
+                    samples = model.forecast(task).assign(
+                        model=name, as_of=np.nan
+                    )
+                    drawn = hub_forecasts(samples, task, date).rename(
+                        columns={
+                            "forecast_date": "origin",
+                            "sample": "output_type_id",
+                        }
+                    )
+                    table = drawn.assign(output_type="sample")[
+                        [*keys, "output_type", "output_type_id", "value"]
+                    ]
+                    frames.append(hub_quantiles(table, de.QUANTILE_LEVELS))
+            fc = pd.concat(frames, ignore_index=True)
+            fc = fc.drop(columns="output_type").rename(
+                columns={"output_type_id": "quantile"}
+            )
+            scored = de.score_germany(
+                de.with_truth(fc, tri_df, config.truth_delay),
+                config.truth_delay,
+            )
+            # The -28 sum is in the context for every model: leave it out.
+            scored = scored[scored["horizon"] > -28]
+            rows.append(
+                {
+                    "model": name,
+                    "lags": lags,
+                    "wis": scored["wis"].mean(),
+                    "n": len(scored),
+                }
+            )
+            print(rows[-1], flush=True)
+    foundation._chronos_input, foundation._group_rows = real_input, real_rows
+    table = pd.DataFrame(rows).pivot_table(
+        index="model", columns="lags", values="wis"
+    )
+    table["no_lags_over_lags"] = table[False] / table[True]
+    table.round(3).to_csv(out / "real-lags.csv")
+
+
 def main() -> None:
     """Run a subcommand."""
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(required=True)
-    for name, run in (("synthetic", synthetic), ("attention", attention)):
+    for name, run in (
+        ("synthetic", synthetic),
+        ("attention", attention),
+        ("real", real),
+    ):
         p = sub.add_parser(name)
         p.add_argument("out")
         p.add_argument("--adapter", required=True)
-        p.add_argument("--blocks", required=True)
+        p.add_argument("--blocks", required=name != "real")
         p.add_argument("--limit", type=int, default=0)
         if name == "synthetic":
             p.add_argument("--settings", required=True)
-        else:
+        if name in ("attention", "real"):
             p.add_argument("--germany", default="")
             p.add_argument("--dates", nargs="*", default=[])
         p.set_defaults(run=run)
