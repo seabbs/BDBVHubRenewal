@@ -376,3 +376,16 @@ def test_zone_units_name_their_study_on_the_command_line(
 ) -> None:
     cmd = poll.unit_command(tmp_path, ("bdbv_zones", "slots-a"))
     assert cmd[-4:] == ["bdbv_zones", str(tmp_path), "slots-a", "7day"]
+
+
+def test_operator_files_cap_units_and_skip_german_runs(poll, tmp_path) -> None:
+    # Sims need the cores: one unit at a time, and German nowcasts of
+    # checkpoints that are not the paper model dropped, by file.
+    cap = tmp_path / "max-units"
+    assert poll.unit_cap(cap, default=4) == 4
+    cap.write_text("1\n")
+    assert poll.unit_cap(cap, default=4) == 1
+    skip = tmp_path / "skip-german"
+    assert poll.skipped_german(skip) == set()
+    skip.write_text("slots-a\n# n250\nslots-b\n")
+    assert poll.skipped_german(skip) == {"slots-a", "slots-b"}
