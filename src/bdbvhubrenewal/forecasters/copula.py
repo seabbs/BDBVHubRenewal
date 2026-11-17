@@ -54,6 +54,7 @@ __all__ = [
     "RollingCopula",
     "error_scores",
     "estimate_copula",
+    "estimate_record",
     "normal_scores",
     "pair_registered",
     "pair_samples",
@@ -530,6 +531,28 @@ def estimate_copula(
     -------
     GaussianCopula
     """
+    pairs = _pairs(scores, national)
+    return _estimate(pairs, prior, weight)[0]
+
+
+def _estimate(
+    pairs: dict[str, pd.DataFrame], prior: GaussianCopula, weight: float
+) -> tuple[GaussianCopula, dict[str, object]]:
+    """Shrink each correlation of `pairs` to the prior, with its record."""
+    out: dict[str, float] = {}
+    record: dict[str, object] = {}
+    for name, rows in pairs.items():
+        r, rho0, n = _corr(rows), getattr(prior, name), len(rows)
+        rho = rho0 if r is None else (n * r + weight * rho0) / (n + weight)
+        out[name] = float(np.clip(rho, 0.0, MAX_RHO))
+        short = name.removeprefix("rho_")
+        record[f"n_{short}"] = int(n) if r is not None else 0
+        record[f"prior_{short}"] = r is None
+    return GaussianCopula(**out), record
+
+
+def _pairs(scores: pd.DataFrame, national: str) -> dict[str, pd.DataFrame]:
+    """Return the pairs of normal scores behind each correlation."""
     week = pd.to_datetime(scores["target_end_date"])
     scores = scores.drop(columns="target_end_date").assign(week=week)
     forecast = ["model", "origin"]
@@ -548,18 +571,27 @@ def estimate_copula(
     ]
     kin = same["location_a"].map(_province) == same["location_b"].map(_province)
     zones = same.loc[(a_zone | b_zone) & kin & ordered]
-    pairs = {
+    return {
         "rho_time": time,
         "rho_provinces": provinces,
         "rho_national": same.loc[a_national & ~b_national & ~b_zone],
         "rho_zones": zones,
     }
-    out = {}
-    for name, rows in pairs.items():
-        r, rho0, n = _corr(rows), getattr(prior, name), len(rows)
-        rho = rho0 if r is None else (n * r + weight * rho0) / (n + weight)
-        out[name] = float(np.clip(rho, 0.0, MAX_RHO))
-    return GaussianCopula(**out)
+
+
+def estimate_record(
+    scores: pd.DataFrame,
+    prior: GaussianCopula = PRIOR,
+    weight: float = PRIOR_WEIGHT,
+    national: str = NATIONAL,
+) -> tuple[GaussianCopula, dict[str, object]]:
+    """Estimate the copula as `estimate_copula`, with its record.
+
+    The record has, for each correlation (`time`, `provinces`, `national`,
+    `zones`), `n_<name>`, the pairs behind it, and `prior_<name>`, whether
+    it fell back to the prior for want of pairs that define it.
+    """
+    return _estimate(_pairs(scores, national), prior, weight)
 
 
 @dataclass(frozen=True)

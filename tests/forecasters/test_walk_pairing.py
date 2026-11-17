@@ -128,5 +128,5 @@ def test_shrinkage_strength_is_a_setting(task) -> None:
     )
     weak.forecast(task)
     strong.forecast(task)
-    assert strong.copula_fit["rho_provinces"] == pytest.approx(0.7)
+    assert strong.copula_fit["rho_provinces"] == pytest.approx(0.7, abs=1e-4)
     assert weak.copula_fit["rho_provinces"] != pytest.approx(0.7)

@@ -80,11 +80,10 @@ from bdbvhubrenewal.forecasters.copula import (
     PAIRINGS,
     PRIOR,
     PRIOR_WEIGHT,
-    RollingCopula,
     error_scores,
+    estimate_record,
     pair_walks,
 )
-from bdbvhubrenewal.forecasters.copula import estimate_copula as estimate
 from bdbvhubrenewal.forecasters.introductions import silent_trajectories
 from bdbvhubrenewal.forecasters.obs import sample_count
 from bdbvhubrenewal.forecasters.walk import random_walks
@@ -297,15 +296,21 @@ class RandomWalk:
         weeks before the walk (`copula.PAIRINGS`): `rolling`, by the
         copula estimated from the model's own recent nowcast errors, by
         default.
+    prior_weight : float
+        Pairs the prior counts as in the shrinkage of each correlation, a
+        guard for thin windows (`copula.estimate_copula`).
     copula_fit : dict or None
-        The copula of the last forecast: `model`, `origin`, `n_scores` and
-        the four correlations, or None with no pairing.
+        The copula of the last forecast: `model`, `origin`, `n_scores`, the
+        four correlations and, for each, the pairs behind it and whether it
+        fell back to the prior (`copula.estimate_record`), or None with no
+        pairing.
     """
 
     name: str = "randomwalk"
     settings: Settings = field(default_factory=Settings)
     fit_diagnostics: list[dict[str, object]] = field(default_factory=list)
     pairing: str = "rolling"
+    prior_weight: float = PRIOR_WEIGHT
     copula_fit: dict[str, object] | None = field(
         init=False, default=None, repr=False
     )
@@ -331,12 +336,20 @@ class RandomWalk:
         if self.pairing == "off":
             return values
         copula, n = PRIOR, 0
+        record: dict[str, object] = {}
         if self.pairing == "rolling":
             scores = self._error_scores(origin, task)
-            if len(scores):
-                fit = RollingCopula(weight=PRIOR_WEIGHT)
-                copula = estimate(scores, fit.prior, fit.weight)
-                n = len(scores)
+            n = len(scores)
+            copula, record = estimate_record(
+                scores
+                if n
+                else pd.DataFrame(
+                    columns=["model", "origin", "location",
+                             "target_end_date", "z"]
+                ),
+                PRIOR,
+                self.prior_weight,
+            )  # fmt: skip
         rng = task.rng(self.name, "copula")
         paired = pair_walks(
             values, tuple(origin.snap.locations), anchors, copula, rng
@@ -346,6 +359,7 @@ class RandomWalk:
             "origin": task.vintage,
             "n_scores": n,
             **{k: float(v) for k, v in vars(copula).items()},
+            **record,
         }
         return paired
 
