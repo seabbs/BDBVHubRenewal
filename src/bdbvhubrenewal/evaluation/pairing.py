@@ -6,7 +6,7 @@ forecast (`forecasters.copula.pair_walks`). Here each forecasts a task once
 and gives its draws under every pairing (`VARIANTS`): none (`off`), the
 prior (`prior`), and the rolling estimate at each shrinkage strength
 (`rolling_w<w>`), by the step the model itself calls
-(`RandomWalk.variant`). Pairing only reorders draws, so per-cell scores
+(`RandomWalk.with_pairing`). Pairing only reorders draws, so per-cell scores
 are equal across variants and only sums and joint scores move.
 
 `variant_scores` scores each variant of one forecast by level (national,
@@ -106,7 +106,7 @@ def variant_forecasts(name: str, task: ForecastTask) -> dict[str, pd.DataFrame]:
     out = {}
     for label, weight in VARIANTS:
         pairing = "rolling" if label.startswith("rolling") else label
-        drawn = model.variant(pairing, weight)
+        drawn = model.with_pairing(pairing, weight)
         zones = drawn["location"].str.count("-") >= 2
         out[label] = drawn if zones.all() else add_national(drawn)
     return out

@@ -300,7 +300,7 @@ class RandomWalk:
         Pairs the prior counts as in the shrinkage of each correlation, a
         guard for thin windows (`copula.estimate_copula`).
     keep_variants : bool
-        Keep the last forecast's unpaired draws, so `variant` gives it
+        Keep the last forecast's unpaired draws, so `with_pairing` gives it
         under another pairing or shrinkage strength.
     copula_fit : dict or None
         The copula of the last forecast: `model`, `origin`, `n_scores`, the
@@ -388,7 +388,7 @@ class RandomWalk:
         }
         return paired, fit
 
-    def variant(
+    def with_pairing(
         self, pairing: str, weight: float | None = None
     ) -> pd.DataFrame:
         """Return the last forecast under another pairing or strength.

@@ -140,12 +140,20 @@ def test_variants_come_from_one_forecast_as_the_model_gives_them(
     # draws, through the step the model itself calls.
     model = dataclasses.replace(get_model(name), keep_variants=True)
     paired = model.forecast(task)
-    pd.testing.assert_frame_equal(model.variant("rolling"), paired)
-    pd.testing.assert_frame_equal(model.variant("off"), _run(name, task, "off"))
+    pd.testing.assert_frame_equal(model.with_pairing("rolling"), paired)
     pd.testing.assert_frame_equal(
-        model.variant("prior"), _run(name, task, "prior")
+        model.with_pairing("off"), _run(name, task, "off")
+    )
+    pd.testing.assert_frame_equal(
+        model.with_pairing("prior"), _run(name, task, "prior")
     )
     weak = dataclasses.replace(get_model(name), prior_weight=0.0)
     pd.testing.assert_frame_equal(
-        model.variant("rolling", weight=0.0), weak.forecast(task)
+        model.with_pairing("rolling", weight=0.0), weak.forecast(task)
     )
+
+
+@pytest.mark.parametrize("name", MODELS)
+def test_a_walk_model_is_not_mistaken_for_a_renewal_variant(name: str) -> None:
+    # The fit store reads a renewal variant from a model's `variant`.
+    assert not hasattr(get_model(name), "variant")
