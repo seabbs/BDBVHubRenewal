@@ -394,9 +394,7 @@ def live_numbers(scores: pd.DataFrame | None, run: str = LIVE_RUN) -> dict:
     return out
 
 
-FINETUNED_EVIDENCE: Final = (
-    "aggregation_scores",
-)
+FINETUNED_EVIDENCE: Final = ("aggregation_scores",)
 """Evidence of both zero-shot and fine-tuned models, whose fine-tuned rows
 come from earlier fine-tunes than the paper's and are left out."""
 
