@@ -431,7 +431,7 @@ def checkpoint_numbers(scores: pd.DataFrame) -> dict:
     return out
 
 
-PLANNED_CHECKPOINTS: Final = (1000, 2000, 4000, 8000)
+PLANNED_CHECKPOINTS: Final = (1000, 2000, 4000, 8400)
 """The final run's checkpoints, which set the axis before any lands."""
 
 

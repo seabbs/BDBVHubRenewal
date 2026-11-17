@@ -77,12 +77,12 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
 - We fine-tune base Chronos-2 on synthetic data on a laptop, with its default LoRA recipe.
 - LoRA trains a small update to about 1% of the model's weights rather than retraining them all, so fine-tuning starts from the original model (SI).
 - The learning rate falls linearly to zero at 8,400 simulations.
-- Each simulation gives 32 training blocks.
+- Each simulation gives up to 32 training blocks.
 - A block is daily, 3-day or weekly, or daily with one weekly or 3-day total row per place.
 - Four in five blocks are multivariate and one in five univariate.
-- We save checkpoints from 250 simulations on.
+- We save checkpoints at 250, 500, 750, 1,000, 2,000, 4,000 and 8,400 simulations.
 - We report the final checkpoint, at 8,400 simulations, where the learning rate reaches zero, and select no checkpoint on real data.
-- The simulations come in balanced blocks of 840, so the final model has seen 10 full blocks and early checkpoints only part of the grid.
+- The simulations come in balanced blocks of 840, so the final model has seen ten whole blocks and the checkpoints before 840 only part of the grid.
 - Chronos-2 forecasts the country, provinces and health zones as separate series in one joint block.
 - We compare the joint block with forecasting each level alone and with summing the lowest level (SI).
 - We compare lags capped at 4 weeks or 28 days with lags run to the truth delay (SI).
