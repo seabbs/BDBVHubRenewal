@@ -6,7 +6,7 @@ committed `dashboard.runs` of workflow/config.yaml, then `DASHBOARD_RUNS`
 in config/local.env (specs separated by `;`), then `--run` on the
 command line. A run spec is
 
-    name=SOURCE[,label=L][,colour=C][,live][,base=OTHER][,prefix=P]
+    name=SOURCE[,label=L][,colour=C][,hue=H][,live][,base=OTHER][,prefix=P]
         [,hashes=H1+H2][,n=H1:250+H2:500]
 
 A spec splits only at a comma that starts a known field, so a value may
@@ -37,7 +37,16 @@ from pathlib import Path
 PALETTE = ("#2563eb", "#db2777", "#ea580c", "#0d9488", "#7c3aed", "#65a30d")
 """Colours of runs that name none, in order."""
 
-RUN_FIELDS = {"label", "colour", "live", "base", "prefix", "hashes", "n"}
+RUN_FIELDS = {
+    "label",
+    "colour",
+    "live",
+    "base",
+    "prefix",
+    "hashes",
+    "n",
+    "hue",
+}
 REF_FIELDS = {"label", "colour", "checkpoint", "role"}
 ROLES = {"baseline", "start", "other"}
 """A reference's role on the score panels: the series scores are relative
@@ -161,6 +170,7 @@ def parse_run(spec: str) -> Run:
         prefix=o.get("prefix"),
         hashes=tuple(filter(None, o.get("hashes", "").split("+"))),
         n=sizes,
+        hue=int(o["hue"]) if o.get("hue") else None,
     )
 
 
