@@ -358,6 +358,29 @@ def build_parser() -> argparse.ArgumentParser:
         "OUT/held-out.",
     )
 
+    pst = sub.add_parser(
+        "pairing-sensitivity",
+        help="Score randomwalk and randomwalknowcast with no pairing, the "
+        "prior and the rolling copula at each shrinkage strength, from one "
+        "forecast each, on the BDBV release backtest or the German "
+        "development half (`evaluation.pairing`).",
+    )
+    pst.add_argument("--study", choices=["bdbv", "germany"], required=True)
+    pst.add_argument(
+        "--data",
+        default=None,
+        help="The data directory; for germany, its raw/germany.",
+    )
+    pst.add_argument(
+        "--config",
+        default=None,
+        help="config/backtest.toml (bdbv) or config/germany.toml.",
+    )
+    pst.add_argument(
+        "--chunk", default=None, help=_CHUNK_HELP.format(what="origins")
+    )
+    pst.add_argument("--out", default="results/pairing")
+
     gtm = sub.add_parser(
         "germany-teams",
         help="Score the German hospitalisation hub teams' nowcasts.",
@@ -1908,6 +1931,36 @@ def _germany_backtest(args: argparse.Namespace) -> int:
     return 0
 
 
+def _pairing_sensitivity(args: argparse.Namespace, data_dir: str) -> int:
+    from bdbvhubrenewal.evaluation import germany as de
+    from bdbvhubrenewal.evaluation import pairing
+
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+    name = f"pairing-{args.study}"
+    if args.study == "bdbv":
+        config = args.config or "config/backtest.toml"
+        data = args.data or data_dir
+        real = load_target(data).query("kind == 'real'")
+        origins = bt.real_vintages(real)[:-1]
+        if args.chunk:
+            origins = chunk(origins, args.chunk)
+        scores = pairing.bdbv_sensitivity(data, config, origins)
+    else:
+        config = args.config or "config/germany.toml"
+        data = args.data or f"{data_dir}/raw/germany"
+        dates = de.nowcast_dates(de.load_germany_config(config))
+        if args.chunk:
+            dates = chunk(dates, args.chunk)
+        scores = pairing.germany_sensitivity(data, config, dates)
+    if args.chunk:
+        name += "-" + args.chunk.replace("/", "of")
+    path = out / f"{name}.csv.gz"
+    write_csv(scores, path)
+    print(f"Pairing sensitivity ({args.study}): {len(scores)} rows in {path}.")
+    return 0
+
+
 def _germany_teams(args: argparse.Namespace) -> int:
     from bdbvhubrenewal.data.germany import hub_triangle
     from bdbvhubrenewal.evaluation import germany as de
@@ -2088,6 +2141,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
     if args.command == "germany-backtest":
         return _germany_backtest(args)
+    if args.command == "pairing-sensitivity":
+        return _pairing_sensitivity(args, str(_data_root()))
     if args.command == "germany-teams":
         return _germany_teams(args)
     if args.command == "germany-asof":

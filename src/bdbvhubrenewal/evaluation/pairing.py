@@ -112,11 +112,13 @@ def variant_forecasts(name: str, task: ForecastTask) -> dict[str, pd.DataFrame]:
     return out
 
 
-def _level(location: pd.Series, levels: dict[str, str]) -> pd.Series:
+def _level(
+    location: pd.Series, levels: dict[str, str], national: str
+) -> pd.Series:
     """Each location's level: national, a named level, or zones."""
     zone = location.str.count("-") >= 2
     out = location.map(levels).fillna("provinces")
-    out[location == NATIONAL] = "national"
+    out[location == national] = "national"
     out[zone] = "zones"
     return out
 
@@ -147,6 +149,7 @@ def variant_scores(
     variant: str,
     origin: str,
     levels: dict[str, str] | None = None,
+    national: str = NATIONAL,
 ) -> pd.DataFrame:
     """Score one variant of one forecast by level.
 
@@ -162,6 +165,8 @@ def variant_scores(
     levels : dict, optional
         A level for places that are neither the country nor zones (such as
         age groups); `provinces` by default.
+    national : str
+        The country's code.
 
     Returns
     -------
@@ -172,7 +177,7 @@ def variant_scores(
     rows = samples.merge(truth[[*_CELL, "truth"]], on=_CELL)
     if rows.empty:
         return pd.DataFrame(columns=list(SCORE_COLUMNS))
-    rows = rows.assign(level=_level(rows["location"], levels or {}))
+    rows = rows.assign(level=_level(rows["location"], levels or {}, national))
     found: list[pd.DataFrame] = []
     for level, grp in rows.groupby("level"):
         scored: list[dict[str, object]] = [
@@ -242,3 +247,186 @@ def summarise_pairing(scores: pd.DataFrame) -> pd.DataFrame:
     idx = pd.MultiIndex.from_frame(out[[k for k in keys if k != "variant"]])
     out["relative"] = out["value"].to_numpy() / base.reindex(idx).to_numpy()
     return out[[*keys, "value", "n", "relative"]]
+
+
+def bdbv_sensitivity(
+    data: str,
+    config_path: str = "config/backtest.toml",
+    origins: list[str] | None = None,
+) -> pd.DataFrame:
+    """Score every variant on the BDBV release backtest's origins.
+
+    Each real origin (less `skip_origins` and the latest) is forecast for
+    the provinces, with the country their sum, and for the active zones
+    from their own data, as the zone backtest does. Truth is each week's
+    count in the first release the backtest's truth delay after it, for
+    provinces and zones alike.
+
+    Parameters
+    ----------
+    data : str
+        The data directory.
+    config_path : str
+        The backtest config.
+    origins : list of str, optional
+        Only these origins (a block of a chunked run).
+
+    Returns
+    -------
+    pandas.DataFrame
+        `variant_scores` rows of every model, variant, origin and level.
+    """
+    from pathlib import Path
+
+    from bdbvhubrenewal.data import (
+        load_daily,
+        load_daily_zones,
+        load_delays,
+        load_target,
+    )
+    from bdbvhubrenewal.data.zones import hub_zones, weekly_zone_counts
+    from bdbvhubrenewal.evaluation.backtest import load_config, real_vintages
+    from bdbvhubrenewal.evaluation.nowcast import (
+        resolve_truth_delay,
+        rolling_truth,
+    )
+    from bdbvhubrenewal.evaluation.store import origin_tasks
+    from bdbvhubrenewal.forecasters.zones import zone_task
+
+    config = load_config(config_path)
+    target, delays = load_target(data), load_delays(data)
+    daily, daily_zones = load_daily(data), load_daily_zones(data)
+    codes = hub_zones(Path(data) / "hub-config" / "tasks.json")
+    real = target.loc[target["kind"] == "real"]
+    vintages = real_vintages(real)
+    delay = resolve_truth_delay(config, target)
+    cutoff = real.drop_duplicates("vintage").set_index("vintage")["cutoff"]
+    zone_counts = pd.concat(
+        [
+            weekly_zone_counts(daily_zones, v).assign(
+                kind="real", vintage=v, cutoff=cutoff[v]
+            )
+            for v in vintages
+        ],
+        ignore_index=True,
+    )
+    truth = pd.concat(
+        [rolling_truth(real, delay), rolling_truth(zone_counts, delay)],
+        ignore_index=True,
+    )
+    tasks = origin_tasks(target, delays, config, daily)
+    frames = []
+    for origin in vintages[:-1]:
+        if origin in config.skip_origins or origin not in tasks:
+            continue
+        if origins is not None and origin not in origins:
+            continue
+        task = tasks[origin]
+        counts = weekly_zone_counts(daily_zones, origin)
+        active = tuple(z for z in codes if z in set(counts["location"]))
+        zt = zone_task(task, counts, active, pd.concat([daily, daily_zones]))
+        for name in MODELS:
+            for t in (task, zt):
+                for label, s in variant_forecasts(name, t).items():
+                    frames.append(
+                        variant_scores(
+                            s,
+                            truth,
+                            study="bdbv",
+                            model=name,
+                            variant=label,
+                            origin=origin,
+                        )
+                    )
+    if not frames:
+        return pd.DataFrame(columns=list(SCORE_COLUMNS))
+    return pd.concat(frames, ignore_index=True)
+
+
+def germany_sensitivity(
+    data: str,
+    config_path: str = "config/germany.toml",
+    dates: list[str] | None = None,
+) -> pd.DataFrame:
+    """Score every variant on the German development half.
+
+    Each nowcast date's states task (with Germany their sum) and age
+    groups task are forecast as the German benchmark does
+    (`data.germany.nowcast_tasks`, `hub_forecasts`), on the 7-day sums
+    ending 0 to 28 days back, with the truth the sum reported the config's
+    truth delay after it ends.
+
+    Parameters
+    ----------
+    data : str
+        The German data directory.
+    config_path : str
+        The German config.
+    dates : list of str, optional
+        Only these nowcast dates (a block of a chunked run).
+
+    Returns
+    -------
+    pandas.DataFrame
+        `variant_scores` rows of every model, variant, date and level.
+    """
+    from pathlib import Path
+
+    from bdbvhubrenewal.data.germany import (
+        AGE_GROUPS,
+        hub_forecasts,
+        hub_target,
+        hub_triangle,
+        nowcast_tasks,
+    )
+    from bdbvhubrenewal.evaluation import germany as de
+    from bdbvhubrenewal.evaluation.nowcast import rolling_truth
+
+    cfg = de.load_germany_config(config_path)
+    triangle = hub_triangle(Path(data) / Path(cfg.triangle).name)
+    run = de.nowcast_dates(cfg) if dates is None else list(dates)
+    levels = dict.fromkeys(AGE_GROUPS, "ages")
+    frames = []
+    for date in run:
+        for task in nowcast_tasks(triangle, date, cfg.n_samples, cfg.seed):
+            for name in MODELS:
+                drawn = variant_forecasts(name, task)
+                if not drawn:
+                    continue
+                moved = {
+                    label: hub_forecasts(
+                        s.assign(model=name, as_of=np.nan), task, date
+                    )
+                    for label, s in drawn.items()
+                }
+                ends = sorted(
+                    set(next(iter(moved.values()))["target_end_date"])
+                )
+                truth = rolling_truth(
+                    hub_target(triangle, ends), cfg.truth_delay
+                )
+                for label, s in moved.items():
+                    frames.append(
+                        variant_scores(
+                            s,
+                            truth,
+                            study="germany",
+                            model=name,
+                            variant=label,
+                            origin=date,
+                            levels={
+                                **levels,
+                                **{
+                                    p: "states"
+                                    for p in set(s["location"])
+                                    if p not in levels and p != "DE"
+                                },
+                            },
+                        )
+                    )
+    if not frames:
+        return pd.DataFrame(columns=list(SCORE_COLUMNS))
+    out = pd.concat(frames, ignore_index=True)
+    # Germany's provinces are its states.
+    out["level"] = out["level"].replace({"provinces": "states"})
+    return out
