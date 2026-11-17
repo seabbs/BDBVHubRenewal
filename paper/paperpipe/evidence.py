@@ -9,6 +9,7 @@ waits on in place of its table, and `None` in place of its numbers.
 
 - `copula_figure`: the rolling copula against no pairing, by study and
   level.
+- `rho_medians`: the median rolling rho_p of each walk model.
 - `aggregation_figure`: WIS of each aggregation option relative to
   `randomwalknowcast` on the same targets, by study and level.
 - `heldout_figure` and `realism_figure`: the fine-tune's held-out loss
@@ -40,7 +41,6 @@ from matplotlib.figure import Figure
 from paperpipe.outputs import to_markdown
 
 __all__ = [
-    "ARMS",
     "EVIDENCE",
     "aggregation_figure",
     "aggregation_numbers",
@@ -58,20 +58,13 @@ __all__ = [
     "live_numbers",
     "realism_figure",
     "realism_numbers",
+    "rho_medians",
     "scale_floor_numbers",
     "slots_rows",
     "slots_summary",
     "waiting",
     "write_evidence",
 ]
-
-ARMS: Final = {
-    "unpaired": "Unpaired",
-    "fixed": "Fixed",
-    "rolling": "Rolling",
-    "rolling_w25": "Rolling, w = 25",
-}
-"""Pairing arms of the copula comparison, in table order."""
 
 OPTIONS: Final = {
     "joint": "(a)",
@@ -680,6 +673,7 @@ def diseases_table(diseases: pd.DataFrame) -> pd.DataFrame:
 
 EVIDENCE: Final = {
     "si_copula": "fm-copula's walk scores, no pairing against rolling rho_p",
+    "copula_rho": "the walk models' rho_p by origin (copula.json rows)",
     "aggregation_scores": "fm-agg's per-target aggregation scores",
     "finetune_heldout": "fm-finetune3's held-out loss curve",
     "sim_summaries": "fm-finetune3's per-outbreak r3 pilot summaries",
@@ -709,7 +703,14 @@ case study and level), `run`, `outbreaks` (the run's checkpoint) and
 NOT_YET: Final = "(not yet available)"
 """What the paper quotes in place of a number whose rows are not set."""
 
+COPULA_MODELS: Final = ("randomwalk", "randomwalknowcast")
+"""The models that pair their province draws by rho_p."""
+
 QUOTED: Final = {
+    "rho": {
+        m: {"rho_p": NOT_YET, "origins": NOT_YET, "fallback": NOT_YET}
+        for m in COPULA_MODELS
+    },
     "realism": {
         "zero_share": {"sim_q95": NOT_YET, "BDBV": NOT_YET},
         "delay_q99": {"sim_q95": NOT_YET, "Germany_states": NOT_YET},
@@ -738,6 +739,27 @@ COPULA_METRICS: Final = {
 """The copula figure's scores: CRPS and 90% coverage of each cell, which
 at the national level is the sum of the provinces, and the energy score
 on log counts of the level's places and weeks as one vector."""
+
+
+def rho_medians(rho: pd.DataFrame) -> dict:
+    """Return each walk model's median rolling rho_p over origins.
+
+    `rho` has the walk models' `copula.json` rows: `model`, `origin`,
+    `n_scores`, `rho_provinces`, `n_pairs` and `fallback`. Origins that
+    fell back to the prior for want of pairs are counted, not in the
+    median.
+    """
+    fallback = rho["fallback"].astype(str).str.lower() == "true"
+    out: dict = {}
+    for model, g in rho.groupby("model", sort=False):
+        own = fallback.loc[g.index]
+        est = g.loc[~own, "rho_provinces"]
+        out[model] = {
+            "rho_p": round(float(est.median()), 2) if len(est) else NOT_YET,
+            "origins": int(g["origin"].nunique()),
+            "fallback": int(own.sum()),
+        }
+    return out
 
 
 def copula_figure(rows: pd.DataFrame) -> Figure:
@@ -1012,8 +1034,10 @@ def write_evidence(
         None if sims is None or ref is None else realism_figure(sims, ref),
         ["sim_summaries", "sim_realism"],
     )
+    rho = data["copula_rho"]
     numbers = {
         "evidence": {
+            "rho": QUOTED["rho"] if rho is None else rho_medians(rho),
             "lag": (
                 None
                 if any(

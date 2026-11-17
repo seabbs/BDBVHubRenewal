@@ -353,6 +353,7 @@ Choices tuned on development data, with their values and the data they were set 
 
 - @fig-copula-impact compares the rolling $\rho_p$ with no pairing on the German first half, the BDBV release backtest and the held-out simulations, at the national level and for provinces.
 - The per-province CRPS and coverage are unchanged by construction, so only the national sum and the energy score move.
+- The median rolling $\rho_p$ over origins is {{< meta evidence.rho.randomwalknowcast.rho_p >}} for `randomwalknowcast` and {{< meta evidence.rho.randomwalk.rho_p >}} for `randomwalk`, with {{< meta evidence.rho.randomwalknowcast.fallback >}} and {{< meta evidence.rho.randomwalk.fallback >}} origins falling back to the prior.
 
 ![Each score of `randomwalk` and `randomwalknowcast` with the rolling $\rho_p$ relative to no pairing, by study and level: CRPS and 90% coverage of each cell, where the national level is the sum of the provinces, and the energy score (ES) of each level's places and weeks on the log scale. Development data only.](build/figures/si/copula-impact.png){#fig-copula-impact}
 
