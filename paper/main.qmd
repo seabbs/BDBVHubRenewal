@@ -83,7 +83,6 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
 - We save checkpoints at 1,000, 2,000, 4,000 and 8,000 simulations.
 - Training draws simulations from a balanced, shuffled design, so every checkpoint has seen the whole grid.
 - Chronos-2 forecasts the country, provinces and health zones as separate series in one joint block.
-- The copula only pairs draws, for joint scores and sums, and leaves marginals unchanged.
 - We compare the joint block with forecasting each level alone and with summing the lowest level (SI).
 - We compare lags capped at 4 weeks or 28 days with lags run to the truth delay (SI).
 - We compare the model with attention biases with one fine-tuned without them (SI).
@@ -124,33 +123,11 @@ The full settings are in the SI.
 
 ### Correlated trajectories
 
-Chronos-2 draws each place and week on its own.
-`randomwalknowcast` draws each nowcast week on its own, and its forecast weeks follow its walk within each sample.
-Paired at random, independent draws give sums over weeks or places that are too narrow.
-We pair them into trajectories with a Gaussian copula over weeks and places.
-Each trajectory draws a vector $z$ from a multivariate normal with correlation matrix $\Sigma$.
-Each place-week's draws are then reordered across trajectories so that they rank as $z$ does.
-This is an empirical copula reordering in the style of the Schaake shuffle [@Clark2004] and ensemble copula coupling [@Schefzik2013].
-Each place-week keeps its own draws, so every marginal forecast and every per-week score is unchanged.
-For `randomwalknowcast` the reordering replaces the walk's own dependence over weeks.
-$\Sigma$ is a place correlation times a week correlation.
-Two steps $\delta$ days apart have correlation $\rho_t^{\delta/7}$.
-Two provinces have correlation $\rho_p$, and the country and a province have correlation $\rho_n$.
-The daily models also pair the days of a week, with correlation $\rho_d^{|d - d'|}$ between days $d$ and $d'$.
-$\rho_d = 0.985$ is fixed rather than estimated, as each matured error is of a week's sum. It gives the best weekly WIS, median bias and coverage of the daily models on the Ebola release backtest.
-Where the country is the sum of its provinces, as for `randomwalknowcast`, it is summed again from the paired provinces.
-Copulas have been used before to give joint forecasts of seasonal influenza [@Ray2018; @Brooks2018].
+- We pair the draws of `randomwalk` and `randomwalknowcast` into trajectories with a rolling Gaussian copula, so their sums over weeks and places are not too narrow, while each cell keeps its own draws (SI).
 
-At each forecast origin we estimate the three correlations from the model's own matured errors.
-For each forecast made at an earlier origin whose truth had been released by this origin, we take the randomised probability integral transform (PIT) of the truth in the forecast's draws and map it to a normal score.
-We use the scores of the 8 latest matured weeks.
-Each correlation is the Pearson correlation of pairs of scores from the same forecast.
-We shrink it towards a fixed prior, $(\rho_t, \rho_p, \rho_n) = (0.9, 0.7, 0.7)$, with the prior worth 100 pairs, and keep it between 0 and 0.95.
-An origin with no matured errors takes the prior.
 We score the paired trajectories with the variogram score of order 0.5 [@Scheuerer2015] on $\log(x + 1)$ counts and the coverage of sums over weeks and over places.
 We also report the energy score [@Gneiting2008], which has been used for epidemic trajectories from forecast hubs [@Bay2026] but discriminates poorly between dependence structures [@Pinson2013].
 Both scores are proper for joint forecasts [@gneitingStrictlyProperScoring2007].
-The SI gives the copula in full, its estimator and window, and the scores of paired against unpaired trajectories.
 
 ### Evaluation on held-out synthetic data
 
@@ -293,7 +270,7 @@ German nowcast hub: mean scores, coverage and number of forecasts of each model,
 - We show national nowcasts against the other submissions.
 - We summarise the scores.
 - The SI compares the joint block with each level alone and with the lowest level summed (Joint block or aggregation).
-- The SI compares paired with unpaired trajectories (Impact of correlated trajectories).
+- The SI compares the walks with the rolling copula and with the copula off (Impact of correlated trajectories).
 :::
 
 ::: {#fig-ebola-nowcasts}

@@ -7,62 +7,8 @@ from paperpipe.evidence import (
     EVIDENCE,
     aggregation_numbers,
     aggregation_table,
-    copula_table,
-    rho_medians,
     write_evidence,
 )
-
-
-def _copula() -> pd.DataFrame:
-    rows = []
-    for arm, es in (("rolling", 0.3), ("unpaired", 0.5), ("fixed", 0.31)):
-        for origin in ("2026-10-04", "2026-10-11"):
-            rows.append(
-                {
-                    "study": "ebola",
-                    "strata": "provinces",
-                    "model": "randomwalknowcast",
-                    "arm": arm,
-                    "origin_date": origin,
-                    "energy_log": es,
-                    "variogram_log": 40.0,
-                    "cover50_weeks": 0.9,
-                    "cover90_weeks": 0.95,
-                    "cover50_places": 0.6,
-                    "cover90_places": 0.7,
-                    "wis_strata": 1.0,
-                    "wis_national": np.nan,
-                }
-            )
-    return pd.DataFrame(rows)
-
-
-def test_copula_table_averages_and_orders_the_arms() -> None:
-    t = copula_table(_copula(), "ebola")
-    assert t["Pairing"].tolist() == ["Unpaired", "Fixed", "Rolling"]
-    assert t["ES (log)"].tolist() == [0.5, 0.31, 0.3]
-    assert t["Places 50% / 90%"].iloc[0] == "0.60 / 0.70"
-
-
-def test_rho_medians_by_strata_and_model() -> None:
-    rho = pd.DataFrame(
-        {
-            "study": "germany",
-            "strata": "states",
-            "model": "randomwalknowcast",
-            "arm": "rolling",
-            "rho_t": [0.5, 0.6, 0.7],
-            "rho_p": [0.0, 0.04, 0.1],
-            "rho_n": np.nan,
-        }
-    )
-    # The fixed arm's prior is not an estimate.
-    rho = pd.concat([rho, rho.assign(arm="fixed", rho_t=0.9, rho_p=0.7)])
-    out = rho_medians(rho)
-    assert out["germany"]["states"]["randomwalknowcast"] == {
-        "rho_t": 0.6,
-        "rho_p": 0.04,
-    }
 
 
 def test_aggregation_is_relative_to_the_reference_on_shared_targets() -> None:
@@ -117,11 +63,11 @@ def test_missing_evidence_leaves_a_note_and_no_numbers(tmp_path) -> None:
         tmp_path / "fig",
         tmp_path / "e.yml",
     )
-    assert "waits on" in (tmp_path / "si" / "copula-ebola.md").read_text()
+    assert "waits on" in (tmp_path / "si" / "aggregation-ebola.md").read_text()
     assert (tmp_path / "fig" / "sim-realism.png").is_file()
     doc = yaml.safe_load((tmp_path / "e.yml").read_text())
-    rho = doc["evidence"]["rho"]["germany"]["states"]["randomwalknowcast"]
-    assert rho["rho_t"] == "(not yet available)"
+    zero = doc["evidence"]["realism"]["zero_share"]
+    assert zero["BDBV"] == "(not yet available)"
     assert len(out["evidence"]["waiting"]) == len(EVIDENCE)
 
 

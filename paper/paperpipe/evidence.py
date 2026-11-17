@@ -7,9 +7,6 @@ into the SI's tables, figures and quoted numbers, so nothing is typed into
 the paper. A result whose rows are not set yet gets a note saying what it
 waits on in place of its table, and `None` in place of its numbers.
 
-- `copula_table`: mean joint scores, coverage of sums and WIS of each
-  model and pairing arm, by strata.
-- `rho_medians`: median rolling copula correlations over origins and places.
 - `aggregation_table`: WIS of each aggregation option relative to
   `randomwalknowcast` on the same targets, with coverage and n per level.
 - `heldout_figure` and `realism_figure`: the fine-tune's held-out loss
@@ -41,7 +38,7 @@ __all__ = [
     "checkpoint_rows",
     "comparison_figure",
     "comparison_table",
-    "copula_table",
+    "copula_figure",
     "cost_table",
     "diseases_table",
     "drop_finetuned",
@@ -49,7 +46,6 @@ __all__ = [
     "lag_numbers",
     "realism_figure",
     "realism_numbers",
-    "rho_medians",
     "scale_floor_numbers",
     "slots_loss_table",
     "slots_scores_table",
@@ -85,71 +81,6 @@ def _pair(a: pd.Series, b: pd.Series) -> list[str]:
         "" if pd.isna(x) or pd.isna(y) else f"{x:.2f} / {y:.2f}"
         for x, y in zip(a, b, strict=True)
     ]
-
-
-def copula_table(scores: pd.DataFrame, study: str) -> pd.DataFrame:
-    """Return the copula comparison of one study, one row per model and arm.
-
-    Parameters
-    ----------
-    scores : pandas.DataFrame
-        Per-forecast rows: `study`, `strata`, `model`, `arm`,
-        `energy_log`, `variogram_log`, `cover50_weeks`, `cover90_weeks`,
-        `cover50_places`, `cover90_places`, `wis_strata`, `wis_national`.
-    study : str
-        `ebola` or `germany`.
-
-    Returns
-    -------
-    pandas.DataFrame
-        Display columns, means over forecasts.
-    """
-    sc = scores.loc[scores["study"] == study]
-    cols = [
-        "energy_log",
-        "variogram_log",
-        "cover50_weeks",
-        "cover90_weeks",
-        "cover50_places",
-        "cover90_places",
-        "wis_strata",
-        "wis_national",
-    ]
-    m = sc.groupby(["strata", "model", "arm"], sort=False)[cols].mean()
-    m = m.reset_index()
-    m["arm"] = pd.Categorical(m["arm"], categories=list(ARMS), ordered=True)
-    m = m.sort_values(["strata", "model", "arm"])
-    return pd.DataFrame(
-        {
-            "Strata": m["strata"].str.capitalize(),
-            "Model": m["model"],
-            "Pairing": m["arm"].map(ARMS).astype(str),
-            "ES (log)": m["energy_log"].round(3),
-            "VS (log)": m["variogram_log"].round(3),
-            "Weeks 50% / 90%": _pair(m["cover50_weeks"], m["cover90_weeks"]),
-            "Places 50% / 90%": _pair(m["cover50_places"], m["cover90_places"]),
-            "WIS strata": m["wis_strata"].round(2),
-            "WIS national": m["wis_national"].round(2),
-        }
-    )
-
-
-def rho_medians(rho: pd.DataFrame) -> dict:
-    """Return the median rolling correlations by study, strata and model.
-
-    Rows of other pairing arms, where `rho` has an `arm` column, are left
-    out.
-    """
-    if "arm" in rho.columns:
-        rho = rho.loc[rho["arm"] == "rolling"]
-    out: dict = {}
-    for (study, strata, model), g in rho.groupby(["study", "strata", "model"]):
-        out.setdefault(study, {}).setdefault(strata, {})[model] = {
-            name: round(float(g[name].median()), 2)
-            for name in ("rho_t", "rho_p", "rho_n")
-            if name in g and g[name].notna().any()
-        }
-    return out
 
 
 def aggregation_table(
@@ -327,8 +258,6 @@ def checkpoint_rows(
 
 
 FINETUNED_EVIDENCE: Final = (
-    "copula_scores",
-    "copula_rho",
     "aggregation_scores",
     "aggregation_cost",
 )
@@ -615,8 +544,7 @@ def diseases_table(diseases: pd.DataFrame) -> pd.DataFrame:
 
 
 EVIDENCE: Final = {
-    "copula_scores": "fm-copula's per-forecast copula scores",
-    "copula_rho": "fm-copula's rolling correlation estimates",
+    "si_copula": "fm-copula's walk scores with the copula off and rolling",
     "aggregation_scores": "fm-agg's per-target aggregation scores",
     "aggregation_cost": "fm-agg's cost of each option",
     "finetune_heldout": "fm-finetune3's held-out loss curve",
@@ -650,12 +578,6 @@ NOT_YET: Final = "(not yet available)"
 """What the paper quotes in place of a number whose rows are not set."""
 
 QUOTED: Final = {
-    "rho": {
-        "germany": {
-            strata: {"randomwalknowcast": {"rho_t": NOT_YET, "rho_p": NOT_YET}}
-            for strata in ("states", "ages")
-        }
-    },
     "realism": {
         "zero_share": {"sim_q95": NOT_YET, "BDBV": NOT_YET},
         "delay_q99": {"sim_q95": NOT_YET, "Germany_states": NOT_YET},
@@ -780,6 +702,95 @@ def comparison_table(rows: pd.DataFrame) -> pd.DataFrame:
     return wide.sort_values(["Set", "Outbreaks"]).reset_index(drop=True)
 
 
+COPULA_STUDIES: Final = {
+    "germany_dev": "Germany",
+    "bdbv_backtest": "BDBV",
+    "heldout_synthetic": "Held-out synthetic",
+}
+"""The copula figure's studies, in its row order, all on development data."""
+
+COPULA_METRICS: Final = {
+    "energy": "ES",
+    "variogram": "VS",
+    "cover50_sum": "Sum 50%",
+    "cover90_sum": "Sum 90%",
+    "wis_summed": "Sum WIS",
+    "wis_cell": "Cell WIS",
+}
+"""The copula figure's scores: joint scores, coverage and WIS of summed
+targets, then the per-cell WIS, which the copula leaves unchanged."""
+
+
+def copula_figure(rows: pd.DataFrame) -> Figure:
+    """Plot each score of the rolling copula relative to the copula off.
+
+    One panel per study and level, never pooled across levels. Each panel
+    gives the ratio rolling / off of every score in `COPULA_METRICS`, one
+    marker per model, with 1 the copula off. `rows` has `study`, `level`,
+    `model`, `copula` (`off` or `rolling`), `target` (`summed` or `cell`),
+    `metric`, `value` and `n`.
+    """
+    wis = rows["metric"] == "wis"
+    rows = rows.assign(
+        metric=rows["metric"].where(~wis, "wis_" + rows["target"])
+    )
+    wide = rows.pivot_table(
+        index=["study", "level", "model", "metric"],
+        columns="copula",
+        values="value",
+    ).reset_index()
+    wide["ratio"] = wide["rolling"] / wide["off"]
+    n = rows.groupby(["study", "level"])["n"].min()
+    studies = [s for s in COPULA_STUDIES if s in set(wide["study"])]
+    levels = {
+        s: list(dict.fromkeys(rows.loc[rows["study"] == s, "level"]))
+        for s in studies
+    }
+    ncol = max(len(v) for v in levels.values())
+    fig, axes = plt.subplots(
+        len(studies),
+        ncol,
+        figsize=(3.4 * ncol, 2.6 * len(studies)),
+        layout="constrained",
+        squeeze=False,
+    )
+    metrics = list(COPULA_METRICS)
+    models = sorted(wide["model"].unique())
+    markers = dict(zip(models, "osD^v", strict=False))
+    for i, study in enumerate(studies):
+        for j in range(ncol):
+            ax = axes[i, j]
+            if j >= len(levels[study]):
+                ax.set_visible(False)
+                continue
+            level = levels[study][j]
+            one = wide.loc[(wide["study"] == study) & (wide["level"] == level)]
+            for model, g in one.groupby("model"):
+                x = [metrics.index(m) for m in g["metric"]]
+                ax.plot(
+                    x,
+                    g["ratio"],
+                    ls="none",
+                    marker=markers[model],
+                    label=model,
+                )
+            ax.axhline(1, color="#888888", lw=1)
+            ax.set_xticks(
+                range(len(metrics)),
+                [COPULA_METRICS[m] for m in metrics],
+                fontsize=7,
+            )
+            ax.set_title(
+                f"{COPULA_STUDIES[study]}, {level} "
+                f"(n = {int(n.loc[(study, level)])})",
+                fontsize=9,
+            )
+            ax.set_ylabel("Rolling / off")
+    handles, labels = axes[0, 0].get_legend_handles_labels()
+    fig.legend(handles, labels, loc="outside lower center", ncol=len(models))
+    return fig
+
+
 def comparison_figure(rows: pd.DataFrame) -> Figure:
     """Plot a fine-tuning comparison: each run's score by checkpoint.
 
@@ -888,19 +899,19 @@ def write_evidence(
         fig.savefig(fig_dir / f"{name}.png", dpi=200)
         plt.close(fig)
 
-    cop = data["copula_scores"]
     agg = data["aggregation_scores"]
     for study in ("ebola", "germany"):
-        table(
-            f"copula-{study}",
-            None if cop is None else copula_table(cop, study),
-            ["copula_scores"],
-        )
         table(
             f"aggregation-{study}",
             None if agg is None else aggregation_table(agg, study),
             ["aggregation_scores"],
         )
+    cop = data["si_copula"]
+    figure(
+        "copula-impact",
+        None if cop is None else copula_figure(cop),
+        ["si_copula"],
+    )
     cost = data["aggregation_cost"]
     table(
         "aggregation-cost",
@@ -969,10 +980,8 @@ def write_evidence(
         None if sims is None or ref is None else realism_figure(sims, ref),
         ["sim_summaries", "sim_realism"],
     )
-    rho = data["copula_rho"]
     numbers = {
         "evidence": {
-            "rho": QUOTED["rho"] if rho is None else rho_medians(rho),
             "lag": (
                 None
                 if any(
