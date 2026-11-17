@@ -360,8 +360,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     pst = sub.add_parser(
         "pairing-sensitivity",
-        help="Score randomwalk and randomwalknowcast with no pairing, the "
-        "prior and the rolling copula at each shrinkage strength, from one "
+        help="Score randomwalk and randomwalknowcast with no pairing and "
+        "with their provinces paired by the rolling rho_p, from one "
         "forecast each, on the BDBV release backtest or the German "
         "development half (`evaluation.pairing`).",
     )

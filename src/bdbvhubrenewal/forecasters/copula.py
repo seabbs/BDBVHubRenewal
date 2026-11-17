@@ -1,334 +1,87 @@
 # Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
-r"""A Gaussian copula that pairs a model's marginal draws into trajectories.
+r"""A Gaussian copula that pairs the walk models' province draws.
 
-A model that gives each place and step only its marginal, such as
-`randomwalknowcast`, draws each cell independently.
-`GaussianCopula.couple` pairs those draws into trajectories: each
-trajectory draws one correlated normal vector $z$ over places and steps,
-and every cell's draws are reordered across trajectories so they rank as
-$z$ does.
-This is the Gaussian copula with $u = \Phi(z)$ read off each cell's own
-draws, so each cell keeps exactly the draws it had.
-
-The correlation of $z$ is a place correlation times a step correlation.
-Two steps $\delta$ days apart have correlation $\rho_t^{\delta / 7}$.
-Between places it is $\rho_p$ for two provinces, $\rho_n$ for the
-country and a province, and $\rho_z$ for two health zones of one
-province or a zone and its province. Zones of different provinces take
-$\rho_p$, and a zone and the country $\rho_n$.
-`estimate_copula` estimates the four from normal scores of a model's own
+`randomwalk` and `randomwalknowcast` draw each province on its own, so
+the country, the sum of the provinces, is too narrow.
+`pair_walks` pairs the provinces' draws within each week: each week, each
+trajectory draws one normal per province with correlation $\rho_p$ between
+any two, and each cell's draws are reordered across trajectories so they
+rank as the normals do (the Schaake shuffle, Clark et al. 2004, as
+ensemble copula coupling uses it, Schefzik et al. 2013).
+So each cell keeps exactly the draws it had.
+Weeks are not paired with each other, and zones and the country are not
+paired at all.
+`estimate_rho` estimates $\rho_p$ from normal scores of a model's own
 matured errors (`error_scores`), shrunk towards a prior as a guard for
 thin windows.
-
-`pair_walks` is the step a walk model (`randomwalk`, `randomwalknowcast`)
-calls in its forecast. Weeks before a place's walk are reordered cell by
-cell, the Schaake shuffle (Clark et al. 2004) as ensemble copula coupling
-uses it (Schefzik et al. 2013). From its start, a place's walk is already
-a joint trajectory, so it moves as a whole.
 """
 
 from __future__ import annotations
 
 import zlib
-from collections.abc import Sequence
-from dataclasses import dataclass
 from typing import Final
 
 import numpy as np
 import pandas as pd
 from scipy.special import ndtri
-from statsmodels.stats.correlation_tools import corr_nearest
 
 from bdbvhubrenewal.forecasters.base import NATIONAL
 
 __all__ = [
     "MAX_RHO",
-    "PAIRINGS",
     "PRIOR",
     "PRIOR_WEIGHT",
     "WINDOW_WEEKS",
-    "GaussianCopula",
     "error_scores",
-    "estimate_copula",
-    "estimate_record",
+    "estimate_rho",
     "pair_walks",
 ]
 
 MAX_RHO: Final = 0.95
-"""Largest correlation `estimate_copula` gives."""
+"""Largest $\rho_p$ `estimate_rho` gives."""
+
+PRIOR: Final = 0.7
+"""The $\rho_p$ estimates are shrunk towards."""
+
+PRIOR_WEIGHT: Final = 10.0
+"""Pairs the prior counts as in `estimate_rho`'s shrinkage, a guard for
+thin windows only. Chosen on the release backtest from 0, 10, 30 and 100,
+which scored within 1% of one another; 10 is the weakest that still
+guards a window with few pairs."""
 
 WINDOW_WEEKS: Final = 8
 """The latest weeks of releases whose errors are used (`error_scores`)."""
 
-PAIRINGS: Final = ("off", "prior", "rolling")
-"""How a walk model pairs its draws: not at all, by the prior, or by the
-copula estimated from its own recent errors (the default)."""
 
-PRIOR_WEIGHT: Final = 10.0
-"""Pairs the prior counts as in `estimate_copula`'s shrinkage, a guard for
-thin windows only. Chosen on the release backtest from 0, 10, 30 and 100,
-which scored within 1% of one another (docs/pairing.md); 10 is the weakest
-that still guards a window with few pairs."""
-
-_CELL = ["model", "origin", "location", "target_end_date"]
-_FIT_COLUMNS = [
-    "model",
-    "origin",
-    "n_scores",
-    "rho_time",
-    "rho_provinces",
-    "rho_national",
-    "rho_zones",
-]
+def _provinces(
+    locations: pd.Series | tuple[str, ...], national: str
+) -> np.ndarray:
+    """Return whether each location is a province, not the country or a zone."""
+    codes = pd.Series(list(locations), dtype=object).astype(str)
+    return ((codes != national) & (codes.str.count("-") < 2)).to_numpy()
 
 
-def _is_zone(location: pd.Series) -> pd.Series:
-    """Return whether each location is a health zone (`CD-XX-YY`)."""
-    return location.astype(str).str.count("-") >= 2
-
-
-def _province(code: str) -> str:
-    """Return a zone's province, or the code itself."""
-    return code.rsplit("-", 1)[0] if code.count("-") >= 2 else code
-
-
-def _factor(corr: np.ndarray) -> np.ndarray:
-    """Return the Cholesky factor $L$ of the correlation matrix nearest `corr`.
-
-    A valid correlation matrix is used as it is. Otherwise it is replaced
-    by the nearest correlation matrix (Higham 2002), as statsmodels'
-    `corr_nearest` gives it.
-    """
-    if np.linalg.eigvalsh(corr).min() <= 0:
-        corr = corr_nearest(corr, threshold=1e-10)
-    return np.asarray(np.linalg.cholesky(corr))
-
-
-@dataclass(frozen=True)
-class GaussianCopula:
-    r"""Correlations of a Gaussian copula over places and weeks.
-
-    Attributes
-    ----------
-    rho_time : float
-        $\rho_t$, between consecutive weeks of a place.
-    rho_provinces : float
-        $\rho_p$, between two provinces in a week.
-    rho_national : float
-        $\rho_n$, between the country and a province or zone in a week.
-    rho_zones : float
-        $\rho_z$, between two zones of one province, or a zone and its
-        province, in a week.
-    """
-
-    rho_time: float = 0.0
-    rho_provinces: float = 0.0
-    rho_national: float = 0.0
-    rho_zones: float = 0.0
-
-    def __post_init__(self) -> None:
-        """Check each correlation is in [0, 1)."""
-        for name in ("rho_time", "rho_provinces", "rho_national", "rho_zones"):
-            if not 0.0 <= getattr(self, name) < 1.0:
-                raise ValueError(f"{name} must be between 0 and 1 (not 1).")
-
-    def normals(
-        self,
-        rng: np.random.Generator,
-        n: int,
-        n_places: int,
-        days: np.ndarray,
-        national: bool = True,
-        locations: Sequence[str] | None = None,
-        country: str = NATIONAL,
-    ) -> np.ndarray:
-        r"""Draw correlated standard normals over places and steps.
-
-        Where the correlations give no correlation matrix, a nearby one is
-        used (`_factor`).
-
-        Parameters
-        ----------
-        rng : numpy.random.Generator
-            Random generator.
-        n : int
-            Trajectories.
-        n_places : int
-            Places.
-        days : numpy.ndarray
-            Day of each step.
-        national : bool
-            Whether the first place is the country. Otherwise every place
-            is a province. Ignored with `locations`.
-        locations : sequence of str, optional
-            The places' codes, which say which is the country (`country`),
-            a province or a zone (`CD-XX-YY`). By default the first place
-            is the country if `national` and the others are provinces.
-        country : str
-            The country's code in `locations`.
-
-        Returns
-        -------
-        numpy.ndarray
-            `[n, n_places, len(days)]`.
-        """
-        place = self.places(n_places, national, locations, country)
-        days = np.asarray(days, dtype=float)
-        step = self.rho_time ** (np.abs(np.subtract.outer(days, days)) / 7)
-        e = rng.standard_normal((n, n_places, len(days)))
-        return np.asarray(
-            np.einsum(
-                "pi,nij,tj->npt",
-                _factor(place),
-                e,
-                _factor(step),
-                optimize=True,
-            )
-        )
-
-    def places(
-        self,
-        n_places: int,
-        national: bool = True,
-        locations: Sequence[str] | None = None,
-        country: str = NATIONAL,
-    ) -> np.ndarray:
-        """Return the correlation between places, as `normals` uses it."""
-        if locations is None:
-            place = np.full((n_places, n_places), self.rho_provinces)
-            if national:
-                place[0, :] = place[:, 0] = self.rho_national
-            np.fill_diagonal(place, 1.0)
-            return place
-        codes = np.asarray(list(locations), dtype=object)
-        is_country = codes == country
-        zone = np.array([c.count("-") >= 2 for c in codes]) & ~is_country
-        parent = np.array([_province(c) for c in codes], dtype=object)
-        place = np.full((len(codes), len(codes)), self.rho_provinces)
-        same = (parent[:, None] == parent[None, :]) & (
-            zone[:, None] | zone[None, :]
-        )
-        place[same] = self.rho_zones
-        place[is_country, :] = self.rho_national
-        place[:, is_country] = self.rho_national
-        np.fill_diagonal(place, 1.0)
-        return place
-
-    def order(
-        self,
-        draws: np.ndarray,
-        rng: np.random.Generator,
-        days: np.ndarray | None = None,
-        national: bool = True,
-        locations: Sequence[str] | None = None,
-        country: str = NATIONAL,
-    ) -> np.ndarray:
-        """Return the trajectory each cell's draws go to.
-
-        Parameters
-        ----------
-        draws : numpy.ndarray
-            Draws of each place and step, `[n, n_places, n_steps]`.
-        rng : numpy.random.Generator
-            Random generator.
-        days : numpy.ndarray, optional
-            Day of each step, weekly steps by default.
-        national : bool
-            Whether the first place is the country.
-        locations : sequence of str, optional
-            The places' codes (`normals`).
-        country : str
-            The country's code in `locations`.
-
-        Returns
-        -------
-        numpy.ndarray
-            Indices `[n, n_places, n_steps]`: trajectory $k$ of a cell
-            takes the cell's draw at index $k$, so the draws rank as the
-            copula's normals do.
-        """
-        n, n_places, n_steps = draws.shape
-        if days is None:
-            days = 7 * np.arange(n_steps)
-        z = self.normals(rng, n, n_places, days, national, locations, country)
-        rank = np.argsort(np.argsort(z, axis=0), axis=0)
-        by_value = np.argsort(draws, axis=0, kind="stable")
-        return np.take_along_axis(by_value, rank, axis=0)
-
-    def couple(
-        self,
-        draws: np.ndarray,
-        rng: np.random.Generator,
-        days: np.ndarray | None = None,
-        national: bool = True,
-        locations: Sequence[str] | None = None,
-        country: str = NATIONAL,
-    ) -> np.ndarray:
-        """Pair independent draws into trajectories (`order`).
-
-        Parameters
-        ----------
-        draws : numpy.ndarray
-            Draws of each place and step, `[n, n_places, n_steps]`.
-        rng : numpy.random.Generator
-            Random generator.
-        days : numpy.ndarray, optional
-            Day of each step, weekly steps by default.
-        national : bool
-            Whether the first place is the country.
-        locations : sequence of str, optional
-            The places' codes (`normals`).
-        country : str
-            The country's code in `locations`.
-
-        Returns
-        -------
-        numpy.ndarray
-            The same draws of each cell, reordered across trajectories.
-        """
-        index = self.order(draws, rng, days, national, locations, country)
-        return np.take_along_axis(draws, index, axis=0)
-
-
-PRIOR: Final = GaussianCopula(
-    rho_time=0.9, rho_provinces=0.7, rho_national=0.7, rho_zones=0.7
-)
-"""The correlations estimates are shrunk towards. The zones' is set to
-the provinces' (no zone errors had matured to choose it)."""
-
-
-def _corr(pairs: pd.DataFrame) -> float | None:
-    """Pearson correlation of `z_a` and `z_b`, or None if it has none."""
-    if len(pairs) < 2:
-        return None
-    with np.errstate(invalid="ignore", divide="ignore"):
-        r = np.corrcoef(pairs["z_a"], pairs["z_b"])[0, 1]
-    return float(r) if np.isfinite(r) else None
-
-
-def estimate_copula(
+def estimate_rho(
     scores: pd.DataFrame,
-    prior: GaussianCopula = GaussianCopula(),  # noqa: B008
-    weight: float = 0.0,
+    prior: float = PRIOR,
+    weight: float = PRIOR_WEIGHT,
     national: str = NATIONAL,
-) -> GaussianCopula:
-    r"""Estimate the copula's correlations from normal scores.
+) -> dict[str, float | int | bool]:
+    r"""Estimate $\rho_p$ from normal scores, with its record.
 
-    Each is the correlation $r$ of the scores of pairs from one forecast:
-    $\rho_t$ of a place's consecutive weeks, $\rho_p$ of two provinces in a
-    week, $\rho_n$ of the country and a province in a week, and $\rho_z$
-    of two zones of one province, or a zone and its province, in a week.
-    With $n$ such pairs and the prior's $\rho_0$ each is
-    $(n r + w \rho_0) / (n + w)$, the prior's where the pairs give no
-    $r$, then floored at zero and capped at `MAX_RHO`.
+    $r$ is the Pearson correlation of the scores of every pair of two
+    provinces in the same week of one forecast; the country and zones are
+    left out. With $n$ pairs and the prior $\rho_0$ the estimate is
+    $(n r + w \rho_0) / (n + w)$, the prior's where the pairs give no $r$,
+    then floored at zero and capped at `MAX_RHO`.
 
     Parameters
     ----------
     scores : pandas.DataFrame
         `error_scores`: `model`, `origin`, `location`,
         `target_end_date` and `z`.
-    prior : GaussianCopula
-        The correlations to shrink towards.
+    prior : float
+        $\rho_0$.
     weight : float
         $w$, the pairs the prior counts as.
     national : str
@@ -336,69 +89,32 @@ def estimate_copula(
 
     Returns
     -------
-    GaussianCopula
+    dict
+        `rho_provinces`, `n_pairs` (the pairs behind it, 0 if it fell
+        back) and `fallback` (whether it fell back to the prior for want of
+        pairs that define it).
     """
-    pairs = _pairs(scores, national)
-    return _estimate(pairs, prior, weight)[0]
-
-
-def _estimate(
-    pairs: dict[str, pd.DataFrame], prior: GaussianCopula, weight: float
-) -> tuple[GaussianCopula, dict[str, object]]:
-    """Shrink each correlation of `pairs` to the prior, with its record."""
-    out: dict[str, float] = {}
-    record: dict[str, object] = {}
-    for name, rows in pairs.items():
-        r, rho0, n = _corr(rows), getattr(prior, name), len(rows)
-        rho = rho0 if r is None else (n * r + weight * rho0) / (n + weight)
-        out[name] = float(np.clip(rho, 0.0, MAX_RHO))
-        short = name.removeprefix("rho_")
-        record[f"n_{short}"] = int(n) if r is not None else 0
-        record[f"prior_{short}"] = r is None
-    return GaussianCopula(**out), record
-
-
-def _pairs(scores: pd.DataFrame, national: str) -> dict[str, pd.DataFrame]:
-    """Return the pairs of normal scores behind each correlation."""
-    week = pd.to_datetime(scores["target_end_date"])
-    scores = scores.drop(columns="target_end_date").assign(week=week)
-    forecast = ["model", "origin"]
-    later = scores.assign(week=scores["week"] - pd.Timedelta(days=7))
-    time = scores.merge(
-        later, on=[*forecast, "location", "week"], suffixes=("_a", "_b")
-    )
-    same = scores.merge(scores, on=[*forecast, "week"], suffixes=("_a", "_b"))
-    a_national = same["location_a"] == national
-    b_national = same["location_b"] == national
-    a_zone = _is_zone(same["location_a"]) & ~a_national
-    b_zone = _is_zone(same["location_b"]) & ~b_national
-    ordered = same["location_a"] < same["location_b"]
-    provinces = same.loc[
-        ~a_national & ~b_national & ~a_zone & ~b_zone & ordered
-    ]
-    kin = same["location_a"].map(_province) == same["location_b"].map(_province)
-    zones = same.loc[(a_zone | b_zone) & kin & ordered]
-    return {
-        "rho_time": time,
-        "rho_provinces": provinces,
-        "rho_national": same.loc[a_national & ~b_national & ~b_zone],
-        "rho_zones": zones,
+    fallback: dict[str, float | int | bool] = {
+        "rho_provinces": prior,
+        "n_pairs": 0,
+        "fallback": True,
     }
-
-
-def estimate_record(
-    scores: pd.DataFrame,
-    prior: GaussianCopula = PRIOR,
-    weight: float = PRIOR_WEIGHT,
-    national: str = NATIONAL,
-) -> tuple[GaussianCopula, dict[str, object]]:
-    """Estimate the copula as `estimate_copula`, with its record.
-
-    The record has, for each correlation (`time`, `provinces`, `national`,
-    `zones`), `n_<name>`, the pairs behind it, and `prior_<name>`, whether
-    it fell back to the prior for want of pairs that define it.
-    """
-    return _estimate(_pairs(scores, national), prior, weight)
+    if scores.empty:
+        return fallback
+    rows = scores.loc[_provinces(scores["location"], national)]
+    key = ["model", "origin", "target_end_date"]
+    pairs = rows.merge(rows, on=key, suffixes=("_a", "_b"))
+    pairs = pairs.loc[pairs["location_a"] < pairs["location_b"]]
+    r = None
+    if len(pairs) >= 2:
+        with np.errstate(invalid="ignore", divide="ignore"):
+            r = np.corrcoef(pairs["z_a"], pairs["z_b"])[0, 1]
+        r = float(r) if np.isfinite(r) else None
+    if r is None:
+        return fallback
+    n = len(pairs)
+    rho = float(np.clip((n * r + weight * prior) / (n + weight), 0, MAX_RHO))
+    return {"rho_provinces": rho, "n_pairs": int(n), "fallback": False}
 
 
 def error_scores(
@@ -448,7 +164,7 @@ def error_scores(
     pandas.DataFrame
         `model`, `origin` (the release), `location`, `target_end_date`
         (a date 7 days apart per week back, so consecutive weeks pair) and
-        `z`, as `estimate_copula` takes them.
+        `z`, as `estimate_rho` takes them.
     """
     from scipy.stats import nbinom
 
@@ -492,53 +208,65 @@ def pair_walks(
     values: np.ndarray,
     locations: tuple[str, ...],
     anchors: np.ndarray,
-    copula: GaussianCopula,
+    rho: float,
     rng: np.random.Generator,
-    days: np.ndarray | None = None,
+    national: str = NATIONAL,
 ) -> np.ndarray:
-    """Pair a walk model's draws, keeping each place's walk whole.
+    r"""Pair a walk model's province draws within each week.
 
-    Weeks of a place before its walk starts (`anchors`) are drawn on their
-    own, so each is reordered as the copula's normals rank (the Schaake
-    shuffle; Clark et al. 2004). From its walk start on, a place's draws
-    are joint trajectories, so each moves as a whole, ranked by its total
-    over the walk weeks against the start week's normal, keeping the walk's
-    own dependence.
+    Each week, each trajectory draws one normal per place, with
+    correlation `rho` between any two. Weeks of a province before its walk
+    starts (`anchors`) are drawn on their own, so each is reordered as its
+    week's normals rank. From its start on, a province's draws are joint
+    trajectories, so each moves as a whole, ranked by its total over the
+    walk weeks against the normals of the latest week any province's walk
+    starts, so the walks are paired with each other in every week from it.
+    The country and zones keep their draws as they are.
 
     Parameters
     ----------
     values : numpy.ndarray
         Draws `[S, L, H]`.
     locations : tuple of str
-        The places' codes (`GaussianCopula.normals`).
+        The places' codes.
     anchors : numpy.ndarray
         Each place's first walk week, an index into the weeks, `[L]`; at
         or beyond `H` the place has no walk.
-    copula : GaussianCopula
-        The copula.
+    rho : float
+        $\rho_p$, in [0, 1).
     rng : numpy.random.Generator
         Random generator.
-    days : numpy.ndarray, optional
-        Day of each week, weekly by default.
+    national : str
+        The country's code.
 
     Returns
     -------
     numpy.ndarray
-        `values` with each cell's draws reordered across trajectories.
+        `values` with each province cell's draws reordered across
+        trajectories.
     """
-    n, _, n_steps = values.shape
-    if days is None:
-        days = 7 * np.arange(n_steps)
-    z = copula.normals(rng, n, len(locations), days, locations=list(locations))
+    if not 0.0 <= rho < 1.0:
+        raise ValueError("rho must be between 0 and 1 (not 1).")
+    n, n_places, n_steps = values.shape
+    paired = _provinces(locations, national)
+    if not paired.any():
+        return values
+    z = np.sqrt(rho) * rng.standard_normal((n, 1, n_steps)) + np.sqrt(
+        1 - rho
+    ) * rng.standard_normal((n, n_places, n_steps))
     rank = np.argsort(np.argsort(z, axis=0), axis=0)
     index = np.take_along_axis(
         np.argsort(values, axis=0, kind="stable"), rank, axis=0
     )
-    for loc, a in enumerate(np.asarray(anchors, int)):
-        if a < n_steps:
+    anchors = np.asarray(anchors, int)
+    walks = paired & (anchors < n_steps)
+    if walks.any():
+        latest = anchors[walks].max()
+        for loc in np.flatnonzero(walks):
             # A walk is ranked by its total, which carries its latent path
             # better than one week's count with its own observation noise.
-            total = values[:, loc, a:].sum(axis=1)
-            whole = np.argsort(total, kind="stable")[rank[:, loc, a]]
-            index[:, loc, a:] = whole[:, None]
+            total = values[:, loc, anchors[loc] :].sum(axis=1)
+            whole = np.argsort(total, kind="stable")[rank[:, loc, latest]]
+            index[:, loc, anchors[loc] :] = whole[:, None]
+    index[:, ~paired] = np.arange(n)[:, None, None]
     return np.take_along_axis(values, index, axis=0)

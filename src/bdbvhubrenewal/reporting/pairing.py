@@ -2,8 +2,8 @@
 """The pairing sensitivity page: how much the walk models' copula matters.
 
 `pairing_page` reads the `pairing-sensitivity` results and writes one
-compact table per study and a line on the shrinkage strength to
-`docs/generated/pairing.md`, which `docs/pairing.md` includes.
+compact table per study to `docs/generated/pairing.md`, which
+`docs/pairing.md` includes.
 """
 
 from __future__ import annotations
@@ -12,8 +12,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from bdbvhubrenewal.evaluation.pairing import WEIGHTS, summarise_pairing
-from bdbvhubrenewal.forecasters.copula import PRIOR_WEIGHT
+from bdbvhubrenewal.evaluation.pairing import summarise_pairing
 
 __all__ = ["pairing_page"]
 
@@ -31,10 +30,9 @@ _TARGETS = {
 
 def _table(summary: pd.DataFrame) -> str:
     """Return one study's table: CRPS or energy relative to no pairing."""
-    chosen = f"rolling_w{int(PRIOR_WEIGHT)}"
     rows = summary.loc[
         summary["metric"].isin(["crps", "energy"])
-        & summary["variant"].isin(["prior", chosen])
+        & (summary["variant"] == "rolling")
     ]
     wide = rows.pivot_table(
         index=["model", "level", "target"],
@@ -43,14 +41,14 @@ def _table(summary: pd.DataFrame) -> str:
     ).reset_index()
     cover = summary.loc[
         (summary["metric"] == "cover90")
-        & summary["variant"].isin(["off", chosen])
+        & summary["variant"].isin(["off", "rolling"])
     ].pivot_table(
         index=["model", "level", "target"], columns="variant", values="value"
     )
     lines = [
-        "| model | level | target | prior | rolling | 90% cover, off | "
+        "| model | level | target | rolling | 90% cover, off | "
         "90% cover, rolling |",
-        "|---|---|---|---|---|---|---|",
+        "|---|---|---|---|---|---|",
     ]
     cov = cover.to_dict("index")
 
@@ -70,33 +68,10 @@ def _table(summary: pd.DataFrame) -> str:
         c = cov.get((model, level, target), {})
         lines.append(
             f"| `{model}` | {level} | {_TARGETS.get(target, target)} "
-            f"| {fmt(r.get('prior'))} | {fmt(r.get(chosen))} "
-            f"| {fmt(c.get('off'))} | {fmt(c.get(chosen))} |"
+            f"| {fmt(r.get('rolling'))} "
+            f"| {fmt(c.get('off'))} | {fmt(c.get('rolling'))} |"
         )
     return "\n".join(lines)
-
-
-def _shrinkage(summary: pd.DataFrame) -> str:
-    """Return the shrinkage line: rolling national CRPS by strength."""
-    rows = summary.loc[
-        (summary["study"] == "bdbv")
-        & (summary["model"] == "randomwalknowcast")
-        & (summary["level"] == "national")
-        & (summary["target"] == "cell")
-        & (summary["metric"] == "crps")
-    ].set_index("variant")["relative"]
-    parts = [
-        f"$w = {int(w)}$: {rows[f'rolling_w{int(w)}']:.3f}"
-        for w in WEIGHTS
-        if f"rolling_w{int(w)}" in rows.index
-    ]
-    if not parts:
-        return ""
-    return (
-        "Shrinkage strength, `randomwalknowcast`'s national CRPS relative to "
-        "no pairing on the release backtest: " + ", ".join(parts) + ". "
-        f"The models use $w = {int(PRIOR_WEIGHT)}$."
-    )
 
 
 def pairing_page(results: Path | str, generated: Path | str) -> None:
@@ -124,6 +99,5 @@ def pairing_page(results: Path | str, generated: Path | str) -> None:
             if own.empty:
                 continue
             parts += [f"### {label}", "", _table(own), ""]
-        parts.append(_shrinkage(summary))
         text = "\n".join(parts)
     (gen / "pairing.md").write_text(text.rstrip() + "\n")

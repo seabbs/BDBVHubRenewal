@@ -1,13 +1,13 @@
 # Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
-"""How much pairing the walk models' draws matters (the sensitivity page).
+r"""How much pairing the walk models' draws matters (the sensitivity page).
 
-`randomwalk` and `randomwalknowcast` pair their draws inside their
-forecast (`forecasters.copula.pair_walks`). Here each forecasts a task once
-and gives its draws under every pairing (`VARIANTS`): none (`off`), the
-prior (`prior`), and the rolling estimate at each shrinkage strength
-(`rolling_w<w>`), by the step the model itself calls
-(`RandomWalk.with_pairing`). Pairing only reorders draws, so per-cell scores
-are equal across variants and only sums and joint scores move.
+`randomwalk` and `randomwalknowcast` pair their province draws within
+each week inside their forecast (`forecasters.copula.pair_walks`). Here
+each forecasts a task once and gives its draws under both pairings
+(`VARIANTS`): none (`off`) and the rolling $\rho_p$ it uses (`rolling`),
+from its unpaired draws (`RandomWalk.unpaired`). Pairing only reorders
+draws, so per-cell scores are equal across variants and only sums and
+joint scores move.
 
 `variant_scores` scores each variant of one forecast by level (national,
 provinces or states or age groups, zones): per cell and on summed targets
@@ -44,7 +44,6 @@ __all__ = [
     "MODELS",
     "SCORE_COLUMNS",
     "VARIANTS",
-    "WEIGHTS",
     "summarise_pairing",
     "variant_forecasts",
     "variant_scores",
@@ -53,15 +52,8 @@ __all__ = [
 MODELS: Final = ("randomwalk", "randomwalknowcast")
 """The models that pair their draws."""
 
-WEIGHTS: Final = (0.0, 10.0, 30.0, 100.0)
-"""Shrinkage strengths compared: the prior's weight in pairs."""
-
-VARIANTS: Final = (
-    ("off", None),
-    ("prior", None),
-    *((f"rolling_w{int(w)}", w) for w in WEIGHTS),
-)
-"""Each variant's label and shrinkage strength (None: not rolling)."""
+VARIANTS: Final = ("off", "rolling")
+"""The pairings compared: none, and the rolling $\rho_p$ the models use."""
 
 SCORE_COLUMNS: Final = (
     "study",
@@ -80,7 +72,7 @@ _CELL = ["location", "target_end_date"]
 
 
 def variant_forecasts(name: str, task: ForecastTask) -> dict[str, pd.DataFrame]:
-    """Forecast a task once and return it under every pairing.
+    """Forecast a task once and return it under both pairings.
 
     Parameters
     ----------
@@ -100,13 +92,11 @@ def variant_forecasts(name: str, task: ForecastTask) -> dict[str, pd.DataFrame]:
         cast("RandomWalk", get_model(name)), keep_variants=True
     )
     try:
-        model.forecast(task)
+        paired = model.forecast(task)
     except ModelUnavailableError:
         return {}
     out = {}
-    for label, weight in VARIANTS:
-        pairing = "rolling" if label.startswith("rolling") else label
-        drawn = model.with_pairing(pairing, weight)
+    for label, drawn in zip(VARIANTS, (model.unpaired(), paired), strict=True):
         zones = drawn["location"].str.count("-") >= 2
         out[label] = drawn if zones.all() else add_national(drawn)
     return out
@@ -254,13 +244,13 @@ def bdbv_sensitivity(
     config_path: str = "config/backtest.toml",
     origins: list[str] | None = None,
 ) -> pd.DataFrame:
-    """Score every variant on the BDBV release backtest's origins.
+    """Score both pairings on the BDBV release backtest's origins.
 
     Each real origin (less `skip_origins` and the latest) is forecast for
-    the provinces, with the country their sum, and for the active zones
-    from their own data, as the zone backtest does. Truth is each week's
-    count in the first release the backtest's truth delay after it, for
-    provinces and zones alike.
+    the provinces, with the country their sum. Zones are their own
+    forecasts and are not paired, so they are not scored here. Truth is
+    each week's count in the first release the backtest's truth delay
+    after it.
 
     Parameters
     ----------
@@ -276,44 +266,20 @@ def bdbv_sensitivity(
     pandas.DataFrame
         `variant_scores` rows of every model, variant, origin and level.
     """
-    from pathlib import Path
-
-    from bdbvhubrenewal.data import (
-        load_daily,
-        load_daily_zones,
-        load_delays,
-        load_target,
-    )
-    from bdbvhubrenewal.data.zones import hub_zones, weekly_zone_counts
+    from bdbvhubrenewal.data import load_daily, load_delays, load_target
     from bdbvhubrenewal.evaluation.backtest import load_config, real_vintages
     from bdbvhubrenewal.evaluation.nowcast import (
         resolve_truth_delay,
         rolling_truth,
     )
     from bdbvhubrenewal.evaluation.store import origin_tasks
-    from bdbvhubrenewal.forecasters.zones import zone_task
 
     config = load_config(config_path)
     target, delays = load_target(data), load_delays(data)
-    daily, daily_zones = load_daily(data), load_daily_zones(data)
-    codes = hub_zones(Path(data) / "hub-config" / "tasks.json")
+    daily = load_daily(data)
     real = target.loc[target["kind"] == "real"]
     vintages = real_vintages(real)
-    delay = resolve_truth_delay(config, target)
-    cutoff = real.drop_duplicates("vintage").set_index("vintage")["cutoff"]
-    zone_counts = pd.concat(
-        [
-            weekly_zone_counts(daily_zones, v).assign(
-                kind="real", vintage=v, cutoff=cutoff[v]
-            )
-            for v in vintages
-        ],
-        ignore_index=True,
-    )
-    truth = pd.concat(
-        [rolling_truth(real, delay), rolling_truth(zone_counts, delay)],
-        ignore_index=True,
-    )
+    truth = rolling_truth(real, resolve_truth_delay(config, target))
     tasks = origin_tasks(target, delays, config, daily)
     frames = []
     for origin in vintages[:-1]:
@@ -321,23 +287,18 @@ def bdbv_sensitivity(
             continue
         if origins is not None and origin not in origins:
             continue
-        task = tasks[origin]
-        counts = weekly_zone_counts(daily_zones, origin)
-        active = tuple(z for z in codes if z in set(counts["location"]))
-        zt = zone_task(task, counts, active, pd.concat([daily, daily_zones]))
         for name in MODELS:
-            for t in (task, zt):
-                for label, s in variant_forecasts(name, t).items():
-                    frames.append(
-                        variant_scores(
-                            s,
-                            truth,
-                            study="bdbv",
-                            model=name,
-                            variant=label,
-                            origin=origin,
-                        )
+            for label, s in variant_forecasts(name, tasks[origin]).items():
+                frames.append(
+                    variant_scores(
+                        s,
+                        truth,
+                        study="bdbv",
+                        model=name,
+                        variant=label,
+                        origin=origin,
                     )
+                )
     if not frames:
         return pd.DataFrame(columns=list(SCORE_COLUMNS))
     return pd.concat(frames, ignore_index=True)
@@ -348,7 +309,7 @@ def germany_sensitivity(
     config_path: str = "config/germany.toml",
     dates: list[str] | None = None,
 ) -> pd.DataFrame:
-    """Score every variant on the German development half.
+    """Score both pairings on the German development half.
 
     Each nowcast date's states task (with Germany their sum) and age
     groups task are forecast as the German benchmark does

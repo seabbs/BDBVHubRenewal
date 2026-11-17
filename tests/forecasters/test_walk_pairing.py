@@ -8,7 +8,6 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import pytest
-from scipy.stats import spearmanr
 
 from bdbvhubrenewal.data.zones import hub_zones, weekly_zone_counts
 from bdbvhubrenewal.evaluation.backtest import BacktestConfig, make_tasks
@@ -78,21 +77,23 @@ def test_each_places_walk_moves_as_a_whole(name: str, task) -> None:
 def test_provinces_are_paired_within_a_week(name: str, task) -> None:
     model, paired, off = _run(name, task)
     last = sorted(off["target_end_date"].unique())[-1]
-    big = (
-        off.loc[off["target_end_date"] == last]
-        .groupby("location")["value"]
-        .std()
-        .sort_values()
-        .index[-2:]
-    )
-    a, b = ((loc, last) for loc in big)
 
-    def rho(w: pd.DataFrame) -> float:
-        return float(spearmanr(w[a], w[b]).statistic)
+    def mean_rank_corr(samples: pd.DataFrame) -> float:
+        week = samples.loc[samples["target_end_date"] == last]
+        x = week.pivot(index="sample", columns="location", values="value")
+        c = x.loc[:, x.std() > 0].rank().corr().to_numpy()
+        k = c.shape[0]
+        return float((c.sum() - k) / (k * (k - 1)))
+
+    def national_var(samples: pd.DataFrame) -> float:
+        week = samples.loc[samples["target_end_date"] == last]
+        return float(week.groupby("sample")["value"].sum().var())
 
     assert model.copula_fit["rho_provinces"] > 0.1
-    assert abs(rho(_wide(off))) < 0.15
-    assert rho(_wide(paired)) > rho(_wide(off)) + 0.05
+    assert abs(mean_rank_corr(off)) < 0.01
+    assert mean_rank_corr(paired) > 0.02
+    # So the country, their sum, widens.
+    assert national_var(paired) > national_var(off)
 
 
 def test_the_copula_record_is_rho_p_with_its_pairs(task) -> None:

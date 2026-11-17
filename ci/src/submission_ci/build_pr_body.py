@@ -349,11 +349,17 @@ def copula_line(provenance: Mapping[str, Any]) -> str:
     copula = (provenance.get("run") or {}).get("copula")
     if not copula:
         return ""
+    head = (
+        "Pairing: province draws paired within each week by a Gaussian "
+        f"copula with rho_p {copula['rho_provinces']:.2f}"
+    )
+    if copula["fallback"]:
+        return (
+            f"{head}, the prior, as no pairs of scored errors gave an estimate."
+        )
     return (
-        "Pairing: draws paired by a Gaussian copula with "
-        f"rho_t {copula['rho_time']:.2f}, rho_p {copula['rho_provinces']:.2f} "
-        f"and rho_n {copula['rho_national']:.2f}, from {copula['n_scores']} "
-        f"scored past forecasts ({copula['source']})."
+        f"{head}, from {copula['n_pairs']} pairs of "
+        f"{copula['n_scores']} scored errors."
     )
 
 
