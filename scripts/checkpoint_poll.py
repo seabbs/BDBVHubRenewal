@@ -34,7 +34,7 @@ import shutil
 import subprocess
 import sys
 import time
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
@@ -465,6 +465,26 @@ def launch(cache: Path, unit: Unit) -> subprocess.Popen:
     )
 
 
+def next_unit(
+    pending: list[Unit],
+    running: Iterable[Unit],
+    limits: Mapping[str, int] | None,
+) -> Unit | None:
+    """Return the first pending unit whose study has a free lane.
+
+    `limits` caps the running units per study; with none, the first.
+    """
+    if not limits:
+        return pending[0] if pending else None
+    busy: dict[str, int] = {}
+    for unit in running:
+        busy[unit[0]] = busy.get(unit[0], 0) + 1
+    for unit in pending:
+        if busy.get(unit[0], 0) < limits.get(unit[0], len(pending)):
+            return unit
+    return None
+
+
 def run_units(
     cache: Path,
     units: list[Unit],
@@ -473,6 +493,7 @@ def run_units(
     paused: list[str] | None = None,
     on_done: Any = None,
     max_units: int = 0,
+    limits: Mapping[str, int] | None = None,
 ) -> bool:
     """Run the units not yet done, gated; return whether all finished.
 
@@ -509,11 +530,13 @@ def run_units(
                 f"{total - left}/{total} units")  # fmt: skip
             if done and on_done is not None:
                 on_done(unit)
-        if pending and len(running) < (max_units or MAX_UNITS):
-            if pending[0][0] == "heldout" or can_launch(
+        nxt = next_unit(pending, running, limits)
+        if nxt is not None and len(running) < (max_units or MAX_UNITS):
+            if nxt[0] == "heldout" or can_launch(
                 budget(), mem_avail_gb(), len(running)
             ):
-                unit = pending.pop(0)
+                unit = nxt
+                pending.remove(unit)
                 running[unit] = launch(cache, unit)
                 log(f"progress: {name}: started {' '.join(unit)}")
                 waited = False
@@ -856,6 +879,7 @@ def main(cache: Path) -> None:
                 run_units(
                     cache, germ, "German", newer_slots, paused, landed,
                     max_units=GERMAN_PARALLEL + 1,
+                    limits={"germany": GERMAN_PARALLEL, "heldout_scores": 1},
                 )  # fmt: skip
                 continue
         if not run_units(cache, units, checkpoint, newer_slots, paused):
