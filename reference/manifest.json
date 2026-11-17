@@ -1,0 +1,21 @@
+{
+ "label": "reference",
+ "tag": "reference",
+ "models": [
+  "fm_chronos_daily_complete",
+  "fm_chronos_daily_ragged",
+  "fm_chronos_weekly_complete",
+  "fm_chronos_weekly_ragged",
+  "randomwalknowcast"
+ ],
+ "origins": [
+  "2026-10-09",
+  "2026-10-17",
+  "2026-10-24",
+  "2026-11-01",
+  "2026-11-08"
+ ],
+ "rows": 269514,
+ "levels": "reporting.hubtables.HUB_QUANTILE_LEVELS",
+ "truth": "first release D days after each week (rolling_truth)"
+}
