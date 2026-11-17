@@ -334,7 +334,9 @@ def make_report(
 
     # Backtest and comparison pages: the models the site shows.
     names = _page_models()
-    summaries = _release_section(fig, gen, res, real, names, config.n_samples)
+    summaries = _release_section(
+        fig, gen, res, real, names, config.score_samples, config.n_samples
+    )
     _backtest_page(
         fig, gen, res, out, config, target, names, data_dir, summaries
     )
@@ -521,29 +523,45 @@ def _ours(frame: pd.DataFrame, names: Sequence[str]) -> pd.DataFrame:
     return frame.loc[frame["model"].isin(names)]
 
 
-def draws_note(n: int, key: str = "backtest") -> str:
-    """Say how many draws per forecast a page scores, from the config.
+_FAIR_NOTE: Final = (
+    "CRPS, log CRPS and the energy score use the fair estimators, so "
+    "scores on different numbers of draws compare "
+    "([scores](methods/evaluation.md#scores)).\n"
+)
 
-    `key` is the `[samples]` entry of `config/backtest.toml` that set
-    `n`: `backtest` for the backtest pages and `comparison` for the hub
-    comparison.
+
+def draws_note(n: int, stored: int) -> str:
+    """Say how many draws per forecast the backtest pages score.
+
+    `n` is `[samples] backtest`, the draws of the models run here, and
+    `stored` is `[forecast] n_samples`, the stored fits' draws, both from
+    `config/backtest.toml`.
     """
-    energy = "fair" if key == "backtest" else "plain"
     return (
-        f"Our models are scored on {n:,} draws per forecast "
-        f"(`[samples] {key}` in `config/backtest.toml`), with common "
-        f"random numbers, by CRPS and the {energy} energy score "
-        "([estimators](methods/evaluation.md#scores)).\n"
+        f"The models run here are scored on {n:,} draws per forecast "
+        "(`[samples] backtest` in `config/backtest.toml`) and the stored "
+        f"fits on their {stored:,} (`[forecast] n_samples`), with common "
+        "random numbers. " + _FAIR_NOTE
     )
 
 
-def _release_intro(samples: int) -> str:
+def comparison_draws_note(n: int) -> str:
+    """Say how many draws per forecast the hub comparison scores."""
+    return (
+        f"Our models are scored on their {n:,} draws per forecast "
+        "(`[forecast] n_samples` in `config/backtest.toml`) and the hub "
+        "teams on their samples as submitted. " + _FAIR_NOTE
+    )
+
+
+def _release_intro(samples: int, stored: int) -> str:
     """Return the lead of the Backtest page's overall scores."""
     return (
         "Scores on the complete weeks, or on what each later release "
         "reported, as picked "
         "([how scoring works](methods/evaluation.md#real-releases), "
-        "[metrics](methods/evaluation.md#scores)).\n" + draws_note(samples)
+        "[metrics](methods/evaluation.md#scores)).\n"
+        + draws_note(samples, stored)
     )
 
 
@@ -553,7 +571,7 @@ def _nowcast_meta(latest: str, shown: Sequence[str], samples: int) -> str:
         f"Latest vintage **{latest}**, models "
         f"{', '.join(f'`{n}`' for n in shown)}.\n"
         f"Each forecast has {samples:,} draws "
-        "(`[samples] backtest` in `config/backtest.toml`).\n"
+        "(`[forecast] n_samples` in `config/backtest.toml`).\n"
     )
 
 
@@ -564,10 +582,12 @@ def _release_section(
     real: pd.DataFrame,
     names: Sequence[str],
     samples: int,
+    stored: int,
 ) -> dict[str, str]:
     """Write the real-release evaluation tables and figure.
 
-    `samples` is the draws per forecast, `[samples] backtest`.
+    `samples` is the draws per forecast of the models run here,
+    `[samples] backtest`, and `stored` the stored fits'.
 
     The tables hold the number of forecasts, $n$, in every row, for our
     models only. Returns each target's score summary URL.
@@ -722,7 +742,7 @@ def _release_section(
     _write(
         gen / "release-headline.md",
         "## Overall\n\n"
-        + _release_intro(samples)
+        + _release_intro(samples, stored)
         + _scored_on(rep)
         + complete
         + "The [energy score](methods/evaluation.md#energy-score) scores each "
@@ -2221,11 +2241,9 @@ def _comparison_page(
         "round, so a round we did not submit to shows only the main "
         "build.\n"
         "Each row's n is beside the hub cells scored in its round.\n"
-        + draws_note(
-            int(summary.get("samples", load_config().comparison_samples)),
-            "comparison",
-        )
-        + "Hub teams' samples are scored as submitted.\n",
+        + comparison_draws_note(
+            int(summary.get("samples", load_config().n_samples))
+        ),
     )
     scores_path = cmp_dir / "scores.csv"
     scores = (

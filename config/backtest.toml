@@ -6,19 +6,17 @@
 # are forecasts. The hub accepts up to +3.
 min_horizon = -4
 max_horizon = 3
+n_samples = 100
 seed = 20261027
 
 [samples]
-# Draws per forecast. Every model shares the seed above, so their draws
-# use common random numbers.
-# The backtest pages (backtest, nowcast, zones, scenarios, recovery and
-# score history) score every model on `backtest` draws, the stored fits
-# included: the fit store fits its tasks with this many.
+# Draws per forecast of the models the site runs itself (the release
+# backtest baselines, zones, scenarios and recovery). The fit store, the
+# submission and the hub comparison keep `n_samples` above, so the fit
+# keys do not move with this. Every model shares the seed (common random
+# numbers). Scores use the fair estimators, so they compare across draw
+# counts in expectation.
 backtest = 1000
-# The Comparison with the hub page scores our models on `comparison`
-# draws, as many as the hub teams submit: the models run there draw this
-# many and the stored fits keep their first sample ids.
-comparison = 100
 
 [split]
 # Complete weeks are scored against each later real vintage.

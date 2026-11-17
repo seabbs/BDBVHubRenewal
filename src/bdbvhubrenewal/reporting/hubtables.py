@@ -13,7 +13,6 @@ no model.
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from dataclasses import replace
 from pathlib import Path
 from typing import Final
 
@@ -25,7 +24,7 @@ from bdbvhubrenewal.data.zones import is_zone, weekly_zone_counts
 from bdbvhubrenewal.forecasters import ForecastTask
 from bdbvhubrenewal.forecasters.base import NATIONAL, SAMPLE_COLUMNS
 from bdbvhubrenewal.forecasters.zones import walks_own_zones, zones_for_model
-from bdbvhubrenewal.submission.hub import HUB_SAMPLES, hub_draws, to_hub_table
+from bdbvhubrenewal.submission.hub import to_hub_table
 
 __all__ = [
     "HUB_QUANTILE_LEVELS",
@@ -116,9 +115,6 @@ def hub_tables(
     rows = forecasts.loc[forecasts["vintage"] == task.vintage]
     if "as_of" in rows:
         rows = rows.loc[rows["as_of"].isna()]
-    # The hub takes HUB_SAMPLES draws, the first of the backtest's.
-    rows = hub_draws(rows)
-    task = replace(task, n_samples=HUB_SAMPLES)
     out = {}
     for name, own in rows.groupby("model"):
         places = own.loc[own["location"] != NATIONAL, list(SAMPLE_COLUMNS)]

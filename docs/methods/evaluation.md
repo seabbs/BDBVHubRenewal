@@ -11,29 +11,29 @@ Forecasts from simulated vintages are scored against the simulated final counts.
 ## Scores
 
 The hub takes sample trajectories, so every BDBV forecast is scored on its samples by the continuous ranked probability score (CRPS), as the paper scores Ebola.
-With samples $X_1, \dots, X_m$ of a forecast $F$ and the observed count $y$,
+With samples $X_1, \dots, X_m$ of a forecast $F$ and the observed count $y$, we use the fair form[^ferro],
 
 $$
-\text{CRPS}(F, y) = \frac{1}{m} \sum_{i} \lvert X_i - y \rvert - \frac{1}{2m^2} \sum_{i, j} \lvert X_i - X_j \rvert.
+\text{CRPS}(F, y) = \frac{1}{m} \sum_{i} \lvert X_i - y \rvert - \frac{1}{2m(m - 1)} \sum_{i \ne j} \lvert X_i - X_j \rvert.
 $$
 
-This is the CRPS of the samples' empirical distribution, scoringrules' `crps_ensemble` with `estimator="nrg"`.
+This is scoringrules' `crps_ensemble` with `estimator="fair"`, as in the paper.
 CRPS on the log scale is the CRPS of the transformed target, $\text{CRPS}(\log(1 + X), \log(1 + y))$, never the log of CRPS.
 CRPS on the natural scale is dominated by the places with the most cases.
 On the log scale it approximates a score of the relative error, close to a score of the growth rate, so every place counts on a similar footing[^bosse].
-This plain estimator is used for every model, ours and the hub teams', with no fair or ensemble correction.
-Every model shares the backtest's seed, so their draws use common random numbers.
-The number of draws is set in `[samples]` in `config/backtest.toml`.
+CRPS, log CRPS and the [energy score](#energy-score) use the fair estimators for every model, ours and the hub teams'.
+Their expectation does not depend on the number of draws $m$.
+So scores compare fairly although the number of draws differs across models and pages.
 
-| Page | Draws per forecast | CRPS | Energy score |
-|---|---|---|---|
-| Backtest, Nowcast, health zones, scenarios, recovery and Score history | 1,000 (`backtest`), the stored fits included | Plain | Fair |
-| Comparison with the hub | 100 (`comparison`), as the hub teams submit | Plain | Plain |
-| German nowcast benchmark | Quantiles at seven levels | WIS | None |
+| Forecasts | Draws per forecast | Set by |
+|---|---|---|
+| Models the site runs itself in the release backtest, health zones, scenarios and recovery | 1,000 | `[samples] backtest` in `config/backtest.toml` |
+| Stored fits, the submission, the Nowcast page and our models in the Comparison with the hub | 100 | `[forecast] n_samples` in `config/backtest.toml` |
+| Hub teams | 100 | Their submissions |
+| German nowcast benchmark | Quantiles at seven levels, scored by WIS | `config/germany.toml` |
 
-The fit store fits each model with the backtest's 1,000 draws, so the backtest scores the stored fits on all of them.
-In the comparison our models run here draw 100 samples, and the stored fits keep the first 100 of their 1,000 sample ids, from the same seed.
-Hub teams are scored on the samples they submitted.
+Every model shares the backtest's seed, so its draws use common random numbers.
+Each page states the counts it scores.
 
 $$
 \text{Bias} = 1 - \big(P(X \le y) + P(X \le y - 1)\big),
@@ -58,16 +58,10 @@ The energy score scores one forecast of a vector $\mathbf{y}$.
 For an origin, a release and a scale, $\mathbf{y}$ holds every place at that scale in every scored week, and national holds the weeks only.
 It uses only the place-week cells that every compared model forecasts.
 Sample $i$ of a model is its draws with sample index $i$, $\mathbf{X}_i$.
-The backtest pages use the fair form over $m$ samples,
+We use the fair form over $m$ samples, scoringrules' `es_ensemble` with `estimator="fair"`, for every model,
 
 $$
 \text{ES}(F, \mathbf{y}) = \frac{1}{m} \sum_{i} \lVert \mathbf{X}_i - \mathbf{y} \rVert - \frac{1}{2m(m - 1)} \sum_{i \ne j} \lVert \mathbf{X}_i - \mathbf{X}_j \rVert.
-$$
-
-The Comparison with the hub uses the plain form, the energy score of the samples' empirical distribution, for every model,
-
-$$
-\text{ES}(F, \mathbf{y}) = \frac{1}{m} \sum_{i} \lVert \mathbf{X}_i - \mathbf{y} \rVert - \frac{1}{2m^2} \sum_{i, j} \lVert \mathbf{X}_i - \mathbf{X}_j \rVert.
 $$
 
 The energy score on the log scale is the energy score of $\log(1 + \mathbf{y})$ against $\log(1 + \mathbf{X}_i)$, never the log of the score.
@@ -238,5 +232,7 @@ Under 1% of the teams' forecasts have quantiles that cross, and their values are
 The paper also filled some missing ILM and LMU nowcasts from later model versions, and those are not scored here.
 
 [^wolffram]: Wolffram D, Abbott S, an der Heiden M, Funk S, Günther F, Hailer D, et al. (2023). Collaborative nowcasting of COVID-19 hospitalization incidences in Germany. PLOS Computational Biology 19(8): e1011394. [doi:10.1371/journal.pcbi.1011394](https://doi.org/10.1371/journal.pcbi.1011394).
+
+[^ferro]: Ferro CAT (2014). Fair scores for ensemble forecasts. Quarterly Journal of the Royal Meteorological Society 140(683): 1917–1923. [doi:10.1002/qj.2270](https://doi.org/10.1002/qj.2270).
 
 [^bosse]: Bosse NI, Abbott S, Cori A, van Leeuwen E, Bracher J, Funk S (2023). Scoring epidemiological forecasts on transformed scales. PLOS Computational Biology 19(8): e1011393. [doi:10.1371/journal.pcbi.1011393](https://doi.org/10.1371/journal.pcbi.1011393).

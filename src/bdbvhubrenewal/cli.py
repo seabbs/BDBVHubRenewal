@@ -101,10 +101,8 @@ from bdbvhubrenewal.submission.fitting import (
     run_forecast,
 )
 from bdbvhubrenewal.submission.hub import (
-    HUB_SAMPLES,
     ROUND_NAME,
     SUBMISSION_CONFIG,
-    hub_draws,
     model_abbr_for,
     model_id,
     render_model_metadata,
@@ -810,7 +808,7 @@ def _backtest(args: argparse.Namespace) -> int:
         as_of, dates = _scenario_dates(args, target)
         sforecasts, sscores, senergy, struth = bt.run_scenarios(
             models,
-            config,
+            bt.for_scoring(config),
             target,
             delays,
             load_health_zones(args.data),
@@ -909,7 +907,7 @@ def _forecast_parts(
         as_of, dates = _scenario_dates(args, target)
         forecasts, zones = bt.scenario_forecasts(
             models,
-            config,
+            bt.for_scoring(config),
             target,
             delays,
             load_health_zones(args.data),
@@ -925,7 +923,7 @@ def _forecast_parts(
             dates = chunk(config.simulated_dates, args.chunk)
             config = dataclasses.replace(config, simulated_dates=tuple(dates))
         forecasts = bt.recovery_forecasts(
-            models, config, lags=cutoff_lags(daily)
+            models, bt.for_scoring(config), lags=cutoff_lags(daily)
         )
         write_csv(forecasts, parts / "recovery-forecasts.csv.gz")
     else:
@@ -947,7 +945,9 @@ def _forecast_parts(
                 target, delays, config, daily, _zone_data(args.data)
             ).values()
         )
-        forecast_releases(tasks, target, models).write(parts)
+        forecast_releases(
+            bt.tasks_for_scoring(tasks, config), target, models
+        ).write(parts)
     print(f"Forecasts of {[m.name for m in models]} written to {parts}.")
     return 0
 
@@ -1080,7 +1080,7 @@ def _recovery(
 ) -> pd.DataFrame:
     """Run the recovery check, write its files and return its scores."""
     rforecasts, rscores, renergy = bt.run_recovery(
-        models, config, lags=cutoff_lags(load_daily(args.data))
+        models, bt.for_scoring(config), lags=cutoff_lags(load_daily(args.data))
     )
     for table, path in (
         (rforecasts, output / "recovery-forecasts.csv.gz"),
@@ -1111,8 +1111,10 @@ def _release_backtest(
     )
     stored, learnt = _stored(args, target, forecasts)
     delay = resolve_truth_delay(config, target)
+    # The baselines run here take `[samples] backtest` draws; the stored
+    # fits keep the fit store's `n_samples`.
     out = release_backtest(
-        tasks,
+        bt.tasks_for_scoring(tasks, config),
         daily,
         target,
         stored=stored,
@@ -1142,7 +1144,7 @@ def _release_scores(
     stored, learnt = _stored(args, target, forecasts)
     delay = resolve_truth_delay(config, target)
     out = score_releases(
-        tasks,
+        bt.tasks_for_scoring(tasks, config),
         daily,
         target,
         run,
@@ -1390,15 +1392,6 @@ def _hub_forecast(
         samples = loaded.forecast(task)
         check_samples(samples, task)
         result = Forecast(samples)
-    # The hub takes HUB_SAMPLES draws, the first of the task's.
-    result = dataclasses.replace(
-        result,
-        samples=hub_draws(result.samples),
-        unassigned=None
-        if result.unassigned is None
-        else hub_draws(result.unassigned),
-    )
-    task = dataclasses.replace(task, n_samples=HUB_SAMPLES)
     name = get_config(config).model if config else model
     zones, zone_note = _zones(data, name, task, result.samples)
     # A model that forecasts zones itself gives them through `zones`.
@@ -1560,9 +1553,9 @@ def _zone_backtest(args: argparse.Namespace) -> int:
     from bdbvhubrenewal.evaluation.zones import zone_backtest
 
     hub_config = Path(args.data) / "hub-config" / "tasks.json"
-    # The zone backtest keeps its own default horizons and seed, with the
-    # backtest's draws.
-    draws = bt.load_config(args.backtest_config).n_samples
+    # The zone backtest keeps its own default horizons and seed, with
+    # `[samples] backtest` draws.
+    draws = bt.load_config(args.backtest_config).score_samples
     config = dataclasses.replace(bt.BacktestConfig(), n_samples=draws)
     if args.forecast_only:
         from bdbvhubrenewal.evaluation.zones import zone_forecasts
@@ -1830,8 +1823,6 @@ def _compare_hub(args: argparse.Namespace) -> int:
         hc.load_hub_submissions(cfg.submitted),
         hub_ids,
     )
-    # Our models on the hub's draws, as scored, for the figures too.
-    forecasts = hc.comparison_draws(forecasts, config.comparison_samples)
     zones = hc.zone_truth(load_health_zones(args.data), codes, target)
     scores, energy, pending = hc.score_comparison(
         forecasts, target, delays, config, daily, zones
@@ -1858,7 +1849,7 @@ def _compare_hub(args: argparse.Namespace) -> int:
     summary = {
         "truth_vintage": str(real["vintage"].max()),
         "complete_after_weeks": config.complete_after_weeks,
-        "samples": config.comparison_samples,
+        "samples": config.n_samples,
         "baseline": hc.resolve_baseline(cfg.baseline),
         "preferred_baseline": cfg.baseline,
         "locations": list(cfg.locations),

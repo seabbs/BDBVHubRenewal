@@ -527,9 +527,10 @@ def page_markdown(hist: pd.DataFrame | None, samples: int | None = None) -> str:
     parts = []
     if samples is not None:
         parts.append(
-            f"Each deploy scores {samples:,} draws per forecast "
-            "(`[samples] backtest` in `config/backtest.toml`) at the time "
-            "of this build. Earlier deploys may have scored fewer.\n"
+            f"This build scores the models it runs on {samples:,} draws "
+            "per forecast (`[samples] backtest` in `config/backtest.toml`). "
+            "Earlier deploys may have scored fewer. The fair CRPS keeps "
+            "scores on different numbers of draws comparable.\n"
         )
     for view, heading, what in VIEWS:
         srcs = {

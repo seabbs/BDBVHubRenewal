@@ -33,13 +33,11 @@ from bdbvhubrenewal.data.tidy import write_csv
 
 __all__ = [
     "HUB_COLUMNS",
-    "HUB_SAMPLES",
     "METADATA_DEFAULTS",
     "OUTPUT_TYPE",
     "ROUND_NAME",
     "SUBMISSION_CONFIG",
     "TEAM_ABBR",
-    "hub_draws",
     "model_abbr_for",
     "model_id",
     "render_model_metadata",
@@ -49,33 +47,6 @@ __all__ = [
     "write_model_metadata",
     "write_submission",
 ]
-
-HUB_SAMPLES: Final = 100
-"""Sample trajectories per location the hub takes."""
-
-
-def hub_draws(frame: pd.DataFrame, n: int = HUB_SAMPLES) -> pd.DataFrame:
-    """Keep the first `n` sample ids, the draws a hub file takes.
-
-    The backtest and the fit store draw more (`[samples] backtest` in
-    `config/backtest.toml`). The first ids are a sample of the same
-    forecast, from the task's seed. They need not equal the draws of an
-    `n`-draw run, as the random walks' JAX draws depend on the count.
-
-    Parameters
-    ----------
-    frame : pandas.DataFrame
-        Rows with a `sample` column.
-    n : int
-        The draws to keep.
-
-    Returns
-    -------
-    pandas.DataFrame
-        The rows with `sample` at most `n`.
-    """
-    return frame.loc[frame["sample"] <= n].reset_index(drop=True)
-
 
 HUB_COLUMNS: Final = (
     "reference_date",
@@ -171,7 +142,7 @@ def to_hub_table(
     *,
     unassigned: pd.DataFrame | None = None,
     zones: pd.DataFrame | None = None,
-    n_samples: int = HUB_SAMPLES,
+    n_samples: int = 100,
     forecast_date: dt.date | str | None = None,
     zones_sum: bool = True,
 ) -> pd.DataFrame:

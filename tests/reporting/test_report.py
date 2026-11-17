@@ -619,8 +619,9 @@ def test_backtest_and_nowcast_pages_name_the_backtest_draws() -> None:
     assert f"{stored:,}" in note
     assert "[samples] backtest" in note
     assert "fair" in note
-    meta = report._nowcast_meta("2026-11-08", ["renewal"], n, stored)
-    assert f"{n:,} draws" in meta
+    # The Nowcast page shows the submission's forecasts, at n_samples.
+    meta = report._nowcast_meta("2026-11-08", ["renewal"], stored)
+    assert f"{stored:,} draws" in meta
     assert "2026-11-08" in meta
     lead = report._release_intro(n, stored)
     assert f"{n:,} draws" in lead
