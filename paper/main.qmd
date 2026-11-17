@@ -70,9 +70,12 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
 
 ::: {.callout-note title="Plan"}
 - We give Chronos-2 the reporting triangle as series, one per place and reporting delay, each missing until reported (Figure 1B).
-- We add learned attention biases that mark a place's counts and lags, and parent and child places, so the model links each delay series to its place, building on Moirai's any-variate attention and TableFormer's relation biases [@Woo2024; @Yang2022] (SI).
+- Chronos-2 is built from attention layers, in which each series updates what it has learned as a weighted mix of the other series, with more weight on those it finds relevant.
+- Without more information, the model has no marker of which delay series belong to which place's count.
+- We add learned attention biases that nudge these weights by how two series are related (the same series, the same place, or a place and its parent or child), building on Moirai's any-variate attention and TableFormer's relation biases [@Woo2024; @Yang2022] (SI).
 - A third each of the training blocks with places have a country equal to, above or later than the sum of its places.
 - We fine-tune base Chronos-2 on synthetic data on a laptop, with its default LoRA recipe.
+- LoRA trains a small update to about 1% of the model's weights rather than retraining them all, so fine-tuning starts from the original model (SI).
 - The learning rate falls linearly to zero at 8,000 simulations.
 - Each simulation gives 32 training blocks.
 - A block is daily, 3-day or weekly, or daily with one weekly or 3-day total row per place.
@@ -156,6 +159,7 @@ The SI gives the copula in full, its estimator and window, and the scores of pai
 - The fine-tune never trained on the held-out set's seeds (SI).
 - We set each tuned choice on development data, apart from every scored set (SI).
 - We score sample forecasts with CRPS and log-scale CRPS, bias, and 50% and 90% coverage, relative to `randomwalknowcast`.
+- We score samples with the fair CRPS and the fair energy score, which correct for the number of samples, so forecasts with different numbers of samples, ours and the hub teams', compare fairly [@Ferro2014; @Zamo2018; @zanetta_scoringrules_2024].
 - We score against the data as reported $D$ days later, with $D$ each outbreak's 98% reporting delay.
 - Key references: [@bracherEvaluatingEpidemicForecasts2021; @Bosse2023-sx; @gneitingStrictlyProperScoring2007; @gneitingProbabilisticForecastsCalibration2007; @sherrattPredictivePerformanceMultimodel2023].
 :::
@@ -334,6 +338,8 @@ The fine-tuned model is trained on simulations only, so it never sees the BDBV t
   - Fine-tuning ran on a laptop, so it needs no shared compute.
   - The BDBV hub imputes missing onset dates from reporting delays, which can over-smooth its data (Methods, Data) [@bdbv_modeling_hub_2026].
   - Smoothed release histories mismatch the epinowcast reporting structure our simulations assume, which may disadvantage the fine-tuned Chronos-2.
+  - We fine-tuned on blocks of at most 288 steps of history but forecast with all available data.
+  - We did not test whether this affects Chronos-2's handling of longer histories, which matters most for long series such as the German daily data.
   - Fine-tuning used the laptop's GPU, which made it several times faster than its CPU.
   - On a laptop CPU alone it would run in hours.
   - Key references: [@Kalahasti2026; @Meyer2025].

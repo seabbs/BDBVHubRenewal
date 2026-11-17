@@ -15,14 +15,23 @@ epiforecasts/BVDOutbreakSize (`src/scoring.jl`).
   `score_quantiles` scores those by WIS, the absolute error of the median
   and the coverage of each central interval.
 - **Log WIS**: WIS of $\log(1 + y)$ against $\log(1 + x)$ for the samples.
+- **CRPS** in the fair form (Ferro 2014) over $m$ samples,
+  $$\frac{1}{m}\sum_i |x_i - y| -
+  \frac{1}{2m(m - 1)}\sum_{i \ne j} |x_i - x_j|,$$
+  scoringrules' `crps_ensemble` with `estimator="fair"`, as the paper
+  scores. Its expectation does not depend on $m$, so forecasts with
+  different numbers of draws compare. `estimator="nrg"` gives the CRPS of
+  the empirical distribution. The BDBV pages score by CRPS, as the hub
+  takes samples; the German benchmark scores quantiles by WIS.
+- **Log CRPS**: CRPS of $\log(1 + y)$ against $\log(1 + x)$.
   It scores relative error, so large provinces do not dominate.
-- **CRPS** of the empirical sample distribution, for reference.
 - **Coverage** of the central 50% and 90% sample intervals.
 - **Bias** $1 - (P(X \le y) + P(X \le y - 1))$ for counts, in $[-1, 1]$.
   Positive means overprediction.
 - **Energy score** of a vector forecast, in the fair form over $m$ samples,
   $$\text{ES}(F, \mathbf{y}) = \frac{1}{m}\sum_i \|\mathbf{X}_i - \mathbf{y}\|
-  - \frac{1}{2m(m-1)}\sum_{i \ne j} \|\mathbf{X}_i - \mathbf{X}_j\|.$$
+  - \frac{1}{2m(m-1)}\sum_{i \ne j} \|\mathbf{X}_i - \mathbf{X}_j\|,$$
+  scoringrules' `es_ensemble` with `estimator="fair"`.
   The vector is every place at one scale by every scored week, for one
   origin, so the score rewards getting the joint pattern right.
   The sample index is the joint draw.
@@ -73,6 +82,7 @@ SCORE_COLUMNS: Final = (
     "underprediction",
     "log_wis",
     "crps",
+    "log_crps",
     "ae_median",
     "coverage_50",
     "coverage_90",
@@ -158,11 +168,15 @@ def wis_quantile(
     }
 
 
-def crps_sample(obs: float, samples: ArrayLike) -> float:
-    """Return the CRPS of the empirical distribution of the samples.
+def crps_sample(
+    obs: float, samples: ArrayLike, estimator: str = "fair"
+) -> float:
+    r"""Return the CRPS of a sample forecast.
 
-    Uses $E|X - y| - E|X - X'|/2$ with the sorted closed form for the
-    second term.
+    $\frac{1}{m}\sum_i |x_i - y| - \frac{1}{2c}\sum_{i, j} |x_i - x_j|$,
+    with the pair sum in sorted closed form. The fair form (Ferro 2014)
+    has $c = m(m - 1)$ and an expectation that does not depend on $m$;
+    `nrg`, the CRPS of the empirical distribution, has $c = m^2$.
 
     Parameters
     ----------
@@ -170,18 +184,28 @@ def crps_sample(obs: float, samples: ArrayLike) -> float:
         The observed value.
     samples : array-like
         Sample values.
+    estimator : str
+        `"fair"`, as scoringrules' `crps_ensemble(estimator="fair")`, or
+        `"nrg"`.
 
     Returns
     -------
     float
-        The CRPS.
+        The CRPS. With one sample the fair form has no spread term.
     """
+    if estimator not in ("fair", "nrg"):
+        raise ValueError(
+            f"estimator must be 'fair' or 'nrg', not {estimator!r}."
+        )
     x = np.sort(_as_samples(samples))
     n = x.size
     mae = np.mean(np.abs(x - obs))
     weights = 2 * np.arange(1, n + 1) - n - 1
-    spread = np.sum(weights * x) / n**2
-    return float(mae - spread)
+    # Half the sum of |x_i - x_j| over all pairs.
+    half = np.sum(weights * x)
+    if estimator == "nrg":
+        return float(mae - half / n**2)
+    return float(mae - (half / (n * (n - 1)) if n > 1 else 0.0))
 
 
 def energy_sample(obs: ArrayLike, samples: ArrayLike) -> float:
@@ -197,7 +221,8 @@ def energy_sample(obs: ArrayLike, samples: ArrayLike) -> float:
     Returns
     -------
     float
-        The energy score. In one dimension it is the fair CRPS.
+        The energy score, as scoringrules' `es_ensemble` with
+        `estimator="fair"`. In one dimension it is the fair CRPS.
     """
     y = np.asarray(obs, dtype=np.float64)
     x = np.asarray(samples, dtype=np.float64)
@@ -225,7 +250,9 @@ def scale_of(location: pd.Series) -> pd.Series:
 
 
 def energy_scores(
-    samples: pd.DataFrame, truth: pd.DataFrame, unit: Sequence[str]
+    samples: pd.DataFrame,
+    truth: pd.DataFrame,
+    unit: Sequence[str],
 ) -> pd.DataFrame:
     """Score every model's joint forecast of each scale with the energy score.
 
@@ -342,6 +369,7 @@ def score_sample(obs: float, samples: ArrayLike) -> dict[str, float]:
     out = wis_sample(obs, x)
     out["log_wis"] = wis_sample(float(np.log1p(obs)), np.log1p(x))["wis"]
     out["crps"] = crps_sample(obs, x)
+    out["log_crps"] = crps_sample(float(np.log1p(obs)), np.log1p(x))
     out["ae_median"] = float(abs(np.median(x) - obs))
     out["coverage_50"] = float(coverage_sample(obs, x, 0.5))
     out["coverage_90"] = float(coverage_sample(obs, x, 0.9))

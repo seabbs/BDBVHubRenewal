@@ -18,8 +18,8 @@ Rules, for the round whose window is open now:
 - On a new round, only run on *fresh* data: an `as_of` no earlier round
   used. Last week's data are not resubmitted on Sunday morning, but if
   nothing new lands by the last `stale_fallback_hours` of the window the
-  round runs on what there is rather than being missed. With one check
-  each morning, that is the Tuesday check.
+  round runs on what there is rather than being missed. With a check
+  every 3 hours, that is the first check in the last day of the window.
 - `force` (manual dispatch) skips the data checks but never the window,
   unless `ignore_window` is also set, which only a dry run may use.
 

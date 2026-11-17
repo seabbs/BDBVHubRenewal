@@ -689,3 +689,37 @@ def test_scenarios_forecast_apart_by_model_score_as_one_run(
     )
     for got, want in zip(out, whole[1:], strict=True):
         pd.testing.assert_frame_equal(got, want, check_dtype=False)
+
+
+def test_sample_counts_come_from_the_config(
+    tmp_path: Path,
+    target: pd.DataFrame,
+    delays: pd.DataFrame,
+    daily: pd.DataFrame,
+) -> None:
+    # The models run here draw `[samples] backtest`; the fit store and the
+    # submission keep `[forecast] n_samples`, so their fit keys do not
+    # move with it.
+    from bdbvhubrenewal.evaluation import store
+    from bdbvhubrenewal.evaluation.backtest import (
+        for_scoring,
+        tasks_for_scoring,
+    )
+
+    text = (ROOT / "config" / "backtest.toml").read_text()
+    assert "[samples]" in text
+    cfg = load_config(ROOT / "config" / "backtest.toml")
+    assert cfg.n_samples == 100
+    assert cfg.score_samples == 1000
+    assert for_scoring(cfg).n_samples == 1000
+    assert replace(for_scoring(cfg), n_samples=100) == cfg
+    path = tmp_path / "backtest.toml"
+    path.write_text(text.replace("backtest = 1000", "backtest = 7"))
+    assert load_config(path).score_samples == 7
+    tasks = store.origin_tasks(target, delays, cfg, daily)
+    assert tasks
+    assert {t.n_samples for t in tasks.values()} == {100}
+    drawn = tasks_for_scoring(list(tasks.values()), cfg)
+    assert {t.n_samples for t in drawn} == {1000}
+    # The same seed, so each model draws from the same stream.
+    assert [t.seed for t in drawn] == [t.seed for t in tasks.values()]

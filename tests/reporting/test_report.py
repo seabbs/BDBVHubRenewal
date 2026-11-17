@@ -10,6 +10,13 @@ from bdbvhubrenewal.reporting import report
 
 ROOT = Path(__file__).resolve().parents[2]
 FIXTURES = Path(__file__).parent / "fixtures"
+# nowcast-scores.csv and zone-scores.csv there are score tables without
+# samples. Their `log_crps` column is a stand-in set equal to `log_wis`,
+# added when the pages moved to CRPS, not a computed score: read it only
+# as test input.
+"""Score tables for the page tests. They keep no samples, so their
+`log_crps` column is a stand-in copied from `log_wis`, not a CRPS score:
+read it only as page input."""
 
 
 def test_comparison_page(tmp_path: Path, target: pd.DataFrame) -> None:
@@ -59,6 +66,14 @@ def test_comparison_page(tmp_path: Path, target: pd.DataFrame) -> None:
     # Other teams are named as the hub names them.
     assert "teamA-weekly" in teams
     assert "CC0-1.0" in teams
+    # The page names the comparison's configured draws per forecast.
+    from bdbvhubrenewal.evaluation.backtest import load_config
+
+    n = load_config(ROOT / "config" / "backtest.toml").n_samples
+    lead = (gen / "comparison-lead.md").read_text()
+    assert f"{n:,} draws" in lead
+    assert "as submitted" in lead
+    assert "fair" in lead
     assert "teamA-weekly" in scores
     figures = (gen / "comparison-figures.md").read_text()
     assert "2026-10-24" in figures
@@ -144,15 +159,16 @@ def _scores() -> pd.DataFrame:
             "target_end_date": ["2026-09-26", "2026-10-17"],
             "horizon": [-3, 0],
             "truth_vintage": "2026-10-24",
-            "wis": [10.0, 50.0],
+            "crps": [10.0, 50.0],
         }
     )
     for col in (
         "dispersion",
         "overprediction",
         "underprediction",
+        "wis",
         "log_wis",
-        "crps",
+        "log_crps",
         "ae_median",
         "coverage_50",
         "coverage_90",
@@ -164,9 +180,9 @@ def _scores() -> pd.DataFrame:
 
 def _two_model_scores() -> pd.DataFrame:
     rows = []
-    for model, wis in (("randomwalk", 10.0), ("renewal", 5.0)):
+    for model, crps in (("randomwalk", 10.0), ("renewal", 5.0)):
         for loc in ("CD", "CD-IT"):
-            rows.append(_scores().assign(model=model, location=loc, wis=wis))
+            rows.append(_scores().assign(model=model, location=loc, crps=crps))
     return pd.concat(rows, ignore_index=True)
 
 
@@ -276,7 +292,7 @@ def test_recovery_section() -> None:
             """data-targets='{"complete": "summary.json"}' """
             f'data-view="{view}"'
         ) in text
-    assert "recovery-wis-horizon.svg" in text
+    assert "recovery-crps-horizon.svg" in text
     assert "mean energy score" in text
     assert "| national | randomwalk |   2 |" in text
 
@@ -298,8 +314,8 @@ def _scenario_scores() -> pd.DataFrame:
                                 if location == "CD"
                                 else "province",
                                 "horizon": horizon,
-                                "wis": 10.0 + horizon,
-                                "log_wis": 0.5,
+                                "crps": 10.0 + horizon,
+                                "log_crps": 0.5,
                                 "coverage_50": 0.5,
                                 "coverage_90": 0.9,
                                 "bias": 0.123,
@@ -332,7 +348,7 @@ def test_scenario_scores_table(tmp_path: Path) -> None:
     assert "national" in text
     assert "province" in text
     assert "randomwalknowcast" in text
-    assert "10.5" in text  # mean WIS over horizons 0 and 1
+    assert "10.5" in text  # mean CRPS over horizons 0 and 1
     assert "0.12" in text  # bias to 2 dp
     assert '<div class="tablesort" markdown="1">' in text
 
@@ -353,11 +369,11 @@ def test_dropdown_wraps_and_indents() -> None:
     assert report._dropdown("x", "More").startswith('??? note "More"')
 
 
-def test_metric_tabs_have_wis_and_log_wis() -> None:
-    text = report._metric_tabs("x", "WIS by horizon.")
-    assert '=== "WIS"' in text
-    assert '=== "WIS on the log scale"' in text
-    assert "figures/x-log-wis.svg#only-light" in text
+def test_metric_tabs_have_crps_and_log_crps() -> None:
+    text = report._metric_tabs("x", "CRPS by horizon.")
+    assert '=== "CRPS"' in text
+    assert '=== "CRPS on the log scale"' in text
+    assert "figures/x-log-crps.svg#only-light" in text
 
 
 def test_nowcast_groups() -> None:
@@ -432,7 +448,7 @@ def test_scored_on_counts_pairs_and_forecasts() -> None:
         "On later releases, the scores cover 3 origin and release pairs.\n"
         "The randomwalk baseline has 1 national and 2 province forecasts.\n"
         "1 of them are of a place and week with no case, where every model's "
-        "WIS is close to 0, so mean WIS is lower than over places with "
+        "CRPS is close to 0, so mean CRPS is lower than over places with "
         "cases.\n"
         "The renewal models are not scored at health zones.\n"
     )
@@ -466,8 +482,8 @@ def _scenario_results(res: Path) -> None:
                             "target_end_date": week,
                             "horizon": h,
                             "truth": 5.0,
-                            "wis": 1.0 + h,
-                            "log_wis": 0.1,
+                            "crps": 1.0 + h,
+                            "log_crps": 0.1,
                             "coverage_50": 0.5,
                             "coverage_90": 0.9,
                             "bias": 0.0,
@@ -547,8 +563,8 @@ def test_checks_chart_has_a_set_per_baseline() -> None:
                 "group": "none",
                 "model": list(rel),
                 "n": 4,
-                "relative WIS": list(rel.values()),
-                "WIS": [2.0, 4.0],
+                "relative CRPS": list(rel.values()),
+                "CRPS": [2.0, 4.0],
                 "90% coverage": [0.9, 0.8],
             }
         )
@@ -572,12 +588,12 @@ def test_checks_chart_has_a_set_per_baseline() -> None:
 def test_by_baseline_stacks_a_table_per_baseline() -> None:
     def make(base: str) -> pd.DataFrame:
         rel = [1.0, 2.0] if base == "a" else [0.5, 1.0]
-        return pd.DataFrame({"model": ["a", "b"], "rel_wis": rel})
+        return pd.DataFrame({"model": ["a", "b"], "rel_crps": rel})
 
     got = report._by_baseline(make, ["b", "a"])
-    assert list(got.columns) == ["baseline", "model", "rel_wis"]
+    assert list(got.columns) == ["baseline", "model", "rel_crps"]
     assert list(got["baseline"]) == ["b", "b", "a", "a"]
-    assert list(got["rel_wis"]) == [0.5, 1.0, 1.0, 2.0]
+    assert list(got["rel_crps"]) == [0.5, 1.0, 1.0, 2.0]
 
 
 def test_fit_settings_skip_models_with_no_sampler(
@@ -603,3 +619,21 @@ def test_complete_target_text_names_models_with_no_complete_score() -> None:
     assert "So `renewal` have no complete-week scores yet" in text
     full = report._complete_on(scores.iloc[[0, 2]], zones, 56)
     assert "no complete-week scores" not in full
+
+
+def test_backtest_and_nowcast_pages_name_the_backtest_draws() -> None:
+    from bdbvhubrenewal.evaluation.backtest import load_config
+
+    cfg = load_config(ROOT / "config" / "backtest.toml")
+    n, stored = cfg.score_samples, cfg.n_samples
+    note = report.draws_note(n, stored)
+    assert f"{n:,} draws" in note
+    assert f"{stored:,}" in note
+    assert "[samples] backtest" in note
+    assert "fair" in note
+    # The Nowcast page shows the submission's forecasts, at n_samples.
+    meta = report._nowcast_meta("2026-11-08", ["renewal"], stored)
+    assert f"{stored:,} draws" in meta
+    assert "2026-11-08" in meta
+    lead = report._release_intro(n, stored)
+    assert f"{n:,} draws" in lead

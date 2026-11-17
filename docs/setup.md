@@ -55,7 +55,7 @@ from bdbvhubrenewal.data import (
     load_target,
 )
 from bdbvhubrenewal.evaluation import backtest as bt
-from bdbvhubrenewal.evaluation.nowcast import relative_wis, release_backtest
+from bdbvhubrenewal.evaluation.nowcast import relative_crps, release_backtest
 from bdbvhubrenewal.forecasters import NATIONAL
 from bdbvhubrenewal.forecasters.chain import Settings
 from bdbvhubrenewal.forecasters.randomwalk import RandomWalk, RandomWalkNowcast
@@ -92,8 +92,8 @@ scores = release_backtest(
 
 OUT.mkdir(parents=True, exist_ok=True)
 forecasts.to_csv(OUT / "forecasts.csv", index=False)
-table = relative_wis(scores.loc[scores["target"] == "reported"])
-table.to_csv(OUT / "relative-wis.csv", index=False)
+table = relative_crps(scores.loc[scores["target"] == "reported"])
+table.to_csv(OUT / "relative-crps.csv", index=False)
 fig = plot_location_grid(forecasts, real, [NATIONAL, "CD-IT"])
 fig.savefig(OUT / "forecast.png", dpi=150)
 print(table)

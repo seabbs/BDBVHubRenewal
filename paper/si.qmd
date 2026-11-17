@@ -65,6 +65,7 @@ The learned biases added to Chronos-2's group-attention scores.
 
 #### Group attention
 
+- In attention, each series updates its representation as a weighted mix of the others, with weights from how well its query matches their keys.
 - Chronos-2 attends over time within each series, then over the series of a block at each time step, which is group attention [@Ansari2025].
 - At one time step, row $i$ of a block (a place's count or one of its lag series) attends to row $j$ with weight
 $$
@@ -75,6 +76,7 @@ where $q_i$ and $k_j$ are the query and key vectors of one head in one layer, an
 
 #### Attention biases
 
+- Our change adds a learned nudge to those weights for each pair of rows, by their relation (same row, same place, child to parent, parent to child), so the model can tell which lags belong to which count.
 - Each row $i$ belongs to a place $P(i)$, and each place $p$ has a parent $\pi(p)$ in the block, or none.
 - We add a learned bias for each relation $r$ to the scores:
 $$
@@ -107,6 +109,7 @@ where $y_{p,s}$ is place $p$'s daily count on day $s$ and $k = 7$ for weekly or 
 
 #### LoRA
 
+- Instead of retraining all the weights, LoRA trains a small low-rank update to some of them, about 1% of the weights, which leaves the base model unchanged at the start.
 - LoRA replaces a weight matrix $W \in \mathbb{R}^{d_\text{out} \times d_\text{in}}$ with
 $$
 W' = W + \frac{\alpha}{r} B A,
@@ -303,6 +306,15 @@ Option (d) tests whether pairing the draws with the copula before summing narrow
 - We compute the WIS from scoringrules' `interval_score` and the absolute error of the median, as its `weighted_interval_score` (0.11) adds the median itself ([scoringrules#140](https://github.com/frazane/scoringrules/issues/140)).
 - Key references: [@bosse2022scoringutils; @jordanEvaluatingProbabilisticForecasts2019; @zanetta_scoringrules_2024].
 :::
+
+For a forecast of $m$ samples $x_1, \dots, x_m$ and an observation $y$, the fair CRPS is
+$$
+\mathrm{CRPS}_\mathrm{f}(x, y) = \frac{1}{m}\sum_{i=1}^{m} |x_i - y| - \frac{1}{2m(m-1)}\sum_{i \ne j} |x_i - x_j|.
+$$
+Its expectation does not depend on $m$, whereas the usual sample form, with $2m^2$ in the second denominator, favours forecasts with more samples [@Ferro2014; @Zamo2018].
+The fair energy score is the same form for a vector of counts, with the Euclidean norm $\lVert \cdot \rVert$ in place of $|\cdot|$.
+We compute both with scoringrules' `fair` estimator, `crps_ensemble` and `es_ensemble`, on counts and on $\log(x + 1)$ counts.
+Our models give 1,000 samples and hub teams 100, so the fair form compares them on the same footing.
 
 ### Choices tuned on development data
 
