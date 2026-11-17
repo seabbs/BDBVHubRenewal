@@ -14,7 +14,9 @@ branch, checks the commit is on origin, and writes a mailbox line for
 bdbv-paper. When no checkpoint is waiting it extends the scored
 checkpoints' BDBV rows to origins new releases add, and then runs the
 health zones (`zone_units`), each label landed as its unit ends, and
-then the daily target (`daily_units`): the reference's first (about
+then the German 1 to 4 week forecasts (`forecast_units`, once the live
+run's German nowcasts are done: the reference, then its latest
+checkpoint), then the daily target (`daily_units`): the reference's first (about
 4.5 h), then the one-model checkpoints', each landed again with its
 daily rows. The German job runs the zone units too, after the held-out
 scores (`german_units`). Units
@@ -297,6 +299,30 @@ def zone_units(cache: Path, runs: Mapping[str, str]) -> list[Unit]:
         if cs.unit_done(cache, "bdbv", lb)
         and not cs.unit_done(cache, "bdbv_zones", lb)
     ]
+
+
+FORECAST_JOB = "German forecasts"
+"""The idle-time job: 1 to 4 week German forecasts of the reference and
+the live run's latest checkpoint (`forecast_units`), SI only."""
+IDLE_JOBS = ("new BDBV origins", ZONE_JOB, FORECAST_JOB, DAILY_JOB)
+"""The idle path's jobs, in the order they run."""
+
+
+def _forecasts():
+    """Import scripts/germany_forecast.py."""
+    import germany_forecast
+
+    return germany_forecast
+
+
+def forecast_units(cache: Path, runs: Mapping[str, str]) -> list[Unit]:
+    """Return the German forecast units still to run.
+
+    None while any of the live run's German nowcasts is not done, so they
+    never wait for these; then the reference's and the latest live
+    checkpoint's (most outbreaks), only (`germany_forecast.units`).
+    """
+    return list(_forecasts().units(cache, runs, cs.unit_done))
 
 
 def german_units(pick: list[str], zones: list[Unit]) -> list[Unit]:
@@ -866,6 +892,21 @@ def main(cache: Path) -> None:
                 ) and not paused:  # fmt: skip
                     failures[ZONE_JOB] = failures.get(ZONE_JOB, 0) + 1
                     say(f"FAILED the {ZONE_JOB}; logs in "
+                        f"{cache.parent / 'log'}")  # fmt: skip
+                    time.sleep(POLL_SECONDS)
+                continue
+            ahead = forecast_units(cache, runs)
+            if ahead and failures.get(FORECAST_JOB, 0) < MAX_FAILURES:
+                log(f"progress: {FORECAST_JOB} started: "
+                    f"{', '.join(u[1] for u in ahead)}")  # fmt: skip
+                if not run_units(
+                    cache, ahead, FORECAST_JOB, newer_slots, paused,
+                    lambda u, hashes=sorted(keep): land(
+                        cache, hashes, f"{u[1]} German forecasts"),
+                    max_units=1,
+                ) and not paused:  # fmt: skip
+                    failures[FORECAST_JOB] = failures.get(FORECAST_JOB, 0) + 1
+                    say(f"FAILED the {FORECAST_JOB}; logs in "
                         f"{cache.parent / 'log'}")  # fmt: skip
                     time.sleep(POLL_SECONDS)
                 continue

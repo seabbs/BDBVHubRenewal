@@ -36,7 +36,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 import tomllib
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
@@ -63,6 +63,7 @@ from bdbvhubrenewal.evaluation.marginals import (
 from bdbvhubrenewal.evaluation.nowcast import rolling_truth
 from bdbvhubrenewal.evaluation.scoring import relative_skill, score_quantiles
 from bdbvhubrenewal.forecasters import get_model
+from bdbvhubrenewal.forecasters.base import ForecastTask
 
 __all__ = [
     "DAILY_HORIZONS",
@@ -370,6 +371,7 @@ def germany_forecasts(
     dates: Sequence[str],
     n_samples: int,
     seed: int,
+    make_tasks: Callable[..., list[ForecastTask]] = nowcast_tasks,
 ) -> pd.DataFrame:
     """Nowcast each date with each model, as quantiles at the hub's levels.
 
@@ -385,6 +387,9 @@ def germany_forecasts(
     n_samples, seed : int
         Samples per forecast where the quantiles come from samples, and
         their seed, the same for every model.
+    make_tasks : callable
+        Gives a date's tasks from `(triangle, date, n_samples, seed)`,
+        `nowcast_tasks` by default. Tasks with later weeks give forecasts.
 
     Returns
     -------
@@ -398,7 +403,7 @@ def germany_forecasts(
     keys = ["model", "origin", "location", "target_end_date", "horizon"]
     frames = []
     for date in dates:
-        for task in nowcast_tasks(triangle, date, n_samples, seed):
+        for task in make_tasks(triangle, date, n_samples, seed):
             for model in built:
                 at = forecast_quantiles(
                     model, task, QUANTILE_LEVELS, n_samples, seed

@@ -29,6 +29,11 @@ rows in `evidence/checkpoint-scores.csv` with `rule` = `RULE`:
   randomwalknowcast's own zone run (`zone_method` `native`), every other
   model's draws split across the zones (`split`), scored as the
   provinces on each zone-week's count in the first release D days on.
+- `germany_forecast`: 1 to 4 week forecasts of the German development
+  half's 7-day sums (scripts/germany_forecast.py), WIS by level and
+  `horizon_weeks`, relative to randomwalknowcast and to the same model
+  zero-shot (`rel_to`), for the reference and the live run's latest
+  checkpoint. SI only; a study of its own so other readers skip it.
 
 Each study is scored on two targets (`target`): `7day`, the hub's
 target, as above, and `daily`, each day's count by onset date (Germany:
@@ -52,6 +57,7 @@ Usage:
   python scripts/checkpoint_scores.py heldout CACHE HASH
   python scripts/checkpoint_scores.py heldout_scores CACHE LABEL
   python scripts/checkpoint_scores.py bdbv_zones CACHE LABEL [7day]
+  python scripts/checkpoint_scores.py germany_forecast CACHE LABEL [7day]
   python scripts/checkpoint_scores.py table CACHE EVIDENCE CHECKPOINTS HASH...
 
 TARGETS is `7day`, `daily` or `7day,daily`, the label's own
@@ -159,10 +165,12 @@ COLUMNS = [
     "wis",
     "crps",
     "n_blocks",
+    "horizon_weeks",
     "zone_method",
 ]
 """Rows' columns; `layout` to `n_blocks` are the `heldout` study's and
-empty for the others; `zone_method` is the zone rows' (`bdbv_zones`)."""
+empty for the others; `horizon_weeks` the `germany_forecast` study's;
+`zone_method` is the zone rows' (`bdbv_zones`)."""
 HELD_OUT_LEVELS = ("leaf", "national", "intermediate")
 SORT = ["rule", "study", "level", "model", "outbreaks", "checkpoint"]
 """The evidence's row order, before the target."""
@@ -738,6 +746,14 @@ def _zones():
     return bdbv_zones
 
 
+def _germany_forecast():
+    """Import scripts/germany_forecast.py, the German forecast unit."""
+    sys.path.insert(0, str(Path(__file__).parent))
+    import germany_forecast
+
+    return germany_forecast
+
+
 def unit_done(
     cache: Path, study: str, label: str, target: str = "7day"
 ) -> bool:
@@ -748,6 +764,10 @@ def unit_done(
     """
     if study == "bdbv_zones":
         return target == "7day" and bool(_zones().unit_done(cache, label))
+    if study == "germany_forecast":
+        return target == "7day" and bool(
+            _germany_forecast().unit_done(cache, label)
+        )
     if study == "heldout":
         return (cache / "heldout" / f"{label}-release.json").exists()
     if study == "heldout_scores":
@@ -991,6 +1011,7 @@ def table(
             *(held_out_rows(h, m[0]) for h, m in meta.items()),
             heldout_rows(cache, labels),
             _zones().rows(cache, labels),
+            _germany_forecast().rows(cache, labels),
         ],
         ignore_index=True,
     )
@@ -1033,10 +1054,11 @@ def main(argv: Sequence[str]) -> None:
         held_out_unit(cache, argv[2])
     elif study == "heldout_scores":
         heldout_scores_unit(cache, argv[2])
-    elif study == "bdbv_zones":
+    elif study in ("bdbv_zones", "germany_forecast"):
         if len(argv) > 3 and argv[3] != "7day":
-            raise SystemExit(f"bdbv_zones has the 7-day target only: {argv[3]}")
-        _zones().unit(cache, argv[2])
+            raise SystemExit(f"{study} has the 7-day target only: {argv[3]}")
+        mod = _zones() if study == "bdbv_zones" else _germany_forecast()
+        mod.unit(cache, argv[2])
     elif study == "table":
         new = table(cache, Path(argv[2]), Path(argv[3]), argv[4:])
         print(new.round(3).to_string(index=False), flush=True)

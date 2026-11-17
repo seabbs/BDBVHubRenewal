@@ -21,6 +21,8 @@ FIXTURE = (
 )
 DATE = "2021-09-15"
 """A Wednesday: its hub week ends on Saturday 2021-09-18."""
+RUN_DATE = "2021-09-25"
+"""The first fixture date the random walk has a spread at in both tasks."""
 SPLIT = "2021-10-01"
 
 
@@ -58,7 +60,7 @@ def triangle() -> pd.DataFrame:
 @pytest.fixture(scope="module")
 def forecasts(gf, triangle) -> pd.DataFrame:
     return gf.forecasts(
-        ["randomwalknowcast"], triangle, DATE, 30, 1, split_date=SPLIT
+        ["randomwalknowcast"], triangle, RUN_DATE, 30, 1, split_date=SPLIT
     )
 
 
@@ -84,11 +86,13 @@ def test_forecasts_end_7_to_28_days_after_the_nowcast_date(forecasts):
     assert set(forecasts["horizon"]) == {7, 14, 21, 28}
     assert set(forecasts["horizon_weeks"]) == {1, 2, 3, 4}
     ends = {
-        (dt.date.fromisoformat(DATE) + dt.timedelta(days=h)).isoformat()
+        (dt.date.fromisoformat(RUN_DATE) + dt.timedelta(days=h)).isoformat()
         for h in (7, 14, 21, 28)
     }
     assert set(forecasts["target_end_date"]) == ends
-    assert (forecasts["origin"] == DATE).all()
+    assert (forecasts["origin"] == RUN_DATE).all()
+    # Both tasks: Germany and its two states, and the six age groups.
+    assert forecasts["location"].nunique() == 9
     assert set(forecasts["model"]) == {"randomwalknowcast"}
     assert forecasts["quantile"].nunique() == 7
 
@@ -125,9 +129,25 @@ def test_the_unit_refuses_held_out_dates_before_running(gf):
 # Truth -----------------------------------------------------------------
 
 
-def test_every_horizon_gets_the_40_day_rule_s_truth(gf, triangle, forecasts):
-    # The fixture's reports end on 2021-10-20, 7 days after the 4-week
+def test_every_horizon_gets_the_40_day_rule_s_truth(gf, triangle):
+    # The fixture's reports end on 2021-10-20, 7 days after DATE's 4-week
     # sum, so a 7-day delay stands in for the 40-day one here.
+    ends = [
+        (dt.date.fromisoformat(DATE) + dt.timedelta(days=h)).isoformat()
+        for h in (7, 14, 21, 28)
+    ]
+    forecasts = pd.DataFrame(
+        {
+            "model": "randomwalknowcast",
+            "origin": DATE,
+            "location": ["DE", "DE-BY", "00-04", "80+"],
+            "target_end_date": ends,
+            "horizon": [7, 14, 21, 28],
+            "horizon_weeks": [1, 2, 3, 4],
+            "quantile": 0.5,
+            "value": 1.0,
+        }
+    )
     fc = gf.with_truth(forecasts, triangle, truth_delay=7)
     assert fc["truth"].notna().all()
     lag = pd.to_datetime(fc["truth_vintage"]) - pd.to_datetime(
@@ -272,31 +292,29 @@ def live(poll, tmp_path):
     return tmp_path, poll.runs_of(tmp_path)
 
 
-def _done(monkeypatch, cs, done):
+def _done(monkeypatch, poll, done):
     monkeypatch.setattr(
-        cs,
+        poll.cs,
         "unit_done",
         lambda _c, study, label, _target="7day": (study, label) in done,
     )
 
 
-def test_forecasts_wait_for_every_live_german_nowcast(
-    poll, cs, live, monkeypatch
-):
+def test_forecasts_wait_for_every_live_german_nowcast(poll, live, monkeypatch):
     cache, runs = live
     # slots-b, the newest, is still nowcasting: nothing runs yet, not
     # even the reference, and not the older slots-a that is done.
-    _done(monkeypatch, cs, {("germany", "slots-a"), ("germany", "slots-c")})
+    _done(monkeypatch, poll, {("germany", "slots-a"), ("germany", "slots-c")})
     assert poll.forecast_units(cache, runs) == []
 
 
 def test_forecasts_run_the_reference_then_the_newest_checkpoint_only(
-    poll, cs, live, monkeypatch
+    poll, live, monkeypatch
 ):
     cache, runs = live
     done = {("germany", lb) for lb in ("slots-a", "slots-b", "slots-c")}
     done.add(("germany", "nnnn"))
-    _done(monkeypatch, cs, done)
+    _done(monkeypatch, poll, done)
     assert poll.forecast_units(cache, runs) == [
         ("germany_forecast", "reference"),
         ("germany_forecast", "slots-b"),
