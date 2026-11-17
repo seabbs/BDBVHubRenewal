@@ -2,7 +2,10 @@
 // Python: each model over the forecasts the baseline also made (same
 // origin, release, place and week), with n, the mean of every metric and,
 // for relative metrics, the model's mean over the baseline's. Metric
-// columns are used as embedded and only averaged and divided.
+// columns are used as embedded and only averaged and divided. Each entry
+// has cells, the baseline's n, and partial, whether the model has fewer
+// of the baseline's forecasts (mark_partial in Python), so its row is read
+// apart from the full rows, which all have the baseline's n.
 (function (root) {
   "use strict";
 
@@ -35,10 +38,12 @@
         a.bsum[i] += b[5 + i];
       }
     });
+    var cells = acc[baseline] ? acc[baseline].n : null;
     return Object.keys(acc).map(Number).sort(function (x, y) { return x - y; })
       .map(function (m) {
         var a = acc[m];
-        var out = { model: m, n: a.n, mean: {}, rel: {} };
+        var out = { model: m, n: a.n, cells: cells,
+          partial: cells !== null && a.n < cells, mean: {}, rel: {} };
         d.metrics.forEach(function (met, i) {
           out.mean[met.key] = a.sum[i] / a.n;
           // A zero baseline gives no relative score, as in Python.
@@ -47,6 +52,16 @@
         return out;
       });
   }
+
+  // A keep function for the rounds (origin indices) given, or every row
+  // for null. Rows of several rounds are summarised together, so each
+  // score is over the union of their cells.
+  summarise.inRounds = function (rounds) {
+    if (rounds === null || rounds === undefined) return function () { return true; };
+    var on = {};
+    rounds.forEach(function (o) { on[o] = true; });
+    return function (r) { return on[r[1]] === true; };
+  };
 
   if (typeof module !== "undefined" && module.exports) module.exports = summarise;
   else root.bdbvSummarise = summarise;

@@ -1,7 +1,6 @@
 // Table filter: a text search, a select per named column and sortable
-// headers for each table inside a `.tablefilter` block. data-defaults
-// (column to value) sets the value a select opens on. A cell's
-// `data-sort` value, where given, is what it sorts by. Without JavaScript
+// headers (tablesort.js) for each table inside a `.tablefilter` block.
+// data-defaults (column to value) sets the value a select opens on. Without JavaScript
 // the table is a plain table. Scripts that build a table call
 // bdbvTableFilter(block).
 (function () {
@@ -9,10 +8,6 @@
   var h = window.bdbvToggles.h;
 
   function text(cell) { return cell.textContent.trim(); }
-  function key(cell) {
-    return cell.dataset.sort !== undefined ? cell.dataset.sort : text(cell);
-  }
-  function num(s) { return s === "" ? NaN : Number(s); }
 
   function init(root) {
     var table = root.querySelector("table");
@@ -63,24 +58,7 @@
       count.textContent = shown + " of " + rows.length + " rows";
     }
 
-    var sorted = { col: -1, dir: 1 };
-    heads.forEach(function (th, col) {
-      th.classList.add("tablefilter-sort");
-      th.setAttribute("aria-sort", "none");
-      th.addEventListener("click", function () {
-        sorted.dir = sorted.col === col ? -sorted.dir : 1;
-        sorted.col = col;
-        heads.forEach(function (o) { o.setAttribute("aria-sort", "none"); });
-        th.setAttribute("aria-sort", sorted.dir > 0 ? "ascending" : "descending");
-        rows.sort(function (a, b) {
-          var x = key(a.cells[col]), y = key(b.cells[col]);
-          var nx = num(x), ny = num(y);
-          var c = isNaN(nx) || isNaN(ny) ? x.localeCompare(y) : nx - ny;
-          return c * sorted.dir;
-        });
-        rows.forEach(function (r) { body.appendChild(r); });
-      });
-    });
+    window.bdbvTableSort.sortable(table);
     apply();
   }
 
