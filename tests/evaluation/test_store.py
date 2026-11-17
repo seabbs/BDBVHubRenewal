@@ -908,7 +908,7 @@ def test_a_stored_own_national_model_keeps_its_national_rows(
     root = tmp_path / "store"
     store.write_fit(root, dataclasses.replace(fit, forecasts=rows))
 
-    def hub(model: str, *, forecast: Forecast, **_: object) -> pd.DataFrame:
+    def hub(_: str, *, forecast: Forecast, **__: object) -> pd.DataFrame:
         # As `cli._hub_forecast` writes an own-national model's table.
         return to_hub_table(
             forecast.samples,
@@ -926,9 +926,7 @@ def test_a_stored_own_national_model_keeps_its_national_rows(
     got = table.loc[table["location"] == NATIONAL]
     assert not got.empty
     weeks = {str(d) for d in task.target_end_dates}
-    want = rows.loc[
-        national & rows["target_end_date"].astype(str).isin(weeks)
-    ]
+    want = rows.loc[national & rows["target_end_date"].astype(str).isin(weeks)]
     assert got["value"].sum() == want["value"].round().sum()
 
 
