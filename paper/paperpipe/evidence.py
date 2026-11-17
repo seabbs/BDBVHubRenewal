@@ -679,7 +679,7 @@ def diseases_table(diseases: pd.DataFrame) -> pd.DataFrame:
 
 
 EVIDENCE: Final = {
-    "si_copula": "fm-copula's walk scores with no pairing and the rolling rho_p",
+    "si_copula": "fm-copula's walk scores, no pairing against rolling rho_p",
     "aggregation_scores": "fm-agg's per-target aggregation scores",
     "finetune_heldout": "fm-finetune3's held-out loss curve",
     "sim_summaries": "fm-finetune3's per-outbreak r3 pilot summaries",
