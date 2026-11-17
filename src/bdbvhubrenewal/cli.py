@@ -11,11 +11,14 @@ Commands:
 - `zone-backtest`: score the random walk models run at zone level.
 - `digest`: hash what a backtest reads, to key its cached outputs.
 - `concat-results`: stack the results files of runs made apart.
+- `germany-ft-load`: write the stored German forecasts of the fine-tuned
+  model's checkpoint, for the Pages build.
 - `score`: score the forecasts of `--forecast-only` runs together.
 - `fit`: fit a configuration and write the fit directory and its
   `diagnostics.json`, for the submission CI.
-- `fit-store`: list the fitted models' fits the store lacks, make one, or
-  load the stored fits into the results (`evaluation.store`).
+- `fit-store`: list the fitted models' fits the store lacks, make one,
+  load the stored fits into the results (`evaluation.store`), or archive
+  every candidate's forecasts for a round (`evaluation.store_archive`).
 - `plot-submission`: plot a submitted hub file.
 - `plot-ppc`: plot a fit's posterior predictive checks (`ppc.json`).
 - `coherence`: compare the national data with the sum of the provinces.
@@ -43,6 +46,7 @@ import sys
 from collections.abc import Sequence
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
+from typing import Any
 
 import pandas as pd
 
@@ -61,10 +65,16 @@ from bdbvhubrenewal.data.dates import as_date
 from bdbvhubrenewal.data.releases import cutoff_lags
 from bdbvhubrenewal.data.simulate import SCENARIO_RT_SCALE
 from bdbvhubrenewal.data.tidy import write_csv
-from bdbvhubrenewal.data.zones import hub_zones, weekly_zone_counts
+from bdbvhubrenewal.data.zones import (
+    ZoneData,
+    hub_zones,
+    is_zone,
+    load_zone_data,
+    weekly_zone_counts,
+)
 from bdbvhubrenewal.devices import host_devices
 from bdbvhubrenewal.evaluation import backtest as bt
-from bdbvhubrenewal.evaluation import store
+from bdbvhubrenewal.evaluation import store, store_archive
 from bdbvhubrenewal.evaluation.nowcast import (
     ReleaseBacktest,
     ReleaseForecasts,
@@ -83,7 +93,7 @@ from bdbvhubrenewal.forecasters.base import (
     list_models,
 )
 from bdbvhubrenewal.forecasters.renewal import DELAY_SUMMARY_FILE
-from bdbvhubrenewal.forecasters.zones import zones_for_model
+from bdbvhubrenewal.forecasters.zones import walks_own_zones, zones_for_model
 from bdbvhubrenewal.submission.fitting import (
     Forecast,
     get_config,
@@ -197,12 +207,7 @@ def build_parser() -> argparse.ArgumentParser:
     back.add_argument("--data", default=data_dir)
     back.add_argument("--models", nargs="*", default=None)
     back.add_argument("--results", default="results")
-    back.add_argument(
-        "--store",
-        default="output/fit-store",
-        help="The fit store checkout (`fit-store load` read it). The "
-        "fitted models' samples are taken from its fits, every week.",
-    )
+    _add_store_arg(back)
     back.add_argument(
         "--output",
         default="results",
@@ -382,6 +387,25 @@ def build_parser() -> argparse.ArgumentParser:
     gpp.add_argument("--config", default="config/germany.toml")
     gpp.add_argument("--results", default="results/germany")
 
+    gft = sub.add_parser(
+        "germany-ft-load",
+        help="Write the stored German forecasts of the fine-tuned model's "
+        "checkpoint, for the Pages build (`evaluation.germany_store`).",
+    )
+    gft.add_argument("--config", default="config/germany.toml")
+    gft.add_argument("--finetune", default="config/finetune.toml")
+    gft.add_argument(
+        "--store", required=True, help="The germany-ft-forecasts tree."
+    )
+    gft.add_argument(
+        "--out", required=True, help="A germany-backtest results directory."
+    )
+    gft.add_argument(
+        "--note",
+        required=True,
+        help="JSON naming the checkpoint shown, which the page reads.",
+    )
+
     dig = sub.add_parser(
         "digest",
         help="Print a hash of what a backtest reads, to key its outputs.",
@@ -410,12 +434,7 @@ def build_parser() -> argparse.ArgumentParser:
     sc.add_argument("--config", default="config/backtest.toml")
     sc.add_argument("--data", default=data_dir)
     sc.add_argument("--results", default="results")
-    sc.add_argument(
-        "--store",
-        default="output/fit-store",
-        help="The fit store checkout (`fit-store load` read it). The "
-        "fitted models' samples are taken from its fits, every week.",
-    )
+    _add_store_arg(sc)
     sc.add_argument("--output", default="results")
     sc.add_argument(
         "parts",
@@ -455,7 +474,9 @@ def build_parser() -> argparse.ArgumentParser:
     fst = sub.add_parser(
         "fit-store", help="Plan, make or load the fitted models' stored fits."
     )
-    fst.add_argument("action", choices=["plan", "fit", "load", "unpack"])
+    fst.add_argument(
+        "action", choices=["plan", "fit", "load", "unpack", "archive"]
+    )
     fst.add_argument("--store", default="output/fit-store")
     fst.add_argument("--data", default=data_dir)
     fst.add_argument("--config", default="config/backtest.toml")
@@ -464,13 +485,20 @@ def build_parser() -> argparse.ArgumentParser:
         "--model", help="With `fit` or `unpack`: the model to fit or read."
     )
     fst.add_argument(
-        "--origin", help="With `fit` or `unpack`: the real origin."
+        "--origin",
+        help="With `fit`, `unpack` or `archive`: the real origin.",
+    )
+    fst.add_argument(
+        "--reference-date",
+        default=None,
+        help="With `archive`: the round, as `nowcast --reference-date`.",
     )
     fst.add_argument(
         "--out",
         default=None,
         help="With `plan`: write the missing fits as a matrix JSON here. "
-        "With `unpack`: the fit directory to write.",
+        "With `unpack`: the fit directory to write. "
+        "With `archive`: the hub tables file to write.",
     )
     fst.add_argument(
         "--origins",
@@ -483,7 +511,8 @@ def build_parser() -> argparse.ArgumentParser:
         "--models",
         nargs="*",
         default=None,
-        help="With `plan` or `load`: only these models (default: all fitted).",
+        help="With `plan` or `load`: only these models (default: all "
+        "fitted). With `archive`: default every candidate's model.",
     )
     fst.add_argument(
         "--retry-failed",
@@ -578,11 +607,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Uncommitted hub files, for other licences.",
     )
     cmp.add_argument("--out", default="results/hub-comparison")
+    _add_store_arg(cmp)
     cmp.add_argument(
-        "--store",
-        default="output/fit-store",
-        help="The fit store checkout (`fit-store load` read it). The "
-        "fitted models' samples are taken from its fits, every week.",
+        "--results",
+        default="results",
+        help="Where `fit-store load` wrote its status file.",
     )
     cmp.add_argument(
         "--models",
@@ -655,20 +684,48 @@ def _vintage(target_vintages: Sequence[str], vintage: str | None) -> str:
     return vintage
 
 
+def _zone_data(data: Path | str) -> ZoneData | None:
+    """Return the zone tables, or None if the data has none."""
+    try:
+        return load_zone_data(data)
+    except FileNotFoundError:
+        return None
+
+
 def _task(args: argparse.Namespace) -> tuple[ForecastTask, list[str]]:
     """Build the forecast task, and notes on any stream that stood in."""
-    config = bt.load_config(args.backtest_config)
-    target, delays = load_target(args.data), load_delays(args.data)
+    return _round_task(
+        load_target(args.data),
+        load_delays(args.data),
+        load_daily(args.data),
+        bt.load_config(args.backtest_config),
+        args.vintage,
+        args.reference_date,
+        zones=_zone_data(args.data),
+    )
+
+
+def _round_task(
+    target: pd.DataFrame,
+    delays: pd.DataFrame,
+    daily: pd.DataFrame,
+    config: bt.BacktestConfig,
+    vintage: str | None,
+    reference_date: str | None,
+    zones: ZoneData | None = None,
+) -> tuple[ForecastTask, list[str]]:
+    """Build a round's task, moved to `reference_date` if one is given.
+
+    `zones` puts the health zones in the task, for models that read them.
+    """
     real = target.loc[target["kind"] == "real"]
-    vintage = _vintage([str(v) for v in real["vintage"].unique()], args.vintage)
+    vintage = _vintage([str(v) for v in real["vintage"].unique()], vintage)
     task, note = bt.vintage_task(
-        target, delays, config, vintage, load_daily(args.data)
+        target, delays, config, vintage, daily, zones=zones
     )
     notes = [note] if note else []
-    if args.reference_date and as_date(args.reference_date) != (
-        task.reference_date
-    ):
-        ref = as_date(args.reference_date)
+    if reference_date and as_date(reference_date) != task.reference_date:
+        ref = as_date(reference_date)
         weeks = dataclasses.replace(config, min_horizon=bt.TASK_MIN_HORIZON)
         task = dataclasses.replace(
             task,
@@ -697,6 +754,16 @@ def _fit(args: argparse.Namespace) -> int:
         f"(sampler {diag.get('sampler')}); wrote {result.fit_dir}."
     )
     return 0
+
+
+def _add_store_arg(parser: argparse.ArgumentParser) -> None:
+    """Add `--store`, the fit store the fitted models' samples come from."""
+    parser.add_argument(
+        "--store",
+        default="output/fit-store",
+        help="The fit store checkout that `fit-store load` read. The "
+        "fitted models' samples come from its fits, every week.",
+    )
 
 
 def _models(names: Sequence[str] | None) -> list[str]:
@@ -788,6 +855,7 @@ def _backtest(args: argparse.Namespace) -> int:
         fits=fits,
         learnt=learnt,
         daily=load_daily(args.data),
+        zones=_zone_data(args.data),
     )
     _write_fits(fits, results / "backtest-fits.csv")
     _write_fits(learnt, output / DELAY_SUMMARY_FILE)
@@ -863,7 +931,7 @@ def _forecast_parts(
         learnt: list[pd.DataFrame] = []
         forecasts = bt.run_development(
             models, target, delays, config, fits=fits, learnt=learnt,
-            daily=daily,
+            daily=daily, zones=_zone_data(args.data),
         )  # fmt: skip
         write_csv(forecasts, parts / "forecasts.csv.gz")
         for name, frames in (
@@ -872,7 +940,11 @@ def _forecast_parts(
         ):
             table = pd.concat(frames, ignore_index=True) if frames else None
             write_csv(pd.DataFrame() if table is None else table, parts / name)
-        tasks = list(store.origin_tasks(target, delays, config, daily).values())
+        tasks = list(
+            store.origin_tasks(
+                target, delays, config, daily, _zone_data(args.data)
+            ).values()
+        )
         forecast_releases(
             bt.tasks_for_scoring(tasks, config), target, models
         ).write(parts)
@@ -1032,7 +1104,11 @@ def _release_backtest(
     The fitted models' final-count forecasts are taken from `forecasts`.
     """
     daily = load_daily(args.data)
-    tasks = list(store.origin_tasks(target, delays, config, daily).values())
+    tasks = list(
+        store.origin_tasks(
+            target, delays, config, daily, _zone_data(args.data)
+        ).values()
+    )
     stored, learnt = _stored(args, target, forecasts)
     delay = resolve_truth_delay(config, target)
     # The baselines run here take `score_samples` draws; the stored fits
@@ -1060,7 +1136,11 @@ def _release_scores(
 ) -> None:
     """Score stacked release forecasts with the stored models'."""
     daily = load_daily(args.data)
-    tasks = list(store.origin_tasks(target, delays, config, daily).values())
+    tasks = list(
+        store.origin_tasks(
+            target, delays, config, daily, _zone_data(args.data)
+        ).values()
+    )
     stored, learnt = _stored(args, target, forecasts)
     delay = resolve_truth_delay(config, target)
     out = score_releases(
@@ -1098,16 +1178,13 @@ def _write_release(out: ReleaseBacktest, results: Path, delay: int) -> None:
 
 
 def _fit_store_forecasts(args: argparse.Namespace) -> pd.DataFrame:
-    """Return the real forecasts of every fit `fit-store load` used.
+    """Return the real forecasts of every whole fit in the results' status.
 
-    `fit-store load` cuts the forecasts it writes to the backtest's weeks,
-    but a stored fit forecasts its whole origin task, as the release
-    backtest runs the baselines. These are the whole fits, read from the
-    store (`--store`) by the keys in the results' `STATUS_FILE`. Empty if
-    either is missing.
+    The fits are read from `--store` by the keys `fit-store load` wrote
+    to `STATUS_FILE`. Empty if either is missing.
     """
-    status = Path(getattr(args, "results", "results")) / store.STATUS_FILE
-    root = Path(getattr(args, "store", "output/fit-store"))
+    status = Path(args.results) / store.STATUS_FILE
+    root = Path(args.store)
     if not status.exists() or not root.is_dir():
         return pd.DataFrame()
     frames = []
@@ -1140,6 +1217,33 @@ def _with_whole_fits(
     return pd.concat([whole[cols], rows.loc[keep, cols]], ignore_index=True)
 
 
+def _comparison_stored(
+    stored: pd.DataFrame,
+    whole: pd.DataFrame,
+    rounds: Sequence[str],
+    live: Sequence[str],
+) -> pd.DataFrame:
+    """Put the whole fits of the hub rounds in place of the stored rows.
+
+    Only rounds in `rounds` and models not in `live` are taken, in the
+    comparison's sample columns, with `kind` as `source`.
+    """
+    from bdbvhubrenewal.evaluation import hubcompare as hc
+
+    if whole.empty:
+        return stored
+    # A date read back as a timestamp prints with its time, so keep the day.
+    day = whole["reference_date"].astype(str).str.slice(0, 10)
+    whole = whole.assign(reference_date=day)
+    whole = whole.loc[
+        whole["reference_date"].isin(list(rounds))
+        & ~whole["model"].isin(list(live))
+    ].rename(columns={"kind": "source"})
+    return _with_whole_fits(
+        stored, whole[list(hc.SAMPLE_COLUMNS)], "reference_date"
+    )
+
+
 def _stored(
     args: argparse.Namespace, target: pd.DataFrame, forecasts: pd.DataFrame
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -1168,6 +1272,7 @@ def _stored(
             forecasts["model"].isin(fitted)
             & (forecasts["kind"] == "real")
             & forecasts["as_of"].isna()
+            & ~forecasts["location"].map(is_zone)
         ],
         _fit_store_forecasts(args),
         "vintage",
@@ -1230,27 +1335,148 @@ def _write_fits(fits: list[pd.DataFrame], path: Path) -> None:
 
 
 def _zones(
-    args: argparse.Namespace,
+    data: str,
+    name: str | None,
     task: ForecastTask,
     samples: pd.DataFrame,
-    hub_config: Path,
 ) -> tuple[pd.DataFrame | None, str]:
-    """Forecast the zones to sum to the provinces, or say why not.
+    """Forecast the zones, or say why not.
 
-    The zones come from `zones_for_model`.
+    The zones come from `zones_for_model` for model `name`.
     """
+    hub_config = Path(data) / "hub-config" / "tasks.json"
     try:
-        daily = load_daily_zones(args.data)
+        daily = load_daily_zones(data)
     except OSError:
         return None, "no zone data, so the file has no health zones"
     counts = weekly_zone_counts(daily, task.vintage)
     if counts.empty:
         return None, f"no zone data for {task.vintage}, so no health zones"
-    name = get_config(args.config).model if args.config else args.model
     zones = zones_for_model(
         name, task, samples, counts, hub_zones(hub_config), daily
     )
     return zones, ""
+
+
+def _hub_forecast(
+    task: ForecastTask,
+    *,
+    data: str,
+    model: str | None,
+    config: str | None = None,
+    fit: Path | str | None = None,
+    forecast: Forecast | None = None,
+    forecast_date: str | None = None,
+) -> tuple[pd.DataFrame, Forecast, pd.DataFrame | None, str, Any]:
+    """Return the hub table `nowcast` writes, with its forecast and zones.
+
+    A `forecast` given is used as it is. Otherwise, with `config` it
+    forecasts from the fit directory `fit`, else `model` forecasts. The
+    zones come from `_zones`.
+
+    Returns
+    -------
+    tuple
+        The hub table, the forecast, the zone samples (or None), why
+        there are no zones ("" if there are) and the fine-tuned checkpoint
+        the model loaded (or None).
+    """
+    checkpoint = None
+    if forecast is not None:
+        result = forecast
+    elif config:
+        result = run_forecast(get_config(config), task, fit)
+    else:
+        loaded = get_model(str(model))
+        checkpoint = getattr(loaded, "checkpoint", None)
+        samples = loaded.forecast(task)
+        check_samples(samples, task)
+        result = Forecast(samples)
+    name = get_config(config).model if config else model
+    zones, zone_note = _zones(data, name, task, result.samples)
+    # A model that forecasts zones itself gives them through `zones`.
+    own_zones = result.samples["location"].map(is_zone)
+    table = to_hub_table(
+        result.samples.loc[~own_zones],
+        task.reference_date,
+        unassigned=result.unassigned,
+        zones=zones,
+        forecast_date=forecast_date,
+        zones_sum=not walks_own_zones(name),
+    )
+    return table, result, zones, zone_note, checkpoint
+
+
+def _fit_store_archive(args: argparse.Namespace) -> int:
+    """Run `fit-store archive` (`evaluation.store_archive`).
+
+    Returns 1 if an argument is missing, the origin is no real one, or a
+    policy candidate (or a model in `--models`) is not archived; the
+    others are written all the same.
+    """
+    if not (args.out and args.origin):
+        print("ERROR: archive needs --out and --origin.", file=sys.stderr)
+        return 1
+    target, delays = load_target(args.data), load_delays(args.data)
+    daily, config = load_daily(args.data), bt.load_config(args.config)
+    try:
+        task, _ = _round_task(
+            target,
+            delays,
+            daily,
+            config,
+            args.origin,
+            args.reference_date,
+            zones=_zone_data(args.data),
+        )
+    except (KeyError, ValueError, OSError) as err:
+        print(f"ERROR: {err}", file=sys.stderr)
+        return 1
+    stored_task = store_archive.store_task(
+        target, delays, config, daily, task.vintage, zones=_zone_data(args.data)
+    )
+
+    def hub(
+        model: str,
+        *,
+        config: str | None = None,
+        fit_dir: Path | None = None,
+        forecast: Forecast | None = None,
+    ) -> pd.DataFrame:
+        return _hub_forecast(
+            task,
+            data=args.data,
+            model=model,
+            config=config,
+            fit=fit_dir,
+            forecast=forecast,
+        )[0]
+
+    models = store_archive.candidate_models(args.policy)
+    required = set(store_archive.policy_candidates(args.policy))
+    if args.models:
+        models = {m: models.get(m) for m in args.models}
+        required = set(args.models)
+    table = store_archive.archive(
+        args.store,
+        task,
+        stored_task,
+        models,
+        store.samplers(args.policy),
+        hub,
+    )
+    out = Path(args.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    write_csv(table, out)
+    for row in table.drop_duplicates("model").itertuples():
+        print(f"{row.model}: key {row.key}, made {row.fitted_at}.")
+    n = table["model"].nunique()
+    print(f"Archived {n} of {len(models)} models' forecasts in {out}.")
+    missing = sorted(required - set(table["model"]))
+    if missing:
+        print(f"ERROR: candidates not archived: {missing}.", file=sys.stderr)
+        return 1
+    return 0
 
 
 def _nowcast(args: argparse.Namespace) -> int:
@@ -1258,29 +1484,18 @@ def _nowcast(args: argparse.Namespace) -> int:
 
     # A renewal model given by --model is fitted here.
     host_devices(int(sampler_settings()["num_chains"]))
-    hub_config = Path(args.data) / "hub-config" / "tasks.json"
-    checkpoint = None
     try:
         task, handled = _task(args)
-        if args.config:
-            config = get_config(args.config)
-            result = run_forecast(config, task, args.fit)
-        else:
-            model = get_model(args.model)
-            checkpoint = getattr(model, "checkpoint", None)
-            samples = model.forecast(task)
-            check_samples(samples, task)
-            result = Forecast(samples)
-        zones, zone_note = _zones(args, task, result.samples, hub_config)
-        if zone_note:
-            handled.append(zone_note)
-        table = to_hub_table(
-            result.samples,
-            task.reference_date,
-            unassigned=result.unassigned,
-            zones=zones,
+        table, result, zones, zone_note, checkpoint = _hub_forecast(
+            task,
+            data=args.data,
+            model=args.model,
+            config=args.config,
+            fit=args.fit,
             forecast_date=args.forecast_date,
         )
+        if zone_note:
+            handled.append(zone_note)
         path = write_submission(table, args.out, model_id(_abbr(args)))
     except (LookupError, ValueError, OSError) as err:
         print(f"ERROR: {err}", file=sys.stderr)
@@ -1587,8 +1802,7 @@ def _compare_hub(args: argparse.Namespace) -> int:
         bt.for_scoring(config),
         live,
         daily,
-        load_daily_zones(args.data),
-        codes,
+        load_zone_data(args.data),
         min_horizon=min(int(horizons.min()), config.min_horizon)
         if len(hub)
         else None,
@@ -1598,17 +1812,9 @@ def _compare_hub(args: argparse.Namespace) -> int:
         rounds,
         exclude=live,
     )
-    # The fitted models' whole fits, as for the release backtest, so the
-    # hub teams' weeks the backtest's weeks leave out are covered too.
-    whole = _fit_store_forecasts(args)
-    if not whole.empty:
-        whole = whole.assign(reference_date=whole["reference_date"].astype(str))
-        whole = whole.loc[
-            whole["reference_date"].isin(rounds) & ~whole["model"].isin(live)
-        ].rename(columns={"kind": "source"})
-        stored = _with_whole_fits(
-            stored, whole[list(hc.SAMPLE_COLUMNS)], "reference_date"
-        )
+    stored = _comparison_stored(
+        stored, _fit_store_forecasts(args), rounds, live
+    )
     hub_ids = hc.own_hub_ids()
     forecasts = hc.with_submissions(
         pd.concat(
@@ -1749,6 +1955,40 @@ def _germany_paper(args: argparse.Namespace) -> int:
     return 0
 
 
+def _germany_ft_load(args: argparse.Namespace) -> int:
+    from bdbvhubrenewal.evaluation import germany as de
+    from bdbvhubrenewal.evaluation import germany_store as gs
+    from bdbvhubrenewal.forecasters import foundation
+
+    config = de.load_germany_config(args.config)
+    spec = foundation.finetuned_spec(args.finetune)
+    stored = gs.stored_tags(args.store)
+    tag, pinned = gs.choose_checkpoint(
+        stored, foundation.finetuned_releases(), spec
+    )
+    note = Path(args.note)
+    note.parent.mkdir(parents=True, exist_ok=True)
+    meta = {"tag": tag, "pinned": pinned, "models": list(gs.STORED_MODELS)}
+    note.write_text(json.dumps(meta, indent=2) + "\n")
+    if tag is None:
+        print(
+            f"No stored German forecasts of the _ft models for {pinned} "
+            f"or any other checkpoint ({len(stored)} stored)."
+        )
+        return 0
+    forecasts = gs.load_stored(args.store, tag, config.split_date)
+    scores = de.score_germany(forecasts, config.truth_delay)
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+    write_csv(forecasts, out / "forecasts.csv.gz")
+    write_csv(scores, out / "scores.csv.gz")
+    print(
+        f"The _ft models at {tag} (pinned {pinned}): {len(scores)} "
+        f"scored nowcasts in {out}."
+    )
+    return 0
+
+
 def _data_root() -> Path:
     """Return the tidy data directory, `$BDBV_DATA_DIR` or `data/`."""
     return Path(os.environ.get("BDBV_DATA_DIR") or "data")
@@ -1807,6 +2047,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "fit":
         return _fit(args)
     if args.command == "fit-store":
+        if args.action == "archive":
+            return _fit_store_archive(args)
         return store.command(args)
     if args.command == "plot-submission":
         return _plot_submission(args)
@@ -1837,6 +2079,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _germany_asof(args)
     if args.command == "germany-paper":
         return _germany_paper(args)
+    if args.command == "germany-ft-load":
+        return _germany_ft_load(args)
     if args.command == "digest":
         from bdbvhubrenewal.evaluation.digest import (
             backtest_digest,

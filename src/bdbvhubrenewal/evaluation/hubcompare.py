@@ -11,7 +11,9 @@ For each hub round, `our_forecasts` runs our unfitted models from the
 latest real vintage that serves the round.
 Rounds with no such vintage are skipped.
 Fitted models are slow, so `stored_forecasts` takes theirs from the
-backtest forecast files for the same round.
+backtest forecast files for the same round, and `compare-hub` puts the
+fit store's whole fits of the round in their place, as those files hold
+only the backtest's weeks.
 The `source` column says which (`real` or `hub`).
 
 `score_comparison` scores every model on the hub teams' cells only: the
@@ -48,7 +50,7 @@ import pandas as pd
 import yaml
 
 from bdbvhubrenewal.data.dates import as_date, reference_date_for_vintage
-from bdbvhubrenewal.data.zones import weekly_zone_counts
+from bdbvhubrenewal.data.zones import ZoneData, is_zone, weekly_zone_counts
 from bdbvhubrenewal.evaluation.backtest import (
     BacktestConfig,
     make_tasks,
@@ -372,6 +374,10 @@ def fetch_hub_submissions(  # pragma: no cover - network
 def load_hub_submissions(*roots: Path | str) -> pd.DataFrame:
     """Read the weekly-round sample forecasts in some directories.
 
+    A file may hold a resubmission with a later `forecast_date`. Only the
+    rows of the latest `forecast_date` in each file are read; rows with
+    no `forecast_date` count only when no row has one.
+
     Parameters
     ----------
     *roots : pathlib.Path or str
@@ -383,6 +389,14 @@ def load_hub_submissions(*roots: Path | str) -> pd.DataFrame:
     pandas.DataFrame
         Columns `model`, `source` (`hub`), `reference_date`, `location`,
         `target_end_date`, `sample` and `value`.
+
+    Raises
+    ------
+    ValueError
+        If a model still has two rows of one round, place, week and
+        sample, for example one round in both a `.csv` and a `.csv.gz`.
+        This stops the comparison on purpose: which copy to score is not
+        known, and dropping the model would hide it.
     """
     frames = []
     for root in roots:
@@ -394,6 +408,10 @@ def load_hub_submissions(*roots: Path | str) -> pd.DataFrame:
             ]
             if rows.empty:
                 continue
+            if "forecast_date" in rows:
+                dates = pd.to_datetime(rows["forecast_date"], errors="coerce")
+                if dates.notna().any():
+                    rows = rows.loc[dates == dates.max()]
             frames.append(
                 pd.DataFrame(
                     {
@@ -411,7 +429,17 @@ def load_hub_submissions(*roots: Path | str) -> pd.DataFrame:
             )
     if not frames:
         return pd.DataFrame(columns=list(SAMPLE_COLUMNS))
-    return pd.concat(frames, ignore_index=True)
+    out = pd.concat(frames, ignore_index=True)
+    keys = ["model", "reference_date", "location", "target_end_date", "sample"]
+    twice = out.duplicated(keys)
+    if twice.any():
+        first = out.loc[twice].iloc[0]
+        raise ValueError(
+            f"{first['model']} has {int(twice.sum())} repeated sample rows, "
+            f"such as round {first['reference_date']}, {first['location']}, "
+            f"week {first['target_end_date']}, sample {first['sample']}."
+        )
+    return out
 
 
 def load_team_metadata(root: Path | str) -> pd.DataFrame:
@@ -476,8 +504,7 @@ def our_forecasts(
     config: BacktestConfig,
     models: Sequence[str],
     daily: pd.DataFrame,
-    daily_zones: pd.DataFrame,
-    zones: Sequence[str],
+    zones: ZoneData,
     min_horizon: int | None = None,
 ) -> pd.DataFrame:
     """Run our models for hub rounds from the matching vintages.
@@ -485,6 +512,8 @@ def our_forecasts(
     Each model runs on the country and provinces, and again on the health
     zones with cases at the vintage, as the zone backtest runs them. Only
     the zones are kept from the zone run, as it also gives the country.
+    A model that forecasts the zones itself (`reads_zones`) has no zone
+    run, and only its zones with cases are kept.
 
     Parameters
     ----------
@@ -498,10 +527,8 @@ def our_forecasts(
         Registered model names that run at zone level.
     daily : pandas.DataFrame
         Daily onsets by release of the country and provinces.
-    daily_zones : pandas.DataFrame
-        Daily onsets by release of the health zones (`load_daily_zones`).
-    zones : sequence of str
-        The hub's zone codes (`hub_zones`).
+    zones : ZoneData
+        The health-zone tables and codes (`load_zone_data`).
     min_horizon : int, optional
         First week, in weeks from the reference date, to cover the weeks
         the hub forecasts did. Defaults to `config.min_horizon`.
@@ -523,20 +550,21 @@ def our_forecasts(
         if vintage is None or not built:
             continue
         rows = real.loc[real["vintage"] == vintage]
-        tasks = make_tasks(rows, delays, config, daily=daily)
-        counts = weekly_zone_counts(daily_zones, vintage)
-        here = tuple(z for z in zones if z in set(counts["location"]))
-        history = pd.concat([daily, daily_zones])
-        zone = run_forecasts(
-            built, [zone_task(t, counts, here, history) for t in tasks]
-        )
-        fc = pd.concat(
-            [
-                run_forecasts(built, tasks),
-                zone.loc[zone["location"].isin(here)],
-            ],
-            ignore_index=True,
-        )
+        tasks = make_tasks(rows, delays, config, daily=daily, zones=zones)
+        counts = weekly_zone_counts(zones.daily, vintage)
+        here = tuple(z for z in zones.codes if z in set(counts["location"]))
+        history = pd.concat([daily, zones.daily])
+        walks = [m for m in built if not getattr(m, "reads_zones", False)]
+        fc = run_forecasts(built, tasks)
+        # Every model's zones are those with cases, as the walks run on.
+        fc = fc.loc[~fc["location"].map(is_zone) | fc["location"].isin(here)]
+        if walks:
+            zone = run_forecasts(
+                walks, [zone_task(t, counts, here, history) for t in tasks]
+            )
+            fc = pd.concat(
+                [fc, zone.loc[zone["location"].isin(here)]], ignore_index=True
+            )
         fc["source"] = "real"
         frames.append(fc)
     if not frames:

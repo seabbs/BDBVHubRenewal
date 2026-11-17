@@ -155,3 +155,31 @@ def test_the_si_text_states_the_bdbv_cut_in_config() -> None:
     for key in ("release", "cutoff", "truth_until"):
         assert cut[key] in text
     assert f"{cut['truth_delay']} days" in text
+
+
+def test_score_tables_keep_the_hub_target(tmp_path: Path) -> None:
+    rows = _scores()
+    daily = rows.assign(target="daily", score=100.0)
+    both = pd.concat([rows.assign(target="7day"), daily], ignore_index=True)
+    score_tables(
+        "germany",
+        both,
+        pd.DataFrame(),
+        tmp_path / "main",
+        tmp_path / "si",
+        split=SPLIT,
+        baseline="randomwalknowcast",
+    )
+    plain = tmp_path / "plain"
+    score_tables(
+        "germany",
+        rows,
+        pd.DataFrame(),
+        plain / "main",
+        plain / "si",
+        split=SPLIT,
+        baseline="randomwalknowcast",
+    )
+    got = pd.read_csv(tmp_path / "main" / "germany-scores.csv")
+    want = pd.read_csv(plain / "main" / "germany-scores.csv")
+    pd.testing.assert_frame_equal(got, want)

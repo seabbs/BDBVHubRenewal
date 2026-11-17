@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
 from bdbvhubrenewal.evaluation.germany import (
     SCORE_COLUMNS,
@@ -104,6 +105,7 @@ def test_page_tables_and_summaries(tmp_path: Path) -> None:
     assert "rel_wis" in table
     assert "| wis " not in table
     assert "0.8" in table
+    assert '<div class="tablesort" markdown="1">' in table
     data = json.loads((fig / "scoresummary-germany-latest.json").read_text())
     assert [p["id"] for p in data["pools"]] == ["national", "states", "age"]
     names = {p["id"]: p["name"] for p in data["places"]}
@@ -172,3 +174,191 @@ def test_every_model_has_its_own_colour_and_dash() -> None:
     assert set(styles) == set(models)
     pairs = [(light, dash) for light, _, dash in styles.values()]
     assert len(set(pairs)) == len(models)
+
+
+FT = "fm_chronos_daily_ragged_ft"
+
+
+def _with_ft(res: Path, tag: str | None = "chronos-ft-bbb") -> None:
+    """Add the stored fine-tuned model, as `germany-ft-load` does."""
+    fc = pd.read_csv(res / "forecasts.csv.gz", dtype=str)
+    ft = _forecasts((FT,))
+    ft = ft.loc[ft["origin"] < CONFIG.split_date]
+    pd.concat([fc, ft.astype(str)]).to_csv(
+        res / "forecasts.csv.gz", index=False
+    )
+    sc = pd.read_csv(res / "scores.csv.gz", dtype=str)
+    pd.concat([sc, _rows(((FT, 2.5),)).astype(str)]).to_csv(
+        res / "scores.csv.gz", index=False
+    )
+    meta = {
+        "tag": tag,
+        "pinned": "chronos-ft-bbb",
+        "models": [FT, "fm_chronos_weekly_ragged_ft"],
+    }
+    (res / "ft-checkpoint.json").write_text(json.dumps(meta))
+
+
+def test_the_stored_ft_model_is_scored_on_the_baselines_cells(
+    tmp_path: Path,
+) -> None:
+    res = tmp_path / "germany"
+    _scores(res)
+    _with_ft(res)
+    # A team missing one national cell narrows every national row.
+    teams = pd.read_csv(res / "teams.csv.gz", dtype=str)
+    gap = _rows((("SU", 3.0),)).astype(str)
+    gap = gap.loc[~((gap["pool"] == "national") & (gap["horizon"] == "-7"))]
+    pd.concat([teams, gap]).to_csv(res / "teams.csv.gz", index=False)
+    fig, gen = tmp_path / "figures", tmp_path / "generated"
+    germany_page(fig, gen, res, CONFIG)
+    table = (gen / "germany-scores.md").read_text()
+    rows = [
+        [c.strip() for c in line.strip("|").split("|")]
+        for line in table.splitlines()
+        if line.startswith("|") and "---" not in line
+    ]
+    head, body = rows[0], rows[1:]
+    got = pd.DataFrame(body, columns=head)
+    ns = got.pivot(index="pool", columns="model", values="n").astype(int)
+    assert FT in ns.columns
+    # Every row of a level scores the cells all its models share.
+    assert (ns.nunique(axis=1) == 1).all(), ns
+    rel = got.loc[got["model"] == FT].set_index("pool")["rel_wis"]
+    assert set(rel.astype(float)) == {0.5}
+    data = json.loads((fig / "explorer-germany.json").read_text())
+    assert FT in {m["name"] for m in data["models"]}
+
+
+def test_the_page_names_the_ft_checkpoint(tmp_path: Path) -> None:
+    res = tmp_path / "germany"
+    _scores(res)
+    _with_ft(res)
+    fig, gen = tmp_path / "figures", tmp_path / "generated"
+    germany_page(fig, gen, res, CONFIG)
+    note = (gen / "germany-ft.md").read_text()
+    assert "chronos-ft-bbb" in note
+    assert FT in note
+    assert "fm_chronos_weekly_ragged_ft" in note
+    # The checkpoint is named once for both models.
+    assert note.count("chronos-ft-bbb") == 2  # link text and URL
+    assert "releases/tag/chronos-ft-bbb" in note
+
+
+def test_the_page_says_when_no_ft_checkpoint_is_stored(
+    tmp_path: Path,
+) -> None:
+    res = tmp_path / "germany"
+    _scores(res)
+    _with_ft(res, tag=None)
+    fig, gen = tmp_path / "figures", tmp_path / "generated"
+    germany_page(fig, gen, res, CONFIG)
+    assert "not stored yet" in (gen / "germany-ft.md").read_text()
+
+
+def test_the_page_writes_no_held_out_date(tmp_path: Path) -> None:
+    from bdbvhubrenewal.reporting.germany import held_out_leaks
+
+    res = tmp_path / "germany"
+    _scores(res)
+    _with_ft(res)
+    fig, gen = tmp_path / "figures", tmp_path / "generated"
+    germany_page(fig, gen, res, CONFIG)
+    files = [*fig.glob("*germany*.json"), *gen.glob("germany-*.md")]
+    assert len(files) >= 7
+    assert held_out_leaks(files, CONFIG.split_date) == []
+
+
+def test_the_leak_check_finds_held_out_dates(tmp_path: Path) -> None:
+    from bdbvhubrenewal.reporting.germany import held_out_leaks
+
+    split = CONFIG.split_date
+    ok = tmp_path / "ok.json"
+    ok.write_text(
+        json.dumps({"origins": ["2022-02-09"], "releases": ["40-day truth"]})
+    )
+    bad = tmp_path / "scoresummary-germany-latest.json"
+    bad.write_text(json.dumps({"origins": ["2022-02-09", split]}))
+    page = tmp_path / "index.html"
+    # The split date itself is named in the page's prose.
+    page.write_text(f"<p>Nowcast dates before {split} only.</p>")
+    leaky = tmp_path / "leaky.html"
+    leaky.write_text("<td>2022-02-11</td>")
+    assert held_out_leaks([ok, page], split) == []
+    found = held_out_leaks([ok, bad, page, leaky], split)
+    assert len(found) == 2
+    assert any("2022-02-11" in f for f in found)
+    assert any(split in f and "origins" in f for f in found)
+
+
+def test_the_page_refuses_to_write_a_held_out_date(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from bdbvhubrenewal.reporting import germany as page
+
+    res = tmp_path / "germany"
+    _scores(res)
+    # Were the development filter to fail, the guard stops the page.
+    monkeypatch.setattr(
+        page, "_development", lambda frame, _config: frame, raising=True
+    )
+    with pytest.raises(ValueError, match="held-out"):
+        page.germany_page(
+            tmp_path / "figures", tmp_path / "generated", res, CONFIG
+        )
+
+
+def test_every_row_scores_the_cells_all_its_models_share(
+    tmp_path: Path,
+) -> None:
+    res = tmp_path / "germany"
+    _scores(res)
+    _with_ft(res)
+    # A team missing one national cell: every model's national row drops
+    # it, so each row of a level has the same n.
+    teams = pd.read_csv(res / "teams.csv.gz", dtype=str)
+    gap = _rows((("SU", 3.0),)).astype(str)
+    gap = gap.loc[~((gap["pool"] == "national") & (gap["horizon"] == "-7"))]
+    pd.concat([teams, gap]).to_csv(res / "teams.csv.gz", index=False)
+    fig, gen = tmp_path / "figures", tmp_path / "generated"
+    germany_page(fig, gen, res, CONFIG)
+    table = (gen / "germany-scores.md").read_text()
+    rows = [
+        [c.strip() for c in line.strip("|").split("|")]
+        for line in table.splitlines()
+        if line.startswith("|") and "---" not in line
+    ]
+    got = pd.DataFrame(rows[1:], columns=rows[0])
+    n = got.pivot(index="pool", columns="model", values="n").astype(int)
+    assert "SU" in n.columns
+    assert (n.nunique(axis=1) == 1).all(), n
+    assert n.loc["national"].iloc[0] == 1
+    assert n.loc["states"].iloc[0] == 2
+    data = json.loads((fig / "scoresummary-germany-latest.json").read_text())
+    pool = [p["pool"] for p in data["places"]]
+    # The summary's national rows hold the shared cell only (horizon 0).
+    national = {
+        h
+        for r, h in zip(data["rows"], data["horizons"], strict=True)
+        if pool[r[3]] == "national"
+    }
+    assert national == {0}
+
+
+def test_the_summary_names_no_truth_vintage(tmp_path: Path) -> None:
+    res = tmp_path / "germany"
+    _scores(res)
+    fig, gen = tmp_path / "figures", tmp_path / "generated"
+    germany_page(fig, gen, res, CONFIG)
+    data = json.loads((fig / "scoresummary-germany-latest.json").read_text())
+    # The truth's report dates fall up to 40 days after the last nowcast
+    # date, in the held-out half, so the page names the truth instead.
+    assert data["releases"] == ["40-day truth"]
+
+
+def test_the_leak_check_covers_truth_vintages(tmp_path: Path) -> None:
+    from bdbvhubrenewal.reporting.germany import held_out_leaks
+
+    path = tmp_path / "scoresummary-germany-latest.json"
+    path.write_text(json.dumps({"releases": ["2022-03-21"]}))
+    assert held_out_leaks([path], CONFIG.split_date)

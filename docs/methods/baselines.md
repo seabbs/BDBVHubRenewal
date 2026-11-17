@@ -18,7 +18,7 @@ In brief, `randomwalknowcast`:
 5. takes the walk's variance net of Poisson noise ([Forecast](#forecast));
 6. shares the delay, size and walk variance with a parent where a place has fewer than 10 cases a week ([Own or pooled estimates](#own-or-pooled-estimates)).
 
-Two further rules keep places with few or no cases sensible: introductions for places with no recent case ([Forecast](#forecast)), and zone samples that sum to their province's ([Health zones](#health-zones)).
+A further rule keeps places with no recent case sensible: introductions ([Forecast](#forecast)).
 
 ## Structure
 
@@ -229,12 +229,20 @@ A pooled $\sigma_p$ uses the changes and noise of all the places in the pool tog
 
 A place with no case in the 9 weeks to $c_o$ stays at 0 until a new introduction, which starts its walk from a Poisson(1) count given at least 1.
 An introduction occurs each week after the latest complete week with probability $q_p$, times the share of the week not yet reported.
-$q_p$ is estimated over the 9 weeks to the place's start week, the weeks that set its walk spread, from the place and its siblings.
+$q_p$ is estimated over the 9 weeks to the place's start week, the weeks that set its walk spread.
 A place with no case yet takes the rate of a first case: the share of weeks with a case among the weeks with no case before them.
 A place seen before takes the rate of a re-introduction: the share of weeks with a case among the weeks with an earlier case but none in the 9 weeks before.
-If the siblings have no introduction of that kind in the 9 weeks, all weeks to the start week count instead.
+Each rate has two sources, taken as independent:
+
+$$
+q_p = 1 - (1 - q_{\text{local}})(1 - q_{\text{global}}),
+$$
+
+with $q_{\text{local}}$ pooled over the place and its siblings, and $q_{\text{global}}$ over the other places of its level, the zones of the other provinces for a zone.
+Provinces and the country have no other places of their level, so their $q_{\text{global}} = 0$.
+$q_p$ is 0 only where no place of the level has an introduction of that kind in the window.
 Without this rule a silent place would walk from a nowcast near 0, with baselinenowcast's $+1$ and a pooled spread, and so forecast a few cases every week.
-Most zones and several provinces are silent at any origin, and their truth is almost always 0, so the rule keeps them at exactly 0 unless a case is likely from what their siblings show.
+Most zones and several provinces are silent at any origin, and their truth is almost always 0, so the rule keeps them at exactly 0 unless a case is likely from what their siblings and the rest of the country show.
 
 ## Start from the latest complete week
 
@@ -263,22 +271,18 @@ Where no week reaches 0.95, `randomwalknowcast` takes the first week as the late
    The start week is looked for only in the 9 weeks to $c_o$, $1.5 D$ and the nowcast's own window, counting the week holding $c_o$.
 4. The weeks after it are the walk's draws from the sample's completed value of that week, $\log(1 + y)$ plus the walk's steps.
 5. A place with no case in the 9 weeks to $c_o$, or with no start week in those 9 weeks, starts at the latest complete week instead.
-   After it the place stays at 0 until an introduction, as above, floored at the counts reported.
+   A place with no case in those 9 weeks then stays at 0 until an introduction, as above.
+   A place with cases but no start week walks on from its mean reported count over the 9 weeks to its latest complete week.
+   Both are floored at the counts reported.
 
 ## Health zones
 
 `randomwalk` and `randomwalknowcast` run on each zone's own release snapshots in the same way as for provinces.
 Each zone takes its delay, size and walk spread by the rules [above](#own-or-pooled-estimates).
-Province sample $Y^{(i)}(w)$ is apportioned over the zones in proportion to the zone model's own sample $x^{(i)}_z(w)$ of the same id and week:
-
-$$
-y^{(i)}_z(w) \approx Y^{(i)}(w)\, \frac{x^{(i)}_z(w)}{\sum_{z'} x^{(i)}_{z'}(w)}.
-$$
-
-Largest remainders make the values whole numbers that sum to $Y^{(i)}(w)$, so zone samples sum to their province's samples ([Renewal models](model.md#health-zones)).
-Where every $x^{(i)}_z(w)$ is 0 the split uses the Dirichlet mean shares of the [Renewal models](model.md#split-of-province-samples) page.
-Zones are reconciled because their own walks are noisy and do not sum to their province's, which pools more data.
-The split keeps each zone's share from its own sample, and the province sets the total, so the zone, province and national forecasts describe one set of trajectories.
+A zone with no case in the 9 weeks to $c_o$ stays at 0 until an introduction ([Forecast](#forecast)).
+The zone samples are these draws.
+No province sample is split over the zones, so zones need not sum to their province.
+The hub does not require them to.
 
 ## Partially pooled variant
 
@@ -367,7 +371,7 @@ A later day of the week holding $c_o$ is an NB draw with mean $\lambda_{p,w(t)} 
 Later weeks continue the walk from the draw's last $\lambda$ with its $\sigma_p$, and their counts are NB with mean $\lambda$ and size $7 \phi_p$, the sum of seven days.
 Weeks before the 16 fitted weeks are the counts reported.
 National is the sum of the provinces by sample.
-In the zone backtest it also runs on the zones, which are reconciled to its provinces as for `randomwalknowcast` ([Health zones](#health-zones)).
+In the zone backtest it also runs on the zones, and its zone draws are scored as they are ([Health zones](#health-zones)).
 Elsewhere, as in the hub tables, its province samples are split across the zones as for the renewal models ([Renewal models](model.md#split-of-province-samples)).
 
 **Silent places.**

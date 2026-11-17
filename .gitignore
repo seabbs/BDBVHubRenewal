@@ -41,3 +41,6 @@ docs/figures/*.json
 # Written by `fit-store load` from the fit-store branch.
 results/fit-store.json
 results/delay-summary.csv
+
+# Machine settings (scripts/local_config.sh); see config/local.env.example.
+config/local.env

@@ -9,9 +9,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.data import load_daily_zones
 from bdbvhubrenewal.data.dates import reference_date_for_vintage
-from bdbvhubrenewal.data.zones import hub_zones
+from bdbvhubrenewal.data.zones import hub_zones, load_zone_data
 from bdbvhubrenewal.evaluation.backtest import BacktestConfig
 from bdbvhubrenewal.evaluation.hubcompare import (
     ATTRIBUTION,
@@ -35,8 +34,8 @@ ROOT = Path(__file__).resolve().parents[2]
 pytestmark = pytest.mark.usefixtures("flat_model")
 WEEKS = ["2026-09-19", "2026-09-26", "2026-10-03", "2026-10-10"]
 DATA = ROOT / "tests" / "fixtures" / "data"
-DAILY_ZONES = load_daily_zones(DATA)
 ZONES = hub_zones(DATA / "hub-config" / "tasks.json")
+ZONE_DATA = load_zone_data(DATA)
 NO_ZONES = pd.DataFrame(
     {
         **{c: pd.Series(dtype=str) for c in ("kind", "vintage", "location")},
@@ -118,8 +117,7 @@ def _ours(
         config,
         ["flat"],
         daily,
-        DAILY_ZONES,
-        ZONES,
+        ZONE_DATA,
         min_horizon=-4,
     )
 
@@ -132,6 +130,69 @@ def test_load_hub_submissions_keeps_weekly_samples(tmp_path: Path) -> None:
     assert set(weekly["source"]) == {"hub"}
     # Reads several roots, as the committed and cached files are apart.
     assert len(load_hub_submissions(tmp_path, tmp_path / "none")) == len(weekly)
+
+
+def test_load_hub_submissions_keeps_latest_resubmission(
+    tmp_path: Path,
+) -> None:
+    # A resubmission appends a later forecast_date to the same file.
+    first = _hub_rows().assign(forecast_date="2026-10-20")
+    again = first.assign(forecast_date="2026-10-21", value=first["value"] + 1)
+    out = tmp_path / "model-output" / "teamA-weekly"
+    out.mkdir(parents=True)
+    with gzip.open(out / "2026-10-24-teamA-weekly.csv.gz", "wt") as fh:
+        pd.concat([first, again]).to_csv(fh, index=False)
+    hub = load_hub_submissions(tmp_path)
+    keys = ["model", "reference_date", "location", "target_end_date", "sample"]
+    assert not hub.duplicated(keys).any()
+    assert len(hub) == len(first)
+    expected = again["value"].to_numpy()
+    assert (hub["value"].to_numpy() == expected).all()
+
+
+def test_load_hub_submissions_ignores_rows_with_no_forecast_date(
+    tmp_path: Path,
+) -> None:
+    # A row with no forecast_date must not count as the latest one.
+    first = _hub_rows().assign(forecast_date=np.nan)
+    dated = first.assign(forecast_date="2026-10-21", value=first["value"] + 1)
+    out = tmp_path / "model-output" / "teamA-weekly"
+    out.mkdir(parents=True)
+    pd.concat([first, dated]).to_csv(
+        out / "2026-10-24-teamA-weekly.csv", index=False
+    )
+    hub = load_hub_submissions(tmp_path)
+    assert len(hub) == len(first)
+    assert (hub["value"].to_numpy() == dated["value"].to_numpy()).all()
+
+
+def test_load_hub_submissions_stops_on_repeated_samples(
+    tmp_path: Path,
+) -> None:
+    rows = _hub_rows()
+    out = tmp_path / "model-output" / "teamA-weekly"
+    out.mkdir(parents=True)
+    pd.concat([rows, rows]).to_csv(
+        out / "2026-10-24-teamA-weekly.csv", index=False
+    )
+    # `_hub_rows` has no forecast_date column, as older hub files do, so
+    # both copies are read and the repeat stops the load.
+    with pytest.raises(ValueError, match="teamA-weekly has"):
+        load_hub_submissions(tmp_path)
+
+
+def test_load_hub_submissions_stops_on_a_round_in_two_files(
+    tmp_path: Path,
+) -> None:
+    # The same round as `.csv` and `.csv.gz` in one model directory.
+    rows = _hub_rows()
+    out = tmp_path / "model-output" / "teamA-weekly"
+    out.mkdir(parents=True)
+    rows.to_csv(out / "2026-10-24-teamA-weekly.csv", index=False)
+    with gzip.open(out / "2026-10-24-teamA-weekly.csv.gz", "wt") as fh:
+        rows.to_csv(fh, index=False)
+    with pytest.raises(ValueError, match="teamA-weekly has"):
+        load_hub_submissions(tmp_path)
 
 
 def test_load_team_metadata(tmp_path: Path) -> None:
@@ -158,7 +219,7 @@ def test_attribution_names_the_hub() -> None:
 
 def test_load_comparison_config() -> None:
     cfg = load_comparison_config(ROOT / "config" / "hub-comparison.toml")
-    assert cfg.baseline == "randomwalk"
+    assert cfg.baseline == "randomwalknowcast"
     assert cfg.submitted == "data/our-submissions"
     assert "CD" in cfg.locations
 
@@ -191,8 +252,7 @@ def test_our_forecasts_cover_the_hub_weeks(
         config,
         ["flat"],
         daily,
-        DAILY_ZONES,
-        ZONES,
+        ZONE_DATA,
         min_horizon=-5,
     )
     assert set(fc["model"]) == {"flat"}
@@ -573,8 +633,7 @@ def test_our_models_are_scored_only_on_the_hub_cells(
         _CONFIG,
         ["flat"],
         daily,
-        DAILY_ZONES,
-        ZONES,
+        ZONE_DATA,
         min_horizon=-6,
     )
     hub = load_hub_submissions(tmp_path)

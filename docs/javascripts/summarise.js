@@ -53,6 +53,16 @@
       });
   }
 
+  // A keep function for the rounds (origin indices) given, or every row
+  // for null. Rows of several rounds are summarised together, so each
+  // score is over the union of their cells.
+  summarise.inRounds = function (rounds) {
+    if (rounds === null || rounds === undefined) return function () { return true; };
+    var on = {};
+    rounds.forEach(function (o) { on[o] = true; });
+    return function (r) { return on[r[1]] === true; };
+  };
+
   if (typeof module !== "undefined" && module.exports) module.exports = summarise;
   else root.bdbvSummarise = summarise;
 })(this);

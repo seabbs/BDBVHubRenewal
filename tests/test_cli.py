@@ -41,7 +41,7 @@ def _written(out: Path) -> pd.DataFrame:
 
 
 @pytest.mark.usefixtures("in_root")
-def test_cli_nowcast_writes_coherent_zones(tmp_path: Path) -> None:
+def test_cli_nowcast_writes_zones(tmp_path: Path) -> None:
     args = ["nowcast", "--out", str(tmp_path / "sub")]
     assert main([*args, "--forecast-date", "2026-07-31"]) == 0
     table = _written(tmp_path / "sub")
@@ -54,14 +54,8 @@ def test_cli_nowcast_writes_coherent_zones(tmp_path: Path) -> None:
     assert side["zones"] is True
     assert side["n_zones"] == zones["location"].nunique()
     assert side["note"] == ""
+    # Zones need not sum to their provinces; national is their sum.
     keys = ["output_type_id", "target_end_date"]
-    summed = (
-        zones.assign(location=zones["location"].str.slice(0, 5))
-        .groupby(["location", *keys])["value"]
-        .sum()
-    )
-    want = provs.set_index(["location", *keys])["value"]
-    assert (summed.reindex(want.index) == want).all()
     nat = table.loc[level == 0].set_index(keys)["value"]
     assert (nat == provs.groupby(keys)["value"].sum().reindex(nat.index)).all()
 
@@ -216,7 +210,9 @@ def test_stored_samples_keep_numeric_values_without_our_forecasts(
     from bdbvhubrenewal.evaluation.scoring import energy_scores
     from bdbvhubrenewal.forecasters.renewal import DELAY_SUMMARY_FILE
 
-    args = argparse.Namespace(data=str(DATA), results=str(tmp_path))
+    args = argparse.Namespace(
+        data=str(DATA), results=str(tmp_path), store=str(tmp_path / "none")
+    )
     # With no fits loaded and no hub files there are no stored samples or
     # delays, and the empty samples are still numeric.
     empty, none = _stored(args, load_target(DATA), run_forecasts([], []))
@@ -814,6 +810,59 @@ def test_data_defaults_follow_bdbv_data_dir(
     assert getattr(args, attr) == f"elsewhere{path}"
 
 
+@pytest.mark.usefixtures("in_root")
+def test_cli_fit_store_archives_what_each_model_submits(
+    flat_model: str, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from bdbvhubrenewal.evaluation import store
+    from bdbvhubrenewal.forecasters import base
+
+    factory = base._REGISTRY[flat_model].factory
+    monkeypatch.setitem(
+        base._REGISTRY,
+        "flat",
+        base.ModelSpec("flat", factory, "Fitted.", fitted=True),
+    )
+    monkeypatch.setattr(store, "code_digest", lambda *_: "c")
+    origin, ref = "2026-10-24", "2026-10-31"
+    root = tmp_path / "store"
+    fit = ["fit-store", "fit", "--store", str(root), "--model", "flat"]
+    assert main([*fit, "--origin", origin]) == 0
+    out = tmp_path / "archive" / "candidates.csv.gz"
+    args = ["fit-store", "archive", "--store", str(root), "--out", str(out)]
+    when = ["--origin", origin, "--reference-date", ref]
+    models = ["--models", "flat", "randomwalknowcast"]
+    assert main([*args, *when, *models]) == 0
+    table = pd.read_csv(out)
+    assert set(table["model"]) == {"flat", "randomwalknowcast"}
+    assert set(table["vintage"]) == {origin}
+    assert set(table["reference_date"]) == {ref}
+    assert table["current"].all()
+    # Health zones, as each model would submit them.
+    zones = table.loc[table["location"].str.count("-") == 2]
+    assert set(zones["model"]) == {"flat", "randomwalknowcast"}
+    # The random walk on a nowcast is the file the submission writes.
+    sub = tmp_path / "sub"
+    nowcast = ["nowcast", "--model", "randomwalknowcast", "--vintage", origin]
+    assert main([*nowcast, "--reference-date", ref, "--out", str(sub)]) == 0
+    submitted = _written(sub)
+    archived = table.loc[table["model"] == "randomwalknowcast"]
+    pd.testing.assert_frame_equal(
+        archived[list(submitted.columns)].reset_index(drop=True),
+        submitted,
+        check_dtype=False,
+    )
+    # An origin that is not a real one, or none, is an error.
+    assert main([*args, "--origin", "2020-01-04"]) == 1
+    assert main(args) == 1
+    # A candidate that is not archived fails the command, but the others
+    # are written.
+    out.unlink()
+    broken = ["--models", "flat", "renewal"]
+    assert main([*args, *when, *broken]) == 1
+    assert set(pd.read_csv(out)["model"]) == {"flat"}
+
+
 def test_cli_germany_held_out_half_goes_to_its_own_directory(
     tmp_path: Path,
 ) -> None:
@@ -924,3 +973,45 @@ def test_stored_samples_take_every_week_of_the_stored_fit(
     args.store = str(tmp_path / "missing")
     stored, _ = _stored(args, load_target(DATA), trimmed)
     assert sorted(stored["target_end_date"].astype(str)) == weeks[2:]
+
+
+def test_hub_comparison_takes_the_whole_fits_of_its_rounds() -> None:
+    # compare-hub keeps the whole fits of the hub rounds only, for models
+    # it does not run live, in its sample columns, and they replace the
+    # stored rows of the same model and round.
+    from bdbvhubrenewal.cli import _comparison_stored
+
+    whole = pd.DataFrame(
+        {
+            "model": ["renewal", "renewal", "randomwalk"],
+            "kind": "real",
+            "vintage": "2026-10-17",
+            "reference_date": pd.to_datetime(
+                ["2026-10-24", "2026-10-31", "2026-10-24"]
+            ),
+            "location": "CD",
+            "target_end_date": "2026-09-12",
+            "sample": 1,
+            "value": 5.0,
+            "as_of": None,
+            "horizon": -6,
+        }
+    )
+    stored = pd.DataFrame(
+        {
+            "model": ["renewal", "renewalsp"],
+            "source": "real",
+            "reference_date": "2026-10-24",
+            "location": "CD",
+            "target_end_date": "2026-09-26",
+            "sample": 1,
+            "value": 1.0,
+        }
+    )
+    out = _comparison_stored(stored, whole, ["2026-10-24"], ["randomwalk"])
+    assert list(out.columns) == list(stored.columns)
+    assert set(out["source"]) == {"real"}
+    assert set(out["reference_date"]) == {"2026-10-24"}
+    renewal = out.loc[out["model"] == "renewal"]
+    assert list(renewal["target_end_date"]) == ["2026-09-12"]
+    assert set(out["model"]) == {"renewal", "renewalsp"}

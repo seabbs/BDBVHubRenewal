@@ -19,6 +19,7 @@ from collections.abc import Callable, Mapping, Sequence
 import pandas as pd
 
 from bdbvhubrenewal.forecasters import NATIONAL
+from bdbvhubrenewal.reporting.site import site_baseline
 
 __all__ = [
     "ENERGY_SUMMARY",
@@ -104,7 +105,7 @@ def summary_rows(
     models: Sequence[str],
     colours: Mapping[str, tuple[str, str, str]],
     names: Mapping[str, str],
-    baseline: str = "randomwalk",
+    baseline: str | None = None,
     metrics: Sequence[tuple[str, str, float | None, bool]] = SUMMARY_METRICS,
     default_on: Sequence[str] | None = None,
     energy: pd.DataFrame | None = None,
@@ -147,6 +148,7 @@ def summary_rows(
         label) and `rows` of model, origin, release and pool indices, then
         each energy score.
     """
+    baseline = baseline or site_baseline()
     shown = [m for m in models if m in set(scores["model"])]
     s = scores.loc[scores["model"].isin(shown)]
     origins = sorted(set(s["origin"].astype(str)))

@@ -9,7 +9,8 @@ through, and a test fails if a setting has no label.
 
 - `main_table`: one row per factor, with its levels (main text);
 - `si_table`: every factor, derived setting and drawn value, with the R
-  expression that draws it (SI);
+  expression that draws it, and the size bounds a simulation must fall
+  within (SI);
 - `model_note` and `heldout_note`: the SI notes on the epinowcast model
   and on the held-out set (the `synthetic` block of the workflow config).
 
@@ -36,6 +37,7 @@ __all__ = [
     "heldout_note",
     "main_table",
     "model_note",
+    "parse_bounds",
     "parse_factors",
     "parse_values",
     "si_table",
@@ -220,6 +222,19 @@ LABELS: Final = {
         "Longest delay (days), from the delay's 99th centile",
         "`enw_preprocess_data(max_delay)`",
     ),
+    # Bounds on a simulation; one outside them is drawn again.
+    "min_size": (
+        "Fewest cases (the draws' mean) a simulation keeps",
+        "`simulate_cell()`",
+    ),
+    "max_size": (
+        "Most cases (the draws' mean) a simulation keeps",
+        "`simulate_cell()`",
+    ),
+    "max_independent": (
+        "Most independent strata",
+        "`simulate_independent()`",
+    ),
 }
 """Each setting's label and the epinowcast function it enters through."""
 
@@ -276,6 +291,25 @@ def parse_values(text: str) -> dict[str, str]:
     if m:
         values["max_delay"] = m.group(1).strip()
     return values
+
+
+def parse_bounds(text: str) -> dict[str, str]:
+    """Return the simulator's size bounds and their R expressions."""
+    out = {}
+    for name in ("min_size", "max_independent"):
+        m = re.search(rf"^{name} <- (.*)$", text, flags=re.M)
+        if m:
+            out[name] = m.group(1).strip()
+    m = re.search(
+        r"^max_size <- function\(design\) \{\n(.*?)\n\}", text, re.M | re.S
+    )
+    if m:
+        out["max_size"] = " ".join(m.group(1).split())
+    return {
+        k: out[k]
+        for k in ("min_size", "max_size", "max_independent")
+        if k in out
+    }
 
 
 def _derived(text: str) -> dict[str, str]:
@@ -347,6 +381,7 @@ def si_table(text: str, settings: pd.DataFrame) -> pd.DataFrame:
         },
         **{k: f"`{v}`" for k, v in _derived(text).items()},
         **{k: f"`{v}`" for k, v in parse_values(text).items()},
+        **{k: f"`{v}`" for k, v in parse_bounds(text).items()},
     }
     return pd.DataFrame(
         [

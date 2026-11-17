@@ -21,7 +21,9 @@ def test_plot_relative_overall_skips_models_missing_from_a_pool() -> None:
             "bias": [0.1, -0.2, 0.0],
         }
     )
-    fig = plot_relative_overall(table, ["randomwalk", "renewal"])
+    fig = plot_relative_overall(
+        table, ["randomwalk", "renewal"], baseline="randomwalk"
+    )
     shown = [ax for ax in fig.axes if ax.get_visible()]
     assert [ax.get_ylabel() for ax in shown] == [
         "Relative CRPS to randomwalk",

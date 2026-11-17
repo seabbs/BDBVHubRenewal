@@ -39,9 +39,11 @@ exactly 0 until its first introduction, which comes each week with its
 pooled probability times the share of the week not yet reported, and then
 walks from a count drawn from Poisson(1) given at least 1
 (`introductions.silent_trajectories`).
-In `randomwalknowcast` a place with no week to start from is quiet like
-a silent one: after its latest complete week it draws introductions,
-floored at the counts reported (`_quiet`).
+In `randomwalknowcast` a place with no week to start from is quiet
+(`_quiet`): it starts at its latest complete week. A silent quiet place
+draws introductions from there. One with recent cases walks from its mean
+reported count over the `start_window` weeks to that week (`_level`).
+Both are floored at the counts reported.
 National is the sum of provinces by sample.
 Each model raises if the task has no snapshots or no pair of releases
 within the delay window.
@@ -141,8 +143,8 @@ def _walks(
 
     Places in `quiet` `[L]` draw their introductions
     (`silent_trajectories`), and the others walk from `x0` `[L, S]`. The
-    rates `[L, S, h]` are the walk's, also for quiet places, whose counts
-    do not use them.
+    rates `[L, S, h]` are the walk's, also for places drawing
+    introductions, whose counts do not use them.
     """
     k_walk, k_silent = jax.random.split(key)
     keys = jax.random.split(k_walk, x0.shape[0])
@@ -210,6 +212,20 @@ def _quiet(origin: Origin) -> np.ndarray:
     the `start_window`.
     """
     return origin.silent | ~_start_ok(origin).any(axis=1)
+
+
+def _level(origin: Origin) -> np.ndarray:
+    """Return each place's mean reported count before its walk, `[L]`.
+
+    The mean is over the `start_window` weeks up to the place's latest
+    complete week (`Origin.start`).
+    """
+    weeks = np.arange(origin.reported.shape[1])
+    last = np.asarray(origin.start)[:, None]
+    first = last - start_window(origin.settings) + 1
+    mask = (weeks >= first) & (weeks <= last)
+    out: np.ndarray = (origin.reported * mask).sum(1) / mask.sum(1)
+    return out
 
 
 def _start_weeks(origin: Origin) -> np.ndarray:
@@ -530,9 +546,12 @@ class RandomWalkNowcast(RandomWalk):
         w0 = _start_weeks(origin)
         quiet = _quiet(origin)
         rows = np.arange(n_loc)
-        lam, y = _walks(
-            key_walk, nowcast[:, rows, w0].T, origin, w0, n_all, quiet
-        )
+        # Only silent places draw introductions: one with recent cases has
+        # a level to walk from.
+        x0 = nowcast[:, rows, w0].T
+        low = quiet & ~origin.silent
+        x0[low] = _level(origin)[low, None]
+        lam, y = _walks(key_walk, x0, origin, w0, n_all, origin.silent)
         # Days of the cut-off week after the cut-off are drawn from the
         # walk's rate that week. A partial cut-off week's start week is the
         # week before it when that week meets the start rule, so the rate
@@ -563,7 +582,7 @@ class RandomWalkNowcast(RandomWalk):
         for loc in range(n_loc):
             s = int(w0[loc])
             if quiet[loc]:
-                # A quiet place is its reported counts, then its
+                # A quiet place is its reported counts, then its walk or
                 # introductions, floored at the counts reported.
                 values[:, loc, : s + 1] = origin.reported[loc, : s + 1]
                 values[:, loc, s + 1 :] = y[loc, :, : n_all - s - 1]
