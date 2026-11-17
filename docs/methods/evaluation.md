@@ -156,7 +156,7 @@ Zones are forecast from their own data in their own call and are paired among th
 The normals' correlation is $\rho_t^{\delta/7}$ between weeks $\delta$ days apart, $\rho_p$ between two provinces (or zones of different provinces) and $\rho_z$ between two zones of a province.
 At each forecast they are estimated from the model's own matured errors: each earlier release's nowcast of the count still to come, against what the origin release reports, over releases in the last 8 weeks.
 Each error's randomised PIT under the model's negative binomial nowcast is mapped to a normal score, and each correlation is the Pearson correlation of the scores of its pairs ($\rho_t$: consecutive weeks of a place; $\rho_p$: two provinces in a week; $\rho_z$: two zones of a province in a week).
-With $n$ pairs and correlation $r$ the estimate is $(n r + w \rho_0)/(n + w)$, capped at 0.95, with $w$ chosen on the release backtest ([Pairing sensitivity](../pairing.md)) so the estimate dominates; the prior $(\rho_t, \rho_p, \rho_z) = (0.9, 0.7, 0.7)$ only guards thin windows.
+With $n$ pairs and correlation $r$ the estimate is $(n r + w \rho_0)/(n + w)$, capped at 0.95, with $w = 10$ chosen on the release backtest ([Pairing sensitivity](../pairing.md)) so the estimate dominates; the prior $(\rho_t, \rho_p, \rho_z) = (0.9, 0.7, 0.7)$ only guards thin windows.
 Each forecast's correlations, the pairs behind each and whether it fell back to the prior are recorded (a submission's `copula.json`).
 $\rho_n$, between the country and a province, does not enter, as the country is summed.
 

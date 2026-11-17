@@ -21,7 +21,6 @@ import logging
 from pathlib import Path
 
 import pandas as pd
-
 from bdbvhubrenewal.data.tidy import write_csv
 from bdbvhubrenewal.evaluation.pairing import (
     MODELS,
@@ -30,6 +29,7 @@ from bdbvhubrenewal.evaluation.pairing import (
     variant_scores,
 )
 from bdbvhubrenewal.forecasters import get_model
+
 from paperdata.synthetic_runner import (
     first_draws,
     hub_codes,

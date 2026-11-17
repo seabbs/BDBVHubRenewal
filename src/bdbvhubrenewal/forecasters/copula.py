@@ -64,9 +64,11 @@ PAIRINGS: Final = ("off", "prior", "rolling")
 """How a walk model pairs its draws: not at all, by the prior, or by the
 copula estimated from its own recent errors (the default)."""
 
-PRIOR_WEIGHT: Final = 100.0
-"""Pairs of normal scores the prior counts as, in `estimate_copula`'s
-shrinkage."""
+PRIOR_WEIGHT: Final = 10.0
+"""Pairs the prior counts as in `estimate_copula`'s shrinkage, a guard for
+thin windows only. Chosen on the release backtest from 0, 10, 30 and 100,
+which scored within 1% of one another (docs/pairing.md); 10 is the weakest
+that still guards a window with few pairs."""
 
 _CELL = ["model", "origin", "location", "target_end_date"]
 _FIT_COLUMNS = [
