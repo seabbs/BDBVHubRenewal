@@ -562,25 +562,30 @@ def test_the_aggregation_figure_has_a_panel_per_study_and_level() -> None:
 
 
 def _si_copula() -> pd.DataFrame:
-    """Rows of the rolling copula's impact: off and rolling, by level."""
+    """Rows of `evaluation.pairing.summarise_pairing`: off and rolling.
+
+    Zones, sums over weeks and per-cell rows of the zones are in the
+    rows, as the sensitivity gives them, but not in the figure.
+    """
     rows = []
     for study, levels in [
-        ("germany_dev", ["national", "states", "age"]),
-        ("bdbv_backtest", ["national", "provinces", "zones"]),
+        ("germany", ["national", "states", "ages"]),
+        ("bdbv", ["national", "provinces", "zones"]),
     ]:
         for level in levels:
-            for copula, value in (("off", 2.0), ("rolling", 1.0)):
+            for variant, value in (("off", 2.0), ("rolling", 1.0)):
                 for target, metric in (
-                    ("summed", "energy"),
-                    ("summed", "cover90_sum"),
-                    ("cell", "wis"),
+                    ("cell", "crps"),
+                    ("cell", "cover90"),
+                    ("joint", "log_energy"),
+                    ("sum_weeks", "crps"),
                 ):
                     rows.append(
                         {
                             "study": study,
                             "level": level,
                             "model": "randomwalknowcast",
-                            "copula": copula,
+                            "variant": variant,
                             "target": target,
                             "metric": metric,
                             "value": value,
@@ -590,16 +595,20 @@ def _si_copula() -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def test_the_copula_figure_has_one_panel_per_study_and_level() -> None:
+def test_the_copula_figure_has_national_and_provinces_per_study() -> None:
     from paperpipe.evidence import copula_figure
 
     fig = copula_figure(_si_copula())
     drawn = [ax for ax in fig.axes if ax.get_visible() and ax.has_data()]
-    assert len(drawn) == 6
-    assert {ax.get_title().split(" (")[0] for ax in drawn} >= {
+    titles = {ax.get_title().split(" (")[0] for ax in drawn}
+    assert titles == {
         "Germany, national",
-        "BDBV, zones",
+        "Germany, states",
+        "BDBV, national",
+        "BDBV, provinces",
     }
+    labels = {t.get_text() for t in drawn[0].get_xticklabels()}
+    assert labels == {"CRPS", "90% coverage", "ES (log)"}
 
 
 def test_the_copula_figure_waits_then_draws(tmp_path) -> None:
