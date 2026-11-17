@@ -7,3 +7,21 @@
 # the settings hash `scripts/finetune_stream.py` gives does not
 # cover it.
 hash = "latest"
+
+# The Chronos-2 checkpoint fine-tuned on real data alone, the German
+# development half and the public BDBV data up to the release in
+# config/finetune/realdata.toml on the germany-ft branch
+# (`realdata-ft-<hash>`), that the SI-only `fm_chronos_*_ragged_real` models
+# load. Empty until that release is published.
+realdata = ""
+
+# The BDBV data the real-data checkpoint trained on: every public release
+# up to `release` (cut-off `cutoff`), with truth masked after `truth_until`,
+# the cut-off less `truth_delay` days (the release backtest's BDBV truth
+# delay on these releases). The SI scores the real-data models on BDBV only
+# from the rounds after `release`, so it is scored prospectively.
+[realdata_bdbv]
+release = "2026-11-08"
+cutoff = "2026-11-05"
+truth_delay = 35
+truth_until = "2026-10-01"
