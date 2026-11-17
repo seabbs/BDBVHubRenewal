@@ -34,9 +34,9 @@ synthetic:
   # realised values.
   simulations:
     development: ../output/finetune/development
-    # Simulation round 1's folder (~/bdbv-rounds/rounds/r1/sims on
-    # archie), whose held-out batches are the held-out set.
-    paper: ../output/rounds/r1/sims
+    # Simulation round 1's folder under the rounds folder (ROOT in
+    # config/local.env), whose held-out batches are the held-out set.
+    paper: $ROOT/rounds/r1/sims
   # The synthetic runner's forecasts of them, with its
   # observations and factors beside them.
   forecasts:
