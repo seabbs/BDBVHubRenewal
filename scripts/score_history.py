@@ -44,6 +44,7 @@ import json
 import re
 import subprocess
 import sys
+import tomllib
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 from pathlib import Path
 from typing import Any
@@ -506,8 +507,17 @@ VIEWS = (
 """Chart views: data name, heading and what it draws."""
 
 
-def page_markdown(hist: pd.DataFrame | None) -> str:
-    """Return the Score history page's charts, or a notice."""
+def backtest_samples(path: Path | str = "config/backtest.toml") -> int:
+    """Return the backtest's draws per forecast, `[samples] backtest`."""
+    raw = tomllib.loads(Path(path).read_text())
+    return int(raw["samples"]["backtest"])
+
+
+def page_markdown(hist: pd.DataFrame | None, samples: int | None = None) -> str:
+    """Return the Score history page's charts, or a notice.
+
+    `samples`, the draws per forecast, is named above the charts.
+    """
     if hist is None or hist.empty:
         return (
             '!!! warning "Score history unavailable"\n\n'
@@ -515,6 +525,12 @@ def page_markdown(hist: pd.DataFrame | None) -> str:
             "read for this build.\n"
         )
     parts = []
+    if samples is not None:
+        parts.append(
+            f"Each deploy scores {samples:,} draws per forecast "
+            "(`[samples] backtest` in `config/backtest.toml`) at the time "
+            "of this build. Earlier deploys may have scored fewer.\n"
+        )
     for view, heading, what in VIEWS:
         srcs = {
             t: f"../../figures/scorehistory-{view}-{t}.json"
@@ -540,6 +556,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     parser.add_argument("--figures", help="Write the chart JSON here")
     parser.add_argument("--current", help="This build's figures directory")
     parser.add_argument("--current-sha", default="HEAD")
+    parser.add_argument("--config", default="config/backtest.toml")
     args = parser.parse_args(argv)
     try:
         deploys = walk(args.ref)
@@ -558,7 +575,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     if args.docs:
         docs = Path(args.docs)
         docs.mkdir(parents=True, exist_ok=True)
-        page = page_markdown(hist)
+        page = page_markdown(hist, backtest_samples(args.config))
         (docs / "score-history.md").write_text(page)
     if hist is None:
         return

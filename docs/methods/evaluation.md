@@ -21,9 +21,18 @@ This is the CRPS of the samples' empirical distribution, scoringrules' `crps_ens
 CRPS on the log scale is the CRPS of the transformed target, $\text{CRPS}(\log(1 + X), \log(1 + y))$, never the log of CRPS.
 CRPS on the natural scale is dominated by the places with the most cases.
 On the log scale it approximates a score of the relative error, close to a score of the growth rate, so every place counts on a similar footing[^bosse].
-The models run here rather than from the fit store take 1,000 draws per forecast in every scored run (`score_samples` in `config/backtest.toml`), as the paper does.
+This plain estimator is used for every model, ours and the hub teams', with no fair or ensemble correction.
 Every model shares the backtest's seed, so their draws use common random numbers.
-The fitted models are scored on the 100 draws of their stored fits (`n_samples`).
+The number of draws is set in `[samples]` in `config/backtest.toml`.
+
+| Page | Draws per forecast | CRPS | Energy score |
+|---|---|---|---|
+| Backtest, Nowcast, health zones, scenarios, recovery and Score history | 1,000 (`backtest`), the stored fits included | Plain | Fair |
+| Comparison with the hub | 100 (`comparison`), as the hub teams submit | Plain | Plain |
+| German nowcast benchmark | Quantiles at seven levels | WIS | None |
+
+The fit store fits each model with the backtest's 1,000 draws, so the backtest scores the stored fits on all of them.
+In the comparison our models draw 100 samples, and the stored fits keep their first 100 sample ids, which are the draws a 100-draw run gives.
 Hub teams are scored on the samples they submitted.
 
 $$
@@ -49,10 +58,16 @@ The energy score scores one forecast of a vector $\mathbf{y}$.
 For an origin, a release and a scale, $\mathbf{y}$ holds every place at that scale in every scored week, and national holds the weeks only.
 It uses only the place-week cells that every compared model forecasts.
 Sample $i$ of a model is its draws with sample index $i$, $\mathbf{X}_i$.
-We use the fair form over $m$ samples,
+The backtest pages use the fair form over $m$ samples,
 
 $$
 \text{ES}(F, \mathbf{y}) = \frac{1}{m} \sum_{i} \lVert \mathbf{X}_i - \mathbf{y} \rVert - \frac{1}{2m(m - 1)} \sum_{i \ne j} \lVert \mathbf{X}_i - \mathbf{X}_j \rVert.
+$$
+
+The Comparison with the hub uses the plain form, the energy score of the samples' empirical distribution, for every model,
+
+$$
+\text{ES}(F, \mathbf{y}) = \frac{1}{m} \sum_{i} \lVert \mathbf{X}_i - \mathbf{y} \rVert - \frac{1}{2m^2} \sum_{i, j} \lVert \mathbf{X}_i - \mathbf{X}_j \rVert.
 $$
 
 The energy score on the log scale is the energy score of $\log(1 + \mathbf{y})$ against $\log(1 + \mathbf{X}_i)$, never the log of the score.

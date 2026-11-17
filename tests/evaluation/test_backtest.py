@@ -36,7 +36,7 @@ pytestmark = pytest.mark.usefixtures("flat_model")
 
 def test_load_config() -> None:
     cfg = load_config(ROOT / "config" / "backtest.toml")
-    assert cfg.n_samples == 100
+    assert cfg.n_samples == 1000
     assert all(pd.Timestamp(d).dayofweek == 5 for d in cfg.simulated_dates)
     # A generous convergence gate on BVDOutbreakSize releases.
     assert cfg.bvd_max_rhat == 1.1

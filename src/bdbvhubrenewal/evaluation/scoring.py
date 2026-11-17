@@ -24,9 +24,11 @@ epiforecasts/BVDOutbreakSize (`src/scoring.jl`).
 - **Coverage** of the central 50% and 90% sample intervals.
 - **Bias** $1 - (P(X \le y) + P(X \le y - 1))$ for counts, in $[-1, 1]$.
   Positive means overprediction.
-- **Energy score** of a vector forecast, in the fair form over $m$ samples,
+- **Energy score** of a vector forecast over $m$ samples, in the fair form
   $$\text{ES}(F, \mathbf{y}) = \frac{1}{m}\sum_i \|\mathbf{X}_i - \mathbf{y}\|
-  - \frac{1}{2m(m-1)}\sum_{i \ne j} \|\mathbf{X}_i - \mathbf{X}_j\|.$$
+  - \frac{1}{2m(m-1)}\sum_{i \ne j} \|\mathbf{X}_i - \mathbf{X}_j\|,$$
+  or the plain form, with $\frac{1}{2m^2}$ over all pairs.
+  The backtest uses the fair form and the hub comparison the plain form.
   The vector is every place at one scale by every scored week, for one
   origin, so the score rewards getting the joint pattern right.
   The sample index is the joint draw.
@@ -189,8 +191,10 @@ def crps_sample(obs: float, samples: ArrayLike) -> float:
     return float(mae - spread)
 
 
-def energy_sample(obs: ArrayLike, samples: ArrayLike) -> float:
-    r"""Return the fair energy score of a sample forecast of a vector.
+def energy_sample(
+    obs: ArrayLike, samples: ArrayLike, fair: bool = True
+) -> float:
+    r"""Return the energy score of a sample forecast of a vector.
 
     Parameters
     ----------
@@ -198,17 +202,23 @@ def energy_sample(obs: ArrayLike, samples: ArrayLike) -> float:
         The observed vector, length $d$.
     samples : array-like
         Joint samples, shape `[m, d]` with $m \ge 2$.
+    fair : bool
+        The fair form, which divides the spread over $i \ne j$ by
+        $2m(m - 1)$, or the plain form, which divides it by $2m^2$, the
+        energy score of the samples' empirical distribution.
 
     Returns
     -------
     float
-        The energy score. In one dimension it is the fair CRPS.
+        The energy score. In one dimension the fair form is the fair CRPS
+        and the plain form `crps_sample`.
     """
     y = np.asarray(obs, dtype=np.float64)
     x = np.asarray(samples, dtype=np.float64)
     m = x.shape[0]
     fit = np.mean(np.linalg.norm(x - y, axis=1))
-    spread = np.sum(pdist(x)) / (m * (m - 1))
+    # pdist sums each pair once, half the sum over i != j.
+    spread = np.sum(pdist(x)) / (m * (m - 1) if fair else m**2)
     return float(fit - spread)
 
 
@@ -230,7 +240,10 @@ def scale_of(location: pd.Series) -> pd.Series:
 
 
 def energy_scores(
-    samples: pd.DataFrame, truth: pd.DataFrame, unit: Sequence[str]
+    samples: pd.DataFrame,
+    truth: pd.DataFrame,
+    unit: Sequence[str],
+    fair: bool = True,
 ) -> pd.DataFrame:
     """Score every model's joint forecast of each scale with the energy score.
 
@@ -249,6 +262,8 @@ def energy_scores(
     unit : sequence of str
         Columns that identify one forecast of every scale, such as an
         origin and the release scored against.
+    fair : bool
+        The fair or the plain form (`energy_sample`).
 
     Returns
     -------
@@ -277,8 +292,10 @@ def energy_scores(
                     "model": model,
                     "n_cells": x.shape[1],
                     "n_samples": x.shape[0],
-                    "energy": energy_sample(obs, x),
-                    "log_energy": energy_sample(np.log1p(obs), np.log1p(x)),
+                    "energy": energy_sample(obs, x, fair),
+                    "log_energy": energy_sample(
+                        np.log1p(obs), np.log1p(x), fair
+                    ),
                 }
             )
     return pd.DataFrame(out)

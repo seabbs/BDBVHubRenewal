@@ -73,6 +73,7 @@ __all__ = [
     "WEEKLY_TARGET",
     "ComparisonConfig",
     "attribution",
+    "comparison_draws",
     "fetch_hub_submissions",
     "forecast_quantiles",
     "hub_cells",
@@ -522,7 +523,8 @@ def our_forecasts(
     target, delays : pandas.DataFrame
         Tidy tables.
     config : BacktestConfig
-        Horizons, samples and seed.
+        Horizons and seed. The models draw `comparison_samples` samples,
+        as many as the hub teams submit, with the shared seed.
     models : sequence of str
         Registered model names that run at zone level.
     daily : pandas.DataFrame
@@ -539,6 +541,7 @@ def our_forecasts(
         Output of `run_forecasts` with a `source` column (`real`). Rounds
         with no matching vintage are skipped.
     """
+    config = replace(config, n_samples=config.comparison_samples)
     if min_horizon is not None:
         config = replace(config, min_horizon=min_horizon)
     real = target.loc[target["kind"] == "real"]
@@ -690,6 +693,30 @@ def _on_hub_cells(forecasts: pd.DataFrame) -> pd.DataFrame:
     return forecasts.loc[on | (forecasts["source"] == "hub").to_numpy()]
 
 
+def comparison_draws(forecasts: pd.DataFrame, n: int) -> pd.DataFrame:
+    """Keep the first `n` sample ids of each of our models' forecasts.
+
+    Our stored fits have the backtest's draws, more than the hub teams
+    submit. Every model of ours draws from the shared seed, so the first
+    ids of each are common random numbers, as a run of `n` draws gives.
+    Hub teams' rows (`source` `hub`) are kept as submitted.
+
+    Parameters
+    ----------
+    forecasts : pandas.DataFrame
+        Samples with `source` and `sample`.
+    n : int
+        The draws to keep.
+
+    Returns
+    -------
+    pandas.DataFrame
+        The rows kept.
+    """
+    keep = (forecasts["source"] == "hub") | (forecasts["sample"] <= n)
+    return forecasts.loc[keep].reset_index(drop=True)
+
+
 def score_comparison(
     forecasts: pd.DataFrame,
     target: pd.DataFrame,
@@ -702,6 +729,10 @@ def score_comparison(
 
     Only the cells a hub team forecast (`hub_cells`) are scored, so our
     models are scored on the same rounds, places and weeks as the teams.
+    Our models keep their first `config.comparison_samples` sample ids
+    (`comparison_draws`), as many as the hub teams submit, and the hub
+    teams' samples are scored as submitted. CRPS is `crps_sample` and
+    the energy score the plain form for every model.
 
     Parameters
     ----------
@@ -710,7 +741,8 @@ def score_comparison(
     target, delays : pandas.DataFrame
         Tidy tables with every real vintage.
     config : BacktestConfig
-        Settings of the tasks the rounds are scored from.
+        Settings of the tasks the rounds are scored from, and
+        `comparison_samples`.
     daily : pandas.DataFrame
         Daily onsets by release, as for `make_tasks`.
     zones : pandas.DataFrame
@@ -726,7 +758,9 @@ def score_comparison(
         `reference_date` and `source`), and the pending rounds with
         columns `reference_date`, `vintage` and `models`.
     """
-    forecasts = _on_hub_cells(forecasts)
+    forecasts = comparison_draws(
+        _on_hub_cells(forecasts), config.comparison_samples
+    )
     real = target.loc[target["kind"] == "real"]
     vintages = sorted(set(real["vintage"]))
     rounds, tasks, stored, pending = {}, [], [], []
@@ -758,6 +792,7 @@ def score_comparison(
         models=(),
         stored=samples,
         compare=set(samples["model"]),
+        fair=False,
     )
     sources = samples[["model", "vintage", "source"]].drop_duplicates()
     sources = sources.rename(columns={"vintage": "origin"})

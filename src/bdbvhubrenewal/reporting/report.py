@@ -334,7 +334,7 @@ def make_report(
 
     # Backtest and comparison pages: the models the site shows.
     names = _page_models()
-    summaries = _release_section(fig, gen, res, real, names)
+    summaries = _release_section(fig, gen, res, real, names, config.n_samples)
     _backtest_page(
         fig, gen, res, out, config, target, names, data_dir, summaries
     )
@@ -521,14 +521,53 @@ def _ours(frame: pd.DataFrame, names: Sequence[str]) -> pd.DataFrame:
     return frame.loc[frame["model"].isin(names)]
 
 
+def draws_note(n: int, key: str = "backtest") -> str:
+    """Say how many draws per forecast a page scores, from the config.
+
+    `key` is the `[samples]` entry of `config/backtest.toml` that set
+    `n`: `backtest` for the backtest pages and `comparison` for the hub
+    comparison.
+    """
+    energy = "fair" if key == "backtest" else "plain"
+    return (
+        f"Our models are scored on {n:,} draws per forecast "
+        f"(`[samples] {key}` in `config/backtest.toml`), with common "
+        f"random numbers, by CRPS and the {energy} energy score "
+        "([estimators](methods/evaluation.md#scores)).\n"
+    )
+
+
+def _release_intro(samples: int) -> str:
+    """Return the lead of the Backtest page's overall scores."""
+    return (
+        "Scores on the complete weeks, or on what each later release "
+        "reported, as picked "
+        "([how scoring works](methods/evaluation.md#real-releases), "
+        "[metrics](methods/evaluation.md#scores)).\n" + draws_note(samples)
+    )
+
+
+def _nowcast_meta(latest: str, shown: Sequence[str], samples: int) -> str:
+    """Return the Nowcast page's lead: the vintage, models and draws."""
+    return (
+        f"Latest vintage **{latest}**, models "
+        f"{', '.join(f'`{n}`' for n in shown)}.\n"
+        f"Each forecast has {samples:,} draws "
+        "(`[samples] backtest` in `config/backtest.toml`).\n"
+    )
+
+
 def _release_section(
     fig: Path,
     gen: Path,
     res: Path,
     real: pd.DataFrame,
     names: Sequence[str],
+    samples: int,
 ) -> dict[str, str]:
     """Write the real-release evaluation tables and figure.
+
+    `samples` is the draws per forecast, `[samples] backtest`.
 
     The tables hold the number of forecasts, $n$, in every row, for our
     models only. Returns each target's score summary URL.
@@ -683,10 +722,7 @@ def _release_section(
     _write(
         gen / "release-headline.md",
         "## Overall\n\n"
-        "Scores on the complete weeks, or on what each later release "
-        "reported, as picked "
-        "([how scoring works](methods/evaluation.md#real-releases), "
-        "[metrics](methods/evaluation.md#scores)).\n"
+        + _release_intro(samples)
         + _scored_on(rep)
         + complete
         + "The [energy score](methods/evaluation.md#energy-score) scores each "
@@ -877,9 +913,7 @@ def _nowcast_page(
     for stem, _, _ in kinds:
         _write(gen / f"{stem}-tabs.md", "\n".join(pages[stem]))
     _write(
-        gen / "nowcast-meta.md",
-        f"Latest vintage **{latest}**, models "
-        f"{', '.join(f'`{n}`' for n in shown)}.\n",
+        gen / "nowcast-meta.md", _nowcast_meta(latest, shown, config.n_samples)
     )
 
 
@@ -2186,7 +2220,12 @@ def _comparison_page(
         "marked main build is the current main branch's forecast for every "
         "round, so a round we did not submit to shows only the main "
         "build.\n"
-        "Each row's n is beside the hub cells scored in its round.\n",
+        "Each row's n is beside the hub cells scored in its round.\n"
+        + draws_note(
+            int(summary.get("samples", load_config().comparison_samples)),
+            "comparison",
+        )
+        + "Hub teams' samples are scored as submitted.\n",
     )
     scores_path = cmp_dir / "scores.csv"
     scores = (

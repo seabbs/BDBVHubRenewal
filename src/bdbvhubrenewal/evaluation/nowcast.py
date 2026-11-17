@@ -643,6 +643,7 @@ def release_backtest(
     complete_after: int = COMPLETE_WEEKS,
     compare: Collection[str] | None = None,
     truth_delay: int | None = None,
+    fair: bool = True,
 ) -> ReleaseBacktest:
     """Forecast from every real release and score every model.
 
@@ -672,6 +673,9 @@ def release_backtest(
         $D$: score the complete target on each week's count in the first
         release $D$ days after it (`rolling_truth`) rather than on the
         complete weeks of the latest release.
+    fair : bool
+        The fair energy score, as the backtest scores it, or the plain
+        form, as the hub comparison does (`scoring.energy_sample`).
 
     Returns
     -------
@@ -710,6 +714,7 @@ def release_backtest(
         complete_after=complete_after,
         compare=compare,
         truth_delay=truth_delay,
+        fair=fair,
     )
 
 
@@ -880,6 +885,7 @@ def score_releases(
     complete_after: int = COMPLETE_WEEKS,
     compare: Collection[str] | None = None,
     truth_delay: int | None = None,
+    fair: bool = True,
 ) -> ReleaseBacktest:
     """Score the forecasts of `forecast_releases` and of stored models.
 
@@ -902,6 +908,8 @@ def score_releases(
     compare : collection of str, optional
         As for `release_backtest`.
     truth_delay : int, optional
+        As for `release_backtest`.
+    fair : bool
         As for `release_backtest`.
 
     Returns
@@ -1006,7 +1014,9 @@ def score_releases(
         # Each complete week is labelled with the release giving its truth,
         # and weeks with none yet are dropped, quantiles included.
         frames = [_relabel(f, complete) for f in frames]
-    return _score(frames, origin_rows, fit_rows, real, done, complete, compare)
+    return _score(
+        frames, origin_rows, fit_rows, real, done, complete, compare, fair
+    )
 
 
 def _relabel(frame: pd.DataFrame, complete: pd.DataFrame) -> pd.DataFrame:
@@ -1060,6 +1070,7 @@ def _score(
     done: pd.DataFrame,
     complete: pd.DataFrame,
     compare: Collection[str] | None,
+    fair: bool = True,
 ) -> ReleaseBacktest:
     fits = (
         pd.concat(fit_rows, ignore_index=True) if fit_rows else pd.DataFrame()
@@ -1090,7 +1101,7 @@ def _score(
         s["weeks_back"] = s.pop("horizon")
         scored.append(s)
         pool = grp if compare is None else grp[grp["model"].isin(compare)]
-        energy.append(energy_scores(pool, truth, unit=_KEYS[1:4]))
+        energy.append(energy_scores(pool, truth, unit=_KEYS[1:4], fair=fair))
     scores = pd.concat(scored, ignore_index=True)
     flags = done.rename(columns={"complete": "complete_at_latest"})
     scores = scores.merge(

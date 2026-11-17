@@ -153,11 +153,13 @@ def test_a_models_own_zones_stay_apart_from_its_provinces(
 
     # The country and provinces are as without the zones.
     pd.testing.assert_frame_equal(places("own"), places("randomwalk"))
-    # The zones are the model's own, as they are.
+    # The zones are the model's own, as they are, on the hub's draws.
+    from bdbvhubrenewal.submission.hub import hub_draws
+
     table = tables["own"]
     rows = table.loc[table["location"].map(is_zone)]
     got = rows.set_index(["location", "target_end_date", "output_type_id"])
-    want = split.set_index(["location", "target_end_date", "sample"])
+    want = hub_draws(split).set_index(["location", "target_end_date", "sample"])
     assert np.array_equal(
         got["value"].sort_index().to_numpy(),
         want["value"].sort_index().to_numpy(),
