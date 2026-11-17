@@ -27,11 +27,12 @@ Truth is the nowcasts' rule (`with_truth`): each sum's count in the data
 so every forecast has one.
 
 The models: `randomwalknowcast` and zero-shot Chronos-2 (`reference`),
-and the `_ft` models of one checkpoint: the live run's newest whose
-German nowcasts are done (`latest_checkpoint`) when the job first starts.
-That label is pinned in `<cache>/germany_forecast/label.txt` (`PIN`) and
-newer checkpoints are never forecast while the file exists; remove it by
-hand to forecast the newest. The poller's gate (`units`) waits for every
+and the `_ft` models of one checkpoint: the live run's final checkpoint
+(`cs.FINAL_OUTBREAKS`, the reported model; none is picked on scores),
+once its German nowcasts are done (`final_checkpoint`). Until then only
+the reference forecasts. The label is pinned in
+`<cache>/germany_forecast/label.txt` (`PIN`); remove it by hand to
+forecast another. The poller's gate (`units`) waits for every
 live German nowcast it can still finish: labels held, superseded or
 failed too often (`skip`) do not block it. Forecasts are cached in
 `<cache>/germany_forecast/<label>/<date>.csv.gz`, one file per date as
@@ -262,19 +263,23 @@ def live_labels(runs: Mapping[str, str]) -> list[str]:
     return sorted(lb for lb, run in runs.items() if run in cs.CURRENT_RUNS)
 
 
-def latest_checkpoint(
+def final_checkpoint(
     cache: Path, runs: Mapping[str, str], done: Any = None
 ) -> str | None:
-    """Return the newest live checkpoint whose German nowcasts are done.
+    """Return the live run's final checkpoint if its nowcasts are done.
 
-    The newest has the most outbreaks; None if no live one is done.
-    `done` is `cs.unit_done` by default.
+    The final checkpoint (`cs.FINAL_OUTBREAKS` outbreaks) is the reported
+    model; none is picked on scores. None until it exists and its German
+    nowcasts are done. `done` is `cs.unit_done` by default.
     """
     done = done or cs.unit_done
-    finished = [lb for lb in live_labels(runs) if done(cache, "germany", lb)]
-    if not finished:
-        return None
-    return max(finished, key=lambda lb: (_outbreaks(cache, lb), lb))
+    final = [
+        lb
+        for lb in live_labels(runs)
+        if _outbreaks(cache, lb) == cs.FINAL_OUTBREAKS
+        and done(cache, "germany", lb)
+    ]
+    return min(final) if final else None
 
 
 def pinned(cache: Path) -> str | None:
@@ -293,8 +298,8 @@ def units(
 
     With a pinned label (`PIN`), the reference's and its units. Else none
     while a live German nowcast not in `skip` (labels the poller cannot
-    finish) is not done; then the reference's and the latest checkpoint's,
-    which is pinned here as the job starts. `done` is `cs.unit_done` by
+    finish) is not done; then the reference's, and the final checkpoint's
+    (`final_checkpoint`) once it exists, which is pinned here. `done` is `cs.unit_done` by
     default.
     """
     done = done or cs.unit_done
@@ -303,7 +308,7 @@ def units(
         live = [lb for lb in live_labels(runs) if lb not in set(skip)]
         if any(not done(cache, "germany", lb) for lb in live):
             return []
-        label = latest_checkpoint(cache, runs, done)
+        label = final_checkpoint(cache, runs, done)
         if label is not None:
             root = cache / STUDY
             root.mkdir(parents=True, exist_ok=True)

@@ -157,6 +157,7 @@ COLUMNS = [
     "loss",
     "loss_zero_shot",
     "run",
+    "chosen",
     "target",
     "daily_rule",
     "layout",
@@ -223,6 +224,17 @@ def scored_checkpoints(evidence: pd.DataFrame) -> set[str]:
 
 
 # Rows ------------------------------------------------------------------
+
+
+FINAL_OUTBREAKS = 8000
+"""The reported model is the live run's final checkpoint (Sam: its
+learning rate decays to zero there), never one picked on scores."""
+
+
+def chosen(rows: pd.DataFrame) -> pd.Series:
+    """Mark the rows of the reported model: the live run's final checkpoint."""
+    run = rows["run"].astype(str)
+    return run.isin(CURRENT_RUNS) & (rows["outbreaks"] == FINAL_OUTBREAKS)
 
 
 CURRENT_RUNS = {"one-model"}
@@ -1038,6 +1050,7 @@ def table(
     new["grid"] = new["checkpoint"].map({h: m[2] for h, m in meta.items()})
     runs = {h: run_of(m[0]) for h, m in meta.items()}
     new["run"] = new["checkpoint"].map(runs).fillna("zero-shot")
+    new["chosen"] = chosen(new)
     old = pd.read_csv(evidence, dtype={"checkpoint": str})
     merge_evidence(old, new).round(4).to_csv(evidence, index=False)
     ck = pd.read_csv(checkpoints, dtype={"checkpoint": str})
