@@ -304,6 +304,15 @@ Option (d) tests whether pairing the draws with the copula before summing narrow
 - Key references: [@bosse2022scoringutils; @jordanEvaluatingProbabilisticForecasts2019; @zanetta_scoringrules_2024].
 :::
 
+For a forecast of $m$ samples $x_1, \dots, x_m$ and an observation $y$, the fair CRPS is
+$$
+\mathrm{CRPS}_\mathrm{f}(x, y) = \frac{1}{m}\sum_{i=1}^{m} |x_i - y| - \frac{1}{2m(m-1)}\sum_{i \ne j} |x_i - x_j|.
+$$
+Its expectation does not depend on $m$, whereas the usual sample form, with $2m^2$ in the second denominator, favours forecasts with more samples [@Ferro2014; @Zamo2018].
+The fair energy score is the same form for a vector of counts, with the Euclidean norm $\lVert \cdot \rVert$ in place of $|\cdot|$.
+We compute both with scoringrules' `fair` estimator, `crps_ensemble` and `es_ensemble`, on counts and on $\log(x + 1)$ counts.
+Our models give 1,000 samples and hub teams 100, so the fair form compares them on the same footing.
+
 ### Choices tuned on development data
 
 @tbl-tuned-choices lists each choice we tuned and the data it was set on, none of which is in a scored set.

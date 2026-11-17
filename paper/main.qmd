@@ -156,6 +156,7 @@ The SI gives the copula in full, its estimator and window, and the scores of pai
 - The fine-tune never trained on the held-out set's seeds (SI).
 - We set each tuned choice on development data, apart from every scored set (SI).
 - We score sample forecasts with CRPS and log-scale CRPS, bias, and 50% and 90% coverage, relative to `randomwalknowcast`.
+- We score samples with the fair CRPS and the fair energy score, which correct for the number of samples, so forecasts with different numbers of samples, ours and the hub teams', compare fairly [@Ferro2014; @Zamo2018; @zanetta_scoringrules_2024].
 - We score against the data as reported $D$ days later, with $D$ each outbreak's 98% reporting delay.
 - Key references: [@bracherEvaluatingEpidemicForecasts2021; @Bosse2023-sx; @gneitingStrictlyProperScoring2007; @gneitingProbabilisticForecastsCalibration2007; @sherrattPredictivePerformanceMultimodel2023].
 :::
