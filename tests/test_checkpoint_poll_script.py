@@ -187,3 +187,13 @@ def test_a_queue_of_only_held_or_superseded_checkpoints_is_idle(
     assert poll.choose(queue, runs, set(), tmp_path / "none", False, set()) == (
         "slots-a"
     )
+
+
+def test_new_bdbv_origins_skip_what_this_code_cannot_load(poll) -> None:
+    runs = {
+        "a": "no-slots",
+        "slots-z": "slots-zeroinit",
+        "slots-o": "one-model",
+    }
+    labels = ["reference", "a", "slots-z", "slots-o"]
+    assert poll.extendable(labels, runs) == ["reference", "a", "slots-o"]
