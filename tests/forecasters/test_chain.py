@@ -160,7 +160,7 @@ def test_no_errors_take_the_prior_size(daily: pd.DataFrame) -> None:
     np.testing.assert_allclose(origin.size, PRIOR_SIZE, rtol=1e-6)
 
 
-def test_a_delay_is_own_with_10_cases_a_week_else_the_pooled_parents(
+def test_a_delay_is_own_with_10_cases_a_week_and_a_zone_takes_its_provinces(
     daily: pd.DataFrame, daily_zones: pd.DataFrame
 ) -> None:
     both = pd.concat([daily, daily_zones])
@@ -190,11 +190,17 @@ def test_a_delay_is_own_with_10_cases_a_week_else_the_pooled_parents(
         gaps,
     )
     # The same rule as the walk spread: own with 10 cases a week, else
-    # the pooled estimate of the nearest parent that has them.
+    # the pooled estimate of the nearest parent that has them. A health
+    # zone takes its province's delay: own zone delays from a few release
+    # pairs report too fast (#323).
     src = source_index(level, snap.parent)
+    zone = np.array([loc.count("-") == 2 for loc in snap.locations])
+    src[zone] = src[snap.parent[zone]]
     np.testing.assert_allclose(fit.g, np.concatenate([own_g, pooled_g])[src])
+    np.testing.assert_array_equal(fit.source, src)
     assert (src < len(level)).any()
     assert (src >= len(level)).any()
+    assert (fit.g[zone] == fit.g[snap.parent[zone]]).all()
 
 
 def test_one_rule_shares_the_size_by_level_only(origin24) -> None:
