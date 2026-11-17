@@ -727,7 +727,8 @@ def test_daily_baseline_rows_name_their_provisional_rule(cs) -> None:
     )
     rows = cs.relative(cells, "ebola", ("crps", "log_crps"))
     assert "daily_rule" in cs.COLUMNS
-    rule = rows.set_index(["target", "model"])["daily_rule"]
+    national = rows.loc[rows["level"] == "national"]
+    rule = national.set_index(["target", "model"])["daily_rule"]
     assert rule[("daily", "randomwalknowcast")] == cs.DAILY_RULE
     assert cs.DAILY_RULE == "week-split"
     assert pd.isna(rule[("7day", "randomwalknowcast")])

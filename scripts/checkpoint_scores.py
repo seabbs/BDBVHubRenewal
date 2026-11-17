@@ -94,6 +94,11 @@ here if it has `quantiles(task, levels, target="daily")`, `daily(task)` or
 """
 DAILY_RUNS = ("one-model",)
 """Runs (`run_of`) whose checkpoints take the daily target by default."""
+DAILY_RULE = "week-split"
+"""`daily_rule` of the baseline's daily rows: randomwalknowcast's days are
+its weekly draws split by a provisional rule
+(`bdbvhubrenewal.forecasters.randomwalk.split_week_draws`); empty for
+every other row."""
 DAILY_DONE = "daily.done"
 """In a unit's folder: written once every date holds the daily target."""
 DAILY_DAYS = 28
@@ -133,6 +138,7 @@ COLUMNS = [
     "loss_zero_shot",
     "run",
     "target",
+    "daily_rule",
 ]
 HELD_OUT_LEVELS = ("leaf", "national", "intermediate")
 SORT = ["rule", "study", "level", "model", "outbreaks", "checkpoint"]
@@ -317,6 +323,8 @@ def relative(
     for m in metrics:
         mean[f"rel_{m}"] = mean[m] / base[m].reindex(at).to_numpy()
     out = mean.reset_index().assign(study=study, rule=RULE)
+    split = (out["target"] == "daily") & (out["model"] == BASELINE)
+    out["daily_rule"] = np.where(split, DAILY_RULE, None)
     return out.reindex(columns=COLUMNS)
 
 
