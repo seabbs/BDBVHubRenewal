@@ -55,7 +55,7 @@ Usage:
   python scripts/checkpoint_scores.py germany CACHE LABEL [TARGETS]
   python scripts/checkpoint_scores.py bdbv CACHE LABEL [TARGETS]
   python scripts/checkpoint_scores.py heldout CACHE HASH
-  python scripts/checkpoint_scores.py heldout_scores CACHE LABEL
+  python scripts/checkpoint_scores.py heldout_scores CACHE LABEL [r4|r5]
   python scripts/checkpoint_scores.py bdbv_zones CACHE LABEL [7day]
   python scripts/checkpoint_scores.py germany_forecast CACHE LABEL [7day]
   python scripts/checkpoint_scores.py table CACHE EVIDENCE CHECKPOINTS HASH...
@@ -168,10 +168,14 @@ COLUMNS = [
     "n_blocks",
     "horizon_weeks",
     "zone_method",
+    "factor",
+    "factor_level",
 ]
-"""Rows' columns; `layout` to `n_blocks` are the `heldout` study's and
+"""Rows' columns; `layout` to `n_blocks` are the `heldout` studies' and
 empty for the others; `horizon_weeks` the `germany_forecast` study's;
-`zone_method` is the zone rows' (`bdbv_zones`)."""
+`zone_method` is the zone rows' (`bdbv_zones`); `factor` and
+`factor_level` the `heldout_r5` study's rows by grid r5's design factors
+(empty on its rows over every simulation)."""
 HELD_OUT_LEVELS = ("leaf", "national", "intermediate")
 SORT = ["rule", "study", "level", "model", "outbreaks", "checkpoint"]
 """The evidence's row order, before the target."""
@@ -758,15 +762,69 @@ def _heldout_scores():
     return heldout_scores
 
 
-def heldout_scores_unit(cache: Path, label: str) -> None:
-    """Score a label on the held-out simulation blocks, one thread."""
+def held_set_of(settings: Mapping[str, Any]) -> str:
+    """Return the held-out set a checkpoint is scored on: its grid's."""
+    return "r5" if settings.get("grid") == "r5" else "r4"
+
+
+TRAINER_CUT = {
+    "memory_gb": "MEMORY_GB",
+    "seed": "CUT_SEED",
+    "blocks_per_simulation": "PER_SIMULATION",
+}
+"""Settings the held-out cut must share with the trainer, and the
+heldout_scores constants that hold them."""
+
+
+def trainer_sha(cache: Path, held: str) -> str:
+    """Return the trainer's `held_out_sha256` for held-out set `held`.
+
+    r4's is fixed. Another grid's is read from its checkpoints' settings
+    in `<cache>/heldout/` (the `heldout` units), which must agree on it
+    and on the cut (`TRAINER_CUT`, and the set's draws).
+    """
+    hs = _heldout_scores()
+    if held == "r4":
+        return str(hs.HELD_SHA256)
+    want = hs.SETS[held]
+    shas: dict[str, list[str]] = {}
+    for path in sorted((cache / "heldout").glob("*.json")):
+        if path.name.endswith("-release.json"):
+            continue
+        settings = json.loads(path.read_text())
+        if held_set_of(settings) != held:
+            continue
+        cut = {k: getattr(hs, v) for k, v in TRAINER_CUT.items()}
+        cut["draws_per_simulation"] = want.draws
+        for key, value in cut.items():
+            if settings.get(key) != value:
+                raise SystemExit(
+                    f"{path.stem} was trained with {key} "
+                    f"{settings.get(key)}, the held-out cut uses {value}"
+                )
+        shas.setdefault(settings["held_out_sha256"], []).append(path.stem)
+    if not shas:
+        raise SystemExit(f"no {held} checkpoint settings in {cache}/heldout")
+    if len(shas) > 1:
+        raise SystemExit(f"{held} checkpoints differ in held-out set: {shas}")
+    return next(iter(shas))
+
+
+def heldout_scores_unit(cache: Path, label: str, held: str = "r4") -> None:
+    """Score a label on a held-out set's simulation blocks, one thread."""
     import torch
 
     torch.set_num_threads(1)
     _pin(label)
     hs = _heldout_scores()
     hs.ft.check_package(Path(__file__).parents[1])
-    hs.unit(cache, label, reference=label == REFERENCE)
+    hs.unit(
+        cache,
+        label,
+        reference=label == REFERENCE,
+        held=hs.SETS[held],
+        sha=trainer_sha(cache, held),
+    )
 
 
 def _zones():
@@ -801,8 +859,9 @@ def unit_done(
         )
     if study == "heldout":
         return (cache / "heldout" / f"{label}-release.json").exists()
-    if study == "heldout_scores":
-        return bool(_heldout_scores().unit_done(cache, label))
+    held = {h.name: h for h in _heldout_scores().SETS.values()}
+    if study in held:
+        return bool(_heldout_scores().unit_done(cache, label, held[study]))
     want = germany_dates() if study == "germany" else bdbv_origins()
     files = (cache / study / label).glob("*.csv.gz")
     have = {p.name.removesuffix(".csv.gz") for p in files}
@@ -1018,13 +1077,27 @@ def bdbv_rows(
     return relative(matched(sc, BDBV_CELL), "ebola", ("crps", "log_crps"))
 
 
-def heldout_rows(cache: Path, labels: Sequence[str]) -> pd.DataFrame:
-    """Return the finished labels' `heldout` rows; none without reference."""
-    ready = ready_labels(cache, "heldout_scores", labels)
-    if REFERENCE not in ready:
-        return pd.DataFrame(columns=COLUMNS)
-    rows = _heldout_scores().rows(cache, ready, REFERENCE)
-    return rows.assign(rule=RULE).reindex(columns=COLUMNS)
+def heldout_rows(
+    cache: Path, labels: Sequence[str], sets: Mapping[str, str] | None = None
+) -> pd.DataFrame:
+    """Return the finished labels' held-out rows, each set's on its own.
+
+    `sets` gives each checkpoint's set (`held_set_of`), r4 if unlisted;
+    a set's rows need its reference unit finished.
+    """
+    hs = _heldout_scores()
+    sets = sets or {}
+    parts = [pd.DataFrame(columns=COLUMNS)]
+    for name, held in hs.SETS.items():
+        mine = [
+            lb for lb in labels if lb == REFERENCE or sets.get(lb, "r4") == name
+        ]
+        ready = ready_labels(cache, held.name, mine)
+        if REFERENCE not in ready:
+            continue
+        rows = hs.rows(cache, ready, REFERENCE, held)
+        parts.append(rows.assign(rule=RULE).reindex(columns=COLUMNS))
+    return pd.concat(parts, ignore_index=True)
 
 
 def table(
@@ -1054,7 +1127,9 @@ def table(
                 daily_ready(cache, "bdbv", labels),
             ),
             *(held_out_rows(h, m[0]) for h, m in meta.items()),
-            heldout_rows(cache, labels),
+            heldout_rows(
+                cache, labels, {h: held_set_of(m[0]) for h, m in meta.items()}
+            ),
             _zones().rows(cache, labels),
             _germany_forecast().rows(cache, labels),
         ],
@@ -1099,7 +1174,7 @@ def main(argv: Sequence[str]) -> None:
     elif study == "heldout":
         held_out_unit(cache, argv[2])
     elif study == "heldout_scores":
-        heldout_scores_unit(cache, argv[2])
+        heldout_scores_unit(cache, argv[2], *argv[3:4])
     elif study in ("bdbv_zones", "germany_forecast"):
         if len(argv) > 3 and argv[3] != "7day":
             raise SystemExit(f"{study} has the 7-day target only: {argv[3]}")

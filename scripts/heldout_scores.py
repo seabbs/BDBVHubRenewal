@@ -57,6 +57,7 @@ elsewhere (`rel_to`).
 from __future__ import annotations
 
 import copy
+import dataclasses
 import datetime as dt
 import gc
 import hashlib
@@ -110,6 +111,80 @@ SAMPLE = {
 thread, so these take about 45 minutes a label: more of the small weekly
 and 3-day blocks, fewer of the larger daily ones."""
 SAMPLE_SEED = 20261117
+
+
+@dataclasses.dataclass(frozen=True)
+class HeldSet:
+    """A held-out set: which simulations are cut and scored, and where.
+
+    The first `holdout` simulations of seeds `seeds` in `sim_dir` are cut
+    as the trainer cuts them with `draws` draws each. The first `checked`
+    of them are the trainer's own held-out set, whose ids must hash to
+    its `held_out_sha256`. `sizes` blocks of each layout are sampled, or
+    every block if None. Blocks and scores go in `<cache>/<name>/`, rows
+    under study `study`.
+    """
+
+    name: str
+    sim_dir: Path
+    seeds: tuple[int, int]
+    holdout: int
+    checked: int
+    draws: int
+    sizes: Mapping[str, int] | None
+    study: str
+
+
+SETS = {
+    "r4": HeldSet(
+        name=STUDY,
+        sim_dir=SIM_DIR,
+        seeds=HELD_SEEDS,
+        holdout=HOLDOUT,
+        checked=HOLDOUT,
+        draws=DRAWS,
+        sizes=SAMPLE,
+        study="heldout",
+    ),
+    # Grid r5 holds out round 9, one balanced block of 840 simulations
+    # (#311); the trainer monitors its first 90 and every one is scored.
+    "r5": HeldSet(
+        name="heldout_scores_r5",
+        sim_dir=Path("~/bdbv-rounds/rounds/r9/sims"),
+        seeds=(30900, 30939),
+        holdout=840,
+        checked=90,
+        draws=1,
+        sizes=None,
+        study="heldout_r5",
+    ),
+}
+"""The held-out sets by grid. r4's keeps the folder its cache is in."""
+R4 = SETS["r4"]
+
+FACTORS = (
+    "process",
+    "gt_shape",
+    "trajectory",
+    "delay_family",
+    "delay_form",
+    "delay_change",
+    "reporting",
+    "reference_dow",
+    "observation",
+    "strata",
+    "spread",
+    "place_rt",
+    "seeding",
+    "mixing",
+    "imports",
+    "shocks",
+    "delay_places",
+    "obs_strata",
+    "strata_link",
+)
+"""Grid r5's design factors (scripts/finetune_simulate.R `factors`), one
+column each in the simulations' settings files."""
 CHUNK = 10
 """Blocks per cache file."""
 N_DRAWS = 1000
@@ -125,6 +200,7 @@ STEP_DAYS = {"weekly": 7, "3day": 3}
 SCORES = ("wis", "log_wis", "crps", "coverage_50", "coverage_90", "coverage_95")
 FRAME = [
     "block",
+    "outbreak",
     "layout",
     "target",
     "level",
@@ -153,20 +229,22 @@ ROWS = [
     "coverage_50",
     "coverage_90",
     "coverage_95",
+    "factor",
+    "factor_level",
 ]
 
 
 # The blocks ------------------------------------------------------------
 
 
-def cut_settings() -> tuple:
+def cut_settings(draws: int = DRAWS) -> tuple:
     """Return `finetune_stream.init_worker`'s arguments for the cut."""
     return (
         min(ft.MAX_SERIES, ft.max_series(MEMORY_GB)),
         ft.MAX_LAGS,
         LAYOUTS,
         UNIVARIATE,
-        DRAWS,
+        draws,
         SUBSET_SEED,
     )
 
@@ -176,6 +254,7 @@ def cut_blocks(
     ids: Sequence[str],
     per_simulation: int = PER_SIMULATION,
     seed: int = CUT_SEED,
+    draws: int = DRAWS,
 ) -> list[dict]:
     """Return the held-out blocks as the trainer cuts them, with metadata.
 
@@ -185,7 +264,7 @@ def cut_blocks(
     weekly blocks the counts, so randomwalknowcast's task can be built
     from the releases the block was cut from.
     """
-    fs.init_worker(*cut_settings())
+    fs.init_worker(*cut_settings(draws))
     block_of, pad_of = ft.training_block, ft._pad
 
     def training_block(counts, source, places, cutoffs, **kw):
@@ -217,9 +296,14 @@ def cut_blocks(
 
 
 def sample_index(
-    blocks: Sequence[Mapping], sizes: Mapping[str, int], seed: int
+    blocks: Sequence[Mapping], sizes: Mapping[str, int] | None, seed: int
 ) -> list[int]:
-    """Return a fixed sample of `sizes[layout]` blocks of each layout."""
+    """Return a fixed sample of `sizes[layout]` blocks of each layout.
+
+    Every block if `sizes` is None.
+    """
+    if sizes is None:
+        return list(range(len(blocks)))
     rng = np.random.default_rng(seed)
     out: list[int] = []
     for layout in LAYOUTS:
@@ -229,7 +313,12 @@ def sample_index(
     return out
 
 
-def _key(sha: str, sizes: Mapping[str, int], per_simulation: int) -> str:
+def _key(
+    sha: str,
+    sizes: Mapping[str, int] | None,
+    per_simulation: int,
+    held: HeldSet = R4,
+) -> str:
     """Return the cut and sample's key: the held-out set and settings."""
     text = json.dumps(
         {
@@ -237,18 +326,30 @@ def _key(sha: str, sizes: Mapping[str, int], per_simulation: int) -> str:
             "seed": CUT_SEED,
             "per_simulation": per_simulation,
             "layouts": LAYOUTS,
-            "sizes": dict(sizes),
+            "sizes": None if sizes is None else dict(sizes),
             "sample_seed": SAMPLE_SEED,
-            "settings": [DRAWS, SUBSET_SEED, UNIVARIATE, MEMORY_GB],
+            "settings": [held.draws, SUBSET_SEED, UNIVARIATE, MEMORY_GB],
+            # r4's key is as it was, so its cache stays valid.
+            **(
+                {}
+                if held == R4
+                else {"set": [held.name, held.holdout, held.checked]}
+            ),
         },
         sort_keys=True,
     )
     return hashlib.sha256(text.encode()).hexdigest()[:12]
 
 
-def _held_ids(sim_dir: Path) -> list[str]:
-    seeds = range(HELD_SEEDS[0], HELD_SEEDS[1] + 1)
-    return fs.ready_outbreaks(sim_dir, seeds)[:HOLDOUT]
+def _held_ids(sim_dir: Path, held: HeldSet = R4) -> list[str]:
+    seeds = range(held.seeds[0], held.seeds[1] + 1)
+    ids = fs.ready_outbreaks(sim_dir, seeds)[: held.holdout]
+    if len(ids) < held.holdout:
+        raise ValueError(
+            f"{len(ids)} of {held.name}'s {held.holdout} held-out "
+            f"simulations are in {sim_dir}"
+        )
+    return ids
 
 
 def _atomic(path: Path, data: bytes) -> None:
@@ -259,39 +360,45 @@ def _atomic(path: Path, data: bytes) -> None:
 
 def prepare(
     cache: Path,
-    sim_dir: Path = SIM_DIR,
+    sim_dir: Path | None = None,
     ids: Sequence[str] | None = None,
     sha: str = HELD_SHA256,
-    sizes: Mapping[str, int] = SAMPLE,
+    sizes: Mapping[str, int] | None = SAMPLE,
     per_simulation: int = PER_SIMULATION,
+    held: HeldSet = R4,
 ) -> list[dict]:
     """Return the sampled held-out blocks, cutting them once.
 
-    The blocks are written to `<cache>/heldout_scores/blocks-<key>.pkl`
+    The blocks are written to `<cache>/<held.name>/blocks-<key>.pkl`
     and the key, sample and block counts to `sample.json` there. Each
-    block gains its `index` in the full cut.
+    block gains its `index` in the full cut. A set other than r4 takes
+    its own `sim_dir` and `sizes` unless given.
 
     Raises
     ------
     ValueError
-        If the simulations' ids do not hash to `sha`, the held-out set.
+        If the first `held.checked` simulations' ids do not hash to
+        `sha`, the trainer's held-out set.
     """
-    root = Path(cache) / STUDY
+    if held != R4:
+        sizes = held.sizes if sizes is SAMPLE else sizes
+    root = Path(cache) / held.name
     root.mkdir(parents=True, exist_ok=True)
-    key = _key(sha, sizes, per_simulation)
+    key = _key(sha, sizes, per_simulation, held)
     path = root / f"blocks-{key}.pkl"
     if path.exists():
         with path.open("rb") as f:
             return list(pickle.load(f))
-    sim_dir = Path(sim_dir).expanduser()
-    ids = list(_held_ids(sim_dir) if ids is None else ids)
-    found = hashlib.sha256(("\n".join(ids) + "\n").encode()).hexdigest()
+    sim_dir = Path(held.sim_dir if sim_dir is None else sim_dir).expanduser()
+    ids = list(_held_ids(sim_dir, held) if ids is None else ids)
+    checked = ids[: held.checked]
+    found = hashlib.sha256(("\n".join(checked) + "\n").encode()).hexdigest()
     if found != sha:
         raise ValueError(
             f"the held-out simulations hash to {found}, not the trainer's "
             f"held-out set {sha}"
         )
-    blocks = cut_blocks(sim_dir, ids, per_simulation)
+    blocks = cut_blocks(sim_dir, ids, per_simulation, draws=held.draws)
     index = sample_index(blocks, sizes, SAMPLE_SEED)
     sampled = [{**blocks[i], "index": i} for i in index]
     for b in sampled:
@@ -305,15 +412,21 @@ def prepare(
         "n_blocks": len(sampled),
         "cut": {str(k): int(v) for k, v in counts.items()},
         "n_cut": len(blocks),
-        "sample": {s: int(sizes.get(s, 0)) for s in LAYOUTS},
+        "sample": (
+            None
+            if sizes is None
+            else {s: int(sizes.get(s, 0)) for s in LAYOUTS}
+        ),
         "index": index,
+        "sim_dir": str(sim_dir),
+        "outbreaks": ids,
     }
     _atomic(root / "sample.json", json.dumps(note, indent=1).encode())
     return sampled
 
 
-def _sample(cache: Path) -> dict | None:
-    path = Path(cache) / STUDY / "sample.json"
+def _sample(cache: Path, held: HeldSet = R4) -> dict | None:
+    path = Path(cache) / held.name / "sample.json"
     return json.loads(path.read_text()) if path.exists() else None
 
 
@@ -443,6 +556,7 @@ def block_frame(
     out = pd.DataFrame(
         {
             "block": int(block["index"]),
+            "outbreak": block.get("outbreak"),
             "layout": block["source"],
             "target": targets[rows],
             "level": levels[rows],
@@ -475,19 +589,49 @@ def _matched(cell: pd.DataFrame, n_pairs: int) -> pd.DataFrame:
     return cell.set_index(keys).loc[full].reset_index()
 
 
-def relative_rows(scores: pd.DataFrame) -> pd.DataFrame:
+def _summary(part: pd.DataFrame, ref: tuple[str, str]) -> pd.DataFrame:
+    """Return each model's mean scores in `part`, relative to `ref`."""
+    by = part.groupby(["model", "checkpoint"])
+    mean = by[list(SCORES)].mean()
+    mean["n"] = by.size()
+    mean["n_blocks"] = by["block"].nunique()
+    base = mean.loc[ref]
+    mean["rel_wis"] = mean["wis"] / base["wis"]
+    mean["rel_log_wis"] = mean["log_wis"] / base["log_wis"]
+    return mean.reset_index()
+
+
+def _has(part: pd.DataFrame, ref: tuple[str, str]) -> bool:
+    return not part.empty and ref in set(
+        zip(part["model"], part["checkpoint"], strict=True)
+    )
+
+
+def _rel_to(ref: tuple[str, str]) -> str:
+    return ref[0] if ref[0] == BASELINE else ZERO_SHOT
+
+
+def relative_rows(
+    scores: pd.DataFrame,
+    factors: pd.DataFrame | None = None,
+    study: str = "heldout",
+) -> pd.DataFrame:
     """Return mean scores by layout, target, level and window.
 
     `scores` holds every label's `block_frame`s with a `checkpoint`. In
     each (layout, target) cell only the target rows and steps every model
     and checkpoint scored are kept. Means are relative to randomwalknowcast
     where it forecast the cell, else to zero-shot Chronos-2 (`rel_to`).
+    With `factors` (`factor_table`), each cell is also split by each
+    factor's levels, over every level and window (`factor`,
+    `factor_level`).
     """
     out = []
     for (layout, target), cell in scores.groupby(["layout", "target"]):
         pairs = set(zip(cell["model"], cell["checkpoint"], strict=True))
         ref = reference_of(pairs)
         cell = _matched(cell, len(pairs))
+        tag = {"layout": layout, "target": target, "rel_to": _rel_to(ref)}
         for level in ["all", *sorted(set(cell["level"]))]:
             for window in ("all", "nowcast", "forecast"):
                 part = cell
@@ -495,30 +639,55 @@ def relative_rows(scores: pd.DataFrame) -> pd.DataFrame:
                     part = part.loc[part["level"] == level]
                 if window != "all":
                     part = part.loc[part["window"] == window]
-                if part.empty or ref not in set(
-                    zip(part["model"], part["checkpoint"], strict=True)
-                ):
-                    continue
-                by = part.groupby(["model", "checkpoint"])
-                mean = by[list(SCORES)].mean()
-                mean["n"] = by.size()
-                mean["n_blocks"] = by["block"].nunique()
-                base = mean.loc[ref]
-                mean["rel_wis"] = mean["wis"] / base["wis"]
-                mean["rel_log_wis"] = mean["log_wis"] / base["log_wis"]
-                out.append(
-                    mean.reset_index().assign(
-                        layout=layout,
-                        target=target,
-                        level=level,
-                        window=window,
-                        rel_to=ref[0] if ref[0] == BASELINE else ZERO_SHOT,
+                if _has(part, ref):
+                    out.append(
+                        _summary(part, ref).assign(
+                            **tag, level=level, window=window
+                        )
                     )
-                )
+        if factors is None:
+            continue
+        levels = factors.reindex(simulation_of(cell["outbreak"]).to_numpy())
+        for factor in factors.columns:
+            col = levels[factor].to_numpy()
+            for value in sorted(pd.unique(col[pd.notna(col)])):
+                part = cell.loc[col == value]
+                if _has(part, ref):
+                    out.append(
+                        _summary(part, ref).assign(
+                            **tag,
+                            level="all",
+                            window="all",
+                            factor=factor,
+                            factor_level=str(value),
+                        )
+                    )
     if not out:
         return pd.DataFrame(columns=ROWS)
-    rows = pd.concat(out, ignore_index=True).assign(study="heldout")
+    rows = pd.concat(out, ignore_index=True).assign(study=study)
     return rows.reindex(columns=ROWS)
+
+
+def simulation_of(outbreaks: pd.Series) -> pd.Series:
+    """Return each outbreak's simulation: its id less the draw."""
+    return outbreaks.astype(str).str.rsplit("-", n=1).str[0]
+
+
+def factor_table(sim_dir: Path, ids: Sequence[str]) -> pd.DataFrame:
+    """Return each simulation's design factor levels, indexed by id.
+
+    Read from the simulations' `settings-<seed>.csv` files; only the
+    `FACTORS` columns they have are kept.
+    """
+    files = sorted(Path(sim_dir).expanduser().glob("settings-*.csv"))
+    frames = []
+    for f in files:
+        head = pd.read_csv(f, nrows=0).columns
+        cols = ["outbreak", *(c for c in FACTORS if c in head)]
+        frames.append(pd.read_csv(f, usecols=cols, dtype=str))
+    table = pd.concat(frames, ignore_index=True).set_index("outbreak")
+    keep = [c for c in FACTORS if c in table.columns]
+    return table.loc[table.index.isin(set(ids)), keep]
 
 
 # The unit --------------------------------------------------------------
@@ -670,8 +839,10 @@ def _chunks(blocks: Sequence[dict]) -> list[Sequence[dict]]:
     return [blocks[i : i + CHUNK] for i in range(0, len(blocks), CHUNK)]
 
 
-def _chunk_path(cache: Path, label: str, key: str, k: int) -> Path:
-    return Path(cache) / STUDY / label / f"{key}-{k:03d}.csv.gz"
+def _chunk_path(
+    cache: Path, label: str, key: str, k: int, held: HeldSet = R4
+) -> Path:
+    return Path(cache) / held.name / label / f"{key}-{k:03d}.csv.gz"
 
 
 def free_caches() -> None:
@@ -714,19 +885,21 @@ def unit(
     models: Mapping[str, Predictor] | None = None,
     blocks: Sequence[dict] | None = None,
     reference: bool | None = None,
+    held: HeldSet = R4,
+    sha: str = HELD_SHA256,
 ) -> None:
     """Score a label's models on the sampled blocks, a chunk a file.
 
     Finished chunks are read from the cache, so a rerun resumes.
     """
-    blocks = prepare(cache) if blocks is None else blocks
-    note = _sample(cache)
+    blocks = prepare(cache, sha=sha, held=held) if blocks is None else blocks
+    note = _sample(cache, held)
     assert note is not None
     key = note["key"]
-    (Path(cache) / STUDY / label).mkdir(parents=True, exist_ok=True)
+    (Path(cache) / held.name / label).mkdir(parents=True, exist_ok=True)
     chunks = _chunks(blocks)
     for k, chunk in enumerate(chunks):
-        path = _chunk_path(cache, label, key, k)
+        path = _chunk_path(cache, label, key, k, held)
         if path.exists():
             continue
         if models is None:
@@ -741,42 +914,55 @@ def unit(
         frame.to_csv(tmp, index=False, compression="gzip")
         tmp.rename(path)
         free_caches()
-        print(f"{STUDY} {label} chunk {k + 1}/{len(chunks)}", flush=True)
-    print(f"{STUDY} {label} done", flush=True)
+        print(f"{held.name} {label} chunk {k + 1}/{len(chunks)}", flush=True)
+    print(f"{held.name} {label} done", flush=True)
 
 
-def unit_done(cache: Path, label: str) -> bool:
+def unit_done(cache: Path, label: str, held: HeldSet = R4) -> bool:
     """Whether every chunk of a label's unit is in the cache."""
-    note = _sample(cache)
+    note = _sample(cache, held)
     if note is None:
         return False
     n = -(-int(note["n_blocks"]) // CHUNK)
     return all(
-        _chunk_path(cache, label, note["key"], k).exists() for k in range(n)
+        _chunk_path(cache, label, note["key"], k, held).exists()
+        for k in range(n)
     )
 
 
-def label_scores(cache: Path, label: str) -> pd.DataFrame:
+def label_scores(cache: Path, label: str, held: HeldSet = R4) -> pd.DataFrame:
     """Return a label's cached scores."""
-    note = _sample(cache)
+    note = _sample(cache, held)
     assert note is not None
     files = sorted(
-        (Path(cache) / STUDY / label).glob(f"{note['key']}-*.csv.gz")
+        (Path(cache) / held.name / label).glob(f"{note['key']}-*.csv.gz")
     )
     return pd.concat(
-        [pd.read_csv(f, dtype={"model": str}) for f in files],
+        [pd.read_csv(f, dtype={"model": str, "outbreak": str}) for f in files],
         ignore_index=True,
     )
 
 
-def rows(cache: Path, labels: Sequence[str], reference: str) -> pd.DataFrame:
-    """Return the finished labels' relative rows, none without the reference."""
+def rows(
+    cache: Path, labels: Sequence[str], reference: str, held: HeldSet = R4
+) -> pd.DataFrame:
+    """Return the finished labels' relative rows, none without the reference.
+
+    A set other than r4 also has rows by design factor level.
+    """
     if reference not in labels:
         return pd.DataFrame(columns=ROWS)
     parts = [
-        label_scores(cache, lb).assign(
+        label_scores(cache, lb, held).assign(
             checkpoint=ZERO_SHOT if lb == reference else lb
         )
         for lb in labels
     ]
-    return relative_rows(pd.concat(parts, ignore_index=True))
+    factors = None
+    if held != R4:
+        note = _sample(cache, held)
+        assert note is not None
+        factors = factor_table(Path(note["sim_dir"]), note["outbreaks"])
+    return relative_rows(
+        pd.concat(parts, ignore_index=True), factors, held.study
+    )

@@ -346,7 +346,8 @@ def test_a_zone_unit_waits_for_its_province_draws(bz, tmp_path) -> None:
 
 def test_checkpoint_scores_knows_the_zone_unit(cs, tmp_path) -> None:
     assert "zone_method" in cs.COLUMNS
-    assert cs.COLUMNS[-1] == "zone_method"
+    # New columns go last, so older tables keep their order.
+    assert cs.COLUMNS[-3:] == ["zone_method", "factor", "factor_level"]
     assert not cs.unit_done(tmp_path, "bdbv_zones", "reference", "daily")
 
 
