@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import html
 import math
 from collections.abc import Callable, Sequence
 from typing import Any
@@ -64,8 +65,14 @@ def chart(
     `line`, `faint` (a line at low opacity), `dots` or `pts` (a line
     with labelled points); `dash` is a key of `DASHES`. `xticks` puts x
     on a log2 axis with those ticks; `marks` are labelled vertical lines
-    and `hlines` horizontal ones.
+    and `hlines` horizontal ones. Text and colours are escaped; `note`
+    is HTML, put in as it is.
     """
+    esc = html.escape
+    title, xlabel = esc(title), esc(xlabel)
+    xticks = [(t, esc(lab)) for t, lab in xticks] if xticks else None
+    marks = [(m, esc(lab)) for m, lab in marks]
+    series = [(esc(s[0]), esc(s[1]), *s[2:]) for s in series]
     pts = [p for s in series for p in s[2] if p[1] is not None]
     if not pts:
         return f"<div class=card><h3>{title}</h3><p class=mut>no data</p></div>"
