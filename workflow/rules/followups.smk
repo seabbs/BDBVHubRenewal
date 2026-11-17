@@ -245,3 +245,62 @@ def followups(wc=None):
 rule followups:
     input:
         followups,
+
+
+DL = config["delay_learning"]
+
+
+def heldout_blocks(wc):
+    """The held-out synthetic block sample `score_heldout` cut, once."""
+    found = sorted(Path(f"{CACHE}/heldout_scores").glob("blocks-*.pkl"))
+    if not found:
+        raise ValueError(f"no held-out blocks in {CACHE}/heldout_scores")
+    return str(found[-1])
+
+
+rule delay_learning:
+    # What a slots checkpoint learnt about reporting delays, against
+    # zero-shot, for the SI (scripts/delay_learning.py): delay checks on
+    # held-out synthetic blocks, then the biases and the attention used on
+    # them and on German development inputs.
+    input:
+        heldout=f"{CACHE}/heldout/{{label}}.done",
+        adapter=rules.fetch_adapter.output,
+        germany=rules.agg_data.output.germany,
+    output:
+        checks=f"{CACHE}/delay-learning/{{label}}/delay-checks.csv",
+        shares=f"{CACHE}/delay-learning/{{label}}/attention-shares.csv",
+    log:
+        f"{CACHE}/delay-learning/{{label}}/run.log",
+    params:
+        prefix=lambda wc, resources: job_prefix(resources.mem_mb),
+        out=f"{CACHE}/delay-learning/{{label}}",
+        blocks=heldout_blocks,
+        settings=f"{ROUNDS_DIR}/r*/sims/settings-*.csv",
+        dates=" ".join(DL["dates"]),
+        limit=DL["limit"],
+    threads: 1
+    resources:
+        mem_mb=DL["mem_mb"],
+    shell:
+        """
+        run() {{ """
+        + HEAVY
+        + """uv run --group chronos python -u scripts/delay_learning.py "$@"; }}
+        run synthetic {params.out} --adapter {input.adapter} \
+          --blocks {params.blocks} --settings '{params.settings}' \
+          --limit {params.limit} > {log} 2>&1
+        run attention {params.out} --adapter {input.adapter} \
+          --blocks {params.blocks} --germany {input.germany} \
+          --dates {params.dates} --limit {params.limit} >> {log} 2>&1
+        """
+
+
+rule delay_learning_all:
+    # The delay analysis of the checkpoints `delay_learning.labels` names,
+    # or of the newest slots checkpoint.
+    input:
+        lambda wc: expand(
+            f"{CACHE}/delay-learning/{{label}}/delay-checks.csv",
+            label=DL["labels"] or slots_labels()[-1:],
+        ),

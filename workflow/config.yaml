@@ -97,6 +97,16 @@ agg:
   existing: origin/agg-slots:results/agg/aggregation-scores.csv.gz
   mem_mb: 6144
 
+delay_learning:
+  # What a slots checkpoint learnt about reporting delays, for the SI
+  # (scripts/delay_learning.py, rule delay_learning_all): `labels`, or the
+  # newest slots checkpoint; German development dates whose input blocks'
+  # attention is read; `limit` blocks per set (0 for all).
+  labels: []
+  dates: ["2021-11-22", "2021-12-06", "2021-12-20", "2022-01-03", "2022-01-17", "2022-01-31"]
+  limit: 0
+  mem_mb: 6144
+
 dashboard:
   # The fine-tuning dashboard (task dashboard; workflow/flowlib/dashboard).
   # Runs on every machine: release-prefix runs need no paths. Runs with a
