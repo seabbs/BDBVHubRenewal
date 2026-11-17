@@ -1047,51 +1047,6 @@ simulate_outbreak <- function(design, v) {
     drift = v$drift, step = v$step, periodic = v$periodic, 0
   )
   if (design$shocks == "backlog") change_terms <- c(change_terms, "backlog")
-  # Report date: day-of-week effects, or reports on given weekdays. Built
-  # before the reference date model, which holds the largest design
-  # matrix, so the two are never built at once; neither draws random
-  # numbers. Garbage is collected before each of epinowcast's large
-  # steps: after a large step R's next collection is gigabytes away.
-  gc()
-  structural <- NULL
-  report_terms <- NULL
-  if (design$reporting == "daily") {
-    report_terms <- "(1 | day_of_week)"
-  } else {
-    on <- strsplit(design$report_days, ";")[[1]]
-    structural <- enw_structural_reporting_metadata(pobs)
-    structural[, report := as.integer(weekdays(report_date) %in% on)]
-    structural <- structural[, .(.group, date, report_date, report)]
-  }
-  if (design$shocks == "outage") {
-    if (is.null(structural)) {
-      structural <- enw_structural_reporting_metadata(pobs)
-      structural[, report := 1L]
-    }
-    for (k in seq_along(windows)) {
-      w <- windows[[k]]
-      groups <- strata[place == sprintf("P%02d", v$shock_places[k]), .group]
-      structural[
-        .group %in% groups & report_date >= w[1] & report_date <= w[2],
-        report := 0L
-      ]
-    }
-  }
-  if (design$delay_change == "bunching") {
-    if (is.null(structural)) {
-      structural <- enw_structural_reporting_metadata(pobs)
-      structural[, report := 1L]
-    }
-    held <- bunch_dates(structural, v)
-    structural[report_date %in% held, report := 0L]
-    v$bunch_dates <- as.character(held)
-  }
-  report <- enw_report(
-    non_parametric = as_formula(FALSE, report_terms),
-    structural = structural, data = pobs
-  )
-  rm(structural)
-  gc()
   place_delays <- multi_place && design$delay_places != "shared"
   stratum_terms <- c(
     if (place_delays) "(1 | place)", if (multi_age) "(1 | age)"
@@ -1099,6 +1054,9 @@ simulate_outbreak <- function(design, v) {
   hazard <- design$delay_form != "parametric"
   family <- if (parametric) design$delay_family else "none"
   hazard_terms <- c("rw(delay)", "(1 | delay)")
+  # Garbage is collected before each of epinowcast's large steps: after a
+  # large step R's next collection is gigabytes away.
+  gc()
   reference <- enw_reference(
     parametric = if (parametric) {
       as_formula(TRUE, c(change_terms, stratum_terms))
@@ -1181,6 +1139,46 @@ simulate_outbreak <- function(design, v) {
     parameters$expl_beta_sd <- array(v$reference_dow_sd)
   }
 
+  # Report date: day-of-week effects, or reports on given weekdays.
+  gc()
+  structural <- NULL
+  report_terms <- NULL
+  if (design$reporting == "daily") {
+    report_terms <- "(1 | day_of_week)"
+  } else {
+    on <- strsplit(design$report_days, ";")[[1]]
+    structural <- enw_structural_reporting_metadata(pobs)
+    structural[, report := as.integer(weekdays(report_date) %in% on)]
+    structural <- structural[, .(.group, date, report_date, report)]
+  }
+  if (design$shocks == "outage") {
+    if (is.null(structural)) {
+      structural <- enw_structural_reporting_metadata(pobs)
+      structural[, report := 1L]
+    }
+    for (k in seq_along(windows)) {
+      w <- windows[[k]]
+      groups <- strata[place == sprintf("P%02d", v$shock_places[k]), .group]
+      structural[
+        .group %in% groups & report_date >= w[1] & report_date <= w[2],
+        report := 0L
+      ]
+    }
+  }
+  if (design$delay_change == "bunching") {
+    if (is.null(structural)) {
+      structural <- enw_structural_reporting_metadata(pobs)
+      structural[, report := 1L]
+    }
+    held <- bunch_dates(structural, v)
+    structural[report_date %in% held, report := 0L]
+    v$bunch_dates <- as.character(held)
+  }
+  report <- enw_report(
+    non_parametric = as_formula(FALSE, report_terms),
+    structural = structural, data = pobs
+  )
+  rm(structural)
   if (length(report_terms)) {
     parameters$rep_beta <- array(rnorm(report$data$rep_fncol))
     parameters$rep_beta_sd <- array(v$dow_sd)
