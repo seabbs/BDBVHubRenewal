@@ -87,6 +87,7 @@ The simulator, `enw_simulate`, is on epinowcast's `feature/829-simulate-forecast
 The simulations form the grid `r5`, a crossed design over 21 factors (`factors` in the script).
 These include the process (exponential growth, or renewal with a mean generation time of 3, 7 or 15 days), the generation time's shape, the trajectory of $R_t$ (eight shapes, from steady growth to several waves), the delay's family, its form (parametric, non-parametric or both) and how it changes over time (static, drift, step, periodic or random walk), reporting on every day or on one to three weekdays, a reference day-of-week effect, the observation model and the strata.
 Each block of 840 simulations holds every level of each factor in equal shares, shuffled per factor.
+A round of 40 batches of 21 simulations is one block.
 The observation model is NB1 in four simulations of five and Poisson in the fifth.
 NB1 dispersion is scaled by the expected count and the delay's $\sum_d p_d^2$ (epinowcast#937).
 The strata are one place, 2 to 26 places, 2 to 8 ages, or places by ages, at most 60 strata.
@@ -103,8 +104,9 @@ The other blocks' targets are all levels, leaves and the national total, or leav
 Each simulation is cut at 32 cut-offs, one block each, with up to 364 steps of context.
 A block is daily (25%), weekly (25%), 3-day (15%), daily with a weekly row per place (25%), or daily with a 3-day row per place (10%).
 
-Training runs in one pass over 8,400 simulations, ten blocks' worth of the grid, from round 9 on, the first round of grid `r5`, while the outbreaks are simulated (`scripts/finetune_stream.py`, `workflow/rules/finetune.smk`).
-It is scored on 90 held-out simulations of round 9.
+Round 9, the first round of grid `r5`, is the held-out block.
+Training runs in one pass over the next ten rounds, ten whole blocks of 8,400 simulations, in seed order while they are simulated (`scripts/finetune_stream.py`, `workflow/rules/finetune.smk`).
+The trainer monitors its loss on the first 90 simulations of the held-out block, a random sample of its cells.
 LoRA trains beside learned attention biases for related series (`forecasters.series_bias`).
 The adapter's learning rate starts at $10^{-5}$ and the biases' at $10^{-3}$, both falling linearly to zero at 38,325 steps, at 8,400 simulations.
 There is no warmup and no weight decay, and training is in full (fp32) precision.
