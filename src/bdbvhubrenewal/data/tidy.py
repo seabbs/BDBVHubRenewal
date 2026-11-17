@@ -735,6 +735,61 @@ def national_coherence(
     return long.sort_values([*keys, "stream"]).reset_index(drop=True)
 
 
+def zone_coherence(
+    target: pd.DataFrame, zones: pd.DataFrame, national: str = "CD"
+) -> pd.DataFrame:
+    """Compare each province and the country with the sum of their zones.
+
+    Parameters
+    ----------
+    target : pandas.DataFrame
+        Tidy target table (`load_target`); its real rows are used.
+    zones : pandas.DataFrame
+        The hub's weekly health zone counts (`load_health_zones`), with
+        `vintage`, `location`, `province`, `target_end_date` and `total`.
+    national : str
+        Location code of the country.
+
+    Returns
+    -------
+    pandas.DataFrame
+        One row per vintage, week and parent: `level` (`province` or
+        `national`), `location` (the parent), `parent` (its total),
+        `zones` (the sum of its zones) and `gap` (parent minus zones),
+        cases in no zone where positive. A week missing on one side counts
+        as zero there, so a province with no zone rows shows its whole
+        count as a gap.
+    """
+    keys = ["vintage", "target_end_date"]
+    real = target.loc[target["kind"] == "real"]
+    prov = real.loc[real["location"].str.count("-") == 1]
+    parent = prov.groupby([*keys, "location"])["total"].sum()
+    from_zones = (
+        zones.rename(columns={"location": "zone"})
+        .groupby([*keys, "province"])["total"]
+        .sum()
+    )
+    from_zones.index = from_zones.index.set_names([*keys, "location"])
+    parent, from_zones = parent.align(from_zones, join="outer", fill_value=0)
+    provinces = (
+        pd.DataFrame({"parent": parent, "zones": from_zones})
+        .reset_index()
+        .assign(level="province")
+    )
+    nat = real.loc[real["location"] == national].groupby(keys)["total"].sum()
+    all_zones = zones.groupby(keys)["total"].sum()
+    nat, all_zones = nat.align(all_zones, join="outer", fill_value=0)
+    country = (
+        pd.DataFrame({"parent": nat, "zones": all_zones})
+        .reset_index()
+        .assign(level="national", location=national)
+    )
+    out = pd.concat([provinces, country], ignore_index=True)
+    out["gap"] = out["parent"] - out["zones"]
+    cols = [*keys, "level", "location", "parent", "zones", "gap"]
+    return out[cols].sort_values(cols[:4]).reset_index(drop=True)
+
+
 def delays_for_vintage(
     delays: pd.DataFrame, vintage: str
 ) -> tuple[pd.DataFrame, str]:
@@ -775,7 +830,10 @@ def delays_for_vintage(
 
 
 def coherence_summary(
-    target: pd.DataFrame, vintage: str, national: str = "CD"
+    target: pd.DataFrame,
+    vintage: str,
+    national: str = "CD",
+    zones: pd.DataFrame | None = None,
 ) -> dict[str, Any]:
     """Summarise national coherence for one real vintage.
 
@@ -790,12 +848,19 @@ def coherence_summary(
         The real vintage to check.
     national : str
         Location code of the country.
+    zones : pandas.DataFrame, optional
+        The hub's weekly health zone counts. With them, `zones` summarises
+        each province and the country against their zones
+        (`zone_coherence`).
 
     Returns
     -------
     dict
-        `as_of`, `coherent`, per-stream summaries, the rows with a gap and
-        how the models handle a gap.
+        `as_of`, `coherent`, per-stream summaries, the rows with a gap,
+        how the models handle a gap and, with `zones`, the zones' summary:
+        `coherent`, the province and national weeks with a gap,
+        `unassigned_cases` (the country's cases in no zone),
+        `unassigned_share` and the rows with a gap.
 
     Raises
     ------
@@ -834,6 +899,44 @@ def coherence_summary(
             for r in gaps.to_dict("records")
         ],
         "handling": COHERENCE_HANDLING,
+        **(
+            {}
+            if zones is None
+            else {"zones": _zone_summary(target, zones, vintage, national)}
+        ),
+    }
+
+
+def _zone_summary(
+    target: pd.DataFrame, zones: pd.DataFrame, vintage: str, national: str
+) -> dict[str, Any]:
+    """Summarise `zone_coherence` for one vintage."""
+    table = zone_coherence(
+        target.loc[target["vintage"] == vintage],
+        zones.loc[zones["vintage"] == vintage],
+        national,
+    )
+    gaps = table.loc[table["gap"] != 0]
+    country = table.loc[table["level"] == "national"]
+    unassigned = int(country["gap"].sum())
+    total = int(country["parent"].sum())
+    return {
+        "coherent": gaps.empty,
+        "province_weeks_with_gap": int((gaps["level"] == "province").sum()),
+        "national_weeks_with_gap": int((gaps["level"] == "national").sum()),
+        "unassigned_cases": unassigned,
+        "unassigned_share": unassigned / total if total else 0.0,
+        "rows": [
+            {
+                "target_end_date": str(r["target_end_date"]),
+                "level": str(r["level"]),
+                "location": str(r["location"]),
+                "parent": int(r["parent"]),
+                "zones": int(r["zones"]),
+                "gap": int(r["gap"]),
+            }
+            for r in gaps.to_dict("records")
+        ],
     }
 
 

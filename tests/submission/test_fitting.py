@@ -435,3 +435,36 @@ def test_cli_prints_the_checkpoint_a_run_resolves(
 ) -> None:
     assert main(["finetuned-checkpoint"]) == 0
     assert capsys.readouterr().out.strip() == fake_checkpoint
+
+
+def test_zone_coherence(
+    target: pd.DataFrame, health_zones: pd.DataFrame
+) -> None:
+    from bdbvhubrenewal.data import zone_coherence
+
+    table = zone_coherence(target, health_zones)
+    assert set(table["level"]) == {"province", "national"}
+    assert (table["gap"] == 0).all()
+    summary = coherence_summary(target, "2026-10-24", zones=health_zones)
+    assert summary["zones"]["coherent"] is True
+    assert summary["zones"]["unassigned_share"] == 0.0
+
+
+def test_zone_coherence_reports_cases_in_no_zone(
+    target: pd.DataFrame, health_zones: pd.DataFrame
+) -> None:
+    from bdbvhubrenewal.data import zone_coherence
+
+    zones = health_zones.copy()
+    row = zones.index[
+        (zones["vintage"] == "2026-10-24") & (zones["total"] >= 2)
+    ][0]
+    zones.loc[row, "total"] -= 2
+    table = zone_coherence(target, zones)
+    gaps = table.loc[(table["gap"] != 0) & (table["vintage"] == "2026-10-24")]
+    # The province and the country each have 2 cases in no zone.
+    assert set(gaps["level"]) == {"province", "national"}
+    assert (gaps["gap"] == 2).all()
+    summary = coherence_summary(target, "2026-10-24", zones=zones)
+    assert summary["zones"]["coherent"] is False
+    assert summary["zones"]["unassigned_cases"] == 2

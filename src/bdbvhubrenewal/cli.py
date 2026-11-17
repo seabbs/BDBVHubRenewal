@@ -540,7 +540,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     coh = sub.add_parser(
         "coherence",
-        help="Compare the national data with the sum of the provinces.",
+        help="Compare the national data with the sum of the provinces, and "
+        "each province and the country with the sum of their zones.",
     )
     coh.add_argument("--vintage", default="latest")
     coh.add_argument("--data", default=data_dir)
@@ -1695,7 +1696,11 @@ def _coherence(args: argparse.Namespace) -> int:
     target = load_target(args.data)
     real = target.loc[target["kind"] == "real"]
     vintage = _vintage([str(v) for v in real["vintage"].unique()], args.vintage)
-    summary = coherence_summary(target, vintage)
+    try:
+        zones = load_health_zones(args.data)
+    except OSError:
+        zones = None
+    summary = coherence_summary(target, vintage, zones=zones)
     _print_coherence(summary)
     if args.out:
         out = Path(args.out)
@@ -1705,6 +1710,22 @@ def _coherence(args: argparse.Namespace) -> int:
 
 
 def _print_coherence(summary: dict[str, object]) -> None:
+    zones = summary.get("zones")
+    if isinstance(zones, dict):
+        if zones["coherent"]:
+            print(
+                f"Zone coherence ({summary['as_of']}): each province equals "
+                "the sum of its zones, and the country the sum of all zones."
+            )
+        else:
+            print(
+                f"WARNING: zone coherence ({summary['as_of']}): "
+                f"{zones['province_weeks_with_gap']} province-weeks and "
+                f"{zones['national_weeks_with_gap']} national weeks differ "
+                f"from their zones; {zones['unassigned_cases']} cases "
+                f"({100 * zones['unassigned_share']:.1f}%) are in no zone.",
+                file=sys.stderr,
+            )
     if summary["coherent"]:
         print(
             f"National coherence ({summary['as_of']}): the national counts "
