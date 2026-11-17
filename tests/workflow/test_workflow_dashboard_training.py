@@ -41,6 +41,13 @@ def test_run_params_decay_linearly_without_history(tmp_path):
     assert got["current"]["adapter"] == 1e-5 * 0.75
 
 
+def test_run_params_decay_over_the_outbreaks_without_a_step_count(tmp_path):
+    args = "x --learning-rate 1e-5 --outbreaks 8400 --prefixes 250 8400"
+    got = training.run_params(tmp_path, [], 0, args)
+    assert got["lr_steps"] == 0
+    assert got["lr_outbreaks"] == 8400
+
+
 def test_steps_per_simulation_follow_the_schedule_or_the_last_checkpoint():
     assert training.steps_per_simulation(36500, [250, 8000], []) == 4.5625
     cks = [("n500", {"steps": 2000, "n_outbreaks": 500}, None)]

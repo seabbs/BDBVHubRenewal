@@ -448,7 +448,7 @@ def test_blocks_cut_by_a_process_pool_match(tmp_path):
     assert [o for o, _ in pairs] == [o for o, _ in here]
 
 
-def test_a_straggler_is_folded_into_a_later_chunk(tmp_path):
+def test_a_chunk_waits_for_a_missing_batch_in_seed_order(tmp_path):
     from finetune_stream import next_chunk
 
     ids = _sim_dir(tmp_path)  # seeds 6001 and 6002, two simulations each
@@ -456,17 +456,12 @@ def test_a_straggler_is_folded_into_a_later_chunk(tmp_path):
     for name in ("counts-6001.csv.gz", "settings-6001.csv"):
         (tmp_path / name).rename(tmp_path / f"late-{name}")
     seeds = range(6001, 6003)
-    assert next_chunk(tmp_path, seeds, [], 2, waited=60, patience=1200) is None
-    # After the patience, later finished seeds train first.
-    late = next_chunk(tmp_path, seeds, [], 2, waited=1300, patience=1200)
-    assert late == ids[2:]
-    # The straggler joins the next chunk once it finishes.
+    assert next_chunk(tmp_path, seeds, [], 2) is None
+    # Once it finishes, the chunk is its outbreaks, then 6002's.
     for name in ("counts-6001.csv.gz", "settings-6001.csv"):
         (tmp_path / f"late-{name}").rename(tmp_path / name)
-    assert (
-        next_chunk(tmp_path, seeds, late, 2, waited=0, patience=1200)
-        == (ids[:2])
-    )
+    assert next_chunk(tmp_path, seeds, [], 2) == ids[:2]
+    assert next_chunk(tmp_path, seeds, ids[:2], 2) == ids[2:]
 
 
 def test_blocks_are_cut_without_torch(tmp_path):
@@ -496,12 +491,10 @@ def test_blocks_are_cut_without_torch(tmp_path):
     assert int(out.stdout.split()[-1]) > 0
 
 
-def test_learning_rate_decays_linearly_to_zero_over_its_steps():
+def test_learning_rate_decays_linearly_to_zero_over_the_simulations():
     from finetune_stream import learning_rate
 
-    # Constant without a schedule length.
-    assert learning_rate(5000, 1e-5, 0) == 1e-5
-    # Linear decay to zero over the steps, as Chronos-2's own fit.
+    # Linear decay to zero over the run's simulations.
     assert learning_rate(0, 1e-5, 1000) == 1e-5
     assert abs(learning_rate(500, 1e-5, 1000) - 5e-6) < 1e-15
     assert learning_rate(1000, 1e-5, 1000) == 0.0
@@ -800,6 +793,13 @@ def _fake_torch(monkeypatch):
     torch = types.ModuleType("torch")
     torch.save = lambda obj, path: Path(path).write_text(json.dumps(obj))
     torch.load = lambda path, **_: json.loads(Path(path).read_text())
+    # The random state the trainer saves with its state (CPU only).
+    torch.get_rng_state = lambda: [0]
+    torch.set_rng_state = lambda _: None
+    torch.cuda = types.SimpleNamespace(is_available=lambda: False)
+    torch.backends = types.SimpleNamespace(
+        mps=types.SimpleNamespace(is_available=lambda: False)
+    )
     peft = types.ModuleType("peft")
     peft.get_peft_model_state_dict = lambda model: model["adapter"]
     peft.set_peft_model_state_dict = lambda model, sd: model.update(adapter=sd)

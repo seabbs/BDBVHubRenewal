@@ -18,7 +18,7 @@ if LOCAL["SIMS_FROM"]:
 RUN = LOCAL["RUN"]
 TRAIN = f"{RUN}/train"
 
-segments.check_chunks(FT["prefixes"], FT["chunk"])
+segments.check_chunks(FT["prefixes"], FT["chunk"], FT["outbreaks"])
 PREV = dict((n, p) for p, n in segments.segments(FT["prefixes"]))
 
 
@@ -30,11 +30,11 @@ def training_seeds():
     """The run's training seeds, in the order it trains on them."""
     if FT["seed_file"]:
         return [int(s) for s in Path(FT["seed_file"]).read_text().split()]
-    return [s for r in FT["rounds"] for s in seeds_of(r)[0]]
+    return [s for r in FT["rounds"] for s in seeds_of(r)]
 
 
 def held_seeds():
-    return seeds_of(FT["held_round"])[1]
+    return seeds_of(FT["held_round"])
 
 
 def known_exclusions():
@@ -201,7 +201,7 @@ rule train_segment:
           --stop-from {params.stop_from} \
           --blocks-per-simulation {params.blocks} \
           --draws-per-simulation {FT[draws]} --subset-seed {FT[subset_seed]} \
-          --learning-rate {FT[learning_rate]} --lr-steps {FT[lr_steps]} \
+          --learning-rate {FT[learning_rate]} \
           --sources {params.sources} \
           --univariate-share {FT[univariate_share]} {params.real} \
           --note "{FT[note]}" --chunk {FT[chunk]} \
@@ -249,12 +249,16 @@ def trainable():
     """The prefixes done or within reach of the seed list."""
     skip = known_exclusions()
     order = training_seeds()
+    # A spare batch past each prefix but the run's last, which takes
+    # every training simulation.
     return [
         n
         for n in FT["prefixes"]
         if Path(f"{TRAIN}/n{n}/settings.json").exists()
         or segments.reachable(
-            n + SIM["batch"], order, lambda s: kept_or_full(s, skip)
+            n + SIM["batch"] * (n < FT["outbreaks"]),
+            order,
+            lambda s: kept_or_full(s, skip),
         )
     ]
 

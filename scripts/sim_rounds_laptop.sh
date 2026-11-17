@@ -21,7 +21,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/local_config.sh"
 LOCAL=${LOCAL:-$PWD/output/finetune/laptop-rounds}
 ENW_LIB=${ENW_LIB:-$PWD/output/finetune/rlib}
 ENW_CACHE=${ENW_CACHE:-$PWD/output/finetune/enwcache}
-BATCH=${BATCH:-25}
+BATCH=${BATCH:-21}
 DRAWS=1
 SLOTS=${SLOTS:-2}
 SLOT_MEM_GB=${SLOT_MEM_GB:-16}
@@ -107,8 +107,6 @@ if [ "$GRID" != "$(grep -o '^grid_name <- "[^"]*"' "$SIM_TREE/scripts/finetune_s
   exit 1
 fi
 
-# Held-out seeds of a round follow its 40 training seeds.
-held_from=$((30000 + ROUND * 100 + 40))
 claim="claim $FIRST-$LAST for round $ROUND (grid $GRID)"
 on_rounds "mkdir -p $RDIR/sims/logs && { [ -f $RDIR/manifest.csv ] || echo $HEADER > $RDIR/manifest.csv; }"
 if ! on_rounds "grep -qF '$HOST_NAME $claim' $REMOTE_MAILBOX"; then
@@ -122,7 +120,7 @@ run_batch() {
   local seed=$1 cap=$(($2 * 1024 * 1024)) log pid rss
   log=$DIR/sims/logs/$seed.log
   (
-    cd "$SIM_TREE" && ENW_DRAWS=$DRAWS ENW_LIB=$ENW_LIB ENW_CACHE=$ENW_CACHE \
+    cd "$SIM_TREE" && ENW_DRAWS=$DRAWS ENW_SEED_BASE=${SEED_BASE:-30000} ENW_LIB=$ENW_LIB ENW_CACHE=$ENW_CACHE \
       exec /usr/bin/time -l nice -n 19 Rscript scripts/finetune_simulate.R \
       "$BATCH" "$seed" "$DIR/sims"
   ) > "$log" 2>&1 &
@@ -156,12 +154,10 @@ publish() {
 recorded() { on_rounds "grep -q '^$ROUND,$1,' $RDIR/manifest.csv"; }
 
 slot() {
-  local s kind
+  local s
   for s in $(seq "$FIRST" "$LAST"); do
     mkdir "$DIR/sims/.lock-$s" 2> /dev/null || continue
     recorded "$s" && continue
-    kind=train
-    [ "$s" -ge "$held_from" ] && kind=held-out
     if ! run_batch "$s" "$SLOT_MEM_GB"; then
       say "batch $s failed at $SLOT_MEM_GB GB; retrying at $RETRY_MEM_GB GB ($(tail -n 2 "$DIR/sims/logs/$s.log" | tr '\n' ' ' | tr -d '"$`' | cut -c1-160))"
       mv "$DIR/sims/logs/$s.log" "$DIR/sims/logs/$s.first.log"
@@ -170,7 +166,7 @@ slot() {
         continue
       fi
     fi
-    until publish "$s" "$kind"; do
+    until publish "$s" block; do
       echo "$(date) copying batch $s failed; trying again"
       sleep 300
     done

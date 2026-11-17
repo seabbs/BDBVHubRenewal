@@ -1,7 +1,8 @@
 # Simulation rounds.
 #
 # Round r is the batches of `flowlib.segments.round_seeds`, each
-# scripts/finetune_simulate.R with exactly `draws` observation draws, into
+# scripts/finetune_simulate.R with exactly `draws` observation draws, and
+# is grid block r: 40 batches of 21 are its 840 simulations. Into
 # <ROOT>/rounds/r<r>/sims/. Each batch gets a manifest row, the round's
 # manifest joins them, the sim QC (scripts/sim_qc.py) reviews the round,
 # and `round_ready` writes the seed lists and READY last. Every
@@ -16,23 +17,10 @@ SIM = config["simulate"]
 
 
 def seeds_of(round_):
-    """A round's training and held-out seeds."""
+    """A round's batch seeds, its grid block."""
     return segments.round_seeds(
-        int(round_),
-        SIM["seed_base"],
-        SIM["train_batches"],
-        SIM["held_batches"],
+        int(round_), SIM["seed_base"], SIM["batches"]
     )
-
-
-def all_seeds(round_):
-    train, held = seeds_of(round_)
-    return train + held
-
-
-def kind_of(round_, seed):
-    train, _ = seeds_of(round_)
-    return "train" if int(seed) in train else "held-out"
 
 
 def grid_name():
@@ -58,6 +46,7 @@ rule simulate_batch:
         sims=f"{ROUNDS_DIR}/r{{round}}/sims",
         batch=SIM["batch"],
         draws=SIM["draws"],
+        seed_base=SIM["seed_base"],
         prefix=lambda wc, resources: job_prefix(resources.mem_mb),
         min_free=LOCAL["MIN_FREE_GB"],
         min_disk=LOCAL["MIN_DISK_GB"],
@@ -85,7 +74,8 @@ rule simulate_batch:
         tmp={params.sims}/tmp/{wildcards.seed}
         rm -rf "$tmp" && mkdir -p "$tmp"
         trap 'rm -rf "$tmp"' EXIT
-        TMPDIR="$tmp" ENW_DRAWS={params.draws} {params.prefix} \
+        TMPDIR="$tmp" ENW_DRAWS={params.draws} \
+          ENW_SEED_BASE={params.seed_base} {params.prefix} \
           /usr/bin/time -f "peak_rss_kb %M wall_s %e" \
           nice -n 19 Rscript scripts/finetune_simulate.R \
           {params.batch} {wildcards.seed} {params.sims} > {log} 2>&1
@@ -111,7 +101,7 @@ rule batch_record:
             params.sims,
             round_=r,
             seed=s,
-            kind=kind_of(r, s),
+            kind="block",
             grid=grid_name(),
             commit=git_commit(),
             draws=SIM["draws"],
@@ -126,7 +116,7 @@ rule round_manifest:
     input:
         lambda wc: expand(
             f"{ROUNDS_DIR}/r{wc.round}/records/record-{{seed}}.csv",
-            seed=all_seeds(wc.round),
+            seed=seeds_of(wc.round),
         ),
     output:
         f"{ROUNDS_DIR}/r{{round}}/manifest.csv",
@@ -154,22 +144,20 @@ rule round_ready:
         rules.sim_qc.output.summary,
     output:
         seeds=f"{ROUNDS_DIR}/r{{round}}/seeds.txt",
-        held=f"{ROUNDS_DIR}/r{{round}}/held-out.txt",
         ready=f"{ROUNDS_DIR}/r{{round}}/READY",
     localrule: True
     run:
         import datetime as dt
 
-        train, held = seeds_of(wildcards.round)
-        Path(output.seeds).write_text("".join(f"{s}\n" for s in train))
-        Path(output.held).write_text(f"{held[0]} {held[-1]}\n")
+        seeds = seeds_of(wildcards.round)
+        Path(output.seeds).write_text("".join(f"{s}\n" for s in seeds))
         Path(output.ready).write_text(
             dt.datetime.now(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ") + "\n"
         )
         qc = Path(input[0]).read_text().strip()
         say(
-            f"round {wildcards.round} ready for training: {len(train)} "
-            f"training and {len(held)} held-out batches; {qc}"
+            f"round {wildcards.round} ready: {len(seeds)} batches, one grid "
+            f"block; {qc}"
         )
 
 
@@ -228,6 +216,6 @@ rule release:
         [
             f"{ROUNDS_DIR}/r{r}/released/{s}.done"
             for r in config["rounds"]
-            for s in all_seeds(r)
+            for s in seeds_of(r)
         ],
         expand(f"{ROUNDS_DIR}/r{{r}}/released/qc.done", r=config["rounds"]),

@@ -7,12 +7,13 @@ batch it needs has finished (`scripts/finetune_simulate.R`), and the
 trainer waits for it otherwise. Within a chunk the blocks
 (`finetune_chronos.outbreak_blocks`, seeded per outbreak) are shuffled
 and packed by size (`finetune_chronos.plan_batches`). The learning rate
-is constant, so the checkpoint after the first N outbreaks
-(`finetune_chronos.PREFIXES`) is Chronos-2 fine-tuned on those N in one
-pass. Each is saved in `OUT/n<N>` with its consumed order and settings
-hash, and published as the release `chronos-ft-<hash>` when `--publish`
-is set. Held-out loss is on the first `--holdout` outbreaks of the
-held-out seeds, simulated first.
+falls linearly to zero over the run's `--outbreaks` simulations
+(`sims_done`), so the checkpoint after the first N outbreaks is
+Chronos-2 fine-tuned on those N in one pass of that schedule. Each is
+saved in `OUT/n<N>` with its consumed order and settings hash, and
+published as the release `chronos-ft-<hash>` when `--publish` is set.
+Held-out loss is on the first `--holdout` outbreaks of the held-out
+seeds, simulated first.
 
     uv run --group chronos python scripts/finetune_stream.py SIM_DIR OUT \
         --grid r3 --train-seeds FIRST LAST --held-out-seeds FIRST LAST \
@@ -74,9 +75,6 @@ evals."""
 POLL = 60
 """Seconds between checks for a chunk's simulations."""
 
-PATIENCE = 20 * 60
-"""Seconds a chunk waits for a missing batch before later batches train
-first; the late batch's outbreaks then join a later chunk."""
 
 REPO = "seabbs/BDBVHubRenewal"
 """Repository of the checkpoint releases."""
@@ -224,10 +222,10 @@ def group_rates(optimiser) -> dict:
     return {g["name"]: g["lr"] for g in optimiser.param_groups}
 
 
-def set_learning_rates(optimiser, step: int, steps: int) -> None:
-    """Set each group's rate at `step`: linear from its base to zero."""
+def set_learning_rates(optimiser, sims: float, outbreaks: int) -> None:
+    """Set each group's rate at `sims` simulations of `outbreaks`."""
     for group in optimiser.param_groups:
-        group["lr"] = learning_rate(step, group["base_lr"], steps)
+        group["lr"] = learning_rate(sims, group["base_lr"], outbreaks)
 
 
 def lora_model(base, config, init: Path | None):
@@ -250,15 +248,24 @@ def lora_model(base, config, init: Path | None):
     return model
 
 
-def learning_rate(step: int, base: float, steps: int) -> float:
-    """Return the learning rate of step `step` (from 0).
+def learning_rate(sims: float, base: float, outbreaks: int) -> float:
+    """Return the learning rate once `sims` simulations are trained.
 
-    It falls linearly from `base` to zero over `steps` steps, as
-    Chronos-2's own fine-tuning does, and stays constant if `steps` is 0.
+    It falls linearly from `base` to zero over the run's `outbreaks`
+    simulations, so it reaches zero as the last simulation's last batch
+    is trained, however the blocks are packed into steps.
     """
-    if steps <= 0:
-        return base
-    return base * max(0.0, 1 - step / steps)
+    return base * max(0.0, 1 - sims / outbreaks)
+
+
+def sims_done(done: int, size: int, position: int, steps: int) -> float:
+    """Return the simulations trained before step `position` of a chunk.
+
+    `done` simulations before the chunk of `size`, planned as `steps`
+    steps: within the chunk, its share of steps taken, so the rate falls
+    smoothly.
+    """
+    return done + size * position / steps
 
 
 def should_stop(
@@ -373,25 +380,19 @@ def next_chunk(
     seeds: range,
     trained: list[str],
     size: int,
-    waited: float,
-    patience: float = PATIENCE,
 ) -> list[str] | None:
     """Return the next `size` outbreaks to train on, or None if not ready.
 
     They are the first outbreaks not yet `trained` of the finished
-    batches in seed order, up to the first batch not finished. Once the
-    chunk has `waited` `patience` seconds, later finished batches count
-    too, so a straggler's outbreaks join a later chunk instead of holding
-    up training.
+    batches in seed order, up to the first batch not finished, so a
+    chunk waits for a missing batch and every run trains in seed order.
     """
     seen = set(trained)
     out: list[str] = []
     for seed in seeds:
         ids = batch_outbreaks(sim_dir, seed)
         if ids is None:
-            if waited < patience:
-                break
-            continue
+            break
         out.extend(o for o in ids if o not in seen)
         if len(out) >= size:
             return out[:size]
@@ -1023,6 +1024,75 @@ def skipped_lines(skipped: list[dict]) -> list[str]:
     ]
 
 
+def check_until(until: int | None, prefixes: list[int]) -> None:
+    """Raise if `--until` is not one of the run's prefixes."""
+    if until is not None and until not in prefixes:
+        raise ValueError(f"--until {until} is not a prefix of {prefixes}")
+
+
+def until_start(done: int, until: int | None, have_prefix: bool) -> str:
+    """Return what a segment does with the state it resumes from.
+
+    "train" while the state is short of `until`; "kept" if it is at
+    `until` and prefix `until` is saved, so only the state is kept with
+    it. A state past `until`, or at it without the prefix, cannot make
+    that prefix again, so the segment stops with an error rather than
+    train past it.
+    """
+    if until is None or done < until:
+        return "train"
+    if done > until:
+        raise SystemExit(
+            f"the state is at {done} outbreaks, past n{until}: that prefix "
+            "cannot be made from it"
+        )
+    if not have_prefix:
+        raise SystemExit(
+            f"the state is at n{until} but n{until} is missing; retrain it "
+            "from the state of the prefix before"
+        )
+    return "kept"
+
+
+def keep_state(state: Path, where: Path) -> None:
+    """Copy the trainer's state to `where/state`, replacing any there."""
+    kept = where / "state"
+    shutil.rmtree(kept, ignore_errors=True)
+    shutil.copytree(state, kept)
+
+
+def save_rng(where: Path) -> None:
+    """Save torch's random state (CPU and any GPU) to `where/rng.pt`.
+
+    Chronos-2 trains with dropout, so a resumed run matches the run that
+    did not stop only with the random state it stopped at.
+    """
+    import torch
+
+    rng = {"cpu": torch.get_rng_state()}
+    if torch.cuda.is_available():
+        rng["cuda"] = torch.cuda.get_rng_state_all()
+    if torch.backends.mps.is_available():
+        rng["mps"] = torch.mps.get_rng_state()
+    torch.save(rng, where / "rng.pt")
+
+
+def load_rng(where: Path) -> bool:
+    """Restore torch's random state from `where/rng.pt`, if saved."""
+    import torch
+
+    path = where / "rng.pt"
+    if not path.exists():
+        return False
+    rng = torch.load(path, weights_only=True)
+    torch.set_rng_state(rng["cpu"])
+    if "cuda" in rng and torch.cuda.is_available():
+        torch.cuda.set_rng_state_all(rng["cuda"])
+    if "mps" in rng and torch.backends.mps.is_available():
+        torch.mps.set_rng_state(rng["mps"])
+    return True
+
+
 def save_state(where: Path, model, optimiser, state: dict) -> None:
     """Save the trainer's state: adapter, optimiser and position."""
     import torch
@@ -1033,6 +1103,7 @@ def save_state(where: Path, model, optimiser, state: dict) -> None:
     torch.save(get_peft_model_state_dict(model), tmp / "adapter.pt")
     torch.save(optimiser.state_dict(), tmp / "optimiser.pt")
     (tmp / "state.json").write_text(json.dumps(state))
+    save_rng(tmp)
     # The last state is kept until the new one is in place.
     old = where.with_suffix(".old")
     if where.exists():
@@ -1060,6 +1131,8 @@ def load_state(where: Path, model, optimiser) -> dict | None:
     optimiser.load_state_dict(
         torch.load(where / "optimiser.pt", weights_only=True)
     )
+    # A state saved without the random state resumes without it.
+    load_rng(where)
     return json.loads((where / "state.json").read_text())
 
 
@@ -1101,9 +1174,6 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--outbreaks", type=int, default=ft.PREFIXES[-1])
     parser.add_argument("--holdout", type=int, default=150)
     parser.add_argument("--learning-rate", type=float, default=1e-4)
-    # Steps over which the learning rate falls linearly to zero; 0 keeps
-    # it constant.
-    parser.add_argument("--lr-steps", type=int, default=0)
     # Sources to train on: weekly, daily, and 3-day blocks summed from the
     # daily triangle; one of them trains an adapter for it alone.
     parser.add_argument("--sources", nargs="+", default=list(ft.SOURCES))
@@ -1139,6 +1209,10 @@ def build_parser() -> argparse.ArgumentParser:
     # group attention bias for same-place and parent-child pairs.
     parser.add_argument("--series-bias", action="store_true")
     parser.add_argument("--bias-lr", type=float, default=BIAS_LR)
+    # One segment of a continuous run: stop once prefix N is saved, with
+    # the trainer's state beside it (`n<N>/state`), which the next
+    # segment resumes from (workflow/rules/finetune.smk).
+    parser.add_argument("--until", type=int)
     return parser
 
 
@@ -1189,6 +1263,7 @@ def main() -> None:
     held_seeds = range(args.held_out_seeds[0], args.held_out_seeds[1] + 1)
     prefixes = [p for p in args.prefixes if p < args.outbreaks]
     prefixes.append(args.outbreaks)
+    check_until(args.until, prefixes)
     k = args.blocks_per_simulation
 
     # Held-out outbreaks first.
@@ -1310,7 +1385,7 @@ def main() -> None:
             if args.real_training
             else {}
         ),
-        **({"lr_steps": args.lr_steps} if args.lr_steps else {}),
+        "lr_decay": "linear to zero over the outbreaks",
         **(
             {"sources": list(ft.SOURCES)}
             if ft.SOURCES != ("weekly", "daily")
@@ -1420,7 +1495,7 @@ def main() -> None:
         size = min(CHUNK, args.outbreaks - len(after))
         if size <= 0:
             return
-        ids = next_chunk(sim_dir, training_seeds(), after, size, 0)
+        ids = next_chunk(sim_dir, training_seeds(), after, size)
         if ids is not None and tuple(ids) not in ahead:
             ahead[tuple(ids)] = submit_cut(
                 pool, sim_dir, ids, args.seed, k, args.cut_workers
@@ -1434,7 +1509,13 @@ def main() -> None:
         load_blocks(args.real_validation) if args.real_validation else []
     )
     t0 = time.perf_counter()
-    while done < args.outbreaks:
+    # A segment stops at its prefix; one whose state is already there
+    # only keeps it, and one past it fails (`until_start`).
+    until_start(
+        done, args.until, (out / f"n{args.until}" / "settings.json").exists()
+    )
+    stop = args.outbreaks if args.until is None else args.until
+    while done < stop:
         hi = min(done + CHUNK, args.outbreaks)
         split = {"wait_s": 0.0, "cut_s": 0.0, "train_s": 0.0, "eval_s": 0.0}
         tick = time.perf_counter()
@@ -1444,10 +1525,7 @@ def main() -> None:
         )
         free_memory()
         while not chunk:
-            waited = time.perf_counter() - tick
-            ids = next_chunk(
-                sim_dir, training_seeds(), trained, hi - done, waited
-            )
+            ids = next_chunk(sim_dir, training_seeds(), trained, hi - done)
             if ids is not None:
                 chunk = ids
                 break
@@ -1455,12 +1533,6 @@ def main() -> None:
             if done_all and not args.wait_for_seeds:
                 raise RuntimeError(f"fewer than {hi} training outbreaks")
             time.sleep(POLL)
-        contiguous = ready_outbreaks(sim_dir, training_seeds())[done:hi]
-        if chunk != contiguous:
-            log(
-                f"outbreaks {done + 1}-{hi}: batches still running after "
-                f"{PATIENCE // 60} min, so later batches train first"
-            )
         split["wait_s"] = time.perf_counter() - tick
         tick = time.perf_counter()
         report(
@@ -1507,7 +1579,11 @@ def main() -> None:
             while pause.exists():
                 report(stage="paused")
                 time.sleep(30)
-            set_learning_rates(optimiser, step, args.lr_steps)
+            set_learning_rates(
+                optimiser,
+                sims_done(done, len(chunk), position, len(plan)),
+                args.outbreaks,
+            )
             value = accumulate(list(indices), backward, zero, skip)
             if not finite_step(params, optimiser, value):
                 log(f"step {step + 1}: no update (loss {value})")
@@ -1591,6 +1667,7 @@ def main() -> None:
                 "outbreaks_sha256": ft._sha256(where / "outbreaks.txt"),
                 "consumed_sha256": ft._sha256(where / "consumed.txt"),
                 "steps": step,
+                "sims_done": done,
                 "blocks": seen["blocks"],
                 "series": seen["series"],
                 "level_mix": seen.get("mix", {}),
@@ -1663,6 +1740,13 @@ def main() -> None:
         snapshot()
         report(stage="training", step=step, outbreaks=done, split=split)
     pool.shutdown(cancel_futures=True)
+    if args.until is not None and done == args.until:
+        # A segment: the next one resumes from the state kept with n<N>.
+        snapshot()
+        keep_state(state_dir, out / f"n{done}")
+        report(stage=f"stopped at n{done}", step=step, outbreaks=done)
+        log(f"stopped at n{done} (--until)")
+        return
     report(stage="finished", step=step, outbreaks=done)
     log("finished")
 

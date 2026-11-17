@@ -27,29 +27,29 @@ def segments(prefixes: Iterable[int]) -> list[tuple[int | None, int]]:
     return list(zip([None, *ordered[:-1]], ordered, strict=True))
 
 
-def check_chunks(prefixes: Iterable[int], chunk: int) -> None:
+def check_chunks(
+    prefixes: Iterable[int], chunk: int, outbreaks: int | None = None
+) -> None:
     """Raise if a prefix does not end a training chunk.
 
-    The trainer takes outbreaks in chunks of `chunk`, so it can stop
-    cleanly only at a chunk's end.
+    The trainer takes outbreaks in chunks of `chunk`, the last ending at
+    the run's `outbreaks`, so it can stop cleanly only at a chunk's end.
     """
-    bad = [p for p in prefixes if p % chunk]
+    bad = [p for p in prefixes if p % chunk and p != outbreaks]
     if bad:
         raise ValueError(
             f"prefixes {bad} do not end a chunk of {chunk} outbreaks"
         )
 
 
-def round_seeds(
-    round_: int, base: int, train: int, held: int
-) -> tuple[list[int], list[int]]:
-    """Return a round's training and held-out batch seeds.
+def round_seeds(round_: int, base: int, batches: int) -> list[int]:
+    """Return a round's batch seeds, `base` + 100 r on.
 
-    Must match the seeds of rounds already simulated.
+    A round is one grid block (`grid_index` in
+    scripts/finetune_simulate.R), so must match the simulator's.
     """
     first = base + 100 * round_
-    seeds = list(range(first, first + train + held))
-    return seeds[:train], seeds[train:]
+    return list(range(first, first + batches))
 
 
 def seeds_for(

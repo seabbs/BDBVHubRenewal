@@ -55,13 +55,14 @@ Each machine reruns its task on a timer as releases land.
 
 ## 1. Simulate (`rules/simulate.smk`)
 
-Round r is 40 training and 4 held-out batches of 25 outbreaks, seeds from 30000 + 100 r, each with exactly one observation draw.
+Round r is 40 batches of 21 outbreaks, seeds from 30000 + 100 r, each with exactly one observation draw.
+A round is grid block r, 840 simulations, and is used whole for training or as the held-out block.
 
 - `simulate_batch`: one batch of `scripts/finetune_simulate.R`, under `JOB_PREFIX` at nice 19, once there is memory and disk to spare (`workflow/scripts/wait_for_room.sh`). A batch that fails is retried once at the higher cap. The simulator must be the committed one.
 - `batch_record`: the batch's manifest row (sha256 of each file, memory, time, grid, commit, host), keeping a row the round's manifest already holds.
 - `round_manifest`: the round's `manifest.csv`, rows in seed order.
 - `sim_qc`: the recorded sim-QC review (`scripts/sim_qc.py`), whose exclusions (`qc/excluded.csv`) the trainer skips. Nothing is deleted.
-- `round_ready`: the seed lists and `READY`, last.
+- `round_ready`: the seed list and `READY`, last.
 - `simulate`: the rounds in `rounds`. At most `sim_slots` batches run at once (2 by default).
 - `release_batch`, `release_qc`, `release`: opt-in, each batch and the round's QC exclusions to its round's release.
 
@@ -69,14 +70,14 @@ Outputs are in `<ROOT>/rounds/r<N>/`.
 
 ## 2. Fine-tune (`rules/finetune.smk`)
 
-One continuous run of `scripts/finetune_stream.py` from base Chronos-2, cut into one segment per checkpoint prefix (250, 500, 750, 1,000, 2,000, 4,000, 8,000).
+One continuous run of `scripts/finetune_stream.py` from base Chronos-2, cut into one segment per checkpoint prefix (250, 500, 750, 1,000, 2,000, 4,000, 8,400).
 Segment N resumes from the state kept with the prefix before and stops once `n<N>` is saved (`--until N`).
 The state carries the learning-rate schedule, the step, the batch position and torch's random state, so the segments in turn are the run that never stopped.
 
-- `seed_list`: the training seeds in order, the rounds' in seed order (rounds 9 to 17, grid r5) or a fixed `seed_file`.
+- `seed_list`: the training seeds in order, the rounds' in seed order (rounds 10 to 19, grid r5) or a fixed `seed_file`.
 - `fetch_batch`: a batch into `<RUN>/sims/`, hard linked from this machine's rounds or downloaded from its release (`sims_from`).
 - `real_validation`: the BDBV pseudo-origin blocks each checkpoint is scored on (`scripts/finetune_real_validation.py`).
-- `train_segment`: one segment on the GPU. Its inputs are the batches that hold its first N outbreaks after QC exclusions, one spare, and the held-out batches. A finished checkpoint is final and is never retrained.
+- `train_segment`: one segment on the GPU. Its inputs are the batches that hold its first N outbreaks after QC exclusions, one spare, and the held-out round's batches (round 9). A finished checkpoint is final and is never retrained.
 - `checkpoint_check`: a report of whether checkpoint `check_at` (1,000) beats zero-shot on the held-out simulations and the pseudo-origins. It never stops training.
 - `finetune`: every prefix.
 

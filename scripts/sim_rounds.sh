@@ -3,16 +3,17 @@
 #
 #   scripts/sim_rounds.sh FIRST_ROUND [LAST_ROUND]
 #
-# Each round r is ROUND_BATCHES training batches and HELD_BATCHES held-out
-# batches of BATCH simulations (scripts/finetune_simulate.R, exactly
-# DRAWS observation draws each), run SLOTS at a time, each in a systemd
-# scope of SLOT_MEM. A batch that fails is retried once at RETRY_MEM.
+# Each round r is ROUND_BATCHES batches of BATCH simulations
+# (scripts/finetune_simulate.R, exactly DRAWS observation draws each), 40
+# of 21 by default: grid block r, 840 simulations. A round is used whole,
+# for training or as the held-out block. Batches run SLOTS at a time,
+# each in a systemd scope of SLOT_MEM. A batch that fails is retried
+# once at RETRY_MEM.
 # Outputs go to $ROOT/rounds/r<r>/:
 #
 #   sims/          counts-<seed>.csv.gz, settings-<seed>.csv,
 #                  failures-<seed>.csv and logs/<seed>.log
-#   seeds.txt      training seeds, one a line (scripts/finetune_continuous.sh)
-#   held-out.txt   first and last held-out seed
+#   seeds.txt      the round's seeds, one a line
 #   manifest.csv   one row per batch: seed, kind, grid and its commit,
 #                  draws, sha256 of each file, memory and time
 #   qc/            the sim-QC review (scripts/sim_qc.py)
@@ -27,9 +28,8 @@
 set -uo pipefail
 
 source "$(dirname "${BASH_SOURCE[0]}")/local_config.sh"
-BATCH=${BATCH:-25}
+BATCH=${BATCH:-21}
 ROUND_BATCHES=${ROUND_BATCHES:-40}
-HELD_BATCHES=${HELD_BATCHES:-4}
 DRAWS=${DRAWS:-1}
 SLOTS=${SLOTS:-3}
 MIN_FREE_GB=${MIN_FREE_GB:-20}
@@ -43,10 +43,10 @@ REPO=${REPO:-seabbs/BDBVHubRenewal}
 
 say() { echo "$(date '+%F %H:%M') $HOST_NAME sim rounds: $*" >> "$MAILBOX"; }
 
-# Seeds of round $1: training then held-out, unique across rounds.
+# Seeds of round $1, unique across rounds.
 round_seeds() {
   local first=$((SEED_BASE + $1 * 100))
-  seq "$first" $((first + ROUND_BATCHES + HELD_BATCHES - 1))
+  seq "$first" $((first + ROUND_BATCHES - 1))
 }
 
 sha() { if [ -f "$1" ]; then sha256 "$1"; fi; }
@@ -62,7 +62,7 @@ run_batch() {
   tmp=$dir/sims/tmp/$seed
   rm -rf "$tmp"
   mkdir -p "$tmp"
-  TMPDIR=$tmp ENW_DRAWS=$DRAWS systemd-run --user --scope -q \
+  TMPDIR=$tmp ENW_DRAWS=$DRAWS ENW_SEED_BASE=$SEED_BASE systemd-run --user --scope -q \
     -p MemoryMax="$mem" -p MemorySwapMax=0 \
     /usr/bin/time -f "peak_rss_kb %M wall_s %e" \
     nice -n 19 Rscript scripts/finetune_simulate.R "$BATCH" "$seed" \
@@ -126,16 +126,13 @@ running() { pgrep -f "finetune_simulate.R $BATCH $1 $2/sims" > /dev/null; }
 
 # Record a finished batch left by an earlier driver.
 reconcile() {
-  local dir=$1 k s kind
-  for k in "${!seeds[@]}"; do
-    s=${seeds[$k]}
-    kind=train
-    [ "$k" -ge "$ROUND_BATCHES" ] && kind=held-out
+  local dir=$1 s
+  for s in "${seeds[@]}"; do
     recorded "$s" "$dir" && continue
     if [ -s "$dir/sims/settings-$s.csv" ] && \
         grep -q 'peak_rss_kb' "$dir/sims/logs/$s.log" 2> /dev/null && \
         gzip -t "$dir/sims/counts-$s.csv.gz" 2> /dev/null; then
-      manifest_row "$s" "$dir" "$kind"
+      manifest_row "$s" "$dir" block
     fi
   done
 }
@@ -156,11 +153,8 @@ simulate_round() {
     running "$(basename "$tmp")" "$dir" || rm -rf "$tmp"
   done
   slot() {
-    local s k kind n
-    for k in "${!seeds[@]}"; do
-      s=${seeds[$k]}
-      kind=train
-      [ "$k" -ge "$ROUND_BATCHES" ] && kind=held-out
+    local s n
+    for s in "${seeds[@]}"; do
       recorded "$s" "$dir" && continue
       if claimed_seeds | grep -qx "$s"; then continue; fi
       mkdir "$dir/sims/.lock-$s" 2> /dev/null || continue
@@ -181,7 +175,7 @@ simulate_round() {
           continue
         fi
       fi
-      manifest_row "$s" "$dir" "$kind"
+      manifest_row "$s" "$dir" block
       n=$(grep -c "^$ROUND," "$dir/manifest.csv")
       if [ $((n % 10)) -eq 0 ]; then
         say "round $ROUND: $n of $total batches simulated"
@@ -212,7 +206,7 @@ for ((ROUND = first; ROUND <= last; ROUND++)); do
   dir=$ROOT/rounds/r$ROUND
   mkdir -p "$dir/sims/logs" "$dir/qc"
   [ -f "$dir/manifest.csv" ] || echo "round,seed,kind,grid,grid_commit,draws,batch,counts_sha256,settings_sha256,failures_sha256,peak_rss_kb,wall_s,host,finished" > "$dir/manifest.csv"
-  say "round $ROUND started: $((ROUND_BATCHES * BATCH)) training and $((HELD_BATCHES * BATCH)) held-out simulations, $DRAWS draws each, grid $GRID at ${COMMIT:0:9}, $SLOTS slots of $SLOT_MEM, into $dir"
+  say "round $ROUND started: grid block $ROUND, $((ROUND_BATCHES * BATCH)) simulations, $DRAWS draws each, grid $GRID at ${COMMIT:0:9}, $SLOTS slots of $SLOT_MEM, into $dir"
   t0=$(date +%s)
   simulate_round "$dir"
   n_sims=$(cat "$dir"/sims/settings-*.csv 2> /dev/null | grep -vc '^outbreak')
@@ -235,10 +229,9 @@ for ((ROUND = first; ROUND <= last; ROUND++)); do
   # The seed lists come last, with READY: the trainer pulls a round once
   # they exist, so it never trains on an unreviewed round.
   mapfile -t seeds < <(round_seeds "$ROUND")
-  printf '%s\n' "${seeds[@]:0:ROUND_BATCHES}" > "$dir/seeds.txt"
-  echo "${seeds[ROUND_BATCHES]} ${seeds[-1]}" > "$dir/held-out.txt"
+  printf '%s\n' "${seeds[@]}" > "$dir/seeds.txt"
   date -u +%FT%TZ > "$dir/READY"
   claimed=$(claimed_seeds | grep -xF -f <(round_seeds "$ROUND") | tr '\n' ' ')
   [ -n "$claimed" ] && say "round $ROUND: seeds claimed by another host, not simulated here: $claimed"
-  say "round $ROUND ready for training: $n_sims simulations in $(( ($(date +%s) - t0) / 60 )) min, $(cat "$dir/qc/summary.txt" 2> /dev/null); seeds $dir/seeds.txt, held-out $(cat "$dir/held-out.txt")"
+  say "round $ROUND ready: $n_sims simulations in $(( ($(date +%s) - t0) / 60 )) min, $(cat "$dir/qc/summary.txt" 2> /dev/null); seeds $dir/seeds.txt"
 done
