@@ -160,9 +160,9 @@ evidence:
   lag_bdbv_after:
     ref: e4f4d7a49773a3050a9529df5c70d7cc8504dafc
     path: evidence/bdbv-lagfix/fm-summary-after.csv
-  # The walks' scores with the copula off and rolling, by study and level,
-  # on development data (#253). Pending: results/pairing/si-copula.csv on
-  # evidence/fm-copula once the reworked copula lands.
+  # The walks' scores with no pairing and the rolling rho_p, by study and
+  # level, on development data (#253's `summarise_pairing` rows). Pending:
+  # bdbv-timesfm's rows on evidence/fm-copula.
   si_copula: null
   aggregation_scores:
     ref: 5a3e0440880f54751fd8dccbfa14133a2a74ba81

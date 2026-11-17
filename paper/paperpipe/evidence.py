@@ -7,7 +7,8 @@ into the SI's tables, figures and quoted numbers, so nothing is typed into
 the paper. A result whose rows are not set yet gets a note saying what it
 waits on in place of its table, and `None` in place of its numbers.
 
-- `copula_figure`: the rolling copula's impact by study and level.
+- `copula_figure`: the rolling copula against no pairing, by study and
+  level.
 - `aggregation_figure`: WIS of each aggregation option relative to
   `randomwalknowcast` on the same targets, by study and level.
 - `heldout_figure` and `realism_figure`: the fine-tune's held-out loss
@@ -678,7 +679,7 @@ def diseases_table(diseases: pd.DataFrame) -> pd.DataFrame:
 
 
 EVIDENCE: Final = {
-    "si_copula": "fm-copula's walk scores with the copula off and rolling",
+    "si_copula": "fm-copula's walk scores with no pairing and the rolling rho_p",
     "aggregation_scores": "fm-agg's per-target aggregation scores",
     "finetune_heldout": "fm-finetune3's held-out loss curve",
     "sim_summaries": "fm-finetune3's per-outbreak r3 pilot summaries",
@@ -718,40 +719,44 @@ QUOTED: Final = {
 
 
 COPULA_STUDIES: Final = {
-    "germany_dev": "Germany",
-    "bdbv_backtest": "BDBV",
-    "heldout_synthetic": "Held-out synthetic",
+    "germany": "Germany",
+    "bdbv": "BDBV",
+    "synthetic": "Held-out synthetic",
 }
 """The copula figure's studies, in its row order, all on development data."""
 
+COPULA_LEVELS: Final = ("national", "provinces", "states")
+"""The levels the copula changes: the country, which is the sum of the
+provinces (or states), and the provinces themselves. Zones are not
+paired."""
+
 COPULA_METRICS: Final = {
-    "energy": "ES",
-    "variogram": "VS",
-    "cover50_sum": "Sum 50%",
-    "cover90_sum": "Sum 90%",
-    "wis_summed": "Sum WIS",
-    "wis_cell": "Cell WIS",
+    "cell_crps": "CRPS",
+    "cell_cover90": "90% coverage",
+    "joint_log_energy": "ES (log)",
 }
-"""The copula figure's scores: joint scores, coverage and WIS of summed
-targets, then the per-cell WIS, which the copula leaves unchanged."""
+"""The copula figure's scores: CRPS and 90% coverage of each cell, which
+at the national level is the sum of the provinces, and the energy score
+on log counts of the level's places and weeks as one vector."""
 
 
 def copula_figure(rows: pd.DataFrame) -> Figure:
-    """Plot each score of the rolling copula relative to the copula off.
+    """Plot each score of the rolling copula relative to no pairing.
 
-    One panel per study and level, never pooled across levels. Each panel
-    gives the ratio rolling / off of every score in `COPULA_METRICS`, one
-    marker per model, with 1 the copula off. `rows` has `study`, `level`,
-    `model`, `copula` (`off` or `rolling`), `target` (`summed` or `cell`),
-    `metric`, `value` and `n`.
+    One panel per study and level in `COPULA_LEVELS`, never pooled across
+    levels. Each panel gives the ratio rolling / off of every score in
+    `COPULA_METRICS`, one marker per model, with 1 no pairing. `rows` are
+    `evaluation.pairing.summarise_pairing`'s: `study`, `level`, `model`,
+    `variant` (`off` or `rolling`), `target`, `metric`, `value` and `n`.
     """
-    wis = rows["metric"] == "wis"
-    rows = rows.assign(
-        metric=rows["metric"].where(~wis, "wis_" + rows["target"])
-    )
+    rows = rows.assign(metric=rows["target"] + "_" + rows["metric"])
+    rows = rows.loc[
+        rows["metric"].isin(list(COPULA_METRICS))
+        & rows["level"].isin(COPULA_LEVELS)
+    ]
     wide = rows.pivot_table(
         index=["study", "level", "model", "metric"],
-        columns="copula",
+        columns="variant",
         values="value",
     ).reset_index()
     wide["ratio"] = wide["rolling"] / wide["off"]
@@ -800,7 +805,7 @@ def copula_figure(rows: pd.DataFrame) -> Figure:
                 f"(n = {int(n.loc[(study, level)])})",
                 fontsize=9,
             )
-            ax.set_ylabel("Rolling / off")
+            ax.set_ylabel("Rolling / no pairing")
     handles, labels = axes[0, 0].get_legend_handles_labels()
     fig.legend(handles, labels, loc="outside lower center", ncol=len(models))
     return fig
