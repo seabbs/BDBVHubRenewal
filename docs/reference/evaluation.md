@@ -20,5 +20,3 @@ Score forecasts, run the backtest and compare models with each other and with th
 ::: bdbvhubrenewal.evaluation.zones
 
 ::: bdbvhubrenewal.evaluation.germany
-
-::: bdbvhubrenewal.evaluation.trajectories

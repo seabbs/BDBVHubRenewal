@@ -46,7 +46,7 @@ import sys
 from collections.abc import Sequence
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import pandas as pd
 
@@ -88,7 +88,6 @@ from bdbvhubrenewal.forecasters.base import (
     NATIONAL,
     ForecastModel,
     ForecastTask,
-    ModelSpec,
     check_samples,
     get_model,
     list_models,
@@ -119,9 +118,6 @@ from bdbvhubrenewal.submission.validate import (
     validate_submission,
 )
 from bdbvhubrenewal.submission.validate import main as validate_main
-
-if TYPE_CHECKING:
-    from bdbvhubrenewal.evaluation.germany import GermanyConfig
 
 __all__ = ["build_parser", "chunk", "host_devices", "main"]
 
@@ -293,19 +289,6 @@ def build_parser() -> argparse.ArgumentParser:
     now.add_argument(
         "--fit", default=None, help="Fit directory written by `fit`."
     )
-    now.add_argument(
-        "--store",
-        default=None,
-        help="A fit store checkout, for a paired model's past forecasts, "
-        "whose errors give the copula its draws are paired by "
-        "(`submission.pairing`). Without one, they are forecast again.",
-    )
-    now.add_argument(
-        "--history",
-        default=None,
-        help="The ledger's archive of each round's candidates, for past "
-        "forecasts neither the fit store nor forecasting again gives.",
-    )
     now.add_argument("--out", default="output/submission")
     now.add_argument(
         "--forecast-date",
@@ -373,19 +356,6 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Run the held-out half of the dates, for the paper, into "
         "OUT/held-out.",
-    )
-
-    gsc = sub.add_parser(
-        "germany-score",
-        help="Pair and score the paired models' German samples of every "
-        "block (`germany-backtest --chunk`) together, adding them to OUT's "
-        "forecasts and scores.",
-    )
-    gsc.add_argument("--config", default="config/germany.toml")
-    gsc.add_argument("--data", default=f"{data_dir}/raw/germany")
-    gsc.add_argument("--out", default="results/germany")
-    gsc.add_argument(
-        "parts", nargs="+", help="Directories with a samples.csv.gz."
     )
 
     gtm = sub.add_parser(
@@ -508,12 +478,6 @@ def build_parser() -> argparse.ArgumentParser:
         "action", choices=["plan", "fit", "load", "unpack", "archive"]
     )
     fst.add_argument("--store", default="output/fit-store")
-    fst.add_argument(
-        "--history",
-        default=None,
-        help="With archive: the ledger's archive of each round's "
-        "candidates, for the copula a paired model is paired by.",
-    )
     fst.add_argument("--data", default=data_dir)
     fst.add_argument("--config", default="config/backtest.toml")
     fst.add_argument("--policy", default="ci/policy.toml")
@@ -1200,7 +1164,6 @@ def _write_release(out: ReleaseBacktest, results: Path, delay: int) -> None:
         ("energy", out.energy),
         ("origins", out.origins),
         ("fits", out.fits),
-        ("copulas", out.copulas),
     ):
         write_csv(table, results / f"nowcast-{name}.csv")
     (results / "nowcast-truth.json").write_text(
@@ -1395,65 +1358,6 @@ def _zones(
     return zones, ""
 
 
-def _spec(name: str) -> ModelSpec:
-    """Return a registered model's entry."""
-    return {s.name: s for s in list_models()}[name]
-
-
-def _pair(
-    name: str,
-    task: ForecastTask,
-    result: Forecast,
-    *,
-    data: str,
-    backtest_config: str,
-    fit_store: str | None,
-    history: str | None,
-) -> tuple[Forecast, dict[str, object]]:
-    """Pair a paired model's draws by the copula of its recent errors."""
-    from bdbvhubrenewal.submission.pairing import pair_submission
-
-    config = bt.load_config(backtest_config)
-    target = load_target(data)
-    delay = resolve_truth_delay(config, target)
-    # The backtest's origins: those before this one give the copula's
-    # errors, and a model with no stored fit there is forecast again.
-    past = list(
-        store.origin_tasks(
-            target, load_delays(data), config, load_daily(data)
-        ).values()
-    )
-    samples, record = pair_submission(
-        name,
-        result.samples,
-        task,
-        delay,
-        history,
-        fit_store,
-        past,
-        config.max_horizon,
-    )
-    print(
-        f"Pairing {name}: rho_t {record['rho_time']:.2f}, rho_p "
-        f"{record['rho_provinces']:.2f}, rho_n {record['rho_national']:.2f} "
-        f"from {record['n_scores']} scores; past forecasts by origin: "
-        + ", ".join(f"{o} {s}" for o, s in record["sources"].items())
-    )
-    return dataclasses.replace(result, samples=samples), record
-
-
-@dataclasses.dataclass(frozen=True)
-class _HubForecast:
-    """The hub table `nowcast` writes, and how it was made."""
-
-    table: pd.DataFrame
-    result: Forecast
-    zones: pd.DataFrame | None
-    zone_note: str
-    checkpoint: Any = None
-    copula: dict[str, object] | None = None
-
-
 def _hub_forecast(
     task: ForecastTask,
     *,
@@ -1463,24 +1367,19 @@ def _hub_forecast(
     fit: Path | str | None = None,
     forecast: Forecast | None = None,
     forecast_date: str | None = None,
-    backtest_config: str = "config/backtest.toml",
-    fit_store: str | None = None,
-    history: str | None = None,
-) -> _HubForecast:
+) -> tuple[pd.DataFrame, Forecast, pd.DataFrame | None, str, Any]:
     """Return the hub table `nowcast` writes, with its forecast and zones.
 
     A `forecast` given is used as it is. Otherwise, with `config` it
-    forecasts from the fit directory `fit`, else `model` forecasts. A
-    model registered as `paired` has its draws paired (`_pair`, with
-    `backtest_config`, `fit_store` and `history`), its zones from `_zones`
-    with them.
+    forecasts from the fit directory `fit`, else `model` forecasts. The
+    zones come from `_zones`.
 
     Returns
     -------
-    _HubForecast
-        The hub table, the forecast, the zone samples (or None), why there
-        are no zones ("" if there are), the fine-tuned checkpoint loaded
-        (or None) and the copula's record (or None).
+    tuple
+        The hub table, the forecast, the zone samples (or None), why
+        there are no zones ("" if there are) and the fine-tuned checkpoint
+        the model loaded (or None).
     """
     checkpoint = None
     if forecast is not None:
@@ -1495,29 +1394,6 @@ def _hub_forecast(
         result = Forecast(samples)
     name = get_config(config).model if config else model
     zones, zone_note = _zones(data, name, task, result.samples)
-    copula = None
-    if name is not None and _spec(name).paired:
-        # Zones forecast from their own data are paired with the provinces.
-        own = result.samples.loc[~result.samples["location"].map(is_zone)]
-        both = own if zones is None else pd.concat([own, zones])
-        paired, copula = _pair(
-            name,
-            task,
-            dataclasses.replace(result, samples=both.reset_index(drop=True)),
-            data=data,
-            backtest_config=backtest_config,
-            fit_store=fit_store,
-            history=history,
-        )
-        drawn = paired.samples["location"].map(is_zone)
-        if zones is not None:
-            zones = paired.samples.loc[drawn, list(zones.columns)]
-            zones = zones.astype(
-                {"sample": "int64"} if "sample" in zones else {}
-            ).reset_index(drop=True)
-        result = dataclasses.replace(
-            paired, samples=paired.samples.loc[~drawn].reset_index(drop=True)
-        )
     # A model that forecasts zones itself gives them through `zones`.
     own_zones = result.samples["location"].map(is_zone)
     table = to_hub_table(
@@ -1528,7 +1404,7 @@ def _hub_forecast(
         forecast_date=forecast_date,
         zones_sum=not walks_own_zones(name),
     )
-    return _HubForecast(table, result, zones, zone_note, checkpoint, copula)
+    return table, result, zones, zone_note, checkpoint
 
 
 def _fit_store_archive(args: argparse.Namespace) -> int:
@@ -1574,10 +1450,7 @@ def _fit_store_archive(args: argparse.Namespace) -> int:
             config=config,
             fit=fit_dir,
             forecast=forecast,
-            backtest_config=args.config,
-            fit_store=args.store,
-            history=args.history,
-        ).table
+        )[0]
 
     models = store_archive.candidate_models(args.policy)
     required = set(store_archive.policy_candidates(args.policy))
@@ -1613,24 +1486,14 @@ def _nowcast(args: argparse.Namespace) -> int:
     host_devices(int(sampler_settings()["num_chains"]))
     try:
         task, handled = _task(args)
-        made = _hub_forecast(
+        table, result, zones, zone_note, checkpoint = _hub_forecast(
             task,
             data=args.data,
             model=args.model,
             config=args.config,
             fit=args.fit,
             forecast_date=args.forecast_date,
-            backtest_config=args.backtest_config,
-            fit_store=args.store,
-            history=args.history,
         )
-        table, result, zones, zone_note = (
-            made.table,
-            made.result,
-            made.zones,
-            made.zone_note,
-        )
-        checkpoint, copula = made.checkpoint, made.copula
         if zone_note:
             handled.append(zone_note)
         path = write_submission(table, args.out, model_id(_abbr(args)))
@@ -1644,11 +1507,6 @@ def _nowcast(args: argparse.Namespace) -> int:
     n_zones = 0 if zones is None else int(zones["location"].nunique())
     zone_record = {"zones": n_zones > 0, "n_zones": n_zones, "note": zone_note}
     (Path(args.out) / "zones.json").write_text(json.dumps(zone_record) + "\n")
-    # The copula a paired model's draws were paired by, for the PR body.
-    if copula is not None:
-        (Path(args.out) / "copula.json").write_text(
-            json.dumps(copula, default=str) + "\n"
-        )
     # The fine-tuned checkpoint the model loaded, for the PR body.
     if checkpoint is not None:
         record = {
@@ -2020,80 +1878,19 @@ def _germany_backtest(args: argparse.Namespace) -> int:
         else args.models
     )
     triangle = hub_triangle(Path(args.data) / Path(config.triangle).name)
-    quantiles, samples = de.germany_forecasts(
-        models, triangle, dates, config.n_samples, config.seed
+    forecasts = de.with_truth(
+        de.germany_forecasts(
+            models, triangle, dates, config.n_samples, config.seed
+        ),
+        triangle,
+        config.truth_delay,
     )
-    forecasts = de.with_truth(quantiles, triangle, config.truth_delay)
     scores = de.score_germany(forecasts, config.truth_delay)
     out = Path(args.out) / ("held-out" if args.held_out else "")
     out.mkdir(parents=True, exist_ok=True)
     write_csv(forecasts, out / "forecasts.csv.gz")
     write_csv(scores, out / "scores.csv.gz")
-    write_csv(samples, out / "samples.csv.gz")
     print(f"German benchmark: {len(scores)} scored nowcasts in {out}.")
-    if args.chunk:
-        # A block's copula would see only its own dates, so the paired
-        # models' samples are scored together (`germany-score`).
-        print(f"Samples of the paired models left to germany-score in {out}.")
-        return 0
-    return _germany_score(samples, triangle, config, out)
-
-
-def _germany_scores(args: argparse.Namespace) -> int:
-    from bdbvhubrenewal.data.germany import hub_triangle
-    from bdbvhubrenewal.evaluation import germany as de
-
-    config = de.load_germany_config(args.config)
-    triangle = hub_triangle(Path(args.data) / Path(config.triangle).name)
-    files = [Path(p) / "samples.csv.gz" for p in args.parts]
-    parts = [
-        t for f in files if f.exists() and not (t := _read_or_empty(f)).empty
-    ]
-    samples = (
-        pd.concat(parts, ignore_index=True).astype(
-            {"origin": str, "target_end_date": str}
-        )
-        if parts
-        else pd.DataFrame()
-    )
-    out = Path(args.out)
-    out.mkdir(parents=True, exist_ok=True)
-    return _germany_score(samples, triangle, config, out)
-
-
-def _germany_score(
-    samples: pd.DataFrame,
-    triangle: pd.DataFrame,
-    config: GermanyConfig,
-    out: Path,
-) -> int:
-    """Pair, take quantiles of and score German samples, adding to `out`.
-
-    Rows of the paired models already in `out`'s forecasts and scores are
-    replaced, so a rerun gives the same tables.
-    """
-    from bdbvhubrenewal.evaluation import germany as de
-
-    quantiles, copulas = de.pair_quantiles(
-        samples, triangle, config.truth_delay, config.seed
-    )
-    forecasts = de.with_truth(quantiles, triangle, config.truth_delay)
-    scores = de.score_germany(forecasts, config.truth_delay)
-    paired = set(forecasts["model"])
-    for name, table in (("forecasts", forecasts), ("scores", scores)):
-        path = out / f"{name}.csv.gz"
-        old = _read_or_empty(path) if path.exists() else pd.DataFrame()
-        if not old.empty:
-            old = old.loc[~old["model"].isin(paired)]
-            table = pd.concat([old, table], ignore_index=True)
-        write_csv(table, path)
-    write_csv(copulas, out / "copulas.csv.gz")
-    # The draws are consumed here; the results keep their quantiles only.
-    (out / "samples.csv.gz").unlink(missing_ok=True)
-    print(
-        f"German benchmark: {len(scores)} scored nowcasts of paired models "
-        f"({', '.join(sorted(paired)) or 'none'}) added in {out}."
-    )
     return 0
 
 
@@ -2277,8 +2074,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
     if args.command == "germany-backtest":
         return _germany_backtest(args)
-    if args.command == "germany-score":
-        return _germany_scores(args)
     if args.command == "germany-teams":
         return _germany_teams(args)
     if args.command == "germany-asof":

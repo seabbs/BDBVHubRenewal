@@ -527,7 +527,7 @@ def test_score_scores_the_complete_target_on_the_truth_delay(
         del args
         seen.update(kwargs)
         empty = pd.DataFrame()
-        return ReleaseBacktest(empty, empty, empty, empty, empty, empty)
+        return ReleaseBacktest(empty, empty, empty, empty, empty)
 
     monkeypatch.setattr(
         cli, "_stored", lambda *_: (pd.DataFrame(), pd.DataFrame())
@@ -705,52 +705,6 @@ def test_cli_germany_backtest_scores_a_block_of_dates(tmp_path: Path) -> None:
     assert set(scores["model"]) == {"randomwalk"}
     forecasts = pd.read_csv(out / "forecasts.csv.gz")
     assert set(forecasts["origin"]) == {"2021-10-05"}
-
-
-def test_cli_germany_paired_blocks_are_scored_together(tmp_path: Path) -> None:
-    data, config = _germany_data(tmp_path)
-    parts = []
-    for block in ("0/2", "1/2"):
-        part = tmp_path / f"part-{block[0]}"
-        assert main(["germany-backtest", "--config", str(config), "--data",
-                     str(data), "--models", "randomwalk", "randomwalknowcast",
-                     "--chunk", block, "--out", str(part)]) == 0  # fmt: skip
-        # A block scores its unpaired models and leaves the paired ones'
-        # samples to germany-score, so the copula sees every block.
-        scored = pd.read_csv(part / "scores.csv.gz")
-        assert set(scored["model"]) == {"randomwalk"}
-        drawn = pd.read_csv(part / "samples.csv.gz")
-        assert set(drawn["model"]) == {"randomwalknowcast"}
-        parts.append(str(part))
-    out = tmp_path / "results"
-    assert main(["concat-results", "--out", str(out), *parts]) == 0
-    for _ in range(2):  # a rerun gives the same tables
-        assert main(["germany-score", "--config", str(config), "--data",
-                     str(data), "--out", str(out), *parts]) == 0  # fmt: skip
-        scores = pd.read_csv(out / "scores.csv.gz")
-        assert set(scores["model"]) == {"randomwalk", "randomwalknowcast"}
-        assert set(scores["origin"]) == {"2021-10-04", "2021-10-05"}
-        assert not scores.duplicated(
-            ["model", "origin", "location", "target_end_date"]
-        ).any()
-    copulas = pd.read_csv(out / "copulas.csv.gz")
-    assert set(copulas["origin"]) == {"2021-10-04", "2021-10-05"}
-    # The raw draws are consumed, not published with the results.
-    assert not (out / "samples.csv.gz").exists()
-
-
-def test_cli_germany_backtest_of_every_date_pairs_and_scores_them(
-    tmp_path: Path,
-) -> None:
-    data, config = _germany_data(tmp_path)
-    out = tmp_path / "results"
-    assert main(["germany-backtest", "--config", str(config), "--data",
-                 str(data), "--models", "randomwalk", "randomwalknowcast",
-                 "--out", str(out)]) == 0  # fmt: skip
-    scores = pd.read_csv(out / "scores.csv.gz")
-    assert set(scores["model"]) == {"randomwalk", "randomwalknowcast"}
-    assert (out / "copulas.csv.gz").exists()
-    assert not (out / "samples.csv.gz").exists()
 
 
 def test_cli_germany_teams_scores_the_hub_teams(tmp_path: Path) -> None:
@@ -941,25 +895,6 @@ def test_cli_germany_asof_writes_the_data_each_date_saw(
     assert set(asof["origin"]) == {"2021-10-04", "2021-10-05"}
 
 
-@pytest.mark.usefixtures("in_root")
-def test_cli_nowcast_pairs_a_paired_model_and_records_it(
-    tmp_path: Path,
-) -> None:
-    out, none = tmp_path / "sub", tmp_path / "no-store"
-    assert main(["nowcast", "--model", "randomwalknowcast", "--store",
-                 str(none), "--out", str(out)]) == 0  # fmt: skip
-    record = json.loads((out / "copula.json").read_text())
-    assert record["model"] == "randomwalknowcast"
-    assert isinstance(record["n_scores"], int)
-    assert isinstance(record["rho_time"], float)
-    assert {"rho_time", "rho_provinces", "rho_national", "n_scores"} <= set(
-        record
-    )
-    plain = tmp_path / "plain"
-    assert main(["nowcast", "--model", "randomwalk", "--out", str(plain)]) == 0
-    assert not (plain / "copula.json").exists()
-
-
 def _stored_fit(store: Path, weeks: list[str]) -> None:
     from bdbvhubrenewal.evaluation import store as st
 
@@ -1045,43 +980,6 @@ def test_stored_samples_take_every_week_of_the_stored_fit(
     assert sorted(stored["target_end_date"].astype(str)) == weeks[2:]
 
 
-@pytest.mark.usefixtures("in_root")
-def test_a_paired_models_own_zones_are_paired_with_its_provinces(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    # randomwalknowcast forecasts zones from their own data, so the copula
-    # must see them, and the hub file must hold the paired zone draws.
-    from bdbvhubrenewal import cli
-
-    seen: dict[str, pd.DataFrame] = {}
-    real = cli._pair
-
-    def recording(name, task, result, **kw):
-        seen["in"] = result.samples
-        out, record = real(name, task, result, **kw)
-        seen["out"] = out.samples
-        return out, record
-
-    monkeypatch.setattr(cli, "_pair", recording)
-    out = tmp_path / "sub"
-    assert main(["nowcast", "--model", "randomwalknowcast", "--out",
-                 str(out)]) == 0  # fmt: skip
-    zone_in = seen["in"].loc[seen["in"]["location"].str.count("-") == 2]
-    assert not zone_in.empty
-    (path,) = out.rglob("*.csv")
-    table = pd.read_csv(path)
-    zone = table.loc[table["location"].str.count("-") == 2]
-    paired = seen["out"].loc[seen["out"]["location"].str.count("-") == 2]
-    keys = ["location", "target_end_date", "output_type_id"]
-    got = zone.set_index(keys)["value"].sort_index()
-    want = (
-        paired.rename(columns={"sample": "output_type_id"})
-        .set_index(keys)["value"]
-        .reindex(got.index)
-    )
-    assert (got == want.round().clip(lower=0)).all()
-
-
 def test_hub_comparison_takes_the_whole_fits_of_its_rounds() -> None:
     # compare-hub keeps the whole fits of the hub rounds only, for models
     # it does not run live, in its sample columns, and they replace the
@@ -1122,3 +1020,16 @@ def test_hub_comparison_takes_the_whole_fits_of_its_rounds() -> None:
     renewal = out.loc[out["model"] == "renewal"]
     assert list(renewal["target_end_date"]) == ["2026-09-12"]
     assert set(out["model"]) == {"renewal", "renewalsp"}
+
+
+@pytest.mark.usefixtures("in_root")
+def test_cli_nowcast_records_a_walk_models_copula(tmp_path: Path) -> None:
+    out = tmp_path / "sub"
+    assert main(["nowcast", "--model", "randomwalknowcast", "--out",
+                 str(out)]) == 0  # fmt: skip
+    record = json.loads((out / "copula.json").read_text())
+    assert record["model"] == "randomwalknowcast"
+    assert isinstance(record["n_scores"], int)
+    for name in ("time", "provinces", "zones"):
+        assert isinstance(record[f"n_{name}"], int)
+        assert isinstance(record[f"prior_{name}"], bool)

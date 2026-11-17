@@ -20,7 +20,6 @@ from bdbvhubrenewal.evaluation.germany import (
     germany_forecasts,
     load_germany_config,
     nowcast_dates,
-    pair_quantiles,
     paper_forecasts,
     relative_scores,
     run_models,
@@ -43,109 +42,15 @@ def triangle() -> pd.DataFrame:
 
 
 @pytest.fixture(scope="module")
-def drawn(triangle: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
-    return germany_forecasts(
+def forecasts(triangle: pd.DataFrame) -> pd.DataFrame:
+    drawn = germany_forecasts(
         ["randomwalk", "randomwalknowcast"],
         triangle,
         ["2021-10-04", "2021-10-05"],
         n_samples=30,
         seed=1,
     )
-
-
-@pytest.fixture(scope="module")
-def samples(drawn: tuple[pd.DataFrame, pd.DataFrame]) -> pd.DataFrame:
-    return drawn[1]
-
-
-@pytest.fixture(scope="module")
-def paired(
-    samples: pd.DataFrame, triangle: pd.DataFrame
-) -> tuple[pd.DataFrame, pd.DataFrame]:
-    return pair_quantiles(samples, triangle, truth_delay=10, seed=1)
-
-
-@pytest.fixture(scope="module")
-def forecasts(
-    drawn: tuple[pd.DataFrame, pd.DataFrame],
-    paired: tuple[pd.DataFrame, pd.DataFrame],
-    triangle: pd.DataFrame,
-) -> pd.DataFrame:
-    both = pd.concat([drawn[0], paired[0]], ignore_index=True)
-    return with_truth(both, triangle, truth_delay=10)
-
-
-def test_only_paired_models_that_draw_give_samples(
-    drawn: tuple[pd.DataFrame, pd.DataFrame],
-) -> None:
-    quantiles, samples = drawn
-    assert set(quantiles["model"]) == {"randomwalk"}
-    assert set(samples["model"]) == {"randomwalknowcast"}
-
-
-def test_with_no_pairing_a_paired_model_s_quantiles_are_its_draws(
-    samples: pd.DataFrame,
-    triangle: pd.DataFrame,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    from bdbvhubrenewal.evaluation import germany
-
-    monkeypatch.setattr(
-        germany,
-        "pair_registered",
-        lambda f, *_, **__: (f, pd.DataFrame(columns=["model", "origin"])),
-    )
-    plain, _ = pair_quantiles(samples, triangle, truth_delay=10, seed=1)
-    # The same model taken as unpaired gives `forecast_quantiles`' rows.
-    monkeypatch.setattr(germany, "list_models", lambda: [])
-    want, none = germany_forecasts(
-        ["randomwalknowcast"],
-        triangle,
-        ["2021-10-04", "2021-10-05"],
-        n_samples=30,
-        seed=1,
-    )
-    assert none.empty
-    keys = ["model", "origin", "location", "target_end_date", "quantile"]
-    both = plain.merge(want, on=keys, suffixes=("", "_want"))
-    assert len(both) == len(plain) == len(want)
-    np.testing.assert_allclose(both["value"], both["value_want"])
-
-
-def test_samples_carry_each_task(samples: pd.DataFrame) -> None:
-    assert set(samples["task"]) == {"states", "ages"}
-    assert {"model", "origin", "location", "sample", "value"} <= set(samples)
-    ages = samples.loc[samples["task"] == "ages", "location"]
-    assert "DE" not in set(ages)
-
-
-def test_paired_models_are_paired_by_task(
-    samples: pd.DataFrame,
-    paired: tuple[pd.DataFrame, pd.DataFrame],
-    triangle: pd.DataFrame,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    quantiles, copulas = paired
-    assert set(copulas["model"]) == {"randomwalknowcast"}
-    assert set(copulas["task"]) == {"states", "ages"}
-    from bdbvhubrenewal.evaluation import germany
-
-    monkeypatch.setattr(
-        germany,
-        "pair_registered",
-        lambda f, *_, **__: (f, pd.DataFrame(columns=["model", "origin"])),
-    )
-    plain, _ = pair_quantiles(samples, triangle, truth_delay=10, seed=1)
-    keys = ["model", "origin", "location", "target_end_date", "quantile"]
-    both = quantiles.merge(plain, on=keys, suffixes=("", "_plain"))
-    assert len(both) == len(quantiles)
-    same = both["value"] == both["value_plain"]
-    # Each place keeps its forecast, and only the country, the sum of the
-    # paired states, changes.
-    assert same[both["location"] != "DE"].all()
-    assert not same[
-        (both["location"] == "DE") & (both["model"] == "randomwalknowcast")
-    ].all()
+    return with_truth(drawn, triangle, truth_delay=10)
 
 
 @pytest.fixture(scope="module")
@@ -435,7 +340,7 @@ def test_a_quantile_model_s_german_scores_do_not_depend_on_the_seed(
             ["2021-10-04"],
             n_samples=30,
             seed=seed,
-        )[0]
+        )
         for seed in (1, 2)
     ]
     assert not runs[0].empty
@@ -447,12 +352,12 @@ def test_a_sample_model_s_german_quantiles_use_the_draws_given(
 ) -> None:
     runs = [
         germany_forecasts(
-            ["randomwalk"],
+            ["randomwalknowcast"],
             triangle,
             ["2021-10-04"],
             n_samples=30,
             seed=seed,
-        )[0]
+        )
         for seed in (1, 1, 2)
     ]
     pd.testing.assert_frame_equal(runs[0], runs[1])

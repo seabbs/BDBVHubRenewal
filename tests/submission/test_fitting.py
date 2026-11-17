@@ -381,15 +381,7 @@ def test_nowcast_records_the_checkpoint_it_loaded(
 
     monkeypatch.setattr(foundation, "chronos_sampler", zeros)
     out = tmp_path / "ft"
-    # The first origin: no earlier forecasts, so the copula is its prior.
-    args = [
-        "--model",
-        "fm_chronos_weekly_ragged_ft",
-        "--vintage",
-        "2026-10-09",
-        "--out",
-        str(out),
-    ]
+    args = ["--model", "fm_chronos_weekly_ragged_ft", "--out", str(out)]
     assert main(["nowcast", *args]) == 0
     record = json.loads((out / "checkpoint.json").read_text())
     assert record["tag"] == f"chronos-ft-{fake_checkpoint}"

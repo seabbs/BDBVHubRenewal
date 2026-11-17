@@ -29,13 +29,7 @@ from bdbvhubrenewal.forecasters.base import (
     ModelUnavailableError,
 )
 
-__all__ = [
-    "COMMON_STREAM",
-    "N_DRAWS",
-    "forecast_draws",
-    "forecast_quantiles",
-    "own_quantiles",
-]
+__all__ = ["COMMON_STREAM", "N_DRAWS", "forecast_quantiles"]
 
 N_DRAWS: Final = 1000
 """Draws per forecast where the quantiles come from draws."""
@@ -75,10 +69,14 @@ def forecast_quantiles(
         row per location, week and level, the country included.
     """
     at = np.asarray(levels, dtype=float)
-    own = own_quantiles(model, task, at)
+    own = _own_quantiles(model, task, at)
     if own is not None:
         return own
-    drawn = forecast_draws(model, task, n_draws, seed)
+    if hasattr(model, "stream"):
+        model = _with_stream(model)
+    drawn = run_forecasts(
+        [model], [dataclasses.replace(task, n_samples=n_draws, seed=seed)]
+    )
     keys = [c for c in drawn.columns if c not in ("sample", "value")]
     return (
         drawn.groupby(keys, dropna=False)["value"]
@@ -88,44 +86,13 @@ def forecast_quantiles(
     )
 
 
-def forecast_draws(
-    model: ForecastModel,
-    task: ForecastTask,
-    n_draws: int = N_DRAWS,
-    seed: int = 0,
-) -> pd.DataFrame:
-    """Return one model's draws of one task, as `forecast_quantiles` takes them.
-
-    Parameters
-    ----------
-    model : ForecastModel
-        The model. One with a `stream` draws from `COMMON_STREAM`.
-    task : ForecastTask
-        The task. Its `n_samples` and `seed` are replaced.
-    n_draws : int
-        Draws per forecast.
-    seed : int
-        The task's seed, the same for every model.
-
-    Returns
-    -------
-    pandas.DataFrame
-        `run_forecasts` rows, the country included.
-    """
-    if hasattr(model, "stream"):
-        model = _with_stream(model)
-    return run_forecasts(
-        [model], [dataclasses.replace(task, n_samples=n_draws, seed=seed)]
-    )
-
-
 def _with_stream(model: Any) -> Any:
     """Return the model drawing from the shared stream."""
     return dataclasses.replace(model, stream=COMMON_STREAM)
 
 
-def own_quantiles(
-    model: Any, task: ForecastTask, levels: Sequence[float] | np.ndarray
+def _own_quantiles(
+    model: Any, task: ForecastTask, levels: np.ndarray
 ) -> pd.DataFrame | None:
     """Return the model's own quantiles as `run_forecasts` rows, if any.
 

@@ -7,6 +7,4 @@
 - `ppc`: posterior predictive check summaries and their plot.
 - `hubcompare`: comparison with the forecasts submitted to the hub.
 - `germany`: the German hospitalisation nowcast benchmark.
-- `trajectories`: scores of forecasts paired by the copula against
-  unpaired ones.
 """

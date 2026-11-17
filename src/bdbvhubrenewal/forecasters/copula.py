@@ -16,22 +16,19 @@ Between places it is $\rho_p$ for two provinces, $\rho_n$ for the
 country and a province, and $\rho_z$ for two health zones of one
 province or a zone and its province. Zones of different provinces take
 $\rho_p$, and a zone and the country $\rho_n$.
-`estimate_copula` estimates the four from the normal scores of matured
-weeks at past origins (`normal_scores`), shrunk towards a prior.
+`estimate_copula` estimates the four from normal scores of a model's own
+matured errors (`error_scores`), shrunk towards a prior as a guard for
+thin windows.
 
-`pair_samples` pairs one forecast table, and `RollingCopula` pairs a
-model's forecasts at every origin, each with the copula estimated from
-the model's own recent matured errors.
-`pair_registered` pairs the models registered as `paired`, those that
-draw each place and week on their own.
-Zones are paired in their own right. A province that is the sum of its
-zones is summed again from the paired zones, and a country that is the
-sum of its provinces from the paired provinces.
+`pair_walks` is the step a walk model (`randomwalk`, `randomwalknowcast`)
+calls in its forecast. Weeks before a place's walk are reordered cell by
+cell, the Schaake shuffle (Clark et al. 2004) as ensemble copula coupling
+uses it (Schefzik et al. 2013). From its start, a place's walk is already
+a joint trajectory, so it moves as a whole.
 """
 
 from __future__ import annotations
 
-import dataclasses
 import zlib
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -42,7 +39,7 @@ import pandas as pd
 from scipy.special import ndtri
 from statsmodels.stats.correlation_tools import corr_nearest
 
-from bdbvhubrenewal.forecasters.base import NATIONAL, list_models
+from bdbvhubrenewal.forecasters.base import NATIONAL
 
 __all__ = [
     "MAX_RHO",
@@ -51,13 +48,9 @@ __all__ = [
     "PRIOR_WEIGHT",
     "WINDOW_WEEKS",
     "GaussianCopula",
-    "RollingCopula",
     "error_scores",
     "estimate_copula",
     "estimate_record",
-    "normal_scores",
-    "pair_registered",
-    "pair_samples",
     "pair_walks",
 ]
 
@@ -65,7 +58,7 @@ MAX_RHO: Final = 0.95
 """Largest correlation `estimate_copula` gives."""
 
 WINDOW_WEEKS: Final = 8
-"""Matured weeks of errors `RollingCopula` estimates from."""
+"""The latest weeks of releases whose errors are used (`error_scores`)."""
 
 PAIRINGS: Final = ("off", "prior", "rolling")
 """How a walk model pairs its draws: not at all, by the prior, or by the
@@ -302,194 +295,6 @@ PRIOR: Final = GaussianCopula(
 the provinces' (no zone errors had matured to choose it)."""
 
 
-def _final(samples: pd.DataFrame) -> pd.Series:
-    """Rows of final counts: those with no `as_of`, if there is one."""
-    if "as_of" not in samples:
-        return pd.Series(True, index=samples.index)
-    return samples["as_of"].isna()
-
-
-def _summed(final: pd.DataFrame, national: str) -> bool:
-    """Whether the country is in `final` as the sum of the provinces."""
-    is_nat = final["location"] == national
-    provinces = ~is_nat & ~_is_zone(final["location"])
-    return _sum_of(final, is_nat, provinces)
-
-
-def _sum_of(final: pd.DataFrame, parent: pd.Series, parts: pd.Series) -> bool:
-    """Whether the rows `parent` are, draw by draw, the sum of `parts`."""
-    if not parent.any() or not parts.any():
-        return False
-    keys = ["target_end_date", "sample"]
-    total = final.loc[parts].groupby(keys)["value"].sum()
-    own = final.loc[parent].set_index(keys)["value"]
-    return bool(np.allclose(own.to_numpy(), total.reindex(own.index)))
-
-
-def _summed_provinces(final: pd.DataFrame) -> set[str]:
-    """Return the provinces in `final` that are the sum of their zones."""
-    zone = _is_zone(final["location"])
-    parents = final.loc[zone, "location"].map(_province)
-    out = set()
-    for prov in set(parents):
-        mine = zone & (final["location"].map(_province) == prov)
-        if _sum_of(final, final["location"] == prov, mine):
-            out.add(prov)
-    return out
-
-
-def pair_samples(
-    samples: pd.DataFrame,
-    copula: GaussianCopula,
-    rng: np.random.Generator,
-    national: str = NATIONAL,
-) -> pd.DataFrame:
-    """Pair one forecast's draws into trajectories by a copula.
-
-    Each place and week keeps its draws, and every row of a draw, such as
-    its counts as a later release reports them (`as_of`), moves with it.
-    Health zones are paired in their own right (`rho_zones`).
-    A province that is the sum of its zones is not paired but summed
-    again from them, and a country that is the sum of the provinces is
-    summed again from those.
-
-    Parameters
-    ----------
-    samples : pandas.DataFrame
-        One forecast: `location`, `target_end_date`, `sample` and
-        `value`, a draw of every place and week for each sample, and
-        optionally `as_of` and other columns.
-    copula : GaussianCopula
-        The copula.
-    rng : numpy.random.Generator
-        Random generator.
-    national : str
-        The country's location code.
-
-    Returns
-    -------
-    pandas.DataFrame
-        `samples` with the sample ids of each cell reordered.
-    """
-    final = samples.loc[_final(samples)]
-    summed = _summed(final, national)
-    sums = _summed_provinces(final)
-    places = sorted(set(final["location"]) - {national} - sums)
-    own = not summed and bool((final["location"] == national).any())
-    if own:
-        places = [national, *places]
-    final = final.loc[final["location"].isin(places)]
-    weeks = sorted(set(final["target_end_date"]))
-    wide = final.pivot(
-        index="sample", columns=["location", "target_end_date"], values="value"
-    ).reindex(columns=pd.MultiIndex.from_product([places, weeks]))
-    draws = wide.to_numpy().reshape(len(wide), len(places), len(weeks))
-    days = (pd.to_datetime(weeks) - pd.Timestamp(weeks[0])).days.to_numpy()
-    index = copula.order(draws, rng, days, locations=places, country=national)
-    ids = wide.index.to_numpy()
-    moves = pd.DataFrame(
-        {
-            "location": np.repeat(places, len(weeks) * len(ids)),
-            "target_end_date": np.tile(np.repeat(weeks, len(ids)), len(places)),
-            "sample": ids[index.transpose(1, 2, 0).reshape(-1)],
-            "paired": np.tile(ids, len(places) * len(weeks)),
-        }
-    )
-    keys = ["location", "target_end_date", "sample"]
-    out = samples.merge(moves, on=keys, how="left")
-    out["sample"] = (
-        out["paired"].fillna(out["sample"]).astype(samples["sample"].dtype)
-    )
-    out = out.drop(columns="paired")
-    for prov in sorted(sums):
-        mine = _is_zone(out["location"]) & (
-            out["location"].map(_province) == prov
-        )
-        out = _sum_into(out, out["location"] == prov, mine)
-    if summed:
-        out = _sum_country(out, national)
-    return out[list(samples.columns)].reset_index(drop=True)
-
-
-def _sum_country(samples: pd.DataFrame, national: str) -> pd.DataFrame:
-    """Set the country's rows to the sum of its provinces' rows."""
-    province = samples["location"].str.count("-") == 1
-    return _sum_into(samples, samples["location"] == national, province)
-
-
-def _sum_into(
-    samples: pd.DataFrame, parent: pd.Series, parts: pd.Series
-) -> pd.DataFrame:
-    """Set the rows `parent` to the sum of the rows `parts`, by draw."""
-    keys = ["target_end_date", "sample"]
-    if "as_of" in samples:
-        keys.append("as_of")
-    total = (
-        samples.loc[parts]
-        .groupby(keys, dropna=False)["value"]
-        .sum()
-        .rename("total")
-    )
-    rows = samples.loc[parent].join(total, on=keys)
-    have = rows["total"].notna().to_numpy()
-    idx = rows.index[have]
-    samples.loc[idx, "value"] = rows.loc[idx, "total"].to_numpy()
-    return samples
-
-
-def normal_scores(
-    forecasts: pd.DataFrame, truth: pd.DataFrame, seed: int
-) -> pd.DataFrame:
-    r"""Return the normal score of each truth in its forecast's draws.
-
-    The score is $\Phi^{-1}$ of the randomised PIT: with $m$ draws, $b$
-    below the truth and $e$ equal to it, $(b + U (e + 1)) / (m + 1)$ for
-    $U$ uniform, drawn for each forecast from a hash of the seed, model,
-    origin, place and week, so a score does not depend on which other
-    forecasts are scored with it.
-    A forecast whose draws are all equal gives no score, as its PIT is
-    $U$ alone.
-
-    Parameters
-    ----------
-    forecasts : pandas.DataFrame
-        Columns `model`, `origin`, `location`, `target_end_date`, `sample`
-        and `value`.
-    truth : pandas.DataFrame
-        Columns `location`, `target_end_date` and `truth`, plus any
-        columns it should be matched on.
-    seed : int
-        Seed of the uniform draws.
-
-    Returns
-    -------
-    pandas.DataFrame
-        One row per forecast with a truth and spread: `model`, `origin`,
-        `location`, `target_end_date` and `z`.
-    """
-    on = [c for c in truth.columns if c != "truth"]
-    rows = forecasts.merge(truth.dropna(subset=["truth"]), on=on)
-    rows = rows.assign(
-        below=rows["value"] < rows["truth"],
-        equal=rows["value"] == rows["truth"],
-    )
-    out = rows.groupby(_CELL, as_index=False).agg(
-        below=("below", "sum"),
-        equal=("equal", "sum"),
-        m=("value", "size"),
-        spread=("value", "nunique"),
-    )
-    out = out.loc[out["spread"] > 1].reset_index(drop=True)
-    if out.empty:
-        return out[_CELL].assign(z=pd.Series(dtype=float))
-    keys = out[_CELL].astype(str).agg("|".join, axis=1)
-    # A hash in (0, 1): never 0 or 1, so the score is finite.
-    u = np.array([(zlib.crc32(f"{seed}|{k}".encode()) + 0.5) for k in keys])
-    u = u / 2.0**32
-    pit = (out["below"] + u * (out["equal"] + 1)) / (out["m"] + 1)
-    return out[_CELL].assign(z=ndtri(pit.to_numpy()))
-
-
 def _corr(pairs: pd.DataFrame) -> float | None:
     """Pearson correlation of `z_a` and `z_b`, or None if it has none."""
     if len(pairs) < 2:
@@ -518,7 +323,7 @@ def estimate_copula(
     Parameters
     ----------
     scores : pandas.DataFrame
-        `normal_scores`: `model`, `origin`, `location`,
+        `error_scores`: `model`, `origin`, `location`,
         `target_end_date` and `z`.
     prior : GaussianCopula
         The correlations to shrink towards.
@@ -594,150 +399,6 @@ def estimate_record(
     return _estimate(_pairs(scores, national), prior, weight)
 
 
-@dataclass(frozen=True)
-class RollingCopula:
-    """A copula estimated at each origin from a model's recent errors.
-
-    Attributes
-    ----------
-    prior : GaussianCopula
-        The correlations estimates are shrunk towards.
-    window_weeks : int
-        The latest matured weeks whose errors are used.
-    weight : float
-        The pairs the prior counts as (`estimate_copula`).
-    national : str
-        The country's location code.
-    """
-
-    prior: GaussianCopula = PRIOR
-    window_weeks: int = WINDOW_WEEKS
-    weight: float = PRIOR_WEIGHT
-    national: str = NATIONAL
-
-    def fit(
-        self, scores: pd.DataFrame, origin: str
-    ) -> tuple[GaussianCopula, int]:
-        """Estimate the copula at an origin.
-
-        The scores used are those of forecasts made before the origin
-        whose truth was released by it, of the `window_weeks` latest
-        such weeks.
-
-        Parameters
-        ----------
-        scores : pandas.DataFrame
-            One model's `normal_scores`, with `truth_vintage`, the
-            release of each truth.
-        origin : str
-            The origin, ISO date.
-
-        Returns
-        -------
-        tuple
-            The copula, and the number of scores it is estimated from.
-        """
-        known = scores.loc[
-            (scores["origin"] < origin) & (scores["truth_vintage"] <= origin)
-        ]
-        if known.empty:
-            return self.prior, 0
-        last = pd.Timestamp(known["target_end_date"].max())
-        first = last - pd.Timedelta(weeks=self.window_weeks)
-        used = known.loc[pd.to_datetime(known["target_end_date"]) > first]
-        copula = estimate_copula(used, self.prior, self.weight, self.national)
-        return copula, len(used)
-
-    def pair(
-        self, forecasts: pd.DataFrame, truth: pd.DataFrame, seed: int
-    ) -> tuple[pd.DataFrame, pd.DataFrame]:
-        """Pair every model's forecast at every origin.
-
-        Parameters
-        ----------
-        forecasts : pandas.DataFrame
-            `model`, `origin`, `location`, `target_end_date`, `sample`
-            and `value`, and optionally `as_of` and other columns.
-        truth : pandas.DataFrame
-            `rolling_truth`: `location`, `target_end_date`, `truth` and
-            `truth_vintage`.
-        seed : int
-            Seed. Each forecast's score, and each model and origin's
-            pairing, draw from their own streams.
-
-        Returns
-        -------
-        tuple of pandas.DataFrame
-            The paired forecasts, and each model and origin's fit:
-            `model`, `origin`, `n_scores` and the four correlations.
-        """
-        cells = ["location", "target_end_date"]
-        released = truth[[*cells, "truth_vintage"]]
-        paired, fits = [], []
-        for model, own in forecasts.groupby("model"):
-            model = str(model)
-            key = [seed, zlib.crc32(model.encode())]
-            final = own.loc[_final(own)]
-            scores = normal_scores(
-                final[["model", "origin", *cells, "sample", "value"]],
-                truth[[*cells, "truth"]],
-                seed,
-            ).merge(released, on=cells)
-            for origin, rows in own.groupby("origin"):
-                origin = str(origin)
-                copula, n = self.fit(scores, origin)
-                rng = np.random.default_rng([*key, zlib.crc32(origin.encode())])
-                paired.append(pair_samples(rows, copula, rng, self.national))
-                fits.append(
-                    {
-                        "model": model,
-                        "origin": origin,
-                        "n_scores": n,
-                        **dataclasses.asdict(copula),
-                    }
-                )
-        out = pd.concat(paired, ignore_index=True)[list(forecasts.columns)]
-        return out, pd.DataFrame(fits, columns=_FIT_COLUMNS)
-
-
-def pair_registered(
-    forecasts: pd.DataFrame,
-    truth: pd.DataFrame,
-    seed: int,
-    national: str = NATIONAL,
-) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Pair the forecasts of the models registered as `paired`.
-
-    Each is paired by `RollingCopula` with its defaults. Other models'
-    rows are left as they are.
-
-    Parameters
-    ----------
-    forecasts : pandas.DataFrame
-        As for `RollingCopula.pair`.
-    truth : pandas.DataFrame
-        As for `RollingCopula.pair`.
-    seed : int
-        Seed.
-    national : str
-        The country's location code.
-
-    Returns
-    -------
-    tuple of pandas.DataFrame
-        The forecasts, and each paired model and origin's fit.
-    """
-    names = {s.name for s in list_models() if s.paired}
-    mine = forecasts["model"].isin(names)
-    if not mine.any():
-        return forecasts, pd.DataFrame(columns=_FIT_COLUMNS)
-    paired, fits = RollingCopula(national=national).pair(
-        forecasts.loc[mine], truth, seed
-    )
-    out = pd.concat([forecasts.loc[~mine], paired], ignore_index=True)
-    return out, fits
-
-
 def error_scores(
     added: np.ndarray,
     remaining: np.ndarray,
@@ -756,8 +417,9 @@ def error_scores(
     of each place and week back, as a negative binomial with mean
     `remaining` and size $\phi_k$; the origin release reports what came
     (`added`). The score is $\Phi^{-1}$ of the randomised PIT of `added`
-    in that distribution, with the uniform drawn from a hash, as
-    `normal_scores`. Releases more than `window_weeks` weeks before the
+    in that distribution, with the uniform drawn from a hash of the seed,
+    model, release, place and week back, so a score does not depend on the
+    others. Releases more than `window_weeks` weeks before the
     origin are left out, as are cells with no nowcast spread.
 
     Parameters

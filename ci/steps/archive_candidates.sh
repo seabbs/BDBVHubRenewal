@@ -21,16 +21,11 @@ if [ "${SKIP_FETCH:-false}" != true ]; then
   "$CI_DIR/../scripts/fit-store.sh" fetch "$store"
 fi
 made="$WORK/candidates.csv.gz"
-# Past rounds' forecasts, for the copula a paired model is paired by, as
-# in the submission (candidate.sh).
-history="$WORK/ledger-archive"
-[ -d "$history" ] || ledger_archive "$history"
 # Exits 1 when a candidate is not archived, after writing the others,
 # which are pushed all the same.
 archived=0
 cli fit-store archive --store "$store" --origin "$AS_OF" \
-  --reference-date "$REFERENCE_DATE" --history "$history/archive" \
-  --out "$made" || archived=$?
+  --reference-date "$REFERENCE_DATE" --out "$made" || archived=$?
 if [ ! -f "$made" ]; then
   echo "::error::no candidates file written"
   exit $((archived ? archived : 1))

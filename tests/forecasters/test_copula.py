@@ -5,17 +5,15 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 import pytest
-from scipy.special import ndtri
 from scipy.stats import spearmanr
 
 from bdbvhubrenewal.forecasters import NATIONAL
 from bdbvhubrenewal.forecasters.copula import (
     PRIOR,
     GaussianCopula,
-    RollingCopula,
+    error_scores,
     estimate_copula,
-    normal_scores,
-    pair_samples,
+    pair_walks,
 )
 
 
@@ -98,46 +96,6 @@ def test_correlations_must_be_in_zero_to_one(rho) -> None:
         GaussianCopula(*rho)
 
 
-def _forecasts(values: dict[tuple[str, str], np.ndarray]) -> pd.DataFrame:
-    return pd.concat(
-        pd.DataFrame(
-            {
-                "model": "m",
-                "origin": "2026-10-24",
-                "location": loc,
-                "target_end_date": week,
-                "sample": np.arange(1, len(v) + 1),
-                "value": v,
-            }
-        )
-        for (loc, week), v in values.items()
-    )
-
-
-def test_normal_scores_are_the_truths_place_in_the_forecast() -> None:
-    forecasts = _forecasts(
-        {
-            ("CD", "2026-10-17"): np.arange(100.0),
-            ("CD", "2026-10-24"): np.arange(100.0),
-            ("CD-IT", "2026-10-17"): np.zeros(100),
-        }
-    )
-    truth = pd.DataFrame(
-        {
-            "location": ["CD", "CD", "CD-IT"],
-            "target_end_date": ["2026-10-17", "2026-10-24", "2026-10-17"],
-            "truth": [49.5, 1000.0, 0.0],
-        }
-    )
-    out = normal_scores(forecasts, truth, seed=0)
-    z = out.set_index(["location", "target_end_date"])["z"]
-    assert z[("CD", "2026-10-17")] == pytest.approx(0.0, abs=0.03)
-    assert z[("CD", "2026-10-24")] > 2.3
-    # A forecast with no spread says nothing of where the truth falls.
-    assert ("CD-IT", "2026-10-17") not in z.index
-    assert {"model", "origin", "location", "target_end_date"} <= set(out)
-
-
 def test_estimate_recovers_the_correlations() -> None:
     truth = GaussianCopula(0.6, 0.4, 0.5)
     rng = np.random.default_rng(6)
@@ -177,40 +135,6 @@ def test_estimate_of_negative_correlation_is_floored_at_zero() -> None:
     fit = estimate_copula(scores)
     assert fit.rho_time == 0.0
     assert fit.rho_national == 0.0
-
-
-def test_a_truth_tied_with_draws_falls_among_them() -> None:
-    draws = np.r_[np.zeros(60), np.ones(40)]
-    forecasts = _forecasts({("CD", "2026-10-17"): draws})
-    truth = pd.DataFrame(
-        {"location": ["CD"], "target_end_date": ["2026-10-17"], "truth": [0.0]}
-    )
-    z = [
-        normal_scores(forecasts, truth, seed=s)["z"].iloc[0] for s in range(200)
-    ]
-    # The PIT is uniform on (0, 61 / 101], so finite and below its top.
-    assert np.isfinite(z).all()
-    assert max(z) <= ndtri(61 / 101)
-    assert min(z) < ndtri(0.1)
-
-
-def test_weeks_with_no_truth_give_no_score() -> None:
-    forecasts = _forecasts(
-        {
-            ("CD", "2026-10-17"): np.arange(100.0),
-            ("CD", "2026-10-24"): np.arange(100.0),
-        }
-    )
-    truth = pd.DataFrame(
-        {
-            "location": ["CD", "CD"],
-            "target_end_date": ["2026-10-17", "2026-10-24"],
-            "truth": [10.0, np.nan],
-        }
-    )
-    out = normal_scores(forecasts, truth, seed=0)
-    assert out["target_end_date"].tolist() == ["2026-10-17"]
-    assert np.isfinite(out["z"]).all()
 
 
 def test_steps_are_correlated_by_their_days_apart() -> None:
@@ -263,317 +187,13 @@ def test_estimate_shrinks_towards_the_prior() -> None:
     assert far.rho_time == pytest.approx(0.1)
 
 
-def _samples(n: int = 1000, national: str = "own") -> pd.DataFrame:
-    """Independent draws of three provinces over three weeks, and the
-    country as its own series or as their sum."""
-    rng = np.random.default_rng(10)
-    weeks = ["2026-10-10", "2026-10-17", "2026-10-24"]
-    rows = []
-    for p in ("CD-A", "CD-B", "CD-C"):
-        for w in weeks:
-            values = rng.gamma(2.0, 10.0, size=n).round()
-            rows.append(
-                pd.DataFrame(
-                    {
-                        "location": p,
-                        "target_end_date": w,
-                        "sample": np.arange(1, n + 1),
-                        "value": values,
-                    }
-                )
-            )
-    out = pd.concat(rows, ignore_index=True)
-    if national == "own":
-        nat = out.loc[out["location"] == "CD-A"].assign(
-            location=NATIONAL, value=lambda x: x["value"] * 3
-        )
-        nat["value"] = rng.permutation(nat["value"].to_numpy())
-    else:
-        nat = out.groupby(["target_end_date", "sample"], as_index=False)[
-            "value"
-        ].sum()
-        nat.insert(0, "location", NATIONAL)
-    return pd.concat([out, nat[list(out.columns)]], ignore_index=True)
-
-
-def _cells(samples: pd.DataFrame) -> pd.Series:
-    return samples.groupby(["location", "target_end_date"])["value"].apply(
-        lambda v: tuple(np.sort(v.to_numpy()))
-    )
-
-
-def _wide(samples: pd.DataFrame) -> pd.DataFrame:
-    return samples.pivot(
-        index="sample", columns=["location", "target_end_date"], values="value"
-    )
-
-
-def test_pairing_a_table_keeps_each_cells_draws() -> None:
-    samples = _samples()
-    out = pair_samples(
-        samples, GaussianCopula(0.8, 0.5, 0.6), np.random.default_rng(11)
-    )
-    assert set(out.columns) == set(samples.columns)
-    pd.testing.assert_series_equal(_cells(out), _cells(samples))
-    wide = _wide(out)
-    a, b = ("CD-A", "2026-10-10"), ("CD-A", "2026-10-17")
-    assert _rank_corr(wide[a], wide[b]) > 0.6
-    assert _rank_corr(wide[a], wide[(NATIONAL, "2026-10-10")]) > 0.4
-
-
-def test_a_summed_country_is_summed_again() -> None:
-    samples = _samples(national="sum")
-    out = pair_samples(
-        samples, GaussianCopula(0.0, 0.7, 0.0), np.random.default_rng(12)
-    )
-    prov = out.loc[out["location"] != NATIONAL]
-    pd.testing.assert_series_equal(
-        _cells(prov), _cells(samples.loc[samples["location"] != NATIONAL])
-    )
-    wide = _wide(out)
-    week = "2026-10-17"
-    total = sum(wide[(p, week)] for p in ("CD-A", "CD-B", "CD-C"))
-    assert np.array_equal(wide[(NATIONAL, week)], total)
-    # Paired provinces make the country's sum wider.
-    before = _wide(samples)[(NATIONAL, week)].std()
-    assert wide[(NATIONAL, week)].std() > 1.2 * before
-
-
-def test_reported_rows_move_with_their_sample() -> None:
-    samples = _samples()
-    final = samples.assign(as_of=np.nan)
-    reported = samples.assign(as_of="2026-11-01", value=samples["value"] + 0.5)
-    both = pd.concat([final, reported], ignore_index=True)
-    out = pair_samples(
-        both, GaussianCopula(0.8, 0.5, 0.6), np.random.default_rng(13)
-    )
-    keys = ["location", "target_end_date", "sample"]
-    joined = out.loc[out["as_of"].isna()].merge(
-        out.loc[out["as_of"].notna()], on=keys
-    )
-    assert len(joined) == len(samples)
-    assert np.allclose(joined["value_y"] - joined["value_x"], 0.5)
-
-
-def test_pairing_is_reproducible() -> None:
-    samples = _samples()
-    copula = GaussianCopula(0.8, 0.5, 0.6)
-    a = pair_samples(samples, copula, np.random.default_rng(14))
-    b = pair_samples(samples, copula, np.random.default_rng(14))
-    pd.testing.assert_frame_equal(a, b)
-
-
-def _origin_scores() -> pd.DataFrame:
-    """Scores of forecasts at three origins, with each truth's release."""
-    scores = _structured_scores(n_origins=30)
-    origin = np.where(
-        scores["origin"].astype(int) < 10,
-        "2026-10-03",
-        np.where(scores["origin"].astype(int) < 20, "2026-10-17", "2026-10-31"),
-    )
-    return scores.assign(origin=origin, truth_vintage="2026-10-25")
-
-
-def test_the_first_origin_takes_the_prior() -> None:
-    rolling = RollingCopula(GaussianCopula(0.2, 0.2, 0.2))
-    fit, n = rolling.fit(_origin_scores(), "2026-10-03")
-    assert fit == GaussianCopula(0.2, 0.2, 0.2)
-    assert n == 0
-
-
-def test_rolling_fit_uses_matured_weeks_of_earlier_origins() -> None:
-    scores = _origin_scores()
-    prior = GaussianCopula(0.2, 0.2, 0.2)
-    rolling = RollingCopula(prior, window_weeks=2, weight=10.0)
-    fit, n = rolling.fit(scores, "2026-10-31")
-    # Earlier origins, truth released by the origin, and the last two
-    # matured weeks.
-    used = scores.loc[
-        (scores["origin"] < "2026-10-31")
-        & (scores["target_end_date"] > "2026-10-10")
-    ]
-    assert n == len(used)
-    assert fit == estimate_copula(used, prior, weight=10.0)
-    # No truth released by the origin: the prior.
-    late = scores.assign(truth_vintage="2026-11-07")
-    assert rolling.fit(late, "2026-10-31")[0] == prior
-
-
-def test_rolling_pairing_keeps_draws_and_records_each_fit() -> None:
-    a = _samples(n=200).assign(model="m", origin="2026-10-24")
-    b = _samples(n=200).assign(model="m", origin="2026-10-31")
-    forecasts = pd.concat([a, b], ignore_index=True)
-    truth = (
-        forecasts.groupby(["location", "target_end_date"], as_index=False)[
-            "value"
-        ]
-        .median()
-        .rename(columns={"value": "truth"})
-        .assign(truth_vintage="2026-10-30")
-    )
-    rolling = RollingCopula(GaussianCopula(0.5, 0.5, 0.5))
-    paired, fits = rolling.pair(forecasts, truth, seed=1)
-    for origin in ("2026-10-24", "2026-10-31"):
-        mine = forecasts["origin"] == origin
-        pd.testing.assert_series_equal(
-            _cells(paired.loc[paired["origin"] == origin]),
-            _cells(forecasts.loc[mine]),
-        )
-    assert list(fits["origin"]) == ["2026-10-24", "2026-10-31"]
-    assert list(fits["n_scores"]) == [0, 12]
-    assert {"rho_time", "rho_provinces", "rho_national"} <= set(fits)
-
-
 def test_a_correlation_with_no_variation_takes_the_prior() -> None:
     scores = _structured_scores(n_origins=5).assign(z=0.5)
     fit = estimate_copula(scores, GaussianCopula(0.3, 0.2, 0.1))
     assert fit == GaussianCopula(0.3, 0.2, 0.1)
 
 
-def test_rolling_fit_leaves_out_each_truth_not_yet_released() -> None:
-    scores = _origin_scores()
-    late = scores["location"] == NATIONAL
-    scores.loc[late, "truth_vintage"] = "2026-11-07"
-    rolling = RollingCopula(GaussianCopula(), weight=0.0)
-    fit, n = rolling.fit(scores, "2026-10-31")
-    used = scores.loc[(scores["origin"] < "2026-10-31") & ~late]
-    assert n == len(used)
-    assert fit == estimate_copula(used)
-
-
-def test_a_models_pairing_does_not_depend_on_other_models() -> None:
-    a = _samples(n=200).assign(model="m", origin="2026-10-31")
-    b = a.assign(model="another")
-    truth = (
-        a.groupby(["location", "target_end_date"], as_index=False)["value"]
-        .median()
-        .rename(columns={"value": "truth"})
-        .assign(truth_vintage="2026-10-30")
-    )
-    earlier = a.assign(origin="2026-10-24")
-    alone, _ = RollingCopula().pair(
-        pd.concat([earlier, a], ignore_index=True), truth, seed=3
-    )
-    both, _ = RollingCopula().pair(
-        pd.concat([earlier, a, earlier.assign(model="another"), b]),
-        truth,
-        seed=3,
-    )
-    keys = ["origin", "location", "target_end_date", "sample"]
-    pd.testing.assert_frame_equal(
-        alone.sort_values(keys).reset_index(drop=True),
-        both.loc[both["model"] == "m"].sort_values(keys).reset_index(drop=True),
-    )
-
-
-def test_a_cells_normal_score_does_not_depend_on_other_cells() -> None:
-    one = _forecasts({("CD", "2026-10-17"): np.zeros(50)})
-    many = _forecasts(
-        {
-            ("CD-IT", "2026-10-10"): np.zeros(50),
-            ("CD", "2026-10-17"): np.zeros(50),
-        }
-    )
-    many = pd.concat(
-        [many, many.assign(value=many["value"] + 1)], ignore_index=True
-    )
-    one = pd.concat([one, one.assign(value=1.0)], ignore_index=True)
-    truth = pd.DataFrame(
-        {
-            "location": ["CD", "CD-IT"],
-            "target_end_date": ["2026-10-17", "2026-10-10"],
-            "truth": [0.0, 0.0],
-        }
-    )
-    a = normal_scores(one, truth, seed=4).set_index("location")["z"]
-    b = normal_scores(many, truth, seed=4).set_index("location")["z"]
-    assert a["CD"] == b["CD"]
-    assert normal_scores(one, truth, seed=5)["z"].iloc[0] != a["CD"]
-
-
-def _zoned(n: int = 2000, summed: bool = False) -> pd.DataFrame:
-    """Independent draws of two provinces' zones over three weeks.
-
-    Province CD-A has zones CD-A-01 to CD-A-03, CD-B has CD-B-01 and
-    CD-B-02. Each province is its own forecast, or the sum of its zones.
-    """
-    rng = np.random.default_rng(20)
-    weeks = ["2026-10-10", "2026-10-17", "2026-10-24"]
-    zones = {"CD-A": ["CD-A-01", "CD-A-02", "CD-A-03"],
-             "CD-B": ["CD-B-01", "CD-B-02"]}  # fmt: skip
-    rows = []
-
-    def add(loc: str, week: str, values: np.ndarray) -> None:
-        rows.append(
-            pd.DataFrame(
-                {
-                    "location": loc,
-                    "target_end_date": week,
-                    "sample": np.arange(1, n + 1),
-                    "value": values,
-                }
-            )
-        )
-
-    for prov, own in zones.items():
-        for w in weeks:
-            parts = [rng.gamma(2.0, 10.0, size=n).round() for _ in own]
-            for z, v in zip(own, parts, strict=True):
-                add(z, w, v)
-            total = sum(parts) if summed else rng.gamma(4.0, 10.0, size=n)
-            add(prov, w, np.asarray(total).round())
-    return pd.concat(rows, ignore_index=True)
-
-
 ZONED = GaussianCopula(0.8, 0.3, 0.6, rho_zones=0.7)
-
-
-def test_zones_are_paired_in_their_own_right() -> None:
-    samples = _zoned()
-    out = pair_samples(samples, ZONED, np.random.default_rng(21))
-    pd.testing.assert_series_equal(_cells(out), _cells(samples))
-    wide = _wide(out)
-    w1, w2 = "2026-10-10", "2026-10-17"
-
-    def rank(r: float) -> float:
-        return 6 / np.pi * np.arcsin(r / 2)
-
-    # Two zones of a province, and a zone and its province: rho_zones.
-    assert _rank_corr(wide[("CD-A-01", w1)], wide[("CD-A-02", w1)]) == (
-        pytest.approx(rank(0.7), abs=0.05)
-    )
-    assert _rank_corr(wide[("CD-A-01", w1)], wide[("CD-A", w1)]) == (
-        pytest.approx(rank(0.7), abs=0.05)
-    )
-    # Zones of different provinces: rho_p. Weeks of a zone: rho_t.
-    assert _rank_corr(wide[("CD-A-01", w1)], wide[("CD-B-01", w1)]) == (
-        pytest.approx(rank(0.3), abs=0.05)
-    )
-    assert _rank_corr(wide[("CD-B-02", w1)], wide[("CD-B-02", w2)]) == (
-        pytest.approx(rank(0.8), abs=0.05)
-    )
-
-
-def test_a_province_that_sums_its_zones_is_summed_again() -> None:
-    samples = _zoned(n=500, summed=True)
-    out = pair_samples(samples, ZONED, np.random.default_rng(22))
-    zone = out["location"].str.count("-") == 2
-    pd.testing.assert_series_equal(
-        _cells(out.loc[zone]), _cells(samples.loc[samples["location"]
-                                                  .str.count("-") == 2])
-    )  # fmt: skip
-    keys = ["target_end_date", "sample"]
-    for prov in ("CD-A", "CD-B"):
-        own = out.loc[out["location"].str.startswith(prov + "-")]
-        total = own.groupby(keys)["value"].sum()
-        got = out.loc[out["location"] == prov].set_index(keys)["value"]
-        pd.testing.assert_series_equal(
-            got.sort_index(), total.sort_index(), check_names=False
-        )
-    # Paired zones make a wider province than independent ones.
-    before = samples.loc[samples["location"] == "CD-A", "value"].std()
-    after = out.loc[out["location"] == "CD-A", "value"].std()
-    assert after > 1.1 * before
 
 
 def test_zone_correlation_is_estimated_from_zone_pairs() -> None:
@@ -597,36 +217,6 @@ def test_zone_correlation_is_estimated_from_zone_pairs() -> None:
     # Only the two provinces give rho_p, not zones of different provinces.
     assert got.rho_provinces == pytest.approx(0.2, abs=0.06)
     assert got.rho_time == pytest.approx(0.6, abs=0.04)
-
-
-def test_the_prior_pairs_zones_and_fits_record_rho_zones() -> None:
-    assert PRIOR.rho_zones == pytest.approx(0.7)
-    with pytest.raises(ValueError, match="rho_zones"):
-        GaussianCopula(rho_zones=1.0)
-    samples = _zoned(n=200).assign(model="m", origin="2026-10-01")
-    _, fits = RollingCopula().pair(
-        samples,
-        pd.DataFrame(
-            columns=["location", "target_end_date", "truth", "truth_vintage"]
-        ),
-        seed=1,
-    )
-    assert fits["rho_zones"].tolist() == [pytest.approx(0.7)]
-
-
-def test_another_countrys_own_series_is_paired_as_the_country() -> None:
-    # A country forecast as its own series pairs with its places by
-    # rho_n, whatever its code (Germany's DE, not the default CD).
-    samples = _samples(n=3000).replace({"location": {NATIONAL: "DE"}})
-    samples["location"] = samples["location"].str.replace("CD-", "DE-")
-    # rho_p 0.6 keeps the matrix valid while rho_n 0.8 stays distinct.
-    copula = GaussianCopula(0.0, 0.6, 0.8)
-    out = pair_samples(samples, copula, np.random.default_rng(30), "DE")
-    wide = _wide(out)
-    w = "2026-10-17"
-    assert _rank_corr(wide[("DE", w)], wide[("DE-A", w)]) == pytest.approx(
-        6 / np.pi * np.arcsin(0.8 / 2), abs=0.05
-    )
 
 
 def test_the_factor_is_the_cholesky_factor_of_the_nearest_correlation() -> None:
@@ -669,3 +259,73 @@ def test_seeded_pairing_statistics_are_unchanged() -> None:
         _draws(n=4000), np.random.default_rng(2)
     )
     np.testing.assert_array_equal(out, again)
+
+
+def test_walks_keep_their_cells_and_move_as_a_whole() -> None:
+    rng = np.random.default_rng(40)
+    n, h = 3000, 6
+    start = rng.normal(size=(n, 2, 1))
+    walk = np.cumsum(
+        np.concatenate([start, rng.normal(0, 0.3, (n, 2, h - 1))], axis=2),
+        axis=2,
+    )
+    out = pair_walks(
+        walk,
+        ("CD-A", "CD-B"),
+        np.array([2, 2]),
+        PRIOR,
+        np.random.default_rng(1),
+    )
+    assert np.array_equal(np.sort(out, axis=0), np.sort(walk, axis=0))
+    # From the start week on, each place's trajectories are kept whole.
+    for loc in range(2):
+        a, b = walk[:, loc, 2:], out[:, loc, 2:]
+        np.testing.assert_array_equal(
+            a[np.lexsort(a.T[::-1])], b[np.lexsort(b.T[::-1])]
+        )
+    # Before it, cells are paired across places by rho_p.
+    assert _rank_corr(out[:, 0, 0], out[:, 1, 0]) == pytest.approx(
+        6 / np.pi * np.arcsin(0.7 / 2), abs=0.05
+    )
+    # The walks are paired across places through their totals.
+    assert _rank_corr(out[:, 0, -1], out[:, 1, -1]) > 0.3
+
+
+def test_zones_are_paired_within_and_across_provinces() -> None:
+    zones = ("CD-A-01", "CD-A-02", "CD-B-01")
+    draws = _draws(n=3000, places=3, steps=2)
+    out = pair_walks(
+        draws, zones, np.array([9, 9, 9]), ZONED, np.random.default_rng(41)
+    )
+    rank = {r: 6 / np.pi * np.arcsin(r / 2) for r in (0.7, 0.3)}
+    assert _rank_corr(out[:, 0, 0], out[:, 1, 0]) == pytest.approx(
+        rank[0.7], abs=0.05
+    )
+    assert _rank_corr(out[:, 0, 0], out[:, 2, 0]) == pytest.approx(
+        rank[0.3], abs=0.05
+    )
+
+
+def test_error_scores_are_pit_normal_scores_of_recent_nowcasts() -> None:
+    mu = np.full((3, 2, 2), 10.0)
+    added = np.array([[[10, 3], [10, 30]]] * 3, float)
+    valid = np.ones_like(mu, bool)
+    valid[0, 0, 0] = False
+    size = np.full((2, 2), 5.0)
+    out = error_scores(
+        added, mu, valid, size, ["r1", "r2", "r3"],
+        np.array([7, 14, 70]), ("CD-A", "CD-B"), "m", seed=1,
+    )  # fmt: skip
+    # The release 70 days back is outside the 8-week window, and the
+    # invalid cell gives no score.
+    assert set(out["origin"]) == {"r1", "r2"}
+    assert len(out) == 2 * 4 - 1
+    # A count far above the nowcast gives a high score, far below a low one.
+    r2 = out.loc[out["origin"] == "r2"]
+    assert r2.loc[r2["location"] == "CD-B", "z"].max() > 2.0
+    assert r2.loc[r2["location"] == "CD-A", "z"].min() < -0.5
+    again = error_scores(
+        added, mu, valid, size, ["r1", "r2", "r3"],
+        np.array([7, 14, 70]), ("CD-A", "CD-B"), "m", seed=1,
+    )  # fmt: skip
+    pd.testing.assert_frame_equal(out, again)
