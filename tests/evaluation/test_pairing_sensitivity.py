@@ -49,7 +49,7 @@ def scores(setup) -> pd.DataFrame:
 def test_one_forecast_gives_every_variant_with_the_country(setup) -> None:
     task, _ = setup
     drawn = variant_forecasts("randomwalknowcast", task)
-    assert list(drawn) == [label for label, _ in VARIANTS]
+    assert list(drawn) == list(VARIANTS) == ["off", "rolling"]
     for samples in drawn.values():
         assert NATIONAL in set(samples["location"])
 
@@ -64,7 +64,7 @@ def test_per_cell_scores_do_not_move_and_sums_do(scores) -> None:
         & (scores["target"] == "cell")
     ].set_index("variant")["value"]  # fmt: skip
     # The country is the provinces' sum, so its score moves with pairing.
-    assert national["off"] != national["prior"]
+    assert national["off"] != national["rolling"]
 
 
 def test_summary_is_relative_to_no_pairing(scores) -> None:
@@ -73,4 +73,4 @@ def test_summary_is_relative_to_no_pairing(scores) -> None:
     # Undefined only where no pairing scores 0 (0 / 0).
     assert (off.dropna() == 1.0).all()
     assert off.notna().any()
-    assert set(out["variant"]) == {label for label, _ in VARIANTS}
+    assert set(out["variant"]) == set(VARIANTS)

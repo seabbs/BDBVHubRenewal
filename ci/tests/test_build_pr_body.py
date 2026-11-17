@@ -374,15 +374,20 @@ def test_names_the_copula_a_models_draws_were_paired_by(
             "model": "randomwalknowcast",
             "origin": "2026-11-08",
             "n_scores": 120,
-            "rho_time": 0.812,
-            "rho_provinces": 0.5,
-            "rho_national": 0.6,
-            "source": "recomputed+store",
+            "rho_provinces": 0.512,
+            "n_pairs": 300,
+            "fallback": False,
         }
     )
     lines = visible(body(g, provenance=prov))
     assert (
-        "Pairing: draws paired by a Gaussian copula with rho_t 0.81, "
-        "rho_p 0.50 and rho_n 0.60, from 120 scored past forecasts "
-        "(recomputed+store)."
+        "Pairing: province draws paired within each week by a Gaussian "
+        "copula with rho_p 0.51, from 300 pairs of 120 scored errors."
+    ) in lines
+    prov["run"]["copula"].update(rho_provinces=0.7, n_pairs=0, fallback=True)
+    lines = visible(body(g, provenance=prov))
+    assert (
+        "Pairing: province draws paired within each week by a Gaussian "
+        "copula with rho_p 0.70, the prior, as no pairs of scored errors "
+        "gave an estimate."
     ) in lines

@@ -1030,6 +1030,7 @@ def test_cli_nowcast_records_a_walk_models_copula(tmp_path: Path) -> None:
     record = json.loads((out / "copula.json").read_text())
     assert record["model"] == "randomwalknowcast"
     assert isinstance(record["n_scores"], int)
-    for name in ("time", "provinces", "zones"):
-        assert isinstance(record[f"n_{name}"], int)
-        assert isinstance(record[f"prior_{name}"], bool)
+    assert 0.0 <= record["rho_provinces"] <= 0.95
+    assert isinstance(record["n_pairs"], int)
+    assert isinstance(record["fallback"], bool)
+    assert not any(k.startswith(("rho_t", "rho_n", "rho_z")) for k in record)
