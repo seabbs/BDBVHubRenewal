@@ -43,6 +43,9 @@ Every stored fit is 2 chains of 500 warm-up, run in parallel, with no refit.
 Each takes 750 draws, `renewalbvd` at target acceptance 0.95 and the others at 0.9.
 The wait for the store stops against the window's close (`[timing]` in `ci/policy.toml`).
 
+`randomwalk` and `randomwalknowcast` pair their draws inside their forecast ([Correlated trajectories](../methods/evaluation.md#correlated-trajectories)), so a submission uses the same paired draws as the backtest.
+Each round's $\rho_p$, the pairs behind it and any fall-back to the prior are recorded in the round's `copula.json`.
+
 ## Checks
 
 An invalid file, a fit past the convergence failure thresholds or a forecast far from the recent data rules a candidate out.

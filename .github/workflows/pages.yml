@@ -156,6 +156,49 @@ jobs:
           # run without the inputs and are keyed on its own code and
           # config/germany.toml, which pins its data. A nowcast date takes
           # about 1 to 3 minutes, so the 80 development dates run in blocks.
+          # How much the walk models' pairing matters (docs/pairing.md):
+          # one forecast per origin gives every pairing variant.
+          - cell: pairing-bdbv
+            model: randomwalknowcast
+            with: >-
+              src/bdbvhubrenewal/evaluation/pairing.py
+              src/bdbvhubrenewal/evaluation/scoring.py
+              src/bdbvhubrenewal/evaluation/store.py
+            run: >-
+              uv run bdbvhubrenewal pairing-sensitivity --study bdbv
+              --out output/parts/pairing
+          - cell: pairing-germany-0
+            model: randomwalknowcast
+            germany: true
+            with: >-
+              src/bdbvhubrenewal/data/germany.py src/bdbvhubrenewal/evaluation/germany.py src/bdbvhubrenewal/evaluation/scoring.py src/bdbvhubrenewal/evaluation/pairing.py
+            run: >-
+              uv run bdbvhubrenewal pairing-sensitivity --study germany
+              --chunk 0/4 --out output/parts/pairing
+          - cell: pairing-germany-1
+            model: randomwalknowcast
+            germany: true
+            with: >-
+              src/bdbvhubrenewal/data/germany.py src/bdbvhubrenewal/evaluation/germany.py src/bdbvhubrenewal/evaluation/scoring.py src/bdbvhubrenewal/evaluation/pairing.py
+            run: >-
+              uv run bdbvhubrenewal pairing-sensitivity --study germany
+              --chunk 1/4 --out output/parts/pairing
+          - cell: pairing-germany-2
+            model: randomwalknowcast
+            germany: true
+            with: >-
+              src/bdbvhubrenewal/data/germany.py src/bdbvhubrenewal/evaluation/germany.py src/bdbvhubrenewal/evaluation/scoring.py src/bdbvhubrenewal/evaluation/pairing.py
+            run: >-
+              uv run bdbvhubrenewal pairing-sensitivity --study germany
+              --chunk 2/4 --out output/parts/pairing
+          - cell: pairing-germany-3
+            model: randomwalknowcast
+            germany: true
+            with: >-
+              src/bdbvhubrenewal/data/germany.py src/bdbvhubrenewal/evaluation/germany.py src/bdbvhubrenewal/evaluation/scoring.py src/bdbvhubrenewal/evaluation/pairing.py
+            run: >-
+              uv run bdbvhubrenewal pairing-sensitivity --study germany
+              --chunk 3/4 --out output/parts/pairing
           - cell: germany-randomwalknowcast-0
             model: randomwalknowcast
             germany: true
@@ -383,7 +426,7 @@ jobs:
           MODEL: ${{ matrix.model }}
           RUN: ${{ matrix.run }}
           WITH: >-
-            ${{ matrix.germany && 'src/bdbvhubrenewal/data/germany.py
+            ${{ matrix.with || matrix.germany && 'src/bdbvhubrenewal/data/germany.py
             src/bdbvhubrenewal/evaluation/germany.py
             src/bdbvhubrenewal/evaluation/backtest.py
             src/bdbvhubrenewal/evaluation/nowcast.py
@@ -633,6 +676,11 @@ jobs:
           uv run bdbvhubrenewal germany-teams --out results/germany
           uv run bdbvhubrenewal germany-asof --out results/germany
           uv run bdbvhubrenewal germany-paper --results results/germany
+          # The pairing sensitivity's blocks, for docs/pairing.md.
+          mkdir -p results/pairing
+          for f in output/parts/parts-pairing-*/pairing/*.csv.gz; do
+            [ -e "$f" ] && cp "$f" results/pairing/
+          done
           uv run bdbvhubrenewal report --ledger output/ledger
           # The live fine-tuning run's newest scored checkpoint, read at
           # the checkpoint-scoring branch's head (never a pinned commit).

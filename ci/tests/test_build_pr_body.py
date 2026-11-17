@@ -358,3 +358,36 @@ def test_names_the_checkpoint_a_model_loaded(tmp_path: Path) -> None:
         "Checkpoint: release `chronos-ft-2c2b22a03107` of "
         "seabbs/BDBVHubRenewal, adapter SHA-256 `3459d83a8855`."
     ) in lines
+
+
+def test_names_the_copula_a_models_draws_were_paired_by(
+    tmp_path: Path,
+) -> None:
+    g = gate(tmp_path)
+    prov = read_json(g / "provenance.json")
+    assert not any(
+        line.startswith("Pairing:")
+        for line in visible(body(g, provenance=prov))
+    )
+    prov["run"].update(
+        copula={
+            "model": "randomwalknowcast",
+            "origin": "2026-11-08",
+            "n_scores": 120,
+            "rho_provinces": 0.512,
+            "n_pairs": 300,
+            "fallback": False,
+        }
+    )
+    lines = visible(body(g, provenance=prov))
+    assert (
+        "Pairing: province draws paired within each week by a Gaussian "
+        "copula with rho_p 0.51, from 300 pairs of 120 scored errors."
+    ) in lines
+    prov["run"]["copula"].update(rho_provinces=0.7, n_pairs=0, fallback=True)
+    lines = visible(body(g, provenance=prov))
+    assert (
+        "Pairing: province draws paired within each week by a Gaussian "
+        "copula with rho_p 0.70, the prior, as no pairs of scored errors "
+        "gave an estimate."
+    ) in lines

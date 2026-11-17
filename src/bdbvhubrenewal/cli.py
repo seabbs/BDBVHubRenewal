@@ -358,6 +358,29 @@ def build_parser() -> argparse.ArgumentParser:
         "OUT/held-out.",
     )
 
+    pst = sub.add_parser(
+        "pairing-sensitivity",
+        help="Score randomwalk and randomwalknowcast with no pairing and "
+        "with their provinces paired by the rolling rho_p, from one "
+        "forecast each, on the BDBV release backtest or the German "
+        "development half (`evaluation.pairing`).",
+    )
+    pst.add_argument("--study", choices=["bdbv", "germany"], required=True)
+    pst.add_argument(
+        "--data",
+        default=None,
+        help="The data directory; for germany, its raw/germany.",
+    )
+    pst.add_argument(
+        "--config",
+        default=None,
+        help="config/backtest.toml (bdbv) or config/germany.toml.",
+    )
+    pst.add_argument(
+        "--chunk", default=None, help=_CHUNK_HELP.format(what="origins")
+    )
+    pst.add_argument("--out", default="results/pairing")
+
     gtm = sub.add_parser(
         "germany-teams",
         help="Score the German hospitalisation hub teams' nowcasts.",
@@ -1388,7 +1411,14 @@ def _hub_forecast(
     fit: Path | str | None = None,
     forecast: Forecast | None = None,
     forecast_date: str | None = None,
-) -> tuple[pd.DataFrame, Forecast, pd.DataFrame | None, str, Any]:
+) -> tuple[
+    pd.DataFrame,
+    Forecast,
+    pd.DataFrame | None,
+    str,
+    Any,
+    dict[str, object] | None,
+]:
     """Return the hub table `nowcast` writes, with its forecast and zones.
 
     A `forecast` given is used as it is. Otherwise, with `config` it
@@ -1399,10 +1429,11 @@ def _hub_forecast(
     -------
     tuple
         The hub table, the forecast, the zone samples (or None), why
-        there are no zones ("" if there are) and the fine-tuned checkpoint
-        the model loaded (or None).
+        there are no zones ("" if there are), the fine-tuned checkpoint
+        the model loaded (or None) and the copula a walk model paired its
+        draws by (`copula_fit`, or None).
     """
-    checkpoint = None
+    checkpoint, copula = None, None
     if forecast is not None:
         result = forecast
     elif config:
@@ -1411,6 +1442,7 @@ def _hub_forecast(
         loaded = get_model(str(model))
         checkpoint = getattr(loaded, "checkpoint", None)
         samples = loaded.forecast(task)
+        copula = getattr(loaded, "copula_fit", None)
         check_samples(samples, task)
         result = Forecast(samples)
     name = get_config(config).model if config else model
@@ -1425,7 +1457,7 @@ def _hub_forecast(
         forecast_date=forecast_date,
         zones_sum=not walks_own_zones(name),
     )
-    return table, result, zones, zone_note, checkpoint
+    return table, result, zones, zone_note, checkpoint, copula
 
 
 def _fit_store_archive(args: argparse.Namespace) -> int:
@@ -1507,7 +1539,7 @@ def _nowcast(args: argparse.Namespace) -> int:
     host_devices(int(sampler_settings()["num_chains"]))
     try:
         task, handled = _task(args)
-        table, result, zones, zone_note, checkpoint = _hub_forecast(
+        table, result, zones, zone_note, checkpoint, copula = _hub_forecast(
             task,
             data=args.data,
             model=args.model,
@@ -1528,6 +1560,11 @@ def _nowcast(args: argparse.Namespace) -> int:
     n_zones = 0 if zones is None else int(zones["location"].nunique())
     zone_record = {"zones": n_zones > 0, "n_zones": n_zones, "note": zone_note}
     (Path(args.out) / "zones.json").write_text(json.dumps(zone_record) + "\n")
+    # The copula a walk model paired its draws by, for the PR body.
+    if copula is not None:
+        (Path(args.out) / "copula.json").write_text(
+            json.dumps(copula, default=str) + "\n"
+        )
     # The fine-tuned checkpoint the model loaded, for the PR body.
     if checkpoint is not None:
         record = {
@@ -1935,6 +1972,48 @@ def _germany_backtest(args: argparse.Namespace) -> int:
     return 0
 
 
+def _pairing_sensitivity(args: argparse.Namespace, data_dir: str) -> int:
+    from bdbvhubrenewal.evaluation import germany as de
+    from bdbvhubrenewal.evaluation import pairing
+
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+    name = f"pairing-{args.study}"
+    if args.study == "bdbv":
+        config = args.config or "config/backtest.toml"
+        data = args.data or data_dir
+        real = load_target(data).query("kind == 'real'")
+        origins = bt.real_vintages(real)[:-1]
+        if args.chunk:
+            origins = chunk(origins, args.chunk)
+        scores = pairing.bdbv_sensitivity(data, config, origins)
+    else:
+        config = args.config or "config/germany.toml"
+        data = args.data or f"{data_dir}/raw/germany"
+        dates = de.nowcast_dates(de.load_germany_config(config))
+        if args.chunk:
+            dates = chunk(dates, args.chunk)
+        # Each date is kept as it is scored, so a rerun resumes.
+        done = out / "germany-dates"
+        done.mkdir(exist_ok=True)
+        for date in dates:
+            path = done / f"{date}.csv.gz"
+            if not path.exists():
+                write_csv(
+                    pairing.germany_sensitivity(data, config, [date]), path
+                )
+        scores = pd.concat(
+            [_read_or_empty(done / f"{d}.csv.gz") for d in dates],
+            ignore_index=True,
+        )
+    if args.chunk:
+        name += "-" + args.chunk.replace("/", "of")
+    path = out / f"{name}.csv.gz"
+    write_csv(scores, path)
+    print(f"Pairing sensitivity ({args.study}): {len(scores)} rows in {path}.")
+    return 0
+
+
 def _germany_teams(args: argparse.Namespace) -> int:
     from bdbvhubrenewal.data.germany import hub_triangle
     from bdbvhubrenewal.evaluation import germany as de
@@ -2137,6 +2216,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
     if args.command == "germany-backtest":
         return _germany_backtest(args)
+    if args.command == "pairing-sensitivity":
+        return _pairing_sensitivity(args, str(_data_root()))
     if args.command == "germany-teams":
         return _germany_teams(args)
     if args.command == "germany-asof":
