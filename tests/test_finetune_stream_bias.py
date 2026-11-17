@@ -188,3 +188,12 @@ def test_the_bias_learning_rate_of_5e3_reaches_the_optimiser():
     model = fs.lora_model(model, fs.lora_config(True), None)
     opt = torch.optim.AdamW(fs.param_groups(model, 1e-5, args.bias_lr))
     assert fs.group_rates(opt) == {"lora": 1e-5, "bias": 5e-3}
+
+
+def test_the_bias_has_no_weight_decay_and_the_adapter_keeps_its_default():
+    model = tiny_model()
+    series_bias.attach(model)
+    model = fs.lora_model(model, fs.lora_config(True), None)
+    opt = torch.optim.AdamW(fs.param_groups(model, 1e-5, fs.BIAS_LR))
+    decay = {g["name"]: g["weight_decay"] for g in opt.param_groups}
+    assert decay == {"lora": 0.01, "bias": 0.0}

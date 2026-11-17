@@ -82,3 +82,10 @@ def test_room_needs_the_disk_threshold(tmp_path):
     )
     assert ok.stdout.strip() == "yes"
     assert full.stdout.strip() == "no"
+
+
+def test_draws_per_simulation_are_set_by_the_launcher():
+    script = (
+        Path(__file__).parents[1] / "scripts" / "sim_rounds.sh"
+    ).read_text()
+    assert "DRAWS=${DRAWS:-10}" in script
