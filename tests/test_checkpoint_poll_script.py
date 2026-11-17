@@ -282,3 +282,11 @@ def test_bdbv_paper_is_told_the_target_and_run_filters(poll) -> None:
     assert "target == '7day'" in note
     assert "run == 'one-model'" in note
     assert "abc" in note
+
+
+def test_german_runs_go_in_progress_first_then_newest(poll) -> None:
+    # The lead: finish n125 (in progress), then n1000, n750, n500, n250.
+    cached = {"slots-a": 66, "slots-b": 0, "slots-c": 0, "slots-d": 3}
+    n = {"slots-a": 125, "slots-b": 1000, "slots-c": 250, "slots-d": 500}
+    order = poll.german_order(list(cached), cached, n)
+    assert order == ["slots-a", "slots-b", "slots-d", "slots-c"]
