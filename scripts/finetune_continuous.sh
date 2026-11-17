@@ -24,13 +24,14 @@ set -uo pipefail
 
 source "$(dirname "${BASH_SOURCE[0]}")/local_config.sh"
 HERE=${HERE:-output/finetune/continuous-r5}
-OUTBREAKS=${OUTBREAKS:-8000}
+# Ten of grid r5's balanced blocks of 840 simulations.
+OUTBREAKS=${OUTBREAKS:-8400}
 # Each round simulates 100 held-out outbreaks (one draw each); 90 of
 # them, so a few skipped simulations do not stop the trainer.
 HOLDOUT=${HOLDOUT:-90}
 # Early checkpoints at 250 to 750 compare runs as they train; each lands
 # on a chunk's end.
-PREFIXES=${PREFIXES:-250 500 750 1000 2000 4000 8000}
+PREFIXES=${PREFIXES:-250 500 750 1000 2000 4000 8400}
 # The first round of grid r5; earlier rounds are other grids.
 FIRST_ROUND=${FIRST_ROUND:-9}
 # Round r's training seeds are SEED_BASE + 100 r on, ROUND_BATCHES of
@@ -38,13 +39,12 @@ FIRST_ROUND=${FIRST_ROUND:-9}
 SEED_BASE=${SEED_BASE:-30000}
 ROUND_BATCHES=${ROUND_BATCHES:-40}
 # One draw (grid r5 simulates one) at each of CUTS snapshots
-# (finetune_chronos.CUTS): 32 blocks a simulation, as with two draws at 16
-# before, so the learning rate still reaches zero at OUTBREAKS: 8 x 4,564
-# steps.
+# (finetune_chronos.CUTS): 32 blocks a simulation.
 DRAWS=${DRAWS:-1}
 CUTS=${CUTS:-32}
 SUBSET_SEED=${SUBSET_SEED:-1}
-LR_STEPS=${LR_STEPS:-36500}
+# 36,500 steps per 8,000 simulations (4.5625 a simulation) at OUTBREAKS.
+LR_STEPS=${LR_STEPS:-38325}
 # Zero-shot Chronos-2's loss on the BDBV pseudo-origins
 # (scripts/finetune_real_validation.py, blocks with their own 16-step
 # prediction length), which n1000 must beat.

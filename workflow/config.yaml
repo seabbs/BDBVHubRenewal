@@ -23,13 +23,15 @@ simulate:
 
 finetune:
   # The continuous run, one training
-  # segment per prefix (`--until`), in <RUN>/train/n<N>/.
-  prefixes: [250, 500, 750, 1000, 2000, 4000, 8000]
-  outbreaks: 8000
+  # segment per prefix (`--until`), in <RUN>/train/n<N>/. It trains on
+  # 8,400 outbreaks, ten of grid r5's balanced blocks of 840.
+  prefixes: [250, 500, 750, 1000, 2000, 4000, 8400]
+  outbreaks: 8400
   # Training seeds: the rounds' training batches in seed order, or a
   # fixed list from `seed_file` (one seed a line, in order). The held-out
   # batches are those of `held_round`. Grid r5 starts at round 9; rounds 9
-  # to 17 hold the outbreaks, a spare batch and room for QC exclusions.
+  # to 17 (9,000) hold the outbreaks, a spare batch and room for QC
+  # exclusions.
   rounds: [9, 10, 11, 12, 13, 14, 15, 16, 17]
   seed_file: null
   held_round: 9
@@ -39,14 +41,15 @@ finetune:
   sims_from: local
   # Chronos-2's recipe: one draw of each simulation cut at `cuts`
   # cut-offs, the learning rate falling linearly to zero over `lr_steps`,
-  # and the series bias at its own rate `bias_lr`.
+  # and the series bias at its own rate `bias_lr`. `lr_steps` is 36,500
+  # steps per 8,000 outbreaks (4.5625 a simulation) at 8,400.
   grid: r5
   draws: 1
   cuts: 32
   subset_seed: 1
   learning_rate: 1.0e-5
   bias_lr: 1.0e-3
-  lr_steps: 36500
+  lr_steps: 38325
   sources: [daily, weekly, 3day, daily+weekly, daily+3day]
   univariate_share: 0.2
   chunk: 250

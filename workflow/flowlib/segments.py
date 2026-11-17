@@ -27,13 +27,15 @@ def segments(prefixes: Iterable[int]) -> list[tuple[int | None, int]]:
     return list(zip([None, *ordered[:-1]], ordered, strict=True))
 
 
-def check_chunks(prefixes: Iterable[int], chunk: int) -> None:
+def check_chunks(
+    prefixes: Iterable[int], chunk: int, outbreaks: int | None = None
+) -> None:
     """Raise if a prefix does not end a training chunk.
 
-    The trainer takes outbreaks in chunks of `chunk`, so it can stop
-    cleanly only at a chunk's end.
+    The trainer takes outbreaks in chunks of `chunk`, the last ending at
+    the run's `outbreaks`, so it can stop cleanly only at a chunk's end.
     """
-    bad = [p for p in prefixes if p % chunk]
+    bad = [p for p in prefixes if p % chunk and p != outbreaks]
     if bad:
         raise ValueError(
             f"prefixes {bad} do not end a chunk of {chunk} outbreaks"

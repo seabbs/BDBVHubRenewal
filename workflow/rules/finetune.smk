@@ -18,7 +18,7 @@ if LOCAL["SIMS_FROM"]:
 RUN = LOCAL["RUN"]
 TRAIN = f"{RUN}/train"
 
-segments.check_chunks(FT["prefixes"], FT["chunk"])
+segments.check_chunks(FT["prefixes"], FT["chunk"], FT["outbreaks"])
 PREV = dict((n, p) for p, n in segments.segments(FT["prefixes"]))
 
 
