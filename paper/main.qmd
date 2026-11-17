@@ -116,11 +116,12 @@ Beside it, one place's daily rows carry a weekly total row, missing until the la
 
 ### Correlated trajectories
 
-- We pair the draws of `randomwalk` and `randomwalknowcast` into trajectories with a rolling Gaussian copula, so their sums over weeks and places are not too narrow, while each cell keeps its own draws (SI).
+- We pair the province draws of `randomwalk` and `randomwalknowcast` within each week with a rolling Gaussian copula, so their national forecast, the per-sample sum of the provinces, is not too narrow, while each cell keeps its own draws (SI).
+- The hub does not require coherence across levels, so this is our choice for the walks.
+  Chronos-2 submits its joint block's own national forecast.
 
-We score the paired trajectories with the variogram score of order 0.5 [@Scheuerer2015] on $\log(x + 1)$ counts and the coverage of sums over weeks and over places.
-We also report the energy score [@Gneiting2008], which has been used for epidemic trajectories from forecast hubs [@Bay2026] but discriminates poorly between dependence structures [@Pinson2013].
-Both scores are proper for joint forecasts [@gneitingStrictlyProperScoring2007].
+We score the national sum and the provinces by the CRPS and 90% coverage.
+We also report the energy score [@Gneiting2008], which is proper for joint forecasts [@gneitingStrictlyProperScoring2007] and has been used for epidemic trajectories from forecast hubs [@Bay2026], but discriminates poorly between dependence structures [@Pinson2013].
 
 ### Evaluation on held-out synthetic data
 
@@ -269,7 +270,7 @@ German nowcast hub: mean scores, coverage and number of forecasts of each model,
 - We show national nowcasts against the other submissions.
 - We summarise the scores.
 - The SI compares the joint block with each level alone and with the lowest level summed (Joint block or aggregation).
-- The SI compares the walks with the rolling copula and with the copula off (Impact of correlated trajectories).
+- The SI compares the walks with the rolling copula and with no pairing (Impact of correlated trajectories).
 :::
 
 ::: {#fig-ebola-nowcasts}
