@@ -402,6 +402,13 @@ def build_parser() -> argparse.ArgumentParser:
         "--out", required=True, help="A germany-backtest results directory."
     )
     gft.add_argument(
+        "--checkpoint-scores",
+        default=None,
+        help="evidence/checkpoint-scores.csv from the checkpoint-scoring "
+        "branch: only the live run's checkpoints are shown, labelled "
+        "preliminary (`reporting.live_checkpoint`).",
+    )
+    gft.add_argument(
         "--note",
         required=True,
         help="JSON naming the checkpoint shown, which the page reads.",
@@ -541,7 +548,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     coh = sub.add_parser(
         "coherence",
-        help="Compare the national data with the sum of the provinces.",
+        help="Compare the national data with the sum of the provinces, and "
+        "each province and the country with the sum of their zones.",
     )
     coh.add_argument("--vintage", default="latest")
     coh.add_argument("--data", default=data_dir)
@@ -639,6 +647,19 @@ def build_parser() -> argparse.ArgumentParser:
     )
     frz.add_argument("--ledger", required=True)
     frz.add_argument("--round", required=True)
+
+    live = sub.add_parser(
+        "live-checkpoint",
+        help="Write the live fine-tuning run's preliminary summary.",
+    )
+    live.add_argument(
+        "--scores",
+        required=True,
+        help="evidence/checkpoint-scores.csv from the checkpoint-scoring "
+        "branch; a missing file writes a note.",
+    )
+    live.add_argument("--out", required=True)
+    live.add_argument("--run", default=None, help="Defaults to LIVE_RUN.")
 
     rep = sub.add_parser("report", help="Make the docs figures and tables.")
     rep.add_argument("--figures", default="docs/figures")
@@ -1697,7 +1718,11 @@ def _coherence(args: argparse.Namespace) -> int:
     target = load_target(args.data)
     real = target.loc[target["kind"] == "real"]
     vintage = _vintage([str(v) for v in real["vintage"].unique()], args.vintage)
-    summary = coherence_summary(target, vintage)
+    try:
+        zones = load_health_zones(args.data)
+    except OSError:
+        zones = None
+    summary = coherence_summary(target, vintage, zones=zones)
     _print_coherence(summary)
     if args.out:
         out = Path(args.out)
@@ -1707,6 +1732,22 @@ def _coherence(args: argparse.Namespace) -> int:
 
 
 def _print_coherence(summary: dict[str, object]) -> None:
+    zones = summary.get("zones")
+    if isinstance(zones, dict):
+        if zones["coherent"]:
+            print(
+                f"Zone coherence ({summary['as_of']}): each province equals "
+                "the sum of its zones, and the country the sum of all zones."
+            )
+        else:
+            print(
+                f"WARNING: zone coherence ({summary['as_of']}): "
+                f"{zones['province_weeks_with_gap']} province-weeks and "
+                f"{zones['national_weeks_with_gap']} national weeks differ "
+                f"from their zones; {zones['unassigned_cases']} cases "
+                f"({100 * zones['unassigned_share']:.1f}%) are in no zone.",
+                file=sys.stderr,
+            )
     if summary["coherent"]:
         print(
             f"National coherence ({summary['as_of']}): the national counts "
@@ -1962,16 +2003,25 @@ def _germany_ft_load(args: argparse.Namespace) -> int:
     from bdbvhubrenewal.evaluation import germany as de
     from bdbvhubrenewal.evaluation import germany_store as gs
     from bdbvhubrenewal.forecasters import foundation
+    from bdbvhubrenewal.reporting import live_checkpoint as lc
 
     config = de.load_germany_config(args.config)
     spec = foundation.finetuned_spec(args.finetune)
     stored = gs.stored_tags(args.store)
+    live = None
+    path = Path(args.checkpoint_scores) if args.checkpoint_scores else None
+    if path is not None and path.is_file() and path.stat().st_size > 0:
+        live = lc.live_tags(pd.read_csv(path))
     tag, pinned = gs.choose_checkpoint(
-        stored, foundation.finetuned_releases(), spec
+        stored, foundation.finetuned_releases(), spec, live
     )
     note = Path(args.note)
     note.parent.mkdir(parents=True, exist_ok=True)
     meta = {"tag": tag, "pinned": pinned, "models": list(gs.STORED_MODELS)}
+    if live is not None:
+        meta["live_run"] = lc.LIVE_RUN
+        if tag in live:
+            meta["label"] = lc.label(live[tag])
     note.write_text(json.dumps(meta, indent=2) + "\n")
     if tag is None:
         print(
@@ -1995,6 +2045,19 @@ def _germany_ft_load(args: argparse.Namespace) -> int:
 def _data_root() -> Path:
     """Return the tidy data directory, `$BDBV_DATA_DIR` or `data/`."""
     return Path(os.environ.get("BDBV_DATA_DIR") or "data")
+
+
+def _live_checkpoint(args: argparse.Namespace) -> int:
+    from bdbvhubrenewal.reporting.live_checkpoint import LIVE_RUN, docs_page
+
+    path = Path(args.scores)
+    # The Pages step leaves an empty file when the branch has no table.
+    has = path.is_file() and path.stat().st_size > 0
+    scores = pd.read_csv(path) if has else None
+    out = Path(args.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(docs_page(scores, args.run or LIVE_RUN))
+    return 0
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -2080,6 +2143,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _germany_teams(args)
     if args.command == "germany-asof":
         return _germany_asof(args)
+    if args.command == "live-checkpoint":
+        return _live_checkpoint(args)
     if args.command == "germany-paper":
         return _germany_paper(args)
     if args.command == "germany-ft-load":

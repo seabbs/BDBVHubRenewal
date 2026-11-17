@@ -25,6 +25,10 @@ Scores at each of the paper's levels: Germany, its states and its age groups.
 
 --8<-- "germany-scores.md"
 
+## Fine-tuned checkpoint
+
+--8<-- "ft-preliminary.md"
+
 ## By horizon
 
 By days from the nowcast date to the end of the 7-day sum, at the level chosen.
