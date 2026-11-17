@@ -595,16 +595,22 @@ def checkpoint_sizes(
 
 
 def mail_section(ctx: Context) -> str:
-    """Return the mailbox's last matching lines, if a mailbox is set."""
-    if not ctx.mailbox or not ctx.mailbox.exists():
-        return "<p class=mut>no mailbox on this machine</p>"
+    """Return the notes file's last matching lines; none without one."""
+    if not ctx.mailbox:
+        return ""
+    if not ctx.mailbox.exists():
+        return "<h2>Recent activity</h2><p class=mut>no notes yet</p>"
     rx = re.compile(ctx.mail_filter, re.I) if ctx.mail_filter else None
     with ctx.mailbox.open(errors="replace") as f:
         tail = deque(f, maxlen=400)
     lines = [x.rstrip("\n") for x in tail if not rx or rx.search(x)][-30:]
     if not lines:
-        return "<p class=mut>no matching lines</p>"
-    return "<pre>" + html.escape("\n".join(lines)) + "</pre>"
+        return "<h2>Recent activity</h2><p class=mut>no matching lines</p>"
+    return (
+        "<h2>Recent activity</h2><pre>"
+        + html.escape("\n".join(lines))
+        + "</pre>"
+    )
 
 
 def build(ctx: Context) -> str:
@@ -683,7 +689,7 @@ own first 20 steps for both. Reference line is 1.</p>{plots}
 <script>{_asset("checkpoints.js")}</script>
 <h2>Performance on real data</h2>{scores_section(ctx, score_rows, local)}
 <h2>German nowcasts by checkpoint</h2>{germany_section(ctx, sizes)}
-<h2>Recent activity (mailbox)</h2>{mail_section(ctx)}
+{mail_section(ctx)}
 <details class=tbls><summary><b>Tables</b></summary>
 <h3>Checkpoints</h3><div class=wrap>{tables}</div></details>"""
     return (
