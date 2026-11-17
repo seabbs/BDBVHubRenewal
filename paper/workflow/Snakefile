@@ -345,12 +345,14 @@ def tables(mode, study):
 
 
 def outputs(mode):
-    design = [
-        f"{R}/{mode}/tables/main/synthetic-design.md",
-        *(
-            f"{R}/{mode}/tables/si/{n}.md"
-            for n in ("synthetic-design", "epinowcast-model", "heldout-set")
-        ),
+    design = [f"{R}/{mode}/figures/si/sim-examples.png"] + [
+        f"{R}/{mode}/tables/si/{n}.md"
+        for n in (
+            "grid-epidemic",
+            "grid-reporting",
+            "epinowcast-model",
+            "heldout-set",
+        )
     ]
     evidence = [f"{R}/{mode}/evidence.yml"]
     joint = [
@@ -358,7 +360,12 @@ def outputs(mode):
         for study in STUDIES
         if study in JOINT_STUDIES
     ]
-    return evidence + design + joint + [
+    real = (
+        [f"{R}/{mode}/tables/si/real-finetune.md"]
+        if {"germany", "ebola"} <= set(STUDIES)
+        else []
+    )
+    return evidence + design + joint + real + [
         path
         for study in STUDIES
         for path in [*figures(mode, study), *tables(mode, study)]
@@ -593,6 +600,18 @@ rule joint_scores:
         "--truth {input.truth} --out {output.scores} --table {output.table}"
 
 
+rule real_finetune:
+    # The real-data comparison of both case studies as one table.
+    input:
+        germany=f"{R}/{{mode}}/tables/si/germany-real-finetune.csv",
+        ebola=f"{R}/{{mode}}/tables/si/ebola-real-finetune.csv",
+    output:
+        f"{R}/{{mode}}/tables/si/real-finetune.md",
+    shell:
+        "{PYTHON} -m paperpipe real-finetune --germany {input.germany} "
+        "--ebola {input.ebola} --out {output}"
+
+
 def study_split(mode, study):
     s = run_settings(config, mode)
     if study == "germany" and s.germany_split is not None:
@@ -672,10 +691,23 @@ def grid_config(mode):
     }
 
 
-def grid_settings(w):
-    """Simulations whose settings give the realised values, if they exist."""
-    sims = SYNTHETIC["simulations"][w.mode]
-    return f"--settings {shlex.quote(sims)}" if os.path.isdir(sims) else ""
+# Example simulations of the grid, from pilot simulations on an evidence
+# branch (`paperfigs.sim_examples`).
+rule sim_examples:
+    output:
+        f"{R}/{{mode}}/figures/si/sim-examples.png",
+    params:
+        ref=SYNTHETIC["examples"]["ref"],
+        path=SYNTHETIC["examples"]["path"],
+        picks=shlex.quote(json.dumps(SYNTHETIC["examples"]["picks"])),
+        tmp=f"{R}/{{mode}}/sim-examples",
+    shell:
+        "(git -C .. cat-file -e {params.ref}^{{commit}} 2>/dev/null || "
+        "git -C .. fetch -q origin {params.ref}) && "
+        "rm -rf {params.tmp} && mkdir -p {params.tmp} && "
+        "git -C .. archive {params.ref} {params.path} | tar -x -C {params.tmp} "
+        "&& {PYTHON} -m paperfigs.sim_examples --sims {params.tmp}/{params.path} "
+        "--picks {params.picks} --out {output}"
 
 
 # The grid tables and SI notes, read from the simulator's code
@@ -684,19 +716,16 @@ rule grid_tables:
     input:
         simulator=evidence_file(SYNTHETIC["simulator"]),
     output:
-        main=f"{R}/{{mode}}/tables/main/synthetic-design.md",
-        si=f"{R}/{{mode}}/tables/si/synthetic-design.md",
+        epidemic=f"{R}/{{mode}}/tables/si/grid-epidemic.md",
+        reporting=f"{R}/{{mode}}/tables/si/grid-reporting.md",
         model=f"{R}/{{mode}}/tables/si/epinowcast-model.md",
         heldout=f"{R}/{{mode}}/tables/si/heldout-set.md",
     params:
         config=lambda w: shlex.quote(json.dumps(grid_config(w.mode))),
-        settings=grid_settings,
-        main=f"{R}/{{mode}}/tables/main",
         si=f"{R}/{{mode}}/tables/si",
     shell:
         "{PYTHON} -m papertables.synthetic_grid --simulator {input.simulator} "
-        "--config {params.config} {params.settings} "
-        "--main-dir {params.main} --si-dir {params.si}"
+        "--config {params.config} --si-dir {params.si}"
 
 
 rule evidence:
@@ -733,6 +762,7 @@ rule summary:
         "{PYTHON} -m paperpipe summary --mode {wildcards.mode} "
         "--meta {input.meta} --scores {input.scores} --out {output} "
         + (f"--finetuned {config['finetuned']}" if config.get("finetuned") else "")
+        + f" --realdata-after {REALDATA_AFTER}"
 
 
 # The paper reads `build`, so it shows the last run published.

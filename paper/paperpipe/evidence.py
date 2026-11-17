@@ -10,8 +10,8 @@ waits on in place of its table, and `None` in place of its numbers.
 - `copula_table`: mean joint scores, coverage of sums and WIS of each
   model and pairing arm, by strata.
 - `rho_medians`: median rolling copula correlations over origins and places.
-- `aggregation_table`: WIS of each aggregation option relative to
-  `randomwalknowcast` on the same targets, with coverage and n per level.
+- `aggregation_figure`: WIS of each aggregation option relative to
+  `randomwalknowcast` on the same targets, by study and level.
 - `heldout_figure` and `realism_figure`: the fine-tune's held-out loss
   and the simulated outbreaks against the data and published values.
 """
@@ -43,15 +43,14 @@ from paperpipe.outputs import to_markdown
 __all__ = [
     "ARMS",
     "EVIDENCE",
+    "aggregation_figure",
     "aggregation_numbers",
-    "aggregation_table",
     "branch_head",
     "checkpoint_figure",
     "checkpoint_numbers",
     "checkpoint_rows",
     "comparison_figure",
     "copula_table",
-    "cost_table",
     "diseases_table",
     "drop_finetuned",
     "heldout_figure",
@@ -77,12 +76,18 @@ ARMS: Final = {
 """Pairing arms of the copula comparison, in table order."""
 
 OPTIONS: Final = {
-    "joint": "Joint block",
-    "level": "Level by level",
-    "zones_summed": "Lowest level summed",
-    "zones_copula": "Lowest level summed after pairing",
+    "joint": "(a)",
+    "level": "(b)",
+    "zones_summed": "(c)",
+    "zones_copula": "(d)",
+    "weekly_row": "(e) weekly row",
+    "days_copula": "(e) days, copula",
+    "days_summed": "(e) days, random",
 }
-"""Aggregation options, in table order."""
+"""Aggregation options as the SI names them, in figure order: (a) to (d)
+sum over places, and (e) over time, comparing the daily model's in-block
+weekly row with its days summed after pairing by the rolling copula or at
+random."""
 
 
 def waiting(what: str) -> str:
@@ -162,73 +167,76 @@ def rho_medians(rho: pd.DataFrame) -> dict:
     return out
 
 
-def aggregation_table(
-    scores: pd.DataFrame, study: str, reference: str = "randomwalknowcast"
-) -> pd.DataFrame:
-    """Return each option's WIS relative to the reference, by level.
+def aggregation_figure(
+    scores: pd.DataFrame, reference: str = "randomwalknowcast"
+) -> Figure:
+    """Plot each option's WIS relative to the reference, by study and level.
+
+    One panel per study and level, never pooled across levels, with the
+    options (`OPTIONS`) on the x axis and one marker per model, on the
+    targets each shares with `reference`.
 
     Parameters
     ----------
     scores : pandas.DataFrame
         Per-target rows: `study`, `model`, `option`, `level`, `location`,
-        `origin_date`, `target_date`, `wis`, `log_wis`, `cover50`,
-        `cover95`, with the reference model's rows.
-    study : str
-        `ebola` or `germany`.
+        `origin_date`, `target_date` and `wis`, with the reference
+        model's rows.
     reference : str
         The model scores are relative to.
-
-    Returns
-    -------
-    pandas.DataFrame
-        One row per model, option and level: relative WIS with the log
-        scale in brackets, 50% and 95% coverage and n, the number of
-        targets shared with the reference.
     """
-    sc = scores.loc[scores["study"] == study]
-    keys = ["level", "location", "origin_date", "target_date"]
-    ref = sc.loc[sc["model"] == reference, [*keys, "wis", "log_wis"]]
-    paired = sc.loc[sc["model"] != reference].merge(
+    keys = ["study", "level", "location", "origin_date", "target_date"]
+    ref = scores.loc[scores["model"] == reference, [*keys, "wis"]]
+    ref = ref.drop_duplicates(keys)
+    paired = scores.loc[scores["model"] != reference].merge(
         ref, on=keys, suffixes=("", "_ref")
     )
-    g = paired.groupby(["model", "option", "level"], sort=False)
-    sums = g[["wis", "wis_ref", "log_wis", "log_wis_ref"]].sum()
-    rel = sums["wis"] / sums["wis_ref"]
-    rel_log = sums["log_wis"] / sums["log_wis_ref"]
-    cover = g[["cover50", "cover95"]].mean()
-    out = pd.DataFrame(
-        {
-            "Relative WIS (log)": [
-                f"{a:.2f} ({b:.2f})" for a, b in zip(rel, rel_log, strict=True)
-            ],
-            "50% / 95%": _pair(cover["cover50"], cover["cover95"]),
-            "n": g.size(),
-        },
-        index=sums.index,
-    ).reset_index()
-    out["option"] = pd.Categorical(
-        out["option"], categories=list(OPTIONS), ordered=True
+    sums = paired.groupby(["study", "level", "model", "option"])[
+        ["wis", "wis_ref"]
+    ].sum()
+    rel = (sums["wis"] / sums["wis_ref"]).rename("rel").reset_index()
+    panels = list(dict.fromkeys(zip(rel["study"], rel["level"], strict=True)))
+    studies = list(dict.fromkeys(s for s, _ in panels))
+    ncol = max(sum(s == st for s, _ in panels) for st in studies)
+    fig, axes = plt.subplots(
+        len(studies),
+        ncol,
+        figsize=(3.6 * ncol, 2.8 * len(studies)),
+        layout="constrained",
+        squeeze=False,
     )
-    out = out.sort_values(["model", "option", "level"])
-    out["option"] = out["option"].map(OPTIONS).astype(str)
-    return out.rename(
-        columns={"model": "Model", "option": "Option", "level": "Level"}
-    )
-
-
-def cost_table(cost: pd.DataFrame) -> pd.DataFrame:
-    """Return each option's cost, with the options named as in the SI."""
-    out = cost.assign(option=cost["option"].map(OPTIONS).fillna(cost["option"]))
-    return out.rename(
-        columns={
-            "study": "Study",
-            "model": "Model",
-            "option": "Option",
-            "series": "Series per block",
-            "memory_gb": "Memory (GB)",
-            "seconds": "Time (s)",
-        }
-    )
+    options = [o for o in OPTIONS if o in set(rel["option"])]
+    models = sorted(rel["model"].unique())
+    markers = dict(zip(models, "osD^v<>", strict=False))
+    for i, study in enumerate(studies):
+        levels = [lv for s, lv in panels if s == study]
+        for j in range(ncol):
+            ax = axes[i, j]
+            if j >= len(levels):
+                ax.set_visible(False)
+                continue
+            one = rel.loc[(rel["study"] == study) & (rel["level"] == levels[j])]
+            for model, g in one.groupby("model"):
+                ax.plot(
+                    [options.index(o) for o in g["option"]],
+                    g["rel"],
+                    ls="none",
+                    marker=markers[model],
+                    label=model,
+                )
+            ax.axhline(1, color="#888888", lw=1)
+            ax.set_xticks(
+                range(len(options)),
+                [OPTIONS[o] for o in options],
+                fontsize=7,
+                rotation=30,
+                ha="right",
+            )
+            ax.set_title(f"{study}, {levels[j]}", fontsize=9)
+            ax.set_ylabel("Relative WIS")
+    handles, labels = axes[0, 0].get_legend_handles_labels()
+    fig.legend(handles, labels, loc="outside lower center", ncol=2, fontsize=7)
+    return fig
 
 
 def aggregation_numbers(
@@ -458,7 +466,6 @@ FINETUNED_EVIDENCE: Final = (
     "copula_scores",
     "copula_rho",
     "aggregation_scores",
-    "aggregation_cost",
 )
 """Evidence of both zero-shot and fine-tuned models, whose fine-tuned rows
 come from earlier fine-tunes than the paper's and are left out."""
@@ -746,7 +753,6 @@ EVIDENCE: Final = {
     "copula_scores": "fm-copula's per-forecast copula scores",
     "copula_rho": "fm-copula's rolling correlation estimates",
     "aggregation_scores": "fm-agg's per-target aggregation scores",
-    "aggregation_cost": "fm-agg's cost of each option",
     "finetune_heldout": "fm-finetune3's held-out loss curve",
     "sim_summaries": "fm-finetune3's per-outbreak r3 pilot summaries",
     "sim_realism": "fm-finetune3's data reference values",
@@ -931,16 +937,10 @@ def write_evidence(
             None if cop is None else copula_table(cop, study),
             ["copula_scores"],
         )
-        table(
-            f"aggregation-{study}",
-            None if agg is None else aggregation_table(agg, study),
-            ["aggregation_scores"],
-        )
-    cost = data["aggregation_cost"]
-    table(
-        "aggregation-cost",
-        None if cost is None else cost_table(cost),
-        ["aggregation_cost"],
+    figure(
+        "aggregation",
+        None if agg is None else aggregation_figure(agg),
+        ["aggregation_scores"],
     )
     dis = data["sim_diseases"]
     table(

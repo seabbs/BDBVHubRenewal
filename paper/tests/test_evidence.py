@@ -585,3 +585,41 @@ def test_an_evidence_branch_resolves_to_its_head(tmp_path) -> None:
     # A new commit on the branch gives a new head, so the file is new.
     assert branch_head("scores", clone) == git("rev-parse", "scores")
     assert branch_head("scores", clone) != first
+
+
+def test_the_aggregation_figure_has_a_panel_per_study_and_level() -> None:
+    from paperpipe.evidence import aggregation_figure
+
+    rows = []
+    for study, levels in [
+        ("ebola", ["national", "provinces", "zones"]),
+        ("germany", ["national", "states", "age groups"]),
+    ]:
+        for level in levels:
+            for model, option in [
+                ("randomwalknowcast", "joint"),
+                ("fm_chronos_daily_ragged", "joint"),
+                ("fm_chronos_daily_ragged", "weekly_row"),
+                ("fm_chronos_daily_ragged", "days_copula"),
+                ("fm_chronos_daily_ragged", "days_summed"),
+            ]:
+                rows.append(
+                    {
+                        "study": study,
+                        "model": model,
+                        "option": option,
+                        "level": level,
+                        "location": "X",
+                        "origin_date": "2026-10-01",
+                        "target_date": "2026-09-26",
+                        "wis": 1.0 if model == "randomwalknowcast" else 0.8,
+                        "log_wis": 1.0,
+                        "cover50": 1,
+                        "cover95": 1,
+                    }
+                )
+    fig = aggregation_figure(pd.DataFrame(rows))
+    drawn = [ax for ax in fig.axes if ax.get_visible() and ax.has_data()]
+    assert len(drawn) == 6
+    labels = {t.get_text() for t in drawn[0].get_xticklabels()}
+    assert {"(a)", "(e) weekly row", "(e) days, copula"} <= labels
