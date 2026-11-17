@@ -40,8 +40,8 @@ The workflow uses:
 
 - paths: `ROOT` (rounds), `RUN` (the fine-tuning run), `SCORE_CACHE`, `NOSLOTS_RUN` and `GERMANY_BLOCKS` (the slots check's);
 - what this machine does: `TARGETS` (what `all` runs; by default `simulate finetune score`, so a CPU machine sets `simulate score` and a GPU machine `finetune`), `SIMS_FROM` (`local` or `release`), `PUBLISH` (release each checkpoint as it is trained);
-- resources: `JOB_PREFIX` (a per-job memory cap such as a `systemd-run` scope, or `workflow/scripts/mem_cap.sh {mem}` on macOS; `{mem}` becomes the job's budget), `MIN_FREE_GB` and `MIN_DISK_GB` (room a heavy job waits for), and the Taskfile's `CORES`, `MEM_MB` and `SIM_SLOTS`, or `SIM_PROFILE` for a host profile;
-- the rounds host a helping host pushes to: `REMOTE` and `REMOTE_ROOT`;
+- resources: `JOB_PREFIX` (a per-job memory cap such as a `systemd-run` scope, or `workflow/scripts/mem_cap.sh {mem}` on macOS; `{mem}` becomes the job's budget), `MIN_FREE_GB` and `MIN_DISK_GB` (room a heavy job waits for), and the Taskfile's `CORES`, `MEM_MB` and `SIM_SLOTS`, or `SNAKEMAKE_PROFILE`, an untracked profile of the machine's own (see `config/profile.example`);
+- sharing the rounds: `SIM_SEEDS` (the seeds this machine takes: seeds, `first-last` ranges or rounds as `r<N>`; empty: all), and on a helping machine `REMOTE` and `REMOTE_ROOT` (the rounds host and its rounds folder; empty: `ROOT`);
 - `HOST_NAME`.
 
 Nothing in the workflow needs a notes file. As an optional local extra, setting both `NOTIFY` and `MAILBOX` appends a one-line note to the file `MAILBOX` when a round is ready, a checkpoint is saved or published, the checked checkpoint misses zero-shot, scores land or a run fails. Both are empty by default, a note that cannot be written is only a warning, and no rule's output or success depends on it. The optional detached-job helpers in `tools/` use the same switch.
@@ -49,7 +49,7 @@ Nothing in the workflow needs a notes file. As an optional local extra, setting 
 Task reads `config/local.env` itself, not `$LOCAL_CONFIG`.
 
 Profiles in `workflow/profiles/` hold resources only and are named by role: `cpu` (simulate, score), `gpu` (fine-tune, publish) and `ci`.
-The two simulating hosts have their own: `archie` (the rounds host) and `laptop` (a helping host, which leaves 4 cores and 16 GB free), chosen by `SIM_PROFILE`.
+A machine's own cores and resources go in an untracked profile named by `SNAKEMAKE_PROFILE`, never in the repository.
 All of them rerun a step only when an input is newer (`rerun-triggers: mtime`), so editing a script does not reschedule finished work.
 Settings that are the same on every machine are in `workflow/config.yaml`; override them with `--config` or `--configfile`.
 
@@ -68,8 +68,8 @@ A round is grid block r, 840 simulations, and is used whole for training or as t
 - `round_ready`: the seed list and `READY`, last.
 - `simulate`: the rounds in `rounds`. At most `sim_slots` batches run at once (2 by default).
 - `release_batch`, `release_qc`, `release`: opt-in, each batch and the round's QC exclusions to its round's release.
-- `push_batch`, `push`: on a helping host, the seeds `simulate.hosts` names for it (seeds or `first-last` ranges, by `HOST_NAME`), each pushed to the rounds host's round (`REMOTE`, `REMOTE_ROOT`): its files, then its manifest row (`flowlib.hosts`).
-- `await_batch`: on the rounds host, a seed another host simulates, done once its manifest row has arrived; one waits at a time. Its row is kept as pushed.
+- `push_batch`, `push`: on a helping host, its seeds (`SIM_SEEDS`), each pushed to the rounds host's round (`REMOTE`, `REMOTE_ROOT`): its files, then its manifest row (`flowlib.hosts`).
+- `await_batch`: on the rounds host, a seed not in its `SIM_SEEDS`, done once the host that simulates it has pushed its manifest row; one waits at a time. Its row is kept as pushed.
 
 Outputs are in `<ROOT>/rounds/r<N>/`.
 

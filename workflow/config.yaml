@@ -19,11 +19,6 @@ simulate:
   retry_mem_mb: 20480
   # GitHub repository of the `sims-r<N>` releases.
   repo: seabbs/BDBVHubRenewal
-  # Seeds a helping host simulates, by its HOST_NAME, as seeds or
-  # first-last ranges; it pushes them to the rounds host (`push`), which
-  # simulates every other seed and waits for these (flowlib.hosts). For
-  # example {laptop: ["31005", "31007", "31900-31939"]}.
-  hosts: {}
 
 finetune:
   # The continuous run, one training

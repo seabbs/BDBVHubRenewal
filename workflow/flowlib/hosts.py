@@ -1,52 +1,51 @@
-"""Rounds simulated on two hosts: the seed split and the push of a batch.
+"""Rounds simulated on two hosts: each host's seeds and the push of a batch.
 
-`simulate.hosts` in workflow/config.yaml names the seeds each helping
-host simulates, as seeds or `first-last` ranges. A host it names
-simulates only those seeds; any other host, the rounds host, simulates
-every seed no host is named for and waits for the rest. A helping host
-pushes each finished batch to the rounds host's round (`REMOTE`, or
-this machine when empty): the files first, then the batch's manifest
-row, so a reader of the manifest sees complete batches only.
+Each host lists the seeds it takes in its local config (`SIM_SEEDS` in
+config/local.env): seeds, `first-last` ranges or whole rounds (`r<N>`).
+A host with none takes every seed. The rounds host simulates its seeds
+of each round and waits for the rest; a helping host pushes each of its
+batches to the rounds host's round (`REMOTE`, or this machine when
+empty): the files first, then the batch's manifest row, so a reader of
+the manifest sees complete batches only.
 """
 
 from __future__ import annotations
 
+import re
 import shlex
 import subprocess
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable
 from pathlib import Path
 
 from flowlib import manifest
 
+SPEC = re.compile(r"^(r(\d+)|(\d+)(-(\d+))?)$")
 
-def seeds(specs: Iterable[str | int]) -> set[int]:
-    """Return the seeds of specs such as `31005` or `31900-31939`."""
+
+def seeds(specs: str, round_seeds: Callable[[int], Iterable[int]]) -> set[int]:
+    """Return the seeds of space-separated specs.
+
+    A spec is a seed (`31005`), a range (`31900-31939`) or a round
+    (`r19`, its seeds from `round_seeds`). Raises `ValueError` on any
+    other spec.
+    """
     out: set[int] = set()
-    for spec in specs:
-        first, _, last = str(spec).partition("-")
-        out.update(range(int(first), int(last or first) + 1))
+    for spec in specs.split():
+        found = SPEC.match(spec)
+        if not found:
+            raise ValueError(f"not a seed, range or round: {spec}")
+        if found.group(2):
+            out.update(round_seeds(int(found.group(2))))
+        else:
+            first = int(found.group(3))
+            last = int(found.group(5) or first)
+            out.update(range(first, last + 1))
     return out
 
 
-def check(split: Mapping[str, Iterable[str | int]]) -> None:
-    """Raise if a seed is named for more than one host."""
-    seen: dict[int, str] = {}
-    for host, specs in split.items():
-        for seed in sorted(seeds(specs)):
-            if seed in seen:
-                raise ValueError(
-                    f"seed {seed} is named for both {seen[seed]} and {host}"
-                )
-            seen[seed] = host
-
-
-def simulates(
-    seed: int, host: str, split: Mapping[str, Iterable[str | int]]
-) -> bool:
-    """Whether `host` simulates `seed` under the split."""
-    if host in split:
-        return seed in seeds(split[host])
-    return not any(seed in seeds(s) for s in split.values())
+def simulates(seed: int, mine: set[int]) -> bool:
+    """Whether a host taking seeds `mine` (empty: all) simulates `seed`."""
+    return not mine or seed in mine
 
 
 def _on(remote: str, command: str) -> None:

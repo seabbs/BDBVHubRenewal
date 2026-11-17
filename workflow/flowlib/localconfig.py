@@ -40,10 +40,14 @@ DEFAULTS = (
     ("GERMANY_BLOCKS", "$ROOT/germany/germany.pkl"),
     ("JOB_PREFIX", ""),
     # The rounds host, as ssh names it (empty: this machine), and its
-    # rounds folder (empty: bdbv-rounds there, or ROOT here), where a
-    # helping host pushes its batches.
+    # rounds folder (empty: ROOT), where a helping host pushes its
+    # batches; the seeds this host simulates (flowlib.hosts; empty: all);
+    # and a Snakemake profile of this machine's cores and resources
+    # (empty: workflow/profiles/cpu with CORES, MEM_MB and SIM_SLOTS).
     ("REMOTE", ""),
     ("REMOTE_ROOT", ""),
+    ("SIM_SEEDS", ""),
+    ("SNAKEMAKE_PROFILE", ""),
     # Mailbox lines (any value turns them on), publishing as it trains,
     # the targets `all` runs here, and where batches come from (empty:
     # workflow/config.yaml's `finetune.sims_from`).

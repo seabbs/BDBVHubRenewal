@@ -1,0 +1,20 @@
+# An example Snakemake profile of one machine's cores and resources for
+# `task simulate` and `task push`. Copy this folder to an untracked one
+# (config/profile/ is ignored), set your values and name it in
+# config/local.env as SNAKEMAKE_PROFILE=config/profile. The values below
+# are placeholders.
+rerun-triggers: [mtime]
+printshellcmds: true
+keep-going: true
+latency-wait: 30
+#cores: 8
+default-resources:
+  - mem_mb=2048
+set-threads:
+  - simulate_batch=1
+resources:
+  # Batches at once, the memory budget the batches share (MB), and one
+  # batch from another host waited for at a time.
+  #- sim_slots=4
+  #- mem_mb=32768
+  - awaiting=1

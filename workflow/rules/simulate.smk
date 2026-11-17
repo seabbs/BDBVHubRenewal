@@ -11,20 +11,17 @@
 # Targets: `simulate` (the rounds in `rounds`), and the opt-in `release`,
 # which uploads each batch to the release sims-r<r>.
 #
-# Two hosts can share the rounds (flowlib.hosts): `simulate.hosts` names
-# the seeds a helping host simulates. That host's target is `push`,
-# which sends each of its batches to the rounds host (REMOTE) with its
-# manifest row; the rounds host's `simulate` waits for them.
+# Two hosts can share the rounds (flowlib.hosts): each lists the seeds
+# it takes in its local config (SIM_SEEDS; empty: all). A helping
+# host's target is `push`, which sends each of its batches to the rounds
+# host (REMOTE) with its manifest row; the rounds host's `simulate`
+# simulates its own seeds and waits for the rest.
 
 from flowlib import hosts, manifest, segments
 
 SIM = config["simulate"]
-SPLIT = SIM.get("hosts") or {}
-hosts.check(SPLIT)
 REMOTE = LOCAL["REMOTE"]
-REMOTE_ROUNDS = (
-    LOCAL["REMOTE_ROOT"] or ("bdbv-rounds" if REMOTE else LOCAL["ROOT"])
-) + "/rounds"
+REMOTE_ROUNDS = f"{LOCAL['REMOTE_ROOT'] or LOCAL['ROOT']}/rounds"
 
 
 def seeds_of(round_):
@@ -34,9 +31,12 @@ def seeds_of(round_):
     )
 
 
+MINE = hosts.seeds(LOCAL["SIM_SEEDS"], seeds_of)
+
+
 def here(seed):
     """Whether this host simulates batch `seed`."""
-    return hosts.simulates(int(seed), HOST, SPLIT)
+    return hosts.simulates(int(seed), MINE)
 
 
 def batch_files(wc):
@@ -110,7 +110,7 @@ rule simulate_batch:
 
 
 rule await_batch:
-    # A batch another host simulates (`simulate.hosts`): done once that
+    # A batch another host simulates (not in SIM_SEEDS): done once that
     # host has pushed its files and then its row to this round's
     # manifest. One waits at a time (`--resources awaiting=1`).
     output:
@@ -290,7 +290,8 @@ rule push_batch:
 
 
 rule push:
-    # A helping host's target: its seeds of the rounds in `rounds`.
+    # A helping host's target: its seeds (SIM_SEEDS) of the rounds in
+    # `rounds`.
     input:
         [
             f"{ROUNDS_DIR}/r{r}/sent/{s}.done"
