@@ -297,6 +297,21 @@ Option (d) tests whether pairing the draws with the copula before summing narrow
 - Key references: [@bosse2022scoringutils; @jordanEvaluatingProbabilisticForecasts2019; @zanetta_scoringrules_2024].
 :::
 
+### Choices tuned on development data
+
+@tbl-tuned-choices lists each choice we tuned and the data it was set on, none of which is in a scored set.
+
+::: {#tbl-tuned-choices}
+| Choice | Value | Set on |
+|---|---|---|
+| Floor on Chronos-2's scale at inference | None | Held-out simulations and the BDBV release backtest |
+| Lag cap of the ragged layout | 4 weeks or 28 days | German first half and the BDBV release backtest |
+| Copula prior $(\rho_t, \rho_p, \rho_n)$ | $(0.9, 0.7, 0.7)$ | Ebola release backtest |
+| Copula day correlation $\rho_d$ | 0.985 | Ebola release backtest |
+
+Choices tuned on development data, with their values and the data they were set on.
+:::
+
 ### Implementation
 
 ::: {.callout-note title="Plan"}
@@ -364,7 +379,8 @@ The cost of each option: series per block, memory and time.
 - They share the grid, the data order and the recipe, as checkpoints of one run.
 - @fig-finetune-heldout gives the held-out loss by source.
 - @fig-checkpoint-curve gives German first-half and BDBV relative scores at each checkpoint, with zero-shot Chronos-2 on the ragged layout and on complete data only as reference lines.
-- A later checkpoint has also trained for more steps, at a learning rate that falls to zero at 8,000 simulations.
+- A later checkpoint has also trained for more steps.
+- The learning rate falls linearly to zero at 8,000 simulations, so the 1,000, 2,000 and 4,000 checkpoints are taken at 88%, 75% and 50% of the starting rate, and only the 8,000 checkpoint is annealed.
 
 ![Held-out loss of the fine-tune against the number of simulated outbreaks it has seen.](build/figures/si/finetune-heldout.png){#fig-finetune-heldout}
 
@@ -376,7 +392,8 @@ The cost of each option: series per block, memory and time.
 - Both runs share the grid, the data order, the LoRA recipe and the checkpoints.
 - @tbl-slots-loss gives held-out loss by source, and @tbl-slots-scores German first-half and BDBV relative scores at checkpoints of the same size.
 - @tbl-slots-swap gives the loss when whole lag series move to another place, relative to the loss as given.
-- A ratio of 1 means the model does not tell which place a lag series belongs to.
+- A ratio above 1 means the model's forecast depends on which place's lags sit with a target.
+- Zero-shot Chronos-2 can also match lags to targets by value, so the comparison with the run without biases, not the ratio alone, tests the biases.
 - @fig-compare-slots shows both runs by checkpoint.
 - The run without biases built its 3-day blocks as daily steps, so we compare 3-day blocks with zero-shot only.
 
@@ -385,7 +402,7 @@ The cost of each option: series per block, memory and time.
 ::: {#tbl-slots-loss}
 {{< include build/tables/si/slots-loss.md >}}
 
-Held-out loss of the run with attention biases by source and window (nowcast or forecast steps), against the run without them at the same checkpoint and against zero-shot Chronos-2, with the paired ratio and its 90% interval over blocks.
+Held-out loss of the run with attention biases by source and window (nowcast or forecast steps), against the run without them at the same checkpoint and against zero-shot Chronos-2, with the paired ratio and its 90% bootstrap interval, resampling blocks.
 :::
 
 ::: {#tbl-slots-scores}
@@ -397,7 +414,7 @@ Relative WIS on the German first half and relative CRPS on the BDBV release back
 ::: {#tbl-slots-swap}
 {{< include build/tables/si/slots-swap.md >}}
 
-Lag-swap test: loss with whole lag series moved between places, as a ratio of the loss as given, with its 90% interval over blocks, for zero-shot Chronos-2 and the run with attention biases.
+Lag-swap test: loss with whole lag series moved between places, as a ratio of the loss as given, with its 90% bootstrap interval, resampling blocks, for zero-shot Chronos-2 and the run with attention biases.
 :::
 
 ### Delays against no delays
