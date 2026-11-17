@@ -25,7 +25,7 @@ def test_a_set_device_wins():
 def test_cuda_is_found_with_nvidia_smi(tmp_path):
     path = _nvidia_smi(tmp_path, 2)
     assert machine.device({}, path=path) == "cuda"
-    assert machine.gpus({}, path=path) == 2
+    assert machine.gpus(path=path) == 2
 
 
 def test_apple_silicon_has_mps():
@@ -57,9 +57,7 @@ def test_headroom_never_leaves_less_than_one_core():
 
 
 def test_the_arguments_hold_cores_and_resources():
-    args = machine.args(
-        {"SIM_SLOTS": "3"}, cores=8, total_mb=32768, path="", system="Linux"
-    )
+    args = machine.args({"SIM_SLOTS": "3"}, cores=8, total_mb=32768, path="")
     assert args[:2] == ["--cores", "8"]
     res = args[args.index("--resources") + 1 :]
     assert "mem_mb=32768" in res

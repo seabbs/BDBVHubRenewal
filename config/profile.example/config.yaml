@@ -1,8 +1,9 @@
-# An example Snakemake profile of one machine's cores and resources for
-# `task simulate` and `task push`. Copy this folder to an untracked one
-# (config/profile/ is ignored), set your values and name it in
-# config/local.env as SNAKEMAKE_PROFILE=config/profile. The values below
-# are placeholders.
+# An example Snakemake profile for a machine that needs more than
+# workflow/profiles/default and its budget (flowlib.machine). Copy this
+# folder to an untracked one (config/profile/ is ignored), set your
+# values and name it in config/local.env as
+# SNAKEMAKE_PROFILE=config/profile; it then replaces the default profile
+# and budget for every target. The values below are placeholders.
 rerun-triggers: [mtime]
 printshellcmds: true
 keep-going: true
@@ -13,8 +14,9 @@ default-resources:
 set-threads:
   - simulate_batch=1
 resources:
-  # Batches at once, the memory budget the batches share (MB), and one
-  # batch from another host waited for at a time.
+  # One trainer at a time, batches at once, their shared memory budget
+  # (MB), and one batch from another host waited for at a time.
+  - gpu=1
   #- sim_slots=4
   #- mem_mb=32768
   - awaiting=1

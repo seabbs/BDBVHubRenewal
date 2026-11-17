@@ -180,7 +180,7 @@ rule train_segment:
         bias=f"--series-bias --bias-lr {FT['bias_lr']}"
         if FT["series_bias"]
         else "",
-        device=LOCAL.get("DEVICE") or os.environ.get("DEVICE", "auto"),
+        device=machine.device(LOCAL),
         hf_home=LOCAL.get("HF_HOME", "output/finetune/hf"),
         watermark=LOCAL.get("MPS_HIGH_WATERMARK", "0.85"),
     resources:

@@ -15,7 +15,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(workflow.basedir)))
 
-from flowlib import localconfig, notify  # noqa: E402
+from flowlib import localconfig, machine, notify  # noqa: E402
 
 
 configfile: str(Path(workflow.basedir) / "config.yaml")
