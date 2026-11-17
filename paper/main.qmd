@@ -230,7 +230,7 @@ Held-out synthetic data: mean scores, coverage and number of forecasts of each m
 ::: {#tbl-synthetic-joint}
 {{< include build/tables/main/synthetic-joint.md >}}
 
-Held-out synthetic data: mean energy and variogram scores of each model's trajectories on log(x + 1) counts, and their ratio to {{< meta results.synthetic.baseline >}} on the forecasts both made. {{< meta results.synthetic.label >}} {{< meta results.synthetic.note >}}
+Held-out synthetic data: mean energy score of each model's trajectories on log(x + 1) counts, and their ratio to {{< meta results.synthetic.baseline >}} on the forecasts both made. {{< meta results.synthetic.label >}} {{< meta results.synthetic.note >}}
 :::
 
 ### German nowcast hub
@@ -296,7 +296,7 @@ Ebola hub submissions: mean scores, coverage and number of forecasts of each mod
 ::: {#tbl-ebola-joint}
 {{< include build/tables/main/ebola-joint.md >}}
 
-Ebola hub submissions: mean energy and variogram scores of each model's trajectories on log(x + 1) counts, and their ratio to {{< meta results.ebola.baseline >}} on the forecasts both made. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
+Ebola hub submissions: mean energy score of each model's trajectories on log(x + 1) counts, and their ratio to {{< meta results.ebola.baseline >}} on the forecasts both made. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
 :::
 
 ## Discussion
