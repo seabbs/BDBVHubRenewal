@@ -67,6 +67,7 @@ class Context:
     excluded: set = field(default_factory=set)
     mirror_status: str = ""
     delays: dict[str, int | None] = field(default_factory=dict)
+    summarised: dict[str, tuple] = field(default_factory=dict)
 
     def log(self, run: Run) -> list[dict[str, Any]]:
         """Return a run's logged steps (none for a run with no folder)."""
@@ -87,19 +88,39 @@ class Context:
     def forecasts(self, key: str) -> Path:
         """Return the quantile files a dataset's panels read.
 
-        A samples dataset is summarised first into the mirror folder.
+        A samples dataset's are its summaries (`summarise`), never made
+        while a page is built.
         """
-        ds = self.dataset(key)
-        folder = self.source.dataset(key)
-        if ds.get("format") != "samples":
-            return folder
-        out = self.source.root / f"{key}-quantiles"
-        truth = self.source.truth(key)
-        if truth is not None and truth.is_file() and folder.is_dir():
-            self.delays[key] = nowcasts.summarise_samples(
-                folder, out, truth, ds
+        if self.dataset(key).get("format") != "samples":
+            return self.source.dataset(key)
+        return self.source.root / f"{key}-quantiles"
+
+    def summarise(self) -> None:
+        """Summarise each samples dataset whose truth or files changed.
+
+        Run at start, before a static render and in the background loop.
+        """
+        for ds in self.datasets:
+            if ds.get("format") != "samples":
+                continue
+            key = ds["key"]
+            folder = self.source.dataset(key)
+            truth = self.source.truth(key)
+            if truth is None or not truth.is_file() or not folder.is_dir():
+                continue
+            sig = (
+                truth.stat().st_mtime_ns,
+                tuple(
+                    (str(f), f.stat().st_mtime_ns)
+                    for f in sorted(folder.glob("*/*.csv.gz"))
+                ),
             )
-        return out
+            if self.summarised.get(key) == sig:
+                continue
+            self.delays[key] = nowcasts.summarise_samples(
+                folder, self.forecasts(key), truth, ds
+            )
+            self.summarised[key] = sig
 
     def nowcasts(self, key: str) -> dict[str, Any] | None:
         """Return a dataset's nowcasts, rebuilt only when its files change."""
@@ -575,11 +596,13 @@ def _caption(ctx: Context, ds: Mapping[str, Any]) -> str:
     return text.replace("{delay}", "" if delay is None else str(delay))
 
 
-def nowcasts_section(ctx: Context, sizes: Mapping[str, int]) -> str:
+def nowcasts_section(
+    ctx: Context, sizes: Mapping[str, int], builts: Mapping[str, Any]
+) -> str:
     """Return the nowcast panels of every dataset, behind a selector."""
     datasets, sources = [], set()
     for ds in ctx.datasets:
-        built = ctx.nowcasts(ds["key"])
+        built = builts.get(ds["key"])
         if not built or not built["origins"] or not built["locs"]:
             continue
         meta = nowcasts.meta(
@@ -713,14 +736,14 @@ def tables_section(ctx: Context, info: Mapping[str, Any]) -> str:
     return "".join(out)
 
 
-def selector_data(ctx: Context) -> str:
+def selector_data(ctx: Context, builts: Mapping[str, Any]) -> str:
     """Return the shared run and reference selector's data."""
     refs = [
         {"key": r.key, "label": r.label, "color": r.colour}
         for r in ctx.references
     ]
     for ds in ctx.datasets:
-        built = ctx.nowcasts(ds["key"])
+        built = builts.get(ds["key"])
         for s in built["sets"] if built else ():
             if s.startswith("model:") and not any(r["key"] == s for r in refs):
                 refs.append(
@@ -789,6 +812,7 @@ def build(ctx: Context) -> str:
     ]
     sizes = checkpoint_sizes(ctx, info, score_rows)
     mail = mail_section(ctx)
+    builts = {ds["key"]: ctx.nowcasts(ds["key"]) for ds in ctx.datasets}
     sections = [
         ("status", "Status"),
         ("loss", "Loss"),
@@ -809,7 +833,7 @@ def build(ctx: Context) -> str:
 <div class=navrow><b>{html.escape(live.label)} run</b><nav class=nav>{nav}</nav>
 {bar}<span class=mut>{datetime.now():%H:%M:%S}</span></div>
 <div id=selbar class=selbar></div>
-<script type="application/json" id=seldata>{selector_data(ctx)}</script>
+<script type="application/json" id=seldata>{selector_data(ctx, builts)}</script>
 <script>ftSel.init(JSON.parse(document.getElementById("seldata").textContent))</script>
 </header>
 <details class=sec id=status open><summary><h2>Status</h2></summary>
@@ -825,7 +849,7 @@ def build(ctx: Context) -> str:
             scores_section(ctx, score_rows, local) + notes_section(ctx),
             True,
         ),
-        ("nowcasts", "Nowcasts", nowcasts_section(ctx, sizes), True),
+        ("nowcasts", "Nowcasts", nowcasts_section(ctx, sizes, builts), True),
     ]
     if mail:
         parts.append(("mailbox", "Recent activity", mail, True))

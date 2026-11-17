@@ -226,3 +226,24 @@ def test_the_mailbox_section_is_hidden_without_a_mailbox(tmp_path):
     ctx = _machine(tmp_path)
     ctx.mailbox = None
     assert "Recent activity" not in page.build(ctx)
+
+
+def test_samples_are_summarised_outside_page_builds(tmp_path, monkeypatch):
+    from flowlib.dashboard import nowcasts
+
+    ctx = _machine(tmp_path)
+    ctx.datasets = [{"key": "b", "format": "samples", "groups": []}]
+    calls = []
+    monkeypatch.setattr(
+        nowcasts, "summarise_samples", lambda *a, **_k: calls.append(a) or 14
+    )
+    truth = tmp_path / "truth.csv"
+    truth.write_text("kind\n")
+    (tmp_path / "scores" / "b").mkdir(parents=True)
+    monkeypatch.setattr(ctx.source, "truth", lambda _key: truth)
+    page.build(ctx)
+    assert calls == []
+    ctx.summarise()
+    ctx.summarise()  # nothing changed: the summaries are not redone
+    assert len(calls) == 1
+    assert ctx.delays["b"] == 14
