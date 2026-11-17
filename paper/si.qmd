@@ -45,7 +45,7 @@ Chronos-2's group attention has no notion of which series is which, so on its ow
 
 - We add four learned biases to Chronos-2's group-attention scores (@tbl-attention-biases).
 - They start at zero, so fine-tuning starts from base Chronos-2, as for the relation biases TableFormer adds to a pretrained model [@Yang2022].
-- The biases train at a learning rate of $10^{-3}$ and the LoRA adapter at $10^{-5}$, both falling linearly to zero at 8,000 outbreaks.
+- The biases train at a learning rate of $10^{-3}$ and the LoRA adapter at $10^{-5}$, both falling linearly to zero at 8,400 simulations.
 - We identify places by name within each block, with no limit on the number of places.
 - A place's parent is the nearest prefix of its name in the block, else the country.
 - Training blocks include countries equal to, above or later than the sum of their places, so a place belongs to its parent without summing to it.
@@ -135,16 +135,16 @@ where $m_{n,t}$ is 1 for a target step to forecast and 0 for a missing target or
 $$
 \eta_t = \eta_0 \left(1 - \frac{t}{T}\right),
 $$
-with $T = 36{,}500$ steps, which is reached at 8,000 simulations.
+with $T$ the step at 8,400 simulations (value pending the design's launcher).
 - $\eta_0 = 10^{-5}$ for the LoRA adapter, as in Chronos-2 [@Ansari2025], and $\eta_0 = 10^{-3}$ for the attention biases.
 - We train with AdamW [@Loshchilov2019] and clip the gradient norm at 1 [@Pascanu2013].
 - Neither has weight decay or warmup, as in Chronos-2's fine-tuning [@Ansari2025], and the biases follow Moirai and TableFormer in having no weight decay [@Woo2024; @Yang2022].
 
 **Training blocks.**
 A simulation gives daily counts by onset and report date, and a release counts every case reported by its cut-off, one cut-off a week.
-Each simulation gives one observation draw, cut at 32 cut-offs, one drawn at random within each of 32 equal stretches of its weekly cut-offs, so one simulation gives 32 blocks.
+Each simulation gives one observation draw, cut at 32 cut-offs, one drawn at random within each of 32 equal stretches of its weekly cut-offs, so one simulation gives up to 32 blocks.
 Each block has up to 364 steps of context, and its prediction length is its horizon.
-We train on 8,000 simulations, with checkpoints at 250, 500, 750, 1,000, 2,000, 4,000 and 8,000.
+We train on 8,400 simulations, 10 balanced blocks of 840, save checkpoints from 250 simulations on, and report the checkpoint at 8,400.
 
 ::: {#tbl-block-layouts}
 | Layout | Share of blocks |
@@ -173,10 +173,10 @@ The realised shares of the combinations of layout and options in the training bl
 :::
 
 **Order of the training data.**
-The grid is a crossed factorial design balanced in every block of 120 simulations, with each factor's levels shuffled independently, as in a Latin hypercube.
-Training takes the simulations in chunks of 250, about two balanced blocks.
-A chunk gives about 6,700 training blocks, which are shuffled and packed into about 1,250 steps of up to 256 series each.
-So every checkpoint has seen the whole grid, and no factor level comes in a run of its own.
+The grid is balanced in blocks of 840 simulations, with each factor's levels shuffled independently within a block, as in a Latin hypercube.
+Training takes the simulations in order, in chunks of 250, so a chunk holds under a third of a block.
+A chunk gives about 7,150 training blocks, as blocks with no counts are skipped, which are shuffled and packed into about 1,500 steps of up to 256 series each.
+So the checkpoints at 250, 500 and 750 simulations have seen only part of the grid, and the final model has seen 10 full blocks.
 
 Chronos-2 divides a flat context by a scale of $10^{-5}$, and we apply no floor to that scale at inference.
 A floor of one count at inference only hurts small series, of five counts or fewer, on held-out simulations.
@@ -258,7 +258,7 @@ The simulated outbreaks' ranges against published values for several diseases, t
 
 We cut the held-out simulations into blocks as in training, with the five layouts and non-summing parents (@tbl-block-layouts), using a fixed seed.
 A manifest records each held-out block's layout and options.
-The paper's test set, 100 simulations outside training, is cut the same way.
+The paper's test set, one balanced block of 840 simulations outside training, is cut the same way.
 
 ### Correlated trajectories
 
@@ -367,13 +367,13 @@ Summing the lowest level loses at every level above it, with or without the copu
 
 ### Checkpoint curve
 
-- We compare the final run's checkpoints, fine-tuned on 250, 500, 750, 1,000, 2,000, 4,000 and 8,000 simulations.
+- We compare the final run's checkpoints, fine-tuned on 250 to 8,400 simulations.
 - They share the grid, the data order and the recipe, as checkpoints of one run.
 - @fig-finetune-heldout gives the trainer's held-out loss by level, for transparency, not to select a checkpoint.
 - @fig-checkpoint-curve gives German first-half and BDBV relative scores at each checkpoint, with zero-shot Chronos-2 on the ragged layout and on complete data only as reference lines.
 - @tbl-checkpoints gives the headline scores of each checkpoint.
 - A later checkpoint has also trained for more steps.
-- The learning rate falls linearly to zero at 8,000 simulations, so the earlier checkpoints are taken at 97% (250) to 50% (4,000) of the starting rate, and only the 8,000 checkpoint is annealed.
+- The learning rate falls linearly to zero at 8,400 simulations, so only the 8,400 checkpoint is annealed.
 
 ![The trainer's held-out loss of the fine-tune by level (national, intermediate and leaf) against the number of simulated outbreaks it has seen. {{< meta evidence.live.label >}} Development data only.](build/figures/si/finetune-heldout.png){#fig-finetune-heldout}
 
