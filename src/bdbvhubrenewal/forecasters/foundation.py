@@ -1119,10 +1119,13 @@ class FoundationModel:
         horizon = len(tri.times) - start
         seed = int(task.rng(self.stream or self.name).integers(0, 2**31 - 1))
         period = week_rows(tri) if self.weekly_totals else None
-        cased = {places[i] for i in np.flatnonzero(tri.final.sum(axis=1))}
-        group = _lags_of(
-            layout_block(tri, self.layout, places, start, period), cased
-        )
+        group = layout_block(tri, self.layout, places, start, period)
+        if self.checkpoint is None:
+            # Zero-shot drops the lags of places with no cases, which tell
+            # Chronos-2 nothing. A fine-tuned model was trained with them
+            # (all-zero rows), so it keeps them.
+            cased = {places[i] for i in np.flatnonzero(tri.final.sum(axis=1))}
+            group = _lags_of(group, cased)
         sample = self.sample or partial(
             chronos_sampler, checkpoint=self.checkpoint
         )
