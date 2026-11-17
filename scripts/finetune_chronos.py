@@ -32,7 +32,7 @@ from bdbvhubrenewal.forecasters.finetune import (
     weekly_cutoffs,
 )
 
-CONTEXT = 288
+CONTEXT = 364
 """Steps of context in a block, left-padded with missing values."""
 
 
@@ -117,9 +117,9 @@ up to it. With gradient checkpointing a block of 2,400 series fits the
 laptop's GPU memory (64 GB) but peaks at about 56 GB in training, so
 2,000 leaves headroom."""
 
-CUTS = 16
+CUTS = 32
 """Snapshots (cut-off slots) of each observation draw, spread over its
-course."""
+course: 32 blocks from one draw."""
 
 MEMORY_COST = {False: (0.0, 6.7e-5), True: (6.25e-3, 3.35e-6)}
 """GPU memory of one training step in GB per series and per series
@@ -326,28 +326,19 @@ def choose_places(
     return (NATIONAL, *totals, *sorted(leaves)), mix
 
 
-REPORT_BATCH_SHARE = 0.1
-"""Share of blocks whose reports come in a weekly batch on a random
-weekday (`finetune.batch_reports`), with any layout."""
-
 AGGREGATE_END = "a random weekday, or 3-day offset, per block"
 """The day a block's period totals end on (`finetune.period_totals`):
 any, as the German target is a 7-day sum ending on every day."""
 
 
 def block_options(source: str, rng: np.random.Generator) -> dict:
-    """Return a block's report batching and period end, drawn from `rng`.
+    """Return a block's period end, drawn from `rng`.
 
-    A weekly batch on a random weekday for `REPORT_BATCH_SHARE` of
-    blocks; for a source with period totals, a random end day.
+    For a source with period totals, a random end day. Reports come in
+    weekly batches only from the grid's weekday reporting.
     """
-    batch = rng.random() < REPORT_BATCH_SHARE
-    weekday = int(rng.integers(7))
     end = int(rng.integers(7 if MIXED.get(source) == "weekly" else 3))
-    return {
-        "batch_weekday": weekday if batch else None,
-        "period_end": end if source in MIXED else None,
-    }
+    return {"period_end": end if source in MIXED else None}
 
 
 def outbreak_blocks(

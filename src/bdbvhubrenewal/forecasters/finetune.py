@@ -283,18 +283,6 @@ def period_totals(
     return out
 
 
-def batch_reports(counts: pd.DataFrame, weekday: int) -> pd.DataFrame:
-    """Return counts reported in a weekly batch on `weekday` (Monday 0).
-
-    Each report is held to the next `weekday` on or after its date, as
-    epinowcast's cumulative report-date aggregation does, so a release
-    gains reports only once a week. Reference dates are unchanged.
-    """
-    report = pd.to_datetime(counts["report_date"])
-    held = report + pd.to_timedelta((weekday - report.dt.weekday) % 7, "D")
-    return counts.assign(report_date=held.dt.strftime("%Y-%m-%d"))
-
-
 PARENTS: Final = ("exact", "unallocated", "late_parent")
 """How a block's country relates to its places (`country_counts`)."""
 
@@ -339,7 +327,6 @@ def training_block(
     parent: str = "exact",
     rng: np.random.Generator | None = None,
     period_end: int | None = None,
-    batch_weekday: int | None = None,
 ) -> dict[str, Any] | None:
     """Return one training block, cut at the last of `cutoffs`.
 
@@ -372,8 +359,6 @@ def training_block(
     period_end : int, optional
         For a source with period totals (`MIXED`), the day its periods
         end on (`period_totals`).
-    batch_weekday : int, optional
-        Report in a weekly batch on this weekday (`batch_reports`).
 
     Returns
     -------
@@ -387,8 +372,6 @@ def training_block(
     """
     cut = cutoffs[-1]
     end = epiweek_end(cut) + dt.timedelta(weeks=ahead_weeks)
-    if batch_weekday is not None:
-        counts = batch_reports(counts, batch_weekday)
     counts, country = country_counts(
         counts, parent, rng or np.random.default_rng(0)
     )

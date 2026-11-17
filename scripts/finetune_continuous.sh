@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Fine-tune Chronos-2 continuously on the r4 rounds as they are simulated.
+# Fine-tune Chronos-2 continuously on the grid r5 rounds as they are
+# simulated, from round FIRST_ROUND.
 #
 #   nohup scripts/finetune_continuous.sh > output/finetune/continuous.out 2>&1 &
 #
@@ -10,8 +11,8 @@
 # one trainer over the growing list from
 # base Chronos-2 to OUTBREAKS with Chronos-2's recipe
 # (scripts/finetune_stream.py): learning rate 1e-5 falling linearly to zero
-# over LR_STEPS, each block's horizon as its prediction length, every draw
-# cut at 16 snapshots. The trainer checks and publishes a checkpoint at each
+# over LR_STEPS, each block's horizon as its prediction length, one draw
+# of each simulation cut at 32 snapshots. The trainer checks and publishes a checkpoint at each
 # doubling from 1,000, whatever its scores, and waits for rounds as they
 # land. Each checkpoint is copied to `$REMOTE_ROOT/checkpoints/` with a
 # line in the shared mailbox; a stopped trainer is an alert in the
@@ -23,14 +24,17 @@ HERE=${HERE:-output/finetune/continuous}
 OUTBREAKS=${OUTBREAKS:-8000}
 # Each round simulates 100 held-out outbreaks.
 HOLDOUT=${HOLDOUT:-100}
-# Early checkpoints at 125 to 750 compare runs as they train; each lands
+# Early checkpoints at 250 to 750 compare runs as they train; each lands
 # on a chunk's end.
-PREFIXES=${PREFIXES:-125 250 500 750 1000 2000 4000 8000}
-# Two draws at each of 16 snapshots, sampled across the 10: 32 blocks, about
-# 2.2 h per 1,000 simulations on an M-series laptop (2026-11-16 probe:
-# 22,820 steps per 1,000 at 160 blocks, 1.75 s a step). The learning rate
-# reaches zero at OUTBREAKS: 8 x 4,564 steps.
-DRAWS=${DRAWS:-2}
+PREFIXES=${PREFIXES:-250 500 750 1000 2000 4000 8000}
+# The first round of grid r5; earlier rounds are other grids.
+FIRST_ROUND=${FIRST_ROUND:-9}
+# One draw (grid r5 simulates one) at each of CUTS snapshots
+# (finetune_chronos.CUTS): 32 blocks a simulation, as with two draws at 16
+# before, so the learning rate still reaches zero at OUTBREAKS: 8 x 4,564
+# steps.
+DRAWS=${DRAWS:-1}
+CUTS=${CUTS:-32}
 SUBSET_SEED=${SUBSET_SEED:-1}
 LR_STEPS=${LR_STEPS:-36500}
 # Zero-shot Chronos-2's loss on the BDBV pseudo-origins
@@ -41,7 +45,7 @@ SOURCES=${SOURCES:-daily weekly 3day daily+weekly daily+3day}
 UNIVARIATE_SHARE=${UNIVARIATE_SHARE:-0.2}
 # Simulations per training chunk: training starts once this many have
 # landed, in seed order.
-CHUNK=${CHUNK:-125}
+CHUNK=${CHUNK:-250}
 REAL_VALIDATION=${REAL_VALIDATION:-output/finetune/real-validation.pkl}
 # The series bias (src/bdbvhubrenewal/forecasters/series_bias.py): 1 trains
 # a learned group attention bias for same-place and parent-child series
@@ -65,6 +69,7 @@ sync_rounds() {
   touch "$HERE/seeds.txt"
   local n d
   for n in $(remote_ls | sed -n 's/^r\([0-9]*\)$/\1/p' | sort -n); do
+    [ "$n" -ge "$FIRST_ROUND" ] || continue
     d=$HERE/rounds/r$n
     mkdir -p "$d"
     pull "r$n" manifest.csv "$d" || continue
@@ -131,22 +136,22 @@ trainer=""
 published=""
 while true; do
   sync_rounds || echo "$(date) sync failed; trying again"
-  if [ -z "$trainer" ] && [ -s "$HERE/rounds/r1/held-out.txt" ]; then
-    read -r -a held < "$HERE/rounds/r1/held-out.txt"
+  if [ -z "$trainer" ] && [ -s "$HERE/rounds/r$FIRST_ROUND/held-out.txt" ]; then
+    read -r -a held < "$HERE/rounds/r$FIRST_ROUND/held-out.txt"
     # $bias is empty or one word, so it is left unquoted.
     # shellcheck disable=SC2086
     PYTORCH_MPS_HIGH_WATERMARK_RATIO=${MPS_HIGH_WATERMARK:-0.85} \
     PYTORCH_MPS_LOW_WATERMARK_RATIO=0.6 \
     HF_HOME=${HF_HOME:-output/finetune/hf} HF_HUB_OFFLINE=1 MPLCONFIGDIR="${TMPDIR:-/tmp}" \
       nohup .venv/bin/python scripts/finetune_stream.py \
-      "$HERE/sims" "$HERE/train" --grid r4 --seed-list "$HERE/seeds.txt" \
+      "$HERE/sims" "$HERE/train" --grid r5 --seed-list "$HERE/seeds.txt" \
       --held-out-seeds "${held[0]}" "${held[1]}" --holdout "$HOLDOUT" \
       --outbreaks "$OUTBREAKS" \
       --prefixes $PREFIXES --stop-from "$((OUTBREAKS + 1))" \
-      --blocks-per-simulation $((16 * DRAWS)) --draws-per-simulation "$DRAWS" \
+      --blocks-per-simulation $((CUTS * DRAWS)) --draws-per-simulation "$DRAWS" \
       --subset-seed "$SUBSET_SEED" --learning-rate 1e-5 --lr-steps "$LR_STEPS" \
       --sources $SOURCES --univariate-share "$UNIVARIATE_SHARE" \
-      --real-validation "$REAL_VALIDATION" --note "continuous r4" --publish \
+      --real-validation "$REAL_VALIDATION" --note "continuous r5" --publish \
       --chunk "$CHUNK" --wait-for-seeds \
       --exclude "$HERE/excluded.txt" $bias \
       >> "$HERE/train.log" 2>&1 < /dev/null &
