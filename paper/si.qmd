@@ -138,6 +138,7 @@ $$
 with $T = 36{,}500$ steps, which is reached at 8,000 simulations.
 - $\eta_0 = 10^{-5}$ for the LoRA adapter, as in Chronos-2 [@Ansari2025], and $\eta_0 = 10^{-3}$ for the attention biases.
 - We train with AdamW [@Loshchilov2019] and clip the gradient norm at 1 [@Pascanu2013].
+- Neither has weight decay or warmup, as in Chronos-2's fine-tuning [@Ansari2025], and the biases follow Moirai and TableFormer in having no weight decay [@Woo2024; @Yang2022].
 
 **Training blocks.**
 A simulation gives daily counts by onset and report date, and a release counts every case reported by its cut-off, one cut-off a week.
