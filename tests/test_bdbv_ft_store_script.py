@@ -46,7 +46,7 @@ def test_draws_become_hub_quantiles_with_truth(store) -> None:
     )
     out = store.bdbv_quantiles(draws, truth, (0.05, 0.5, 0.95))
     assert out["quantile"].tolist() == [0.05, 0.5, 0.95]
-    assert out["value"].round(1).tolist() == [49.9, 499.5, 949.0]
+    assert out["value"].tolist() == pytest.approx([49.95, 499.5, 949.05])
     assert (out["truth"] == 500.0).all()
     assert set(out.columns) >= {
         "model",

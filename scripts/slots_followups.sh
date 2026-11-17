@@ -34,6 +34,20 @@ if [ -f "$store" ]; then
 else
   say "skipped the site's German store: no germany_ft_store.py yet"
 fi
+# The checkpoint's BDBV quantiles for CI (branch bdbv-ft-forecasts).
+if (cd "$here" && .venv/bin/python scripts/bdbv_ft_store.py \
+  "$HOME/ckpt-scores/cache" "$label" --repo "$here"); then
+  say "BDBV forecasts stored for CI (bdbv-ft-forecasts)"
+else
+  say "FAILED to store the BDBV forecasts (scripts/bdbv_ft_store.py)"
+fi
+# The slots check and the aggregation arms are built on the slots code;
+# a checkpoint without series slots (the one-model run) skips them.
+settings=$HOME/ckpt-scores/cache/heldout/$label.json
+if ! grep -q '"series_slots"' "$settings" 2> /dev/null; then
+  say "skipped the slots check and the aggregation arms: no series slots in $label's settings"
+  exit 0
+fi
 exec 9> "$HOME/.slots-followups.lock"
 flock 9
 for job in "slots-check:scripts/slots_check.sh" "agg-slots:scripts/agg/run_finetuned.sh"; do
