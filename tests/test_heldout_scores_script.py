@@ -544,3 +544,41 @@ def test_the_r5_unit_is_its_own_study(cs, tmp_path) -> None:
     # The r4 set's unit is not done by the r5 set's files.
     assert not cs.unit_done(tmp_path, "heldout_scores", "reference")
     assert hs.SETS["r5"].name == "heldout_scores_r5"
+
+
+def test_a_set_can_keep_a_fixed_sample_of_each_simulation_s_blocks(
+    hs, sims, tmp_path
+) -> None:
+    root, ids = sims
+    kw = {
+        "name": "toy",
+        "sim_dir": root,
+        "seeds": (5001, 5001),
+        "holdout": len(ids),
+        "checked": len(ids),
+        "draws": 2,
+        "sizes": None,
+        "study": "heldout_toy",
+    }
+    every = hs.cut_blocks(root, ids, per_simulation=64)
+    # Cut a simulation at a time: the same blocks as one cut of all.
+    one = hs.HeldSet(**kw, per_simulation_sample=None, cut_batch=1)
+    got = hs.prepare(
+        tmp_path / "a", held=one, ids=ids, sha=_sha(ids), per_simulation=64
+    )
+    assert len(got) == len(every)
+    for a, b in zip(got, every, strict=True):
+        np.testing.assert_array_equal(a["context"], b["context"])
+    # A fixed sample of 3 blocks of each simulation, the same each time.
+    three = hs.HeldSet(**kw, per_simulation_sample=3, cut_batch=1)
+    first = hs.prepare(
+        tmp_path / "b", held=three, ids=ids, sha=_sha(ids), per_simulation=64
+    )
+    again = hs.prepare(
+        tmp_path / "c", held=three, ids=ids, sha=_sha(ids), per_simulation=64
+    )
+    sims_of = hs.simulation_of(pd.Series([b["outbreak"] for b in first]))
+    assert sims_of.value_counts().to_dict() == dict.fromkeys(ids, 3)
+    assert [b["cut_index"] for b in first] == [b["cut_index"] for b in again]
+    assert [b["index"] for b in first] == list(range(len(first)))
+    assert hs.SETS["r5"].per_simulation_sample == 4
