@@ -925,6 +925,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../pairing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Pairing sensitivity
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../comparison/" class="md-nav__link">
         
   
@@ -2212,6 +2240,8 @@ A stored fit forecasts one week past its own round, so a round with no new relea
 Every stored fit is 2 chains of 500 warm-up, run in parallel, with no refit.
 Each takes 750 draws, <code>renewalbvd</code> at target acceptance 0.95 and the others at 0.9.
 The wait for the store stops against the window's close (<code>[timing]</code> in <code>ci/policy.toml</code>).</p>
+<p><code>randomwalk</code> and <code>randomwalknowcast</code> pair their draws inside their forecast (<a href="../../methods/evaluation/#correlated-trajectories">Correlated trajectories</a>), so a submission uses the same paired draws as the backtest.
+Each round's <span class="arithmatex">\(\rho_p\)</span>, the pairs behind it and any fall-back to the prior are recorded in the round's <code>copula.json</code>.</p>
 <h2 id="checks">Checks<a class="headerlink" href="#checks" title="Permanent link">&para;</a></h2>
 <p>An invalid file, a fit past the convergence failure thresholds or a forecast far from the recent data rules a candidate out.
 Thresholds are in <code>ci/policy.toml</code>.</p>

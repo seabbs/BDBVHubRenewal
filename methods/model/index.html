@@ -1237,6 +1237,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../pairing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Pairing sensitivity
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../comparison/" class="md-nav__link">
         
   
@@ -2826,7 +2854,8 @@ The term adds no parameters, and <span class="arithmatex">\(\zeta = 0\)</span> g
 <h2 id="health-zones">Health zones<a class="headerlink" href="#health-zones" title="Permanent link">&para;</a></h2>
 <p>Zones do not enter the national value.
 <code>randomwalk</code> and <code>randomwalknowcast</code> forecast each zone from its own data (<a href="../baselines/#health-zones">Baseline models</a>).
-Every other model's province forecast, <code>pprandomwalknowcast</code>'s included, is split across the zones, so its zone samples sum to its province's samples, sample by sample and week by week.</p>
+Every other province-level model, <code>pprandomwalknowcast</code> included, splits its province samples across the zones in its own forecast, so its zone samples sum to its province's samples, sample by sample and week by week.
+The stored fits, the scores, the site and the submission all read these zone samples.</p>
 <h3 id="split-of-province-samples">Split of province samples<a class="headerlink" href="#split-of-province-samples" title="Permanent link">&para;</a></h3>
 <p>For province <span class="arithmatex">\(p\)</span> with zones <span class="arithmatex">\(z\)</span>, let <span class="arithmatex">\(o_z(w)\)</span> be zone <span class="arithmatex">\(z\)</span>'s published count for week <span class="arithmatex">\(w\)</span> and <span class="arithmatex">\(O(w) = \sum_z o_z(w)\)</span>.
 Each province sample <span class="arithmatex">\(i\)</span> draws its zone shares once, for all weeks,</p>

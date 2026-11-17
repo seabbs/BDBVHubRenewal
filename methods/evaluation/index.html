@@ -852,6 +852,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#correlated-trajectories" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Correlated trajectories
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#reading-the-figures" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1084,6 +1095,34 @@
     
   
     Backtest
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../pairing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Pairing sensitivity
   
 
     
@@ -2192,6 +2231,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#correlated-trajectories" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Correlated trajectories
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#reading-the-figures" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2364,7 +2414,7 @@ The draws of <code>renewal</code> and <code>renewalbvd</code> are joint across p
 <code>renewalsp</code> fits each province on its own, so its provinces are independent.
 Zones split each province draw, so zones are joint within a province for every renewal model.
 <code>pprandomwalknowcast</code> takes one posterior draw of its pooled parameters per sample index, so its places share that draw.
-<code>randomwalk</code> and <code>randomwalknowcast</code> draw each place independently.
+<code>randomwalk</code> and <code>randomwalknowcast</code> pair their province draws within each week by a rolling copula inside their forecast; their zones are not paired (<a href="#correlated-trajectories">Correlated trajectories</a>).
 Hub teams' samples are joint across weeks within a place only, as the hub's sample format sets, so pairing their indices across places scores them as independent across places.</p>
 <h2 id="backtest-design">Backtest design<a class="headerlink" href="#backtest-design" title="Permanent link">&para;</a></h2>
 <p>Each vintage is a forecast task.
@@ -2453,6 +2503,27 @@ There a week is complete when it is at least 4 weeks back from the week holding 
 Relative CRPS is against <code>randomwalknowcast</code> on the forecasts both made, for national and the provinces pooled, over all origins and by origin, and by origin and place.
 Every table counts its forecasts, <span class="arithmatex">\(n\)</span>, so a model with fewer forecasts was scored on fewer weeks or places.
 The run stops if an origin has no release snapshots or two models run here give identical samples.</p>
+<h2 id="correlated-trajectories">Correlated trajectories<a class="headerlink" href="#correlated-trajectories" title="Permanent link">&para;</a></h2>
+<p><code>randomwalk</code> and <code>randomwalknowcast</code> draw each province on its own, so the country, the sum of the provinces, would be too narrow.
+Each pairs its province draws inside its own forecast (<code>forecasters.copula.pair_walks</code>), so the fit store, every page, the backtests and the submissions read the same paired draws.
+The renewal models' draws are already joint trajectories (zones from a Dirichlet split of joint province draws), so they are left as they are: reordering would break their real dependence.</p>
+<p>Provinces are their own forecasts.
+The country is the sum of the provinces in each sample.
+Zones are their own forecasts, and are neither summed nor paired.
+The copula pairs province draws with each other within a week only, by one correlation, <span class="arithmatex">\(\rho_p\)</span>.</p>
+<p>The pairing is a Gaussian copula applied by rank reordering, the Schaake shuffle<sup id="fnref:clark"><a class="footnote-ref" href="#fn:clark">4</a></sup> as ensemble copula coupling uses it<sup id="fnref:schefzik"><a class="footnote-ref" href="#fn:schefzik">5</a></sup>.
+Each week, each trajectory draws one normal per province, with correlation <span class="arithmatex">\(\rho_p\)</span> between any two, and each cell's draws are reordered across samples to rank as the normals do.
+So every per-week forecast and its scores are unchanged.
+Every week is reordered this way, whether a province is nowcast or walking that week, so the recent nowcast weeks are paired too.
+Weeks are reordered on their own, so a province's draws are not kept as one trajectory across weeks.
+Nothing we submit or score uses a quantity over several weeks, so this costs nothing.</p>
+<p>At each forecast <span class="arithmatex">\(\rho_p\)</span> is estimated from the model's own matured errors: each earlier release's nowcast of the count still to come, against what the origin release reports, over releases in the last 8 weeks.
+Each error's randomised PIT under the model's negative binomial nowcast is mapped to a normal score.
+<span class="arithmatex">\(r\)</span> is the Pearson correlation of the scores of two provinces in the same week of one release.
+With <span class="arithmatex">\(n\)</span> such pairs the estimate is <span class="arithmatex">\((n r + w \rho_0)/(n + w)\)</span>, floored at 0 and capped at 0.95, with <span class="arithmatex">\(w = 10\)</span> chosen on the release backtest so the estimate dominates.
+The prior <span class="arithmatex">\(\rho_0 = 0.7\)</span> only guards thin windows.
+Each forecast's <span class="arithmatex">\(\rho_p\)</span>, the pairs behind it and whether it fell back to the prior are recorded (a submission's <code>copula.json</code>).
+How much pairing matters is on the <a href="../../pairing/">Pairing sensitivity</a> page.</p>
 <h2 id="reading-the-figures">Reading the figures<a class="headerlink" href="#reading-the-figures" title="Permanent link">&para;</a></h2>
 <p>Fans show 100 sample trajectories, the 50% and 90% bands and the median.
 In point-and-line figures, points are medians, thick lines 50% intervals and thin lines 90% intervals.
@@ -2473,8 +2544,8 @@ Each real vintage before the latest is forecast, and origins with no pair of rel
 Zones are scored on the reported target as for <a href="#real-releases">real releases</a>, with the zone delays fitted at the origin, so a zone count is never scored against a count still being reported.
 Relative CRPS is against <code>randomwalknowcast</code>.
 <code>pprandomwalknowcast</code> is fitted here on the zones and on the provinces.
-On the Nowcast page only <code>randomwalk</code> and <code>randomwalknowcast</code> are shown at zone level.
-The fitted models are shown at the country and provinces, from their stored forecasts.</p>
+On the Nowcast page every model is shown at zone level: the random walks from their zone runs, and the fitted models from the zone samples of their stored forecasts (<a href="../model/#health-zones">Renewal models</a>).
+The Comparison with the hub scores every model's zone samples on the zone cells the hub teams forecast.</p>
 <h2 id="checks">Scores by place type and plausibility<a class="headerlink" href="#checks" title="Permanent link">&para;</a></h2>
 <p>The scores on the reported target, at province and zone level, are also averaged by the type of place and by a plausibility flag of each forecast, both decided from the counts reported at the origin.
 Relative CRPS in these averages is against <code>randomwalknowcast</code>.
@@ -2504,6 +2575,7 @@ A round is pending until a later real release exists.</p>
 <li>Each day's data version is a release whose cut-off is that day, and the Meldedatum is the onset date. A release's count of a day is the count reported by then in the hub's reporting triangle, with the changes after 80 days put at 81 days, as epinowcast's <code>germany_covid19_hosp</code> does. A day's last count is carried to every later release.</li>
 <li>Germany is the country. The states are its provinces in one task and Germany's age groups its provinces in another. Germany's nowcast is the sum of the states.</li>
 <li>Hub weeks end on Saturdays, so every date of a nowcast moves forward by the 0 to 6 days to the next Saturday. The 7-day sums ending on the nowcast date and 7, 14, 21 and 28 days before it are then hub weeks, and the nowcasts move back.</li>
+<li><code>randomwalk</code> and <code>randomwalknowcast</code> pair their draws inside their forecast, as on BDBV (<a href="#correlated-trajectories">Correlated trajectories</a>). Each state's and age group's nowcast is unchanged, and Germany's, the sum of the paired states, widens.</li>
 </ol>
 <p>The nowcast dates are the paper's, every day from 2021-11-22 to 2022-04-29.
 They are split at their midpoint.
@@ -2541,6 +2613,12 @@ The paper also filled some missing ILM and LMU nowcasts from later model version
 </li>
 <li id="fn:bosse">
 <p>Bosse NI, Abbott S, Cori A, van Leeuwen E, Bracher J, Funk S (2023). Scoring epidemiological forecasts on transformed scales. PLOS Computational Biology 19(8): e1011393. <a href="https://doi.org/10.1371/journal.pcbi.1011393">doi:10.1371/journal.pcbi.1011393</a>.&#160;<a class="footnote-backref" href="#fnref:bosse" title="Jump back to footnote 3 in the text">&#8617;</a></p>
+</li>
+<li id="fn:clark">
+<p>Clark M, Gangopadhyay S, Hay L, Rajagopalan B, Wilby R (2004). The Schaake shuffle: a method for reconstructing space-time variability in forecasted precipitation and temperature fields. Journal of Hydrometeorology 5(1): 243-262. <a href="https://doi.org/10.1175/1525-7541(2004)005%3C0243:TSSAMF%3E2.0.CO;2">doi:10.1175/1525-7541(2004)005&lt;0243:TSSAMF&gt;2.0.CO;2</a>.&#160;<a class="footnote-backref" href="#fnref:clark" title="Jump back to footnote 4 in the text">&#8617;</a></p>
+</li>
+<li id="fn:schefzik">
+<p>Schefzik R, Thorarinsdottir TL, Gneiting T (2013). Uncertainty quantification in complex simulation models using ensemble copula coupling. Statistical Science 28(4): 616-640. <a href="https://doi.org/10.1214/13-STS443">doi:10.1214/13-STS443</a>.&#160;<a class="footnote-backref" href="#fnref:schefzik" title="Jump back to footnote 5 in the text">&#8617;</a></p>
 </li>
 </ol>
 </div>

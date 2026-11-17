@@ -228,7 +228,8 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
 <li>Each simulation gives 32 training blocks.</li>
 <li>A block is daily, 3-day or weekly, or daily with one weekly or 3-day total row per place.</li>
 <li>Four in five blocks are multivariate and one in five univariate.</li>
-<li>We save checkpoints at 1,000, 2,000, 4,000 and 8,000 simulations.</li>
+<li>We save checkpoints at 250, 500, 750, 1,000, 2,000, 4,000 and 8,000 simulations.</li>
+<li>We report the final checkpoint, at 8,000 simulations, where the learning rate reaches zero, and select no checkpoint on real data.</li>
 <li>Training draws simulations from a balanced, shuffled design, so every checkpoint has seen the whole grid.</li>
 <li>Chronos-2 forecasts the country, provinces and health zones as separate series in one joint block.</li>
 <li>The copula only pairs draws, for joint scores and sums, and leaves marginals unchanged.</li>
@@ -269,160 +270,12 @@ Figure&nbsp;1: The fine-tuning pipeline. (A) The assumptions in the epinowcast s
 </div>
 <div class="callout-body-container callout-body">
 <ul>
-<li>We simulate outbreaks with epinowcast over a crossed factorial grid of epidemic process, trajectory, delay, reporting, observation model and strata.</li>
+<li>We simulate outbreaks of up to 52 weeks with epinowcast over a crossed grid of epidemic process, trajectory, places and age groups, reporting delays and their changes, report days, reporting shocks and observation noise (SI).</li>
+<li>The outbreaks range from one wave to several, with cases spread over many places or concentrated in a few, delays that drift, step, bunch or slow down, and NB1 or Poisson noise.</li>
 <li>We checked the grid’s ranges against published values for several diseases, the case studies among them.</li>
-<li><a href="#tbl-synthetic-grid" class="quarto-xref">Table&nbsp;1</a> gives the grid’s factors and levels.</li>
-<li>The SI gives the full simulation process and the epinowcast model.</li>
 <li>Key references: <span class="citation" data-cites="abbottepinowcast lison2024 Park2024 Ansari2024 Dooley2023 Muller2022 Hollmann2025">(<a href="#ref-abbottepinowcast" role="doc-biblioref">Abbott et al. 2026</a>; <a href="#ref-lison2024" role="doc-biblioref">Lison et al. 2024</a>; <a href="#ref-Park2024" role="doc-biblioref">Park et al. 2024</a>; <a href="#ref-Ansari2024" role="doc-biblioref">Ansari et al. 2024</a>; <a href="#ref-Dooley2023" role="doc-biblioref">Dooley et al. 2023</a>; <a href="#ref-Muller2022" role="doc-biblioref">Müller et al. 2022</a>; <a href="#ref-Hollmann2025" role="doc-biblioref">Hollmann et al. 2025</a>)</span>.</li>
 </ul>
 </div>
-</div>
-<div id="tbl-synthetic-grid" class="quarto-float quarto-figure quarto-figure-center anchored">
-<figure class="quarto-float quarto-float-tbl figure">
-<figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-synthetic-grid-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Table&nbsp;1: The crossed factors of the simulation grid and their levels, each balanced within every block of simulations, read from the simulator’s code. The full settings are in the SI.
-</figcaption>
-<div aria-describedby="tbl-synthetic-grid-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-<table class="caption-top table">
-<colgroup>
-<col style="width: 25%">
-<col style="width: 25%">
-<col style="width: 25%">
-<col style="width: 25%">
-</colgroup>
-<thead>
-<tr class="header">
-<th>Factor</th>
-<th>Levels</th>
-<th>Enters through</th>
-<th>Realised</th>
-</tr>
-</thead>
-<tbody>
-<tr class="odd">
-<td>Generative process</td>
-<td><code>growth</code>, <code>renewal_3</code>, <code>renewal_7</code>, <code>renewal_15</code>; balanced, 1/4 each</td>
-<td><code>enw_expectation()</code></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>Generation time shape</td>
-<td><code>gamma_0.3</code>, <code>gamma_0.6</code>, <code>gamma_1</code>, <code>lognormal_0.6</code>; balanced, 1/4 each</td>
-<td><code>enw_expectation(generation_time)</code></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>Trajectory of the growth rate</td>
-<td><code>growth</code>, <code>decline</code>, <code>flat</code>, <code>rise_fall_sharp</code>, <code>rise_fall_gradual</code>, <code>fall_rise</code>, <code>oscillating</code>, <code>multi_wave</code>; balanced, 1/8 each</td>
-<td><code>enw_simulate(growth_rate)</code></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>Parametric delay family</td>
-<td><code>lognormal</code>, <code>gamma</code>, <code>exponential</code>; balanced, 1/3 each</td>
-<td><code>enw_reference(distribution)</code></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>Delay form</td>
-<td><code>parametric</code>, <code>non_parametric</code>, <code>both</code>; balanced, 1/3 each</td>
-<td><code>enw_reference(parametric, non_parametric)</code></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>Delay over time</td>
-<td><code>static</code>, <code>drift</code>, <code>step</code>, <code>periodic</code>, <code>walk</code>; balanced, 1/5 each</td>
-<td><code>enw_reference()</code></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>Report days</td>
-<td><code>daily</code>, <code>weekdays</code>; balanced, 1/2 each</td>
-<td><code>enw_report(structural)</code></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>Day-of-week effect on expected counts</td>
-<td><code>no</code>, <code>yes</code>; balanced, 1/2 each</td>
-<td><code>enw_expectation(observation)</code></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>Observation model</td>
-<td><code>negbin</code>, <code>negbin1d</code>, <code>poisson</code>; balanced, 1/3 each</td>
-<td><code>enw_obs(family)</code></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>Strata</td>
-<td><code>single</code>, <code>places</code>, <code>ages</code>, <code>places_ages</code>; balanced, 1/4 each</td>
-<td><code>enw_preprocess_data(by)</code></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>How cases spread over strata</td>
-<td><code>even</code>, <code>concentrated</code>; balanced, 1/2 each</td>
-<td><code>stratum_seed()</code></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>How places’ growth paths relate</td>
-<td><code>shared</code>, <code>independent</code>, <code>correlated</code>, <code>lagged</code>; balanced, 1/4 each</td>
-<td><code>place_growth()</code></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>When places start</td>
-<td><code>start</code>, <code>mid</code>; balanced, 1/2 each</td>
-<td><code>late_strata()</code></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>How places infect each other</td>
-<td><code>none</code>, <code>symmetric</code>, <code>asymmetric</code>, <code>distance</code>, <code>time_varying</code>; balanced, 1/5 each</td>
-<td><code>place_mixing()</code></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>Strength of mixing between places</td>
-<td><code>weak</code>, <code>strong</code>; balanced, 1/2 each</td>
-<td><code>place_mixing()</code></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>Imported cases</td>
-<td><code>none</code>, <code>constant</code>, <code>pulses</code>; balanced, 1/3 each</td>
-<td><code>stratum_imports()</code></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>Reporting shocks in one or two places</td>
-<td><code>none</code>, <code>backlog</code>, <code>outage</code>; balanced, 1/3 each</td>
-<td><code>shock_window()</code></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>How places’ delays relate</td>
-<td><code>shared</code>, <code>shifted</code>, <code>independent</code>; balanced, 1/3 each</td>
-<td><code>delay_parameters()</code></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>Observation noise across strata</td>
-<td><code>shared</code>, <code>dispersion</code>, <code>families</code>; balanced, 1/3 each</td>
-<td><code>observe()</code></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>Linked or independent strata</td>
-<td><code>linked</code>, <code>independent</code>; balanced, 1/2 each</td>
-<td><code>simulate_independent()</code></td>
-<td></td>
-</tr>
-</tbody>
-</table>
-</div>
-</figure>
 </div>
 </section>
 <section id="correlated-trajectories" class="level3">
@@ -550,6 +403,49 @@ Table&nbsp;1: The crossed factors of the simulation grid and their levels, each 
 <p>The plots in primarycensored-paper are a model for these. Each section has two paragraphs, one on visual performance and one summarising scores.</p>
 <p>Key references: the Methods references, with <span class="citation" data-cites="bracherEvaluatingEpidemicForecasts2021 Bosse2023-sx">(<a href="#ref-bracherEvaluatingEpidemicForecasts2021" role="doc-biblioref">Bracher et al. 2021</a>; <a href="#ref-Bosse2023-sx" role="doc-biblioref">Bosse et al. 2023</a>)</span> for the natural- and log-scale panels.</p>
 </div>
+</div>
+<div id="tbl-live-summary" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-tbl figure">
+<figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-live-summary-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Table&nbsp;1: Zero-shot Chronos-2 and the newest scored checkpoint of the fine-tuned model: national WIS on the German first half and CRPS and log CRPS on the BDBV release backtest, relative to <code>randomwalknowcast</code> (daily / weekly model), and the trainer’s held-out loss, with each cell’s simulations in brackets. The SI gives every checkpoint (Checkpoint curve). Preliminary: fine-tuned on 2,000 of 8,000 simulations. Development data only.
+</figcaption>
+<div aria-describedby="tbl-live-summary-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<table class="caption-top table">
+<colgroup>
+<col style="width: 20%">
+<col style="width: 20%">
+<col style="width: 20%">
+<col style="width: 20%">
+<col style="width: 20%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Simulations</th>
+<th>German WIS</th>
+<th>BDBV CRPS</th>
+<th>BDBV log CRPS</th>
+<th>Held-out loss</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Zero-shot</td>
+<td>3.05 / 4.24</td>
+<td>1.31 / 1.50</td>
+<td>1.25 / 1.58</td>
+<td>0.40</td>
+</tr>
+<tr class="even">
+<td>Newest checkpoint</td>
+<td>4.93 / 2.99 (1,000)</td>
+<td>1.91 / 2.59 (2,000)</td>
+<td>1.90 / 2.22 (2,000)</td>
+<td>0.26 (2,000)</td>
+</tr>
+</tbody>
+</table>
+</div>
+</figure>
 </div>
 <section id="held-out-synthetic-data" class="level3">
 <h3 class="anchored" data-anchor-id="held-out-synthetic-data">Held-out synthetic data</h3>
@@ -897,7 +793,7 @@ Figure&nbsp;5: German nowcast hub. (A, B) WIS relative to <code>KIT-frozen_basel
 </figcaption>
 </figure>
 </div>
-<p>On the development half, the best model was MeanEnsemble, with a relative score of 0.11 and 0.14 on the log scale, against KIT-frozen_baseline, and 0.82 against <code>randomwalknowcast</code>, as the hub’s baseline is a point forecast with no coverage.</p>
+<p>On the development half, the best model was MeanEnsemble, with a relative score of 0.11 and 0.14 on the log scale, against KIT-frozen_baseline, and 0.83 against <code>randomwalknowcast</code>, as the hub’s baseline is a point forecast with no coverage.</p>
 <div id="tbl-germany-scores" class="quarto-float quarto-figure quarto-figure-center anchored">
 <figure class="quarto-float quarto-float-tbl figure">
 <figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-germany-scores-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
@@ -950,7 +846,7 @@ Table&nbsp;4: German nowcast hub: mean scores, coverage and number of forecasts 
 <td>9185</td>
 <td>0.137</td>
 <td>0.159</td>
-<td>1.01</td>
+<td>1.03</td>
 <td>1.02</td>
 </tr>
 <tr class="even">
@@ -965,8 +861,8 @@ Table&nbsp;4: German nowcast hub: mean scores, coverage and number of forecasts 
 <td>2716</td>
 <td>0.224</td>
 <td>0.22</td>
-<td>1.99</td>
-<td>2.01</td>
+<td>2.03</td>
+<td>2.02</td>
 </tr>
 <tr class="odd">
 <td>germany</td>
@@ -980,7 +876,7 @@ Table&nbsp;4: German nowcast hub: mean scores, coverage and number of forecasts 
 <td>9200</td>
 <td>0.148</td>
 <td>0.168</td>
-<td>1.1</td>
+<td>1.11</td>
 <td>1.08</td>
 </tr>
 <tr class="even">
@@ -995,8 +891,8 @@ Table&nbsp;4: German nowcast hub: mean scores, coverage and number of forecasts 
 <td>9200</td>
 <td>1</td>
 <td>1</td>
-<td>7.42</td>
-<td>6.44</td>
+<td>7.52</td>
+<td>6.45</td>
 </tr>
 <tr class="odd">
 <td>germany</td>
@@ -1010,7 +906,7 @@ Table&nbsp;4: German nowcast hub: mean scores, coverage and number of forecasts 
 <td>8495</td>
 <td>0.148</td>
 <td>0.171</td>
-<td>1.1</td>
+<td>1.12</td>
 <td>1.18</td>
 </tr>
 <tr class="even">
@@ -1025,8 +921,8 @@ Table&nbsp;4: German nowcast hub: mean scores, coverage and number of forecasts 
 <td>9177</td>
 <td>0.11</td>
 <td>0.143</td>
-<td>0.821</td>
-<td>0.924</td>
+<td>0.832</td>
+<td>0.925</td>
 </tr>
 <tr class="odd">
 <td>germany</td>
@@ -1040,8 +936,8 @@ Table&nbsp;4: German nowcast hub: mean scores, coverage and number of forecasts 
 <td>9177</td>
 <td>0.112</td>
 <td>0.143</td>
-<td>0.837</td>
-<td>0.924</td>
+<td>0.848</td>
+<td>0.925</td>
 </tr>
 <tr class="even">
 <td>germany</td>
@@ -1055,7 +951,7 @@ Table&nbsp;4: German nowcast hub: mean scores, coverage and number of forecasts 
 <td>9200</td>
 <td>0.169</td>
 <td>0.197</td>
-<td>1.25</td>
+<td>1.27</td>
 <td>1.27</td>
 </tr>
 <tr class="odd">
@@ -1070,8 +966,8 @@ Table&nbsp;4: German nowcast hub: mean scores, coverage and number of forecasts 
 <td>6800</td>
 <td>0.202</td>
 <td>0.255</td>
-<td>1.41</td>
-<td>1.5</td>
+<td>1.44</td>
+<td>1.51</td>
 </tr>
 <tr class="even">
 <td>germany</td>
@@ -1085,7 +981,7 @@ Table&nbsp;4: German nowcast hub: mean scores, coverage and number of forecasts 
 <td>9200</td>
 <td>0.159</td>
 <td>0.179</td>
-<td>1.18</td>
+<td>1.2</td>
 <td>1.15</td>
 </tr>
 <tr class="odd">
@@ -1100,7 +996,7 @@ Table&nbsp;4: German nowcast hub: mean scores, coverage and number of forecasts 
 <td>9131</td>
 <td>0.266</td>
 <td>0.28</td>
-<td>1.97</td>
+<td>2</td>
 <td>1.81</td>
 </tr>
 <tr class="even">
@@ -1115,8 +1011,8 @@ Table&nbsp;4: German nowcast hub: mean scores, coverage and number of forecasts 
 <td>9200</td>
 <td>0.609</td>
 <td>0.597</td>
-<td>4.51</td>
-<td>3.84</td>
+<td>4.58</td>
+<td>3.85</td>
 </tr>
 <tr class="odd">
 <td>germany</td>
@@ -1130,7 +1026,7 @@ Table&nbsp;4: German nowcast hub: mean scores, coverage and number of forecasts 
 <td>9200</td>
 <td>0.346</td>
 <td>0.357</td>
-<td>2.57</td>
+<td>2.6</td>
 <td>2.3</td>
 </tr>
 <tr class="even">
@@ -1145,7 +1041,7 @@ Table&nbsp;4: German nowcast hub: mean scores, coverage and number of forecasts 
 <td>9200</td>
 <td>0.571</td>
 <td>0.508</td>
-<td>4.24</td>
+<td>4.3</td>
 <td>3.27</td>
 </tr>
 <tr class="odd">
@@ -1160,35 +1056,35 @@ Table&nbsp;4: German nowcast hub: mean scores, coverage and number of forecasts 
 <td>9200</td>
 <td>0.539</td>
 <td>0.49</td>
-<td>3.99</td>
-<td>3.15</td>
+<td>4.05</td>
+<td>3.16</td>
 </tr>
 <tr class="even">
 <td>germany</td>
 <td>randomwalk</td>
 <td>wis</td>
-<td>97</td>
-<td>0.0987</td>
+<td>92.3</td>
+<td>0.098</td>
 <td>-0.421</td>
-<td>0.215</td>
-<td>0.48</td>
+<td>0.216</td>
+<td>0.487</td>
 <td>9200</td>
-<td>0.587</td>
-<td>0.518</td>
-<td>4.35</td>
-<td>3.33</td>
+<td>0.558</td>
+<td>0.514</td>
+<td>4.2</td>
+<td>3.32</td>
 </tr>
 <tr class="odd">
 <td>germany</td>
 <td>randomwalknowcast</td>
 <td>wis</td>
-<td>22.3</td>
+<td>22</td>
 <td>0.0296</td>
-<td>-0.133</td>
-<td>0.542</td>
-<td>0.917</td>
+<td>-0.136</td>
+<td>0.551</td>
+<td>0.922</td>
 <td>9200</td>
-<td>0.135</td>
+<td>0.133</td>
 <td>0.155</td>
 <td>1</td>
 <td>1</td>
@@ -1239,7 +1135,7 @@ Figure&nbsp;7: Ebola: sample forecasts of the hub’s rounds from 21 November 20
 </figcaption>
 </figure>
 </div>
-<p> On the release backtest before the scored rounds, the best model was renewalsp, with a relative score of 0.83 and 0.95 on the log scale, against randomwalknowcast.</p>
+<p> On the release backtest before the scored rounds, the best model was renewalsp, with a relative score of 0.82 and 0.94 on the log scale, against randomwalknowcast.</p>
 <div id="tbl-ebola-scores" class="quarto-float quarto-figure quarto-figure-center anchored">
 <figure class="quarto-float quarto-float-tbl figure">
 <figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-ebola-scores-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
@@ -1286,8 +1182,8 @@ Table&nbsp;5: Ebola hub submissions: mean scores, coverage and number of forecas
 <td>0.833</td>
 <td>0.889</td>
 <td>162</td>
-<td>2.63</td>
-<td>1.79</td>
+<td>2.6</td>
+<td>1.78</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -1299,8 +1195,8 @@ Table&nbsp;5: Ebola hub submissions: mean scores, coverage and number of forecas
 <td>0.837</td>
 <td>0.915</td>
 <td>270</td>
-<td>1.96</td>
-<td>2</td>
+<td>1.94</td>
+<td>1.99</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
@@ -1312,8 +1208,8 @@ Table&nbsp;5: Ebola hub submissions: mean scores, coverage and number of forecas
 <td>0.877</td>
 <td>0.944</td>
 <td>162</td>
-<td>2.14</td>
-<td>1.51</td>
+<td>2.11</td>
+<td>1.5</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -1325,8 +1221,8 @@ Table&nbsp;5: Ebola hub submissions: mean scores, coverage and number of forecas
 <td>0.878</td>
 <td>0.963</td>
 <td>270</td>
-<td>1.67</td>
-<td>1.55</td>
+<td>1.65</td>
+<td>1.54</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
@@ -1338,30 +1234,30 @@ Table&nbsp;5: Ebola hub submissions: mean scores, coverage and number of forecas
 <td>0.84</td>
 <td>0.883</td>
 <td>162</td>
-<td>1.06</td>
-<td>0.842</td>
+<td>1.05</td>
+<td>0.841</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
 <td>randomwalk</td>
 <td>crps</td>
-<td>2.52</td>
-<td>0.0478</td>
-<td>0.0384</td>
+<td>2.59</td>
+<td>0.048</td>
+<td>0.0374</td>
 <td>0.833</td>
-<td>0.926</td>
+<td>0.932</td>
 <td>162</td>
-<td>1.37</td>
-<td>1.57</td>
+<td>1.39</td>
+<td>1.58</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
 <td>randomwalknowcast</td>
 <td>crps</td>
-<td>1.84</td>
+<td>1.86</td>
 <td>0.0304</td>
-<td>0.0482</td>
-<td>0.889</td>
+<td>0.0469</td>
+<td>0.895</td>
 <td>0.926</td>
 <td>162</td>
 <td>1</td>
@@ -1377,7 +1273,7 @@ Table&nbsp;5: Ebola hub submissions: mean scores, coverage and number of forecas
 <td>0.878</td>
 <td>0.933</td>
 <td>270</td>
-<td>0.929</td>
+<td>0.918</td>
 <td>1.07</td>
 </tr>
 <tr class="odd">
@@ -1390,7 +1286,7 @@ Table&nbsp;5: Ebola hub submissions: mean scores, coverage and number of forecas
 <td>0.874</td>
 <td>0.937</td>
 <td>270</td>
-<td>0.942</td>
+<td>0.931</td>
 <td>1.13</td>
 </tr>
 <tr class="even">
@@ -1403,8 +1299,8 @@ Table&nbsp;5: Ebola hub submissions: mean scores, coverage and number of forecas
 <td>0.87</td>
 <td>0.926</td>
 <td>162</td>
-<td>0.825</td>
-<td>0.945</td>
+<td>0.816</td>
+<td>0.944</td>
 </tr>
 </tbody>
 </table>
@@ -1442,54 +1338,54 @@ Table&nbsp;6: Ebola hub submissions: mean energy and variogram scores of each mo
 <td>54</td>
 <td>0.0984</td>
 <td>0.112</td>
-<td>1.52</td>
-<td>0.895</td>
+<td>1.51</td>
+<td>0.886</td>
 </tr>
 <tr class="even">
 <td>fm_chronos_daily_ragged</td>
 <td>54</td>
 <td>0.108</td>
 <td>0.12</td>
-<td>1.66</td>
-<td>0.955</td>
+<td>1.65</td>
+<td>0.945</td>
 </tr>
 <tr class="odd">
 <td>fm_chronos_weekly_complete</td>
 <td>54</td>
 <td>0.0771</td>
 <td>0.128</td>
-<td>1.19</td>
-<td>1.02</td>
+<td>1.18</td>
+<td>1.01</td>
 </tr>
 <tr class="even">
 <td>fm_chronos_weekly_ragged</td>
 <td>54</td>
 <td>0.0822</td>
 <td>0.13</td>
-<td>1.27</td>
-<td>1.04</td>
+<td>1.26</td>
+<td>1.03</td>
 </tr>
 <tr class="odd">
 <td>pprandomwalknowcast</td>
 <td>54</td>
 <td>0.0539</td>
 <td>0.111</td>
-<td>0.832</td>
-<td>0.882</td>
+<td>0.828</td>
+<td>0.873</td>
 </tr>
 <tr class="even">
 <td>randomwalk</td>
 <td>54</td>
-<td>0.0827</td>
-<td>0.127</td>
-<td>1.28</td>
-<td>1.01</td>
+<td>0.0839</td>
+<td>0.132</td>
+<td>1.29</td>
+<td>1.04</td>
 </tr>
 <tr class="odd">
 <td>randomwalknowcast</td>
 <td>54</td>
-<td>0.0648</td>
-<td>0.125</td>
+<td>0.0651</td>
+<td>0.127</td>
 <td>1</td>
 <td>1</td>
 </tr>
@@ -1498,24 +1394,24 @@ Table&nbsp;6: Ebola hub submissions: mean energy and variogram scores of each mo
 <td>54</td>
 <td>0.0704</td>
 <td>0.132</td>
-<td>1.09</td>
-<td>1.05</td>
+<td>1.08</td>
+<td>1.04</td>
 </tr>
 <tr class="odd">
 <td>renewalbvd</td>
 <td>54</td>
 <td>0.0733</td>
 <td>0.136</td>
-<td>1.13</td>
-<td>1.09</td>
+<td>1.12</td>
+<td>1.08</td>
 </tr>
 <tr class="even">
 <td>renewalsp</td>
 <td>54</td>
 <td>0.0624</td>
 <td>0.13</td>
-<td>0.963</td>
-<td>1.04</td>
+<td>0.959</td>
+<td>1.03</td>
 </tr>
 </tbody>
 </table>
@@ -1547,7 +1443,7 @@ Table&nbsp;6: Ebola hub submissions: mean energy and variogram scores of each mo
 <li>Fine-tuning ran on a laptop, so it needs no shared compute.</li>
 <li>The BDBV hub imputes missing onset dates from reporting delays, which can over-smooth its data (Methods, Data) <span class="citation" data-cites="bdbv_modeling_hub_2026">(<a href="#ref-bdbv_modeling_hub_2026" role="doc-biblioref">InsightNet-US 2026</a>)</span>.</li>
 <li>Smoothed release histories mismatch the epinowcast reporting structure our simulations assume, which may disadvantage the fine-tuned Chronos-2.</li>
-<li>We fine-tuned on blocks of at most 288 steps of history but forecast with all available data.</li>
+<li>We fine-tuned on blocks of at most 364 steps of history but forecast with all available data.</li>
 <li>We did not test whether this affects Chronos-2’s handling of longer histories, which matters most for long series such as the German daily data.</li>
 <li>Fine-tuning used the laptop’s GPU, which made it several times faster than its CPU.</li>
 <li>On a laptop CPU alone it would run in hours.</li>
