@@ -882,6 +882,56 @@ def test_stored_samples_keep_the_unassigned_national_part(
     assert len(forecast.unassigned) == n_weeks * n_samples
 
 
+def test_a_stored_own_national_model_keeps_its_national_rows(
+    fitted_flat: str,
+    tasks: dict[str, ForecastTask],
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    from bdbvhubrenewal.evaluation import store_archive
+    from bdbvhubrenewal.submission.hub import to_hub_table
+
+    # As a Chronos-2 model, which forecasts the country in its joint
+    # block and submits those national draws (`own_national`).
+    monkeypatch.setattr(
+        store_archive,
+        "own_national",
+        lambda name: name == fitted_flat,
+        raising=False,
+    )
+    task = tasks[sorted(tasks)[-1]]
+    fit = store.fit(fitted_flat, task, {}, "c")
+    rows = fit.forecasts
+    national = rows["location"] == NATIONAL
+    rows.loc[national, "value"] = rows.loc[national, "value"] + 5
+    root = tmp_path / "store"
+    store.write_fit(root, dataclasses.replace(fit, forecasts=rows))
+
+    def hub(model: str, *, forecast: Forecast, **_: object) -> pd.DataFrame:
+        # As `cli._hub_forecast` writes an own-national model's table.
+        return to_hub_table(
+            forecast.samples,
+            task.reference_date,
+            unassigned=forecast.unassigned,
+            n_samples=task.n_samples,
+            forecast_date=task.reference_date,
+            national="own",
+        )
+
+    table = store_archive.archive(
+        root, task, task, {fitted_flat: None}, {}, hub, lambda _: "c"
+    )
+    assert "not archived" not in capsys.readouterr().err
+    got = table.loc[table["location"] == NATIONAL]
+    assert not got.empty
+    weeks = {str(d) for d in task.target_end_dates}
+    want = rows.loc[
+        national & rows["target_end_date"].astype(str).isin(weeks)
+    ]
+    assert got["value"].sum() == want["value"].round().sum()
+
+
 def test_stored_samples_missing_a_week_are_not_archived(
     fitted_flat: str,
     tasks: dict[str, ForecastTask],
