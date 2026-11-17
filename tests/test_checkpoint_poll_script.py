@@ -303,3 +303,19 @@ def test_german_runs_go_in_progress_first_then_newest(poll) -> None:
     n = {"slots-a": 125, "slots-b": 1000, "slots-c": 250, "slots-d": 500}
     order = poll.german_order(list(cached), cached, n)
     assert order == ["slots-a", "slots-b", "slots-d", "slots-c"]
+
+
+def test_lanes_cap_each_study_so_german_keeps_two_runs(poll) -> None:
+    pending = [
+        ("heldout_scores", "s1"),
+        ("germany", "s2"),
+        ("heldout_scores", "s3"),
+    ]
+    running = [("germany", "s0"), ("heldout_scores", "reference")]
+    limits = {"germany": 2, "heldout_scores": 1}
+    # The held-out lane is full, so the next German run starts.
+    assert poll.next_unit(pending, running, limits) == ("germany", "s2")
+    full = [("germany", "s0"), ("germany", "s4"), ("heldout_scores", "r")]
+    assert poll.next_unit(pending, full, limits) is None
+    # No limits: first pending, as before.
+    assert poll.next_unit(pending, running, None) == ("heldout_scores", "s1")
