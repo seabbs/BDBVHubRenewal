@@ -2,25 +2,28 @@
 # Fine-tune Chronos-2 continuously on the grid r5 rounds as they are
 # simulated, from round FIRST_ROUND.
 #
-#   nohup scripts/finetune_continuous.sh > output/finetune/continuous.out 2>&1 &
+#   nohup scripts/finetune_continuous.sh > output/finetune/continuous-r5.out 2>&1 &
 #
 # Each round of 1,000 simulations lands on the rounds host (REMOTE, or this
 # machine; scripts/local_config.sh) in `$REMOTE_ROOT/rounds/r<N>/` (`manifest.csv`, `held-out.txt`, `sims/`).
-# This streams each round's finished batches into output/finetune/continuous/
-# as its manifest lists them, appends their seeds to one seed list, and runs
-# one trainer over the growing list from
+# This streams each round's finished batches into HERE as its manifest
+# lists them, lists every training seed of each round in seed order, and
+# runs one trainer over the growing list, which waits for each batch in
+# turn, from
 # base Chronos-2 to OUTBREAKS with Chronos-2's recipe
-# (scripts/finetune_stream.py): learning rate 1e-5 falling linearly to zero
-# over LR_STEPS, each block's horizon as its prediction length, one draw
-# of each simulation cut at 32 snapshots. The trainer checks and publishes a checkpoint at each
-# doubling from 1,000, whatever its scores, and waits for rounds as they
-# land. Each checkpoint is copied to `$REMOTE_ROOT/checkpoints/` with a
+# (scripts/finetune_stream.py): learning rate 1e-5 for the adapter and
+# 1e-3 for the attention biases, falling linearly to zero over LR_STEPS,
+# each block's horizon as its prediction length, one draw of each
+# simulation cut at 32 snapshots. The trainer checks and publishes a
+# checkpoint at each of PREFIXES, whatever its scores, and waits for
+# rounds as they land. Each checkpoint is copied to
+# `$REMOTE_ROOT/checkpoints/slots/` with a
 # line in the shared mailbox; a stopped trainer is an alert in the
 # mailbox and the local INBOX. Run from the repo root of a clean worktree.
 set -uo pipefail
 
 source "$(dirname "${BASH_SOURCE[0]}")/local_config.sh"
-HERE=${HERE:-output/finetune/continuous}
+HERE=${HERE:-output/finetune/continuous-r5}
 OUTBREAKS=${OUTBREAKS:-8000}
 # Each round simulates 100 held-out outbreaks (one draw each); 90 of
 # them, so a few skipped simulations do not stop the trainer.
@@ -30,6 +33,10 @@ HOLDOUT=${HOLDOUT:-90}
 PREFIXES=${PREFIXES:-250 500 750 1000 2000 4000 8000}
 # The first round of grid r5; earlier rounds are other grids.
 FIRST_ROUND=${FIRST_ROUND:-9}
+# Round r's training seeds are SEED_BASE + 100 r on, ROUND_BATCHES of
+# them (scripts/sim_rounds.sh).
+SEED_BASE=${SEED_BASE:-30000}
+ROUND_BATCHES=${ROUND_BATCHES:-40}
 # One draw (grid r5 simulates one) at each of CUTS snapshots
 # (finetune_chronos.CUTS): 32 blocks a simulation, as with two draws at 16
 # before, so the learning rate still reaches zero at OUTBREAKS: 8 x 4,564
@@ -48,12 +55,12 @@ UNIVARIATE_SHARE=${UNIVARIATE_SHARE:-0.2}
 # landed, in seed order.
 CHUNK=${CHUNK:-250}
 REAL_VALIDATION=${REAL_VALIDATION:-output/finetune/real-validation.pkl}
-# The series bias (src/bdbvhubrenewal/forecasters/series_bias.py): 1 trains
-# a learned group attention bias for same-place and parent-child series
-# beside the adapter. Such a run keeps to its own HERE and checkpoint
-# folder (checkpoints/slots/, the paper's finetune_run name), so the run
-# without it is never touched, and its releases are chronos-slots-<hash>.
-SERIES_BIAS=${SERIES_BIAS:-0}
+# The series bias (src/bdbvhubrenewal/forecasters/series_bias.py): learned
+# group attention biases for same-place and parent-child series, trained
+# beside the adapter at their own rate, into checkpoints/slots/ (the
+# paper's finetune_run name), released as chronos-slots-<hash>. 0 is the
+# no-bias control, which sets its own HERE and copies to checkpoints/.
+SERIES_BIAS=${SERIES_BIAS:-1}
 
 remote_ls() { on_rounds "ls $REMOTE_ROOT/rounds" 2> /dev/null; }
 # Copy a round's file or folder ($2, "sims/" for its simulations) to $3.
@@ -64,11 +71,12 @@ pull() {
 sync_rounds() {
   # Stream each round's finished batches as its manifest lists them, so
   # training need not wait for the round to be ready: the manifest first,
-  # then the simulations, so every seed it lists has its files; its new
-  # training seeds join the seed list once each, in manifest order.
+  # then the simulations, so every seed it lists has its files. The seed
+  # list is every training seed of each round in seed order, finished or
+  # not, so the trainer takes them in that order, as the workflow does.
   mkdir -p "$HERE/sims" "$HERE/rounds"
-  touch "$HERE/seeds.txt"
-  local n d
+  local n d seeds=$HERE/seeds.txt.tmp
+  : > "$seeds"
   for n in $(remote_ls | sed -n 's/^r\([0-9]*\)$/\1/p' | sort -n); do
     [ "$n" -ge "$FIRST_ROUND" ] || continue
     d=$HERE/rounds/r$n
@@ -76,30 +84,20 @@ sync_rounds() {
     pull "r$n" manifest.csv "$d" || continue
     pull "r$n" held-out.txt "$d" 2> /dev/null || true
     pull "r$n" sims/ "$HERE/sims" || return 1
-    python3 - "$d/manifest.csv" "$HERE/seeds.txt" <<'PY'
-import csv, sys
-from pathlib import Path
-manifest, seeds = Path(sys.argv[1]), Path(sys.argv[2])
-have = set(seeds.read_text().split())
-new = [
-    r["seed"]
-    for r in csv.DictReader(manifest.open())
-    if r["kind"] == "train" and r["seed"] not in have
-]
-with seeds.open("a") as f:
-    f.writelines(f"{s}\n" for s in dict.fromkeys(new))
-PY
+    seq $((SEED_BASE + 100 * n)) $((SEED_BASE + 100 * n + ROUND_BATCHES - 1)) >> "$seeds"
   done
+  mv "$seeds" "$HERE/seeds.txt"
 }
 
 bias_args() {
-  # The trainer's bias argument; a bias run must not use the default HERE.
-  [ "$SERIES_BIAS" = 1 ] || return 0
-  if [ "$HERE" = output/finetune/continuous ]; then
-    echo "SERIES_BIAS needs its own HERE, not $HERE" >&2
+  # The trainer's bias argument; the no-bias control must not use the
+  # design run's HERE.
+  if [ "$SERIES_BIAS" = 1 ]; then
+    echo "--series-bias"
+  elif [ "$HERE" = output/finetune/continuous-r5 ]; then
+    echo "SERIES_BIAS=0 needs its own HERE, not $HERE" >&2
     return 1
   fi
-  echo "--series-bias"
 }
 
 remote_checkpoints() {

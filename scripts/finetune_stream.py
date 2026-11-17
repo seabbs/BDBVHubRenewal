@@ -74,9 +74,6 @@ evals."""
 POLL = 60
 """Seconds between checks for a chunk's simulations."""
 
-PATIENCE = 20 * 60
-"""Seconds a chunk waits for a missing batch before later batches train
-first; the late batch's outbreaks then join a later chunk."""
 
 REPO = "seabbs/BDBVHubRenewal"
 """Repository of the checkpoint releases."""
@@ -373,25 +370,19 @@ def next_chunk(
     seeds: range,
     trained: list[str],
     size: int,
-    waited: float,
-    patience: float = PATIENCE,
 ) -> list[str] | None:
     """Return the next `size` outbreaks to train on, or None if not ready.
 
     They are the first outbreaks not yet `trained` of the finished
-    batches in seed order, up to the first batch not finished. Once the
-    chunk has `waited` `patience` seconds, later finished batches count
-    too, so a straggler's outbreaks join a later chunk instead of holding
-    up training.
+    batches in seed order, up to the first batch not finished, so a
+    chunk waits for a missing batch and every run trains in seed order.
     """
     seen = set(trained)
     out: list[str] = []
     for seed in seeds:
         ids = batch_outbreaks(sim_dir, seed)
         if ids is None:
-            if waited < patience:
-                break
-            continue
+            break
         out.extend(o for o in ids if o not in seen)
         if len(out) >= size:
             return out[:size]
@@ -1497,7 +1488,7 @@ def main() -> None:
         size = min(CHUNK, args.outbreaks - len(after))
         if size <= 0:
             return
-        ids = next_chunk(sim_dir, training_seeds(), after, size, 0)
+        ids = next_chunk(sim_dir, training_seeds(), after, size)
         if ids is not None and tuple(ids) not in ahead:
             ahead[tuple(ids)] = submit_cut(
                 pool, sim_dir, ids, args.seed, k, args.cut_workers
@@ -1527,10 +1518,7 @@ def main() -> None:
         )
         free_memory()
         while not chunk:
-            waited = time.perf_counter() - tick
-            ids = next_chunk(
-                sim_dir, training_seeds(), trained, hi - done, waited
-            )
+            ids = next_chunk(sim_dir, training_seeds(), trained, hi - done)
             if ids is not None:
                 chunk = ids
                 break
@@ -1538,12 +1526,6 @@ def main() -> None:
             if done_all and not args.wait_for_seeds:
                 raise RuntimeError(f"fewer than {hi} training outbreaks")
             time.sleep(POLL)
-        contiguous = ready_outbreaks(sim_dir, training_seeds())[done:hi]
-        if chunk != contiguous:
-            log(
-                f"outbreaks {done + 1}-{hi}: batches still running after "
-                f"{PATIENCE // 60} min, so later batches train first"
-            )
         split["wait_s"] = time.perf_counter() - tick
         tick = time.perf_counter()
         report(
