@@ -624,12 +624,10 @@ def zones_for_model(
 ) -> pd.DataFrame:
     """Return a model's health-zone samples.
 
-    A model that forecasts the zones itself gives zone rows in `samples`
-    that already sum to its provinces (`reconcile_zones`), and they are
-    used as they are. A random walk model with no fit is run on the zones
-    (`zone_forecast`). Any other model's province samples, a fitted
-    model's included, are split across the zones by `ZoneAllocator`, so
-    no model is fitted here.
+    A model's own zone rows in `samples` are used as they are: a
+    province-level model splits its zones in its forecast (`with_zones`),
+    and Chronos-2 forecasts them. A random walk model with no fit is run on
+    the zones (`zone_forecast`). Other samples have no zones.
 
     Parameters
     ----------
@@ -658,4 +656,4 @@ def zones_for_model(
     if walks_own_zones(name):
         model = get_model(str(name))
         return zone_forecast(model, task, counts, zones, daily_zones)
-    return ZoneAllocator().allocate(samples, task, counts, zones)
+    return pd.DataFrame(columns=list(SAMPLE_COLUMNS))
