@@ -1,8 +1,12 @@
 # Checkpoint scoring.
 #
-# Each checkpoint label gets three units of scripts/checkpoint_scores.py:
-# `germany` (WIS on the German development half), `bdbv` (sample CRPS on
-# the BDBV release backtest) and `heldout` (the trainer's held-out loss).
+# Each checkpoint label gets five units of scripts/checkpoint_scores.py:
+# `germany` (WIS on the German development half, 7-day target), `bdbv`
+# (sample CRPS on the BDBV release backtest, 7-day target), `heldout`
+# (the trainer's held-out loss), `heldout_scores` (proper scores on the
+# `score.held_set` held-out simulations, by layout and design factor
+# level) and `bdbv_zones` (the backtest's health zones). Labels in
+# `score.kept` join the tables from the cache and are never scored.
 # A unit caches one file per date or origin in <SCORE_CACHE>/<study>/
 # <label>/ and resumes from it; its done stamp is written when it exits
 # cleanly. `score_table` merges every label's rows into the evidence
@@ -58,14 +62,18 @@ ROOM = (
 )
 
 
-def unit_shell(study):
+def unit_shell(study, extra="7day"):
     return (
         "mkdir -p " + CACHE + " && " + ROOM + "OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 "
         "XLA_FLAGS=--xla_cpu_multi_thread_eigen=false "
         "{params.prefix} nice -n 19 uv run --group chronos python "
         f"scripts/checkpoint_scores.py {study} {CACHE} {{wildcards.label}} "
-        "> {log} 2>&1 && touch {output}"
+        f"{extra} > {{log}} 2>&1 && touch {{output}}"
     )
+
+
+HELD = {"r4": "heldout_scores", "r5": "heldout_scores_r5"}[SC["held_set"]]
+"""The held-out set's cache folder (scripts/heldout_scores.py SETS)."""
 
 
 rule score_bdbv:
@@ -111,6 +119,49 @@ rule score_heldout:
         "{wildcards.label} > {log} 2>&1 && touch {output}"
 
 
+def held_inputs(wc):
+    """A checkpoint's settings, or, for the reference, every checkpoint's.
+
+    The unit checks the held-out set against the trainer's hash in them.
+    """
+    labels = [wc.label] if wc.label not in SC["reference"] else checkpoint_labels()
+    return expand(f"{CACHE}/heldout/{{label}}.done", label=labels)
+
+
+rule score_heldout_scores:
+    input:
+        held_inputs,
+    output:
+        f"{CACHE}/{HELD}/{{label}}.done",
+    log:
+        f"{CACHE}/log/{HELD}-{{label}}.log",
+    params:
+        prefix=lambda wc, resources: job_prefix(resources.mem_mb),
+    priority: 8
+    threads: 1
+    resources:
+        mem_mb=SC["held_mem_mb"],
+    shell:
+        unit_shell("heldout_scores", SC["held_set"])
+
+
+rule score_zones:
+    input:
+        f"{CACHE}/bdbv/{{label}}.done",
+    output:
+        f"{CACHE}/bdbv_zones/{{label}}.done",
+    log:
+        f"{CACHE}/log/bdbv_zones-{{label}}.log",
+    params:
+        prefix=lambda wc, resources: job_prefix(resources.mem_mb),
+    priority: 9
+    threads: 1
+    resources:
+        mem_mb=SC["mem_mb"],
+    shell:
+        unit_shell("bdbv_zones")
+
+
 rule score_germany_forecast:
     # Opt-in (`score.germany_forecast`): never part of `score` unless on.
     input:
@@ -141,10 +192,14 @@ def forecast_inputs(wc=None):
 def table_inputs(wc):
     labels = checkpoint_labels()
     every = [*SC["reference"], *labels]
+    # The reference's held-out scores need a checkpoint's settings.
+    held = every if labels else []
     return {
         "bdbv": expand(f"{CACHE}/bdbv/{{label}}.done", label=every),
         "germany": expand(f"{CACHE}/germany/{{label}}.done", label=every),
         "heldout": expand(f"{CACHE}/heldout/{{label}}.done", label=labels),
+        "held": expand(f"{CACHE}/{HELD}/{{label}}.done", label=held),
+        "zones": expand(f"{CACHE}/bdbv_zones/{{label}}.done", label=every),
         "forecast": forecast_inputs(),
     }
 
@@ -156,7 +211,7 @@ rule score_table:
         evidence=f"{CACHE}/tables/checkpoint-scores.csv",
         checkpoints=f"{CACHE}/tables/checkpoints.csv",
     params:
-        labels=lambda wc: " ".join(checkpoint_labels()),
+        labels=lambda wc: " ".join([*SC["kept"], *checkpoint_labels()]),
         evidence=SC["evidence"],
         checkpoints=SC["checkpoints"],
     localrule: True

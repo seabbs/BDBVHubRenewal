@@ -228,7 +228,7 @@ def test_score_takes_checkpoints_from_the_release_list(tmp_path):
     cache.mkdir()
     (cache / "releases.json").write_text(
         '[{"tagName": "chronos-slots-aaa",'
-        ' "publishedAt": "2026-11-16T12:00:00Z"}]'
+        ' "publishedAt": "2026-11-17T18:00:00Z"}]'
     )
     jobs = dry(tmp_path, "score")
     assert jobs["score_heldout"] == 1

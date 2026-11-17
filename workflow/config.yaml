@@ -65,7 +65,26 @@ score:
   # Checkpoints to score, as labels (`<hash>`, `slots-<hash>`); null takes
   # every checkpoint released from `published_from` (rule release_list).
   labels: null
-  published_from: "2026-11-16T09:00:00Z"
+  # Grid r5's run (#311) published its first checkpoint after this.
+  published_from: "2026-11-17T17:00:00Z"
+  # Labels whose cached scores join the tables but are never scored: the
+  # previous run's checkpoints (grid r4, the old poller's cache).
+  kept:
+    - 7962fd718a47
+    - de129103cacc
+    - slots-06dbdcc2b48d
+    - slots-2ddfd57de549
+    - slots-7d7c5d9f247e
+    - slots-81b35ccb4875
+    - slots-9901ebc48e96
+    - slots-dfbc40ca2e0a
+    - slots-f01d4b22faad
+    - slots-f23ac5d03d45
+  # The held-out simulations scored with proper scores
+  # (scripts/heldout_scores.py SETS): r5 is round 9, all 840.
+  held_set: r5
+  # A held-out scores unit's memory cap (MB).
+  held_mem_mb: 8192
   # Labels scored beside every checkpoint: randomwalknowcast and zero-shot
   # Chronos-2.
   reference: [reference]
@@ -89,7 +108,8 @@ score:
 slots_check:
   # Each slots checkpoint against zero-shot Chronos-2 and the no-slots
   # checkpoint of its size (scripts/slots_check.py), in `shards` parts.
-  run: true
+  # Off: grid r5 trains no no-slots checkpoint to compare with.
+  run: false
   shards: 2
   mem_mb: 6144
 
@@ -98,7 +118,8 @@ agg:
   # pinned to the hub at
   # `hub_ref`, the models' fits at the BDBV origins and every German
   # development date (`dates: []`), the paired arm, scores and rows.
-  run: true
+  # Off for grid r5, as the slots check.
+  run: false
   hub_ref: ad1bb4af13bf
   models: [fm_chronos_daily_ragged_ft, fm_chronos_weekly_ragged_ft]
   origins: ["2026-10-09", "2026-10-17", "2026-10-24", "2026-11-01"]
