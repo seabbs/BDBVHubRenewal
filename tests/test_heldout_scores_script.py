@@ -5,6 +5,7 @@ from __future__ import annotations
 import datetime as dt
 import hashlib
 import importlib.util
+import json
 import sys
 from pathlib import Path
 
@@ -463,7 +464,8 @@ def test_factor_rows_split_each_cell_by_the_simulations_levels(
         tmp_path, "reference", {"fm_chronos": chronos(10)}, blocks, held=held
     )
     hs.unit(tmp_path, "abc", {"fm_chronos": chronos(20)}, blocks, held=held)
-    assert set(hs.label_scores(tmp_path, "abc", held)["outbreak"]) <= set(ids)
+    scored = hs.label_scores(tmp_path, "abc", held)["outbreak"]
+    assert set(hs.simulation_of(scored)) == set(ids)
     factors = hs.factor_table(root, ids)
     assert list(factors.loc[ids[0]][["process", "shocks"]]) == [
         "growth",
@@ -487,3 +489,58 @@ def test_factor_rows_split_each_cell_by_the_simulations_levels(
     assert cell["n"].sum() == all_["n"].sum()
     base = rows.loc[rows["checkpoint"] == "zero-shot", "rel_wis"]
     assert np.allclose(base, 1.0)
+
+
+def _settings(cache: Path, label: str, **kw) -> None:
+    root = cache / "heldout"
+    root.mkdir(parents=True, exist_ok=True)
+    base = {
+        "grid": "r5",
+        "held_out_sha256": "a" * 64,
+        "memory_gb": 36.0,
+        "seed": 1,
+        "blocks_per_simulation": 32,
+        "draws_per_simulation": 1,
+    }
+    (root / f"{label}.json").write_text(json.dumps({**base, **kw}))
+    (root / f"{label}-release.json").write_text("{}")
+
+
+def test_the_r5_trainer_hash_is_read_from_the_r5_releases(cs, tmp_path) -> None:
+    # The old run's settings and release files sit beside them.
+    _settings(tmp_path, "slots-old", grid="r4", held_out_sha256="b" * 64)
+    with pytest.raises(SystemExit, match="no r5 checkpoint"):
+        cs.trainer_sha(tmp_path, "r5")
+    _settings(tmp_path, "slots-n250")
+    _settings(tmp_path, "slots-n500")
+    assert cs.trainer_sha(tmp_path, "r5") == "a" * 64
+    assert cs.trainer_sha(tmp_path, "r4") == _load("heldout_scores").HELD_SHA256
+    # Checkpoints that disagree on the held-out set, or were cut another
+    # way, stop the unit rather than score a different set.
+    _settings(tmp_path, "slots-n750", held_out_sha256="c" * 64)
+    with pytest.raises(SystemExit, match="held-out"):
+        cs.trainer_sha(tmp_path, "r5")
+    (tmp_path / "heldout" / "slots-n750.json").unlink()
+    _settings(tmp_path, "slots-n750", memory_gb=64.0)
+    with pytest.raises(SystemExit, match="memory_gb"):
+        cs.trainer_sha(tmp_path, "r5")
+
+
+def test_each_checkpoint_s_held_out_rows_come_from_its_grid_s_set(cs) -> None:
+    assert cs.held_set_of({"grid": "r5"}) == "r5"
+    assert cs.held_set_of({"grid": "r4"}) == "r4"
+    assert cs.held_set_of({}) == "r4"
+
+
+def test_the_r5_unit_is_its_own_study(cs, tmp_path) -> None:
+    assert not cs.unit_done(tmp_path, "heldout_scores_r5", "reference")
+    hs = _load("heldout_scores")
+    root = tmp_path / "heldout_scores_r5"
+    root.mkdir()
+    (root / "sample.json").write_text(json.dumps({"key": "k", "n_blocks": 1}))
+    (root / "reference").mkdir()
+    (root / "reference" / "k-000.csv.gz").write_bytes(b"")
+    assert cs.unit_done(tmp_path, "heldout_scores_r5", "reference")
+    # The r4 set's unit is not done by the r5 set's files.
+    assert not cs.unit_done(tmp_path, "heldout_scores", "reference")
+    assert hs.SETS["r5"].name == "heldout_scores_r5"
