@@ -8,8 +8,7 @@ Steps, in workflow order:
   guard;
 - `truth`: the rolling truth, D days after each target date;
 - `scores`: the forecasts scored against the truth;
-- `joint-scores`: sample trajectories scored jointly (energy and variogram
-  scores);
+- `joint-scores`: sample trajectories scored jointly (energy score);
 - `figures` and `score-tables`: main-text and SI outputs;
 - `evidence`: SI tables, figures and numbers from evidence branches;
 - `ebola-extra`: further Ebola samples, kept to some models;
