@@ -24,18 +24,23 @@ on:
   # (UTC+1, no daylight saving), which is Saturday 23:00 to Tuesday 22:59
   # UTC. Runs are cheap when there is no new data: `detect` stops them.
   schedule:
-    - cron: '0 23 * * 6'  # Saturday 23:00 UTC, as the window opens
-    # One check each morning in the window. A round is submitted once
-    # (detect), so a check after its PR opened stops at once, unless the
-    # model code on main changed since, which updates the PR. Tuesday
-    # 06:00 UTC leaves 17 hours to the close: the fits take about an
-    # hour, each fit's timeout stops 45 minutes short of the close
-    # (ci/policy.toml [timing]), and the organisers have the US working
-    # day to approve the PR's checks.
-    - cron: '0 6 * * 0-2'
+    # Every check is off the hour: GitHub delays schedules at the top of
+    # the hour by hours under load (our 06:00 runs started at 13:00-15:42)
+    # and sometimes drops them (no run on Tuesday 2026-11-10).
+    - cron: '17 23 * * 6'  # Saturday 23:17 UTC, as the window opens
+    # Every 3 hours through the window, so a round the hub merges into
+    # its tasks.json during the day is picked up within hours: 2026-11-21
+    # merged Monday 14:37 UTC, nine minutes after that day's only check.
+    # A round is submitted once (detect), so a check after its PR opened
+    # stops at once, unless the model code on main changed since, which
+    # updates the PR. Runs queue one at a time (hub-submission). The last
+    # check, Tuesday 21:17, is 1 h 42 before the close; the fits take
+    # about an hour, and each fit's timeout stops 45 minutes short of the
+    # close (ci/policy.toml [timing]).
+    - cron: '17 */3 * * 0-2'
     # Outside the window, only to freeze the pages of merged rounds and
     # release closed rounds.
-    - cron: '0 6 * * 3-5'
+    - cron: '17 6 * * 3-5'
   workflow_dispatch:
     inputs:
       dry_run:
