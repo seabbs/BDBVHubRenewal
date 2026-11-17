@@ -795,6 +795,13 @@ def _fake_torch(monkeypatch):
     torch = types.ModuleType("torch")
     torch.save = lambda obj, path: Path(path).write_text(json.dumps(obj))
     torch.load = lambda path, **_: json.loads(Path(path).read_text())
+    # The random state the trainer saves with its state (CPU only).
+    torch.get_rng_state = lambda: [0]
+    torch.set_rng_state = lambda _: None
+    torch.cuda = types.SimpleNamespace(is_available=lambda: False)
+    torch.backends = types.SimpleNamespace(
+        mps=types.SimpleNamespace(is_available=lambda: False)
+    )
     peft = types.ModuleType("peft")
     peft.get_peft_model_state_dict = lambda model: model["adapter"]
     peft.set_peft_model_state_dict = lambda model, sd: model.update(adapter=sd)
