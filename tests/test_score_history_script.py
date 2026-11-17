@@ -33,7 +33,7 @@ def test_source_sha_is_read_from_main_deploys_only(sh) -> None:
 def _summary() -> dict[str, object]:
     # Models: randomwalk (baseline), good, "as reported".
     # Places: CD (national), CD-IT and CD-NK (provinces).
-    # Rows: model, origin, release, place, week, wis, cov50; `horizons`
+    # Rows: model, origin, release, place, week, crps, cov50; `horizons`
     # gives each row's horizon.
     return {
         "models": [
@@ -43,7 +43,7 @@ def _summary() -> dict[str, object]:
         ],
         "baseline": 0,
         "metrics": [
-            {"key": "wis", "relative": True},
+            {"key": "crps", "relative": True},
             {"key": "coverage_50", "relative": False},
         ],
         "origins": ["2026-10-24", "2026-10-31"],
@@ -82,20 +82,20 @@ def test_summary_scores_match_on_baseline_forecasts(sh) -> None:
     assert set(out.index.get_level_values("model")) == {"randomwalk", "good"}
     nat = out.loc[("national", "good")]
     assert nat["n"] == 2
-    assert nat["wis"] == pytest.approx(17.5)
-    assert nat["rel_wis"] == pytest.approx(35 / 40)
-    assert nat["base_wis"] == pytest.approx(20.0)
+    assert nat["crps"] == pytest.approx(17.5)
+    assert nat["rel_crps"] == pytest.approx(35 / 40)
+    assert nat["base_crps"] == pytest.approx(20.0)
     assert nat["coverage_50"] == pytest.approx(1.0)
     prov = out.loc[("provinces", "good")]
     assert prov["n"] == 1
-    assert prov["rel_wis"] == pytest.approx(0.5)
-    assert out.loc[("national", "randomwalk"), "rel_wis"] == 1.0
+    assert prov["rel_crps"] == pytest.approx(0.5)
+    assert out.loc[("national", "randomwalk"), "rel_crps"] == 1.0
     assert "rel_coverage_50" not in out.columns
     # Relative to good, randomwalk is twice as bad nationally.
     vs_good = every.loc[every["baseline"] == "good"].set_index(
         ["pool", "model"]
     )
-    assert vs_good.loc[("national", "randomwalk"), "rel_wis"] == pytest.approx(
+    assert vs_good.loc[("national", "randomwalk"), "rel_crps"] == pytest.approx(
         40 / 35
     )
 
@@ -146,7 +146,7 @@ def test_history_splits_by_target_week(sh) -> None:
         & (out["pool"] == "national")
     ].set_index("split")
     assert set(out.index) == {"week 2026-10-24"}
-    assert out.loc["week 2026-10-24", "rel_wis"] == pytest.approx(35 / 40)
+    assert out.loc["week 2026-10-24", "rel_crps"] == pytest.approx(35 / 40)
 
 
 def _good_national(df):
@@ -179,7 +179,7 @@ def test_common_forecasts_keep_the_scored_set_fixed(sh) -> None:
     common = out.loc[out["common"]]
     assert list(full["n"]) == [2, 3]
     assert list(common["n"]) == [2, 2]
-    assert list(common["wis"]) == pytest.approx([17.5, 18.5])
+    assert list(common["crps"]) == pytest.approx([17.5, 18.5])
     assert list(common["break"]) == [True, False]
 
 
@@ -243,10 +243,10 @@ def test_by_model_view_marks_breaks_and_names_commits(sh) -> None:
     good = [r for r in nat["rows"] if r[0] == 1]
     assert good[0][:3] == [1, 0, 2]
     keys = [m["key"] for m in d["metrics"]]
-    assert good[0][3 + keys.index("rel_wis")] == pytest.approx(35 / 40)
+    assert good[0][3 + keys.index("rel_crps")] == pytest.approx(35 / 40)
     rw = d["sets"]["good|national|week 2026-10-24"]["rows"][0]
     assert rw[0] == 0
-    assert rw[3 + keys.index("rel_wis")] == pytest.approx(40 / 35, rel=1e-3)
+    assert rw[3 + keys.index("rel_crps")] == pytest.approx(40 / 35, rel=1e-3)
 
 
 def test_by_week_view_draws_a_line_per_week_for_one_model(
@@ -271,7 +271,7 @@ def test_by_week_view_draws_a_line_per_week_for_one_model(
     # Week 2026-10-24 (legend 1) at both deploys, 2026-10-31 at the last.
     assert sorted((r[0], r[1]) for r in rows) == [(0, 1), (1, 0), (1, 1)]
     new = next(r for r in rows if r[0] == 0)
-    assert new[3 + keys.index("rel_wis")] == pytest.approx(0.5)
+    assert new[3 + keys.index("rel_crps")] == pytest.approx(0.5)
 
 
 def test_repeated_deploys_of_a_commit_keep_the_latest(sh) -> None:
@@ -375,7 +375,7 @@ def test_each_target_week_has_its_own_common_window(sh) -> None:
     assert list(old["source_sha"].str[:1]) == ["a", "b"]
     assert list(old["n"]) == [2, 2]
     assert list(new["source_sha"].str[:1]) == ["b"]
-    assert list(new["rel_wis"]) == pytest.approx([0.5])
+    assert list(new["rel_crps"]) == pytest.approx([0.5])
 
 
 def test_chart_opens_on_the_newest_week_scored_at_most_deploys(sh) -> None:
@@ -399,3 +399,33 @@ def test_common_sets_are_found_per_target(sh) -> None:
     )
     common = out.loc[out["common"]]
     assert set(common["target"]) == {"latest", "complete"}
+
+
+def test_chart_shows_crps_and_old_wis_deploys_as_missing(sh) -> None:
+    # Deploys before the switch to CRPS carry WIS only, which is not
+    # relabelled: their CRPS points are missing.
+    keys = [c for c, *_ in sh.CHART_METRICS]
+    assert keys[:2] == ["rel_crps", "crps"]
+    assert not any("wis" in k for k in keys)
+    new = _summary()
+    old = json.loads(json.dumps(new).replace('"crps"', '"wis"'))
+    deploys = [
+        ("a" * 40, "2026-11-04T10:00:00+00:00", "p1", "latest", old),
+        ("b" * 40, "2026-11-05T10:00:00+00:00", "p2", "latest", new),
+    ]
+    charts = sh.chart_data(sh.history(deploys), {"good": ("#111", "#222", "")})
+    nat = charts["model"]["latest"]["sets"][
+        "randomwalk|national|week 2026-10-24"
+    ]
+    good = [r for r in nat["rows"] if r[0] == 1]
+    at = 3 + keys.index("rel_crps")
+    assert good[0][at] is None
+    assert good[1][at] == pytest.approx(35 / 40)
+
+
+def test_page_names_the_configured_draws(sh) -> None:
+    root = Path(__file__).resolve().parents[1]
+    n = sh.backtest_samples(root / "config" / "backtest.toml")
+    assert n == 1000
+    page = sh.page_markdown(_two_deploys(sh), samples=n)
+    assert "1,000 draws" in page

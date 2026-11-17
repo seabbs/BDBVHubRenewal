@@ -441,7 +441,9 @@ rule ebola_hub:
 # The release backtest of the models on main, from every past release. CI
 # has run it by the paper step, so this rule then has nothing to do.
 # The paper's own release backtest of `backtest_models` at its number of
-# draws, from a copy of the backtest config with only `n_samples` changed.
+# draws, from a copy of the backtest config with only `[samples] backtest`
+# changed: the draws of the models the backtest runs itself. The stored
+# fits keep `[forecast] n_samples`.
 EBOLA_DRAWS = f"{R}/ebola-backtest/forecasts.csv.gz"
 
 
@@ -459,9 +461,9 @@ rule ebola_backtest_draws:
         heavy=1,
     shell:
         "mkdir -p {params.folder} && "
-        "sed 's/^n_samples = .*/n_samples = {params.n}/' {params.config} "
+        "sed 's/^backtest = .*/backtest = {params.n}/' {params.config} "
         "> {params.folder}/backtest.toml && "
-        "grep -q '^n_samples = {params.n}$' {params.folder}/backtest.toml && "
+        "grep -q '^backtest = {params.n}$' {params.folder}/backtest.toml && "
         "cd .. && {BDBV} backtest --config {params.folder}/backtest.toml "
         "--models {params.models} --no-recovery "
         "--results {params.folder}/results --output {params.folder}"

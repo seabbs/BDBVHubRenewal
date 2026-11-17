@@ -90,11 +90,11 @@ def test_relative_skill_is_against_the_zone_randomwalk(
     scores: pd.DataFrame,
 ) -> None:
     rel = zone_relative_skill(scores).set_index("model")
-    assert rel.loc[ZONE_BASELINE, "relative_wis"] == pytest.approx(1.0)
-    assert (rel["relative_wis"] > 0).all()
+    assert rel.loc[ZONE_BASELINE, "relative_crps"] == pytest.approx(1.0)
+    assert (rel["relative_crps"] > 0).all()
     by = zone_relative_skill(scores, by=("horizon",))
     mine = by.loc[by["model"] == "randomwalknowcast"].set_index("horizon")
-    assert (mine["relative_wis"] > 0).all()
+    assert (mine["relative_crps"] > 0).all()
     assert mine.index.min() == -4
 
 
@@ -191,3 +191,10 @@ def test_zone_forecasts_read_skips_an_empty_part(tmp_path: Path) -> None:
     run = ZoneForecasts.read([tmp_path / "a", tmp_path / "b"])
     assert list(run.samples.columns) == ["key", "origin", "value"]
     assert len(run.runs) == 1
+
+
+def test_zone_relative_skill_scores_crps(scores: pd.DataFrame) -> None:
+    rel = zone_relative_skill(scores).set_index("model")
+    assert rel.loc[ZONE_BASELINE, "relative_crps"] == pytest.approx(1.0)
+    assert rel.loc[ZONE_BASELINE, "relative_log_crps"] == pytest.approx(1.0)
+    assert "relative_wis" not in rel.columns
