@@ -106,3 +106,13 @@ def test_the_timer_kind_follows_the_platform():
     assert schedule.timer_kind({}, "darwin") == "launchd"
     assert schedule.timer_kind({}, "linux", has_systemd=True) == "systemd"
     assert schedule.timer_kind({}, "linux", has_systemd=False) == "cron"
+
+
+def test_timers_run_with_the_installing_path(tmp_path):
+    assert "PATH=/opt/uv/bin:/usr/bin python3" in schedule.cron_line(
+        tmp_path, 30, "/opt/uv/bin:/usr/bin"
+    )
+    service, _ = schedule.systemd_units(tmp_path, 30, "/opt/uv/bin")
+    assert "Environment=PATH=/opt/uv/bin" in service
+    data = plistlib.loads(schedule.launchd_plist(tmp_path, 30, "/opt/uv/bin"))
+    assert data["EnvironmentVariables"]["PATH"] == "/opt/uv/bin"
