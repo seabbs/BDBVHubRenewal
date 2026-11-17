@@ -150,3 +150,12 @@ def test_the_held_out_default_leaves_room_for_skipped_simulations(tmp_path):
     # few skipped ones.
     out = _source(tmp_path, "", 'echo "$HOLDOUT"')
     assert out.stdout.split() == ["90"]
+
+
+def test_the_run_is_ten_grid_blocks(tmp_path):
+    out = _source(tmp_path, "", 'echo "$OUTBREAKS $LR_STEPS $PREFIXES"')
+    assert out.stdout.split() == [
+        "8400",
+        "38325",
+        *["250", "500", "750", "1000", "2000", "4000", "8400"],
+    ]
