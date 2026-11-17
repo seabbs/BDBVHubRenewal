@@ -42,17 +42,23 @@ def _sync(tmp_path, remote, first=1):
     return out.stdout.split()
 
 
-def test_finished_batches_stream_in_before_their_round_is_ready(tmp_path):
+def _train_seeds(n):
+    """Round n's 40 training seeds, in seed order."""
+    return [str(30000 + 100 * n + i) for i in range(40)]
+
+
+def test_the_seed_list_is_every_training_seed_in_seed_order(tmp_path):
     remote = tmp_path / "remote"
-    _round(remote, 1, [(20001, "train"), (20002, "train"), (29901, "held_out")])
-    (remote / "r1" / "held-out.txt").write_text("29901 29901\n")
+    # Batches finish out of order; the list is in seed order regardless.
+    _round(remote, 1, [(30102, "train"), (30100, "train"), (30140, "held_out")])
+    (remote / "r1" / "held-out.txt").write_text("30140 30143\n")
     _round(remote, 2, [(30201, "train")])
-    assert _sync(tmp_path, remote) == ["20001", "20002", "30201"]
-    # A batch finishing later joins once, after the others.
+    assert _sync(tmp_path, remote) == _train_seeds(1) + _train_seeds(2)
+    # A later sync keeps the list as it was, and pulls new batches.
     _round(remote, 2, [(30201, "train"), (30200, "train")])
-    assert _sync(tmp_path, remote) == ["20001", "20002", "30201", "30200"]
+    assert _sync(tmp_path, remote) == _train_seeds(1) + _train_seeds(2)
     assert (tmp_path / "local" / "sims" / "settings-30200.csv").exists()
-    assert (tmp_path / "local" / "sims" / "settings-29901.csv").exists()
+    assert (tmp_path / "local" / "sims" / "settings-30140.csv").exists()
 
 
 def test_n1000_must_beat_zero_shot_on_both(tmp_path):
@@ -93,21 +99,30 @@ def _source(tmp_path, env: str, command: str):
     )
 
 
-def test_a_bias_run_trains_with_the_bias_into_its_own_folders(tmp_path):
-    plain = _source(tmp_path, "", "bias_args; echo; remote_checkpoints")
-    assert plain.returncode == 0
-    assert plain.stdout.split() == ["checkpoints"]
+def test_the_run_trains_the_attention_biases_by_default(tmp_path):
     on = _source(
-        tmp_path,
-        f"export SERIES_BIAS=1 HERE={tmp_path}/bias;",
-        "bias_args; echo; remote_checkpoints",
+        tmp_path, "", 'bias_args; echo; remote_checkpoints; echo "$HERE"'
     )
     assert on.returncode == 0
-    assert on.stdout.split() == ["--series-bias", "checkpoints/slots"]
+    assert on.stdout.split() == [
+        "--series-bias",
+        "checkpoints/slots",
+        "output/finetune/continuous-r5",
+    ]
 
 
-def test_a_bias_run_refuses_the_no_bias_runs_folder(tmp_path):
-    out = _source(tmp_path, "export SERIES_BIAS=1;", "bias_args")
+def test_a_no_bias_control_sets_it_and_its_own_folder(tmp_path):
+    off = _source(
+        tmp_path,
+        f"export SERIES_BIAS=0 HERE={tmp_path}/nobias;",
+        "bias_args; echo; remote_checkpoints",
+    )
+    assert off.returncode == 0
+    assert off.stdout.split() == ["checkpoints"]
+
+
+def test_a_no_bias_run_refuses_the_design_runs_folder(tmp_path):
+    out = _source(tmp_path, "export SERIES_BIAS=0;", "bias_args")
     assert out.returncode != 0
     assert "HERE" in out.stderr
 
@@ -125,7 +140,7 @@ def test_the_restart_streams_only_rounds_from_the_first_r5_round(tmp_path):
     remote = tmp_path / "remote"
     _round(remote, 8, [(30801, "train")])
     _round(remote, 9, [(30900, "train"), (30940, "held_out")])
-    assert _sync(tmp_path, remote, first=9) == ["30900"]
+    assert _sync(tmp_path, remote, first=9) == _train_seeds(9)
     out = _source(tmp_path, "", 'echo "$FIRST_ROUND"')
     assert out.stdout.split() == ["9"]
 
