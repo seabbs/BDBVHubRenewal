@@ -125,3 +125,9 @@ def test_the_si_notes_name_every_level_and_the_held_out_seeds() -> None:
     assert all(str(b) in heldout for b in config.get("blocks") or [])
     # One sentence per line.
     assert all(line.count(". ") == 0 for line in heldout.splitlines() if line)
+
+
+def test_the_model_note_gives_one_draw_and_no_nb2() -> None:
+    model = synthetic_grid.model_note(TEXT)
+    assert "with one observation draw." in model
+    assert "NB2 or NB1" not in model
