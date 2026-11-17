@@ -253,7 +253,7 @@ The paper's test set, 100 simulations outside training, is cut the same way.
 ### Correlated trajectories
 
 - `randomwalk` and `randomwalknowcast` draw each place's nowcast weeks on their own, so sums over weeks and places of randomly paired draws are too narrow.
-- We pair their draws into trajectories with a Gaussian copula, by rank reordering as in the Schaake shuffle [@Clark2004] and ensemble copula coupling [@Schefzik2013].
+- We pair their draws into trajectories with a Gaussian copula, by rank reordering as in the Schaake shuffle [@Clark2004] and ensemble copula coupling [@Schefzik2013], as copulas have been used for joint forecasts of seasonal influenza [@Ray2018; @Brooks2018].
 - Chronos-2 is not paired, and hub teams' samples are left as submitted.
 - Pairing happens inside each walk model's forecast, so every score and submission reads the same paired draws.
 - It changes only summed targets: each cell keeps its own draws.
