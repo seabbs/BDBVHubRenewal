@@ -6,7 +6,7 @@ committed `dashboard.runs` of workflow/config.yaml, then `DASHBOARD_RUNS`
 in config/local.env (specs separated by `;`), then `--run` on the
 command line. A run spec is
 
-    name=SOURCE[,label=L][,colour=C][,live][,base=OTHER][,prefix=P]
+    name=SOURCE[,label=L][,colour=C][,hue=H][,live][,base=OTHER][,prefix=P]
         [,hashes=H1+H2][,n=H1:250+H2:500]
 
 A spec splits only at a comma that starts a known field, so a value may
@@ -37,7 +37,16 @@ from pathlib import Path
 PALETTE = ("#2563eb", "#db2777", "#ea580c", "#0d9488", "#7c3aed", "#65a30d")
 """Colours of runs that name none, in order."""
 
-RUN_FIELDS = {"label", "colour", "live", "base", "prefix", "hashes", "n"}
+RUN_FIELDS = {
+    "label",
+    "colour",
+    "live",
+    "base",
+    "prefix",
+    "hashes",
+    "n",
+    "hue",
+}
 REF_FIELDS = {"label", "colour", "checkpoint", "role"}
 ROLES = {"baseline", "start", "other"}
 """A reference's role on the score panels: the series scores are relative
@@ -58,6 +67,19 @@ class Run:
     n: Mapping[str, int] = field(default_factory=dict)
     base: str | None = None
     live: bool = False
+    hue: int | None = None
+
+
+def shade(run: Run, rank: int, count: int) -> str:
+    """Return the colour of a run's `rank`th checkpoint of `count`.
+
+    A run with a `hue` shades its checkpoints from light (earliest) to
+    dark (latest); a run with a fixed colour keeps it.
+    """
+    if run.hue is None:
+        return run.colour
+    light = 46 if count < 2 else 66 - 28 * rank / (count - 1)
+    return f"hsl({run.hue},80%,{light:.0f}%)"
 
 
 @dataclass(frozen=True)
@@ -113,6 +135,7 @@ def make_run(
     prefix: str | None = None,
     hashes: Sequence[str] = (),
     n: Mapping[str, int] | None = None,
+    hue: int | None = None,
 ) -> Run:
     """Return a run; SOURCE is a folder, or a release prefix ending in `-`."""
     is_prefix = source.endswith("-") and "/" not in source
@@ -126,6 +149,7 @@ def make_run(
         n=dict(n or {}),
         base=base,
         live=bool(live),
+        hue=None if hue is None else int(hue),
     )
 
 
@@ -146,6 +170,7 @@ def parse_run(spec: str) -> Run:
         prefix=o.get("prefix"),
         hashes=tuple(filter(None, o.get("hashes", "").split("+"))),
         n=sizes,
+        hue=int(o["hue"]) if o.get("hue") else None,
     )
 
 
@@ -160,6 +185,7 @@ def _from_config(entry: Mapping) -> Run:
         prefix=entry.get("prefix"),
         hashes=tuple(entry.get("hashes") or ()),
         n={h: int(v) for h, v in (entry.get("n") or {}).items()},
+        hue=entry.get("hue"),
     )
 
 
@@ -184,7 +210,9 @@ def load_runs(
         replace(
             r,
             live=r.key == first,
-            colour=r.colour or PALETTE[i % len(PALETTE)],
+            colour=r.colour
+            or (shade(r, 0, 1) if r.hue is not None else "")
+            or PALETTE[i % len(PALETTE)],
         )
         for i, r in enumerate(runs)
     ]
@@ -283,15 +311,21 @@ class Classifier:
     """Which run or reference a checkpoint or row belongs to."""
 
     def __init__(
-        self, runs: Sequence[Run], references: Sequence[Reference] = ()
+        self,
+        runs: Sequence[Run],
+        references: Sequence[Reference] = (),
+        excluded: Iterable[str] = (),
     ) -> None:
         self.runs = list(runs)
         self.references = list(references)
+        self.excluded = set(excluded)
         self._saved = {r.key: folder_hashes(r.folder) for r in self.runs}
 
     def run_of(self, name: str) -> str | None:
         """Return the run of a checkpoint name, or None if none claims it."""
         key, prefix = split_label(name)
+        if key in self.excluded:
+            return None
         bare = prefix.removeprefix("chronos-")
         for r in self.runs:
             if key in r.hashes or key in self._saved[r.key]:
