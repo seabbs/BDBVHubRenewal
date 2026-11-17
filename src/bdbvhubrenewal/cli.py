@@ -1952,7 +1952,19 @@ def _pairing_sensitivity(args: argparse.Namespace, data_dir: str) -> int:
         dates = de.nowcast_dates(de.load_germany_config(config))
         if args.chunk:
             dates = chunk(dates, args.chunk)
-        scores = pairing.germany_sensitivity(data, config, dates)
+        # Each date is kept as it is scored, so a rerun resumes.
+        done = out / "germany-dates"
+        done.mkdir(exist_ok=True)
+        for date in dates:
+            path = done / f"{date}.csv.gz"
+            if not path.exists():
+                write_csv(
+                    pairing.germany_sensitivity(data, config, [date]), path
+                )
+        scores = pd.concat(
+            [_read_or_empty(done / f"{d}.csv.gz") for d in dates],
+            ignore_index=True,
+        )
     if args.chunk:
         name += "-" + args.chunk.replace("/", "of")
     path = out / f"{name}.csv.gz"
