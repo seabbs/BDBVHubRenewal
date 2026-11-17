@@ -20,7 +20,9 @@ Handled (warn or pass):
   `national_sum` national equals the sum of the provinces plus the
                  unassigned cases in `national.json`, per sample and
                  week (fails otherwise). A modelled province missing
-                 from the file warns.
+                 from the file warns. Skipped when `national.json` has
+                 `national_source = "own"`: the model forecast the
+                 country itself, and the hub does not require the sum.
 
 Plausibility (`plausible` fails; the others warn):
   `plausible`    each location's forecast near its recent data: median
@@ -270,9 +272,17 @@ def check_national_sum(
     National sample k must equal the sum of province sample k plus the
     sample's modelled unassigned component (`national.json`), for every
     week, up to float noise (`tol` absolute, or 1e-12 relative). Every
-    modelled province must be in the file.
+    modelled province must be in the file. Skipped when the sidecar's
+    `national_source` is `"own"`.
     """
     national = str(sidecar["national"])
+    if sidecar.get("national_source", "sum") == "own":
+        return Check(
+            "national_sum",
+            "skip",
+            f"{national} is the model's own forecast (national.json), "
+            "not the sum of the provinces",
+        )
     provs = [loc for loc in s.locations if is_province(loc)]
     modelled = sorted(sidecar["modelled_provinces"])
     unassigned = _unassigned(sidecar)
