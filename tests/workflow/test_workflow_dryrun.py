@@ -195,6 +195,34 @@ def test_score_runs_three_units_a_checkpoint_and_the_reference(tmp_path):
     assert "land" not in jobs
 
 
+def test_german_forecasts_are_off_by_default(tmp_path):
+    config = {"score": {"labels": ["slots-aaa", "bbb"]}}
+    jobs = dry(tmp_path, "score", config=config)
+    assert "score_germany_forecast" not in jobs
+    assert "score_germany_forecast" not in dry(
+        tmp_path, "germany_forecast", config=config
+    )
+
+
+def test_german_forecasts_run_the_reference_and_one_checkpoint(tmp_path):
+    forecast = {"enabled": True, "label": "slots-aaa"}
+    config = {
+        "score": {"labels": ["slots-aaa", "bbb"], "germany_forecast": forecast}
+    }
+    jobs = dry(tmp_path, "germany_forecast", config=config)
+    assert jobs["score_germany_forecast"] == 2
+    # Each after its own German nowcasts.
+    assert jobs["score_germany"] == 2
+    assert dry(tmp_path, "score", config=config)["score_germany_forecast"] == 2
+
+
+def test_german_forecasts_of_the_reference_alone(tmp_path):
+    forecast = {"enabled": True, "label": None}
+    config = {"score": {"labels": ["bbb"], "germany_forecast": forecast}}
+    jobs = dry(tmp_path, "germany_forecast", config=config)
+    assert jobs["score_germany_forecast"] == 1
+
+
 def test_score_takes_checkpoints_from_the_release_list(tmp_path):
     cache = tmp_path / "scores"
     cache.mkdir()
