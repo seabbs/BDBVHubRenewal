@@ -402,6 +402,21 @@ def follow_ups(checkpoint: str) -> list[str] | None:
     return [str(FOLLOW_UPS), checkpoint]
 
 
+def start_follow_ups(checkpoint: str, cache: Path) -> None:
+    """Start a slots checkpoint's follow-up jobs, detached."""
+    cmd = follow_ups(checkpoint)
+    if cmd is None:
+        return
+    out = cache.parent / "log" / f"followups-{checkpoint}.log"
+    with out.open("a") as f:
+        subprocess.Popen(
+            cmd, stdout=f, stderr=f, stdin=subprocess.DEVNULL,
+            start_new_session=True,
+        )  # fmt: skip
+    say(f"{checkpoint}: started its follow-ups (stores; slots check and "
+        f"aggregation for slots runs) ({cmd[0]}); log {out}")  # fmt: skip
+
+
 def mailbox_line(text: str, when: str | None = None) -> str:
     """Return a mailbox line, as scripts/job_watch.sh writes them."""
     when = when or dt.datetime.now().strftime("%Y-%m-%d %H:%M")
@@ -953,6 +968,8 @@ def main(cache: Path) -> None:
                     if sha is not None and lb != cs.REFERENCE:
                         keep.add(lb)
                         note_paper(sha, lb, cache)
+                        if unit[0] == "germany":
+                            start_follow_ups(lb, cache)
 
                 say(f"German runs: {', '.join(pick)} "
                     f"({', '.join(f'n{outbreaks[lb]} {cached[lb]}/80' for lb in pick)})")  # fmt: skip
@@ -980,16 +997,7 @@ def main(cache: Path) -> None:
             continue
         log(f"progress: {checkpoint} landed at {sha}")
         note_paper(sha, checkpoint, cache)
-        cmd = follow_ups(checkpoint)
-        if cmd is not None:
-            out = cache.parent / "log" / f"followups-{checkpoint}.log"
-            with out.open("a") as f:
-                subprocess.Popen(
-                    cmd, stdout=f, stderr=f, stdin=subprocess.DEVNULL,
-                    start_new_session=True,
-                )  # fmt: skip
-            say(f"{checkpoint}: started the aggregation arms and the "
-                f"slots check ({cmd[0]}); log {out}")  # fmt: skip
+        start_follow_ups(checkpoint, cache)
 
 
 if __name__ == "__main__":
