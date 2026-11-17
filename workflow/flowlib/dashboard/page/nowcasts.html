@@ -1,7 +1,7 @@
 <div class=gctl>
 <label id=gdsl hidden>Dataset <select id=gds></select></label>
-<label>Source <select id=gsrc><option value=daily>daily</option>
-<option value=weekly>weekly</option></select></label>
+<label id=gtgtl hidden>Target <select id=gtgt></select></label>
+<label>Source <select id=gsrc>{sources}</select></label>
 <label class=gwide>Nowcast date <button id=gprev>&lt;</button>
 <input type=range id=gsl><button id=gnext>&gt;</button>
 <b id=gdate></b></label>
@@ -13,11 +13,16 @@
 <option>3</option><option>4</option></select></label>
 <label>every <select id=gstep><option value=1>1 week</option>
 <option value=2>2 weeks</option><option value=4>4 weeks</option></select>
+</label>
+<label>y-axis fits <select id=gyfit><option value=0>95% intervals</option>
+<option value=1>50% intervals</option><option value=2>truth and medians</option></select>
+</label>
+<label><input type=checkbox id=gylog> log y</label>
+<label>intervals <select id=gbands><option value=0>50% and 95%</option>
+<option value=1>50% only</option><option value=2>none</option></select>
 </label></div>
 <details class=glocs><summary id=gsum>Locations</summary>
 <div id=glocs></div></details>
-<div id=gruns class=gck></div>
 <div id=gck class=gck></div>
-<div class=plots><div class=card><h3>Nowcasts, weekly counts</h3>
-<div id=gplot></div></div>
-<div class=card><h3>WIS by checkpoint</h3><div id=gwis></div></div></div>
+<div class=gwrap id=gwrap><div class=card><div class=cardinfo>{tip}</div><div id=gplot></div></div>
+<div class=card><div id=gwis></div></div></div>
