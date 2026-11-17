@@ -131,6 +131,11 @@ def test_cli_lopo_writes_scores_for_mask_aware_models(tmp_path: Path) -> None:
         _REGISTRY.pop("mask_aware")
     scores = pd.read_csv(tmp_path / "res" / "lopo-scores.csv")
     assert set(scores["model"]) == {"mask_aware"}
+    # LOPO runs its models here, on `[samples] backtest` draws.
+    from bdbvhubrenewal.evaluation.backtest import load_config
+
+    cfg = load_config(ROOT / "config" / "backtest.toml")
+    assert set(scores["n_samples"]) == {cfg.score_samples}
     assert (tmp_path / "out" / "lopo-forecasts.csv.gz").exists()
     # The development backtest is not rerun.
     assert not (tmp_path / "res" / "nowcast-scores.csv").exists()

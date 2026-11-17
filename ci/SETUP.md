@@ -131,8 +131,8 @@ Ledger commits are on a side branch, so an occasional commit to `main` keeps the
 GitHub-hosted `ubuntu-latest` on a public repository: 4 vCPUs, 16 GB RAM, 14 GB disk, and a **6-hour cap per job**.
 The wait for the fit store, and each fit job's timeout, is at most 350 minutes, and stops 45 minutes before the window closes (`ci/policy.toml` `[timing]`).
 Artefacts are kept for 90 days at most, so the ledger branch is the durable archive.
-Scheduled starts can be late by minutes, or dropped when GitHub is busy.
-If a morning check is dropped, the next morning's check runs the round, and a manual dispatch covers the Tuesday check.
+Scheduled starts can be late, by hours at the top of the hour, or dropped when GitHub is busy, so every check is off the hour.
+If a check is dropped, the next one, 3 hours later, runs the round.
 
 Every fit runs 2 chains of 500 warm-up in parallel (`ci/policy.toml`).
 Each candidate takes 750 draws, `renewalbvd` at target acceptance 0.95 and the others at 0.9.
@@ -142,11 +142,12 @@ The candidates fit in separate jobs at the same time, so the fit stage takes abo
 Time a real fit with a dry run on a past vintage (see above), and read the `Fit took N s` line in the job summary.
 
 The chain runs prepare (random walk), then every renewal fit in parallel, then the gate.
-Scheduled runs check once each morning, at 06:00 UTC on Sunday, Monday and Tuesday, after the Saturday 23:00 UTC run as the window opens.
+Scheduled runs check every 3 hours through the window, at 17 minutes past 00:00, 03:00 and so on to 21:00 UTC on Sunday, Monday and Tuesday, after the Saturday 23:17 UTC run as the window opens.
+So a round the hub merges into its `tasks.json` during the day is picked up within hours.
 A round is submitted once: when the ledger records its PR, later scheduled runs stop, and a manual dispatch resubmits.
 The exception is a change to the model code on main (`src/`, `config/`, `ci/policy.toml`, `uv.lock` or `ci/steps/`) since the commit the ledger records for the round.
 A scheduled run in the window then reruns and updates the round's PR.
-From the Tuesday 06:00 UTC check there are about 17 hours to the close, which also leaves the organisers the US working day to approve the PR's checks.
+A round is normally run by the first check after its data and its `tasks.json` entry land, well before the close, which leaves the organisers time to approve the PR's checks.
 Every fit job's timeout leaves `reserve_minutes` (45) before the close for the gate and the pull request.
 So a fit that runs to its timeout still reaches the fallback or random walk before the close.
 `max_tree_depth` is set per candidate in `ci/policy.toml`.
@@ -157,7 +158,7 @@ If fits come close to the cap:
    Use fewer warm-up iterations or draws, start from last week's posterior, and keep the JAX compilation cache warm (`setup-forecast-env` restores it).
 2. Start earlier.
    Data usually land on Friday or Saturday, and the window opens Sunday.
-   The last scheduled start on Tuesday is 06:00 UTC, which leaves about 17 hours before the window closes for the fits and the gate.
+   A round runs at the first check after its data land, within 3 hours; the last check, Tuesday 21:17 UTC, only catches a round that missed the others.
 3. Use a bigger machine through `FIT_RUNNER`.
    GitHub's larger runners need a paid Team or Enterprise organisation, for example if the repo moves to `epiforecasts`.
    A self-hosted runner works too.

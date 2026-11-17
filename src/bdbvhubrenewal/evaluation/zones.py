@@ -456,7 +456,7 @@ def _cutoff(daily: pd.DataFrame, vintage: str) -> dt.date:
 def zone_relative_skill(
     scores: pd.DataFrame, by: Sequence[str] = ()
 ) -> pd.DataFrame:
-    """Return each model's mean WIS and log WIS relative to zone randomwalk.
+    """Return each model's mean CRPS and log CRPS relative to zone randomwalk.
 
     Parameters
     ----------
@@ -471,7 +471,11 @@ def zone_relative_skill(
         See `bdbvhubrenewal.evaluation.scoring.relative_skill`.
     """
     return relative_skill(
-        scores, baseline=ZONE_BASELINE, by=by, match_on=_KEYS[1:]
+        scores,
+        baseline=ZONE_BASELINE,
+        by=by,
+        metrics=("crps", "log_crps"),
+        match_on=_KEYS[1:],
     )
 
 

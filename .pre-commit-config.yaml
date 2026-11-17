@@ -21,13 +21,13 @@ repos:
         entry: uv run ruff check --fix
         language: system
         types: [python]
-        files: ^(src|tests)/
+        files: ^(src|tests|workflow|scripts)/
       - id: ruff-format
         name: ruff format
         entry: uv run ruff format
         language: system
         types: [python]
-        files: ^(src|tests)/
+        files: ^(src|tests|workflow|scripts)/
       - id: mypy
         name: mypy
         entry: uv run mypy src

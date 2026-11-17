@@ -36,15 +36,15 @@ tasks:
   lint:
     desc: Lint, check formatting and type-check
     cmds:
-      - uv run ruff check src tests
-      - uv run ruff format --check src tests
+      - uv run ruff check src tests workflow scripts
+      - uv run ruff format --check src tests workflow scripts
       - uv run mypy src
 
   format:
     desc: Format and fix lint where safe
     cmds:
-      - uv run ruff format src tests
-      - uv run ruff check --fix src tests
+      - uv run ruff format src tests workflow scripts
+      - uv run ruff check --fix src tests workflow scripts
 
   data:
     desc: Download every hub data vintage and rebuild the tidy tables in data/ (not committed; the tests read tests/fixtures/data/)
@@ -76,7 +76,7 @@ tasks:
       - uv run bdbvhubrenewal backtest {{.CLI_ARGS}}
 
   score-history:
-    desc: Write results/score-history.csv, the backtest scores of each deploy from main, and print relative WIS by deploy
+    desc: Write results/score-history.csv, the backtest scores of each deploy from main, and print relative CRPS by deploy
     cmds:
       - git fetch -q origin gh-pages
       - uv run python scripts/score_history.py {{.CLI_ARGS}}

@@ -36,7 +36,9 @@ def test_joint_scores_are_scoringrules_on_log_counts() -> None:
     out = joint_scores(_trajectories("m", draws, truth))
     row = out.iloc[0]
     assert row["energy_log"] == pytest.approx(
-        float(sr.es_ensemble(np.log1p(truth), np.log1p(draws)))
+        float(
+            sr.es_ensemble(np.log1p(truth), np.log1p(draws), estimator="fair")
+        )
     )
     assert row["variogram_log"] == pytest.approx(
         float(sr.vs_ensemble(np.log1p(truth), np.log1p(draws), p=0.5))

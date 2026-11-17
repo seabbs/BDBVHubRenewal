@@ -27,7 +27,7 @@ modelled delay we can see, so no model is scored on the counts later
 vintages report.
 A round is pending until a real vintage later than its matching vintage
 exists.
-`summarise_comparison` gives WIS relative to a baseline on the weeks both
+`summarise_comparison` gives CRPS relative to a baseline on the weeks both
 forecast, by round and target, with `n` beside the hub cells scored, so a
 model that missed some shows it.
 """
@@ -136,7 +136,7 @@ class ComparisonConfig:
     Attributes
     ----------
     baseline : str
-        Model that WIS is relative to, if registered
+        Model that CRPS is relative to, if registered
         (`resolve_baseline`).
     stored : tuple of str
         Forecast files to take fitted models' forecasts from.
@@ -702,6 +702,8 @@ def score_comparison(
 
     Only the cells a hub team forecast (`hub_cells`) are scored, so our
     models are scored on the same rounds, places and weeks as the teams.
+    Every model, ours and the hub teams', is scored on its own samples
+    by the fair CRPS and energy score, so counts that differ compare.
 
     Parameters
     ----------
@@ -782,15 +784,15 @@ def summarise_comparison(scores: pd.DataFrame, baseline: str) -> pd.DataFrame:
     scores : pandas.DataFrame
         Output of `score_comparison`.
     baseline : str
-        Model that WIS is relative to.
+        Model that CRPS is relative to.
 
     Returns
     -------
     pandas.DataFrame
         Columns `reference_date`, `target`, `model`, `source`, `n`,
         `hub_cells` (the cells the hub teams forecast that are scored, so
-        `n` below it is a model that missed some), `wis`, `log_wis`,
-        `relative_wis` and `relative_log_wis` (on the weeks shared with
+        `n` below it is a model that missed some), `crps`, `log_crps`,
+        `rel_crps` and `rel_log_crps` (on the weeks shared with
         the baseline; missing if none), `coverage_50`, `coverage_90` and
         `bias`.
     """
@@ -807,11 +809,16 @@ def summarise_comparison(scores: pd.DataFrame, baseline: str) -> pd.DataFrame:
         scores,
         baseline=baseline,
         by=by,
-        metrics=("wis", "log_wis"),
+        metrics=("crps", "log_crps"),
         match_on=(*by, "truth_vintage", "location", "target_end_date"),
+    ).rename(
+        columns={
+            "relative_crps": "rel_crps",
+            "relative_log_crps": "rel_log_crps",
+        }
     )
     out = out.merge(
-        rel[[*by, "model", "relative_wis", "relative_log_wis"]],
+        rel[[*by, "model", "rel_crps", "rel_log_crps"]],
         on=[*by, "model"],
         how="left",
     )
@@ -821,15 +828,15 @@ def summarise_comparison(scores: pd.DataFrame, baseline: str) -> pd.DataFrame:
         "source",
         "n",
         "hub_cells",
-        "wis",
-        "log_wis",
-        "relative_wis",
-        "relative_log_wis",
+        "crps",
+        "log_crps",
+        "rel_crps",
+        "rel_log_crps",
         "coverage_50",
         "coverage_90",
         "bias",
     ]
-    return out[cols].sort_values([*by, "wis"]).reset_index(drop=True)
+    return out[cols].sort_values([*by, "crps"]).reset_index(drop=True)
 
 
 def trajectory_samples(

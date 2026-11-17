@@ -4,15 +4,17 @@
 # with the stored fits (results/forecasts.csv.gz), and the German
 # benchmark's development half (results/germany) and held-out half
 # (results/germany/held-out). Waits for the run's forecast and held-out
-# jobs; reports to the mailbox (MAILBOX in config/local.env).
+# jobs, printing each stage (also to MAILBOX with NOTIFY set in
+# config/local.env; workflow/scripts/notify.sh).
 #
 # Usage (from anywhere): paper/scripts/gather_heldout.sh RUN_ID
 set -uo pipefail
 run=$1
 root=$(cd "$(dirname "$0")/../.." && pwd)
 setting() { python3 "$root/workflow/flowlib/localconfig.py" "$1"; }
-mb=$(setting MAILBOX)
-say() { echo "$(date '+%F %H:%M') paper: CI gather (run $run): $*" >> "$mb"; }
+SAY_PREFIX="paper: CI gather (run $run)"
+# shellcheck source=workflow/scripts/notify.sh
+source "$root/workflow/scripts/notify.sh"
 repo=seabbs/BDBVHubRenewal
 bdbv="$root/.venv/bin/bdbvhubrenewal"
 cd "$root"

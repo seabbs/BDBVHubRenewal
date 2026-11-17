@@ -1,5 +1,6 @@
 """Score panels read whichever runs and references are configured."""
 
+import pytest
 from flowlib.dashboard import runs, scores
 
 RULE = "own-quantile-wis_crps-1000-common"
@@ -132,3 +133,12 @@ def test_reference_roles_go_to_the_page():
         "other": "other",
         "extra": "start",
     }
+
+
+def test_a_missing_score_table_has_no_rows(tmp_path):
+    assert scores.read(tmp_path / "none.csv") == []
+
+
+def test_a_score_table_that_cannot_be_read_raises(tmp_path):
+    with pytest.raises(IsADirectoryError):
+        scores.read(tmp_path)

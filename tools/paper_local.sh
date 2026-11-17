@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
-# The full paper run on a shared host, as a detached job: wait for the
-# held-out inputs, then run scripts/paper.sh paper single-threaded and
-# niced, reporting each stage to the mailbox (MAILBOX in config/local.env).
+# Optional: the full paper run on a shared host as a detached job. Waits
+# for the held-out inputs, then runs scripts/paper.sh single-threaded and
+# niced, printing each stage; with NOTIFY and MAILBOX set in
+# config/local.env the stages are also appended to MAILBOX
+# (workflow/scripts/notify.sh). Not needed to build the paper: `task
+# paper` does that in the foreground once the inputs are there.
 #
-# Usage (from anywhere): nohup paper/scripts/paper_local.sh [TARGET] &
+# Usage (from anywhere): nohup tools/paper_local.sh [TARGET] &
 #
 # Waits for (each checked every 10 minutes, for up to 24 h):
 # - the held-out synthetic simulations of the paper run's seeds, in the
@@ -14,13 +17,14 @@
 # QUARTO_BIN picks a Quarto (default: quarto on PATH).
 set -uo pipefail
 target=${1:-paper}
-root=$(cd "$(dirname "$0")/../.." && pwd)
+root=$(cd "$(dirname "$0")/.." && pwd)
 setting() { python3 "$root/workflow/flowlib/localconfig.py" "$1"; }
-mb=$(setting MAILBOX)
 logs=$(setting PAPER_LOGS)
 log=$logs/paper-local-$target.log
 mkdir -p "$logs"
-say() { echo "$(date '+%F %H:%M') paper: local $target run: $*" >> "$mb"; }
+SAY_PREFIX="paper: local $target run"
+# shellcheck source=workflow/scripts/notify.sh
+source "$root/workflow/scripts/notify.sh"
 cd "$root"
 export PATH="$root/.venv/bin:${QUARTO_BIN:+$(dirname "$QUARTO_BIN"):}$PATH"
 unset VIRTUAL_ENV

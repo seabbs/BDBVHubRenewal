@@ -15,7 +15,7 @@ def test_with_no_file_everything_is_on_this_machine(tmp_path):
     env = {"HOME": str(tmp_path)}
     cfg = localconfig.read(tmp_path / "none.env", env)
     assert cfg["ROOT"] == f"{tmp_path}/bdbv-rounds"
-    assert cfg["MAILBOX"] == f"{tmp_path}/bdbv-mailbox.md"
+    assert cfg["MAILBOX"] == ""
     assert cfg["INBOX"] == ""
     assert cfg["JOB_PREFIX"] == ""
     assert cfg["HOST_NAME"]
@@ -129,8 +129,8 @@ def test_the_command_line_prints_one_setting(tmp_path):
     "rel",
     [
         "paper/scripts/gather_heldout.sh",
-        "paper/scripts/paper_local.sh",
-        "paper/scripts/run_target.sh",
+        "tools/paper_local.sh",
+        "tools/run_target.sh",
         "paper/workflow/config.yaml",
         "paper/Taskfile.yml",
         "scripts/paper.sh",

@@ -66,7 +66,7 @@ rule simulate_batch:
         mem_mb=lambda wc, attempt: (
             SIM["mem_mb"] if attempt == 1 else SIM["retry_mem_mb"]
         ),
-        # At most `--resources sim_slots=N` batches at once (2 on archie).
+        # At most `--resources sim_slots=N` batches at once (2 by default).
         sim_slots=1,
     threads: 1
     shell:
