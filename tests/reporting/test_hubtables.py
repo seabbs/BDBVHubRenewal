@@ -81,6 +81,8 @@ def test_hub_tables_cover_country_provinces_and_zones(
         daily=daily,
     )[0]
     forecasts = bt.run_forecasts([get_model("randomwalk")], [task])
+    # The backtest draws 1,000; the hub file takes the first 100.
+    assert forecasts["sample"].max() == 1000
     zones = hub_zones(DATA / "hub-config" / "tasks.json")
     tables = hub_tables(forecasts, task, load_daily_zones(DATA), zones)
     table = tables["randomwalk"]
@@ -160,3 +162,12 @@ def test_a_models_own_zones_stay_apart_from_its_provinces(
         got["value"].sort_index().to_numpy(),
         want["value"].sort_index().to_numpy(),
     )
+
+
+def test_hub_draws_keep_the_first_sample_ids() -> None:
+    from bdbvhubrenewal.submission.hub import HUB_SAMPLES, hub_draws
+
+    assert HUB_SAMPLES == 100
+    rows = pd.DataFrame({"sample": np.arange(1, 1001), "value": 1.0})
+    kept = hub_draws(rows)
+    assert list(kept["sample"]) == list(range(1, 101))
