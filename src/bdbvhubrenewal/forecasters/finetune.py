@@ -438,9 +438,11 @@ def training_block(
     target_places = list(range(len(places)))
     if period is not None:
         # One row a place of its period totals, after the daily counts;
-        # Chronos-2 scores it only where it has a value.
+        # Chronos-2 scores it only where it has a value. They sum the daily
+        # rows as assembled, the release's counts in the context and the
+        # truth after it, as inference sums the release's counts.
         target = np.concatenate(
-            [target, period_totals(truth, tri.times, period, period_end)]
+            [target, period_totals(target, tri.times, period, period_end)]
         )
         target_places += target_places
     context = np.concatenate([target, lagged]).astype(np.float32)
