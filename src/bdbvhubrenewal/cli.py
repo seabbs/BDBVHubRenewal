@@ -831,7 +831,7 @@ def _backtest(args: argparse.Namespace) -> int:
             models,
             target,
             delays,
-            config,
+            bt.for_scoring(config),
             fits=fits,
         )
         write_csv(lopo_fc, output / "lopo-forecasts.csv.gz")

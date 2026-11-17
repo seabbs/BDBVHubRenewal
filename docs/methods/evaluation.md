@@ -27,7 +27,7 @@ So scores compare fairly although the number of draws differs across models and 
 
 | Forecasts | Draws per forecast | Set by |
 |---|---|---|
-| Models the site runs itself in the release backtest, health zones, scenarios and recovery | 1,000 | `[samples] backtest` in `config/backtest.toml` |
+| Models the site runs itself in the release backtest, health zones, leave-one-province-out, scenarios and recovery | 1,000 | `[samples] backtest` in `config/backtest.toml` |
 | Stored fits, the submission, the Nowcast page and our models in the Comparison with the hub | 100 | `[forecast] n_samples` in `config/backtest.toml` |
 | Hub teams | 100 | Their submissions |
 | German nowcast benchmark | Quantiles at seven levels, scored by WIS | `config/germany.toml` |

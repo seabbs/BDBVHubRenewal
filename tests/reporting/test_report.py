@@ -10,6 +10,10 @@ from bdbvhubrenewal.reporting import report
 
 ROOT = Path(__file__).resolve().parents[2]
 FIXTURES = Path(__file__).parent / "fixtures"
+# nowcast-scores.csv and zone-scores.csv there are score tables without
+# samples. Their `log_crps` column is a stand-in set equal to `log_wis`,
+# added when the pages moved to CRPS, not a computed score: read it only
+# as test input.
 """Score tables for the page tests. They keep no samples, so their
 `log_crps` column is a stand-in copied from `log_wis`, not a CRPS score:
 read it only as page input."""
