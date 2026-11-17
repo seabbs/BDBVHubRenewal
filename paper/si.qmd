@@ -45,7 +45,7 @@ Chronos-2's group attention has no notion of which series is which, so on its ow
 
 - We add four learned biases to Chronos-2's group-attention scores (@tbl-attention-biases).
 - They start at zero, so fine-tuning starts from base Chronos-2, as for the relation biases TableFormer adds to a pretrained model [@Yang2022].
-- The biases train at a learning rate of $10^{-3}$ and the LoRA adapter at $10^{-5}$, both falling linearly to zero at 8,400 simulations.
+- The biases train at a learning rate of $10^{-3}$ and the LoRA adapter at $10^{-5}$, both falling linearly to zero over the 8,400 simulations.
 - We identify places by name within each block, with no limit on the number of places.
 - A place's parent is the nearest prefix of its name in the block, else the country.
 - Training blocks include countries equal to, above or later than the sum of their places, so a place belongs to its parent without summing to it.
@@ -131,11 +131,11 @@ where $m_{n,t}$ is 1 for a target step to forecast and 0 for a missing target or
 
 #### Learning rates
 
-- The learning rate at step $t$ falls linearly from $\eta_0$ to zero [@Devlin2019]:
+- The learning rate falls linearly from $\eta_0$ to zero over the simulations [@Devlin2019]:
 $$
-\eta_t = \eta_0 \left(1 - \frac{t}{T}\right),
+\eta_s = \eta_0 \left(1 - \frac{s}{S}\right),
 $$
-with $T = 38{,}325$ steps, set for 8,400 simulations.
+where $s$ is the number of simulations consumed and $S = 8{,}400$, so the rate reaches zero at the last simulation however the blocks are packed into steps.
 - $\eta_0 = 10^{-5}$ for the LoRA adapter, as in Chronos-2 [@Ansari2025], and $\eta_0 = 10^{-3}$ for the attention biases.
 - We train with AdamW [@Loshchilov2019] in fp32 and clip the gradient norm at 1 [@Pascanu2013].
 - Neither has weight decay or warmup, as in Chronos-2's fine-tuning [@Ansari2025], and the biases follow Moirai and TableFormer in having no weight decay [@Woo2024; @Yang2022].
@@ -375,7 +375,7 @@ Summing the lowest level loses at every level above it, with or without the copu
 - @fig-checkpoint-curve gives German first-half and BDBV relative scores at each checkpoint, with zero-shot Chronos-2 on the ragged layout and on complete data only as reference lines.
 - @tbl-checkpoints gives the headline scores of each checkpoint.
 - A later checkpoint has also trained for more steps.
-- The learning rate falls linearly to zero at 8,400 simulations, so the earlier checkpoints are taken at 97% (250) to 52% (4,000) of the starting rate, and only the 8,400 checkpoint is annealed.
+- The learning rate falls linearly to zero over the 8,400 simulations, so the earlier checkpoints are taken at 97% (250) to 52% (4,000) of the starting rate, and only the 8,400 checkpoint is annealed.
 
 ![The trainer's held-out loss of the fine-tune by level (national, intermediate and leaf) against the number of simulated outbreaks it has seen. {{< meta evidence.live.label >}} Development data only.](build/figures/si/finetune-heldout.png){#fig-finetune-heldout}
 
