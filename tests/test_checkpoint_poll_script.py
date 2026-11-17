@@ -54,6 +54,8 @@ def test_a_checkpoint_needs_its_runs_the_reference_and_old_bdbv(poll) -> None:
         ("bdbv", "reference"),
         ("bdbv", "bbbbbbbbbbbb"),
         ("bdbv", "aaaaaaaaaaaa"),
+        ("heldout_scores", "reference"),
+        ("heldout_scores", "bbbbbbbbbbbb"),
         ("germany", "reference"),
         ("germany", "bbbbbbbbbbbb"),
     }
@@ -61,6 +63,14 @@ def test_a_checkpoint_needs_its_runs_the_reference_and_old_bdbv(poll) -> None:
     # German runs, which write each date to the cache as it finishes.
     order = [u for u in units if u[0] != "heldout"]
     assert order[:2] == [("bdbv", "reference"), ("bdbv", "bbbbbbbbbbbb")]
+    # The held-out proper scores come after BDBV and before Germany.
+    at = {u: i for i, u in enumerate(units)}
+    assert at[("bdbv", "bbbbbbbbbbbb")] < at[("heldout_scores", "reference")]
+    assert (
+        at[("heldout_scores", "reference")]
+        < at[("heldout_scores", "bbbbbbbbbbbb")]
+    )
+    assert at[("heldout_scores", "bbbbbbbbbbbb")] < at[("germany", "reference")]
 
 
 def test_mailbox_lines_carry_the_label(poll) -> None:
@@ -73,6 +83,7 @@ def test_the_zero_shot_reference_lands_before_any_checkpoint(poll, tmp_path):
     assert poll.reference_pending(tmp_path) == [
         ("germany", "reference"),
         ("bdbv", "reference"),
+        ("heldout_scores", "reference"),
     ]
     # Once landed (its stamp written), the reference is not pending.
     (tmp_path / poll.REFERENCE_STAMP).write_text("abc\n")
@@ -100,7 +111,9 @@ def test_slots_checkpoints_land_bdbv_before_germany(poll) -> None:
     units = poll.units_for("slots-a", scored=set())
     fast, slow = poll.split_fast(units)
     assert {u[0] for u in fast} == {"heldout", "bdbv"}
-    assert {u[0] for u in slow} == {"germany"}
+    # The held-out proper scores take about 45 minutes a checkpoint, so they
+    # run with the German units, not before the interim BDBV rows.
+    assert {u[0] for u in slow} == {"heldout_scores", "germany"}
 
 
 def test_a_new_slots_checkpoint_s_bdbv_goes_before_an_older_german_run(

@@ -85,15 +85,22 @@ def can_launch(
 
 
 def units_for(checkpoint: str, scored: set[str]) -> list[tuple[str, str]]:
-    """Return a checkpoint's units: held-out, BDBV (fast), then Germany.
+    """Return a checkpoint's units: fast ones first, then the slow.
+
+    Held-out settings and BDBV are fast; the held-out proper scores and
+    Germany are slow.
 
     BDBV units of scored checkpoints are included so their rows cover
-    the same origins; finished units return at once from the cache.
+    the same origins; finished units return at once from the cache. The
+    reference's held-out proper scores are here too, as a cache whose
+    reference landed before them never runs `reference_pending`.
     """
     return [
         ("heldout", checkpoint),
         ("bdbv", cs.REFERENCE),
         ("bdbv", checkpoint),
+        ("heldout_scores", cs.REFERENCE),
+        ("heldout_scores", checkpoint),
         ("germany", cs.REFERENCE),
         ("germany", checkpoint),
         *(("bdbv", s) for s in sorted(scored)),
@@ -288,19 +295,31 @@ def fresh_slots(cache: Path, labels: list[str]) -> set[str]:
     }
 
 
+FAST = ("heldout", "bdbv")
+"""Studies whose units take minutes."""
+
+
 def split_fast(
     units: list[tuple[str, str]],
 ) -> tuple[list[tuple[str, str]], list[tuple[str, str]]]:
-    """Split units into the fast ones (held-out, BDBV) and the German."""
-    fast = [u for u in units if u[0] != "germany"]
-    return fast, [u for u in units if u[0] == "germany"]
+    """Split units into the fast ones (held-out, BDBV) and the slow.
+
+    The held-out proper scores take about 45 minutes a checkpoint, so they
+    run with the German units, after the interim BDBV rows land.
+    """
+    fast = [u for u in units if u[0] in FAST]
+    return fast, [u for u in units if u[0] not in FAST]
 
 
 def reference_pending(cache: Path) -> list[tuple[str, str]]:
     """Return the zero-shot reference's units, until its rows have landed."""
     if (cache / REFERENCE_STAMP).exists():
         return []
-    return [("germany", cs.REFERENCE), ("bdbv", cs.REFERENCE)]
+    return [
+        ("germany", cs.REFERENCE),
+        ("bdbv", cs.REFERENCE),
+        ("heldout_scores", cs.REFERENCE),
+    ]
 
 
 FOLLOW_UPS = Path(__file__).parent / "slots_followups.sh"
@@ -795,7 +814,10 @@ def main(cache: Path) -> None:
                 lb
                 for lb in meta
                 if runs.get(lb) in cs.CURRENT_RUNS
-                and not cs.unit_done(cache, "germany", lb)
+                and not (
+                    cs.unit_done(cache, "germany", lb)
+                    and cs.unit_done(cache, "heldout_scores", lb)
+                )
                 and all(cs.unit_done(cache, *u) for u in split_fast(
                     units_for(lb, scored))[0])
             ]  # fmt: skip
@@ -806,14 +828,26 @@ def main(cache: Path) -> None:
             outbreaks = {lb: int(m.get("n_outbreaks", 0)) for lb, m in meta.items()}
             pick = german_order(due, cached, outbreaks)
             if pick:
-                germ = [("germany", cs.REFERENCE), *(("germany", lb) for lb in pick)]
+                # Two German lanes and one held-out-scores lane: the first
+                # two German runs, then the reference's and each
+                # checkpoint's held-out scores, then the other German runs.
+                hs = [("heldout_scores", cs.REFERENCE)]
+                hs += [("heldout_scores", lb) for lb in pick]
+                germ = [
+                    ("germany", cs.REFERENCE),
+                    *(("germany", lb) for lb in pick[:GERMAN_PARALLEL]),
+                    *hs,
+                    *(("germany", lb) for lb in pick[GERMAN_PARALLEL:]),
+                ]
 
                 def landed(unit: Unit) -> None:
                     lb = unit[1]
-                    if unit[0] != "germany" or lb == cs.REFERENCE:
+                    if lb == cs.REFERENCE and unit[0] == "germany":
                         return
-                    sha = land(cache, sorted(keep | {lb}), lb)
-                    if sha is not None:
+                    hashes = keep if lb == cs.REFERENCE else keep | {lb}
+                    what = f"{lb} {unit[0]}"
+                    sha = land(cache, sorted(hashes), what)
+                    if sha is not None and lb != cs.REFERENCE:
                         keep.add(lb)
                         note_paper(sha, lb, cache)
 
@@ -821,7 +855,7 @@ def main(cache: Path) -> None:
                     f"({', '.join(f'n{outbreaks[lb]} {cached[lb]}/80' for lb in pick)})")  # fmt: skip
                 run_units(
                     cache, germ, "German", newer_slots, paused, landed,
-                    max_units=GERMAN_PARALLEL,
+                    max_units=GERMAN_PARALLEL + 1,
                 )  # fmt: skip
                 continue
         if not run_units(cache, units, checkpoint, newer_slots, paused):
