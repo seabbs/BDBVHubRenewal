@@ -1,15 +1,16 @@
 #!/usr/bin/env bash
-# Run workflow targets as a detached job that reports to the archie
-# mailbox: a start line, then done or FAILED with the log's tail.
+# Run workflow targets as a detached job that reports to the mailbox
+# (MAILBOX in config/local.env): a start line, then done or FAILED with the log's tail.
 # Single-threaded and niced, for shared hosts.
 #
 # Usage (from anywhere): paper/scripts/run_target.sh NAME TARGET... [SNAKEMAKE ARGS]
-# Start it with nohup; the log is ~/paper-jobs/NAME.log.
+# Start it with nohup; the log is NAME.log in PAPER_LOGS.
 set -uo pipefail
 name=$1; shift
 paper=$(cd "$(dirname "$0")/.." && pwd)
-mb=${MAILBOX:-$HOME/bdbv-archie-mailbox.md}
-logs=$HOME/paper-jobs; mkdir -p "$logs"; log=$logs/$name.log
+setting() { python3 "$paper/../workflow/flowlib/localconfig.py" "$1"; }
+mb=$(setting MAILBOX)
+logs=$(setting PAPER_LOGS); mkdir -p "$logs"; log=$logs/$name.log
 say() { echo "$(date '+%F %H:%M') paper: $name: $*" >> "$mb"; }
 export OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1
 cd "$paper"

@@ -35,9 +35,13 @@
       }
     });
     var out = {};
+    var cells = acc[baseline] ? acc[baseline].n : null;
     Object.keys(acc).forEach(function (m) {
       var a = acc[m];
-      var s = { n: a.n, mean: {}, rel: {} };
+      // As in summarise.js: partial if the model has fewer of the
+      // baseline's origins and releases than the baseline.
+      var s = { n: a.n, cells: cells, partial: cells !== null && a.n < cells,
+        mean: {}, rel: {} };
       e.metrics.forEach(function (met, i) {
         s.mean[met.key] = a.sum[i] / a.n;
         // A zero baseline gives no relative score, as in Python.

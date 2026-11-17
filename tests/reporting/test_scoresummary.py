@@ -387,3 +387,32 @@ def test_all_rounds_keeps_every_row() -> None:
     scores = _scores()
     data = summary_rows(scores, MODELS, COLOURS, {}, baseline="randomwalk")
     _check_against(_node_rounds(data, "null"), scores)
+
+
+@pytest.mark.parametrize(
+    ("baseline", "partial"),
+    # randomwalk also lacks one CD-NK week, which "a" has.
+    [("randomwalk", {"b"}), ("a", {"b", "randomwalk"})],
+)
+def test_browser_summary_puts_a_model_lacking_cells_apart(
+    baseline: str, partial: set[str]
+) -> None:
+    # "b" has no forecast for CD-IT in one week. Every model with all the
+    # baseline's cells has the baseline's n, and "b", with fewer, is
+    # marked partial so its row is not read beside the others.
+    scores = _scores()
+    drop = (scores["model"] == "b") & (scores["location"] == "CD-IT")
+    drop &= scores["target_end_date"] == "2026-10-10"
+    scores = scores.loc[~drop]
+    data = summary_rows(scores, MODELS, COLOURS, {}, baseline="randomwalk")
+    places = [i for i, p in enumerate(data["places"]) if p["pool"] != "zones"]
+    keep = f"function (r) {{ return {places}.includes(r[3]); }}"
+    got = _node_with(SUMMARISE, data, keep, MODELS.index(baseline))
+    assert isinstance(got, list)
+    rows = {MODELS[r["model"]]: r for r in got}
+    base_n = rows[baseline]["n"]
+    assert all(r["cells"] == base_n for r in got)
+    assert {m for m, r in rows.items() if r["partial"]} == partial
+    assert all(rows[m]["n"] < base_n for m in partial)
+    full = [r for m, r in rows.items() if m not in partial]
+    assert {r["n"] for r in full} == {base_n}
