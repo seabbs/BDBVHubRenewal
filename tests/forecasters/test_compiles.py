@@ -4,8 +4,9 @@ The hashes are of each model's samples at the 2026-10-24 vintage with
 seed 3, from the eager code before the walks were compiled as whole
 programs. Compiling must not change a single draw. A change to the
 model's draws re-pins them: both for local plus global introduction
-rates, and randomwalknowcast for quiet places with recent cases walking
-from their level.
+rates, randomwalknowcast for quiet places with recent cases walking
+from their level, and both for pairing their draws by the rolling copula
+(#253), which reorders draws and keeps every cell's.
 
 pprandomwalknowcast is not pinned: its NUTS fit is compiled for the CPU it
 runs on, so its draws differ between machines (archie and the CI runners).
@@ -23,8 +24,8 @@ from bdbvhubrenewal.evaluation.backtest import BacktestConfig, make_tasks
 from bdbvhubrenewal.forecasters import ForecastTask, get_model
 
 PINNED = {
-    "randomwalk": "fc9c81d7b6643399",
-    "randomwalknowcast": "0fae625f34f27963",
+    "randomwalk": "1a5633e98a40ea3b",
+    "randomwalknowcast": "d18438877cfeb321",
 }
 
 _COMPILES: list[float] = []
