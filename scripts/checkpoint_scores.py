@@ -155,12 +155,20 @@ def scored_checkpoints(evidence: pd.DataFrame) -> set[str]:
 # Rows ------------------------------------------------------------------
 
 
-def run_of(settings: Mapping[str, Any]) -> str:
-    """Return a checkpoint's run: `slots`, `slots-zeroinit` or `no-slots`.
+CURRENT_RUNS = {"one-model"}
+"""Runs whose adapters this code loads (series bias, mixed layouts)."""
 
-    The first slots run's slots started at zero and did not learn; the
-    slots run restarted with random slots at their own learning rate.
+
+def run_of(settings: Mapping[str, Any]) -> str:
+    """Return a checkpoint's run from its settings.
+
+    `one-model`: the series bias with mixed-frequency layouts (a source
+    such as `daily+weekly`); `attn-bias`: the earlier series-bias trials;
+    `slots-zeroinit` and `slots`: the superseded slots runs; `no-slots`.
     """
+    if settings.get("series_bias"):
+        mixed = any("+" in str(s) for s in settings.get("sources", []))
+        return "one-model" if mixed else "attn-bias"
     slots = settings.get("series_slots")
     if not slots:
         return "no-slots"

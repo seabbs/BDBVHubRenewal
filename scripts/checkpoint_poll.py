@@ -159,6 +159,34 @@ def unheld(queue: list[str], zero_init: set[str], hold: Path = HOLD) -> list[str
     ]
 
 
+def scoreable(queue: list[str], runs: Mapping[str, str]) -> list[str]:
+    """Return the queue less the slots checkpoints this code cannot load.
+
+    A slots checkpoint is scored only if its run is current
+    (`cs.CURRENT_RUNS`); one not yet classified waits (`unclassified`).
+    """
+    return [
+        lb
+        for lb in queue
+        if not lb.startswith("slots-") or runs.get(lb) in cs.CURRENT_RUNS
+    ]
+
+
+def unclassified(queue: list[str], runs: Mapping[str, str]) -> list[str]:
+    """Return the slots checkpoints whose settings are not fetched yet."""
+    return [lb for lb in queue if lb.startswith("slots-") and lb not in runs]
+
+
+def runs_of(cache: Path) -> dict[str, str]:
+    """Return each fetched checkpoint's run, from its settings.json."""
+    out = {}
+    for f in (cache / "heldout").glob("*.json"):
+        if f.name.endswith("-release.json"):
+            continue
+        out[f.stem] = cs.run_of(json.loads(f.read_text()))
+    return out
+
+
 def zero_init_labels(cache: Path) -> set[str]:
     """Return the scored slots checkpoints of the zero-init run."""
     out = set()
@@ -547,6 +575,18 @@ def main(cache: Path) -> None:
             log("progress: idle, every published checkpoint scored")
             time.sleep(POLL_SECONDS)
             continue
+        runs = runs_of(cache)
+        new = unclassified(queue, runs)
+        if new:
+            # Their settings say which run they are; held-out units only.
+            run_units(cache, [("heldout", lb) for lb in new], "settings")
+            runs = runs_of(cache)
+        skipped = [lb for lb in queue if lb not in scoreable(queue, runs)]
+        if skipped and skipped != HELD.get("skipped"):
+            say("not scored on this code (superseded runs): "
+                + ", ".join(f"{lb} ({runs.get(lb, '?')})" for lb in skipped))  # fmt: skip
+        HELD["skipped"] = skipped
+        queue = scoreable(queue, runs)
         zero = zero_init_labels(cache)
         held = [lb for lb in queue if lb not in unheld(queue, zero)]
         if held and held != HELD["labels"]:
@@ -566,7 +606,9 @@ def main(cache: Path) -> None:
                 labels = cs.checkpoint_queue(releases(), scored)
             except (subprocess.CalledProcessError, ValueError):
                 return False
-            labels = unheld(labels, zero_init_labels(cache))
+            labels = scoreable(
+                unheld(labels, zero_init_labels(cache)), runs_of(cache)
+            )
             return should_pause(
                 current or "",
                 labels,
