@@ -627,3 +627,45 @@ def test_another_countrys_own_series_is_paired_as_the_country() -> None:
     assert _rank_corr(wide[("DE", w)], wide[("DE-A", w)]) == pytest.approx(
         6 / np.pi * np.arcsin(0.8 / 2), abs=0.05
     )
+
+
+def test_the_factor_is_the_cholesky_factor_of_the_nearest_correlation() -> None:
+    from statsmodels.stats.correlation_tools import corr_nearest
+
+    from bdbvhubrenewal.forecasters.copula import _factor
+
+    valid = GaussianCopula(0.8, 0.5, 0.6).places(5)
+    a = _factor(valid)
+    # A valid matrix is reproduced, by its lower-triangular Cholesky factor.
+    np.testing.assert_allclose(a @ a.T, valid, atol=1e-10)
+    assert np.allclose(a, np.tril(a))
+    # An invalid one (rho_n far above rho_p) is replaced by the nearest
+    # correlation matrix (Higham), as statsmodels gives it.
+    bad = GaussianCopula(0.0, 0.1, 0.9).places(5)
+    assert np.linalg.eigvalsh(bad).min() < 0
+    b = _factor(bad)
+    np.testing.assert_allclose(b @ b.T, corr_nearest(bad), atol=1e-6)
+    np.testing.assert_allclose(np.diag(b @ b.T), 1.0, atol=1e-8)
+
+
+def test_seeded_pairing_statistics_are_unchanged() -> None:
+    # The draws a seed gives depend on the factor, but the pairing does
+    # not: the same seeded run recovers the copula's rank correlations, as
+    # before the factor changed (test_draws_follow_the_correlations).
+    out = GaussianCopula(0.8, 0.5, 0.3).couple(
+        _draws(n=4000), np.random.default_rng(2)
+    )
+    rank = {r: 6 / np.pi * np.arcsin(r / 2) for r in (0.8, 0.5, 0.3)}
+    assert _rank_corr(out[:, 1, 0], out[:, 1, 1]) == pytest.approx(
+        rank[0.8], abs=0.03
+    )
+    assert _rank_corr(out[:, 1, 3], out[:, 2, 3]) == pytest.approx(
+        rank[0.5], abs=0.03
+    )
+    assert _rank_corr(out[:, 0, 3], out[:, 3, 3]) == pytest.approx(
+        rank[0.3], abs=0.03
+    )
+    again = GaussianCopula(0.8, 0.5, 0.3).couple(
+        _draws(n=4000), np.random.default_rng(2)
+    )
+    np.testing.assert_array_equal(out, again)
