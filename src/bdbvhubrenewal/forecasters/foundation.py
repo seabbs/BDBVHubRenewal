@@ -1257,7 +1257,7 @@ def native_sampler(
         pipeline = _chronos(checkpoint)
         native = np.asarray(pipeline.quantiles, dtype=float)
         quantiles, _ = pipeline.predict_quantiles(
-            [dict(g) for g in groups],
+            [_chronos_input(g) for g in groups],
             prediction_length=horizon,
             quantile_levels=native.tolist(),
         )
