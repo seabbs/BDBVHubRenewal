@@ -62,8 +62,11 @@ def test_comparison_page(tmp_path: Path, target: pd.DataFrame) -> None:
     # The page names the comparison's configured draws per forecast.
     from bdbvhubrenewal.evaluation.backtest import load_config
 
-    n = load_config(ROOT / "config" / "backtest.toml").comparison_samples
-    assert f"{n:,} draws" in (gen / "comparison-lead.md").read_text()
+    n = load_config(ROOT / "config" / "backtest.toml").n_samples
+    lead = (gen / "comparison-lead.md").read_text()
+    assert f"{n:,} draws" in lead
+    assert "as submitted" in lead
+    assert "fair" in lead
     assert "teamA-weekly" in scores
     figures = (gen / "comparison-figures.md").read_text()
     assert "2026-10-24" in figures
@@ -609,11 +612,15 @@ def test_complete_target_text_names_models_with_no_complete_score() -> None:
 def test_backtest_and_nowcast_pages_name_the_backtest_draws() -> None:
     from bdbvhubrenewal.evaluation.backtest import load_config
 
-    n = load_config(ROOT / "config" / "backtest.toml").n_samples
-    assert f"{n:,} draws" in report.draws_note(n)
-    assert "[samples] backtest" in report.draws_note(n)
-    meta = report._nowcast_meta("2026-11-08", ["renewal"], n)
+    cfg = load_config(ROOT / "config" / "backtest.toml")
+    n, stored = cfg.score_samples, cfg.n_samples
+    note = report.draws_note(n, stored)
+    assert f"{n:,} draws" in note
+    assert f"{stored:,}" in note
+    assert "[samples] backtest" in note
+    assert "fair" in note
+    meta = report._nowcast_meta("2026-11-08", ["renewal"], n, stored)
     assert f"{n:,} draws" in meta
     assert "2026-11-08" in meta
-    lead = report._release_intro(n)
+    lead = report._release_intro(n, stored)
     assert f"{n:,} draws" in lead

@@ -121,11 +121,27 @@ def test_wis_of_point_mass_is_absolute_error() -> None:
     assert wis_sample(7.0, np.full(10, 3.0))["wis"] == pytest.approx(4.0)
 
 
-def test_crps_matches_scoringrules() -> None:
-    samples = np.random.default_rng(2).gamma(2, 10, 100)
+@pytest.mark.parametrize("seed", [2, 3, 4])
+@pytest.mark.parametrize("m", [10, 100, 1000])
+def test_crps_is_scoringrules_fair_estimator(seed: int, m: int) -> None:
+    # The fair form (Ferro 2014), as the paper scores after #281, so
+    # scores at 100 and 1,000 draws compare in expectation.
+    samples = np.random.default_rng(seed).gamma(2, 10, m)
     for obs in (5.0, 20.0, 60.0):
-        want = float(sr.crps_ensemble(obs, samples, estimator="nrg"))
+        want = float(sr.crps_ensemble(obs, samples, estimator="fair"))
         assert crps_sample(obs, samples) == pytest.approx(want)
+        nrg = float(sr.crps_ensemble(obs, samples, estimator="nrg"))
+        got = crps_sample(obs, samples, estimator="nrg")
+        assert got == pytest.approx(nrg)
+
+
+@pytest.mark.parametrize("seed", [5, 6])
+def test_energy_is_scoringrules_fair_estimator(seed: int) -> None:
+    rng = np.random.default_rng(seed)
+    x = rng.poisson(20, (200, 6)).astype(float)
+    y = rng.poisson(20, 6).astype(float)
+    want = float(sr.es_ensemble(y, x, estimator="fair"))
+    assert energy_sample(y, x) == pytest.approx(want)
 
 
 def test_wis_is_close_to_crps_for_many_samples() -> None:
@@ -263,7 +279,7 @@ def test_relative_skill_is_mean_over_mean_on_the_matched_set() -> None:
 
 def test_log_crps_is_the_crps_of_log1p_counts() -> None:
     # As the paper scores Ebola: sample CRPS of log(1 + y) against
-    # log(1 + x), with scoringrules' "nrg" estimator.
+    # log(1 + x), with scoringrules' fair estimator.
     from bdbvhubrenewal.evaluation.scoring import SCORE_COLUMNS, score_sample
 
     assert "log_crps" in SCORE_COLUMNS
@@ -272,10 +288,10 @@ def test_log_crps_is_the_crps_of_log1p_counts() -> None:
         got = score_sample(obs, samples)
         want = crps_sample(float(np.log1p(obs)), np.log1p(samples))
         assert got["log_crps"] == pytest.approx(want)
-        nrg = sr.crps_ensemble(
-            np.log1p(obs), np.log1p(samples), estimator="nrg"
+        fair = sr.crps_ensemble(
+            np.log1p(obs), np.log1p(samples), estimator="fair"
         )
-        assert got["log_crps"] == pytest.approx(float(nrg))
+        assert got["log_crps"] == pytest.approx(float(fair))
         assert got["crps"] == pytest.approx(crps_sample(obs, samples))
 
 
@@ -353,8 +369,7 @@ def _two_models_same_samples() -> tuple[pd.DataFrame, pd.DataFrame]:
     return pd.DataFrame(rows), truth
 
 
-@pytest.mark.parametrize("fair", [True, False])
-def test_same_samples_score_the_same_whoever_made_them(fair: bool) -> None:
+def test_same_samples_score_the_same_whoever_made_them() -> None:
     # Ours or a hub team's: one estimator for every model.
     forecasts, truth = _two_models_same_samples()
     scores = score_forecasts(forecasts, truth).set_index(
@@ -364,33 +379,7 @@ def test_same_samples_score_the_same_whoever_made_them(fair: bool) -> None:
         a = scores.loc["renewal", col].sort_index()
         b = scores.loc["teamA-hub", col].sort_index()
         assert np.allclose(a.to_numpy(), b.to_numpy())
-    energy = energy_scores(forecasts, truth, unit=["origin"], fair=fair)
+    energy = energy_scores(forecasts, truth, unit=["origin"])
     by = energy.set_index("model")
     for col in ("energy", "log_energy"):
         assert by.loc["renewal", col] == pytest.approx(by.loc["teamA-hub", col])
-
-
-def test_plain_and_fair_energy_follow_their_formulas() -> None:
-    # Two draws, 0 and 2, of an observed 1: E|X - y| = 1 and the pair
-    # distance sums to 2 over i != j. Fair divides by 2m(m - 1) = 4,
-    # plain by 2m^2 = 8, over all pairs including i = j.
-    x, y = np.array([[0.0], [2.0]]), np.array([1.0])
-    assert energy_sample(y, x, fair=True) == pytest.approx(1 - 4 / 4)
-    assert energy_sample(y, x, fair=False) == pytest.approx(1 - 4 / 8)
-    # In one dimension plain is the nrg CRPS and fair the fair CRPS.
-    s = np.random.default_rng(9).gamma(2, 10, 50)
-    plain = energy_sample(np.array([20.0]), s[:, None], fair=False)
-    assert plain == pytest.approx(crps_sample(20.0, s))
-    fair = energy_sample(np.array([20.0]), s[:, None], fair=True)
-    want = sr.crps_ensemble(20.0, s, estimator="fair")
-    assert fair == pytest.approx(float(want))
-
-
-def test_energy_stays_fair_by_default() -> None:
-    import inspect
-
-    x = np.random.default_rng(10).normal(0, 1, (30, 3))
-    y = np.zeros(3)
-    assert energy_sample(y, x) == pytest.approx(energy_sample(y, x, fair=True))
-    assert energy_sample(y, x) != pytest.approx(energy_sample(y, x, fair=False))
-    assert inspect.signature(energy_scores).parameters["fair"].default is True
