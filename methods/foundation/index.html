@@ -18,7 +18,7 @@
         <link rel="prev" href="../model/">
       
       
-        <link rel="next" href="../evaluation/">
+        <link rel="next" href="../finetuned-chronos/">
       
       
         
@@ -57,7 +57,7 @@
     
       <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
     
-      <link rel="stylesheet" href="../../stylesheets/extra.css?v=afdda586">
+      <link rel="stylesheet" href="../../stylesheets/extra.css?v=66c70f79">
     
     <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
@@ -801,6 +801,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#health-zones" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Health zones
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#fine-tuning" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -826,6 +837,34 @@
   
 </nav>
       
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../finetuned-chronos/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Using the fine-tuned Chronos-2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
     </li>
   
 
@@ -1017,34 +1056,6 @@
     
   
     Backtest
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../simulation/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Simulation checks
   
 
     
@@ -2158,6 +2169,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#health-zones" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Health zones
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#fine-tuning" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2215,7 +2237,7 @@ The hub model <code>seabbs-chronos2_ft</code> is set up to submit <code>fm_chron
 <p>In brief, each model:</p>
 <ol>
 <li>lays out the hub target of every release by place, step and release lag (<a href="#releases">Releases</a>);</li>
-<li>puts the country and every province, each as its own hub-target series, in one block that Chronos-2 forecasts jointly (<a href="#layouts">Layouts</a>);</li>
+<li>puts every hub target, the country, the provinces and their health zones, each as its own series, in one block that Chronos-2 forecasts jointly (<a href="#layouts">Layouts</a>);</li>
 <li>draws 100 trajectories from Chronos-2's quantiles (<a href="#trajectories">Trajectories</a>);</li>
 <li>rounds the draws to counts no lower than the count already reported (<a href="#counts">Counts</a>).</li>
 </ol>
@@ -2223,7 +2245,7 @@ The hub model <code>seabbs-chronos2_ft</code> is set up to submit <code>fm_chron
 <p>The target is the hub's: confirmed cases by onset week, known and imputed onsets together.
 Two sources give it with its updates.</p>
 <ul>
-<li><strong>Weekly</strong> (<code>fm_chronos_weekly_*</code>): the weekly counts of each release of the target data.
+<li><strong>Weekly</strong> (<code>fm_chronos_weekly_*</code>): the weekly counts of each release of the target data, for the country, the provinces and the zones.
   A step is an onset week.</li>
 <li><strong>Daily</strong> (<code>fm_chronos_daily_*</code>): the daily counts of each release, known plus imputed onsets.
   A step is an onset day.</li>
@@ -2233,17 +2255,20 @@ Two sources give it with its updates.</p>
 Release <span class="arithmatex">\(r\)</span> gives lag <span class="arithmatex">\(d\)</span> only at step <span class="arithmatex">\(c_r - d\)</span>, so each lag has at most one value per release and is missing at other steps.
 <span class="arithmatex">\(X_{p,t}\)</span> is the count of step <span class="arithmatex">\(t\)</span> at the vintage, with cut-off step <span class="arithmatex">\(c\)</span>.</p>
 <h2 id="layouts">Layouts<a class="headerlink" href="#layouts" title="Permanent link">&para;</a></h2>
-<p>The country and all 26 provinces are each a series in one block, each the hub target itself, so the country is not the sum of the provinces.
-Chronos-2 forecasts every target series in the block jointly, from one shared last step of context, <span class="arithmatex">\(t^*\)</span>, which each layout sets differently.
-Health zones are split from the provinces as for the other fitted models (<a href="../baselines/#health-zones">Health zones</a>).</p>
+<p>Every hub target is a series in one block: the country, all 26 provinces, and every health zone of those provinces.
+Each is the hub target itself, so the country is not the sum of the provinces and the zones are not split from them.
+Zone counts are zero before the zone releases start.
+Chronos-2 forecasts every target series in the block jointly, from one shared last step of context, <span class="arithmatex">\(t^*\)</span>, which each layout sets differently.</p>
 <ul>
 <li><strong>Complete</strong> (<code>*_complete</code>): the targets <span class="arithmatex">\(X_{p,t}\)</span> for <span class="arithmatex">\(t \le t^*\)</span>.
   <span class="arithmatex">\(t^*\)</span> is the earliest over places of the week <code>randomwalk</code> starts its walk from, the latest week 95% complete under its delay (<a href="../baselines/#forecast">Baseline models</a>).
   It comes from the delay alone, so it needs no walk spread.</li>
-<li><strong>Ragged</strong> (<code>*_ragged</code>): the same targets, with one lag series per place and lag <span class="arithmatex">\(d &lt; D\)</span>, indexed by onset step as in a regression nowcast.
+<li><strong>Ragged</strong> (<code>*_ragged</code>): the same targets, with one lag series per place with cases and lag <span class="arithmatex">\(d &lt; D\)</span>, indexed by onset step as in a regression nowcast.
   Lag series <span class="arithmatex">\(d\)</span> holds <span class="arithmatex">\(Y_{p,t,d}\)</span>, missing where it is not yet reported, and Chronos-2 masks the missing values.
   <span class="arithmatex">\(t^* = c - D\)</span>, the last step whose count is at lag <span class="arithmatex">\(D\)</span> or more, with <span class="arithmatex">\(D = 4\)</span> weeks or <span class="arithmatex">\(D = 28\)</span> days.
-  The lag series run past <span class="arithmatex">\(t^*\)</span> as known future values, which is how recent counts reach the nowcast.</li>
+  The lag series run past <span class="arithmatex">\(t^*\)</span> as known future values, which is how recent counts reach the nowcast.
+  A place with no cases has no lag series, as they would be all zero.
+  So the daily block, where 75 of 546 places have cases, fits in memory.</li>
 </ul>
 <p>Chronos-2 standardises each series and takes its arcsinh, so counts go in as they are.</p>
 <h2 id="trajectories">Trajectories<a class="headerlink" href="#trajectories" title="Permanent link">&para;</a></h2>
@@ -2260,6 +2285,11 @@ The context is every step from the first onset in the releases to <span class="a
 <h2 id="scoring">Scoring<a class="headerlink" href="#scoring" title="Permanent link">&para;</a></h2>
 <p>The models forecast final counts and model no delay.
 So the release backtest scores them on the complete target only, each week against the first release the truth delay after it ends (<a href="../evaluation/#real-releases">Evaluation</a>).</p>
+<h2 id="health-zones">Health zones<a class="headerlink" href="#health-zones" title="Permanent link">&para;</a></h2>
+<p>The models forecast the zones themselves, as series of the block.
+Each model makes its zones sum to its provinces sample by sample, with each zone keeping its published count (<code>forecasters.zones.reconcile_zones</code>, <a href="../baselines/#health-zones">Health zones</a>).
+So the stored forecasts, the hub file and the scores all have the zones as submitted.
+The other fitted models split their provinces across the zones instead (<a href="../baselines/#health-zones">Health zones</a>).</p>
 <h2 id="fine-tuning">Fine-tuning<a class="headerlink" href="#fine-tuning" title="Permanent link">&para;</a></h2>
 <p>The <code>_ft</code> models load one LoRA checkpoint of Chronos-2, trained on 2,000 outbreaks simulated with epinowcast's generative model (<code>scripts/finetune_simulate.R</code>).
 The simulator, <code>enw_simulate</code>, is on epinowcast's <code>feature/829-simulate-forecast</code> branch, pinned at commit <code>e084b080</code>, and is not yet in a release.
@@ -2285,7 +2315,7 @@ Such fits are retried by running the Fit store workflow with <code>retry_failed<
 <ul>
 <li>The zero-shot models use Chronos-2 as pretrained. It has not seen these data or outbreaks like them.</li>
 <li>The fine-tuned models have seen only simulated outbreaks, whose delays and dynamics may not match these data.</li>
-<li>The daily fine-tuned model was trained on blocks of at most five provinces but forecasts all 26 in one block.</li>
+<li>The fine-tuned models were trained on blocks of at most 26 provinces, five for the daily one, but forecast all 546 hub targets in one block.</li>
 <li>Draws are independent across steps and places, so every weekly value of the daily models, a sum of seven daily draws, is too narrow, as are sums over weeks or places.</li>
 </ul>
 <div class="footnote">
@@ -2350,13 +2380,13 @@ Such fits are retried by running the Fit store workflow with <code>retry_failed<
         
         
           
-          <a href="../evaluation/" class="md-footer__link md-footer__link--next" aria-label="Next: Evaluation">
+          <a href="../finetuned-chronos/" class="md-footer__link md-footer__link--next" aria-label="Next: Using the fine-tuned Chronos-2">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                Evaluation
+                Using the fine-tuned Chronos-2
               </div>
             </div>
             <div class="md-footer__button md-icon">
@@ -2425,23 +2455,25 @@ Such fits are retried by running the Fit store workflow with <code>retry_failed<
       
         <script src="../../javascripts/mathjax.js?v=bced49b5"></script>
       
-        <script src="../../javascripts/toggles.js?v=b6055b59"></script>
+        <script src="../../javascripts/toggles.js?v=47ee5e12"></script>
       
         <script src="../../javascripts/placemap.js?v=03fe1366"></script>
       
         <script src="../../javascripts/zoom.js?v=4e0c610c"></script>
       
-        <script src="../../javascripts/summarise.js?v=896d340e"></script>
+        <script src="../../javascripts/summarise.js?v=e2f49fd3"></script>
       
         <script src="../../javascripts/energy.js?v=36005f6a"></script>
       
-        <script src="../../javascripts/tablefilter.js?v=774f66a6"></script>
+        <script src="../../javascripts/tablesort.js?v=eb2e29e2"></script>
       
-        <script src="../../javascripts/explorer.js?v=576e13e2"></script>
+        <script src="../../javascripts/tablefilter.js?v=2e54a8a5"></script>
+      
+        <script src="../../javascripts/explorer.js?v=c0ccb898"></script>
       
         <script src="../../javascripts/scorechart.js?v=1c27a70d"></script>
       
-        <script src="../../javascripts/scoresummary.js?v=34222cf0"></script>
+        <script src="../../javascripts/scoresummary.js?v=baec2b21"></script>
       
         <script src="../../javascripts/checkschart.js?v=1ee222fe"></script>
       

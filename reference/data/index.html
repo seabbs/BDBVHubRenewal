@@ -57,7 +57,7 @@
     
       <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
     
-      <link rel="stylesheet" href="../../stylesheets/extra.css?v=afdda586">
+      <link rel="stylesheet" href="../../stylesheets/extra.css?v=66c70f79">
     
     <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
@@ -698,6 +698,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../methods/finetuned-chronos/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Using the fine-tuned Chronos-2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../methods/evaluation/" class="md-nav__link">
         
   
@@ -877,34 +905,6 @@
     
   
     Backtest
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../simulation/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Simulation checks
   
 
     
@@ -3238,6 +3238,39 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#bdbvhubrenewal.data.zones.ZoneData" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;ZoneData
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#bdbvhubrenewal.data.zones.load_zone_data" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;load_zone_data
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#bdbvhubrenewal.data.zones.is_zone" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;is_zone
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#bdbvhubrenewal.data.zones.province_of" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -5390,6 +5423,39 @@
   
     <nav class="md-nav" aria-label=" zones">
       <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#bdbvhubrenewal.data.zones.ZoneData" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;ZoneData
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#bdbvhubrenewal.data.zones.load_zone_data" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;load_zone_data
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#bdbvhubrenewal.data.zones.is_zone" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;is_zone
+      
+    </span>
+  </a>
+  
+</li>
         
           <li class="md-nav__item">
   <a href="#bdbvhubrenewal.data.zones.province_of" class="md-nav__link">
@@ -23478,6 +23544,361 @@ They equal the zone rows of the hub's <code>time-series.csv</code>.</p>
 
 
 
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="bdbvhubrenewal.data.zones.ZoneData" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <span class="doc doc-object-name doc-class-name">ZoneData</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
+  </span>
+
+<a href="#bdbvhubrenewal.data.zones.ZoneData" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+
+
+
+        <p>The health-zone tables a forecast task carries.</p>
+
+
+<p><span class="doc-section-title">Attributes:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td><code><span title="bdbvhubrenewal.data.zones.ZoneData.weekly">weekly</span></code></td>
+            <td>
+                  <code><span title="pandas.DataFrame">DataFrame</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Weekly zone counts by release (<code>load_health_zones</code>).</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="bdbvhubrenewal.data.zones.ZoneData.daily">daily</span></code></td>
+            <td>
+                  <code><span title="pandas.DataFrame">DataFrame</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Daily zone onsets by release (<code>load_daily_zones</code>).</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="bdbvhubrenewal.data.zones.ZoneData.codes">codes</span></code></td>
+            <td>
+                  <code>tuple of str</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The hub's zone codes (<code>hub_zones</code>).</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+
+
+
+
+
+
+              <details class="mkdocstrings-source">
+                <summary>Source code in <code>src/bdbvhubrenewal/data/zones.py</code></summary>
+                <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#bdbvhubrenewal.data.zones.ZoneData--source--__codelineno-0-31">31</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.ZoneData--source--__codelineno-0-32">32</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.ZoneData--source--__codelineno-0-33">33</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.ZoneData--source--__codelineno-0-34">34</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.ZoneData--source--__codelineno-0-35">35</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.ZoneData--source--__codelineno-0-36">36</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.ZoneData--source--__codelineno-0-37">37</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.ZoneData--source--__codelineno-0-38">38</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.ZoneData--source--__codelineno-0-39">39</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.ZoneData--source--__codelineno-0-40">40</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.ZoneData--source--__codelineno-0-41">41</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.ZoneData--source--__codelineno-0-42">42</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.ZoneData--source--__codelineno-0-43">43</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.ZoneData--source--__codelineno-0-44">44</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.ZoneData--source--__codelineno-0-45">45</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.ZoneData--source--__codelineno-0-46">46</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.ZoneData--source--__codelineno-0-47">47</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="bdbvhubrenewal.data.zones.ZoneData--source--__codelineno-0-31" name="bdbvhubrenewal.data.zones.ZoneData--source--__codelineno-0-31"></a><span class="nd">@dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<a id="bdbvhubrenewal.data.zones.ZoneData--source--__codelineno-0-32" name="bdbvhubrenewal.data.zones.ZoneData--source--__codelineno-0-32"></a><span class="k">class</span><span class="w"> </span><span class="nc">ZoneData</span><span class="p">:</span>
+<a id="bdbvhubrenewal.data.zones.ZoneData--source--__codelineno-0-33" name="bdbvhubrenewal.data.zones.ZoneData--source--__codelineno-0-33"></a><span class="w">    </span><span class="sd">"""The health-zone tables a forecast task carries.</span>
+<a id="bdbvhubrenewal.data.zones.ZoneData--source--__codelineno-0-34" name="bdbvhubrenewal.data.zones.ZoneData--source--__codelineno-0-34"></a>
+<a id="bdbvhubrenewal.data.zones.ZoneData--source--__codelineno-0-35" name="bdbvhubrenewal.data.zones.ZoneData--source--__codelineno-0-35"></a><span class="sd">    Attributes</span>
+<a id="bdbvhubrenewal.data.zones.ZoneData--source--__codelineno-0-36" name="bdbvhubrenewal.data.zones.ZoneData--source--__codelineno-0-36"></a><span class="sd">    ----------</span>
+<a id="bdbvhubrenewal.data.zones.ZoneData--source--__codelineno-0-37" name="bdbvhubrenewal.data.zones.ZoneData--source--__codelineno-0-37"></a><span class="sd">    weekly : pandas.DataFrame</span>
+<a id="bdbvhubrenewal.data.zones.ZoneData--source--__codelineno-0-38" name="bdbvhubrenewal.data.zones.ZoneData--source--__codelineno-0-38"></a><span class="sd">        Weekly zone counts by release (`load_health_zones`).</span>
+<a id="bdbvhubrenewal.data.zones.ZoneData--source--__codelineno-0-39" name="bdbvhubrenewal.data.zones.ZoneData--source--__codelineno-0-39"></a><span class="sd">    daily : pandas.DataFrame</span>
+<a id="bdbvhubrenewal.data.zones.ZoneData--source--__codelineno-0-40" name="bdbvhubrenewal.data.zones.ZoneData--source--__codelineno-0-40"></a><span class="sd">        Daily zone onsets by release (`load_daily_zones`).</span>
+<a id="bdbvhubrenewal.data.zones.ZoneData--source--__codelineno-0-41" name="bdbvhubrenewal.data.zones.ZoneData--source--__codelineno-0-41"></a><span class="sd">    codes : tuple of str</span>
+<a id="bdbvhubrenewal.data.zones.ZoneData--source--__codelineno-0-42" name="bdbvhubrenewal.data.zones.ZoneData--source--__codelineno-0-42"></a><span class="sd">        The hub's zone codes (`hub_zones`).</span>
+<a id="bdbvhubrenewal.data.zones.ZoneData--source--__codelineno-0-43" name="bdbvhubrenewal.data.zones.ZoneData--source--__codelineno-0-43"></a><span class="sd">    """</span>
+<a id="bdbvhubrenewal.data.zones.ZoneData--source--__codelineno-0-44" name="bdbvhubrenewal.data.zones.ZoneData--source--__codelineno-0-44"></a>
+<a id="bdbvhubrenewal.data.zones.ZoneData--source--__codelineno-0-45" name="bdbvhubrenewal.data.zones.ZoneData--source--__codelineno-0-45"></a>    <span class="n">weekly</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span>
+<a id="bdbvhubrenewal.data.zones.ZoneData--source--__codelineno-0-46" name="bdbvhubrenewal.data.zones.ZoneData--source--__codelineno-0-46"></a>    <span class="n">daily</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span>
+<a id="bdbvhubrenewal.data.zones.ZoneData--source--__codelineno-0-47" name="bdbvhubrenewal.data.zones.ZoneData--source--__codelineno-0-47"></a>    <span class="n">codes</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span>
+</code></pre></div></td></tr></table></div>
+              </details>
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="bdbvhubrenewal.data.zones.load_zone_data" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <span class="doc doc-object-name doc-function-name">load_zone_data</span>
+
+
+<a href="#bdbvhubrenewal.data.zones.load_zone_data" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">load_zone_data</span><span class="p">(</span><span class="n">data_dir</span><span class="p">:</span> <span class="n">Path</span> <span class="o">|</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ZoneData</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Load the zone tables and codes of a data directory.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>data_dir</code>
+            </td>
+            <td>
+                  <code><span title="pathlib.Path">Path</span> or <span title="str">str</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Directory holding the tidy tables and <code>hub-config/tasks.json</code>.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="            ZoneData
+
+
+  
+      dataclass
+   (bdbvhubrenewal.data.zones.ZoneData)" href="#bdbvhubrenewal.data.zones.ZoneData">ZoneData</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>src/bdbvhubrenewal/data/zones.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#bdbvhubrenewal.data.zones.load_zone_data--source--__codelineno-0-50">50</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.load_zone_data--source--__codelineno-0-51">51</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.load_zone_data--source--__codelineno-0-52">52</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.load_zone_data--source--__codelineno-0-53">53</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.load_zone_data--source--__codelineno-0-54">54</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.load_zone_data--source--__codelineno-0-55">55</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.load_zone_data--source--__codelineno-0-56">56</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.load_zone_data--source--__codelineno-0-57">57</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.load_zone_data--source--__codelineno-0-58">58</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.load_zone_data--source--__codelineno-0-59">59</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.load_zone_data--source--__codelineno-0-60">60</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.load_zone_data--source--__codelineno-0-61">61</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.load_zone_data--source--__codelineno-0-62">62</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.load_zone_data--source--__codelineno-0-63">63</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.load_zone_data--source--__codelineno-0-64">64</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.load_zone_data--source--__codelineno-0-65">65</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.load_zone_data--source--__codelineno-0-66">66</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="bdbvhubrenewal.data.zones.load_zone_data--source--__codelineno-0-50" name="bdbvhubrenewal.data.zones.load_zone_data--source--__codelineno-0-50"></a><span class="k">def</span><span class="w"> </span><span class="nf">load_zone_data</span><span class="p">(</span><span class="n">data_dir</span><span class="p">:</span> <span class="n">Path</span> <span class="o">|</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ZoneData</span><span class="p">:</span>
+<a id="bdbvhubrenewal.data.zones.load_zone_data--source--__codelineno-0-51" name="bdbvhubrenewal.data.zones.load_zone_data--source--__codelineno-0-51"></a><span class="w">    </span><span class="sd">"""Load the zone tables and codes of a data directory.</span>
+<a id="bdbvhubrenewal.data.zones.load_zone_data--source--__codelineno-0-52" name="bdbvhubrenewal.data.zones.load_zone_data--source--__codelineno-0-52"></a>
+<a id="bdbvhubrenewal.data.zones.load_zone_data--source--__codelineno-0-53" name="bdbvhubrenewal.data.zones.load_zone_data--source--__codelineno-0-53"></a><span class="sd">    Parameters</span>
+<a id="bdbvhubrenewal.data.zones.load_zone_data--source--__codelineno-0-54" name="bdbvhubrenewal.data.zones.load_zone_data--source--__codelineno-0-54"></a><span class="sd">    ----------</span>
+<a id="bdbvhubrenewal.data.zones.load_zone_data--source--__codelineno-0-55" name="bdbvhubrenewal.data.zones.load_zone_data--source--__codelineno-0-55"></a><span class="sd">    data_dir : pathlib.Path or str</span>
+<a id="bdbvhubrenewal.data.zones.load_zone_data--source--__codelineno-0-56" name="bdbvhubrenewal.data.zones.load_zone_data--source--__codelineno-0-56"></a><span class="sd">        Directory holding the tidy tables and `hub-config/tasks.json`.</span>
+<a id="bdbvhubrenewal.data.zones.load_zone_data--source--__codelineno-0-57" name="bdbvhubrenewal.data.zones.load_zone_data--source--__codelineno-0-57"></a>
+<a id="bdbvhubrenewal.data.zones.load_zone_data--source--__codelineno-0-58" name="bdbvhubrenewal.data.zones.load_zone_data--source--__codelineno-0-58"></a><span class="sd">    Returns</span>
+<a id="bdbvhubrenewal.data.zones.load_zone_data--source--__codelineno-0-59" name="bdbvhubrenewal.data.zones.load_zone_data--source--__codelineno-0-59"></a><span class="sd">    -------</span>
+<a id="bdbvhubrenewal.data.zones.load_zone_data--source--__codelineno-0-60" name="bdbvhubrenewal.data.zones.load_zone_data--source--__codelineno-0-60"></a><span class="sd">    ZoneData</span>
+<a id="bdbvhubrenewal.data.zones.load_zone_data--source--__codelineno-0-61" name="bdbvhubrenewal.data.zones.load_zone_data--source--__codelineno-0-61"></a><span class="sd">    """</span>
+<a id="bdbvhubrenewal.data.zones.load_zone_data--source--__codelineno-0-62" name="bdbvhubrenewal.data.zones.load_zone_data--source--__codelineno-0-62"></a>    <span class="k">return</span> <span class="n">ZoneData</span><span class="p">(</span>
+<a id="bdbvhubrenewal.data.zones.load_zone_data--source--__codelineno-0-63" name="bdbvhubrenewal.data.zones.load_zone_data--source--__codelineno-0-63"></a>        <span class="n">load_health_zones</span><span class="p">(</span><span class="n">data_dir</span><span class="p">),</span>
+<a id="bdbvhubrenewal.data.zones.load_zone_data--source--__codelineno-0-64" name="bdbvhubrenewal.data.zones.load_zone_data--source--__codelineno-0-64"></a>        <span class="n">load_daily_zones</span><span class="p">(</span><span class="n">data_dir</span><span class="p">),</span>
+<a id="bdbvhubrenewal.data.zones.load_zone_data--source--__codelineno-0-65" name="bdbvhubrenewal.data.zones.load_zone_data--source--__codelineno-0-65"></a>        <span class="n">hub_zones</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="n">data_dir</span><span class="p">)</span> <span class="o">/</span> <span class="s2">"hub-config"</span> <span class="o">/</span> <span class="s2">"tasks.json"</span><span class="p">),</span>
+<a id="bdbvhubrenewal.data.zones.load_zone_data--source--__codelineno-0-66" name="bdbvhubrenewal.data.zones.load_zone_data--source--__codelineno-0-66"></a>    <span class="p">)</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="bdbvhubrenewal.data.zones.is_zone" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <span class="doc doc-object-name doc-function-name">is_zone</span>
+
+
+<a href="#bdbvhubrenewal.data.zones.is_zone" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">is_zone</span><span class="p">(</span><span class="n">location</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Return whether a location code is a zone, <code>CD-XX-NN</code>.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>location</code>
+            </td>
+            <td>
+                  <code><span title="str">str</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>A location code.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>True for a zone, False for the country or a province.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>src/bdbvhubrenewal/data/zones.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#bdbvhubrenewal.data.zones.is_zone--source--__codelineno-0-69">69</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.is_zone--source--__codelineno-0-70">70</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.is_zone--source--__codelineno-0-71">71</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.is_zone--source--__codelineno-0-72">72</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.is_zone--source--__codelineno-0-73">73</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.is_zone--source--__codelineno-0-74">74</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.is_zone--source--__codelineno-0-75">75</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.is_zone--source--__codelineno-0-76">76</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.is_zone--source--__codelineno-0-77">77</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.is_zone--source--__codelineno-0-78">78</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.is_zone--source--__codelineno-0-79">79</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.is_zone--source--__codelineno-0-80">80</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.is_zone--source--__codelineno-0-81">81</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.is_zone--source--__codelineno-0-82">82</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="bdbvhubrenewal.data.zones.is_zone--source--__codelineno-0-69" name="bdbvhubrenewal.data.zones.is_zone--source--__codelineno-0-69"></a><span class="k">def</span><span class="w"> </span><span class="nf">is_zone</span><span class="p">(</span><span class="n">location</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<a id="bdbvhubrenewal.data.zones.is_zone--source--__codelineno-0-70" name="bdbvhubrenewal.data.zones.is_zone--source--__codelineno-0-70"></a><span class="w">    </span><span class="sd">"""Return whether a location code is a zone, `CD-XX-NN`.</span>
+<a id="bdbvhubrenewal.data.zones.is_zone--source--__codelineno-0-71" name="bdbvhubrenewal.data.zones.is_zone--source--__codelineno-0-71"></a>
+<a id="bdbvhubrenewal.data.zones.is_zone--source--__codelineno-0-72" name="bdbvhubrenewal.data.zones.is_zone--source--__codelineno-0-72"></a><span class="sd">    Parameters</span>
+<a id="bdbvhubrenewal.data.zones.is_zone--source--__codelineno-0-73" name="bdbvhubrenewal.data.zones.is_zone--source--__codelineno-0-73"></a><span class="sd">    ----------</span>
+<a id="bdbvhubrenewal.data.zones.is_zone--source--__codelineno-0-74" name="bdbvhubrenewal.data.zones.is_zone--source--__codelineno-0-74"></a><span class="sd">    location : str</span>
+<a id="bdbvhubrenewal.data.zones.is_zone--source--__codelineno-0-75" name="bdbvhubrenewal.data.zones.is_zone--source--__codelineno-0-75"></a><span class="sd">        A location code.</span>
+<a id="bdbvhubrenewal.data.zones.is_zone--source--__codelineno-0-76" name="bdbvhubrenewal.data.zones.is_zone--source--__codelineno-0-76"></a>
+<a id="bdbvhubrenewal.data.zones.is_zone--source--__codelineno-0-77" name="bdbvhubrenewal.data.zones.is_zone--source--__codelineno-0-77"></a><span class="sd">    Returns</span>
+<a id="bdbvhubrenewal.data.zones.is_zone--source--__codelineno-0-78" name="bdbvhubrenewal.data.zones.is_zone--source--__codelineno-0-78"></a><span class="sd">    -------</span>
+<a id="bdbvhubrenewal.data.zones.is_zone--source--__codelineno-0-79" name="bdbvhubrenewal.data.zones.is_zone--source--__codelineno-0-79"></a><span class="sd">    bool</span>
+<a id="bdbvhubrenewal.data.zones.is_zone--source--__codelineno-0-80" name="bdbvhubrenewal.data.zones.is_zone--source--__codelineno-0-80"></a><span class="sd">        True for a zone, False for the country or a province.</span>
+<a id="bdbvhubrenewal.data.zones.is_zone--source--__codelineno-0-81" name="bdbvhubrenewal.data.zones.is_zone--source--__codelineno-0-81"></a><span class="sd">    """</span>
+<a id="bdbvhubrenewal.data.zones.is_zone--source--__codelineno-0-82" name="bdbvhubrenewal.data.zones.is_zone--source--__codelineno-0-82"></a>    <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="n">location</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">"-"</span><span class="p">))</span> <span class="o">==</span> <span class="mi">3</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
 
 <div class="doc doc-object doc-function">
 
@@ -23551,33 +23972,33 @@ They equal the zone rows of the hub's <code>time-series.csv</code>.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/bdbvhubrenewal/data/zones.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#bdbvhubrenewal.data.zones.province_of--source--__codelineno-0-21">21</a></span>
-<span class="normal"><a href="#bdbvhubrenewal.data.zones.province_of--source--__codelineno-0-22">22</a></span>
-<span class="normal"><a href="#bdbvhubrenewal.data.zones.province_of--source--__codelineno-0-23">23</a></span>
-<span class="normal"><a href="#bdbvhubrenewal.data.zones.province_of--source--__codelineno-0-24">24</a></span>
-<span class="normal"><a href="#bdbvhubrenewal.data.zones.province_of--source--__codelineno-0-25">25</a></span>
-<span class="normal"><a href="#bdbvhubrenewal.data.zones.province_of--source--__codelineno-0-26">26</a></span>
-<span class="normal"><a href="#bdbvhubrenewal.data.zones.province_of--source--__codelineno-0-27">27</a></span>
-<span class="normal"><a href="#bdbvhubrenewal.data.zones.province_of--source--__codelineno-0-28">28</a></span>
-<span class="normal"><a href="#bdbvhubrenewal.data.zones.province_of--source--__codelineno-0-29">29</a></span>
-<span class="normal"><a href="#bdbvhubrenewal.data.zones.province_of--source--__codelineno-0-30">30</a></span>
-<span class="normal"><a href="#bdbvhubrenewal.data.zones.province_of--source--__codelineno-0-31">31</a></span>
-<span class="normal"><a href="#bdbvhubrenewal.data.zones.province_of--source--__codelineno-0-32">32</a></span>
-<span class="normal"><a href="#bdbvhubrenewal.data.zones.province_of--source--__codelineno-0-33">33</a></span>
-<span class="normal"><a href="#bdbvhubrenewal.data.zones.province_of--source--__codelineno-0-34">34</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="bdbvhubrenewal.data.zones.province_of--source--__codelineno-0-21" name="bdbvhubrenewal.data.zones.province_of--source--__codelineno-0-21"></a><span class="k">def</span><span class="w"> </span><span class="nf">province_of</span><span class="p">(</span><span class="n">zone</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
-<a id="bdbvhubrenewal.data.zones.province_of--source--__codelineno-0-22" name="bdbvhubrenewal.data.zones.province_of--source--__codelineno-0-22"></a><span class="w">    </span><span class="sd">"""Return the province code of a zone code.</span>
-<a id="bdbvhubrenewal.data.zones.province_of--source--__codelineno-0-23" name="bdbvhubrenewal.data.zones.province_of--source--__codelineno-0-23"></a>
-<a id="bdbvhubrenewal.data.zones.province_of--source--__codelineno-0-24" name="bdbvhubrenewal.data.zones.province_of--source--__codelineno-0-24"></a><span class="sd">    Parameters</span>
-<a id="bdbvhubrenewal.data.zones.province_of--source--__codelineno-0-25" name="bdbvhubrenewal.data.zones.province_of--source--__codelineno-0-25"></a><span class="sd">    ----------</span>
-<a id="bdbvhubrenewal.data.zones.province_of--source--__codelineno-0-26" name="bdbvhubrenewal.data.zones.province_of--source--__codelineno-0-26"></a><span class="sd">    zone : str</span>
-<a id="bdbvhubrenewal.data.zones.province_of--source--__codelineno-0-27" name="bdbvhubrenewal.data.zones.province_of--source--__codelineno-0-27"></a><span class="sd">        A zone code, `CD-XX-NN`.</span>
-<a id="bdbvhubrenewal.data.zones.province_of--source--__codelineno-0-28" name="bdbvhubrenewal.data.zones.province_of--source--__codelineno-0-28"></a>
-<a id="bdbvhubrenewal.data.zones.province_of--source--__codelineno-0-29" name="bdbvhubrenewal.data.zones.province_of--source--__codelineno-0-29"></a><span class="sd">    Returns</span>
-<a id="bdbvhubrenewal.data.zones.province_of--source--__codelineno-0-30" name="bdbvhubrenewal.data.zones.province_of--source--__codelineno-0-30"></a><span class="sd">    -------</span>
-<a id="bdbvhubrenewal.data.zones.province_of--source--__codelineno-0-31" name="bdbvhubrenewal.data.zones.province_of--source--__codelineno-0-31"></a><span class="sd">    str</span>
-<a id="bdbvhubrenewal.data.zones.province_of--source--__codelineno-0-32" name="bdbvhubrenewal.data.zones.province_of--source--__codelineno-0-32"></a><span class="sd">        `CD-XX`.</span>
-<a id="bdbvhubrenewal.data.zones.province_of--source--__codelineno-0-33" name="bdbvhubrenewal.data.zones.province_of--source--__codelineno-0-33"></a><span class="sd">    """</span>
-<a id="bdbvhubrenewal.data.zones.province_of--source--__codelineno-0-34" name="bdbvhubrenewal.data.zones.province_of--source--__codelineno-0-34"></a>    <span class="k">return</span> <span class="n">zone</span><span class="p">[:</span><span class="mi">5</span><span class="p">]</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#bdbvhubrenewal.data.zones.province_of--source--__codelineno-0-85">85</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.province_of--source--__codelineno-0-86">86</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.province_of--source--__codelineno-0-87">87</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.province_of--source--__codelineno-0-88">88</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.province_of--source--__codelineno-0-89">89</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.province_of--source--__codelineno-0-90">90</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.province_of--source--__codelineno-0-91">91</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.province_of--source--__codelineno-0-92">92</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.province_of--source--__codelineno-0-93">93</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.province_of--source--__codelineno-0-94">94</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.province_of--source--__codelineno-0-95">95</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.province_of--source--__codelineno-0-96">96</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.province_of--source--__codelineno-0-97">97</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.province_of--source--__codelineno-0-98">98</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="bdbvhubrenewal.data.zones.province_of--source--__codelineno-0-85" name="bdbvhubrenewal.data.zones.province_of--source--__codelineno-0-85"></a><span class="k">def</span><span class="w"> </span><span class="nf">province_of</span><span class="p">(</span><span class="n">zone</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<a id="bdbvhubrenewal.data.zones.province_of--source--__codelineno-0-86" name="bdbvhubrenewal.data.zones.province_of--source--__codelineno-0-86"></a><span class="w">    </span><span class="sd">"""Return the province code of a zone code.</span>
+<a id="bdbvhubrenewal.data.zones.province_of--source--__codelineno-0-87" name="bdbvhubrenewal.data.zones.province_of--source--__codelineno-0-87"></a>
+<a id="bdbvhubrenewal.data.zones.province_of--source--__codelineno-0-88" name="bdbvhubrenewal.data.zones.province_of--source--__codelineno-0-88"></a><span class="sd">    Parameters</span>
+<a id="bdbvhubrenewal.data.zones.province_of--source--__codelineno-0-89" name="bdbvhubrenewal.data.zones.province_of--source--__codelineno-0-89"></a><span class="sd">    ----------</span>
+<a id="bdbvhubrenewal.data.zones.province_of--source--__codelineno-0-90" name="bdbvhubrenewal.data.zones.province_of--source--__codelineno-0-90"></a><span class="sd">    zone : str</span>
+<a id="bdbvhubrenewal.data.zones.province_of--source--__codelineno-0-91" name="bdbvhubrenewal.data.zones.province_of--source--__codelineno-0-91"></a><span class="sd">        A zone code, `CD-XX-NN`.</span>
+<a id="bdbvhubrenewal.data.zones.province_of--source--__codelineno-0-92" name="bdbvhubrenewal.data.zones.province_of--source--__codelineno-0-92"></a>
+<a id="bdbvhubrenewal.data.zones.province_of--source--__codelineno-0-93" name="bdbvhubrenewal.data.zones.province_of--source--__codelineno-0-93"></a><span class="sd">    Returns</span>
+<a id="bdbvhubrenewal.data.zones.province_of--source--__codelineno-0-94" name="bdbvhubrenewal.data.zones.province_of--source--__codelineno-0-94"></a><span class="sd">    -------</span>
+<a id="bdbvhubrenewal.data.zones.province_of--source--__codelineno-0-95" name="bdbvhubrenewal.data.zones.province_of--source--__codelineno-0-95"></a><span class="sd">    str</span>
+<a id="bdbvhubrenewal.data.zones.province_of--source--__codelineno-0-96" name="bdbvhubrenewal.data.zones.province_of--source--__codelineno-0-96"></a><span class="sd">        `CD-XX`.</span>
+<a id="bdbvhubrenewal.data.zones.province_of--source--__codelineno-0-97" name="bdbvhubrenewal.data.zones.province_of--source--__codelineno-0-97"></a><span class="sd">    """</span>
+<a id="bdbvhubrenewal.data.zones.province_of--source--__codelineno-0-98" name="bdbvhubrenewal.data.zones.province_of--source--__codelineno-0-98"></a>    <span class="k">return</span> <span class="n">zone</span><span class="p">[:</span><span class="mi">5</span><span class="p">]</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -23656,47 +24077,47 @@ They equal the zone rows of the hub's <code>time-series.csv</code>.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/bdbvhubrenewal/data/zones.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-37">37</a></span>
-<span class="normal"><a href="#bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-38">38</a></span>
-<span class="normal"><a href="#bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-39">39</a></span>
-<span class="normal"><a href="#bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-40">40</a></span>
-<span class="normal"><a href="#bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-41">41</a></span>
-<span class="normal"><a href="#bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-42">42</a></span>
-<span class="normal"><a href="#bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-43">43</a></span>
-<span class="normal"><a href="#bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-44">44</a></span>
-<span class="normal"><a href="#bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-45">45</a></span>
-<span class="normal"><a href="#bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-46">46</a></span>
-<span class="normal"><a href="#bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-47">47</a></span>
-<span class="normal"><a href="#bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-48">48</a></span>
-<span class="normal"><a href="#bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-49">49</a></span>
-<span class="normal"><a href="#bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-50">50</a></span>
-<span class="normal"><a href="#bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-51">51</a></span>
-<span class="normal"><a href="#bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-52">52</a></span>
-<span class="normal"><a href="#bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-53">53</a></span>
-<span class="normal"><a href="#bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-54">54</a></span>
-<span class="normal"><a href="#bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-55">55</a></span>
-<span class="normal"><a href="#bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-56">56</a></span>
-<span class="normal"><a href="#bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-57">57</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-37" name="bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-37"></a><span class="k">def</span><span class="w"> </span><span class="nf">hub_zones</span><span class="p">(</span><span class="n">tasks_json</span><span class="p">:</span> <span class="n">Path</span> <span class="o">|</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="o">...</span><span class="p">]:</span>
-<a id="bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-38" name="bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-38"></a><span class="w">    </span><span class="sd">"""Return the zone codes the hub accepts as locations.</span>
-<a id="bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-39" name="bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-39"></a>
-<a id="bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-40" name="bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-40"></a><span class="sd">    Parameters</span>
-<a id="bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-41" name="bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-41"></a><span class="sd">    ----------</span>
-<a id="bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-42" name="bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-42"></a><span class="sd">    tasks_json : pathlib.Path or str</span>
-<a id="bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-43" name="bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-43"></a><span class="sd">        Path to the hub's `hub-config/tasks.json`.</span>
-<a id="bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-44" name="bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-44"></a>
-<a id="bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-45" name="bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-45"></a><span class="sd">    Returns</span>
-<a id="bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-46" name="bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-46"></a><span class="sd">    -------</span>
-<a id="bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-47" name="bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-47"></a><span class="sd">    tuple of str</span>
-<a id="bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-48" name="bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-48"></a><span class="sd">        Sorted zone codes from every round's location options.</span>
-<a id="bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-49" name="bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-49"></a><span class="sd">    """</span>
-<a id="bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-50" name="bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-50"></a>    <span class="n">config</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="n">tasks_json</span><span class="p">)</span><span class="o">.</span><span class="n">read_text</span><span class="p">())</span>
-<a id="bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-51" name="bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-51"></a>    <span class="n">codes</span><span class="p">:</span> <span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
-<a id="bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-52" name="bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-52"></a>    <span class="k">for</span> <span class="n">rnd</span> <span class="ow">in</span> <span class="n">config</span><span class="p">[</span><span class="s2">"rounds"</span><span class="p">]:</span>
-<a id="bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-53" name="bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-53"></a>        <span class="k">for</span> <span class="n">task</span> <span class="ow">in</span> <span class="n">rnd</span><span class="p">[</span><span class="s2">"model_tasks"</span><span class="p">]:</span>
-<a id="bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-54" name="bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-54"></a>            <span class="n">loc</span> <span class="o">=</span> <span class="n">task</span><span class="p">[</span><span class="s2">"task_ids"</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"location"</span><span class="p">,</span> <span class="p">{})</span>
-<a id="bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-55" name="bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-55"></a>            <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">"required"</span><span class="p">,</span> <span class="s2">"optional"</span><span class="p">):</span>
-<a id="bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-56" name="bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-56"></a>                <span class="n">codes</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">loc</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">)</span> <span class="ow">or</span> <span class="p">[])</span>
-<a id="bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-57" name="bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-57"></a>    <span class="k">return</span> <span class="nb">tuple</span><span class="p">(</span><span class="nb">sorted</span><span class="p">(</span><span class="n">c</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">codes</span> <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">c</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">"-"</span><span class="p">))</span> <span class="o">==</span> <span class="mi">3</span><span class="p">))</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-101">101</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-102">102</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-103">103</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-104">104</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-105">105</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-106">106</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-107">107</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-108">108</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-109">109</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-110">110</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-111">111</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-112">112</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-113">113</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-114">114</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-115">115</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-116">116</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-117">117</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-118">118</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-119">119</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-120">120</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-121">121</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-101" name="bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-101"></a><span class="k">def</span><span class="w"> </span><span class="nf">hub_zones</span><span class="p">(</span><span class="n">tasks_json</span><span class="p">:</span> <span class="n">Path</span> <span class="o">|</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="o">...</span><span class="p">]:</span>
+<a id="bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-102" name="bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-102"></a><span class="w">    </span><span class="sd">"""Return the zone codes the hub accepts as locations.</span>
+<a id="bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-103" name="bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-103"></a>
+<a id="bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-104" name="bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-104"></a><span class="sd">    Parameters</span>
+<a id="bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-105" name="bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-105"></a><span class="sd">    ----------</span>
+<a id="bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-106" name="bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-106"></a><span class="sd">    tasks_json : pathlib.Path or str</span>
+<a id="bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-107" name="bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-107"></a><span class="sd">        Path to the hub's `hub-config/tasks.json`.</span>
+<a id="bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-108" name="bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-108"></a>
+<a id="bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-109" name="bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-109"></a><span class="sd">    Returns</span>
+<a id="bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-110" name="bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-110"></a><span class="sd">    -------</span>
+<a id="bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-111" name="bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-111"></a><span class="sd">    tuple of str</span>
+<a id="bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-112" name="bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-112"></a><span class="sd">        Sorted zone codes from every round's location options.</span>
+<a id="bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-113" name="bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-113"></a><span class="sd">    """</span>
+<a id="bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-114" name="bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-114"></a>    <span class="n">config</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="n">tasks_json</span><span class="p">)</span><span class="o">.</span><span class="n">read_text</span><span class="p">())</span>
+<a id="bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-115" name="bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-115"></a>    <span class="n">codes</span><span class="p">:</span> <span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+<a id="bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-116" name="bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-116"></a>    <span class="k">for</span> <span class="n">rnd</span> <span class="ow">in</span> <span class="n">config</span><span class="p">[</span><span class="s2">"rounds"</span><span class="p">]:</span>
+<a id="bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-117" name="bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-117"></a>        <span class="k">for</span> <span class="n">task</span> <span class="ow">in</span> <span class="n">rnd</span><span class="p">[</span><span class="s2">"model_tasks"</span><span class="p">]:</span>
+<a id="bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-118" name="bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-118"></a>            <span class="n">loc</span> <span class="o">=</span> <span class="n">task</span><span class="p">[</span><span class="s2">"task_ids"</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"location"</span><span class="p">,</span> <span class="p">{})</span>
+<a id="bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-119" name="bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-119"></a>            <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">"required"</span><span class="p">,</span> <span class="s2">"optional"</span><span class="p">):</span>
+<a id="bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-120" name="bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-120"></a>                <span class="n">codes</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">loc</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">)</span> <span class="ow">or</span> <span class="p">[])</span>
+<a id="bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-121" name="bdbvhubrenewal.data.zones.hub_zones--source--__codelineno-0-121"></a>    <span class="k">return</span> <span class="nb">tuple</span><span class="p">(</span><span class="nb">sorted</span><span class="p">(</span><span class="n">c</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">codes</span> <span class="k">if</span> <span class="n">is_zone</span><span class="p">(</span><span class="n">c</span><span class="p">)))</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -23795,65 +24216,65 @@ onset week) and <code>total</code>, for weeks with at least one onset.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/bdbvhubrenewal/data/zones.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-60">60</a></span>
-<span class="normal"><a href="#bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-61">61</a></span>
-<span class="normal"><a href="#bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-62">62</a></span>
-<span class="normal"><a href="#bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-63">63</a></span>
-<span class="normal"><a href="#bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-64">64</a></span>
-<span class="normal"><a href="#bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-65">65</a></span>
-<span class="normal"><a href="#bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-66">66</a></span>
-<span class="normal"><a href="#bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-67">67</a></span>
-<span class="normal"><a href="#bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-68">68</a></span>
-<span class="normal"><a href="#bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-69">69</a></span>
-<span class="normal"><a href="#bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-70">70</a></span>
-<span class="normal"><a href="#bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-71">71</a></span>
-<span class="normal"><a href="#bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-72">72</a></span>
-<span class="normal"><a href="#bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-73">73</a></span>
-<span class="normal"><a href="#bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-74">74</a></span>
-<span class="normal"><a href="#bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-75">75</a></span>
-<span class="normal"><a href="#bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-76">76</a></span>
-<span class="normal"><a href="#bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-77">77</a></span>
-<span class="normal"><a href="#bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-78">78</a></span>
-<span class="normal"><a href="#bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-79">79</a></span>
-<span class="normal"><a href="#bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-80">80</a></span>
-<span class="normal"><a href="#bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-81">81</a></span>
-<span class="normal"><a href="#bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-82">82</a></span>
-<span class="normal"><a href="#bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-83">83</a></span>
-<span class="normal"><a href="#bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-84">84</a></span>
-<span class="normal"><a href="#bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-85">85</a></span>
-<span class="normal"><a href="#bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-86">86</a></span>
-<span class="normal"><a href="#bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-87">87</a></span>
-<span class="normal"><a href="#bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-88">88</a></span>
-<span class="normal"><a href="#bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-89">89</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-60" name="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-60"></a><span class="k">def</span><span class="w"> </span><span class="nf">weekly_zone_counts</span><span class="p">(</span><span class="n">daily_zones</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="n">vintage</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
-<a id="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-61" name="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-61"></a><span class="w">    </span><span class="sd">"""Sum one vintage's daily zone onsets by epi week.</span>
-<a id="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-62" name="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-62"></a>
-<a id="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-63" name="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-63"></a><span class="sd">    Parameters</span>
-<a id="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-64" name="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-64"></a><span class="sd">    ----------</span>
-<a id="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-65" name="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-65"></a><span class="sd">    daily_zones : pandas.DataFrame</span>
-<a id="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-66" name="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-66"></a><span class="sd">        The tidy daily zone table (`load_daily_zones`), with columns</span>
-<a id="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-67" name="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-67"></a><span class="sd">        `vintage`, `location`, `onset_date`, `observed` and `imputed`.</span>
-<a id="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-68" name="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-68"></a><span class="sd">    vintage : str</span>
-<a id="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-69" name="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-69"></a><span class="sd">        The vintage, ISO format.</span>
-<a id="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-70" name="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-70"></a>
-<a id="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-71" name="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-71"></a><span class="sd">    Returns</span>
-<a id="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-72" name="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-72"></a><span class="sd">    -------</span>
-<a id="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-73" name="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-73"></a><span class="sd">    pandas.DataFrame</span>
-<a id="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-74" name="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-74"></a><span class="sd">        Columns `location`, `target_end_date` (the Saturday ending the</span>
-<a id="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-75" name="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-75"></a><span class="sd">        onset week) and `total`, for weeks with at least one onset.</span>
-<a id="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-76" name="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-76"></a><span class="sd">    """</span>
-<a id="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-77" name="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-77"></a>    <span class="n">rows</span> <span class="o">=</span> <span class="n">daily_zones</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">daily_zones</span><span class="p">[</span><span class="s2">"vintage"</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">str</span><span class="p">)</span> <span class="o">==</span> <span class="n">vintage</span><span class="p">]</span>
-<a id="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-78" name="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-78"></a>    <span class="n">onset</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">to_datetime</span><span class="p">(</span><span class="n">rows</span><span class="p">[</span><span class="s2">"onset_date"</span><span class="p">])</span>
-<a id="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-79" name="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-79"></a>    <span class="n">end</span> <span class="o">=</span> <span class="n">onset</span> <span class="o">+</span> <span class="n">pd</span><span class="o">.</span><span class="n">to_timedelta</span><span class="p">((</span><span class="mi">5</span> <span class="o">-</span> <span class="n">onset</span><span class="o">.</span><span class="n">dt</span><span class="o">.</span><span class="n">weekday</span><span class="p">)</span> <span class="o">%</span> <span class="mi">7</span><span class="p">,</span> <span class="n">unit</span><span class="o">=</span><span class="s2">"D"</span><span class="p">)</span>
-<a id="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-80" name="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-80"></a>    <span class="n">out</span> <span class="o">=</span> <span class="p">(</span>
-<a id="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-81" name="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-81"></a>        <span class="n">rows</span><span class="o">.</span><span class="n">assign</span><span class="p">(</span>
-<a id="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-82" name="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-82"></a>            <span class="n">target_end_date</span><span class="o">=</span><span class="n">end</span><span class="o">.</span><span class="n">dt</span><span class="o">.</span><span class="n">date</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">str</span><span class="p">),</span>
-<a id="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-83" name="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-83"></a>            <span class="n">total</span><span class="o">=</span><span class="n">rows</span><span class="p">[</span><span class="s2">"observed"</span><span class="p">]</span> <span class="o">+</span> <span class="n">rows</span><span class="p">[</span><span class="s2">"imputed"</span><span class="p">],</span>
-<a id="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-84" name="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-84"></a>        <span class="p">)</span>
-<a id="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-85" name="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-85"></a>        <span class="o">.</span><span class="n">groupby</span><span class="p">([</span><span class="s2">"location"</span><span class="p">,</span> <span class="s2">"target_end_date"</span><span class="p">],</span> <span class="n">as_index</span><span class="o">=</span><span class="kc">False</span><span class="p">)[</span><span class="s2">"total"</span><span class="p">]</span>
-<a id="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-86" name="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-86"></a>        <span class="o">.</span><span class="n">sum</span><span class="p">()</span>
-<a id="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-87" name="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-87"></a>    <span class="p">)</span>
-<a id="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-88" name="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-88"></a>    <span class="n">kept</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span> <span class="o">=</span> <span class="n">out</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">out</span><span class="p">[</span><span class="s2">"total"</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">]</span>
-<a id="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-89" name="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-89"></a>    <span class="k">return</span> <span class="n">kept</span><span class="o">.</span><span class="n">reset_index</span><span class="p">(</span><span class="n">drop</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-124">124</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-125">125</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-126">126</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-127">127</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-128">128</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-129">129</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-130">130</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-131">131</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-132">132</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-133">133</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-134">134</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-135">135</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-136">136</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-137">137</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-138">138</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-139">139</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-140">140</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-141">141</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-142">142</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-143">143</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-144">144</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-145">145</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-146">146</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-147">147</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-148">148</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-149">149</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-150">150</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-151">151</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-152">152</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-153">153</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-124" name="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-124"></a><span class="k">def</span><span class="w"> </span><span class="nf">weekly_zone_counts</span><span class="p">(</span><span class="n">daily_zones</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="n">vintage</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
+<a id="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-125" name="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-125"></a><span class="w">    </span><span class="sd">"""Sum one vintage's daily zone onsets by epi week.</span>
+<a id="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-126" name="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-126"></a>
+<a id="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-127" name="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-127"></a><span class="sd">    Parameters</span>
+<a id="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-128" name="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-128"></a><span class="sd">    ----------</span>
+<a id="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-129" name="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-129"></a><span class="sd">    daily_zones : pandas.DataFrame</span>
+<a id="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-130" name="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-130"></a><span class="sd">        The tidy daily zone table (`load_daily_zones`), with columns</span>
+<a id="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-131" name="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-131"></a><span class="sd">        `vintage`, `location`, `onset_date`, `observed` and `imputed`.</span>
+<a id="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-132" name="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-132"></a><span class="sd">    vintage : str</span>
+<a id="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-133" name="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-133"></a><span class="sd">        The vintage, ISO format.</span>
+<a id="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-134" name="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-134"></a>
+<a id="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-135" name="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-135"></a><span class="sd">    Returns</span>
+<a id="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-136" name="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-136"></a><span class="sd">    -------</span>
+<a id="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-137" name="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-137"></a><span class="sd">    pandas.DataFrame</span>
+<a id="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-138" name="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-138"></a><span class="sd">        Columns `location`, `target_end_date` (the Saturday ending the</span>
+<a id="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-139" name="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-139"></a><span class="sd">        onset week) and `total`, for weeks with at least one onset.</span>
+<a id="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-140" name="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-140"></a><span class="sd">    """</span>
+<a id="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-141" name="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-141"></a>    <span class="n">rows</span> <span class="o">=</span> <span class="n">daily_zones</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">daily_zones</span><span class="p">[</span><span class="s2">"vintage"</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">str</span><span class="p">)</span> <span class="o">==</span> <span class="n">vintage</span><span class="p">]</span>
+<a id="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-142" name="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-142"></a>    <span class="n">onset</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">to_datetime</span><span class="p">(</span><span class="n">rows</span><span class="p">[</span><span class="s2">"onset_date"</span><span class="p">])</span>
+<a id="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-143" name="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-143"></a>    <span class="n">end</span> <span class="o">=</span> <span class="n">onset</span> <span class="o">+</span> <span class="n">pd</span><span class="o">.</span><span class="n">to_timedelta</span><span class="p">((</span><span class="mi">5</span> <span class="o">-</span> <span class="n">onset</span><span class="o">.</span><span class="n">dt</span><span class="o">.</span><span class="n">weekday</span><span class="p">)</span> <span class="o">%</span> <span class="mi">7</span><span class="p">,</span> <span class="n">unit</span><span class="o">=</span><span class="s2">"D"</span><span class="p">)</span>
+<a id="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-144" name="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-144"></a>    <span class="n">out</span> <span class="o">=</span> <span class="p">(</span>
+<a id="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-145" name="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-145"></a>        <span class="n">rows</span><span class="o">.</span><span class="n">assign</span><span class="p">(</span>
+<a id="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-146" name="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-146"></a>            <span class="n">target_end_date</span><span class="o">=</span><span class="n">end</span><span class="o">.</span><span class="n">dt</span><span class="o">.</span><span class="n">date</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">str</span><span class="p">),</span>
+<a id="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-147" name="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-147"></a>            <span class="n">total</span><span class="o">=</span><span class="n">rows</span><span class="p">[</span><span class="s2">"observed"</span><span class="p">]</span> <span class="o">+</span> <span class="n">rows</span><span class="p">[</span><span class="s2">"imputed"</span><span class="p">],</span>
+<a id="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-148" name="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-148"></a>        <span class="p">)</span>
+<a id="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-149" name="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-149"></a>        <span class="o">.</span><span class="n">groupby</span><span class="p">([</span><span class="s2">"location"</span><span class="p">,</span> <span class="s2">"target_end_date"</span><span class="p">],</span> <span class="n">as_index</span><span class="o">=</span><span class="kc">False</span><span class="p">)[</span><span class="s2">"total"</span><span class="p">]</span>
+<a id="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-150" name="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-150"></a>        <span class="o">.</span><span class="n">sum</span><span class="p">()</span>
+<a id="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-151" name="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-151"></a>    <span class="p">)</span>
+<a id="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-152" name="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-152"></a>    <span class="n">kept</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span> <span class="o">=</span> <span class="n">out</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">out</span><span class="p">[</span><span class="s2">"total"</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">]</span>
+<a id="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-153" name="bdbvhubrenewal.data.zones.weekly_zone_counts--source--__codelineno-0-153"></a>    <span class="k">return</span> <span class="n">kept</span><span class="o">.</span><span class="n">reset_index</span><span class="p">(</span><span class="n">drop</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -25522,23 +25943,25 @@ end on: <code>kind</code> (<code>real</code>), <code>vintage</code> and <code>cu
       
         <script src="../../javascripts/mathjax.js?v=bced49b5"></script>
       
-        <script src="../../javascripts/toggles.js?v=b6055b59"></script>
+        <script src="../../javascripts/toggles.js?v=47ee5e12"></script>
       
         <script src="../../javascripts/placemap.js?v=03fe1366"></script>
       
         <script src="../../javascripts/zoom.js?v=4e0c610c"></script>
       
-        <script src="../../javascripts/summarise.js?v=896d340e"></script>
+        <script src="../../javascripts/summarise.js?v=e2f49fd3"></script>
       
         <script src="../../javascripts/energy.js?v=36005f6a"></script>
       
-        <script src="../../javascripts/tablefilter.js?v=774f66a6"></script>
+        <script src="../../javascripts/tablesort.js?v=eb2e29e2"></script>
       
-        <script src="../../javascripts/explorer.js?v=576e13e2"></script>
+        <script src="../../javascripts/tablefilter.js?v=2e54a8a5"></script>
+      
+        <script src="../../javascripts/explorer.js?v=c0ccb898"></script>
       
         <script src="../../javascripts/scorechart.js?v=1c27a70d"></script>
       
-        <script src="../../javascripts/scoresummary.js?v=34222cf0"></script>
+        <script src="../../javascripts/scoresummary.js?v=baec2b21"></script>
       
         <script src="../../javascripts/checkschart.js?v=1ee222fe"></script>
       

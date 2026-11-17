@@ -57,7 +57,7 @@
     
       <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
     
-      <link rel="stylesheet" href="../../stylesheets/extra.css?v=afdda586">
+      <link rel="stylesheet" href="../../stylesheets/extra.css?v=66c70f79">
     
     <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
@@ -1010,6 +1010,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../finetuned-chronos/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Using the fine-tuned Chronos-2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../evaluation/" class="md-nav__link">
         
   
@@ -1189,34 +1217,6 @@
     
   
     Backtest
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../simulation/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Simulation checks
   
 
     
@@ -2824,9 +2824,9 @@ R_{\mathcal{G}}(t_b) = \frac{\sum_{p \in \mathcal{G}} \Omega_p\, R_p(t_b)}{\sum_
 Leaving a province out drops the national term and the patch that holds it.
 The term adds no parameters, and <span class="arithmatex">\(\zeta = 0\)</span> gives <code>renewal</code>.</p>
 <h2 id="health-zones">Health zones<a class="headerlink" href="#health-zones" title="Permanent link">&para;</a></h2>
-<p>Zone samples sum to their province's samples, sample by sample and week by week, and zones do not enter the national value.
-<code>randomwalk</code> and <code>randomwalknowcast</code> run at zone level and their samples set the zone shares of the province samples (<a href="../baselines/#health-zones">Baseline models</a>).
-Every other model's province forecast, <code>pprandomwalknowcast</code>'s included, is split across the zones.</p>
+<p>Zones do not enter the national value.
+<code>randomwalk</code> and <code>randomwalknowcast</code> forecast each zone from its own data (<a href="../baselines/#health-zones">Baseline models</a>).
+Every other model's province forecast, <code>pprandomwalknowcast</code>'s included, is split across the zones, so its zone samples sum to its province's samples, sample by sample and week by week.</p>
 <h3 id="split-of-province-samples">Split of province samples<a class="headerlink" href="#split-of-province-samples" title="Permanent link">&para;</a></h3>
 <p>For province <span class="arithmatex">\(p\)</span> with zones <span class="arithmatex">\(z\)</span>, let <span class="arithmatex">\(o_z(w)\)</span> be zone <span class="arithmatex">\(z\)</span>'s published count for week <span class="arithmatex">\(w\)</span> and <span class="arithmatex">\(O(w) = \sum_z o_z(w)\)</span>.
 Each province sample <span class="arithmatex">\(i\)</span> draws its zone shares once, for all weeks,</p>
@@ -2992,23 +2992,25 @@ Each zone keeps its published count and the rest of the province sample <span cl
       
         <script src="../../javascripts/mathjax.js?v=bced49b5"></script>
       
-        <script src="../../javascripts/toggles.js?v=b6055b59"></script>
+        <script src="../../javascripts/toggles.js?v=47ee5e12"></script>
       
         <script src="../../javascripts/placemap.js?v=03fe1366"></script>
       
         <script src="../../javascripts/zoom.js?v=4e0c610c"></script>
       
-        <script src="../../javascripts/summarise.js?v=896d340e"></script>
+        <script src="../../javascripts/summarise.js?v=e2f49fd3"></script>
       
         <script src="../../javascripts/energy.js?v=36005f6a"></script>
       
-        <script src="../../javascripts/tablefilter.js?v=774f66a6"></script>
+        <script src="../../javascripts/tablesort.js?v=eb2e29e2"></script>
       
-        <script src="../../javascripts/explorer.js?v=576e13e2"></script>
+        <script src="../../javascripts/tablefilter.js?v=2e54a8a5"></script>
+      
+        <script src="../../javascripts/explorer.js?v=c0ccb898"></script>
       
         <script src="../../javascripts/scorechart.js?v=1c27a70d"></script>
       
-        <script src="../../javascripts/scoresummary.js?v=34222cf0"></script>
+        <script src="../../javascripts/scoresummary.js?v=baec2b21"></script>
       
         <script src="../../javascripts/checkschart.js?v=1ee222fe"></script>
       

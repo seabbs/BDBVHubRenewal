@@ -57,7 +57,7 @@
     
       <link rel="stylesheet" href="../assets/_mkdocstrings.css">
     
-      <link rel="stylesheet" href="../stylesheets/extra.css?v=afdda586">
+      <link rel="stylesheet" href="../stylesheets/extra.css?v=66c70f79">
     
     <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
@@ -698,6 +698,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../methods/finetuned-chronos/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Using the fine-tuned Chronos-2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../methods/evaluation/" class="md-nav__link">
         
   
@@ -882,34 +910,6 @@
     
   
     Backtest
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../simulation/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Simulation checks
   
 
     
@@ -2144,6 +2144,7 @@
 The paper's later dates, from 2022-02-10, are held out.
 Every nowcast is scored on its quantiles at the hub's seven levels, by WIS and the coverage of the 50% and 95% intervals, on the data reported 40 days after the sum ends (<a href="../methods/evaluation/#german-nowcast-benchmark">how the benchmark is set up</a>).
 Relative scores are against <code>randomwalknowcast</code> on the nowcasts both made.</p>
+<p><code>fm_chronos_daily_ragged_ft</code> and <code>fm_chronos_weekly_ragged_ft</code> show the fine-tuned checkpoint <a href="https://github.com/seabbs/BDBVHubRenewal/releases/tag/chronos-slots-06dbdcc2b48d"><code>chronos-slots-06dbdcc2b48d</code></a>. Their forecasts are those the checkpoint scoring run made, stored on the <code>germany-ft-forecasts</code> branch, not rerun here. The pinned checkpoint, <code>chronos-ft-7962fd718a47</code>, is not stored yet.</p>
 <h2 id="nowcasts">Nowcasts<a class="headerlink" href="#nowcasts" title="Permanent link">&para;</a></h2>
 <p>Each model's median and its 50% and 95% intervals at every seventh nowcast date, for Germany, each state and each age group.
 The solid line is the 7-day sum as reported 40 days after it ends, and the dashed line the data on the nowcast date.
@@ -2160,6 +2161,7 @@ The table under the plot scores the place and dates shown, so with all rounds it
 <noscript>The interactive summary needs JavaScript.</noscript>
 </div>
 
+<div class="tablesort">
 <table>
 <thead>
 <tr>
@@ -2176,92 +2178,92 @@ The table under the plot scores the place and dates shown, so with all rounds it
 <tr>
 <td style="text-align: left;">national</td>
 <td style="text-align: left;">MeanEnsemble</td>
-<td style="text-align: right;">399</td>
-<td style="text-align: right;">0.753</td>
-<td style="text-align: right;">0.81</td>
-<td style="text-align: right;">0.361</td>
-<td style="text-align: right;">0.807</td>
+<td style="text-align: right;">388</td>
+<td style="text-align: right;">0.761</td>
+<td style="text-align: right;">0.811</td>
+<td style="text-align: right;">0.366</td>
+<td style="text-align: right;">0.809</td>
 </tr>
 <tr>
 <td style="text-align: left;">national</td>
 <td style="text-align: left;">MedianEnsemble</td>
-<td style="text-align: right;">399</td>
-<td style="text-align: right;">0.785</td>
-<td style="text-align: right;">0.776</td>
-<td style="text-align: right;">0.366</td>
+<td style="text-align: right;">388</td>
+<td style="text-align: right;">0.79</td>
+<td style="text-align: right;">0.783</td>
+<td style="text-align: right;">0.369</td>
 <td style="text-align: right;">0.802</td>
 </tr>
 <tr>
 <td style="text-align: left;">national</td>
+<td style="text-align: left;">randomwalknowcast</td>
+<td style="text-align: right;">388</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.353</td>
+<td style="text-align: right;">0.83</td>
+</tr>
+<tr>
+<td style="text-align: left;">national</td>
 <td style="text-align: left;">Epiforecasts</td>
-<td style="text-align: right;">400</td>
-<td style="text-align: right;">0.999</td>
-<td style="text-align: right;">0.915</td>
-<td style="text-align: right;">0.215</td>
+<td style="text-align: right;">388</td>
+<td style="text-align: right;">1.048</td>
+<td style="text-align: right;">0.945</td>
+<td style="text-align: right;">0.216</td>
 <td style="text-align: right;">0.528</td>
 </tr>
 <tr>
 <td style="text-align: left;">national</td>
-<td style="text-align: left;">randomwalknowcast</td>
-<td style="text-align: right;">400</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: right;">0.348</td>
-<td style="text-align: right;">0.822</td>
-</tr>
-<tr>
-<td style="text-align: left;">national</td>
 <td style="text-align: left;">LMU</td>
-<td style="text-align: right;">400</td>
-<td style="text-align: right;">1.058</td>
-<td style="text-align: right;">0.765</td>
-<td style="text-align: right;">0.102</td>
-<td style="text-align: right;">0.302</td>
+<td style="text-align: right;">388</td>
+<td style="text-align: right;">1.105</td>
+<td style="text-align: right;">0.792</td>
+<td style="text-align: right;">0.103</td>
+<td style="text-align: right;">0.304</td>
 </tr>
 <tr>
 <td style="text-align: left;">national</td>
 <td style="text-align: left;">KIT</td>
-<td style="text-align: right;">400</td>
-<td style="text-align: right;">1.124</td>
-<td style="text-align: right;">1.241</td>
-<td style="text-align: right;">0.56</td>
-<td style="text-align: right;">0.992</td>
+<td style="text-align: right;">388</td>
+<td style="text-align: right;">1.135</td>
+<td style="text-align: right;">1.25</td>
+<td style="text-align: right;">0.559</td>
+<td style="text-align: right;">0.997</td>
 </tr>
 <tr>
 <td style="text-align: left;">national</td>
 <td style="text-align: left;">RIVM</td>
-<td style="text-align: right;">400</td>
-<td style="text-align: right;">1.215</td>
-<td style="text-align: right;">0.961</td>
-<td style="text-align: right;">0.092</td>
+<td style="text-align: right;">388</td>
+<td style="text-align: right;">1.274</td>
+<td style="text-align: right;">0.992</td>
+<td style="text-align: right;">0.095</td>
 <td style="text-align: right;">0.235</td>
 </tr>
 <tr>
 <td style="text-align: left;">national</td>
 <td style="text-align: left;">SU</td>
-<td style="text-align: right;">400</td>
-<td style="text-align: right;">1.265</td>
-<td style="text-align: right;">1.181</td>
-<td style="text-align: right;">0.208</td>
-<td style="text-align: right;">0.61</td>
+<td style="text-align: right;">388</td>
+<td style="text-align: right;">1.335</td>
+<td style="text-align: right;">1.232</td>
+<td style="text-align: right;">0.204</td>
+<td style="text-align: right;">0.603</td>
 </tr>
 <tr>
 <td style="text-align: left;">national</td>
 <td style="text-align: left;">RKI</td>
-<td style="text-align: right;">400</td>
-<td style="text-align: right;">1.367</td>
-<td style="text-align: right;">1.017</td>
-<td style="text-align: right;">0.11</td>
-<td style="text-align: right;">0.342</td>
+<td style="text-align: right;">388</td>
+<td style="text-align: right;">1.45</td>
+<td style="text-align: right;">1.066</td>
+<td style="text-align: right;">0.111</td>
+<td style="text-align: right;">0.345</td>
 </tr>
 <tr>
 <td style="text-align: left;">national</td>
 <td style="text-align: left;">fm_chronos_daily_ragged_ft</td>
-<td style="text-align: right;">400</td>
-<td style="text-align: right;">1.644</td>
-<td style="text-align: right;">1.702</td>
-<td style="text-align: right;">0.415</td>
-<td style="text-align: right;">0.738</td>
+<td style="text-align: right;">388</td>
+<td style="text-align: right;">1.944</td>
+<td style="text-align: right;">1.94</td>
+<td style="text-align: right;">0.327</td>
+<td style="text-align: right;">0.727</td>
 </tr>
 <tr>
 <td style="text-align: left;">national</td>
@@ -2275,308 +2277,227 @@ The table under the plot scores the place and dates shown, so with all rounds it
 <tr>
 <td style="text-align: left;">national</td>
 <td style="text-align: left;">SZ</td>
-<td style="text-align: right;">397</td>
-<td style="text-align: right;">2.128</td>
-<td style="text-align: right;">1.658</td>
-<td style="text-align: right;">0.101</td>
-<td style="text-align: right;">0.252</td>
-</tr>
-<tr>
-<td style="text-align: left;">national</td>
-<td style="text-align: left;">fm_chronos_daily_ragged</td>
-<td style="text-align: right;">400</td>
-<td style="text-align: right;">3.048</td>
-<td style="text-align: right;">2.331</td>
-<td style="text-align: right;">0.16</td>
-<td style="text-align: right;">0.445</td>
-</tr>
-<tr>
-<td style="text-align: left;">national</td>
-<td style="text-align: left;">fm_chronos_weekly_ragged_ft</td>
-<td style="text-align: right;">400</td>
-<td style="text-align: right;">3.158</td>
-<td style="text-align: right;">2.95</td>
-<td style="text-align: right;">0.452</td>
-<td style="text-align: right;">0.8</td>
-</tr>
-<tr>
-<td style="text-align: left;">national</td>
-<td style="text-align: left;">fm_chronos_weekly_ragged</td>
-<td style="text-align: right;">400</td>
-<td style="text-align: right;">4.237</td>
-<td style="text-align: right;">4.749</td>
-<td style="text-align: right;">0.178</td>
-<td style="text-align: right;">0.768</td>
-</tr>
-<tr>
-<td style="text-align: left;">national</td>
-<td style="text-align: left;">fm_chronos_weekly_complete</td>
-<td style="text-align: right;">400</td>
-<td style="text-align: right;">4.996</td>
-<td style="text-align: right;">5.679</td>
-<td style="text-align: right;">0.295</td>
-<td style="text-align: right;">0.78</td>
+<td style="text-align: right;">388</td>
+<td style="text-align: right;">2.181</td>
+<td style="text-align: right;">1.685</td>
+<td style="text-align: right;">0.103</td>
+<td style="text-align: right;">0.258</td>
 </tr>
 <tr>
 <td style="text-align: left;">national</td>
 <td style="text-align: left;">randomwalk</td>
-<td style="text-align: right;">400</td>
-<td style="text-align: right;">5.5</td>
-<td style="text-align: right;">4.337</td>
-<td style="text-align: right;">0.132</td>
-<td style="text-align: right;">0.33</td>
-</tr>
-<tr>
-<td style="text-align: left;">national</td>
-<td style="text-align: left;">fm_chronos_daily_complete</td>
-<td style="text-align: right;">400</td>
-<td style="text-align: right;">5.556</td>
-<td style="text-align: right;">4.629</td>
-<td style="text-align: right;">0.092</td>
-<td style="text-align: right;">0.36</td>
+<td style="text-align: right;">388</td>
+<td style="text-align: right;">5.739</td>
+<td style="text-align: right;">4.511</td>
+<td style="text-align: right;">0.137</td>
+<td style="text-align: right;">0.34</td>
 </tr>
 <tr>
 <td style="text-align: left;">national</td>
 <td style="text-align: left;">KIT-frozen_baseline</td>
-<td style="text-align: right;">400</td>
-<td style="text-align: right;">9.047</td>
-<td style="text-align: right;">5.234</td>
+<td style="text-align: right;">388</td>
+<td style="text-align: right;">9.343</td>
+<td style="text-align: right;">5.361</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0</td>
 </tr>
 <tr>
 <td style="text-align: left;">states</td>
 <td style="text-align: left;">MeanEnsemble</td>
-<td style="text-align: right;">6384</td>
-<td style="text-align: right;">0.88</td>
-<td style="text-align: right;">0.87</td>
-<td style="text-align: right;">0.428</td>
-<td style="text-align: right;">0.817</td>
+<td style="text-align: right;">5620</td>
+<td style="text-align: right;">0.874</td>
+<td style="text-align: right;">0.866</td>
+<td style="text-align: right;">0.402</td>
+<td style="text-align: right;">0.804</td>
 </tr>
 <tr>
 <td style="text-align: left;">states</td>
 <td style="text-align: left;">MedianEnsemble</td>
-<td style="text-align: right;">6384</td>
-<td style="text-align: right;">0.884</td>
-<td style="text-align: right;">0.86</td>
-<td style="text-align: right;">0.429</td>
-<td style="text-align: right;">0.819</td>
+<td style="text-align: right;">5620</td>
+<td style="text-align: right;">0.879</td>
+<td style="text-align: right;">0.856</td>
+<td style="text-align: right;">0.404</td>
+<td style="text-align: right;">0.807</td>
 </tr>
 <tr>
 <td style="text-align: left;">states</td>
 <td style="text-align: left;">randomwalknowcast</td>
-<td style="text-align: right;">6400</td>
+<td style="text-align: right;">5620</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.546</td>
-<td style="text-align: right;">0.912</td>
-</tr>
-<tr>
-<td style="text-align: left;">states</td>
-<td style="text-align: left;">Epiforecasts</td>
-<td style="text-align: right;">6385</td>
-<td style="text-align: right;">1.071</td>
-<td style="text-align: right;">1.035</td>
-<td style="text-align: right;">0.398</td>
-<td style="text-align: right;">0.787</td>
+<td style="text-align: right;">0.539</td>
+<td style="text-align: right;">0.916</td>
 </tr>
 <tr>
 <td style="text-align: left;">states</td>
 <td style="text-align: left;">KIT</td>
-<td style="text-align: right;">6400</td>
-<td style="text-align: right;">1.077</td>
-<td style="text-align: right;">1.085</td>
-<td style="text-align: right;">0.517</td>
-<td style="text-align: right;">0.91</td>
+<td style="text-align: right;">5620</td>
+<td style="text-align: right;">1.072</td>
+<td style="text-align: right;">1.082</td>
+<td style="text-align: right;">0.507</td>
+<td style="text-align: right;">0.914</td>
+</tr>
+<tr>
+<td style="text-align: left;">states</td>
+<td style="text-align: left;">Epiforecasts</td>
+<td style="text-align: right;">5620</td>
+<td style="text-align: right;">1.079</td>
+<td style="text-align: right;">1.042</td>
+<td style="text-align: right;">0.367</td>
+<td style="text-align: right;">0.769</td>
 </tr>
 <tr>
 <td style="text-align: left;">states</td>
 <td style="text-align: left;">LMU</td>
-<td style="text-align: right;">5695</td>
-<td style="text-align: right;">1.108</td>
-<td style="text-align: right;">0.921</td>
-<td style="text-align: right;">0.309</td>
-<td style="text-align: right;">0.67</td>
+<td style="text-align: right;">5620</td>
+<td style="text-align: right;">1.117</td>
+<td style="text-align: right;">0.929</td>
+<td style="text-align: right;">0.307</td>
+<td style="text-align: right;">0.668</td>
 </tr>
 <tr>
 <td style="text-align: left;">states</td>
 <td style="text-align: left;">SU</td>
-<td style="text-align: right;">6400</td>
-<td style="text-align: right;">1.209</td>
-<td style="text-align: right;">1.149</td>
-<td style="text-align: right;">0.393</td>
-<td style="text-align: right;">0.789</td>
+<td style="text-align: right;">5620</td>
+<td style="text-align: right;">1.216</td>
+<td style="text-align: right;">1.156</td>
+<td style="text-align: right;">0.377</td>
+<td style="text-align: right;">0.778</td>
 </tr>
 <tr>
 <td style="text-align: left;">states</td>
 <td style="text-align: left;">RIVM</td>
-<td style="text-align: right;">6400</td>
-<td style="text-align: right;">1.301</td>
-<td style="text-align: right;">1.062</td>
-<td style="text-align: right;">0.258</td>
-<td style="text-align: right;">0.602</td>
+<td style="text-align: right;">5620</td>
+<td style="text-align: right;">1.31</td>
+<td style="text-align: right;">1.068</td>
+<td style="text-align: right;">0.219</td>
+<td style="text-align: right;">0.565</td>
 </tr>
 <tr>
 <td style="text-align: left;">states</td>
 <td style="text-align: left;">RKI</td>
-<td style="text-align: right;">6400</td>
-<td style="text-align: right;">1.443</td>
-<td style="text-align: right;">1.006</td>
-<td style="text-align: right;">0.167</td>
-<td style="text-align: right;">0.301</td>
+<td style="text-align: right;">5620</td>
+<td style="text-align: right;">1.441</td>
+<td style="text-align: right;">1.003</td>
+<td style="text-align: right;">0.148</td>
+<td style="text-align: right;">0.282</td>
 </tr>
 <tr>
 <td style="text-align: left;">states</td>
 <td style="text-align: left;">SZ</td>
-<td style="text-align: right;">6352</td>
-<td style="text-align: right;">1.758</td>
-<td style="text-align: right;">1.419</td>
-<td style="text-align: right;">0.165</td>
-<td style="text-align: right;">0.397</td>
+<td style="text-align: right;">5620</td>
+<td style="text-align: right;">1.773</td>
+<td style="text-align: right;">1.428</td>
+<td style="text-align: right;">0.16</td>
+<td style="text-align: right;">0.39</td>
 </tr>
 <tr>
 <td style="text-align: left;">states</td>
 <td style="text-align: left;">fm_chronos_daily_ragged_ft</td>
-<td style="text-align: right;">6400</td>
-<td style="text-align: right;">1.954</td>
-<td style="text-align: right;">1.986</td>
-<td style="text-align: right;">0.251</td>
-<td style="text-align: right;">0.626</td>
-</tr>
-<tr>
-<td style="text-align: left;">states</td>
-<td style="text-align: left;">fm_chronos_daily_ragged</td>
-<td style="text-align: right;">6400</td>
-<td style="text-align: right;">2.328</td>
-<td style="text-align: right;">1.942</td>
-<td style="text-align: right;">0.202</td>
-<td style="text-align: right;">0.498</td>
-</tr>
-<tr>
-<td style="text-align: left;">states</td>
-<td style="text-align: left;">fm_chronos_weekly_ragged_ft</td>
-<td style="text-align: right;">6400</td>
-<td style="text-align: right;">2.727</td>
-<td style="text-align: right;">2.576</td>
-<td style="text-align: right;">0.475</td>
-<td style="text-align: right;">0.815</td>
-</tr>
-<tr>
-<td style="text-align: left;">states</td>
-<td style="text-align: left;">fm_chronos_weekly_ragged</td>
-<td style="text-align: right;">6400</td>
-<td style="text-align: right;">3.511</td>
-<td style="text-align: right;">3.58</td>
-<td style="text-align: right;">0.304</td>
-<td style="text-align: right;">0.763</td>
+<td style="text-align: right;">5620</td>
+<td style="text-align: right;">1.776</td>
+<td style="text-align: right;">1.741</td>
+<td style="text-align: right;">0.27</td>
+<td style="text-align: right;">0.639</td>
 </tr>
 <tr>
 <td style="text-align: left;">states</td>
 <td style="text-align: left;">randomwalk</td>
-<td style="text-align: right;">6400</td>
-<td style="text-align: right;">3.566</td>
-<td style="text-align: right;">3.427</td>
-<td style="text-align: right;">0.233</td>
-<td style="text-align: right;">0.496</td>
-</tr>
-<tr>
-<td style="text-align: left;">states</td>
-<td style="text-align: left;">fm_chronos_weekly_complete</td>
-<td style="text-align: right;">6400</td>
-<td style="text-align: right;">3.96</td>
-<td style="text-align: right;">4.303</td>
-<td style="text-align: right;">0.354</td>
-<td style="text-align: right;">0.788</td>
-</tr>
-<tr>
-<td style="text-align: left;">states</td>
-<td style="text-align: left;">fm_chronos_daily_complete</td>
-<td style="text-align: right;">6400</td>
-<td style="text-align: right;">4.271</td>
-<td style="text-align: right;">3.552</td>
-<td style="text-align: right;">0.181</td>
-<td style="text-align: right;">0.438</td>
+<td style="text-align: right;">5620</td>
+<td style="text-align: right;">3.632</td>
+<td style="text-align: right;">3.485</td>
+<td style="text-align: right;">0.22</td>
+<td style="text-align: right;">0.489</td>
 </tr>
 <tr>
 <td style="text-align: left;">states</td>
 <td style="text-align: left;">KIT-frozen_baseline</td>
-<td style="text-align: right;">6400</td>
-<td style="text-align: right;">5.723</td>
-<td style="text-align: right;">3.279</td>
-<td style="text-align: right;">0.048</td>
-<td style="text-align: right;">0.048</td>
+<td style="text-align: right;">5620</td>
+<td style="text-align: right;">5.834</td>
+<td style="text-align: right;">3.333</td>
+<td style="text-align: right;">0.027</td>
+<td style="text-align: right;">0.027</td>
 </tr>
 <tr>
 <td style="text-align: left;">age</td>
 <td style="text-align: left;">MeanEnsemble</td>
-<td style="text-align: right;">2394</td>
-<td style="text-align: right;">0.798</td>
-<td style="text-align: right;">0.816</td>
-<td style="text-align: right;">0.404</td>
-<td style="text-align: right;">0.863</td>
+<td style="text-align: right;">2328</td>
+<td style="text-align: right;">0.797</td>
+<td style="text-align: right;">0.821</td>
+<td style="text-align: right;">0.406</td>
+<td style="text-align: right;">0.861</td>
 </tr>
 <tr>
 <td style="text-align: left;">age</td>
 <td style="text-align: left;">MedianEnsemble</td>
-<td style="text-align: right;">2394</td>
-<td style="text-align: right;">0.817</td>
-<td style="text-align: right;">0.793</td>
-<td style="text-align: right;">0.414</td>
+<td style="text-align: right;">2328</td>
+<td style="text-align: right;">0.815</td>
+<td style="text-align: right;">0.802</td>
+<td style="text-align: right;">0.415</td>
 <td style="text-align: right;">0.862</td>
 </tr>
 <tr>
 <td style="text-align: left;">age</td>
 <td style="text-align: left;">Epiforecasts</td>
-<td style="text-align: right;">2400</td>
-<td style="text-align: right;">0.941</td>
-<td style="text-align: right;">0.887</td>
-<td style="text-align: right;">0.342</td>
-<td style="text-align: right;">0.783</td>
+<td style="text-align: right;">2328</td>
+<td style="text-align: right;">0.969</td>
+<td style="text-align: right;">0.918</td>
+<td style="text-align: right;">0.341</td>
+<td style="text-align: right;">0.78</td>
 </tr>
 <tr>
 <td style="text-align: left;">age</td>
 <td style="text-align: left;">randomwalknowcast</td>
-<td style="text-align: right;">2400</td>
+<td style="text-align: right;">2328</td>
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">0.562</td>
+<td style="text-align: right;">0.568</td>
 <td style="text-align: right;">0.946</td>
 </tr>
 <tr>
 <td style="text-align: left;">age</td>
-<td style="text-align: left;">SU</td>
-<td style="text-align: right;">2400</td>
-<td style="text-align: right;">1.064</td>
-<td style="text-align: right;">0.988</td>
-<td style="text-align: right;">0.36</td>
-<td style="text-align: right;">0.787</td>
+<td style="text-align: left;">KIT</td>
+<td style="text-align: right;">2328</td>
+<td style="text-align: right;">1.095</td>
+<td style="text-align: right;">1.149</td>
+<td style="text-align: right;">0.546</td>
+<td style="text-align: right;">0.972</td>
 </tr>
 <tr>
 <td style="text-align: left;">age</td>
-<td style="text-align: left;">KIT</td>
-<td style="text-align: right;">2400</td>
-<td style="text-align: right;">1.108</td>
-<td style="text-align: right;">1.141</td>
-<td style="text-align: right;">0.545</td>
-<td style="text-align: right;">0.967</td>
+<td style="text-align: left;">SU</td>
+<td style="text-align: right;">2328</td>
+<td style="text-align: right;">1.095</td>
+<td style="text-align: right;">1.023</td>
+<td style="text-align: right;">0.358</td>
+<td style="text-align: right;">0.783</td>
 </tr>
 <tr>
 <td style="text-align: left;">age</td>
 <td style="text-align: left;">LMU</td>
-<td style="text-align: right;">2400</td>
-<td style="text-align: right;">1.144</td>
-<td style="text-align: right;">0.831</td>
+<td style="text-align: right;">2328</td>
+<td style="text-align: right;">1.176</td>
+<td style="text-align: right;">0.864</td>
 <td style="text-align: right;">0.201</td>
-<td style="text-align: right;">0.521</td>
+<td style="text-align: right;">0.519</td>
 </tr>
 <tr>
 <td style="text-align: left;">age</td>
 <td style="text-align: left;">RIVM</td>
-<td style="text-align: right;">2400</td>
-<td style="text-align: right;">1.223</td>
-<td style="text-align: right;">0.954</td>
-<td style="text-align: right;">0.19</td>
-<td style="text-align: right;">0.476</td>
+<td style="text-align: right;">2328</td>
+<td style="text-align: right;">1.234</td>
+<td style="text-align: right;">0.975</td>
+<td style="text-align: right;">0.194</td>
+<td style="text-align: right;">0.481</td>
+</tr>
+<tr>
+<td style="text-align: left;">age</td>
+<td style="text-align: left;">fm_chronos_daily_ragged_ft</td>
+<td style="text-align: right;">2328</td>
+<td style="text-align: right;">1.757</td>
+<td style="text-align: right;">1.672</td>
+<td style="text-align: right;">0.339</td>
+<td style="text-align: right;">0.702</td>
 </tr>
 <tr>
 <td style="text-align: left;">age</td>
@@ -2589,87 +2510,34 @@ The table under the plot scores the place and dates shown, so with all rounds it
 </tr>
 <tr>
 <td style="text-align: left;">age</td>
-<td style="text-align: left;">fm_chronos_daily_ragged_ft</td>
-<td style="text-align: right;">2400</td>
-<td style="text-align: right;">2.11</td>
-<td style="text-align: right;">1.989</td>
-<td style="text-align: right;">0.291</td>
-<td style="text-align: right;">0.654</td>
-</tr>
-<tr>
-<td style="text-align: left;">age</td>
 <td style="text-align: left;">SZ</td>
-<td style="text-align: right;">2382</td>
-<td style="text-align: right;">2.137</td>
-<td style="text-align: right;">1.603</td>
-<td style="text-align: right;">0.116</td>
-<td style="text-align: right;">0.317</td>
-</tr>
-<tr>
-<td style="text-align: left;">age</td>
-<td style="text-align: left;">fm_chronos_daily_ragged</td>
-<td style="text-align: right;">2400</td>
-<td style="text-align: right;">2.474</td>
-<td style="text-align: right;">2.024</td>
-<td style="text-align: right;">0.22</td>
-<td style="text-align: right;">0.54</td>
-</tr>
-<tr>
-<td style="text-align: left;">age</td>
-<td style="text-align: left;">fm_chronos_weekly_ragged_ft</td>
-<td style="text-align: right;">2400</td>
-<td style="text-align: right;">3.113</td>
-<td style="text-align: right;">2.551</td>
-<td style="text-align: right;">0.538</td>
-<td style="text-align: right;">0.808</td>
-</tr>
-<tr>
-<td style="text-align: left;">age</td>
-<td style="text-align: left;">fm_chronos_daily_complete</td>
-<td style="text-align: right;">2400</td>
-<td style="text-align: right;">3.902</td>
-<td style="text-align: right;">3.021</td>
-<td style="text-align: right;">0.133</td>
-<td style="text-align: right;">0.335</td>
-</tr>
-<tr>
-<td style="text-align: left;">age</td>
-<td style="text-align: left;">fm_chronos_weekly_complete</td>
-<td style="text-align: right;">2400</td>
-<td style="text-align: right;">3.94</td>
-<td style="text-align: right;">3.845</td>
-<td style="text-align: right;">0.27</td>
-<td style="text-align: right;">0.609</td>
+<td style="text-align: right;">2328</td>
+<td style="text-align: right;">2.143</td>
+<td style="text-align: right;">1.626</td>
+<td style="text-align: right;">0.118</td>
+<td style="text-align: right;">0.318</td>
 </tr>
 <tr>
 <td style="text-align: left;">age</td>
 <td style="text-align: left;">randomwalk</td>
-<td style="text-align: right;">2400</td>
-<td style="text-align: right;">4.448</td>
-<td style="text-align: right;">4.122</td>
-<td style="text-align: right;">0.182</td>
+<td style="text-align: right;">2328</td>
+<td style="text-align: right;">4.561</td>
+<td style="text-align: right;">4.25</td>
+<td style="text-align: right;">0.185</td>
 <td style="text-align: right;">0.463</td>
 </tr>
 <tr>
 <td style="text-align: left;">age</td>
-<td style="text-align: left;">fm_chronos_weekly_ragged</td>
-<td style="text-align: right;">2400</td>
-<td style="text-align: right;">4.482</td>
-<td style="text-align: right;">4.489</td>
-<td style="text-align: right;">0.288</td>
-<td style="text-align: right;">0.732</td>
-</tr>
-<tr>
-<td style="text-align: left;">age</td>
 <td style="text-align: left;">KIT-frozen_baseline</td>
-<td style="text-align: right;">2400</td>
-<td style="text-align: right;">8.395</td>
-<td style="text-align: right;">4.578</td>
-<td style="text-align: right;">0.016</td>
-<td style="text-align: right;">0.016</td>
+<td style="text-align: right;">2328</td>
+<td style="text-align: right;">8.463</td>
+<td style="text-align: right;">4.668</td>
+<td style="text-align: right;">0.014</td>
+<td style="text-align: right;">0.014</td>
 </tr>
 </tbody>
 </table>
+</div>
 <h2 id="by-horizon">By horizon<a class="headerlink" href="#by-horizon" title="Permanent link">&para;</a></h2>
 <p>By days from the nowcast date to the end of the 7-day sum, at the level chosen.
 The round picker is the nowcast date.</p>
@@ -2827,23 +2695,25 @@ Pick a place to narrow the table.</p>
       
         <script src="../javascripts/mathjax.js?v=bced49b5"></script>
       
-        <script src="../javascripts/toggles.js?v=b6055b59"></script>
+        <script src="../javascripts/toggles.js?v=47ee5e12"></script>
       
         <script src="../javascripts/placemap.js?v=03fe1366"></script>
       
         <script src="../javascripts/zoom.js?v=4e0c610c"></script>
       
-        <script src="../javascripts/summarise.js?v=896d340e"></script>
+        <script src="../javascripts/summarise.js?v=e2f49fd3"></script>
       
         <script src="../javascripts/energy.js?v=36005f6a"></script>
       
-        <script src="../javascripts/tablefilter.js?v=774f66a6"></script>
+        <script src="../javascripts/tablesort.js?v=eb2e29e2"></script>
       
-        <script src="../javascripts/explorer.js?v=576e13e2"></script>
+        <script src="../javascripts/tablefilter.js?v=2e54a8a5"></script>
+      
+        <script src="../javascripts/explorer.js?v=c0ccb898"></script>
       
         <script src="../javascripts/scorechart.js?v=1c27a70d"></script>
       
-        <script src="../javascripts/scoresummary.js?v=34222cf0"></script>
+        <script src="../javascripts/scoresummary.js?v=baec2b21"></script>
       
         <script src="../javascripts/checkschart.js?v=1ee222fe"></script>
       

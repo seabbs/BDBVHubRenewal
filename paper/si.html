@@ -6,7 +6,7 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
-<meta name="dcterms.date" content="2026-11-16">
+<meta name="dcterms.date" content="2026-11-17">
 
 <title>Supporting Information: title to be chosen</title>
 <style>
@@ -101,6 +101,7 @@ window.Quarto = {
   <ul class="collapse">
   <li><a href="#baselines" id="toc-baselines" class="nav-link" data-scroll-target="#baselines">Baselines</a></li>
   <li><a href="#foundation-model-setup-and-fine-tuning" id="toc-foundation-model-setup-and-fine-tuning" class="nav-link" data-scroll-target="#foundation-model-setup-and-fine-tuning">Foundation model setup and fine-tuning</a></li>
+  <li><a href="#monitoring-fine-tuning" id="toc-monitoring-fine-tuning" class="nav-link" data-scroll-target="#monitoring-fine-tuning">Monitoring fine-tuning</a></li>
   <li><a href="#synthetic-data-generation" id="toc-synthetic-data-generation" class="nav-link" data-scroll-target="#synthetic-data-generation">Synthetic data generation</a></li>
   <li><a href="#correlated-trajectories" id="toc-correlated-trajectories" class="nav-link" data-scroll-target="#correlated-trajectories">Correlated trajectories</a></li>
   <li><a href="#aggregation-options" id="toc-aggregation-options" class="nav-link" data-scroll-target="#aggregation-options">Aggregation options</a></li>
@@ -111,6 +112,10 @@ window.Quarto = {
   <ul class="collapse">
   <li><a href="#impact-of-correlated-trajectories" id="toc-impact-of-correlated-trajectories" class="nav-link" data-scroll-target="#impact-of-correlated-trajectories">Impact of correlated trajectories</a></li>
   <li><a href="#joint-block-or-aggregation" id="toc-joint-block-or-aggregation" class="nav-link" data-scroll-target="#joint-block-or-aggregation">Joint block or aggregation</a></li>
+  <li><a href="#checkpoint-curve" id="toc-checkpoint-curve" class="nav-link" data-scroll-target="#checkpoint-curve">Checkpoint curve</a></li>
+  <li><a href="#attention-biases-for-place-and-parent-against-none" id="toc-attention-biases-for-place-and-parent-against-none" class="nav-link" data-scroll-target="#attention-biases-for-place-and-parent-against-none">Attention biases for place and parent against none</a></li>
+  <li><a href="#delays-against-no-delays" id="toc-delays-against-no-delays" class="nav-link" data-scroll-target="#delays-against-no-delays">Delays against no delays</a></li>
+  <li><a href="#real-data-fine-tune-against-synthetic" id="toc-real-data-fine-tune-against-synthetic" class="nav-link" data-scroll-target="#real-data-fine-tune-against-synthetic">Real-data fine-tune against synthetic</a></li>
   <li><a href="#held-out-synthetic-data" id="toc-held-out-synthetic-data" class="nav-link" data-scroll-target="#held-out-synthetic-data">Held-out synthetic data</a></li>
   <li><a href="#german-nowcast-hub" id="toc-german-nowcast-hub" class="nav-link" data-scroll-target="#german-nowcast-hub">German nowcast hub</a></li>
   <li><a href="#ebola-hub-submissions" id="toc-ebola-hub-submissions" class="nav-link" data-scroll-target="#ebola-hub-submissions">Ebola hub submissions</a></li>
@@ -135,7 +140,7 @@ window.Quarto = {
     <div>
     <div class="quarto-title-meta-heading">Published</div>
     <div class="quarto-title-meta-contents">
-      <p class="date">November 16, 2026</p>
+      <p class="date">November 17, 2026</p>
     </div>
   </div>
   
@@ -166,7 +171,7 @@ One SI section per paper section.
 </div>
 <div class="callout-body-container callout-body">
 <ul>
-<li><code>randomwalk</code> and <code>randomwalknowcast</code> in full.</li>
+<li>We describe <code>randomwalk</code> and <code>randomwalknowcast</code> in full.</li>
 <li>Key references: <span class="citation" data-cites="Johnson2025">(<a href="#ref-Johnson2025" role="doc-biblioref">Johnson et al. 2025</a>)</span>.</li>
 </ul>
 </div>
@@ -185,16 +190,87 @@ One SI section per paper section.
 </div>
 <div class="callout-body-container callout-body">
 <ul>
-<li>How Chronos-2 and LoRA work, in brief, with schematics.</li>
-<li>Foundation model setup and fine-tuning settings.</li>
+<li>We describe how Chronos-2 and LoRA work, with schematics.</li>
+<li>We give every setting of the model and the fine-tune.</li>
 <li>Key references: <span class="citation" data-cites="Ansari2025 Hu2021">(<a href="#ref-Ansari2025" role="doc-biblioref">Ansari et al. 2025</a>; <a href="#ref-Hu2021" role="doc-biblioref">Hu et al. 2021</a>)</span>.</li>
 </ul>
 </div>
 </div>
-<p><strong>Series slots.</strong> Chronos-2’s group attention has no notion of which series is which, so on its own it can link a lag series to its place’s counts only by matching their values. The fine-tuned model adds a learned slot embedding, shared by each place’s count series and its lag series. The places of a block take distinct slots, so the model ties each place’s covariates to its counts while seeing all places at once. In each training block the places are assigned to slots by a random permutation, so a slot carries no meaning of its own beyond marking which series go together. The slot embeddings start at zero, so before training the model is base Chronos-2, and they are trained with the LoRA adapter under Chronos-2’s fine-tuning recipe.</p>
+<p><strong>Attention biases.</strong> Chronos-2’s group attention has no notion of which series is which, so on its own it can link a lag series to its place’s counts only by matching their values.</p>
+<ul>
+<li>We add four learned biases to Chronos-2’s group-attention scores (<a href="#tbl-attention-biases" class="quarto-xref">Table&nbsp;1</a>).</li>
+<li>They start at zero, so fine-tuning starts from base Chronos-2, as for the relation biases TableFormer adds to a pretrained model <span class="citation" data-cites="Yang2022">(<a href="#ref-Yang2022" role="doc-biblioref">Yang et al. 2022</a>)</span>.</li>
+<li>The biases train at a learning rate of <span class="math inline">\(10^{-3}\)</span> and the LoRA adapter at <span class="math inline">\(10^{-5}\)</span>, both falling linearly to zero at 8,000 outbreaks.</li>
+<li>We identify places by name within each block, with no limit on the number of places.</li>
+<li>A place’s parent is the nearest prefix of its name in the block, else the country.</li>
+<li>Training blocks include countries equal to, above or later than the sum of their places, so a place belongs to its parent without summing to it.</li>
+<li>The biases follow Moirai’s any-variate attention bias <span class="citation" data-cites="Woo2024">(<a href="#ref-Woo2024" role="doc-biblioref">Woo et al. 2024</a>)</span>, and the relative position biases of T5 <span class="citation" data-cites="Raffel2020">(<a href="#ref-Raffel2020" role="doc-biblioref">Raffel et al. 2020</a>)</span> and the structural biases of Graphormer <span class="citation" data-cites="Ying2021">(<a href="#ref-Ying2021" role="doc-biblioref">Ying et al. 2021</a>)</span>.</li>
+<li>In Moirai’s ablation, additive learned variate embeddings gave a normalised MAE of 0.904 on the Monash benchmark, against 0.655 with the attention bias <span class="citation" data-cites="Woo2024">(<a href="#ref-Woo2024" role="doc-biblioref">Woo et al. 2024</a>)</span>.</li>
+</ul>
+<div id="tbl-attention-biases" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-tbl figure">
+<figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-attention-biases-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Table&nbsp;1: The learned biases added to Chronos-2’s group-attention scores.
+</figcaption>
+<div aria-describedby="tbl-attention-biases-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<table class="caption-top table">
+<colgroup>
+<col style="width: 33%">
+<col style="width: 33%">
+<col style="width: 33%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Relation</th>
+<th>Pairs of series</th>
+<th>Parameters</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Self</td>
+<td>A series attending to itself</td>
+<td>One scalar per layer and head, starting at zero</td>
+</tr>
+<tr class="even">
+<td>Same place</td>
+<td>A series attending to another series of its place, its count or a lag</td>
+<td>One scalar per layer and head, starting at zero</td>
+</tr>
+<tr class="odd">
+<td>Up</td>
+<td>A child place’s series attending to its parent’s series</td>
+<td>One scalar per layer and head, starting at zero</td>
+</tr>
+<tr class="even">
+<td>Down</td>
+<td>A parent place’s series attending to its children’s series</td>
+<td>One scalar per layer and head, starting at zero</td>
+</tr>
+</tbody>
+</table>
+</div>
+</figure>
+</div>
+<p><strong>Training blocks.</strong> A simulation gives daily counts by onset and report date, and a release counts every case reported by its cut-off, one cut-off a week. Each simulation gives 10 observation draws, and at each of 16 cut-offs 2 of the 10 draws are sampled, so one simulation gives 32 blocks. Each block takes daily steps, or sums the days to 3-day or weekly steps, at random. Four in five blocks are multivariate, holding several of the simulation’s strata with or without the country and their totals, and one in five is univariate, the country or a single stratum. Of the blocks with places, a third each have a country equal to the sum of its places, a country above it (cases not allocated to a place), and a country reported later than its places (its own stream). Each block’s prediction length is its horizon, and the LoRA learning rate falls linearly from <span class="math inline">\(10^{-5}\)</span> to zero at 8,000 simulations, with checkpoints at 1,000, 2,000, 4,000 and 8,000.</p>
+<p><strong>Order of the training data.</strong> The grid is a crossed factorial design balanced in every block of 120 simulations, with each factor’s levels shuffled independently, as in a Latin hypercube. Training takes the simulations in chunks of 250, about two balanced blocks. A chunk gives about 6,700 training blocks, which are shuffled and packed into about 1,250 steps of up to 256 series each. So every checkpoint has seen the whole grid, and no factor level comes in a run of its own.</p>
 <p>Chronos-2 divides a flat context by a scale of <span class="math inline">\(10^{-5}\)</span>, and we apply no floor to that scale at inference. A floor of one count at inference only hurts small series, of five counts or fewer, on held-out simulations. At 4,000 outbreaks their median loss is <strong>?meta:evidence.scale_floor.sims.n4000.small.median_loss.none</strong> without it and <strong>?meta:evidence.scale_floor.sims.n4000.small.median_loss.floor</strong> with it, and the share of 99% quantiles over 100 times the truth is <strong>?meta:evidence.scale_floor.sims.n4000.small.q99_over_100x.none</strong>% and <strong>?meta:evidence.scale_floor.sims.n4000.small.q99_over_100x.floor</strong>%. Large series are unchanged, with median loss <strong>?meta:evidence.scale_floor.sims.n4000.large.median_loss.none</strong> and <strong>?meta:evidence.scale_floor.sims.n4000.large.median_loss.floor</strong>. On the BDBV release backtest the floor gives a lower relative WIS at every fine-tuned checkpoint, <strong>?meta:evidence.scale_floor.bdbv.provinces.weekly.n4000.floor</strong> against <strong>?meta:evidence.scale_floor.bdbv.provinces.weekly.n4000.none</strong> for the weekly model at 4,000 outbreaks on provinces. Chronos-2’s widest interval is from 1% to 99%, as it has no 2.5% or 97.5% quantiles.</p>
 <p>The ragged layout’s lag series run to 4 weeks or 28 days. Lags run to the truth delay do worse with short release histories. On the German development half, the national WIS relative to <code>randomwalknowcast</code> is 2.91 with the 4-week cap and 3.79 with lags to the truth delay for the daily zero-shot model, and 4.44 and 8.01 for the weekly one. On the BDBV release backtest it is 2.78 and 5.84 for the daily zero-shot model, and 1.3 and 3.17 for the weekly one. BDBV’s zones have few weekly releases, so with the longer horizon no recent lag of a zone falls in the model’s context.</p>
 <p>To compare training on simulations with training on real data, we also fine-tuned Chronos-2 on real data alone (<code>fm_chronos_daily_ragged_real</code> and <code>fm_chronos_weekly_ragged_real</code>). It was trained on the German data and the BDBV data together. The German part used the data as available on 2022-02-09, the last day of the German development half, and nothing later. German training blocks were cut at every nowcast date whose truth, four weeks ahead, was at least 40 days old by then, from 2021-04-20 to 2021-12-03. Each date was laid out as the German nowcast tasks are, with the same block functions as the simulations, from the daily and weekly releases, for Germany alone and with its states or age groups, at release lags of 14 to 49 days (including 40) or 2 to 7 weeks. The hub file’s changes after 80 days hold revisions made up to August 2022, so they were left out. The BDBV part used every public release up to 2026-11-08 (cut-off 2026-11-05). Daily blocks were cut at each daily release, and weekly blocks at each week from the hub’s public per-case delay table, for the country alone and with its provinces, at every release lag. Truth was the latest release’s counts, left out after 2026-10-01, so every count trained on was at least the BDBV truth delay of 35 days old. Training followed Chronos-2’s recipe as the simulation fine-tune does, from base Chronos-2, for its default 1,000 steps. The last 14 German nowcast dates were held out to monitor the loss.</p>
+</section>
+<section id="monitoring-fine-tuning" class="level3">
+<h3 class="anchored" data-anchor-id="monitoring-fine-tuning">Monitoring fine-tuning</h3>
+<p>A local dashboard, part of the fine-tuning workflow, was used to review training as it ran (<a href="#fig-dashboard" class="quarto-xref">Figure&nbsp;1</a>). It showed the training and held-out loss by source, each checkpoint’s scores against <code>randomwalknowcast</code> with the zero-shot and complete-only references, and the German nowcasts by checkpoint. Reviewing it led to the complete-only reference in the checkpoint curve (<a href="#fig-checkpoint-curve" class="quarto-xref">Figure&nbsp;4</a>). The dashboard was built with the help of a large language model.</p>
+<div id="fig-dashboard" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-dashboard-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="figures/dashboard-2026-11-16.png" class="img-fluid figure-img">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-dashboard-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;1: The fine-tuning dashboard on 16 November 2026 at 17:29, with a run at 500 simulations: training and held-out loss by source, checkpoint scores against <code>randomwalknowcast</code> with the zero-shot and complete-only references, and German nowcasts by checkpoint.
+</figcaption>
+</figure>
+</div>
 </section>
 <section id="synthetic-data-generation" class="level3">
 <h3 class="anchored" data-anchor-id="synthetic-data-generation">Synthetic data generation</h3>
@@ -209,8 +285,8 @@ One SI section per paper section.
 </div>
 <div class="callout-body-container callout-body">
 <ul>
-<li>Synthetic data generation in full, with an overview of the epinowcast model used.</li>
-<li>The full factor table and the realism comparison against published disease parameters.</li>
+<li>We describe the simulation in full, with the epinowcast model it uses.</li>
+<li>We give the full factor table and compare the simulations with published disease parameters.</li>
 <li>Key references: <span class="citation" data-cites="abbottepinowcast lison2024 Park2024 abbottprimarycensored">(<a href="#ref-abbottepinowcast" role="doc-biblioref">Abbott et al. 2026</a>; <a href="#ref-lison2024" role="doc-biblioref">Lison et al. 2024</a>; <a href="#ref-Park2024" role="doc-biblioref">Park et al. 2024</a>; <a href="#ref-abbottprimarycensored" role="doc-biblioref">Abbott 2026</a>)</span>.</li>
 </ul>
 </div>
@@ -249,7 +325,7 @@ One SI section per paper section.
 <div id="tbl-synthetic-grid-si" class="quarto-float quarto-figure quarto-figure-center anchored">
 <figure class="quarto-float quarto-float-tbl figure">
 <figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-synthetic-grid-si-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Table&nbsp;1: Every setting of the simulation grid: the crossed factors and their levels, the settings derived from a cell, and the values drawn within it, with the R expression that draws them and the epinowcast function each enters through, read from the simulator’s code. Realised values are over the run’s simulations where they exist.
+Table&nbsp;2: Every setting of the simulation grid: the crossed factors and their levels, the settings derived from a cell, and the values drawn within it, with the R expression that draws them and the epinowcast function each enters through, read from the simulator’s code. Realised values are over the run’s simulations where they exist.
 </figcaption>
 <div aria-describedby="tbl-synthetic-grid-si-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
 <table class="caption-top table">
@@ -730,38 +806,18 @@ Table&nbsp;1: Every setting of the simulation grid: the crossed factors and thei
 <img src="build/figures/si/sim-realism.png" class="img-fluid figure-img">
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-sim-realism-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;1: How the simulated outbreaks (grey histograms) compare with the BDBV data and the German data by state and by age: outbreak size, weekly peak, growth, the share of stratum-weeks with no cases, dispersion, the reporting delay and the share reported within 0, 7, 14 and 28 days.
+Figure&nbsp;2: How the simulated outbreaks (grey histograms) compare with the BDBV data and the German data by state and by age: outbreak size, weekly peak, growth, the share of stratum-weeks with no cases, dispersion, the reporting delay and the share reported within 0, 7, 14 and 28 days.
 </figcaption>
 </figure>
 </div>
 <div id="tbl-sim-diseases" class="quarto-float quarto-figure quarto-figure-center anchored">
 <figure class="quarto-float quarto-float-tbl figure">
 <figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-sim-diseases-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Table&nbsp;2: The simulated outbreaks’ ranges against published values for several diseases, the case studies among them.
+Table&nbsp;3: The simulated outbreaks’ ranges against published values for several diseases, the case studies among them.
 </figcaption>
 <div aria-describedby="tbl-sim-diseases-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
 <p><em>Not yet available: waits on fm-finetune3’s published disease values.</em></p>
 </div>
-</figure>
-</div>
-<div id="fig-finetune-heldout" class="quarto-float quarto-figure quarto-figure-center anchored">
-<figure class="quarto-float quarto-float-fig figure">
-<div aria-describedby="fig-finetune-heldout-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-<img src="build/figures/si/finetune-heldout.png" class="img-fluid figure-img">
-</div>
-<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-finetune-heldout-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;2: Held-out loss of the fine-tune against the number of simulated outbreaks it has seen.
-</figcaption>
-</figure>
-</div>
-<div id="fig-checkpoint-curve" class="quarto-float quarto-figure quarto-figure-center anchored">
-<figure class="quarto-float quarto-float-fig figure">
-<div aria-describedby="fig-checkpoint-curve-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-<img src="build/figures/si/checkpoint-curve.png" class="img-fluid figure-img">
-</div>
-<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-checkpoint-curve-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;3: WIS (Germany, on each model’s own quantiles) and CRPS (BDBV, on 1,000 draws with common random numbers) relative to <code>randomwalknowcast</code> of the ragged Chronos-2 models against the number of simulated outbreaks each checkpoint was fine-tuned on, with the zero-shot model at the left, on the case studies by level. Each panel gives n, the fewest matched cells of its points, and the forecast origins they come from, and panels with fewer than 5 are grey.
-</figcaption>
 </figure>
 </div>
 </section>
@@ -773,6 +829,7 @@ Figure&nbsp;3: WIS (Germany, on each model’s own quantiles) and CRPS (BDBV, on
 <section id="protocol" class="level5">
 <h5 class="anchored" data-anchor-id="protocol">Protocol</h5>
 <p>Each outbreak is released weekly, on one weekday from Wednesday to Saturday drawn from its id, and a release’s cut-off is its origin. Each outbreak has four origins, spread evenly from its 6th release to the last release at least its longest delay plus 5 weeks before its last report. Each forecast covers weeks -4 to 3 from the week of the cut-off, as weekly totals by onset week for the country and each stratum. Scores use rolling truth, the count reported D days after the end of a target week, with D the outbreak’s own 98% reporting delay in whole days, and are relative to <code>randomwalknowcast</code>.</p>
+<p>The training blocks cut from these simulations include countries that equal, exceed or lag the sum of their places, a third of the blocks with places each (Foundation model setup).</p>
 </section>
 </section>
 </section>
@@ -785,7 +842,7 @@ Figure&nbsp;3: WIS (Germany, on each model’s own quantiles) and CRPS (BDBV, on
 </section>
 <section id="aggregation-options" class="level3">
 <h3 class="anchored" data-anchor-id="aggregation-options">Aggregation options</h3>
-<p>Chronos-2 can forecast every level of a place hierarchy in one block, or each level on its own. We compare four options for the zero-shot and fine-tuned models, daily and weekly: (a) all levels in one joint block; (b) each level in its own block; (c) the lowest level only, summed up to the others with draws paired at random; (d) the lowest level only, summed up after pairing its draws with the rolling copula. Option (d) tests whether the copula rescues aggregation.</p>
+<p>Chronos-2 can forecast every level of a place hierarchy in one block, or each level on its own. We compare four options for the zero-shot and fine-tuned models, daily and weekly: (a) all levels in one joint block; (b) each level in its own block; (c) the lowest level only, summed up to the others with draws paired at random; (d) the lowest level only, summed up after pairing its draws with the rolling copula. Option (d) tests whether pairing the draws with the copula before summing narrows the gap to the joint block.</p>
 </section>
 <section id="scoring" class="level3">
 <h3 class="anchored" data-anchor-id="scoring">Scoring</h3>
@@ -800,7 +857,7 @@ Figure&nbsp;3: WIS (Germany, on each model’s own quantiles) and CRPS (BDBV, on
 </div>
 <div class="callout-body-container callout-body">
 <ul>
-<li>Scoring, and its check against scoringutils.</li>
+<li>We describe the scores and check them against scoringutils.</li>
 <li>Key references: <span class="citation" data-cites="bosse2022scoringutils jordanEvaluatingProbabilisticForecasts2019 zanetta_scoringrules_2024">(<a href="#ref-bosse2022scoringutils" role="doc-biblioref">Bosse et al. 2022</a>; <a href="#ref-jordanEvaluatingProbabilisticForecasts2019" role="doc-biblioref">Jordan, Krüger, and Lerch 2019</a>; <a href="#ref-zanetta_scoringrules_2024" role="doc-biblioref">Zanetta and Allen 2024</a>)</span>.</li>
 </ul>
 </div>
@@ -819,8 +876,8 @@ Figure&nbsp;3: WIS (Germany, on each model’s own quantiles) and CRPS (BDBV, on
 </div>
 <div class="callout-body-container callout-body">
 <ul>
-<li>The tools we used, each cited: Python, PyTorch on the laptop GPU, chronos-forecasting, PEFT for LoRA, R and epinowcast for simulation, and scoringrules for scoring, checked against scoringutils.</li>
-<li>The evaluation runs as a Snakemake workflow, so every result can be reproduced from the raw data.</li>
+<li>We used Python, PyTorch, chronos-forecasting, PEFT for LoRA, R and epinowcast for simulation, and scoringrules for scoring, checked against scoringutils.</li>
+<li>A Snakemake workflow runs the evaluation from the raw data to every figure and table.</li>
 </ul>
 </div>
 </div>
@@ -839,19 +896,19 @@ Figure&nbsp;3: WIS (Germany, on each model’s own quantiles) and CRPS (BDBV, on
 </div>
 <div class="callout-body-container callout-body">
 <ul>
-<li>Score breakdowns by location and horizon for each case study.</li>
-<li>WIS over time for each case study.</li>
-<li>Held-out synthetic scores by number of fine-tuning outbreaks.</li>
+<li>We break down each case study’s scores by location and horizon.</li>
+<li>We show each case study’s WIS over time.</li>
+<li>We show held-out synthetic scores by the number of fine-tuning outbreaks.</li>
 </ul>
 </div>
 </div>
 <section id="impact-of-correlated-trajectories" class="level3">
 <h3 class="anchored" data-anchor-id="impact-of-correlated-trajectories">Impact of correlated trajectories</h3>
-<p>Pairing changes no marginal forecast, so it shows in the joint scores and in the coverage of sums over weeks and over places. <a href="#tbl-copula-ebola" class="quarto-xref">Table&nbsp;3</a> and <a href="#tbl-copula-germany" class="quarto-xref">Table&nbsp;4</a> compare unpaired forecasts with the fixed and rolling copula for every model that uses it. The rolling estimates have median <span class="math inline">\(\rho_t\)</span> 0.54 and <span class="math inline">\(\rho_p\)</span> 4.0e-2 by German state, and <span class="math inline">\(\rho_t\)</span> 0.43 and <span class="math inline">\(\rho_p\)</span> 0.18 by age group, for <code>randomwalknowcast</code>.</p>
+<p>Pairing changes no marginal forecast, so it shows in the joint scores and in the coverage of sums over weeks and over places. <a href="#tbl-copula-ebola" class="quarto-xref">Table&nbsp;4</a> and <a href="#tbl-copula-germany" class="quarto-xref">Table&nbsp;5</a> compare unpaired forecasts with the fixed and rolling copula for every model that uses it. The rolling estimates have median <span class="math inline">\(\rho_t\)</span> 0.54 and <span class="math inline">\(\rho_p\)</span> 4.0e-2 by German state, and <span class="math inline">\(\rho_t\)</span> 0.43 and <span class="math inline">\(\rho_p\)</span> 0.18 by age group, for <code>randomwalknowcast</code>.</p>
 <div id="tbl-copula-ebola" class="quarto-float quarto-figure quarto-figure-center anchored">
 <figure class="quarto-float quarto-float-tbl figure">
 <figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-copula-ebola-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Table&nbsp;3: Ebola release backtest: energy score (ES) and variogram score (VS) on the log scale, 50% and 90% coverage of each place’s sum over weeks and of the sum over provinces, and WIS of the provinces and the country, for each model unpaired and paired by the fixed or rolling copula.
+Table&nbsp;4: Ebola release backtest: energy score (ES) and variogram score (VS) on the log scale, 50% and 90% coverage of each place’s sum over weeks and of the sum over provinces, and WIS of the provinces and the country, for each model unpaired and paired by the fixed or rolling copula.
 </figcaption>
 <div aria-describedby="tbl-copula-ebola-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
 <table class="caption-top table">
@@ -1108,7 +1165,7 @@ Table&nbsp;3: Ebola release backtest: energy score (ES) and variogram score (VS)
 <div id="tbl-copula-germany" class="quarto-float quarto-figure quarto-figure-center anchored">
 <figure class="quarto-float quarto-float-tbl figure">
 <figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-copula-germany-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Table&nbsp;4: German nowcast hub, development half: as <a href="#tbl-copula-ebola" class="quarto-xref">Table&nbsp;3</a>, by state and by age group, with the sum over places taken over states or age groups.
+Table&nbsp;5: German nowcast hub, development half: as <a href="#tbl-copula-ebola" class="quarto-xref">Table&nbsp;4</a>, by state and by age group, with the sum over places taken over states or age groups.
 </figcaption>
 <div aria-describedby="tbl-copula-germany-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
 <table class="caption-top table">
@@ -1233,11 +1290,11 @@ Table&nbsp;4: German nowcast hub, development half: as <a href="#tbl-copula-ebol
 </section>
 <section id="joint-block-or-aggregation" class="level3">
 <h3 class="anchored" data-anchor-id="joint-block-or-aggregation">Joint block or aggregation</h3>
-<p>The submission uses the joint block. On BDBV it is best or tied at provinces, zones and the national level for the zero-shot models. On the German development half, level by level is competitive for the daily zero-shot model (2.19 against 3.05 at the national level) and for age groups. Summing the lowest level loses at every level above it, with or without the copula: at BDBV’s national level the daily zero-shot model scores 8.01 summed and 5.11 summed after pairing, against 1.26 for the joint block. All WIS are relative to <code>randomwalknowcast</code> on the same targets. <a href="#tbl-aggregation-ebola" class="quarto-xref">Table&nbsp;5</a> and <a href="#tbl-aggregation-germany" class="quarto-xref">Table&nbsp;6</a> give every model and level, and <a href="#tbl-aggregation-cost" class="quarto-xref">Table&nbsp;7</a> what each option costs.</p>
+<p>Our Chronos-2 models use the joint block. On BDBV it is best or tied at provinces, zones and the national level for the zero-shot models. On the German development half, level by level is competitive for the daily zero-shot model (2.19 against 3.05 at the national level) and for age groups. Summing the lowest level loses at every level above it, with or without the copula: at BDBV’s national level the daily zero-shot model scores 8.01 summed and 5.11 summed after pairing, against 1.26 for the joint block. All WIS are relative to <code>randomwalknowcast</code> on the same targets. <a href="#tbl-aggregation-ebola" class="quarto-xref">Table&nbsp;6</a> and <a href="#tbl-aggregation-germany" class="quarto-xref">Table&nbsp;7</a> give every model and level, and <a href="#tbl-aggregation-cost" class="quarto-xref">Table&nbsp;8</a> what each option costs.</p>
 <div id="tbl-aggregation-ebola" class="quarto-float quarto-figure quarto-figure-center anchored">
 <figure class="quarto-float quarto-float-tbl figure">
 <figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-aggregation-ebola-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Table&nbsp;5: Ebola release backtest: WIS of each option relative to <code>randomwalknowcast</code> on the same targets (log scale in brackets), 50% and 95% coverage and the number of targets, by level (national, provinces, zones).
+Table&nbsp;6: Ebola release backtest: WIS of each option relative to <code>randomwalknowcast</code> on the same targets (log scale in brackets), 50% and 95% coverage and the number of targets, by level (national, provinces, zones).
 </figcaption>
 <div aria-describedby="tbl-aggregation-ebola-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
 <table class="caption-top table">
@@ -1310,7 +1367,7 @@ Table&nbsp;5: Ebola release backtest: WIS of each option relative to <code>rando
 </tr>
 <tr class="odd">
 <td>fm_chronos_daily_ragged</td>
-<td>Zones summed</td>
+<td>Lowest level summed</td>
 <td>national</td>
 <td>8.01 (6.04)</td>
 <td>0.33 / 0.50</td>
@@ -1318,7 +1375,7 @@ Table&nbsp;5: Ebola release backtest: WIS of each option relative to <code>rando
 </tr>
 <tr class="even">
 <td>fm_chronos_daily_ragged</td>
-<td>Zones summed</td>
+<td>Lowest level summed</td>
 <td>provinces</td>
 <td>5.74 (7.88)</td>
 <td>0.94 / 0.96</td>
@@ -1326,7 +1383,7 @@ Table&nbsp;5: Ebola release backtest: WIS of each option relative to <code>rando
 </tr>
 <tr class="odd">
 <td>fm_chronos_daily_ragged</td>
-<td>Zones summed</td>
+<td>Lowest level summed</td>
 <td>zones</td>
 <td>4.72 (4.18)</td>
 <td>0.55 / 0.77</td>
@@ -1334,7 +1391,7 @@ Table&nbsp;5: Ebola release backtest: WIS of each option relative to <code>rando
 </tr>
 <tr class="even">
 <td>fm_chronos_daily_ragged</td>
-<td>Zones summed after pairing</td>
+<td>Lowest level summed after pairing</td>
 <td>national</td>
 <td>5.11 (3.92)</td>
 <td>0.50 / 0.50</td>
@@ -1342,7 +1399,7 @@ Table&nbsp;5: Ebola release backtest: WIS of each option relative to <code>rando
 </tr>
 <tr class="odd">
 <td>fm_chronos_daily_ragged</td>
-<td>Zones summed after pairing</td>
+<td>Lowest level summed after pairing</td>
 <td>provinces</td>
 <td>4.06 (5.57)</td>
 <td>0.96 / 0.96</td>
@@ -1350,7 +1407,7 @@ Table&nbsp;5: Ebola release backtest: WIS of each option relative to <code>rando
 </tr>
 <tr class="even">
 <td>fm_chronos_daily_ragged</td>
-<td>Zones summed after pairing</td>
+<td>Lowest level summed after pairing</td>
 <td>zones</td>
 <td>4.72 (4.18)</td>
 <td>0.55 / 0.77</td>
@@ -1406,7 +1463,7 @@ Table&nbsp;5: Ebola release backtest: WIS of each option relative to <code>rando
 </tr>
 <tr class="odd">
 <td>fm_chronos_weekly_ragged</td>
-<td>Zones summed</td>
+<td>Lowest level summed</td>
 <td>national</td>
 <td>4.15 (3.62)</td>
 <td>0.33 / 0.33</td>
@@ -1414,7 +1471,7 @@ Table&nbsp;5: Ebola release backtest: WIS of each option relative to <code>rando
 </tr>
 <tr class="even">
 <td>fm_chronos_weekly_ragged</td>
-<td>Zones summed</td>
+<td>Lowest level summed</td>
 <td>provinces</td>
 <td>2.77 (3.93)</td>
 <td>0.94 / 0.94</td>
@@ -1422,7 +1479,7 @@ Table&nbsp;5: Ebola release backtest: WIS of each option relative to <code>rando
 </tr>
 <tr class="odd">
 <td>fm_chronos_weekly_ragged</td>
-<td>Zones summed</td>
+<td>Lowest level summed</td>
 <td>zones</td>
 <td>2.22 (2.32)</td>
 <td>0.77 / 0.92</td>
@@ -1430,7 +1487,7 @@ Table&nbsp;5: Ebola release backtest: WIS of each option relative to <code>rando
 </tr>
 <tr class="even">
 <td>fm_chronos_weekly_ragged</td>
-<td>Zones summed after pairing</td>
+<td>Lowest level summed after pairing</td>
 <td>national</td>
 <td>2.15 (1.82)</td>
 <td>0.33 / 0.50</td>
@@ -1438,7 +1495,7 @@ Table&nbsp;5: Ebola release backtest: WIS of each option relative to <code>rando
 </tr>
 <tr class="odd">
 <td>fm_chronos_weekly_ragged</td>
-<td>Zones summed after pairing</td>
+<td>Lowest level summed after pairing</td>
 <td>provinces</td>
 <td>1.72 (2.44)</td>
 <td>0.95 / 0.97</td>
@@ -1446,7 +1503,7 @@ Table&nbsp;5: Ebola release backtest: WIS of each option relative to <code>rando
 </tr>
 <tr class="even">
 <td>fm_chronos_weekly_ragged</td>
-<td>Zones summed after pairing</td>
+<td>Lowest level summed after pairing</td>
 <td>zones</td>
 <td>2.22 (2.32)</td>
 <td>0.77 / 0.92</td>
@@ -1460,7 +1517,7 @@ Table&nbsp;5: Ebola release backtest: WIS of each option relative to <code>rando
 <div id="tbl-aggregation-germany" class="quarto-float quarto-figure quarto-figure-center anchored">
 <figure class="quarto-float quarto-float-tbl figure">
 <figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-aggregation-germany-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Table&nbsp;6: German nowcast hub, development half: as <a href="#tbl-aggregation-ebola" class="quarto-xref">Table&nbsp;5</a>, by level (national, states, age groups).
+Table&nbsp;7: German nowcast hub, development half: as <a href="#tbl-aggregation-ebola" class="quarto-xref">Table&nbsp;6</a>, by level (national, states, age groups).
 </figcaption>
 <div aria-describedby="tbl-aggregation-germany-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
 <table class="caption-top table">
@@ -1533,7 +1590,7 @@ Table&nbsp;6: German nowcast hub, development half: as <a href="#tbl-aggregation
 </tr>
 <tr class="odd">
 <td>fm_chronos_daily_ragged</td>
-<td>Zones summed</td>
+<td>Lowest level summed</td>
 <td>ages</td>
 <td>2.53 (2.60)</td>
 <td>0.21 / 0.51</td>
@@ -1541,7 +1598,7 @@ Table&nbsp;6: German nowcast hub, development half: as <a href="#tbl-aggregation
 </tr>
 <tr class="even">
 <td>fm_chronos_daily_ragged</td>
-<td>Zones summed</td>
+<td>Lowest level summed</td>
 <td>national</td>
 <td>3.51 (3.72)</td>
 <td>0.03 / 0.11</td>
@@ -1549,7 +1606,7 @@ Table&nbsp;6: German nowcast hub, development half: as <a href="#tbl-aggregation
 </tr>
 <tr class="odd">
 <td>fm_chronos_daily_ragged</td>
-<td>Zones summed</td>
+<td>Lowest level summed</td>
 <td>states</td>
 <td>2.39 (2.23)</td>
 <td>0.19 / 0.47</td>
@@ -1557,7 +1614,7 @@ Table&nbsp;6: German nowcast hub, development half: as <a href="#tbl-aggregation
 </tr>
 <tr class="even">
 <td>fm_chronos_daily_ragged</td>
-<td>Zones summed after pairing</td>
+<td>Lowest level summed after pairing</td>
 <td>ages</td>
 <td>2.53 (2.60)</td>
 <td>0.21 / 0.51</td>
@@ -1565,7 +1622,7 @@ Table&nbsp;6: German nowcast hub, development half: as <a href="#tbl-aggregation
 </tr>
 <tr class="odd">
 <td>fm_chronos_daily_ragged</td>
-<td>Zones summed after pairing</td>
+<td>Lowest level summed after pairing</td>
 <td>national</td>
 <td>2.98 (3.13)</td>
 <td>0.07 / 0.29</td>
@@ -1573,7 +1630,7 @@ Table&nbsp;6: German nowcast hub, development half: as <a href="#tbl-aggregation
 </tr>
 <tr class="even">
 <td>fm_chronos_daily_ragged</td>
-<td>Zones summed after pairing</td>
+<td>Lowest level summed after pairing</td>
 <td>states</td>
 <td>2.39 (2.23)</td>
 <td>0.19 / 0.47</td>
@@ -1629,7 +1686,7 @@ Table&nbsp;6: German nowcast hub, development half: as <a href="#tbl-aggregation
 </tr>
 <tr class="odd">
 <td>fm_chronos_weekly_ragged</td>
-<td>Zones summed</td>
+<td>Lowest level summed</td>
 <td>ages</td>
 <td>4.39 (4.18)</td>
 <td>0.28 / 0.70</td>
@@ -1637,7 +1694,7 @@ Table&nbsp;6: German nowcast hub, development half: as <a href="#tbl-aggregation
 </tr>
 <tr class="even">
 <td>fm_chronos_weekly_ragged</td>
-<td>Zones summed</td>
+<td>Lowest level summed</td>
 <td>national</td>
 <td>5.60 (5.68)</td>
 <td>0.10 / 0.33</td>
@@ -1645,7 +1702,7 @@ Table&nbsp;6: German nowcast hub, development half: as <a href="#tbl-aggregation
 </tr>
 <tr class="odd">
 <td>fm_chronos_weekly_ragged</td>
-<td>Zones summed</td>
+<td>Lowest level summed</td>
 <td>states</td>
 <td>3.48 (2.84)</td>
 <td>0.30 / 0.72</td>
@@ -1653,7 +1710,7 @@ Table&nbsp;6: German nowcast hub, development half: as <a href="#tbl-aggregation
 </tr>
 <tr class="even">
 <td>fm_chronos_weekly_ragged</td>
-<td>Zones summed after pairing</td>
+<td>Lowest level summed after pairing</td>
 <td>ages</td>
 <td>4.39 (4.18)</td>
 <td>0.28 / 0.70</td>
@@ -1661,7 +1718,7 @@ Table&nbsp;6: German nowcast hub, development half: as <a href="#tbl-aggregation
 </tr>
 <tr class="odd">
 <td>fm_chronos_weekly_ragged</td>
-<td>Zones summed after pairing</td>
+<td>Lowest level summed after pairing</td>
 <td>national</td>
 <td>5.11 (5.13)</td>
 <td>0.20 / 0.44</td>
@@ -1669,7 +1726,7 @@ Table&nbsp;6: German nowcast hub, development half: as <a href="#tbl-aggregation
 </tr>
 <tr class="even">
 <td>fm_chronos_weekly_ragged</td>
-<td>Zones summed after pairing</td>
+<td>Lowest level summed after pairing</td>
 <td>states</td>
 <td>3.48 (2.84)</td>
 <td>0.30 / 0.72</td>
@@ -1683,7 +1740,7 @@ Table&nbsp;6: German nowcast hub, development half: as <a href="#tbl-aggregation
 <div id="tbl-aggregation-cost" class="quarto-float quarto-figure quarto-figure-center anchored">
 <figure class="quarto-float quarto-float-tbl figure">
 <figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-aggregation-cost-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Table&nbsp;7: The cost of each option: series per block, memory and time.
+Table&nbsp;8: The cost of each option: series per block, memory and time.
 </figcaption>
 <div aria-describedby="tbl-aggregation-cost-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
 <table class="caption-top table">
@@ -1725,7 +1782,7 @@ Table&nbsp;7: The cost of each option: series per block, memory and time.
 <tr class="odd">
 <td>ebola</td>
 <td>fm_chronos_daily_ragged</td>
-<td>Zones summed after pairing</td>
+<td>Lowest level summed after pairing</td>
 <td>2367</td>
 <td>6.61</td>
 <td>36.9</td>
@@ -1733,7 +1790,7 @@ Table&nbsp;7: The cost of each option: series per block, memory and time.
 <tr class="even">
 <td>ebola</td>
 <td>fm_chronos_daily_ragged</td>
-<td>Zones summed</td>
+<td>Lowest level summed</td>
 <td>2367</td>
 <td>6.61</td>
 <td>36.9</td>
@@ -1757,7 +1814,7 @@ Table&nbsp;7: The cost of each option: series per block, memory and time.
 <tr class="odd">
 <td>ebola</td>
 <td>fm_chronos_weekly_ragged</td>
-<td>Zones summed after pairing</td>
+<td>Lowest level summed after pairing</td>
 <td>783</td>
 <td>1.69</td>
 <td>6.7</td>
@@ -1765,7 +1822,7 @@ Table&nbsp;7: The cost of each option: series per block, memory and time.
 <tr class="even">
 <td>ebola</td>
 <td>fm_chronos_weekly_ragged</td>
-<td>Zones summed</td>
+<td>Lowest level summed</td>
 <td>783</td>
 <td>1.69</td>
 <td>6.7</td>
@@ -1789,7 +1846,7 @@ Table&nbsp;7: The cost of each option: series per block, memory and time.
 <tr class="odd">
 <td>germany</td>
 <td>fm_chronos_daily_ragged</td>
-<td>Zones summed after pairing</td>
+<td>Lowest level summed after pairing</td>
 <td>464+174</td>
 <td>3.32</td>
 <td>10.8</td>
@@ -1797,7 +1854,7 @@ Table&nbsp;7: The cost of each option: series per block, memory and time.
 <tr class="even">
 <td>germany</td>
 <td>fm_chronos_daily_ragged</td>
-<td>Zones summed</td>
+<td>Lowest level summed</td>
 <td>464+174</td>
 <td>3.32</td>
 <td>10.8</td>
@@ -1821,7 +1878,7 @@ Table&nbsp;7: The cost of each option: series per block, memory and time.
 <tr class="odd">
 <td>germany</td>
 <td>fm_chronos_weekly_ragged</td>
-<td>Zones summed after pairing</td>
+<td>Lowest level summed after pairing</td>
 <td>80+30</td>
 <td>2.71</td>
 <td>2.4</td>
@@ -1829,7 +1886,7 @@ Table&nbsp;7: The cost of each option: series per block, memory and time.
 <tr class="even">
 <td>germany</td>
 <td>fm_chronos_weekly_ragged</td>
-<td>Zones summed</td>
+<td>Lowest level summed</td>
 <td>80+30</td>
 <td>2.71</td>
 <td>2.4</td>
@@ -1840,12 +1897,166 @@ Table&nbsp;7: The cost of each option: series per block, memory and time.
 </figure>
 </div>
 </section>
+<section id="checkpoint-curve" class="level3">
+<h3 class="anchored" data-anchor-id="checkpoint-curve">Checkpoint curve</h3>
+<ul>
+<li>We compare the final run’s checkpoints, fine-tuned on 1,000, 2,000, 4,000 and 8,000 simulations.</li>
+<li>They share the grid, the data order and the recipe, as checkpoints of one run.</li>
+<li><a href="#fig-finetune-heldout" class="quarto-xref">Figure&nbsp;3</a> gives the held-out loss by source.</li>
+<li><a href="#fig-checkpoint-curve" class="quarto-xref">Figure&nbsp;4</a> gives German first-half and BDBV relative scores at each checkpoint, with zero-shot Chronos-2 on the ragged layout and on complete data only as reference lines.</li>
+<li>A later checkpoint has also trained for more steps, at a learning rate that falls to zero at 8,000 simulations.</li>
+</ul>
+<div id="fig-finetune-heldout" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-finetune-heldout-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="build/figures/si/finetune-heldout.png" class="img-fluid figure-img">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-finetune-heldout-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;3: Held-out loss of the fine-tune against the number of simulated outbreaks it has seen.
+</figcaption>
+</figure>
+</div>
+<div id="fig-checkpoint-curve" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-checkpoint-curve-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="build/figures/si/checkpoint-curve.png" class="img-fluid figure-img">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-checkpoint-curve-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;4: WIS (Germany, on each model’s own quantiles) and CRPS (BDBV, on 1,000 draws with common random numbers) relative to <code>randomwalknowcast</code> of the fine-tuned ragged Chronos-2 models against the number of simulated outbreaks each checkpoint was fine-tuned on, on the case studies by level. Horizontal lines give the models with no fine-tuning: zero-shot Chronos-2 on the ragged layout (dashed) and on complete data only (dotted), each in its source’s colour, and <code>randomwalknowcast</code> at 1. Each panel gives n, the fewest matched cells of its points, and the forecast origins they come from, and panels with fewer than 5 are grey.
+</figcaption>
+</figure>
+</div>
+</section>
+<section id="attention-biases-for-place-and-parent-against-none" class="level3">
+<h3 class="anchored" data-anchor-id="attention-biases-for-place-and-parent-against-none">Attention biases for place and parent against none</h3>
+<ul>
+<li>We compare the run with attention biases with a run without them.</li>
+<li>Both runs share the grid, the data order, the LoRA recipe and the checkpoints.</li>
+<li><a href="#tbl-slots-loss" class="quarto-xref">Table&nbsp;9</a> gives held-out loss by source, and <a href="#tbl-slots-scores" class="quarto-xref">Table&nbsp;10</a> German first-half and BDBV relative scores at checkpoints of the same size.</li>
+<li><a href="#tbl-slots-swap" class="quarto-xref">Table&nbsp;11</a> gives the loss when whole lag series move to another place, relative to the loss as given.</li>
+<li>A ratio of 1 means the model does not tell which place a lag series belongs to.</li>
+<li><a href="#fig-compare-slots" class="quarto-xref">Figure&nbsp;5</a> shows both runs by checkpoint.</li>
+<li>The run without biases built its 3-day blocks as daily steps, so we compare 3-day blocks with zero-shot only.</li>
+</ul>
+<div id="fig-compare-slots" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-compare-slots-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="build/figures/si/compare-slots.png" class="img-fluid figure-img">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-compare-slots-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;5: Attention biases against none: held-out loss by source and German first-half and BDBV relative scores, by checkpoint.
+</figcaption>
+</figure>
+</div>
+<div id="tbl-slots-loss" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-tbl figure">
+<figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-slots-loss-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Table&nbsp;9: Held-out loss of the run with attention biases by source and window (nowcast or forecast steps), against the run without them at the same checkpoint and against zero-shot Chronos-2, with the paired ratio and its 90% interval over blocks.
+</figcaption>
+<div aria-describedby="tbl-slots-loss-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<p><em>Not yet available: waits on slots-check’s slots against no slots and lag-swap test.</em></p>
+</div>
+</figure>
+</div>
+<div id="tbl-slots-scores" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-tbl figure">
+<figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-slots-scores-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Table&nbsp;10: Relative WIS on the German first half and relative CRPS on the BDBV release backtest, both against <code>randomwalknowcast</code>, of the runs with and without attention biases at checkpoints fine-tuned on the same number of outbreaks.
+</figcaption>
+<div aria-describedby="tbl-slots-scores-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<p><em>Not yet available: waits on germany-chronos2’s scores of each r3 checkpoint.</em></p>
+</div>
+</figure>
+</div>
+<div id="tbl-slots-swap" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-tbl figure">
+<figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-slots-swap-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Table&nbsp;11: Lag-swap test: loss with whole lag series moved between places, as a ratio of the loss as given, with its 90% interval over blocks, for zero-shot Chronos-2 and the run with attention biases.
+</figcaption>
+<div aria-describedby="tbl-slots-swap-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<p><em>Not yet available: waits on slots-check’s slots against no slots and lag-swap test.</em></p>
+</div>
+</figure>
+</div>
+</section>
+<section id="delays-against-no-delays" class="level3">
+<h3 class="anchored" data-anchor-id="delays-against-no-delays">Delays against no delays</h3>
+<ul>
+<li>We fine-tune a run on complete counts only, with the attention biases and without lag series, and compare it with the ragged run.</li>
+<li>Both runs share the grid, the data order, the recipe and the checkpoints.</li>
+<li><a href="#tbl-compare-delays" class="quarto-xref">Table&nbsp;12</a> gives held-out loss by source and German first-half and BDBV relative scores at checkpoints of the same size.</li>
+<li><a href="#fig-compare-delays" class="quarto-xref">Figure&nbsp;6</a> shows both runs by checkpoint.</li>
+<li>Without lag series the no-delay model has no counts after the last complete step, so its context ends there.</li>
+</ul>
+<div id="fig-compare-delays" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-compare-delays-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="build/figures/si/compare-delays.png" class="img-fluid figure-img">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-compare-delays-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;6: Delays against no delays: held-out loss by source and German first-half and BDBV relative scores, by checkpoint.
+</figcaption>
+</figure>
+</div>
+<div id="tbl-compare-delays" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-tbl figure">
+<figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-compare-delays-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Table&nbsp;12: The full and no-delay runs at matched checkpoints: held-out loss by source, relative WIS on the German first half and relative CRPS on BDBV, against <code>randomwalknowcast</code>.
+</figcaption>
+<div aria-describedby="tbl-compare-delays-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<p><em>Not yet available: waits on the full and no-delay runs’ scores by checkpoint.</em></p>
+</div>
+</figure>
+</div>
+</section>
+<section id="real-data-fine-tune-against-synthetic" class="level3">
+<h3 class="anchored" data-anchor-id="real-data-fine-tune-against-synthetic">Real-data fine-tune against synthetic</h3>
+<ul>
+<li>We fine-tune a model on the German development half and BDBV releases, and compare it with the model fine-tuned on simulations.</li>
+<li>Both use the same recipe and the ragged layout.</li>
+<li><a href="#tbl-germany-real-finetune" class="quarto-xref">Table&nbsp;13</a> gives scores on the German held-out half, against zero-shot Chronos-2 and the synthetic model.</li>
+<li><a href="#tbl-ebola-real-finetune" class="quarto-xref">Table&nbsp;14</a> gives scores on BDBV rounds after the last release the real-data model trained on.</li>
+<li><a href="#fig-compare-realdata" class="quarto-xref">Figure&nbsp;7</a> shows both.</li>
+<li>The real-data model saw the German development half, so we score it on the held-out half only.</li>
+<li>We leave it out of every other table and figure.</li>
+</ul>
+<div id="fig-compare-realdata" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-compare-realdata-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="build/figures/si/compare-realdata.png" class="img-fluid figure-img">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-compare-realdata-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;7: Real-data fine-tune against synthetic: German held-out and BDBV relative scores.
+</figcaption>
+</figure>
+</div>
+<div id="tbl-germany-real-finetune" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-tbl figure">
+<figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-germany-real-finetune-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Table&nbsp;13: German nowcast hub held-out half: Chronos-2 zero-shot (<code>_ragged</code>), fine-tuned on simulations (<code>_ft</code>) and fine-tuned on real data (<code>_real</code>), overall (<code>all</code>) and by level, with WIS relative to <code>randomwalknowcast</code>.
+</figcaption>
+<div aria-describedby="tbl-germany-real-finetune-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<p><em>No held-out forecasts in this run.</em></p>
+</div>
+</figure>
+</div>
+<div id="tbl-ebola-real-finetune" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-tbl figure">
+<figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-ebola-real-finetune-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Table&nbsp;14: BDBV scored rounds (from 21 November 2026, after every release the real-data model trained on): Chronos-2 zero-shot (<code>_ragged</code>), fine-tuned on simulations (<code>_ft</code>) and fine-tuned on real data (<code>_real</code>), overall (<code>all</code>) and by level, with CRPS relative to <code>randomwalknowcast</code>.
+</figcaption>
+<div aria-describedby="tbl-ebola-real-finetune-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<p><em>Pending: no BDBV round after the last release the real-data model trained on has truth yet.</em></p>
+</div>
+</figure>
+</div>
+</section>
 <section id="held-out-synthetic-data" class="level3">
 <h3 class="anchored" data-anchor-id="held-out-synthetic-data">Held-out synthetic data</h3>
 <div id="tbl-synthetic-evaluated" class="quarto-float quarto-figure quarto-figure-center anchored">
 <figure class="quarto-float quarto-float-tbl figure">
 <figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-synthetic-evaluated-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Table&nbsp;8: The share of evaluated outbreaks in each level of each grid factor, as each simulation recorded its cell. Illustrative, dummy data
+Table&nbsp;15: The share of evaluated outbreaks in each level of each grid factor, as each simulation recorded its cell. Illustrative, dummy data
 </figcaption>
 <div aria-describedby="tbl-synthetic-evaluated-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
 <table class="caption-top table">
@@ -2028,7 +2239,7 @@ Table&nbsp;8: The share of evaluated outbreaks in each level of each grid factor
 <img src="build/figures/si/synthetic-si-nowcasts.png" class="img-fluid figure-img">
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-synthetic-si-nowcasts-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;4: Held-out synthetic data: nowcasts of outbreaks drawn to cover the levels of the trajectory, delay form, observation model and strata, one row per outbreak labelled by its cell, one column per model. Black is the rolling truth, grey dashed the data as of the origin, and blue the model’s median with its 50% and 95% intervals. Illustrative, dummy data
+Figure&nbsp;8: Held-out synthetic data: nowcasts of outbreaks drawn to cover the levels of the trajectory, delay form, observation model and strata, one row per outbreak labelled by its cell, one column per model. Black is the rolling truth, grey dashed the data as of the origin, and blue the model’s median with its 50% and 95% intervals. Illustrative, dummy data
 </figcaption>
 </figure>
 </div>
@@ -2038,7 +2249,7 @@ Figure&nbsp;4: Held-out synthetic data: nowcasts of outbreaks drawn to cover the
 <img src="build/figures/si/synthetic-si-factors.png" class="img-fluid figure-img">
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-synthetic-si-factors-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;5: Held-out synthetic data: relative CRPS by level of each scenario factor. Illustrative, dummy data
+Figure&nbsp;9: Held-out synthetic data: relative CRPS by level of each scenario factor. Illustrative, dummy data
 </figcaption>
 </figure>
 </div>
@@ -2048,7 +2259,7 @@ Figure&nbsp;5: Held-out synthetic data: relative CRPS by level of each scenario 
 <img src="build/figures/si/synthetic-si-factors-log.png" class="img-fluid figure-img">
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-synthetic-si-factors-log-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;6: Held-out synthetic data: relative CRPS on the log scale by level of each scenario factor. Illustrative, dummy data
+Figure&nbsp;10: Held-out synthetic data: relative CRPS on the log scale by level of each scenario factor. Illustrative, dummy data
 </figcaption>
 </figure>
 </div>
@@ -2058,7 +2269,7 @@ Figure&nbsp;6: Held-out synthetic data: relative CRPS on the log scale by level 
 <img src="build/figures/si/synthetic-si-wis-over-time.png" class="img-fluid figure-img">
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-synthetic-si-wis-over-time-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;7: Held-out synthetic data: CRPS over time. Illustrative, dummy data
+Figure&nbsp;11: Held-out synthetic data: CRPS over time. Illustrative, dummy data
 </figcaption>
 </figure>
 </div>
@@ -2068,14 +2279,14 @@ Figure&nbsp;7: Held-out synthetic data: CRPS over time. Illustrative, dummy data
 <img src="build/figures/si/synthetic-si-finetune-size.png" class="img-fluid figure-img">
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-synthetic-si-finetune-size-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;8: Held-out synthetic data: relative CRPS of each fine-tuning checkpoint, at doublings from 1,000 outbreaks, against the number of simulated outbreaks it was trained on (log scale). Illustrative, dummy data
+Figure&nbsp;12: Held-out synthetic data: relative CRPS of each fine-tuning checkpoint, at doublings from 1,000 outbreaks, against the number of simulated outbreaks it was trained on (log scale). Illustrative, dummy data
 </figcaption>
 </figure>
 </div>
 <div id="tbl-synthetic-horizon" class="quarto-float quarto-figure quarto-figure-center anchored">
 <figure class="quarto-float quarto-float-tbl figure">
 <figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-synthetic-horizon-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Table&nbsp;9: Held-out synthetic data scores by horizon. Illustrative, dummy data
+Table&nbsp;16: Held-out synthetic data scores by horizon. Illustrative, dummy data
 </figcaption>
 <div aria-describedby="tbl-synthetic-horizon-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
 <table class="caption-top table">
@@ -2902,7 +3113,7 @@ Table&nbsp;9: Held-out synthetic data scores by horizon. Illustrative, dummy dat
 <div id="tbl-synthetic-location" class="quarto-float quarto-figure quarto-figure-center anchored">
 <figure class="quarto-float quarto-float-tbl figure">
 <figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-synthetic-location-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Table&nbsp;10: Held-out synthetic data scores by location and stratum. Illustrative, dummy data
+Table&nbsp;17: Held-out synthetic data scores by location and stratum. Illustrative, dummy data
 </figcaption>
 <div aria-describedby="tbl-synthetic-location-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
 <table class="caption-top table">
@@ -3793,7 +4004,7 @@ Table&nbsp;10: Held-out synthetic data scores by location and stratum. Illustrat
 <img src="build/figures/si/germany-si-nowcasts.png" class="img-fluid figure-img">
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-germany-si-nowcasts-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;9: German nowcast hub: nowcasts for places picked by a rule in the workflow config (the largest, median and smallest by recent count, and the most rising and most falling), one row per place labelled with why it was picked, at the last origin shown in the main text, one column per model. Black is the rolling truth, grey dashed the data as of the origin, and blue the model’s median with its 50% and 95% intervals.
+Figure&nbsp;13: German nowcast hub: nowcasts for places picked by a rule in the workflow config (the largest, median and smallest by recent count, and the most rising and most falling), one row per place labelled with why it was picked, at the last origin shown in the main text, one column per model. Black is the rolling truth, grey dashed the data as of the origin, and blue the model’s median with its 50% and 95% intervals.
 </figcaption>
 </figure>
 </div>
@@ -3803,7 +4014,7 @@ Figure&nbsp;9: German nowcast hub: nowcasts for places picked by a rule in the w
 <img src="build/figures/si/germany-si-places.png" class="img-fluid figure-img">
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-germany-si-places-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;10: German nowcast hub: WIS of every place relative to KIT-frozen_baseline, one dot per model.
+Figure&nbsp;14: German nowcast hub: WIS of every place relative to KIT-frozen_baseline, one dot per model.
 </figcaption>
 </figure>
 </div>
@@ -3813,7 +4024,7 @@ Figure&nbsp;10: German nowcast hub: WIS of every place relative to KIT-frozen_ba
 <img src="build/figures/si/germany-si-location-horizon.png" class="img-fluid figure-img">
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-germany-si-location-horizon-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;11: German nowcast hub: relative WIS by location and horizon.
+Figure&nbsp;15: German nowcast hub: relative WIS by location and horizon.
 </figcaption>
 </figure>
 </div>
@@ -3823,7 +4034,7 @@ Figure&nbsp;11: German nowcast hub: relative WIS by location and horizon.
 <img src="build/figures/si/germany-si-location-horizon-log.png" class="img-fluid figure-img">
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-germany-si-location-horizon-log-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;12: German nowcast hub: relative WIS on the log scale by location and horizon.
+Figure&nbsp;16: German nowcast hub: relative WIS on the log scale by location and horizon.
 </figcaption>
 </figure>
 </div>
@@ -3833,14 +4044,14 @@ Figure&nbsp;12: German nowcast hub: relative WIS on the log scale by location an
 <img src="build/figures/si/germany-si-wis-over-time.png" class="img-fluid figure-img">
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-germany-si-wis-over-time-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;13: German nowcast hub: WIS over time, with a dotted line at the split.
+Figure&nbsp;17: German nowcast hub: WIS over time, with a dotted line at the split.
 </figcaption>
 </figure>
 </div>
 <div id="tbl-germany-horizon" class="quarto-float quarto-figure quarto-figure-center anchored">
 <figure class="quarto-float quarto-float-tbl figure">
 <figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-germany-horizon-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Table&nbsp;11: German nowcast hub scores by horizon.
+Table&nbsp;18: German nowcast hub scores by horizon.
 </figcaption>
 <div aria-describedby="tbl-germany-horizon-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
 <table class="caption-top table">
@@ -5247,7 +5458,7 @@ Table&nbsp;11: German nowcast hub scores by horizon.
 <div id="tbl-germany-location" class="quarto-float quarto-figure quarto-figure-center anchored">
 <figure class="quarto-float quarto-float-tbl figure">
 <figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-germany-location-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Table&nbsp;12: German nowcast hub scores by location and stratum.
+Table&nbsp;19: German nowcast hub scores by location and stratum.
 </figcaption>
 <div aria-describedby="tbl-germany-location-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
 <table class="caption-top table">
@@ -11549,30 +11760,6 @@ Table&nbsp;12: German nowcast hub scores by location and stratum.
 </div>
 </figure>
 </div>
-<section id="fine-tuning-on-real-data" class="level4">
-<h4 class="anchored" data-anchor-id="fine-tuning-on-real-data">Fine-tuning on real data</h4>
-<p><a href="#tbl-germany-real-finetune" class="quarto-xref">Table&nbsp;13</a> compares Chronos-2 fine-tuned on real data with the zero-shot model and the model fine-tuned on simulations, on the German held-out half only, as the real-data model saw the development half. <a href="#tbl-ebola-real-finetune" class="quarto-xref">Table&nbsp;14</a> makes the same comparison on BDBV, from the first round after the last release it trained on, so it is scored prospectively. The real-data model is left out of every other table and figure.</p>
-<div id="tbl-germany-real-finetune" class="quarto-float quarto-figure quarto-figure-center anchored">
-<figure class="quarto-float quarto-float-tbl figure">
-<figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-germany-real-finetune-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Table&nbsp;13: German nowcast hub held-out half: Chronos-2 zero-shot (<code>_ragged</code>), fine-tuned on simulations (<code>_ft</code>) and fine-tuned on real data (<code>_real</code>), overall (<code>all</code>) and by level, with WIS relative to <code>randomwalknowcast</code>.
-</figcaption>
-<div aria-describedby="tbl-germany-real-finetune-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-<p><em>No held-out forecasts in this run.</em></p>
-</div>
-</figure>
-</div>
-<div id="tbl-ebola-real-finetune" class="quarto-float quarto-figure quarto-figure-center anchored">
-<figure class="quarto-float quarto-float-tbl figure">
-<figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-ebola-real-finetune-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Table&nbsp;14: BDBV scored rounds (from 21 November 2026, after every release the real-data model trained on): Chronos-2 zero-shot (<code>_ragged</code>), fine-tuned on simulations (<code>_ft</code>) and fine-tuned on real data (<code>_real</code>), overall (<code>all</code>) and by level, with CRPS relative to <code>randomwalknowcast</code>.
-</figcaption>
-<div aria-describedby="tbl-ebola-real-finetune-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-<p><em>Pending: no BDBV round after the last release the real-data model trained on has truth yet.</em></p>
-</div>
-</figure>
-</div>
-</section>
 </section>
 <section id="ebola-hub-submissions" class="level3">
 <h3 class="anchored" data-anchor-id="ebola-hub-submissions">Ebola hub submissions</h3>
@@ -11582,7 +11769,7 @@ Table&nbsp;14: BDBV scored rounds (from 21 November 2026, after every release th
 <img src="build/figures/si/ebola-si-nowcasts.png" class="img-fluid figure-img">
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-ebola-si-nowcasts-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;14: Ebola: nowcasts for places picked by a rule in the workflow config (the largest, median and smallest by recent count, and the most rising and most falling), one row per place labelled with why it was picked, at the last origin shown in the main text, one column per model. Black is the rolling truth, grey dashed the data as of the origin, and blue the model’s median with its 50% and 95% intervals.
+Figure&nbsp;18: Ebola: nowcasts for places picked by a rule in the workflow config (the largest, median and smallest by recent count, and the most rising and most falling), one row per place labelled with why it was picked, at the last origin shown in the main text, one column per model. Black is the rolling truth, grey dashed the data as of the origin, and blue the model’s median with its 50% and 95% intervals.
 </figcaption>
 </figure>
 </div>
@@ -11592,7 +11779,7 @@ Figure&nbsp;14: Ebola: nowcasts for places picked by a rule in the workflow conf
 <img src="build/figures/si/ebola-si-places.png" class="img-fluid figure-img">
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-ebola-si-places-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;15: Ebola: CRPS of every place relative to randomwalknowcast, one dot per model.
+Figure&nbsp;19: Ebola: CRPS of every place relative to randomwalknowcast, one dot per model.
 </figcaption>
 </figure>
 </div>
@@ -11602,7 +11789,7 @@ Figure&nbsp;15: Ebola: CRPS of every place relative to randomwalknowcast, one do
 <img src="build/figures/si/ebola-si-location-horizon.png" class="img-fluid figure-img">
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-ebola-si-location-horizon-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;16: Ebola: relative CRPS by location and horizon.
+Figure&nbsp;20: Ebola: relative CRPS by location and horizon.
 </figcaption>
 </figure>
 </div>
@@ -11612,7 +11799,7 @@ Figure&nbsp;16: Ebola: relative CRPS by location and horizon.
 <img src="build/figures/si/ebola-si-location-horizon-log.png" class="img-fluid figure-img">
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-ebola-si-location-horizon-log-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;17: Ebola: relative CRPS on the log scale by location and horizon.
+Figure&nbsp;21: Ebola: relative CRPS on the log scale by location and horizon.
 </figcaption>
 </figure>
 </div>
@@ -11622,14 +11809,14 @@ Figure&nbsp;17: Ebola: relative CRPS on the log scale by location and horizon.
 <img src="build/figures/si/ebola-si-wis-over-time.png" class="img-fluid figure-img">
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-ebola-si-wis-over-time-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;18: Ebola: CRPS over time.
+Figure&nbsp;22: Ebola: CRPS over time.
 </figcaption>
 </figure>
 </div>
 <div id="tbl-ebola-horizon" class="quarto-float quarto-figure quarto-figure-center anchored">
 <figure class="quarto-float quarto-float-tbl figure">
 <figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-ebola-horizon-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Table&nbsp;15: Ebola hub submissions scores by horizon.
+Table&nbsp;20: Ebola hub submissions scores by horizon.
 </figcaption>
 <div aria-describedby="tbl-ebola-horizon-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
 <table class="caption-top table">
@@ -11669,39 +11856,95 @@ Table&nbsp;15: Ebola hub submissions scores by horizon.
 <td>fm_chronos_daily_complete</td>
 <td>crps</td>
 <td>-4</td>
-<td>8.66</td>
-<td>0.0601</td>
-<td>0.199</td>
-<td>0.815</td>
-<td>0.852</td>
-<td>27</td>
+<td>4.84</td>
+<td>0.0507</td>
+<td>0.2</td>
+<td>0.827</td>
+<td>0.889</td>
+<td>81</td>
+<td>3.81</td>
+<td>2.96</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>fm_chronos_daily_complete</td>
+<td>crps</td>
+<td>-3</td>
 <td>4.19</td>
-<td>5.95</td>
+<td>0.0607</td>
+<td>0.146</td>
+<td>0.833</td>
+<td>0.889</td>
+<td>54</td>
+<td>2.49</td>
+<td>1.43</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>fm_chronos_daily_complete</td>
+<td>crps</td>
+<td>-2</td>
+<td>6.34</td>
+<td>0.0535</td>
+<td>0.17</td>
+<td>0.852</td>
+<td>0.889</td>
+<td>27</td>
+<td>1.54</td>
+<td>1.05</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
 <td>fm_chronos_daily_ragged</td>
 <td>crps</td>
 <td>-4</td>
-<td>7.22</td>
-<td>0.0574</td>
-<td>0.191</td>
-<td>0.815</td>
-<td>0.907</td>
-<td>54</td>
-<td>3.02</td>
-<td>5.63</td>
+<td>4.68</td>
+<td>0.0585</td>
+<td>0.19</td>
+<td>0.843</td>
+<td>0.898</td>
+<td>108</td>
+<td>3.16</td>
+<td>3.58</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
 <td>fm_chronos_daily_ragged</td>
 <td>crps</td>
 <td>-3</td>
-<td>11.2</td>
-<td>0.0989</td>
-<td>0.15</td>
-<td>0.741</td>
-<td>0.889</td>
+<td>4.94</td>
+<td>0.0742</td>
+<td>0.121</td>
+<td>0.815</td>
+<td>0.914</td>
+<td>81</td>
+<td>1.56</td>
+<td>1.51</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>fm_chronos_daily_ragged</td>
+<td>crps</td>
+<td>-2</td>
+<td>5.18</td>
+<td>0.0793</td>
+<td>0.0622</td>
+<td>0.852</td>
+<td>0.926</td>
+<td>54</td>
+<td>1.11</td>
+<td>1.06</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>fm_chronos_daily_ragged</td>
+<td>crps</td>
+<td>-1</td>
+<td>9.17</td>
+<td>0.0908</td>
+<td>0.0748</td>
+<td>0.852</td>
+<td>0.963</td>
 <td>27</td>
 <td></td>
 <td></td>
@@ -11711,39 +11954,95 @@ Table&nbsp;15: Ebola hub submissions scores by horizon.
 <td>fm_chronos_weekly_complete</td>
 <td>crps</td>
 <td>-4</td>
-<td>7.44</td>
-<td>0.0424</td>
-<td>0.146</td>
-<td>0.852</td>
+<td>4</td>
+<td>0.0458</td>
+<td>0.105</td>
+<td>0.864</td>
+<td>0.938</td>
+<td>81</td>
+<td>3.15</td>
+<td>2.68</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>fm_chronos_weekly_complete</td>
+<td>crps</td>
+<td>-3</td>
+<td>3.34</td>
+<td>0.0466</td>
+<td>0.0659</td>
+<td>0.889</td>
+<td>0.944</td>
+<td>54</td>
+<td>1.98</td>
+<td>1.1</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>fm_chronos_weekly_complete</td>
+<td>crps</td>
+<td>-2</td>
+<td>5.2</td>
+<td>0.0456</td>
+<td>0.13</td>
+<td>0.889</td>
 <td>0.963</td>
 <td>27</td>
-<td>3.6</td>
-<td>4.2</td>
+<td>1.26</td>
+<td>0.896</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
 <td>fm_chronos_weekly_ragged</td>
 <td>crps</td>
 <td>-4</td>
-<td>3.64</td>
-<td>0.0278</td>
-<td>0.0756</td>
-<td>0.907</td>
-<td>1</td>
-<td>54</td>
-<td>1.41</td>
-<td>2.93</td>
+<td>3.07</td>
+<td>0.0406</td>
+<td>0.083</td>
+<td>0.88</td>
+<td>0.972</td>
+<td>108</td>
+<td>1.83</td>
+<td>2.62</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
 <td>fm_chronos_weekly_ragged</td>
 <td>crps</td>
 <td>-3</td>
-<td>7.21</td>
-<td>0.0678</td>
-<td>0.0533</td>
-<td>0.852</td>
-<td>0.963</td>
+<td>4.63</td>
+<td>0.0578</td>
+<td>0.0231</td>
+<td>0.864</td>
+<td>0.951</td>
+<td>81</td>
+<td>1.86</td>
+<td>1.22</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>fm_chronos_weekly_ragged</td>
+<td>crps</td>
+<td>-2</td>
+<td>5.02</td>
+<td>0.0753</td>
+<td>-0.0207</td>
+<td>0.87</td>
+<td>0.944</td>
+<td>54</td>
+<td>1.33</td>
+<td>0.905</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>fm_chronos_weekly_ragged</td>
+<td>crps</td>
+<td>-1</td>
+<td>6.14</td>
+<td>0.055</td>
+<td>0.047</td>
+<td>0.926</td>
+<td>1</td>
 <td>27</td>
 <td></td>
 <td></td>
@@ -11753,38 +12052,122 @@ Table&nbsp;15: Ebola hub submissions scores by horizon.
 <td>pprandomwalknowcast</td>
 <td>crps</td>
 <td>-4</td>
-<td>1.66</td>
-<td>0.0115</td>
-<td>0.0467</td>
+<td>2.18</td>
+<td>0.0158</td>
+<td>0.144</td>
+<td>0.852</td>
+<td>0.864</td>
+<td>81</td>
+<td>1.71</td>
+<td>0.925</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>pprandomwalknowcast</td>
+<td>crps</td>
+<td>-3</td>
+<td>1.63</td>
+<td>0.0364</td>
+<td>0.142</td>
+<td>0.815</td>
 <td>0.889</td>
+<td>54</td>
+<td>0.967</td>
+<td>0.859</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>pprandomwalknowcast</td>
+<td>crps</td>
+<td>-2</td>
+<td>1.98</td>
+<td>0.0337</td>
+<td>0.114</td>
+<td>0.852</td>
 <td>0.926</td>
 <td>27</td>
-<td>0.8</td>
-<td>1.14</td>
+<td>0.481</td>
+<td>0.663</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
 <td>randomwalk</td>
 <td>crps</td>
 <td>-4</td>
-<td>2.92</td>
-<td>0.0122</td>
-<td>-0.0944</td>
-<td>0.889</td>
-<td>0.889</td>
+<td>2.18</td>
+<td>0.0391</td>
+<td>0.0622</td>
+<td>0.852</td>
+<td>0.914</td>
+<td>81</td>
+<td>1.71</td>
+<td>2.28</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>randomwalk</td>
+<td>crps</td>
+<td>-3</td>
+<td>2.62</td>
+<td>0.0588</td>
+<td>0.0264</td>
+<td>0.852</td>
+<td>0.926</td>
+<td>54</td>
+<td>1.56</td>
+<td>1.39</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>randomwalk</td>
+<td>crps</td>
+<td>-2</td>
+<td>3.65</td>
+<td>0.0611</td>
+<td>0.0279</td>
+<td>0.815</td>
+<td>0.963</td>
 <td>27</td>
-<td>1.41</td>
-<td>1.21</td>
+<td>0.887</td>
+<td>1.2</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
 <td>randomwalknowcast</td>
 <td>crps</td>
 <td>-4</td>
-<td>2.07</td>
-<td>0.0101</td>
-<td>-0.051</td>
-<td>0.889</td>
+<td>1.27</td>
+<td>0.0171</td>
+<td>0.0632</td>
+<td>0.901</td>
+<td>0.926</td>
+<td>81</td>
+<td>1</td>
+<td>1</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>randomwalknowcast</td>
+<td>crps</td>
+<td>-3</td>
+<td>1.69</td>
+<td>0.0424</td>
+<td>0.0358</td>
+<td>0.87</td>
+<td>0.907</td>
+<td>54</td>
+<td>1</td>
+<td>1</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>randomwalknowcast</td>
+<td>crps</td>
+<td>-2</td>
+<td>4.11</td>
+<td>0.0509</td>
+<td>0.033</td>
+<td>0.926</td>
 <td>0.926</td>
 <td>27</td>
 <td>1</td>
@@ -11795,25 +12178,53 @@ Table&nbsp;15: Ebola hub submissions scores by horizon.
 <td>renewal</td>
 <td>crps</td>
 <td>-4</td>
-<td>1.43</td>
-<td>0.0168</td>
-<td>-0.0646</td>
-<td>0.87</td>
-<td>0.963</td>
-<td>54</td>
-<td>0.864</td>
-<td>2.08</td>
+<td>1.14</td>
+<td>0.0175</td>
+<td>0.0352</td>
+<td>0.861</td>
+<td>0.944</td>
+<td>108</td>
+<td>0.896</td>
+<td>1.12</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
 <td>renewal</td>
 <td>crps</td>
 <td>-3</td>
-<td>0.696</td>
-<td>0.0371</td>
-<td>-0.0204</td>
-<td>0.963</td>
-<td>0.963</td>
+<td>1.52</td>
+<td>0.0431</td>
+<td>-0.0184</td>
+<td>0.864</td>
+<td>0.901</td>
+<td>81</td>
+<td>1.15</td>
+<td>1.09</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>renewal</td>
+<td>crps</td>
+<td>-2</td>
+<td>2.74</td>
+<td>0.0684</td>
+<td>0.00148</td>
+<td>0.889</td>
+<td>0.926</td>
+<td>54</td>
+<td>0.752</td>
+<td>0.993</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>renewal</td>
+<td>crps</td>
+<td>-1</td>
+<td>3.48</td>
+<td>0.0418</td>
+<td>0.0641</td>
+<td>1</td>
+<td>1</td>
 <td>27</td>
 <td></td>
 <td></td>
@@ -11823,25 +12234,53 @@ Table&nbsp;15: Ebola hub submissions scores by horizon.
 <td>renewalbvd</td>
 <td>crps</td>
 <td>-4</td>
-<td>1.48</td>
-<td>0.0174</td>
-<td>-0.0685</td>
-<td>0.87</td>
-<td>0.963</td>
-<td>54</td>
-<td>0.884</td>
-<td>2.12</td>
+<td>1.14</td>
+<td>0.018</td>
+<td>0.0346</td>
+<td>0.861</td>
+<td>0.944</td>
+<td>108</td>
+<td>0.903</td>
+<td>1.14</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
 <td>renewalbvd</td>
 <td>crps</td>
 <td>-3</td>
-<td>0.679</td>
-<td>0.0371</td>
-<td>-0.0293</td>
-<td>0.963</td>
-<td>0.963</td>
+<td>1.55</td>
+<td>0.0435</td>
+<td>-0.021</td>
+<td>0.864</td>
+<td>0.901</td>
+<td>81</td>
+<td>1.18</td>
+<td>1.1</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>renewalbvd</td>
+<td>crps</td>
+<td>-2</td>
+<td>2.59</td>
+<td>0.0682</td>
+<td>4.11e-18</td>
+<td>0.889</td>
+<td>0.926</td>
+<td>54</td>
+<td>0.756</td>
+<td>1.01</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>renewalbvd</td>
+<td>crps</td>
+<td>-1</td>
+<td>2.64</td>
+<td>0.0417</td>
+<td>0.0589</td>
+<td>0.926</td>
+<td>1</td>
 <td>27</td>
 <td></td>
 <td></td>
@@ -11851,14 +12290,42 @@ Table&nbsp;15: Ebola hub submissions scores by horizon.
 <td>renewalsp</td>
 <td>crps</td>
 <td>-4</td>
-<td>1.75</td>
-<td>0.0179</td>
-<td>-0.0467</td>
+<td>1.31</td>
+<td>0.0159</td>
+<td>0.0768</td>
+<td>0.889</td>
 <td>0.926</td>
-<td>0.926</td>
+<td>81</td>
+<td>1.03</td>
+<td>0.928</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>renewalsp</td>
+<td>crps</td>
+<td>-3</td>
+<td>1.43</td>
+<td>0.0404</td>
+<td>-0.023</td>
+<td>0.833</td>
+<td>0.907</td>
+<td>54</td>
+<td>0.849</td>
+<td>0.952</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>renewalsp</td>
+<td>crps</td>
+<td>-2</td>
+<td>2.38</td>
+<td>0.0452</td>
+<td>0.0448</td>
+<td>0.889</td>
+<td>0.963</td>
 <td>27</td>
-<td>0.847</td>
-<td>1.77</td>
+<td>0.58</td>
+<td>0.889</td>
 </tr>
 </tbody>
 </table>
@@ -11868,7 +12335,7 @@ Table&nbsp;15: Ebola hub submissions scores by horizon.
 <div id="tbl-ebola-location" class="quarto-float quarto-figure quarto-figure-center anchored">
 <figure class="quarto-float quarto-float-tbl figure">
 <figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-ebola-location-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Table&nbsp;16: Ebola hub submissions scores by location and stratum.
+Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 </figcaption>
 <div aria-describedby="tbl-ebola-location-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
 <table class="caption-top table">
@@ -11911,14 +12378,14 @@ Table&nbsp;16: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD</td>
 <td>all</td>
-<td>110</td>
-<td>0.227</td>
-<td>1</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>4.76</td>
-<td>4.05</td>
+<td>47.5</td>
+<td>0.0947</td>
+<td>0.813</td>
+<td>0.167</td>
+<td>0.667</td>
+<td>6</td>
+<td>3.23</td>
+<td>2.97</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -11931,9 +12398,9 @@ Table&nbsp;16: Ebola hub submissions scores by location and stratum.
 <td>0</td>
 <td>1</td>
 <td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
+<td>6</td>
+<td>0</td>
+<td>0</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
@@ -11941,14 +12408,14 @@ Table&nbsp;16: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-BU</td>
 <td>all</td>
-<td>0.482</td>
-<td>0.126</td>
-<td>0.57</td>
+<td>0.664</td>
+<td>0.281</td>
+<td>0.632</td>
 <td>1</td>
 <td>1</td>
-<td>1</td>
-<td>inf</td>
-<td>inf</td>
+<td>6</td>
+<td>2.18</td>
+<td>1.49</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -11961,9 +12428,9 @@ Table&nbsp;16: Ebola hub submissions scores by location and stratum.
 <td>0</td>
 <td>1</td>
 <td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
+<td>6</td>
+<td>0</td>
+<td>0</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
@@ -11976,9 +12443,9 @@ Table&nbsp;16: Ebola hub submissions scores by location and stratum.
 <td>0</td>
 <td>1</td>
 <td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
+<td>6</td>
+<td>0</td>
+<td>0</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -11991,9 +12458,9 @@ Table&nbsp;16: Ebola hub submissions scores by location and stratum.
 <td>0</td>
 <td>1</td>
 <td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
+<td>6</td>
+<td>0</td>
+<td>0</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
@@ -12001,14 +12468,14 @@ Table&nbsp;16: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-HU</td>
 <td>all</td>
-<td>7.17</td>
-<td>0.189</td>
-<td>0.98</td>
+<td>7.35</td>
+<td>0.223</td>
+<td>0.908</td>
 <td>0</td>
-<td>0</td>
-<td>1</td>
-<td>2.47</td>
-<td>2.3</td>
+<td>0.333</td>
+<td>6</td>
+<td>5.28</td>
+<td>4.65</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -12016,14 +12483,14 @@ Table&nbsp;16: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-IT</td>
 <td>all</td>
-<td>31</td>
-<td>0.113</td>
-<td>0.86</td>
-<td>0</td>
+<td>16.6</td>
+<td>0.0618</td>
+<td>0.437</td>
+<td>0.5</td>
 <td>1</td>
-<td>1</td>
-<td>1.09</td>
-<td>0.93</td>
+<td>6</td>
+<td>1.37</td>
+<td>1.34</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
@@ -12036,9 +12503,9 @@ Table&nbsp;16: Ebola hub submissions scores by location and stratum.
 <td>0</td>
 <td>1</td>
 <td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
+<td>6</td>
+<td>0</td>
+<td>0</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -12051,9 +12518,9 @@ Table&nbsp;16: Ebola hub submissions scores by location and stratum.
 <td>0</td>
 <td>1</td>
 <td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
+<td>6</td>
+<td>0</td>
+<td>0</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
@@ -12066,9 +12533,9 @@ Table&nbsp;16: Ebola hub submissions scores by location and stratum.
 <td>0</td>
 <td>1</td>
 <td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
+<td>6</td>
+<td>0</td>
+<td>0</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -12081,9 +12548,9 @@ Table&nbsp;16: Ebola hub submissions scores by location and stratum.
 <td>0</td>
 <td>1</td>
 <td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
+<td>6</td>
+<td>0</td>
+<td>0</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
@@ -12096,9 +12563,9 @@ Table&nbsp;16: Ebola hub submissions scores by location and stratum.
 <td>0</td>
 <td>1</td>
 <td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
+<td>6</td>
+<td>0</td>
+<td>0</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -12111,9 +12578,9 @@ Table&nbsp;16: Ebola hub submissions scores by location and stratum.
 <td>0</td>
 <td>1</td>
 <td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
+<td>6</td>
+<td>0</td>
+<td>0</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
@@ -12126,9 +12593,9 @@ Table&nbsp;16: Ebola hub submissions scores by location and stratum.
 <td>0</td>
 <td>1</td>
 <td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
+<td>6</td>
+<td>0</td>
+<td>0</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -12141,9 +12608,9 @@ Table&nbsp;16: Ebola hub submissions scores by location and stratum.
 <td>0</td>
 <td>1</td>
 <td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
+<td>6</td>
+<td>0</td>
+<td>0</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
@@ -12156,9 +12623,9 @@ Table&nbsp;16: Ebola hub submissions scores by location and stratum.
 <td>0</td>
 <td>1</td>
 <td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
+<td>6</td>
+<td>0</td>
+<td>0</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -12171,9 +12638,9 @@ Table&nbsp;16: Ebola hub submissions scores by location and stratum.
 <td>0</td>
 <td>1</td>
 <td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
+<td>6</td>
+<td>0</td>
+<td>0</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
@@ -12186,9 +12653,9 @@ Table&nbsp;16: Ebola hub submissions scores by location and stratum.
 <td>0</td>
 <td>1</td>
 <td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
+<td>6</td>
+<td>0</td>
+<td>0</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -12196,14 +12663,14 @@ Table&nbsp;16: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-NK</td>
 <td>all</td>
-<td>81.7</td>
-<td>0.464</td>
-<td>1</td>
+<td>55.2</td>
+<td>0.28</td>
+<td>0.977</td>
 <td>0</td>
 <td>0</td>
-<td>1</td>
-<td>60.1</td>
-<td>46.3</td>
+<td>6</td>
+<td>2.99</td>
+<td>2.23</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
@@ -12211,14 +12678,14 @@ Table&nbsp;16: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-NU</td>
 <td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
+<td>0.399</td>
+<td>0.213</td>
+<td>-0.103</td>
+<td>0.833</td>
+<td>0.833</td>
+<td>6</td>
+<td>1.18</td>
+<td>1.14</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -12231,9 +12698,9 @@ Table&nbsp;16: Ebola hub submissions scores by location and stratum.
 <td>0</td>
 <td>1</td>
 <td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
+<td>6</td>
+<td>0</td>
+<td>0</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
@@ -12241,14 +12708,14 @@ Table&nbsp;16: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-SK</td>
 <td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
+<td>0.00255</td>
+<td>0.00177</td>
+<td>0.025</td>
 <td>1</td>
 <td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
+<td>6</td>
+<td>inf</td>
+<td>inf</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -12256,14 +12723,14 @@ Table&nbsp;16: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-SU</td>
 <td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
+<td>0.0977</td>
+<td>0.0529</td>
+<td>0.0983</td>
 <td>1</td>
 <td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
+<td>6</td>
+<td>7.15</td>
+<td>5.66</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
@@ -12276,3429 +12743,3429 @@ Table&nbsp;16: Ebola hub submissions scores by location and stratum.
 <td>0</td>
 <td>1</td>
 <td>1</td>
+<td>6</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>fm_chronos_daily_complete</td>
+<td>crps</td>
+<td>CD-TO</td>
+<td>all</td>
+<td>3.86</td>
+<td>0.263</td>
+<td>0.983</td>
+<td>0</td>
+<td>0.167</td>
+<td>6</td>
+<td>1.07</td>
+<td>1.28</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>fm_chronos_daily_complete</td>
+<td>crps</td>
+<td>CD-TU</td>
+<td>all</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
 <td>1</td>
+<td>1</td>
+<td>6</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>fm_chronos_daily_ragged</td>
+<td>crps</td>
+<td>CD</td>
+<td>all</td>
+<td>47.2</td>
+<td>0.0924</td>
+<td>0.537</td>
+<td>0.4</td>
+<td>0.7</td>
+<td>10</td>
+<td>1.7</td>
+<td>1.62</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>fm_chronos_daily_ragged</td>
+<td>crps</td>
+<td>CD-BC</td>
+<td>all</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>10</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>fm_chronos_daily_ragged</td>
+<td>crps</td>
+<td>CD-BU</td>
+<td>all</td>
+<td>1.31</td>
+<td>0.422</td>
+<td>0.683</td>
+<td>0.5</td>
+<td>1</td>
+<td>10</td>
+<td>3.38</td>
+<td>2</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>fm_chronos_daily_ragged</td>
+<td>crps</td>
+<td>CD-EQ</td>
+<td>all</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>10</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>fm_chronos_daily_ragged</td>
+<td>crps</td>
+<td>CD-HK</td>
+<td>all</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>10</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>fm_chronos_daily_ragged</td>
+<td>crps</td>
+<td>CD-HL</td>
+<td>all</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>10</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>fm_chronos_daily_ragged</td>
+<td>crps</td>
+<td>CD-HU</td>
+<td>all</td>
+<td>7.48</td>
+<td>0.215</td>
+<td>0.731</td>
+<td>0.3</td>
+<td>0.6</td>
+<td>10</td>
+<td>5.47</td>
+<td>4.8</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>fm_chronos_daily_ragged</td>
+<td>crps</td>
+<td>CD-IT</td>
+<td>all</td>
+<td>21.2</td>
+<td>0.0764</td>
+<td>0.28</td>
+<td>0.6</td>
+<td>1</td>
+<td>10</td>
+<td>1.1</td>
+<td>1.08</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>fm_chronos_daily_ragged</td>
+<td>crps</td>
+<td>CD-KC</td>
+<td>all</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>10</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>fm_chronos_daily_ragged</td>
+<td>crps</td>
+<td>CD-KE</td>
+<td>all</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>10</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>fm_chronos_daily_ragged</td>
+<td>crps</td>
+<td>CD-KG</td>
+<td>all</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>10</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>fm_chronos_daily_ragged</td>
+<td>crps</td>
+<td>CD-KL</td>
+<td>all</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>10</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>fm_chronos_daily_ragged</td>
+<td>crps</td>
+<td>CD-KN</td>
+<td>all</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>10</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>fm_chronos_daily_ragged</td>
+<td>crps</td>
+<td>CD-KS</td>
+<td>all</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>10</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>fm_chronos_daily_ragged</td>
+<td>crps</td>
+<td>CD-LO</td>
+<td>all</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>10</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>fm_chronos_daily_ragged</td>
+<td>crps</td>
+<td>CD-LU</td>
+<td>all</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>10</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>fm_chronos_daily_ragged</td>
+<td>crps</td>
+<td>CD-MA</td>
+<td>all</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>10</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>fm_chronos_daily_ragged</td>
+<td>crps</td>
+<td>CD-MN</td>
+<td>all</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>10</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>fm_chronos_daily_ragged</td>
+<td>crps</td>
+<td>CD-MO</td>
+<td>all</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>10</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>fm_chronos_daily_ragged</td>
+<td>crps</td>
+<td>CD-NK</td>
+<td>all</td>
+<td>61.2</td>
+<td>0.303</td>
+<td>0.854</td>
+<td>0.1</td>
+<td>0.4</td>
+<td>10</td>
+<td>2.49</td>
+<td>1.86</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>fm_chronos_daily_ragged</td>
+<td>crps</td>
+<td>CD-NU</td>
+<td>all</td>
+<td>0.485</td>
+<td>0.246</td>
+<td>-0.157</td>
+<td>0.8</td>
+<td>0.8</td>
+<td>10</td>
+<td>1.4</td>
+<td>1.21</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>fm_chronos_daily_ragged</td>
+<td>crps</td>
+<td>CD-SA</td>
+<td>all</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>10</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>fm_chronos_daily_ragged</td>
+<td>crps</td>
+<td>CD-SK</td>
+<td>all</td>
+<td>0.0294</td>
+<td>0.0197</td>
+<td>0.133</td>
+<td>1</td>
+<td>1</td>
+<td>10</td>
+<td>inf</td>
+<td>inf</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>fm_chronos_daily_ragged</td>
+<td>crps</td>
+<td>CD-SU</td>
+<td>all</td>
+<td>0.413</td>
+<td>0.221</td>
+<td>-0.058</td>
+<td>0.8</td>
+<td>0.8</td>
+<td>10</td>
+<td>26</td>
+<td>14.7</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>fm_chronos_daily_ragged</td>
+<td>crps</td>
+<td>CD-TA</td>
+<td>all</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>10</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>fm_chronos_daily_ragged</td>
+<td>crps</td>
+<td>CD-TO</td>
+<td>all</td>
+<td>3.96</td>
+<td>0.31</td>
+<td>0.575</td>
+<td>0.1</td>
+<td>0.4</td>
+<td>10</td>
+<td>1.33</td>
+<td>1.6</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>fm_chronos_daily_ragged</td>
+<td>crps</td>
+<td>CD-TU</td>
+<td>all</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>10</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>fm_chronos_weekly_complete</td>
+<td>crps</td>
+<td>CD</td>
+<td>all</td>
+<td>38.8</td>
+<td>0.0785</td>
+<td>0.118</td>
+<td>0.333</td>
+<td>1</td>
+<td>6</td>
+<td>2.64</td>
+<td>2.46</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>fm_chronos_weekly_complete</td>
+<td>crps</td>
+<td>CD-BC</td>
+<td>all</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>6</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>fm_chronos_weekly_complete</td>
+<td>crps</td>
+<td>CD-BU</td>
+<td>all</td>
+<td>0.547</td>
+<td>0.293</td>
+<td>0.43</td>
+<td>0.833</td>
+<td>0.833</td>
+<td>6</td>
+<td>1.8</td>
+<td>1.56</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>fm_chronos_weekly_complete</td>
+<td>crps</td>
+<td>CD-EQ</td>
+<td>all</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>6</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>fm_chronos_weekly_complete</td>
+<td>crps</td>
+<td>CD-HK</td>
+<td>all</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>6</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>fm_chronos_weekly_complete</td>
+<td>crps</td>
+<td>CD-HL</td>
+<td>all</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>6</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>fm_chronos_weekly_complete</td>
+<td>crps</td>
+<td>CD-HU</td>
+<td>all</td>
+<td>2.56</td>
+<td>0.0792</td>
+<td>0.437</td>
+<td>0.833</td>
+<td>0.833</td>
+<td>6</td>
+<td>1.84</td>
+<td>1.65</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>fm_chronos_weekly_complete</td>
+<td>crps</td>
+<td>CD-IT</td>
+<td>all</td>
+<td>23.5</td>
+<td>0.0841</td>
+<td>-0.0667</td>
+<td>0.5</td>
+<td>1</td>
+<td>6</td>
+<td>1.95</td>
+<td>1.82</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>fm_chronos_weekly_complete</td>
+<td>crps</td>
+<td>CD-KC</td>
+<td>all</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>6</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>fm_chronos_weekly_complete</td>
+<td>crps</td>
+<td>CD-KE</td>
+<td>all</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>6</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>fm_chronos_weekly_complete</td>
+<td>crps</td>
+<td>CD-KG</td>
+<td>all</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>6</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>fm_chronos_weekly_complete</td>
+<td>crps</td>
+<td>CD-KL</td>
+<td>all</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>6</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>fm_chronos_weekly_complete</td>
+<td>crps</td>
+<td>CD-KN</td>
+<td>all</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>6</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>fm_chronos_weekly_complete</td>
+<td>crps</td>
+<td>CD-KS</td>
+<td>all</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>6</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>fm_chronos_weekly_complete</td>
+<td>crps</td>
+<td>CD-LO</td>
+<td>all</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>6</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>fm_chronos_weekly_complete</td>
+<td>crps</td>
+<td>CD-LU</td>
+<td>all</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>6</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>fm_chronos_weekly_complete</td>
+<td>crps</td>
+<td>CD-MA</td>
+<td>all</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>6</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>fm_chronos_weekly_complete</td>
+<td>crps</td>
+<td>CD-MN</td>
+<td>all</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>6</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>fm_chronos_weekly_complete</td>
+<td>crps</td>
+<td>CD-MO</td>
+<td>all</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>6</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>fm_chronos_weekly_complete</td>
+<td>crps</td>
+<td>CD-NK</td>
+<td>all</td>
+<td>38.6</td>
+<td>0.2</td>
+<td>0.6</td>
+<td>0.333</td>
+<td>0.833</td>
+<td>6</td>
+<td>2.09</td>
+<td>1.59</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>fm_chronos_weekly_complete</td>
+<td>crps</td>
+<td>CD-NU</td>
+<td>all</td>
+<td>0.51</td>
+<td>0.242</td>
+<td>-0.0833</td>
+<td>0.833</td>
+<td>0.833</td>
+<td>6</td>
+<td>1.5</td>
+<td>1.29</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>fm_chronos_weekly_complete</td>
+<td>crps</td>
+<td>CD-SA</td>
+<td>all</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>6</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>fm_chronos_weekly_complete</td>
+<td>crps</td>
+<td>CD-SK</td>
+<td>all</td>
+<td>0.0184</td>
+<td>0.00868</td>
+<td>0.0867</td>
+<td>1</td>
+<td>1</td>
+<td>6</td>
+<td>inf</td>
+<td>inf</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>fm_chronos_weekly_complete</td>
+<td>crps</td>
+<td>CD-SU</td>
+<td>all</td>
+<td>0.0945</td>
+<td>0.062</td>
+<td>0.12</td>
+<td>1</td>
+<td>1</td>
+<td>6</td>
+<td>6.91</td>
+<td>6.64</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>fm_chronos_weekly_complete</td>
+<td>crps</td>
+<td>CD-TA</td>
+<td>all</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>6</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>fm_chronos_weekly_complete</td>
+<td>crps</td>
+<td>CD-TO</td>
+<td>all</td>
+<td>2.81</td>
+<td>0.195</td>
+<td>0.958</td>
+<td>0</td>
+<td>0.167</td>
+<td>6</td>
+<td>0.782</td>
+<td>0.955</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>fm_chronos_weekly_complete</td>
+<td>crps</td>
+<td>CD-TU</td>
+<td>all</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>6</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>fm_chronos_weekly_ragged</td>
+<td>crps</td>
+<td>CD</td>
+<td>all</td>
+<td>44.5</td>
+<td>0.0937</td>
+<td>-0.038</td>
+<td>0.4</td>
+<td>1</td>
+<td>10</td>
+<td>2.28</td>
+<td>2.36</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>fm_chronos_weekly_ragged</td>
+<td>crps</td>
+<td>CD-BC</td>
+<td>all</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>10</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>fm_chronos_weekly_ragged</td>
+<td>crps</td>
+<td>CD-BU</td>
+<td>all</td>
+<td>0.601</td>
+<td>0.277</td>
+<td>0.371</td>
+<td>0.9</td>
+<td>1</td>
+<td>10</td>
+<td>2.08</td>
+<td>1.69</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>fm_chronos_weekly_ragged</td>
+<td>crps</td>
+<td>CD-EQ</td>
+<td>all</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>10</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>fm_chronos_weekly_ragged</td>
+<td>crps</td>
+<td>CD-HK</td>
+<td>all</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>10</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>fm_chronos_weekly_ragged</td>
+<td>crps</td>
+<td>CD-HL</td>
+<td>all</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>10</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>fm_chronos_weekly_ragged</td>
+<td>crps</td>
+<td>CD-HU</td>
+<td>all</td>
+<td>3.04</td>
+<td>0.103</td>
+<td>0.26</td>
+<td>0.8</td>
+<td>0.9</td>
+<td>10</td>
+<td>1.91</td>
+<td>1.79</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>fm_chronos_weekly_ragged</td>
+<td>crps</td>
+<td>CD-IT</td>
+<td>all</td>
+<td>24.7</td>
+<td>0.0914</td>
+<td>-0.246</td>
+<td>0.7</td>
+<td>1</td>
+<td>10</td>
+<td>1.47</td>
+<td>1.52</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>fm_chronos_weekly_ragged</td>
+<td>crps</td>
+<td>CD-KC</td>
+<td>all</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>10</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>fm_chronos_weekly_ragged</td>
+<td>crps</td>
+<td>CD-KE</td>
+<td>all</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>10</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>fm_chronos_weekly_ragged</td>
+<td>crps</td>
+<td>CD-KG</td>
+<td>all</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>10</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>fm_chronos_weekly_ragged</td>
+<td>crps</td>
+<td>CD-KL</td>
+<td>all</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>10</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>fm_chronos_weekly_ragged</td>
+<td>crps</td>
+<td>CD-KN</td>
+<td>all</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>10</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>fm_chronos_weekly_ragged</td>
+<td>crps</td>
+<td>CD-KS</td>
+<td>all</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>10</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>fm_chronos_weekly_ragged</td>
+<td>crps</td>
+<td>CD-LO</td>
+<td>all</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>10</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>fm_chronos_weekly_ragged</td>
+<td>crps</td>
+<td>CD-LU</td>
+<td>all</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>10</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>fm_chronos_weekly_ragged</td>
+<td>crps</td>
+<td>CD-MA</td>
+<td>all</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>10</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>fm_chronos_weekly_ragged</td>
+<td>crps</td>
+<td>CD-MN</td>
+<td>all</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>10</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>fm_chronos_weekly_ragged</td>
+<td>crps</td>
+<td>CD-MO</td>
+<td>all</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>10</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>fm_chronos_weekly_ragged</td>
+<td>crps</td>
+<td>CD-NK</td>
+<td>all</td>
+<td>37.7</td>
+<td>0.193</td>
+<td>0.389</td>
+<td>0.3</td>
+<td>1</td>
+<td>10</td>
+<td>1.41</td>
+<td>1.11</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>fm_chronos_weekly_ragged</td>
+<td>crps</td>
+<td>CD-NU</td>
+<td>all</td>
+<td>0.516</td>
+<td>0.258</td>
+<td>-0.151</td>
+<td>0.8</td>
+<td>0.8</td>
+<td>10</td>
+<td>1.55</td>
+<td>1.32</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>fm_chronos_weekly_ragged</td>
+<td>crps</td>
+<td>CD-SA</td>
+<td>all</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>10</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>fm_chronos_weekly_ragged</td>
+<td>crps</td>
+<td>CD-SK</td>
+<td>all</td>
+<td>0.00913</td>
+<td>0.00455</td>
+<td>0.064</td>
+<td>1</td>
+<td>1</td>
+<td>10</td>
+<td>inf</td>
+<td>inf</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>fm_chronos_weekly_ragged</td>
+<td>crps</td>
+<td>CD-SU</td>
+<td>all</td>
+<td>0.32</td>
+<td>0.201</td>
+<td>-0.06</td>
+<td>0.7</td>
+<td>0.8</td>
+<td>10</td>
+<td>14.6</td>
+<td>11.1</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>fm_chronos_weekly_ragged</td>
+<td>crps</td>
+<td>CD-TA</td>
+<td>all</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>10</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>fm_chronos_weekly_ragged</td>
+<td>crps</td>
+<td>CD-TO</td>
+<td>all</td>
+<td>2.85</td>
+<td>0.24</td>
+<td>0.509</td>
+<td>0.1</td>
+<td>0.5</td>
+<td>10</td>
+<td>0.856</td>
+<td>1.13</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>fm_chronos_weekly_ragged</td>
+<td>crps</td>
+<td>CD-TU</td>
+<td>all</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>10</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>pprandomwalknowcast</td>
+<td>crps</td>
+<td>CD</td>
+<td>all</td>
+<td>21.6</td>
+<td>0.0437</td>
+<td>0.782</td>
+<td>0.167</td>
+<td>0.333</td>
+<td>6</td>
+<td>1.47</td>
+<td>1.37</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>pprandomwalknowcast</td>
+<td>crps</td>
+<td>CD-BC</td>
+<td>all</td>
+<td>3.33e-05</td>
+<td>1.83e-05</td>
+<td>0.00167</td>
+<td>1</td>
+<td>1</td>
+<td>6</td>
+<td>5.71</td>
+<td>5.98</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>pprandomwalknowcast</td>
+<td>crps</td>
+<td>CD-BU</td>
+<td>all</td>
+<td>0.0743</td>
+<td>0.0394</td>
+<td>0.223</td>
+<td>1</td>
+<td>1</td>
+<td>6</td>
+<td>0.244</td>
+<td>0.209</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>pprandomwalknowcast</td>
+<td>crps</td>
+<td>CD-EQ</td>
+<td>all</td>
+<td>3.33e-05</td>
+<td>2.31e-05</td>
+<td>0.00333</td>
+<td>1</td>
+<td>1</td>
+<td>6</td>
+<td>2.94</td>
+<td>3.73</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>pprandomwalknowcast</td>
+<td>crps</td>
+<td>CD-HK</td>
+<td>all</td>
+<td>1.67e-05</td>
+<td>1.16e-05</td>
+<td>0.00167</td>
+<td>1</td>
+<td>1</td>
+<td>6</td>
+<td>3.45</td>
+<td>3.86</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>pprandomwalknowcast</td>
+<td>crps</td>
+<td>CD-HL</td>
+<td>all</td>
+<td>1.67e-05</td>
+<td>1.16e-05</td>
+<td>0.00167</td>
+<td>1</td>
+<td>1</td>
+<td>6</td>
+<td>1.18</td>
+<td>1.28</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>pprandomwalknowcast</td>
+<td>crps</td>
+<td>CD-HU</td>
+<td>all</td>
+<td>1.24</td>
+<td>0.0447</td>
+<td>0.592</td>
+<td>0.5</td>
+<td>0.833</td>
+<td>6</td>
+<td>0.888</td>
+<td>0.932</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>pprandomwalknowcast</td>
+<td>crps</td>
+<td>CD-IT</td>
+<td>all</td>
+<td>11</td>
+<td>0.0432</td>
+<td>0.61</td>
+<td>0</td>
+<td>0.167</td>
+<td>6</td>
+<td>0.912</td>
+<td>0.935</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>pprandomwalknowcast</td>
+<td>crps</td>
+<td>CD-KC</td>
+<td>all</td>
+<td>1.67e-05</td>
+<td>1.16e-05</td>
+<td>0.00167</td>
+<td>1</td>
+<td>1</td>
+<td>6</td>
+<td>2.86</td>
+<td>3.67</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>pprandomwalknowcast</td>
+<td>crps</td>
+<td>CD-KE</td>
+<td>all</td>
+<td>8.33e-05</td>
+<td>5.3e-05</td>
+<td>0.00667</td>
+<td>1</td>
+<td>1</td>
+<td>6</td>
+<td>17.2</td>
+<td>18</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>pprandomwalknowcast</td>
+<td>crps</td>
+<td>CD-KG</td>
+<td>all</td>
+<td>5e-05</td>
+<td>2.31e-05</td>
+<td>0.00167</td>
+<td>1</td>
+<td>1</td>
+<td>6</td>
+<td>4.69</td>
+<td>3.35</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>pprandomwalknowcast</td>
+<td>crps</td>
+<td>CD-KL</td>
+<td>all</td>
+<td>1.67e-05</td>
+<td>1.16e-05</td>
+<td>0.00167</td>
+<td>1</td>
+<td>1</td>
+<td>6</td>
+<td>1.16</td>
+<td>1.26</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>pprandomwalknowcast</td>
+<td>crps</td>
+<td>CD-KN</td>
+<td>all</td>
+<td>3.33e-05</td>
+<td>1.83e-05</td>
+<td>0.00167</td>
+<td>1</td>
+<td>1</td>
+<td>6</td>
+<td>1.68</td>
+<td>1.56</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>pprandomwalknowcast</td>
+<td>crps</td>
+<td>CD-KS</td>
+<td>all</td>
+<td>1.67e-05</td>
+<td>1.16e-05</td>
+<td>0.00167</td>
+<td>1</td>
+<td>1</td>
+<td>6</td>
+<td>1.69</td>
+<td>1.88</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>pprandomwalknowcast</td>
+<td>crps</td>
+<td>CD-LO</td>
+<td>all</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>6</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>pprandomwalknowcast</td>
+<td>crps</td>
+<td>CD-LU</td>
+<td>all</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>6</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>pprandomwalknowcast</td>
+<td>crps</td>
+<td>CD-MA</td>
+<td>all</td>
+<td>0.000133</td>
+<td>5.07e-05</td>
+<td>0.00333</td>
+<td>1</td>
+<td>1</td>
+<td>6</td>
+<td>13.8</td>
+<td>8.18</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>pprandomwalknowcast</td>
+<td>crps</td>
+<td>CD-MN</td>
+<td>all</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>6</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>pprandomwalknowcast</td>
+<td>crps</td>
+<td>CD-MO</td>
+<td>all</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>6</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>pprandomwalknowcast</td>
+<td>crps</td>
+<td>CD-NK</td>
+<td>all</td>
+<td>14.3</td>
+<td>0.0826</td>
+<td>0.625</td>
+<td>0</td>
+<td>0.5</td>
+<td>6</td>
+<td>0.776</td>
+<td>0.658</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>pprandomwalknowcast</td>
+<td>crps</td>
+<td>CD-NU</td>
+<td>all</td>
+<td>0.34</td>
+<td>0.187</td>
+<td>-0.117</td>
+<td>0.833</td>
+<td>0.833</td>
+<td>6</td>
+<td>1</td>
+<td>0.998</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>pprandomwalknowcast</td>
+<td>crps</td>
+<td>CD-SA</td>
+<td>all</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>6</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>pprandomwalknowcast</td>
+<td>crps</td>
+<td>CD-SK</td>
+<td>all</td>
+<td>1.67e-05</td>
+<td>1.16e-05</td>
+<td>0.00167</td>
+<td>1</td>
+<td>1</td>
+<td>6</td>
+<td>inf</td>
+<td>inf</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>pprandomwalknowcast</td>
+<td>crps</td>
+<td>CD-SU</td>
+<td>all</td>
+<td>0.0101</td>
+<td>0.00604</td>
+<td>0.075</td>
+<td>1</td>
+<td>1</td>
+<td>6</td>
+<td>0.741</td>
+<td>0.647</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>pprandomwalknowcast</td>
+<td>crps</td>
+<td>CD-TA</td>
+<td>all</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>6</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>pprandomwalknowcast</td>
+<td>crps</td>
+<td>CD-TO</td>
+<td>all</td>
+<td>4.37</td>
+<td>0.247</td>
+<td>0.913</td>
+<td>0.167</td>
+<td>0.167</td>
+<td>6</td>
+<td>1.22</td>
+<td>1.21</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>pprandomwalknowcast</td>
+<td>crps</td>
+<td>CD-TU</td>
+<td>all</td>
+<td>3.33e-05</td>
+<td>1.83e-05</td>
+<td>0.00167</td>
+<td>1</td>
+<td>1</td>
+<td>6</td>
+<td>18.2</td>
+<td>18.1</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>randomwalk</td>
+<td>crps</td>
+<td>CD</td>
+<td>all</td>
+<td>26.5</td>
+<td>0.0579</td>
+<td>-0.158</td>
+<td>0.333</td>
+<td>0.667</td>
+<td>6</td>
+<td>1.81</td>
+<td>1.82</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>randomwalk</td>
+<td>crps</td>
+<td>CD-BC</td>
+<td>all</td>
+<td>9.67e-06</td>
+<td>5.42e-06</td>
+<td>0.00183</td>
+<td>1</td>
+<td>1</td>
+<td>6</td>
+<td>1.66</td>
+<td>1.77</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>randomwalk</td>
+<td>crps</td>
+<td>CD-BU</td>
+<td>all</td>
+<td>0.752</td>
+<td>0.394</td>
+<td>0.498</td>
+<td>0.5</td>
+<td>1</td>
+<td>6</td>
+<td>2.47</td>
+<td>2.09</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>randomwalk</td>
+<td>crps</td>
+<td>CD-EQ</td>
+<td>all</td>
+<td>9e-06</td>
+<td>5.11e-06</td>
+<td>0.00133</td>
+<td>1</td>
+<td>1</td>
+<td>6</td>
+<td>0.794</td>
+<td>0.826</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>randomwalk</td>
+<td>crps</td>
+<td>CD-HK</td>
+<td>all</td>
+<td>5e-06</td>
+<td>2.76e-06</td>
+<td>0.000833</td>
+<td>1</td>
+<td>1</td>
+<td>6</td>
+<td>1.03</td>
+<td>0.923</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>randomwalk</td>
+<td>crps</td>
+<td>CD-HL</td>
+<td>all</td>
+<td>9.67e-06</td>
+<td>5.92e-06</td>
+<td>0.00217</td>
+<td>1</td>
+<td>1</td>
+<td>6</td>
+<td>0.682</td>
+<td>0.657</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>randomwalk</td>
+<td>crps</td>
+<td>CD-HU</td>
+<td>all</td>
+<td>3.06</td>
+<td>0.0967</td>
+<td>0.551</td>
+<td>0.667</td>
+<td>0.833</td>
+<td>6</td>
+<td>2.2</td>
+<td>2.01</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>randomwalk</td>
+<td>crps</td>
+<td>CD-IT</td>
+<td>all</td>
+<td>17.2</td>
+<td>0.0721</td>
+<td>-0.551</td>
+<td>0.333</td>
+<td>0.833</td>
+<td>6</td>
+<td>1.43</td>
+<td>1.56</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>randomwalk</td>
+<td>crps</td>
+<td>CD-KC</td>
+<td>all</td>
+<td>1.13e-05</td>
+<td>7.19e-06</td>
+<td>0.00217</td>
+<td>1</td>
+<td>1</td>
+<td>6</td>
+<td>1.94</td>
+<td>2.29</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>randomwalk</td>
+<td>crps</td>
+<td>CD-KE</td>
+<td>all</td>
+<td>7.17e-06</td>
+<td>4.68e-06</td>
+<td>0.00183</td>
+<td>1</td>
+<td>1</td>
+<td>6</td>
+<td>1.48</td>
+<td>1.59</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>randomwalk</td>
+<td>crps</td>
+<td>CD-KG</td>
+<td>all</td>
+<td>9.17e-06</td>
+<td>5.43e-06</td>
+<td>0.00183</td>
+<td>1</td>
+<td>1</td>
+<td>6</td>
+<td>0.859</td>
+<td>0.788</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>randomwalk</td>
+<td>crps</td>
+<td>CD-KL</td>
+<td>all</td>
+<td>4.83e-06</td>
+<td>3.19e-06</td>
+<td>0.001</td>
+<td>1</td>
+<td>1</td>
+<td>6</td>
+<td>0.337</td>
+<td>0.349</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>randomwalk</td>
+<td>crps</td>
+<td>CD-KN</td>
+<td>all</td>
+<td>4e-06</td>
+<td>2.34e-06</td>
+<td>0.00117</td>
+<td>1</td>
+<td>1</td>
+<td>6</td>
+<td>0.202</td>
+<td>0.199</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>randomwalk</td>
+<td>crps</td>
+<td>CD-KS</td>
+<td>all</td>
+<td>2.17e-06</td>
+<td>1.41e-06</td>
+<td>0.000833</td>
+<td>1</td>
+<td>1</td>
+<td>6</td>
+<td>0.22</td>
+<td>0.229</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>randomwalk</td>
+<td>crps</td>
+<td>CD-LO</td>
+<td>all</td>
+<td>5.67e-06</td>
+<td>3.64e-06</td>
+<td>0.00167</td>
+<td>1</td>
+<td>1</td>
+<td>6</td>
+<td>0.248</td>
+<td>0.263</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>randomwalk</td>
+<td>crps</td>
+<td>CD-LU</td>
+<td>all</td>
+<td>9.67e-06</td>
+<td>6.28e-06</td>
+<td>0.00233</td>
+<td>1</td>
+<td>1</td>
+<td>6</td>
+<td>1.61</td>
+<td>1.88</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>randomwalk</td>
+<td>crps</td>
+<td>CD-MA</td>
+<td>all</td>
+<td>8.5e-06</td>
+<td>4.98e-06</td>
+<td>0.002</td>
+<td>1</td>
+<td>1</td>
+<td>6</td>
+<td>0.879</td>
+<td>0.802</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>randomwalk</td>
+<td>crps</td>
+<td>CD-MN</td>
+<td>all</td>
+<td>3.33e-06</td>
+<td>2.26e-06</td>
+<td>0.00117</td>
+<td>1</td>
+<td>1</td>
+<td>6</td>
+<td>0.455</td>
+<td>0.519</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>randomwalk</td>
+<td>crps</td>
+<td>CD-MO</td>
+<td>all</td>
+<td>1.3e-05</td>
+<td>8.27e-06</td>
+<td>0.00267</td>
+<td>1</td>
+<td>1</td>
+<td>6</td>
+<td>1.73</td>
+<td>1.98</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>randomwalk</td>
+<td>crps</td>
+<td>CD-NK</td>
+<td>all</td>
+<td>18.5</td>
+<td>0.107</td>
+<td>-0.384</td>
+<td>0.167</td>
+<td>0.667</td>
+<td>6</td>
+<td>1.01</td>
+<td>0.85</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>randomwalk</td>
+<td>crps</td>
+<td>CD-NU</td>
+<td>all</td>
+<td>0.533</td>
+<td>0.296</td>
+<td>-0.016</td>
+<td>0.667</td>
+<td>0.833</td>
+<td>6</td>
+<td>1.57</td>
+<td>1.58</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>randomwalk</td>
+<td>crps</td>
+<td>CD-SA</td>
+<td>all</td>
+<td>3.83e-06</td>
+<td>2.3e-06</td>
+<td>0.00133</td>
+<td>1</td>
+<td>1</td>
+<td>6</td>
+<td>0.59</td>
+<td>0.607</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>randomwalk</td>
+<td>crps</td>
+<td>CD-SK</td>
+<td>all</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>6</td>
+<td></td>
+<td></td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>randomwalk</td>
+<td>crps</td>
+<td>CD-SU</td>
+<td>all</td>
+<td>0.261</td>
+<td>0.159</td>
+<td>0.397</td>
+<td>1</td>
+<td>1</td>
+<td>6</td>
+<td>19.1</td>
+<td>17</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>randomwalk</td>
+<td>crps</td>
+<td>CD-TA</td>
+<td>all</td>
+<td>1.62e-05</td>
+<td>9.78e-06</td>
+<td>0.0025</td>
+<td>1</td>
+<td>1</td>
+<td>6</td>
+<td>1.01</td>
+<td>1.08</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>randomwalk</td>
+<td>crps</td>
+<td>CD-TO</td>
+<td>all</td>
+<td>2.5</td>
+<td>0.15</td>
+<td>0.833</td>
+<td>0.167</td>
+<td>0.167</td>
+<td>6</td>
+<td>0.696</td>
+<td>0.735</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>randomwalk</td>
+<td>crps</td>
+<td>CD-TU</td>
+<td>all</td>
+<td>1.1e-05</td>
+<td>7e-06</td>
+<td>0.00217</td>
+<td>1</td>
+<td>1</td>
+<td>6</td>
+<td>6</td>
+<td>6.92</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>randomwalknowcast</td>
+<td>crps</td>
+<td>CD</td>
+<td>all</td>
+<td>14.7</td>
+<td>0.0319</td>
+<td>-0.082</td>
+<td>0.5</td>
+<td>0.667</td>
+<td>6</td>
+<td>1</td>
+<td>1</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>randomwalknowcast</td>
+<td>crps</td>
+<td>CD-BC</td>
+<td>all</td>
+<td>5.83e-06</td>
+<td>3.06e-06</td>
+<td>0.00133</td>
+<td>1</td>
+<td>1</td>
+<td>6</td>
+<td>1</td>
+<td>1</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>randomwalknowcast</td>
+<td>crps</td>
+<td>CD-BU</td>
+<td>all</td>
+<td>0.305</td>
+<td>0.189</td>
+<td>0.352</td>
+<td>1</td>
+<td>1</td>
+<td>6</td>
+<td>1</td>
+<td>1</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>randomwalknowcast</td>
+<td>crps</td>
+<td>CD-EQ</td>
+<td>all</td>
+<td>1.13e-05</td>
+<td>6.19e-06</td>
+<td>0.0015</td>
+<td>1</td>
+<td>1</td>
+<td>6</td>
+<td>1</td>
+<td>1</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>randomwalknowcast</td>
+<td>crps</td>
+<td>CD-HK</td>
+<td>all</td>
+<td>4.83e-06</td>
+<td>2.99e-06</td>
+<td>0.00133</td>
+<td>1</td>
+<td>1</td>
+<td>6</td>
+<td>1</td>
+<td>1</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>randomwalknowcast</td>
+<td>crps</td>
+<td>CD-HL</td>
+<td>all</td>
+<td>1.42e-05</td>
+<td>9e-06</td>
+<td>0.00233</td>
+<td>1</td>
+<td>1</td>
+<td>6</td>
+<td>1</td>
+<td>1</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>randomwalknowcast</td>
+<td>crps</td>
+<td>CD-HU</td>
+<td>all</td>
+<td>1.39</td>
+<td>0.048</td>
+<td>0.507</td>
+<td>0.5</td>
+<td>0.833</td>
+<td>6</td>
+<td>1</td>
+<td>1</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>randomwalknowcast</td>
+<td>crps</td>
+<td>CD-IT</td>
+<td>all</td>
+<td>12.1</td>
+<td>0.0462</td>
+<td>0.0172</td>
+<td>0.667</td>
+<td>0.667</td>
+<td>6</td>
+<td>1</td>
+<td>1</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>randomwalknowcast</td>
+<td>crps</td>
+<td>CD-KC</td>
+<td>all</td>
+<td>5.83e-06</td>
+<td>3.15e-06</td>
+<td>0.00133</td>
+<td>1</td>
+<td>1</td>
+<td>6</td>
+<td>1</td>
+<td>1</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>randomwalknowcast</td>
+<td>crps</td>
+<td>CD-KE</td>
+<td>all</td>
+<td>4.83e-06</td>
+<td>2.95e-06</td>
+<td>0.0015</td>
+<td>1</td>
+<td>1</td>
+<td>6</td>
+<td>1</td>
+<td>1</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>randomwalknowcast</td>
+<td>crps</td>
+<td>CD-KG</td>
+<td>all</td>
+<td>1.07e-05</td>
+<td>6.89e-06</td>
+<td>0.00183</td>
+<td>1</td>
+<td>1</td>
+<td>6</td>
+<td>1</td>
+<td>1</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>randomwalknowcast</td>
+<td>crps</td>
+<td>CD-KL</td>
+<td>all</td>
+<td>1.43e-05</td>
+<td>9.14e-06</td>
+<td>0.0025</td>
+<td>1</td>
+<td>1</td>
+<td>6</td>
+<td>1</td>
+<td>1</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>randomwalknowcast</td>
+<td>crps</td>
+<td>CD-KN</td>
+<td>all</td>
+<td>1.98e-05</td>
+<td>1.18e-05</td>
+<td>0.00283</td>
+<td>1</td>
+<td>1</td>
+<td>6</td>
+<td>1</td>
+<td>1</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>randomwalknowcast</td>
+<td>crps</td>
+<td>CD-KS</td>
+<td>all</td>
+<td>9.83e-06</td>
+<td>6.14e-06</td>
+<td>0.00183</td>
+<td>1</td>
+<td>1</td>
+<td>6</td>
+<td>1</td>
+<td>1</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>randomwalknowcast</td>
+<td>crps</td>
+<td>CD-LO</td>
+<td>all</td>
+<td>2.28e-05</td>
+<td>1.39e-05</td>
+<td>0.00183</td>
+<td>1</td>
+<td>1</td>
+<td>6</td>
+<td>1</td>
+<td>1</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>randomwalknowcast</td>
+<td>crps</td>
+<td>CD-LU</td>
+<td>all</td>
+<td>6e-06</td>
+<td>3.34e-06</td>
+<td>0.0015</td>
+<td>1</td>
+<td>1</td>
+<td>6</td>
+<td>1</td>
+<td>1</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>randomwalknowcast</td>
+<td>crps</td>
+<td>CD-MA</td>
+<td>all</td>
+<td>9.67e-06</td>
+<td>6.2e-06</td>
+<td>0.002</td>
+<td>1</td>
+<td>1</td>
+<td>6</td>
+<td>1</td>
+<td>1</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>randomwalknowcast</td>
+<td>crps</td>
+<td>CD-MN</td>
+<td>all</td>
+<td>7.33e-06</td>
+<td>4.36e-06</td>
+<td>0.00167</td>
+<td>1</td>
+<td>1</td>
+<td>6</td>
+<td>1</td>
+<td>1</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>randomwalknowcast</td>
+<td>crps</td>
+<td>CD-MO</td>
+<td>all</td>
+<td>7.5e-06</td>
+<td>4.18e-06</td>
+<td>0.0015</td>
+<td>1</td>
+<td>1</td>
+<td>6</td>
+<td>1</td>
+<td>1</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>randomwalknowcast</td>
+<td>crps</td>
+<td>CD-NK</td>
+<td>all</td>
+<td>18.4</td>
+<td>0.126</td>
+<td>-0.314</td>
+<td>0.5</td>
+<td>0.667</td>
+<td>6</td>
+<td>1</td>
+<td>1</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>randomwalknowcast</td>
+<td>crps</td>
+<td>CD-NU</td>
+<td>all</td>
+<td>0.34</td>
+<td>0.188</td>
+<td>-0.126</td>
+<td>0.833</td>
+<td>0.833</td>
+<td>6</td>
+<td>1</td>
+<td>1</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>randomwalknowcast</td>
+<td>crps</td>
+<td>CD-SA</td>
+<td>all</td>
+<td>6.5e-06</td>
+<td>3.79e-06</td>
+<td>0.00133</td>
+<td>1</td>
+<td>1</td>
+<td>6</td>
+<td>1</td>
+<td>1</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>randomwalknowcast</td>
+<td>crps</td>
+<td>CD-SK</td>
+<td>all</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>6</td>
 <td></td>
 <td></td>
 </tr>
 <tr class="even">
 <td>ebola</td>
-<td>fm_chronos_daily_complete</td>
+<td>randomwalknowcast</td>
+<td>crps</td>
+<td>CD-SU</td>
+<td>all</td>
+<td>0.0137</td>
+<td>0.00934</td>
+<td>0.0858</td>
+<td>1</td>
+<td>1</td>
+<td>6</td>
+<td>1</td>
+<td>1</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>randomwalknowcast</td>
+<td>crps</td>
+<td>CD-TA</td>
+<td>all</td>
+<td>1.6e-05</td>
+<td>9.05e-06</td>
+<td>0.00233</td>
+<td>1</td>
+<td>1</td>
+<td>6</td>
+<td>1</td>
+<td>1</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>randomwalknowcast</td>
+<td>crps</td>
+<td>CD-TO</td>
+<td>all</td>
+<td>3.59</td>
+<td>0.205</td>
+<td>0.853</td>
+<td>0.167</td>
+<td>0.167</td>
+<td>6</td>
+<td>1</td>
+<td>1</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>randomwalknowcast</td>
+<td>crps</td>
+<td>CD-TU</td>
+<td>all</td>
+<td>1.83e-06</td>
+<td>1.01e-06</td>
+<td>0.000667</td>
+<td>1</td>
+<td>1</td>
+<td>6</td>
+<td>1</td>
+<td>1</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>renewal</td>
+<td>crps</td>
+<td>CD</td>
+<td>all</td>
+<td>16.4</td>
+<td>0.034</td>
+<td>-0.182</td>
+<td>0.5</td>
+<td>0.7</td>
+<td>10</td>
+<td>0.868</td>
+<td>0.871</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>renewal</td>
+<td>crps</td>
+<td>CD-BC</td>
+<td>all</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>10</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>renewal</td>
+<td>crps</td>
+<td>CD-BU</td>
+<td>all</td>
+<td>0.332</td>
+<td>0.142</td>
+<td>0.231</td>
+<td>1</td>
+<td>1</td>
+<td>10</td>
+<td>0.472</td>
+<td>0.368</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>renewal</td>
+<td>crps</td>
+<td>CD-EQ</td>
+<td>all</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>10</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>renewal</td>
+<td>crps</td>
+<td>CD-HK</td>
+<td>all</td>
+<td>1e-05</td>
+<td>6.93e-06</td>
+<td>0.001</td>
+<td>1</td>
+<td>1</td>
+<td>10</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>renewal</td>
+<td>crps</td>
+<td>CD-HL</td>
+<td>all</td>
+<td>6e-05</td>
+<td>4.16e-05</td>
+<td>0.004</td>
+<td>1</td>
+<td>1</td>
+<td>10</td>
+<td>2.35</td>
+<td>2.57</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>renewal</td>
+<td>crps</td>
+<td>CD-HU</td>
+<td>all</td>
+<td>1.62</td>
+<td>0.0561</td>
+<td>0.426</td>
+<td>0.7</td>
+<td>0.8</td>
+<td>10</td>
+<td>1.12</td>
+<td>1.17</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>renewal</td>
+<td>crps</td>
+<td>CD-IT</td>
+<td>all</td>
+<td>12.4</td>
+<td>0.0472</td>
+<td>-0.042</td>
+<td>0.4</td>
+<td>0.8</td>
+<td>10</td>
+<td>0.825</td>
+<td>0.842</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>renewal</td>
+<td>crps</td>
+<td>CD-KC</td>
+<td>all</td>
+<td>1e-05</td>
+<td>6.93e-06</td>
+<td>0.001</td>
+<td>1</td>
+<td>1</td>
+<td>10</td>
+<td>2.86</td>
+<td>3.67</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>renewal</td>
+<td>crps</td>
+<td>CD-KE</td>
+<td>all</td>
+<td>3e-05</td>
+<td>2.08e-05</td>
+<td>0.003</td>
+<td>1</td>
+<td>1</td>
+<td>10</td>
+<td>3.45</td>
+<td>3.92</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>renewal</td>
+<td>crps</td>
+<td>CD-KG</td>
+<td>all</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>10</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>renewal</td>
+<td>crps</td>
+<td>CD-KL</td>
+<td>all</td>
+<td>4e-05</td>
+<td>2.77e-05</td>
+<td>0.004</td>
+<td>1</td>
+<td>1</td>
+<td>10</td>
+<td>1.16</td>
+<td>1.26</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>renewal</td>
+<td>crps</td>
+<td>CD-KN</td>
+<td>all</td>
+<td>4e-05</td>
+<td>2.77e-05</td>
+<td>0.002</td>
+<td>1</td>
+<td>1</td>
+<td>10</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>renewal</td>
+<td>crps</td>
+<td>CD-KS</td>
+<td>all</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>10</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>renewal</td>
+<td>crps</td>
+<td>CD-LO</td>
+<td>all</td>
+<td>1e-05</td>
+<td>6.93e-06</td>
+<td>0.001</td>
+<td>1</td>
+<td>1</td>
+<td>10</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>renewal</td>
+<td>crps</td>
+<td>CD-LU</td>
+<td>all</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>10</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>renewal</td>
+<td>crps</td>
+<td>CD-MA</td>
+<td>all</td>
+<td>0.00014</td>
+<td>9.7e-05</td>
+<td>0.006</td>
+<td>1</td>
+<td>1</td>
+<td>10</td>
+<td>1.72</td>
+<td>1.86</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>renewal</td>
+<td>crps</td>
+<td>CD-MN</td>
+<td>all</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>10</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>renewal</td>
+<td>crps</td>
+<td>CD-MO</td>
+<td>all</td>
+<td>1e-05</td>
+<td>6.93e-06</td>
+<td>0.001</td>
+<td>1</td>
+<td>1</td>
+<td>10</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>renewal</td>
+<td>crps</td>
+<td>CD-NK</td>
+<td>all</td>
+<td>13.6</td>
+<td>0.0833</td>
+<td>-0.291</td>
+<td>0.3</td>
+<td>0.8</td>
+<td>10</td>
+<td>0.895</td>
+<td>0.831</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>renewal</td>
+<td>crps</td>
+<td>CD-NU</td>
+<td>all</td>
+<td>0.453</td>
+<td>0.244</td>
+<td>-0.091</td>
+<td>0.8</td>
+<td>0.8</td>
+<td>10</td>
+<td>1.24</td>
+<td>1.19</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>renewal</td>
+<td>crps</td>
+<td>CD-SA</td>
+<td>all</td>
+<td>9e-05</td>
+<td>6.24e-05</td>
+<td>0.003</td>
+<td>1</td>
+<td>1</td>
+<td>10</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>renewal</td>
+<td>crps</td>
+<td>CD-SK</td>
+<td>all</td>
+<td>0.00099</td>
+<td>0.000686</td>
+<td>0.023</td>
+<td>1</td>
+<td>1</td>
+<td>10</td>
+<td>inf</td>
+<td>inf</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>renewal</td>
+<td>crps</td>
+<td>CD-SU</td>
+<td>all</td>
+<td>0.288</td>
+<td>0.186</td>
+<td>-0.13</td>
+<td>0.8</td>
+<td>0.8</td>
+<td>10</td>
+<td>10.8</td>
+<td>8.46</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>renewal</td>
+<td>crps</td>
+<td>CD-TA</td>
+<td>all</td>
+<td>7e-05</td>
+<td>4.85e-05</td>
+<td>0.005</td>
+<td>1</td>
+<td>1</td>
+<td>10</td>
+<td>1.04</td>
+<td>1.28</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>renewal</td>
+<td>crps</td>
+<td>CD-TO</td>
+<td>all</td>
+<td>3.62</td>
+<td>0.226</td>
+<td>0.437</td>
+<td>0.3</td>
+<td>0.5</td>
+<td>10</td>
+<td>1.47</td>
+<td>1.48</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>renewal</td>
+<td>crps</td>
+<td>CD-TU</td>
+<td>all</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>10</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>renewalbvd</td>
+<td>crps</td>
+<td>CD</td>
+<td>all</td>
+<td>15</td>
+<td>0.0316</td>
+<td>-0.188</td>
+<td>0.5</td>
+<td>0.8</td>
+<td>10</td>
+<td>0.909</td>
+<td>0.912</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>renewalbvd</td>
+<td>crps</td>
+<td>CD-BC</td>
+<td>all</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>10</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>renewalbvd</td>
+<td>crps</td>
+<td>CD-BU</td>
+<td>all</td>
+<td>0.357</td>
+<td>0.159</td>
+<td>0.271</td>
+<td>0.9</td>
+<td>1</td>
+<td>10</td>
+<td>0.564</td>
+<td>0.438</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>renewalbvd</td>
+<td>crps</td>
+<td>CD-EQ</td>
+<td>all</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>10</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>renewalbvd</td>
+<td>crps</td>
+<td>CD-HK</td>
+<td>all</td>
+<td>4e-05</td>
+<td>2.77e-05</td>
+<td>0.002</td>
+<td>1</td>
+<td>1</td>
+<td>10</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>renewalbvd</td>
+<td>crps</td>
+<td>CD-HL</td>
+<td>all</td>
+<td>3e-05</td>
+<td>2.08e-05</td>
+<td>0.003</td>
+<td>1</td>
+<td>1</td>
+<td>10</td>
+<td>2.35</td>
+<td>2.57</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>renewalbvd</td>
+<td>crps</td>
+<td>CD-HU</td>
+<td>all</td>
+<td>1.5</td>
+<td>0.0527</td>
+<td>0.378</td>
+<td>0.7</td>
+<td>0.8</td>
+<td>10</td>
+<td>1.07</td>
+<td>1.13</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>renewalbvd</td>
+<td>crps</td>
+<td>CD-IT</td>
+<td>all</td>
+<td>11.5</td>
+<td>0.0444</td>
+<td>-0.049</td>
+<td>0.4</td>
+<td>0.8</td>
+<td>10</td>
+<td>0.85</td>
+<td>0.867</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>renewalbvd</td>
+<td>crps</td>
+<td>CD-KC</td>
+<td>all</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>10</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>renewalbvd</td>
+<td>crps</td>
+<td>CD-KE</td>
+<td>all</td>
+<td>2e-05</td>
+<td>1.39e-05</td>
+<td>0.002</td>
+<td>1</td>
+<td>1</td>
+<td>10</td>
+<td>3.45</td>
+<td>3.92</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>renewalbvd</td>
+<td>crps</td>
+<td>CD-KG</td>
+<td>all</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>10</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>renewalbvd</td>
+<td>crps</td>
+<td>CD-KL</td>
+<td>all</td>
+<td>3e-05</td>
+<td>2.08e-05</td>
+<td>0.003</td>
+<td>1</td>
+<td>1</td>
+<td>10</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>renewalbvd</td>
+<td>crps</td>
+<td>CD-KN</td>
+<td>all</td>
+<td>5e-05</td>
+<td>3.47e-05</td>
+<td>0.003</td>
+<td>1</td>
+<td>1</td>
+<td>10</td>
+<td>0.84</td>
+<td>0.982</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>renewalbvd</td>
+<td>crps</td>
+<td>CD-KS</td>
+<td>all</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>10</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>renewalbvd</td>
+<td>crps</td>
+<td>CD-LO</td>
+<td>all</td>
+<td>2e-05</td>
+<td>1.39e-05</td>
+<td>0.002</td>
+<td>1</td>
+<td>1</td>
+<td>10</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>renewalbvd</td>
+<td>crps</td>
+<td>CD-LU</td>
+<td>all</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>10</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>renewalbvd</td>
+<td>crps</td>
+<td>CD-MA</td>
+<td>all</td>
+<td>0.00011</td>
+<td>7.62e-05</td>
+<td>0.005</td>
+<td>1</td>
+<td>1</td>
+<td>10</td>
+<td>1.72</td>
+<td>1.86</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>renewalbvd</td>
+<td>crps</td>
+<td>CD-MN</td>
+<td>all</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>10</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>renewalbvd</td>
+<td>crps</td>
+<td>CD-MO</td>
+<td>all</td>
+<td>1e-05</td>
+<td>6.93e-06</td>
+<td>0.001</td>
+<td>1</td>
+<td>1</td>
+<td>10</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>renewalbvd</td>
+<td>crps</td>
+<td>CD-NK</td>
+<td>all</td>
+<td>13.3</td>
+<td>0.0823</td>
+<td>-0.304</td>
+<td>0.2</td>
+<td>0.7</td>
+<td>10</td>
+<td>0.889</td>
+<td>0.827</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>renewalbvd</td>
+<td>crps</td>
+<td>CD-NU</td>
+<td>all</td>
+<td>0.457</td>
+<td>0.246</td>
+<td>-0.087</td>
+<td>0.8</td>
+<td>0.8</td>
+<td>10</td>
+<td>1.26</td>
+<td>1.21</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>renewalbvd</td>
+<td>crps</td>
+<td>CD-SA</td>
+<td>all</td>
+<td>4e-05</td>
+<td>2.77e-05</td>
+<td>0.002</td>
+<td>1</td>
+<td>1</td>
+<td>10</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>renewalbvd</td>
+<td>crps</td>
+<td>CD-SK</td>
+<td>all</td>
+<td>0.00125</td>
+<td>0.000864</td>
+<td>0.024</td>
+<td>1</td>
+<td>1</td>
+<td>10</td>
+<td>inf</td>
+<td>inf</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>renewalbvd</td>
+<td>crps</td>
+<td>CD-SU</td>
+<td>all</td>
+<td>0.293</td>
+<td>0.19</td>
+<td>-0.132</td>
+<td>0.8</td>
+<td>0.8</td>
+<td>10</td>
+<td>11.3</td>
+<td>9.08</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>renewalbvd</td>
+<td>crps</td>
+<td>CD-TA</td>
+<td>all</td>
+<td>2e-05</td>
+<td>1.39e-05</td>
+<td>0.002</td>
+<td>1</td>
+<td>1</td>
+<td>10</td>
+<td>2.08</td>
+<td>2.55</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>renewalbvd</td>
 <td>crps</td>
 <td>CD-TO</td>
 <td>all</td>
 <td>3.51</td>
-<td>0.503</td>
-<td>0.96</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>259</td>
-<td>204</td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>fm_chronos_daily_complete</td>
-<td>crps</td>
-<td>CD-TU</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>fm_chronos_daily_ragged</td>
-<td>crps</td>
-<td>CD</td>
-<td>all</td>
-<td>100</td>
-<td>0.196</td>
-<td>0.953</td>
-<td>0</td>
-<td>0</td>
-<td>3</td>
-<td>2.83</td>
-<td>2.45</td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>fm_chronos_daily_ragged</td>
-<td>crps</td>
-<td>CD-BC</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>3</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>fm_chronos_daily_ragged</td>
-<td>crps</td>
-<td>CD-BU</td>
-<td>all</td>
-<td>1.6</td>
-<td>0.388</td>
-<td>0.767</td>
-<td>0.333</td>
-<td>1</td>
-<td>3</td>
-<td>inf</td>
-<td>inf</td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>fm_chronos_daily_ragged</td>
-<td>crps</td>
-<td>CD-EQ</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>3</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>fm_chronos_daily_ragged</td>
-<td>crps</td>
-<td>CD-HK</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>3</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>fm_chronos_daily_ragged</td>
-<td>crps</td>
-<td>CD-HL</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>3</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>fm_chronos_daily_ragged</td>
-<td>crps</td>
-<td>CD-HU</td>
-<td>all</td>
-<td>7.71</td>
-<td>0.194</td>
-<td>0.85</td>
-<td>0</td>
-<td>0.667</td>
-<td>3</td>
-<td>1.85</td>
-<td>1.74</td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>fm_chronos_daily_ragged</td>
-<td>crps</td>
-<td>CD-IT</td>
-<td>all</td>
-<td>34.5</td>
-<td>0.113</td>
-<td>0.687</td>
-<td>0</td>
-<td>1</td>
-<td>3</td>
-<td>0.556</td>
-<td>0.481</td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>fm_chronos_daily_ragged</td>
-<td>crps</td>
-<td>CD-KC</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>3</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>fm_chronos_daily_ragged</td>
-<td>crps</td>
-<td>CD-KE</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>3</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>fm_chronos_daily_ragged</td>
-<td>crps</td>
-<td>CD-KG</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>3</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>fm_chronos_daily_ragged</td>
-<td>crps</td>
-<td>CD-KL</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>3</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>fm_chronos_daily_ragged</td>
-<td>crps</td>
-<td>CD-KN</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>3</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>fm_chronos_daily_ragged</td>
-<td>crps</td>
-<td>CD-KS</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>3</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>fm_chronos_daily_ragged</td>
-<td>crps</td>
-<td>CD-LO</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>3</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>fm_chronos_daily_ragged</td>
-<td>crps</td>
-<td>CD-LU</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>3</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>fm_chronos_daily_ragged</td>
-<td>crps</td>
-<td>CD-MA</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>3</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>fm_chronos_daily_ragged</td>
-<td>crps</td>
-<td>CD-MN</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>3</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>fm_chronos_daily_ragged</td>
-<td>crps</td>
-<td>CD-MO</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>3</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>fm_chronos_daily_ragged</td>
-<td>crps</td>
-<td>CD-NK</td>
-<td>all</td>
-<td>83.8</td>
-<td>0.446</td>
-<td>1</td>
-<td>0</td>
-<td>0</td>
-<td>3</td>
-<td>56.8</td>
-<td>43.7</td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>fm_chronos_daily_ragged</td>
-<td>crps</td>
-<td>CD-NU</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>3</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>fm_chronos_daily_ragged</td>
-<td>crps</td>
-<td>CD-SA</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>3</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>fm_chronos_daily_ragged</td>
-<td>crps</td>
-<td>CD-SK</td>
-<td>all</td>
-<td>0.028</td>
-<td>0.0191</td>
-<td>0.14</td>
-<td>1</td>
-<td>1</td>
-<td>3</td>
-<td>inf</td>
-<td>inf</td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>fm_chronos_daily_ragged</td>
-<td>crps</td>
-<td>CD-SU</td>
-<td>all</td>
-<td>0.333</td>
-<td>0.231</td>
-<td>-0.333</td>
-<td>0.667</td>
-<td>0.667</td>
-<td>3</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>fm_chronos_daily_ragged</td>
-<td>crps</td>
-<td>CD-TA</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>3</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>fm_chronos_daily_ragged</td>
-<td>crps</td>
-<td>CD-TO</td>
-<td>all</td>
-<td>2.64</td>
-<td>0.337</td>
-<td>0.72</td>
-<td>0.333</td>
-<td>1</td>
-<td>3</td>
-<td>299</td>
-<td>213</td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>fm_chronos_daily_ragged</td>
-<td>crps</td>
-<td>CD-TU</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>3</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>fm_chronos_weekly_complete</td>
-<td>crps</td>
-<td>CD</td>
-<td>all</td>
-<td>79.2</td>
-<td>0.165</td>
-<td>0.8</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>3.43</td>
-<td>2.94</td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>fm_chronos_weekly_complete</td>
-<td>crps</td>
-<td>CD-BC</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>fm_chronos_weekly_complete</td>
-<td>crps</td>
-<td>CD-BU</td>
-<td>all</td>
-<td>0.0747</td>
-<td>0.0189</td>
-<td>0.22</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td>inf</td>
-<td>inf</td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>fm_chronos_weekly_complete</td>
-<td>crps</td>
-<td>CD-EQ</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>fm_chronos_weekly_complete</td>
-<td>crps</td>
-<td>CD-HK</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>fm_chronos_weekly_complete</td>
-<td>crps</td>
-<td>CD-HL</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>fm_chronos_weekly_complete</td>
-<td>crps</td>
-<td>CD-HU</td>
-<td>all</td>
-<td>0.661</td>
-<td>0.0176</td>
-<td>0.38</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td>0.227</td>
-<td>0.214</td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>fm_chronos_weekly_complete</td>
-<td>crps</td>
-<td>CD-IT</td>
-<td>all</td>
-<td>37.1</td>
-<td>0.13</td>
-<td>0.58</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1.3</td>
-<td>1.07</td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>fm_chronos_weekly_complete</td>
-<td>crps</td>
-<td>CD-KC</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>fm_chronos_weekly_complete</td>
-<td>crps</td>
-<td>CD-KE</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>fm_chronos_weekly_complete</td>
-<td>crps</td>
-<td>CD-KG</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>fm_chronos_weekly_complete</td>
-<td>crps</td>
-<td>CD-KL</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>fm_chronos_weekly_complete</td>
-<td>crps</td>
-<td>CD-KN</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>fm_chronos_weekly_complete</td>
-<td>crps</td>
-<td>CD-KS</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>fm_chronos_weekly_complete</td>
-<td>crps</td>
-<td>CD-LO</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>fm_chronos_weekly_complete</td>
-<td>crps</td>
-<td>CD-LU</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>fm_chronos_weekly_complete</td>
-<td>crps</td>
-<td>CD-MA</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>fm_chronos_weekly_complete</td>
-<td>crps</td>
-<td>CD-MN</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>fm_chronos_weekly_complete</td>
-<td>crps</td>
-<td>CD-MO</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>fm_chronos_weekly_complete</td>
-<td>crps</td>
-<td>CD-NK</td>
-<td>all</td>
-<td>81.4</td>
-<td>0.455</td>
-<td>0.98</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>59.9</td>
-<td>45.4</td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>fm_chronos_weekly_complete</td>
-<td>crps</td>
-<td>CD-NU</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>fm_chronos_weekly_complete</td>
-<td>crps</td>
-<td>CD-SA</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>fm_chronos_weekly_complete</td>
-<td>crps</td>
-<td>CD-SK</td>
-<td>all</td>
-<td>0.0156</td>
-<td>0.00968</td>
-<td>0.11</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td>inf</td>
-<td>inf</td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>fm_chronos_weekly_complete</td>
-<td>crps</td>
-<td>CD-SU</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>fm_chronos_weekly_complete</td>
-<td>crps</td>
-<td>CD-TA</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>fm_chronos_weekly_complete</td>
-<td>crps</td>
-<td>CD-TO</td>
-<td>all</td>
-<td>2.35</td>
-<td>0.348</td>
-<td>0.87</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>174</td>
-<td>141</td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>fm_chronos_weekly_complete</td>
-<td>crps</td>
-<td>CD-TU</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>fm_chronos_weekly_ragged</td>
-<td>crps</td>
-<td>CD</td>
-<td>all</td>
-<td>51.2</td>
-<td>0.102</td>
-<td>0.34</td>
-<td>0.333</td>
-<td>1</td>
-<td>3</td>
-<td>0.724</td>
-<td>0.695</td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>fm_chronos_weekly_ragged</td>
-<td>crps</td>
-<td>CD-BC</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>3</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>fm_chronos_weekly_ragged</td>
-<td>crps</td>
-<td>CD-BU</td>
-<td>all</td>
-<td>0.283</td>
-<td>0.0795</td>
-<td>0.363</td>
-<td>1</td>
-<td>1</td>
-<td>3</td>
-<td>inf</td>
-<td>inf</td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>fm_chronos_weekly_ragged</td>
-<td>crps</td>
-<td>CD-EQ</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>3</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>fm_chronos_weekly_ragged</td>
-<td>crps</td>
-<td>CD-HK</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>3</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>fm_chronos_weekly_ragged</td>
-<td>crps</td>
-<td>CD-HL</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>3</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>fm_chronos_weekly_ragged</td>
-<td>crps</td>
-<td>CD-HU</td>
-<td>all</td>
-<td>2.36</td>
-<td>0.0576</td>
-<td>0.163</td>
-<td>1</td>
-<td>1</td>
-<td>3</td>
-<td>0.218</td>
-<td>0.176</td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>fm_chronos_weekly_ragged</td>
-<td>crps</td>
-<td>CD-IT</td>
-<td>all</td>
-<td>26.5</td>
-<td>0.0941</td>
-<td>-0.0533</td>
-<td>0.667</td>
-<td>1</td>
-<td>3</td>
-<td>0.731</td>
-<td>0.703</td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>fm_chronos_weekly_ragged</td>
-<td>crps</td>
-<td>CD-KC</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>3</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>fm_chronos_weekly_ragged</td>
-<td>crps</td>
-<td>CD-KE</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>3</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>fm_chronos_weekly_ragged</td>
-<td>crps</td>
-<td>CD-KG</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>3</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>fm_chronos_weekly_ragged</td>
-<td>crps</td>
-<td>CD-KL</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>3</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>fm_chronos_weekly_ragged</td>
-<td>crps</td>
-<td>CD-KN</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>3</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>fm_chronos_weekly_ragged</td>
-<td>crps</td>
-<td>CD-KS</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>3</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>fm_chronos_weekly_ragged</td>
-<td>crps</td>
-<td>CD-LO</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>3</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>fm_chronos_weekly_ragged</td>
-<td>crps</td>
-<td>CD-LU</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>3</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>fm_chronos_weekly_ragged</td>
-<td>crps</td>
-<td>CD-MA</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>3</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>fm_chronos_weekly_ragged</td>
-<td>crps</td>
-<td>CD-MN</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>3</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>fm_chronos_weekly_ragged</td>
-<td>crps</td>
-<td>CD-MO</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>3</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>fm_chronos_weekly_ragged</td>
-<td>crps</td>
-<td>CD-NK</td>
-<td>all</td>
-<td>47.7</td>
-<td>0.259</td>
-<td>0.753</td>
-<td>0</td>
-<td>1</td>
-<td>3</td>
-<td>27.4</td>
-<td>21.5</td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>fm_chronos_weekly_ragged</td>
-<td>crps</td>
-<td>CD-NU</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>3</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>fm_chronos_weekly_ragged</td>
-<td>crps</td>
-<td>CD-SA</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>3</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>fm_chronos_weekly_ragged</td>
-<td>crps</td>
-<td>CD-SK</td>
-<td>all</td>
-<td>0.0331</td>
-<td>0.012</td>
-<td>0.09</td>
-<td>1</td>
-<td>1</td>
-<td>3</td>
-<td>inf</td>
-<td>inf</td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>fm_chronos_weekly_ragged</td>
-<td>crps</td>
-<td>CD-SU</td>
-<td>all</td>
-<td>0.333</td>
-<td>0.231</td>
-<td>-0.333</td>
-<td>0.667</td>
-<td>0.667</td>
-<td>3</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>fm_chronos_weekly_ragged</td>
-<td>crps</td>
-<td>CD-TA</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>3</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>fm_chronos_weekly_ragged</td>
-<td>crps</td>
-<td>CD-TO</td>
-<td>all</td>
-<td>2.01</td>
-<td>0.275</td>
-<td>0.517</td>
-<td>0.333</td>
-<td>1</td>
-<td>3</td>
-<td>219</td>
-<td>170</td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>fm_chronos_weekly_ragged</td>
-<td>crps</td>
-<td>CD-TU</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>3</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>pprandomwalknowcast</td>
-<td>crps</td>
-<td>CD</td>
-<td>all</td>
-<td>2.19</td>
-<td>0.00517</td>
-<td>-0.18</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td>0.0947</td>
-<td>0.0921</td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>pprandomwalknowcast</td>
-<td>crps</td>
-<td>CD-BC</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>pprandomwalknowcast</td>
-<td>crps</td>
-<td>CD-BU</td>
-<td>all</td>
-<td>0.0226</td>
-<td>0.0065</td>
-<td>0.15</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td>inf</td>
-<td>inf</td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>pprandomwalknowcast</td>
-<td>crps</td>
-<td>CD-EQ</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>pprandomwalknowcast</td>
-<td>crps</td>
-<td>CD-HK</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>pprandomwalknowcast</td>
-<td>crps</td>
-<td>CD-HL</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>pprandomwalknowcast</td>
-<td>crps</td>
-<td>CD-HU</td>
-<td>all</td>
-<td>0.888</td>
-<td>0.0261</td>
-<td>0.75</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>0.305</td>
-<td>0.318</td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>pprandomwalknowcast</td>
-<td>crps</td>
-<td>CD-IT</td>
-<td>all</td>
-<td>23.6</td>
-<td>0.0995</td>
-<td>-1</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>0.828</td>
-<td>0.817</td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>pprandomwalknowcast</td>
-<td>crps</td>
-<td>CD-KC</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>pprandomwalknowcast</td>
-<td>crps</td>
-<td>CD-KE</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>pprandomwalknowcast</td>
-<td>crps</td>
-<td>CD-KG</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>pprandomwalknowcast</td>
-<td>crps</td>
-<td>CD-KL</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>pprandomwalknowcast</td>
-<td>crps</td>
-<td>CD-KN</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>pprandomwalknowcast</td>
-<td>crps</td>
-<td>CD-KS</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>pprandomwalknowcast</td>
-<td>crps</td>
-<td>CD-LO</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>pprandomwalknowcast</td>
-<td>crps</td>
-<td>CD-LU</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>pprandomwalknowcast</td>
-<td>crps</td>
-<td>CD-MA</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>pprandomwalknowcast</td>
-<td>crps</td>
-<td>CD-MN</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>pprandomwalknowcast</td>
-<td>crps</td>
-<td>CD-MO</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>pprandomwalknowcast</td>
-<td>crps</td>
-<td>CD-NK</td>
-<td>all</td>
-<td>17.7</td>
-<td>0.121</td>
-<td>1</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>13.1</td>
-<td>12.1</td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>pprandomwalknowcast</td>
-<td>crps</td>
-<td>CD-NU</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>pprandomwalknowcast</td>
-<td>crps</td>
-<td>CD-SA</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>pprandomwalknowcast</td>
-<td>crps</td>
-<td>CD-SK</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>pprandomwalknowcast</td>
-<td>crps</td>
-<td>CD-SU</td>
-<td>all</td>
-<td>0.0037</td>
-<td>0.00149</td>
-<td>0.06</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td>inf</td>
-<td>inf</td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>pprandomwalknowcast</td>
-<td>crps</td>
-<td>CD-TA</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>pprandomwalknowcast</td>
-<td>crps</td>
-<td>CD-TO</td>
-<td>all</td>
-<td>0.281</td>
-<td>0.0497</td>
-<td>0.48</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td>20.7</td>
-<td>20.2</td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>pprandomwalknowcast</td>
-<td>crps</td>
-<td>CD-TU</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>randomwalk</td>
-<td>crps</td>
-<td>CD</td>
-<td>all</td>
-<td>33.3</td>
-<td>0.0823</td>
-<td>-0.963</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1.44</td>
-<td>1.46</td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>randomwalk</td>
-<td>crps</td>
-<td>CD-BC</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>randomwalk</td>
-<td>crps</td>
-<td>CD-BU</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>randomwalk</td>
-<td>crps</td>
-<td>CD-EQ</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>randomwalk</td>
-<td>crps</td>
-<td>CD-HK</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>randomwalk</td>
-<td>crps</td>
-<td>CD-HL</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>randomwalk</td>
-<td>crps</td>
-<td>CD-HU</td>
-<td>all</td>
+<td>0.221</td>
+<td>0.425</td>
+<td>0.3</td>
+<td>0.5</td>
+<td>10</td>
 <td>1.42</td>
-<td>0.0361</td>
-<td>0.415</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td>0.487</td>
-<td>0.439</td>
+<td>1.43</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
-<td>randomwalk</td>
+<td>renewalbvd</td>
 <td>crps</td>
-<td>CD-IT</td>
+<td>CD-TU</td>
 <td>all</td>
-<td>38</td>
-<td>0.166</td>
-<td>-1</td>
+<td>0</td>
 <td>0</td>
 <td>0</td>
 <td>1</td>
-<td>1.33</td>
-<td>1.36</td>
+<td>1</td>
+<td>10</td>
+<td>0</td>
+<td>0</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
-<td>randomwalk</td>
+<td>renewalsp</td>
 <td>crps</td>
-<td>CD-KC</td>
+<td>CD</td>
 <td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>randomwalk</td>
-<td>crps</td>
-<td>CD-KE</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>randomwalk</td>
-<td>crps</td>
-<td>CD-KG</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>randomwalk</td>
-<td>crps</td>
-<td>CD-KL</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>randomwalk</td>
-<td>crps</td>
-<td>CD-KN</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>randomwalk</td>
-<td>crps</td>
-<td>CD-KS</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>randomwalk</td>
-<td>crps</td>
-<td>CD-LO</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>randomwalk</td>
-<td>crps</td>
-<td>CD-LU</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>randomwalk</td>
-<td>crps</td>
-<td>CD-MA</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>randomwalk</td>
-<td>crps</td>
-<td>CD-MN</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>randomwalk</td>
-<td>crps</td>
-<td>CD-MO</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>randomwalk</td>
-<td>crps</td>
-<td>CD-NK</td>
-<td>all</td>
+<td>12.7</td>
+<td>0.0273</td>
+<td>-0.127</td>
+<td>0.167</td>
+<td>0.833</td>
 <td>6</td>
-<td>0.0448</td>
-<td>-1</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>4.42</td>
-<td>4.48</td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>randomwalk</td>
-<td>crps</td>
-<td>CD-NU</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
+<td>0.862</td>
+<td>0.855</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
-<td>randomwalk</td>
-<td>crps</td>
-<td>CD-SA</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>randomwalk</td>
-<td>crps</td>
-<td>CD-SK</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>randomwalk</td>
-<td>crps</td>
-<td>CD-SU</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>randomwalk</td>
-<td>crps</td>
-<td>CD-TA</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>randomwalk</td>
-<td>crps</td>
-<td>CD-TO</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td>0</td>
-<td>0</td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>randomwalk</td>
-<td>crps</td>
-<td>CD-TU</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>randomwalknowcast</td>
-<td>crps</td>
-<td>CD</td>
-<td>all</td>
-<td>23.1</td>
-<td>0.0562</td>
-<td>-0.996</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>randomwalknowcast</td>
+<td>renewalsp</td>
 <td>crps</td>
 <td>CD-BC</td>
 <td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
+<td>3.33e-05</td>
+<td>1.83e-05</td>
+<td>0.00167</td>
 <td>1</td>
 <td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
+<td>6</td>
+<td>5.71</td>
+<td>5.98</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td>ebola</td>
-<td>randomwalknowcast</td>
+<td>renewalsp</td>
 <td>crps</td>
 <td>CD-BU</td>
 <td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
+<td>0.176</td>
+<td>0.0768</td>
+<td>0.258</td>
 <td>1</td>
 <td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
+<td>6</td>
+<td>0.579</td>
+<td>0.408</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td>ebola</td>
-<td>randomwalknowcast</td>
+<td>renewalsp</td>
 <td>crps</td>
 <td>CD-EQ</td>
 <td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
+<td>3.33e-05</td>
+<td>2.31e-05</td>
+<td>0.00333</td>
 <td>1</td>
 <td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
+<td>6</td>
+<td>2.94</td>
+<td>3.73</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td>ebola</td>
-<td>randomwalknowcast</td>
+<td>renewalsp</td>
 <td>crps</td>
 <td>CD-HK</td>
 <td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
+<td>1.67e-05</td>
+<td>1.16e-05</td>
+<td>0.00167</td>
 <td>1</td>
 <td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
+<td>6</td>
+<td>3.45</td>
+<td>3.86</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td>ebola</td>
-<td>randomwalknowcast</td>
+<td>renewalsp</td>
 <td>crps</td>
 <td>CD-HL</td>
 <td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
+<td>1.67e-05</td>
+<td>1.16e-05</td>
+<td>0.00167</td>
 <td>1</td>
 <td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
+<td>6</td>
+<td>1.18</td>
+<td>1.28</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td>ebola</td>
-<td>randomwalknowcast</td>
+<td>renewalsp</td>
 <td>crps</td>
 <td>CD-HU</td>
 <td>all</td>
-<td>2.91</td>
-<td>0.0823</td>
-<td>0.927</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
+<td>1.02</td>
+<td>0.0386</td>
+<td>0.197</td>
+<td>0.5</td>
+<td>0.833</td>
+<td>6</td>
+<td>0.731</td>
+<td>0.804</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td>ebola</td>
-<td>randomwalknowcast</td>
+<td>renewalsp</td>
 <td>crps</td>
 <td>CD-IT</td>
 <td>all</td>
-<td>28.5</td>
-<td>0.122</td>
-<td>-1</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
+<td>9.58</td>
+<td>0.038</td>
+<td>-0.0983</td>
+<td>0.333</td>
+<td>0.667</td>
+<td>6</td>
+<td>0.794</td>
+<td>0.823</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td>ebola</td>
-<td>randomwalknowcast</td>
+<td>renewalsp</td>
 <td>crps</td>
 <td>CD-KC</td>
 <td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
+<td>1.67e-05</td>
+<td>1.16e-05</td>
+<td>0.00167</td>
 <td>1</td>
 <td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
+<td>6</td>
+<td>2.86</td>
+<td>3.67</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td>ebola</td>
-<td>randomwalknowcast</td>
+<td>renewalsp</td>
 <td>crps</td>
 <td>CD-KE</td>
 <td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>randomwalknowcast</td>
-<td>crps</td>
-<td>CD-KG</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>randomwalknowcast</td>
-<td>crps</td>
-<td>CD-KL</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>randomwalknowcast</td>
-<td>crps</td>
-<td>CD-KN</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>randomwalknowcast</td>
-<td>crps</td>
-<td>CD-KS</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>randomwalknowcast</td>
-<td>crps</td>
-<td>CD-LO</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>randomwalknowcast</td>
-<td>crps</td>
-<td>CD-LU</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>randomwalknowcast</td>
-<td>crps</td>
-<td>CD-MA</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>randomwalknowcast</td>
-<td>crps</td>
-<td>CD-MN</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>randomwalknowcast</td>
-<td>crps</td>
-<td>CD-MO</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>randomwalknowcast</td>
-<td>crps</td>
-<td>CD-NK</td>
-<td>all</td>
-<td>1.36</td>
-<td>0.01</td>
-<td>-0.425</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>randomwalknowcast</td>
-<td>crps</td>
-<td>CD-NU</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>randomwalknowcast</td>
-<td>crps</td>
-<td>CD-SA</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>randomwalknowcast</td>
-<td>crps</td>
-<td>CD-SK</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>randomwalknowcast</td>
-<td>crps</td>
-<td>CD-SU</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>randomwalknowcast</td>
-<td>crps</td>
-<td>CD-TA</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>randomwalknowcast</td>
-<td>crps</td>
-<td>CD-TO</td>
-<td>all</td>
-<td>0.0136</td>
-<td>0.00247</td>
-<td>0.116</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>randomwalknowcast</td>
-<td>crps</td>
-<td>CD-TU</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>renewal</td>
-<td>crps</td>
-<td>CD</td>
-<td>all</td>
-<td>13.3</td>
-<td>0.0309</td>
-<td>-0.613</td>
-<td>0.333</td>
-<td>0.667</td>
-<td>3</td>
-<td>0.88</td>
-<td>0.879</td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>renewal</td>
-<td>crps</td>
-<td>CD-BC</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>3</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>renewal</td>
-<td>crps</td>
-<td>CD-BU</td>
-<td>all</td>
-<td>0.297</td>
-<td>0.101</td>
-<td>0.207</td>
-<td>1</td>
-<td>1</td>
-<td>3</td>
-<td>inf</td>
-<td>inf</td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>renewal</td>
-<td>crps</td>
-<td>CD-EQ</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>3</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>renewal</td>
-<td>crps</td>
-<td>CD-HK</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>3</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>renewal</td>
-<td>crps</td>
-<td>CD-HL</td>
-<td>all</td>
-<td>3.33e-05</td>
-<td>2.31e-05</td>
-<td>0.00333</td>
-<td>1</td>
-<td>1</td>
-<td>3</td>
-<td>inf</td>
-<td>inf</td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>renewal</td>
-<td>crps</td>
-<td>CD-HU</td>
-<td>all</td>
-<td>0.53</td>
-<td>0.0161</td>
-<td>0.277</td>
-<td>1</td>
-<td>1</td>
-<td>3</td>
-<td>0.204</td>
-<td>0.213</td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>renewal</td>
-<td>crps</td>
-<td>CD-IT</td>
-<td>all</td>
-<td>12.9</td>
-<td>0.0528</td>
-<td>-0.743</td>
-<td>0.333</td>
-<td>0.667</td>
-<td>3</td>
-<td>0.826</td>
-<td>0.818</td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>renewal</td>
-<td>crps</td>
-<td>CD-KC</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>3</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>renewal</td>
-<td>crps</td>
-<td>CD-KE</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>3</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>renewal</td>
-<td>crps</td>
-<td>CD-KG</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>3</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>renewal</td>
-<td>crps</td>
-<td>CD-KL</td>
-<td>all</td>
-<td>3.33e-05</td>
-<td>2.31e-05</td>
-<td>0.00333</td>
-<td>1</td>
-<td>1</td>
-<td>3</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>renewal</td>
-<td>crps</td>
-<td>CD-KN</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>3</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>renewal</td>
-<td>crps</td>
-<td>CD-KS</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>3</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>renewal</td>
-<td>crps</td>
-<td>CD-LO</td>
-<td>all</td>
-<td>3.33e-05</td>
-<td>2.31e-05</td>
-<td>0.00333</td>
-<td>1</td>
-<td>1</td>
-<td>3</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>renewal</td>
-<td>crps</td>
-<td>CD-LU</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>3</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>renewal</td>
-<td>crps</td>
-<td>CD-MA</td>
-<td>all</td>
-<td>3.33e-05</td>
-<td>2.31e-05</td>
-<td>0.00333</td>
-<td>1</td>
-<td>1</td>
-<td>3</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>renewal</td>
-<td>crps</td>
-<td>CD-MN</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>3</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>renewal</td>
-<td>crps</td>
-<td>CD-MO</td>
-<td>all</td>
-<td>3.33e-05</td>
-<td>2.31e-05</td>
-<td>0.00333</td>
-<td>1</td>
-<td>1</td>
-<td>3</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>renewal</td>
-<td>crps</td>
-<td>CD-NK</td>
-<td>all</td>
-<td>3.72</td>
-<td>0.0252</td>
-<td>-0.17</td>
-<td>0.667</td>
-<td>1</td>
-<td>3</td>
-<td>1.65</td>
-<td>1.66</td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>renewal</td>
-<td>crps</td>
-<td>CD-NU</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>3</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>renewal</td>
-<td>crps</td>
-<td>CD-SA</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>3</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>renewal</td>
-<td>crps</td>
-<td>CD-SK</td>
-<td>all</td>
-<td>6.67e-05</td>
-<td>4.62e-05</td>
+<td>8.33e-05</td>
+<td>5.3e-05</td>
 <td>0.00667</td>
 <td>1</td>
 <td>1</td>
-<td>3</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>renewal</td>
-<td>crps</td>
-<td>CD-SU</td>
-<td>all</td>
-<td>0.419</td>
-<td>0.277</td>
-<td>-0.35</td>
-<td>0.667</td>
-<td>0.667</td>
-<td>3</td>
-<td>inf</td>
-<td>inf</td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>renewal</td>
-<td>crps</td>
-<td>CD-TA</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>3</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>renewal</td>
-<td>crps</td>
-<td>CD-TO</td>
-<td>all</td>
-<td>0.848</td>
-<td>0.133</td>
-<td>0.0233</td>
-<td>0.333</td>
-<td>1</td>
-<td>3</td>
-<td>85.7</td>
-<td>78.2</td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>renewal</td>
-<td>crps</td>
-<td>CD-TU</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>3</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>renewalbvd</td>
-<td>crps</td>
-<td>CD</td>
-<td>all</td>
-<td>13.6</td>
-<td>0.0316</td>
-<td>-0.647</td>
-<td>0.333</td>
-<td>0.667</td>
-<td>3</td>
-<td>0.907</td>
-<td>0.907</td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>renewalbvd</td>
-<td>crps</td>
-<td>CD-BC</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>3</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>renewalbvd</td>
-<td>crps</td>
-<td>CD-BU</td>
-<td>all</td>
-<td>0.312</td>
-<td>0.108</td>
-<td>0.213</td>
-<td>1</td>
-<td>1</td>
-<td>3</td>
-<td>inf</td>
-<td>inf</td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>renewalbvd</td>
-<td>crps</td>
-<td>CD-EQ</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>3</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>renewalbvd</td>
-<td>crps</td>
-<td>CD-HK</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>3</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>renewalbvd</td>
-<td>crps</td>
-<td>CD-HL</td>
-<td>all</td>
-<td>3.33e-05</td>
-<td>2.31e-05</td>
-<td>0.00333</td>
-<td>1</td>
-<td>1</td>
-<td>3</td>
-<td>inf</td>
-<td>inf</td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>renewalbvd</td>
-<td>crps</td>
-<td>CD-HU</td>
-<td>all</td>
-<td>0.545</td>
-<td>0.0167</td>
-<td>0.247</td>
-<td>1</td>
-<td>1</td>
-<td>3</td>
-<td>0.17</td>
-<td>0.178</td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>renewalbvd</td>
-<td>crps</td>
-<td>CD-IT</td>
-<td>all</td>
-<td>13.2</td>
-<td>0.054</td>
-<td>-0.76</td>
-<td>0.333</td>
-<td>0.667</td>
-<td>3</td>
-<td>0.838</td>
-<td>0.831</td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>renewalbvd</td>
-<td>crps</td>
-<td>CD-KC</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>3</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>renewalbvd</td>
-<td>crps</td>
-<td>CD-KE</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>3</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>renewalbvd</td>
-<td>crps</td>
-<td>CD-KG</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>3</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>renewalbvd</td>
-<td>crps</td>
-<td>CD-KL</td>
-<td>all</td>
-<td>3.33e-05</td>
-<td>2.31e-05</td>
-<td>0.00333</td>
-<td>1</td>
-<td>1</td>
-<td>3</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>renewalbvd</td>
-<td>crps</td>
-<td>CD-KN</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>3</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>renewalbvd</td>
-<td>crps</td>
-<td>CD-KS</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>3</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>renewalbvd</td>
-<td>crps</td>
-<td>CD-LO</td>
-<td>all</td>
-<td>3.33e-05</td>
-<td>2.31e-05</td>
-<td>0.00333</td>
-<td>1</td>
-<td>1</td>
-<td>3</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>renewalbvd</td>
-<td>crps</td>
-<td>CD-LU</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>3</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>renewalbvd</td>
-<td>crps</td>
-<td>CD-MA</td>
-<td>all</td>
-<td>3.33e-05</td>
-<td>2.31e-05</td>
-<td>0.00333</td>
-<td>1</td>
-<td>1</td>
-<td>3</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>renewalbvd</td>
-<td>crps</td>
-<td>CD-MN</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>3</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>renewalbvd</td>
-<td>crps</td>
-<td>CD-MO</td>
-<td>all</td>
-<td>3.33e-05</td>
-<td>2.31e-05</td>
-<td>0.00333</td>
-<td>1</td>
-<td>1</td>
-<td>3</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>renewalbvd</td>
-<td>crps</td>
-<td>CD-NK</td>
-<td>all</td>
-<td>3.72</td>
-<td>0.0251</td>
-<td>-0.21</td>
-<td>0.667</td>
-<td>1</td>
-<td>3</td>
-<td>1.76</td>
-<td>1.78</td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>renewalbvd</td>
-<td>crps</td>
-<td>CD-NU</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>3</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>renewalbvd</td>
-<td>crps</td>
-<td>CD-SA</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>3</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>renewalbvd</td>
-<td>crps</td>
-<td>CD-SK</td>
-<td>all</td>
-<td>0.000167</td>
-<td>0.000116</td>
-<td>0.01</td>
-<td>1</td>
-<td>1</td>
-<td>3</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>renewalbvd</td>
-<td>crps</td>
-<td>CD-SU</td>
-<td>all</td>
-<td>0.416</td>
-<td>0.275</td>
-<td>-0.347</td>
-<td>0.667</td>
-<td>0.667</td>
-<td>3</td>
-<td>inf</td>
-<td>inf</td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>renewalbvd</td>
-<td>crps</td>
-<td>CD-TA</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>3</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>renewalbvd</td>
-<td>crps</td>
-<td>CD-TO</td>
-<td>all</td>
-<td>0.872</td>
-<td>0.136</td>
-<td>-0.02</td>
-<td>0.333</td>
-<td>1</td>
-<td>3</td>
-<td>93.2</td>
-<td>83.3</td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>renewalbvd</td>
-<td>crps</td>
-<td>CD-TU</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>3</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>renewalsp</td>
-<td>crps</td>
-<td>CD</td>
-<td>all</td>
-<td>18.5</td>
-<td>0.045</td>
-<td>-0.91</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>0.801</td>
-<td>0.801</td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>renewalsp</td>
-<td>crps</td>
-<td>CD-BC</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>renewalsp</td>
-<td>crps</td>
-<td>CD-BU</td>
-<td>all</td>
-<td>0.414</td>
-<td>0.118</td>
-<td>0.27</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td>inf</td>
-<td>inf</td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>renewalsp</td>
-<td>crps</td>
-<td>CD-EQ</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>renewalsp</td>
-<td>crps</td>
-<td>CD-HK</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>renewalsp</td>
-<td>crps</td>
-<td>CD-HL</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>renewalsp</td>
-<td>crps</td>
-<td>CD-HU</td>
-<td>all</td>
-<td>0.253</td>
-<td>0.00755</td>
-<td>0.12</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td>0.0869</td>
-<td>0.0918</td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>renewalsp</td>
-<td>crps</td>
-<td>CD-IT</td>
-<td>all</td>
-<td>25.4</td>
-<td>0.108</td>
-<td>-1</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>0.891</td>
-<td>0.886</td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>renewalsp</td>
-<td>crps</td>
-<td>CD-KC</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>renewalsp</td>
-<td>crps</td>
-<td>CD-KE</td>
-<td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
+<td>6</td>
+<td>17.2</td>
+<td>18</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -15706,14 +16173,14 @@ Table&nbsp;16: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-KG</td>
 <td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
+<td>5e-05</td>
+<td>2.31e-05</td>
+<td>0.00167</td>
 <td>1</td>
 <td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
+<td>6</td>
+<td>4.69</td>
+<td>3.35</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
@@ -15721,14 +16188,14 @@ Table&nbsp;16: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-KL</td>
 <td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
+<td>1.67e-05</td>
+<td>1.16e-05</td>
+<td>0.00167</td>
 <td>1</td>
 <td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
+<td>6</td>
+<td>1.16</td>
+<td>1.26</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -15736,14 +16203,14 @@ Table&nbsp;16: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-KN</td>
 <td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
+<td>3.33e-05</td>
+<td>1.83e-05</td>
+<td>0.00167</td>
 <td>1</td>
 <td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
+<td>6</td>
+<td>1.68</td>
+<td>1.56</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
@@ -15751,14 +16218,14 @@ Table&nbsp;16: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-KS</td>
 <td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
+<td>1.67e-05</td>
+<td>1.16e-05</td>
+<td>0.00167</td>
 <td>1</td>
 <td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
+<td>6</td>
+<td>1.69</td>
+<td>1.88</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -15771,9 +16238,9 @@ Table&nbsp;16: Ebola hub submissions scores by location and stratum.
 <td>0</td>
 <td>1</td>
 <td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
+<td>6</td>
+<td>0</td>
+<td>0</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
@@ -15786,9 +16253,9 @@ Table&nbsp;16: Ebola hub submissions scores by location and stratum.
 <td>0</td>
 <td>1</td>
 <td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
+<td>6</td>
+<td>0</td>
+<td>0</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -15796,14 +16263,14 @@ Table&nbsp;16: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-MA</td>
 <td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
+<td>0.000133</td>
+<td>5.07e-05</td>
+<td>0.00333</td>
 <td>1</td>
 <td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
+<td>6</td>
+<td>13.8</td>
+<td>8.18</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
@@ -15816,9 +16283,9 @@ Table&nbsp;16: Ebola hub submissions scores by location and stratum.
 <td>0</td>
 <td>1</td>
 <td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
+<td>6</td>
+<td>0</td>
+<td>0</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -15831,9 +16298,9 @@ Table&nbsp;16: Ebola hub submissions scores by location and stratum.
 <td>0</td>
 <td>1</td>
 <td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
+<td>6</td>
+<td>0</td>
+<td>0</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
@@ -15841,14 +16308,14 @@ Table&nbsp;16: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-NK</td>
 <td>all</td>
-<td>2.08</td>
-<td>0.0151</td>
-<td>0.03</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td>1.53</td>
-<td>1.51</td>
+<td>13</td>
+<td>0.0795</td>
+<td>-0.165</td>
+<td>0.5</td>
+<td>0.667</td>
+<td>6</td>
+<td>0.703</td>
+<td>0.633</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -15856,14 +16323,14 @@ Table&nbsp;16: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-NU</td>
 <td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
+<td>0.345</td>
+<td>0.189</td>
+<td>-0.0967</td>
+<td>0.833</td>
+<td>0.833</td>
+<td>6</td>
+<td>1.02</td>
+<td>1.01</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
@@ -15876,9 +16343,9 @@ Table&nbsp;16: Ebola hub submissions scores by location and stratum.
 <td>0</td>
 <td>1</td>
 <td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
+<td>6</td>
+<td>0</td>
+<td>0</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -15886,14 +16353,14 @@ Table&nbsp;16: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-SK</td>
 <td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
+<td>1.67e-05</td>
+<td>1.16e-05</td>
+<td>0.00167</td>
 <td>1</td>
 <td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
+<td>6</td>
+<td>inf</td>
+<td>inf</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
@@ -15901,14 +16368,14 @@ Table&nbsp;16: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-SU</td>
 <td>all</td>
-<td>0.227</td>
-<td>0.115</td>
-<td>0.04</td>
+<td>0.161</td>
+<td>0.0814</td>
+<td>0.15</td>
 <td>1</td>
 <td>1</td>
-<td>1</td>
-<td>inf</td>
-<td>inf</td>
+<td>6</td>
+<td>11.8</td>
+<td>8.72</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -15921,9 +16388,9 @@ Table&nbsp;16: Ebola hub submissions scores by location and stratum.
 <td>0</td>
 <td>1</td>
 <td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
+<td>6</td>
+<td>0</td>
+<td>0</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
@@ -15931,14 +16398,14 @@ Table&nbsp;16: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-TO</td>
 <td>all</td>
-<td>0.46</td>
-<td>0.0751</td>
-<td>0.19</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td>33.9</td>
-<td>30.4</td>
+<td>4.42</td>
+<td>0.25</td>
+<td>0.883</td>
+<td>0.167</td>
+<td>0.167</td>
+<td>6</td>
+<td>1.23</td>
+<td>1.22</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -15946,14 +16413,14 @@ Table&nbsp;16: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-TU</td>
 <td>all</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
+<td>3.33e-05</td>
+<td>1.83e-05</td>
+<td>0.00167</td>
 <td>1</td>
 <td>1</td>
-<td>1</td>
-<td></td>
-<td></td>
+<td>6</td>
+<td>18.2</td>
+<td>18.1</td>
 </tr>
 </tbody>
 </table>
@@ -16001,11 +16468,23 @@ Lison, Adrian, Sam Abbott, Jana Huisman, and Tanja Stadler. 2024. <span>“Gener
 <div id="ref-Park2024" class="csl-entry" role="listitem">
 Park, Sang Woo, Andrei R. Akhmetzhanov, Kelly Charniga, Anne Cori, Nicholas G. Davies, Jonathan Dushoff, Sebastian Funk, et al. 2024. <span>“Estimating Epidemiological Delay Distributions for Infectious Diseases.”</span> medRxiv. <a href="https://doi.org/10.1101/2024.01.12.24301247">https://doi.org/10.1101/2024.01.12.24301247</a>.
 </div>
+<div id="ref-Raffel2020" class="csl-entry" role="listitem">
+Raffel, Colin, Noam Shazeer, Adam Roberts, Katherine Lee, Sharan Narang, Michael Matena, Yanqi Zhou, Wei Li, and Peter J. Liu. 2020. <span>“Exploring the Limits of Transfer Learning with a Unified Text-to-Text Transformer.”</span> <em>Journal of Machine Learning Research</em> 21 (140): 1–67. <a href="https://arxiv.org/abs/1910.10683">https://arxiv.org/abs/1910.10683</a>.
+</div>
 <div id="ref-Schefzik2013" class="csl-entry" role="listitem">
 Schefzik, Roman, Thordis L. Thorarinsdottir, and Tilmann Gneiting. 2013. <span>“Uncertainty Quantification in Complex Simulation Models Using Ensemble Copula Coupling.”</span> <em>Statistical Science</em> 28 (4): 616–40. <a href="https://doi.org/10.1214/13-STS443">https://doi.org/10.1214/13-STS443</a>.
 </div>
 <div id="ref-Scheuerer2015" class="csl-entry" role="listitem">
 Scheuerer, Michael, and Thomas M. Hamill. 2015. <span>“Variogram-Based Proper Scoring Rules for Probabilistic Forecasts of Multivariate Quantities.”</span> <em>Monthly Weather Review</em> 143 (4): 1321–34. <a href="https://doi.org/10.1175/MWR-D-14-00269.1">https://doi.org/10.1175/MWR-D-14-00269.1</a>.
+</div>
+<div id="ref-Woo2024" class="csl-entry" role="listitem">
+Woo, Gerald, Chenghao Liu, Akshat Kumar, Caiming Xiong, Silvio Savarese, and Doyen Sahoo. 2024. <span>“Unified Training of Universal Time Series Forecasting Transformers.”</span> In <em>Proceedings of the 41st International Conference on Machine Learning</em>. <a href="https://doi.org/10.48550/arXiv.2402.02592">https://doi.org/10.48550/arXiv.2402.02592</a>.
+</div>
+<div id="ref-Yang2022" class="csl-entry" role="listitem">
+Yang, Jingfeng, Aditya Gupta, Shyam Upadhyay, Luheng He, Rahul Goel, and Shachi Paul. 2022. <span>“<span>TableFormer</span>: Robust Transformer Modeling for Table-Text Encoding.”</span> In <em>Proceedings of the 60th Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers)</em>. <a href="https://arxiv.org/abs/2203.00274">https://arxiv.org/abs/2203.00274</a>.
+</div>
+<div id="ref-Ying2021" class="csl-entry" role="listitem">
+Ying, Chengxuan, Tianle Cai, Shengjie Luo, Shuxin Zheng, Guolin Ke, Di He, Yanming Shen, and Tie-Yan Liu. 2021. <span>“Do Transformers Really Perform Bad for Graph Representation?”</span> In <em>Advances in Neural Information Processing Systems</em>. Vol. 34. <a href="https://arxiv.org/abs/2106.05234">https://arxiv.org/abs/2106.05234</a>.
 </div>
 <div id="ref-zanetta_scoringrules_2024" class="csl-entry" role="listitem">
 Zanetta, Francesco, and Sam Allen. 2024. <span>“Scoringrules: A Python Library for Probabilistic Forecast Evaluation.”</span> <a href="https://github.com/frazane/scoringrules">https://github.com/frazane/scoringrules</a>.

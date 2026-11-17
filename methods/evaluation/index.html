@@ -15,7 +15,7 @@
         <link rel="canonical" href="https://samabbott.co.uk/BDBVHubRenewal/methods/evaluation/">
       
       
-        <link rel="prev" href="../foundation/">
+        <link rel="prev" href="../finetuned-chronos/">
       
       
         <link rel="next" href="../implementation/">
@@ -57,7 +57,7 @@
     
       <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
     
-      <link rel="stylesheet" href="../../stylesheets/extra.css?v=afdda586">
+      <link rel="stylesheet" href="../../stylesheets/extra.css?v=66c70f79">
     
     <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
@@ -700,6 +700,34 @@
                 
   
   
+  
+  
+    <li class="md-nav__item">
+      <a href="../finetuned-chronos/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Using the fine-tuned Chronos-2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
     
   
   
@@ -1056,34 +1084,6 @@
     
   
     Backtest
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../simulation/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Simulation checks
   
 
     
@@ -2305,7 +2305,8 @@ On the log scale it approximates a score of the relative error, close to a score
 <p>Positive bias is overprediction.
 Relative WIS is a ratio of means against a baseline <span class="arithmatex">\(b\)</span> over the forecasts both made, and below 1 beats it.
 Relative WIS on the log scale is the same ratio of mean WIS on the log scale.
-The baseline is <code>randomwalk</code>.
+The baseline is <code>randomwalknowcast</code>, set by <code>[scores] baseline</code> in <code>config/site.toml</code>.
+Of the Chronos-2 models the site shows only <code>fm_chronos_daily_ragged_ft</code> (<code>[models]</code> in <code>config/site.toml</code>); the others are still fitted, scored and in the paper.
 The interactive summaries and the checks chart have a Relative to picker that makes any model the baseline, and the overall score tables a baseline filter.
 In the summaries a new baseline changes which forecasts are matched, so <span class="arithmatex">\(n\)</span> and the means change too.
 Coverage is whether <span class="arithmatex">\(y\)</span> falls in the central 50% and 90% sample intervals.</p>
@@ -2319,7 +2320,7 @@ We use the fair form over <span class="arithmatex">\(m\)</span> samples,</p>
 \text{ES}(F, \mathbf{y}) = \frac{1}{m} \sum_{i} \lVert \mathbf{X}_i - \mathbf{y} \rVert - \frac{1}{2m(m - 1)} \sum_{i \ne j} \lVert \mathbf{X}_i - \mathbf{X}_j \rVert.
 \]</div>
 <p>The energy score on the log scale is the energy score of <span class="arithmatex">\(\log(1 + \mathbf{y})\)</span> against <span class="arithmatex">\(\log(1 + \mathbf{X}_i)\)</span>, never the log of the score.
-Relative energy scores are ratios of means against <code>randomwalk</code> over the origins and releases both have, and <span class="arithmatex">\(n\)</span> counts those.
+Relative energy scores are ratios of means against <code>randomwalknowcast</code> over the origins and releases both have, and <span class="arithmatex">\(n\)</span> counts those.
 The score rewards a joint pattern across places only where draws are joint.
 The draws of <code>renewal</code> and <code>renewalbvd</code> are joint across provinces, one posterior draw per sample index.
 <code>renewalsp</code> fits each province on its own, so its provinces are independent.
@@ -2411,7 +2412,7 @@ The Backtest page gives the truth delay in use and how many forecasts it scores.
 Health zones are scored on the weeks the latest release reports in full.
 There a week is complete when it is at least 4 weeks back from the week holding the latest release's cut-off and grew by less than 2% since the release before.</p>
 <p>Scores are WIS, 50% and 90% coverage and bias, by model, origin, weeks back from the week holding the origin's cut-off, and place.
-Relative WIS is against <code>randomwalk</code> on the forecasts both made, for national and the provinces pooled, over all origins and by origin, and by origin and place.
+Relative WIS is against <code>randomwalknowcast</code> on the forecasts both made, for national and the provinces pooled, over all origins and by origin, and by origin and place.
 Every table counts its forecasts, <span class="arithmatex">\(n\)</span>, so a model with fewer forecasts was scored on fewer weeks or places.
 The run stops if an origin has no release snapshots or two models run here give identical samples.</p>
 <h2 id="reading-the-figures">Reading the figures<a class="headerlink" href="#reading-the-figures" title="Permanent link">&para;</a></h2>
@@ -2429,16 +2430,16 @@ It runs on every real vintage for the three renewal models.</p>
 <h2 id="health-zones">Health zones<a class="headerlink" href="#health-zones" title="Permanent link">&para;</a></h2>
 <p><code>randomwalk</code>, <code>randomwalknowcast</code> and <code>pprandomwalknowcast</code> are scored at zone level, for every zone with cases at the vintage (<a href="../baselines/#health-zones">Baseline models</a>).
 A week with no onsets in a zone has a count of 0.
-Each model's zone samples are made to sum to its province samples, as in the submitted file, and are scored in that form.
+Each model's zone samples are scored as the model draws them, as in the submitted file.
 Each real vintage before the latest is forecast, and origins with no pair of releases within the delay window are skipped, as for provinces.
 Zones are scored on the reported target as for <a href="#real-releases">real releases</a>, with the zone delays fitted at the origin, so a zone count is never scored against a count still being reported.
-Relative WIS is against <code>randomwalk</code> in the same form.
+Relative WIS is against <code>randomwalknowcast</code>.
 <code>pprandomwalknowcast</code> is fitted here on the zones and on the provinces.
 On the Nowcast page only <code>randomwalk</code> and <code>randomwalknowcast</code> are shown at zone level.
 The fitted models are shown at the country and provinces, from their stored forecasts.</p>
 <h2 id="checks">Scores by place type and plausibility<a class="headerlink" href="#checks" title="Permanent link">&para;</a></h2>
 <p>The scores on the reported target, at province and zone level, are also averaged by the type of place and by a plausibility flag of each forecast, both decided from the counts reported at the origin.
-Relative WIS in these averages is against <code>randomwalk</code>.
+Relative WIS in these averages is against <code>randomwalknowcast</code>.
 Week <span class="arithmatex">\(w\)</span> is the latest week ending on or before the origin, and <span class="arithmatex">\(n(t)\)</span> the count reported then for the week ending <span class="arithmatex">\(t\)</span>, with 0 for a week with no row.
 A place with no case in the 9 weeks to <span class="arithmatex">\(w\)</span>, one with no week above 5 cases, and the rest form the three place types.
 The flag is set from each origin's forecast of week <span class="arithmatex">\(w + 1\)</span>, with median <span class="arithmatex">\(q_{50}\)</span> and 95% quantile <span class="arithmatex">\(q_{95}\)</span>.
@@ -2450,10 +2451,13 @@ A forecast with neither has no flag.
 Every scored week of a forecast takes the forecast's place type and flag, and the scores are averaged over scored weeks.</p>
 <h2 id="comparison-with-hub-forecasts">Comparison with hub forecasts<a class="headerlink" href="#comparison-with-hub-forecasts" title="Permanent link">&para;</a></h2>
 <p>For each hub reference date, our unfitted models forecast from the latest real vintage serving the round.
-Fitted models use their stored backtest forecasts for the same round.
+Fitted models use their stored fits for the same round, every week the fit forecast.
 Where we submitted to a round, our submitted file is a series of its own beside these main-build forecasts.
-Every model is scored on the complete weeks it forecast, from the vintage serving the round, since hub teams have no modelled delay we can see.
-WIS is relative to <code>randomwalk</code> on the weeks both forecast, on the <a href="../../comparison/">comparison page</a>.
+Every model is scored only on the hub teams' cells: the rounds, places and weeks any team forecast.
+Our models forecast more places and weeks, and rounds no team forecast, and those cells are not scored.
+Each cell is scored on the complete weeks, from the vintage serving the round, since hub teams have no modelled delay we can see.
+The table by round gives each model's <code>n</code> beside <code>hub_cells</code>, the team cells scored, so a model with fewer missed some.
+WIS is relative to <code>randomwalknowcast</code> on the weeks both forecast, on the <a href="../../comparison/">comparison page</a>.
 A round is pending until a later real release exists.</p>
 <h2 id="german-nowcast-benchmark">German nowcast benchmark<a class="headerlink" href="#german-nowcast-benchmark" title="Permanent link">&para;</a></h2>
 <p>The German COVID-19 hospitalisation nowcasting hub<sup id="fnref:wolffram"><a class="footnote-ref" href="#fn:wolffram">1</a></sup> collected nowcasts of the 7-day hospitalisation incidence by Meldedatum, the date a case was reported positive, for Germany, its 16 states and six age groups.
@@ -2531,7 +2535,7 @@ The paper also filled some missing ILM and LMU nowcasts from later model version
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="../foundation/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Foundation models">
+          <a href="../finetuned-chronos/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Using the fine-tuned Chronos-2">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -2541,7 +2545,7 @@ The paper also filled some missing ILM and LMU nowcasts from later model version
                 Previous
               </span>
               <div class="md-ellipsis">
-                Foundation models
+                Using the fine-tuned Chronos-2
               </div>
             </div>
           </a>
@@ -2623,23 +2627,25 @@ The paper also filled some missing ILM and LMU nowcasts from later model version
       
         <script src="../../javascripts/mathjax.js?v=bced49b5"></script>
       
-        <script src="../../javascripts/toggles.js?v=b6055b59"></script>
+        <script src="../../javascripts/toggles.js?v=47ee5e12"></script>
       
         <script src="../../javascripts/placemap.js?v=03fe1366"></script>
       
         <script src="../../javascripts/zoom.js?v=4e0c610c"></script>
       
-        <script src="../../javascripts/summarise.js?v=896d340e"></script>
+        <script src="../../javascripts/summarise.js?v=e2f49fd3"></script>
       
         <script src="../../javascripts/energy.js?v=36005f6a"></script>
       
-        <script src="../../javascripts/tablefilter.js?v=774f66a6"></script>
+        <script src="../../javascripts/tablesort.js?v=eb2e29e2"></script>
       
-        <script src="../../javascripts/explorer.js?v=576e13e2"></script>
+        <script src="../../javascripts/tablefilter.js?v=2e54a8a5"></script>
+      
+        <script src="../../javascripts/explorer.js?v=c0ccb898"></script>
       
         <script src="../../javascripts/scorechart.js?v=1c27a70d"></script>
       
-        <script src="../../javascripts/scoresummary.js?v=34222cf0"></script>
+        <script src="../../javascripts/scoresummary.js?v=baec2b21"></script>
       
         <script src="../../javascripts/checkschart.js?v=1ee222fe"></script>
       

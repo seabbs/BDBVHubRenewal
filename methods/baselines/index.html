@@ -57,7 +57,7 @@
     
       <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
     
-      <link rel="stylesheet" href="../../stylesheets/extra.css?v=afdda586">
+      <link rel="stylesheet" href="../../stylesheets/extra.css?v=66c70f79">
     
     <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
@@ -871,6 +871,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../finetuned-chronos/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Using the fine-tuned Chronos-2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../evaluation/" class="md-nav__link">
         
   
@@ -1050,34 +1078,6 @@
     
   
     Backtest
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../simulation/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Simulation checks
   
 
     
@@ -2286,7 +2286,7 @@ Both run at province and zone level (<a href="#health-zones">Health zones</a>), 
 <li>takes the walk's variance net of Poisson noise (<a href="#forecast">Forecast</a>);</li>
 <li>shares the delay, size and walk variance with a parent where a place has fewer than 10 cases a week (<a href="#own-or-pooled-estimates">Own or pooled estimates</a>).</li>
 </ol>
-<p>Two further rules keep places with few or no cases sensible: introductions for places with no recent case (<a href="#forecast">Forecast</a>), and zone samples that sum to their province's (<a href="#health-zones">Health zones</a>).</p>
+<p>A further rule keeps places with no recent case sensible: introductions (<a href="#forecast">Forecast</a>).</p>
 <h2 id="structure">Structure<a class="headerlink" href="#structure" title="Permanent link">&para;</a></h2>
 <p><code>randomwalknowcast</code> nowcasts each recent week and walks forward from each nowcast draw.</p>
 <pre class="mermaid"><code>flowchart TD
@@ -2461,12 +2461,18 @@ If no parent nor the country has a variance above 0, the model gives no forecast
 A pooled <span class="arithmatex">\(\sigma_p\)</span> uses the changes and noise of all the places in the pool together.</p>
 <p>A place with no case in the 9 weeks to <span class="arithmatex">\(c_o\)</span> stays at 0 until a new introduction, which starts its walk from a Poisson(1) count given at least 1.
 An introduction occurs each week after the latest complete week with probability <span class="arithmatex">\(q_p\)</span>, times the share of the week not yet reported.
-<span class="arithmatex">\(q_p\)</span> is estimated over the 9 weeks to the place's start week, the weeks that set its walk spread, from the place and its siblings.
+<span class="arithmatex">\(q_p\)</span> is estimated over the 9 weeks to the place's start week, the weeks that set its walk spread.
 A place with no case yet takes the rate of a first case: the share of weeks with a case among the weeks with no case before them.
 A place seen before takes the rate of a re-introduction: the share of weeks with a case among the weeks with an earlier case but none in the 9 weeks before.
-If the siblings have no introduction of that kind in the 9 weeks, all weeks to the start week count instead.
+Each rate has two sources, taken as independent:</p>
+<div class="arithmatex">\[
+q_p = 1 - (1 - q_{\text{local}})(1 - q_{\text{global}}),
+\]</div>
+<p>with <span class="arithmatex">\(q_{\text{local}}\)</span> pooled over the place and its siblings, and <span class="arithmatex">\(q_{\text{global}}\)</span> over the other places of its level, the zones of the other provinces for a zone.
+Provinces and the country have no other places of their level, so their <span class="arithmatex">\(q_{\text{global}} = 0\)</span>.
+<span class="arithmatex">\(q_p\)</span> is 0 only where no place of the level has an introduction of that kind in the window.
 Without this rule a silent place would walk from a nowcast near 0, with baselinenowcast's <span class="arithmatex">\(+1\)</span> and a pooled spread, and so forecast a few cases every week.
-Most zones and several provinces are silent at any origin, and their truth is almost always 0, so the rule keeps them at exactly 0 unless a case is likely from what their siblings show.</p>
+Most zones and several provinces are silent at any origin, and their truth is almost always 0, so the rule keeps them at exactly 0 unless a case is likely from what their siblings and the rest of the country show.</p>
 <h2 id="start-from-the-latest-complete-week">Start from the latest complete week<a class="headerlink" href="#start-from-the-latest-complete-week" title="Permanent link">&para;</a></h2>
 <p><code>randomwalk</code> makes no nowcast.
 Its start week <span class="arithmatex">\(w_0\)</span> is the latest week with</p>
@@ -2489,19 +2495,17 @@ Where no week reaches 0.95, <code>randomwalknowcast</code> takes the first week 
    The start week is looked for only in the 9 weeks to <span class="arithmatex">\(c_o\)</span>, <span class="arithmatex">\(1.5 D\)</span> and the nowcast's own window, counting the week holding <span class="arithmatex">\(c_o\)</span>.</li>
 <li>The weeks after it are the walk's draws from the sample's completed value of that week, <span class="arithmatex">\(\log(1 + y)\)</span> plus the walk's steps.</li>
 <li>A place with no case in the 9 weeks to <span class="arithmatex">\(c_o\)</span>, or with no start week in those 9 weeks, starts at the latest complete week instead.
-   After it the place stays at 0 until an introduction, as above, floored at the counts reported.</li>
+   A place with no case in those 9 weeks then stays at 0 until an introduction, as above.
+   A place with cases but no start week walks on from its mean reported count over the 9 weeks to its latest complete week.
+   Both are floored at the counts reported.</li>
 </ol>
 <h2 id="health-zones">Health zones<a class="headerlink" href="#health-zones" title="Permanent link">&para;</a></h2>
 <p><code>randomwalk</code> and <code>randomwalknowcast</code> run on each zone's own release snapshots in the same way as for provinces.
 Each zone takes its delay, size and walk spread by the rules <a href="#own-or-pooled-estimates">above</a>.
-Province sample <span class="arithmatex">\(Y^{(i)}(w)\)</span> is apportioned over the zones in proportion to the zone model's own sample <span class="arithmatex">\(x^{(i)}_z(w)\)</span> of the same id and week:</p>
-<div class="arithmatex">\[
-y^{(i)}_z(w) \approx Y^{(i)}(w)\, \frac{x^{(i)}_z(w)}{\sum_{z'} x^{(i)}_{z'}(w)}.
-\]</div>
-<p>Largest remainders make the values whole numbers that sum to <span class="arithmatex">\(Y^{(i)}(w)\)</span>, so zone samples sum to their province's samples (<a href="../model/#health-zones">Renewal models</a>).
-Where every <span class="arithmatex">\(x^{(i)}_z(w)\)</span> is 0 the split uses the Dirichlet mean shares of the <a href="../model/#split-of-province-samples">Renewal models</a> page.
-Zones are reconciled because their own walks are noisy and do not sum to their province's, which pools more data.
-The split keeps each zone's share from its own sample, and the province sets the total, so the zone, province and national forecasts describe one set of trajectories.</p>
+A zone with no case in the 9 weeks to <span class="arithmatex">\(c_o\)</span> stays at 0 until an introduction (<a href="#forecast">Forecast</a>).
+The zone samples are these draws.
+No province sample is split over the zones, so zones need not sum to their province.
+The hub does not require them to.</p>
 <h2 id="partially-pooled-variant">Partially pooled variant<a class="headerlink" href="#partially-pooled-variant" title="Permanent link">&para;</a></h2>
 <p><code>pprandomwalknowcast</code> is one generative model of the expected final counts and the reporting delay, in the style of epinowcast<sup id="fnref:enw"><a class="footnote-ref" href="#fn:enw">2</a></sup>.
 It is fitted with NUTS to the release snapshots, and its forecast samples are posterior predictive draws.
@@ -2607,7 +2611,7 @@ A later day of the week holding <span class="arithmatex">\(c_o\)</span> is an NB
 Later weeks continue the walk from the draw's last <span class="arithmatex">\(\lambda\)</span> with its <span class="arithmatex">\(\sigma_p\)</span>, and their counts are NB with mean <span class="arithmatex">\(\lambda\)</span> and size <span class="arithmatex">\(7 \phi_p\)</span>, the sum of seven days.
 Weeks before the 16 fitted weeks are the counts reported.
 National is the sum of the provinces by sample.
-In the zone backtest it also runs on the zones, which are reconciled to its provinces as for <code>randomwalknowcast</code> (<a href="#health-zones">Health zones</a>).
+In the zone backtest it also runs on the zones, and its zone draws are scored as they are (<a href="#health-zones">Health zones</a>).
 Elsewhere, as in the hub tables, its province samples are split across the zones as for the renewal models (<a href="../model/#split-of-province-samples">Renewal models</a>).</p>
 <p><strong>Silent places.</strong>
 A silent leaf has no case to fit, and a walk from a <span class="arithmatex">\(\lambda\)</span> near 0 gave divergent draws.
@@ -2819,23 +2823,25 @@ The walk has no drift, and its spread comes from 8 weekly changes, net of a delt
       
         <script src="../../javascripts/mathjax.js?v=bced49b5"></script>
       
-        <script src="../../javascripts/toggles.js?v=b6055b59"></script>
+        <script src="../../javascripts/toggles.js?v=47ee5e12"></script>
       
         <script src="../../javascripts/placemap.js?v=03fe1366"></script>
       
         <script src="../../javascripts/zoom.js?v=4e0c610c"></script>
       
-        <script src="../../javascripts/summarise.js?v=896d340e"></script>
+        <script src="../../javascripts/summarise.js?v=e2f49fd3"></script>
       
         <script src="../../javascripts/energy.js?v=36005f6a"></script>
       
-        <script src="../../javascripts/tablefilter.js?v=774f66a6"></script>
+        <script src="../../javascripts/tablesort.js?v=eb2e29e2"></script>
       
-        <script src="../../javascripts/explorer.js?v=576e13e2"></script>
+        <script src="../../javascripts/tablefilter.js?v=2e54a8a5"></script>
+      
+        <script src="../../javascripts/explorer.js?v=c0ccb898"></script>
       
         <script src="../../javascripts/scorechart.js?v=1c27a70d"></script>
       
-        <script src="../../javascripts/scoresummary.js?v=34222cf0"></script>
+        <script src="../../javascripts/scoresummary.js?v=baec2b21"></script>
       
         <script src="../../javascripts/checkschart.js?v=1ee222fe"></script>
       
