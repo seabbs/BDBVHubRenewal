@@ -110,3 +110,27 @@ def test_the_summary_has_zero_shot_and_the_newest_checkpoint() -> None:
     assert len(t) == 2
     assert t.iloc[1]["German WIS"] == "3.00 / 3.00 (125)"
     assert t.iloc[1]["BDBV CRPS"] == "1.75 / 1.75 (250)"
+
+
+def test_the_docs_page_gets_the_label_and_summary(tmp_path) -> None:
+    from bdbvhubrenewal.cli import main
+
+    scores = tmp_path / "scores.csv"
+    _rows().to_csv(scores, index=False)
+    out = tmp_path / "ft-preliminary.md"
+    args = ["live-checkpoint", "--scores", str(scores), "--out", str(out)]
+    assert main([*args, "--run", "one-model"]) == 0
+    text = out.read_text()
+    assert "Preliminary" in text
+    assert "Newest checkpoint" in text
+
+
+def test_the_docs_page_waits_without_scores(tmp_path) -> None:
+    from bdbvhubrenewal.cli import main
+
+    out = tmp_path / "ft-preliminary.md"
+    missing = str(tmp_path / "none.csv")
+    assert (
+        main(["live-checkpoint", "--scores", missing, "--out", str(out)]) == 0
+    )
+    assert "not yet" in out.read_text()
