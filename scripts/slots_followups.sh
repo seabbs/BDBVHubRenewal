@@ -53,6 +53,10 @@ flock 9
 for job in "slots-check:scripts/slots_check.sh" "agg-slots:scripts/agg/run_finetuned.sh"; do
   tree=$trees/${job%%:*}
   runner=$tree/${job#*:}
+  if [ -f "$HOME/${job%%:*}/DISABLED" ]; then
+    say "skipped ${job%%:*}: $(cat "$HOME/${job%%:*}/DISABLED")"
+    continue
+  fi
   if [ ! -x "$runner" ]; then
     say "skipped ${job%%:*}: no runner at $runner"
     continue
