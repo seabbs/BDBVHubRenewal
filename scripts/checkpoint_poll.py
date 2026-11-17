@@ -342,6 +342,15 @@ SKIP_GERMAN_FILE = Path.home() / "ckpt-scores" / "skip-german"
 """If present, labels (one a line) whose German nowcasts are not run."""
 
 
+FAST_ONLY_FILE = Path.home() / "ckpt-scores" / "fast-only"
+"""While present, only new checkpoints' held-out and BDBV units run."""
+
+
+def fast_only(path: Path) -> bool:
+    """Whether the scorer is held to held-out and BDBV units."""
+    return path.exists()
+
+
 def unit_cap(path: Path, default: int) -> int:
     """Return the cap in `path`, or `default` without the file."""
     try:
@@ -905,6 +914,10 @@ def main(cache: Path) -> None:
                 zero_init_labels(cache),
             )
 
+        if job is None and fast_only(FAST_ONLY_FILE):
+            log("progress: fast-only: idle (held-out and BDBV only)")
+            time.sleep(POLL_SECONDS)
+            continue
         if job is None:
             stale = [
                 s
@@ -998,6 +1011,12 @@ def main(cache: Path) -> None:
                 if sha is not None and note is not None:
                     say(note)
             # The loop picks what goes on next (an older German run, say).
+            continue
+        if fast_only(FAST_ONLY_FILE):
+            # Held to held-out and BDBV: no German, held-out scores,
+            # zones or idle jobs until the file goes.
+            log("progress: fast-only: idle (held-out and BDBV only)")
+            time.sleep(POLL_SECONDS)
             continue
         if checkpoint.startswith("slots-"):
             # Every due German run of the live run's checkpoints, in
