@@ -43,6 +43,10 @@ RUNS = [
     {"key": "attention bias", "label": "attention bias", "hue": 217,
      "live": True, "dir": RUN, "hashes": None, "prefix": None, "n": {},
      "base_from": "slots zeroinit"},
+    {"key": "attention bias v1", "label": "attention bias (separate layouts)",
+     "hue": 160, "live": False,
+     "dir": ROOT / "output/finetune/continuous-slots-bias4", "hashes": None,
+     "prefix": None, "n": {}, "base_from": "slots zeroinit"},
     {"key": "slots zeroinit", "label": "slots (zero init)", "hue": 330,
      "live": False, "dir": ROOT / "output/finetune/continuous-slots-zeroinit",
      "hashes": ["7d7c5d9f247e", "06dbdcc2b48d"], "prefix": None,
@@ -79,6 +83,8 @@ def live_dir():
 
 
 CKPTS = [250, 500, 750, 1000, 2000, 4000, 8000]  # fallback prefixes
+# Optional remote mailbox shown under Recent activity; None hides the section.
+MAILBOX = {"host": "archie", "path": "~/bdbv-archie-mailbox.md", "lines": 30}
 MAIL_RE = re.compile(
     r"slots|ckpt-scores|agg-slots|slots-check|fm-finetune3|sim round|"
     r"sim-round|sims? rounds?", re.I)
@@ -163,7 +169,8 @@ def mail_fetch():
     try:
         r = subprocess.run(
             ["ssh", "-o", "ConnectTimeout=10", "-o", "BatchMode=yes",
-             "archie", "tail -n 30 ~/bdbv-archie-mailbox.md"],
+             MAILBOX["host"],
+             f"tail -n {MAILBOX['lines']} {MAILBOX['path']}"],
             capture_output=True, text=True, timeout=20)
         if r.returncode == 0:
             MAIL["lines"] = [l for l in r.stdout.splitlines()
@@ -264,6 +271,15 @@ def run_params(rundir, hist, step):
             if isinstance(v, list) else {"lr": v})
         for g, x in v.items():
             logged.setdefault(g, []).append((h["step"], float(x)))
+    # one entry per group name, ignoring case; history's spelling wins
+    disp = {g.lower(): g for g in logged}
+    for g in groups:
+        disp.setdefault(g.lower(), g)
+    merged = {}
+    for g, v in groups.items():
+        merged.setdefault(disp[g.lower()], v)
+    groups = merged
+    logged = {disp[g.lower()]: v for g, v in logged.items()}
     for g in logged:
         groups.setdefault(g, logged[g][0][1])
     current = {}
@@ -627,34 +643,49 @@ def score_classify(r):
     return None
 
 
+LEVEL_ORDER = ["national", "states", "age", "provinces"]
+STUDY_ORDER = ["germany", "ebola", "heldout"]
+
+
 def score_payload(rows, local):
     """Rows for the client-side score chart and not-yet-scored markers."""
     out, seen_h, seen_n = [], set(), {}
     variants, vbase, targets = {}, {}, {}
+    levels, metrics, vlabel = {}, {}, {}
     run_keys = {c["key"] for c in RUNS}
     for r in rows:
-        if r.get("rule") != RULE or r["study"] not in ("germany", "ebola"):
+        if r.get("rule") != RULE:
             continue
         ser = score_classify(r)
-        v = num(r["rel_wis" if r["study"] == "germany" else "rel_crps"])
-        if ser is None or v is None:
+        if ser is None:
             continue
+        # The source is the layout column when the row has one (held-out
+        # synthetic scores), else daily or weekly from the model name.
+        lay = (r.get("layout") or "").strip()
         base = base_src(r["model"])
-        if base is None:
+        src = lay or base
+        if src is None:
             continue
-        src = base
         h = norm_hash(r["checkpoint"])[0]
         n = int(num(r.get("outbreaks")) or 0)
         tgt = (r.get("target") or "").strip()
-        out.append([r["study"], r["level"], src, ser, n,
-                    "" if r["checkpoint"] == "zero-shot" else h,
-                    round(v, 4), tgt])
-        targets.setdefault(r["study"], set()).add(tgt)
-        if ser in run_keys:
-            variants.setdefault(r["study"], set()).add(src)
-        vbase[src] = base
-        seen_h.add(h)
-        seen_n.setdefault(ser, set()).add(n)
+        for col, metric in (("rel_wis", "wis"), ("rel_crps", "crps")):
+            v = num(r.get(col))
+            if v is None:
+                continue
+            out.append([r["study"], r["level"], src, ser, n,
+                        "" if r["checkpoint"] == "zero-shot" else h,
+                        round(v, 4), tgt, metric])
+            st = r["study"]
+            targets.setdefault(st, set()).add(tgt)
+            levels.setdefault(st, set()).add(r["level"])
+            metrics.setdefault(st, set()).add(metric)
+            vlabel[st] = "layout" if lay else vlabel.get(st, "source")
+            if ser in run_keys:
+                variants.setdefault(st, set()).add(src)
+            vbase[src] = base or src
+            seen_h.add(h)
+            seen_n.setdefault(ser, set()).add(n)
     pending = []
     for run, n, h in local:
         scored = (h in seen_h) if h else (n in seen_n.get(run, set()))
@@ -670,7 +701,13 @@ def score_payload(rows, local):
             "col": {s["key"]: s["color"] for s in series},
             "variants": {k: sorted(v) for k, v in variants.items()},
             "targets": {k: sorted(v) for k, v in targets.items()},
-            "vbase": vbase,
+            "vbase": vbase, "vlabel": vlabel,
+            "metrics": {k: sorted(v) for k, v in metrics.items()},
+            "levels": {k: sorted(v, key=lambda x: (
+                LEVEL_ORDER.index(x) if x in LEVEL_ORDER else 99, x))
+                for k, v in levels.items()},
+            "studies": sorted({r[0] for r in out}, key=lambda x: (
+                STUDY_ORDER.index(x) if x in STUDY_ORDER else 99, x)),
             "defaults": [next((c["key"] for c in RUNS if c["key"] in seen_n),
                               live_cfg()["key"]), "zero", "rw"]}
 
@@ -679,23 +716,19 @@ def heldout_chart(rows):
     ho = []
     xval = lambda r: 125 if r["checkpoint"] == "zero-shot" else (
         num(r.get("outbreaks")) or None)
-    rows = [r for r in rows if r.get("rule") == RULE]
-    for lvl, colour in (("all", run_colour(RUNS[0]["key"])),
-                        ("real_validation", REF_COL["complete"])):
-        rs = [r for r in rows if r["study"] == "held_out"
-              and r["level"] == lvl and num(r.get("loss")) is not None]
-        for run, dash in [(c["key"], None if i == 0 else "dash")
-                          for i, c in enumerate(RUNS)]:
-            pts = sorted((xval(r), num(r["loss"])) for r in rs
-                         if xval(r) and hash_run(*norm_hash(
-                             r["checkpoint"])) == run)
-            z = [(125, num(r["loss_zero_shot"])) for r in rs
-                 if num(r.get("loss_zero_shot")) is not None][:1]
-            if pts:
-                s = (f"{lvl}, {run}", colour, z + pts, "pts")
-                ho.append(s + (dash,) if dash else s)
-    return chart("Held-out loss (all blocks; real validation)", ho,
-                 ylog=True, xticks=XT, xlabel="simulations (log2)")
+    rows = [r for r in rows if r.get("rule") == RULE and
+            r["study"] == "held_out" and r["level"] == "all"
+            and num(r.get("loss")) is not None]
+    for c in RUNS:
+        pts = sorted((xval(r), num(r["loss"])) for r in rows
+                     if xval(r) and hash_run(*norm_hash(
+                         r["checkpoint"])) == c["key"])
+        z = [(125, num(r["loss_zero_shot"])) for r in rows
+             if num(r.get("loss_zero_shot")) is not None][:1]
+        if pts:
+            ho.append((c["label"], run_colour(c["key"]), z + pts, "pts"))
+    return chart("Held-out loss (all blocks)", ho, xticks=XT,
+                 xlabel="simulations (log2)")
 
 
 SC_JS = r"""
@@ -703,12 +736,15 @@ SC_JS = r"""
 var P=JSON.parse(document.getElementById("sdata").textContent);
 var $=function(i){return document.getElementById(i)};
 var SERS=P.series.map(function(s){return [s.key,s.label]}),RUNK=P.series.filter(function(s){return s.run}).map(function(s){return s.key});
-var LV={germany:[["national","national"],["states","states"],["age","ages"]],ebola:[["national","national"],["provinces","provinces"]]};
+var STUDIES=P.studies.map(function(s){return [s,{germany:"Germany",ebola:"BDBV",heldout:"held-out synthetic"}[s]||s]});
+function LVL(st){return (P.levels[st]||[]).map(function(l){return [l,l=="age"?"ages":l]})}
+var LV={};P.studies.forEach(function(s){LV[s]=LVL(s)});
 var MK=["circle","square","triangle","diamond"];
 var VDASH=["","6 3","2 3","8 3 2 3"],REFK=["zero","complete","rw"];
-var S={study:"germany",vars:null,target:null,lv:["national"],cmp:false,log:false,ser:P.defaults.slice()};
-try{var sv=JSON.parse(sessionStorage.getItem("fts4")||"null");if(sv)S=sv}catch(e){}
-function save(){try{sessionStorage.setItem("fts4",JSON.stringify(S))}catch(e){}}
+var S={study:STUDIES.length?STUDIES[0][0]:"",vars:null,target:null,metric:null,lv:["national"],cmp:false,log:false};
+function SEL(){return ftSel.get()}
+try{var sv=JSON.parse(sessionStorage.getItem("fts5")||"null");if(sv)S=sv}catch(e){}
+function save(){try{sessionStorage.setItem("fts5",JSON.stringify(S))}catch(e){}}
 function mark(k,x,y,c,t){var r=3.6,s="";
  if(k=="circle")s='<circle cx="'+x+'" cy="'+y+'" r="'+r+'" fill="'+c+'">';
  else if(k=="square")s='<rect x="'+(x-r)+'" y="'+(y-r)+'" width="'+2*r+'" height="'+2*r+'" fill="'+c+'">';
@@ -716,6 +752,8 @@ function mark(k,x,y,c,t){var r=3.6,s="";
  else s='<polygon points="'+x+','+(y-r-1)+' '+(x+r+1)+','+y+' '+x+','+(y+r+1)+' '+(x-r-1)+','+y+'" fill="'+c+'">';
  return s+'<title>'+t+'</title>'+(k=="circle"?"</circle>":k=="square"?"</rect>":"</polygon>")}
 function btn(id,label,on,sty){return '<button data-id="'+id+'" class="tog'+(on?" on":"")+'"'+(sty?' style="'+sty+'"':"")+'>'+label+'</button>'}
+function MTS(){return P.metrics[S.study]||[]}
+function MT(){var a=MTS();return a.indexOf(S.metric)>=0?S.metric:(a.indexOf("wis")>=0?"wis":a[0]||"")}
 function TGTS(){return P.targets[S.study]||[]}
 function TGT(){var a=TGTS();return a.indexOf(S.target)>=0?S.target:(a.indexOf("7day")>=0?"7day":a[0]||"")}
 function tlab(v){return v=="7day"?"7-day":(v||"all")}
@@ -726,42 +764,50 @@ function curVars(){var av=VARS(),sel=(S.vars||[]).filter(function(v){return av.i
  return sel}
 function controls(){
  var lv=LV[S.study];
- $("sctl").innerHTML=[["germany","Germany"],["ebola","BDBV"]].map(function(a){return btn("study:"+a[0],a[1],S.study==a[0])}).join("")
+ $("sctl").innerHTML=STUDIES.map(function(a){return btn("study:"+a[0],a[1],S.study==a[0])}).join("")
+ +(MTS().length>1?'<span class=sep></span><span class=mut>score</span>'+MTS().map(function(a){return btn("met:"+a,a.toUpperCase(),MT()==a)}).join(""):"")
  +(TGTS().length>1?'<span class=sep></span><span class=mut>target</span>'+TGTS().map(function(a){return btn("tgt:"+a,tlab(a),TGT()==a)}).join(""):"")
- +'<span class=sep></span><span class=mut>source</span>'+VARS().map(function(a){return btn("var:"+a,a,curVars().indexOf(a)>=0)}).join("")
+ +'<span class=sep></span><span class=mut>'+(P.vlabel[S.study]||"source")+'</span>'+VARS().map(function(a){return btn("var:"+a,a,curVars().indexOf(a)>=0)}).join("")
  +'<span class=sep></span>'+lv.map(function(a){return btn("lv:"+a[0],a[1],S.lv.indexOf(a[0])>=0)}).join("")+btn("cmp","compare levels",S.cmp)
- +'<span class=sep></span>'+SERS.map(function(a){return btn("ser:"+a[0],a[1],S.ser.indexOf(a[0])>=0,"border-left:4px solid "+P.col[a[0]])}).join("")
+
  +'<span class=sep></span>'+btn("log","log scale",S.log)}
 function tick(arr,v){var i=arr.indexOf(v);if(i>=0)arr.splice(i,1);else arr.push(v)}
 $("sctl").onclick=function(e){var b=e.target.closest("button");if(!b)return;var p=b.dataset.id.split(":"),k=p[0],v=p[1];
- if(k=="study"){S.study=v;S.lv=S.lv.filter(function(l){return LV[v].some(function(a){return a[0]==l})});if(!S.lv.length)S.lv=["national"]}
+ if(k=="study"){S.study=v;S.vars=null;S.lv=S.lv.filter(function(l){return LV[v].some(function(a){return a[0]==l})});if(!S.lv.length)S.lv=[LV[v].length?LV[v][0][0]:"national"]}
  else if(k=="tgt")S.target=v;
+ else if(k=="met")S.metric=v;
  else if(k=="var"){var cv=curVars().slice();var i=cv.indexOf(v);if(i>=0){if(cv.length>1)cv.splice(i,1)}else cv.push(v);S.vars=cv}
  else if(k=="lv"){if(S.cmp){tick(S.lv,v);if(!S.lv.length)S.lv=[v]}else S.lv=[v]}
  else if(k=="cmp"){S.cmp=!S.cmp;if(!S.cmp)S.lv=[S.lv[0]]}
  else if(k=="log")S.log=!S.log;
- else tick(S.ser,v);
+ else{}
  save();draw()};
 function fmt(v){return (+v).toPrecision(3)}
 function niceTicks(lo,hi){var st=(hi-lo)/4,m=Math.pow(10,Math.floor(Math.log10(st))),k=[1,2,2.5,5,10].find(function(x){return x*m>=st})*m,o=[];
  for(var v=Math.ceil(lo/k)*k;v<=hi+1e-9;v+=k)o.push(+v.toFixed(6));return o}
 function draw(){
+ var avl=LV[S.study]||[];
+ if(avl.length&&!avl.some(function(a){return S.lv.indexOf(a[0])>=0}))S.lv=[avl[0][0]];
  controls();
- var lv=LV[S.study].filter(function(a){return S.lv.indexOf(a[0])>=0});
+ var lv=avl.filter(function(a){return S.lv.indexOf(a[0])>=0});
  var vs=curVars();
- var TG=TGT();
- function rowsFor(v){return P.rows.filter(function(r){return r[0]==S.study&&(r[7]==TG||r[7]=="")&&(r[2]==v||(REFK.indexOf(r[3])>=0&&r[2]==baseOf(v)))})}
+ var TG=TGT(),MM=MT();
+ function rowsFor(v){return P.rows.filter(function(r){return r[0]==S.study&&(r[7]==TG||r[7]=="")&&r[8]==MM&&(r[2]==v||(REFK.indexOf(r[3])>=0&&r[2]==baseOf(v)))})}
  var rows=[];vs.forEach(function(v){rowsFor(v).forEach(function(r){if(rows.indexOf(r)<0)rows.push(r)})});
- var shown=rows.filter(function(r){return S.ser.indexOf(r[3])>=0&&r[3]!="rw"&&lv.some(function(l){return l[0]==r[1]})});
+ var shown=rows.filter(function(r){return SEL().indexOf(r[3])>=0&&r[3]!="rw"&&lv.some(function(l){return l[0]==r[1]})});
  var W=640,H=320,L=44,R=16,T=10,B=44;
  var ns=shown.filter(function(r){return r[4]>0}).map(function(r){return r[4]});
  var nmin=ns.length?Math.min.apply(null,ns):250,nmax=ns.length?Math.max.apply(null,ns):250;
  var zx=nmin/2,x0=Math.log2(zx),x1=Math.log2(nmax*1.18);
  var sx=function(n){return L+(Math.log2(n||zx)-x0)/(x1-x0)*(W-L-R)};
  var vals=shown.map(function(r){return r[6]});
- var d=Math.max.apply(null,[0.05].concat(vals.map(function(v){return Math.abs(v-1)})))*1.1,lo,hi,sy;
- if(S.log){var q=Math.max.apply(null,[1.05].concat(vals.map(function(v){return Math.max(v,1/v)})))*1.1;lo=Math.log(1/q);hi=Math.log(q);sy=function(v){return T+(1-(Math.log(v)-lo)/(hi-lo))*(H-T-B)}}
- else{lo=Math.max(0,1-d);hi=1+d;sy=function(v){return T+(1-(v-lo)/(hi-lo))*(H-T-B)}}
+ // y range from the data shown; the randomwalknowcast line (1) counts only if close
+ if(!vals.length)vals=[1];
+ var vmin=Math.min.apply(null,vals),vmax=Math.max.apply(null,vals),spn=(vmax-vmin)||0.1*vmax;
+ if(1>=vmin-spn&&1<=vmax+spn){vmin=Math.min(vmin,1);vmax=Math.max(vmax,1)}
+ var showRw=1>=vmin&&1<=vmax,lo,hi,sy;
+ if(S.log){lo=Math.log(vmin)-0.1*(Math.log(vmax)-Math.log(vmin)||0.1);hi=Math.log(vmax)+0.1*(Math.log(vmax)-Math.log(vmin)||0.1);sy=function(v){return T+(1-(Math.log(v)-lo)/(hi-lo))*(H-T-B)}}
+ else{var pd=0.1*((vmax-vmin)||0.1*vmax);lo=Math.max(0,vmin-pd);hi=vmax+pd;sy=function(v){return T+(1-(v-lo)/(hi-lo))*(H-T-B)}}
  var h='<svg viewBox="0 0 '+W+' '+H+'" width="100%">';
  var yt=S.log?[0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1,1.1,1.25,1.5,2,3,4,6,8].filter(function(v){return Math.log(v)>=lo&&Math.log(v)<=hi}):niceTicks(lo,hi);
  yt.forEach(function(v){h+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+sy(v)+'" y2="'+sy(v)+'" class=grid /><text x="'+(L-5)+'" y="'+(sy(v)+3)+'" text-anchor=end class=ax>'+v+'</text>'});
@@ -769,11 +815,11 @@ function draw(){
  xt.forEach(function(t){h+='<line x1="'+sx(t[0])+'" x2="'+sx(t[0])+'" y1="'+T+'" y2="'+(H-B)+'" class=grid /><text x="'+sx(t[0])+'" y="'+(H-B+14)+'" text-anchor=middle class=ax>'+t[1]+'</text>'});
  h+='<text x="'+(W/2)+'" y="'+(H-6)+'" text-anchor=middle class=ax>simulations (log2)</text>';
  P.pending.forEach(function(p){if(p.n<=nmax*1.18&&p.n>=zx){h+='<line x1="'+sx(p.n)+'" x2="'+sx(p.n)+'" y1="'+T+'" y2="'+(H-B)+'" class=mark /><text x="'+(sx(p.n)+3)+'" y="'+(T+10)+'" class=ax>n'+p.n+' scoring</text>'}});
- if(S.ser.indexOf("rw")>=0)h+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+sy(1)+'" y2="'+sy(1)+'" stroke="'+P.col.rw+'" stroke-width=2 ><title>randomwalknowcast = 1</title></line>';
+ if(SEL().indexOf("rw")>=0&&showRw)h+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+sy(1)+'" y2="'+sy(1)+'" stroke="'+P.col.rw+'" stroke-width=2 ><title>randomwalknowcast = 1</title></line>';
  var any=false,sum=[],drawn={};
  lv.forEach(function(l,li){var mk=MK[li];
   RUNK.concat(["zero","complete"]).forEach(function(s){
-   if(S.ser.indexOf(s)<0)return;
+   if(SEL().indexOf(s)<0)return;
    var lab=SERS.find(function(x){return x[0]==s})[1],c=P.col[s];
    vs.forEach(function(v,vi){
     var rowsV=rowsFor(v);
@@ -792,15 +838,16 @@ function draw(){
      if(RUNK.indexOf(s)>=0){var last=rs[rs.length-1];
       sum.push((lv.length>1?l[1]+": ":"")+lab+vtag+" n"+last[4]+": "+fmt(last[6])+(zs?" vs zero-shot "+fmt(zs[6])+", "+((last[6]/zs[6]-1)*100>=0?"+":"")+((last[6]/zs[6]-1)*100).toFixed(0)+"%":""))}}})})});
  h+='</svg>';
- var leg=SERS.filter(function(s){return S.ser.indexOf(s[0])>=0}).map(function(s){return '<span><i style="background:'+P.col[s[0]]+'"></i>'+s[1]+(s[0]=="zero"?" (dashed)":s[0]=="complete"?" (dotted)":"")+'</span>'}).join("");
+ var leg=SERS.filter(function(s){return SEL().indexOf(s[0])>=0}).map(function(s){return '<span><i style="background:'+P.col[s[0]]+'"></i>'+s[1]+(s[0]=="zero"?" (dashed)":s[0]=="complete"?" (dotted)":"")+'</span>'}).join("");
  if(vs.length>1)leg+=vs.map(function(v,i){return '<span><svg width=26 height=8 viewBox="0 0 26 8"><line x1=0 x2=26 y1=4 y2=4 stroke="var(--fg)" stroke-width=2'+(VDASH[i%4]?' stroke-dasharray="'+VDASH[i%4]+'"':"")+' /></svg>'+v+'</span>'}).join("");
  if(lv.length>1)leg+=lv.map(function(l,i){return '<span><svg width=12 height=12 viewBox="0 0 12 12">'+mark(MK[i],6,6,"var(--fg)","")+'</svg>'+l[1]+'</span>'}).join("");
  var note="";
- if(S.ser.indexOf("complete")>=0&&!rows.some(function(r){return r[3]=="complete"}))note+="<p class=mut>complete-only pending</p>";
+ if(SEL().indexOf("complete")>=0&&!rows.some(function(r){return r[3]=="complete"}))note+="<p class=mut>complete-only pending</p>";
  if(P.pending.length)note+='<p class=mut>Scoring on archie, not yet in the scores: '+P.pending.map(function(p){return p.run+" n"+p.n+(p.hash?" "+p.hash:"")}).join(", ")+'.</p>';
  if(!any)note+="<p class=mut>No rows for this selection.</p>";
- $("splot").innerHTML='<div class=sum>'+(sum.join("; ")||"")+'</div>'+h+'<div class=leg>'+leg+'</div>'+note+'<p class=mut>Relative to randomwalknowcast ('+(S.study=="germany"?"WIS":"CRPS")+', below 1 is better'+(TGTS().length>1?', target '+tlab(TG):'')+'). Marker shape shows level'+(vs.length>1?', line style the variant':'')+'.</p>';
+ $("splot").innerHTML='<div class=sum><span class=mut>rel. '+MM.toUpperCase()+' vs randomwalknowcast</span> '+(sum.join("; ")||"")+'</div>'+h+'<div class=leg>'+leg+'</div>'+note;
 }
+window.addEventListener("ftsel",draw);
 draw();
 })();
 """
@@ -1045,7 +1092,7 @@ var DSS=D.datasets,RUNS=D.runs;
 var $=function(i){return document.getElementById(i)};
 var DASH=["","6 3","8 3 2 3","2 3"],MK=["circle","square","triangle","diamond"];
 var S={ds:DSS[0].key,locs:["DE"],src:"daily",target:null,oi:null,latest:true,nd:1,step:2,on:null,chk:{}};
-var KEY="ftg4";
+var KEY="ftg5";
 try{var sv=JSON.parse(sessionStorage.getItem(KEY)||"null");if(sv)Object.keys(sv).forEach(function(k){S[k]=sv[k]})}catch(e){}
 function cur(){return DSS.find(function(d){return d.key==S.ds})||DSS[0]}
 var C=cur();S.ds=C.key;
@@ -1056,15 +1103,15 @@ function TGT(){var a=C.targets||[];return a.indexOf(S.target)>=0?S.target:(a.ind
 function tlab(v){return v=="7day"?"7-day":(v||"all")}
 S.locs=(S.locs||[]).filter(function(l){return C.locs.indexOf(l)>=0});if(!S.locs.length)S.locs=[C.locs[0]];
 if(S.latest||ORI().indexOf(S.origin)<0){S.oi=ORI().length-1;S.latest=true}else S.oi=ORI().indexOf(S.origin);
-if(!S.on){var r0=RUNS.find(function(r){return ofRun(r.key).length})||RUNS[0];
- S.on=[r0?r0.key:"","zero-shot"].filter(function(x){return x})}
-function save(){try{sessionStorage.setItem(KEY,JSON.stringify({ds:S.ds,locs:S.locs,src:S.src,target:S.target,latest:S.latest,origin:ORI()[S.oi],nd:S.nd,step:S.step,on:S.on,chk:S.chk}))}catch(e){}}
+function onKey(id){return {"zero-shot":"zero","complete-only":"complete"}[id]||id}
+function isOn(k){return ftSel.get().indexOf(k)>=0}
+function save(){try{sessionStorage.setItem(KEY,JSON.stringify({ds:S.ds,locs:S.locs,src:S.src,target:S.target,latest:S.latest,origin:ORI()[S.oi],nd:S.nd,step:S.step,chk:S.chk}))}catch(e){}}
 function chosen(k){var all=ofRun(k),ids=(S.chk[k]||[]).filter(function(i){return all.some(function(m){return m.id==i})});
  if(!ids.length&&all.length)ids=[all[all.length-1].id];return ids}
 function effective(){var o=[];
- RUNS.forEach(function(r){if(S.on.indexOf(r.key)>=0){var ids=chosen(r.key);
+ RUNS.forEach(function(r){if(isOn(r.key)){var ids=chosen(r.key);
   ids.forEach(function(id,i){o.push({id:id,run:r.key,rank:ids.length-1-i})})}});
- refs().forEach(function(m){if(S.on.indexOf(m.id)>=0)o.push({id:m.id,run:"ref",rank:0})});
+ refs().forEach(function(m){if(isOn(onKey(m.id)))o.push({id:m.id,run:"ref",rank:0})});
  return o}
 function ms(s){return Date.parse(s+"T00:00:00Z")}
 function dates(){var O=ORI(),out=[];
@@ -1098,11 +1145,14 @@ function panel(d,loc,ds,eff,small){
   if(f){fs.push({e:e,f:f,di:di,o:o});f.q.forEach(function(q){ymax=Math.max(ymax,q[6])})}})});
  var runBands=eff.some(function(e){return e.run!="ref"&&fs.some(function(z){return z.e===e})});
  ymax*=1.06;
- var sx=function(x){return L+(x-t0)/(t1-t0)*(W-L-R)},sy=function(y){return T+(1-y/ymax)*(H-T-B)};
+ // y from the data shown, not from zero
+ var ylo=Infinity;pts.forEach(function(p){ylo=Math.min(ylo,p[1])});fs.forEach(function(z){z.f.q.forEach(function(q){ylo=Math.min(ylo,q[0])})});
+ var ymin=isFinite(ylo)?Math.max(0,ylo-0.15*(ymax-ylo)):0;
+ var sx=function(x){return L+(x-t0)/(t1-t0)*(W-L-R)},sy=function(y){return T+(1-(y-ymin)/(ymax-ymin))*(H-T-B)};
  var h='<svg viewBox="0 0 '+W+' '+H+'" width="100%">';
  var step=Math.pow(10,Math.floor(Math.log10(ymax/4)));
  var m=[1,2,2.5,5,10].find(function(k){return k*step>=ymax/(small?3:5)})*step;
- for(var v=0;v<=ymax;v+=m)h+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+sy(v)+'" y2="'+sy(v)+'" class=grid /><text x="'+(L-4)+'" y="'+(sy(v)+3)+'" text-anchor=end class=ax>'+fmt(v)+'</text>';
+ for(var v=Math.ceil(ymin/m)*m;v<=ymax;v+=m)h+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+sy(v)+'" y2="'+sy(v)+'" class=grid /><text x="'+(L-4)+'" y="'+(sy(v)+3)+'" text-anchor=end class=ax>'+fmt(v)+'</text>';
  var xs=small?28:14;
  for(var x=t0;x<=t1;x+=xs*864e5)h+='<text x="'+sx(x)+'" y="'+(H-B+12)+'" text-anchor=middle class=ax>'+new Date(x).toISOString().slice(5,10)+'</text>';
  ds.forEach(function(o){h+='<line x1="'+sx(ms(o))+'" x2="'+sx(ms(o))+'" y1="'+T+'" y2="'+(H-B)+'" class=mark />'});
@@ -1129,6 +1179,7 @@ function legend(eff,ds){
  return '<div class=leg2>'+leg+'</div>'}
 function plots(){
  var eff=effective(),ds=dates(),small=S.locs.length>1;
+ $("gwrap").className=small?"gwrap wide":"gwrap";
  Promise.all(S.locs.map(load)).then(function(all){
   var miss={},h='<div class=panels style="grid-template-columns:repeat('+(small?"auto-fit,minmax(260px,1fr)":"1,1fr")+')">';
   all.forEach(function(d,i){var p=panel(d,S.locs[i],ds,eff,small);p.miss.forEach(function(m){miss[m]=1});
@@ -1136,7 +1187,6 @@ function plots(){
   h+='</div>'+legend(eff,ds);
   var ms_=Object.keys(miss);
   if(ms_.length)h+='<p class=mut>No forecast for some nowcast dates: '+ms_.join(", ")+'</p>';
-  h+='<p class=mut>'+(TGT()=="7day"||!TGT()?"7-day counts by target week":tlab(TGT())+" counts by target day")+'. Colour is the run. Line style runs from dotted (earliest) to solid (latest selected checkpoint). Bands (50% dark, 95% light) are drawn for the latest checkpoint of each run. Truth: '+C.truth+'.'+(ds.length>1?' Marker shape shows the nowcast date, and each nowcast ends at its date.':'')+'</p>';
   $("gplot").innerHTML=h;
   wisChart(all[0],eff)}).catch(function(){$("gplot").innerHTML='<p class=mut>Could not load data.</p>'})}
 function wisChart(d,eff){
@@ -1146,18 +1196,16 @@ function wisChart(d,eff){
  var com=Object.keys(W_(sel[0])).filter(function(o){return sel.every(function(id){return W_(id)[o]!==undefined})});
  if(!com.length){$("gwis").innerHTML='<p class=mut>No nowcast dates common to the selected checkpoints.</p>';return}
  var vals=sel.map(function(id){var a=com.map(function(o){return W_(id)[o]});return a.reduce(function(x,y){return x+y},0)/a.length});
- var W=520,H=60+sel.length*26,L=230,mx=Math.max.apply(null,vals)*1.05,h='<svg viewBox="0 0 '+W+' '+H+'" width="100%">';
- sel.forEach(function(id,i){var y=10+i*26,w=vals[i]/mx*(W-L-60);
-  h+='<text x="'+(L-6)+'" y="'+(y+14)+'" text-anchor=end class=ax>'+id2lab(id)+'</text><rect x="'+L+'" y="'+y+'" width="'+w+'" height="18" fill="'+colour(id)+'" /><text x="'+(L+w+4)+'" y="'+(y+14)+'" class=ax>'+fmt(vals[i])+'</text>'});
- $("gwis").innerHTML=h+'</svg><p class=mut>Mean WIS for '+S.locs[0]+' ('+S.src+' source, '+tlab(TGT())+' target) over '+com.length+' nowcast dates common to the selected checkpoints. Lower is better.</p>';
+ var W=260,H=12+sel.length*34,mx=Math.max.apply(null,vals)*1.05,h='<svg viewBox="0 0 '+W+' '+H+'" width="100%">';
+ function shortLab(id){var m=C.meta.find(function(x){return x.id==id});if(!m)return id;var r=RUNS.find(function(r){return r.key==m.run});return r?r.label+" n"+m.n:m.label}
+ sel.forEach(function(id,i){var y=4+i*34,w=vals[i]/mx*(W-48);
+  h+='<text x="0" y="'+(y+9)+'" class=ax>'+shortLab(id)+'</text><rect x="0" y="'+(y+13)+'" width="'+w+'" height="14" fill="'+colour(id)+'" /><text x="'+(w+4)+'" y="'+(y+24)+'" class=ax>'+fmt(vals[i])+'</text>'});
+ $("gwis").innerHTML=h+'</svg>';
 }
 function chips(){var h='';
- RUNS.forEach(function(r){if(S.on.indexOf(r.key)<0)return;var all=ofRun(r.key),ch=chosen(r.key);
+ RUNS.forEach(function(r){if(!isOn(r.key))return;var all=ofRun(r.key),ch=chosen(r.key);
   h+='<span class=lg><b style="color:'+r.color+'">'+r.label+'</b> '+(all.length?all.map(function(m){var on=ch.indexOf(m.id)>=0;return '<button class="tog'+(on?' on':'')+'" data-chip="'+r.key+'|'+m.id+'" title="'+m.id+' ('+m.count+' dates)" style="'+(on?'background:'+r.color+';border-color:'+r.color:'')+'">n'+m.n+'</button>'}).join(""):'<span class=mut>no checkpoints scored yet</span>')+'</span>'});
  $("gck").innerHTML=h}
-function runBtns(){
- $("gruns").innerHTML=RUNS.map(function(r){return '<button class="tog'+(S.on.indexOf(r.key)>=0?' on':'')+'" data-run="'+r.key+'" style="border-left:4px solid '+r.color+'">'+r.label+'</button>'}).join("")
-  +refs().map(function(m){return '<button class="tog'+(S.on.indexOf(m.id)>=0?' on':'')+'" data-run="'+m.id+'" style="border-left:4px solid '+m.color+'">'+m.label+'</button>'}).join("")}
 function locBtns(){
  $("glocs").innerHTML=C.groups.filter(function(g){return g.locs.length}).map(function(g){return '<div><span class=mut>'+g.name+'</span> '+g.locs.map(function(l){return '<button class="tog'+(S.locs.indexOf(l)>=0?' on':'')+'" data-loc="'+l+'">'+l+'</button>'}).join("")+'</div>'}).join("");
  $("gsum").textContent="Locations: "+S.locs.join(", ")}
@@ -1166,7 +1214,7 @@ function draw(){
  $("gsl").value=S.oi;$("gnd").value=S.nd;$("gstep").value=S.step;$("gsrc").value=S.src;
  $("gtgtl").hidden=(C.targets||[]).length<2;
  $("gtgt").innerHTML=(C.targets||[]).map(function(v){return '<option value="'+v+'"'+(v==TGT()?' selected':'')+'>'+tlab(v)+'</option>'}).join("");
- runBtns();chips();locBtns();plots();save()}
+ chips();locBtns();plots();save()}
 function build(){
  if(DSS.length>1){$("gdsl").hidden=false;$("gds").innerHTML=DSS.map(function(d){return '<option value="'+d.key+'"'+(d.key==S.ds?' selected':'')+'>'+d.label+'</option>'}).join("");
   $("gds").onchange=function(){S.ds=this.value;C=cur();S.locs=[C.locs[0]];S.oi=ORI().length-1;S.latest=true;$("gsl").max=S.oi;draw()}}
@@ -1182,11 +1230,10 @@ function build(){
  $("gnext").onclick=function(){S.oi=Math.min(ORI().length-1,S.oi+1);S.latest=S.oi==ORI().length-1;draw()};
  $("glocs").onclick=function(e){var b=e.target.closest("button");if(!b)return;var l=b.dataset.loc,i=S.locs.indexOf(l);
   if(i>=0){if(S.locs.length>1)S.locs.splice(i,1)}else S.locs.push(l);draw()};
- $("gruns").onclick=function(e){var b=e.target.closest("button");if(!b)return;var k=b.dataset.run,i=S.on.indexOf(k);
-  if(i>=0)S.on.splice(i,1);else{S.on.push(k);delete S.chk[k]}draw()};
  $("gck").onclick=function(e){var b=e.target.closest("button");if(!b)return;var p=b.dataset.chip.split("|"),k=p[0],id=p[1];
   var ids=chosen(k).slice(),i=ids.indexOf(id);if(i>=0){if(ids.length>1)ids.splice(i,1)}else ids.push(id);S.chk[k]=ids;draw()};
  draw()}
+window.addEventListener("ftsel",function(){draw()});
 build();
 })();
 '''
@@ -1240,14 +1287,40 @@ def germany_html(known_n, once):
 </label></div>
 <details class=glocs><summary id=gsum>Locations</summary>
 <div id=glocs></div></details>
-<div id=gruns class=gck></div>
 <div id=gck class=gck></div>
-<div class=plots><div class=card><h3>Nowcasts</h3>
-<div id=gplot></div></div>
-<div class=card><h3>WIS by checkpoint</h3><div id=gwis></div></div></div>
+<div class=gwrap id=gwrap><div class=card><div id=gplot></div></div>
+<div class=card><h3>mean WIS</h3><div id=gwis></div></div></div>
 <script type="application/json" id=gdata>{payload}</script>
 <script>{GER_JS}</script>""")
 
+
+# Shared run and reference selection, one set of toggles for every panel.
+SEL_JS = r"""
+(function(){var D=null,on=[];
+ function render(){var el=document.getElementById("selbar");if(!el||!D)return;
+  function b(x){return '<button class="tog'+(on.indexOf(x.key)>=0?' on':'')+'" data-k="'+x.key+'" style="border-left:4px solid '+x.color+'">'+x.label+'</button>'}
+  el.innerHTML='<span class=mut>runs</span>'+D.runs.map(b).join("")+'<span class=sep></span><span class=mut>references</span>'+D.refs.map(b).join("");
+  el.onclick=function(e){var bt=e.target.closest("button");if(!bt)return;window.ftSel.toggle(bt.dataset.k)}}
+ function save(){try{sessionStorage.setItem("ftsel",JSON.stringify(on))}catch(e){}}
+ window.ftSel={
+  init:function(d){D=d;var s=null;try{s=JSON.parse(sessionStorage.getItem("ftsel")||"null")}catch(e){}
+   var all=d.runs.concat(d.refs).map(function(x){return x.key});
+   on=(Array.isArray(s)?s:d.defaults.slice()).filter(function(k){return all.indexOf(k)>=0});
+   if(!on.length)on=d.defaults.slice();render()},
+  get:function(){return on.slice()},
+  toggle:function(k){var i=on.indexOf(k);if(i>=0){if(on.length>1)on.splice(i,1)}else on.push(k);
+   save();render();window.dispatchEvent(new Event("ftsel"))}}})();
+"""
+
+NAV_JS = r"""
+(function(){
+ [].forEach.call(document.querySelectorAll("details.sec"),function(d){
+  try{var v=sessionStorage.getItem("ftsec-"+d.id);if(v!==null)d.open=v=="1"}catch(e){}
+  d.addEventListener("toggle",function(){try{sessionStorage.setItem("ftsec-"+d.id,d.open?"1":"0")}catch(e){}})});
+ [].forEach.call(document.querySelectorAll(".nav a"),function(a){
+  a.addEventListener("click",function(){var d=document.querySelector(a.getAttribute("href"));if(d&&d.tagName=="DETAILS")d.open=true})});
+})();
+"""
 
 # Reload every 60 s, but wait while any time slider is playing.
 MODE_JS = r"""
@@ -1569,26 +1642,21 @@ def build():
     age = now - last_t if last_t else None
     stale = age is not None and age > 600
     cls = lambda ok: "ok" if ok else "bad"
+    next_txt = (f"n{scoring[0]}: scoring since " + datetime.fromtimestamp(
+        (RUN / f"train/n{scoring[0]}").stat().st_mtime).strftime("%H:%M")
+        if scoring else f"n{nxt}" if nxt else "none")
+    next_sub = ((f"then n{nxt} at step {tstep(nxt)}, ETA {eta(nxt)}" if nxt
+                 else "") if scoring else
+                f"step {tstep(nxt)}, ETA {eta(nxt)}" if nxt else "")
     tiles = [
-        ("Step", f"{step}" if step is not None else "n/a",
-         f"n{ntrained:.0f} of {target} simulations trained"
-         if ntrained is not None else ""),
         ("Steps / s (30 min)", f"{rate:.3f}" if rate else "n/a",
          f"{rate*60:.1f} steps/min" if rate else ""),
-        ("Next checkpoint",
-         (f"n{scoring[0]}: scoring since " + datetime.fromtimestamp(
-             (RUN / f"train/n{scoring[0]}").stat().st_mtime).strftime("%H:%M")
-          if scoring else f"n{nxt}" if nxt else "none"),
-         (f"then n{nxt} at step {tstep(nxt)}, ETA {eta(nxt)}" if nxt else "")
-         if scoring else
-         f"at step {tstep(nxt)}, ETA {eta(nxt)}" if nxt else ""),
         (f"ETA n{target}", eta(target), f"step {tstep(target)}"),
         ("Learning rates",
          "\n".join(f"{g} {v:.2e}" for g, v in P["current"].items())
          or "n/a",
          (f"linear decay to 0 at step {P['lr_steps']}" if P["lr_steps"]
           else "constant") + (", from history" if P["logged"] else "")),
-        ("Trainer", pidtxt, cls(alive) if alive is not None else ""),
         ("Last log line",
          datetime.fromtimestamp(last_t).strftime("%H:%M:%S") if last_t
          else "n/a",
@@ -1596,11 +1664,19 @@ def build():
                                         else "") if age is not None else ""),
     ]
     tiles_h = "".join(
-        f'<div class="tile {c if c else ""}{" bad" if t=="Last log line" and stale else ""}">'
+        f'<div class="tile{" bad" if k == "Last log line" and stale else ""}">'
         f'<div class=k>{k}</div><div class="v{" vl" if "\n" in v else ""}">'
         f'{html.escape(v).replace(chr(10), "<br>")}</div>'
-        f'<div class=s>{html.escape(s) if c not in ("ok","bad") else ""}</div>'
-        f'</div>' for k, v, s in tiles for t, c in [(k, s if k == "Trainer" else "")])
+        f'<div class=s>{html.escape(s)}</div></div>'
+        for k, v, s in tiles)
+    bar_tiles = (
+        f'<span class=bt><span class=k>step</span> <b>{step if step is not None else "n/a"}</b>'
+        f' <span class=mut>n{ntrained:.0f}/{target}</span></span>'
+        if ntrained is not None else "") + (
+        f'<span class=bt><span class=k>next</span> <b>{html.escape(next_txt)}</b>'
+        f' <span class=mut>{html.escape(next_sub)}</span></span>'
+        f'<span class="bt {"ok" if alive else "bad" if alive is False else ""}">'
+        f'<span class=k>trainer</span> <b>{html.escape(pidtxt)}</b></span>')
     stage = status.get("stage")
     sub = (f"stage: {html.escape(str(stage))}; stream status "
            f"{html.escape(str(status.get('time', '')))}" if status else "")
@@ -1750,15 +1826,22 @@ def build():
                 + "</table>")
         except Exception as e:
             cmp_h = f"<p class=mut>could not read csv: {html.escape(str(e))}</p>"
-    mail_kick()
-    if MAIL["ok"] is None:
-        mh = "<p class=mut>loading mailbox (refreshes in a minute)</p>"
-    elif MAIL["ok"] is False and not MAIL["lines"]:
-        mh = "<p class=mut>mailbox unavailable (ssh failed)</p>"
-    elif not MAIL["lines"]:
-        mh = "<p class=mut>no matching lines in last 30</p>"
-    else:
-        mh = "<pre>" + html.escape("\n".join(MAIL["lines"])) + "</pre>"
+    mh = ""
+    if MAILBOX:
+        mail_kick()
+        if MAIL["ok"] is None:
+            mh = "<p class=mut>loading mailbox (refreshes in a minute)</p>"
+        elif MAIL["ok"] is False and not MAIL["lines"]:
+            mh = "<p class=mut>mailbox unavailable (ssh failed)</p>"
+        elif not MAIL["lines"]:
+            mh = "<p class=mut>no matching lines</p>"
+        else:
+            ln = MAIL["lines"]
+            cut = lambda s: html.escape(s if len(s) <= 260 else s[:257] + "...")
+            mh = ("<pre>" + "\n".join(cut(x) for x in ln[-5:]) + "</pre>"
+                  + (f"<details><summary>show more ({len(ln) - 5})</summary>"
+                     "<pre>" + html.escape("\n".join(ln[:-5])) + "</pre>"
+                     "</details>" if len(ln) > 5 else ""))
 
     for k in ("scores", "md", "germany"):
         rem_kick(k)
@@ -1791,11 +1874,33 @@ def build():
     modebar = (
         '<div class="sctl modebar"><span class=mut>Loss scale</span>'
         '<button class=tog data-mode=raw>raw</button>'
-        '<button class=tog data-mode=start>relative to start</button>'
-        '<button class=tog data-mode=base>relative to base Chronos-2</button>'
+        '<button class=tog data-mode=start title="divided by the run\'s own step-0 loss">relative to start</button>'
+        '<button class=tog data-mode=base title="divided by base Chronos-2 on the same blocks (base_from in RUNS)">relative to base Chronos-2</button>'
         '<span class=sep></span><span class=mut>x range</span>'
         '<button class=tog data-rng=zoom>live run</button>'
         '<button class=tog data-rng=full>full range</button></div>')
+    sc_pay = score_payload(srows, local) if srows else {}
+    refs = [{"key": "zero", "label": "zero-shot", "color": REF_COL["zero"]},
+            {"key": "complete", "label": "complete-only",
+             "color": REF_COL["complete"]},
+            {"key": "rw", "label": "randomwalknowcast",
+             "color": REF_COL["rw"]}]
+    for ds in DATASETS:
+        gb = ger_build(ds)
+        for s in (gb["sets"] if gb else []):
+            if s.startswith("hub:") and not any(r["key"] == s for r in refs):
+                refs.append({"key": s, "label": s[4:], "color": "#94a3b8"})
+    seldata = json.dumps({
+        "runs": [{"key": c["key"], "label": c["label"],
+                  "color": run_colour(c["key"])} for c in RUNS],
+        "refs": refs,
+        "defaults": sc_pay.get("defaults") or [LC["key"], "zero", "rw"]},
+        separators=(",", ":")).replace("</", "<\\/")
+    sections = [("status", "Status"), ("loss", "Loss"),
+                ("bias", "Attention bias"), ("performance", "Performance"),
+                ("nowcasts", "Nowcasts")] + (
+        [("mailbox", "Activity")] if mh else []) + [("tables", "Tables")]
+    nav = "".join(f'<a href="#{i}">{n}</a>' for i, n in sections)
     css = """
 :root{--bg:#fff;--fg:#1d2127;--mut:#6b7280;--card:#f6f7f9;--line:#d9dde3;
 --c1:#2563eb;--c2:#ea580c;--c3:#16a34a;--c4:#9333ea;--bad:#dc2626;--ok:#15803d}
@@ -1804,14 +1909,14 @@ def build():
 --c3:#4ade80;--c4:#c084fc;--bad:#f87171;--ok:#4ade80}}
 body{background:var(--bg);color:var(--fg);font:14px system-ui,sans-serif;
 margin:0;padding:16px;max-width:1300px;margin-inline:auto}
-h1{font-size:18px;margin:0 0 4px}h2{font-size:15px;margin:24px 0 8px}
+h1{font-size:18px;margin:0 0 4px}h2{font-size:15px;margin:12px 0 6px}
 h3{font-size:13px;margin:0 0 6px}.mut{color:var(--mut)}
 .tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));
 gap:8px}.tile,.card{background:var(--card);border-radius:8px;padding:10px}
 .vl{font-size:14px!important;line-height:1.3}.k{font-size:11px;color:var(--mut)}.v{font-size:18px;font-weight:600;
 font-variant-numeric:tabular-nums}.s{font-size:11px;color:var(--mut)}
 .tile.ok .v{color:var(--ok)}.tile.bad .v{color:var(--bad)}
-.plots{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,520px),1fr));
+.plots{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,440px),1fr));
 gap:8px}svg{display:block}.grid{stroke:var(--line);stroke-width:1}
 .mark{stroke:var(--mut);stroke-dasharray:3 3;stroke-width:1}
 .ax{fill:var(--mut);font-size:10px}.leg{font-size:12px;display:flex;gap:12px;
@@ -1830,46 +1935,65 @@ body.m-start.r-zoom .m-start.r-zoom,body.m-start.r-full .m-start.r-full,
 body.m-base.r-zoom .m-base.r-zoom,body.m-base.r-full .m-base.r-full{display:block}.sctl{display:flex;flex-wrap:wrap;gap:4px;align-items:center;
 margin-bottom:8px}.sep{width:10px}.sum{font-size:13px;font-weight:600;
 min-height:1.3em;margin-bottom:4px}.plots2{display:grid;
-grid-template-columns:repeat(auto-fill,minmax(min(100%,520px),1fr));gap:8px;
+grid-template-columns:repeat(auto-fill,minmax(min(100%,440px),1fr));gap:8px;
 align-items:start}.tog{border:1px solid var(--line);background:var(--card);
 color:var(--fg);border-radius:6px;padding:2px 8px;cursor:pointer;
 font-size:12px}
 .tog.on{background:var(--c1);color:#fff;border-color:var(--c1)}
 .sctl .mut{margin-left:10px}.lg{display:inline-flex;align-items:center;gap:6px;margin-right:14px}
 .leg2{font-size:12px;display:flex;flex-wrap:wrap;gap:4px 18px}.glocs{margin:6px 0}.glocs .tog{margin:1px}.panels{display:grid;gap:8px}
-.panels h4{margin:0 0 2px;font-size:12px}.plots3{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,400px),1fr));gap:8px}
+.panels h4{margin:0 0 2px;font-size:12px}.plots3{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,290px),1fr));gap:8px}
 .plots3 .leg{font-size:11px;gap:2px 8px}
 .biasrow{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-start}
-.biasrow .card{padding:4px;line-height:0}.tiles4{display:flex;gap:6px}
+.topbar{position:sticky;top:0;z-index:20;background:var(--bg);padding:6px 0 4px;
+border-bottom:1px solid var(--line);margin-bottom:6px}
+.navrow{display:flex;flex-wrap:wrap;gap:4px 16px;align-items:center}
+.nav{display:flex;gap:10px}.nav a{color:var(--c1);text-decoration:none;font-size:13px}
+.bt{font-size:13px}.bt.ok b{color:var(--ok)}.bt.bad b{color:var(--bad)}
+.selbar{display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin-top:4px}
+.selbar .mut{font-size:11px;margin-left:6px}
+details.sec{margin:0 0 6px}details.sec>summary{cursor:pointer;list-style:none;
+display:flex;align-items:center}details.sec>summary::-webkit-details-marker{display:none}
+details.sec>summary::before{content:"▸";margin-right:6px;color:var(--mut)}
+details.sec[open]>summary::before{content:"▾"}
+details.sec{scroll-margin-top:92px}details.sec h2{margin:10px 0 6px}
+.gwrap{display:grid;grid-template-columns:minmax(0,720px) 260px;gap:8px;align-items:start}
+.gwrap.wide{grid-template-columns:minmax(0,1fr) 260px}
+@media(max-width:900px){.gwrap{grid-template-columns:1fr}}
+@media(max-width:1250px){.tiles4{flex-wrap:wrap;width:292px}.biasrow>div:not(.card){max-width:292px}}
+.biasrow .card{padding:4px;line-height:0}
+.biasrow>.card:first-child{flex:1 1 300px;max-width:480px}.biasrow>.card:first-child svg{width:100%;height:auto}.tiles4{display:flex;gap:6px}
 .tile4 .mut{font-size:11px;line-height:1.3}.tile4 svg{display:block}
 .rel .band{opacity:0;pointer-events:none}.rel:hover .band{opacity:.22}
 .rel{pointer-events:all}
 .gck i{display:inline-block;width:10px;height:10px;border-radius:2px;
 margin:0 4px}select,button{font:inherit}
-pre{white-space:pre-wrap;background:var(--card);padding:10px;border-radius:8px;
-font-size:12px}.wrap{overflow-x:auto}"""
-    body = f"""<h1>Chronos-2 fine-tuning: {html.escape(LC["label"])} run</h1>
-<div class=mut>{datetime.now():%Y-%m-%d %H:%M:%S}; auto-refresh 60 s; {sub}</div>
-<h2>Status</h2><div class=tiles>{tiles_h}</div>
-<h2>Loss plots</h2>{modebar}
-<p class=mut>Relative values divide by the run's own step-0 held-out loss
-(start), or by the base model's held-out loss on the same blocks (base, set
-with base_from in RUNS for runs that start with labels). Training loss uses its
-own first 20 steps for both. Reference line is 1.</p>{plots_h}
-<p class=mut>Dashed lines mark published checkpoints of the live run.</p>
-<h2>Attention bias ({html.escape(LC["label"])} run)</h2>{bias_h}
-<h2>Performance on real data</h2>{sc_h}{md_h}
-<h2>German nowcasts by checkpoint</h2>{rv_h}
-<h2>Recent activity (archie mailbox)</h2>{mh}
-<details class=tbls><summary><b>Tables</b></summary>
+pre{white-space:pre-wrap;background:var(--card);padding:8px;border-radius:8px;
+font-size:12px;margin:4px 0}.wrap{overflow-x:auto}"""
+    body = f"""<header class=topbar>
+<div class=navrow><b>{html.escape(LC["label"])} run</b><nav class=nav>{nav}</nav>
+{bar_tiles}<span class=mut>{datetime.now():%H:%M:%S}</span></div>
+<div id=selbar class=selbar></div>
+<script type="application/json" id=seldata>{seldata}</script>
+<script>ftSel.init(JSON.parse(document.getElementById("seldata").textContent))</script>
+</header>
+<details class=sec id=status open><summary><h2>Status</h2></summary>
+<div class=tiles>{tiles_h}</div>
+<div class=mut>{sub}</div></details>
+<details class=sec id=loss open><summary><h2>Loss</h2></summary>{modebar}{plots_h}</details>
+<details class=sec id=bias open><summary><h2>Attention bias</h2></summary>{bias_h}</details>
+<details class=sec id=performance open><summary><h2>Performance on real data</h2></summary>{sc_h}{md_h}</details>
+<details class=sec id=nowcasts open><summary><h2>German nowcasts</h2></summary>{rv_h}</details>
+{"" if not mh else f'<details class=sec id=mailbox open><summary><h2>Recent activity</h2></summary>{mh}</details>'}
+<details class=sec id=tables><summary><h2>Tables</h2></summary>
 <h3>Checkpoints</h3><div class=wrap>{ck_h}</div>
 <h3>Slots vs no slots (matched checkpoints)</h3><div class=wrap>{cmp_h}</div>
 </details>"""
     return (f'<!doctype html><html><head><meta charset=utf-8>'
             f'<meta name=viewport content="width=device-width,initial-scale=1">'
             f'<title>FT dashboard</title>'
-            f'<style>{css}</style><script>{PLAYER_JS}</script></head>'
-            f'<body>{body}<script>{MODE_JS}\n{REFRESH_JS}</script></body></html>')
+            f'<style>{css}</style><script>{PLAYER_JS}\n{SEL_JS}</script></head>'
+            f'<body>{body}<script>{MODE_JS}\n{NAV_JS}\n{REFRESH_JS}</script></body></html>')
 
 
 LOCK = threading.Lock()
