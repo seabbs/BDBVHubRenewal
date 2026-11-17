@@ -100,7 +100,8 @@ its weekly draws split by a provisional rule
 (`bdbvhubrenewal.forecasters.randomwalk.split_week_draws`); empty for
 every other row."""
 DAILY_DONE = "daily.done"
-"""In a unit's folder: written once every date holds the daily target."""
+"""In a unit's folder: the dates or origins whose files hold the daily
+target, one a line, written when the unit finishes."""
 DAILY_DAYS = 28
 """The daily target's days run from this many days before the nowcast
 date (the reference date for BDBV) to it, as the 7-day target's sums."""
@@ -497,6 +498,24 @@ def _add(path: Path, parts: list[pd.DataFrame]) -> None:
     _write(pd.concat(parts, ignore_index=True), path)
 
 
+def _seven_first(path: Path, targets: Sequence[str], label: str) -> None:
+    """Stop a daily-only unit at a date with no 7-day forecasts yet.
+
+    `unit_done` reads a date's 7-day target from its file's presence, so
+    a file must never hold the daily target alone.
+    """
+    if "7day" not in targets and not path.exists():
+        raise SystemExit(
+            f"{label} {path.name}: the 7-day forecasts come first "
+            "(run the unit with 7day)"
+        )
+
+
+def _daily_done(root: Path, dates: Sequence[str]) -> None:
+    """Write the dates whose files hold the daily target (`DAILY_DONE`)."""
+    (root / DAILY_DONE).write_text("".join(f"{d}\n" for d in dates))
+
+
 def germany_unit(
     cache: Path, label: str, targets: Sequence[str] = ("7day",)
 ) -> None:
@@ -518,6 +537,7 @@ def germany_unit(
     dates = de.nowcast_dates(config, held_out=False)
     for i, date in enumerate(dates, 1):
         path = root / f"{date}.csv.gz"
+        _seven_first(path, targets, label)
         todo = [t for t in targets if t not in cached_targets(path)]
         if not todo:
             continue
@@ -544,7 +564,7 @@ def germany_unit(
             flush=True,
         )
     if "daily" in targets:
-        (root / DAILY_DONE).write_text("done\n")
+        _daily_done(root, dates)
     print(f"germany {label} done", flush=True)
 
 
@@ -613,6 +633,7 @@ def bdbv_unit(
     root = unit_root(cache, "bdbv", label)
     for origin in origins:
         path = root / f"{origin}.csv.gz"
+        _seven_first(path, targets, label)
         todo = [t for t in targets if t not in cached_targets(path)]
         if not todo:
             continue
@@ -645,7 +666,7 @@ def bdbv_unit(
         free_caches()
         print(f"bdbv {label} {origin}: {', '.join(todo)}", flush=True)
     if "daily" in targets:
-        (root / DAILY_DONE).write_text("done\n")
+        _daily_done(root, origins)
     print(f"bdbv {label} done", flush=True)
 
 
@@ -673,16 +694,19 @@ def unit_done(
 ) -> bool:
     """Whether a unit's cache is complete for a target.
 
-    Every date's file holds the 7-day target; the daily one is done once
-    the unit has written `DAILY_DONE`.
+    Every date's file holds the 7-day target; the daily one is done for
+    the dates `DAILY_DONE` lists.
     """
     if study == "heldout":
         return (cache / "heldout" / f"{label}-release.json").exists()
     want = germany_dates() if study == "germany" else bdbv_origins()
     files = (cache / study / label).glob("*.csv.gz")
     have = {p.name.removesuffix(".csv.gz") for p in files}
-    if target == "daily" and not (cache / study / label / DAILY_DONE).exists():
-        return False
+    if target == "daily":
+        marker = cache / study / label / DAILY_DONE
+        if not marker.exists():
+            return False
+        have &= set(marker.read_text().split())
     return set(want) <= have
 
 

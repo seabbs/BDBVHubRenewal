@@ -233,7 +233,10 @@ def test_a_checkpoint_s_units_are_7day_only(poll) -> None:
     assert all(len(u) == 2 or u[2] == "7day" for u in units)
 
 
-def test_the_reference_daily_run_comes_first_when_idle(poll, tmp_path) -> None:
+def test_the_reference_daily_run_comes_first_when_idle(
+    poll, monkeypatch, tmp_path
+) -> None:
+    monkeypatch.setattr(poll.cs, "unit_done", lambda *_: False)
     _settings(tmp_path, "slots-a", "one-model")
     runs = poll.runs_of(tmp_path)
     jobs = poll.daily_units(tmp_path, ["slots-a"], runs)

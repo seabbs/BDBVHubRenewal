@@ -12,8 +12,12 @@ rule's rows, commits evidence/checkpoint-scores.csv and
 evidence/checkpoints.csv, pushes them to the `checkpoint-scoring`
 branch, checks the commit is on origin, and writes a mailbox line for
 bdbv-paper. When no checkpoint is waiting it extends the scored
-checkpoints' BDBV rows to origins new releases add. Units resume from
-the cache, so a restart loses only the forecasts in flight.
+checkpoints' BDBV rows to origins new releases add, and then runs the
+daily target (`daily_units`): the reference's first (about 4.5 h), then
+the one-model checkpoints', each landed again with its daily rows. Units
+run with the 7-day target only otherwise, so 7-day rows never wait.
+Units resume from the cache, so a restart loses only the forecasts in
+flight.
 
 Usage: python scripts/checkpoint_poll.py CACHE
 
@@ -96,6 +100,10 @@ def units_for(checkpoint: str, scored: set[str]) -> list[tuple[str, str]]:
     ]
 
 
+DAILY_JOB = "daily target"
+"""The idle-time job: the reference's daily units, then the checkpoints'
+(`daily_units`), pausable by a fresh slots checkpoint."""
+
 COMPLETE_JOB = "complete-data reference"
 """The job that adds the complete-data models to the zero-shot reference."""
 
@@ -150,7 +158,9 @@ HELD: dict[str, list[str]] = {"labels": []}
 """The checkpoints last reported as held, so each is said once."""
 
 
-def unheld(queue: list[str], zero_init: set[str], hold: Path = HOLD) -> list[str]:
+def unheld(
+    queue: list[str], zero_init: set[str], hold: Path = HOLD
+) -> list[str]:
     """Return the queue less the slots run's checkpoints while `hold` exists."""
     if not hold.exists():
         return list(queue)
@@ -209,6 +219,29 @@ def extendable(labels: list[str], runs: Mapping[str, str]) -> list[str]:
     the reference, no-slots checkpoints and the current run's."""
     ok = cs.CURRENT_RUNS | {"no-slots"}
     return [lb for lb in labels if lb == cs.REFERENCE or runs.get(lb) in ok]
+
+
+def daily_units(
+    cache: Path, labels: list[str], runs: Mapping[str, str]
+) -> list[Unit]:
+    """Return the daily-target units still to run, an idle-time job.
+
+    The reference's first: every checkpoint's daily rows divide by its
+    randomwalknowcast. Then those of `labels` that take the daily target
+    by default (`cs.targets_for`, the one-model run) and whose BDBV rows
+    may grow here (`extendable`), BDBV before Germany.
+    """
+    ref = [(study, cs.REFERENCE, "daily") for study in ("bdbv", "germany")]
+    todo = [u for u in ref if not cs.unit_done(cache, *u)]
+    if todo:
+        return todo
+    out: list[Unit] = []
+    for lb in extendable(labels, runs):
+        if lb == cs.REFERENCE or "daily" not in cs.targets_for(cache, lb):
+            continue
+        units = [(study, lb, "daily") for study in ("bdbv", "germany")]
+        out += [u for u in units if not cs.unit_done(cache, *u)]
+    return out
 
 
 def zero_init_labels(cache: Path) -> set[str]:
@@ -343,13 +376,23 @@ def unit_env(label: str) -> dict[str, str]:
     return env
 
 
-def launch(cache: Path, unit: tuple[str, str]) -> subprocess.Popen:
-    """Start one unit in its own memory-capped scope."""
-    study, label = unit
-    logs = cache.parent / "log"
-    logs.mkdir(parents=True, exist_ok=True)
-    out = (logs / f"{study}-{label}.log").open("a")
-    cmd = [
+Unit = tuple[str, ...]
+"""(study, label), the 7-day target, or (study, label, target)."""
+
+
+def target_of(unit: Unit) -> str:
+    """Return a unit's target, `7day` where it names none."""
+    return unit[2] if len(unit) > 2 else "7day"
+
+
+def unit_command(cache: Path, unit: Unit) -> list[str]:
+    """Return a unit's command, its target always given.
+
+    Without one, `checkpoint_scores.py` would take the label's own
+    targets (`cs.targets_for`), so a 7-day unit could run the daily one.
+    """
+    study, label = unit[0], unit[1]
+    return [
         "systemd-run",
         "--user",
         "--scope",
@@ -366,7 +409,18 @@ def launch(cache: Path, unit: tuple[str, str]) -> subprocess.Popen:
         study,
         str(cache),
         label,
+        target_of(unit),
     ]
+
+
+def launch(cache: Path, unit: Unit) -> subprocess.Popen:
+    """Start one unit in its own memory-capped scope."""
+    study, label = unit[0], unit[1]
+    logs = cache.parent / "log"
+    logs.mkdir(parents=True, exist_ok=True)
+    name = f"{study}-{label}" + ("-daily" if target_of(unit) == "daily" else "")
+    out = (logs / f"{name}.log").open("a")
+    cmd = unit_command(cache, unit)
     return subprocess.Popen(
         cmd, stdout=out, stderr=subprocess.STDOUT, env=unit_env(label)
     )
@@ -374,7 +428,7 @@ def launch(cache: Path, unit: tuple[str, str]) -> subprocess.Popen:
 
 def run_units(
     cache: Path,
-    units: list[tuple[str, str]],
+    units: list[Unit],
     name: str,
     pause: Any = None,
     paused: list[str] | None = None,
@@ -387,7 +441,7 @@ def run_units(
     """
     pending = [u for u in units if not cs.unit_done(cache, *u)]
     total, ok = len(pending), True
-    running: dict[tuple[str, str], subprocess.Popen] = {}
+    running: dict[Unit, subprocess.Popen] = {}
     waited = False
     checked = time.monotonic()
     while pending or running:
@@ -410,7 +464,7 @@ def run_units(
             ok &= done
             left = len(pending) + len(running)
             state = "done" if done else f"FAILED ({proc.returncode})"
-            log(f"progress: {name}: {unit[0]} {unit[1]} {state}, "
+            log(f"progress: {name}: {' '.join(unit)} {state}, "
                 f"{total - left}/{total} units")  # fmt: skip
         if pending and len(running) < MAX_UNITS:
             if pending[0][0] == "heldout" or can_launch(
@@ -418,7 +472,7 @@ def run_units(
             ):
                 unit = pending.pop(0)
                 running[unit] = launch(cache, unit)
-                log(f"progress: {name}: started {unit[0]} {unit[1]}")
+                log(f"progress: {name}: started {' '.join(unit)}")
                 waited = False
                 continue
             if not waited:
@@ -610,22 +664,6 @@ def main(cache: Path) -> None:
             fresh,
         )
         queue = unheld(queue, zero)
-        if job is None:
-            stale = [
-                s
-                for s in extendable([cs.REFERENCE, *sorted(scored)], runs)
-                if not cs.unit_done(cache, "bdbv", s)
-            ]
-            if stale and scored:
-                units = [("bdbv", s) for s in stale]
-                if run_units(cache, units, "new BDBV origins"):
-                    land(cache, sorted(keep), "BDBV rows to new origins")
-                else:
-                    time.sleep(POLL_SECONDS)
-                continue
-            log("progress: idle, every published checkpoint scored")
-            time.sleep(POLL_SECONDS)
-            continue
         paused: list[str] = []
 
         def newer_slots(current: str | None = job) -> bool:
@@ -645,9 +683,41 @@ def main(cache: Path) -> None:
                 zero_init_labels(cache),
             )
 
+        if job is None:
+            stale = [
+                s
+                for s in extendable([cs.REFERENCE, *sorted(scored)], runs)
+                if not cs.unit_done(cache, "bdbv", s)
+            ]
+            if stale and scored:
+                units = [("bdbv", s) for s in stale]
+                if run_units(cache, units, "new BDBV origins"):
+                    land(cache, sorted(keep), "BDBV rows to new origins")
+                else:
+                    time.sleep(POLL_SECONDS)
+                continue
+            daily = daily_units(cache, sorted(scored), runs)
+            if daily and failures.get(DAILY_JOB, 0) < MAX_FAILURES:
+                labels = sorted({u[1] for u in daily})
+                log(f"progress: {DAILY_JOB} started: {', '.join(labels)}")
+                if run_units(cache, daily, DAILY_JOB, newer_slots, paused):
+                    land(cache, sorted(keep),
+                         f"daily target of {', '.join(labels)}")  # fmt: skip
+                elif not paused:
+                    failures[DAILY_JOB] = failures.get(DAILY_JOB, 0) + 1
+                    say(f"FAILED the {DAILY_JOB} ({', '.join(labels)}); "
+                        f"logs in {cache.parent / 'log'}")  # fmt: skip
+                    time.sleep(POLL_SECONDS)
+                continue
+            log("progress: idle, every published checkpoint scored")
+            time.sleep(POLL_SECONDS)
+            continue
         if job == COMPLETE_JOB:
             log(f"progress: {COMPLETE_JOB} started")
-            units = [("bdbv", cs.COMPLETE_LABEL), ("germany", cs.COMPLETE_LABEL)]
+            units = [
+                ("bdbv", cs.COMPLETE_LABEL),
+                ("germany", cs.COMPLETE_LABEL),
+            ]
             if not run_units(cache, units, COMPLETE_JOB, newer_slots, paused):
                 if paused:
                     continue
