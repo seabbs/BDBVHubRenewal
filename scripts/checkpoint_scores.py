@@ -681,14 +681,18 @@ def bdbv_unit(
     """
     from bdbvhubrenewal.data import load_daily
     from bdbvhubrenewal.evaluation import backtest as bt
-    from bdbvhubrenewal.evaluation import store
-    from bdbvhubrenewal.evaluation.marginals import daily_draws
+    from bdbvhubrenewal.evaluation import marginals, store
     from bdbvhubrenewal.forecasters import get_model
     from bdbvhubrenewal.forecasters.base import (
         ModelUnavailableError,
         add_national,
     )
 
+    if "daily" in targets and not hasattr(marginals, "daily_draws"):
+        raise SystemExit(
+            "the BDBV daily target needs "
+            "evaluation.marginals.daily_draws, not on this branch"
+        )
     _pin(label)
     config = bt.load_config()
     data = Path("data")
@@ -719,7 +723,7 @@ def bdbv_unit(
                     if target == "7day":
                         drawn = model.forecast(task)
                     else:
-                        drawn = daily_draws(model, task)
+                        drawn = marginals.daily_draws(model, task)
                 except ModelUnavailableError as err:
                     print(f"{model.name} at {origin}: {err}", flush=True)
                     continue
