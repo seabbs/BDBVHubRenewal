@@ -332,7 +332,31 @@ def forecast_units(
     kept = set(unheld(labels, zero_init_labels(cache), hold))
     skip = {lb for lb in labels if lb not in kept}
     skip |= {lb for lb, n in (failures or {}).items() if n >= MAX_FAILURES}
+    skip |= skipped_german(SKIP_GERMAN_FILE)
     return list(_forecasts().units(cache, runs, cs.unit_done, skip))
+
+
+MAX_UNITS_FILE = Path.home() / "ckpt-scores" / "max-units"
+"""If present, the most units run at once (read each tick)."""
+SKIP_GERMAN_FILE = Path.home() / "ckpt-scores" / "skip-german"
+"""If present, labels (one a line) whose German nowcasts are not run."""
+
+
+def unit_cap(path: Path, default: int) -> int:
+    """Return the cap in `path`, or `default` without the file."""
+    try:
+        return max(1, int(path.read_text().split()[0]))
+    except (OSError, IndexError, ValueError):
+        return default
+
+
+def skipped_german(path: Path) -> set[str]:
+    """Return the labels in `path`, ignoring blank and # lines."""
+    try:
+        lines = path.read_text().splitlines()
+    except OSError:
+        return set()
+    return {ln.strip() for ln in lines if ln.strip() and not ln.startswith("#")}
 
 
 def german_units(pick: list[str], zones: list[Unit]) -> list[Unit]:
@@ -344,12 +368,14 @@ def german_units(pick: list[str], zones: list[Unit]) -> list[Unit]:
     """
     hs: list[Unit] = [("heldout_scores", cs.REFERENCE)]
     hs += [("heldout_scores", lb) for lb in pick]
+    skip = skipped_german(SKIP_GERMAN_FILE)
+    germ = [lb for lb in pick if lb not in skip]
     return [
         ("germany", cs.REFERENCE),
-        *(("germany", lb) for lb in pick[:GERMAN_PARALLEL]),
+        *(("germany", lb) for lb in germ[:GERMAN_PARALLEL]),
         *hs,
         *zones,
-        *(("germany", lb) for lb in pick[GERMAN_PARALLEL:]),
+        *(("germany", lb) for lb in germ[GERMAN_PARALLEL:]),
     ]
 
 
@@ -651,7 +677,8 @@ def run_units(
             if done and on_done is not None:
                 on_done(unit)
         nxt = next_unit(pending, running, limits)
-        if nxt is not None and len(running) < (max_units or MAX_UNITS):
+        cap = unit_cap(MAX_UNITS_FILE, max_units or MAX_UNITS)
+        if nxt is not None and len(running) < min(max_units or MAX_UNITS, cap):
             if nxt[0] == "heldout" or can_launch(
                 budget(), mem_avail_gb(), len(running)
             ):
@@ -987,7 +1014,10 @@ def main(cache: Path) -> None:
                 for lb in meta
                 if runs.get(lb) in cs.CURRENT_RUNS
                 and not (
-                    cs.unit_done(cache, "germany", lb)
+                    (
+                        cs.unit_done(cache, "germany", lb)
+                        or lb in skipped_german(SKIP_GERMAN_FILE)
+                    )
                     and cs.unit_done(cache, "heldout_scores", lb)
                 )
                 and all(cs.unit_done(cache, *u) for u in split_fast(
