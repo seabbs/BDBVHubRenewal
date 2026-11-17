@@ -193,6 +193,7 @@ def test_sample_crps_nrg_on_request(y: float) -> None:
     assert s["score"].item() == pytest.approx(_crps_nrg(X, y))
 
 
+@pytest.mark.filterwarnings("ignore:invalid value encountered in log1p")
 def test_sample_crps_does_not_favour_more_draws() -> None:
     # Hub teams give 100 draws and our models 1,000: the mean score of a
     # calibrated forecast must not depend on how many draws it has.
