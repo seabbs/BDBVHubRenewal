@@ -101,13 +101,23 @@ def write_summary(
     mode: str,
     studies: Mapping[str, dict],
     finetuned: str | None = None,
+    realdata_after: str | None = None,
 ) -> None:
     """Write every study's numbers as Quarto metadata under `results`.
 
+    `realdata_after` is the last BDBV release the real-data model trained
+    on, quoted by the SI.
     `finetuned` is the fine-tuned checkpoint the `_ft` models loaded, or
     `pending` while the final run has published none.
     """
     pin = finetuned or "pending"
-    doc = {"results": {"mode": mode, "finetuned": pin, **studies}}
+    doc = {
+        "results": {
+            "mode": mode,
+            "finetuned": pin,
+            "realdata_after": realdata_after or "pending",
+            **studies,
+        }
+    }
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(yaml.safe_dump(doc, sort_keys=False))

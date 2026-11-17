@@ -451,25 +451,18 @@ The full and no-delay runs at matched checkpoints: held-out loss by source, rela
 ### Real-data fine-tune against synthetic
 
 - We fine-tune a model on the German development half and BDBV releases, and compare it with the model fine-tuned on simulations.
+- Its BDBV training data are every release up to {{< meta results.realdata_after >}}, so we score it on BDBV rounds from 21 November 2026 only.
+- It saw the German development half, so we score it on the held-out half only.
 - Both use the same recipe and the ragged layout.
-- @tbl-germany-real-finetune gives scores on the German held-out half, against zero-shot Chronos-2 and the synthetic model.
-- @tbl-ebola-real-finetune gives scores on BDBV rounds after the last release the real-data model trained on.
-- @fig-compare-realdata shows both.
-- The real-data model saw the German development half, so we score it on the held-out half only.
-- We leave it out of every other table and figure.
+- @tbl-real-finetune gives the scores, and @fig-compare-realdata shows them.
+- We leave the real-data model out of every other table and figure.
 
 ![Real-data fine-tune against synthetic: German held-out and BDBV relative scores.](build/figures/si/compare-realdata.png){#fig-compare-realdata}
 
-::: {#tbl-germany-real-finetune}
-{{< include build/tables/si/germany-real-finetune.md >}}
+::: {#tbl-real-finetune}
+{{< include build/tables/si/real-finetune.md >}}
 
-German nowcast hub held-out half: Chronos-2 zero-shot (`_ragged`), fine-tuned on simulations (`_ft`) and fine-tuned on real data (`_real`), overall (`all`) and by level, with WIS relative to `randomwalknowcast`. {{< meta results.germany.label >}} {{< meta results.germany.note >}}
-:::
-
-::: {#tbl-ebola-real-finetune}
-{{< include build/tables/si/ebola-real-finetune.md >}}
-
-BDBV scored rounds (from 21 November 2026, after every release the real-data model trained on): Chronos-2 zero-shot (`_ragged`), fine-tuned on simulations (`_ft`) and fine-tuned on real data (`_real`), overall (`all`) and by level, with CRPS relative to `randomwalknowcast`. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
+Chronos-2 zero-shot (`_ragged`), fine-tuned on simulations (`_ft`) and fine-tuned on real data (`_real`), by level: WIS on the German held-out half and CRPS on BDBV rounds from 21 November 2026, relative to `randomwalknowcast`. Blank cells have no scores yet.
 :::
 
 ### Daily nowcasts

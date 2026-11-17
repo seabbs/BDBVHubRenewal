@@ -183,3 +183,39 @@ def test_score_tables_keep_the_hub_target(tmp_path: Path) -> None:
     got = pd.read_csv(tmp_path / "main" / "germany-scores.csv")
     want = pd.read_csv(plain / "main" / "germany-scores.csv")
     pd.testing.assert_frame_equal(got, want)
+
+
+def test_one_real_data_table_has_germany_and_bdbv_as_columns() -> None:
+    from paperpipe.outputs import real_finetune_combined
+
+    def rows(study: str, levels: list[str], value: float) -> pd.DataFrame:
+        out = []
+        for model in (
+            "fm_chronos_daily_ragged_ft",
+            "fm_chronos_daily_ragged_real",
+        ):
+            for level in ["all", *levels]:
+                out.append(
+                    {
+                        "study": study,
+                        "model": model,
+                        "level": level,
+                        "rel_score": value,
+                    }
+                )
+        return pd.DataFrame(out)
+
+    germany = rows("germany", ["national", "states", "age groups"], 0.9)
+    ebola = rows("ebola", ["national", "provinces", "zones"], 1.2)
+    t = real_finetune_combined(germany, ebola)
+    assert list(t.columns) == ["Model", "Level", "German held-out", "BDBV"]
+    # One row per model and level, never pooled across levels.
+    assert len(t) == 6
+    assert set(t["Level"]) == {
+        "National",
+        "States / provinces",
+        "Age groups / zones",
+    }
+    # BDBV cells are blank until it has scored rounds.
+    t = real_finetune_combined(germany, None)
+    assert (t["BDBV"] == "").all()

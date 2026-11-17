@@ -42,7 +42,9 @@ from paperpipe.evidence import EVIDENCE, write_evidence
 from paperpipe.meta import baseline_of, read_meta, write_meta
 from paperpipe.outputs import (
     joint_table,
+    real_finetune_combined,
     score_tables,
+    to_markdown,
     write_figures,
 )
 from paperpipe.studies import (
@@ -221,7 +223,22 @@ def _summary(a: argparse.Namespace) -> None:
     for m, t in zip(a.meta, a.scores, strict=True):
         meta = read_meta(m)
         studies[meta["study"]] = study_summary(meta, pd.read_csv(t), a.mode)
-    write_summary(a.out, a.mode, studies, finetuned=a.finetuned)
+    write_summary(
+        a.out,
+        a.mode,
+        studies,
+        finetuned=a.finetuned,
+        realdata_after=a.realdata_after,
+    )
+
+
+def _real_finetune(a: argparse.Namespace) -> None:
+    def read(path: Path) -> pd.DataFrame | None:
+        frame = pd.read_csv(path) if path.stat().st_size else None
+        return None if frame is None or frame.empty else frame
+
+    table = real_finetune_combined(read(a.germany), read(a.ebola))
+    a.out.write_text(to_markdown(table))
 
 
 def _score_tables(a: argparse.Namespace) -> None:
@@ -366,7 +383,18 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--scores", type=Path, nargs="+", required=True)
     p.add_argument("--out", type=Path, required=True)
     p.add_argument("--finetuned", default=None)
+    p.add_argument(
+        "--realdata-after",
+        default=None,
+        help="The last BDBV release the real-data model trained on.",
+    )
     p.set_defaults(run=_summary)
+
+    p = sub.add_parser("real-finetune")
+    p.add_argument("--germany", type=Path, required=True)
+    p.add_argument("--ebola", type=Path, required=True)
+    p.add_argument("--out", type=Path, required=True)
+    p.set_defaults(run=_real_finetune)
     return parser
 
 
