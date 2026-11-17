@@ -22,6 +22,13 @@ the trainer's seed (`CUT_SEED`, its `--seed`) and settings
 drawn with `SAMPLE_SEED`, the same for every label. The cut and sample
 are cached once (`prepare`).
 
+That is the r4 set (`SETS["r4"]`, the previous run's). Grid r5 holds
+out round 9, one balanced block of 840 simulations (`SETS["r5"]`): every
+simulation is scored, with a fixed sample of each one's blocks
+(`simulation_sample`), cut 21 simulations at a time so the whole cut is
+never held at once, and its rows (study `heldout_r5`) are also split by
+the simulations' design factor levels (`FACTORS`, `factor_table`).
+
 Targets: a layout's count rows are its own target (daily, 7day for the
 weekly layout, 3day). A mixed layout (daily+weekly, daily+3day) has
 daily count rows (target daily) and each place's 7-day or 3-day totals
@@ -121,8 +128,10 @@ class HeldSet:
     as the trainer cuts them with `draws` draws each. The first `checked`
     of them are the trainer's own held-out set, whose ids must hash to
     its `held_out_sha256`. `sizes` blocks of each layout are sampled, or
-    every block if None. Blocks and scores go in `<cache>/<name>/`, rows
-    under study `study`.
+    every block if None. With `cut_batch`, the simulations are cut that
+    many at a time, and `per_simulation_sample` blocks of each kept (all
+    if None), so the whole cut is never held at once. Blocks and scores
+    go in `<cache>/<name>/`, rows under study `study`.
     """
 
     name: str
@@ -133,6 +142,8 @@ class HeldSet:
     draws: int
     sizes: Mapping[str, int] | None
     study: str
+    per_simulation_sample: int | None = None
+    cut_batch: int | None = None
 
 
 SETS = {
@@ -148,6 +159,9 @@ SETS = {
     ),
     # Grid r5 holds out round 9, one balanced block of 840 simulations
     # (#311); the trainer monitors its first 90 and every one is scored.
+    # All 32 cuts of each take about 78 h a checkpoint on one thread
+    # (12 s a block, 27 blocks a simulation), so 4 of each are scored:
+    # about 11 h, every simulation and so every factor level kept.
     "r5": HeldSet(
         name="heldout_scores_r5",
         sim_dir=Path("~/bdbv-rounds/rounds/r9/sims"),
@@ -157,6 +171,8 @@ SETS = {
         draws=1,
         sizes=None,
         study="heldout_r5",
+        per_simulation_sample=4,
+        cut_batch=21,
     ),
 }
 """The held-out sets by grid. r4's keeps the folder its cache is in."""
@@ -313,6 +329,54 @@ def sample_index(
     return out
 
 
+def simulation_sample(
+    blocks: Sequence[Mapping], k: int | None, seed: int = SAMPLE_SEED
+) -> list[int]:
+    """Return a fixed sample of `k` blocks of each simulation, in order.
+
+    Each simulation's draw is seeded by its id, so it does not depend on
+    the other simulations cut with it. All blocks if `k` is None.
+    """
+    if k is None:
+        return list(range(len(blocks)))
+    sims = simulation_of(pd.Series([str(b["outbreak"]) for b in blocks]))
+    out: list[int] = []
+    for sim, idx in sims.groupby(sims, sort=False).groups.items():
+        digest = hashlib.sha256(f"{seed}-{sim}".encode()).hexdigest()
+        rng = np.random.default_rng(int(digest[:12], 16))
+        mine = list(idx)
+        take = rng.choice(len(mine), min(k, len(mine)), replace=False)
+        out += [int(mine[j]) for j in take]
+    return sorted(out)
+
+
+def _batched(
+    sim_dir: Path, ids: Sequence[str], per_simulation: int, held: HeldSet
+) -> tuple[list[dict], pd.Series]:
+    """Cut `held.cut_batch` simulations at a time, keeping its sample.
+
+    Returns the kept blocks, each with its `cut_index` in the whole cut,
+    and the whole cut's block count by layout.
+    """
+    assert held.cut_batch is not None
+    kept: list[dict] = []
+    layouts: list[str] = []
+    for i in range(0, len(ids), held.cut_batch):
+        part = cut_blocks(
+            sim_dir,
+            ids[i : i + held.cut_batch],
+            per_simulation,
+            draws=held.draws,
+        )
+        for j in simulation_sample(part, held.per_simulation_sample):
+            kept.append({**part[j], "cut_index": len(layouts) + j})
+        layouts += [b["source"] for b in part]
+        print(
+            f"{held.name}: cut {min(i + held.cut_batch, len(ids))}/{len(ids)}"
+        )
+    return kept, pd.Series(layouts, dtype=object).value_counts()
+
+
 def _key(
     sha: str,
     sizes: Mapping[str, int] | None,
@@ -333,7 +397,10 @@ def _key(
             **(
                 {}
                 if held == R4
-                else {"set": [held.name, held.holdout, held.checked]}
+                else {
+                    "set": [held.name, held.holdout, held.checked],
+                    "per_simulation_sample": held.per_simulation_sample,
+                }
             ),
         },
         sort_keys=True,
@@ -398,20 +465,30 @@ def prepare(
             f"the held-out simulations hash to {found}, not the trainer's "
             f"held-out set {sha}"
         )
-    blocks = cut_blocks(sim_dir, ids, per_simulation, draws=held.draws)
-    index = sample_index(blocks, sizes, SAMPLE_SEED)
-    sampled = [{**blocks[i], "index": i} for i in index]
+    if held.cut_batch is None:
+        blocks = cut_blocks(sim_dir, ids, per_simulation, draws=held.draws)
+        index = sample_index(blocks, sizes, SAMPLE_SEED)
+        sampled = [{**blocks[i], "index": i} for i in index]
+        counts = pd.Series([b["source"] for b in blocks]).value_counts()
+        n_cut = len(blocks)
+    else:
+        if sizes is not None:
+            raise ValueError("a batched cut keeps a sample of each simulation")
+        kept, counts = _batched(sim_dir, ids, per_simulation, held)
+        sampled = [{**b, "index": i} for i, b in enumerate(kept)]
+        index = [int(b["cut_index"]) for b in kept]
+        n_cut = int(counts.sum())
     for b in sampled:
         if b["source"] != "weekly":
             b["meta"] = {**b["meta"], "counts": None}
     _atomic(path, pickle.dumps(sampled))
-    counts = pd.Series([b["source"] for b in blocks]).value_counts()
     note = {
         "key": key,
         "held_out_sha256": sha,
         "n_blocks": len(sampled),
         "cut": {str(k): int(v) for k, v in counts.items()},
-        "n_cut": len(blocks),
+        "n_cut": n_cut,
+        "per_simulation_sample": held.per_simulation_sample,
         "sample": (
             None
             if sizes is None
