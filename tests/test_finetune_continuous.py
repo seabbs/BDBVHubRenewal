@@ -128,3 +128,10 @@ def test_the_restart_streams_only_rounds_from_the_first_r5_round(tmp_path):
     assert _sync(tmp_path, remote, first=9) == ["30900"]
     out = _source(tmp_path, "", 'echo "$FIRST_ROUND"')
     assert out.stdout.split() == ["9"]
+
+
+def test_the_held_out_default_leaves_room_for_skipped_simulations(tmp_path):
+    # Round 9 has 100 held-out simulations of one draw; 90 tolerates a
+    # few skipped ones.
+    out = _source(tmp_path, "", 'echo "$HOLDOUT"')
+    assert out.stdout.split() == ["90"]
