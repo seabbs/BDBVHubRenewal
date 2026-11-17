@@ -75,7 +75,7 @@ def test_a_run_s_bias_from_its_checkpoints_and_history(tmp_path):
     run = runs.make_run("r", str(folder), live=True)
     got = bias.run_bias(run, step=None)
     assert [p[0] for p in got["pts"]["same"]] == [600, 1140, 2280]
-    assert got["pts"]["same"][0][1] == 1.5
+    assert got["pts"]["same"][0][1]["mean"] == 1.5
     assert got["latest"]["step"] == 2280
     assert got["latest"]["same"] == [[2.0, 2.0], [2.0, 2.0]]
 
