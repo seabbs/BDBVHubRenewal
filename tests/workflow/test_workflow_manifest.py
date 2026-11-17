@@ -2,7 +2,9 @@
 
 import gzip
 import hashlib
+import re
 
+import pytest
 from flowlib import manifest
 
 
@@ -76,3 +78,33 @@ def test_rows_are_joined_in_seed_order_under_the_header(tmp_path):
     assert out.read_text() == (
         manifest.HEADER + "\n4,30421,train\n4,30422,train\n"
     )
+
+
+def _row(sims):
+    return manifest.row(
+        sims,
+        round_=4,
+        seed=30421,
+        kind="train",
+        grid="r4",
+        commit="abc",
+        draws=10,
+        batch=25,
+        host="h",
+        finished="t",
+    )
+
+
+def test_a_batch_without_counts_or_settings_has_no_row(tmp_path):
+    for name in ("counts-30421.csv.gz", "settings-30421.csv"):
+        sims = _batch(tmp_path / name)
+        (sims / name).unlink()
+        with pytest.raises(FileNotFoundError, match=re.escape(name)):
+            _row(sims)
+
+
+def test_a_batch_without_its_log_has_no_row(tmp_path):
+    sims = _batch(tmp_path)
+    (sims / "logs" / "30421.log").unlink()
+    with pytest.raises(FileNotFoundError, match=re.escape("30421.log")):
+        _row(sims)

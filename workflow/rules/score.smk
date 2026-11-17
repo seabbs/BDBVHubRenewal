@@ -20,7 +20,7 @@ CACHE = LOCAL["SCORE_CACHE"]
 
 
 checkpoint release_list:
-    # The only rule that reads the network; `task score` reruns it.
+    # Lists the releases to score; `task score` reruns it.
     output:
         f"{CACHE}/releases.json",
     params:
