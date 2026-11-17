@@ -72,9 +72,19 @@ from bdbvhubrenewal.forecasters.chain import (
     NoCompleteWeek,
     Origin,
     Settings,
+    _add_spread,
     build_origin,
     delay_summary,
 )
+from bdbvhubrenewal.forecasters.copula import (
+    PAIRINGS,
+    PRIOR,
+    PRIOR_WEIGHT,
+    RollingCopula,
+    error_scores,
+    pair_walks,
+)
+from bdbvhubrenewal.forecasters.copula import estimate_copula as estimate
 from bdbvhubrenewal.forecasters.introductions import silent_trajectories
 from bdbvhubrenewal.forecasters.obs import sample_count
 from bdbvhubrenewal.forecasters.walk import random_walks
@@ -282,12 +292,89 @@ class RandomWalk:
         One row per place from the last forecast: the start week, the
         errors behind the spread and the source of the delay, spread and
         walk.
+    pairing : str
+        How the draws are paired into trajectories across places and the
+        weeks before the walk (`copula.PAIRINGS`): `rolling`, by the
+        copula estimated from the model's own recent nowcast errors, by
+        default.
+    copula_fit : dict or None
+        The copula of the last forecast: `model`, `origin`, `n_scores` and
+        the four correlations, or None with no pairing.
     """
 
     name: str = "randomwalk"
     settings: Settings = field(default_factory=Settings)
     fit_diagnostics: list[dict[str, object]] = field(default_factory=list)
+    pairing: str = "rolling"
+    copula_fit: dict[str, object] | None = field(
+        init=False, default=None, repr=False
+    )
     needs_snapshots: ClassVar[bool] = True
+
+    def pair(
+        self,
+        origin: Origin,
+        task: ForecastTask,
+        values: np.ndarray,
+        anchors: np.ndarray,
+    ) -> np.ndarray:
+        """Pair draws `[S, L, H]` into trajectories (`copula.pair_walks`).
+
+        The copula is the prior, or with `rolling` estimated from the
+        normal scores of the model's own nowcasts at earlier releases
+        (`copula.error_scores`), shrunk to the prior. A model whose errors
+        cannot be fitted takes the prior.
+        """
+        if self.pairing not in PAIRINGS:
+            raise ValueError(f"pairing must be one of {PAIRINGS}.")
+        self.copula_fit = None
+        if self.pairing == "off":
+            return values
+        copula, n = PRIOR, 0
+        if self.pairing == "rolling":
+            scores = self._error_scores(origin, task)
+            if len(scores):
+                fit = RollingCopula(weight=PRIOR_WEIGHT)
+                copula = estimate(scores, fit.prior, fit.weight)
+                n = len(scores)
+        rng = task.rng(self.name, "copula")
+        paired = pair_walks(
+            values, tuple(origin.snap.locations), anchors, copula, rng
+        )
+        self.copula_fit = {
+            "model": self.name,
+            "origin": task.vintage,
+            "n_scores": n,
+            **{k: float(v) for k, v in vars(copula).items()},
+        }
+        return paired
+
+    def _error_scores(self, origin: Origin, task: ForecastTask) -> pd.DataFrame:
+        """Return the normal scores of the model's own earlier nowcasts."""
+        if origin.errors is None:
+            try:
+                _add_spread(origin)
+            except (ValueError, FloatingPointError, np.linalg.LinAlgError):
+                return pd.DataFrame()
+        errors, size = origin.errors, origin.size
+        if errors is None or size is None or not errors.releases:
+            return pd.DataFrame()
+        snap = origin.snap
+        at = {r: i for i, r in enumerate(snap.releases)}
+        ages = np.array(
+            [snap.cut[origin.o] - snap.cut[at[r]] for r in errors.releases]
+        )
+        return error_scores(
+            errors.added,
+            errors.remaining,
+            errors.valid,
+            size,
+            list(errors.releases),
+            ages,
+            tuple(snap.locations),
+            self.name,
+            task.seed,
+        )
 
     def snapshots(self, task: ForecastTask) -> SnapshotArrays:
         """Return the task's release snapshots as arrays.
@@ -442,6 +529,8 @@ class RandomWalk:
                     draw = y[loc, :, u - start[loc] - 1]
                     floor = origin.reported[loc, u] if u < n_data else 0.0
                     values[:, loc, u] = np.maximum(draw, floor)
+        # Each place's walk runs from the week after its start.
+        values = self.pair(origin, task, values, start + 1)
         self._diagnostics(origin, task, start)
         return frame(task, weeks, values, self.rows(origin, task))
 
@@ -486,6 +575,9 @@ class RandomWalkNowcast(RandomWalk):
         """
         origin = self.origin_at(task, errors=True)
         values, weeks = self.trajectories(origin, task, origin.point)
+        # Nowcast weeks are drawn on their own; the walk runs jointly from
+        # each place's start week.
+        values = self.pair(origin, task, values, _start_weeks(origin))
         self.delay_summary = delay_summary(origin, self.name, task.vintage)
         self._diagnostics(
             origin,
