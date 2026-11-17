@@ -3,8 +3,9 @@
 A tick (`workflow/scripts/tick.py`) runs this machine's targets
 (`SCHEDULE_TARGETS` in config/local.env, in order, for example
 `score land` where checkpoints are scored or `finetune publish` where
-they are trained), each a Snakemake run at nice 19 with the machine's
-cores and memory. It runs only when there is room (`MIN_FREE_GB`,
+they are trained), each a Snakemake run at nice 19 with the default
+profile and the machine's cores and memory less its headroom
+(flowlib.machine). It runs only when there is room (`MIN_FREE_GB`,
 `MIN_DISK_GB`) and never beside another tick (a lock). Snakemake reruns
 only what changed, so `land` commits only new tables.
 
@@ -24,16 +25,19 @@ from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from pathlib import Path
 
-PROFILE = {
-    "simulate": "cpu",
-    "release": "cpu",
-    "score": "cpu",
-    "land": "cpu",
-    "finetune": "gpu",
-    "publish": "gpu",
-    "dashboard": "cpu",
-}
-"""The targets a tick may run, each with its Snakemake profile."""
+from flowlib import machine
+
+TARGETS = (
+    "simulate",
+    "push",
+    "release",
+    "score",
+    "land",
+    "finetune",
+    "publish",
+    "dashboard",
+)
+"""The targets a tick may run, each with workflow/profiles/default."""
 
 EXTRA = {"score": ["--forcerun", "release_list"]}
 """Options of a target: `score` lists the releases afresh each tick."""
@@ -56,9 +60,9 @@ def plan(cfg: Mapping[str, str]) -> list[tuple[str, list[str]]]:
         If a target is not one a tick may run.
     """
     targets = cfg.get("SCHEDULE_TARGETS", "").split()
-    bad = [t for t in targets if t not in PROFILE]
+    bad = [t for t in targets if t not in TARGETS]
     if bad:
-        raise ValueError(f"targets {bad} are not among {sorted(PROFILE)}")
+        raise ValueError(f"targets {bad} are not among {sorted(TARGETS)}")
     out = []
     for t in targets:
         cmd = [
@@ -72,13 +76,8 @@ def plan(cfg: Mapping[str, str]) -> list[tuple[str, list[str]]]:
             "snakemake",
             t,
             "--workflow-profile",
-            f"workflow/profiles/{PROFILE[t]}",
-            "--cores",
-            cfg.get("CORES") or "1",
-            "--resources",
-            f"mem_mb={cfg.get('MEM_MB') or 32768}",
-            "gpu=1",
-            f"sim_slots={cfg.get('SIM_SLOTS') or 2}",
+            "workflow/profiles/default",
+            *machine.args(cfg),
             *EXTRA.get(t, []),
         ]
         out.append((t, cmd))

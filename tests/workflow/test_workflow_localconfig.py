@@ -148,3 +148,9 @@ def test_paper_cores_come_from_the_local_config():
     assert 'dotenv: ["../config/local.env"]' in taskfile
     script = (ROOT / "scripts" / "paper.sh").read_text()
     assert "localconfig.py CORES" in script
+
+
+def test_a_host_s_seeds_profile_and_rounds_host_are_local(tmp_path):
+    cfg = localconfig.read(tmp_path / "none.env", {"HOME": str(tmp_path)})
+    for key in ("SIM_SEEDS", "SNAKEMAKE_PROFILE", "REMOTE", "REMOTE_ROOT"):
+        assert cfg[key] == ""

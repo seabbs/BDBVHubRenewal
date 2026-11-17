@@ -14,7 +14,17 @@ min_disk=$2
 where=$3
 poll=${ROOM_POLL:-60}
 tries=${ROOM_TRIES:-}
-free_gb() { awk '/MemAvailable/ {print int($2 / 1048576)}' /proc/meminfo; }
+# Available memory: Linux's MemAvailable, or on macOS the free, inactive,
+# speculative and purgeable pages.
+free_gb() {
+  if [ -r /proc/meminfo ]; then
+    awk '/MemAvailable/ {print int($2 / 1048576)}' /proc/meminfo
+  else
+    vm_stat | awk '/page size of/ {ps = $8}
+      /Pages (free|inactive|speculative|purgeable)/ {gsub(/\./, "", $NF); n += $NF}
+      END {print int(n * ps / 1073741824)}'
+  fi
+}
 disk_gb() { df -Pk "$where" | awk 'NR == 2 {print int($4 / 1048576)}'; }
 room() {
   local free disk

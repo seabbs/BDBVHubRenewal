@@ -13,6 +13,7 @@ High level, one Taskfile task per target:
 | `task all` | `all` | simulate, fine-tune and score | no |
 | `task simulate ROUNDS="4 5"` | `simulate` | simulation rounds, with QC and manifests | no |
 | `task release ROUNDS=4` | `release` | each batch to its `sims-r<N>` release | GitHub releases |
+| `task push ROUNDS="19 18"` | `push` | a helping host's batches, pushed to the rounds host | the rounds host |
 | `task finetune` | `finetune` | every checkpoint prefix of the run | no |
 | `task publish` | `publish` | verify and release each checkpoint | GitHub releases |
 | `task score` | `score` | score each released checkpoint, then its follow-ups | no |
@@ -39,14 +40,16 @@ The workflow uses:
 
 - paths: `ROOT` (rounds), `RUN` (the fine-tuning run), `SCORE_CACHE`, `NOSLOTS_RUN` and `GERMANY_BLOCKS` (the slots check's);
 - what this machine does: `TARGETS` (what `all` runs; by default `simulate finetune score`, so a CPU machine sets `simulate score` and a GPU machine `finetune`), `SIMS_FROM` (`local` or `release`), `PUBLISH` (release each checkpoint as it is trained);
-- resources: `JOB_PREFIX` (a per-job memory cap such as a `systemd-run` scope; `{mem}` becomes the job's budget), `MIN_FREE_GB` and `MIN_DISK_GB` (room a heavy job waits for), and the Taskfile's `CORES`, `MEM_MB` and `SIM_SLOTS`;
+- resources: `JOB_PREFIX` (a per-job memory cap such as a `systemd-run` scope, or `workflow/scripts/mem_cap.sh {mem}` on macOS; `{mem}` becomes the job's budget), `MIN_FREE_GB` and `MIN_DISK_GB` (room a heavy job waits for), `HEADROOM_CORES` and `HEADROOM_GB` (cores and memory kept free), `CORES` and `MEM_MB` (set them outright instead), `SIM_SLOTS` (batches at once, 2 by default) and `DEVICE` (`auto`: CUDA, then MPS, then the CPU);
+- sharing the rounds: `SIM_SEEDS` (the seeds this machine takes: seeds, `first-last` ranges or rounds as `r<N>`; empty: all), and on a helping machine `REMOTE` and `REMOTE_ROOT` (the rounds host and its rounds folder; empty: `ROOT`);
 - `HOST_NAME`.
 
 Nothing in the workflow needs a notes file. As an optional local extra, setting both `NOTIFY` and `MAILBOX` appends a one-line note to the file `MAILBOX` when a round is ready, a checkpoint is saved or published, the checked checkpoint misses zero-shot, scores land or a run fails. Both are empty by default, a note that cannot be written is only a warning, and no rule's output or success depends on it. The optional detached-job helpers in `tools/` use the same switch.
 
 Task reads `config/local.env` itself, not `$LOCAL_CONFIG`.
 
-Profiles in `workflow/profiles/` hold resources only and are named by role: `cpu` (simulate, score), `gpu` (fine-tune, publish) and `ci`.
+Every target runs with one profile, `workflow/profiles/default`, and this machine's cores, memory and GPU less its headroom (`workflow/flowlib/machine.py`, which the Taskfile and the tick call; `python3 workflow/flowlib/machine.py device` prints the device). `workflow/profiles/ci` is for CI.
+A machine that needs more can name an untracked profile of its own with `SNAKEMAKE_PROFILE` (see `config/profile.example`), never one in the repository.
 All of them rerun a step only when an input is newer (`rerun-triggers: mtime`), so editing a script does not reschedule finished work.
 Settings that are the same on every machine are in `workflow/config.yaml`; override them with `--config` or `--configfile`.
 
@@ -65,6 +68,8 @@ A round is grid block r, 840 simulations, and is used whole for training or as t
 - `round_ready`: the seed list and `READY`, last.
 - `simulate`: the rounds in `rounds`. At most `sim_slots` batches run at once (2 by default).
 - `release_batch`, `release_qc`, `release`: opt-in, each batch and the round's QC exclusions to its round's release.
+- `push_batch`, `push`: on a helping host, its seeds (`SIM_SEEDS`), each pushed to the rounds host's round (`REMOTE`, `REMOTE_ROOT`): its files, then its manifest row (`flowlib.hosts`).
+- `await_batch`: on the rounds host, a seed not in its `SIM_SEEDS`, done once the host that simulates it has pushed its manifest row; one waits at a time. Its row is kept as pushed.
 
 Outputs are in `<ROOT>/rounds/r<N>/`.
 
@@ -137,7 +142,7 @@ The workflow updates itself as results come in. Each machine runs its own target
 | the machine that trains (GPU) | `finetune publish` | trains the next segment once its batches are there, and releases each new checkpoint |
 | a simulating machine | `simulate release` | simulates the configured rounds and releases each batch |
 
-A tick (`task tick`, `workflow/scripts/tick.py`) runs the targets in order at nice 19 with the machine's `CORES` and `MEM_MB`. It is skipped when another tick is still running (a lock in `output/`) or when less than `MIN_FREE_GB` of memory or `MIN_DISK_GB` of disk is free; a failed target stops the tick, so `land` never follows a failed `score`. Its log is `output/workflow-tick.log`.
+A tick (`task tick`, `workflow/scripts/tick.py`) runs the targets in order at nice 19 with the default profile and the machine's budget. It is skipped when another tick is still running (a lock in `output/`) or when less than `MIN_FREE_GB` of memory or `MIN_DISK_GB` of disk is free; a failed target stops the tick, so `land` never follows a failed `score`. Its log is `output/workflow-tick.log`.
 
 `task schedule ACTION=install` installs a timer that runs the tick every `SCHEDULE_EVERY` minutes (default 60): a systemd user timer on Linux with systemd, else a cron line; a launchd agent on macOS; or the one `SCHEDULE_KIND` names. The unit is written from where the checkout is and the `PATH` it is installed from, so nothing machine-specific is committed. `ACTION=show` prints it, `ACTION=uninstall` removes it.
 

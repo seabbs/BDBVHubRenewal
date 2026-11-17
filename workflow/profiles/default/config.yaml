@@ -1,0 +1,12 @@
+# Every workflow run on any machine: simulate, fine-tune, score and
+# publish. Its cores and resources come from this machine
+# (flowlib.machine, less the headroom in config/local.env), passed by the
+# Taskfile and the scheduled tick, so this file names no machine.
+rerun-triggers: [mtime]
+printshellcmds: true
+keep-going: true
+latency-wait: 30
+default-resources:
+  - mem_mb=2048
+set-threads:
+  - simulate_batch=1

@@ -10,10 +10,18 @@
 #
 # Targets: `simulate` (the rounds in `rounds`), and the opt-in `release`,
 # which uploads each batch to the release sims-r<r>.
+#
+# Two hosts can share the rounds (flowlib.hosts): each lists the seeds
+# it takes in its local config (SIM_SEEDS; empty: all). A helping
+# host's target is `push`, which sends each of its batches to the rounds
+# host (REMOTE) with its manifest row; the rounds host's `simulate`
+# simulates its own seeds and waits for the rest.
 
-from flowlib import manifest, segments
+from flowlib import hosts, manifest, segments
 
 SIM = config["simulate"]
+REMOTE = LOCAL["REMOTE"]
+REMOTE_ROUNDS = f"{LOCAL['REMOTE_ROOT'] or LOCAL['ROOT']}/rounds"
 
 
 def seeds_of(round_):
@@ -21,6 +29,24 @@ def seeds_of(round_):
     return segments.round_seeds(
         int(round_), SIM["seed_base"], SIM["batches"]
     )
+
+
+MINE = hosts.seeds(LOCAL["SIM_SEEDS"], seeds_of)
+
+
+def here(seed):
+    """Whether this host simulates batch `seed`."""
+    return hosts.simulates(int(seed), MINE)
+
+
+def batch_files(wc):
+    """A batch's files: simulated here, or pushed by its host."""
+    if here(wc.seed):
+        return {
+            "counts": rules.simulate_batch.output.counts.format(**wc),
+            "settings": rules.simulate_batch.output.settings.format(**wc),
+        }
+    return {"arrived": rules.await_batch.output[0].format(**wc)}
 
 
 def grid_name():
@@ -76,17 +102,38 @@ rule simulate_batch:
         trap 'rm -rf "$tmp"' EXIT
         TMPDIR="$tmp" ENW_DRAWS={params.draws} \
           ENW_SEED_BASE={params.seed_base} {params.prefix} \
-          /usr/bin/time -f "peak_rss_kb %M wall_s %e" \
+          workflow/scripts/timed.sh \
           nice -n 19 Rscript scripts/finetune_simulate.R \
           {params.batch} {wildcards.seed} {params.sims} > {log} 2>&1
         gzip -t {output.counts}
         """
 
 
+rule await_batch:
+    # A batch another host simulates (not in SIM_SEEDS): done once that
+    # host has pushed its files and then its row to this round's
+    # manifest. One waits at a time (`--resources awaiting=1`).
+    output:
+        f"{ROUNDS_DIR}/r{{round}}/arrived/{{seed}}.done",
+    params:
+        manifest=f"{ROUNDS_DIR}/r{{round}}/manifest.csv",
+        poll=60,
+    resources:
+        awaiting=1,
+    localrule: True
+    shell:
+        """
+        until grep -q '^{wildcards.round},{wildcards.seed},' \
+            {params.manifest} 2> /dev/null; do
+          sleep {params.poll}
+        done
+        touch {output}
+        """
+
+
 rule batch_record:
     input:
-        counts=rules.simulate_batch.output.counts,
-        settings=rules.simulate_batch.output.settings,
+        unpack(batch_files),
     output:
         f"{ROUNDS_DIR}/r{{round}}/records/record-{{seed}}.csv",
     params:
@@ -97,7 +144,10 @@ rule batch_record:
         import datetime as dt
 
         r, s = int(wildcards.round), int(wildcards.seed)
-        line = manifest.existing(params.old, r, s) or manifest.row(
+        line = manifest.existing(params.old, r, s)
+        if line is None and not here(s):
+            raise ValueError(f"batch {s} arrived without its manifest row")
+        line = line or manifest.row(
             params.sims,
             round_=r,
             seed=s,
@@ -165,14 +215,15 @@ rule release_batch:
     # Opt-in (target `release`): uploads a batch to the release sims-r<r>,
     # so another machine can train on it before the round ends.
     input:
-        counts=rules.simulate_batch.output.counts,
-        settings=rules.simulate_batch.output.settings,
+        unpack(batch_files),
         record=rules.batch_record.output,
     output:
         touch(f"{ROUNDS_DIR}/r{{round}}/released/{{seed}}.done"),
     params:
         repo=SIM["repo"],
         tag="sims-r{round}",
+        counts=rules.simulate_batch.output.counts,
+        settings=rules.simulate_batch.output.settings,
     localrule: True
     shell:
         """
@@ -183,7 +234,7 @@ rule release_batch:
             > /dev/null 2>&1 || \
           gh release view {params.tag} -R {params.repo} > /dev/null
         gh release upload {params.tag} -R {params.repo} --clobber \
-          {input.counts} {input.settings} {input.record}
+          {params.counts} {params.settings} {input.record}
         """
 
 
@@ -204,6 +255,50 @@ rule release_qc:
         cp {input} {params.named}
         gh release upload {params.tag} -R {params.repo} --clobber {params.named}
         """
+
+
+rule push_batch:
+    # A helping host's batch, sent to the rounds host's round: its files,
+    # then its manifest row (flowlib.hosts.push).
+    input:
+        counts=rules.simulate_batch.output.counts,
+        settings=rules.simulate_batch.output.settings,
+    output:
+        touch(f"{ROUNDS_DIR}/r{{round}}/sent/{{seed}}.done"),
+    params:
+        sims=f"{ROUNDS_DIR}/r{{round}}/sims",
+        there=f"{REMOTE_ROUNDS}/r{{round}}",
+    retries: 3
+    localrule: True
+    run:
+        import datetime as dt
+
+        r, s = int(wildcards.round), int(wildcards.seed)
+        row = manifest.row(
+            params.sims,
+            round_=r,
+            seed=s,
+            kind="block",
+            grid=grid_name(),
+            commit=git_commit(),
+            draws=SIM["draws"],
+            batch=SIM["batch"],
+            host=HOST,
+            finished=dt.datetime.now(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        )
+        hosts.push(params.sims, s, params.there, row, REMOTE)
+
+
+rule push:
+    # A helping host's target: its seeds (SIM_SEEDS) of the rounds in
+    # `rounds`.
+    input:
+        [
+            f"{ROUNDS_DIR}/r{r}/sent/{s}.done"
+            for r in config["rounds"]
+            for s in seeds_of(r)
+            if here(s)
+        ],
 
 
 rule simulate:

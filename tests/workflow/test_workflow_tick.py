@@ -17,7 +17,12 @@ def ran(tmp_path, monkeypatch):
     calls = []
     codes = {}
 
-    def run(cmd, **_):
+    real = subprocess.run
+
+    def run(cmd, **kw):
+        # Only the targets' runs; the machine's budget is read for real.
+        if cmd[0] != "nice":
+            return real(cmd, **kw)
         target = cmd[8]
         calls.append(target)
         return subprocess.CompletedProcess(cmd, codes.get(target, 0))
