@@ -22,8 +22,9 @@ set -uo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/local_config.sh"
 HERE=${HERE:-output/finetune/continuous}
 OUTBREAKS=${OUTBREAKS:-8000}
-# Each round simulates 100 held-out outbreaks.
-HOLDOUT=${HOLDOUT:-100}
+# Each round simulates 100 held-out outbreaks (one draw each); 90 of
+# them, so a few skipped simulations do not stop the trainer.
+HOLDOUT=${HOLDOUT:-90}
 # Early checkpoints at 250 to 750 compare runs as they train; each lands
 # on a chunk's end.
 PREFIXES=${PREFIXES:-250 500 750 1000 2000 4000 8000}
