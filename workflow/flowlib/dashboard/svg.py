@@ -58,6 +58,7 @@ def chart(
     hlines: Sequence[float] = (),
     xlabel: str = "step",
     note: str = "",
+    info: str = "",
 ) -> str:
     """Return a card with an SVG line chart and its legend.
 
@@ -66,10 +67,10 @@ def chart(
     with labelled points); `dash` is a key of `DASHES`. `xticks` puts x
     on a log2 axis with those ticks; `marks` are labelled vertical lines
     and `hlines` horizontal ones. Text and colours are escaped; `note`
-    is HTML, put in as it is.
+    and `info` (a marker after the title) are HTML, put in as they are.
     """
     esc = html.escape
-    title, xlabel = esc(title), esc(xlabel)
+    title, xlabel = esc(title) + info, esc(xlabel)
     xticks = [(t, esc(lab)) for t, lab in xticks] if xticks else None
     marks = [(m, esc(lab)) for m, lab in marks]
     series = [(esc(s[0]), esc(s[1]), *s[2:]) for s in series]

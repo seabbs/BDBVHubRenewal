@@ -1,0 +1,67 @@
+# The fine-tuning dashboard's run settings for this machine (task dashboard,
+# workflow/scripts/dashboard.py). Copy to config/dashboard.local.yaml, which
+# git ignores, or name another file with DASHBOARD_CONFIG in
+# config/local.env. Keys here replace workflow/config.yaml's `dashboard`
+# keys; `runs` are added after its runs and `exclude` joins its exclusions.
+# Paths are relative to the repository; a source "host:path" is copied
+# read-only with rsync over ssh.
+
+# Where copies of remote sources are kept.
+mirror: output/finetune/dashboard-cache
+
+# Runs shown, in plot order. Each run's source is its training output folder
+# (train.log, train/n<N>/settings.json, trainer.pid) or a release prefix
+# ending in "-". hue shades its checkpoints light (early) to dark (late);
+# colour fixes one colour instead. live: the run the status follows. base:
+# the run whose step-0 losses are the base model's. hashes and n name
+# checkpoints a run has no folder for.
+runs:
+  - key: attention bias
+    label: attention bias
+    source: output/finetune/continuous-slots
+    hue: 217
+    live: true
+    base: slots zeroinit
+  - key: attention bias v1
+    label: attention bias (separate layouts)
+    source: output/finetune/continuous-slots-bias4
+    hue: 160
+    base: slots zeroinit
+  - key: slots zeroinit
+    label: slots (zero init)
+    source: output/finetune/continuous-slots-zeroinit
+    hue: 330
+    hashes: [7d7c5d9f247e, 06dbdcc2b48d]
+    n: {7d7c5d9f247e: 250, 06dbdcc2b48d: 500}
+  - key: no slots
+    label: no slots
+    source: path/to/fm-finetune-r4/output/finetune/continuous
+    hue: 25
+    hashes: [de129103cacc, 7962fd718a47]
+    n: {de129103cacc: 1000, 7962fd718a47: 2000}
+
+# Checkpoints no panel shows: hashes, and every checkpoint saved in dirs.
+exclude:
+  hashes: [85babc01767c, ea31bba0123e]
+  dirs: [output/finetune/continuous-slots-labels]
+
+# The score table and the per-checkpoint forecasts of each dataset, from the
+# machine that scores ("host:path", or a local path).
+scores: archie:code/seabbs/BDBVHubRenewal/.worktrees/checkpoint-scoring/evidence/checkpoint-scores.csv
+datasets:
+  - key: germany
+    source: archie:ckpt-scores/cache/germany/
+  - key: bdbv
+    source: archie:ckpt-scores/cache/bdbv/
+    truth_source: archie:code/seabbs/BDBVHubRenewal/.worktrees/checkpoint-scoring/data/target.csv
+
+# Extra tables (CSV, shown under Tables) and notes (text, shown under
+# Performance), each with a label and a path (local, or "host:path").
+tables:
+  - {label: Slots vs no slots (matched checkpoints), path: output/finetune/slots-vs-noslots.csv}
+notes:
+  - {label: slots-vs-noslots.md (archie review), path: "archie:bdbv-ckpt-review/slots-vs-noslots.md"}
+
+# A notes file shown under Recent activity ("host:path" or a local path);
+# leave it out to hide the section.
+mailbox: {source: "archie:bdbv-archie-mailbox.md", lines: 30}
