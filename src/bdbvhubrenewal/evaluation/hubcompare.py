@@ -697,8 +697,9 @@ def comparison_draws(forecasts: pd.DataFrame, n: int) -> pd.DataFrame:
     """Keep the first `n` sample ids of each of our models' forecasts.
 
     Our stored fits have the backtest's draws, more than the hub teams
-    submit. Every model of ours draws from the shared seed, so the first
-    ids of each are common random numbers, as a run of `n` draws gives.
+    submit. Every model of ours draws from the shared seed (common random
+    numbers), and its first ids are a sample of the same forecast. They
+    need not equal the draws of an `n`-draw run.
     Hub teams' rows (`source` `hub`) are kept as submitted.
 
     Parameters

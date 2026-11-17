@@ -58,8 +58,9 @@ def hub_draws(frame: pd.DataFrame, n: int = HUB_SAMPLES) -> pd.DataFrame:
     """Keep the first `n` sample ids, the draws a hub file takes.
 
     The backtest and the fit store draw more (`[samples] backtest` in
-    `config/backtest.toml`). Every model draws from the task's seed, so
-    the first ids are the draws an `n`-draw run gives.
+    `config/backtest.toml`). The first ids are a sample of the same
+    forecast, from the task's seed. They need not equal the draws of an
+    `n`-draw run, as the random walks' JAX draws depend on the count.
 
     Parameters
     ----------

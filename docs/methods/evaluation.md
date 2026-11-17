@@ -32,7 +32,7 @@ The number of draws is set in `[samples]` in `config/backtest.toml`.
 | German nowcast benchmark | Quantiles at seven levels | WIS | None |
 
 The fit store fits each model with the backtest's 1,000 draws, so the backtest scores the stored fits on all of them.
-In the comparison our models draw 100 samples, and the stored fits keep their first 100 sample ids, which are the draws a 100-draw run gives.
+In the comparison our models run here draw 100 samples, and the stored fits keep the first 100 of their 1,000 sample ids, from the same seed.
 Hub teams are scored on the samples they submitted.
 
 $$
