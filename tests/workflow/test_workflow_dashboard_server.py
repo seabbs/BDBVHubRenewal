@@ -68,14 +68,11 @@ def test_a_failing_data_request_is_a_server_error(server, monkeypatch):
     assert status_of(server + "/data/germany/DE.json") == 500
 
 
-class _FailedMirror:
-    def refresh(self):
-        return "mirror failed: host unreachable"
-
-
-def test_once_shows_and_reports_a_failed_mirror(tmp_path):
+def test_once_shows_and_reports_a_failed_mirror(tmp_path, monkeypatch):
     ctx = _machine(tmp_path)
-    ctx.source = _FailedMirror()
+    monkeypatch.setattr(
+        ctx.source, "refresh", lambda: "mirror failed: host unreachable"
+    )
     out = tmp_path / "page" / "index.html"
     assert dashboard.write_once(ctx, out) == 1
     assert "mirror failed: host unreachable" in out.read_text()
