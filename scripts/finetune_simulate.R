@@ -738,6 +738,207 @@ effect_sds <- function(rdesign, sds) {
   array(as.numeric(unlist(sds[effects])))
 }
 
+# Stan data as JSON, as cmdstanr writes it from a list (`process_data`):
+# each array of the model's data in its declared shape and integer type,
+# reals with a decimal point. Arrays of `min_size` values or more are
+# written in slabs along their first dimension (`write_json_array`), so
+# the whole of a large array's text is never held at once.
+write_stan_data <- function(data, file, variables, min_size = 1e6,
+                            slab = 2e6) {
+  for (name in names(variables)) {
+    x <- data[[name]]
+    if (length(x) == 1 && variables[[name]]$dimensions == 1) {
+      x <- array(x, dim = 1)
+    }
+    if (variables[[name]]$type == "int" && !is.integer(x)) {
+      x <- round(x)
+      mode(x) <- "integer"
+    }
+    data[[name]] <- x
+  }
+  large <- vapply(data, length, 1) >= min_size
+  cmdstanr::write_stan_json(data[!large], file, always_decimal = TRUE)
+  # The small arrays' object, reopened for the large ones.
+  head <- readLines(file)
+  head[length(head)] <- sub("}$", "", head[length(head)])
+  writeLines(head, file)
+  sep <- if (any(!large)) ",\n" else ""
+  for (name in names(data)[large]) {
+    cat(sep, "\"", name, "\": ", file = file, sep = "", append = TRUE)
+    write_json_array(data[[name]], file, slab)
+    data[[name]] <- NULL
+    sep <- ",\n"
+  }
+  cat("\n}\n", file = file, append = TRUE)
+  invisible(file)
+}
+
+# Append numeric array `x` to `file` as a JSON array nested in index order
+# (first index outermost), as jsonlite writes it. Each distinct value is
+# formatted once by jsonlite (`digits = NA`, reals with a decimal point),
+# so every value has jsonlite's text. Written in slabs of about `slab`
+# values along the first dimension, one innermost array a line.
+write_json_array <- function(x, file, slab = 2e6) {
+  d <- dim(x)
+  if (is.null(d)) d <- length(x)
+  n <- length(d)
+  inner <- d[n]
+  # Each line is an innermost array, at index (i_1, ..., i_{n-1}). Before
+  # it open the arrays it starts (i_k, ..., i_{n-1} all first, k >= 2);
+  # after it close those it ends (all last).
+  mid <- if (n > 2) d[2:(n - 1)] else integer(0)
+  per_row <- prod(mid)
+  cat("[", file = file, append = TRUE)
+  step <- max(1L, floor(slab / prod(d[-1])))
+  for (s in seq(1L, d[1], by = step)) {
+    rows <- s:min(d[1], s + step - 1L)
+    part <- if (n == 1) {
+      x[rows]
+    } else {
+      do.call(`[`, c(list(x, rows), rep(list(TRUE), n - 1L), drop = FALSE))
+    }
+    # Values in row-major order, `inner` to a line. `unique` and `match`
+    # take -0 for 0 (so 0 is labelled from +0); jsonlite writes -0 as
+    # "-0.0".
+    values <- if (n == 1) part else as.vector(aperm(part, n:1))
+    u <- unique(values + 0L)
+    txt <- jsonlite::toJSON(u, always_decimal = TRUE, digits = NA)
+    labels <- strsplit(
+      substr(txt, 2L, nchar(txt) - 1L), ",", fixed = TRUE
+    )[[1]]
+    stopifnot(length(labels) == length(u))
+    text <- labels[match(values, u)]
+    if (is.double(values)) {
+      text[which(values == 0 & 1 / values < 0)] <- "-0.0"
+    }
+    rm(part, values)
+    if (n == 1) {
+      cat(
+        if (s > 1L) ",", paste(text, collapse = ","),
+        file = file, append = TRUE, sep = ""
+      )
+      next
+    }
+    lines <- matrix(text, nrow = inner)
+    rm(text)
+    # Collect the last slab's text now: after a large simulation R's next
+    # collection is gigabytes away.
+    invisible(gc(full = FALSE))
+    k <- ncol(lines)
+    # Position of each line among the middle indices (0-based, row-major).
+    pos <- (seq_len(k) - 1L) %% per_row
+    opens <- trailing_run(pos, rev(mid), 0L)
+    closes <- trailing_run(pos, rev(mid), -1L)
+    prefix <- paste0(
+      c(if (s > 1L) "," else "", rep(",", k - 1L)), strrep("[", opens + 1L)
+    )
+    lines[1, ] <- paste0(prefix, lines[1, ])
+    lines[inner, ] <- paste0(lines[inner, ], strrep("]", closes + 1L))
+    fwrite(
+      as.data.table(t(lines)), file,
+      append = TRUE, quote = FALSE, sep = ",", col.names = FALSE
+    )
+  }
+  cat("]", file = file, append = TRUE)
+}
+
+# For row-major positions `pos` (0-based) over dimensions given fastest
+# first (`dims`), how many of the fastest indices in a row are at their
+# first value (`at = 0`) or their last (`at = -1`).
+trailing_run <- function(pos, dims, at) {
+  run <- integer(length(pos))
+  on <- rep(TRUE, length(pos))
+  for (m in dims) {
+    i <- pos %% m
+    on <- on & i == if (at == 0L) 0L else m - 1L
+    run <- run + on
+    pos <- pos %/% m
+  }
+  run
+}
+
+# The Stan data and initial values of `enw_simulate` (epinowcast): its
+# steps up to sampling, in its order, so the draws (and the R random
+# stream) are its own. The reporting triangle's cells come back too. The
+# data hold their own copies of the modules' design matrices.
+enw_simulate_data <- function(data, growth_rate, parameters, reference,
+                              report, expectation, obs) {
+  expr_len <- expectation$data$expr_t * data$groups[[1]]
+  growth_rate <- epinowcast:::.resolve_growth_rate_length(
+    growth_rate, expr_len
+  )
+  capture_sampler <- function(data, init, ...) {
+    data.table(data = list(data), init = list(init))
+  }
+  capture_fit <- enw_fit_opts(
+    sampler = capture_sampler, nowcast = TRUE, pp = TRUE,
+    likelihood = FALSE
+  )
+  # `epinowcast` uses `data` only to bind it to its output, which copies
+  # every table in it; the triangle's cells are the one table needed.
+  prepared <- do.call(epinowcast, list(
+    data = data[, .(new_confirm)], reference = reference, report = report,
+    expectation = expectation,
+    missing = enw_missing(formula = ~0, data = data), obs = obs,
+    fit = capture_fit, model = NULL
+  ))
+  data_list <- enw_get_data(prepared, "data")
+  data_list$expr_r_override <- 1L
+  data_list$expr_r_override_value <- as.numeric(growth_rate)
+  init <- utils::modifyList(enw_get_data(prepared, "init")(), parameters)
+  init <- epinowcast:::.map_centred_intercepts(init)
+  list(data = data_list, init = init, cells = prepared$new_confirm[[1]])
+}
+
+# One draw of the posterior predictions `pp_obs` from the Stan data of
+# `enw_simulate_data` written to `stan$file`, as `enw_simulate` samples
+# it. The data and output files are removed once read.
+enw_simulate_draw <- function(stan, model, seed, ...) {
+  fit <- model$sample(
+    data = stan$file, fixed_param = TRUE, chains = 1, iter_sampling = 1L,
+    iter_warmup = 0, seed = seed, threads_per_chain = 1,
+    init = function() stan$init, ...
+  )
+  on.exit(unlink(c(stan$file, fit$output_files())))
+  # A failed run raises cmdstanr's own error.
+  if (any(fit$return_codes() != 0)) fit$draws("pp_obs")
+  read_pp_obs(fit$output_files())
+}
+
+# The first draw of `pp_obs` in a CmdStan output file, as
+# `$draws("pp_obs")` gives it, from the header and the first draw's line
+# alone: only the `pp_obs` fields are parsed.
+read_pp_obs <- function(file) {
+  con <- file(file, "r")
+  on.exit(close(con))
+  lines <- character(0)
+  while (length(lines) < 2L) {
+    line <- readLines(con, n = 1L)
+    stopifnot(length(line) == 1L)
+    if (!startsWith(line, "#")) lines <- c(lines, line)
+  }
+  # Field i of a line runs between its commas i - 1 and i (found on the
+  # line's bytes: `gregexpr` takes quadratic time on a line this long).
+  commas <- function(x) {
+    c(0L, which(charToRaw(x) == charToRaw(",")), nchar(x, "bytes") + 1L)
+  }
+  h <- commas(lines[1])
+  at <- which(
+    substring(lines[1], h[-length(h)] + 1L, h[-length(h)] + 7L) == "pp_obs."
+  )
+  field <- function(i) substr(lines[1], h[i] + 1L, h[i + 1L] - 1L)
+  stopifnot(
+    all(diff(at) == 1L), field(at[1]) == "pp_obs.1",
+    field(at[length(at)]) == paste0("pp_obs.", length(at))
+  )
+  d <- commas(lines[2])
+  stopifnot(length(d) == length(h))
+  as.numeric(strsplit(
+    substr(lines[2], d[at[1]] + 1L, d[at[length(at)] + 1L] - 1L), ",",
+    fixed = TRUE
+  )[[1]])
+}
+
 simulate_outbreak <- function(design, v) {
   # Four weeks plus the longest delay past the last cut-off, so a block's
   # horizon (four weeks) is complete.
@@ -755,6 +956,7 @@ simulate_outbreak <- function(design, v) {
   pobs <- suppressMessages(suppressWarnings(enw_preprocess_data(
     grid, by = c("place", "age"), max_delay = max_delay
   )))
+  rm(grid)
   strata <- unique(pobs$metareference[[1]][, .(.group, place, age)])
   setorder(strata, .group)
   multi_place <- design$n_places > 1
@@ -845,6 +1047,51 @@ simulate_outbreak <- function(design, v) {
     drift = v$drift, step = v$step, periodic = v$periodic, 0
   )
   if (design$shocks == "backlog") change_terms <- c(change_terms, "backlog")
+  # Report date: day-of-week effects, or reports on given weekdays. Built
+  # before the reference date model, which holds the largest design
+  # matrix, so the two are never built at once; neither draws random
+  # numbers. Garbage is collected before each of epinowcast's large
+  # steps: after a large step R's next collection is gigabytes away.
+  gc()
+  structural <- NULL
+  report_terms <- NULL
+  if (design$reporting == "daily") {
+    report_terms <- "(1 | day_of_week)"
+  } else {
+    on <- strsplit(design$report_days, ";")[[1]]
+    structural <- enw_structural_reporting_metadata(pobs)
+    structural[, report := as.integer(weekdays(report_date) %in% on)]
+    structural <- structural[, .(.group, date, report_date, report)]
+  }
+  if (design$shocks == "outage") {
+    if (is.null(structural)) {
+      structural <- enw_structural_reporting_metadata(pobs)
+      structural[, report := 1L]
+    }
+    for (k in seq_along(windows)) {
+      w <- windows[[k]]
+      groups <- strata[place == sprintf("P%02d", v$shock_places[k]), .group]
+      structural[
+        .group %in% groups & report_date >= w[1] & report_date <= w[2],
+        report := 0L
+      ]
+    }
+  }
+  if (design$delay_change == "bunching") {
+    if (is.null(structural)) {
+      structural <- enw_structural_reporting_metadata(pobs)
+      structural[, report := 1L]
+    }
+    held <- bunch_dates(structural, v)
+    structural[report_date %in% held, report := 0L]
+    v$bunch_dates <- as.character(held)
+  }
+  report <- enw_report(
+    non_parametric = as_formula(FALSE, report_terms),
+    structural = structural, data = pobs
+  )
+  rm(structural)
+  gc()
   place_delays <- multi_place && design$delay_places != "shared"
   stratum_terms <- c(
     if (place_delays) "(1 | place)", if (multi_age) "(1 | age)"
@@ -934,44 +1181,6 @@ simulate_outbreak <- function(design, v) {
     parameters$expl_beta_sd <- array(v$reference_dow_sd)
   }
 
-  # Report date: day-of-week effects, or reports on given weekdays.
-  structural <- NULL
-  report_terms <- NULL
-  if (design$reporting == "daily") {
-    report_terms <- "(1 | day_of_week)"
-  } else {
-    on <- strsplit(design$report_days, ";")[[1]]
-    structural <- enw_structural_reporting_metadata(pobs)
-    structural[, report := as.integer(weekdays(report_date) %in% on)]
-    structural <- structural[, .(.group, date, report_date, report)]
-  }
-  if (design$shocks == "outage") {
-    if (is.null(structural)) {
-      structural <- enw_structural_reporting_metadata(pobs)
-      structural[, report := 1L]
-    }
-    for (k in seq_along(windows)) {
-      w <- windows[[k]]
-      groups <- strata[place == sprintf("P%02d", v$shock_places[k]), .group]
-      structural[
-        .group %in% groups & report_date >= w[1] & report_date <= w[2],
-        report := 0L
-      ]
-    }
-  }
-  if (design$delay_change == "bunching") {
-    if (is.null(structural)) {
-      structural <- enw_structural_reporting_metadata(pobs)
-      structural[, report := 1L]
-    }
-    held <- bunch_dates(structural, v)
-    structural[report_date %in% held, report := 0L]
-    v$bunch_dates <- as.character(held)
-  }
-  report <- enw_report(
-    non_parametric = as_formula(FALSE, report_terms),
-    structural = structural, data = pobs
-  )
   if (length(report_terms)) {
     parameters$rep_beta <- array(rnorm(report$data$rep_fncol))
     parameters$rep_beta_sd <- array(v$dow_sd)
@@ -985,19 +1194,31 @@ simulate_outbreak <- function(design, v) {
   v$sqrt_phi_obs <- ifelse(v$obs_family == "negbin1d",
     v$obs_sqrt_phi * sqrt(v$lambda_hat * v$sum_p2), v$obs_sqrt_phi
   )
-  sims <- suppressMessages(suppressWarnings(enw_simulate(
+  # `enw_simulate` in two steps, so the design matrices and the rest of
+  # the model's inputs are freed once written, before Stan runs.
+  gc()
+  stan <- suppressMessages(suppressWarnings(enw_simulate_data(
     pobs, growth_rate = latent$growth_rate, parameters = parameters,
     reference = reference, report = report, expectation = expectation,
-    obs = enw_obs(family = "poisson", data = pobs), model = model,
-    seed = sample.int(.Machine$integer.max, 1), draws = 1L,
-    show_messages = debug, show_exceptions = debug, refresh = 0
+    obs = enw_obs(family = "poisson", data = pobs)
   )))
   # The draws in the order `enw_pp_summary` binds them to the triangle,
   # read directly as summarising them is slow.
-  cells <- data.table::copy(sims$new_confirm[[1]])
+  cells <- data.table::copy(stan$cells)
   data.table::setorderv(cells, c(".group", "reference_date"))
-  obs <- sims$fit[[1]]$draws("pp_obs", format = "matrix")
-  mu <- as.numeric(obs[1, ]) / expected_scale
+  stan$cells <- NULL
+  rm(pobs, meta, reference, report, expectation, latent, onsets)
+  stan$file <- write_stan_data(
+    stan$data, tempfile("standata-", fileext = ".json"),
+    model$variables()$data
+  )
+  stan$data <- NULL
+  gc()
+  mu <- suppressMessages(suppressWarnings(enw_simulate_draw(
+    stan, model, seed = sample.int(.Machine$integer.max, 1),
+    show_messages = debug, show_exceptions = debug, refresh = 0
+  ))) / expected_scale
+  rm(stan)
   pp <- rbindlist(lapply(seq_len(draws), function(k) {
     cells[, .(.group, place, age, reference_date, report_date,
       draw = k,
