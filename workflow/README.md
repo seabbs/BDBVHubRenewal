@@ -95,6 +95,7 @@ Outputs are in `<RUN>/train/n<N>/`.
 - `score_bdbv`, `score_germany`, `score_heldout`: the units of `scripts/checkpoint_scores.py` for each checkpoint and the references. BDBV units run before German ones. Each caches one file per origin or date and resumes from it.
 - `score_table`: the rows of every checkpoint in `<SCORE_CACHE>/tables/`, keeping other rules' rows of the committed tables.
 - `land`: opt-in, commit the tables to `evidence/` and push, only from the evidence branch (`score.branch`), never main.
+- `score_germany_forecast`, `germany_forecast`: opt-in (`score.germany_forecast.enabled`, off by default), the SI's German 1 to 4 week forecasts of the development half for the reference and one checkpoint (`score.germany_forecast.label`), each after its German nowcasts. With it on, `score` takes them too. The rows are study `germany_forecast`.
 
 After each slots checkpoint's scores:
 
