@@ -96,9 +96,23 @@ def build(
         datasets=dash.get("datasets") or [],
         mailbox=source.mailbox,
         mail_filter=dash.get("mail_filter", ""),
+        mail_lines=source.mailbox_lines,
         once=once,
+        view={
+            "studies": dash.get("studies") or {},
+            "levels": dash.get("levels") or [],
+            "defaults": dash.get("score_defaults") or {},
+        },
+        tables=[_rooted(t, root) for t in dash.get("tables") or []],
+        notes=[_rooted(t, root) for t in dash.get("notes") or []],
         excluded=excluded,
     )
+
+
+def _rooted(entry: Mapping[str, str], root: Path) -> dict[str, str]:
+    """Return a table or note entry with its path from the repository."""
+    path = Path(entry["path"]).expanduser()
+    return {**entry, "path": str(path if path.is_absolute() else root / path)}
 
 
 def merge_datasets(

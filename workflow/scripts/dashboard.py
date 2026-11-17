@@ -25,7 +25,7 @@ import yaml
 sys.path.insert(0, str(Path(__file__).parents[1]))
 
 from flowlib import localconfig
-from flowlib.dashboard import context, germany, page
+from flowlib.dashboard import context, nowcasts, page
 
 CONFIG = Path(__file__).parents[1] / "config.yaml"
 LOCK = threading.Lock()
@@ -70,9 +70,13 @@ def handler(ctx: page.Context) -> type[BaseHTTPRequestHandler]:
                 self._send(500, b"error: see the server's log", "text/plain")
 
         def _data(self, name: str) -> None:
-            loc = name.removesuffix(".json").split("/", 1)[-1]
+            # /data/<dataset>/<location>.json
+            key, _, loc = name.removesuffix(".json").partition("/")
+            if key not in {d["key"] for d in ctx.datasets} or not loc:
+                self._send(404, b"{}", "application/json")
+                return
             with LOCK:
-                found = germany.location(ctx.germany(), loc)
+                found = nowcasts.location(ctx.nowcasts(key), loc)
             if not found:
                 self._send(404, b"{}", "application/json")
                 return

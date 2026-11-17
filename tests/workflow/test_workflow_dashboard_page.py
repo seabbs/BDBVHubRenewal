@@ -143,6 +143,21 @@ def _machine(tmp_path):
         mailbox=box,
         mail_filter="slots",
         once=True,
+        datasets=[
+            {
+                "key": "germany",
+                "label": "Germany",
+                "format": "quantiles",
+                "metric": "WIS",
+                "truth": "t",
+                "groups": [{"name": "national", "match": "^DE$"}],
+            }
+        ],
+        view={
+            "studies": {"germany": "Germany"},
+            "levels": ["national"],
+            "defaults": {"target": "7day", "source": "daily"},
+        },
     )
 
 
@@ -150,14 +165,25 @@ def test_every_section_is_built_for_the_configured_runs(tmp_path):
     out = page.build(_machine(tmp_path))
     for h in (
         "Status",
-        "Loss plots",
-        "Held-out loss by checkpoint",
+        "Loss",
+        "Attention bias",
         "Performance on real data",
-        "German nowcasts by checkpoint",
+        "Nowcasts",
         "Recent activity",
+        "Tables",
     ):
-        assert f"<h2>{h}" in out
-    assert "Chronos-2 fine-tuning: my run" in out
+        assert f"<h2>{h}</h2>" in out
+    assert "<b>my run run</b>" in out
+    for anchor in (
+        "status",
+        "loss",
+        "bias",
+        "performance",
+        "nowcasts",
+        "mailbox",
+        "tables",
+    ):
+        assert f'<a href="#{anchor}">' in out
     assert "#123456" in out
     assert (
         "n250 of 8000" not in out
@@ -166,7 +192,11 @@ def test_every_section_is_built_for_the_configured_runs(tmp_path):
     assert "slots n250 published" in out
     assert "other" not in out.split("Recent activity")[1]
     assert "id=gdata" in out
-    assert '"levels":[0.025,0.25,0.5,0.75,0.975]' in out
+    assert '"key":"germany"' in out
+    assert "id=ldata" in out
+    assert "id=bdata" in out
+    assert "id=seldata" in out
+    assert '<option value="daily" selected>daily</option>' in out
     # No hard-coded runs or hosts.
     assert "no slots" not in out
     assert "archie" not in out
@@ -185,7 +215,7 @@ def test_checkpoint_sizes_also_come_from_the_score_table(tmp_path):
     ctx.runs = list(ctx.runs) + list(runs.load_runs([], "other=other-ft-", []))
     sizes = page.checkpoint_sizes(
         ctx,
-        page.run_info(ctx),
+        {r.key: {"ck": page._checkpoints(r)} for r in ctx.runs},
         [{"checkpoint": "other-ft-bbbbbb", "outbreaks": "500"}],
     )
     assert sizes["bbbbbb"] == 500
