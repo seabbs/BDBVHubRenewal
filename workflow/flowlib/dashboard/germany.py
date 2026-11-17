@@ -18,6 +18,8 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
+from bdbvhubrenewal.evaluation.scoring import wis_quantile
+
 from .rows import num, sources
 from .runs import Classifier, Reference, Run, split_label
 
@@ -35,22 +37,8 @@ REFERENCE = "reference"
 
 def wis(q: Sequence[float], y: float) -> float:
     """Return the WIS of the seven `WIS_LEVELS` quantiles at truth `y`."""
-    total = 0.5 * abs(y - q[3])
-    for alpha, lo, hi in (
-        (0.05, q[0], q[6]),
-        (0.2, q[1], q[5]),
-        (0.5, q[2], q[4]),
-    ):
-        total += (
-            alpha
-            / 2
-            * (
-                (hi - lo)
-                + 2 / alpha * max(lo - y, 0)
-                + 2 / alpha * max(y - hi, 0)
-            )
-        )
-    return total / 3.5
+    levels = [float(v) for v in WIS_LEVELS]
+    return float(wis_quantile([y], [list(q)], levels)["wis"][0])
 
 
 def read_file(

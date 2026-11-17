@@ -106,7 +106,6 @@ def payload(
     return {
         "rows": out,
         "pending": pending,
-        "xt": TICKS,
         "series": series_list,
         "col": {s["key"]: s["color"] for s in series_list},
         "defaults": [k for k in [first, *(r.key for r in references)] if k],
