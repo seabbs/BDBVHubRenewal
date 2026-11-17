@@ -174,3 +174,12 @@ def test_fine_tuned_rows_wait_for_a_checkpoint_of_the_final_run() -> None:
     ]
     pinned = keep_finetuned(fc, {"finetuned": "abcdef123456"})
     assert len(pinned) == len(fc)
+
+
+def test_the_heldout_set_is_round_nine_one_grid_block() -> None:
+    cfg = _config()
+    # Round 9 of #311's layout: 40 batches of 21 simulations, seeds
+    # 30000 + 100 * 9 on, one balanced block of 840.
+    assert cfg["heldout"]["synthetic_seeds"] == list(range(30900, 30940))
+    assert cfg["synthetic"]["simulations_per_seed"] == 21
+    assert cfg["synthetic"]["simulations"]["paper"].endswith("rounds/r9/sims")
