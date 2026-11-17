@@ -22,6 +22,8 @@ A place with at least 10 cases a week uses its own $g$, and otherwise
 the pooled $g$ of its nearest parent with them, fitted to the summed
 pair sums of that parent's places with 10 cases a week (`pooling`), as
 for the walk spread and the nowcast size.
+A health zone uses its province's $g$: own zone delays, from a few
+release pairs of small counts, report too fast (#323).
 Only onset days within `Settings.history_delay` (63 for $D = 42$) of the
 latest cut-off are summed, and downward revisions are first moved onto
 earlier releases of the day, as baselinenowcast does.
@@ -71,6 +73,7 @@ from bdbvhubrenewal.baselinenowcast import (
     window_pairs,
 )
 from bdbvhubrenewal.data.snapshots import SnapshotArrays, week_sum, weekly_sums
+from bdbvhubrenewal.data.zones import is_zone
 from bdbvhubrenewal.forecasters.base import ModelUnavailableError
 from bdbvhubrenewal.forecasters.introductions import (
     introduction_rates,
@@ -349,6 +352,10 @@ def fit_delay(
 ) -> DelayFit | None:
     """Estimate the delay factors from the pairs up to release `r`.
 
+    A place uses its own delay with `Settings.min_level` cases a week,
+    and otherwise the pooled delay of the nearest parent that has them.
+    A health zone uses its province's.
+
     Parameters
     ----------
     snap : SnapshotArrays
@@ -376,6 +383,13 @@ def fit_delay(
         gaps,
     )
     source = source_index(level, snap.parent, min_level=settings.min_level)
+    # A health zone takes its province's delay. Own zone delays, from a
+    # few release pairs of small, reassigned counts, report too fast
+    # (#323). Parents come before children, so the province is set.
+    for i, loc in enumerate(snap.locations):
+        if not is_zone(loc):
+            continue
+        source[i] = source[snap.parent[i]]
     g = np.concatenate([own_g, pooled_g])[source]
     own = np.broadcast_to((source == np.arange(level.size))[:, None], g.shape)
     return DelayFit(pairs, g, level, source, np.array(own))

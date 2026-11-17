@@ -192,6 +192,8 @@ Each estimate is chosen by one rule.
    The walk spread also needs an own $\sigma_p^2 > 0$ ([below](#forecast)).
 3. **Fallback.** Otherwise it uses the pooled estimate of its nearest parent that meets the same rule, and otherwise the country's.
    A pooled estimate uses together the pair sums, errors and weekly changes of the parent's children with $\ell \ge 10$, or the parent's own where none has.
+4. **Zone delay.** A health zone uses its province's delay $\Delta$ whatever its level.
+   Own zone delays, fitted from a few release pairs of small counts, put the share of the newest week reported at 0.41 where 0.25 was (#323).
 
 ## Forecast
 
