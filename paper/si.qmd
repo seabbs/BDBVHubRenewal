@@ -65,6 +65,7 @@ The learned biases added to Chronos-2's group-attention scores.
 
 #### Group attention
 
+- In attention, each series updates its representation as a weighted mix of the others, with weights from how well its query matches their keys.
 - Chronos-2 attends over time within each series, then over the series of a block at each time step, which is group attention [@Ansari2025].
 - At one time step, row $i$ of a block (a place's count or one of its lag series) attends to row $j$ with weight
 $$
@@ -75,6 +76,7 @@ where $q_i$ and $k_j$ are the query and key vectors of one head in one layer, an
 
 #### Attention biases
 
+- Our change adds a learned nudge to those weights for each pair of rows, by their relation (same row, same place, child to parent, parent to child), so the model can tell which lags belong to which count.
 - Each row $i$ belongs to a place $P(i)$, and each place $p$ has a parent $\pi(p)$ in the block, or none.
 - We add a learned bias for each relation $r$ to the scores:
 $$
@@ -107,6 +109,7 @@ where $y_{p,s}$ is place $p$'s daily count on day $s$ and $k = 7$ for weekly or 
 
 #### LoRA
 
+- Instead of retraining all the weights, LoRA trains a small low-rank update to some of them, about 1% of the weights, which leaves the base model unchanged at the start.
 - LoRA replaces a weight matrix $W \in \mathbb{R}^{d_\text{out} \times d_\text{in}}$ with
 $$
 W' = W + \frac{\alpha}{r} B A,
