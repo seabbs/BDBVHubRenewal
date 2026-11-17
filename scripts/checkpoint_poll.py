@@ -197,6 +197,26 @@ def runs_of(cache: Path) -> dict[str, str]:
     return out
 
 
+GERMAN_PARALLEL = 2
+"""Slots checkpoints whose German units run at once (each under 6 GB)."""
+
+
+def german_order(
+    labels: list[str], cached: Mapping[str, int], n: Mapping[str, int]
+) -> list[str]:
+    """Return the order of German runs: the one furthest on, then newest.
+
+    The run with the most dates cached goes first (it finishes soonest),
+    then the rest by outbreaks, most first.
+    """
+    rest = sorted(labels, key=lambda lb: -n.get(lb, 0))
+    going = [lb for lb in labels if cached.get(lb, 0) > 0]
+    if not going:
+        return rest
+    first = max(going, key=lambda lb: (cached[lb], n.get(lb, 0)))
+    return [first, *[lb for lb in rest if lb != first]]
+
+
 def choose(
     queue: list[str],
     runs: Mapping[str, str],
@@ -432,6 +452,7 @@ def run_units(
     name: str,
     pause: Any = None,
     paused: list[str] | None = None,
+    on_done: Any = None,
 ) -> bool:
     """Run the units not yet done, gated; return whether all finished.
 
@@ -466,6 +487,8 @@ def run_units(
             state = "done" if done else f"FAILED ({proc.returncode})"
             log(f"progress: {name}: {' '.join(unit)} {state}, "
                 f"{total - left}/{total} units")  # fmt: skip
+            if done and on_done is not None:
+                on_done(unit)
         if pending and len(running) < MAX_UNITS:
             if pending[0][0] == "heldout" or can_launch(
                 budget(), mem_avail_gb(), len(running)
@@ -757,6 +780,45 @@ def main(cache: Path) -> None:
                     say(note)
             # The loop picks what goes on next (an older German run, say).
             continue
+        if checkpoint.startswith("slots-"):
+            # German runs of the live run's checkpoints, two at a time, in
+            # german_order; each lands as soon as its own unit ends.
+            meta = {
+                lb: json.loads((cache / "heldout" / f"{lb}.json").read_text())
+                for lb in queue
+                if lb.startswith("slots-")
+                and (cache / "heldout" / f"{lb}.json").exists()
+            }
+            due = [
+                lb
+                for lb in meta
+                if runs.get(lb) in cs.CURRENT_RUNS
+                and not cs.unit_done(cache, "germany", lb)
+                and all(cs.unit_done(cache, *u) for u in split_fast(
+                    units_for(lb, scored))[0])
+            ]  # fmt: skip
+            cached = {
+                lb: len(list((cache / "germany" / lb).glob("*.csv.gz")))
+                for lb in due
+            }
+            outbreaks = {lb: int(m.get("n_outbreaks", 0)) for lb, m in meta.items()}
+            pick = german_order(due, cached, outbreaks)[:GERMAN_PARALLEL]
+            if pick:
+                germ = [("germany", cs.REFERENCE), *(("germany", lb) for lb in pick)]
+
+                def landed(unit: Unit) -> None:
+                    lb = unit[1]
+                    if unit[0] != "germany" or lb == cs.REFERENCE:
+                        return
+                    sha = land(cache, sorted(keep | {lb}), lb)
+                    if sha is not None:
+                        keep.add(lb)
+                        note_paper(sha, lb, cache)
+
+                say(f"German runs: {', '.join(pick)} "
+                    f"({', '.join(f'n{outbreaks[lb]} {cached[lb]}/80' for lb in pick)})")  # fmt: skip
+                run_units(cache, germ, "German", newer_slots, paused, landed)
+                continue
         if not run_units(cache, units, checkpoint, newer_slots, paused):
             if paused:
                 continue
