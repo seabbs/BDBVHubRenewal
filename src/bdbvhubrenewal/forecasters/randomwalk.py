@@ -299,6 +299,9 @@ class RandomWalk:
     prior_weight : float
         Pairs the prior counts as in the shrinkage of each correlation, a
         guard for thin windows (`copula.estimate_copula`).
+    keep_variants : bool
+        Keep the last forecast's unpaired draws, so `variant` gives it
+        under another pairing or shrinkage strength.
     copula_fit : dict or None
         The copula of the last forecast: `model`, `origin`, `n_scores`, the
         four correlations and, for each, the pairs behind it and whether it
@@ -311,6 +314,7 @@ class RandomWalk:
     fit_diagnostics: list[dict[str, object]] = field(default_factory=list)
     pairing: str = "rolling"
     prior_weight: float = PRIOR_WEIGHT
+    keep_variants: bool = field(default=False, repr=False)
     copula_fit: dict[str, object] | None = field(
         init=False, default=None, repr=False
     )
@@ -332,14 +336,37 @@ class RandomWalk:
         """
         if self.pairing not in PAIRINGS:
             raise ValueError(f"pairing must be one of {PAIRINGS}.")
-        self.copula_fit = None
-        if self.pairing == "off":
-            return values
-        copula, n = PRIOR, 0
+        scores = (
+            self._error_scores(origin, task)
+            if self.pairing == "rolling" or self.keep_variants
+            else pd.DataFrame()
+        )
+        locations = tuple(origin.snap.locations)
+        if self.keep_variants:
+            self._kept = (values, locations, anchors, scores, task)
+        paired, self.copula_fit = self._paired(
+            values, locations, anchors, scores, task, self.pairing,
+            self.prior_weight,
+        )  # fmt: skip
+        return paired
+
+    def _paired(
+        self,
+        values: np.ndarray,
+        locations: tuple[str, ...],
+        anchors: np.ndarray,
+        scores: pd.DataFrame,
+        task: ForecastTask,
+        pairing: str,
+        weight: float,
+    ) -> tuple[np.ndarray, dict[str, object] | None]:
+        """Pair `values` as `pairing` and `weight` give, with the record."""
+        if pairing == "off":
+            return values, None
+        copula = PRIOR
         record: dict[str, object] = {}
-        if self.pairing == "rolling":
-            scores = self._error_scores(origin, task)
-            n = len(scores)
+        n = len(scores) if pairing == "rolling" else 0
+        if pairing == "rolling":
             copula, record = estimate_record(
                 scores
                 if n
@@ -348,20 +375,47 @@ class RandomWalk:
                              "target_end_date", "z"]
                 ),
                 PRIOR,
-                self.prior_weight,
+                weight,
             )  # fmt: skip
         rng = task.rng(self.name, "copula")
-        paired = pair_walks(
-            values, tuple(origin.snap.locations), anchors, copula, rng
-        )
-        self.copula_fit = {
+        paired = pair_walks(values, locations, anchors, copula, rng)
+        fit = {
             "model": self.name,
             "origin": task.vintage,
             "n_scores": n,
             **{k: float(v) for k, v in vars(copula).items()},
             **record,
         }
-        return paired
+        return paired, fit
+
+    def variant(
+        self, pairing: str, weight: float | None = None
+    ) -> pd.DataFrame:
+        """Return the last forecast under another pairing or strength.
+
+        Needs `keep_variants`. The draws are the same; only their pairing
+        differs, by the step the model itself calls (`pair`).
+
+        Parameters
+        ----------
+        pairing : str
+            One of `copula.PAIRINGS`.
+        weight : float, optional
+            The prior's weight in pairs, the model's `prior_weight` by
+            default.
+
+        Returns
+        -------
+        pandas.DataFrame
+            As `forecast`.
+        """
+        values, locations, anchors, scores, task = self._kept
+        weeks, rows = self._kept_frame
+        paired, _ = self._paired(
+            values, locations, anchors, scores, task, pairing,
+            self.prior_weight if weight is None else weight,
+        )  # fmt: skip
+        return frame(task, weeks, paired, rows)
 
     def _error_scores(self, origin: Origin, task: ForecastTask) -> pd.DataFrame:
         """Return the normal scores of the model's own earlier nowcasts."""
@@ -546,6 +600,7 @@ class RandomWalk:
         # Each place's walk runs from the week after its start.
         values = self.pair(origin, task, values, start + 1)
         self._diagnostics(origin, task, start)
+        self._kept_frame = (weeks, self.rows(origin, task))
         return frame(task, weeks, values, self.rows(origin, task))
 
 
@@ -598,6 +653,7 @@ class RandomWalkNowcast(RandomWalk):
             task,
             _start_weeks(origin),
         )
+        self._kept_frame = (weeks, self.rows(origin, task))
         return frame(task, weeks, values, self.rows(origin, task))
 
     def trajectories(
