@@ -689,23 +689,20 @@ def finetuned_adapter(checkpoint: Checkpoint) -> Path:
 @cache
 def _chronos(checkpoint: Checkpoint | None = None) -> Any:
     adapter = None if checkpoint is None else finetuned_adapter(checkpoint)
-    import torch
-    from chronos import Chronos2Pipeline
+    import chronos
 
-    device = (
-        "cuda"
-        if torch.cuda.is_available()
-        else "mps"
-        if torch.backends.mps.is_available()
-        else "cpu"
-    )
-    pipeline = Chronos2Pipeline.from_pretrained(
-        CHRONOS_MODEL, revision=CHRONOS_REVISION, device_map=device
+    from bdbvhubrenewal import torchdevice as devices
+
+    devices.apply_threads()
+    pipeline = chronos.Chronos2Pipeline.from_pretrained(
+        CHRONOS_MODEL,
+        revision=CHRONOS_REVISION,
+        device_map=devices.pick_device(),
     )
     if adapter is None:
         return pipeline
     # Slots, if the adapter holds them, load with it.
-    return Chronos2Pipeline(
+    return chronos.Chronos2Pipeline(
         model=series_bias.load_adapter(pipeline.model, adapter)
     )
 

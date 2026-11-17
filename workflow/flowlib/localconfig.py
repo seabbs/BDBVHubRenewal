@@ -39,6 +39,12 @@ DEFAULTS = (
     ("NOSLOTS_RUN", "$ROOT/checkpoints"),
     ("GERMANY_BLOCKS", "$ROOT/germany/germany.pkl"),
     ("JOB_PREFIX", ""),
+    # The torch device (auto, cuda, mps or cpu), torch's CPU threads
+    # (empty: torch's default) and the series in one Chronos-2 forward
+    # (`bdbvhubrenewal.torchdevice`).
+    ("DEVICE", "auto"),
+    ("TORCH_THREADS", ""),
+    ("CHRONOS_BATCH", "256"),
     # Mailbox lines (any value turns them on), publishing as it trains,
     # the targets `all` runs here, and where batches come from (empty:
     # workflow/config.yaml's `finetune.sims_from`).

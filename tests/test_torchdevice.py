@@ -7,7 +7,7 @@ import types
 
 import pytest
 
-from bdbvhubrenewal import devices
+from bdbvhubrenewal import torchdevice as devices
 
 
 def _torch(cuda: bool, mps: bool, calls: list | None = None):
