@@ -24,7 +24,7 @@ def test_steps_are_parsed_with_their_losses(tmp_path):
     assert rows[0]["loss"] == 0.5
     assert rows[0]["held"] == 0.4
     assert rows[0]["src"] == {"3day": 0.31, "daily": 0.29, "weekly": 0.12}
-    assert rows[1]["src"]["daily"] is None
+    assert rows[1]["src"] == {}
 
 
 def test_only_whole_lines_are_read_and_new_ones_appended(tmp_path):

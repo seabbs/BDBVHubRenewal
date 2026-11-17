@@ -3,7 +3,9 @@ name: Pages
 # Builds the site on pull requests, publishes it as a preview at
 # pr-preview/pr-N/ and comments the link (pr-closed.yml removes
 # it when the pull request closes). Builds and deploys the site from main.
-# Both deploy to the gh-pages branch, which Pages serves.
+# Both deploy to the gh-pages branch, which Pages serves. The site and the
+# paper also rebuild on a schedule and when evidence/ changes on main, so
+# new checkpoint scores reach them without a manual step.
 on:
   push:
     branches: [main]
@@ -11,6 +13,7 @@ on:
       - 'docs/**'
       - 'mkdocs.yml'
       - 'paper/**'
+      - 'evidence/**'
       - 'assets/**'
       - 'src/**'
       - 'data/**'
@@ -42,6 +45,9 @@ on:
       - 'uv.lock'
       - '.github/workflows/pages.yml'
       - '.github/actions/setup-forecast-env/**'
+  # Every 6 hours, off the hour and after the fit store's run (30 */6).
+  schedule:
+    - cron: '43 */6 * * *'
   # A dispatch from main rebuilds and deploys the site. From another
   # branch it builds the site as an artifact only, which is how a branch
   # is checked against a scratch fit store (`store_branch`).

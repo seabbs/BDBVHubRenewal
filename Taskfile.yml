@@ -285,6 +285,16 @@ tasks:
       - task: wf
         vars: {PROFILE: cpu, WF_TARGET: "dashboard --forcerun dashboard"}
 
+  tick:
+    desc: Run this machine's scheduled workflow targets once (SCHEDULE_TARGETS in config/local.env), with the lock and room checks a timer uses
+    cmds:
+      - python3 workflow/scripts/tick.py
+
+  schedule:
+    desc: Show, install or remove the timer that runs `task tick` every SCHEDULE_EVERY minutes (ACTION=show|install|uninstall)
+    cmds:
+      - python3 workflow/scripts/schedule.py {{.ACTION | default "show"}}
+
   dag:
     desc: Draw the workflow's rule graph (TARGET=all by default) as workflow-dag.svg
     cmds:
