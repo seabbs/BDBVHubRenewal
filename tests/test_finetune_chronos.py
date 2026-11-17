@@ -750,10 +750,10 @@ def test_a_pass_samples_draws_across_every_snapshot():
     a = snapshots(draws, np.random.default_rng(0), n_draws=2, subset_seed=7)
     b = snapshots(draws, np.random.default_rng(5), n_draws=2, subset_seed=7)
     c = snapshots(draws, np.random.default_rng(0), n_draws=2, subset_seed=8)
-    # 16 snapshots, two draws each: 32 blocks, spread over the 10 draws.
-    assert len(a) == 32
-    assert len({(o, j) for o, _, j in a}) == 32
-    assert all(sum(j == k for _, _, j in a) == 2 for k in range(16))
+    # 32 snapshots, two draws each: 64 blocks, spread over the 10 draws.
+    assert len(a) == 64
+    assert len({(o, j) for o, _, j in a}) == 64
+    assert all(sum(j == k for _, _, j in a) == 2 for k in range(32))
     assert len({o for o, _, _ in a}) > 2
     # The subset seed alone picks the draws, so a later pass can take others.
     assert {(o, j) for o, _, j in b} == {(o, j) for o, _, j in a}

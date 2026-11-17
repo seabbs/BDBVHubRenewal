@@ -177,23 +177,25 @@ def test_a_places_period_totals_row_is_in_its_place():
     assert list(parent) == [-1, 0, 0, -1, 0, 0, -1, -1, 0, 0, 0, 0]
 
 
-def test_the_bias_learning_rate_of_5e3_reaches_the_optimiser():
+def test_the_bias_learning_rate_of_1e3_reaches_the_optimiser():
     parser = fs.build_parser()
     args = parser.parse_args(
         ["sims", "out", "--held-out-seeds", "1", "2", "--grid", "r5"]
     )
-    assert args.bias_lr == 5e-3
+    assert args.bias_lr == 1e-3
     model = tiny_model()
     series_bias.attach(model)
     model = fs.lora_model(model, fs.lora_config(True), None)
-    opt = torch.optim.AdamW(fs.param_groups(model, 1e-5, args.bias_lr))
-    assert fs.group_rates(opt) == {"lora": 1e-5, "bias": 5e-3}
+    opt = fs.make_optimiser(model, 1e-5, args.bias_lr)
+    assert fs.group_rates(opt) == {"lora": 1e-5, "bias": 1e-3}
 
 
-def test_the_bias_has_no_weight_decay_and_the_adapter_keeps_its_default():
+def test_neither_group_has_weight_decay():
+    # As Chronos-2's own fit (the HF Trainer's default of 0).
     model = tiny_model()
     series_bias.attach(model)
     model = fs.lora_model(model, fs.lora_config(True), None)
-    opt = torch.optim.AdamW(fs.param_groups(model, 1e-5, fs.BIAS_LR))
+    opt = fs.make_optimiser(model, 1e-5, fs.BIAS_LR)
+    assert isinstance(opt, torch.optim.AdamW)
     decay = {g["name"]: g["weight_decay"] for g in opt.param_groups}
-    assert decay == {"lora": 0.01, "bias": 0.0}
+    assert decay == {"lora": 0.0, "bias": 0.0}
