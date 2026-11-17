@@ -6,62 +6,8 @@ import yaml
 from paperpipe.evidence import (
     EVIDENCE,
     aggregation_numbers,
-    copula_table,
-    rho_medians,
     write_evidence,
 )
-
-
-def _copula() -> pd.DataFrame:
-    rows = []
-    for arm, es in (("rolling", 0.3), ("unpaired", 0.5), ("fixed", 0.31)):
-        for origin in ("2026-10-04", "2026-10-11"):
-            rows.append(
-                {
-                    "study": "ebola",
-                    "strata": "provinces",
-                    "model": "randomwalknowcast",
-                    "arm": arm,
-                    "origin_date": origin,
-                    "energy_log": es,
-                    "variogram_log": 40.0,
-                    "cover50_weeks": 0.9,
-                    "cover90_weeks": 0.95,
-                    "cover50_places": 0.6,
-                    "cover90_places": 0.7,
-                    "wis_strata": 1.0,
-                    "wis_national": np.nan,
-                }
-            )
-    return pd.DataFrame(rows)
-
-
-def test_copula_table_averages_and_orders_the_arms() -> None:
-    t = copula_table(_copula(), "ebola")
-    assert t["Pairing"].tolist() == ["Unpaired", "Fixed", "Rolling"]
-    assert t["ES (log)"].tolist() == [0.5, 0.31, 0.3]
-    assert t["Places 50% / 90%"].iloc[0] == "0.60 / 0.70"
-
-
-def test_rho_medians_by_strata_and_model() -> None:
-    rho = pd.DataFrame(
-        {
-            "study": "germany",
-            "strata": "states",
-            "model": "randomwalknowcast",
-            "arm": "rolling",
-            "rho_t": [0.5, 0.6, 0.7],
-            "rho_p": [0.0, 0.04, 0.1],
-            "rho_n": np.nan,
-        }
-    )
-    # The fixed arm's prior is not an estimate.
-    rho = pd.concat([rho, rho.assign(arm="fixed", rho_t=0.9, rho_p=0.7)])
-    out = rho_medians(rho)
-    assert out["germany"]["states"]["randomwalknowcast"] == {
-        "rho_t": 0.6,
-        "rho_p": 0.04,
-    }
 
 
 def test_aggregation_is_relative_to_the_reference_on_shared_targets() -> None:
@@ -112,11 +58,11 @@ def test_missing_evidence_leaves_a_note_and_no_numbers(tmp_path) -> None:
         tmp_path / "fig",
         tmp_path / "e.yml",
     )
-    assert "waits on" in (tmp_path / "si" / "copula-ebola.md").read_text()
+    assert "waits on" in (tmp_path / "si" / "sim-diseases.md").read_text()
     assert (tmp_path / "fig" / "sim-realism.png").is_file()
     doc = yaml.safe_load((tmp_path / "e.yml").read_text())
-    rho = doc["evidence"]["rho"]["germany"]["states"]["randomwalknowcast"]
-    assert rho["rho_t"] == "(not yet available)"
+    zero = doc["evidence"]["realism"]["zero_share"]
+    assert zero["BDBV"] == "(not yet available)"
     assert len(out["evidence"]["waiting"]) == len(EVIDENCE)
 
 
@@ -613,3 +559,111 @@ def test_the_aggregation_figure_has_a_panel_per_study_and_level() -> None:
     assert len(drawn) == 6
     labels = {t.get_text() for t in drawn[0].get_xticklabels()}
     assert {"(a)", "(e) weekly row", "(e) days, copula"} <= labels
+
+
+def _si_copula() -> pd.DataFrame:
+    """Rows of `evaluation.pairing.summarise_pairing`: off and rolling.
+
+    Zones, sums over weeks and per-cell rows of the zones are in the
+    rows, as the sensitivity gives them, but not in the figure.
+    """
+    rows = []
+    for study, levels in [
+        ("germany", ["national", "states", "ages"]),
+        ("bdbv", ["national", "provinces", "zones"]),
+    ]:
+        for level in levels:
+            for variant, value in (("off", 2.0), ("rolling", 1.0)):
+                for target, metric in (
+                    ("cell", "crps"),
+                    ("cell", "cover90"),
+                    ("joint", "log_energy"),
+                    ("sum_weeks", "crps"),
+                ):
+                    rows.append(
+                        {
+                            "study": study,
+                            "level": level,
+                            "model": "randomwalknowcast",
+                            "variant": variant,
+                            "target": target,
+                            "metric": metric,
+                            "value": value,
+                            "n": 10,
+                        }
+                    )
+    return pd.DataFrame(rows)
+
+
+def test_the_copula_figure_has_national_and_provinces_per_study() -> None:
+    from paperpipe.evidence import copula_figure
+
+    fig = copula_figure(_si_copula())
+    drawn = [ax for ax in fig.axes if ax.get_visible() and ax.has_data()]
+    titles = {ax.get_title().split(" (")[0] for ax in drawn}
+    assert titles == {
+        "Germany, national",
+        "Germany, states",
+        "BDBV, national",
+        "BDBV, provinces",
+    }
+    labels = {t.get_text() for t in drawn[0].get_xticklabels()}
+    assert labels == {"CRPS", "90% coverage", "ES (log)"}
+
+
+def test_the_copula_figure_waits_then_draws(tmp_path) -> None:
+    write_evidence(
+        dict.fromkeys(EVIDENCE),
+        tmp_path / "si",
+        tmp_path / "fig",
+        tmp_path / "e.yml",
+    )
+    assert (tmp_path / "fig" / "copula-impact.png").is_file()
+    rows = tmp_path / "si-copula.csv"
+    _si_copula().to_csv(rows, index=False)
+    paths = dict.fromkeys(EVIDENCE) | {"si_copula": rows}
+    write_evidence(paths, tmp_path / "si", tmp_path / "fig", tmp_path / "e.yml")
+    assert (tmp_path / "fig" / "copula-impact.png").stat().st_size > 20000
+
+
+def _copula_rho() -> pd.DataFrame:
+    """Rows of the walk models' `copula.json`, one per model and origin."""
+    return pd.DataFrame(
+        {
+            "model": ["randomwalknowcast"] * 3 + ["randomwalk"] * 2,
+            "origin": ["2026-10-04", "2026-10-11", "2026-10-18"] * 1
+            + ["2026-10-04", "2026-10-11"],
+            "n_scores": [40, 44, 0, 40, 44],
+            "rho_provinces": [0.5, 0.7, 0.7, 0.3, 0.4],
+            "n_pairs": [120, 130, 0, 120, 130],
+            "fallback": [False, False, True, False, False],
+        }
+    )
+
+
+def test_rho_medians_give_rho_p_only_without_fallbacks() -> None:
+    from paperpipe.evidence import rho_medians
+
+    out = rho_medians(_copula_rho())
+    assert out == {
+        "randomwalknowcast": {"rho_p": 0.6, "origins": 3, "fallback": 1},
+        "randomwalk": {"rho_p": 0.35, "origins": 2, "fallback": 0},
+    }
+
+
+def test_rho_p_is_quoted_once_its_rows_exist(tmp_path) -> None:
+    out = write_evidence(
+        dict.fromkeys(EVIDENCE),
+        tmp_path / "si",
+        tmp_path / "fig",
+        tmp_path / "e.yml",
+    )
+    rho = out["evidence"]["rho"]["randomwalknowcast"]
+    assert rho["rho_p"] == "(not yet available)"
+    rows = tmp_path / "copula-rho.csv"
+    _copula_rho().to_csv(rows, index=False)
+    paths = dict.fromkeys(EVIDENCE) | {"copula_rho": rows}
+    out = write_evidence(
+        paths, tmp_path / "si", tmp_path / "fig", tmp_path / "e.yml"
+    )
+    assert out["evidence"]["rho"]["randomwalk"]["rho_p"] == 0.35

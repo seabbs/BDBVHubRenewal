@@ -45,7 +45,7 @@ Chronos-2's group attention has no notion of which series is which, so on its ow
 
 - We add four learned biases to Chronos-2's group-attention scores (@tbl-attention-biases).
 - They start at zero, so fine-tuning starts from base Chronos-2, as for the relation biases TableFormer adds to a pretrained model [@Yang2022].
-- The biases train at a learning rate of $10^{-3}$ and the LoRA adapter at $10^{-5}$, both falling linearly to zero at 8,000 outbreaks.
+- The biases train at a learning rate of $10^{-3}$ and the LoRA adapter at $10^{-5}$, both falling linearly to zero over the 8,400 simulations.
 - We identify places by name within each block, with no limit on the number of places.
 - A place's parent is the nearest prefix of its name in the block, else the country.
 - Training blocks include countries equal to, above or later than the sum of their places, so a place belongs to its parent without summing to it.
@@ -131,20 +131,20 @@ where $m_{n,t}$ is 1 for a target step to forecast and 0 for a missing target or
 
 #### Learning rates
 
-- The learning rate at step $t$ falls linearly from $\eta_0$ to zero [@Devlin2019]:
+- The learning rate falls linearly from $\eta_0$ to zero over the simulations [@Devlin2019]:
 $$
-\eta_t = \eta_0 \left(1 - \frac{t}{T}\right),
+\eta_t = \eta_0 \left(1 - \frac{s_t}{8{,}400}\right),
 $$
-with $T = 36{,}500$ steps, which is reached at 8,000 simulations.
+where $s_t$ is the number of simulations trained by step $t$, interpolated within a chunk by its steps, so the rate reaches zero at the last simulation however the blocks are packed into steps.
 - $\eta_0 = 10^{-5}$ for the LoRA adapter, as in Chronos-2 [@Ansari2025], and $\eta_0 = 10^{-3}$ for the attention biases.
-- We train with AdamW [@Loshchilov2019] and clip the gradient norm at 1 [@Pascanu2013].
+- We train with AdamW [@Loshchilov2019] in fp32 and clip the gradient norm at 1 [@Pascanu2013].
 - Neither has weight decay or warmup, as in Chronos-2's fine-tuning [@Ansari2025], and the biases follow Moirai and TableFormer in having no weight decay [@Woo2024; @Yang2022].
 
 **Training blocks.**
 A simulation gives daily counts by onset and report date, and a release counts every case reported by its cut-off, one cut-off a week.
-Each simulation gives one observation draw, cut at 32 cut-offs, one drawn at random within each of 32 equal stretches of its weekly cut-offs, so one simulation gives 32 blocks.
+Each simulation gives one observation draw, cut at 32 cut-offs, one drawn at random within each of 32 equal stretches of its weekly cut-offs, so one simulation gives up to 32 blocks.
 Each block has up to 364 steps of context, and its prediction length is its horizon.
-We train on 8,000 simulations, with checkpoints at 250, 500, 750, 1,000, 2,000, 4,000 and 8,000.
+We train on 8,400 simulations, 10 balanced blocks of 840, with checkpoints at 250, 500, 750, 1,000, 2,000, 4,000 and 8,400.
 
 ::: {#tbl-block-layouts}
 | Layout | Share of blocks |
@@ -173,10 +173,10 @@ The realised shares of the combinations of layout and options in the training bl
 :::
 
 **Order of the training data.**
-The grid is a crossed factorial design balanced in every block of 120 simulations, with each factor's levels shuffled independently, as in a Latin hypercube.
-Training takes the simulations in chunks of 250, about two balanced blocks.
-A chunk gives about 6,700 training blocks, which are shuffled and packed into about 1,250 steps of up to 256 series each.
-So every checkpoint has seen the whole grid, and no factor level comes in a run of its own.
+The grid is balanced in blocks of 840 simulations, with each factor's levels shuffled independently within a block, as in a Latin hypercube.
+Training takes the simulations in order, in chunks of 250, so a chunk holds under a third of a block.
+A chunk gives up to 8,000 training blocks, 32 a simulation, which are shuffled and packed into about 1,500 steps of up to 256 series each, roughly 6 a simulation.
+So the checkpoints at 250, 500 and 750 simulations have seen only part of the grid, whole blocks are seen at each 840, and the 8,400 checkpoint has seen ten.
 
 Chronos-2 divides a flat context by a scale of $10^{-5}$, and we apply no floor to that scale at inference.
 A floor of one count at inference only hurts small series, of five counts or fewer, on held-out simulations.
@@ -258,46 +258,35 @@ The simulated outbreaks' ranges against published values for several diseases, t
 
 We cut the held-out simulations into blocks as in training, with the five layouts and non-summing parents (@tbl-block-layouts), using a fixed seed.
 A manifest records each held-out block's layout and options.
-The paper's test set, 100 simulations outside training, is cut the same way.
+The held-out simulations are simulation round 9, one whole block of 840 separate from the ten training blocks, and are the paper's test set.
+The trainer monitors its loss on 90 of them, a random sample of the block's cells.
 
 ### Correlated trajectories
 
-The copula pairs the draws of models that give each place and week only its own draws.
-These are the Chronos-2 models and `randomwalknowcast`.
-Hub teams' samples are joint across weeks within a place, so their pairing across places is left as submitted.
+- `randomwalk` and `randomwalknowcast` draw each province on its own, so the country, the per-sample sum of the provinces, is too narrow if the draws are paired at random.
+- We pair the province draws within each week with a Gaussian copula, by rank reordering as in the Schaake shuffle [@Clark2004] and ensemble copula coupling [@Schefzik2013].
+- Copulas have been used for coherent bottom-up forecasts of hierarchies [@BenTaieb2017] and for joint forecasts of seasonal influenza [@Ray2018; @Brooks2018].
+- Provinces are their own forecasts, the country is the per-sample sum of the provinces, and zones are their own forecasts, not summed.
+- The hub does not require coherence across levels.
+  We choose the sum of the provinces for the walks' national forecast, and Chronos-2 submits its joint block's own national row.
+- Pairing happens inside each walk model's forecast, so every score and submission reads the same paired draws.
+- Pairing only reorders draws, so each cell keeps its own draws.
 
 **The copula.**
-With $P$ places and steps on days $d_1, \dots, d_S$, each trajectory draws $z \sim \mathrm{N}(0, \Sigma)$ with $\Sigma = \Sigma_p \otimes \Sigma_t$.
-The week correlation is $(\Sigma_t)_{jk} = \rho_t^{|d_j - d_k| / 7}$.
-The place correlation is $\rho_p$ between two provinces and $\rho_n$ between the country and a province.
-Where $\rho_p$ and $\rho_n$ give no valid correlation matrix, we set its negative eigenvalues to zero and rescale it to unit diagonal.
-For each place-week, the $m$ draws are sorted and the $k$th trajectory takes the draw whose rank matches the rank of $z_k$ in that cell.
-Each cell keeps exactly its own draws [@Clark2004; @Schefzik2013].
-A country forecast as its own series, as by Chronos-2, is paired as one more place.
-A country that is the sum of its provinces is not paired but summed again from the paired provinces, so its forecast widens.
+Each week, each trajectory $k$ draws one normal $z_k$ per province, with correlation $\rho_p$ between any two provinces.
+Before a province's walk starts, each cell's $m$ draws are sorted and the $k$th trajectory takes the draw whose rank matches the rank of $z_k$ in that cell.
+From the walk start, each province's trajectory moves as a whole, ranked by its walk total against the normals of the latest week any province's walk starts, so the walk's own dependence over weeks is kept.
 
 **The estimator.**
-For a forecast with $m$ draws, $b$ of them below the truth and $e$ equal to it, the randomised PIT is $u = (b + U(e + 1)) / (m + 1)$ with $U \sim \mathrm{U}(0, 1)$.
-Its normal score is $\Phi^{-1}(u)$.
-A forecast whose draws are all equal gives no score.
-Truth is the count as reported $D$ days after the week, so a week's error matures only once that release exists.
-At an origin, we use forecasts made at earlier origins whose truth was released by the origin, from the 8 latest such weeks.
-$\rho_t$ is estimated from pairs of consecutive weeks of one place in one forecast.
-$\rho_p$ is estimated from pairs of provinces in the same week of one forecast, and $\rho_n$ from the country and a province.
-With $n$ pairs whose Pearson correlation is $r$, the estimate is $(n r + w \rho_0) / (n + w)$, with $w = 100$ and $\rho_0$ the prior.
-It is then kept within $[0, 0.95]$.
-Where the pairs give no correlation, the estimate is the prior.
-The prior $(\rho_t, \rho_p, \rho_n) = (0.9, 0.7, 0.7)$ is set by the energy score of the Chronos-2 models on the Ebola release backtest, so it is tuned in sample.
-As a sensitivity analysis we give the prior less weight, $w = 25$.
+$\rho_p$ comes from the model's own matured errors.
+For a count $y$ that an earlier release nowcast with negative binomial distribution function $F$, and that the origin release reports, the randomised PIT is $u = F(y - 1) + U\,(F(y) - F(y - 1))$ with $U \sim \mathrm{U}(0, 1)$, and its normal score is $\Phi^{-1}(u)$.
+We use pairs of provinces in one week, from the releases of the last 8 weeks.
+With $n$ pairs whose Pearson correlation is $r$, the estimate is $(n r + w \rho_0) / (n + w)$ with $w = 10$ and $\rho_0 = 0.7$, kept within $[0, 0.95]$.
+The shrinkage only guards thin windows (@tbl-tuned-choices).
 
 **Scores.**
-We score the trajectories with the energy score [@Gneiting2008] and the variogram score of order $p = 0.5$ [@Scheuerer2015], both on $\log(x + 1)$ counts.
-We also report the 50% and 90% coverage of each place's sum over weeks and of the sum over provinces in each week.
-WIS of each place and week is unchanged by pairing, except for a country summed from its provinces.
-We compare three versions of each model.
-Unpaired forecasts keep the sample indices the model gave.
-Fixed forecasts are paired with the prior at every origin.
-Rolling forecasts are paired with the copula estimated at each origin.
+We compare each walk model with no pairing, keeping the sample indices the model gave, and with the rolling $\rho_p$.
+We score the country and each province by the CRPS and 90% coverage, and each level's places and weeks as one vector by the energy score [@Gneiting2008] on $\log(x + 1)$ counts.
 
 ### Aggregation options
 
@@ -307,7 +296,7 @@ We compare five options for the zero-shot and fine-tuned models:
 (b) each level in its own block;
 (c) the lowest level only, summed up to the others with draws paired at random;
 (d) the lowest level only, summed up after pairing its draws with the rolling copula;
-(e) for the daily model, weekly totals from its in-block weekly row, against its days summed to weeks after pairing them with the rolling copula's $\rho_t$, as `randomwalknowcast` does, and at random.
+(e) for the daily model, weekly totals from its in-block weekly row, against its days summed to weeks after pairing them with a rolling correlation over days, and at random.
 Options (d) and (e) test whether pairing draws with the copula before summing narrows the gap to forecasting the total directly.
 Option (e) is inference only, on the final checkpoint.
 
@@ -337,8 +326,7 @@ Our models give 1,000 samples and hub teams 100, so the fair form compares them 
 |---|---|---|
 | Floor on Chronos-2's scale at inference | None | Held-out simulations and the BDBV release backtest |
 | Lag cap of the ragged layout | 4 weeks or 28 days | German first half and the BDBV release backtest |
-| Copula prior $(\rho_t, \rho_p, \rho_n)$ | $(0.9, 0.7, 0.7)$ | Ebola release backtest |
-| Copula day correlation $\rho_d$ | 0.985 | Ebola release backtest |
+| Copula shrinkage weight $w$ | 10, the weakest of 0, 10, 30 and 100, which scored within 1% of one another | Ebola release backtest |
 | Checkpoint of the submitted fine-tuned model | 1,000 simulations | BDBV release backtest, the plausibility check of the 14 November 2026 round, and the German first half |
 | Realism checks of the simulation grid | Grid ranges | BDBV releases and German data reported by 2022-02-09 |
 
@@ -363,21 +351,11 @@ Choices tuned on development data, with their values and the data they were set 
 
 ### Impact of correlated trajectories
 
-Pairing changes no marginal forecast, so it shows in the joint scores and in the coverage of sums over weeks and over places.
-@tbl-copula-ebola and @tbl-copula-germany compare unpaired forecasts with the fixed and rolling copula for every model that uses it.
-The rolling estimates have median $\rho_t$ {{< meta evidence.rho.germany.states.randomwalknowcast.rho_t >}} and $\rho_p$ {{< meta evidence.rho.germany.states.randomwalknowcast.rho_p >}} by German state, and $\rho_t$ {{< meta evidence.rho.germany.ages.randomwalknowcast.rho_t >}} and $\rho_p$ {{< meta evidence.rho.germany.ages.randomwalknowcast.rho_p >}} by age group, for `randomwalknowcast`.
+- @fig-copula-impact compares the rolling $\rho_p$ with no pairing on the German first half, the BDBV release backtest and the held-out simulations, at the national level and for provinces.
+- The per-province CRPS and coverage are unchanged by construction, so only the national sum and the energy score move.
+- The median rolling $\rho_p$ over origins is {{< meta evidence.rho.randomwalknowcast.rho_p >}} for `randomwalknowcast` and {{< meta evidence.rho.randomwalk.rho_p >}} for `randomwalk`, with {{< meta evidence.rho.randomwalknowcast.fallback >}} and {{< meta evidence.rho.randomwalk.fallback >}} origins falling back to the prior.
 
-::: {#tbl-copula-ebola}
-{{< include build/tables/si/copula-ebola.md >}}
-
-Ebola release backtest: energy score (ES) and variogram score (VS) on the log scale, 50% and 90% coverage of each place's sum over weeks and of the sum over provinces, and WIS of the provinces and the country, for each model unpaired and paired by the fixed or rolling copula.
-:::
-
-::: {#tbl-copula-germany}
-{{< include build/tables/si/copula-germany.md >}}
-
-German nowcast hub, development half: as @tbl-copula-ebola, by state and by age group, with the sum over places taken over states or age groups.
-:::
+![Each score of `randomwalk` and `randomwalknowcast` with the rolling $\rho_p$ relative to no pairing, by study and level: CRPS and 90% coverage of each cell, where the national level is the sum of the provinces, and the energy score (ES) of each level's places and weeks on the log scale. Development data only.](build/figures/si/copula-impact.png){#fig-copula-impact}
 
 ### Joint block or aggregation
 
@@ -391,13 +369,13 @@ Summing the lowest level loses at every level above it, with or without the copu
 
 ### Checkpoint curve
 
-- We compare the final run's checkpoints, fine-tuned on 250, 500, 750, 1,000, 2,000, 4,000 and 8,000 simulations.
+- We compare the final run's checkpoints, fine-tuned on 250, 500, 750, 1,000, 2,000, 4,000 and 8,400 simulations.
 - They share the grid, the data order and the recipe, as checkpoints of one run.
 - @fig-finetune-heldout gives the trainer's held-out loss by level, for transparency, not to select a checkpoint.
 - @fig-checkpoint-curve gives German first-half and BDBV relative scores at each checkpoint, with zero-shot Chronos-2 on the ragged layout and on complete data only as reference lines.
 - @tbl-checkpoints gives the headline scores of each checkpoint.
 - A later checkpoint has also trained for more steps.
-- The learning rate falls linearly to zero at 8,000 simulations, so the earlier checkpoints are taken at 97% (250) to 50% (4,000) of the starting rate, and only the 8,000 checkpoint is annealed.
+- The learning rate falls linearly to zero over the 8,400 simulations, so the earlier checkpoints are taken at 97% (250) to 52% (4,000) of the starting rate, and only the 8,400 checkpoint is annealed.
 
 ![The trainer's held-out loss of the fine-tune by level (national, intermediate and leaf) against the number of simulated outbreaks it has seen. {{< meta evidence.live.label >}} Development data only.](build/figures/si/finetune-heldout.png){#fig-finetune-heldout}
 

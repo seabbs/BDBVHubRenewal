@@ -29,7 +29,7 @@ synthetic:
   # (`evidence` below), and the held-out set's design.
   simulator: simulator
   grid: r5
-  simulations_per_seed: 25
+  simulations_per_seed: 21
   draw: 1
   # The synthetic runner's protocol, quoted in the SI note.
   protocol: {min_releases: 6, horizon_weeks: 5, horizons: [-4, 3]}
@@ -49,9 +49,9 @@ synthetic:
   # realised values.
   simulations:
     development: ../output/finetune/development
-    # Simulation round 1's folder under the rounds folder (ROOT in
-    # config/local.env), whose held-out batches are the held-out set.
-    paper: $ROOT/rounds/r1/sims
+    # Simulation round 9's folder under the rounds folder (ROOT in
+    # config/local.env), one grid block of 840 held out whole (#311).
+    paper: $ROOT/rounds/r9/sims
   # The synthetic runner's forecasts of them, with its
   # observations and factors beside them.
   forecasts:
@@ -160,13 +160,13 @@ evidence:
   lag_bdbv_after:
     ref: e4f4d7a49773a3050a9529df5c70d7cc8504dafc
     path: evidence/bdbv-lagfix/fm-summary-after.csv
-  # The copula's arms scored by `evaluation.trajectories`.
-  copula_scores:
-    ref: addbf7d86d01aca10f2a7ae8e63792c741cb5668
-    path: results/copula-scores.csv.gz
-  copula_rho:
-    ref: addbf7d86d01aca10f2a7ae8e63792c741cb5668
-    path: results/copula-rho.csv.gz
+  # The walks' scores with no pairing and the rolling rho_p, by study and
+  # level, on development data (#253's `summarise_pairing` rows). Pending:
+  # bdbv-timesfm's rows on evidence/fm-copula.
+  si_copula: null
+  # Each walk model's rho_p by origin, the rows of its rounds' copula.json
+  # (model, origin, n_scores, rho_provinces, n_pairs, fallback). Pending.
+  copula_rho: null
   aggregation_scores:
     ref: 5a3e0440880f54751fd8dccbfa14133a2a74ba81
     path: results/agg/aggregation-scores.csv.gz
@@ -197,9 +197,14 @@ development:
 # Data kept out of every development run.
 # Only the `paper` target reads them.
 heldout:
-  # Outbreaks simulated with seeds the fine-tune never saw.
-  # The held-out batches of simulation round 1 on the final grid.
-  synthetic_seeds: [30140, 30141, 30142, 30143]
+  # Outbreaks simulated with seeds the fine-tune never saw: round 9, one
+  # grid block of 840 (40 batches of 21, seeds 30900 to 30939, #311).
+  synthetic_seeds: [
+    30900, 30901, 30902, 30903, 30904, 30905, 30906, 30907, 30908, 30909,
+    30910, 30911, 30912, 30913, 30914, 30915, 30916, 30917, 30918, 30919,
+    30920, 30921, 30922, 30923, 30924, 30925, 30926, 30927, 30928, 30929,
+    30930, 30931, 30932, 30933, 30934, 30935, 30936, 30937, 30938, 30939,
+  ]
   # First held-out German nowcast date.
   # The benchmark's dates run from 2021-11-22 to 2022-04-29.
   # The first 80 are the development half.

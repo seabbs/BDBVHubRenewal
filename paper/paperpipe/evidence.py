@@ -7,9 +7,9 @@ into the SI's tables, figures and quoted numbers, so nothing is typed into
 the paper. A result whose rows are not set yet gets a note saying what it
 waits on in place of its table, and `None` in place of its numbers.
 
-- `copula_table`: mean joint scores, coverage of sums and WIS of each
-  model and pairing arm, by strata.
-- `rho_medians`: median rolling copula correlations over origins and places.
+- `copula_figure`: the rolling copula against no pairing, by study and
+  level.
+- `rho_medians`: the median rolling rho_p of each walk model.
 - `aggregation_figure`: WIS of each aggregation option relative to
   `randomwalknowcast` on the same targets, by study and level.
 - `heldout_figure` and `realism_figure`: the fine-tune's held-out loss
@@ -41,7 +41,6 @@ from matplotlib.figure import Figure
 from paperpipe.outputs import to_markdown
 
 __all__ = [
-    "ARMS",
     "EVIDENCE",
     "aggregation_figure",
     "aggregation_numbers",
@@ -50,7 +49,7 @@ __all__ = [
     "checkpoint_numbers",
     "checkpoint_rows",
     "comparison_figure",
-    "copula_table",
+    "copula_figure",
     "diseases_table",
     "drop_finetuned",
     "heldout_figure",
@@ -66,14 +65,6 @@ __all__ = [
     "waiting",
     "write_evidence",
 ]
-
-ARMS: Final = {
-    "unpaired": "Unpaired",
-    "fixed": "Fixed",
-    "rolling": "Rolling",
-    "rolling_w25": "Rolling, w = 25",
-}
-"""Pairing arms of the copula comparison, in table order."""
 
 OPTIONS: Final = {
     "joint": "(a)",
@@ -100,71 +91,6 @@ def _pair(a: pd.Series, b: pd.Series) -> list[str]:
         "" if pd.isna(x) or pd.isna(y) else f"{x:.2f} / {y:.2f}"
         for x, y in zip(a, b, strict=True)
     ]
-
-
-def copula_table(scores: pd.DataFrame, study: str) -> pd.DataFrame:
-    """Return the copula comparison of one study, one row per model and arm.
-
-    Parameters
-    ----------
-    scores : pandas.DataFrame
-        Per-forecast rows: `study`, `strata`, `model`, `arm`,
-        `energy_log`, `variogram_log`, `cover50_weeks`, `cover90_weeks`,
-        `cover50_places`, `cover90_places`, `wis_strata`, `wis_national`.
-    study : str
-        `ebola` or `germany`.
-
-    Returns
-    -------
-    pandas.DataFrame
-        Display columns, means over forecasts.
-    """
-    sc = scores.loc[scores["study"] == study]
-    cols = [
-        "energy_log",
-        "variogram_log",
-        "cover50_weeks",
-        "cover90_weeks",
-        "cover50_places",
-        "cover90_places",
-        "wis_strata",
-        "wis_national",
-    ]
-    m = sc.groupby(["strata", "model", "arm"], sort=False)[cols].mean()
-    m = m.reset_index()
-    m["arm"] = pd.Categorical(m["arm"], categories=list(ARMS), ordered=True)
-    m = m.sort_values(["strata", "model", "arm"])
-    return pd.DataFrame(
-        {
-            "Strata": m["strata"].str.capitalize(),
-            "Model": m["model"],
-            "Pairing": m["arm"].map(ARMS).astype(str),
-            "ES (log)": m["energy_log"].round(3),
-            "VS (log)": m["variogram_log"].round(3),
-            "Weeks 50% / 90%": _pair(m["cover50_weeks"], m["cover90_weeks"]),
-            "Places 50% / 90%": _pair(m["cover50_places"], m["cover90_places"]),
-            "WIS strata": m["wis_strata"].round(2),
-            "WIS national": m["wis_national"].round(2),
-        }
-    )
-
-
-def rho_medians(rho: pd.DataFrame) -> dict:
-    """Return the median rolling correlations by study, strata and model.
-
-    Rows of other pairing arms, where `rho` has an `arm` column, are left
-    out.
-    """
-    if "arm" in rho.columns:
-        rho = rho.loc[rho["arm"] == "rolling"]
-    out: dict = {}
-    for (study, strata, model), g in rho.groupby(["study", "strata", "model"]):
-        out.setdefault(study, {}).setdefault(strata, {})[model] = {
-            name: round(float(g[name].median()), 2)
-            for name in ("rho_t", "rho_p", "rho_n")
-            if name in g and g[name].notna().any()
-        }
-    return out
 
 
 def aggregation_figure(
@@ -462,11 +388,7 @@ def live_numbers(scores: pd.DataFrame | None, run: str = LIVE_RUN) -> dict:
     return out
 
 
-FINETUNED_EVIDENCE: Final = (
-    "copula_scores",
-    "copula_rho",
-    "aggregation_scores",
-)
+FINETUNED_EVIDENCE: Final = ("aggregation_scores",)
 """Evidence of both zero-shot and fine-tuned models, whose fine-tuned rows
 come from earlier fine-tunes than the paper's and are left out."""
 
@@ -502,7 +424,7 @@ def checkpoint_numbers(scores: pd.DataFrame) -> dict:
     return out
 
 
-PLANNED_CHECKPOINTS: Final = (1000, 2000, 4000, 8000)
+PLANNED_CHECKPOINTS: Final = (1000, 2000, 4000, 8400)
 """The final run's checkpoints, which set the axis before any lands."""
 
 
@@ -750,8 +672,8 @@ def diseases_table(diseases: pd.DataFrame) -> pd.DataFrame:
 
 
 EVIDENCE: Final = {
-    "copula_scores": "fm-copula's per-forecast copula scores",
-    "copula_rho": "fm-copula's rolling correlation estimates",
+    "si_copula": "fm-copula's walk scores, no pairing against rolling rho_p",
+    "copula_rho": "the walk models' rho_p by origin (copula.json rows)",
     "aggregation_scores": "fm-agg's per-target aggregation scores",
     "finetune_heldout": "fm-finetune3's held-out loss curve",
     "sim_summaries": "fm-finetune3's per-outbreak r3 pilot summaries",
@@ -781,12 +703,13 @@ case study and level), `run`, `outbreaks` (the run's checkpoint) and
 NOT_YET: Final = "(not yet available)"
 """What the paper quotes in place of a number whose rows are not set."""
 
+COPULA_MODELS: Final = ("randomwalk", "randomwalknowcast")
+"""The models that pair their province draws by rho_p."""
+
 QUOTED: Final = {
     "rho": {
-        "germany": {
-            strata: {"randomwalknowcast": {"rho_t": NOT_YET, "rho_p": NOT_YET}}
-            for strata in ("states", "ages")
-        }
+        m: {"rho_p": NOT_YET, "origins": NOT_YET, "fallback": NOT_YET}
+        for m in COPULA_MODELS
     },
     "realism": {
         "zero_share": {"sim_q95": NOT_YET, "BDBV": NOT_YET},
@@ -794,6 +717,120 @@ QUOTED: Final = {
     },
 }
 """The numbers the paper quotes, as they read until their rows exist."""
+
+
+COPULA_STUDIES: Final = {
+    "germany": "Germany",
+    "bdbv": "BDBV",
+    "synthetic": "Held-out synthetic",
+}
+"""The copula figure's studies, in its row order, all on development data."""
+
+COPULA_LEVELS: Final = ("national", "provinces", "states")
+"""The levels the copula changes: the country, which is the sum of the
+provinces (or states), and the provinces themselves. Zones are not
+paired."""
+
+COPULA_METRICS: Final = {
+    "cell_crps": "CRPS",
+    "cell_cover90": "90% coverage",
+    "joint_log_energy": "ES (log)",
+}
+"""The copula figure's scores: CRPS and 90% coverage of each cell, which
+at the national level is the sum of the provinces, and the energy score
+on log counts of the level's places and weeks as one vector."""
+
+
+def rho_medians(rho: pd.DataFrame) -> dict:
+    """Return each walk model's median rolling rho_p over origins.
+
+    `rho` has the walk models' `copula.json` rows: `model`, `origin`,
+    `n_scores`, `rho_provinces`, `n_pairs` and `fallback`. Origins that
+    fell back to the prior for want of pairs are counted, not in the
+    median.
+    """
+    fallback = rho["fallback"].astype(str).str.lower() == "true"
+    out: dict = {}
+    for model, g in rho.groupby("model", sort=False):
+        own = fallback.loc[g.index]
+        est = g.loc[~own, "rho_provinces"]
+        out[model] = {
+            "rho_p": round(float(est.median()), 2) if len(est) else NOT_YET,
+            "origins": int(g["origin"].nunique()),
+            "fallback": int(own.sum()),
+        }
+    return out
+
+
+def copula_figure(rows: pd.DataFrame) -> Figure:
+    """Plot each score of the rolling copula relative to no pairing.
+
+    One panel per study and level in `COPULA_LEVELS`, never pooled across
+    levels. Each panel gives the ratio rolling / off of every score in
+    `COPULA_METRICS`, one marker per model, with 1 no pairing. `rows` are
+    `evaluation.pairing.summarise_pairing`'s: `study`, `level`, `model`,
+    `variant` (`off` or `rolling`), `target`, `metric`, `value` and `n`.
+    """
+    rows = rows.assign(metric=rows["target"] + "_" + rows["metric"])
+    rows = rows.loc[
+        rows["metric"].isin(list(COPULA_METRICS))
+        & rows["level"].isin(COPULA_LEVELS)
+    ]
+    wide = rows.pivot_table(
+        index=["study", "level", "model", "metric"],
+        columns="variant",
+        values="value",
+    ).reset_index()
+    wide["ratio"] = wide["rolling"] / wide["off"]
+    n = rows.groupby(["study", "level"])["n"].min()
+    studies = [s for s in COPULA_STUDIES if s in set(wide["study"])]
+    levels = {
+        s: list(dict.fromkeys(rows.loc[rows["study"] == s, "level"]))
+        for s in studies
+    }
+    ncol = max(len(v) for v in levels.values())
+    fig, axes = plt.subplots(
+        len(studies),
+        ncol,
+        figsize=(3.4 * ncol, 2.6 * len(studies)),
+        layout="constrained",
+        squeeze=False,
+    )
+    metrics = list(COPULA_METRICS)
+    models = sorted(wide["model"].unique())
+    markers = dict(zip(models, "osD^v", strict=False))
+    for i, study in enumerate(studies):
+        for j in range(ncol):
+            ax = axes[i, j]
+            if j >= len(levels[study]):
+                ax.set_visible(False)
+                continue
+            level = levels[study][j]
+            one = wide.loc[(wide["study"] == study) & (wide["level"] == level)]
+            for model, g in one.groupby("model"):
+                x = [metrics.index(m) for m in g["metric"]]
+                ax.plot(
+                    x,
+                    g["ratio"],
+                    ls="none",
+                    marker=markers[model],
+                    label=model,
+                )
+            ax.axhline(1, color="#888888", lw=1)
+            ax.set_xticks(
+                range(len(metrics)),
+                [COPULA_METRICS[m] for m in metrics],
+                fontsize=7,
+            )
+            ax.set_title(
+                f"{COPULA_STUDIES[study]}, {level} "
+                f"(n = {int(n.loc[(study, level)])})",
+                fontsize=9,
+            )
+            ax.set_ylabel("Rolling / no pairing")
+    handles, labels = axes[0, 0].get_legend_handles_labels()
+    fig.legend(handles, labels, loc="outside lower center", ncol=len(models))
+    return fig
 
 
 def comparison_figure(rows: pd.DataFrame) -> Figure:
@@ -929,18 +966,17 @@ def write_evidence(
         fig.savefig(fig_dir / f"{name}.png", dpi=200)
         plt.close(fig)
 
-    cop = data["copula_scores"]
     agg = data["aggregation_scores"]
-    for study in ("ebola", "germany"):
-        table(
-            f"copula-{study}",
-            None if cop is None else copula_table(cop, study),
-            ["copula_scores"],
-        )
     figure(
         "aggregation",
         None if agg is None else aggregation_figure(agg),
         ["aggregation_scores"],
+    )
+    cop = data["si_copula"]
+    figure(
+        "copula-impact",
+        None if cop is None else copula_figure(cop),
+        ["si_copula"],
     )
     dis = data["sim_diseases"]
     table(
