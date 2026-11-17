@@ -60,40 +60,28 @@ def test_a_paired_forecast_is_a_function_of_its_task(name: str, task) -> None:
 
 
 @pytest.mark.parametrize("name", MODELS)
-def test_each_places_walk_moves_as_a_whole(name: str, task) -> None:
-    # The walk weeks of a place are joint trajectories, which pairing
-    # keeps: the set of each place's last-two-week pairs is unchanged.
-    _, paired, off = _run(name, task)
-    weeks = sorted(off["target_end_date"].unique())[-2:]
-    for loc in task.locations:
-        a = _wide(off)[[(loc, w) for w in weeks]].to_numpy()
-        b = _wide(paired)[[(loc, w) for w in weeks]].to_numpy()
-        np.testing.assert_array_equal(
-            a[np.lexsort(a.T[::-1])], b[np.lexsort(b.T[::-1])]
-        )
-
-
-@pytest.mark.parametrize("name", MODELS)
 def test_provinces_are_paired_within_a_week(name: str, task) -> None:
     model, paired, off = _run(name, task)
-    last = sorted(off["target_end_date"].unique())[-1]
+    weeks = sorted(off["target_end_date"].unique())
 
-    def mean_rank_corr(samples: pd.DataFrame) -> float:
+    def mean_rank_corr(samples: pd.DataFrame, last: str) -> float:
         week = samples.loc[samples["target_end_date"] == last]
         x = week.pivot(index="sample", columns="location", values="value")
         c = x.loc[:, x.std() > 0].rank().corr().to_numpy()
         k = c.shape[0]
         return float((c.sum() - k) / (k * (k - 1)))
 
-    def national_var(samples: pd.DataFrame) -> float:
+    def national_var(samples: pd.DataFrame, last: str) -> float:
         week = samples.loc[samples["target_end_date"] == last]
         return float(week.groupby("sample")["value"].sum().var())
 
     assert model.copula_fit["rho_provinces"] > 0.1
-    assert abs(mean_rank_corr(off)) < 0.01
-    assert mean_rank_corr(paired) > 0.02
-    # So the country, their sum, widens.
-    assert national_var(paired) > national_var(off)
+    # In every week, nowcast and forecast alike.
+    for week in weeks:
+        assert abs(mean_rank_corr(off, week)) < 0.02
+        assert mean_rank_corr(paired, week) > 0.02
+        # So the country, their sum, widens.
+        assert national_var(paired, week) > national_var(off, week)
 
 
 def test_the_copula_record_is_rho_p_with_its_pairs(task) -> None:

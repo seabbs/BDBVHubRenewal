@@ -37,10 +37,7 @@ def _spearman(rho: float) -> float:
 
 def _pair(draws: np.ndarray, rho: float, seed: int = 1, **kw) -> np.ndarray:
     places = kw.pop("locations", PROVINCES[: draws.shape[1]])
-    anchors = kw.pop("anchors", np.full(len(places), draws.shape[2]))
-    return pair_walks(
-        draws, places, anchors, rho, np.random.default_rng(seed), **kw
-    )
+    return pair_walks(draws, places, rho, np.random.default_rng(seed), **kw)
 
 
 def test_each_cell_keeps_its_draws() -> None:
@@ -92,30 +89,36 @@ def test_rho_must_be_in_zero_to_one(rho: float) -> None:
         _pair(_draws(n=10), rho)
 
 
-def test_walks_keep_their_cells_and_move_as_a_whole() -> None:
+def _mixed(n: int = 3000, h: int = 6) -> np.ndarray:
+    """Two provinces walking jointly from week 2 and two not yet walking."""
     rng = np.random.default_rng(40)
-    n, h = 3000, 6
-    start = rng.normal(size=(n, 2, 1))
-    walk = np.cumsum(
-        np.concatenate([start, rng.normal(0, 0.3, (n, 2, h - 1))], axis=2),
-        axis=2,
+    start = rng.gamma(2.0, 5.0, size=(n, 2, 1))
+    steps = rng.normal(0, 0.3, (n, 2, h - 1))
+    walk = start * np.exp(
+        np.cumsum(np.concatenate([np.zeros((n, 2, 1)), steps], axis=2), axis=2)
     )
-    # The two walks start in different weeks.
-    anchors = np.array([2, 3])
-    out = _pair(walk, PRIOR, locations=("CD-A", "CD-B"), anchors=anchors)
-    assert np.array_equal(np.sort(out, axis=0), np.sort(walk, axis=0))
-    # From its start week on, each place's trajectories are kept whole.
-    for loc, a in enumerate(anchors):
-        x, y = walk[:, loc, a:], out[:, loc, a:]
-        np.testing.assert_array_equal(
-            x[np.lexsort(x.T[::-1])], y[np.lexsort(y.T[::-1])]
+    walk[:, :, :2] = rng.gamma(2.0, 5.0, size=(n, 2, 2))
+    nowcast = rng.gamma(2.0, 5.0, size=(n, 2, h))
+    return np.concatenate([walk, nowcast], axis=1)
+
+
+def test_every_week_pairs_its_provinces_whatever_their_phase() -> None:
+    draws = _mixed()
+    out = _pair(draws, PRIOR)
+    assert np.array_equal(np.sort(out, axis=0), np.sort(draws, axis=0))
+    # A walking and a not yet walking province, in every week.
+    for week in range(draws.shape[2]):
+        assert _rank_corr(out[:, 0, week], out[:, 2, week]) == pytest.approx(
+            _spearman(PRIOR), abs=0.05
         )
-    # Before either walk, cells are paired within the week by rho_p.
-    assert _rank_corr(out[:, 0, 0], out[:, 1, 0]) == pytest.approx(
-        _spearman(PRIOR), abs=0.05
-    )
-    # The walks are paired with each other, though they start apart.
-    assert _rank_corr(out[:, 0, -1], out[:, 1, -1]) > 0.3
+
+
+def test_national_spread_in_a_nowcast_week_rises_with_rho_p() -> None:
+    # In week 1 no province walks yet in two of the four.
+    draws = _mixed()
+    spread = [_pair(draws, rho)[:, :, 1].sum(axis=1).std() for rho in
+              (0.0, 0.3, 0.7)]  # fmt: skip
+    assert spread[0] < spread[1] < spread[2]
 
 
 def _scores(rho: float, n_origins: int = 400, seed: int = 6) -> pd.DataFrame:
