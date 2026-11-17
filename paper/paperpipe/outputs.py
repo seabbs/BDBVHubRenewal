@@ -30,8 +30,11 @@ from paperfigs.nowcasts import (
 )
 from paperfigs.periods import add_period
 from paperfigs.plots import (
+    DAILY,
+    HUB_TARGETS,
     nowcast_panels,
     results_panel,
+    rows_of_target,
     si_place_dots,
     si_scores_by_factor,
     si_scores_by_finetune_size,
@@ -79,6 +82,7 @@ FIGURES: Final[dict[str, dict[str, tuple[str, ...]]]] = {
             "si-location-horizon",
             "si-location-horizon-log",
             "si-wis-over-time",
+            "si-results-daily",
         ),
     },
     "ebola": {
@@ -169,6 +173,14 @@ def _figures(
     nowcasts: Mapping,
     baseline: str,
 ) -> dict[str, Figure]:
+    # The main text and the other SI figures score the hub's target.
+    hub = HUB_TARGETS.get(study)
+    daily_fc = rows_of_target(forecasts, DAILY)
+    daily_sc = rows_of_target(scores, DAILY)
+    forecasts = rows_of_target(forecasts, hub)
+    scores = rows_of_target(scores, hub)
+    observations = rows_of_target(observations, hub)
+    truth = rows_of_target(truth, hub)
     seed = int(nowcasts["seed"])
     models = place_models(
         forecasts["model"].unique(), nowcasts["models"][study]
@@ -225,7 +237,21 @@ def _figures(
             "si-finetune-size": si_scores_by_finetune_size(scores, baseline),
         }
     national = _national(study, forecasts, nowcasts)
-    return {
+    daily = {}
+    if study == "germany":
+        daily["si-results-daily"] = (
+            results_panel(
+                daily_fc,
+                observations,
+                daily_sc,
+                split=split,
+                target=None,
+                **shown,
+            )
+            if not daily_fc.empty
+            else _pending("Daily-target rows are pending.")
+        )
+    return daily | {
         "nowcasts": by_origin(national),
         "results": results_panel(
             forecasts,
@@ -317,6 +343,14 @@ def write_figures(
                 plt.close(figs[name])
                 written.append(path)
     return written
+
+
+def _pending(note: str) -> Figure:
+    """Return a small figure that says what it waits on."""
+    fig, ax = plt.subplots(figsize=(6, 1.2))
+    ax.axis("off")
+    ax.text(0.5, 0.5, note, ha="center", va="center")
+    return fig
 
 
 def _mark_dummy(fig: Figure) -> None:
@@ -496,6 +530,9 @@ def score_tables(
         The tables written.
     """
     baseline = baseline or STUDY_BASELINES[study]
+    # The tables score the hub's target; daily scores are in the SI's
+    # daily-nowcast section.
+    scores = rows_of_target(scores, HUB_TARGETS.get(study))
     every = scores
     scores = add_period(drop_checkpoints(drop_real_data(scores)), split)
     period = ["period"] if split is not None else []

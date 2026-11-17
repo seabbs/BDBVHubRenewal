@@ -660,21 +660,48 @@ def panel_b_bias(g: Svg, oy: float) -> float:
         y = gy + 4 + k * 12
         g.rect(lx, y - 7, 9, 7.5, fill=c, rx=1)
         g.text(lx + 13, y, name, size=SMALL)
+    for k, line in enumerate(
+        (
+            "learned bias per relation, layer",
+            "and head, added to the attention",
+            "scores; zero at the start",
+        )
+    ):
+        g.text(
+            lx,
+            gy + 4 + len(RELATIONS) * 12 + 4 + 9 * k,
+            line,
+            size=SMALL,
+            fill=MUTED,
+        )
+    # One place's daily rows with a weekly total row, beside the grid.
+    days, cw, rh = 14, 6.2, 9.0
+    ax = WIDTH - days * cw - 2
     g.text(
-        lx,
-        gy + 4 + len(RELATIONS) * 12 + 4,
-        "learned bias per relation, layer and head, added to the",
+        ax + days * cw,
+        oy + 8,
+        "one place with a weekly row",
         size=SMALL,
+        anchor="end",
         fill=MUTED,
     )
-    g.text(
-        lx,
-        gy + 4 + len(RELATIONS) * 12 + 13,
-        "attention scores; zero at the start",
-        size=SMALL,
-        fill=MUTED,
-    )
-    return bottom + 3
+    agg = [("daily", 0), ("lag 1", 1), ("lag 2", 2), ("weekly", None)]
+    for r, (name, lag) in enumerate(agg):
+        y = gy + r * (rh + 2)
+        g.text(
+            ax - 3, y + rh - 2.2, name, size=SMALL - 1, anchor="end", fill=MUTED
+        )
+        for d in range(days):
+            if lag is None:
+                kind = "truth" if (d + 1) % 7 == 0 else "unseen"
+            elif lag == 0:
+                kind = "final"
+            else:
+                kind = "lag" if d < days - lag else "unseen"
+            cell(g, ax + d * cw, y, cw, rh, kind)
+    # The weekly row joins its place's same-place group.
+    g.rect(ax - 30, gy, 3.2, len(agg) * (rh + 2) - 2, fill=SLOTS[0], rx=1.6)
+    return max(bottom, gy + len(agg) * (rh + 2)) + 3
 
 
 def panel_c(g: Svg, oy: float) -> float:
