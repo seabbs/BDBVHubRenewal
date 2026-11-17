@@ -332,3 +332,26 @@ def test_a_mixed_block_adds_each_places_period_totals_on_daily_steps(
     assert np.isnan(agg[:, ends[0] + 1 : ends[1]]).all()
     for e in ends:
         assert np.allclose(agg[:, e], d[:n, e - width + 1 : e + 1].sum(1))
+
+
+def test_a_mixed_blocks_totals_in_the_context_are_the_releases_counts() -> None:
+    # Late reports (20 days on) are past the release for recent onsets, so
+    # the daily row's context is short of the truth there. The total row
+    # must sum the same counts the daily row shows, not the truth.
+    counts = _two_places()
+    late = counts.assign(
+        report_date=counts["report_date"] + pd.Timedelta(days=20)
+    )
+    counts = pd.concat([counts, late], ignore_index=True)
+    cutoffs = ["2026-09-23", "2026-09-30"]
+    places = (NATIONAL, "A", "B")
+    block = training_block(counts, "daily+weekly", places, cutoffs, max_lag=3)
+    n, start = len(places), block["start"]
+    x = block["context"]
+    daily, agg = x[:n], x[n : 2 * n]
+    ends = [e for e in np.flatnonzero(~np.isnan(agg[0])) if e < start]
+    assert ends
+    for e in ends:
+        assert np.allclose(agg[:, e], daily[:, e - 6 : e + 1].sum(1))
+    truth = training_block(counts, "daily", places, ["2026-12-31"], max_lag=3)
+    assert truth is not None
