@@ -84,6 +84,28 @@ def test_batches_already_simulated_are_kept(tmp_path):
     assert jobs["simulate_batch"] == 38
 
 
+SPLIT = {
+    "rounds": [10],
+    "simulate": {"hosts": {"laptop": ["31005", "31007"]}},
+}
+
+
+def test_a_round_shared_with_another_host_waits_for_its_seeds(tmp_path):
+    jobs = dry(tmp_path, "simulate", config=SPLIT)
+    assert jobs["simulate_batch"] == 38
+    assert jobs["await_batch"] == 2
+    assert jobs["batch_record"] == 40
+
+
+def test_a_second_host_simulates_and_pushes_only_its_seeds(tmp_path):
+    (tmp_path / "local.env").write_text(f"ROOT={tmp_path}\nHOST_NAME=laptop\n")
+    jobs = dry(tmp_path, "push", config=SPLIT)
+    assert jobs["simulate_batch"] == 2
+    assert jobs["push_batch"] == 2
+    assert "batch_record" not in jobs
+    assert "await_batch" not in jobs
+
+
 FT = {
     "rounds": [1, 2],
     "finetune": {
