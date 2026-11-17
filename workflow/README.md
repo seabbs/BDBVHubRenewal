@@ -105,14 +105,43 @@ After each slots checkpoint's scores:
 
 ## 5. Dashboard (`workflow/flowlib/dashboard/`)
 
-`task dashboard` serves a page for a running fine-tune on 127.0.0.1 (`PORT=8765`); it is not a Snakemake job, so it never holds the workflow's lock.
+`task dashboard`, or `uv run --group paper python workflow/scripts/dashboard.py --port 8765`, serves a page for a running fine-tune on 127.0.0.1; it is not a Snakemake job, so it never holds the workflow's lock.
 `task dashboard:static` builds the rule `dashboard`, a static render of the same page in `<RUN>/reports/dashboard.html`.
 
-- Runs are configured, not coded: `dashboard.runs` in `workflow/config.yaml` (release-prefix runs, which need no paths), then `DASHBOARD_RUNS` in `config/local.env` (runs with a local folder), then `--run` (`task dashboard -- --run realdata=realdata-ft-,colour=#0d9488`). A spec is `name=<folder|prefix>[,label=..][,colour=..][,live][,base=..][,prefix=..][,hashes=h1+h2][,n=h1:250+h2:500]`; any run can be compared with any other.
-- References (zero-shot ragged, complete-only, randomwalknowcast) are `dashboard.references`, matched on rows by model and checkpoint, with `--ref` to add or replace one.
-- Scores and German forecasts come from `SCORE_CACHE`, or, with `REMOTE` set, a read-only rsync mirror of `REMOTE:REMOTE_ROOT/scores` (or `REMOTE_SCORE_CACHE`) in `dashboard.mirror`.
-- German nowcasts use the paper panels' quantile levels, bands and truth ink (`paperfigs.plots`, through `flowlib/dashboard/paperstyle.py`, with a test that fails if the paper's bands change), so the dashboard and the paper's nowcast figures look alike.
-- With a notes file configured (`MAILBOX`, or `REMOTE_MAILBOX` when mirroring), a section shows its last lines matching `dashboard.mail_filter`; without one the section is not shown.
+The page has a sticky bar (section links, the live run's step, one run and reference selector every chart follows) and sections: Status (tiles), Loss (client-side plots), Attention bias, Performance on real data (scores by study, score, target and source), Nowcasts (every dataset), Recent activity (with a notes file) and Tables. Every chart has an info marker (`page/explain.json`).
+
+Settings:
+
+- `workflow/config.yaml`'s `dashboard`: references (matched on rows by model and checkpoint, with a role: `baseline`, `start` or `other`), score studies and their labels, level order and defaults, the datasets (Germany: quantiles and WIS; BDBV: samples, summarised to quantiles with the scorer's truth rule and sample CRPS), the notes filter.
+- `config/dashboard.local.yaml` (git ignores it; `config/dashboard.example.yaml` is committed; `DASHBOARD_CONFIG` in `config/local.env` names another file): this machine's runs (training output folders with a hue, the live run, a base run, or release prefixes), exclusions, the mirror folder, and where the score table, each dataset, the BDBV truth table, extra tables, notes and the notes file come from. A `host:path` source is copied read-only with rsync over ssh; nothing is written back.
+- `DASHBOARD_RUNS` and `--run`, `--ref`: more runs and references on top.
+
+On a laptop that trains while another machine scores:
+
+```sh
+uv sync --group paper                                          # once
+cp config/dashboard.example.yaml config/dashboard.local.yaml   # then edit paths
+uv run --group paper python workflow/scripts/dashboard.py --port 8765
+# open http://127.0.0.1:8765/; with the venv active, plain `python` works too
+```
+
+## Scheduled runs
+
+The workflow updates itself as results come in. Each machine runs its own targets on a timer; Snakemake reruns only what changed.
+
+| Where | `SCHEDULE_TARGETS` | Does, each tick |
+|---|---|---|
+| the machine that scores (CPU) | `score land` | lists new checkpoint releases, scores them, rebuilds the table, and commits and pushes it to the evidence branch only if it changed |
+| the machine that trains (GPU) | `finetune publish` | trains the next segment once its batches are there, and releases each new checkpoint |
+| a simulating machine | `simulate release` | simulates the configured rounds and releases each batch |
+
+A tick (`task tick`, `workflow/scripts/tick.py`) runs the targets in order at nice 19 with the machine's `CORES` and `MEM_MB`. It is skipped when another tick is still running (a lock in `output/`) or when less than `MIN_FREE_GB` of memory or `MIN_DISK_GB` of disk is free; a failed target stops the tick, so `land` never follows a failed `score`. Its log is `output/workflow-tick.log`.
+
+`task schedule ACTION=install` installs a timer that runs the tick every `SCHEDULE_EVERY` minutes (default 60): a systemd user timer on Linux with systemd, else a cron line; a launchd agent on macOS; or the one `SCHEDULE_KIND` names. The unit is written from where the checkout is and the `PATH` it is installed from, so nothing machine-specific is committed. `ACTION=show` prints it, `ACTION=uninstall` removes it.
+
+On CI, the site and the paper (`.github/workflows/pages.yml`) rebuild every 6 hours (`43 */6 * * *`, after the fit store's run) and whenever `evidence/` changes on main, so new checkpoint scores reach the docs and the paper without a manual step.
+
+Nothing here needs an agent or a notes file; with `NOTIFY` set, rules still add their optional notes.
 
 ## CI
 

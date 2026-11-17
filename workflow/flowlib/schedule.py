@@ -1,0 +1,215 @@
+"""Scheduled workflow runs: what one tick runs, and the timer that runs it.
+
+A tick (`workflow/scripts/tick.py`) runs this machine's targets
+(`SCHEDULE_TARGETS` in config/local.env, in order, for example
+`score land` where checkpoints are scored or `finetune publish` where
+they are trained), each a Snakemake run at nice 19 with the machine's
+cores and memory. It runs only when there is room (`MIN_FREE_GB`,
+`MIN_DISK_GB`) and never beside another tick (a lock). Snakemake reruns
+only what changed, so `land` commits only new tables.
+
+A timer runs the tick every `SCHEDULE_EVERY` minutes (default 60): a
+cron line or a systemd user timer on Linux, a launchd agent on macOS
+(`SCHEDULE_KIND`, or chosen from the platform). The units are made at
+install (`workflow/scripts/schedule.py install`), from where the
+repository is on this machine, so nothing machine-specific is committed.
+"""
+
+from __future__ import annotations
+
+import fcntl
+import os
+import plistlib
+from collections.abc import Iterator, Mapping
+from contextlib import contextmanager
+from pathlib import Path
+
+PROFILE = {
+    "simulate": "cpu",
+    "release": "cpu",
+    "score": "cpu",
+    "land": "cpu",
+    "finetune": "gpu",
+    "publish": "gpu",
+    "dashboard": "cpu",
+}
+"""The targets a tick may run, each with its Snakemake profile."""
+
+EXTRA = {"score": ["--forcerun", "release_list"]}
+"""Options of a target: `score` lists the releases afresh each tick."""
+
+MARK = "# bdbvhubrenewal workflow tick"
+"""Ends this repository's cron line, so it can be replaced or removed."""
+
+LABEL = "org.bdbvhubrenewal.workflow-tick"
+"""The systemd unit and launchd agent name."""
+
+TICK = "workflow/scripts/tick.py"
+
+
+def plan(cfg: Mapping[str, str]) -> list[tuple[str, list[str]]]:
+    """Return each target of a tick with its command, in order.
+
+    Raises
+    ------
+    ValueError
+        If a target is not one a tick may run.
+    """
+    targets = cfg.get("SCHEDULE_TARGETS", "").split()
+    bad = [t for t in targets if t not in PROFILE]
+    if bad:
+        raise ValueError(f"targets {bad} are not among {sorted(PROFILE)}")
+    out = []
+    for t in targets:
+        cmd = [
+            "nice",
+            "-n",
+            "19",
+            "uv",
+            "run",
+            "--group",
+            "paper",
+            "snakemake",
+            t,
+            "--workflow-profile",
+            f"workflow/profiles/{PROFILE[t]}",
+            "--cores",
+            cfg.get("CORES") or "1",
+            "--resources",
+            f"mem_mb={cfg.get('MEM_MB') or 32768}",
+            "gpu=1",
+            f"sim_slots={cfg.get('SIM_SLOTS') or 2}",
+            *EXTRA.get(t, []),
+        ]
+        out.append((t, cmd))
+    return out
+
+
+def _free_gb(meminfo: Path) -> int | None:
+    try:
+        for line in meminfo.read_text().splitlines():
+            if line.startswith("MemAvailable:"):
+                return int(line.split()[1]) // 1048576
+    except OSError:
+        return None
+    return None
+
+
+def room(
+    cfg: Mapping[str, str],
+    where: Path | str,
+    meminfo: Path | str = "/proc/meminfo",
+) -> tuple[bool, str]:
+    """Return whether there is memory and disk for a tick, and why not.
+
+    Memory is checked where `/proc/meminfo` exists (Linux); disk at
+    `where`.
+    """
+    need_mem = int(cfg.get("MIN_FREE_GB") or 0)
+    need_disk = int(cfg.get("MIN_DISK_GB") or 0)
+    free = _free_gb(Path(meminfo))
+    if free is not None and free < need_mem:
+        return False, f"{free} GB memory available, {need_mem} GB needed"
+    st = os.statvfs(where)
+    disk = st.f_bavail * st.f_frsize // 2**30
+    if disk < need_disk:
+        return False, f"{disk} GB disk free, {need_disk} GB needed"
+    return True, ""
+
+
+@contextmanager
+def locked(path: Path | str) -> Iterator[bool]:
+    """Hold a lock on `path` if no other tick does; yield whether it is held."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a") as f:
+        try:
+            fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            yield False
+            return
+        try:
+            yield True
+        finally:
+            fcntl.flock(f, fcntl.LOCK_UN)
+
+
+def cron_spec(every: int) -> str:
+    """Return a cron schedule for every `every` minutes, off the hour."""
+    if every < 60 and 60 % every == 0:
+        return f"*/{every} * * * *"
+    if every % 60 == 0:
+        hours = every // 60
+        return "7 * * * *" if hours == 1 else f"7 */{hours} * * *"
+    return f"*/{every} * * * *"
+
+
+def _command(root: Path, path: str) -> str:
+    log = root / "output" / "workflow-tick.log"
+    env = f"PATH={path} " if path else ""
+    return f"cd {root} && {env}python3 {TICK} >> {log} 2>&1"
+
+
+def cron_line(root: Path | str, every: int, path: str = "") -> str:
+    """Return this repository's cron line; `path` is the PATH to run with."""
+    return f"{cron_spec(every)} {_command(Path(root), path)} {MARK}"
+
+
+def merge_crontab(old: str, line: str | None) -> str:
+    """Return a crontab with this repository's line replaced (or removed)."""
+    kept = [x for x in old.splitlines() if not x.rstrip().endswith(MARK)]
+    if line:
+        kept.append(line)
+    return "".join(f"{x}\n" for x in kept)
+
+
+def systemd_units(
+    root: Path | str, every: int, path: str = ""
+) -> tuple[str, str]:
+    """Return the systemd user service and timer of the tick."""
+    root = Path(root)
+    env = f"Environment=PATH={path}\n" if path else ""
+    service = (
+        "[Unit]\nDescription=BDBVHubRenewal workflow tick\n\n"
+        "[Service]\nType=oneshot\n"
+        f"WorkingDirectory={root}\n{env}"
+        f"ExecStart=/usr/bin/env python3 {TICK}\n"
+        f"StandardOutput=append:{root / 'output' / 'workflow-tick.log'}\n"
+        f"StandardError=append:{root / 'output' / 'workflow-tick.log'}\n"
+    )
+    timer = (
+        "[Unit]\nDescription=Run the BDBVHubRenewal workflow tick\n\n"
+        f"[Timer]\nOnBootSec=5min\nOnUnitActiveSec={every}min\n"
+        "Persistent=true\n\n[Install]\nWantedBy=timers.target\n"
+    )
+    return service, timer
+
+
+def launchd_plist(root: Path | str, every: int, path: str = "") -> bytes:
+    """Return the launchd agent of the tick; `path` is the PATH to run with."""
+    root = Path(root)
+    log = str(root / "output" / "workflow-tick.log")
+    extra = {"EnvironmentVariables": {"PATH": path}} if path else {}
+    return plistlib.dumps(
+        {
+            **extra,
+            "Label": LABEL,
+            "ProgramArguments": ["/usr/bin/env", "python3", TICK],
+            "WorkingDirectory": str(root),
+            "StartInterval": every * 60,
+            "StandardOutPath": log,
+            "StandardErrorPath": log,
+            "RunAtLoad": False,
+        }
+    )
+
+
+def timer_kind(
+    cfg: Mapping[str, str], platform: str, has_systemd: bool = False
+) -> str:
+    """Return the timer to use: `SCHEDULE_KIND`, else by platform."""
+    if cfg.get("SCHEDULE_KIND"):
+        return cfg["SCHEDULE_KIND"]
+    if platform == "darwin":
+        return "launchd"
+    return "systemd" if has_systemd else "cron"

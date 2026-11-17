@@ -25,7 +25,7 @@ import yaml
 sys.path.insert(0, str(Path(__file__).parents[1]))
 
 from flowlib import localconfig
-from flowlib.dashboard import context, germany, page
+from flowlib.dashboard import context, nowcasts, page
 
 CONFIG = Path(__file__).parents[1] / "config.yaml"
 LOCK = threading.Lock()
@@ -70,9 +70,13 @@ def handler(ctx: page.Context) -> type[BaseHTTPRequestHandler]:
                 self._send(500, b"error: see the server's log", "text/plain")
 
         def _data(self, name: str) -> None:
-            loc = name.removesuffix(".json").split("/", 1)[-1]
+            # /data/<dataset>/<location>.json
+            key, _, loc = name.removesuffix(".json").partition("/")
+            if key not in {d["key"] for d in ctx.datasets} or not loc:
+                self._send(404, b"{}", "application/json")
+                return
             with LOCK:
-                found = germany.location(ctx.germany(), loc)
+                found = nowcasts.location(ctx.nowcasts(key), loc)
             if not found:
                 self._send(404, b"{}", "application/json")
                 return
@@ -85,13 +89,17 @@ def handler(ctx: page.Context) -> type[BaseHTTPRequestHandler]:
 
 
 def keep_mirrored(ctx: page.Context, every: float) -> None:
-    """Refresh the score mirror every `every` seconds, outside requests."""
+    """Refresh copies and summaries every `every` seconds, outside requests."""
 
     def loop() -> None:
         while True:
             status = ctx.source.refresh()
+            ctx.summarise()
             with LOCK:
                 ctx.mirror_status = status
+                # Warm each dataset's nowcasts, so pages do not build them.
+                for ds in ctx.datasets:
+                    ctx.nowcasts(ds["key"])
             time.sleep(every)
 
     threading.Thread(target=loop, daemon=True).start()
@@ -106,6 +114,7 @@ def write_once(ctx: page.Context, out: Path) -> int:
     """
     ctx.mirror_status = ctx.source.refresh()
     print(ctx.mirror_status)
+    ctx.summarise()
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(page.build(ctx))
     print("wrote", out)
@@ -121,8 +130,9 @@ def main() -> None:
     )
     if a.once:
         sys.exit(write_once(ctx, a.once))
-    if ctx.source.command():
-        keep_mirrored(ctx, float(config["dashboard"].get("mirror_every", 300)))
+    # Copies and summaries are kept fresh in the background, from the start
+    # and also on a machine whose sources are all local, so no page waits.
+    keep_mirrored(ctx, float(config["dashboard"].get("mirror_every", 300)))
     server = ThreadingHTTPServer(("127.0.0.1", a.port), handler(ctx))
     print(f"http://127.0.0.1:{a.port}/")
     server.serve_forever()
