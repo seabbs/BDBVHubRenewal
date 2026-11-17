@@ -778,16 +778,23 @@ def test_bdbv_origins_stop_before_the_first_scored_round(cs) -> None:
 
 
 def test_only_the_final_checkpoint_of_the_live_run_is_marked_chosen(cs) -> None:
-    # Sam: the reported model is n8000, chosen by the learning-rate decay to
-    # zero, never on German or BDBV scores.
-    assert cs.FINAL_OUTBREAKS == 8000
+    # Sam: the reported model is grid r5's n8400 (#311), chosen by the
+    # learning-rate decay to zero, never on German or BDBV scores.
+    assert cs.FINAL_OUTBREAKS == 8400
     rows = pd.DataFrame(
         {
-            "run": ["one-model", "one-model", "no-slots", "zero-shot"],
-            "outbreaks": [8000, 4000, 8000, 0],
+            "run": [
+                "one-model",
+                "one-model",
+                "one-model",
+                "no-slots",
+                "zero-shot",
+            ],
+            "grid": ["r5", "r5", "r4", "r5", None],
+            "outbreaks": [8400, 4000, 8400, 8400, 0],
         }
     )
-    assert cs.chosen(rows).tolist() == [True, False, False, False]
+    assert cs.chosen(rows).tolist() == [True, False, False, False, False]
 
 
 def test_the_german_daily_target_is_refused_without_its_code(
