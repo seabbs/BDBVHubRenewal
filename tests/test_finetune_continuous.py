@@ -110,3 +110,12 @@ def test_a_bias_run_refuses_the_no_bias_runs_folder(tmp_path):
     out = _source(tmp_path, "export SERIES_BIAS=1;", "bias_args")
     assert out.returncode != 0
     assert "HERE" in out.stderr
+
+
+def test_the_restart_trains_on_grid_r5_with_one_draw_of_32_blocks(tmp_path):
+    out = _source(tmp_path, "", 'echo "$DRAWS $CUTS $CHUNK"')
+    assert out.returncode == 0
+    assert out.stdout.split() == ["1", "32", "250"]
+    script = SCRIPT.read_text()
+    assert "--grid r5" in script
+    assert "--blocks-per-simulation $((CUTS * DRAWS))" in script

@@ -358,28 +358,6 @@ def test_a_mixed_blocks_periods_can_end_on_any_day() -> None:
     assert offsets == {0, 1, 2}
 
 
-def test_batched_reports_land_only_on_one_weekday() -> None:
-    from bdbvhubrenewal.forecasters.finetune import batch_reports
-
-    counts = _two_places()
-    batched = batch_reports(counts, 2)
-    report = pd.to_datetime(batched["report_date"])
-    before = pd.to_datetime(counts["report_date"])
-    assert set(report.dt.weekday) == {2}
-    assert ((report - before).dt.days.between(0, 6)).all()
-    # Every case is still reported, against its reference date.
-    totals = batched.groupby(["location", "reference_date"])["count"].sum()
-    assert totals.equals(
-        counts.groupby(["location", "reference_date"])["count"].sum()
-    )
-    # Cut-offs between batch days see no new reports.
-    cutoffs = ["2026-09-17", "2026-09-18", "2026-09-19", "2026-09-23"]
-    rows = releases(batched, "daily", cutoffs)
-    seen = rows.groupby("cutoff")["observed"].sum()
-    assert seen["2026-09-17"] == seen["2026-09-18"] == seen["2026-09-19"]
-    assert seen["2026-09-23"] > seen["2026-09-19"]
-
-
 def test_a_mixed_blocks_totals_in_the_context_are_the_releases_counts() -> None:
     # Late reports (20 days on) are past the release for recent onsets, so
     # the daily row's context is short of the truth there. The total row

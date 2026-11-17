@@ -175,3 +175,16 @@ def test_a_places_period_totals_row_is_in_its_place():
     place, parent = fs.block_rows([block])
     assert list(place) == [0, 1, 2, 0, 1, 2, 0, 0, 1, 1, 2, 2]
     assert list(parent) == [-1, 0, 0, -1, 0, 0, -1, -1, 0, 0, 0, 0]
+
+
+def test_the_bias_learning_rate_of_5e3_reaches_the_optimiser():
+    parser = fs.build_parser()
+    args = parser.parse_args(
+        ["sims", "out", "--held-out-seeds", "1", "2", "--grid", "r5"]
+    )
+    assert args.bias_lr == 5e-3
+    model = tiny_model()
+    series_bias.attach(model)
+    model = fs.lora_model(model, fs.lora_config(True), None)
+    opt = torch.optim.AdamW(fs.param_groups(model, 1e-5, args.bias_lr))
+    assert fs.group_rates(opt) == {"lora": 1e-5, "bias": 5e-3}

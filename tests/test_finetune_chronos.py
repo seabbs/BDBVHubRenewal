@@ -712,10 +712,10 @@ def test_each_draw_is_cut_at_every_snapshot_once():
 
     draws = [f"9001-0001-{d}" for d in range(1, 11)]
     picks = snapshots(draws, np.random.default_rng(0))
-    # 10 draws x 16 cut-offs: 160 blocks, one source each.
-    assert CUTS == 16
-    assert len(picks) == 160
-    assert len({(o, j) for o, _, j in picks}) == 160
+    # 10 draws x 32 cut-offs: 320 blocks, one source each.
+    assert CUTS == 32
+    assert len(picks) == 320
+    assert len({(o, j) for o, _, j in picks}) == 320
     assert {s for _, s, _ in picks} <= set(SOURCES)
 
 
@@ -890,15 +890,27 @@ def test_mixed_blocks_keep_each_target_rows_place_and_level(monkeypatch):
     assert seen
 
 
-def test_block_options_batch_a_tenth_and_vary_the_period_end():
-    from finetune_chronos import REPORT_BATCH_SHARE, block_options
+def test_block_options_vary_the_period_end_and_never_batch_reports():
+    import finetune_chronos
+    from finetune_chronos import block_options
 
     rng = np.random.default_rng(0)
     weekly = [block_options("daily+weekly", rng) for _ in range(3000)]
-    batched = [o["batch_weekday"] is not None for o in weekly]
-    assert np.mean(batched) == pytest.approx(REPORT_BATCH_SHARE, abs=0.02)
+    # Weekly batches come from the grid's weekday reporting alone.
+    assert all(set(o) == {"period_end"} for o in weekly)
+    assert not hasattr(finetune_chronos, "REPORT_BATCH_SHARE")
     assert {o["period_end"] for o in weekly} == set(range(7))
     assert {
         block_options("daily+3day", rng)["period_end"] for _ in range(300)
     } == {0, 1, 2}
     assert block_options("weekly", rng)["period_end"] is None
+
+
+def test_one_draw_of_a_simulation_gives_32_blocks_of_a_year_s_context():
+    from finetune_chronos import CONTEXT, CUTS
+    from finetune_stream import snapshots
+
+    picks = snapshots(["9001-0001-1"], np.random.default_rng(0))
+    assert CONTEXT == 364
+    assert CUTS == 32
+    assert len(picks) == 32
