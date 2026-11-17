@@ -9,6 +9,10 @@ command line. A run spec is
     name=SOURCE[,label=L][,colour=C][,live][,base=OTHER][,prefix=P]
         [,hashes=H1+H2][,n=H1:250+H2:500]
 
+A spec splits only at a comma that starts a known field, so a value may
+hold commas not followed by a field name (a regex such as `a{1,2}`).
+Config entries are read as they are, so their labels may hold anything.
+
 SOURCE is a training output folder (its `train/n<N>/settings.json` name
 the run's checkpoints) or a release prefix ending in `-`, such as
 `realdata-ft-`. `hashes` and `n` name checkpoints a run has no folder
@@ -77,53 +81,86 @@ class Reference:
 
 
 def _split(spec: str, fields: set[str]) -> tuple[str, str, dict[str, str]]:
-    head, *rest = spec.split(",")
+    """Split a spec at commas that start a known field.
+
+    So a value may hold commas (a regex such as `a{1,2}`) as long as they
+    are not followed by a field name; `,word=` with an unknown word is an
+    error.
+    """
+    known = "|".join(sorted(fields))
+    head, *rest = re.split(rf",(?=(?:{known})(?:=|,|$))", spec)
     if "=" not in head:
         raise ValueError(f"a spec is name=SOURCE[,key=value...], not {spec!r}")
-    name, source = (x.strip() for x in head.split("=", 1))
+    name, value = (x.strip() for x in head.split("=", 1))
+    stray = re.search(r",([A-Za-z_]+)=", value)
+    if stray:
+        raise ValueError(f"unknown field {stray.group(1)!r} in {spec!r}")
     opts = {}
     for item in rest:
         k, sep, v = item.partition("=")
-        k = k.strip()
-        if k not in fields:
-            raise ValueError(f"unknown field {k!r} in {spec!r}")
-        opts[k] = v.strip() if sep else "1"
-    return name, source, opts
+        opts[k.strip()] = v.strip() if sep else "1"
+    return name, value, opts
+
+
+def make_run(
+    key: str,
+    source: str,
+    *,
+    label: str | None = None,
+    colour: str = "",
+    live: bool = False,
+    base: str | None = None,
+    prefix: str | None = None,
+    hashes: Sequence[str] = (),
+    n: Mapping[str, int] | None = None,
+) -> Run:
+    """Return a run; SOURCE is a folder, or a release prefix ending in `-`."""
+    is_prefix = source.endswith("-") and "/" not in source
+    return Run(
+        key=key,
+        label=label or key,
+        colour=colour or "",
+        folder=None if is_prefix else Path(source).expanduser(),
+        prefix=source if is_prefix else prefix,
+        hashes=tuple(hashes),
+        n=dict(n or {}),
+        base=base,
+        live=bool(live),
+    )
 
 
 def parse_run(spec: str) -> Run:
     """Return the run of a `name=SOURCE[,...]` spec."""
     name, source, o = _split(spec, RUN_FIELDS)
-    is_prefix = source.endswith("-") and "/" not in source
     sizes = {}
     for pair in filter(None, o.get("n", "").split("+")):
         h, _, size = pair.partition(":")
         sizes[h] = int(size)
-    return Run(
-        key=name,
-        label=o.get("label", name),
+    return make_run(
+        name,
+        source,
+        label=o.get("label"),
         colour=o.get("colour", ""),
-        folder=None if is_prefix else Path(source).expanduser(),
-        prefix=source if is_prefix else o.get("prefix"),
+        live="live" in o,
+        base=o.get("base"),
+        prefix=o.get("prefix"),
         hashes=tuple(filter(None, o.get("hashes", "").split("+"))),
         n=sizes,
-        base=o.get("base"),
-        live="live" in o,
     )
 
 
 def _from_config(entry: Mapping) -> Run:
-    parts = [f"{entry['key']}={entry['source']}"]
-    for k in ("label", "colour", "base", "prefix"):
-        if entry.get(k):
-            parts.append(f"{k}={entry[k]}")
-    if entry.get("hashes"):
-        parts.append("hashes=" + "+".join(entry["hashes"]))
-    if entry.get("n"):
-        parts.append("n=" + "+".join(f"{h}:{v}" for h, v in entry["n"].items()))
-    if entry.get("live"):
-        parts.append("live")
-    return parse_run(",".join(parts))
+    return make_run(
+        entry["key"],
+        entry["source"],
+        label=entry.get("label"),
+        colour=entry.get("colour", ""),
+        live=bool(entry.get("live")),
+        base=entry.get("base"),
+        prefix=entry.get("prefix"),
+        hashes=tuple(entry.get("hashes") or ()),
+        n={h: int(v) for h, v in (entry.get("n") or {}).items()},
+    )
 
 
 def load_runs(
@@ -159,16 +196,36 @@ def _role(role: str) -> str:
     return role
 
 
+def make_reference(
+    key: str,
+    model: str,
+    *,
+    label: str | None = None,
+    colour: str | None = None,
+    checkpoint: str | None = None,
+    role: str | None = None,
+) -> Reference:
+    """Return a reference matched on rows by `model` and `checkpoint`."""
+    return Reference(
+        key=key,
+        label=label or key,
+        colour=colour or "#6b7280",
+        model=model,
+        checkpoint=checkpoint,
+        role=_role(role or "other"),
+    )
+
+
 def parse_reference(spec: str) -> Reference:
     """Return the reference of a `name=MODEL_REGEX[,...]` spec."""
     name, model, o = _split(spec, REF_FIELDS)
-    return Reference(
-        key=name,
-        label=o.get("label", name),
-        colour=o.get("colour", "#6b7280"),
-        model=model,
+    return make_reference(
+        name,
+        model,
+        label=o.get("label"),
+        colour=o.get("colour"),
         checkpoint=o.get("checkpoint"),
-        role=_role(o.get("role", "other")),
+        role=o.get("role"),
     )
 
 
@@ -178,13 +235,13 @@ def load_references(
     """Return the references of config then `--ref`, later ones replacing."""
     out: dict[str, Reference] = {}
     for e in config:
-        out[e["key"]] = Reference(
-            key=e["key"],
-            label=e.get("label", e["key"]),
-            colour=e.get("colour", "#6b7280"),
-            model=e["model"],
+        out[e["key"]] = make_reference(
+            e["key"],
+            e["model"],
+            label=e.get("label"),
+            colour=e.get("colour"),
             checkpoint=e.get("checkpoint"),
-            role=_role(e.get("role", "other")),
+            role=e.get("role"),
         )
     for s in cli:
         r = parse_reference(s)

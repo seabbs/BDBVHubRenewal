@@ -90,3 +90,61 @@ def test_same_values_as_the_shell_loader(tmp_path):
     ).stdout.split("\n")
     cfg = localconfig.read(None, env)
     assert [cfg[k] for k in keys] == out[: len(keys)]
+
+
+def test_paper_logs_default_under_home(tmp_path):
+    cfg = localconfig.read(tmp_path / "none.env", {"HOME": str(tmp_path)})
+    assert cfg["PAPER_LOGS"] == f"{tmp_path}/paper-jobs"
+
+
+def test_expand_fills_settings_into_a_path(tmp_path):
+    path = tmp_path / "local.env"
+    path.write_text("ROOT=/data/rounds\n")
+    cfg = localconfig.read(path, {"HOME": str(tmp_path)})
+    out = localconfig.expand("$ROOT/rounds/r1/sims", cfg)
+    assert out == "/data/rounds/rounds/r1/sims"
+    assert localconfig.expand("../output/x", cfg) == "../output/x"
+
+
+def test_the_command_line_prints_one_setting(tmp_path):
+    path = tmp_path / "local.env"
+    path.write_text("MAILBOX=/data/box.md\n")
+    env = {
+        "PATH": os.environ["PATH"],
+        "HOME": str(tmp_path),
+        "LOCAL_CONFIG": str(path),
+    }
+    script = ROOT / "workflow" / "flowlib" / "localconfig.py"
+    out = subprocess.run(
+        ["python3", str(script), "MAILBOX"],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert out.stdout == "/data/box.md\n"
+
+
+@pytest.mark.parametrize(
+    "rel",
+    [
+        "paper/scripts/gather_heldout.sh",
+        "paper/scripts/paper_local.sh",
+        "paper/scripts/run_target.sh",
+        "paper/workflow/config.yaml",
+        "paper/Taskfile.yml",
+        "scripts/paper.sh",
+        "scripts/ladder.py",
+    ],
+)
+def test_paper_scripts_name_no_host_or_home_folder(rel):
+    text = (ROOT / rel).read_text()
+    for word in ("archie", "paper-jobs", "~/", "$HOME/", "/home/"):
+        assert word not in text, f"{rel} names {word}"
+
+
+def test_paper_cores_come_from_the_local_config():
+    taskfile = (ROOT / "paper" / "Taskfile.yml").read_text()
+    assert 'dotenv: ["../config/local.env"]' in taskfile
+    script = (ROOT / "scripts" / "paper.sh").read_text()
+    assert "localconfig.py CORES" in script

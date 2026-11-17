@@ -94,7 +94,7 @@ from bdbvhubrenewal.forecasters.base import (
     list_models,
 )
 from bdbvhubrenewal.forecasters.renewal import DELAY_SUMMARY_FILE
-from bdbvhubrenewal.forecasters.zones import zones_for_model
+from bdbvhubrenewal.forecasters.zones import walks_own_zones, zones_for_model
 from bdbvhubrenewal.submission.fitting import (
     Forecast,
     get_config,
@@ -211,12 +211,7 @@ def build_parser() -> argparse.ArgumentParser:
     back.add_argument("--data", default=data_dir)
     back.add_argument("--models", nargs="*", default=None)
     back.add_argument("--results", default="results")
-    back.add_argument(
-        "--store",
-        default="output/fit-store",
-        help="The fit store checkout (`fit-store load` read it). The "
-        "fitted models' samples are taken from its fits, every week.",
-    )
+    _add_store_arg(back)
     back.add_argument(
         "--output",
         default="results",
@@ -464,12 +459,7 @@ def build_parser() -> argparse.ArgumentParser:
     sc.add_argument("--config", default="config/backtest.toml")
     sc.add_argument("--data", default=data_dir)
     sc.add_argument("--results", default="results")
-    sc.add_argument(
-        "--store",
-        default="output/fit-store",
-        help="The fit store checkout (`fit-store load` read it). The "
-        "fitted models' samples are taken from its fits, every week.",
-    )
+    _add_store_arg(sc)
     sc.add_argument("--output", default="results")
     sc.add_argument(
         "parts",
@@ -648,11 +638,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Uncommitted hub files, for other licences.",
     )
     cmp.add_argument("--out", default="results/hub-comparison")
+    _add_store_arg(cmp)
     cmp.add_argument(
-        "--store",
-        default="output/fit-store",
-        help="The fit store checkout (`fit-store load` read it). The "
-        "fitted models' samples are taken from its fits, every week.",
+        "--results",
+        default="results",
+        help="Where `fit-store load` wrote its status file.",
     )
     cmp.add_argument(
         "--models",
@@ -795,6 +785,16 @@ def _fit(args: argparse.Namespace) -> int:
         f"(sampler {diag.get('sampler')}); wrote {result.fit_dir}."
     )
     return 0
+
+
+def _add_store_arg(parser: argparse.ArgumentParser) -> None:
+    """Add `--store`, the fit store the fitted models' samples come from."""
+    parser.add_argument(
+        "--store",
+        default="output/fit-store",
+        help="The fit store checkout that `fit-store load` read. The "
+        "fitted models' samples come from its fits, every week.",
+    )
 
 
 def _models(names: Sequence[str] | None) -> list[str]:
@@ -1206,16 +1206,13 @@ def _write_release(out: ReleaseBacktest, results: Path, delay: int) -> None:
 
 
 def _fit_store_forecasts(args: argparse.Namespace) -> pd.DataFrame:
-    """Return the real forecasts of every fit `fit-store load` used.
+    """Return the real forecasts of every whole fit in the results' status.
 
-    `fit-store load` cuts the forecasts it writes to the backtest's weeks,
-    but a stored fit forecasts its whole origin task, as the release
-    backtest runs the baselines. These are the whole fits, read from the
-    store (`--store`) by the keys in the results' `STATUS_FILE`. Empty if
-    either is missing.
+    The fits are read from `--store` by the keys `fit-store load` wrote
+    to `STATUS_FILE`. Empty if either is missing.
     """
-    status = Path(getattr(args, "results", "results")) / store.STATUS_FILE
-    root = Path(getattr(args, "store", "output/fit-store"))
+    status = Path(args.results) / store.STATUS_FILE
+    root = Path(args.store)
     if not status.exists() or not root.is_dir():
         return pd.DataFrame()
     frames = []
@@ -1246,6 +1243,33 @@ def _with_whole_fits(
     ]
     cols = [c for c in rows.columns if c in whole.columns]
     return pd.concat([whole[cols], rows.loc[keep, cols]], ignore_index=True)
+
+
+def _comparison_stored(
+    stored: pd.DataFrame,
+    whole: pd.DataFrame,
+    rounds: Sequence[str],
+    live: Sequence[str],
+) -> pd.DataFrame:
+    """Put the whole fits of the hub rounds in place of the stored rows.
+
+    Only rounds in `rounds` and models not in `live` are taken, in the
+    comparison's sample columns, with `kind` as `source`.
+    """
+    from bdbvhubrenewal.evaluation import hubcompare as hc
+
+    if whole.empty:
+        return stored
+    # A date read back as a timestamp prints with its time, so keep the day.
+    day = whole["reference_date"].astype(str).str.slice(0, 10)
+    whole = whole.assign(reference_date=day)
+    whole = whole.loc[
+        whole["reference_date"].isin(list(rounds))
+        & ~whole["model"].isin(list(live))
+    ].rename(columns={"kind": "source"})
+    return _with_whole_fits(
+        stored, whole[list(hc.SAMPLE_COLUMNS)], "reference_date"
+    )
 
 
 def _stored(
@@ -1493,6 +1517,7 @@ def _hub_forecast(
         unassigned=result.unassigned,
         zones=zones,
         forecast_date=forecast_date,
+        zones_sum=not walks_own_zones(name),
     )
     return _HubForecast(table, result, zones, zone_note, checkpoint, copula)
 
@@ -1914,17 +1939,9 @@ def _compare_hub(args: argparse.Namespace) -> int:
         rounds,
         exclude=live,
     )
-    # The fitted models' whole fits, as for the release backtest, so the
-    # hub teams' weeks the backtest's weeks leave out are covered too.
-    whole = _fit_store_forecasts(args)
-    if not whole.empty:
-        whole = whole.assign(reference_date=whole["reference_date"].astype(str))
-        whole = whole.loc[
-            whole["reference_date"].isin(rounds) & ~whole["model"].isin(live)
-        ].rename(columns={"kind": "source"})
-        stored = _with_whole_fits(
-            stored, whole[list(hc.SAMPLE_COLUMNS)], "reference_date"
-        )
+    stored = _comparison_stored(
+        stored, _fit_store_forecasts(args), rounds, live
+    )
     hub_ids = hc.own_hub_ids()
     forecasts = hc.with_submissions(
         pd.concat(

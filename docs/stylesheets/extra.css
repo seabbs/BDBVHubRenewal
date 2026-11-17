@@ -391,3 +391,9 @@ svg.zoomable {
   align-items: center;
   gap: 0.2rem;
 }
+
+/* A model lacking some of the baseline's forecasts (scoresummary.js). */
+.explorer-table tr.partial td {
+  font-style: italic;
+  opacity: 0.75;
+}

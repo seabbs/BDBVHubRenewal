@@ -53,7 +53,6 @@ def test_both_baselines_are_scored_at_zone_level(
     scores: pd.DataFrame, vintages: list[str]
 ) -> None:
     names = {"randomwalk", "randomwalknowcast"}
-    # Each model is scored as it runs, with no reconciliation.
     assert set(scores["model"]) == names
     assert (scores["location"].str.count("-") == 2).all()
     # Each origin is scored on what every later release reported, and on

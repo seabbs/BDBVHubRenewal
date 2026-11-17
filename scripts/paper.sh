@@ -6,7 +6,7 @@
 # The one command for the paper, run by `task paper` and by the paper
 # step of .github/workflows/pages.yml, so a local run and CI do the same.
 # `development` (the default) never reads the held-out data; `paper`
-# needs it (paper/README.md). CORES sets Snakemake's cores (default 4).
+# needs it (paper/README.md). CORES (environment or config/local.env) sets Snakemake's cores (default 4).
 #
 # The Ebola study reads our stored fits from the fit store's history, so
 # the fit-store branch is fetched first. Snakemake then runs the target's
@@ -37,9 +37,10 @@ fi
 git fetch -q --no-tags origin \
   +refs/heads/fit-store:refs/remotes/origin/fit-store
 
+cores=${CORES:-$(python3 workflow/flowlib/localconfig.py CORES)}
 cd paper
 uv run --group paper --group chronos snakemake -s workflow/Snakefile render \
-  --config render="$target" --cores "${CORES:-4}" --resources heavy=1 \
+  --config render="$target" --cores "${cores:-4}" --resources heavy=1 \
   --rerun-triggers mtime
 
 mkdir -p ../docs/paper/figures ../docs/paper/build

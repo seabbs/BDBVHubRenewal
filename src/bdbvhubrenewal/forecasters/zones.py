@@ -1,9 +1,8 @@
 # Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
-r"""Health-zone forecasts: the random walks' own, others split from provinces.
+r"""Health-zone forecasts.
 
-For models other than the random walks, each province sample is split
-across the province's zones, so the zone samples sum to it, sample by
-sample and week by week.
+`ZoneAllocator` splits each province sample across the province's zones,
+so the zone samples sum to it, sample by sample and week by week.
 The national total stays the sum of the provinces.
 
 For a province $p$ with zones $z$, let $o_z(w)$ be zone $z$'s published
@@ -49,8 +48,8 @@ Their zone samples are the zone model's own draws, and need not sum to
 the province samples (`zone_forecast`).
 
 A model that forecasts the zones itself, as Chronos-2 does, has its zone
-samples made to sum to its province samples (`reconcile_zones`).
-Each zone keeps what it has published, and the rest of province sample
+samples made to sum to its province samples (`reconcile_zones`): each
+zone keeps what it has published, and the rest of province sample
 $Y^{(k)}(w)$ is apportioned over the zones in proportion to the zone
 model's own sample $x^{(k)}_z(w)$ above that, by largest remainders, so
 the values are whole numbers that sum exactly to $Y^{(k)}(w)$:
@@ -91,6 +90,8 @@ __all__ = [
     "ZoneAllocator",
     "check_zone_coherence",
     "reconcile_zones",
+    "walks_own_zones",
+    "zone_draws",
     "zone_forecast",
     "zone_task",
     "zones_for_model",
@@ -410,6 +411,25 @@ def reconcile_zones(
     return pd.concat(frames, ignore_index=True)[list(SAMPLE_COLUMNS)]
 
 
+def zone_draws(samples: pd.DataFrame) -> pd.DataFrame:
+    """Return a zone task's final-count zone rows, `SAMPLE_COLUMNS` only."""
+    final = _final(samples)
+    final = final.loc[final["location"] != NATIONAL]
+    return final[list(SAMPLE_COLUMNS)].reset_index(drop=True)
+
+
+def walks_own_zones(name: str | None) -> bool:
+    """Return whether model `name` forecasts each zone from its own data.
+
+    Only the random walks without a fit do (`zone_forecast`); their zones
+    need not sum to their provinces.
+    """
+    specs = {s.name: s for s in list_models()}
+    if name not in specs or specs[name].fitted:
+        return False
+    return isinstance(get_model(name), RandomWalk)
+
+
 def zone_forecast(
     model: ForecastModel,
     task: ForecastTask,
@@ -452,9 +472,7 @@ def zone_forecast(
         daily_zones if history is None else pd.concat([history, daily_zones])
     )
     zt = zone_task(task, counts, zones, daily)
-    raw = _final(model.forecast(zt))
-    raw = raw.loc[raw["location"] != NATIONAL]
-    return raw[list(SAMPLE_COLUMNS)].reset_index(drop=True)
+    return zone_draws(model.forecast(zt))
 
 
 def check_zone_coherence(
@@ -599,8 +617,7 @@ def zones_for_model(
     own = samples["location"].map(is_zone)
     if own.any():
         return samples.loc[own, list(SAMPLE_COLUMNS)].reset_index(drop=True)
-    fitted = {s.name for s in list_models() if s.fitted}
-    model = None if name is None else get_model(name)
-    if isinstance(model, RandomWalk) and name not in fitted:
+    if walks_own_zones(name):
+        model = get_model(str(name))
         return zone_forecast(model, task, counts, zones, daily_zones)
     return ZoneAllocator().allocate(samples, task, counts, zones)

@@ -4,13 +4,14 @@
 # with the stored fits (results/forecasts.csv.gz), and the German
 # benchmark's development half (results/germany) and held-out half
 # (results/germany/held-out). Waits for the run's forecast and held-out
-# jobs; reports to the archie mailbox.
+# jobs; reports to the mailbox (MAILBOX in config/local.env).
 #
 # Usage (from anywhere): paper/scripts/gather_heldout.sh RUN_ID
 set -uo pipefail
 run=$1
 root=$(cd "$(dirname "$0")/../.." && pwd)
-mb=${MAILBOX:-$HOME/bdbv-archie-mailbox.md}
+setting() { python3 "$root/workflow/flowlib/localconfig.py" "$1"; }
+mb=$(setting MAILBOX)
 say() { echo "$(date '+%F %H:%M') paper: CI gather (run $run): $*" >> "$mb"; }
 repo=seabbs/BDBVHubRenewal
 bdbv="$root/.venv/bin/bdbvhubrenewal"
@@ -52,5 +53,5 @@ if "$bdbv" score \
    "$bdbv" germany-paper --results results/germany/held-out; then
   say "done: results/forecasts.csv.gz, results/germany and results/germany/held-out in $root"
 else
-  say "FAILED: gathering (log ~/paper-jobs/gather-heldout.log)"; exit 1
+  say "FAILED: gathering (log $(setting PAPER_LOGS)/gather-heldout.log)"; exit 1
 fi

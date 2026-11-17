@@ -218,8 +218,7 @@ def _level(origin: Origin) -> np.ndarray:
     """Return each place's mean reported count before its walk, `[L]`.
 
     The mean is over the `start_window` weeks up to the place's latest
-    complete week (`Origin.start`). A quiet place with recent cases walks
-    from it (#187).
+    complete week (`Origin.start`).
     """
     weeks = np.arange(origin.reported.shape[1])
     last = np.asarray(origin.start)[:, None]
@@ -547,8 +546,8 @@ class RandomWalkNowcast(RandomWalk):
         w0 = _start_weeks(origin)
         quiet = _quiet(origin)
         rows = np.arange(n_loc)
-        # A quiet place with recent cases walks from its own level, and
-        # only a silent one draws introductions.
+        # Only silent places draw introductions: one with recent cases has
+        # a level to walk from.
         x0 = nowcast[:, rows, w0].T
         low = quiet & ~origin.silent
         x0[low] = _level(origin)[low, None]
