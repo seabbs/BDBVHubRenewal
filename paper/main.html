@@ -224,15 +224,14 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
 <li>A third each of the training blocks with places have a country equal to, above or later than the sum of its places.</li>
 <li>We fine-tune base Chronos-2 on synthetic data on a laptop, with its default LoRA recipe.</li>
 <li>LoRA trains a small update to about 1% of the model’s weights rather than retraining them all, so fine-tuning starts from the original model (SI).</li>
-<li>The learning rate falls linearly to zero at 8,000 simulations.</li>
-<li>Each simulation gives 32 training blocks.</li>
+<li>The learning rate falls linearly to zero over the 8,400 simulations.</li>
+<li>Each simulation gives up to 32 training blocks.</li>
 <li>A block is daily, 3-day or weekly, or daily with one weekly or 3-day total row per place.</li>
 <li>Four in five blocks are multivariate and one in five univariate.</li>
-<li>We save checkpoints at 250, 500, 750, 1,000, 2,000, 4,000 and 8,000 simulations.</li>
-<li>We report the final checkpoint, at 8,000 simulations, where the learning rate reaches zero, and select no checkpoint on real data.</li>
-<li>Training draws simulations from a balanced, shuffled design, so every checkpoint has seen the whole grid.</li>
+<li>We save checkpoints at 250, 500, 750, 1,000, 2,000, 4,000 and 8,400 simulations.</li>
+<li>We report the final checkpoint, at 8,400 simulations, where the learning rate reaches zero, and select no checkpoint on real data.</li>
+<li>The simulations come in balanced blocks of 840, so the final model has seen ten whole blocks and the checkpoints before 840 only part of the grid.</li>
 <li>Chronos-2 forecasts the country, provinces and health zones as separate series in one joint block.</li>
-<li>The copula only pairs draws, for joint scores and sums, and leaves marginals unchanged.</li>
 <li>We compare the joint block with forecasting each level alone and with summing the lowest level (SI).</li>
 <li>We compare lags capped at 4 weeks or 28 days with lags run to the truth delay (SI).</li>
 <li>We compare the model with attention biases with one fine-tuned without them (SI).</li>
@@ -280,8 +279,11 @@ Figure&nbsp;1: The fine-tuning pipeline. (A) The assumptions in the epinowcast s
 </section>
 <section id="correlated-trajectories" class="level3">
 <h3 class="anchored" data-anchor-id="correlated-trajectories">Correlated trajectories</h3>
-<p>Chronos-2 draws each place and week on its own. <code>randomwalknowcast</code> draws each nowcast week on its own, and its forecast weeks follow its walk within each sample. Paired at random, independent draws give sums over weeks or places that are too narrow. We pair them into trajectories with a Gaussian copula over weeks and places. Each trajectory draws a vector <span class="math inline">\(z\)</span> from a multivariate normal with correlation matrix <span class="math inline">\(\Sigma\)</span>. Each place-week’s draws are then reordered across trajectories so that they rank as <span class="math inline">\(z\)</span> does. This is an empirical copula reordering in the style of the Schaake shuffle <span class="citation" data-cites="Clark2004">(<a href="#ref-Clark2004" role="doc-biblioref">Clark et al. 2004</a>)</span> and ensemble copula coupling <span class="citation" data-cites="Schefzik2013">(<a href="#ref-Schefzik2013" role="doc-biblioref">Schefzik, Thorarinsdottir, and Gneiting 2013</a>)</span>. Each place-week keeps its own draws, so every marginal forecast and every per-week score is unchanged. For <code>randomwalknowcast</code> the reordering replaces the walk’s own dependence over weeks. <span class="math inline">\(\Sigma\)</span> is a place correlation times a week correlation. Two steps <span class="math inline">\(\delta\)</span> days apart have correlation <span class="math inline">\(\rho_t^{\delta/7}\)</span>. Two provinces have correlation <span class="math inline">\(\rho_p\)</span>, and the country and a province have correlation <span class="math inline">\(\rho_n\)</span>. The daily models also pair the days of a week, with correlation <span class="math inline">\(\rho_d^{|d - d'|}\)</span> between days <span class="math inline">\(d\)</span> and <span class="math inline">\(d'\)</span>. <span class="math inline">\(\rho_d = 0.985\)</span> is fixed rather than estimated, as each matured error is of a week’s sum. It gives the best weekly WIS, median bias and coverage of the daily models on the Ebola release backtest. Where the country is the sum of its provinces, as for <code>randomwalknowcast</code>, it is summed again from the paired provinces. Copulas have been used before to give joint forecasts of seasonal influenza <span class="citation" data-cites="Ray2018 Brooks2018">(<a href="#ref-Ray2018" role="doc-biblioref">Ray and Reich 2018</a>; <a href="#ref-Brooks2018" role="doc-biblioref">Brooks et al. 2018</a>)</span>.</p>
-<p>At each forecast origin we estimate the three correlations from the model’s own matured errors. For each forecast made at an earlier origin whose truth had been released by this origin, we take the randomised probability integral transform (PIT) of the truth in the forecast’s draws and map it to a normal score. We use the scores of the 8 latest matured weeks. Each correlation is the Pearson correlation of pairs of scores from the same forecast. We shrink it towards a fixed prior, <span class="math inline">\((\rho_t, \rho_p, \rho_n) = (0.9, 0.7, 0.7)\)</span>, with the prior worth 100 pairs, and keep it between 0 and 0.95. An origin with no matured errors takes the prior. We score the paired trajectories with the variogram score of order 0.5 <span class="citation" data-cites="Scheuerer2015">(<a href="#ref-Scheuerer2015" role="doc-biblioref">Scheuerer and Hamill 2015</a>)</span> on <span class="math inline">\(\log(x + 1)\)</span> counts and the coverage of sums over weeks and over places. We also report the energy score <span class="citation" data-cites="Gneiting2008">(<a href="#ref-Gneiting2008" role="doc-biblioref">Gneiting et al. 2008</a>)</span>, which has been used for epidemic trajectories from forecast hubs <span class="citation" data-cites="Bay2026">(<a href="#ref-Bay2026" role="doc-biblioref">Bay et al. 2026</a>)</span> but discriminates poorly between dependence structures <span class="citation" data-cites="Pinson2013">(<a href="#ref-Pinson2013" role="doc-biblioref">Pinson and Tastu 2013</a>)</span>. Both scores are proper for joint forecasts <span class="citation" data-cites="gneitingStrictlyProperScoring2007">(<a href="#ref-gneitingStrictlyProperScoring2007" role="doc-biblioref">Gneiting and Raftery 2007</a>)</span>. The SI gives the copula in full, its estimator and window, and the scores of paired against unpaired trajectories.</p>
+<ul>
+<li>We pair the province draws of <code>randomwalk</code> and <code>randomwalknowcast</code> within each week with a rolling Gaussian copula, so their national forecast, the per-sample sum of the provinces, is not too narrow, while each cell keeps its own draws (SI).</li>
+<li>The hub does not require coherence across levels, so this is our choice for the walks. Chronos-2 submits its joint block’s own national forecast.</li>
+</ul>
+<p>We score the national sum and the provinces by the CRPS and 90% coverage. We also report the energy score <span class="citation" data-cites="Gneiting2008">(<a href="#ref-Gneiting2008" role="doc-biblioref">Gneiting et al. 2008</a>)</span>, which is proper for joint forecasts <span class="citation" data-cites="gneitingStrictlyProperScoring2007">(<a href="#ref-gneitingStrictlyProperScoring2007" role="doc-biblioref">Gneiting and Raftery 2007</a>)</span> and has been used for epidemic trajectories from forecast hubs <span class="citation" data-cites="Bay2026">(<a href="#ref-Bay2026" role="doc-biblioref">Bay et al. 2026</a>)</span>, but discriminates poorly between dependence structures <span class="citation" data-cites="Pinson2013">(<a href="#ref-Pinson2013" role="doc-biblioref">Pinson and Tastu 2013</a>)</span>.</p>
 </section>
 <section id="evaluation-on-held-out-synthetic-data" class="level3">
 <h3 class="anchored" data-anchor-id="evaluation-on-held-out-synthetic-data">Evaluation on held-out synthetic data</h3>
@@ -1111,7 +1113,7 @@ Table&nbsp;4: German nowcast hub: mean scores, coverage and number of forecasts 
 <li>We show national nowcasts against the other submissions.</li>
 <li>We summarise the scores.</li>
 <li>The SI compares the joint block with each level alone and with the lowest level summed (Joint block or aggregation).</li>
-<li>The SI compares paired with unpaired trajectories (Impact of correlated trajectories).</li>
+<li>The SI compares the walks with the rolling copula and with no pairing (Impact of correlated trajectories).</li>
 </ul>
 </div>
 </div>
@@ -1135,7 +1137,7 @@ Figure&nbsp;7: Ebola: sample forecasts of the hub’s rounds from 21 November 20
 </figcaption>
 </figure>
 </div>
-<p> On the release backtest before the scored rounds, the best model was renewalsp, with a relative score of 0.82 and 0.94 on the log scale, against randomwalknowcast.</p>
+<p> On the release backtest before the scored rounds, the best model was renewalsp, with a relative score of 0.8 and 0.95 on the log scale, against randomwalknowcast.</p>
 <div id="tbl-ebola-scores" class="quarto-float quarto-figure quarto-figure-center anchored">
 <figure class="quarto-float quarto-float-tbl figure">
 <figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-ebola-scores-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
@@ -1267,40 +1269,40 @@ Table&nbsp;5: Ebola hub submissions: mean scores, coverage and number of forecas
 <td>ebola</td>
 <td>renewal</td>
 <td>crps</td>
-<td>1.71</td>
-<td>0.0372</td>
-<td>0.0144</td>
-<td>0.878</td>
-<td>0.933</td>
+<td>1.78</td>
+<td>0.0371</td>
+<td>0.0125</td>
+<td>0.885</td>
+<td>0.93</td>
 <td>270</td>
-<td>0.918</td>
+<td>0.92</td>
 <td>1.07</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
 <td>renewalbvd</td>
 <td>crps</td>
-<td>1.68</td>
-<td>0.0381</td>
-<td>0.0149</td>
-<td>0.874</td>
-<td>0.937</td>
+<td>1.63</td>
+<td>0.0379</td>
+<td>0.0121</td>
+<td>0.878</td>
+<td>0.93</td>
 <td>270</td>
-<td>0.931</td>
+<td>0.933</td>
 <td>1.13</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
 <td>renewalsp</td>
 <td>crps</td>
-<td>1.52</td>
-<td>0.0287</td>
-<td>0.0382</td>
-<td>0.87</td>
+<td>1.5</td>
+<td>0.0289</td>
+<td>0.0391</td>
+<td>0.889</td>
 <td>0.926</td>
 <td>162</td>
-<td>0.816</td>
-<td>0.944</td>
+<td>0.805</td>
+<td>0.95</td>
 </tr>
 </tbody>
 </table>
@@ -1392,25 +1394,25 @@ Table&nbsp;6: Ebola hub submissions: mean energy and variogram scores of each mo
 <tr class="even">
 <td>renewal</td>
 <td>54</td>
-<td>0.0704</td>
+<td>0.0698</td>
 <td>0.132</td>
-<td>1.08</td>
+<td>1.07</td>
 <td>1.04</td>
 </tr>
 <tr class="odd">
 <td>renewalbvd</td>
 <td>54</td>
-<td>0.0733</td>
+<td>0.0735</td>
 <td>0.136</td>
-<td>1.12</td>
-<td>1.08</td>
+<td>1.13</td>
+<td>1.07</td>
 </tr>
 <tr class="even">
 <td>renewalsp</td>
 <td>54</td>
-<td>0.0624</td>
-<td>0.13</td>
-<td>0.959</td>
+<td>0.063</td>
+<td>0.131</td>
+<td>0.967</td>
 <td>1.03</td>
 </tr>
 </tbody>
@@ -1536,14 +1538,8 @@ Bosse, Nikos I., Sam Abbott, Anne Cori, Edwin van Leeuwen, Johannes Bracher, and
 <div id="ref-bracherEvaluatingEpidemicForecasts2021" class="csl-entry" role="listitem">
 Bracher, Johannes, Evan L. Ray, Tilmann Gneiting, and Nicholas G. Reich. 2021. <span>“Evaluating Epidemic Forecasts in an Interval Format.”</span> <em>PLOS Computational Biology</em> 17 (2): e1008618. <a href="https://doi.org/10.1371/journal.pcbi.1008618">https://doi.org/10.1371/journal.pcbi.1008618</a>.
 </div>
-<div id="ref-Brooks2018" class="csl-entry" role="listitem">
-Brooks, Logan C., David C. Farrow, Sangwon Hyun, Ryan J. Tibshirani, and Roni Rosenfeld. 2018. <span>“Nonmechanistic Forecasts of Seasonal Influenza with Iterative One-Week-Ahead Distributions.”</span> <em>PLOS Computational Biology</em> 14 (6): e1006134. <a href="https://doi.org/10.1371/journal.pcbi.1006134">https://doi.org/10.1371/journal.pcbi.1006134</a>.
-</div>
 <div id="ref-Cai2026" class="csl-entry" role="listitem">
 Cai, Peng, Guoyu Huang, and Ximing Xu. 2026. <span>“Benchmarking Time Series Foundation Models for Multi-Country Infectious Disease Forecasting: A Retrospective Evaluation Across over 70 Diseases.”</span> <em>BMC Public Health</em>, October. <a href="https://doi.org/10.1186/s12889-026-29918-1">https://doi.org/10.1186/s12889-026-29918-1</a>.
-</div>
-<div id="ref-Clark2004" class="csl-entry" role="listitem">
-Clark, Martyn, Subhrendu Gangopadhyay, Lauren Hay, Balaji Rajagopalan, and Robert Wilby. 2004. <span>“The <span>Schaake</span> Shuffle: A Method for Reconstructing Space–Time Variability in Forecasted Precipitation and Temperature Fields.”</span> <em>Journal of Hydrometeorology</em> 5 (1): 243–62. <a href="https://doi.org/10.1175/1525-7541(2004)005<0243:TSSAMF>2.0.CO;2">https://doi.org/10.1175/1525-7541(2004)005&lt;0243:TSSAMF&gt;2.0.CO;2</a>.
 </div>
 <div id="ref-Das2024b" class="csl-entry" role="listitem">
 Das, Abhimanyu, Matthew Faw, Rajat Sen, and Yichen Zhou. 2024. <span>“In-Context Fine-Tuning for Time-Series Foundation Models.”</span> arXiv. <a href="https://doi.org/10.48550/arXiv.2410.24087">https://doi.org/10.48550/arXiv.2410.24087</a>.
@@ -1659,17 +1655,8 @@ Pinson, Pierre, and Julija Tastu. 2013. <span>“Discrimination Ability of the E
 <div id="ref-Rasul2023" class="csl-entry" role="listitem">
 Rasul, Kashif, Arjun Ashok, Andrew Robert Williams, Hena Ghonia, Rishika Bhagwatkar, Arian Khorasani, Mohammad Javad Darvishi Bayazi, et al. 2023. <span>“<span>Lag-Llama</span>: Towards Foundation Models for Probabilistic Time Series Forecasting.”</span> arXiv. <a href="https://doi.org/10.48550/arXiv.2310.08278">https://doi.org/10.48550/arXiv.2310.08278</a>.
 </div>
-<div id="ref-Ray2018" class="csl-entry" role="listitem">
-Ray, Evan L., and Nicholas G. Reich. 2018. <span>“Prediction of Infectious Disease Epidemics via Weighted Density Ensembles.”</span> <em>PLOS Computational Biology</em> 14 (2): e1005910. <a href="https://doi.org/10.1371/journal.pcbi.1005910">https://doi.org/10.1371/journal.pcbi.1005910</a>.
-</div>
 <div id="ref-reichCollaborativeHubsMaking2022" class="csl-entry" role="listitem">
 Reich, Nicholas G., Justin Lessler, Sebastian Funk, Cecile Viboud, Alessandro Vespignani, Ryan J. Tibshirani, Katriona Shea, et al. 2022. <span>“Collaborative <span>Hubs</span>: <span>Making</span> the <span>Most</span> of <span>Predictive Epidemic Modeling</span>.”</span> <em>American Journal of Public Health</em> 112 (6): 839–42. <a href="https://doi.org/10.2105/AJPH.2022.306831">https://doi.org/10.2105/AJPH.2022.306831</a>.
-</div>
-<div id="ref-Schefzik2013" class="csl-entry" role="listitem">
-Schefzik, Roman, Thordis L. Thorarinsdottir, and Tilmann Gneiting. 2013. <span>“Uncertainty Quantification in Complex Simulation Models Using Ensemble Copula Coupling.”</span> <em>Statistical Science</em> 28 (4): 616–40. <a href="https://doi.org/10.1214/13-STS443">https://doi.org/10.1214/13-STS443</a>.
-</div>
-<div id="ref-Scheuerer2015" class="csl-entry" role="listitem">
-Scheuerer, Michael, and Thomas M. Hamill. 2015. <span>“Variogram-Based Proper Scoring Rules for Probabilistic Forecasts of Multivariate Quantities.”</span> <em>Monthly Weather Review</em> 143 (4): 1321–34. <a href="https://doi.org/10.1175/MWR-D-14-00269.1">https://doi.org/10.1175/MWR-D-14-00269.1</a>.
 </div>
 <div id="ref-Schneble2021" class="csl-entry" role="listitem">
 Schneble, Marc, Giacomo De Nicola, Göran Kauermann, and Ursula Berger. 2021. <span>“Nowcasting Fatal <span>COVID</span>-19 Infections on a Regional Level in <span>Germany</span>.”</span> <em>Biometrical Journal</em> 63 (3): 471–89. <a href="https://doi.org/10.1002/bimj.202000143">https://doi.org/10.1002/bimj.202000143</a>.

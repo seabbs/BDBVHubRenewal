@@ -202,7 +202,7 @@ One SI section per paper section.
 <ul>
 <li>We add four learned biases to Chronos-2’s group-attention scores (<a href="#tbl-attention-biases" class="quarto-xref">Table&nbsp;1</a>).</li>
 <li>They start at zero, so fine-tuning starts from base Chronos-2, as for the relation biases TableFormer adds to a pretrained model <span class="citation" data-cites="Yang2022">(<a href="#ref-Yang2022" role="doc-biblioref">Yang et al. 2022</a>)</span>.</li>
-<li>The biases train at a learning rate of <span class="math inline">\(10^{-3}\)</span> and the LoRA adapter at <span class="math inline">\(10^{-5}\)</span>, both falling linearly to zero at 8,000 outbreaks.</li>
+<li>The biases train at a learning rate of <span class="math inline">\(10^{-3}\)</span> and the LoRA adapter at <span class="math inline">\(10^{-5}\)</span>, both falling linearly to zero over the 8,400 simulations.</li>
 <li>We identify places by name within each block, with no limit on the number of places.</li>
 <li>A place’s parent is the nearest prefix of its name in the block, else the country.</li>
 <li>Training blocks include countries equal to, above or later than the sum of their places, so a place belongs to its parent without summing to it.</li>
@@ -322,14 +322,14 @@ L = \frac{1}{N} \sum_{n=1}^{N} \frac{1}{H} \sum_{t=1}^{H} m_{n,t} \sum_{k=1}^{21
 <section id="learning-rates" class="level4">
 <h4 class="anchored" data-anchor-id="learning-rates">Learning rates</h4>
 <ul>
-<li>The learning rate at step <span class="math inline">\(t\)</span> falls linearly from <span class="math inline">\(\eta_0\)</span> to zero <span class="citation" data-cites="Devlin2019">(<a href="#ref-Devlin2019" role="doc-biblioref">Devlin et al. 2019</a>)</span>: <span class="math display">\[
-\eta_t = \eta_0 \left(1 - \frac{t}{T}\right),
-\]</span> with <span class="math inline">\(T = 36{,}500\)</span> steps, which is reached at 8,000 simulations.</li>
+<li>The learning rate falls linearly from <span class="math inline">\(\eta_0\)</span> to zero over the simulations <span class="citation" data-cites="Devlin2019">(<a href="#ref-Devlin2019" role="doc-biblioref">Devlin et al. 2019</a>)</span>: <span class="math display">\[
+\eta_t = \eta_0 \left(1 - \frac{s_t}{8{,}400}\right),
+\]</span> where <span class="math inline">\(s_t\)</span> is the number of simulations trained by step <span class="math inline">\(t\)</span>, interpolated within a chunk by its steps, so the rate reaches zero at the last simulation however the blocks are packed into steps.</li>
 <li><span class="math inline">\(\eta_0 = 10^{-5}\)</span> for the LoRA adapter, as in Chronos-2 <span class="citation" data-cites="Ansari2025">(<a href="#ref-Ansari2025" role="doc-biblioref">Ansari et al. 2025</a>)</span>, and <span class="math inline">\(\eta_0 = 10^{-3}\)</span> for the attention biases.</li>
-<li>We train with AdamW <span class="citation" data-cites="Loshchilov2019">(<a href="#ref-Loshchilov2019" role="doc-biblioref">Loshchilov and Hutter 2019</a>)</span> and clip the gradient norm at 1 <span class="citation" data-cites="Pascanu2013">(<a href="#ref-Pascanu2013" role="doc-biblioref">Pascanu, Mikolov, and Bengio 2013</a>)</span>.</li>
+<li>We train with AdamW <span class="citation" data-cites="Loshchilov2019">(<a href="#ref-Loshchilov2019" role="doc-biblioref">Loshchilov and Hutter 2019</a>)</span> in fp32 and clip the gradient norm at 1 <span class="citation" data-cites="Pascanu2013">(<a href="#ref-Pascanu2013" role="doc-biblioref">Pascanu, Mikolov, and Bengio 2013</a>)</span>.</li>
 <li>Neither has weight decay or warmup, as in Chronos-2’s fine-tuning <span class="citation" data-cites="Ansari2025">(<a href="#ref-Ansari2025" role="doc-biblioref">Ansari et al. 2025</a>)</span>, and the biases follow Moirai and TableFormer in having no weight decay <span class="citation" data-cites="Woo2024 Yang2022">(<a href="#ref-Woo2024" role="doc-biblioref">Woo et al. 2024</a>; <a href="#ref-Yang2022" role="doc-biblioref">Yang et al. 2022</a>)</span>.</li>
 </ul>
-<p><strong>Training blocks.</strong> A simulation gives daily counts by onset and report date, and a release counts every case reported by its cut-off, one cut-off a week. Each simulation gives one observation draw, cut at 32 cut-offs, one drawn at random within each of 32 equal stretches of its weekly cut-offs, so one simulation gives 32 blocks. Each block has up to 364 steps of context, and its prediction length is its horizon. We train on 8,000 simulations, with checkpoints at 250, 500, 750, 1,000, 2,000, 4,000 and 8,000.</p>
+<p><strong>Training blocks.</strong> A simulation gives daily counts by onset and report date, and a release counts every case reported by its cut-off, one cut-off a week. Each simulation gives one observation draw, cut at 32 cut-offs, one drawn at random within each of 32 equal stretches of its weekly cut-offs, so one simulation gives up to 32 blocks. Each block has up to 364 steps of context, and its prediction length is its horizon. We train on 8,400 simulations, 10 balanced blocks of 840, with checkpoints at 250, 500, 750, 1,000, 2,000, 4,000 and 8,400.</p>
 <div id="tbl-block-layouts" class="quarto-float quarto-figure quarto-figure-center anchored">
 <figure class="quarto-float quarto-float-tbl figure">
 <figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-block-layouts-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
@@ -388,7 +388,7 @@ Table&nbsp;3: The realised shares of the combinations of layout and options in t
 </div>
 </figure>
 </div>
-<p><strong>Order of the training data.</strong> The grid is a crossed factorial design balanced in every block of 120 simulations, with each factor’s levels shuffled independently, as in a Latin hypercube. Training takes the simulations in chunks of 250, about two balanced blocks. A chunk gives about 6,700 training blocks, which are shuffled and packed into about 1,250 steps of up to 256 series each. So every checkpoint has seen the whole grid, and no factor level comes in a run of its own.</p>
+<p><strong>Order of the training data.</strong> The grid is balanced in blocks of 840 simulations, with each factor’s levels shuffled independently within a block, as in a Latin hypercube. Training takes the simulations in order, in chunks of 250, so a chunk holds under a third of a block. A chunk gives up to 8,000 training blocks, 32 a simulation, which are shuffled and packed into about 1,500 steps of up to 256 series each, roughly 6 a simulation. So the checkpoints at 250, 500 and 750 simulations have seen only part of the grid, whole blocks are seen at each 840, and the 8,400 checkpoint has seen ten.</p>
 <p>Chronos-2 divides a flat context by a scale of <span class="math inline">\(10^{-5}\)</span>, and we apply no floor to that scale at inference. A floor of one count at inference only hurts small series, of five counts or fewer, on held-out simulations. At 4,000 outbreaks their median loss is <strong>?meta:evidence.scale_floor.sims.n4000.small.median_loss.none</strong> without it and <strong>?meta:evidence.scale_floor.sims.n4000.small.median_loss.floor</strong> with it, and the share of 99% quantiles over 100 times the truth is <strong>?meta:evidence.scale_floor.sims.n4000.small.q99_over_100x.none</strong>% and <strong>?meta:evidence.scale_floor.sims.n4000.small.q99_over_100x.floor</strong>%. Large series are unchanged, with median loss <strong>?meta:evidence.scale_floor.sims.n4000.large.median_loss.none</strong> and <strong>?meta:evidence.scale_floor.sims.n4000.large.median_loss.floor</strong>. On the BDBV release backtest the floor gives a lower relative WIS at every fine-tuned checkpoint, <strong>?meta:evidence.scale_floor.bdbv.provinces.weekly.n4000.floor</strong> against <strong>?meta:evidence.scale_floor.bdbv.provinces.weekly.n4000.none</strong> for the weekly model at 4,000 outbreaks on provinces. Chronos-2’s widest interval is from 1% to 99%, as it has no 2.5% or 97.5% quantiles.</p>
 <p>The ragged layout’s lag series run to 4 weeks or 28 days. Lags run to the truth delay do worse with short release histories. On the German development half, the national WIS relative to <code>randomwalknowcast</code> is 2.91 with the 4-week cap and 3.79 with lags to the truth delay for the daily zero-shot model, and 4.44 and 8.01 for the weekly one. On the BDBV release backtest it is 2.78 and 5.84 for the daily zero-shot model, and 1.3 and 3.17 for the weekly one. BDBV’s zones have few weekly releases, so with the longer horizon no recent lag of a zone falls in the model’s context.</p>
 <p>To compare training on simulations with training on real data, we also fine-tuned Chronos-2 on real data alone (<code>fm_chronos_daily_ragged_real</code> and <code>fm_chronos_weekly_ragged_real</code>). It was trained on the German data and the BDBV data together. The German part used the data as available on 2022-02-09, the last day of the German development half, and nothing later. German training blocks were cut at every nowcast date whose truth, four weeks ahead, was at least 40 days old by then, from 2021-04-20 to 2021-12-03. Each date was laid out as the German nowcast tasks are, with the same block functions as the simulations, from the daily and weekly releases, for Germany alone and with its states or age groups, at release lags of 14 to 49 days (including 40) or 2 to 7 weeks. The hub file’s changes after 80 days hold revisions made up to August 2022, so they were left out. The BDBV part used every public release up to 2026-11-08 (cut-off 2026-11-05). Daily blocks were cut at each daily release, and weekly blocks at each week from the hub’s public per-case delay table, for the country alone and with its provinces, at every release lag. Truth was the latest release’s counts, left out after 2026-10-01, so every count trained on was at least the BDBV truth delay of 35 days old. Training followed Chronos-2’s recipe as the simulation fine-tune does, from base Chronos-2, for its default 1,000 steps. The last 14 German nowcast dates were held out to monitor the loss.</p>
@@ -396,7 +396,7 @@ Table&nbsp;3: The realised shares of the combinations of layout and options in t
 </section>
 <section id="monitoring-fine-tuning" class="level3">
 <h3 class="anchored" data-anchor-id="monitoring-fine-tuning">Monitoring fine-tuning</h3>
-<p>A local dashboard, part of the fine-tuning workflow, was used to review training as it ran (<a href="#fig-dashboard" class="quarto-xref">Figure&nbsp;1</a>). It showed the training and held-out loss by source, each checkpoint’s scores against <code>randomwalknowcast</code> with the zero-shot and complete-only references, and the German nowcasts by checkpoint. Reviewing it led to the complete-only reference in the checkpoint curve (<a href="#fig-checkpoint-curve" class="quarto-xref">Figure&nbsp;6</a>). The dashboard was built with the help of a large language model.</p>
+<p>A local dashboard, part of the fine-tuning workflow, was used to review training as it ran (<a href="#fig-dashboard" class="quarto-xref">Figure&nbsp;1</a>). It showed the training and held-out loss by source, each checkpoint’s scores against <code>randomwalknowcast</code> with the zero-shot and complete-only references, and the German nowcasts by checkpoint. Reviewing it led to the complete-only reference in the checkpoint curve (<a href="#fig-checkpoint-curve" class="quarto-xref">Figure&nbsp;7</a>). The dashboard was built with the help of a large language model.</p>
 <div id="fig-dashboard" class="quarto-float quarto-figure quarto-figure-center anchored">
 <figure class="quarto-float quarto-float-fig figure">
 <div aria-describedby="fig-dashboard-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
@@ -638,25 +638,33 @@ Table&nbsp;6: The simulated outbreaks’ ranges against published values for sev
 </section>
 <section id="the-held-out-synthetic-set" class="level4">
 <h4 class="anchored" data-anchor-id="the-held-out-synthetic-set">The held-out synthetic set</h4>
-<p>The held-out set is simulated on grid <code>r5</code> with seeds 30140 to 30143, 25 simulations each. We evaluate draw 1 of each simulation, so the outbreaks are independent. The fine-tune never trains on these seeds. The simulations are written to <code>/home/runner/bdbv-rounds/rounds/r1/sims</code>, and the workflow config records them. The synthetic runner runs the models on the set.</p>
+<p>The held-out set is simulated on grid <code>r5</code> with seeds 30900 to 30939, 21 simulations each. We evaluate draw 1 of each simulation, so the outbreaks are independent. The fine-tune never trains on these seeds. The simulations are written to <code>/home/runner/bdbv-rounds/rounds/r9/sims</code>, and the workflow config records them. The synthetic runner runs the models on the set.</p>
 <p>The held-out set was reserved for the final evaluation. No model was scored on it during development. We checked the pipeline on the r3 pilot seeds 9501 to 9504, whose forecasts are not results.</p>
 <section id="protocol" class="level5">
 <h5 class="anchored" data-anchor-id="protocol">Protocol</h5>
 <p>Each outbreak is released weekly, on one weekday from Wednesday to Saturday drawn from its id, and a release’s cut-off is its origin. Each outbreak has four origins, spread evenly from its 6th release to the last release at least its longest delay plus 5 weeks before its last report. Each forecast covers weeks -4 to 3 from the week of the cut-off, as weekly totals by onset week for the country and each stratum. Scores use rolling truth, the count reported D days after the end of a target week, with D the outbreak’s own 98% reporting delay in whole days, and are relative to <code>randomwalknowcast</code>.</p>
-<p>We cut the held-out simulations into blocks as in training, with the five layouts and non-summing parents (<a href="#tbl-block-layouts" class="quarto-xref">Table&nbsp;2</a>), using a fixed seed. A manifest records each held-out block’s layout and options. The paper’s test set, 100 simulations outside training, is cut the same way.</p>
+<p>We cut the held-out simulations into blocks as in training, with the five layouts and non-summing parents (<a href="#tbl-block-layouts" class="quarto-xref">Table&nbsp;2</a>), using a fixed seed. A manifest records each held-out block’s layout and options. The held-out simulations are simulation round 9, one whole block of 840 separate from the ten training blocks, and are the paper’s test set. The trainer monitors its loss on 90 of them, a random sample of the block’s cells.</p>
 </section>
 </section>
 </section>
 <section id="correlated-trajectories" class="level3">
 <h3 class="anchored" data-anchor-id="correlated-trajectories">Correlated trajectories</h3>
-<p>The copula pairs the draws of models that give each place and week only its own draws. These are the Chronos-2 models and <code>randomwalknowcast</code>. Hub teams’ samples are joint across weeks within a place, so their pairing across places is left as submitted.</p>
-<p><strong>The copula.</strong> With <span class="math inline">\(P\)</span> places and steps on days <span class="math inline">\(d_1, \dots, d_S\)</span>, each trajectory draws <span class="math inline">\(z \sim \mathrm{N}(0, \Sigma)\)</span> with <span class="math inline">\(\Sigma = \Sigma_p \otimes \Sigma_t\)</span>. The week correlation is <span class="math inline">\((\Sigma_t)_{jk} = \rho_t^{|d_j - d_k| / 7}\)</span>. The place correlation is <span class="math inline">\(\rho_p\)</span> between two provinces and <span class="math inline">\(\rho_n\)</span> between the country and a province. Where <span class="math inline">\(\rho_p\)</span> and <span class="math inline">\(\rho_n\)</span> give no valid correlation matrix, we set its negative eigenvalues to zero and rescale it to unit diagonal. For each place-week, the <span class="math inline">\(m\)</span> draws are sorted and the <span class="math inline">\(k\)</span>th trajectory takes the draw whose rank matches the rank of <span class="math inline">\(z_k\)</span> in that cell. Each cell keeps exactly its own draws <span class="citation" data-cites="Clark2004 Schefzik2013">(<a href="#ref-Clark2004" role="doc-biblioref">Clark et al. 2004</a>; <a href="#ref-Schefzik2013" role="doc-biblioref">Schefzik, Thorarinsdottir, and Gneiting 2013</a>)</span>. A country forecast as its own series, as by Chronos-2, is paired as one more place. A country that is the sum of its provinces is not paired but summed again from the paired provinces, so its forecast widens.</p>
-<p><strong>The estimator.</strong> For a forecast with <span class="math inline">\(m\)</span> draws, <span class="math inline">\(b\)</span> of them below the truth and <span class="math inline">\(e\)</span> equal to it, the randomised PIT is <span class="math inline">\(u = (b + U(e + 1)) / (m + 1)\)</span> with <span class="math inline">\(U \sim \mathrm{U}(0, 1)\)</span>. Its normal score is <span class="math inline">\(\Phi^{-1}(u)\)</span>. A forecast whose draws are all equal gives no score. Truth is the count as reported <span class="math inline">\(D\)</span> days after the week, so a week’s error matures only once that release exists. At an origin, we use forecasts made at earlier origins whose truth was released by the origin, from the 8 latest such weeks. <span class="math inline">\(\rho_t\)</span> is estimated from pairs of consecutive weeks of one place in one forecast. <span class="math inline">\(\rho_p\)</span> is estimated from pairs of provinces in the same week of one forecast, and <span class="math inline">\(\rho_n\)</span> from the country and a province. With <span class="math inline">\(n\)</span> pairs whose Pearson correlation is <span class="math inline">\(r\)</span>, the estimate is <span class="math inline">\((n r + w \rho_0) / (n + w)\)</span>, with <span class="math inline">\(w = 100\)</span> and <span class="math inline">\(\rho_0\)</span> the prior. It is then kept within <span class="math inline">\([0, 0.95]\)</span>. Where the pairs give no correlation, the estimate is the prior. The prior <span class="math inline">\((\rho_t, \rho_p, \rho_n) = (0.9, 0.7, 0.7)\)</span> is set by the energy score of the Chronos-2 models on the Ebola release backtest, so it is tuned in sample. As a sensitivity analysis we give the prior less weight, <span class="math inline">\(w = 25\)</span>.</p>
-<p><strong>Scores.</strong> We score the trajectories with the energy score <span class="citation" data-cites="Gneiting2008">(<a href="#ref-Gneiting2008" role="doc-biblioref">Gneiting et al. 2008</a>)</span> and the variogram score of order <span class="math inline">\(p = 0.5\)</span> <span class="citation" data-cites="Scheuerer2015">(<a href="#ref-Scheuerer2015" role="doc-biblioref">Scheuerer and Hamill 2015</a>)</span>, both on <span class="math inline">\(\log(x + 1)\)</span> counts. We also report the 50% and 90% coverage of each place’s sum over weeks and of the sum over provinces in each week. WIS of each place and week is unchanged by pairing, except for a country summed from its provinces. We compare three versions of each model. Unpaired forecasts keep the sample indices the model gave. Fixed forecasts are paired with the prior at every origin. Rolling forecasts are paired with the copula estimated at each origin.</p>
+<ul>
+<li><code>randomwalk</code> and <code>randomwalknowcast</code> draw each province on its own, so the country, the per-sample sum of the provinces, is too narrow if the draws are paired at random.</li>
+<li>We pair the province draws within each week with a Gaussian copula, by rank reordering as in the Schaake shuffle <span class="citation" data-cites="Clark2004">(<a href="#ref-Clark2004" role="doc-biblioref">Clark et al. 2004</a>)</span> and ensemble copula coupling <span class="citation" data-cites="Schefzik2013">(<a href="#ref-Schefzik2013" role="doc-biblioref">Schefzik, Thorarinsdottir, and Gneiting 2013</a>)</span>.</li>
+<li>Copulas have been used for coherent bottom-up forecasts of hierarchies <span class="citation" data-cites="BenTaieb2017">(<a href="#ref-BenTaieb2017" role="doc-biblioref">Ben Taieb, Taylor, and Hyndman 2017</a>)</span> and for joint forecasts of seasonal influenza <span class="citation" data-cites="Ray2018 Brooks2018">(<a href="#ref-Ray2018" role="doc-biblioref">Ray and Reich 2018</a>; <a href="#ref-Brooks2018" role="doc-biblioref">Brooks et al. 2018</a>)</span>.</li>
+<li>Provinces are their own forecasts, the country is the per-sample sum of the provinces, and zones are their own forecasts, not summed.</li>
+<li>The hub does not require coherence across levels. We choose the sum of the provinces for the walks’ national forecast, and Chronos-2 submits its joint block’s own national row.</li>
+<li>Pairing happens inside each walk model’s forecast, so every score and submission reads the same paired draws.</li>
+<li>Pairing only reorders draws, so each cell keeps its own draws.</li>
+</ul>
+<p><strong>The copula.</strong> Each week, each trajectory <span class="math inline">\(k\)</span> draws one normal <span class="math inline">\(z_k\)</span> per province, with correlation <span class="math inline">\(\rho_p\)</span> between any two provinces. Before a province’s walk starts, each cell’s <span class="math inline">\(m\)</span> draws are sorted and the <span class="math inline">\(k\)</span>th trajectory takes the draw whose rank matches the rank of <span class="math inline">\(z_k\)</span> in that cell. From the walk start, each province’s trajectory moves as a whole, ranked by its walk total against the normals of the latest week any province’s walk starts, so the walk’s own dependence over weeks is kept.</p>
+<p><strong>The estimator.</strong> <span class="math inline">\(\rho_p\)</span> comes from the model’s own matured errors. For a count <span class="math inline">\(y\)</span> that an earlier release nowcast with negative binomial distribution function <span class="math inline">\(F\)</span>, and that the origin release reports, the randomised PIT is <span class="math inline">\(u = F(y - 1) + U\,(F(y) - F(y - 1))\)</span> with <span class="math inline">\(U \sim \mathrm{U}(0, 1)\)</span>, and its normal score is <span class="math inline">\(\Phi^{-1}(u)\)</span>. We use pairs of provinces in one week, from the releases of the last 8 weeks. With <span class="math inline">\(n\)</span> pairs whose Pearson correlation is <span class="math inline">\(r\)</span>, the estimate is <span class="math inline">\((n r + w \rho_0) / (n + w)\)</span> with <span class="math inline">\(w = 10\)</span> and <span class="math inline">\(\rho_0 = 0.7\)</span>, kept within <span class="math inline">\([0, 0.95]\)</span>. The shrinkage only guards thin windows (<a href="#tbl-tuned-choices" class="quarto-xref">Table&nbsp;7</a>).</p>
+<p><strong>Scores.</strong> We compare each walk model with no pairing, keeping the sample indices the model gave, and with the rolling <span class="math inline">\(\rho_p\)</span>. We score the country and each province by the CRPS and 90% coverage, and each level’s places and weeks as one vector by the energy score <span class="citation" data-cites="Gneiting2008">(<a href="#ref-Gneiting2008" role="doc-biblioref">Gneiting et al. 2008</a>)</span> on <span class="math inline">\(\log(x + 1)\)</span> counts.</p>
 </section>
 <section id="aggregation-options" class="level3">
 <h3 class="anchored" data-anchor-id="aggregation-options">Aggregation options</h3>
-<p>Chronos-2 can forecast every level of a place hierarchy in one block, or each level on its own, and the daily model can give weekly totals in its block or as sums of its days. We compare five options for the zero-shot and fine-tuned models: (a) all levels in one joint block; (b) each level in its own block; (c) the lowest level only, summed up to the others with draws paired at random; (d) the lowest level only, summed up after pairing its draws with the rolling copula; (e) for the daily model, weekly totals from its in-block weekly row, against its days summed to weeks after pairing them with the rolling copula’s <span class="math inline">\(\rho_t\)</span>, as <code>randomwalknowcast</code> does, and at random. Options (d) and (e) test whether pairing draws with the copula before summing narrows the gap to forecasting the total directly. Option (e) is inference only, on the final checkpoint.</p>
+<p>Chronos-2 can forecast every level of a place hierarchy in one block, or each level on its own, and the daily model can give weekly totals in its block or as sums of its days. We compare five options for the zero-shot and fine-tuned models: (a) all levels in one joint block; (b) each level in its own block; (c) the lowest level only, summed up to the others with draws paired at random; (d) the lowest level only, summed up after pairing its draws with the rolling copula; (e) for the daily model, weekly totals from its in-block weekly row, against its days summed to weeks after pairing them with a rolling correlation over days, and at random. Options (d) and (e) test whether pairing draws with the copula before summing narrows the gap to forecasting the total directly. Option (e) is inference only, on the final checkpoint.</p>
 </section>
 <section id="scoring" class="level3">
 <h3 class="anchored" data-anchor-id="scoring">Scoring</h3>
@@ -715,21 +723,16 @@ Table&nbsp;7: Choices tuned on development data, with their values and the data 
 <td>German first half and the BDBV release backtest</td>
 </tr>
 <tr class="odd">
-<td>Copula prior <span class="math inline">\((\rho_t, \rho_p, \rho_n)\)</span></td>
-<td><span class="math inline">\((0.9, 0.7, 0.7)\)</span></td>
+<td>Copula shrinkage weight <span class="math inline">\(w\)</span></td>
+<td>10, the weakest of 0, 10, 30 and 100, which scored within 1% of one another</td>
 <td>Ebola release backtest</td>
 </tr>
 <tr class="even">
-<td>Copula day correlation <span class="math inline">\(\rho_d\)</span></td>
-<td>0.985</td>
-<td>Ebola release backtest</td>
-</tr>
-<tr class="odd">
 <td>Checkpoint of the submitted fine-tuned model</td>
 <td>1,000 simulations</td>
 <td>BDBV release backtest, the plausibility check of the 14 November 2026 round, and the German first half</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td>Realism checks of the simulation grid</td>
 <td>Grid ranges</td>
 <td>BDBV releases and German data reported by 2022-02-09</td>
@@ -781,400 +784,32 @@ Table&nbsp;7: Choices tuned on development data, with their values and the data 
 </div>
 <section id="impact-of-correlated-trajectories" class="level3">
 <h3 class="anchored" data-anchor-id="impact-of-correlated-trajectories">Impact of correlated trajectories</h3>
-<p>Pairing changes no marginal forecast, so it shows in the joint scores and in the coverage of sums over weeks and over places. <a href="#tbl-copula-ebola" class="quarto-xref">Table&nbsp;8</a> and <a href="#tbl-copula-germany" class="quarto-xref">Table&nbsp;9</a> compare unpaired forecasts with the fixed and rolling copula for every model that uses it. The rolling estimates have median <span class="math inline">\(\rho_t\)</span> 0.54 and <span class="math inline">\(\rho_p\)</span> 4.0e-2 by German state, and <span class="math inline">\(\rho_t\)</span> 0.43 and <span class="math inline">\(\rho_p\)</span> 0.18 by age group, for <code>randomwalknowcast</code>.</p>
-<div id="tbl-copula-ebola" class="quarto-float quarto-figure quarto-figure-center anchored">
-<figure class="quarto-float quarto-float-tbl figure">
-<figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-copula-ebola-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Table&nbsp;8: Ebola release backtest: energy score (ES) and variogram score (VS) on the log scale, 50% and 90% coverage of each place’s sum over weeks and of the sum over provinces, and WIS of the provinces and the country, for each model unpaired and paired by the fixed or rolling copula.
+<ul>
+<li><a href="#fig-copula-impact" class="quarto-xref">Figure&nbsp;4</a> compares the rolling <span class="math inline">\(\rho_p\)</span> with no pairing on the German first half, the BDBV release backtest and the held-out simulations, at the national level and for provinces.</li>
+<li>The per-province CRPS and coverage are unchanged by construction, so only the national sum and the energy score move.</li>
+<li>The median rolling <span class="math inline">\(\rho_p\)</span> over origins is (not yet available) for <code>randomwalknowcast</code> and (not yet available) for <code>randomwalk</code>, with (not yet available) and (not yet available) origins falling back to the prior.</li>
+</ul>
+<div id="fig-copula-impact" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-copula-impact-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="build/figures/si/copula-impact.png" class="img-fluid figure-img">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-copula-impact-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;4: Each score of <code>randomwalk</code> and <code>randomwalknowcast</code> with the rolling <span class="math inline">\(\rho_p\)</span> relative to no pairing, by study and level: CRPS and 90% coverage of each cell, where the national level is the sum of the provinces, and the energy score (ES) of each level’s places and weeks on the log scale. Development data only.
 </figcaption>
-<div aria-describedby="tbl-copula-ebola-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-<table class="caption-top table">
-<colgroup>
-<col style="width: 11%">
-<col style="width: 11%">
-<col style="width: 11%">
-<col style="width: 11%">
-<col style="width: 11%">
-<col style="width: 11%">
-<col style="width: 11%">
-<col style="width: 11%">
-<col style="width: 11%">
-</colgroup>
-<thead>
-<tr class="header">
-<th>Strata</th>
-<th>Model</th>
-<th>Pairing</th>
-<th>ES (log)</th>
-<th>VS (log)</th>
-<th>Weeks 50% / 90%</th>
-<th>Places 50% / 90%</th>
-<th>WIS strata</th>
-<th>WIS national</th>
-</tr>
-</thead>
-<tbody>
-<tr class="odd">
-<td>Provinces</td>
-<td>fm_chronos_daily_complete</td>
-<td>Unpaired</td>
-<td>0.529</td>
-<td>11.4</td>
-<td>0.88 / 0.91</td>
-<td>0.50 / 0.50</td>
-<td>1.36</td>
-<td>30.5</td>
-</tr>
-<tr class="even">
-<td>Provinces</td>
-<td>fm_chronos_daily_complete</td>
-<td>Fixed</td>
-<td>0.28</td>
-<td>6.4</td>
-<td>0.95 / 0.97</td>
-<td>0.50 / 0.72</td>
-<td>0.81</td>
-<td>18.9</td>
-</tr>
-<tr class="odd">
-<td>Provinces</td>
-<td>fm_chronos_daily_complete</td>
-<td>Rolling</td>
-<td>0.284</td>
-<td>6.38</td>
-<td>0.95 / 0.97</td>
-<td>0.50 / 0.72</td>
-<td>0.81</td>
-<td>18.9</td>
-</tr>
-<tr class="even">
-<td>Provinces</td>
-<td>fm_chronos_daily_complete</td>
-<td>Rolling, w = 25</td>
-<td>0.29</td>
-<td>6.38</td>
-<td>0.95 / 0.97</td>
-<td>0.50 / 0.72</td>
-<td>0.81</td>
-<td>18.9</td>
-</tr>
-<tr class="odd">
-<td>Provinces</td>
-<td>fm_chronos_daily_ragged</td>
-<td>Unpaired</td>
-<td>0.547</td>
-<td>58.9</td>
-<td>0.89 / 0.91</td>
-<td>0.46 / 0.46</td>
-<td>1.04</td>
-<td>20.8</td>
-</tr>
-<tr class="even">
-<td>Provinces</td>
-<td>fm_chronos_daily_ragged</td>
-<td>Fixed</td>
-<td>0.301</td>
-<td>40.3</td>
-<td>0.94 / 0.96</td>
-<td>0.67 / 0.73</td>
-<td>0.68</td>
-<td>12.7</td>
-</tr>
-<tr class="odd">
-<td>Provinces</td>
-<td>fm_chronos_daily_ragged</td>
-<td>Rolling</td>
-<td>0.299</td>
-<td>40.3</td>
-<td>0.94 / 0.96</td>
-<td>0.54 / 0.73</td>
-<td>0.68</td>
-<td>12.7</td>
-</tr>
-<tr class="even">
-<td>Provinces</td>
-<td>fm_chronos_daily_ragged</td>
-<td>Rolling, w = 25</td>
-<td>0.299</td>
-<td>40.3</td>
-<td>0.94 / 0.96</td>
-<td>0.54 / 0.73</td>
-<td>0.68</td>
-<td>12.7</td>
-</tr>
-<tr class="odd">
-<td>Provinces</td>
-<td>fm_chronos_weekly_complete</td>
-<td>Unpaired</td>
-<td>0.396</td>
-<td>7.69</td>
-<td>0.92 / 0.97</td>
-<td>0.50 / 0.50</td>
-<td>1.01</td>
-<td>16.6</td>
-</tr>
-<tr class="even">
-<td>Provinces</td>
-<td>fm_chronos_weekly_complete</td>
-<td>Fixed</td>
-<td>0.362</td>
-<td>7.73</td>
-<td>0.92 / 0.97</td>
-<td>0.50 / 0.78</td>
-<td>1.01</td>
-<td>16.6</td>
-</tr>
-<tr class="odd">
-<td>Provinces</td>
-<td>fm_chronos_weekly_complete</td>
-<td>Rolling</td>
-<td>0.362</td>
-<td>7.73</td>
-<td>0.92 / 0.97</td>
-<td>0.50 / 0.78</td>
-<td>1.01</td>
-<td>16.6</td>
-</tr>
-<tr class="even">
-<td>Provinces</td>
-<td>fm_chronos_weekly_complete</td>
-<td>Rolling, w = 25</td>
-<td>0.365</td>
-<td>7.73</td>
-<td>0.92 / 0.97</td>
-<td>0.50 / 0.61</td>
-<td>1.01</td>
-<td>16.6</td>
-</tr>
-<tr class="odd">
-<td>Provinces</td>
-<td>fm_chronos_weekly_ragged</td>
-<td>Unpaired</td>
-<td>0.359</td>
-<td>40.8</td>
-<td>0.90 / 0.95</td>
-<td>0.38 / 0.52</td>
-<td>0.68</td>
-<td>12</td>
-</tr>
-<tr class="even">
-<td>Provinces</td>
-<td>fm_chronos_weekly_ragged</td>
-<td>Fixed</td>
-<td>0.319</td>
-<td>40.8</td>
-<td>0.92 / 0.96</td>
-<td>0.46 / 0.58</td>
-<td>0.68</td>
-<td>12</td>
-</tr>
-<tr class="odd">
-<td>Provinces</td>
-<td>fm_chronos_weekly_ragged</td>
-<td>Rolling</td>
-<td>0.319</td>
-<td>40.8</td>
-<td>0.92 / 0.96</td>
-<td>0.46 / 0.58</td>
-<td>0.68</td>
-<td>12</td>
-</tr>
-<tr class="even">
-<td>Provinces</td>
-<td>fm_chronos_weekly_ragged</td>
-<td>Rolling, w = 25</td>
-<td>0.319</td>
-<td>40.8</td>
-<td>0.92 / 0.96</td>
-<td>0.46 / 0.58</td>
-<td>0.68</td>
-<td>12</td>
-</tr>
-<tr class="odd">
-<td>Provinces</td>
-<td>randomwalknowcast</td>
-<td>Unpaired</td>
-<td>0.078</td>
-<td>0.364</td>
-<td>0.96 / 0.97</td>
-<td>0.33 / 0.67</td>
-<td>0.29</td>
-<td>6.27</td>
-</tr>
-<tr class="even">
-<td>Provinces</td>
-<td>randomwalknowcast</td>
-<td>Fixed</td>
-<td>0.075</td>
-<td>0.361</td>
-<td>0.96 / 0.97</td>
-<td>0.33 / 0.67</td>
-<td>0.29</td>
-<td>5.43</td>
-</tr>
-<tr class="odd">
-<td>Provinces</td>
-<td>randomwalknowcast</td>
-<td>Rolling</td>
-<td>0.075</td>
-<td>0.362</td>
-<td>0.96 / 0.97</td>
-<td>0.33 / 0.67</td>
-<td>0.29</td>
-<td>5.5</td>
-</tr>
-<tr class="even">
-<td>Provinces</td>
-<td>randomwalknowcast</td>
-<td>Rolling, w = 25</td>
-<td>0.077</td>
-<td>0.362</td>
-<td>0.96 / 0.97</td>
-<td>0.33 / 0.67</td>
-<td>0.29</td>
-<td>5.63</td>
-</tr>
-</tbody>
-</table>
-</div>
-</figure>
-</div>
-<div id="tbl-copula-germany" class="quarto-float quarto-figure quarto-figure-center anchored">
-<figure class="quarto-float quarto-float-tbl figure">
-<figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-copula-germany-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Table&nbsp;9: German nowcast hub, development half: as <a href="#tbl-copula-ebola" class="quarto-xref">Table&nbsp;8</a>, by state and by age group, with the sum over places taken over states or age groups.
-</figcaption>
-<div aria-describedby="tbl-copula-germany-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-<table class="caption-top table">
-<colgroup>
-<col style="width: 11%">
-<col style="width: 11%">
-<col style="width: 11%">
-<col style="width: 11%">
-<col style="width: 11%">
-<col style="width: 11%">
-<col style="width: 11%">
-<col style="width: 11%">
-<col style="width: 11%">
-</colgroup>
-<thead>
-<tr class="header">
-<th>Strata</th>
-<th>Model</th>
-<th>Pairing</th>
-<th>ES (log)</th>
-<th>VS (log)</th>
-<th>Weeks 50% / 90%</th>
-<th>Places 50% / 90%</th>
-<th>WIS strata</th>
-<th>WIS national</th>
-</tr>
-</thead>
-<tbody>
-<tr class="odd">
-<td>Ages</td>
-<td>randomwalknowcast</td>
-<td>Unpaired</td>
-<td>0.241</td>
-<td>2.52</td>
-<td>0.36 / 0.81</td>
-<td>0.32 / 0.69</td>
-<td>29.7</td>
-<td></td>
-</tr>
-<tr class="even">
-<td>Ages</td>
-<td>randomwalknowcast</td>
-<td>Fixed</td>
-<td>0.233</td>
-<td>2.38</td>
-<td>0.57 / 0.94</td>
-<td>0.56 / 0.90</td>
-<td>29.7</td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>Ages</td>
-<td>randomwalknowcast</td>
-<td>Rolling</td>
-<td>0.237</td>
-<td>2.46</td>
-<td>0.44 / 0.91</td>
-<td>0.41 / 0.81</td>
-<td>29.7</td>
-<td></td>
-</tr>
-<tr class="even">
-<td>Ages</td>
-<td>randomwalknowcast</td>
-<td>Rolling, w = 25</td>
-<td>0.238</td>
-<td>2.46</td>
-<td>0.42 / 0.90</td>
-<td>0.40 / 0.77</td>
-<td>29.7</td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>States</td>
-<td>randomwalknowcast</td>
-<td>Unpaired</td>
-<td>0.659</td>
-<td>52.6</td>
-<td>0.41 / 0.80</td>
-<td>0.34 / 0.72</td>
-<td>16.2</td>
-<td>162</td>
-</tr>
-<tr class="even">
-<td>States</td>
-<td>randomwalknowcast</td>
-<td>Fixed</td>
-<td>0.666</td>
-<td>52</td>
-<td>0.57 / 0.92</td>
-<td>0.70 / 0.98</td>
-<td>16.2</td>
-<td>165</td>
-</tr>
-<tr class="odd">
-<td>States</td>
-<td>randomwalknowcast</td>
-<td>Rolling</td>
-<td>0.658</td>
-<td>52.4</td>
-<td>0.51 / 0.89</td>
-<td>0.38 / 0.84</td>
-<td>16.2</td>
-<td>152</td>
-</tr>
-<tr class="even">
-<td>States</td>
-<td>randomwalknowcast</td>
-<td>Rolling, w = 25</td>
-<td>0.659</td>
-<td>52.5</td>
-<td>0.50 / 0.89</td>
-<td>0.37 / 0.82</td>
-<td>16.2</td>
-<td>154</td>
-</tr>
-</tbody>
-</table>
-</div>
 </figure>
 </div>
 </section>
 <section id="joint-block-or-aggregation" class="level3">
 <h3 class="anchored" data-anchor-id="joint-block-or-aggregation">Joint block or aggregation</h3>
-<p>Our Chronos-2 models use the joint block. On BDBV it is best or tied at provinces, zones and the national level for the zero-shot models. On the German development half, level by level is competitive for the daily zero-shot model (2.19 against 3.05 at the national level) and for age groups. Summing the lowest level loses at every level above it, with or without the copula: at BDBV’s national level the daily zero-shot model scores 8.01 summed and 5.11 summed after pairing, against 1.26 for the joint block. <a href="#fig-aggregation" class="quarto-xref">Figure&nbsp;4</a> gives every option by study and level, with WIS relative to <code>randomwalknowcast</code> on the same targets.</p>
+<p>Our Chronos-2 models use the joint block. On BDBV it is best or tied at provinces, zones and the national level for the zero-shot models. On the German development half, level by level is competitive for the daily zero-shot model (2.19 against 3.05 at the national level) and for age groups. Summing the lowest level loses at every level above it, with or without the copula: at BDBV’s national level the daily zero-shot model scores 8.01 summed and 5.11 summed after pairing, against 1.26 for the joint block. <a href="#fig-aggregation" class="quarto-xref">Figure&nbsp;5</a> gives every option by study and level, with WIS relative to <code>randomwalknowcast</code> on the same targets.</p>
 <div id="fig-aggregation" class="quarto-float quarto-figure quarto-figure-center anchored">
 <figure class="quarto-float quarto-float-fig figure">
 <div aria-describedby="fig-aggregation-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
 <img src="build/figures/si/aggregation.png" class="img-fluid figure-img">
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-aggregation-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;4: WIS of each aggregation option relative to <code>randomwalknowcast</code> on the same targets, by study and level, one marker per model: (a) joint block, (b) level by level, (c) lowest level summed at random, (d) lowest level summed after pairing, and (e) the daily model’s weekly row against its days summed after pairing and at random. Ebola release backtest and German development half.
+Figure&nbsp;5: WIS of each aggregation option relative to <code>randomwalknowcast</code> on the same targets, by study and level, one marker per model: (a) joint block, (b) level by level, (c) lowest level summed at random, (d) lowest level summed after pairing, and (e) the daily model’s weekly row against its days summed after pairing and at random. Ebola release backtest and German development half.
 </figcaption>
 </figure>
 </div>
@@ -1182,13 +817,13 @@ Figure&nbsp;4: WIS of each aggregation option relative to <code>randomwalknowcas
 <section id="checkpoint-curve" class="level3">
 <h3 class="anchored" data-anchor-id="checkpoint-curve">Checkpoint curve</h3>
 <ul>
-<li>We compare the final run’s checkpoints, fine-tuned on 250, 500, 750, 1,000, 2,000, 4,000 and 8,000 simulations.</li>
+<li>We compare the final run’s checkpoints, fine-tuned on 250, 500, 750, 1,000, 2,000, 4,000 and 8,400 simulations.</li>
 <li>They share the grid, the data order and the recipe, as checkpoints of one run.</li>
-<li><a href="#fig-finetune-heldout" class="quarto-xref">Figure&nbsp;5</a> gives the trainer’s held-out loss by level, for transparency, not to select a checkpoint.</li>
-<li><a href="#fig-checkpoint-curve" class="quarto-xref">Figure&nbsp;6</a> gives German first-half and BDBV relative scores at each checkpoint, with zero-shot Chronos-2 on the ragged layout and on complete data only as reference lines.</li>
-<li><a href="#tbl-checkpoints" class="quarto-xref">Table&nbsp;10</a> gives the headline scores of each checkpoint.</li>
+<li><a href="#fig-finetune-heldout" class="quarto-xref">Figure&nbsp;6</a> gives the trainer’s held-out loss by level, for transparency, not to select a checkpoint.</li>
+<li><a href="#fig-checkpoint-curve" class="quarto-xref">Figure&nbsp;7</a> gives German first-half and BDBV relative scores at each checkpoint, with zero-shot Chronos-2 on the ragged layout and on complete data only as reference lines.</li>
+<li><a href="#tbl-checkpoints" class="quarto-xref">Table&nbsp;8</a> gives the headline scores of each checkpoint.</li>
 <li>A later checkpoint has also trained for more steps.</li>
-<li>The learning rate falls linearly to zero at 8,000 simulations, so the earlier checkpoints are taken at 97% (250) to 50% (4,000) of the starting rate, and only the 8,000 checkpoint is annealed.</li>
+<li>The learning rate falls linearly to zero over the 8,400 simulations, so the earlier checkpoints are taken at 97% (250) to 52% (4,000) of the starting rate, and only the 8,400 checkpoint is annealed.</li>
 </ul>
 <div id="fig-finetune-heldout" class="quarto-float quarto-figure quarto-figure-center anchored">
 <figure class="quarto-float quarto-float-fig figure">
@@ -1196,7 +831,7 @@ Figure&nbsp;4: WIS of each aggregation option relative to <code>randomwalknowcas
 <img src="build/figures/si/finetune-heldout.png" class="img-fluid figure-img">
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-finetune-heldout-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;5: The trainer’s held-out loss of the fine-tune by level (national, intermediate and leaf) against the number of simulated outbreaks it has seen. Preliminary: fine-tuned on 2,000 of 8,000 simulations. Development data only.
+Figure&nbsp;6: The trainer’s held-out loss of the fine-tune by level (national, intermediate and leaf) against the number of simulated outbreaks it has seen. Preliminary: fine-tuned on 2,000 of 8,000 simulations. Development data only.
 </figcaption>
 </figure>
 </div>
@@ -1206,14 +841,14 @@ Figure&nbsp;5: The trainer’s held-out loss of the fine-tune by level (national
 <img src="build/figures/si/checkpoint-curve.png" class="img-fluid figure-img">
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-checkpoint-curve-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;6: WIS (Germany, on each model’s own quantiles) and CRPS (BDBV, on 1,000 draws with common random numbers) relative to <code>randomwalknowcast</code> of the fine-tuned ragged Chronos-2 models against the number of simulated outbreaks each checkpoint was fine-tuned on, by level. Horizontal lines give the models with no fine-tuning: zero-shot Chronos-2 on the ragged layout (dashed) and on complete data only (dotted), each in its source’s colour, and <code>randomwalknowcast</code> at 1. Each panel gives n, the fewest matched cells of its points, and the forecast origins they come from, and panels with fewer than 5 are grey. Preliminary: fine-tuned on 2,000 of 8,000 simulations. Development data only.
+Figure&nbsp;7: WIS (Germany, on each model’s own quantiles) and CRPS (BDBV, on 1,000 draws with common random numbers) relative to <code>randomwalknowcast</code> of the fine-tuned ragged Chronos-2 models against the number of simulated outbreaks each checkpoint was fine-tuned on, by level. Horizontal lines give the models with no fine-tuning: zero-shot Chronos-2 on the ragged layout (dashed) and on complete data only (dotted), each in its source’s colour, and <code>randomwalknowcast</code> at 1. Each panel gives n, the fewest matched cells of its points, and the forecast origins they come from, and panels with fewer than 5 are grey. Preliminary: fine-tuned on 2,000 of 8,000 simulations. Development data only.
 </figcaption>
 </figure>
 </div>
 <div id="tbl-checkpoints" class="quarto-float quarto-figure quarto-figure-center anchored">
 <figure class="quarto-float quarto-float-tbl figure">
 <figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-checkpoints-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Table&nbsp;10: Zero-shot Chronos-2, then each checkpoint by the simulations it was fine-tuned on: national WIS on the German first half and CRPS and log CRPS on the BDBV release backtest, relative to <code>randomwalknowcast</code> (daily / weekly model), and the trainer’s held-out loss. Blank cells are not yet scored. Preliminary: fine-tuned on 2,000 of 8,000 simulations. Development data only.
+Table&nbsp;8: Zero-shot Chronos-2, then each checkpoint by the simulations it was fine-tuned on: national WIS on the German first half and CRPS and log CRPS on the BDBV release backtest, relative to <code>randomwalknowcast</code> (daily / weekly model), and the trainer’s held-out loss. Blank cells are not yet scored. Preliminary: fine-tuned on 2,000 of 8,000 simulations. Development data only.
 </figcaption>
 <div aria-describedby="tbl-checkpoints-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
 <table class="caption-top table">
@@ -1287,8 +922,8 @@ Table&nbsp;10: Zero-shot Chronos-2, then each checkpoint by the simulations it w
 <ul>
 <li>We compare the run with attention biases with a run without them.</li>
 <li>Both runs share the grid, the data order, the LoRA recipe and the checkpoints.</li>
-<li><a href="#fig-compare-slots" class="quarto-xref">Figure&nbsp;7</a> shows the trainer’s held-out loss and German first-half and BDBV relative scores of both runs by checkpoint and level.</li>
-<li><a href="#tbl-slots-summary" class="quarto-xref">Table&nbsp;11</a> gives each run’s newest checkpoint.</li>
+<li><a href="#fig-compare-slots" class="quarto-xref">Figure&nbsp;8</a> shows the trainer’s held-out loss and German first-half and BDBV relative scores of both runs by checkpoint and level.</li>
+<li><a href="#tbl-slots-summary" class="quarto-xref">Table&nbsp;9</a> gives each run’s newest checkpoint.</li>
 <li>The lag-swap test moves whole lag series to another place.</li>
 <li>A ratio above 1 means the model’s forecast depends on which place’s lags sit with a target.</li>
 <li>Zero-shot Chronos-2 can also match lags to targets by value, so the comparison with the run without biases, not the ratio alone, tests the biases.</li>
@@ -1300,14 +935,14 @@ Table&nbsp;10: Zero-shot Chronos-2, then each checkpoint by the simulations it w
 <img src="build/figures/si/compare-slots.png" class="img-fluid figure-img">
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-compare-slots-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;7: Attention biases against none: the trainer’s held-out loss and German first-half and BDBV relative scores, by checkpoint and level. Preliminary: fine-tuned on 2,000 of 8,000 simulations. Development data only.
+Figure&nbsp;8: Attention biases against none: the trainer’s held-out loss and German first-half and BDBV relative scores, by checkpoint and level. Preliminary: fine-tuned on 2,000 of 8,000 simulations. Development data only.
 </figcaption>
 </figure>
 </div>
 <div id="tbl-slots-summary" class="quarto-float quarto-figure quarto-figure-center anchored">
 <figure class="quarto-float quarto-float-tbl figure">
 <figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-slots-summary-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Table&nbsp;11: Zero-shot Chronos-2 and the newest checkpoint of the runs with and without attention biases: national WIS on the German first half and CRPS and log CRPS on the BDBV release backtest, relative to <code>randomwalknowcast</code> (daily / weekly model), and the trainer’s held-out loss, with each cell’s simulations in brackets. Preliminary: fine-tuned on 2,000 of 8,000 simulations. Development data only.
+Table&nbsp;9: Zero-shot Chronos-2 and the newest checkpoint of the runs with and without attention biases: national WIS on the German first half and CRPS and log CRPS on the BDBV release backtest, relative to <code>randomwalknowcast</code> (daily / weekly model), and the trainer’s held-out loss, with each cell’s simulations in brackets. Preliminary: fine-tuned on 2,000 of 8,000 simulations. Development data only.
 </figcaption>
 <div aria-describedby="tbl-slots-summary-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
 <table class="caption-top table">
@@ -1360,7 +995,7 @@ Table&nbsp;11: Zero-shot Chronos-2 and the newest checkpoint of the runs with an
 <ul>
 <li>We fine-tune a run on complete counts only, with the attention biases and without lag series, and compare it with the ragged run.</li>
 <li>Both runs share the grid, the data order, the recipe and the checkpoints.</li>
-<li><a href="#fig-compare-delays" class="quarto-xref">Figure&nbsp;8</a> shows both runs by checkpoint.</li>
+<li><a href="#fig-compare-delays" class="quarto-xref">Figure&nbsp;9</a> shows both runs by checkpoint.</li>
 <li>Without lag series the no-delay model has no counts after the last complete step, so its context ends there.</li>
 </ul>
 <div id="fig-compare-delays" class="quarto-float quarto-figure quarto-figure-center anchored">
@@ -1369,7 +1004,7 @@ Table&nbsp;11: Zero-shot Chronos-2 and the newest checkpoint of the runs with an
 <img src="build/figures/si/compare-delays.png" class="img-fluid figure-img">
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-compare-delays-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;8: Delays against no delays: held-out loss by source and German first-half and BDBV relative scores, by checkpoint.
+Figure&nbsp;9: Delays against no delays: held-out loss by source and German first-half and BDBV relative scores, by checkpoint.
 </figcaption>
 </figure>
 </div>
@@ -1381,7 +1016,7 @@ Figure&nbsp;8: Delays against no delays: held-out loss by source and German firs
 <li>Its BDBV training data are every release up to 2026-11-08, so we score it on BDBV rounds from 21 November 2026 only.</li>
 <li>It saw the German development half, so we score it on the held-out half only.</li>
 <li>Both use the same recipe and the ragged layout.</li>
-<li><a href="#tbl-real-finetune" class="quarto-xref">Table&nbsp;12</a> gives the scores, and <a href="#fig-compare-realdata" class="quarto-xref">Figure&nbsp;9</a> shows them.</li>
+<li><a href="#tbl-real-finetune" class="quarto-xref">Table&nbsp;10</a> gives the scores, and <a href="#fig-compare-realdata" class="quarto-xref">Figure&nbsp;10</a> shows them.</li>
 <li>We leave the real-data model out of every other table and figure.</li>
 </ul>
 <div id="fig-compare-realdata" class="quarto-float quarto-figure quarto-figure-center anchored">
@@ -1390,14 +1025,14 @@ Figure&nbsp;8: Delays against no delays: held-out loss by source and German firs
 <img src="build/figures/si/compare-realdata.png" class="img-fluid figure-img">
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-compare-realdata-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;9: Real-data fine-tune against synthetic: German held-out and BDBV relative scores.
+Figure&nbsp;10: Real-data fine-tune against synthetic: German held-out and BDBV relative scores.
 </figcaption>
 </figure>
 </div>
 <div id="tbl-real-finetune" class="quarto-float quarto-figure quarto-figure-center anchored">
 <figure class="quarto-float quarto-float-tbl figure">
 <figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-real-finetune-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Table&nbsp;12: Chronos-2 zero-shot (<code>_ragged</code>), fine-tuned on simulations (<code>_ft</code>) and fine-tuned on real data (<code>_real</code>), by level: WIS on the German held-out half and CRPS on BDBV rounds from 21 November 2026, relative to <code>randomwalknowcast</code>. Blank cells have no scores yet.
+Table&nbsp;10: Chronos-2 zero-shot (<code>_ragged</code>), fine-tuned on simulations (<code>_ft</code>) and fine-tuned on real data (<code>_real</code>), by level: WIS on the German held-out half and CRPS on BDBV rounds from 21 November 2026, relative to <code>randomwalknowcast</code>. Blank cells have no scores yet.
 </figcaption>
 <div aria-describedby="tbl-real-finetune-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
 <table class="caption-top">
@@ -1422,8 +1057,8 @@ Table&nbsp;12: Chronos-2 zero-shot (<code>_ragged</code>), fine-tuned on simulat
 <li>We score our models’ daily counts in both case studies directly from the daily rows, not summed.</li>
 <li>The main text scores the hub targets, 7-day counts for Germany and weekly counts for BDBV.</li>
 <li>Hub teams give no daily forecasts, so we compare our models with <code>randomwalknowcast</code> only.</li>
-<li><a href="#fig-compare-daily" class="quarto-xref">Figure&nbsp;10</a> shows both.</li>
-<li><a href="#fig-germany-si-results-daily" class="quarto-xref">Figure&nbsp;11</a> repeats the German results figure for daily counts.</li>
+<li><a href="#fig-compare-daily" class="quarto-xref">Figure&nbsp;11</a> shows both.</li>
+<li><a href="#fig-germany-si-results-daily" class="quarto-xref">Figure&nbsp;12</a> repeats the German results figure for daily counts.</li>
 </ul>
 <div id="fig-compare-daily" class="quarto-float quarto-figure quarto-figure-center anchored">
 <figure class="quarto-float quarto-float-fig figure">
@@ -1431,7 +1066,7 @@ Table&nbsp;12: Chronos-2 zero-shot (<code>_ragged</code>), fine-tuned on simulat
 <img src="build/figures/si/compare-daily.png" class="img-fluid figure-img">
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-compare-daily-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;10: Daily nowcasts: German and BDBV relative scores on daily counts and on the hub targets, by checkpoint.
+Figure&nbsp;11: Daily nowcasts: German and BDBV relative scores on daily counts and on the hub targets, by checkpoint.
 </figcaption>
 </figure>
 </div>
@@ -1441,7 +1076,7 @@ Figure&nbsp;10: Daily nowcasts: German and BDBV relative scores on daily counts 
 <img src="build/figures/si/germany-si-results-daily.png" class="img-fluid figure-img">
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-germany-si-results-daily-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;11: German nowcast hub, daily counts: the panels of the German results figure, with daily nowcasts against the daily truth and WIS on daily counts, without the hub teams.
+Figure&nbsp;12: German nowcast hub, daily counts: the panels of the German results figure, with daily nowcasts against the daily truth and WIS on daily counts, without the hub teams.
 </figcaption>
 </figure>
 </div>
@@ -1451,7 +1086,7 @@ Figure&nbsp;11: German nowcast hub, daily counts: the panels of the German resul
 <div id="tbl-synthetic-evaluated" class="quarto-float quarto-figure quarto-figure-center anchored">
 <figure class="quarto-float quarto-float-tbl figure">
 <figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-synthetic-evaluated-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Table&nbsp;13: The share of evaluated outbreaks in each level of each grid factor, as each simulation recorded its cell. Illustrative, dummy data
+Table&nbsp;11: The share of evaluated outbreaks in each level of each grid factor, as each simulation recorded its cell. Illustrative, dummy data
 </figcaption>
 <div aria-describedby="tbl-synthetic-evaluated-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
 <table class="caption-top table">
@@ -1634,7 +1269,7 @@ Table&nbsp;13: The share of evaluated outbreaks in each level of each grid facto
 <img src="build/figures/si/synthetic-si-nowcasts.png" class="img-fluid figure-img">
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-synthetic-si-nowcasts-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;12: Held-out synthetic data: nowcasts of outbreaks drawn to cover the levels of the trajectory, delay form, observation model and strata, one row per outbreak labelled by its cell, one column per model. Black is the rolling truth, grey dashed the data as of the origin, and blue the model’s median with its 50% and 95% intervals. Illustrative, dummy data
+Figure&nbsp;13: Held-out synthetic data: nowcasts of outbreaks drawn to cover the levels of the trajectory, delay form, observation model and strata, one row per outbreak labelled by its cell, one column per model. Black is the rolling truth, grey dashed the data as of the origin, and blue the model’s median with its 50% and 95% intervals. Illustrative, dummy data
 </figcaption>
 </figure>
 </div>
@@ -1644,7 +1279,7 @@ Figure&nbsp;12: Held-out synthetic data: nowcasts of outbreaks drawn to cover th
 <img src="build/figures/si/synthetic-si-factors.png" class="img-fluid figure-img">
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-synthetic-si-factors-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;13: Held-out synthetic data: relative CRPS by level of each scenario factor. Illustrative, dummy data
+Figure&nbsp;14: Held-out synthetic data: relative CRPS by level of each scenario factor. Illustrative, dummy data
 </figcaption>
 </figure>
 </div>
@@ -1654,7 +1289,7 @@ Figure&nbsp;13: Held-out synthetic data: relative CRPS by level of each scenario
 <img src="build/figures/si/synthetic-si-factors-log.png" class="img-fluid figure-img">
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-synthetic-si-factors-log-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;14: Held-out synthetic data: relative CRPS on the log scale by level of each scenario factor. Illustrative, dummy data
+Figure&nbsp;15: Held-out synthetic data: relative CRPS on the log scale by level of each scenario factor. Illustrative, dummy data
 </figcaption>
 </figure>
 </div>
@@ -1664,7 +1299,7 @@ Figure&nbsp;14: Held-out synthetic data: relative CRPS on the log scale by level
 <img src="build/figures/si/synthetic-si-wis-over-time.png" class="img-fluid figure-img">
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-synthetic-si-wis-over-time-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;15: Held-out synthetic data: CRPS over time. Illustrative, dummy data
+Figure&nbsp;16: Held-out synthetic data: CRPS over time. Illustrative, dummy data
 </figcaption>
 </figure>
 </div>
@@ -1674,14 +1309,14 @@ Figure&nbsp;15: Held-out synthetic data: CRPS over time. Illustrative, dummy dat
 <img src="build/figures/si/synthetic-si-finetune-size.png" class="img-fluid figure-img">
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-synthetic-si-finetune-size-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;16: Held-out synthetic data: relative CRPS of each fine-tuning checkpoint, at doublings from 1,000 outbreaks, against the number of simulated outbreaks it was trained on (log scale). Illustrative, dummy data
+Figure&nbsp;17: Held-out synthetic data: relative CRPS of each fine-tuning checkpoint, at doublings from 1,000 outbreaks, against the number of simulated outbreaks it was trained on (log scale). Illustrative, dummy data
 </figcaption>
 </figure>
 </div>
 <div id="tbl-synthetic-horizon" class="quarto-float quarto-figure quarto-figure-center anchored">
 <figure class="quarto-float quarto-float-tbl figure">
 <figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-synthetic-horizon-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Table&nbsp;14: Held-out synthetic data scores by horizon. Illustrative, dummy data
+Table&nbsp;12: Held-out synthetic data scores by horizon. Illustrative, dummy data
 </figcaption>
 <div aria-describedby="tbl-synthetic-horizon-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
 <table class="caption-top table">
@@ -2508,7 +2143,7 @@ Table&nbsp;14: Held-out synthetic data scores by horizon. Illustrative, dummy da
 <div id="tbl-synthetic-location" class="quarto-float quarto-figure quarto-figure-center anchored">
 <figure class="quarto-float quarto-float-tbl figure">
 <figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-synthetic-location-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Table&nbsp;15: Held-out synthetic data scores by location and stratum. Illustrative, dummy data
+Table&nbsp;13: Held-out synthetic data scores by location and stratum. Illustrative, dummy data
 </figcaption>
 <div aria-describedby="tbl-synthetic-location-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
 <table class="caption-top table">
@@ -3399,7 +3034,7 @@ Table&nbsp;15: Held-out synthetic data scores by location and stratum. Illustrat
 <img src="build/figures/si/germany-si-nowcasts.png" class="img-fluid figure-img">
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-germany-si-nowcasts-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;17: German nowcast hub: nowcasts for places picked by a rule in the workflow config (the largest, median and smallest by recent count, and the most rising and most falling), one row per place labelled with why it was picked, at the last origin shown in the main text, one column per model. Black is the rolling truth, grey dashed the data as of the origin, and blue the model’s median with its 50% and 95% intervals.
+Figure&nbsp;18: German nowcast hub: nowcasts for places picked by a rule in the workflow config (the largest, median and smallest by recent count, and the most rising and most falling), one row per place labelled with why it was picked, at the last origin shown in the main text, one column per model. Black is the rolling truth, grey dashed the data as of the origin, and blue the model’s median with its 50% and 95% intervals.
 </figcaption>
 </figure>
 </div>
@@ -3409,7 +3044,7 @@ Figure&nbsp;17: German nowcast hub: nowcasts for places picked by a rule in the 
 <img src="build/figures/si/germany-si-places.png" class="img-fluid figure-img">
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-germany-si-places-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;18: German nowcast hub: WIS of every place relative to KIT-frozen_baseline, one dot per model.
+Figure&nbsp;19: German nowcast hub: WIS of every place relative to KIT-frozen_baseline, one dot per model.
 </figcaption>
 </figure>
 </div>
@@ -3419,7 +3054,7 @@ Figure&nbsp;18: German nowcast hub: WIS of every place relative to KIT-frozen_ba
 <img src="build/figures/si/germany-si-location-horizon.png" class="img-fluid figure-img">
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-germany-si-location-horizon-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;19: German nowcast hub: relative WIS by location and horizon.
+Figure&nbsp;20: German nowcast hub: relative WIS by location and horizon.
 </figcaption>
 </figure>
 </div>
@@ -3429,7 +3064,7 @@ Figure&nbsp;19: German nowcast hub: relative WIS by location and horizon.
 <img src="build/figures/si/germany-si-location-horizon-log.png" class="img-fluid figure-img">
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-germany-si-location-horizon-log-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;20: German nowcast hub: relative WIS on the log scale by location and horizon.
+Figure&nbsp;21: German nowcast hub: relative WIS on the log scale by location and horizon.
 </figcaption>
 </figure>
 </div>
@@ -3439,14 +3074,14 @@ Figure&nbsp;20: German nowcast hub: relative WIS on the log scale by location an
 <img src="build/figures/si/germany-si-wis-over-time.png" class="img-fluid figure-img">
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-germany-si-wis-over-time-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;21: German nowcast hub: WIS over time, with a dotted line at the split.
+Figure&nbsp;22: German nowcast hub: WIS over time, with a dotted line at the split.
 </figcaption>
 </figure>
 </div>
 <div id="tbl-germany-horizon" class="quarto-float quarto-figure quarto-figure-center anchored">
 <figure class="quarto-float quarto-float-tbl figure">
 <figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-germany-horizon-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Table&nbsp;16: German nowcast hub scores by horizon.
+Table&nbsp;14: German nowcast hub scores by horizon.
 </figcaption>
 <div aria-describedby="tbl-germany-horizon-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
 <table class="caption-top table">
@@ -4853,7 +4488,7 @@ Table&nbsp;16: German nowcast hub scores by horizon.
 <div id="tbl-germany-location" class="quarto-float quarto-figure quarto-figure-center anchored">
 <figure class="quarto-float quarto-float-tbl figure">
 <figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-germany-location-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Table&nbsp;17: German nowcast hub scores by location and stratum.
+Table&nbsp;15: German nowcast hub scores by location and stratum.
 </figcaption>
 <div aria-describedby="tbl-germany-location-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
 <table class="caption-top table">
@@ -11164,7 +10799,7 @@ Table&nbsp;17: German nowcast hub scores by location and stratum.
 <img src="build/figures/si/ebola-si-nowcasts.png" class="img-fluid figure-img">
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-ebola-si-nowcasts-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;22: Ebola: nowcasts for places picked by a rule in the workflow config (the largest, median and smallest by recent count, and the most rising and most falling), one row per place labelled with why it was picked, at the last origin shown in the main text, one column per model. Black is the rolling truth, grey dashed the data as of the origin, and blue the model’s median with its 50% and 95% intervals.
+Figure&nbsp;23: Ebola: nowcasts for places picked by a rule in the workflow config (the largest, median and smallest by recent count, and the most rising and most falling), one row per place labelled with why it was picked, at the last origin shown in the main text, one column per model. Black is the rolling truth, grey dashed the data as of the origin, and blue the model’s median with its 50% and 95% intervals.
 </figcaption>
 </figure>
 </div>
@@ -11174,7 +10809,7 @@ Figure&nbsp;22: Ebola: nowcasts for places picked by a rule in the workflow conf
 <img src="build/figures/si/ebola-si-places.png" class="img-fluid figure-img">
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-ebola-si-places-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;23: Ebola: CRPS of every place relative to randomwalknowcast, one dot per model.
+Figure&nbsp;24: Ebola: CRPS of every place relative to randomwalknowcast, one dot per model.
 </figcaption>
 </figure>
 </div>
@@ -11184,7 +10819,7 @@ Figure&nbsp;23: Ebola: CRPS of every place relative to randomwalknowcast, one do
 <img src="build/figures/si/ebola-si-location-horizon.png" class="img-fluid figure-img">
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-ebola-si-location-horizon-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;24: Ebola: relative CRPS by location and horizon.
+Figure&nbsp;25: Ebola: relative CRPS by location and horizon.
 </figcaption>
 </figure>
 </div>
@@ -11194,7 +10829,7 @@ Figure&nbsp;24: Ebola: relative CRPS by location and horizon.
 <img src="build/figures/si/ebola-si-location-horizon-log.png" class="img-fluid figure-img">
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-ebola-si-location-horizon-log-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;25: Ebola: relative CRPS on the log scale by location and horizon.
+Figure&nbsp;26: Ebola: relative CRPS on the log scale by location and horizon.
 </figcaption>
 </figure>
 </div>
@@ -11204,14 +10839,14 @@ Figure&nbsp;25: Ebola: relative CRPS on the log scale by location and horizon.
 <img src="build/figures/si/ebola-si-wis-over-time.png" class="img-fluid figure-img">
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-ebola-si-wis-over-time-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;26: Ebola: CRPS over time.
+Figure&nbsp;27: Ebola: CRPS over time.
 </figcaption>
 </figure>
 </div>
 <div id="tbl-ebola-horizon" class="quarto-float quarto-figure quarto-figure-center anchored">
 <figure class="quarto-float quarto-float-tbl figure">
 <figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-ebola-horizon-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Table&nbsp;18: Ebola hub submissions scores by horizon.
+Table&nbsp;16: Ebola hub submissions scores by horizon.
 </figcaption>
 <div aria-describedby="tbl-ebola-horizon-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
 <table class="caption-top table">
@@ -11573,37 +11208,37 @@ Table&nbsp;18: Ebola hub submissions scores by horizon.
 <td>renewal</td>
 <td>crps</td>
 <td>-4</td>
-<td>1.11</td>
-<td>0.0168</td>
-<td>0.0335</td>
-<td>0.861</td>
+<td>1.12</td>
+<td>0.017</td>
+<td>0.0337</td>
+<td>0.87</td>
 <td>0.944</td>
 <td>108</td>
 <td>0.929</td>
-<td>1.13</td>
+<td>1.14</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
 <td>renewal</td>
 <td>crps</td>
 <td>-3</td>
-<td>1.54</td>
-<td>0.0429</td>
-<td>-0.0221</td>
+<td>1.53</td>
+<td>0.0424</td>
+<td>-0.0238</td>
 <td>0.864</td>
-<td>0.901</td>
+<td>0.889</td>
 <td>81</td>
 <td>1.12</td>
-<td>1.09</td>
+<td>1.08</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
 <td>renewal</td>
 <td>crps</td>
 <td>-2</td>
-<td>2.57</td>
-<td>0.0667</td>
-<td>0.00352</td>
+<td>2.68</td>
+<td>0.0674</td>
+<td>-0.0013</td>
 <td>0.889</td>
 <td>0.926</td>
 <td>54</td>
@@ -11615,9 +11250,65 @@ Table&nbsp;18: Ebola hub submissions scores by horizon.
 <td>renewal</td>
 <td>crps</td>
 <td>-1</td>
-<td>2.94</td>
-<td>0.0427</td>
-<td>0.0696</td>
+<td>3.41</td>
+<td>0.0412</td>
+<td>0.0641</td>
+<td>1</td>
+<td>1</td>
+<td>27</td>
+<td></td>
+<td></td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>renewalbvd</td>
+<td>crps</td>
+<td>-4</td>
+<td>1.13</td>
+<td>0.0181</td>
+<td>0.0362</td>
+<td>0.861</td>
+<td>0.944</td>
+<td>108</td>
+<td>0.943</td>
+<td>1.21</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>renewalbvd</td>
+<td>crps</td>
+<td>-3</td>
+<td>1.55</td>
+<td>0.0433</td>
+<td>-0.0249</td>
+<td>0.864</td>
+<td>0.889</td>
+<td>81</td>
+<td>1.13</td>
+<td>1.1</td>
+</tr>
+<tr class="even">
+<td>ebola</td>
+<td>renewalbvd</td>
+<td>crps</td>
+<td>-2</td>
+<td>2.42</td>
+<td>0.0686</td>
+<td>0.00222</td>
+<td>0.889</td>
+<td>0.926</td>
+<td>54</td>
+<td>0.755</td>
+<td>1.09</td>
+</tr>
+<tr class="odd">
+<td>ebola</td>
+<td>renewalbvd</td>
+<td>crps</td>
+<td>-1</td>
+<td>2.28</td>
+<td>0.0396</td>
+<td>0.0463</td>
 <td>0.963</td>
 <td>1</td>
 <td>27</td>
@@ -11626,87 +11317,31 @@ Table&nbsp;18: Ebola hub submissions scores by horizon.
 </tr>
 <tr class="even">
 <td>ebola</td>
-<td>renewalbvd</td>
+<td>renewalsp</td>
 <td>crps</td>
 <td>-4</td>
-<td>1.14</td>
-<td>0.0179</td>
-<td>0.0369</td>
-<td>0.861</td>
-<td>0.944</td>
-<td>108</td>
-<td>0.954</td>
-<td>1.2</td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>renewalbvd</td>
-<td>crps</td>
-<td>-3</td>
-<td>1.52</td>
-<td>0.0437</td>
-<td>-0.0199</td>
-<td>0.864</td>
+<td>1.29</td>
+<td>0.0159</td>
+<td>0.0752</td>
 <td>0.914</td>
-<td>81</td>
-<td>1.12</td>
-<td>1.11</td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>renewalbvd</td>
-<td>crps</td>
-<td>-2</td>
-<td>2.55</td>
-<td>0.0687</td>
-<td>0.000926</td>
-<td>0.889</td>
 <td>0.926</td>
-<td>54</td>
-<td>0.751</td>
+<td>81</td>
 <td>1.07</td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>renewalbvd</td>
-<td>crps</td>
-<td>-1</td>
-<td>2.59</td>
-<td>0.0412</td>
-<td>0.0589</td>
-<td>0.926</td>
-<td>1</td>
-<td>27</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>renewalsp</td>
-<td>crps</td>
-<td>-4</td>
-<td>1.31</td>
-<td>0.0157</td>
-<td>0.0769</td>
-<td>0.889</td>
-<td>0.926</td>
-<td>81</td>
-<td>1.08</td>
-<td>0.964</td>
+<td>0.976</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
 <td>renewalsp</td>
 <td>crps</td>
 <td>-3</td>
-<td>1.42</td>
-<td>0.0401</td>
-<td>-0.023</td>
-<td>0.833</td>
+<td>1.38</td>
+<td>0.0404</td>
+<td>-0.0178</td>
+<td>0.852</td>
 <td>0.907</td>
 <td>54</td>
-<td>0.817</td>
-<td>0.952</td>
+<td>0.796</td>
+<td>0.96</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -11730,7 +11365,7 @@ Table&nbsp;18: Ebola hub submissions scores by horizon.
 <div id="tbl-ebola-location" class="quarto-float quarto-figure quarto-figure-center anchored">
 <figure class="quarto-float quarto-float-tbl figure">
 <figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-ebola-location-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Table&nbsp;19: Ebola hub submissions scores by location and stratum.
+Table&nbsp;17: Ebola hub submissions scores by location and stratum.
 </figcaption>
 <div aria-describedby="tbl-ebola-location-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
 <table class="caption-top table">
@@ -14189,13 +13824,13 @@ Table&nbsp;19: Ebola hub submissions scores by location and stratum.
 <td>CD-TU</td>
 <td>all</td>
 <td>0</td>
-<td>2.89e-19</td>
+<td>0</td>
 <td>0.00167</td>
 <td>1</td>
 <td>1</td>
 <td>6</td>
 <td></td>
-<td>0.333</td>
+<td>0</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
@@ -14608,14 +14243,14 @@ Table&nbsp;19: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD</td>
 <td>all</td>
-<td>15.7</td>
-<td>0.0329</td>
-<td>-0.191</td>
+<td>16.8</td>
+<td>0.0349</td>
+<td>-0.19</td>
 <td>0.5</td>
 <td>0.7</td>
 <td>10</td>
-<td>0.905</td>
-<td>0.908</td>
+<td>0.917</td>
+<td>0.92</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
@@ -14638,14 +14273,14 @@ Table&nbsp;19: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-BU</td>
 <td>all</td>
-<td>0.324</td>
-<td>0.143</td>
-<td>0.247</td>
-<td>0.9</td>
+<td>0.32</td>
+<td>0.137</td>
+<td>0.225</td>
+<td>1</td>
 <td>1</td>
 <td>10</td>
-<td>0.455</td>
-<td>0.366</td>
+<td>0.439</td>
+<td>0.357</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
@@ -14683,9 +14318,9 @@ Table&nbsp;19: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-HL</td>
 <td>all</td>
-<td>0</td>
-<td>5.2e-19</td>
-<td>0.003</td>
+<td>2.02e-05</td>
+<td>1.4e-05</td>
+<td>0.004</td>
 <td>1</td>
 <td>1</td>
 <td>10</td>
@@ -14698,14 +14333,14 @@ Table&nbsp;19: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-HU</td>
 <td>all</td>
-<td>1.6</td>
-<td>0.0554</td>
-<td>0.424</td>
+<td>1.54</td>
+<td>0.0534</td>
+<td>0.425</td>
 <td>0.7</td>
 <td>0.8</td>
 <td>10</td>
-<td>1.07</td>
-<td>1.13</td>
+<td>1.03</td>
+<td>1.09</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
@@ -14713,14 +14348,14 @@ Table&nbsp;19: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-IT</td>
 <td>all</td>
-<td>11</td>
-<td>0.0424</td>
-<td>-0.076</td>
-<td>0.4</td>
+<td>11.8</td>
+<td>0.0451</td>
+<td>-0.088</td>
+<td>0.5</td>
 <td>0.8</td>
 <td>10</td>
-<td>0.767</td>
-<td>0.784</td>
+<td>0.766</td>
+<td>0.783</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -14744,8 +14379,8 @@ Table&nbsp;19: Ebola hub submissions scores by location and stratum.
 <td>CD-KE</td>
 <td>all</td>
 <td>0</td>
-<td>3.47e-19</td>
-<td>0.002</td>
+<td>5.2e-19</td>
+<td>0.003</td>
 <td>1</td>
 <td>1</td>
 <td>10</td>
@@ -14819,8 +14454,8 @@ Table&nbsp;19: Ebola hub submissions scores by location and stratum.
 <td>CD-LO</td>
 <td>all</td>
 <td>0</td>
-<td>3.47e-19</td>
-<td>0.002</td>
+<td>1.73e-19</td>
+<td>0.001</td>
 <td>1</td>
 <td>1</td>
 <td>10</td>
@@ -14848,9 +14483,9 @@ Table&nbsp;19: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-MA</td>
 <td>all</td>
-<td>6.06e-05</td>
-<td>4.2e-05</td>
-<td>0.005</td>
+<td>8.08e-05</td>
+<td>5.6e-05</td>
+<td>0.006</td>
 <td>1</td>
 <td>1</td>
 <td>10</td>
@@ -14893,14 +14528,14 @@ Table&nbsp;19: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-NK</td>
 <td>all</td>
-<td>13.3</td>
-<td>0.0822</td>
-<td>-0.287</td>
+<td>13.4</td>
+<td>0.0824</td>
+<td>-0.285</td>
 <td>0.3</td>
-<td>0.8</td>
+<td>0.7</td>
 <td>10</td>
-<td>0.911</td>
-<td>0.856</td>
+<td>0.908</td>
+<td>0.854</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -14910,7 +14545,7 @@ Table&nbsp;19: Ebola hub submissions scores by location and stratum.
 <td>all</td>
 <td>0.45</td>
 <td>0.243</td>
-<td>-0.092</td>
+<td>-0.093</td>
 <td>0.8</td>
 <td>0.8</td>
 <td>10</td>
@@ -14938,9 +14573,9 @@ Table&nbsp;19: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-SK</td>
 <td>all</td>
-<td>0.00121</td>
-<td>0.00084</td>
-<td>0.027</td>
+<td>0.00097</td>
+<td>0.000672</td>
+<td>0.026</td>
 <td>1</td>
 <td>1</td>
 <td>10</td>
@@ -14953,14 +14588,14 @@ Table&nbsp;19: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-SU</td>
 <td>all</td>
-<td>0.285</td>
-<td>0.185</td>
-<td>-0.135</td>
+<td>0.286</td>
+<td>0.186</td>
+<td>-0.139</td>
 <td>0.8</td>
 <td>0.8</td>
 <td>10</td>
-<td>14.8</td>
-<td>11.9</td>
+<td>14.9</td>
+<td>12.1</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -14968,9 +14603,9 @@ Table&nbsp;19: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-TA</td>
 <td>all</td>
-<td>0</td>
-<td>3.47e-19</td>
-<td>0.003</td>
+<td>2.02e-05</td>
+<td>1.4e-05</td>
+<td>0.006</td>
 <td>1</td>
 <td>1</td>
 <td>10</td>
@@ -14984,13 +14619,13 @@ Table&nbsp;19: Ebola hub submissions scores by location and stratum.
 <td>CD-TO</td>
 <td>all</td>
 <td>3.52</td>
-<td>0.22</td>
-<td>0.445</td>
+<td>0.219</td>
+<td>0.424</td>
 <td>0.3</td>
 <td>0.5</td>
 <td>10</td>
-<td>1.42</td>
 <td>1.43</td>
+<td>1.44</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -14999,8 +14634,8 @@ Table&nbsp;19: Ebola hub submissions scores by location and stratum.
 <td>CD-TU</td>
 <td>all</td>
 <td>0</td>
-<td>1.73e-19</td>
-<td>0.001</td>
+<td>0</td>
+<td>0</td>
 <td>1</td>
 <td>1</td>
 <td>10</td>
@@ -15013,14 +14648,14 @@ Table&nbsp;19: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD</td>
 <td>all</td>
-<td>14.7</td>
-<td>0.031</td>
-<td>-0.183</td>
+<td>14</td>
+<td>0.0298</td>
+<td>-0.204</td>
 <td>0.5</td>
 <td>0.7</td>
 <td>10</td>
-<td>0.876</td>
-<td>0.878</td>
+<td>0.88</td>
+<td>0.881</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -15043,14 +14678,14 @@ Table&nbsp;19: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-BU</td>
 <td>all</td>
-<td>0.353</td>
-<td>0.159</td>
-<td>0.278</td>
+<td>0.357</td>
+<td>0.157</td>
+<td>0.267</td>
 <td>0.9</td>
 <td>1</td>
 <td>10</td>
-<td>0.579</td>
-<td>0.48</td>
+<td>0.61</td>
+<td>0.498</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -15073,8 +14708,8 @@ Table&nbsp;19: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-HK</td>
 <td>all</td>
-<td>2.02e-05</td>
-<td>1.4e-05</td>
+<td>0</td>
+<td>3.47e-19</td>
 <td>0.002</td>
 <td>1</td>
 <td>1</td>
@@ -15088,9 +14723,9 @@ Table&nbsp;19: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-HL</td>
 <td>all</td>
-<td>0</td>
-<td>5.2e-19</td>
-<td>0.003</td>
+<td>2.02e-05</td>
+<td>1.4e-05</td>
+<td>0.004</td>
 <td>1</td>
 <td>1</td>
 <td>10</td>
@@ -15103,14 +14738,14 @@ Table&nbsp;19: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-HU</td>
 <td>all</td>
-<td>1.51</td>
-<td>0.0531</td>
-<td>0.387</td>
+<td>1.47</td>
+<td>0.0517</td>
+<td>0.373</td>
 <td>0.7</td>
 <td>0.8</td>
 <td>10</td>
-<td>1.09</td>
-<td>1.15</td>
+<td>1.06</td>
+<td>1.12</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -15118,14 +14753,14 @@ Table&nbsp;19: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-IT</td>
 <td>all</td>
-<td>11.3</td>
-<td>0.0435</td>
-<td>-0.045</td>
+<td>11</td>
+<td>0.0426</td>
+<td>-0.076</td>
 <td>0.4</td>
-<td>0.9</td>
+<td>0.8</td>
 <td>10</td>
-<td>0.834</td>
-<td>0.846</td>
+<td>0.847</td>
+<td>0.857</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
@@ -15134,13 +14769,13 @@ Table&nbsp;19: Ebola hub submissions scores by location and stratum.
 <td>CD-KC</td>
 <td>all</td>
 <td>0</td>
-<td>1.73e-19</td>
-<td>0.001</td>
+<td>0</td>
+<td>0</td>
 <td>1</td>
 <td>1</td>
 <td>10</td>
 <td></td>
-<td>0.333</td>
+<td>0</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -15149,8 +14784,8 @@ Table&nbsp;19: Ebola hub submissions scores by location and stratum.
 <td>CD-KE</td>
 <td>all</td>
 <td>0</td>
-<td>3.47e-19</td>
-<td>0.002</td>
+<td>5.2e-19</td>
+<td>0.003</td>
 <td>1</td>
 <td>1</td>
 <td>10</td>
@@ -15179,13 +14814,13 @@ Table&nbsp;19: Ebola hub submissions scores by location and stratum.
 <td>CD-KL</td>
 <td>all</td>
 <td>0</td>
-<td>5.2e-19</td>
-<td>0.003</td>
+<td>6.94e-19</td>
+<td>0.004</td>
 <td>1</td>
 <td>1</td>
 <td>10</td>
 <td></td>
-<td>0</td>
+<td>1</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
@@ -15298,14 +14933,14 @@ Table&nbsp;19: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-NK</td>
 <td>all</td>
-<td>13.2</td>
-<td>0.0816</td>
-<td>-0.293</td>
-<td>0.2</td>
-<td>0.8</td>
+<td>12.9</td>
+<td>0.0798</td>
+<td>-0.298</td>
+<td>0.3</td>
+<td>0.7</td>
 <td>10</td>
-<td>0.91</td>
-<td>0.851</td>
+<td>0.911</td>
+<td>0.852</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
@@ -15313,14 +14948,14 @@ Table&nbsp;19: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-NU</td>
 <td>all</td>
-<td>0.458</td>
-<td>0.248</td>
-<td>-0.084</td>
+<td>0.455</td>
+<td>0.246</td>
+<td>-0.087</td>
 <td>0.8</td>
 <td>0.8</td>
 <td>10</td>
-<td>1.28</td>
-<td>1.24</td>
+<td>1.27</td>
+<td>1.22</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -15328,9 +14963,9 @@ Table&nbsp;19: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-SA</td>
 <td>all</td>
-<td>2.02e-05</td>
-<td>1.4e-05</td>
-<td>0.002</td>
+<td>6.06e-05</td>
+<td>4.2e-05</td>
+<td>0.003</td>
 <td>1</td>
 <td>1</td>
 <td>10</td>
@@ -15343,9 +14978,9 @@ Table&nbsp;19: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-SK</td>
 <td>all</td>
-<td>0.00103</td>
-<td>0.000714</td>
-<td>0.025</td>
+<td>0.000869</td>
+<td>0.000602</td>
+<td>0.022</td>
 <td>1</td>
 <td>1</td>
 <td>10</td>
@@ -15358,14 +14993,14 @@ Table&nbsp;19: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-SU</td>
 <td>all</td>
-<td>0.287</td>
-<td>0.186</td>
-<td>-0.134</td>
+<td>0.292</td>
+<td>0.189</td>
+<td>-0.122</td>
 <td>0.8</td>
 <td>0.8</td>
 <td>10</td>
-<td>15.1</td>
-<td>12</td>
+<td>16</td>
+<td>12.7</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
@@ -15373,9 +15008,9 @@ Table&nbsp;19: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-TA</td>
 <td>all</td>
-<td>0</td>
-<td>1.73e-19</td>
-<td>0.002</td>
+<td>2.02e-05</td>
+<td>1.4e-05</td>
+<td>0.004</td>
 <td>1</td>
 <td>1</td>
 <td>10</td>
@@ -15388,14 +15023,14 @@ Table&nbsp;19: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-TO</td>
 <td>all</td>
-<td>3.62</td>
-<td>0.227</td>
-<td>0.424</td>
+<td>3.59</td>
+<td>0.228</td>
+<td>0.419</td>
 <td>0.3</td>
 <td>0.5</td>
 <td>10</td>
+<td>1.46</td>
 <td>1.48</td>
-<td>1.49</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
@@ -15404,8 +15039,8 @@ Table&nbsp;19: Ebola hub submissions scores by location and stratum.
 <td>CD-TU</td>
 <td>all</td>
 <td>0</td>
-<td>0</td>
-<td>0</td>
+<td>1.73e-19</td>
+<td>0.001</td>
 <td>1</td>
 <td>1</td>
 <td>10</td>
@@ -15418,14 +15053,14 @@ Table&nbsp;19: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD</td>
 <td>all</td>
-<td>12.6</td>
-<td>0.0271</td>
-<td>-0.127</td>
-<td>0.167</td>
+<td>12.2</td>
+<td>0.0263</td>
+<td>-0.12</td>
+<td>0.5</td>
 <td>0.833</td>
 <td>6</td>
-<td>0.846</td>
-<td>0.837</td>
+<td>0.822</td>
+<td>0.813</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
@@ -15448,14 +15083,14 @@ Table&nbsp;19: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-BU</td>
 <td>all</td>
-<td>0.172</td>
-<td>0.0754</td>
-<td>0.258</td>
+<td>0.178</td>
+<td>0.0792</td>
+<td>0.277</td>
 <td>1</td>
 <td>1</td>
 <td>6</td>
-<td>0.582</td>
-<td>0.424</td>
+<td>0.602</td>
+<td>0.446</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
@@ -15508,14 +15143,14 @@ Table&nbsp;19: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-HU</td>
 <td>all</td>
-<td>1.01</td>
-<td>0.0383</td>
-<td>0.197</td>
+<td>1.03</td>
+<td>0.0391</td>
+<td>0.208</td>
 <td>0.5</td>
 <td>0.833</td>
 <td>6</td>
-<td>0.717</td>
-<td>0.795</td>
+<td>0.734</td>
+<td>0.813</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
@@ -15523,14 +15158,14 @@ Table&nbsp;19: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-IT</td>
 <td>all</td>
-<td>9.52</td>
-<td>0.0378</td>
-<td>-0.0983</td>
-<td>0.333</td>
+<td>9.39</td>
+<td>0.0373</td>
+<td>-0.105</td>
+<td>0.5</td>
 <td>0.667</td>
 <td>6</td>
-<td>0.799</td>
-<td>0.822</td>
+<td>0.787</td>
+<td>0.811</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -15703,14 +15338,14 @@ Table&nbsp;19: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-NK</td>
 <td>all</td>
-<td>12.9</td>
-<td>0.0791</td>
-<td>-0.165</td>
+<td>12.8</td>
+<td>0.0786</td>
+<td>-0.17</td>
 <td>0.5</td>
 <td>0.667</td>
 <td>6</td>
-<td>0.719</td>
-<td>0.653</td>
+<td>0.715</td>
+<td>0.649</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -15718,14 +15353,14 @@ Table&nbsp;19: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-NU</td>
 <td>all</td>
-<td>0.344</td>
-<td>0.189</td>
-<td>-0.0967</td>
+<td>0.348</td>
+<td>0.191</td>
+<td>-0.0867</td>
 <td>0.833</td>
 <td>0.833</td>
 <td>6</td>
-<td>1.02</td>
-<td>1.02</td>
+<td>1.03</td>
+<td>1.03</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
@@ -15763,13 +15398,13 @@ Table&nbsp;19: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-SU</td>
 <td>all</td>
-<td>0.156</td>
-<td>0.0791</td>
-<td>0.15</td>
+<td>0.154</td>
+<td>0.0796</td>
+<td>0.138</td>
 <td>1</td>
 <td>1</td>
 <td>6</td>
-<td>16.3</td>
+<td>16.1</td>
 <td>12.1</td>
 </tr>
 <tr class="even">
@@ -15839,8 +15474,14 @@ Abbott, Sam, Adrian Lison, Sebastian Funk, Carl Pearson, Hugo Gruson, Felix Guen
 <div id="ref-Ansari2025" class="csl-entry" role="listitem">
 Ansari, Abdul Fatir, Oleksandr Shchur, Jaris Küken, Andreas Auer, Boran Han, Pedro Mercado, Syama Sundar Rangapuram, et al. 2025. <span>“<span>Chronos-2</span>: From Univariate to Universal Forecasting.”</span> arXiv. <a href="https://doi.org/10.48550/arXiv.2510.15821">https://doi.org/10.48550/arXiv.2510.15821</a>.
 </div>
+<div id="ref-BenTaieb2017" class="csl-entry" role="listitem">
+Ben Taieb, Souhaib, James W. Taylor, and Rob J. Hyndman. 2017. <span>“Coherent Probabilistic Forecasts for Hierarchical Time Series.”</span> In <em>Proceedings of the 34th International Conference on Machine Learning</em>, edited by Doina Precup and Yee Whye Teh, 70:3348–57. Proceedings of Machine Learning Research. PMLR. <a href="https://proceedings.mlr.press/v70/taieb17a.html">https://proceedings.mlr.press/v70/taieb17a.html</a>.
+</div>
 <div id="ref-bosse2022scoringutils" class="csl-entry" role="listitem">
 Bosse, Nikos I., Hugo Gruson, Anne Cori, Edwin van Leeuwen, Sebastian Funk, and Sam Abbott. 2022. <span>“Evaluating Forecasts with Scoringutils in <span>R</span>.”</span> arXiv. <a href="https://doi.org/10.48550/arXiv.2205.07090">https://doi.org/10.48550/arXiv.2205.07090</a>.
+</div>
+<div id="ref-Brooks2018" class="csl-entry" role="listitem">
+Brooks, Logan C., David C. Farrow, Sangwon Hyun, Ryan J. Tibshirani, and Roni Rosenfeld. 2018. <span>“Nonmechanistic Forecasts of Seasonal Influenza with Iterative One-Week-Ahead Distributions.”</span> <em>PLOS Computational Biology</em> 14 (6): e1006134. <a href="https://doi.org/10.1371/journal.pcbi.1006134">https://doi.org/10.1371/journal.pcbi.1006134</a>.
 </div>
 <div id="ref-Clark2004" class="csl-entry" role="listitem">
 Clark, Martyn, Subhrendu Gangopadhyay, Lauren Hay, Balaji Rajagopalan, and Robert Wilby. 2004. <span>“The <span>Schaake</span> Shuffle: A Method for Reconstructing Space–Time Variability in Forecasted Precipitation and Temperature Fields.”</span> <em>Journal of Hydrometeorology</em> 5 (1): 243–62. <a href="https://doi.org/10.1175/1525-7541(2004)005<0243:TSSAMF>2.0.CO;2">https://doi.org/10.1175/1525-7541(2004)005&lt;0243:TSSAMF&gt;2.0.CO;2</a>.
@@ -15881,11 +15522,11 @@ Pascanu, Razvan, Tomas Mikolov, and Yoshua Bengio. 2013. <span>“On the Difficu
 <div id="ref-Raffel2020" class="csl-entry" role="listitem">
 Raffel, Colin, Noam Shazeer, Adam Roberts, Katherine Lee, Sharan Narang, Michael Matena, Yanqi Zhou, Wei Li, and Peter J. Liu. 2020. <span>“Exploring the Limits of Transfer Learning with a Unified Text-to-Text Transformer.”</span> <em>Journal of Machine Learning Research</em> 21 (140): 1–67. <a href="https://arxiv.org/abs/1910.10683">https://arxiv.org/abs/1910.10683</a>.
 </div>
+<div id="ref-Ray2018" class="csl-entry" role="listitem">
+Ray, Evan L., and Nicholas G. Reich. 2018. <span>“Prediction of Infectious Disease Epidemics via Weighted Density Ensembles.”</span> <em>PLOS Computational Biology</em> 14 (2): e1005910. <a href="https://doi.org/10.1371/journal.pcbi.1005910">https://doi.org/10.1371/journal.pcbi.1005910</a>.
+</div>
 <div id="ref-Schefzik2013" class="csl-entry" role="listitem">
 Schefzik, Roman, Thordis L. Thorarinsdottir, and Tilmann Gneiting. 2013. <span>“Uncertainty Quantification in Complex Simulation Models Using Ensemble Copula Coupling.”</span> <em>Statistical Science</em> 28 (4): 616–40. <a href="https://doi.org/10.1214/13-STS443">https://doi.org/10.1214/13-STS443</a>.
-</div>
-<div id="ref-Scheuerer2015" class="csl-entry" role="listitem">
-Scheuerer, Michael, and Thomas M. Hamill. 2015. <span>“Variogram-Based Proper Scoring Rules for Probabilistic Forecasts of Multivariate Quantities.”</span> <em>Monthly Weather Review</em> 143 (4): 1321–34. <a href="https://doi.org/10.1175/MWR-D-14-00269.1">https://doi.org/10.1175/MWR-D-14-00269.1</a>.
 </div>
 <div id="ref-Woo2024" class="csl-entry" role="listitem">
 Woo, Gerald, Chenghao Liu, Akshat Kumar, Caiming Xiong, Silvio Savarese, and Doyen Sahoo. 2024. <span>“Unified Training of Universal Time Series Forecasting Transformers.”</span> In <em>Proceedings of the 41st International Conference on Machine Learning</em>. <a href="https://doi.org/10.48550/arXiv.2402.02592">https://doi.org/10.48550/arXiv.2402.02592</a>.
