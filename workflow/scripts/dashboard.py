@@ -100,15 +100,16 @@ def keep_mirrored(ctx: page.Context, every: float) -> None:
 def write_once(ctx: page.Context, out: Path) -> int:
     """Refresh the mirror and write the page to `out`.
 
-    Returns 1 if the mirror failed, so the page shows the failure and
-    the caller fails too, else 0.
+    Returns 1 if the score mirror failed, so the page shows the failure
+    and the caller fails too, else 0. A failed mailbox copy is shown on
+    the page but does not fail it, as the mailbox is optional.
     """
     ctx.mirror_status = ctx.source.refresh()
     print(ctx.mirror_status)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(page.build(ctx))
     print("wrote", out)
-    return int("failed" in ctx.mirror_status)
+    return int(ctx.mirror_status.startswith("mirror failed"))
 
 
 def main() -> None:

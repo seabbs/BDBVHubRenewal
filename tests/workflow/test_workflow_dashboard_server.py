@@ -76,3 +76,14 @@ def test_once_shows_and_reports_a_failed_mirror(tmp_path, monkeypatch):
     out = tmp_path / "page" / "index.html"
     assert dashboard.write_once(ctx, out) == 1
     assert "mirror failed: host unreachable" in out.read_text()
+
+
+def test_once_shows_but_does_not_fail_on_a_failed_mailbox(
+    tmp_path, monkeypatch
+):
+    ctx = _machine(tmp_path)
+    status = "mirrored from h; mailbox failed: no such file"
+    monkeypatch.setattr(ctx.source, "refresh", lambda: status)
+    out = tmp_path / "page" / "index.html"
+    assert dashboard.write_once(ctx, out) == 0
+    assert "mailbox failed: no such file" in out.read_text()
