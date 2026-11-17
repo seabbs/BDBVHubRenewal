@@ -164,9 +164,10 @@ def test_the_held_out_default_leaves_room_for_skipped_simulations(tmp_path):
 
 
 def test_the_run_is_ten_grid_blocks(tmp_path):
-    out = _source(tmp_path, "", 'echo "$OUTBREAKS $LR_STEPS $PREFIXES"')
+    out = _source(tmp_path, "", 'echo "$OUTBREAKS $PREFIXES"')
     assert out.stdout.split() == [
         "8400",
-        "38325",
         *["250", "500", "750", "1000", "2000", "4000", "8400"],
     ]
+    # The rate falls to zero over OUTBREAKS, not a step count.
+    assert "LR_STEPS" not in SCRIPT.read_text()

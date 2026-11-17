@@ -491,12 +491,10 @@ def test_blocks_are_cut_without_torch(tmp_path):
     assert int(out.stdout.split()[-1]) > 0
 
 
-def test_learning_rate_decays_linearly_to_zero_over_its_steps():
+def test_learning_rate_decays_linearly_to_zero_over_the_simulations():
     from finetune_stream import learning_rate
 
-    # Constant without a schedule length.
-    assert learning_rate(5000, 1e-5, 0) == 1e-5
-    # Linear decay to zero over the steps, as Chronos-2's own fit.
+    # Linear decay to zero over the run's simulations.
     assert learning_rate(0, 1e-5, 1000) == 1e-5
     assert abs(learning_rate(500, 1e-5, 1000) - 5e-6) < 1e-15
     assert learning_rate(1000, 1e-5, 1000) == 0.0

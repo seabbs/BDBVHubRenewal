@@ -23,7 +23,6 @@ DESIGN = {
     "learning_rate": 1e-5,
     "bias_lr": 1e-3,
     "series_bias": True,
-    "lr_steps": 38325,
     "sources": ["daily", "weekly", "3day", "daily+weekly", "daily+3day"],
     "univariate_share": 0.2,
     "chunk": 250,
@@ -31,11 +30,10 @@ DESIGN = {
 }
 
 
-def test_the_run_is_ten_grid_blocks_at_36500_steps_per_8000():
-    # Ten of r5's balanced blocks of 840, and the learning rate reaching
-    # zero there at the trainer's 36,500 steps per 8,000 simulations.
+def test_the_run_is_ten_grid_blocks():
     assert DESIGN["outbreaks"] == 10 * 840
-    assert DESIGN["lr_steps"] == DESIGN["outbreaks"] * 36500 // 8000
+    # The rate falls to zero over the simulations, not a step count.
+    assert "lr_steps" not in CONFIG["finetune"]
 
 
 @pytest.mark.parametrize("key", sorted(DESIGN))
@@ -124,7 +122,6 @@ def test_the_trainer_gets_the_agreed_design(tmp_path):
     assert args.blocks_per_simulation == 32
     assert args.subset_seed == 1
     assert args.learning_rate == 1e-5
-    assert args.lr_steps == 38325
     assert args.series_bias
     assert args.bias_lr == 1e-3
     assert args.sources == DESIGN["sources"]
