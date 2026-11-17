@@ -329,7 +329,7 @@ def loss_plots(ctx: Context, info: Mapping, live: Run, mode: str) -> str:
                 ]
                 held.append((r.label, r.colour, pts, "pts"))
         for src in SOURCES:
-            pts = [(x["step"], x["src"][src]) for x in rows]
+            pts = [(x["step"], x["src"].get(src)) for x in rows]
             if not any(v is not None for _, v in pts):
                 continue
             if rel:

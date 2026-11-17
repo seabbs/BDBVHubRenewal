@@ -19,11 +19,13 @@ from typing import Any
 STEP = re.compile(
     r"^(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d) \[train\] step (\d+): "
     r"loss ([\d.eE+-]+), held-out \([^)]*\) ([\d.eE+-]+)"
-    r"(?:, by source 3day ([\d.eE+-]+), daily ([\d.eE+-]+), "
-    r"weekly ([\d.eE+-]+))?"
+    r"(?:, by source ((?:[\w+]+ [\d.eE+-]+(?:, |$))+))?"
 )
 """A logged step of the trainer: time, step, loss, held-out loss, and the
-held-out loss by source every few hundred steps."""
+held-out loss by source (any source names) every few hundred steps."""
+
+SOURCE = re.compile(r"([\w+]+) ([\d.eE+-]+)")
+"""One source and its loss in a step's `by source` list."""
 
 PREFIXES = (250, 500, 750, 1000, 2000, 4000, 8000)
 """Checkpoint sizes when neither the trainer nor the folder names them."""
@@ -66,11 +68,7 @@ class Log:
                 "step": int(g[1]),
                 "loss": _float(g[2]),
                 "held": _float(g[3]),
-                "src": {
-                    "3day": _float(g[4]),
-                    "daily": _float(g[5]),
-                    "weekly": _float(g[6]),
-                },
+                "src": {k: float(v) for k, v in SOURCE.findall(g[4] or "")},
             }
 
     def rows(self) -> list[dict[str, Any]]:
