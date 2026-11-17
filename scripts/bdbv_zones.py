@@ -11,11 +11,15 @@ taken as in a hub submission:
   Chronos-2 forecasts them, #234) is scored on those rows as they are.
 - `native`: `randomwalknowcast` with no cached zone rows is run on the
   zones' own release snapshots (`zones_for_model`), from the same task,
-  seed and stream as in a submission.
-- Any other model with no zone rows is skipped at that origin.
+  seed and stream as in a submission. Since #263 these zones are its own
+  forecasts and need not sum to its provinces.
+- `split`: any other model with no zone rows has its province draws
+  split across the zones by `ZoneAllocator`, checked to sum to them.
+  The backtest tasks carry no zone data (`store.origin_tasks` without
+  `zones`), as the old poller scored, so this is how a Chronos-2
+  checkpoint's zones are made here, not as its submission makes them.
 
-Zones are not forced to sum to the provinces: since #263 the random
-walks' zones are their own forecasts, as in a submission. Only the zones
+An origin where no model has zones stops the unit. Only the zones
 with a case at the origin (`active_zones`) are kept, in
 `<cache>/bdbv_zones/<label>/<origin>.csv.gz`, one file per origin as it
 finishes. Zone codes come from the hub data (`hub-config/tasks.json`
@@ -54,9 +58,9 @@ SAMPLE = ["location", "target_end_date", "sample", "value"]
 
 
 def zone_method(model: str) -> str:
-    """Return `native` for a model run on the zones if its cache has none.
+    """Return how a model's zones are made if its cache has none.
 
-    Other models (`split`) are skipped at an origin with no zone rows.
+    `native` (run on the zones) or `split` (from its province draws).
     """
     return NATIVE if model in NATIVE_MODELS else SPLIT
 
@@ -123,7 +127,11 @@ def origin_zones(
         `zone_method`.
     """
     from bdbvhubrenewal.data.zones import is_zone
-    from bdbvhubrenewal.forecasters.zones import zones_for_model
+    from bdbvhubrenewal.forecasters.zones import (
+        ZoneAllocator,
+        check_zone_coherence,
+        zones_for_model,
+    )
 
     seven = draws.loc[cs.with_target(draws)["target"] == "7day"]
     frames = []
@@ -137,13 +145,19 @@ def origin_zones(
             got = zones_for_model(model, task, prov, counts, zones, daily_zones)
             method = NATIVE
         else:
-            print(f"{model} at {task.vintage}: no zone draws", flush=True)
+            prov = province_draws(seven, model, task)
+            got = ZoneAllocator().allocate(prov, task, counts, zones)
+            bad = check_zone_coherence(prov, got)
+            if bad:
+                raise ValueError(f"{model} at {task.vintage}: {bad[0]}")
+            method = SPLIT
+        if got.empty:
             continue
         if active is not None:
             got = got.loc[got["location"].isin(set(active))]
         frames.append(got.assign(model=model, zone_method=method))
     if not frames:
-        return pd.DataFrame(columns=[*SAMPLE, "model", "zone_method"])
+        raise ValueError(f"no zone draws of any model at {task.vintage}")
     out = pd.concat(frames, ignore_index=True)
     out["value"] = out["value"].astype("float32")
     return out

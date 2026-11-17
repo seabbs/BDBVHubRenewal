@@ -158,15 +158,15 @@ def test_a_model_with_no_zone_rows_is_split_from_its_provinces(
 
 
 def test_an_origin_with_no_zones_at_all_stops_the_unit(
-    bz, task, draws, zones, daily_zones
+    bz, task, draws, counts, daily_zones
 ) -> None:
-    empty = pd.DataFrame(columns=["location", "target_end_date", "count"])
+    # No hub zones: no model can have zone draws, so nothing is scored.
     other = draws.loc[
         (draws["model"] == "randomwalknowcast")
         & ~draws["location"].map(is_zone)
     ].assign(model="fm_chronos_weekly_ragged_ft")
     with pytest.raises(ValueError, match="no zone draws"):
-        bz.origin_zones(task, other, empty, zones, daily_zones)
+        bz.origin_zones(task, other, counts, (), daily_zones)
 
 
 def test_zones_cover_only_the_forecast_provinces(made, task, zones) -> None:
