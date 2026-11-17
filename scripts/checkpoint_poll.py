@@ -13,8 +13,11 @@ evidence/checkpoints.csv, pushes them to the `checkpoint-scoring`
 branch, checks the commit is on origin, and writes a mailbox line for
 bdbv-paper. When no checkpoint is waiting it extends the scored
 checkpoints' BDBV rows to origins new releases add, and then runs the
-daily target (`daily_units`): the reference's first (about 4.5 h), then
-the one-model checkpoints', each landed again with its daily rows. Units
+health zones (`zone_units`), each label landed as its unit ends, and
+then the daily target (`daily_units`): the reference's first (about
+4.5 h), then the one-model checkpoints', each landed again with its
+daily rows. The German job runs the zone units too, after the held-out
+scores (`german_units`). Units
 run with the 7-day target only otherwise, so 7-day rows never wait.
 Units resume from the cache, so a restart loses only the forecasts in
 flight.
@@ -246,6 +249,72 @@ def extendable(labels: list[str], runs: Mapping[str, str]) -> list[str]:
     the reference, no-slots checkpoints and the current run's."""
     ok = cs.CURRENT_RUNS | {"no-slots"}
     return [lb for lb in labels if lb == cs.REFERENCE or runs.get(lb) in ok]
+
+
+ZONE_JOB = "health zones"
+"""The idle-time job: zone units still to run (`zone_units`)."""
+ZONE_RUNS = (*sorted(cs.CURRENT_RUNS), "no-slots", "slots-zeroinit")
+"""The runs whose zones are scored, in order: the live run, then no-slots,
+then zero-init. The split reads cached draws, so zero-init's checkpoints
+need no adapter here."""
+
+
+def zone_order(
+    labels: list[str], runs: Mapping[str, str], outbreaks: Mapping[str, int]
+) -> list[str]:
+    """Return the labels whose zones are scored, in the order to run.
+
+    The reference first (every zone row divides by its randomwalknowcast),
+    then `ZONE_RUNS` in turn, each newest (most outbreaks) first. The
+    labels this code may handle (`extendable`) and zero-init's.
+    """
+    ok = set(extendable(labels, runs))
+    ok |= {lb for lb in labels if runs.get(lb) == "slots-zeroinit"}
+    out = [cs.REFERENCE] if cs.REFERENCE in ok else []
+    for run in ZONE_RUNS:
+        mine = [lb for lb in labels if lb in ok and runs.get(lb) == run]
+        out += sorted(mine, key=lambda lb: (-outbreaks.get(lb, 0), lb))
+    return out
+
+
+def zone_units(cache: Path, runs: Mapping[str, str]) -> list[Unit]:
+    """Return the zone units still to run, in `zone_order`.
+
+    Every label with cached province draws (a `bdbv` unit done) whose
+    zones are not done.
+    """
+    root = cache / "bdbv"
+    labels = sorted(p.name for p in root.iterdir() if p.is_dir())
+    outbreaks = {}
+    for lb in labels:
+        settings = cache / "heldout" / f"{lb}.json"
+        if settings.exists():
+            n = json.loads(settings.read_text()).get("n_outbreaks", 0)
+            outbreaks[lb] = int(n or 0)
+    return [
+        ("bdbv_zones", lb)
+        for lb in zone_order(labels, runs, outbreaks)
+        if cs.unit_done(cache, "bdbv", lb)
+        and not cs.unit_done(cache, "bdbv_zones", lb)
+    ]
+
+
+def german_units(pick: list[str], zones: list[Unit]) -> list[Unit]:
+    """Return the German job's units, run `GERMAN_PARALLEL + 1` at a time.
+
+    The reference's and the first two German runs, then the reference's
+    and each checkpoint's held-out scores, then the zone units, then the
+    other German runs.
+    """
+    hs: list[Unit] = [("heldout_scores", cs.REFERENCE)]
+    hs += [("heldout_scores", lb) for lb in pick]
+    return [
+        ("germany", cs.REFERENCE),
+        *(("germany", lb) for lb in pick[:GERMAN_PARALLEL]),
+        *hs,
+        *zones,
+        *(("germany", lb) for lb in pick[GERMAN_PARALLEL:]),
+    ]
 
 
 def daily_units(
@@ -771,6 +840,20 @@ def main(cache: Path) -> None:
                 else:
                     time.sleep(POLL_SECONDS)
                 continue
+            zones = zone_units(cache, runs)
+            if zones and failures.get(ZONE_JOB, 0) < MAX_FAILURES:
+                log(f"progress: {ZONE_JOB} started: "
+                    f"{', '.join(u[1] for u in zones)}")  # fmt: skip
+                if not run_units(
+                    cache, zones, ZONE_JOB, newer_slots, paused,
+                    lambda u, hashes=sorted(keep): land(
+                        cache, hashes, f"{u[1]} health zones"),
+                ) and not paused:  # fmt: skip
+                    failures[ZONE_JOB] = failures.get(ZONE_JOB, 0) + 1
+                    say(f"FAILED the {ZONE_JOB}; logs in "
+                        f"{cache.parent / 'log'}")  # fmt: skip
+                    time.sleep(POLL_SECONDS)
+                continue
             daily = daily_units(cache, sorted(scored), runs)
             if daily and failures.get(DAILY_JOB, 0) < MAX_FAILURES:
                 labels = sorted({u[1] for u in daily})
@@ -848,24 +931,21 @@ def main(cache: Path) -> None:
                 lb: len(list((cache / "germany" / lb).glob("*.csv.gz")))
                 for lb in due
             }
-            outbreaks = {lb: int(m.get("n_outbreaks", 0)) for lb, m in meta.items()}
+            outbreaks = {
+                lb: int(m.get("n_outbreaks", 0)) for lb, m in meta.items()
+            }
             pick = german_order(due, cached, outbreaks)
             if pick:
-                # Two German lanes and one held-out-scores lane: the first
-                # two German runs, then the reference's and each
-                # checkpoint's held-out scores, then the other German runs.
-                hs = [("heldout_scores", cs.REFERENCE)]
-                hs += [("heldout_scores", lb) for lb in pick]
-                germ = [
-                    ("germany", cs.REFERENCE),
-                    *(("germany", lb) for lb in pick[:GERMAN_PARALLEL]),
-                    *hs,
-                    *(("germany", lb) for lb in pick[GERMAN_PARALLEL:]),
-                ]
+                # Two German lanes and one lane for the held-out scores,
+                # then the zones (german_units).
+                germ = german_units(pick, zone_units(cache, runs))
 
                 def landed(unit: Unit) -> None:
                     lb = unit[1]
                     if lb == cs.REFERENCE and unit[0] == "germany":
+                        return
+                    if unit[0] == "bdbv_zones":
+                        land(cache, sorted(keep), f"{lb} health zones")
                         return
                     hashes = keep if lb == cs.REFERENCE else keep | {lb}
                     what = f"{lb} {unit[0]}"
@@ -878,8 +958,12 @@ def main(cache: Path) -> None:
                     f"({', '.join(f'n{outbreaks[lb]} {cached[lb]}/80' for lb in pick)})")  # fmt: skip
                 run_units(
                     cache, germ, "German", newer_slots, paused, landed,
-                    max_units=GERMAN_PARALLEL + 1,
-                    limits={"germany": GERMAN_PARALLEL, "heldout_scores": 1},
+                    max_units=GERMAN_PARALLEL + 2,
+                    limits={
+                        "germany": GERMAN_PARALLEL,
+                        "heldout_scores": 1,
+                        "bdbv_zones": 1,
+                    },
                 )  # fmt: skip
                 continue
         if not run_units(cache, units, checkpoint, newer_slots, paused):

@@ -24,6 +24,11 @@ rows in `evidence/checkpoint-scores.csv` with `rule` = `RULE`:
   relative to randomwalknowcast where it forecast and to zero-shot
   Chronos-2 elsewhere (`rel_to`). Not the trainer's loss: `held_out`
   rows are that, read from settings.json.
+- `ebola` at level `zones`: the health zones with a case at each origin
+  (scripts/bdbv_zones.py), from each model's cached province draws:
+  randomwalknowcast's own zone run (`zone_method` `native`), every other
+  model's draws split across the zones (`split`), scored as the
+  provinces on each zone-week's count in the first release D days on.
 
 Each study is scored on two targets (`target`): `7day`, the hub's
 target, as above, and `daily`, each day's count by onset date (Germany:
@@ -46,6 +51,7 @@ Usage:
   python scripts/checkpoint_scores.py bdbv CACHE LABEL [TARGETS]
   python scripts/checkpoint_scores.py heldout CACHE HASH
   python scripts/checkpoint_scores.py heldout_scores CACHE LABEL
+  python scripts/checkpoint_scores.py bdbv_zones CACHE LABEL [7day]
   python scripts/checkpoint_scores.py table CACHE EVIDENCE CHECKPOINTS HASH...
 
 TARGETS is `7day`, `daily` or `7day,daily`, the label's own
@@ -153,9 +159,10 @@ COLUMNS = [
     "wis",
     "crps",
     "n_blocks",
+    "zone_method",
 ]
 """Rows' columns; `layout` to `n_blocks` are the `heldout` study's and
-empty for the others."""
+empty for the others; `zone_method` is the zone rows' (`bdbv_zones`)."""
 HELD_OUT_LEVELS = ("leaf", "national", "intermediate")
 SORT = ["rule", "study", "level", "model", "outbreaks", "checkpoint"]
 """The evidence's row order, before the target."""
@@ -723,14 +730,24 @@ def heldout_scores_unit(cache: Path, label: str) -> None:
     hs.unit(cache, label, reference=label == REFERENCE)
 
 
+def _zones():
+    """Import scripts/bdbv_zones.py, the health-zone unit and rows."""
+    sys.path.insert(0, str(Path(__file__).parent))
+    import bdbv_zones
+
+    return bdbv_zones
+
+
 def unit_done(
     cache: Path, study: str, label: str, target: str = "7day"
 ) -> bool:
     """Whether a unit's cache is complete for a target.
 
     Every date's file holds the 7-day target; the daily one is done for
-    the dates `DAILY_DONE` lists.
+    the dates `DAILY_DONE` lists. The zone unit has the 7-day target only.
     """
+    if study == "bdbv_zones":
+        return target == "7day" and bool(_zones().unit_done(cache, label))
     if study == "heldout":
         return (cache / "heldout" / f"{label}-release.json").exists()
     if study == "heldout_scores":
@@ -973,6 +990,7 @@ def table(
             ),
             *(held_out_rows(h, m[0]) for h, m in meta.items()),
             heldout_rows(cache, labels),
+            _zones().rows(cache, labels),
         ],
         ignore_index=True,
     )
@@ -1015,6 +1033,10 @@ def main(argv: Sequence[str]) -> None:
         held_out_unit(cache, argv[2])
     elif study == "heldout_scores":
         heldout_scores_unit(cache, argv[2])
+    elif study == "bdbv_zones":
+        if len(argv) > 3 and argv[3] != "7day":
+            raise SystemExit(f"bdbv_zones has the 7-day target only: {argv[3]}")
+        _zones().unit(cache, argv[2])
     elif study == "table":
         new = table(cache, Path(argv[2]), Path(argv[3]), argv[4:])
         print(new.round(3).to_string(index=False), flush=True)
