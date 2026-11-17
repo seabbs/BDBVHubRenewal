@@ -230,15 +230,21 @@ def scored_checkpoints(evidence: pd.DataFrame) -> set[str]:
 # Rows ------------------------------------------------------------------
 
 
-FINAL_OUTBREAKS = 8000
+FINAL_OUTBREAKS = 8400
 """The reported model is the live run's final checkpoint (Sam: its
 learning rate decays to zero there), never one picked on scores."""
+FINAL_GRID = "r5"
+"""The live run's grid (#311)."""
 
 
 def chosen(rows: pd.DataFrame) -> pd.Series:
     """Mark the rows of the reported model: the live run's final checkpoint."""
     run = rows["run"].astype(str)
-    return run.isin(CURRENT_RUNS) & (rows["outbreaks"] == FINAL_OUTBREAKS)
+    return (
+        run.isin(CURRENT_RUNS)
+        & (rows["grid"].astype(str) == FINAL_GRID)
+        & (rows["outbreaks"] == FINAL_OUTBREAKS)
+    )
 
 
 CURRENT_RUNS = {"one-model"}
