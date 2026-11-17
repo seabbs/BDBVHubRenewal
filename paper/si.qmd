@@ -291,13 +291,15 @@ Rolling forecasts are paired with the copula estimated at each origin.
 
 ### Aggregation options
 
-Chronos-2 can forecast every level of a place hierarchy in one block, or each level on its own.
-We compare four options for the zero-shot and fine-tuned models, daily and weekly:
+Chronos-2 can forecast every level of a place hierarchy in one block, or each level on its own, and the daily model can give weekly totals in its block or as sums of its days.
+We compare five options for the zero-shot and fine-tuned models:
 (a) all levels in one joint block;
 (b) each level in its own block;
 (c) the lowest level only, summed up to the others with draws paired at random;
-(d) the lowest level only, summed up after pairing its draws with the rolling copula.
-Option (d) tests whether pairing the draws with the copula before summing narrows the gap to the joint block.
+(d) the lowest level only, summed up after pairing its draws with the rolling copula;
+(e) for the daily model, weekly totals from its in-block weekly row, against its days summed to weeks after pairing them with the rolling copula's $\rho_t$, as `randomwalknowcast` does, and at random.
+Options (d) and (e) test whether pairing draws with the copula before summing narrows the gap to forecasting the total directly.
+Option (e) is inference only, on the final checkpoint.
 
 ### Scoring
 
@@ -373,26 +375,9 @@ Our Chronos-2 models use the joint block.
 On BDBV it is best or tied at provinces, zones and the national level for the zero-shot models.
 On the German development half, level by level is competitive for the daily zero-shot model ({{< meta evidence.aggregation.germany.national.fm_chronos_daily_ragged.level >}} against {{< meta evidence.aggregation.germany.national.fm_chronos_daily_ragged.joint >}} at the national level) and for age groups.
 Summing the lowest level loses at every level above it, with or without the copula: at BDBV's national level the daily zero-shot model scores {{< meta evidence.aggregation.ebola.national.fm_chronos_daily_ragged.zones_summed >}} summed and {{< meta evidence.aggregation.ebola.national.fm_chronos_daily_ragged.zones_copula >}} summed after pairing, against {{< meta evidence.aggregation.ebola.national.fm_chronos_daily_ragged.joint >}} for the joint block.
-All WIS are relative to `randomwalknowcast` on the same targets.
-@tbl-aggregation-ebola and @tbl-aggregation-germany give every model and level, and @tbl-aggregation-cost what each option costs.
+@fig-aggregation gives every option by study and level, with WIS relative to `randomwalknowcast` on the same targets.
 
-::: {#tbl-aggregation-ebola}
-{{< include build/tables/si/aggregation-ebola.md >}}
-
-Ebola release backtest: WIS of each option relative to `randomwalknowcast` on the same targets (log scale in brackets), 50% and 95% coverage and the number of targets, by level (national, provinces, zones).
-:::
-
-::: {#tbl-aggregation-germany}
-{{< include build/tables/si/aggregation-germany.md >}}
-
-German nowcast hub, development half: as @tbl-aggregation-ebola, by level (national, states, age groups).
-:::
-
-::: {#tbl-aggregation-cost}
-{{< include build/tables/si/aggregation-cost.md >}}
-
-The cost of each option: series per block, memory and time.
-:::
+![WIS of each aggregation option relative to `randomwalknowcast` on the same targets, by study and level, one marker per model: (a) joint block, (b) level by level, (c) lowest level summed at random, (d) lowest level summed after pairing, and (e) the daily model's weekly row against its days summed after pairing and at random. Ebola release backtest and German development half.](build/figures/si/aggregation.png){#fig-aggregation}
 
 ### Checkpoint curve
 

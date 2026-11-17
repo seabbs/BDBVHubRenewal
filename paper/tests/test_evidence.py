@@ -6,7 +6,6 @@ import yaml
 from paperpipe.evidence import (
     EVIDENCE,
     aggregation_numbers,
-    aggregation_table,
     copula_table,
     rho_medians,
     write_evidence,
@@ -102,10 +101,6 @@ def test_aggregation_is_relative_to_the_reference_on_shared_targets() -> None:
             "log_wis": 2.0,
         },
     ]
-    t = aggregation_table(pd.DataFrame(rows), "ebola")
-    assert t["Option"].tolist() == ["Joint block", "Level by level"]
-    assert t["Relative WIS (log)"].tolist() == ["0.50 (0.50)", "2.00 (2.00)"]
-    assert t["n"].tolist() == [1, 1]
     numbers = aggregation_numbers(pd.DataFrame(rows))
     assert numbers["ebola"]["national"]["fm"] == {"joint": 0.5, "level": 2.0}
 
@@ -163,12 +158,8 @@ def test_a_study_without_rows_still_waits(tmp_path) -> None:
     ).to_csv(rows, index=False)
     paths = dict.fromkeys(EVIDENCE) | {"aggregation_scores": rows}
     write_evidence(paths, tmp_path / "si", tmp_path / "fig", tmp_path / "e.yml")
-    assert (
-        "Joint block" in (tmp_path / "si" / "aggregation-ebola.md").read_text()
-    )
-    assert (
-        "waits on" in (tmp_path / "si" / "aggregation-germany.md").read_text()
-    )
+    assert (tmp_path / "fig" / "aggregation.png").is_file()
+    assert not (tmp_path / "si" / "aggregation-cost.md").exists()
 
 
 def test_lag_numbers_pair_each_model_with_its_longer_horizon() -> None:
@@ -432,8 +423,7 @@ def test_aggregation_options_name_the_lowest_level_not_zones() -> None:
     # Germany's lowest level is states or age groups, not zones.
     from paperpipe.evidence import OPTIONS
 
-    assert OPTIONS["zones_summed"] == "Lowest level summed"
-    assert OPTIONS["zones_copula"] == "Lowest level summed after pairing"
+    assert not any("zone" in label.lower() for label in OPTIONS.values())
 
 
 def test_checkpoint_curves_show_the_untuned_models_as_lines() -> None:
