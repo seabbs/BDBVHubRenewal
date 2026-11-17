@@ -389,3 +389,13 @@ def test_operator_files_cap_units_and_skip_german_runs(poll, tmp_path) -> None:
     assert poll.skipped_german(skip) == set()
     skip.write_text("slots-a\n# n250\nslots-b\n")
     assert poll.skipped_german(skip) == {"slots-a", "slots-b"}
+
+
+def test_fast_only_runs_held_out_and_bdbv_and_nothing_else(
+    poll, tmp_path
+) -> None:
+    # Sims need every spare core: only new checkpoints' held-out and BDBV.
+    flag = tmp_path / "fast-only"
+    assert not poll.fast_only(flag)
+    flag.write_text("r5 simulations\n")
+    assert poll.fast_only(flag)
