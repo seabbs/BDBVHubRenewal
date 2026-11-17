@@ -719,8 +719,8 @@ def model_note(text: str) -> str:
         f" of epinowcast, at commit `{_sha(text)}`.",
         "The simulation script is `scripts/finetune_simulate.R`, with grid"
         f" `{grid.group(1) if grid else ''}`.",
-        "Each simulation is one set of fixed parameters with several"
-        " observation draws, and we evaluate one draw of each.",
+        "Each simulation is one set of fixed parameters with one"
+        " observation draw.",
         "Simulations follow a crossed design, in which every level of every"
         " factor is balanced within each block of simulations.",
         "Continuous settings are drawn within a simulation's cell, as the"
@@ -748,8 +748,8 @@ def model_note(text: str) -> str:
         " delay, a non-parametric hazard over delays, or both, and it may"
         " change over time.",
         "Report date effects and report days are set by `enw_report()`.",
-        "Counts by onset day and delay are negative binomial (NB2 or NB1)"
-        " or Poisson, set by `enw_obs()`, with the NB1 dispersion matched"
+        "Counts by onset day and delay are negative binomial (NB1) or"
+        " Poisson, set by `enw_obs()`, with the NB1 dispersion matched"
         " to the NB2 scale (epinowcast issue 937).",
         "The longest delay is the shortest of 3, 4, 6, 8 and 12 weeks at or"
         " above the delay's 99th centile.",
