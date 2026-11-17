@@ -93,9 +93,8 @@ def test_the_trainer_gets_the_agreed_design(tmp_path):
     sys.path.insert(0, str(ROOT / "scripts"))
     import finetune_stream as fs
 
-    args, rest = fs.build_parser().parse_known_args(_trainer_args(tmp_path))
-    # The segment's stop, which the trainer on main does not yet take.
-    assert rest == ["--until", "250"]
+    args = fs.build_parser().parse_args(_trainer_args(tmp_path))
+    assert args.until == 250
     assert args.grid == "r5"
     # Round 9's held-out batches, seeds 30940 to 30943.
     assert args.held_out_seeds == [30940, 30943]
