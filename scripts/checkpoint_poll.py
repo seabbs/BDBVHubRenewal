@@ -586,13 +586,22 @@ def note_paper(sha: str, checkpoint: str, cache: Path) -> None:
         (cache / "heldout" / f"{checkpoint}-release.json").read_text()
     )
     outbreaks, grid = cs.outbreaks_and_grid(settings, release)
-    say(
+    say(paper_note(sha, checkpoint, outbreaks, grid, cs.run_of(settings)))
+
+
+def paper_note(
+    sha: str, checkpoint: str, outbreaks: int, grid: str, run: str
+) -> str:
+    """Return bdbv-paper's line for a landed checkpoint."""
+    return (
         f"bdbv-paper: rows for {checkpoint} ({outbreaks} outbreaks, grid "
-        f"{grid}) landed at {sha} on origin/{BRANCH} (verified), "
+        f"{grid}, run {run}) landed at {sha} on origin/{BRANCH} (verified), "
         f"evidence/checkpoint-scores.csv; bump `checkpoint_scores` in "
         f"paper/workflow/config.yaml to it. Filter rule == '{cs.RULE}' "
-        "(older rows are rule 'samples-100'); germany uses rel_wis and "
-        "rel_log_wis, ebola rel_crps and rel_log_crps (rel_wis empty), "
+        "(older rows are rule 'samples-100') and target == '7day' for the "
+        "hub target (target 'daily' rows compare our models only); "
+        f"final_checkpoints from run == 'one-model'. germany uses rel_wis "
+        "and rel_log_wis, ebola rel_crps and rel_log_crps (rel_wis empty), "
         "held_out loss and loss_zero_shot; curves by grid."
     )
 
