@@ -172,13 +172,45 @@ def _crps_nrg(x: np.ndarray, y: float) -> float:
     )
 
 
+def _crps_fair(x: np.ndarray, y: float) -> float:
+    m = len(x)
+    spread = np.abs(x[:, None] - x[None, :]).sum() / (2 * m * (m - 1))
+    return float(np.mean(np.abs(x - y)) - spread)
+
+
 @pytest.mark.parametrize("y", [0.0, 3.0, 4.0, 20.0])
 def test_sample_crps_and_log_crps(y: float) -> None:
     s = score_forecasts(_samples("m", X, y))
     assert s["metric"].item() == "crps"
-    assert s["score"].item() == pytest.approx(_crps_nrg(X, y))
-    want = _crps_nrg(np.log1p(X), np.log1p(y))
+    assert s["score"].item() == pytest.approx(_crps_fair(X, y))
+    want = _crps_fair(np.log1p(X), np.log1p(y))
     assert s["log_score"].item() == pytest.approx(want)
+
+
+@pytest.mark.parametrize("y", [0.0, 3.0, 4.0, 20.0])
+def test_sample_crps_nrg_on_request(y: float) -> None:
+    s = score_forecasts(_samples("m", X, y), crps_estimator="nrg")
+    assert s["score"].item() == pytest.approx(_crps_nrg(X, y))
+
+
+def test_sample_crps_does_not_favour_more_draws() -> None:
+    # Hub teams give 100 draws and our models 1,000: the mean score of a
+    # calibrated forecast must not depend on how many draws it has.
+    rng = np.random.default_rng(3)
+    truth = rng.normal(size=4000)
+
+    def mean_score(m: int) -> float:
+        rows = [
+            _samples(f"m{m}", rng.normal(size=m), y).assign(
+                origin_date=pd.Timestamp("2026-01-01") + pd.Timedelta(days=i)
+            )
+            for i, y in enumerate(truth)
+        ]
+        s = score_forecasts(pd.concat(rows), counts=False)
+        return float(s["score"].mean())
+
+    expected = 1 / np.sqrt(np.pi)
+    assert mean_score(10) == pytest.approx(expected, rel=0.03)
 
 
 @pytest.mark.parametrize(
