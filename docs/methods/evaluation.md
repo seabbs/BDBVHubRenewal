@@ -154,9 +154,9 @@ The copula pairs province draws with each other within a week only, by one corre
 The pairing is a Gaussian copula applied by rank reordering, the Schaake shuffle[^clark] as ensemble copula coupling uses it[^schefzik].
 Each week, each trajectory draws one normal per province, with correlation $\rho_p$ between any two, and each cell's draws are reordered across samples to rank as the normals do.
 So every per-week forecast and its scores are unchanged.
-Weeks before a province's walk are reordered cell by cell.
-From its start, a province's walk is already a joint trajectory, so it moves as a whole, ranked by its total over the walk weeks against the normals of the latest week any province's walk starts.
-So the walks are paired with each other in every week from then on.
+Every week is reordered this way, whether a province is nowcast or walking that week, so the recent nowcast weeks are paired too.
+Weeks are reordered on their own, so a province's draws are not kept as one trajectory across weeks.
+Nothing we submit or score uses a quantity over several weeks, so this costs nothing.
 
 At each forecast $\rho_p$ is estimated from the model's own matured errors: each earlier release's nowcast of the count still to come, against what the origin release reports, over releases in the last 8 weeks.
 Each error's randomised PIT under the model's negative binomial nowcast is mapped to a normal score.
