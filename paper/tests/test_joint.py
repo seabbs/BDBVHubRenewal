@@ -29,7 +29,7 @@ def _trajectories(model: str, draws: np.ndarray, truth) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def test_joint_scores_are_scoringrules_on_log_counts() -> None:
+def test_joint_scores_are_the_energy_score_on_log_counts_only() -> None:
     rng = np.random.default_rng(1)
     draws = rng.poisson(20, size=(50, 4)).astype(float)
     truth = np.array([18.0, 22, 19, 25])
@@ -40,9 +40,7 @@ def test_joint_scores_are_scoringrules_on_log_counts() -> None:
             sr.es_ensemble(np.log1p(truth), np.log1p(draws), estimator="fair")
         )
     )
-    assert row["variogram_log"] == pytest.approx(
-        float(sr.vs_ensemble(np.log1p(truth), np.log1p(draws), p=0.5))
-    )
+    assert "variogram_log" not in out.columns
     assert row["n_targets"] == 4
 
 
@@ -60,7 +58,8 @@ def test_pairing_matters_and_baseline_scores_one() -> None:
     )
     rel = relative_joint_scores(joint_scores(fc)).set_index("model")
     assert rel.loc["BDBVHub-baseline", "rel_energy_log"] == 1
-    assert rel.loc["paired", "rel_variogram_log"] < 1
+    assert rel.loc["paired", "rel_energy_log"] < 1
+    assert not any("variogram" in c for c in rel.columns)
 
 
 def test_only_targets_with_known_truth_count() -> None:
