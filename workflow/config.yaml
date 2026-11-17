@@ -126,6 +126,16 @@ dashboard:
       paper_model: randomwalknowcast
       model: "^randomwalknowcast$"
       role: baseline
+  # Score studies in selector order with their labels, the order of their
+  # levels, and the target, score, source and level shown first.
+  studies:
+    germany: Germany
+    ebola: BDBV
+    held_out: held-out synthetic
+  levels: [national, states, age, provinces]
+  score_defaults: {target: 7day, metric: wis, source: daily, level: national}
+  # Checkpoints no panel shows (more, and folders, in the local file).
+  exclude: {hashes: []}
   # The checkpoint scores' rule shown.
   rule: own-quantile-wis_crps-1000-common
   # Mailbox lines shown (a regular expression).
