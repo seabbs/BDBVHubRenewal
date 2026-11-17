@@ -303,3 +303,60 @@ def test_german_runs_go_in_progress_first_then_newest(poll) -> None:
     n = {"slots-a": 125, "slots-b": 1000, "slots-c": 250, "slots-d": 500}
     order = poll.german_order(list(cached), cached, n)
     assert order == ["slots-a", "slots-b", "slots-d", "slots-c"]
+
+
+def test_zone_units_go_reference_live_run_newest_no_slots_zero_init(
+    poll,
+) -> None:
+    runs = {
+        "slots-a": "one-model",
+        "slots-b": "one-model",
+        "slots-z": "slots-zeroinit",
+        "abc": "no-slots",
+        "slots-old": "slots",
+        "slots-bias": "attn-bias",
+    }
+    n = {"slots-a": 250, "slots-b": 1000, "slots-z": 2000, "abc": 500}
+    labels = [*runs, "reference", "reference-complete"]
+    order = poll.zone_order(labels, runs, n)
+    assert order == ["reference", "slots-b", "slots-a", "abc", "slots-z"]
+
+
+def test_zone_units_wait_for_province_draws_and_skip_done_ones(
+    poll, monkeypatch, tmp_path
+) -> None:
+    for lb in ("reference", "slots-a", "slots-b", "slots-c"):
+        (tmp_path / "bdbv" / lb).mkdir(parents=True)
+    runs = dict.fromkeys(("slots-a", "slots-b", "slots-c"), "one-model")
+    done = {("bdbv", "reference"), ("bdbv", "slots-a"), ("bdbv", "slots-b")}
+    done |= {("bdbv_zones", "slots-b")}
+
+    def unit_done(_cache, study, label, _target="7day"):
+        return (study, label) in done
+
+    monkeypatch.setattr(poll.cs, "unit_done", unit_done)
+    units = poll.zone_units(tmp_path, runs)
+    assert units == [("bdbv_zones", "reference"), ("bdbv_zones", "slots-a")]
+
+
+def test_zone_units_run_in_the_german_job_after_the_held_out_scores(
+    poll,
+) -> None:
+    zones = [("bdbv_zones", "reference"), ("bdbv_zones", "slots-a")]
+    units = poll.german_units(["slots-a", "slots-b", "slots-c"], zones)
+    hs = [u for u in units if u[0] == "heldout_scores"]
+    after = units.index(hs[-1]) + 1
+    assert units[after : after + 2] == zones
+    assert units[:3] == [
+        ("germany", "reference"),
+        ("germany", "slots-a"),
+        ("germany", "slots-b"),
+    ]
+    assert units[-1] == ("germany", "slots-c")
+
+
+def test_zone_units_name_their_study_on_the_command_line(
+    poll, tmp_path
+) -> None:
+    cmd = poll.unit_command(tmp_path, ("bdbv_zones", "slots-a"))
+    assert cmd[-4:] == ["bdbv_zones", str(tmp_path), "slots-a", "7day"]
