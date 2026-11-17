@@ -257,6 +257,7 @@ Table&nbsp;1: The learned biases added to Chronos-2’s group-attention scores.
 <section id="group-attention" class="level4">
 <h4 class="anchored" data-anchor-id="group-attention">Group attention</h4>
 <ul>
+<li>In attention, each series updates its representation as a weighted mix of the others, with weights from how well its query matches their keys.</li>
 <li>Chronos-2 attends over time within each series, then over the series of a block at each time step, which is group attention <span class="citation" data-cites="Ansari2025">(<a href="#ref-Ansari2025" role="doc-biblioref">Ansari et al. 2025</a>)</span>.</li>
 <li>At one time step, row <span class="math inline">\(i\)</span> of a block (a place’s count or one of its lag series) attends to row <span class="math inline">\(j\)</span> with weight <span class="math display">\[
 a_{ij} = \operatorname{softmax}_j\!\left(q_i^\top k_j + M_{ij}\right),
@@ -267,6 +268,7 @@ a_{ij} = \operatorname{softmax}_j\!\left(q_i^\top k_j + M_{ij}\right),
 <section id="attention-biases" class="level4">
 <h4 class="anchored" data-anchor-id="attention-biases">Attention biases</h4>
 <ul>
+<li>Our change adds a learned nudge to those weights for each pair of rows, by their relation (same row, same place, child to parent, parent to child), so the model can tell which lags belong to which count.</li>
 <li>Each row <span class="math inline">\(i\)</span> belongs to a place <span class="math inline">\(P(i)\)</span>, and each place <span class="math inline">\(p\)</span> has a parent <span class="math inline">\(\pi(p)\)</span> in the block, or none.</li>
 <li>We add a learned bias for each relation <span class="math inline">\(r\)</span> to the scores: <span class="math display">\[
 a_{ij} = \operatorname{softmax}_j\!\left(q_i^\top k_j + M_{ij} + \sum_{r} b_r^{(l,h)}\,\mathbb{1}\!\left[(i,j) \in R_r\right]\right),
@@ -298,6 +300,7 @@ y^{(k)}_{p,t} = \begin{cases} \sum_{s=t-k+1}^{t} y_{p,s} &amp; \text{if day } t 
 <section id="lora" class="level4">
 <h4 class="anchored" data-anchor-id="lora">LoRA</h4>
 <ul>
+<li>Instead of retraining all the weights, LoRA trains a small low-rank update to some of them, about 1% of the weights, which leaves the base model unchanged at the start.</li>
 <li>LoRA replaces a weight matrix <span class="math inline">\(W \in \mathbb{R}^{d_\text{out} \times d_\text{in}}\)</span> with <span class="math display">\[
 W' = W + \frac{\alpha}{r} B A,
 \]</span> where <span class="math inline">\(A \in \mathbb{R}^{r \times d_\text{in}}\)</span> and <span class="math inline">\(B \in \mathbb{R}^{d_\text{out} \times r}\)</span> are trained and <span class="math inline">\(W\)</span> is frozen <span class="citation" data-cites="Hu2021">(<a href="#ref-Hu2021" role="doc-biblioref">Hu et al. 2021</a>)</span>.</li>
@@ -1014,6 +1017,9 @@ Table&nbsp;5: The simulated outbreaks’ ranges against published values for sev
 </ul>
 </div>
 </div>
+<p>For a forecast of <span class="math inline">\(m\)</span> samples <span class="math inline">\(x_1, \dots, x_m\)</span> and an observation <span class="math inline">\(y\)</span>, the fair CRPS is <span class="math display">\[
+\mathrm{CRPS}_\mathrm{f}(x, y) = \frac{1}{m}\sum_{i=1}^{m} |x_i - y| - \frac{1}{2m(m-1)}\sum_{i \ne j} |x_i - x_j|.
+\]</span> Its expectation does not depend on <span class="math inline">\(m\)</span>, whereas the usual sample form, with <span class="math inline">\(2m^2\)</span> in the second denominator, favours forecasts with more samples <span class="citation" data-cites="Ferro2014 Zamo2018">(<a href="#ref-Ferro2014" role="doc-biblioref">Ferro 2014</a>; <a href="#ref-Zamo2018" role="doc-biblioref">Zamo and Naveau 2018</a>)</span>. The fair energy score is the same form for a vector of counts, with the Euclidean norm <span class="math inline">\(\lVert \cdot \rVert\)</span> in place of <span class="math inline">\(|\cdot|\)</span>. We compute both with scoringrules’ <code>fair</code> estimator, <code>crps_ensemble</code> and <code>es_ensemble</code>, on counts and on <span class="math inline">\(\log(x + 1)\)</span> counts. Our models give 1,000 samples and hub teams 100, so the fair form compares them on the same footing.</p>
 </section>
 <section id="choices-tuned-on-development-data" class="level3">
 <h3 class="anchored" data-anchor-id="choices-tuned-on-development-data">Choices tuned on development data</h3>
@@ -16718,6 +16724,9 @@ Bosse, Nikos I., Hugo Gruson, Anne Cori, Edwin van Leeuwen, Sebastian Funk, and 
 <div id="ref-Clark2004" class="csl-entry" role="listitem">
 Clark, Martyn, Subhrendu Gangopadhyay, Lauren Hay, Balaji Rajagopalan, and Robert Wilby. 2004. <span>“The <span>Schaake</span> Shuffle: A Method for Reconstructing Space–Time Variability in Forecasted Precipitation and Temperature Fields.”</span> <em>Journal of Hydrometeorology</em> 5 (1): 243–62. <a href="https://doi.org/10.1175/1525-7541(2004)005<0243:TSSAMF>2.0.CO;2">https://doi.org/10.1175/1525-7541(2004)005&lt;0243:TSSAMF&gt;2.0.CO;2</a>.
 </div>
+<div id="ref-Ferro2014" class="csl-entry" role="listitem">
+Ferro, Christopher A. T. 2014. <span>“Fair Scores for Ensemble Forecasts.”</span> <em>Quarterly Journal of the Royal Meteorological Society</em> 140 (683): 1917–23. <a href="https://doi.org/10.1002/qj.2270">https://doi.org/10.1002/qj.2270</a>.
+</div>
 <div id="ref-Gneiting2008" class="csl-entry" role="listitem">
 Gneiting, Tilmann, Larissa I. Stanberry, Eric P. Grimit, Leonhard Held, and Nicholas A. Johnson. 2008. <span>“Assessing Probabilistic Forecasts of Multivariate Quantities, with an Application to Ensemble Predictions of Surface Winds.”</span> <em>TEST</em> 17 (2): 211–35. <a href="https://doi.org/10.1007/s11749-008-0114-x">https://doi.org/10.1007/s11749-008-0114-x</a>.
 </div>
@@ -16753,6 +16762,9 @@ Yang, Jingfeng, Aditya Gupta, Shyam Upadhyay, Luheng He, Rahul Goel, and Shachi 
 </div>
 <div id="ref-Ying2021" class="csl-entry" role="listitem">
 Ying, Chengxuan, Tianle Cai, Shengjie Luo, Shuxin Zheng, Guolin Ke, Di He, Yanming Shen, and Tie-Yan Liu. 2021. <span>“Do Transformers Really Perform Bad for Graph Representation?”</span> In <em>Advances in Neural Information Processing Systems</em>. Vol. 34. <a href="https://arxiv.org/abs/2106.05234">https://arxiv.org/abs/2106.05234</a>.
+</div>
+<div id="ref-Zamo2018" class="csl-entry" role="listitem">
+Zamo, Michaël, and Philippe Naveau. 2018. <span>“Estimation of the Continuous Ranked Probability Score with Limited Information and Applications to Ensemble Weather Forecasts.”</span> <em>Mathematical Geosciences</em> 50 (2): 209–34. <a href="https://doi.org/10.1007/s11004-017-9709-7">https://doi.org/10.1007/s11004-017-9709-7</a>.
 </div>
 <div id="ref-zanetta_scoringrules_2024" class="csl-entry" role="listitem">
 Zanetta, Francesco, and Sam Allen. 2024. <span>“Scoringrules: A Python Library for Probabilistic Forecast Evaluation.”</span> <a href="https://github.com/frazane/scoringrules">https://github.com/frazane/scoringrules</a>.

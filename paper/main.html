@@ -218,9 +218,12 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
 <div class="callout-body-container callout-body">
 <ul>
 <li>We give Chronos-2 the reporting triangle as series, one per place and reporting delay, each missing until reported (Figure 1B).</li>
-<li>We add learned attention biases that mark a place’s counts and lags, and parent and child places, so the model links each delay series to its place, building on Moirai’s any-variate attention and TableFormer’s relation biases <span class="citation" data-cites="Woo2024 Yang2022">(<a href="#ref-Woo2024" role="doc-biblioref">Woo et al. 2024</a>; <a href="#ref-Yang2022" role="doc-biblioref">Yang et al. 2022</a>)</span> (SI).</li>
+<li>Chronos-2 is built from attention layers, in which each series updates what it has learned as a weighted mix of the other series, with more weight on those it finds relevant.</li>
+<li>Without more information, the model has no marker of which delay series belong to which place’s count.</li>
+<li>We add learned attention biases that nudge these weights by how two series are related (the same series, the same place, or a place and its parent or child), building on Moirai’s any-variate attention and TableFormer’s relation biases <span class="citation" data-cites="Woo2024 Yang2022">(<a href="#ref-Woo2024" role="doc-biblioref">Woo et al. 2024</a>; <a href="#ref-Yang2022" role="doc-biblioref">Yang et al. 2022</a>)</span> (SI).</li>
 <li>A third each of the training blocks with places have a country equal to, above or later than the sum of its places.</li>
 <li>We fine-tune base Chronos-2 on synthetic data on a laptop, with its default LoRA recipe.</li>
+<li>LoRA trains a small update to about 1% of the model’s weights rather than retraining them all, so fine-tuning starts from the original model (SI).</li>
 <li>The learning rate falls linearly to zero at 8,000 simulations.</li>
 <li>Each simulation gives 32 training blocks.</li>
 <li>A block is daily, 3-day or weekly, or daily with one weekly or 3-day total row per place.</li>
@@ -444,6 +447,7 @@ Table&nbsp;1: The crossed factors of the simulation grid and their levels, each 
 <li>The fine-tune never trained on the held-out set’s seeds (SI).</li>
 <li>We set each tuned choice on development data, apart from every scored set (SI).</li>
 <li>We score sample forecasts with CRPS and log-scale CRPS, bias, and 50% and 90% coverage, relative to <code>randomwalknowcast</code>.</li>
+<li>We score samples with the fair CRPS and the fair energy score, which correct for the number of samples, so forecasts with different numbers of samples, ours and the hub teams’, compare fairly <span class="citation" data-cites="Ferro2014 Zamo2018 zanetta_scoringrules_2024">(<a href="#ref-Ferro2014" role="doc-biblioref">Ferro 2014</a>; <a href="#ref-Zamo2018" role="doc-biblioref">Zamo and Naveau 2018</a>; <a href="#ref-zanetta_scoringrules_2024" role="doc-biblioref">Zanetta and Allen 2024</a>)</span>.</li>
 <li>We score against the data as reported <span class="math inline">\(D\)</span> days later, with <span class="math inline">\(D\)</span> each outbreak’s 98% reporting delay.</li>
 <li>Key references: <span class="citation" data-cites="bracherEvaluatingEpidemicForecasts2021 Bosse2023-sx gneitingStrictlyProperScoring2007 gneitingProbabilisticForecastsCalibration2007 sherrattPredictivePerformanceMultimodel2023">(<a href="#ref-bracherEvaluatingEpidemicForecasts2021" role="doc-biblioref">Bracher et al. 2021</a>; <a href="#ref-Bosse2023-sx" role="doc-biblioref">Bosse et al. 2023</a>; <a href="#ref-gneitingStrictlyProperScoring2007" role="doc-biblioref">Gneiting and Raftery 2007</a>; <a href="#ref-gneitingProbabilisticForecastsCalibration2007" role="doc-biblioref">Gneiting, Balabdaoui, and Raftery 2007</a>; <a href="#ref-sherrattPredictivePerformanceMultimodel2023" role="doc-biblioref">Sherratt et al. 2023</a>)</span>.</li>
 </ul>
@@ -1543,6 +1547,8 @@ Table&nbsp;6: Ebola hub submissions: mean energy and variogram scores of each mo
 <li>Fine-tuning ran on a laptop, so it needs no shared compute.</li>
 <li>The BDBV hub imputes missing onset dates from reporting delays, which can over-smooth its data (Methods, Data) <span class="citation" data-cites="bdbv_modeling_hub_2026">(<a href="#ref-bdbv_modeling_hub_2026" role="doc-biblioref">InsightNet-US 2026</a>)</span>.</li>
 <li>Smoothed release histories mismatch the epinowcast reporting structure our simulations assume, which may disadvantage the fine-tuned Chronos-2.</li>
+<li>We fine-tuned on blocks of at most 288 steps of history but forecast with all available data.</li>
+<li>We did not test whether this affects Chronos-2’s handling of longer histories, which matters most for long series such as the German daily data.</li>
 <li>Fine-tuning used the laptop’s GPU, which made it several times faster than its CPU.</li>
 <li>On a laptop CPU alone it would run in hours.</li>
 <li>Key references: <span class="citation" data-cites="Kalahasti2026 Meyer2025">(<a href="#ref-Kalahasti2026" role="doc-biblioref">Kalahasti et al. 2026</a>; <a href="#ref-Meyer2025" role="doc-biblioref">Meyer et al. 2025</a>)</span>.</li>
@@ -1660,6 +1666,9 @@ Dudley, Carson, Reiden Magdaleno, Christopher Harding, and Marisa Eisenberg. 202
 </div>
 <div id="ref-Dudley2026" class="csl-entry" role="listitem">
 Dudley, Carson, Reiden Magdaleno, Christopher Harding, Ananya Sharma, Emily Martin, and Marisa Eisenberg. 2026. <span>“Mantis: A Foundation Model for Mechanistic Disease Forecasting.”</span> <em>Proceedings of the National Academy of Sciences</em> 123 (40). <a href="https://doi.org/10.1073/pnas.2602542123">https://doi.org/10.1073/pnas.2602542123</a>.
+</div>
+<div id="ref-Ferro2014" class="csl-entry" role="listitem">
+Ferro, Christopher A. T. 2014. <span>“Fair Scores for Ensemble Forecasts.”</span> <em>Quarterly Journal of the Royal Meteorological Society</em> 140 (683): 1917–23. <a href="https://doi.org/10.1002/qj.2270">https://doi.org/10.1002/qj.2270</a>.
 </div>
 <div id="ref-funkAssessingPerformanceRealtime2019" class="csl-entry" role="listitem">
 Funk, Sebastian, Anton Camacho, Adam J. Kucharski, Rachel Lowe, Rosalind M. Eggo, and W. John Edmunds. 2019. <span>“Assessing the Performance of Real-Time Epidemic Forecasts: <span>A</span> Case Study of <span>Ebola</span> in the <span>Western Area</span> Region of <span>Sierra Leone</span>, 2014-15.”</span> <em>PLOS Computational Biology</em> 15 (2): e1006785. <a href="https://doi.org/10.1371/journal.pcbi.1006785">https://doi.org/10.1371/journal.pcbi.1006785</a>.
@@ -1804,6 +1813,12 @@ Woo, Gerald, Chenghao Liu, Akshat Kumar, Caiming Xiong, Silvio Savarese, and Doy
 </div>
 <div id="ref-Yang2022" class="csl-entry" role="listitem">
 Yang, Jingfeng, Aditya Gupta, Shyam Upadhyay, Luheng He, Rahul Goel, and Shachi Paul. 2022. <span>“<span>TableFormer</span>: Robust Transformer Modeling for Table-Text Encoding.”</span> In <em>Proceedings of the 60th Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers)</em>. <a href="https://arxiv.org/abs/2203.00274">https://arxiv.org/abs/2203.00274</a>.
+</div>
+<div id="ref-Zamo2018" class="csl-entry" role="listitem">
+Zamo, Michaël, and Philippe Naveau. 2018. <span>“Estimation of the Continuous Ranked Probability Score with Limited Information and Applications to Ensemble Weather Forecasts.”</span> <em>Mathematical Geosciences</em> 50 (2): 209–34. <a href="https://doi.org/10.1007/s11004-017-9709-7">https://doi.org/10.1007/s11004-017-9709-7</a>.
+</div>
+<div id="ref-zanetta_scoringrules_2024" class="csl-entry" role="listitem">
+Zanetta, Francesco, and Sam Allen. 2024. <span>“Scoringrules: A Python Library for Probabilistic Forecast Evaluation.”</span> <a href="https://github.com/frazane/scoringrules">https://github.com/frazane/scoringrules</a>.
 </div>
 </div></section></div></main>
 <!-- /main column -->
