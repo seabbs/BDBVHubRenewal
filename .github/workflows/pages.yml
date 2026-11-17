@@ -464,13 +464,18 @@ jobs:
         with:
           path: ~/.cache/huggingface
           key: chronos-2-29ec3766d36d6f73f0696f85560a422f50e8498c
+      - name: Resolve the fine-tuned checkpoint
+        id: finetuned
+        if: endsWith(matrix.model, '_ft') && steps.cache.outputs.cache-hit != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: echo "hash=$(uv run bdbvhubrenewal finetuned-checkpoint)" >> "$GITHUB_OUTPUT"
       - name: Cache the fine-tuned checkpoints
         if: endsWith(matrix.model, '_ft') && steps.cache.outputs.cache-hit != 'true'
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/bdbvhubrenewal
-          key: chronos-ft-${{ github.run_id }}
-          restore-keys: chronos-ft-
+          key: chronos-ft-${{ steps.finetuned.outputs.hash }}
       - name: Run
         if: steps.cache.outputs.cache-hit != 'true'
         # Fine-tuned models list the releases to find their checkpoint,
@@ -555,13 +560,18 @@ jobs:
         with:
           path: ~/.cache/huggingface
           key: chronos-2-29ec3766d36d6f73f0696f85560a422f50e8498c
+      - name: Resolve the fine-tuned checkpoint
+        id: finetuned
+        if: endsWith(matrix.model, '_ft')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: echo "hash=$(uv run bdbvhubrenewal finetuned-checkpoint)" >> "$GITHUB_OUTPUT"
       - name: Cache the fine-tuned checkpoints
         if: endsWith(matrix.model, '_ft')
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/bdbvhubrenewal
-          key: chronos-ft-${{ github.run_id }}
-          restore-keys: chronos-ft-
+          key: chronos-ft-${{ steps.finetuned.outputs.hash }}
       - name: Run
         env:
           MODEL: ${{ matrix.model }}
@@ -766,6 +776,8 @@ jobs:
         with:
           name: site
           path: _site
+          # Read by this run's deploy and preview jobs only.
+          retention-days: 3
       # The results and data the `release` job may attach, and on a pull
       # request for comparing its results with main's.
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
