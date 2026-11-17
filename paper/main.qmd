@@ -70,9 +70,12 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
 
 ::: {.callout-note title="Plan"}
 - We give Chronos-2 the reporting triangle as series, one per place and reporting delay, each missing until reported (Figure 1B).
-- We add learned attention biases that mark a place's counts and lags, and parent and child places, so the model links each delay series to its place, building on Moirai's any-variate attention and TableFormer's relation biases [@Woo2024; @Yang2022] (SI).
+- Chronos-2 is built from attention layers, in which each series updates what it has learned as a weighted mix of the other series, with more weight on those it finds relevant.
+- Without more information, the model has no marker of which delay series belong to which place's count.
+- We add learned attention biases that nudge these weights by how two series are related (the same series, the same place, or a place and its parent or child), building on Moirai's any-variate attention and TableFormer's relation biases [@Woo2024; @Yang2022] (SI).
 - A third each of the training blocks with places have a country equal to, above or later than the sum of its places.
 - We fine-tune base Chronos-2 on synthetic data on a laptop, with its default LoRA recipe.
+- LoRA trains a small update to about 1% of the model's weights rather than retraining them all, so fine-tuning starts from the original model (SI).
 - The learning rate falls linearly to zero at 8,000 simulations.
 - Each simulation gives 32 training blocks.
 - A block is daily, 3-day or weekly, or daily with one weekly or 3-day total row per place.
