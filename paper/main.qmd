@@ -81,6 +81,7 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
 - A block is daily, 3-day or weekly, or daily with one weekly or 3-day total row per place.
 - Four in five blocks are multivariate and one in five univariate.
 - We save checkpoints at 1,000, 2,000, 4,000 and 8,000 simulations.
+- We report the final checkpoint, at 8,000 simulations, where the learning rate reaches zero, and select no checkpoint on real data.
 - Training draws simulations from a balanced, shuffled design, so every checkpoint has seen the whole grid.
 - Chronos-2 forecasts the country, provinces and health zones as separate series in one joint block.
 - The copula only pairs draws, for joint scores and sums, and leaves marginals unchanged.

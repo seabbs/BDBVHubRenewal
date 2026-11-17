@@ -398,7 +398,7 @@ The cost of each option: series per block, memory and time.
 
 - We compare the final run's checkpoints, fine-tuned on 1,000, 2,000, 4,000 and 8,000 simulations.
 - They share the grid, the data order and the recipe, as checkpoints of one run.
-- @fig-finetune-heldout gives the trainer's held-out loss by level.
+- @fig-finetune-heldout gives the trainer's held-out loss by level, for transparency, not to select a checkpoint.
 - @fig-checkpoint-curve gives German first-half and BDBV relative scores at each checkpoint, with zero-shot Chronos-2 on the ragged layout and on complete data only as reference lines.
 - @tbl-checkpoints gives the headline scores of each checkpoint.
 - A later checkpoint has also trained for more steps.
