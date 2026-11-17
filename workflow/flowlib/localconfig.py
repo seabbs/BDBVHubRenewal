@@ -46,6 +46,12 @@ DEFAULTS = (
     ("PUBLISH", ""),
     ("TARGETS", "simulate finetune score"),
     ("SIMS_FROM", ""),
+    # Scheduled runs (workflow/scripts/tick.py): the targets each tick runs
+    # in order (empty: none), every how many minutes, and the timer
+    # (cron, systemd or launchd; empty: by platform).
+    ("SCHEDULE_TARGETS", ""),
+    ("SCHEDULE_EVERY", "60"),
+    ("SCHEDULE_KIND", ""),
     # Dashboard runs with a local folder (flowlib.dashboard.runs specs,
     # separated by `;`).
     ("DASHBOARD_RUNS", ""),

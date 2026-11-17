@@ -347,3 +347,44 @@ def test_the_dashboard_render_is_its_own_target(tmp_path):
     assert dry(tmp_path, "dashboard") == {"dashboard": 1}
     jobs = dry(tmp_path, "all", config={**FT, "score": {"labels": ["aaa"]}})
     assert "dashboard" not in jobs
+
+
+def _scored(tmp_path):
+    import os
+    import time
+
+    data = tmp_path / "target.csv"
+    data.write_text("x\n")
+    cache = tmp_path / "scores"
+    for study in ("bdbv", "germany", "heldout"):
+        (cache / study).mkdir(parents=True, exist_ok=True)
+    stamps = [
+        cache / "bdbv" / "reference.done",
+        cache / "germany" / "reference.done",
+        cache / "bdbv" / "aaa.done",
+        cache / "germany" / "aaa.done",
+        cache / "heldout" / "aaa.done",
+    ]
+    for f in stamps:
+        f.write_text("")
+    (cache / "tables").mkdir()
+    for f in ("checkpoint-scores.csv", "checkpoints.csv", "landed"):
+        (cache / "tables" / f).write_text("")
+    old = time.time() - 3600
+    os.utime(data, (old, old))
+    for f in stamps:
+        os.utime(f, (old + 60, old + 60))
+    return {
+        "score": {"labels": ["aaa"], "data": str(data)},
+        "slots_check": {"run": False},
+        "agg": {"run": False},
+    }, stamps
+
+
+def test_land_runs_only_when_the_tables_changed(tmp_path):
+    config, stamps = _scored(tmp_path)
+    assert dry(tmp_path, "land", config=config) == {}
+    stamps[2].write_text("")  # a unit finished again: newer than the table
+    jobs = dry(tmp_path, "land", config=config)
+    assert jobs["score_table"] == 1
+    assert jobs["land"] == 1
