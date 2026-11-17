@@ -206,17 +206,13 @@ def unit(cache: Path, label: str) -> None:
     """Write zone draws for each origin of a label's cached draws."""
     import resource
 
-    from bdbvhubrenewal.data import load_daily, load_daily_zones
+    from bdbvhubrenewal.data import load_daily_zones
     from bdbvhubrenewal.data.zones import hub_zones, weekly_zone_counts
     from bdbvhubrenewal.evaluation import backtest as bt
-    from bdbvhubrenewal.evaluation import store
 
     config = bt.load_config()
     data = Path("data")
-    target = pd.read_csv(data / "target.csv", dtype={"kind": str})
-    tasks = store.origin_tasks(
-        target, pd.read_csv(data / "delays.csv.gz"), config, load_daily(data)
-    )
+    tasks = cs.bdbv_tasks(data, config)
     daily_zones = load_daily_zones(data)
     zones = hub_zones(data / "hub-config" / "tasks.json")
     src = cache / "bdbv" / label

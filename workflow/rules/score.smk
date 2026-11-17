@@ -5,8 +5,7 @@
 # (sample CRPS on the BDBV release backtest, 7-day target), `heldout`
 # (the trainer's held-out loss), `heldout_scores` (proper scores on the
 # `score.held_set` held-out simulations, by layout and design factor
-# level) and `bdbv_zones` (the backtest's health zones). Labels in
-# `score.kept` join the tables from the cache and are never scored.
+# level) and `bdbv_zones` (the backtest's health zones).
 # A unit caches one file per date or origin in <SCORE_CACHE>/<study>/
 # <label>/ and resumes from it; its done stamp is written when it exits
 # cleanly. `score_table` merges every label's rows into the evidence
@@ -211,7 +210,7 @@ rule score_table:
         evidence=f"{CACHE}/tables/checkpoint-scores.csv",
         checkpoints=f"{CACHE}/tables/checkpoints.csv",
     params:
-        labels=lambda wc: " ".join([*SC["kept"], *checkpoint_labels()]),
+        labels=lambda wc: " ".join(checkpoint_labels()),
         evidence=SC["evidence"],
         checkpoints=SC["checkpoints"],
     localrule: True

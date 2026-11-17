@@ -670,6 +670,34 @@ def daily_window(drawn: pd.DataFrame, reference: str) -> pd.DataFrame:
     return drawn.loc[(day >= first) & (day <= end)]
 
 
+def bdbv_tasks(data: Path, config: Any) -> dict[str, Any]:
+    """Return each BDBV origin's task, with the zones as in a submission.
+
+    The zone tables (`load_zone_data`) put the zones in Chronos-2's block
+    beside the provinces and the country, and give a province model its
+    zones from its own forecast (#299), as the hub submission does.
+    """
+    from bdbvhubrenewal.data import load_daily
+    from bdbvhubrenewal.data.zones import load_zone_data
+    from bdbvhubrenewal.evaluation import store
+
+    target = pd.read_csv(data / "target.csv", dtype={"kind": str})
+    return store.origin_tasks(
+        target,
+        pd.read_csv(data / "delays.csv.gz"),
+        config,
+        load_daily(data),
+        zones=load_zone_data(data),
+    )
+
+
+def existing_rows(path: Path, columns: Sequence[str]) -> pd.DataFrame:
+    """Return a score table's rows, or none if it does not exist yet."""
+    if not Path(path).exists():
+        return pd.DataFrame(columns=list(columns))
+    return pd.read_csv(path, dtype={"checkpoint": str})
+
+
 def bdbv_unit(
     cache: Path, label: str, targets: Sequence[str] = ("7day",)
 ) -> None:
@@ -679,9 +707,8 @@ def bdbv_unit(
     the days `DAILY_DAYS` back to the task's reference date. Only the
     `targets` an origin's file lacks are run and added to it.
     """
-    from bdbvhubrenewal.data import load_daily
     from bdbvhubrenewal.evaluation import backtest as bt
-    from bdbvhubrenewal.evaluation import marginals, store
+    from bdbvhubrenewal.evaluation import marginals
     from bdbvhubrenewal.forecasters import get_model
     from bdbvhubrenewal.forecasters.base import (
         ModelUnavailableError,
@@ -696,10 +723,7 @@ def bdbv_unit(
     _pin(label)
     config = bt.load_config()
     data = Path("data")
-    target = pd.read_csv(data / "target.csv", dtype={"kind": str})
-    tasks = store.origin_tasks(
-        target, pd.read_csv(data / "delays.csv.gz"), config, load_daily(data)
-    )
+    tasks = bdbv_tasks(data, config)
     origins = bdbv_origins()
     built = {
         t: [common(get_model(m)) for m in label_models(label, t)]
@@ -1163,9 +1187,9 @@ def table(
     runs = {h: run_of(m[0]) for h, m in meta.items()}
     new["run"] = new["checkpoint"].map(runs).fillna("zero-shot")
     new["chosen"] = chosen(new)
-    old = pd.read_csv(evidence, dtype={"checkpoint": str})
+    old = existing_rows(evidence, COLUMNS)
     merge_evidence(old, new).round(4).to_csv(evidence, index=False)
-    ck = pd.read_csv(checkpoints, dtype={"checkpoint": str})
+    ck = existing_rows(checkpoints, ["checkpoint", "outbreaks", "grid"])
     add = pd.DataFrame(
         [(h, m[1], m[2]) for h, m in meta.items()],
         columns=["checkpoint", "outbreaks", "grid"],

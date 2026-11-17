@@ -67,19 +67,6 @@ score:
   labels: null
   # Grid r5's run (#311) published its first checkpoint after this.
   published_from: "2026-11-17T17:00:00Z"
-  # Labels whose cached scores join the tables but are never scored: the
-  # previous run's checkpoints (grid r4, the old poller's cache).
-  kept:
-    - 7962fd718a47
-    - de129103cacc
-    - slots-06dbdcc2b48d
-    - slots-2ddfd57de549
-    - slots-7d7c5d9f247e
-    - slots-81b35ccb4875
-    - slots-9901ebc48e96
-    - slots-dfbc40ca2e0a
-    - slots-f01d4b22faad
-    - slots-f23ac5d03d45
   # The held-out simulations scored with proper scores
   # (scripts/heldout_scores.py SETS): r5 is round 9, all 840.
   held_set: r5
