@@ -7,13 +7,12 @@
 rounds: []
 
 simulate:
-  # Round r is `train_batches` training then
-  # `held_batches` held-out batches from seed `seed_base` + 100 r, each
-  # `batch` outbreaks with exactly `draws` observation draws.
+  # Round r is `batches` batches from seed `seed_base` + 100 r, each
+  # `batch` outbreaks with exactly `draws` observation draws: 40 of 21 are
+  # grid block r, 840 simulations (scripts/finetune_simulate.R).
   seed_base: 30000
-  train_batches: 40
-  held_batches: 4
-  batch: 25
+  batches: 40
+  batch: 21
   draws: 1
   # A batch's memory, and its one retry's (MB).
   mem_mb: 16384
@@ -27,12 +26,12 @@ finetune:
   # 8,400 outbreaks, ten of grid r5's balanced blocks of 840.
   prefixes: [250, 500, 750, 1000, 2000, 4000, 8400]
   outbreaks: 8400
-  # Training seeds: the rounds' training batches in seed order, or a
-  # fixed list from `seed_file` (one seed a line, in order). The held-out
-  # batches are those of `held_round`. Grid r5 starts at round 9; rounds 9
-  # to 17 (9,000) hold the outbreaks, a spare batch and room for QC
-  # exclusions.
-  rounds: [9, 10, 11, 12, 13, 14, 15, 16, 17]
+  # Training seeds: the rounds' batches in seed order, or a fixed list
+  # from `seed_file` (one seed a line, in order). The held-out round is
+  # one whole grid block, and the ten rounds after it the ten blocks
+  # trained on. The trainer monitors the first `holdout` simulations of
+  # the held-out round; the scoring workflow scores it whole.
+  rounds: [10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
   seed_file: null
   held_round: 9
   holdout: 90

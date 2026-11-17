@@ -42,16 +42,14 @@ def check_chunks(
         )
 
 
-def round_seeds(
-    round_: int, base: int, train: int, held: int
-) -> tuple[list[int], list[int]]:
-    """Return a round's training and held-out batch seeds.
+def round_seeds(round_: int, base: int, batches: int) -> list[int]:
+    """Return a round's batch seeds, `base` + 100 r on.
 
-    Must match the seeds of rounds already simulated.
+    A round is one grid block (`grid_index` in
+    scripts/finetune_simulate.R), so must match the simulator's.
     """
     first = base + 100 * round_
-    seeds = list(range(first, first + train + held))
-    return seeds[:train], seeds[train:]
+    return list(range(first, first + batches))
 
 
 def seeds_for(

@@ -4,12 +4,12 @@
 #
 #   nohup scripts/finetune_continuous.sh > output/finetune/continuous-r5.out 2>&1 &
 #
-# Each round of 1,000 simulations lands on the rounds host (REMOTE, or this
+# Each round, one grid block of 840 simulations, lands on the rounds host (REMOTE, or this
 # machine; scripts/local_config.sh) in `$REMOTE_ROOT/rounds/r<N>/` (`manifest.csv`, `held-out.txt`, `sims/`).
 # This streams each round's finished batches into HERE as its manifest
-# lists them, lists every training seed of each round in seed order, and
-# runs one trainer over the growing list, which waits for each batch in
-# turn, from
+# lists them and runs one trainer, which waits for each batch in turn,
+# on the held-out round FIRST_ROUND and the next TRAIN_ROUNDS rounds in
+# seed order, from
 # base Chronos-2 to OUTBREAKS with Chronos-2's recipe
 # (scripts/finetune_stream.py): learning rate 1e-5 for the adapter and
 # 1e-3 for the attention biases, falling linearly to zero over LR_STEPS,
@@ -26,16 +26,19 @@ source "$(dirname "${BASH_SOURCE[0]}")/local_config.sh"
 HERE=${HERE:-output/finetune/continuous-r5}
 # Ten of grid r5's balanced blocks of 840 simulations.
 OUTBREAKS=${OUTBREAKS:-8400}
-# Each round simulates 100 held-out outbreaks (one draw each); 90 of
-# them, so a few skipped simulations do not stop the trainer.
+# The trainer monitors the first 90 simulations of the held-out round, a
+# random sample of its block's cells; the scoring workflow scores the
+# whole round at each checkpoint.
 HOLDOUT=${HOLDOUT:-90}
 # Early checkpoints at 250 to 750 compare runs as they train; each lands
 # on a chunk's end.
 PREFIXES=${PREFIXES:-250 500 750 1000 2000 4000 8400}
-# The first round of grid r5; earlier rounds are other grids.
+# The first round of grid r5, the held-out block; earlier rounds are other
+# grids. The next TRAIN_ROUNDS rounds are the blocks trained on.
 FIRST_ROUND=${FIRST_ROUND:-9}
-# Round r's training seeds are SEED_BASE + 100 r on, ROUND_BATCHES of
-# them (scripts/sim_rounds.sh).
+TRAIN_ROUNDS=${TRAIN_ROUNDS:-10}
+# Round r's seeds are SEED_BASE + 100 r on, ROUND_BATCHES of them, grid
+# block r (scripts/sim_rounds.sh).
 SEED_BASE=${SEED_BASE:-30000}
 ROUND_BATCHES=${ROUND_BATCHES:-40}
 # One draw (grid r5 simulates one) at each of CUTS snapshots
@@ -68,25 +71,37 @@ pull() {
   rsync -a --exclude '.tmp-*' --exclude 'tmp/' "$(at_rounds "$REMOTE_ROOT/rounds/$1/$2")" "$3/"
 }
 
+# Seeds of round $1, in order.
+round_seeds() {
+  seq $((SEED_BASE + 100 * $1)) $((SEED_BASE + 100 * $1 + ROUND_BATCHES - 1))
+}
+
+# The first and last seed of the held-out round.
+held_out_seeds() {
+  local s
+  s=$(round_seeds "$FIRST_ROUND")
+  echo "$(head -n 1 <<< "$s") $(tail -n 1 <<< "$s")"
+}
+
 sync_rounds() {
   # Stream each round's finished batches as its manifest lists them, so
   # training need not wait for the round to be ready: the manifest first,
   # then the simulations, so every seed it lists has its files. The seed
-  # list is every training seed of each round in seed order, finished or
+  # list is every seed of the training rounds in seed order, finished or
   # not, so the trainer takes them in that order, as the workflow does.
   mkdir -p "$HERE/sims" "$HERE/rounds"
-  local n d seeds=$HERE/seeds.txt.tmp
-  : > "$seeds"
+  local n d last=$((FIRST_ROUND + TRAIN_ROUNDS))
   for n in $(remote_ls | sed -n 's/^r\([0-9]*\)$/\1/p' | sort -n); do
-    [ "$n" -ge "$FIRST_ROUND" ] || continue
+    [ "$n" -ge "$FIRST_ROUND" ] && [ "$n" -le "$last" ] || continue
     d=$HERE/rounds/r$n
     mkdir -p "$d"
     pull "r$n" manifest.csv "$d" || continue
-    pull "r$n" held-out.txt "$d" 2> /dev/null || true
     pull "r$n" sims/ "$HERE/sims" || return 1
-    seq $((SEED_BASE + 100 * n)) $((SEED_BASE + 100 * n + ROUND_BATCHES - 1)) >> "$seeds"
   done
-  mv "$seeds" "$HERE/seeds.txt"
+  for n in $(seq $((FIRST_ROUND + 1)) "$last"); do
+    round_seeds "$n"
+  done > "$HERE/seeds.txt.tmp"
+  mv "$HERE/seeds.txt.tmp" "$HERE/seeds.txt"
 }
 
 bias_args() {
@@ -135,8 +150,9 @@ trainer=""
 published=""
 while true; do
   sync_rounds || echo "$(date) sync failed; trying again"
-  if [ -z "$trainer" ] && [ -s "$HERE/rounds/r$FIRST_ROUND/held-out.txt" ]; then
-    read -r -a held < "$HERE/rounds/r$FIRST_ROUND/held-out.txt"
+  if [ -z "$trainer" ] && [ -s "$HERE/rounds/r$FIRST_ROUND/manifest.csv" ]; then
+    # The trainer waits for the held-out simulations it monitors.
+    read -r -a held <<< "$(held_out_seeds)"
     # $bias is empty or one word, so it is left unquoted.
     # shellcheck disable=SC2086
     PYTORCH_MPS_HIGH_WATERMARK_RATIO=${MPS_HIGH_WATERMARK:-0.85} \
