@@ -133,9 +133,9 @@ where $m_{n,t}$ is 1 for a target step to forecast and 0 for a missing target or
 
 - The learning rate falls linearly from $\eta_0$ to zero over the simulations [@Devlin2019]:
 $$
-\eta_s = \eta_0 \left(1 - \frac{s}{S}\right),
+\eta_t = \eta_0 \left(1 - \frac{s_t}{8{,}400}\right),
 $$
-where $s$ is the number of simulations consumed and $S = 8{,}400$, so the rate reaches zero at the last simulation however the blocks are packed into steps.
+where $s_t$ is the number of simulations trained by step $t$, interpolated within a chunk by its steps, so the rate reaches zero at the last simulation however the blocks are packed into steps.
 - $\eta_0 = 10^{-5}$ for the LoRA adapter, as in Chronos-2 [@Ansari2025], and $\eta_0 = 10^{-3}$ for the attention biases.
 - We train with AdamW [@Loshchilov2019] in fp32 and clip the gradient norm at 1 [@Pascanu2013].
 - Neither has weight decay or warmup, as in Chronos-2's fine-tuning [@Ansari2025], and the biases follow Moirai and TableFormer in having no weight decay [@Woo2024; @Yang2022].
@@ -175,7 +175,7 @@ The realised shares of the combinations of layout and options in the training bl
 **Order of the training data.**
 The grid is balanced in blocks of 840 simulations, with each factor's levels shuffled independently within a block, as in a Latin hypercube.
 Training takes the simulations in order, in chunks of 250, so a chunk holds under a third of a block.
-A chunk gives up to 8,000 training blocks, 32 a simulation, which are shuffled and packed into steps of up to 256 series each.
+A chunk gives up to 8,000 training blocks, 32 a simulation, which are shuffled and packed into about 1,500 steps of up to 256 series each, roughly 6 a simulation.
 So the checkpoints at 250, 500 and 750 simulations have seen only part of the grid, whole blocks are seen at each 840, and the 8,400 checkpoint has seen ten.
 
 Chronos-2 divides a flat context by a scale of $10^{-5}$, and we apply no floor to that scale at inference.
