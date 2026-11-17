@@ -75,7 +75,7 @@ import numpy as np
 import pandas as pd
 
 from bdbvhubrenewal.data.dates import as_date
-from bdbvhubrenewal.data.zones import is_zone, province_of
+from bdbvhubrenewal.data.zones import is_zone, province_of, weekly_zone_counts
 from bdbvhubrenewal.forecasters.base import (
     NATIONAL,
     SAMPLE_COLUMNS,
@@ -91,6 +91,7 @@ __all__ = [
     "check_zone_coherence",
     "reconcile_zones",
     "walks_own_zones",
+    "with_zones",
     "zone_draws",
     "zone_forecast",
     "zone_task",
@@ -409,6 +410,43 @@ def reconcile_zones(
     if not frames:
         return pd.DataFrame(columns=list(SAMPLE_COLUMNS))
     return pd.concat(frames, ignore_index=True)[list(SAMPLE_COLUMNS)]
+
+
+def with_zones(samples: pd.DataFrame, task: ForecastTask) -> pd.DataFrame:
+    """Return a province model's samples with its zones split from them.
+
+    Each province sample is split across the province's zones by
+    `ZoneAllocator`, from the task's zone counts at its vintage. This is
+    the one place a province-level model gets its zones, so every
+    consumer reads the zones it submits. Samples are returned as they are
+    when the task has no zone data, or when they already hold zones (a
+    model that forecasts the zones itself).
+
+    Parameters
+    ----------
+    samples : pandas.DataFrame
+        The model's output for `task`, provinces and optionally national,
+        with `as_of` rows if any.
+    task : ForecastTask
+        The task, with `zone_daily_history` and `zone_codes`.
+
+    Returns
+    -------
+    pandas.DataFrame
+        `samples` with the zone rows added (no `as_of` rows for zones).
+    """
+    daily = task.zone_daily_history
+    if not task.zone_codes or daily is None or daily.empty:
+        return samples
+    if samples["location"].map(is_zone).any():
+        return samples
+    counts = weekly_zone_counts(daily, task.vintage)
+    zones = ZoneAllocator().allocate(samples, task, counts, task.zone_codes)
+    if zones.empty:
+        return samples
+    if "as_of" in samples:
+        zones = zones.assign(as_of=np.nan)
+    return pd.concat([samples, zones], ignore_index=True)
 
 
 def zone_draws(samples: pd.DataFrame) -> pd.DataFrame:

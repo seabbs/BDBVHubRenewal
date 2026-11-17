@@ -28,16 +28,24 @@ KEYS = ["location", "target_end_date", "sample"]
 
 
 @pytest.fixture(scope="module")
-def task(target: pd.DataFrame, delays: pd.DataFrame) -> ForecastTask:
+def task(
+    target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
+) -> ForecastTask:
     rows = target.loc[target["vintage"] == VINTAGE]
-    return make_tasks(rows, delays, BacktestConfig(seed=3))[0]
+    return make_tasks(rows, delays, BacktestConfig(seed=3), daily=daily)[0]
 
 
 @pytest.fixture(scope="module")
-def zone_task(target: pd.DataFrame, delays: pd.DataFrame) -> ForecastTask:
+def zone_task(
+    target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
+) -> ForecastTask:
     rows = target.loc[target["vintage"] == VINTAGE]
     return make_tasks(
-        rows, delays, BacktestConfig(seed=3), zones=load_zone_data(DATA)
+        rows,
+        delays,
+        BacktestConfig(seed=3),
+        daily=daily,
+        zones=load_zone_data(DATA),
     )[0]
 
 
@@ -138,13 +146,13 @@ def test_the_submitted_file_is_unchanged(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from bdbvhubrenewal.cli import _hub_forecast
+    from bdbvhubrenewal.submission.fitting import get_config, run_fit
     from bdbvhubrenewal.submission.hub import to_hub_table
 
     _fake_renewal(monkeypatch)
-    rn.fit_renewal(
-        zone_task, {"num_chains": 2, "num_samples": 50, "seed": 7}, tmp_path,
-        variant="renewal", config_name="main",
-    )  # fmt: skip
+    # The CI's sampler seed is not the task's, as here.
+    sampler = {"num_chains": 2, "num_samples": 50, "seed": 7}
+    run_fit(get_config("main"), zone_task, sampler, tmp_path, model="renewal")
     table, result, *_ = _hub_forecast(
         zone_task, data=str(DATA), model=None, config="main", fit=tmp_path,
         forecast_date=VINTAGE,
@@ -156,3 +164,17 @@ def test_the_submitted_file_is_unchanged(
         zones=_submitted_split(prov, zone_task), forecast_date=VINTAGE,
     )  # fmt: skip
     pd.testing.assert_frame_equal(table, want)
+
+
+# A NUTS fit, about 5 minutes.
+@pytest.mark.slow
+def test_pprandomwalknowcast_returns_the_submitted_zones(
+    zone_task: ForecastTask,
+) -> None:
+    out = get_model("pprandomwalknowcast").forecast(zone_task)
+    own = out["location"].map(is_zone)
+    assert own.any()
+    pd.testing.assert_frame_equal(
+        _sorted(out.loc[own]),
+        _sorted(_submitted_split(out.loc[~own], zone_task)),
+    )
