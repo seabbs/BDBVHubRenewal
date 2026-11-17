@@ -19,17 +19,31 @@ rows in `evidence/checkpoint-scores.csv` with `rule` = `RULE`:
   `real_validation_loss` where given); `loss_zero_shot` is the base
   model's loss on the same set (`held_out_loss_start`).
 
+Each study is scored on two targets (`target`): `7day`, the hub's
+target, as above, and `daily`, each day's count by onset date (Germany:
+by Meldedatum) from 28 days back to the nowcast date, straight from the
+daily models' daily steps, not summed. The daily target is scored the
+same way, on a daily truth (each day's count in the first report D days
+after it), against `randomwalknowcast`'s daily forecasts, for our daily
+models only: the hub teams and the weekly models have no daily
+forecasts. The reference and the checkpoints of the current run take it
+(`targets_for`); other checkpoints only when asked.
+
 Relative scores divide by `randomwalknowcast` on the cells every model
-and checkpoint of a level made. Each run of the models is a "label":
+and checkpoint of a level and target made. Each run of the models is a "label":
 `reference` (randomwalknowcast and the zero-shot models) or a checkpoint
 hash (the `_ft` models with `BDBV_CHRONOS_FT` set to it). Forecasts are
 cached per date (Germany) and origin (BDBV), so a rerun resumes.
 
 Usage:
-  python scripts/checkpoint_scores.py germany CACHE LABEL
-  python scripts/checkpoint_scores.py bdbv CACHE LABEL
+  python scripts/checkpoint_scores.py germany CACHE LABEL [TARGETS]
+  python scripts/checkpoint_scores.py bdbv CACHE LABEL [TARGETS]
   python scripts/checkpoint_scores.py heldout CACHE HASH
   python scripts/checkpoint_scores.py table CACHE EVIDENCE CHECKPOINTS HASH...
+
+TARGETS is `7day`, `daily` or `7day,daily`, the label's own
+(`targets_for`) by default. A unit adds only the targets a date's cache
+file lacks; a file with no `target` column holds the 7-day target.
 
 `table` rebuilds the rule's rows for the hashes given from the cache and
 merges them into EVIDENCE (rows of other rules are kept) and the
@@ -69,6 +83,21 @@ BASELINE = "randomwalknowcast"
 REFERENCE = "reference"
 ZERO_SHOT = ("fm_chronos_daily_ragged", "fm_chronos_weekly_ragged")
 FINETUNED = tuple(f"{m}_ft" for m in ZERO_SHOT)
+TARGETS = ("7day", "daily")
+"""The hub's 7-day target and each day's count (Sam, 2026-11-17 00:10)."""
+DAILY_ZERO_SHOT = ("fm_chronos_daily_ragged",)
+"""The zero-shot models with a daily target; the weekly ones have none."""
+FINETUNED_DAILY = ("fm_chronos_daily_ragged_ft",)
+"""The fine-tuned models scored on the daily target. A model plugs in
+here if it has `quantiles(task, levels, target="daily")` or `daily(task)`
+(`bdbvhubrenewal.evaluation.marginals.daily_quantiles`)."""
+DAILY_RUNS = ("slots",)
+"""Runs (`run_of`) whose checkpoints take the daily target by default."""
+DAILY_DONE = "daily.done"
+"""In a unit's folder: written once every date holds the daily target."""
+DAILY_DAYS = 28
+"""The daily target's days run from this many days before the nowcast
+date (the reference date for BDBV) to it, as the 7-day target's sums."""
 COMPLETE = ("fm_chronos_daily_complete", "fm_chronos_weekly_complete")
 """Chronos-2 given only complete data points (no lags), zero-shot: a
 reference beside the ragged zero-shot models (Sam, 2026-11-16 16:55)."""
@@ -102,8 +131,11 @@ COLUMNS = [
     "loss",
     "loss_zero_shot",
     "run",
+    "target",
 ]
 HELD_OUT_LEVELS = ("leaf", "national", "intermediate")
+SORT = ["rule", "study", "level", "model", "outbreaks", "checkpoint"]
+"""The evidence's row order, before the target."""
 
 
 # Which checkpoints to score -------------------------------------------
@@ -227,11 +259,19 @@ def held_out_rows(checkpoint: str, settings: Mapping[str, Any]) -> pd.DataFrame:
     return out.reindex(columns=COLUMNS)
 
 
+def with_target(rows: pd.DataFrame) -> pd.DataFrame:
+    """Return rows with a `target`, `7day` where they have none."""
+    if "target" not in rows:
+        return rows.assign(target="7day")
+    return rows.assign(target=rows["target"].fillna("7day"))
+
+
 def matched(rows: pd.DataFrame, cell: list[str]) -> pd.DataFrame:
-    """Keep, in each level, the cells every model and checkpoint made."""
+    """Keep, in each level and target, the cells every model made."""
+    rows = with_target(rows)
     key = rows["model"] + "@" + rows["checkpoint"]
     out = []
-    for _, part in rows.assign(_k=key).groupby("level"):
+    for _, part in rows.assign(_k=key).groupby(["target", "level"]):
         n = part.groupby(cell)["_k"].nunique()
         full = n.index[n == part["_k"].nunique()]
         out.append(part.set_index(cell).loc[full].reset_index())
@@ -244,12 +284,14 @@ def relative(
     """Return mean scores relative to the baseline, by level and model.
 
     `metrics` is the score and its log-scale score, such as
-    `("wis", "log_wis")` or `("crps", "log_crps")`.
+    `("wis", "log_wis")` or `("crps", "log_crps")`. Each target divides
+    by the baseline's scores of that target.
     """
+    rows = with_target(rows)
     covers = [
         c for c in ("coverage_50", "coverage_90", "coverage_95") if c in rows
     ]
-    keys = ["level", "model", "checkpoint"]
+    keys = ["target", "level", "model", "checkpoint"]
     mean = rows.groupby(keys)[[*metrics, *covers]].mean()
     mean["n"] = rows.groupby(keys).size()
     origins = rows.groupby(keys)["origin"]
@@ -257,11 +299,14 @@ def relative(
     mean["first_origin"] = origins.min()
     mean["last_origin"] = origins.max()
     base = mean.xs((BASELINE, "zero-shot"), level=("model", "checkpoint"))
+    at = pd.MultiIndex.from_arrays(
+        [
+            mean.index.get_level_values("target"),
+            mean.index.get_level_values("level"),
+        ]
+    )
     for m in metrics:
-        mean[f"rel_{m}"] = (
-            mean[m]
-            / base[m].reindex(mean.index.get_level_values("level")).to_numpy()
-        )
+        mean[f"rel_{m}"] = mean[m] / base[m].reindex(at).to_numpy()
     out = mean.reset_index().assign(study=study, rule=RULE)
     return out.reindex(columns=COLUMNS)
 
@@ -275,8 +320,9 @@ def merge_evidence(old: pd.DataFrame, new: pd.DataFrame) -> pd.DataFrame:
     old["rule"] = old["rule"].astype(object).fillna(OLD_RULE)
     old = old.loc[old["rule"] != RULE]
     out = pd.concat([old, new.reindex(columns=COLUMNS)], ignore_index=True)
+    out["target"] = out["target"].astype(object).fillna("7day")
     return out.sort_values(
-        ["rule", "study", "level", "model", "outbreaks", "checkpoint"],
+        [*SORT, "target"],
         kind="stable",
     ).reset_index(drop=True)
 
@@ -293,8 +339,12 @@ def common(model: Any) -> Any:
     return model
 
 
-def label_models(label: str) -> tuple[str, ...]:
-    """Return the models a label runs."""
+def label_models(label: str, target: str = "7day") -> tuple[str, ...]:
+    """Return the models a label runs for a target."""
+    if target == "daily":
+        if label == REFERENCE:
+            return (BASELINE, *DAILY_ZERO_SHOT)
+        return () if label == COMPLETE_LABEL else FINETUNED_DAILY
     if label == REFERENCE:
         return (BASELINE, *ZERO_SHOT, *COMPLETE)
     if label == COMPLETE_LABEL:
@@ -374,13 +424,71 @@ def merge_complete(cache: Path) -> None:
     (cache / COMPLETE_STAMP).write_text("merged\n")
 
 
-def ready_labels(cache: Path, study: str, labels: Sequence[str]) -> list[str]:
-    """Return the labels whose `study` unit is complete."""
-    return [lb for lb in labels if unit_done(cache, study, lb)]
+def ready_labels(
+    cache: Path, study: str, labels: Sequence[str], target: str = "7day"
+) -> list[str]:
+    """Return the labels whose `study` unit is complete for `target`."""
+    return [lb for lb in labels if unit_done(cache, study, lb, target)]
 
 
-def germany_unit(cache: Path, label: str) -> None:
-    """Nowcast each development date, as own quantiles with truth."""
+def daily_ready(cache: Path, study: str, labels: Sequence[str]) -> list[str]:
+    """Return the labels with the daily target, if the reference has it.
+
+    The daily target's baseline is the reference's `randomwalknowcast`.
+    """
+    ready = ready_labels(cache, study, labels, "daily")
+    return ready if REFERENCE in ready else []
+
+
+def targets_for(cache: Path, label: str) -> tuple[str, ...]:
+    """Return the targets a label takes by default.
+
+    The reference and the checkpoints of `DAILY_RUNS` take both; others,
+    and checkpoints whose settings are not fetched yet, the 7-day only.
+    """
+    if label == REFERENCE:
+        return TARGETS
+    settings = cache / "heldout" / f"{label}.json"
+    if label == COMPLETE_LABEL or not settings.exists():
+        return ("7day",)
+    run = run_of(json.loads(settings.read_text()))
+    return TARGETS if run in DAILY_RUNS else ("7day",)
+
+
+_READ = {"dtype": {"origin": str, "target_end_date": str}}
+
+
+def read_cache(path: Path) -> pd.DataFrame:
+    """Read a cache file, with `target` `7day` where it has none."""
+    return with_target(pd.read_csv(path, **_READ))
+
+
+def cached_targets(path: Path) -> set[str]:
+    """Return the targets a cache file holds, none if it is missing."""
+    if not path.exists():
+        return set()
+    head = pd.read_csv(path, nrows=0)
+    if "target" not in head:
+        return {"7day"}
+    return set(pd.read_csv(path, usecols=["target"])["target"].dropna())
+
+
+def _add(path: Path, parts: list[pd.DataFrame]) -> None:
+    """Write a date's new targets beside the ones its file holds."""
+    if path.exists():
+        parts = [read_cache(path), *parts]
+    _write(pd.concat(parts, ignore_index=True), path)
+
+
+def germany_unit(
+    cache: Path, label: str, targets: Sequence[str] = ("7day",)
+) -> None:
+    """Nowcast each development date, as own quantiles with truth.
+
+    Only the `targets` a date's file lacks are run and added to it.
+    """
+    import time
+
     from bdbvhubrenewal.data.germany import hub_triangle
     from bdbvhubrenewal.evaluation import germany as de
 
@@ -393,18 +501,33 @@ def germany_unit(cache: Path, label: str) -> None:
     dates = de.nowcast_dates(config, held_out=False)
     for i, date in enumerate(dates, 1):
         path = root / f"{date}.csv.gz"
-        if path.exists():
+        todo = [t for t in targets if t not in cached_targets(path)]
+        if not todo:
             continue
-        fc = de.germany_forecasts(
-            list(label_models(label)),
-            triangle,
-            [date],
-            config.n_samples,
-            config.seed,
-        )
-        _write(de.with_truth(fc, triangle, config.truth_delay), path)
+        parts, took = [], []
+        for target in todo:
+            start = time.monotonic()
+            models = list(label_models(label, target))
+            if target == "7day":
+                fc = de.germany_forecasts(
+                    models, triangle, [date], config.n_samples, config.seed
+                )
+                fc = de.with_truth(fc, triangle, config.truth_delay)
+            else:
+                fc = de.germany_daily_forecasts(
+                    models, triangle, [date], config.n_samples, config.seed
+                )
+                fc = de.with_truth(fc, triangle, config.truth_delay, window=1)
+            parts.append(fc.assign(target=target))
+            took.append(f"{target} {time.monotonic() - start:.0f}s")
+        _add(path, parts)
         free_caches()
-        print(f"germany {label} {date} ({i}/{len(dates)})", flush=True)
+        print(
+            f"germany {label} {date} ({i}/{len(dates)}): {', '.join(took)}",
+            flush=True,
+        )
+    if "daily" in targets:
+        (root / DAILY_DONE).write_text("done\n")
     print(f"germany {label} done", flush=True)
 
 
@@ -431,8 +554,23 @@ def origin_draws(frames: list[pd.DataFrame], origin: str) -> pd.DataFrame:
     return out
 
 
-def bdbv_unit(cache: Path, label: str) -> None:
-    """Draw 1,000 final-count samples per origin for each model."""
+def daily_window(drawn: pd.DataFrame, reference: str) -> pd.DataFrame:
+    """Keep the daily target's days: `DAILY_DAYS` back to `reference`."""
+    day = pd.to_datetime(drawn["target_end_date"])
+    end = pd.Timestamp(reference)
+    first = end - pd.Timedelta(days=DAILY_DAYS)
+    return drawn.loc[(day >= first) & (day <= end)]
+
+
+def bdbv_unit(
+    cache: Path, label: str, targets: Sequence[str] = ("7day",)
+) -> None:
+    """Draw 1,000 final-count samples per origin for each model.
+
+    The daily target's draws are each model's daily draws (`daily`), of
+    the days `DAILY_DAYS` back to the task's reference date. Only the
+    `targets` an origin's file lacks are run and added to it.
+    """
     from bdbvhubrenewal.data import load_daily
     from bdbvhubrenewal.evaluation import backtest as bt
     from bdbvhubrenewal.evaluation import store
@@ -450,29 +588,46 @@ def bdbv_unit(cache: Path, label: str) -> None:
         target, pd.read_csv(data / "delays.csv.gz"), config, load_daily(data)
     )
     origins = bdbv_origins()
-    built = [common(get_model(m)) for m in label_models(label)]
+    built = {
+        t: [common(get_model(m)) for m in label_models(label, t)]
+        for t in targets
+    }
     root = unit_root(cache, "bdbv", label)
     for origin in origins:
         path = root / f"{origin}.csv.gz"
-        if path.exists():
+        todo = [t for t in targets if t not in cached_targets(path)]
+        if not todo:
             continue
         task = dataclasses.replace(
             tasks[origin], n_samples=N_DRAWS, seed=config.seed
         )
-        frames = []
-        for model in built:
-            try:
-                drawn = model.forecast(task)
-            except ModelUnavailableError as err:
-                print(f"{model.name} at {origin}: {err}", flush=True)
-                continue
-            if "as_of" in drawn:
-                drawn = drawn.loc[drawn["as_of"].isna()].drop(columns="as_of")
-            frames.append(add_national(drawn).assign(model=model.name))
-        out = origin_draws(frames, origin)
-        _write(out, path)
+        parts = []
+        for target in todo:
+            frames = []
+            for model in built[target]:
+                try:
+                    if target == "7day":
+                        drawn = model.forecast(task)
+                    else:
+                        drawn = model.daily(task)
+                except ModelUnavailableError as err:
+                    print(f"{model.name} at {origin}: {err}", flush=True)
+                    continue
+                if drawn is None:
+                    continue
+                if "as_of" in drawn:
+                    drawn = drawn.loc[drawn["as_of"].isna()].drop(
+                        columns="as_of"
+                    )
+                if target == "daily":
+                    drawn = daily_window(drawn, str(task.reference_date))
+                frames.append(add_national(drawn).assign(model=model.name))
+            parts.append(origin_draws(frames, origin).assign(target=target))
+        _add(path, parts)
         free_caches()
-        print(f"bdbv {label} {origin}", flush=True)
+        print(f"bdbv {label} {origin}: {', '.join(todo)}", flush=True)
+    if "daily" in targets:
+        (root / DAILY_DONE).write_text("done\n")
     print(f"bdbv {label} done", flush=True)
 
 
@@ -495,13 +650,21 @@ def held_out_unit(cache: Path, checkpoint: str) -> None:
     print(f"heldout {checkpoint} done", flush=True)
 
 
-def unit_done(cache: Path, study: str, label: str) -> bool:
-    """Whether a unit's cache is complete."""
+def unit_done(
+    cache: Path, study: str, label: str, target: str = "7day"
+) -> bool:
+    """Whether a unit's cache is complete for a target.
+
+    Every date's file holds the 7-day target; the daily one is done once
+    the unit has written `DAILY_DONE`.
+    """
     if study == "heldout":
         return (cache / "heldout" / f"{label}-release.json").exists()
     want = germany_dates() if study == "germany" else bdbv_origins()
     files = (cache / study / label).glob("*.csv.gz")
     have = {p.name.removesuffix(".csv.gz") for p in files}
+    if target == "daily" and not (cache / study / label / DAILY_DONE).exists():
+        return False
     return set(want) <= have
 
 
@@ -556,28 +719,112 @@ def _tag(rows: pd.DataFrame, label: str) -> pd.DataFrame:
     )
 
 
-def germany_rows(cache: Path, labels: Sequence[str]) -> pd.DataFrame:
-    """Return the German development half's rule rows."""
+def _by_target(
+    labels: Sequence[str], daily_labels: Sequence[str]
+) -> dict[str, list[str]]:
+    """Return each label's targets to score."""
+    out: dict[str, list[str]] = {}
+    for label in labels:
+        out.setdefault(label, []).append("7day")
+    for label in daily_labels:
+        out.setdefault(label, []).append("daily")
+    return out
+
+
+def germany_rows(
+    cache: Path, labels: Sequence[str], daily_labels: Sequence[str] = ()
+) -> pd.DataFrame:
+    """Return the German development half's rule rows.
+
+    The 7-day target's from `labels` and the daily target's from
+    `daily_labels`, where the hub teams take no part.
+    """
     from bdbvhubrenewal.evaluation import germany as de
 
     sys.path.insert(0, str(Path(__file__).parent))
     from germany_chronos_dev import scores as germany_scores
 
     config = de.load_germany_config("config/germany.toml")
-    read = {"dtype": {"origin": str, "target_end_date": str}}
+    teams = set(de.TEAM_NAMES.values())
     parts = []
-    for label in labels:
+    for label, targets in _by_target(labels, daily_labels).items():
         files = sorted((cache / "germany" / label).glob("*.csv.gz"))
-        fc = pd.concat([pd.read_csv(f, **read) for f in files])
+        fc = pd.concat([read_cache(f) for f in files])
         fc = fc.loc[fc["origin"] < config.split_date]
-        sc = germany_scores(fc, config.truth_delay)
-        parts.append(_tag(sc, label))
+        for target in targets:
+            part = fc.loc[fc["target"] == target].drop(columns="target")
+            if target == "daily":
+                part = part.loc[~part["model"].isin(teams)]
+            if part.empty:
+                continue
+            sc = germany_scores(part, config.truth_delay)
+            parts.append(_tag(sc, label).assign(target=target))
     sc = pd.concat(parts, ignore_index=True).rename(columns={"pool": "level"})
     return relative(matched(sc, GERMANY_CELL), "germany", ("wis", "log_wis"))
 
 
-def bdbv_rows(cache: Path, labels: Sequence[str]) -> pd.DataFrame:
-    """Return the BDBV release backtest's rule rows."""
+def bdbv_daily_truth(daily: pd.DataFrame, delay: int) -> pd.DataFrame:
+    """Return each day's count in the first release `delay` days after it.
+
+    A release lists only days with a case (`load_daily`), so each covers
+    every day from the first onset to its cut-off, 0 where it has no row:
+    the release reporting no case that day. The count is observed plus
+    imputed onsets, as the weekly target's. The provinces are the places,
+    and the country is their sum.
+
+    Parameters
+    ----------
+    daily : pandas.DataFrame
+        `load_daily` rows: `vintage`, `location`, `onset_date`,
+        `observed`, `imputed` and `cutoff`.
+    delay : int
+        $D$, the days from a day to the cut-off of the release that gives
+        its truth.
+
+    Returns
+    -------
+    pandas.DataFrame
+        As `rolling_truth`, one row per place and day with a release $D$
+        days on, the day in `target_end_date`.
+    """
+    from bdbvhubrenewal.evaluation.nowcast import rolling_truth
+
+    rows = daily.loc[daily["location"].str.count("-") == 1]
+    places = sorted(set(rows["location"]))
+    first = pd.Timestamp(rows["onset_date"].min())
+    frames = []
+    for (vintage, cutoff), own in rows.groupby(["vintage", "cutoff"]):
+        days = pd.date_range(first, cutoff, freq="D").strftime("%Y-%m-%d")
+        wide = (
+            own.assign(total=own["observed"] + own["imputed"])
+            .pivot_table(
+                index="onset_date",
+                columns="location",
+                values="total",
+                aggfunc="sum",
+            )
+            .reindex(index=days, columns=places)
+            .fillna(0.0)
+        )
+        wide["CD"] = wide[places].sum(axis=1)
+        long = wide.rename_axis(index="target_end_date").reset_index()
+        long = long.melt(
+            id_vars="target_end_date", var_name="location", value_name="total"
+        )
+        frames.append(long.assign(vintage=vintage, cutoff=cutoff))
+    return rolling_truth(pd.concat(frames, ignore_index=True), delay)
+
+
+def bdbv_rows(
+    cache: Path, labels: Sequence[str], daily_labels: Sequence[str] = ()
+) -> pd.DataFrame:
+    """Return the BDBV release backtest's rule rows.
+
+    The 7-day target's from `labels`, on the weekly truth, and the daily
+    target's from `daily_labels`, on the daily truth
+    (`bdbv_daily_truth`).
+    """
+    from bdbvhubrenewal.data import load_daily
     from bdbvhubrenewal.evaluation import backtest as bt
     from bdbvhubrenewal.evaluation.nowcast import (
         resolve_truth_delay,
@@ -587,15 +834,22 @@ def bdbv_rows(cache: Path, labels: Sequence[str]) -> pd.DataFrame:
     config = bt.load_config()
     target = pd.read_csv("data/target.csv", dtype={"kind": str})
     real = target.loc[target["kind"] == "real"]
-    truth = rolling_truth(real, resolve_truth_delay(config, target))
-    truth = truth.astype({"target_end_date": str, "truth_vintage": str})
+    delay = resolve_truth_delay(config, target)
+    truth = {"7day": rolling_truth(real, delay)}
+    if daily_labels:
+        truth["daily"] = bdbv_daily_truth(load_daily(Path("data")), delay)
+    truth = {
+        t: v.astype({"target_end_date": str, "truth_vintage": str})
+        for t, v in truth.items()
+    }
     parts = []
-    for label in labels:
+    for label, targets in _by_target(labels, daily_labels).items():
         for f in sorted((cache / "bdbv" / label).glob("*.csv.gz")):
-            draws = pd.read_csv(
-                f, dtype={"origin": str, "target_end_date": str}
-            )
-            parts.append(_tag(cell_scores(draws, truth), label))
+            draws = read_cache(f)
+            for t in targets:
+                part = draws.loc[draws["target"] == t].drop(columns="target")
+                sc = _tag(cell_scores(part, truth[t]), label)
+                parts.append(sc.assign(target=t))
     sc = pd.concat(parts, ignore_index=True)
     sc["level"] = (sc["location"].str.count("-") == 0).map(
         {True: "national", False: "provinces"}
@@ -620,8 +874,16 @@ def table(
     labels = [REFERENCE, *hashes]
     new = pd.concat(
         [
-            germany_rows(cache, ready_labels(cache, "germany", labels)),
-            bdbv_rows(cache, ready_labels(cache, "bdbv", labels)),
+            germany_rows(
+                cache,
+                ready_labels(cache, "germany", labels),
+                daily_ready(cache, "germany", labels),
+            ),
+            bdbv_rows(
+                cache,
+                ready_labels(cache, "bdbv", labels),
+                daily_ready(cache, "bdbv", labels),
+            ),
             *(held_out_rows(h, m[0]) for h, m in meta.items()),
         ],
         ignore_index=True,
@@ -649,10 +911,18 @@ def table(
 def main(argv: Sequence[str]) -> None:
     """Run one unit, or rebuild the table."""
     study, cache = argv[0], Path(argv[1])
-    if study == "germany":
-        germany_unit(cache, argv[2])
-    elif study == "bdbv":
-        bdbv_unit(cache, argv[2])
+    if study in ("germany", "bdbv"):
+        label = argv[2]
+        targets = (
+            tuple(argv[3].split(","))
+            if len(argv) > 3
+            else targets_for(cache, label)
+        )
+        unknown = set(targets) - set(TARGETS)
+        if unknown:
+            raise SystemExit(f"unknown targets {sorted(unknown)}: {TARGETS}")
+        unit = germany_unit if study == "germany" else bdbv_unit
+        unit(cache, label, targets)
     elif study == "heldout":
         held_out_unit(cache, argv[2])
     elif study == "table":
