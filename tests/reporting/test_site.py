@@ -59,10 +59,10 @@ def test_scored_on_names_the_site_baseline() -> None:
 
 
 def test_axis_labels_name_the_site_baseline() -> None:
-    assert plots._metric_label("relative_wis") == (
-        "WIS relative to randomwalknowcast"
+    assert plots._metric_label("relative_crps") == (
+        "CRPS relative to randomwalknowcast"
     )
-    assert plots._metric_label("wis") == "Mean WIS"
+    assert plots._metric_label("crps") == "Mean CRPS"
 
 
 def test_comparisons_zones_and_history_use_randomwalknowcast() -> None:

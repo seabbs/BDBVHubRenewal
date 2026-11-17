@@ -10,27 +10,40 @@ Forecasts from simulated vintages are scored against the simulated final counts.
 
 ## Scores
 
-Scores follow [scoringutils](https://epiforecasts.io/scoringutils/) and [BVDOutbreakSize](https://github.com/epiforecasts/BVDOutbreakSize).
-With sample quantiles $q_\tau$ at 23 levels, $\tau \in \{0.01, 0.025, 0.05, 0.10, \dots, 0.95, 0.975, 0.99\}$,
+The hub takes sample trajectories, so every BDBV forecast is scored on its samples by the continuous ranked probability score (CRPS), as the paper scores Ebola.
+With samples $X_1, \dots, X_m$ of a forecast $F$ and the observed count $y$, we use the fair form[^ferro],
 
 $$
-\text{WIS}(F, y) = \frac{1}{K + 1/2} \sum_{\tau} \left(\mathbb{1}\{y < q_\tau\} - \tau\right)\left(q_\tau - y\right), \qquad K = 11.
+\text{CRPS}(F, y) = \frac{1}{m} \sum_{i} \lvert X_i - y \rvert - \frac{1}{2m(m - 1)} \sum_{i \ne j} \lvert X_i - X_j \rvert.
 $$
 
-It splits into dispersion, overprediction and underprediction.
-WIS on the log scale is the WIS of the transformed target, $\text{WIS}(\log(1 + x), \log(1 + y))$, never the log of WIS.
-WIS on the natural scale is dominated by the places with the most cases.
+This is scoringrules' `crps_ensemble` with `estimator="fair"`, as in the paper.
+CRPS on the log scale is the CRPS of the transformed target, $\text{CRPS}(\log(1 + X), \log(1 + y))$, never the log of CRPS.
+CRPS on the natural scale is dominated by the places with the most cases.
 On the log scale it approximates a score of the relative error, close to a score of the growth rate, so every place counts on a similar footing[^bosse].
+CRPS, log CRPS and the [energy score](#energy-score) use the fair estimators for every model, ours and the hub teams'.
+Their expectation does not depend on the number of draws $m$.
+So scores compare fairly although the number of draws differs across models and pages.
+
+| Forecasts | Draws per forecast | Set by |
+|---|---|---|
+| Models the site runs itself in the release backtest, health zones, leave-one-province-out, scenarios and recovery | 1,000 | `[samples] backtest` in `config/backtest.toml` |
+| Stored fits, the submission, the Nowcast page and our models in the Comparison with the hub | 100 | `[forecast] n_samples` in `config/backtest.toml` |
+| Hub teams | 100 | Their submissions |
+| German nowcast benchmark | Quantiles at seven levels, scored by WIS | `config/germany.toml` |
+
+Every model shares the backtest's seed, so its draws use common random numbers.
+Each page states the counts it scores.
 
 $$
 \text{Bias} = 1 - \big(P(X \le y) + P(X \le y - 1)\big),
 \qquad
-\text{rWIS}_m = \frac{\overline{\text{WIS}}_m}{\overline{\text{WIS}}_b}.
+\text{rCRPS}_m = \frac{\overline{\text{CRPS}}_m}{\overline{\text{CRPS}}_b}.
 $$
 
 Positive bias is overprediction.
-Relative WIS is a ratio of means against a baseline $b$ over the forecasts both made, and below 1 beats it.
-Relative WIS on the log scale is the same ratio of mean WIS on the log scale.
+Relative CRPS is a ratio of means against a baseline $b$ over the forecasts both made, and below 1 beats it.
+Relative CRPS on the log scale is the same ratio of mean CRPS on the log scale.
 The baseline is `randomwalknowcast`, set by `[scores] baseline` in `config/site.toml`.
 Of the Chronos-2 models the site shows only `fm_chronos_daily_ragged_ft` (`[models]` in `config/site.toml`); the others are still fitted, scored and in the paper.
 The interactive summaries and the checks chart have a Relative to picker that makes any model the baseline, and the overall score tables a baseline filter.
@@ -45,7 +58,7 @@ The energy score scores one forecast of a vector $\mathbf{y}$.
 For an origin, a release and a scale, $\mathbf{y}$ holds every place at that scale in every scored week, and national holds the weeks only.
 It uses only the place-week cells that every compared model forecasts.
 Sample $i$ of a model is its draws with sample index $i$, $\mathbf{X}_i$.
-We use the fair form over $m$ samples,
+We use the fair form over $m$ samples, scoringrules' `es_ensemble` with `estimator="fair"`, for every model,
 
 $$
 \text{ES}(F, \mathbf{y}) = \frac{1}{m} \sum_{i} \lVert \mathbf{X}_i - \mathbf{y} \rVert - \frac{1}{2m(m - 1)} \sum_{i \ne j} \lVert \mathbf{X}_i - \mathbf{X}_j \rVert.
@@ -122,8 +135,8 @@ The Backtest page gives the truth delay in use and how many forecasts it scores.
 Health zones are scored on the weeks the latest release reports in full.
 There a week is complete when it is at least 4 weeks back from the week holding the latest release's cut-off and grew by less than 2% since the release before.
 
-Scores are WIS, 50% and 90% coverage and bias, by model, origin, weeks back from the week holding the origin's cut-off, and place.
-Relative WIS is against `randomwalknowcast` on the forecasts both made, for national and the provinces pooled, over all origins and by origin, and by origin and place.
+Scores are CRPS, CRPS on the log scale, 50% and 90% coverage and bias, by model, origin, weeks back from the week holding the origin's cut-off, and place.
+Relative CRPS is against `randomwalknowcast` on the forecasts both made, for national and the provinces pooled, over all origins and by origin, and by origin and place.
 Every table counts its forecasts, $n$, so a model with fewer forecasts was scored on fewer weeks or places.
 The run stops if an origin has no release snapshots or two models run here give identical samples.
 
@@ -150,7 +163,7 @@ A week with no onsets in a zone has a count of 0.
 Each model's zone samples are scored as the model draws them, as in the submitted file.
 Each real vintage before the latest is forecast, and origins with no pair of releases within the delay window are skipped, as for provinces.
 Zones are scored on the reported target as for [real releases](#real-releases), with the zone delays fitted at the origin, so a zone count is never scored against a count still being reported.
-Relative WIS is against `randomwalknowcast`.
+Relative CRPS is against `randomwalknowcast`.
 `pprandomwalknowcast` is fitted here on the zones and on the provinces.
 On the Nowcast page only `randomwalk` and `randomwalknowcast` are shown at zone level.
 The fitted models are shown at the country and provinces, from their stored forecasts.
@@ -158,7 +171,7 @@ The fitted models are shown at the country and provinces, from their stored fore
 ## Scores by place type and plausibility { #checks }
 
 The scores on the reported target, at province and zone level, are also averaged by the type of place and by a plausibility flag of each forecast, both decided from the counts reported at the origin.
-Relative WIS in these averages is against `randomwalknowcast`.
+Relative CRPS in these averages is against `randomwalknowcast`.
 Week $w$ is the latest week ending on or before the origin, and $n(t)$ the count reported then for the week ending $t$, with 0 for a week with no row.
 A place with no case in the 9 weeks to $w$, one with no week above 5 cases, and the rest form the three place types.
 The flag is set from each origin's forecast of week $w + 1$, with median $q_{50}$ and 95% quantile $q_{95}$.
@@ -178,7 +191,7 @@ Every model is scored only on the hub teams' cells: the rounds, places and weeks
 Our models forecast more places and weeks, and rounds no team forecast, and those cells are not scored.
 Each cell is scored on the complete weeks, from the vintage serving the round, since hub teams have no modelled delay we can see.
 The table by round gives each model's `n` beside `hub_cells`, the team cells scored, so a model with fewer missed some.
-WIS is relative to `randomwalknowcast` on the weeks both forecast, on the [comparison page](../comparison.md).
+CRPS is relative to `randomwalknowcast` on the weeks both forecast, on the [comparison page](../comparison.md).
 A round is pending until a later real release exists.
 
 ## German nowcast benchmark
@@ -197,7 +210,13 @@ The 79 dates from 2022-02-10 on are held out for the paper and are not scored he
 The hub collected nowcasts as quantiles at the levels 2.5%, 10%, 25%, 50%, 75%, 90% and 97.5%.
 Our models' samples are reduced to their quantiles at these levels, as for a hub submission.
 Our models and the hub teams are then scored the same way, as the paper did.
-The scores are the WIS of the seven quantiles, the absolute error of the median and the coverage of the 50% and 95% intervals.
+The scores are the weighted interval score (WIS) of the seven quantiles, the absolute error of the median and the coverage of the 50% and 95% intervals.
+These are quantile forecasts, so this benchmark keeps WIS where the BDBV pages use CRPS.
+With quantiles $q_\tau$ at the $2K + 1$ levels $\tau$,
+
+$$
+\text{WIS}(F, y) = \frac{1}{K + 1/2} \sum_{\tau} \left(\mathbb{1}\{y < q_\tau\} - \tau\right)\left(q_\tau - y\right), \qquad K = 3.
+$$
 Each 7-day sum's truth is its count in the data 40 days after it ends, the paper's 40-day truth.
 The backtest scores its complete weeks the same way, on the first release the truth delay after each week ([Real releases](#real-releases)).
 Relative scores divide a model's mean score by `randomwalknowcast`'s on the nowcasts both made.
@@ -213,5 +232,7 @@ Under 1% of the teams' forecasts have quantiles that cross, and their values are
 The paper also filled some missing ILM and LMU nowcasts from later model versions, and those are not scored here.
 
 [^wolffram]: Wolffram D, Abbott S, an der Heiden M, Funk S, Günther F, Hailer D, et al. (2023). Collaborative nowcasting of COVID-19 hospitalization incidences in Germany. PLOS Computational Biology 19(8): e1011394. [doi:10.1371/journal.pcbi.1011394](https://doi.org/10.1371/journal.pcbi.1011394).
+
+[^ferro]: Ferro CAT (2014). Fair scores for ensemble forecasts. Quarterly Journal of the Royal Meteorological Society 140(683): 1917–1923. [doi:10.1002/qj.2270](https://doi.org/10.1002/qj.2270).
 
 [^bosse]: Bosse NI, Abbott S, Cori A, van Leeuwen E, Bracher J, Funk S (2023). Scoring epidemiological forecasts on transformed scales. PLOS Computational Biology 19(8): e1011393. [doi:10.1371/journal.pcbi.1011393](https://doi.org/10.1371/journal.pcbi.1011393).
