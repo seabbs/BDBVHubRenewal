@@ -712,3 +712,23 @@ def test_the_one_model_run_is_told_from_the_superseded_ones(cs) -> None:
     assert cs.run_of({"series_slots": {"init": "normal"}}) == "slots"
     assert cs.run_of({}) == "no-slots"
     assert {"one-model"} == cs.CURRENT_RUNS
+
+
+def test_daily_baseline_rows_name_their_provisional_rule(cs) -> None:
+    # randomwalknowcast nowcasts weeks: its daily forecasts split each
+    # week's draws over the days (`split_week_draws`), a provisional
+    # choice the rows name so the paper can footnote or drop them.
+    cells = pd.concat(
+        [
+            _target_cells("randomwalknowcast", "7day", 2.0),
+            _target_cells("randomwalknowcast", "daily", 1.0),
+            _target_cells("fm_chronos_daily_ragged", "daily", 4.0),
+        ]
+    )
+    rows = cs.relative(cells, "ebola", ("crps", "log_crps"))
+    assert "daily_rule" in cs.COLUMNS
+    rule = rows.set_index(["target", "model"])["daily_rule"]
+    assert rule[("daily", "randomwalknowcast")] == cs.DAILY_RULE
+    assert cs.DAILY_RULE == "week-split"
+    assert pd.isna(rule[("7day", "randomwalknowcast")])
+    assert pd.isna(rule[("daily", "fm_chronos_daily_ragged")])

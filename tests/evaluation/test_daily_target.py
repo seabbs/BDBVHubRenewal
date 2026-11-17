@@ -357,3 +357,99 @@ def test_german_daily_forecasts_leave_out_weekly_models(
     )
     assert set(out["model"]) == {"fm_chronos_daily_ragged"}
     assert set(out["horizon"]) == set(DAILY_HORIZONS)
+
+
+# The provisional week-split rule -----------------------------------------
+
+
+def _week(counts, growth, seen=None, quiet=False):
+    """One place and one week of `split_week_draws` inputs."""
+    counts = np.asarray(counts, float)[None, None, :]
+    growth = np.asarray(growth, float)[None, None, :]
+    has = np.ones((1, 7), dtype=bool)
+    seen = has if seen is None else np.asarray(seen, dtype=bool)[None, :]
+    return counts, growth, has, seen, np.array([quiet])
+
+
+def test_split_week_draws_sum_to_the_weekly_draws_per_sample() -> None:
+    from bdbvhubrenewal.forecasters.randomwalk import split_week_draws
+
+    counts, growth, has, seen, quiet = _week(
+        [5, 4, 3, 2, 1, 0, 0], [1.0, 1.1, 1.2, 1.5, 2.0, 3.0, 4.0]
+    )
+    drawn = np.array([15.0, 30.0, 22.0])[:, None, None]
+    missing = np.zeros(drawn.shape)
+    out = split_week_draws(
+        counts, growth, has, seen, quiet, drawn, missing,
+        np.random.default_rng(1),
+    )  # fmt: skip
+    assert out.shape == (3, 1, 1, 7)
+    np.testing.assert_array_equal(out.sum(-1)[:, 0, 0], drawn[:, 0, 0])
+    assert (out >= counts[None]).all()
+    # A complete day (G = 1) gets no new reports.
+    assert (out[:, 0, 0, 0] == 5).all()
+
+
+def test_an_all_zero_week_splits_by_the_share_not_yet_reported() -> None:
+    from bdbvhubrenewal.forecasters.randomwalk import split_week_draws
+
+    # Nothing reported, so Y (G - 1) is 0 every day: the shares are
+    # 1 - 1/G, and complete days get nothing.
+    counts, growth, has, seen, quiet = _week(
+        [0] * 7, [1.0, 1.0, 1.0, 1.0, 2.0, 2.0, 4.0]
+    )
+    drawn = np.full((4000, 1, 1), 10.0)
+    out = split_week_draws(
+        counts, growth, has, seen, quiet, drawn, np.zeros(drawn.shape),
+        np.random.default_rng(2),
+    )  # fmt: skip
+    mean = out[:, 0, 0].mean(0)
+    assert (mean[:4] == 0).all()
+    share = np.array([0.5, 0.5, 0.75]) / 1.75
+    np.testing.assert_allclose(mean[4:], 10 * share, rtol=0.05)
+    # Complete and empty: an even split over the observed days.
+    counts, growth, has, seen, quiet = _week([0] * 7, [1.0] * 7)
+    out = split_week_draws(
+        counts, growth, has, seen, quiet, drawn, np.zeros(drawn.shape),
+        np.random.default_rng(3),
+    )  # fmt: skip
+    np.testing.assert_allclose(out[:, 0, 0].mean(0), 10 / 7, rtol=0.05)
+
+
+def test_the_missing_days_take_the_cut_off_week_s_walk_draw() -> None:
+    from bdbvhubrenewal.forecasters.randomwalk import split_week_draws
+
+    # Five days observed; the last two are after the cut-off.
+    seen = [True] * 5 + [False] * 2
+    counts, growth, has, seen, quiet = _week(
+        [3, 3, 3, 2, 1, 0, 0], [1.0, 1.0, 1.1, 1.5, 2.0, 1.0, 1.0], seen
+    )
+    drawn = np.array([30.0, 40.0])[:, None, None]
+    missing = np.array([8.0, 20.0])[:, None, None]
+    out = split_week_draws(
+        counts, growth, has, seen, quiet, drawn, missing,
+        np.random.default_rng(4),
+    )  # fmt: skip
+    np.testing.assert_array_equal(out[:, 0, 0, 5:].sum(-1), missing[:, 0, 0])
+    np.testing.assert_array_equal(out.sum(-1)[:, 0, 0], drawn[:, 0, 0])
+
+
+def test_daily_draws_leave_the_7_day_draws_unchanged(pins) -> None:
+    task = pins.bdbv_tasks()["2026-10-17"]
+    before = get_model("randomwalknowcast").forecast(task)
+    model = get_model("randomwalknowcast")
+    model.daily(task)
+    pd.testing.assert_frame_equal(model.forecast(task), before)
+
+
+def test_daily_national_is_the_sum_of_the_provinces_by_draw(pins) -> None:
+    task = pins.bdbv_tasks()["2026-10-24"]
+    model = get_model("randomwalknowcast")
+    q = daily_quantiles(model, task, (0.5,), 40, 7)
+    draws = model.daily(dataclasses.replace(task, n_samples=40, seed=7))
+    total = draws.groupby(["target_end_date", "sample"])["value"].sum()
+    want = total.groupby("target_end_date").quantile(0.5)
+    got = q.loc[q["location"] == NATIONAL].set_index("target_end_date")
+    np.testing.assert_array_equal(
+        got["value"].to_numpy(), want.reindex(got.index).to_numpy()
+    )
