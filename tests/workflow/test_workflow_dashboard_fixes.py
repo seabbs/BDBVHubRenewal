@@ -68,8 +68,8 @@ def test_a_failed_mailbox_copy_is_reported(tmp_path, monkeypatch):
 
     monkeypatch.setattr(mirror.subprocess, "run", run)
     status = src.refresh()
-    assert status.startswith("mirrored from h")
-    assert "mailbox failed" in status
+    assert status.startswith("mirrored")
+    assert "mailbox.md failed" in status
 
 
 def test_shared_row_helpers():

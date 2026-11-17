@@ -121,7 +121,7 @@ def main() -> None:
     )
     if a.once:
         sys.exit(write_once(ctx, a.once))
-    if ctx.source.command():
+    if ctx.source.commands():
         keep_mirrored(ctx, float(config["dashboard"].get("mirror_every", 300)))
     server = ThreadingHTTPServer(("127.0.0.1", a.port), handler(ctx))
     print(f"http://127.0.0.1:{a.port}/")

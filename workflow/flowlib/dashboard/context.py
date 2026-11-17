@@ -13,6 +13,8 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
+import yaml
+
 from . import paperstyle
 from . import runs as spec
 from .mirror import Source
@@ -36,10 +38,16 @@ def build(
     SystemExit
         If no layer names a run.
     """
-    dash = config["dashboard"]
     ft = config["finetune"]
+    extra = local_settings(local, root)
+    dash = {
+        **config["dashboard"],
+        **{k: v for k, v in extra.items() if k not in ("runs", "exclude")},
+    }
     run_list = spec.load_runs(
-        dash.get("runs") or [], local.get("DASHBOARD_RUNS", ""), runs
+        [*(dash.get("runs") or []), *(extra.get("runs") or [])],
+        local.get("DASHBOARD_RUNS", ""),
+        runs,
     )
     if not run_list:
         raise SystemExit(
@@ -57,7 +65,18 @@ def build(
         else e
         for e in dash.get("references") or []
     ]
-    source = Source(local, root / dash["mirror"])
+    source = Source(
+        local,
+        root / dash["mirror"],
+        datasets=dash.get("datasets") or [],
+        scores=dash.get("scores"),
+        mailbox=dash.get("mailbox"),
+        root=root,
+    )
+    excluded = exclusions(
+        [config["dashboard"].get("exclude") or {}, extra.get("exclude") or {}],
+        root,
+    )
     return Context(
         runs=run_list,
         references=spec.load_references(references, refs),
@@ -71,4 +90,37 @@ def build(
         mailbox=source.mailbox,
         mail_filter=dash.get("mail_filter", ""),
         once=once,
+        excluded=excluded,
     )
+
+
+def local_settings(local: Mapping[str, str], root: Path) -> dict[str, Any]:
+    """Return the uncommitted dashboard settings, if any.
+
+    `DASHBOARD_CONFIG` in config/local.env names the file; by default it
+    is config/dashboard.local.yaml (git ignores it; see
+    config/dashboard.example.yaml). Its keys replace those of the
+    committed `dashboard` config, except `runs` (added after the
+    committed ones) and `exclude` (joined with the committed one).
+    """
+    path = Path(
+        local.get("DASHBOARD_CONFIG")
+        or root / "config" / "dashboard.local.yaml"
+    ).expanduser()
+    if not path.is_file():
+        return {}
+    return yaml.safe_load(path.read_text()) or {}
+
+
+def exclusions(parts: Sequence[Mapping[str, Any]], root: Path) -> set[str]:
+    """Return the checkpoint hashes no panel shows.
+
+    Each part lists `hashes`, and `dirs`, training output folders whose
+    saved checkpoints are all excluded (relative to the repository).
+    """
+    out: set[str] = set()
+    for part in parts:
+        out |= {str(h) for h in part.get("hashes") or ()}
+        for d in part.get("dirs") or ():
+            out |= spec.folder_hashes(root / Path(d).expanduser())
+    return out

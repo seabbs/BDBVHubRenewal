@@ -1,79 +1,112 @@
-"""Scores reach the dashboard from this machine or a read-only mirror."""
+"""Where the dashboard reads scores, forecasts, truth and notes from."""
 
+import subprocess
 from pathlib import Path
 
 from flowlib.dashboard import mirror
 
-
-def test_with_no_remote_the_local_scores_are_read(tmp_path):
-    cfg = {"REMOTE": "", "SCORE_CACHE": str(tmp_path / "scores")}
-    src = mirror.Source(cfg, tmp_path / "mirror")
-    assert src.root == tmp_path / "scores"
-    assert src.command() is None
+DATASETS = [{"key": "germany"}, {"key": "bdbv", "truth_source": "data/t.csv"}]
 
 
-def test_a_remote_is_mirrored_with_rsync_read_only(tmp_path):
-    cfg = {
-        "REMOTE": "sims-host",
-        "REMOTE_ROOT": "bdbv-rounds",
-        "SCORE_CACHE": "/unused",
-    }
-    src = mirror.Source(cfg, tmp_path / "mirror")
-    assert src.root == tmp_path / "mirror"
-    cmd = src.command()
-    assert cmd[0] == "rsync"
-    assert "sims-host:bdbv-rounds/scores/" in cmd
-    assert str(tmp_path / "mirror") + "/" in cmd
-    # Only the score table and the German forecast caches.
-    assert "--include=tables/checkpoint-scores.csv" in cmd
-    assert "--include=germany/***" in cmd
-    assert cmd[-3:-2] == ["--exclude=*"] or "--exclude=*" in cmd
+def test_by_default_the_scoring_cache_is_read_in_place(tmp_path):
+    cfg = {"REMOTE": "", "SCORE_CACHE": str(tmp_path / "s"), "MAILBOX": ""}
+    src = mirror.Source(cfg, tmp_path / "m", datasets=DATASETS, root=tmp_path)
+    assert src.scores == tmp_path / "s" / "tables" / "checkpoint-scores.csv"
+    assert src.dataset("germany") == tmp_path / "s" / "germany"
+    assert src.truth("bdbv") == tmp_path / "data" / "t.csv"
+    assert src.truth("germany") is None
+    assert src.mailbox is None
+    assert src.commands() == []
 
 
-def test_the_remote_scores_path_can_be_set(tmp_path):
-    cfg = {
-        "REMOTE": "h",
-        "REMOTE_ROOT": "r",
-        "REMOTE_SCORE_CACHE": "ckpt-scores/cache",
-        "SCORE_CACHE": "/x",
-    }
-    assert "h:ckpt-scores/cache/" in mirror.Source(cfg, tmp_path).command()
-
-
-def test_paths_under_the_root(tmp_path):
-    src = mirror.Source({"REMOTE": "", "SCORE_CACHE": str(tmp_path)}, Path("m"))
-    assert src.scores == tmp_path / "tables" / "checkpoint-scores.csv"
-    assert src.germany == tmp_path / "germany"
-
-
-def test_a_remote_mailbox_is_mirrored_too(tmp_path):
-    cfg = {
-        "REMOTE": "h",
-        "REMOTE_ROOT": "r",
-        "REMOTE_MAILBOX": "box.md",
-        "SCORE_CACHE": "/x",
-        "MAILBOX": "/local/box.md",
-    }
-    src = mirror.Source(cfg, tmp_path)
-    assert src.mailbox == tmp_path / "mailbox.md"
-    assert src.mailbox_command() == [
+def test_remote_sources_are_mirrored_read_only(tmp_path):
+    datasets = [
+        {"key": "germany", "source": "h:cache/germany/"},
+        {
+            "key": "bdbv",
+            "source": "h:cache/bdbv/",
+            "truth_source": "h:repo/data/target.csv",
+        },
+    ]
+    src = mirror.Source(
+        {"REMOTE": "", "SCORE_CACHE": "/x", "MAILBOX": ""},
+        tmp_path / "m",
+        datasets=datasets,
+        scores="h:repo/evidence/scores.csv",
+        mailbox={"source": "h:box.md", "lines": 30},
+        root=tmp_path,
+    )
+    assert src.dataset("germany") == tmp_path / "m" / "germany"
+    assert src.scores == tmp_path / "m" / "checkpoint-scores.csv"
+    assert src.truth("bdbv") == tmp_path / "m" / "bdbv-truth.csv"
+    assert src.mailbox == tmp_path / "m" / "mailbox.md"
+    cmds = src.commands()
+    assert [
+        "rsync",
+        "-a",
+        "--timeout=60",
+        "h:cache/germany/",
+        f"{tmp_path / 'm' / 'germany'}/",
+    ] in cmds
+    assert [
         "rsync",
         "-a",
         "--timeout=60",
         "h:box.md",
-        str(tmp_path / "mailbox.md"),
-    ]
+        str(tmp_path / "m" / "mailbox.md"),
+    ] in cmds
+    assert len(cmds) == 5
 
 
-def test_a_local_mailbox_is_read_where_it_is(tmp_path):
-    cfg = {"REMOTE": "", "SCORE_CACHE": str(tmp_path), "MAILBOX": "/b.md"}
-    src = mirror.Source(cfg, tmp_path / "m")
-    assert src.mailbox == Path("/b.md")
-    assert src.mailbox_command() is None
+def test_local_sources_are_read_where_they_are(tmp_path):
+    src = mirror.Source(
+        {"REMOTE": "", "SCORE_CACHE": "/x", "MAILBOX": "/notes.md"},
+        tmp_path / "m",
+        datasets=[{"key": "g", "source": "out/g"}],
+        root=tmp_path,
+    )
+    assert src.dataset("g") == tmp_path / "out" / "g"
+    assert src.mailbox == Path("/notes.md")
+    assert src.commands() == []
 
 
-def test_a_mirror_folder_that_cannot_be_made_is_a_failed_mirror(tmp_path):
-    (tmp_path / "file").write_text("")
-    cfg = {"REMOTE": "h", "REMOTE_ROOT": "r", "SCORE_CACHE": "/x"}
-    src = mirror.Source(cfg, tmp_path / "file" / "mirror")
-    assert src.refresh().startswith("mirror failed:")
+def test_the_old_remote_keys_still_mirror_the_scoring_cache(tmp_path):
+    cfg = {
+        "REMOTE": "h",
+        "REMOTE_ROOT": "r",
+        "SCORE_CACHE": "/x",
+        "REMOTE_MAILBOX": "box.md",
+        "MAILBOX": "",
+    }
+    src = mirror.Source(
+        cfg, tmp_path, datasets=[{"key": "germany"}], root=tmp_path
+    )
+    assert src.dataset("germany") == tmp_path / "germany"
+    assert [
+        "rsync",
+        "-a",
+        "--timeout=60",
+        "h:r/scores/germany/",
+        f"{tmp_path / 'germany'}/",
+    ] in src.commands()
+    assert src.mailbox == tmp_path / "mailbox.md"
+
+
+def test_refresh_reports_each_failed_copy(tmp_path, monkeypatch):
+    src = mirror.Source(
+        {"REMOTE": "", "SCORE_CACHE": "/x", "MAILBOX": ""},
+        tmp_path,
+        datasets=[{"key": "g", "source": "h:g/"}],
+        mailbox={"source": "h:box.md"},
+        root=tmp_path,
+    )
+
+    def run(cmd, **_):
+        code = 23 if cmd[-1].endswith("mailbox.md") else 0
+        return subprocess.CompletedProcess(cmd, code, "", "no such file")
+
+    monkeypatch.setattr(mirror.subprocess, "run", run)
+    status = src.refresh()
+    assert status.startswith("mirrored")
+    assert "mailbox.md failed" in status
+    assert src.failed

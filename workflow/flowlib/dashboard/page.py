@@ -47,12 +47,13 @@ class Context:
     once: bool = False
     logs: dict[str, logs.Log] = field(default_factory=dict)
     germany_store: dict = field(default_factory=dict)
+    excluded: set = field(default_factory=set)
     mirror_status: str = ""
 
     def germany(self) -> dict[str, Any] | None:
         """Return the German nowcasts, rebuilt only when the cache changes."""
         return germany.cached_build(
-            self.source.germany,
+            self.source.dataset("germany"),
             self.runs,
             self.references,
             self.germany_store,
