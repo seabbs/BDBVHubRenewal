@@ -327,20 +327,24 @@ def test_forecasts_wait_for_every_live_german_nowcast(poll, live, monkeypatch):
     assert poll.forecast_units(cache, runs) == []
 
 
-def test_forecasts_run_the_reference_then_the_newest_checkpoint_only(
+def test_forecasts_run_the_reference_then_the_final_checkpoint_only(
     poll, live, monkeypatch
 ):
+    # Sam: the reported model is the final checkpoint (n8000), never one
+    # picked on scores. Until it exists only the reference forecasts.
     cache, runs = live
     done = {("germany", lb) for lb in ("slots-a", "slots-b", "slots-c")}
     done.add(("germany", "nnnn"))
     _done(monkeypatch, poll, done)
     assert poll.forecast_units(cache, runs) == [
-        ("germany_forecast", "reference"),
-        ("germany_forecast", "slots-b"),
+        ("germany_forecast", "reference")
     ]
+    _settings(cache, "slots-f", "one-model", 8000)
+    runs = poll.runs_of(cache)
+    done.add(("germany", "slots-f"))
     done.add(("germany_forecast", "reference"))
-    assert poll.forecast_units(cache, runs) == [("germany_forecast", "slots-b")]
-    done.add(("germany_forecast", "slots-b"))
+    assert poll.forecast_units(cache, runs) == [("germany_forecast", "slots-f")]
+    done.add(("germany_forecast", "slots-f"))
     assert poll.forecast_units(cache, runs) == []
 
 
@@ -350,30 +354,23 @@ def test_the_forecast_job_comes_last_after_the_daily_target(poll):
     assert order[-1] == poll.FORECAST_JOB
 
 
-def test_the_label_is_pinned_when_the_job_first_starts(poll, live, monkeypatch):
+def test_the_final_checkpoint_is_pinned_once_its_nowcasts_are_done(
+    poll, live, monkeypatch
+):
     cache, runs = live
+    _settings(cache, "slots-f", "one-model", 8000)
+    runs = poll.runs_of(cache)
     done = {("germany", lb) for lb in ("slots-a", "slots-b", "slots-c")}
     _done(monkeypatch, poll, done)
+    # n8000 still nowcasting: nothing runs (the gate waits for it).
+    assert poll.forecast_units(cache, runs) == []
+    done.add(("germany", "slots-f"))
     assert poll.forecast_units(cache, runs)[-1] == (
         "germany_forecast",
-        "slots-b",
+        "slots-f",
     )
     pin = cache / "germany_forecast" / "label.txt"
-    assert pin.read_text().strip() == "slots-b"
-    # A newer checkpoint, even one still nowcasting, changes nothing.
-    _settings(cache, "slots-d", "one-model", 2000)
-    runs = poll.runs_of(cache)
-    done.add(("germany", "slots-d"))
-    assert poll.forecast_units(cache, runs)[-1] == (
-        "germany_forecast",
-        "slots-b",
-    )
-    done.add(("germany_forecast", "reference"))
-    done.add(("germany_forecast", "slots-b"))
-    assert poll.forecast_units(cache, runs) == []
-    # Only removing the pin by hand reruns it, for the newest.
-    pin.unlink()
-    assert poll.forecast_units(cache, runs) == [("germany_forecast", "slots-d")]
+    assert pin.read_text().strip() == "slots-f"
 
 
 def test_labels_the_poller_cannot_finish_do_not_block_the_gate(
@@ -384,11 +381,7 @@ def test_labels_the_poller_cannot_finish_do_not_block_the_gate(
     _done(monkeypatch, poll, {("germany", "slots-a"), ("germany", "slots-c")})
     assert poll.forecast_units(cache, runs, {"slots-b": 1}) == []
     failed = poll.forecast_units(cache, runs, {"slots-b": poll.MAX_FAILURES})
-    assert failed == [
-        ("germany_forecast", "reference"),
-        ("germany_forecast", "slots-c"),
-    ]
-    (cache / "germany_forecast" / "label.txt").unlink()
+    assert failed == [("germany_forecast", "reference")]
     hold = cache / "hold"
     hold.write_text("")
     held = poll.forecast_units(cache, runs, hold=hold)

@@ -775,3 +775,16 @@ def test_bdbv_origins_stop_before_the_first_scored_round(cs) -> None:
     ]
     got = cs.development_origins(vintages, skip=("2026-10-09",))
     assert got == ["2026-11-15"]
+
+
+def test_only_the_final_checkpoint_of_the_live_run_is_marked_chosen(cs) -> None:
+    # Sam: the reported model is n8000, chosen by the learning-rate decay to
+    # zero, never on German or BDBV scores.
+    assert cs.FINAL_OUTBREAKS == 8000
+    rows = pd.DataFrame(
+        {
+            "run": ["one-model", "one-model", "no-slots", "zero-shot"],
+            "outbreaks": [8000, 4000, 8000, 0],
+        }
+    )
+    assert cs.chosen(rows).tolist() == [True, False, False, False]
