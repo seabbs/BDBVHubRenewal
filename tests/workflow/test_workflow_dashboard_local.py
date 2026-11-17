@@ -111,3 +111,37 @@ def test_the_committed_example_is_valid(tmp_path):
     }
     ctx = context.build(BASE, local, root=tmp_path)
     assert sum(r.live for r in ctx.runs) == 1
+
+
+def test_local_datasets_merge_into_the_committed_ones_by_key(tmp_path):
+    base = {
+        **BASE,
+        "dashboard": {
+            **BASE["dashboard"],
+            "datasets": [
+                {"key": "germany", "label": "Germany", "format": "quantiles"},
+                {
+                    "key": "bdbv",
+                    "label": "BDBV",
+                    "format": "samples",
+                    "truth_source": "data/target.csv",
+                },
+            ],
+        },
+    }
+    local = _local(
+        tmp_path,
+        """
+runs: [{key: s, source: slots-}]
+datasets:
+  - {key: bdbv, source: "h:cache/bdbv/", truth_source: "h:repo/target.csv"}
+""",
+    )
+    ctx = context.build(base, local, root=tmp_path)
+    by_key = {d["key"]: d for d in ctx.datasets}
+    assert list(by_key) == ["germany", "bdbv"]
+    assert by_key["bdbv"]["format"] == "samples"
+    assert by_key["bdbv"]["source"] == "h:cache/bdbv/"
+    assert ctx.source.truth("bdbv") == tmp_path / "output/dashboard/mirror" / (
+        "bdbv-truth.csv"
+    )

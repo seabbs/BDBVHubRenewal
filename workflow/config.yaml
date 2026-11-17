@@ -143,12 +143,37 @@ dashboard:
   # Where scores are mirrored to when REMOTE is set, and how often (s).
   mirror: output/dashboard/mirror
   mirror_every: 300
-  # The datasets of the nowcast panels and their location groups.
+  # The nowcast panels' datasets, in selector order. format: quantiles
+  # (rows carry quantile, value and truth) or samples (rows carry sample and
+  # value; quantiles, truth and the sample CRPS come from truth_source, the
+  # release table, with the scorer's truth rule: each week's count in the
+  # first release D days or more after it, D the age by which truth_level
+  # of the national count is reported, leaving out truth_skip releases).
+  # source: the per-checkpoint forecast folders (default: SCORE_CACHE/<key>;
+  # a local file can name a "host:path"). targets: those shown, or all.
+  # truth: the truth line's caption ({delay} is D for samples datasets).
   datasets:
     - key: germany
       label: Germany
+      format: quantiles
+      metric: WIS
       truth: latest vintage of the forecast files
       groups:
         - {name: national, match: "^DE$"}
         - {name: states, match: "^DE-"}
         - {name: ages, match: "^(\\d\\d-\\d\\d|80\\+)$"}
+    - key: bdbv
+      label: BDBV (Ebola)
+      format: samples
+      metric: CRPS
+      targets: [7day]
+      truth_source: data/target.csv
+      truth_level: 0.98
+      truth_skip: ["2026-08-18"]
+      national: CD
+      truth: >-
+        each week's count in the first release {delay} days or more after
+        it, as scored (dashed: latest release)
+      groups:
+        - {name: national, match: "^CD$"}
+        - {name: provinces, match: "^CD-[A-Z]{2}$"}

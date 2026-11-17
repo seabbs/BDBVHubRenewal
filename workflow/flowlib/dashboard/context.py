@@ -42,8 +42,15 @@ def build(
     extra = local_settings(local, root)
     dash = {
         **config["dashboard"],
-        **{k: v for k, v in extra.items() if k not in ("runs", "exclude")},
+        **{
+            k: v
+            for k, v in extra.items()
+            if k not in ("runs", "exclude", "datasets")
+        },
     }
+    dash["datasets"] = merge_datasets(
+        config["dashboard"].get("datasets") or [], extra.get("datasets") or []
+    )
     run_list = spec.load_runs(
         [*(dash.get("runs") or []), *(extra.get("runs") or [])],
         local.get("DASHBOARD_RUNS", ""),
@@ -92,6 +99,16 @@ def build(
         once=once,
         excluded=excluded,
     )
+
+
+def merge_datasets(
+    committed: Sequence[Mapping[str, Any]], local: Sequence[Mapping[str, Any]]
+) -> list[dict[str, Any]]:
+    """Return the datasets, local entries updating committed ones by key."""
+    out = {d["key"]: dict(d) for d in committed}
+    for d in local:
+        out.setdefault(d["key"], {}).update(d)
+    return list(out.values())
 
 
 def local_settings(local: Mapping[str, str], root: Path) -> dict[str, Any]:
