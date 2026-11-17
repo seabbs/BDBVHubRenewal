@@ -815,3 +815,10 @@ def test_the_bdbv_daily_target_is_refused_without_its_code(
     monkeypatch.delattr(marginals, "daily_draws", raising=False)
     with pytest.raises(SystemExit, match="daily_draws"):
         cs.bdbv_unit(tmp_path, cs.REFERENCE, ("7day", "daily"))
+
+
+def test_no_german_forecast_rows_without_its_script(cs, tmp_path) -> None:
+    # scripts/germany_forecast.py is not on main; the table goes on.
+    rows = cs.germany_forecast_rows(tmp_path, [cs.REFERENCE])
+    assert rows.empty
+    assert list(rows.columns) == cs.COLUMNS
