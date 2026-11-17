@@ -21,16 +21,21 @@ from typing import Final
 import pandas as pd
 
 __all__ = [
+    "LIVE_RUN",
     "MODELS",
     "PLANNED",
     "RULE",
     "SCORED_FROM",
     "checkpoint_table",
+    "docs_page",
     "label",
     "newest",
     "summary_table",
     "tidy",
 ]
+
+LIVE_RUN: Final = "one-model"
+"""The live fine-tuning run, by the scores' `run` column."""
 
 RULE: Final = "own-quantile-wis_crps-1000-common"
 """The scoring rule shown: WIS on each model's own quantiles for Germany,
@@ -190,4 +195,26 @@ def summary_table(scores: pd.DataFrame, run: str) -> pd.DataFrame:
         cells[name] = f"{value} ({n:,})" if value else ""
     return pd.DataFrame(
         [full.iloc[0].to_dict(), cells], columns=list(full.columns)
+    )
+
+
+def docs_page(scores: pd.DataFrame | None, run: str = LIVE_RUN) -> str:
+    """Return the docs' preliminary summary of the live run, as Markdown.
+
+    Without scores, a note says they are not yet available.
+    """
+    if scores is None or not newest(scores, run):
+        return "*Fine-tuned checkpoint scores are not yet available.*\n"
+    from bdbvhubrenewal.reporting.tables import markdown_table
+
+    top = newest(scores, run)
+    n = max(n for _, n in top.values())
+    return (
+        f"**{label(n)}** Scores of the newest scored checkpoint of the "
+        f"fine-tuning run (`{run}`) on development data only: national WIS "
+        "on the German first half and CRPS on the BDBV release backtest, "
+        "relative to `randomwalknowcast` (daily / weekly model), and the "
+        "trainer's held-out loss. Brackets give each cell's simulations.\n\n"
+        + markdown_table(summary_table(scores, run))
+        + "\n"
     )

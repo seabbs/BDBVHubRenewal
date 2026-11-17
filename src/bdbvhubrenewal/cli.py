@@ -639,6 +639,19 @@ def build_parser() -> argparse.ArgumentParser:
     frz.add_argument("--ledger", required=True)
     frz.add_argument("--round", required=True)
 
+    live = sub.add_parser(
+        "live-checkpoint",
+        help="Write the live fine-tuning run's preliminary summary.",
+    )
+    live.add_argument(
+        "--scores",
+        required=True,
+        help="evidence/checkpoint-scores.csv from the checkpoint-scoring "
+        "branch; a missing file writes a note.",
+    )
+    live.add_argument("--out", required=True)
+    live.add_argument("--run", default=None, help="Defaults to LIVE_RUN.")
+
     rep = sub.add_parser("report", help="Make the docs figures and tables.")
     rep.add_argument("--figures", default="docs/figures")
     rep.add_argument("--generated", default="docs/generated")
@@ -1995,6 +2008,17 @@ def _data_root() -> Path:
     return Path(os.environ.get("BDBV_DATA_DIR") or "data")
 
 
+def _live_checkpoint(args: argparse.Namespace) -> int:
+    from bdbvhubrenewal.reporting.live_checkpoint import LIVE_RUN, docs_page
+
+    path = Path(args.scores)
+    scores = pd.read_csv(path) if path.is_file() else None
+    out = Path(args.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(docs_page(scores, args.run or LIVE_RUN))
+    return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """Run the command line interface.
 
@@ -2078,6 +2102,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _germany_teams(args)
     if args.command == "germany-asof":
         return _germany_asof(args)
+    if args.command == "live-checkpoint":
+        return _live_checkpoint(args)
     if args.command == "germany-paper":
         return _germany_paper(args)
     if args.command == "germany-ft-load":
