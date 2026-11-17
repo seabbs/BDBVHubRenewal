@@ -104,6 +104,17 @@ def test_paper_target_and_cores_are_passed(repo: Path) -> None:
     assert "--config render=paper --cores 2 " in snake
 
 
+def test_cores_come_from_the_local_config(repo: Path) -> None:
+    # Without CORES in the environment, the script reads config/local.env
+    # through workflow/flowlib/localconfig.py.
+    (repo / "config").mkdir()
+    (repo / "config" / "local.env").write_text("CORES=3\n")
+    out = _run(repo)
+    assert out.returncode == 0, out.stderr
+    (snake,) = [c for c in _calls(repo) if "snakemake" in c]
+    assert "--cores 3 " in snake
+
+
 def test_an_unknown_target_fails(repo: Path) -> None:
     out = _run(repo, "final")
     assert out.returncode != 0
