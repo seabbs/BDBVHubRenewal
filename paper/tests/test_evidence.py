@@ -759,3 +759,50 @@ def test_the_heldout_layout_table_waits_then_shows_its_rows(tmp_path) -> None:
     paths = dict.fromkeys(EVIDENCE) | {"heldout_layout": rows}
     write_evidence(paths, tmp_path / "si", tmp_path / "fig", tmp_path / "e.yml")
     assert "daily_weekly" in table.read_text()
+
+
+def test_an_evidence_branch_resolves_to_its_head(tmp_path) -> None:
+    import subprocess
+
+    from paperpipe.evidence import branch_head
+
+    origin = tmp_path / "origin"
+
+    def git(*args, cwd=origin):
+        return subprocess.run(
+            ["git", *args], cwd=cwd, check=True, capture_output=True, text=True
+        ).stdout.strip()
+
+    origin.mkdir()
+    git("init", "-q", "-b", "main")
+    git(
+        "-c",
+        "user.name=t",
+        "-c",
+        "user.email=t@t",
+        "commit",
+        "-q",
+        "--allow-empty",
+        "-m",
+        "a",
+    )
+    git("branch", "scores")
+    clone = tmp_path / "clone"
+    git("clone", "-q", str(origin), str(clone), cwd=tmp_path)
+    first = branch_head("scores", clone)
+    assert first == git("rev-parse", "scores")
+    git("checkout", "-q", "scores")
+    git(
+        "-c",
+        "user.name=t",
+        "-c",
+        "user.email=t@t",
+        "commit",
+        "-q",
+        "--allow-empty",
+        "-m",
+        "b",
+    )
+    # A new commit on the branch gives a new head, so the file is new.
+    assert branch_head("scores", clone) == git("rev-parse", "scores")
+    assert branch_head("scores", clone) != first
