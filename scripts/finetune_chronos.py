@@ -326,6 +326,30 @@ def choose_places(
     return (NATIONAL, *totals, *sorted(leaves)), mix
 
 
+REPORT_BATCH_SHARE = 0.1
+"""Share of blocks whose reports come in a weekly batch on a random
+weekday (`finetune.batch_reports`), with any layout."""
+
+AGGREGATE_END = "a random weekday, or 3-day offset, per block"
+"""The day a block's period totals end on (`finetune.period_totals`):
+any, as the German target is a 7-day sum ending on every day."""
+
+
+def block_options(source: str, rng: np.random.Generator) -> dict:
+    """Return a block's report batching and period end, drawn from `rng`.
+
+    A weekly batch on a random weekday for `REPORT_BATCH_SHARE` of
+    blocks; for a source with period totals, a random end day.
+    """
+    batch = rng.random() < REPORT_BATCH_SHARE
+    weekday = int(rng.integers(7))
+    end = int(rng.integers(7 if MIXED.get(source) == "weekly" else 3))
+    return {
+        "batch_weekday": weekday if batch else None,
+        "period_end": end if source in MIXED else None,
+    }
+
+
 def outbreak_blocks(
     counts: pd.DataFrame,
     provinces: list[str],
@@ -387,7 +411,7 @@ def outbreak_blocks(
                 places, mix = choose_places(provinces, budget, rng)
             # How the country relates to its places, drawn from a child
             # generator, so the other draws are as without it.
-            parent_rng = rng.spawn(1)[0]
+            parent_rng, option_rng = rng.spawn(2)
             parent = "exact"
             if len(places) > 1 and places[0] == NATIONAL:
                 parent = str(parent_rng.choice(PARENT_MIX))
@@ -400,6 +424,7 @@ def outbreak_blocks(
                 totals=any("-" in p for p in provinces),
                 parent=parent,
                 rng=parent_rng,
+                **(options := block_options(source, option_rng)),
             )
             if block is None:
                 if empty is not None:
@@ -413,6 +438,7 @@ def outbreak_blocks(
             padded["places"] = tuple(places)
             padded["target_places"] = list(block["target_places"])
             padded["parent"] = parent
+            padded |= options
             padded["mix"] = mix
             padded["source"] = source
             out.append(padded)

@@ -888,3 +888,17 @@ def test_mixed_blocks_keep_each_target_rows_place_and_level(monkeypatch):
             assert len(b["levels"]) == b["n_targets"] == 2 * n
             seen += 1
     assert seen
+
+
+def test_block_options_batch_a_tenth_and_vary_the_period_end():
+    from finetune_chronos import REPORT_BATCH_SHARE, block_options
+
+    rng = np.random.default_rng(0)
+    weekly = [block_options("daily+weekly", rng) for _ in range(3000)]
+    batched = [o["batch_weekday"] is not None for o in weekly]
+    assert np.mean(batched) == pytest.approx(REPORT_BATCH_SHARE, abs=0.02)
+    assert {o["period_end"] for o in weekly} == set(range(7))
+    assert {
+        block_options("daily+3day", rng)["period_end"] for _ in range(300)
+    } == {0, 1, 2}
+    assert block_options("weekly", rng)["period_end"] is None

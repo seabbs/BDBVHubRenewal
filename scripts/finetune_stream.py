@@ -1246,6 +1246,9 @@ def main() -> None:
         "blocks_per_simulation": k,
         "univariate_share": ft.UNIVARIATE_SHARE,
         "parent_mix": list(ft.PARENT_MIX),
+        "source_shares": ft.SOURCE_SHARES,
+        "report_batch_share": ft.REPORT_BATCH_SHARE,
+        "aggregate_end": ft.AGGREGATE_END,
         **(
             {
                 "draws_per_simulation": DRAWS_PER_PASS,

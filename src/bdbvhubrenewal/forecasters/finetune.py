@@ -236,14 +236,18 @@ the period of each, weekly or 3-day."""
 
 
 def period_totals(
-    days: np.ndarray, times: Sequence[str], period: str
+    days: np.ndarray,
+    times: Sequence[str],
+    period: str,
+    end: int | None = None,
 ) -> np.ndarray:
     """Return each place's period totals on its periods' last days.
 
     `days` is `[L, T]` daily counts on the days `times`. A weekly period
-    ends on a Saturday (an epiweek's end) and a 3-day one on every third
-    day back from the last (`bin_ends`'s anchor). Only whole periods
-    count; every other day is missing.
+    ends on weekday `end` (Monday 0), by default a Saturday (an epiweek's
+    end), and a 3-day one on the days whose index is `end` modulo 3, by
+    default every third day back from the last (`bin_ends`'s anchor).
+    Only whole periods count; every other day is missing.
 
     Parameters
     ----------
@@ -253,6 +257,8 @@ def period_totals(
         The days, ISO format.
     period : str
         `"weekly"` or `"3day"`.
+    end : int, optional
+        The weekday or day offset periods end on.
 
     Returns
     -------
@@ -262,16 +268,31 @@ def period_totals(
     k = 7 if period == "weekly" else BINNED[period]
     n = len(times)
     if period == "weekly":
+        weekday = 5 if end is None else end
         ends = [
-            e for e, t in enumerate(times) if epiweek_end(t).isoformat() == t
+            e
+            for e, t in enumerate(times)
+            if dt.date.fromisoformat(t).weekday() == weekday
         ]
     else:
-        ends = list(range((n - 1) % k, n, k))
+        ends = list(range((n - 1) % k if end is None else end % k, n, k))
     out = np.full(days.shape, np.nan)
     for e in ends:
         if e - k + 1 >= 0:
             out[:, e] = days[:, e - k + 1 : e + 1].sum(axis=1)
     return out
+
+
+def batch_reports(counts: pd.DataFrame, weekday: int) -> pd.DataFrame:
+    """Return counts reported in a weekly batch on `weekday` (Monday 0).
+
+    Each report is held to the next `weekday` on or after its date, as
+    epinowcast's cumulative report-date aggregation does, so a release
+    gains reports only once a week. Reference dates are unchanged.
+    """
+    report = pd.to_datetime(counts["report_date"])
+    held = report + pd.to_timedelta((weekday - report.dt.weekday) % 7, "D")
+    return counts.assign(report_date=held.dt.strftime("%Y-%m-%d"))
 
 
 PARENTS: Final = ("exact", "unallocated", "late_parent")
@@ -317,6 +338,8 @@ def training_block(
     totals: bool = False,
     parent: str = "exact",
     rng: np.random.Generator | None = None,
+    period_end: int | None = None,
+    batch_weekday: int | None = None,
 ) -> dict[str, Any] | None:
     """Return one training block, cut at the last of `cutoffs`.
 
@@ -346,6 +369,11 @@ def training_block(
         with `rng`.
     rng : numpy.random.Generator, optional
         Draws the `parent` cases; a fixed seed by default.
+    period_end : int, optional
+        For a source with period totals (`MIXED`), the day its periods
+        end on (`period_totals`).
+    batch_weekday : int, optional
+        Report in a weekly batch on this weekday (`batch_reports`).
 
     Returns
     -------
@@ -359,6 +387,8 @@ def training_block(
     """
     cut = cutoffs[-1]
     end = epiweek_end(cut) + dt.timedelta(weeks=ahead_weeks)
+    if batch_weekday is not None:
+        counts = batch_reports(counts, batch_weekday)
     counts, country = country_counts(
         counts, parent, rng or np.random.default_rng(0)
     )
@@ -410,7 +440,7 @@ def training_block(
         # One row a place of its period totals, after the daily counts;
         # Chronos-2 scores it only where it has a value.
         target = np.concatenate(
-            [target, period_totals(truth, tri.times, period)]
+            [target, period_totals(truth, tri.times, period, period_end)]
         )
         target_places += target_places
     context = np.concatenate([target, lagged]).astype(np.float32)
