@@ -398,15 +398,15 @@ The cost of each option: series per block, memory and time.
 
 - We compare the final run's checkpoints, fine-tuned on 1,000, 2,000, 4,000 and 8,000 simulations.
 - They share the grid, the data order and the recipe, as checkpoints of one run.
-- @fig-finetune-heldout gives the held-out loss by source.
+- @fig-finetune-heldout gives the trainer's held-out loss by level.
 - @fig-checkpoint-curve gives German first-half and BDBV relative scores at each checkpoint, with zero-shot Chronos-2 on the ragged layout and on complete data only as reference lines.
 - @tbl-checkpoints gives the headline scores of each checkpoint.
 - A later checkpoint has also trained for more steps.
 - The learning rate falls linearly to zero at 8,000 simulations, so the 1,000, 2,000 and 4,000 checkpoints are taken at 88%, 75% and 50% of the starting rate, and only the 8,000 checkpoint is annealed.
 
-![Held-out loss of the fine-tune against the number of simulated outbreaks it has seen. {{< meta evidence.live.label >}} Development data only.](build/figures/si/finetune-heldout.png){#fig-finetune-heldout}
+![The trainer's held-out loss of the fine-tune by level (national, intermediate and leaf) against the number of simulated outbreaks it has seen. {{< meta evidence.live.label >}} Development data only.](build/figures/si/finetune-heldout.png){#fig-finetune-heldout}
 
-![WIS (Germany, on each model's own quantiles) and CRPS (BDBV, on 1,000 draws with common random numbers) relative to `randomwalknowcast` of the fine-tuned ragged Chronos-2 models against the number of simulated outbreaks each checkpoint was fine-tuned on, nationally. Horizontal lines give the models with no fine-tuning: zero-shot Chronos-2 on the ragged layout (dashed) and on complete data only (dotted), each in its source's colour, and `randomwalknowcast` at 1. Each panel gives n, the fewest matched cells of its points, and the forecast origins they come from, and panels with fewer than 5 are grey. {{< meta evidence.live.label >}} Development data only.](build/figures/si/checkpoint-curve.png){#fig-checkpoint-curve}
+![WIS (Germany, on each model's own quantiles) and CRPS (BDBV, on 1,000 draws with common random numbers) relative to `randomwalknowcast` of the fine-tuned ragged Chronos-2 models against the number of simulated outbreaks each checkpoint was fine-tuned on, by level. Horizontal lines give the models with no fine-tuning: zero-shot Chronos-2 on the ragged layout (dashed) and on complete data only (dotted), each in its source's colour, and `randomwalknowcast` at 1. Each panel gives n, the fewest matched cells of its points, and the forecast origins they come from, and panels with fewer than 5 are grey. {{< meta evidence.live.label >}} Development data only.](build/figures/si/checkpoint-curve.png){#fig-checkpoint-curve}
 
 ::: {#tbl-checkpoints}
 {{< include build/tables/si/checkpoint-table.md >}}
@@ -418,14 +418,14 @@ Zero-shot Chronos-2, then each checkpoint by the simulations it was fine-tuned o
 
 - We compare the run with attention biases with a run without them.
 - Both runs share the grid, the data order, the LoRA recipe and the checkpoints.
-- @fig-compare-slots shows the trainer's held-out loss and German first-half and BDBV national relative scores of both runs by checkpoint.
+- @fig-compare-slots shows the trainer's held-out loss and German first-half and BDBV relative scores of both runs by checkpoint and level.
 - @tbl-slots-summary gives each run's newest checkpoint.
 - The lag-swap test moves whole lag series to another place.
 - A ratio above 1 means the model's forecast depends on which place's lags sit with a target.
 - Zero-shot Chronos-2 can also match lags to targets by value, so the comparison with the run without biases, not the ratio alone, tests the biases.
 - The lag-swap test is not yet scored for this run.
 
-![Attention biases against none: the trainer's held-out loss and German first-half and BDBV national relative scores, by checkpoint. {{< meta evidence.live.label >}} Development data only.](build/figures/si/compare-slots.png){#fig-compare-slots}
+![Attention biases against none: the trainer's held-out loss and German first-half and BDBV relative scores, by checkpoint and level. {{< meta evidence.live.label >}} Development data only.](build/figures/si/compare-slots.png){#fig-compare-slots}
 
 ::: {#tbl-slots-summary}
 {{< include build/tables/si/slots-summary.md >}}

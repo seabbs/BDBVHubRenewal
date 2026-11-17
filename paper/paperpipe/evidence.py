@@ -318,11 +318,11 @@ def _case_study_rows(scores: pd.DataFrame) -> pd.DataFrame:
 
 
 def checkpoint_rows(scores: pd.DataFrame, run: str = LIVE_RUN) -> pd.DataFrame:
-    """Return zero-shot and the live run's checkpoint rows, nationally.
+    """Return zero-shot and the live run's checkpoint rows, by level.
 
     Rows of `CHECKPOINT_RULE` and the hub target on the case studies'
-    development data (`live_checkpoint.tidy`), at the national level only,
-    as the levels show the same. BDBV's relative CRPS fills `rel_wis`, so one column
+    development data (`live_checkpoint.tidy`), at every level, each for
+    its own panel. BDBV's relative CRPS fills `rel_wis`, so one column
     holds each study's relative score.
     """
     out = tidy(scores)
@@ -330,9 +330,11 @@ def checkpoint_rows(scores: pd.DataFrame, run: str = LIVE_RUN) -> pd.DataFrame:
     out = out.assign(rel_wis=out["rel"], rel_log_wis=out["rel_log"])
     live = out["run"] == run if "run" in out else False
     keep = (out["checkpoint"] == "zero-shot") | live
-    out = out.loc[keep & (out["level"] == "national")]
-    return out.reset_index(drop=True)
+    return out.loc[keep].reset_index(drop=True)
 
+
+HELDOUT_LEVELS: Final = ("national", "intermediate", "leaf")
+"""Levels of the trainer's held-out loss, each reported on its own."""
 
 WITHOUT_BIASES: Final = "no-slots"
 """The run fine-tuned without attention biases, by the scores' `run`."""
@@ -343,34 +345,34 @@ def slots_rows(
 ) -> pd.DataFrame:
     """Return the runs with and without attention biases, by checkpoint.
 
-    Sets are the trainer's held-out loss and the national relative scores
-    of each model on the German first half and the BDBV release backtest,
+    Sets are, one per level, the trainer's held-out loss and the relative
+    scores of each model on the German first half and the BDBV release backtest,
     in the layout of `comparison_figure` (`set`, `run`, `outbreaks`,
     `score`).
     """
     rows = tidy(scores)
     names = {run: "attention biases", without: "no biases"}
     rows = rows.loc[rows["run"].isin(names) & (rows["outbreaks"] > 0)]
-    loss = rows.loc[(rows["study"] == "held_out") & (rows["level"] == "all")]
+    loss = rows.loc[
+        (rows["study"] == "held_out") & rows["level"].isin(HELDOUT_LEVELS)
+    ]
     out = [
         pd.DataFrame(
             {
-                "set": "Held-out loss",
+                "set": "Held-out loss, " + loss["level"],
                 "run": loss["run"].map(names),
                 "outbreaks": loss["outbreaks"],
                 "score": loss["loss"],
             }
         )
     ]
-    case = rows.loc[
-        rows["study"].isin(["germany", "ebola"]) & (rows["level"] == "national")
-    ]
+    case = rows.loc[rows["study"].isin(["germany", "ebola"])]
     study = case["study"].map({"germany": "German", "ebola": "BDBV"})
     source = case["model"].str.extract(r"_(daily|weekly)_")[0]
     out.append(
         pd.DataFrame(
             {
-                "set": study + " national, " + source,
+                "set": study + " " + case["level"] + ", " + source,
                 "run": case["run"].map(names),
                 "outbreaks": case["outbreaks"],
                 "score": case["rel"],
@@ -414,18 +416,19 @@ def slots_summary(
 def heldout_rows(scores: pd.DataFrame, run: str = LIVE_RUN) -> pd.DataFrame:
     """Return the trainer's held-out loss of the live run by checkpoint.
 
-    In the layout of `heldout_figure`, on the trainer's held-out set.
+    In the layout of `heldout_figure`, on the trainer's held-out set, one
+    line per level (`HELDOUT_LEVELS`).
     """
     rows = tidy(scores)
     rows = rows.loc[
         (rows["study"] == "held_out")
-        & (rows["level"] == "all")
+        & rows["level"].isin(HELDOUT_LEVELS)
         & (rows["run"] == run)
     ]
     return pd.DataFrame(
         {
             "run": run,
-            "blocks": "trainer's held-out set",
+            "blocks": rows["level"],
             "outbreaks_seen": rows["outbreaks"],
             "heldout_loss": rows["loss"],
         }
