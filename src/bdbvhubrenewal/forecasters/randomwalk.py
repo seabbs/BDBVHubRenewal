@@ -310,7 +310,6 @@ class RandomWalk:
         origin: Origin,
         task: ForecastTask,
         values: np.ndarray,
-        anchors: np.ndarray,
     ) -> np.ndarray:
         """Pair the provinces' draws `[S, L, H]` within each week.
 
@@ -335,7 +334,7 @@ class RandomWalk:
         }
         rng = task.rng(self.name, "copula")
         rho = float(fit["rho_provinces"])
-        return pair_walks(values, locations, anchors, rho, rng)
+        return pair_walks(values, locations, rho, rng)
 
     def unpaired(self) -> pd.DataFrame:
         """Return the last forecast's draws before pairing.
@@ -526,8 +525,7 @@ class RandomWalk:
                     draw = y[loc, :, u - start[loc] - 1]
                     floor = origin.reported[loc, u] if u < n_data else 0.0
                     values[:, loc, u] = np.maximum(draw, floor)
-        # Each place's walk runs from the week after its start.
-        values = self.pair(origin, task, values, start + 1)
+        values = self.pair(origin, task, values)
         self._diagnostics(origin, task, start)
         self._kept_frame = (weeks, self.rows(origin, task), task)
         return frame(task, weeks, values, self.rows(origin, task))
@@ -573,9 +571,7 @@ class RandomWalkNowcast(RandomWalk):
         """
         origin = self.origin_at(task, errors=True)
         values, weeks = self.trajectories(origin, task, origin.point)
-        # Nowcast weeks are drawn on their own; the walk runs jointly from
-        # each place's start week.
-        values = self.pair(origin, task, values, _start_weeks(origin))
+        values = self.pair(origin, task, values)
         self.delay_summary = delay_summary(origin, self.name, task.vintage)
         self._diagnostics(
             origin,

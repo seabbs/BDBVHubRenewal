@@ -8,9 +8,10 @@ trajectory draws one normal per province with correlation $\rho_p$ between
 any two, and each cell's draws are reordered across trajectories so they
 rank as the normals do (the Schaake shuffle, Clark et al. 2004, as
 ensemble copula coupling uses it, Schefzik et al. 2013).
-So each cell keeps exactly the draws it had.
-Weeks are not paired with each other, and zones and the country are not
-paired at all.
+So each cell keeps exactly the draws it had, whether it is nowcast or
+walking. Weeks are not paired with each other, so a province's own weeks
+are not kept as one trajectory, and zones and the country are not paired
+at all.
 `estimate_rho` estimates $\rho_p$ from normal scores of a model's own
 matured errors (`error_scores`), shrunk towards a prior as a guard for
 thin windows.
@@ -207,7 +208,6 @@ def error_scores(
 def pair_walks(
     values: np.ndarray,
     locations: tuple[str, ...],
-    anchors: np.ndarray,
     rho: float,
     rng: np.random.Generator,
     national: str = NATIONAL,
@@ -215,13 +215,12 @@ def pair_walks(
     r"""Pair a walk model's province draws within each week.
 
     Each week, each trajectory draws one normal per place, with
-    correlation `rho` between any two. Weeks of a province before its walk
-    starts (`anchors`) are drawn on their own, so each is reordered as its
-    week's normals rank. From its start on, a province's draws are joint
-    trajectories, so each moves as a whole, ranked by its total over the
-    walk weeks against the normals of the latest week any province's walk
-    starts, so the walks are paired with each other in every week from it.
-    The country and zones keep their draws as they are.
+    correlation `rho` between any two, and each province's draws that week
+    are reordered to rank as its normals do, whether the province is
+    nowcast or walking that week. So every week's provinces are paired,
+    but a province's own weeks are not kept as one trajectory, which
+    nothing submitted or scored uses. The country and zones keep their
+    draws as they are.
 
     Parameters
     ----------
@@ -229,9 +228,6 @@ def pair_walks(
         Draws `[S, L, H]`.
     locations : tuple of str
         The places' codes.
-    anchors : numpy.ndarray
-        Each place's first walk week, an index into the weeks, `[L]`; at
-        or beyond `H` the place has no walk.
     rho : float
         $\rho_p$, in [0, 1).
     rng : numpy.random.Generator
@@ -258,15 +254,5 @@ def pair_walks(
     index = np.take_along_axis(
         np.argsort(values, axis=0, kind="stable"), rank, axis=0
     )
-    anchors = np.asarray(anchors, int)
-    walks = paired & (anchors < n_steps)
-    if walks.any():
-        latest = anchors[walks].max()
-        for loc in np.flatnonzero(walks):
-            # A walk is ranked by its total, which carries its latent path
-            # better than one week's count with its own observation noise.
-            total = values[:, loc, anchors[loc] :].sum(axis=1)
-            whole = np.argsort(total, kind="stable")[rank[:, loc, latest]]
-            index[:, loc, anchors[loc] :] = whole[:, None]
     index[:, ~paired] = np.arange(n)[:, None, None]
     return np.take_along_axis(values, index, axis=0)
