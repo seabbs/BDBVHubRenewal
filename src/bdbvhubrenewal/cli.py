@@ -105,6 +105,7 @@ from bdbvhubrenewal.submission.hub import (
     SUBMISSION_CONFIG,
     model_abbr_for,
     model_id,
+    own_national,
     render_model_metadata,
     to_hub_table,
     write_model_metadata,
@@ -1403,6 +1404,7 @@ def _hub_forecast(
         zones=zones,
         forecast_date=forecast_date,
         zones_sum=not walks_own_zones(name),
+        national="own" if own_national(name) else "sum",
     )
     return table, result, zones, zone_note, checkpoint
 
