@@ -42,7 +42,8 @@ pair of releases within the delay window, is listed with no forecasts
 there.
 A model with no snapshots stops the run.
 
-Scores are WIS, coverage and bias (`bdbvhubrenewal.evaluation.scoring`)
+Scores are CRPS, log CRPS, coverage and bias
+(`bdbvhubrenewal.evaluation.scoring`)
 and every table counts its forecasts, $n$.
 The energy score is scored from the same drawn samples, one per origin,
 release, target and scale.
@@ -92,8 +93,8 @@ __all__ = [
     "delay_curves",
     "draw_reported",
     "forecast_releases",
+    "relative_crps",
     "relative_energy",
-    "relative_wis",
     "release_backtest",
     "reported_samples",
     "reporting_delay",
@@ -689,13 +690,13 @@ def release_backtest(
     Score stored forecasts against the counts later releases reported.
 
     >>> from bdbvhubrenewal.evaluation.nowcast import (
-    ...     relative_wis, release_backtest
+    ...     relative_crps, release_backtest
     ... )
     >>> result = release_backtest(
     ...     [task], daily, target, models=(), stored=forecasts
     ... )
     >>> scores = result.scores.query("target == 'reported'")
-    >>> relative_wis(scores)
+    >>> relative_crps(scores)
     """
     run = forecast_releases(tasks, target, models)
     return score_releases(
@@ -1158,10 +1159,10 @@ def summarise(
     Returns
     -------
     pandas.DataFrame
-        The group columns, `n` and the mean WIS, coverage of the 50% and
+        The group columns, `n` and the mean CRPS, coverage of the 50% and
         90% intervals and bias.
     """
-    cols = ["wis", "coverage_50", "coverage_90", "bias"]
+    cols = ["crps", "coverage_50", "coverage_90", "bias"]
     assert set(cols) <= set(SCORE_COLUMNS)
     grp = scores.groupby(list(by))
     out = grp[cols].mean()
@@ -1169,12 +1170,12 @@ def summarise(
     return out.reset_index()
 
 
-def relative_wis(
+def relative_crps(
     scores: pd.DataFrame,
     by: Sequence[str] = ("target",),
     baseline: str = "randomwalk",
 ) -> pd.DataFrame:
-    """Divide each model's mean WIS by the baseline's on the same forecasts.
+    """Divide each model's mean CRPS by the baseline's on the same forecasts.
 
     Parameters
     ----------
@@ -1189,28 +1190,32 @@ def relative_wis(
     -------
     pandas.DataFrame
         One row per cell and model, over the forecasts the baseline also
-        made: `n`, `wis`, `base_wis`, `rel_wis`, `rel_log_wis` (mean WIS
-        on the log scale over the baseline's), missing where the baseline's
-        mean is 0, the coverage of the 50% and 90% intervals and the mean
-        `bias`.
+        made: `n`, `crps`, `base_crps`, `rel_crps`, `rel_log_crps` (mean
+        CRPS on the log scale over the baseline's), missing where the
+        baseline's mean is 0, the coverage of the 50% and 90% intervals and
+        the mean `bias`.
     """
     match = ("target", "origin", "truth_vintage", "location", "target_end_date")
     rel = relative_skill(
         scores,
         baseline,
         by=by,
+        metrics=("crps", "log_crps"),
         match_on=match,
-        means=("wis", "log_wis", "coverage_50", "coverage_90", "bias"),
+        means=("crps", "coverage_50", "coverage_90", "bias"),
     )
     out = rel.rename(
-        columns={"relative_wis": "rel_wis", "relative_log_wis": "rel_log_wis"}
+        columns={
+            "relative_crps": "rel_crps",
+            "relative_log_crps": "rel_log_crps",
+        }
     ).sort_values([*by, "model"])
     order = [
         "n",
-        "wis",
-        "base_wis",
-        "rel_wis",
-        "rel_log_wis",
+        "crps",
+        "base_crps",
+        "rel_crps",
+        "rel_log_crps",
         "coverage_50",
         "coverage_90",
         "bias",

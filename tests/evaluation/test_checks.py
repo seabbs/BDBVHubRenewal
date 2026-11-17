@@ -123,8 +123,8 @@ def test_check_summary_averages_by_place_type_and_flag() -> None:
             "target_end_date": ["2026-10-31", "2026-11-07", "2026-11-07"],
             "scale": "zones",
             **dict.fromkeys(SCORE_COLUMNS, 0.0),
-            "wis": [4.0, 2.0, 9.0],
-            "log_wis": [1.0, 1.0, 2.0],
+            "crps": [4.0, 2.0, 9.0],
+            "log_crps": [1.0, 1.0, 2.0],
             "coverage_90": [0.0, 1.0, 0.0],
         }
     )
@@ -144,10 +144,10 @@ def test_check_summary_averages_by_place_type_and_flag() -> None:
         }
     )
     got = check_summary(scores, types, flagged).set_index(["split", "group"])
-    assert got.loc[("place type", "larger"), "WIS"] == 3.0
+    assert got.loc[("place type", "larger"), "CRPS"] == 3.0
     assert got.loc[("place type", "larger"), "n"] == 2
     assert got.loc[("flag", "blow-up"), "90% coverage"] == 0.0
-    assert got.loc[("flag", "collapse"), "log WIS"] == 1.0
+    assert got.loc[("flag", "collapse"), "log CRPS"] == 1.0
 
 
 def test_check_summary_divides_by_the_baseline_on_the_same_weeks() -> None:
@@ -164,13 +164,13 @@ def test_check_summary_divides_by_the_baseline_on_the_same_weeks() -> None:
                 **week,
                 **dict.fromkeys(SCORE_COLUMNS, 0.0),
                 "model": "rw",
-                "wis": 2.0,
+                "crps": 2.0,
             },
             {
                 **week,
                 **dict.fromkeys(SCORE_COLUMNS, 0.0),
                 "model": "rwn",
-                "wis": 6.0,
+                "crps": 6.0,
             },
         ]
     )
@@ -189,11 +189,11 @@ def test_check_summary_divides_by_the_baseline_on_the_same_weeks() -> None:
     got = check_summary(scores, types, flagged, baseline="rw").set_index(
         ["split", "group", "model"]
     )
-    assert got.loc[("flag", "collapse", "rwn"), "relative WIS"] == 3.0
-    assert got.loc[("place type", "larger", "rw"), "relative WIS"] == 1.0
+    assert got.loc[("flag", "collapse", "rwn"), "relative CRPS"] == 3.0
+    assert got.loc[("place type", "larger", "rw"), "relative CRPS"] == 1.0
 
 
-def test_check_summary_gives_no_relative_wis_for_a_zero_baseline() -> None:
+def test_check_summary_gives_no_relative_crps_for_a_zero_baseline() -> None:
     week = {
         "origin": ORIGIN,
         "truth_vintage": "2026-11-08",
@@ -203,7 +203,7 @@ def test_check_summary_gives_no_relative_wis_for_a_zero_baseline() -> None:
     }
     scores = pd.DataFrame(
         [
-            {**week, **dict.fromkeys(SCORE_COLUMNS, 0.0), "model": m, "wis": w}
+            {**week, **dict.fromkeys(SCORE_COLUMNS, 0.0), "model": m, "crps": w}
             for m, w in (("rw", 0.0), ("rwn", 6.0))
         ]
     )
@@ -219,4 +219,4 @@ def test_check_summary_gives_no_relative_wis_for_a_zero_baseline() -> None:
         }
     )
     got = check_summary(scores, types, flagged, baseline="rw")
-    assert got["relative WIS"].isna().all()
+    assert got["relative CRPS"].isna().all()

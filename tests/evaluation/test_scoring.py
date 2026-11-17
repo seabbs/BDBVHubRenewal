@@ -121,11 +121,27 @@ def test_wis_of_point_mass_is_absolute_error() -> None:
     assert wis_sample(7.0, np.full(10, 3.0))["wis"] == pytest.approx(4.0)
 
 
-def test_crps_matches_scoringrules() -> None:
-    samples = np.random.default_rng(2).gamma(2, 10, 100)
+@pytest.mark.parametrize("seed", [2, 3, 4])
+@pytest.mark.parametrize("m", [10, 100, 1000])
+def test_crps_is_scoringrules_fair_estimator(seed: int, m: int) -> None:
+    # The fair form (Ferro 2014), as the paper scores after #281, so
+    # scores at 100 and 1,000 draws compare in expectation.
+    samples = np.random.default_rng(seed).gamma(2, 10, m)
     for obs in (5.0, 20.0, 60.0):
-        want = float(sr.crps_ensemble(obs, samples, estimator="nrg"))
+        want = float(sr.crps_ensemble(obs, samples, estimator="fair"))
         assert crps_sample(obs, samples) == pytest.approx(want)
+        nrg = float(sr.crps_ensemble(obs, samples, estimator="nrg"))
+        got = crps_sample(obs, samples, estimator="nrg")
+        assert got == pytest.approx(nrg)
+
+
+@pytest.mark.parametrize("seed", [5, 6])
+def test_energy_is_scoringrules_fair_estimator(seed: int) -> None:
+    rng = np.random.default_rng(seed)
+    x = rng.poisson(20, (200, 6)).astype(float)
+    y = rng.poisson(20, 6).astype(float)
+    want = float(sr.es_ensemble(y, x, estimator="fair"))
+    assert energy_sample(y, x) == pytest.approx(want)
 
 
 def test_wis_is_close_to_crps_for_many_samples() -> None:
@@ -259,3 +275,111 @@ def test_relative_skill_is_mean_over_mean_on_the_matched_set() -> None:
     assert rel.loc["a", "wis"] == pytest.approx(5.0)
     assert rel.loc["a", "base_wis"] == pytest.approx(2.5)
     assert rel.loc["a", "bias"] == pytest.approx(0.3)
+
+
+def test_log_crps_is_the_crps_of_log1p_counts() -> None:
+    # As the paper scores Ebola: sample CRPS of log(1 + y) against
+    # log(1 + x), with scoringrules' fair estimator.
+    from bdbvhubrenewal.evaluation.scoring import SCORE_COLUMNS, score_sample
+
+    assert "log_crps" in SCORE_COLUMNS
+    samples = np.random.default_rng(5).poisson(25, 1000).astype(float)
+    for obs in (0.0, 12.0, 80.0):
+        got = score_sample(obs, samples)
+        want = crps_sample(float(np.log1p(obs)), np.log1p(samples))
+        assert got["log_crps"] == pytest.approx(want)
+        fair = sr.crps_ensemble(
+            np.log1p(obs), np.log1p(samples), estimator="fair"
+        )
+        assert got["log_crps"] == pytest.approx(float(fair))
+        assert got["crps"] == pytest.approx(crps_sample(obs, samples))
+
+
+def test_score_forecasts_gives_log_crps() -> None:
+    rows = [
+        {
+            "model": "m",
+            "kind": "real",
+            "vintage": "2026-08-18",
+            "reference_date": "2026-08-22",
+            "location": "CD-IT",
+            "target_end_date": "2026-09-05",
+            "horizon": 2,
+            "sample": i + 1,
+            "value": float(v),
+        }
+        for i, v in enumerate([3, 8, 15, 22, 40])
+    ]
+    truth = pd.DataFrame(
+        {"location": ["CD-IT"], "target_end_date": ["2026-09-05"], "truth": [9]}
+    )
+    scores = score_forecasts(pd.DataFrame(rows), truth)
+    want = crps_sample(float(np.log1p(9)), np.log1p([3, 8, 15, 22, 40]))
+    assert scores["log_crps"].iloc[0] == pytest.approx(want)
+
+
+def test_german_quantile_scores_stay_wis() -> None:
+    # The German benchmark scores quantile forecasts, so it keeps WIS.
+    from bdbvhubrenewal.evaluation import germany
+
+    assert "wis" in germany.SCORE_COLUMNS
+    assert "crps" not in germany.SCORE_COLUMNS
+    quantiles = pd.DataFrame(
+        {
+            "id": [0] * 3,
+            "quantile": [0.25, 0.5, 0.75],
+            "value": [4.0, 6.0, 9.0],
+        }
+    )
+    assert "wis" in wis_quantile(
+        np.array([5.0]),
+        quantiles["value"].to_numpy()[None, :],
+        quantiles["quantile"].to_numpy(),
+    )
+
+
+def _two_models_same_samples() -> tuple[pd.DataFrame, pd.DataFrame]:
+    rng = np.random.default_rng(8)
+    draws = rng.poisson(30, (100, 2, 2)).astype(float)
+    rows = [
+        {
+            "model": model,
+            "kind": "real",
+            "vintage": "2026-10-17",
+            "reference_date": "2026-10-24",
+            "origin": "2026-10-17",
+            "location": loc,
+            "target_end_date": week,
+            "horizon": 0,
+            "sample": s + 1,
+            "value": draws[s, i, j],
+        }
+        for model in ("renewal", "teamA-hub")
+        for s in range(100)
+        for i, loc in enumerate(("CD-IT", "CD-NK"))
+        for j, week in enumerate(("2026-10-17", "2026-10-24"))
+    ]
+    truth = pd.DataFrame(
+        {
+            "location": ["CD-IT", "CD-IT", "CD-NK", "CD-NK"],
+            "target_end_date": ["2026-10-17", "2026-10-24"] * 2,
+            "truth": [25, 31, 40, 12],
+        }
+    )
+    return pd.DataFrame(rows), truth
+
+
+def test_same_samples_score_the_same_whoever_made_them() -> None:
+    # Ours or a hub team's: one estimator for every model.
+    forecasts, truth = _two_models_same_samples()
+    scores = score_forecasts(forecasts, truth).set_index(
+        ["model", "location", "target_end_date"]
+    )
+    for col in ("crps", "log_crps"):
+        a = scores.loc["renewal", col].sort_index()
+        b = scores.loc["teamA-hub", col].sort_index()
+        assert np.allclose(a.to_numpy(), b.to_numpy())
+    energy = energy_scores(forecasts, truth, unit=["origin"])
+    by = energy.set_index("model")
+    for col in ("energy", "log_energy"):
+        assert by.loc["renewal", col] == pytest.approx(by.loc["teamA-hub", col])

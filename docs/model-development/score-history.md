@@ -13,8 +13,9 @@ There is no score over all weeks, as later commits score more weeks, origins and
 "Common forecasts only", ticked at first, keeps for each model, baseline and week the forecasts (origin, release and place) scored at every commit of a window back from the newest.
 The window is as long as keeps the most common forecasts times commits.
 
-Relative WIS, as on the [Backtest](../backtest.md) page, also moves when the baseline changes.
-Read it beside WIS, where randomwalk's own line shows the baseline, or pick randomwalknowcast under "Relative to".
+Relative CRPS, as on the [Backtest](../backtest.md) page, also moves when the baseline changes.
+Read it beside CRPS, where randomwalk's own line shows the baseline, or pick randomwalknowcast under "Relative to".
+Commits before the site switched from WIS to CRPS have no CRPS, so their points are missing.
 A star and a vertical line mark a commit where what a line is scored on changed.
 Points either side of one are not comparable.
 The last point of a preview build is that build's own scores.
