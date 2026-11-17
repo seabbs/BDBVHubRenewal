@@ -130,3 +130,22 @@ def test_shrinkage_strength_is_a_setting(task) -> None:
     strong.forecast(task)
     assert strong.copula_fit["rho_provinces"] == pytest.approx(0.7, abs=1e-4)
     assert weak.copula_fit["rho_provinces"] != pytest.approx(0.7)
+
+
+@pytest.mark.parametrize("name", MODELS)
+def test_variants_come_from_one_forecast_as_the_model_gives_them(
+    name: str, task
+) -> None:
+    # One forecast gives every pairing and shrinkage strength from the same
+    # draws, through the step the model itself calls.
+    model = dataclasses.replace(get_model(name), keep_variants=True)
+    paired = model.forecast(task)
+    pd.testing.assert_frame_equal(model.variant("rolling"), paired)
+    pd.testing.assert_frame_equal(model.variant("off"), _run(name, task, "off"))
+    pd.testing.assert_frame_equal(
+        model.variant("prior"), _run(name, task, "prior")
+    )
+    weak = dataclasses.replace(get_model(name), prior_weight=0.0)
+    pd.testing.assert_frame_equal(
+        model.variant("rolling", weight=0.0), weak.forecast(task)
+    )
