@@ -223,7 +223,7 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
 <li>We fine-tune base Chronos-2 on synthetic data on a laptop, with its default LoRA recipe.</li>
 <li>The learning rate falls linearly to zero at 8,000 simulations.</li>
 <li>Each simulation gives 32 training blocks.</li>
-<li>A block takes daily steps, or sums the days to 3-day or weekly steps.</li>
+<li>A block is daily, 3-day or weekly, or daily with one weekly or 3-day total row per place.</li>
 <li>Four in five blocks are multivariate and one in five univariate.</li>
 <li>We save checkpoints at 1,000, 2,000, 4,000 and 8,000 simulations.</li>
 <li>Training draws simulations from a balanced, shuffled design, so every checkpoint has seen the whole grid.</li>
@@ -248,7 +248,7 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
 <img src="figures/fig1-pipeline.svg" class="img-fluid figure-img">
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-pipeline-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;1: The fine-tuning pipeline. (A) The assumptions in the epinowcast simulations: a latent process gives expected onsets by stratum, which a reporting delay that may drift or step, report-day effects and count noise turn into a reporting triangle. (B) The reporting triangle laid out as ragged series for Chronos-2: each place has a target complete up to E and one series per lag, missing until reported (daily lag series fill only on release days), and counts reported after E enter as known-future inputs. Group attention has learned biases for a series attending to itself and to the other series of its place, its count and lags, and between a place and its parent or children, as in Moirai’s any-variate attention <span class="citation" data-cites="Woo2024">(<a href="#ref-Woo2024" role="doc-biblioref">Woo et al. 2024</a>)</span>, while every place’s series sit in one group. The grid shows group attention at one step for a country C and places A and B, each with a count and two lag series, with each cell shaded by its relation. (C) Training blocks and LoRA fine-tuning, and why it is fast: blocks cut from simulated release histories at random cut-offs are scored against the final counts, and only rank-8 adapters, about 1% of the weights, and the attention biases are trained. (D) Forecasting with the fine-tuned model: one forward pass gives quantiles for each step, and each draw reads them at a uniform level u and is at least the count reported so far.
+Figure&nbsp;1: The fine-tuning pipeline. (A) The assumptions in the epinowcast simulations: a latent process gives expected onsets by stratum, which a reporting delay that may drift or step, report-day effects and count noise turn into a reporting triangle. (B) The reporting triangle laid out as ragged series for Chronos-2: each place has a target complete up to E and one series per lag, missing until reported (daily lag series fill only on release days), and counts reported after E enter as known-future inputs. Group attention has learned biases for a series attending to itself and to the other series of its place, its count and lags, and between a place and its parent or children, as in Moirai’s any-variate attention <span class="citation" data-cites="Woo2024">(<a href="#ref-Woo2024" role="doc-biblioref">Woo et al. 2024</a>)</span>, while every place’s series sit in one group. The grid shows group attention at one step for a country C and places A and B, each with a count and two lag series, with each cell shaded by its relation. Beside it, one place’s daily rows carry a weekly total row, missing until the last day of each week. (C) Training blocks and LoRA fine-tuning, and why it is fast: blocks cut from simulated release histories at random cut-offs are scored against the final counts, and only rank-8 adapters, about 1% of the weights, and the attention biases are trained. (D) Forecasting with the fine-tuned model: one forward pass gives quantiles for each step, and each draw reads them at a uniform level u and is at least the count reported so far.
 </figcaption>
 </figure>
 </div>
@@ -424,8 +424,8 @@ Table&nbsp;1: The crossed factors of the simulation grid and their levels, each 
 </section>
 <section id="correlated-trajectories" class="level3">
 <h3 class="anchored" data-anchor-id="correlated-trajectories">Correlated trajectories</h3>
-<p>Chronos-2 and <code>randomwalknowcast</code> draw each place and week on its own. Paired at random, their draws give sums over weeks or places that are too narrow. We pair them into trajectories with a Gaussian copula over weeks and places. Each trajectory draws a vector <span class="math inline">\(z\)</span> from a multivariate normal with correlation matrix <span class="math inline">\(\Sigma\)</span>. Each place-week’s draws are then reordered across trajectories so that they rank as <span class="math inline">\(z\)</span> does. This is an empirical copula reordering in the style of the Schaake shuffle <span class="citation" data-cites="Clark2004">(<a href="#ref-Clark2004" role="doc-biblioref">Clark et al. 2004</a>)</span> and ensemble copula coupling <span class="citation" data-cites="Schefzik2013">(<a href="#ref-Schefzik2013" role="doc-biblioref">Schefzik, Thorarinsdottir, and Gneiting 2013</a>)</span>. Each place-week keeps its own draws, so every marginal forecast and every per-week score is unchanged. <span class="math inline">\(\Sigma\)</span> is a place correlation times a week correlation. Two steps <span class="math inline">\(\delta\)</span> days apart have correlation <span class="math inline">\(\rho_t^{\delta/7}\)</span>. Two provinces have correlation <span class="math inline">\(\rho_p\)</span>, and the country and a province have correlation <span class="math inline">\(\rho_n\)</span>. The daily models also pair the days of a week, with correlation <span class="math inline">\(\rho_d^{|d - d'|}\)</span> between days <span class="math inline">\(d\)</span> and <span class="math inline">\(d'\)</span>. <span class="math inline">\(\rho_d = 0.985\)</span> is fixed rather than estimated, as each matured error is of a week’s sum. It gives the best weekly WIS, median bias and coverage of the daily models on the Ebola release backtest. Where the country is the sum of its provinces, as for <code>randomwalknowcast</code>, it is summed again from the paired provinces. Copulas have been used before to give joint forecasts of seasonal influenza <span class="citation" data-cites="Ray2018 Brooks2018">(<a href="#ref-Ray2018" role="doc-biblioref">Ray and Reich 2018</a>; <a href="#ref-Brooks2018" role="doc-biblioref">Brooks et al. 2018</a>)</span>.</p>
-<p>At each forecast origin we estimate the three correlations from the model’s own matured errors. For each forecast made at an earlier origin whose truth had been released by this origin, we take the randomised probability integral transform (PIT) of the truth in the forecast’s draws and map it to a normal score. We use the scores of the 8 latest matured weeks. Each correlation is the Pearson correlation of pairs of scores from the same forecast. We shrink it towards a fixed prior, <span class="math inline">\((\rho_t, \rho_p, \rho_n) = (0.9, 0.7, 0.7)\)</span>, with the prior worth 100 pairs, and keep it between 0 and 0.95. An origin with no matured errors takes the prior. We score the paired trajectories with the energy score <span class="citation" data-cites="Gneiting2008">(<a href="#ref-Gneiting2008" role="doc-biblioref">Gneiting et al. 2008</a>)</span> and the variogram score of order 0.5 <span class="citation" data-cites="Scheuerer2015">(<a href="#ref-Scheuerer2015" role="doc-biblioref">Scheuerer and Hamill 2015</a>)</span> on <span class="math inline">\(\log(x + 1)\)</span> counts. Both are proper scores for joint forecasts <span class="citation" data-cites="gneitingStrictlyProperScoring2007">(<a href="#ref-gneitingStrictlyProperScoring2007" role="doc-biblioref">Gneiting and Raftery 2007</a>)</span>, and the energy score has been used for epidemic trajectories from forecast hubs <span class="citation" data-cites="Bay2026">(<a href="#ref-Bay2026" role="doc-biblioref">Bay et al. 2026</a>)</span>. We also report the coverage of sums over weeks and over places. The SI gives the copula in full, its estimator and window, and the scores of paired against unpaired trajectories.</p>
+<p>Chronos-2 draws each place and week on its own. <code>randomwalknowcast</code> draws each nowcast week on its own, and its forecast weeks follow its walk within each sample. Paired at random, independent draws give sums over weeks or places that are too narrow. We pair them into trajectories with a Gaussian copula over weeks and places. Each trajectory draws a vector <span class="math inline">\(z\)</span> from a multivariate normal with correlation matrix <span class="math inline">\(\Sigma\)</span>. Each place-week’s draws are then reordered across trajectories so that they rank as <span class="math inline">\(z\)</span> does. This is an empirical copula reordering in the style of the Schaake shuffle <span class="citation" data-cites="Clark2004">(<a href="#ref-Clark2004" role="doc-biblioref">Clark et al. 2004</a>)</span> and ensemble copula coupling <span class="citation" data-cites="Schefzik2013">(<a href="#ref-Schefzik2013" role="doc-biblioref">Schefzik, Thorarinsdottir, and Gneiting 2013</a>)</span>. Each place-week keeps its own draws, so every marginal forecast and every per-week score is unchanged. For <code>randomwalknowcast</code> the reordering replaces the walk’s own dependence over weeks. <span class="math inline">\(\Sigma\)</span> is a place correlation times a week correlation. Two steps <span class="math inline">\(\delta\)</span> days apart have correlation <span class="math inline">\(\rho_t^{\delta/7}\)</span>. Two provinces have correlation <span class="math inline">\(\rho_p\)</span>, and the country and a province have correlation <span class="math inline">\(\rho_n\)</span>. The daily models also pair the days of a week, with correlation <span class="math inline">\(\rho_d^{|d - d'|}\)</span> between days <span class="math inline">\(d\)</span> and <span class="math inline">\(d'\)</span>. <span class="math inline">\(\rho_d = 0.985\)</span> is fixed rather than estimated, as each matured error is of a week’s sum. It gives the best weekly WIS, median bias and coverage of the daily models on the Ebola release backtest. Where the country is the sum of its provinces, as for <code>randomwalknowcast</code>, it is summed again from the paired provinces. Copulas have been used before to give joint forecasts of seasonal influenza <span class="citation" data-cites="Ray2018 Brooks2018">(<a href="#ref-Ray2018" role="doc-biblioref">Ray and Reich 2018</a>; <a href="#ref-Brooks2018" role="doc-biblioref">Brooks et al. 2018</a>)</span>.</p>
+<p>At each forecast origin we estimate the three correlations from the model’s own matured errors. For each forecast made at an earlier origin whose truth had been released by this origin, we take the randomised probability integral transform (PIT) of the truth in the forecast’s draws and map it to a normal score. We use the scores of the 8 latest matured weeks. Each correlation is the Pearson correlation of pairs of scores from the same forecast. We shrink it towards a fixed prior, <span class="math inline">\((\rho_t, \rho_p, \rho_n) = (0.9, 0.7, 0.7)\)</span>, with the prior worth 100 pairs, and keep it between 0 and 0.95. An origin with no matured errors takes the prior. We score the paired trajectories with the variogram score of order 0.5 <span class="citation" data-cites="Scheuerer2015">(<a href="#ref-Scheuerer2015" role="doc-biblioref">Scheuerer and Hamill 2015</a>)</span> on <span class="math inline">\(\log(x + 1)\)</span> counts and the coverage of sums over weeks and over places. We also report the energy score <span class="citation" data-cites="Gneiting2008">(<a href="#ref-Gneiting2008" role="doc-biblioref">Gneiting et al. 2008</a>)</span>, which has been used for epidemic trajectories from forecast hubs <span class="citation" data-cites="Bay2026">(<a href="#ref-Bay2026" role="doc-biblioref">Bay et al. 2026</a>)</span> but discriminates poorly between dependence structures <span class="citation" data-cites="Pinson2013">(<a href="#ref-Pinson2013" role="doc-biblioref">Pinson and Tastu 2013</a>)</span>. Both scores are proper for joint forecasts <span class="citation" data-cites="gneitingStrictlyProperScoring2007">(<a href="#ref-gneitingStrictlyProperScoring2007" role="doc-biblioref">Gneiting and Raftery 2007</a>)</span>. The SI gives the copula in full, its estimator and window, and the scores of paired against unpaired trajectories.</p>
 </section>
 <section id="evaluation-on-held-out-synthetic-data" class="level3">
 <h3 class="anchored" data-anchor-id="evaluation-on-held-out-synthetic-data">Evaluation on held-out synthetic data</h3>
@@ -442,6 +442,7 @@ Table&nbsp;1: The crossed factors of the simulation grid and their levels, each 
 <ul>
 <li>We held out a set of simulations from development.</li>
 <li>The fine-tune never trained on the held-out set’s seeds (SI).</li>
+<li>We set each tuned choice on development data, apart from every scored set (SI).</li>
 <li>We score sample forecasts with CRPS and log-scale CRPS, bias, and 50% and 90% coverage, relative to <code>randomwalknowcast</code>.</li>
 <li>We score against the data as reported <span class="math inline">\(D\)</span> days later, with <span class="math inline">\(D\)</span> each outbreak’s 98% reporting delay.</li>
 <li>Key references: <span class="citation" data-cites="bracherEvaluatingEpidemicForecasts2021 Bosse2023-sx gneitingStrictlyProperScoring2007 gneitingProbabilisticForecastsCalibration2007 sherrattPredictivePerformanceMultimodel2023">(<a href="#ref-bracherEvaluatingEpidemicForecasts2021" role="doc-biblioref">Bracher et al. 2021</a>; <a href="#ref-Bosse2023-sx" role="doc-biblioref">Bosse et al. 2023</a>; <a href="#ref-gneitingStrictlyProperScoring2007" role="doc-biblioref">Gneiting and Raftery 2007</a>; <a href="#ref-gneitingProbabilisticForecastsCalibration2007" role="doc-biblioref">Gneiting, Balabdaoui, and Raftery 2007</a>; <a href="#ref-sherrattPredictivePerformanceMultimodel2023" role="doc-biblioref">Sherratt et al. 2023</a>)</span>.</li>
@@ -466,7 +467,8 @@ Table&nbsp;1: The crossed factors of the simulation grid and their levels, each 
 <li>We score quantile forecasts with WIS and log-scale WIS, bias, and coverage, against the data as reported 40 days later <span class="citation" data-cites="Wolffram2023">(<a href="#ref-Wolffram2023" role="doc-biblioref">Wolffram et al. 2023</a>)</span>.</li>
 <li>We score each model on its own quantiles at the hub’s seven levels, interpolated linearly where it lacks one.</li>
 <li>We score models that give samples, and sums over days, on the quantiles of 1,000 draws with common random numbers.</li>
-<li>We may report only one of the daily and weekly versions.</li>
+<li>One fine-tuned Chronos-2 model forecasts daily, 3-day and weekly data.</li>
+<li>For both case studies, we also score our models’ daily counts directly from the daily rows, against <code>randomwalknowcast</code> (SI).</li>
 <li>We split the nowcast dates in half at 10 February 2022.</li>
 <li>We developed the setup on the first half and score the second half.</li>
 <li>Key references: <span class="citation" data-cites="Wolffram2023 Johnson2025 amaralPostprocessingWeightedCombination2025">(<a href="#ref-Wolffram2023" role="doc-biblioref">Wolffram et al. 2023</a>; <a href="#ref-Johnson2025" role="doc-biblioref">Johnson et al. 2025</a>; <a href="#ref-amaralPostprocessingWeightedCombination2025" role="doc-biblioref">Amaral et al. 2025</a>)</span>.</li>
@@ -629,73 +631,73 @@ Table&nbsp;2: Held-out synthetic data: mean scores, coverage and number of forec
 <td>synthetic</td>
 <td>epinowcast</td>
 <td>crps</td>
-<td>10.8</td>
-<td>0.149</td>
+<td>10.7</td>
+<td>0.148</td>
 <td>0.24</td>
 <td>0.465</td>
 <td>0.8</td>
 <td>1056</td>
-<td>0.678</td>
-<td>0.866</td>
+<td>0.682</td>
+<td>0.869</td>
 </tr>
 <tr class="even">
 <td>synthetic</td>
 <td>fm_chronos_daily_complete</td>
 <td>crps</td>
-<td>18.6</td>
-<td>0.203</td>
+<td>18.4</td>
+<td>0.201</td>
 <td>-0.107</td>
 <td>0.415</td>
 <td>0.792</td>
 <td>1056</td>
-<td>1.17</td>
+<td>1.18</td>
 <td>1.18</td>
 </tr>
 <tr class="odd">
 <td>synthetic</td>
 <td>fm_chronos_daily_ragged</td>
 <td>crps</td>
-<td>21.1</td>
-<td>0.235</td>
+<td>21</td>
+<td>0.233</td>
 <td>0.427</td>
 <td>0.295</td>
 <td>0.598</td>
 <td>1056</td>
-<td>1.33</td>
-<td>1.36</td>
+<td>1.34</td>
+<td>1.37</td>
 </tr>
 <tr class="even">
 <td>synthetic</td>
 <td>fm_chronos_weekly_complete</td>
 <td>crps</td>
-<td>17.8</td>
-<td>0.21</td>
+<td>17.6</td>
+<td>0.209</td>
 <td>-0.2</td>
 <td>0.423</td>
 <td>0.781</td>
 <td>1056</td>
-<td>1.12</td>
-<td>1.22</td>
+<td>1.13</td>
+<td>1.23</td>
 </tr>
 <tr class="odd">
 <td>synthetic</td>
 <td>fm_chronos_weekly_ragged</td>
 <td>crps</td>
-<td>21.8</td>
-<td>0.227</td>
+<td>21.6</td>
+<td>0.225</td>
 <td>0.0425</td>
 <td>0.391</td>
 <td>0.733</td>
 <td>1056</td>
-<td>1.37</td>
+<td>1.38</td>
 <td>1.32</td>
 </tr>
 <tr class="even">
 <td>synthetic</td>
 <td>randomwalk</td>
 <td>crps</td>
-<td>19.2</td>
-<td>0.212</td>
+<td>19</td>
+<td>0.21</td>
 <td>-0.0361</td>
 <td>0.549</td>
 <td>0.89</td>
@@ -707,8 +709,8 @@ Table&nbsp;2: Held-out synthetic data: mean scores, coverage and number of forec
 <td>synthetic</td>
 <td>randomwalknowcast</td>
 <td>crps</td>
-<td>15.9</td>
-<td>0.172</td>
+<td>15.7</td>
+<td>0.17</td>
 <td>0.178</td>
 <td>0.623</td>
 <td>0.915</td>
@@ -750,95 +752,95 @@ Table&nbsp;3: Held-out synthetic data: mean energy and variogram scores of each 
 <tr class="odd">
 <td>epinowcast</td>
 <td>144</td>
-<td>0.522</td>
+<td>0.518</td>
 <td>2.18</td>
-<td>0.849</td>
+<td>0.852</td>
 <td>0.658</td>
 </tr>
 <tr class="even">
 <td>fm_chronos_daily_complete</td>
 <td>144</td>
-<td>0.732</td>
+<td>0.726</td>
 <td>4.08</td>
-<td>1.19</td>
+<td>1.2</td>
 <td>1.23</td>
 </tr>
 <tr class="odd">
 <td>fm_chronos_daily_ragged</td>
 <td>144</td>
-<td>0.813</td>
+<td>0.808</td>
 <td>3.83</td>
-<td>1.32</td>
+<td>1.33</td>
 <td>1.16</td>
 </tr>
 <tr class="even">
 <td>fm_chronos_daily_ragged_ft@1000</td>
 <td>144</td>
-<td>0.659</td>
+<td>0.653</td>
 <td>3.12</td>
-<td>1.07</td>
+<td>1.08</td>
 <td>0.944</td>
 </tr>
 <tr class="odd">
 <td>fm_chronos_daily_ragged_ft@16000</td>
 <td>144</td>
-<td>0.575</td>
+<td>0.57</td>
 <td>2.72</td>
-<td>0.935</td>
+<td>0.939</td>
 <td>0.821</td>
 </tr>
 <tr class="even">
 <td>fm_chronos_daily_ragged_ft@2000</td>
 <td>144</td>
-<td>0.597</td>
+<td>0.592</td>
 <td>2.8</td>
-<td>0.97</td>
+<td>0.974</td>
 <td>0.845</td>
 </tr>
 <tr class="odd">
 <td>fm_chronos_daily_ragged_ft@4000</td>
 <td>144</td>
-<td>0.588</td>
+<td>0.583</td>
 <td>2.79</td>
-<td>0.956</td>
+<td>0.96</td>
 <td>0.842</td>
 </tr>
 <tr class="even">
 <td>fm_chronos_daily_ragged_ft@8000</td>
 <td>144</td>
-<td>0.554</td>
+<td>0.549</td>
 <td>2.51</td>
-<td>0.901</td>
+<td>0.904</td>
 <td>0.757</td>
 </tr>
 <tr class="odd">
 <td>fm_chronos_weekly_complete</td>
 <td>144</td>
-<td>0.752</td>
+<td>0.745</td>
 <td>4.18</td>
-<td>1.22</td>
+<td>1.23</td>
 <td>1.26</td>
 </tr>
 <tr class="even">
 <td>fm_chronos_weekly_ragged</td>
 <td>144</td>
-<td>0.827</td>
+<td>0.821</td>
 <td>4.61</td>
-<td>1.34</td>
+<td>1.35</td>
 <td>1.39</td>
 </tr>
 <tr class="odd">
 <td>randomwalk</td>
 <td>144</td>
-<td>0.783</td>
+<td>0.774</td>
 <td>4.75</td>
-<td>1.27</td>
+<td>1.28</td>
 <td>1.43</td>
 </tr>
 <tr class="even">
 <td>randomwalknowcast</td>
 <td>144</td>
-<td>0.615</td>
+<td>0.607</td>
 <td>3.31</td>
 <td>1</td>
 <td>1</td>
@@ -866,6 +868,7 @@ Table&nbsp;3: Held-out synthetic data: mean energy and variogram scores of each 
 <li>We summarise the scores.</li>
 <li>The SI compares the model fine-tuned on real data with the one fine-tuned on simulations (Real-data fine-tune against synthetic).</li>
 <li>The SI compares capped lags with lags run to the truth delay (Foundation model setup).</li>
+<li>The SI gives daily nowcasts for both case studies against <code>randomwalknowcast</code> (Daily nowcasts).</li>
 <li>Key references: <span class="citation" data-cites="Wolffram2023 amaralPostprocessingWeightedCombination2025">(<a href="#ref-Wolffram2023" role="doc-biblioref">Wolffram et al. 2023</a>; <a href="#ref-amaralPostprocessingWeightedCombination2025" role="doc-biblioref">Amaral et al. 2025</a>)</span>.</li>
 </ul>
 </div>
@@ -1232,7 +1235,7 @@ Figure&nbsp;7: Ebola: sample forecasts of the hub’s rounds from 21 November 20
 </figcaption>
 </figure>
 </div>
-<p> On the release backtest before the scored rounds, the best model was renewalsp, with a relative score of 0.81 and 0.93 on the log scale, against randomwalknowcast.</p>
+<p> On the release backtest before the scored rounds, the best model was renewalsp, with a relative score of 0.81 and 0.92 on the log scale, against randomwalknowcast.</p>
 <div id="tbl-ebola-scores" class="quarto-float quarto-figure quarto-figure-center anchored">
 <figure class="quarto-float quarto-float-tbl figure">
 <figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-ebola-scores-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
@@ -1273,73 +1276,73 @@ Table&nbsp;5: Ebola hub submissions: mean scores, coverage and number of forecas
 <td>ebola</td>
 <td>fm_chronos_daily_complete</td>
 <td>crps</td>
-<td>4.88</td>
-<td>0.0545</td>
+<td>4.85</td>
+<td>0.0542</td>
 <td>0.177</td>
 <td>0.833</td>
 <td>0.889</td>
 <td>162</td>
-<td>2.59</td>
-<td>1.75</td>
+<td>2.58</td>
+<td>1.74</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
 <td>fm_chronos_daily_ragged</td>
 <td>crps</td>
-<td>5.31</td>
-<td>0.0706</td>
+<td>5.26</td>
+<td>0.0701</td>
 <td>0.133</td>
 <td>0.837</td>
 <td>0.915</td>
 <td>270</td>
-<td>1.93</td>
-<td>1.96</td>
+<td>1.92</td>
+<td>1.94</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
 <td>fm_chronos_weekly_complete</td>
 <td>crps</td>
-<td>3.98</td>
-<td>0.0461</td>
+<td>3.94</td>
+<td>0.0457</td>
 <td>0.0963</td>
 <td>0.877</td>
 <td>0.944</td>
 <td>162</td>
-<td>2.11</td>
-<td>1.48</td>
+<td>2.09</td>
+<td>1.47</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
 <td>fm_chronos_weekly_ragged</td>
 <td>crps</td>
-<td>4.23</td>
-<td>0.0541</td>
+<td>4.17</td>
+<td>0.0537</td>
 <td>0.0407</td>
 <td>0.878</td>
 <td>0.963</td>
 <td>270</td>
-<td>1.66</td>
-<td>1.52</td>
+<td>1.63</td>
+<td>1.51</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
 <td>pprandomwalknowcast</td>
 <td>crps</td>
-<td>1.96</td>
-<td>0.0257</td>
+<td>1.95</td>
+<td>0.0256</td>
 <td>0.138</td>
 <td>0.84</td>
 <td>0.883</td>
 <td>162</td>
 <td>1.04</td>
-<td>0.824</td>
+<td>0.82</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
 <td>randomwalk</td>
 <td>crps</td>
 <td>2.57</td>
-<td>0.0494</td>
+<td>0.0493</td>
 <td>0.0445</td>
 <td>0.846</td>
 <td>0.926</td>
@@ -1364,40 +1367,40 @@ Table&nbsp;5: Ebola hub submissions: mean scores, coverage and number of forecas
 <td>ebola</td>
 <td>renewal</td>
 <td>crps</td>
-<td>1.81</td>
-<td>0.0378</td>
+<td>1.79</td>
+<td>0.0375</td>
 <td>0.0153</td>
 <td>0.881</td>
 <td>0.933</td>
 <td>270</td>
-<td>0.92</td>
+<td>0.916</td>
 <td>1.07</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
 <td>renewalbvd</td>
 <td>crps</td>
-<td>1.7</td>
-<td>0.0381</td>
+<td>1.69</td>
+<td>0.0378</td>
 <td>0.0134</td>
 <td>0.874</td>
 <td>0.933</td>
 <td>270</td>
-<td>0.931</td>
-<td>1.09</td>
+<td>0.927</td>
+<td>1.08</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
 <td>renewalsp</td>
 <td>crps</td>
-<td>1.53</td>
-<td>0.0289</td>
+<td>1.52</td>
+<td>0.0287</td>
 <td>0.0382</td>
 <td>0.87</td>
 <td>0.926</td>
 <td>162</td>
-<td>0.813</td>
-<td>0.928</td>
+<td>0.808</td>
+<td>0.921</td>
 </tr>
 </tbody>
 </table>
@@ -1433,9 +1436,9 @@ Table&nbsp;6: Ebola hub submissions: mean energy and variogram scores of each mo
 <tr class="odd">
 <td>fm_chronos_daily_complete</td>
 <td>54</td>
-<td>0.0988</td>
+<td>0.0984</td>
 <td>0.112</td>
-<td>1.5</td>
+<td>1.49</td>
 <td>0.888</td>
 </tr>
 <tr class="even">
@@ -1443,37 +1446,37 @@ Table&nbsp;6: Ebola hub submissions: mean energy and variogram scores of each mo
 <td>54</td>
 <td>0.108</td>
 <td>0.12</td>
-<td>1.64</td>
+<td>1.63</td>
 <td>0.948</td>
 </tr>
 <tr class="odd">
 <td>fm_chronos_weekly_complete</td>
 <td>54</td>
-<td>0.0777</td>
+<td>0.0771</td>
 <td>0.128</td>
-<td>1.18</td>
+<td>1.17</td>
 <td>1.01</td>
 </tr>
 <tr class="even">
 <td>fm_chronos_weekly_ragged</td>
 <td>54</td>
-<td>0.0829</td>
+<td>0.0822</td>
 <td>0.13</td>
-<td>1.26</td>
+<td>1.25</td>
 <td>1.03</td>
 </tr>
 <tr class="odd">
 <td>pprandomwalknowcast</td>
 <td>54</td>
-<td>0.0542</td>
+<td>0.0539</td>
 <td>0.111</td>
-<td>0.823</td>
+<td>0.819</td>
 <td>0.876</td>
 </tr>
 <tr class="even">
 <td>randomwalk</td>
 <td>54</td>
-<td>0.0866</td>
+<td>0.0865</td>
 <td>0.13</td>
 <td>1.31</td>
 <td>1.03</td>
@@ -1481,7 +1484,7 @@ Table&nbsp;6: Ebola hub submissions: mean energy and variogram scores of each mo
 <tr class="odd">
 <td>randomwalknowcast</td>
 <td>54</td>
-<td>0.0659</td>
+<td>0.0658</td>
 <td>0.126</td>
 <td>1</td>
 <td>1</td>
@@ -1489,15 +1492,15 @@ Table&nbsp;6: Ebola hub submissions: mean energy and variogram scores of each mo
 <tr class="even">
 <td>renewal</td>
 <td>54</td>
-<td>0.0718</td>
+<td>0.0713</td>
 <td>0.134</td>
-<td>1.09</td>
+<td>1.08</td>
 <td>1.06</td>
 </tr>
 <tr class="odd">
 <td>renewalbvd</td>
 <td>54</td>
-<td>0.0727</td>
+<td>0.0722</td>
 <td>0.135</td>
 <td>1.1</td>
 <td>1.07</td>
@@ -1505,9 +1508,9 @@ Table&nbsp;6: Ebola hub submissions: mean energy and variogram scores of each mo
 <tr class="even">
 <td>renewalsp</td>
 <td>54</td>
-<td>0.063</td>
+<td>0.0624</td>
 <td>0.13</td>
-<td>0.956</td>
+<td>0.948</td>
 <td>1.03</td>
 </tr>
 </tbody>
@@ -1744,6 +1747,9 @@ Overton, Christopher E, Sam Abbott, Rachel Christie, Fergus Cumming, Julie Day, 
 </div>
 <div id="ref-Park2024" class="csl-entry" role="listitem">
 Park, Sang Woo, Andrei R. Akhmetzhanov, Kelly Charniga, Anne Cori, Nicholas G. Davies, Jonathan Dushoff, Sebastian Funk, et al. 2024. <span>“Estimating Epidemiological Delay Distributions for Infectious Diseases.”</span> medRxiv. <a href="https://doi.org/10.1101/2024.01.12.24301247">https://doi.org/10.1101/2024.01.12.24301247</a>.
+</div>
+<div id="ref-Pinson2013" class="csl-entry" role="listitem">
+Pinson, Pierre, and Julija Tastu. 2013. <span>“Discrimination Ability of the Energy Score.”</span> DTU Compute Technical Report 2013-15. Technical University of Denmark.
 </div>
 <div id="ref-Rasul2023" class="csl-entry" role="listitem">
 Rasul, Kashif, Arjun Ashok, Andrew Robert Williams, Hena Ghonia, Rishika Bhagwatkar, Arian Khorasani, Mohammad Javad Darvishi Bayazi, et al. 2023. <span>“<span>Lag-Llama</span>: Towards Foundation Models for Probabilistic Time Series Forecasting.”</span> arXiv. <a href="https://doi.org/10.48550/arXiv.2310.08278">https://doi.org/10.48550/arXiv.2310.08278</a>.

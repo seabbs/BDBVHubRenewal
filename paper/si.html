@@ -106,6 +106,7 @@ window.Quarto = {
   <li><a href="#correlated-trajectories" id="toc-correlated-trajectories" class="nav-link" data-scroll-target="#correlated-trajectories">Correlated trajectories</a></li>
   <li><a href="#aggregation-options" id="toc-aggregation-options" class="nav-link" data-scroll-target="#aggregation-options">Aggregation options</a></li>
   <li><a href="#scoring" id="toc-scoring" class="nav-link" data-scroll-target="#scoring">Scoring</a></li>
+  <li><a href="#choices-tuned-on-development-data" id="toc-choices-tuned-on-development-data" class="nav-link" data-scroll-target="#choices-tuned-on-development-data">Choices tuned on development data</a></li>
   <li><a href="#implementation" id="toc-implementation" class="nav-link" data-scroll-target="#implementation">Implementation</a></li>
   </ul></li>
   <li><a href="#results" id="toc-results" class="nav-link" data-scroll-target="#results">Results</a>
@@ -116,6 +117,7 @@ window.Quarto = {
   <li><a href="#attention-biases-for-place-and-parent-against-none" id="toc-attention-biases-for-place-and-parent-against-none" class="nav-link" data-scroll-target="#attention-biases-for-place-and-parent-against-none">Attention biases for place and parent against none</a></li>
   <li><a href="#delays-against-no-delays" id="toc-delays-against-no-delays" class="nav-link" data-scroll-target="#delays-against-no-delays">Delays against no delays</a></li>
   <li><a href="#real-data-fine-tune-against-synthetic" id="toc-real-data-fine-tune-against-synthetic" class="nav-link" data-scroll-target="#real-data-fine-tune-against-synthetic">Real-data fine-tune against synthetic</a></li>
+  <li><a href="#daily-nowcasts" id="toc-daily-nowcasts" class="nav-link" data-scroll-target="#daily-nowcasts">Daily nowcasts</a></li>
   <li><a href="#held-out-synthetic-data" id="toc-held-out-synthetic-data" class="nav-link" data-scroll-target="#held-out-synthetic-data">Held-out synthetic data</a></li>
   <li><a href="#german-nowcast-hub" id="toc-german-nowcast-hub" class="nav-link" data-scroll-target="#german-nowcast-hub">German nowcast hub</a></li>
   <li><a href="#ebola-hub-submissions" id="toc-ebola-hub-submissions" class="nav-link" data-scroll-target="#ebola-hub-submissions">Ebola hub submissions</a></li>
@@ -252,11 +254,141 @@ Table&nbsp;1: The learned biases added to Chronos-2’s group-attention scores.
 </div>
 </figure>
 </div>
-<p><strong>Training blocks.</strong> A simulation gives daily counts by onset and report date, and a release counts every case reported by its cut-off, one cut-off a week. Each simulation gives 10 observation draws, and at each of 16 cut-offs 2 of the 10 draws are sampled, so one simulation gives 32 blocks. Each block takes daily steps, or sums the days to 3-day or weekly steps, at random. Four in five blocks are multivariate, holding several of the simulation’s strata with or without the country and their totals, and one in five is univariate, the country or a single stratum. Of the blocks with places, a third each have a country equal to the sum of its places, a country above it (cases not allocated to a place), and a country reported later than its places (its own stream). Each block’s prediction length is its horizon, and the LoRA learning rate falls linearly from <span class="math inline">\(10^{-5}\)</span> to zero at 8,000 simulations, with checkpoints at 1,000, 2,000, 4,000 and 8,000.</p>
+<section id="group-attention" class="level4">
+<h4 class="anchored" data-anchor-id="group-attention">Group attention</h4>
+<ul>
+<li>Chronos-2 attends over time within each series, then over the series of a block at each time step, which is group attention <span class="citation" data-cites="Ansari2025">(<a href="#ref-Ansari2025" role="doc-biblioref">Ansari et al. 2025</a>)</span>.</li>
+<li>At one time step, row <span class="math inline">\(i\)</span> of a block (a place’s count or one of its lag series) attends to row <span class="math inline">\(j\)</span> with weight <span class="math display">\[
+a_{ij} = \operatorname{softmax}_j\!\left(q_i^\top k_j + M_{ij}\right),
+\]</span> where <span class="math inline">\(q_i\)</span> and <span class="math inline">\(k_j\)</span> are the query and key vectors of one head in one layer, and <span class="math inline">\(M_{ij}\)</span> is the group mask, <span class="math inline">\(0\)</span> when rows <span class="math inline">\(i\)</span> and <span class="math inline">\(j\)</span> are in the same block and <span class="math inline">\(-\infty\)</span> otherwise.</li>
+<li>Chronos-2 does not divide the scores by the square root of the key dimension.</li>
+</ul>
+</section>
+<section id="attention-biases" class="level4">
+<h4 class="anchored" data-anchor-id="attention-biases">Attention biases</h4>
+<ul>
+<li>Each row <span class="math inline">\(i\)</span> belongs to a place <span class="math inline">\(P(i)\)</span>, and each place <span class="math inline">\(p\)</span> has a parent <span class="math inline">\(\pi(p)\)</span> in the block, or none.</li>
+<li>We add a learned bias for each relation <span class="math inline">\(r\)</span> to the scores: <span class="math display">\[
+a_{ij} = \operatorname{softmax}_j\!\left(q_i^\top k_j + M_{ij} + \sum_{r} b_r^{(l,h)}\,\mathbb{1}\!\left[(i,j) \in R_r\right]\right),
+\]</span> with one scalar <span class="math inline">\(b_r^{(l,h)}\)</span> per relation <span class="math inline">\(r\)</span>, layer <span class="math inline">\(l\)</span> and head <span class="math inline">\(h\)</span>, and <span class="math inline">\(b_r^{(l,h)} = 0\)</span> at the start.</li>
+<li>The relations are the pairs of rows in <a href="#tbl-attention-biases" class="quarto-xref">Table&nbsp;1</a>: <span class="math display">\[
+\begin{aligned}
+R_\text{self} &amp;= \{(i, j) : i = j\},\\
+R_\text{same} &amp;= \{(i, j) : i \neq j,\ P(i) = P(j)\},\\
+R_\text{up} &amp;= \{(i, j) : P(j) = \pi(P(i))\},\\
+R_\text{down} &amp;= \{(i, j) : P(i) = \pi(P(j))\}.
+\end{aligned}
+\]</span></li>
+<li>A pair in no relation gets no bias, as in Moirai’s any-variate attention <span class="citation" data-cites="Woo2024">(<a href="#ref-Woo2024" role="doc-biblioref">Woo et al. 2024</a>)</span> and TableFormer’s relation biases <span class="citation" data-cites="Yang2022">(<a href="#ref-Yang2022" role="doc-biblioref">Yang et al. 2022</a>)</span>.</li>
+</ul>
+</section>
+<section id="mixed-frequency-blocks" class="level4">
+<h4 class="anchored" data-anchor-id="mixed-frequency-blocks">Mixed-frequency blocks</h4>
+<ul>
+<li>One fine-tuned Chronos-2 model forecasts daily, 3-day and weekly data.</li>
+<li>A training block is daily, 3-day or weekly, or daily with one aggregate row per place (<a href="#tbl-block-layouts" class="quarto-xref">Table&nbsp;2</a>).</li>
+<li>A place’s aggregate row holds its 3-day or weekly totals, <span class="math display">\[
+y^{(k)}_{p,t} = \begin{cases} \sum_{s=t-k+1}^{t} y_{p,s} &amp; \text{if day } t \text{ ends a period of } k \text{ days},\\ \text{missing} &amp; \text{otherwise,} \end{cases}
+\]</span> where <span class="math inline">\(y_{p,s}\)</span> is place <span class="math inline">\(p\)</span>’s daily count on day <span class="math inline">\(s\)</span> and <span class="math inline">\(k = 7\)</span> for weekly or <span class="math inline">\(k = 3\)</span> for 3-day totals.</li>
+<li>The aggregate row has no lag series of its own.</li>
+<li>It belongs to its place, so it is in that place’s same-place relation.</li>
+<li>The loss counts the aggregate row only on period-end days, where <span class="math inline">\(m_{n,t} = 1\)</span>, and its missing days have <span class="math inline">\(m_{n,t} = 0\)</span>.</li>
+</ul>
+</section>
+<section id="lora" class="level4">
+<h4 class="anchored" data-anchor-id="lora">LoRA</h4>
+<ul>
+<li>LoRA replaces a weight matrix <span class="math inline">\(W \in \mathbb{R}^{d_\text{out} \times d_\text{in}}\)</span> with <span class="math display">\[
+W' = W + \frac{\alpha}{r} B A,
+\]</span> where <span class="math inline">\(A \in \mathbb{R}^{r \times d_\text{in}}\)</span> and <span class="math inline">\(B \in \mathbb{R}^{d_\text{out} \times r}\)</span> are trained and <span class="math inline">\(W\)</span> is frozen <span class="citation" data-cites="Hu2021">(<a href="#ref-Hu2021" role="doc-biblioref">Hu et al. 2021</a>)</span>.</li>
+<li>We use rank <span class="math inline">\(r = 8\)</span> and <span class="math inline">\(\alpha = 16\)</span>.</li>
+<li>We apply it to the query, key, value and output projections of the time and group attention of all 12 layers, and to the output layer.</li>
+<li><span class="math inline">\(B\)</span> starts at zero, so <span class="math inline">\(W' = W\)</span> at the start.</li>
+</ul>
+</section>
+<section id="loss" class="level4">
+<h4 class="anchored" data-anchor-id="loss">Loss</h4>
+<ul>
+<li>Chronos-2 scales each row by the mean <span class="math inline">\(\mu_n\)</span> and standard deviation <span class="math inline">\(\sigma_n\)</span> of its context, then applies <span class="math inline">\(\operatorname{arcsinh}\)</span>, so a target <span class="math inline">\(y_{n,t}\)</span> becomes <span class="math inline">\(\tilde y_{n,t} = \operatorname{arcsinh}\!\left((y_{n,t} - \mu_n)/\sigma_n\right)\)</span>.</li>
+<li>The model gives a quantile <span class="math inline">\(\hat q_{n,t,k}\)</span> at each of 21 levels <span class="math inline">\(\tau_k \in \{0.01, 0.05, 0.10, \dots, 0.95, 0.99\}\)</span>.</li>
+<li>The loss is the quantile (pinball) loss, averaged over the <span class="math inline">\(H\)</span> steps and the <span class="math inline">\(N\)</span> rows of a batch and summed over levels: <span class="math display">\[
+L = \frac{1}{N} \sum_{n=1}^{N} \frac{1}{H} \sum_{t=1}^{H} m_{n,t} \sum_{k=1}^{21} 2 \left| \left(\tilde y_{n,t} - \hat q_{n,t,k}\right) \left(\mathbb{1}\!\left[\tilde y_{n,t} \le \hat q_{n,t,k}\right] - \tau_k\right) \right|,
+\]</span> where <span class="math inline">\(m_{n,t}\)</span> is 1 for a target step to forecast and 0 for a missing target or a lag series’ known future value.</li>
+</ul>
+</section>
+<section id="learning-rates" class="level4">
+<h4 class="anchored" data-anchor-id="learning-rates">Learning rates</h4>
+<ul>
+<li>The learning rate at step <span class="math inline">\(t\)</span> falls linearly from <span class="math inline">\(\eta_0\)</span> to zero: <span class="math display">\[
+\eta_t = \eta_0 \left(1 - \frac{t}{T}\right),
+\]</span> with <span class="math inline">\(T = 36{,}500\)</span> steps, which is reached at 8,000 simulations.</li>
+<li><span class="math inline">\(\eta_0 = 10^{-5}\)</span> for the LoRA adapter, as in Chronos-2, and <span class="math inline">\(\eta_0 = 10^{-3}\)</span> for the attention biases.</li>
+</ul>
+<p><strong>Training blocks.</strong> A simulation gives daily counts by onset and report date, and a release counts every case reported by its cut-off, one cut-off a week. Each simulation gives 10 observation draws, and at each of 16 cut-offs 2 of the 10 draws are sampled, so one simulation gives 32 blocks. Each block’s prediction length is its horizon, and the LoRA learning rate falls linearly from <span class="math inline">\(10^{-5}\)</span> to zero at 8,000 simulations, with checkpoints at 1,000, 2,000, 4,000 and 8,000.</p>
+<div id="tbl-block-layouts" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-tbl figure">
+<figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-block-layouts-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Table&nbsp;2: The layouts of the training blocks and their shares.
+</figcaption>
+<div aria-describedby="tbl-block-layouts-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<table class="caption-top table">
+<thead>
+<tr class="header">
+<th>Layout</th>
+<th>Share of blocks</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Daily</td>
+<td>25%</td>
+</tr>
+<tr class="even">
+<td>Weekly</td>
+<td>25%</td>
+</tr>
+<tr class="odd">
+<td>3-day</td>
+<td>15%</td>
+</tr>
+<tr class="even">
+<td>Daily with a weekly row per place</td>
+<td>25%</td>
+</tr>
+<tr class="odd">
+<td>Daily with a 3-day row per place</td>
+<td>10%</td>
+</tr>
+</tbody>
+</table>
+</div>
+</figure>
+</div>
+<ul>
+<li>We apply further options on top of the layout, each drawn independently.</li>
+<li>10% of the blocks hold every report to one randomly chosen weekday, so reference dates stay daily and reports arrive in weekly batches, as in weekly surveillance reporting.</li>
+<li>20% of the blocks hold a single series, the country or one place.</li>
+<li>The other blocks hold a random set of places, with or without the country.</li>
+<li>Where a block holds the country and some of its places, a third each have a country equal to the sum of its places, above it (with cases not assigned to a place), or later than it (its own stream).</li>
+<li>The options combine, so a block can be, for example, daily with a weekly row, batched and non-summing.</li>
+<li>Non-summing parents apply only where a block holds both the country and its places.</li>
+<li><a href="#tbl-block-combinations" class="quarto-xref">Table&nbsp;3</a> gives the realised share of each combination.</li>
+</ul>
+<div id="tbl-block-combinations" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-tbl figure">
+<figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-block-combinations-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Table&nbsp;3: The realised shares of the combinations of layout and options in the training blocks.
+</figcaption>
+<div aria-describedby="tbl-block-combinations-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<p><em>Not yet available: waits on fm-finetune3’s realised shares of block layouts and options.</em></p>
+</div>
+</figure>
+</div>
 <p><strong>Order of the training data.</strong> The grid is a crossed factorial design balanced in every block of 120 simulations, with each factor’s levels shuffled independently, as in a Latin hypercube. Training takes the simulations in chunks of 250, about two balanced blocks. A chunk gives about 6,700 training blocks, which are shuffled and packed into about 1,250 steps of up to 256 series each. So every checkpoint has seen the whole grid, and no factor level comes in a run of its own.</p>
 <p>Chronos-2 divides a flat context by a scale of <span class="math inline">\(10^{-5}\)</span>, and we apply no floor to that scale at inference. A floor of one count at inference only hurts small series, of five counts or fewer, on held-out simulations. At 4,000 outbreaks their median loss is <strong>?meta:evidence.scale_floor.sims.n4000.small.median_loss.none</strong> without it and <strong>?meta:evidence.scale_floor.sims.n4000.small.median_loss.floor</strong> with it, and the share of 99% quantiles over 100 times the truth is <strong>?meta:evidence.scale_floor.sims.n4000.small.q99_over_100x.none</strong>% and <strong>?meta:evidence.scale_floor.sims.n4000.small.q99_over_100x.floor</strong>%. Large series are unchanged, with median loss <strong>?meta:evidence.scale_floor.sims.n4000.large.median_loss.none</strong> and <strong>?meta:evidence.scale_floor.sims.n4000.large.median_loss.floor</strong>. On the BDBV release backtest the floor gives a lower relative WIS at every fine-tuned checkpoint, <strong>?meta:evidence.scale_floor.bdbv.provinces.weekly.n4000.floor</strong> against <strong>?meta:evidence.scale_floor.bdbv.provinces.weekly.n4000.none</strong> for the weekly model at 4,000 outbreaks on provinces. Chronos-2’s widest interval is from 1% to 99%, as it has no 2.5% or 97.5% quantiles.</p>
 <p>The ragged layout’s lag series run to 4 weeks or 28 days. Lags run to the truth delay do worse with short release histories. On the German development half, the national WIS relative to <code>randomwalknowcast</code> is 2.91 with the 4-week cap and 3.79 with lags to the truth delay for the daily zero-shot model, and 4.44 and 8.01 for the weekly one. On the BDBV release backtest it is 2.78 and 5.84 for the daily zero-shot model, and 1.3 and 3.17 for the weekly one. BDBV’s zones have few weekly releases, so with the longer horizon no recent lag of a zone falls in the model’s context.</p>
 <p>To compare training on simulations with training on real data, we also fine-tuned Chronos-2 on real data alone (<code>fm_chronos_daily_ragged_real</code> and <code>fm_chronos_weekly_ragged_real</code>). It was trained on the German data and the BDBV data together. The German part used the data as available on 2022-02-09, the last day of the German development half, and nothing later. German training blocks were cut at every nowcast date whose truth, four weeks ahead, was at least 40 days old by then, from 2021-04-20 to 2021-12-03. Each date was laid out as the German nowcast tasks are, with the same block functions as the simulations, from the daily and weekly releases, for Germany alone and with its states or age groups, at release lags of 14 to 49 days (including 40) or 2 to 7 weeks. The hub file’s changes after 80 days hold revisions made up to August 2022, so they were left out. The BDBV part used every public release up to 2026-11-08 (cut-off 2026-11-05). Daily blocks were cut at each daily release, and weekly blocks at each week from the hub’s public per-case delay table, for the country alone and with its provinces, at every release lag. Truth was the latest release’s counts, left out after 2026-10-01, so every count trained on was at least the BDBV truth delay of 35 days old. Training followed Chronos-2’s recipe as the simulation fine-tune does, from base Chronos-2, for its default 1,000 steps. The last 14 German nowcast dates were held out to monitor the loss.</p>
+</section>
 </section>
 <section id="monitoring-fine-tuning" class="level3">
 <h3 class="anchored" data-anchor-id="monitoring-fine-tuning">Monitoring fine-tuning</h3>
@@ -325,7 +457,7 @@ Figure&nbsp;1: The fine-tuning dashboard on 16 November 2026 at 17:29, with a ru
 <div id="tbl-synthetic-grid-si" class="quarto-float quarto-figure quarto-figure-center anchored">
 <figure class="quarto-float quarto-float-tbl figure">
 <figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-synthetic-grid-si-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Table&nbsp;2: Every setting of the simulation grid: the crossed factors and their levels, the settings derived from a cell, and the values drawn within it, with the R expression that draws them and the epinowcast function each enters through, read from the simulator’s code. Realised values are over the run’s simulations where they exist.
+Table&nbsp;4: Every setting of the simulation grid: the crossed factors and their levels, the settings derived from a cell, the values drawn within it, and the bounds on outbreak size (a simulation outside them is drawn again), with the R expression that draws them and the epinowcast function each enters through, read from the simulator’s code. Realised values are over the run’s simulations where they exist.
 </figcaption>
 <div aria-describedby="tbl-synthetic-grid-si-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
 <table class="caption-top table">
@@ -794,12 +926,31 @@ Table&nbsp;2: Every setting of the simulation grid: the crossed factors and thei
 <td><code>enw_preprocess_data(max_delay)</code></td>
 <td></td>
 </tr>
+<tr class="even">
+<td>Fewest cases (the draws’ mean) a simulation keeps</td>
+<td><code>10</code></td>
+<td><code>simulate_cell()</code></td>
+<td></td>
+</tr>
+<tr class="odd">
+<td>Most cases (the draws’ mean) a simulation keeps</td>
+<td><code>300000 * max(1, design$n_places * design$n_ages / 26)</code></td>
+<td><code>simulate_cell()</code></td>
+<td></td>
+</tr>
+<tr class="even">
+<td>Most independent strata</td>
+<td><code>8L</code></td>
+<td><code>simulate_independent()</code></td>
+<td></td>
+</tr>
 </tbody>
 </table>
 </div>
 </figure>
 </div>
 <p>The grid has two limitations. Simulated strata are less sparse than BDBV’s provinces: the share of stratum-weeks with no cases reaches (not yet available) at the 95% point of the simulations, against (not yet available) for BDBV. Simulated delays are shorter than the German data’s, whose 99% point is (not yet available) days against (not yet available) at the 95% point of the simulations.</p>
+<p>The simulator works around four limits of epinowcast’s simulation mode, each until the linked epinowcast change. It uses <code>enw_simulate()</code> from a feature branch of epinowcast (commit e084b080), until <a href="https://github.com/epinowcast/epinowcast/pull/841">epinowcast#841</a> is merged. It reads the posterior predictive counts (<code>pp_obs</code>) from the fit directly, as <code>enw_pp_summary()</code> is slow, and runs each batch of 25 simulations under a 16 GB memory cap (<a href="https://github.com/epinowcast/epinowcast/pull/841">epinowcast#841</a>). Gamma reporting delays have a coefficient of variation of 0.8 to 1.6, as a shape above 2 gives NaN tail hazards (<a href="https://github.com/epinowcast/epinowcast/issues/939">epinowcast#939</a>). When the delay walks over weeks, its log spread walks at half the scale of its log location, as a zero scale sits on the parameter’s lower bound, where Stan cannot start (<a href="https://github.com/epinowcast/epinowcast/issues/941">epinowcast#941</a>).</p>
 <div id="fig-sim-realism" class="quarto-float quarto-figure quarto-figure-center anchored">
 <figure class="quarto-float quarto-float-fig figure">
 <div aria-describedby="fig-sim-realism-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
@@ -813,7 +964,7 @@ Figure&nbsp;2: How the simulated outbreaks (grey histograms) compare with the BD
 <div id="tbl-sim-diseases" class="quarto-float quarto-figure quarto-figure-center anchored">
 <figure class="quarto-float quarto-float-tbl figure">
 <figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-sim-diseases-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Table&nbsp;3: The simulated outbreaks’ ranges against published values for several diseases, the case studies among them.
+Table&nbsp;5: The simulated outbreaks’ ranges against published values for several diseases, the case studies among them.
 </figcaption>
 <div aria-describedby="tbl-sim-diseases-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
 <p><em>Not yet available: waits on fm-finetune3’s published disease values.</em></p>
@@ -824,12 +975,12 @@ Table&nbsp;3: The simulated outbreaks’ ranges against published values for sev
 </section>
 <section id="the-held-out-synthetic-set" class="level4">
 <h4 class="anchored" data-anchor-id="the-held-out-synthetic-set">The held-out synthetic set</h4>
-<p>The held-out set is simulated on grid <code>r4</code> with seeds 30140 to 30143, 25 simulations each. We evaluate draw 1 of each simulation, so the outbreaks are independent. The fine-tune never trains on these seeds. The simulations are written to <code>../output/rounds/r1/sims</code>, and the workflow config records them. The synthetic runner runs the models on the set.</p>
+<p>The held-out set is simulated on grid <code>r4</code> with seeds 30140 to 30143, 25 simulations each. We evaluate draw 1 of each simulation, so the outbreaks are independent. The fine-tune never trains on these seeds. The simulations are written to <code>/home/runner/bdbv-rounds/rounds/r1/sims</code>, and the workflow config records them. The synthetic runner runs the models on the set.</p>
 <p>The held-out set was reserved for the final evaluation. No model was scored on it during development. We checked the pipeline on the r3 pilot seeds 9501 to 9504, whose forecasts are not results.</p>
 <section id="protocol" class="level5">
 <h5 class="anchored" data-anchor-id="protocol">Protocol</h5>
 <p>Each outbreak is released weekly, on one weekday from Wednesday to Saturday drawn from its id, and a release’s cut-off is its origin. Each outbreak has four origins, spread evenly from its 6th release to the last release at least its longest delay plus 5 weeks before its last report. Each forecast covers weeks -4 to 3 from the week of the cut-off, as weekly totals by onset week for the country and each stratum. Scores use rolling truth, the count reported D days after the end of a target week, with D the outbreak’s own 98% reporting delay in whole days, and are relative to <code>randomwalknowcast</code>.</p>
-<p>The training blocks cut from these simulations include countries that equal, exceed or lag the sum of their places, a third of the blocks with places each (Foundation model setup).</p>
+<p>We cut the held-out simulations into blocks as in training, with the five layouts, report batching and non-summing parents (<a href="#tbl-block-layouts" class="quarto-xref">Table&nbsp;2</a>), using a fixed seed. A manifest records each held-out block’s layout and options. The paper’s test set, 100 simulations outside training, is cut the same way.</p>
 </section>
 </section>
 </section>
@@ -858,9 +1009,69 @@ Table&nbsp;3: The simulated outbreaks’ ranges against published values for sev
 <div class="callout-body-container callout-body">
 <ul>
 <li>We describe the scores and check them against scoringutils.</li>
+<li>We compute the WIS from scoringrules’ <code>interval_score</code> and the absolute error of the median, as its <code>weighted_interval_score</code> (0.11) adds the median itself (<a href="https://github.com/frazane/scoringrules/issues/140">scoringrules#140</a>).</li>
 <li>Key references: <span class="citation" data-cites="bosse2022scoringutils jordanEvaluatingProbabilisticForecasts2019 zanetta_scoringrules_2024">(<a href="#ref-bosse2022scoringutils" role="doc-biblioref">Bosse et al. 2022</a>; <a href="#ref-jordanEvaluatingProbabilisticForecasts2019" role="doc-biblioref">Jordan, Krüger, and Lerch 2019</a>; <a href="#ref-zanetta_scoringrules_2024" role="doc-biblioref">Zanetta and Allen 2024</a>)</span>.</li>
 </ul>
 </div>
+</div>
+</section>
+<section id="choices-tuned-on-development-data" class="level3">
+<h3 class="anchored" data-anchor-id="choices-tuned-on-development-data">Choices tuned on development data</h3>
+<p><a href="#tbl-tuned-choices" class="quarto-xref">Table&nbsp;6</a> lists each choice we tuned and the data it was set on, none of which is in a scored set.</p>
+<div id="tbl-tuned-choices" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-tbl figure">
+<figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-tuned-choices-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Table&nbsp;6: Choices tuned on development data, with their values and the data they were set on.
+</figcaption>
+<div aria-describedby="tbl-tuned-choices-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<table class="caption-top table">
+<colgroup>
+<col style="width: 33%">
+<col style="width: 33%">
+<col style="width: 33%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Choice</th>
+<th>Value</th>
+<th>Set on</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Floor on Chronos-2’s scale at inference</td>
+<td>None</td>
+<td>Held-out simulations and the BDBV release backtest</td>
+</tr>
+<tr class="even">
+<td>Lag cap of the ragged layout</td>
+<td>4 weeks or 28 days</td>
+<td>German first half and the BDBV release backtest</td>
+</tr>
+<tr class="odd">
+<td>Copula prior <span class="math inline">\((\rho_t, \rho_p, \rho_n)\)</span></td>
+<td><span class="math inline">\((0.9, 0.7, 0.7)\)</span></td>
+<td>Ebola release backtest</td>
+</tr>
+<tr class="even">
+<td>Copula day correlation <span class="math inline">\(\rho_d\)</span></td>
+<td>0.985</td>
+<td>Ebola release backtest</td>
+</tr>
+<tr class="odd">
+<td>Checkpoint of the submitted fine-tuned model</td>
+<td>1,000 simulations</td>
+<td>BDBV release backtest, the plausibility check of the 14 November 2026 round, and the German first half</td>
+</tr>
+<tr class="even">
+<td>Realism checks of the simulation grid</td>
+<td>Grid ranges</td>
+<td>BDBV releases and German data reported by 2022-02-09</td>
+</tr>
+</tbody>
+</table>
+</div>
+</figure>
 </div>
 </section>
 <section id="implementation" class="level3">
@@ -904,11 +1115,11 @@ Table&nbsp;3: The simulated outbreaks’ ranges against published values for sev
 </div>
 <section id="impact-of-correlated-trajectories" class="level3">
 <h3 class="anchored" data-anchor-id="impact-of-correlated-trajectories">Impact of correlated trajectories</h3>
-<p>Pairing changes no marginal forecast, so it shows in the joint scores and in the coverage of sums over weeks and over places. <a href="#tbl-copula-ebola" class="quarto-xref">Table&nbsp;4</a> and <a href="#tbl-copula-germany" class="quarto-xref">Table&nbsp;5</a> compare unpaired forecasts with the fixed and rolling copula for every model that uses it. The rolling estimates have median <span class="math inline">\(\rho_t\)</span> 0.54 and <span class="math inline">\(\rho_p\)</span> 4.0e-2 by German state, and <span class="math inline">\(\rho_t\)</span> 0.43 and <span class="math inline">\(\rho_p\)</span> 0.18 by age group, for <code>randomwalknowcast</code>.</p>
+<p>Pairing changes no marginal forecast, so it shows in the joint scores and in the coverage of sums over weeks and over places. <a href="#tbl-copula-ebola" class="quarto-xref">Table&nbsp;7</a> and <a href="#tbl-copula-germany" class="quarto-xref">Table&nbsp;8</a> compare unpaired forecasts with the fixed and rolling copula for every model that uses it. The rolling estimates have median <span class="math inline">\(\rho_t\)</span> 0.54 and <span class="math inline">\(\rho_p\)</span> 4.0e-2 by German state, and <span class="math inline">\(\rho_t\)</span> 0.43 and <span class="math inline">\(\rho_p\)</span> 0.18 by age group, for <code>randomwalknowcast</code>.</p>
 <div id="tbl-copula-ebola" class="quarto-float quarto-figure quarto-figure-center anchored">
 <figure class="quarto-float quarto-float-tbl figure">
 <figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-copula-ebola-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Table&nbsp;4: Ebola release backtest: energy score (ES) and variogram score (VS) on the log scale, 50% and 90% coverage of each place’s sum over weeks and of the sum over provinces, and WIS of the provinces and the country, for each model unpaired and paired by the fixed or rolling copula.
+Table&nbsp;7: Ebola release backtest: energy score (ES) and variogram score (VS) on the log scale, 50% and 90% coverage of each place’s sum over weeks and of the sum over provinces, and WIS of the provinces and the country, for each model unpaired and paired by the fixed or rolling copula.
 </figcaption>
 <div aria-describedby="tbl-copula-ebola-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
 <table class="caption-top table">
@@ -1165,7 +1376,7 @@ Table&nbsp;4: Ebola release backtest: energy score (ES) and variogram score (VS)
 <div id="tbl-copula-germany" class="quarto-float quarto-figure quarto-figure-center anchored">
 <figure class="quarto-float quarto-float-tbl figure">
 <figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-copula-germany-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Table&nbsp;5: German nowcast hub, development half: as <a href="#tbl-copula-ebola" class="quarto-xref">Table&nbsp;4</a>, by state and by age group, with the sum over places taken over states or age groups.
+Table&nbsp;8: German nowcast hub, development half: as <a href="#tbl-copula-ebola" class="quarto-xref">Table&nbsp;7</a>, by state and by age group, with the sum over places taken over states or age groups.
 </figcaption>
 <div aria-describedby="tbl-copula-germany-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
 <table class="caption-top table">
@@ -1290,11 +1501,11 @@ Table&nbsp;5: German nowcast hub, development half: as <a href="#tbl-copula-ebol
 </section>
 <section id="joint-block-or-aggregation" class="level3">
 <h3 class="anchored" data-anchor-id="joint-block-or-aggregation">Joint block or aggregation</h3>
-<p>Our Chronos-2 models use the joint block. On BDBV it is best or tied at provinces, zones and the national level for the zero-shot models. On the German development half, level by level is competitive for the daily zero-shot model (2.19 against 3.05 at the national level) and for age groups. Summing the lowest level loses at every level above it, with or without the copula: at BDBV’s national level the daily zero-shot model scores 8.01 summed and 5.11 summed after pairing, against 1.26 for the joint block. All WIS are relative to <code>randomwalknowcast</code> on the same targets. <a href="#tbl-aggregation-ebola" class="quarto-xref">Table&nbsp;6</a> and <a href="#tbl-aggregation-germany" class="quarto-xref">Table&nbsp;7</a> give every model and level, and <a href="#tbl-aggregation-cost" class="quarto-xref">Table&nbsp;8</a> what each option costs.</p>
+<p>Our Chronos-2 models use the joint block. On BDBV it is best or tied at provinces, zones and the national level for the zero-shot models. On the German development half, level by level is competitive for the daily zero-shot model (2.19 against 3.05 at the national level) and for age groups. Summing the lowest level loses at every level above it, with or without the copula: at BDBV’s national level the daily zero-shot model scores 8.01 summed and 5.11 summed after pairing, against 1.26 for the joint block. All WIS are relative to <code>randomwalknowcast</code> on the same targets. <a href="#tbl-aggregation-ebola" class="quarto-xref">Table&nbsp;9</a> and <a href="#tbl-aggregation-germany" class="quarto-xref">Table&nbsp;10</a> give every model and level, and <a href="#tbl-aggregation-cost" class="quarto-xref">Table&nbsp;11</a> what each option costs.</p>
 <div id="tbl-aggregation-ebola" class="quarto-float quarto-figure quarto-figure-center anchored">
 <figure class="quarto-float quarto-float-tbl figure">
 <figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-aggregation-ebola-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Table&nbsp;6: Ebola release backtest: WIS of each option relative to <code>randomwalknowcast</code> on the same targets (log scale in brackets), 50% and 95% coverage and the number of targets, by level (national, provinces, zones).
+Table&nbsp;9: Ebola release backtest: WIS of each option relative to <code>randomwalknowcast</code> on the same targets (log scale in brackets), 50% and 95% coverage and the number of targets, by level (national, provinces, zones).
 </figcaption>
 <div aria-describedby="tbl-aggregation-ebola-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
 <table class="caption-top table">
@@ -1517,7 +1728,7 @@ Table&nbsp;6: Ebola release backtest: WIS of each option relative to <code>rando
 <div id="tbl-aggregation-germany" class="quarto-float quarto-figure quarto-figure-center anchored">
 <figure class="quarto-float quarto-float-tbl figure">
 <figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-aggregation-germany-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Table&nbsp;7: German nowcast hub, development half: as <a href="#tbl-aggregation-ebola" class="quarto-xref">Table&nbsp;6</a>, by level (national, states, age groups).
+Table&nbsp;10: German nowcast hub, development half: as <a href="#tbl-aggregation-ebola" class="quarto-xref">Table&nbsp;9</a>, by level (national, states, age groups).
 </figcaption>
 <div aria-describedby="tbl-aggregation-germany-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
 <table class="caption-top table">
@@ -1740,7 +1951,7 @@ Table&nbsp;7: German nowcast hub, development half: as <a href="#tbl-aggregation
 <div id="tbl-aggregation-cost" class="quarto-float quarto-figure quarto-figure-center anchored">
 <figure class="quarto-float quarto-float-tbl figure">
 <figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-aggregation-cost-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Table&nbsp;8: The cost of each option: series per block, memory and time.
+Table&nbsp;11: The cost of each option: series per block, memory and time.
 </figcaption>
 <div aria-describedby="tbl-aggregation-cost-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
 <table class="caption-top table">
@@ -1904,7 +2115,8 @@ Table&nbsp;8: The cost of each option: series per block, memory and time.
 <li>They share the grid, the data order and the recipe, as checkpoints of one run.</li>
 <li><a href="#fig-finetune-heldout" class="quarto-xref">Figure&nbsp;3</a> gives the held-out loss by source.</li>
 <li><a href="#fig-checkpoint-curve" class="quarto-xref">Figure&nbsp;4</a> gives German first-half and BDBV relative scores at each checkpoint, with zero-shot Chronos-2 on the ragged layout and on complete data only as reference lines.</li>
-<li>A later checkpoint has also trained for more steps, at a learning rate that falls to zero at 8,000 simulations.</li>
+<li>A later checkpoint has also trained for more steps.</li>
+<li>The learning rate falls linearly to zero at 8,000 simulations, so the 1,000, 2,000 and 4,000 checkpoints are taken at 88%, 75% and 50% of the starting rate, and only the 8,000 checkpoint is annealed.</li>
 </ul>
 <div id="fig-finetune-heldout" class="quarto-float quarto-figure quarto-figure-center anchored">
 <figure class="quarto-float quarto-float-fig figure">
@@ -1932,9 +2144,10 @@ Figure&nbsp;4: WIS (Germany, on each model’s own quantiles) and CRPS (BDBV, on
 <ul>
 <li>We compare the run with attention biases with a run without them.</li>
 <li>Both runs share the grid, the data order, the LoRA recipe and the checkpoints.</li>
-<li><a href="#tbl-slots-loss" class="quarto-xref">Table&nbsp;9</a> gives held-out loss by source, and <a href="#tbl-slots-scores" class="quarto-xref">Table&nbsp;10</a> German first-half and BDBV relative scores at checkpoints of the same size.</li>
-<li><a href="#tbl-slots-swap" class="quarto-xref">Table&nbsp;11</a> gives the loss when whole lag series move to another place, relative to the loss as given.</li>
-<li>A ratio of 1 means the model does not tell which place a lag series belongs to.</li>
+<li><a href="#tbl-slots-loss" class="quarto-xref">Table&nbsp;12</a> gives held-out loss by source, and <a href="#tbl-slots-scores" class="quarto-xref">Table&nbsp;13</a> German first-half and BDBV relative scores at checkpoints of the same size.</li>
+<li><a href="#tbl-slots-swap" class="quarto-xref">Table&nbsp;14</a> gives the loss when whole lag series move to another place, relative to the loss as given.</li>
+<li>A ratio above 1 means the model’s forecast depends on which place’s lags sit with a target.</li>
+<li>Zero-shot Chronos-2 can also match lags to targets by value, so the comparison with the run without biases, not the ratio alone, tests the biases.</li>
 <li><a href="#fig-compare-slots" class="quarto-xref">Figure&nbsp;5</a> shows both runs by checkpoint.</li>
 <li>The run without biases built its 3-day blocks as daily steps, so we compare 3-day blocks with zero-shot only.</li>
 </ul>
@@ -1951,7 +2164,7 @@ Figure&nbsp;5: Attention biases against none: held-out loss by source and German
 <div id="tbl-slots-loss" class="quarto-float quarto-figure quarto-figure-center anchored">
 <figure class="quarto-float quarto-float-tbl figure">
 <figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-slots-loss-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Table&nbsp;9: Held-out loss of the run with attention biases by source and window (nowcast or forecast steps), against the run without them at the same checkpoint and against zero-shot Chronos-2, with the paired ratio and its 90% interval over blocks.
+Table&nbsp;12: Held-out loss of the run with attention biases by source and window (nowcast or forecast steps), against the run without them at the same checkpoint and against zero-shot Chronos-2, with the paired ratio and its 90% bootstrap interval, resampling blocks.
 </figcaption>
 <div aria-describedby="tbl-slots-loss-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
 <p><em>Not yet available: waits on slots-check’s slots against no slots and lag-swap test.</em></p>
@@ -1961,7 +2174,7 @@ Table&nbsp;9: Held-out loss of the run with attention biases by source and windo
 <div id="tbl-slots-scores" class="quarto-float quarto-figure quarto-figure-center anchored">
 <figure class="quarto-float quarto-float-tbl figure">
 <figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-slots-scores-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Table&nbsp;10: Relative WIS on the German first half and relative CRPS on the BDBV release backtest, both against <code>randomwalknowcast</code>, of the runs with and without attention biases at checkpoints fine-tuned on the same number of outbreaks.
+Table&nbsp;13: Relative WIS on the German first half and relative CRPS on the BDBV release backtest, both against <code>randomwalknowcast</code>, of the runs with and without attention biases at checkpoints fine-tuned on the same number of outbreaks.
 </figcaption>
 <div aria-describedby="tbl-slots-scores-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
 <p><em>Not yet available: waits on germany-chronos2’s scores of each r3 checkpoint.</em></p>
@@ -1971,7 +2184,7 @@ Table&nbsp;10: Relative WIS on the German first half and relative CRPS on the BD
 <div id="tbl-slots-swap" class="quarto-float quarto-figure quarto-figure-center anchored">
 <figure class="quarto-float quarto-float-tbl figure">
 <figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-slots-swap-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Table&nbsp;11: Lag-swap test: loss with whole lag series moved between places, as a ratio of the loss as given, with its 90% interval over blocks, for zero-shot Chronos-2 and the run with attention biases.
+Table&nbsp;14: Lag-swap test: loss with whole lag series moved between places, as a ratio of the loss as given, with its 90% bootstrap interval, resampling blocks, for zero-shot Chronos-2 and the run with attention biases.
 </figcaption>
 <div aria-describedby="tbl-slots-swap-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
 <p><em>Not yet available: waits on slots-check’s slots against no slots and lag-swap test.</em></p>
@@ -1984,7 +2197,7 @@ Table&nbsp;11: Lag-swap test: loss with whole lag series moved between places, a
 <ul>
 <li>We fine-tune a run on complete counts only, with the attention biases and without lag series, and compare it with the ragged run.</li>
 <li>Both runs share the grid, the data order, the recipe and the checkpoints.</li>
-<li><a href="#tbl-compare-delays" class="quarto-xref">Table&nbsp;12</a> gives held-out loss by source and German first-half and BDBV relative scores at checkpoints of the same size.</li>
+<li><a href="#tbl-compare-delays" class="quarto-xref">Table&nbsp;15</a> gives held-out loss by source and German first-half and BDBV relative scores at checkpoints of the same size.</li>
 <li><a href="#fig-compare-delays" class="quarto-xref">Figure&nbsp;6</a> shows both runs by checkpoint.</li>
 <li>Without lag series the no-delay model has no counts after the last complete step, so its context ends there.</li>
 </ul>
@@ -2001,7 +2214,7 @@ Figure&nbsp;6: Delays against no delays: held-out loss by source and German firs
 <div id="tbl-compare-delays" class="quarto-float quarto-figure quarto-figure-center anchored">
 <figure class="quarto-float quarto-float-tbl figure">
 <figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-compare-delays-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Table&nbsp;12: The full and no-delay runs at matched checkpoints: held-out loss by source, relative WIS on the German first half and relative CRPS on BDBV, against <code>randomwalknowcast</code>.
+Table&nbsp;15: The full and no-delay runs at matched checkpoints: held-out loss by source, relative WIS on the German first half and relative CRPS on BDBV, against <code>randomwalknowcast</code>.
 </figcaption>
 <div aria-describedby="tbl-compare-delays-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
 <p><em>Not yet available: waits on the full and no-delay runs’ scores by checkpoint.</em></p>
@@ -2014,8 +2227,8 @@ Table&nbsp;12: The full and no-delay runs at matched checkpoints: held-out loss 
 <ul>
 <li>We fine-tune a model on the German development half and BDBV releases, and compare it with the model fine-tuned on simulations.</li>
 <li>Both use the same recipe and the ragged layout.</li>
-<li><a href="#tbl-germany-real-finetune" class="quarto-xref">Table&nbsp;13</a> gives scores on the German held-out half, against zero-shot Chronos-2 and the synthetic model.</li>
-<li><a href="#tbl-ebola-real-finetune" class="quarto-xref">Table&nbsp;14</a> gives scores on BDBV rounds after the last release the real-data model trained on.</li>
+<li><a href="#tbl-germany-real-finetune" class="quarto-xref">Table&nbsp;16</a> gives scores on the German held-out half, against zero-shot Chronos-2 and the synthetic model.</li>
+<li><a href="#tbl-ebola-real-finetune" class="quarto-xref">Table&nbsp;17</a> gives scores on BDBV rounds after the last release the real-data model trained on.</li>
 <li><a href="#fig-compare-realdata" class="quarto-xref">Figure&nbsp;7</a> shows both.</li>
 <li>The real-data model saw the German development half, so we score it on the held-out half only.</li>
 <li>We leave it out of every other table and figure.</li>
@@ -2033,7 +2246,7 @@ Figure&nbsp;7: Real-data fine-tune against synthetic: German held-out and BDBV r
 <div id="tbl-germany-real-finetune" class="quarto-float quarto-figure quarto-figure-center anchored">
 <figure class="quarto-float quarto-float-tbl figure">
 <figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-germany-real-finetune-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Table&nbsp;13: German nowcast hub held-out half: Chronos-2 zero-shot (<code>_ragged</code>), fine-tuned on simulations (<code>_ft</code>) and fine-tuned on real data (<code>_real</code>), overall (<code>all</code>) and by level, with WIS relative to <code>randomwalknowcast</code>.
+Table&nbsp;16: German nowcast hub held-out half: Chronos-2 zero-shot (<code>_ragged</code>), fine-tuned on simulations (<code>_ft</code>) and fine-tuned on real data (<code>_real</code>), overall (<code>all</code>) and by level, with WIS relative to <code>randomwalknowcast</code>.
 </figcaption>
 <div aria-describedby="tbl-germany-real-finetune-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
 <p><em>No held-out forecasts in this run.</em></p>
@@ -2043,7 +2256,7 @@ Table&nbsp;13: German nowcast hub held-out half: Chronos-2 zero-shot (<code>_rag
 <div id="tbl-ebola-real-finetune" class="quarto-float quarto-figure quarto-figure-center anchored">
 <figure class="quarto-float quarto-float-tbl figure">
 <figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-ebola-real-finetune-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Table&nbsp;14: BDBV scored rounds (from 21 November 2026, after every release the real-data model trained on): Chronos-2 zero-shot (<code>_ragged</code>), fine-tuned on simulations (<code>_ft</code>) and fine-tuned on real data (<code>_real</code>), overall (<code>all</code>) and by level, with CRPS relative to <code>randomwalknowcast</code>.
+Table&nbsp;17: BDBV scored rounds (from 21 November 2026, after every release the real-data model trained on): Chronos-2 zero-shot (<code>_ragged</code>), fine-tuned on simulations (<code>_ft</code>) and fine-tuned on real data (<code>_real</code>), overall (<code>all</code>) and by level, with CRPS relative to <code>randomwalknowcast</code>.
 </figcaption>
 <div aria-describedby="tbl-ebola-real-finetune-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
 <p><em>Pending: no BDBV round after the last release the real-data model trained on has truth yet.</em></p>
@@ -2051,12 +2264,67 @@ Table&nbsp;14: BDBV scored rounds (from 21 November 2026, after every release th
 </figure>
 </div>
 </section>
+<section id="daily-nowcasts" class="level3">
+<h3 class="anchored" data-anchor-id="daily-nowcasts">Daily nowcasts</h3>
+<ul>
+<li>We score our models’ daily counts in both case studies directly from the daily rows, not summed.</li>
+<li>The main text scores the hub targets, 7-day counts for Germany and weekly counts for BDBV.</li>
+<li>Hub teams give no daily forecasts, so we compare our models with <code>randomwalknowcast</code> only.</li>
+<li><a href="#tbl-compare-daily" class="quarto-xref">Table&nbsp;18</a> gives German and BDBV relative scores on daily counts and on the hub targets at each checkpoint.</li>
+<li><a href="#fig-compare-daily" class="quarto-xref">Figure&nbsp;8</a> shows both.</li>
+<li><a href="#fig-germany-si-results-daily" class="quarto-xref">Figure&nbsp;9</a> repeats the German results figure for daily counts.</li>
+</ul>
+<div id="fig-compare-daily" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-compare-daily-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="build/figures/si/compare-daily.png" class="img-fluid figure-img">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-compare-daily-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;8: Daily nowcasts: German and BDBV relative scores on daily counts and on the hub targets, by checkpoint.
+</figcaption>
+</figure>
+</div>
+<div id="tbl-compare-daily" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-tbl figure">
+<figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-compare-daily-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Table&nbsp;18: Our models’ relative scores on daily counts and on the hub targets at matched checkpoints: relative WIS for Germany and relative CRPS for BDBV, against <code>randomwalknowcast</code>.
+</figcaption>
+<div aria-describedby="tbl-compare-daily-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<p><em>Not yet available: waits on our models’ daily and hub-target scores by checkpoint.</em></p>
+</div>
+</figure>
+</div>
+<div id="fig-germany-si-results-daily" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-germany-si-results-daily-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="build/figures/si/germany-si-results-daily.png" class="img-fluid figure-img">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-germany-si-results-daily-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;9: German nowcast hub, daily counts: the panels of the German results figure, with daily nowcasts against the daily truth and WIS on daily counts, without the hub teams.
+</figcaption>
+</figure>
+</div>
+</section>
 <section id="held-out-synthetic-data" class="level3">
 <h3 class="anchored" data-anchor-id="held-out-synthetic-data">Held-out synthetic data</h3>
+<ul>
+<li>We report held-out scores by block layout, and by target where the layout has it: the weekly or 3-day totals from the aggregate row, and the daily counts.</li>
+<li><a href="#tbl-heldout-layout" class="quarto-xref">Table&nbsp;19</a> gives them.</li>
+</ul>
+<div id="tbl-heldout-layout" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-tbl figure">
+<figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-heldout-layout-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Table&nbsp;19: Held-out synthetic data: CRPS relative to <code>randomwalknowcast</code> by block layout and target. Illustrative, dummy data
+</figcaption>
+<div aria-describedby="tbl-heldout-layout-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<p><em>Not yet available: waits on held-out synthetic scores by block layout and target.</em></p>
+</div>
+</figure>
+</div>
 <div id="tbl-synthetic-evaluated" class="quarto-float quarto-figure quarto-figure-center anchored">
 <figure class="quarto-float quarto-float-tbl figure">
 <figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-synthetic-evaluated-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Table&nbsp;15: The share of evaluated outbreaks in each level of each grid factor, as each simulation recorded its cell. Illustrative, dummy data
+Table&nbsp;20: The share of evaluated outbreaks in each level of each grid factor, as each simulation recorded its cell. Illustrative, dummy data
 </figcaption>
 <div aria-describedby="tbl-synthetic-evaluated-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
 <table class="caption-top table">
@@ -2239,7 +2507,7 @@ Table&nbsp;15: The share of evaluated outbreaks in each level of each grid facto
 <img src="build/figures/si/synthetic-si-nowcasts.png" class="img-fluid figure-img">
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-synthetic-si-nowcasts-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;8: Held-out synthetic data: nowcasts of outbreaks drawn to cover the levels of the trajectory, delay form, observation model and strata, one row per outbreak labelled by its cell, one column per model. Black is the rolling truth, grey dashed the data as of the origin, and blue the model’s median with its 50% and 95% intervals. Illustrative, dummy data
+Figure&nbsp;10: Held-out synthetic data: nowcasts of outbreaks drawn to cover the levels of the trajectory, delay form, observation model and strata, one row per outbreak labelled by its cell, one column per model. Black is the rolling truth, grey dashed the data as of the origin, and blue the model’s median with its 50% and 95% intervals. Illustrative, dummy data
 </figcaption>
 </figure>
 </div>
@@ -2249,7 +2517,7 @@ Figure&nbsp;8: Held-out synthetic data: nowcasts of outbreaks drawn to cover the
 <img src="build/figures/si/synthetic-si-factors.png" class="img-fluid figure-img">
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-synthetic-si-factors-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;9: Held-out synthetic data: relative CRPS by level of each scenario factor. Illustrative, dummy data
+Figure&nbsp;11: Held-out synthetic data: relative CRPS by level of each scenario factor. Illustrative, dummy data
 </figcaption>
 </figure>
 </div>
@@ -2259,7 +2527,7 @@ Figure&nbsp;9: Held-out synthetic data: relative CRPS by level of each scenario 
 <img src="build/figures/si/synthetic-si-factors-log.png" class="img-fluid figure-img">
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-synthetic-si-factors-log-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;10: Held-out synthetic data: relative CRPS on the log scale by level of each scenario factor. Illustrative, dummy data
+Figure&nbsp;12: Held-out synthetic data: relative CRPS on the log scale by level of each scenario factor. Illustrative, dummy data
 </figcaption>
 </figure>
 </div>
@@ -2269,7 +2537,7 @@ Figure&nbsp;10: Held-out synthetic data: relative CRPS on the log scale by level
 <img src="build/figures/si/synthetic-si-wis-over-time.png" class="img-fluid figure-img">
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-synthetic-si-wis-over-time-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;11: Held-out synthetic data: CRPS over time. Illustrative, dummy data
+Figure&nbsp;13: Held-out synthetic data: CRPS over time. Illustrative, dummy data
 </figcaption>
 </figure>
 </div>
@@ -2279,14 +2547,14 @@ Figure&nbsp;11: Held-out synthetic data: CRPS over time. Illustrative, dummy dat
 <img src="build/figures/si/synthetic-si-finetune-size.png" class="img-fluid figure-img">
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-synthetic-si-finetune-size-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;12: Held-out synthetic data: relative CRPS of each fine-tuning checkpoint, at doublings from 1,000 outbreaks, against the number of simulated outbreaks it was trained on (log scale). Illustrative, dummy data
+Figure&nbsp;14: Held-out synthetic data: relative CRPS of each fine-tuning checkpoint, at doublings from 1,000 outbreaks, against the number of simulated outbreaks it was trained on (log scale). Illustrative, dummy data
 </figcaption>
 </figure>
 </div>
 <div id="tbl-synthetic-horizon" class="quarto-float quarto-figure quarto-figure-center anchored">
 <figure class="quarto-float quarto-float-tbl figure">
 <figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-synthetic-horizon-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Table&nbsp;16: Held-out synthetic data scores by horizon. Illustrative, dummy data
+Table&nbsp;21: Held-out synthetic data scores by horizon. Illustrative, dummy data
 </figcaption>
 <div aria-describedby="tbl-synthetic-horizon-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
 <table class="caption-top table">
@@ -2326,153 +2594,153 @@ Table&nbsp;16: Held-out synthetic data scores by horizon. Illustrative, dummy da
 <td>epinowcast</td>
 <td>crps</td>
 <td>-28</td>
-<td>5.78</td>
-<td>0.0845</td>
+<td>5.74</td>
+<td>0.084</td>
 <td>0.259</td>
 <td>0.496</td>
 <td>0.783</td>
 <td>129</td>
-<td>0.701</td>
-<td>0.885</td>
+<td>0.702</td>
+<td>0.887</td>
 </tr>
 <tr class="even">
 <td>synthetic</td>
 <td>epinowcast</td>
 <td>crps</td>
 <td>-21</td>
-<td>6.61</td>
-<td>0.0963</td>
+<td>6.57</td>
+<td>0.0957</td>
 <td>0.367</td>
 <td>0.366</td>
 <td>0.701</td>
 <td>134</td>
-<td>1.06</td>
-<td>1.09</td>
+<td>1.07</td>
+<td>1.1</td>
 </tr>
 <tr class="odd">
 <td>synthetic</td>
 <td>epinowcast</td>
 <td>crps</td>
 <td>-14</td>
-<td>6.91</td>
-<td>0.093</td>
+<td>6.87</td>
+<td>0.0924</td>
 <td>0.339</td>
 <td>0.504</td>
 <td>0.763</td>
 <td>139</td>
-<td>0.993</td>
-<td>0.981</td>
+<td>0.998</td>
+<td>0.984</td>
 </tr>
 <tr class="even">
 <td>synthetic</td>
 <td>epinowcast</td>
 <td>crps</td>
 <td>-7</td>
-<td>6.19</td>
-<td>0.101</td>
+<td>6.13</td>
+<td>0.1</td>
 <td>0.291</td>
 <td>0.437</td>
 <td>0.803</td>
 <td>142</td>
-<td>0.684</td>
-<td>0.96</td>
+<td>0.686</td>
+<td>0.963</td>
 </tr>
 <tr class="odd">
 <td>synthetic</td>
 <td>epinowcast</td>
 <td>crps</td>
 <td>0</td>
-<td>10.9</td>
-<td>0.141</td>
+<td>10.8</td>
+<td>0.139</td>
 <td>0.235</td>
 <td>0.479</td>
 <td>0.8</td>
 <td>140</td>
-<td>0.815</td>
-<td>0.863</td>
+<td>0.819</td>
+<td>0.866</td>
 </tr>
 <tr class="even">
 <td>synthetic</td>
 <td>epinowcast</td>
 <td>crps</td>
 <td>7</td>
-<td>13.4</td>
-<td>0.192</td>
+<td>13.3</td>
+<td>0.19</td>
 <td>0.179</td>
 <td>0.5</td>
 <td>0.818</td>
 <td>132</td>
-<td>0.542</td>
-<td>0.816</td>
+<td>0.543</td>
+<td>0.818</td>
 </tr>
 <tr class="odd">
 <td>synthetic</td>
 <td>epinowcast</td>
 <td>crps</td>
 <td>14</td>
-<td>19.9</td>
-<td>0.244</td>
+<td>19.7</td>
+<td>0.241</td>
 <td>0.132</td>
 <td>0.419</td>
 <td>0.847</td>
 <td>124</td>
-<td>0.782</td>
-<td>0.844</td>
+<td>0.788</td>
+<td>0.848</td>
 </tr>
 <tr class="even">
 <td>synthetic</td>
 <td>epinowcast</td>
 <td>crps</td>
 <td>21</td>
-<td>18.6</td>
-<td>0.27</td>
+<td>18.4</td>
+<td>0.267</td>
 <td>0.0801</td>
 <td>0.526</td>
 <td>0.905</td>
 <td>116</td>
-<td>0.495</td>
-<td>0.781</td>
+<td>0.498</td>
+<td>0.783</td>
 </tr>
 <tr class="odd">
 <td>synthetic</td>
 <td>fm_chronos_daily_complete</td>
 <td>crps</td>
 <td>-28</td>
-<td>8.11</td>
+<td>8.06</td>
 <td>0.103</td>
 <td>-0.33</td>
 <td>0.357</td>
 <td>0.729</td>
 <td>129</td>
-<td>0.984</td>
-<td>1.08</td>
+<td>0.986</td>
+<td>1.09</td>
 </tr>
 <tr class="even">
 <td>synthetic</td>
 <td>fm_chronos_daily_complete</td>
 <td>crps</td>
 <td>-21</td>
-<td>7.99</td>
-<td>0.0964</td>
+<td>7.94</td>
+<td>0.0957</td>
 <td>-0.221</td>
 <td>0.336</td>
 <td>0.769</td>
 <td>134</td>
-<td>1.28</td>
-<td>1.09</td>
+<td>1.29</td>
+<td>1.1</td>
 </tr>
 <tr class="odd">
 <td>synthetic</td>
 <td>fm_chronos_daily_complete</td>
 <td>crps</td>
 <td>-14</td>
-<td>7.88</td>
+<td>7.83</td>
 <td>0.103</td>
 <td>-0.168</td>
 <td>0.417</td>
 <td>0.748</td>
 <td>139</td>
-<td>1.13</td>
+<td>1.14</td>
 <td>1.09</td>
 </tr>
 <tr class="even">
@@ -2480,13 +2748,13 @@ Table&nbsp;16: Held-out synthetic data scores by horizon. Illustrative, dummy da
 <td>fm_chronos_daily_complete</td>
 <td>crps</td>
 <td>-7</td>
-<td>8.56</td>
-<td>0.123</td>
+<td>8.49</td>
+<td>0.122</td>
 <td>-0.163</td>
 <td>0.444</td>
 <td>0.775</td>
 <td>142</td>
-<td>0.946</td>
+<td>0.949</td>
 <td>1.17</td>
 </tr>
 <tr class="odd">
@@ -2494,13 +2762,13 @@ Table&nbsp;16: Held-out synthetic data scores by horizon. Illustrative, dummy da
 <td>fm_chronos_daily_complete</td>
 <td>crps</td>
 <td>0</td>
-<td>14.1</td>
-<td>0.182</td>
+<td>14</td>
+<td>0.181</td>
 <td>-0.0389</td>
 <td>0.479</td>
 <td>0.814</td>
 <td>140</td>
-<td>1.06</td>
+<td>1.07</td>
 <td>1.12</td>
 </tr>
 <tr class="even">
@@ -2508,13 +2776,13 @@ Table&nbsp;16: Held-out synthetic data scores by horizon. Illustrative, dummy da
 <td>fm_chronos_daily_complete</td>
 <td>crps</td>
 <td>7</td>
-<td>27.8</td>
-<td>0.277</td>
+<td>27.6</td>
+<td>0.274</td>
 <td>-0.056</td>
 <td>0.447</td>
 <td>0.833</td>
 <td>132</td>
-<td>1.12</td>
+<td>1.13</td>
 <td>1.18</td>
 </tr>
 <tr class="odd">
@@ -2522,8 +2790,8 @@ Table&nbsp;16: Held-out synthetic data scores by horizon. Illustrative, dummy da
 <td>fm_chronos_daily_complete</td>
 <td>crps</td>
 <td>14</td>
-<td>32.4</td>
-<td>0.342</td>
+<td>32</td>
+<td>0.339</td>
 <td>0.0752</td>
 <td>0.435</td>
 <td>0.839</td>
@@ -2536,28 +2804,28 @@ Table&nbsp;16: Held-out synthetic data scores by horizon. Illustrative, dummy da
 <td>fm_chronos_daily_complete</td>
 <td>crps</td>
 <td>21</td>
-<td>48</td>
-<td>0.443</td>
+<td>47.4</td>
+<td>0.439</td>
 <td>0.0758</td>
 <td>0.397</td>
 <td>0.836</td>
 <td>116</td>
-<td>1.28</td>
-<td>1.28</td>
+<td>1.29</td>
+<td>1.29</td>
 </tr>
 <tr class="odd">
 <td>synthetic</td>
 <td>fm_chronos_daily_ragged</td>
 <td>crps</td>
 <td>-28</td>
-<td>11.3</td>
-<td>0.134</td>
+<td>11.2</td>
+<td>0.133</td>
 <td>0.596</td>
 <td>0.217</td>
 <td>0.442</td>
 <td>129</td>
-<td>1.37</td>
-<td>1.4</td>
+<td>1.38</td>
+<td>1.41</td>
 </tr>
 <tr class="even">
 <td>synthetic</td>
@@ -2570,21 +2838,21 @@ Table&nbsp;16: Held-out synthetic data scores by horizon. Illustrative, dummy da
 <td>0.231</td>
 <td>0.493</td>
 <td>134</td>
-<td>1.79</td>
-<td>1.7</td>
+<td>1.8</td>
+<td>1.71</td>
 </tr>
 <tr class="odd">
 <td>synthetic</td>
 <td>fm_chronos_daily_ragged</td>
 <td>crps</td>
 <td>-14</td>
-<td>10.7</td>
-<td>0.146</td>
+<td>10.6</td>
+<td>0.145</td>
 <td>0.606</td>
 <td>0.194</td>
 <td>0.511</td>
 <td>139</td>
-<td>1.53</td>
+<td>1.54</td>
 <td>1.54</td>
 </tr>
 <tr class="even">
@@ -2598,35 +2866,35 @@ Table&nbsp;16: Held-out synthetic data scores by horizon. Illustrative, dummy da
 <td>0.303</td>
 <td>0.514</td>
 <td>142</td>
-<td>1.6</td>
-<td>1.75</td>
+<td>1.61</td>
+<td>1.76</td>
 </tr>
 <tr class="odd">
 <td>synthetic</td>
 <td>fm_chronos_daily_ragged</td>
 <td>crps</td>
 <td>0</td>
-<td>17.6</td>
-<td>0.215</td>
+<td>17.5</td>
+<td>0.214</td>
 <td>0.323</td>
 <td>0.336</td>
 <td>0.7</td>
 <td>140</td>
-<td>1.32</td>
-<td>1.32</td>
+<td>1.33</td>
+<td>1.33</td>
 </tr>
 <tr class="even">
 <td>synthetic</td>
 <td>fm_chronos_daily_ragged</td>
 <td>crps</td>
 <td>7</td>
-<td>20.8</td>
-<td>0.254</td>
+<td>20.6</td>
+<td>0.252</td>
 <td>0.262</td>
 <td>0.333</td>
 <td>0.735</td>
 <td>132</td>
-<td>0.84</td>
+<td>0.844</td>
 <td>1.08</td>
 </tr>
 <tr class="odd">
@@ -2634,41 +2902,41 @@ Table&nbsp;16: Held-out synthetic data scores by horizon. Illustrative, dummy da
 <td>fm_chronos_daily_ragged</td>
 <td>crps</td>
 <td>14</td>
-<td>28.8</td>
-<td>0.366</td>
+<td>28.5</td>
+<td>0.363</td>
 <td>0.0617</td>
 <td>0.403</td>
 <td>0.694</td>
 <td>124</td>
-<td>1.13</td>
-<td>1.27</td>
+<td>1.14</td>
+<td>1.28</td>
 </tr>
 <tr class="even">
 <td>synthetic</td>
 <td>fm_chronos_daily_ragged</td>
 <td>crps</td>
 <td>21</td>
-<td>60.5</td>
-<td>0.477</td>
+<td>60.1</td>
+<td>0.474</td>
 <td>0.265</td>
 <td>0.362</td>
 <td>0.716</td>
 <td>116</td>
-<td>1.61</td>
-<td>1.38</td>
+<td>1.63</td>
+<td>1.39</td>
 </tr>
 <tr class="odd">
 <td>synthetic</td>
 <td>fm_chronos_weekly_complete</td>
 <td>crps</td>
 <td>-28</td>
-<td>8.43</td>
-<td>0.111</td>
+<td>8.38</td>
+<td>0.11</td>
 <td>-0.347</td>
 <td>0.302</td>
 <td>0.651</td>
 <td>129</td>
-<td>1.02</td>
+<td>1.03</td>
 <td>1.16</td>
 </tr>
 <tr class="even">
@@ -2676,13 +2944,13 @@ Table&nbsp;16: Held-out synthetic data scores by horizon. Illustrative, dummy da
 <td>fm_chronos_weekly_complete</td>
 <td>crps</td>
 <td>-21</td>
-<td>9.69</td>
+<td>9.64</td>
 <td>0.111</td>
 <td>-0.365</td>
 <td>0.321</td>
 <td>0.672</td>
 <td>134</td>
-<td>1.56</td>
+<td>1.57</td>
 <td>1.27</td>
 </tr>
 <tr class="odd">
@@ -2690,27 +2958,27 @@ Table&nbsp;16: Held-out synthetic data scores by horizon. Illustrative, dummy da
 <td>fm_chronos_weekly_complete</td>
 <td>crps</td>
 <td>-14</td>
-<td>9.05</td>
-<td>0.117</td>
+<td>9</td>
+<td>0.116</td>
 <td>-0.339</td>
 <td>0.324</td>
 <td>0.705</td>
 <td>139</td>
-<td>1.3</td>
-<td>1.23</td>
+<td>1.31</td>
+<td>1.24</td>
 </tr>
 <tr class="even">
 <td>synthetic</td>
 <td>fm_chronos_weekly_complete</td>
 <td>crps</td>
 <td>-7</td>
-<td>9.43</td>
-<td>0.124</td>
+<td>9.36</td>
+<td>0.123</td>
 <td>-0.249</td>
 <td>0.415</td>
 <td>0.81</td>
 <td>142</td>
-<td>1.04</td>
+<td>1.05</td>
 <td>1.18</td>
 </tr>
 <tr class="odd">
@@ -2718,41 +2986,41 @@ Table&nbsp;16: Held-out synthetic data scores by horizon. Illustrative, dummy da
 <td>fm_chronos_weekly_complete</td>
 <td>crps</td>
 <td>0</td>
-<td>16.7</td>
-<td>0.213</td>
+<td>16.6</td>
+<td>0.212</td>
 <td>-0.0974</td>
 <td>0.479</td>
 <td>0.814</td>
 <td>140</td>
-<td>1.25</td>
-<td>1.31</td>
+<td>1.26</td>
+<td>1.32</td>
 </tr>
 <tr class="even">
 <td>synthetic</td>
 <td>fm_chronos_weekly_complete</td>
 <td>crps</td>
 <td>7</td>
-<td>23.4</td>
-<td>0.276</td>
+<td>23.2</td>
+<td>0.274</td>
 <td>-0.0476</td>
 <td>0.53</td>
 <td>0.879</td>
 <td>132</td>
-<td>0.945</td>
-<td>1.17</td>
+<td>0.948</td>
+<td>1.18</td>
 </tr>
 <tr class="odd">
 <td>synthetic</td>
 <td>fm_chronos_weekly_complete</td>
 <td>crps</td>
 <td>14</td>
-<td>29.7</td>
-<td>0.365</td>
+<td>29.4</td>
+<td>0.362</td>
 <td>-0.0856</td>
 <td>0.516</td>
 <td>0.839</td>
 <td>124</td>
-<td>1.17</td>
+<td>1.18</td>
 <td>1.27</td>
 </tr>
 <tr class="even">
@@ -2760,13 +3028,13 @@ Table&nbsp;16: Held-out synthetic data scores by horizon. Illustrative, dummy da
 <td>fm_chronos_weekly_complete</td>
 <td>crps</td>
 <td>21</td>
-<td>40.7</td>
-<td>0.409</td>
+<td>40.1</td>
+<td>0.405</td>
 <td>-0.0356</td>
 <td>0.517</td>
 <td>0.897</td>
 <td>116</td>
-<td>1.08</td>
+<td>1.09</td>
 <td>1.19</td>
 </tr>
 <tr class="odd">
@@ -2774,27 +3042,27 @@ Table&nbsp;16: Held-out synthetic data scores by horizon. Illustrative, dummy da
 <td>fm_chronos_weekly_ragged</td>
 <td>crps</td>
 <td>-28</td>
-<td>6.8</td>
-<td>0.0853</td>
+<td>6.75</td>
+<td>0.0848</td>
 <td>-0.00845</td>
 <td>0.457</td>
 <td>0.76</td>
 <td>129</td>
-<td>0.825</td>
-<td>0.894</td>
+<td>0.826</td>
+<td>0.895</td>
 </tr>
 <tr class="even">
 <td>synthetic</td>
 <td>fm_chronos_weekly_ragged</td>
 <td>crps</td>
 <td>-21</td>
-<td>7.73</td>
-<td>0.103</td>
+<td>7.68</td>
+<td>0.102</td>
 <td>0.0893</td>
 <td>0.366</td>
 <td>0.687</td>
 <td>134</td>
-<td>1.24</td>
+<td>1.25</td>
 <td>1.17</td>
 </tr>
 <tr class="odd">
@@ -2802,8 +3070,8 @@ Table&nbsp;16: Held-out synthetic data scores by horizon. Illustrative, dummy da
 <td>fm_chronos_weekly_ragged</td>
 <td>crps</td>
 <td>-14</td>
-<td>9.93</td>
-<td>0.119</td>
+<td>9.88</td>
+<td>0.118</td>
 <td>-0.024</td>
 <td>0.353</td>
 <td>0.734</td>
@@ -2816,41 +3084,41 @@ Table&nbsp;16: Held-out synthetic data scores by horizon. Illustrative, dummy da
 <td>fm_chronos_weekly_ragged</td>
 <td>crps</td>
 <td>-7</td>
-<td>8.81</td>
-<td>0.137</td>
+<td>8.75</td>
+<td>0.136</td>
 <td>-0.00331</td>
 <td>0.345</td>
 <td>0.704</td>
 <td>142</td>
-<td>0.974</td>
-<td>1.3</td>
+<td>0.978</td>
+<td>1.31</td>
 </tr>
 <tr class="odd">
 <td>synthetic</td>
 <td>fm_chronos_weekly_ragged</td>
 <td>crps</td>
 <td>0</td>
-<td>16</td>
-<td>0.22</td>
+<td>15.9</td>
+<td>0.219</td>
 <td>0.0749</td>
 <td>0.386</td>
 <td>0.729</td>
 <td>140</td>
-<td>1.2</td>
-<td>1.35</td>
+<td>1.21</td>
+<td>1.36</td>
 </tr>
 <tr class="even">
 <td>synthetic</td>
 <td>fm_chronos_weekly_ragged</td>
 <td>crps</td>
 <td>7</td>
-<td>30.3</td>
-<td>0.34</td>
+<td>30.1</td>
+<td>0.338</td>
 <td>0.0248</td>
 <td>0.379</td>
 <td>0.727</td>
 <td>132</td>
-<td>1.22</td>
+<td>1.23</td>
 <td>1.45</td>
 </tr>
 <tr class="odd">
@@ -2858,13 +3126,13 @@ Table&nbsp;16: Held-out synthetic data scores by horizon. Illustrative, dummy da
 <td>fm_chronos_weekly_ragged</td>
 <td>crps</td>
 <td>14</td>
-<td>42.7</td>
-<td>0.428</td>
+<td>42.3</td>
+<td>0.425</td>
 <td>0.0718</td>
 <td>0.395</td>
 <td>0.71</td>
 <td>124</td>
-<td>1.68</td>
+<td>1.7</td>
 <td>1.49</td>
 </tr>
 <tr class="even">
@@ -2872,36 +3140,36 @@ Table&nbsp;16: Held-out synthetic data scores by horizon. Illustrative, dummy da
 <td>fm_chronos_weekly_ragged</td>
 <td>crps</td>
 <td>21</td>
-<td>59.4</td>
-<td>0.432</td>
+<td>58.8</td>
+<td>0.429</td>
 <td>0.13</td>
 <td>0.466</td>
 <td>0.828</td>
 <td>116</td>
-<td>1.58</td>
-<td>1.25</td>
+<td>1.6</td>
+<td>1.26</td>
 </tr>
 <tr class="odd">
 <td>synthetic</td>
 <td>randomwalk</td>
 <td>crps</td>
 <td>-28</td>
-<td>7.04</td>
-<td>0.095</td>
+<td>6.97</td>
+<td>0.0942</td>
 <td>-0.0828</td>
 <td>0.558</td>
 <td>0.845</td>
 <td>129</td>
-<td>0.854</td>
-<td>0.995</td>
+<td>0.853</td>
+<td>0.994</td>
 </tr>
 <tr class="even">
 <td>synthetic</td>
 <td>randomwalk</td>
 <td>crps</td>
 <td>-21</td>
-<td>6.88</td>
-<td>0.0945</td>
+<td>6.81</td>
+<td>0.0937</td>
 <td>-0.147</td>
 <td>0.5</td>
 <td>0.858</td>
@@ -2914,8 +3182,8 @@ Table&nbsp;16: Held-out synthetic data scores by horizon. Illustrative, dummy da
 <td>randomwalk</td>
 <td>crps</td>
 <td>-14</td>
-<td>7.72</td>
-<td>0.105</td>
+<td>7.65</td>
+<td>0.104</td>
 <td>-0.0886</td>
 <td>0.511</td>
 <td>0.856</td>
@@ -2928,13 +3196,13 @@ Table&nbsp;16: Held-out synthetic data scores by horizon. Illustrative, dummy da
 <td>randomwalk</td>
 <td>crps</td>
 <td>-7</td>
-<td>9.09</td>
-<td>0.119</td>
+<td>9</td>
+<td>0.118</td>
 <td>-0.0984</td>
 <td>0.563</td>
 <td>0.894</td>
 <td>142</td>
-<td>1</td>
+<td>1.01</td>
 <td>1.14</td>
 </tr>
 <tr class="odd">
@@ -2942,8 +3210,8 @@ Table&nbsp;16: Held-out synthetic data scores by horizon. Illustrative, dummy da
 <td>randomwalk</td>
 <td>crps</td>
 <td>0</td>
-<td>14.4</td>
-<td>0.176</td>
+<td>14.2</td>
+<td>0.174</td>
 <td>0.0397</td>
 <td>0.564</td>
 <td>0.957</td>
@@ -2956,8 +3224,8 @@ Table&nbsp;16: Held-out synthetic data scores by horizon. Illustrative, dummy da
 <td>randomwalk</td>
 <td>crps</td>
 <td>7</td>
-<td>27.8</td>
-<td>0.312</td>
+<td>27.5</td>
+<td>0.309</td>
 <td>0.0346</td>
 <td>0.53</td>
 <td>0.879</td>
@@ -2970,22 +3238,22 @@ Table&nbsp;16: Held-out synthetic data scores by horizon. Illustrative, dummy da
 <td>randomwalk</td>
 <td>crps</td>
 <td>14</td>
-<td>39.2</td>
-<td>0.376</td>
+<td>38.7</td>
+<td>0.372</td>
 <td>0.0573</td>
 <td>0.581</td>
 <td>0.927</td>
 <td>124</td>
 <td>1.55</td>
-<td>1.3</td>
+<td>1.31</td>
 </tr>
 <tr class="even">
 <td>synthetic</td>
 <td>randomwalk</td>
 <td>crps</td>
 <td>21</td>
-<td>47.9</td>
-<td>0.475</td>
+<td>47.1</td>
+<td>0.47</td>
 <td>0.0109</td>
 <td>0.595</td>
 <td>0.905</td>
@@ -2998,8 +3266,8 @@ Table&nbsp;16: Held-out synthetic data scores by horizon. Illustrative, dummy da
 <td>randomwalknowcast</td>
 <td>crps</td>
 <td>-28</td>
-<td>8.25</td>
-<td>0.0955</td>
+<td>8.17</td>
+<td>0.0947</td>
 <td>0.32</td>
 <td>0.527</td>
 <td>0.798</td>
@@ -3012,8 +3280,8 @@ Table&nbsp;16: Held-out synthetic data scores by horizon. Illustrative, dummy da
 <td>randomwalknowcast</td>
 <td>crps</td>
 <td>-21</td>
-<td>6.22</td>
-<td>0.088</td>
+<td>6.15</td>
+<td>0.0872</td>
 <td>0.192</td>
 <td>0.649</td>
 <td>0.888</td>
@@ -3026,8 +3294,8 @@ Table&nbsp;16: Held-out synthetic data scores by horizon. Illustrative, dummy da
 <td>randomwalknowcast</td>
 <td>crps</td>
 <td>-14</td>
-<td>6.96</td>
-<td>0.0948</td>
+<td>6.88</td>
+<td>0.0939</td>
 <td>0.213</td>
 <td>0.583</td>
 <td>0.906</td>
@@ -3040,8 +3308,8 @@ Table&nbsp;16: Held-out synthetic data scores by horizon. Illustrative, dummy da
 <td>randomwalknowcast</td>
 <td>crps</td>
 <td>-7</td>
-<td>9.04</td>
-<td>0.105</td>
+<td>8.95</td>
+<td>0.104</td>
 <td>0.189</td>
 <td>0.634</td>
 <td>0.901</td>
@@ -3054,8 +3322,8 @@ Table&nbsp;16: Held-out synthetic data scores by horizon. Illustrative, dummy da
 <td>randomwalknowcast</td>
 <td>crps</td>
 <td>0</td>
-<td>13.3</td>
-<td>0.163</td>
+<td>13.1</td>
+<td>0.161</td>
 <td>0.182</td>
 <td>0.6</td>
 <td>0.936</td>
@@ -3068,8 +3336,8 @@ Table&nbsp;16: Held-out synthetic data scores by horizon. Illustrative, dummy da
 <td>randomwalknowcast</td>
 <td>crps</td>
 <td>7</td>
-<td>24.8</td>
-<td>0.235</td>
+<td>24.5</td>
+<td>0.233</td>
 <td>0.151</td>
 <td>0.644</td>
 <td>0.955</td>
@@ -3082,8 +3350,8 @@ Table&nbsp;16: Held-out synthetic data scores by horizon. Illustrative, dummy da
 <td>randomwalknowcast</td>
 <td>crps</td>
 <td>14</td>
-<td>25.4</td>
-<td>0.288</td>
+<td>25</td>
+<td>0.285</td>
 <td>0.0586</td>
 <td>0.669</td>
 <td>0.976</td>
@@ -3096,8 +3364,8 @@ Table&nbsp;16: Held-out synthetic data scores by horizon. Illustrative, dummy da
 <td>randomwalknowcast</td>
 <td>crps</td>
 <td>21</td>
-<td>37.6</td>
-<td>0.345</td>
+<td>36.8</td>
+<td>0.341</td>
 <td>0.101</td>
 <td>0.69</td>
 <td>0.966</td>
@@ -3113,7 +3381,7 @@ Table&nbsp;16: Held-out synthetic data scores by horizon. Illustrative, dummy da
 <div id="tbl-synthetic-location" class="quarto-float quarto-figure quarto-figure-center anchored">
 <figure class="quarto-float quarto-float-tbl figure">
 <figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-synthetic-location-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Table&nbsp;17: Held-out synthetic data scores by location and stratum. Illustrative, dummy data
+Table&nbsp;22: Held-out synthetic data scores by location and stratum. Illustrative, dummy data
 </figcaption>
 <div aria-describedby="tbl-synthetic-location-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
 <table class="caption-top table">
@@ -3156,14 +3424,14 @@ Table&nbsp;17: Held-out synthetic data scores by location and stratum. Illustrat
 <td>crps</td>
 <td>s9501-sim01</td>
 <td>all</td>
-<td>9.88</td>
-<td>0.11</td>
+<td>9.78</td>
+<td>0.109</td>
 <td>0.108</td>
 <td>0.552</td>
 <td>0.888</td>
 <td>134</td>
-<td>0.594</td>
-<td>0.693</td>
+<td>0.597</td>
+<td>0.695</td>
 </tr>
 <tr class="even">
 <td>synthetic</td>
@@ -3171,13 +3439,13 @@ Table&nbsp;17: Held-out synthetic data scores by location and stratum. Illustrat
 <td>crps</td>
 <td>s9501-sim02</td>
 <td>all</td>
-<td>13.2</td>
-<td>0.317</td>
+<td>13.1</td>
+<td>0.316</td>
 <td>0.735</td>
 <td>0.227</td>
 <td>0.445</td>
 <td>128</td>
-<td>0.995</td>
+<td>0.997</td>
 <td>1.09</td>
 </tr>
 <tr class="odd">
@@ -3186,14 +3454,14 @@ Table&nbsp;17: Held-out synthetic data scores by location and stratum. Illustrat
 <td>crps</td>
 <td>s9501-sim03</td>
 <td>all</td>
-<td>17.6</td>
-<td>0.112</td>
+<td>17.5</td>
+<td>0.111</td>
 <td>0.491</td>
 <td>0.303</td>
 <td>0.72</td>
 <td>132</td>
-<td>0.547</td>
-<td>0.677</td>
+<td>0.55</td>
+<td>0.681</td>
 </tr>
 <tr class="even">
 <td>synthetic</td>
@@ -3201,14 +3469,14 @@ Table&nbsp;17: Held-out synthetic data scores by location and stratum. Illustrat
 <td>crps</td>
 <td>s9501-sim04</td>
 <td>all</td>
-<td>22.9</td>
-<td>0.125</td>
+<td>22.6</td>
+<td>0.124</td>
 <td>-0.00746</td>
 <td>0.522</td>
 <td>0.828</td>
 <td>134</td>
-<td>0.721</td>
-<td>0.796</td>
+<td>0.726</td>
+<td>0.8</td>
 </tr>
 <tr class="odd">
 <td>synthetic</td>
@@ -3216,14 +3484,14 @@ Table&nbsp;17: Held-out synthetic data scores by location and stratum. Illustrat
 <td>crps</td>
 <td>s9501-sim05</td>
 <td>all</td>
-<td>4.85</td>
-<td>0.136</td>
+<td>4.79</td>
+<td>0.135</td>
 <td>-0.0269</td>
 <td>0.612</td>
 <td>0.891</td>
 <td>129</td>
-<td>0.974</td>
-<td>0.991</td>
+<td>0.98</td>
+<td>0.994</td>
 </tr>
 <tr class="even">
 <td>synthetic</td>
@@ -3231,13 +3499,13 @@ Table&nbsp;17: Held-out synthetic data scores by location and stratum. Illustrat
 <td>crps</td>
 <td>s9501-sim06</td>
 <td>all</td>
-<td>5.21</td>
-<td>0.157</td>
+<td>5.15</td>
+<td>0.156</td>
 <td>0.171</td>
 <td>0.515</td>
 <td>0.886</td>
 <td>132</td>
-<td>0.987</td>
+<td>0.991</td>
 <td>1.06</td>
 </tr>
 <tr class="odd">
@@ -3246,14 +3514,14 @@ Table&nbsp;17: Held-out synthetic data scores by location and stratum. Illustrat
 <td>crps</td>
 <td>s9501-sim07</td>
 <td>all</td>
-<td>5.51</td>
-<td>0.151</td>
+<td>5.45</td>
+<td>0.149</td>
 <td>0.282</td>
 <td>0.485</td>
 <td>0.856</td>
 <td>132</td>
-<td>0.775</td>
-<td>0.883</td>
+<td>0.78</td>
+<td>0.886</td>
 </tr>
 <tr class="even">
 <td>synthetic</td>
@@ -3261,14 +3529,14 @@ Table&nbsp;17: Held-out synthetic data scores by location and stratum. Illustrat
 <td>crps</td>
 <td>s9501-sim08</td>
 <td>all</td>
-<td>6.93</td>
-<td>0.0934</td>
+<td>6.86</td>
+<td>0.0925</td>
 <td>0.183</td>
 <td>0.496</td>
 <td>0.874</td>
 <td>135</td>
-<td>0.45</td>
-<td>0.607</td>
+<td>0.452</td>
+<td>0.609</td>
 </tr>
 <tr class="odd">
 <td>synthetic</td>
@@ -3276,14 +3544,14 @@ Table&nbsp;17: Held-out synthetic data scores by location and stratum. Illustrat
 <td>crps</td>
 <td>s9501-sim01</td>
 <td>all</td>
-<td>19</td>
-<td>0.19</td>
+<td>18.9</td>
+<td>0.189</td>
 <td>-0.343</td>
 <td>0.321</td>
 <td>0.724</td>
 <td>134</td>
-<td>1.14</td>
-<td>1.2</td>
+<td>1.15</td>
+<td>1.21</td>
 </tr>
 <tr class="even">
 <td>synthetic</td>
@@ -3291,8 +3559,8 @@ Table&nbsp;17: Held-out synthetic data scores by location and stratum. Illustrat
 <td>crps</td>
 <td>s9501-sim02</td>
 <td>all</td>
-<td>12.4</td>
-<td>0.309</td>
+<td>12.3</td>
+<td>0.307</td>
 <td>0.569</td>
 <td>0.242</td>
 <td>0.531</td>
@@ -3306,14 +3574,14 @@ Table&nbsp;17: Held-out synthetic data scores by location and stratum. Illustrat
 <td>crps</td>
 <td>s9501-sim03</td>
 <td>all</td>
-<td>30.4</td>
-<td>0.164</td>
+<td>30.1</td>
+<td>0.162</td>
 <td>-0.0935</td>
 <td>0.462</td>
 <td>0.864</td>
 <td>132</td>
-<td>0.943</td>
-<td>0.992</td>
+<td>0.947</td>
+<td>0.995</td>
 </tr>
 <tr class="even">
 <td>synthetic</td>
@@ -3321,14 +3589,14 @@ Table&nbsp;17: Held-out synthetic data scores by location and stratum. Illustrat
 <td>crps</td>
 <td>s9501-sim04</td>
 <td>all</td>
-<td>51.5</td>
-<td>0.269</td>
+<td>50.9</td>
+<td>0.267</td>
 <td>-0.256</td>
 <td>0.418</td>
 <td>0.791</td>
 <td>134</td>
-<td>1.62</td>
-<td>1.72</td>
+<td>1.63</td>
+<td>1.73</td>
 </tr>
 <tr class="odd">
 <td>synthetic</td>
@@ -3336,14 +3604,14 @@ Table&nbsp;17: Held-out synthetic data scores by location and stratum. Illustrat
 <td>crps</td>
 <td>s9501-sim05</td>
 <td>all</td>
-<td>7.2</td>
-<td>0.2</td>
+<td>7.12</td>
+<td>0.198</td>
 <td>-0.273</td>
 <td>0.419</td>
 <td>0.845</td>
 <td>129</td>
-<td>1.45</td>
-<td>1.45</td>
+<td>1.46</td>
+<td>1.46</td>
 </tr>
 <tr class="even">
 <td>synthetic</td>
@@ -3351,14 +3619,14 @@ Table&nbsp;17: Held-out synthetic data scores by location and stratum. Illustrat
 <td>crps</td>
 <td>s9501-sim06</td>
 <td>all</td>
-<td>6.69</td>
-<td>0.18</td>
+<td>6.62</td>
+<td>0.178</td>
 <td>-0.0424</td>
 <td>0.508</td>
 <td>0.909</td>
 <td>132</td>
 <td>1.27</td>
-<td>1.21</td>
+<td>1.22</td>
 </tr>
 <tr class="odd">
 <td>synthetic</td>
@@ -3366,14 +3634,14 @@ Table&nbsp;17: Held-out synthetic data scores by location and stratum. Illustrat
 <td>crps</td>
 <td>s9501-sim07</td>
 <td>all</td>
-<td>7.46</td>
-<td>0.155</td>
+<td>7.39</td>
+<td>0.154</td>
 <td>-0.0754</td>
 <td>0.523</td>
 <td>0.871</td>
 <td>132</td>
-<td>1.05</td>
-<td>0.909</td>
+<td>1.06</td>
+<td>0.913</td>
 </tr>
 <tr class="even">
 <td>synthetic</td>
@@ -3381,14 +3649,14 @@ Table&nbsp;17: Held-out synthetic data scores by location and stratum. Illustrat
 <td>crps</td>
 <td>s9501-sim08</td>
 <td>all</td>
-<td>13.5</td>
-<td>0.158</td>
+<td>13.3</td>
+<td>0.156</td>
 <td>-0.317</td>
 <td>0.422</td>
 <td>0.793</td>
 <td>135</td>
-<td>0.874</td>
-<td>1.02</td>
+<td>0.88</td>
+<td>1.03</td>
 </tr>
 <tr class="odd">
 <td>synthetic</td>
@@ -3396,14 +3664,14 @@ Table&nbsp;17: Held-out synthetic data scores by location and stratum. Illustrat
 <td>crps</td>
 <td>s9501-sim01</td>
 <td>all</td>
-<td>32.2</td>
-<td>0.249</td>
+<td>32</td>
+<td>0.248</td>
 <td>0.282</td>
 <td>0.373</td>
 <td>0.627</td>
 <td>134</td>
-<td>1.94</td>
-<td>1.58</td>
+<td>1.95</td>
+<td>1.59</td>
 </tr>
 <tr class="even">
 <td>synthetic</td>
@@ -3411,13 +3679,13 @@ Table&nbsp;17: Held-out synthetic data scores by location and stratum. Illustrat
 <td>crps</td>
 <td>s9501-sim02</td>
 <td>all</td>
-<td>17.4</td>
-<td>0.397</td>
+<td>17.3</td>
+<td>0.396</td>
 <td>0.693</td>
 <td>0.211</td>
 <td>0.398</td>
 <td>128</td>
-<td>1.31</td>
+<td>1.32</td>
 <td>1.36</td>
 </tr>
 <tr class="odd">
@@ -3426,14 +3694,14 @@ Table&nbsp;17: Held-out synthetic data scores by location and stratum. Illustrat
 <td>crps</td>
 <td>s9501-sim03</td>
 <td>all</td>
-<td>30.8</td>
-<td>0.175</td>
+<td>30.5</td>
+<td>0.174</td>
 <td>0.521</td>
 <td>0.258</td>
 <td>0.583</td>
 <td>132</td>
-<td>0.954</td>
-<td>1.06</td>
+<td>0.96</td>
+<td>1.07</td>
 </tr>
 <tr class="even">
 <td>synthetic</td>
@@ -3441,14 +3709,14 @@ Table&nbsp;17: Held-out synthetic data scores by location and stratum. Illustrat
 <td>crps</td>
 <td>s9501-sim04</td>
 <td>all</td>
-<td>33.9</td>
-<td>0.167</td>
+<td>33.6</td>
+<td>0.166</td>
 <td>0.349</td>
 <td>0.351</td>
 <td>0.709</td>
 <td>134</td>
-<td>1.07</td>
-<td>1.07</td>
+<td>1.08</td>
+<td>1.08</td>
 </tr>
 <tr class="odd">
 <td>synthetic</td>
@@ -3456,14 +3724,14 @@ Table&nbsp;17: Held-out synthetic data scores by location and stratum. Illustrat
 <td>crps</td>
 <td>s9501-sim05</td>
 <td>all</td>
-<td>7.75</td>
-<td>0.201</td>
+<td>7.7</td>
+<td>0.2</td>
 <td>0.228</td>
 <td>0.318</td>
 <td>0.682</td>
 <td>129</td>
-<td>1.56</td>
-<td>1.47</td>
+<td>1.57</td>
+<td>1.48</td>
 </tr>
 <tr class="even">
 <td>synthetic</td>
@@ -3471,14 +3739,14 @@ Table&nbsp;17: Held-out synthetic data scores by location and stratum. Illustrat
 <td>crps</td>
 <td>s9501-sim06</td>
 <td>all</td>
-<td>14.7</td>
-<td>0.294</td>
+<td>14.6</td>
+<td>0.292</td>
 <td>0.458</td>
 <td>0.28</td>
 <td>0.53</td>
 <td>132</td>
-<td>2.78</td>
-<td>1.98</td>
+<td>2.81</td>
+<td>2</td>
 </tr>
 <tr class="odd">
 <td>synthetic</td>
@@ -3487,13 +3755,13 @@ Table&nbsp;17: Held-out synthetic data scores by location and stratum. Illustrat
 <td>s9501-sim07</td>
 <td>all</td>
 <td>11.9</td>
-<td>0.221</td>
+<td>0.22</td>
 <td>0.458</td>
 <td>0.311</td>
 <td>0.583</td>
 <td>132</td>
-<td>1.68</td>
-<td>1.3</td>
+<td>1.7</td>
+<td>1.31</td>
 </tr>
 <tr class="even">
 <td>synthetic</td>
@@ -3501,14 +3769,14 @@ Table&nbsp;17: Held-out synthetic data scores by location and stratum. Illustrat
 <td>crps</td>
 <td>s9501-sim08</td>
 <td>all</td>
-<td>19.4</td>
-<td>0.179</td>
+<td>19.3</td>
+<td>0.177</td>
 <td>0.431</td>
 <td>0.259</td>
 <td>0.659</td>
 <td>135</td>
-<td>1.26</td>
-<td>1.16</td>
+<td>1.27</td>
+<td>1.17</td>
 </tr>
 <tr class="odd">
 <td>synthetic</td>
@@ -3516,13 +3784,13 @@ Table&nbsp;17: Held-out synthetic data scores by location and stratum. Illustrat
 <td>crps</td>
 <td>s9501-sim01</td>
 <td>all</td>
-<td>19.3</td>
-<td>0.238</td>
+<td>19.1</td>
+<td>0.236</td>
 <td>-0.364</td>
 <td>0.351</td>
 <td>0.739</td>
 <td>134</td>
-<td>1.16</td>
+<td>1.17</td>
 <td>1.51</td>
 </tr>
 <tr class="even">
@@ -3531,14 +3799,14 @@ Table&nbsp;17: Held-out synthetic data scores by location and stratum. Illustrat
 <td>crps</td>
 <td>s9501-sim02</td>
 <td>all</td>
-<td>9.05</td>
-<td>0.262</td>
+<td>8.96</td>
+<td>0.26</td>
 <td>0.37</td>
 <td>0.414</td>
 <td>0.719</td>
 <td>128</td>
-<td>0.682</td>
-<td>0.895</td>
+<td>0.68</td>
+<td>0.894</td>
 </tr>
 <tr class="odd">
 <td>synthetic</td>
@@ -3546,14 +3814,14 @@ Table&nbsp;17: Held-out synthetic data scores by location and stratum. Illustrat
 <td>crps</td>
 <td>s9501-sim03</td>
 <td>all</td>
-<td>37.5</td>
-<td>0.218</td>
+<td>37.1</td>
+<td>0.216</td>
 <td>-0.159</td>
 <td>0.409</td>
 <td>0.773</td>
 <td>132</td>
-<td>1.16</td>
-<td>1.32</td>
+<td>1.17</td>
+<td>1.33</td>
 </tr>
 <tr class="even">
 <td>synthetic</td>
@@ -3561,13 +3829,13 @@ Table&nbsp;17: Held-out synthetic data scores by location and stratum. Illustrat
 <td>crps</td>
 <td>s9501-sim04</td>
 <td>all</td>
-<td>39.3</td>
-<td>0.212</td>
+<td>38.9</td>
+<td>0.211</td>
 <td>-0.399</td>
 <td>0.366</td>
 <td>0.716</td>
 <td>134</td>
-<td>1.24</td>
+<td>1.25</td>
 <td>1.36</td>
 </tr>
 <tr class="odd">
@@ -3576,14 +3844,14 @@ Table&nbsp;17: Held-out synthetic data scores by location and stratum. Illustrat
 <td>crps</td>
 <td>s9501-sim05</td>
 <td>all</td>
-<td>7.53</td>
-<td>0.205</td>
+<td>7.47</td>
+<td>0.203</td>
 <td>-0.387</td>
 <td>0.419</td>
 <td>0.736</td>
 <td>129</td>
-<td>1.51</td>
-<td>1.49</td>
+<td>1.53</td>
+<td>1.5</td>
 </tr>
 <tr class="even">
 <td>synthetic</td>
@@ -3591,14 +3859,14 @@ Table&nbsp;17: Held-out synthetic data scores by location and stratum. Illustrat
 <td>crps</td>
 <td>s9501-sim06</td>
 <td>all</td>
-<td>5.61</td>
-<td>0.156</td>
+<td>5.54</td>
+<td>0.154</td>
 <td>-0.0817</td>
 <td>0.553</td>
 <td>0.902</td>
 <td>132</td>
+<td>1.07</td>
 <td>1.06</td>
-<td>1.05</td>
 </tr>
 <tr class="odd">
 <td>synthetic</td>
@@ -3606,14 +3874,14 @@ Table&nbsp;17: Held-out synthetic data scores by location and stratum. Illustrat
 <td>crps</td>
 <td>s9501-sim07</td>
 <td>all</td>
-<td>8.05</td>
-<td>0.192</td>
+<td>7.96</td>
+<td>0.19</td>
 <td>-0.158</td>
 <td>0.492</td>
 <td>0.902</td>
 <td>132</td>
+<td>1.14</td>
 <td>1.13</td>
-<td>1.12</td>
 </tr>
 <tr class="even">
 <td>synthetic</td>
@@ -3621,13 +3889,13 @@ Table&nbsp;17: Held-out synthetic data scores by location and stratum. Illustrat
 <td>crps</td>
 <td>s9501-sim08</td>
 <td>all</td>
-<td>15.4</td>
-<td>0.201</td>
+<td>15.2</td>
+<td>0.199</td>
 <td>-0.395</td>
 <td>0.385</td>
 <td>0.763</td>
 <td>135</td>
-<td>0.997</td>
+<td>1</td>
 <td>1.31</td>
 </tr>
 <tr class="odd">
@@ -3636,14 +3904,14 @@ Table&nbsp;17: Held-out synthetic data scores by location and stratum. Illustrat
 <td>crps</td>
 <td>s9501-sim01</td>
 <td>all</td>
-<td>21.8</td>
-<td>0.222</td>
+<td>21.7</td>
+<td>0.22</td>
 <td>-0.115</td>
 <td>0.425</td>
 <td>0.731</td>
 <td>134</td>
-<td>1.31</td>
-<td>1.4</td>
+<td>1.32</td>
+<td>1.41</td>
 </tr>
 <tr class="even">
 <td>synthetic</td>
@@ -3651,13 +3919,13 @@ Table&nbsp;17: Held-out synthetic data scores by location and stratum. Illustrat
 <td>crps</td>
 <td>s9501-sim02</td>
 <td>all</td>
-<td>13.2</td>
-<td>0.338</td>
+<td>13.1</td>
+<td>0.336</td>
 <td>0.559</td>
 <td>0.266</td>
 <td>0.547</td>
 <td>128</td>
-<td>0.995</td>
+<td>0.996</td>
 <td>1.16</td>
 </tr>
 <tr class="odd">
@@ -3666,8 +3934,8 @@ Table&nbsp;17: Held-out synthetic data scores by location and stratum. Illustrat
 <td>crps</td>
 <td>s9501-sim03</td>
 <td>all</td>
-<td>37.3</td>
-<td>0.194</td>
+<td>37</td>
+<td>0.193</td>
 <td>0.0118</td>
 <td>0.402</td>
 <td>0.795</td>
@@ -3681,14 +3949,14 @@ Table&nbsp;17: Held-out synthetic data scores by location and stratum. Illustrat
 <td>crps</td>
 <td>s9501-sim04</td>
 <td>all</td>
-<td>56.7</td>
-<td>0.227</td>
+<td>56.2</td>
+<td>0.225</td>
 <td>-0.0821</td>
 <td>0.373</td>
 <td>0.746</td>
 <td>134</td>
-<td>1.79</td>
-<td>1.45</td>
+<td>1.8</td>
+<td>1.46</td>
 </tr>
 <tr class="odd">
 <td>synthetic</td>
@@ -3696,14 +3964,14 @@ Table&nbsp;17: Held-out synthetic data scores by location and stratum. Illustrat
 <td>crps</td>
 <td>s9501-sim05</td>
 <td>all</td>
-<td>8.98</td>
-<td>0.235</td>
+<td>8.88</td>
+<td>0.233</td>
 <td>-0.112</td>
 <td>0.403</td>
 <td>0.767</td>
 <td>129</td>
-<td>1.8</td>
-<td>1.71</td>
+<td>1.82</td>
+<td>1.72</td>
 </tr>
 <tr class="even">
 <td>synthetic</td>
@@ -3711,14 +3979,14 @@ Table&nbsp;17: Held-out synthetic data scores by location and stratum. Illustrat
 <td>crps</td>
 <td>s9501-sim06</td>
 <td>all</td>
-<td>7.22</td>
-<td>0.193</td>
+<td>7.16</td>
+<td>0.191</td>
 <td>0.0444</td>
 <td>0.477</td>
 <td>0.803</td>
 <td>132</td>
-<td>1.37</td>
-<td>1.3</td>
+<td>1.38</td>
+<td>1.31</td>
 </tr>
 <tr class="odd">
 <td>synthetic</td>
@@ -3726,14 +3994,14 @@ Table&nbsp;17: Held-out synthetic data scores by location and stratum. Illustrat
 <td>crps</td>
 <td>s9501-sim07</td>
 <td>all</td>
-<td>11.7</td>
-<td>0.246</td>
+<td>11.6</td>
+<td>0.244</td>
 <td>0.0575</td>
 <td>0.386</td>
 <td>0.712</td>
 <td>132</td>
-<td>1.65</td>
-<td>1.44</td>
+<td>1.67</td>
+<td>1.45</td>
 </tr>
 <tr class="even">
 <td>synthetic</td>
@@ -3741,14 +4009,14 @@ Table&nbsp;17: Held-out synthetic data scores by location and stratum. Illustrat
 <td>crps</td>
 <td>s9501-sim08</td>
 <td>all</td>
-<td>16.2</td>
-<td>0.166</td>
+<td>16.1</td>
+<td>0.165</td>
 <td>-0.00711</td>
 <td>0.393</td>
 <td>0.756</td>
 <td>135</td>
-<td>1.05</td>
-<td>1.08</td>
+<td>1.06</td>
+<td>1.09</td>
 </tr>
 <tr class="odd">
 <td>synthetic</td>
@@ -3756,14 +4024,14 @@ Table&nbsp;17: Held-out synthetic data scores by location and stratum. Illustrat
 <td>crps</td>
 <td>s9501-sim01</td>
 <td>all</td>
-<td>19.4</td>
-<td>0.201</td>
+<td>19.1</td>
+<td>0.199</td>
 <td>-0.15</td>
 <td>0.582</td>
 <td>0.948</td>
 <td>134</td>
 <td>1.16</td>
-<td>1.27</td>
+<td>1.28</td>
 </tr>
 <tr class="even">
 <td>synthetic</td>
@@ -3771,14 +4039,14 @@ Table&nbsp;17: Held-out synthetic data scores by location and stratum. Illustrat
 <td>crps</td>
 <td>s9501-sim02</td>
 <td>all</td>
-<td>10.5</td>
-<td>0.248</td>
+<td>10.4</td>
+<td>0.246</td>
 <td>0.501</td>
 <td>0.422</td>
 <td>0.711</td>
 <td>128</td>
-<td>0.79</td>
-<td>0.849</td>
+<td>0.789</td>
+<td>0.848</td>
 </tr>
 <tr class="odd">
 <td>synthetic</td>
@@ -3786,13 +4054,13 @@ Table&nbsp;17: Held-out synthetic data scores by location and stratum. Illustrat
 <td>crps</td>
 <td>s9501-sim03</td>
 <td>all</td>
-<td>30.2</td>
-<td>0.166</td>
+<td>29.8</td>
+<td>0.164</td>
 <td>-0.0105</td>
 <td>0.598</td>
 <td>0.955</td>
 <td>132</td>
-<td>0.938</td>
+<td>0.937</td>
 <td>1.01</td>
 </tr>
 <tr class="even">
@@ -3801,14 +4069,14 @@ Table&nbsp;17: Held-out synthetic data scores by location and stratum. Illustrat
 <td>crps</td>
 <td>s9501-sim04</td>
 <td>all</td>
-<td>44.4</td>
-<td>0.237</td>
+<td>43.8</td>
+<td>0.234</td>
 <td>-0.176</td>
 <td>0.507</td>
 <td>0.918</td>
 <td>134</td>
 <td>1.4</td>
-<td>1.51</td>
+<td>1.52</td>
 </tr>
 <tr class="odd">
 <td>synthetic</td>
@@ -3816,8 +4084,8 @@ Table&nbsp;17: Held-out synthetic data scores by location and stratum. Illustrat
 <td>crps</td>
 <td>s9501-sim05</td>
 <td>all</td>
-<td>6.9</td>
-<td>0.175</td>
+<td>6.81</td>
+<td>0.173</td>
 <td>-0.187</td>
 <td>0.574</td>
 <td>0.876</td>
@@ -3831,14 +4099,14 @@ Table&nbsp;17: Held-out synthetic data scores by location and stratum. Illustrat
 <td>crps</td>
 <td>s9501-sim06</td>
 <td>all</td>
-<td>10.1</td>
-<td>0.255</td>
+<td>9.96</td>
+<td>0.253</td>
 <td>-0.00568</td>
 <td>0.561</td>
 <td>0.909</td>
 <td>132</td>
-<td>1.91</td>
-<td>1.72</td>
+<td>1.92</td>
+<td>1.73</td>
 </tr>
 <tr class="odd">
 <td>synthetic</td>
@@ -3846,8 +4114,8 @@ Table&nbsp;17: Held-out synthetic data scores by location and stratum. Illustrat
 <td>crps</td>
 <td>s9501-sim07</td>
 <td>all</td>
-<td>13.4</td>
-<td>0.219</td>
+<td>13.2</td>
+<td>0.216</td>
 <td>-0.0805</td>
 <td>0.583</td>
 <td>0.947</td>
@@ -3861,8 +4129,8 @@ Table&nbsp;17: Held-out synthetic data scores by location and stratum. Illustrat
 <td>crps</td>
 <td>s9501-sim08</td>
 <td>all</td>
-<td>18</td>
-<td>0.197</td>
+<td>17.8</td>
+<td>0.194</td>
 <td>-0.162</td>
 <td>0.563</td>
 <td>0.852</td>
@@ -3876,8 +4144,8 @@ Table&nbsp;17: Held-out synthetic data scores by location and stratum. Illustrat
 <td>crps</td>
 <td>s9501-sim01</td>
 <td>all</td>
-<td>16.6</td>
-<td>0.158</td>
+<td>16.4</td>
+<td>0.156</td>
 <td>0.0135</td>
 <td>0.679</td>
 <td>0.963</td>
@@ -3891,8 +4159,8 @@ Table&nbsp;17: Held-out synthetic data scores by location and stratum. Illustrat
 <td>crps</td>
 <td>s9501-sim02</td>
 <td>all</td>
-<td>13.3</td>
-<td>0.292</td>
+<td>13.2</td>
+<td>0.29</td>
 <td>0.633</td>
 <td>0.258</td>
 <td>0.617</td>
@@ -3906,8 +4174,8 @@ Table&nbsp;17: Held-out synthetic data scores by location and stratum. Illustrat
 <td>crps</td>
 <td>s9501-sim03</td>
 <td>all</td>
-<td>32.2</td>
-<td>0.165</td>
+<td>31.8</td>
+<td>0.163</td>
 <td>0.217</td>
 <td>0.591</td>
 <td>0.902</td>
@@ -3921,8 +4189,8 @@ Table&nbsp;17: Held-out synthetic data scores by location and stratum. Illustrat
 <td>crps</td>
 <td>s9501-sim04</td>
 <td>all</td>
-<td>31.7</td>
-<td>0.157</td>
+<td>31.2</td>
+<td>0.154</td>
 <td>-0.000149</td>
 <td>0.724</td>
 <td>0.97</td>
@@ -3936,8 +4204,8 @@ Table&nbsp;17: Held-out synthetic data scores by location and stratum. Illustrat
 <td>crps</td>
 <td>s9501-sim05</td>
 <td>all</td>
-<td>4.98</td>
-<td>0.137</td>
+<td>4.89</td>
+<td>0.135</td>
 <td>0.0632</td>
 <td>0.752</td>
 <td>0.984</td>
@@ -3951,8 +4219,8 @@ Table&nbsp;17: Held-out synthetic data scores by location and stratum. Illustrat
 <td>crps</td>
 <td>s9501-sim06</td>
 <td>all</td>
-<td>5.28</td>
-<td>0.148</td>
+<td>5.2</td>
+<td>0.146</td>
 <td>0.22</td>
 <td>0.636</td>
 <td>0.962</td>
@@ -3966,8 +4234,8 @@ Table&nbsp;17: Held-out synthetic data scores by location and stratum. Illustrat
 <td>crps</td>
 <td>s9501-sim07</td>
 <td>all</td>
-<td>7.11</td>
-<td>0.171</td>
+<td>6.99</td>
+<td>0.168</td>
 <td>0.225</td>
 <td>0.659</td>
 <td>0.939</td>
@@ -3981,8 +4249,8 @@ Table&nbsp;17: Held-out synthetic data scores by location and stratum. Illustrat
 <td>crps</td>
 <td>s9501-sim08</td>
 <td>all</td>
-<td>15.4</td>
-<td>0.154</td>
+<td>15.2</td>
+<td>0.152</td>
 <td>0.0701</td>
 <td>0.674</td>
 <td>0.97</td>
@@ -4004,7 +4272,7 @@ Table&nbsp;17: Held-out synthetic data scores by location and stratum. Illustrat
 <img src="build/figures/si/germany-si-nowcasts.png" class="img-fluid figure-img">
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-germany-si-nowcasts-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;13: German nowcast hub: nowcasts for places picked by a rule in the workflow config (the largest, median and smallest by recent count, and the most rising and most falling), one row per place labelled with why it was picked, at the last origin shown in the main text, one column per model. Black is the rolling truth, grey dashed the data as of the origin, and blue the model’s median with its 50% and 95% intervals.
+Figure&nbsp;15: German nowcast hub: nowcasts for places picked by a rule in the workflow config (the largest, median and smallest by recent count, and the most rising and most falling), one row per place labelled with why it was picked, at the last origin shown in the main text, one column per model. Black is the rolling truth, grey dashed the data as of the origin, and blue the model’s median with its 50% and 95% intervals.
 </figcaption>
 </figure>
 </div>
@@ -4014,7 +4282,7 @@ Figure&nbsp;13: German nowcast hub: nowcasts for places picked by a rule in the 
 <img src="build/figures/si/germany-si-places.png" class="img-fluid figure-img">
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-germany-si-places-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;14: German nowcast hub: WIS of every place relative to KIT-frozen_baseline, one dot per model.
+Figure&nbsp;16: German nowcast hub: WIS of every place relative to KIT-frozen_baseline, one dot per model.
 </figcaption>
 </figure>
 </div>
@@ -4024,7 +4292,7 @@ Figure&nbsp;14: German nowcast hub: WIS of every place relative to KIT-frozen_ba
 <img src="build/figures/si/germany-si-location-horizon.png" class="img-fluid figure-img">
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-germany-si-location-horizon-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;15: German nowcast hub: relative WIS by location and horizon.
+Figure&nbsp;17: German nowcast hub: relative WIS by location and horizon.
 </figcaption>
 </figure>
 </div>
@@ -4034,7 +4302,7 @@ Figure&nbsp;15: German nowcast hub: relative WIS by location and horizon.
 <img src="build/figures/si/germany-si-location-horizon-log.png" class="img-fluid figure-img">
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-germany-si-location-horizon-log-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;16: German nowcast hub: relative WIS on the log scale by location and horizon.
+Figure&nbsp;18: German nowcast hub: relative WIS on the log scale by location and horizon.
 </figcaption>
 </figure>
 </div>
@@ -4044,14 +4312,14 @@ Figure&nbsp;16: German nowcast hub: relative WIS on the log scale by location an
 <img src="build/figures/si/germany-si-wis-over-time.png" class="img-fluid figure-img">
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-germany-si-wis-over-time-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;17: German nowcast hub: WIS over time, with a dotted line at the split.
+Figure&nbsp;19: German nowcast hub: WIS over time, with a dotted line at the split.
 </figcaption>
 </figure>
 </div>
 <div id="tbl-germany-horizon" class="quarto-float quarto-figure quarto-figure-center anchored">
 <figure class="quarto-float quarto-float-tbl figure">
 <figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-germany-horizon-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Table&nbsp;18: German nowcast hub scores by horizon.
+Table&nbsp;23: German nowcast hub scores by horizon.
 </figcaption>
 <div aria-describedby="tbl-germany-horizon-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
 <table class="caption-top table">
@@ -5458,7 +5726,7 @@ Table&nbsp;18: German nowcast hub scores by horizon.
 <div id="tbl-germany-location" class="quarto-float quarto-figure quarto-figure-center anchored">
 <figure class="quarto-float quarto-float-tbl figure">
 <figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-germany-location-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Table&nbsp;19: German nowcast hub scores by location and stratum.
+Table&nbsp;24: German nowcast hub scores by location and stratum.
 </figcaption>
 <div aria-describedby="tbl-germany-location-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
 <table class="caption-top table">
@@ -11769,7 +12037,7 @@ Table&nbsp;19: German nowcast hub scores by location and stratum.
 <img src="build/figures/si/ebola-si-nowcasts.png" class="img-fluid figure-img">
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-ebola-si-nowcasts-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;18: Ebola: nowcasts for places picked by a rule in the workflow config (the largest, median and smallest by recent count, and the most rising and most falling), one row per place labelled with why it was picked, at the last origin shown in the main text, one column per model. Black is the rolling truth, grey dashed the data as of the origin, and blue the model’s median with its 50% and 95% intervals.
+Figure&nbsp;20: Ebola: nowcasts for places picked by a rule in the workflow config (the largest, median and smallest by recent count, and the most rising and most falling), one row per place labelled with why it was picked, at the last origin shown in the main text, one column per model. Black is the rolling truth, grey dashed the data as of the origin, and blue the model’s median with its 50% and 95% intervals.
 </figcaption>
 </figure>
 </div>
@@ -11779,7 +12047,7 @@ Figure&nbsp;18: Ebola: nowcasts for places picked by a rule in the workflow conf
 <img src="build/figures/si/ebola-si-places.png" class="img-fluid figure-img">
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-ebola-si-places-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;19: Ebola: CRPS of every place relative to randomwalknowcast, one dot per model.
+Figure&nbsp;21: Ebola: CRPS of every place relative to randomwalknowcast, one dot per model.
 </figcaption>
 </figure>
 </div>
@@ -11789,7 +12057,7 @@ Figure&nbsp;19: Ebola: CRPS of every place relative to randomwalknowcast, one do
 <img src="build/figures/si/ebola-si-location-horizon.png" class="img-fluid figure-img">
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-ebola-si-location-horizon-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;20: Ebola: relative CRPS by location and horizon.
+Figure&nbsp;22: Ebola: relative CRPS by location and horizon.
 </figcaption>
 </figure>
 </div>
@@ -11799,7 +12067,7 @@ Figure&nbsp;20: Ebola: relative CRPS by location and horizon.
 <img src="build/figures/si/ebola-si-location-horizon-log.png" class="img-fluid figure-img">
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-ebola-si-location-horizon-log-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;21: Ebola: relative CRPS on the log scale by location and horizon.
+Figure&nbsp;23: Ebola: relative CRPS on the log scale by location and horizon.
 </figcaption>
 </figure>
 </div>
@@ -11809,14 +12077,14 @@ Figure&nbsp;21: Ebola: relative CRPS on the log scale by location and horizon.
 <img src="build/figures/si/ebola-si-wis-over-time.png" class="img-fluid figure-img">
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-ebola-si-wis-over-time-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;22: Ebola: CRPS over time.
+Figure&nbsp;24: Ebola: CRPS over time.
 </figcaption>
 </figure>
 </div>
 <div id="tbl-ebola-horizon" class="quarto-float quarto-figure quarto-figure-center anchored">
 <figure class="quarto-float quarto-float-tbl figure">
 <figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-ebola-horizon-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Table&nbsp;20: Ebola hub submissions scores by horizon.
+Table&nbsp;25: Ebola hub submissions scores by horizon.
 </figcaption>
 <div aria-describedby="tbl-ebola-horizon-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
 <table class="caption-top table">
@@ -11856,27 +12124,27 @@ Table&nbsp;20: Ebola hub submissions scores by horizon.
 <td>fm_chronos_daily_complete</td>
 <td>crps</td>
 <td>-4</td>
-<td>4.84</td>
-<td>0.0507</td>
+<td>4.82</td>
+<td>0.0504</td>
 <td>0.2</td>
 <td>0.827</td>
 <td>0.889</td>
 <td>81</td>
-<td>3.81</td>
-<td>2.96</td>
+<td>3.79</td>
+<td>2.94</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
 <td>fm_chronos_daily_complete</td>
 <td>crps</td>
 <td>-3</td>
-<td>4.19</td>
-<td>0.0607</td>
+<td>4.16</td>
+<td>0.0605</td>
 <td>0.146</td>
 <td>0.833</td>
 <td>0.889</td>
 <td>54</td>
-<td>2.49</td>
+<td>2.47</td>
 <td>1.43</td>
 </tr>
 <tr class="odd">
@@ -11884,13 +12152,13 @@ Table&nbsp;20: Ebola hub submissions scores by horizon.
 <td>fm_chronos_daily_complete</td>
 <td>crps</td>
 <td>-2</td>
-<td>6.34</td>
-<td>0.0535</td>
+<td>6.3</td>
+<td>0.0532</td>
 <td>0.17</td>
 <td>0.852</td>
 <td>0.889</td>
 <td>27</td>
-<td>1.54</td>
+<td>1.53</td>
 <td>1.05</td>
 </tr>
 <tr class="even">
@@ -11898,50 +12166,50 @@ Table&nbsp;20: Ebola hub submissions scores by horizon.
 <td>fm_chronos_daily_ragged</td>
 <td>crps</td>
 <td>-4</td>
-<td>4.68</td>
-<td>0.0585</td>
+<td>4.65</td>
+<td>0.0581</td>
 <td>0.19</td>
 <td>0.843</td>
 <td>0.898</td>
 <td>108</td>
-<td>3.16</td>
-<td>3.58</td>
+<td>3.14</td>
+<td>3.55</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
 <td>fm_chronos_daily_ragged</td>
 <td>crps</td>
 <td>-3</td>
-<td>4.94</td>
-<td>0.0742</td>
+<td>4.9</td>
+<td>0.0738</td>
 <td>0.121</td>
 <td>0.815</td>
 <td>0.914</td>
 <td>81</td>
-<td>1.56</td>
-<td>1.51</td>
+<td>1.54</td>
+<td>1.5</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
 <td>fm_chronos_daily_ragged</td>
 <td>crps</td>
 <td>-2</td>
-<td>5.18</td>
-<td>0.0793</td>
+<td>5.11</td>
+<td>0.0788</td>
 <td>0.0622</td>
 <td>0.852</td>
 <td>0.926</td>
 <td>54</td>
-<td>1.11</td>
-<td>1.06</td>
+<td>1.1</td>
+<td>1.05</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
 <td>fm_chronos_daily_ragged</td>
 <td>crps</td>
 <td>-1</td>
-<td>9.17</td>
-<td>0.0908</td>
+<td>9.08</td>
+<td>0.09</td>
 <td>0.0748</td>
 <td>0.852</td>
 <td>0.963</td>
@@ -11954,92 +12222,92 @@ Table&nbsp;20: Ebola hub submissions scores by horizon.
 <td>fm_chronos_weekly_complete</td>
 <td>crps</td>
 <td>-4</td>
-<td>4</td>
-<td>0.0458</td>
+<td>3.97</td>
+<td>0.0455</td>
 <td>0.105</td>
 <td>0.864</td>
 <td>0.938</td>
 <td>81</td>
-<td>3.15</td>
-<td>2.68</td>
+<td>3.12</td>
+<td>2.66</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
 <td>fm_chronos_weekly_complete</td>
 <td>crps</td>
 <td>-3</td>
-<td>3.34</td>
-<td>0.0466</td>
+<td>3.29</td>
+<td>0.0463</td>
 <td>0.0659</td>
 <td>0.889</td>
 <td>0.944</td>
 <td>54</td>
-<td>1.98</td>
-<td>1.1</td>
+<td>1.95</td>
+<td>1.09</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
 <td>fm_chronos_weekly_complete</td>
 <td>crps</td>
 <td>-2</td>
-<td>5.2</td>
-<td>0.0456</td>
+<td>5.13</td>
+<td>0.0451</td>
 <td>0.13</td>
 <td>0.889</td>
 <td>0.963</td>
 <td>27</td>
-<td>1.26</td>
-<td>0.896</td>
+<td>1.25</td>
+<td>0.888</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
 <td>fm_chronos_weekly_ragged</td>
 <td>crps</td>
 <td>-4</td>
-<td>3.07</td>
-<td>0.0406</td>
+<td>3.02</td>
+<td>0.0402</td>
 <td>0.083</td>
 <td>0.88</td>
 <td>0.972</td>
 <td>108</td>
-<td>1.83</td>
-<td>2.62</td>
+<td>1.8</td>
+<td>2.6</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
 <td>fm_chronos_weekly_ragged</td>
 <td>crps</td>
 <td>-3</td>
-<td>4.63</td>
-<td>0.0578</td>
+<td>4.57</td>
+<td>0.0574</td>
 <td>0.0231</td>
 <td>0.864</td>
 <td>0.951</td>
 <td>81</td>
-<td>1.86</td>
-<td>1.22</td>
+<td>1.83</td>
+<td>1.21</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
 <td>fm_chronos_weekly_ragged</td>
 <td>crps</td>
 <td>-2</td>
-<td>5.02</td>
-<td>0.0753</td>
+<td>4.93</td>
+<td>0.0747</td>
 <td>-0.0207</td>
 <td>0.87</td>
 <td>0.944</td>
 <td>54</td>
-<td>1.33</td>
-<td>0.905</td>
+<td>1.31</td>
+<td>0.895</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
 <td>fm_chronos_weekly_ragged</td>
 <td>crps</td>
 <td>-1</td>
-<td>6.14</td>
-<td>0.055</td>
+<td>6.04</td>
+<td>0.0541</td>
 <td>0.047</td>
 <td>0.926</td>
 <td>1</td>
@@ -12052,42 +12320,42 @@ Table&nbsp;20: Ebola hub submissions scores by horizon.
 <td>pprandomwalknowcast</td>
 <td>crps</td>
 <td>-4</td>
-<td>2.18</td>
+<td>2.17</td>
 <td>0.0158</td>
 <td>0.144</td>
 <td>0.852</td>
 <td>0.864</td>
 <td>81</td>
 <td>1.71</td>
-<td>0.925</td>
+<td>0.921</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
 <td>pprandomwalknowcast</td>
 <td>crps</td>
 <td>-3</td>
-<td>1.63</td>
-<td>0.0364</td>
+<td>1.62</td>
+<td>0.0363</td>
 <td>0.142</td>
 <td>0.815</td>
 <td>0.889</td>
 <td>54</td>
-<td>0.967</td>
-<td>0.859</td>
+<td>0.963</td>
+<td>0.857</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
 <td>pprandomwalknowcast</td>
 <td>crps</td>
 <td>-2</td>
-<td>1.98</td>
-<td>0.0337</td>
+<td>1.96</td>
+<td>0.0334</td>
 <td>0.114</td>
 <td>0.852</td>
 <td>0.926</td>
 <td>27</td>
-<td>0.481</td>
-<td>0.663</td>
+<td>0.478</td>
+<td>0.658</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -12101,7 +12369,7 @@ Table&nbsp;20: Ebola hub submissions scores by horizon.
 <td>0.914</td>
 <td>81</td>
 <td>1.71</td>
-<td>2.28</td>
+<td>2.29</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
@@ -12122,8 +12390,8 @@ Table&nbsp;20: Ebola hub submissions scores by horizon.
 <td>randomwalk</td>
 <td>crps</td>
 <td>-2</td>
-<td>3.65</td>
-<td>0.0611</td>
+<td>3.64</td>
+<td>0.061</td>
 <td>0.0279</td>
 <td>0.815</td>
 <td>0.963</td>
@@ -12150,7 +12418,7 @@ Table&nbsp;20: Ebola hub submissions scores by horizon.
 <td>randomwalknowcast</td>
 <td>crps</td>
 <td>-3</td>
-<td>1.69</td>
+<td>1.68</td>
 <td>0.0424</td>
 <td>0.0358</td>
 <td>0.87</td>
@@ -12165,7 +12433,7 @@ Table&nbsp;20: Ebola hub submissions scores by horizon.
 <td>crps</td>
 <td>-2</td>
 <td>4.11</td>
-<td>0.0509</td>
+<td>0.0508</td>
 <td>0.033</td>
 <td>0.926</td>
 <td>0.926</td>
@@ -12178,22 +12446,22 @@ Table&nbsp;20: Ebola hub submissions scores by horizon.
 <td>renewal</td>
 <td>crps</td>
 <td>-4</td>
-<td>1.14</td>
-<td>0.0175</td>
+<td>1.13</td>
+<td>0.0173</td>
 <td>0.0352</td>
 <td>0.861</td>
 <td>0.944</td>
 <td>108</td>
-<td>0.896</td>
-<td>1.12</td>
+<td>0.892</td>
+<td>1.11</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
 <td>renewal</td>
 <td>crps</td>
 <td>-3</td>
-<td>1.52</td>
-<td>0.0431</td>
+<td>1.51</td>
+<td>0.0429</td>
 <td>-0.0184</td>
 <td>0.864</td>
 <td>0.901</td>
@@ -12206,22 +12474,22 @@ Table&nbsp;20: Ebola hub submissions scores by horizon.
 <td>renewal</td>
 <td>crps</td>
 <td>-2</td>
-<td>2.74</td>
-<td>0.0684</td>
+<td>2.71</td>
+<td>0.068</td>
 <td>0.00148</td>
 <td>0.889</td>
 <td>0.926</td>
 <td>54</td>
-<td>0.752</td>
-<td>0.993</td>
+<td>0.749</td>
+<td>0.987</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
 <td>renewal</td>
 <td>crps</td>
 <td>-1</td>
-<td>3.48</td>
-<td>0.0418</td>
+<td>3.41</td>
+<td>0.0412</td>
 <td>0.0641</td>
 <td>1</td>
 <td>1</td>
@@ -12235,40 +12503,40 @@ Table&nbsp;20: Ebola hub submissions scores by horizon.
 <td>crps</td>
 <td>-4</td>
 <td>1.14</td>
-<td>0.018</td>
+<td>0.0178</td>
 <td>0.0346</td>
 <td>0.861</td>
 <td>0.944</td>
 <td>108</td>
-<td>0.903</td>
-<td>1.14</td>
+<td>0.899</td>
+<td>1.13</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
 <td>renewalbvd</td>
 <td>crps</td>
 <td>-3</td>
-<td>1.55</td>
-<td>0.0435</td>
+<td>1.54</td>
+<td>0.0433</td>
 <td>-0.021</td>
 <td>0.864</td>
 <td>0.901</td>
 <td>81</td>
-<td>1.18</td>
-<td>1.1</td>
+<td>1.17</td>
+<td>1.09</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
 <td>renewalbvd</td>
 <td>crps</td>
 <td>-2</td>
-<td>2.59</td>
-<td>0.0682</td>
+<td>2.56</td>
+<td>0.0679</td>
 <td>4.11e-18</td>
 <td>0.889</td>
 <td>0.926</td>
 <td>54</td>
-<td>0.756</td>
+<td>0.753</td>
 <td>1.01</td>
 </tr>
 <tr class="odd">
@@ -12276,8 +12544,8 @@ Table&nbsp;20: Ebola hub submissions scores by horizon.
 <td>renewalbvd</td>
 <td>crps</td>
 <td>-1</td>
-<td>2.64</td>
-<td>0.0417</td>
+<td>2.59</td>
+<td>0.0412</td>
 <td>0.0589</td>
 <td>0.926</td>
 <td>1</td>
@@ -12291,41 +12559,41 @@ Table&nbsp;20: Ebola hub submissions scores by horizon.
 <td>crps</td>
 <td>-4</td>
 <td>1.31</td>
-<td>0.0159</td>
+<td>0.0157</td>
 <td>0.0768</td>
 <td>0.889</td>
 <td>0.926</td>
 <td>81</td>
 <td>1.03</td>
-<td>0.928</td>
+<td>0.917</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
 <td>renewalsp</td>
 <td>crps</td>
 <td>-3</td>
-<td>1.43</td>
-<td>0.0404</td>
+<td>1.42</td>
+<td>0.0401</td>
 <td>-0.023</td>
 <td>0.833</td>
 <td>0.907</td>
 <td>54</td>
-<td>0.849</td>
-<td>0.952</td>
+<td>0.844</td>
+<td>0.946</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
 <td>renewalsp</td>
 <td>crps</td>
 <td>-2</td>
-<td>2.38</td>
-<td>0.0452</td>
+<td>2.36</td>
+<td>0.0448</td>
 <td>0.0448</td>
 <td>0.889</td>
 <td>0.963</td>
 <td>27</td>
-<td>0.58</td>
-<td>0.889</td>
+<td>0.575</td>
+<td>0.882</td>
 </tr>
 </tbody>
 </table>
@@ -12335,7 +12603,7 @@ Table&nbsp;20: Ebola hub submissions scores by horizon.
 <div id="tbl-ebola-location" class="quarto-float quarto-figure quarto-figure-center anchored">
 <figure class="quarto-float quarto-float-tbl figure">
 <figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-ebola-location-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Table&nbsp;21: Ebola hub submissions scores by location and stratum.
+Table&nbsp;26: Ebola hub submissions scores by location and stratum.
 </figcaption>
 <div aria-describedby="tbl-ebola-location-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
 <table class="caption-top table">
@@ -12378,14 +12646,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD</td>
 <td>all</td>
-<td>47.5</td>
-<td>0.0947</td>
+<td>47.3</td>
+<td>0.0943</td>
 <td>0.813</td>
 <td>0.167</td>
 <td>0.667</td>
 <td>6</td>
-<td>3.23</td>
-<td>2.97</td>
+<td>3.22</td>
+<td>2.96</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -12408,14 +12676,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-BU</td>
 <td>all</td>
-<td>0.664</td>
-<td>0.281</td>
+<td>0.655</td>
+<td>0.278</td>
 <td>0.632</td>
 <td>1</td>
 <td>1</td>
 <td>6</td>
-<td>2.18</td>
-<td>1.49</td>
+<td>2.15</td>
+<td>1.48</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -12468,14 +12736,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-HU</td>
 <td>all</td>
-<td>7.35</td>
-<td>0.223</td>
+<td>7.3</td>
+<td>0.222</td>
 <td>0.908</td>
 <td>0</td>
 <td>0.333</td>
 <td>6</td>
-<td>5.28</td>
-<td>4.65</td>
+<td>5.25</td>
+<td>4.62</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -12483,14 +12751,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-IT</td>
 <td>all</td>
-<td>16.6</td>
-<td>0.0618</td>
+<td>16.4</td>
+<td>0.0612</td>
 <td>0.437</td>
 <td>0.5</td>
 <td>1</td>
 <td>6</td>
-<td>1.37</td>
-<td>1.34</td>
+<td>1.36</td>
+<td>1.33</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
@@ -12663,13 +12931,13 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-NK</td>
 <td>all</td>
-<td>55.2</td>
-<td>0.28</td>
+<td>55</td>
+<td>0.279</td>
 <td>0.977</td>
 <td>0</td>
 <td>0</td>
 <td>6</td>
-<td>2.99</td>
+<td>2.98</td>
 <td>2.23</td>
 </tr>
 <tr class="odd">
@@ -12678,14 +12946,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-NU</td>
 <td>all</td>
-<td>0.399</td>
+<td>0.398</td>
 <td>0.213</td>
 <td>-0.103</td>
 <td>0.833</td>
 <td>0.833</td>
 <td>6</td>
-<td>1.18</td>
-<td>1.14</td>
+<td>1.17</td>
+<td>1.13</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -12708,8 +12976,8 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-SK</td>
 <td>all</td>
-<td>0.00255</td>
-<td>0.00177</td>
+<td>0.00232</td>
+<td>0.00161</td>
 <td>0.025</td>
 <td>1</td>
 <td>1</td>
@@ -12723,14 +12991,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-SU</td>
 <td>all</td>
-<td>0.0977</td>
-<td>0.0529</td>
+<td>0.0959</td>
+<td>0.0522</td>
 <td>0.0983</td>
 <td>1</td>
 <td>1</td>
 <td>6</td>
-<td>7.15</td>
-<td>5.66</td>
+<td>7.06</td>
+<td>5.62</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
@@ -12753,8 +13021,8 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-TO</td>
 <td>all</td>
-<td>3.86</td>
-<td>0.263</td>
+<td>3.85</td>
+<td>0.262</td>
 <td>0.983</td>
 <td>0</td>
 <td>0.167</td>
@@ -12783,14 +13051,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD</td>
 <td>all</td>
-<td>47.2</td>
-<td>0.0924</td>
+<td>46.7</td>
+<td>0.0916</td>
 <td>0.537</td>
 <td>0.4</td>
 <td>0.7</td>
 <td>10</td>
-<td>1.7</td>
-<td>1.62</td>
+<td>1.68</td>
+<td>1.6</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
@@ -12813,14 +13081,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-BU</td>
 <td>all</td>
-<td>1.31</td>
-<td>0.422</td>
+<td>1.29</td>
+<td>0.419</td>
 <td>0.683</td>
 <td>0.5</td>
 <td>1</td>
 <td>10</td>
-<td>3.38</td>
-<td>2</td>
+<td>3.34</td>
+<td>1.98</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
@@ -12873,14 +13141,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-HU</td>
 <td>all</td>
-<td>7.48</td>
-<td>0.215</td>
+<td>7.39</td>
+<td>0.213</td>
 <td>0.731</td>
 <td>0.3</td>
 <td>0.6</td>
 <td>10</td>
-<td>5.47</td>
-<td>4.8</td>
+<td>5.44</td>
+<td>4.78</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
@@ -12888,14 +13156,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-IT</td>
 <td>all</td>
-<td>21.2</td>
-<td>0.0764</td>
+<td>20.8</td>
+<td>0.0752</td>
 <td>0.28</td>
 <td>0.6</td>
 <td>1</td>
 <td>10</td>
-<td>1.1</td>
 <td>1.08</td>
+<td>1.07</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -13068,13 +13336,13 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-NK</td>
 <td>all</td>
-<td>61.2</td>
-<td>0.303</td>
+<td>61</td>
+<td>0.302</td>
 <td>0.854</td>
 <td>0.1</td>
 <td>0.4</td>
 <td>10</td>
-<td>2.49</td>
+<td>2.47</td>
 <td>1.86</td>
 </tr>
 <tr class="even">
@@ -13083,13 +13351,13 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-NU</td>
 <td>all</td>
-<td>0.485</td>
+<td>0.483</td>
 <td>0.246</td>
 <td>-0.157</td>
 <td>0.8</td>
 <td>0.8</td>
 <td>10</td>
-<td>1.4</td>
+<td>1.39</td>
 <td>1.21</td>
 </tr>
 <tr class="odd">
@@ -13113,8 +13381,8 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-SK</td>
 <td>all</td>
-<td>0.0294</td>
-<td>0.0197</td>
+<td>0.0281</td>
+<td>0.0188</td>
 <td>0.133</td>
 <td>1</td>
 <td>1</td>
@@ -13128,14 +13396,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-SU</td>
 <td>all</td>
-<td>0.413</td>
-<td>0.221</td>
+<td>0.408</td>
+<td>0.22</td>
 <td>-0.058</td>
 <td>0.8</td>
 <td>0.8</td>
 <td>10</td>
-<td>26</td>
-<td>14.7</td>
+<td>25.6</td>
+<td>14.6</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -13158,8 +13426,8 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-TO</td>
 <td>all</td>
-<td>3.96</td>
-<td>0.31</td>
+<td>3.94</td>
+<td>0.309</td>
 <td>0.575</td>
 <td>0.1</td>
 <td>0.4</td>
@@ -13188,14 +13456,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD</td>
 <td>all</td>
-<td>38.8</td>
-<td>0.0785</td>
+<td>38.4</td>
+<td>0.0777</td>
 <td>0.118</td>
 <td>0.333</td>
 <td>1</td>
 <td>6</td>
-<td>2.64</td>
-<td>2.46</td>
+<td>2.62</td>
+<td>2.44</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -13218,14 +13486,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-BU</td>
 <td>all</td>
-<td>0.547</td>
-<td>0.293</td>
+<td>0.541</td>
+<td>0.291</td>
 <td>0.43</td>
 <td>0.833</td>
 <td>0.833</td>
 <td>6</td>
-<td>1.8</td>
-<td>1.56</td>
+<td>1.78</td>
+<td>1.55</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -13278,14 +13546,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-HU</td>
 <td>all</td>
-<td>2.56</td>
-<td>0.0792</td>
+<td>2.49</td>
+<td>0.0775</td>
 <td>0.437</td>
 <td>0.833</td>
 <td>0.833</td>
 <td>6</td>
-<td>1.84</td>
-<td>1.65</td>
+<td>1.79</td>
+<td>1.62</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -13293,14 +13561,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-IT</td>
 <td>all</td>
-<td>23.5</td>
-<td>0.0841</td>
+<td>23.2</td>
+<td>0.0831</td>
 <td>-0.0667</td>
 <td>0.5</td>
 <td>1</td>
 <td>6</td>
-<td>1.95</td>
-<td>1.82</td>
+<td>1.92</td>
+<td>1.8</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
@@ -13473,14 +13741,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-NK</td>
 <td>all</td>
-<td>38.6</td>
-<td>0.2</td>
+<td>38.3</td>
+<td>0.199</td>
 <td>0.6</td>
 <td>0.333</td>
 <td>0.833</td>
 <td>6</td>
-<td>2.09</td>
-<td>1.59</td>
+<td>2.07</td>
+<td>1.58</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
@@ -13488,13 +13756,13 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-NU</td>
 <td>all</td>
-<td>0.51</td>
-<td>0.242</td>
+<td>0.504</td>
+<td>0.241</td>
 <td>-0.0833</td>
 <td>0.833</td>
 <td>0.833</td>
 <td>6</td>
-<td>1.5</td>
+<td>1.48</td>
 <td>1.29</td>
 </tr>
 <tr class="even">
@@ -13518,8 +13786,8 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-SK</td>
 <td>all</td>
-<td>0.0184</td>
-<td>0.00868</td>
+<td>0.0158</td>
+<td>0.00762</td>
 <td>0.0867</td>
 <td>1</td>
 <td>1</td>
@@ -13533,14 +13801,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-SU</td>
 <td>all</td>
-<td>0.0945</td>
-<td>0.062</td>
+<td>0.093</td>
+<td>0.0615</td>
 <td>0.12</td>
 <td>1</td>
 <td>1</td>
 <td>6</td>
-<td>6.91</td>
-<td>6.64</td>
+<td>6.85</td>
+<td>6.63</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
@@ -13563,14 +13831,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-TO</td>
 <td>all</td>
-<td>2.81</td>
+<td>2.8</td>
 <td>0.195</td>
 <td>0.958</td>
 <td>0</td>
 <td>0.167</td>
 <td>6</td>
-<td>0.782</td>
-<td>0.955</td>
+<td>0.781</td>
+<td>0.953</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
@@ -13593,14 +13861,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD</td>
 <td>all</td>
-<td>44.5</td>
-<td>0.0937</td>
+<td>43.9</td>
+<td>0.0926</td>
 <td>-0.038</td>
 <td>0.4</td>
 <td>1</td>
 <td>10</td>
-<td>2.28</td>
-<td>2.36</td>
+<td>2.25</td>
+<td>2.34</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
@@ -13623,14 +13891,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-BU</td>
 <td>all</td>
-<td>0.601</td>
-<td>0.277</td>
+<td>0.59</td>
+<td>0.274</td>
 <td>0.371</td>
 <td>0.9</td>
 <td>1</td>
 <td>10</td>
-<td>2.08</td>
-<td>1.69</td>
+<td>2.05</td>
+<td>1.68</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
@@ -13683,14 +13951,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-HU</td>
 <td>all</td>
-<td>3.04</td>
-<td>0.103</td>
+<td>2.94</td>
+<td>0.101</td>
 <td>0.26</td>
 <td>0.8</td>
 <td>0.9</td>
 <td>10</td>
-<td>1.91</td>
-<td>1.79</td>
+<td>1.86</td>
+<td>1.76</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
@@ -13698,14 +13966,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-IT</td>
 <td>all</td>
-<td>24.7</td>
-<td>0.0914</td>
+<td>24.2</td>
+<td>0.0898</td>
 <td>-0.246</td>
 <td>0.7</td>
 <td>1</td>
 <td>10</td>
-<td>1.47</td>
-<td>1.52</td>
+<td>1.44</td>
+<td>1.51</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -13878,14 +14146,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-NK</td>
 <td>all</td>
-<td>37.7</td>
-<td>0.193</td>
+<td>37.3</td>
+<td>0.192</td>
 <td>0.389</td>
 <td>0.3</td>
 <td>1</td>
 <td>10</td>
-<td>1.41</td>
-<td>1.11</td>
+<td>1.39</td>
+<td>1.1</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -13893,14 +14161,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-NU</td>
 <td>all</td>
-<td>0.516</td>
-<td>0.258</td>
+<td>0.512</td>
+<td>0.257</td>
 <td>-0.151</td>
 <td>0.8</td>
 <td>0.8</td>
 <td>10</td>
-<td>1.55</td>
-<td>1.32</td>
+<td>1.53</td>
+<td>1.31</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
@@ -13923,8 +14191,8 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-SK</td>
 <td>all</td>
-<td>0.00913</td>
-<td>0.00455</td>
+<td>0.00733</td>
+<td>0.0038</td>
 <td>0.064</td>
 <td>1</td>
 <td>1</td>
@@ -13938,14 +14206,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-SU</td>
 <td>all</td>
-<td>0.32</td>
-<td>0.201</td>
+<td>0.315</td>
+<td>0.2</td>
 <td>-0.06</td>
 <td>0.7</td>
 <td>0.8</td>
 <td>10</td>
-<td>14.6</td>
-<td>11.1</td>
+<td>14.2</td>
+<td>11</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -13968,13 +14236,13 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-TO</td>
 <td>all</td>
-<td>2.85</td>
-<td>0.24</td>
+<td>2.84</td>
+<td>0.239</td>
 <td>0.509</td>
 <td>0.1</td>
 <td>0.5</td>
 <td>10</td>
-<td>0.856</td>
+<td>0.854</td>
 <td>1.13</td>
 </tr>
 <tr class="even">
@@ -13998,8 +14266,8 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD</td>
 <td>all</td>
-<td>21.6</td>
-<td>0.0437</td>
+<td>21.5</td>
+<td>0.0436</td>
 <td>0.782</td>
 <td>0.167</td>
 <td>0.333</td>
@@ -14013,14 +14281,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-BC</td>
 <td>all</td>
-<td>3.33e-05</td>
-<td>1.83e-05</td>
+<td>0</td>
+<td>2.89e-19</td>
 <td>0.00167</td>
 <td>1</td>
 <td>1</td>
 <td>6</td>
-<td>5.71</td>
-<td>5.98</td>
+<td>0</td>
+<td>1.74e-13</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
@@ -14028,14 +14296,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-BU</td>
 <td>all</td>
-<td>0.0743</td>
-<td>0.0394</td>
+<td>0.0722</td>
+<td>0.0384</td>
 <td>0.223</td>
 <td>1</td>
 <td>1</td>
 <td>6</td>
-<td>0.244</td>
-<td>0.209</td>
+<td>0.237</td>
+<td>0.204</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -14043,14 +14311,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-EQ</td>
 <td>all</td>
-<td>3.33e-05</td>
-<td>2.31e-05</td>
+<td>0</td>
+<td>5.78e-19</td>
 <td>0.00333</td>
 <td>1</td>
 <td>1</td>
 <td>6</td>
-<td>2.94</td>
-<td>3.73</td>
+<td>0</td>
+<td>1.3e-13</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
@@ -14058,14 +14326,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-HK</td>
 <td>all</td>
-<td>1.67e-05</td>
-<td>1.16e-05</td>
+<td>0</td>
+<td>2.89e-19</td>
 <td>0.00167</td>
 <td>1</td>
 <td>1</td>
 <td>6</td>
-<td>3.45</td>
-<td>3.86</td>
+<td>0</td>
+<td>1.65e-13</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -14073,14 +14341,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-HL</td>
 <td>all</td>
-<td>1.67e-05</td>
-<td>1.16e-05</td>
+<td>0</td>
+<td>2.89e-19</td>
 <td>0.00167</td>
 <td>1</td>
 <td>1</td>
 <td>6</td>
-<td>1.18</td>
-<td>1.28</td>
+<td>0</td>
+<td>4.1e-14</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
@@ -14088,14 +14356,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-HU</td>
 <td>all</td>
-<td>1.24</td>
-<td>0.0447</td>
+<td>1.22</td>
+<td>0.0443</td>
 <td>0.592</td>
 <td>0.5</td>
 <td>0.833</td>
 <td>6</td>
-<td>0.888</td>
-<td>0.932</td>
+<td>0.881</td>
+<td>0.925</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -14104,13 +14372,13 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>CD-IT</td>
 <td>all</td>
 <td>11</td>
-<td>0.0432</td>
+<td>0.043</td>
 <td>0.61</td>
 <td>0</td>
 <td>0.167</td>
 <td>6</td>
-<td>0.912</td>
-<td>0.935</td>
+<td>0.91</td>
+<td>0.933</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
@@ -14118,14 +14386,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-KC</td>
 <td>all</td>
-<td>1.67e-05</td>
-<td>1.16e-05</td>
+<td>0</td>
+<td>2.89e-19</td>
 <td>0.00167</td>
 <td>1</td>
 <td>1</td>
 <td>6</td>
-<td>2.86</td>
-<td>3.67</td>
+<td>0</td>
+<td>1.65e-13</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -14133,14 +14401,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-KE</td>
 <td>all</td>
-<td>8.33e-05</td>
-<td>5.3e-05</td>
+<td>0</td>
+<td>1.16e-18</td>
 <td>0.00667</td>
 <td>1</td>
 <td>1</td>
 <td>6</td>
-<td>17.2</td>
-<td>18</td>
+<td>0</td>
+<td>7.59e-13</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
@@ -14148,14 +14416,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-KG</td>
 <td>all</td>
-<td>5e-05</td>
-<td>2.31e-05</td>
+<td>0</td>
+<td>5.78e-19</td>
 <td>0.00167</td>
 <td>1</td>
 <td>1</td>
 <td>6</td>
-<td>4.69</td>
-<td>3.35</td>
+<td>0</td>
+<td>1.11e-13</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -14163,14 +14431,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-KL</td>
 <td>all</td>
-<td>1.67e-05</td>
-<td>1.16e-05</td>
+<td>0</td>
+<td>2.89e-19</td>
 <td>0.00167</td>
 <td>1</td>
 <td>1</td>
 <td>6</td>
-<td>1.16</td>
-<td>1.26</td>
+<td>0</td>
+<td>4.14e-14</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
@@ -14178,14 +14446,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-KN</td>
 <td>all</td>
-<td>3.33e-05</td>
-<td>1.83e-05</td>
+<td>0</td>
+<td>2.89e-19</td>
 <td>0.00167</td>
 <td>1</td>
 <td>1</td>
 <td>6</td>
-<td>1.68</td>
-<td>1.56</td>
+<td>0</td>
+<td>3.21e-14</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -14193,14 +14461,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-KS</td>
 <td>all</td>
-<td>1.67e-05</td>
-<td>1.16e-05</td>
+<td>0</td>
+<td>2.89e-19</td>
 <td>0.00167</td>
 <td>1</td>
 <td>1</td>
 <td>6</td>
-<td>1.69</td>
-<td>1.88</td>
+<td>0</td>
+<td>6.46e-14</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
@@ -14238,14 +14506,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-MA</td>
 <td>all</td>
-<td>0.000133</td>
-<td>5.07e-05</td>
+<td>0</td>
+<td>2.89e-19</td>
 <td>0.00333</td>
 <td>1</td>
 <td>1</td>
 <td>6</td>
-<td>13.8</td>
-<td>8.18</td>
+<td>0</td>
+<td>6.52e-14</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -14283,14 +14551,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-NK</td>
 <td>all</td>
-<td>14.3</td>
-<td>0.0826</td>
+<td>14.2</td>
+<td>0.0822</td>
 <td>0.625</td>
 <td>0</td>
 <td>0.5</td>
 <td>6</td>
-<td>0.776</td>
-<td>0.658</td>
+<td>0.772</td>
+<td>0.655</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
@@ -14298,14 +14566,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-NU</td>
 <td>all</td>
-<td>0.34</td>
+<td>0.339</td>
 <td>0.187</td>
 <td>-0.117</td>
 <td>0.833</td>
 <td>0.833</td>
 <td>6</td>
-<td>1</td>
-<td>0.998</td>
+<td>0.999</td>
+<td>0.996</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -14328,13 +14596,13 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-SK</td>
 <td>all</td>
-<td>1.67e-05</td>
-<td>1.16e-05</td>
+<td>0</td>
+<td>2.89e-19</td>
 <td>0.00167</td>
 <td>1</td>
 <td>1</td>
 <td>6</td>
-<td>inf</td>
+<td></td>
 <td>inf</td>
 </tr>
 <tr class="even">
@@ -14343,14 +14611,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-SU</td>
 <td>all</td>
-<td>0.0101</td>
-<td>0.00604</td>
+<td>0.00933</td>
+<td>0.00563</td>
 <td>0.075</td>
 <td>1</td>
 <td>1</td>
 <td>6</td>
-<td>0.741</td>
-<td>0.647</td>
+<td>0.687</td>
+<td>0.607</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
@@ -14373,14 +14641,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-TO</td>
 <td>all</td>
-<td>4.37</td>
-<td>0.247</td>
+<td>4.36</td>
+<td>0.246</td>
 <td>0.913</td>
 <td>0.167</td>
 <td>0.167</td>
 <td>6</td>
-<td>1.22</td>
 <td>1.21</td>
+<td>1.2</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
@@ -14388,14 +14656,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-TU</td>
 <td>all</td>
-<td>3.33e-05</td>
-<td>1.83e-05</td>
+<td>0</td>
+<td>0</td>
 <td>0.00167</td>
 <td>1</td>
 <td>1</td>
 <td>6</td>
-<td>18.2</td>
-<td>18.1</td>
+<td>0</td>
+<td>0</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -14418,14 +14686,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-BC</td>
 <td>all</td>
-<td>9.67e-06</td>
-<td>5.42e-06</td>
+<td>5.67e-06</td>
+<td>3.51e-06</td>
 <td>0.00183</td>
 <td>1</td>
 <td>1</td>
 <td>6</td>
-<td>1.66</td>
-<td>1.77</td>
+<td>1.89</td>
+<td>2.12</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -14448,14 +14716,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-EQ</td>
 <td>all</td>
-<td>9e-06</td>
-<td>5.11e-06</td>
+<td>6.01e-06</td>
+<td>3.64e-06</td>
 <td>0.00133</td>
 <td>1</td>
 <td>1</td>
 <td>6</td>
-<td>0.794</td>
-<td>0.826</td>
+<td>0.783</td>
+<td>0.819</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -14463,14 +14731,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-HK</td>
 <td>all</td>
-<td>5e-06</td>
-<td>2.76e-06</td>
+<td>3.34e-06</td>
+<td>1.89e-06</td>
 <td>0.000833</td>
 <td>1</td>
 <td>1</td>
 <td>6</td>
-<td>1.03</td>
-<td>0.923</td>
+<td>1.25</td>
+<td>1.08</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
@@ -14478,14 +14746,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-HL</td>
 <td>all</td>
-<td>9.67e-06</td>
-<td>5.92e-06</td>
+<td>6.01e-06</td>
+<td>3.93e-06</td>
 <td>0.00217</td>
 <td>1</td>
 <td>1</td>
 <td>6</td>
-<td>0.682</td>
-<td>0.657</td>
+<td>0.545</td>
+<td>0.557</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -14493,8 +14761,8 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-HU</td>
 <td>all</td>
-<td>3.06</td>
-<td>0.0967</td>
+<td>3.05</td>
+<td>0.0965</td>
 <td>0.551</td>
 <td>0.667</td>
 <td>0.833</td>
@@ -14509,7 +14777,7 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>CD-IT</td>
 <td>all</td>
 <td>17.2</td>
-<td>0.0721</td>
+<td>0.072</td>
 <td>-0.551</td>
 <td>0.333</td>
 <td>0.833</td>
@@ -14523,14 +14791,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-KC</td>
 <td>all</td>
-<td>1.13e-05</td>
-<td>7.19e-06</td>
+<td>8.01e-06</td>
+<td>5.26e-06</td>
 <td>0.00217</td>
 <td>1</td>
 <td>1</td>
 <td>6</td>
-<td>1.94</td>
-<td>2.29</td>
+<td>3</td>
+<td>3</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
@@ -14538,14 +14806,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-KE</td>
 <td>all</td>
-<td>7.17e-06</td>
-<td>4.68e-06</td>
+<td>4.67e-06</td>
+<td>3.14e-06</td>
 <td>0.00183</td>
 <td>1</td>
 <td>1</td>
 <td>6</td>
-<td>1.48</td>
-<td>1.59</td>
+<td>2</td>
+<td>2.06</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -14553,14 +14821,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-KG</td>
 <td>all</td>
-<td>9.17e-06</td>
-<td>5.43e-06</td>
+<td>5.67e-06</td>
+<td>3.55e-06</td>
 <td>0.00183</td>
 <td>1</td>
 <td>1</td>
 <td>6</td>
-<td>0.859</td>
-<td>0.788</td>
+<td>0.739</td>
+<td>0.679</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
@@ -14568,14 +14836,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-KL</td>
 <td>all</td>
-<td>4.83e-06</td>
-<td>3.19e-06</td>
+<td>3.34e-06</td>
+<td>2.31e-06</td>
 <td>0.001</td>
 <td>1</td>
 <td>1</td>
 <td>6</td>
-<td>0.337</td>
-<td>0.349</td>
+<td>0.313</td>
+<td>0.331</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -14583,14 +14851,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-KN</td>
 <td>all</td>
-<td>4e-06</td>
 <td>2.34e-06</td>
+<td>1.33e-06</td>
 <td>0.00117</td>
 <td>1</td>
 <td>1</td>
 <td>6</td>
-<td>0.202</td>
-<td>0.199</td>
+<td>0.159</td>
+<td>0.148</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
@@ -14598,14 +14866,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-KS</td>
 <td>all</td>
-<td>2.17e-06</td>
-<td>1.41e-06</td>
+<td>1e-06</td>
+<td>6.94e-07</td>
 <td>0.000833</td>
 <td>1</td>
 <td>1</td>
 <td>6</td>
-<td>0.22</td>
-<td>0.229</td>
+<td>0.143</td>
+<td>0.155</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -14613,14 +14881,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-LO</td>
 <td>all</td>
-<td>5.67e-06</td>
-<td>3.64e-06</td>
+<td>3.34e-06</td>
+<td>2.22e-06</td>
 <td>0.00167</td>
 <td>1</td>
 <td>1</td>
 <td>6</td>
-<td>0.248</td>
-<td>0.263</td>
+<td>0.172</td>
+<td>0.184</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
@@ -14628,14 +14896,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-LU</td>
 <td>all</td>
-<td>9.67e-06</td>
-<td>6.28e-06</td>
+<td>6.34e-06</td>
+<td>4.3e-06</td>
 <td>0.00233</td>
 <td>1</td>
 <td>1</td>
 <td>6</td>
-<td>1.61</td>
-<td>1.88</td>
+<td>2.11</td>
+<td>2.32</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -14643,14 +14911,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-MA</td>
 <td>all</td>
-<td>8.5e-06</td>
-<td>4.98e-06</td>
+<td>4.67e-06</td>
+<td>3.01e-06</td>
 <td>0.002</td>
 <td>1</td>
 <td>1</td>
 <td>6</td>
-<td>0.879</td>
-<td>0.802</td>
+<td>0.7</td>
+<td>0.678</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
@@ -14658,14 +14926,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-MN</td>
 <td>all</td>
-<td>3.33e-06</td>
-<td>2.26e-06</td>
+<td>2e-06</td>
+<td>1.39e-06</td>
 <td>0.00117</td>
 <td>1</td>
 <td>1</td>
 <td>6</td>
-<td>0.455</td>
-<td>0.519</td>
+<td>0.462</td>
+<td>0.51</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -14673,14 +14941,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-MO</td>
 <td>all</td>
-<td>1.3e-05</td>
-<td>8.27e-06</td>
+<td>9.01e-06</td>
+<td>5.96e-06</td>
 <td>0.00267</td>
 <td>1</td>
 <td>1</td>
 <td>6</td>
-<td>1.73</td>
-<td>1.98</td>
+<td>2.08</td>
+<td>2.36</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
@@ -14718,14 +14986,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-SA</td>
 <td>all</td>
-<td>3.83e-06</td>
-<td>2.3e-06</td>
+<td>1.67e-06</td>
+<td>1.06e-06</td>
 <td>0.00133</td>
 <td>1</td>
 <td>1</td>
 <td>6</td>
-<td>0.59</td>
-<td>0.607</td>
+<td>0.455</td>
+<td>0.451</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -14748,14 +15016,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-SU</td>
 <td>all</td>
-<td>0.261</td>
+<td>0.26</td>
 <td>0.159</td>
 <td>0.397</td>
 <td>1</td>
 <td>1</td>
 <td>6</td>
-<td>19.1</td>
-<td>17</td>
+<td>19.2</td>
+<td>17.1</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -14763,14 +15031,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-TA</td>
 <td>all</td>
-<td>1.62e-05</td>
-<td>9.78e-06</td>
+<td>1.17e-05</td>
+<td>7.33e-06</td>
 <td>0.0025</td>
 <td>1</td>
 <td>1</td>
 <td>6</td>
-<td>1.01</td>
-<td>1.08</td>
+<td>1.03</td>
+<td>1.1</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
@@ -14793,14 +15061,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-TU</td>
 <td>all</td>
-<td>1.1e-05</td>
-<td>7e-06</td>
+<td>8.01e-06</td>
+<td>5.17e-06</td>
 <td>0.00217</td>
 <td>1</td>
 <td>1</td>
 <td>6</td>
-<td>6</td>
-<td>6.92</td>
+<td>12</td>
+<td>14.1</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
@@ -14823,8 +15091,8 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-BC</td>
 <td>all</td>
-<td>5.83e-06</td>
-<td>3.06e-06</td>
+<td>3e-06</td>
+<td>1.66e-06</td>
 <td>0.00133</td>
 <td>1</td>
 <td>1</td>
@@ -14838,8 +15106,8 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-BU</td>
 <td>all</td>
-<td>0.305</td>
-<td>0.189</td>
+<td>0.304</td>
+<td>0.188</td>
 <td>0.352</td>
 <td>1</td>
 <td>1</td>
@@ -14853,8 +15121,8 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-EQ</td>
 <td>all</td>
-<td>1.13e-05</td>
-<td>6.19e-06</td>
+<td>7.67e-06</td>
+<td>4.45e-06</td>
 <td>0.0015</td>
 <td>1</td>
 <td>1</td>
@@ -14868,8 +15136,8 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-HK</td>
 <td>all</td>
-<td>4.83e-06</td>
-<td>2.99e-06</td>
+<td>2.67e-06</td>
+<td>1.75e-06</td>
 <td>0.00133</td>
 <td>1</td>
 <td>1</td>
@@ -14883,8 +15151,8 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-HL</td>
 <td>all</td>
-<td>1.42e-05</td>
-<td>9e-06</td>
+<td>1.1e-05</td>
+<td>7.06e-06</td>
 <td>0.00233</td>
 <td>1</td>
 <td>1</td>
@@ -14899,7 +15167,7 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>CD-HU</td>
 <td>all</td>
 <td>1.39</td>
-<td>0.048</td>
+<td>0.0479</td>
 <td>0.507</td>
 <td>0.5</td>
 <td>0.833</td>
@@ -14913,8 +15181,8 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-IT</td>
 <td>all</td>
-<td>12.1</td>
-<td>0.0462</td>
+<td>12</td>
+<td>0.0461</td>
 <td>0.0172</td>
 <td>0.667</td>
 <td>0.667</td>
@@ -14928,8 +15196,8 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-KC</td>
 <td>all</td>
-<td>5.83e-06</td>
-<td>3.15e-06</td>
+<td>2.67e-06</td>
+<td>1.75e-06</td>
 <td>0.00133</td>
 <td>1</td>
 <td>1</td>
@@ -14943,8 +15211,8 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-KE</td>
 <td>all</td>
-<td>4.83e-06</td>
-<td>2.95e-06</td>
+<td>2.34e-06</td>
+<td>1.52e-06</td>
 <td>0.0015</td>
 <td>1</td>
 <td>1</td>
@@ -14958,8 +15226,8 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-KG</td>
 <td>all</td>
-<td>1.07e-05</td>
-<td>6.89e-06</td>
+<td>7.67e-06</td>
+<td>5.22e-06</td>
 <td>0.00183</td>
 <td>1</td>
 <td>1</td>
@@ -14973,8 +15241,8 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-KL</td>
 <td>all</td>
-<td>1.43e-05</td>
-<td>9.14e-06</td>
+<td>1.07e-05</td>
+<td>6.98e-06</td>
 <td>0.0025</td>
 <td>1</td>
 <td>1</td>
@@ -14988,8 +15256,8 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-KN</td>
 <td>all</td>
-<td>1.98e-05</td>
-<td>1.18e-05</td>
+<td>1.47e-05</td>
+<td>9.02e-06</td>
 <td>0.00283</td>
 <td>1</td>
 <td>1</td>
@@ -15003,8 +15271,8 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-KS</td>
 <td>all</td>
-<td>9.83e-06</td>
-<td>6.14e-06</td>
+<td>7.01e-06</td>
+<td>4.47e-06</td>
 <td>0.00183</td>
 <td>1</td>
 <td>1</td>
@@ -15018,8 +15286,8 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-LO</td>
 <td>all</td>
-<td>2.28e-05</td>
-<td>1.39e-05</td>
+<td>1.94e-05</td>
+<td>1.2e-05</td>
 <td>0.00183</td>
 <td>1</td>
 <td>1</td>
@@ -15033,8 +15301,8 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-LU</td>
 <td>all</td>
-<td>6e-06</td>
-<td>3.34e-06</td>
+<td>3e-06</td>
+<td>1.85e-06</td>
 <td>0.0015</td>
 <td>1</td>
 <td>1</td>
@@ -15048,8 +15316,8 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-MA</td>
 <td>all</td>
-<td>9.67e-06</td>
-<td>6.2e-06</td>
+<td>6.67e-06</td>
+<td>4.43e-06</td>
 <td>0.002</td>
 <td>1</td>
 <td>1</td>
@@ -15063,8 +15331,8 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-MN</td>
 <td>all</td>
-<td>7.33e-06</td>
-<td>4.36e-06</td>
+<td>4.34e-06</td>
+<td>2.72e-06</td>
 <td>0.00167</td>
 <td>1</td>
 <td>1</td>
@@ -15078,8 +15346,8 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-MO</td>
 <td>all</td>
-<td>7.5e-06</td>
-<td>4.18e-06</td>
+<td>4.34e-06</td>
+<td>2.53e-06</td>
 <td>0.0015</td>
 <td>1</td>
 <td>1</td>
@@ -15123,8 +15391,8 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-SA</td>
 <td>all</td>
-<td>6.5e-06</td>
-<td>3.79e-06</td>
+<td>3.67e-06</td>
+<td>2.35e-06</td>
 <td>0.00133</td>
 <td>1</td>
 <td>1</td>
@@ -15153,8 +15421,8 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-SU</td>
 <td>all</td>
-<td>0.0137</td>
-<td>0.00934</td>
+<td>0.0136</td>
+<td>0.00928</td>
 <td>0.0858</td>
 <td>1</td>
 <td>1</td>
@@ -15168,8 +15436,8 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-TA</td>
 <td>all</td>
-<td>1.6e-05</td>
-<td>9.05e-06</td>
+<td>1.13e-05</td>
+<td>6.65e-06</td>
 <td>0.00233</td>
 <td>1</td>
 <td>1</td>
@@ -15198,8 +15466,8 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-TU</td>
 <td>all</td>
-<td>1.83e-06</td>
-<td>1.01e-06</td>
+<td>6.67e-07</td>
+<td>3.67e-07</td>
 <td>0.000667</td>
 <td>1</td>
 <td>1</td>
@@ -15213,14 +15481,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD</td>
 <td>all</td>
-<td>16.4</td>
-<td>0.034</td>
+<td>16.2</td>
+<td>0.0336</td>
 <td>-0.182</td>
 <td>0.5</td>
 <td>0.7</td>
 <td>10</td>
-<td>0.868</td>
-<td>0.871</td>
+<td>0.863</td>
+<td>0.866</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
@@ -15243,14 +15511,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-BU</td>
 <td>all</td>
-<td>0.332</td>
-<td>0.142</td>
+<td>0.326</td>
+<td>0.14</td>
 <td>0.231</td>
 <td>1</td>
 <td>1</td>
 <td>10</td>
-<td>0.472</td>
-<td>0.368</td>
+<td>0.461</td>
+<td>0.361</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
@@ -15273,8 +15541,8 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-HK</td>
 <td>all</td>
-<td>1e-05</td>
-<td>6.93e-06</td>
+<td>0</td>
+<td>1.73e-19</td>
 <td>0.001</td>
 <td>1</td>
 <td>1</td>
@@ -15288,14 +15556,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-HL</td>
 <td>all</td>
-<td>6e-05</td>
-<td>4.16e-05</td>
+<td>2.02e-05</td>
+<td>1.4e-05</td>
 <td>0.004</td>
 <td>1</td>
 <td>1</td>
 <td>10</td>
-<td>2.35</td>
-<td>2.57</td>
+<td>0</td>
+<td>8.19e-14</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -15303,14 +15571,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-HU</td>
 <td>all</td>
-<td>1.62</td>
-<td>0.0561</td>
+<td>1.6</td>
+<td>0.0554</td>
 <td>0.426</td>
 <td>0.7</td>
 <td>0.8</td>
 <td>10</td>
-<td>1.12</td>
-<td>1.17</td>
+<td>1.11</td>
+<td>1.16</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
@@ -15318,14 +15586,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-IT</td>
 <td>all</td>
-<td>12.4</td>
-<td>0.0472</td>
+<td>12.3</td>
+<td>0.0467</td>
 <td>-0.042</td>
 <td>0.4</td>
 <td>0.8</td>
 <td>10</td>
-<td>0.825</td>
-<td>0.842</td>
+<td>0.821</td>
+<td>0.838</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -15333,14 +15601,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-KC</td>
 <td>all</td>
-<td>1e-05</td>
-<td>6.93e-06</td>
+<td>0</td>
+<td>1.73e-19</td>
 <td>0.001</td>
 <td>1</td>
 <td>1</td>
 <td>10</td>
-<td>2.86</td>
-<td>3.67</td>
+<td>0</td>
+<td>1.65e-13</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
@@ -15348,14 +15616,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-KE</td>
 <td>all</td>
-<td>3e-05</td>
-<td>2.08e-05</td>
+<td>0</td>
+<td>5.2e-19</td>
 <td>0.003</td>
 <td>1</td>
 <td>1</td>
 <td>10</td>
-<td>3.45</td>
-<td>3.92</td>
+<td>0</td>
+<td>1.9e-13</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -15378,14 +15646,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-KL</td>
 <td>all</td>
-<td>4e-05</td>
-<td>2.77e-05</td>
+<td>0</td>
+<td>6.94e-19</td>
 <td>0.004</td>
 <td>1</td>
 <td>1</td>
 <td>10</td>
-<td>1.16</td>
-<td>1.26</td>
+<td>0</td>
+<td>4.14e-14</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -15393,8 +15661,8 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-KN</td>
 <td>all</td>
-<td>4e-05</td>
-<td>2.77e-05</td>
+<td>2.02e-05</td>
+<td>1.4e-05</td>
 <td>0.002</td>
 <td>1</td>
 <td>1</td>
@@ -15423,8 +15691,8 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-LO</td>
 <td>all</td>
-<td>1e-05</td>
-<td>6.93e-06</td>
+<td>0</td>
+<td>1.73e-19</td>
 <td>0.001</td>
 <td>1</td>
 <td>1</td>
@@ -15453,14 +15721,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-MA</td>
 <td>all</td>
-<td>0.00014</td>
-<td>9.7e-05</td>
+<td>8.08e-05</td>
+<td>5.6e-05</td>
 <td>0.006</td>
 <td>1</td>
 <td>1</td>
 <td>10</td>
-<td>1.72</td>
-<td>1.86</td>
+<td>0</td>
+<td>6.52e-14</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
@@ -15483,8 +15751,8 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-MO</td>
 <td>all</td>
-<td>1e-05</td>
-<td>6.93e-06</td>
+<td>0</td>
+<td>1.73e-19</td>
 <td>0.001</td>
 <td>1</td>
 <td>1</td>
@@ -15498,14 +15766,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-NK</td>
 <td>all</td>
-<td>13.6</td>
-<td>0.0833</td>
+<td>13.5</td>
+<td>0.0828</td>
 <td>-0.291</td>
 <td>0.3</td>
 <td>0.8</td>
 <td>10</td>
-<td>0.895</td>
-<td>0.831</td>
+<td>0.893</td>
+<td>0.829</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -15513,13 +15781,13 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-NU</td>
 <td>all</td>
-<td>0.453</td>
+<td>0.451</td>
 <td>0.244</td>
 <td>-0.091</td>
 <td>0.8</td>
 <td>0.8</td>
 <td>10</td>
-<td>1.24</td>
+<td>1.23</td>
 <td>1.19</td>
 </tr>
 <tr class="odd">
@@ -15528,8 +15796,8 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-SA</td>
 <td>all</td>
-<td>9e-05</td>
-<td>6.24e-05</td>
+<td>6.06e-05</td>
+<td>4.2e-05</td>
 <td>0.003</td>
 <td>1</td>
 <td>1</td>
@@ -15543,8 +15811,8 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-SK</td>
 <td>all</td>
-<td>0.00099</td>
-<td>0.000686</td>
+<td>0.000768</td>
+<td>0.000532</td>
 <td>0.023</td>
 <td>1</td>
 <td>1</td>
@@ -15558,14 +15826,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-SU</td>
 <td>all</td>
-<td>0.288</td>
-<td>0.186</td>
+<td>0.286</td>
+<td>0.185</td>
 <td>-0.13</td>
 <td>0.8</td>
 <td>0.8</td>
 <td>10</td>
-<td>10.8</td>
-<td>8.46</td>
+<td>10.5</td>
+<td>8.28</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -15573,14 +15841,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-TA</td>
 <td>all</td>
-<td>7e-05</td>
-<td>4.85e-05</td>
+<td>2.02e-05</td>
+<td>1.4e-05</td>
 <td>0.005</td>
 <td>1</td>
 <td>1</td>
 <td>10</td>
-<td>1.04</td>
-<td>1.28</td>
+<td>0</td>
+<td>4.35e-14</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
@@ -15588,8 +15856,8 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-TO</td>
 <td>all</td>
-<td>3.62</td>
-<td>0.226</td>
+<td>3.61</td>
+<td>0.225</td>
 <td>0.437</td>
 <td>0.3</td>
 <td>0.5</td>
@@ -15618,14 +15886,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD</td>
 <td>all</td>
-<td>15</td>
-<td>0.0316</td>
+<td>14.8</td>
+<td>0.0313</td>
 <td>-0.188</td>
 <td>0.5</td>
 <td>0.8</td>
 <td>10</td>
-<td>0.909</td>
-<td>0.912</td>
+<td>0.904</td>
+<td>0.908</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -15648,14 +15916,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-BU</td>
 <td>all</td>
-<td>0.357</td>
-<td>0.159</td>
+<td>0.351</td>
+<td>0.157</td>
 <td>0.271</td>
 <td>0.9</td>
 <td>1</td>
 <td>10</td>
-<td>0.564</td>
-<td>0.438</td>
+<td>0.551</td>
+<td>0.43</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -15678,8 +15946,8 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-HK</td>
 <td>all</td>
-<td>4e-05</td>
-<td>2.77e-05</td>
+<td>2.02e-05</td>
+<td>1.4e-05</td>
 <td>0.002</td>
 <td>1</td>
 <td>1</td>
@@ -15693,14 +15961,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-HL</td>
 <td>all</td>
-<td>3e-05</td>
-<td>2.08e-05</td>
+<td>0</td>
+<td>5.2e-19</td>
 <td>0.003</td>
 <td>1</td>
 <td>1</td>
 <td>10</td>
-<td>2.35</td>
-<td>2.57</td>
+<td>0</td>
+<td>8.19e-14</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
@@ -15708,14 +15976,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-HU</td>
 <td>all</td>
-<td>1.5</td>
-<td>0.0527</td>
+<td>1.48</td>
+<td>0.052</td>
 <td>0.378</td>
 <td>0.7</td>
 <td>0.8</td>
 <td>10</td>
-<td>1.07</td>
-<td>1.13</td>
+<td>1.06</td>
+<td>1.12</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -15723,14 +15991,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-IT</td>
 <td>all</td>
-<td>11.5</td>
-<td>0.0444</td>
+<td>11.4</td>
+<td>0.044</td>
 <td>-0.049</td>
 <td>0.4</td>
 <td>0.8</td>
 <td>10</td>
-<td>0.85</td>
-<td>0.867</td>
+<td>0.845</td>
+<td>0.862</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
@@ -15753,14 +16021,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-KE</td>
 <td>all</td>
-<td>2e-05</td>
-<td>1.39e-05</td>
+<td>0</td>
+<td>3.47e-19</td>
 <td>0.002</td>
 <td>1</td>
 <td>1</td>
 <td>10</td>
-<td>3.45</td>
-<td>3.92</td>
+<td>0</td>
+<td>1.9e-13</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
@@ -15783,8 +16051,8 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-KL</td>
 <td>all</td>
-<td>3e-05</td>
-<td>2.08e-05</td>
+<td>0</td>
+<td>5.2e-19</td>
 <td>0.003</td>
 <td>1</td>
 <td>1</td>
@@ -15798,14 +16066,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-KN</td>
 <td>all</td>
-<td>5e-05</td>
-<td>3.47e-05</td>
+<td>2.02e-05</td>
+<td>1.4e-05</td>
 <td>0.003</td>
 <td>1</td>
 <td>1</td>
 <td>10</td>
-<td>0.84</td>
-<td>0.982</td>
+<td>0</td>
+<td>3.21e-14</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -15828,8 +16096,8 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-LO</td>
 <td>all</td>
-<td>2e-05</td>
-<td>1.39e-05</td>
+<td>0</td>
+<td>3.47e-19</td>
 <td>0.002</td>
 <td>1</td>
 <td>1</td>
@@ -15858,14 +16126,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-MA</td>
 <td>all</td>
-<td>0.00011</td>
-<td>7.62e-05</td>
+<td>6.06e-05</td>
+<td>4.2e-05</td>
 <td>0.005</td>
 <td>1</td>
 <td>1</td>
 <td>10</td>
-<td>1.72</td>
-<td>1.86</td>
+<td>0</td>
+<td>6.52e-14</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -15888,8 +16156,8 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-MO</td>
 <td>all</td>
-<td>1e-05</td>
-<td>6.93e-06</td>
+<td>0</td>
+<td>1.73e-19</td>
 <td>0.001</td>
 <td>1</td>
 <td>1</td>
@@ -15904,13 +16172,13 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>CD-NK</td>
 <td>all</td>
 <td>13.3</td>
-<td>0.0823</td>
+<td>0.0819</td>
 <td>-0.304</td>
 <td>0.2</td>
 <td>0.7</td>
 <td>10</td>
-<td>0.889</td>
-<td>0.827</td>
+<td>0.887</td>
+<td>0.825</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
@@ -15918,13 +16186,13 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-NU</td>
 <td>all</td>
-<td>0.457</td>
+<td>0.455</td>
 <td>0.246</td>
 <td>-0.087</td>
 <td>0.8</td>
 <td>0.8</td>
 <td>10</td>
-<td>1.26</td>
+<td>1.25</td>
 <td>1.21</td>
 </tr>
 <tr class="even">
@@ -15933,8 +16201,8 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-SA</td>
 <td>all</td>
-<td>4e-05</td>
-<td>2.77e-05</td>
+<td>2.02e-05</td>
+<td>1.4e-05</td>
 <td>0.002</td>
 <td>1</td>
 <td>1</td>
@@ -15948,8 +16216,8 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-SK</td>
 <td>all</td>
-<td>0.00125</td>
-<td>0.000864</td>
+<td>0.00101</td>
+<td>0.0007</td>
 <td>0.024</td>
 <td>1</td>
 <td>1</td>
@@ -15963,14 +16231,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-SU</td>
 <td>all</td>
-<td>0.293</td>
-<td>0.19</td>
+<td>0.29</td>
+<td>0.188</td>
 <td>-0.132</td>
 <td>0.8</td>
 <td>0.8</td>
 <td>10</td>
-<td>11.3</td>
-<td>9.08</td>
+<td>11</td>
+<td>8.89</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
@@ -15978,14 +16246,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-TA</td>
 <td>all</td>
-<td>2e-05</td>
-<td>1.39e-05</td>
+<td>0</td>
+<td>1.73e-19</td>
 <td>0.002</td>
 <td>1</td>
 <td>1</td>
 <td>10</td>
-<td>2.08</td>
-<td>2.55</td>
+<td>0</td>
+<td>4.35e-14</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -15993,13 +16261,13 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-TO</td>
 <td>all</td>
-<td>3.51</td>
-<td>0.221</td>
+<td>3.49</td>
+<td>0.219</td>
 <td>0.425</td>
 <td>0.3</td>
 <td>0.5</td>
 <td>10</td>
-<td>1.42</td>
+<td>1.41</td>
 <td>1.43</td>
 </tr>
 <tr class="odd">
@@ -16023,14 +16291,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD</td>
 <td>all</td>
-<td>12.7</td>
-<td>0.0273</td>
+<td>12.6</td>
+<td>0.0271</td>
 <td>-0.127</td>
 <td>0.167</td>
 <td>0.833</td>
 <td>6</td>
-<td>0.862</td>
-<td>0.855</td>
+<td>0.856</td>
+<td>0.85</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
@@ -16038,14 +16306,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-BC</td>
 <td>all</td>
-<td>3.33e-05</td>
-<td>1.83e-05</td>
+<td>0</td>
+<td>2.89e-19</td>
 <td>0.00167</td>
 <td>1</td>
 <td>1</td>
 <td>6</td>
-<td>5.71</td>
-<td>5.98</td>
+<td>0</td>
+<td>1.74e-13</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -16053,14 +16321,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-BU</td>
 <td>all</td>
-<td>0.176</td>
-<td>0.0768</td>
+<td>0.172</td>
+<td>0.0754</td>
 <td>0.258</td>
 <td>1</td>
 <td>1</td>
 <td>6</td>
-<td>0.579</td>
-<td>0.408</td>
+<td>0.565</td>
+<td>0.4</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
@@ -16068,14 +16336,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-EQ</td>
 <td>all</td>
-<td>3.33e-05</td>
-<td>2.31e-05</td>
+<td>0</td>
+<td>5.78e-19</td>
 <td>0.00333</td>
 <td>1</td>
 <td>1</td>
 <td>6</td>
-<td>2.94</td>
-<td>3.73</td>
+<td>0</td>
+<td>1.3e-13</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -16083,14 +16351,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-HK</td>
 <td>all</td>
-<td>1.67e-05</td>
-<td>1.16e-05</td>
+<td>0</td>
+<td>2.89e-19</td>
 <td>0.00167</td>
 <td>1</td>
 <td>1</td>
 <td>6</td>
-<td>3.45</td>
-<td>3.86</td>
+<td>0</td>
+<td>1.65e-13</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
@@ -16098,14 +16366,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-HL</td>
 <td>all</td>
-<td>1.67e-05</td>
-<td>1.16e-05</td>
+<td>0</td>
+<td>2.89e-19</td>
 <td>0.00167</td>
 <td>1</td>
 <td>1</td>
 <td>6</td>
-<td>1.18</td>
-<td>1.28</td>
+<td>0</td>
+<td>4.1e-14</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -16113,14 +16381,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-HU</td>
 <td>all</td>
-<td>1.02</td>
-<td>0.0386</td>
+<td>1.01</td>
+<td>0.0383</td>
 <td>0.197</td>
 <td>0.5</td>
 <td>0.833</td>
 <td>6</td>
-<td>0.731</td>
-<td>0.804</td>
+<td>0.724</td>
+<td>0.798</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
@@ -16128,14 +16396,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-IT</td>
 <td>all</td>
-<td>9.58</td>
-<td>0.038</td>
+<td>9.52</td>
+<td>0.0378</td>
 <td>-0.0983</td>
 <td>0.333</td>
 <td>0.667</td>
 <td>6</td>
-<td>0.794</td>
-<td>0.823</td>
+<td>0.791</td>
+<td>0.819</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -16143,14 +16411,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-KC</td>
 <td>all</td>
-<td>1.67e-05</td>
-<td>1.16e-05</td>
+<td>0</td>
+<td>2.89e-19</td>
 <td>0.00167</td>
 <td>1</td>
 <td>1</td>
 <td>6</td>
-<td>2.86</td>
-<td>3.67</td>
+<td>0</td>
+<td>1.65e-13</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
@@ -16158,14 +16426,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-KE</td>
 <td>all</td>
-<td>8.33e-05</td>
-<td>5.3e-05</td>
+<td>0</td>
+<td>1.16e-18</td>
 <td>0.00667</td>
 <td>1</td>
 <td>1</td>
 <td>6</td>
-<td>17.2</td>
-<td>18</td>
+<td>0</td>
+<td>7.59e-13</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -16173,14 +16441,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-KG</td>
 <td>all</td>
-<td>5e-05</td>
-<td>2.31e-05</td>
+<td>0</td>
+<td>5.78e-19</td>
 <td>0.00167</td>
 <td>1</td>
 <td>1</td>
 <td>6</td>
-<td>4.69</td>
-<td>3.35</td>
+<td>0</td>
+<td>1.11e-13</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
@@ -16188,14 +16456,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-KL</td>
 <td>all</td>
-<td>1.67e-05</td>
-<td>1.16e-05</td>
+<td>0</td>
+<td>2.89e-19</td>
 <td>0.00167</td>
 <td>1</td>
 <td>1</td>
 <td>6</td>
-<td>1.16</td>
-<td>1.26</td>
+<td>0</td>
+<td>4.14e-14</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -16203,14 +16471,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-KN</td>
 <td>all</td>
-<td>3.33e-05</td>
-<td>1.83e-05</td>
+<td>0</td>
+<td>2.89e-19</td>
 <td>0.00167</td>
 <td>1</td>
 <td>1</td>
 <td>6</td>
-<td>1.68</td>
-<td>1.56</td>
+<td>0</td>
+<td>3.21e-14</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
@@ -16218,14 +16486,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-KS</td>
 <td>all</td>
-<td>1.67e-05</td>
-<td>1.16e-05</td>
+<td>0</td>
+<td>2.89e-19</td>
 <td>0.00167</td>
 <td>1</td>
 <td>1</td>
 <td>6</td>
-<td>1.69</td>
-<td>1.88</td>
+<td>0</td>
+<td>6.46e-14</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -16263,14 +16531,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-MA</td>
 <td>all</td>
-<td>0.000133</td>
-<td>5.07e-05</td>
+<td>0</td>
+<td>2.89e-19</td>
 <td>0.00333</td>
 <td>1</td>
 <td>1</td>
 <td>6</td>
-<td>13.8</td>
-<td>8.18</td>
+<td>0</td>
+<td>6.52e-14</td>
 </tr>
 <tr class="odd">
 <td>ebola</td>
@@ -16308,14 +16576,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-NK</td>
 <td>all</td>
-<td>13</td>
-<td>0.0795</td>
+<td>12.9</td>
+<td>0.0791</td>
 <td>-0.165</td>
 <td>0.5</td>
 <td>0.667</td>
 <td>6</td>
-<td>0.703</td>
-<td>0.633</td>
+<td>0.699</td>
+<td>0.63</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -16323,13 +16591,13 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-NU</td>
 <td>all</td>
-<td>0.345</td>
+<td>0.344</td>
 <td>0.189</td>
 <td>-0.0967</td>
 <td>0.833</td>
 <td>0.833</td>
 <td>6</td>
-<td>1.02</td>
+<td>1.01</td>
 <td>1.01</td>
 </tr>
 <tr class="odd">
@@ -16353,13 +16621,13 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-SK</td>
 <td>all</td>
-<td>1.67e-05</td>
-<td>1.16e-05</td>
+<td>0</td>
+<td>2.89e-19</td>
 <td>0.00167</td>
 <td>1</td>
 <td>1</td>
 <td>6</td>
-<td>inf</td>
+<td></td>
 <td>inf</td>
 </tr>
 <tr class="odd">
@@ -16368,14 +16636,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-SU</td>
 <td>all</td>
-<td>0.161</td>
-<td>0.0814</td>
+<td>0.156</td>
+<td>0.0791</td>
 <td>0.15</td>
 <td>1</td>
 <td>1</td>
 <td>6</td>
-<td>11.8</td>
-<td>8.72</td>
+<td>11.5</td>
+<td>8.52</td>
 </tr>
 <tr class="even">
 <td>ebola</td>
@@ -16398,13 +16666,13 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-TO</td>
 <td>all</td>
-<td>4.42</td>
-<td>0.25</td>
+<td>4.39</td>
+<td>0.249</td>
 <td>0.883</td>
 <td>0.167</td>
 <td>0.167</td>
 <td>6</td>
-<td>1.23</td>
+<td>1.22</td>
 <td>1.22</td>
 </tr>
 <tr class="even">
@@ -16413,14 +16681,14 @@ Table&nbsp;21: Ebola hub submissions scores by location and stratum.
 <td>crps</td>
 <td>CD-TU</td>
 <td>all</td>
-<td>3.33e-05</td>
-<td>1.83e-05</td>
+<td>0</td>
+<td>0</td>
 <td>0.00167</td>
 <td>1</td>
 <td>1</td>
 <td>6</td>
-<td>18.2</td>
-<td>18.1</td>
+<td>0</td>
+<td>0</td>
 </tr>
 </tbody>
 </table>

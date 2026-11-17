@@ -57,7 +57,7 @@
     
       <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
     
-      <link rel="stylesheet" href="../../stylesheets/extra.css?v=66c70f79">
+      <link rel="stylesheet" href="../../stylesheets/extra.css?v=79bb969f">
     
     <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
@@ -2309,6 +2309,8 @@ The baseline is <code>randomwalknowcast</code>, set by <code>[scores] baseline</
 Of the Chronos-2 models the site shows only <code>fm_chronos_daily_ragged_ft</code> (<code>[models]</code> in <code>config/site.toml</code>); the others are still fitted, scored and in the paper.
 The interactive summaries and the checks chart have a Relative to picker that makes any model the baseline, and the overall score tables a baseline filter.
 In the summaries a new baseline changes which forecasts are matched, so <span class="arithmatex">\(n\)</span> and the means change too.
+A model with every one of the baseline's forecasts has the baseline's <span class="arithmatex">\(n\)</span>, so those rows are read side by side.
+A model with fewer is marked partial, with its <span class="arithmatex">\(n\)</span> of the baseline's, and comes after them, as its scores are on fewer forecasts.
 Coverage is whether <span class="arithmatex">\(y\)</span> falls in the central 50% and 90% sample intervals.</p>
 <h3 id="energy-score">Energy score<a class="headerlink" href="#energy-score" title="Permanent link">&para;</a></h3>
 <p>The energy score scores one forecast of a vector <span class="arithmatex">\(\mathbf{y}\)</span>.
@@ -2633,9 +2635,9 @@ The paper also filled some missing ILM and LMU nowcasts from later model version
       
         <script src="../../javascripts/zoom.js?v=4e0c610c"></script>
       
-        <script src="../../javascripts/summarise.js?v=e2f49fd3"></script>
+        <script src="../../javascripts/summarise.js?v=c4a6e89a"></script>
       
-        <script src="../../javascripts/energy.js?v=36005f6a"></script>
+        <script src="../../javascripts/energy.js?v=93c70f1f"></script>
       
         <script src="../../javascripts/tablesort.js?v=eb2e29e2"></script>
       
@@ -2645,7 +2647,7 @@ The paper also filled some missing ILM and LMU nowcasts from later model version
       
         <script src="../../javascripts/scorechart.js?v=1c27a70d"></script>
       
-        <script src="../../javascripts/scoresummary.js?v=baec2b21"></script>
+        <script src="../../javascripts/scoresummary.js?v=d19c5790"></script>
       
         <script src="../../javascripts/checkschart.js?v=1ee222fe"></script>
       
