@@ -668,12 +668,6 @@ def grid_config(mode):
     }
 
 
-def grid_settings(w):
-    """Simulations whose settings give the realised values, if they exist."""
-    sims = SYNTHETIC["simulations"][w.mode]
-    return f"--settings {shlex.quote(sims)}" if os.path.isdir(sims) else ""
-
-
 # The grid tables and SI notes, read from the simulator's code
 # (`papertables.synthetic_grid`).
 rule grid_tables:
