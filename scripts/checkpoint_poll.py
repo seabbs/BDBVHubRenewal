@@ -453,6 +453,7 @@ def run_units(
     pause: Any = None,
     paused: list[str] | None = None,
     on_done: Any = None,
+    max_units: int = 0,
 ) -> bool:
     """Run the units not yet done, gated; return whether all finished.
 
@@ -489,7 +490,7 @@ def run_units(
                 f"{total - left}/{total} units")  # fmt: skip
             if done and on_done is not None:
                 on_done(unit)
-        if pending and len(running) < MAX_UNITS:
+        if pending and len(running) < (max_units or MAX_UNITS):
             if pending[0][0] == "heldout" or can_launch(
                 budget(), mem_avail_gb(), len(running)
             ):
@@ -781,8 +782,9 @@ def main(cache: Path) -> None:
             # The loop picks what goes on next (an older German run, say).
             continue
         if checkpoint.startswith("slots-"):
-            # German runs of the live run's checkpoints, two at a time, in
-            # german_order; each lands as soon as its own unit ends.
+            # Every due German run of the live run's checkpoints, in
+            # german_order, two at a time (a freed slot takes the next);
+            # each lands as soon as its own unit ends.
             meta = {
                 lb: json.loads((cache / "heldout" / f"{lb}.json").read_text())
                 for lb in queue
@@ -802,7 +804,7 @@ def main(cache: Path) -> None:
                 for lb in due
             }
             outbreaks = {lb: int(m.get("n_outbreaks", 0)) for lb, m in meta.items()}
-            pick = german_order(due, cached, outbreaks)[:GERMAN_PARALLEL]
+            pick = german_order(due, cached, outbreaks)
             if pick:
                 germ = [("germany", cs.REFERENCE), *(("germany", lb) for lb in pick)]
 
@@ -817,7 +819,10 @@ def main(cache: Path) -> None:
 
                 say(f"German runs: {', '.join(pick)} "
                     f"({', '.join(f'n{outbreaks[lb]} {cached[lb]}/80' for lb in pick)})")  # fmt: skip
-                run_units(cache, germ, "German", newer_slots, paused, landed)
+                run_units(
+                    cache, germ, "German", newer_slots, paused, landed,
+                    max_units=GERMAN_PARALLEL,
+                )  # fmt: skip
                 continue
         if not run_units(cache, units, checkpoint, newer_slots, paused):
             if paused:
