@@ -246,7 +246,11 @@ def test_finished_units_are_kept(tmp_path):
 
 
 def test_score_runs_the_follow_ups_of_slots_checkpoints_only(tmp_path):
-    config = {"score": {"labels": ["slots-aaa", "bbb"]}}
+    config = {
+        "score": {"labels": ["slots-aaa", "bbb"]},
+        "slots_check": {"run": True},
+        "agg": {"run": True},
+    }
     jobs = dry(tmp_path, "score", config=config)
     assert jobs["slots_check_shard"] == 2
     assert jobs["slots_check_summary"] == 1
@@ -254,6 +258,37 @@ def test_score_runs_the_follow_ups_of_slots_checkpoints_only(tmp_path):
     assert jobs["agg_rows"] == 1
     assert jobs["agg_sanity"] == 1
     assert jobs["fetch_adapter"] == 1
+
+
+def test_the_follow_ups_are_off_for_grid_r5(tmp_path):
+    # r5 has no no-slots checkpoint for the slots check to compare with.
+    config = {"score": {"labels": ["slots-aaa", "bbb"]}}
+    jobs = dry(tmp_path, "score", config=config)
+    assert "slots_check_shard" not in jobs
+    assert "agg_fit" not in jobs
+
+
+def test_score_runs_held_out_scores_and_zones_a_label(tmp_path):
+    config = {"score": {"labels": ["slots-aaa", "bbb"]}}
+    jobs = dry(tmp_path, "score", config=config)
+    # Each checkpoint and the reference on the held-out set's simulations.
+    assert jobs["score_heldout_scores"] == 3
+    assert jobs["score_zones"] == 3
+
+
+def test_kept_labels_join_the_table_but_are_never_scored(tmp_path):
+    config = {"score": {"labels": ["slots-aaa"], "kept": ["slots-old"]}}
+    jobs = dry(tmp_path, "score", config=config)
+    assert jobs["score_bdbv"] == 2
+    assert jobs["score_heldout"] == 1
+    assert jobs["score_heldout_scores"] == 2
+    assert jobs["score_table"] == 1
+
+
+def test_no_held_out_scores_before_a_checkpoint(tmp_path):
+    # The reference's needs a checkpoint's held-out set to check against.
+    jobs = dry(tmp_path, "score", config={"score": {"labels": []}})
+    assert "score_heldout_scores" not in jobs
 
 
 def _local(tmp_path, *lines):
