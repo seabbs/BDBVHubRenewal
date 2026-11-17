@@ -352,7 +352,12 @@ def outputs(mode):
         for study in STUDIES
         if study in JOINT_STUDIES
     ]
-    return evidence + design + joint + [
+    real = (
+        [f"{R}/{mode}/tables/si/real-finetune.md"]
+        if {"germany", "ebola"} <= set(STUDIES)
+        else []
+    )
+    return evidence + design + joint + real + [
         path
         for study in STUDIES
         for path in [*figures(mode, study), *tables(mode, study)]
@@ -587,6 +592,18 @@ rule joint_scores:
         "--truth {input.truth} --out {output.scores} --table {output.table}"
 
 
+rule real_finetune:
+    # The real-data comparison of both case studies as one table.
+    input:
+        germany=f"{R}/{{mode}}/tables/si/germany-real-finetune.csv",
+        ebola=f"{R}/{{mode}}/tables/si/ebola-real-finetune.csv",
+    output:
+        f"{R}/{{mode}}/tables/si/real-finetune.md",
+    shell:
+        "{PYTHON} -m paperpipe real-finetune --germany {input.germany} "
+        "--ebola {input.ebola} --out {output}"
+
+
 def study_split(mode, study):
     s = run_settings(config, mode)
     if study == "germany" and s.germany_split is not None:
@@ -728,6 +745,7 @@ rule summary:
         "{PYTHON} -m paperpipe summary --mode {wildcards.mode} "
         "--meta {input.meta} --scores {input.scores} --out {output} "
         + (f"--finetuned {config['finetuned']}" if config.get("finetuned") else "")
+        + f" --realdata-after {REALDATA_AFTER}"
 
 
 # The paper reads `build`, so it shows the last run published.

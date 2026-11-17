@@ -57,6 +57,7 @@ __all__ = [
     "STUDY_SI_TABLES",
     "figure_names",
     "joint_table",
+    "real_finetune_combined",
     "real_finetune_table",
     "score_tables",
     "to_markdown",
@@ -475,6 +476,53 @@ def real_finetune_table(
             _table(rows, ["level"], REFERENCE),
         ],
         ignore_index=True,
+    )
+
+
+REAL_LEVELS: Final = (
+    ("national", "national", "National"),
+    ("states", "provinces", "States / provinces"),
+    ("age groups", "zones", "Age groups / zones"),
+)
+"""German and BDBV levels shown side by side in the real-data table."""
+
+
+def real_finetune_combined(
+    germany: pd.DataFrame | None, ebola: pd.DataFrame | None
+) -> pd.DataFrame:
+    """Return the real-data comparison of both case studies as one table.
+
+    One row per model and level (`REAL_LEVELS`), never pooled across
+    levels, with each model's score relative to `REFERENCE` on the German
+    held-out half and on BDBV rounds after the real-data model's last
+    training release. A study without rows yet is blank.
+    """
+
+    def cells(rows: pd.DataFrame | None, level: str) -> dict[str, str]:
+        if rows is None or rows.empty:
+            return {}
+        one = rows.loc[rows["level"] == level]
+        return {
+            str(m): f"{v:.2f}"
+            for m, v in zip(one["model"], one["rel_score"], strict=True)
+            if pd.notna(v)
+        }
+
+    frames = [f for f in (germany, ebola) if f is not None and not f.empty]
+    models = sorted({m for f in frames for m in f["model"] if m != REFERENCE})
+    out = []
+    for model in models:
+        for de, cd, name in REAL_LEVELS:
+            out.append(
+                {
+                    "Model": model,
+                    "Level": name,
+                    "German held-out": cells(germany, de).get(model, ""),
+                    "BDBV": cells(ebola, cd).get(model, ""),
+                }
+            )
+    return pd.DataFrame(
+        out, columns=["Model", "Level", "German held-out", "BDBV"]
     )
 
 
