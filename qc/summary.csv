@@ -1,0 +1,2 @@
+simulations,negbin1d,poisson,cases_min,cases_median,cases_max,growth_runs,growth_low_start_days,low_start_days_median_all
+20,15,5,159,6758.0,86005,2,307;0,69.0
