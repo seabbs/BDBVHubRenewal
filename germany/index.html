@@ -2144,7 +2144,7 @@
 The paper's later dates, from 2022-02-10, are held out.
 Every nowcast is scored on its quantiles at the hub's seven levels, by WIS and the coverage of the 50% and 95% intervals, on the data reported 40 days after the sum ends (<a href="../methods/evaluation/#german-nowcast-benchmark">how the benchmark is set up</a>).
 Relative scores are against <code>randomwalknowcast</code> on the nowcasts both made.</p>
-<p><code>fm_chronos_daily_ragged_ft</code> and <code>fm_chronos_weekly_ragged_ft</code> show the fine-tuned checkpoint <a href="https://github.com/seabbs/BDBVHubRenewal/releases/tag/chronos-slots-06dbdcc2b48d"><code>chronos-slots-06dbdcc2b48d</code></a>. Their forecasts are those the checkpoint scoring run made, stored on the <code>germany-ft-forecasts</code> branch, not rerun here. The pinned checkpoint, <code>chronos-ft-7962fd718a47</code>, is not stored yet.</p>
+<p><code>fm_chronos_daily_ragged_ft</code> and <code>fm_chronos_weekly_ragged_ft</code> show the fine-tuned checkpoint <a href="https://github.com/seabbs/BDBVHubRenewal/releases/tag/chronos-slots-f01d4b22faad"><code>chronos-slots-f01d4b22faad</code></a>. Their forecasts are those the checkpoint scoring run made, stored on the <code>germany-ft-forecasts</code> branch, not rerun here. The pinned checkpoint, <code>chronos-ft-7962fd718a47</code>, is not stored yet.</p>
 <h2 id="nowcasts">Nowcasts<a class="headerlink" href="#nowcasts" title="Permanent link">&para;</a></h2>
 <p>Each model's median and its 50% and 95% intervals at every seventh nowcast date, for Germany, each state and each age group.
 The solid line is the 7-day sum as reported 40 days after it ends, and the dashed line the data on the nowcast date.
@@ -2258,15 +2258,6 @@ The table under the plot scores the place and dates shown, so with all rounds it
 </tr>
 <tr>
 <td style="text-align: left;">national</td>
-<td style="text-align: left;">fm_chronos_daily_ragged_ft</td>
-<td style="text-align: right;">388</td>
-<td style="text-align: right;">1.944</td>
-<td style="text-align: right;">1.94</td>
-<td style="text-align: right;">0.327</td>
-<td style="text-align: right;">0.727</td>
-</tr>
-<tr>
-<td style="text-align: left;">national</td>
 <td style="text-align: left;">ILM</td>
 <td style="text-align: right;">388</td>
 <td style="text-align: right;">2.048</td>
@@ -2282,6 +2273,15 @@ The table under the plot scores the place and dates shown, so with all rounds it
 <td style="text-align: right;">1.685</td>
 <td style="text-align: right;">0.103</td>
 <td style="text-align: right;">0.258</td>
+</tr>
+<tr>
+<td style="text-align: left;">national</td>
+<td style="text-align: left;">fm_chronos_daily_ragged_ft</td>
+<td style="text-align: right;">388</td>
+<td style="text-align: right;">4.322</td>
+<td style="text-align: right;">5.055</td>
+<td style="text-align: right;">0.278</td>
+<td style="text-align: right;">0.799</td>
 </tr>
 <tr>
 <td style="text-align: left;">national</td>
@@ -2395,10 +2395,10 @@ The table under the plot scores the place and dates shown, so with all rounds it
 <td style="text-align: left;">states</td>
 <td style="text-align: left;">fm_chronos_daily_ragged_ft</td>
 <td style="text-align: right;">5620</td>
-<td style="text-align: right;">1.776</td>
-<td style="text-align: right;">1.741</td>
-<td style="text-align: right;">0.27</td>
-<td style="text-align: right;">0.639</td>
+<td style="text-align: right;">3.524</td>
+<td style="text-align: right;">3.845</td>
+<td style="text-align: right;">0.304</td>
+<td style="text-align: right;">0.769</td>
 </tr>
 <tr>
 <td style="text-align: left;">states</td>
@@ -2492,15 +2492,6 @@ The table under the plot scores the place and dates shown, so with all rounds it
 </tr>
 <tr>
 <td style="text-align: left;">age</td>
-<td style="text-align: left;">fm_chronos_daily_ragged_ft</td>
-<td style="text-align: right;">2328</td>
-<td style="text-align: right;">1.757</td>
-<td style="text-align: right;">1.672</td>
-<td style="text-align: right;">0.339</td>
-<td style="text-align: right;">0.702</td>
-</tr>
-<tr>
-<td style="text-align: left;">age</td>
 <td style="text-align: left;">ILM</td>
 <td style="text-align: right;">2328</td>
 <td style="text-align: right;">1.942</td>
@@ -2525,6 +2516,15 @@ The table under the plot scores the place and dates shown, so with all rounds it
 <td style="text-align: right;">4.25</td>
 <td style="text-align: right;">0.185</td>
 <td style="text-align: right;">0.463</td>
+</tr>
+<tr>
+<td style="text-align: left;">age</td>
+<td style="text-align: left;">fm_chronos_daily_ragged_ft</td>
+<td style="text-align: right;">2328</td>
+<td style="text-align: right;">4.813</td>
+<td style="text-align: right;">5.23</td>
+<td style="text-align: right;">0.326</td>
+<td style="text-align: right;">0.811</td>
 </tr>
 <tr>
 <td style="text-align: left;">age</td>
@@ -2701,7 +2701,7 @@ Pick a place to narrow the table.</p>
       
         <script src="../javascripts/zoom.js?v=4e0c610c"></script>
       
-        <script src="../javascripts/summarise.js?v=c4a6e89a"></script>
+        <script src="../javascripts/summarise.js?v=488a333f"></script>
       
         <script src="../javascripts/energy.js?v=93c70f1f"></script>
       
@@ -2713,9 +2713,9 @@ Pick a place to narrow the table.</p>
       
         <script src="../javascripts/scorechart.js?v=1c27a70d"></script>
       
-        <script src="../javascripts/scoresummary.js?v=d19c5790"></script>
+        <script src="../javascripts/scoresummary.js?v=1903e806"></script>
       
-        <script src="../javascripts/checkschart.js?v=1ee222fe"></script>
+        <script src="../javascripts/checkschart.js?v=c3e7ff92"></script>
       
         <script src="../javascripts/nowcastchart.js?v=e5f9eb42"></script>
       

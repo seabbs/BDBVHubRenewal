@@ -34,14 +34,14 @@
     rel.fill(d, base);
     var note = h("p", { class: "explorer-note" }, root);
     var chartDiv = h("div", {}, root);
-    // Relative WIS is the first metric, missing where the baseline has no
+    // Relative CRPS is the first metric, missing where the baseline has no
     // forecast at the scale.
     function pick() {
       var k = rel.name() + "|" + selScale.value + "|" + selSplit.value +
         (common && common.checked ? "|common" : "");
       var set = d.sets[k] || { x: [], rows: [] };
       var none = !set.rows.some(function (r) { return r[3] !== null; });
-      note.textContent = "Relative WIS divides by " + rel.name() + " on the same scored weeks." +
+      note.textContent = "Relative CRPS divides by " + rel.name() + " on the same scored weeks." +
         (none ? " " + rel.name() + " has no forecasts at this scale, so there is none here." : "");
       return set;
     }

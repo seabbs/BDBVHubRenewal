@@ -2480,10 +2480,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#bdbvhubrenewal.reporting.report.relative_wis" class="md-nav__link">
+  <a href="#bdbvhubrenewal.reporting.report.relative_crps" class="md-nav__link">
     <span class="md-ellipsis">
       
-        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;relative_wis
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;relative_crps
       
     </span>
   </a>
@@ -2495,6 +2495,28 @@
     <span class="md-ellipsis">
       
         <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;make_report
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#bdbvhubrenewal.reporting.report.draws_note" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;draws_note
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#bdbvhubrenewal.reporting.report.comparison_draws_note" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;comparison_draws_note
       
     </span>
   </a>
@@ -3270,10 +3292,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#bdbvhubrenewal.reporting.report.relative_wis" class="md-nav__link">
+  <a href="#bdbvhubrenewal.reporting.report.relative_crps" class="md-nav__link">
     <span class="md-ellipsis">
       
-        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;relative_wis
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;relative_crps
       
     </span>
   </a>
@@ -3285,6 +3307,28 @@
     <span class="md-ellipsis">
       
         <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;make_report
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#bdbvhubrenewal.reporting.report.draws_note" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;draws_note
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#bdbvhubrenewal.reporting.report.comparison_draws_note" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;comparison_draws_note
       
     </span>
   </a>
@@ -10587,7 +10631,7 @@ at 100 dpi, for the submission pull request.</p>
 <div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">plot_scores</span><span class="p">(</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">scores</span><span class="p">:</span> <span class="n">DataFrame</span><span class="p">,</span>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="n">by</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"horizon"</span><span class="p">,</span>
-<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">metric</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"wis"</span><span class="p">,</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">metric</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"crps"</span><span class="p">,</span>
 <a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="n">models</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 <a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">mode</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"light"</span><span class="p">,</span>
 <a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="n">colours</span><span class="p">:</span> <span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]</span>
@@ -10652,12 +10696,12 @@ at 100 dpi, for the submission pull request.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>A score column, such as <code>"wis"</code>, <code>"log_wis"</code>, <code>"coverage_90"</code> or
+                <p>A score column, such as <code>"crps"</code>, <code>"log_crps"</code>, <code>"coverage_90"</code> or
 <code>"bias"</code>.</p>
               </div>
             </td>
             <td>
-                  <code>&#39;wis&#39;</code>
+                  <code>&#39;crps&#39;</code>
             </td>
           </tr>
           <tr class="doc-section-item">
@@ -10826,7 +10870,7 @@ at 100 dpi, for the submission pull request.</p>
 <span class="normal"><a href="#bdbvhubrenewal.reporting.plots.plot_scores--source--__codelineno-0-2094">2094</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="bdbvhubrenewal.reporting.plots.plot_scores--source--__codelineno-0-2009" name="bdbvhubrenewal.reporting.plots.plot_scores--source--__codelineno-0-2009"></a><span class="k">def</span><span class="w"> </span><span class="nf">plot_scores</span><span class="p">(</span>
 <a id="bdbvhubrenewal.reporting.plots.plot_scores--source--__codelineno-0-2010" name="bdbvhubrenewal.reporting.plots.plot_scores--source--__codelineno-0-2010"></a>    <span class="n">scores</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span>
 <a id="bdbvhubrenewal.reporting.plots.plot_scores--source--__codelineno-0-2011" name="bdbvhubrenewal.reporting.plots.plot_scores--source--__codelineno-0-2011"></a>    <span class="n">by</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"horizon"</span><span class="p">,</span>
-<a id="bdbvhubrenewal.reporting.plots.plot_scores--source--__codelineno-0-2012" name="bdbvhubrenewal.reporting.plots.plot_scores--source--__codelineno-0-2012"></a>    <span class="n">metric</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"wis"</span><span class="p">,</span>
+<a id="bdbvhubrenewal.reporting.plots.plot_scores--source--__codelineno-0-2012" name="bdbvhubrenewal.reporting.plots.plot_scores--source--__codelineno-0-2012"></a>    <span class="n">metric</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"crps"</span><span class="p">,</span>
 <a id="bdbvhubrenewal.reporting.plots.plot_scores--source--__codelineno-0-2013" name="bdbvhubrenewal.reporting.plots.plot_scores--source--__codelineno-0-2013"></a>    <span class="n">models</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 <a id="bdbvhubrenewal.reporting.plots.plot_scores--source--__codelineno-0-2014" name="bdbvhubrenewal.reporting.plots.plot_scores--source--__codelineno-0-2014"></a>    <span class="n">mode</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"light"</span><span class="p">,</span>
 <a id="bdbvhubrenewal.reporting.plots.plot_scores--source--__codelineno-0-2015" name="bdbvhubrenewal.reporting.plots.plot_scores--source--__codelineno-0-2015"></a>    <span class="n">colours</span><span class="p">:</span> <span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
@@ -10840,7 +10884,7 @@ at 100 dpi, for the submission pull request.</p>
 <a id="bdbvhubrenewal.reporting.plots.plot_scores--source--__codelineno-0-2023" name="bdbvhubrenewal.reporting.plots.plot_scores--source--__codelineno-0-2023"></a><span class="sd">    by : str</span>
 <a id="bdbvhubrenewal.reporting.plots.plot_scores--source--__codelineno-0-2024" name="bdbvhubrenewal.reporting.plots.plot_scores--source--__codelineno-0-2024"></a><span class="sd">        `"horizon"` or `"location"`.</span>
 <a id="bdbvhubrenewal.reporting.plots.plot_scores--source--__codelineno-0-2025" name="bdbvhubrenewal.reporting.plots.plot_scores--source--__codelineno-0-2025"></a><span class="sd">    metric : str</span>
-<a id="bdbvhubrenewal.reporting.plots.plot_scores--source--__codelineno-0-2026" name="bdbvhubrenewal.reporting.plots.plot_scores--source--__codelineno-0-2026"></a><span class="sd">        A score column, such as `"wis"`, `"log_wis"`, `"coverage_90"` or</span>
+<a id="bdbvhubrenewal.reporting.plots.plot_scores--source--__codelineno-0-2026" name="bdbvhubrenewal.reporting.plots.plot_scores--source--__codelineno-0-2026"></a><span class="sd">        A score column, such as `"crps"`, `"log_crps"`, `"coverage_90"` or</span>
 <a id="bdbvhubrenewal.reporting.plots.plot_scores--source--__codelineno-0-2027" name="bdbvhubrenewal.reporting.plots.plot_scores--source--__codelineno-0-2027"></a><span class="sd">        `"bias"`.</span>
 <a id="bdbvhubrenewal.reporting.plots.plot_scores--source--__codelineno-0-2028" name="bdbvhubrenewal.reporting.plots.plot_scores--source--__codelineno-0-2028"></a><span class="sd">    models : sequence of str, optional</span>
 <a id="bdbvhubrenewal.reporting.plots.plot_scores--source--__codelineno-0-2029" name="bdbvhubrenewal.reporting.plots.plot_scores--source--__codelineno-0-2029"></a><span class="sd">        Models in registry order.</span>
@@ -10927,13 +10971,13 @@ at 100 dpi, for the submission pull request.</p>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">scores</span><span class="p">:</span> <span class="n">DataFrame</span><span class="p">,</span>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="n">models</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 <a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">mode</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"light"</span><span class="p">,</span>
-<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="n">metric</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"wis"</span><span class="p">,</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="n">metric</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"crps"</span><span class="p">,</span>
 <a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Figure</span>
 </code></pre></div>
 
     <div class="doc doc-contents ">
 
-        <p>Plot mean WIS by horizon on the simulated scenarios.</p>
+        <p>Plot mean CRPS by horizon on the simulated scenarios.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -10957,7 +11001,7 @@ at 100 dpi, for the submission pull request.</p>
             <td>
               <div class="doc-md-description">
                 <p>Scenario scores with <code>scenario</code>, <code>location</code>, <code>model</code>, <code>horizon</code>,
-<code>wis</code>, <code>truth_view</code> and <code>complete</code>.</p>
+<code>crps</code>, <code>truth_view</code> and <code>complete</code>.</p>
               </div>
             </td>
             <td>
@@ -11088,15 +11132,15 @@ weeks. National is solid, provinces dashed and zones dotted.</p>
 <a id="bdbvhubrenewal.reporting.plots.plot_scenarios--source--__codelineno-0-2098" name="bdbvhubrenewal.reporting.plots.plot_scenarios--source--__codelineno-0-2098"></a>    <span class="n">scores</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span>
 <a id="bdbvhubrenewal.reporting.plots.plot_scenarios--source--__codelineno-0-2099" name="bdbvhubrenewal.reporting.plots.plot_scenarios--source--__codelineno-0-2099"></a>    <span class="n">models</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 <a id="bdbvhubrenewal.reporting.plots.plot_scenarios--source--__codelineno-0-2100" name="bdbvhubrenewal.reporting.plots.plot_scenarios--source--__codelineno-0-2100"></a>    <span class="n">mode</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"light"</span><span class="p">,</span>
-<a id="bdbvhubrenewal.reporting.plots.plot_scenarios--source--__codelineno-0-2101" name="bdbvhubrenewal.reporting.plots.plot_scenarios--source--__codelineno-0-2101"></a>    <span class="n">metric</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"wis"</span><span class="p">,</span>
+<a id="bdbvhubrenewal.reporting.plots.plot_scenarios--source--__codelineno-0-2101" name="bdbvhubrenewal.reporting.plots.plot_scenarios--source--__codelineno-0-2101"></a>    <span class="n">metric</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"crps"</span><span class="p">,</span>
 <a id="bdbvhubrenewal.reporting.plots.plot_scenarios--source--__codelineno-0-2102" name="bdbvhubrenewal.reporting.plots.plot_scenarios--source--__codelineno-0-2102"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Figure</span><span class="p">:</span>
-<a id="bdbvhubrenewal.reporting.plots.plot_scenarios--source--__codelineno-0-2103" name="bdbvhubrenewal.reporting.plots.plot_scenarios--source--__codelineno-0-2103"></a><span class="w">    </span><span class="sd">"""Plot mean WIS by horizon on the simulated scenarios.</span>
+<a id="bdbvhubrenewal.reporting.plots.plot_scenarios--source--__codelineno-0-2103" name="bdbvhubrenewal.reporting.plots.plot_scenarios--source--__codelineno-0-2103"></a><span class="w">    </span><span class="sd">"""Plot mean CRPS by horizon on the simulated scenarios.</span>
 <a id="bdbvhubrenewal.reporting.plots.plot_scenarios--source--__codelineno-0-2104" name="bdbvhubrenewal.reporting.plots.plot_scenarios--source--__codelineno-0-2104"></a>
 <a id="bdbvhubrenewal.reporting.plots.plot_scenarios--source--__codelineno-0-2105" name="bdbvhubrenewal.reporting.plots.plot_scenarios--source--__codelineno-0-2105"></a><span class="sd">    Parameters</span>
 <a id="bdbvhubrenewal.reporting.plots.plot_scenarios--source--__codelineno-0-2106" name="bdbvhubrenewal.reporting.plots.plot_scenarios--source--__codelineno-0-2106"></a><span class="sd">    ----------</span>
 <a id="bdbvhubrenewal.reporting.plots.plot_scenarios--source--__codelineno-0-2107" name="bdbvhubrenewal.reporting.plots.plot_scenarios--source--__codelineno-0-2107"></a><span class="sd">    scores : pandas.DataFrame</span>
 <a id="bdbvhubrenewal.reporting.plots.plot_scenarios--source--__codelineno-0-2108" name="bdbvhubrenewal.reporting.plots.plot_scenarios--source--__codelineno-0-2108"></a><span class="sd">        Scenario scores with `scenario`, `location`, `model`, `horizon`,</span>
-<a id="bdbvhubrenewal.reporting.plots.plot_scenarios--source--__codelineno-0-2109" name="bdbvhubrenewal.reporting.plots.plot_scenarios--source--__codelineno-0-2109"></a><span class="sd">        `wis`, `truth_view` and `complete`.</span>
+<a id="bdbvhubrenewal.reporting.plots.plot_scenarios--source--__codelineno-0-2109" name="bdbvhubrenewal.reporting.plots.plot_scenarios--source--__codelineno-0-2109"></a><span class="sd">        `crps`, `truth_view` and `complete`.</span>
 <a id="bdbvhubrenewal.reporting.plots.plot_scenarios--source--__codelineno-0-2110" name="bdbvhubrenewal.reporting.plots.plot_scenarios--source--__codelineno-0-2110"></a><span class="sd">    models : sequence of str, optional</span>
 <a id="bdbvhubrenewal.reporting.plots.plot_scenarios--source--__codelineno-0-2111" name="bdbvhubrenewal.reporting.plots.plot_scenarios--source--__codelineno-0-2111"></a><span class="sd">        Models in registry order.</span>
 <a id="bdbvhubrenewal.reporting.plots.plot_scenarios--source--__codelineno-0-2112" name="bdbvhubrenewal.reporting.plots.plot_scenarios--source--__codelineno-0-2112"></a><span class="sd">    mode : str</span>
@@ -11159,7 +11203,7 @@ weeks. National is solid, provinces dashed and zones dotted.</p>
 <a href="#bdbvhubrenewal.reporting.plots.plot_scores_by_truth" class="headerlink" title="Permanent link">&para;</a></h3>
 <div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">plot_scores_by_truth</span><span class="p">(</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">scores</span><span class="p">:</span> <span class="n">DataFrame</span><span class="p">,</span>
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="n">metric</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"wis"</span><span class="p">,</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="n">metric</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"crps"</span><span class="p">,</span>
 <a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">models</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 <a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="n">mode</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"light"</span><span class="p">,</span>
 <a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Figure</span>
@@ -11210,7 +11254,7 @@ weeks. National is solid, provinces dashed and zones dotted.</p>
               </div>
             </td>
             <td>
-                  <code>&#39;wis&#39;</code>
+                  <code>&#39;crps&#39;</code>
             </td>
           </tr>
           <tr class="doc-section-item">
@@ -11326,7 +11370,7 @@ vintage.</p>
 <span class="normal"><a href="#bdbvhubrenewal.reporting.plots.plot_scores_by_truth--source--__codelineno-0-2206">2206</a></span>
 <span class="normal"><a href="#bdbvhubrenewal.reporting.plots.plot_scores_by_truth--source--__codelineno-0-2207">2207</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="bdbvhubrenewal.reporting.plots.plot_scores_by_truth--source--__codelineno-0-2158" name="bdbvhubrenewal.reporting.plots.plot_scores_by_truth--source--__codelineno-0-2158"></a><span class="k">def</span><span class="w"> </span><span class="nf">plot_scores_by_truth</span><span class="p">(</span>
 <a id="bdbvhubrenewal.reporting.plots.plot_scores_by_truth--source--__codelineno-0-2159" name="bdbvhubrenewal.reporting.plots.plot_scores_by_truth--source--__codelineno-0-2159"></a>    <span class="n">scores</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span>
-<a id="bdbvhubrenewal.reporting.plots.plot_scores_by_truth--source--__codelineno-0-2160" name="bdbvhubrenewal.reporting.plots.plot_scores_by_truth--source--__codelineno-0-2160"></a>    <span class="n">metric</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"wis"</span><span class="p">,</span>
+<a id="bdbvhubrenewal.reporting.plots.plot_scores_by_truth--source--__codelineno-0-2160" name="bdbvhubrenewal.reporting.plots.plot_scores_by_truth--source--__codelineno-0-2160"></a>    <span class="n">metric</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"crps"</span><span class="p">,</span>
 <a id="bdbvhubrenewal.reporting.plots.plot_scores_by_truth--source--__codelineno-0-2161" name="bdbvhubrenewal.reporting.plots.plot_scores_by_truth--source--__codelineno-0-2161"></a>    <span class="n">models</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 <a id="bdbvhubrenewal.reporting.plots.plot_scores_by_truth--source--__codelineno-0-2162" name="bdbvhubrenewal.reporting.plots.plot_scores_by_truth--source--__codelineno-0-2162"></a>    <span class="n">mode</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"light"</span><span class="p">,</span>
 <a id="bdbvhubrenewal.reporting.plots.plot_scores_by_truth--source--__codelineno-0-2163" name="bdbvhubrenewal.reporting.plots.plot_scores_by_truth--source--__codelineno-0-2163"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Figure</span><span class="p">:</span>
@@ -11800,7 +11844,7 @@ reports, bars the 50% and 90% intervals.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p><code>relative_wis</code> output by <code>x</code>, for one target.</p>
+                <p><code>relative_crps</code> output by <code>x</code>, for one target.</p>
               </div>
             </td>
             <td>
@@ -11832,7 +11876,7 @@ reports, bars the 50% and 90% intervals.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>The model WIS is relative to, named in the labels.</p>
+                <p>The model CRPS is relative to, named in the labels.</p>
               </div>
             </td>
             <td>
@@ -12027,11 +12071,11 @@ at its reference.</p>
 <a id="bdbvhubrenewal.reporting.nowcast_plots.plot_relative_overall--source--__codelineno-0-153" name="bdbvhubrenewal.reporting.nowcast_plots.plot_relative_overall--source--__codelineno-0-153"></a><span class="sd">    Parameters</span>
 <a id="bdbvhubrenewal.reporting.nowcast_plots.plot_relative_overall--source--__codelineno-0-154" name="bdbvhubrenewal.reporting.nowcast_plots.plot_relative_overall--source--__codelineno-0-154"></a><span class="sd">    ----------</span>
 <a id="bdbvhubrenewal.reporting.nowcast_plots.plot_relative_overall--source--__codelineno-0-155" name="bdbvhubrenewal.reporting.nowcast_plots.plot_relative_overall--source--__codelineno-0-155"></a><span class="sd">    table : pandas.DataFrame</span>
-<a id="bdbvhubrenewal.reporting.nowcast_plots.plot_relative_overall--source--__codelineno-0-156" name="bdbvhubrenewal.reporting.nowcast_plots.plot_relative_overall--source--__codelineno-0-156"></a><span class="sd">        `relative_wis` output by `x`, for one target.</span>
+<a id="bdbvhubrenewal.reporting.nowcast_plots.plot_relative_overall--source--__codelineno-0-156" name="bdbvhubrenewal.reporting.nowcast_plots.plot_relative_overall--source--__codelineno-0-156"></a><span class="sd">        `relative_crps` output by `x`, for one target.</span>
 <a id="bdbvhubrenewal.reporting.nowcast_plots.plot_relative_overall--source--__codelineno-0-157" name="bdbvhubrenewal.reporting.nowcast_plots.plot_relative_overall--source--__codelineno-0-157"></a><span class="sd">    models : sequence of str</span>
 <a id="bdbvhubrenewal.reporting.nowcast_plots.plot_relative_overall--source--__codelineno-0-158" name="bdbvhubrenewal.reporting.nowcast_plots.plot_relative_overall--source--__codelineno-0-158"></a><span class="sd">        Models in registry order. Those absent from a pool are skipped.</span>
 <a id="bdbvhubrenewal.reporting.nowcast_plots.plot_relative_overall--source--__codelineno-0-159" name="bdbvhubrenewal.reporting.nowcast_plots.plot_relative_overall--source--__codelineno-0-159"></a><span class="sd">    baseline : str</span>
-<a id="bdbvhubrenewal.reporting.nowcast_plots.plot_relative_overall--source--__codelineno-0-160" name="bdbvhubrenewal.reporting.nowcast_plots.plot_relative_overall--source--__codelineno-0-160"></a><span class="sd">        The model WIS is relative to, named in the labels.</span>
+<a id="bdbvhubrenewal.reporting.nowcast_plots.plot_relative_overall--source--__codelineno-0-160" name="bdbvhubrenewal.reporting.nowcast_plots.plot_relative_overall--source--__codelineno-0-160"></a><span class="sd">        The model CRPS is relative to, named in the labels.</span>
 <a id="bdbvhubrenewal.reporting.nowcast_plots.plot_relative_overall--source--__codelineno-0-161" name="bdbvhubrenewal.reporting.nowcast_plots.plot_relative_overall--source--__codelineno-0-161"></a><span class="sd">    mode : str</span>
 <a id="bdbvhubrenewal.reporting.nowcast_plots.plot_relative_overall--source--__codelineno-0-162" name="bdbvhubrenewal.reporting.nowcast_plots.plot_relative_overall--source--__codelineno-0-162"></a><span class="sd">        `"light"` or `"dark"`.</span>
 <a id="bdbvhubrenewal.reporting.nowcast_plots.plot_relative_overall--source--__codelineno-0-163" name="bdbvhubrenewal.reporting.nowcast_plots.plot_relative_overall--source--__codelineno-0-163"></a><span class="sd">    x : str</span>
@@ -12440,7 +12484,7 @@ change from the previous release by week, with a line at 0.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Plot relative WIS per place and model, a row per place, by scale.</p>
+        <p>Plot relative CRPS per place and model, a row per place, by scale.</p>
 <p>The axis is on the log scale, so places whose scores are near zero do
 not set it. Scores of 0 are left out.</p>
 
@@ -12465,7 +12509,7 @@ not set it. Scores of 0 are left out.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p><code>relative_wis</code> output by <code>pool</code> and <code>location</code>.</p>
+                <p><code>relative_crps</code> output by <code>pool</code> and <code>location</code>.</p>
               </div>
             </td>
             <td>
@@ -12653,7 +12697,7 @@ a row per place, by name, and a dot per model.</p>
 <a id="bdbvhubrenewal.reporting.nowcast_plots.plot_place_summary--source--__codelineno-0-324" name="bdbvhubrenewal.reporting.nowcast_plots.plot_place_summary--source--__codelineno-0-324"></a>    <span class="n">names</span><span class="p">:</span> <span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">],</span>
 <a id="bdbvhubrenewal.reporting.nowcast_plots.plot_place_summary--source--__codelineno-0-325" name="bdbvhubrenewal.reporting.nowcast_plots.plot_place_summary--source--__codelineno-0-325"></a>    <span class="n">mode</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"light"</span><span class="p">,</span>
 <a id="bdbvhubrenewal.reporting.nowcast_plots.plot_place_summary--source--__codelineno-0-326" name="bdbvhubrenewal.reporting.nowcast_plots.plot_place_summary--source--__codelineno-0-326"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Figure</span><span class="p">:</span>
-<a id="bdbvhubrenewal.reporting.nowcast_plots.plot_place_summary--source--__codelineno-0-327" name="bdbvhubrenewal.reporting.nowcast_plots.plot_place_summary--source--__codelineno-0-327"></a><span class="w">    </span><span class="sd">"""Plot relative WIS per place and model, a row per place, by scale.</span>
+<a id="bdbvhubrenewal.reporting.nowcast_plots.plot_place_summary--source--__codelineno-0-327" name="bdbvhubrenewal.reporting.nowcast_plots.plot_place_summary--source--__codelineno-0-327"></a><span class="w">    </span><span class="sd">"""Plot relative CRPS per place and model, a row per place, by scale.</span>
 <a id="bdbvhubrenewal.reporting.nowcast_plots.plot_place_summary--source--__codelineno-0-328" name="bdbvhubrenewal.reporting.nowcast_plots.plot_place_summary--source--__codelineno-0-328"></a>
 <a id="bdbvhubrenewal.reporting.nowcast_plots.plot_place_summary--source--__codelineno-0-329" name="bdbvhubrenewal.reporting.nowcast_plots.plot_place_summary--source--__codelineno-0-329"></a><span class="sd">    The axis is on the log scale, so places whose scores are near zero do</span>
 <a id="bdbvhubrenewal.reporting.nowcast_plots.plot_place_summary--source--__codelineno-0-330" name="bdbvhubrenewal.reporting.nowcast_plots.plot_place_summary--source--__codelineno-0-330"></a><span class="sd">    not set it. Scores of 0 are left out.</span>
@@ -12661,7 +12705,7 @@ a row per place, by name, and a dot per model.</p>
 <a id="bdbvhubrenewal.reporting.nowcast_plots.plot_place_summary--source--__codelineno-0-332" name="bdbvhubrenewal.reporting.nowcast_plots.plot_place_summary--source--__codelineno-0-332"></a><span class="sd">    Parameters</span>
 <a id="bdbvhubrenewal.reporting.nowcast_plots.plot_place_summary--source--__codelineno-0-333" name="bdbvhubrenewal.reporting.nowcast_plots.plot_place_summary--source--__codelineno-0-333"></a><span class="sd">    ----------</span>
 <a id="bdbvhubrenewal.reporting.nowcast_plots.plot_place_summary--source--__codelineno-0-334" name="bdbvhubrenewal.reporting.nowcast_plots.plot_place_summary--source--__codelineno-0-334"></a><span class="sd">    table : pandas.DataFrame</span>
-<a id="bdbvhubrenewal.reporting.nowcast_plots.plot_place_summary--source--__codelineno-0-335" name="bdbvhubrenewal.reporting.nowcast_plots.plot_place_summary--source--__codelineno-0-335"></a><span class="sd">        `relative_wis` output by `pool` and `location`.</span>
+<a id="bdbvhubrenewal.reporting.nowcast_plots.plot_place_summary--source--__codelineno-0-335" name="bdbvhubrenewal.reporting.nowcast_plots.plot_place_summary--source--__codelineno-0-335"></a><span class="sd">        `relative_crps` output by `pool` and `location`.</span>
 <a id="bdbvhubrenewal.reporting.nowcast_plots.plot_place_summary--source--__codelineno-0-336" name="bdbvhubrenewal.reporting.nowcast_plots.plot_place_summary--source--__codelineno-0-336"></a><span class="sd">    models : sequence of str</span>
 <a id="bdbvhubrenewal.reporting.nowcast_plots.plot_place_summary--source--__codelineno-0-337" name="bdbvhubrenewal.reporting.nowcast_plots.plot_place_summary--source--__codelineno-0-337"></a><span class="sd">        Models in order. Those absent from a place are skipped.</span>
 <a id="bdbvhubrenewal.reporting.nowcast_plots.plot_place_summary--source--__codelineno-0-338" name="bdbvhubrenewal.reporting.nowcast_plots.plot_place_summary--source--__codelineno-0-338"></a><span class="sd">    colours : mapping of str to (str, str, str)</span>
@@ -12694,11 +12738,11 @@ a row per place, by name, and a dot per model.</p>
 <a id="bdbvhubrenewal.reporting.nowcast_plots.plot_place_summary--source--__codelineno-0-365" name="bdbvhubrenewal.reporting.nowcast_plots.plot_place_summary--source--__codelineno-0-365"></a>        <span class="n">places</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">sub</span><span class="p">[</span><span class="s2">"location"</span><span class="p">]),</span> <span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">names</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">x</span><span class="p">))</span>
 <a id="bdbvhubrenewal.reporting.nowcast_plots.plot_place_summary--source--__codelineno-0-366" name="bdbvhubrenewal.reporting.nowcast_plots.plot_place_summary--source--__codelineno-0-366"></a>        <span class="n">y</span> <span class="o">=</span> <span class="p">{</span><span class="n">loc</span><span class="p">:</span> <span class="n">i</span> <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">loc</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">places</span><span class="p">)}</span>
 <a id="bdbvhubrenewal.reporting.nowcast_plots.plot_place_summary--source--__codelineno-0-367" name="bdbvhubrenewal.reporting.nowcast_plots.plot_place_summary--source--__codelineno-0-367"></a>        <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">models</span><span class="p">:</span>
-<a id="bdbvhubrenewal.reporting.nowcast_plots.plot_place_summary--source--__codelineno-0-368" name="bdbvhubrenewal.reporting.nowcast_plots.plot_place_summary--source--__codelineno-0-368"></a>            <span class="n">own</span> <span class="o">=</span> <span class="n">sub</span><span class="o">.</span><span class="n">loc</span><span class="p">[(</span><span class="n">sub</span><span class="p">[</span><span class="s2">"model"</span><span class="p">]</span> <span class="o">==</span> <span class="n">m</span><span class="p">)</span> <span class="o">&amp;</span> <span class="p">(</span><span class="n">sub</span><span class="p">[</span><span class="s2">"rel_wis"</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">)]</span>
+<a id="bdbvhubrenewal.reporting.nowcast_plots.plot_place_summary--source--__codelineno-0-368" name="bdbvhubrenewal.reporting.nowcast_plots.plot_place_summary--source--__codelineno-0-368"></a>            <span class="n">own</span> <span class="o">=</span> <span class="n">sub</span><span class="o">.</span><span class="n">loc</span><span class="p">[(</span><span class="n">sub</span><span class="p">[</span><span class="s2">"model"</span><span class="p">]</span> <span class="o">==</span> <span class="n">m</span><span class="p">)</span> <span class="o">&amp;</span> <span class="p">(</span><span class="n">sub</span><span class="p">[</span><span class="s2">"rel_crps"</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">)]</span>
 <a id="bdbvhubrenewal.reporting.nowcast_plots.plot_place_summary--source--__codelineno-0-369" name="bdbvhubrenewal.reporting.nowcast_plots.plot_place_summary--source--__codelineno-0-369"></a>            <span class="k">if</span> <span class="n">own</span><span class="o">.</span><span class="n">empty</span><span class="p">:</span>
 <a id="bdbvhubrenewal.reporting.nowcast_plots.plot_place_summary--source--__codelineno-0-370" name="bdbvhubrenewal.reporting.nowcast_plots.plot_place_summary--source--__codelineno-0-370"></a>                <span class="k">continue</span>
 <a id="bdbvhubrenewal.reporting.nowcast_plots.plot_place_summary--source--__codelineno-0-371" name="bdbvhubrenewal.reporting.nowcast_plots.plot_place_summary--source--__codelineno-0-371"></a>            <span class="n">ax</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span>
-<a id="bdbvhubrenewal.reporting.nowcast_plots.plot_place_summary--source--__codelineno-0-372" name="bdbvhubrenewal.reporting.nowcast_plots.plot_place_summary--source--__codelineno-0-372"></a>                <span class="n">own</span><span class="p">[</span><span class="s2">"rel_wis"</span><span class="p">],</span>
+<a id="bdbvhubrenewal.reporting.nowcast_plots.plot_place_summary--source--__codelineno-0-372" name="bdbvhubrenewal.reporting.nowcast_plots.plot_place_summary--source--__codelineno-0-372"></a>                <span class="n">own</span><span class="p">[</span><span class="s2">"rel_crps"</span><span class="p">],</span>
 <a id="bdbvhubrenewal.reporting.nowcast_plots.plot_place_summary--source--__codelineno-0-373" name="bdbvhubrenewal.reporting.nowcast_plots.plot_place_summary--source--__codelineno-0-373"></a>                <span class="n">own</span><span class="p">[</span><span class="s2">"location"</span><span class="p">]</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="n">y</span><span class="p">),</span>
 <a id="bdbvhubrenewal.reporting.nowcast_plots.plot_place_summary--source--__codelineno-0-374" name="bdbvhubrenewal.reporting.nowcast_plots.plot_place_summary--source--__codelineno-0-374"></a>                <span class="s2">"o"</span><span class="p">,</span>
 <a id="bdbvhubrenewal.reporting.nowcast_plots.plot_place_summary--source--__codelineno-0-375" name="bdbvhubrenewal.reporting.nowcast_plots.plot_place_summary--source--__codelineno-0-375"></a>                <span class="n">ms</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span>
@@ -12712,7 +12756,7 @@ a row per place, by name, and a dot per model.</p>
 <a id="bdbvhubrenewal.reporting.nowcast_plots.plot_place_summary--source--__codelineno-0-383" name="bdbvhubrenewal.reporting.nowcast_plots.plot_place_summary--source--__codelineno-0-383"></a>        <span class="n">ax</span><span class="o">.</span><span class="n">set_yticks</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">places</span><span class="p">)),</span> <span class="p">[</span><span class="n">names</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="n">p</span><span class="p">)</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">places</span><span class="p">])</span>
 <a id="bdbvhubrenewal.reporting.nowcast_plots.plot_place_summary--source--__codelineno-0-384" name="bdbvhubrenewal.reporting.nowcast_plots.plot_place_summary--source--__codelineno-0-384"></a>        <span class="n">ax</span><span class="o">.</span><span class="n">set_ylim</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">places</span><span class="p">)</span> <span class="o">-</span> <span class="mf">0.5</span><span class="p">,</span> <span class="o">-</span><span class="mf">0.5</span><span class="p">)</span>
 <a id="bdbvhubrenewal.reporting.nowcast_plots.plot_place_summary--source--__codelineno-0-385" name="bdbvhubrenewal.reporting.nowcast_plots.plot_place_summary--source--__codelineno-0-385"></a>        <span class="n">ax</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="n">titles</span><span class="p">[</span><span class="n">pool</span><span class="p">],</span> <span class="n">fontsize</span><span class="o">=</span><span class="mi">9</span><span class="p">)</span>
-<a id="bdbvhubrenewal.reporting.nowcast_plots.plot_place_summary--source--__codelineno-0-386" name="bdbvhubrenewal.reporting.nowcast_plots.plot_place_summary--source--__codelineno-0-386"></a>        <span class="n">ax</span><span class="o">.</span><span class="n">set_xlabel</span><span class="p">(</span><span class="s2">"Relative WIS"</span><span class="p">)</span>
+<a id="bdbvhubrenewal.reporting.nowcast_plots.plot_place_summary--source--__codelineno-0-386" name="bdbvhubrenewal.reporting.nowcast_plots.plot_place_summary--source--__codelineno-0-386"></a>        <span class="n">ax</span><span class="o">.</span><span class="n">set_xlabel</span><span class="p">(</span><span class="s2">"Relative CRPS"</span><span class="p">)</span>
 <a id="bdbvhubrenewal.reporting.nowcast_plots.plot_place_summary--source--__codelineno-0-387" name="bdbvhubrenewal.reporting.nowcast_plots.plot_place_summary--source--__codelineno-0-387"></a>        <span class="n">ax</span><span class="o">.</span><span class="n">set_axisbelow</span><span class="p">(</span><span class="kc">True</span><span class="p">)</span>
 <a id="bdbvhubrenewal.reporting.nowcast_plots.plot_place_summary--source--__codelineno-0-388" name="bdbvhubrenewal.reporting.nowcast_plots.plot_place_summary--source--__codelineno-0-388"></a>    <span class="n">handles</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Artist</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
 <a id="bdbvhubrenewal.reporting.nowcast_plots.plot_place_summary--source--__codelineno-0-389" name="bdbvhubrenewal.reporting.nowcast_plots.plot_place_summary--source--__codelineno-0-389"></a>    <span class="k">for</span> <span class="n">ax</span> <span class="ow">in</span> <span class="n">axes</span><span class="p">[</span><span class="mi">0</span><span class="p">]:</span>
@@ -12859,12 +12903,12 @@ Backtest and Nowcast pages without changes here.</p>
 <div class="doc doc-object doc-function">
 
 
-<h3 id="bdbvhubrenewal.reporting.report.relative_wis" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <span class="doc doc-object-name doc-function-name">relative_wis</span>
+<h3 id="bdbvhubrenewal.reporting.report.relative_crps" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <span class="doc doc-object-name doc-function-name">relative_crps</span>
 
 
-<a href="#bdbvhubrenewal.reporting.report.relative_wis" class="headerlink" title="Permanent link">&para;</a></h3>
-<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">relative_wis</span><span class="p">(</span>
+<a href="#bdbvhubrenewal.reporting.report.relative_crps" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">relative_crps</span><span class="p">(</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">scores</span><span class="p">:</span> <span class="n">DataFrame</span><span class="p">,</span>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="n">by</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="s2">"target"</span><span class="p">,),</span>
 <a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">baseline</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
@@ -12873,7 +12917,7 @@ Backtest and Nowcast pages without changes here.</p>
 
     <div class="doc doc-contents ">
 
-        <p><code>nowcast.relative_wis</code>, with each model lacking cells marked.</p>
+        <p><code>nowcast.relative_crps</code>, with each model lacking cells marked.</p>
 <p>The baseline defaults to the site's (<code>site_baseline</code>).</p>
 <p>Each row gets <code>cells</code>, the baseline's n in its group, and <code>partial</code>
 (<code>mark_partial</code>). Full rows all have the baseline's n, and partial
@@ -12883,45 +12927,45 @@ scored on fewer forecasts among the others.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/bdbvhubrenewal/reporting/report.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#bdbvhubrenewal.reporting.report.relative_wis--source--__codelineno-0-155">155</a></span>
-<span class="normal"><a href="#bdbvhubrenewal.reporting.report.relative_wis--source--__codelineno-0-156">156</a></span>
-<span class="normal"><a href="#bdbvhubrenewal.reporting.report.relative_wis--source--__codelineno-0-157">157</a></span>
-<span class="normal"><a href="#bdbvhubrenewal.reporting.report.relative_wis--source--__codelineno-0-158">158</a></span>
-<span class="normal"><a href="#bdbvhubrenewal.reporting.report.relative_wis--source--__codelineno-0-159">159</a></span>
-<span class="normal"><a href="#bdbvhubrenewal.reporting.report.relative_wis--source--__codelineno-0-160">160</a></span>
-<span class="normal"><a href="#bdbvhubrenewal.reporting.report.relative_wis--source--__codelineno-0-161">161</a></span>
-<span class="normal"><a href="#bdbvhubrenewal.reporting.report.relative_wis--source--__codelineno-0-162">162</a></span>
-<span class="normal"><a href="#bdbvhubrenewal.reporting.report.relative_wis--source--__codelineno-0-163">163</a></span>
-<span class="normal"><a href="#bdbvhubrenewal.reporting.report.relative_wis--source--__codelineno-0-164">164</a></span>
-<span class="normal"><a href="#bdbvhubrenewal.reporting.report.relative_wis--source--__codelineno-0-165">165</a></span>
-<span class="normal"><a href="#bdbvhubrenewal.reporting.report.relative_wis--source--__codelineno-0-166">166</a></span>
-<span class="normal"><a href="#bdbvhubrenewal.reporting.report.relative_wis--source--__codelineno-0-167">167</a></span>
-<span class="normal"><a href="#bdbvhubrenewal.reporting.report.relative_wis--source--__codelineno-0-168">168</a></span>
-<span class="normal"><a href="#bdbvhubrenewal.reporting.report.relative_wis--source--__codelineno-0-169">169</a></span>
-<span class="normal"><a href="#bdbvhubrenewal.reporting.report.relative_wis--source--__codelineno-0-170">170</a></span>
-<span class="normal"><a href="#bdbvhubrenewal.reporting.report.relative_wis--source--__codelineno-0-171">171</a></span>
-<span class="normal"><a href="#bdbvhubrenewal.reporting.report.relative_wis--source--__codelineno-0-172">172</a></span>
-<span class="normal"><a href="#bdbvhubrenewal.reporting.report.relative_wis--source--__codelineno-0-173">173</a></span>
-<span class="normal"><a href="#bdbvhubrenewal.reporting.report.relative_wis--source--__codelineno-0-174">174</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="bdbvhubrenewal.reporting.report.relative_wis--source--__codelineno-0-155" name="bdbvhubrenewal.reporting.report.relative_wis--source--__codelineno-0-155"></a><span class="k">def</span><span class="w"> </span><span class="nf">relative_wis</span><span class="p">(</span>
-<a id="bdbvhubrenewal.reporting.report.relative_wis--source--__codelineno-0-156" name="bdbvhubrenewal.reporting.report.relative_wis--source--__codelineno-0-156"></a>    <span class="n">scores</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span>
-<a id="bdbvhubrenewal.reporting.report.relative_wis--source--__codelineno-0-157" name="bdbvhubrenewal.reporting.report.relative_wis--source--__codelineno-0-157"></a>    <span class="n">by</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="s2">"target"</span><span class="p">,),</span>
-<a id="bdbvhubrenewal.reporting.report.relative_wis--source--__codelineno-0-158" name="bdbvhubrenewal.reporting.report.relative_wis--source--__codelineno-0-158"></a>    <span class="n">baseline</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="bdbvhubrenewal.reporting.report.relative_wis--source--__codelineno-0-159" name="bdbvhubrenewal.reporting.report.relative_wis--source--__codelineno-0-159"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
-<a id="bdbvhubrenewal.reporting.report.relative_wis--source--__codelineno-0-160" name="bdbvhubrenewal.reporting.report.relative_wis--source--__codelineno-0-160"></a><span class="w">    </span><span class="sd">"""`nowcast.relative_wis`, with each model lacking cells marked.</span>
-<a id="bdbvhubrenewal.reporting.report.relative_wis--source--__codelineno-0-161" name="bdbvhubrenewal.reporting.report.relative_wis--source--__codelineno-0-161"></a>
-<a id="bdbvhubrenewal.reporting.report.relative_wis--source--__codelineno-0-162" name="bdbvhubrenewal.reporting.report.relative_wis--source--__codelineno-0-162"></a><span class="sd">    The baseline defaults to the site's (`site_baseline`).</span>
-<a id="bdbvhubrenewal.reporting.report.relative_wis--source--__codelineno-0-163" name="bdbvhubrenewal.reporting.report.relative_wis--source--__codelineno-0-163"></a>
-<a id="bdbvhubrenewal.reporting.report.relative_wis--source--__codelineno-0-164" name="bdbvhubrenewal.reporting.report.relative_wis--source--__codelineno-0-164"></a><span class="sd">    Each row gets `cells`, the baseline's n in its group, and `partial`</span>
-<a id="bdbvhubrenewal.reporting.report.relative_wis--source--__codelineno-0-165" name="bdbvhubrenewal.reporting.report.relative_wis--source--__codelineno-0-165"></a><span class="sd">    (`mark_partial`). Full rows all have the baseline's n, and partial</span>
-<a id="bdbvhubrenewal.reporting.report.relative_wis--source--__codelineno-0-166" name="bdbvhubrenewal.reporting.report.relative_wis--source--__codelineno-0-166"></a><span class="sd">    rows come after them in each group, so the tables never set a model</span>
-<a id="bdbvhubrenewal.reporting.report.relative_wis--source--__codelineno-0-167" name="bdbvhubrenewal.reporting.report.relative_wis--source--__codelineno-0-167"></a><span class="sd">    scored on fewer forecasts among the others.</span>
-<a id="bdbvhubrenewal.reporting.report.relative_wis--source--__codelineno-0-168" name="bdbvhubrenewal.reporting.report.relative_wis--source--__codelineno-0-168"></a><span class="sd">    """</span>
-<a id="bdbvhubrenewal.reporting.report.relative_wis--source--__codelineno-0-169" name="bdbvhubrenewal.reporting.report.relative_wis--source--__codelineno-0-169"></a>    <span class="n">baseline</span> <span class="o">=</span> <span class="n">baseline</span> <span class="ow">or</span> <span class="n">site_baseline</span><span class="p">()</span>
-<a id="bdbvhubrenewal.reporting.report.relative_wis--source--__codelineno-0-170" name="bdbvhubrenewal.reporting.report.relative_wis--source--__codelineno-0-170"></a>    <span class="n">out</span> <span class="o">=</span> <span class="n">mark_partial</span><span class="p">(</span><span class="n">_relative_wis</span><span class="p">(</span><span class="n">scores</span><span class="p">,</span> <span class="n">by</span><span class="p">,</span> <span class="n">baseline</span><span class="p">),</span> <span class="n">by</span><span class="p">,</span> <span class="n">baseline</span><span class="p">)</span>
-<a id="bdbvhubrenewal.reporting.report.relative_wis--source--__codelineno-0-171" name="bdbvhubrenewal.reporting.report.relative_wis--source--__codelineno-0-171"></a>    <span class="n">keys</span> <span class="o">=</span> <span class="p">[</span><span class="n">c</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">by</span> <span class="k">if</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">out</span><span class="o">.</span><span class="n">columns</span><span class="p">]</span>
-<a id="bdbvhubrenewal.reporting.report.relative_wis--source--__codelineno-0-172" name="bdbvhubrenewal.reporting.report.relative_wis--source--__codelineno-0-172"></a>    <span class="k">return</span> <span class="n">out</span><span class="o">.</span><span class="n">sort_values</span><span class="p">([</span><span class="o">*</span><span class="n">keys</span><span class="p">,</span> <span class="s2">"partial"</span><span class="p">],</span> <span class="n">kind</span><span class="o">=</span><span class="s2">"stable"</span><span class="p">)</span><span class="o">.</span><span class="n">reset_index</span><span class="p">(</span>
-<a id="bdbvhubrenewal.reporting.report.relative_wis--source--__codelineno-0-173" name="bdbvhubrenewal.reporting.report.relative_wis--source--__codelineno-0-173"></a>        <span class="n">drop</span><span class="o">=</span><span class="kc">True</span>
-<a id="bdbvhubrenewal.reporting.report.relative_wis--source--__codelineno-0-174" name="bdbvhubrenewal.reporting.report.relative_wis--source--__codelineno-0-174"></a>    <span class="p">)</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#bdbvhubrenewal.reporting.report.relative_crps--source--__codelineno-0-155">155</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.reporting.report.relative_crps--source--__codelineno-0-156">156</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.reporting.report.relative_crps--source--__codelineno-0-157">157</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.reporting.report.relative_crps--source--__codelineno-0-158">158</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.reporting.report.relative_crps--source--__codelineno-0-159">159</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.reporting.report.relative_crps--source--__codelineno-0-160">160</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.reporting.report.relative_crps--source--__codelineno-0-161">161</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.reporting.report.relative_crps--source--__codelineno-0-162">162</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.reporting.report.relative_crps--source--__codelineno-0-163">163</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.reporting.report.relative_crps--source--__codelineno-0-164">164</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.reporting.report.relative_crps--source--__codelineno-0-165">165</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.reporting.report.relative_crps--source--__codelineno-0-166">166</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.reporting.report.relative_crps--source--__codelineno-0-167">167</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.reporting.report.relative_crps--source--__codelineno-0-168">168</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.reporting.report.relative_crps--source--__codelineno-0-169">169</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.reporting.report.relative_crps--source--__codelineno-0-170">170</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.reporting.report.relative_crps--source--__codelineno-0-171">171</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.reporting.report.relative_crps--source--__codelineno-0-172">172</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.reporting.report.relative_crps--source--__codelineno-0-173">173</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.reporting.report.relative_crps--source--__codelineno-0-174">174</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="bdbvhubrenewal.reporting.report.relative_crps--source--__codelineno-0-155" name="bdbvhubrenewal.reporting.report.relative_crps--source--__codelineno-0-155"></a><span class="k">def</span><span class="w"> </span><span class="nf">relative_crps</span><span class="p">(</span>
+<a id="bdbvhubrenewal.reporting.report.relative_crps--source--__codelineno-0-156" name="bdbvhubrenewal.reporting.report.relative_crps--source--__codelineno-0-156"></a>    <span class="n">scores</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span>
+<a id="bdbvhubrenewal.reporting.report.relative_crps--source--__codelineno-0-157" name="bdbvhubrenewal.reporting.report.relative_crps--source--__codelineno-0-157"></a>    <span class="n">by</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="s2">"target"</span><span class="p">,),</span>
+<a id="bdbvhubrenewal.reporting.report.relative_crps--source--__codelineno-0-158" name="bdbvhubrenewal.reporting.report.relative_crps--source--__codelineno-0-158"></a>    <span class="n">baseline</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="bdbvhubrenewal.reporting.report.relative_crps--source--__codelineno-0-159" name="bdbvhubrenewal.reporting.report.relative_crps--source--__codelineno-0-159"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
+<a id="bdbvhubrenewal.reporting.report.relative_crps--source--__codelineno-0-160" name="bdbvhubrenewal.reporting.report.relative_crps--source--__codelineno-0-160"></a><span class="w">    </span><span class="sd">"""`nowcast.relative_crps`, with each model lacking cells marked.</span>
+<a id="bdbvhubrenewal.reporting.report.relative_crps--source--__codelineno-0-161" name="bdbvhubrenewal.reporting.report.relative_crps--source--__codelineno-0-161"></a>
+<a id="bdbvhubrenewal.reporting.report.relative_crps--source--__codelineno-0-162" name="bdbvhubrenewal.reporting.report.relative_crps--source--__codelineno-0-162"></a><span class="sd">    The baseline defaults to the site's (`site_baseline`).</span>
+<a id="bdbvhubrenewal.reporting.report.relative_crps--source--__codelineno-0-163" name="bdbvhubrenewal.reporting.report.relative_crps--source--__codelineno-0-163"></a>
+<a id="bdbvhubrenewal.reporting.report.relative_crps--source--__codelineno-0-164" name="bdbvhubrenewal.reporting.report.relative_crps--source--__codelineno-0-164"></a><span class="sd">    Each row gets `cells`, the baseline's n in its group, and `partial`</span>
+<a id="bdbvhubrenewal.reporting.report.relative_crps--source--__codelineno-0-165" name="bdbvhubrenewal.reporting.report.relative_crps--source--__codelineno-0-165"></a><span class="sd">    (`mark_partial`). Full rows all have the baseline's n, and partial</span>
+<a id="bdbvhubrenewal.reporting.report.relative_crps--source--__codelineno-0-166" name="bdbvhubrenewal.reporting.report.relative_crps--source--__codelineno-0-166"></a><span class="sd">    rows come after them in each group, so the tables never set a model</span>
+<a id="bdbvhubrenewal.reporting.report.relative_crps--source--__codelineno-0-167" name="bdbvhubrenewal.reporting.report.relative_crps--source--__codelineno-0-167"></a><span class="sd">    scored on fewer forecasts among the others.</span>
+<a id="bdbvhubrenewal.reporting.report.relative_crps--source--__codelineno-0-168" name="bdbvhubrenewal.reporting.report.relative_crps--source--__codelineno-0-168"></a><span class="sd">    """</span>
+<a id="bdbvhubrenewal.reporting.report.relative_crps--source--__codelineno-0-169" name="bdbvhubrenewal.reporting.report.relative_crps--source--__codelineno-0-169"></a>    <span class="n">baseline</span> <span class="o">=</span> <span class="n">baseline</span> <span class="ow">or</span> <span class="n">site_baseline</span><span class="p">()</span>
+<a id="bdbvhubrenewal.reporting.report.relative_crps--source--__codelineno-0-170" name="bdbvhubrenewal.reporting.report.relative_crps--source--__codelineno-0-170"></a>    <span class="n">out</span> <span class="o">=</span> <span class="n">mark_partial</span><span class="p">(</span><span class="n">_relative_crps</span><span class="p">(</span><span class="n">scores</span><span class="p">,</span> <span class="n">by</span><span class="p">,</span> <span class="n">baseline</span><span class="p">),</span> <span class="n">by</span><span class="p">,</span> <span class="n">baseline</span><span class="p">)</span>
+<a id="bdbvhubrenewal.reporting.report.relative_crps--source--__codelineno-0-171" name="bdbvhubrenewal.reporting.report.relative_crps--source--__codelineno-0-171"></a>    <span class="n">keys</span> <span class="o">=</span> <span class="p">[</span><span class="n">c</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">by</span> <span class="k">if</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">out</span><span class="o">.</span><span class="n">columns</span><span class="p">]</span>
+<a id="bdbvhubrenewal.reporting.report.relative_crps--source--__codelineno-0-172" name="bdbvhubrenewal.reporting.report.relative_crps--source--__codelineno-0-172"></a>    <span class="k">return</span> <span class="n">out</span><span class="o">.</span><span class="n">sort_values</span><span class="p">([</span><span class="o">*</span><span class="n">keys</span><span class="p">,</span> <span class="s2">"partial"</span><span class="p">],</span> <span class="n">kind</span><span class="o">=</span><span class="s2">"stable"</span><span class="p">)</span><span class="o">.</span><span class="n">reset_index</span><span class="p">(</span>
+<a id="bdbvhubrenewal.reporting.report.relative_crps--source--__codelineno-0-173" name="bdbvhubrenewal.reporting.report.relative_crps--source--__codelineno-0-173"></a>        <span class="n">drop</span><span class="o">=</span><span class="kc">True</span>
+<a id="bdbvhubrenewal.reporting.report.relative_crps--source--__codelineno-0-174" name="bdbvhubrenewal.reporting.report.relative_crps--source--__codelineno-0-174"></a>    <span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -13310,7 +13354,9 @@ scored on fewer forecasts among the others.</p>
 <span class="normal"><a href="#bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-388">388</a></span>
 <span class="normal"><a href="#bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-389">389</a></span>
 <span class="normal"><a href="#bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-390">390</a></span>
-<span class="normal"><a href="#bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-391">391</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-196" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-196"></a><span class="k">def</span><span class="w"> </span><span class="nf">make_report</span><span class="p">(</span>
+<span class="normal"><a href="#bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-391">391</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-392">392</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-393">393</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-196" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-196"></a><span class="k">def</span><span class="w"> </span><span class="nf">make_report</span><span class="p">(</span>
 <a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-197" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-197"></a>    <span class="n">figures</span><span class="p">:</span> <span class="n">Path</span> <span class="o">|</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"docs/figures"</span><span class="p">,</span>
 <a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-198" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-198"></a>    <span class="n">generated</span><span class="p">:</span> <span class="n">Path</span> <span class="o">|</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"docs/generated"</span><span class="p">,</span>
 <a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-199" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-199"></a>    <span class="n">data_dir</span><span class="p">:</span> <span class="n">Path</span> <span class="o">|</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"data"</span><span class="p">,</span>
@@ -13451,61 +13497,152 @@ scored on fewer forecasts among the others.</p>
 <a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-334" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-334"></a>
 <a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-335" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-335"></a>    <span class="c1"># Backtest and comparison pages: the models the site shows.</span>
 <a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-336" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-336"></a>    <span class="n">names</span> <span class="o">=</span> <span class="n">_page_models</span><span class="p">()</span>
-<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-337" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-337"></a>    <span class="n">summaries</span> <span class="o">=</span> <span class="n">_release_section</span><span class="p">(</span><span class="n">fig</span><span class="p">,</span> <span class="n">gen</span><span class="p">,</span> <span class="n">res</span><span class="p">,</span> <span class="n">real</span><span class="p">,</span> <span class="n">names</span><span class="p">)</span>
-<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-338" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-338"></a>    <span class="n">_backtest_page</span><span class="p">(</span>
-<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-339" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-339"></a>        <span class="n">fig</span><span class="p">,</span> <span class="n">gen</span><span class="p">,</span> <span class="n">res</span><span class="p">,</span> <span class="n">out</span><span class="p">,</span> <span class="n">config</span><span class="p">,</span> <span class="n">target</span><span class="p">,</span> <span class="n">names</span><span class="p">,</span> <span class="n">data_dir</span><span class="p">,</span> <span class="n">summaries</span>
-<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-340" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-340"></a>    <span class="p">)</span>
-<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-341" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-341"></a>    <span class="n">_comparison_page</span><span class="p">(</span><span class="n">fig</span><span class="p">,</span> <span class="n">gen</span><span class="p">,</span> <span class="n">Path</span><span class="p">(</span><span class="n">hub_comparison</span><span class="p">),</span> <span class="n">target</span><span class="p">)</span>
-<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-342" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-342"></a>    <span class="n">germany_page</span><span class="p">(</span><span class="n">fig</span><span class="p">,</span> <span class="n">gen</span><span class="p">,</span> <span class="n">Path</span><span class="p">(</span><span class="n">germany</span><span class="p">),</span> <span class="n">load_germany_config</span><span class="p">(</span><span class="n">germany_config</span><span class="p">))</span>
-<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-343" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-343"></a>
-<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-344" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-344"></a>    <span class="c1"># Nowcast page: latest real vintage, every registered model.</span>
-<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-345" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-345"></a>    <span class="n">rows</span> <span class="o">=</span> <span class="n">real</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">real</span><span class="p">[</span><span class="s2">"vintage"</span><span class="p">]</span> <span class="o">==</span> <span class="n">latest</span><span class="p">]</span>
-<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-346" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-346"></a>    <span class="n">zone_data</span> <span class="o">=</span> <span class="n">load_zone_data</span><span class="p">(</span><span class="n">data_dir</span><span class="p">)</span>
-<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-347" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-347"></a>    <span class="n">tasks</span> <span class="o">=</span> <span class="n">make_tasks</span><span class="p">(</span>
-<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-348" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-348"></a>        <span class="n">rows</span><span class="p">,</span> <span class="n">delays</span><span class="p">,</span> <span class="n">config</span><span class="p">,</span> <span class="n">history</span><span class="o">=</span><span class="n">real</span><span class="p">,</span> <span class="n">daily</span><span class="o">=</span><span class="n">daily</span><span class="p">,</span> <span class="n">zones</span><span class="o">=</span><span class="n">zone_data</span>
-<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-349" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-349"></a>    <span class="p">)</span>
-<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-350" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-350"></a>    <span class="n">forecasts_now</span> <span class="o">=</span> <span class="n">_nowcast_forecasts</span><span class="p">(</span><span class="n">tasks</span><span class="p">,</span> <span class="n">latest</span><span class="p">,</span> <span class="n">res</span><span class="p">)</span>
-<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-351" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-351"></a>    <span class="n">_nowcast_page</span><span class="p">(</span><span class="n">fig</span><span class="p">,</span> <span class="n">gen</span><span class="p">,</span> <span class="n">target</span><span class="p">,</span> <span class="n">forecasts_now</span><span class="p">,</span> <span class="n">names</span><span class="p">,</span> <span class="n">config</span><span class="p">,</span> <span class="n">latest</span><span class="p">)</span>
-<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-352" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-352"></a>    <span class="n">_zone_nowcast_section</span><span class="p">(</span>
-<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-353" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-353"></a>        <span class="n">fig</span><span class="p">,</span> <span class="n">gen</span><span class="p">,</span> <span class="n">data_dir</span><span class="p">,</span> <span class="n">target</span><span class="p">,</span> <span class="n">tasks</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">forecasts_now</span><span class="p">,</span> <span class="n">config</span><span class="p">,</span> <span class="n">names</span>
-<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-354" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-354"></a>    <span class="p">)</span>
-<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-355" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-355"></a>    <span class="c1"># Every model's hub tables at every real origin, for the round</span>
-<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-356" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-356"></a>    <span class="c1"># releases, so a round released after later hub releases still gets</span>
-<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-357" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-357"></a>    <span class="c1"># its own.</span>
-<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-358" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-358"></a>    <span class="k">for</span> <span class="n">vintage</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">real</span><span class="p">[</span><span class="s2">"vintage"</span><span class="p">])</span> <span class="o">-</span> <span class="nb">set</span><span class="p">(</span><span class="n">config</span><span class="o">.</span><span class="n">skip_origins</span><span class="p">)):</span>
-<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-359" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-359"></a>        <span class="k">if</span> <span class="n">vintage</span> <span class="o">==</span> <span class="n">latest</span><span class="p">:</span>
-<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-360" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-360"></a>            <span class="n">task</span><span class="p">,</span> <span class="n">at</span> <span class="o">=</span> <span class="n">tasks</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">forecasts_now</span>
-<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-361" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-361"></a>        <span class="k">else</span><span class="p">:</span>
-<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-362" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-362"></a>            <span class="n">task</span> <span class="o">=</span> <span class="n">make_tasks</span><span class="p">(</span>
-<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-363" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-363"></a>                <span class="n">real</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">real</span><span class="p">[</span><span class="s2">"vintage"</span><span class="p">]</span> <span class="o">==</span> <span class="n">vintage</span><span class="p">],</span>
-<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-364" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-364"></a>                <span class="n">delays</span><span class="p">,</span>
-<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-365" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-365"></a>                <span class="n">config</span><span class="p">,</span>
-<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-366" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-366"></a>                <span class="n">history</span><span class="o">=</span><span class="n">real</span><span class="p">,</span>
-<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-367" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-367"></a>                <span class="n">daily</span><span class="o">=</span><span class="n">daily</span><span class="p">,</span>
-<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-368" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-368"></a>                <span class="n">zones</span><span class="o">=</span><span class="n">zone_data</span><span class="p">,</span>
-<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-369" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-369"></a>            <span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
-<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-370" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-370"></a>            <span class="n">at</span> <span class="o">=</span> <span class="n">_stored_at</span><span class="p">(</span><span class="n">res</span><span class="p">,</span> <span class="n">vintage</span><span class="p">)</span>
-<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-371" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-371"></a>        <span class="n">write_hub_tables</span><span class="p">(</span>
-<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-372" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-372"></a>            <span class="n">hub_tables</span><span class="p">(</span><span class="n">at</span><span class="p">,</span> <span class="n">task</span><span class="p">,</span> <span class="n">zone_data</span><span class="o">.</span><span class="n">daily</span><span class="p">,</span> <span class="n">zone_data</span><span class="o">.</span><span class="n">codes</span><span class="p">),</span>
-<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-373" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-373"></a>            <span class="n">res</span> <span class="o">/</span> <span class="s2">"hub"</span> <span class="o">/</span> <span class="nb">str</span><span class="p">(</span><span class="n">vintage</span><span class="p">),</span>
-<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-374" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-374"></a>        <span class="p">)</span>
-<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-375" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-375"></a>    <span class="n">groups</span> <span class="o">=</span> <span class="n">_nowcast_groups</span><span class="p">(</span><span class="n">target</span><span class="p">,</span> <span class="nb">sorted</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">forecasts_now</span><span class="p">[</span><span class="s2">"location"</span><span class="p">])))</span>
-<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-376" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-376"></a>    <span class="n">save_light_dark</span><span class="p">(</span>
-<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-377" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-377"></a>        <span class="n">partial</span><span class="p">(</span>
-<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-378" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-378"></a>            <span class="n">plot_delay_check</span><span class="p">,</span> <span class="n">daily</span><span class="p">,</span> <span class="n">latest</span><span class="p">,</span> <span class="p">[</span><span class="o">*</span><span class="n">groups</span><span class="p">[</span><span class="s2">"main"</span><span class="p">],</span> <span class="o">*</span><span class="n">groups</span><span class="p">[</span><span class="s2">"other"</span><span class="p">]]</span>
-<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-379" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-379"></a>        <span class="p">),</span>
-<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-380" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-380"></a>        <span class="n">fig</span> <span class="o">/</span> <span class="s2">"delay-check.svg"</span><span class="p">,</span>
-<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-381" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-381"></a>    <span class="p">)</span>
-<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-382" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-382"></a>    <span class="c1"># Written by `fit-store load` from the stored fits.</span>
-<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-383" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-383"></a>    <span class="n">learnt</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">read_csv</span><span class="p">(</span><span class="n">res</span> <span class="o">/</span> <span class="n">DELAY_SUMMARY_FILE</span><span class="p">)</span>
-<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-384" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-384"></a>    <span class="n">fitted</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">learnt</span><span class="p">[</span><span class="s2">"location"</span><span class="p">])</span> <span class="o">-</span> <span class="p">{</span><span class="s2">"shared"</span><span class="p">})</span>
-<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-385" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-385"></a>    <span class="n">baseline</span> <span class="o">=</span> <span class="n">baseline_share</span><span class="p">(</span>
-<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-386" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-386"></a>        <span class="n">daily</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">learnt</span><span class="p">[</span><span class="s2">"vintage"</span><span class="p">]</span><span class="o">.</span><span class="n">max</span><span class="p">()),</span> <span class="p">[</span><span class="n">NATIONAL</span><span class="p">,</span> <span class="o">*</span><span class="n">fitted</span><span class="p">]</span>
-<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-387" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-387"></a>    <span class="p">)</span>
-<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-388" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-388"></a>    <span class="n">save_light_dark</span><span class="p">(</span>
-<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-389" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-389"></a>        <span class="n">partial</span><span class="p">(</span><span class="n">plot_renewal_delay</span><span class="p">,</span> <span class="n">learnt</span><span class="p">,</span> <span class="n">baseline</span><span class="p">,</span> <span class="n">_location_names</span><span class="p">(</span><span class="n">real</span><span class="p">)),</span>
-<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-390" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-390"></a>        <span class="n">fig</span> <span class="o">/</span> <span class="s2">"renewal-delay.svg"</span><span class="p">,</span>
-<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-391" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-391"></a>    <span class="p">)</span>
+<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-337" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-337"></a>    <span class="n">summaries</span> <span class="o">=</span> <span class="n">_release_section</span><span class="p">(</span>
+<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-338" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-338"></a>        <span class="n">fig</span><span class="p">,</span> <span class="n">gen</span><span class="p">,</span> <span class="n">res</span><span class="p">,</span> <span class="n">real</span><span class="p">,</span> <span class="n">names</span><span class="p">,</span> <span class="n">config</span><span class="o">.</span><span class="n">score_samples</span><span class="p">,</span> <span class="n">config</span><span class="o">.</span><span class="n">n_samples</span>
+<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-339" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-339"></a>    <span class="p">)</span>
+<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-340" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-340"></a>    <span class="n">_backtest_page</span><span class="p">(</span>
+<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-341" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-341"></a>        <span class="n">fig</span><span class="p">,</span> <span class="n">gen</span><span class="p">,</span> <span class="n">res</span><span class="p">,</span> <span class="n">out</span><span class="p">,</span> <span class="n">config</span><span class="p">,</span> <span class="n">target</span><span class="p">,</span> <span class="n">names</span><span class="p">,</span> <span class="n">data_dir</span><span class="p">,</span> <span class="n">summaries</span>
+<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-342" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-342"></a>    <span class="p">)</span>
+<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-343" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-343"></a>    <span class="n">_comparison_page</span><span class="p">(</span><span class="n">fig</span><span class="p">,</span> <span class="n">gen</span><span class="p">,</span> <span class="n">Path</span><span class="p">(</span><span class="n">hub_comparison</span><span class="p">),</span> <span class="n">target</span><span class="p">)</span>
+<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-344" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-344"></a>    <span class="n">germany_page</span><span class="p">(</span><span class="n">fig</span><span class="p">,</span> <span class="n">gen</span><span class="p">,</span> <span class="n">Path</span><span class="p">(</span><span class="n">germany</span><span class="p">),</span> <span class="n">load_germany_config</span><span class="p">(</span><span class="n">germany_config</span><span class="p">))</span>
+<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-345" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-345"></a>
+<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-346" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-346"></a>    <span class="c1"># Nowcast page: latest real vintage, every registered model.</span>
+<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-347" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-347"></a>    <span class="n">rows</span> <span class="o">=</span> <span class="n">real</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">real</span><span class="p">[</span><span class="s2">"vintage"</span><span class="p">]</span> <span class="o">==</span> <span class="n">latest</span><span class="p">]</span>
+<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-348" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-348"></a>    <span class="n">zone_data</span> <span class="o">=</span> <span class="n">load_zone_data</span><span class="p">(</span><span class="n">data_dir</span><span class="p">)</span>
+<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-349" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-349"></a>    <span class="n">tasks</span> <span class="o">=</span> <span class="n">make_tasks</span><span class="p">(</span>
+<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-350" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-350"></a>        <span class="n">rows</span><span class="p">,</span> <span class="n">delays</span><span class="p">,</span> <span class="n">config</span><span class="p">,</span> <span class="n">history</span><span class="o">=</span><span class="n">real</span><span class="p">,</span> <span class="n">daily</span><span class="o">=</span><span class="n">daily</span><span class="p">,</span> <span class="n">zones</span><span class="o">=</span><span class="n">zone_data</span>
+<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-351" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-351"></a>    <span class="p">)</span>
+<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-352" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-352"></a>    <span class="n">forecasts_now</span> <span class="o">=</span> <span class="n">_nowcast_forecasts</span><span class="p">(</span><span class="n">tasks</span><span class="p">,</span> <span class="n">latest</span><span class="p">,</span> <span class="n">res</span><span class="p">)</span>
+<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-353" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-353"></a>    <span class="n">_nowcast_page</span><span class="p">(</span><span class="n">fig</span><span class="p">,</span> <span class="n">gen</span><span class="p">,</span> <span class="n">target</span><span class="p">,</span> <span class="n">forecasts_now</span><span class="p">,</span> <span class="n">names</span><span class="p">,</span> <span class="n">config</span><span class="p">,</span> <span class="n">latest</span><span class="p">)</span>
+<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-354" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-354"></a>    <span class="n">_zone_nowcast_section</span><span class="p">(</span>
+<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-355" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-355"></a>        <span class="n">fig</span><span class="p">,</span> <span class="n">gen</span><span class="p">,</span> <span class="n">data_dir</span><span class="p">,</span> <span class="n">target</span><span class="p">,</span> <span class="n">tasks</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">forecasts_now</span><span class="p">,</span> <span class="n">config</span><span class="p">,</span> <span class="n">names</span>
+<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-356" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-356"></a>    <span class="p">)</span>
+<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-357" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-357"></a>    <span class="c1"># Every model's hub tables at every real origin, for the round</span>
+<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-358" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-358"></a>    <span class="c1"># releases, so a round released after later hub releases still gets</span>
+<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-359" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-359"></a>    <span class="c1"># its own.</span>
+<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-360" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-360"></a>    <span class="k">for</span> <span class="n">vintage</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">real</span><span class="p">[</span><span class="s2">"vintage"</span><span class="p">])</span> <span class="o">-</span> <span class="nb">set</span><span class="p">(</span><span class="n">config</span><span class="o">.</span><span class="n">skip_origins</span><span class="p">)):</span>
+<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-361" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-361"></a>        <span class="k">if</span> <span class="n">vintage</span> <span class="o">==</span> <span class="n">latest</span><span class="p">:</span>
+<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-362" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-362"></a>            <span class="n">task</span><span class="p">,</span> <span class="n">at</span> <span class="o">=</span> <span class="n">tasks</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">forecasts_now</span>
+<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-363" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-363"></a>        <span class="k">else</span><span class="p">:</span>
+<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-364" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-364"></a>            <span class="n">task</span> <span class="o">=</span> <span class="n">make_tasks</span><span class="p">(</span>
+<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-365" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-365"></a>                <span class="n">real</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">real</span><span class="p">[</span><span class="s2">"vintage"</span><span class="p">]</span> <span class="o">==</span> <span class="n">vintage</span><span class="p">],</span>
+<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-366" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-366"></a>                <span class="n">delays</span><span class="p">,</span>
+<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-367" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-367"></a>                <span class="n">config</span><span class="p">,</span>
+<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-368" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-368"></a>                <span class="n">history</span><span class="o">=</span><span class="n">real</span><span class="p">,</span>
+<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-369" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-369"></a>                <span class="n">daily</span><span class="o">=</span><span class="n">daily</span><span class="p">,</span>
+<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-370" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-370"></a>                <span class="n">zones</span><span class="o">=</span><span class="n">zone_data</span><span class="p">,</span>
+<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-371" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-371"></a>            <span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-372" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-372"></a>            <span class="n">at</span> <span class="o">=</span> <span class="n">_stored_at</span><span class="p">(</span><span class="n">res</span><span class="p">,</span> <span class="n">vintage</span><span class="p">)</span>
+<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-373" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-373"></a>        <span class="n">write_hub_tables</span><span class="p">(</span>
+<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-374" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-374"></a>            <span class="n">hub_tables</span><span class="p">(</span><span class="n">at</span><span class="p">,</span> <span class="n">task</span><span class="p">,</span> <span class="n">zone_data</span><span class="o">.</span><span class="n">daily</span><span class="p">,</span> <span class="n">zone_data</span><span class="o">.</span><span class="n">codes</span><span class="p">),</span>
+<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-375" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-375"></a>            <span class="n">res</span> <span class="o">/</span> <span class="s2">"hub"</span> <span class="o">/</span> <span class="nb">str</span><span class="p">(</span><span class="n">vintage</span><span class="p">),</span>
+<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-376" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-376"></a>        <span class="p">)</span>
+<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-377" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-377"></a>    <span class="n">groups</span> <span class="o">=</span> <span class="n">_nowcast_groups</span><span class="p">(</span><span class="n">target</span><span class="p">,</span> <span class="nb">sorted</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">forecasts_now</span><span class="p">[</span><span class="s2">"location"</span><span class="p">])))</span>
+<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-378" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-378"></a>    <span class="n">save_light_dark</span><span class="p">(</span>
+<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-379" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-379"></a>        <span class="n">partial</span><span class="p">(</span>
+<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-380" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-380"></a>            <span class="n">plot_delay_check</span><span class="p">,</span> <span class="n">daily</span><span class="p">,</span> <span class="n">latest</span><span class="p">,</span> <span class="p">[</span><span class="o">*</span><span class="n">groups</span><span class="p">[</span><span class="s2">"main"</span><span class="p">],</span> <span class="o">*</span><span class="n">groups</span><span class="p">[</span><span class="s2">"other"</span><span class="p">]]</span>
+<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-381" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-381"></a>        <span class="p">),</span>
+<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-382" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-382"></a>        <span class="n">fig</span> <span class="o">/</span> <span class="s2">"delay-check.svg"</span><span class="p">,</span>
+<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-383" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-383"></a>    <span class="p">)</span>
+<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-384" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-384"></a>    <span class="c1"># Written by `fit-store load` from the stored fits.</span>
+<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-385" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-385"></a>    <span class="n">learnt</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">read_csv</span><span class="p">(</span><span class="n">res</span> <span class="o">/</span> <span class="n">DELAY_SUMMARY_FILE</span><span class="p">)</span>
+<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-386" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-386"></a>    <span class="n">fitted</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">learnt</span><span class="p">[</span><span class="s2">"location"</span><span class="p">])</span> <span class="o">-</span> <span class="p">{</span><span class="s2">"shared"</span><span class="p">})</span>
+<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-387" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-387"></a>    <span class="n">baseline</span> <span class="o">=</span> <span class="n">baseline_share</span><span class="p">(</span>
+<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-388" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-388"></a>        <span class="n">daily</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">learnt</span><span class="p">[</span><span class="s2">"vintage"</span><span class="p">]</span><span class="o">.</span><span class="n">max</span><span class="p">()),</span> <span class="p">[</span><span class="n">NATIONAL</span><span class="p">,</span> <span class="o">*</span><span class="n">fitted</span><span class="p">]</span>
+<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-389" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-389"></a>    <span class="p">)</span>
+<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-390" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-390"></a>    <span class="n">save_light_dark</span><span class="p">(</span>
+<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-391" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-391"></a>        <span class="n">partial</span><span class="p">(</span><span class="n">plot_renewal_delay</span><span class="p">,</span> <span class="n">learnt</span><span class="p">,</span> <span class="n">baseline</span><span class="p">,</span> <span class="n">_location_names</span><span class="p">(</span><span class="n">real</span><span class="p">)),</span>
+<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-392" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-392"></a>        <span class="n">fig</span> <span class="o">/</span> <span class="s2">"renewal-delay.svg"</span><span class="p">,</span>
+<a id="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-393" name="bdbvhubrenewal.reporting.report.make_report--source--__codelineno-0-393"></a>    <span class="p">)</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="bdbvhubrenewal.reporting.report.draws_note" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <span class="doc doc-object-name doc-function-name">draws_note</span>
+
+
+<a href="#bdbvhubrenewal.reporting.report.draws_note" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">draws_note</span><span class="p">(</span><span class="n">n</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">stored</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Say how many draws per forecast the backtest pages score.</p>
+<p><code>n</code> is <code>[samples] backtest</code>, the draws of the models run here, and
+<code>stored</code> is <code>[forecast] n_samples</code>, the stored fits' draws, both from
+<code>config/backtest.toml</code>.</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>src/bdbvhubrenewal/reporting/report.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#bdbvhubrenewal.reporting.report.draws_note--source--__codelineno-0-533">533</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.reporting.report.draws_note--source--__codelineno-0-534">534</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.reporting.report.draws_note--source--__codelineno-0-535">535</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.reporting.report.draws_note--source--__codelineno-0-536">536</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.reporting.report.draws_note--source--__codelineno-0-537">537</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.reporting.report.draws_note--source--__codelineno-0-538">538</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.reporting.report.draws_note--source--__codelineno-0-539">539</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.reporting.report.draws_note--source--__codelineno-0-540">540</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.reporting.report.draws_note--source--__codelineno-0-541">541</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.reporting.report.draws_note--source--__codelineno-0-542">542</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.reporting.report.draws_note--source--__codelineno-0-543">543</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.reporting.report.draws_note--source--__codelineno-0-544">544</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.reporting.report.draws_note--source--__codelineno-0-545">545</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="bdbvhubrenewal.reporting.report.draws_note--source--__codelineno-0-533" name="bdbvhubrenewal.reporting.report.draws_note--source--__codelineno-0-533"></a><span class="k">def</span><span class="w"> </span><span class="nf">draws_note</span><span class="p">(</span><span class="n">n</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">stored</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<a id="bdbvhubrenewal.reporting.report.draws_note--source--__codelineno-0-534" name="bdbvhubrenewal.reporting.report.draws_note--source--__codelineno-0-534"></a><span class="w">    </span><span class="sd">"""Say how many draws per forecast the backtest pages score.</span>
+<a id="bdbvhubrenewal.reporting.report.draws_note--source--__codelineno-0-535" name="bdbvhubrenewal.reporting.report.draws_note--source--__codelineno-0-535"></a>
+<a id="bdbvhubrenewal.reporting.report.draws_note--source--__codelineno-0-536" name="bdbvhubrenewal.reporting.report.draws_note--source--__codelineno-0-536"></a><span class="sd">    `n` is `[samples] backtest`, the draws of the models run here, and</span>
+<a id="bdbvhubrenewal.reporting.report.draws_note--source--__codelineno-0-537" name="bdbvhubrenewal.reporting.report.draws_note--source--__codelineno-0-537"></a><span class="sd">    `stored` is `[forecast] n_samples`, the stored fits' draws, both from</span>
+<a id="bdbvhubrenewal.reporting.report.draws_note--source--__codelineno-0-538" name="bdbvhubrenewal.reporting.report.draws_note--source--__codelineno-0-538"></a><span class="sd">    `config/backtest.toml`.</span>
+<a id="bdbvhubrenewal.reporting.report.draws_note--source--__codelineno-0-539" name="bdbvhubrenewal.reporting.report.draws_note--source--__codelineno-0-539"></a><span class="sd">    """</span>
+<a id="bdbvhubrenewal.reporting.report.draws_note--source--__codelineno-0-540" name="bdbvhubrenewal.reporting.report.draws_note--source--__codelineno-0-540"></a>    <span class="k">return</span> <span class="p">(</span>
+<a id="bdbvhubrenewal.reporting.report.draws_note--source--__codelineno-0-541" name="bdbvhubrenewal.reporting.report.draws_note--source--__codelineno-0-541"></a>        <span class="sa">f</span><span class="s2">"The models run here are scored on </span><span class="si">{</span><span class="n">n</span><span class="si">:</span><span class="s2">,</span><span class="si">}</span><span class="s2"> draws per forecast "</span>
+<a id="bdbvhubrenewal.reporting.report.draws_note--source--__codelineno-0-542" name="bdbvhubrenewal.reporting.report.draws_note--source--__codelineno-0-542"></a>        <span class="s2">"(`[samples] backtest` in `config/backtest.toml`) and the stored "</span>
+<a id="bdbvhubrenewal.reporting.report.draws_note--source--__codelineno-0-543" name="bdbvhubrenewal.reporting.report.draws_note--source--__codelineno-0-543"></a>        <span class="sa">f</span><span class="s2">"fits on their </span><span class="si">{</span><span class="n">stored</span><span class="si">:</span><span class="s2">,</span><span class="si">}</span><span class="s2"> (`[forecast] n_samples`), with common "</span>
+<a id="bdbvhubrenewal.reporting.report.draws_note--source--__codelineno-0-544" name="bdbvhubrenewal.reporting.report.draws_note--source--__codelineno-0-544"></a>        <span class="s2">"random numbers. "</span> <span class="o">+</span> <span class="n">_FAIR_NOTE</span>
+<a id="bdbvhubrenewal.reporting.report.draws_note--source--__codelineno-0-545" name="bdbvhubrenewal.reporting.report.draws_note--source--__codelineno-0-545"></a>    <span class="p">)</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="bdbvhubrenewal.reporting.report.comparison_draws_note" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <span class="doc doc-object-name doc-function-name">comparison_draws_note</span>
+
+
+<a href="#bdbvhubrenewal.reporting.report.comparison_draws_note" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">comparison_draws_note</span><span class="p">(</span><span class="n">n</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Say how many draws per forecast the hub comparison scores.</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>src/bdbvhubrenewal/reporting/report.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#bdbvhubrenewal.reporting.report.comparison_draws_note--source--__codelineno-0-548">548</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.reporting.report.comparison_draws_note--source--__codelineno-0-549">549</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.reporting.report.comparison_draws_note--source--__codelineno-0-550">550</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.reporting.report.comparison_draws_note--source--__codelineno-0-551">551</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.reporting.report.comparison_draws_note--source--__codelineno-0-552">552</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.reporting.report.comparison_draws_note--source--__codelineno-0-553">553</a></span>
+<span class="normal"><a href="#bdbvhubrenewal.reporting.report.comparison_draws_note--source--__codelineno-0-554">554</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="bdbvhubrenewal.reporting.report.comparison_draws_note--source--__codelineno-0-548" name="bdbvhubrenewal.reporting.report.comparison_draws_note--source--__codelineno-0-548"></a><span class="k">def</span><span class="w"> </span><span class="nf">comparison_draws_note</span><span class="p">(</span><span class="n">n</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<a id="bdbvhubrenewal.reporting.report.comparison_draws_note--source--__codelineno-0-549" name="bdbvhubrenewal.reporting.report.comparison_draws_note--source--__codelineno-0-549"></a><span class="w">    </span><span class="sd">"""Say how many draws per forecast the hub comparison scores."""</span>
+<a id="bdbvhubrenewal.reporting.report.comparison_draws_note--source--__codelineno-0-550" name="bdbvhubrenewal.reporting.report.comparison_draws_note--source--__codelineno-0-550"></a>    <span class="k">return</span> <span class="p">(</span>
+<a id="bdbvhubrenewal.reporting.report.comparison_draws_note--source--__codelineno-0-551" name="bdbvhubrenewal.reporting.report.comparison_draws_note--source--__codelineno-0-551"></a>        <span class="sa">f</span><span class="s2">"Our models are scored on their </span><span class="si">{</span><span class="n">n</span><span class="si">:</span><span class="s2">,</span><span class="si">}</span><span class="s2"> draws per forecast "</span>
+<a id="bdbvhubrenewal.reporting.report.comparison_draws_note--source--__codelineno-0-552" name="bdbvhubrenewal.reporting.report.comparison_draws_note--source--__codelineno-0-552"></a>        <span class="s2">"(`[forecast] n_samples` in `config/backtest.toml`) and the hub "</span>
+<a id="bdbvhubrenewal.reporting.report.comparison_draws_note--source--__codelineno-0-553" name="bdbvhubrenewal.reporting.report.comparison_draws_note--source--__codelineno-0-553"></a>        <span class="s2">"teams on their samples as submitted. "</span> <span class="o">+</span> <span class="n">_FAIR_NOTE</span>
+<a id="bdbvhubrenewal.reporting.report.comparison_draws_note--source--__codelineno-0-554" name="bdbvhubrenewal.reporting.report.comparison_draws_note--source--__codelineno-0-554"></a>    <span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -14738,7 +14875,7 @@ benchmark has not been run.</p>
       
         <script src="../../javascripts/zoom.js?v=4e0c610c"></script>
       
-        <script src="../../javascripts/summarise.js?v=c4a6e89a"></script>
+        <script src="../../javascripts/summarise.js?v=488a333f"></script>
       
         <script src="../../javascripts/energy.js?v=93c70f1f"></script>
       
@@ -14750,9 +14887,9 @@ benchmark has not been run.</p>
       
         <script src="../../javascripts/scorechart.js?v=1c27a70d"></script>
       
-        <script src="../../javascripts/scoresummary.js?v=d19c5790"></script>
+        <script src="../../javascripts/scoresummary.js?v=1903e806"></script>
       
-        <script src="../../javascripts/checkschart.js?v=1ee222fe"></script>
+        <script src="../../javascripts/checkschart.js?v=c3e7ff92"></script>
       
         <script src="../../javascripts/nowcastchart.js?v=e5f9eb42"></script>
       

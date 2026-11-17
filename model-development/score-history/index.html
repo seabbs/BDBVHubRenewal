@@ -2087,12 +2087,14 @@ A commit's point is its latest deploy.</p>
 There is no score over all weeks, as later commits score more weeks, origins and releases.
 "Common forecasts only", ticked at first, keeps for each model, baseline and week the forecasts (origin, release and place) scored at every commit of a window back from the newest.
 The window is as long as keeps the most common forecasts times commits.</p>
-<p>Relative WIS, as on the <a href="../../backtest/">Backtest</a> page, also moves when the baseline changes.
-Read it beside WIS, where randomwalk's own line shows the baseline, or pick randomwalknowcast under "Relative to".
+<p>Relative CRPS, as on the <a href="../../backtest/">Backtest</a> page, also moves when the baseline changes.
+Read it beside CRPS, where randomwalk's own line shows the baseline, or pick randomwalknowcast under "Relative to".
+Commits before the site switched from WIS to CRPS have no CRPS, so their points are missing.
 A star and a vertical line mark a commit where what a line is scored on changed.
 Points either side of one are not comparable.
 The last point of a preview build is that build's own scores.
 <code>task score-history</code> writes the same history to <code>results/score-history.csv</code>.</p>
+<p>This build scores the models it runs on 1,000 draws per forecast (<code>[samples] backtest</code> in <code>config/backtest.toml</code>). Earlier deploys may have scored fewer. The fair CRPS keeps scores on different numbers of draws comparable.</p>
 <h2 id="by-target-week">By target week<a class="headerlink" href="#by-target-week" title="Permanent link">&para;</a></h2>
 <p>Scores at each main commit, one line per target week for the model picked.</p>
 <div class="checkschart" data-targets='{"latest": "../../figures/scorehistory-week-latest.json", "complete": "../../figures/scorehistory-week-complete.json"}' role="group" aria-label="Scores by target week">
@@ -2239,7 +2241,7 @@ The last point of a preview build is that build's own scores.
       
         <script src="../../javascripts/zoom.js?v=4e0c610c"></script>
       
-        <script src="../../javascripts/summarise.js?v=c4a6e89a"></script>
+        <script src="../../javascripts/summarise.js?v=488a333f"></script>
       
         <script src="../../javascripts/energy.js?v=93c70f1f"></script>
       
@@ -2251,9 +2253,9 @@ The last point of a preview build is that build's own scores.
       
         <script src="../../javascripts/scorechart.js?v=1c27a70d"></script>
       
-        <script src="../../javascripts/scoresummary.js?v=d19c5790"></script>
+        <script src="../../javascripts/scoresummary.js?v=1903e806"></script>
       
-        <script src="../../javascripts/checkschart.js?v=1ee222fe"></script>
+        <script src="../../javascripts/checkschart.js?v=c3e7ff92"></script>
       
         <script src="../../javascripts/nowcastchart.js?v=e5f9eb42"></script>
       
