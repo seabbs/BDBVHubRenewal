@@ -1832,6 +1832,11 @@ def _compare_hub(args: argparse.Namespace) -> int:
     write_csv(scores, out / "scores.csv")
     write_csv(energy, out / "energy.csv")
     write_csv(pending, out / "pending.csv")
+    # Sums and trajectories, the scores pairing draws affects.
+    write_csv(
+        hc.summed_comparison(forecasts, target, daily, zones, config.seed),
+        out / "summed.csv",
+    )
     write_csv(hc.forecast_quantiles(forecasts), out / "quantiles.csv.gz")
     teams = hc.load_team_metadata(hub_dir)
     write_csv(

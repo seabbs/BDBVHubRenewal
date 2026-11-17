@@ -632,3 +632,27 @@ def test_backtest_and_nowcast_pages_name_the_backtest_draws() -> None:
     assert "2026-11-08" in meta
     lead = report._release_intro(n, stored)
     assert f"{n:,} draws" in lead
+
+
+def test_summed_table_is_relative_to_the_baseline(tmp_path: Path) -> None:
+    from bdbvhubrenewal.reporting.report import _summed_table
+
+    rows = pd.DataFrame(
+        {
+            "reference_date": "2026-10-24",
+            "model": ["base", "base", "teamA", "teamA"],
+            "source": ["real", "real", "hub", "hub"],
+            "target": ["sum_weeks", "energy_weeks"] * 2,
+            "metric": ["crps", "energy"] * 2,
+            "value": [2.0, 4.0, 1.0, 6.0],
+            "n": 3,
+            "joint": [True, True, True, True],
+        }
+    )
+    rows.to_csv(tmp_path / "summed.csv", index=False)
+    text = _summed_table(tmp_path, "base")
+    assert "each place over its weeks" in text
+    assert "| 0.50 | 1.50 |" in text
+    assert "joint across weeks within a place only" in text
+    (tmp_path / "summed.csv").unlink()
+    assert "Not run yet" in _summed_table(tmp_path, "base")

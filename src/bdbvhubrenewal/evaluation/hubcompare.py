@@ -40,7 +40,7 @@ import io
 import json
 import os
 import tomllib
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Final
@@ -57,13 +57,18 @@ from bdbvhubrenewal.evaluation.backtest import (
     run_forecasts,
 )
 from bdbvhubrenewal.evaluation.nowcast import (
+    _truth,
+    complete_weeks,
     release_backtest,
 )
 from bdbvhubrenewal.evaluation.scoring import (
+    coverage_sample,
+    crps_sample,
+    energy_sample,
     relative_skill,
     summarise_scores,
 )
-from bdbvhubrenewal.forecasters import get_model, list_models
+from bdbvhubrenewal.forecasters import NATIONAL, get_model, list_models
 from bdbvhubrenewal.forecasters.zones import zone_task
 
 __all__ = [
@@ -900,3 +905,223 @@ def forecast_quantiles(
     out = grp.quantile(np.array(list(QUANTILES.values()))).unstack()
     out.columns = list(QUANTILES)
     return out.reset_index()
+
+
+SUMMED_COLUMNS: Final = (
+    "reference_date",
+    "model",
+    "source",
+    "target",
+    "metric",
+    "value",
+    "n",
+    "joint",
+)
+"""Columns of `summed_comparison`."""
+
+
+def _independent(rows: pd.DataFrame, seed: int, key: str) -> pd.DataFrame:
+    """Permute each place's sample ids, as ids not joint across places."""
+    import zlib
+
+    out = []
+    for loc, own in rows.groupby("location"):
+        rng = np.random.default_rng([seed, zlib.crc32(f"{key}|{loc}".encode())])
+        ids = np.sort(own["sample"].unique())
+        mapping = dict(zip(ids, rng.permutation(ids), strict=True))
+        out.append(own.assign(sample=own["sample"].map(mapping)))
+    return pd.concat(out, ignore_index=True)
+
+
+def summed_comparison(
+    forecasts: pd.DataFrame,
+    target: pd.DataFrame,
+    daily: pd.DataFrame,
+    zones: pd.DataFrame,
+    seed: int = 0,
+) -> pd.DataFrame:
+    """Score every model on the sums and trajectories pairing affects.
+
+    Per-cell scores do not change when draws are paired into trajectories,
+    so these are the scores that do, on the same hub cells and complete
+    weeks as `score_comparison`:
+
+    - `sum_weeks`: each place's total over its weeks (CRPS, 50% and 90%
+      coverage);
+    - `energy_weeks`: the energy score of each place's weeks as one
+      vector;
+    - `sum_provinces`: the country each week as the sum of the provinces,
+      where every province with a count that week is complete and given;
+    - `sum_zones`: a province each week as the sum of its zones, where
+      every zone with a count is complete and given.
+
+    The hub's sample format makes a team's sample ids joint across weeks
+    within a place only (`compound_taskid_set`: round, location and
+    target), so a hub team's ids are kept for `sum_weeks` and
+    `energy_weeks` but permuted at random per place before summing across
+    places, as the format gives no joint draws there (`joint` is False).
+    Our models' ids are their own trajectories and are kept.
+
+    Parameters
+    ----------
+    forecasts : pandas.DataFrame
+        Hub and our samples with `SAMPLE_COLUMNS`.
+    target : pandas.DataFrame
+        Tidy target with every real vintage.
+    daily : pandas.DataFrame
+        Daily onsets by release, for the complete weeks.
+    zones : pandas.DataFrame
+        Health zone counts by release in the target's layout
+        (`zone_truth`).
+    seed : int
+        Seed of the permutations.
+
+    Returns
+    -------
+    pandas.DataFrame
+        `SUMMED_COLUMNS`: the mean of each score over a round's places or
+        weeks, and how many (`n`).
+    """
+    cols = list(SUMMED_COLUMNS)
+    forecasts = _on_hub_cells(forecasts)[list(SAMPLE_COLUMNS)]
+    both = pd.concat([target, zones], ignore_index=True)
+    real = both.loc[both["kind"] == "real"]
+    if real.empty or forecasts.empty:
+        return pd.DataFrame(columns=cols)
+    latest = str(real["vintage"].max())
+    done = complete_weeks(both, daily, latest)
+    # Every place with a count each week, complete or not: a sum across
+    # places is scored only where all of them are complete and given.
+    every = _truth(real, latest)
+    truth = every.merge(
+        done.loc[done["complete"], ["location", "target_end_date"]],
+        on=["location", "target_end_date"],
+    )
+    cell = ["location", "target_end_date"]
+    rows = forecasts.assign(
+        reference_date=forecasts["reference_date"].astype(str),
+        target_end_date=forecasts["target_end_date"].astype(str),
+    ).merge(truth, on=cell)
+    level = rows["location"].str.count("-")
+    rows = rows.assign(level=level)
+    found: list[dict[str, object]] = []
+
+    def cells_total(own: pd.DataFrame) -> float:
+        return float(own.drop_duplicates(cell)["truth"].sum())
+
+    def given(own: pd.DataFrame) -> float:
+        return float(own["truth"].iloc[0])
+
+    def score(
+        grp: pd.DataFrame,
+        by: list[str],
+        name: str,
+        base: dict[str, object],
+        observed: Callable[[pd.DataFrame], float] = cells_total,
+    ) -> None:
+        values = []
+        for _, own in grp.groupby(by):
+            draws = own.groupby("sample")["value"].sum().to_numpy()
+            obs = observed(own)
+            values.append(
+                (
+                    crps_sample(obs, draws),
+                    coverage_sample(obs, draws, 0.5),
+                    coverage_sample(obs, draws, 0.9),
+                )
+            )
+        if not values:
+            return
+        arr = np.asarray(values, dtype=float)
+        for i, metric in enumerate(("crps", "cover50", "cover90")):
+            found.append(
+                {**base, "target": name, "metric": metric,
+                 "value": float(arr[:, i].mean()), "n": len(values)}
+            )  # fmt: skip
+
+    for (ref, model, source), grp in rows.groupby(
+        ["reference_date", "model", "source"]
+    ):
+        hub = source == "hub"
+        base = {"reference_date": ref, "model": model, "source": source}
+        score(grp, ["location"], "sum_weeks", {**base, "joint": True})
+        energies = []
+        for _, own in grp.groupby("location"):
+            wide = own.pivot(index="sample", columns=cell, values="value")
+            seen = (
+                own.drop_duplicates(cell)
+                .set_index(cell)["truth"]
+                .reindex(wide.columns)
+                .to_numpy()
+            )
+            energies.append(energy_sample(seen, wide.to_numpy()))
+        if energies:
+            found.append(
+                {**base, "joint": True, "target": "energy_weeks",
+                 "metric": "energy", "value": float(np.mean(energies)),
+                 "n": len(energies)}
+            )  # fmt: skip
+        paired = (
+            _independent(grp, seed, f"{ref}|{model}|{source}") if hub else grp
+        )
+        sums = {**base, "joint": not hub}
+        # The country from the provinces, where every province is given.
+        provinces = paired.loc[paired["level"] == 1]
+        nat = truth.loc[truth["location"] == NATIONAL]
+        need = every.loc[every["location"].str.count("-") == 1]
+        weeks = []
+        for week, own in provinces.groupby("target_end_date"):
+            want = set(need.loc[need["target_end_date"] == week, "location"])
+            if want and want <= set(own["location"]):
+                total = nat.loc[nat["target_end_date"] == week, "truth"]
+                if len(total):
+                    weeks.append(
+                        own.loc[own["location"].isin(want)].assign(
+                            truth=float(total.iloc[0]), location=NATIONAL
+                        )
+                    )
+        if weeks:
+            score(
+                pd.concat(weeks, ignore_index=True),
+                ["target_end_date"],
+                "sum_provinces",
+                sums,
+                given,
+            )
+        # A province from its zones, where every zone is given.
+        zone_rows = paired.loc[paired["level"] == 2]
+        if not zone_rows.empty:
+            parent = zone_rows["location"].str.rsplit("-", n=1).str[0]
+            zone_truth_rows = every.loc[every["location"].str.count("-") == 2]
+            groups = []
+            for key, own in zone_rows.assign(p=parent).groupby(
+                ["p", "target_end_date"]
+            ):
+                prov, week = str(key[0]), str(key[1])
+                want = set(
+                    zone_truth_rows.loc[
+                        zone_truth_rows["location"].str.startswith(prov + "-")
+                        & (zone_truth_rows["target_end_date"] == week),
+                        "location",
+                    ]
+                )
+                total = truth.loc[
+                    (truth["location"] == prov)
+                    & (truth["target_end_date"] == week),
+                    "truth",
+                ]
+                if want and want <= set(own["location"]) and len(total):
+                    groups.append(
+                        own.loc[own["location"].isin(want)].assign(
+                            truth=float(total.iloc[0]), location=prov
+                        )
+                    )
+            if groups:
+                score(
+                    pd.concat(groups, ignore_index=True),
+                    ["location", "target_end_date"],
+                    "sum_zones",
+                    sums,
+                    given,
+                )
+    return pd.DataFrame(found, columns=cols)

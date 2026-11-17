@@ -33,6 +33,12 @@ randomwalk and our other main builds, such as the 2026-11-07 renewal and renewal
 
 --8<-- "comparison-figures.md"
 
+## Sums and trajectories
+
+Pairing draws into trajectories leaves each week's score unchanged, so these are the scores it moves: the CRPS of summed targets and the energy score over a place's weeks ([how they are scored](methods/evaluation.md#comparison-with-hub-forecasts)).
+
+--8<-- "comparison-summed.md"
+
 ## Rounds
 
 --8<-- "comparison-rounds.md"

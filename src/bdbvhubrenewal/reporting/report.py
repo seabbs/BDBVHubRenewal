@@ -2179,6 +2179,68 @@ def _teams_table(teams: pd.DataFrame, hub_ids: Mapping[str, str]) -> str:
     return table.to_markdown(index=False) + "\n"
 
 
+_SUMMED_LABELS = {
+    "sum_weeks": "each place over its weeks",
+    "sum_provinces": "country from provinces",
+    "sum_zones": "province from zones",
+    "energy_weeks": "energy over weeks",
+}
+
+
+def _summed_table(cmp_dir: Path, baseline: str) -> str:
+    """Return the sums and trajectories table, relative to the baseline.
+
+    Each model's mean CRPS of each summed target (energy score over weeks)
+    over the rounds it shares with the baseline, over the baseline's.
+    """
+    path = cmp_dir / "summed.csv"
+    if not path.exists() or path.stat().st_size <= 1:
+        return "Not run yet: `bdbvhubrenewal compare-hub --fetch`.\n"
+    rows = pd.read_csv(path)
+    rows = rows.loc[rows["metric"].isin(["crps", "energy"])]
+    if rows.empty:
+        return "No round has a complete week to score yet.\n"
+    base = rows.loc[rows["model"] == baseline]
+    shared = rows.merge(
+        base[["reference_date", "target", "value"]].rename(
+            columns={"value": "base"}
+        ),
+        on=["reference_date", "target"],
+    )
+    if shared.empty:
+        return f"No round shares a scored target with `{baseline}` yet.\n"
+    summary = (
+        shared.groupby(["model", "source", "target"])[["value", "base"]]
+        .mean()
+        .assign(rel=lambda d: d["value"] / d["base"])
+        .reset_index()
+    )
+    wide = summary.pivot_table(
+        index=["model", "source"], columns="target", values="rel"
+    )
+    cols = [t for t in _SUMMED_LABELS if t in wide.columns]
+    lines = [
+        "| model | " + " | ".join(_SUMMED_LABELS[t] for t in cols) + " |",
+        "|---|" + "---|" * len(cols),
+    ]
+    for rec in wide.reset_index().to_dict("records"):
+        cells = " | ".join(
+            "" if pd.isna(rec[t]) else f"{float(rec[t]):.2f}" for t in cols
+        )
+        label = comparison_label(str(rec["model"]), str(rec["source"]))
+        lines.append(f"| {label} | {cells} |")
+    return (
+        "\n".join(lines)
+        + "\n\nRelative to `"
+        + baseline
+        + "` on the rounds both scored; below 1 is better. "
+        "The hub's sample format makes a team's sample ids joint across "
+        "weeks within a place only, which covers every team, so a team's "
+        "sums across places are of its draws taken as independent across "
+        "places; ours are our own trajectories.\n"
+    )
+
+
 def _comparison_page(
     fig: Path,
     gen: Path,
@@ -2196,6 +2258,7 @@ def _comparison_page(
             "comparison-rounds.md",
             "comparison-teams.md",
             "comparison-figures.md",
+            "comparison-summed.md",
         ):
             _write(gen / name, missing)
         _write(
@@ -2245,6 +2308,7 @@ def _comparison_page(
             int(summary.get("samples", load_config().n_samples))
         ),
     )
+    _write(gen / "comparison-summed.md", _summed_table(cmp_dir, baseline))
     scores_path = cmp_dir / "scores.csv"
     scores = (
         _site_rows(pd.read_csv(scores_path))

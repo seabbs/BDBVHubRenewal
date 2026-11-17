@@ -679,3 +679,71 @@ def test_summarise_comparison_scores_crps(
     assert rows.loc["flat", "rel_log_crps"] == pytest.approx(1)
     assert {"crps", "log_crps"} <= set(table.columns)
     assert not any("wis" in c for c in table.columns)
+
+
+# Weeks every place has complete at the fixtures' latest release, and one
+# that is not complete everywhere.
+_SUMMED_WEEKS = ["2026-08-15", "2026-09-12", "2026-09-19"]
+
+
+def _summed_inputs(target: pd.DataFrame, drop: str | None = None):
+    """A hub team and one of our models, drawn around the latest counts."""
+    real = target.loc[target["kind"] == "real"]
+    latest = real.loc[real["vintage"] == real["vintage"].max()]
+    rows = latest.loc[latest["target_end_date"].astype(str).isin(_SUMMED_WEEKS)]
+    rng = np.random.default_rng(5)
+    frames = []
+    for model, source in (("teamA-weekly", "hub"), ("flat", "ours")):
+        for r in rows.itertuples():
+            if model == "teamA-weekly" and r.location == drop:
+                continue
+            frames.append(
+                pd.DataFrame(
+                    {
+                        "model": model,
+                        "source": source,
+                        "reference_date": "2026-10-24",
+                        "location": r.location,
+                        "target_end_date": str(r.target_end_date),
+                        "sample": np.arange(1, 101),
+                        "value": rng.poisson(max(r.total, 1), 100),
+                    }
+                )
+            )
+    return pd.concat(frames, ignore_index=True)
+
+
+def test_summed_comparison_scores_sums_and_trajectories(
+    target: pd.DataFrame, daily: pd.DataFrame
+) -> None:
+    from bdbvhubrenewal.evaluation.hubcompare import summed_comparison
+
+    out = summed_comparison(_summed_inputs(target), target, daily, NO_ZONES)
+    assert {"sum_weeks", "energy_weeks", "sum_provinces"} <= set(out["target"])
+    # A team's ids are joint across weeks only, as the hub's format says,
+    # so its sums across places are of ids permuted per place.
+    team = out.loc[out["model"] == "teamA-weekly"]
+    assert team.loc[team["target"] == "sum_weeks", "joint"].all()
+    assert not team.loc[team["target"] == "sum_provinces", "joint"].any()
+    ours = out.loc[out["model"] == "flat"]
+    assert ours.loc[ours["target"] == "sum_provinces", "joint"].all()
+    # Only the two weeks complete for every province give the country.
+    assert set(ours.loc[ours["target"] == "sum_provinces", "n"]) == {2}
+    again = summed_comparison(_summed_inputs(target), target, daily, NO_ZONES)
+    pd.testing.assert_frame_equal(out, again)
+
+
+def test_summed_comparison_needs_every_province_for_the_country(
+    target: pd.DataFrame, daily: pd.DataFrame
+) -> None:
+    from bdbvhubrenewal.evaluation.hubcompare import summed_comparison
+
+    real = target.loc[target["kind"] == "real"]
+    province = sorted(
+        x for x in real["location"].unique() if x.count("-") == 1
+    )[0]
+    out = summed_comparison(
+        _summed_inputs(target, drop=province), target, daily, NO_ZONES
+    )
+    # Every model is scored on the team's cells, so none has the country.
+    assert "sum_provinces" not in set(out["target"])
