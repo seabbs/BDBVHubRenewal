@@ -1128,3 +1128,43 @@ def test_the_realdata_models_wait_for_their_pin() -> None:
     names = {s.name for s in list_models()}
     assert not {m for m in names if m.endswith("_real")}
     assert not [m for m in stored_models() if m.endswith("_real")]
+
+
+def test_native_quantiles_pass_chronos_only_its_keys(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # A block carries `target_places` for the series bias; Chronos-2's
+    # predict_quantiles rejects any key but target and the covariates.
+    allowed = {"target", "past_covariates", "future_covariates"}
+    seen = []
+
+    class Tensor:
+        def __init__(self, values: np.ndarray) -> None:
+            self.values = values
+
+        def float(self) -> Tensor:
+            return self
+
+        def cpu(self) -> Tensor:
+            return self
+
+        def numpy(self) -> np.ndarray:
+            return self.values
+
+    class Pipeline:
+        quantiles = (0.1, 0.5, 0.9)
+
+        def predict_quantiles(self, inputs, prediction_length, quantile_levels):
+            seen.extend(inputs)
+            n = len(quantile_levels)
+            shape = (prediction_length, n)
+            return [
+                Tensor(np.zeros((g["target"].shape[0], *shape))) for g in inputs
+            ], None
+
+    monkeypatch.setattr(foundation, "_chronos", lambda *_: Pipeline())
+    group = {"target": np.ones((2, 5)), "target_places": [0, 1]}
+    out = foundation.native_sampler([0.5])([group], 3, 1, 0)
+    assert len(seen) == 1
+    assert set(seen[0]) <= allowed
+    assert out[0].shape == (1, 2, 3)
