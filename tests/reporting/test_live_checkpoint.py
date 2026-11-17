@@ -149,3 +149,12 @@ def test_an_empty_scores_file_also_waits(tmp_path) -> None:
         == 0
     )
     assert "not yet" in out.read_text()
+
+
+def test_live_tags_map_the_run_s_labels_to_release_tags() -> None:
+    from bdbvhubrenewal.reporting.live_checkpoint import live_tags
+
+    assert live_tags(_rows(), "one-model") == {
+        "chronos-slots-a": 125,
+        "chronos-slots-b": 250,
+    }

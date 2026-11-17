@@ -294,3 +294,22 @@ def test_the_load_command_writes_nothing_without_a_stored_checkpoint(
 
 def test_both_fine_tuned_models_are_stored() -> None:
     assert STORED_MODELS == (DAILY, WEEKLY)
+
+
+def test_only_the_live_run_s_checkpoints_are_shown() -> None:
+    releases = [
+        *RELEASES,
+        _release("chronos-slots-live1", "2026-11-17T10:00:00Z"),
+        _release("chronos-slots-other", "2026-11-18T10:00:00Z"),
+    ]
+    stored = {"chronos-ft-bbb", "chronos-slots-live1", "chronos-slots-other"}
+    live = {"chronos-slots-live1", "chronos-slots-live2"}
+    # The other run is newer but not live, so the live checkpoint wins.
+    assert choose_checkpoint(stored, releases, "latest", live) == (
+        "chronos-slots-live1",
+        "chronos-ft-bbb",
+    )
+    # With no live checkpoint stored, nothing is shown, not the pin.
+    assert choose_checkpoint(
+        stored - {"chronos-slots-live1"}, releases, "latest", live
+    ) == (None, "chronos-ft-bbb")
