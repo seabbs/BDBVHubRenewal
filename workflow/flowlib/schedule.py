@@ -44,10 +44,8 @@ TARGETS = (
     "finetune",
     "publish",
     "dashboard",
-    "paper",
 )
-"""The targets a tick may run, each with workflow/profiles/default but
-`paper`, the paper's own workflow (workflow/scripts/paper_run.py)."""
+"""The targets a tick may run, each with workflow/profiles/default."""
 
 POOL = ("simulate", "push", "finetune", "score", "dashboard")
 """Targets that share one Snakemake run and the machine's budget."""
@@ -74,20 +72,6 @@ TICK = "workflow/scripts/tick.py"
 
 def _snakemake(cfg: Mapping[str, str], targets: list[str]) -> list[str]:
     """Return the Snakemake run of `targets` on this machine's budget."""
-    if targets == ["paper"]:
-        # The paper's own workflow, which waits for its held-out inputs.
-        return [
-            "nice",
-            "-n",
-            "19",
-            "uv",
-            "run",
-            "--group",
-            "paper",
-            "python",
-            "workflow/scripts/paper_run.py",
-            "paper",
-        ]
     forced = [r for t in targets for r in FORCERUN.get(t, [])]
     if cfg.get("SIMS_FROM") not in ("release", "remote"):
         forced = [r for r in forced if r != "available_batches"]

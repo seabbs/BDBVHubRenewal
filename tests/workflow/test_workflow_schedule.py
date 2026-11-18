@@ -171,11 +171,8 @@ def test_a_machine_with_the_rounds_lists_no_batches():
     assert "--forcerun" not in got[0][1]
 
 
-def test_the_paper_is_its_own_step_after_the_pool():
-    # The paper is its own Snakemake workflow, so it cannot share the
-    # pool's run; it waits for its held-out inputs without failing.
-    got = schedule.plan({"SCHEDULE_TARGETS": "paper score land"})
-    assert [t for t, _ in got] == ["score", "paper", "land"]
-    paper = got[1][1]
-    assert paper[:3] == ["nice", "-n", "19"]
-    assert paper[-2:] == ["workflow/scripts/paper_run.py", "paper"]
+def test_the_paper_is_not_a_tick_target():
+    # The paper run pins the checkpoint into tracked config and copies
+    # into docs/, so it is run on purpose (`task paper`), not on a timer.
+    with pytest.raises(ValueError, match="paper"):
+        schedule.plan({"SCHEDULE_TARGETS": "score paper"})
