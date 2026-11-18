@@ -20,7 +20,8 @@ if(S.latest||ORI().indexOf(S.origin)<0){S.oi=ORI().length-1;S.latest=true}else S
 function onKey(id){return id}
 function isOn(k){return ftSel.get().indexOf(k)>=0}
 function save(){try{sessionStorage.setItem(KEY,JSON.stringify({ds:S.ds,locs:S.locs,src:S.src,target:S.target,latest:S.latest,origin:ORI()[S.oi],nd:S.nd,step:S.step,chk:S.chk}))}catch(e){}}
-function chosen(k){var all=ofRun(k),ids=(S.chk[k]||[]).filter(function(i){return all.some(function(m){return m.id==i})});
+// A run's chosen checkpoints, smallest first, so lines, legend and scores share one order.
+function chosen(k){var all=ofRun(k),ids=all.map(function(m){return m.id}).filter(function(i){return (S.chk[k]||[]).indexOf(i)>=0});
  if(!ids.length&&all.length)ids=[all[all.length-1].id];return ids}
 function effective(){var o=[];
  RUNS.forEach(function(r){if(isOn(r.key)){var ids=chosen(r.key);
@@ -98,7 +99,7 @@ function legend(eff,ds){
  var leg='<div class=lg><b>truth</b> '+sw("var(--fg)",0)+'</div>';
  if(S.locs.some(function(l){var c=cache[C.key+"/"+l]||(C.preload||{})[l];return c&&c.latest&&c.latest[TGT()]}))leg+='<div class=lg><b>latest release</b> <svg width=26 height=8 viewBox="0 0 26 8"><line x1=0 x2=26 y1=4 y2=4 stroke="var(--fg)" stroke-width=1 stroke-dasharray="3 3" /></svg></div>';
  RUNS.forEach(function(r){var g=eff.filter(function(e){return e.run==r.key});if(!g.length)return;
-  leg+='<div class=lg><b style="color:'+r.color+'">'+r.label+'</b> '+g.map(function(e){return sw(colour(e.id),e.rank)+"n"+C.meta.find(function(x){return x.id==e.id}).n}).join(" ")+'</div>'});
+  leg+='<div class=lg><b>'+r.label+'</b> '+g.map(function(e){return sw(colour(e.id),e.rank)+"n"+C.meta.find(function(x){return x.id==e.id}).n}).join(" ")+'</div>'});
  var rf=eff.filter(function(e){return e.run=="ref"});
  if(rf.length)leg+='<div class=lg><b>reference</b> '+rf.map(function(e){return sw(colour(e.id),0)+id2lab(e.id)}).join(" ")+'</div>';
  if(ds.length>1)leg+='<div class=lg><b>nowcast date</b> '+ds.map(function(o,i){return '<svg width=12 height=12 viewBox="0 0 12 12">'+mark(MK[i%4],6,6,"var(--fg)","",3)+'</svg>'+o}).join(" ")+'</div>';
@@ -127,16 +128,19 @@ function wisChart(d,eff){
  var mean=function(f){return sel.map(function(id){var a=com.map(function(o){return f(id,o)});return a.reduce(function(x,y){return x+y},0)/a.length})};
  var wis=mean(function(id,o){return W_(id)[o]}),c50=mean(function(id,o){return X_(id)[o][0]}),c95=mean(function(id,o){return X_(id)[o][1]}),bias=mean(function(id,o){return X_(id)[o][2]});
  function shortLab(id){var m=C.meta.find(function(x){return x.id==id});if(!m)return id;var r=RUNS.find(function(r){return r.key==m.run});return r?r.label+" n"+m.n:m.label}
+ // Each row's swatch is its plot line (colour and dash); the text stays in text colour.
+ var rk={};eff.forEach(function(e){rk[e.id]=e.run=="ref"?0:e.rank});
+ function lab(id,y){return '<line x1="0" x2="22" y1="'+(y+5)+'" y2="'+(y+5)+'" stroke="'+colour(id)+'" stroke-width="2.2"'+dashAttr(rk[id]||0)+' /><text x="28" y="'+(y+9)+'" class=ax>'+shortLab(id)+'</text>'}
  var W=Math.max(200,$("gwis").clientWidth),RH=30;
  function rows(title,body,H,k){return '<h3>'+title+ftInfo(k)+'</h3><svg viewBox="0 0 '+W+' '+H+'" width="'+W+'" height="'+H+'">'+body+'</svg>'}
  // mean WIS
  var mx=Math.max.apply(null,wis)*1.05,h1='';
  sel.forEach(function(id,i){var y=2+i*RH,w=wis[i]/mx*(W-48);
-  h1+='<text x="0" y="'+(y+9)+'" class=ax>'+shortLab(id)+'</text><rect x="0" y="'+(y+12)+'" width="'+w+'" height="12" fill="'+colour(id)+'" /><text x="'+(w+4)+'" y="'+(y+22)+'" class=ax>'+fmt(wis[i])+'</text>'});
+  h1+=lab(id,y)+'<rect x="0" y="'+(y+12)+'" width="'+w+'" height="12" fill="'+colour(id)+'" /><text x="'+(w+4)+'" y="'+(y+22)+'" class=ax>'+fmt(wis[i])+'</text>'});
  // coverage of the 50% and 95% intervals, nominal lines at 0.5 and 0.95
  var cw=W-36,h2='';
  sel.forEach(function(id,i){var y=2+i*RH;
-  h2+='<text x="0" y="'+(y+9)+'" class=ax>'+shortLab(id)+'</text>'
+  h2+=lab(id,y)
    +'<rect x="0" y="'+(y+12)+'" width="'+c50[i]*cw+'" height="7" fill="'+colour(id)+'"><title>50% interval: '+c50[i].toFixed(2)+'</title></rect><text x="'+(c50[i]*cw+3)+'" y="'+(y+19)+'" class=ax>'+c50[i].toFixed(2)+'</text>'
    +'<rect x="0" y="'+(y+20)+'" width="'+c95[i]*cw+'" height="7" fill="'+colour(id)+'" opacity=".55"><title>95% interval: '+c95[i].toFixed(2)+'</title></rect><text x="'+(c95[i]*cw+3)+'" y="'+(y+27)+'" class=ax>'+c95[i].toFixed(2)+'</text>'});
  var H2=4+sel.length*RH;
@@ -144,7 +148,7 @@ function wisChart(d,eff){
  // bias, -1 to 1 with 0 marked
  var bw=W,h3='';
  sel.forEach(function(id,i){var y=2+i*RH,x0=bw/2,w=Math.abs(bias[i])*(bw/2-34);
-  h3+='<text x="0" y="'+(y+9)+'" class=ax>'+shortLab(id)+'</text><rect x="'+(bias[i]>=0?x0:x0-w)+'" y="'+(y+12)+'" width="'+w+'" height="12" fill="'+colour(id)+'"><title>bias '+bias[i].toFixed(3)+' (positive: forecast above truth)</title></rect><text x="'+(bias[i]>=0?x0+w+3:x0-w-3)+'" y="'+(y+22)+'" text-anchor="'+(bias[i]>=0?"start":"end")+'" class=ax>'+bias[i].toFixed(2)+'</text>'});
+  h3+=lab(id,y)+'<rect x="'+(bias[i]>=0?x0:x0-w)+'" y="'+(y+12)+'" width="'+w+'" height="12" fill="'+colour(id)+'"><title>bias '+bias[i].toFixed(3)+' (positive: forecast above truth)</title></rect><text x="'+(bias[i]>=0?x0+w+3:x0-w-3)+'" y="'+(y+22)+'" text-anchor="'+(bias[i]>=0?"start":"end")+'" class=ax>'+bias[i].toFixed(2)+'</text>'});
  h3+='<line x1="'+bw/2+'" x2="'+bw/2+'" y1="0" y2="'+H2+'" stroke="var(--fg)" stroke-width="1" />';
  $("gwis").innerHTML=rows("mean "+C.metric,h1,H2,"wis")+rows("coverage 50% and 95% (dashed: nominal)",h2,H2,"coverage")+rows("bias (+: forecast above truth)",h3,H2,"biasscore")
   +'<div class=mut style="font-size:11px">'+com.length+' common nowcast dates</div>';
