@@ -42,6 +42,23 @@ def _since(start: float) -> float:
     return time.perf_counter() - start
 
 
+def _log_rss(path: Path, every: float = 30.0) -> None:
+    """Append this process's resident memory (GB) to `path` every `every` s."""
+    import threading
+
+    def loop() -> None:
+        while True:
+            rss = 0
+            for line in Path("/proc/self/status").read_text().splitlines():
+                if line.startswith("VmRSS:"):
+                    rss = int(line.split()[1])
+            with path.open("a") as fh:
+                fh.write(f"{_since(T0):.0f} {rss / 1e6:.2f}\n")
+            time.sleep(every)
+
+    threading.Thread(target=loop, daemon=True).start()
+
+
 def main() -> int:
     """Run the probe."""
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
@@ -58,6 +75,7 @@ def main() -> int:
     args = p.parse_args()
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
+    _log_rss(out / "rss.log")
 
     import jax
     import jax.monitoring
