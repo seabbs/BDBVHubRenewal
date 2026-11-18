@@ -25,8 +25,13 @@ from bdbvhubrenewal.forecasters.foundation import (
 
 __all__ = [
     "AHEAD_WEEKS",
+    "CADENCE_DAYS",
+    "GAP_SHARE",
+    "ROLLING",
     "final_counts",
+    "release_days",
     "releases",
+    "rolling_totals",
     "training_block",
     "weekly_cutoffs",
 ]
@@ -283,6 +288,95 @@ def period_totals(
     return out
 
 
+ROLLING: Final = {"daily+rolling7": 7, "daily+rolling3": 3}
+"""Training-only sources on daily steps with each place's rolling sums:
+the days each sums, a value on every day, as the German target's 7-day
+sums are."""
+
+
+def rolling_totals(days: np.ndarray, k: int) -> np.ndarray:
+    """Return each place's `k`-day sums ending on each day.
+
+    Parameters
+    ----------
+    days : numpy.ndarray
+        Daily counts, `[L, T]`.
+    k : int
+        Days in each sum.
+
+    Returns
+    -------
+    numpy.ndarray
+        `[L, T]`, the sum of days `t - k + 1` to `t` on day `t`, NaN on
+        the first `k - 1` days.
+    """
+    out = np.full(days.shape, np.nan)
+    if days.shape[1] >= k:
+        sums = np.cumsum(np.pad(days, ((0, 0), (1, 0))), axis=1)
+        out[:, k - 1 :] = sums[:, k:] - sums[:, :-k]
+    return out
+
+
+CADENCE_DAYS: Final = {"daily": 1, "3day": 3, "weekly": 7}
+"""Days between releases of each regular cadence."""
+
+GAP_SHARE: Final = 0.2
+"""Share of releases a `_gaps` cadence misses, all but the cut's."""
+
+
+def release_days(
+    first: str, cut: str, cadence: str, rng: np.random.Generator | None
+) -> list[str]:
+    """Return the release cut-offs of a block, the last on its cut.
+
+    Regular cadences (`CADENCE_DAYS`) step back from `cut` to `first`:
+    daily releases are every day, as Germany's; weekly ones every seventh,
+    as the BDBV hub's. A `<cadence>_gaps` cadence misses each release but
+    the cut's with chance `GAP_SHARE`, drawn with `rng`. `weekdays` is
+    daily releases with none on Saturday or Sunday, but the cut's.
+
+    Parameters
+    ----------
+    first, cut : str
+        The first day a release may fall on, and the block's cut, ISO.
+    cadence : str
+        `daily`, `3day`, `weekly`, each with `_gaps`, or `weekdays`.
+    rng : numpy.random.Generator or None
+        Draws the gaps; unused by the other cadences.
+
+    Returns
+    -------
+    list of str
+        Release cut-offs in order, ISO format.
+
+    Raises
+    ------
+    ValueError
+        If the cadence is none of these.
+    """
+    base = cadence.removesuffix("_gaps")
+    gaps = base != cadence
+    if cadence == "weekdays":
+        base = "daily"
+    if base not in CADENCE_DAYS:
+        raise ValueError(f"unknown release cadence {cadence!r}")
+    step = dt.timedelta(days=CADENCE_DAYS[base])
+    start, day = as_date(first), as_date(cut)
+    out = []
+    while day >= start:
+        out.append(day)
+        day -= step
+    out.reverse()
+    if cadence == "weekdays":
+        out = [d for d in out[:-1] if d.weekday() < 5] + out[-1:]
+    if gaps:
+        assert rng is not None
+        miss = rng.random(len(out) - 1) < GAP_SHARE
+        out = [d for d, m in zip(out[:-1], miss, strict=True) if not m]
+        out.append(as_date(cut))
+    return [d.isoformat() for d in out]
+
+
 PARENTS: Final = ("exact", "unallocated", "late_parent")
 """How a block's country relates to its places (`country_counts`)."""
 
@@ -344,7 +438,8 @@ def training_block(
     places : sequence of str
         The places of the block, the country first if there are several.
     cutoffs : sequence of str
-        Cut-offs of the releases up to the cut, ISO format.
+        Cut-offs of the releases up to the cut, ISO format, at the
+        block's release cadence (`release_days`).
     max_lag : int
         Release lag $D$ in the source's steps.
     ahead_weeks : int
@@ -358,7 +453,8 @@ def training_block(
         Draws the `parent` cases; a fixed seed by default.
     period_end : int, optional
         For a source with period totals (`MIXED`), the day its periods
-        end on (`period_totals`).
+        end on (`period_totals`). Sources with rolling sums (`ROLLING`)
+        have a sum on every day instead.
 
     Returns
     -------
@@ -379,7 +475,8 @@ def training_block(
     if not rows["location"].isin(places).any():
         return None
     period = MIXED.get(source)
-    if period is not None:
+    window = ROLLING.get(source)
+    if period is not None or window is not None:
         rows = releases(counts, "daily", cutoffs, totals, country)
         tri = hub_triangle(
             rows, "daily", places, end.isoformat(), max_lag=max_lag
@@ -419,7 +516,12 @@ def training_block(
     )
     target = np.concatenate([group["target"], truth[:, start:]], axis=1)
     target_places = list(range(len(places)))
-    if period is not None:
+    if window is not None:
+        # One row a place of its rolling sums, after the daily counts,
+        # summed as the period totals are.
+        target = np.concatenate([target, rolling_totals(target, window)])
+        target_places += target_places
+    elif period is not None:
         # One row a place of its period totals, after the daily counts;
         # Chronos-2 scores it only where it has a value. They sum the daily
         # rows as assembled, the release's counts in the context and the
