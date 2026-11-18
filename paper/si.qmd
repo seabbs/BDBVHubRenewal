@@ -27,10 +27,58 @@ One SI section per paper section.
 
 ### Baselines
 
-::: {.callout-note title="Plan"}
-- We describe `randomwalk` and `randomwalknowcast` in full.
-- Key references: [@Johnson2025].
-:::
+`randomwalknowcast` nowcasts the recent weeks with baselinenowcast [@Johnson2025] and forecasts each nowcast draw on with a random walk.
+`randomwalk` is the same walk from the latest complete week, with no nowcast.
+Both run on each province and each health zone.
+The country is the per-sample sum of the provinces, and zones are their own forecasts, not summed to their province.
+Each pairs its province draws within each week by a Gaussian copula (Correlated trajectories).
+
+**Data.**
+$C_{p,r}(t)$ is the count of place $p$ with onset on day $t$ at release $r$, and $Y_{p,r}(w)$ its sum over week $w$.
+Release $r$ has cut-off $c_r$, its latest onset day, and the forecast's latest release is $o$.
+Two consecutive releases are $s = c_{r+1} - c_r$ days apart, and only pairs with $1 \le s \le D$, $D = 42$ days, inform the delay.
+
+**Delay.**
+We follow baselinenowcast on the daily release snapshots, with one extension for release gaps of more than one day.
+With $\Delta_p(j) \ge 0$ the daily log growth at age $j$, and $\Delta_p(j) = 0$ for $j \ge D$, for each gap $s$ and age $x < D$,
+$$
+\log \frac{\sum_t C_{p,r+1}(t)}{\sum_t C_{p,r}(t)} = \sum_{j=x}^{x+s-1} \Delta_p(j),
+$$
+summed over pairs of gap $s$ and days $t$ of age $x$ at $r$.
+$\Delta_p$ is the non-negative least squares fit of these equations, weighted by their denominators.
+With gaps of one day only, $\exp \Delta_p(x)$ is baselinenowcast's chain-ladder factor.
+As in baselinenowcast, only onset days within $1.5 D$ of the cut-off contribute, and a downward revision is taken from the day's earlier increments.
+The growth from age $a$ to final is $\Gamma_p(a) = \exp \sum_{j=a}^{D-1} \Delta_p(j)$, and $1 / \Gamma_p(a)$ is the share reported.
+
+**Nowcast.**
+baselinenowcast fills each recent week's row of a weekly reporting triangle from its reported count, using the shares $1 / \Gamma_p$, to the nowcast mean $\mu_p(w)$.
+The final count is the count reported plus new reports,
+$$
+X_{p,i}(w) = Y_{p,o}(w) + A, \qquad A \sim \mathrm{NB}\big(\mu_p(w) - Y_{p,o}(w),\ \phi_{p,k}\big),
+$$
+with mean $\mu_p(w) - Y_{p,o}(w)$ and size $\phi_{p,k}$ for a week $k$ weeks back.
+$\phi_{p,k}$ is fitted by maximum likelihood to the new reports of retrospective nowcasts from earlier releases, as in baselinenowcast.
+Where there are none, $\phi_{p,k} \approx 2.2$, the median of epinowcast's prior $1 / \sqrt{\phi} \sim \mathcal{N}^+(0, 1)$ [@abbottepinowcast].
+
+**Own or pooled estimates.**
+A place with at least 10 cases a week, on average over weeks 3 to 6 back, uses its own delay, size and walk spread.
+Otherwise it uses the pooled estimate of its nearest parent that meets the same rule, and otherwise the country's.
+
+**Forecast.**
+From a start value $x_i$ in sample $i$, for $h \ge 1$ weeks after the start,
+$$
+\log\{1 + \lambda_i(h)\} = \max\Big(0,\ \log(1 + x_i) + \sigma_p \sum_{j=1}^{h} z_{i,j}\Big), \qquad z_{i,j} \sim \mathcal{N}(0, 1), \qquad \tilde y_i(h) \sim \mathrm{Poisson}\big(\lambda_i(h)\big),
+$$
+so each sample is one trajectory.
+$\sigma_p^2$ is the variance of the weekly changes in $\log(1 + Y_{p,o})$ over the 9 weeks to the latest complete week, less their mean Poisson variance by the delta method, $Y / (1 + Y)^2$ for each count, as the walk draws Poisson counts on top.
+A place with no case in the 9 weeks to the cut-off stays at 0 until an introduction, which starts its walk from a Poisson(1) count of at least 1.
+An introduction occurs each week with probability $q_p = 1 - (1 - q_\mathrm{local})(1 - q_\mathrm{global})$, the rates of new or renewed introductions among the place and its siblings and among the other places of its level.
+
+**Start of the walk.**
+`randomwalk` starts every sample from the reported count of the latest week whose estimated share reported, the mean of $1 / \Gamma_p(c_o - t)$ over its days, is at least 0.95.
+`randomwalknowcast` takes the nowcast draws $X_{p,i}(w)$ for the weeks up to the cut-off.
+A partial cut-off week adds Poisson counts for its missing days, at the rate walked from the sample's nowcast of the latest full week that is at least 5% reported with at least 5 cases, within the 9 weeks to the cut-off.
+Each sample then walks on from its own completed cut-off week.
 
 ### Foundation model setup and fine-tuning
 
