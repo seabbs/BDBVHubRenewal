@@ -71,7 +71,17 @@ def test_model_config_applies_overrides() -> None:
     single = rn.model_config(rn.VARIANTS["renewalsp"])
     assert single == replace(rn.engine().MAIN, national=True, depletion=False)
     assert rn.VARIANTS["renewalsp"].per_province
-    assert rn.model_config(rn.VARIANTS["renewal"]) == rn.engine().MAIN
+    assert rn.model_config(rn.VARIANTS["renewal"]) == replace(
+        rn.engine().MAIN, centred_rt=True
+    )
+
+
+def test_pooled_variants_centre_the_shared_rt_walk() -> None:
+    # The pooled log Rt walk is pinned by every province's data, so its
+    # levels are sampled directly (#320). renewalsp keeps the steps.
+    for name in ("renewal", "renewalbvd"):
+        assert rn.model_config(rn.VARIANTS[name]).centred_rt
+    assert not rn.model_config(rn.VARIANTS["renewalsp"]).centred_rt
 
 
 def test_sampler_settings_read_the_environment(
