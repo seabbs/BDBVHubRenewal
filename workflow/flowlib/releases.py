@@ -36,10 +36,10 @@ def labels(
 
 def released_seeds(names: Iterable[str]) -> set[int]:
     """Return the batches whose counts and settings are both assets."""
+    ext = {"counts": ".csv.gz", "settings": ".csv"}
     have: dict[int, set[str]] = {}
     for name in names:
-        m = re.fullmatch(r"(counts)-(\d+)\.csv\.gz|(settings)-(\d+)\.csv", name)
-        if m:
-            kind = m[1] or m[3]
-            have.setdefault(int(m[2] or m[4]), set()).add(kind)
+        m = re.fullmatch(r"(counts|settings)-(\d+)(\.csv(?:\.gz)?)", name)
+        if m and m[3] == ext[m[1]]:
+            have.setdefault(int(m[2]), set()).add(m[1])
     return {s for s, kinds in have.items() if len(kinds) == 2}

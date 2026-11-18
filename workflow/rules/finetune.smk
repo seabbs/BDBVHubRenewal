@@ -28,12 +28,6 @@ if LOCAL["SIMS_FROM"]:
     FT["sims_from"] = LOCAL["SIMS_FROM"]
 RUN = LOCAL["RUN"]
 TRAIN = f"{RUN}/train"
-# The no-bias control is another run: it must not train into the slots
-# run's folder (RUN's default).
-if not FT["series_bias"] and Path(RUN) == Path(LOCAL["ROOT"], "checkpoints/slots"):
-    raise ValueError(
-        f"a no-bias run (series_bias false) needs its own RUN, not {RUN}"
-    )
 
 segments.check_chunks(FT["prefixes"], FT["chunk"], FT["outbreaks"])
 PREV = dict((n, p) for p, n in segments.segments(FT["prefixes"]))
@@ -99,10 +93,19 @@ checkpoint available_batches:
                 (here / "qc").mkdir(parents=True, exist_ok=True)
                 for name in ("manifest.csv", "qc/excluded.csv"):
                     there = f"{REMOTE_ROUNDS}/r{r}/{name}"
-                    subprocess.run(
+                    got = subprocess.run(
                         ["rsync", "-a", hosts._at(REMOTE, there), str(here / name)],
                         capture_output=True,
+                        text=True,
                     )  # fmt: skip
+                    # A round with no QC yet has no exclusions; a round not
+                    # started has no manifest, and nor has an unreachable
+                    # host, so that is said (the mirror kept so far stays).
+                    if got.returncode and name == "manifest.csv":
+                        print(
+                            f"could not copy {there}: {got.stderr.strip()[:200]}",
+                            file=sys.stderr,
+                        )
                 seeds |= manifest.seeds(here / "manifest.csv")
                 continue
             # A round not released yet has no release.
@@ -358,8 +361,13 @@ def trainable():
 
 
 def to_train():
-    """The prefixes `finetune` asks for: those in reach, or with
-    `next_segment_only` those saved and the first not yet saved."""
+    """Prefixes `finetune` asks for."""
+    # The no-bias control is another run: it must not train into the slots
+    # run's folder (RUN's default).
+    if not FT["series_bias"] and Path(RUN) == Path(LOCAL["ROOT"], "checkpoints/slots"):
+        raise ValueError(
+            f"a no-bias run (series_bias false) needs its own RUN, not {RUN}"
+        )
     prefixes = trainable()
     if not config.get("next_segment_only"):
         return prefixes

@@ -96,10 +96,11 @@ def _snakemake(cfg: Mapping[str, str], targets: list[str]) -> list[str]:
     ]
 
 
-def plan(cfg: Mapping[str, str]) -> list[tuple[str, list[str]]]:
-    """Return each step of a tick with its command, in order.
+def plan(cfg: Mapping[str, str]) -> list[tuple[str, list[str], bool]]:
+    """Return each step of a tick, in order.
 
-    The pool targets are the first step, one run named by its targets;
+    A step is its name, its command and whether it is the pool run. The
+    pool targets are the first step, one run named by its targets;
     each outward target is a step of its own after it.
 
     Raises
@@ -112,8 +113,8 @@ def plan(cfg: Mapping[str, str]) -> list[tuple[str, list[str]]]:
     if bad:
         raise ValueError(f"targets {bad} are not among {sorted(TARGETS)}")
     pool = [t for t in targets if t in POOL]
-    out = [(" ".join(pool), _snakemake(cfg, pool))] if pool else []
-    out += [(t, _snakemake(cfg, [t])) for t in targets if t not in POOL]
+    out = [(" ".join(pool), _snakemake(cfg, pool), True)] if pool else []
+    out += [(t, _snakemake(cfg, [t]), False) for t in targets if t not in POOL]
     return out
 
 

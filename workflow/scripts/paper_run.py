@@ -130,11 +130,13 @@ def main(argv: list[str]) -> int:
     logs = Path(cfg["PAPER_LOGS"]).expanduser()
     logs.mkdir(parents=True, exist_ok=True)
     log = logs / f"paper-{name}.log"
-    pinned = (
-        f", fine-tuned checkpoint {pin() or 'pending'}"
-        if name == "paper"
-        else ""
-    )
+    pinned = ""
+    if name == "paper":
+        try:
+            pinned = f", fine-tuned checkpoint {pin() or 'pending'}"
+        except subprocess.CalledProcessError as err:
+            say(f"FAILED pin: {(err.stderr or '').strip()[:250]}", cfg)
+            return err.returncode
     say(f"started {name}{pinned} (log {log})", cfg)
     with log.open("w") as out:
         rc = subprocess.run(
