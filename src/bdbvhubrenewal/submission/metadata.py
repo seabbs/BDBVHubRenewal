@@ -211,9 +211,8 @@ MODEL_METADATA = {
             "day from Chronos-2's 21 quantiles, rounded to counts no lower "
             "than those reported. "
             "The model is not fitted to these data. "
-            "The national value is the block's own national series. "
-            "The zones come straight from the block, as the country and "
-            "provinces do: nothing is summed or split. "
+            "The country, provinces and health zones are each the model's "
+            "own forecast of that series: nothing is summed or split. "
             "See https://samabbott.co.uk/bdbv-hub-modelling/methods/foundation/."
         ),
         "data_inputs": (
@@ -247,9 +246,8 @@ MODEL_METADATA = {
             "week from Chronos-2's 21 quantiles, rounded to counts no lower "
             "than those reported. "
             "The model is not fitted to these data. "
-            "The national value is the block's own national series. "
-            "The zones come straight from the block, as the country and "
-            "provinces do: nothing is summed or split. "
+            "The country, provinces and health zones are each the model's "
+            "own forecast of that series: nothing is summed or split. "
             "See https://samabbott.co.uk/bdbv-hub-modelling/methods/foundation/."
         ),
         "data_inputs": (
