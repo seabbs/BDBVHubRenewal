@@ -405,7 +405,9 @@ class _FakePipeline:
 
     quantiles = (0.1, 0.5, 0.9)
 
-    def predict_quantiles(self, groups, prediction_length, quantile_levels):
+    def predict_quantiles(
+        self, groups, prediction_length, quantile_levels, **_kw
+    ):
         import torch
 
         out = []
