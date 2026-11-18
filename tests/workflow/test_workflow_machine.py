@@ -93,3 +93,25 @@ def test_this_machine_reads():
     got = machine.budget({})
     assert got["cores"] >= 1
     assert got["mem_mb"] > 0
+
+
+def test_torch_runs_on_the_machine_device_with_the_rule_threads():
+    env = machine.torch_env({"DEVICE": "cuda:1"}, threads=6)
+    assert env["DEVICE"] == "cuda:1"
+    for name in ("TORCH_THREADS", "OMP_NUM_THREADS", "MKL_NUM_THREADS"):
+        assert env[name] == "6"
+    assert "CUDA_VISIBLE_DEVICES" not in env
+    assert "CHRONOS_BATCH" not in env
+    # JAX (XLA) reads none of the *_NUM_THREADS settings.
+    assert "intra_op_parallelism_threads=6" in env["XLA_FLAGS"]
+
+
+def test_a_device_can_be_asked_for_and_the_chronos_batch_set():
+    env = machine.torch_env({"CHRONOS_BATCH": "128"}, threads=1, device="cpu")
+    assert env["DEVICE"] == "cpu"
+    assert env["CHRONOS_BATCH"] == "128"
+
+
+def test_torch_env_as_shell_assignments():
+    got = machine.shell_env({"DEVICE": "cpu", "TORCH_THREADS": "2"})
+    assert got == "DEVICE=cpu TORCH_THREADS=2"

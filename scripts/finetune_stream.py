@@ -53,6 +53,7 @@ from bdbvhubrenewal.forecasters.foundation import (
     CHRONOS_REVISION,
     SLOTS_PREFIX,
     release_tag,
+    torch_device,
 )
 
 sys.path.insert(0, str(Path(__file__).parent))
@@ -790,24 +791,6 @@ def held_out_loss(model, blocks: list[dict], batch_size: int) -> float:
     return float(np.average(losses, weights=weights))
 
 
-def pick_device(device: str = "auto") -> str:
-    """Return the torch device to train on.
-
-    `auto` takes CUDA, then MPS, then the CPU; any other name is used as
-    given. The device is a machine setting (`DEVICE` in the local config),
-    kept out of the checkpoint hash.
-    """
-    import torch
-
-    if device != "auto":
-        return device
-    if torch.cuda.is_available():
-        return "cuda"
-    if torch.backends.mps.is_available():
-        return "mps"
-    return "cpu"
-
-
 def free_memory() -> None:
     """Return the GPU memory PyTorch caches but does not use."""
     import torch
@@ -1323,7 +1306,7 @@ def main() -> None:
     )
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)  # noqa: NPY002
-    device = pick_device(args.device)
+    device = torch_device(args.device)
     pipeline = Chronos2Pipeline.from_pretrained(
         CHRONOS_MODEL, revision=CHRONOS_REVISION, device_map=device
     )

@@ -730,3 +730,60 @@ def test_an_unreachable_rounds_host_is_said(tmp_path):
     )  # fmt: skip
     assert "manifest.csv" in out.stderr
     assert "could not copy" in out.stderr
+
+
+def score_jobs(tmp_path, config, local_extra=""):
+    """Return each score rule's shell command, priority and resources."""
+    local = tmp_path / "local.env"
+    local.write_text(
+        f"ROOT={tmp_path}\nHOST_NAME=test-host\nDEVICE=cuda\n{local_extra}"
+    )
+    overlay = tmp_path / "overlay.yaml"
+    overlay.write_text(yaml.safe_dump(config))
+    out = subprocess.run(
+        [str(SNAKEMAKE), "score", "-s", "workflow/Snakefile", "-n", "-p",
+         "--cores", "8", "--workflow-profile", "workflow/profiles/ci",
+         "--configfile", str(overlay)],
+        cwd=ROOT,
+        env={"PATH": str(SNAKEMAKE.parent) + ":/usr/bin:/bin",
+             "HOME": str(tmp_path), "LOCAL_CONFIG": str(local)},
+        capture_output=True,
+        text=True,
+    )  # fmt: skip
+    assert out.returncode == 0, out.stderr + out.stdout
+    return re.split(r"\n(?=(?:local)?rule \w+:)", out.stdout)
+
+
+def test_score_units_run_torch_on_the_machine_device(tmp_path):
+    config = {"score": {"labels": ["aaa", "bbb"]}}
+    blocks = score_jobs(tmp_path, config)
+    units = [b for b in blocks if re.match(r"rule score_(bdbv|germany):", b)]
+    assert len(units) == 6
+    for block in units:
+        assert "DEVICE=cuda" in block
+        assert "OMP_NUM_THREADS=1 " not in block
+        assert "CUDA_VISIBLE_DEVICES" not in block
+        assert re.search(r"resources: .*gpu=1", block)
+        # A few threads, not the machine: simulations keep their cores.
+        assert re.search(r"threads: 2\b", block)
+        assert "intra_op_parallelism_threads=2" in block
+
+
+def test_score_threads_are_a_machine_setting(tmp_path):
+    config = {"score": {"labels": ["aaa"]}}
+    blocks = score_jobs(tmp_path, config, "SCORE_THREADS=3\n")
+    units = [b for b in blocks if re.match(r"rule score_bdbv:", b)]
+    assert units
+    assert all(re.search(r"threads: 3\b", b) for b in units)
+
+
+def test_newer_checkpoints_are_scored_first(tmp_path):
+    config = {"score": {"labels": ["aaa", "bbb"]}}
+    blocks = score_jobs(tmp_path, config)
+    got = {}
+    for block in blocks:
+        rule = re.match(r"rule (score_bdbv):", block)
+        if rule:
+            label = re.search(r"wildcards: label=(\S+)", block)[1]
+            got[label] = float(re.search(r"priority: ([\d.]+)", block)[1])
+    assert got["bbb"] > got["aaa"] > got["reference"]

@@ -6,7 +6,10 @@
 # A unit caches one file per date or origin in <SCORE_CACHE>/<study>/
 # <label>/ and resumes from it; its done stamp is written when it exits
 # cleanly. `score_table` merges every label's rows into the evidence
-# tables in <SCORE_CACHE>/tables/. BDBV units run before German ones.
+# tables in <SCORE_CACHE>/tables/. BDBV units run before German ones,
+# and within each the newest checkpoint first. A unit runs torch on
+# this machine's device (flowlib.machine) with SCORE_THREADS threads,
+# and takes the `gpu` resource, so units on one GPU queue.
 #
 # Targets: `score`, or one unit, <SCORE_CACHE>/germany/<label>.done.
 # `land` (opt-in) commits the tables to evidence/ and pushes.
@@ -58,11 +61,33 @@ ROOM = (
 )
 
 
+# A unit's CPU threads (SCORE_THREADS, default 2): a few, so simulations
+# keep the rest of the machine's cores.
+UNIT_THREADS = int(LOCAL.get("SCORE_THREADS") or 2)
+
+
+def score_order():
+    """The checkpoint labels, oldest published first."""
+    if SC["labels"] is not None:
+        return list(SC["labels"])
+    path = checkpoints.release_list.get().output[0]
+    return releases.by_time(json.loads(Path(path).read_text()), SC["published_from"])
+
+
+def unit_priority(base):
+    """A unit's priority: `base`, newer checkpoints a fraction higher."""
+    return lambda wc: releases.priority(score_order(), wc.label, base)
+
+
+def unit_env(wc, threads):
+    """The unit's torch device, threads and Chronos-2 batch."""
+    return machine.shell_env(machine.torch_env(LOCAL, threads))
+
+
 def unit_shell(study):
     return (
-        "mkdir -p " + CACHE + " && " + ROOM + "OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 "
-        "XLA_FLAGS=--xla_cpu_multi_thread_eigen=false "
-        "{params.prefix} nice -n 19 uv run --group chronos python "
+        "mkdir -p " + CACHE + " && " + ROOM + "{params.prefix} nice -n 19 "
+        "env {params.env} uv run --group chronos python "
         f"scripts/checkpoint_scores.py {study} {CACHE} {{wildcards.label}} "
         "> {log} 2>&1 && touch {output}"
     )
@@ -77,10 +102,12 @@ rule score_bdbv:
         f"{CACHE}/log/bdbv-{{label}}.log",
     params:
         prefix=lambda wc, resources: job_prefix(resources.mem_mb),
-    priority: 10
-    threads: 1
+        env=unit_env,
+    priority: unit_priority(10)
+    threads: UNIT_THREADS
     resources:
         mem_mb=SC["mem_mb"],
+        gpu=1,
     shell:
         unit_shell("bdbv")
 
@@ -92,10 +119,12 @@ rule score_germany:
         f"{CACHE}/log/germany-{{label}}.log",
     params:
         prefix=lambda wc, resources: job_prefix(resources.mem_mb),
-    priority: 5
-    threads: 1
+        env=unit_env,
+    priority: unit_priority(5)
+    threads: UNIT_THREADS
     resources:
         mem_mb=SC["mem_mb"],
+        gpu=1,
     shell:
         unit_shell("germany")
 
@@ -121,10 +150,12 @@ rule score_germany_forecast:
         f"{CACHE}/log/germany_forecast-{{label}}.log",
     params:
         prefix=lambda wc, resources: job_prefix(resources.mem_mb),
-    priority: 1
-    threads: 1
+        env=unit_env,
+    priority: unit_priority(1)
+    threads: UNIT_THREADS
     resources:
         mem_mb=SC["mem_mb"],
+        gpu=1,
     shell:
         unit_shell("germany_forecast")
 

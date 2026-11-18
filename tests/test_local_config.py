@@ -105,11 +105,11 @@ def test_no_fine_tuning_or_simulation_code_names_a_host_or_home():
 def test_the_trainer_takes_its_device_from_the_machine():
     import sys
 
-    # pick_device imports torch, which CI's test env does not install.
+    # torch_device imports torch, which CI's test env does not install.
     pytest.importorskip("torch")
 
     sys.path.insert(0, str(ROOT / "scripts"))
     import finetune_stream as fs
 
-    assert fs.pick_device("cpu") == "cpu"
-    assert fs.pick_device("auto") in {"cuda", "mps", "cpu"}
+    assert fs.torch_device("cpu") == "cpu"
+    assert fs.torch_device("auto") in {"cuda", "mps", "cpu"}
