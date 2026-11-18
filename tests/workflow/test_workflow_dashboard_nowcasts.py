@@ -259,3 +259,42 @@ def test_samples_are_scored_against_the_scorer_s_truth(tmp_path):
         crps_sample(y, draws), abs=1e-3
     )
     assert float(rows[0]["latest"]) == 100
+
+
+def test_wis_parts_on_both_scales_sum_to_each_scale_s_wis(tmp_path):
+    from bdbvhubrenewal.evaluation.scoring import wis_quantile
+
+    _quantiles(
+        tmp_path / "reference" / "2022-02-09.csv.gz",
+        "fm_chronos_daily_ragged",
+        truth=15.5,
+    )
+    rs, refs = _setup()
+    built = nowcasts.build(tmp_path, rs, refs, levels=PAGE)
+    parts = built["parts"]["DE"]["zero"]["7day"]["daily"]["2022-02-09"]
+    q = [8.0, 9, 10, 11, 12, 13, 14]
+    nat = wis_quantile([15.5], [q], nowcasts.LEVELS)
+    log = wis_quantile(np.log1p([15.5]), [np.log1p(q)], nowcasts.LEVELS)
+    want = (
+        [nat[p][0] for p in nowcasts.WIS_PARTS]
+        + [log["wis"][0]]
+        + [log[p][0] for p in nowcasts.WIS_PARTS]
+    )
+    assert parts == pytest.approx(want, abs=1e-3)
+    # The truth is above every quantile: underprediction only.
+    assert parts[1] == 0
+    assert parts[0] + parts[2] == pytest.approx(
+        built["score"]["DE"]["zero"]["7day"]["daily"]["2022-02-09"], abs=0.01
+    )
+    assert nowcasts.location(built, "DE")["parts"] == built["parts"]["DE"]
+
+
+def test_a_file_score_has_no_parts(tmp_path):
+    _quantiles(
+        tmp_path / "reference" / "2022-02-09.csv.gz",
+        "fm_chronos_daily_ragged",
+        score=3.25,
+    )
+    rs, refs = _setup()
+    built = nowcasts.build(tmp_path, rs, refs, levels=PAGE)
+    assert "zero" not in built["parts"].get("DE", {})
