@@ -192,13 +192,14 @@ def table_inputs(wc):
     labels = checkpoint_labels()
     every = [*SC["reference"], *labels]
     # The reference's held-out scores need a checkpoint's settings.
-    held = every if labels else []
+    held = every if labels and SC["held_out"] else []
+    zoned = every if SC["zones"] else []
     return {
         "bdbv": expand(f"{CACHE}/bdbv/{{label}}.done", label=every),
         "germany": expand(f"{CACHE}/germany/{{label}}.done", label=every),
         "heldout": expand(f"{CACHE}/heldout/{{label}}.done", label=labels),
         "held": expand(f"{CACHE}/{HELD}/{{label}}.done", label=held),
-        "zones": expand(f"{CACHE}/bdbv_zones/{{label}}.done", label=every),
+        "zones": expand(f"{CACHE}/bdbv_zones/{{label}}.done", label=zoned),
         "forecast": forecast_inputs(),
     }
 

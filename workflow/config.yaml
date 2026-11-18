@@ -65,13 +65,17 @@ score:
   # Checkpoints to score, as labels (`<hash>`, `slots-<hash>`); null takes
   # every checkpoint released from `published_from` (rule release_list).
   labels: null
-  # Grid r5's run (#311) published its first checkpoint after this.
-  published_from: "2026-11-17T17:00:00Z"
+  # The previous run (grid r4) and grid r5's (#311).
+  published_from: "2026-11-16T09:00:00Z"
   # The held-out simulations scored with proper scores
   # (scripts/heldout_scores.py SETS): r5 is round 9, all 840.
   held_set: r5
   # A held-out scores unit's memory cap (MB).
   held_mem_mb: 8192
+  # Whether `score` takes the held-out simulation scores and the
+  # backtest's health zones (off until the shared scorer lands, #314).
+  held_out: false
+  zones: false
   # Labels scored beside every checkpoint: randomwalknowcast and zero-shot
   # Chronos-2.
   reference: [reference]

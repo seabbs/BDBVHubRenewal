@@ -269,7 +269,13 @@ def test_the_follow_ups_are_off_for_grid_r5(tmp_path):
 
 
 def test_score_runs_held_out_scores_and_zones_a_label(tmp_path):
-    config = {"score": {"labels": ["slots-aaa", "bbb"]}}
+    config = {
+        "score": {
+            "labels": ["slots-aaa", "bbb"],
+            "zones": True,
+            "held_out": True,
+        }
+    }
     jobs = dry(tmp_path, "score", config=config)
     # Each checkpoint and the reference on the held-out set's simulations.
     assert jobs["score_heldout_scores"] == 3
