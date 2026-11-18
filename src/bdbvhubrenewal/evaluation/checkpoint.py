@@ -64,10 +64,14 @@ BASELINE: Final = "randomwalknowcast"
 REFERENCE: Final = "reference"
 REFERENCE_PIN: Final = "e8a1f5ae338b"
 """The checkpoint the reference pins, which its models never load."""
-ZERO_SHOT: Final = ("fm_chronos_daily_ragged",)
-FINETUNED: Final = tuple(f"{m}_ft" for m in ZERO_SHOT)
-COMPLETE: Final = ("fm_chronos_daily_complete",)
-"""Zero-shot Chronos-2 given complete data points only, a reference."""
+REFERENCE_SOURCE: Final = {"bdbv": "weekly", "germany": "daily"}
+"""The source each study's zero-shot and complete-data references take,
+chosen a priori as the simplest for its target (Sam, 2026-11-19): the
+weekly releases for BDBV's weekly target, the daily releases (summed to
+7 days) for the German 7-day target. Other layouts are for the SI only."""
+FINETUNED: Final = ("fm_chronos_daily_ragged_ft",)
+"""The fine-tuned model, in the layout it is fine-tuned on: the daily
+releases with each place's weekly totals as a target row."""
 N_DRAWS: Final = 1000
 SCORED_FROM: Final = "2026-11-21"
 """The first scored BDBV round; origins from it are never scored here."""
@@ -129,10 +133,15 @@ SORT: Final = ["rule", "study", "level", "model", "outbreaks", "checkpoint"]
 # Labels and checkpoints ------------------------------------------------
 
 
-def label_models(label: str) -> tuple[str, ...]:
-    """Return the models a label runs."""
+def label_models(label: str, study: str = "bdbv") -> tuple[str, ...]:
+    """Return the models a label runs on a study (`REFERENCE_SOURCE`)."""
     if label == REFERENCE:
-        return (BASELINE, *ZERO_SHOT, *COMPLETE)
+        source = REFERENCE_SOURCE[study]
+        return (
+            BASELINE,
+            f"fm_chronos_{source}_ragged",
+            f"fm_chronos_{source}_complete",
+        )
     return FINETUNED
 
 
@@ -513,7 +522,7 @@ def germany_unit(cache: Path, label: str) -> None:
     root = cache / "germany" / label
     root.mkdir(parents=True, exist_ok=True)
     dates = de.nowcast_dates(config, held_out=False)
-    models = list(label_models(label))
+    models = list(label_models(label, "germany"))
     for i, date in enumerate(dates, 1):
         path = root / f"{date}.csv.gz"
         if path.exists():

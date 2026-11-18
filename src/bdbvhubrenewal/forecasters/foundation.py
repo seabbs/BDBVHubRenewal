@@ -2,16 +2,16 @@
 r"""The Chronos-2 foundation model on the hub target's releases.
 
 See the Foundation models methods page for the model.
-The registered models all take one layout, the one fine-tuned on: the
-daily releases, with each place's weekly totals as a target row the
-weekly target is read from (`week_rows`). Each layout of the releases
-(`LAYOUTS`) is one model, `fm_chronos_daily_<layout>`, and the ragged
-model with a fine-tuned checkpoint (`resolve_checkpoint`, the latest
-release unless `config/finetune.toml` pins one) is
-`fm_chronos_daily_ragged_ft`. `FoundationModel` still takes the weekly
-releases as a source. For the SI, `fm_chronos_<source>_ragged_real`
-is the ragged model with the checkpoint fine-tuned on real data alone
-(the German development half and the public BDBV data to date,
+Each pair of a source (`SOURCES`) and a layout (`LAYOUTS`) is one
+reference model, `fm_chronos_<source>_<layout>`, zero-shot or on complete
+data. The fine-tuned model, `fm_chronos_daily_ragged_ft`, takes the layout
+it is fine-tuned on: the daily releases, with each place's weekly totals as
+a target row the weekly target is read from (`week_rows`), and the ragged
+layout, with the checkpoint `resolve_checkpoint` gives (the latest release
+unless `config/finetune.toml` pins one). For the SI,
+`fm_chronos_daily_ragged_real` is the daily ragged model with the
+checkpoint fine-tuned on real data alone (the German development half
+and the public BDBV data to date,
 `scripts/finetune_realdata.py`), pinned in `config/finetune.toml` and
 released as `realdata-ft-<hash>`, which the latest lookup never takes.
 `hub_triangle` lays out the hub target by place, time and release lag,
@@ -1302,18 +1302,20 @@ def native_sampler(
     return sample
 
 
-for _layout in LAYOUTS:
-    # One layout, the one fine-tuned on: the daily releases with each
-    # place's weekly totals as a target row, the weekly target read from it.
-    _name = f"fm_chronos_daily_{_layout}"
-    register_model(
-        _name,
-        partial(FoundationModel, _name, "daily", _layout, weekly_totals=True),
-        "Chronos-2 on the hub target's daily releases with each place's "
-        f"weekly totals as a target row, {_layout} layout, every target in "
-        "one block.",
-        fitted=True,
-    )
+for _source in SOURCES:
+    # The references, zero-shot and complete-data, take each source on its
+    # own: daily-only (the daily forecast summed to weeks) and weekly-only.
+    for _layout in LAYOUTS:
+        _name = f"fm_chronos_{_source}_{_layout}"
+        register_model(
+            _name,
+            partial(FoundationModel, _name, _source, _layout),
+            f"Chronos-2 on the hub target's {_source} releases, {_layout} "
+            "layout, every target in one block.",
+            fitted=True,
+        )
+# The fine-tuned model takes the layout it is fine-tuned on: the daily
+# releases with each place's weekly totals as a target row.
 register_model(
     "fm_chronos_daily_ragged_ft",
     partial(_finetuned, "fm_chronos_daily_ragged_ft", "daily"),

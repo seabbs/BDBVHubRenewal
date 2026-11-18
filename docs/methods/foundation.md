@@ -1,13 +1,13 @@
 # Foundation models
 
-Three experimental candidate models that give the hub target's releases to the Chronos-2 time series foundation model[^chronos2].
+Five experimental candidate models that give the hub target's releases to the Chronos-2 time series foundation model[^chronos2].
 { .page-subtitle }
 
 The data and notation are on the [Data methods page](data.md#target-and-notation).
-The models are named `fm_chronos_daily_<layout>`, with two layouts.
-All three take one block layout, the one Chronos-2 is fine-tuned on: the daily releases, with each place's weekly totals as a target row the weekly target is read from ([Releases](#releases)).
+The models are named `fm_chronos_<source>_<layout>`, with two sources of the hub target and two layouts.
 None is fitted to these data: Chronos-2 forecasts in context, from its pretrained weights or a fine-tuned checkpoint.
-`fm_chronos_daily_ragged_ft` is the ragged model with Chronos-2 fine-tuned on simulated outbreaks ([Fine-tuning](#fine-tuning)).
+`fm_chronos_daily_ragged_ft` is the daily ragged model with Chronos-2 fine-tuned on simulated outbreaks ([Fine-tuning](#fine-tuning)), in the layout it is fine-tuned on: each place also has a target row of its weekly totals, which the weekly forecast is read from.
+The zero-shot and complete-data references take each source on its own; each study uses the simplest for its target, chosen before scoring: the weekly releases for the BDBV weekly target and the daily releases for the German 7-day target. The other source is reported in the SI only.
 Each is a candidate, not submitted.
 The hub model `seabbs-nowcastfm` is set up to submit `fm_chronos_daily_ragged_ft` and is off until it is opted in ([Opting in](../submission/opting-in.md)).
 
@@ -21,10 +21,12 @@ In brief, each model:
 ## Releases
 
 The target is the hub's: confirmed cases by onset week, known and imputed onsets together.
-The models read it from the daily releases: the daily counts of each release, known plus imputed onsets.
-A step is an onset day.
-Each place also has a target row of its weekly totals, the sum of its daily counts over each hub week, on the week's last day.
-The weekly forecast is read from that row, as in the fine-tuning blocks that hold daily counts with a weekly row per place.
+Two sources give it with its updates.
+
+- **Weekly** (`fm_chronos_weekly_*`): the weekly counts of each release of the target data, for the country, the provinces and the zones.
+  A step is an onset week.
+- **Daily** (`fm_chronos_daily_*`): the daily counts of each release, known plus imputed onsets.
+  A step is an onset day.
 
 For place $p$, step $t$ and release $r$ with cut-off in step $c_r$, the release lag is $d = c_r - t$.
 $Y_{p,t,d}$ is the count of step $t$ at lag $d$, from the release whose cut-off is $d$ steps after $t$.
@@ -60,7 +62,7 @@ Draws are independent across steps and series.
 
 A draw is rounded to the nearest count and floored at zero.
 A step's draw is no lower than its count at the vintage, and steps up to $t^*$ are their count at the vintage.
-Each week is read from the weekly totals row and is no lower than its reported count.
+The daily source is summed to weeks, as the hub's target is weekly, and each week is no lower than its reported count.
 
 ## Patches and context
 
@@ -75,7 +77,7 @@ So the release backtest scores them on the complete target only, each week again
 ## Health zones
 
 The models forecast the zones themselves, as series of the block.
-The country, provinces and zones all come straight from the block.
+The country, provinces and zones all come straight from the block, daily or weekly as the model runs.
 Nothing is summed or split, so zones need not sum to their province.
 Each zone keeps its published count, as every series does.
 So the stored forecasts, the hub file and the scores all have the zones as submitted.
@@ -135,7 +137,6 @@ Such fits are retried by running the Fit store workflow with `retry_failed` (`gh
 - The zero-shot models use Chronos-2 as pretrained. It has not seen these data or outbreaks like them.
 - The fine-tuned models have seen only simulated outbreaks, whose delays and dynamics may not match these data.
 - The fine-tuned models were trained on blocks no larger than the memory budget allows, but forecast all 546 hub targets in one block.
-- Draws are independent across steps and places, so sums over weeks or places are too narrow.
-- The block holds the daily lag series only; it could also have held each place's weekly lag series.
+- Draws are independent across steps and places, so every weekly value of the daily models, a sum of seven daily draws, is too narrow, as are sums over weeks or places.
 
 [^chronos2]: Ansari A F et al. (2025) Chronos-2: From univariate to universal forecasting. arXiv:2510.15821. Code: <https://github.com/amazon-science/chronos-forecasting>.
