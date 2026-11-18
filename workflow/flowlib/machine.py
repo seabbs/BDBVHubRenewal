@@ -85,7 +85,8 @@ def torch_env(
     none of those settings: `XLA_FLAGS` makes XLA's Eigen pool
     single-threaded, kept beside any flags already set (as
     `bdbvhubrenewal.devices` keeps them). `CHRONOS_BATCH` in the local
-    config, if set, is the series in one Chronos-2 forward pass.
+    config, if set, is the series in one Chronos-2 forward pass, and
+    `SCORE_DATES` the German dates a scoring unit forecasts together.
     """
     env = {"DEVICE": device or _device(cfg, path)}
     env |= dict.fromkeys(THREAD_VARS, str(threads))
@@ -93,8 +94,9 @@ def torch_env(
     if EIGEN not in flags:
         flags.append(EIGEN)
     env["XLA_FLAGS"] = " ".join(flags)
-    if cfg.get("CHRONOS_BATCH"):
-        env["CHRONOS_BATCH"] = str(cfg["CHRONOS_BATCH"])
+    for key in ("CHRONOS_BATCH", "SCORE_DATES"):
+        if cfg.get(key):
+            env[key] = str(cfg[key])
     return env
 
 
