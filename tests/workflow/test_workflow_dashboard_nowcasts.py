@@ -176,7 +176,7 @@ def test_one_location_has_truth_and_latest_by_target(tmp_path):
     rs, refs = _setup()
     built = nowcasts.build(tmp_path, rs, refs, levels=PAGE)
     got = nowcasts.location(built, "DE")
-    assert set(got) == {"series", "score", "stats", "truth", "latest"}
+    assert set(got) == {"series", "score", "parts", "stats", "truth", "latest"}
     assert got["truth"]["7day"] == {"t": ["2022-02-01"], "y": [10.0]}
 
 
