@@ -413,7 +413,9 @@ jobs:
           path: |
             ${{ env.WORK }}/gate
             ${{ env.WORK }}/metadata
-          retention-days: 90
+          # The round's record: kept for a live submission, briefly for a
+          # dry run.
+          retention-days: ${{ needs.detect.outputs.dry_run == 'false' && 90 || 7 }}
 
   submit:
     name: Open or update the hub PR
@@ -479,7 +481,9 @@ jobs:
             ${{ env.WORK }}/gate/pr-body.md
             ${{ env.WORK }}/gate/pr-title.txt
             ${{ env.WORK }}/gate/pr-outcome.txt
-          retention-days: 90
+          # The round's record: kept for a live submission, briefly for a
+          # dry run.
+          retention-days: ${{ needs.detect.outputs.dry_run == 'false' && 90 || 7 }}
 
   # baseline: random walk on a nowcast, falling back to plain
   # random walk, under its own hub id. Apart from the renewal chain; both
@@ -568,7 +572,9 @@ jobs:
           path: |
             ${{ env.WORK }}/track-randomwalknowcast/gate
             ${{ env.WORK }}/track-randomwalknowcast/metadata
-          retention-days: 90
+          # The round's record: kept for a live submission, briefly for a
+          # dry run.
+          retention-days: ${{ needs.detect.outputs.dry_run == 'false' && 90 || 7 }}
 
   # chronos: fine-tuned Chronos-2 (`chronos_model`, the
   # [models.fm_chronos_*_ragged_ft] table of config/hub.toml) under its
@@ -610,12 +616,16 @@ jobs:
         with:
           path: ~/.cache/huggingface
           key: chronos-2-29ec3766d36d6f73f0696f85560a422f50e8498c
+      - name: Resolve the fine-tuned checkpoint
+        id: finetuned
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: echo "hash=$(uv run bdbvhubrenewal finetuned-checkpoint)" >> "$GITHUB_OUTPUT"
       - name: Cache the fine-tuned checkpoints
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/bdbvhubrenewal
-          key: chronos-ft-${{ github.run_id }}
-          restore-keys: chronos-ft-
+          key: chronos-ft-${{ steps.finetuned.outputs.hash }}
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: inputs
@@ -678,7 +688,9 @@ jobs:
           path: |
             ${{ env.WORK }}/track-${{ needs.prepare.outputs.chronos_model }}/gate
             ${{ env.WORK }}/track-${{ needs.prepare.outputs.chronos_model }}/metadata
-          retention-days: 90
+          # The round's record: kept for a live submission, briefly for a
+          # dry run.
+          retention-days: ${{ needs.detect.outputs.dry_run == 'false' && 90 || 7 }}
 
   record:
     name: Record the round in the ledger
