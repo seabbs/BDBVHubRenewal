@@ -15,10 +15,11 @@ ROOT = Path(__file__).parents[2]
 SNAKEMAKE = Path(sys.executable).parent / "snakemake"
 
 
-def dry(tmp_path, *targets, config=None):
+def dry(tmp_path, *targets, config=None, extra=()):
     """Return the jobs per rule of a dry run of `targets`.
 
-    `config` is merged into workflow/config.yaml.
+    `config` is merged into workflow/config.yaml; `extra` are more
+    Snakemake options.
     """
     local = tmp_path / "local.env"
     if not local.exists():
@@ -39,6 +40,7 @@ def dry(tmp_path, *targets, config=None):
             "--workflow-profile",
             "workflow/profiles/ci",
             *(["--configfile", str(overlay)] if config else []),
+            *extra,
         ],
         cwd=ROOT,
         env={
@@ -648,3 +650,53 @@ def test_a_tick_does_not_train_on_to_the_n1000_check(tmp_path):
     jobs = dry(tmp_path, "finetune", config=config)
     assert jobs["train_segment"] == 1
     assert "checkpoint_check" not in jobs
+
+
+def _rounds_host(tmp_path, rounds):
+    """A rounds host on this machine with `rounds` {round: seeds} listed."""
+    host = tmp_path / "host"
+    for r, seeds in rounds.items():
+        where = host / "rounds" / f"r{r}"
+        (where / "qc").mkdir(parents=True)
+        rows = "".join(
+            f"{r},{s},block,r5,c,1,21,a,b,,1,2.0,h,t\n" for s in seeds
+        )
+        (where / "manifest.csv").write_text("header\n" + rows)
+    local = tmp_path / "local.env"
+    local.write_text(
+        f"ROOT={tmp_path}\nHOST_NAME=test-host\nREMOTE_ROOT={host}\n"
+    )
+    return local
+
+
+def _list_batches(tmp_path, local):
+    """Run available_batches for real, as a tick does each run."""
+    overlay = tmp_path / "overlay.yaml"
+    overlay.write_text(yaml.safe_dump(REMOTE))
+    run = tmp_path / "checkpoints" / "slots"
+    out = subprocess.run(
+        [str(SNAKEMAKE), str(run / "available-batches.txt"), "-s",
+         "workflow/Snakefile", "--cores", "1", "--workflow-profile",
+         "workflow/profiles/ci", "--configfile", str(overlay),
+         "--forcerun", "available_batches"],
+        cwd=ROOT,
+        env={"PATH": str(SNAKEMAKE.parent) + ":/usr/bin:/bin",
+             "HOME": str(tmp_path), "LOCAL_CONFIG": str(local)},
+        capture_output=True,
+        text=True,
+    )  # fmt: skip
+    assert out.returncode == 0, out.stderr + out.stdout
+
+
+def test_a_fresh_listing_keeps_the_checkpoints_saved(tmp_path):
+    # Each tick lists the batches anew; the newer list must not make a
+    # saved (protected) checkpoint look outdated.
+    local = _rounds_host(
+        tmp_path, {1: range(30100, 30140), 2: range(30200, 30240)}
+    )
+    _checkpoint(tmp_path, 250)
+    _list_batches(tmp_path, local)
+    jobs = dry(
+        tmp_path, "finetune", config={**REMOTE, "next_segment_only": True}
+    )
+    assert jobs["train_segment"] == 1
