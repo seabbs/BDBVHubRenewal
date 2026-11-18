@@ -141,8 +141,9 @@ def test_the_zone_split_keys_the_province_models_fits(tmp_path: Path) -> None:
     edit("forecasters/zones.py")
     split = digests()
     assert all(split[m] != before[m] for m in models)
-    # A model that forecasts the zones itself reconciles them in its fit.
-    assert store.code_digest("fm_chronos_weekly_ragged", root) != own
+    # Chronos-2 takes its zones straight from its block, so the split is
+    # not its fit code.
+    assert store.code_digest("fm_chronos_weekly_ragged", root) == own
     before = split
     # Introductions are drawn in the fit, for provinces with no recent case.
     edit("forecasters/introductions.py")

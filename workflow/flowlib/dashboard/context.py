@@ -94,6 +94,7 @@ def build(
         source=source,
         rule=dash["rule"],
         outbreaks=int(ft["outbreaks"]),
+        prefixes=tuple(int(p) for p in ft["prefixes"]),
         learning_rate=float(ft["learning_rate"]),
         datasets=dash.get("datasets") or [],
         mailbox=source.mailbox,

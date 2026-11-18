@@ -83,7 +83,9 @@ class _FakePipeline:
         self.value = value
         self.calls: list[dict] = []
 
-    def predict_quantiles(self, inputs, prediction_length, quantile_levels):
+    def predict_quantiles(
+        self, inputs, prediction_length, quantile_levels, **_kw
+    ):
         self.calls.append(
             {
                 "inputs": inputs,

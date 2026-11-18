@@ -76,7 +76,9 @@ So the release backtest scores them on the complete target only, each week again
 ## Health zones
 
 The models forecast the zones themselves, as series of the block.
-Each model makes its zones sum to its provinces sample by sample, with each zone keeping its published count (`forecasters.zones.reconcile_zones`, [Health zones](baselines.md#health-zones)).
+The country, provinces and zones all come straight from the block, daily or weekly as the model runs.
+Nothing is summed or split, so zones need not sum to their province.
+Each zone keeps its published count, as every series does.
 So the stored forecasts, the hub file and the scores all have the zones as submitted.
 The other fitted models split their provinces across the zones instead ([Health zones](baselines.md#health-zones)).
 
