@@ -94,21 +94,22 @@ def test_a_segment_starts_from_the_prefix_before(tmp_path):
     assert (run / "state.json").read_text() == '{"done": 250}'
 
 
-def test_a_state_further_on_is_kept(tmp_path):
-    # A segment that stopped part way resumes from its own saves.
-    run, prev = tmp_path / "state", tmp_path / "n250" / "state"
-    _state(prev, 250)
-    _state(run, 375)
-    assert segments.resume_state(run, prev, 250) == "kept"
-    assert (run / "state.json").read_text() == '{"done": 375}'
-
-
-def test_a_state_behind_is_replaced(tmp_path):
-    run, prev = tmp_path / "state", tmp_path / "n500" / "state"
-    _state(prev, 500)
-    _state(run, 250)
-    assert segments.resume_state(run, prev, 500) == "copied"
-    assert (run / "state.json").read_text() == '{"done": 500}'
+@pytest.mark.parametrize(
+    ("prev_n", "run_n", "action", "kept"),
+    [
+        # A segment that stopped part way resumes from its own saves.
+        (250, 375, "kept", 375),
+        (500, 250, "copied", 500),
+    ],
+)
+def test_a_state_further_on_is_kept_and_one_behind_replaced(
+    tmp_path, prev_n, run_n, action, kept
+):
+    run, prev = tmp_path / "state", tmp_path / f"n{prev_n}" / "state"
+    _state(prev, prev_n)
+    _state(run, run_n)
+    assert segments.resume_state(run, prev, prev_n) == action
+    assert (run / "state.json").read_text() == f'{{"done": {kept}}}'
 
 
 def test_a_run_state_alone_is_enough(tmp_path):
