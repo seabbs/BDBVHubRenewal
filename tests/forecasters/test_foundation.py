@@ -1156,7 +1156,9 @@ def test_native_quantiles_pass_chronos_only_its_keys(
     class Pipeline:
         quantiles = (0.1, 0.5, 0.9)
 
-        def predict_quantiles(self, inputs, prediction_length, quantile_levels):
+        def predict_quantiles(
+            self, inputs, prediction_length, quantile_levels, **_kw
+        ):
             seen.extend(inputs)
             n = len(quantile_levels)
             shape = (prediction_length, n)
