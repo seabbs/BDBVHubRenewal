@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import os
 import platform
+import shlex
 import shutil
 import subprocess
 import sys
@@ -95,7 +96,7 @@ def torch_env(
 
 def shell_env(env: Mapping[str, str]) -> str:
     """Return `env` as shell assignments to put before a command."""
-    return " ".join(f"{k}={v}" for k, v in env.items())
+    return " ".join(f"{k}={shlex.quote(v)}" for k, v in env.items())
 
 
 def machine_mb() -> int:
