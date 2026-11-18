@@ -623,6 +623,8 @@ def nowcasts_section(
                 for r in ctx.runs
             ],
             "defaults": defaults,
+            # WIS parts in the paper's order, each its share of the colour.
+            "parts": [[p, wis.part_share(p)] for p in wis.PARTS],
         }
     )
     first = defaults.get("source")

@@ -37,6 +37,11 @@ INK_TEXT: str = style.INK["text"]
 """The paper's text ink, whose shades key the parts in a legend."""
 
 
+def part_share(part: str) -> float:
+    """Return the share of its model's colour a WIS part's segment takes."""
+    return float(plots.PART_SHADES[part])
+
+
 def part_colour(colour: str, part: str) -> str:
     """Return a WIS part's bar colour: its model's colour, shaded.
 
@@ -45,7 +50,7 @@ def part_colour(colour: str, part: str) -> str:
     """
     from matplotlib.colors import to_hex, to_rgb
 
-    share = plots.PART_SHADES[part]
+    share = part_share(part)
     try:
         rgb = to_rgb(colour)
     except ValueError:

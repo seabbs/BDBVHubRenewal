@@ -18,6 +18,7 @@ from . import paperstyle, svg
 
 PARTS = paperstyle.WIS_PARTS
 """The components, in the order they stack."""
+part_share = paperstyle.part_share
 
 NOTE = (
     "Mean WIS on the forecasts the models were scored on together; the "
