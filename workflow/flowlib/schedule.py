@@ -203,7 +203,7 @@ def systemd_units(
     root = Path(root)
     env = f"Environment=PATH={path}\n" if path else ""
     service = (
-        "[Unit]\nDescription=BDBVHubRenewal workflow tick\n\n"
+        "[Unit]\nDescription=bdbv-hub-modelling workflow tick\n\n"
         "[Service]\nType=oneshot\n"
         f"WorkingDirectory={root}\n{env}"
         f"ExecStart=/usr/bin/env python3 {TICK}\n"
@@ -211,7 +211,7 @@ def systemd_units(
         f"StandardError=append:{root / 'output' / 'workflow-tick.log'}\n"
     )
     timer = (
-        "[Unit]\nDescription=Run the BDBVHubRenewal workflow tick\n\n"
+        "[Unit]\nDescription=Run the bdbv-hub-modelling workflow tick\n\n"
         f"[Timer]\nOnBootSec=5min\nOnUnitActiveSec={every}min\n"
         "Persistent=true\n\n[Install]\nWantedBy=timers.target\n"
     )

@@ -57,6 +57,42 @@ def device(
     return "cpu"
 
 
+_device = device
+
+
+THREAD_VARS = (
+    "TORCH_THREADS",
+    "OMP_NUM_THREADS",
+    "MKL_NUM_THREADS",
+    "OPENBLAS_NUM_THREADS",
+)
+"""The thread counts a torch or JAX job reads, all set to its threads."""
+
+
+def torch_env(
+    cfg: Mapping[str, str],
+    threads: int,
+    device: str | None = None,
+    path: str | None = None,
+) -> dict[str, str]:
+    """Return the environment of a job running torch here.
+
+    The job runs on `device`, by default this machine's (`device`), with
+    `threads` CPU threads, its rule's. `CHRONOS_BATCH` in the local
+    config, if set, is the series in one Chronos-2 forward pass.
+    """
+    env = {"DEVICE": device or _device(cfg, path)}
+    env |= dict.fromkeys(THREAD_VARS, str(threads))
+    if cfg.get("CHRONOS_BATCH"):
+        env["CHRONOS_BATCH"] = str(cfg["CHRONOS_BATCH"])
+    return env
+
+
+def shell_env(env: Mapping[str, str]) -> str:
+    """Return `env` as shell assignments to put before a command."""
+    return " ".join(f"{k}={v}" for k, v in env.items())
+
+
 def machine_mb() -> int:
     """Return this machine's memory in MB."""
     meminfo = Path("/proc/meminfo")

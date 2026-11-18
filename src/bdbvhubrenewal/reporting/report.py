@@ -1193,7 +1193,7 @@ def _evidence_link(evidence: object) -> str:
     if evidence.startswith("http"):
         label = evidence.rstrip("/").rsplit("/", 1)[-1]
         return f"[{label}]({evidence})"
-    url = f"https://github.com/seabbs/BDBVHubRenewal/blob/main/{evidence}"
+    url = f"https://github.com/seabbs/bdbv-hub-modelling/blob/main/{evidence}"
     return f"[`{evidence}`]({url})"
 
 

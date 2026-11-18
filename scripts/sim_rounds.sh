@@ -39,7 +39,7 @@ SLOT_MEM=${SLOT_MEM:-16G}
 RETRY_MEM=${RETRY_MEM:-20G}
 SEED_BASE=${SEED_BASE:-30000}
 ARCHIVE=${ARCHIVE:-1}
-REPO=${REPO:-seabbs/BDBVHubRenewal}
+REPO=${REPO:-seabbs/bdbv-hub-modelling}
 
 say() { echo "$(date '+%F %H:%M') $HOST_NAME sim rounds: $*" >> "$MAILBOX"; }
 

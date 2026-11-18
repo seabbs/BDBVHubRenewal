@@ -127,7 +127,7 @@ The adapter is downloaded once and checked against `sha256sums.txt` and the sett
 The fit store resolves the release once per run, with the workflow's GitHub token, and passes its hash to every fit in `BDBV_CHRONOS_FT`.
 If GitHub cannot be reached, building a model fails rather than fall back to a checkpoint downloaded before.
 A fit whose adapter cannot be downloaded is stored as failed, and the fit store keeps it until its inputs change.
-Such fits are retried by running the Fit store workflow with `retry_failed` (`gh workflow run fit-store.yml -R seabbs/BDBVHubRenewal -f retry_failed=true -f models="fm_chronos_weekly_ragged_ft fm_chronos_daily_ragged_ft"`).
+Such fits are retried by running the Fit store workflow with `retry_failed` (`gh workflow run fit-store.yml -R seabbs/bdbv-hub-modelling -f retry_failed=true -f models="fm_chronos_weekly_ragged_ft fm_chronos_daily_ragged_ft"`).
 
 ## Limitations
 

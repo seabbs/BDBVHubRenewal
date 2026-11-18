@@ -14,7 +14,7 @@ from submission_ci.release_rounds import FOOTER, Plan, main, plan
 REF = "2026-11-07"
 PR_A = "https://github.com/InsightNet-US/BDBV-Modeling-Hub/pull/95"
 PR_B = "https://github.com/InsightNet-US/BDBV-Modeling-Hub/pull/94"
-RUN = "https://github.com/seabbs/BDBVHubRenewal/actions/runs/41691221605"
+RUN = "https://github.com/seabbs/bdbv-hub-modelling/actions/runs/41691221605"
 SHA = "16340ee3556f578b7482d79f98657e7611b60b7a"
 AFTER = dt.datetime(2026, 11, 6, tzinfo=dt.UTC)
 DURING = dt.datetime(2026, 11, 2, tzinfo=dt.UTC)
@@ -112,7 +112,7 @@ def runner(pr_state: str = "MERGED") -> FakeRunner:
 def args(tmp_path: Path, *extra: str) -> list[str]:
     return [
         "--state", str(ledger(tmp_path)),
-        "--repo", "seabbs/BDBVHubRenewal",
+        "--repo", "seabbs/bdbv-hub-modelling",
         "--now", AFTER.isoformat(),
         *extra,
     ]  # fmt: skip

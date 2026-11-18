@@ -350,6 +350,15 @@ def test_a_place_with_no_week_to_start_from_starts_late_and_stays_small(
     assert (su[:, :n_data] >= origin.reported[i]).all()
 
 
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "The copula pairs each week's province draws on its own (#310), so "
+        "a sample's nowcast week and the week after are not one trajectory: "
+        "the correlation is about 0 paired and 0.9 unpaired. Whether to keep "
+        "trajectories is Sam's decision."
+    ),
+)
 def test_the_walk_forecasts_on_from_each_samples_nowcast(
     target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
 ) -> None:

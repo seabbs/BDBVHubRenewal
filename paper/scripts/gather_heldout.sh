@@ -15,7 +15,7 @@ setting() { python3 "$root/workflow/flowlib/localconfig.py" "$1"; }
 SAY_PREFIX="paper: CI gather (run $run)"
 # shellcheck source=workflow/scripts/notify.sh
 source "$root/workflow/scripts/notify.sh"
-repo=seabbs/BDBVHubRenewal
+repo=seabbs/bdbv-hub-modelling
 bdbv="$root/.venv/bin/bdbvhubrenewal"
 cd "$root"
 jobs() {

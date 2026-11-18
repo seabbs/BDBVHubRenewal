@@ -14,12 +14,12 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 Clone the repository and install the package and its dependencies into `.venv/`.
 
 ```sh
-git clone https://github.com/seabbs/BDBVHubRenewal.git
-cd BDBVHubRenewal
+git clone https://github.com/seabbs/bdbv-hub-modelling.git
+cd bdbv-hub-modelling
 uv sync
 ```
 
-Run every command below from the `BDBVHubRenewal` folder.
+Run every command below from the `bdbv-hub-modelling` folder.
 The hub data are not committed.
 `task data` (or `uv run bdbvhubrenewal data`) fetches the latest hub data into `data/`, and `task data-bvd` caches the BVDOutbreakSize releases that renewalbvd reads.
 The tests read a frozen copy in `tests/fixtures/data/`, so they need no download.
@@ -40,7 +40,7 @@ VS Code offers to install `ipykernel` the first time you run a notebook cell.
 
 ## Run a forecast from a script
 
-Save this as `my_forecast.py` in the `BDBVHubRenewal` folder.
+Save this as `my_forecast.py` in the `bdbv-hub-modelling` folder.
 It forecasts with the random walk nowcast from one release, scores the forecast against later releases and saves a table and a figure.
 [Getting started](getting-started.ipynb) walks through the same steps, and the [API reference](reference/index.md) documents each function.
 

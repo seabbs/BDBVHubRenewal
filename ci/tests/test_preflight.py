@@ -12,7 +12,7 @@ from conftest import FakeRunner
 
 from submission_ci.preflight import Settings, main, render, run_checks
 
-REPO = "seabbs/BDBVHubRenewal"
+REPO = "seabbs/bdbv-hub-modelling"
 FORK = "seabbs-bot/BDBV-Modeling-Hub"
 HUB = "InsightNet-US/BDBV-Modeling-Hub"
 MID = "seabbs-renewal"

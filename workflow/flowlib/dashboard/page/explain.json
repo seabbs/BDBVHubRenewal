@@ -19,5 +19,8 @@
  "t_eta": "Time to the final checkpoint at the recent training speed.",
  "t_lr": "Current learning rate of each optimiser group.",
  "t_trainer": "Whether the trainer process is running.",
- "t_log": "Time of the last training log line. It turns red after 10 minutes."
+ "t_log": "Time of the last training log line. It turns red after 10 minutes.",
+ "learnlevel": "Held-out loss on all held-out simulated blocks at each checkpoint, by level (leaf, intermediate, national), divided by that level's loss at step 0. Each level is scored with the other rows of its blocks masked. Below 1 means fine-tuning helps that level; good is every line falling and none rising above 1.",
+ "learnlayer": "How far the LoRA adapter has moved each encoder layer from base Chronos-2: the Frobenius norm of the scaled update B·A, a layer's time and group attention modules added in quadrature. One line per checkpoint. It shows where the model changes, not whether it improves: expect steady growth that slows as the learning rate falls, with no one layer running away.",
+ "learnkind": "The same update size split by kind of module: time attention (along each series), group attention (across the series of a block) and the output layer, at each checkpoint. Growing group attention means the model is learning how places relate; growth that levels off late in the run is expected as the learning rate falls to zero."
 }
