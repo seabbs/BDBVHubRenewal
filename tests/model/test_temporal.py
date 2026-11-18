@@ -44,8 +44,9 @@ def test_repr():
 
 
 def test_centred_samples_the_levels():
-    # Centred, the fitted levels are the site, so data that pin the
-    # level of the walk pin each parameter, not a sum of steps.
+    # Centred, the fitted levels themselves are the site, so data that
+    # pin the level of the walk pin each parameter, not a sum of steps
+    # or a sum with the starting value.
     from numpyro.handlers import condition
 
     rw = NonCentredRandomWalk(
@@ -58,10 +59,10 @@ def test_centred_samples_the_levels():
         )
     assert "w_z" not in tr
     np.testing.assert_allclose(x[:3], 1.0)
-    np.testing.assert_allclose(x[3:6], 1.0 + levels)
+    np.testing.assert_allclose(x[3:6], levels)
     assert tr["w_z_future"]["value"].shape == (4, 2)
-    # Steps of the levels are N(0, sd).
-    steps = jnp.diff(jnp.vstack([jnp.zeros((1, 2)), levels]), axis=0)
+    # Steps of the levels from the starting value are N(0, sd).
+    steps = jnp.diff(jnp.vstack([jnp.ones((1, 2)), levels]), axis=0)
     expected = float(
         __import__("numpyro")
         .distributions.Normal(0.0, 0.5)
