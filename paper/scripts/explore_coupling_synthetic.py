@@ -85,6 +85,10 @@ def main() -> None:
                             origin=f"{outbreak}|{task.vintage}",
                         )
                     )
+        if not frames:
+            # Too short for any origin: nothing to score.
+            logging.info("%s: no origins", outbreak)
+            continue
         write_csv(pd.concat(frames, ignore_index=True), path)
         logging.info("%s done", outbreak)
     scores = pd.concat(
