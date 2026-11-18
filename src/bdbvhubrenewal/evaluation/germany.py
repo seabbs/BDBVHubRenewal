@@ -57,6 +57,7 @@ from bdbvhubrenewal.evaluation.marginals import forecast_quantiles
 from bdbvhubrenewal.evaluation.nowcast import rolling_truth
 from bdbvhubrenewal.evaluation.scoring import relative_skill, score_quantiles
 from bdbvhubrenewal.forecasters import get_model, list_models
+from bdbvhubrenewal.forecasters.foundation import FoundationModel, prefetch
 
 log = logging.getLogger(__name__)
 
@@ -397,11 +398,17 @@ def germany_forecasts(
         `quantile` and `value`, at `QUANTILE_LEVELS`
         (`bdbvhubrenewal.evaluation.marginals.forecast_quantiles`).
     """
-    built = [get_model(m) for m in models]
+    tasks = {d: nowcast_tasks(triangle, d, n_samples, seed) for d in dates}
+    every = [t for ts in tasks.values() for t in ts]
+    # Chronos-2 is predicted for every date's tasks in a few batched passes.
+    built = [
+        prefetch(m, every) if isinstance(m, FoundationModel) else m
+        for m in (get_model(m) for m in models)
+    ]
     keys = ["model", "origin", "location", "target_end_date", "horizon"]
     frames = []
     for date in dates:
-        for task in nowcast_tasks(triangle, date, n_samples, seed):
+        for task in tasks[date]:
             for model in built:
                 at = forecast_quantiles(
                     model, task, QUANTILE_LEVELS, n_samples, seed
