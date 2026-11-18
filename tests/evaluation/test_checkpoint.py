@@ -14,17 +14,13 @@ from bdbvhubrenewal.evaluation.scoring import coverage_sample, crps_sample
 
 
 def test_each_label_runs_its_models():
+    # One foundation layout: the daily releases with weekly totals rows.
     assert ck.label_models("reference") == (
         "randomwalknowcast",
         "fm_chronos_daily_ragged",
-        "fm_chronos_weekly_ragged",
         "fm_chronos_daily_complete",
-        "fm_chronos_weekly_complete",
     )
-    assert ck.label_models("abc123") == (
-        "fm_chronos_daily_ragged_ft",
-        "fm_chronos_weekly_ragged_ft",
-    )
+    assert ck.label_models("abc123") == ("fm_chronos_daily_ragged_ft",)
 
 
 @pytest.mark.parametrize(

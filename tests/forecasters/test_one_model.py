@@ -18,6 +18,7 @@ from bdbvhubrenewal.forecasters import (
     ForecastTask,
     foundation,
     get_model,
+    list_models,
     series_bias,
 )
 from bdbvhubrenewal.forecasters.foundation import (
@@ -114,13 +115,20 @@ def test_inference_rows_carry_the_total_rows_places():
         assert place[4 + k] == PLACES.index(name.rsplit("_lag_", 1)[0])
 
 
-def test_the_weekly_and_daily_finetuned_models_share_one_adapter(ft):
-    weekly = get_model("fm_chronos_weekly_ragged_ft")
-    assert weekly.checkpoint == ft.checkpoint
-    assert (weekly.source, weekly.weekly_totals) == ("weekly", False)
+def test_every_foundation_model_takes_the_layout_it_is_fine_tuned_on(ft):
+    # One layout: the daily releases with each place's weekly totals as a
+    # target row, zero-shot, complete-data and fine-tuned alike.
+    names = {s.name for s in list_models() if s.name.startswith("fm_")}
+    assert names >= {
+        "fm_chronos_daily_ragged",
+        "fm_chronos_daily_complete",
+        "fm_chronos_daily_ragged_ft",
+    }
+    assert not {n for n in names if "weekly" in n}
     assert (ft.source, ft.weekly_totals) == ("daily", True)
-    # The zero-shot daily model has no total rows.
-    assert not get_model("fm_chronos_daily_ragged").weekly_totals
+    for name in ("fm_chronos_daily_ragged", "fm_chronos_daily_complete"):
+        model = get_model(name)
+        assert (model.source, model.weekly_totals) == ("daily", True)
 
 
 def _aggregate_sampler(store: list):
@@ -180,22 +188,6 @@ def test_weekly_forecasts_are_read_from_the_total_rows(
             (out["location"] == place) & out["target_end_date"].isin(future)
         ]
         assert (rows["value"] >= 1000 + i).all()
-
-
-def test_the_weekly_finetuned_model_uses_the_weekly_block_alone(
-    task: ForecastTask, fake_checkpoint: str
-) -> None:
-    store: list = []
-    weekly = dataclasses.replace(
-        get_model("fm_chronos_weekly_ragged_ft"),
-        sample=_aggregate_sampler(store),
-    )
-    assert weekly.checkpoint.hash == fake_checkpoint
-    weekly.forecast(task)
-    group = store[-1]
-    assert np.atleast_2d(group["target"]).shape[0] == len(group["places"])
-    n_lags = len(group["places"]) * foundation.MAX_LAG["weekly"]
-    assert len(group["past_covariates"]) == n_lags
 
 
 def test_one_forecast_gives_daily_draws_from_the_count_rows_too(

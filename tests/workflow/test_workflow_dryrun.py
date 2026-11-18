@@ -397,7 +397,7 @@ def test_score_runs_the_follow_ups_of_slots_checkpoints_only(tmp_path):
     jobs = dry(tmp_path, "score", config=config)
     assert jobs["slots_check_shard"] == 2
     assert jobs["slots_check_summary"] == 1
-    assert jobs["agg_fit"] == 2
+    assert jobs["agg_fit"] == 1
     assert jobs["agg_rows"] == 1
     assert jobs["agg_sanity"] == 1
     assert jobs["fetch_adapter"] == 1

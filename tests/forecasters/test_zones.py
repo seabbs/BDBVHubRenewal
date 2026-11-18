@@ -519,9 +519,9 @@ def test_zones_need_not_sum_for_the_walks_and_the_foundation_model() -> None:
     for name in (
         "randomwalk",
         "randomwalknowcast",
-        "fm_chronos_weekly_ragged",
+        "fm_chronos_daily_ragged",
         "fm_chronos_daily_ragged_ft",
-        "fm_chronos_weekly_complete",
+        "fm_chronos_daily_complete",
     ):
         assert zones_need_not_sum(name), name
     for name in ("renewal", "renewalsp", None, "not-a-model"):

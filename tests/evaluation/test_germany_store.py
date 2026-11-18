@@ -25,6 +25,7 @@ CONFIG = load_germany_config(ROOT / "config" / "germany.toml")
 SPLIT = CONFIG.split_date
 
 
+# WEEKLY is a model old caches hold, which the store leaves out.
 DAILY, WEEKLY = "fm_chronos_daily_ragged_ft", "fm_chronos_weekly_ragged_ft"
 
 
@@ -125,7 +126,7 @@ def test_development_rows_keep_the_model_before_the_split() -> None:
         ]
     )
     out = development_rows(frame, SPLIT)
-    assert set(out["model"]) == {DAILY, WEEKLY}
+    assert set(out["model"]) == {DAILY}
     assert out["origin"].max() == "2022-02-09"
     assert (out["target_end_date"] < SPLIT).all()
 
@@ -196,7 +197,7 @@ def test_the_store_script_writes_a_label_from_the_cache(
         check=True,
     )
     stored = load_stored(out, "chronos-ft-abcdef123456", SPLIT)
-    assert set(stored["model"]) == {DAILY, WEEKLY}
+    assert set(stored["model"]) == {DAILY}
     assert sorted(set(stored["origin"])) == ["2021-11-22", "2021-11-23"]
 
 
@@ -292,8 +293,8 @@ def test_the_load_command_writes_nothing_without_a_stored_checkpoint(
     assert json.loads(note.read_text())["tag"] is None
 
 
-def test_both_fine_tuned_models_are_stored() -> None:
-    assert STORED_MODELS == (DAILY, WEEKLY)
+def test_the_fine_tuned_model_is_stored() -> None:
+    assert STORED_MODELS == (DAILY,)
 
 
 def test_only_the_live_run_s_checkpoints_are_shown() -> None:

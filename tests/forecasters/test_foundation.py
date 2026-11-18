@@ -50,11 +50,24 @@ from bdbvhubrenewal.forecasters.zones import (
     zones_for_model,
 )
 
-FINETUNED_MODELS = tuple(f"fm_chronos_{s}_ragged_ft" for s in SOURCES)
+FINETUNED_MODELS = ("fm_chronos_daily_ragged_ft",)
 MODELS = (
-    *(f"fm_chronos_{s}_{lay}" for s in SOURCES for lay in LAYOUTS),
+    *(f"fm_chronos_daily_{lay}" for lay in LAYOUTS),
     *FINETUNED_MODELS,
 )
+
+
+def _model(source: str, layout: str) -> FoundationModel:
+    """Return the model of a source and layout.
+
+    The daily ones are registered (with the weekly totals rows); the
+    weekly source is no longer a registered model but `FoundationModel`
+    still takes it.
+    """
+    if source == "daily":
+        return get_model(f"fm_chronos_daily_{layout}")
+    name = f"fm_chronos_weekly_{layout}"
+    return FoundationModel(name, "weekly", layout)
 
 
 def _constant(value: float):
@@ -151,7 +164,7 @@ def test_ragged_lags_stop_below_the_truth_delay(
     # and the forecasts and scores were worse.
     store: list = []
     model = dataclasses.replace(
-        get_model(f"fm_chronos_{source}_ragged"), sample=_recording(store)
+        _model(source, "ragged"), sample=_recording(store)
     )
     model.forecast(task)
     groups, _ = store[0]
@@ -277,20 +290,22 @@ def test_one_block_holds_every_target(source: str, task: ForecastTask) -> None:
     for layout in LAYOUTS:
         store: list = []
         model = dataclasses.replace(
-            get_model(f"fm_chronos_{source}_{layout}"),
+            _model(source, layout),
             sample=_recording(store),
         )
         model.forecast(task)
         groups, horizon = store[0]
         assert len(groups) == 1
         seen[layout] = (groups[0], horizon)
+    # The daily models add each place's weekly totals as a target row.
+    n_targets = n_places * (2 if source == "daily" else 1)
     complete, _ = seen["complete"]
-    assert complete["target"].shape[0] == n_places
+    assert complete["target"].shape[0] == n_targets
     assert "future_covariates" not in complete
     ragged, horizon = seen["ragged"]
     # The targets are the hub-target series only; the lag series are
     # covariates, with no copy of a target, of the places with cases.
-    assert ragged["target"].shape[0] == n_places
+    assert ragged["target"].shape[0] == n_targets
     future = ragged["future_covariates"]
     assert ragged["past_covariates"].keys() == future.keys()
     lagged = {name.rsplit("_lag_", 1)[0] for name in future}
@@ -312,7 +327,7 @@ def test_complete_starts_from_the_random_walk_week(
 ) -> None:
     store: list = []
     model = dataclasses.replace(
-        get_model(f"fm_chronos_{source}_complete"), sample=_recording(store)
+        _model(source, "complete"), sample=_recording(store)
     )
     model.forecast(task)
     origin = RandomWalk().origin_at(task, errors=False)
@@ -333,7 +348,7 @@ def test_complete_starts_from_the_random_walk_week(
 def test_weekly_ragged_needs_no_daily_releases(task: ForecastTask) -> None:
     bare = dataclasses.replace(task, daily_history=None)
     model = dataclasses.replace(
-        get_model("fm_chronos_weekly_ragged"), sample=_constant(0.0)
+        _model("weekly", "ragged"), sample=_constant(0.0)
     )
     # It reads no release snapshots, so it forecasts without them.
     assert not model.needs_snapshots
@@ -373,7 +388,7 @@ def test_complete_forecasts_with_no_walk_spread(
     with pytest.raises(NoWalkSpread):
         RandomWalk().origin_at(flat, errors=False)
     model = dataclasses.replace(
-        get_model(f"fm_chronos_{source}_complete"), sample=_constant(0.0)
+        _model(source, "complete"), sample=_constant(0.0)
     )
     check_samples(model.forecast(flat), flat)
 
@@ -394,7 +409,7 @@ def test_complete_with_a_walk_start_off_the_grid_is_unavailable(
     # A walk that starts before the first release step is off the grid.
     monkeypatch.setattr(foundation, "_walk_start", lambda _: "1900-01-06")
     model = dataclasses.replace(
-        get_model(f"fm_chronos_{source}_complete"), sample=_constant(0.0)
+        _model(source, "complete"), sample=_constant(0.0)
     )
     with pytest.raises(ModelUnavailableError, match="1900-01-06"):
         model.forecast(task)
@@ -521,7 +536,7 @@ def test_unreachable_github_fails_loudly(
     monkeypatch.setattr(foundation, "FINETUNED_CACHE", str(cache))
     foundation.resolve_checkpoint.cache_clear()
     with pytest.raises(ConnectionError):
-        get_model("fm_chronos_weekly_ragged_ft")
+        get_model("fm_chronos_daily_ragged_ft")
 
 
 def test_no_checkpoint_release_fails(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -674,7 +689,7 @@ def test_missing_adapter_is_stored_as_failed(
     # The latest release lists its checksums but the adapter cannot be
     # downloaded. As a missing Chronos-2: a failed fit, not a fit with no
     # forecast.
-    stored = store.fit("fm_chronos_weekly_ragged_ft", task, {}, "c")
+    stored = store.fit("fm_chronos_daily_ragged_ft", task, {}, "c")
     assert stored.meta["status"] == "failed"
     assert f"chronos-ft-{fake_checkpoint}" in stored.meta["error"]
     # The stored fit records the checkpoint it was keyed on.
@@ -805,9 +820,7 @@ def _by_series(groups, horizon, n, _seed):
 @pytest.fixture(scope="module")
 def zoned(task: ForecastTask) -> pd.DataFrame:
     """Samples with the zones, from a stand-in that draws each series apart."""
-    model = dataclasses.replace(
-        get_model("fm_chronos_weekly_ragged"), sample=_by_series
-    )
+    model = dataclasses.replace(_model("weekly", "ragged"), sample=_by_series)
     return model.forecast(task)
 
 
@@ -963,7 +976,7 @@ def test_zone_releases_without_a_target_release_add_no_lag_cells(
     )[0]
     store: list = []
     model = dataclasses.replace(
-        get_model("fm_chronos_weekly_ragged"), sample=_recording(store)
+        _model("weekly", "ragged"), sample=_recording(store)
     )
     model.forecast(task)
     group = store[0][0][0]
@@ -982,7 +995,7 @@ def test_weeks_before_the_first_onset_are_forecast(
         task, target_end_dates=(early, *task.target_end_dates)
     )
     model = dataclasses.replace(
-        get_model("fm_chronos_weekly_ragged"), sample=_constant(0.0)
+        _model("weekly", "ragged"), sample=_constant(0.0)
     )
     out = model.forecast(longer)
     assert set(out.loc[out["target_end_date"] == early, "value"]) == {0.0}
@@ -1058,7 +1071,7 @@ def test_slots_checkpoints_have_their_own_releases(
     assert adapter.name == "chronos-slots-abc"
 
 
-REALDATA_MODELS = tuple(f"fm_chronos_{s}_ragged_real" for s in SOURCES)
+REALDATA_MODELS = ("fm_chronos_daily_ragged_real",)
 
 
 def test_latest_never_takes_a_realdata_release(

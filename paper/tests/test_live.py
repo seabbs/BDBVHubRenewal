@@ -117,8 +117,8 @@ def test_the_runs_are_compared_at_matched_sizes() -> None:
     )
     out = slots_summary(pd.concat([_scores(), extra]), "one-model")
     # Both runs reached 1,000, so both rows give 1,000, not 2,000.
-    assert out.iloc[2]["BDBV CRPS"] == "1.00 / 1.00 (1,000)"
-    assert out.iloc[1]["BDBV CRPS"] == "1.00 / 1.00 (1,000)"
+    assert out.iloc[2]["BDBV CRPS"] == "1.00 (1,000)"
+    assert out.iloc[1]["BDBV CRPS"] == "1.00 (1,000)"
 
 
 def test_the_curve_keeps_the_hub_target_only() -> None:

@@ -138,7 +138,7 @@ def test_whole_chain_fits_from_the_last_tuesday_start() -> None:
 
 def test_chronos_is_a_hub_model_of_its_own() -> None:
     pol = load_policy(POLICY_PATH)
-    for model in ("fm_chronos_daily_ragged_ft", "fm_chronos_weekly_ragged_ft"):
+    for model in ("fm_chronos_daily_ragged_ft",):
         only = pol.for_model(model, only=True)
         (c,) = only.chain()
         assert (c.model, c.kind) == (model, "direct")

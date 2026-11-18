@@ -374,7 +374,7 @@ def test_chronos_track_metadata_is_the_committed_file(
 ) -> None:
     assert main(["hub-id", "--model", "fm_chronos_daily_ragged_ft"]) == 0
     assert capsys.readouterr().out.strip() == "seabbs-nowcastfm"
-    for model in ("fm_chronos_daily_ragged_ft", "fm_chronos_weekly_ragged_ft"):
+    for model in ("fm_chronos_daily_ragged_ft",):
         out = tmp_path / model
         args = ["--model", model, "--abbr", "nowcastfm", "--out", str(out)]
         assert main(["metadata", *args]) == 0
@@ -398,7 +398,7 @@ def test_nowcast_records_the_checkpoint_it_loaded(
 
     monkeypatch.setattr(foundation, "chronos_sampler", zeros)
     out = tmp_path / "ft"
-    args = ["--model", "fm_chronos_weekly_ragged_ft", "--out", str(out)]
+    args = ["--model", "fm_chronos_daily_ragged_ft", "--out", str(out)]
     assert main(["nowcast", *args]) == 0
     record = json.loads((out / "checkpoint.json").read_text())
     assert record["tag"] == f"chronos-ft-{fake_checkpoint}"
