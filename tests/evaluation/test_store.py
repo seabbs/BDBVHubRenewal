@@ -69,6 +69,28 @@ def _copy_repo(tmp_path: Path) -> Path:
     return tmp_path
 
 
+def test_code_digest_keeps_its_key_when_modules_move(tmp_path: Path) -> None:
+    # The packages move (WP2b) renames modules and rewrites import lines
+    # without changing what a fit runs, so no stored fit refits.
+    root = _copy_repo(tmp_path)
+    src = root / "src/bdbvhubrenewal/forecasters"
+    before = store.code_digest("randomwalk", root)
+    (src / "walk.py").rename(src / "steps.py")
+    for name in ("chain.py", "introductions.py", "randomwalk.py"):
+        path = src / name
+        path.write_text(
+            path.read_text().replace(
+                "bdbvhubrenewal.forecasters.walk import",
+                "bdbvhubrenewal.forecasters.steps import",
+            )
+        )
+    moved = store.code_digest("randomwalk", root)
+    assert moved == before
+    steps = src / "steps.py"
+    steps.write_text(steps.read_text() + "\n\ndef _f():\n    return 2\n")
+    assert store.code_digest("randomwalk", root) != moved
+
+
 def test_code_digest_ignores_docstrings_and_comments(tmp_path: Path) -> None:
     root = _copy_repo(tmp_path)
     code = root / "src/bdbvhubrenewal/model/delays.py"
