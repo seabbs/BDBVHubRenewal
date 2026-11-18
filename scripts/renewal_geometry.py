@@ -41,7 +41,8 @@ def main(path: str, top: int = 8) -> None:
     num_steps = g["num_steps"]
     print(f"{path}: {z.shape[2]} unconstrained dims, {z.shape[1]} draws")
     for c in range(z.shape[0]):
-        m = imm[c] if imm.ndim == 2 else imm
+        # A leading chain axis when chains ran in parallel.
+        m = imm[c] if imm.shape[0] == z.shape[0] and imm.ndim > 1 else imm
         scale = np.sqrt(np.diag(m)) if m.ndim == 2 else np.sqrt(m)
         u = z[c] / scale
         cov = np.cov(u, rowvar=False)
