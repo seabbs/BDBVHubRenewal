@@ -29,9 +29,9 @@ from pathlib import Path
 import pandas as pd
 
 from bdbvhubrenewal.data.dates import as_date
+from bdbvhubrenewal.data.files import write_csv
 from bdbvhubrenewal.data.releases import release_cutoff
 from bdbvhubrenewal.data.simulate import SimulatedOutbreak
-from bdbvhubrenewal.data.tidy import write_csv
 from bdbvhubrenewal.data.zones import weekly_zone_counts
 from bdbvhubrenewal.evaluation.backtest import (
     BacktestConfig,

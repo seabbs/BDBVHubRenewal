@@ -5,17 +5,21 @@ checks them against scoringutils 2.2 on a fixed fixture.
 
 Quantile forecasts (`metric` is `wis`):
 
-- **WIS** (Bracher et al. 2021) from scoringrules' `interval_score` on the
-  central intervals the levels make, plus the median:
+- **WIS** (Bracher et al. 2021) from the shared scorer's `wis_quantile`
+  on the central intervals the levels make, plus the median:
   $\frac{1}{K + 1/2}\left(\frac{1}{2}|y - m|
-  + \sum_k \frac{\alpha_k}{2} \text{IS}_{\alpha_k}\right)$.
-  scoringrules' own `weighted_interval_score` (0.11) adds the median value
-  instead of its absolute error, so it is not used.
+  + \sum_k \frac{\alpha_k}{2} \text{IS}_{\alpha_k}\right)$,
+  with its split into dispersion, overprediction and underprediction
+  (`WIS_PARTS`), which sum to it.
 - **Bias** as scoringutils' `bias_quantile`: below the median,
   $1 - 2\max\{\tau : q_\tau \le y\}$; above it,
   $1 - 2\min\{\tau : q_\tau \ge y\}$; zero at the median.
 
-Sample forecasts (`metric` is `crps`):
+Sample forecasts are scored on their quantiles by default
+(`samples="wis"`, `metric` is `wis`): the WIS and its parts of their
+linear sample quantiles at the shared scorer's `QUANTILE_LEVELS`, the 23
+hub levels, as `evaluation.checkpoint` scores them. With `samples="crps"`
+(`metric` is `crps`), for the SI:
 
 - **CRPS** from scoringrules' `crps_ensemble` with the `fair` estimator
   (Ferro 2014), $\frac{1}{m}\sum_i |x_i - y| -
@@ -53,6 +57,7 @@ from typing import Final
 import numpy as np
 import pandas as pd
 import scoringrules as sr
+from bdbvhubrenewal.evaluation.scoring import QUANTILE_LEVELS, wis_quantile
 
 from paperfigs.schema import DEFAULT_STRATUM, FORECAST_KEYS
 
@@ -61,6 +66,7 @@ __all__ = [
     "STUDY_BASELINES",
     "STUDY_COUNTS",
     "STUDY_COVERAGE",
+    "WIS_PARTS",
     "coverage_column",
     "coverage_columns",
     "forecast_share",
@@ -103,6 +109,15 @@ SCORE_COLUMNS: Final = ("score", "log_score", "bias")
 """Score columns written by `score_forecasts`, beside `metric` and the
 `coverage_<width>` columns."""
 
+WIS_PARTS: Final = ("dispersion", "overprediction", "underprediction")
+"""WIS's parts (Bracher et al. 2021), which sum to it."""
+
+PART_COLUMNS: Final = (*WIS_PARTS, *(f"log_{p}" for p in WIS_PARTS))
+"""The parts of `score` and `log_score`, missing for CRPS rows."""
+
+SAMPLE_METRICS: Final = ("wis", "crps")
+"""How `score_forecasts` scores sample forecasts."""
+
 _MATCH: Final = (
     "location",
     "stratum",
@@ -133,20 +148,17 @@ def coverage_columns(scores: pd.DataFrame) -> list[str]:
 # --------------------------------------------------------------------------
 
 
-def _wis(q: np.ndarray, levels: np.ndarray, y: np.ndarray) -> np.ndarray:
-    lower = levels < 0.5
-    is_median = np.isclose(levels, 0.5)
-    lo = q[:, lower]
-    hi = q[:, ~lower & ~is_median][:, ::-1]
-    med = q[:, is_median][:, 0]
-    alpha = 2 * levels[lower]
-    if alpha.size == 0:
-        return np.abs(y - med)
-    interval = np.asarray(
-        sr.interval_score(y, lo, hi, alpha, backend="numpy"), dtype=float
-    ).reshape(lo.shape)
-    total = (interval * alpha / 2).sum(axis=1) + 0.5 * np.abs(y - med)
-    return total / (alpha.size + 0.5)
+def _wis_parts(
+    q: np.ndarray, levels: np.ndarray, y: np.ndarray
+) -> dict[str, np.ndarray]:
+    """WIS and its parts, natural and log scale, from the shared scorer."""
+    nat = wis_quantile(y, q, levels)
+    log = wis_quantile(np.log1p(y), np.log1p(q), levels)
+    out = {"score": nat["wis"], "log_score": log["wis"]}
+    for p in WIS_PARTS:
+        out[p] = nat[p]
+        out[f"log_{p}"] = log[p]
+    return out
 
 
 def _bias_quantile(
@@ -183,8 +195,8 @@ def _score_quantile_block(
     out = wide.index.to_frame(index=False)
     y = out["truth"].to_numpy(dtype=float)
     out["metric"] = "wis"
-    out["score"] = _wis(q, levels, y)
-    out["log_score"] = _wis(np.log1p(q), levels, np.log1p(y))
+    for name, value in _wis_parts(q, levels, y).items():
+        out[name] = value
     out["bias"] = _bias_quantile(q, levels, y)
     for w in widths:
         out[coverage_column(w)] = _coverage_quantile(q, levels, y, w)
@@ -229,17 +241,28 @@ def _score_sample_block(
     widths: tuple[float, ...],
     counts: bool,
     estimator: str = CRPS_ESTIMATOR,
+    samples: str = "wis",
 ) -> pd.DataFrame:
-    """Score sample forecasts that share one number of samples."""
+    """Score sample forecasts that share one number of samples.
+
+    `samples="wis"` scores their quantiles at `QUANTILE_LEVELS`;
+    `samples="crps"` scores the draws by the CRPS.
+    """
     keys = list(FORECAST_KEYS)
     ordered = block.sort_values([*keys, "sample_id"])
     first = ordered.drop_duplicates(keys)
     out = first.loc[:, [*keys, "truth"]].reset_index(drop=True)
     x = ordered["value"].to_numpy(dtype=float).reshape(len(out), -1)
     y = out["truth"].to_numpy(dtype=float)
-    out["metric"] = "crps"
-    out["score"] = _crps(x, y, estimator)
-    out["log_score"] = _crps(np.log1p(x), np.log1p(y), estimator)
+    if samples == "wis":
+        q = np.quantile(x, QUANTILE_LEVELS, axis=1).T
+        out["metric"] = "wis"
+        for name, value in _wis_parts(q, QUANTILE_LEVELS, y).items():
+            out[name] = value
+    else:
+        out["metric"] = "crps"
+        out["score"] = _crps(x, y, estimator)
+        out["log_score"] = _crps(np.log1p(x), np.log1p(y), estimator)
     out["bias"] = _bias_sample(x, y, counts)
     for w in widths:
         out[coverage_column(w)] = _coverage_sample(x, y, w)
@@ -266,10 +289,12 @@ def score_forecasts(
     coverage: tuple[float, ...] | None = None,
     counts: bool | None = None,
     crps_estimator: str = CRPS_ESTIMATOR,
+    samples: str = "wis",
 ) -> pd.DataFrame:
     """Score each forecast with a known truth.
 
-    Quantile forecasts get the WIS and sample forecasts the CRPS.
+    Quantile forecasts get the WIS. Sample forecasts get the WIS of their
+    quantiles at `QUANTILE_LEVELS`, or the CRPS with `samples="crps"`.
 
     Parameters
     ----------
@@ -285,15 +310,20 @@ def score_forecasts(
         scoringrules' CRPS estimator for sample forecasts: `fair`, whose
         expectation does not depend on the number of draws, or `nrg`,
         scoringutils' form.
+    samples : str
+        `wis` or `crps`, how sample forecasts are scored.
 
     Returns
     -------
     pandas.DataFrame
         One row per forecast: the key columns, `truth`, `metric` (`wis`
-        or `crps`), `SCORE_COLUMNS` and a `coverage_<width>` column per
+        or `crps`), `SCORE_COLUMNS`, `PART_COLUMNS` (missing for CRPS
+        rows) and a `coverage_<width>` column per
         width, such as `coverage_90`. A study's row is missing for a width
         it does not score. Forecasts with missing truth are dropped.
     """
+    if samples not in SAMPLE_METRICS:
+        raise ValueError(f"samples must be one of {SAMPLE_METRICS}.")
     keys = list(FORECAST_KEYS)
     df = forecasts.loc[forecasts["truth"].notna()]
     if "stratum" not in df.columns:
@@ -308,14 +338,14 @@ def score_forecasts(
             for b in _blocks(one[is_q], "quantile_level")
         ]
         parts += [
-            _score_sample_block(b, widths, is_count, crps_estimator)
+            _score_sample_block(b, widths, is_count, crps_estimator, samples)
             for b in _blocks(one[~is_q], "sample_id")
         ]
+    columns = [*keys, "truth", "metric", *SCORE_COLUMNS, *PART_COLUMNS]
     if not parts:
-        return pd.DataFrame(columns=[*keys, "truth", "metric", *SCORE_COLUMNS])
+        return pd.DataFrame(columns=columns)
     out = pd.concat(parts, ignore_index=True)
-    columns = [*keys, "truth", "metric", *SCORE_COLUMNS]
-    out = out.loc[:, [*columns, *_by_width(out.columns)]]
+    out = out.reindex(columns=[*columns, *_by_width(out.columns)])
     return out.sort_values(keys, ignore_index=True)
 
 
@@ -378,7 +408,9 @@ def relative_scores(
     -------
     pandas.DataFrame
         `study`, `model`, `by`, `rel_score`, `rel_log_score` and `n`, the
-        number of matched forecasts. The baseline scores 1.
+        number of matched forecasts. The baseline scores 1. For WIS,
+        `rel_<part>` and `rel_log_<part>` give each of `WIS_PARTS` over the
+        baseline's WIS, so they sum to `rel_score` and `rel_log_score`.
 
     Raises
     ------
@@ -405,7 +437,8 @@ def _relative_one(
     paired = scores.merge(base, on=match, how="inner")
     group = ["study", "model", *by]
     g = paired.groupby(group, observed=True)
-    sums = g[["score", "log_score", "base", "base_log"]].sum()
+    parts = [c for c in PART_COLUMNS if c in paired and paired[c].notna().all()]
+    sums = g[["score", "log_score", "base", "base_log", *parts]].sum()
     out = pd.DataFrame(
         {
             "rel_score": sums["score"] / sums["base"],
@@ -413,6 +446,10 @@ def _relative_one(
             "n": g.size(),
         }
     )
+    for c in parts:
+        out[f"rel_{c}"] = (
+            sums[c] / sums["base_log" if c.startswith("log_") else "base"]
+        )
     return out.reset_index()
 
 

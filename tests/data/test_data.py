@@ -20,8 +20,8 @@ from bdbvhubrenewal.data import (
     tidy_locations,
     tidy_target,
     vintages,
-    write_csv,
 )
+from bdbvhubrenewal.data.files import write_csv
 
 DATA = Path(__file__).resolve().parents[1] / "fixtures" / "data"
 

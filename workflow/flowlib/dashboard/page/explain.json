@@ -15,7 +15,7 @@
  "biasscore": "Mean of 1 minus 2 times the forecast CDF at the truth, from -1 (forecast too low) to +1 (too high). 0 is unbiased.",
  "t_step": "The trainer's current optimiser step, and how many simulations that is.",
  "t_rate": "Training speed over the last 30 minutes.",
- "t_next": "The next saved checkpoint and when it is due. While a checkpoint is being scored it shows scoring since the time it was saved.",
+ "t_next": "Simulations trained so far of the next checkpoint's size, and when it is due. A checkpoint already written and still being scored at its size is named below with the time it was written.",
  "t_eta": "Time to the final checkpoint at the recent training speed.",
  "t_lr": "Current learning rate of each optimiser group.",
  "t_trainer": "Whether the trainer process is running.",

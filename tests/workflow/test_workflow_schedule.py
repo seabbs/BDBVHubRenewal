@@ -133,6 +133,15 @@ def test_systemd_user_units(tmp_path):
     assert "Persistent=true" in timer
 
 
+def test_installing_makes_the_log_folder(tmp_path):
+    # systemd cannot open the log, and so never runs the tick, without it.
+    schedule.systemd_units(tmp_path / "a", 45)
+    schedule.launchd_plist(tmp_path / "b", 60)
+    schedule.cron_line(tmp_path / "c", 30)
+    for root in "abc":
+        assert (tmp_path / root / "output").is_dir()
+
+
 def test_a_launchd_agent(tmp_path):
     data = plistlib.loads(schedule.launchd_plist(tmp_path, 60))
     assert data["StartInterval"] == 3600

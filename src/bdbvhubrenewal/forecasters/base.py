@@ -26,6 +26,7 @@ __all__ = [
     "SAMPLE_COLUMNS",
     "ForecastModel",
     "ForecastTask",
+    "MissingSnapshots",
     "ModelSpec",
     "ModelUnavailableError",
     "add_national",
@@ -47,6 +48,10 @@ class ModelUnavailableError(ValueError):
 
     The backtest skips the task for that model and says so.
     """
+
+
+class MissingSnapshots(ModelUnavailableError):  # noqa: N818
+    """The task has no daily release snapshots."""
 
 
 @dataclass(frozen=True)

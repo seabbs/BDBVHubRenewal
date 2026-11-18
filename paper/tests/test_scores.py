@@ -1,11 +1,13 @@
 import numpy as np
 import pandas as pd
 import pytest
+from bdbvhubrenewal.evaluation.scoring import wis_sample
 
 from paperfigs.scores import (
     STUDY_BASELINES,
     STUDY_COUNTS,
     STUDY_COVERAGE,
+    WIS_PARTS,
     forecast_share,
     relative_scores,
     score_forecasts,
@@ -180,7 +182,7 @@ def _crps_fair(x: np.ndarray, y: float) -> float:
 
 @pytest.mark.parametrize("y", [0.0, 3.0, 4.0, 20.0])
 def test_sample_crps_and_log_crps(y: float) -> None:
-    s = score_forecasts(_samples("m", X, y))
+    s = score_forecasts(_samples("m", X, y), samples="crps")
     assert s["metric"].item() == "crps"
     assert s["score"].item() == pytest.approx(_crps_fair(X, y))
     want = _crps_fair(np.log1p(X), np.log1p(y))
@@ -189,7 +191,9 @@ def test_sample_crps_and_log_crps(y: float) -> None:
 
 @pytest.mark.parametrize("y", [0.0, 3.0, 4.0, 20.0])
 def test_sample_crps_nrg_on_request(y: float) -> None:
-    s = score_forecasts(_samples("m", X, y), crps_estimator="nrg")
+    s = score_forecasts(
+        _samples("m", X, y), crps_estimator="nrg", samples="crps"
+    )
     assert s["score"].item() == pytest.approx(_crps_nrg(X, y))
 
 
@@ -207,7 +211,7 @@ def test_sample_crps_does_not_favour_more_draws() -> None:
             )
             for i, y in enumerate(truth)
         ]
-        s = score_forecasts(pd.concat(rows), counts=False)
+        s = score_forecasts(pd.concat(rows), counts=False, samples="crps")
         return float(s["score"].mean())
 
     expected = 1 / np.sqrt(np.pi)
@@ -309,3 +313,47 @@ def test_blocks_stay_apart_when_their_hashes_collide(monkeypatch) -> None:
     want = score_forecasts(df)
     monkeypatch.setattr(scores, "hash", lambda _: 0, raising=False)
     pd.testing.assert_frame_equal(score_forecasts(df), want)
+
+
+@pytest.mark.parametrize("y", [0.0, 3.0, 20.0])
+def test_wis_parts_sum_to_the_score(y: float) -> None:
+    s = score_forecasts(_rows("m", Q, y)).iloc[0]
+    assert s[list(WIS_PARTS)].sum() == pytest.approx(s["score"])
+    logs = [f"log_{p}" for p in WIS_PARTS]
+    assert s[logs].sum() == pytest.approx(s["log_score"])
+
+
+@pytest.mark.parametrize("y", [0.0, 3.0, 20.0])
+def test_samples_score_the_shared_wis_of_their_quantiles(y: float) -> None:
+    s = score_forecasts(_samples("m", X, y)).iloc[0]
+    want = wis_sample(y, X)
+    assert s["metric"] == "wis"
+    assert s["score"] == pytest.approx(want["wis"])
+    for p in WIS_PARTS:
+        assert s[p] == pytest.approx(want[p])
+
+
+def test_crps_rows_have_no_wis_parts() -> None:
+    s = score_forecasts(_samples("m", X, 3.0), samples="crps")
+    assert s[list(WIS_PARTS)].isna().all(axis=None)
+
+
+def test_unknown_sample_metric_is_refused() -> None:
+    with pytest.raises(ValueError, match="samples"):
+        score_forecasts(_samples("m", X, 3.0), samples="energy")
+
+
+def test_relative_parts_sum_to_the_relative_wis() -> None:
+    days = {2.0: "2024-01-10", 9.0: "2024-01-11"}
+    df = pd.concat(
+        [_rows("ref", Q, y, origin=d) for y, d in days.items()]
+        + [_rows("m", Q * 1.3, y, origin=d) for y, d in days.items()]
+    )
+    rel = relative_scores(score_forecasts(df), baseline="ref")
+    rel = rel.set_index("model")
+    for scale in ("", "log_"):
+        parts = [f"rel_{scale}{p}" for p in WIS_PARTS]
+        total = "rel_log_score" if scale else "rel_score"
+        assert rel[parts].sum(axis=1).to_numpy() == pytest.approx(
+            rel[total].to_numpy()
+        )

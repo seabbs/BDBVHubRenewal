@@ -161,8 +161,9 @@ def test_a_fit_key_holds_the_zone_split_only_where_its_model_calls_it() -> None:
 
     zones = "src/bdbvhubrenewal/forecasters/zones.py"
     # The province-level models split their zones in their own forecast
-    # (`with_zones`, since #299), so their keys hold the split.
-    for model in ("renewal", "renewalsp"):
+    # (`with_zones`, since #299), and the zone fits call its zone_task, so
+    # their keys hold the split.
+    for model in ("renewal", "renewalbvd", "renewalsp"):
         assert zones in fit_code(model, ROOT)
     # Models whose modules do not import it leave it out: the walks, and
     # Chronos-2, which takes its zones straight from its block.
@@ -204,3 +205,33 @@ def test_fit_code_covers_what_a_stored_fit_runs(
     assert out[0].meta["status"] == "ok", out[0].meta.get("error")
     missing = ran - set(store.fit_code(model, ROOT))
     assert not missing, f"{model} runs code its key leaves out: {missing}"
+
+
+def test_model_code_follows_imports_into_workspace_packages(
+    tmp_path: Path,
+) -> None:
+    # The packages move (WP2b) puts modules under packages/<name>/src, so
+    # the walk resolves each top-level package to its own source folder.
+    from bdbvhubrenewal.evaluation.digest import model_code
+
+    shutil.copytree(
+        ROOT / "src",
+        tmp_path / "src",
+        ignore=shutil.ignore_patterns("__pycache__"),
+    )
+    pkg = tmp_path / "packages/walkpkg/src/walkpkg"
+    pkg.mkdir(parents=True)
+    old = tmp_path / "src/bdbvhubrenewal/forecasters/walk.py"
+    old.rename(pkg / "steps.py")
+    (pkg / "__init__.py").write_text("from walkpkg.steps import random_walks\n")
+    for name in ("chain.py", "introductions.py", "randomwalk.py"):
+        path = tmp_path / "src/bdbvhubrenewal/forecasters" / name
+        path.write_text(
+            path.read_text().replace(
+                "bdbvhubrenewal.forecasters.walk import", "walkpkg import"
+            )
+        )
+    code = model_code("randomwalk", tmp_path)
+    assert "packages/walkpkg/src/walkpkg/steps.py" in code
+    assert "packages/walkpkg/src/walkpkg/__init__.py" in code
+    assert "src/bdbvhubrenewal/forecasters/randomwalk.py" in code

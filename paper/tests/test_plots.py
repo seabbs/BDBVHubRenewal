@@ -16,7 +16,7 @@ from paperfigs.plots import (
     si_wis_over_time,
 )
 from paperfigs.schema import STUDIES
-from paperfigs.scores import score_forecasts
+from paperfigs.scores import relative_scores, score_forecasts
 from paperfigs.style import bar_style, model_order, model_style, point_style
 
 
@@ -62,9 +62,9 @@ def test_results_panel_has_lettered_panels(study) -> None:
     assert letters == list(PANEL_LETTERS[: 8 if stratified else 7])
     if stratified:
         assert any("by stratum" in ax.get_title() for ax in fig.axes)
-    metric = "WIS" if fc["study"].iloc[0] == "germany" else "CRPS"
+    # Sample studies are scored on their quantiles too.
     titles = " ".join(ax.get_title() for ax in fig.axes)
-    assert f"Relative {metric}" in titles
+    assert "Relative WIS" in titles
     assert fig.legends
     plt.close(fig)
 
@@ -155,8 +155,9 @@ def test_split_draws_both_halves_and_the_line(germany) -> None:
     assert "Development half" in labels
     assert "Held-out half" in labels
     rel_ax = next(ax for ax in fig.axes if ax.get_title() == "Relative WIS")
+    # Three WIS parts per model and half.
     n_models = scores["model"].nunique()
-    assert len(rel_ax.patches) == 2 * n_models
+    assert len(rel_ax.patches) == 3 * 2 * n_models
     plt.close(fig)
 
 
@@ -164,7 +165,7 @@ def test_no_split_draws_one_bar_per_model(germany) -> None:
     fc, obs, scores, _ = germany
     fig = results_panel(fc, obs, scores, split=None)
     rel_ax = next(ax for ax in fig.axes if ax.get_title() == "Relative WIS")
-    assert len(rel_ax.patches) == scores["model"].nunique()
+    assert len(rel_ax.patches) == 3 * scores["model"].nunique()
     assert "development | held out" not in _texts(fig)
     plt.close(fig)
 
@@ -330,6 +331,7 @@ def test_germany_has_a_daily_target_si_figure() -> None:
     from paperpipe.outputs import FIGURES
 
     assert "si-results-daily" in FIGURES["germany"]["si"]
+<<<<<<< HEAD
 
 
 def test_wis_components_have_one_colour_each() -> None:
@@ -338,3 +340,45 @@ def test_wis_components_have_one_colour_each() -> None:
     assert tuple(style.WIS_COLOURS) == style.WIS_PARTS
     assert len(set(style.WIS_COLOURS.values())) == 3
     assert style.wis_colour("dispersion") == style.WIS_COLOURS["dispersion"]
+||||||| da81aa7d5
+=======
+
+
+def test_wis_bars_stack_their_parts_to_the_relative_wis(germany) -> None:
+    fc, obs, scores, _ = germany
+    fig = results_panel(fc, obs, scores, split=None)
+    rel_ax = next(ax for ax in fig.axes if ax.get_title() == "Relative WIS")
+    rel = relative_scores(scores).set_index("model")
+    models = model_order(scores["model"].unique())
+    ends = {}
+    for bar in rel_ax.patches:
+        i = round(bar.get_y() + bar.get_height() / 2)
+        ends[i] = max(ends.get(i, 0.0), bar.get_x() + bar.get_width())
+    for i, m in enumerate(models):
+        assert ends[i] == pytest.approx(rel.loc[m, "rel_score"])
+    labels = [t.get_text() for t in fig.legends[0].get_texts()]
+    assert {"Dispersion", "Overprediction", "Underprediction"} <= set(labels)
+    plt.close(fig)
+
+
+def test_crps_bars_are_drawn_from_one(study) -> None:
+    fc, obs, _ = study
+    if fc["sample_id"].isna().all():
+        pytest.skip("quantile study")
+    scores = score_forecasts(fc, samples="crps")
+    fig = results_panel(fc, obs, scores)
+    rel_ax = next(ax for ax in fig.axes if ax.get_title() == "Relative CRPS")
+    assert len(rel_ax.patches) == scores["model"].nunique()
+    assert rel_ax.get_xscale() == "log"
+    plt.close(fig)
+
+
+def test_results_panel_shows_only_the_given_models(germany) -> None:
+    fc, obs, scores, _ = germany
+    keep = ["randomwalknowcast", "fm_chronos_daily_ragged_ft"]
+    fig = results_panel(fc, obs, scores, split=None, models=keep)
+    rel_ax = next(ax for ax in fig.axes if ax.get_title() == "Relative WIS")
+    # The two models and the study's baseline, three parts each.
+    assert len(rel_ax.patches) == 3 * 3
+    plt.close(fig)
+>>>>>>> origin/main

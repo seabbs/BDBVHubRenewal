@@ -32,7 +32,7 @@ from bdbvhubrenewal.forecasters.base import (
     SAMPLE_COLUMNS,
     check_samples,
 )
-from bdbvhubrenewal.submission.fitting import Forecast
+from bdbvhubrenewal.forecasters.forecast import Forecast
 from bdbvhubrenewal.submission.hub import HUB_COLUMNS, own_national
 
 __all__ = [

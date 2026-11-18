@@ -23,8 +23,8 @@ from bdbvhubrenewal.forecasters import (
     get_model,
     list_models,
 )
+from bdbvhubrenewal.forecasters.base import MissingSnapshots
 from bdbvhubrenewal.forecasters.chain import (
-    MissingSnapshots,
     NoCompleteWeek,
     NoDelayPair,
     NoWalkSpread,
