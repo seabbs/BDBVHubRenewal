@@ -492,3 +492,45 @@ def test_daily_releases_fill_every_lag_cell_weekly_ones_one_in_seven() -> None:
         fill[cadence] = np.isfinite(lags).mean()
     assert fill["daily"] == 1
     assert fill["weekly"] == pytest.approx(1 / 7, abs=0.05)
+
+
+def _releases_by_loop(counts: pd.DataFrame, cutoffs) -> pd.DataFrame:
+    """The release rows as summed one cut-off at a time (before r6)."""
+    frames = []
+    for cutoff in cutoffs:
+        seen = counts.loc[counts["report_date"] <= pd.Timestamp(cutoff)]
+        rows = seen.groupby(["location", "reference_date"], as_index=False)[
+            "count"
+        ].sum()
+        rows.insert(0, "vintage", cutoff)
+        rows.insert(1, "cutoff", cutoff)
+        frames.append(rows)
+    return pd.concat(frames, ignore_index=True)
+
+
+@pytest.mark.parametrize("source", ["daily", "weekly"])
+def test_releases_match_summing_each_cut_off_alone(source) -> None:
+    from bdbvhubrenewal.forecasters.finetune import _release_rows
+
+    rng = np.random.default_rng(3)
+    n = 400
+    counts = pd.DataFrame(
+        {
+            "location": rng.choice(["A", "B", "C"], n),
+            "reference_date": pd.Timestamp("2026-09-01")
+            + pd.to_timedelta(rng.integers(0, 30, n), "D"),
+            "count": rng.integers(0, 5, n),
+        }
+    )
+    counts["report_date"] = counts["reference_date"] + pd.to_timedelta(
+        rng.integers(0, 20, n), "D"
+    )
+    days = pd.date_range("2026-08-30", "2026-10-25")
+    cutoffs = [
+        d.date().isoformat() for d in days[:: 1 if source == "daily" else 7]
+    ]
+    got = _release_rows(counts, cutoffs)
+    want = _releases_by_loop(counts, cutoffs)
+    pd.testing.assert_frame_equal(
+        got.reset_index(drop=True), want, check_dtype=False
+    )

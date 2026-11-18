@@ -571,17 +571,20 @@ def hub_triangle(
     partial = np.full((len(places), n_times, lags), np.nan)
     final = np.zeros((len(places), n_times))
     last = 0
-    for release in sorted(set(rows["vintage"])):
-        mine = (rows["vintage"] == release).to_numpy()
-        cutoff = str(rows.loc[mine, "cutoff"].iloc[0])
+    # Each release's rows by position, found once rather than by a scan
+    # of every row per release, which daily releases make costly.
+    by_release = rows.groupby("vintage", sort=True).indices
+    cutoffs = rows["cutoff"].to_numpy()
+    in_grid = (step >= 0) & (step < n_times)
+    where = place.to_numpy().astype(int)
+    values = value.to_numpy()
+    for release in sorted(by_release, key=str):
+        mine = by_release[release]
+        cutoff = str(cutoffs[mine[0]])
         at = (_step(source, cutoff) - first).days // width
         counts = np.zeros((len(places), n_times))
-        keep = mine & (step >= 0) & (step < n_times)
-        np.add.at(
-            counts,
-            (place.to_numpy()[keep].astype(int), step[keep]),
-            value.to_numpy()[keep],
-        )
+        keep = mine[in_grid[mine]]
+        np.add.at(counts, (where[keep], step[keep]), values[keep])
         for d in range(lags):
             if 0 <= at - d < n_times:
                 partial[:, at - d, d] = counts[:, at - d]

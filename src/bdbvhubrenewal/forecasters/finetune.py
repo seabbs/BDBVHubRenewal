@@ -105,16 +105,7 @@ def releases(
     if source == "weekly":
         days = counts["reference_date"].dt.day_of_week
         counts["reference_date"] += pd.to_timedelta((5 - days) % 7, unit="D")
-    frames = []
-    for cutoff in cutoffs:
-        seen = counts.loc[counts["report_date"] <= pd.Timestamp(cutoff)]
-        rows = seen.groupby(["location", "reference_date"], as_index=False)[
-            "count"
-        ].sum()
-        rows.insert(0, "vintage", cutoff)
-        rows.insert(1, "cutoff", cutoff)
-        frames.append(pd.DataFrame(rows))
-    out = pd.DataFrame(pd.concat(frames, ignore_index=True))
+    out = _release_rows(counts, cutoffs)
     out["reference_date"] = out["reference_date"].dt.strftime("%Y-%m-%d")
     if source == "weekly":
         return out.rename(
@@ -124,6 +115,55 @@ def releases(
     return out.rename(
         columns={"reference_date": "onset_date", "count": "observed"}
     )
+
+
+def _release_rows(counts: pd.DataFrame, cutoffs: Sequence[str]) -> pd.DataFrame:
+    """Return each cut-off's count by place and reference date.
+
+    A place and reference date is in a cut-off's rows once any of its
+    reports is by then, with the sum of those reports. Each one's
+    cumulative count is read at each cut-off by a binary search, so the
+    cost grows with the rows plus the cells, not their product, as daily
+    releases need.
+
+    Parameters
+    ----------
+    counts : pandas.DataFrame
+        `location`, `reference_date`, `report_date` (timestamps) and
+        `count`.
+    cutoffs : sequence of str
+        Cut-offs, ISO format.
+
+    Returns
+    -------
+    pandas.DataFrame
+        `vintage`, `cutoff`, `location`, `reference_date` and `count`,
+        by cut-off and then by place and reference date.
+    """
+    keys = ["location", "reference_date"]
+    rows = pd.DataFrame(
+        counts.groupby([*keys, "report_date"], as_index=False)["count"].sum()
+    ).sort_values([*keys, "report_date"], kind="stable")
+    cell = rows.groupby(keys, sort=False).ngroup().to_numpy()
+    cells = rows.drop_duplicates(keys)[keys].reset_index(drop=True)
+    cumulative = rows.groupby(keys, sort=False)["count"].cumsum().to_numpy()
+    day = rows["report_date"].to_numpy().astype("datetime64[D]").astype(int)
+    span = int(day.max() - day.min()) + 2
+    # One sorted key per report: its cell, then its day.
+    key = cell * span + (day - day.min())
+    frames = []
+    for cutoff in cutoffs:
+        at = np.datetime64(cutoff, "D").astype(int) - day.min()
+        at = np.clip(at, -1, span - 1)
+        wanted = np.arange(len(cells)) * span + at
+        last = np.searchsorted(key, wanted, side="right") - 1
+        seen = (last >= 0) & (cell[np.maximum(last, 0)] == cells.index)
+        part = cells.loc[seen].copy()
+        part["count"] = cumulative[last[seen]]
+        part.insert(0, "vintage", cutoff)
+        part.insert(1, "cutoff", cutoff)
+        frames.append(part)
+    return pd.DataFrame(pd.concat(frames, ignore_index=True))
 
 
 def final_counts(
@@ -471,13 +511,17 @@ def training_block(
     counts, country = country_counts(
         counts, parent, rng or np.random.default_rng(0)
     )
-    rows = releases(counts, source, cutoffs, totals, country)
-    if not rows["location"].isin(places).any():
-        return None
     period = MIXED.get(source)
     window = ROLLING.get(source)
+    # Daily-based sources lay out the daily releases, so only those are
+    # summed.
+    on_days = period is not None or window is not None or source in BINNED
+    rows = releases(
+        counts, "daily" if on_days else source, cutoffs, totals, country
+    )
+    if not rows["location"].isin(places).any():
+        return None
     if period is not None or window is not None:
-        rows = releases(counts, "daily", cutoffs, totals, country)
         tri = hub_triangle(
             rows, "daily", places, end.isoformat(), max_lag=max_lag
         )
@@ -486,7 +530,6 @@ def training_block(
         )
     elif source in BINNED:
         k = BINNED[source]
-        rows = releases(counts, "daily", cutoffs, totals, country)
         daily = hub_triangle(
             rows, "daily", places, end.isoformat(), max_lag=k * max_lag
         )
