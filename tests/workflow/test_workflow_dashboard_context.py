@@ -111,3 +111,43 @@ def test_a_reference_can_take_its_paper_colour(tmp_path):
     assert ctx.references[0].colour == paperstyle.model_colour(
         "randomwalknowcast"
     )
+
+
+def test_runs_and_references_take_the_shared_display_names(tmp_path):
+    from pathlib import Path
+
+    import yaml
+    from flowlib.dashboard import paperstyle
+
+    cfg = {
+        **CONFIG,
+        "dashboard": {
+            **CONFIG["dashboard"],
+            "runs": [],
+            "references": [
+                {
+                    "key": "rw",
+                    "model": "^r$",
+                    "paper_model": "randomwalknowcast",
+                }
+            ],
+        },
+    }
+    local = {
+        "DASHBOARD_RUNS": f"a={tmp_path}",
+        "REMOTE": "",
+        "SCORE_CACHE": "/x",
+        "MAILBOX": "",
+    }
+    ctx = context.build(cfg, local)
+    assert ctx.references[0].label == "Random walk nowcast"
+    # A run with no label of its own is the fine-tuned model.
+    assert ctx.runs[0].label == "Fine-tuned (delays)"
+    assert ctx.runs[0].colour == paperstyle.model_colour(context.RUN_MODEL)
+    # The workflow's references are named and coloured from the paper.
+    shipped = yaml.safe_load(
+        (Path(__file__).parents[2] / "workflow" / "config.yaml").read_text()
+    )["dashboard"]["references"]
+    assert all("paper_model" in r and "label" not in r for r in shipped)
+    names = {paperstyle.model_label(r["paper_model"]) for r in shipped}
+    assert names == {"Zero-shot (delays)", "Zero-shot", "Random walk nowcast"}

@@ -370,3 +370,15 @@ def test_results_panel_shows_only_the_given_models(germany) -> None:
     # The two models and the study's baseline, three parts each.
     assert len(rel_ax.patches) == 3 * 3
     plt.close(fig)
+
+
+def test_models_have_one_display_name_each() -> None:
+    from paperfigs.style import MODEL_LABELS, model_label
+
+    assert model_label("fm_chronos_daily_ragged_ft") == "Fine-tuned (delays)"
+    assert model_label("fm_chronos_daily_ragged") == "Zero-shot (delays)"
+    assert model_label("fm_chronos_daily_complete") == "Zero-shot"
+    assert model_label("randomwalknowcast") == "Random walk nowcast"
+    assert model_label("randomwalk") == "Random walk"
+    assert model_label("hub_team_a") == "hub_team_a"
+    assert len(set(MODEL_LABELS.values())) == len(MODEL_LABELS)
