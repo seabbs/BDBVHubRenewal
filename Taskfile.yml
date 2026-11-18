@@ -292,6 +292,11 @@ tasks:
       - task: wf
         vars: {WF_TARGET: "dashboard --forcerun dashboard"}
 
+  monitor:
+    desc: Serve the workflow monitor, each machine's running and recent jobs from the status the ticks write (MONITOR_HOST, MONITOR_PORT, MONITOR_REFRESH in config/local.env)
+    cmds:
+      - python3 workflow/scripts/monitor.py
+
   tick:
     desc: Run this machine's scheduled workflow targets once (SCHEDULE_TARGETS in config/local.env), with the lock and room checks a timer uses
     cmds:
