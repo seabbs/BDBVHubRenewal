@@ -221,10 +221,6 @@ VARIANTS: Final[dict[str, Variant]] = {
             "renewal",
             "Province renewal (PyRenew): pooled Rt, gravity importation, "
             "depletion, modelled delays and imputation.",
-            # The pooled log Rt walk is pinned by every province's data,
-            # so its levels are sampled directly; standardised steps hit
-            # the tree depth cap on nearly every draw (#320).
-            overrides={"centred_rt": True},
         ),
         Variant(
             "renewalsp",
@@ -239,7 +235,6 @@ VARIANTS: Final[dict[str, Variant]] = {
             "Province renewal informed by BVDOutbreakSize Rt, as a tempered "
             "pseudo-observation.",
             base="BVD",
-            overrides={"centred_rt": True},
         ),
     )
 }
