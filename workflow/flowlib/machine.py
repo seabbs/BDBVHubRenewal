@@ -83,6 +83,11 @@ def torch_env(
     """
     env = {"DEVICE": device or _device(cfg, path)}
     env |= dict.fromkeys(THREAD_VARS, str(threads))
+    # JAX reads XLA's own setting, not the ones above.
+    env["XLA_FLAGS"] = (
+        "--xla_cpu_multi_thread_eigen=false "
+        f"intra_op_parallelism_threads={threads}"
+    )
     if cfg.get("CHRONOS_BATCH"):
         env["CHRONOS_BATCH"] = str(cfg["CHRONOS_BATCH"])
     return env
