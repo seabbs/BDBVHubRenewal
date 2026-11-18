@@ -47,23 +47,11 @@ national pooling of `pooling`.
 Their zone samples are the zone model's own draws, and need not sum to
 the province samples (`zone_forecast`).
 
-A model that forecasts the zones itself, as Chronos-2 does, has its zone
-samples made to sum to its province samples (`reconcile_zones`): each
-zone keeps what it has published, and the rest of province sample
-$Y^{(k)}(w)$ is apportioned over the zones in proportion to the zone
-model's own sample $x^{(k)}_z(w)$ above that, by largest remainders, so
-the values are whole numbers that sum exactly to $Y^{(k)}(w)$:
-
-$$
-y^{(k)}_z(w) \approx o_z(w) +
-  \big(Y^{(k)}(w) - O(w)\big)\, \frac{\max(x^{(k)}_z(w) - o_z(w), 0)}
-  {\sum_{z'} \max(x^{(k)}_{z'}(w) - o_{z'}(w), 0)}.
-$$
-
-Where no zone sample is above its published count the split uses the
-Dirichlet mean shares of the allocator above.
-If a sample is below the published total, it is apportioned by the
-published counts.
+Chronos-2 forecasts the zones itself, as series of its joint block beside
+the provinces and the country, and its zone samples are used as they are:
+they need not sum to the province samples either (`zones_need_not_sum`).
+`reconcile_zones` makes a model's own zone samples sum to its province
+samples; no registered model calls it.
 """
 
 from __future__ import annotations
