@@ -19,7 +19,7 @@ from bdbvhubrenewal.forecasters import (
     list_models,
 )
 from bdbvhubrenewal.forecasters import renewal as rn
-from bdbvhubrenewal.submission.fitting import Forecast
+from bdbvhubrenewal.forecasters.forecast import Forecast
 from bdbvhubrenewal.submission.hub import model_abbr_for
 
 pytest.importorskip("pyrenew")

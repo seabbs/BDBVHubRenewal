@@ -21,7 +21,7 @@ import logging
 from pathlib import Path
 
 import pandas as pd
-from bdbvhubrenewal.data.tidy import write_csv
+from bdbvhubrenewal.data.files import write_csv
 from bdbvhubrenewal.evaluation.pairing import (
     MODELS,
     SCORE_COLUMNS,

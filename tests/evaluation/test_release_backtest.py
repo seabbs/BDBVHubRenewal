@@ -25,7 +25,8 @@ from bdbvhubrenewal.evaluation.nowcast import (
     weeks_back_from_cutoff,
 )
 from bdbvhubrenewal.forecasters import get_model
-from bdbvhubrenewal.forecasters.chain import MissingSnapshots, delay_summary
+from bdbvhubrenewal.forecasters.base import MissingSnapshots
+from bdbvhubrenewal.forecasters.chain import delay_summary
 from bdbvhubrenewal.forecasters.randomwalk import RandomWalkNowcast
 
 

@@ -46,7 +46,7 @@ import numpy as np
 import pandas as pd
 from numpy.typing import NDArray
 
-from bdbvhubrenewal.data.tidy import write_csv
+from bdbvhubrenewal.data.files import write_csv
 from bdbvhubrenewal.data.zones import is_zone
 from bdbvhubrenewal.forecasters.base import (
     NATIONAL,
@@ -54,11 +54,11 @@ from bdbvhubrenewal.forecasters.base import (
     ForecastTask,
     register_model,
 )
+from bdbvhubrenewal.forecasters.forecast import Forecast
 from bdbvhubrenewal.forecasters.zones import with_zones
 
 if TYPE_CHECKING:
     from bdbvhubrenewal.data.bvd import BvdRelease
-    from bdbvhubrenewal.submission.fitting import Forecast
 
 __all__ = [
     "DEFAULT_SAMPLER",
@@ -1587,12 +1587,10 @@ def forecast_renewal(task: ForecastTask, fit_dir: Path | str) -> Forecast:
 
     Returns
     -------
-    bdbvhubrenewal.submission.fitting.Forecast
+    bdbvhubrenewal.forecasters.forecast.Forecast
         Province samples, the unassigned component and the reported
         provinces.
     """
-    from bdbvhubrenewal.submission.fitting import Forecast
-
     path = Path(fit_dir)
     samples = pd.read_csv(path / SAMPLES_FILE, dtype={"target_end_date": str})
     samples = samples.loc[

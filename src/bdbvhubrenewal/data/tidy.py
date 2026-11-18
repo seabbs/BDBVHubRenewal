@@ -22,6 +22,13 @@ populations.
 Province populations come from a cited public source instead
 (`PROVINCE_POPULATIONS`).
 
+A hub release is labelled by its `as_of` date. From the 2026-11-01
+release on, `as_of` is the extraction date, one day after the last
+reported case. The hub states that earlier releases were labelled by the
+last reported case. `release_id` maps a label, as published or
+as the hub may rewrite it, to the label we key releases by, so results,
+the submission ledger and rounds keep their keys.
+
 The tidy tables written by `build_tidy_data` are small and committed
 under `data/`.
 Raw downloads go to `data/raw/` and are not committed.
@@ -44,13 +51,15 @@ from typing import Any, Final
 import numpy as np
 import pandas as pd
 
-from bdbvhubrenewal.data.dates import epiweek_end
-from bdbvhubrenewal.data.releases import latest_onset_days, release_id
+from bdbvhubrenewal.data.dates import as_date, epiweek_end
+from bdbvhubrenewal.data.files import write_csv
+from bdbvhubrenewal.data.releases import latest_onset_days
 
 __all__ = [
     "COHERENCE_HANDLING",
     "DATA_STREAMS",
     "HUB_REPO",
+    "ORIGINAL_AS_OF",
     "POPULATION_SOURCE",
     "PROVINCE_CENTRES",
     "PROVINCE_POPULATIONS",
@@ -72,6 +81,7 @@ __all__ = [
     "load_target",
     "national_coherence",
     "newly_missing",
+    "release_id",
     "release_updates",
     "revision_table",
     "tidy_daily",
@@ -80,8 +90,41 @@ __all__ = [
     "tidy_locations",
     "tidy_target",
     "vintages",
-    "write_csv",
 ]
+
+ORIGINAL_AS_OF: frozenset[str] = frozenset(
+    {"2026-08-18", "2026-10-09", "2026-10-17", "2026-10-24"}
+)
+"""`as_of` labels of the releases published before 2026-11-01, which the
+hub may rewrite a day later. They key results, the submission ledger and
+rounds, so a rewritten label maps back to them."""
+
+
+def release_id(as_of: dt.date | str) -> str:
+    """Return the label we key a hub release by.
+
+    A label in `ORIGINAL_AS_OF` is kept. If the hub rewrites one a day
+    later, it maps back. Other labels are kept.
+
+    Parameters
+    ----------
+    as_of : datetime.date or str
+        The release's `as_of`, as published or as rewritten.
+
+    Returns
+    -------
+    str
+        The release's label, ISO formatted.
+
+    Examples
+    --------
+    >>> release_id("2026-10-25"), release_id("2026-11-01")
+    ('2026-10-24', '2026-11-01')
+    """
+    day = as_date(as_of)
+    before = (day - dt.timedelta(days=1)).isoformat()
+    return before if before in ORIGINAL_AS_OF else day.isoformat()
+
 
 HUB_REPO: Final = "InsightNet-US/BDBV-Modeling-Hub"
 """The hub's GitHub repository."""
@@ -162,27 +205,6 @@ POPULATION_SOURCE: Final = (
     " (accessed 2026-10-27)."
 )
 """Citation for `PROVINCE_POPULATIONS`."""
-
-
-_GZIP: Final = {"method": "gzip", "mtime": 0}
-"""Gzip settings with a fixed time, so a table always writes the same bytes."""
-
-
-def write_csv(frame: pd.DataFrame, path: Path | str) -> None:
-    """Write a table as CSV, gzipped when `path` ends in `.gz`.
-
-    The bytes depend on the table only, so an unchanged table leaves its
-    file, its git diff and any hash of it unchanged.
-
-    Parameters
-    ----------
-    frame : pandas.DataFrame
-        The table, written without its index.
-    path : pathlib.Path or str
-        Where to write it.
-    """
-    gz = Path(path).suffix == ".gz"
-    frame.to_csv(path, index=False, compression=_GZIP if gz else None)
 
 
 def load_province_centres() -> pd.DataFrame:

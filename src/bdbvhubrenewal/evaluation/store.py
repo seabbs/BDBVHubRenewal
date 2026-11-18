@@ -58,7 +58,7 @@ from typing import Any, Final
 import pandas as pd
 
 from bdbvhubrenewal.data import load_daily, load_delays, load_target
-from bdbvhubrenewal.data.tidy import write_csv
+from bdbvhubrenewal.data.files import write_csv
 from bdbvhubrenewal.data.zones import ZoneData, load_zone_data
 from bdbvhubrenewal.evaluation.backtest import (
     BacktestConfig,

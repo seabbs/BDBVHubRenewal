@@ -52,8 +52,8 @@ def test_generic_helpers_live_in_generic_modules() -> None:
         "release_pairs",
     } <= _defs("data/releases.py")
     assert "write_csv" in _defs("data/files.py")
-    assert "MissingSnapshots" in _defs("data/snapshots.py")
-    assert "Forecast" in _defs("forecasters/base.py")
+    assert "MissingSnapshots" in _defs("forecasters/base.py")
+    assert "Forecast" in _defs("forecasters/forecast.py")
 
 
 def test_hub_release_labels_live_with_the_hub_data() -> None:

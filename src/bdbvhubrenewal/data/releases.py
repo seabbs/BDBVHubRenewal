@@ -1,12 +1,6 @@
 # Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
-"""Release labels, cut-offs and the renewal model's report to publication lag.
+"""Release cut-offs and the renewal model's report to publication lag.
 
-A hub release is labelled by its `as_of` date. From the 2026-11-01
-release on, `as_of` is the extraction date, one day after the last
-reported case. The hub states that earlier releases were labelled by the
-last reported case. `release_id` maps a label, as published or
-as the hub may rewrite it, to the label we key releases by, so results,
-the submission ledger and rounds keep their keys.
 A release's data cut-off is its latest onset day over all places.
 The last day or two before extraction are thin, as new reports take time
 to reach the line list. `latest_onset_days` derives the cut-off from the
@@ -31,46 +25,11 @@ from bdbvhubrenewal.data.dates import as_date
 
 __all__ = [
     "MAX_PAIR_AGE",
-    "ORIGINAL_AS_OF",
     "cutoff_lags",
     "latest_onset_days",
     "release_cutoff",
-    "release_id",
     "release_pairs",
 ]
-
-ORIGINAL_AS_OF: frozenset[str] = frozenset(
-    {"2026-08-18", "2026-10-09", "2026-10-17", "2026-10-24"}
-)
-"""`as_of` labels of the releases published before 2026-11-01, which the
-hub may rewrite a day later. They key results, the submission ledger and
-rounds, so a rewritten label maps back to them."""
-
-
-def release_id(as_of: dt.date | str) -> str:
-    """Return the label we key a hub release by.
-
-    A label in `ORIGINAL_AS_OF` is kept. If the hub rewrites one a day
-    later, it maps back. Other labels are kept.
-
-    Parameters
-    ----------
-    as_of : datetime.date or str
-        The release's `as_of`, as published or as rewritten.
-
-    Returns
-    -------
-    str
-        The release's label, ISO formatted.
-
-    Examples
-    --------
-    >>> release_id("2026-10-25"), release_id("2026-11-01")
-    ('2026-10-24', '2026-11-01')
-    """
-    day = as_date(as_of)
-    before = (day - dt.timedelta(days=1)).isoformat()
-    return before if before in ORIGINAL_AS_OF else day.isoformat()
 
 
 def latest_onset_days(daily: pd.DataFrame) -> pd.Series:
