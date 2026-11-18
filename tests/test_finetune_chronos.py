@@ -1031,7 +1031,9 @@ def test_the_cache_is_emptied_only_above_its_limit(monkeypatch):
 def test_evaluation_cadence_defaults_to_the_recipe_s():
     import finetune_stream as fs
 
-    args = fs.build_parser().parse_args(["sims", "out"])
+    args = fs.build_parser().parse_args(
+        ["sims", "out", "--held-out-seeds", "1", "2", "--grid", "r5"]
+    )
     assert args.eval_every == fs.ft.EVAL_EVERY == 100
     assert args.by_source_every == fs.BY_SOURCE_EVERY == 200
     fs.check_cadence(500, 1000)

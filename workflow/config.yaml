@@ -56,6 +56,11 @@ finetune:
   sources: [daily, weekly, 3day, daily+weekly, daily+3day]
   univariate_share: 0.2
   chunk: 250
+  # Steps between the trainer's held-out evaluations: the monitor on the
+  # first 100 held-out blocks, and by source (100 blocks a source) on a
+  # multiple of it. They only score: the steps trained are the same.
+  eval_every: 100
+  by_source_every: 200
   series_bias: true
   note: continuous r5
   # The real validation blocks (scripts/finetune_real_validation.py) and

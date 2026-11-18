@@ -71,7 +71,7 @@ SAVE_EVERY = 50
 resumes from."""
 BY_SOURCE_EVERY = 200
 """Steps between held-out losses by source, which cost three monitor
-evals."""
+evals (the default of `--by-source-every`)."""
 
 POLL = 60
 """Seconds between checks for a chunk's simulations."""
@@ -1237,7 +1237,23 @@ def build_parser() -> argparse.ArgumentParser:
     # the trainer's state beside it (`n<N>/state`), which the next
     # segment resumes from (workflow/rules/finetune.smk).
     parser.add_argument("--until", type=int)
+    # Steps between held-out evaluations: the monitor, and by source on
+    # a multiple of its steps. They only score, so the steps trained and
+    # the settings hash are the same whatever they are.
+    parser.add_argument("--eval-every", type=int, default=ft.EVAL_EVERY)
+    parser.add_argument("--by-source-every", type=int, default=BY_SOURCE_EVERY)
     return parser
+
+
+def check_cadence(eval_every: int, by_source_every: int) -> None:
+    """Raise unless both are positive and by source is on monitor steps."""
+    if eval_every <= 0 or by_source_every <= 0:
+        raise ValueError("evaluation steps must be positive")
+    if by_source_every % eval_every:
+        raise ValueError(
+            f"--by-source-every {by_source_every} is not a multiple of "
+            f"--eval-every {eval_every}"
+        )
 
 
 def main() -> None:
@@ -1274,6 +1290,10 @@ def main() -> None:
 
     if (args.seed_list is None) == (args.train_seeds is None):
         parser.error("give one of --train-seeds and --seed-list")
+    try:
+        check_cadence(args.eval_every, args.by_source_every)
+    except ValueError as error:
+        parser.error(str(error))
 
     def training_seeds() -> range | list[int]:
         if args.seed_list is not None:
@@ -1635,14 +1655,14 @@ def main() -> None:
                 report(
                     stage="training", step=step, outbreaks=done, gpu=memory()
                 )
-            if step % ft.EVAL_EVERY == 0:
+            if step % args.eval_every == 0:
                 since = time.perf_counter()
                 monitor = held_out_loss(
                     model, val[: ft.EVAL_BLOCKS], args.batch_size
                 )
                 entry = {"step": step, "eval_loss": monitor}
                 described = ""
-                if step % BY_SOURCE_EVERY == 0:
+                if step % args.by_source_every == 0:
                     entry["by_source"] = held_out_by_source(
                         model, val, args.batch_size, ft.EVAL_BLOCKS
                     )
