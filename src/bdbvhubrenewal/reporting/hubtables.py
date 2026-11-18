@@ -19,7 +19,7 @@ from typing import Final
 import numpy as np
 import pandas as pd
 
-from bdbvhubrenewal.data.tidy import write_csv
+from bdbvhubrenewal.data.files import write_csv
 from bdbvhubrenewal.data.zones import is_zone, weekly_zone_counts
 from bdbvhubrenewal.forecasters import ForecastTask
 from bdbvhubrenewal.forecasters.base import NATIONAL, SAMPLE_COLUMNS

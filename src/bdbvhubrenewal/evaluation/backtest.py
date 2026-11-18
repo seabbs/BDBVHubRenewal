@@ -57,11 +57,11 @@ from bdbvhubrenewal.forecasters.base import (
     SAMPLE_COLUMNS,
     ForecastModel,
     ForecastTask,
+    MissingSnapshots,
     ModelUnavailableError,
     add_national,
     check_samples,
 )
-from bdbvhubrenewal.forecasters.chain import MissingSnapshots
 
 __all__ = [
     "BacktestConfig",

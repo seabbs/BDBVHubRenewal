@@ -29,7 +29,7 @@ import pandas as pd
 import yaml
 
 from bdbvhubrenewal.data.dates import as_date
-from bdbvhubrenewal.data.tidy import write_csv
+from bdbvhubrenewal.data.files import write_csv
 
 __all__ = [
     "HUB_COLUMNS",

@@ -21,7 +21,7 @@ from bdbvhubrenewal.evaluation.backtest import (
 )
 from bdbvhubrenewal.forecasters import ForecastTask, get_model
 from bdbvhubrenewal.forecasters.base import NATIONAL, SAMPLE_COLUMNS
-from bdbvhubrenewal.submission.fitting import Forecast
+from bdbvhubrenewal.forecasters.forecast import Forecast
 
 ROOT = Path(__file__).resolve().parents[2]
 

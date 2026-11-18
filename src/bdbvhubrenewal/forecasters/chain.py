@@ -88,7 +88,6 @@ __all__ = [
     "DelayFit",
     "DelayFn",
     "Errors",
-    "MissingSnapshots",
     "NoDelayPair",
     "NoWalkSpread",
     "Origin",
@@ -107,10 +106,6 @@ __all__ = [
 ]
 
 log = logging.getLogger(__name__)
-
-
-class MissingSnapshots(ModelUnavailableError):  # noqa: N818
-    """The task has no daily release snapshots."""
 
 
 class NoDelayPair(ModelUnavailableError):  # noqa: N818
