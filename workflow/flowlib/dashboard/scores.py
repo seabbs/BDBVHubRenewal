@@ -23,17 +23,6 @@ VALUE = {"rel_wis": "wis", "rel_crps": "crps"}
 AXIS0 = "zero-shot"
 """The label of the checkpoint axis' left end, before any training."""
 
-TICKS = [
-    (125, "zero-shot"),
-    (250, "250"),
-    (500, "500"),
-    (1000, "1000"),
-    (2000, "2000"),
-    (4000, "4000"),
-    (8000, "8000"),
-]
-"""The x positions and labels of the checkpoint axis; zero-shot at 125."""
-
 
 def read(path: Path | str) -> list[dict[str, str]]:
     """Return a score table's rows, or none if there is no table yet.

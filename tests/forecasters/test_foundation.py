@@ -840,7 +840,7 @@ def test_national_sums_provinces_not_zones(zoned: pd.DataFrame) -> None:
     assert national == _provinces(rows)["value"].sum()
 
 
-def test_zone_samples_are_the_models_own_summed_to_its_provinces(
+def test_zone_samples_come_straight_from_the_block(
     task: ForecastTask,
     zoned: pd.DataFrame,
     daily_zones: pd.DataFrame,
@@ -850,8 +850,10 @@ def test_zone_samples_are_the_models_own_summed_to_its_provinces(
     counts = weekly_zone_counts(daily_zones, task.vintage)
     own = zoned.loc[zoned["location"].map(is_zone)]
     provinces = _provinces(zoned)
-    # The model's zones sum to its provinces and keep the published counts.
-    assert not check_zone_coherence(provinces, own)
+    # The block's own zone series: nothing sums them to the provinces
+    # (the stand-in draws each series apart, so they do not sum), and
+    # each keeps its published count.
+    assert check_zone_coherence(provinces, own)
     keys = ["location", "target_end_date"]
     floor = own.merge(counts, on=keys, how="left")["total"].fillna(0).to_numpy()
     assert (own["value"].to_numpy() >= floor).all()

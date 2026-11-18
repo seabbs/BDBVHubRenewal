@@ -93,7 +93,7 @@ from bdbvhubrenewal.forecasters.base import (
     list_models,
 )
 from bdbvhubrenewal.forecasters.renewal import DELAY_SUMMARY_FILE
-from bdbvhubrenewal.forecasters.zones import walks_own_zones, zones_for_model
+from bdbvhubrenewal.forecasters.zones import zones_for_model
 from bdbvhubrenewal.submission.fitting import (
     Forecast,
     get_config,
@@ -110,6 +110,7 @@ from bdbvhubrenewal.submission.hub import (
     to_hub_table,
     write_model_metadata,
     write_submission,
+    zones_need_not_sum,
 )
 from bdbvhubrenewal.submission.metadata import MODEL_METADATA
 from bdbvhubrenewal.submission.validate import (
@@ -1456,7 +1457,7 @@ def _hub_forecast(
         unassigned=result.unassigned,
         zones=zones,
         forecast_date=forecast_date,
-        zones_sum=not walks_own_zones(name),
+        zones_sum=not zones_need_not_sum(name),
         national="own" if own_national(name) else "sum",
     )
     return table, result, zones, zone_note, checkpoint, copula
