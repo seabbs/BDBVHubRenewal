@@ -168,13 +168,17 @@ def test_model_code_keeps_a_skipped_module_its_model_imports() -> None:
             model_code(model, ROOT, STORE_ENTRIES, cli=False, skip=STORE_SKIP)
         )
 
-    # Chronos-2's module imports the zone split, so its key holds it, and
-    # so do the province-level models that split their zones in their own
-    # forecast (`with_zones`, since #299).
-    for model in ("fm_chronos_weekly_ragged", "renewal", "renewalsp"):
+    # The province-level models split their zones in their own forecast
+    # (`with_zones`, since #299), so their keys hold the split.
+    for model in ("renewal", "renewalsp"):
         assert zones in code(model)
-    # Models whose modules do not import it still leave it out.
-    for model in ("randomwalk", "randomwalknowcast"):
+    # Models whose modules do not import it leave it out: the walks, and
+    # Chronos-2, which takes its zones straight from its block.
+    for model in (
+        "randomwalk",
+        "randomwalknowcast",
+        "fm_chronos_weekly_ragged",
+    ):
         assert zones not in code(model)
 
 
