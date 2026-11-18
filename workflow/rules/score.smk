@@ -8,8 +8,8 @@
 # cleanly. `score_table` merges every label's rows into the evidence
 # tables in <SCORE_CACHE>/tables/. BDBV units run before German ones,
 # and within each the newest checkpoint first. A unit runs torch on
-# this machine's device (flowlib.machine) with the machine's cores as
-# its threads, and takes the `gpu` resource, so units on one GPU queue.
+# this machine's device (flowlib.machine) with SCORE_THREADS threads,
+# and takes the `gpu` resource, so units on one GPU queue.
 #
 # Targets: `score`, or one unit, <SCORE_CACHE>/germany/<label>.done.
 # `land` (opt-in) commits the tables to evidence/ and pushes.
@@ -61,7 +61,9 @@ ROOM = (
 )
 
 
-UNIT_THREADS = machine.budget(LOCAL)["cores"]
+# A unit's CPU threads (SCORE_THREADS, default 2): a few, so simulations
+# keep the rest of the machine's cores.
+UNIT_THREADS = int(LOCAL.get("SCORE_THREADS") or 2)
 
 
 def score_order():
