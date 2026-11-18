@@ -3,8 +3,8 @@
 `labels`: checkpoint labels of releases published from a cut-off, the
 final run's `chronos-slots-<hash>` first as `slots-<hash>`, then
 `chronos-ft-<hash>` as `<hash>`, each group oldest first. Other releases
-are left out. The labels must be the ones `scripts/checkpoint_scores.py`
-takes.
+are left out. The labels must be the ones `bdbvhubrenewal.evaluation
+.checkpoint` takes.
 
 `by_time` orders the same labels oldest first across both kinds, and
 `priority` gives newer checkpoints' jobs a higher priority.

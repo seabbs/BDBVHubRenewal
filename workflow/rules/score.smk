@@ -1,21 +1,22 @@
 # Checkpoint scoring.
 #
-# Each checkpoint label gets three units of scripts/checkpoint_scores.py:
-# `germany` (WIS on the German development half), `bdbv` (sample CRPS on
-# the BDBV release backtest) and `heldout` (the trainer's held-out loss).
+# Each checkpoint label gets the units of bdbvhubrenewal.evaluation
+# .checkpoint: `germany` (WIS on the German development half), `bdbv`
+# (CRPS on the BDBV release backtest, provinces and country), `bdbv_zones`
+# (the same with the health zones in Chronos-2's block, as submitted) and
+# `release` (the release's settings, with the trainer's held-out loss).
 # A unit caches one file per date or origin in <SCORE_CACHE>/<study>/
 # <label>/ and resumes from it; its done stamp is written when it exits
 # cleanly. `score_table` merges every label's rows into the evidence
 # tables in <SCORE_CACHE>/tables/. BDBV units run before German ones,
 # and within each the newest checkpoint first. A unit runs torch on
 # this machine's device (flowlib.machine) with SCORE_THREADS threads,
-# and takes the `gpu` resource, so units on one GPU queue.
+# and takes the `gpu` resource, so units on one GPU queue. Zone units
+# run on the CPU with their own memory (`score.zones_mem_mb`): their
+# Chronos-2 block is too large for an 8 GB GPU.
 #
 # Targets: `score`, or one unit, <SCORE_CACHE>/germany/<label>.done.
 # `land` (opt-in) commits the tables to evidence/ and pushes.
-# `germany_forecast` (opt-in, `score.germany_forecast.enabled`) runs the
-# German 1 to 4 week forecasts of the reference and one checkpoint, each
-# after its German nowcasts; with it on, `score` takes them too.
 
 import json
 
@@ -84,11 +85,18 @@ def unit_env(wc, threads):
     return machine.shell_env(machine.torch_env(LOCAL, threads))
 
 
+def cpu_env(wc, threads):
+    """As `unit_env`, on the CPU."""
+    return machine.shell_env(machine.torch_env(LOCAL, threads, device="cpu"))
+
+
+EVALUATE = "uv run --group chronos python -m bdbvhubrenewal.evaluation.checkpoint"
+
+
 def unit_shell(study):
     return (
         "mkdir -p " + CACHE + " && " + ROOM + "{params.prefix} nice -n 19 "
-        "env {params.env} uv run --group chronos python "
-        f"scripts/checkpoint_scores.py {study} {CACHE} {{wildcards.label}} "
+        f"env {{params.env}} {EVALUATE} {study} {CACHE} {{wildcards.label}} "
         "> {log} 2>&1 && touch {output}"
     )
 
@@ -112,6 +120,24 @@ rule score_bdbv:
         unit_shell("bdbv")
 
 
+rule score_bdbv_zones:
+    input:
+        SC["data"],
+    output:
+        f"{CACHE}/bdbv_zones/{{label}}.done",
+    log:
+        f"{CACHE}/log/bdbv_zones-{{label}}.log",
+    params:
+        prefix=lambda wc, resources: job_prefix(resources.mem_mb),
+        env=cpu_env,
+    priority: unit_priority(8)
+    threads: UNIT_THREADS
+    resources:
+        mem_mb=SC["zones_mem_mb"],
+    shell:
+        unit_shell("bdbv_zones")
+
+
 rule score_germany:
     output:
         f"{CACHE}/germany/{{label}}.done",
@@ -129,44 +155,15 @@ rule score_germany:
         unit_shell("germany")
 
 
-rule score_heldout:
+rule score_release:
     output:
         f"{CACHE}/heldout/{{label}}.done",
     log:
         f"{CACHE}/log/heldout-{{label}}.log",
     localrule: True
     shell:
-        f"uv run python scripts/checkpoint_scores.py heldout {CACHE} "
-        "{wildcards.label} > {log} 2>&1 && touch {output}"
-
-
-rule score_germany_forecast:
-    # Opt-in (`score.germany_forecast`): never part of `score` unless on.
-    input:
-        f"{CACHE}/germany/{{label}}.done",
-    output:
-        f"{CACHE}/germany_forecast/{{label}}.done",
-    log:
-        f"{CACHE}/log/germany_forecast-{{label}}.log",
-    params:
-        prefix=lambda wc, resources: job_prefix(resources.mem_mb),
-        env=unit_env,
-    priority: unit_priority(1)
-    threads: UNIT_THREADS
-    resources:
-        mem_mb=SC["mem_mb"],
-        gpu=1,
-    shell:
-        unit_shell("germany_forecast")
-
-
-def forecast_inputs(wc=None):
-    """The German forecast units, none unless switched on."""
-    fc = SC.get("germany_forecast") or {}
-    if not fc.get("enabled"):
-        return []
-    labels = [*SC["reference"], *([fc["label"]] if fc.get("label") else [])]
-    return expand(f"{CACHE}/germany_forecast/{{label}}.done", label=labels)
+        f"{EVALUATE} release {CACHE} {{wildcards.label}} > {{log}} 2>&1 "
+        "&& touch {output}"
 
 
 def table_inputs(wc):
@@ -174,9 +171,9 @@ def table_inputs(wc):
     every = [*SC["reference"], *labels]
     return {
         "bdbv": expand(f"{CACHE}/bdbv/{{label}}.done", label=every),
+        "zones": expand(f"{CACHE}/bdbv_zones/{{label}}.done", label=every),
         "germany": expand(f"{CACHE}/germany/{{label}}.done", label=every),
-        "heldout": expand(f"{CACHE}/heldout/{{label}}.done", label=labels),
-        "forecast": forecast_inputs(),
+        "release": expand(f"{CACHE}/heldout/{{label}}.done", label=labels),
     }
 
 
@@ -196,7 +193,7 @@ rule score_table:
         """
         [ -f {params.evidence} ] && cp {params.evidence} {output.evidence}
         [ -f {params.checkpoints} ] && cp {params.checkpoints} {output.checkpoints}
-        uv run python scripts/checkpoint_scores.py table {CACHE} \
+        {EVALUATE} table {CACHE} \
           {output.evidence} {output.checkpoints} {params.labels}
         """
 
@@ -235,12 +232,6 @@ rule land:
         if head != git("rev-parse", f"origin/{params.branch}"):
             raise SystemExit(f"{head} is not on origin/{params.branch}")
         say(f"checkpoint scores landed at {head[:9]} on origin/{params.branch}")
-
-
-rule germany_forecast:
-    # Opt-in target: the German forecast units alone.
-    input:
-        forecast_inputs,
 
 
 rule score:
