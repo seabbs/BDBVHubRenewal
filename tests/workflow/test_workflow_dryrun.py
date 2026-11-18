@@ -312,42 +312,62 @@ def test_verify_alone_never_releases(tmp_path):
     assert jobs == {"verify_checkpoint": 1}
 
 
-def test_score_runs_three_units_a_checkpoint_and_the_reference(tmp_path):
+def test_score_runs_each_unit_for_a_checkpoint_and_the_reference(tmp_path):
     config = {"score": {"labels": ["slots-aaa", "bbb"]}}
     jobs = dry(tmp_path, "score", config=config)
     assert jobs["score_bdbv"] == 3
+    # Zones are their own target: the table does not wait about an hour
+    # of CPU per checkpoint for them.
+    assert "score_zones" not in jobs
     assert jobs["score_germany"] == 3
-    assert jobs["score_heldout"] == 2
+    assert jobs["score_release"] == 2
     assert jobs["score_table"] == 1
     assert "land" not in jobs
 
 
-def test_german_forecasts_are_off_by_default(tmp_path):
-    config = {"score": {"labels": ["slots-aaa", "bbb"]}}
-    jobs = dry(tmp_path, "score", config=config)
-    assert "score_germany_forecast" not in jobs
-    assert "score_germany_forecast" not in dry(
-        tmp_path, "germany_forecast", config=config
+def test_units_run_the_shared_checkpoint_evaluation(tmp_path):
+    blocks = score_jobs(
+        tmp_path, {"score": {"labels": ["aaa"]}}, target="zones"
     )
+    units = [b for b in blocks if re.match(r"(local)?rule score_\w+:", b)]
+    assert units
+    for block in units:
+        assert "scripts/checkpoint_scores.py" not in block
+    shells = "".join(units)
+    assert "-m bdbvhubrenewal.evaluation.checkpoint zones" in shells
 
 
-def test_german_forecasts_run_the_reference_and_one_checkpoint(tmp_path):
-    forecast = {"enabled": True, "label": "slots-aaa"}
-    config = {
-        "score": {"labels": ["slots-aaa", "bbb"], "germany_forecast": forecast}
-    }
-    jobs = dry(tmp_path, "germany_forecast", config=config)
-    assert jobs["score_germany_forecast"] == 2
-    # Each after its own German nowcasts.
-    assert jobs["score_germany"] == 2
-    assert dry(tmp_path, "score", config=config)["score_germany_forecast"] == 2
+def test_zones_are_their_own_target_and_refresh_the_table(tmp_path):
+    config = {"score": {"labels": ["slots-aaa", "bbb"]}}
+    jobs = dry(tmp_path, "zones", config=config)
+    assert jobs["score_zones"] == 3
+    assert jobs["zones"] == 1
+    assert jobs["score_table"] == 1
 
 
-def test_german_forecasts_of_the_reference_alone(tmp_path):
-    forecast = {"enabled": True, "label": None}
-    config = {"score": {"labels": ["bbb"], "germany_forecast": forecast}}
-    jobs = dry(tmp_path, "germany_forecast", config=config)
-    assert jobs["score_germany_forecast"] == 1
+def test_skipped_checkpoints_are_not_scored(tmp_path):
+    config = {"score": {"labels": None, "skip": ["slots-aaa"]}}
+    cache = tmp_path / "scores"
+    cache.mkdir()
+    at = "2026-11-16T12:00:00Z"
+    (cache / "releases.json").write_text(
+        f'[{{"tagName": "chronos-slots-aaa", "publishedAt": "{at}"}},'
+        f' {{"tagName": "chronos-ft-bbb", "publishedAt": "{at}"}}]'
+    )
+    jobs = dry(tmp_path, "score", config=config)
+    assert jobs["score_release"] == 1
+    assert jobs["score_bdbv"] == 2
+
+
+def test_zone_units_run_on_the_cpu_with_their_own_memory(tmp_path):
+    config = {"score": {"labels": ["aaa"], "zones_mem_mb": 12345}}
+    blocks = score_jobs(tmp_path, config, target="zones")
+    zones = [b for b in blocks if re.match(r"rule score_zones:", b)]
+    assert len(zones) == 2
+    for block in zones:
+        assert "DEVICE=cpu" in block
+        assert "gpu=" not in block
+        assert re.search(r"mem_mb=12345", block)
 
 
 def test_score_takes_checkpoints_from_the_release_list(tmp_path):
@@ -358,7 +378,7 @@ def test_score_takes_checkpoints_from_the_release_list(tmp_path):
         ' "publishedAt": "2026-11-16T12:00:00Z"}]'
     )
     jobs = dry(tmp_path, "score")
-    assert jobs["score_heldout"] == 1
+    assert jobs["score_release"] == 1
     assert "release_list" not in jobs
 
 
@@ -724,7 +744,7 @@ def test_an_unreachable_rounds_host_is_said(tmp_path):
     assert "could not copy" in out.stderr
 
 
-def score_jobs(tmp_path, config, local_extra=""):
+def score_jobs(tmp_path, config, local_extra="", target="score"):
     """Return each score rule's shell command, priority and resources."""
     local = tmp_path / "local.env"
     local.write_text(
@@ -733,7 +753,7 @@ def score_jobs(tmp_path, config, local_extra=""):
     overlay = tmp_path / "overlay.yaml"
     overlay.write_text(yaml.safe_dump(config))
     out = subprocess.run(
-        [str(SNAKEMAKE), "score", "-s", "workflow/Snakefile", "-n", "-p",
+        [str(SNAKEMAKE), target, "-s", "workflow/Snakefile", "-n", "-p",
          "--cores", "8", "--workflow-profile", "workflow/profiles/ci",
          "--configfile", str(overlay)],
         cwd=ROOT,

@@ -99,10 +99,11 @@ Outputs are in `<RUN>/train/n<N>/`.
 
 - `release_list`: the repository's releases, the only rule that reads the network; `task score` and each tick rerun it in a run of its own before scoring, as Snakemake 9 ends a run after a forced checkpoint without the jobs it unlocks. The checkpoints scored are the slots ones first, then the others, oldest first, from `published_from`, or `score.labels`.
 - `bdbv_data`: the hub's data (`bdbvhubrenewal data`), or `task data`. Newer data reruns the BDBV units, which add only the new origins.
-- `score_bdbv`, `score_germany`, `score_heldout`: the units of `scripts/checkpoint_scores.py` for each checkpoint and the references. BDBV units run before German ones. Each caches one file per origin or date and resumes from it.
+- `score_bdbv`, `score_zones`, `score_germany`, `score_release`: the units of `bdbvhubrenewal.evaluation.checkpoint` for each checkpoint and the references, newest checkpoint first. BDBV units run before German ones. Each caches one file per origin or date and resumes from it.
+  Units run torch on the machine's device with `SCORE_THREADS` threads and the `gpu` resource. `score_zones` forecasts with the health zones in Chronos-2's block, as submitted, on the CPU with `score.zones_mem_mb`.
 - `score_table`: the rows of every checkpoint in `<SCORE_CACHE>/tables/`, keeping other rules' rows of the committed tables.
+- `zones`: target, not part of `score`. It runs `score_zones` for every label, then writes the tables again with their zone rows. `score_table` takes zone rows only from finished zone units, so BDBV and German rows never wait for zones.
 - `land`: opt-in, commit the tables to `evidence/` and push, only from the evidence branch (`score.branch`), never main.
-- `score_germany_forecast`, `germany_forecast`: opt-in (`score.germany_forecast.enabled`, off by default), the SI's German 1 to 4 week forecasts of the development half for the reference and one checkpoint (`score.germany_forecast.label`), each after its German nowcasts. With it on, `score` takes them too. The rows are study `germany_forecast`.
 
 After each slots checkpoint's scores:
 
