@@ -258,3 +258,19 @@ def test_release_unit_writes_settings_and_release(tmp_path, monkeypatch):
         "grid": "r5"
     }
     assert (tmp_path / "heldout" / "abc-release.json").exists()
+
+
+def test_cached_draws_keep_the_7day_target(tmp_path):
+    rows = pd.DataFrame(
+        {
+            "origin": ["2026-10-01"] * 2,
+            "location": ["CD"] * 2,
+            "target_end_date": ["2026-10-03"] * 2,
+            "value": [1.0, 2.0],
+            "target": ["7day", "daily"],
+        }
+    )
+    rows.to_csv(tmp_path / "2026-10-01.csv.gz", index=False)
+    got = ck._cached(tmp_path)
+    assert got["value"].tolist() == [1.0]
+    assert "target" not in got
