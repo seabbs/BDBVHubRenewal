@@ -96,7 +96,8 @@ score:
 slots_check:
   # Each slots checkpoint against zero-shot Chronos-2 and the no-slots
   # checkpoint of its size (scripts/slots_check.py), in `shards` parts.
-  run: true
+  # Off: the script is not on main, and grid r5 trains no no-slots arm.
+  run: false
   shards: 2
   mem_mb: 6144
 
@@ -105,7 +106,8 @@ agg:
   # pinned to the hub at
   # `hub_ref`, the models' fits at the BDBV origins and every German
   # development date (`dates: []`), the paired arm, scores and rows.
-  run: true
+  # Off: the scripts/agg/ scripts are not on main.
+  run: false
   hub_ref: ad1bb4af13bf
   models: [fm_chronos_daily_ragged_ft, fm_chronos_weekly_ragged_ft]
   origins: ["2026-10-09", "2026-10-17", "2026-10-24", "2026-11-01"]
