@@ -55,11 +55,11 @@ NEEDS_POOL = {"land", "release"}
 would otherwise rerun the failed scoring or simulation it depends on.
 `publish` reads only saved checkpoints, so it always runs."""
 
-FORCERUN = {"score": ["release_list"], "finetune": ["released_batches"]}
+FORCERUN = {"score": ["release_list"], "finetune": ["available_batches"]}
 """Rules a target reruns each tick: `score` lists the checkpoint releases
-afresh, `finetune` the simulation batches released, on a machine that
-takes them from releases (`SIMS_FROM=release`); --forcerun adds a rule
-to the run even when nothing needs it."""
+afresh, `finetune` the simulation batches it can have, on a machine
+without the rounds (`SIMS_FROM` release or remote); --forcerun adds a
+rule to the run even when nothing needs it."""
 
 MARK = "# bdbvhubrenewal workflow tick"
 """Ends this repository's cron line, so it can be replaced or removed."""
@@ -73,8 +73,8 @@ TICK = "workflow/scripts/tick.py"
 def _snakemake(cfg: Mapping[str, str], targets: list[str]) -> list[str]:
     """Return the Snakemake run of `targets` on this machine's budget."""
     forced = [r for t in targets for r in FORCERUN.get(t, [])]
-    if cfg.get("SIMS_FROM") != "release":
-        forced = [r for r in forced if r != "released_batches"]
+    if cfg.get("SIMS_FROM") not in ("release", "remote"):
+        forced = [r for r in forced if r != "available_batches"]
     extra = ["--forcerun", *forced] if forced else []
     return [
         "nice",

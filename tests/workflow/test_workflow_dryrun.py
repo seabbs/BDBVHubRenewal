@@ -549,3 +549,41 @@ def test_land_runs_only_when_the_tables_changed(tmp_path):
     jobs = dry(tmp_path, "land", config=config)
     assert jobs["score_table"] == 1
     assert jobs["land"] == 1
+
+
+def test_the_rounds_host_s_manifests_and_exclusions_are_mirrored(tmp_path):
+    # The rounds host is this machine here (REMOTE empty), its rounds in
+    # REMOTE_ROOT: round 1 whole, round 2 so far one batch.
+    host = tmp_path / "host"
+    for r, seeds in ((1, range(30100, 30140)), (2, [30200])):
+        where = host / "rounds" / f"r{r}"
+        (where / "qc").mkdir(parents=True)
+        rows = "".join(
+            f"{r},{s},block,r5,c,1,21,a,b,,1,2.0,h,t\n" for s in seeds
+        )
+        (where / "manifest.csv").write_text("header\n" + rows)
+    (host / "rounds" / "r1" / "qc" / "excluded.csv").write_text(
+        "simulation\n30101-3\n"
+    )
+    local = tmp_path / "local.env"
+    local.write_text(
+        f"ROOT={tmp_path}\nHOST_NAME=test-host\nREMOTE_ROOT={host}\n"
+    )
+    overlay = tmp_path / "overlay.yaml"
+    overlay.write_text(yaml.safe_dump(REMOTE))
+    run = tmp_path / "checkpoints" / "slots"
+    out = subprocess.run(
+        [str(SNAKEMAKE), str(run / "available-batches.txt"), "-s",
+         "workflow/Snakefile", "--cores", "1", "--workflow-profile",
+         "workflow/profiles/ci", "--configfile", str(overlay)],
+        cwd=ROOT,
+        env={"PATH": str(SNAKEMAKE.parent) + ":/usr/bin:/bin",
+             "HOME": str(tmp_path), "LOCAL_CONFIG": str(local)},
+        capture_output=True,
+        text=True,
+    )  # fmt: skip
+    assert out.returncode == 0, out.stderr + out.stdout
+    listed = (run / "available-batches.txt").read_text().split()
+    assert listed == [str(s) for s in [*range(30100, 30140), 30200]]
+    assert (run / "rounds" / "r1" / "qc" / "excluded.csv").exists()
+    assert (run / "rounds" / "r2" / "manifest.csv").exists()

@@ -5,19 +5,22 @@
 # state kept with the prefix before and stops once n<N> is saved
 # (`--until N`). Its inputs are the batches that hold the first N
 # outbreaks of the seed list, one spare, and the held-out batches,
-# gathered in <RUN>/sims/ from this machine's rounds or the sims-r<N>
-# releases (`fetch_batch`).
+# gathered in <RUN>/sims/ from this machine's rounds, the rounds host's
+# (REMOTE) or the sims-r<N> releases (`fetch_batch`).
 #
 # Targets: `finetune` (every prefix), or one checkpoint,
 # <RUN>/train/n<N>/settings.json. Publishing is the publish module's.
 #
-# From releases (`sims_from: release`, a machine without the rounds), a
-# segment is planned only once its batches are released: the training
-# seeds count up to the first batch not yet released, and nothing trains
-# before the whole held-out round is (`released_batches`, listed afresh
-# each tick).
+# A machine without the rounds takes its batches from the rounds host
+# (`sims_from: remote`, REMOTE and REMOTE_ROOT in config/local.env), as
+# each round's manifest lists them, or from the sims-r<N> releases
+# (`release`). A segment is planned only once its batches can be had: the
+# training seeds count up to the first batch not yet listed, and nothing
+# trains before the whole held-out round is (`available_batches`, listed
+# afresh each tick). From the rounds host, its rounds' manifests and QC
+# exclusions are mirrored in <RUN>/rounds/.
 
-from flowlib import releases
+from flowlib import hosts, manifest, releases
 
 FT = config["finetune"]
 # Where batches come from is this machine's choice when set.
@@ -45,32 +48,34 @@ def held_seeds():
     return seeds_of(FT["held_round"])
 
 
-FROM_RELEASES = FT["sims_from"] == "release"
+ELSEWHERE = FT["sims_from"] in ("release", "remote")
+# The rounds host's rounds mirrored here: manifests and QC exclusions.
+MIRROR = f"{RUN}/rounds"
 
 
 def available_seeds():
     """The training seeds whose batches can be had now, in order.
 
     All of them from this machine's rounds, which the workflow simulates.
-    From releases, those before the first batch not yet released, and none
-    until the held-out round is released.
+    From the rounds host or releases, those before the first batch not
+    yet listed, and none until the held-out round is all listed.
     """
     order = training_seeds()
-    if not FROM_RELEASES:
+    if not ELSEWHERE:
         return order
-    path = checkpoints.released_batches.get().output[0]
-    released = {int(s) for s in Path(path).read_text().split()}
-    if not set(held_seeds()) <= released:
+    path = checkpoints.available_batches.get().output[0]
+    listed = {int(s) for s in Path(path).read_text().split()}
+    if not set(held_seeds()) <= listed:
         return []
     for i, seed in enumerate(order):
-        if seed not in released:
+        if seed not in listed:
             return order[:i]
     return order
 
 
-checkpoint released_batches:
+checkpoint available_batches:
     output:
-        f"{RUN}/released-batches.txt",
+        f"{RUN}/available-batches.txt",
     params:
         repo=SIM["repo"],
         rounds=lambda wc: sorted(
@@ -80,8 +85,20 @@ checkpoint released_batches:
     run:
         import json
 
-        names = []
+        seeds = set()
         for r in params.rounds:
+            if FT["sims_from"] == "remote":
+                # The manifest and QC exclusions of a round there so far.
+                here = Path(f"{MIRROR}/r{r}")
+                (here / "qc").mkdir(parents=True, exist_ok=True)
+                for name in ("manifest.csv", "qc/excluded.csv"):
+                    there = f"{REMOTE_ROUNDS}/r{r}/{name}"
+                    subprocess.run(
+                        ["rsync", "-a", hosts._at(REMOTE, there), str(here / name)],
+                        capture_output=True,
+                    )  # fmt: skip
+                seeds |= manifest.seeds(here / "manifest.csv")
+                continue
             # A round not released yet has no release.
             got = subprocess.run(
                 ["gh", "release", "view", f"sims-r{r}", "-R", params.repo,
@@ -90,15 +107,16 @@ checkpoint released_batches:
                 text=True,
             )  # fmt: skip
             if got.returncode == 0:
-                names += [a["name"] for a in json.loads(got.stdout)["assets"]]
-        seeds = sorted(releases.released_seeds(names))
-        Path(output[0]).write_text("".join(f"{s}\n" for s in seeds))
+                names = [a["name"] for a in json.loads(got.stdout)["assets"]]
+                seeds |= releases.released_seeds(names)
+        Path(output[0]).write_text("".join(f"{s}\n" for s in sorted(seeds)))
 
 
 def known_exclusions():
     """The sim-QC exclusions known now."""
     paths = [Path(f"{RUN}/excluded.csv")]
     paths += Path(ROUNDS_DIR).glob("r*/qc/excluded.csv")
+    paths += Path(MIRROR).glob("r*/qc/excluded.csv")
     paths += Path(f"{RUN}/excluded-releases").glob("*.csv")
     return set().union(*(segments.excluded(p) for p in paths))
 
@@ -159,20 +177,26 @@ rule fetch_batch:
         counts=f"{RUN}/sims/counts-{{seed}}.csv.gz",
         settings=f"{RUN}/sims/settings-{{seed}}.csv",
     params:
-        local=FT["sims_from"] == "local",
+        source=FT["sims_from"],
         repo=SIM["repo"],
         tag=lambda wc: f"sims-r{round_of(wc.seed)}",
         sims=f"{RUN}/sims",
         src=lambda wc, input: input.get("counts", ""),
         src_settings=lambda wc, input: input.get("settings", ""),
+        there=lambda wc: hosts._at(
+            REMOTE, f"{REMOTE_ROUNDS}/r{round_of(wc.seed)}/sims"
+        ),
     localrule: True
     shell:
-        # Hard links where the rounds are on this machine, else the batch's
-        # assets of its round's release.
+        # Hard links where the rounds are on this machine, a copy from the
+        # rounds host, else the batch's assets of its round's release.
         """
-        if [ "{params.local}" = True ]; then
+        if [ "{params.source}" = local ]; then
           ln -f {params.src} {output.counts} 2> /dev/null || cp {params.src} {output.counts}
           ln -f {params.src_settings} {output.settings} 2> /dev/null || cp {params.src_settings} {output.settings}
+        elif [ "{params.source}" = remote ]; then
+          rsync -a {params.there}/counts-{wildcards.seed}.csv.gz \
+            {params.there}/settings-{wildcards.seed}.csv {params.sims}/
         else
           gh release download {params.tag} -R {params.repo} --clobber \
             -D {params.sims} -p counts-{wildcards.seed}.csv.gz \
@@ -227,6 +251,9 @@ rule train_segment:
             if FT["sims_from"] == "release"
             else ""
         ),
+        # Where the QC exclusions are: this machine's rounds, or the
+        # rounds host's mirrored here.
+        rounds=MIRROR if FT["sims_from"] == "remote" else ROUNDS_DIR,
         held=lambda wc: f"{held_seeds()[0]} {held_seeds()[-1]}",
         prefixes=" ".join(str(p) for p in FT["prefixes"]),
         stop_from=FT["outbreaks"] + 1,
@@ -251,7 +278,7 @@ rule train_segment:
         # before replaces it if missing or behind (flowlib.segments).
         """
         uv run python workflow/scripts/prepare_segment.py {TRAIN} {RUN} \
-          {ROUNDS_DIR} {params.prev_args} {params.release_args} > {log}
+          {params.rounds} {params.prev_args} {params.release_args} > {log}
         DEVICE={params.device} HF_HOME={params.hf_home} HF_HUB_OFFLINE=1 \
         PYTORCH_MPS_HIGH_WATERMARK_RATIO={params.watermark} \
         PYTORCH_MPS_LOW_WATERMARK_RATIO=0.6 MPLCONFIGDIR="${{TMPDIR:-/tmp}}" \
