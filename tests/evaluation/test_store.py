@@ -216,12 +216,7 @@ def test_stacked_forecasts_keep_their_values_in_less_memory() -> None:
     want = pd.concat(frames, ignore_index=True)
     for col in ("model", "location", "target_end_date"):
         assert isinstance(got[col].dtype, pd.CategoricalDtype), col
-    pd.testing.assert_frame_equal(
-        got.astype(
-            dict.fromkeys(("model", "location", "target_end_date"), object)
-        ),
-        want,
-    )
+    pd.testing.assert_frame_equal(got.astype(want.dtypes.to_dict()), want)
     assert (
         got.memory_usage(deep=True).sum() < want.memory_usage(deep=True).sum()
     )
@@ -264,28 +259,19 @@ def _workflow_paths(event: str) -> list[str]:
 def _key_files(monkeypatch: pytest.MonkeyPatch) -> set[str]:
     """List the repository files a fit key depends on."""
     import inspect
-    from collections.abc import Callable
 
     from bdbvhubrenewal import cli
     from bdbvhubrenewal.evaluation import digest
 
     read: set[Path] = set()
     open_ = Path.open
-    getsource = inspect.getsource
 
     def record_open(self: Path, *args: object, **kwargs: object) -> object:
         read.add(self.resolve())
         return open_(self, *args, **kwargs)
 
-    def record_source(obj: Callable[..., object]) -> str:
-        src = inspect.getsourcefile(obj)
-        assert src is not None
-        read.add(Path(src).resolve())
-        return getsource(obj)
-
     with monkeypatch.context() as mp:
         mp.setattr(Path, "open", record_open)
-        mp.setattr(store.inspect, "getsource", record_source)
         for model in store.stored_models():
             store.code_digest(model, ROOT)
     # The key hashes the Python version. `fit-store plan` reads the config
