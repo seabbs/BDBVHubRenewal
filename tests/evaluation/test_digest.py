@@ -156,22 +156,14 @@ def test_model_code_leaves_out_other_models() -> None:
     assert "src/bdbvhubrenewal/forecasters/randomwalk.py" in renewal
 
 
-def test_model_code_keeps_a_skipped_module_its_model_imports() -> None:
-    from bdbvhubrenewal.evaluation.digest import model_code
-    from bdbvhubrenewal.evaluation.store import STORE_ENTRIES, STORE_SKIP
+def test_a_fit_key_holds_the_zone_split_only_where_its_model_calls_it() -> None:
+    from bdbvhubrenewal.evaluation.store import fit_code
 
     zones = "src/bdbvhubrenewal/forecasters/zones.py"
-    assert zones in STORE_SKIP
-
-    def code(model: str) -> set[str]:
-        return set(
-            model_code(model, ROOT, STORE_ENTRIES, cli=False, skip=STORE_SKIP)
-        )
-
     # The province-level models split their zones in their own forecast
     # (`with_zones`, since #299), so their keys hold the split.
     for model in ("renewal", "renewalsp"):
-        assert zones in code(model)
+        assert zones in fit_code(model, ROOT)
     # Models whose modules do not import it leave it out: the walks, and
     # Chronos-2, which takes its zones straight from its block.
     for model in (
@@ -179,7 +171,7 @@ def test_model_code_keeps_a_skipped_module_its_model_imports() -> None:
         "randomwalknowcast",
         "fm_chronos_weekly_ragged",
     ):
-        assert zones not in code(model)
+        assert zones not in fit_code(model, ROOT)
 
 
 @pytest.mark.slow

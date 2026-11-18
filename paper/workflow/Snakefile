@@ -68,6 +68,8 @@ STUDIES = config["studies"]
 PYTHON = shlex.quote(sys.executable)
 BDBV = shlex.quote(str(Path(sys.executable).parent / "bdbvhubrenewal"))
 GERMANY = config["germany"]
+# The tools the shell rules call, as the project workflow's.
+TOOLS_ENV = "../../workflow/envs/tools.yaml"
 
 # The last BDBV release the SI's real-data models trained on
 # (config/finetune.toml); their BDBV comparison scores later rounds only.
@@ -76,8 +78,9 @@ with open("../config/finetune.toml", "rb") as f:
 EBOLA = config["ebola"]
 # The fine-tuned checkpoint every `_ft` model the workflow runs loads, so
 # each study uses the same one; recorded in results.yml.
+# Set here, not read: so not an `envvars` requirement of the workflow.
 if config.get("finetuned"):
-    os.environ["BDBV_CHRONOS_FT"] = str(config["finetuned"])
+    os.environ.update(BDBV_CHRONOS_FT=str(config["finetuned"]))
 SYNTHETIC = config["synthetic"]
 # Simulation folders may name machine settings, such as $ROOT.
 SYNTHETIC["simulations"] = {
@@ -110,9 +113,7 @@ if str(_split) != str(config["heldout"]["germany_from"]):
 # or followed: an entry naming a `branch` reads its head, resolved here so
 # a new commit there extracts the file anew.
 EVIDENCE = {
-    name: entry
-    for name, entry in (config.get("evidence") or {}).items()
-    if entry
+    name: entry for name, entry in (config.get("evidence") or {}).items() if entry
 }
 for _entry in EVIDENCE.values():
     if "branch" in _entry:
@@ -133,10 +134,15 @@ for name, entry in EVIDENCE.items():
             f"evidence_{name}"
         output:
             evidence_file(name),
+        log:
+            f"{R}/logs/evidence_{name}.log",
+        conda:
+            TOOLS_ENV
         params:
             ref=entry["ref"],
             path=entry["path"],
         shell:
+            "exec >{log} 2>&1; "
             "(git cat-file -e {params.ref}^{{commit}} 2>/dev/null || "
             "git fetch -q origin {params.ref}) && "
             "git show {params.ref}:{params.path} > {output}"
@@ -179,10 +185,16 @@ for i, entry in enumerate(EBOLA.get("extra") or []):
             evidence_file(entry["evidence"]),
         output:
             f"{R}/evidence/ebola-extra-{i}.csv.gz",
+        log:
+            f"{R}/logs/ebola_extra_{i}.log",
+        conda:
+            TOOLS_ENV
         params:
+            python=PYTHON,
             models=shlex.quote(entry.get("models") or "."),
         shell:
-            "{PYTHON} -m paperpipe ebola-extra --input {input} "
+            "exec >{log} 2>&1; "
+            "{params.python} -m paperpipe ebola-extra --input {input} "
             "--models {params.models} --out {output}"
 
 
@@ -196,10 +208,16 @@ for i, entry in enumerate(GERMANY.get("extra") or []):
             evidence_file(entry["evidence"]),
         output:
             f"{R}/evidence/germany-extra-{i}.csv.gz",
+        log:
+            f"{R}/logs/germany_extra_{i}.log",
+        conda:
+            TOOLS_ENV
         params:
+            python=PYTHON,
             args=extra_args(entry),
         shell:
-            "{PYTHON} -m paperpipe germany-extra --input {input} "
+            "exec >{log} 2>&1; "
+            "{params.python} -m paperpipe germany-extra --input {input} "
             "{params.args} --out {output}"
 
 
@@ -296,11 +314,16 @@ for _mode in MODES:
             synthetic_simulations(_mode),
         output:
             SYNTHETIC["forecasts"][_mode],
+        log:
+            f"{R}/logs/synthetic_forecasts_{_mode}.log",
+        conda:
+            TOOLS_ENV
+        resources:
+            heavy=1,
         params:
-            sims=SYNTHETIC["simulations"][_mode],
-            seeds=" ".join(
-                str(s) for s in run_settings(config, _mode).synthetic_seeds
-            ),
+            python=PYTHON,
+            sims=lambda w, mode=_mode: SYNTHETIC["simulations"][mode],
+            seeds=" ".join(str(s) for s in run_settings(config, _mode).synthetic_seeds),
             # The fine-tuned models wait for the final run's checkpoint.
             models=(
                 ""
@@ -308,10 +331,9 @@ for _mode in MODES:
                 else "--models "
                 + " ".join(m for m in SYNTHETIC_MODELS if "_ft" not in m)
             ),
-        resources:
-            heavy=1,
         shell:
-            "PYTHONPATH=. {PYTHON} scripts/run_synthetic.py {params.sims} "
+            "exec >{log} 2>&1; "
+            "PYTHONPATH=. {params.python} scripts/run_synthetic.py {params.sims} "
             "{output} --seeds {params.seeds} --samples 1000 --device cpu "
             "--threads 1 {params.models}"
 
@@ -365,11 +387,17 @@ def outputs(mode):
         if {"germany", "ebola"} <= set(STUDIES)
         else []
     )
-    return evidence + design + joint + real + [
-        path
-        for study in STUDIES
-        for path in [*figures(mode, study), *tables(mode, study)]
-    ]
+    return (
+        evidence
+        + design
+        + joint
+        + real
+        + [
+            path
+            for study in STUDIES
+            for path in [*figures(mode, study), *tables(mode, study)]
+        ]
+    )
 
 
 rule development:
@@ -392,16 +420,29 @@ rule render:
         "main.pdf",
         "si.html",
         "si.pdf",
+    log:
+        f"{R}/logs/render.log",
+    conda:
+        TOOLS_ENV
     shell:
-        "quarto render main.qmd && quarto render si.qmd"
+        "exec >{log} 2>&1; quarto render main.qmd && quarto render si.qmd"
 
 
 rule germany_fetch:
     output:
         TRIANGLE,
+    log:
+        f"{R}/logs/germany_fetch.log",
+    conda:
+        TOOLS_ENV
+    params:
+        bdbv=BDBV,
+        germany_config=GERMANY["config"],
+        germany_data=lambda w, output: Path(output[0]).parent,
     shell:
-        "{BDBV} germany-fetch --config {GERMANY[config]} "
-        "--out {GERMANY[data]}"
+        "exec >{log} 2>&1; "
+        "{params.bdbv} germany-fetch --config {params.germany_config} "
+        "--out {params.germany_data}"
 
 
 rule germany_development:
@@ -409,14 +450,21 @@ rule germany_development:
         TRIANGLE,
     output:
         f"{GERMANY['results']}/paper-forecasts.csv.gz",
+    log:
+        f"{R}/logs/germany_development.log",
+    conda:
+        TOOLS_ENV
     params:
+        bdbv=BDBV,
+        germany_root_config=GERMANY_ROOT["config"],
         args=f"--config {GERMANY_ROOT['config']} --data {GERMANY_ROOT['data']}",
         out=GERMANY_ROOT["results"],
     shell:
+        "exec >{log} 2>&1; "
         "cd .. && "
-        "{BDBV} germany-backtest {params.args} --out {params.out} && "
-        "{BDBV} germany-teams {params.args} --out {params.out} && "
-        "{BDBV} germany-paper --config {GERMANY_ROOT[config]} "
+        "{params.bdbv} germany-backtest {params.args} --out {params.out} && "
+        "{params.bdbv} germany-teams {params.args} --out {params.out} && "
+        "{params.bdbv} germany-paper --config {params.germany_root_config} "
         "--results {params.out}"
 
 
@@ -426,26 +474,38 @@ rule germany_heldout:
         TRIANGLE,
     output:
         f"{GERMANY['results']}/held-out/paper-forecasts.csv.gz",
+    log:
+        f"{R}/logs/germany_heldout.log",
+    conda:
+        TOOLS_ENV
     params:
+        bdbv=BDBV,
+        germany_root_config=GERMANY_ROOT["config"],
         args=f"--config {GERMANY_ROOT['config']} --data {GERMANY_ROOT['data']}",
         out=GERMANY_ROOT["results"],
     shell:
+        "exec >{log} 2>&1; "
         "cd .. && "
-        "{BDBV} germany-backtest {params.args} --held-out "
+        "{params.bdbv} germany-backtest {params.args} --held-out "
         "--out {params.out} && "
-        "{BDBV} germany-teams {params.args} --held-out --out {params.out} && "
-        "{BDBV} germany-paper --config {GERMANY_ROOT[config]} "
+        "{params.bdbv} germany-teams {params.args} --held-out --out {params.out} && "
+        "{params.bdbv} germany-paper --config {params.germany_root_config} "
         "--results {params.out}/held-out"
 
 
 rule ebola_hub:
     output:
         f"{EBOLA['hub']}/target-data/time-series.csv",
+    log:
+        f"{R}/logs/ebola_hub.log",
+    # Snakemake makes the output's folders first, so clone beside them.
+    conda:
+        TOOLS_ENV
     params:
         repo=EBOLA["hub_repo"],
-        hub=EBOLA["hub"],
-    # Snakemake makes the output's folders first, so clone beside them.
+        hub=lambda w, output: Path(output[0]).parent.parent,
     shell:
+        "exec >{log} 2>&1; "
         "rm -rf {params.hub}.clone && "
         "git clone --quiet --depth 1 {params.repo} {params.hub}.clone && "
         "rm -rf {params.hub} && mv {params.hub}.clone {params.hub}"
@@ -465,19 +525,25 @@ rule ebola_backtest_draws:
         f"{EBOLA['data']}/target.csv",
     output:
         EBOLA_DRAWS,
+    log:
+        f"{R}/logs/ebola_backtest_draws.log",
+    conda:
+        TOOLS_ENV
+    resources:
+        heavy=1,
     params:
+        bdbv=BDBV,
         models=" ".join(EBOLA["backtest_models"]),
         n=EBOLA.get("n_samples", 100),
         folder=lambda w: os.path.abspath(f"{R}/ebola-backtest"),
         config=EBOLA["config"],
-    resources:
-        heavy=1,
     shell:
+        "exec >{log} 2>&1; "
         "mkdir -p {params.folder} && "
         "sed 's/^backtest = .*/backtest = {params.n}/' {params.config} "
         "> {params.folder}/backtest.toml && "
         "grep -q '^backtest = {params.n}$' {params.folder}/backtest.toml && "
-        "cd .. && {BDBV} backtest --config {params.folder}/backtest.toml "
+        "cd .. && {params.bdbv} backtest --config {params.folder}/backtest.toml "
         "--models {params.models} --no-recovery "
         "--results {params.folder}/results --output {params.folder}"
 
@@ -486,11 +552,17 @@ rule ebola_backtest:
     output:
         EBOLA["backtest"],
         f"{EBOLA['data']}/target.csv",
+    log:
+        f"{R}/logs/ebola_backtest.log",
+    conda:
+        TOOLS_ENV
     params:
+        bdbv=BDBV,
         models=" ".join(EBOLA["backtest_models"]),
     shell:
-        "cd .. && {BDBV} data && "
-        "{BDBV} backtest --models {params.models} --no-recovery"
+        "exec >{log} 2>&1; "
+        "cd .. && {params.bdbv} data && "
+        "{params.bdbv} backtest --models {params.models} --no-recovery"
 
 
 rule data:
@@ -500,7 +572,12 @@ rule data:
         observations=f"{R}/{{mode}}/data/{{study}}-observations.csv.gz",
         locations=f"{R}/{{mode}}/data/{{study}}-locations.csv",
         meta=f"{R}/{{mode}}/data/{{study}}-meta.json",
+    log:
+        f"{R}/{{mode}}/logs/data-{{study}}.log",
+    conda:
+        TOOLS_ENV
     params:
+        python=PYTHON,
         limits=limits,
         sources=sources,
         delay=lambda w: (
@@ -515,7 +592,8 @@ rule data:
         ),
         config=shlex.quote(json.dumps(config)),
     shell:
-        "{PYTHON} -m paperpipe data {wildcards.study} {params.limits} "
+        "exec >{log} 2>&1; "
+        "{params.python} -m paperpipe data {wildcards.study} {params.limits} "
         "{params.sources} {params.delay} {params.note} "
         "--mode {wildcards.mode} "
         "--config {params.config} "
@@ -529,12 +607,18 @@ rule forecasts:
         meta=rules.data.output.meta,
     output:
         f"{R}/{{mode}}/raw/{{study}}.csv.gz",
+    log:
+        f"{R}/{{mode}}/logs/forecasts-{{study}}.log",
+    conda:
+        TOOLS_ENV
     params:
+        python=PYTHON,
         limits=limits,
         sources=sources,
         n_samples=config["n_samples"],
     shell:
-        "{PYTHON} -m paperpipe forecasts {wildcards.study} {params.limits} "
+        "exec >{log} 2>&1; "
+        "{params.python} -m paperpipe forecasts {wildcards.study} {params.limits} "
         "{params.sources} --meta {input.meta} "
         "--n-samples {params.n_samples} --out {output}"
 
@@ -544,10 +628,16 @@ rule table:
         rules.forecasts.output,
     output:
         f"{R}/{{mode}}/forecasts/{{study}}.csv.gz",
+    log:
+        f"{R}/{{mode}}/logs/table-{{study}}.log",
+    conda:
+        TOOLS_ENV
     params:
+        python=PYTHON,
         config=shlex.quote(json.dumps(config)),
     shell:
-        "{PYTHON} -m paperpipe table --raw {input} --mode {wildcards.mode} "
+        "exec >{log} 2>&1; "
+        "{params.python} -m paperpipe table --raw {input} --mode {wildcards.mode} "
         "--config {params.config} --out {output}"
 
 
@@ -557,14 +647,18 @@ rule truth:
         locations=rules.data.output.locations,
     output:
         f"{R}/{{mode}}/truth/{{study}}.csv.gz",
+    log:
+        f"{R}/{{mode}}/logs/truth-{{study}}.log",
+    conda:
+        TOOLS_ENV
     params:
+        python=PYTHON,
         rule=lambda w: (
-            "--first-after"
-            if w.study in config.get("truth_first_after", [])
-            else ""
+            "--first-after" if w.study in config.get("truth_first_after", []) else ""
         ),
     shell:
-        "{PYTHON} -m paperpipe truth {params.rule} "
+        "exec >{log} 2>&1; "
+        "{params.python} -m paperpipe truth {params.rule} "
         "--observations {input.observations} "
         "--locations {input.locations} --out {output}"
 
@@ -575,11 +669,18 @@ rule scores:
         truth=rules.truth.output,
     output:
         f"{R}/{{mode}}/scores/{{study}}.csv.gz",
+    log:
+        f"{R}/{{mode}}/logs/scores-{{study}}.log",
+    conda:
+        TOOLS_ENV
     # One memory-heavy step at a time with `--resources heavy=1`.
     resources:
         heavy=1,
+    params:
+        python=PYTHON,
     shell:
-        "{PYTHON} -m paperpipe scores --forecasts {input.forecasts} "
+        "exec >{log} 2>&1; "
+        "{params.python} -m paperpipe scores --forecasts {input.forecasts} "
         "--truth {input.truth} --out {output}"
 
 
@@ -591,11 +692,18 @@ rule joint_scores:
     output:
         scores=f"{R}/{{mode}}/scores/{{study}}-joint.csv.gz",
         table=f"{R}/{{mode}}/tables/main/{{study}}-joint.md",
+    log:
+        f"{R}/{{mode}}/logs/joint_scores-{{study}}.log",
+    conda:
+        TOOLS_ENV
     # One memory-heavy step at a time with `--resources heavy=1`.
     resources:
         heavy=1,
+    params:
+        python=PYTHON,
     shell:
-        "{PYTHON} -m paperpipe joint-scores --forecasts {input.forecasts} "
+        "exec >{log} 2>&1; "
+        "{params.python} -m paperpipe joint-scores --forecasts {input.forecasts} "
         "--meta {input.meta} "
         "--truth {input.truth} --out {output.scores} --table {output.table}"
 
@@ -607,8 +715,15 @@ rule real_finetune:
         ebola=f"{R}/{{mode}}/tables/si/ebola-real-finetune.csv",
     output:
         f"{R}/{{mode}}/tables/si/real-finetune.md",
+    log:
+        f"{R}/{{mode}}/logs/real_finetune.log",
+    conda:
+        TOOLS_ENV
+    params:
+        python=PYTHON,
     shell:
-        "{PYTHON} -m paperpipe real-finetune --germany {input.germany} "
+        "exec >{log} 2>&1; "
+        "{params.python} -m paperpipe real-finetune --germany {input.germany} "
         "--ebola {input.ebola} --out {output}"
 
 
@@ -643,14 +758,20 @@ for study in STUDIES:
             **study_files(study),
         output:
             figures("{mode}", study),
+        log:
+            f"{R}/{{mode}}/logs/figures_{study}.log",
+        conda:
+            TOOLS_ENV
         params:
+            python=PYTHON,
             study=study,
             split=lambda w, study=study: study_split(w.mode, study),
             config=shlex.quote(json.dumps(config)),
             main=f"{R}/{{mode}}/figures/main",
             si=f"{R}/{{mode}}/figures/si",
         shell:
-            "{PYTHON} -m paperpipe figures {params.study} "
+            "exec >{log} 2>&1; "
+            "{params.python} -m paperpipe figures {params.study} "
             "--forecasts {input.forecasts} "
             "--observations {input.observations} "
             "--scores {input.scores} --locations {input.locations} "
@@ -667,13 +788,19 @@ for study in STUDIES:
             meta=study_files(study)["meta"],
         output:
             tables("{mode}", study),
+        log:
+            f"{R}/{{mode}}/logs/score_tables_{study}.log",
+        conda:
+            TOOLS_ENV
         params:
+            python=PYTHON,
             study=study,
             split=lambda w, study=study: study_split(w.mode, study),
             main=f"{R}/{{mode}}/tables/main",
             si=f"{R}/{{mode}}/tables/si",
         shell:
-            "{PYTHON} -m paperpipe score-tables {params.study} "
+            "exec >{log} 2>&1; "
+            "{params.python} -m paperpipe score-tables {params.study} "
             "--scores {input.scores} --locations {input.locations} "
             "--meta {input.meta} "
             "--main-dir {params.main} --si-dir {params.si} {params.split} "
@@ -696,17 +823,23 @@ def grid_config(mode):
 rule sim_examples:
     output:
         f"{R}/{{mode}}/figures/si/sim-examples.png",
+    log:
+        f"{R}/{{mode}}/logs/sim_examples.log",
+    conda:
+        TOOLS_ENV
     params:
+        python=PYTHON,
         ref=SYNTHETIC["examples"]["ref"],
         path=SYNTHETIC["examples"]["path"],
         picks=shlex.quote(json.dumps(SYNTHETIC["examples"]["picks"])),
         tmp=f"{R}/{{mode}}/sim-examples",
     shell:
+        "exec >{log} 2>&1; "
         "(git -C .. cat-file -e {params.ref}^{{commit}} 2>/dev/null || "
         "git -C .. fetch -q origin {params.ref}) && "
         "rm -rf {params.tmp} && mkdir -p {params.tmp} && "
         "git -C .. archive {params.ref} {params.path} | tar -x -C {params.tmp} "
-        "&& {PYTHON} -m paperfigs.sim_examples --sims {params.tmp}/{params.path} "
+        "&& {params.python} -m paperfigs.sim_examples --sims {params.tmp}/{params.path} "
         "--picks {params.picks} --out {output}"
 
 
@@ -720,11 +853,17 @@ rule grid_tables:
         reporting=f"{R}/{{mode}}/tables/si/grid-reporting.md",
         model=f"{R}/{{mode}}/tables/si/epinowcast-model.md",
         heldout=f"{R}/{{mode}}/tables/si/heldout-set.md",
+    log:
+        f"{R}/{{mode}}/logs/grid_tables.log",
+    conda:
+        TOOLS_ENV
     params:
+        python=PYTHON,
         config=lambda w: shlex.quote(json.dumps(grid_config(w.mode))),
         si=f"{R}/{{mode}}/tables/si",
     shell:
-        "{PYTHON} -m papertables.synthetic_grid --simulator {input.simulator} "
+        "exec >{log} 2>&1; "
+        "{params.python} -m papertables.synthetic_grid --simulator {input.simulator} "
         "--config {params.config} --si-dir {params.si}"
 
 
@@ -733,7 +872,12 @@ rule evidence:
         **{n: evidence_file(n) for n in EVIDENCE if n in EVIDENCE_NAMES},
     output:
         yml=f"{R}/{{mode}}/evidence.yml",
+    log:
+        f"{R}/{{mode}}/logs/evidence.log",
+    conda:
+        TOOLS_ENV
     params:
+        python=PYTHON,
         args=" ".join(
             f"--{n.replace('_', '-')} {evidence_file(n)}"
             for n in EVIDENCE
@@ -743,11 +887,10 @@ rule evidence:
         fig=f"{R}/{{mode}}/figures/si",
         # The live fine-tuning run, whose newest scored checkpoints are
         # shown as preliminary.
-        live=(
-            f"--live-run {config['live_run']}" if config.get("live_run") else ""
-        ),
+        live=(f"--live-run {config['live_run']}" if config.get("live_run") else ""),
     shell:
-        "{PYTHON} -m paperpipe evidence {params.args} --mode {wildcards.mode} "
+        "exec >{log} 2>&1; "
+        "{params.python} -m paperpipe evidence {params.args} --mode {wildcards.mode} "
         "--si-dir {params.si} --fig-dir {params.fig} --out {output.yml} "
         "{params.live}"
 
@@ -758,8 +901,15 @@ rule summary:
         scores=[f"{R}/{{mode}}/tables/main/{s}-scores.csv" for s in STUDIES],
     output:
         f"{R}/{{mode}}/results.yml",
+    log:
+        f"{R}/{{mode}}/logs/summary.log",
+    conda:
+        TOOLS_ENV
+    params:
+        python=PYTHON,
     shell:
-        "{PYTHON} -m paperpipe summary --mode {wildcards.mode} "
+        "exec >{log} 2>&1; "
+        "{params.python} -m paperpipe summary --mode {wildcards.mode} "
         "--meta {input.meta} --scores {input.scores} --out {output} "
         + (f"--finetuned {config['finetuned']}" if config.get("finetuned") else "")
         + f" --realdata-after {REALDATA_AFTER}"
@@ -773,10 +923,15 @@ rule publish:
     output:
         # Outside `build`, which each publish replaces.
         touch(f"{R}/{{mode}}/published"),
+    log:
+        f"{R}/{{mode}}/logs/publish.log",
+    conda:
+        TOOLS_ENV
     params:
-        run=f"{R}/{{mode}}",
+        run=lambda w: f"{R}/{w.mode}",
         build=BUILD,
     shell:
+        "exec >{log} 2>&1; "
         "rm -rf {params.build} && mkdir -p {params.build} && "
         "cp -R {params.run}/figures {params.run}/tables {params.build}/ && "
         "cp {input.summary} {params.build}/results.yml && "

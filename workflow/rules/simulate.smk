@@ -17,44 +17,6 @@
 # host (REMOTE) with its manifest row; the rounds host's `simulate`
 # simulates its own seeds and waits for the rest.
 
-from flowlib import hosts, manifest, segments
-
-SIM = config["simulate"]
-REMOTE = LOCAL["REMOTE"]
-REMOTE_ROUNDS = f"{LOCAL['REMOTE_ROOT'] or LOCAL['ROOT']}/rounds"
-
-
-def seeds_of(round_):
-    """A round's batch seeds, its grid block."""
-    return segments.round_seeds(
-        int(round_), SIM["seed_base"], SIM["batches"]
-    )
-
-
-MINE = hosts.seeds(LOCAL["SIM_SEEDS"], seeds_of)
-
-
-def here(seed):
-    """Whether this host simulates batch `seed`."""
-    return hosts.simulates(int(seed), MINE)
-
-
-def batch_files(wc):
-    """A batch's files: simulated here, or pushed by its host."""
-    if here(wc.seed):
-        return {
-            "counts": rules.simulate_batch.output.counts.format(**wc),
-            "settings": rules.simulate_batch.output.settings.format(**wc),
-        }
-    return {"arrived": rules.await_batch.output[0].format(**wc)}
-
-
-def grid_name():
-    """The grid the simulator names (`grid_name <- "..."`), if any."""
-    text = Path("scripts/finetune_simulate.R").read_text()
-    found = re.search(r'^grid_name <- "([^"]*)"', text, re.M)
-    return found.group(1) if found else ""
-
 
 wildcard_constraints:
     round=r"\d+",
@@ -68,46 +30,48 @@ rule simulate_batch:
         settings=f"{ROUNDS_DIR}/r{{round}}/sims/settings-{{seed}}.csv",
     log:
         f"{ROUNDS_DIR}/r{{round}}/sims/logs/{{seed}}.log",
-    params:
-        sims=f"{ROUNDS_DIR}/r{{round}}/sims",
-        batch=SIM["batch"],
-        draws=SIM["draws"],
-        seed_base=SIM["seed_base"],
-        prefix=lambda wc, resources: job_prefix(resources.mem_mb),
-        min_free=LOCAL["MIN_FREE_GB"],
-        min_disk=LOCAL["MIN_DISK_GB"],
+    # In one pool, after the trainer (20) and before scoring (10 and
+    # below): the trainer waits on these batches.
+    priority: 15
     retries: 1
+    conda:
+        TOOLS_ENV
+    threads: 1
     resources:
         mem_mb=lambda wc, attempt: (
             SIM["mem_mb"] if attempt == 1 else SIM["retry_mem_mb"]
         ),
         # At most `--resources sim_slots=N` batches at once (2 by default).
         sim_slots=1,
-    threads: 1
-    # In one pool, after the trainer (20) and before scoring (10 and
-    # below): the trainer waits on these batches.
-    priority: 15
+    params:
+        sims=lambda wc, output: Path(output.counts).parent,
+        batch=SIM["batch"],
+        draws=SIM["draws"],
+        seed_base=SIM["seed_base"],
+        prefix=lambda wc, resources: job_prefix(resources.mem_mb),
+        min_free=LOCAL["MIN_FREE_GB"],
+        min_disk=LOCAL["MIN_DISK_GB"],
     shell:
         # The simulator must be the committed one, as the manifest records
         # the commit. A retry keeps the first attempt's log. R and Stan
         # write temporary files to a folder of the batch's own, removed
         # however the batch ends.
         """
-        git diff --quiet HEAD -- scripts/finetune_simulate.R || {{
-          echo "scripts/finetune_simulate.R differs from HEAD" > {log}
-          exit 1
-        }}
+        if ! git diff --quiet HEAD -- scripts/finetune_simulate.R; then
+            echo "scripts/finetune_simulate.R differs from HEAD" >{log}
+            exit 1
+        fi
         workflow/scripts/wait_for_room.sh {params.min_free} {params.min_disk} \
-          {params.sims}
+            {params.sims}
         [ -s {log} ] && mv {log} {params.sims}/logs/{wildcards.seed}.first.log
         tmp={params.sims}/tmp/{wildcards.seed}
         rm -rf "$tmp" && mkdir -p "$tmp"
         trap 'rm -rf "$tmp"' EXIT
         TMPDIR="$tmp" ENW_DRAWS={params.draws} \
-          ENW_SEED_BASE={params.seed_base} {params.prefix} \
-          workflow/scripts/timed.sh \
-          nice -n 19 Rscript scripts/finetune_simulate.R \
-          {params.batch} {wildcards.seed} {params.sims} > {log} 2>&1
+            ENW_SEED_BASE={params.seed_base} {params.prefix} \
+            workflow/scripts/timed.sh \
+            nice -n 19 Rscript scripts/finetune_simulate.R \
+            {params.batch} {wildcards.seed} {params.sims} >{log} 2>&1
         gzip -t {output.counts}
         """
 
@@ -118,17 +82,22 @@ rule await_batch:
     # manifest. One waits at a time (`--resources awaiting=1`).
     output:
         f"{ROUNDS_DIR}/r{{round}}/arrived/{{seed}}.done",
+    log:
+        f"{ROUNDS_DIR}/r{{round}}/logs/await-{{seed}}.log",
+    localrule: True
+    conda:
+        TOOLS_ENV
+    resources:
+        awaiting=1,
     params:
         manifest=f"{ROUNDS_DIR}/r{{round}}/manifest.csv",
         poll=60,
-    resources:
-        awaiting=1,
-    localrule: True
     shell:
         """
+        exec >{log} 2>&1
         until grep -q '^{wildcards.round},{wildcards.seed},' \
-            {params.manifest} 2> /dev/null; do
-          sleep {params.poll}
+            {params.manifest} 2>/dev/null; do
+            sleep {params.poll}
         done
         touch {output}
         """
@@ -139,30 +108,14 @@ rule batch_record:
         unpack(batch_files),
     output:
         f"{ROUNDS_DIR}/r{{round}}/records/record-{{seed}}.csv",
+    log:
+        f"{ROUNDS_DIR}/r{{round}}/logs/record-{{seed}}.log",
+    localrule: True
     params:
         sims=f"{ROUNDS_DIR}/r{{round}}/sims",
         old=f"{ROUNDS_DIR}/r{{round}}/manifest.csv",
-    localrule: True
     run:
-        import datetime as dt
-
-        r, s = int(wildcards.round), int(wildcards.seed)
-        line = manifest.existing(params.old, r, s)
-        if line is None and not here(s):
-            raise ValueError(f"batch {s} arrived without its manifest row")
-        line = line or manifest.row(
-            params.sims,
-            round_=r,
-            seed=s,
-            kind="block",
-            grid=grid_name(),
-            commit=git_commit(),
-            draws=SIM["draws"],
-            batch=SIM["batch"],
-            host=HOST,
-            finished=dt.datetime.now(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
-        )
-        Path(output[0]).write_text(line + "\n")
+        write_record(input, output, params, wildcards)
 
 
 rule round_manifest:
@@ -173,6 +126,8 @@ rule round_manifest:
         ),
     output:
         f"{ROUNDS_DIR}/r{{round}}/manifest.csv",
+    log:
+        f"{ROUNDS_DIR}/r{{round}}/logs/manifest.log",
     localrule: True
     run:
         manifest.join(input, output[0])
@@ -186,8 +141,10 @@ rule sim_qc:
         summary=f"{ROUNDS_DIR}/r{{round}}/qc/summary.txt",
     log:
         f"{ROUNDS_DIR}/r{{round}}/qc/run.log",
+    conda:
+        TOOLS_ENV
     params:
-        round_dir=f"{ROUNDS_DIR}/r{{round}}",
+        round_dir=lambda wc, input: Path(input[0]).parent,
     shell:
         "uv run python scripts/sim_qc.py {params.round_dir} > {log} 2>&1"
 
@@ -198,20 +155,11 @@ rule round_ready:
     output:
         seeds=f"{ROUNDS_DIR}/r{{round}}/seeds.txt",
         ready=f"{ROUNDS_DIR}/r{{round}}/READY",
+    log:
+        f"{ROUNDS_DIR}/r{{round}}/logs/ready.log",
     localrule: True
     run:
-        import datetime as dt
-
-        seeds = seeds_of(wildcards.round)
-        Path(output.seeds).write_text("".join(f"{s}\n" for s in seeds))
-        Path(output.ready).write_text(
-            dt.datetime.now(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ") + "\n"
-        )
-        qc = Path(input[0]).read_text().strip()
-        say(
-            f"round {wildcards.round} ready: {len(seeds)} batches, one grid "
-            f"block; {qc}"
-        )
+        mark_ready(input, output, params, wildcards)
 
 
 rule release_batch:
@@ -222,22 +170,27 @@ rule release_batch:
         record=rules.batch_record.output,
     output:
         touch(f"{ROUNDS_DIR}/r{{round}}/released/{{seed}}.done"),
+    log:
+        f"{ROUNDS_DIR}/r{{round}}/logs/release-{{seed}}.log",
+    localrule: True
+    conda:
+        TOOLS_ENV
     params:
         repo=SIM["repo"],
         tag="sims-r{round}",
         counts=rules.simulate_batch.output.counts,
         settings=rules.simulate_batch.output.settings,
-    localrule: True
     shell:
         """
-        gh release view {params.tag} -R {params.repo} > /dev/null 2>&1 || \
-          gh release create {params.tag} -R {params.repo} --prerelease \
-            --title "Simulations, round {wildcards.round}" \
-            --notes "Fine-tuning simulations of round {wildcards.round}, one batch per asset, with their manifest rows." \
-            > /dev/null 2>&1 || \
-          gh release view {params.tag} -R {params.repo} > /dev/null
+        exec >{log} 2>&1
+        gh release view {params.tag} -R {params.repo} >/dev/null 2>&1 \
+            || gh release create {params.tag} -R {params.repo} --prerelease \
+                --title "Simulations, round {wildcards.round}" \
+                --notes "Fine-tuning simulations of round {wildcards.round}, one batch per asset, with their manifest rows." \
+                >/dev/null 2>&1 \
+            || gh release view {params.tag} -R {params.repo} >/dev/null
         gh release upload {params.tag} -R {params.repo} --clobber \
-          {params.counts} {params.settings} {input.record}
+            {params.counts} {params.settings} {input.record}
         """
 
 
@@ -248,13 +201,18 @@ rule release_qc:
         rules.sim_qc.output.excluded,
     output:
         touch(f"{ROUNDS_DIR}/r{{round}}/released/qc.done"),
+    log:
+        f"{ROUNDS_DIR}/r{{round}}/logs/release-qc.log",
+    localrule: True
+    conda:
+        TOOLS_ENV
     params:
         repo=SIM["repo"],
         tag="sims-r{round}",
         named=f"{ROUNDS_DIR}/r{{round}}/qc/excluded-r{{round}}.csv",
-    localrule: True
     shell:
         """
+        exec >{log} 2>&1
         cp {input} {params.named}
         gh release upload {params.tag} -R {params.repo} --clobber {params.named}
         """
@@ -268,28 +226,15 @@ rule push_batch:
         settings=rules.simulate_batch.output.settings,
     output:
         touch(f"{ROUNDS_DIR}/r{{round}}/sent/{{seed}}.done"),
-    params:
-        sims=f"{ROUNDS_DIR}/r{{round}}/sims",
-        there=f"{REMOTE_ROUNDS}/r{{round}}",
+    log:
+        f"{ROUNDS_DIR}/r{{round}}/logs/push-{{seed}}.log",
     retries: 3
     localrule: True
+    params:
+        sims=lambda wc, input: str(Path(input.counts).parent),
+        there=lambda wc: f"{REMOTE_ROUNDS}/r{wc.round}",
     run:
-        import datetime as dt
-
-        r, s = int(wildcards.round), int(wildcards.seed)
-        row = manifest.row(
-            params.sims,
-            round_=r,
-            seed=s,
-            kind="block",
-            grid=grid_name(),
-            commit=git_commit(),
-            draws=SIM["draws"],
-            batch=SIM["batch"],
-            host=HOST,
-            finished=dt.datetime.now(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
-        )
-        hosts.push(params.sims, s, params.there, row, REMOTE)
+        push_record(input, output, params, wildcards)
 
 
 rule push:
