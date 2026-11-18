@@ -2,12 +2,15 @@
 
     python3 workflow/scripts/tick.py
 
-Runs `SCHEDULE_TARGETS` from config/local.env in order, each a Snakemake
-run at nice 19 (`flowlib.schedule.plan`), unless another tick is running
-(a lock in output/) or there is too little memory or disk
-(`MIN_FREE_GB`, `MIN_DISK_GB`). A failed target stops the tick, so
-`land` never follows a failed `score`. Standard library only, so a
-timer can run it with any python3.
+Runs `SCHEDULE_TARGETS` from config/local.env: the pool targets as one
+Snakemake run at nice 19, then the outward targets in order
+(`flowlib.schedule.plan`), unless another tick is running (a lock in
+output/) or there is too little memory or disk (`MIN_FREE_GB`,
+`MIN_DISK_GB`). A failed pool run skips `land` and `release`
+(`schedule.NEEDS_POOL`), so `land` never follows a failed `score`, but
+`publish` still releases the checkpoints saved; a failed outward target
+stops the tick. Standard library only, so a timer can run it with any
+python3.
 """
 
 import subprocess
@@ -43,13 +46,20 @@ def main() -> int:
         if not ok:
             say(f"skipped: {why}")
             return 0
+        failed = 0
         for target, cmd in steps:
+            pool = target.split()[0] in schedule.POOL
+            if failed and target in schedule.NEEDS_POOL:
+                say(f"{target}: skipped after a failed run")
+                continue
             say(f"{target}: start")
             rc = subprocess.run(cmd, cwd=ROOT).returncode
             say(f"{target}: {'done' if rc == 0 else f'FAILED (exit {rc})'}")
-            if rc:
+            if rc and not pool:
+                # An outward target's failure stops the tick.
                 return rc
-    return 0
+            failed = failed or rc
+    return failed
 
 
 if __name__ == "__main__":

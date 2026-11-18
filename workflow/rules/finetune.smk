@@ -185,6 +185,9 @@ rule train_segment:
         watermark=LOCAL.get("MPS_HIGH_WATERMARK", "0.85"),
     resources:
         gpu=1,
+    # In one pool the trainer, the run's critical path, goes first: before
+    # simulation (15) and checkpoint scoring (10 and below).
+    priority: 20
     shell:
         # The run's own state resumes it; the state kept with the prefix
         # before replaces it if missing or behind (flowlib.segments).

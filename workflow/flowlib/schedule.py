@@ -1,13 +1,21 @@
 """Scheduled workflow runs: what one tick runs, and the timer that runs it.
 
 A tick (`workflow/scripts/tick.py`) runs this machine's targets
-(`SCHEDULE_TARGETS` in config/local.env, in order, for example
-`score land` where checkpoints are scored or `finetune publish` where
-they are trained), each a Snakemake run at nice 19 with the default
-profile and the machine's cores and memory less its headroom
-(flowlib.machine). It runs only when there is room (`MIN_FREE_GB`,
-`MIN_DISK_GB`) and never beside another tick (a lock). Snakemake reruns
-only what changed, so `land` commits only new tables.
+(`SCHEDULE_TARGETS` in config/local.env, for example `score land` where
+checkpoints are scored or `finetune publish` where they are trained).
+The pool targets (`POOL`) are one Snakemake run at nice 19 with the
+default profile and the machine's cores, memory and GPU less its
+headroom (flowlib.machine), so whichever queued job fits starts as
+another ends, by the rules' priorities (the trainer, then simulation,
+then scoring). The outward targets, which write outside this machine,
+follow in their configured order; `land` and `release` only after a
+pool run that succeeded (`NEEDS_POOL`). Work that appears while a run is
+going (a new checkpoint, a landed round) waits for the next tick's run,
+so its delay is at most the longest running job. Snakemake locks the
+worktree it runs in, so a machine has one driver worktree.
+It runs only when there is room (`MIN_FREE_GB`, `MIN_DISK_GB`) and never
+beside another tick (a lock). Snakemake reruns only what changed, so
+`land` commits only new tables.
 
 A timer runs the tick every `SCHEDULE_EVERY` minutes (default 60): a
 cron line or a systemd user timer on Linux, a launchd agent on macOS
@@ -39,6 +47,14 @@ TARGETS = (
 )
 """The targets a tick may run, each with workflow/profiles/default."""
 
+POOL = ("simulate", "push", "finetune", "score", "dashboard")
+"""Targets that share one Snakemake run and the machine's budget."""
+
+NEEDS_POOL = {"land", "release"}
+"""Outward targets that run only after a pool run that succeeded: each
+would otherwise rerun the failed scoring or simulation it depends on.
+`publish` reads only saved checkpoints, so it always runs."""
+
 EXTRA = {"score": ["--forcerun", "release_list"]}
 """Options of a target: `score` lists the releases afresh each tick."""
 
@@ -51,8 +67,31 @@ LABEL = "org.bdbvhubrenewal.workflow-tick"
 TICK = "workflow/scripts/tick.py"
 
 
+def _snakemake(cfg: Mapping[str, str], targets: list[str]) -> list[str]:
+    """Return the Snakemake run of `targets` on this machine's budget."""
+    extra = [x for t in targets for x in EXTRA.get(t, [])]
+    return [
+        "nice",
+        "-n",
+        "19",
+        "uv",
+        "run",
+        "--group",
+        "paper",
+        "snakemake",
+        *targets,
+        "--workflow-profile",
+        "workflow/profiles/default",
+        *machine.args(cfg),
+        *extra,
+    ]
+
+
 def plan(cfg: Mapping[str, str]) -> list[tuple[str, list[str]]]:
-    """Return each target of a tick with its command, in order.
+    """Return each step of a tick with its command, in order.
+
+    The pool targets are the first step, one run named by its targets;
+    each outward target is a step of its own after it.
 
     Raises
     ------
@@ -63,24 +102,9 @@ def plan(cfg: Mapping[str, str]) -> list[tuple[str, list[str]]]:
     bad = [t for t in targets if t not in TARGETS]
     if bad:
         raise ValueError(f"targets {bad} are not among {sorted(TARGETS)}")
-    out = []
-    for t in targets:
-        cmd = [
-            "nice",
-            "-n",
-            "19",
-            "uv",
-            "run",
-            "--group",
-            "paper",
-            "snakemake",
-            t,
-            "--workflow-profile",
-            "workflow/profiles/default",
-            *machine.args(cfg),
-            *EXTRA.get(t, []),
-        ]
-        out.append((t, cmd))
+    pool = [t for t in targets if t in POOL]
+    out = [(" ".join(pool), _snakemake(cfg, pool))] if pool else []
+    out += [(t, _snakemake(cfg, [t])) for t in targets if t not in POOL]
     return out
 
 
