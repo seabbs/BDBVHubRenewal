@@ -60,7 +60,7 @@ class Context:
     view: Mapping[str, Any] = field(default_factory=dict)
     tables: Sequence[Mapping[str, str]] = ()
     notes: Sequence[Mapping[str, str]] = ()
-    logs: dict[str, logs.Log] = field(default_factory=dict)
+    logs: dict[str, logs.RunLog] = field(default_factory=dict)
     stores: dict[str, dict] = field(default_factory=dict)
     excluded: set = field(default_factory=set)
     mirror_status: str = ""
@@ -73,7 +73,7 @@ class Context:
             return []
         key = str(run.folder)
         if key not in self.logs:
-            self.logs[key] = logs.Log(run.folder / "train.log")
+            self.logs[key] = logs.RunLog(run.folder)
         return self.logs[key].rows()
 
     def dataset(self, key: str) -> Mapping[str, Any]:
