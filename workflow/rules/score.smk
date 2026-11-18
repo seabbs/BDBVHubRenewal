@@ -17,13 +17,6 @@
 # German 1 to 4 week forecasts of the reference and one checkpoint, each
 # after its German nowcasts; with it on, `score` takes them too.
 
-import json
-
-from flowlib import releases
-
-SC = config["score"]
-CACHE = LOCAL["SCORE_CACHE"]
-
 
 checkpoint release_list:
     # Lists the releases to score; `task score` reruns it.
@@ -37,14 +30,6 @@ checkpoint release_list:
         "--json tagName,publishedAt > {output}"
 
 
-def checkpoint_labels(wc=None):
-    """The checkpoints to score."""
-    if SC["labels"] is not None:
-        return list(SC["labels"])
-    path = checkpoints.release_list.get().output[0]
-    return releases.labels(json.loads(Path(path).read_text()), SC["published_from"])
-
-
 rule bdbv_data:
     # The hub's data (`bdbvhubrenewal data`). A refresh (`task data`) makes
     # the BDBV units rerun, and they add only the new origins.
@@ -53,50 +38,6 @@ rule bdbv_data:
     localrule: True
     shell:
         "uv run bdbvhubrenewal data"
-
-
-ROOM = (
-    f"workflow/scripts/wait_for_room.sh {LOCAL['MIN_FREE_GB']} "
-    f"{LOCAL['MIN_DISK_GB']} {CACHE} && "
-)
-
-
-# A unit's CPU threads (SCORE_THREADS, default 2): a few, so simulations
-# keep the rest of the machine's cores.
-UNIT_THREADS = int(LOCAL.get("SCORE_THREADS") or 2)
-
-
-def score_order():
-    """The checkpoint labels, oldest published first.
-
-    Read from the release list if it is there, none otherwise: a job's
-    priority cannot wait on the release_list checkpoint.
-    """
-    if SC["labels"] is not None:
-        return list(SC["labels"])
-    path = Path(f"{CACHE}/releases.json")
-    if not path.exists():
-        return []
-    return releases.by_time(json.loads(path.read_text()), SC["published_from"])
-
-
-def unit_priority(base):
-    """A unit's priority: `base`, newer checkpoints a fraction higher."""
-    return lambda wc: releases.priority(score_order(), wc.label, base)
-
-
-def unit_env(wc, threads):
-    """The unit's torch device, threads and Chronos-2 batch."""
-    return machine.shell_env(machine.torch_env(LOCAL, threads))
-
-
-def unit_shell(study):
-    return (
-        "mkdir -p " + CACHE + " && " + ROOM + "{params.prefix} nice -n 19 "
-        "env {params.env} uv run --group chronos python "
-        f"scripts/checkpoint_scores.py {study} {CACHE} {{wildcards.label}} "
-        "> {log} 2>&1 && touch {output}"
-    )
 
 
 rule score_bdbv:
@@ -166,26 +107,6 @@ rule score_germany_forecast:
         unit_shell("germany_forecast")
 
 
-def forecast_inputs(wc=None):
-    """The German forecast units, none unless switched on."""
-    fc = SC.get("germany_forecast") or {}
-    if not fc.get("enabled"):
-        return []
-    labels = [*SC["reference"], *([fc["label"]] if fc.get("label") else [])]
-    return expand(f"{CACHE}/germany_forecast/{{label}}.done", label=labels)
-
-
-def table_inputs(wc):
-    labels = checkpoint_labels()
-    every = [*SC["reference"], *labels]
-    return {
-        "bdbv": expand(f"{CACHE}/bdbv/{{label}}.done", label=every),
-        "germany": expand(f"{CACHE}/germany/{{label}}.done", label=every),
-        "heldout": expand(f"{CACHE}/heldout/{{label}}.done", label=labels),
-        "forecast": forecast_inputs(),
-    }
-
-
 rule score_table:
     input:
         unpack(table_inputs),
@@ -197,12 +118,13 @@ rule score_table:
         labels=lambda wc: " ".join(checkpoint_labels()),
         evidence=SC["evidence"],
         checkpoints=SC["checkpoints"],
+        cache=lambda wc: CACHE,
     shell:
         # Rows of other rules in the committed tables are kept.
         """
         [ -f {params.evidence} ] && cp {params.evidence} {output.evidence}
         [ -f {params.checkpoints} ] && cp {params.checkpoints} {output.checkpoints}
-        uv run python scripts/checkpoint_scores.py table {CACHE} \
+        uv run python scripts/checkpoint_scores.py table {params.cache} \
             {output.evidence} {output.checkpoints} {params.labels}
         """
 
@@ -220,25 +142,7 @@ rule land:
         checkpoints=SC["checkpoints"],
         branch=SC["branch"],
     run:
-        import shutil
-
-        def git(*args):
-            return subprocess.run(
-                ["git", *args], check=True, capture_output=True, text=True
-            ).stdout.strip()
-
-        notify.check_branch(git("rev-parse", "--abbrev-ref", "HEAD"), params.branch)
-        shutil.copy(input[0], params.evidence)
-        shutil.copy(input[1], params.checkpoints)
-        git("add", params.evidence, params.checkpoints)
-        if git("diff", "--cached", "--name-only"):
-            git("commit", "-q", "-m", "evidence: checkpoint scores")
-        git("push", "-q", "origin", params.branch)
-        git("fetch", "-q", "origin", params.branch)
-        head = git("rev-parse", "HEAD")
-        if head != git("rev-parse", f"origin/{params.branch}"):
-            raise SystemExit(f"{head} is not on origin/{params.branch}")
-        say(f"checkpoint scores landed at {head[:9]} on origin/{params.branch}")
+        land_tables(input, output, params, wildcards)
 
 
 rule germany_forecast:

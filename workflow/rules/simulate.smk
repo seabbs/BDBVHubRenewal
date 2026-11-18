@@ -17,42 +17,6 @@
 # host (REMOTE) with its manifest row; the rounds host's `simulate`
 # simulates its own seeds and waits for the rest.
 
-from flowlib import hosts, manifest, segments
-
-SIM = config["simulate"]
-REMOTE = LOCAL["REMOTE"]
-REMOTE_ROUNDS = f"{LOCAL['REMOTE_ROOT'] or LOCAL['ROOT']}/rounds"
-
-
-def seeds_of(round_):
-    """A round's batch seeds, its grid block."""
-    return segments.round_seeds(int(round_), SIM["seed_base"], SIM["batches"])
-
-
-MINE = hosts.seeds(LOCAL["SIM_SEEDS"], seeds_of)
-
-
-def here(seed):
-    """Whether this host simulates batch `seed`."""
-    return hosts.simulates(int(seed), MINE)
-
-
-def batch_files(wc):
-    """A batch's files: simulated here, or pushed by its host."""
-    if here(wc.seed):
-        return {
-            "counts": rules.simulate_batch.output.counts.format(**wc),
-            "settings": rules.simulate_batch.output.settings.format(**wc),
-        }
-    return {"arrived": rules.await_batch.output[0].format(**wc)}
-
-
-def grid_name():
-    """The grid the simulator names (`grid_name <- "..."`), if any."""
-    text = Path("scripts/finetune_simulate.R").read_text()
-    found = re.search(r'^grid_name <- "([^"]*)"', text, re.M)
-    return found.group(1) if found else ""
-
 
 wildcard_constraints:
     round=r"\d+",
@@ -78,7 +42,7 @@ rule simulate_batch:
         # At most `--resources sim_slots=N` batches at once (2 by default).
         sim_slots=1,
     params:
-        sims=f"{ROUNDS_DIR}/r{{round}}/sims",
+        sims=lambda wc, output: Path(output.counts).parent,
         batch=SIM["batch"],
         draws=SIM["draws"],
         seed_base=SIM["seed_base"],
@@ -92,9 +56,9 @@ rule simulate_batch:
         # however the batch ends.
         """
         git diff --quiet HEAD -- scripts/finetune_simulate.R || {{
-                  echo "scripts/finetune_simulate.R differs from HEAD" > {log}
-                  exit 1
-                }}
+                                          echo "scripts/finetune_simulate.R differs from HEAD" > {log}
+                                          exit 1
+                                        }}
         workflow/scripts/wait_for_room.sh {params.min_free} {params.min_disk} \
             {params.sims}
         [ -s {log} ] && mv {log} {params.sims}/logs/{wildcards.seed}.first.log
@@ -142,25 +106,7 @@ rule batch_record:
         sims=f"{ROUNDS_DIR}/r{{round}}/sims",
         old=f"{ROUNDS_DIR}/r{{round}}/manifest.csv",
     run:
-        import datetime as dt
-
-        r, s = int(wildcards.round), int(wildcards.seed)
-        line = manifest.existing(params.old, r, s)
-        if line is None and not here(s):
-            raise ValueError(f"batch {s} arrived without its manifest row")
-        line = line or manifest.row(
-            params.sims,
-            round_=r,
-            seed=s,
-            kind="block",
-            grid=grid_name(),
-            commit=git_commit(),
-            draws=SIM["draws"],
-            batch=SIM["batch"],
-            host=HOST,
-            finished=dt.datetime.now(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
-        )
-        Path(output[0]).write_text(line + "\n")
+        write_record(input, output, params, wildcards)
 
 
 rule round_manifest:
@@ -185,7 +131,7 @@ rule sim_qc:
     log:
         f"{ROUNDS_DIR}/r{{round}}/qc/run.log",
     params:
-        round_dir=f"{ROUNDS_DIR}/r{{round}}",
+        round_dir=lambda wc, input: Path(input[0]).parent,
     shell:
         "uv run python scripts/sim_qc.py {params.round_dir} > {log} 2>&1"
 
@@ -198,18 +144,7 @@ rule round_ready:
         ready=f"{ROUNDS_DIR}/r{{round}}/READY",
     localrule: True
     run:
-        import datetime as dt
-
-        seeds = seeds_of(wildcards.round)
-        Path(output.seeds).write_text("".join(f"{s}\n" for s in seeds))
-        Path(output.ready).write_text(
-            dt.datetime.now(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ") + "\n"
-        )
-        qc = Path(input[0]).read_text().strip()
-        say(
-            f"round {wildcards.round} ready: {len(seeds)} batches, one grid "
-            f"block; {qc}"
-        )
+        mark_ready(input, output, params, wildcards)
 
 
 rule release_batch:
@@ -269,25 +204,10 @@ rule push_batch:
     retries: 3
     localrule: True
     params:
-        sims=f"{ROUNDS_DIR}/r{{round}}/sims",
-        there=f"{REMOTE_ROUNDS}/r{{round}}",
+        sims=lambda wc, input: str(Path(input.counts).parent),
+        there=lambda wc: f"{REMOTE_ROUNDS}/r{wc.round}",
     run:
-        import datetime as dt
-
-        r, s = int(wildcards.round), int(wildcards.seed)
-        row = manifest.row(
-            params.sims,
-            round_=r,
-            seed=s,
-            kind="block",
-            grid=grid_name(),
-            commit=git_commit(),
-            draws=SIM["draws"],
-            batch=SIM["batch"],
-            host=HOST,
-            finished=dt.datetime.now(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
-        )
-        hosts.push(params.sims, s, params.there, row, REMOTE)
+        push_record(input, output, params, wildcards)
 
 
 rule push:

@@ -15,45 +15,18 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(workflow.basedir)))
 
-from flowlib import localconfig, machine, notify  # noqa: E402
+from flowlib import machine  # noqa: E402
 
 
 configfile: str(Path(workflow.basedir) / "config.yaml")
 
 
-LOCAL = localconfig.read()
-HOST = LOCAL["HOST_NAME"]
-ROUNDS_DIR = f"{LOCAL['ROOT']}/rounds"
-
-
-def say(message):
-    """A mailbox line, when NOTIFY is set in config/local.env."""
-    notify.post(message, LOCAL)
-
-
-def job_prefix(mem_mb):
-    """The machine's command prefix for a job capped at `mem_mb` MB."""
-    return LOCAL["JOB_PREFIX"].replace("{mem}", f"{int(mem_mb)}M")
-
-
-def git_commit():
-    """The commit the workflow runs at."""
-    return subprocess.run(
-        ["git", "rev-parse", "HEAD"],
-        capture_output=True,
-        text=True,
-        check=True,
-    ).stdout.strip()
-
-
+include: "rules/common.smk"
 include: "rules/simulate.smk"
 include: "rules/finetune.smk"
 include: "rules/publish.smk"
 include: "rules/score.smk"
 include: "rules/followups.smk"
-
-
-TARGETS = LOCAL["TARGETS"].split()
 
 
 rule all:

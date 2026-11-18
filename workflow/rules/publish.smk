@@ -15,7 +15,7 @@ rule verify_checkpoint:
         f"{TRAIN}/n{{n}}/verified.txt",
     localrule: True
     params:
-        where=f"{TRAIN}/n{{n}}",
+        where=lambda wc, input: Path(input.settings).parent,
     shell:
         "uv run python scripts/finetune_verify.py {params.where} > {output}"
 
@@ -27,7 +27,7 @@ rule publish_checkpoint:
         f"{TRAIN}/n{{n}}/published.json",
     localrule: True
     params:
-        where=f"{TRAIN}/n{{n}}",
+        where=lambda wc, output: Path(output[0]).parent,
     shell:
         """
         uv run python workflow/scripts/publish_checkpoint.py {params.where} {output}

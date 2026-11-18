@@ -5,25 +5,6 @@
 # <SCORE_CACHE>/slots-check/<label>/summary.csv, or aggregation rows,
 # <SCORE_CACHE>/agg/<label>/aggregation-scores.csv.gz.
 
-SLC = config["slots_check"]
-AGG = config["agg"]
-AGG_ROOT = f"{CACHE}/agg"
-HEAVY = (
-    ROOM + "{params.prefix} nice -n 19 env OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 "
-    "OPENBLAS_NUM_THREADS=1 CUDA_VISIBLE_DEVICES= "
-)
-
-
-def slots_labels():
-    return [lb for lb in checkpoint_labels() if lb.startswith("slots-")]
-
-
-def main_scores(wc):
-    return [
-        f"{CACHE}/bdbv/{wc.label}.done",
-        f"{CACHE}/germany/{wc.label}.done",
-    ]
-
 
 wildcard_constraints:
     label=r"slots-[0-9a-f]+|[0-9a-f]+|reference[a-z-]*",
@@ -38,7 +19,7 @@ rule fetch_adapter:
     localrule: True
     params:
         repo=SIM["repo"],
-        tag=lambda wc: "chronos-slots-" + wc.label.removeprefix("slots-"),
+        tag=lambda wc: f"chronos-slots-{wc.label.removeprefix('slots-')}",
     shell:
         """
         gh release download {params.tag} -R {params.repo} -D {output} \
@@ -69,7 +50,8 @@ rule slots_check_shard:
         noslots=LOCAL["NOSLOTS_RUN"],
         germany=LOCAL["GERMANY_BLOCKS"],
     shell:
-        HEAVY + "uv run --group chronos python -u scripts/slots_check.py score "
+        f"{HEAVY}"
+        "uv run --group chronos python -u scripts/slots_check.py score "
         "{output.csv} --slots {input.adapter} --label {wildcards.label} "
         "--shard {wildcards.shard} {params.shards} --cache {params.blocks} "
         "--noslots-root {params.noslots} --sim-dir {params.sims} "
@@ -103,6 +85,8 @@ rule agg_data:
         existing=f"{AGG_ROOT}/existing-scores.csv.gz",
     localrule: True
     params:
+        # The rows' folder, as a function: it holds the outputs.
+        root=lambda wc: AGG_ROOT,
         ref=AGG["hub_ref"],
         zero_shot=AGG["zero_shot"],
         existing=AGG["existing"],
@@ -110,9 +94,9 @@ rule agg_data:
         """
         export GITHUB_TOKEN=${{GITHUB_TOKEN:-$(gh auth token)}}
         uv run python -m bdbvhubrenewal.cli data \
-            --raw {AGG_ROOT}/data/raw --out {AGG_ROOT}/data --ref {params.ref}
+            --raw {params.root}/data/raw --out {params.root}/data --ref {params.ref}
         uv run python -m bdbvhubrenewal.cli germany-fetch \
-            --out {AGG_ROOT}/germany
+            --out {params.root}/germany
         git show {params.zero_shot} >{output.zero_shot}
         git show {params.existing} >{output.existing}
         """
@@ -129,31 +113,24 @@ rule agg_sanity:
     resources:
         mem_mb=AGG["mem_mb"],
     params:
+        # The rows' folder, as a function: it holds the outputs.
+        root=lambda wc: AGG_ROOT,
         prefix=lambda wc, resources: job_prefix(resources.mem_mb),
-        sane=f"{AGG_ROOT}/sanity/{{code}}",
+        sane=lambda wc, output: Path(output[0]).parent,
     shell:
         """
         run() {{ """
-        + HEAVY
-        + """uv run --group chronos python scripts/agg/finetuned.py "$@"; }}
-        run bdbv-fit --data {AGG_ROOT}/data --model fm_chronos_daily_ragged \
+        f"{HEAVY}"
+        """uv run --group chronos python scripts/agg/finetuned.py "$@"; }}
+        run bdbv-fit --data {params.root}/data --model fm_chronos_daily_ragged \
             --groupings joint --origins 2026-10-17 2026-11-01 \
             --out {params.sane}/fits
-        run bdbv-score --data {AGG_ROOT}/data --fits {params.sane}/fits \
+        run bdbv-score --data {params.root}/data --fits {params.sane}/fits \
             --out {params.sane}/scores.csv
         run sanity --existing {input.zero_shot} \
             --scores {params.sane}/scores.csv --out {params.sane}/compare.csv \
             --tolerance 0 >{output}
         """
-
-
-def src_tree():
-    return subprocess.run(
-        ["git", "rev-parse", "--short", "HEAD:src"],
-        capture_output=True,
-        text=True,
-        check=True,
-    ).stdout.strip()
 
 
 rule agg_fit:
@@ -168,6 +145,8 @@ rule agg_fit:
     resources:
         mem_mb=AGG["mem_mb"],
     params:
+        # The rows' folder, as a function: it holds the outputs.
+        root=lambda wc: AGG_ROOT,
         prefix=lambda wc, resources: job_prefix(resources.mem_mb),
         cache=f"{AGG_ROOT}/{{label}}",
         origins=" ".join(AGG["origins"]),
@@ -176,12 +155,12 @@ rule agg_fit:
         """
         export BDBV_CHRONOS_FT={wildcards.label}
         run() {{ """
-        + HEAVY
-        + """uv run --group chronos python scripts/agg/finetuned.py "$@"; }}
-        run bdbv-fit --data {AGG_ROOT}/data --model {wildcards.model} \
+        f"{HEAVY}"
+        """uv run --group chronos python scripts/agg/finetuned.py "$@"; }}
+        run bdbv-fit --data {params.root}/data --model {wildcards.model} \
             --checkpoint {wildcards.label} --origins {params.origins} \
             --out {params.cache}/bdbv-fits >{log} 2>&1
-        run germany-fit --data {AGG_ROOT}/germany --model {wildcards.model} \
+        run germany-fit --data {params.root}/germany --model {wildcards.model} \
             --checkpoint {wildcards.label} {params.dates} \
             --out {params.cache}/germany-samples >>{log} 2>&1
         touch {output}
@@ -201,6 +180,8 @@ rule agg_rows:
     resources:
         mem_mb=AGG["mem_mb"],
     params:
+        # The rows' folder, as a function: it holds the outputs.
+        root=lambda wc: AGG_ROOT,
         prefix=lambda wc, resources: job_prefix(resources.mem_mb),
         cache=f"{AGG_ROOT}/{{label}}",
         existing=f"{AGG_ROOT}/existing-scores.csv.gz",
@@ -208,19 +189,19 @@ rule agg_rows:
         """
         export BDBV_CHRONOS_FT={wildcards.label}
         run() {{ """
-        + HEAVY
-        + """uv run --group chronos python scripts/agg/finetuned.py "$@"; }}
+        f"{HEAVY}"
+        """uv run --group chronos python scripts/agg/finetuned.py "$@"; }}
         rm -rf {params.cache}/bdbv-paired
         """
-        + HEAVY
-        + """uv run --group chronos python scripts/agg/bdbv_paired.py \
-            --data {AGG_ROOT}/data --fits {params.cache}/bdbv-fits \
+        f"{HEAVY}"
+        """uv run --group chronos python scripts/agg/bdbv_paired.py \
+            --data {params.root}/data --fits {params.cache}/bdbv-fits \
             --out {params.cache}/bdbv-paired >{log} 2>&1
         mkdir -p {params.cache}/scores
-        run bdbv-score --data {AGG_ROOT}/data --fits {params.cache}/bdbv-fits \
+        run bdbv-score --data {params.root}/data --fits {params.cache}/bdbv-fits \
             {params.cache}/bdbv-paired --out {params.cache}/scores/bdbv.csv \
             >>{log} 2>&1
-        run germany-score --data {AGG_ROOT}/germany \
+        run germany-score --data {params.root}/germany \
             --samples {params.cache}/germany-samples \
             --out {params.cache}/scores/germany.csv >>{log} 2>&1
         run export --existing {params.existing} \
@@ -229,16 +210,6 @@ rule agg_rows:
             --germany {params.cache}/scores/germany.csv --out {output} \
             >>{log} 2>&1
         """
-
-
-def followups(wc=None):
-    labels = slots_labels()
-    out = []
-    if SLC["run"]:
-        out += expand(f"{CACHE}/slots-check/{{label}}/summary.csv", label=labels)
-    if AGG["run"]:
-        out += expand(f"{AGG_ROOT}/{{label}}/aggregation-scores.csv.gz", label=labels)
-    return out
 
 
 rule followups:
