@@ -320,42 +320,36 @@ def test_verify_alone_never_releases(tmp_path):
     assert jobs == {"verify_checkpoint": 1}
 
 
-def test_score_runs_three_units_a_checkpoint_and_the_reference(tmp_path):
+def test_score_runs_each_unit_for_a_checkpoint_and_the_reference(tmp_path):
     config = {"score": {"labels": ["slots-aaa", "bbb"]}}
     jobs = dry(tmp_path, "score", config=config)
     assert jobs["score_bdbv"] == 3
+    assert jobs["score_bdbv_zones"] == 3
     assert jobs["score_germany"] == 3
-    assert jobs["score_heldout"] == 2
+    assert jobs["score_release"] == 2
     assert jobs["score_table"] == 1
     assert "land" not in jobs
 
 
-def test_german_forecasts_are_off_by_default(tmp_path):
-    config = {"score": {"labels": ["slots-aaa", "bbb"]}}
-    jobs = dry(tmp_path, "score", config=config)
-    assert "score_germany_forecast" not in jobs
-    assert "score_germany_forecast" not in dry(
-        tmp_path, "germany_forecast", config=config
-    )
+def test_units_run_the_shared_checkpoint_evaluation(tmp_path):
+    blocks = score_jobs(tmp_path, {"score": {"labels": ["aaa"]}})
+    units = [b for b in blocks if re.match(r"(local)?rule score_\w+:", b)]
+    assert units
+    for block in units:
+        assert "scripts/checkpoint_scores.py" not in block
+    shells = "".join(units)
+    assert "-m bdbvhubrenewal.evaluation.checkpoint bdbv_zones" in shells
 
 
-def test_german_forecasts_run_the_reference_and_one_checkpoint(tmp_path):
-    forecast = {"enabled": True, "label": "slots-aaa"}
-    config = {
-        "score": {"labels": ["slots-aaa", "bbb"], "germany_forecast": forecast}
-    }
-    jobs = dry(tmp_path, "germany_forecast", config=config)
-    assert jobs["score_germany_forecast"] == 2
-    # Each after its own German nowcasts.
-    assert jobs["score_germany"] == 2
-    assert dry(tmp_path, "score", config=config)["score_germany_forecast"] == 2
-
-
-def test_german_forecasts_of_the_reference_alone(tmp_path):
-    forecast = {"enabled": True, "label": None}
-    config = {"score": {"labels": ["bbb"], "germany_forecast": forecast}}
-    jobs = dry(tmp_path, "germany_forecast", config=config)
-    assert jobs["score_germany_forecast"] == 1
+def test_zone_units_run_on_the_cpu_with_their_own_memory(tmp_path):
+    config = {"score": {"labels": ["aaa"], "zones_mem_mb": 12345}}
+    blocks = score_jobs(tmp_path, config)
+    zones = [b for b in blocks if re.match(r"rule score_bdbv_zones:", b)]
+    assert len(zones) == 2
+    for block in zones:
+        assert "DEVICE=cpu" in block
+        assert "gpu=" not in block
+        assert re.search(r"mem_mb=12345", block)
 
 
 def test_score_takes_checkpoints_from_the_release_list(tmp_path):
@@ -366,7 +360,7 @@ def test_score_takes_checkpoints_from_the_release_list(tmp_path):
         ' "publishedAt": "2026-11-16T12:00:00Z"}]'
     )
     jobs = dry(tmp_path, "score")
-    assert jobs["score_heldout"] == 1
+    assert jobs["score_release"] == 1
     assert "release_list" not in jobs
 
 
