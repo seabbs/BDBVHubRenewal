@@ -156,6 +156,7 @@ rule train_segment:
         chunk=FT["chunk"],
         eval_every=FT["eval_every"],
         by_source_every=FT["by_source_every"],
+        eval_mode=FT["eval"],
     shell:
         # The run's own state resumes it; the state kept with the prefix
         # before replaces it if missing or behind (flowlib.segments).
@@ -180,6 +181,7 @@ rule train_segment:
             --note "{params.note}" --chunk {params.chunk} \
             --eval-every {params.eval_every} \
             --by-source-every {params.by_source_every} \
+            --eval {params.eval_mode} \
             --exclude {params.run}/excluded.csv {params.bias} \
             --until {wildcards.n} >>{log} 2>&1
         # An optional notification line; it never fails the rule.

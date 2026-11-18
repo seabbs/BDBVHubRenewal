@@ -61,6 +61,10 @@ finetune:
   # multiple of it. They only score: the steps trained are the same.
   eval_every: 100
   by_source_every: 200
+  # Where the trainer's held-out evaluation runs: `local` (in the trainer,
+  # as before) or `offload` (the trainer saves adapter snapshots for
+  # scripts/finetune_evaluate.py and carries on). Training is the same.
+  eval: local
   series_bias: true
   note: continuous r5
   # The real validation blocks (scripts/finetune_real_validation.py) and
