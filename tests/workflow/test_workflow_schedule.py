@@ -151,3 +151,12 @@ def test_timers_run_with_the_installing_path(tmp_path):
     assert "Environment=PATH=/opt/uv/bin" in service
     data = plistlib.loads(schedule.launchd_plist(tmp_path, 30, "/opt/uv/bin"))
     assert data["EnvironmentVariables"]["PATH"] == "/opt/uv/bin"
+
+
+def test_a_finetune_run_lists_the_released_batches_afresh():
+    got = schedule.plan({"SCHEDULE_TARGETS": "finetune score"})
+    pool = got[0][1]
+    assert pool.count("--forcerun") == 1
+    forced = pool[pool.index("--forcerun") + 1 :]
+    assert "release_list" in forced
+    assert "released_batches" in forced

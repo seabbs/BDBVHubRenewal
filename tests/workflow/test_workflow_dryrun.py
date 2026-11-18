@@ -152,11 +152,45 @@ def test_finetune_trains_one_segment_per_prefix(tmp_path):
     assert jobs["simulate_batch"] == 65
 
 
+RELEASE = {**FT, "finetune": {**FT["finetune"], "sims_from": "release"}}
+
+
+def _released(tmp_path, seeds):
+    """The batches the sims-r<N> releases hold, as the tick lists them."""
+    where = tmp_path / "checkpoints" / "slots"
+    where.mkdir(parents=True, exist_ok=True)
+    (where / "released-batches.txt").write_text(
+        "".join(f"{s}\n" for s in seeds)
+    )
+
+
 def test_finetune_takes_batches_from_releases(tmp_path):
-    config = {**FT, "finetune": {**FT["finetune"], "sims_from": "release"}}
-    jobs = dry(tmp_path, "finetune", config=config)
+    _released(tmp_path, [*range(30100, 30140), *range(30200, 30240)])
+    jobs = dry(tmp_path, "finetune", config=RELEASE)
     assert jobs["fetch_batch"] == 65
     assert "simulate_batch" not in jobs
+
+
+def test_from_releases_only_released_batches_are_trained_on(tmp_path):
+    # The held-out round and 13 batches of round 2: 273 outbreaks, enough
+    # for n250 and its spare batch but not n500.
+    _released(tmp_path, [*range(30100, 30140), *range(30200, 30213)])
+    jobs = dry(tmp_path, "finetune", config=RELEASE)
+    assert jobs["train_segment"] == 1
+    # 12 batches hold 252 outbreaks, then one spare, then the held-out.
+    assert jobs["fetch_batch"] == 12 + 1 + 40
+
+
+def test_from_releases_nothing_trains_before_the_held_out_round_is_in(tmp_path):
+    _released(tmp_path, [*range(30100, 30139), *range(30200, 30240)])
+    jobs = dry(tmp_path, "finetune", config=RELEASE)
+    assert "train_segment" not in jobs
+
+
+def test_from_releases_the_tick_lists_them_first(tmp_path):
+    # With no list yet, the run lists the releases before planning.
+    jobs = dry(tmp_path, "finetune", config=RELEASE)
+    assert jobs["released_batches"] == 1
 
 
 def test_finetune_never_publishes(tmp_path):
