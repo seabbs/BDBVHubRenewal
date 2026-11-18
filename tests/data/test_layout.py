@@ -14,6 +14,7 @@ PKG = Path(__file__).resolve().parents[2] / "src/bdbvhubrenewal"
 GENERIC = (
     "data/dates.py",
     "data/files.py",
+    "data/hierarchy.py",
     "data/releases.py",
     "data/snapshots.py",
     "forecasters/base.py",
@@ -66,6 +67,11 @@ def test_generic_data_modules_import_no_hub_data_code() -> None:
         f"bdbvhubrenewal.{m.removesuffix('.py').replace('/', '.')}"
         for m in GENERIC
     }
-    for rel in GENERIC[:4]:
+    for rel in (m for m in GENERIC if m.startswith("data/")):
         own = {m for m in _imported(rel) if m.startswith("bdbvhubrenewal")}
         assert own <= allowed, (rel, own - allowed)
+
+
+def test_snapshots_hold_no_hub_location_codes() -> None:
+    assert not {"NATIONAL", "parent_code"} & _defs("data/snapshots.py")
+    assert "CD" not in (PKG / "data/snapshots.py").read_text()

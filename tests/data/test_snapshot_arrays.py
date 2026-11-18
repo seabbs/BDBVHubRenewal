@@ -10,11 +10,7 @@ import pandas as pd
 import pytest
 
 from bdbvhubrenewal.data.releases import release_cutoff
-from bdbvhubrenewal.data.snapshots import (
-    parent_code,
-    snapshot_arrays,
-    weekly_sums,
-)
+from bdbvhubrenewal.data.snapshots import snapshot_arrays, weekly_sums
 
 VINTAGES = ("2026-08-18", "2026-10-09", "2026-10-17", "2026-10-24")
 
@@ -72,8 +68,6 @@ def test_hierarchy_and_node_order(daily: pd.DataFrame) -> None:
     snap = snapshot_arrays(daily, "2026-10-24", ("CD-IT", "CD-IT-01"))
     assert snap.locations == ("CD", "CD-IT", "CD-IT-01")
     assert snap.parent.tolist() == [-1, 0, 1]
-    assert parent_code("CD-IT-01") == "CD-IT"
-    assert parent_code("CD") is None
 
 
 def test_releases_after_the_vintage_are_not_used(daily: pd.DataFrame) -> None:
