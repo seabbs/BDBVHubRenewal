@@ -113,3 +113,11 @@ def test_a_device_can_be_asked_for_and_the_chronos_batch_set():
 def test_torch_env_as_shell_assignments():
     got = machine.shell_env({"DEVICE": "cpu", "TORCH_THREADS": "2"})
     assert got == "DEVICE=cpu TORCH_THREADS=2"
+
+
+def test_a_value_with_a_space_stays_one_assignment():
+    import shlex
+
+    env = machine.torch_env({}, threads=2, device="cpu")
+    words = shlex.split(machine.shell_env(env))
+    assert dict(w.split("=", 1) for w in words)["XLA_FLAGS"] == env["XLA_FLAGS"]
