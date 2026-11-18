@@ -154,6 +154,8 @@ rule train_segment:
         univariate_share=FT["univariate_share"],
         note=FT["note"],
         chunk=FT["chunk"],
+        eval_every=FT["eval_every"],
+        by_source_every=FT["by_source_every"],
     shell:
         # The run's own state resumes it; the state kept with the prefix
         # before replaces it if missing or behind (flowlib.segments).
@@ -176,6 +178,8 @@ rule train_segment:
             --sources {params.sources} \
             --univariate-share {params.univariate_share} {params.real} \
             --note "{params.note}" --chunk {params.chunk} \
+            --eval-every {params.eval_every} \
+            --by-source-every {params.by_source_every} \
             --exclude {params.run}/excluded.csv {params.bias} \
             --until {wildcards.n} >>{log} 2>&1
         # An optional notification line; it never fails the rule.
