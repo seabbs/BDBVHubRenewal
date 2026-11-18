@@ -222,8 +222,12 @@ def build_model(name: str, sampler: Mapping[str, Any]) -> ForecastModel:
             os.environ[SAMPLER_ENV] = old
 
 
-def _strip(source: str) -> str:
-    """Dump Python source as its syntax tree, without docstrings."""
+def _strip(source: str, imports: bool = True) -> str:
+    """Dump Python source as its syntax tree, without docstrings.
+
+    With `imports` false, import statements are dropped too, so a module
+    keeps its dump when the modules it imports move.
+    """
     tree = ast.parse(textwrap.dedent(source))
     for node in ast.walk(tree):
         body = getattr(node, "body", None)
@@ -237,6 +241,7 @@ def _strip(source: str) -> str:
                 and isinstance(s.value, ast.Constant)
                 and isinstance(s.value.value, str)
             )
+            and (imports or not isinstance(s, (ast.Import, ast.ImportFrom)))
         ]
         node.body = kept or [ast.Pass()]  # type: ignore[attr-defined]
     return ast.dump(tree)
@@ -283,6 +288,7 @@ def _export(root: str, lock: str) -> str:
             "--no-hashes",
             "--no-header",
             "--no-emit-project",
+            "--no-emit-workspace",
         ],
         cwd=root,
         capture_output=True,
@@ -295,9 +301,12 @@ def code_digest(model: str, root: Path | str = ".") -> str:
     """Hash the code a stored fit of a model runs and its dependencies.
 
     Python files in `fit_code` are hashed as syntax trees without
-    docstrings, so comments and docstrings do not change the key; other
-    files by their bytes. `run_forecasts` and the backtest helpers it
-    calls are hashed the same way, with the Python minor version.
+    docstrings or import statements, so comments, docstrings and moved
+    imports do not change the key; other files by their name and bytes.
+    The files' hashes are combined in sorted order, not by path, so
+    moving or renaming modules keeps the key. `run_forecasts` and the
+    backtest helpers it calls are hashed the same way, with the Python
+    minor version.
     The dependencies are `uv export --no-dev --all-extras` of `uv.lock`.
 
     Parameters
@@ -318,15 +327,18 @@ def code_digest(model: str, root: Path | str = ".") -> str:
     for name in names:
         path = base / name
         files += sorted(path.rglob("*")) if path.is_dir() else [path]
-    digest = hashlib.sha256()
+    parts = []
     for path in files:
         if not path.is_file() or "__pycache__" in path.parts:
             continue
-        digest.update(path.relative_to(base).as_posix().encode())
         if path.suffix == ".py":
-            digest.update(_strip(path.read_text()).encode())
+            body = _strip(path.read_text(), imports=False).encode()
         else:
-            digest.update(path.read_bytes())
+            body = path.name.encode() + b"\0" + path.read_bytes()
+        parts.append(hashlib.sha256(body).hexdigest())
+    digest = hashlib.sha256()
+    for part in sorted(parts):
+        digest.update(part.encode())
     for func in (run_forecasts, _fit_rows):
         digest.update(_strip(inspect.getsource(func)).encode())
     digest.update(repr(sys.version_info[:2]).encode())
