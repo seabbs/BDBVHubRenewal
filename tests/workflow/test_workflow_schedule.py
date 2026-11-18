@@ -169,3 +169,13 @@ def test_a_machine_with_the_rounds_lists_no_batches():
     # --forcerun adds a rule to the run even when nothing needs it.
     got = schedule.plan({"SCHEDULE_TARGETS": "finetune"})
     assert "--forcerun" not in got[0][1]
+
+
+def test_the_paper_is_its_own_step_after_the_pool():
+    # The paper is its own Snakemake workflow, so it cannot share the
+    # pool's run; it waits for its held-out inputs without failing.
+    got = schedule.plan({"SCHEDULE_TARGETS": "paper score land"})
+    assert [t for t, _ in got] == ["score", "paper", "land"]
+    paper = got[1][1]
+    assert paper[:3] == ["nice", "-n", "19"]
+    assert paper[-2:] == ["workflow/scripts/paper_run.py", "paper"]
