@@ -330,3 +330,11 @@ def test_germany_has_a_daily_target_si_figure() -> None:
     from paperpipe.outputs import FIGURES
 
     assert "si-results-daily" in FIGURES["germany"]["si"]
+
+
+def test_wis_components_have_one_colour_each() -> None:
+    from paperfigs import style
+
+    assert tuple(style.WIS_COLOURS) == style.WIS_PARTS
+    assert len(set(style.WIS_COLOURS.values())) == 3
+    assert style.wis_colour("dispersion") == style.WIS_COLOURS["dispersion"]
