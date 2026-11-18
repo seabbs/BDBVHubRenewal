@@ -1,21 +1,23 @@
 <h1>
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/logo-dark.svg">
-    <img src="assets/logo.svg" alt="BDBVHubRenewal" width="275" height="44">
+    <img src="assets/logo.svg" alt="bdbv-hub-modelling" width="336" height="44">
   </picture>
 </h1>
 
 **Forecasts for the BDBV Modeling Hub.**
 
-[![Docs](https://img.shields.io/badge/docs-online-blue.svg)](https://samabbott.co.uk/BDBVHubRenewal/)
-[![Pages](https://github.com/seabbs/BDBVHubRenewal/actions/workflows/pages.yml/badge.svg)](https://github.com/seabbs/BDBVHubRenewal/actions/workflows/pages.yml)
+[![Docs](https://img.shields.io/badge/docs-online-blue.svg)](https://samabbott.co.uk/bdbv-hub-modelling/)
+[![Pages](https://github.com/seabbs/bdbv-hub-modelling/actions/workflows/pages.yml/badge.svg)](https://github.com/seabbs/bdbv-hub-modelling/actions/workflows/pages.yml)
 [![licence: MIT](https://img.shields.io/badge/licence-MIT-blue.svg)](LICENSE)
 [![DOI](https://zenodo.org/badge/1435982169.svg)](https://doi.org/10.5281/zenodo.23942616)
 
+**Quick links:** <a href="https://samabbott.co.uk/bdbv-hub-modelling/" title="bdbv-hub-modelling"><img src="assets/logos/bdbv-hub-modelling/logo-mark.svg" alt="bdbv-hub-modelling" width="32" height="32"></a> <a href="https://samabbott.co.uk/bdbv-hub-modelling/paper/" title="Fine-tuned foundation"><img src="assets/logos/fine-tuned-foundation/logo-mark.svg" alt="Fine-tuned foundation" width="32" height="32"></a> <a href="https://samabbott.co.uk/bdbv-hub-modelling/methods/model/" title="Joint-model-informed renewal"><img src="assets/logos/joint-model-informed-renewal/logo-mark.svg" alt="Joint-model-informed renewal" width="32" height="32"></a> <a href="https://samabbott.co.uk/bdbv-hub-modelling/submission/workflow/" title="Hub submission"><img src="assets/logos/hub-submission/logo-mark.svg" alt="Hub submission" width="32" height="32"></a>
+
 | Component | Tests | Lint | Coverage |
 | --- | --- | --- | --- |
-| Package (`src/`) | [![Tests](https://github.com/seabbs/BDBVHubRenewal/actions/workflows/test.yml/badge.svg)](https://github.com/seabbs/BDBVHubRenewal/actions/workflows/test.yml) | [![Lint](https://github.com/seabbs/BDBVHubRenewal/actions/workflows/lint.yml/badge.svg)](https://github.com/seabbs/BDBVHubRenewal/actions/workflows/lint.yml) | [![package coverage](https://codecov.io/gh/seabbs/BDBVHubRenewal/branch/main/graph/badge.svg?flag=package)](https://codecov.io/gh/seabbs/BDBVHubRenewal?flags%5B0%5D=package) |
-| Submission CI (`ci/`) | [![Submission CI tests](https://github.com/seabbs/BDBVHubRenewal/actions/workflows/submission-ci-tests.yml/badge.svg)](https://github.com/seabbs/BDBVHubRenewal/actions/workflows/submission-ci-tests.yml) | [![Lint](https://github.com/seabbs/BDBVHubRenewal/actions/workflows/lint.yml/badge.svg)](https://github.com/seabbs/BDBVHubRenewal/actions/workflows/lint.yml) | [![ci coverage](https://codecov.io/gh/seabbs/BDBVHubRenewal/branch/main/graph/badge.svg?flag=ci)](https://codecov.io/gh/seabbs/BDBVHubRenewal?flags%5B0%5D=ci) |
+| Package (`src/`) | [![Tests](https://github.com/seabbs/bdbv-hub-modelling/actions/workflows/test.yml/badge.svg)](https://github.com/seabbs/bdbv-hub-modelling/actions/workflows/test.yml) | [![Lint](https://github.com/seabbs/bdbv-hub-modelling/actions/workflows/lint.yml/badge.svg)](https://github.com/seabbs/bdbv-hub-modelling/actions/workflows/lint.yml) | [![package coverage](https://codecov.io/gh/seabbs/bdbv-hub-modelling/branch/main/graph/badge.svg?flag=package)](https://codecov.io/gh/seabbs/bdbv-hub-modelling?flags%5B0%5D=package) |
+| Submission CI (`ci/`) | [![Submission CI tests](https://github.com/seabbs/bdbv-hub-modelling/actions/workflows/submission-ci-tests.yml/badge.svg)](https://github.com/seabbs/bdbv-hub-modelling/actions/workflows/submission-ci-tests.yml) | [![Lint](https://github.com/seabbs/bdbv-hub-modelling/actions/workflows/lint.yml/badge.svg)](https://github.com/seabbs/bdbv-hub-modelling/actions/workflows/lint.yml) | [![ci coverage](https://codecov.io/gh/seabbs/bdbv-hub-modelling/branch/main/graph/badge.svg?flag=ci)](https://codecov.io/gh/seabbs/bdbv-hub-modelling?flags%5B0%5D=ci) |
 
 The [BDBV Modeling Hub](https://github.com/InsightNet-US/BDBV-Modeling-Hub) collects weekly nowcasts and short-term forecasts of confirmed Bundibugyo virus disease cases in the 2026 outbreak in the Democratic Republic of the Congo.
 Participating teams submit sample trajectories of cases by week of symptom onset, nationally, by province and by health zone.
@@ -30,27 +32,26 @@ The package, `bdbvhubrenewal`, fits the models, scores them and writes the hub s
 `seabbs-rwnowcast` is `randomwalknowcast`, baselinenowcast ([Johnson et al. 2025](https://doi.org/10.12688/wellcomeopenres.25027.2)) ported to JAX, with a random walk on top.
 It runs by province and health zone, and the national value is the sum of the provinces.
 `randomwalk` is the same walk with no nowcast.
-`pprandomwalknowcast` is a generative variant in the style of epinowcast, with the delay and the walk fitted jointly and partially pooled over places, and is not submitted.
 The renewal models are built on [PyRenew](https://github.com/CDCgov/PyRenew) and model daily symptom onsets, with a learnt onset-to-report delay and the hub's imputation of missing onsets.
 `renewal` fits the provinces together, with a pooled Rt and importation between provinces through a gravity kernel.
 `renewalsp` fits the same model to each province on its own, with no pooling or importation.
 `renewalbvd` is `renewal` with the BVDOutbreakSize Rt estimates added to the fit.
 `seabbs-renewal` submits the first model in the chain in `ci/policy.toml` that passes its checks, starting with `renewalbvd`.
-See the [documentation](https://samabbott.co.uk/BDBVHubRenewal/) for the methods and results.
+See the [documentation](https://samabbott.co.uk/bdbv-hub-modelling/) for the methods and results.
 
 ## Installation
 
 Install the package and its dependencies with [uv](https://docs.astral.sh/uv/).
 
 ```bash
-git clone https://github.com/seabbs/BDBVHubRenewal
-cd BDBVHubRenewal
+git clone https://github.com/seabbs/bdbv-hub-modelling
+cd bdbv-hub-modelling
 uv sync
 ```
 
 ## Usage
 
-The [Getting started](https://samabbott.co.uk/BDBVHubRenewal/getting-started/) page forecasts with both baselines, `randomwalknowcast` and `randomwalk`, loads the stored `renewal` fit at the same origin, and plots and scores all three in Python.
+The [Getting started](https://samabbott.co.uk/bdbv-hub-modelling/getting-started/) page forecasts with both baselines, `randomwalknowcast` and `randomwalk`, loads the stored `renewal` fit at the same origin, and plots and scores all three in Python.
 
 ## Data
 
@@ -66,12 +67,14 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 [![DOI](https://zenodo.org/badge/1435982169.svg)](https://doi.org/10.5281/zenodo.23942616)
 
-Abbott S (2026). BDBVHubRenewal: renewal-model nowcasts and forecasts for the BDBV Modeling Hub. Zenodo. <https://doi.org/10.5281/zenodo.23942616>.
+**Quick links:** <a href="https://samabbott.co.uk/bdbv-hub-modelling/" title="bdbv-hub-modelling"><img src="assets/logos/bdbv-hub-modelling/logo-mark.svg" alt="bdbv-hub-modelling" width="32" height="32"></a> <a href="https://samabbott.co.uk/bdbv-hub-modelling/paper/" title="Fine-tuned foundation"><img src="assets/logos/fine-tuned-foundation/logo-mark.svg" alt="Fine-tuned foundation" width="32" height="32"></a> <a href="https://samabbott.co.uk/bdbv-hub-modelling/methods/model/" title="Joint-model-informed renewal"><img src="assets/logos/joint-model-informed-renewal/logo-mark.svg" alt="Joint-model-informed renewal" width="32" height="32"></a> <a href="https://samabbott.co.uk/bdbv-hub-modelling/submission/workflow/" title="Hub submission"><img src="assets/logos/hub-submission/logo-mark.svg" alt="Hub submission" width="32" height="32"></a>
+
+Abbott S (2026). bdbv-hub-modelling: renewal-model nowcasts and forecasts for the BDBV Modeling Hub. Zenodo. <https://doi.org/10.5281/zenodo.23942616>.
 
 ```bibtex
 @software{abbott_bdbvhubrenewal,
   author = {Abbott, Sam},
-  title = {{BDBVHubRenewal}: renewal-model nowcasts and forecasts for the {BDBV} Modeling Hub},
+  title = {{bdbv-hub-modelling}: renewal-model nowcasts and forecasts for the {BDBV} Modeling Hub},
   year = {2026},
   publisher = {Zenodo},
   doi = {10.5281/zenodo.23942616},

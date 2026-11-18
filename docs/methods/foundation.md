@@ -8,7 +8,7 @@ The models are named `fm_chronos_<source>_<layout>`, with two sources of the hub
 None is fitted to these data: Chronos-2 forecasts in context, from its pretrained weights or a fine-tuned checkpoint.
 The two `fm_chronos_<source>_ragged_ft` models are the ragged models with Chronos-2 fine-tuned on simulated outbreaks ([Fine-tuning](#fine-tuning)).
 Each is a candidate, not submitted.
-The hub model `seabbs-chronos2_ft` is set up to submit `fm_chronos_daily_ragged_ft` and is off until it is opted in ([Opting in](../submission/opting-in.md)).
+The hub model `seabbs-nowcastfm` is set up to submit `fm_chronos_daily_ragged_ft` and is off until it is opted in ([Opting in](../submission/opting-in.md)).
 
 In brief, each model:
 
@@ -127,7 +127,7 @@ The adapter is downloaded once and checked against `sha256sums.txt` and the sett
 The fit store resolves the release once per run, with the workflow's GitHub token, and passes its hash to every fit in `BDBV_CHRONOS_FT`.
 If GitHub cannot be reached, building a model fails rather than fall back to a checkpoint downloaded before.
 A fit whose adapter cannot be downloaded is stored as failed, and the fit store keeps it until its inputs change.
-Such fits are retried by running the Fit store workflow with `retry_failed` (`gh workflow run fit-store.yml -R seabbs/BDBVHubRenewal -f retry_failed=true -f models="fm_chronos_weekly_ragged_ft fm_chronos_daily_ragged_ft"`).
+Such fits are retried by running the Fit store workflow with `retry_failed` (`gh workflow run fit-store.yml -R seabbs/bdbv-hub-modelling -f retry_failed=true -f models="fm_chronos_weekly_ragged_ft fm_chronos_daily_ragged_ft"`).
 
 ## Limitations
 

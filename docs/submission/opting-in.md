@@ -10,7 +10,7 @@ Each is opted in on its own in `config/hub.toml`.
 | --- | --- | --- | --- |
 | `seabbs-rwnowcast` | random walk on a nowcast (`randomwalknowcast`) | nothing (round skipped) | nothing more |
 | `seabbs-randomwalk` | the random walk (`randomwalk`) | nothing | nothing more |
-| `seabbs-chronos2_ft` | fine-tuned Chronos-2, the model its table in `config/hub.toml` names (`fm_chronos_daily_ragged_ft` or `fm_chronos_weekly_ragged_ft`) | nothing (round skipped) | nothing more |
+| `seabbs-nowcastfm` | fine-tuned Chronos-2, the model its table in `config/hub.toml` names (`fm_chronos_daily_ragged_ft` or `fm_chronos_weekly_ragged_ft`) | nothing (round skipped) | nothing more |
 | `seabbs-renewal` | the renewal chain | the next model in the chain in `ci/policy.toml` | `[submission] model` in `config/hub.toml` |
 
 `DRY_RUN` is the global switch.
@@ -31,14 +31,14 @@ Run it after each part, logged in to `gh` as `seabbs`.
    Fine-grained tokens cannot open pull requests on a repository the bot does not belong to.
    `workflow` is needed because each branch carries the hub's own workflow changes.
 4. Restrict the `hub-submission` environment to `main`.
-   `gh api -X PUT repos/seabbs/BDBVHubRenewal/environments/hub-submission -F 'deployment_branch_policy[protected_branches]=false' -F 'deployment_branch_policy[custom_branch_policies]=true'`
-   `gh api -X POST repos/seabbs/BDBVHubRenewal/environments/hub-submission/deployment-branch-policies -f name=main -f type=branch`
+   `gh api -X PUT repos/seabbs/bdbv-hub-modelling/environments/hub-submission -F 'deployment_branch_policy[protected_branches]=false' -F 'deployment_branch_policy[custom_branch_policies]=true'`
+   `gh api -X POST repos/seabbs/bdbv-hub-modelling/environments/hub-submission/deployment-branch-policies -f name=main -f type=branch`
 5. Store the token in that environment.
-   `gh secret set HUB_SUBMIT_TOKEN --env hub-submission -R seabbs/BDBVHubRenewal`
+   `gh secret set HUB_SUBMIT_TOKEN --env hub-submission -R seabbs/bdbv-hub-modelling`
 6. Make the default workflow token read-only.
-   `gh api -X PUT repos/seabbs/BDBVHubRenewal/actions/permissions/workflow -f default_workflow_permissions=read -F can_approve_pull_request_reviews=false`
+   `gh api -X PUT repos/seabbs/bdbv-hub-modelling/actions/permissions/workflow -f default_workflow_permissions=read -F can_approve_pull_request_reviews=false`
 7. Set the locations each file must hold.
-   `gh variable set EXPECTED_LOCATIONS -R seabbs/BDBVHubRenewal -b "CD,CD-IT,CD-NK,CD-HU,CD-TO"`
+   `gh variable set EXPECTED_LOCATIONS -R seabbs/bdbv-hub-modelling -b "CD,CD-IT,CD-NK,CD-HU,CD-TO"`
 8. Commit an edit to the `cron` lines of `.github/workflows/submit.yml` as yourself (`/commit --as-me`), so failure emails reach you.
 9. Tell Justin Lessler and Claire Smith that weekly pull requests will come from `seabbs-bot`.
    A maintainer must approve the hub's checks on the first one.
@@ -49,11 +49,11 @@ Run it after each part, logged in to `gh` as `seabbs`.
 2. Set `submit = true` for it in `config/hub.toml` and push to `main`.
    For `seabbs-renewal`, also set `[submission] model`.
 3. Dry run, and read the pull request body in the job summary.
-   `gh workflow run submit.yml -R seabbs/BDBVHubRenewal`
+   `gh workflow run submit.yml -R seabbs/bdbv-hub-modelling`
 4. Inside the window (Sunday to Tuesday, Kinshasa time), do one supervised live run.
-   `gh workflow run submit.yml -R seabbs/BDBVHubRenewal -f dry_run=false`
+   `gh workflow run submit.yml -R seabbs/bdbv-hub-modelling -f dry_run=false`
 5. Go live.
-   `gh variable set DRY_RUN -R seabbs/BDBVHubRenewal -b false`
+   `gh variable set DRY_RUN -R seabbs/bdbv-hub-modelling -b false`
 
-To pause, set `DRY_RUN` back to `true`, set `submit = false`, or run `gh workflow disable submit.yml -R seabbs/BDBVHubRenewal`.
+To pause, set `DRY_RUN` back to `true`, set `submit = false`, or run `gh workflow disable submit.yml -R seabbs/bdbv-hub-modelling`.
 Renew the token before it expires (step 5 of Once).

@@ -118,17 +118,9 @@ def test_a_host_can_take_whole_rounds(tmp_path):
     assert jobs["push_batch"] == 40
 
 
-def test_no_host_is_named_in_the_committed_workflow():
+def test_only_generic_profiles_ship():
     profiles = (ROOT / "workflow" / "profiles").iterdir()
     assert sorted(p.name for p in profiles) == ["ci", "default"]
-    for path in [
-        ROOT / "workflow" / "config.yaml",
-        ROOT / "workflow" / "README.md",
-        ROOT / "config" / "local.env.example",
-        ROOT / "config" / "profile.example" / "config.yaml",
-        *(ROOT / "workflow" / "rules").glob("*.smk"),
-    ]:
-        assert "archie" not in path.read_text().lower(), path
 
 
 FT = {

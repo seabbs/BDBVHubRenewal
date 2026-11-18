@@ -449,8 +449,8 @@ METADATA_DEFAULTS: Final[dict[str, Any]] = {
         }
     ],
     "license": "CC-BY-4.0",
-    "repo_url": "https://github.com/seabbs/BDBVHubRenewal",
-    "website_url": "https://samabbott.co.uk/BDBVHubRenewal/",
+    "repo_url": "https://github.com/seabbs/bdbv-hub-modelling",
+    "website_url": "https://samabbott.co.uk/bdbv-hub-modelling/",
     "ensemble_of_hub_models": False,
     "team_funding": FUNDING,
 }

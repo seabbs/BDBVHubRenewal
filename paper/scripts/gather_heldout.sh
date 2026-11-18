@@ -15,7 +15,7 @@ setting() { python3 "$root/workflow/flowlib/localconfig.py" "$1"; }
 SAY_PREFIX="paper: CI gather (run $run)"
 # shellcheck source=workflow/scripts/notify.sh
 source "$root/workflow/scripts/notify.sh"
-repo=seabbs/BDBVHubRenewal
+repo=seabbs/bdbv-hub-modelling
 bdbv="$root/.venv/bin/bdbvhubrenewal"
 cd "$root"
 jobs() {
@@ -42,7 +42,6 @@ if "$bdbv" score \
      "$p"-development-{randomwalk,randomwalknowcast} \
      "$p"-recovery-randomwalk "$p"-recovery-randomwalknowcast-{0,1,2} \
      "$p"-zones-{randomwalk,randomwalknowcast} \
-     "$p"-zones-pprandomwalknowcast-{0,1} \
      "$p"-scenario-{randomwalk,randomwalknowcast}-{falling,flat,rising} &&
    "$bdbv" concat-results --out results/germany \
      output/parts/parts-germany-*/germany &&

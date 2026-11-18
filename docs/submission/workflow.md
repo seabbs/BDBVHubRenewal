@@ -92,4 +92,4 @@ A round's page is frozen once its pull request merges, and later docs builds do 
 | `task ci-test` | Tests of the CI scripts. |
 | `task ci-fit` | Fits and forecasts one config as a candidate does. |
 | `task submission-preflight` | Lists what a live run still needs. |
-| `gh workflow run submit.yml -R seabbs/BDBVHubRenewal -f force=true -f ignore_window=true -f reference_date=<date>` | A dry run on a past round. |
+| `gh workflow run submit.yml -R seabbs/bdbv-hub-modelling -f force=true -f ignore_window=true -f reference_date=<date>` | A dry run on a past round. |

@@ -11,7 +11,7 @@ Fine-tuning runs locally, not on CI.
 ## Install
 
 ```sh
-uv add "bdbvhubrenewal @ git+https://github.com/seabbs/BDBVHubRenewal"
+uv add "bdbvhubrenewal @ git+https://github.com/seabbs/bdbv-hub-modelling"
 uv add chronos-forecasting==2.3.2 "peft>=0.17" "torch>=2.7"
 ```
 

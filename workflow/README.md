@@ -97,7 +97,7 @@ Outputs are in `<RUN>/train/n<N>/`.
 
 ## 4. Score (`rules/score.smk`, `rules/followups.smk`)
 
-- `release_list`: the repository's releases, the only rule that reads the network; `task score` reruns it. The checkpoints scored are the slots ones first, then the others, oldest first, from `published_from`, or `score.labels`.
+- `release_list`: the repository's releases, the only rule that reads the network; `task score` and each tick rerun it in a run of its own before scoring, as Snakemake 9 ends a run after a forced checkpoint without the jobs it unlocks. The checkpoints scored are the slots ones first, then the others, oldest first, from `published_from`, or `score.labels`.
 - `bdbv_data`: the hub's data (`bdbvhubrenewal data`), or `task data`. Newer data reruns the BDBV units, which add only the new origins.
 - `score_bdbv`, `score_zones`, `score_germany`, `score_release`: the units of `bdbvhubrenewal.evaluation.checkpoint` for each checkpoint and the references, newest checkpoint first. BDBV units run before German ones. Each caches one file per origin or date and resumes from it.
   Units run torch on the machine's device with `SCORE_THREADS` threads and the `gpu` resource. `score_zones` forecasts with the health zones in Chronos-2's block, as submitted, on the CPU with `score.zones_mem_mb`.
@@ -130,7 +130,7 @@ On a laptop that trains while another machine scores:
 uv sync --group paper                                          # once
 cp config/dashboard.example.yaml config/dashboard.local.yaml   # then edit paths
 uv run --group paper python workflow/scripts/dashboard.py --port 8765
-# open http://127.0.0.1:8765/; with the venv active, plain `python` works too
+# open the address it prints; with the venv active, plain `python` works too
 ```
 
 ## Scheduled runs
@@ -145,6 +145,8 @@ The workflow updates itself as results come in. Each machine runs its own target
 
 A tick (`task tick`, `workflow/scripts/tick.py`) runs the pool targets (`simulate`, `push`, `finetune`, `score`, `dashboard`) as one Snakemake run at nice 19 with the default profile and the machine's budget, so a free core or the GPU takes whichever queued job fits.
 When jobs compete, the trainer goes first (priority 20), then simulation (15), then checkpoint scoring (10 and below).
+Before it, the lists the pool plans from (the checkpoint releases, and on a machine without the rounds the batches it can have) are refreshed in a run of their own.
+A failed refresh leaves the last lists, and the pool still runs.
 The outward targets (`land`, `publish`, `release`) follow in their configured order.
 A failed run skips `land` and `release`, so `land` never follows a failed `score`, but `publish` still releases the checkpoints saved.
 A tick's run trains only the next segment (`next_segment_only`), so it ends after one segment and the next run plans afresh.
@@ -157,6 +159,21 @@ A tick is skipped when another tick is still running (a lock in `output/`) or wh
 On CI, the site and the paper (`.github/workflows/pages.yml`) rebuild every 6 hours (`43 */6 * * *`, after the fit store's run) and whenever `evidence/` changes on main, so new checkpoint scores reach the docs and the paper without a manual step.
 
 Nothing here needs an agent or a notes file; with `NOTIFY` set, rules still add their optional notes.
+
+## Monitor
+
+`task monitor` serves one page of what runs where: each machine's step, its running jobs (rule, wildcards, resources, start) and its recent ones.
+Each tick writes its machine's status to `<ROOT>/status/<host>.json` every `STATUS_EVERY` seconds while a step runs, and when it is skipped or ends (`workflow/flowlib/runstatus.py`, read from the run's own Snakemake log).
+With a rounds host (`REMOTE`) the file is copied to its `status/` folder, which the monitor reads, so one page shows every machine.
+A run that stops writing for two intervals, because it was killed or its machine went down, is shown as stale.
+The page is served on `MONITOR_HOST` and `MONITOR_PORT` and refreshes every `MONITOR_REFRESH` seconds, all from `config/local.env`.
+It is separate from the fine-tuning dashboard, of which several may run at once.
+Work run outside the workflow does not appear until it runs under the tick.
+
+We chose this over Panoptes.
+Snakemake 9 has no `--wms-monitor`; monitoring goes through logger plugins.
+The Panoptes logger plugin is not maintained by the Snakemake organisation, and Panoptes needs a server that every machine can reach.
+The status files need neither: the machines already reach the rounds host.
 
 ## CI
 

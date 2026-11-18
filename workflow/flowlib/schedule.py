@@ -55,11 +55,13 @@ NEEDS_POOL = {"land", "release"}
 would otherwise rerun the failed scoring or simulation it depends on.
 `publish` reads only saved checkpoints, so it always runs."""
 
-FORCERUN = {"score": ["release_list"], "finetune": ["available_batches"]}
-"""Rules a target reruns each tick: `score` lists the checkpoint releases
-afresh, `finetune` the simulation batches it can have, on a machine
-without the rounds (`SIMS_FROM` release or remote); --forcerun adds a
-rule to the run even when nothing needs it."""
+LISTINGS = {"score": "release_list", "finetune": "available_batches"}
+"""The list each target plans from, refreshed each tick: `score` the
+checkpoint releases, `finetune` the simulation batches it can have, on a
+machine without the rounds (`SIMS_FROM` release or remote). They are
+refreshed in a run of their own, the tick's first step: Snakemake 9 ends
+a run after a forced checkpoint without the jobs it unlocks. A failed
+refresh leaves the last lists, and the pool still runs."""
 
 MARK = "# bdbvhubrenewal workflow tick"
 """Ends this repository's cron line, so it can be replaced or removed."""
@@ -72,10 +74,7 @@ TICK = "workflow/scripts/tick.py"
 
 def _snakemake(cfg: Mapping[str, str], targets: list[str]) -> list[str]:
     """Return the Snakemake run of `targets` on this machine's budget."""
-    forced = [r for t in targets for r in FORCERUN.get(t, [])]
-    if cfg.get("SIMS_FROM") not in ("release", "remote"):
-        forced = [r for r in forced if r != "available_batches"]
-    extra = ["--forcerun", *forced] if forced else []
+    extra = []
     if "finetune" in targets:
         # One segment a run, so the next run plans afresh.
         extra += ["--config", "next_segment_only=True"]
@@ -99,9 +98,10 @@ def _snakemake(cfg: Mapping[str, str], targets: list[str]) -> list[str]:
 def plan(cfg: Mapping[str, str]) -> list[tuple[str, list[str], bool]]:
     """Return each step of a tick, in order.
 
-    A step is its name, its command and whether it is the pool run. The
-    pool targets are the first step, one run named by its targets;
-    each outward target is a step of its own after it.
+    A step is its name, its command and whether a failure lets the tick go
+    on (the refresh and the pool run). The listings the pool plans from
+    are refreshed first (`LISTINGS`), then the pool targets are one run
+    named by its targets, then each outward target is a step of its own.
 
     Raises
     ------
@@ -113,7 +113,15 @@ def plan(cfg: Mapping[str, str]) -> list[tuple[str, list[str], bool]]:
     if bad:
         raise ValueError(f"targets {bad} are not among {sorted(TARGETS)}")
     pool = [t for t in targets if t in POOL]
-    out = [(" ".join(pool), _snakemake(cfg, pool), True)] if pool else []
+    lists = [LISTINGS[t] for t in pool if t in LISTINGS]
+    if cfg.get("SIMS_FROM") not in ("release", "remote"):
+        lists = [r for r in lists if r != "available_batches"]
+    out = []
+    if lists:
+        cmd = [*_snakemake(cfg, lists), "--forcerun", *lists]
+        out.append(("refresh", cmd, True))
+    if pool:
+        out.append((" ".join(pool), _snakemake(cfg, pool), True))
     out += [(t, _snakemake(cfg, [t]), False) for t in targets if t not in POOL]
     return out
 
@@ -203,7 +211,7 @@ def systemd_units(
     root = Path(root)
     env = f"Environment=PATH={path}\n" if path else ""
     service = (
-        "[Unit]\nDescription=BDBVHubRenewal workflow tick\n\n"
+        "[Unit]\nDescription=bdbv-hub-modelling workflow tick\n\n"
         "[Service]\nType=oneshot\n"
         f"WorkingDirectory={root}\n{env}"
         f"ExecStart=/usr/bin/env python3 {TICK}\n"
@@ -211,7 +219,7 @@ def systemd_units(
         f"StandardError=append:{root / 'output' / 'workflow-tick.log'}\n"
     )
     timer = (
-        "[Unit]\nDescription=Run the BDBVHubRenewal workflow tick\n\n"
+        "[Unit]\nDescription=Run the bdbv-hub-modelling workflow tick\n\n"
         f"[Timer]\nOnBootSec=5min\nOnUnitActiveSec={every}min\n"
         "Persistent=true\n\n[Install]\nWantedBy=timers.target\n"
     )

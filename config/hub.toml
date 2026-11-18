@@ -30,5 +30,5 @@ submit = false
 # (the table's key: fm_chronos_daily_ragged_ft or
 # fm_chronos_weekly_ragged_ft). It has no fallback.
 [models.fm_chronos_daily_ragged_ft]
-model_abbr = "chronos2_ft"
+model_abbr = "nowcastfm"
 submit = false

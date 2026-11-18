@@ -9,6 +9,9 @@ are left out. The labels must be the ones `bdbvhubrenewal.evaluation
 `by_time` orders the same labels oldest first across both kinds, and
 `priority` gives newer checkpoints' jobs a higher priority.
 
+`by_time` orders the same labels oldest first across both kinds, and
+`priority` gives newer checkpoints' jobs a higher priority.
+
 `released_seeds`: the simulation batches a `sims-r<N>` release holds.
 """
 
