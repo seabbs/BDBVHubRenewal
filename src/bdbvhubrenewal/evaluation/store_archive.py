@@ -33,7 +33,7 @@ from bdbvhubrenewal.forecasters.base import (
     check_samples,
 )
 from bdbvhubrenewal.submission.fitting import Forecast
-from bdbvhubrenewal.submission.hub import HUB_COLUMNS
+from bdbvhubrenewal.submission.hub import HUB_COLUMNS, own_national
 
 __all__ = [
     "COLUMNS",
@@ -157,12 +157,16 @@ def store_task(
     )[0]
 
 
-def _stored_forecast(rows: pd.DataFrame, task: ForecastTask) -> Forecast:
+def _stored_forecast(
+    rows: pd.DataFrame, task: ForecastTask, own: bool = False
+) -> Forecast:
     """Return a stored fit's forecast for the round's weeks.
 
     The nowcasts of earlier report dates (`as_of`) are dropped. Stored
-    national rows are the model's own, so what they hold beyond the sum
-    of the provinces is the national part no province holds
+    national rows are the model's own. A model that submits its own
+    national draws (`own`, see `submission.hub.own_national`) keeps them
+    as samples. For any other model, what they hold beyond the sum of the
+    provinces is the national part no province holds
     (`Forecast.unassigned`), as a fit directory gives it.
     """
     if "as_of" in rows:
@@ -174,6 +178,8 @@ def _stored_forecast(rows: pd.DataFrame, task: ForecastTask) -> Forecast:
     national = rows["location"] == NATIONAL
     samples = rows.loc[~national].reset_index(drop=True)
     check_samples(samples, task)
+    if own:
+        return Forecast(rows.reset_index(drop=True))
     keys = ["target_end_date", "sample"]
     total = rows.loc[national].set_index(keys)["value"]
     summed = samples.groupby(keys)["value"].sum()
@@ -208,7 +214,8 @@ def _stored(
                 (Path(fit_dir) / name).write_bytes(base64.b64decode(body))
             table = hub(model, config=config, fit_dir=Path(fit_dir))
     else:
-        table = hub(model, forecast=_stored_forecast(fit.forecasts, task))
+        forecast = _stored_forecast(fit.forecasts, task, own_national(model))
+        table = hub(model, forecast=forecast)
     meta = fit.meta
     return table.assign(
         key=meta["key"],
