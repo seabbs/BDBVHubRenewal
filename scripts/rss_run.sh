@@ -14,18 +14,19 @@ shift 3
 mkdir -p "$out"
 n=$(awk -F, '{print NF}' <<< "$cores")
 start=$(date +%s)
-systemd-run --user --scope --quiet -p MemoryMax="$memmax" \
+unit=rss-run-$(basename "$out")-$$
+systemd-run --user --scope --quiet --unit="$unit" -p MemoryMax="$memmax" \
   -p MemorySwapMax=0 \
   env XLA_FLAGS=--xla_force_host_platform_device_count=$n \
   nice -n 19 taskset -c "$cores" "$@" > "$out/log.txt" 2>&1 &
 pid=$!
 while kill -0 "$pid" 2>/dev/null; do
-  kb=$(ps -o rss= --ppid "$pid" -p "$pid" 2>/dev/null | awk '{s+=$1} END {print s+0}')
-  for c in $(pgrep -P "$pid"); do
-    kb=$((kb + $(ps -o rss= --ppid "$c" 2>/dev/null | awk '{s+=$1} END {print s+0}')))
-  done
-  echo "$(( $(date +%s) - start )) $(awk -v k="$kb" 'BEGIN {printf "%.2f", k / 1e6}')" \
-    >> "$out/rss.log"
+  # The scope's memory: every process the command started.
+  b=$(systemctl --user show -p MemoryCurrent --value "$unit.scope" \
+    2>/dev/null || echo 0)
+  case $b in ''|*[!0-9]*) b=0 ;; esac
+  echo "$(( $(date +%s) - start )) $(awk -v b="$b" \
+    'BEGIN {printf "%.2f", b / 1e9}')" >> "$out/rss.log"
   sleep 30
 done
 if wait "$pid"; then status=done; else status="FAILED ($?)"; fi
