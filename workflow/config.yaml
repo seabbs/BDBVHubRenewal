@@ -135,20 +135,18 @@ dashboard:
   # [,role=..]). Role: baseline (scores are relative to it), start (each
   # run's curve starts from it, dashed) or other (dotted, the default).
   references:
+    # Each takes its paper model's display name and colour
+    # (paperfigs.style MODEL_LABELS, model_style).
     - key: zero
-      label: zero-shot ragged
-      colour: "#16a34a"
+      paper_model: fm_chronos_daily_ragged
       model: "^(?!randomwalknowcast$)(?!.*_complete$)"
       checkpoint: zero-shot
       role: start
     - key: complete
-      label: complete-only
-      colour: "#9333ea"
+      paper_model: fm_chronos_daily_complete
       model: "_complete$"
       checkpoint: zero-shot
     - key: rw
-      label: randomwalknowcast
-      # Its colour in the paper figures (paperfigs.style).
       paper_model: randomwalknowcast
       model: "^randomwalknowcast$"
       role: baseline

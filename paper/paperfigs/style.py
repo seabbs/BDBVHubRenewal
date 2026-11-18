@@ -19,9 +19,11 @@ import matplotlib as mpl
 
 __all__ = [
     "INK",
+    "MODEL_LABELS",
     "MODEL_ORDER",
     "bar_style",
     "line_style",
+    "model_label",
     "model_order",
     "model_style",
     "point_style",
@@ -82,6 +84,21 @@ _STYLE: Final[dict[str, tuple[str, str]]] = {
 
 MODEL_ORDER: Final = tuple(_STYLE)
 """Order models are listed in: baselines, foundation models, others."""
+
+MODEL_LABELS: Final[dict[str, str]] = {
+    "fm_chronos_daily_ragged_ft": "Fine-tuned (delays)",
+    "fm_chronos_daily_ragged": "Zero-shot (delays)",
+    "fm_chronos_daily_complete": "Zero-shot",
+    "randomwalknowcast": "Random walk nowcast",
+    "randomwalk": "Random walk",
+}
+"""Each model's display name (Sam, 18 Nov), shared by the paper, the SI,
+the dashboard and the site, so no figure shows a code id."""
+
+
+def model_label(model: str) -> str:
+    """Return a model's display name, or its id if it has none."""
+    return MODEL_LABELS.get(model, model)
 
 
 def model_order(models: Sequence[str]) -> list[str]:

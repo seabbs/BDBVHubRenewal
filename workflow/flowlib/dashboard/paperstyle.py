@@ -1,8 +1,8 @@
 """Colours from the paper figures, for the dashboard.
 
-A reference configured with `paper_model` takes that model's colour in
-the paper figures (`paperfigs.style`), so randomwalknowcast is drawn in
-the same colour on the dashboard and in the paper; the WIS bars shade
+A reference configured with `paper_model` takes that model's name and
+colour in the paper figures (`paperfigs.style`), so a model is named and
+drawn alike on the dashboard and in the paper; the WIS bars shade
 the model's colour by part as the paper's do. `paper/` is put on
 the path here, as the paper's workflow does. The nowcast panels keep the
 laptop dashboard's own drawing (ribbons, medians, truth line).
@@ -23,6 +23,11 @@ from paperfigs import plots, scores, style  # noqa: E402
 def model_colour(model: str) -> str:
     """Return a model's colour in the paper figures."""
     return style.model_style(model, [model])[0]
+
+
+def model_label(model: str) -> str:
+    """Return a model's display name in the paper (`style.MODEL_LABELS`)."""
+    return style.model_label(model)
 
 
 WIS_PARTS: tuple[str, ...] = tuple(scores.WIS_PARTS)
