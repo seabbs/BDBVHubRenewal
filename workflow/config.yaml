@@ -72,6 +72,11 @@ score:
   # every checkpoint released from `published_from` (rule release_list).
   labels: null
   published_from: "2026-11-16T09:00:00Z"
+  # Checkpoints left out: the previous run's slots arm, whose adapters
+  # main's loader no longer loads (SLOTS_ISSUE). Their cached rows stay in the
+  # tables.
+  skip: [slots-7d7c5d9f247e, slots-06dbdcc2b48d, slots-85babc01767c,
+    slots-ea31bba0123e]
   # Labels scored beside every checkpoint: randomwalknowcast and zero-shot
   # Chronos-2.
   reference: [reference]

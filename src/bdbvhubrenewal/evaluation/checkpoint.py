@@ -600,7 +600,8 @@ def bdbv_rows(
 ) -> pd.DataFrame:
     """Return the BDBV backtest's rule rows.
 
-    National and provinces from unit `bdbv`, zones from `zones`.
+    National and provinces from unit `bdbv`, zones from `zones` for the
+    labels whose zone unit has finished.
     """
     from bdbvhubrenewal.data.tidy import load_daily_zones
     from bdbvhubrenewal.evaluation import backtest as bt
@@ -621,6 +622,13 @@ def bdbv_rows(
     parts = []
     for label in labels:
         for unit in ("bdbv", "zones"):
+            if (
+                unit == "zones"
+                and not (cache / unit / f"{label}.done").exists()
+            ):
+                # A zone unit's rows count once it is finished: part of one
+                # would narrow the zone cells every label is matched on.
+                continue
             draws = _cached(cache / unit / label)
             if draws is None:
                 continue

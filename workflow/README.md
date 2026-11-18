@@ -102,6 +102,7 @@ Outputs are in `<RUN>/train/n<N>/`.
 - `score_bdbv`, `score_zones`, `score_germany`, `score_release`: the units of `bdbvhubrenewal.evaluation.checkpoint` for each checkpoint and the references, newest checkpoint first. BDBV units run before German ones. Each caches one file per origin or date and resumes from it.
   Units run torch on the machine's device with `SCORE_THREADS` threads and the `gpu` resource. `score_zones` forecasts with the health zones in Chronos-2's block, as submitted, on the CPU with `score.zones_mem_mb`.
 - `score_table`: the rows of every checkpoint in `<SCORE_CACHE>/tables/`, keeping other rules' rows of the committed tables.
+- `zones`: target, not part of `score`. It runs `score_zones` for every label, then writes the tables again with their zone rows. `score_table` takes zone rows only from finished zone units, so BDBV and German rows never wait for zones.
 - `land`: opt-in, commit the tables to `evidence/` and push, only from the evidence branch (`score.branch`), never main.
 
 After each slots checkpoint's scores:

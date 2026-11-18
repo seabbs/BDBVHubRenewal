@@ -13,7 +13,8 @@
 # this machine's device (flowlib.machine) with SCORE_THREADS threads,
 # and takes the `gpu` resource, so units on one GPU queue. Zone units
 # run on the CPU with their own memory (`score.zones_mem_mb`): their
-# Chronos-2 block is too large for an 8 GB GPU.
+# Chronos-2 block is too large for an 8 GB GPU. They are their own target,
+# `zones`, which refreshes the tables; `score` takes the zone rows cached.
 #
 # Targets: `score`, or one unit, <SCORE_CACHE>/germany/<label>.done.
 # `land` (opt-in) commits the tables to evidence/ and pushes.
@@ -43,7 +44,9 @@ def checkpoint_labels(wc=None):
     if SC["labels"] is not None:
         return list(SC["labels"])
     path = checkpoints.release_list.get().output[0]
-    return releases.labels(json.loads(Path(path).read_text()), SC["published_from"])
+    found = releases.labels(json.loads(Path(path).read_text()), SC["published_from"])
+    skip = set(SC.get("skip") or ())
+    return [lb for lb in found if lb not in skip]
 
 
 rule bdbv_data:
@@ -177,7 +180,6 @@ def table_inputs(wc):
     every = [*SC["reference"], *labels]
     return {
         "bdbv": expand(f"{CACHE}/bdbv/{{label}}.done", label=every),
-        "zones": expand(f"{CACHE}/zones/{{label}}.done", label=every),
         "germany": expand(f"{CACHE}/germany/{{label}}.done", label=every),
         "release": expand(f"{CACHE}/heldout/{{label}}.done", label=labels),
     }
@@ -202,6 +204,25 @@ rule score_table:
         {EVALUATE} table {CACHE} \
           {output.evidence} {output.checkpoints} {params.labels}
         """
+
+
+rule zones:
+    # Target: the zone units of every label, then the tables again with
+    # their rows. Not part of `score`, whose table takes the zone rows
+    # cached so far, so BDBV and German rows never wait on zones.
+    input:
+        units=lambda wc: expand(
+            f"{CACHE}/zones/{{label}}.done",
+            label=[*SC["reference"], *checkpoint_labels()],
+        ),
+        tables=rules.score_table.output,
+    output:
+        touch(f"{CACHE}/tables/zones.done"),
+    params:
+        labels=lambda wc: " ".join(checkpoint_labels()),
+    localrule: True
+    shell:
+        f"{EVALUATE} table {CACHE} {{input.tables}} {{params.labels}}"
 
 
 rule land:
