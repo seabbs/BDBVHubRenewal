@@ -336,6 +336,9 @@ The fine-tuned model is trained on simulations only, so it never sees the BDBV t
   - A comparison with custom neural networks.
   - Testing the fine-tuned model as an emulator of epinowcast.
   - Fine-tuning with other epidemiological features as covariates, such as distances between locations or mobility.
+  - Training on the count not yet reported instead of the total count.
+    The reported count would then be a lower bound by construction.
+    This needs signed remainders where counts are revised down.
   - Key references: [@Das2024a; @Woo2024; @Rasul2023; @Kamarthi2021; @Koemen2025; @respinow_hub_2025].
 - **Conclusions.**
   - Generic forecasting models can be reused, with domain knowledge added through simulated data.
