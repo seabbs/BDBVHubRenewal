@@ -82,6 +82,7 @@ docs = [
   "mkdocstrings[python]>=0.26",
 ]
 paper = [
+  "snakefmt>=0.10",
   "snakemake>=9.27,<10",
 ]
 

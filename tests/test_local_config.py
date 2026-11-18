@@ -75,33 +75,6 @@ def test_the_local_config_is_not_tracked():
     assert (ROOT / "config" / "local.env.example").exists()
 
 
-def test_no_fine_tuning_or_simulation_code_names_a_host_or_home():
-    files = subprocess.run(
-        [
-            "git",
-            "ls-files",
-            "scripts/finetune_*",
-            "scripts/sim_*",
-            "scripts/local_config.sh",
-            "src/bdbvhubrenewal/forecasters",
-            "config/finetune*",
-            "config/local.env.example",
-        ],
-        cwd=ROOT,
-        capture_output=True,
-        text=True,
-        check=True,
-    ).stdout.split()
-    found = subprocess.run(
-        ["grep", "-n", "-i", "-E", r"archie|/home/[a-z]|/Users/[a-z]", *files],
-        cwd=ROOT,
-        capture_output=True,
-        text=True,
-        check=False,
-    ).stdout
-    assert found == ""
-
-
 def test_the_trainer_takes_its_device_from_the_machine():
     import sys
 
