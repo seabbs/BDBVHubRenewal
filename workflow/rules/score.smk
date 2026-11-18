@@ -89,7 +89,7 @@ rule score_bdbv:
     resources:
         mem_mb=SC["mem_mb"],
     shell:
-        unit_shell("bdbv")
+        unit_shell("bdbv", "7day zones" if SC["zones"] else "7day")
 
 
 rule score_germany:

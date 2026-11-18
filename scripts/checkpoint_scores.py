@@ -53,7 +53,7 @@ cached per date (Germany) and origin (BDBV), so a rerun resumes.
 
 Usage:
   python scripts/checkpoint_scores.py germany CACHE LABEL [TARGETS]
-  python scripts/checkpoint_scores.py bdbv CACHE LABEL [TARGETS]
+  python scripts/checkpoint_scores.py bdbv CACHE LABEL [TARGETS] [zones]
   python scripts/checkpoint_scores.py heldout CACHE HASH
   python scripts/checkpoint_scores.py heldout_scores CACHE LABEL [r4|r5]
   python scripts/checkpoint_scores.py bdbv_zones CACHE LABEL [7day]
@@ -670,12 +670,13 @@ def daily_window(drawn: pd.DataFrame, reference: str) -> pd.DataFrame:
     return drawn.loc[(day >= first) & (day <= end)]
 
 
-def bdbv_tasks(data: Path, config: Any) -> dict[str, Any]:
+def bdbv_tasks(data: Path, config: Any, zones: bool = True) -> dict[str, Any]:
     """Return each BDBV origin's task, with the zones as in a submission.
 
     The zone tables (`load_zone_data`) put the zones in Chronos-2's block
     beside the provinces and the country, and give a province model its
-    zones from its own forecast (#299), as the hub submission does.
+    zones from its own forecast (#299), as the hub submission does. With
+    `zones` False the tasks hold provinces and the country only.
     """
     from bdbvhubrenewal.data import load_daily
     from bdbvhubrenewal.data.zones import load_zone_data
@@ -687,7 +688,7 @@ def bdbv_tasks(data: Path, config: Any) -> dict[str, Any]:
         pd.read_csv(data / "delays.csv.gz"),
         config,
         load_daily(data),
-        zones=load_zone_data(data),
+        zones=load_zone_data(data) if zones else None,
     )
 
 
@@ -699,7 +700,10 @@ def existing_rows(path: Path, columns: Sequence[str]) -> pd.DataFrame:
 
 
 def bdbv_unit(
-    cache: Path, label: str, targets: Sequence[str] = ("7day",)
+    cache: Path,
+    label: str,
+    targets: Sequence[str] = ("7day",),
+    zones: bool = True,
 ) -> None:
     """Draw 1,000 final-count samples per origin for each model.
 
@@ -723,7 +727,7 @@ def bdbv_unit(
     _pin(label)
     config = bt.load_config()
     data = Path("data")
-    tasks = bdbv_tasks(data, config)
+    tasks = bdbv_tasks(data, config, zones)
     origins = bdbv_origins()
     built = {
         t: [common(get_model(m)) for m in label_models(label, t)]
@@ -1215,8 +1219,10 @@ def main(argv: Sequence[str]) -> None:
         unknown = set(targets) - set(TARGETS)
         if unknown:
             raise SystemExit(f"unknown targets {sorted(unknown)}: {TARGETS}")
-        unit = germany_unit if study == "germany" else bdbv_unit
-        unit(cache, label, targets)
+        if study == "germany":
+            germany_unit(cache, label, targets)
+        else:
+            bdbv_unit(cache, label, targets, zones="zones" in argv[4:])
     elif study == "heldout":
         held_out_unit(cache, argv[2])
     elif study == "heldout_scores":
