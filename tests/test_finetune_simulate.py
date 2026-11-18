@@ -1163,7 +1163,7 @@ def test_stan_data_in_slabs_parse_as_cmdstanr_writes_them(tmp_path):
 data <- do.call(enw_simulate_data, inputs)$data
 variables <- model$variables()$data
 ours <- write_stan_data(data, tempfile(), variables, min_size = 50,
-  slab = 37)
+  slab = 2e4)
 theirs <- cmdstanr:::process_data(data, list(data = variables))
 a <- jsonlite::fromJSON(ours, simplifyVector = FALSE)
 b <- jsonlite::fromJSON(theirs, simplifyVector = FALSE)

@@ -939,6 +939,15 @@ read_pp_obs <- function(file) {
   )[[1]])
 }
 
+# An epinowcast module, its builder's frame emptied. A module's `inits`
+# closure keeps the frame it was built in (the reference model's full
+# design matrices among it) though it reads only its arguments.
+drop_builder_frame <- function(module) {
+  env <- environment(module$inits)
+  rm(list = ls(env, all.names = TRUE), envir = env)
+  module
+}
+
 simulate_outbreak <- function(design, v) {
   # Four weeks plus the longest delay past the last cut-off, so a block's
   # horizon (four weeks) is complete.
@@ -1073,6 +1082,7 @@ simulate_outbreak <- function(design, v) {
     },
     data = pobs
   )
+  reference <- drop_builder_frame(reference)
   rd <- reference$data
   delay <- delay_parameters(family, v, max_delay)
   stratum_sd <- list(place = v$delay_place_sd, age = v$delay_age_sd)
@@ -1178,6 +1188,7 @@ simulate_outbreak <- function(design, v) {
     non_parametric = as_formula(FALSE, report_terms),
     structural = structural, data = pobs
   )
+  report <- drop_builder_frame(report)
   rm(structural)
   if (length(report_terms)) {
     parameters$rep_beta <- array(rnorm(report$data$rep_fncol))
