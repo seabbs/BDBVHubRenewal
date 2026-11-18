@@ -90,7 +90,8 @@ The main priors are below, and the rest are on the [Renewal models](../methods/m
 ## Inference
 
 We fit each model with the No-U-Turn sampler[^nuts] in NumPyro[^numpyro], through PyRenew[^pyrenew].
-Each fit runs 2 chains of 500 warm-up and 1500 draws, keeping every other draw, with target acceptance 0.9 (0.95 for `renewalbvd`) and maximum tree depth 10 (`ci/policy.toml`).
+Each zone fit runs 2 chains of 500 warm-up and 1500 draws, keeping every other draw, with target acceptance 0.9 (0.95 for `renewalbvd`) and maximum tree depth 10 (`ci/policy.toml`).
+`renewalsp` runs 2 chains of 500 warm-up and 750 draws.
 Each chain starts from its own draw from the prior.
 The walks are sampled non-centred and anchored at their mean over the fit, which removes a ridge between a walk's level and its first steps.
 A fit runs on a 4-core CI runner in 1.4 to 3.1 hours at the origins 2026-10-17 to 2026-11-15 (#185).
@@ -117,10 +118,13 @@ The submission walks a chain of candidates, `renewalbvd`, `renewalsp`, `renewal`
 - Fits are slow.
   A zone fit takes 1.5 to 2 times as long as the province fits it replaced, and the time grows with the number of zones fitted.
 - The zone fits need two releases at most 42 days apart, because the silent zones take the random walk's introductions.
-  At the 2026-10-09 origin they could not forecast, and the submission chain falls back to `renewalsp` (#365).
+  At the 2026-10-09 origin they could not forecast, and nor could `renewalsp` or `randomwalknowcast`, which need the same pair.
+  So at such an origin the submission falls back to `randomwalk` (#365).
 - The province fits we replaced saturated the maximum tree depth in most draws, which made their convergence slow and fragile (#320).
   The zone fits do not, but `renewalsp` still does (#330).
-- In #185's backtest the zone fits beat the province fits at every level, but both did worse than `randomwalknowcast` at the national level at the two latest origins.
+- In #185's backtest, scored against each later release, the zone fits beat the province fits at every level.
+  On weeks complete at the newest release they were mixed at the province level.
+  Both did worse than `randomwalknowcast` at the national level at the two latest origins.
 - The delay is by province, so zones in the same province cannot differ in how fast they report.
 - Silent zones are forecast by the random walk's introduction layer, independent of the fit, so a new zone's cases do not come from its neighbours' transmission.
 - The tempering $\zeta$ is fixed, not learnt or tuned on scores.
