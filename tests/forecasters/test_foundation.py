@@ -405,7 +405,9 @@ class _FakePipeline:
 
     quantiles = (0.1, 0.5, 0.9)
 
-    def predict_quantiles(self, groups, prediction_length, quantile_levels):
+    def predict_quantiles(
+        self, groups, prediction_length, quantile_levels, **_kw
+    ):
         import torch
 
         out = []
@@ -838,7 +840,7 @@ def test_national_sums_provinces_not_zones(zoned: pd.DataFrame) -> None:
     assert national == _provinces(rows)["value"].sum()
 
 
-def test_zone_samples_are_the_models_own_summed_to_its_provinces(
+def test_zone_samples_come_straight_from_the_block(
     task: ForecastTask,
     zoned: pd.DataFrame,
     daily_zones: pd.DataFrame,
@@ -848,8 +850,10 @@ def test_zone_samples_are_the_models_own_summed_to_its_provinces(
     counts = weekly_zone_counts(daily_zones, task.vintage)
     own = zoned.loc[zoned["location"].map(is_zone)]
     provinces = _provinces(zoned)
-    # The model's zones sum to its provinces and keep the published counts.
-    assert not check_zone_coherence(provinces, own)
+    # The block's own zone series: nothing sums them to the provinces
+    # (the stand-in draws each series apart, so they do not sum), and
+    # each keeps its published count.
+    assert check_zone_coherence(provinces, own)
     keys = ["location", "target_end_date"]
     floor = own.merge(counts, on=keys, how="left")["total"].fillna(0).to_numpy()
     assert (own["value"].to_numpy() >= floor).all()
@@ -1154,7 +1158,9 @@ def test_native_quantiles_pass_chronos_only_its_keys(
     class Pipeline:
         quantiles = (0.1, 0.5, 0.9)
 
-        def predict_quantiles(self, inputs, prediction_length, quantile_levels):
+        def predict_quantiles(
+            self, inputs, prediction_length, quantile_levels, **_kw
+        ):
             seen.extend(inputs)
             n = len(quantile_levels)
             shape = (prediction_length, n)

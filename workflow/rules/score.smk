@@ -8,8 +8,8 @@
 # cleanly. `score_table` merges every label's rows into the evidence
 # tables in <SCORE_CACHE>/tables/. BDBV units run before German ones,
 # and within each the newest checkpoint first. A unit runs torch on
-# this machine's device (flowlib.machine) with the machine's cores as
-# its threads, and takes the `gpu` resource, so units on one GPU queue.
+# this machine's device (flowlib.machine) with SCORE_THREADS threads,
+# and takes the `gpu` resource, so units on one GPU queue.
 #
 # Targets: `score`, or one unit, <SCORE_CACHE>/germany/<label>.done.
 # `land` (opt-in) commits the tables to evidence/ and pushes.
@@ -17,32 +17,21 @@
 # German 1 to 4 week forecasts of the reference and one checkpoint, each
 # after its German nowcasts; with it on, `score` takes them too.
 
-import json
-
-from flowlib import releases
-
-SC = config["score"]
-CACHE = LOCAL["SCORE_CACHE"]
-
 
 checkpoint release_list:
     # Lists the releases to score; `task score` reruns it.
     output:
         f"{CACHE}/releases.json",
+    log:
+        f"{CACHE}/log/release-list.log",
+    localrule: True
+    conda:
+        TOOLS_ENV
     params:
         repo=SIM["repo"],
-    localrule: True
     shell:
         "gh release list -R {params.repo} --limit 500 "
-        "--json tagName,publishedAt > {output}"
-
-
-def checkpoint_labels(wc=None):
-    """The checkpoints to score."""
-    if SC["labels"] is not None:
-        return list(SC["labels"])
-    path = checkpoints.release_list.get().output[0]
-    return releases.labels(json.loads(Path(path).read_text()), SC["published_from"])
+        "--json tagName,publishedAt > {output} 2>{log}"
 
 
 rule bdbv_data:
@@ -50,45 +39,13 @@ rule bdbv_data:
     # the BDBV units rerun, and they add only the new origins.
     output:
         SC["data"],
+    log:
+        f"{CACHE}/log/bdbv-data.log",
     localrule: True
+    conda:
+        TOOLS_ENV
     shell:
-        "uv run bdbvhubrenewal data"
-
-
-ROOM = (
-    f"workflow/scripts/wait_for_room.sh {LOCAL['MIN_FREE_GB']} "
-    f"{LOCAL['MIN_DISK_GB']} {CACHE} && "
-)
-
-
-UNIT_THREADS = machine.budget(LOCAL)["cores"]
-
-
-def score_order():
-    """The checkpoint labels, oldest published first."""
-    if SC["labels"] is not None:
-        return list(SC["labels"])
-    path = checkpoints.release_list.get().output[0]
-    return releases.by_time(json.loads(Path(path).read_text()), SC["published_from"])
-
-
-def unit_priority(base):
-    """A unit's priority: `base`, newer checkpoints a fraction higher."""
-    return lambda wc: releases.priority(score_order(), wc.label, base)
-
-
-def unit_env(wc, threads):
-    """The unit's torch device, threads and Chronos-2 batch."""
-    return machine.shell_env(machine.torch_env(LOCAL, threads))
-
-
-def unit_shell(study):
-    return (
-        "mkdir -p " + CACHE + " && " + ROOM + "{params.prefix} nice -n 19 "
-        "env {params.env} uv run --group chronos python "
-        f"scripts/checkpoint_scores.py {study} {CACHE} {{wildcards.label}} "
-        "> {log} 2>&1 && touch {output}"
-    )
+        "uv run bdbvhubrenewal data > {log} 2>&1"
 
 
 rule score_bdbv:
@@ -98,14 +55,16 @@ rule score_bdbv:
         f"{CACHE}/bdbv/{{label}}.done",
     log:
         f"{CACHE}/log/bdbv-{{label}}.log",
-    params:
-        prefix=lambda wc, resources: job_prefix(resources.mem_mb),
-        env=unit_env,
     priority: unit_priority(10)
+    conda:
+        TOOLS_ENV
     threads: UNIT_THREADS
     resources:
         mem_mb=SC["mem_mb"],
         gpu=1,
+    params:
+        prefix=lambda wc, resources: job_prefix(resources.mem_mb),
+        env=unit_env,
     shell:
         unit_shell("bdbv")
 
@@ -115,14 +74,16 @@ rule score_germany:
         f"{CACHE}/germany/{{label}}.done",
     log:
         f"{CACHE}/log/germany-{{label}}.log",
-    params:
-        prefix=lambda wc, resources: job_prefix(resources.mem_mb),
-        env=unit_env,
     priority: unit_priority(5)
+    conda:
+        TOOLS_ENV
     threads: UNIT_THREADS
     resources:
         mem_mb=SC["mem_mb"],
         gpu=1,
+    params:
+        prefix=lambda wc, resources: job_prefix(resources.mem_mb),
+        env=unit_env,
     shell:
         unit_shell("germany")
 
@@ -133,6 +94,8 @@ rule score_heldout:
     log:
         f"{CACHE}/log/heldout-{{label}}.log",
     localrule: True
+    conda:
+        TOOLS_ENV
     shell:
         f"uv run python scripts/checkpoint_scores.py heldout {CACHE} "
         "{wildcards.label} > {log} 2>&1 && touch {output}"
@@ -146,36 +109,18 @@ rule score_germany_forecast:
         f"{CACHE}/germany_forecast/{{label}}.done",
     log:
         f"{CACHE}/log/germany_forecast-{{label}}.log",
-    params:
-        prefix=lambda wc, resources: job_prefix(resources.mem_mb),
-        env=unit_env,
     priority: unit_priority(1)
+    conda:
+        TOOLS_ENV
     threads: UNIT_THREADS
     resources:
         mem_mb=SC["mem_mb"],
         gpu=1,
+    params:
+        prefix=lambda wc, resources: job_prefix(resources.mem_mb),
+        env=unit_env,
     shell:
         unit_shell("germany_forecast")
-
-
-def forecast_inputs(wc=None):
-    """The German forecast units, none unless switched on."""
-    fc = SC.get("germany_forecast") or {}
-    if not fc.get("enabled"):
-        return []
-    labels = [*SC["reference"], *([fc["label"]] if fc.get("label") else [])]
-    return expand(f"{CACHE}/germany_forecast/{{label}}.done", label=labels)
-
-
-def table_inputs(wc):
-    labels = checkpoint_labels()
-    every = [*SC["reference"], *labels]
-    return {
-        "bdbv": expand(f"{CACHE}/bdbv/{{label}}.done", label=every),
-        "germany": expand(f"{CACHE}/germany/{{label}}.done", label=every),
-        "heldout": expand(f"{CACHE}/heldout/{{label}}.done", label=labels),
-        "forecast": forecast_inputs(),
-    }
 
 
 rule score_table:
@@ -184,18 +129,24 @@ rule score_table:
     output:
         evidence=f"{CACHE}/tables/checkpoint-scores.csv",
         checkpoints=f"{CACHE}/tables/checkpoints.csv",
+    log:
+        f"{CACHE}/log/score-table.log",
+    localrule: True
+    conda:
+        TOOLS_ENV
     params:
         labels=lambda wc: " ".join(checkpoint_labels()),
         evidence=SC["evidence"],
         checkpoints=SC["checkpoints"],
-    localrule: True
+        cache=lambda wc: CACHE,
     shell:
         # Rows of other rules in the committed tables are kept.
         """
+        exec >{log} 2>&1
         [ -f {params.evidence} ] && cp {params.evidence} {output.evidence}
         [ -f {params.checkpoints} ] && cp {params.checkpoints} {output.checkpoints}
-        uv run python scripts/checkpoint_scores.py table {CACHE} \
-          {output.evidence} {output.checkpoints} {params.labels}
+        uv run python scripts/checkpoint_scores.py table {params.cache} \
+            {output.evidence} {output.checkpoints} {params.labels}
         """
 
 
@@ -206,33 +157,15 @@ rule land:
         rules.score_table.output,
     output:
         touch(f"{CACHE}/tables/landed"),
+    log:
+        f"{CACHE}/log/land.log",
+    localrule: True
     params:
         evidence=SC["evidence"],
         checkpoints=SC["checkpoints"],
         branch=SC["branch"],
-    localrule: True
     run:
-        import shutil
-
-        def git(*args):
-            return subprocess.run(
-                ["git", *args], check=True, capture_output=True, text=True
-            ).stdout.strip()
-
-        notify.check_branch(
-            git("rev-parse", "--abbrev-ref", "HEAD"), params.branch
-        )
-        shutil.copy(input[0], params.evidence)
-        shutil.copy(input[1], params.checkpoints)
-        git("add", params.evidence, params.checkpoints)
-        if git("diff", "--cached", "--name-only"):
-            git("commit", "-q", "-m", "evidence: checkpoint scores")
-        git("push", "-q", "origin", params.branch)
-        git("fetch", "-q", "origin", params.branch)
-        head = git("rev-parse", "HEAD")
-        if head != git("rev-parse", f"origin/{params.branch}"):
-            raise SystemExit(f"{head} is not on origin/{params.branch}")
-        say(f"checkpoint scores landed at {head[:9]} on origin/{params.branch}")
+        land_tables(input, output, params, wildcards)
 
 
 rule germany_forecast:

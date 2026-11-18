@@ -36,11 +36,11 @@ from __future__ import annotations
 import argparse
 import ast
 import base64
+import dataclasses
 import datetime as dt
 import functools
 import gzip
 import hashlib
-import inspect
 import io
 import json
 import os
@@ -62,7 +62,6 @@ from bdbvhubrenewal.data.tidy import write_csv
 from bdbvhubrenewal.data.zones import ZoneData, load_zone_data
 from bdbvhubrenewal.evaluation.backtest import (
     BacktestConfig,
-    _fit_rows,
     load_config,
     merge_by_model,
     real_vintages,
@@ -77,16 +76,17 @@ from bdbvhubrenewal.forecasters import (
 )
 
 __all__ = [
+    "FIT_FUNCTIONS",
+    "KEY_SKIP",
     "STATUS_FILE",
     "STORE_DATA",
-    "STORE_ENTRIES",
-    "STORE_SKIP",
     "UNPACKED_FILE",
     "StoreStatus",
     "StoredFit",
     "build_model",
     "code_digest",
     "command",
+    "compact_forecasts",
     "current_keys",
     "failed",
     "fit",
@@ -98,33 +98,39 @@ __all__ = [
     "plan",
     "read_fit",
     "samplers",
+    "stack_forecasts",
     "store_path",
     "stored_models",
     "unpack",
     "write_fit",
 ]
 
-STORE_ENTRIES: Final = (
-    "src/bdbvhubrenewal/evaluation/backtest.py",
-    "src/bdbvhubrenewal/evaluation/store.py",
-)
-"""The shared modules a stored fit calls: `fit` and `run_forecasts`."""
+FIT_FUNCTIONS: Final = {
+    "src/bdbvhubrenewal/evaluation/store.py": (
+        "build_model",
+        "fit",
+        "fit_files",
+    ),
+    "src/bdbvhubrenewal/evaluation/backtest.py": ("_fit_rows", "run_forecasts"),
+}
+"""The functions of the store and the backtest a stored fit runs.
 
-STORE_SKIP: Final = (
-    "src/bdbvhubrenewal/evaluation/digest.py",
-    "src/bdbvhubrenewal/evaluation/zones.py",
-    "src/bdbvhubrenewal/forecasters/zones.py",
-    "src/bdbvhubrenewal/reporting/plots.py",
-)
-"""Modules `STORE_ENTRIES` import but a fit does not call.
-
-The zone module, for models that do not call it: a province-level
-model splits its zones in its own forecast (`forecasters.zones.with_zones`)
-and a model that forecasts the zones itself reconciles them, so each
-imports the module and it is in that model's code. `fit_code`'s own helper
-(`evaluation.digest`), and the plots `evaluation.ppc` imports for
-`plot_ppc`, which a fit does not draw.
+Only these are in a fit's key, by their source. The rest of those
+modules, and everything only they import, is loader and IO code: changing
+it never refits.
 """
+
+KEY_SKIP: Final = (
+    "src/bdbvhubrenewal/evaluation/backtest.py",
+    "src/bdbvhubrenewal/evaluation/digest.py",
+    "src/bdbvhubrenewal/evaluation/store.py",
+    "src/bdbvhubrenewal/reporting/plots.py",
+    "src/bdbvhubrenewal/reporting/site.py",
+)
+"""Loader, IO and report modules a model's code imports but a fit does not
+run, left out of its key with what only they import (unless the model's
+own module imports them). The store's and backtest's functions a fit runs
+are keyed by source instead (`FIT_FUNCTIONS`)."""
 
 STORE_DATA: Final = "src/bdbvhubrenewal/data/*.csv"
 """The package's data files, which a fit may read (the province centres
@@ -247,13 +253,31 @@ def _strip(source: str, imports: bool = True) -> str:
     return ast.dump(tree)
 
 
+def _fit_functions(root: Path) -> list[str]:
+    """Dump each function in `FIT_FUNCTIONS` from `root`'s source."""
+    out = []
+    for rel, names in FIT_FUNCTIONS.items():
+        tree = ast.parse((root / rel).read_text())
+        defs = {
+            n.name: n
+            for n in tree.body
+            if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+        }
+        missing = sorted(set(names) - set(defs))
+        if missing:
+            raise ValueError(f"{rel} has no {missing}")
+        out += [_strip(ast.unparse(defs[name])) for name in names]
+    return out
+
+
 def fit_code(model: str, root: Path | str = ".") -> list[str]:
     """List the source files a stored fit of one model can run.
 
-    The import closure of the model's module and `STORE_ENTRIES`
-    (`evaluation.digest.model_code`), without the other models' modules
-    and the modules a fit does not call (`STORE_SKIP`) unless the model's
-    own module imports them, and the package's data files (`STORE_DATA`).
+    The import closure of the model's module, with any other model's
+    module it builds on (`evaluation.digest.model_code`), and the
+    package's data files (`STORE_DATA`), without the loader, IO and report
+    modules in `KEY_SKIP`. The store's and the backtest's own code is
+    keyed by function (`FIT_FUNCTIONS`), not by file.
 
     Parameters
     ----------
@@ -269,7 +293,7 @@ def fit_code(model: str, root: Path | str = ".") -> list[str]:
     """
     from bdbvhubrenewal.evaluation.digest import model_code
 
-    code = model_code(model, root, STORE_ENTRIES, cli=False, skip=STORE_SKIP)
+    code = model_code(model, root, (), cli=False, skip=KEY_SKIP)
     data = [p.relative_to(root).as_posix() for p in Path(root).glob(STORE_DATA)]
     return sorted([*code, *data])
 
@@ -304,9 +328,9 @@ def code_digest(model: str, root: Path | str = ".") -> str:
     docstrings or import statements, so comments, docstrings and moved
     imports do not change the key; other files by their name and bytes.
     The files' hashes are combined in sorted order, not by path, so
-    moving or renaming modules keeps the key. `run_forecasts` and the
-    backtest helpers it calls are hashed the same way, with the Python
-    minor version.
+    moving or renaming modules keeps the key. The functions of the store
+    and the backtest a fit runs (`FIT_FUNCTIONS`) are hashed the same
+    way, read from `root`, with the Python minor version.
     The dependencies are `uv export --no-dev --all-extras` of `uv.lock`.
 
     Parameters
@@ -339,8 +363,8 @@ def code_digest(model: str, root: Path | str = ".") -> str:
     digest = hashlib.sha256()
     for part in sorted(parts):
         digest.update(part.encode())
-    for func in (run_forecasts, _fit_rows):
-        digest.update(_strip(inspect.getsource(func)).encode())
+    for part in _fit_functions(base):
+        digest.update(part.encode())
     digest.update(repr(sys.version_info[:2]).encode())
     lock = hashlib.sha256()
     for name in ("pyproject.toml", "uv.lock"):
@@ -928,12 +952,19 @@ def load(
     out.mkdir(parents=True, exist_ok=True)
     status: list[StoreStatus] = []
     loaded: list[StoredFit] = []
+    forecasts: list[pd.DataFrame] = []
+    low = -(10**6) if min_horizon is None else min_horizon
+    high = 10**6 if max_horizon is None else max_horizon
     for (model, origin), key in sorted(keys.items(), key=lambda x: x[0][1])[
         ::-1
     ]:
         chosen, failed = _choose(Path(store), model, origin, key)
         if chosen is not None:
-            loaded.append(chosen)
+            # Each fit's forecasts are cut to the backtest's weeks and
+            # compacted as read (`compact_forecasts`), so the store's
+            # samples never sit in memory as text at once.
+            forecasts.append(compact_forecasts(chosen.forecasts, low, high))
+            loaded.append(dataclasses.replace(chosen, forecasts=pd.DataFrame()))
         status.append(
             StoreStatus(
                 model,
@@ -945,15 +976,8 @@ def load(
                 failed,
             )
         )
-    forecasts = [f.forecasts for f in loaded]
-    low = -(10**6) if min_horizon is None else min_horizon
-    high = 10**6 if max_horizon is None else max_horizon
-    forecasts = [
-        f.loc[f["horizon"].between(low, high)] if "horizon" in f else f
-        for f in forecasts
-    ]
     for name, frames in (
-        ("forecasts.csv.gz", forecasts),
+        ("forecasts.csv.gz", [stack_forecasts(forecasts)]),
         ("backtest-fits.csv", [f.fits for f in loaded]),
         (DELAY_SUMMARY_FILE, [f.delays for f in loaded]),
     ):
@@ -962,6 +986,52 @@ def load(
         json.dumps([vars(s) for s in status], indent=1) + "\n"
     )
     return status
+
+
+TEXT_COLUMNS: Final = (
+    "model",
+    "kind",
+    "vintage",
+    "reference_date",
+    "location",
+    "target_end_date",
+)
+"""Stored forecasts' text columns, held as categories when loading."""
+
+
+def compact_forecasts(
+    frame: pd.DataFrame, low: int = -(10**6), high: int = 10**6
+) -> pd.DataFrame:
+    """Return a fit's forecasts at weeks `low` to `high`, text as categories.
+
+    A stored fit with the zones holds about 600,000 sample rows. As text
+    they take about 250 MB, and the store's fits together more than a CI
+    runner's memory.
+    """
+    if "horizon" in frame:
+        frame = frame.loc[frame["horizon"].between(low, high)]
+    cols = [c for c in TEXT_COLUMNS if c in frame]
+    return frame.astype(dict.fromkeys(cols, "category")).reset_index(drop=True)
+
+
+def stack_forecasts(frames: Sequence[pd.DataFrame]) -> pd.DataFrame:
+    """Concatenate forecasts, text columns as categories shared by all.
+
+    `pd.concat` turns categories that differ between frames back into
+    text, so each text column is first given every frame's categories.
+    The values equal `pd.concat` of the frames.
+    """
+    frames = [compact_forecasts(f) for f in frames if not f.empty]
+    if not frames:
+        return pd.DataFrame()
+    shared = {}
+    for col in TEXT_COLUMNS:
+        if all(col in f for f in frames):
+            seen = {c for f in frames for c in f[col].cat.categories}
+            cats = sorted(seen, key=str)
+            shared[col] = pd.CategoricalDtype(cats)
+    frames = [f.astype(shared) for f in frames]
+    return pd.concat(frames, ignore_index=True)
 
 
 def _merge(path: Path, frames: Iterable[pd.DataFrame]) -> None:

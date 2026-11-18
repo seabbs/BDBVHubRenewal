@@ -21,50 +21,56 @@ exclude_docs: |
 
 nav:
   - Home: index.md
-  - Setup: setup.md
-  - Getting started: getting-started.ipynb
-  - Methods:
-      - Data: methods/data.md
-      - Baseline models: methods/baselines.md
-      - Renewal models: methods/model.md
+  - Fine-tuned foundation:
+      - foundation/index.md
+      - Paper: paper.md
       - Foundation models: methods/foundation.md
       - Using the fine-tuned Chronos-2: methods/finetuned-chronos.md
-      - Evaluation: methods/evaluation.md
-      - Implementation: methods/implementation.md
-  - Results:
-      - Data: data.md
+      - Baseline models: methods/baselines.md
+      - German nowcast benchmark: germany.md
+  - Joint-model-informed renewal:
+      - renewal/index.md
+      - Renewal models: methods/model.md
+      - Model building: model-development/model-building.md
+      - Development log: model-development/log.md
+      - Score history: model-development/score-history.md
+  - Hub submission:
+      - hub/index.md
       - Nowcast: nowcast.md
       - Backtest: backtest.md
-      - Pairing sensitivity: pairing.md
       - Comparison with hub forecasts: comparison.md
-      - German nowcast benchmark: germany.md
-  - Paper: paper.md
-  - Submission:
-      - Submission log: submission/rounds/index.md
-      - Opting in: submission/opting-in.md
-      - Workflow: submission/workflow.md
-      - Hub specification: submission/hub-spec.md
-  - Development:
-      - Contributing: development/contributing.md
-      - Adding a model: development/adding-a-model.md
-      - CLI: development/cli.md
-      - Model development:
-          - Model building: model-development/model-building.md
-          - Development log: model-development/log.md
-          - Score history: model-development/score-history.md
+      - Data:
+          - Hub data: data.md
+          - Data methods: methods/data.md
+      - Methods:
+          - Evaluation: methods/evaluation.md
+          - Pairing sensitivity: pairing.md
+      - Submission:
+          - Workflow: submission/workflow.md
+          - Hub specification: submission/hub-spec.md
+          - Opting in: submission/opting-in.md
+          - Submission log: submission/rounds/index.md
+  - Packages:
+      - Setup: setup.md
+      - Getting started: getting-started.ipynb
+      - Implementation: methods/implementation.md
+      - Development:
+          - Contributing: development/contributing.md
+          - Adding a model: development/adding-a-model.md
+          - CLI: development/cli.md
+      - API reference:
+          - reference/index.md
+          - Data: reference/data.md
+          - Models:
+              - Forecasters: reference/forecasters.md
+              - Renewal model: reference/model.md
+              - Baselinenowcast: reference/baselinenowcast.md
+          - Evaluation: reference/evaluation.md
+          - Reporting:
+              - Figures and tables: reference/reporting.md
+              - Submission: reference/submission.md
+          - CLI: reference/cli.md
       - Citation and licence: citation.md
-  - API reference:
-      - reference/index.md
-      - Data: reference/data.md
-      - Models:
-          - Forecasters: reference/forecasters.md
-          - Renewal model: reference/model.md
-          - Baselinenowcast: reference/baselinenowcast.md
-      - Evaluation: reference/evaluation.md
-      - Reporting:
-          - Figures and tables: reference/reporting.md
-          - Submission: reference/submission.md
-      - CLI: reference/cli.md
 
 theme:
   name: material
@@ -77,6 +83,8 @@ theme:
   features:
     - navigation.tabs
     - navigation.sections
+    - navigation.indexes
+    - navigation.path
     - navigation.top
     - navigation.footer
     - search.suggest

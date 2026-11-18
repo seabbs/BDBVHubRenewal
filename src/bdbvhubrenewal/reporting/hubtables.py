@@ -23,8 +23,12 @@ from bdbvhubrenewal.data.tidy import write_csv
 from bdbvhubrenewal.data.zones import is_zone, weekly_zone_counts
 from bdbvhubrenewal.forecasters import ForecastTask
 from bdbvhubrenewal.forecasters.base import NATIONAL, SAMPLE_COLUMNS
-from bdbvhubrenewal.forecasters.zones import walks_own_zones, zones_for_model
-from bdbvhubrenewal.submission.hub import own_national, to_hub_table
+from bdbvhubrenewal.forecasters.zones import zones_for_model
+from bdbvhubrenewal.submission.hub import (
+    own_national,
+    to_hub_table,
+    zones_need_not_sum,
+)
 
 __all__ = [
     "HUB_QUANTILE_LEVELS",
@@ -131,7 +135,7 @@ def hub_tables(
             unassigned=None if mine else _unassigned(own),
             zones=split,
             forecast_date=task.vintage,
-            zones_sum=not walks_own_zones(str(name)),
+            zones_sum=not zones_need_not_sum(str(name)),
             national="own" if mine else "sum",
         )
     return out

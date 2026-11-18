@@ -132,10 +132,27 @@ def test_code_digest_follows_each_models_own_code(tmp_path: Path) -> None:
     # The CLI is not fit code.
     edit(f"{src}/cli.py")
     assert digests() == before
-    # The store's own code refits every model.
+    # The store's loader and IO code do not key a fit: editing them never
+    # refits.
     edit(f"{src}/evaluation/store.py")
-    after = digests()
-    assert all(after[m] != before[m] for m in models)
+    edit(f"{src}/evaluation/backtest.py")
+    assert digests() == before
+    # The functions a fit runs do, for every model.
+    for rel, func in (
+        ("evaluation/store.py", "def fit("),
+        ("evaluation/backtest.py", "def run_forecasts("),
+    ):
+        path = root / src / rel
+        text = path.read_text()
+        head, body = text.split(func, 1)
+        sig, rest = body.split('"""', 1)
+        doc, rest = rest.split('"""', 1)
+        path.write_text(
+            head + func + sig + '"""' + doc + '"""\n    _EDITED = 1' + rest
+        )
+        after = digests()
+        assert all(after[m] != before[m] for m in models), rel
+        before = after
 
 
 def test_the_zone_split_keys_the_province_models_fits(tmp_path: Path) -> None:
@@ -158,8 +175,9 @@ def test_the_zone_split_keys_the_province_models_fits(tmp_path: Path) -> None:
     edit("forecasters/zones.py")
     split = digests()
     assert all(split[m] != before[m] for m in models)
-    # A model that forecasts the zones itself reconciles them in its fit.
-    assert store.code_digest("fm_chronos_weekly_ragged", root) != own
+    # Chronos-2 takes its zones straight from its block, so the split is
+    # not its fit code.
+    assert store.code_digest("fm_chronos_weekly_ragged", root) == own
     before = split
     # Introductions are drawn in the fit, for provinces with no recent case.
     edit("forecasters/introductions.py")
@@ -167,13 +185,42 @@ def test_the_zone_split_keys_the_province_models_fits(tmp_path: Path) -> None:
     assert all(after[m] != before[m] for m in models)
 
 
-def test_fit_code_has_the_store_and_no_other_model() -> None:
+def test_fit_code_is_the_models_code_not_the_store() -> None:
     renewal = set(store.fit_code("renewal", ROOT))
-    assert "src/bdbvhubrenewal/evaluation/store.py" in renewal
     assert "src/bdbvhubrenewal/model/observation.py" in renewal
     walk = set(store.fit_code("randomwalknowcast", ROOT))
     assert "src/bdbvhubrenewal/forecasters/renewal.py" not in walk
-    assert "src/bdbvhubrenewal/evaluation/store.py" in walk
+    # The store and the backtest module are loader and IO code; the
+    # functions of theirs a fit runs are keyed by source (`FIT_FUNCTIONS`).
+    for files in (renewal, walk):
+        assert "src/bdbvhubrenewal/evaluation/store.py" not in files
+        assert "src/bdbvhubrenewal/evaluation/backtest.py" not in files
+
+
+def test_stacked_forecasts_keep_their_values_in_less_memory() -> None:
+    rng = np.random.default_rng(0)
+    frames = [
+        pd.DataFrame(
+            {
+                "model": m,
+                "location": rng.choice(["CD", "CD-IT", "CD-IT-10"], 500),
+                "target_end_date": rng.choice(
+                    ["2026-11-07", "2026-11-14"], 500
+                ),
+                "sample": np.arange(500),
+                "value": rng.poisson(5, 500).astype(float),
+            }
+        )
+        for m in ("renewal", "randomwalk")
+    ]
+    got = store.stack_forecasts(frames)
+    want = pd.concat(frames, ignore_index=True)
+    for col in ("model", "location", "target_end_date"):
+        assert isinstance(got[col].dtype, pd.CategoricalDtype), col
+    pd.testing.assert_frame_equal(got.astype(want.dtypes.to_dict()), want)
+    assert (
+        got.memory_usage(deep=True).sum() < want.memory_usage(deep=True).sum()
+    )
 
 
 def test_fit_time_data_files_key_a_fit(tmp_path: Path) -> None:
@@ -186,8 +233,7 @@ def test_fit_time_data_files_key_a_fit(tmp_path: Path) -> None:
 
 
 def test_report_code_does_not_key_a_fit(tmp_path: Path) -> None:
-    # `fit_code` runs `digest.model_code`, so a change to its import
-    # closure can move a key. Its own source is not hashed (`STORE_SKIP`).
+    # Report code is not in any model's import closure.
     root = _copy_repo(tmp_path)
     models = ("renewal",)
 
@@ -214,28 +260,19 @@ def _workflow_paths(event: str) -> list[str]:
 def _key_files(monkeypatch: pytest.MonkeyPatch) -> set[str]:
     """List the repository files a fit key depends on."""
     import inspect
-    from collections.abc import Callable
 
     from bdbvhubrenewal import cli
     from bdbvhubrenewal.evaluation import digest
 
     read: set[Path] = set()
     open_ = Path.open
-    getsource = inspect.getsource
 
     def record_open(self: Path, *args: object, **kwargs: object) -> object:
         read.add(self.resolve())
         return open_(self, *args, **kwargs)
 
-    def record_source(obj: Callable[..., object]) -> str:
-        src = inspect.getsourcefile(obj)
-        assert src is not None
-        read.add(Path(src).resolve())
-        return getsource(obj)
-
     with monkeypatch.context() as mp:
         mp.setattr(Path, "open", record_open)
-        mp.setattr(store.inspect, "getsource", record_source)
         for model in store.stored_models():
             store.code_digest(model, ROOT)
     # The key hashes the Python version. `fit-store plan` reads the config
