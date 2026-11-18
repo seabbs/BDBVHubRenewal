@@ -156,10 +156,10 @@ RELEASE = {**FT, "finetune": {**FT["finetune"], "sims_from": "release"}}
 
 
 def _released(tmp_path, seeds):
-    """The batches the sims-r<N> releases hold, as the tick lists them."""
+    """The batches the run can have, as the tick lists them."""
     where = tmp_path / "checkpoints" / "slots"
     where.mkdir(parents=True, exist_ok=True)
-    (where / "released-batches.txt").write_text(
+    (where / "available-batches.txt").write_text(
         "".join(f"{s}\n" for s in seeds)
     )
 
@@ -190,7 +190,25 @@ def test_from_releases_nothing_trains_before_the_held_out_round_is_in(tmp_path):
 def test_from_releases_the_tick_lists_them_first(tmp_path):
     # With no list yet, the run lists the releases before planning.
     jobs = dry(tmp_path, "finetune", config=RELEASE)
-    assert jobs["released_batches"] == 1
+    assert jobs["available_batches"] == 1
+
+
+REMOTE = {**FT, "finetune": {**FT["finetune"], "sims_from": "remote"}}
+
+
+def test_from_the_rounds_host_only_listed_batches_are_trained_on(tmp_path):
+    # A machine without the rounds streams them from the rounds host's
+    # manifests, as they are simulated, before any release.
+    _released(tmp_path, [*range(30100, 30140), *range(30200, 30213)])
+    jobs = dry(tmp_path, "finetune", config=REMOTE)
+    assert jobs["train_segment"] == 1
+    assert jobs["fetch_batch"] == 12 + 1 + 40
+    assert "simulate_batch" not in jobs
+
+
+def test_from_the_rounds_host_the_tick_lists_its_manifests_first(tmp_path):
+    jobs = dry(tmp_path, "finetune", config=REMOTE)
+    assert jobs["available_batches"] == 1
 
 
 def test_finetune_never_publishes(tmp_path):
