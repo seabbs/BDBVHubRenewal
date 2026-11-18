@@ -284,8 +284,11 @@ def zone_truth(
 ) -> pd.DataFrame:
     """Return each zone-week's count in the first release `delay` days on.
 
-    Each release counts every forecast zone and week, 0 where it reports
-    no onset (`weekly_zone_counts` lists weeks with one).
+    Each release counts every forecast zone and week from the zone's
+    first report (its earliest week with an onset in any release), 0
+    where it reports no onset (`weekly_zone_counts` lists weeks with
+    one). Earlier weeks are left out: no release reports the zone yet,
+    and a 0 there would score every model as exact.
 
     Parameters
     ----------
@@ -320,7 +323,12 @@ def zone_truth(
         .assign(vintage=v, cutoff=cutoffs[v])
         for v, c in counts.items()
     ]
-    return rolling_truth(pd.concat(frames, ignore_index=True), delay)
+    every = pd.concat(counts.values())
+    first = every.loc[every["total"] > 0].groupby("location")["target_end_date"]
+    start = first.min()
+    rows = pd.concat(frames, ignore_index=True)
+    begun = rows["target_end_date"] >= rows["location"].map(start)
+    return rolling_truth(rows.loc[begun.fillna(False)], delay)
 
 
 def tag(rows: pd.DataFrame, label: str) -> pd.DataFrame:
