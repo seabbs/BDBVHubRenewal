@@ -758,7 +758,7 @@ def test_score_units_run_torch_on_the_machine_device(tmp_path):
         assert re.search(r"resources: .*gpu=1", block)
         # A few threads, not the machine: simulations keep their cores.
         assert re.search(r"threads: 2\b", block)
-        assert "intra_op_parallelism_threads=2" in block
+        assert "--xla_cpu_multi_thread_eigen=false" in block
 
 
 def test_score_threads_are_a_machine_setting(tmp_path):
