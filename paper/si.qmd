@@ -547,6 +547,12 @@ Held-out synthetic data: relative WIS on the log scale by level of each scenario
 Held-out synthetic data: WIS over time. {{< meta results.synthetic.label >}} {{< meta results.synthetic.note >}}
 :::
 
+::: {#fig-synthetic-si-results-crps}
+![](build/figures/si/synthetic-si-results-crps.png)
+
+Held-out synthetic data: the main results figure for every model, scoring the samples by the fair CRPS rather than the WIS of their quantiles. (A, B) CRPS relative to `randomwalknowcast` on the natural and log scales; (C) bias; (D) 50% and 90% coverage; then relative CRPS by scenario factor and by horizon. {{< meta results.synthetic.label >}} {{< meta results.synthetic.note >}}
+:::
+
 ::: {#fig-synthetic-si-finetune-size}
 ![](build/figures/si/synthetic-si-finetune-size.png)
 
@@ -647,6 +653,12 @@ Ebola: relative WIS on the log scale by location and horizon. {{< meta results.e
 ![](build/figures/si/ebola-si-wis-over-time.png)
 
 Ebola: WIS over time. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
+:::
+
+::: {#fig-ebola-si-results-crps}
+![](build/figures/si/ebola-si-results-crps.png)
+
+Ebola: the main results figure for every model, scoring the samples by the fair CRPS rather than the WIS of their quantiles. (A, B) CRPS relative to {{< meta results.ebola.baseline >}} on the natural and log scales; (C) bias; (D) 50% and 90% coverage; then relative CRPS by location and by horizon. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
 :::
 
 ::: {#tbl-ebola-horizon}

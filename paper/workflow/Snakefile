@@ -668,7 +668,8 @@ rule scores:
         forecasts=rules.table.output,
         truth=rules.truth.output,
     output:
-        f"{R}/{{mode}}/scores/{{study}}.csv.gz",
+        wis=f"{R}/{{mode}}/scores/{{study}}.csv.gz",
+        crps=f"{R}/{{mode}}/scores-crps/{{study}}.csv.gz",
     log:
         f"{R}/{{mode}}/logs/scores-{{study}}.log",
     conda:
@@ -681,7 +682,7 @@ rule scores:
     shell:
         "exec >{log} 2>&1; "
         "{params.python} -m paperpipe scores --forecasts {input.forecasts} "
-        "--truth {input.truth} --out {output}"
+        "--truth {input.truth} --out {output.wis} --crps-out {output.crps}"
 
 
 rule joint_scores:
@@ -744,6 +745,7 @@ def study_files(study):
         "locations": f"{R}/{{mode}}/data/{study}-locations.csv",
         "meta": f"{R}/{{mode}}/data/{study}-meta.json",
         "scores": f"{R}/{{mode}}/scores/{study}.csv.gz",
+        "crps_scores": f"{R}/{{mode}}/scores-crps/{study}.csv.gz",
         "truth": f"{R}/{{mode}}/truth/{study}.csv.gz",
     }
 
@@ -775,6 +777,7 @@ for study in STUDIES:
             "--forecasts {input.forecasts} "
             "--observations {input.observations} "
             "--scores {input.scores} --locations {input.locations} "
+            "--crps-scores {input.crps_scores} "
             "--meta {input.meta} --truth {input.truth} "
             "--config {params.config} "
             "--main-dir {params.main} --si-dir {params.si} {params.split}"
