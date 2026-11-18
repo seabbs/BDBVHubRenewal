@@ -8,8 +8,7 @@ Steps, in workflow order:
   guard;
 - `truth`: the rolling truth, D days after each target date;
 - `scores`: the forecasts scored against the truth;
-- `joint-scores`: sample trajectories scored jointly (energy and variogram
-  scores);
+- `joint-scores`: sample trajectories scored jointly (energy score);
 - `figures` and `score-tables`: main-text and SI outputs;
 - `evidence`: SI tables, figures and numbers from evidence branches;
 - `ebola-extra`: further Ebola samples, kept to some models;
@@ -26,6 +25,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 import pandas as pd
+from bdbvhubrenewal.reporting.live_checkpoint import LIVE_RUN
 
 from paperdata import germany
 from paperfigs.joint import joint_scores
@@ -42,7 +42,9 @@ from paperpipe.evidence import EVIDENCE, write_evidence
 from paperpipe.meta import baseline_of, read_meta, write_meta
 from paperpipe.outputs import (
     joint_table,
+    real_finetune_combined,
     score_tables,
+    to_markdown,
     write_figures,
 )
 from paperpipe.studies import (
@@ -193,9 +195,7 @@ def _joint(a: argparse.Namespace) -> None:
 
 def _evidence(a: argparse.Namespace) -> None:
     paths = {name: getattr(a, name) for name in EVIDENCE}
-    numbers = write_evidence(
-        paths, a.si_dir, a.fig_dir, a.out, checkpoints=tuple(a.checkpoints)
-    )
+    numbers = write_evidence(paths, a.si_dir, a.fig_dir, a.out, run=a.live_run)
     if a.mode == "paper" and numbers["evidence"]["waiting"]:
         raise ValueError(
             "The paper run cannot leave SI results out; it waits on "
@@ -221,7 +221,22 @@ def _summary(a: argparse.Namespace) -> None:
     for m, t in zip(a.meta, a.scores, strict=True):
         meta = read_meta(m)
         studies[meta["study"]] = study_summary(meta, pd.read_csv(t), a.mode)
-    write_summary(a.out, a.mode, studies, finetuned=a.finetuned)
+    write_summary(
+        a.out,
+        a.mode,
+        studies,
+        finetuned=a.finetuned,
+        realdata_after=a.realdata_after,
+    )
+
+
+def _real_finetune(a: argparse.Namespace) -> None:
+    def read(path: Path) -> pd.DataFrame | None:
+        frame = pd.read_csv(path) if path.stat().st_size else None
+        return None if frame is None or frame.empty else frame
+
+    table = real_finetune_combined(read(a.germany), read(a.ebola))
+    a.out.write_text(to_markdown(table))
 
 
 def _score_tables(a: argparse.Namespace) -> None:
@@ -343,7 +358,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--si-dir", type=Path, required=True)
     p.add_argument("--fig-dir", type=Path, required=True)
     p.add_argument("--out", type=Path, required=True)
-    p.add_argument("--checkpoints", nargs="*", default=[])
+    p.add_argument(
+        "--live-run",
+        default=LIVE_RUN,
+        help="The live fine-tuning run, by the checkpoint scores' `run`.",
+    )
     p.set_defaults(run=_evidence)
 
     p = sub.add_parser("ebola-extra")
@@ -366,7 +385,18 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--scores", type=Path, nargs="+", required=True)
     p.add_argument("--out", type=Path, required=True)
     p.add_argument("--finetuned", default=None)
+    p.add_argument(
+        "--realdata-after",
+        default=None,
+        help="The last BDBV release the real-data model trained on.",
+    )
     p.set_defaults(run=_summary)
+
+    p = sub.add_parser("real-finetune")
+    p.add_argument("--germany", type=Path, required=True)
+    p.add_argument("--ebola", type=Path, required=True)
+    p.add_argument("--out", type=Path, required=True)
+    p.set_defaults(run=_real_finetune)
     return parser
 
 

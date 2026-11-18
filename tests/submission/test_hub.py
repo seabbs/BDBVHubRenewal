@@ -185,3 +185,43 @@ def test_forecast_date_defaults_to_the_run_date_in_utc() -> None:
         2026, 10, 26, 23, 30, tzinfo=dt.timezone(dt.timedelta(hours=-5))
     )
     assert run_date(late) == dt.date(2026, 10, 27)
+
+
+def _with_national(value: float = 999.4) -> pd.DataFrame:
+    samples = _provinces(value=10.4)
+    national = samples.loc[samples["location"] == "CD-IT"].assign(
+        location="CD", value=value
+    )
+    return pd.concat([samples, national], ignore_index=True)
+
+
+def test_writer_keeps_a_models_own_national_rows(tmp_path: Path) -> None:
+    # A model that forecasts the country itself, as the Chronos-2 joint
+    # block does, keeps its own national draws. The hub does not require
+    # the national value to be the sum of the provinces.
+    table = _table(_with_national(), "2026-10-31", national="own")
+    cd = table.loc[table["location"] == "CD", "value"]
+    assert (cd == 999).all()
+    assert len(cd) == 100 * 3
+    assert _failures(table, tmp_path) == []
+
+
+def test_own_national_rows_must_be_complete() -> None:
+    samples = _with_national()
+    samples = samples.loc[
+        ~((samples["location"] == "CD") & (samples["sample"] == 1))
+    ]
+    with pytest.raises(ValueError, match="CD"):
+        _table(samples, "2026-10-31", national="own")
+    with pytest.raises(ValueError, match="national"):
+        _table(_provinces(), "2026-10-31", national="own")
+
+
+def test_only_the_chronos_models_give_their_own_national() -> None:
+    from bdbvhubrenewal.submission.hub import own_national
+
+    assert own_national("fm_chronos_daily_ragged_ft")
+    assert own_national("fm_chronos_weekly_ragged")
+    for name in ("renewal", "renewalbvd", "randomwalknowcast", "randomwalk"):
+        assert not own_national(name)
+    assert not own_national(None)

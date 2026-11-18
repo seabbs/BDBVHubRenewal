@@ -82,15 +82,40 @@ The other fitted models split their provinces across the zones instead ([Health 
 
 ## Fine-tuning
 
-The `_ft` models load one LoRA checkpoint of Chronos-2, trained on 2,000 outbreaks simulated with epinowcast's generative model (`scripts/finetune_simulate.R`).
+The `_ft` models load one LoRA checkpoint of Chronos-2, fine-tuned on outbreaks simulated with epinowcast's generative model (`scripts/finetune_simulate.R`).
 The simulator, `enw_simulate`, is on epinowcast's `feature/829-simulate-forecast` branch, pinned at commit `e084b080`, and is not yet in a release.
-Each outbreak is a renewal process with a drawn log $R_t$ path, a reporting delay that drifts and differs by place, day-of-week effects and negative binomial noise, in one to 26 places.
-Each gives a daily reporting triangle, and its weekly releases are summed from it.
-A training block cuts an outbreak's releases at one cut-off and lays them out as the ragged layout does, with the target past $t^*$ the outbreak's final counts (`forecasters.finetune.training_block`).
+The simulations form the grid `r5`, a crossed design over 21 factors (`factors` in the script).
+These include the process (exponential growth, or renewal with a mean generation time of 3, 7 or 15 days), the generation time's shape, the trajectory of $R_t$ (eight shapes, from steady growth to several waves), the delay's family, its form (parametric, non-parametric or both) and how it changes over time (static, drift, step, periodic or random walk), reporting on every day or on one to three weekdays, a reference day-of-week effect, the observation model and the strata.
+Each block of 840 simulations holds every level of each factor in equal shares, shuffled per factor.
+A round of 40 batches of 21 simulations is one block.
+The observation model is NB1 in four simulations of five and Poisson in the fifth.
+NB1 dispersion is scaled by the expected count and the delay's $\sum_d p_d^2$ (epinowcast#937).
+The strata are one place, 2 to 26 places, 2 to 8 ages, or places by ages, at most 60 strata.
+Outbreaks run 16 to 52 weeks.
+Outbreak sizes have a median of about 3,700 cases, with 90% between 70 and 84,000.
+Each simulation gives one observation draw, a daily reporting triangle, and its weekly releases are summed from it.
+
+A training block cuts one draw's releases at one cut-off and lays them out as the ragged layout does, with the target past $t^*$ the outbreak's final counts (`forecasters.finetune.training_block`).
 $D$ is drawn from 2 to 7 weeks, or 14 to 49 days, so the model is not tied to one $D$.
-Each outbreak gives up to four weekly and four daily blocks, with the country and a random subset of its places.
-A block holds at most 26 provinces when weekly and five when daily, so daily blocks fit GPU memory.
-Training is 1,000 steps of LoRA at learning rate $10^{-4}$, with 5% of blocks held out (`scripts/finetune_chronos.py`).
+A block holds the totals over places and over ages as well as the strata, so every aggregate is the exact sum of the series below it.
+Four or more flat places are grouped into regions, with region totals.
+One block in five is a single series, the national total or one leaf.
+The other blocks' targets are all levels, leaves and the national total, or leaves only, in equal shares.
+Each simulation is cut at 32 cut-offs, one block each, with up to 364 steps of context.
+A block is daily (25%), weekly (25%), 3-day (15%), daily with a weekly row per place (25%), or daily with a 3-day row per place (10%).
+
+Round 9, the first round of grid `r5`, is the held-out block.
+Training runs in one pass over the next ten rounds, ten whole blocks of 8,400 simulations, in seed order while they are simulated (`scripts/finetune_stream.py`, `workflow/rules/finetune.smk`).
+The trainer monitors its loss on the first 90 simulations of the held-out block, a random sample of its cells.
+LoRA trains beside learned attention biases for related series (`forecasters.series_bias`).
+The adapter's learning rate starts at $10^{-5}$ and the biases' at $10^{-3}$, both falling linearly to zero over the 8,400 simulations.
+The rate follows the simulations trained, interpolated within a chunk by its steps, so it reaches zero with the last simulation's last batch however the blocks are packed.
+There is no warmup and no weight decay, and training is in full (fp32) precision.
+The r3 checkpoints were trained by `scripts/finetune_driver.sh` with `config/finetune/r3.env`, both removed after commit eae369693.
+Blocks are packed into batches by size within a memory budget, which also sets the largest block.
+A checkpoint is saved at 250, 500, 750, 1,000, 2,000, 4,000 and 8,400 simulations.
+Each is scored on held-out blocks from separate simulations, by level, and published.
+Training stops at 8,400 simulations.
 
 A checkpoint is named by its settings hash, of the blocks, the code and the training settings.
 The first release, `chronos-ft-2c2b22a03107`, was trained from earlier code, so its hash cannot be reproduced from this repository.
@@ -108,7 +133,7 @@ Such fits are retried by running the Fit store workflow with `retry_failed` (`gh
 
 - The zero-shot models use Chronos-2 as pretrained. It has not seen these data or outbreaks like them.
 - The fine-tuned models have seen only simulated outbreaks, whose delays and dynamics may not match these data.
-- The fine-tuned models were trained on blocks of at most 26 provinces, five for the daily one, but forecast all 546 hub targets in one block.
+- The fine-tuned models were trained on blocks no larger than the memory budget allows, but forecast all 546 hub targets in one block.
 - Draws are independent across steps and places, so every weekly value of the daily models, a sum of seven daily draws, is too narrow, as are sums over weeks or places.
 
 [^chronos2]: Ansari A F et al. (2025) Chronos-2: From univariate to universal forecasting. arXiv:2510.15821. Code: <https://github.com/amazon-science/chronos-forecasting>.

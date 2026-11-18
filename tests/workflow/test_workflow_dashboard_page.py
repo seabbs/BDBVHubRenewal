@@ -138,7 +138,6 @@ def _machine(tmp_path):
         rule="R",
         outbreaks=8000,
         learning_rate=1e-5,
-        lr_steps=36500,
         mailbox=box,
         mail_filter="slots",
         once=True,

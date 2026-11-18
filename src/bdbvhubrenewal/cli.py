@@ -106,6 +106,7 @@ from bdbvhubrenewal.submission.hub import (
     SUBMISSION_CONFIG,
     model_abbr_for,
     model_id,
+    own_national,
     render_model_metadata,
     to_hub_table,
     write_model_metadata,
@@ -359,6 +360,29 @@ def build_parser() -> argparse.ArgumentParser:
         "OUT/held-out.",
     )
 
+    pst = sub.add_parser(
+        "pairing-sensitivity",
+        help="Score randomwalk and randomwalknowcast with no pairing and "
+        "with their provinces paired by the rolling rho_p, from one "
+        "forecast each, on the BDBV release backtest or the German "
+        "development half (`evaluation.pairing`).",
+    )
+    pst.add_argument("--study", choices=["bdbv", "germany"], required=True)
+    pst.add_argument(
+        "--data",
+        default=None,
+        help="The data directory; for germany, its raw/germany.",
+    )
+    pst.add_argument(
+        "--config",
+        default=None,
+        help="config/backtest.toml (bdbv) or config/germany.toml.",
+    )
+    pst.add_argument(
+        "--chunk", default=None, help=_CHUNK_HELP.format(what="origins")
+    )
+    pst.add_argument("--out", default="results/pairing")
+
     gtm = sub.add_parser(
         "germany-teams",
         help="Score the German hospitalisation hub teams' nowcasts.",
@@ -400,6 +424,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     gft.add_argument(
         "--out", required=True, help="A germany-backtest results directory."
+    )
+    gft.add_argument(
+        "--checkpoint-scores",
+        default=None,
+        help="evidence/checkpoint-scores.csv from the checkpoint-scoring "
+        "branch: only the live run's checkpoints are shown, labelled "
+        "preliminary (`reporting.live_checkpoint`).",
     )
     gft.add_argument(
         "--note",
@@ -541,7 +572,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     coh = sub.add_parser(
         "coherence",
-        help="Compare the national data with the sum of the provinces.",
+        help="Compare the national data with the sum of the provinces, and "
+        "each province and the country with the sum of their zones.",
     )
     coh.add_argument("--vintage", default="latest")
     coh.add_argument("--data", default=data_dir)
@@ -639,6 +671,19 @@ def build_parser() -> argparse.ArgumentParser:
     )
     frz.add_argument("--ledger", required=True)
     frz.add_argument("--round", required=True)
+
+    live = sub.add_parser(
+        "live-checkpoint",
+        help="Write the live fine-tuning run's preliminary summary.",
+    )
+    live.add_argument(
+        "--scores",
+        required=True,
+        help="evidence/checkpoint-scores.csv from the checkpoint-scoring "
+        "branch; a missing file writes a note.",
+    )
+    live.add_argument("--out", required=True)
+    live.add_argument("--run", default=None, help="Defaults to LIVE_RUN.")
 
     rep = sub.add_parser("report", help="Make the docs figures and tables.")
     rep.add_argument("--figures", default="docs/figures")
@@ -1385,7 +1430,14 @@ def _hub_forecast(
     fit: Path | str | None = None,
     forecast: Forecast | None = None,
     forecast_date: str | None = None,
-) -> tuple[pd.DataFrame, Forecast, pd.DataFrame | None, str, Any]:
+) -> tuple[
+    pd.DataFrame,
+    Forecast,
+    pd.DataFrame | None,
+    str,
+    Any,
+    dict[str, object] | None,
+]:
     """Return the hub table `nowcast` writes, with its forecast and zones.
 
     A `forecast` given is used as it is. Otherwise, with `config` it
@@ -1397,10 +1449,11 @@ def _hub_forecast(
     -------
     tuple
         The hub table, the forecast, the zone samples (or None), why
-        there are no zones ("" if there are) and the fine-tuned checkpoint
-        the model loaded (or None).
+        there are no zones ("" if there are), the fine-tuned checkpoint
+        the model loaded (or None) and the copula a walk model paired its
+        draws by (`copula_fit`, or None).
     """
-    checkpoint = None
+    checkpoint, copula = None, None
     own = None
     if forecast is not None:
         result = forecast
@@ -1414,6 +1467,7 @@ def _hub_forecast(
         loaded = get_model(str(model))
         checkpoint = getattr(loaded, "checkpoint", None)
         samples = loaded.forecast(task)
+        copula = getattr(loaded, "copula_fit", None)
         check_samples(samples, task)
         result = Forecast(samples)
         own = getattr(loaded, "zone_samples", None)
@@ -1428,8 +1482,9 @@ def _hub_forecast(
         zones=zones,
         forecast_date=forecast_date,
         zones_sum=not walks_own_zones(name),
+        national="own" if own_national(name) else "sum",
     )
-    return table, result, zones, zone_note, checkpoint
+    return table, result, zones, zone_note, checkpoint, copula
 
 
 def _fit_store_archive(args: argparse.Namespace) -> int:
@@ -1511,7 +1566,7 @@ def _nowcast(args: argparse.Namespace) -> int:
     host_devices(int(sampler_settings()["num_chains"]))
     try:
         task, handled = _task(args)
-        table, result, zones, zone_note, checkpoint = _hub_forecast(
+        table, result, zones, zone_note, checkpoint, copula = _hub_forecast(
             task,
             data=args.data,
             model=args.model,
@@ -1525,13 +1580,20 @@ def _nowcast(args: argparse.Namespace) -> int:
     except (LookupError, ValueError, OSError) as err:
         print(f"ERROR: {err}", file=sys.stderr)
         return 1
-    _write_national_sidecar(Path(args.out), task, result)
+    name = get_config(args.config).model if args.config else args.model
+    source = "own" if own_national(name) else "sum"
+    _write_national_sidecar(Path(args.out), task, result, source)
     # Problems handled on the way, for the PR's `Handled:` line.
     (Path(args.out) / "handled.json").write_text(json.dumps(handled) + "\n")
     # Whether the file has health zones, for the CI's zone check.
     n_zones = 0 if zones is None else int(zones["location"].nunique())
     zone_record = {"zones": n_zones > 0, "n_zones": n_zones, "note": zone_note}
     (Path(args.out) / "zones.json").write_text(json.dumps(zone_record) + "\n")
+    # The copula a walk model paired its draws by, for the PR body.
+    if copula is not None:
+        (Path(args.out) / "copula.json").write_text(
+            json.dumps(copula, default=str) + "\n"
+        )
     # The fine-tuned checkpoint the model loaded, for the PR body.
     if checkpoint is not None:
         record = {
@@ -1656,9 +1718,13 @@ def _write_zone_results(
 
 
 def _write_national_sidecar(
-    out: Path, task: ForecastTask, result: Forecast
+    out: Path, task: ForecastTask, result: Forecast, source: str = "sum"
 ) -> Path:
-    """Write `national.json`, which the CI's national check reads."""
+    """Write `national.json`, which the CI's national check reads.
+
+    `source` is `"own"` when the national rows are the model's own
+    forecast (`own_national`), which the check does not sum.
+    """
     unassigned = []
     if result.unassigned is not None:
         unassigned = [
@@ -1678,6 +1744,7 @@ def _write_national_sidecar(
             task.locations if result.modelled is None else result.modelled
         ),
         "unassigned": unassigned,
+        "national_source": source,
     }
     path.write_text(json.dumps(record, indent=2) + "\n")
     return path
@@ -1720,7 +1787,11 @@ def _coherence(args: argparse.Namespace) -> int:
     target = load_target(args.data)
     real = target.loc[target["kind"] == "real"]
     vintage = _vintage([str(v) for v in real["vintage"].unique()], args.vintage)
-    summary = coherence_summary(target, vintage)
+    try:
+        zones = load_health_zones(args.data)
+    except OSError:
+        zones = None
+    summary = coherence_summary(target, vintage, zones=zones)
     _print_coherence(summary)
     if args.out:
         out = Path(args.out)
@@ -1730,6 +1801,22 @@ def _coherence(args: argparse.Namespace) -> int:
 
 
 def _print_coherence(summary: dict[str, object]) -> None:
+    zones = summary.get("zones")
+    if isinstance(zones, dict):
+        if zones["coherent"]:
+            print(
+                f"Zone coherence ({summary['as_of']}): each province equals "
+                "the sum of its zones, and the country the sum of all zones."
+            )
+        else:
+            print(
+                f"WARNING: zone coherence ({summary['as_of']}): "
+                f"{zones['province_weeks_with_gap']} province-weeks and "
+                f"{zones['national_weeks_with_gap']} national weeks differ "
+                f"from their zones; {zones['unassigned_cases']} cases "
+                f"({100 * zones['unassigned_share']:.1f}%) are in no zone.",
+                file=sys.stderr,
+            )
     if summary["coherent"]:
         print(
             f"National coherence ({summary['as_of']}): the national counts "
@@ -1919,6 +2006,48 @@ def _germany_backtest(args: argparse.Namespace) -> int:
     return 0
 
 
+def _pairing_sensitivity(args: argparse.Namespace, data_dir: str) -> int:
+    from bdbvhubrenewal.evaluation import germany as de
+    from bdbvhubrenewal.evaluation import pairing
+
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+    name = f"pairing-{args.study}"
+    if args.study == "bdbv":
+        config = args.config or "config/backtest.toml"
+        data = args.data or data_dir
+        real = load_target(data).query("kind == 'real'")
+        origins = bt.real_vintages(real)[:-1]
+        if args.chunk:
+            origins = chunk(origins, args.chunk)
+        scores = pairing.bdbv_sensitivity(data, config, origins)
+    else:
+        config = args.config or "config/germany.toml"
+        data = args.data or f"{data_dir}/raw/germany"
+        dates = de.nowcast_dates(de.load_germany_config(config))
+        if args.chunk:
+            dates = chunk(dates, args.chunk)
+        # Each date is kept as it is scored, so a rerun resumes.
+        done = out / "germany-dates"
+        done.mkdir(exist_ok=True)
+        for date in dates:
+            path = done / f"{date}.csv.gz"
+            if not path.exists():
+                write_csv(
+                    pairing.germany_sensitivity(data, config, [date]), path
+                )
+        scores = pd.concat(
+            [_read_or_empty(done / f"{d}.csv.gz") for d in dates],
+            ignore_index=True,
+        )
+    if args.chunk:
+        name += "-" + args.chunk.replace("/", "of")
+    path = out / f"{name}.csv.gz"
+    write_csv(scores, path)
+    print(f"Pairing sensitivity ({args.study}): {len(scores)} rows in {path}.")
+    return 0
+
+
 def _germany_teams(args: argparse.Namespace) -> int:
     from bdbvhubrenewal.data.germany import hub_triangle
     from bdbvhubrenewal.evaluation import germany as de
@@ -1985,16 +2114,25 @@ def _germany_ft_load(args: argparse.Namespace) -> int:
     from bdbvhubrenewal.evaluation import germany as de
     from bdbvhubrenewal.evaluation import germany_store as gs
     from bdbvhubrenewal.forecasters import foundation
+    from bdbvhubrenewal.reporting import live_checkpoint as lc
 
     config = de.load_germany_config(args.config)
     spec = foundation.finetuned_spec(args.finetune)
     stored = gs.stored_tags(args.store)
+    live = None
+    path = Path(args.checkpoint_scores) if args.checkpoint_scores else None
+    if path is not None and path.is_file() and path.stat().st_size > 0:
+        live = lc.live_tags(pd.read_csv(path))
     tag, pinned = gs.choose_checkpoint(
-        stored, foundation.finetuned_releases(), spec
+        stored, foundation.finetuned_releases(), spec, live
     )
     note = Path(args.note)
     note.parent.mkdir(parents=True, exist_ok=True)
     meta = {"tag": tag, "pinned": pinned, "models": list(gs.STORED_MODELS)}
+    if live is not None:
+        meta["live_run"] = lc.LIVE_RUN
+        if tag in live:
+            meta["label"] = lc.label(live[tag])
     note.write_text(json.dumps(meta, indent=2) + "\n")
     if tag is None:
         print(
@@ -2018,6 +2156,19 @@ def _germany_ft_load(args: argparse.Namespace) -> int:
 def _data_root() -> Path:
     """Return the tidy data directory, `$BDBV_DATA_DIR` or `data/`."""
     return Path(os.environ.get("BDBV_DATA_DIR") or "data")
+
+
+def _live_checkpoint(args: argparse.Namespace) -> int:
+    from bdbvhubrenewal.reporting.live_checkpoint import LIVE_RUN, docs_page
+
+    path = Path(args.scores)
+    # The Pages step leaves an empty file when the branch has no table.
+    has = path.is_file() and path.stat().st_size > 0
+    scores = pd.read_csv(path) if has else None
+    out = Path(args.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(docs_page(scores, args.run or LIVE_RUN))
+    return 0
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -2099,10 +2250,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
     if args.command == "germany-backtest":
         return _germany_backtest(args)
+    if args.command == "pairing-sensitivity":
+        return _pairing_sensitivity(args, str(_data_root()))
     if args.command == "germany-teams":
         return _germany_teams(args)
     if args.command == "germany-asof":
         return _germany_asof(args)
+    if args.command == "live-checkpoint":
+        return _live_checkpoint(args)
     if args.command == "germany-paper":
         return _germany_paper(args)
     if args.command == "germany-ft-load":

@@ -71,7 +71,7 @@ The draws of `renewal` and `renewalbvd` are joint across zones and provinces, on
 `renewalsp` fits each province on its own, so its provinces are independent.
 Its zones split each province draw, so they are joint within a province.
 `pprandomwalknowcast` takes one posterior draw of its pooled parameters per sample index, so its places share that draw.
-`randomwalk` and `randomwalknowcast` draw each place independently.
+`randomwalk` and `randomwalknowcast` pair their province draws within each week by a rolling copula inside their forecast; their zones are not paired ([Correlated trajectories](#correlated-trajectories)).
 Hub teams' samples are joint across weeks within a place only, as the hub's sample format sets, so pairing their indices across places scores them as independent across places.
 
 ## Backtest design
@@ -140,6 +140,32 @@ Relative CRPS is against `randomwalknowcast` on the forecasts both made, for nat
 Every table counts its forecasts, $n$, so a model with fewer forecasts was scored on fewer weeks or places.
 The run stops if an origin has no release snapshots or two models run here give identical samples.
 
+## Correlated trajectories
+
+`randomwalk` and `randomwalknowcast` draw each province on its own, so the country, the sum of the provinces, would be too narrow.
+Each pairs its province draws inside its own forecast (`forecasters.copula.pair_walks`), so the fit store, every page, the backtests and the submissions read the same paired draws.
+The renewal models' draws are already joint trajectories (zones from a Dirichlet split of joint province draws), so they are left as they are: reordering would break their real dependence.
+
+Provinces are their own forecasts.
+The country is the sum of the provinces in each sample.
+Zones are their own forecasts, and are neither summed nor paired.
+The copula pairs province draws with each other within a week only, by one correlation, $\rho_p$.
+
+The pairing is a Gaussian copula applied by rank reordering, the Schaake shuffle[^clark] as ensemble copula coupling uses it[^schefzik].
+Each week, each trajectory draws one normal per province, with correlation $\rho_p$ between any two, and each cell's draws are reordered across samples to rank as the normals do.
+So every per-week forecast and its scores are unchanged.
+Every week is reordered this way, whether a province is nowcast or walking that week, so the recent nowcast weeks are paired too.
+Weeks are reordered on their own, so a province's draws are not kept as one trajectory across weeks.
+Nothing we submit or score uses a quantity over several weeks, so this costs nothing.
+
+At each forecast $\rho_p$ is estimated from the model's own matured errors: each earlier release's nowcast of the count still to come, against what the origin release reports, over releases in the last 8 weeks.
+Each error's randomised PIT under the model's negative binomial nowcast is mapped to a normal score.
+$r$ is the Pearson correlation of the scores of two provinces in the same week of one release.
+With $n$ such pairs the estimate is $(n r + w \rho_0)/(n + w)$, floored at 0 and capped at 0.95, with $w = 10$ chosen on the release backtest so the estimate dominates.
+The prior $\rho_0 = 0.7$ only guards thin windows.
+Each forecast's $\rho_p$, the pairs behind it and whether it fell back to the prior are recorded (a submission's `copula.json`).
+How much pairing matters is on the [Pairing sensitivity](../pairing.md) page.
+
 ## Reading the figures
 
 Fans show 100 sample trajectories, the 50% and 90% bands and the median.
@@ -165,8 +191,8 @@ Each real vintage before the latest is forecast, and origins with no pair of rel
 Zones are scored on the reported target as for [real releases](#real-releases), with the zone delays fitted at the origin, so a zone count is never scored against a count still being reported.
 Relative CRPS is against `randomwalknowcast`.
 `pprandomwalknowcast` is fitted here on the zones and on the provinces.
-On the Nowcast page only `randomwalk` and `randomwalknowcast` are shown at zone level.
-The fitted models are shown at the country and provinces, from their stored forecasts.
+On the Nowcast page every model is shown at zone level: the random walks from their zone runs, and the fitted models from the zone samples of their stored forecasts ([Renewal models](model.md#health-zones)).
+The Comparison with the hub scores every model's zone samples on the zone cells the hub teams forecast.
 
 ## Scores by place type and plausibility { #checks }
 
@@ -202,6 +228,7 @@ The German COVID-19 hospitalisation nowcasting hub[^wolffram] collected nowcasts
 1. Each day's data version is a release whose cut-off is that day, and the Meldedatum is the onset date. A release's count of a day is the count reported by then in the hub's reporting triangle, with the changes after 80 days put at 81 days, as epinowcast's `germany_covid19_hosp` does. A day's last count is carried to every later release.
 2. Germany is the country. The states are its provinces in one task and Germany's age groups its provinces in another. Germany's nowcast is the sum of the states.
 3. Hub weeks end on Saturdays, so every date of a nowcast moves forward by the 0 to 6 days to the next Saturday. The 7-day sums ending on the nowcast date and 7, 14, 21 and 28 days before it are then hub weeks, and the nowcasts move back.
+4. `randomwalk` and `randomwalknowcast` pair their draws inside their forecast, as on BDBV ([Correlated trajectories](#correlated-trajectories)). Each state's and age group's nowcast is unchanged, and Germany's, the sum of the paired states, widens.
 
 The nowcast dates are the paper's, every day from 2021-11-22 to 2022-04-29.
 They are split at their midpoint.
@@ -236,3 +263,7 @@ The paper also filled some missing ILM and LMU nowcasts from later model version
 [^ferro]: Ferro CAT (2014). Fair scores for ensemble forecasts. Quarterly Journal of the Royal Meteorological Society 140(683): 1917–1923. [doi:10.1002/qj.2270](https://doi.org/10.1002/qj.2270).
 
 [^bosse]: Bosse NI, Abbott S, Cori A, van Leeuwen E, Bracher J, Funk S (2023). Scoring epidemiological forecasts on transformed scales. PLOS Computational Biology 19(8): e1011393. [doi:10.1371/journal.pcbi.1011393](https://doi.org/10.1371/journal.pcbi.1011393).
+
+[^clark]: Clark M, Gangopadhyay S, Hay L, Rajagopalan B, Wilby R (2004). The Schaake shuffle: a method for reconstructing space-time variability in forecasted precipitation and temperature fields. Journal of Hydrometeorology 5(1): 243-262. [doi:10.1175/1525-7541(2004)005<0243:TSSAMF>2.0.CO;2](https://doi.org/10.1175/1525-7541(2004)005%3C0243:TSSAMF%3E2.0.CO;2).
+
+[^schefzik]: Schefzik R, Thorarinsdottir TL, Gneiting T (2013). Uncertainty quantification in complex simulation models using ensemble copula coupling. Statistical Science 28(4): 616-640. [doi:10.1214/13-STS443](https://doi.org/10.1214/13-STS443).

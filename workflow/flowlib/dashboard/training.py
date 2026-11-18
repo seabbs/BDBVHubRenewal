@@ -1,7 +1,8 @@
 """A training run's schedule and losses, for the status and loss plots.
 
 The schedule comes from the trainer's command line (`--learning-rate`,
-`--lr-steps`, `--<group>-lr`, `--prefixes`), its saved settings and the
+`--outbreaks`, `--<group>-lr`, `--prefixes`, or `--lr-steps` of runs
+that decayed over steps), its saved settings and the
 learning rates its history logs; the losses from its history
 (`train/history.json`), log rows and checkpoint settings.
 """
@@ -30,7 +31,9 @@ def run_params(
     Returns
     -------
     dict
-        `lr_steps`, the optimiser `groups` (name -> base rate), each
+        `lr_steps` (runs that decayed over steps), `lr_outbreaks` (the
+        simulations the rate falls to zero over, otherwise), the
+        optimiser `groups` (name -> base rate), each
         group's `current` rate, the rates its history `logged` (name ->
         [(step, rate)]) and the checkpoint `prefixes`.
     """
@@ -46,6 +49,12 @@ def run_params(
     last = settings[-1] if settings else {}
     m = re.search(r"--lr-steps\s+(\d+)", args)
     lr_steps = int(m.group(1)) if m else int(last.get("lr_steps") or 0)
+    # Runs without a step count decay over `--outbreaks`, as their
+    # settings record (`lr_decay`); older runs with settings but no
+    # `lr_decay` kept a constant rate.
+    m = re.search(r"--outbreaks\s+(\d+)", args)
+    decays = last.get("lr_decay") or not settings
+    lr_outbreaks = int(m.group(1)) if m and decays and not lr_steps else 0
     groups: dict[str, float] = {}
     base_name = (
         "LoRA" if last.get("lora") or "--series-bias" in args else "adapter"
@@ -99,6 +108,7 @@ def run_params(
             )
     return {
         "lr_steps": lr_steps,
+        "lr_outbreaks": lr_outbreaks,
         "groups": groups,
         "current": current,
         "logged": logged,

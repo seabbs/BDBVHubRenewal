@@ -12,6 +12,8 @@
   target's releases.
 - `zonerenewal`: `renewal` and `renewalbvd` fitted on health zones, with
   provinces the zone sums; registered in place of their province fits.
+- `copula`: a Gaussian copula that pairs the walk models' province draws
+  within each week.
 - `zones`: health-zone forecasts split from any model's province samples.
 
 Importing this package registers the built-in models.

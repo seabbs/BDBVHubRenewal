@@ -235,6 +235,11 @@ def _ft_note(results: Path) -> str:
     meta = json.loads(path.read_text())
     tag, pinned = meta["tag"], meta["pinned"]
     models = " and ".join(f"`{m}`" for m in meta["models"])
+    if tag is None and meta.get("live_run"):
+        return (
+            f"{models} are not shown: the German forecasts of the "
+            f"fine-tuning run (`{meta['live_run']}`) are not stored yet.\n"
+        )
     if tag is None:
         return (
             f"{models} are not shown: the German forecasts of their "
@@ -246,7 +251,9 @@ def _ft_note(results: Path) -> str:
         "scoring run made, stored on the `germany-ft-forecasts` branch, "
         "not rerun here."
     )
-    if pinned and tag != pinned:
+    if meta.get("label"):
+        note = f"**{meta['label']}** " + note
+    elif pinned and tag != pinned:
         note += f" The pinned checkpoint, `{pinned}`, is not stored yet."
     return note + "\n"
 

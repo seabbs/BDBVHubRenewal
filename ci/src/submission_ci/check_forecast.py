@@ -20,7 +20,9 @@ Handled (warn or pass):
   `national_sum` national equals the sum of the provinces plus the
                  unassigned cases in `national.json`, per sample and
                  week (fails otherwise). A modelled province missing
-                 from the file warns.
+                 from the file warns. Skipped when `national.json` has
+                 `national_source = "own"`: the model forecast the
+                 country itself, and the hub does not require the sum.
 
 Plausibility (`plausible` fails; the others warn):
   `plausible`    each location's forecast near its recent data: median
@@ -270,9 +272,17 @@ def check_national_sum(
     National sample k must equal the sum of province sample k plus the
     sample's modelled unassigned component (`national.json`), for every
     week, up to float noise (`tol` absolute, or 1e-12 relative). Every
-    modelled province must be in the file.
+    modelled province must be in the file. Skipped when the sidecar's
+    `national_source` is `"own"`.
     """
     national = str(sidecar["national"])
+    if sidecar.get("national_source", "sum") == "own":
+        return Check(
+            "national_sum",
+            "skip",
+            f"{national} is the model's own forecast (national.json), "
+            "not the sum of the provinces",
+        )
     provs = [loc for loc in s.locations if is_province(loc)]
     modelled = sorted(sidecar["modelled_provinces"])
     unassigned = _unassigned(sidecar)
@@ -354,7 +364,8 @@ def check_plausible(
     `plausible_median_ratio` times the base, the 97.5% quantile within
     `plausible_q975_ratio` times it, and, where the recent maximum is at
     least the floor, the median above the maximum over
-    `plausible_low_ratio`. Locations without observed data (the health
+    `plausible_low_ratio` unless it is at least the count already
+    observed for that week. Locations without observed data (the health
     zones) are skipped. Any breach fails, so the chain moves on.
     """
     n_recent = int(c["plausible_recent_weeks"])
@@ -394,7 +405,11 @@ def check_plausible(
                         f"{fmt(tail)} times the recent maximum {fmt(base)}",
                     )
                 )
-            elif top >= floor and med < top / lo:
+            elif (
+                top >= floor
+                and med < top / lo
+                and med < series.get(w, math.inf)
+            ):
                 found.append(
                     (
                         "fail",

@@ -7,11 +7,11 @@ into the SI's tables, figures and quoted numbers, so nothing is typed into
 the paper. A result whose rows are not set yet gets a note saying what it
 waits on in place of its table, and `None` in place of its numbers.
 
-- `copula_table`: mean joint scores, coverage of sums and WIS of each
-  model and pairing arm, by strata.
-- `rho_medians`: median rolling copula correlations over origins and places.
-- `aggregation_table`: WIS of each aggregation option relative to
-  `randomwalknowcast` on the same targets, with coverage and n per level.
+- `copula_figure`: the rolling copula against no pairing, by study and
+  level.
+- `rho_medians`: the median rolling rho_p of each walk model.
+- `aggregation_figure`: WIS of each aggregation option relative to
+  `randomwalknowcast` on the same targets, by study and level.
 - `heldout_figure` and `realism_figure`: the fine-tune's held-out loss
   and the simulated outbreaks against the data and published values.
 """
@@ -26,53 +26,59 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import yaml
+from bdbvhubrenewal.reporting.live_checkpoint import (
+    LIVE_RUN,
+    checkpoint_table,
+    newest,
+    summary_table,
+    tidy,
+)
+from bdbvhubrenewal.reporting.live_checkpoint import (
+    label as checkpoint_label,
+)
 from matplotlib.figure import Figure
 
 from paperpipe.outputs import to_markdown
 
 __all__ = [
-    "ARMS",
     "EVIDENCE",
-    "THREE_DAY",
+    "aggregation_figure",
     "aggregation_numbers",
-    "aggregation_table",
+    "branch_head",
     "checkpoint_figure",
     "checkpoint_numbers",
     "checkpoint_rows",
     "comparison_figure",
-    "comparison_table",
-    "copula_table",
-    "cost_table",
+    "copula_figure",
     "diseases_table",
     "drop_finetuned",
     "heldout_figure",
+    "heldout_rows",
     "lag_numbers",
+    "live_numbers",
     "realism_figure",
     "realism_numbers",
     "rho_medians",
     "scale_floor_numbers",
-    "slots_loss_table",
-    "slots_scores_table",
-    "slots_swap_table",
+    "slots_rows",
+    "slots_summary",
     "waiting",
     "write_evidence",
 ]
 
-ARMS: Final = {
-    "unpaired": "Unpaired",
-    "fixed": "Fixed",
-    "rolling": "Rolling",
-    "rolling_w25": "Rolling, w = 25",
-}
-"""Pairing arms of the copula comparison, in table order."""
-
 OPTIONS: Final = {
-    "joint": "Joint block",
-    "level": "Level by level",
-    "zones_summed": "Lowest level summed",
-    "zones_copula": "Lowest level summed after pairing",
+    "joint": "(a)",
+    "level": "(b)",
+    "zones_summed": "(c)",
+    "zones_copula": "(d)",
+    "weekly_row": "(e) weekly row",
+    "days_copula": "(e) days, copula",
+    "days_summed": "(e) days, random",
 }
-"""Aggregation options, in table order."""
+"""Aggregation options as the SI names them, in figure order: (a) to (d)
+sum over places, and (e) over time, comparing the daily model's in-block
+weekly row with its days summed after pairing by the rolling copula or at
+random."""
 
 
 def waiting(what: str) -> str:
@@ -87,138 +93,76 @@ def _pair(a: pd.Series, b: pd.Series) -> list[str]:
     ]
 
 
-def copula_table(scores: pd.DataFrame, study: str) -> pd.DataFrame:
-    """Return the copula comparison of one study, one row per model and arm.
+def aggregation_figure(
+    scores: pd.DataFrame, reference: str = "randomwalknowcast"
+) -> Figure:
+    """Plot each option's WIS relative to the reference, by study and level.
 
-    Parameters
-    ----------
-    scores : pandas.DataFrame
-        Per-forecast rows: `study`, `strata`, `model`, `arm`,
-        `energy_log`, `variogram_log`, `cover50_weeks`, `cover90_weeks`,
-        `cover50_places`, `cover90_places`, `wis_strata`, `wis_national`.
-    study : str
-        `ebola` or `germany`.
-
-    Returns
-    -------
-    pandas.DataFrame
-        Display columns, means over forecasts.
-    """
-    sc = scores.loc[scores["study"] == study]
-    cols = [
-        "energy_log",
-        "variogram_log",
-        "cover50_weeks",
-        "cover90_weeks",
-        "cover50_places",
-        "cover90_places",
-        "wis_strata",
-        "wis_national",
-    ]
-    m = sc.groupby(["strata", "model", "arm"], sort=False)[cols].mean()
-    m = m.reset_index()
-    m["arm"] = pd.Categorical(m["arm"], categories=list(ARMS), ordered=True)
-    m = m.sort_values(["strata", "model", "arm"])
-    return pd.DataFrame(
-        {
-            "Strata": m["strata"].str.capitalize(),
-            "Model": m["model"],
-            "Pairing": m["arm"].map(ARMS).astype(str),
-            "ES (log)": m["energy_log"].round(3),
-            "VS (log)": m["variogram_log"].round(3),
-            "Weeks 50% / 90%": _pair(m["cover50_weeks"], m["cover90_weeks"]),
-            "Places 50% / 90%": _pair(m["cover50_places"], m["cover90_places"]),
-            "WIS strata": m["wis_strata"].round(2),
-            "WIS national": m["wis_national"].round(2),
-        }
-    )
-
-
-def rho_medians(rho: pd.DataFrame) -> dict:
-    """Return the median rolling correlations by study, strata and model.
-
-    Rows of other pairing arms, where `rho` has an `arm` column, are left
-    out.
-    """
-    if "arm" in rho.columns:
-        rho = rho.loc[rho["arm"] == "rolling"]
-    out: dict = {}
-    for (study, strata, model), g in rho.groupby(["study", "strata", "model"]):
-        out.setdefault(study, {}).setdefault(strata, {})[model] = {
-            name: round(float(g[name].median()), 2)
-            for name in ("rho_t", "rho_p", "rho_n")
-            if name in g and g[name].notna().any()
-        }
-    return out
-
-
-def aggregation_table(
-    scores: pd.DataFrame, study: str, reference: str = "randomwalknowcast"
-) -> pd.DataFrame:
-    """Return each option's WIS relative to the reference, by level.
+    One panel per study and level, never pooled across levels, with the
+    options (`OPTIONS`) on the x axis and one marker per model, on the
+    targets each shares with `reference`.
 
     Parameters
     ----------
     scores : pandas.DataFrame
         Per-target rows: `study`, `model`, `option`, `level`, `location`,
-        `origin_date`, `target_date`, `wis`, `log_wis`, `cover50`,
-        `cover95`, with the reference model's rows.
-    study : str
-        `ebola` or `germany`.
+        `origin_date`, `target_date` and `wis`, with the reference
+        model's rows.
     reference : str
         The model scores are relative to.
-
-    Returns
-    -------
-    pandas.DataFrame
-        One row per model, option and level: relative WIS with the log
-        scale in brackets, 50% and 95% coverage and n, the number of
-        targets shared with the reference.
     """
-    sc = scores.loc[scores["study"] == study]
-    keys = ["level", "location", "origin_date", "target_date"]
-    ref = sc.loc[sc["model"] == reference, [*keys, "wis", "log_wis"]]
-    paired = sc.loc[sc["model"] != reference].merge(
+    keys = ["study", "level", "location", "origin_date", "target_date"]
+    ref = scores.loc[scores["model"] == reference, [*keys, "wis"]]
+    ref = ref.drop_duplicates(keys)
+    paired = scores.loc[scores["model"] != reference].merge(
         ref, on=keys, suffixes=("", "_ref")
     )
-    g = paired.groupby(["model", "option", "level"], sort=False)
-    sums = g[["wis", "wis_ref", "log_wis", "log_wis_ref"]].sum()
-    rel = sums["wis"] / sums["wis_ref"]
-    rel_log = sums["log_wis"] / sums["log_wis_ref"]
-    cover = g[["cover50", "cover95"]].mean()
-    out = pd.DataFrame(
-        {
-            "Relative WIS (log)": [
-                f"{a:.2f} ({b:.2f})" for a, b in zip(rel, rel_log, strict=True)
-            ],
-            "50% / 95%": _pair(cover["cover50"], cover["cover95"]),
-            "n": g.size(),
-        },
-        index=sums.index,
-    ).reset_index()
-    out["option"] = pd.Categorical(
-        out["option"], categories=list(OPTIONS), ordered=True
+    sums = paired.groupby(["study", "level", "model", "option"])[
+        ["wis", "wis_ref"]
+    ].sum()
+    rel = (sums["wis"] / sums["wis_ref"]).rename("rel").reset_index()
+    panels = list(dict.fromkeys(zip(rel["study"], rel["level"], strict=True)))
+    studies = list(dict.fromkeys(s for s, _ in panels))
+    ncol = max(sum(s == st for s, _ in panels) for st in studies)
+    fig, axes = plt.subplots(
+        len(studies),
+        ncol,
+        figsize=(3.6 * ncol, 2.8 * len(studies)),
+        layout="constrained",
+        squeeze=False,
     )
-    out = out.sort_values(["model", "option", "level"])
-    out["option"] = out["option"].map(OPTIONS).astype(str)
-    return out.rename(
-        columns={"model": "Model", "option": "Option", "level": "Level"}
-    )
-
-
-def cost_table(cost: pd.DataFrame) -> pd.DataFrame:
-    """Return each option's cost, with the options named as in the SI."""
-    out = cost.assign(option=cost["option"].map(OPTIONS).fillna(cost["option"]))
-    return out.rename(
-        columns={
-            "study": "Study",
-            "model": "Model",
-            "option": "Option",
-            "series": "Series per block",
-            "memory_gb": "Memory (GB)",
-            "seconds": "Time (s)",
-        }
-    )
+    options = [o for o in OPTIONS if o in set(rel["option"])]
+    models = sorted(rel["model"].unique())
+    markers = dict(zip(models, "osD^v<>", strict=False))
+    for i, study in enumerate(studies):
+        levels = [lv for s, lv in panels if s == study]
+        for j in range(ncol):
+            ax = axes[i, j]
+            if j >= len(levels):
+                ax.set_visible(False)
+                continue
+            one = rel.loc[(rel["study"] == study) & (rel["level"] == levels[j])]
+            for model, g in one.groupby("model"):
+                ax.plot(
+                    [options.index(o) for o in g["option"]],
+                    g["rel"],
+                    ls="none",
+                    marker=markers[model],
+                    label=model,
+                )
+            ax.axhline(1, color="#888888", lw=1)
+            ax.set_xticks(
+                range(len(options)),
+                [OPTIONS[o] for o in options],
+                fontsize=7,
+                rotation=30,
+                ha="right",
+            )
+            ax.set_title(f"{study}, {levels[j]}", fontsize=9)
+            ax.set_ylabel("Relative WIS")
+    handles, labels = axes[0, 0].get_legend_handles_labels()
+    fig.legend(handles, labels, loc="outside lower center", ncol=2, fontsize=7)
+    return fig
 
 
 def aggregation_numbers(
@@ -307,31 +251,144 @@ def _case_study_rows(scores: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
-def checkpoint_rows(
-    scores: pd.DataFrame, checkpoints: tuple[str, ...] = ()
-) -> pd.DataFrame:
-    """Return the final run's checkpoint rows, under one scoring rule.
+def checkpoint_rows(scores: pd.DataFrame, run: str = LIVE_RUN) -> pd.DataFrame:
+    """Return zero-shot and the live run's checkpoint rows, by level.
 
-    Rows of `CHECKPOINT_RULE` are kept where the table records a rule, and
-    the case studies' rows only (not the held-out loss). Of the fine-tuned
-    rows, only the final run's `checkpoints` are kept, with the zero-shot
-    model; before the run publishes one, only zero-shot is left.
-    BDBV's relative CRPS fills `rel_wis` where that is empty, so one
-    column holds each study's relative score.
+    Rows of `CHECKPOINT_RULE` and the hub target on the case studies'
+    development data (`live_checkpoint.tidy`), at every level, each for
+    its own panel. BDBV's relative CRPS fills `rel_wis`, so one column
+    holds each study's relative score.
     """
-    out = _case_study_rows(scores)
-    keep = (out["checkpoint"] == "zero-shot") | out["checkpoint"].isin(
-        list(checkpoints)
-    )
+    out = tidy(scores)
+    out = out.loc[out["study"].isin(["germany", "ebola"])]
+    out = out.assign(rel_wis=out["rel"], rel_log_wis=out["rel_log"])
+    live = out["run"] == run if "run" in out else False
+    keep = (out["checkpoint"] == "zero-shot") | live
     return out.loc[keep].reset_index(drop=True)
 
 
-FINETUNED_EVIDENCE: Final = (
-    "copula_scores",
-    "copula_rho",
-    "aggregation_scores",
-    "aggregation_cost",
-)
+HELDOUT_LEVELS: Final = ("national", "intermediate", "leaf")
+"""Levels of the trainer's held-out loss, each reported on its own."""
+
+WITHOUT_BIASES: Final = "no-slots"
+"""The run fine-tuned without attention biases, by the scores' `run`."""
+
+
+def slots_rows(
+    scores: pd.DataFrame, run: str = LIVE_RUN, without: str = WITHOUT_BIASES
+) -> pd.DataFrame:
+    """Return the runs with and without attention biases, by checkpoint.
+
+    Sets are, one per level, the trainer's held-out loss and the relative
+    scores of each model on the German first half and the BDBV release backtest,
+    in the layout of `comparison_figure` (`set`, `run`, `outbreaks`,
+    `score`).
+    """
+    rows = tidy(scores)
+    names = {run: "attention biases", without: "no biases"}
+    rows = rows.loc[rows["run"].isin(names) & (rows["outbreaks"] > 0)]
+    loss = rows.loc[
+        (rows["study"] == "held_out") & rows["level"].isin(HELDOUT_LEVELS)
+    ]
+    out = [
+        pd.DataFrame(
+            {
+                "set": "Held-out loss, " + loss["level"],
+                "run": loss["run"].map(names),
+                "outbreaks": loss["outbreaks"],
+                "score": loss["loss"],
+            }
+        )
+    ]
+    case = rows.loc[rows["study"].isin(["germany", "ebola"])]
+    study = case["study"].map({"germany": "German", "ebola": "BDBV"})
+    source = case["model"].str.extract(r"_(daily|weekly)_")[0]
+    out.append(
+        pd.DataFrame(
+            {
+                "set": study + " " + case["level"] + ", " + source,
+                "run": case["run"].map(names),
+                "outbreaks": case["outbreaks"],
+                "score": case["rel"],
+            }
+        )
+    )
+    return pd.concat(out, ignore_index=True).dropna(subset=["score"])
+
+
+def slots_summary(
+    scores: pd.DataFrame, run: str = LIVE_RUN, without: str = WITHOUT_BIASES
+) -> pd.DataFrame:
+    """Return zero-shot and both runs at the largest size both reached.
+
+    Per study, each run keeps only checkpoints up to the largest number
+    of simulations both runs were scored at, so the rows compare like
+    with like; a study with no shared size is blank.
+    """
+    rows = tidy(scores)
+    both = rows.loc[rows["run"].isin([run, without])]
+    keep = pd.Series(True, index=scores.index)
+    for study, g in both.groupby("study"):
+        sizes = [set(g.loc[g["run"] == r, "outbreaks"]) for r in (run, without)]
+        shared = sizes[0] & sizes[1]
+        top = max(shared) if shared else -1
+        drop = (
+            (scores["study"] == study)
+            & scores["run"].isin([run, without])
+            & (scores["outbreaks"] > top)
+        )
+        keep &= ~drop
+    matched = scores.loc[keep]
+    live = summary_table(matched, run)
+    none = summary_table(matched, without)
+    out = pd.concat([live, none.iloc[[1]]], ignore_index=True)
+    out = out.rename(columns={"Simulations": "Run"})
+    out["Run"] = ["Zero-shot", "attention biases", "no biases"]
+    return out
+
+
+def heldout_rows(scores: pd.DataFrame, run: str = LIVE_RUN) -> pd.DataFrame:
+    """Return the trainer's held-out loss of the live run by checkpoint.
+
+    In the layout of `heldout_figure`, on the trainer's held-out set, one
+    line per level (`HELDOUT_LEVELS`).
+    """
+    rows = tidy(scores)
+    rows = rows.loc[
+        (rows["study"] == "held_out")
+        & rows["level"].isin(HELDOUT_LEVELS)
+        & (rows["run"] == run)
+    ]
+    return pd.DataFrame(
+        {
+            "run": run,
+            "blocks": rows["level"],
+            "outbreaks_seen": rows["outbreaks"],
+            "heldout_loss": rows["loss"],
+        }
+    )
+
+
+def live_numbers(scores: pd.DataFrame | None, run: str = LIVE_RUN) -> dict:
+    """Return each study's newest checkpoint of the live run and its label.
+
+    `label` is the newest over the studies, for captions; it says the
+    scores are not yet available before any checkpoint is scored.
+    """
+    top = {} if scores is None else newest(scores, run)
+    out: dict = {
+        study: {"checkpoint": ck, "outbreaks": n, "label": checkpoint_label(n)}
+        for study, (ck, n) in top.items()
+    }
+    out["label"] = (
+        checkpoint_label(max(n for _, n in top.values()))
+        if top
+        else "Fine-tuned checkpoint scores are not yet available."
+    )
+    return out
+
+
+FINETUNED_EVIDENCE: Final = ("aggregation_scores",)
 """Evidence of both zero-shot and fine-tuned models, whose fine-tuned rows
 come from earlier fine-tunes than the paper's and are left out."""
 
@@ -367,7 +424,7 @@ def checkpoint_numbers(scores: pd.DataFrame) -> dict:
     return out
 
 
-PLANNED_CHECKPOINTS: Final = (1000, 2000, 4000, 8000)
+PLANNED_CHECKPOINTS: Final = (1000, 2000, 4000, 8400)
 """The final run's checkpoints, which set the axis before any lands."""
 
 
@@ -615,10 +672,9 @@ def diseases_table(diseases: pd.DataFrame) -> pd.DataFrame:
 
 
 EVIDENCE: Final = {
-    "copula_scores": "fm-copula's per-forecast copula scores",
-    "copula_rho": "fm-copula's rolling correlation estimates",
+    "si_copula": "fm-copula's walk scores, no pairing against rolling rho_p",
+    "copula_rho": "the walk models' rho_p by origin (copula.json rows)",
     "aggregation_scores": "fm-agg's per-target aggregation scores",
-    "aggregation_cost": "fm-agg's cost of each option",
     "finetune_heldout": "fm-finetune3's held-out loss curve",
     "sim_summaries": "fm-finetune3's per-outbreak r3 pilot summaries",
     "sim_realism": "fm-finetune3's data reference values",
@@ -628,7 +684,6 @@ EVIDENCE: Final = {
     "lag_germany": "germany-chronos2's German lag-horizon scores",
     "lag_bdbv_before": "the BDBV scores with the 4-week lag horizon",
     "lag_bdbv_after": "the BDBV scores with lags to the truth delay",
-    "slots_check": "slots-check's slots against no slots and lag-swap test",
     "compare_slots": "the slots and no-slots runs' scores by checkpoint",
     "compare_delays": "the full and no-delay runs' scores by checkpoint",
     "compare_realdata": "the real-data and synthetic fine-tunes' scores",
@@ -636,7 +691,6 @@ EVIDENCE: Final = {
     "block_combinations": (
         "fm-finetune3's realised shares of block layouts and options"
     ),
-    "heldout_layout": "held-out synthetic scores by block layout and target",
 }
 """Each evidence input and what it waits on until set.
 
@@ -649,12 +703,13 @@ case study and level), `run`, `outbreaks` (the run's checkpoint) and
 NOT_YET: Final = "(not yet available)"
 """What the paper quotes in place of a number whose rows are not set."""
 
+COPULA_MODELS: Final = ("randomwalk", "randomwalknowcast")
+"""The models that pair their province draws by rho_p."""
+
 QUOTED: Final = {
     "rho": {
-        "germany": {
-            strata: {"randomwalknowcast": {"rho_t": NOT_YET, "rho_p": NOT_YET}}
-            for strata in ("states", "ages")
-        }
+        m: {"rho_p": NOT_YET, "origins": NOT_YET, "fallback": NOT_YET}
+        for m in COPULA_MODELS
     },
     "realism": {
         "zero_share": {"sim_q95": NOT_YET, "BDBV": NOT_YET},
@@ -664,120 +719,118 @@ QUOTED: Final = {
 """The numbers the paper quotes, as they read until their rows exist."""
 
 
-THREE_DAY: Final = "3day"
-"""How the slots check names its 3-day sets."""
+COPULA_STUDIES: Final = {
+    "germany": "Germany",
+    "bdbv": "BDBV",
+    "synthetic": "Held-out synthetic",
+}
+"""The copula figure's studies, in its row order, all on development data."""
+
+COPULA_LEVELS: Final = ("national", "provinces", "states")
+"""The levels the copula changes: the country, which is the sum of the
+provinces (or states), and the provinces themselves. Zones are not
+paired."""
+
+COPULA_METRICS: Final = {
+    "cell_crps": "CRPS",
+    "cell_cover90": "90% coverage",
+    "joint_log_energy": "ES (log)",
+}
+"""The copula figure's scores: CRPS and 90% coverage of each cell, which
+at the national level is the sum of the provinces, and the energy score
+on log counts of the level's places and weeks as one vector."""
 
 
-def _ratio_ci(rows: pd.DataFrame) -> list[str]:
-    """Return each ratio and its 90% interval as `r (lo to hi)`, 2 d.p."""
-    return [
-        f"{r:.2f} ({lo:.2f} to {hi:.2f})"
-        for r, lo, hi in zip(
-            rows["ratio"], rows["ci_low"], rows["ci_high"], strict=True
-        )
-    ]
+def rho_medians(rho: pd.DataFrame) -> dict:
+    """Return each walk model's median rolling rho_p over origins.
 
-
-def slots_loss_table(check: pd.DataFrame) -> pd.DataFrame:
-    """Return the slots run's loss against each comparator, by source.
-
-    The slots check's `given` rows: the slots run's mean loss against
-    zero-shot Chronos-2 and against the no-slots run at the same
-    checkpoint, with the paired ratio and its 90% interval. The no-slots
-    run built its 3-day blocks as daily, so 3-day blocks against no slots
-    are left out.
+    `rho` has the walk models' `copula.json` rows: `model`, `origin`,
+    `n_scores`, `rho_provinces`, `n_pairs` and `fallback`. Origins that
+    fell back to the prior for want of pairs are counted, not in the
+    median.
     """
-    rows = check.loc[
-        (check["model"] == "slots") & (check["condition"] == "given")
-    ]
+    fallback = rho["fallback"].astype(str).str.lower() == "true"
+    out: dict = {}
+    for model, g in rho.groupby("model", sort=False):
+        own = fallback.loc[g.index]
+        est = g.loc[~own, "rho_provinces"]
+        out[model] = {
+            "rho_p": round(float(est.median()), 2) if len(est) else NOT_YET,
+            "origins": int(g["origin"].nunique()),
+            "fallback": int(own.sum()),
+        }
+    return out
+
+
+def copula_figure(rows: pd.DataFrame) -> Figure:
+    """Plot each score of the rolling copula relative to no pairing.
+
+    One panel per study and level in `COPULA_LEVELS`, never pooled across
+    levels. Each panel gives the ratio rolling / off of every score in
+    `COPULA_METRICS`, one marker per model, with 1 no pairing. `rows` are
+    `evaluation.pairing.summarise_pairing`'s: `study`, `level`, `model`,
+    `variant` (`off` or `rolling`), `target`, `metric`, `value` and `n`.
+    """
+    rows = rows.assign(metric=rows["target"] + "_" + rows["metric"])
     rows = rows.loc[
-        ~(rows["set"].str.contains(THREE_DAY) & (rows["against"] == "no-slots"))
+        rows["metric"].isin(list(COPULA_METRICS))
+        & rows["level"].isin(COPULA_LEVELS)
     ]
-    return pd.DataFrame(
-        {
-            "Set": rows["set"],
-            "Window": rows["window"],
-            "Against": rows["against"],
-            "Slots loss": rows["loss"].round(2),
-            "Against loss": rows["against_loss"].round(2),
-            "Ratio (90% CI)": _ratio_ci(rows),
-        }
-    ).reset_index(drop=True)
-
-
-def slots_swap_table(check: pd.DataFrame) -> pd.DataFrame:
-    """Return each model's loss with lag series swapped between places.
-
-    The ratio of loss with whole lag series moved to another place to the
-    loss as given, with its 90% interval; 1 means the model does not tell
-    which place a lag series belongs to.
-    """
-    rows = check.loc[check["condition"] == "swap_places"]
-    return pd.DataFrame(
-        {
-            "Set": rows["set"],
-            "Window": rows["window"],
-            "Model": rows["model"],
-            "Ratio (90% CI)": _ratio_ci(rows),
-        }
-    ).reset_index(drop=True)
-
-
-def slots_scores_table(
-    scores: pd.DataFrame, checkpoints: tuple[str, ...] = ()
-) -> pd.DataFrame:
-    """Return the case studies' relative scores of both runs, matched.
-
-    Rows of `CHECKPOINT_RULE` for Germany's first half and BDBV: each of
-    the final slots run's `checkpoints` beside the no-slots run's
-    checkpoint fine-tuned on as many outbreaks. Other slots runs'
-    checkpoints (`slots-<hash>`) are left out. Relative WIS for Germany
-    and relative CRPS for BDBV, against `randomwalknowcast`.
-    """
-    rows = _case_study_rows(scores)
-    rows = rows.loc[rows["outbreaks"] > 0]
-    ids = rows["checkpoint"].astype(str)
-    slots = ids.isin(list(checkpoints))
-    plain = ~ids.str.startswith("slots-")
-    keys = ["study", "level", "model", "outbreaks"]
-    twice = rows.loc[plain].duplicated(keys, keep=False)
-    if twice.any():
-        names = sorted(set(rows.loc[plain].loc[twice, "checkpoint"]))
-        raise ValueError(
-            f"More than one no-slots checkpoint per size: {', '.join(names)}."
-        )
-    pairs = rows.loc[slots, [*keys, "rel_wis"]].merge(
-        rows.loc[plain, [*keys, "rel_wis"]],
-        on=keys,
-        suffixes=("_slots", "_none"),
-    )
-    pairs = pairs.sort_values(keys).reset_index(drop=True)
-    return pd.DataFrame(
-        {
-            "Study": pairs["study"],
-            "Level": pairs["level"],
-            "Model": pairs["model"],
-            "Outbreaks": pairs["outbreaks"],
-            "Slots": pairs["rel_wis_slots"],
-            "No slots": pairs["rel_wis_none"],
-        }
-    )
-
-
-def comparison_table(rows: pd.DataFrame) -> pd.DataFrame:
-    """Return a fine-tuning comparison with each run's score side by side.
-
-    One row per set and checkpoint, one column per run, for the
-    checkpoints every run reached.
-    """
     wide = rows.pivot_table(
-        index=["set", "outbreaks"], columns="run", values="score"
-    ).dropna()
-    wide = wide.reset_index().rename(
-        columns={"set": "Set", "outbreaks": "Outbreaks"}
+        index=["study", "level", "model", "metric"],
+        columns="variant",
+        values="value",
+    ).reset_index()
+    wide["ratio"] = wide["rolling"] / wide["off"]
+    n = rows.groupby(["study", "level"])["n"].min()
+    studies = [s for s in COPULA_STUDIES if s in set(wide["study"])]
+    levels = {
+        s: list(dict.fromkeys(rows.loc[rows["study"] == s, "level"]))
+        for s in studies
+    }
+    ncol = max(len(v) for v in levels.values())
+    fig, axes = plt.subplots(
+        len(studies),
+        ncol,
+        figsize=(3.4 * ncol, 2.6 * len(studies)),
+        layout="constrained",
+        squeeze=False,
     )
-    wide.columns.name = None
-    return wide.sort_values(["Set", "Outbreaks"]).reset_index(drop=True)
+    metrics = list(COPULA_METRICS)
+    models = sorted(wide["model"].unique())
+    markers = dict(zip(models, "osD^v", strict=False))
+    for i, study in enumerate(studies):
+        for j in range(ncol):
+            ax = axes[i, j]
+            if j >= len(levels[study]):
+                ax.set_visible(False)
+                continue
+            level = levels[study][j]
+            one = wide.loc[(wide["study"] == study) & (wide["level"] == level)]
+            for model, g in one.groupby("model"):
+                x = [metrics.index(m) for m in g["metric"]]
+                ax.plot(
+                    x,
+                    g["ratio"],
+                    ls="none",
+                    marker=markers[model],
+                    label=model,
+                )
+            ax.axhline(1, color="#888888", lw=1)
+            ax.set_xticks(
+                range(len(metrics)),
+                [COPULA_METRICS[m] for m in metrics],
+                fontsize=7,
+            )
+            ax.set_title(
+                f"{COPULA_STUDIES[study]}, {level} "
+                f"(n = {int(n.loc[(study, level)])})",
+                fontsize=9,
+            )
+            ax.set_ylabel("Rolling / no pairing")
+    handles, labels = axes[0, 0].get_legend_handles_labels()
+    fig.legend(handles, labels, loc="outside lower center", ncol=len(models))
+    return fig
 
 
 def comparison_figure(rows: pd.DataFrame) -> Figure:
@@ -825,6 +878,31 @@ def comparison_figure(rows: pd.DataFrame) -> Figure:
     return fig
 
 
+def branch_head(branch: str, repo: Path | str = ".") -> str:
+    """Return the commit at the head of an evidence branch on `origin`.
+
+    The branch is fetched first, so each workflow run reads its newest
+    rows; an evidence file named by this commit is extracted anew when
+    the branch moves. Offline, the branch as last fetched is used.
+    """
+    import subprocess
+
+    def git(*args: str) -> str:
+        return subprocess.run(
+            ["git", "-C", str(repo), *args],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+
+    try:
+        git("fetch", "-q", "origin", branch)
+        return git("rev-parse", "FETCH_HEAD")
+    except subprocess.CalledProcessError:
+        # Offline: the branch as last fetched.
+        return git("rev-parse", f"origin/{branch}")
+
+
 def _read(paths: Mapping[str, Path | None], name: str) -> pd.DataFrame | None:
     path = paths.get(name)
     if path is None:
@@ -837,7 +915,7 @@ def write_evidence(
     si_dir: Path,
     fig_dir: Path,
     out_yml: Path,
-    checkpoints: tuple[str, ...] = (),
+    run: str = LIVE_RUN,
 ) -> dict:
     """Write every evidence table and figure, and the numbers they quote.
 
@@ -849,9 +927,9 @@ def write_evidence(
         Folders for the SI tables and figures.
     out_yml : pathlib.Path
         The quoted numbers, as Quarto metadata under `evidence`.
-    checkpoints : tuple of str
-        The final run's published checkpoints, which the curve shows
-        (`checkpoint_rows`).
+    run : str
+        The live fine-tuning run, whose scored checkpoints the curve, the
+        tables and the comparisons show as preliminary.
 
     Returns
     -------
@@ -888,24 +966,17 @@ def write_evidence(
         fig.savefig(fig_dir / f"{name}.png", dpi=200)
         plt.close(fig)
 
-    cop = data["copula_scores"]
     agg = data["aggregation_scores"]
-    for study in ("ebola", "germany"):
-        table(
-            f"copula-{study}",
-            None if cop is None else copula_table(cop, study),
-            ["copula_scores"],
-        )
-        table(
-            f"aggregation-{study}",
-            None if agg is None else aggregation_table(agg, study),
-            ["aggregation_scores"],
-        )
-    cost = data["aggregation_cost"]
-    table(
-        "aggregation-cost",
-        None if cost is None else cost_table(cost),
-        ["aggregation_cost"],
+    figure(
+        "aggregation",
+        None if agg is None else aggregation_figure(agg),
+        ["aggregation_scores"],
+    )
+    cop = data["si_copula"]
+    figure(
+        "copula-impact",
+        None if cop is None else copula_figure(cop),
+        ["si_copula"],
     )
     dis = data["sim_diseases"]
     table(
@@ -913,30 +984,26 @@ def write_evidence(
         None if dis is None else diseases_table(dis),
         ["sim_diseases"],
     )
-    ckpt = data["checkpoint_scores"]
-    if ckpt is not None:
-        ckpt = checkpoint_rows(ckpt, checkpoints)
+    raw = data["checkpoint_scores"]
+    ckpt = None if raw is None else checkpoint_rows(raw, run)
     figure(
         "checkpoint-curve",
         None if ckpt is None else checkpoint_figure(ckpt),
         ["checkpoint_scores"],
     )
-    check = data["slots_check"]
     table(
-        "slots-loss",
-        None if check is None else slots_loss_table(check),
-        ["slots_check"],
+        "checkpoint-table",
+        None if raw is None else checkpoint_table(raw, run),
+        ["checkpoint_scores"],
     )
     table(
-        "slots-swap",
-        None if check is None else slots_swap_table(check),
-        ["slots_check"],
+        "live-summary",
+        None if raw is None else summary_table(raw, run),
+        ["checkpoint_scores"],
     )
     table(
-        "slots-scores",
-        None
-        if data["checkpoint_scores"] is None
-        else slots_scores_table(data["checkpoint_scores"], checkpoints),
+        "slots-summary",
+        None if raw is None else slots_summary(raw, run),
         ["checkpoint_scores"],
     )
     table(
@@ -944,7 +1011,8 @@ def write_evidence(
         data["block_combinations"],
         ["block_combinations"],
     )
-    table("heldout-layout", data["heldout_layout"], ["heldout_layout"])
+    if data["compare_slots"] is None and raw is not None:
+        data["compare_slots"] = slots_rows(raw, run)
     for name in ("slots", "delays", "realdata", "daily"):
         rows = data[f"compare_{name}"]
         figure(
@@ -952,15 +1020,12 @@ def write_evidence(
             None if rows is None else comparison_figure(rows),
             [f"compare_{name}"],
         )
-        table(
-            f"compare-{name}",
-            None if rows is None else comparison_table(rows),
-            [f"compare_{name}"],
-        )
     curve = data["finetune_heldout"]
+    if curve is None and raw is not None:
+        curve = heldout_rows(raw, run)
     figure(
         "finetune-heldout",
-        None if curve is None else heldout_figure(curve),
+        None if curve is None or curve.empty else heldout_figure(curve),
         ["finetune_heldout"],
     )
     sims, ref = data["sim_summaries"], data["sim_realism"]
@@ -995,6 +1060,7 @@ def write_evidence(
                 else scale_floor_numbers(data["scale_floor"])
             ),
             "checkpoints": (None if ckpt is None else checkpoint_numbers(ckpt)),
+            "live": live_numbers(raw, run),
             "aggregation": (None if agg is None else aggregation_numbers(agg)),
             "realism": (
                 QUOTED["realism"] if ref is None else realism_numbers(ref)

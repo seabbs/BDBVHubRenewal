@@ -1,7 +1,8 @@
 name: Pull request closed
 
-# When a pull request closes or merges, stops its running workflows and
-# removes its docs preview from gh-pages.
+# When a pull request closes or merges, stops its running workflows,
+# deletes its Actions caches and main's superseded ones, and removes its
+# docs preview from gh-pages.
 # pull_request_target runs even when the pull request has merge
 # conflicts, which pull_request does not. It never checks out the pull
 # request's code.
@@ -28,6 +29,36 @@ jobs:
             --event pull_request -L 100 --json databaseId,status \
             -q '.[] | select(.status != "completed") | .databaseId' |
             xargs -r -n 1 gh run cancel -R "$GITHUB_REPOSITORY" || true
+
+  caches:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      # A pull request's caches serve only its own runs.
+      - name: Delete the pull request's caches
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REF: refs/pull/${{ github.event.number }}/merge
+        run: |
+          gh cache list -R "$GITHUB_REPOSITORY" --ref "$REF" -L 1000 \
+            --json id -q '.[].id' |
+            xargs -r -n 1 gh cache delete -R "$GITHUB_REPOSITORY" || true
+      # Main's JAX caches are restored newest first by key prefix, and
+      # its forecast output caches by the hash of their inputs, so an
+      # older entry under the same prefix is read only if the inputs go
+      # back. Keeping the newest per prefix keeps main's caches small.
+      - name: Delete main's superseded caches
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh cache list -R "$GITHUB_REPOSITORY" --ref refs/heads/main \
+            -L 1000 --sort created_at --order desc --json id,key \
+            -q '.[] | select(.key | test("^(jax|forecast)-"))
+                | [.id, (.key | sub("-[0-9a-f]{16,}$"; ""))] | @tsv' |
+            awk -F'\t' 'seen[$2]++ { print $1 }' |
+            xargs -r -n 1 gh cache delete -R "$GITHUB_REPOSITORY" || true
 
   remove:
     if: github.event.pull_request.head.repo.full_name == github.repository

@@ -25,7 +25,7 @@ from bdbvhubrenewal.data.zones import is_zone, weekly_zone_counts
 from bdbvhubrenewal.forecasters import ForecastTask
 from bdbvhubrenewal.forecasters.base import NATIONAL, SAMPLE_COLUMNS
 from bdbvhubrenewal.forecasters.zones import walks_own_zones, zones_for_model
-from bdbvhubrenewal.submission.hub import to_hub_table
+from bdbvhubrenewal.submission.hub import own_national, to_hub_table
 
 __all__ = [
     "HUB_QUANTILE_LEVELS",
@@ -143,13 +143,17 @@ def hub_tables(
             split = zones_for_model(
                 str(name), task, places, counts, zones, daily_zones
             )
+        # A model that forecasts the country keeps its national rows.
+        country_own = own_national(str(name))
+        country = own.loc[own["location"] == NATIONAL, list(SAMPLE_COLUMNS)]
         out[str(name)] = to_hub_table(
-            provinces,
+            pd.concat([provinces, country]) if country_own else provinces,
             task.reference_date,
-            unassigned=_unassigned(own),
+            unassigned=None if country_own else _unassigned(own),
             zones=split,
             forecast_date=task.vintage,
             zones_sum=not walks_own_zones(str(name)),
+            national="own" if country_own else "sum",
         )
     return out
 

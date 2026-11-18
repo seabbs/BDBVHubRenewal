@@ -56,8 +56,8 @@ def dry(tmp_path, *targets, config=None):
 
 def test_simulate_runs_every_batch_of_a_round(tmp_path):
     jobs = dry(tmp_path, "simulate", config={"rounds": [4]})
-    assert jobs["simulate_batch"] == 44
-    assert jobs["batch_record"] == 44
+    assert jobs["simulate_batch"] == 40
+    assert jobs["batch_record"] == 40
     assert jobs["round_manifest"] == 1
     assert jobs["sim_qc"] == 1
     assert jobs["round_ready"] == 1
@@ -70,7 +70,7 @@ def test_simulate_never_releases(tmp_path):
 
 def test_release_is_its_own_target(tmp_path):
     jobs = dry(tmp_path, "release", config={"rounds": [4]})
-    assert jobs["release_batch"] == 44
+    assert jobs["release_batch"] == 40
 
 
 def test_batches_already_simulated_are_kept(tmp_path):
@@ -81,15 +81,60 @@ def test_batches_already_simulated_are_kept(tmp_path):
             f.write("x\n")
         (sims / f"settings-{seed}.csv").write_text("outbreak\n")
     jobs = dry(tmp_path, "simulate", config={"rounds": [4]})
-    assert jobs["simulate_batch"] == 42
+    assert jobs["simulate_batch"] == 38
+
+
+SPLIT = {"rounds": [10]}
+
+
+def _host(tmp_path, seeds):
+    (tmp_path / "local.env").write_text(
+        f"ROOT={tmp_path}\nHOST_NAME=test-host\nSIM_SEEDS={seeds}\n"
+    )
+
+
+def test_a_round_shared_with_another_host_waits_for_its_seeds(tmp_path):
+    _host(tmp_path, '"31000-31004 31006 31008-31039"')
+    jobs = dry(tmp_path, "simulate", config=SPLIT)
+    assert jobs["simulate_batch"] == 38
+    assert jobs["await_batch"] == 2
+    assert jobs["batch_record"] == 40
+
+
+def test_a_second_host_simulates_and_pushes_only_its_seeds(tmp_path):
+    _host(tmp_path, '"31005 31007"')
+    jobs = dry(tmp_path, "push", config=SPLIT)
+    assert jobs["simulate_batch"] == 2
+    assert jobs["push_batch"] == 2
+    assert "batch_record" not in jobs
+    assert "await_batch" not in jobs
+
+
+def test_a_host_can_take_whole_rounds(tmp_path):
+    _host(tmp_path, "r10")
+    jobs = dry(tmp_path, "push", config={"rounds": [10, 11]})
+    assert jobs["push_batch"] == 40
+
+
+def test_no_host_is_named_in_the_committed_workflow():
+    profiles = (ROOT / "workflow" / "profiles").iterdir()
+    assert sorted(p.name for p in profiles) == ["ci", "default"]
+    for path in [
+        ROOT / "workflow" / "config.yaml",
+        ROOT / "workflow" / "README.md",
+        ROOT / "config" / "local.env.example",
+        ROOT / "config" / "profile.example" / "config.yaml",
+        *(ROOT / "workflow" / "rules").glob("*.smk"),
+    ]:
+        assert "archie" not in path.read_text().lower(), path
 
 
 FT = {
-    "rounds": [1],
+    "rounds": [1, 2],
     "finetune": {
         "prefixes": [250, 500],
         "outbreaks": 500,
-        "rounds": [1],
+        "rounds": [2],
         "held_round": 1,
         "sims_from": "local",
         "real_validation": None,
@@ -100,16 +145,17 @@ FT = {
 def test_finetune_trains_one_segment_per_prefix(tmp_path):
     jobs = dry(tmp_path, "finetune", config=FT)
     assert jobs["train_segment"] == 2
-    # 500 outbreaks are 20 batches, one spare, and 4 held-out batches.
-    assert jobs["fetch_batch"] == 25
+    # 500 outbreaks are 24 batches of 21, one spare, and the held-out
+    # round's 40 batches.
+    assert jobs["fetch_batch"] == 65
     # On one machine the batches are simulated here.
-    assert jobs["simulate_batch"] == 25
+    assert jobs["simulate_batch"] == 65
 
 
 def test_finetune_takes_batches_from_releases(tmp_path):
     config = {**FT, "finetune": {**FT["finetune"], "sims_from": "release"}}
     jobs = dry(tmp_path, "finetune", config=config)
-    assert jobs["fetch_batch"] == 25
+    assert jobs["fetch_batch"] == 65
     assert "simulate_batch" not in jobs
 
 
@@ -312,7 +358,7 @@ def test_at_most_two_simulations_run_at_once(tmp_path):
             "--cores",
             "8",
             "--workflow-profile",
-            "workflow/profiles/cpu",
+            "workflow/profiles/default",
             "--config",
             "rounds=[4]",
         ],

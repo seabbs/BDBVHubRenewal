@@ -40,13 +40,14 @@ from dataclasses import dataclass, field, replace
 from functools import partial
 from pathlib import Path
 from types import ModuleType
-from typing import TYPE_CHECKING, Any, Final
+from typing import TYPE_CHECKING, Any, ClassVar, Final
 
 import numpy as np
 import pandas as pd
 from numpy.typing import NDArray
 
 from bdbvhubrenewal.data.tidy import write_csv
+from bdbvhubrenewal.data.zones import is_zone
 from bdbvhubrenewal.forecasters.base import (
     NATIONAL,
     SAMPLE_COLUMNS,
@@ -54,6 +55,7 @@ from bdbvhubrenewal.forecasters.base import (
     get_model,
     register_model,
 )
+from bdbvhubrenewal.forecasters.zones import with_zones
 
 if TYPE_CHECKING:
     from bdbvhubrenewal.data.bvd import BvdRelease
@@ -1131,6 +1133,7 @@ class RenewalModel:
     sampler: dict[str, Any] = field(default_factory=sampler_settings)
     progress: Path | None = None
     supports_mask: bool = field(init=False, default=True)
+    reads_zones: ClassVar[bool] = True
     name: str = field(init=False)
     fit_diagnostics: list[dict[str, Any]] = field(
         init=False, default_factory=list
@@ -1353,6 +1356,8 @@ class RenewalModel:
         >>> model.fit_diagnostics  # divergences and R-hat of the fit
         """
         fit = self.forecast_fit(task)
+        # The zones are split from the provinces as part of the forecast.
+        fit = replace(fit, samples=with_zones(fit.samples, task))
         self.last_fit = fit
         self.delay_summary = fit_delays(fit, task)
         self.fit_diagnostics = [
@@ -1452,13 +1457,19 @@ def fit_renewal(
     out = Path(fit_dir)
     out.mkdir(parents=True, exist_ok=True)
     settings = sampler_settings(sampler)
-    task = replace(task, seed=int(settings.get("seed", task.seed)))
+    seeded = replace(task, seed=int(settings.get("seed", task.seed)))
     registered = get_model(variant)
     if not isinstance(registered, RenewalModel):
         raise TypeError(f"{variant} is not a renewal model.")
     model = replace(registered, sampler=settings, progress=out / "progress.log")
-    model.forecast(task)
-    return model.write_fit_dir(task, out, config_name)
+    model.forecast(seeded)
+    fit = model.last_fit
+    if fit is not None and getattr(fit, "zones", None) is None:
+        # A province fit's zones are split with the task's own seed, as
+        # `forecast` does. A zone fit's zones are its own.
+        provinces = fit.samples.loc[~fit.samples["location"].map(is_zone)]
+        model.last_fit = replace(fit, samples=with_zones(provinces, task))
+    return model.write_fit_dir(seeded, out, config_name)
 
 
 def write_fit_dir(
@@ -1524,7 +1535,7 @@ def write_fit_dir(
         write_csv(
             pd.concat(pairs, ignore_index=True), out / TRAJECTORY_DRAW_FILE
         )
-    modelled = sorted(set(fit.samples["location"]))
+    modelled = sorted({c for c in fit.samples["location"] if not is_zone(c)})
     (out / TRAJECTORIES_FILE).write_text(
         json.dumps({"variant": variant, "modelled": modelled}, indent=1) + "\n"
     )

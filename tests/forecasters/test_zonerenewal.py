@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.data.zones import province_of
+from bdbvhubrenewal.data.zones import is_zone, province_of
 from bdbvhubrenewal.evaluation.backtest import BacktestConfig, make_tasks
 from bdbvhubrenewal.forecasters import ForecastTask, get_model
 from bdbvhubrenewal.forecasters import renewal as rn
@@ -123,7 +123,15 @@ def test_zone_fit_sums_fitted_and_silent_zones_to_provinces(
     zones = model.zone_samples
     assert zones is not None
     assert set(zones["location"]) == set(fitted) | quiet_zones
-    assert set(samples["location"]) == set(task.locations)
+    # The forecast carries the zone fit's own zones, so the store and the
+    # scores read them rather than a split of the provinces.
+    own = samples["location"].map(is_zone)
+    assert set(samples.loc[~own, "location"]) == set(task.locations)
+    pd.testing.assert_frame_equal(
+        samples.loc[own].reset_index(drop=True),
+        zones[list(samples.columns)].reset_index(drop=True),
+    )
+    samples = samples.loc[~own]
     # Provinces are the sums of their zones, sample by sample, and
     # national is their sum, with no unassigned part.
     assert model.last_fit is not None

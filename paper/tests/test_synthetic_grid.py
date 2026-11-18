@@ -39,8 +39,14 @@ TEXT = _simulator()
 def test_factors_and_levels_are_read_from_the_simulator() -> None:
     factors = synthetic_grid.parse_factors(TEXT)
     assert "strata" in factors
-    assert factors["observation"] == ["negbin", "negbin1d", "poisson"]
-    assert all(len(levels) >= 2 for levels in factors.values())
+    assert factors["observation"] == ["negbin1d", "poisson"]
+    assert all(len(levels) >= 1 for levels in factors.values())
+
+
+def test_repeated_levels_give_their_shares() -> None:
+    shares = synthetic_grid.parse_shares(TEXT)
+    assert shares["observation"] == {"negbin1d": 0.8, "poisson": 0.2}
+    assert shares["reporting"] == {"daily": 0.5, "weekdays": 0.5}
 
 
 def test_values_are_read_from_the_simulator() -> None:
@@ -49,77 +55,58 @@ def test_values_are_read_from_the_simulator() -> None:
     # Multi-line expressions are kept whole.
     assert values["gt_mean"].startswith("if (renewal)")
     assert "max_delay" in values
+    # Draws set after the list, one line each, are read too.
+    assert values["shock_mult"] == "runif(n_shocks, 2, 5)"
 
 
 def test_size_bounds_are_read_from_the_simulator() -> None:
     bounds = synthetic_grid.parse_bounds(TEXT)
     assert list(bounds) == ["min_size", "max_size", "max_independent"]
     assert bounds["min_size"] == "10"
-    assert bounds["max_independent"] == "8L"
     # The upper bound scales with the strata.
     assert "design$n_places" in bounds["max_size"]
 
 
-def test_every_setting_has_a_label() -> None:
+def test_every_setting_has_a_layer_and_a_label() -> None:
     names = [
         *synthetic_grid.parse_factors(TEXT),
         *synthetic_grid.DERIVED,
         *synthetic_grid.parse_values(TEXT),
         *synthetic_grid.parse_bounds(TEXT),
     ]
-    missing = [n for n in names if n not in synthetic_grid.LABELS]
-    assert not missing
+    assert not [n for n in names if n not in synthetic_grid.FACTOR_OF]
+    assert not [
+        f
+        for f in synthetic_grid.parse_factors(TEXT)
+        if f not in synthetic_grid.LAYER
+    ]
+    assert not [n for n in names if n not in synthetic_grid.LABELS]
 
 
-def test_the_main_table_has_one_row_per_factor_with_its_levels() -> None:
+def test_the_layer_tables_split_the_factors_with_their_draws() -> None:
+    tables = synthetic_grid.layer_tables(TEXT)
+    assert list(tables) == ["epidemic", "reporting"]
     factors = synthetic_grid.parse_factors(TEXT)
-    table = synthetic_grid.main_table(TEXT, pd.DataFrame({"outbreak": []}))
-    assert list(table["setting"]) == list(factors)
-    for (_, row), levels in zip(
-        table.iterrows(), factors.values(), strict=True
-    ):
-        for level in levels:
-            assert level in row["levels"]
-        assert f"1/{len(levels)} each" in row["levels"]
-
-
-def test_the_si_table_has_every_setting() -> None:
-    table = synthetic_grid.si_table(TEXT, pd.DataFrame({"outbreak": []}))
-    names = [
-        *synthetic_grid.parse_factors(TEXT),
-        *synthetic_grid.DERIVED,
-        *synthetic_grid.parse_values(TEXT),
-        *synthetic_grid.parse_bounds(TEXT),
-    ]
-    assert list(table["setting"]) == names
-
-
-def test_realised_values_come_from_the_settings() -> None:
-    settings = pd.DataFrame(
-        {
-            "outbreak": ["a", "b", "c"],
-            "observation": ["negbin", "poisson", "negbin"],
-            "delay_mean": [6.0, 10.0, 20.0],
-            "n_places": [1, 1, 5],
-            "report_days": ["all", "Monday", "all"],
-        }
-    )
-    main = synthetic_grid.main_table(TEXT, settings).set_index("setting")
-    assert main.loc["observation", "realised"] == "negbin 67%, poisson 33%"
-    si = synthetic_grid.si_table(TEXT, settings).set_index("setting")
-    assert si.loc["delay_mean", "realised"] == "10 [6, 20]"
-    assert si.loc["n_places", "realised"] == "1 [1, 5]; 67% one place"
-    assert si.loc["report_days", "realised"] == "67% every day"
-    assert si.loc["offset", "realised"] == ""
+    rows = pd.concat(tables.values())
+    assert sorted(rows["setting"]) == sorted(factors)
+    for table in tables.values():
+        assert list(table.columns) == ["setting", "factor", "levels", "draws"]
+    epi = tables["epidemic"].set_index("setting")
+    rep = tables["reporting"].set_index("setting")
+    assert "mixing" in epi.index
+    assert "shocks" in rep.index
+    assert "80%" in rep.loc["observation", "levels"]
+    assert "log-uniform(0.01, 0.5)" in epi.loc["mixing", "draws"]
+    assert "U(2, 5)" in rep.loc["shocks", "draws"]
 
 
 def test_markdown_escapes_pipes() -> None:
-    table = synthetic_grid.si_table(TEXT, pd.DataFrame({"outbreak": []}))
-    md = synthetic_grid.to_markdown(table, synthetic_grid.SI_HEADERS)
+    table = synthetic_grid.layer_tables(TEXT)["reporting"]
+    md = synthetic_grid.to_markdown(table, synthetic_grid.HEADERS)
     lines = md.strip().splitlines()
     assert len(lines) == len(table) + 2
-    # Five unescaped pipes bound the four cells of each row.
-    assert all(len(re.findall(r"(?<!\\)\|", line)) == 5 for line in lines[2:])
+    # Four unescaped pipes bound the three cells of each row.
+    assert all(len(re.findall(r"(?<!\\)\|", line)) == 4 for line in lines[2:])
 
 
 def test_the_si_notes_name_every_level_and_the_held_out_seeds() -> None:
@@ -139,3 +126,9 @@ def test_the_si_notes_name_every_level_and_the_held_out_seeds() -> None:
     assert all(str(b) in heldout for b in config.get("blocks") or [])
     # One sentence per line.
     assert all(line.count(". ") == 0 for line in heldout.splitlines() if line)
+
+
+def test_the_model_note_gives_one_draw_and_no_nb2() -> None:
+    model = synthetic_grid.model_note(TEXT)
+    assert "with one observation draw." in model
+    assert "NB2 or NB1" not in model

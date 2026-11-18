@@ -217,62 +217,69 @@ tasks:
   # The top-level workflow (workflow/Snakefile, workflow/README.md). Each
   # task runs a target; pass more Snakemake options after `--`, such as
   # `task score -- -n` for a dry run or a file to build one output.
+  # Every target runs with workflow/profiles/default and this machine's
+  # cores and resources less its headroom (flowlib.machine), or with the
+  # untracked profile SNAKEMAKE_PROFILE names (see config/profile.example).
   wf:
     internal: true
     cmds:
       - >-
         {{.SNAKEMAKE}} {{.WF_TARGET}}
-        --workflow-profile workflow/profiles/{{.PROFILE}}
-        --cores {{.CORES | default 1}}
-        --resources mem_mb={{.MEM_MB | default 32768}} gpu=1
-        sim_slots={{.SIM_SLOTS | default 2}}
+        {{if .SNAKEMAKE_PROFILE}}--workflow-profile {{.SNAKEMAKE_PROFILE}}
+        {{else}}--workflow-profile workflow/profiles/default
+        $(python3 workflow/flowlib/machine.py args){{end}}
         {{.CLI_ARGS}}
 
   all:
     desc: Run every workflow target that writes nothing outside this machine (simulate, finetune, score)
     cmds:
       - task: wf
-        vars: {PROFILE: cpu, WF_TARGET: all}
+        vars: {WF_TARGET: all}
 
   simulate:
     desc: Simulate the rounds in ROUNDS (for example ROUNDS=4 or ROUNDS="4 5"), with QC and manifests
     cmds:
       - task: wf
         vars:
-          PROFILE: cpu
           WF_TARGET: 'simulate --config "rounds=[{{.ROUNDS | default "" | splitList " " | join ","}}]"'
+
+  push:
+    desc: Simulate this host's seeds (SIM_SEEDS) of ROUNDS and push each batch to the rounds host (REMOTE)
+    cmds:
+      - task: wf
+        vars:
+          WF_TARGET: 'push --config "rounds=[{{.ROUNDS | default "" | splitList " " | join ","}}]"'
 
   release:
     desc: Upload each simulated batch of ROUNDS to its sims-r<N> release (writes GitHub releases)
     cmds:
       - task: wf
         vars:
-          PROFILE: cpu
           WF_TARGET: 'release --config "rounds=[{{.ROUNDS | default "" | splitList " " | join ","}}]"'
 
   finetune:
     desc: Train every checkpoint prefix of the fine-tuning run, one segment at a time on the GPU
     cmds:
       - task: wf
-        vars: {PROFILE: gpu, WF_TARGET: finetune}
+        vars: {WF_TARGET: finetune}
 
   publish:
     desc: Verify and release every finished checkpoint (writes GitHub releases)
     cmds:
       - task: wf
-        vars: {PROFILE: gpu, WF_TARGET: publish}
+        vars: {WF_TARGET: publish}
 
   score:
     desc: Score every released checkpoint (German, BDBV, held-out), then the slots check and aggregation rows
     cmds:
       - task: wf
-        vars: {PROFILE: cpu, WF_TARGET: "score --forcerun release_list"}
+        vars: {WF_TARGET: "score --forcerun release_list"}
 
   land:
     desc: Commit the checkpoint score tables to evidence/ and push (writes to GitHub)
     cmds:
       - task: wf
-        vars: {PROFILE: cpu, WF_TARGET: land}
+        vars: {WF_TARGET: land}
 
   dashboard:
     desc: Serve the fine-tuning dashboard on 127.0.0.1 (PORT=8765); runs from workflow/config.yaml, DASHBOARD_RUNS and `-- --run name=<folder|prefix>`
@@ -283,7 +290,7 @@ tasks:
     desc: Write the dashboard once as a static page (<RUN>/reports/dashboard.html)
     cmds:
       - task: wf
-        vars: {PROFILE: cpu, WF_TARGET: "dashboard --forcerun dashboard"}
+        vars: {WF_TARGET: "dashboard --forcerun dashboard"}
 
   tick:
     desc: Run this machine's scheduled workflow targets once (SCHEDULE_TARGETS in config/local.env), with the lock and room checks a timer uses

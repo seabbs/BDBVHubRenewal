@@ -39,6 +39,25 @@ DEFAULTS = (
     ("NOSLOTS_RUN", "$ROOT/checkpoints"),
     ("GERMANY_BLOCKS", "$ROOT/germany/germany.pkl"),
     ("JOB_PREFIX", ""),
+    # The rounds host, as ssh names it (empty: this machine), and its
+    # rounds folder (empty: ROOT), where a helping host pushes its
+    # batches; the seeds this host simulates (flowlib.hosts; empty: all);
+    # and a Snakemake profile of this machine's own (empty:
+    # workflow/profiles/default with flowlib.machine's budget).
+    ("REMOTE", ""),
+    ("REMOTE_ROOT", ""),
+    ("SIM_SEEDS", ""),
+    ("SNAKEMAKE_PROFILE", ""),
+    # This machine's budget for workflow/profiles/default
+    # (flowlib.machine): its cores and memory less the headroom kept free,
+    # unless CORES and MEM_MB set them; simulation batches at once; and
+    # the device (auto: CUDA, MPS, else the CPU).
+    ("HEADROOM_CORES", "0"),
+    ("HEADROOM_GB", "0"),
+    ("CORES", ""),
+    ("MEM_MB", ""),
+    ("SIM_SLOTS", ""),
+    ("DEVICE", "auto"),
     # Mailbox lines (any value turns them on), publishing as it trains,
     # the targets `all` runs here, and where batches come from (empty:
     # workflow/config.yaml's `finetune.sims_from`).

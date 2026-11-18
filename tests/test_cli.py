@@ -881,12 +881,22 @@ def test_cli_fit_store_archives_what_each_model_submits(
 ) -> None:
     from bdbvhubrenewal.evaluation import store
     from bdbvhubrenewal.forecasters import base
+    from bdbvhubrenewal.forecasters.zones import with_zones
 
-    factory = base._REGISTRY[flat_model].factory
+    flat = base._REGISTRY[flat_model].factory
+
+    class Zoned(flat):  # type: ignore[misc, valid-type]
+        """A province model, which splits its zones in its forecast."""
+
+        reads_zones = True
+
+        def forecast(self, task):  # type: ignore[no-untyped-def]
+            return with_zones(super().forecast(task), task)
+
     monkeypatch.setitem(
         base._REGISTRY,
         "flat",
-        base.ModelSpec("flat", factory, "Fitted.", fitted=True),
+        base.ModelSpec("flat", Zoned, "Fitted.", fitted=True),
     )
     monkeypatch.setattr(store, "code_digest", lambda *_: "c")
     origin, ref = "2026-10-24", "2026-10-31"
@@ -1080,3 +1090,19 @@ def test_hub_comparison_takes_the_whole_fits_of_its_rounds() -> None:
     renewal = out.loc[out["model"] == "renewal"]
     assert list(renewal["target_end_date"]) == ["2026-09-12"]
     assert set(out["model"]) == {"renewal", "renewalsp"}
+
+
+@pytest.mark.usefixtures("in_root")
+def test_cli_nowcast_records_a_walk_models_copula(tmp_path: Path) -> None:
+    out = tmp_path / "sub"
+    assert main(["nowcast", "--model", "randomwalknowcast", "--out",
+                 str(out)]) == 0  # fmt: skip
+    record = json.loads((out / "copula.json").read_text())
+    assert record["model"] == "randomwalknowcast"
+    assert isinstance(record["n_scores"], int)
+    assert 0.0 <= record["rho_provinces"] <= 0.95
+    assert isinstance(record["n_pairs"], int)
+    assert isinstance(record["fallback"], bool)
+    assert set(record) == {
+        "model", "origin", "n_scores", "rho_provinces", "n_pairs", "fallback"
+    }  # fmt: skip

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime as dt
 import json
 from pathlib import Path
 from typing import Any
@@ -16,9 +17,9 @@ from conftest import (
     write_samples,
 )
 
-from submission_ci.check_forecast import main, run_checks
+from submission_ci.check_forecast import check_plausible, main, run_checks
 from submission_ci.common import read_json
-from submission_ci.hubdata import read_observed
+from submission_ci.hubdata import Observed, Samples, read_observed
 
 OBS = read_observed(HUB / "time-series.csv", AS_OF)
 TASKS = read_json(HUB / "tasks.json")
@@ -178,6 +179,20 @@ def test_national_unassigned_component_adds_up(tmp_path: Path) -> None:
     )
     assert (
         _checks(path, national_sidecar=short)["national_sum"].status == "fail"
+    )
+
+
+def test_a_models_own_national_skips_the_sum(tmp_path: Path) -> None:
+    # A model that forecasts the country itself (Chronos-2) writes its own
+    # national rows; the hub does not require them to sum (hub-spec.md).
+    path = sub(tmp_path, mutate=_bump_national(weeks()[0], 7, 5.0))
+    side = _sidecar(national_source="own")
+    c = _checks(path, national_sidecar=side)["national_sum"]
+    assert c.status == "skip"
+    assert "own" in c.summary
+    side = _sidecar(national_source="sum")
+    assert _checks(path, national_sidecar=side)["national_sum"].status == (
+        "fail"
     )
 
 
@@ -436,6 +451,51 @@ def test_collapse_to_near_zero_is_ruled_out(tmp_path: Path) -> None:
     )}  # fmt: skip
     assert checks["plausible"].status == "fail"
     assert "CD-IT" in checks["plausible"].summary
+
+
+# Mandima in the 2026-11-15 release: 34, 54, 39, then 2 and 0.
+MANDIMA = {
+    "2026-10-17": 34.0,
+    "2026-10-24": 54.0,
+    "2026-10-31": 39.0,
+    "2026-11-07": 2.0,
+    "2026-11-14": 0.0,
+}
+
+
+def _mandima_check(medians: dict[str, float]) -> Any:
+    s = Samples(columns=[], rows=0)
+    for i in range(1, 11):
+        for w, m in medians.items():
+            s.values["CD-IT-26"][str(i)][w] = m
+    obs = Observed(as_of="2026-11-15", counts={"CD-IT-26": MANDIMA})
+    return check_plausible(s, obs, dt.date(2026, 11, 21), 3, POLICY.checks)
+
+
+def _mandima_medians(nov7: float) -> dict[str, float]:
+    return {
+        "2026-10-31": 39.0,
+        "2026-11-07": nov7,
+        "2026-11-14": 3.0,
+        "2026-11-21": 3.0,
+        "2026-11-28": 3.0,
+        "2026-12-05": 3.0,
+        "2026-12-12": 3.0,
+    }
+
+
+def test_low_median_at_the_reported_count_passes() -> None:
+    # The median for 11-07 (2) is what is already reported for that week,
+    # under 1/20 of the recent maximum 54: the data, not a collapse.
+    assert _mandima_check(_mandima_medians(2.0)).status == "pass"
+
+
+def test_low_median_below_the_reported_count_is_ruled_out() -> None:
+    # 10-31 was reported as 39; a median of 1 is under 1/20 of 54.
+    medians = {**_mandima_medians(2.0), "2026-10-31": 1.0}
+    check = _mandima_check(medians)
+    assert check.status == "fail"
+    assert "2026-10-31" in " ".join(check.details)
 
 
 def test_plausible_thresholds_are_settings(tmp_path: Path) -> None:

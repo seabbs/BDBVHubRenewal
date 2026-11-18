@@ -103,6 +103,7 @@ from bdbvhubrenewal.reporting.nowcast_plots import (
     plot_release_nowcasts,
     plot_truth_changes,
 )
+from bdbvhubrenewal.reporting.pairing import pairing_page
 from bdbvhubrenewal.reporting.plots import (
     baseline_share,
     comparison_colours,
@@ -346,6 +347,7 @@ def make_report(
     )
     _comparison_page(fig, gen, Path(hub_comparison), target)
     germany_page(fig, gen, Path(germany), load_germany_config(germany_config))
+    pairing_page(res / "pairing", gen)
 
     # Nowcast page: latest real vintage, every registered model.
     rows = real.loc[real["vintage"] == latest]

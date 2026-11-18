@@ -514,9 +514,15 @@ class ZoneRenewalModel(RenewalModel):
             zones.append(samples_table(zt, runs["all"].data, runs["all"].draws))
             later.extend(_as_reported(zt, runs["all"]))
         zone_samples = pd.concat(zones, ignore_index=True)
+        # The samples hold the zones too, so the forecast, the store and
+        # the scores read the zone fit's own zones, not a split
+        # (`forecasters.zones.with_zones` leaves them as they are).
         return ZoneRenewalFit(
             runs,
-            sum_zones(zone_samples),
+            pd.concat(
+                [sum_zones(zone_samples), zone_samples[list(SAMPLE_COLUMNS)]],
+                ignore_index=True,
+            ),
             None,
             as_reported=sum_zones(pd.concat(later, ignore_index=True))
             if later

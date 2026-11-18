@@ -44,6 +44,9 @@ results/delay-summary.csv
 
 # Machine settings (scripts/local_config.sh); see config/local.env.example.
 config/local.env
+# A machine's own Snakemake profile (config/profile.example).
+config/profile/
+/.venv
 
 # The dashboard's machine settings (config/dashboard.example.yaml).
 config/dashboard.local.yaml

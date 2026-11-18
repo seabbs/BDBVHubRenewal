@@ -72,8 +72,14 @@ from bdbvhubrenewal.forecasters.chain import (
     NoCompleteWeek,
     Origin,
     Settings,
+    _add_spread,
     build_origin,
     delay_summary,
+)
+from bdbvhubrenewal.forecasters.copula import (
+    error_scores,
+    estimate_rho,
+    pair_walks,
 )
 from bdbvhubrenewal.forecasters.introductions import silent_trajectories
 from bdbvhubrenewal.forecasters.obs import sample_count
@@ -282,12 +288,89 @@ class RandomWalk:
         One row per place from the last forecast: the start week, the
         errors behind the spread and the source of the delay, spread and
         walk.
+    keep_variants : bool
+        Keep the last forecast's unpaired draws, for `unpaired`.
+    copula_fit : dict or None
+        The copula of the last forecast: `model`, `origin`, `n_scores` and
+        `copula.estimate_rho`'s `rho_provinces`, `n_pairs` and `fallback`,
+        or None where there are no provinces to pair (a zone task).
     """
 
     name: str = "randomwalk"
     settings: Settings = field(default_factory=Settings)
     fit_diagnostics: list[dict[str, object]] = field(default_factory=list)
+    keep_variants: bool = field(default=False, repr=False)
+    copula_fit: dict[str, object] | None = field(
+        init=False, default=None, repr=False
+    )
     needs_snapshots: ClassVar[bool] = True
+
+    def pair(
+        self,
+        origin: Origin,
+        task: ForecastTask,
+        values: np.ndarray,
+    ) -> np.ndarray:
+        """Pair the provinces' draws `[S, L, H]` within each week.
+
+        rho_p is estimated from the normal scores of the model's own
+        nowcasts at earlier releases (`copula.error_scores`), shrunk to the
+        prior (`copula.estimate_rho`), and the draws are paired by it
+        (`copula.pair_walks`). A task of zones is left unpaired.
+        """
+        if self.keep_variants:
+            self._unpaired = values
+        locations = tuple(origin.snap.locations)
+        if all(c.count("-") >= 2 for c in task.locations):
+            self.copula_fit = None
+            return values
+        scores = self._error_scores(origin, task)
+        fit = estimate_rho(scores)
+        self.copula_fit = {
+            "model": self.name,
+            "origin": task.vintage,
+            "n_scores": len(scores),
+            **fit,
+        }
+        rng = task.rng(self.name, "copula")
+        rho = float(fit["rho_provinces"])
+        return pair_walks(values, locations, rho, rng)
+
+    def unpaired(self) -> pd.DataFrame:
+        """Return the last forecast's draws before pairing.
+
+        Needs `keep_variants`. The draws are the forecast's own, so only
+        their pairing differs.
+        """
+        weeks, rows, task = self._kept_frame
+        return frame(task, weeks, self._unpaired, rows)
+
+    def _error_scores(self, origin: Origin, task: ForecastTask) -> pd.DataFrame:
+        """Return the normal scores of the model's own earlier nowcasts."""
+        if origin.errors is None:
+            try:
+                _add_spread(origin)
+            except (ValueError, FloatingPointError, np.linalg.LinAlgError):
+                return pd.DataFrame()
+        errors, size = origin.errors, origin.size
+        if errors is None or size is None or not errors.releases:
+            return pd.DataFrame()
+        snap = origin.snap
+        at = {r: i for i, r in enumerate(snap.releases)}
+        ages = np.array(
+            [snap.cut[origin.o] - snap.cut[at[r]] for r in errors.releases]
+        )
+        return error_scores(
+            errors.added,
+            errors.remaining,
+            errors.valid,
+            size,
+            list(errors.releases),
+            ages,
+            tuple(snap.locations),
+            self.name,
+            task.seed,
+        )
 
     def snapshots(self, task: ForecastTask) -> SnapshotArrays:
         """Return the task's release snapshots as arrays.
@@ -442,7 +525,9 @@ class RandomWalk:
                     draw = y[loc, :, u - start[loc] - 1]
                     floor = origin.reported[loc, u] if u < n_data else 0.0
                     values[:, loc, u] = np.maximum(draw, floor)
+        values = self.pair(origin, task, values)
         self._diagnostics(origin, task, start)
+        self._kept_frame = (weeks, self.rows(origin, task), task)
         return frame(task, weeks, values, self.rows(origin, task))
 
 
@@ -486,12 +571,14 @@ class RandomWalkNowcast(RandomWalk):
         """
         origin = self.origin_at(task, errors=True)
         values, weeks = self.trajectories(origin, task, origin.point)
+        values = self.pair(origin, task, values)
         self.delay_summary = delay_summary(origin, self.name, task.vintage)
         self._diagnostics(
             origin,
             task,
             _start_weeks(origin),
         )
+        self._kept_frame = (weeks, self.rows(origin, task), task)
         return frame(task, weeks, values, self.rows(origin, task))
 
     def trajectories(

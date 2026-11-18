@@ -262,14 +262,14 @@ jobs:
           key: chronos-2-29ec3766d36d6f73f0696f85560a422f50e8498c
       # The fine-tuned models download the LoRA adapter of the newest
       # chronos-ft-* release (or the one config/finetune.toml pins), kept
-      # by its hash. A missing adapter is stored as failed.
+      # by its hash, which keys the cache. A missing adapter is stored as
+      # failed.
       - name: Cache the fine-tuned checkpoints
         if: endsWith(matrix.model, '_ft')
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/bdbvhubrenewal
-          key: chronos-ft-${{ github.run_id }}
-          restore-keys: chronos-ft-
+          key: chronos-ft-${{ needs.plan.outputs.chronos_ft }}
       # A fit that raises is stored as failed and is not retried until
       # its inputs change or a dispatch sets retry_failed. One that times
       # out is retried next run.

@@ -138,9 +138,10 @@ def test_hub_tables_take_a_zone_fit_s_own_zones(
         mine.set_index(keys)["value"].sort_index(),
         check_names=False,
     )
-    # Without its zone fit, a model's provinces are split.
+    # Without its zone fit, a model's zones are those in its own forecast
+    # (`with_zones`); these province-only samples have none.
     split = hub_tables(forecasts, task, daily_zones, zones)["renewal"]
-    assert len(set(split["location"]) & set(zones)) > 1
+    assert not set(split["location"]) & set(zones)
 
 
 def test_a_models_own_zones_stay_apart_from_its_provinces(
@@ -199,3 +200,51 @@ def test_a_models_own_zones_stay_apart_from_its_provinces(
         got["value"].sort_index().to_numpy(),
         want["value"].sort_index().to_numpy(),
     )
+
+
+def test_a_model_that_forecasts_the_country_keeps_its_national_rows(
+    target: pd.DataFrame,
+    delays: pd.DataFrame,
+    daily: pd.DataFrame,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The Chronos-2 models forecast the country in their joint block, and
+    # their national draws are written as they are, not as the sum of the
+    # provinces. Other models' national rows are the provinces' sum.
+    from bdbvhubrenewal.forecasters.base import SAMPLE_COLUMNS
+    from bdbvhubrenewal.reporting import hubtables
+
+    real = target.loc[target["kind"] == "real"]
+    latest = real["vintage"].max()
+    task = bt.make_tasks(
+        real.loc[real["vintage"] == latest],
+        delays,
+        bt.load_config(ROOT / "config" / "backtest.toml"),
+        history=real,
+        daily=daily,
+    )[0]
+    walk = bt.run_forecasts([get_model("randomwalk")], [task])
+    national = walk["location"] == NATIONAL
+    own = walk.assign(
+        model="fm_chronos_daily_ragged_ft",
+        value=walk["value"].where(~national, 7.0),
+    )
+    monkeypatch.setattr(
+        hubtables,
+        "zones_for_model",
+        lambda *_a, **_k: pd.DataFrame(columns=list(SAMPLE_COLUMNS)),
+    )
+    zones = hub_zones(DATA / "hub-config" / "tasks.json")
+    tables = hub_tables(
+        pd.concat([walk, own]), task, load_daily_zones(DATA), zones
+    )
+    chronos = tables["fm_chronos_daily_ragged_ft"]
+    assert (chronos.loc[chronos["location"] == NATIONAL, "value"] == 7).all()
+    rw = tables["randomwalk"]
+    wide = rw.pivot_table(
+        index=["output_type_id", "target_end_date"],
+        columns="location",
+        values="value",
+    )
+    provinces = [c for c in wide.columns if c.count("-") == 1]
+    assert (wide[NATIONAL] == wide[provinces].sum(axis=1)).all()
