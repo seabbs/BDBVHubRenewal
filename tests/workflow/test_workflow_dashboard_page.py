@@ -8,7 +8,7 @@ import pytest
 
 pytest.importorskip("matplotlib")
 
-from flowlib.dashboard import mirror, page, runs
+from flowlib.dashboard import logs, mirror, page, runs
 
 LINE = "2026-11-16 16:{m:02d}:00 [train] step {s}: loss {l}, held-out (x) {h}"
 
@@ -138,6 +138,7 @@ def _machine(tmp_path):
         rule="R",
         outbreaks=8000,
         learning_rate=1e-5,
+        prefixes=(250, 500, 750, 1000, 2000, 4000, 8000),
         mailbox=box,
         mail_filter="slots",
         once=True,
@@ -267,11 +268,20 @@ def test_checkpoint_tables_have_a_column_per_source(tmp_path):
     assert "<td>0.2000" in tables
 
 
+def test_run_sizes_drop_prefixes_past_the_run_and_end_at_it():
+    assert page.run_sizes((250, 8000, 9000), 8400) == [250, 8000, 8400]
+    assert page.run_sizes((250, 500), 500) == [250, 500]
+
+
 def test_the_run_size_comes_from_the_config_without_a_trainer(tmp_path):
-    # Under Snakemake there is no trainer command line to read.
     ctx = _machine(tmp_path)
+    # The fixture's run has no trainer command line to name its prefixes.
+    assert logs.trainer_args(ctx.runs[0].folder) == ""
     ctx.outbreaks = 8400
-    ctx.prefixes = (250, 500, 1000, 2000, 4000, 8400)
+    ctx.prefixes = (250, 500, 1000, 2000, 4000, 8000)
     out = page.build(ctx)
     assert "of 8400 simulations trained" in out
     assert "of 8000" not in out
+    planned = page.run_sizes(ctx.prefixes, ctx.outbreaks)
+    st = page.live_status(ctx.runs[0], ctx.log(ctx.runs[0]), planned)
+    assert st.params["prefixes"][-2:] == [8000, 8400]

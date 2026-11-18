@@ -65,7 +65,7 @@ def test_checkpoints_are_listed_by_size(tmp_path):
 
 def test_prefixes_from_the_trainer_command_line_or_saved_folders(tmp_path):
     args = "python scripts/finetune_stream.py a b --prefixes 250 500 8000 --x"
-    assert logs.prefixes(tmp_path, args) == [250, 500, 8000]
+    assert logs.prefixes(tmp_path, args, (250,)) == [250, 500, 8000]
     (tmp_path / "train" / "n750").mkdir(parents=True)
     got = logs.prefixes(tmp_path, "", default=(250, 1000))
     assert got == [250, 750, 1000]

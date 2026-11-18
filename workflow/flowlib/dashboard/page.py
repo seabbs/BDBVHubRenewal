@@ -52,10 +52,8 @@ class Context:
     rule: str
     outbreaks: int
     learning_rate: float
+    prefixes: Sequence[int]  # `finetune.prefixes`
     datasets: Sequence[Mapping[str, Any]] = ()
-    # The run's checkpoint sizes when no trainer command line names them
-    # (the workflow config's `finetune.prefixes`).
-    prefixes: Sequence[int] = logs.PREFIXES
     mailbox: Path | None = None
     mail_filter: str = ""
     mail_lines: int = 400
@@ -211,12 +209,12 @@ def run_sizes(prefixes: Sequence[int], outbreaks: int) -> list[int]:
 def live_status(
     live: Run,
     rows: list[dict[str, Any]],
-    default: Sequence[int] = logs.PREFIXES,
+    planned: Sequence[int],
 ) -> Status:
     """Return the live run's step, speed, schedule and checkpoints.
 
-    `default` gives the checkpoint sizes when no trainer command line
-    names them.
+    `planned` are its checkpoints unless the trainer's command line names
+    them (`logs.prefixes`).
     """
     step = rows[-1]["step"] if rows else None
     last_t = rows[-1]["t"] if rows else None
@@ -229,7 +227,7 @@ def live_status(
     folder = live.folder
     args = logs.trainer_args(folder) if folder else ""
     params = (
-        training.run_params(folder, training.history(live), step, args, default)
+        training.run_params(folder, training.history(live), step, args, planned)
         if folder
         else {
             "lr_steps": 0,
@@ -237,7 +235,7 @@ def live_status(
             "groups": {},
             "current": {},
             "logged": {},
-            "prefixes": list(default),
+            "prefixes": list(planned),
         }
     )
     sizes = params["prefixes"]

@@ -14,7 +14,7 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from .logs import CACHE, PREFIXES, prefixes
+from .logs import CACHE, prefixes
 from .runs import Run
 
 
@@ -28,7 +28,7 @@ def run_params(
     hist: Any,
     step: int | None,
     args: str,
-    default: Sequence[int] = PREFIXES,
+    default: Sequence[int],
 ) -> dict[str, Any]:
     """Return a run's schedule.
 
