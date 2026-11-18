@@ -13,10 +13,11 @@ branch, one file per fit:
 The key (`fit_key`) hashes only what reaches a fit: the task at the
 origin, which holds only the releases up to the origin; the built model,
 whose representation gives its variant and resolved sampler settings;
-the BVDOutbreakSize release a BVD model uses; the code the model's fit
-can run (`fit_code`, without docstrings or comments, and
-`run_forecasts`), less the zone split, which runs at load; and the
-runtime dependencies locked in `uv.lock`.
+the BVDOutbreakSize release a BVD model uses; data a model reads beside
+the task (`fit_inputs`, the zone fits' zone data up to the origin); the
+code the model's fit can run (`fit_code`, without docstrings or
+comments, and `run_forecasts`), less the zone backtest; the package data
+files; and the runtime dependencies locked in `uv.lock`.
 A new release adds one fit per model and leaves the older ones valid,
 while a change to a model's code or settings refits every origin of the
 models that run it, and no other.
@@ -82,6 +83,7 @@ __all__ = [
     "STATUS_FILE",
     "STORE_DATA",
     "UNPACKED_FILE",
+    "ZONE_FITS_FILE",
     "StoreStatus",
     "StoredFit",
     "build_model",
@@ -140,6 +142,11 @@ them."""
 
 STATUS_FILE: Final = "fit-store.json"
 """What `load` used, written beside the results for the docs."""
+
+ZONE_FITS_FILE: Final = "zone-fits.csv.gz"
+"""The zone samples of the stored zone fits, which `load` writes beside
+the results: `model`, `vintage`, `location`, `target_end_date`, `sample`
+and `value`."""
 
 UNPACKED_FILE: Final = "store.json"
 """Which stored fit `unpack` wrote, in the fit directory."""
@@ -542,6 +549,10 @@ def fit_key(model: ForecastModel, task: ForecastTask, code: str) -> str:
         "code": code,
         "bvd": _bvd_tag(model, task),
     }
+    # Data a model reads beside the task (the zone fits' zone data).
+    inputs = getattr(model, "fit_inputs", None)
+    if inputs is not None:
+        head["inputs"] = inputs(task)
     digest.update(json.dumps(head, sort_keys=True).encode())
     for f in fields(task):
         if f.name in ZONE_FIELDS and not zones:
@@ -1000,8 +1011,9 @@ def load(
     Every origin goes to `forecasts.csv.gz`, from `min_horizon` to
     `max_horizon`: a stored fit holds the submission's weeks, which start
     earlier and end later.
-    Fit summaries go to `backtest-fits.csv` and learnt delays to
-    `delay-summary.csv`. Each file keeps the rows of models not stored.
+    Fit summaries go to `backtest-fits.csv`, learnt delays to
+    `delay-summary.csv` and the zone fits' final-count zone samples to
+    `ZONE_FITS_FILE`. Each file keeps the rows of models not stored.
     What was used is written to `STATUS_FILE`.
 
     Parameters
@@ -1027,6 +1039,7 @@ def load(
     status: list[StoreStatus] = []
     loaded: list[StoredFit] = []
     forecasts: list[pd.DataFrame] = []
+    zones: list[pd.DataFrame] = []
     low = -(10**6) if min_horizon is None else min_horizon
     high = 10**6 if max_horizon is None else max_horizon
     for (model, origin), key in sorted(keys.items(), key=lambda x: x[0][1])[
@@ -1035,10 +1048,14 @@ def load(
         chosen, failed = _choose(Path(store), model, origin, key)
         if chosen is not None:
             # Each fit's forecasts are cut to the backtest's weeks and
-            # compacted as read (`compact_forecasts`), so the store's
-            # samples never sit in memory as text at once.
+            # compacted as read (`compact_forecasts`), as are its zone
+            # samples, so the store's samples never sit in memory as text
+            # at once.
             forecasts.append(compact_forecasts(chosen.forecasts, low, high))
-            loaded.append(dataclasses.replace(chosen, forecasts=pd.DataFrame()))
+            zones.append(compact_forecasts(_zone_samples(chosen)))
+            loaded.append(
+                dataclasses.replace(chosen, forecasts=pd.DataFrame(), files={})
+            )
         status.append(
             StoreStatus(
                 model,
@@ -1054,12 +1071,32 @@ def load(
         ("forecasts.csv.gz", [stack_forecasts(forecasts)]),
         ("backtest-fits.csv", [f.fits for f in loaded]),
         (DELAY_SUMMARY_FILE, [f.delays for f in loaded]),
+        (ZONE_FITS_FILE, [stack_forecasts(zones)]),
     ):
         _merge(out / name, frames)
     (out / STATUS_FILE).write_text(
         json.dumps([vars(s) for s in status], indent=1) + "\n"
     )
     return status
+
+
+def _zone_samples(fit: StoredFit) -> pd.DataFrame:
+    """Return a stored zone fit's final-count zone samples, else none."""
+    from bdbvhubrenewal.forecasters.zonerenewal import ZONES_FILE
+
+    body = fit.files.get(ZONES_FILE)
+    if body is None:
+        return pd.DataFrame()
+    zones = pd.read_csv(
+        io.BytesIO(base64.b64decode(body)),
+        compression="gzip",
+        dtype={"target_end_date": str},
+    )
+    if "as_of" in zones:
+        zones = zones.loc[zones["as_of"].isna()].drop(columns="as_of")
+    return zones.assign(
+        model=fit.meta["model"], vintage=fit.meta["origin"]
+    ).reset_index(drop=True)
 
 
 TEXT_COLUMNS: Final = (

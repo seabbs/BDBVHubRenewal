@@ -161,8 +161,9 @@ def test_a_fit_key_holds_the_zone_split_only_where_its_model_calls_it() -> None:
 
     zones = "src/bdbvhubrenewal/forecasters/zones.py"
     # The province-level models split their zones in their own forecast
-    # (`with_zones`, since #299), so their keys hold the split.
-    for model in ("renewal", "renewalsp"):
+    # (`with_zones`, since #299), and the zone fits call its zone_task, so
+    # their keys hold the split.
+    for model in ("renewal", "renewalbvd", "renewalsp"):
         assert zones in fit_code(model, ROOT)
     # Models whose modules do not import it leave it out: the walks, and
     # Chronos-2, which takes its zones straight from its block.

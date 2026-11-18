@@ -193,7 +193,7 @@ def test_code_digest_ignores_docstrings_and_comments(tmp_path: Path) -> None:
 
 def test_code_digest_follows_each_models_own_code(tmp_path: Path) -> None:
     root = _copy_repo(tmp_path)
-    models = ("renewal", "renewalsp", "randomwalknowcast")
+    models = ("renewal", "renewalbvd", "renewalsp", "randomwalknowcast")
 
     def digests() -> dict[str, str]:
         return {m: store.code_digest(m, root) for m in models}
@@ -204,13 +204,16 @@ def test_code_digest_follows_each_models_own_code(tmp_path: Path) -> None:
 
     src = "src/bdbvhubrenewal"
     before = digests()
-    # The three renewal variants share a module, so share a key.
-    assert before["renewal"] == before["renewalsp"]
+    # The zone variants share a module, so share a key, and renewalsp,
+    # in the province module they build on, has its own.
+    assert before["renewal"] == before["renewalbvd"]
+    assert before["renewal"] != before["renewalsp"]
     assert before["renewal"] != before["randomwalknowcast"]
     edit(f"{src}/forecasters/renewal.py")
     after = digests()
     assert after["randomwalknowcast"] == before["randomwalknowcast"]
     assert after["renewal"] != before["renewal"]
+    assert after["renewalsp"] != before["renewalsp"]
     before = after
     edit(f"{src}/model/observation.py")
     after = digests()
@@ -243,8 +246,9 @@ def test_code_digest_follows_each_models_own_code(tmp_path: Path) -> None:
 
 
 def test_the_zone_split_keys_the_province_models_fits(tmp_path: Path) -> None:
-    # A province model splits its zones in its forecast (`with_zones`), so
-    # the split is fit code. The zone backtest is not.
+    # A province model splits its zones in its forecast (`with_zones`), and
+    # the zone fits of renewal and renewalbvd call its zone_task, so the
+    # split is fit code. The zone backtest is not.
     root = _copy_repo(tmp_path)
     models = ("renewal",)
 
@@ -259,6 +263,7 @@ def test_the_zone_split_keys_the_province_models_fits(tmp_path: Path) -> None:
     own = store.code_digest("fm_chronos_weekly_ragged", root)
     edit("evaluation/zones.py")
     assert digests() == before
+    assert store.code_digest("fm_chronos_weekly_ragged", root) == own
     edit("forecasters/zones.py")
     split = digests()
     assert all(split[m] != before[m] for m in models)
@@ -270,6 +275,23 @@ def test_the_zone_split_keys_the_province_models_fits(tmp_path: Path) -> None:
     edit("forecasters/introductions.py")
     after = digests()
     assert all(after[m] != before[m] for m in models)
+
+
+def test_zone_data_keys_the_zone_fits(
+    tasks: dict[str, ForecastTask], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from bdbvhubrenewal.forecasters import zonerenewal as zr
+
+    sampler = store.samplers()
+    models = ["renewal", "renewalsp"]
+    keys = store.current_keys(tasks, models, sampler, "c")
+    daily = zr._daily_zones()
+    monkeypatch.setattr(
+        zr, "_daily_zones", lambda: daily.assign(observed=daily["observed"] + 1)
+    )
+    moved = store.current_keys(tasks, models, sampler, "c")
+    for (model, origin), key in keys.items():
+        assert (moved[(model, origin)] != key) == (model == "renewal")
 
 
 def test_fit_code_is_the_models_code_not_the_store() -> None:
@@ -432,7 +454,8 @@ def test_renewal_key_has_every_model_module() -> None:
 def test_samplers_come_from_the_policy() -> None:
     table = store.samplers(ROOT / "ci" / "policy.toml")
     assert set(table) == {"renewal", "renewalbvd", "renewalsp"}
-    assert table["renewalbvd"]["num_samples"] == 750
+    assert table["renewalbvd"]["num_samples"] == 1500
+    assert table["renewalbvd"]["thinning"] == 2
 
 
 @pytest.fixture
@@ -731,6 +754,105 @@ def test_a_model_with_no_config_stores_no_files(
 ) -> None:
     stored = store.fit(fitted_flat, tasks[sorted(tasks)[-1]], {}, "c")
     assert stored.files == {}
+
+
+def test_load_writes_the_zone_fits_zone_samples(tmp_path: Path) -> None:
+    import base64
+    import gzip
+
+    zones = pd.DataFrame(
+        {
+            "location": ["CD-IT-01", "CD-IT-01"],
+            "target_end_date": ["2026-10-24", "2026-10-24"],
+            "sample": [1, 1],
+            "value": [3.0, 1.0],
+            "as_of": [None, "2026-10-24"],
+        }
+    )
+    body = base64.b64encode(
+        gzip.compress(zones.to_csv(index=False).encode())
+    ).decode()
+    meta = {
+        "model": "renewal",
+        "origin": "2026-10-17",
+        "key": "k",
+        "commit": "c",
+        "fitted_at": "2026-11-13T00:00:00+00:00",
+        "settings": "",
+        "status": "ok",
+    }
+    empty = pd.DataFrame()
+    fit = store.StoredFit(
+        meta, empty, empty, empty, files={"zones.csv.gz": body}
+    )
+    store.write_fit(tmp_path / "store", fit)
+    # A fit with no zone samples adds no rows.
+    plain = store.StoredFit(
+        {**meta, "model": "randomwalknowcast", "key": "p"}, empty, empty, empty
+    )
+    store.write_fit(tmp_path / "store", plain)
+    store.load(
+        tmp_path / "store",
+        {
+            ("renewal", "2026-10-17"): "k",
+            ("randomwalknowcast", "2026-10-17"): "p",
+        },
+        tmp_path / "res",
+    )
+    written = pd.read_csv(tmp_path / "res" / store.ZONE_FITS_FILE)
+    # Final counts only, by model and origin.
+    assert written[
+        ["model", "vintage", "location", "value"]
+    ].to_numpy().tolist() == [["renewal", "2026-10-17", "CD-IT-01", 3.0]]
+
+
+def test_load_compacts_the_zone_samples(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import base64
+    import gzip
+
+    # As the forecasts (#363): zone samples are compacted per fit and
+    # stacked, so the store's zone samples never sit in memory as text.
+    empty = pd.DataFrame()
+    keys = {}
+    for origin in ("2026-10-17", "2026-10-24"):
+        zones = pd.DataFrame(
+            {
+                "location": ["CD-IT-01"] * 2,
+                "target_end_date": [origin] * 2,
+                "sample": [1, 2],
+                "value": [3.0, 1.0],
+            }
+        )
+        body = base64.b64encode(
+            gzip.compress(zones.to_csv(index=False).encode())
+        ).decode()
+        meta = {
+            "model": "renewal",
+            "origin": origin,
+            "key": origin,
+            "commit": "c",
+            "fitted_at": "2026-11-13T00:00:00+00:00",
+            "settings": "",
+            "status": "ok",
+        }
+        store.write_fit(
+            tmp_path / "store",
+            store.StoredFit(
+                meta, empty, empty, empty, files={"zones.csv.gz": body}
+            ),
+        )
+        keys[("renewal", origin)] = origin
+    merged = {}
+    monkeypatch.setattr(
+        store, "_merge", lambda path, frames: merged.update({path.name: frames})
+    )
+    store.load(tmp_path / "store", keys, tmp_path / "res")
+    (frame,) = merged[store.ZONE_FITS_FILE]
+    assert len(frame) == 4
+    for col in ("model", "vintage", "location", "target_end_date"):
+        assert isinstance(frame[col].dtype, pd.CategoricalDtype), col
 
 
 @pytest.mark.usefixtures("in_root", "offline_bvd")

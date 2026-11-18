@@ -52,6 +52,7 @@ from bdbvhubrenewal.forecasters.base import (
     NATIONAL,
     SAMPLE_COLUMNS,
     ForecastTask,
+    get_model,
     register_model,
 )
 from bdbvhubrenewal.forecasters.forecast import Forecast
@@ -219,8 +220,9 @@ VARIANTS: Final[dict[str, Variant]] = {
     for v in (
         Variant(
             "renewal",
-            "Province renewal (PyRenew): pooled Rt, gravity importation, "
-            "depletion, modelled delays and imputation.",
+            "Zone renewal (PyRenew): health zones nested in provinces, "
+            "pooled Rt, gravity importation, depletion, modelled delays and "
+            "imputation; provinces are zone sums.",
         ),
         Variant(
             "renewalsp",
@@ -232,8 +234,8 @@ VARIANTS: Final[dict[str, Variant]] = {
         ),
         Variant(
             "renewalbvd",
-            "Province renewal informed by BVDOutbreakSize Rt, as a tempered "
-            "pseudo-observation.",
+            "Zone renewal informed by BVDOutbreakSize Rt, as a tempered "
+            "pseudo-observation; provinces are zone sums.",
             base="BVD",
         ),
     )
@@ -327,7 +329,8 @@ def run_nuts(model: Any, data: Any, sampler: Mapping[str, Any]) -> Any:
     data : bdbvhubrenewal.model.Vintage
         The inputs.
     sampler : mapping
-        The full sampler table (`sampler_settings`).
+        The full sampler table (`sampler_settings`), with an optional
+        `thinning`.
 
     Returns
     -------
@@ -351,6 +354,8 @@ def run_nuts(model: Any, data: Any, sampler: Mapping[str, Any]) -> Any:
         num_warmup=int(sampler["num_warmup"]),
         num_samples=int(sampler["num_samples"]),
         num_chains=int(sampler["num_chains"]),
+        # Every `thinning`-th draw is kept, so a long chain fits in memory.
+        thinning=int(sampler.get("thinning", 1)),
         chain_method=str(sampler.get("chain_method", "vectorized")),
         progress_bar=False,
     )
@@ -1421,6 +1426,9 @@ def fit_renewal(
 ) -> dict[str, Any]:
     """Fit a variant for the CI and write the fit directory.
 
+    The variant is the registered model, so `renewal` and `renewalbvd`
+    fit health zones (`forecasters.zonerenewal`) and also write their
+    zone samples.
     Trajectories are drawn here, so `forecast_renewal` only reads them.
     Writes `samples.csv.gz`, `delay-summary.csv`, `unassigned.csv.gz`
     (if any), `trajectories.json` and `ppc.json`. `run_fit` writes the returned
@@ -1450,14 +1458,18 @@ def fit_renewal(
     out.mkdir(parents=True, exist_ok=True)
     settings = sampler_settings(sampler)
     seeded = replace(task, seed=int(settings.get("seed", task.seed)))
-    model = RenewalModel(VARIANTS[variant], settings, out / "progress.log")
-    fit = model.forecast_fit(seeded)
-    # The zones are split with the task's own seed, as `forecast` does.
-    fit = replace(fit, samples=with_zones(fit.samples, task))
-    task = seeded
-    return write_fit_dir(
-        fit, task, settings, out, variant=variant, config_name=config_name
-    )
+    registered = get_model(variant)
+    if not isinstance(registered, RenewalModel):
+        raise TypeError(f"{variant} is not a renewal model.")
+    model = replace(registered, sampler=settings, progress=out / "progress.log")
+    model.forecast(seeded)
+    fit = model.last_fit
+    if fit is not None and getattr(fit, "zones", None) is None:
+        # A province fit's zones are split with the task's own seed, as
+        # `forecast` does. A zone fit's zones are its own.
+        provinces = fit.samples.loc[~fit.samples["location"].map(is_zone)]
+        model.last_fit = replace(fit, samples=with_zones(provinces, task))
+    return model.write_fit_dir(seeded, out, config_name)
 
 
 def write_fit_dir(

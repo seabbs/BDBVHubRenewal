@@ -78,7 +78,11 @@ from bdbvhubrenewal.evaluation.nowcast import (
     relative_energy,
 )
 from bdbvhubrenewal.evaluation.scoring import summarise_scores
-from bdbvhubrenewal.evaluation.store import samplers, stored_models
+from bdbvhubrenewal.evaluation.store import (
+    ZONE_FITS_FILE,
+    samplers,
+    stored_models,
+)
 from bdbvhubrenewal.forecasters.base import (
     NATIONAL,
     ForecastTask,
@@ -359,6 +363,12 @@ def make_report(
     # Every model's hub tables at every real origin, for the round
     # releases, so a round released after later hub releases still gets
     # its own.
+    zone_fits = res / ZONE_FITS_FILE
+    zone_samples = (
+        pd.read_csv(zone_fits, dtype={"vintage": str, "target_end_date": str})
+        if zone_fits.exists()
+        else None
+    )
     for vintage in sorted(set(real["vintage"]) - set(config.skip_origins)):
         if vintage == latest:
             task, at = tasks[0], forecasts_now
@@ -373,7 +383,9 @@ def make_report(
             )[0]
             at = _stored_at(res, vintage)
         write_hub_tables(
-            hub_tables(at, task, zone_data.daily, zone_data.codes),
+            hub_tables(
+                at, task, zone_data.daily, zone_data.codes, zone_samples
+            ),
             res / "hub" / str(vintage),
         )
     groups = _nowcast_groups(target, sorted(set(forecasts_now["location"])))
@@ -1716,11 +1728,13 @@ def _fit_settings() -> dict[str, dict[str, Any]]:
 
 
 def _settings_text(sampler: Mapping[str, Any]) -> str:
+    thin = int(sampler.get("thinning", 1))
+    kept = f", keeping 1 in {thin}," if thin > 1 else ""
     return (
         f"{int(sampler['num_chains'])} chains of "
         f"{int(sampler['num_warmup'])} warm-up and "
-        f"{int(sampler['num_samples'])} draws at a target acceptance of "
-        f"{sampler['target_accept']}"
+        f"{int(sampler['num_samples'])} draws{kept} at a target acceptance "
+        f"of {sampler['target_accept']}"
     )
 
 
