@@ -66,8 +66,15 @@ def test_layouts_are_drawn_at_their_shares(monkeypatch):
         "weekly",
         "3day",
         "daily+weekly",
+        "daily+rolling7",
         "daily+3day",
+        "daily+rolling3",
     }
+    # r6 splits the mixed shares evenly between period and rolling totals.
+    assert fs.ft.SOURCE_SHARES["daily+weekly"] == pytest.approx(0.125)
+    assert fs.ft.SOURCE_SHARES["daily+rolling7"] == pytest.approx(0.125)
+    assert fs.ft.SOURCE_SHARES["daily+3day"] == pytest.approx(0.05)
+    assert fs.ft.SOURCE_SHARES["daily+rolling3"] == pytest.approx(0.05)
     rng = np.random.default_rng(0)
     draws = [f"1-0001-{i:02d}" for i in range(10)]
     picks = [s for _ in range(200) for _, s, _ in fs.snapshots(draws, rng)]
