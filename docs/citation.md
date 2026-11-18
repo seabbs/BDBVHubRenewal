@@ -5,13 +5,13 @@ How to cite the software and the data, the funding and the licence.
 
 ## Citing this software
 
-The citation metadata are in [CITATION.cff](https://github.com/seabbs/BDBVHubRenewal/blob/main/CITATION.cff).
+The citation metadata are in [CITATION.cff](https://github.com/seabbs/bdbv-hub-modelling/blob/main/CITATION.cff).
 GitHub turns it into the "Cite this repository" button on the repository page.
 
 ```bibtex
 @software{abbott_bdbvhubrenewal,
   author = {Abbott, Sam},
-  title = {{BDBVHubRenewal}: renewal-model nowcasts and forecasts for the {BDBV} Modeling Hub},
+  title = {{bdbv-hub-modelling}: renewal-model nowcasts and forecasts for the {BDBV} Modeling Hub},
   year = {2026},
   publisher = {Zenodo},
   doi = {10.5281/zenodo.23942616},
@@ -21,7 +21,7 @@ GitHub turns it into the "Cite this repository" button on the repository page.
 
 ## Archived results
 
-Each submitted round has a [GitHub release](https://github.com/seabbs/BDBVHubRenewal/releases), `round-<reference date>`, at the commit it was submitted from.
+Each submitted round has a [GitHub release](https://github.com/seabbs/bdbv-hub-modelling/releases), `round-<reference date>`, at the commit it was submitted from.
 Once every stored fit at the round's hub release is of the current code, the Pages build adds every model's results to it: each model's forecast in the hub's format for the country, provinces and health zones, the scores, the fit summaries, the data and the rendered site.
 Zenodo archives each release with a DOI.
 The Zenodo copy holds the code only.
@@ -42,4 +42,4 @@ The views expressed are those of the author(s) and not necessarily those of the 
 ## Licence
 
 The code is under the MIT licence.
-See [LICENSE](https://github.com/seabbs/BDBVHubRenewal/blob/main/LICENSE).
+See [LICENSE](https://github.com/seabbs/bdbv-hub-modelling/blob/main/LICENSE).

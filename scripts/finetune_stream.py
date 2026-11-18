@@ -77,7 +77,7 @@ POLL = 60
 """Seconds between checks for a chunk's simulations."""
 
 
-REPO = "seabbs/BDBVHubRenewal"
+REPO = "seabbs/bdbv-hub-modelling"
 """Repository of the checkpoint releases."""
 
 

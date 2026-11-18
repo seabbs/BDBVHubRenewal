@@ -1,9 +1,9 @@
 # Paper
 
-A paper on fine-tuning Chronos-2 on simulated outbreaks for nowcasting, planned in [#206](https://github.com/seabbs/BDBVHubRenewal/issues/206).
+A paper on fine-tuning Chronos-2 on simulated outbreaks for nowcasting, planned in [#206](https://github.com/seabbs/bdbv-hub-modelling/issues/206).
 
 - [Main text](paper/main.html) and [supporting information](paper/si.html), with their PDFs.
-- [Reproducing the paper](https://github.com/seabbs/BDBVHubRenewal/blob/main/paper/README.md): the workflow, its targets and how the held-out data are protected.
+- [Reproducing the paper](https://github.com/seabbs/bdbv-hub-modelling/blob/main/paper/README.md): the workflow, its targets and how the held-out data are protected.
 
 ```mermaid
 flowchart LR

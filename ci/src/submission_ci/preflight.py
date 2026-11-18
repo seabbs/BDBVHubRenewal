@@ -557,7 +557,7 @@ def render(checks: Sequence[Check]) -> str:
 def main(argv: Sequence[str] | None = None) -> int:
     """Print the report; exit 1 if anything is missing."""
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    p.add_argument("--repo", default="seabbs/BDBVHubRenewal")
+    p.add_argument("--repo", default="seabbs/bdbv-hub-modelling")
     p.add_argument("--hub", default="InsightNet-US/BDBV-Modeling-Hub")
     p.add_argument("--fork", default="seabbs-bot/BDBV-Modeling-Hub")
     p.add_argument(

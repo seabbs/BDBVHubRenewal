@@ -1,6 +1,6 @@
 # Paper
 
-The manuscript and supporting information for the paper planned in [#206](https://github.com/seabbs/BDBVHubRenewal/issues/206), on fine-tuning Chronos-2 on simulated outbreaks for nowcasting.
+The manuscript and supporting information for the paper planned in [#206](https://github.com/seabbs/bdbv-hub-modelling/issues/206), on fine-tuning Chronos-2 on simulated outbreaks for nowcasting.
 One Snakemake workflow runs its evaluation, from each study's data to the figures, tables and numbers the paper quotes, and then renders the paper.
 
 ## Reproducing the paper
