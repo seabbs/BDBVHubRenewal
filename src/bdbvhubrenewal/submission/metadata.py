@@ -190,8 +190,8 @@ MODEL_METADATA = {
         "releases)",
         "methods": (
             "A time series foundation model (Chronos-2) fine-tuned on "
-            "simulated outbreaks, forecasting the country, provinces and "
-            "health zones jointly from the hub's daily releases."
+            "simulated outbreaks, forecasting daily and weekly series of the "
+            "country, provinces and health zones jointly from daily releases."
         ),
         "methods_long": (
             "We forecast the hub target with Chronos-2 (Ansari et al. 2025, "
@@ -204,16 +204,17 @@ MODEL_METADATA = {
             "this was written. "
             "Each daily release is laid out by onset day and release lag. "
             "The country, each province and each health zone are target "
-            "series in one block, forecast jointly. "
+            "series in one block, each with its daily series and its weekly "
+            "totals, and the block is forecast jointly. "
+            "The weekly forecasts are the weekly total series. "
             "Each place with cases has its counts at release lags under "
             "28 days as covariates. "
             "Each of 100 samples draws its own uniform level per series and "
             "day from Chronos-2's 21 quantiles, rounded to counts no lower "
             "than those reported. "
             "The model is not fitted to these data. "
-            "The national value is the block's own national series. "
-            "The zones are made to sum to their province sample by sample, "
-            "each keeping its published count. "
+            "The country, provinces and health zones are each the model's "
+            "own forecast of that series: nothing is summed or split. "
             "See https://samabbott.co.uk/bdbv-hub-modelling/methods/foundation/."
         ),
         "data_inputs": (
@@ -247,9 +248,8 @@ MODEL_METADATA = {
             "week from Chronos-2's 21 quantiles, rounded to counts no lower "
             "than those reported. "
             "The model is not fitted to these data. "
-            "The national value is the block's own national series. "
-            "The zones are made to sum to their province sample by sample, "
-            "each keeping its published count. "
+            "The country, provinces and health zones are each the model's "
+            "own forecast of that series: nothing is summed or split. "
             "See https://samabbott.co.uk/bdbv-hub-modelling/methods/foundation/."
         ),
         "data_inputs": (
