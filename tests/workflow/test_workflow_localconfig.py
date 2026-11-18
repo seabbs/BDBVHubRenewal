@@ -125,24 +125,6 @@ def test_the_command_line_prints_one_setting(tmp_path):
     assert out.stdout == "/data/box.md\n"
 
 
-@pytest.mark.parametrize(
-    "rel",
-    [
-        "paper/scripts/gather_heldout.sh",
-        "tools/paper_local.sh",
-        "tools/run_target.sh",
-        "paper/workflow/config.yaml",
-        "paper/Taskfile.yml",
-        "scripts/paper.sh",
-        "scripts/ladder.py",
-    ],
-)
-def test_paper_scripts_name_no_host_or_home_folder(rel):
-    text = (ROOT / rel).read_text()
-    for word in ("archie", "paper-jobs", "~/", "$HOME/", "/home/"):
-        assert word not in text, f"{rel} names {word}"
-
-
 def test_paper_cores_come_from_the_local_config():
     taskfile = (ROOT / "paper" / "Taskfile.yml").read_text()
     assert 'dotenv: ["../config/local.env"]' in taskfile

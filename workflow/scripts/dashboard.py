@@ -12,13 +12,14 @@ read-only before each page. Serves on 127.0.0.1 only.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import sys
 import threading
 import time
 import traceback
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import unquote, urlsplit
+from urllib.parse import parse_qs, unquote, urlsplit
 
 import yaml
 
@@ -43,7 +44,7 @@ def parser() -> argparse.ArgumentParser:
 
 
 def handler(ctx: page.Context) -> type[BaseHTTPRequestHandler]:
-    """Return the request handler: the page, and one location's data."""
+    """Return the request handler: the page, its parts and location data."""
 
     class Handler(BaseHTTPRequestHandler):
         def _send(self, code: int, body: bytes, kind: str) -> None:
@@ -56,7 +57,10 @@ def handler(ctx: page.Context) -> type[BaseHTTPRequestHandler]:
         def do_GET(self) -> None:
             path = unquote(urlsplit(self.path).path)
             try:
-                if path.startswith("/data/"):
+                if path == "/sections.json":
+                    query = parse_qs(urlsplit(self.path).query)
+                    self._sections(query.get("have", [""])[0])
+                elif path.startswith("/data/"):
                     self._data(path.removeprefix("/data/"))
                 elif path in ("/", "/index.html"):
                     with LOCK:
@@ -68,6 +72,24 @@ def handler(ctx: page.Context) -> type[BaseHTTPRequestHandler]:
                 # The detail goes to the server's log, not the browser.
                 traceback.print_exc(file=sys.stderr)
                 self._send(500, b"error: see the server's log", "text/plain")
+
+        def _sections(self, have: str) -> None:
+            # Each part's hash, with its html only where `have` (key:hash,
+            # comma separated) holds another hash or none.
+            known = dict(
+                item.split(":", 1) for item in have.split(",") if ":" in item
+            )
+            with LOCK:
+                parts = page.sections(ctx)
+            out = {}
+            for key, content in parts.items():
+                digest = hashlib.sha1(content.encode()).hexdigest()[:12]
+                out[key] = (
+                    {"hash": digest}
+                    if known.get(key) == digest
+                    else {"hash": digest, "html": content}
+                )
+            self._send(200, page._json(out).encode(), "application/json")
 
         def _data(self, name: str) -> None:
             # /data/<dataset>/<location>.json

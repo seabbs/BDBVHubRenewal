@@ -1205,7 +1205,7 @@ def _evidence_link(evidence: object) -> str:
     if evidence.startswith("http"):
         label = evidence.rstrip("/").rsplit("/", 1)[-1]
         return f"[{label}]({evidence})"
-    url = f"https://github.com/seabbs/BDBVHubRenewal/blob/main/{evidence}"
+    url = f"https://github.com/seabbs/bdbv-hub-modelling/blob/main/{evidence}"
     return f"[`{evidence}`]({url})"
 
 
@@ -1714,8 +1714,8 @@ def _fit_settings() -> dict[str, dict[str, Any]]:
     """Return each stored model's sampler settings.
 
     The renewal variants use their table in `ci/policy.toml`; a model with
-    none (`pprandomwalknowcast`) uses its own. A model with no sampler,
-    such as the Chronos-2 models, has none.
+    none uses its own. A model with no sampler, such as the Chronos-2
+    models, has none.
     """
     settings = samplers()
     for name in stored_models():

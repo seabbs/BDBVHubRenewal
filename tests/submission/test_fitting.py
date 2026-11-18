@@ -290,7 +290,9 @@ def test_randomwalknowcast_has_its_own_hub_id(
                  str(tmp_path)]) == 0  # fmt: skip
     text = (tmp_path / "seabbs-rwnowcast.yml").read_text()
     assert "model_abbr: rwnowcast" in text
-    assert "https://samabbott.co.uk/BDBVHubRenewal/methods/baselines/" in text
+    assert (
+        "https://samabbott.co.uk/bdbv-hub-modelling/methods/baselines/" in text
+    )
     assert "10.12688/wellcomeopenres.25027.2" in text
     assert "language model" not in text
 
@@ -323,7 +325,7 @@ def test_committed_metadata_is_only_for_hub_models() -> None:
     # One file per hub model in config/hub.toml, written as the CLI does.
     names = sorted(p.stem for p in (ROOT / "hub" / "model-metadata").glob("*"))
     assert names == [
-        "seabbs-chronos2_ft",
+        "seabbs-nowcastfm",
         "seabbs-renewal",
         "seabbs-rwnowcast",
     ]
@@ -354,17 +356,30 @@ def test_committed_renewal_metadata_is_one_of_the_variants(
 
 
 @pytest.mark.usefixtures("in_root")
+def test_committed_rwnowcast_metadata_is_the_rendered_text(
+    tmp_path: Path,
+) -> None:
+    out = tmp_path / "meta"
+    args = ["metadata", "--model", "randomwalknowcast", "--out", str(out)]
+    assert main(args) == 0
+    text = (out / "seabbs-rwnowcast.yml").read_text()
+    assert (
+        ROOT / "hub" / "model-metadata" / "seabbs-rwnowcast.yml"
+    ).read_text() == text
+
+
+@pytest.mark.usefixtures("in_root")
 def test_chronos_track_metadata_is_the_committed_file(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     assert main(["hub-id", "--model", "fm_chronos_daily_ragged_ft"]) == 0
-    assert capsys.readouterr().out.strip() == "seabbs-chronos2_ft"
+    assert capsys.readouterr().out.strip() == "seabbs-nowcastfm"
     for model in ("fm_chronos_daily_ragged_ft", "fm_chronos_weekly_ragged_ft"):
         out = tmp_path / model
-        args = ["--model", model, "--abbr", "chronos2_ft", "--out", str(out)]
+        args = ["--model", model, "--abbr", "nowcastfm", "--out", str(out)]
         assert main(["metadata", *args]) == 0
-        text = (out / "seabbs-chronos2_ft.yml").read_text()
-        assert "model_abbr: chronos2_ft" in text
+        text = (out / "seabbs-nowcastfm.yml").read_text()
+        assert "model_abbr: nowcastfm" in text
         assert "chronos-ft-" in text
 
 
@@ -425,10 +440,10 @@ def test_chronos_metadata_names_the_release(
     out = tmp_path / "meta"
     args = ["--model", "fm_chronos_daily_ragged_ft", "--out", str(out)]
     assert main(["metadata", *args]) == 0
-    text = (out / "seabbs-chronos2_ft.yml").read_text()
+    text = (out / "seabbs-nowcastfm.yml").read_text()
     assert "release chronos-ft-2c2b22a03107 of" in text
     assert "<" not in text
-    committed = ROOT / "hub" / "model-metadata" / "seabbs-chronos2_ft.yml"
+    committed = ROOT / "hub" / "model-metadata" / "seabbs-nowcastfm.yml"
     assert committed.read_text() == text
 
 

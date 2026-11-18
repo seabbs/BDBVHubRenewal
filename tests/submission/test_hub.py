@@ -225,3 +225,11 @@ def test_only_the_chronos_models_give_their_own_national() -> None:
     for name in ("renewal", "renewalbvd", "randomwalknowcast", "randomwalk"):
         assert not own_national(name)
     assert not own_national(None)
+
+
+def test_committed_metadata_passes_the_hub_schema() -> None:
+    # The files the next submission uploads: each passes the hub's schema
+    # (methods at most 200 characters, model_abbr at most 16).
+    for path in sorted(METADATA.glob("*.yml")):
+        report = validate_metadata(path, HUB)
+        assert report.valid, (path.name, report)

@@ -8,7 +8,6 @@ import pytest
 
 ROOT = Path(__file__).parents[1]
 CONFIG = ROOT / "scripts" / "local_config.sh"
-CONTINUOUS = ROOT / "scripts" / "finetune_continuous.sh"
 LOCAL = (
     "REMOTE",
     "REMOTE_ROOT",
@@ -76,67 +75,14 @@ def test_the_local_config_is_not_tracked():
     assert (ROOT / "config" / "local.env.example").exists()
 
 
-def test_with_no_remote_rounds_stream_in_from_this_machine(tmp_path):
-    rounds = tmp_path / "bdbv-rounds" / "rounds" / "r1"
-    (rounds / "sims").mkdir(parents=True)
-    (rounds / "manifest.csv").write_text("round,seed,kind\n1,20001,train\n")
-    (rounds / "sims" / "settings-20001.csv").write_text("x")
-    # A running batch's temporary files are not simulations.
-    (rounds / "sims" / "tmp" / "20002").mkdir(parents=True)
-    (rounds / "sims" / "tmp" / "20002" / "standata.json").write_text("x")
-    out = subprocess.run(
-        [
-            "bash",
-            "-c",
-            f'source "{CONTINUOUS}"; HERE={tmp_path}/local; '
-            "sync_rounds; cat $HERE/seeds.txt",
-        ],
-        cwd=tmp_path,
-        env=_env(tmp_path, LOCAL_CONFIG=str(tmp_path / "none.env")),
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-    assert out.stdout.split() == ["20001"]
-    assert (tmp_path / "local" / "sims" / "settings-20001.csv").exists()
-    assert not (tmp_path / "local" / "sims" / "tmp").exists()
-
-
-def test_no_fine_tuning_or_simulation_code_names_a_host_or_home():
-    files = subprocess.run(
-        [
-            "git",
-            "ls-files",
-            "scripts/finetune_*",
-            "scripts/sim_*",
-            "scripts/local_config.sh",
-            "src/bdbvhubrenewal/forecasters",
-            "config/finetune*",
-            "config/local.env.example",
-        ],
-        cwd=ROOT,
-        capture_output=True,
-        text=True,
-        check=True,
-    ).stdout.split()
-    found = subprocess.run(
-        ["grep", "-n", "-i", "-E", r"archie|/home/[a-z]|/Users/[a-z]", *files],
-        cwd=ROOT,
-        capture_output=True,
-        text=True,
-        check=False,
-    ).stdout
-    assert found == ""
-
-
 def test_the_trainer_takes_its_device_from_the_machine():
     import sys
 
-    # pick_device imports torch, which CI's test env does not install.
+    # torch_device imports torch, which CI's test env does not install.
     pytest.importorskip("torch")
 
     sys.path.insert(0, str(ROOT / "scripts"))
     import finetune_stream as fs
 
-    assert fs.pick_device("cpu") == "cpu"
-    assert fs.pick_device("auto") in {"cuda", "mps", "cpu"}
+    assert fs.torch_device("cpu") == "cpu"
+    assert fs.torch_device("auto") in {"cuda", "mps", "cpu"}

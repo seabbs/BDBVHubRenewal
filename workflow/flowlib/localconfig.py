@@ -66,9 +66,16 @@ DEFAULTS = (
     ("TARGETS", "simulate finetune score"),
     ("SIMS_FROM", ""),
     # Scheduled runs (workflow/scripts/tick.py): the targets each tick runs
-    # in order (empty: none), every how many minutes, and the timer
+    # (empty: none; flowlib.schedule), every how many minutes, and the timer
     # (cron, systemd or launchd; empty: by platform).
     ("SCHEDULE_TARGETS", ""),
+    # The status each tick writes for the monitor, every how many seconds
+    # (flowlib.runstatus), and where the monitor page is served
+    # (workflow/scripts/monitor.py) and how often it refreshes (seconds).
+    ("STATUS_EVERY", "60"),
+    ("MONITOR_HOST", "127.0.0.1"),
+    ("MONITOR_PORT", "8766"),
+    ("MONITOR_REFRESH", "30"),
     ("SCHEDULE_EVERY", "60"),
     ("SCHEDULE_KIND", ""),
     # Dashboard runs with a local folder (flowlib.dashboard.runs specs,

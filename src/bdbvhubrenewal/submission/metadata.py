@@ -10,39 +10,39 @@ from __future__ import annotations
 __all__ = ["MODEL_METADATA"]
 
 _RENEWAL_OBSERVATION = (
-    "Rt is dated by infection, and onsets are infections convolved with "
-    "a log-normal incubation period with uncertain mean and SD "
-    "(BVDOutbreakSize's priors). "
-    "Confirmed onsets follow a time-varying ascertainment. The "
-    "onset-to-report delay is nonparametric, a discrete hazard that is "
-    "smooth over delay, with a national weekly shift and province offsets "
-    "and weekly drifts partially pooled towards it. Known onsets are right "
-    "truncated by it and by a report-to-publication lag on 0 to 7 days "
-    "learnt from consecutive releases. The "
-    "share of reports with no onset date is modelled by province. The "
-    "hub's imputed onsets are modelled as the hub makes them, from cases "
-    "missing an onset date by report day, back-sampled with the hub's "
-    "delay. Weekly known and imputed counts are negative binomial and the "
-    "delays of known onsets are Dirichlet-multinomial. Over the forecast "
-    "weeks the log Rt walk reverts towards Rt of 1 with a half-life of 2 "
-    "weeks. Fitted by NUTS (NumPyro) to each data vintage. Each sample is "
-    "one joint posterior "
-    "trajectory. See "
-    "https://samabbott.co.uk/BDBVHubRenewal/methods/model/."
+    "Rt is dated by infection. "
+    "Onsets are infections convolved with a log-normal incubation period, "
+    "with BVDOutbreakSize's priors on its mean and SD. "
+    "A time-varying share of onsets is confirmed. "
+    "The onset-to-report delay is a discrete hazard, smooth over delay, "
+    "with a national weekly shift and province offsets and drifts pooled "
+    "towards it. "
+    "Known onsets are right truncated by this delay and by a 0 to 7 day "
+    "report-to-publication lag learnt from consecutive releases. "
+    "The share of reports with no onset date is modelled by province. "
+    "The hub's imputed onsets are modelled as the hub makes them: cases "
+    "with no onset date, back-sampled from report day with the hub's delay. "
+    "Weekly known and imputed counts are negative binomial, and the delays "
+    "of known onsets are Dirichlet-multinomial. "
+    "Over the forecast weeks log Rt reverts towards Rt = 1 with a "
+    "half-life of 2 weeks. "
+    "The model is fitted by NUTS (NumPyro) to each data release, and each "
+    "sample is one joint posterior trajectory. "
+    "See https://samabbott.co.uk/bdbv-hub-modelling/methods/model/."
 )
 _ZONE_SUMS = (
-    "Health zones are fitted and the national value is the sum of the "
-    "province samples, each the sum of its zone samples. Zone WorldPop "
-    "populations and the centroids of each zone's largest polygon set the "
-    "importation kernel between zones. "
+    "Health zones are fitted. "
+    "Each province is the sum of its zones and national is the sum of the "
+    "provinces, sample by sample. "
+    "Zone WorldPop populations and the centroids of each zone's largest "
+    "polygon set the importation kernel between zones. "
 )
 _ZONE_SPLIT = (
-    "The national value is the sum of province samples plus the national "
-    "cases in no province. Health zones are not fitted: each province "
-    "sample is split across its zones with shares drawn once per sample "
-    "from a Dirichlet built on recent and longer-run published zone counts, "
-    "keeping each zone's published count, so zone samples sum to the "
-    "province sample. "
+    "The national value is the sum of the provinces plus the national cases "
+    "in no province. "
+    "Health zones are not fitted. Each province sample is split across its "
+    "zones by shares drawn once per sample from a Dirichlet on recent and "
+    "longer-run zone counts, keeping each zone's published count. "
 )
 _RENEWAL_INPUTS = (
     "Hub target data (weekly confirmed cases by onset week, observed plus "
@@ -73,7 +73,7 @@ MODEL_METADATA = {
             "10 cases a week uses the walk spread of its parent. Each sample "
             "is a joint trajectory and the national value is the sum of "
             "province samples. See "
-            "https://samabbott.co.uk/BDBVHubRenewal/methods/baselines/."
+            "https://samabbott.co.uk/bdbv-hub-modelling/methods/baselines/."
         ),
         "data_inputs": (
             "Hub daily onsets by release (observed plus imputed) for "
@@ -87,61 +87,65 @@ MODEL_METADATA = {
     #   bdbvhubrenewal metadata --model <renewal|renewalsp|renewalbvd>
     # when that changes (tests/submission/test_fitting.py checks it).
     "renewal": {
-        "model_name": "Zone renewal model (PyRenew)",
+        "model_name": "Pooled zone renewal model (PyRenew)",
         "methods": (
-            "Health zone renewal model in PyRenew with pooled Rt, gravity "
-            "importation and depletion, fitted to known and imputed onsets "
-            "with modelled delays; provinces are zone sums."
+            "A renewal model per health zone with pooled Rt, importation "
+            "between zones and depletion, fitted to known and imputed onsets "
+            "with modelled delays. Provinces are zone sums."
         ),
         "methods_long": (
-            "A renewal process for each health zone with recent cases, with "
-            "a national weekly random walk on log Rt plus partially pooled "
-            "province and zone deviations, importation between zones "
-            "through a gravity kernel, and susceptible depletion. Zones with "
-            "no recent case take a random walk introduction layer. "
+            "We model infections in each health zone with recent cases with "
+            "a renewal process in PyRenew. "
+            "Log Rt is a national weekly random walk plus partially pooled "
+            "province and zone deviations. "
+            "Infections move between zones through a gravity kernel, and "
+            "susceptibles are depleted. "
+            "Zones with no recent case take a random walk introduction layer. "
             + _ZONE_SUMS
             + _RENEWAL_OBSERVATION
         ),
         "data_inputs": _RENEWAL_INPUTS,
     },
     "renewalsp": {
-        "model_name": "Single-patch province renewal models (PyRenew)",
+        "model_name": "Single-province renewal models (PyRenew)",
         "methods": (
-            "A renewal model in PyRenew fitted to each province on its own, "
-            "with no pooling or importation, to known and imputed onsets "
-            "with modelled delays; silent provinces take a random walk "
-            "introduction layer."
+            "A renewal model fitted to each province on its own, with no "
+            "pooling or importation, to known and imputed onsets with "
+            "modelled delays. Silent provinces wait for an introduction."
         ),
         "methods_long": (
-            "A renewal process fitted to each province's series on its own, "
-            "with its own weekly random walk on log Rt and no pooling, "
-            "importation or depletion. Provinces with no case in the last "
-            "nine weeks are zero until an introduction, then a random walk. "
+            "We fit a renewal process in PyRenew to each province's series "
+            "on its own. "
+            "Each has its own weekly random walk on log Rt, with no pooling, "
+            "importation or depletion. "
+            "A province with no case in the last nine weeks is zero until an "
+            "introduction, then a random walk. "
             + _ZONE_SPLIT
             + _RENEWAL_OBSERVATION
         ),
         "data_inputs": _RENEWAL_INPUTS,
     },
     "renewalbvd": {
-        "model_name": "Zone renewal model with BVD Rt (PyRenew)",
+        "model_name": (
+            "Pooled zone renewal model informed by BVDOutbreakSize Rt (PyRenew)"
+        ),
         "methods": (
-            "Health zone renewal model in PyRenew with pooled Rt, gravity "
-            "importation and depletion, with a tempered likelihood on "
-            "BVDOutbreakSize Rt, fitted to known and imputed onsets; "
-            "provinces are zone sums."
+            "A renewal model per health zone with pooled Rt, importation and "
+            "depletion, with Rt tied to the newest BVDOutbreakSize estimates "
+            "by a tempered likelihood. Provinces are zone sums."
         ),
         "methods_long": (
-            "A renewal process for each health zone with recent cases, with "
-            "a national weekly random walk on log Rt plus partially pooled "
-            "province and zone deviations, importation between zones "
-            "through a gravity kernel, and susceptible depletion. Zones with "
-            "no recent case take a random walk introduction layer. "
-            "The model's national, "
-            "province and zone Rt in the week of the newest BVDOutbreakSize "
-            "release available at the cut-off are tied to that release's Rt "
-            "estimates, as a likelihood term tempered by 0.5. "
-            + _ZONE_SUMS
-            + _RENEWAL_OBSERVATION
+            "We model infections in each health zone with recent cases with "
+            "a renewal process in PyRenew. "
+            "Log Rt is a national weekly random walk plus partially pooled "
+            "province and zone deviations. "
+            "Infections move between zones through a gravity kernel, and "
+            "susceptibles are depleted. "
+            "Zones with no recent case take a random walk introduction layer. "
+            "The model's national, province and zone Rt in the week of the "
+            "newest BVDOutbreakSize release published by the cut-off are tied "
+            "to that release's Rt estimates by a likelihood term tempered by "
+            "0.5. " + _ZONE_SUMS + _RENEWAL_OBSERVATION
         ),
         "data_inputs": (
             _RENEWAL_INPUTS + " The newest BVDOutbreakSize release published "
@@ -150,147 +154,113 @@ MODEL_METADATA = {
     },
     # A hub model of its own (seabbs-rwnowcast), submitted every round.
     "randomwalknowcast": {
-        "model_name": "RandomWalk on a nowcast",
+        "model_name": "Random walk from a chain-ladder nowcast "
+        "(baselinenowcast)",
         "methods": (
-            "Baselinenowcast chain ladder on daily release snapshots, "
-            "negative binomial new reports on the count to come, then a "
-            "log-scale random walk. Health zones and provinces, national "
-            "the sum of provinces."
+            "A chain-ladder nowcast of each place's recent weeks from the "
+            "daily release snapshots (baselinenowcast), carried forward as a "
+            "log-scale random walk. National is the province sum."
         ),
         "methods_long": (
-            "The baselinenowcast method (Johnson et al. 2025, Wellcome Open "
-            "Research, doi:10.12688/wellcomeopenres.25027.2; "
-            "https://github.com/epinowcast/baselinenowcast/), from a JAX "
-            "port of baselinenowcast 0.2.2, with a random walk on top. "
-            "Daily onsets in the hub's weekly release snapshots are nowcast "
-            "with a chain ladder. Unobserved report days are skipped, and "
-            "every release pair in the 42-day window informs one daily delay, "
-            "fitted by non-negative least squares on the log scale with "
-            "releases as batched reports. Daily nowcasts are summed to hub "
-            "weeks. "
-            # The uncertainty. Edit here if the observation model changes.
-            "The observation model is baselinenowcast's negative binomial on "
-            "the remaining count, fitted per horizon from retrospective "
-            "nowcasts with downward revisions moved onto earlier releases. "
-            "Each sample's completed latest week is carried forward as a "
-            "random walk on the log scale with Poisson noise. A place under "
-            "10 cases a week uses the delay, nowcast size and walk spread "
-            "pooled over its parent (zone, then province, then national). "
-            "The "
-            "national value is the sum of provinces. See "
-            "https://samabbott.co.uk/BDBVHubRenewal/methods/baselines/."
+            "We nowcast and forecast weekly confirmed cases by onset week "
+            "for each health zone and province. "
+            "The nowcast is the baselinenowcast method (Johnson et al. 2025, "
+            "Wellcome Open Research, doi:10.12688/wellcomeopenres.25027.2), "
+            "from a JAX port of baselinenowcast 0.2.2. "
+            "A chain ladder on the hub's daily release snapshots fits one "
+            "daily reporting delay to every release pair in a 42-day window, "
+            "by non-negative least squares on the log scale. "
+            "Report days no release observes are skipped, and downward "
+            "revisions are moved onto earlier releases. "
+            "Daily nowcasts are summed to hub weeks. "
+            "The cases still to be reported are negative binomial, with a "
+            "dispersion fitted per horizon from retrospective nowcasts. "
+            "Each nowcast draw is carried forward from its latest week as a "
+            "random walk on the log scale with Poisson noise. "
+            "A place with fewer than 10 cases a week uses the delay, "
+            "dispersion and walk spread pooled over its parent (zone, then "
+            "province, then country). "
+            "Within each week the provinces' draws are paired by a Gaussian "
+            "copula whose correlation is estimated from the model's own past "
+            "errors (Schaake shuffle), so each province keeps its draws. "
+            "The national value is the sum of the provinces. "
+            "See https://samabbott.co.uk/bdbv-hub-modelling/methods/baselines/."
         ),
         "data_inputs": (
             "Hub daily onsets by release (observed plus imputed) for "
             "provinces and health zones, and the hub's weekly target data."
         ),
     },
-    # Not submitted. Kept so `metadata --model pprandomwalknowcast` can
-    # describe it.
-    "pprandomwalknowcast": {
-        "model_name": "Generative random walk nowcast, partially pooled",
-        "methods": (
-            "Epinowcast-style joint model of weekly expected counts, a log "
-            "random walk, and a log-normal reporting delay, fitted by NUTS "
-            "to the daily release snapshots with partial pooling over "
-            "zones, provinces and country; national the sum of provinces."
-        ),
-        "methods_long": (
-            "One generative model in the style of epinowcast (Abbott et al., "
-            "https://github.com/epinowcast/epinowcast/), fitted with NUTS "
-            "(NumPyro) to each vintage. Each place's weekly expected final "
-            "count is a random walk on the log scale over the last 16 "
-            "weeks, with each onset day expecting a seventh of it. Cases are "
-            "reported after a log-normal delay cut to whole days and capped "
-            "at 42 days. The new reports of each onset day between "
-            "consecutive releases are negative binomial on the expected "
-            "count times the share of the delay between the two ages, so "
-            "the data are right truncated by construction. Downward "
-            "revisions are first moved onto earlier releases, as "
-            "baselinenowcast does. The delay location and scale, the walk "
-            "spread, its starting level and the dispersion are all "
-            "partially pooled over zones, provinces and the country. "
-            "Each sample is "
-            "one posterior draw: reported counts plus negative binomial "
-            "draws of the cases still to come, and the walk continued over "
-            "the forecast weeks. Places with no case in nine weeks are not "
-            "fitted and take randomwalknowcast's draws, 0 until an "
-            "introduction, as renewalsp does. The national value is the "
-            "sum of provinces. "
-            "See https://samabbott.co.uk/BDBVHubRenewal/methods/baselines/."
-        ),
-        "data_inputs": (
-            "Hub daily onsets by release (observed plus imputed) for "
-            "provinces and health zones, and the hub's weekly target data."
-        ),
-    },
-    # Fine-tuned Chronos-2, the hub model seabbs-chronos2_ft. `{release}`
+    # Fine-tuned Chronos-2, the hub model seabbs-nowcastfm. `{release}`
     # is the checkpoint release the model loads, filled in by `metadata`.
-    # The committed hub/model-metadata/seabbs-chronos2_ft.yml is that of
+    # The committed hub/model-metadata/seabbs-nowcastfm.yml is that of
     # the model in config/hub.toml (tests/submission/test_fitting.py).
     "fm_chronos_daily_ragged_ft": {
-        "model_name": "Fine-tuned Chronos-2 (daily releases)",
+        "model_name": "Nowcast foundation (fine-tuned Chronos-2, daily "
+        "releases)",
         "methods": (
-            "Chronos-2 time series foundation model, LoRA fine-tuned on "
-            "outbreaks simulated with epinowcast, forecasting the hub "
-            "target from its daily releases. Country, provinces and "
-            "health zones in one block."
+            "A time series foundation model (Chronos-2) fine-tuned on "
+            "simulated outbreaks, forecasting the country, provinces and "
+            "health zones jointly from the hub's daily releases."
         ),
         "methods_long": (
-            "Chronos-2 (Ansari et al. 2025, arXiv:2510.15821) with a LoRA "
-            "adapter fine-tuned on 2,000 outbreaks simulated with "
-            "epinowcast's generative model (renewal process, drifting "
-            "reporting delays, day-of-week effects, negative binomial "
-            "noise). The adapter is the release {release} of "
-            "https://github.com/seabbs/BDBVHubRenewal, the newest when "
-            "this was written. The hub target of "
-            "every daily release is laid out by onset day and release "
-            "lag. The country, each province and each of their health "
-            "zones are target series in one block. Each place with "
-            "cases has its counts at release lags under 28 days as "
-            "covariates, known past the last day at that lag, and "
-            "Chronos-2 forecasts the block jointly. Each of 100 samples "
-            "draws its own uniform level per series and day from "
-            "Chronos-2's 21 quantiles, rounded to counts no lower than "
-            "those reported. Not fitted to these data. The zones are made "
-            "to sum to their province sample by sample, each keeping its "
-            "published count. See "
-            "https://samabbott.co.uk/BDBVHubRenewal/methods/foundation/."
+            "We forecast the hub target with Chronos-2 (Ansari et al. 2025, "
+            "arXiv:2510.15821) and a LoRA adapter fine-tuned on outbreaks "
+            "simulated with epinowcast's generative model (renewal process, "
+            "drifting reporting delays, day-of-week effects, negative "
+            "binomial noise). "
+            "The adapter is release {release} of "
+            "https://github.com/seabbs/bdbv-hub-modelling, the newest when "
+            "this was written. "
+            "Each daily release is laid out by onset day and release lag. "
+            "The country, each province and each health zone are target "
+            "series in one block, forecast jointly. "
+            "Each place with cases has its counts at release lags under "
+            "28 days as covariates. "
+            "Each of 100 samples draws its own uniform level per series and "
+            "day from Chronos-2's 21 quantiles, rounded to counts no lower "
+            "than those reported. "
+            "The model is not fitted to these data. "
+            "The national value is the block's own national series. "
+            "The zones are made to sum to their province sample by sample, "
+            "each keeping its published count. "
+            "See https://samabbott.co.uk/bdbv-hub-modelling/methods/foundation/."
         ),
         "data_inputs": (
-            "The hub's daily onsets by release (observed plus "
-            "imputed) "
+            "The hub's daily onsets by release (observed plus imputed) "
             "for the country, provinces and health zones."
         ),
     },
     "fm_chronos_weekly_ragged_ft": {
-        "model_name": "Fine-tuned Chronos-2 (weekly releases)",
+        "model_name": "Nowcast foundation (fine-tuned Chronos-2, weekly "
+        "releases)",
         "methods": (
-            "Chronos-2 time series foundation model, LoRA fine-tuned on "
-            "outbreaks simulated with epinowcast, forecasting the hub "
-            "target from its weekly releases. Country, provinces and "
-            "health zones in one block."
+            "A time series foundation model (Chronos-2) fine-tuned on "
+            "simulated outbreaks, forecasting the country, provinces and "
+            "health zones jointly from the hub's weekly releases."
         ),
         "methods_long": (
-            "Chronos-2 (Ansari et al. 2025, arXiv:2510.15821) with a LoRA "
-            "adapter fine-tuned on 2,000 outbreaks simulated with "
-            "epinowcast's generative model (renewal process, drifting "
-            "reporting delays, day-of-week effects, negative binomial "
-            "noise). The adapter is the release {release} of "
-            "https://github.com/seabbs/BDBVHubRenewal, the newest when "
-            "this was written. The hub target of "
-            "every weekly release is laid out by onset week and release "
-            "lag. The country, each province and each of their health "
-            "zones are target series in one block. Each place with "
-            "cases has its counts at release lags under 4 weeks as "
-            "covariates, known past the last week at that lag, and "
-            "Chronos-2 forecasts the block jointly. Each of 100 samples "
-            "draws its own uniform level per series and week from "
-            "Chronos-2's 21 quantiles, rounded to counts no lower than "
-            "those reported. Not fitted to these data. The zones are made "
-            "to sum to their province sample by sample, each keeping its "
-            "published count. See "
-            "https://samabbott.co.uk/BDBVHubRenewal/methods/foundation/."
+            "We forecast the hub target with Chronos-2 (Ansari et al. 2025, "
+            "arXiv:2510.15821) and a LoRA adapter fine-tuned on outbreaks "
+            "simulated with epinowcast's generative model (renewal process, "
+            "drifting reporting delays, day-of-week effects, negative "
+            "binomial noise). "
+            "The adapter is release {release} of "
+            "https://github.com/seabbs/bdbv-hub-modelling, the newest when "
+            "this was written. "
+            "Each weekly release is laid out by onset week and release lag. "
+            "The country, each province and each health zone are target "
+            "series in one block, forecast jointly. "
+            "Each place with cases has its counts at release lags under "
+            "4 weeks as covariates. "
+            "Each of 100 samples draws its own uniform level per series and "
+            "week from Chronos-2's 21 quantiles, rounded to counts no lower "
+            "than those reported. "
+            "The model is not fitted to these data. "
+            "The national value is the block's own national series. "
+            "The zones are made to sum to their province sample by sample, "
+            "each keeping its published count. "
+            "See https://samabbott.co.uk/bdbv-hub-modelling/methods/foundation/."
         ),
         "data_inputs": (
             "The hub's weekly target data by release "

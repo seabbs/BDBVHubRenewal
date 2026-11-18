@@ -90,3 +90,16 @@ def join(rows: Iterable[Path | str], out: Path | str) -> None:
     lines = [Path(r).read_text().strip() for r in rows]
     lines.sort(key=lambda x: int(x.split(",")[1]))
     Path(out).write_text("\n".join([HEADER, *lines]) + "\n")
+
+
+def seeds(manifest: Path | str) -> set[int]:
+    """Return the batches a round's manifest lists (none if it is absent).
+
+    A host appends a batch's row only once its files are in place, so a
+    listed batch can be copied.
+    """
+    path = Path(manifest)
+    if not path.exists():
+        return set()
+    rows = path.read_text().splitlines()[1:]
+    return {int(r.split(",")[1]) for r in rows if r.strip()}

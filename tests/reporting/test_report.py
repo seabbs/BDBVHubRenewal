@@ -249,7 +249,7 @@ def test_development_log(tmp_path: Path) -> None:
             "reason": ["Why then.", "Why now."],
             "evidence": [
                 "results/model-choice.yml",
-                "https://github.com/seabbs/BDBVHubRenewal/commit/abc1234",
+                "https://github.com/seabbs/bdbv-hub-modelling/commit/abc1234",
             ],
         }
     )
@@ -259,7 +259,7 @@ def test_development_log(tmp_path: Path) -> None:
     # Newest first, with evidence as links.
     assert text.index("New decision.") < text.index("Old decision.")
     assert (
-        "[abc1234](https://github.com/seabbs/BDBVHubRenewal/commit/abc1234)"
+        "[abc1234](https://github.com/seabbs/bdbv-hub-modelling/commit/abc1234)"
         in text
     )
     # The committed log reads.
@@ -601,7 +601,7 @@ def test_fit_settings_skip_models_with_no_sampler(
 ) -> None:
     monkeypatch.chdir(ROOT)
     settings = report._fit_settings()
-    assert "pprandomwalknowcast" in settings
+    assert "renewal" in settings
     assert not any(name.startswith("fm_chronos_") for name in settings)
 
 

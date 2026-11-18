@@ -87,3 +87,17 @@ def test_once_shows_but_does_not_fail_on_a_failed_mailbox(
     out = tmp_path / "page" / "index.html"
     assert dashboard.write_once(ctx, out) == 0
     assert "mailbox failed: no such file" in out.read_text()
+
+
+def test_sections_send_only_what_changed(server):
+    status, body = get(server + "/sections.json")
+    assert status == 200
+    first = json.loads(body)
+    assert {"bar", "status", "loss", "nowcasts"} <= set(first)
+    assert all(v["html"] for v in first.values())
+    have = ",".join(f"{k}:{v['hash']}" for k, v in first.items())
+    second = json.loads(get(server + "/sections.json?have=" + have)[1])
+    assert set(second) == set(first)
+    # Unchanged parts come back as their hash alone; the clock moves on.
+    for key in ("loss", "nowcasts", "tables"):
+        assert second[key] == {"hash": first[key]["hash"]}

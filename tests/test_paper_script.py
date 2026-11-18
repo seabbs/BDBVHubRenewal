@@ -138,7 +138,12 @@ def test_pages_and_the_taskfile_run_the_script() -> None:
     assert "working-directory" not in paper
     assert "snakemake" not in paper["run"]
     tasks = yaml.safe_load((ROOT / "Taskfile.yml").read_text())["tasks"]
-    assert any("scripts/paper.sh" in str(c) for c in tasks["paper"]["cmds"])
+    # `task paper` runs the same script, niced and reported on this machine
+    # (workflow/scripts/paper_run.py).
+    cmds = [str(c) for c in tasks["paper"]["cmds"]]
+    assert any("workflow/scripts/paper_run.py" in c for c in cmds)
+    runner = (ROOT / "workflow" / "scripts" / "paper_run.py").read_text()
+    assert '"scripts/paper.sh"' in runner
 
 
 def test_the_steps_get_a_github_token(repo: Path) -> None:

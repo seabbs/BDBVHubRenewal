@@ -101,7 +101,7 @@ tasks:
       - uv run bdbvhubrenewal backtest --scenarios-only {{.CLI_ARGS}}
 
   backtest-zones:
-    desc: Score randomwalk, randomwalknowcast and pprandomwalknowcast at health-zone level (writes results/zone-scores.csv)
+    desc: Score randomwalk and randomwalknowcast at health-zone level (writes results/zone-scores.csv)
     cmds:
       - uv run bdbvhubrenewal zone-backtest {{.CLI_ARGS}}
 
@@ -270,10 +270,12 @@ tasks:
         vars: {WF_TARGET: publish}
 
   score:
-    desc: Score every released checkpoint (German, BDBV, held-out), then the slots check and aggregation rows
+    desc: Score every released checkpoint (German, BDBV, held-out), then the slots check and aggregation rows; the releases are listed afresh in a run of their own first
     cmds:
       - task: wf
-        vars: {WF_TARGET: "score --forcerun release_list"}
+        vars: {WF_TARGET: "release_list --forcerun release_list"}
+      - task: wf
+        vars: {WF_TARGET: score}
 
   land:
     desc: Commit the checkpoint score tables to evidence/ and push (writes to GitHub)
@@ -291,6 +293,11 @@ tasks:
     cmds:
       - task: wf
         vars: {WF_TARGET: "dashboard --forcerun dashboard"}
+
+  monitor:
+    desc: Serve the workflow monitor, each machine's running and recent jobs from the status the ticks write (MONITOR_HOST, MONITOR_PORT, MONITOR_REFRESH in config/local.env)
+    cmds:
+      - python3 workflow/scripts/monitor.py
 
   tick:
     desc: Run this machine's scheduled workflow targets once (SCHEDULE_TARGETS in config/local.env), with the lock and room checks a timer uses
@@ -323,9 +330,14 @@ tasks:
       - uv run --group paper pytest -q tests/workflow
 
   paper:
-    desc: Run the paper workflow (TARGET=development by default, or paper) and render the paper into docs/paper/, as CI does (scripts/paper.sh)
+    desc: Run the paper workflow (TARGET=development by default, or paper) and render the paper into docs/paper/, as CI does (scripts/paper.sh), niced on this machine's cores less its headroom, with start, done or FAILED lines; TARGET=paper waits for the held-out inputs and pins the newest checkpoint first
     cmds:
-      - CORES={{.CORES | default 4}} scripts/paper.sh {{.TARGET | default "development"}}
+      - uv run --group paper python workflow/scripts/paper_run.py {{.TARGET | default "development"}}
+
+  paper:targets:
+    desc: "Run single paper workflow targets the same way: task paper:targets -- TARGET..."
+    cmds:
+      - uv run --group paper python workflow/scripts/paper_run.py --targets {{.CLI_ARGS}}
 
   paper:render:
     desc: Alias of `task paper`

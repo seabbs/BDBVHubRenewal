@@ -35,6 +35,7 @@ REPORT_ONLY: Final = tuple(
     f"src/bdbvhubrenewal/reporting/{name}.py"
     for name in (
         "germany",
+        "live_checkpoint_page",
         "nowcast_plots",
         "report",
         "scorechart",
@@ -298,7 +299,7 @@ def model_code(
     }
     start = _module_file(src, own)
     # Everything the model's own module needs, another model's module
-    # included when it builds on it (pprandomwalknowcast on randomwalk.py).
+    # included when it builds on it (renewal on randomwalk.py).
     # A model defined outside the package (a test's stand-in) has only the
     # shared code.
     stop = {base / s for s in skip}

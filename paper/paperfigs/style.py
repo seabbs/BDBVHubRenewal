@@ -1,6 +1,6 @@
 """Colours, dashes and the matplotlib theme for the paper figures.
 
-The ink colours and categorical palette are those of BDBVHubRenewal's
+The ink colours and categorical palette are those of bdbv-hub-modelling's
 `reporting/plots.py`, copied so the paper does not import the package.
 Each model has a fixed colour and dash. The Chronos variants of one family
 share a colour: fine-tuned on ragged data is solid, zero-shot on ragged

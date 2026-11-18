@@ -21,3 +21,28 @@ def test_earlier_releases_are_left_out():
     got = releases.labels(LISTING, "2026-11-01T00:00:00Z")
     assert got[-1] == "aaa"
     assert "old" in got
+
+
+def test_a_batch_is_released_once_both_its_files_are():
+    names = [
+        "counts-30900.csv.gz",
+        "settings-30900.csv",
+        "counts-30901.csv.gz",
+        "settings-30902.csv",
+        "qc.csv",
+    ]
+    assert releases.released_seeds(names) == {30900}
+
+
+def test_checkpoints_by_publication_time_across_kinds():
+    got = releases.by_time(LISTING, "2026-11-16T09:00:00Z")
+    assert got == ["slots-ccc", "aaa", "slots-bbb"]
+
+
+def test_the_newest_checkpoint_has_the_highest_priority_within_its_band():
+    order = ["slots-ccc", "aaa", "slots-bbb"]
+    got = [releases.priority(order, label, 10) for label in order]
+    assert got == sorted(got)
+    assert all(10 < p < 11 for p in got)
+    # Labels outside the order (the reference) sit at the band's base.
+    assert releases.priority(order, "reference", 10) == 10

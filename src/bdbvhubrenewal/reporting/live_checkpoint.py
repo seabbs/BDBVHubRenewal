@@ -9,9 +9,10 @@ table at the branch head, never a pinned checkpoint, and take each
 study's newest checkpoint of the live run (`run`), labelled as
 preliminary with the number of simulations it was fine-tuned on.
 
-Only development data are shown. `tidy` drops BDBV rows that reach the
-scored hub rounds (`SCORED_FROM`); the scorer never reads the German
-second half.
+The docs page is `reporting.live_checkpoint_page`, which only the docs
+build runs. Only development data are shown. `tidy` drops BDBV rows that
+reach the scored hub rounds (`SCORED_FROM`); the scorer never reads the
+German second half.
 """
 
 from __future__ import annotations
@@ -28,7 +29,6 @@ __all__ = [
     "RULE",
     "SCORED_FROM",
     "checkpoint_table",
-    "docs_page",
     "label",
     "live_tags",
     "newest",
@@ -210,26 +210,4 @@ def summary_table(scores: pd.DataFrame, run: str) -> pd.DataFrame:
         cells[name] = f"{value} ({n:,})" if value else ""
     return pd.DataFrame(
         [full.iloc[0].to_dict(), cells], columns=list(full.columns)
-    )
-
-
-def docs_page(scores: pd.DataFrame | None, run: str = LIVE_RUN) -> str:
-    """Return the docs' preliminary summary of the live run, as Markdown.
-
-    Without scores, a note says they are not yet available.
-    """
-    if scores is None or not newest(scores, run):
-        return "*Fine-tuned checkpoint scores are not yet available.*\n"
-    from bdbvhubrenewal.reporting.tables import markdown_table
-
-    top = newest(scores, run)
-    n = max(n for _, n in top.values())
-    return (
-        f"**{label(n)}** Scores of the newest scored checkpoint of the "
-        f"fine-tuning run (`{run}`) on development data only: national WIS "
-        "on the German first half and CRPS on the BDBV release backtest, "
-        "relative to `randomwalknowcast` (daily / weekly model), and the "
-        "trainer's held-out loss. Brackets give each cell's simulations.\n\n"
-        + markdown_table(summary_table(scores, run))
-        + "\n"
     )

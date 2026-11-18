@@ -236,7 +236,7 @@ def test_zone_code_keys_only_the_zone_fits(tmp_path: Path) -> None:
     zoned = ("renewal", "renewalbvd")
     # renewalsp shares the province module, which finds the zone fits
     # through the registry only.
-    others = ("renewalsp", "pprandomwalknowcast")
+    others = ("renewalsp", "randomwalknowcast")
     before = {m: store.code_digest(m, tmp_path) for m in zoned + others}
     for rel in ("model/zones.py", "forecasters/zonerenewal.py"):
         path = tmp_path / "src/bdbvhubrenewal" / rel

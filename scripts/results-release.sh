@@ -16,8 +16,8 @@
 # standard library only.
 set -euo pipefail
 
-repo=${GITHUB_REPOSITORY:-seabbs/BDBVHubRenewal}
-site_url="https://samabbott.co.uk/BDBVHubRenewal/"
+repo=${GITHUB_REPOSITORY:-seabbs/bdbv-hub-modelling}
+site_url="https://samabbott.co.uk/bdbv-hub-modelling/"
 
 case "$1" in
   attach)
@@ -60,11 +60,11 @@ EOF
         > "$dir/hub.zip"
       (cd "$build/data" && zip -qr - .) > "$dir/data.zip"
       stage=$(mktemp -d "${TMPDIR:-/tmp}/site.XXXXXX")
-      cp -R "$site" "$stage/BDBVHubRenewal"
+      cp -R "$site" "$stage/bdbv-hub-modelling"
       printf '%s\n' \
         "Run \`python3 -m http.server\` in this folder and open" \
-        "http://localhost:8000/BDBVHubRenewal/" > "$stage/README.txt"
-      (cd "$stage" && zip -qr - README.txt BDBVHubRenewal) > "$stage/site.zip"
+        "bdbv-hub-modelling/ at the address it prints." > "$stage/README.txt"
+      (cd "$stage" && zip -qr - README.txt bdbv-hub-modelling) > "$stage/site.zip"
       gh release upload "$tag" "$dir"/* -R "$repo" --clobber
       notes="$stage/notes.md"
       gh release view "$tag" -R "$repo" --json body -q .body |

@@ -84,7 +84,7 @@ def test_code_digest_ignores_docstrings_and_comments(tmp_path: Path) -> None:
 
 def test_code_digest_follows_each_models_own_code(tmp_path: Path) -> None:
     root = _copy_repo(tmp_path)
-    models = ("renewal", "renewalbvd", "renewalsp", "pprandomwalknowcast")
+    models = ("renewal", "renewalbvd", "renewalsp", "randomwalknowcast")
 
     def digests() -> dict[str, str]:
         return {m: store.code_digest(m, root) for m in models}
@@ -99,14 +99,10 @@ def test_code_digest_follows_each_models_own_code(tmp_path: Path) -> None:
     # in the province module they build on, has its own.
     assert before["renewal"] == before["renewalbvd"]
     assert before["renewal"] != before["renewalsp"]
-    assert before["renewal"] != before["pprandomwalknowcast"]
-    edit(f"{src}/forecasters/pprandomwalk.py")
-    after = digests()
-    assert after["renewal"] == before["renewal"]
-    assert after["pprandomwalknowcast"] != before["pprandomwalknowcast"]
-    before = after
+    assert before["renewal"] != before["randomwalknowcast"]
     edit(f"{src}/forecasters/renewal.py")
     after = digests()
+    assert after["randomwalknowcast"] == before["randomwalknowcast"]
     assert after["renewal"] != before["renewal"]
     assert after["renewalsp"] != before["renewalsp"]
     before = after
@@ -128,7 +124,7 @@ def test_the_zone_split_keys_the_province_models_fits(tmp_path: Path) -> None:
     # the zone fits of renewal and renewalbvd call its zone_task, so the
     # split is fit code. The zone backtest is not.
     root = _copy_repo(tmp_path)
-    models = ("renewal", "pprandomwalknowcast")
+    models = ("renewal",)
 
     def digests() -> dict[str, str]:
         return {m: store.code_digest(m, root) for m in models}
@@ -171,6 +167,15 @@ def test_zone_data_keys_the_zone_fits(
         assert (moved[(model, origin)] != key) == (model == "renewal")
 
 
+def test_fit_code_has_the_store_and_no_other_model() -> None:
+    renewal = set(store.fit_code("renewal", ROOT))
+    assert "src/bdbvhubrenewal/evaluation/store.py" in renewal
+    assert "src/bdbvhubrenewal/model/observation.py" in renewal
+    walk = set(store.fit_code("randomwalknowcast", ROOT))
+    assert "src/bdbvhubrenewal/forecasters/renewal.py" not in walk
+    assert "src/bdbvhubrenewal/evaluation/store.py" in walk
+
+
 def test_fit_time_data_files_key_a_fit(tmp_path: Path) -> None:
     # The gravity kernel reads the province centres at fit time.
     root = _copy_repo(tmp_path)
@@ -184,7 +189,7 @@ def test_report_code_does_not_key_a_fit(tmp_path: Path) -> None:
     # `fit_code` runs `digest.model_code`, so a change to its import
     # closure can move a key. Its own source is not hashed (`STORE_SKIP`).
     root = _copy_repo(tmp_path)
-    models = ("renewal", "pprandomwalknowcast")
+    models = ("renewal",)
 
     def digests() -> dict[str, str]:
         return {m: store.code_digest(m, root) for m in models}
@@ -679,7 +684,7 @@ def test_zone_data_keys_only_the_models_that_read_it(
     sampler = store.samplers()
     # Every stored model reads them: the province models split their
     # zones in their forecast, and Chronos-2 forecasts them.
-    reads = ["renewal", "pprandomwalknowcast", "fm_chronos_weekly_complete"]
+    reads = ["renewal", "fm_chronos_weekly_complete"]
     assert store.current_keys(zoned, reads, sampler, "c") != (
         store.current_keys(tasks, reads, sampler, "c")
     )
@@ -947,6 +952,54 @@ def test_stored_samples_keep_the_unassigned_national_part(
     n_weeks = len(task.target_end_dates)
     n_samples = forecast.samples["sample"].nunique()
     assert len(forecast.unassigned) == n_weeks * n_samples
+
+
+def test_a_stored_own_national_model_keeps_its_national_rows(
+    fitted_flat: str,
+    tasks: dict[str, ForecastTask],
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    from bdbvhubrenewal.evaluation import store_archive
+    from bdbvhubrenewal.submission.hub import to_hub_table
+
+    # As a Chronos-2 model, which forecasts the country in its joint
+    # block and submits those national draws (`own_national`).
+    monkeypatch.setattr(
+        store_archive,
+        "own_national",
+        lambda name: name == fitted_flat,
+        raising=False,
+    )
+    task = tasks[sorted(tasks)[-1]]
+    fit = store.fit(fitted_flat, task, {}, "c")
+    rows = fit.forecasts
+    national = rows["location"] == NATIONAL
+    rows.loc[national, "value"] = rows.loc[national, "value"] + 5
+    root = tmp_path / "store"
+    store.write_fit(root, dataclasses.replace(fit, forecasts=rows))
+
+    def hub(_: str, *, forecast: Forecast, **__: object) -> pd.DataFrame:
+        # As `cli._hub_forecast` writes an own-national model's table.
+        return to_hub_table(
+            forecast.samples,
+            task.reference_date,
+            unassigned=forecast.unassigned,
+            n_samples=task.n_samples,
+            forecast_date=task.reference_date,
+            national="own",
+        )
+
+    table = store_archive.archive(
+        root, task, task, {fitted_flat: None}, {}, hub, lambda _: "c"
+    )
+    assert "not archived" not in capsys.readouterr().err
+    got = table.loc[table["location"] == NATIONAL]
+    assert not got.empty
+    weeks = {str(d) for d in task.target_end_dates}
+    want = rows.loc[national & rows["target_end_date"].astype(str).isin(weeks)]
+    assert got["value"].sum() == want["value"].round().sum()
 
 
 def test_stored_samples_missing_a_week_are_not_archived(

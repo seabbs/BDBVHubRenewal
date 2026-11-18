@@ -40,8 +40,9 @@ write_archive() {
 }
 ledger_push "$ledger" "Archive the candidates' forecasts for $REFERENCE_DATE" \
   write_archive
-note "Ledger: every candidate's forecasts at $AS_OF archived for $REFERENCE_DATE."
 if [ "$archived" != 0 ]; then
+  note "Ledger: some candidates' forecasts at $AS_OF archived for $REFERENCE_DATE, not all (see the log above)."
   echo "::error::not every candidate was archived; see the log above"
   exit "$archived"
 fi
+note "Ledger: every candidate's forecasts at $AS_OF archived for $REFERENCE_DATE."

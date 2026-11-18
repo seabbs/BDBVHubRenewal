@@ -50,7 +50,7 @@ def masks(place, parent):
 
 
 def test_pairs_mark_self_same_place_child_to_parent_and_back():
-    # More places than the old 128 labels: no limit.
+    # Any number of places.
     n = 300
     me, same, up, down = masks(
         *series_bias.block_rows(range(n), 0, [-1] + [0] * (n - 1))
