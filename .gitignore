@@ -50,3 +50,6 @@ config/profile/
 
 # The dashboard's machine settings (config/dashboard.example.yaml).
 config/dashboard.local.yaml
+
+# Snakemake run state (the workflow tests make it).
+.snakemake/
