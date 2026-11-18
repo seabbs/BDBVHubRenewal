@@ -41,7 +41,7 @@ import numpy as np
 import pandas as pd
 
 from bdbvhubrenewal.data.dates import as_date, epiweek_end
-from bdbvhubrenewal.data.zones import province_of, weekly_zone_counts
+from bdbvhubrenewal.data.zones import province_of
 from bdbvhubrenewal.forecasters import series_bias
 from bdbvhubrenewal.forecasters.base import (
     NATIONAL,
@@ -52,7 +52,6 @@ from bdbvhubrenewal.forecasters.base import (
 )
 from bdbvhubrenewal.forecasters.chain import start_weeks
 from bdbvhubrenewal.forecasters.randomwalk import RandomWalk
-from bdbvhubrenewal.forecasters.zones import reconcile_zones
 
 __all__ = [
     "ADAPTER_FILES",
@@ -1092,8 +1091,8 @@ class FoundationModel:
         tuple of pandas.DataFrame
             The weekly trajectories, columns `location`, `target_end_date`,
             `sample`, `value`, for the country, the provinces and their
-            zones, each its own series, with the zones made to sum to the
-            provinces (`forecasters.zones.reconcile_zones`); and the daily
+            zones, each its own series of the block, nothing summed or
+            split; and the daily
             ones, columns `location`, `date`, `sample`, `value`.
 
         Raises
@@ -1206,17 +1205,6 @@ class FoundationModel:
                 "value": values.transpose(1, 0, 2).reshape(-1),
             }
         )[list(SAMPLE_COLUMNS)]
-        if zones:
-            # The zones are made to sum to the provinces, as submitted.
-            assert task.zone_daily_history is not None
-            counts = weekly_zone_counts(task.zone_daily_history, task.vintage)
-            own = weekly_out["location"].isin(set(zones))
-            split = reconcile_zones(
-                weekly_out.loc[own], weekly_out.loc[~own], task, counts, zones
-            )
-            weekly_out = pd.concat(
-                [weekly_out.loc[~own], split], ignore_index=True
-            )
         if self.source != "daily":
             return weekly_out, pd.DataFrame(columns=list(DAILY_COLUMNS))
         return weekly_out, _daily_frame(drawn, tri, start, places, weeks)

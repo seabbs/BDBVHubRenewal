@@ -102,6 +102,23 @@ def test_torch_runs_on_the_machine_device_with_the_rule_threads():
         assert env[name] == "6"
     assert "CUDA_VISIBLE_DEVICES" not in env
     assert "CHRONOS_BATCH" not in env
+    # JAX reads none of the *_NUM_THREADS settings; its Eigen pool is
+    # made single-threaded. No TensorFlow-only option is passed to XLA.
+    assert "--xla_cpu_multi_thread_eigen=false" in env["XLA_FLAGS"].split()
+    assert "intra_op_parallelism_threads" not in env["XLA_FLAGS"]
+
+
+def test_inherited_xla_flags_are_kept(monkeypatch):
+    count = "--xla_force_host_platform_device_count=4"
+    monkeypatch.setenv("XLA_FLAGS", count)
+    flags = machine.torch_env({}, threads=2, device="cpu")["XLA_FLAGS"].split()
+    assert flags == [count, "--xla_cpu_multi_thread_eigen=false"]
+    # Given twice, the flag is not repeated.
+    monkeypatch.setenv(
+        "XLA_FLAGS", f"{count} --xla_cpu_multi_thread_eigen=false"
+    )
+    flags = machine.torch_env({}, threads=2, device="cpu")["XLA_FLAGS"].split()
+    assert flags == [count, "--xla_cpu_multi_thread_eigen=false"]
 
 
 def test_a_device_can_be_asked_for_and_the_chronos_batch_set():
@@ -113,3 +130,12 @@ def test_a_device_can_be_asked_for_and_the_chronos_batch_set():
 def test_torch_env_as_shell_assignments():
     got = machine.shell_env({"DEVICE": "cpu", "TORCH_THREADS": "2"})
     assert got == "DEVICE=cpu TORCH_THREADS=2"
+
+
+def test_a_value_with_a_space_stays_one_assignment(monkeypatch):
+    import shlex
+
+    monkeypatch.setenv("XLA_FLAGS", "--xla_force_host_platform_device_count=4")
+    env = machine.torch_env({}, threads=2, device="cpu")
+    words = shlex.split(machine.shell_env(env))
+    assert dict(w.split("=", 1) for w in words)["XLA_FLAGS"] == env["XLA_FLAGS"]

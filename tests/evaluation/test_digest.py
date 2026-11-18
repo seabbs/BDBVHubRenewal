@@ -164,8 +164,13 @@ def test_a_fit_key_holds_the_zone_split_only_where_its_model_calls_it() -> None:
     # (`with_zones`, since #299), so their keys hold the split.
     for model in ("renewal", "renewalsp"):
         assert zones in fit_code(model, ROOT)
-    # Models whose modules do not import it leave it out.
-    for model in ("randomwalk", "randomwalknowcast"):
+    # Models whose modules do not import it leave it out: the walks, and
+    # Chronos-2, which takes its zones straight from its block.
+    for model in (
+        "randomwalk",
+        "randomwalknowcast",
+        "fm_chronos_weekly_ragged",
+    ):
         assert zones not in fit_code(model, ROOT)
 
 

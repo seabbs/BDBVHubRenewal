@@ -29,9 +29,6 @@ held-out loss by source (any source names) every few hundred steps."""
 SOURCE = re.compile(r"([\w+]+) ([\d.eE+-]+)")
 """One source and its loss in a step's `by source` list."""
 
-PREFIXES = (250, 500, 750, 1000, 2000, 4000, 8000)
-"""Checkpoint sizes when neither the trainer nor the folder names them."""
-
 
 def _float(x: str | None) -> float | None:
     return float(x) if x is not None else None
@@ -176,7 +173,7 @@ def trainer_args(folder: Path | str) -> str:
 
 
 def prefixes(
-    folder: Path | str, args: str, default: Sequence[int] = PREFIXES
+    folder: Path | str, args: str, default: Sequence[int]
 ) -> list[int]:
     """Return the run's checkpoint sizes.
 

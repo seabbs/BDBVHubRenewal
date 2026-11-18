@@ -7,7 +7,11 @@ pytest.importorskip("matplotlib")
 from flowlib.dashboard import context
 
 CONFIG = {
-    "finetune": {"outbreaks": 8000, "learning_rate": 1e-5},
+    "finetune": {
+        "outbreaks": 8400,
+        "learning_rate": 1e-5,
+        "prefixes": [250, 500, 8400],
+    },
     "dashboard": {
         "runs": [
             {"key": "realdata", "source": "realdata-ft-", "colour": "#222"}
@@ -47,7 +51,8 @@ def test_runs_come_from_all_three_layers(tmp_path):
     assert next(r for r in ctx.runs if r.live).key == "slots"
     assert [r.key for r in ctx.references] == ["rw"]
     assert ctx.rule == "R"
-    assert ctx.outbreaks == 8000
+    assert ctx.outbreaks == 8400
+    assert ctx.prefixes == (250, 500, 8400)
     assert (
         ctx.source.scores == tmp_path / "s" / "tables" / "checkpoint-scores.csv"
     )

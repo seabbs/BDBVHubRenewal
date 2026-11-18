@@ -321,7 +321,9 @@ def test_a_quantile_model_s_german_scores_do_not_depend_on_the_seed(
     class Pipeline:
         quantiles = (0.01, 0.05, 0.1, 0.5, 0.9, 0.95, 0.99)
 
-        def predict_quantiles(self, groups, prediction_length, quantile_levels):
+        def predict_quantiles(
+            self, groups, prediction_length, quantile_levels, **_kw
+        ):
             import torch
 
             level = 1000 * torch.tensor(quantile_levels, dtype=torch.float32)

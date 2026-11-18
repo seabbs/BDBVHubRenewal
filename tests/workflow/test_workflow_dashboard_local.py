@@ -9,7 +9,11 @@ pytest.importorskip("matplotlib")
 from flowlib.dashboard import context, runs
 
 BASE = {
-    "finetune": {"outbreaks": 8000, "learning_rate": 1e-5},
+    "finetune": {
+        "outbreaks": 8000,
+        "learning_rate": 1e-5,
+        "prefixes": [250, 8000],
+    },
     "dashboard": {
         "runs": [],
         "references": [],

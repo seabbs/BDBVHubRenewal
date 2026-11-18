@@ -368,6 +368,7 @@ Option (e) is inference only, on the final checkpoint.
 - Key references: [@bosse2022scoringutils; @jordanEvaluatingProbabilisticForecasts2019; @zanetta_scoringrules_2024].
 :::
 
+We score quantiles with WIS, split into dispersion, overprediction and underprediction [@bracherEvaluatingEpidemicForecasts2021], and samples, where they are the natural form, with the fair CRPS.
 For a forecast of $m$ samples $x_1, \dots, x_m$ and an observation $y$, the fair CRPS is
 $$
 \mathrm{CRPS}_\mathrm{f}(x, y) = \frac{1}{m}\sum_{i=1}^{m} |x_i - y| - \frac{1}{2m(m-1)}\sum_{i \ne j} |x_i - x_j|.
@@ -439,12 +440,12 @@ Summing the lowest level loses at every level above it, with or without the copu
 
 ![The trainer's held-out loss of the fine-tune by level (national, intermediate and leaf) against the number of simulated outbreaks it has seen. {{< meta evidence.live.label >}} Development data only.](build/figures/si/finetune-heldout.png){#fig-finetune-heldout}
 
-![WIS (Germany, on each model's own quantiles) and CRPS (BDBV, on 1,000 draws with common random numbers) relative to `randomwalknowcast` of the fine-tuned ragged Chronos-2 models against the number of simulated outbreaks each checkpoint was fine-tuned on, by level. Horizontal lines give the models with no fine-tuning: zero-shot Chronos-2 on the ragged layout (dashed) and on complete data only (dotted), each in its source's colour, and `randomwalknowcast` at 1. Each panel gives n, the fewest matched cells of its points, and the forecast origins they come from, and panels with fewer than 5 are grey. {{< meta evidence.live.label >}} Development data only.](build/figures/si/checkpoint-curve.png){#fig-checkpoint-curve}
+![WIS (Germany and BDBV, on each model's own quantiles) relative to `randomwalknowcast` of the fine-tuned ragged Chronos-2 models against the number of simulated outbreaks each checkpoint was fine-tuned on, by level. Horizontal lines give the models with no fine-tuning: zero-shot Chronos-2 on the ragged layout (dashed) and on complete data only (dotted), each in its source's colour, and `randomwalknowcast` at 1. Each panel gives n, the fewest matched cells of its points, and the forecast origins they come from, and panels with fewer than 5 are grey. {{< meta evidence.live.label >}} Development data only.](build/figures/si/checkpoint-curve.png){#fig-checkpoint-curve}
 
 ::: {#tbl-checkpoints}
 {{< include build/tables/si/checkpoint-table.md >}}
 
-Zero-shot Chronos-2, then each checkpoint by the simulations it was fine-tuned on: national WIS on the German first half and CRPS and log CRPS on the BDBV release backtest, relative to `randomwalknowcast` (daily / weekly model), and the trainer's held-out loss. Blank cells are not yet scored. {{< meta evidence.live.label >}} Development data only.
+Zero-shot Chronos-2, then each checkpoint by the simulations it was fine-tuned on: national WIS on the German first half and WIS and log WIS on the BDBV release backtest, relative to `randomwalknowcast` (daily / weekly model), and the trainer's held-out loss. Blank cells are not yet scored. {{< meta evidence.live.label >}} Development data only.
 :::
 
 ### Attention biases for place and parent against none
@@ -463,7 +464,7 @@ Zero-shot Chronos-2, then each checkpoint by the simulations it was fine-tuned o
 ::: {#tbl-slots-summary}
 {{< include build/tables/si/slots-summary.md >}}
 
-Zero-shot Chronos-2 and the newest checkpoint of the runs with and without attention biases: national WIS on the German first half and CRPS and log CRPS on the BDBV release backtest, relative to `randomwalknowcast` (daily / weekly model), and the trainer's held-out loss, with each cell's simulations in brackets. {{< meta evidence.live.label >}} Development data only.
+Zero-shot Chronos-2 and the newest checkpoint of the runs with and without attention biases: national WIS on the German first half and WIS and log WIS on the BDBV release backtest, relative to `randomwalknowcast` (daily / weekly model), and the trainer's held-out loss, with each cell's simulations in brackets. {{< meta evidence.live.label >}} Development data only.
 :::
 
 ### Delays against no delays
@@ -489,7 +490,7 @@ Zero-shot Chronos-2 and the newest checkpoint of the runs with and without atten
 ::: {#tbl-real-finetune}
 {{< include build/tables/si/real-finetune.md >}}
 
-Chronos-2 zero-shot (`_ragged`), fine-tuned on simulations (`_ft`) and fine-tuned on real data (`_real`), by level: WIS on the German held-out half and CRPS on BDBV rounds from 21 November 2026, relative to `randomwalknowcast`. Blank cells have no scores yet.
+Chronos-2 zero-shot (`_ragged`), fine-tuned on simulations (`_ft`) and fine-tuned on real data (`_real`), by level: WIS on the German held-out half and on BDBV rounds from 21 November 2026, relative to `randomwalknowcast`. Blank cells have no scores yet.
 :::
 
 ### Daily nowcasts
@@ -510,6 +511,12 @@ German nowcast hub, daily counts: the panels of the German results figure, with 
 
 ### Held-out synthetic data
 
+::: {#tbl-synthetic-joint}
+{{< include build/tables/main/synthetic-joint.md >}}
+
+Held-out synthetic data: mean energy score of each model's trajectories on log(x + 1) counts, and their ratio to {{< meta results.synthetic.baseline >}} on the forecasts both made. {{< meta results.synthetic.label >}} {{< meta results.synthetic.note >}}
+:::
+
 ::: {#tbl-synthetic-evaluated}
 {{< include build/tables/main/synthetic-grid.md >}}
 
@@ -525,25 +532,25 @@ Held-out synthetic data: nowcasts of outbreaks drawn to cover the levels of the 
 ::: {#fig-synthetic-si-factors}
 ![](build/figures/si/synthetic-si-factors.png)
 
-Held-out synthetic data: relative CRPS by level of each scenario factor. {{< meta results.synthetic.label >}} {{< meta results.synthetic.note >}}
+Held-out synthetic data: relative WIS by level of each scenario factor. {{< meta results.synthetic.label >}} {{< meta results.synthetic.note >}}
 :::
 
 ::: {#fig-synthetic-si-factors-log}
 ![](build/figures/si/synthetic-si-factors-log.png)
 
-Held-out synthetic data: relative CRPS on the log scale by level of each scenario factor. {{< meta results.synthetic.label >}} {{< meta results.synthetic.note >}}
+Held-out synthetic data: relative WIS on the log scale by level of each scenario factor. {{< meta results.synthetic.label >}} {{< meta results.synthetic.note >}}
 :::
 
 ::: {#fig-synthetic-si-wis-over-time}
 ![](build/figures/si/synthetic-si-wis-over-time.png)
 
-Held-out synthetic data: CRPS over time. {{< meta results.synthetic.label >}} {{< meta results.synthetic.note >}}
+Held-out synthetic data: WIS over time. {{< meta results.synthetic.label >}} {{< meta results.synthetic.note >}}
 :::
 
 ::: {#fig-synthetic-si-finetune-size}
 ![](build/figures/si/synthetic-si-finetune-size.png)
 
-Held-out synthetic data: relative CRPS of each fine-tuning checkpoint, at doublings from 1,000 outbreaks, against the number of simulated outbreaks it was trained on (log scale). {{< meta results.synthetic.label >}} {{< meta results.synthetic.note >}}
+Held-out synthetic data: relative WIS of each fine-tuning checkpoint, at doublings from 1,000 outbreaks, against the number of simulated outbreaks it was trained on (log scale). {{< meta results.synthetic.label >}} {{< meta results.synthetic.note >}}
 :::
 
 ::: {#tbl-synthetic-horizon}
@@ -605,6 +612,12 @@ German nowcast hub scores by location and stratum. {{< meta results.germany.labe
 
 ### Ebola hub submissions
 
+::: {#tbl-ebola-joint}
+{{< include build/tables/main/ebola-joint.md >}}
+
+Ebola hub submissions: mean energy score of each model's trajectories on log(x + 1) counts, and their ratio to {{< meta results.ebola.baseline >}} on the forecasts both made. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
+:::
+
 ::: {#fig-ebola-si-nowcasts}
 ![](build/figures/si/ebola-si-nowcasts.png)
 
@@ -614,26 +627,26 @@ Ebola: nowcasts for places picked by a rule in the workflow config (the largest,
 ::: {#fig-ebola-si-places}
 ![](build/figures/si/ebola-si-places.png)
 
-Ebola: CRPS of every place relative to {{< meta results.ebola.baseline >}}, one dot per model. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
+Ebola: WIS of every place relative to {{< meta results.ebola.baseline >}}, one dot per model. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
 :::
 
 
 ::: {#fig-ebola-si-location-horizon}
 ![](build/figures/si/ebola-si-location-horizon.png)
 
-Ebola: relative CRPS by location and horizon. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
+Ebola: relative WIS by location and horizon. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
 :::
 
 ::: {#fig-ebola-si-location-horizon-log}
 ![](build/figures/si/ebola-si-location-horizon-log.png)
 
-Ebola: relative CRPS on the log scale by location and horizon. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
+Ebola: relative WIS on the log scale by location and horizon. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
 :::
 
 ::: {#fig-ebola-si-wis-over-time}
 ![](build/figures/si/ebola-si-wis-over-time.png)
 
-Ebola: CRPS over time. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
+Ebola: WIS over time. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
 :::
 
 ::: {#tbl-ebola-horizon}
