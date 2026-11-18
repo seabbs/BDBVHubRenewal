@@ -787,3 +787,10 @@ def test_newer_checkpoints_are_scored_first(tmp_path):
             label = re.search(r"wildcards: label=(\S+)", block)[1]
             got[label] = float(re.search(r"priority: ([\d.]+)", block)[1])
     assert got["bbb"] > got["aaa"] > got["reference"]
+
+
+def test_one_unit_runs_before_the_release_list_exists(tmp_path):
+    # A unit's priority reads the list if it is there, else takes its band's
+    # base: it never waits on the release_list checkpoint.
+    jobs = dry(tmp_path, str(tmp_path / "scores" / "bdbv" / "aaa.done"))
+    assert jobs["score_bdbv"] == 1
