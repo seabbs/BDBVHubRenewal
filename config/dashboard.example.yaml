@@ -55,8 +55,8 @@ datasets:
     source: archie:ckpt-scores/cache/bdbv/
     truth_source: archie:code/seabbs/BDBVHubRenewal/.worktrees/checkpoint-scoring/data/target.csv
 
-# Extra tables (CSV, shown under Tables) and notes (text, shown under
-# Performance), each with a label and a path (local, or "host:path").
+# Extra tables (CSV) and notes (text), both shown under Tables, each with a
+# label and a path (local, or "host:path").
 tables:
   - {label: Slots vs no slots (matched checkpoints), path: output/finetune/slots-vs-noslots.csv}
 notes:

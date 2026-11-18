@@ -24,9 +24,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from . import bias, logs, nowcasts, scores, svg, training
+from . import bias, learning, logs, nowcasts, scores, svg, training
 from .mirror import Source
-from .runs import Classifier, Reference, Run, split_label
+from .runs import Reference, Run, split_label
 
 ASSETS = Path(__file__).with_name("page")
 MODES = ("raw", "start", "base")
@@ -499,71 +499,6 @@ def checkpoint_table(
     return "".join(out) + "</table>"
 
 
-def heldout_chart(ctx: Context, rows: Sequence[Mapping[str, str]]) -> str:
-    """Return the held-out loss on the full held-out set by checkpoint."""
-    which = Classifier(ctx.runs, ctx.references, ctx.excluded)
-
-    def x(r: Mapping[str, str]) -> float | None:
-        if r["checkpoint"] == "zero-shot":
-            return 125
-        try:
-            return float(r.get("outbreaks") or "") or None
-        except ValueError:
-            return None
-
-    rows = [
-        r
-        for r in rows
-        if r.get("rule") == ctx.rule
-        and r.get("study") == "held_out"
-        and r.get("level") == "all"
-        and r.get("loss")
-    ]
-    series = []
-    for run in ctx.runs:
-        sized = [
-            (x(r), r) for r in rows if which.run_of(r["checkpoint"]) == run.key
-        ]
-        pts = sorted((n, float(r["loss"])) for n, r in sized if n)
-        zero = [
-            (125, float(r["loss_zero_shot"]))
-            for r in rows
-            if r.get("loss_zero_shot")
-        ][:1]
-        if pts:
-            series.append((run.label, run.colour, zero + pts, "pts"))
-    return svg.chart(
-        "Held-out loss (all blocks)",
-        series,
-        xticks=scores.TICKS,
-        xlabel="simulations (log2)",
-        info=tip("heldperf"),
-    )
-
-
-def scores_section(ctx: Context, rows: list, local: list) -> str:
-    """Return the score panels for the configured runs and references."""
-    if not rows:
-        return "<p class=mut>no checkpoint scores yet</p>"
-    pay = _json(
-        scores.payload(
-            rows,
-            ctx.runs,
-            ctx.references,
-            ctx.rule,
-            local,
-            view=ctx.view,
-            excluded=ctx.excluded,
-        )
-    )
-    return (
-        "<div id=sctl class=sctl></div><div class=plots2><div class=card>"
-        f"<div id=splot></div></div>{heldout_chart(ctx, rows)}</div>"
-        f'<script type="application/json" id=sdata>{pay}</script>'
-        f"<script>{_asset('scores.js')}</script>"
-    )
-
-
 def notes_section(ctx: Context) -> str:
     """Return the configured notes (markdown files) as collapsed blocks."""
     out = []
@@ -821,12 +756,6 @@ def build(ctx: Context) -> str:
         base = info.get(r.base or r.key, info[r.key])
         info[r.key]["bfull"] = base["full0"]
     score_rows = scores.read(ctx.source.scores)
-    local = [
-        (r.key, _size(nm), str(s.get("hash") or ""))
-        for r in ctx.runs
-        for nm, s, _ in info[r.key]["ck"]
-        if _size(nm)
-    ]
     sizes = checkpoint_sizes(ctx, info, score_rows)
     mail = mail_section(ctx)
     builts = {ds["key"]: ctx.nowcasts(ds["key"]) for ds in ctx.datasets}
@@ -834,7 +763,7 @@ def build(ctx: Context) -> str:
         ("status", "Status"),
         ("loss", "Loss"),
         ("bias", "Attention bias"),
-        ("performance", "Performance"),
+        ("learning", "Learning"),
         ("nowcasts", "Nowcasts"),
     ]
     sections += [("mailbox", "Activity")] if mail else []
@@ -860,17 +789,13 @@ def build(ctx: Context) -> str:
     parts = [
         ("loss", "Loss", loss_section(ctx, live, st), True),
         ("bias", "Attention bias", bias_section(ctx, live, st), True),
-        (
-            "performance",
-            "Performance on real data",
-            scores_section(ctx, score_rows, local) + notes_section(ctx),
-            True,
-        ),
+        ("learning", "What fine-tuning learns", learning.section(live), True),
         ("nowcasts", "Nowcasts", nowcasts_section(ctx, sizes, builts), True),
     ]
     if mail:
         parts.append(("mailbox", "Recent activity", mail, True))
-    parts.append(("tables", "Tables", tables_section(ctx, info), False))
+    tables = tables_section(ctx, info) + notes_section(ctx)
+    parts.append(("tables", "Tables", tables, False))
     rest = "\n".join(
         f"<details class=sec id={key}{' open' if opened else ''}><summary>"
         f"<h2>{title}</h2></summary>{content}</details>"
