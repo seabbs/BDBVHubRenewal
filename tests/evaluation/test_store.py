@@ -167,13 +167,52 @@ def test_the_zone_split_keys_the_province_models_fits(tmp_path: Path) -> None:
     assert all(after[m] != before[m] for m in models)
 
 
-def test_fit_code_has_the_store_and_no_other_model() -> None:
+def test_fit_code_has_model_code_only() -> None:
     renewal = set(store.fit_code("renewal", ROOT))
-    assert "src/bdbvhubrenewal/evaluation/store.py" in renewal
     assert "src/bdbvhubrenewal/model/observation.py" in renewal
     walk = set(store.fit_code("randomwalknowcast", ROOT))
     assert "src/bdbvhubrenewal/forecasters/renewal.py" not in walk
-    assert "src/bdbvhubrenewal/evaluation/store.py" in walk
+    fm = set(store.fit_code("fm_chronos_weekly_ragged", ROOT))
+    # The foundation model does not run the renewal model.
+    assert "src/bdbvhubrenewal/model/observation.py" not in fm
+    for code in (renewal, walk, fm):
+        io = [p for p in code if p.startswith(_IO_CODE)]
+        assert not io, io
+
+
+_IO_CODE = tuple(
+    f"src/bdbvhubrenewal/{rel}"
+    for rel in (
+        "evaluation/",
+        "submission/",
+        "reporting/",
+        "devices.py",
+        "cli.py",
+    )
+)
+
+
+def test_io_code_does_not_key_a_fit(tmp_path: Path) -> None:
+    # Loading, storing, scoring and writing records never refit a model:
+    # a key holds the model's own code only.
+    root = _copy_repo(tmp_path)
+    models = ("renewal", "randomwalknowcast", "fm_chronos_weekly_ragged")
+
+    def digests() -> dict[str, str]:
+        return {m: store.code_digest(m, root) for m in models}
+
+    before = digests()
+    for rel in (
+        "evaluation/store.py",
+        "evaluation/backtest.py",
+        "evaluation/scoring.py",
+        "evaluation/ppc.py",
+        "submission/fitting.py",
+        "devices.py",
+    ):
+        path = root / "src/bdbvhubrenewal" / rel
+        path.write_text(path.read_text() + "\n_EDITED = 1\n")
+        assert digests() == before, rel
 
 
 def test_fit_time_data_files_key_a_fit(tmp_path: Path) -> None:
