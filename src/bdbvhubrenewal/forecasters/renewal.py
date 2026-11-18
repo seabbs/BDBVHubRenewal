@@ -1169,21 +1169,7 @@ class RenewalModel:
         """
         pr = engine()
         config = model_config(self.variant)
-        rows, used = None, None
-        if config.bvd:
-            from bdbvhubrenewal.data import bvd
-
-            release = bvd_release(task)
-            used = bvd_record(release)
-            if release is not None:
-                rows = bvd.model_rows(release)
-            rhat = used.get("joint_max_rhat")
-            self._log(
-                f"variant={self.name} bvd={used['tag'] or 'none'} "
-                f"bvd_as_of={used.get('as_of', 'none')} "
-                f"bvd_joint_rhat={'none' if rhat is None else f'{rhat:.3f}'}"
-            )
-        data = vintage_inputs(task, config, bvd=rows)
+        data = vintage_inputs(task, config)
         model = pr.build_model(data, config)
         s = self.sampler
         self._log(f"variant={self.name} sampling start")
@@ -1217,16 +1203,11 @@ class RenewalModel:
         posterior = model.mcmc.get_samples()
         n_init = model.latent.n_initialization_points
         beta = np.asarray(posterior["delay_beta"])
-        # Each province's delay, and the shared one they pool towards
-        # when a fit has more than one.
+        # Each fit has one province and so one delay.
         shifts = {
             name: np.asarray(posterior["delay_shift"])[..., p]
             for p, name in enumerate(data.names)
         }
-        if len(shifts) > 1:
-            shifts["shared"] = np.asarray(posterior["delay_shared_shift"])[
-                ..., 0
-            ]
         delay = pd.concat(
             [
                 delay_summary(
@@ -1248,19 +1229,17 @@ class RenewalModel:
             seconds,
             cpu_seconds,
             delay,
-            used,
         )
 
     def forecast_fit(self, task: ForecastTask) -> RenewalFit:
-        """Fit the variant to a task and return its samples.
+        """Fit each province on its own and return the samples.
 
-        A per-province variant fits each province on its own, apart from
-        the provinces the random walks find silent (no case in their
-        walk window), which take `randomwalknowcast`'s draws: exactly 0
-        until an introduction, then its walk. Otherwise the provinces are
-        fitted together. National is the sum of the provinces plus the
-        unassigned part, the national cases no province has
-        (`data_gap`).
+        The provinces the random walks find silent (no case in their walk
+        window) take `randomwalknowcast`'s draws: exactly 0 until an
+        introduction, then its walk. National is the sum of the provinces
+        plus the unassigned part, the national cases no province has
+        (`data_gap`). The pooled variants, `renewal` and `renewalbvd`,
+        fit health zones (`forecasters.zonerenewal.ZoneRenewalModel`).
 
         Parameters
         ----------
@@ -1271,22 +1250,28 @@ class RenewalModel:
         -------
         RenewalFit
             The runs, province samples and national or unassigned parts.
+
+        Raises
+        ------
+        ValueError
+            For a pooled variant, which `ZoneRenewalModel` fits.
         """
-        frames: list[pd.DataFrame] = []
-        later: list[pd.DataFrame] = []
-        tasks = {"all": task}
-        if self.variant.per_province:
-            walk, silent = _silent_walk(task)
-            frames.append(walk)
-            later.extend(
-                walk.loc[walk["target_end_date"] <= d].assign(as_of=d)
-                for d in task.report_by
+        if not self.variant.per_province:
+            raise ValueError(
+                f"{self.name} pools provinces, so it is fitted on health "
+                "zones by ZoneRenewalModel."
             )
-            tasks = {
-                loc: replace(task, locations=(loc,), mask=())
-                for loc in task.locations
-                if loc not in silent
-            }
+        walk, silent = _silent_walk(task)
+        frames = [walk]
+        later = [
+            walk.loc[walk["target_end_date"] <= d].assign(as_of=d)
+            for d in task.report_by
+        ]
+        tasks = {
+            loc: replace(task, locations=(loc,), mask=())
+            for loc in task.locations
+            if loc not in silent
+        }
         runs = self._run_all(tasks)
         for key, run in runs.items():
             frames.append(samples_table(tasks[key], run.data, run.draws))
@@ -1628,7 +1613,10 @@ def _factory(variant: Variant) -> RenewalModel:
     return RenewalModel(variant)
 
 
+# The pooled variants are registered by `forecasters.zonerenewal`.
 for _variant in VARIANTS.values():
+    if not _variant.per_province:
+        continue
     register_model(
         _variant.name,
         partial(_factory, _variant),

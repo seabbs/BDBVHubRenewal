@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 from dataclasses import replace
-from functools import partial
 from pathlib import Path
 from typing import Any
 
@@ -15,7 +14,6 @@ from bdbvhubrenewal.forecasters import (
     NATIONAL,
     ForecastModel,
     ForecastTask,
-    base,
     check_samples,
     get_model,
     list_models,
@@ -47,25 +45,6 @@ def quiet(task: ForecastTask, monkeypatch: pytest.MonkeyPatch) -> str:
     )
     monkeypatch.setattr(rn, "_silent_walk", lambda _: (rows, {place}))
     return place
-
-
-@pytest.fixture
-def province_fits(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Register province fits as `renewal` and `renewalbvd` for one test.
-
-    The zone fits (`forecasters.zonerenewal`) extend `RenewalModel`, so
-    these tests check its plumbing with its own `run` stubbed out.
-    """
-    for name in ("renewal", "renewalbvd"):
-        variant = rn.VARIANTS[name]
-        monkeypatch.setitem(base._REGISTRY, name, base._REGISTRY[name])
-        base.register_model(
-            name,
-            partial(rn.RenewalModel, variant),
-            variant.description,
-            fitted=True,
-            replace=True,
-        )
 
 
 def test_variants_are_registered_as_fitted_models() -> None:
@@ -275,7 +254,7 @@ def _fake_run(task: ForecastTask, variant: rn.Variant) -> rn.RenewalRun:
     )
 
 
-@pytest.mark.usefixtures("province_fits")
+@pytest.mark.usefixtures("quiet")
 def test_fit_renewal_writes_the_ci_contract(
     task: ForecastTask, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -288,25 +267,33 @@ def test_fit_renewal_writes_the_ci_contract(
     monkeypatch.setattr(rn.RenewalModel, "run", fake)
     sampler = {"num_chains": 2, "num_samples": 50, "seed": 7}
     record = rn.fit_renewal(
-        task, sampler, tmp_path, variant="renewal", config_name="main"
+        task, sampler, tmp_path, variant="renewalsp", config_name="renewalsp"
     )
     assert calls[0]["num_chains"] == 2
     assert record["sampler"] == "nuts"
     assert record["model"] == "renewal"
-    assert record["config"] == "main"
-    assert record["num_chains"] == 2
+    assert record["config"] == "renewalsp"
+    # Two chains for each province fitted on its own (all but the silent
+    # one), numbered across the fits and labelled by province.
+    fitted = task.locations[:-1]
+    assert record["num_chains"] == 2 * len(fitted)
     # CPU time over sampling time shows whether the chains ran at once.
-    assert record["sampling_cpu_seconds"] == 2.9
-    assert {c["chain"] for c in record["chains"]} == {0, 1}
+    assert record["sampling_cpu_seconds"] == pytest.approx(2.9 * len(fitted))
+    assert [c["chain"] for c in record["chains"]] == list(
+        range(2 * len(fitted))
+    )
+    assert {c["location"] for c in record["chains"]} == set(fitted)
     assert {"tree_depth_share", "ebfmi", "mean_accept", "step_size"} <= set(
         record["chains"][0]
     )
     assert len(record["worst_rhat"]) <= 10
-    assert {p["name"] for p in record["parameters"]} == {"sd", "z"}
+    assert {p["name"] for p in record["parameters"]} == {
+        f"{loc}:{name}" for loc in fitted for name in ("sd", "z")
+    }
     delay = pd.read_csv(tmp_path / rn.DELAY_SUMMARY_FILE)
     # One delay for each modelled province.
     assert set(delay["location"]) <= set(task.locations)
-    assert set(delay["model"]) == {"renewal"}
+    assert set(delay["model"]) == {"renewalsp"}
     assert set(delay["quantity"]) == {
         "reported_share",
         "median_delay",
@@ -315,7 +302,7 @@ def test_fit_renewal_writes_the_ci_contract(
     }
     ppc = json.loads((tmp_path / "ppc.json").read_text())
     assert ppc["available"] is True
-    assert ppc["config"] == "main"
+    assert ppc["config"] == "renewalsp"
     assert ppc["model"] == "renewal"
 
     result = rn.forecast_renewal(task, tmp_path)
@@ -388,62 +375,7 @@ def test_bvd_variant_reads_the_release_for_its_vintage(
     assert "renewalbvd" in {s.name for s in list_models()}
 
 
-@pytest.mark.usefixtures("province_fits")
-def test_bvd_fit_records_the_release_and_its_rhat(
-    task: ForecastTask, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    import shutil
-
-    from bdbvhubrenewal.data import bvd
-
-    fixtures = Path(__file__).resolve().parents[1] / "data" / "bvd"
-    cache = tmp_path / "bvd"
-    releases = bvd.parse_releases(
-        json.loads((fixtures / "releases.json").read_text())
-    )
-    bvd.save_releases(
-        releases.loc[releases["tag"].isin(["results-3151", "results-3086"])],
-        cache,
-    )
-    for tag in ("results-3151", "results-3086"):
-        shutil.copytree(fixtures / tag, cache / tag)
-    # BDBV_DATA_DIR is also where the fit reads the populations.
-    data = Path(__file__).resolve().parents[1] / "fixtures" / "data"
-    shutil.copy(data / "locations.csv", tmp_path / "locations.csv")
-    monkeypatch.setenv("BDBV_DATA_DIR", str(tmp_path))
-    release = rn.bvd_release(task)
-    assert release is not None
-    assert release.tag == "results-3086"
-
-    def fake(self: rn.RenewalModel, t: ForecastTask) -> rn.RenewalRun:
-        run = _fake_run(t, self.variant)
-        return replace(run, bvd=rn.bvd_record(rn.bvd_release(t)))
-
-    monkeypatch.setattr(rn.RenewalModel, "run", fake)
-    out = tmp_path / "fit"
-    record = rn.fit_renewal(
-        task, {"num_chains": 2}, out, variant="renewalbvd", config_name="bvd"
-    )
-    assert record["bvd"] == {
-        "tag": "results-3086",
-        "as_of": "2026-10-15",
-        "joint_max_rhat": 1.044,
-        "max_rhat": bvd.MAX_RHAT,
-        "skipped": [],
-    }
-    # No release qualifies: the record says so.
-    assert rn.bvd_record(None) == {"tag": None}
-    plain = rn.fit_renewal(
-        task,
-        {"num_chains": 2},
-        tmp_path / "main",
-        variant="renewal",
-        config_name="main",
-    )
-    assert "bvd" not in plain
-
-
-@pytest.mark.usefixtures("province_fits")
+@pytest.mark.usefixtures("quiet")
 def test_fit_records_the_posterior_draw_behind_each_trajectory(
     task: ForecastTask, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -454,13 +386,20 @@ def test_fit_records_the_posterior_draw_behind_each_trajectory(
 
     monkeypatch.setattr(rn.RenewalModel, "run", fake)
     rn.fit_renewal(
-        task, {"num_chains": 2}, tmp_path, variant="renewal", config_name="main"
+        task,
+        {"num_chains": 2},
+        tmp_path,
+        variant="renewalsp",
+        config_name="renewalsp",
     )
     saved = pd.read_csv(tmp_path / rn.TRAJECTORY_DRAW_FILE)
     assert list(saved.columns) == ["location", "sample", "draw"]
-    assert set(saved["location"]) == {"all"}
-    assert saved["sample"].tolist() == list(range(1, task.n_samples + 1))
-    assert saved["draw"].tolist() == list(range(task.n_samples))[::-1]
+    # One fit per province the random walks do not find silent.
+    fitted = set(task.locations[:-1])
+    assert set(saved["location"]) == fitted
+    for _, rows in saved.groupby("location"):
+        assert rows["sample"].tolist() == list(range(1, task.n_samples + 1))
+        assert rows["draw"].tolist() == list(range(task.n_samples))[::-1]
 
 
 def test_chain_method_defaults_to_vectorized(
@@ -535,11 +474,11 @@ def test_report_cutoffs_are_days_from_the_model_start(
     assert cuts == {(pd.Timestamp(last[d]) - start).days: d for d in last}
 
 
-@pytest.mark.usefixtures("quiet", "province_fits")
-@pytest.mark.parametrize("name", ["renewal", "renewalsp"])
+@pytest.mark.usefixtures("quiet")
 def test_forecast_gives_counts_as_reported_later(
-    task: ForecastTask, monkeypatch: pytest.MonkeyPatch, name: str
+    task: ForecastTask, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    name = "renewalsp"
     monkeypatch.setattr(
         rn.RenewalModel, "run", lambda self, t: _fake_run(t, self.variant)
     )
@@ -556,19 +495,22 @@ def test_forecast_gives_counts_as_reported_later(
     assert "as_of" not in plain
 
 
-@pytest.mark.usefixtures("province_fits")
+@pytest.mark.usefixtures("quiet")
 def test_forecast_records_a_summary_of_each_fit(
     task: ForecastTask, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(
         rn.RenewalModel, "run", lambda self, t: _fake_run(t, self.variant)
     )
-    model = get_model("renewal")
+    model = get_model("renewalsp")
     assert isinstance(model, rn.RenewalModel)
     model.sampler = {**model.sampler, "num_chains": 2, "num_warmup": 300}
     model.forecast(task)
-    (row,) = model.fit_diagnostics
-    assert row["fit"] == "all"
+    # One row per province fitted.
+    assert [r["fit"] for r in model.fit_diagnostics] == list(
+        task.locations[:-1]
+    )
+    row = model.fit_diagnostics[0]
     assert row["num_chains"] == 2
     assert row["num_warmup"] == 300
     assert row["seconds"] == 1.5

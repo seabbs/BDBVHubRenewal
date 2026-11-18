@@ -4,12 +4,13 @@
 - `base`: `ForecastTask`, the `ForecastModel` protocol and the registry.
 - `randomwalk`: the random walk baseline, and random walk on a nowcast,
   with `chain` (the daily chain ladder), `pooling`, `obs` and `walk`.
-- `renewal`: the renewal variants, the adapter from a `ForecastTask` to
-  the PyRenew model in `bdbvhubrenewal.model`.
+- `renewal`: the renewal variants, the per-province `renewalsp`, and the
+  adapter from a `ForecastTask` to the PyRenew model in
+  `bdbvhubrenewal.model`.
 - `foundation`: the pretrained Chronos-2 model on two layouts of the hub
   target's releases.
 - `zonerenewal`: `renewal` and `renewalbvd` fitted on health zones, with
-  provinces the zone sums; registered in place of their province fits.
+  provinces the zone sums. `renewal` registers only `renewalsp`.
 - `copula`: a Gaussian copula that pairs the walk models' province draws
   within each week.
 - `zones`: health-zone forecasts split from any model's province samples.

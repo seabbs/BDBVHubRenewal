@@ -296,3 +296,60 @@ def test_bvd_zone_rt_becomes_one_term_per_fitted_zone(tmp_path: Path) -> None:
         raise OSError("offline")
 
     assert zr.zone_bvd_rows(release, tmp_path / "none", names, fail) is None
+
+
+@pytest.mark.usefixtures("quiet_zones")
+def test_bvd_zone_fit_records_the_release_and_its_rhat(
+    task: ForecastTask, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import json
+    import shutil
+
+    from bdbvhubrenewal.data import bvd
+
+    data = tmp_path / "data"
+    shutil.copytree(ROOT / "tests" / "fixtures" / "data", data)
+    fixtures = ROOT / "tests" / "data" / "bvd"
+    releases = bvd.parse_releases(
+        json.loads((fixtures / "releases.json").read_text())
+    )
+    bvd.save_releases(
+        releases.loc[releases["tag"].isin(["results-3151", "results-3086"])],
+        data / "bvd",
+    )
+    for tag in ("results-3151", "results-3086"):
+        shutil.copytree(fixtures / tag, data / "bvd" / tag)
+    monkeypatch.setenv("BDBV_DATA_DIR", str(data))
+    release = rn.bvd_release(task)
+    assert release is not None
+    assert release.tag == "results-3086"
+
+    def fake(self: zr.ZoneRenewalModel, t: ForecastTask) -> rn.RenewalRun:
+        run = _fake_run(t, self.variant)
+        return replace(run, bvd=rn.bvd_record(rn.bvd_release(t)))
+
+    monkeypatch.setattr(zr.ZoneRenewalModel, "run", fake)
+    record = rn.fit_renewal(
+        task,
+        {"num_chains": 2},
+        tmp_path / "bvd",
+        variant="renewalbvd",
+        config_name="bvd",
+    )
+    assert record["bvd"] == {
+        "tag": "results-3086",
+        "as_of": "2026-10-15",
+        "joint_max_rhat": 1.044,
+        "max_rhat": bvd.MAX_RHAT,
+        "skipped": [],
+    }
+    # No release qualifies: the record says so.
+    assert rn.bvd_record(None) == {"tag": None}
+    plain = rn.fit_renewal(
+        task,
+        {"num_chains": 2},
+        tmp_path / "main",
+        variant="renewal",
+        config_name="main",
+    )
+    assert "bvd" not in plain
