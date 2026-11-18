@@ -102,6 +102,8 @@ def test_torch_runs_on_the_machine_device_with_the_rule_threads():
         assert env[name] == "6"
     assert "CUDA_VISIBLE_DEVICES" not in env
     assert "CHRONOS_BATCH" not in env
+    # JAX (XLA) reads none of the *_NUM_THREADS settings.
+    assert "intra_op_parallelism_threads=6" in env["XLA_FLAGS"]
 
 
 def test_a_device_can_be_asked_for_and_the_chronos_batch_set():
