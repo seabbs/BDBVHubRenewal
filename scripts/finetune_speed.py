@@ -6,8 +6,11 @@ as the trainer does, then trains `--steps` steps of their plan with
 Chronos-2 and the LoRA adapter (and the series bias with
 `--series-bias`), timing each part of a step with the device
 synchronised: batch building, forward, backward, the optimiser step and
-the memory release. It also times one held-out evaluation of
-`ft.EVAL_BLOCKS` blocks and one save of the trainer's state, and writes
+the memory release. Then, with `--free-run N`, it trains N more steps
+as the trainer does, with no added synchronisation, timing each whole
+step and, on CUDA, sampling the GPU's busy fraction (`nvidia-smi`). It
+also times the held-out evaluations (the monitor on `ft.EVAL_BLOCKS`
+blocks, and by source) and one save of the trainer's state, and writes
 the times and block sizes as JSON.
 
     uv run --group chronos python scripts/finetune_speed.py SIM_DIR \
@@ -25,8 +28,10 @@ import argparse
 import functools
 import inspect
 import json
+import subprocess
 import sys
 import tempfile
+import threading
 import time
 from pathlib import Path
 
@@ -51,6 +56,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--sims", type=int, default=10)
     p.add_argument("--steps", type=int, default=40)
     p.add_argument("--warmup", type=int, default=3)
+    # Steps trained after the timed ones with no added synchronisation.
+    p.add_argument("--free-run", type=int, default=0)
+    # Empty the cache every step, as before the trainer kept it.
+    p.add_argument("--empty-every-step", action="store_true")
     p.add_argument("--device", default="auto")
     p.add_argument("--threads", type=int)
     p.add_argument("--memory-gb", type=float, default=ft.MEMORY_GB)
@@ -173,7 +182,13 @@ def main() -> None:
             "optimiser",
             functools.partial(fs.finite_step, params, optimiser, value),
         )
-        timed("free", fs.free_memory)
+        timed(
+            "free",
+            functools.partial(
+                fs.free_memory,
+                None if args.empty_every_step else args.memory_gb,
+            ),
+        )
         times["total"] = sum(times[p] for p in parts)
         times["series"] = int(sizes[indices].sum())
         times["blocks"] = len(indices)
@@ -186,11 +201,24 @@ def main() -> None:
             + ", ".join(f"{p} {times[p]:.3f}" for p in (*parts, "total"))
         )
 
+    free = free_run(
+        args,
+        plan[args.steps :][: args.free_run],
+        data,
+        fs_step(model, accepted, device, params, optimiser, args),
+        sync,
+        sizes,
+    )
+
     sync()
     tick = time.perf_counter()
     fs.held_out_loss(model, val[: ft.EVAL_BLOCKS], args.batch_size)
     sync()
     eval_s = time.perf_counter() - tick
+    tick = time.perf_counter()
+    fs.held_out_by_source(model, val, args.batch_size, ft.EVAL_BLOCKS)
+    sync()
+    by_source_s = time.perf_counter() - tick
     with tempfile.TemporaryDirectory() as tmp:
         tick = time.perf_counter()
         fs.save_state(Path(tmp) / "state", model, optimiser, {"step": 0})
@@ -224,6 +252,11 @@ def main() -> None:
         "s_per_simulation": mean["total"] * per_sim,
         "eval_s": eval_s,
         "eval_blocks": min(ft.EVAL_BLOCKS, len(val)),
+        "by_source_s": by_source_s,
+        # Evaluation spread over the steps, as the trainer schedules it.
+        "eval_s_per_step": eval_s / ft.EVAL_EVERY
+        + by_source_s / fs.BY_SOURCE_EVERY,
+        "free_run": free,
         "save_s": save_s,
         "steps": steps,
     }
@@ -231,10 +264,86 @@ def main() -> None:
         f"{device}: {mean['total']:.3f} s a step "
         f"({', '.join(f'{p} {mean[p]:.3f}' for p in parts)}), "
         f"{per_sim:.1f} steps and {summary['s_per_simulation']:.1f} s a "
-        f"simulation; held-out eval {eval_s:.1f} s, save {save_s:.2f} s"
+        f"simulation; held-out eval {eval_s:.1f} s, by source "
+        f"{by_source_s:.1f} s, save {save_s:.2f} s"
     )
+    if free:
+        fs.log(
+            f"free run: {free['step_s']:.3f} s a step, "
+            f"{free['series_per_s']:.0f} series a second, GPU busy "
+            f"{free['gpu_busy']}"
+        )
     if args.out:
         args.out.write_text(json.dumps(summary, indent=1))
+
+
+def fs_step(model, accepted, device, params, optimiser, args):
+    """Return one trainer step on a batch's indices, as `finetune_stream`."""
+
+    def step(data, indices: list[int]) -> float:
+        def backward(part: list[int], share: float) -> float:
+            batch = data._build_batch(part)
+            return fs.train_step(model, batch, accepted, device, share)
+
+        def zero() -> None:
+            optimiser.zero_grad()
+            fs.free_memory()
+
+        optimiser.zero_grad()
+        value = fs.accumulate(indices, backward, zero, print)
+        fs.finite_step(params, optimiser, value)
+        fs.free_memory(None if args.empty_every_step else args.memory_gb)
+        return value
+
+    return step
+
+
+def gpu_busy(stop: threading.Event, out: list[float]) -> None:
+    """Sample the GPU's busy percentage from `nvidia-smi` until `stop`."""
+    while not stop.is_set():
+        try:
+            got = subprocess.run(
+                [
+                    "nvidia-smi",
+                    "--query-gpu=utilization.gpu",
+                    "--format=csv,noheader,nounits",
+                ],
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout
+            out.append(float(got.split()[0]))
+        except (OSError, subprocess.CalledProcessError, ValueError):
+            return
+        stop.wait(0.2)
+
+
+def free_run(args, plan, data, step, sync, sizes) -> dict:
+    """Train `plan`'s steps as the trainer does; time them and the GPU."""
+    if not plan:
+        return {}
+    samples: list[float] = []
+    stop = threading.Event()
+    sampler = threading.Thread(target=gpu_busy, args=(stop, samples))
+    if args.device in ("cuda", "auto"):
+        sampler.start()
+    sync()
+    tick = time.perf_counter()
+    for _, indices in plan:
+        step(data, list(indices))
+    sync()
+    wall = time.perf_counter() - tick
+    stop.set()
+    if sampler.is_alive():
+        sampler.join()
+    series = int(sum(sizes[list(i)].sum() for _, i in plan))
+    return {
+        "steps": len(plan),
+        "step_s": wall / len(plan),
+        "series_per_s": series / wall,
+        "gpu_busy": float(np.mean(samples)) if samples else None,
+        "empty_every_step": args.empty_every_step,
+    }
 
 
 if __name__ == "__main__":
