@@ -24,6 +24,8 @@
 checkpoint available_batches:
     output:
         f"{RUN}/available-batches.txt",
+    log:
+        f"{RUN}/logs/available-batches.log",
     localrule: True
     params:
         repo=SIM["repo"],
@@ -40,6 +42,8 @@ rule fetch_batch:
     output:
         counts=f"{RUN}/sims/counts-{{seed}}.csv.gz",
         settings=f"{RUN}/sims/settings-{{seed}}.csv",
+    log:
+        f"{RUN}/logs/fetch-{{seed}}.log",
     localrule: True
     params:
         source=FT["sims_from"],
@@ -53,6 +57,7 @@ rule fetch_batch:
         # Hard links where the rounds are on this machine, a copy from the
         # rounds host, else the batch's assets of its round's release.
         """
+        exec >{log} 2>&1
         if [ "{params.source}" = local ]; then
             ln -f {params.src} {output.counts} 2>/dev/null || cp {params.src} {output.counts}
             ln -f {params.src_settings} {output.settings} 2>/dev/null || cp {params.src_settings} {output.settings}
@@ -71,6 +76,8 @@ rule fetch_batch:
 rule seed_list:
     output:
         f"{RUN}/seeds.txt",
+    log:
+        f"{RUN}/logs/seed-list.log",
     localrule: True
     run:
         Path(output[0]).write_text("".join(f"{s}\n" for s in training_seeds()))
@@ -81,8 +88,10 @@ rule real_validation:
         FT["delays"] or [],
     output:
         FT["real_validation"] or "no-real-validation",
+    log:
+        f"{RUN}/logs/real-validation.log",
     shell:
-        "uv run python scripts/finetune_real_validation.py {input} {output}"
+        "uv run python scripts/finetune_real_validation.py {input} {output} > {log} 2>&1"
 
 
 rule train_segment:
@@ -176,6 +185,8 @@ rule checkpoint_check:
         f"{TRAIN}/n{CHECK}/settings.json",
     output:
         f"{RUN}/reports/n{CHECK}-check.txt",
+    log:
+        f"{RUN}/logs/n{CHECK}-check.log",
     localrule: True
     params:
         zero_shot=FT["zero_shot_real"],
@@ -202,6 +213,9 @@ rule dashboard:
     # finished run or the record; `task dashboard` serves it live instead.
     output:
         f"{RUN}/reports/dashboard.html",
+    log:
+        f"{RUN}/logs/dashboard.log",
     localrule: True
     shell:
-        "uv run --group paper python workflow/scripts/dashboard.py " "--once {output}"
+        "uv run --group paper python workflow/scripts/dashboard.py "
+        "--once {output} > {log} 2>&1"

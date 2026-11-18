@@ -16,12 +16,15 @@ rule fetch_adapter:
     # sha256sums.txt.
     output:
         directory(f"{CACHE}/adapters/{{label}}"),
+    log:
+        f"{CACHE}/log/adapter-{{label}}.log",
     localrule: True
     params:
         repo=SIM["repo"],
         tag=lambda wc: f"chronos-slots-{wc.label.removeprefix('slots-')}",
     shell:
         """
+        exec >{log} 2>&1
         gh release download {params.tag} -R {params.repo} -D {output} \
             -p adapter_config.json -p adapter_model.safetensors \
             -p settings.json -p sha256sums.txt
@@ -67,13 +70,15 @@ rule slots_check_summary:
     output:
         csv=f"{CACHE}/slots-check/{{label}}/summary.csv",
         blocks=f"{CACHE}/slots-check/{{label}}/blocks.csv.gz",
+    log:
+        f"{CACHE}/slots-check/{{label}}/summary.log",
     localrule: True
     params:
         run=f"{CACHE}/slots-check/{{label}}",
     shell:
         "uv run python scripts/slots_check.py summarise {params.run} "
         "--label {wildcards.label} --commit $(git rev-parse HEAD) "
-        "--csv {output.csv} --blocks {output.blocks}"
+        "--csv {output.csv} --blocks {output.blocks} > {log} 2>&1"
 
 
 rule agg_data:
@@ -83,6 +88,8 @@ rule agg_data:
         germany=f"{AGG_ROOT}/germany/COVID-19_hospitalizations.csv",
         zero_shot=f"{AGG_ROOT}/zero-shot-scores.csv.gz",
         existing=f"{AGG_ROOT}/existing-scores.csv.gz",
+    log:
+        f"{AGG_ROOT}/logs/data.log",
     localrule: True
     params:
         # The rows' folder, as a function: it holds the outputs.
@@ -92,6 +99,7 @@ rule agg_data:
         existing=AGG["existing"],
     shell:
         """
+        exec >{log} 2>&1
         export GITHUB_TOKEN=${{GITHUB_TOKEN:-$(gh auth token)}}
         uv run python -m bdbvhubrenewal.cli data \
             --raw {params.root}/data/raw --out {params.root}/data --ref {params.ref}
@@ -110,6 +118,8 @@ rule agg_sanity:
         zero_shot=rules.agg_data.output.zero_shot,
     output:
         f"{AGG_ROOT}/sanity/{{code}}/result.txt",
+    log:
+        f"{AGG_ROOT}/sanity/{{code}}/run.log",
     resources:
         mem_mb=AGG["mem_mb"],
     params:
@@ -119,6 +129,7 @@ rule agg_sanity:
         sane=lambda wc, output: Path(output[0]).parent,
     shell:
         """
+        exec >{log} 2>&1
         run() {{ """
         f"{HEAVY}"
         """uv run --group chronos python scripts/agg/finetuned.py "$@"; }}

@@ -55,10 +55,10 @@ rule simulate_batch:
         # write temporary files to a folder of the batch's own, removed
         # however the batch ends.
         """
-        git diff --quiet HEAD -- scripts/finetune_simulate.R || {{
-                                          echo "scripts/finetune_simulate.R differs from HEAD" > {log}
-                                          exit 1
-                                        }}
+        if ! git diff --quiet HEAD -- scripts/finetune_simulate.R; then
+            echo "scripts/finetune_simulate.R differs from HEAD" >{log}
+            exit 1
+        fi
         workflow/scripts/wait_for_room.sh {params.min_free} {params.min_disk} \
             {params.sims}
         [ -s {log} ] && mv {log} {params.sims}/logs/{wildcards.seed}.first.log
@@ -80,6 +80,8 @@ rule await_batch:
     # manifest. One waits at a time (`--resources awaiting=1`).
     output:
         f"{ROUNDS_DIR}/r{{round}}/arrived/{{seed}}.done",
+    log:
+        f"{ROUNDS_DIR}/r{{round}}/logs/await-{{seed}}.log",
     localrule: True
     resources:
         awaiting=1,
@@ -88,6 +90,7 @@ rule await_batch:
         poll=60,
     shell:
         """
+        exec >{log} 2>&1
         until grep -q '^{wildcards.round},{wildcards.seed},' \
             {params.manifest} 2>/dev/null; do
             sleep {params.poll}
@@ -101,6 +104,8 @@ rule batch_record:
         unpack(batch_files),
     output:
         f"{ROUNDS_DIR}/r{{round}}/records/record-{{seed}}.csv",
+    log:
+        f"{ROUNDS_DIR}/r{{round}}/logs/record-{{seed}}.log",
     localrule: True
     params:
         sims=f"{ROUNDS_DIR}/r{{round}}/sims",
@@ -117,6 +122,8 @@ rule round_manifest:
         ),
     output:
         f"{ROUNDS_DIR}/r{{round}}/manifest.csv",
+    log:
+        f"{ROUNDS_DIR}/r{{round}}/logs/manifest.log",
     localrule: True
     run:
         manifest.join(input, output[0])
@@ -142,6 +149,8 @@ rule round_ready:
     output:
         seeds=f"{ROUNDS_DIR}/r{{round}}/seeds.txt",
         ready=f"{ROUNDS_DIR}/r{{round}}/READY",
+    log:
+        f"{ROUNDS_DIR}/r{{round}}/logs/ready.log",
     localrule: True
     run:
         mark_ready(input, output, params, wildcards)
@@ -155,6 +164,8 @@ rule release_batch:
         record=rules.batch_record.output,
     output:
         touch(f"{ROUNDS_DIR}/r{{round}}/released/{{seed}}.done"),
+    log:
+        f"{ROUNDS_DIR}/r{{round}}/logs/release-{{seed}}.log",
     localrule: True
     params:
         repo=SIM["repo"],
@@ -163,6 +174,7 @@ rule release_batch:
         settings=rules.simulate_batch.output.settings,
     shell:
         """
+        exec >{log} 2>&1
         gh release view {params.tag} -R {params.repo} >/dev/null 2>&1 \
             || gh release create {params.tag} -R {params.repo} --prerelease \
                 --title "Simulations, round {wildcards.round}" \
@@ -181,6 +193,8 @@ rule release_qc:
         rules.sim_qc.output.excluded,
     output:
         touch(f"{ROUNDS_DIR}/r{{round}}/released/qc.done"),
+    log:
+        f"{ROUNDS_DIR}/r{{round}}/logs/release-qc.log",
     localrule: True
     params:
         repo=SIM["repo"],
@@ -188,6 +202,7 @@ rule release_qc:
         named=f"{ROUNDS_DIR}/r{{round}}/qc/excluded-r{{round}}.csv",
     shell:
         """
+        exec >{log} 2>&1
         cp {input} {params.named}
         gh release upload {params.tag} -R {params.repo} --clobber {params.named}
         """
@@ -201,6 +216,8 @@ rule push_batch:
         settings=rules.simulate_batch.output.settings,
     output:
         touch(f"{ROUNDS_DIR}/r{{round}}/sent/{{seed}}.done"),
+    log:
+        f"{ROUNDS_DIR}/r{{round}}/logs/push-{{seed}}.log",
     retries: 3
     localrule: True
     params:

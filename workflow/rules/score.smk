@@ -22,12 +22,14 @@ checkpoint release_list:
     # Lists the releases to score; `task score` reruns it.
     output:
         f"{CACHE}/releases.json",
+    log:
+        f"{CACHE}/log/release-list.log",
     localrule: True
     params:
         repo=SIM["repo"],
     shell:
         "gh release list -R {params.repo} --limit 500 "
-        "--json tagName,publishedAt > {output}"
+        "--json tagName,publishedAt > {output} 2>{log}"
 
 
 rule bdbv_data:
@@ -35,9 +37,11 @@ rule bdbv_data:
     # the BDBV units rerun, and they add only the new origins.
     output:
         SC["data"],
+    log:
+        f"{CACHE}/log/bdbv-data.log",
     localrule: True
     shell:
-        "uv run bdbvhubrenewal data"
+        "uv run bdbvhubrenewal data > {log} 2>&1"
 
 
 rule score_bdbv:
@@ -113,6 +117,8 @@ rule score_table:
     output:
         evidence=f"{CACHE}/tables/checkpoint-scores.csv",
         checkpoints=f"{CACHE}/tables/checkpoints.csv",
+    log:
+        f"{CACHE}/log/score-table.log",
     localrule: True
     params:
         labels=lambda wc: " ".join(checkpoint_labels()),
@@ -122,6 +128,7 @@ rule score_table:
     shell:
         # Rows of other rules in the committed tables are kept.
         """
+        exec >{log} 2>&1
         [ -f {params.evidence} ] && cp {params.evidence} {output.evidence}
         [ -f {params.checkpoints} ] && cp {params.checkpoints} {output.checkpoints}
         uv run python scripts/checkpoint_scores.py table {params.cache} \
@@ -136,6 +143,8 @@ rule land:
         rules.score_table.output,
     output:
         touch(f"{CACHE}/tables/landed"),
+    log:
+        f"{CACHE}/log/land.log",
     localrule: True
     params:
         evidence=SC["evidence"],
