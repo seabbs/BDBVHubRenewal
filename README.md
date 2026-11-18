@@ -1,7 +1,7 @@
 <h1>
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/logo-dark.svg">
-    <img src="assets/logo.svg" alt="bdbv-hub-modelling" width="275" height="44">
+    <img src="assets/logo.svg" alt="bdbv-hub-modelling" width="336" height="44">
   </picture>
 </h1>
 
@@ -11,6 +11,8 @@
 [![Pages](https://github.com/seabbs/bdbv-hub-modelling/actions/workflows/pages.yml/badge.svg)](https://github.com/seabbs/bdbv-hub-modelling/actions/workflows/pages.yml)
 [![licence: MIT](https://img.shields.io/badge/licence-MIT-blue.svg)](LICENSE)
 [![DOI](https://zenodo.org/badge/1435982169.svg)](https://doi.org/10.5281/zenodo.23942616)
+
+**Quick links:** <a href="https://samabbott.co.uk/bdbv-hub-modelling/" title="bdbv-hub-modelling"><img src="assets/logos/bdbv-hub-modelling/logo-mark.svg" alt="bdbv-hub-modelling" width="32" height="32"></a> <a href="https://samabbott.co.uk/bdbv-hub-modelling/paper/" title="Fine-tuned foundation"><img src="assets/logos/fine-tuned-foundation/logo-mark.svg" alt="Fine-tuned foundation" width="32" height="32"></a> <a href="https://samabbott.co.uk/bdbv-hub-modelling/methods/model/" title="Joint-model-informed renewal"><img src="assets/logos/joint-model-informed-renewal/logo-mark.svg" alt="Joint-model-informed renewal" width="32" height="32"></a> <a href="https://samabbott.co.uk/bdbv-hub-modelling/submission/workflow/" title="Hub submission"><img src="assets/logos/hub-submission/logo-mark.svg" alt="Hub submission" width="32" height="32"></a>
 
 | Component | Tests | Lint | Coverage |
 | --- | --- | --- | --- |
@@ -64,6 +66,8 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 ## Citing
 
 [![DOI](https://zenodo.org/badge/1435982169.svg)](https://doi.org/10.5281/zenodo.23942616)
+
+**Quick links:** <a href="https://samabbott.co.uk/bdbv-hub-modelling/" title="bdbv-hub-modelling"><img src="assets/logos/bdbv-hub-modelling/logo-mark.svg" alt="bdbv-hub-modelling" width="32" height="32"></a> <a href="https://samabbott.co.uk/bdbv-hub-modelling/paper/" title="Fine-tuned foundation"><img src="assets/logos/fine-tuned-foundation/logo-mark.svg" alt="Fine-tuned foundation" width="32" height="32"></a> <a href="https://samabbott.co.uk/bdbv-hub-modelling/methods/model/" title="Joint-model-informed renewal"><img src="assets/logos/joint-model-informed-renewal/logo-mark.svg" alt="Joint-model-informed renewal" width="32" height="32"></a> <a href="https://samabbott.co.uk/bdbv-hub-modelling/submission/workflow/" title="Hub submission"><img src="assets/logos/hub-submission/logo-mark.svg" alt="Hub submission" width="32" height="32"></a>
 
 Abbott S (2026). bdbv-hub-modelling: renewal-model nowcasts and forecasts for the BDBV Modeling Hub. Zenodo. <https://doi.org/10.5281/zenodo.23942616>.
 
