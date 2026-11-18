@@ -49,10 +49,10 @@ jobs:
           uv run mypy src
 
   # Snakemake style and lint of the workflow and the paper's workflow.
-  # It reports without failing the run for now.
+  # Advisory for now: the checks run with step-level continue-on-error,
+  # so the job passes and any findings show as a warning annotation.
   workflow-lint:
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
@@ -60,9 +60,12 @@ jobs:
           enable-cache: true
       - run: uv sync --frozen --group paper
       - name: snakefmt
+        id: snakefmt
+        continue-on-error: true
         run: uv run snakefmt --check workflow paper/workflow
       - name: snakemake --lint
-        if: ${{ !cancelled() }}
+        id: smklint
+        continue-on-error: true
         run: |
           printf 'ROOT=%s\nHOST_NAME=ci\n' "$RUNNER_TEMP" > "$RUNNER_TEMP/local.env"
           export LOCAL_CONFIG="$RUNNER_TEMP/local.env"
@@ -70,6 +73,12 @@ jobs:
           uv run snakemake -s workflow/Snakefile --lint || status=1
           (cd paper && uv run snakemake -s workflow/Snakefile --lint) || status=1
           exit $status
+      - name: Report advisory findings
+        if: >-
+          steps.snakefmt.outcome == 'failure' ||
+          steps.smklint.outcome == 'failure'
+        run: |
+          echo "::warning title=workflow-lint::snakefmt ${{ steps.snakefmt.outcome }}, snakemake --lint ${{ steps.smklint.outcome }} (advisory; see the job log)"
 
   # The submission CI scripts in ci/, their own uv project.
   lint-ci:
