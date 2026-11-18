@@ -162,13 +162,19 @@ class NonCentredRandomWalk(TemporalProcess):
             else 0.5 ** (1.0 / self.half_life_rv())
         )
         if self.centred:
-            # Levels with N(0, sd) steps from 0, one walk per process.
-            free = numpyro.sample(
+            # The levels themselves, with N(0, sd) steps from x0, one walk
+            # per process. Relative to x0 instead, the data would pin only
+            # x0 plus each level, a long direction for NUTS.
+            levels = numpyro.sample(
                 f"{name_prefix}_x",
-                dist.GaussianRandomWalk(sd, num_steps=n_free).expand(
-                    [n_processes]
+                dist.TransformedDistribution(
+                    dist.GaussianRandomWalk(sd, num_steps=n_free).expand(
+                        [n_processes]
+                    ),
+                    dist.transforms.AffineTransform(x0[:, None], 1.0),
                 ),
-            ).T
+            )
+            free = levels.T - x0[None, :]
         else:
             z = numpyro.sample(
                 f"{name_prefix}_z",
