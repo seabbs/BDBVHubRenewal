@@ -84,13 +84,17 @@ def test_the_section_draws_each_part_in_the_paper_s_colour():
     view = {"studies": {"germany": "Germany"}, "levels": ["national"]}
     out = wis.section(bars, view)
     assert "Germany, national" in out
+    # Each part a shade of its model's colour, as the paper's bars.
+    assert wis.PARTS == ("dispersion", "overprediction", "underprediction")
     for part in wis.PARTS:
-        assert paperstyle.wis_colour(part) in out
-    # Stacked in a fixed order: dispersion, under-, then overprediction.
+        assert paperstyle.part_colour("#111", part) in out
+    assert paperstyle.part_colour("#111", "dispersion") == "#111111"
+    assert paperstyle.part_colour("#000000", "underprediction") == "#b3b3b3"
+    # Stacked in the paper's order.
     first = out.index("<rect", out.index("live n250"))
-    assert out.index("dispersion", first) < out.index("underprediction", first)
-    assert out.index("underprediction", first) < out.index(
-        "overprediction", first
+    assert out.index("dispersion", first) < out.index("overprediction", first)
+    assert out.index("overprediction", first) < out.index(
+        "underprediction", first
     )
     assert out.count("class=card") == 1
 

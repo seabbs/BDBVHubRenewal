@@ -334,16 +334,6 @@ def test_germany_has_a_daily_target_si_figure() -> None:
 <<<<<<< HEAD
 
 
-def test_wis_components_have_one_colour_each() -> None:
-    from paperfigs import style
-
-    assert tuple(style.WIS_COLOURS) == style.WIS_PARTS
-    assert len(set(style.WIS_COLOURS.values())) == 3
-    assert style.wis_colour("dispersion") == style.WIS_COLOURS["dispersion"]
-||||||| da81aa7d5
-=======
-
-
 def test_wis_bars_stack_their_parts_to_the_relative_wis(germany) -> None:
     fc, obs, scores, _ = germany
     fig = results_panel(fc, obs, scores, split=None)
