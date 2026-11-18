@@ -80,6 +80,8 @@ HELD_OUT_LEVELS: Final = ("leaf", "national", "intermediate")
 GERMANY_CELL: Final = ["origin", "location", "target_end_date"]
 BDBV_CELL: Final = ["origin", "truth_vintage", "location", "target_end_date"]
 COVERAGE: Final = (50, 90, 95)
+WIS_PARTS: Final = ("dispersion", "overprediction", "underprediction")
+"""WIS's components (Bracher et al. 2021), which sum to it."""
 REPO: Final = "seabbs/BDBVHubRenewal"
 COLUMNS: Final = [
     "study",
@@ -116,6 +118,9 @@ COLUMNS: Final = [
     "zone_method",
     "factor",
     "factor_level",
+    "dispersion",
+    "overprediction",
+    "underprediction",
 ]
 """The evidence table's columns, those of rows of other studies too."""
 SORT: Final = ["rule", "study", "level", "model", "outbreaks", "checkpoint"]
@@ -228,7 +233,10 @@ def unit_done(root: Path, wanted: Sequence[str]) -> bool:
 
 
 def cell_scores(samples: pd.DataFrame, truth: pd.DataFrame) -> pd.DataFrame:
-    """Score each forecast cell's draws by CRPS, log CRPS and coverage.
+    """Score each forecast cell's draws by CRPS, log CRPS, WIS and coverage.
+
+    WIS comes with its components (`WIS_PARTS`), from the draws'
+    quantiles.
 
     All cells at once (`score_cells`); a cell's `level` is its location's
     scale (`scale_of`).
@@ -253,10 +261,13 @@ def cell_scores(samples: pd.DataFrame, truth: pd.DataFrame) -> pd.DataFrame:
             sub.assign(
                 crps=scores["crps"],
                 log_crps=scores["log_crps"],
+                wis=scores["wis"],
+                **{c: scores[c] for c in WIS_PARTS},
                 **{f"coverage_{p}": scores[f"coverage_{p}"] for p in COVERAGE},
             )
         )
-    cols = [*keys, "truth_vintage", "truth", "crps", "log_crps"]
+    cols = [*keys, "truth_vintage", "truth", "crps", "log_crps", "wis"]
+    cols += list(WIS_PARTS)
     cols += [f"coverage_{p}" for p in COVERAGE]
     if not parts:
         return pd.DataFrame(columns=[*cols, "level"])
@@ -334,10 +345,15 @@ def matched(rows: pd.DataFrame, cell: list[str]) -> pd.DataFrame:
 def relative(
     rows: pd.DataFrame, study: str, metrics: tuple[str, str]
 ) -> pd.DataFrame:
-    """Return mean scores relative to the baseline, by level and model."""
-    covers = [c for c in (f"coverage_{p}" for p in COVERAGE) if c in rows]
+    """Return mean scores relative to the baseline, by level and model.
+
+    With the mean WIS and its components, and coverage, where the rows
+    have them.
+    """
+    extra = ["wis", *WIS_PARTS, *(f"coverage_{p}" for p in COVERAGE)]
+    extra = [c for c in extra if c in rows and c not in metrics]
     keys = ["level", "model", "checkpoint"]
-    mean = rows.groupby(keys)[[*metrics, *covers]].mean()
+    mean = rows.groupby(keys)[[*metrics, *extra]].mean()
     mean["n"] = rows.groupby(keys).size()
     origins = rows.groupby(keys)["origin"]
     mean["n_origins"] = origins.nunique()
