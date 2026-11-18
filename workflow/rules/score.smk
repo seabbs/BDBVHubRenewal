@@ -68,11 +68,17 @@ UNIT_THREADS = int(LOCAL.get("SCORE_THREADS") or 2)
 
 
 def score_order():
-    """The checkpoint labels, oldest published first."""
+    """The checkpoint labels, oldest published first.
+
+    Read from the release list if it is there, none otherwise: a job's
+    priority cannot wait on the release_list checkpoint.
+    """
     if SC["labels"] is not None:
         return list(SC["labels"])
-    path = checkpoints.release_list.get().output[0]
-    return releases.by_time(json.loads(Path(path).read_text()), SC["published_from"])
+    path = Path(f"{CACHE}/releases.json")
+    if not path.exists():
+        return []
+    return releases.by_time(json.loads(path.read_text()), SC["published_from"])
 
 
 def unit_priority(base):
