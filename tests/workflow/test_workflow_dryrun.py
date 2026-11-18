@@ -473,3 +473,21 @@ def test_skipped_releases_are_not_scored(tmp_path):
     )
     jobs = dry(tmp_path, "score", config={"score": {"skip": ["slots-old"]}})
     assert jobs["score_heldout"] == 1
+
+
+def test_chronos_units_take_the_gpu():
+    # One Chronos-2 unit at a time on a one-GPU machine.
+    out = subprocess.run(
+        [str(SNAKEMAKE), "--list-rules"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+    )
+    assert out.returncode == 0
+    text = (ROOT / "workflow" / "rules" / "score.smk").read_text()
+    for rule in ("score_bdbv", "score_germany", "score_heldout_scores"):
+        body = text[text.index(f"rule {rule}:") :]
+        body = body[
+            : body.index("\nrule ", 1) if "\nrule " in body[1:] else len(body)
+        ]
+        assert "gpu=1" in body.replace(" ", ""), rule

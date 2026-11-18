@@ -89,6 +89,7 @@ rule score_bdbv:
     threads: 1
     resources:
         mem_mb=SC["mem_mb"],
+        gpu=1,
     shell:
         unit_shell("bdbv", "7day zones" if SC["zones"] else "7day")
 
@@ -104,6 +105,7 @@ rule score_germany:
     threads: 1
     resources:
         mem_mb=SC["mem_mb"],
+        gpu=1,
     shell:
         unit_shell("germany")
 
@@ -141,6 +143,7 @@ rule score_heldout_scores:
     threads: 1
     resources:
         mem_mb=SC["held_mem_mb"],
+        gpu=1,
     shell:
         unit_shell("heldout_scores", SC["held_set"])
 

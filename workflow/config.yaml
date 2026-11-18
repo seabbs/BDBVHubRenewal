@@ -67,9 +67,9 @@ score:
   labels: null
   # The previous run (grid r4) and grid r5's (#311).
   published_from: "2026-11-16T09:00:00Z"
-  # Releases left out: the superseded slots run's adapters
+  # Releases left out: the previous run's slots-arm adapters
   # (`series_slots` embeddings), which the current loader cannot load.
-  skip: [slots-85babc01767c, slots-ea31bba0123e, slots-de9838217c4a]
+  skip: [slots-85babc01767c, slots-ea31bba0123e]
   # The held-out simulations scored with proper scores
   # (scripts/heldout_scores.py SETS): r5 is round 9, all 840.
   held_set: r5
