@@ -1590,8 +1590,6 @@ def main() -> None:
             DatasetMode.TRAIN,
             args.series_bias,
         )
-        # The chunk's blocks, the held-out blocks and the model live on;
-        # the collection each step skips them.
         settle_heap()
         log(
             f"outbreaks {done + 1}-{hi}: {len(blocks)} blocks, "
@@ -1607,6 +1605,9 @@ def main() -> None:
                 sims_done(done, len(chunk), position, len(plan)),
                 args.outbreaks,
             )
+            # Cheap without `free_memory`; the step starts from no gradients
+            # whatever ran before it.
+            optimiser.zero_grad()
             value = accumulate(list(indices), backward, zero, skip)
             if not finite_step(params, optimiser, value):
                 log(f"step {step + 1}: no update (loss {value})")
@@ -1647,6 +1648,8 @@ def main() -> None:
                 if bias:
                     entry["bias"] = bias
                     described += f"bias {_bias_range(bias)}, "
+                # The next batch starts without the evaluation's buffers.
+                free_memory()
                 split["eval_s"] += time.perf_counter() - since
                 history.append(entry)
                 log(

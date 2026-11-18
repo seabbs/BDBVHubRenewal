@@ -14,7 +14,9 @@ the times and block sizes as JSON.
         --train-seeds 31000 31001 --held-out-seeds 30900 30901 \
         --sims 10 --steps 40 --series-bias --out speed.json
 
-It changes nothing it reads; the state goes to a temporary folder.
+Its step loop mirrors `finetune_stream.main`'s (`accumulate`,
+`finite_step`, `free_memory`), so a change there needs the same change
+here. It changes nothing it reads; the state goes to a temporary folder.
 """
 
 from __future__ import annotations
@@ -70,7 +72,10 @@ def main() -> None:
     from chronos.chronos2.dataset import DatasetMode
     from chronos.chronos2.model import Chronos2Model
 
-    args = build_parser().parse_args()
+    parser = build_parser()
+    args = parser.parse_args()
+    if args.warmup >= args.steps:
+        parser.error("--warmup must be less than --steps")
     if args.threads:
         torch.set_num_threads(args.threads)
     ft.SOURCES = tuple(args.sources)
@@ -124,7 +129,7 @@ def main() -> None:
         blocks, args.batch_size, DatasetMode.TRAIN, args.series_bias
     )
     dataset_s = time.perf_counter() - tick
-    # As the trainer does once a chunk, where it has one.
+    # As the trainer does once a chunk; the guard lets it time main too.
     if hasattr(fs, "settle_heap"):
         fs.settle_heap()
 
@@ -160,7 +165,8 @@ def main() -> None:
     for position, (_, indices) in enumerate(plan[: args.steps]):
         times.clear()
         times.update(dict.fromkeys(parts, 0.0))
-        # As the trainer's loop: accumulate, step, free.
+        # As the trainer's loop: clear, accumulate, step, free.
+        optimiser.zero_grad()
         value = fs.accumulate(list(indices), backward, zero, print)
         timed(
             "optimiser",
@@ -189,8 +195,10 @@ def main() -> None:
         fs.save_state(Path(tmp) / "state", model, optimiser, {"step": 0})
         save_s = time.perf_counter() - tick
 
-    timed = steps[args.warmup :]
-    mean = {p: float(np.mean([s[p] for s in timed])) for p in (*parts, "total")}
+    measured = steps[args.warmup :]
+    mean = {
+        p: float(np.mean([s[p] for s in measured])) for p in (*parts, "total")
+    }
     per_sim = len(plan) / len(ids)
     summary = {
         "device": device,

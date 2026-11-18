@@ -983,3 +983,31 @@ def test_settled_objects_are_skipped_by_collections_until_the_next():
         assert ref() is None
     finally:
         gc.unfreeze()
+
+
+def test_steps_in_a_row_do_not_sum_gradients():
+    torch = pytest.importorskip("torch")
+    from finetune_stream import accumulate, finite_step
+
+    def run(clear_between: bool) -> list:
+        torch.manual_seed(0)
+        layer = torch.nn.Linear(2, 1)
+        params = list(layer.parameters())
+        optimiser = torch.optim.SGD(params, lr=0.1)
+
+        def backward(part, share):
+            loss = layer(torch.full((len(part), 2), 1.0)).sum()
+            (loss * share).backward()
+            return float(loss)
+
+        for _ in range(2):
+            if clear_between:
+                optimiser.zero_grad()
+            value = accumulate([1, 2], backward, optimiser.zero_grad, print)
+            finite_step(params, optimiser, value)
+        return [p.detach().clone() for p in params]
+
+    # finite_step leaves the gradients clear, so the next step starts
+    # from none, as if cleared explicitly.
+    for a, b in zip(run(False), run(True), strict=True):
+        assert torch.equal(a, b)
