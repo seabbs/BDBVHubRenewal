@@ -719,6 +719,55 @@ def test_load_writes_the_zone_fits_zone_samples(tmp_path: Path) -> None:
     ].to_numpy().tolist() == [["renewal", "2026-10-17", "CD-IT-01", 3.0]]
 
 
+def test_load_compacts_the_zone_samples(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import base64
+    import gzip
+
+    # As the forecasts (#363): zone samples are compacted per fit and
+    # stacked, so the store's zone samples never sit in memory as text.
+    empty = pd.DataFrame()
+    keys = {}
+    for origin in ("2026-10-17", "2026-10-24"):
+        zones = pd.DataFrame(
+            {
+                "location": ["CD-IT-01"] * 2,
+                "target_end_date": [origin] * 2,
+                "sample": [1, 2],
+                "value": [3.0, 1.0],
+            }
+        )
+        body = base64.b64encode(
+            gzip.compress(zones.to_csv(index=False).encode())
+        ).decode()
+        meta = {
+            "model": "renewal",
+            "origin": origin,
+            "key": origin,
+            "commit": "c",
+            "fitted_at": "2026-11-13T00:00:00+00:00",
+            "settings": "",
+            "status": "ok",
+        }
+        store.write_fit(
+            tmp_path / "store",
+            store.StoredFit(
+                meta, empty, empty, empty, files={"zones.csv.gz": body}
+            ),
+        )
+        keys[("renewal", origin)] = origin
+    merged = {}
+    monkeypatch.setattr(
+        store, "_merge", lambda path, frames: merged.update({path.name: frames})
+    )
+    store.load(tmp_path / "store", keys, tmp_path / "res")
+    (frame,) = merged[store.ZONE_FITS_FILE]
+    assert len(frame) == 4
+    for col in ("model", "vintage", "location", "target_end_date"):
+        assert isinstance(frame[col].dtype, pd.CategoricalDtype), col
+
+
 @pytest.mark.usefixtures("in_root", "offline_bvd")
 def test_zone_data_keys_only_the_models_that_read_it(
     target: pd.DataFrame,
