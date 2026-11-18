@@ -840,3 +840,14 @@ def test_a_missing_score_table_starts_empty(cs, tmp_path) -> None:
     rows = cs.existing_rows(tmp_path / "none.csv", cs.COLUMNS)
     assert rows.empty
     assert list(rows.columns) == cs.COLUMNS
+
+
+def test_the_bdbv_tasks_carry_zones_only_when_asked(cs) -> None:
+    from bdbvhubrenewal.evaluation import backtest as bt
+
+    data = Path(__file__).parent / "fixtures" / "data"
+    plain = next(
+        iter(cs.bdbv_tasks(data, bt.load_config(), zones=False).values())
+    )
+    assert not plain.zone_codes
+    assert plain.zone_daily_history is None
