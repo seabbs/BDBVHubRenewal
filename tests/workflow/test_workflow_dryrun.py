@@ -460,3 +460,16 @@ def test_zones_and_held_out_scores_can_be_left_out(tmp_path):
     assert "score_zones" not in jobs
     assert "score_heldout_scores" not in jobs
     assert jobs["score_table"] == 1
+
+
+def test_skipped_releases_are_not_scored(tmp_path):
+    cache = tmp_path / "scores"
+    cache.mkdir()
+    (cache / "releases.json").write_text(
+        '[{"tagName": "chronos-slots-aaa",'
+        ' "publishedAt": "2026-11-17T18:00:00Z"},'
+        ' {"tagName": "chronos-slots-old",'
+        ' "publishedAt": "2026-11-17T18:00:00Z"}]'
+    )
+    jobs = dry(tmp_path, "score", config={"score": {"skip": ["slots-old"]}})
+    assert jobs["score_heldout"] == 1
