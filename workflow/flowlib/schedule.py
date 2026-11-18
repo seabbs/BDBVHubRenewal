@@ -191,8 +191,19 @@ def _command(root: Path, path: str) -> str:
     return f"cd {root} && {env}python3 {TICK} >> {log} 2>&1"
 
 
+def _log(root: Path) -> Path:
+    """Return the tick's log, making its folder.
+
+    A timer cannot open a log in a folder that does not exist, and so
+    never runs the tick.
+    """
+    (root / "output").mkdir(parents=True, exist_ok=True)
+    return root / "output" / "workflow-tick.log"
+
+
 def cron_line(root: Path | str, every: int, path: str = "") -> str:
     """Return this repository's cron line; `path` is the PATH to run with."""
+    _log(Path(root))
     return f"{cron_spec(every)} {_command(Path(root), path)} {MARK}"
 
 
@@ -209,14 +220,15 @@ def systemd_units(
 ) -> tuple[str, str]:
     """Return the systemd user service and timer of the tick."""
     root = Path(root)
+    log = _log(root)
     env = f"Environment=PATH={path}\n" if path else ""
     service = (
         "[Unit]\nDescription=bdbv-hub-modelling workflow tick\n\n"
         "[Service]\nType=oneshot\n"
         f"WorkingDirectory={root}\n{env}"
         f"ExecStart=/usr/bin/env python3 {TICK}\n"
-        f"StandardOutput=append:{root / 'output' / 'workflow-tick.log'}\n"
-        f"StandardError=append:{root / 'output' / 'workflow-tick.log'}\n"
+        f"StandardOutput=append:{log}\n"
+        f"StandardError=append:{log}\n"
     )
     timer = (
         "[Unit]\nDescription=Run the bdbv-hub-modelling workflow tick\n\n"
@@ -229,7 +241,7 @@ def systemd_units(
 def launchd_plist(root: Path | str, every: int, path: str = "") -> bytes:
     """Return the launchd agent of the tick; `path` is the PATH to run with."""
     root = Path(root)
-    log = str(root / "output" / "workflow-tick.log")
+    log = str(_log(root))
     extra = {"EnvironmentVariables": {"PATH": path}} if path else {}
     return plistlib.dumps(
         {
