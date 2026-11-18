@@ -331,7 +331,6 @@ def test_germany_has_a_daily_target_si_figure() -> None:
     from paperpipe.outputs import FIGURES
 
     assert "si-results-daily" in FIGURES["germany"]["si"]
-<<<<<<< HEAD
 
 
 def test_wis_bars_stack_their_parts_to_the_relative_wis(germany) -> None:
@@ -371,4 +370,3 @@ def test_results_panel_shows_only_the_given_models(germany) -> None:
     # The two models and the study's baseline, three parts each.
     assert len(rel_ax.patches) == 3 * 3
     plt.close(fig)
->>>>>>> origin/main
