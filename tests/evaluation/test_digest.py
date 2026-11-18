@@ -101,9 +101,7 @@ def _ran(run: object) -> set[str]:
     return {Path(f).relative_to(ROOT).as_posix() for f in seen}
 
 
-@pytest.mark.parametrize(
-    "model", ["randomwalk", "randomwalknowcast", "pprandomwalknowcast"]
-)
+@pytest.mark.parametrize("model", ["randomwalk", "randomwalknowcast"])
 def test_model_code_covers_what_its_forecasts_run(
     model: str,
     target: pd.DataFrame,
@@ -152,12 +150,10 @@ def test_model_code_leaves_out_other_models() -> None:
 
     code = set(model_code("randomwalk", ROOT))
     assert "src/bdbvhubrenewal/forecasters/renewal.py" not in code
-    assert "src/bdbvhubrenewal/forecasters/pprandomwalk.py" not in code
     assert "src/bdbvhubrenewal/forecasters/randomwalk.py" in code
-    pp = set(model_code("pprandomwalknowcast", ROOT))
-    assert "src/bdbvhubrenewal/forecasters/renewal.py" not in pp
+    renewal = set(model_code("renewal", ROOT))
     # It builds on the random walk module, so that is in its key.
-    assert "src/bdbvhubrenewal/forecasters/randomwalk.py" in pp
+    assert "src/bdbvhubrenewal/forecasters/randomwalk.py" in renewal
 
 
 def test_model_code_keeps_a_skipped_module_its_model_imports() -> None:
@@ -175,7 +171,7 @@ def test_model_code_keeps_a_skipped_module_its_model_imports() -> None:
     # Chronos-2's module imports the zone split, so its key holds it, and
     # so do the province-level models that split their zones in their own
     # forecast (`with_zones`, since #299).
-    for model in ("fm_chronos_weekly_ragged", "renewal", "pprandomwalknowcast"):
+    for model in ("fm_chronos_weekly_ragged", "renewal", "renewalsp"):
         assert zones in code(model)
     # Models whose modules do not import it still leave it out.
     for model in ("randomwalk", "randomwalknowcast"):

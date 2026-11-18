@@ -596,7 +596,7 @@ def test_fit_settings_skip_models_with_no_sampler(
 ) -> None:
     monkeypatch.chdir(ROOT)
     settings = report._fit_settings()
-    assert "pprandomwalknowcast" in settings
+    assert "renewal" in settings
     assert not any(name.startswith("fm_chronos_") for name in settings)
 
 

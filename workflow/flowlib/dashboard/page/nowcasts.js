@@ -188,6 +188,8 @@ function build(){
   var ids=chosen(k).slice(),i=ids.indexOf(id);if(i>=0){if(ids.length>1)ids.splice(i,1)}else ids.push(id);S.chk[k]=ids;draw()};
  draw()}
 window.addEventListener("ftsel",function(){draw()});
+// New data from the server (live.js): keep every control, drop cached locations.
+window.addEventListener("ftdata",function(e){if(e.detail!=="nowcasts")return;D=JSON.parse($("gdata").textContent);DSS=D.datasets;RUNS=D.runs;C=cur();cache={};if(!window.ftPlaying)draw()});
 var rsz=null;window.addEventListener("resize",function(){clearTimeout(rsz);rsz=setTimeout(plots,150)});
 var sec=document.getElementById("nowcasts");if(sec)sec.addEventListener("toggle",function(){if(sec.open)plots()});
 build();

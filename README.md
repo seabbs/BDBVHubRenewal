@@ -1,7 +1,7 @@
 <h1>
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/logo-dark.svg">
-    <img src="assets/logo.svg" alt="bdbv-hub-modelling" width="275" height="44">
+    <img src="assets/logo.svg" alt="bdbv-hub-modelling" width="336" height="44">
   </picture>
 </h1>
 
@@ -11,6 +11,8 @@
 [![Pages](https://github.com/seabbs/bdbv-hub-modelling/actions/workflows/pages.yml/badge.svg)](https://github.com/seabbs/bdbv-hub-modelling/actions/workflows/pages.yml)
 [![licence: MIT](https://img.shields.io/badge/licence-MIT-blue.svg)](LICENSE)
 [![DOI](https://zenodo.org/badge/1435982169.svg)](https://doi.org/10.5281/zenodo.23942616)
+
+**Quick links:** <a href="https://samabbott.co.uk/bdbv-hub-modelling/" title="bdbv-hub-modelling"><img src="assets/logos/bdbv-hub-modelling/logo-mark.svg" alt="bdbv-hub-modelling" width="32" height="32"></a> <a href="https://samabbott.co.uk/bdbv-hub-modelling/paper/" title="Fine-tuned foundation"><img src="assets/logos/fine-tuned-foundation/logo-mark.svg" alt="Fine-tuned foundation" width="32" height="32"></a> <a href="https://samabbott.co.uk/bdbv-hub-modelling/methods/model/" title="Joint-model-informed renewal"><img src="assets/logos/joint-model-informed-renewal/logo-mark.svg" alt="Joint-model-informed renewal" width="32" height="32"></a> <a href="https://samabbott.co.uk/bdbv-hub-modelling/submission/workflow/" title="Hub submission"><img src="assets/logos/hub-submission/logo-mark.svg" alt="Hub submission" width="32" height="32"></a>
 
 | Component | Tests | Lint | Coverage |
 | --- | --- | --- | --- |
@@ -30,7 +32,6 @@ The package, `bdbvhubrenewal`, fits the models, scores them and writes the hub s
 `seabbs-rwnowcast` is `randomwalknowcast`, baselinenowcast ([Johnson et al. 2025](https://doi.org/10.12688/wellcomeopenres.25027.2)) ported to JAX, with a random walk on top.
 It runs by province and health zone, and the national value is the sum of the provinces.
 `randomwalk` is the same walk with no nowcast.
-`pprandomwalknowcast` is a generative variant in the style of epinowcast, with the delay and the walk fitted jointly and partially pooled over places, and is not submitted.
 The renewal models are built on [PyRenew](https://github.com/CDCgov/PyRenew) and model daily symptom onsets, with a learnt onset-to-report delay and the hub's imputation of missing onsets.
 `renewal` fits the provinces together, with a pooled Rt and importation between provinces through a gravity kernel.
 `renewalsp` fits the same model to each province on its own, with no pooling or importation.
@@ -65,6 +66,8 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 ## Citing
 
 [![DOI](https://zenodo.org/badge/1435982169.svg)](https://doi.org/10.5281/zenodo.23942616)
+
+**Quick links:** <a href="https://samabbott.co.uk/bdbv-hub-modelling/" title="bdbv-hub-modelling"><img src="assets/logos/bdbv-hub-modelling/logo-mark.svg" alt="bdbv-hub-modelling" width="32" height="32"></a> <a href="https://samabbott.co.uk/bdbv-hub-modelling/paper/" title="Fine-tuned foundation"><img src="assets/logos/fine-tuned-foundation/logo-mark.svg" alt="Fine-tuned foundation" width="32" height="32"></a> <a href="https://samabbott.co.uk/bdbv-hub-modelling/methods/model/" title="Joint-model-informed renewal"><img src="assets/logos/joint-model-informed-renewal/logo-mark.svg" alt="Joint-model-informed renewal" width="32" height="32"></a> <a href="https://samabbott.co.uk/bdbv-hub-modelling/submission/workflow/" title="Hub submission"><img src="assets/logos/hub-submission/logo-mark.svg" alt="Hub submission" width="32" height="32"></a>
 
 Abbott S (2026). bdbv-hub-modelling: renewal-model nowcasts and forecasts for the BDBV Modeling Hub. Zenodo. <https://doi.org/10.5281/zenodo.23942616>.
 
