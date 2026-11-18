@@ -72,7 +72,8 @@ N_DRAWS: Final = 1000
 SCORED_FROM: Final = "2026-11-21"
 """The first scored BDBV round; origins from it are never scored here."""
 GERMANY_CHUNK: Final = 20
-"""German dates forecast together (`germany_unit`)."""
+"""German dates forecast together (`germany_unit`) unless `SCORE_DATES`
+in the environment (local config) says otherwise."""
 FINAL_OUTBREAKS: Final = 8400
 """The reported model is the live run's final checkpoint."""
 FINAL_GRID: Final = "r5"
@@ -399,6 +400,15 @@ def merge_evidence(old: pd.DataFrame, new: pd.DataFrame) -> pd.DataFrame:
 # Units -----------------------------------------------------------------
 
 
+def score_dates() -> int:
+    """Return the German dates a unit forecasts together.
+
+    `SCORE_DATES` from the local config (`flowlib.machine.torch_env`),
+    else `GERMANY_CHUNK`: more is faster and holds more in memory.
+    """
+    return int(os.environ.get("SCORE_DATES") or GERMANY_CHUNK)
+
+
 def _pin(label: str) -> None:
     """Pin the checkpoint, so no process resolves `latest` mid-run."""
     os.environ["BDBV_CHRONOS_FT"] = (
@@ -524,11 +534,12 @@ def germany_unit(cache: Path, label: str) -> None:
     dates = de.nowcast_dates(config, held_out=False)
     todo = [d for d in dates if not (root / f"{d}.csv.gz").exists()]
     models = list(label_models(label))
-    # Dates are forecast GERMANY_CHUNK at a time, Chronos-2 predicted for
+    # Dates are forecast `score_dates()` at a time, Chronos-2 predicted for
     # all of them in a few batched passes, and written one file a date so
     # a stopped run resumes.
-    for i in range(0, len(todo), GERMANY_CHUNK):
-        chunk = todo[i : i + GERMANY_CHUNK]
+    step = score_dates()
+    for i in range(0, len(todo), step):
+        chunk = todo[i : i + step]
         start = time.monotonic()
         fc = de.germany_forecasts(
             models, triangle, chunk, config.n_samples, config.seed

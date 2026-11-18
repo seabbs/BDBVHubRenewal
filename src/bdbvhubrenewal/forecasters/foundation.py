@@ -894,8 +894,14 @@ Known = Mapping[str, np.ndarray]
 
 
 def group_key(group: Series, horizon: int) -> str:
-    """Return a key of what Chronos-2 sees of a group, and the horizon."""
+    """Return a key of what Chronos-2 sees of a group, and the horizon.
+
+    The rows' places are in it too: with the series bias, the same numbers
+    at other places forecast differently.
+    """
     h = hashlib.sha256(str(horizon).encode())
+    for name in ("places", "target_places"):
+        h.update(f"{name}={list(group.get(name) or [])!r}".encode())
     for name in CHRONOS_KEYS:
         part = group.get(name)
         if part is None:
