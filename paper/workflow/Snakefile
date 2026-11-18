@@ -110,9 +110,7 @@ if str(_split) != str(config["heldout"]["germany_from"]):
 # or followed: an entry naming a `branch` reads its head, resolved here so
 # a new commit there extracts the file anew.
 EVIDENCE = {
-    name: entry
-    for name, entry in (config.get("evidence") or {}).items()
-    if entry
+    name: entry for name, entry in (config.get("evidence") or {}).items() if entry
 }
 for _entry in EVIDENCE.values():
     if "branch" in _entry:
@@ -296,11 +294,11 @@ for _mode in MODES:
             synthetic_simulations(_mode),
         output:
             SYNTHETIC["forecasts"][_mode],
+        resources:
+            heavy=1,
         params:
             sims=SYNTHETIC["simulations"][_mode],
-            seeds=" ".join(
-                str(s) for s in run_settings(config, _mode).synthetic_seeds
-            ),
+            seeds=" ".join(str(s) for s in run_settings(config, _mode).synthetic_seeds),
             # The fine-tuned models wait for the final run's checkpoint.
             models=(
                 ""
@@ -308,8 +306,6 @@ for _mode in MODES:
                 else "--models "
                 + " ".join(m for m in SYNTHETIC_MODELS if "_ft" not in m)
             ),
-        resources:
-            heavy=1,
         shell:
             "PYTHONPATH=. {PYTHON} scripts/run_synthetic.py {params.sims} "
             "{output} --seeds {params.seeds} --samples 1000 --device cpu "
@@ -365,11 +361,17 @@ def outputs(mode):
         if {"germany", "ebola"} <= set(STUDIES)
         else []
     )
-    return evidence + design + joint + real + [
-        path
-        for study in STUDIES
-        for path in [*figures(mode, study), *tables(mode, study)]
-    ]
+    return (
+        evidence
+        + design
+        + joint
+        + real
+        + [
+            path
+            for study in STUDIES
+            for path in [*figures(mode, study), *tables(mode, study)]
+        ]
+    )
 
 
 rule development:
@@ -400,8 +402,7 @@ rule germany_fetch:
     output:
         TRIANGLE,
     shell:
-        "{BDBV} germany-fetch --config {GERMANY[config]} "
-        "--out {GERMANY[data]}"
+        "{BDBV} germany-fetch --config {GERMANY[config]} " "--out {GERMANY[data]}"
 
 
 rule germany_development:
@@ -465,13 +466,13 @@ rule ebola_backtest_draws:
         f"{EBOLA['data']}/target.csv",
     output:
         EBOLA_DRAWS,
+    resources:
+        heavy=1,
     params:
         models=" ".join(EBOLA["backtest_models"]),
         n=EBOLA.get("n_samples", 100),
         folder=lambda w: os.path.abspath(f"{R}/ebola-backtest"),
         config=EBOLA["config"],
-    resources:
-        heavy=1,
     shell:
         "mkdir -p {params.folder} && "
         "sed 's/^backtest = .*/backtest = {params.n}/' {params.config} "
@@ -559,9 +560,7 @@ rule truth:
         f"{R}/{{mode}}/truth/{{study}}.csv.gz",
     params:
         rule=lambda w: (
-            "--first-after"
-            if w.study in config.get("truth_first_after", [])
-            else ""
+            "--first-after" if w.study in config.get("truth_first_after", []) else ""
         ),
     shell:
         "{PYTHON} -m paperpipe truth {params.rule} "
@@ -743,9 +742,7 @@ rule evidence:
         fig=f"{R}/{{mode}}/figures/si",
         # The live fine-tuning run, whose newest scored checkpoints are
         # shown as preliminary.
-        live=(
-            f"--live-run {config['live_run']}" if config.get("live_run") else ""
-        ),
+        live=(f"--live-run {config['live_run']}" if config.get("live_run") else ""),
     shell:
         "{PYTHON} -m paperpipe evidence {params.args} --mode {wildcards.mode} "
         "--si-dir {params.si} --fig-dir {params.fig} --out {output.yml} "

@@ -57,6 +57,7 @@ TARGETS = LOCAL["TARGETS"].split()
 
 
 rule all:
+    default_target: True
     # This machine's targets (TARGETS in config/local.env; by default
     # simulate, finetune and score). Releases and evidence pushes are
     # their own targets (`release`, `publish`, `land`).
@@ -65,7 +66,6 @@ rule all:
         rules.push.input if "push" in TARGETS else [],
         rules.finetune.input if "finetune" in TARGETS else [],
         rules.score.input if "score" in TARGETS else [],
-    default_target: True
 
 
 onerror:

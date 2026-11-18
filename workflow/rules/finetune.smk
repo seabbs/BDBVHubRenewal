@@ -76,12 +76,12 @@ def available_seeds():
 checkpoint available_batches:
     output:
         f"{RUN}/available-batches.txt",
+    localrule: True
     params:
         repo=SIM["repo"],
         rounds=lambda wc: sorted(
             {FT["held_round"], *(round_of(s) for s in training_seeds())}
         ),
-    localrule: True
     run:
         import json
 
@@ -157,9 +157,7 @@ def segment_inputs(wc):
     if Path(f"{TRAIN}/n{n}/settings.json").exists():
         return {}
     out = {
-        "sims": expand(
-            f"{RUN}/sims/settings-{{seed}}.csv", seed=segment_seeds(n)
-        ),
+        "sims": expand(f"{RUN}/sims/settings-{{seed}}.csv", seed=segment_seeds(n)),
         "seeds": f"{RUN}/seeds.txt",
     }
     if PREV[n] is not None:
@@ -185,6 +183,7 @@ rule fetch_batch:
     output:
         counts=f"{RUN}/sims/counts-{{seed}}.csv.gz",
         settings=f"{RUN}/sims/settings-{{seed}}.csv",
+    localrule: True
     params:
         source=FT["sims_from"],
         repo=SIM["repo"],
@@ -192,24 +191,21 @@ rule fetch_batch:
         sims=f"{RUN}/sims",
         src=lambda wc, input: input.get("counts", ""),
         src_settings=lambda wc, input: input.get("settings", ""),
-        there=lambda wc: hosts._at(
-            REMOTE, f"{REMOTE_ROUNDS}/r{round_of(wc.seed)}/sims"
-        ),
-    localrule: True
+        there=lambda wc: hosts._at(REMOTE, f"{REMOTE_ROUNDS}/r{round_of(wc.seed)}/sims"),
     shell:
         # Hard links where the rounds are on this machine, a copy from the
         # rounds host, else the batch's assets of its round's release.
         """
         if [ "{params.source}" = local ]; then
-          ln -f {params.src} {output.counts} 2> /dev/null || cp {params.src} {output.counts}
-          ln -f {params.src_settings} {output.settings} 2> /dev/null || cp {params.src_settings} {output.settings}
+            ln -f {params.src} {output.counts} 2>/dev/null || cp {params.src} {output.counts}
+            ln -f {params.src_settings} {output.settings} 2>/dev/null || cp {params.src_settings} {output.settings}
         elif [ "{params.source}" = remote ]; then
-          rsync -a {params.there}/counts-{wildcards.seed}.csv.gz \
-            {params.there}/settings-{wildcards.seed}.csv {params.sims}/
+            rsync -a {params.there}/counts-{wildcards.seed}.csv.gz \
+                {params.there}/settings-{wildcards.seed}.csv {params.sims}/
         else
-          gh release download {params.tag} -R {params.repo} --clobber \
-            -D {params.sims} -p counts-{wildcards.seed}.csv.gz \
-            -p settings-{wildcards.seed}.csv
+            gh release download {params.tag} -R {params.repo} --clobber \
+                -D {params.sims} -p counts-{wildcards.seed}.csv.gz \
+                -p settings-{wildcards.seed}.csv
         fi
         gzip -t {output.counts}
         """
@@ -237,15 +233,17 @@ rule train_segment:
         unpack(segment_inputs),
     output:
         settings=protected(f"{TRAIN}/n{{n}}/settings.json"),
-        adapter=protected(
-            f"{TRAIN}/n{{n}}/finetuned-ckpt/adapter_model.safetensors"
-        ),
+        adapter=protected(f"{TRAIN}/n{{n}}/finetuned-ckpt/adapter_model.safetensors"),
     log:
         f"{TRAIN}/n{{n}}.log",
+    # In one pool the trainer, the run's critical path, goes first: before
+    # simulation (15) and checkpoint scoring (10 and below).
+    priority: 20
+    resources:
+        gpu=1,
     params:
         prev_args=lambda wc: (
-            f"--prev {TRAIN}/n{PREV[int(wc.n)]}/state "
-            f"--prev-n {PREV[int(wc.n)]}"
+            f"--prev {TRAIN}/n{PREV[int(wc.n)]}/state " f"--prev-n {PREV[int(wc.n)]}"
             if PREV[int(wc.n)]
             else ""
         ),
@@ -253,8 +251,7 @@ rule train_segment:
         release_args=lambda wc: (
             "--release-rounds "
             + " ".join(
-                str(r)
-                for r in sorted({round_of(s) for s in segment_seeds(int(wc.n))})
+                str(r) for r in sorted({round_of(s) for s in segment_seeds(int(wc.n))})
             )
             + f" --repo {SIM['repo']}"
             if FT["sims_from"] == "release"
@@ -268,45 +265,40 @@ rule train_segment:
         stop_from=FT["outbreaks"] + 1,
         blocks=FT["cuts"] * FT["draws"],
         sources=" ".join(FT["sources"]),
-        real=f"--real-validation {FT['real_validation']}"
-        if FT["real_validation"]
-        else "",
-        bias=f"--series-bias --bias-lr {FT['bias_lr']}"
-        if FT["series_bias"]
-        else "",
+        real=(
+            f"--real-validation {FT['real_validation']}"
+            if FT["real_validation"]
+            else ""
+        ),
+        bias=f"--series-bias --bias-lr {FT['bias_lr']}" if FT["series_bias"] else "",
         device=machine.device(LOCAL),
         hf_home=LOCAL.get("HF_HOME", "output/finetune/hf"),
         watermark=LOCAL.get("MPS_HIGH_WATERMARK", "0.85"),
-    resources:
-        gpu=1,
-    # In one pool the trainer, the run's critical path, goes first: before
-    # simulation (15) and checkpoint scoring (10 and below).
-    priority: 20
     shell:
         # The run's own state resumes it; the state kept with the prefix
         # before replaces it if missing or behind (flowlib.segments).
         """
         uv run python workflow/scripts/prepare_segment.py {TRAIN} {RUN} \
-          {params.rounds} {params.prev_args} {params.release_args} > {log}
+            {params.rounds} {params.prev_args} {params.release_args} >{log}
         DEVICE={params.device} HF_HOME={params.hf_home} HF_HUB_OFFLINE=1 \
-        PYTORCH_MPS_HIGH_WATERMARK_RATIO={params.watermark} \
-        PYTORCH_MPS_LOW_WATERMARK_RATIO=0.6 MPLCONFIGDIR="${{TMPDIR:-/tmp}}" \
-        uv run --group chronos python scripts/finetune_stream.py \
-          {RUN}/sims {TRAIN} --grid {FT[grid]} --seed-list {input.seeds} \
-          --held-out-seeds {params.held} --holdout {FT[holdout]} \
-          --outbreaks {FT[outbreaks]} --prefixes {params.prefixes} \
-          --stop-from {params.stop_from} \
-          --blocks-per-simulation {params.blocks} \
-          --draws-per-simulation {FT[draws]} --subset-seed {FT[subset_seed]} \
-          --learning-rate {FT[learning_rate]} \
-          --sources {params.sources} \
-          --univariate-share {FT[univariate_share]} {params.real} \
-          --note "{FT[note]}" --chunk {FT[chunk]} \
-          --exclude {RUN}/excluded.csv {params.bias} \
-          --until {wildcards.n} >> {log} 2>&1
+            PYTORCH_MPS_HIGH_WATERMARK_RATIO={params.watermark} \
+            PYTORCH_MPS_LOW_WATERMARK_RATIO=0.6 MPLCONFIGDIR="${{TMPDIR:-/tmp}}" \
+            uv run --group chronos python scripts/finetune_stream.py \
+            {RUN}/sims {TRAIN} --grid {FT[grid]} --seed-list {input.seeds} \
+            --held-out-seeds {params.held} --holdout {FT[holdout]} \
+            --outbreaks {FT[outbreaks]} --prefixes {params.prefixes} \
+            --stop-from {params.stop_from} \
+            --blocks-per-simulation {params.blocks} \
+            --draws-per-simulation {FT[draws]} --subset-seed {FT[subset_seed]} \
+            --learning-rate {FT[learning_rate]} \
+            --sources {params.sources} \
+            --univariate-share {FT[univariate_share]} {params.real} \
+            --note "{FT[note]}" --chunk {FT[chunk]} \
+            --exclude {RUN}/excluded.csv {params.bias} \
+            --until {wildcards.n} >>{log} 2>&1
         # An optional notification line; it never fails the rule.
         uv run python workflow/scripts/segment_saved.py {output.settings} \
-          {wildcards.n} || true
+            {wildcards.n} || true
         """
 
 
@@ -321,9 +313,9 @@ rule checkpoint_check:
         f"{TRAIN}/n{CHECK}/settings.json",
     output:
         f"{RUN}/reports/n{CHECK}-check.txt",
+    localrule: True
     params:
         zero_shot=FT["zero_shot_real"],
-    localrule: True
     run:
         import json
 
@@ -380,14 +372,14 @@ rule finetune:
     input:
         lambda wc: expand(f"{TRAIN}/n{{n}}/settings.json", n=to_train()),
         # A machine that publishes as it trains (PUBLISH in local.env).
-        lambda wc: expand(f"{TRAIN}/n{{n}}/published.json", n=to_train())
-        if LOCAL["PUBLISH"]
-        else [],
+        lambda wc: (
+            expand(f"{TRAIN}/n{{n}}/published.json", n=to_train())
+            if LOCAL["PUBLISH"]
+            else []
+        ),
         # The check once its checkpoint is asked for, so one segment a run
         # does not train on to it.
-        lambda wc: [f"{RUN}/reports/n{CHECK}-check.txt"]
-        if CHECK in to_train()
-        else [],
+        lambda wc: [f"{RUN}/reports/n{CHECK}-check.txt"] if CHECK in to_train() else [],
 
 
 rule dashboard:
@@ -397,5 +389,4 @@ rule dashboard:
         f"{RUN}/reports/dashboard.html",
     localrule: True
     shell:
-        "uv run --group paper python workflow/scripts/dashboard.py "
-        "--once {output}"
+        "uv run --group paper python workflow/scripts/dashboard.py " "--once {output}"

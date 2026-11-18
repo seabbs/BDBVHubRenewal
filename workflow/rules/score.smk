@@ -29,9 +29,9 @@ checkpoint release_list:
     # Lists the releases to score; `task score` reruns it.
     output:
         f"{CACHE}/releases.json",
+    localrule: True
     params:
         repo=SIM["repo"],
-    localrule: True
     shell:
         "gh release list -R {params.repo} --limit 500 "
         "--json tagName,publishedAt > {output}"
@@ -106,14 +106,14 @@ rule score_bdbv:
         f"{CACHE}/bdbv/{{label}}.done",
     log:
         f"{CACHE}/log/bdbv-{{label}}.log",
-    params:
-        prefix=lambda wc, resources: job_prefix(resources.mem_mb),
-        env=unit_env,
     priority: unit_priority(10)
     threads: UNIT_THREADS
     resources:
         mem_mb=SC["mem_mb"],
         gpu=1,
+    params:
+        prefix=lambda wc, resources: job_prefix(resources.mem_mb),
+        env=unit_env,
     shell:
         unit_shell("bdbv")
 
@@ -123,14 +123,14 @@ rule score_germany:
         f"{CACHE}/germany/{{label}}.done",
     log:
         f"{CACHE}/log/germany-{{label}}.log",
-    params:
-        prefix=lambda wc, resources: job_prefix(resources.mem_mb),
-        env=unit_env,
     priority: unit_priority(5)
     threads: UNIT_THREADS
     resources:
         mem_mb=SC["mem_mb"],
         gpu=1,
+    params:
+        prefix=lambda wc, resources: job_prefix(resources.mem_mb),
+        env=unit_env,
     shell:
         unit_shell("germany")
 
@@ -154,14 +154,14 @@ rule score_germany_forecast:
         f"{CACHE}/germany_forecast/{{label}}.done",
     log:
         f"{CACHE}/log/germany_forecast-{{label}}.log",
-    params:
-        prefix=lambda wc, resources: job_prefix(resources.mem_mb),
-        env=unit_env,
     priority: unit_priority(1)
     threads: UNIT_THREADS
     resources:
         mem_mb=SC["mem_mb"],
         gpu=1,
+    params:
+        prefix=lambda wc, resources: job_prefix(resources.mem_mb),
+        env=unit_env,
     shell:
         unit_shell("germany_forecast")
 
@@ -192,18 +192,18 @@ rule score_table:
     output:
         evidence=f"{CACHE}/tables/checkpoint-scores.csv",
         checkpoints=f"{CACHE}/tables/checkpoints.csv",
+    localrule: True
     params:
         labels=lambda wc: " ".join(checkpoint_labels()),
         evidence=SC["evidence"],
         checkpoints=SC["checkpoints"],
-    localrule: True
     shell:
         # Rows of other rules in the committed tables are kept.
         """
         [ -f {params.evidence} ] && cp {params.evidence} {output.evidence}
         [ -f {params.checkpoints} ] && cp {params.checkpoints} {output.checkpoints}
         uv run python scripts/checkpoint_scores.py table {CACHE} \
-          {output.evidence} {output.checkpoints} {params.labels}
+            {output.evidence} {output.checkpoints} {params.labels}
         """
 
 
@@ -214,11 +214,11 @@ rule land:
         rules.score_table.output,
     output:
         touch(f"{CACHE}/tables/landed"),
+    localrule: True
     params:
         evidence=SC["evidence"],
         checkpoints=SC["checkpoints"],
         branch=SC["branch"],
-    localrule: True
     run:
         import shutil
 
@@ -227,9 +227,7 @@ rule land:
                 ["git", *args], check=True, capture_output=True, text=True
             ).stdout.strip()
 
-        notify.check_branch(
-            git("rev-parse", "--abbrev-ref", "HEAD"), params.branch
-        )
+        notify.check_branch(git("rev-parse", "--abbrev-ref", "HEAD"), params.branch)
         shutil.copy(input[0], params.evidence)
         shutil.copy(input[1], params.checkpoints)
         git("add", params.evidence, params.checkpoints)

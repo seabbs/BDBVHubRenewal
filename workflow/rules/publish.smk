@@ -13,9 +13,9 @@ rule verify_checkpoint:
         adapter=f"{TRAIN}/n{{n}}/finetuned-ckpt/adapter_model.safetensors",
     output:
         f"{TRAIN}/n{{n}}/verified.txt",
+    localrule: True
     params:
         where=f"{TRAIN}/n{{n}}",
-    localrule: True
     shell:
         "uv run python scripts/finetune_verify.py {params.where} > {output}"
 
@@ -25,15 +25,15 @@ rule publish_checkpoint:
         rules.verify_checkpoint.output,
     output:
         f"{TRAIN}/n{{n}}/published.json",
+    localrule: True
     params:
         where=f"{TRAIN}/n{{n}}",
-    localrule: True
     shell:
         """
         uv run python workflow/scripts/publish_checkpoint.py {params.where} {output}
         # An optional notification line; it never fails the rule.
         uv run python workflow/scripts/notify.py "checkpoint n{wildcards.n} published:" \
-          "$(cat {output})" || true
+            "$(cat {output})" || true
         """
 
 
