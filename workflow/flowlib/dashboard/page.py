@@ -53,6 +53,9 @@ class Context:
     outbreaks: int
     learning_rate: float
     datasets: Sequence[Mapping[str, Any]] = ()
+    # The run's checkpoint sizes when no trainer command line names them
+    # (the workflow config's `finetune.prefixes`).
+    prefixes: Sequence[int] = logs.PREFIXES
     mailbox: Path | None = None
     mail_filter: str = ""
     mail_lines: int = 400
@@ -197,8 +200,24 @@ class Status:
         return _dur((self.at(n) - self.step) / self.rate)
 
 
-def live_status(live: Run, rows: list[dict[str, Any]]) -> Status:
-    """Return the live run's step, speed, schedule and checkpoints."""
+def run_sizes(prefixes: Sequence[int], outbreaks: int) -> list[int]:
+    """Return a run's checkpoint sizes as the trainer makes them.
+
+    The prefixes below the run's simulations, then the run's simulations.
+    """
+    return sorted({int(p) for p in prefixes if p < outbreaks} | {outbreaks})
+
+
+def live_status(
+    live: Run,
+    rows: list[dict[str, Any]],
+    default: Sequence[int] = logs.PREFIXES,
+) -> Status:
+    """Return the live run's step, speed, schedule and checkpoints.
+
+    `default` gives the checkpoint sizes when no trainer command line
+    names them.
+    """
     step = rows[-1]["step"] if rows else None
     last_t = rows[-1]["t"] if rows else None
     recent = [r for r in rows if r["t"] >= (last_t or 0) - 1800]
@@ -210,7 +229,7 @@ def live_status(live: Run, rows: list[dict[str, Any]]) -> Status:
     folder = live.folder
     args = logs.trainer_args(folder) if folder else ""
     params = (
-        training.run_params(folder, training.history(live), step, args)
+        training.run_params(folder, training.history(live), step, args, default)
         if folder
         else {
             "lr_steps": 0,
@@ -218,7 +237,7 @@ def live_status(live: Run, rows: list[dict[str, Any]]) -> Status:
             "groups": {},
             "current": {},
             "logged": {},
-            "prefixes": list(logs.PREFIXES),
+            "prefixes": list(default),
         }
     )
     sizes = params["prefixes"]
@@ -734,7 +753,7 @@ def _parts(ctx: Context) -> tuple[Run, str, str, list]:
         raise ValueError("no runs to show: configure at least one run")
     live = next((r for r in ctx.runs if r.live), ctx.runs[0])
     rows = ctx.log(live)
-    st = live_status(live, rows)
+    st = live_status(live, rows, run_sizes(ctx.prefixes, ctx.outbreaks))
     tiles, bar = status_tiles(st, live)
     status = (
         logs.CACHE.get(live.folder / "train/stream-status.json") or {}
