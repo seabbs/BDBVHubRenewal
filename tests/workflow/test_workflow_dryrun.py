@@ -212,6 +212,41 @@ def test_the_live_run_switches_over_without_retraining(tmp_path):
     assert jobs["train_segment"] == 1
 
 
+def priorities(tmp_path, *targets, config=None):
+    """Return each rule's job priority in a dry run (0 when unset)."""
+    local = tmp_path / "local.env"
+    local.write_text(f"ROOT={tmp_path}\nHOST_NAME=test-host\n")
+    overlay = tmp_path / "overlay.yaml"
+    overlay.write_text(yaml.safe_dump(config or {}))
+    out = subprocess.run(
+        [str(SNAKEMAKE), *targets, "-s", "workflow/Snakefile", "-n",
+         "--cores", "1", "--workflow-profile", "workflow/profiles/ci",
+         "--configfile", str(overlay)],
+        cwd=ROOT,
+        env={"PATH": str(SNAKEMAKE.parent) + ":/usr/bin:/bin",
+             "HOME": str(tmp_path), "LOCAL_CONFIG": str(local)},
+        capture_output=True,
+        text=True,
+    )  # fmt: skip
+    assert out.returncode == 0, out.stderr + out.stdout
+    found = {}
+    for block in re.split(r"\n(?=rule \w+:)", out.stdout):
+        rule = re.match(r"rule (\w+):", block)
+        if rule:
+            got = re.search(r"priority: (\d+)", block)
+            found[rule[1]] = int(got[1]) if got else 0
+    return found
+
+
+def test_the_trainer_goes_first_then_simulation_then_scoring(tmp_path):
+    # One pool per machine: when jobs compete for cores or the GPU, the
+    # trainer (the run's critical path) goes first, then the simulations
+    # it trains on, then checkpoint scoring (score.smk, 10 and below).
+    got = priorities(tmp_path, "finetune", config=FT)
+    assert got["train_segment"] == 20
+    assert got["simulate_batch"] == 15
+
+
 def test_publish_verifies_then_releases_each_checkpoint(tmp_path):
     for n in (250, 500):
         _checkpoint(tmp_path, n)

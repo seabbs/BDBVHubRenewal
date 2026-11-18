@@ -29,6 +29,41 @@ def test_every_target_uses_the_default_profile():
     assert all("workflow/profiles/default" in cmd for _, cmd in got)
 
 
+def snakemake_targets(cmd):
+    """The targets of a planned Snakemake command."""
+    start = cmd.index("snakemake") + 1
+    return cmd[start : cmd.index("--workflow-profile")]
+
+
+def test_the_pool_targets_are_one_snakemake_run():
+    # One run over the machine's whole budget, so a free core or the GPU
+    # takes whichever queued job fits.
+    got = schedule.plan(
+        {"SCHEDULE_TARGETS": "simulate finetune score land publish"}
+    )
+    assert [t for t, _ in got] == ["simulate finetune score", "land", "publish"]
+    pool = got[0][1]
+    assert snakemake_targets(pool) == ["simulate", "finetune", "score"]
+    assert pool.count("--workflow-profile") == 1
+    assert "release_list" in pool
+
+
+def test_the_outward_targets_keep_their_order_after_the_pool():
+    got = schedule.plan({"SCHEDULE_TARGETS": "publish simulate release"})
+    assert [t for t, _ in got] == ["simulate", "publish", "release"]
+
+
+def test_a_pool_without_score_lists_no_releases():
+    got = schedule.plan({"SCHEDULE_TARGETS": "simulate finetune"})
+    assert "release_list" not in got[0][1]
+
+
+def test_land_and_release_need_the_pool_publish_does_not():
+    # publish reads only saved checkpoints, so it never retries a failed
+    # job; land and release would rerun failed scoring or simulation.
+    assert {"land", "release"} == schedule.NEEDS_POOL
+
+
 def test_no_targets_means_nothing_runs():
     assert schedule.plan({"SCHEDULE_TARGETS": ""}) == []
 
