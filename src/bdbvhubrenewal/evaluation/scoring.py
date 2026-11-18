@@ -49,6 +49,7 @@ from typing import Final
 
 import numpy as np
 import pandas as pd
+import scoringrules as sr  # type: ignore[import-untyped]
 from numpy.typing import ArrayLike, NDArray
 from scipy.spatial.distance import pdist
 
@@ -62,6 +63,7 @@ __all__ = [
     "energy_scores",
     "relative_skill",
     "scale_of",
+    "score_cells",
     "score_forecasts",
     "score_quantiles",
     "score_sample",
@@ -408,6 +410,71 @@ def score_sample(obs: float, samples: ArrayLike) -> dict[str, float]:
     return out
 
 
+def score_cells(
+    obs: ArrayLike,
+    samples: ArrayLike,
+    coverage: Sequence[int] = (50, 90),
+) -> dict[str, NDArray[np.float64]]:
+    """Return every score of many forecasts at once.
+
+    The scores of `score_sample` for each row, computed on the whole
+    array: WIS and log WIS from the sample quantiles, fair CRPS and log
+    CRPS (scoringrules' `crps_ensemble`), the absolute error of the
+    median, coverage and bias.
+
+    Parameters
+    ----------
+    obs : array-like
+        The observed values, `[N]`.
+    samples : array-like
+        Each forecast's draws, `[N, m]`.
+    coverage : sequence of int
+        Central interval widths in percent, each a `coverage_<p>` column.
+
+    Returns
+    -------
+    dict
+        `[N]` arrays keyed by `SCORE_COLUMNS` (with the `coverage`
+        columns asked for).
+    """
+    y = np.asarray(obs, dtype=np.float64)
+    x = np.asarray(samples, dtype=np.float64)
+    if x.ndim != 2 or x.shape[1] == 0 or x.shape[0] != y.size:
+        raise ValueError(f"Need [N, m] samples for N={y.size}, not {x.shape}.")
+    tau = QUANTILE_LEVELS
+    out = wis_quantile(y, np.quantile(x, tau, axis=1).T, tau)
+    ly, lx = np.log1p(y), np.log1p(x)
+    out["log_wis"] = wis_quantile(ly, np.quantile(lx, tau, axis=1).T, tau)[
+        "wis"
+    ]
+    out["crps"] = _crps(y, x)
+    out["log_crps"] = _crps(ly, lx)
+    out["ae_median"] = np.abs(np.median(x, axis=1) - y)
+    for p in coverage:
+        level = p / 100
+        lo, hi = np.quantile(x, [(1 - level) / 2, (1 + level) / 2], axis=1)
+        out[f"coverage_{p}"] = ((lo <= y) & (y <= hi)).astype(np.float64)
+    n_lt = np.sum(x < y[:, None], axis=1)
+    n_eq = np.sum(x == y[:, None], axis=1)
+    out["bias"] = 1 - (2 * n_lt + n_eq) / x.shape[1]
+    return out
+
+
+def _crps(
+    y: NDArray[np.float64], x: NDArray[np.float64]
+) -> NDArray[np.float64]:
+    """Fair CRPS of each row; one draw has no spread term.
+
+    scoringrules' `pwm` estimator equals its `fair` one, in sorted
+    O(m log m) form rather than over every pair of draws.
+    """
+    if x.shape[1] == 1:
+        return np.abs(x[:, 0] - y)
+    return np.asarray(
+        sr.crps_ensemble(y, x, m_axis=-1, estimator="pwm"), dtype=np.float64
+    )
+
+
 def score_forecasts(
     forecasts: pd.DataFrame,
     truth: pd.DataFrame,
@@ -456,23 +523,29 @@ def score_forecasts(
     >>> scores = score_forecasts(forecasts, truth)
     >>> summarise_scores(scores, by=["model"])
     """
-    keys = list(keys)
+    keys = [*keys, "horizon"]
     on = [c for c in truth.columns if c != "truth"]
     merged = forecasts.merge(truth, on=on, how="inner")
-    rows: list[dict[str, object]] = []
-    for key, grp in merged.groupby([*keys, "horizon"], sort=True):
-        obs = float(grp["truth"].iloc[0])
-        scores = score_sample(obs, grp["value"].to_numpy())
-        ids: dict[str, object] = dict(zip([*keys, "horizon"], key, strict=True))
-        rows.append(
-            {
-                **ids,
-                "truth": obs,
-                "n_samples": len(grp),
-                **scores,
-            }
+    if merged.empty:
+        return pd.DataFrame(
+            columns=[*keys, "truth", "n_samples", *SCORE_COLUMNS]
         )
-    return pd.DataFrame(rows)
+    group = merged.groupby(keys, sort=True)
+    merged["_cell"] = group.ngroup()
+    cells = group.agg(truth=("truth", "first"), n_samples=("value", "size"))
+    cells = cells.reset_index()
+    merged = merged.sort_values("_cell", kind="stable")
+    parts = []
+    # One array per draw count: cells with m draws form an [N, m] array.
+    for _, idx in cells.groupby("n_samples").groups.items():
+        sub = cells.loc[idx]
+        values = merged.loc[merged["_cell"].isin(sub.index), "value"]
+        draws = values.to_numpy(dtype=np.float64).reshape(len(sub), -1)
+        scores = score_cells(sub["truth"].to_numpy(), draws)
+        parts.append(sub.assign(**{c: scores[c] for c in SCORE_COLUMNS}))
+    out = pd.concat(parts).sort_index()
+    out["truth"] = out["truth"].astype(float)
+    return out.reset_index(drop=True)
 
 
 def score_quantiles(

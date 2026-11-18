@@ -168,6 +168,17 @@ def test_relative_divides_by_the_baseline_by_level():
     assert list(got.columns) == ck.COLUMNS
 
 
+def test_merge_keeps_other_checkpoints_rule_rows():
+    old = pd.DataFrame(
+        [{"study": "ebola", "rule": ck.RULE, "checkpoint": "old", "level": "x"}]
+    )
+    new = pd.DataFrame(
+        [{"study": "ebola", "rule": ck.RULE, "checkpoint": "abc", "level": "y"}]
+    )
+    got = ck.merge_evidence(old, new)
+    assert sorted(got["checkpoint"]) == ["abc", "old"]
+
+
 def test_merge_keeps_other_rules_rows_and_replaces_the_rules():
     old = pd.DataFrame(
         [
