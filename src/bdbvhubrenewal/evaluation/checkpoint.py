@@ -71,6 +71,8 @@ COMPLETE: Final = ("fm_chronos_daily_complete", "fm_chronos_weekly_complete")
 N_DRAWS: Final = 1000
 SCORED_FROM: Final = "2026-11-21"
 """The first scored BDBV round; origins from it are never scored here."""
+GERMANY_CHUNK: Final = 20
+"""German dates forecast together (`germany_unit`)."""
 FINAL_OUTBREAKS: Final = 8400
 """The reported model is the live run's final checkpoint."""
 FINAL_GRID: Final = "r5"
@@ -455,6 +457,7 @@ def bdbv_unit(
         ModelUnavailableError,
         add_national,
     )
+    from bdbvhubrenewal.forecasters.foundation import FoundationModel, prefetch
 
     _pin(label)
     config = bt.load_config()
@@ -466,17 +469,23 @@ def bdbv_unit(
         load_daily(data),
         zones=load_zone_data(data) if zones else None,
     )
-    models = [_common(get_model(m)) for m in label_models(label)]
     root = cache / ("zones" if zones else "bdbv") / label
     root.mkdir(parents=True, exist_ok=True)
-    for origin in bdbv_origins(data):
+    todo = {
+        o: dataclasses.replace(tasks[o], n_samples=N_DRAWS, seed=config.seed)
+        for o in bdbv_origins(data)
+        if not (root / f"{o}.csv.gz").exists()
+    }
+    # Chronos-2 is predicted for every origin in a few batched passes.
+    models = [
+        prefetch(m, list(todo.values()))
+        if isinstance(m, FoundationModel)
+        else m
+        for m in (_common(get_model(m)) for m in label_models(label))
+    ]
+    for origin, task in todo.items():
         path = root / f"{origin}.csv.gz"
-        if path.exists():
-            continue
         start = time.monotonic()
-        task = dataclasses.replace(
-            tasks[origin], n_samples=N_DRAWS, seed=config.seed
-        )
         frames = []
         for model in models:
             try:
@@ -513,19 +522,29 @@ def germany_unit(cache: Path, label: str) -> None:
     root = cache / "germany" / label
     root.mkdir(parents=True, exist_ok=True)
     dates = de.nowcast_dates(config, held_out=False)
+    todo = [d for d in dates if not (root / f"{d}.csv.gz").exists()]
     models = list(label_models(label))
-    for i, date in enumerate(dates, 1):
-        path = root / f"{date}.csv.gz"
-        if path.exists():
-            continue
+    # Dates are forecast GERMANY_CHUNK at a time, Chronos-2 predicted for
+    # all of them in a few batched passes, and written one file a date so
+    # a stopped run resumes.
+    for i in range(0, len(todo), GERMANY_CHUNK):
+        chunk = todo[i : i + GERMANY_CHUNK]
         start = time.monotonic()
         fc = de.germany_forecasts(
-            models, triangle, [date], config.n_samples, config.seed
+            models, triangle, chunk, config.n_samples, config.seed
         )
-        _write(de.with_truth(fc, triangle, config.truth_delay), path)
+        fc = de.with_truth(fc, triangle, config.truth_delay)
+        for date in chunk:
+            mine = fc.loc[fc["origin"] == date].reset_index(drop=True)
+            _write(mine, root / f"{date}.csv.gz")
         _free()
         took = time.monotonic() - start
-        print(f"germany {label} {date} ({i}/{len(dates)}): {took:.0f} s")
+        done = len(dates) - len(todo) + i + len(chunk)
+        print(
+            f"germany {label} {len(chunk)} dates to {chunk[-1]} "
+            f"({done}/{len(dates)}): {took:.0f} s",
+            flush=True,
+        )
     print(f"germany {label} done", flush=True)
 
 

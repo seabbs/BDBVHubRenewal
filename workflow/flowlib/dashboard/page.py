@@ -24,7 +24,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from . import bias, learning, logs, nowcasts, scores, svg, training
+from . import bias, learning, logs, nowcasts, scores, svg, training, wis
 from .mirror import Source
 from .runs import Reference, Run, split_label
 
@@ -32,6 +32,8 @@ ASSETS = Path(__file__).with_name("page")
 MODES = ("raw", "start", "base")
 STALE = 600
 """Seconds after which the last log line is stale."""
+ADAPTER = "finetuned-ckpt/adapter_model.safetensors"
+"""A checkpoint's adapter, which the trainer writes before it scores it."""
 
 
 def _asset(name: str) -> str:
@@ -247,12 +249,14 @@ def live_status(
         for n in sizes
         if folder and (folder / f"train/n{n}/settings.json").exists()
     }
+    # Written but not yet scored at the checkpoint: its adapter is saved.
+    # Snakemake makes a segment's empty output folders when it starts.
     pending = [
         n
         for n in sizes
         if n not in saved
         and folder
-        and (folder / f"train/n{n}/finetuned-ckpt").exists()
+        and (folder / f"train/n{n}/{ADAPTER}").exists()
     ]
     nxt = next((n for n in sizes if n not in saved and n not in pending), None)
     return Status(step, rate, last_t, params, spo, saved, pending, nxt)
@@ -266,19 +270,19 @@ def status_tiles(st: Status, live: Run) -> tuple[str, str]:
     trainer, alive = logs.trainer_state(folder) if folder else ("n/a", None)
     age = now - st.last_t if st.last_t else None
     stale = age is not None and age > STALE
+    # The next prefix with the simulations done of it, and when it is due;
+    # a written checkpoint still being scored is named as itself.
+    done = f"n{trained:.0f} / " if trained is not None else ""
+    next_v = f"{done}n{st.nxt}" if st.nxt else "none"
+    eta = f"ETA {st.eta(st.nxt)}" if st.nxt else ""
+    next_s = f"step {st.at(st.nxt)}, {eta}" if st.nxt else ""
     if st.pending:
         since = datetime.fromtimestamp(
-            (folder / f"train/n{st.pending[0]}").stat().st_mtime
+            (folder / f"train/n{st.pending[0]}/{ADAPTER}").stat().st_mtime
         ).strftime("%H:%M")
-        next_v = f"n{st.pending[0]}: scoring since {since}"
-        next_s = (
-            f"then n{st.nxt} at step {st.at(st.nxt)}, ETA {st.eta(st.nxt)}"
-            if st.nxt
-            else ""
+        next_s = "; ".join(
+            x for x in (next_s, f"n{st.pending[0]} scoring since {since}") if x
         )
-    else:
-        next_v = f"n{st.nxt}" if st.nxt else "none"
-        next_s = f"step {st.at(st.nxt)}, ETA {st.eta(st.nxt)}" if st.nxt else ""
     p = st.params
     rates = "\n".join(f"{g} {v:.2e}" for g, v in p["current"].items()) or "n/a"
     if p["lr_steps"]:
@@ -340,7 +344,8 @@ def status_tiles(st: Status, live: Run) -> tuple[str, str]:
     )
     bar = (
         f"<span class=bt><span class=k>step</span> <b>{st.step}</b> "
-        f"<span class=k>next</span> <b>{html.escape(next_v)}</b></span>"
+        f"<span class=k>next</span> <b>{html.escape(next_v)}</b>"
+        f"{' ' + html.escape(eta) if eta else ''}</span>"
         if st.step is not None
         else ""
     )
@@ -634,6 +639,18 @@ def nowcasts_section(
     )
 
 
+def wis_section(ctx: Context, rows: Sequence[Mapping[str, str]]) -> str:
+    """Return the mean WIS bars by component; none before any are scored.
+
+    Runs' bars are of the view's default source (`dashboard.defaults`).
+    """
+    source = ((ctx.view or {}).get("defaults") or {}).get("source")
+    bars = scores.wis_bars(
+        rows, ctx.runs, ctx.references, ctx.rule, source, ctx.excluded
+    )
+    return wis.section(bars, ctx.view or {}, tip)
+
+
 def mail_section(ctx: Context) -> str:
     """Return the notes file's last matching lines; none without one."""
     if not ctx.mailbox:
@@ -802,15 +819,23 @@ def _parts(ctx: Context) -> tuple[Run, str, str, list]:
         ),
         ("nowcasts", "Nowcasts", nowcasts_section(ctx, sizes, builts), True),
     ]
+    bars = wis_section(ctx, score_rows)
+    if bars:
+        parts.append(("wis", "Mean WIS", bars, True))
     if mail:
         parts.append(("mailbox", "Recent activity", mail, True))
     tables = tables_section(ctx, info) + notes_section(ctx)
     parts.append(("tables", "Tables", tables, False))
-    bar = f"{bar}<span class=mut>{datetime.now():%H:%M:%S}</span>"
+    bar = f"{bar} <span class=mut>{datetime.now():%H:%M:%S}</span>"
     return live, bar, selector_data(ctx, builts), parts
 
 
-NAV = {"status": "Status", "mailbox": "Activity", "learning": "Learning"}
+NAV = {
+    "status": "Status",
+    "mailbox": "Activity",
+    "learning": "Learning",
+    "wis": "WIS",
+}
 """Short names in the top bar, where they differ from the section titles."""
 
 

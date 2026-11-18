@@ -3,6 +3,7 @@
 import csv
 import gzip
 import json
+import re
 
 import pytest
 
@@ -285,3 +286,52 @@ def test_the_run_size_comes_from_the_config_without_a_trainer(tmp_path):
     planned = page.run_sizes(ctx.prefixes, ctx.outbreaks)
     st = page.live_status(ctx.runs[0], ctx.log(ctx.runs[0]), planned)
     assert st.params["prefixes"][-2:] == [8000, 8400]
+
+
+def test_mean_wis_bars_show_once_the_table_has_components(tmp_path):
+    ctx = _machine(tmp_path)
+    assert "<h2>Mean WIS</h2>" not in page.build(ctx)
+    table = tmp_path / "scores" / "tables" / "checkpoint-scores.csv"
+    with table.open() as f:
+        rows = list(csv.DictReader(f))
+    parts = ("wis", "dispersion", "underprediction", "overprediction")
+    rows[0] |= dict(zip(parts, ("1.0", "0.5", "0.2", "0.3"), strict=True))
+    with table.open("w") as f:
+        w = csv.DictWriter(f, [*rows[0]])
+        w.writeheader()
+        w.writerows(rows)
+    ctx.view["defaults"]["source"] = "daily"
+    out = page.build(ctx)
+    assert "<h2>Mean WIS</h2>" in out
+    assert '<a href="#wis">WIS</a>' in out
+    assert "Germany, national" in out
+    assert "my run n250" in out
+    assert "wis" in page.sections(ctx)
+
+
+def test_a_segment_s_empty_folder_is_not_a_checkpoint_being_scored(tmp_path):
+    ctx = _machine(tmp_path)
+    folder = ctx.runs[0].folder
+    # Snakemake makes the next segment's output folders when it starts.
+    (folder / "train" / "n500" / "finetuned-ckpt").mkdir(parents=True)
+    out = page.build(ctx)
+    assert "scoring since" not in out
+    bar = out.split("id=livebar>", 1)[1].split("</span></span>", 1)[0]
+    # Simulations done of the next prefix, and when it is due.
+    assert re.search(r"n\d+ / n500", bar)
+    assert "ETA" in bar
+
+
+def test_a_written_checkpoint_is_scored_as_itself_not_as_the_next(tmp_path):
+    ctx = _machine(tmp_path)
+    ckpt = ctx.runs[0].folder / "train" / "n500" / "finetuned-ckpt"
+    ckpt.mkdir(parents=True)
+    (ckpt / "adapter_model.safetensors").write_bytes(b"")
+    out = page.build(ctx)
+    assert re.search(r"n500 scoring since \d\d:\d\d", out)
+    assert re.search(r"n\d+ / n750", out)
+
+
+def test_the_bar_s_clock_is_spaced_from_the_status(tmp_path):
+    bar = page.sections(_machine(tmp_path))["bar"]
+    assert "</span> <span class=mut>" in bar

@@ -35,6 +35,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Final
 
+import numpy as np
 import pandas as pd
 
 from bdbvhubrenewal.data.dates import as_date, epiweek_end
@@ -228,7 +229,10 @@ def _shift(nowcast_date: str) -> dt.timedelta:
 
 
 def _moved(dates: pd.Series, shift: dt.timedelta) -> pd.Series:
-    return (pd.to_datetime(dates) + shift).dt.date.astype(str)
+    """Move ISO dates by `shift`, each distinct date once."""
+    codes, unique = pd.factorize(dates)
+    moved = (pd.to_datetime(unique) + shift).strftime("%Y-%m-%d")
+    return pd.Series(np.asarray(moved)[codes], index=dates.index)
 
 
 def nowcast_tasks(
@@ -275,12 +279,7 @@ def nowcast_tasks(
     daily = pd.DataFrame(
         {
             "vintage": vintage,
-            "location": [
-                place_code(loc, age)
-                for loc, age in zip(
-                    rows["location"], rows["age_group"], strict=True
-                )
-            ],
+            "location": _place_codes(rows["location"], rows["age_group"]),
             "onset_date": _moved(rows["reference_date"], shift),
             "observed": rows["confirm"],
             "imputed": 0,
@@ -288,7 +287,7 @@ def nowcast_tasks(
         }
     )[_DAILY]
     weekly = _weekly(daily)
-    present = set(daily["location"])
+    present = set(daily["location"].unique())
     groups = (
         tuple(place_code(s) for s in STATES if place_code(s) in present),
         tuple(
@@ -326,6 +325,20 @@ def nowcast_tasks(
     return tasks
 
 
+def _place_codes(locations: pd.Series, ages: pd.Series) -> np.ndarray:
+    """Return `place_code` of each row, each distinct pair once."""
+    loc, locs = pd.factorize(locations)
+    age, ages_ = pd.factorize(ages)
+    pair = loc * len(ages_) + age
+    codes, unique = pd.factorize(pair)
+    locs_, ages_l = list(locs), list(ages_)
+    names = [
+        place_code(locs_[p // len(ages_l)], ages_l[p % len(ages_l)])
+        for p in unique
+    ]
+    return np.array(names)[codes]
+
+
 def _carried(rows: pd.DataFrame) -> pd.DataFrame:
     """Carry each Meldedatum's last count to every later report date.
 
@@ -333,7 +346,9 @@ def _carried(rows: pd.DataFrame) -> pd.DataFrame:
     81 days on, so without this a release would drop the older dates.
     """
     keys = ["location", "age_group", "reference_date"]
-    reports = pd.DataFrame({"report_date": sorted(set(rows["report_date"]))})
+    reports = pd.DataFrame(
+        {"report_date": sorted(rows["report_date"].unique())}
+    )
     last = rows.sort_values("report_date").drop_duplicates(keys, keep="last")
     later = last.rename(columns={"report_date": "last"}).merge(
         reports, how="cross"
@@ -344,9 +359,10 @@ def _carried(rows: pd.DataFrame) -> pd.DataFrame:
 
 def _weekly(daily: pd.DataFrame) -> pd.DataFrame:
     """Sum each release's daily counts to hub weeks, as the target table."""
-    ends = {d: epiweek_end(d).isoformat() for d in set(daily["onset_date"])}
+    codes, unique = pd.factorize(daily["onset_date"])
+    ends = np.array([epiweek_end(d).isoformat() for d in unique])[codes]
     out = (
-        daily.assign(target_end_date=daily["onset_date"].map(ends))
+        daily.assign(target_end_date=ends)
         .groupby(["vintage", "location", "target_end_date"], as_index=False)[
             ["observed", "imputed"]
         ]
@@ -354,7 +370,10 @@ def _weekly(daily: pd.DataFrame) -> pd.DataFrame:
     )
     out["total"] = out["observed"] + out["imputed"]
     out["cutoff"] = out["vintage"]
-    out["location_name"] = [PLACE_NAMES[_place(c)] for c in out["location"]]
+    codes, unique = pd.factorize(out["location"])
+    out["location_name"] = np.array([PLACE_NAMES[_place(c)] for c in unique])[
+        codes
+    ]
     out.insert(0, "kind", "real")
     return out[
         [

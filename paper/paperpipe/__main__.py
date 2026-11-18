@@ -165,8 +165,10 @@ def _truth(a: argparse.Namespace) -> None:
 
 
 def _scores(a: argparse.Namespace) -> None:
-    fc = validate_forecasts(_read(a.forecasts))
-    _write(score_forecasts(attach_truth(fc, _read(a.truth))), a.out)
+    fc = attach_truth(validate_forecasts(_read(a.forecasts)), _read(a.truth))
+    _write(score_forecasts(fc), a.out)
+    # Sample forecasts by the fair CRPS too, for the SI.
+    _write(score_forecasts(fc, samples="crps"), a.crps_out)
 
 
 def _figures(a: argparse.Namespace) -> None:
@@ -179,6 +181,7 @@ def _figures(a: argparse.Namespace) -> None:
         a.main_dir,
         a.si_dir,
         split=_date(a.split),
+        crps_scores=None if a.crps_scores is None else _read(a.crps_scores),
         dummy=read_meta(a.meta)["source"] == "dummy",
         truth=_read(a.truth),
         nowcasts=json.loads(a.config)["nowcasts"],
@@ -325,10 +328,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--forecasts", type=Path, required=True)
     p.add_argument("--truth", type=Path, required=True)
     p.add_argument("--out", type=Path, required=True)
+    p.add_argument("--crps-out", type=Path, required=True)
     p.set_defaults(run=_scores)
 
     p = sub.add_parser("figures")
     _outputs(p)
+    p.add_argument("--crps-scores", type=Path, default=None)
     p.add_argument("--meta", type=Path, required=True)
     p.add_argument("--truth", type=Path, required=True)
     p.add_argument("--config", required=True, help="Workflow config as JSON.")

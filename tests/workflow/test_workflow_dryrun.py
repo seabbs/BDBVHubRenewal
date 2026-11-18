@@ -392,8 +392,19 @@ def test_finished_units_are_kept(tmp_path):
     assert jobs["score_bdbv"] == 1
 
 
-def test_score_runs_the_follow_ups_of_slots_checkpoints_only(tmp_path):
+def test_score_runs_no_follow_ups_by_default(tmp_path):
+    # Their scripts are not on main (test_every_script_a_rule_runs_exists).
     config = {"score": {"labels": ["slots-aaa", "bbb"]}}
+    jobs = dry(tmp_path, "score", config=config)
+    assert not {"slots_check_shard", "agg_fit", "fetch_adapter"} & set(jobs)
+
+
+def test_score_runs_the_follow_ups_of_slots_checkpoints_only(tmp_path):
+    config = {
+        "score": {"labels": ["slots-aaa", "bbb"]},
+        "slots_check": {"run": True},
+        "agg": {"run": True},
+    }
     jobs = dry(tmp_path, "score", config=config)
     assert jobs["slots_check_shard"] == 2
     assert jobs["slots_check_summary"] == 1

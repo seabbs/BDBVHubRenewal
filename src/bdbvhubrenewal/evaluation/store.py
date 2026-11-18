@@ -13,10 +13,11 @@ branch, one file per fit:
 The key (`fit_key`) hashes only what reaches a fit: the task at the
 origin, which holds only the releases up to the origin; the built model,
 whose representation gives its variant and resolved sampler settings;
-the BVDOutbreakSize release a BVD model uses; the code the model's fit
-can run (`fit_code`, without docstrings or comments, and
-`run_forecasts`), less the zone split, which runs at load; and the
-runtime dependencies locked in `uv.lock`.
+the BVDOutbreakSize release a BVD model uses; data a model reads beside
+the task (`fit_inputs`, the zone fits' zone data up to the origin); the
+code the model's fit can run (`fit_code`, without docstrings or
+comments, and `run_forecasts`), less the zone backtest; the package data
+files; and the runtime dependencies locked in `uv.lock`.
 A new release adds one fit per model and leaves the older ones valid,
 while a change to a model's code or settings refits every origin of the
 models that run it, and no other.
@@ -58,7 +59,7 @@ from typing import Any, Final
 import pandas as pd
 
 from bdbvhubrenewal.data import load_daily, load_delays, load_target
-from bdbvhubrenewal.data.tidy import write_csv
+from bdbvhubrenewal.data.files import write_csv
 from bdbvhubrenewal.data.zones import ZoneData, load_zone_data
 from bdbvhubrenewal.evaluation.backtest import (
     BacktestConfig,
@@ -77,10 +78,12 @@ from bdbvhubrenewal.forecasters import (
 
 __all__ = [
     "FIT_FUNCTIONS",
+    "KEY_PACKAGES",
     "KEY_SKIP",
     "STATUS_FILE",
     "STORE_DATA",
     "UNPACKED_FILE",
+    "ZONE_FITS_FILE",
     "StoreStatus",
     "StoredFit",
     "build_model",
@@ -139,6 +142,11 @@ them."""
 
 STATUS_FILE: Final = "fit-store.json"
 """What `load` used, written beside the results for the docs."""
+
+ZONE_FITS_FILE: Final = "zone-fits.csv.gz"
+"""The zone samples of the stored zone fits, which `load` writes beside
+the results: `model`, `vintage`, `location`, `target_end_date`, `sample`
+and `value`."""
 
 UNPACKED_FILE: Final = "store.json"
 """Which stored fit `unpack` wrote, in the fit directory."""
@@ -228,12 +236,8 @@ def build_model(name: str, sampler: Mapping[str, Any]) -> ForecastModel:
             os.environ[SAMPLER_ENV] = old
 
 
-def _strip(source: str, imports: bool = True) -> str:
-    """Dump Python source as its syntax tree, without docstrings.
-
-    With `imports` false, import statements are dropped too, so a module
-    keeps its dump when the modules it imports move.
-    """
+def _strip(source: str) -> str:
+    """Dump Python source as its syntax tree, without docstrings."""
     tree = ast.parse(textwrap.dedent(source))
     for node in ast.walk(tree):
         body = getattr(node, "body", None)
@@ -247,10 +251,86 @@ def _strip(source: str, imports: bool = True) -> str:
                 and isinstance(s.value, ast.Constant)
                 and isinstance(s.value.value, str)
             )
-            and (imports or not isinstance(s, (ast.Import, ast.ImportFrom)))
         ]
         node.body = kept or [ast.Pass()]  # type: ignore[attr-defined]
     return ast.dump(tree)
+
+
+KEY_PACKAGES: Final = ("bdbvhubrenewal",)
+"""The packages whose import lines leave a fit key: their modules are in
+the key themselves (`fit_code`)."""
+
+
+def _own_import(node: ast.stmt) -> bool:
+    """Whether a statement imports from `KEY_PACKAGES` or `__future__`."""
+
+    def own(module: str) -> bool:
+        top = module.split(".")[0]
+        return top in KEY_PACKAGES or top == "__future__"
+
+    if isinstance(node, ast.ImportFrom):
+        return node.level > 0 or own(node.module or "")
+    if isinstance(node, ast.Import):
+        return all(own(alias.name) for alias in node.names)
+    return False
+
+
+def _code_parts(source: str) -> list[str]:
+    """Hash each top-level statement of a module, with what it imports.
+
+    Docstrings, `__all__` and the package's own import lines are left
+    out (`_own_import`), nested ones included. Each remaining statement is
+    hashed as its syntax tree, together with the third-party module-level
+    imports of the names it reads, so moving a function to another file
+    keeps its hash while a change of library does not.
+    """
+    tree = ast.parse(source)
+    for node in ast.walk(tree):
+        body = getattr(node, "body", None)
+        if not isinstance(body, list):
+            continue
+        kept = [
+            s
+            for s in body
+            if not (
+                isinstance(s, ast.Expr)
+                and isinstance(s.value, ast.Constant)
+                and isinstance(s.value.value, str)
+            )
+            and not _own_import(s)
+        ]
+        node.body = kept or [ast.Pass()]  # type: ignore[attr-defined]
+    bound: dict[str, str] = {}
+    parts = []
+    for stmt in tree.body:
+        if isinstance(stmt, ast.Import):
+            for alias in stmt.names:
+                name = alias.asname or alias.name.split(".")[0]
+                bound[name] = f"import {alias.name}"
+        elif isinstance(stmt, ast.ImportFrom):
+            for alias in stmt.names:
+                name = alias.asname or alias.name
+                bound[name] = f"from {stmt.module} import {alias.name}"
+        elif isinstance(stmt, ast.Pass) or _is_all(stmt):
+            continue
+        else:
+            reads = {n.id for n in ast.walk(stmt) if isinstance(n, ast.Name)}
+            uses = sorted(bound[n] for n in reads if n in bound)
+            body = ast.dump(stmt) + "\0" + "\n".join(uses)
+            parts.append(hashlib.sha256(body.encode()).hexdigest())
+    return parts
+
+
+def _is_all(stmt: ast.stmt) -> bool:
+    """Whether a statement assigns `__all__`."""
+    targets = (
+        stmt.targets
+        if isinstance(stmt, ast.Assign)
+        else [stmt.target]
+        if isinstance(stmt, (ast.AnnAssign, ast.AugAssign))
+        else []
+    )
+    return any(isinstance(t, ast.Name) and t.id == "__all__" for t in targets)
 
 
 def _fit_functions(root: Path) -> list[str]:
@@ -324,11 +404,12 @@ def _export(root: str, lock: str) -> str:
 def code_digest(model: str, root: Path | str = ".") -> str:
     """Hash the code a stored fit of a model runs and its dependencies.
 
-    Python files in `fit_code` are hashed as syntax trees without
-    docstrings or import statements, so comments, docstrings and moved
-    imports do not change the key; other files by their name and bytes.
-    The files' hashes are combined in sorted order, not by path, so
-    moving or renaming modules keeps the key. The functions of the store
+    Each top-level statement of the Python files in `fit_code` is hashed
+    as its syntax tree, without docstrings, `__all__` or the package's own
+    import lines, with the third-party imports it reads (`_code_parts`);
+    other files by their name and bytes. The hashes are combined in sorted
+    order, not by file, so comments, docstrings, renamed or moved modules
+    and functions moved between files keep the key. The functions of the store
     and the backtest a fit runs (`FIT_FUNCTIONS`) are hashed the same
     way, read from `root`, with the Python minor version.
     The dependencies are `uv export --no-dev --all-extras` of `uv.lock`.
@@ -356,10 +437,10 @@ def code_digest(model: str, root: Path | str = ".") -> str:
         if not path.is_file() or "__pycache__" in path.parts:
             continue
         if path.suffix == ".py":
-            body = _strip(path.read_text(), imports=False).encode()
+            parts += _code_parts(path.read_text())
         else:
             body = path.name.encode() + b"\0" + path.read_bytes()
-        parts.append(hashlib.sha256(body).hexdigest())
+            parts.append(hashlib.sha256(body).hexdigest())
     digest = hashlib.sha256()
     for part in sorted(parts):
         digest.update(part.encode())
@@ -468,6 +549,10 @@ def fit_key(model: ForecastModel, task: ForecastTask, code: str) -> str:
         "code": code,
         "bvd": _bvd_tag(model, task),
     }
+    # Data a model reads beside the task (the zone fits' zone data).
+    inputs = getattr(model, "fit_inputs", None)
+    if inputs is not None:
+        head["inputs"] = inputs(task)
     digest.update(json.dumps(head, sort_keys=True).encode())
     for f in fields(task):
         if f.name in ZONE_FIELDS and not zones:
@@ -926,8 +1011,9 @@ def load(
     Every origin goes to `forecasts.csv.gz`, from `min_horizon` to
     `max_horizon`: a stored fit holds the submission's weeks, which start
     earlier and end later.
-    Fit summaries go to `backtest-fits.csv` and learnt delays to
-    `delay-summary.csv`. Each file keeps the rows of models not stored.
+    Fit summaries go to `backtest-fits.csv`, learnt delays to
+    `delay-summary.csv` and the zone fits' final-count zone samples to
+    `ZONE_FITS_FILE`. Each file keeps the rows of models not stored.
     What was used is written to `STATUS_FILE`.
 
     Parameters
@@ -953,6 +1039,7 @@ def load(
     status: list[StoreStatus] = []
     loaded: list[StoredFit] = []
     forecasts: list[pd.DataFrame] = []
+    zones: list[pd.DataFrame] = []
     low = -(10**6) if min_horizon is None else min_horizon
     high = 10**6 if max_horizon is None else max_horizon
     for (model, origin), key in sorted(keys.items(), key=lambda x: x[0][1])[
@@ -961,10 +1048,14 @@ def load(
         chosen, failed = _choose(Path(store), model, origin, key)
         if chosen is not None:
             # Each fit's forecasts are cut to the backtest's weeks and
-            # compacted as read (`compact_forecasts`), so the store's
-            # samples never sit in memory as text at once.
+            # compacted as read (`compact_forecasts`), as are its zone
+            # samples, so the store's samples never sit in memory as text
+            # at once.
             forecasts.append(compact_forecasts(chosen.forecasts, low, high))
-            loaded.append(dataclasses.replace(chosen, forecasts=pd.DataFrame()))
+            zones.append(compact_forecasts(_zone_samples(chosen)))
+            loaded.append(
+                dataclasses.replace(chosen, forecasts=pd.DataFrame(), files={})
+            )
         status.append(
             StoreStatus(
                 model,
@@ -980,12 +1071,32 @@ def load(
         ("forecasts.csv.gz", [stack_forecasts(forecasts)]),
         ("backtest-fits.csv", [f.fits for f in loaded]),
         (DELAY_SUMMARY_FILE, [f.delays for f in loaded]),
+        (ZONE_FITS_FILE, [stack_forecasts(zones)]),
     ):
         _merge(out / name, frames)
     (out / STATUS_FILE).write_text(
         json.dumps([vars(s) for s in status], indent=1) + "\n"
     )
     return status
+
+
+def _zone_samples(fit: StoredFit) -> pd.DataFrame:
+    """Return a stored zone fit's final-count zone samples, else none."""
+    from bdbvhubrenewal.forecasters.zonerenewal import ZONES_FILE
+
+    body = fit.files.get(ZONES_FILE)
+    if body is None:
+        return pd.DataFrame()
+    zones = pd.read_csv(
+        io.BytesIO(base64.b64decode(body)),
+        compression="gzip",
+        dtype={"target_end_date": str},
+    )
+    if "as_of" in zones:
+        zones = zones.loc[zones["as_of"].isna()].drop(columns="as_of")
+    return zones.assign(
+        model=fit.meta["model"], vintage=fit.meta["origin"]
+    ).reset_index(drop=True)
 
 
 TEXT_COLUMNS: Final = (

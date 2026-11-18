@@ -1056,3 +1056,19 @@ def test_blocks_record_their_cadence_and_daily_releases_fill_lags(
         fills[cadence] = np.mean([_lag_fill(b) for b in blocks])
     assert fills["daily"] > 0.8
     assert fills["weekly"] < 0.3
+
+
+def test_evaluation_cadence_defaults_to_the_recipe_s():
+    import finetune_stream as fs
+
+    args = fs.build_parser().parse_args(
+        ["sims", "out", "--held-out-seeds", "1", "2", "--grid", "r5"]
+    )
+    assert args.eval_every == fs.ft.EVAL_EVERY == 100
+    assert args.by_source_every == fs.BY_SOURCE_EVERY == 200
+    fs.check_cadence(500, 1000)
+    # By source runs with the monitor, so on a multiple of its steps.
+    with pytest.raises(ValueError, match="multiple"):
+        fs.check_cadence(300, 1000)
+    with pytest.raises(ValueError, match="positive"):
+        fs.check_cadence(0, 0)

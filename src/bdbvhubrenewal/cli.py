@@ -62,9 +62,9 @@ from bdbvhubrenewal.data import (
     tidy,
 )
 from bdbvhubrenewal.data.dates import as_date
+from bdbvhubrenewal.data.files import write_csv
 from bdbvhubrenewal.data.releases import cutoff_lags
 from bdbvhubrenewal.data.simulate import SCENARIO_RT_SCALE
-from bdbvhubrenewal.data.tidy import write_csv
 from bdbvhubrenewal.data.zones import (
     ZoneData,
     hub_zones,
@@ -92,10 +92,11 @@ from bdbvhubrenewal.forecasters.base import (
     get_model,
     list_models,
 )
+from bdbvhubrenewal.forecasters.forecast import Forecast
 from bdbvhubrenewal.forecasters.renewal import DELAY_SUMMARY_FILE
+from bdbvhubrenewal.forecasters.zonerenewal import ZONES_FILE
 from bdbvhubrenewal.forecasters.zones import zones_for_model
 from bdbvhubrenewal.submission.fitting import (
-    Forecast,
     get_config,
     run_fit,
     run_forecast,
@@ -1385,12 +1386,29 @@ def _zones(
     name: str | None,
     task: ForecastTask,
     samples: pd.DataFrame,
+    own: pd.DataFrame | None = None,
 ) -> tuple[pd.DataFrame | None, str]:
     """Forecast the zones, or say why not.
 
-    The zones come from `zones_for_model` for model `name`.
+    A model that forecast the zones itself (`own`: the zone renewal fits,
+    from the fit directory or the model) gives its zone samples, for the
+    hub's zones. Otherwise the zones come from `zones_for_model` for model
+    `name`. Zone samples with none of the hub's zones or target dates (a
+    stale `ZONES_FILE`) give no zones, and a note.
     """
     hub_config = Path(data) / "hub-config" / "tasks.json"
+    if own is not None:
+        codes = set(hub_zones(hub_config))
+        own = own.loc[
+            own["location"].isin(codes)
+            & own["target_end_date"].astype(str).isin(task.target_end_dates)
+        ]
+        if own.empty:
+            return None, (
+                "the fit's zone samples have none of the hub's zones or "
+                "target dates, so the file has no health zones"
+            )
+        return own.reset_index(drop=True), ""
     try:
         daily = load_daily_zones(data)
     except OSError:
@@ -1425,7 +1443,8 @@ def _hub_forecast(
 
     A `forecast` given is used as it is. Otherwise, with `config` it
     forecasts from the fit directory `fit`, else `model` forecasts. The
-    zones come from `_zones`.
+    zones come from `_zones`, with the zone renewal fits' own zone samples
+    (`ZONES_FILE` in `fit`, or the model's `zone_samples`) when there are.
 
     Returns
     -------
@@ -1436,10 +1455,15 @@ def _hub_forecast(
         draws by (`copula_fit`, or None).
     """
     checkpoint, copula = None, None
+    own = None
     if forecast is not None:
         result = forecast
     elif config:
         result = run_forecast(get_config(config), task, fit)
+        if fit is not None and (Path(fit) / ZONES_FILE).exists():
+            own = pd.read_csv(
+                Path(fit) / ZONES_FILE, dtype={"target_end_date": str}
+            )
     else:
         loaded = get_model(str(model))
         checkpoint = getattr(loaded, "checkpoint", None)
@@ -1447,8 +1471,9 @@ def _hub_forecast(
         copula = getattr(loaded, "copula_fit", None)
         check_samples(samples, task)
         result = Forecast(samples)
+        own = getattr(loaded, "zone_samples", None)
     name = get_config(config).model if config else model
-    zones, zone_note = _zones(data, name, task, result.samples)
+    zones, zone_note = _zones(data, name, task, result.samples, own)
     # A model that forecasts zones itself gives them through `zones`.
     own_zones = result.samples["location"].map(is_zone)
     table = to_hub_table(

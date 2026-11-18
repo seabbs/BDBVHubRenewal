@@ -35,6 +35,9 @@ DESIGN = {
     "univariate_share": 0.2,
     "chunk": 250,
     "subset_seed": 1,
+    # Held-out evaluation, which never changes the steps trained.
+    "eval_every": 100,
+    "by_source_every": 200,
 }
 
 
@@ -137,3 +140,6 @@ def test_the_trainer_gets_the_agreed_design(tmp_path):
     assert args.sources == DESIGN["sources"]
     assert args.univariate_share == 0.2
     assert args.chunk == 250
+    # The held-out evaluations' cadence comes from the config.
+    assert args.eval_every == CONFIG["finetune"]["eval_every"]
+    assert args.by_source_every == CONFIG["finetune"]["by_source_every"]
