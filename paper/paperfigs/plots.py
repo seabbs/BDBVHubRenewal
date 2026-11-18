@@ -47,6 +47,7 @@ from paperfigs.periods import PERIOD_ALPHA, PERIODS, add_period
 from paperfigs.schema import DEFAULT_STRATUM
 from paperfigs.scores import (
     STUDY_BASELINES,
+    WIS_PARTS,
     coverage_columns,
     forecast_share,
     metric_of,
@@ -58,6 +59,7 @@ from paperfigs.style import (
     bar_style,
     line_style,
     model_order,
+    model_style,
     point_style,
 )
 
@@ -90,6 +92,17 @@ _TITLES: Final = {
     "stratum": "Relative {m} by stratum",
     "horizon": "Relative {m} by horizon",
 }
+
+PART_SHADES: Final[dict[str, float]] = {
+    "dispersion": 1.0,
+    "overprediction": 0.6,
+    "underprediction": 0.3,
+}
+"""How much of a model's colour each WIS part's bar segment takes, the rest
+white: dispersion darkest, as in Wolffram et al. (2023)."""
+
+_HATCH: Final = {"dashed": "////", "dotted": "...."}
+"""Hatching of a dashed or dotted model's dispersion segment, as `bar_style`."""
 
 _RATIO_TICKS: Final = (0.1, 0.25, 0.5, 0.75, 1, 1.5, 2, 3, 5, 10)
 
@@ -382,6 +395,73 @@ def _bars_relative(
     _pad_log_limits(ax, rel[col].to_numpy(dtype=float), "x")
 
 
+def _tint(colour: str, share: float) -> tuple[float, float, float]:
+    """Mix `share` of `colour` with white."""
+    rgb = np.asarray(mpl.colors.to_rgb(colour))
+    return tuple(share * rgb + (1 - share))
+
+
+def _part_columns(rel: pd.DataFrame, col: str) -> list[str]:
+    """Return the relative WIS parts of `col`, or none if any is missing."""
+    prefix = "rel_log_" if col == "rel_log_score" else "rel_"
+    cols = [f"{prefix}{p}" for p in WIS_PARTS]
+    if all(c in rel and rel[c].notna().all() for c in cols):
+        return cols
+    return []
+
+
+def _bars_parts(
+    ax: Axes, rel: pd.DataFrame, col: str, models: Sequence[str]
+) -> bool:
+    """Stack each model's relative WIS from its parts on a linear axis.
+
+    Each part is over the baseline's WIS on the same forecasts, so the
+    segments sum to the relative WIS and the baseline's bar ends at 1.
+    Returns False, drawing nothing, when `rel` has no parts (CRPS).
+    """
+    cols = _part_columns(rel, col)
+    if not cols:
+        return False
+    periods = _periods(rel)
+    offsets, h = _rows(len(periods))
+    for (period, alpha), dy in zip(periods, offsets, strict=True):
+        one = _pick(rel, period).set_index("model").reindex(models)
+        for i, m in enumerate(models):
+            colour, dash = model_style(m, models)
+            hatch = _HATCH.get(dash)
+            left = 0.0
+            for c, part in zip(cols, WIS_PARTS, strict=True):
+                width = float(one.loc[m, c])
+                ax.barh(
+                    i + dy,
+                    width,
+                    left=left,
+                    height=h,
+                    alpha=alpha,
+                    color=_tint(colour, PART_SHADES[part]),
+                    edgecolor=colour,
+                    linewidth=0.6,
+                    hatch=hatch if part == "dispersion" else None,
+                )
+                left += width
+    ax.axvline(1, color=INK["muted"], linestyle="--", linewidth=1, zorder=3)
+    top = np.nanmax(rel[col].to_numpy(dtype=float), initial=1.0)
+    ax.set_xlim(0, max(top, 1.0) * 1.08)
+    return True
+
+
+def _part_handles() -> list[Patch]:
+    return [
+        Patch(
+            facecolor=_tint(INK["text"], PART_SHADES[p]),
+            edgecolor=INK["text"],
+            linewidth=0.6,
+            label=p.capitalize(),
+        )
+        for p in WIS_PARTS
+    ]
+
+
 def _bars_bias(ax: Axes, summary: pd.DataFrame, models: Sequence[str]) -> None:
     periods = _periods(summary)
     offsets, h = _rows(len(periods))
@@ -528,6 +608,7 @@ def _legend(
     models: Sequence[str],
     split: pd.Timestamp | None = None,
     missing: bool = False,
+    parts: bool = False,
 ) -> None:
     handles = [
         Line2D(
@@ -568,6 +649,8 @@ def _legend(
             )
         )
     handles += _period_handles(split)
+    if parts:
+        handles += _part_handles()
     fig.legend(
         handles=handles,
         loc="outside lower center",
@@ -664,6 +747,7 @@ def results_panel(
     truth: pd.DataFrame | None = None,
     nowcast: bool = True,
     target: str | None = None,
+    models: Sequence[str] | None = None,
 ) -> Figure:
     """Plot the results panel for one study.
 
@@ -672,7 +756,9 @@ def results_panel(
     study's two widths; F relative score by location (main stratum); then,
     for a study with strata, G relative score by stratum; and last the
     relative score by horizon.
-    The score is the WIS for quantile forecasts and the CRPS for samples.
+    The score is the `metric` of `scores`, WIS or CRPS. WIS's relative
+    panels stack its parts (dispersion, overprediction, underprediction)
+    on a linear axis; CRPS's are bars from 1 on a log axis.
 
     Parameters
     ----------
@@ -711,6 +797,9 @@ def results_panel(
         Whether to draw panel A. Without it the panels start at the
         relative score, for a study whose nowcasts have their own figure
         (`nowcast_panels`).
+    models : sequence of str, optional
+        Models to show, those of them with scores. Defaults to every
+        scored model.
 
     Returns
     -------
@@ -729,7 +818,12 @@ def results_panel(
         truth = rows_of_target(truth, target)
     study = _one_study(forecasts)
     obs = observations.loc[observations["study"] == study]
-    sc = add_period(scores.loc[scores["study"] == study], split)
+    sc = scores.loc[scores["study"] == study]
+    if models is not None:
+        keep = set(models) | {baseline or STUDY_BASELINES[study]}
+        sc = sc.loc[sc["model"].isin(keep)]
+        forecasts = forecasts.loc[forecasts["model"].isin(keep)]
+    sc = add_period(sc, split)
     halves = ["period"] if split is not None else []
     baseline = baseline or STUDY_BASELINES[study]
     name = metric_of(sc).upper()
@@ -775,10 +869,13 @@ def results_panel(
         m if share.get(m, 1.0) >= 1 else f"{m} ({share[m]:.0%} made)"
         for m in models
     ]
-    _bars_relative(axd["rel"], rel, "rel_score", models)
-    axd["rel"].set_xlabel(f"Relative to {baseline}")
-    _bars_relative(axd["rel_log"], rel, "rel_log_score", models)
-    axd["rel_log"].set_xlabel(f"Relative to {baseline}")
+    parts = False
+    for key, col in (("rel", "rel_score"), ("rel_log", "rel_log_score")):
+        if _bars_parts(axd[key], rel, col, models):
+            parts = True
+        else:
+            _bars_relative(axd[key], rel, col, models)
+        axd[key].set_xlabel(f"Relative to {baseline}")
     _bars_bias(axd["bias"], summary, models)
     _bars_coverage(axd["coverage"], summary, models)
     for key in ("rel", "rel_log", "bias", "coverage"):
@@ -826,7 +923,7 @@ def results_panel(
         _label(axd[key], letter, _TITLES[key].format(m=name))
     for key in bottom:
         axd[key].set_ylabel(f"Relative {name}")
-    _legend(fig, models, split, missing)
+    _legend(fig, models, split, missing, parts)
     return fig
 
 

@@ -117,19 +117,17 @@ nowcasts:
   factors: [trajectory, delay_form, observation, strata]
   national: {germany: DE, ebola: CD}
   models:
-    synthetic:
-      [randomwalknowcast, fm_chronos_daily_ragged, fm_chronos_daily_ragged_ft]
-    # With the hub teams' ensemble (hub_ensemble in the dummy data).
-    germany:
+    # The main nowcast and score figures of every study show the same four
+    # models (Sam, 2026-11-18): the baseline, zero-shot Chronos-2 on
+    # complete data and on the ragged layout, and the fine-tuned ragged
+    # model, all daily. Every other model is in the SI only.
+    synthetic: &main_models
       - randomwalknowcast
+      - fm_chronos_daily_complete
       - fm_chronos_daily_ragged
       - fm_chronos_daily_ragged_ft
-      - MeanEnsemble
-      - hub_ensemble
-    ebola:
-      - randomwalknowcast
-      - fm_chronos_weekly_ragged
-      - fm_chronos_weekly_ragged_ft
+    germany: *main_models
+    ebola: *main_models
 
 # SI results kept as rows committed to evidence
 # branches (`paperpipe.evidence`). Each is `{ref: <commit>, path: <file>}`;

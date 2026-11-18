@@ -31,7 +31,9 @@ def compared() -> pd.DataFrame:
     # The fixture has no strata, so the validator sets them to "all".
     want["stratum"] = "all"
     # scoringutils' crps_sample is the nrg form.
-    got = score_forecasts(fc, coverage=(0.5, 0.9, 0.95), crps_estimator="nrg")
+    got = score_forecasts(
+        fc, coverage=(0.5, 0.9, 0.95), crps_estimator="nrg", samples="crps"
+    )
     keys = [*FORECAST_KEYS, "metric"]
     out = got.merge(want, on=keys, suffixes=("", "_su"), validate="1:1")
     assert len(out) == len(want) == len(got)

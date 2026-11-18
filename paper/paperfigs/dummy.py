@@ -213,6 +213,9 @@ STUDY_SETUP: Final[dict[str, StudySetup]] = {
         models={
             "randomwalk": _RW,
             "randomwalknowcast": _BASE,
+            "fm_chronos_daily_complete": _FM_COMPLETE,
+            "fm_chronos_daily_ragged": _FM,
+            "fm_chronos_daily_ragged_ft": _FM_FT,
             "fm_chronos_weekly_complete": _FM_WEEKLY_COMPLETE,
             "fm_chronos_weekly_ragged": _FM_WEEKLY,
             "fm_chronos_weekly_ragged_ft": _FM_WEEKLY_FT,

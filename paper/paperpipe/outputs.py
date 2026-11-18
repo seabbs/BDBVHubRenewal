@@ -1,7 +1,10 @@
 """Figures and score tables for the main text and the SI, per study.
 
 `FIGURES` names each study's figures. The `results` panel goes in the main
-text and the rest in the SI. `score_tables` writes the relative scores
+text and the rest in the SI. The main figures show the models of the
+`nowcasts` config and score every study on quantiles by WIS; the SI's
+`si-results-crps` scores the sample studies' draws by the fair CRPS, with
+every model. `score_tables` writes the relative scores
 overall (main text) and by horizon and location (SI), split by half where
 the study has a held-out split, and for the synthetic study the grid of
 scenario factors.
@@ -73,6 +76,7 @@ FIGURES: Final[dict[str, dict[str, tuple[str, ...]]]] = {
             "si-factors-log",
             "si-wis-over-time",
             "si-finetune-size",
+            "si-results-crps",
         ),
     },
     "germany": {
@@ -94,6 +98,7 @@ FIGURES: Final[dict[str, dict[str, tuple[str, ...]]]] = {
             "si-location-horizon",
             "si-location-horizon-log",
             "si-wis-over-time",
+            "si-results-crps",
         ),
     },
 }
@@ -173,9 +178,11 @@ def _figures(
     truth: pd.DataFrame,
     nowcasts: Mapping,
     baseline: str,
+    crps_scores: pd.DataFrame | None = None,
 ) -> dict[str, Figure]:
     # The main text and the other SI figures score the hub's target.
     hub = HUB_TARGETS.get(study)
+    crps = None if crps_scores is None else rows_of_target(crps_scores, hub)
     daily_fc = rows_of_target(forecasts, DAILY)
     daily_sc = rows_of_target(scores, DAILY)
     forecasts = rows_of_target(forecasts, hub)
@@ -197,6 +204,21 @@ def _figures(
     )
     origins = pick_origins(pool, int(nowcasts["origins"]), seed)
     shown = {"baseline": baseline, "nowcast": False}
+    # The SI's fair-CRPS view of the draws, with every model.
+    extra = {}
+    if "si-results-crps" in figure_names(study, "si"):
+        extra["si-results-crps"] = (
+            results_panel(
+                drop_checkpoints(forecasts),
+                observations,
+                drop_checkpoints(crps),
+                split=split,
+                factors=_factors(locations) if study == "synthetic" else None,
+                **shown,
+            )
+            if crps is not None and not crps.empty
+            else _pending("Fair-CRPS scores are pending.")
+        )
     reference = REFERENCE if REFERENCE in set(scores["model"]) else baseline
     rel = (
         relative_scores(drop_checkpoints(scores), baseline=reference)
@@ -220,13 +242,14 @@ def _figures(
         panels_ = pick_outbreaks(
             locations, nowcasts["factors"], int(nowcasts["outbreaks"]), seed
         )
-        return {
+        return extra | {
             "nowcasts": by_origin(panels_[0][0]),
             "results": results_panel(
                 drop_checkpoints(forecasts),
                 observations,
                 main,
                 factors=factors,
+                models=models,
                 **shown,
             ),
             "si-nowcasts": by_place(panels_),
@@ -252,25 +275,30 @@ def _figures(
             if not daily_fc.empty
             else _pending("Daily-target rows are pending.")
         )
-    return daily | {
-        "nowcasts": by_origin(national),
-        "results": results_panel(
-            forecasts,
-            observations,
-            scores,
-            split=split,
-            **shown,
-        ),
-        "si-nowcasts": by_place(other_places(forecasts, national)),
-        "si-places": si_place_dots(scores, models, baseline),
-        "si-location-horizon": si_scores_by_location_horizon(
-            scores, baseline, split=split
-        ),
-        "si-location-horizon-log": si_scores_by_location_horizon(
-            scores, baseline, col="rel_log_score", split=split
-        ),
-        "si-wis-over-time": si_wis_over_time(scores, split=split),
-    }
+    return (
+        extra
+        | daily
+        | {
+            "nowcasts": by_origin(national),
+            "results": results_panel(
+                forecasts,
+                observations,
+                scores,
+                split=split,
+                models=models,
+                **shown,
+            ),
+            "si-nowcasts": by_place(other_places(forecasts, national)),
+            "si-places": si_place_dots(scores, models, baseline),
+            "si-location-horizon": si_scores_by_location_horizon(
+                scores, baseline, split=split
+            ),
+            "si-location-horizon-log": si_scores_by_location_horizon(
+                scores, baseline, col="rel_log_score", split=split
+            ),
+            "si-wis-over-time": si_wis_over_time(scores, split=split),
+        }
+    )
 
 
 def write_figures(
@@ -287,6 +315,7 @@ def write_figures(
     truth: pd.DataFrame,
     nowcasts: Mapping,
     baseline: str,
+    crps_scores: pd.DataFrame | None = None,
 ) -> list[Path]:
     """Write a study's figures as `<study>-<name>.png` and return the paths.
 
@@ -311,6 +340,9 @@ def write_figures(
         `nowcasts` block of the workflow config.
     baseline : str
         The model scores are relative to.
+    crps_scores : pandas.DataFrame, optional
+        `score_forecasts(..., samples="crps")` of the forecasts, for the
+        sample studies' `si-results-crps`.
 
     Returns
     -------
@@ -322,6 +354,8 @@ def write_figures(
     # The real-data models appear in their own SI table only.
     forecasts = drop_real_data(forecasts)
     scores = drop_real_data(scores)
+    if crps_scores is not None:
+        crps_scores = drop_real_data(crps_scores)
     with theme():
         figs = _figures(
             study,
@@ -333,6 +367,7 @@ def write_figures(
             truth,
             nowcasts,
             baseline,
+            crps_scores,
         )
         for part, folder in dirs.items():
             folder.mkdir(parents=True, exist_ok=True)
