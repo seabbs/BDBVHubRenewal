@@ -78,3 +78,52 @@ def test_score_forecasts_with_ragged_draws_equals_the_loop():
     pd.testing.assert_frame_equal(
         got.reset_index(drop=True), pd.DataFrame(want), check_dtype=False
     )
+
+
+WIS_PARTS = ("dispersion", "overprediction", "underprediction")
+
+
+def test_wis_components_of_sample_forecasts_sum_to_wis():
+    rng = np.random.default_rng(5)
+    draws = rng.poisson(rng.uniform(1, 40, (60, 1)), (60, 500)).astype(float)
+    obs = rng.poisson(15, 60).astype(float)
+    got = score_cells(obs, draws)
+    total = sum(got[c] for c in WIS_PARTS)
+    np.testing.assert_allclose(total, got["wis"], rtol=1e-12)
+    assert all((got[c] >= 0).all() for c in WIS_PARTS)
+
+
+def test_wis_components_of_quantile_forecasts_sum_to_wis():
+    from bdbvhubrenewal.evaluation.scoring import (
+        QUANTILE_LEVELS,
+        score_quantiles,
+    )
+
+    rng = np.random.default_rng(6)
+    rows = []
+    for loc in ("A", "B", "C"):
+        q = np.sort(rng.gamma(2, 5, len(QUANTILE_LEVELS)))
+        rows.append(
+            pd.DataFrame(
+                {
+                    "model": "m",
+                    "location": loc,
+                    "target_end_date": "2026-11-01",
+                    "horizon": 1,
+                    "quantile": QUANTILE_LEVELS,
+                    "value": q,
+                }
+            )
+        )
+    truth = pd.DataFrame(
+        {"location": ["A", "B", "C"], "target_end_date": "2026-11-01",
+         "truth": [3.0, 12.0, 40.0]}
+    )  # fmt: skip
+    got = score_quantiles(
+        pd.concat(rows),
+        truth,
+        ("model", "location", "target_end_date"),
+        QUANTILE_LEVELS,
+    )
+    total = got[list(WIS_PARTS)].sum(axis=1)
+    np.testing.assert_allclose(total, got["wis"], rtol=1e-12)

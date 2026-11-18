@@ -274,3 +274,32 @@ def test_cached_draws_keep_the_7day_target(tmp_path):
     got = ck._cached(tmp_path)
     assert got["value"].tolist() == [1.0]
     assert "target" not in got
+
+
+def test_tables_carry_wis_and_its_components():
+    for c in ("wis", "dispersion", "overprediction", "underprediction"):
+        assert c in ck.COLUMNS
+    rng = np.random.default_rng(1)
+    draws = _draws(rng, [("a", "CD", "2026-10-03")])
+    truth = pd.DataFrame(
+        {"location": ["CD"], "target_end_date": ["2026-10-03"],
+         "truth": [10.0], "truth_vintage": ["v"]}
+    )  # fmt: skip
+    got = ck.cell_scores(draws, truth).iloc[0]
+    parts = got["dispersion"] + got["overprediction"] + got["underprediction"]
+    assert parts == pytest.approx(got["wis"])
+
+
+def test_relative_rows_mean_the_wis_components():
+    rows = _scores(
+        ["randomwalknowcast", "fm_chronos_daily_ragged"],
+        ["zero-shot", "abc"],
+        ["national"],
+    ).assign(wis=3.0, dispersion=1.0, overprediction=0.5, underprediction=1.5)
+    got = ck.relative(rows, "ebola", ("crps", "log_crps"))
+    row = got.loc[got["checkpoint"] == "abc"].iloc[0]
+    assert row["wis"] == 3.0
+    assert (
+        row["dispersion"] + row["overprediction"] + row["underprediction"]
+        == 3.0
+    )
