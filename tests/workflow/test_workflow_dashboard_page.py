@@ -200,11 +200,23 @@ def test_every_section_is_built_for_the_configured_runs(tmp_path):
     assert "archie" not in out
 
 
-def test_a_static_page_does_not_reload(tmp_path):
+def test_the_page_never_reloads_and_a_served_one_updates_in_place(tmp_path):
     ctx = _machine(tmp_path)
     assert "location.reload" not in page.build(ctx)
+    assert "/sections.json" not in page.build(ctx)
     ctx.once = False
-    assert "location.reload" in page.build(ctx) or "reload" in page.build(ctx)
+    built = page.build(ctx)
+    assert "location.reload" not in built
+    assert "/sections.json" in built
+
+
+def test_sections_are_the_page_s_parts(tmp_path):
+    ctx = _machine(tmp_path)
+    got = page.sections(ctx)
+    assert {"bar", "status", "loss", "bias", "nowcasts", "tables"} <= set(got)
+    built = page.build(ctx)
+    for key in ("loss", "bias", "tables"):
+        assert got[key] in built
 
 
 def test_checkpoint_sizes_also_come_from_the_score_table(tmp_path):

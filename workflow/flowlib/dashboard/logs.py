@@ -1,8 +1,9 @@
 """A training run's state: its log, checkpoints and trainer process.
 
-A run's folder is `scripts/finetune_stream.py`'s output folder: `train.log`
-(a line per logged step), `train/n<N>/settings.json` per checkpoint and
-`trainer.pid`. Everything here only reads.
+A run's folder is `scripts/finetune_stream.py`'s output folder: its logs,
+`train/n<N>.log` per segment or an older run's `train.log` (a line per
+logged step), `train/n<N>/settings.json` per checkpoint and `trainer.pid`.
+Everything here only reads.
 """
 
 from __future__ import annotations
@@ -11,6 +12,7 @@ import json
 import os
 import re
 import subprocess
+import time
 from collections.abc import Sequence
 from datetime import datetime
 from pathlib import Path
@@ -36,7 +38,7 @@ def _float(x: str | None) -> float | None:
 
 
 class Log:
-    """A `train.log`, read incrementally: whole lines, new ones appended."""
+    """A log file, read incrementally: whole lines, new ones appended."""
 
     def __init__(self, path: Path | str) -> None:
         self.path = Path(path)
@@ -75,6 +77,42 @@ class Log:
         """Return the logged steps so far, in step order."""
         self._update()
         return [self._rows[k] for k in sorted(self._rows)]
+
+
+class RunLog:
+    """A run's logged steps from every log it writes, each read as a `Log`.
+
+    A run writes `train/n<N>.log`, one per segment, and an older run
+    `train.log`. New segment logs are found on each read, a file reached
+    by two names (a link) is read once, and a step logged twice keeps its
+    newest row.
+    """
+
+    def __init__(self, folder: Path | str) -> None:
+        self.folder = Path(folder)
+        self._logs: dict[Path, Log] = {}
+
+    def _paths(self) -> list[Path]:
+        found = sorted(
+            self.folder.glob("train/n*.log"), key=lambda p: _size(p.name)
+        )
+        old = self.folder / "train.log"
+        return ([old] if old.exists() else []) + found
+
+    def rows(self) -> list[dict[str, Any]]:
+        """Return the logged steps of every log, in step order."""
+        merged: dict[int, dict[str, Any]] = {}
+        for path in self._paths():
+            real = path.resolve()
+            if real not in self._logs:
+                self._logs[real] = Log(real)
+            for row in self._logs[real].rows():
+                if (
+                    row["step"] not in merged
+                    or row["t"] >= merged[row["step"]]["t"]
+                ):
+                    merged[row["step"]] = row
+        return [merged[k] for k in sorted(merged)]
 
 
 class JsonCache:
@@ -152,16 +190,48 @@ def prefixes(
     return sorted((saved - {0}) | set(default))
 
 
-def trainer_state(folder: Path | str) -> tuple[str, bool | None]:
-    """Return a description of the trainer process and whether it runs."""
+FRESH_S = 600
+"""Seconds within which a stream status shows the trainer running: it is
+written every 10 steps, and the log tile turns red after 10 minutes."""
+
+
+def _pid_state(folder: Path | str) -> tuple[int | None, bool | None]:
+    """Return `trainer.pid`'s pid and whether it runs (None if unknown)."""
     try:
         pid = int((Path(folder) / "trainer.pid").read_text().split()[0])
     except (OSError, ValueError, IndexError):
-        return "unknown", None
+        return None, None
     try:
         os.kill(pid, 0)
     except PermissionError:
-        return f"alive (pid {pid})", True
+        return pid, True
     except OSError:
-        return f"DEAD (pid {pid})", False
-    return f"alive (pid {pid})", True
+        return pid, False
+    return pid, True
+
+
+def trainer_state(folder: Path | str) -> tuple[str, bool | None]:
+    """Return a description of the trainer process and whether it runs.
+
+    It runs if `trainer.pid`'s process does, or if the stream status
+    (`train/stream-status.json`) was written in the last `FRESH_S`
+    seconds: a trainer started by Snakemake writes no pid file, so one
+    left by an old launcher says nothing. A finished or stopped segment
+    is neither running nor dead.
+    """
+    pid, running = _pid_state(folder)
+    if running:
+        return f"alive (pid {pid})", True
+    path = Path(folder) / "train" / "stream-status.json"
+    try:
+        age = time.time() - path.stat().st_mtime
+    except OSError:
+        age = None
+    if age is not None and age <= FRESH_S:
+        return f"alive (status {age / 60:.0f} min ago)", True
+    stage = str((CACHE.get(path) or {}).get("stage", ""))
+    if stage == "finished" or stage.startswith("stopped at"):
+        return stage, None
+    if pid is None and age is None:
+        return "unknown", None
+    return f"DEAD (pid {pid})" if pid else "DEAD (no recent status)", False

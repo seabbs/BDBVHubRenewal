@@ -54,6 +54,8 @@ function draw(){
  var refs=ftSel.refsOn();
  $("lossrefs").innerHTML=refs.map(function(r){return '<span class="tog dis" title="'+r.label+' is a reference with no training or held-out loss">'+r.label+'</span>'}).join("");
 }
-window.addEventListener("ftsel",draw);window.addEventListener("ftmode",draw);
+window.addEventListener("ftsel",draw);
+// New data from the server (live.js): redraw with the same state.
+window.addEventListener("ftdata",function(e){if(e.detail!=="loss")return;D=JSON.parse($("ldata").textContent);draw()});window.addEventListener("ftmode",draw);
 draw();
 })();
