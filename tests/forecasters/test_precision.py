@@ -39,11 +39,17 @@ def test_auto_takes_each_device_s_half_precision(
     assert foundation.inference_precision(device, "auto") == want
 
 
-def test_precision_comes_from_the_environment_fp32_by_default(
+def test_precision_comes_from_the_environment_auto_by_default(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    import torch
+
+    # Half precision moved relative WIS by under 0.06% on archie's GPU,
+    # so auto is the default; the CPU stays at fp32.
     monkeypatch.delenv("PRECISION", raising=False)
-    assert foundation.inference_precision("cuda") == "fp32"
+    monkeypatch.setattr(torch.cuda, "get_device_capability", lambda *_: (7, 5))
+    assert foundation.inference_precision("cuda") == "fp16"
+    assert foundation.inference_precision("cpu") == "fp32"
     monkeypatch.setenv("PRECISION", "bf16")
     assert foundation.inference_precision("cpu") == "bf16"
     monkeypatch.setenv("PRECISION", "fp8")
