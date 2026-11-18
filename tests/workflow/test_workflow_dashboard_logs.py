@@ -2,6 +2,7 @@
 
 import json
 import os
+import time
 
 from flowlib.dashboard import logs
 
@@ -77,3 +78,37 @@ def test_a_trainer_is_alive_while_its_pid_runs(tmp_path):
     assert str(os.getpid()) in text
     (tmp_path / "trainer.pid").write_text("999999999\n")
     assert logs.trainer_state(tmp_path)[1] is False
+
+
+def _status(folder, stage, age_s):
+    path = folder / "train" / "stream-status.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"stage": stage}))
+    when = time.time() - age_s
+    os.utime(path, (when, when))
+
+
+def test_a_fresh_stream_status_means_alive_whatever_the_pid(tmp_path):
+    # Under Snakemake the pid file is an old launcher's.
+    (tmp_path / "trainer.pid").write_text("999999999\n")
+    _status(tmp_path, "training", 60)
+    text, alive = logs.trainer_state(tmp_path)
+    assert alive is True
+    assert "status" in text
+    # No pid file at all.
+    (tmp_path / "trainer.pid").unlink()
+    assert logs.trainer_state(tmp_path)[1] is True
+
+
+def test_a_stale_status_and_a_dead_pid_mean_dead(tmp_path):
+    (tmp_path / "trainer.pid").write_text("999999999\n")
+    _status(tmp_path, "training", 3600)
+    assert logs.trainer_state(tmp_path)[1] is False
+
+
+def test_a_stopped_run_is_neither_alive_nor_dead(tmp_path):
+    for stage in ("finished", "stopped at n500"):
+        _status(tmp_path, stage, 3600)
+        text, alive = logs.trainer_state(tmp_path)
+        assert alive is None
+        assert stage in text
