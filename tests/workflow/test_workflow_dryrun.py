@@ -442,3 +442,15 @@ def test_land_runs_only_when_the_tables_changed(tmp_path):
     jobs = dry(tmp_path, "land", config=config)
     assert jobs["score_table"] == 1
     assert jobs["land"] == 1
+
+
+def test_zones_and_held_out_scores_can_be_left_out(tmp_path):
+    config = {
+        "score": {"labels": ["slots-aaa"], "zones": False, "held_out": False}
+    }
+    jobs = dry(tmp_path, "score", config=config)
+    assert jobs["score_bdbv"] == 2
+    assert jobs["score_germany"] == 2
+    assert "score_zones" not in jobs
+    assert "score_heldout_scores" not in jobs
+    assert jobs["score_table"] == 1
