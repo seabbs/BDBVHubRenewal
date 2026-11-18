@@ -2134,7 +2134,8 @@ def _data_root() -> Path:
 
 
 def _live_checkpoint(args: argparse.Namespace) -> int:
-    from bdbvhubrenewal.reporting.live_checkpoint import LIVE_RUN, docs_page
+    from bdbvhubrenewal.reporting.live_checkpoint import LIVE_RUN
+    from bdbvhubrenewal.reporting.live_checkpoint_page import docs_page
 
     path = Path(args.scores)
     # The Pages step leaves an empty file when the branch has no table.
