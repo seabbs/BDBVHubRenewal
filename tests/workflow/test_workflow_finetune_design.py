@@ -101,7 +101,9 @@ def _trainer_args(tmp_path):
         ln for ln in text.splitlines() if "scripts/finetune_stream.py" in ln
     )
     words = shlex.split(line.split("scripts/finetune_stream.py", 1)[1])
-    return words[: words.index(">>")]
+    # Up to the log redirect, `>> log` or `>>log` (as snakefmt writes it).
+    end = next(i for i, w in enumerate(words) if w.startswith(">>"))
+    return words[:end]
 
 
 def test_the_trainer_gets_the_agreed_design(tmp_path):
