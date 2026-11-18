@@ -692,13 +692,17 @@ def _chronos(checkpoint: Checkpoint | None = None) -> Any:
     import torch
     from chronos import Chronos2Pipeline
 
-    device = (
-        "cuda"
-        if torch.cuda.is_available()
-        else "mps"
-        if torch.backends.mps.is_available()
-        else "cpu"
-    )
+    # The workflow resolves the machine's device (workflow/flowlib/machine
+    # .py) and passes it as DEVICE; run outside it, torch picks one.
+    device = os.environ.get("DEVICE", "auto")
+    if device == "auto":
+        device = (
+            "cuda"
+            if torch.cuda.is_available()
+            else "mps"
+            if torch.backends.mps.is_available()
+            else "cpu"
+        )
     pipeline = Chronos2Pipeline.from_pretrained(
         CHRONOS_MODEL, revision=CHRONOS_REVISION, device_map=device
     )
