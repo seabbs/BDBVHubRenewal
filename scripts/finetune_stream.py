@@ -819,6 +819,21 @@ def free_memory() -> None:
         torch.cuda.empty_cache()
 
 
+def settle_heap() -> None:
+    """Collect garbage, then leave what survives out of later collections.
+
+    `free_memory` collects every step, and each collection walks every
+    object Python tracks: a chunk's blocks, the held-out blocks and the
+    model's modules. Frozen (`gc.freeze`), they are skipped, while the
+    step's own garbage is still collected and reference counting still
+    frees them. Called once a chunk, it first unfreezes, so cycles left by
+    the chunk before are collected then.
+    """
+    gc.unfreeze()
+    gc.collect()
+    gc.freeze()
+
+
 def memory() -> str:
     """Describe the GPU memory in use."""
     import torch
@@ -896,13 +911,17 @@ def publish(where: Path, key: str, run=subprocess.run) -> None:
 def accumulate(indices: list[int], backward, zero, skip) -> float:
     """Return a batch's loss, accumulating its gradients by `backward`.
 
-    If memory runs out, the gradients are cleared (`zero`) and the batch
-    is run again in halves, and so on; a single block that still does not
-    fit is left out (`skip`). Every other block is used once.
+    The gradients are clear when it starts (`finite_step`). If memory runs
+    out, they are cleared (`zero`) and the batch is run again in halves,
+    and so on; a single block that still does not fit is left out
+    (`skip`). Every other block is used once.
     """
     parts = [indices]
+    retry = False
     while True:
-        zero()
+        if retry:
+            zero()
+        retry = True
         values, sizes = [], []
         try:
             for part in parts:
@@ -937,10 +956,11 @@ def finite_step(params: list, optimiser, value: float) -> bool:
     import torch
 
     grads = [p.grad for p in params if p.grad is not None]
+    # One check on the device, read back once, not once a tensor.
     finite = (
         np.isfinite(value)
         and bool(grads)
-        and all(torch.isfinite(g).all() for g in grads)
+        and bool(torch.stack([torch.isfinite(g).all() for g in grads]).all())
     )
     if finite:
         torch.nn.utils.clip_grad_norm_(params, 1.0)
@@ -1570,6 +1590,7 @@ def main() -> None:
             DatasetMode.TRAIN,
             args.series_bias,
         )
+        settle_heap()
         log(
             f"outbreaks {done + 1}-{hi}: {len(blocks)} blocks, "
             f"{sizes.sum()} series, {len(plan)} steps"
@@ -1584,6 +1605,9 @@ def main() -> None:
                 sims_done(done, len(chunk), position, len(plan)),
                 args.outbreaks,
             )
+            # Cheap without `free_memory`; the step starts from no gradients
+            # whatever ran before it.
+            optimiser.zero_grad()
             value = accumulate(list(indices), backward, zero, skip)
             if not finite_step(params, optimiser, value):
                 log(f"step {step + 1}: no update (loss {value})")
@@ -1624,6 +1648,8 @@ def main() -> None:
                 if bias:
                     entry["bias"] = bias
                     described += f"bias {_bias_range(bias)}, "
+                # The next batch starts without the evaluation's buffers.
+                free_memory()
                 split["eval_s"] += time.perf_counter() - since
                 history.append(entry)
                 log(

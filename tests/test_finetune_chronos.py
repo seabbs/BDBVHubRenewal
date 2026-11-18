@@ -914,3 +914,100 @@ def test_one_draw_of_a_simulation_gives_32_blocks_of_a_year_s_context():
     assert CONTEXT == 364
     assert CUTS == 32
     assert len(picks) == 32
+
+
+def test_a_batch_that_fits_is_not_cleared_first():
+    from finetune_stream import accumulate
+
+    zeroed: list[int] = []
+
+    def backward(part, _share):
+        if len(part) > 2:
+            raise RuntimeError("CUDA out of memory")
+        return 0.5
+
+    # The step before cleared the gradients and freed memory.
+    assert accumulate([1, 2], backward, lambda: zeroed.append(1), print) == 0.5
+    assert zeroed == []
+    # Each retry after running out of memory starts from clear gradients.
+    assert accumulate([1, 2, 3], backward, lambda: zeroed.append(1), print)
+    assert zeroed == [1]
+
+
+def test_one_non_finite_gradient_skips_the_step():
+    torch = pytest.importorskip("torch")
+    from finetune_stream import finite_step
+
+    layer = torch.nn.Linear(2, 1)
+    params = list(layer.parameters())
+    optimiser = torch.optim.AdamW(params, lr=0.1)
+    before = [p.detach().clone() for p in params]
+    layer(torch.ones(1, 2)).sum().backward()
+    params[1].grad[...] = float("inf")
+    assert not finite_step(params, optimiser, 1.0)
+    assert all(torch.equal(a, b) for a, b in zip(before, params, strict=True))
+    assert all(p.grad is None for p in params)
+
+
+def test_settled_objects_are_skipped_by_collections_until_the_next():
+    import gc
+    import weakref
+
+    from finetune_stream import settle_heap
+
+    class Node:
+        pass
+
+    def cycle() -> weakref.ref:
+        a, b = Node(), Node()
+        a.other, b.other = b, a
+        return weakref.ref(a)
+
+    dead = cycle()
+    kept = Node()
+    try:
+        settle_heap()
+        # Garbage from before is collected; what survives is frozen.
+        assert dead() is None
+        assert gc.get_freeze_count() > 0
+        assert all(o is not kept for o in gc.get_objects())
+        # A frozen cycle that becomes garbage waits for the next settle.
+        holder = [Node()]
+        holder[0].me = holder[0]
+        settle_heap()
+        ref = weakref.ref(holder[0])
+        holder.clear()
+        gc.collect()
+        assert ref() is not None
+        settle_heap()
+        assert ref() is None
+    finally:
+        gc.unfreeze()
+
+
+def test_steps_in_a_row_do_not_sum_gradients():
+    torch = pytest.importorskip("torch")
+    from finetune_stream import accumulate, finite_step
+
+    def run(clear_between: bool) -> list:
+        torch.manual_seed(0)
+        layer = torch.nn.Linear(2, 1)
+        params = list(layer.parameters())
+        optimiser = torch.optim.SGD(params, lr=0.1)
+
+        def backward(part, share):
+            loss = layer(torch.full((len(part), 2), 1.0)).sum()
+            (loss * share).backward()
+            return float(loss)
+
+        for _ in range(2):
+            if clear_between:
+                optimiser.zero_grad()
+            value = accumulate([1, 2], backward, optimiser.zero_grad, print)
+            finite_step(params, optimiser, value)
+        return [p.detach().clone() for p in params]
+
+    # finite_step leaves the gradients clear, so the next step starts
+    # from none, as if cleared explicitly.
+    for a, b in zip(run(False), run(True), strict=True):
+        assert torch.equal(a, b)
