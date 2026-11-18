@@ -2,7 +2,7 @@
 """Blocks and steps per training chunk, from the trainer's own code.
 
 Cuts every ready simulation in SIM_DIR as `finetune_stream.py` does with
-the launcher's settings (`scripts/finetune_continuous.sh`: 32 blocks per
+the run's settings (workflow/config.yaml `finetune`: 32 blocks per
 simulation, one draw, subset seed 1, the five layouts, univariate share
 0.2, batch 256) and packs them with `plan_by_length`, so the SI's blocks
 and steps per chunk of 250 can be checked before a checkpoint lands.
