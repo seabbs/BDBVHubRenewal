@@ -17,7 +17,7 @@ Paths to the tidy data default to `$BDBV_DATA_DIR` or `data/`.
 | `bvd` | Cache the BVDOutbreakSize releases each vintage may use. |
 | `compare-hub [--fetch]` | Score our retrospective forecasts and the hub's submitted ones on the same truth and weeks. |
 | `nowcast` | Forecast from a real vintage, write the hub file and check it. With `--config` and `--fit`, forecast from a fit configuration. |
-| `zone-backtest` | Score `randomwalk`, `randomwalknowcast` and `pprandomwalknowcast` run at zone level on the real vintages. `--chunk K/N` runs only block K of N of the origins. |
+| `zone-backtest` | Score `randomwalk` and `randomwalknowcast` run at zone level on the real vintages. `--chunk K/N` runs only block K of N of the origins. |
 | `fit-store plan`, `fit`, `load`, `unpack` | List the fits the fit store lacks (`--origins` for some origins), make one, load the stored fits into `results/`, or write a submission candidate's stored fit directory for the submission. |
 | `fit` | Fit a configuration and write the fit directory and its diagnostics, for the submission CI. |
 | `plot-submission` | Plot a submitted hub file. |
@@ -53,7 +53,7 @@ The Pages build makes the rest with the steps of `task results`, from the code, 
 
 ## Fit store
 
-The backtest and the docs build fit no model, apart from the zone backtest, which fits `pprandomwalknowcast` at each origin ([Evaluation](../methods/evaluation.md#health-zones)).
+The backtest and the docs build fit no model.
 The Fit store workflow (`.github/workflows/fit-store.yml`) fits each fitted model once at each real origin.
 Each fit is one file on the `fit-store` branch, `<model>/<origin>/<key>.json.gz`.
 The key hashes:
@@ -68,7 +68,6 @@ The key hashes:
 - the runtime dependencies in `uv.lock`.
 
 The renewal variants use the sampler table of the submission candidate that runs them, in `ci/policy.toml`.
-`pprandomwalknowcast` uses its own.
 A model code or sampler change refits every origin.
 A new hub release adds one fit per model.
 The task at each origin is the submission's (`backtest.vintage_task`): weeks from 6 before the reference date to one week past `[forecast] max_horizon`, so the next round can be forecast from the same fit when no new release comes, and the latest earlier delays for a release with none of its own.

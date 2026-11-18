@@ -4,9 +4,7 @@
 Each real vintage before the truth vintage is forecast on each zone's
 own release snapshots (`zone_task`), for every zone with cases at the
 vintage.
-The functions default to the two random walks, and the CLI's
-`zone-backtest` adds `pprandomwalknowcast`, which is fitted at each
-origin.
+The functions and the CLI's `zone-backtest` run the two random walks.
 The zone delay, observation model and walk spread are each the zone's own
 where it has at least 10 cases a week, else its province's, else
 national (`pooling`).

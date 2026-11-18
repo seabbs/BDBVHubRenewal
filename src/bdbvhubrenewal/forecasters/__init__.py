@@ -4,8 +4,6 @@
 - `base`: `ForecastTask`, the `ForecastModel` protocol and the registry.
 - `randomwalk`: the random walk baseline, and random walk on a nowcast,
   with `chain` (the daily chain ladder), `pooling`, `obs` and `walk`.
-- `pprandomwalk`: a generative random walk nowcast, the walk and the
-  delay fitted jointly with partial pooling (numpyro).
 - `renewal`: the renewal variants, the adapter from a `ForecastTask` to
   the PyRenew model in `bdbvhubrenewal.model`.
 - `foundation`: the pretrained Chronos-2 model on two layouts of the hub
@@ -33,7 +31,6 @@ from bdbvhubrenewal.forecasters.base import (
     register_model,
 )
 from bdbvhubrenewal.forecasters.foundation import FoundationModel
-from bdbvhubrenewal.forecasters.pprandomwalk import PPRandomWalkNowcast
 from bdbvhubrenewal.forecasters.randomwalk import (
     RandomWalk,
     RandomWalkNowcast,
@@ -49,7 +46,6 @@ __all__ = [
     "FoundationModel",
     "ModelSpec",
     "ModelUnavailableError",
-    "PPRandomWalkNowcast",
     "RandomWalk",
     "RandomWalkNowcast",
     "RenewalModel",
