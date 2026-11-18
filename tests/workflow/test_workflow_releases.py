@@ -21,3 +21,14 @@ def test_earlier_releases_are_left_out():
     got = releases.labels(LISTING, "2026-11-01T00:00:00Z")
     assert got[-1] == "aaa"
     assert "old" in got
+
+
+def test_a_batch_is_released_once_both_its_files_are():
+    names = [
+        "counts-30900.csv.gz",
+        "settings-30900.csv",
+        "counts-30901.csv.gz",
+        "settings-30902.csv",
+        "qc.csv",
+    ]
+    assert releases.released_seeds(names) == {30900}

@@ -15,10 +15,11 @@ ROOT = Path(__file__).parents[2]
 SNAKEMAKE = Path(sys.executable).parent / "snakemake"
 
 
-def dry(tmp_path, *targets, config=None):
+def dry(tmp_path, *targets, config=None, extra=()):
     """Return the jobs per rule of a dry run of `targets`.
 
-    `config` is merged into workflow/config.yaml.
+    `config` is merged into workflow/config.yaml; `extra` are more
+    Snakemake options.
     """
     local = tmp_path / "local.env"
     if not local.exists():
@@ -39,6 +40,7 @@ def dry(tmp_path, *targets, config=None):
             "--workflow-profile",
             "workflow/profiles/ci",
             *(["--configfile", str(overlay)] if config else []),
+            *extra,
         ],
         cwd=ROOT,
         env={
@@ -152,11 +154,63 @@ def test_finetune_trains_one_segment_per_prefix(tmp_path):
     assert jobs["simulate_batch"] == 65
 
 
+RELEASE = {**FT, "finetune": {**FT["finetune"], "sims_from": "release"}}
+
+
+def _released(tmp_path, seeds):
+    """The batches the run can have, as the tick lists them."""
+    where = tmp_path / "checkpoints" / "slots"
+    where.mkdir(parents=True, exist_ok=True)
+    (where / "available-batches.txt").write_text(
+        "".join(f"{s}\n" for s in seeds)
+    )
+
+
 def test_finetune_takes_batches_from_releases(tmp_path):
-    config = {**FT, "finetune": {**FT["finetune"], "sims_from": "release"}}
-    jobs = dry(tmp_path, "finetune", config=config)
+    _released(tmp_path, [*range(30100, 30140), *range(30200, 30240)])
+    jobs = dry(tmp_path, "finetune", config=RELEASE)
     assert jobs["fetch_batch"] == 65
     assert "simulate_batch" not in jobs
+
+
+def test_from_releases_only_released_batches_are_trained_on(tmp_path):
+    # The held-out round and 13 batches of round 2: 273 outbreaks, enough
+    # for n250 and its spare batch but not n500.
+    _released(tmp_path, [*range(30100, 30140), *range(30200, 30213)])
+    jobs = dry(tmp_path, "finetune", config=RELEASE)
+    assert jobs["train_segment"] == 1
+    # 12 batches hold 252 outbreaks, then one spare, then the held-out.
+    assert jobs["fetch_batch"] == 12 + 1 + 40
+
+
+def test_from_releases_nothing_trains_before_the_held_out_round_is_in(tmp_path):
+    _released(tmp_path, [*range(30100, 30139), *range(30200, 30240)])
+    jobs = dry(tmp_path, "finetune", config=RELEASE)
+    assert "train_segment" not in jobs
+
+
+def test_from_releases_the_tick_lists_them_first(tmp_path):
+    # With no list yet, the run lists the releases before planning.
+    jobs = dry(tmp_path, "finetune", config=RELEASE)
+    assert jobs["available_batches"] == 1
+
+
+REMOTE = {**FT, "finetune": {**FT["finetune"], "sims_from": "remote"}}
+
+
+def test_from_the_rounds_host_only_listed_batches_are_trained_on(tmp_path):
+    # A machine without the rounds streams them from the rounds host's
+    # manifests, as they are simulated, before any release.
+    _released(tmp_path, [*range(30100, 30140), *range(30200, 30213)])
+    jobs = dry(tmp_path, "finetune", config=REMOTE)
+    assert jobs["train_segment"] == 1
+    assert jobs["fetch_batch"] == 12 + 1 + 40
+    assert "simulate_batch" not in jobs
+
+
+def test_from_the_rounds_host_the_tick_lists_its_manifests_first(tmp_path):
+    jobs = dry(tmp_path, "finetune", config=REMOTE)
+    assert jobs["available_batches"] == 1
 
 
 def test_finetune_never_publishes(tmp_path):
@@ -210,6 +264,41 @@ def test_the_live_run_switches_over_without_retraining(tmp_path):
     jobs = dry(tmp_path, "finetune", config=config)
     # Only n1000: n2000 needs more seeds than the list has.
     assert jobs["train_segment"] == 1
+
+
+def priorities(tmp_path, *targets, config=None):
+    """Return each rule's job priority in a dry run (0 when unset)."""
+    local = tmp_path / "local.env"
+    local.write_text(f"ROOT={tmp_path}\nHOST_NAME=test-host\n")
+    overlay = tmp_path / "overlay.yaml"
+    overlay.write_text(yaml.safe_dump(config or {}))
+    out = subprocess.run(
+        [str(SNAKEMAKE), *targets, "-s", "workflow/Snakefile", "-n",
+         "--cores", "1", "--workflow-profile", "workflow/profiles/ci",
+         "--configfile", str(overlay)],
+        cwd=ROOT,
+        env={"PATH": str(SNAKEMAKE.parent) + ":/usr/bin:/bin",
+             "HOME": str(tmp_path), "LOCAL_CONFIG": str(local)},
+        capture_output=True,
+        text=True,
+    )  # fmt: skip
+    assert out.returncode == 0, out.stderr + out.stdout
+    found = {}
+    for block in re.split(r"\n(?=rule \w+:)", out.stdout):
+        rule = re.match(r"rule (\w+):", block)
+        if rule:
+            got = re.search(r"priority: (\d+)", block)
+            found[rule[1]] = int(got[1]) if got else 0
+    return found
+
+
+def test_the_trainer_goes_first_then_simulation_then_scoring(tmp_path):
+    # One pool per machine: when jobs compete for cores or the GPU, the
+    # trainer (the run's critical path) goes first, then the simulations
+    # it trains on, then checkpoint scoring (score.smk, 10 and below).
+    got = priorities(tmp_path, "finetune", config=FT)
+    assert got["train_segment"] == 20
+    assert got["simulate_batch"] == 15
 
 
 def test_publish_verifies_then_releases_each_checkpoint(tmp_path):
@@ -462,3 +551,182 @@ def test_land_runs_only_when_the_tables_changed(tmp_path):
     jobs = dry(tmp_path, "land", config=config)
     assert jobs["score_table"] == 1
     assert jobs["land"] == 1
+
+
+def test_the_rounds_host_s_manifests_and_exclusions_are_mirrored(tmp_path):
+    # The rounds host is this machine here (REMOTE empty), its rounds in
+    # REMOTE_ROOT: round 1 whole, round 2 so far one batch.
+    host = tmp_path / "host"
+    for r, seeds in ((1, range(30100, 30140)), (2, [30200])):
+        where = host / "rounds" / f"r{r}"
+        (where / "qc").mkdir(parents=True)
+        rows = "".join(
+            f"{r},{s},block,r5,c,1,21,a,b,,1,2.0,h,t\n" for s in seeds
+        )
+        (where / "manifest.csv").write_text("header\n" + rows)
+    (host / "rounds" / "r1" / "qc" / "excluded.csv").write_text(
+        "simulation\n30101-3\n"
+    )
+    local = tmp_path / "local.env"
+    local.write_text(
+        f"ROOT={tmp_path}\nHOST_NAME=test-host\nREMOTE_ROOT={host}\n"
+    )
+    overlay = tmp_path / "overlay.yaml"
+    overlay.write_text(yaml.safe_dump(REMOTE))
+    run = tmp_path / "checkpoints" / "slots"
+    out = subprocess.run(
+        [str(SNAKEMAKE), str(run / "available-batches.txt"), "-s",
+         "workflow/Snakefile", "--cores", "1", "--workflow-profile",
+         "workflow/profiles/ci", "--configfile", str(overlay)],
+        cwd=ROOT,
+        env={"PATH": str(SNAKEMAKE.parent) + ":/usr/bin:/bin",
+             "HOME": str(tmp_path), "LOCAL_CONFIG": str(local)},
+        capture_output=True,
+        text=True,
+    )  # fmt: skip
+    assert out.returncode == 0, out.stderr + out.stdout
+    listed = (run / "available-batches.txt").read_text().split()
+    assert listed == [str(s) for s in [*range(30100, 30140), 30200]]
+    assert (run / "rounds" / "r1" / "qc" / "excluded.csv").exists()
+    assert (run / "rounds" / "r2" / "manifest.csv").exists()
+
+
+NOBIAS = {**FT, "finetune": {**FT["finetune"], "series_bias": False}}
+
+
+def test_a_no_bias_control_refuses_the_slots_run_s_folder(tmp_path):
+    local = tmp_path / "local.env"
+    local.write_text(f"ROOT={tmp_path}\nHOST_NAME=test-host\n")
+    overlay = tmp_path / "overlay.yaml"
+    overlay.write_text(yaml.safe_dump(NOBIAS))
+    out = subprocess.run(
+        [str(SNAKEMAKE), "finetune", "-s", "workflow/Snakefile", "-n",
+         "--cores", "1", "--workflow-profile", "workflow/profiles/ci",
+         "--configfile", str(overlay)],
+        cwd=ROOT,
+        env={"PATH": str(SNAKEMAKE.parent) + ":/usr/bin:/bin",
+             "HOME": str(tmp_path), "LOCAL_CONFIG": str(local)},
+        capture_output=True,
+        text=True,
+    )  # fmt: skip
+    assert out.returncode != 0
+    assert "RUN" in out.stderr + out.stdout
+
+
+def test_a_no_bias_control_trains_in_its_own_folder(tmp_path):
+    (tmp_path / "local.env").write_text(
+        f"ROOT={tmp_path}\nHOST_NAME=test-host\nRUN={tmp_path}/nobias\n"
+    )
+    jobs = dry(tmp_path, "finetune", config=NOBIAS)
+    assert jobs["train_segment"] == 2
+
+
+def test_a_tick_trains_only_the_next_segment(tmp_path):
+    # So each run ends after one segment and the next run plans afresh:
+    # new rounds, new releases, a checkpoint to score.
+    jobs = dry(tmp_path, "finetune", config={**FT, "next_segment_only": True})
+    assert jobs["train_segment"] == 1
+
+
+def test_a_tick_after_n250_trains_n500(tmp_path):
+    _checkpoint(tmp_path, 250)
+    jobs = dry(tmp_path, "finetune", config={**FT, "next_segment_only": True})
+    assert jobs["train_segment"] == 1
+
+
+def test_a_tick_does_not_train_on_to_the_n1000_check(tmp_path):
+    # The n1000 report needs n1000, so it must not pull the chain there.
+    config = {
+        **FT,
+        "next_segment_only": True,
+        "rounds": [1, 2, 3],
+        "finetune": {
+            **FT["finetune"],
+            "prefixes": [250, 500, 1000],
+            "outbreaks": 1000,
+            "rounds": [2, 3],
+        },
+    }
+    jobs = dry(tmp_path, "finetune", config=config)
+    assert jobs["train_segment"] == 1
+    assert "checkpoint_check" not in jobs
+
+
+def _rounds_host(tmp_path, rounds):
+    """A rounds host on this machine with `rounds` {round: seeds} listed."""
+    host = tmp_path / "host"
+    for r, seeds in rounds.items():
+        where = host / "rounds" / f"r{r}"
+        (where / "qc").mkdir(parents=True)
+        rows = "".join(
+            f"{r},{s},block,r5,c,1,21,a,b,,1,2.0,h,t\n" for s in seeds
+        )
+        (where / "manifest.csv").write_text("header\n" + rows)
+    local = tmp_path / "local.env"
+    local.write_text(
+        f"ROOT={tmp_path}\nHOST_NAME=test-host\nREMOTE_ROOT={host}\n"
+    )
+    return local
+
+
+def _list_batches(tmp_path, local):
+    """Run available_batches for real, as a tick does each run."""
+    overlay = tmp_path / "overlay.yaml"
+    overlay.write_text(yaml.safe_dump(REMOTE))
+    run = tmp_path / "checkpoints" / "slots"
+    out = subprocess.run(
+        [str(SNAKEMAKE), str(run / "available-batches.txt"), "-s",
+         "workflow/Snakefile", "--cores", "1", "--workflow-profile",
+         "workflow/profiles/ci", "--configfile", str(overlay),
+         "--forcerun", "available_batches"],
+        cwd=ROOT,
+        env={"PATH": str(SNAKEMAKE.parent) + ":/usr/bin:/bin",
+             "HOME": str(tmp_path), "LOCAL_CONFIG": str(local)},
+        capture_output=True,
+        text=True,
+    )  # fmt: skip
+    assert out.returncode == 0, out.stderr + out.stdout
+
+
+def test_a_fresh_listing_keeps_the_checkpoints_saved(tmp_path):
+    # Each tick lists the batches anew; the newer list must not make a
+    # saved (protected) checkpoint look outdated.
+    local = _rounds_host(
+        tmp_path, {1: range(30100, 30140), 2: range(30200, 30240)}
+    )
+    _checkpoint(tmp_path, 250)
+    _list_batches(tmp_path, local)
+    jobs = dry(
+        tmp_path, "finetune", config={**REMOTE, "next_segment_only": True}
+    )
+    assert jobs["train_segment"] == 1
+
+
+def test_a_no_bias_config_still_simulates_in_the_default_folder(tmp_path):
+    # The guard is the trainer's: other targets run as before.
+    jobs = dry(tmp_path, "simulate", config={**NOBIAS, "rounds": [4]})
+    assert jobs["simulate_batch"] == 40
+
+
+def test_an_unreachable_rounds_host_is_said(tmp_path):
+    # A tick that cannot copy a round's manifest says so, not silence.
+    local = tmp_path / "local.env"
+    local.write_text(
+        f"ROOT={tmp_path}\nHOST_NAME=test-host\n"
+        f"REMOTE_ROOT={tmp_path}/no-such-host\n"
+    )
+    overlay = tmp_path / "overlay.yaml"
+    overlay.write_text(yaml.safe_dump(REMOTE))
+    run = tmp_path / "checkpoints" / "slots"
+    out = subprocess.run(
+        [str(SNAKEMAKE), str(run / "available-batches.txt"), "-s",
+         "workflow/Snakefile", "--cores", "1", "--workflow-profile",
+         "workflow/profiles/ci", "--configfile", str(overlay)],
+        cwd=ROOT,
+        env={"PATH": str(SNAKEMAKE.parent) + ":/usr/bin:/bin",
+             "HOME": str(tmp_path), "LOCAL_CONFIG": str(local)},
+        capture_output=True,
+        text=True,
+    )  # fmt: skip
+    assert "manifest.csv" in out.stderr
+    assert "could not copy" in out.stderr

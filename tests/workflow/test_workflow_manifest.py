@@ -108,3 +108,14 @@ def test_a_batch_without_its_log_has_no_row(tmp_path):
     (sims / "logs" / "30421.log").unlink()
     with pytest.raises(FileNotFoundError, match=re.escape("30421.log")):
         _row(sims)
+
+
+def test_a_manifest_lists_the_batches_it_holds(tmp_path):
+    path = tmp_path / "manifest.csv"
+    path.write_text(
+        manifest.HEADER + "\n"
+        "10,31002,block,r5,c,1,21,a,b,,1,2.0,host,t\n"
+        "10,31000,block,r5,c,1,21,a,b,,1,2.0,host,t\n"
+    )
+    assert manifest.seeds(path) == {31000, 31002}
+    assert manifest.seeds(tmp_path / "none.csv") == set()

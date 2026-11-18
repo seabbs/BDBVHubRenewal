@@ -84,6 +84,9 @@ rule simulate_batch:
         # At most `--resources sim_slots=N` batches at once (2 by default).
         sim_slots=1,
     threads: 1
+    # In one pool, after the trainer (20) and before scoring (10 and
+    # below): the trainer waits on these batches.
+    priority: 15
     shell:
         # The simulator must be the committed one, as the manifest records
         # the commit. A retry keeps the first attempt's log. R and Stan

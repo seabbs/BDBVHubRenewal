@@ -80,7 +80,8 @@ Segment N resumes from the state kept with the prefix before and stops once `n<N
 The state carries the learning-rate schedule, the step, the batch position and torch's random state, so the segments in turn are the run that never stopped.
 
 - `seed_list`: the training seeds in order, the rounds' in seed order (rounds 10 to 19, grid r5) or a fixed `seed_file`.
-- `fetch_batch`: a batch into `<RUN>/sims/`, hard linked from this machine's rounds or downloaded from its release (`sims_from`).
+- `fetch_batch`: a batch into `<RUN>/sims/`, hard linked from this machine's rounds, copied from the rounds host's (`remote`, `REMOTE` and `REMOTE_ROOT`) or downloaded from its release (`release`; `sims_from`, or `SIMS_FROM` in `config/local.env`).
+- `available_batches`: on a machine without the rounds, the batches it can have, listed afresh each tick: those the rounds host's manifests list (mirrored with its QC exclusions in `<RUN>/rounds/`), or those released. A segment is planned only once its batches are listed, counting the training seeds up to the first batch not yet listed, and nothing trains before the whole held-out round is listed.
 - `real_validation`: the BDBV pseudo-origin blocks each checkpoint is scored on (`scripts/finetune_real_validation.py`).
 - `train_segment`: one segment on the GPU. Its inputs are the batches that hold its first N outbreaks after QC exclusions, one spare, and the held-out round's batches (round 9). A finished checkpoint is final and is never retrained.
 - `checkpoint_check`: a report of whether checkpoint `check_at` (1,000) beats zero-shot on the held-out simulations and the pseudo-origins. It never stops training.
@@ -142,7 +143,14 @@ The workflow updates itself as results come in. Each machine runs its own target
 | the machine that trains (GPU) | `finetune publish` | trains the next segment once its batches are there, and releases each new checkpoint |
 | a simulating machine | `simulate release` | simulates the configured rounds and releases each batch |
 
-A tick (`task tick`, `workflow/scripts/tick.py`) runs the targets in order at nice 19 with the default profile and the machine's budget. It is skipped when another tick is still running (a lock in `output/`) or when less than `MIN_FREE_GB` of memory or `MIN_DISK_GB` of disk is free; a failed target stops the tick, so `land` never follows a failed `score`. Its log is `output/workflow-tick.log`.
+A tick (`task tick`, `workflow/scripts/tick.py`) runs the pool targets (`simulate`, `push`, `finetune`, `score`, `dashboard`) as one Snakemake run at nice 19 with the default profile and the machine's budget, so a free core or the GPU takes whichever queued job fits.
+When jobs compete, the trainer goes first (priority 20), then simulation (15), then checkpoint scoring (10 and below).
+The outward targets (`land`, `publish`, `release`) follow in their configured order.
+A failed run skips `land` and `release`, so `land` never follows a failed `score`, but `publish` still releases the checkpoints saved.
+A tick's run trains only the next segment (`next_segment_only`), so it ends after one segment and the next run plans afresh.
+Work that appears during a run, such as a new checkpoint or a landed round, waits for the next tick's run, so it waits at most as long as the longest running job, one segment.
+Snakemake locks the worktree it runs in, so each machine has one driver worktree.
+A tick is skipped when another tick is still running (a lock in `output/`) or when less than `MIN_FREE_GB` of memory or `MIN_DISK_GB` of disk is free. Its log is `output/workflow-tick.log`.
 
 `task schedule ACTION=install` installs a timer that runs the tick every `SCHEDULE_EVERY` minutes (default 60): a systemd user timer on Linux with systemd, else a cron line; a launchd agent on macOS; or the one `SCHEDULE_KIND` names. The unit is written from where the checkout is and the `PATH` it is installed from, so nothing machine-specific is committed. `ACTION=show` prints it, `ACTION=uninstall` removes it.
 

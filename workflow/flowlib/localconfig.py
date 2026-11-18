@@ -66,7 +66,7 @@ DEFAULTS = (
     ("TARGETS", "simulate finetune score"),
     ("SIMS_FROM", ""),
     # Scheduled runs (workflow/scripts/tick.py): the targets each tick runs
-    # in order (empty: none), every how many minutes, and the timer
+    # (empty: none; flowlib.schedule), every how many minutes, and the timer
     # (cron, systemd or launchd; empty: by platform).
     ("SCHEDULE_TARGETS", ""),
     ("SCHEDULE_EVERY", "60"),

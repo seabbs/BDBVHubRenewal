@@ -6,6 +6,11 @@
 # Simulation rounds to make or read, as round numbers.
 rounds: []
 
+# Whether `finetune` trains only the next segment, not every one in
+# reach. A scheduled tick sets it (flowlib.schedule), so each run ends
+# after one segment and the next run plans afresh.
+next_segment_only: false
+
 simulate:
   # Round r is `batches` batches from seed `seed_base` + 100 r, each
   # `batch` outbreaks with exactly `draws` observation draws: 40 of 21 are
@@ -35,8 +40,9 @@ finetune:
   seed_file: null
   held_round: 9
   holdout: 90
-  # Where the batches come from: `local` (this machine's rounds) or
-  # `release` (the sims-r<N> releases).
+  # Where the batches come from: `local` (this machine's rounds),
+  # `remote` (the rounds host's, REMOTE in config/local.env) or `release`
+  # (the sims-r<N> releases); SIMS_FROM in config/local.env sets it.
   sims_from: local
   # Chronos-2's recipe: one draw of each simulation cut at `cuts`
   # cut-offs, the learning rate falling linearly to zero over the
