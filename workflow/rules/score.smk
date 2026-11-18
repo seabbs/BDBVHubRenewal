@@ -42,7 +42,8 @@ def checkpoint_labels(wc=None):
     if SC["labels"] is not None:
         return list(SC["labels"])
     path = checkpoints.release_list.get().output[0]
-    return releases.labels(json.loads(Path(path).read_text()), SC["published_from"])
+    found = releases.labels(json.loads(Path(path).read_text()), SC["published_from"])
+    return [lb for lb in found if lb not in set(SC["skip"])]
 
 
 rule bdbv_data:
