@@ -63,7 +63,6 @@ import pandas as pd
 
 from bdbvhubrenewal.data.dates import as_date, epiweek_end
 from bdbvhubrenewal.data.releases import release_cutoff
-from bdbvhubrenewal.data.snapshots import NATIONAL
 from bdbvhubrenewal.data.zones import province_of
 from bdbvhubrenewal.evaluation.scoring import (
     SCORE_COLUMNS,
@@ -72,6 +71,7 @@ from bdbvhubrenewal.evaluation.scoring import (
     score_forecasts,
 )
 from bdbvhubrenewal.forecasters.base import (
+    NATIONAL,
     ForecastModel,
     ForecastTask,
     MissingSnapshots,

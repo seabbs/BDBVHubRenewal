@@ -27,9 +27,10 @@ def test_snapshots_take_the_root_from_the_codes() -> None:
             "onset_date": ["2026-10-20", "2026-10-24"],
             "observed": [2, 3],
             "imputed": [0, 0],
+            "cutoff": ["2026-10-24"] * 2,
         }
     )
     snap = snapshot_arrays(daily, "2026-10-24", ("DE-BY", "DE-BE"))
     assert snap.locations == ("DE", "DE-BE", "DE-BY")
     assert snap.parent.tolist() == [-1, 0, 0]
-    assert snap.counts[0, 0].sum() == 5
+    assert snap.counts[1:, 0].sum() == 5
