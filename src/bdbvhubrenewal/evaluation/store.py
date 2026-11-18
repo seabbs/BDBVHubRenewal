@@ -965,6 +965,7 @@ def load(
     status: list[StoreStatus] = []
     loaded: list[StoredFit] = []
     forecasts: list[pd.DataFrame] = []
+    zones: list[pd.DataFrame] = []
     low = -(10**6) if min_horizon is None else min_horizon
     high = 10**6 if max_horizon is None else max_horizon
     for (model, origin), key in sorted(keys.items(), key=lambda x: x[0][1])[
@@ -973,10 +974,14 @@ def load(
         chosen, failed = _choose(Path(store), model, origin, key)
         if chosen is not None:
             # Each fit's forecasts are cut to the backtest's weeks and
-            # compacted as read (`compact_forecasts`), so the store's
-            # samples never sit in memory as text at once.
+            # compacted as read (`compact_forecasts`), as are its zone
+            # samples, so the store's samples never sit in memory as text
+            # at once.
             forecasts.append(compact_forecasts(chosen.forecasts, low, high))
-            loaded.append(dataclasses.replace(chosen, forecasts=pd.DataFrame()))
+            zones.append(compact_forecasts(_zone_samples(chosen)))
+            loaded.append(
+                dataclasses.replace(chosen, forecasts=pd.DataFrame(), files={})
+            )
         status.append(
             StoreStatus(
                 model,
@@ -992,7 +997,7 @@ def load(
         ("forecasts.csv.gz", [stack_forecasts(forecasts)]),
         ("backtest-fits.csv", [f.fits for f in loaded]),
         (DELAY_SUMMARY_FILE, [f.delays for f in loaded]),
-        (ZONE_FITS_FILE, [_zone_samples(f) for f in loaded]),
+        (ZONE_FITS_FILE, [stack_forecasts(zones)]),
     ):
         _merge(out / name, frames)
     (out / STATUS_FILE).write_text(
