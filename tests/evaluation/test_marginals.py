@@ -56,14 +56,6 @@ def task(
     )[0]
 
 
-def _weekly() -> foundation.FoundationModel:
-    """Chronos-2 on the weekly releases, which gives its own quantiles.
-
-    No registered model takes the weekly source now; the class still does.
-    """
-    return foundation.FoundationModel("fm_weekly", "weekly", "ragged")
-
-
 @pytest.fixture
 def fake_chronos(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(foundation, "_chronos", lambda *_: _FakePipeline())
@@ -74,7 +66,7 @@ def fake_chronos(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_a_quantile_model_s_quantiles_do_not_depend_on_the_seed(
     task: ForecastTask,
 ) -> None:
-    model = _weekly()
+    model = get_model("fm_chronos_weekly_ragged")
     one = forecast_quantiles(model, task, LEVELS, seed=1)
     two = forecast_quantiles(model, task, LEVELS, seed=2)
     pd.testing.assert_frame_equal(one, two)
@@ -86,7 +78,7 @@ def test_a_quantile_model_s_quantiles_do_not_depend_on_the_seed(
 def test_native_quantiles_are_interpolated_to_the_levels(
     task: ForecastTask,
 ) -> None:
-    model = _weekly()
+    model = get_model("fm_chronos_weekly_ragged")
     out = forecast_quantiles(model, task, LEVELS, seed=1)
     # Steps after the reported counts: no floor lifts them, so each is
     # the native quantile read at the level (0.025 between 0.01 and 0.05).
@@ -148,5 +140,5 @@ def test_a_sample_model_gives_the_quantiles_of_its_draws(
 @pytest.mark.usefixtures("fake_chronos")
 def test_an_unavailable_quantile_model_has_no_rows(task: ForecastTask) -> None:
     no_history = dataclasses.replace(task, target_history=None)
-    model = _weekly()
+    model = get_model("fm_chronos_weekly_ragged")
     assert forecast_quantiles(model, no_history, LEVELS).empty

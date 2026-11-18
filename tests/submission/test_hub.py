@@ -221,8 +221,7 @@ def test_only_the_chronos_models_give_their_own_national() -> None:
     from bdbvhubrenewal.submission.hub import own_national
 
     assert own_national("fm_chronos_daily_ragged_ft")
-    assert own_national("fm_chronos_daily_ragged")
-    assert own_national("fm_chronos_daily_complete")
+    assert own_national("fm_chronos_weekly_ragged")
     for name in ("renewal", "renewalbvd", "randomwalknowcast", "randomwalk"):
         assert not own_national(name)
     assert not own_national(None)

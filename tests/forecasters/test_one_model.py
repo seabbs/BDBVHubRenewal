@@ -18,7 +18,6 @@ from bdbvhubrenewal.forecasters import (
     ForecastTask,
     foundation,
     get_model,
-    list_models,
     series_bias,
 )
 from bdbvhubrenewal.forecasters.foundation import (
@@ -115,20 +114,15 @@ def test_inference_rows_carry_the_total_rows_places():
         assert place[4 + k] == PLACES.index(name.rsplit("_lag_", 1)[0])
 
 
-def test_every_foundation_model_takes_the_layout_it_is_fine_tuned_on(ft):
-    # One layout: the daily releases with each place's weekly totals as a
-    # target row, zero-shot, complete-data and fine-tuned alike.
-    names = {s.name for s in list_models() if s.name.startswith("fm_")}
-    assert names >= {
-        "fm_chronos_daily_ragged",
-        "fm_chronos_daily_complete",
-        "fm_chronos_daily_ragged_ft",
-    }
-    assert not {n for n in names if "weekly" in n}
+def test_the_finetuned_model_alone_takes_its_trained_layout(ft):
+    # The fine-tuned model is the daily one with weekly totals rows; the
+    # weekly releases are for the references only.
+    with pytest.raises(KeyError):
+        get_model("fm_chronos_weekly_ragged_ft")
     assert (ft.source, ft.weekly_totals) == ("daily", True)
-    for name in ("fm_chronos_daily_ragged", "fm_chronos_daily_complete"):
-        model = get_model(name)
-        assert (model.source, model.weekly_totals) == ("daily", True)
+    assert not get_model("fm_chronos_weekly_ragged").weekly_totals
+    # The zero-shot daily model has no total rows.
+    assert not get_model("fm_chronos_daily_ragged").weekly_totals
 
 
 def _aggregate_sampler(store: list):
