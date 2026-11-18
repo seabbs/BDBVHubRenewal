@@ -3,29 +3,32 @@
 Nowcasts and forecasts of confirmed Bundibugyo virus disease cases for the BDBV Modeling Hub.
 { .page-subtitle }
 
-**Quick links:** [![bdbv-hub-modelling](assets/logos/bdbv-hub-modelling/logo-mark.svg){ width="32" height="32" title="bdbv-hub-modelling" }](index.md) [![Fine-tuned foundation](assets/logos/fine-tuned-foundation/logo-mark.svg){ width="32" height="32" title="Fine-tuned foundation" }](paper.md) [![Joint-model-informed renewal](assets/logos/joint-model-informed-renewal/logo-mark.svg){ width="32" height="32" title="Joint-model-informed renewal" }](methods/model.md) [![Hub submission](assets/logos/hub-submission/logo-mark.svg){ width="32" height="32" title="Hub submission" }](submission/workflow.md)
+**Quick links:** [![bdbv-hub-modelling](assets/logos/bdbv-hub-modelling/logo-mark.svg){ width="32" height="32" title="bdbv-hub-modelling" }](index.md) [![Fine-tuned foundation](assets/logos/fine-tuned-foundation/logo-mark.svg){ width="32" height="32" title="Fine-tuned foundation" }](foundation/index.md) [![Joint-model-informed renewal](assets/logos/joint-model-informed-renewal/logo-mark.svg){ width="32" height="32" title="Joint-model-informed renewal" }](renewal/index.md) [![Hub submission](assets/logos/hub-submission/logo-mark.svg){ width="32" height="32" title="Hub submission" }](hub/index.md)
 
-The [BDBV Modeling Hub](https://github.com/InsightNet-US/BDBV-Modeling-Hub) target is weekly confirmed cases by symptom-onset week, nationally, by province and by health zone, as 100 joint sample trajectories.
-Two hub models are submitted, `seabbs-rwnowcast` and `seabbs-renewal`.
+The [BDBV Modeling Hub](https://github.com/InsightNet-US/BDBV-Modeling-Hub) collects weekly nowcasts and forecasts of confirmed Bundibugyo virus disease cases in the Democratic Republic of the Congo.
+This repository holds the models we submit to it, experimental models related to it, their backtests, and their evaluation on other case studies.
+The random walk and the random walk nowcast are the baselines we evaluate every other model against, and give the hub a principled baseline.
 
-## Models
+The fine-tuned foundation project fine-tunes the Chronos-2 forecasting model on simulated outbreaks so that it can nowcast from reporting triangles ([paper plan](https://github.com/seabbs/bdbv-hub-modelling/issues/206)).
+The [paper](paper/main.html) and its [supporting information](paper/si.html) describe it.
 
-`randomwalknowcast` is baselinenowcast ([Johnson et al. 2025](https://doi.org/10.12688/wellcomeopenres.25027.2), Wellcome Open Research) with a random walk on top, and `randomwalk` is the same walk with no nowcast ([Baseline models](methods/baselines.md)).
-The renewal models (`renewal`, `renewalsp` and `renewalbvd`) are built on [PyRenew](https://github.com/CDCgov/PyRenew) and fit the hub's known and imputed onsets ([Renewal models](methods/model.md)).
-Each week `randomwalknowcast` is submitted as `seabbs-rwnowcast` and the first renewal model to pass its checks as `seabbs-renewal` ([Submission workflow](submission/workflow.md)).
+The joint-model-informed renewal project compares renewal models fitted on their own with renewal models informed by a larger joint model, BVDOutbreakSize, through approximate Markov melding.
 
-## Pages
+<div class="grid cards" markdown>
 
-| Section | What it holds |
-|---|---|
-| [Setup](setup.md) | Install the package and run it from a script, a REPL or a notebook. |
-| [Getting started](getting-started.ipynb) | Forecast with the two baselines, load a stored renewal fit, and plot and score them in Python. |
-| Methods | [Data](methods/data.md), [Baseline models](methods/baselines.md), [Renewal models](methods/model.md), [Evaluation](methods/evaluation.md) and [Implementation](methods/implementation.md). |
-| Results | [Data](data.md), [nowcast](nowcast.md), [backtest](backtest.md) and [comparison with hub forecasts](comparison.md). |
-| Submission | The [workflow](submission/workflow.md), [hub specification](submission/hub-spec.md), [opting in](submission/opting-in.md) and [submission log](submission/rounds/index.md). |
-| Development | The [model building](model-development/model-building.md) ladder, the [development log](model-development/log.md), [contributing](development/contributing.md), [adding a model](development/adding-a-model.md) and the [CLI](development/cli.md). |
-| [Paper](paper.md) | The paper's main text, with links to its supporting information and the PDFs. |
-| [API reference](reference/index.md) | The Python package. |
+-   [![](assets/logos/fine-tuned-foundation/logo-mark.svg){ width="32" height="32" } **Fine-tuned foundation**](foundation/index.md)
+
+    Chronos-2 fine-tuned on simulated outbreaks, the paper, its baselines and the German benchmark.
+
+-   [![](assets/logos/joint-model-informed-renewal/logo-mark.svg){ width="32" height="32" } **Joint-model-informed renewal**](renewal/index.md)
+
+    Renewal models on their own and informed by BVDOutbreakSize.
+
+-   [![](assets/logos/hub-submission/logo-mark.svg){ width="32" height="32" } **Hub submission**](hub/index.md)
+
+    The current nowcast, the backtest, the comparison with the hub and the submission pipeline.
+
+</div>
 
 ## Data credit
 
