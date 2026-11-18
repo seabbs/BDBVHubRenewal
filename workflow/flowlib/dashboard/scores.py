@@ -195,7 +195,8 @@ def wis_bars(
     -------
     dict
         (study, level) -> bars, each with `series`, `label`, `colour`,
-        `n`, `wis` and `parts` (component -> value).
+        `n`, `cells` (forecast cells scored), `wis` and `parts`
+        (component -> value).
     """
     which = Classifier(run_list, references, excluded)
     order = [r.key for r in run_list] + [r.key for r in references]
@@ -227,6 +228,8 @@ def wis_bars(
             "label": f"{label} n{n}" if series in runs_ else label,
             "colour": colour,
             "n": n,
+            # Forecast cells scored: bars compare only on the same cells.
+            "cells": int(num(r.get("n")) or 0),
             "wis": round(total, 4),
             "parts": {p: round(v or 0.0, 4) for p, v in parts.items()},
         }

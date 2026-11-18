@@ -9,6 +9,7 @@ as SVG, so the page needs no script for it.
 from __future__ import annotations
 
 import html
+from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
@@ -18,9 +19,16 @@ PARTS = paperstyle.WIS_PARTS
 """The components, in the order they stack."""
 
 NOTE = (
-    "Mean WIS on the forecasts every model made; the three parts sum to "
-    "it (Bracher et al. 2021)."
+    "Mean WIS on the forecasts the models were scored on together; the "
+    "three parts sum to it (Bracher et al. 2021). * scored on other "
+    "forecasts than most of its card's bars, so not comparable with them."
 )
+
+
+def _usual(bars: Sequence[Mapping[str, Any]]) -> int:
+    """Return the number of cells most of a card's bars were scored on."""
+    counts = Counter(b.get("cells", 0) for b in bars)
+    return max(counts, key=lambda c: (counts[c], c))
 
 
 def card(title: str, bars: Sequence[Mapping[str, Any]], info: str = "") -> str:
@@ -43,10 +51,12 @@ def card(title: str, bars: Sequence[Mapping[str, Any]], info: str = "") -> str:
             f'y2="{base}" class=grid /><text x="{sx(t):.1f}" '
             f'y="{base + 14}" text-anchor=middle class=ax>{t:g}</text>'
         )
+    usual = _usual(bars)
     for i, b in enumerate(bars):
         y = top + row * i + 4
         h = row - 8
-        label = esc(b["label"])
+        other = b.get("cells", 0) != usual
+        label = esc(b["label"]) + (" *" if other else "")
         o.append(
             f'<rect x="4" y="{y + 3}" width="10" height="10" rx="2" '
             f'fill="{esc(b["colour"])}" /><text x="20" y="{y + 12}" '
