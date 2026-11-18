@@ -14,12 +14,10 @@ def test_a_tick_runs_this_machine_s_targets_in_order():
         "SIM_SLOTS": "2",
     }
     got = schedule.plan(cfg)
-    assert [t for t, _, _ in got] == ["score", "land"]
-    score = got[0][1]
-    assert got[0][2] is True
+    assert [t for t, _, _ in got] == ["refresh", "score", "land"]
+    score = got[1][1]
+    assert got[1][2] is True
     assert score[:3] == ["nice", "-n", "19"]
-    assert "--forcerun" in score
-    assert "release_list" in score
     assert "workflow/profiles/default" in score
     assert score[score.index("--cores") :][:2] == ["--cores", "4"]
     assert "mem_mb=32768" in score
@@ -158,22 +156,31 @@ def test_timers_run_with_the_installing_path(tmp_path):
     assert data["EnvironmentVariables"]["PATH"] == "/opt/uv/bin"
 
 
-@pytest.mark.parametrize("source", ["release", "remote"])
-def test_a_finetune_run_lists_the_batches_it_can_have_afresh(source):
+def test_the_listings_are_refreshed_in_a_run_of_their_own():
+    # Snakemake 9 ends a run after a forced checkpoint without the jobs
+    # it unlocks, so the pool must plan from lists refreshed beforehand.
     got = schedule.plan(
-        {"SCHEDULE_TARGETS": "finetune score", "SIMS_FROM": source}
+        {"SCHEDULE_TARGETS": "finetune score", "SIMS_FROM": "remote"}
     )
-    pool = got[0][1]
-    assert pool.count("--forcerun") == 1
-    forced = pool[pool.index("--forcerun") + 1 :]
-    assert "release_list" in forced
-    assert "available_batches" in forced
+    (name, refresh, _), (_, pool, _) = got[:2]
+    assert name == "refresh"
+    assert snakemake_targets(refresh) == ["release_list", "available_batches"]
+    forced = refresh[refresh.index("--forcerun") + 1 :]
+    assert forced[:2] == ["release_list", "available_batches"]
+    assert "--forcerun" not in pool
 
 
-def test_a_machine_with_the_rounds_lists_no_batches():
-    # --forcerun adds a rule to the run even when nothing needs it.
+def test_a_machine_with_the_rounds_refreshes_no_batch_list():
     got = schedule.plan({"SCHEDULE_TARGETS": "finetune"})
+    assert [t for t, _, _ in got] == ["finetune"]
     assert "--forcerun" not in got[0][1]
+
+
+def test_a_failed_refresh_still_leaves_the_pool_to_run():
+    # Its lists are then those of the last tick.
+    got = schedule.plan({"SCHEDULE_TARGETS": "score"})
+    assert got[0][0] == "refresh"
+    assert got[0][2] is True
 
 
 def test_the_paper_is_not_a_tick_target():

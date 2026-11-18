@@ -43,14 +43,14 @@ def ran(tmp_path, monkeypatch):
 def test_targets_run_in_order(ran):
     calls, _, _ = ran
     assert tick.main() == 0
-    assert calls == ["score", "land"]
+    assert calls == ["release_list", "score", "land"]
 
 
 def test_a_failed_target_stops_the_tick(ran):
     calls, codes, _ = ran
     codes["score"] = 1
     assert tick.main() == 1
-    assert calls == ["score"]
+    assert calls == ["release_list", "score"]
 
 
 def test_a_running_tick_means_this_one_is_skipped(ran, tmp_path):
@@ -71,7 +71,12 @@ def test_one_run_takes_every_pool_target(ran):
     calls, _, targets = ran
     targets[0] = "simulate finetune score land publish"
     assert tick.main() == 0
-    assert calls == ["simulate finetune score", "land", "publish"]
+    assert calls == [
+        "release_list",
+        "simulate finetune score",
+        "land",
+        "publish",
+    ]
 
 
 def test_a_failed_pool_skips_land_but_still_publishes(ran):
@@ -81,7 +86,7 @@ def test_a_failed_pool_skips_land_but_still_publishes(ran):
     targets[0] = "finetune score land publish release"
     codes["finetune score"] = 1
     assert tick.main() == 1
-    assert calls == ["finetune score", "publish"]
+    assert calls == ["release_list", "finetune score", "publish"]
 
 
 def status_of(tmp_path):
@@ -113,3 +118,11 @@ def test_a_running_step_is_reported_while_it_runs(tmp_path):
     got = json.loads(seen.read_text())
     assert got["step"] == "simulate"
     assert got["alive"] is True
+
+
+def test_a_failed_refresh_still_runs_the_pool(ran):
+    # Unreachable releases leave the last lists; the pool still runs.
+    calls, codes, _ = ran
+    codes["release_list"] = 1
+    assert tick.main() == 1
+    assert calls == ["release_list", "score"]
