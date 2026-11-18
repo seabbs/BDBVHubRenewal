@@ -23,8 +23,12 @@ from bdbvhubrenewal.data.tidy import write_csv
 from bdbvhubrenewal.data.zones import is_zone, weekly_zone_counts
 from bdbvhubrenewal.forecasters import ForecastTask
 from bdbvhubrenewal.forecasters.base import NATIONAL, SAMPLE_COLUMNS
-from bdbvhubrenewal.forecasters.zones import zones_for_model, zones_need_not_sum
-from bdbvhubrenewal.submission.hub import own_national, to_hub_table
+from bdbvhubrenewal.forecasters.zones import zones_for_model
+from bdbvhubrenewal.submission.hub import (
+    own_national,
+    to_hub_table,
+    zones_need_not_sum,
+)
 
 __all__ = [
     "HUB_QUANTILE_LEVELS",

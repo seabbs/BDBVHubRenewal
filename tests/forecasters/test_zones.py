@@ -512,7 +512,7 @@ def test_hub_table_checks_zone_sums_unless_told_not_to(
 
 
 def test_zones_need_not_sum_for_the_walks_and_the_foundation_model() -> None:
-    from bdbvhubrenewal.forecasters.zones import zones_need_not_sum
+    from bdbvhubrenewal.submission.hub import zones_need_not_sum
 
     # The walks run each zone on its own data; the foundation model takes
     # its zones straight from its block. Neither sums them to provinces.

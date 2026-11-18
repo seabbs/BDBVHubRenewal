@@ -47,6 +47,7 @@ __all__ = [
     "to_hub_table",
     "write_model_metadata",
     "write_submission",
+    "zones_need_not_sum",
 ]
 
 HUB_COLUMNS: Final = (
@@ -186,7 +187,7 @@ def to_hub_table(
         Check that the zones sum to the rounded province samples, sample
         by sample, as a split model's must. False for the random walks'
         own zone draws and the foundation models' block zones
-        (`forecasters.zones.zones_need_not_sum`); the hub
+        (`zones_need_not_sum`); the hub
         does not require the sum (its `model-output/README.md` allows
         any subset of locations).
     national : {"sum", "own"}
@@ -330,6 +331,20 @@ def own_national(name: str | None) -> bool:
     if isinstance(func, type):
         return issubclass(func, FoundationModel)
     return typing.get_type_hints(func).get("return") is FoundationModel
+
+
+def zones_need_not_sum(name: str | None) -> bool:
+    """Return whether model `name`'s zones need not sum to its provinces.
+
+    The random walks forecast each zone from its own data
+    (`forecasters.zones.walks_own_zones`), and the foundation models take
+    their zones straight from their block, as they do the provinces and
+    the country (`own_national`). Every other model splits its provinces
+    across the zones, so its zones must sum to them.
+    """
+    from bdbvhubrenewal.forecasters.zones import walks_own_zones
+
+    return walks_own_zones(name) or own_national(name)
 
 
 def _zone_rows(
