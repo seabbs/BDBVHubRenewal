@@ -11,6 +11,7 @@ import json
 import os
 import re
 import subprocess
+import time
 from collections.abc import Sequence
 from datetime import datetime
 from pathlib import Path
@@ -152,16 +153,48 @@ def prefixes(
     return sorted((saved - {0}) | set(default))
 
 
-def trainer_state(folder: Path | str) -> tuple[str, bool | None]:
-    """Return a description of the trainer process and whether it runs."""
+FRESH_S = 600
+"""Seconds within which a stream status shows the trainer running: it is
+written every 10 steps, and the log tile turns red after 10 minutes."""
+
+
+def _pid_state(folder: Path | str) -> tuple[int | None, bool | None]:
+    """Return `trainer.pid`'s pid and whether it runs (None if unknown)."""
     try:
         pid = int((Path(folder) / "trainer.pid").read_text().split()[0])
     except (OSError, ValueError, IndexError):
-        return "unknown", None
+        return None, None
     try:
         os.kill(pid, 0)
     except PermissionError:
-        return f"alive (pid {pid})", True
+        return pid, True
     except OSError:
-        return f"DEAD (pid {pid})", False
-    return f"alive (pid {pid})", True
+        return pid, False
+    return pid, True
+
+
+def trainer_state(folder: Path | str) -> tuple[str, bool | None]:
+    """Return a description of the trainer process and whether it runs.
+
+    It runs if `trainer.pid`'s process does, or if the stream status
+    (`train/stream-status.json`) was written in the last `FRESH_S`
+    seconds: a trainer started by Snakemake writes no pid file, so one
+    left by an old launcher says nothing. A finished or stopped segment
+    is neither running nor dead.
+    """
+    pid, running = _pid_state(folder)
+    if running:
+        return f"alive (pid {pid})", True
+    path = Path(folder) / "train" / "stream-status.json"
+    try:
+        age = time.time() - path.stat().st_mtime
+    except OSError:
+        age = None
+    if age is not None and age <= FRESH_S:
+        return f"alive (status {age / 60:.0f} min ago)", True
+    stage = str((CACHE.get(path) or {}).get("stage", ""))
+    if stage == "finished" or stage.startswith("stopped at"):
+        return stage, None
+    if pid is None and age is None:
+        return "unknown", None
+    return f"DEAD (pid {pid})" if pid else "DEAD (no recent status)", False
