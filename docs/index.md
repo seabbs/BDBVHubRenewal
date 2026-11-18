@@ -12,7 +12,20 @@ The [paper](paper/main.html) and its [supporting information](paper/si.html) des
 
 The joint-model-informed renewal project compares renewal models fitted on their own with renewal models informed by a larger joint model, BVDOutbreakSize, through approximate Markov melding.
 
-**Quick links:** [![bdbv-hub-modelling](assets/logos/bdbv-hub-modelling/logo-mark.svg){ width="32" height="32" title="bdbv-hub-modelling" }](index.md) [![Fine-tuned foundation](assets/logos/fine-tuned-foundation/logo-mark.svg){ width="32" height="32" title="Fine-tuned foundation" }](foundation/index.md) [![Joint-model-informed renewal](assets/logos/joint-model-informed-renewal/logo-mark.svg){ width="32" height="32" title="Joint-model-informed renewal" }](renewal/index.md) [![Hub submission](assets/logos/hub-submission/logo-mark.svg){ width="32" height="32" title="Hub submission" }](hub/index.md)
+## Quick links
+
+<div class="quick-links" markdown>
+[![](assets/logos/fine-tuned-foundation/logo-mark.svg#only-light){ width="96" height="96" }![](assets/logos/fine-tuned-foundation/logo-mark-dark.svg#only-dark){ width="96" height="96" } Fine-tuned foundation](foundation/index.md){ .quick-link }
+[![](assets/logos/joint-model-informed-renewal/logo-mark.svg#only-light){ width="96" height="96" }![](assets/logos/joint-model-informed-renewal/logo-mark-dark.svg#only-dark){ width="96" height="96" } Joint-model-informed renewal](renewal/index.md){ .quick-link }
+[![](assets/logos/hub-submission/logo-mark.svg#only-light){ width="96" height="96" }![](assets/logos/hub-submission/logo-mark-dark.svg#only-dark){ width="96" height="96" } Hub submission](hub/index.md){ .quick-link }
+[![](assets/logos/nowcastutils/logo-mark.svg#only-light){ width="96" height="96" }![](assets/logos/nowcastutils/logo-mark-dark.svg#only-dark){ width="96" height="96" } nowcastutils](reference/data.md){ .quick-link }
+[![](assets/logos/nowcasteval/logo-mark.svg#only-light){ width="96" height="96" }![](assets/logos/nowcasteval/logo-mark-dark.svg#only-dark){ width="96" height="96" } nowcasteval](methods/evaluation.md){ .quick-link }
+[![](assets/logos/nowcastworkflow/logo-mark.svg#only-light){ width="96" height="96" }![](assets/logos/nowcastworkflow/logo-mark-dark.svg#only-dark){ width="96" height="96" } nowcastworkflow](development/cli.md){ .quick-link }
+[![](assets/logos/nowcastbaselines/logo-mark.svg#only-light){ width="96" height="96" }![](assets/logos/nowcastbaselines/logo-mark-dark.svg#only-dark){ width="96" height="96" } nowcastbaselines](methods/baselines.md){ .quick-link }
+[![](assets/logos/nowcastfoundation/logo-mark.svg#only-light){ width="96" height="96" }![](assets/logos/nowcastfoundation/logo-mark-dark.svg#only-dark){ width="96" height="96" } nowcastfoundation](methods/foundation.md){ .quick-link }
+[![](assets/logos/nowcastrenewal/logo-mark.svg#only-light){ width="96" height="96" }![](assets/logos/nowcastrenewal/logo-mark-dark.svg#only-dark){ width="96" height="96" } nowcastrenewal](methods/model.md){ .quick-link }
+[![](assets/logos/bdbvhub/logo-mark.svg#only-light){ width="96" height="96" }![](assets/logos/bdbvhub/logo-mark-dark.svg#only-dark){ width="96" height="96" } bdbvhub](submission/workflow.md){ .quick-link }
+</div>
 
 <div class="grid cards" markdown>
 
