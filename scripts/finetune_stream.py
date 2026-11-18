@@ -73,6 +73,11 @@ BY_SOURCE_EVERY = 200
 """Steps between held-out losses by source, which cost three monitor
 evals (the default of `--by-source-every`)."""
 
+EVAL_MODES = ("local", "offload")
+"""Where held-out evaluation runs (`--eval`)."""
+HELD_OUT_BLOCKS = "held-out-blocks.pkl"
+"""The held-out blocks an offloaded run saves for its evaluator."""
+
 POLL = 60
 """Seconds between checks for a chunk's simulations."""
 
@@ -1219,9 +1224,49 @@ def build_parser() -> argparse.ArgumentParser:
     # Steps between held-out evaluations: the monitor, and by source on
     # a multiple of its steps. They only score, so the steps trained and
     # the settings hash are the same whatever they are.
+    # Evaluate in the trainer (local) or leave adapter snapshots for
+    # scripts/finetune_evaluate.py to score elsewhere (offload). Training
+    # and the settings hash are the same either way.
+    parser.add_argument("--eval", choices=EVAL_MODES, default="local")
     parser.add_argument("--eval-every", type=int, default=ft.EVAL_EVERY)
     parser.add_argument("--by-source-every", type=int, default=BY_SOURCE_EVERY)
     return parser
+
+
+def check_offload(mode: str, stop_from: int, outbreaks: int) -> None:
+    """Raise if evaluation is offloaded while early stopping can act.
+
+    Stopping reads each checkpoint's held-out loss, which an offloaded
+    run does not compute.
+    """
+    if mode == "offload" and stop_from <= outbreaks:
+        raise ValueError(
+            f"--eval offload needs --stop-from above --outbreaks "
+            f"({stop_from} <= {outbreaks}): stopping reads held-out loss"
+        )
+
+
+def save_snapshot(model, where: Path, request: dict) -> None:
+    """Save the adapter (and series bias) and what to evaluate on it.
+
+    For `scripts/finetune_evaluate.py`. Written beside `where` and then
+    moved into place, so an evaluator never reads part of one. Reading
+    the weights changes nothing the training uses.
+    """
+    tmp = where.with_name(where.name + ".tmp")
+    shutil.rmtree(tmp, ignore_errors=True)
+    model.save_pretrained(tmp / "adapter")
+    (tmp / "request.json").write_text(json.dumps(request))
+    shutil.rmtree(where, ignore_errors=True)
+    tmp.rename(where)
+
+
+def save_blocks(blocks: list[dict], path: Path) -> None:
+    """Save the held-out blocks, so an evaluator scores exactly these."""
+    tmp = path.with_name(path.name + ".tmp")
+    with tmp.open("wb") as f:
+        pickle.dump(blocks, f, protocol=pickle.HIGHEST_PROTOCOL)
+    tmp.rename(path)
 
 
 def check_cadence(eval_every: int, by_source_every: int) -> None:
@@ -1271,8 +1316,14 @@ def main() -> None:
         parser.error("give one of --train-seeds and --seed-list")
     try:
         check_cadence(args.eval_every, args.by_source_every)
+        check_offload(args.eval, args.stop_from, args.outbreaks)
     except ValueError as error:
         parser.error(str(error))
+    # A release carries the held-out losses, which an offloaded run's
+    # checkpoint gets later (the workflow's publish rule).
+    if args.eval == "offload" and args.publish:
+        parser.error("--eval offload publishes through the workflow")
+    offload = args.eval == "offload"
 
     def training_seeds() -> range | list[int]:
         if args.seed_list is not None:
@@ -1320,6 +1371,8 @@ def main() -> None:
         pool, sim_dir, held, args.seed, k, args.cut_workers
     )
     val = [b for _, b in held_pairs]
+    if offload:
+        save_blocks(val, out / HELD_OUT_BLOCKS)
     log(
         f"{len(held)} held-out outbreaks, {len(val)} blocks, "
         f"{len(empty)} skipped with no rows"
@@ -1439,7 +1492,25 @@ def main() -> None:
     seen = {"blocks": 0, "series": 0}
     losses: list[float] = []
     skipped: list[dict] = []
-    if state is None:
+
+    def request(kinds: list[str], **extra) -> dict:
+        """Return what an offloaded evaluation of the model now scores."""
+        return {
+            "step": step,
+            "kinds": kinds,
+            "batch_size": args.batch_size,
+            "n_validation": len(val),
+            **extra,
+        }
+
+    if state is None and offload:
+        consumed.write_text("")
+        step = 0
+        start_loss = None
+        history = [{"step": 0}]
+        save_snapshot(model, out / "evals" / "step-0000000", request(["start"]))
+        log("held-out loss at the start left to the evaluator")
+    elif state is None:
         consumed.write_text("")
         start_loss = held_out_loss(model, val, args.batch_size)
         by_level = held_out_by_level(model, val, LEVEL_BLOCKS)
@@ -1634,7 +1705,27 @@ def main() -> None:
                 report(
                     stage="training", step=step, outbreaks=done, gpu=memory()
                 )
-            if step % args.eval_every == 0:
+            if step % args.eval_every == 0 and offload:
+                since = time.perf_counter()
+                kinds = ["monitor"]
+                if step % args.by_source_every == 0:
+                    kinds.append("by_source")
+                save_snapshot(
+                    model, out / "evals" / f"step-{step:07d}", request(kinds)
+                )
+                entry = {"step": step, "lr": group_rates(optimiser)}
+                bias = bias_summary(model)
+                if bias:
+                    entry["bias"] = bias
+                split["eval_s"] += time.perf_counter() - since
+                history.append(entry)
+                log(
+                    f"step {step}: loss {value:.4f}, held-out "
+                    f"({', '.join(kinds)}) left to the evaluator, "
+                    f"{time.perf_counter() - t0:.0f} s"
+                )
+                (out / "history.json").write_text(json.dumps(history))
+            elif step % args.eval_every == 0:
                 since = time.perf_counter()
                 monitor = held_out_loss(
                     model, val[: ft.EVAL_BLOCKS], args.batch_size
@@ -1710,57 +1801,80 @@ def main() -> None:
             # checkpoint is rebuilt from it to the same hash.
             settings["code_commit"] = commit
             settings["device"] = device
-            settings["held_out_loss_start"] = start_loss
-            settings["held_out_loss"] = held_out_loss(
-                model, val, args.batch_size
-            )
-            if args.real_validation:
-                real = real_validation
-                settings["real_validation_sha256"] = ft._sha256(
-                    args.real_validation
+            if offload:
+                # The evaluator scores the checkpoint's adapter.
+                if args.real_validation:
+                    settings["real_validation_sha256"] = ft._sha256(
+                        args.real_validation
+                    )
+                settings["seconds"] = time.perf_counter() - t0
+                (where / "settings.json").write_text(
+                    json.dumps(settings, indent=1)
                 )
-                settings["real_validation_loss"] = held_out_loss(
-                    model, real, args.batch_size
+                history.append({"step": step, "n_outbreaks": done, "hash": key})
+                (out / "history.json").write_text(json.dumps(history))
+                log(
+                    f"checkpoint n{done}: hash {key}, held-out loss left to "
+                    f"the evaluator; {memory()}"
                 )
-            settings["held_out_loss_by_level"] = held_out_by_level(
-                model, val, LEVEL_BLOCKS
-            )
-            settings["held_out_loss_by_source"] = held_out_by_source(
-                model, val, args.batch_size
-            )
-            settings["seconds"] = time.perf_counter() - t0
-            (where / "settings.json").write_text(json.dumps(settings, indent=1))
-            history.append(
-                {
-                    "step": step,
-                    "n_outbreaks": done,
-                    "held_out_loss": settings["held_out_loss"],
-                    "hash": key,
-                }
-            )
-            (out / "history.json").write_text(json.dumps(history))
-            log(
-                f"checkpoint n{done}: hash {key}, held-out loss "
-                f"{settings['held_out_loss']:.4f} (start {start_loss:.4f}); "
-                f"{memory()}"
-            )
-            report(last_checkpoint=f"n{done} {key}")
-            # A checkpoint whose hash does not recompute from its commit
-            # is kept but not published.
-            mismatch = finetune_verify.problems(where)
-            if mismatch:
-                log(f"n{done} not published: {'; '.join(mismatch)}")
-            elif args.publish:
-                # Bias checkpoints are released apart (`release_tag`).
-                spec = f"{SLOTS_PREFIX}{key}" if args.series_bias else key
-                publish(where, spec)
-                report(last_release=release_tag(spec))
-            # From `stop_from` on, go on only while the last doubling cut
-            # held-out loss by more than `min_gain`.
-            losses.append(settings["held_out_loss"])
-            if should_stop(losses, done, args.stop_from, args.min_gain):
-                log(f"held-out loss gained under {args.min_gain:.0%}: stop")
-                break
+                report(last_checkpoint=f"n{done} {key}")
+                mismatch = finetune_verify.problems(where)
+                if mismatch:
+                    log(f"n{done} does not verify: {'; '.join(mismatch)}")
+            else:
+                settings["held_out_loss_start"] = start_loss
+                settings["held_out_loss"] = held_out_loss(
+                    model, val, args.batch_size
+                )
+                if args.real_validation:
+                    real = real_validation
+                    settings["real_validation_sha256"] = ft._sha256(
+                        args.real_validation
+                    )
+                    settings["real_validation_loss"] = held_out_loss(
+                        model, real, args.batch_size
+                    )
+                settings["held_out_loss_by_level"] = held_out_by_level(
+                    model, val, LEVEL_BLOCKS
+                )
+                settings["held_out_loss_by_source"] = held_out_by_source(
+                    model, val, args.batch_size
+                )
+                settings["seconds"] = time.perf_counter() - t0
+                (where / "settings.json").write_text(
+                    json.dumps(settings, indent=1)
+                )
+                history.append(
+                    {
+                        "step": step,
+                        "n_outbreaks": done,
+                        "held_out_loss": settings["held_out_loss"],
+                        "hash": key,
+                    }
+                )
+                (out / "history.json").write_text(json.dumps(history))
+                log(
+                    f"checkpoint n{done}: hash {key}, held-out loss "
+                    f"{settings['held_out_loss']:.4f} "
+                    f"(start {start_loss:.4f}); {memory()}"
+                )
+                report(last_checkpoint=f"n{done} {key}")
+                # A checkpoint whose hash does not recompute from its commit
+                # is kept but not published.
+                mismatch = finetune_verify.problems(where)
+                if mismatch:
+                    log(f"n{done} not published: {'; '.join(mismatch)}")
+                elif args.publish:
+                    # Bias checkpoints are released apart (`release_tag`).
+                    spec = f"{SLOTS_PREFIX}{key}" if args.series_bias else key
+                    publish(where, spec)
+                    report(last_release=release_tag(spec))
+                # From `stop_from` on, go on only while the last doubling cut
+                # held-out loss by more than `min_gain`.
+                losses.append(settings["held_out_loss"])
+                if should_stop(losses, done, args.stop_from, args.min_gain):
+                    log(f"held-out loss gained under {args.min_gain:.0%}: stop")
+                    break
         split["eval_s"] += time.perf_counter() - tick
         log(
             "chunk time: "
