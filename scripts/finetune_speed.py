@@ -20,6 +20,7 @@ It changes nothing it reads; the state goes to a temporary folder.
 from __future__ import annotations
 
 import argparse
+import functools
 import inspect
 import json
 import sys
@@ -123,40 +124,55 @@ def main() -> None:
         blocks, args.batch_size, DatasetMode.TRAIN, args.series_bias
     )
     dataset_s = time.perf_counter() - tick
+    # As the trainer does once a chunk, where it has one.
+    if hasattr(fs, "settle_heap"):
+        fs.settle_heap()
 
     parts = ("build", "forward", "backward", "optimiser", "free")
+    times: dict = {}
+
+    def timed(part: str, run):
+        """Run `run`, adding its synchronised time to `part`."""
+        sync()
+        tick = time.perf_counter()
+        out = run()
+        sync()
+        times[part] = times.get(part, 0.0) + time.perf_counter() - tick
+        return out
+
+    def backward(part: list[int], share: float) -> float:
+        """Run the trainer's backward, timing its parts."""
+        batch = timed("build", lambda: data._build_batch(part))
+        with series_bias.assigned(model, batch.get("series_rows")):
+            loss = timed(
+                "forward",
+                lambda: fs.forward(model, batch, accepted, device).loss,
+            )
+            timed("backward", lambda: (loss * share).backward())
+        return float(loss.detach())
+
+    def zero() -> None:
+        """Clear as the trainer does before a retry."""
+        optimiser.zero_grad()
+        timed("free", fs.free_memory)
+
     steps = []
     for position, (_, indices) in enumerate(plan[: args.steps]):
-        times = {}
-        sync()
-        tick = time.perf_counter()
-        batch = data._build_batch(list(indices))
-        times["build"] = time.perf_counter() - tick
-        tick = time.perf_counter()
-        with series_bias.assigned(model, batch.get("series_rows")):
-            loss = fs.forward(model, batch, accepted, device).loss
-            sync()
-            times["forward"] = time.perf_counter() - tick
-            tick = time.perf_counter()
-            loss.backward()
-            sync()
-            times["backward"] = time.perf_counter() - tick
-        value = float(loss.detach())
-        del batch, loss
-        tick = time.perf_counter()
-        fs.finite_step(params, optimiser, value)
-        sync()
-        times["optimiser"] = time.perf_counter() - tick
-        tick = time.perf_counter()
-        fs.free_memory()
-        sync()
-        times["free"] = time.perf_counter() - tick
+        times.clear()
+        times.update(dict.fromkeys(parts, 0.0))
+        # As the trainer's loop: accumulate, step, free.
+        value = fs.accumulate(list(indices), backward, zero, print)
+        timed(
+            "optimiser",
+            functools.partial(fs.finite_step, params, optimiser, value),
+        )
+        timed("free", fs.free_memory)
         times["total"] = sum(times[p] for p in parts)
         times["series"] = int(sizes[indices].sum())
         times["blocks"] = len(indices)
         times["length"] = int(lengths[indices[0]])
         times["loss"] = value
-        steps.append(times)
+        steps.append(dict(times))
         fs.log(
             f"step {position + 1}: {times['series']} series in "
             f"{times['blocks']} blocks, length {times['length']}: "
