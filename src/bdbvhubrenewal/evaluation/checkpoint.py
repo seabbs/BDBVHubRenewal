@@ -15,7 +15,7 @@ with `rule` = `RULE`:
   draws per forecast, one seed for every model and one random stream
   for the Chronos-2 models, against each week's count in the first
   release D days on (`rolling_truth`), by level. Unit `bdbv` forecasts
-  the provinces and the country; unit `bdbv_zones` forecasts the task
+  the provinces and the country; unit `zones` forecasts the task
   with the health zones in Chronos-2's block, as a submission does, and
   gives the `zones` level, scored on each zone-week's count in the
   first release D days on (`zone_truth`).
@@ -30,7 +30,7 @@ grid.
 
 Usage:
   python -m bdbvhubrenewal.evaluation.checkpoint bdbv CACHE LABEL
-  python -m bdbvhubrenewal.evaluation.checkpoint bdbv_zones CACHE LABEL
+  python -m bdbvhubrenewal.evaluation.checkpoint zones CACHE LABEL
   python -m bdbvhubrenewal.evaluation.checkpoint germany CACHE LABEL
   python -m bdbvhubrenewal.evaluation.checkpoint release CACHE HASH
   python -m bdbvhubrenewal.evaluation.checkpoint table CACHE EVIDENCE \\
@@ -420,7 +420,7 @@ def bdbv_unit(
 
     With `zones`, the task holds the health zones in Chronos-2's block
     beside the provinces and the country (`load_zone_data`), as a
-    submission does; unit `bdbv_zones`, else `bdbv`.
+    submission does; unit `zones`, else `bdbv`.
     """
     from bdbvhubrenewal.data import load_daily
     from bdbvhubrenewal.data.zones import load_zone_data
@@ -443,7 +443,7 @@ def bdbv_unit(
         zones=load_zone_data(data) if zones else None,
     )
     models = [_common(get_model(m)) for m in label_models(label)]
-    root = cache / ("bdbv_zones" if zones else "bdbv") / label
+    root = cache / ("zones" if zones else "bdbv") / label
     root.mkdir(parents=True, exist_ok=True)
     for origin in bdbv_origins(data):
         path = root / f"{origin}.csv.gz"
@@ -535,7 +535,12 @@ def _cached(root: Path) -> pd.DataFrame | None:
     if not files:
         return None
     dtype = {"origin": str, "target_end_date": str}
-    return pd.concat([pd.read_csv(f, dtype=dtype) for f in files])
+    rows = pd.concat([pd.read_csv(f, dtype=dtype) for f in files])
+    if "target" not in rows:
+        return rows
+    # Files of the earlier script also hold the daily target.
+    keep = rows["target"].fillna("7day") == "7day"
+    return rows.loc[keep].drop(columns="target")
 
 
 def germany_rows(cache: Path, labels: Sequence[str]) -> pd.DataFrame:
@@ -571,7 +576,7 @@ def bdbv_rows(
 ) -> pd.DataFrame:
     """Return the BDBV backtest's rule rows.
 
-    National and provinces from unit `bdbv`, zones from `bdbv_zones`.
+    National and provinces from unit `bdbv`, zones from `zones`.
     """
     from bdbvhubrenewal.data.tidy import load_daily_zones
     from bdbvhubrenewal.evaluation import backtest as bt
@@ -591,7 +596,7 @@ def bdbv_rows(
     daily_zones = None
     parts = []
     for label in labels:
-        for unit in ("bdbv", "bdbv_zones"):
+        for unit in ("bdbv", "zones"):
             draws = _cached(cache / unit / label)
             if draws is None:
                 continue
@@ -669,8 +674,8 @@ def main(argv: Sequence[str]) -> None:
     if len(argv) < 3:
         raise SystemExit(__doc__)
     study, cache = argv[0], Path(argv[1])
-    if study in ("bdbv", "bdbv_zones"):
-        bdbv_unit(cache, argv[2], zones=study == "bdbv_zones")
+    if study in ("bdbv", "zones"):
+        bdbv_unit(cache, argv[2], zones=study == "zones")
     elif study == "germany":
         germany_unit(cache, argv[2])
     elif study == "release":

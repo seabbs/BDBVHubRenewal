@@ -99,8 +99,8 @@ Outputs are in `<RUN>/train/n<N>/`.
 
 - `release_list`: the repository's releases, the only rule that reads the network; `task score` reruns it. The checkpoints scored are the slots ones first, then the others, oldest first, from `published_from`, or `score.labels`.
 - `bdbv_data`: the hub's data (`bdbvhubrenewal data`), or `task data`. Newer data reruns the BDBV units, which add only the new origins.
-- `score_bdbv`, `score_bdbv_zones`, `score_germany`, `score_release`: the units of `bdbvhubrenewal.evaluation.checkpoint` for each checkpoint and the references, newest checkpoint first. BDBV units run before German ones. Each caches one file per origin or date and resumes from it.
-  Units run torch on the machine's device with `SCORE_THREADS` threads and the `gpu` resource. `score_bdbv_zones` forecasts with the health zones in Chronos-2's block, as submitted, on the CPU with `score.zones_mem_mb`.
+- `score_bdbv`, `score_zones`, `score_germany`, `score_release`: the units of `bdbvhubrenewal.evaluation.checkpoint` for each checkpoint and the references, newest checkpoint first. BDBV units run before German ones. Each caches one file per origin or date and resumes from it.
+  Units run torch on the machine's device with `SCORE_THREADS` threads and the `gpu` resource. `score_zones` forecasts with the health zones in Chronos-2's block, as submitted, on the CPU with `score.zones_mem_mb`.
 - `score_table`: the rows of every checkpoint in `<SCORE_CACHE>/tables/`, keeping other rules' rows of the committed tables.
 - `land`: opt-in, commit the tables to `evidence/` and push, only from the evidence branch (`score.branch`), never main.
 

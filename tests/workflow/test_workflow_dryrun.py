@@ -324,7 +324,7 @@ def test_score_runs_each_unit_for_a_checkpoint_and_the_reference(tmp_path):
     config = {"score": {"labels": ["slots-aaa", "bbb"]}}
     jobs = dry(tmp_path, "score", config=config)
     assert jobs["score_bdbv"] == 3
-    assert jobs["score_bdbv_zones"] == 3
+    assert jobs["score_zones"] == 3
     assert jobs["score_germany"] == 3
     assert jobs["score_release"] == 2
     assert jobs["score_table"] == 1
@@ -338,13 +338,13 @@ def test_units_run_the_shared_checkpoint_evaluation(tmp_path):
     for block in units:
         assert "scripts/checkpoint_scores.py" not in block
     shells = "".join(units)
-    assert "-m bdbvhubrenewal.evaluation.checkpoint bdbv_zones" in shells
+    assert "-m bdbvhubrenewal.evaluation.checkpoint zones" in shells
 
 
 def test_zone_units_run_on_the_cpu_with_their_own_memory(tmp_path):
     config = {"score": {"labels": ["aaa"], "zones_mem_mb": 12345}}
     blocks = score_jobs(tmp_path, config)
-    zones = [b for b in blocks if re.match(r"rule score_bdbv_zones:", b)]
+    zones = [b for b in blocks if re.match(r"rule score_zones:", b)]
     assert len(zones) == 2
     for block in zones:
         assert "DEVICE=cpu" in block

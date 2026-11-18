@@ -2,7 +2,7 @@
 #
 # Each checkpoint label gets the units of bdbvhubrenewal.evaluation
 # .checkpoint: `germany` (WIS on the German development half), `bdbv`
-# (CRPS on the BDBV release backtest, provinces and country), `bdbv_zones`
+# (CRPS on the BDBV release backtest, provinces and country), `zones`
 # (the same with the health zones in Chronos-2's block, as submitted) and
 # `release` (the release's settings, with the trainer's held-out loss).
 # A unit caches one file per date or origin in <SCORE_CACHE>/<study>/
@@ -120,13 +120,13 @@ rule score_bdbv:
         unit_shell("bdbv")
 
 
-rule score_bdbv_zones:
+rule score_zones:
     input:
         SC["data"],
     output:
-        f"{CACHE}/bdbv_zones/{{label}}.done",
+        f"{CACHE}/zones/{{label}}.done",
     log:
-        f"{CACHE}/log/bdbv_zones-{{label}}.log",
+        f"{CACHE}/log/zones-{{label}}.log",
     params:
         prefix=lambda wc, resources: job_prefix(resources.mem_mb),
         env=cpu_env,
@@ -135,7 +135,7 @@ rule score_bdbv_zones:
     resources:
         mem_mb=SC["zones_mem_mb"],
     shell:
-        unit_shell("bdbv_zones")
+        unit_shell("zones")
 
 
 rule score_germany:
@@ -171,7 +171,7 @@ def table_inputs(wc):
     every = [*SC["reference"], *labels]
     return {
         "bdbv": expand(f"{CACHE}/bdbv/{{label}}.done", label=every),
-        "zones": expand(f"{CACHE}/bdbv_zones/{{label}}.done", label=every),
+        "zones": expand(f"{CACHE}/zones/{{label}}.done", label=every),
         "germany": expand(f"{CACHE}/germany/{{label}}.done", label=every),
         "release": expand(f"{CACHE}/heldout/{{label}}.done", label=labels),
     }
