@@ -44,7 +44,8 @@ REPORT_ONLY: Final = tuple(
         "zone_nowcast",
     )
 )
-"""Modules only the `report` command runs, so no backtest reads them."""
+"""Modules only the `report` and `live-checkpoint` commands run, so no
+backtest reads them."""
 
 BACKTEST_INPUTS: Final = ("src/bdbvhubrenewal", "config", "data")
 """What every backtest run reads, relative to the repository root."""

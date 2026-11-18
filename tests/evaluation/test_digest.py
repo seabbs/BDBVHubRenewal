@@ -174,7 +174,7 @@ def test_model_code_keeps_a_skipped_module_its_model_imports() -> None:
 
     # Chronos-2's module imports the zone split, so its key holds it, and
     # so do the province-level models that split their zones in their own
-    # forecast (`with_zones`, since #299).
+    # forecast (`with_zones`).
     for model in ("fm_chronos_weekly_ragged", "renewal", "pprandomwalknowcast"):
         assert zones in code(model)
     # Models whose modules do not import it still leave it out.

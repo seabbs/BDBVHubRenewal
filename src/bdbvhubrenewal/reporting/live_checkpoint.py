@@ -9,8 +9,8 @@ table at the branch head, never a pinned checkpoint, and take each
 study's newest checkpoint of the live run (`run`), labelled as
 preliminary with the number of simulations it was fine-tuned on.
 
-The docs page is `reporting.live_checkpoint_page`, which only the docs
-build runs. Only development data are shown. `tidy` drops BDBV rows that
+The docs page is `reporting.live_checkpoint_page`. Only development data
+are shown. `tidy` drops BDBV rows that
 reach the scored hub rounds (`SCORED_FROM`); the scorer never reads the
 German second half.
 """
