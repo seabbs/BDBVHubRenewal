@@ -1,12 +1,14 @@
 """Colours, dashes and the matplotlib theme for the paper figures.
 
-The ink colours and categorical palette are those of bdbv-hub-modelling's
-`reporting/plots.py`, copied so the paper does not import the package.
-Each model has a fixed colour and dash. The Chronos variants of one family
-share a colour: fine-tuned on ragged data is solid, zero-shot on ragged
-data dashed (hatched bars, hollow circles), and zero-shot on complete data
-dotted (dotted bars, hollow squares). They are listed complete, ragged,
-fine-tuned so each step reads left to right.
+The ink colours are those of bdbv-hub-modelling's `reporting/plots.py`.
+Each model's colour, dash and display name are the shared ones of
+`bdbvhubrenewal.evaluation.labels`, which the dashboard and site use too.
+The Chronos variants of one family share a colour: fine-tuned on ragged
+data is solid, zero-shot on ragged data dashed (hollow circles), and
+zero-shot on complete data dotted (hollow squares). Bars are filled with
+the model's colour, and the model is named on the axis in that colour.
+They are listed complete, ragged, fine-tuned so each step reads left to
+right.
 """
 
 from __future__ import annotations
@@ -16,6 +18,7 @@ from contextlib import contextmanager
 from typing import Any, Final
 
 import matplotlib as mpl
+from bdbvhubrenewal.evaluation.labels import MODEL_STYLES
 
 __all__ = [
     "INK",
@@ -58,23 +61,11 @@ _DASHES: Final = {
     "dotted": (0, (1.2, 1.8)),
 }
 
-_HATCHES: Final = {"dashed": "////", "dotted": "...."}
-
 _MARKERS: Final = {"solid": "o", "dashed": "o", "dotted": "s"}
 
 _STYLE: Final[dict[str, tuple[str, str]]] = {
-    "KIT-frozen_baseline": ("#5f5e5a", "solid"),
-    "BDBVHub-baseline": ("#5f5e5a", "solid"),
-    "randomwalknowcast": (_PALETTE[1], "solid"),
-    "randomwalk": (_PALETTE[7], "solid"),
-    "fm_chronos_daily_complete": (_PALETTE[0], "dotted"),
-    "fm_chronos_daily_ragged": (_PALETTE[0], "dashed"),
-    "fm_chronos_daily_ragged_ft": (_PALETTE[0], "solid"),
-    "fm_chronos_weekly_complete": (_PALETTE[6], "dotted"),
-    "fm_chronos_weekly_ragged": (_PALETTE[6], "dashed"),
-    "fm_chronos_weekly_ragged_ft": (_PALETTE[6], "solid"),
-    "epinowcast": (_PALETTE[2], "solid"),
-    "hub_ensemble": (_PALETTE[3], "solid"),
+    **MODEL_STYLES,
+    # Stand-ins for hub teams in the dummy studies.
     "hub_team_a": (_PALETTE[4], "solid"),
     "hub_team_b": (_PALETTE[5], "solid"),
     "hub_team_c": ("#898781", "solid"),
@@ -134,14 +125,9 @@ def line_style(name: str, models: Sequence[str]) -> dict[str, Any]:
 
 
 def bar_style(name: str, models: Sequence[str]) -> dict[str, Any]:
-    """Return bar keywords: filled when solid, hatched otherwise.
-
-    Dashed models get diagonal hatching and dotted models dots.
-    """
-    colour, dash = model_style(name, models)
-    if dash == "solid":
-        return {"color": colour}
-    return {"facecolor": "white", "edgecolor": colour, "hatch": _HATCHES[dash]}
+    """Return bar keywords: every model's bar filled with its colour."""
+    colour, _ = model_style(name, models)
+    return {"color": colour}
 
 
 def point_style(name: str, models: Sequence[str]) -> dict[str, Any]:

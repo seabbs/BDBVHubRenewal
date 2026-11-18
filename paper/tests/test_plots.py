@@ -6,8 +6,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import pytest
+from bdbvhubrenewal.evaluation.labels import model_label
 
 from paperfigs.dummy import DUMMY_CELLS, dummy_factors, dummy_study
+from paperfigs.periods import PERIODS
 from paperfigs.plots import (
     PANEL_LETTERS,
     results_panel,
@@ -130,8 +132,10 @@ def test_chronos_variants_share_a_colour_with_distinct_styles(family) -> None:
     styles = [model_style(n, []) for n in names]
     assert len({c for c, _ in styles}) == 1
     assert [d for _, d in styles] == ["dotted", "dashed", "solid"]
-    bars = [bar_style(n, []).get("hatch") for n in names]
-    assert len(set(bars)) == 3
+    # Bars are filled with the model's colour, never hatched (Sam, #367).
+    bars = [bar_style(n, []) for n in names]
+    assert all("hatch" not in b for b in bars)
+    assert len({b["color"] for b in bars}) == 1
     points = [tuple(sorted(point_style(n, []).items())) for n in names]
     assert len(set(points)) == 3
     assert model_order(list(reversed(names))) == names
@@ -218,14 +222,14 @@ def test_missing_forecasts_are_labelled(gappy) -> None:
         t.get_text()
         for ax in fig.axes
         for t in ax.get_yticklabels()
-        if "randomwalknowcast" in t.get_text()
+        if "Random walk nowcast" in t.get_text()
     ]
     assert any("% made" in label for label in labels)
     assert not any(
         "% made" in t.get_text()
         for ax in fig.axes
         for t in ax.get_yticklabels()
-        if t.get_text().startswith("BDBVHub-baseline")
+        if t.get_text().startswith("Hub baseline")
     )
     plt.close(fig)
 
@@ -294,8 +298,8 @@ def test_nowcast_panels_have_a_column_per_model_and_a_row_per_origin_or_place():
         fc, obs, truth, models, rows, rel={"randomwalknowcast": 1.0}
     )
     assert len(fig.axes) == 6
-    assert fig.axes[0].get_title() == "randomwalknowcast\nrel. 1.00"
-    assert fig.axes[1].get_title() == "fm_chronos_daily_ragged_ft"
+    assert fig.axes[0].get_title() == "Random walk nowcast\nrel. 1.00"
+    assert fig.axes[1].get_title() == "Fine-tuned (delays)"
     assert fig.axes[0].get_ylabel().startswith("origin ")
     assert fig.axes[4].get_ylabel() == "DE, 80+"
     plt.close(fig)
@@ -369,4 +373,57 @@ def test_results_panel_shows_only_the_given_models(germany) -> None:
     rel_ax = next(ax for ax in fig.axes if ax.get_title() == "Relative WIS")
     # The two models and the study's baseline, three parts each.
     assert len(rel_ax.patches) == 3 * 3
+    plt.close(fig)
+
+
+def test_split_bars_put_the_period_on_the_axis(germany) -> None:
+    fc, obs, scores, split = germany
+    fig = results_panel(fc, obs, scores, split=split)
+    rel_ax = next(ax for ax in fig.axes if ax.get_title() == "Relative WIS")
+    models = model_order(scores["model"].unique())
+    ticks = rel_ax.get_yticklabels()
+    # One row per model and period, each named and in its model's colour.
+    assert len(ticks) == 2 * len(models)
+    for k, m in enumerate(models):
+        for t, period in zip(ticks[2 * k : 2 * k + 2], PERIODS, strict=True):
+            assert t.get_text().startswith(model_label(m))
+            assert t.get_text().endswith(period)
+            assert mpl.colors.same_color(t.get_color(), model_style(m, [])[0])
+    plt.close(fig)
+
+
+def test_bars_are_neither_hatched_nor_faded(germany) -> None:
+    fc, obs, scores, split = germany
+    fig = results_panel(fc, obs, scores, split=split)
+    bar_axes = [
+        ax
+        for ax in fig.axes
+        if ax.get_title() in {"Relative WIS", "Relative WIS, log scale"}
+        or ax.get_title() in {"Bias", "Coverage"}
+    ]
+    assert len(bar_axes) == 4
+    for ax in bar_axes:
+        for bar in ax.patches:
+            assert not bar.get_hatch()
+            assert bar.get_alpha() in (None, 1.0)
+    plt.close(fig)
+
+
+def test_no_model_id_reaches_a_figure(germany) -> None:
+    fc, obs, scores, split = germany
+    fig = results_panel(fc, obs, scores, split=split)
+    texts = [t.get_text() for t in fig.legends[0].get_texts()]
+    texts += [t.get_text() for ax in fig.axes for t in ax.get_yticklabels()]
+    texts += [ax.get_xlabel() for ax in fig.axes]
+    named = [m for m in scores["model"].unique() if model_label(m) != m]
+    assert named
+    assert not any(m in t for m in named for t in texts)
+    plt.close(fig)
+
+
+def test_main_results_open_with_nowcasts_over_time(germany) -> None:
+    fc, obs, scores, split = germany
+    fig = results_panel(fc, obs, scores, split=split, nowcast=True)
+    titles = [ax.get_title() for ax in fig.axes]
+    assert "Nowcasts over time" in titles
     plt.close(fig)
