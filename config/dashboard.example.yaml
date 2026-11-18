@@ -47,13 +47,13 @@ exclude:
 
 # The score table and the per-checkpoint forecasts of each dataset, from the
 # machine that scores ("host:path", or a local path).
-scores: archie:code/seabbs/BDBVHubRenewal/.worktrees/checkpoint-scoring/evidence/checkpoint-scores.csv
+scores: archie:code/seabbs/bdbv-hub-modelling/.worktrees/checkpoint-scoring/evidence/checkpoint-scores.csv
 datasets:
   - key: germany
     source: archie:ckpt-scores/cache/germany/
   - key: bdbv
     source: archie:ckpt-scores/cache/bdbv/
-    truth_source: archie:code/seabbs/BDBVHubRenewal/.worktrees/checkpoint-scoring/data/target.csv
+    truth_source: archie:code/seabbs/bdbv-hub-modelling/.worktrees/checkpoint-scoring/data/target.csv
 
 # Extra tables (CSV) and notes (text), both shown under Tables, each with a
 # label and a path (local, or "host:path").

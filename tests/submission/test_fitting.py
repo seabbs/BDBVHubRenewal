@@ -290,7 +290,9 @@ def test_randomwalknowcast_has_its_own_hub_id(
                  str(tmp_path)]) == 0  # fmt: skip
     text = (tmp_path / "seabbs-rwnowcast.yml").read_text()
     assert "model_abbr: rwnowcast" in text
-    assert "https://samabbott.co.uk/BDBVHubRenewal/methods/baselines/" in text
+    assert (
+        "https://samabbott.co.uk/bdbv-hub-modelling/methods/baselines/" in text
+    )
     assert "10.12688/wellcomeopenres.25027.2" in text
     assert "language model" not in text
 

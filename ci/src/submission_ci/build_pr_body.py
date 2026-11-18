@@ -36,7 +36,7 @@ MAX_BODY = 60000  # GitHub's limit is 65536 characters
 HUB = "InsightNet-US/BDBV-Modeling-Hub"
 FOOTER = "This was opened by a bot. Please ping @seabbs for any questions."
 SIGN_OFF = "Signed off by Sam Abbott (@seabbs)."
-DOCS = "https://samabbott.co.uk/BDBVHubRenewal"
+DOCS = "https://samabbott.co.uk/bdbv-hub-modelling"
 
 
 def round_url(reference_date: str, docs: str = DOCS) -> str:
@@ -335,8 +335,8 @@ def checkpoint_line(provenance: Mapping[str, Any]) -> str:
         return ""
     sha = checkpoint["sha256"].get("adapter_model.safetensors", "")
     return (
-        f"Checkpoint: release `{checkpoint['tag']}` of seabbs/BDBVHubRenewal, "
-        f"adapter SHA-256 `{sha[:12]}`."
+        f"Checkpoint: release `{checkpoint['tag']}` of "
+        f"seabbs/bdbv-hub-modelling, adapter SHA-256 `{sha[:12]}`."
     )
 
 

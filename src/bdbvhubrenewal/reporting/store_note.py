@@ -20,7 +20,7 @@ from bdbvhubrenewal.reporting.site import site_models
 
 __all__ = ["store_note", "write_store_note"]
 
-REPO: Final = "https://github.com/seabbs/BDBVHubRenewal"
+REPO: Final = "https://github.com/seabbs/bdbv-hub-modelling"
 """Where commits and workflow runs link to."""
 
 

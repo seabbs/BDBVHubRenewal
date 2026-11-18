@@ -20,7 +20,7 @@ import re
 import subprocess
 from pathlib import Path
 
-REPO = "seabbs/BDBVHubRenewal"
+REPO = "seabbs/bdbv-hub-modelling"
 # Release tag prefix -> the spec prefix the loader takes for it.
 PREFIXES = {"chronos-slots-": "slots-", "chronos-ft-": ""}
 

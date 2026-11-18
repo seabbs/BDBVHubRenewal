@@ -15,8 +15,8 @@ The package has these parts:
 - `reporting`: figures and docs tables.
 - `cli`: the `bdbvhubrenewal` command.
 
-- Repository: <https://github.com/seabbs/BDBVHubRenewal>
-- Docs: <https://samabbott.co.uk/BDBVHubRenewal/>
+- Repository: <https://github.com/seabbs/bdbv-hub-modelling>
+- Docs: <https://samabbott.co.uk/bdbv-hub-modelling/>
 """
 
 from bdbvhubrenewal import (

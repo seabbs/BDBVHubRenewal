@@ -356,7 +356,7 @@ def test_names_the_checkpoint_a_model_loaded(tmp_path: Path) -> None:
     lines = visible(body(g, provenance=prov))
     assert (
         "Checkpoint: release `chronos-ft-2c2b22a03107` of "
-        "seabbs/BDBVHubRenewal, adapter SHA-256 `3459d83a8855`."
+        "seabbs/bdbv-hub-modelling, adapter SHA-256 `3459d83a8855`."
     ) in lines
 
 
