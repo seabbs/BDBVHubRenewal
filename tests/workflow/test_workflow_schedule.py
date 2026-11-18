@@ -154,9 +154,17 @@ def test_timers_run_with_the_installing_path(tmp_path):
 
 
 def test_a_finetune_run_lists_the_released_batches_afresh():
-    got = schedule.plan({"SCHEDULE_TARGETS": "finetune score"})
+    got = schedule.plan(
+        {"SCHEDULE_TARGETS": "finetune score", "SIMS_FROM": "release"}
+    )
     pool = got[0][1]
     assert pool.count("--forcerun") == 1
     forced = pool[pool.index("--forcerun") + 1 :]
     assert "release_list" in forced
     assert "released_batches" in forced
+
+
+def test_a_machine_with_the_rounds_lists_no_released_batches():
+    # --forcerun adds a rule to the run even when nothing needs it.
+    got = schedule.plan({"SCHEDULE_TARGETS": "finetune"})
+    assert "--forcerun" not in got[0][1]

@@ -10,6 +10,14 @@
 #
 # Targets: `finetune` (every prefix), or one checkpoint,
 # <RUN>/train/n<N>/settings.json. Publishing is the publish module's.
+#
+# From releases (`sims_from: release`, a machine without the rounds), a
+# segment is planned only once its batches are released: the training
+# seeds count up to the first batch not yet released, and nothing trains
+# before the whole held-out round is (`released_batches`, listed afresh
+# each tick).
+
+from flowlib import releases
 
 FT = config["finetune"]
 # Where batches come from is this machine's choice when set.
@@ -37,6 +45,56 @@ def held_seeds():
     return seeds_of(FT["held_round"])
 
 
+FROM_RELEASES = FT["sims_from"] == "release"
+
+
+def available_seeds():
+    """The training seeds whose batches can be had now, in order.
+
+    All of them from this machine's rounds, which the workflow simulates.
+    From releases, those before the first batch not yet released, and none
+    until the held-out round is released.
+    """
+    order = training_seeds()
+    if not FROM_RELEASES:
+        return order
+    path = checkpoints.released_batches.get().output[0]
+    released = {int(s) for s in Path(path).read_text().split()}
+    if not set(held_seeds()) <= released:
+        return []
+    for i, seed in enumerate(order):
+        if seed not in released:
+            return order[:i]
+    return order
+
+
+checkpoint released_batches:
+    output:
+        f"{RUN}/released-batches.txt",
+    params:
+        repo=SIM["repo"],
+        rounds=lambda wc: sorted(
+            {FT["held_round"], *(round_of(s) for s in training_seeds())}
+        ),
+    localrule: True
+    run:
+        import json
+
+        names = []
+        for r in params.rounds:
+            # A round not released yet has no release.
+            got = subprocess.run(
+                ["gh", "release", "view", f"sims-r{r}", "-R", params.repo,
+                 "--json", "assets"],
+                capture_output=True,
+                text=True,
+            )  # fmt: skip
+            if got.returncode == 0:
+                names += [a["name"] for a in json.loads(got.stdout)["assets"]]
+        seeds = sorted(releases.released_seeds(names))
+        Path(output[0]).write_text("".join(f"{s}\n" for s in seeds))
+
+
 def known_exclusions():
     """The sim-QC exclusions known now."""
     paths = [Path(f"{RUN}/excluded.csv")]
@@ -59,7 +117,7 @@ def kept_or_full(seed, skip):
 def segment_seeds(n):
     """The seeds segment n needs: n outbreaks, one spare, the held-out."""
     skip = known_exclusions()
-    order = training_seeds()
+    order = available_seeds()
     need = segments.seeds_for(n, order, lambda s: kept_or_full(s, skip))
     spare = order[len(need) : len(need) + 1]
     return need + spare + held_seeds()
@@ -251,7 +309,7 @@ rule checkpoint_check:
 def trainable():
     """The prefixes done or within reach of the seed list."""
     skip = known_exclusions()
-    order = training_seeds()
+    order = available_seeds()
     # A spare batch past each prefix but the run's last, which takes
     # every training simulation.
     return [
