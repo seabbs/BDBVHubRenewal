@@ -13,6 +13,15 @@ from bdbvhubrenewal.evaluation import checkpoint as ck
 from bdbvhubrenewal.evaluation.scoring import coverage_sample, crps_sample
 
 
+def test_german_dates_forecast_together_come_from_the_environment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("SCORE_DATES", raising=False)
+    assert ck.score_dates() == 20
+    monkeypatch.setenv("SCORE_DATES", "40")
+    assert ck.score_dates() == 40
+
+
 def test_each_label_runs_its_models():
     assert ck.label_models("reference") == (
         "randomwalknowcast",
