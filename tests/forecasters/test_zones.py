@@ -511,6 +511,23 @@ def test_hub_table_checks_zone_sums_unless_told_not_to(
     assert set(alloc["location"]) <= set(table["location"])
 
 
+def test_zones_need_not_sum_for_the_walks_and_the_foundation_model() -> None:
+    from bdbvhubrenewal.forecasters.zones import zones_need_not_sum
+
+    # The walks run each zone on its own data; the foundation model takes
+    # its zones straight from its block. Neither sums them to provinces.
+    for name in (
+        "randomwalk",
+        "randomwalknowcast",
+        "fm_chronos_weekly_ragged",
+        "fm_chronos_daily_ragged_ft",
+        "fm_chronos_weekly_complete",
+    ):
+        assert zones_need_not_sum(name), name
+    for name in ("renewal", "renewalsp", None, "not-a-model"):
+        assert not zones_need_not_sum(name), name
+
+
 def test_only_the_random_walks_forecast_their_own_zones() -> None:
     assert walks_own_zones("randomwalk")
     assert walks_own_zones("randomwalknowcast")
