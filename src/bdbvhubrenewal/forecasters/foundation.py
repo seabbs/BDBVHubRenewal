@@ -686,23 +686,50 @@ def finetuned_adapter(checkpoint: Checkpoint) -> Path:
     return out
 
 
+def torch_device(device: str | None = None) -> str:
+    """Return the torch device Chronos-2 runs on, to train or predict.
+
+    `device`, by default `DEVICE`: the workflow resolves the machine's
+    device (workflow/flowlib/machine.py) and passes it on. Unset or
+    `auto`, run outside the workflow, the first of CUDA, MPS and the CPU
+    torch has.
+    """
+    device = device or os.environ.get("DEVICE") or "auto"
+    if device != "auto":
+        return device
+    import torch
+
+    if torch.cuda.is_available():
+        return "cuda"
+    if torch.backends.mps.is_available():
+        return "mps"
+    return "cpu"
+
+
+def apply_threads() -> None:
+    """Set torch's CPU threads to `TORCH_THREADS`, if set (the rule's)."""
+    n = os.environ.get("TORCH_THREADS", "").strip()
+    if n:
+        import torch
+
+        torch.set_num_threads(int(n))
+
+
+def chronos_batch() -> int:
+    """Return the series in one Chronos-2 forward (`CHRONOS_BATCH`).
+
+    256 by default, Chronos-2's own, which fits an 8 GB GPU.
+    """
+    return int(os.environ.get("CHRONOS_BATCH") or 256)
+
+
 @cache
 def _chronos(checkpoint: Checkpoint | None = None) -> Any:
     adapter = None if checkpoint is None else finetuned_adapter(checkpoint)
-    import torch
     from chronos import Chronos2Pipeline
 
-    # The workflow resolves the machine's device (workflow/flowlib/machine
-    # .py) and passes it as DEVICE; run outside it, torch picks one.
-    device = os.environ.get("DEVICE", "auto")
-    if device == "auto":
-        device = (
-            "cuda"
-            if torch.cuda.is_available()
-            else "mps"
-            if torch.backends.mps.is_available()
-            else "cpu"
-        )
+    apply_threads()
+    device = torch_device()
     pipeline = Chronos2Pipeline.from_pretrained(
         CHRONOS_MODEL, revision=CHRONOS_REVISION, device_map=device
     )
@@ -776,6 +803,7 @@ def _predict(
             with series_bias.assigned(model, _group_rows(g)):
                 q, _ = pipeline.predict_quantiles(
                     [_chronos_input(g)],
+                    batch_size=chronos_batch(),
                     prediction_length=horizon,
                     quantile_levels=levels.tolist(),
                 )
@@ -783,6 +811,7 @@ def _predict(
         return biased
     quantiles, _ = pipeline.predict_quantiles(
         [_chronos_input(g) for g in groups],
+        batch_size=chronos_batch(),
         prediction_length=horizon,
         quantile_levels=levels.tolist(),
     )
