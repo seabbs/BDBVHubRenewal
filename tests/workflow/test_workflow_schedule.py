@@ -14,8 +14,9 @@ def test_a_tick_runs_this_machine_s_targets_in_order():
         "SIM_SLOTS": "2",
     }
     got = schedule.plan(cfg)
-    assert [t for t, _ in got] == ["score", "land"]
+    assert [t for t, _, _ in got] == ["score", "land"]
     score = got[0][1]
+    assert got[0][2] is True
     assert score[:3] == ["nice", "-n", "19"]
     assert "--forcerun" in score
     assert "release_list" in score
@@ -26,7 +27,7 @@ def test_a_tick_runs_this_machine_s_targets_in_order():
 
 def test_every_target_uses_the_default_profile():
     got = schedule.plan({"SCHEDULE_TARGETS": "simulate finetune publish"})
-    assert all("workflow/profiles/default" in cmd for _, cmd in got)
+    assert all("workflow/profiles/default" in cmd for _, cmd, _ in got)
 
 
 def snakemake_targets(cmd):
@@ -41,7 +42,11 @@ def test_the_pool_targets_are_one_snakemake_run():
     got = schedule.plan(
         {"SCHEDULE_TARGETS": "simulate finetune score land publish"}
     )
-    assert [t for t, _ in got] == ["simulate finetune score", "land", "publish"]
+    assert [t for t, _, _ in got] == [
+        "simulate finetune score",
+        "land",
+        "publish",
+    ]
     pool = got[0][1]
     assert snakemake_targets(pool) == ["simulate", "finetune", "score"]
     assert pool.count("--workflow-profile") == 1
@@ -50,7 +55,7 @@ def test_the_pool_targets_are_one_snakemake_run():
 
 def test_the_outward_targets_keep_their_order_after_the_pool():
     got = schedule.plan({"SCHEDULE_TARGETS": "publish simulate release"})
-    assert [t for t, _ in got] == ["simulate", "publish", "release"]
+    assert [t for t, _, _ in got] == ["simulate", "publish", "release"]
 
 
 def test_a_pool_without_score_lists_no_releases():
@@ -187,3 +192,8 @@ def test_a_tick_trains_one_segment_a_run():
 def test_a_tick_without_finetune_sets_no_config():
     got = schedule.plan({"SCHEDULE_TARGETS": "score"})
     assert "--config" not in got[0][1]
+
+
+def test_a_step_says_whether_it_is_the_pool():
+    got = schedule.plan({"SCHEDULE_TARGETS": "score land publish"})
+    assert [pool for _, _, pool in got] == [True, False, False]

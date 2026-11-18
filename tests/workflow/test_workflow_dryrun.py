@@ -700,3 +700,33 @@ def test_a_fresh_listing_keeps_the_checkpoints_saved(tmp_path):
         tmp_path, "finetune", config={**REMOTE, "next_segment_only": True}
     )
     assert jobs["train_segment"] == 1
+
+
+def test_a_no_bias_config_still_simulates_in_the_default_folder(tmp_path):
+    # The guard is the trainer's: other targets run as before.
+    jobs = dry(tmp_path, "simulate", config={**NOBIAS, "rounds": [4]})
+    assert jobs["simulate_batch"] == 40
+
+
+def test_an_unreachable_rounds_host_is_said(tmp_path):
+    # A tick that cannot copy a round's manifest says so, not silence.
+    local = tmp_path / "local.env"
+    local.write_text(
+        f"ROOT={tmp_path}\nHOST_NAME=test-host\n"
+        f"REMOTE_ROOT={tmp_path}/no-such-host\n"
+    )
+    overlay = tmp_path / "overlay.yaml"
+    overlay.write_text(yaml.safe_dump(REMOTE))
+    run = tmp_path / "checkpoints" / "slots"
+    out = subprocess.run(
+        [str(SNAKEMAKE), str(run / "available-batches.txt"), "-s",
+         "workflow/Snakefile", "--cores", "1", "--workflow-profile",
+         "workflow/profiles/ci", "--configfile", str(overlay)],
+        cwd=ROOT,
+        env={"PATH": str(SNAKEMAKE.parent) + ":/usr/bin:/bin",
+             "HOME": str(tmp_path), "LOCAL_CONFIG": str(local)},
+        capture_output=True,
+        text=True,
+    )  # fmt: skip
+    assert "manifest.csv" in out.stderr
+    assert "could not copy" in out.stderr

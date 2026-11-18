@@ -92,3 +92,14 @@ def test_single_targets_run_the_paper_workflow(run):
 def test_unknown_targets_are_an_error():
     with pytest.raises(SystemExit):
         paper_run.main(["nope"])
+
+
+def test_a_failed_pin_is_reported(run, monkeypatch):
+    _, lines, _ = run
+
+    def broken():
+        raise subprocess.CalledProcessError(1, "pin", stderr="no releases\n")
+
+    monkeypatch.setattr(paper_run, "pin", broken)
+    assert paper_run.main(["paper"]) == 1
+    assert lines == ["FAILED pin: no releases"]
