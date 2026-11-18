@@ -230,11 +230,13 @@ CACHE = LOCAL["SCORE_CACHE"]
 
 
 def checkpoint_labels(wc=None):
-    """The checkpoints to score."""
+    """The checkpoints to score, less `score.skip`."""
     if SC["labels"] is not None:
         return list(SC["labels"])
     path = checkpoints.release_list.get().output[0]
-    return releases.labels(json.loads(Path(path).read_text()), SC["published_from"])
+    found = releases.labels(json.loads(Path(path).read_text()), SC["published_from"])
+    skip = set(SC.get("skip") or ())
+    return [lb for lb in found if lb not in skip]
 
 
 ROOM = (
@@ -272,22 +274,20 @@ def unit_env(wc, threads):
     return machine.shell_env(machine.torch_env(LOCAL, threads))
 
 
+def cpu_env(wc, threads):
+    """As `unit_env`, on the CPU."""
+    return machine.shell_env(machine.torch_env(LOCAL, threads, device="cpu"))
+
+
+EVALUATE = "uv run --group chronos python -m bdbvhubrenewal.evaluation.checkpoint"
+
+
 def unit_shell(study):
     return (
         f"mkdir -p {CACHE} && {ROOM}{{params.prefix}} nice -n 19 "
-        "env {params.env} uv run --group chronos python "
-        f"scripts/checkpoint_scores.py {study} {CACHE} {{wildcards.label}} "
+        f"env {{params.env}} {EVALUATE} {study} {CACHE} {{wildcards.label}} "
         "> {log} 2>&1 && touch {output}"
     )
-
-
-def forecast_inputs(wc=None):
-    """The German forecast units, none unless switched on."""
-    fc = SC.get("germany_forecast") or {}
-    if not fc.get("enabled"):
-        return []
-    labels = [*SC["reference"], *([fc["label"]] if fc.get("label") else [])]
-    return expand(f"{CACHE}/germany_forecast/{{label}}.done", label=labels)
 
 
 def table_inputs(wc):
@@ -296,9 +296,14 @@ def table_inputs(wc):
     return {
         "bdbv": expand(f"{CACHE}/bdbv/{{label}}.done", label=every),
         "germany": expand(f"{CACHE}/germany/{{label}}.done", label=every),
-        "heldout": expand(f"{CACHE}/heldout/{{label}}.done", label=labels),
-        "forecast": forecast_inputs(),
+        "release": expand(f"{CACHE}/heldout/{{label}}.done", label=labels),
     }
+
+
+def zone_units(wc=None):
+    """Every label's zone unit."""
+    labels = [*SC["reference"], *checkpoint_labels()]
+    return expand(f"{CACHE}/zones/{{label}}.done", label=labels)
 
 
 # From followups.smk.

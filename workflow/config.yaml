@@ -72,6 +72,11 @@ score:
   # every checkpoint released from `published_from` (rule release_list).
   labels: null
   published_from: "2026-11-16T09:00:00Z"
+  # Checkpoints left out: the previous run's slots arm, whose adapters
+  # main's loader no longer loads (#359). Their cached rows stay in the
+  # tables.
+  skip: [slots-7d7c5d9f247e, slots-06dbdcc2b48d, slots-85babc01767c,
+    slots-ea31bba0123e]
   # Labels scored beside every checkpoint: randomwalknowcast and zero-shot
   # Chronos-2.
   reference: [reference]
@@ -79,18 +84,14 @@ score:
   data: data/target.csv
   # A unit's memory cap (MB), at its measured 5 GB peak.
   mem_mb: 6144
+  # A zone unit's memory cap (MB): Chronos-2 on the CPU with the zones in
+  # its block, at its measured 15.4 GB peak (daily ragged, 2026-11-08).
+  zones_mem_mb: 18432
   # The evidence tables the scores merge into, kept rows of other rules.
   evidence: evidence/checkpoint-scores.csv
   checkpoints: evidence/checkpoints.csv
   # The only branch `land` commits and pushes the tables on.
   branch: checkpoint-scoring
-  # Opt-in, for the SI: 1 to 4 week forecasts of the German development
-  # half (scripts/germany_forecast.py), study `germany_forecast`, for the
-  # reference and `label`, the live run's latest checkpoint (null: the
-  # reference alone). Each runs after its own German nowcasts.
-  germany_forecast:
-    enabled: false
-    label: null
 
 slots_check:
   # Each slots checkpoint against zero-shot Chronos-2 and the no-slots
