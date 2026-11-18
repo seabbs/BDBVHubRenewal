@@ -112,3 +112,28 @@ def test_a_stopped_run_is_neither_alive_nor_dead(tmp_path):
         text, alive = logs.trainer_state(tmp_path)
         assert alive is None
         assert stage in text
+
+
+def test_a_run_reads_every_segment_log_and_the_old_train_log(tmp_path):
+    (tmp_path / "train").mkdir()
+    (tmp_path / "train.log").write_text(
+        LINE.format(step=10, loss=0.5, held=0.4) + "\n"
+    )
+    (tmp_path / "train" / "n250.log").write_text(
+        LINE.format(step=20, loss=0.45, held=0.39) + "\n"
+    )
+    log = logs.RunLog(tmp_path)
+    assert [r["step"] for r in log.rows()] == [10, 20]
+    # A new segment's log is found as soon as it is written.
+    (tmp_path / "train" / "n500.log").write_text(
+        LINE.format(step=30, loss=0.4, held=0.38) + "\n"
+    )
+    assert [r["step"] for r in log.rows()] == [10, 20, 30]
+
+
+def test_a_train_log_linked_to_a_segment_log_is_read_once(tmp_path):
+    (tmp_path / "train").mkdir()
+    seg = tmp_path / "train" / "n2000.log"
+    seg.write_text(LINE.format(step=20, loss=0.45, held=0.39) + "\n")
+    (tmp_path / "train.log").symlink_to(seg)
+    assert [r["step"] for r in logs.RunLog(tmp_path).rows()] == [20]
