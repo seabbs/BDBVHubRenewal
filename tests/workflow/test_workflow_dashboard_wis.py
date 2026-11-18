@@ -93,3 +93,19 @@ def test_the_section_draws_each_part_in_the_paper_s_colour():
         "overprediction", first
     )
     assert out.count("class=card") == 1
+
+
+def test_a_bar_scored_on_other_forecasts_is_flagged():
+    rs, refs = _which()
+    rows = [r | {"n": "120"} for r in ROWS[:3]]
+    rows[1] |= {"n": "90"}  # n500, from a resumed or partial unit
+    bars = scores.wis_bars(rows, rs, refs, RULE, source="daily")
+    assert [b["cells"] for b in bars[("germany", "national")]] == [
+        120,
+        90,
+        120,
+    ]
+    out = wis.section(bars, {})
+    assert "live n500 *" in out
+    assert "live n250 *" not in out
+    assert "other forecasts" in out
