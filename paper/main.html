@@ -6,7 +6,7 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
-<meta name="dcterms.date" content="2026-11-17">
+<meta name="dcterms.date" content="2026-11-18">
 
 <title>Title to be chosen</title>
 <style>
@@ -110,7 +110,7 @@ window.Quarto = {
     <div>
     <div class="quarto-title-meta-heading">Published</div>
     <div class="quarto-title-meta-contents">
-      <p class="date">November 17, 2026</p>
+      <p class="date">November 18, 2026</p>
     </div>
   </div>
   
@@ -628,26 +628,16 @@ Table&nbsp;2: Held-out synthetic data: mean scores, coverage and number of forec
 <div id="tbl-synthetic-joint" class="quarto-float quarto-figure quarto-figure-center anchored">
 <figure class="quarto-float quarto-float-tbl figure">
 <figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-synthetic-joint-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Table&nbsp;3: Held-out synthetic data: mean energy and variogram scores of each model’s trajectories on log(x + 1) counts, and their ratio to randomwalknowcast on the forecasts both made. Illustrative, dummy data
+Table&nbsp;3: Held-out synthetic data: mean energy score of each model’s trajectories on log(x + 1) counts, and their ratio to randomwalknowcast on the forecasts both made. Illustrative, dummy data
 </figcaption>
 <div aria-describedby="tbl-synthetic-joint-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
 <table class="caption-top table">
-<colgroup>
-<col style="width: 16%">
-<col style="width: 16%">
-<col style="width: 16%">
-<col style="width: 16%">
-<col style="width: 16%">
-<col style="width: 16%">
-</colgroup>
 <thead>
 <tr class="header">
 <th>model</th>
 <th>n</th>
 <th>energy_log</th>
-<th>variogram_log</th>
 <th>rel_energy_log</th>
-<th>rel_variogram_log</th>
 </tr>
 </thead>
 <tbody>
@@ -655,96 +645,72 @@ Table&nbsp;3: Held-out synthetic data: mean energy and variogram scores of each 
 <td>epinowcast</td>
 <td>144</td>
 <td>0.518</td>
-<td>2.18</td>
 <td>0.852</td>
-<td>0.658</td>
 </tr>
 <tr class="even">
 <td>fm_chronos_daily_complete</td>
 <td>144</td>
 <td>0.726</td>
-<td>4.08</td>
 <td>1.2</td>
-<td>1.23</td>
 </tr>
 <tr class="odd">
 <td>fm_chronos_daily_ragged</td>
 <td>144</td>
 <td>0.808</td>
-<td>3.83</td>
 <td>1.33</td>
-<td>1.16</td>
 </tr>
 <tr class="even">
 <td>fm_chronos_daily_ragged_ft@1000</td>
 <td>144</td>
 <td>0.653</td>
-<td>3.12</td>
 <td>1.08</td>
-<td>0.944</td>
 </tr>
 <tr class="odd">
 <td>fm_chronos_daily_ragged_ft@16000</td>
 <td>144</td>
 <td>0.57</td>
-<td>2.72</td>
 <td>0.939</td>
-<td>0.821</td>
 </tr>
 <tr class="even">
 <td>fm_chronos_daily_ragged_ft@2000</td>
 <td>144</td>
 <td>0.592</td>
-<td>2.8</td>
 <td>0.974</td>
-<td>0.845</td>
 </tr>
 <tr class="odd">
 <td>fm_chronos_daily_ragged_ft@4000</td>
 <td>144</td>
 <td>0.583</td>
-<td>2.79</td>
 <td>0.96</td>
-<td>0.842</td>
 </tr>
 <tr class="even">
 <td>fm_chronos_daily_ragged_ft@8000</td>
 <td>144</td>
 <td>0.549</td>
-<td>2.51</td>
 <td>0.904</td>
-<td>0.757</td>
 </tr>
 <tr class="odd">
 <td>fm_chronos_weekly_complete</td>
 <td>144</td>
 <td>0.745</td>
-<td>4.18</td>
 <td>1.23</td>
-<td>1.26</td>
 </tr>
 <tr class="even">
 <td>fm_chronos_weekly_ragged</td>
 <td>144</td>
 <td>0.821</td>
-<td>4.61</td>
 <td>1.35</td>
-<td>1.39</td>
 </tr>
 <tr class="odd">
 <td>randomwalk</td>
 <td>144</td>
 <td>0.774</td>
-<td>4.75</td>
 <td>1.28</td>
-<td>1.43</td>
 </tr>
 <tr class="even">
 <td>randomwalknowcast</td>
 <td>144</td>
 <td>0.607</td>
-<td>3.31</td>
-<td>1</td>
 <td>1</td>
 </tr>
 </tbody>
@@ -1312,26 +1278,16 @@ Table&nbsp;5: Ebola hub submissions: mean scores, coverage and number of forecas
 <div id="tbl-ebola-joint" class="quarto-float quarto-figure quarto-figure-center anchored">
 <figure class="quarto-float quarto-float-tbl figure">
 <figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-ebola-joint-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Table&nbsp;6: Ebola hub submissions: mean energy and variogram scores of each model’s trajectories on log(x + 1) counts, and their ratio to randomwalknowcast on the forecasts both made.
+Table&nbsp;6: Ebola hub submissions: mean energy score of each model’s trajectories on log(x + 1) counts, and their ratio to randomwalknowcast on the forecasts both made.
 </figcaption>
 <div aria-describedby="tbl-ebola-joint-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
 <table class="caption-top table">
-<colgroup>
-<col style="width: 16%">
-<col style="width: 16%">
-<col style="width: 16%">
-<col style="width: 16%">
-<col style="width: 16%">
-<col style="width: 16%">
-</colgroup>
 <thead>
 <tr class="header">
 <th>model</th>
 <th>n</th>
 <th>energy_log</th>
-<th>variogram_log</th>
 <th>rel_energy_log</th>
-<th>rel_variogram_log</th>
 </tr>
 </thead>
 <tbody>
@@ -1339,81 +1295,61 @@ Table&nbsp;6: Ebola hub submissions: mean energy and variogram scores of each mo
 <td>fm_chronos_daily_complete</td>
 <td>54</td>
 <td>0.0984</td>
-<td>0.112</td>
 <td>1.51</td>
-<td>0.886</td>
 </tr>
 <tr class="even">
 <td>fm_chronos_daily_ragged</td>
 <td>54</td>
 <td>0.108</td>
-<td>0.12</td>
 <td>1.65</td>
-<td>0.945</td>
 </tr>
 <tr class="odd">
 <td>fm_chronos_weekly_complete</td>
 <td>54</td>
 <td>0.0771</td>
-<td>0.128</td>
 <td>1.18</td>
-<td>1.01</td>
 </tr>
 <tr class="even">
 <td>fm_chronos_weekly_ragged</td>
 <td>54</td>
 <td>0.0822</td>
-<td>0.13</td>
 <td>1.26</td>
-<td>1.03</td>
 </tr>
 <tr class="odd">
 <td>pprandomwalknowcast</td>
 <td>54</td>
 <td>0.0539</td>
-<td>0.111</td>
 <td>0.828</td>
-<td>0.873</td>
 </tr>
 <tr class="even">
 <td>randomwalk</td>
 <td>54</td>
 <td>0.0839</td>
-<td>0.132</td>
 <td>1.29</td>
-<td>1.04</td>
 </tr>
 <tr class="odd">
 <td>randomwalknowcast</td>
 <td>54</td>
 <td>0.0651</td>
-<td>0.127</td>
-<td>1</td>
 <td>1</td>
 </tr>
 <tr class="even">
 <td>renewal</td>
 <td>54</td>
 <td>0.0698</td>
-<td>0.132</td>
 <td>1.07</td>
-<td>1.04</td>
 </tr>
 <tr class="odd">
 <td>renewalbvd</td>
 <td>54</td>
 <td>0.0735</td>
-<td>0.136</td>
 <td>1.13</td>
-<td>1.07</td>
 </tr>
 <tr class="even">
 <td>renewalsp</td>
 <td>54</td>
 <td>0.063</td>
-<td>0.131</td>
 <td>0.967</td>
-<td>1.03</td>
 </tr>
 </tbody>
 </table>
