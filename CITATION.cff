@@ -1,5 +1,5 @@
 cff-version: 1.2.0
-title: "BDBVHubRenewal: renewal-model nowcasts and forecasts for the BDBV Modeling Hub"
+title: "bdbv-hub-modelling: renewal-model nowcasts and forecasts for the BDBV Modeling Hub"
 message: "If you use this software, please cite it as below."
 type: software
 authors:
@@ -27,14 +27,14 @@ keywords:
   - Bundibugyo virus disease
 license: MIT
 doi: 10.5281/zenodo.23942616
-repository-code: "https://github.com/seabbs/BDBVHubRenewal"
-url: "https://samabbott.co.uk/BDBVHubRenewal/"
+repository-code: "https://github.com/seabbs/bdbv-hub-modelling"
+url: "https://samabbott.co.uk/bdbv-hub-modelling/"
 identifiers:
   - type: doi
     value: 10.5281/zenodo.23942616
     description: Zenodo concept DOI, all versions
   - type: url
-    value: "https://samabbott.co.uk/BDBVHubRenewal/"
+    value: "https://samabbott.co.uk/bdbv-hub-modelling/"
     description: Documentation
   - type: url
     value: "https://github.com/InsightNet-US/BDBV-Modeling-Hub"

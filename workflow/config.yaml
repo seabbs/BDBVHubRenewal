@@ -23,7 +23,7 @@ simulate:
   mem_mb: 16384
   retry_mem_mb: 20480
   # GitHub repository of the `sims-r<N>` releases.
-  repo: seabbs/BDBVHubRenewal
+  repo: seabbs/bdbv-hub-modelling
 
 finetune:
   # The continuous run, one training

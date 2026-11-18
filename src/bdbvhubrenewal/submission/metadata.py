@@ -33,7 +33,7 @@ _RENEWAL_OBSERVATION = (
     "once per sample from a Dirichlet built on recent and longer-run "
     "published zone counts, keeping each zone's published count, so zone "
     "samples sum to the province sample. See "
-    "https://samabbott.co.uk/BDBVHubRenewal/methods/model/."
+    "https://samabbott.co.uk/bdbv-hub-modelling/methods/model/."
 )
 _RENEWAL_INPUTS = (
     "Hub target data (weekly confirmed cases by onset week, observed plus "
@@ -64,7 +64,7 @@ MODEL_METADATA = {
             "10 cases a week uses the walk spread of its parent. Each sample "
             "is a joint trajectory and the national value is the sum of "
             "province samples. See "
-            "https://samabbott.co.uk/BDBVHubRenewal/methods/baselines/."
+            "https://samabbott.co.uk/bdbv-hub-modelling/methods/baselines/."
         ),
         "data_inputs": (
             "Hub daily onsets by release (observed plus imputed) for "
@@ -165,7 +165,7 @@ MODEL_METADATA = {
             "pooled over its parent (zone, then province, then national). "
             "The "
             "national value is the sum of provinces. See "
-            "https://samabbott.co.uk/BDBVHubRenewal/methods/baselines/."
+            "https://samabbott.co.uk/bdbv-hub-modelling/methods/baselines/."
         ),
         "data_inputs": (
             "Hub daily onsets by release (observed plus imputed) for "
@@ -204,7 +204,7 @@ MODEL_METADATA = {
             "fitted and take randomwalknowcast's draws, 0 until an "
             "introduction, as renewalsp does. The national value is the "
             "sum of provinces. "
-            "See https://samabbott.co.uk/BDBVHubRenewal/methods/baselines/."
+            "See https://samabbott.co.uk/bdbv-hub-modelling/methods/baselines/."
         ),
         "data_inputs": (
             "Hub daily onsets by release (observed plus imputed) for "
@@ -229,7 +229,7 @@ MODEL_METADATA = {
             "epinowcast's generative model (renewal process, drifting "
             "reporting delays, day-of-week effects, negative binomial "
             "noise). The adapter is the release {release} of "
-            "https://github.com/seabbs/BDBVHubRenewal, the newest when "
+            "https://github.com/seabbs/bdbv-hub-modelling, the newest when "
             "this was written. The hub target of "
             "every daily release is laid out by onset day and release "
             "lag. The country, each province and each of their health "
@@ -242,7 +242,7 @@ MODEL_METADATA = {
             "those reported. Not fitted to these data. The zones are made "
             "to sum to their province sample by sample, each keeping its "
             "published count. See "
-            "https://samabbott.co.uk/BDBVHubRenewal/methods/foundation/."
+            "https://samabbott.co.uk/bdbv-hub-modelling/methods/foundation/."
         ),
         "data_inputs": (
             "The hub's daily onsets by release (observed plus "
@@ -264,7 +264,7 @@ MODEL_METADATA = {
             "epinowcast's generative model (renewal process, drifting "
             "reporting delays, day-of-week effects, negative binomial "
             "noise). The adapter is the release {release} of "
-            "https://github.com/seabbs/BDBVHubRenewal, the newest when "
+            "https://github.com/seabbs/bdbv-hub-modelling, the newest when "
             "this was written. The hub target of "
             "every weekly release is laid out by onset week and release "
             "lag. The country, each province and each of their health "
@@ -277,7 +277,7 @@ MODEL_METADATA = {
             "those reported. Not fitted to these data. The zones are made "
             "to sum to their province sample by sample, each keeping its "
             "published count. See "
-            "https://samabbott.co.uk/BDBVHubRenewal/methods/foundation/."
+            "https://samabbott.co.uk/bdbv-hub-modelling/methods/foundation/."
         ),
         "data_inputs": (
             "The hub's weekly target data by release "

@@ -12,7 +12,7 @@
 source "$(dirname "$0")/lib.sh"
 
 LEDGER_BRANCH=${LEDGER_BRANCH:-submission-ledger}
-REPO=${GITHUB_REPOSITORY:-seabbs/BDBVHubRenewal}
+REPO=${GITHUB_REPOSITORY:-seabbs/bdbv-hub-modelling}
 ledger="$WORK/release-ledger"
 mkdir -p "$ledger"
 if ! git fetch -q --depth 1 origin "$LEDGER_BRANCH" 2> /dev/null; then

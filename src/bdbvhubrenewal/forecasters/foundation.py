@@ -111,12 +111,12 @@ FINETUNED_CONFIG: Final = Path("config/finetune.toml")
 or a settings hash."""
 
 FINETUNED_URL: Final = (
-    "https://github.com/seabbs/BDBVHubRenewal/releases/download"
+    "https://github.com/seabbs/bdbv-hub-modelling/releases/download"
 )
 """Where the fine-tuned checkpoints' releases are downloaded from."""
 
 FINETUNED_RELEASES: Final = (
-    "https://api.github.com/repos/seabbs/BDBVHubRenewal/releases"
+    "https://api.github.com/repos/seabbs/bdbv-hub-modelling/releases"
 )
 """The repository's releases, listed to find the latest checkpoint."""
 
