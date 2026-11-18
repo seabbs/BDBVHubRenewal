@@ -28,7 +28,7 @@ def test_run_params_from_the_command_line_settings_and_history(tmp_path):
         "--lr-steps 36500 --bias-lr 1e-3 --prefixes 250 500 8000"
     )
     hist = [{"step": 100, "lr": {"LoRA": 9e-6, "bias": 9e-4}}]
-    got = training.run_params(tmp_path, hist, 100, args)
+    got = training.run_params(tmp_path, hist, 100, args, (250,))
     assert got["lr_steps"] == 36500
     assert got["groups"] == {"adapter": 1e-5, "bias": 1e-3, "LoRA": 9e-6}
     assert got["current"]["bias"] == 9e-4
@@ -37,13 +37,13 @@ def test_run_params_from_the_command_line_settings_and_history(tmp_path):
 
 def test_run_params_decay_linearly_without_history(tmp_path):
     args = "x --learning-rate 1e-5 --lr-steps 1000 --prefixes 250"
-    got = training.run_params(tmp_path, [], 250, args)
+    got = training.run_params(tmp_path, [], 250, args, (250,))
     assert got["current"]["adapter"] == 1e-5 * 0.75
 
 
 def test_run_params_decay_over_the_outbreaks_without_a_step_count(tmp_path):
     args = "x --learning-rate 1e-5 --outbreaks 8400 --prefixes 250 8400"
-    got = training.run_params(tmp_path, [], 0, args)
+    got = training.run_params(tmp_path, [], 0, args, (250,))
     assert got["lr_steps"] == 0
     assert got["lr_outbreaks"] == 8400
 

@@ -24,7 +24,11 @@ def _size(name: str) -> int:
 
 
 def run_params(
-    folder: Path | str, hist: Any, step: int | None, args: str
+    folder: Path | str,
+    hist: Any,
+    step: int | None,
+    args: str,
+    default: Sequence[int],
 ) -> dict[str, Any]:
     """Return a run's schedule.
 
@@ -112,7 +116,7 @@ def run_params(
         "groups": groups,
         "current": current,
         "logged": logged,
-        "prefixes": prefixes(folder, args),
+        "prefixes": prefixes(folder, args, default),
     }
 
 
