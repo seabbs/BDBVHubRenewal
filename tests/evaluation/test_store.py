@@ -132,10 +132,6 @@ def test_code_digest_follows_each_models_own_code(tmp_path: Path) -> None:
     # The CLI is not fit code.
     edit(f"{src}/cli.py")
     assert digests() == before
-    # The store's own code refits every model.
-    edit(f"{src}/evaluation/store.py")
-    after = digests()
-    assert all(after[m] != before[m] for m in models)
 
 
 def test_the_zone_split_keys_the_province_models_fits(tmp_path: Path) -> None:
@@ -226,7 +222,7 @@ def test_fit_time_data_files_key_a_fit(tmp_path: Path) -> None:
 
 def test_report_code_does_not_key_a_fit(tmp_path: Path) -> None:
     # `fit_code` runs `digest.model_code`, so a change to its import
-    # closure can move a key. Its own source is not hashed (`STORE_SKIP`).
+    # closure can move a key. Its own source is not hashed (`STORE_IO`).
     root = _copy_repo(tmp_path)
     models = ("renewal",)
 

@@ -156,26 +156,18 @@ def test_model_code_leaves_out_other_models() -> None:
     assert "src/bdbvhubrenewal/forecasters/randomwalk.py" in renewal
 
 
-def test_model_code_keeps_a_skipped_module_its_model_imports() -> None:
-    from bdbvhubrenewal.evaluation.digest import model_code
-    from bdbvhubrenewal.evaluation.store import STORE_ENTRIES, STORE_SKIP
+def test_fit_code_holds_the_zone_split_only_for_models_that_run_it() -> None:
+    from bdbvhubrenewal.evaluation.store import fit_code
 
     zones = "src/bdbvhubrenewal/forecasters/zones.py"
-    assert zones in STORE_SKIP
-
-    def code(model: str) -> set[str]:
-        return set(
-            model_code(model, ROOT, STORE_ENTRIES, cli=False, skip=STORE_SKIP)
-        )
-
     # Chronos-2's module imports the zone split, so its key holds it, and
     # so do the province-level models that split their zones in their own
     # forecast (`with_zones`, since #299).
     for model in ("fm_chronos_weekly_ragged", "renewal", "renewalsp"):
-        assert zones in code(model)
-    # Models whose modules do not import it still leave it out.
+        assert zones in fit_code(model, ROOT)
+    # Models whose modules do not import it leave it out.
     for model in ("randomwalk", "randomwalknowcast"):
-        assert zones not in code(model)
+        assert zones not in fit_code(model, ROOT)
 
 
 @pytest.mark.slow
@@ -206,5 +198,8 @@ def test_fit_code_covers_what_a_stored_fit_runs(
     out: list[store.StoredFit] = []
     ran = _ran(lambda: out.append(store.fit(model, task, tiny, "c")))
     assert out[0].meta["status"] == "ok", out[0].meta.get("error")
-    missing = ran - set(store.fit_code(model, ROOT))
+    # Code that is not the model's (`STORE_IO`) runs in a fit but no key
+    # holds it.
+    model_run = {p for p in ran if not p.startswith(store.STORE_IO)}
+    missing = model_run - set(store.fit_code(model, ROOT))
     assert not missing, f"{model} runs code its key leaves out: {missing}"

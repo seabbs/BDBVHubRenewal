@@ -79,8 +79,7 @@ from bdbvhubrenewal.forecasters import (
 __all__ = [
     "STATUS_FILE",
     "STORE_DATA",
-    "STORE_ENTRIES",
-    "STORE_SKIP",
+    "STORE_IO",
     "UNPACKED_FILE",
     "StoreStatus",
     "StoredFit",
@@ -104,27 +103,17 @@ __all__ = [
     "write_fit",
 ]
 
-STORE_ENTRIES: Final = (
-    "src/bdbvhubrenewal/evaluation/backtest.py",
-    "src/bdbvhubrenewal/evaluation/store.py",
+STORE_IO: Final = (
+    "src/bdbvhubrenewal/evaluation/",
+    "src/bdbvhubrenewal/submission/",
+    "src/bdbvhubrenewal/reporting/",
+    "src/bdbvhubrenewal/devices.py",
+    "src/bdbvhubrenewal/cli.py",
 )
-"""The shared modules a stored fit calls: `fit` and `run_forecasts`."""
-
-STORE_SKIP: Final = (
-    "src/bdbvhubrenewal/evaluation/digest.py",
-    "src/bdbvhubrenewal/evaluation/zones.py",
-    "src/bdbvhubrenewal/forecasters/zones.py",
-    "src/bdbvhubrenewal/reporting/plots.py",
-)
-"""Modules `STORE_ENTRIES` import but a fit does not call.
-
-The zone module, for models that do not call it: a province-level
-model splits its zones in its own forecast (`forecasters.zones.with_zones`)
-and a model that forecasts the zones itself reconciles them, so each
-imports the module and it is in that model's code. `fit_code`'s own helper
-(`evaluation.digest`), and the plots `evaluation.ppc` imports for
-`plot_ppc`, which a fit does not draw.
-"""
+"""Code that is not the model's: loading and storing fits, scoring,
+records, plots, devices and the CLI. No key holds it, so changing it
+never refits a model. The per-origin loop a fit runs is keyed by its own
+source instead (`code_digest`)."""
 
 STORE_DATA: Final = "src/bdbvhubrenewal/data/*.csv"
 """The package's data files, which a fit may read (the province centres
@@ -248,12 +237,11 @@ def _strip(source: str, imports: bool = True) -> str:
 
 
 def fit_code(model: str, root: Path | str = ".") -> list[str]:
-    """List the source files a stored fit of one model can run.
+    """List the model code a stored fit of one model runs.
 
-    The import closure of the model's module and `STORE_ENTRIES`
-    (`evaluation.digest.model_code`), without the other models' modules
-    and the modules a fit does not call (`STORE_SKIP`) unless the model's
-    own module imports them, and the package's data files (`STORE_DATA`).
+    The import closure of the model's module, which holds any other
+    model's module it builds on, without the code that is not the
+    model's (`STORE_IO`), and the package's data files (`STORE_DATA`).
 
     Parameters
     ----------
@@ -269,7 +257,7 @@ def fit_code(model: str, root: Path | str = ".") -> list[str]:
     """
     from bdbvhubrenewal.evaluation.digest import model_code
 
-    code = model_code(model, root, STORE_ENTRIES, cli=False, skip=STORE_SKIP)
+    code = model_code(model, root, (), cli=False, exclude=STORE_IO)
     data = [p.relative_to(root).as_posix() for p in Path(root).glob(STORE_DATA)]
     return sorted([*code, *data])
 

@@ -258,6 +258,7 @@ def model_code(
     entries: Sequence[str] = FORECAST_ENTRIES,
     cli: bool = True,
     skip: Sequence[str] = (),
+    exclude: Sequence[str] = (),
 ) -> list[str]:
     """List the source files a forecast-only run of one model reads.
 
@@ -268,7 +269,9 @@ def model_code(
     code. With `cli`, the CLI module is added as a file, without
     following its imports, which reach every command. The modules in
     `skip` are left out, with what only they import, unless the model's
-    own module imports them itself.
+    own module imports them itself. Files under the `exclude` prefixes
+    are never listed or followed, even when the model's module imports
+    them.
 
     Parameters
     ----------
@@ -282,6 +285,8 @@ def model_code(
         Add the CLI module.
     skip : sequence of str
         Modules the run imports but does not call, as paths from `root`.
+    exclude : sequence of str
+        Path prefixes from `root` of code that is never listed.
 
     Returns
     -------
@@ -305,6 +310,11 @@ def model_code(
     stop = {base / s for s in skip}
     if start is not None:
         stop -= _imports(start, src)
+    stop |= {
+        f
+        for f in src.rglob("*.py")
+        if f.relative_to(base).as_posix().startswith(tuple(exclude))
+    }
     seen = set() if start is None else _closure(src, [start], stop, start)
     # Then the shared forecasting code, which reaches every model through
     # the registry: there the other models' modules are left out.
