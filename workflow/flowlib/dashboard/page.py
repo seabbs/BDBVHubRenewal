@@ -789,7 +789,12 @@ def build(ctx: Context) -> str:
     parts = [
         ("loss", "Loss", loss_section(ctx, live, st), True),
         ("bias", "Attention bias", bias_section(ctx, live, st), True),
-        ("learning", "What fine-tuning learns", learning.section(live), True),
+        (
+            "learning",
+            "What fine-tuning learns",
+            learning.section(live, tip),
+            True,
+        ),
         ("nowcasts", "Nowcasts", nowcasts_section(ctx, sizes, builts), True),
     ]
     if mail:

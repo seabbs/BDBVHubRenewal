@@ -14,7 +14,7 @@ import json
 import math
 import re
 from array import array
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -29,6 +29,9 @@ BLOCK = re.compile(r"encoder\.block\.(\d+)\.layer\.(\d+)\.")
 
 KINDS = {"0": "time attention", "1": "group attention"}
 """Encoder sublayers by index (`Chronos2EncoderBlock.layer`)."""
+
+EXPLAINERS = ("learnlevel", "learnlayer", "learnkind")
+"""The explainer keys (`page/explain.json`) of the three panels, in order."""
 
 COLOURS = ("#1b9e77", "#d95f02", "#7570b3", "#e7298a", "#66a61e", "#e6ab02")
 """Line colours, in order."""
@@ -186,8 +189,11 @@ def _series(curves: Mapping[str, Sequence[tuple[float, float]]], kind: str):
     ]
 
 
-def section(run: Run) -> str:
-    """Return the live run's three panels of what fine-tuning learns."""
+def section(run: Run, tip: Callable[[str], str] = lambda _: "") -> str:
+    """Return the live run's three panels of what fine-tuning learns.
+
+    `tip` gives the info marker of an explainer key (`page.tip`).
+    """
     history = training.history(run)
     cks = (
         [(n, s) for n, s, _ in logs.checkpoints(run.folder)]
@@ -198,12 +204,14 @@ def section(run: Run) -> str:
         "Held-out loss by level at each checkpoint, relative to the start",
         _series(by_level(history, cks), "pts"),
         hlines=[1.0],
+        info=tip("learnlevel"),
         note="All held-out blocks, each level scored with the others masked.",
     )
     lora = svg.chart(
         "Size of the LoRA update by encoder layer",
         _series(run_lora(run), "pts"),
         xlabel="encoder layer",
+        info=tip("learnlayer"),
         note="Frobenius norm of the scaled B·A, a layer's attention "
         "modules in quadrature; one line per checkpoint.",
     )
@@ -211,6 +219,7 @@ def section(run: Run) -> str:
         "Size of the LoRA update by kind of module",
         _series(run_kinds(run), "pts"),
         xlabel="simulations",
+        info=tip("learnkind"),
         note="Time attention, group attention and the output layer, "
         "each in quadrature over its modules.",
     )
