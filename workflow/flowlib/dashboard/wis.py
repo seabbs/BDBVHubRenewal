@@ -1,8 +1,9 @@
 """Mean WIS as stacked bars of its components (Wolffram et al. 2023).
 
 One card per study and level with a bar per checkpoint and reference
-(`scores.wis_bars`): dispersion, underprediction and overprediction,
-which sum to the WIS, in the paper's colours (`paperstyle`). Drawn here
+(`scores.wis_bars`): dispersion, overprediction and underprediction,
+which sum to the WIS, each a shade of the bar's model colour as in the
+paper (`paperstyle.part_colour`). Drawn here
 as SVG, so the page needs no script for it.
 """
 
@@ -73,7 +74,8 @@ def card(title: str, bars: Sequence[Mapping[str, Any]], info: str = "") -> str:
             w = max(x1 - x0 - 2, 0.5)
             o.append(
                 f'<rect x="{x0:.1f}" y="{y}" width="{w:.1f}" height="{h}" '
-                f'rx="2" fill="{paperstyle.wis_colour(part)}"><title>'
+                f'rx="2" fill="{paperstyle.part_colour(b["colour"], part)}" '
+                f'stroke="{esc(b["colour"])}" stroke-width="0.6"><title>'
                 f"{label}: {part} {v:.3g} of {b['wis']:.3g}</title></rect>"
             )
         o.append(
@@ -81,8 +83,10 @@ def card(title: str, bars: Sequence[Mapping[str, Any]], info: str = "") -> str:
             f"class=lab>{b['wis']:.3g}</text>"
         )
     o.append("</svg>")
+    ink = paperstyle.INK_TEXT
     leg = "".join(
-        f'<span><i style="background:{paperstyle.wis_colour(p)}"></i>{p}</span>'
+        f'<span><i style="background:{paperstyle.part_colour(ink, p)};'
+        f'border:1px solid {ink}"></i>{p}</span>'
         for p in PARTS
     )
     return (

@@ -89,7 +89,7 @@ def test_the_section_draws_each_part_in_the_paper_s_colour():
     for part in wis.PARTS:
         assert paperstyle.part_colour("#111", part) in out
     assert paperstyle.part_colour("#111", "dispersion") == "#111111"
-    assert paperstyle.part_colour("#000000", "underprediction") == "#b3b3b3"
+    assert paperstyle.part_colour("#000000", "underprediction") == "#b2b2b2"
     # Stacked in the paper's order.
     first = out.index("<rect", out.index("live n250"))
     assert out.index("dispersion", first) < out.index("overprediction", first)
