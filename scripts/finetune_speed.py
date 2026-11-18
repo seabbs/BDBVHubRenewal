@@ -37,6 +37,7 @@ import finetune_chronos as ft
 import finetune_stream as fs
 
 from bdbvhubrenewal.forecasters import series_bias
+from bdbvhubrenewal.forecasters.foundation import torch_device
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -85,7 +86,7 @@ def main() -> None:
     fs.checkpoint_large_batches(ft.checkpoint_above(args.memory_gb))
     ft.MAX_SERIES = min(ft.MAX_SERIES, ft.max_series(args.memory_gb))
     k = args.blocks_per_simulation
-    device = fs.pick_device(args.device)
+    device = torch_device(args.device)
 
     def sync() -> None:
         if device == "cuda":
