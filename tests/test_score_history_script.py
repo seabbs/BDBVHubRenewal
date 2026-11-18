@@ -24,7 +24,7 @@ def sh():
 
 def test_source_sha_is_read_from_main_deploys_only(sh) -> None:
     sha = "0996814" + "0" * 33
-    msg = f"Deploying to gh-pages from @ seabbs/BDBVHubRenewal@{sha} 🚀"
+    msg = f"Deploying to gh-pages from @ seabbs/bdbv-hub-modelling@{sha} 🚀"
     assert sh.source_sha(msg) == sha
     assert sh.source_sha("Deploy preview for PR 102 🛫") is None
     assert sh.source_sha("Remove preview for PR 93 🛬") is None

@@ -27,7 +27,7 @@ Model: BVDOutbreakSize-informed renewal model (`renewalbvd`), the first model in
 | Hub validation | PASS |
 | Data coherence | PASS |
 
-This round in our docs: https://samabbott.co.uk/BDBVHubRenewal/submission/rounds/2026-11-07/
+This round in our docs: https://samabbott.co.uk/bdbv-hub-modelling/submission/rounds/2026-11-07/
 
 <details><summary>Details</summary>
 

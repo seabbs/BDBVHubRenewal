@@ -44,10 +44,10 @@ model = [
 ]
 
 [project.urls]
-Homepage = "https://samabbott.co.uk/BDBVHubRenewal/"
-Documentation = "https://samabbott.co.uk/BDBVHubRenewal/"
-Repository = "https://github.com/seabbs/BDBVHubRenewal"
-Issues = "https://github.com/seabbs/BDBVHubRenewal/issues"
+Homepage = "https://samabbott.co.uk/bdbv-hub-modelling/"
+Documentation = "https://samabbott.co.uk/bdbv-hub-modelling/"
+Repository = "https://github.com/seabbs/bdbv-hub-modelling"
+Issues = "https://github.com/seabbs/bdbv-hub-modelling/issues"
 
 [project.scripts]
 bdbvhubrenewal = "bdbvhubrenewal.cli:main"

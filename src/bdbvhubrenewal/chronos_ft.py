@@ -1,7 +1,7 @@
 # Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
 """Use our fine-tuned Chronos-2 on your own reporting triangle.
 
-`load` downloads a `chronos-ft-<hash>` release of seabbs/BDBVHubRenewal,
+`load` downloads a `chronos-ft-<hash>` release of seabbs/bdbv-hub-modelling,
 the newest or a pinned one, and checks each adapter file against the
 release's `sha256sums.txt`. `forecast_triangle` gives a reporting
 triangle to Chronos-2 as the `fm_chronos_*_ragged_ft` models do and

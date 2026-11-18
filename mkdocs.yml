@@ -1,12 +1,12 @@
-site_name: BDBVHubRenewal
+site_name: bdbv-hub-modelling
 site_description: >-
   Nowcasts and forecasts of confirmed Bundibugyo virus disease cases for the
   BDBV Modeling Hub, from baselinenowcast with a random walk, with renewal
   model candidates, data tools and a backtest.
 site_author: Sam Abbott
-site_url: https://samabbott.co.uk/BDBVHubRenewal/
-repo_url: https://github.com/seabbs/BDBVHubRenewal
-repo_name: seabbs/BDBVHubRenewal
+site_url: https://samabbott.co.uk/bdbv-hub-modelling/
+repo_url: https://github.com/seabbs/bdbv-hub-modelling
+repo_name: seabbs/bdbv-hub-modelling
 edit_uri: edit/main/docs/
 copyright: Copyright &copy; 2026 Sam Abbott. MIT licence.
 
@@ -104,10 +104,10 @@ theme:
 extra:
   social:
     - icon: fontawesome/brands/github
-      link: https://github.com/seabbs/BDBVHubRenewal
+      link: https://github.com/seabbs/bdbv-hub-modelling
       name: Source on GitHub
     - icon: material/bug-outline
-      link: https://github.com/seabbs/BDBVHubRenewal/issues
+      link: https://github.com/seabbs/bdbv-hub-modelling/issues
       name: Issue tracker
 
 extra_css:
