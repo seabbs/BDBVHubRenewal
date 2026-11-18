@@ -791,36 +791,15 @@ def held_out_loss(model, blocks: list[dict], batch_size: int) -> float:
     return float(np.average(losses, weights=weights))
 
 
-def _device_held() -> float:
-    """Return the bytes the GPU holds for PyTorch, cache included."""
+def free_memory() -> None:
+    """Return the GPU memory PyTorch caches but does not use."""
     import torch
 
-    if torch.backends.mps.is_available():
-        return float(torch.mps.driver_allocated_memory())
-    if torch.cuda.is_available():
-        return float(torch.cuda.memory_reserved())
-    return 0.0
-
-
-def _empty_cache() -> None:
-    import torch
-
+    gc.collect()
     if torch.backends.mps.is_available():
         torch.mps.empty_cache()
     elif torch.cuda.is_available():
         torch.cuda.empty_cache()
-
-
-def free_memory(above_gb: float | None = None) -> None:
-    """Return the GPU memory PyTorch caches but does not use.
-
-    With `above_gb`, the cache is kept unless the GPU holds more than
-    that, so the next step reuses its buffers rather than allocating
-    them again. Values computed are the same either way.
-    """
-    gc.collect()
-    if above_gb is None or _device_held() > above_gb * 1e9:
-        _empty_cache()
 
 
 def settle_heap() -> None:
@@ -1635,9 +1614,9 @@ def main() -> None:
             value = accumulate(list(indices), backward, zero, skip)
             if not finite_step(params, optimiser, value):
                 log(f"step {step + 1}: no update (loss {value})")
-            # Batches differ in shape, so cached buffers pile up; they are
-            # freed once the GPU holds more than the step's memory budget.
-            free_memory(above_gb=args.memory_gb)
+            # Batches differ in shape, so cached buffers pile up unless they
+            # are freed every step.
+            free_memory()
             step += 1
             position += 1
             with consumed.open("a") as f:
