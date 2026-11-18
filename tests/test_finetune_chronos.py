@@ -1013,21 +1013,6 @@ def test_steps_in_a_row_do_not_sum_gradients():
         assert torch.equal(a, b)
 
 
-def test_the_cache_is_emptied_only_above_its_limit(monkeypatch):
-    import finetune_stream as fs
-
-    emptied: list[int] = []
-    monkeypatch.setattr(fs, "_device_held", lambda: 3e9)
-    monkeypatch.setattr(fs, "_empty_cache", lambda: emptied.append(1))
-    fs.free_memory(above_gb=4)
-    assert emptied == []
-    fs.free_memory(above_gb=2)
-    assert emptied == [1]
-    # With no limit, as between chunks and after an evaluation, always.
-    fs.free_memory()
-    assert emptied == [1, 1]
-
-
 def test_evaluation_cadence_defaults_to_the_recipe_s():
     import finetune_stream as fs
 

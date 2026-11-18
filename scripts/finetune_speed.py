@@ -58,8 +58,6 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--warmup", type=int, default=3)
     # Steps trained after the timed ones with no added synchronisation.
     p.add_argument("--free-run", type=int, default=0)
-    # Empty the cache every step, as before the trainer kept it.
-    p.add_argument("--empty-every-step", action="store_true")
     p.add_argument("--device", default="auto")
     p.add_argument("--threads", type=int)
     p.add_argument("--memory-gb", type=float, default=ft.MEMORY_GB)
@@ -182,13 +180,7 @@ def main() -> None:
             "optimiser",
             functools.partial(fs.finite_step, params, optimiser, value),
         )
-        timed(
-            "free",
-            functools.partial(
-                fs.free_memory,
-                None if args.empty_every_step else args.memory_gb,
-            ),
-        )
+        timed("free", fs.free_memory)
         times["total"] = sum(times[p] for p in parts)
         times["series"] = int(sizes[indices].sum())
         times["blocks"] = len(indices)
@@ -205,7 +197,7 @@ def main() -> None:
         args,
         plan[args.steps :][: args.free_run],
         data,
-        fs_step(model, accepted, device, params, optimiser, args),
+        fs_step(model, accepted, device, params, optimiser),
         sync,
         sizes,
     )
@@ -277,7 +269,7 @@ def main() -> None:
         args.out.write_text(json.dumps(summary, indent=1))
 
 
-def fs_step(model, accepted, device, params, optimiser, args):
+def fs_step(model, accepted, device, params, optimiser):
     """Return one trainer step on a batch's indices, as `finetune_stream`."""
 
     def step(data, indices: list[int]) -> float:
@@ -292,7 +284,7 @@ def fs_step(model, accepted, device, params, optimiser, args):
         optimiser.zero_grad()
         value = fs.accumulate(indices, backward, zero, print)
         fs.finite_step(params, optimiser, value)
-        fs.free_memory(None if args.empty_every_step else args.memory_gb)
+        fs.free_memory()
         return value
 
     return step
@@ -342,7 +334,6 @@ def free_run(args, plan, data, step, sync, sizes) -> dict:
         "step_s": wall / len(plan),
         "series_per_s": series / wall,
         "gpu_busy": float(np.mean(samples)) if samples else None,
-        "empty_every_step": args.empty_every_step,
     }
 
 
