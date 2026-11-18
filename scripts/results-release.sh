@@ -63,7 +63,7 @@ EOF
       cp -R "$site" "$stage/bdbv-hub-modelling"
       printf '%s\n' \
         "Run \`python3 -m http.server\` in this folder and open" \
-        "http://localhost:8000/bdbv-hub-modelling/" > "$stage/README.txt"
+        "bdbv-hub-modelling/ at the address it prints." > "$stage/README.txt"
       (cd "$stage" && zip -qr - README.txt bdbv-hub-modelling) > "$stage/site.zip"
       gh release upload "$tag" "$dir"/* -R "$repo" --clobber
       notes="$stage/notes.md"
