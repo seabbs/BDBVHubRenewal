@@ -720,8 +720,10 @@ def selector_data(ctx: Context, builts: Mapping[str, Any]) -> str:
     )
 
 
-def build(ctx: Context) -> str:
-    """Return the dashboard page.
+def _parts(ctx: Context) -> tuple[Run, str, str, list]:
+    """Return the live run, top bar status, selector data and sections.
+
+    Each section is (id, title, content, open).
 
     Raises
     ------
@@ -759,34 +761,20 @@ def build(ctx: Context) -> str:
     sizes = checkpoint_sizes(ctx, info, score_rows)
     mail = mail_section(ctx)
     builts = {ds["key"]: ctx.nowcasts(ds["key"]) for ds in ctx.datasets}
-    sections = [
-        ("status", "Status"),
-        ("loss", "Loss"),
-        ("bias", "Attention bias"),
-        ("learning", "Learning"),
-        ("nowcasts", "Nowcasts"),
-    ]
-    sections += [("mailbox", "Activity")] if mail else []
-    sections += [("tables", "Tables")]
-    nav = "".join(f'<a href="#{i}">{n}</a>' for i, n in sections)
-    refresh = "" if ctx.once else "auto-refresh 60 s; "
+    live_note = "" if ctx.once else "updates in place every 60 s; "
     mirror = (
         f"scores {html.escape(ctx.mirror_status)}; "
         if ctx.mirror_status
         else ""
     )
-    body = f"""<header class=topbar>
-<div class=navrow><b>{html.escape(live.label)} run</b><nav class=nav>{nav}</nav>
-{bar}<span class=mut>{datetime.now():%H:%M:%S}</span></div>
-<div id=selbar class=selbar></div>
-<script type="application/json" id=seldata>{selector_data(ctx, builts)}</script>
-<script>ftSel.init(JSON.parse(document.getElementById("seldata").textContent))</script>
-</header>
-<details class=sec id=status open><summary><h2>Status</h2></summary>
-<div class=tiles>{tiles}</div>
-<div class=mut>{refresh}{mirror}{sub}</div></details>
-{{rest}}"""
     parts = [
+        (
+            "status",
+            "Status",
+            f"<div class=tiles>{tiles}</div>"
+            f"<div class=mut>{live_note}{mirror}{sub}</div>",
+            True,
+        ),
         ("loss", "Loss", loss_section(ctx, live, st), True),
         ("bias", "Attention bias", bias_section(ctx, live, st), True),
         (
@@ -801,12 +789,50 @@ def build(ctx: Context) -> str:
         parts.append(("mailbox", "Recent activity", mail, True))
     tables = tables_section(ctx, info) + notes_section(ctx)
     parts.append(("tables", "Tables", tables, False))
+    bar = f"{bar}<span class=mut>{datetime.now():%H:%M:%S}</span>"
+    return live, bar, selector_data(ctx, builts), parts
+
+
+NAV = {"status": "Status", "mailbox": "Activity", "learning": "Learning"}
+"""Short names in the top bar, where they differ from the section titles."""
+
+
+def sections(ctx: Context) -> dict[str, str]:
+    """Return the parts the page updates in place, by id.
+
+    `bar` is the top bar's status; the rest are each section's content
+    (`<details id=...>` without its summary).
+    """
+    _, bar, _, parts = _parts(ctx)
+    return {"bar": bar} | {key: content for key, _, content, _ in parts}
+
+
+def build(ctx: Context) -> str:
+    """Return the dashboard page.
+
+    Raises
+    ------
+    ValueError
+        If no run is configured.
+    """
+    live, bar, seldata, parts = _parts(ctx)
+    nav = "".join(
+        f'<a href="#{key}">{NAV.get(key, title)}</a>'
+        for key, title, _, _ in parts
+    )
     rest = "\n".join(
         f"<details class=sec id={key}{' open' if opened else ''}><summary>"
         f"<h2>{title}</h2></summary>{content}</details>"
         for key, title, content, opened in parts
     )
-    body = body.replace("{rest}", rest)
+    body = f"""<header class=topbar>
+<div class=navrow><b>{html.escape(live.label)} run</b><nav class=nav>{nav}</nav>
+<span id=livebar>{bar}</span></div>
+<div id=selbar class=selbar></div>
+<script type="application/json" id=seldata>{seldata}</script>
+<script>ftSel.init(JSON.parse(document.getElementById("seldata").textContent))</script>
+</header>
+{rest}"""
     explain = _json(EXPLAIN)
     info_js = (
         f"window.ftExplain={explain};window.ftInfo=function(k){{var "
@@ -819,6 +845,7 @@ def build(ctx: Context) -> str:
         "<title>Fine-tuning dashboard</title>"
         f"<style>{_asset('style.css')}</style><script>{info_js}</script>"
         f"<script>{_asset('player.js')}\n{_asset('sel.js')}</script></head>"
-        f"<body>{body}<script>{_asset('mode.js')}\n{_asset('nav.js')}\n{_asset('expand.js')}\n"
-        f"{'' if ctx.once else _asset('refresh.js')}</script></body></html>"
+        f"<body>{body}<script>{_asset('mode.js')}\n{_asset('nav.js')}\n"
+        f"{_asset('expand.js')}\n{'' if ctx.once else _asset('live.js')}"
+        "</script></body></html>"
     )

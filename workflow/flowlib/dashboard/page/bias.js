@@ -45,5 +45,7 @@ function draw(){
  el.innerHTML=(tabs?'<div class=biastabs>'+tabs+'</div>':"")+'<div class="card biasline"><div class=cardinfo>'+ftInfo("biasline")+'</div>'+lineplot(run)+'</div>'+(tiles?'<div><div class=tiles4>'+tiles+'</div><div class=mut>'+ftInfo("biasheat")+ftInfo("relations")+' step '+lat.step+', colour scale '+(+lo.toPrecision(3))+' to '+(+hi.toPrecision(3))+', shared; rows layers, columns heads</div></div>':"");
  var tb=el.querySelector(".sctl");if(tb)tb.onclick=function(e){var b=e.target.closest("button");if(b){sel0=b.dataset.b;draw()}}}
 window.addEventListener("ftsel",draw);
+// New data from the server (live.js): redraw with the same state.
+window.addEventListener("ftdata",function(e){if(e.detail!=="bias")return;D=JSON.parse($("bdata").textContent);draw()});
 draw();
 })();
