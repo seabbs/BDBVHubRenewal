@@ -185,7 +185,8 @@ def to_hub_table(
     zones_sum : bool
         Check that the zones sum to the rounded province samples, sample
         by sample, as a split model's must. False for the random walks'
-        own zone draws (`forecasters.zones.walks_own_zones`); the hub
+        own zone draws and the foundation models' block zones
+        (`forecasters.zones.zones_need_not_sum`); the hub
         does not require the sum (its `model-output/README.md` allows
         any subset of locations).
     national : {"sum", "own"}

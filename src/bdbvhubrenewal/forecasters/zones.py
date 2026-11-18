@@ -96,6 +96,7 @@ __all__ = [
     "zone_forecast",
     "zone_task",
     "zones_for_model",
+    "zones_need_not_sum",
 ]
 
 _ZONE_STREAM = 7
@@ -466,6 +467,20 @@ def walks_own_zones(name: str | None) -> bool:
     if name not in specs or specs[name].fitted:
         return False
     return isinstance(get_model(name), RandomWalk)
+
+
+def zones_need_not_sum(name: str | None) -> bool:
+    """Return whether model `name`'s zones need not sum to its provinces.
+
+    The random walks forecast each zone from its own data
+    (`walks_own_zones`), and the foundation models take their zones
+    straight from their block, as they do the provinces and the country
+    (`submission.hub.own_national`). Every other model splits its
+    provinces across the zones, so its zones must sum to them.
+    """
+    from bdbvhubrenewal.submission.hub import own_national
+
+    return walks_own_zones(name) or own_national(name)
 
 
 def zone_forecast(
