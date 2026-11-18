@@ -3,7 +3,8 @@
 Rows are the checkpoint score table (`<SCORE_CACHE>/tables/
 checkpoint-scores.csv`, or its copy on the evidence branch) under one
 scoring rule: relative WIS for Germany, relative CRPS for the BDBV
-backtest. Each row goes to the configured run or reference it belongs to
+backtest, and the mean WIS with its components for the WIS bars. Each
+row goes to the configured run or reference it belongs to
 (`runs.Classifier`); rows no run or reference claims are left out.
 """
 
@@ -14,6 +15,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
+from .paperstyle import WIS_PARTS
 from .rows import num, source
 from .runs import Classifier, Reference, Run, split_label
 
@@ -172,3 +174,71 @@ def payload(
         "view_defaults": dict(view.get("defaults") or {}),
         "axis0": AXIS0,
     }
+
+
+def wis_bars(
+    rows: Iterable[Mapping[str, str]],
+    run_list: Sequence[Run],
+    references: Sequence[Reference],
+    rule: str,
+    source: str | None = None,
+    excluded: Iterable[str] = (),
+) -> dict[tuple[str, str], list[dict[str, Any]]]:
+    """Return each study and level's mean WIS bars, with its components.
+
+    Only the rule's 7-day rows with every component (`WIS_PARTS`) are
+    drawn; rows of a held-out layout are left out, as are a run's rows
+    of a source other than `source`. Bars are each run's checkpoints by
+    size, then the references in their configured order.
+
+    Returns
+    -------
+    dict
+        (study, level) -> bars, each with `series`, `label`, `colour`,
+        `n`, `wis` and `parts` (component -> value).
+    """
+    which = Classifier(run_list, references, excluded)
+    order = [r.key for r in run_list] + [r.key for r in references]
+    named: dict[str, tuple[str, str]] = {
+        r.key: (r.label, r.colour) for r in run_list
+    } | {r.key: (r.label, r.colour) for r in references}
+    runs_ = {r.key for r in run_list}
+    out: dict[tuple[str, str], dict[tuple[str, int], dict[str, Any]]] = {}
+    for r in rows:
+        if r.get("rule") != rule or (r.get("layout") or "").strip():
+            continue
+        if ((r.get("target") or "").strip() or "7day") != "7day":
+            continue
+        series = which.series(r)
+        if series is None:
+            continue
+        if series in runs_ and source and _source_of(r) not in (None, source):
+            continue
+        parts = {p: num(r.get(p)) for p in WIS_PARTS}
+        total = num(r.get("wis"))
+        if total is None or any(v is None for v in parts.values()):
+            continue
+        n = int(num(r.get("outbreaks")) or 0) if series in runs_ else 0
+        label, colour = named[series]
+        out.setdefault((r.get("study", ""), r.get("level", "")), {})[
+            (series, n)
+        ] = {
+            "series": series,
+            "label": f"{label} n{n}" if series in runs_ else label,
+            "colour": colour,
+            "n": n,
+            "wis": round(total, 4),
+            "parts": {p: round(v or 0.0, 4) for p, v in parts.items()},
+        }
+    return {
+        key: [
+            bars[k]
+            for k in sorted(bars, key=lambda k: (order.index(k[0]), k[1]))
+        ]
+        for key, bars in out.items()
+    }
+
+
+def _source_of(row: Mapping[str, str]) -> str | None:
+    """Return a score row's source from its model (daily or weekly)."""
+    return source(row.get("model", ""))

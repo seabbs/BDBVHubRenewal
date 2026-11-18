@@ -20,12 +20,15 @@ import matplotlib as mpl
 __all__ = [
     "INK",
     "MODEL_ORDER",
+    "WIS_COLOURS",
+    "WIS_PARTS",
     "bar_style",
     "line_style",
     "model_order",
     "model_style",
     "point_style",
     "theme",
+    "wis_colour",
 ]
 
 INK: Final[dict[str, str]] = {
@@ -49,6 +52,20 @@ _PALETTE: Final = (
     "#6250d6",
     "#e34948",
 )
+
+WIS_PARTS: Final = ("dispersion", "underprediction", "overprediction")
+"""WIS's components (Bracher et al. 2021), in the order bars stack them."""
+
+WIS_COLOURS: Final[dict[str, str]] = {
+    "dispersion": _PALETTE[2],
+    "underprediction": _PALETTE[6],
+    "overprediction": _PALETTE[7],
+}
+"""Each WIS component's colour, shared with the dashboard.
+
+Green for the spread, violet for too low and red for too high; adjacent
+pairs in `WIS_PARTS` order stay apart under colour-vision deficiency.
+"""
 
 _GREYS: Final = ("#3d3c39", "#a3a198", "#c3c2b7")
 
@@ -194,3 +211,8 @@ def theme() -> Iterator[dict[str, str]]:
     }
     with mpl.rc_context(params):
         yield INK
+
+
+def wis_colour(part: str) -> str:
+    """Return a WIS component's colour (`WIS_COLOURS`)."""
+    return WIS_COLOURS[part]
