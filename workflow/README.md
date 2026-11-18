@@ -130,7 +130,7 @@ On a laptop that trains while another machine scores:
 uv sync --group paper                                          # once
 cp config/dashboard.example.yaml config/dashboard.local.yaml   # then edit paths
 uv run --group paper python workflow/scripts/dashboard.py --port 8765
-# open http://127.0.0.1:8765/; with the venv active, plain `python` works too
+# open the address it prints; with the venv active, plain `python` works too
 ```
 
 ## Scheduled runs
