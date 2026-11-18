@@ -60,6 +60,7 @@ class NonCentredRandomWalk(TemporalProcess):
         n_fit: int | None = None,
         half_life_rv: RandomVariable | None = None,
         forecast_half_life: float | None = None,
+        centred: bool = False,
     ) -> None:
         r"""Initialize the process.
 
@@ -75,12 +76,19 @@ class NonCentredRandomWalk(TemporalProcess):
             Half-life in steps; makes the process AR(1).
         forecast_half_life
             Half-life in steps of the reversion past the fit axis.
+        centred
+            Sample the fitted levels, `{prefix}_x`, with steps
+            $N(0, \sigma)$, instead of the standardised steps. For a
+            walk the data pin closely, so that each level is one
+            parameter rather than a sum of steps. Random walk only.
 
         Raises
         ------
         TypeError
             If `innovation_sd_rv` or `half_life_rv` is not a
             `RandomVariable`.
+        ValueError
+            If `centred` is set with `half_life_rv`.
         """
         if not isinstance(innovation_sd_rv, RandomVariable):
             raise TypeError("innovation_sd_rv must be a RandomVariable.")
@@ -93,6 +101,9 @@ class NonCentredRandomWalk(TemporalProcess):
         self.n_fit = n_fit
         self.half_life_rv = half_life_rv
         self.forecast_half_life = forecast_half_life
+        if centred and half_life_rv is not None:
+            raise ValueError("A centred walk must be a random walk.")
+        self.centred = centred
 
     def __repr__(self) -> str:
         """Return string representation."""
@@ -100,7 +111,8 @@ class NonCentredRandomWalk(TemporalProcess):
             f"NonCentredRandomWalk(innovation_sd_rv={self.innovation_sd_rv!r}"
             f", frozen={self.frozen}, n_fit={self.n_fit}, "
             f"half_life_rv={self.half_life_rv!r}, "
-            f"forecast_half_life={self.forecast_half_life})"
+            f"forecast_half_life={self.forecast_half_life}"
+            + (", centred=True)" if self.centred else ")")
         )
 
     def sample(
@@ -149,11 +161,20 @@ class NonCentredRandomWalk(TemporalProcess):
             if self.half_life_rv is None
             else 0.5 ** (1.0 / self.half_life_rv())
         )
-        z = numpyro.sample(
-            f"{name_prefix}_z",
-            dist.Normal(0.0, 1.0).expand([n_free, n_processes]),
-        )
-        free = _damped_sum(phi, sd * z)
+        if self.centred:
+            # Levels with N(0, sd) steps from 0, one walk per process.
+            free = numpyro.sample(
+                f"{name_prefix}_x",
+                dist.GaussianRandomWalk(sd, num_steps=n_free).expand(
+                    [n_processes]
+                ),
+            ).T
+        else:
+            z = numpyro.sample(
+                f"{name_prefix}_z",
+                dist.Normal(0.0, 1.0).expand([n_free, n_processes]),
+            )
+            free = _damped_sum(phi, sd * z)
         decay = phi ** jnp.arange(1, n_free + 1)[:, None]
         past = jnp.vstack(
             [jnp.repeat(x0[None, :], frozen + 1, axis=0), decay * x0 + free]

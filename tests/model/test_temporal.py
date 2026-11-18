@@ -53,7 +53,7 @@ def test_centred_samples_the_levels():
     )
     levels = jnp.arange(6.0).reshape(3, 2)
     with trace() as tr:
-        x = seed(condition(rw.sample, {"w_x": levels}), rng_seed=0)(
+        x = seed(condition(rw.sample, {"w_x": levels.T}), rng_seed=0)(
             10, initial_value=jnp.ones(2), n_processes=2, name_prefix="w"
         )
     assert "w_z" not in tr
@@ -63,7 +63,8 @@ def test_centred_samples_the_levels():
     # Steps of the levels are N(0, sd).
     steps = jnp.diff(jnp.vstack([jnp.zeros((1, 2)), levels]), axis=0)
     expected = float(
-        __import__("numpyro").distributions.Normal(0.0, 0.5)
+        __import__("numpyro")
+        .distributions.Normal(0.0, 0.5)
         .log_prob(steps)
         .sum()
     )
