@@ -199,6 +199,9 @@ class ModelConfig:
         The Dirichlet-multinomial (default) has $1/\sqrt{\psi} \sim
         \text{HalfNormal}(0.1)$, with $\psi$ capped at $10^4$, so that
         thousands of pooled delays do not make the delay overconfident.
+    centred_rt : bool
+        Sample the levels of the shared log Rt walk (`log_rt_baseline_x`)
+        rather than its standardised steps (`NonCentredRandomWalk`).
     """
 
     national: bool = False
@@ -213,6 +216,7 @@ class ModelConfig:
     delay_counts: Literal["multinomial", "dirichlet-multinomial"] = (
         "dirichlet-multinomial"
     )
+    centred_rt: bool = False
 
 
 MAIN = ModelConfig()
@@ -343,6 +347,7 @@ def _named_walk(
     n_weeks: int,
     ar: bool = False,
     forecast_half_life: float | None = None,
+    centred: bool = False,
 ) -> TemporalProcess:
     """Weekly walk frozen over the seeding period, fitted on the data weeks.
 
@@ -365,6 +370,7 @@ def _named_walk(
         n_fit=frozen + n_weeks,
         half_life_rv=half_life,
         forecast_half_life=forecast_half_life,
+        centred=centred,
     )
     return WeeklyTemporalProcess(inner, start_dow=SUNDAY)
 
@@ -529,6 +535,7 @@ def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
             0.2,
             fit_weeks(data, config),
             forecast_half_life=FORECAST_RT_HALF_LIFE,
+            centred=config.centred_rt,
         ),
         subpop_rt_deviation_process=_named_walk(
             "rt_dev_sd", 0.1, fit_weeks(data, config), ar=True

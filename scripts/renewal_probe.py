@@ -49,6 +49,9 @@ def main() -> int:
     p.add_argument("--origin", default="2026-11-15")
     p.add_argument("--province", default=None)
     p.add_argument("--sampler", default="{}", help="JSON overrides")
+    p.add_argument(
+        "--model-config", default="{}", help="JSON `ModelConfig` overrides"
+    )
     p.add_argument("--data", default="data")
     p.add_argument("--config", default="config/backtest.toml")
     p.add_argument("--out", required=True)
@@ -198,6 +201,14 @@ def main() -> int:
         STAGES["forecast_trajectories"] += _since(t)
         return res
 
+    overrides = json.loads(args.model_config)
+    if overrides:
+        orig_config = renewal.model_config
+
+        def model_config(variant: Any) -> Any:
+            return replace(orig_config(variant), **overrides)
+
+        renewal.model_config = model_config  # type: ignore[assignment]
     renewal.run_nuts = run_nuts  # type: ignore[assignment]
     pr.build_model = build_model  # type: ignore[assignment]
     pr.forecast_trajectories = forecast_trajectories  # type: ignore[assignment]
@@ -250,6 +261,7 @@ def main() -> int:
         "model": args.model,
         "origin": args.origin,
         "province": args.province,
+        "model_config": json.loads(args.model_config),
     }
     (out / "timing.json").write_text(json.dumps(timing, indent=1))
     (out / "diagnostics.json").write_text(
