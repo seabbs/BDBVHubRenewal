@@ -1,0 +1,12 @@
+# The command-line tools the workflow's shell rules call, for
+# `--software-deployment-method conda`. Python packages come from uv.lock
+# through `uv run`; the paper's rules run with Snakemake's own Python.
+# The simulator's R packages are not listed here.
+channels:
+  - conda-forge
+dependencies:
+  - python=3.13
+  - uv
+  - gh
+  - git
+  - rsync
