@@ -16,7 +16,7 @@ import ast
 import hashlib
 import subprocess
 import sys
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Final
 
@@ -129,13 +129,32 @@ FORECAST_ENTRIES: Final = (
 )
 """The modules whose forecasting halves a forecast-only run calls."""
 
-_PACKAGE: Final = "bdbvhubrenewal"
+CLI_MODULE: Final = "bdbvhubrenewal.cli"
+"""The CLI module, added to a forecast-only run's code as a file."""
+
+SOURCE_DIRS: Final = ("src", "packages/*/src")
+"""Source folders, as globs from the repository root, holding the
+workspace's top-level packages."""
+
+Roots = Mapping[str, Path]
+"""Each top-level package of the workspace and the folder holding it."""
 
 
-def _module_file(src: Path, module: str) -> Path | None:
-    """Return the file of a module of the package, or None."""
+def _roots(base: Path) -> dict[str, Path]:
+    """Map each top-level package under `SOURCE_DIRS` to its folder."""
+    roots = {}
+    for pattern in SOURCE_DIRS:
+        for src in sorted(base.glob(pattern)):
+            for init in sorted(src.glob("*/__init__.py")):
+                roots[init.parent.name] = src
+    return roots
+
+
+def _module_file(roots: Roots, module: str) -> Path | None:
+    """Return the file of a module of the workspace, or None."""
     parts = module.split(".")
-    if parts[0] != _PACKAGE:
+    src = roots.get(parts[0])
+    if src is None:
         return None
     base = src.joinpath(*parts)
     for path in (base.with_suffix(".py"), base / "__init__.py"):
@@ -144,45 +163,46 @@ def _module_file(src: Path, module: str) -> Path | None:
     return None
 
 
-def _absolute(path: Path, src: Path, node: ast.ImportFrom) -> str:
+def _absolute(path: Path, roots: Roots, node: ast.ImportFrom) -> str:
     """Return the absolute module of a `from ... import` statement."""
     if not node.level:
         return node.module or ""
+    src = next(s for name, s in roots.items() if path.is_relative_to(s / name))
     # The package holding the module: for `pkg/__init__.py`, `pkg`.
     pkg = path.relative_to(src).with_suffix("").parts[:-1]
     base = ".".join(pkg[: len(pkg) - node.level + 1])
     return f"{base}.{node.module}" if node.module else base
 
 
-def _parents(src: Path, module: str) -> set[Path]:
+def _parents(roots: Roots, module: str) -> set[Path]:
     """Return the `__init__.py` of every package above a module."""
     parts = module.split(".")
     found = set()
     for k in range(1, len(parts)):
-        hit = _module_file(src, ".".join(parts[:k]))
+        hit = _module_file(roots, ".".join(parts[:k]))
         if hit is not None and hit.name == "__init__.py":
             found.add(hit)
     return found
 
 
-def _source_of(src: Path, init: Path, name: str) -> set[Path]:
+def _source_of(roots: Roots, init: Path, name: str) -> set[Path]:
     """Return the modules a package's `__init__.py` takes `name` from."""
     found = set()
     for node in ast.walk(ast.parse(init.read_text())):
         if isinstance(node, ast.ImportFrom) and any(
             a.name == name or a.asname == name for a in node.names
         ):
-            module = _absolute(init, src, node)
-            hit = _module_file(src, f"{module}.{name}") or _module_file(
-                src, module
+            module = _absolute(init, roots, node)
+            hit = _module_file(roots, f"{module}.{name}") or _module_file(
+                roots, module
             )
             if hit is not None:
                 found.add(hit)
     return found
 
 
-def _imports(path: Path, src: Path) -> set[Path]:
-    """Return the package modules a module imports, and their packages.
+def _imports(path: Path, roots: Roots) -> set[Path]:
+    """Return the workspace modules a module imports, and their packages.
 
     Every import is followed, at module level or in a function, since a
     function's import runs when it is called. A name taken from a
@@ -194,21 +214,21 @@ def _imports(path: Path, src: Path) -> set[Path]:
     for node in ast.walk(ast.parse(path.read_text())):
         if isinstance(node, ast.Import):
             for alias in node.names:
-                hit = _module_file(src, alias.name)
+                hit = _module_file(roots, alias.name)
                 if hit is not None:
-                    found |= {hit, *_parents(src, alias.name)}
+                    found |= {hit, *_parents(roots, alias.name)}
         elif isinstance(node, ast.ImportFrom):
-            module = _absolute(path, src, node)
-            hit = _module_file(src, module)
+            module = _absolute(path, roots, node)
+            hit = _module_file(roots, module)
             if hit is None:
                 continue
-            found |= {hit, *_parents(src, module)}
+            found |= {hit, *_parents(roots, module)}
             for alias in node.names:
-                sub = _module_file(src, f"{module}.{alias.name}")
+                sub = _module_file(roots, f"{module}.{alias.name}")
                 if sub is not None:
                     found.add(sub)
                 elif hit.name == "__init__.py":
-                    found |= _source_of(src, hit, alias.name)
+                    found |= _source_of(roots, hit, alias.name)
     return found
 
 
@@ -233,7 +253,7 @@ def _model_modules() -> dict[str, str]:
 
 
 def _closure(
-    src: Path,
+    roots: Roots,
     todo: list[Path],
     stop: set[Path],
     start: Path | None,
@@ -248,7 +268,7 @@ def _closure(
             continue
         seen.add(path)
         if _follows(path) or path == start:
-            todo += sorted(_imports(path, src) - seen)
+            todo += sorted(_imports(path, roots) - seen)
     return seen
 
 
@@ -261,7 +281,8 @@ def model_code(
 ) -> list[str]:
     """List the source files a forecast-only run of one model reads.
 
-    The import closure, within the package, of the model's own module, with
+    The import closure, within the workspace (`SOURCE_DIRS`), of the
+    model's own module, with
     any other model's module it builds on, and of `entries`,
     which stops at the modules that define the other models: the registry
     imports every model, but a model's forecasts do not run the others'
@@ -289,30 +310,30 @@ def model_code(
         Paths relative to `root`, sorted.
     """
     base = Path(root)
-    src = base / "src"
+    roots = _roots(base)
     modules = _model_modules()
     own = modules[model]
     others = {
         f
         for name, m in modules.items()
-        if m != own and (f := _module_file(src, m)) is not None
+        if m != own and (f := _module_file(roots, m)) is not None
     }
-    start = _module_file(src, own)
+    start = _module_file(roots, own)
     # Everything the model's own module needs, another model's module
     # included when it builds on it (renewal on randomwalk.py).
     # A model defined outside the package (a test's stand-in) has only the
     # shared code.
     stop = {base / s for s in skip}
     if start is not None:
-        stop -= _imports(start, src)
-    seen = set() if start is None else _closure(src, [start], stop, start)
+        stop -= _imports(start, roots)
+    seen = set() if start is None else _closure(roots, [start], stop, start)
     # Then the shared forecasting code, which reaches every model through
     # the registry: there the other models' modules are left out.
     seen = _closure(
-        src, [base / e for e in entries], (others | stop) - seen, start, seen
+        roots, [base / e for e in entries], (others | stop) - seen, start, seen
     )
-    if cli:
-        seen.add(src / _PACKAGE / "cli.py")
+    if cli and (path := _module_file(roots, CLI_MODULE)) is not None:
+        seen.add(path)
     return sorted(p.relative_to(base).as_posix() for p in seen)
 
 
