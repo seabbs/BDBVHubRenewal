@@ -122,7 +122,8 @@ def test_native_quantiles_carry_the_series_bias(
     group = _group(1.0)
     foundation.native_sampler(np.array([0.5]))([group], 3, 1, 0)
     want = foundation._group_rows(group)
-    assert len(seen) == 1 and seen[0] is not None
+    assert len(seen) == 1
+    assert seen[0] is not None
     np.testing.assert_array_equal(seen[0], want)
 
 

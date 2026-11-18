@@ -69,6 +69,7 @@ def test_dates_share_chronos_passes(monkeypatch: pytest.MonkeyPatch) -> None:
             [*together.columns[:5], "quantile"], kind="stable"
         ).reset_index(drop=True),
     )
-    # A pass for each model and horizon (dates of different weekdays have
-    # different daily horizons), not for each date and task.
-    assert pipe.calls < per_date / 2
+    # A pass for each model, task schema (states, age groups) and horizon
+    # (dates on other weekdays have other daily horizons), not for each
+    # date and task.
+    assert pipe.calls <= per_date / 2

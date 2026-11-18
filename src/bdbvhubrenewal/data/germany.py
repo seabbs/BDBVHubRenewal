@@ -359,9 +359,10 @@ def _carried(rows: pd.DataFrame) -> pd.DataFrame:
 
 def _weekly(daily: pd.DataFrame) -> pd.DataFrame:
     """Sum each release's daily counts to hub weeks, as the target table."""
-    ends = {d: epiweek_end(d).isoformat() for d in daily["onset_date"].unique()}
+    codes, unique = pd.factorize(daily["onset_date"])
+    ends = np.array([epiweek_end(d).isoformat() for d in unique])[codes]
     out = (
-        daily.assign(target_end_date=daily["onset_date"].map(ends))
+        daily.assign(target_end_date=ends)
         .groupby(["vintage", "location", "target_end_date"], as_index=False)[
             ["observed", "imputed"]
         ]

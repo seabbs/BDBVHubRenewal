@@ -21,6 +21,7 @@ and the fit store stores it as failed.
 
 from __future__ import annotations
 
+import contextlib
 import datetime as dt
 import hashlib
 import http.client
@@ -72,14 +73,17 @@ __all__ = [
     "Checkpoint",
     "FoundationModel",
     "HubTriangle",
+    "Known",
     "Sampler",
     "chronos_sampler",
     "finetuned_adapter",
     "finetuned_releases",
     "finetuned_spec",
+    "group_key",
     "hub_triangle",
     "layout_block",
     "native_sampler",
+    "prefetch",
     "quantile_draws",
     "realdata_pinned",
     "realdata_spec",
@@ -550,9 +554,9 @@ def hub_triangle(
         (first + dt.timedelta(days=width * i)).isoformat()
         for i in range(n_times)
     ]
-    place = (
-        rows["location"].map({c: i for i, c in enumerate(places)}).to_numpy()
-    ).astype(int)
+    index_of = {c: i for i, c in enumerate(places)}
+    codes, unique = pd.factorize(rows["location"])
+    place = np.array([index_of[c] for c in unique], dtype=int)[codes]
     # Each distinct date and release is parsed once; the rows of a release
     # are found by sorting, not by comparing every row to it.
     codes, unique = pd.factorize(rows[time_col])
@@ -791,36 +795,128 @@ def _group_rows(group: Series) -> np.ndarray:
     return np.stack([place, parent[place]])
 
 
+def _schema(group: Series) -> tuple[Any, ...]:
+    """Return what groups predicted in one pass must share.
+
+    Chronos-2 takes one schema a call: the same number of targets and the
+    same covariate names.
+    """
+    return (
+        np.atleast_2d(group["target"]).shape[0],
+        tuple(sorted(group.get("past_covariates", {}))),
+        tuple(sorted(group.get("future_covariates", {}))),
+    )
+
+
+def _n_rows(group: Series) -> int:
+    """Return a group's rows in Chronos-2's batch: targets and covariates."""
+    n = np.atleast_2d(group["target"]).shape[0]
+    return int(n + len(group.get("past_covariates", {})))
+
+
+def _passes(groups: Sequence[Series], budget: int) -> list[list[int]]:
+    """Return the groups of each forward pass, by index.
+
+    Groups of one schema share passes of at most `budget` rows, in order;
+    a group larger than `budget` is a pass of its own.
+    """
+    by: dict[tuple[Any, ...], list[int]] = {}
+    for i, g in enumerate(groups):
+        by.setdefault(_schema(g), []).append(i)
+    out: list[list[int]] = []
+    for idx in by.values():
+        chunk: list[int] = []
+        rows = 0
+        for i in idx:
+            n = _n_rows(groups[i])
+            if chunk and rows + n > budget:
+                out.append(chunk)
+                chunk, rows = [], 0
+            chunk.append(i)
+            rows += n
+        out.append(chunk)
+    return out
+
+
 def _predict(
     pipeline: Any, groups: Sequence[Series], horizon: int, levels: np.ndarray
 ) -> list[Any]:
     """Return Chronos-2's quantiles at `levels` for each group.
 
-    With the series bias each group is predicted on its own, so its rows
-    are one batch, with its rows' places and parents (`_group_rows`), as
-    in held-out losses.
+    Groups of one schema share forward passes of up to `chronos_batch()`
+    rows, each pass exactly one of Chronos-2's batches. With the series
+    bias each pass carries its groups' rows' places and parents, kept
+    apart (`series_bias.batch_rows`), as in held-out losses.
     """
     model = getattr(pipeline, "model", None)
-    if model is not None and series_bias.has_bias(model):
-        # One group a batch, its rows' places and parents by name.
-        biased = []
-        for g in groups:
-            with series_bias.assigned(model, _group_rows(g)):
-                q, _ = pipeline.predict_quantiles(
-                    [_chronos_input(g)],
-                    batch_size=chronos_batch(),
-                    prediction_length=horizon,
-                    quantile_levels=levels.tolist(),
-                )
-            biased.extend(q)
-        return biased
-    quantiles, _ = pipeline.predict_quantiles(
-        [_chronos_input(g) for g in groups],
-        batch_size=chronos_batch(),
-        prediction_length=horizon,
-        quantile_levels=levels.tolist(),
-    )
-    return list(quantiles)
+    bias = model is not None and series_bias.has_bias(model)
+    out: list[Any] = [None] * len(groups)
+    for chunk in _passes(groups, chronos_batch()):
+        part = [groups[i] for i in chunk]
+        rows = (
+            series_bias.batch_rows([_group_rows(g) for g in part])
+            if bias
+            else None
+        )
+        with (
+            series_bias.assigned(model, rows)
+            if bias
+            else contextlib.nullcontext()
+        ):
+            quantiles, _ = pipeline.predict_quantiles(
+                [_chronos_input(g) for g in part],
+                batch_size=sum(_n_rows(g) for g in part),
+                prediction_length=horizon,
+                quantile_levels=levels.tolist(),
+            )
+        for i, q in zip(chunk, quantiles, strict=True):
+            out[i] = q
+    return out
+
+
+Known = Mapping[str, np.ndarray]
+"""Chronos-2's native quantiles of groups, `[V, horizon, Q]`, by
+`group_key`, predicted ahead (`prefetch`)."""
+
+
+def group_key(group: Series, horizon: int) -> str:
+    """Return a key of what Chronos-2 sees of a group, and the horizon."""
+    h = hashlib.sha256(str(horizon).encode())
+    for name in CHRONOS_KEYS:
+        part = group.get(name)
+        if part is None:
+            continue
+        h.update(name.encode())
+        if isinstance(part, Mapping):
+            for k in sorted(part):
+                h.update(k.encode())
+                h.update(np.ascontiguousarray(part[k], dtype=float).tobytes())
+        else:
+            h.update(np.ascontiguousarray(part, dtype=float).tobytes())
+    return h.hexdigest()
+
+
+def _native(
+    pipeline: Any,
+    groups: Sequence[Series],
+    horizon: int,
+    known: Known | None = None,
+) -> list[np.ndarray]:
+    """Return each group's native quantiles, `[V, horizon, Q]`.
+
+    Groups in `known` are read from it; the rest are predicted together.
+    """
+    levels = np.asarray(pipeline.quantiles, dtype=float)
+    keys = [group_key(g, horizon) for g in groups]
+    out: list[np.ndarray | None] = [
+        None if known is None else known.get(k) for k in keys
+    ]
+    todo = [i for i, q in enumerate(out) if q is None]
+    if todo:
+        got = _predict(pipeline, [groups[i] for i in todo], horizon, levels)
+        for i, q in zip(todo, got, strict=True):
+            out[i] = q.float().cpu().numpy()
+    return [np.asarray(q) for q in out]
 
 
 def chronos_sampler(
@@ -829,6 +925,7 @@ def chronos_sampler(
     n_samples: int,
     seed: int,
     checkpoint: Checkpoint | None = None,
+    known: Known | None = None,
 ) -> list[np.ndarray]:
     """Draw trajectories from Chronos-2's quantiles.
 
@@ -849,6 +946,9 @@ def chronos_sampler(
     checkpoint : Checkpoint, optional
         The fine-tuned checkpoint (`finetuned_adapter`) to load into
         Chronos-2. The pretrained model by default.
+    known : mapping, optional
+        Quantiles predicted ahead (`prefetch`), used where they hold a
+        group.
 
     Returns
     -------
@@ -869,10 +969,8 @@ def chronos_sampler(
     pipeline = _chronos(checkpoint)
     levels = np.asarray(pipeline.quantiles, dtype=float)
     rng = np.random.default_rng(seed)
-    quantiles = _predict(pipeline, groups, horizon, levels)
     out = []
-    for q in quantiles:
-        q = q.float().cpu().numpy()  # [V, horizon, Q]
+    for q in _native(pipeline, groups, horizon, known):  # [V, horizon, Q]
         u = rng.uniform(size=(n_samples, *q.shape[:2]))
         out.append(
             quantile_draws(levels, np.broadcast_to(q, (n_samples, *q.shape)), u)
@@ -1059,6 +1157,9 @@ class FoundationModel:
         The task's random stream the draws are seeded from, the model's
         name by default. Models given one stream draw the same random
         numbers (`bdbvhubrenewal.evaluation.marginals.forecast_quantiles`).
+    known : mapping or None
+        Chronos-2's quantiles of tasks predicted ahead in few batched
+        passes (`prefetch`); others are predicted when forecast.
     """
 
     name: str
@@ -1068,6 +1169,7 @@ class FoundationModel:
     weekly_totals: bool = False
     sample: Sampler | None = field(default=None, repr=False)
     stream: str | None = field(default=None, repr=False)
+    known: Known | None = field(default=None, repr=False, compare=False)
     reads_zones: ClassVar[bool] = True
 
     @property
@@ -1165,7 +1267,7 @@ class FoundationModel:
             cased = {places[i] for i in np.flatnonzero(tri.final.sum(axis=1))}
             group = _lags_of(group, cased)
         sample = self.sample or partial(
-            chronos_sampler, checkpoint=self.checkpoint
+            chronos_sampler, checkpoint=self.checkpoint, known=self.known
         )
         draws = sample([group], horizon, task.n_samples, seed)[0]
         drawn = np.maximum(np.round(draws), 0.0)
@@ -1252,14 +1354,18 @@ class FoundationModel:
         if self.source != "weekly":
             return None
         at = np.asarray(levels, dtype=float)
-        run = replace(self, sample=native_sampler(at, self.checkpoint))
+        run = replace(
+            self, sample=native_sampler(at, self.checkpoint, self.known)
+        )
         out = run.forecast(replace(task, n_samples=len(at)))
         out["quantile"] = at[out["sample"].to_numpy() - 1]
         return out[["location", "target_end_date", "quantile", "value"]]
 
 
 def native_sampler(
-    levels: np.ndarray, checkpoint: Checkpoint | None = None
+    levels: np.ndarray,
+    checkpoint: Checkpoint | None = None,
+    known: Known | None = None,
 ) -> Sampler:
     """Return a sampler giving Chronos-2's quantiles at `levels` as paths.
 
@@ -1269,6 +1375,8 @@ def native_sampler(
         Increasing quantile levels, `[K]`.
     checkpoint : Checkpoint, optional
         The fine-tuned checkpoint, the pretrained model by default.
+    known : mapping, optional
+        Quantiles predicted ahead (`prefetch`).
 
     Returns
     -------
@@ -1286,14 +1394,9 @@ def native_sampler(
     ) -> list[np.ndarray]:
         pipeline = _chronos(checkpoint)
         native = np.asarray(pipeline.quantiles, dtype=float)
-        quantiles, _ = pipeline.predict_quantiles(
-            [_chronos_input(g) for g in groups],
-            prediction_length=horizon,
-            quantile_levels=native.tolist(),
-        )
         out = []
-        for q in quantiles:
-            q = np.sort(q.float().cpu().numpy(), axis=-1)  # [V, H, Q]
+        for q in _native(pipeline, groups, horizon, known):
+            q = np.sort(q, axis=-1)  # [V, H, Q]
             at = np.apply_along_axis(
                 lambda v: np.interp(levels, native, v), -1, q
             )  # [V, H, K]
@@ -1301,6 +1404,63 @@ def native_sampler(
         return out
 
     return sample
+
+
+class _CollectedError(Exception):
+    """Raised by `prefetch`'s probe once a task's groups are collected."""
+
+
+def prefetch(
+    model: FoundationModel, tasks: Sequence[ForecastTask]
+) -> FoundationModel:
+    """Return the model with Chronos-2's quantiles of `tasks` predicted.
+
+    Each task's groups are built as `forecast_both` builds them, then all
+    groups of one horizon are predicted together, in passes of up to
+    `chronos_batch()` rows (`_predict`), instead of one pass a task. The
+    model's draws and own quantiles of those tasks then read them, so they
+    are what forecasting each task alone gives. A model with its own
+    sampler, or a task it cannot forecast, is left as it is.
+
+    Parameters
+    ----------
+    model : FoundationModel
+        The model.
+    tasks : sequence of ForecastTask
+        The tasks it will forecast, with their `n_samples` and seeds.
+
+    Returns
+    -------
+    FoundationModel
+        The model with `known` holding the tasks' quantiles.
+    """
+    if model.sample is not None:
+        return model
+    seen: list[tuple[Series, int]] = []
+
+    def collect(
+        groups: Sequence[Series],
+        horizon: int,
+        n: int,  # noqa: ARG001
+        seed: int,  # noqa: ARG001
+    ) -> list[np.ndarray]:
+        seen.extend((g, horizon) for g in groups)
+        raise _CollectedError
+
+    probe = replace(model, sample=collect)
+    for task in tasks:
+        try:
+            probe.forecast_both(task)
+        except (_CollectedError, ModelUnavailableError):
+            continue
+    known = dict(model.known or {})
+    pipeline = _chronos(model.checkpoint)
+    for horizon in sorted({h for _, h in seen}):
+        groups = [g for g, h in seen if h == horizon]
+        quantiles = _native(pipeline, groups, horizon, known)
+        for g, q in zip(groups, quantiles, strict=True):
+            known[group_key(g, horizon)] = q
+    return replace(model, known=known)
 
 
 for _source in SOURCES:
