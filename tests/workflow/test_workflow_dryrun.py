@@ -587,3 +587,33 @@ def test_the_rounds_host_s_manifests_and_exclusions_are_mirrored(tmp_path):
     assert listed == [str(s) for s in [*range(30100, 30140), 30200]]
     assert (run / "rounds" / "r1" / "qc" / "excluded.csv").exists()
     assert (run / "rounds" / "r2" / "manifest.csv").exists()
+
+
+NOBIAS = {**FT, "finetune": {**FT["finetune"], "series_bias": False}}
+
+
+def test_a_no_bias_control_refuses_the_slots_run_s_folder(tmp_path):
+    local = tmp_path / "local.env"
+    local.write_text(f"ROOT={tmp_path}\nHOST_NAME=test-host\n")
+    overlay = tmp_path / "overlay.yaml"
+    overlay.write_text(yaml.safe_dump(NOBIAS))
+    out = subprocess.run(
+        [str(SNAKEMAKE), "finetune", "-s", "workflow/Snakefile", "-n",
+         "--cores", "1", "--workflow-profile", "workflow/profiles/ci",
+         "--configfile", str(overlay)],
+        cwd=ROOT,
+        env={"PATH": str(SNAKEMAKE.parent) + ":/usr/bin:/bin",
+             "HOME": str(tmp_path), "LOCAL_CONFIG": str(local)},
+        capture_output=True,
+        text=True,
+    )  # fmt: skip
+    assert out.returncode != 0
+    assert "RUN" in out.stderr + out.stdout
+
+
+def test_a_no_bias_control_trains_in_its_own_folder(tmp_path):
+    (tmp_path / "local.env").write_text(
+        f"ROOT={tmp_path}\nHOST_NAME=test-host\nRUN={tmp_path}/nobias\n"
+    )
+    jobs = dry(tmp_path, "finetune", config=NOBIAS)
+    assert jobs["train_segment"] == 2
