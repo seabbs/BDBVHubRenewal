@@ -357,14 +357,29 @@ def trainable():
     ]
 
 
+def to_train():
+    """The prefixes `finetune` asks for: those in reach, or with
+    `next_segment_only` those saved and the first not yet saved."""
+    prefixes = trainable()
+    if not config.get("next_segment_only"):
+        return prefixes
+    saved = [n for n in prefixes if Path(f"{TRAIN}/n{n}/settings.json").exists()]
+    rest = [n for n in prefixes if n not in saved]
+    return saved + rest[:1]
+
+
 rule finetune:
     input:
-        lambda wc: expand(f"{TRAIN}/n{{n}}/settings.json", n=trainable()),
+        lambda wc: expand(f"{TRAIN}/n{{n}}/settings.json", n=to_train()),
         # A machine that publishes as it trains (PUBLISH in local.env).
-        lambda wc: expand(f"{TRAIN}/n{{n}}/published.json", n=trainable())
+        lambda wc: expand(f"{TRAIN}/n{{n}}/published.json", n=to_train())
         if LOCAL["PUBLISH"]
         else [],
-        [f"{RUN}/reports/n{CHECK}-check.txt"] if CHECK in FT["prefixes"] else [],
+        # The check once its checkpoint is asked for, so one segment a run
+        # does not train on to it.
+        lambda wc: [f"{RUN}/reports/n{CHECK}-check.txt"]
+        if CHECK in to_train()
+        else [],
 
 
 rule dashboard:

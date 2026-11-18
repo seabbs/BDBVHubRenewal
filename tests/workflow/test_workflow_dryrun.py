@@ -630,3 +630,21 @@ def test_a_tick_after_n250_trains_n500(tmp_path):
     _checkpoint(tmp_path, 250)
     jobs = dry(tmp_path, "finetune", config={**FT, "next_segment_only": True})
     assert jobs["train_segment"] == 1
+
+
+def test_a_tick_does_not_train_on_to_the_n1000_check(tmp_path):
+    # The n1000 report needs n1000, so it must not pull the chain there.
+    config = {
+        **FT,
+        "next_segment_only": True,
+        "rounds": [1, 2, 3],
+        "finetune": {
+            **FT["finetune"],
+            "prefixes": [250, 500, 1000],
+            "outbreaks": 1000,
+            "rounds": [2, 3],
+        },
+    }
+    jobs = dry(tmp_path, "finetune", config=config)
+    assert jobs["train_segment"] == 1
+    assert "checkpoint_check" not in jobs

@@ -76,6 +76,9 @@ def _snakemake(cfg: Mapping[str, str], targets: list[str]) -> list[str]:
     if cfg.get("SIMS_FROM") not in ("release", "remote"):
         forced = [r for r in forced if r != "available_batches"]
     extra = ["--forcerun", *forced] if forced else []
+    if "finetune" in targets:
+        # One segment a run, so the next run plans afresh.
+        extra += ["--config", "next_segment_only=True"]
     return [
         "nice",
         "-n",

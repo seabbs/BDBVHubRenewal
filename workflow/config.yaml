@@ -6,6 +6,11 @@
 # Simulation rounds to make or read, as round numbers.
 rounds: []
 
+# Whether `finetune` trains only the next segment, not every one in
+# reach. A scheduled tick sets it (flowlib.schedule), so each run ends
+# after one segment and the next run plans afresh.
+next_segment_only: false
+
 simulate:
   # Round r is `batches` batches from seed `seed_base` + 100 r, each
   # `batch` outbreaks with exactly `draws` observation draws: 40 of 21 are
