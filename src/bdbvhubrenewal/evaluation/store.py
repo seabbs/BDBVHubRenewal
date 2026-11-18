@@ -77,6 +77,7 @@ from bdbvhubrenewal.forecasters import (
 
 __all__ = [
     "FIT_FUNCTIONS",
+    "KEY_PACKAGES",
     "KEY_SKIP",
     "STATUS_FILE",
     "STORE_DATA",
@@ -228,12 +229,8 @@ def build_model(name: str, sampler: Mapping[str, Any]) -> ForecastModel:
             os.environ[SAMPLER_ENV] = old
 
 
-def _strip(source: str, imports: bool = True) -> str:
-    """Dump Python source as its syntax tree, without docstrings.
-
-    With `imports` false, import statements are dropped too, so a module
-    keeps its dump when the modules it imports move.
-    """
+def _strip(source: str) -> str:
+    """Dump Python source as its syntax tree, without docstrings."""
     tree = ast.parse(textwrap.dedent(source))
     for node in ast.walk(tree):
         body = getattr(node, "body", None)
@@ -247,10 +244,86 @@ def _strip(source: str, imports: bool = True) -> str:
                 and isinstance(s.value, ast.Constant)
                 and isinstance(s.value.value, str)
             )
-            and (imports or not isinstance(s, (ast.Import, ast.ImportFrom)))
         ]
         node.body = kept or [ast.Pass()]  # type: ignore[attr-defined]
     return ast.dump(tree)
+
+
+KEY_PACKAGES: Final = ("bdbvhubrenewal",)
+"""The packages whose import lines leave a fit key: their modules are in
+the key themselves (`fit_code`)."""
+
+
+def _own_import(node: ast.stmt) -> bool:
+    """Whether a statement imports from `KEY_PACKAGES` or `__future__`."""
+
+    def own(module: str) -> bool:
+        top = module.split(".")[0]
+        return top in KEY_PACKAGES or top == "__future__"
+
+    if isinstance(node, ast.ImportFrom):
+        return node.level > 0 or own(node.module or "")
+    if isinstance(node, ast.Import):
+        return all(own(alias.name) for alias in node.names)
+    return False
+
+
+def _code_parts(source: str) -> list[str]:
+    """Hash each top-level statement of a module, with what it imports.
+
+    Docstrings, `__all__` and the package's own import lines are left
+    out (`_own_import`), nested ones included. Each remaining statement is
+    hashed as its syntax tree, together with the third-party module-level
+    imports of the names it reads, so moving a function to another file
+    keeps its hash while a change of library does not.
+    """
+    tree = ast.parse(source)
+    for node in ast.walk(tree):
+        body = getattr(node, "body", None)
+        if not isinstance(body, list):
+            continue
+        kept = [
+            s
+            for s in body
+            if not (
+                isinstance(s, ast.Expr)
+                and isinstance(s.value, ast.Constant)
+                and isinstance(s.value.value, str)
+            )
+            and not _own_import(s)
+        ]
+        node.body = kept or [ast.Pass()]  # type: ignore[attr-defined]
+    bound: dict[str, str] = {}
+    parts = []
+    for stmt in tree.body:
+        if isinstance(stmt, ast.Import):
+            for alias in stmt.names:
+                name = alias.asname or alias.name.split(".")[0]
+                bound[name] = f"import {alias.name}"
+        elif isinstance(stmt, ast.ImportFrom):
+            for alias in stmt.names:
+                name = alias.asname or alias.name
+                bound[name] = f"from {stmt.module} import {alias.name}"
+        elif isinstance(stmt, ast.Pass) or _is_all(stmt):
+            continue
+        else:
+            reads = {n.id for n in ast.walk(stmt) if isinstance(n, ast.Name)}
+            uses = sorted(bound[n] for n in reads if n in bound)
+            body = ast.dump(stmt) + "\0" + "\n".join(uses)
+            parts.append(hashlib.sha256(body.encode()).hexdigest())
+    return parts
+
+
+def _is_all(stmt: ast.stmt) -> bool:
+    """Whether a statement assigns `__all__`."""
+    targets = (
+        stmt.targets
+        if isinstance(stmt, ast.Assign)
+        else [stmt.target]
+        if isinstance(stmt, (ast.AnnAssign, ast.AugAssign))
+        else []
+    )
+    return any(isinstance(t, ast.Name) and t.id == "__all__" for t in targets)
 
 
 def _fit_functions(root: Path) -> list[str]:
@@ -324,11 +397,12 @@ def _export(root: str, lock: str) -> str:
 def code_digest(model: str, root: Path | str = ".") -> str:
     """Hash the code a stored fit of a model runs and its dependencies.
 
-    Python files in `fit_code` are hashed as syntax trees without
-    docstrings or import statements, so comments, docstrings and moved
-    imports do not change the key; other files by their name and bytes.
-    The files' hashes are combined in sorted order, not by path, so
-    moving or renaming modules keeps the key. The functions of the store
+    Each top-level statement of the Python files in `fit_code` is hashed
+    as its syntax tree, without docstrings, `__all__` or the package's own
+    import lines, with the third-party imports it reads (`_code_parts`);
+    other files by their name and bytes. The hashes are combined in sorted
+    order, not by file, so comments, docstrings, renamed or moved modules
+    and functions moved between files keep the key. The functions of the store
     and the backtest a fit runs (`FIT_FUNCTIONS`) are hashed the same
     way, read from `root`, with the Python minor version.
     The dependencies are `uv export --no-dev --all-extras` of `uv.lock`.
@@ -356,10 +430,10 @@ def code_digest(model: str, root: Path | str = ".") -> str:
         if not path.is_file() or "__pycache__" in path.parts:
             continue
         if path.suffix == ".py":
-            body = _strip(path.read_text(), imports=False).encode()
+            parts += _code_parts(path.read_text())
         else:
             body = path.name.encode() + b"\0" + path.read_bytes()
-        parts.append(hashlib.sha256(body).hexdigest())
+            parts.append(hashlib.sha256(body).hexdigest())
     digest = hashlib.sha256()
     for part in sorted(parts):
         digest.update(part.encode())
