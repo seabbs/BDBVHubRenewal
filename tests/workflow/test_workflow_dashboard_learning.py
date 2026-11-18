@@ -150,3 +150,20 @@ def test_lora_update_size_by_kind(tmp_path):
         "group attention": [(250, 3.0), (500, 3.0)],
         "output layer": [(250, 4.0), (500, 4.0)],
     }
+
+
+def test_each_panel_has_its_explainer(tmp_path):
+    folder = tmp_path / "run"
+    (folder / "train").mkdir(parents=True)
+    (folder / "train" / "history.json").write_text(json.dumps(HISTORY))
+    run = runs.Run("r5", "r5", folder=folder, live=True)
+    out = learning.section(run, tip=lambda key: f"<i data-key={key}></i>")
+    for key in learning.EXPLAINERS:
+        assert f"<i data-key={key}></i>" in out
+
+
+def test_every_explainer_has_a_note():
+    from flowlib.dashboard import page
+
+    for key in learning.EXPLAINERS:
+        assert page.EXPLAIN.get(key)
