@@ -16,6 +16,8 @@ rule verify_checkpoint:
     log:
         f"{TRAIN}/n{{n}}/verify.log",
     localrule: True
+    conda:
+        TOOLS_ENV
     params:
         where=lambda wc, input: Path(input.settings).parent,
     shell:
@@ -30,6 +32,8 @@ rule publish_checkpoint:
     log:
         f"{TRAIN}/n{{n}}/publish.log",
     localrule: True
+    conda:
+        TOOLS_ENV
     params:
         where=lambda wc, output: Path(output[0]).parent,
     shell:

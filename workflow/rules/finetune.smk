@@ -45,6 +45,8 @@ rule fetch_batch:
     log:
         f"{RUN}/logs/fetch-{{seed}}.log",
     localrule: True
+    conda:
+        TOOLS_ENV
     params:
         source=FT["sims_from"],
         repo=SIM["repo"],
@@ -90,6 +92,8 @@ rule real_validation:
         FT["real_validation"] or "no-real-validation",
     log:
         f"{RUN}/logs/real-validation.log",
+    conda:
+        TOOLS_ENV
     shell:
         "uv run python scripts/finetune_real_validation.py {input} {output} > {log} 2>&1"
 
@@ -105,6 +109,8 @@ rule train_segment:
     # In one pool the trainer, the run's critical path, goes first: before
     # simulation (15) and checkpoint scoring (10 and below).
     priority: 20
+    conda:
+        TOOLS_ENV
     resources:
         gpu=1,
     params:
@@ -216,6 +222,8 @@ rule dashboard:
     log:
         f"{RUN}/logs/dashboard.log",
     localrule: True
+    conda:
+        TOOLS_ENV
     shell:
         "uv run --group paper python workflow/scripts/dashboard.py "
         "--once {output} > {log} 2>&1"

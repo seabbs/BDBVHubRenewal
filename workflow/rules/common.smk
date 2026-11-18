@@ -10,6 +10,8 @@ LOCAL = localconfig.read()
 HOST = LOCAL["HOST_NAME"]
 ROUNDS_DIR = f"{LOCAL['ROOT']}/rounds"
 TARGETS = LOCAL["TARGETS"].split()
+# The tools the shell rules call (envs/tools.yaml).
+TOOLS_ENV = "../envs/tools.yaml"
 
 
 def say(message):

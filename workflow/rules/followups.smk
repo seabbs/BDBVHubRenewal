@@ -19,6 +19,8 @@ rule fetch_adapter:
     log:
         f"{CACHE}/log/adapter-{{label}}.log",
     localrule: True
+    conda:
+        TOOLS_ENV
     params:
         repo=SIM["repo"],
         tag=lambda wc: f"chronos-slots-{wc.label.removeprefix('slots-')}",
@@ -41,6 +43,8 @@ rule slots_check_shard:
         csv=f"{CACHE}/slots-check/{{label}}/shard-{{shard}}.csv",
     log:
         f"{CACHE}/slots-check/{{label}}/shard-{{shard}}.log",
+    conda:
+        TOOLS_ENV
     threads: 1
     resources:
         mem_mb=SLC["mem_mb"],
@@ -73,6 +77,8 @@ rule slots_check_summary:
     log:
         f"{CACHE}/slots-check/{{label}}/summary.log",
     localrule: True
+    conda:
+        TOOLS_ENV
     params:
         run=f"{CACHE}/slots-check/{{label}}",
     shell:
@@ -91,6 +97,8 @@ rule agg_data:
     log:
         f"{AGG_ROOT}/logs/data.log",
     localrule: True
+    conda:
+        TOOLS_ENV
     params:
         # The rows' folder, as a function: it holds the outputs.
         root=lambda wc: AGG_ROOT,
@@ -120,6 +128,8 @@ rule agg_sanity:
         f"{AGG_ROOT}/sanity/{{code}}/result.txt",
     log:
         f"{AGG_ROOT}/sanity/{{code}}/run.log",
+    conda:
+        TOOLS_ENV
     resources:
         mem_mb=AGG["mem_mb"],
     params:
@@ -153,6 +163,8 @@ rule agg_fit:
         f"{AGG_ROOT}/{{label}}/fits-{{model}}.done",
     log:
         f"{AGG_ROOT}/{{label}}/fits-{{model}}.log",
+    conda:
+        TOOLS_ENV
     resources:
         mem_mb=AGG["mem_mb"],
     params:
@@ -188,6 +200,8 @@ rule agg_rows:
         f"{AGG_ROOT}/{{label}}/aggregation-scores.csv.gz",
     log:
         f"{AGG_ROOT}/{{label}}/rows.log",
+    conda:
+        TOOLS_ENV
     resources:
         mem_mb=AGG["mem_mb"],
     params:

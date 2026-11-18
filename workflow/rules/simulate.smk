@@ -34,6 +34,8 @@ rule simulate_batch:
     # below): the trainer waits on these batches.
     priority: 15
     retries: 1
+    conda:
+        TOOLS_ENV
     threads: 1
     resources:
         mem_mb=lambda wc, attempt: (
@@ -83,6 +85,8 @@ rule await_batch:
     log:
         f"{ROUNDS_DIR}/r{{round}}/logs/await-{{seed}}.log",
     localrule: True
+    conda:
+        TOOLS_ENV
     resources:
         awaiting=1,
     params:
@@ -137,6 +141,8 @@ rule sim_qc:
         summary=f"{ROUNDS_DIR}/r{{round}}/qc/summary.txt",
     log:
         f"{ROUNDS_DIR}/r{{round}}/qc/run.log",
+    conda:
+        TOOLS_ENV
     params:
         round_dir=lambda wc, input: Path(input[0]).parent,
     shell:
@@ -167,6 +173,8 @@ rule release_batch:
     log:
         f"{ROUNDS_DIR}/r{{round}}/logs/release-{{seed}}.log",
     localrule: True
+    conda:
+        TOOLS_ENV
     params:
         repo=SIM["repo"],
         tag="sims-r{round}",
@@ -196,6 +204,8 @@ rule release_qc:
     log:
         f"{ROUNDS_DIR}/r{{round}}/logs/release-qc.log",
     localrule: True
+    conda:
+        TOOLS_ENV
     params:
         repo=SIM["repo"],
         tag="sims-r{round}",

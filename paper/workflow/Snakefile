@@ -68,6 +68,8 @@ STUDIES = config["studies"]
 PYTHON = shlex.quote(sys.executable)
 BDBV = shlex.quote(str(Path(sys.executable).parent / "bdbvhubrenewal"))
 GERMANY = config["germany"]
+# The tools the shell rules call, as the project workflow's.
+TOOLS_ENV = "../../workflow/envs/tools.yaml"
 
 # The last BDBV release the SI's real-data models trained on
 # (config/finetune.toml); their BDBV comparison scores later rounds only.
@@ -134,6 +136,8 @@ for name, entry in EVIDENCE.items():
             evidence_file(name),
         log:
             f"{R}/logs/evidence_{name}.log",
+        conda:
+            TOOLS_ENV
         params:
             ref=entry["ref"],
             path=entry["path"],
@@ -183,6 +187,8 @@ for i, entry in enumerate(EBOLA.get("extra") or []):
             f"{R}/evidence/ebola-extra-{i}.csv.gz",
         log:
             f"{R}/logs/ebola_extra_{i}.log",
+        conda:
+            TOOLS_ENV
         params:
             python=PYTHON,
             models=shlex.quote(entry.get("models") or "."),
@@ -204,6 +210,8 @@ for i, entry in enumerate(GERMANY.get("extra") or []):
             f"{R}/evidence/germany-extra-{i}.csv.gz",
         log:
             f"{R}/logs/germany_extra_{i}.log",
+        conda:
+            TOOLS_ENV
         params:
             python=PYTHON,
             args=extra_args(entry),
@@ -308,6 +316,8 @@ for _mode in MODES:
             SYNTHETIC["forecasts"][_mode],
         log:
             f"{R}/logs/synthetic_forecasts_{_mode}.log",
+        conda:
+            TOOLS_ENV
         resources:
             heavy=1,
         params:
@@ -412,6 +422,8 @@ rule render:
         "si.pdf",
     log:
         f"{R}/logs/render.log",
+    conda:
+        TOOLS_ENV
     shell:
         "exec >{log} 2>&1; quarto render main.qmd && quarto render si.qmd"
 
@@ -421,6 +433,8 @@ rule germany_fetch:
         TRIANGLE,
     log:
         f"{R}/logs/germany_fetch.log",
+    conda:
+        TOOLS_ENV
     params:
         bdbv=BDBV,
         germany_config=GERMANY["config"],
@@ -438,6 +452,8 @@ rule germany_development:
         f"{GERMANY['results']}/paper-forecasts.csv.gz",
     log:
         f"{R}/logs/germany_development.log",
+    conda:
+        TOOLS_ENV
     params:
         bdbv=BDBV,
         germany_root_config=GERMANY_ROOT["config"],
@@ -460,6 +476,8 @@ rule germany_heldout:
         f"{GERMANY['results']}/held-out/paper-forecasts.csv.gz",
     log:
         f"{R}/logs/germany_heldout.log",
+    conda:
+        TOOLS_ENV
     params:
         bdbv=BDBV,
         germany_root_config=GERMANY_ROOT["config"],
@@ -480,10 +498,12 @@ rule ebola_hub:
         f"{EBOLA['hub']}/target-data/time-series.csv",
     log:
         f"{R}/logs/ebola_hub.log",
+    # Snakemake makes the output's folders first, so clone beside them.
+    conda:
+        TOOLS_ENV
     params:
         repo=EBOLA["hub_repo"],
         hub=lambda w, output: Path(output[0]).parent.parent,
-    # Snakemake makes the output's folders first, so clone beside them.
     shell:
         "exec >{log} 2>&1; "
         "rm -rf {params.hub}.clone && "
@@ -507,6 +527,8 @@ rule ebola_backtest_draws:
         EBOLA_DRAWS,
     log:
         f"{R}/logs/ebola_backtest_draws.log",
+    conda:
+        TOOLS_ENV
     resources:
         heavy=1,
     params:
@@ -532,6 +554,8 @@ rule ebola_backtest:
         f"{EBOLA['data']}/target.csv",
     log:
         f"{R}/logs/ebola_backtest.log",
+    conda:
+        TOOLS_ENV
     params:
         bdbv=BDBV,
         models=" ".join(EBOLA["backtest_models"]),
@@ -550,6 +574,8 @@ rule data:
         meta=f"{R}/{{mode}}/data/{{study}}-meta.json",
     log:
         f"{R}/{{mode}}/logs/data-{{study}}.log",
+    conda:
+        TOOLS_ENV
     params:
         python=PYTHON,
         limits=limits,
@@ -583,6 +609,8 @@ rule forecasts:
         f"{R}/{{mode}}/raw/{{study}}.csv.gz",
     log:
         f"{R}/{{mode}}/logs/forecasts-{{study}}.log",
+    conda:
+        TOOLS_ENV
     params:
         python=PYTHON,
         limits=limits,
@@ -602,6 +630,8 @@ rule table:
         f"{R}/{{mode}}/forecasts/{{study}}.csv.gz",
     log:
         f"{R}/{{mode}}/logs/table-{{study}}.log",
+    conda:
+        TOOLS_ENV
     params:
         python=PYTHON,
         config=shlex.quote(json.dumps(config)),
@@ -619,6 +649,8 @@ rule truth:
         f"{R}/{{mode}}/truth/{{study}}.csv.gz",
     log:
         f"{R}/{{mode}}/logs/truth-{{study}}.log",
+    conda:
+        TOOLS_ENV
     params:
         python=PYTHON,
         rule=lambda w: (
@@ -639,6 +671,8 @@ rule scores:
         f"{R}/{{mode}}/scores/{{study}}.csv.gz",
     log:
         f"{R}/{{mode}}/logs/scores-{{study}}.log",
+    conda:
+        TOOLS_ENV
     # One memory-heavy step at a time with `--resources heavy=1`.
     resources:
         heavy=1,
@@ -660,6 +694,8 @@ rule joint_scores:
         table=f"{R}/{{mode}}/tables/main/{{study}}-joint.md",
     log:
         f"{R}/{{mode}}/logs/joint_scores-{{study}}.log",
+    conda:
+        TOOLS_ENV
     # One memory-heavy step at a time with `--resources heavy=1`.
     resources:
         heavy=1,
@@ -681,6 +717,8 @@ rule real_finetune:
         f"{R}/{{mode}}/tables/si/real-finetune.md",
     log:
         f"{R}/{{mode}}/logs/real_finetune.log",
+    conda:
+        TOOLS_ENV
     params:
         python=PYTHON,
     shell:
@@ -722,6 +760,8 @@ for study in STUDIES:
             figures("{mode}", study),
         log:
             f"{R}/{{mode}}/logs/figures_{study}.log",
+        conda:
+            TOOLS_ENV
         params:
             python=PYTHON,
             study=study,
@@ -750,6 +790,8 @@ for study in STUDIES:
             tables("{mode}", study),
         log:
             f"{R}/{{mode}}/logs/score_tables_{study}.log",
+        conda:
+            TOOLS_ENV
         params:
             python=PYTHON,
             study=study,
@@ -783,6 +825,8 @@ rule sim_examples:
         f"{R}/{{mode}}/figures/si/sim-examples.png",
     log:
         f"{R}/{{mode}}/logs/sim_examples.log",
+    conda:
+        TOOLS_ENV
     params:
         python=PYTHON,
         ref=SYNTHETIC["examples"]["ref"],
@@ -811,6 +855,8 @@ rule grid_tables:
         heldout=f"{R}/{{mode}}/tables/si/heldout-set.md",
     log:
         f"{R}/{{mode}}/logs/grid_tables.log",
+    conda:
+        TOOLS_ENV
     params:
         python=PYTHON,
         config=lambda w: shlex.quote(json.dumps(grid_config(w.mode))),
@@ -828,6 +874,8 @@ rule evidence:
         yml=f"{R}/{{mode}}/evidence.yml",
     log:
         f"{R}/{{mode}}/logs/evidence.log",
+    conda:
+        TOOLS_ENV
     params:
         python=PYTHON,
         args=" ".join(
@@ -855,6 +903,8 @@ rule summary:
         f"{R}/{{mode}}/results.yml",
     log:
         f"{R}/{{mode}}/logs/summary.log",
+    conda:
+        TOOLS_ENV
     params:
         python=PYTHON,
     shell:
@@ -875,6 +925,8 @@ rule publish:
         touch(f"{R}/{{mode}}/published"),
     log:
         f"{R}/{{mode}}/logs/publish.log",
+    conda:
+        TOOLS_ENV
     params:
         run=lambda w: f"{R}/{w.mode}",
         build=BUILD,

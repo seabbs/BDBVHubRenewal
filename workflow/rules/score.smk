@@ -25,6 +25,8 @@ checkpoint release_list:
     log:
         f"{CACHE}/log/release-list.log",
     localrule: True
+    conda:
+        TOOLS_ENV
     params:
         repo=SIM["repo"],
     shell:
@@ -40,6 +42,8 @@ rule bdbv_data:
     log:
         f"{CACHE}/log/bdbv-data.log",
     localrule: True
+    conda:
+        TOOLS_ENV
     shell:
         "uv run bdbvhubrenewal data > {log} 2>&1"
 
@@ -52,6 +56,8 @@ rule score_bdbv:
     log:
         f"{CACHE}/log/bdbv-{{label}}.log",
     priority: unit_priority(10)
+    conda:
+        TOOLS_ENV
     threads: UNIT_THREADS
     resources:
         mem_mb=SC["mem_mb"],
@@ -69,6 +75,8 @@ rule score_germany:
     log:
         f"{CACHE}/log/germany-{{label}}.log",
     priority: unit_priority(5)
+    conda:
+        TOOLS_ENV
     threads: UNIT_THREADS
     resources:
         mem_mb=SC["mem_mb"],
@@ -86,6 +94,8 @@ rule score_heldout:
     log:
         f"{CACHE}/log/heldout-{{label}}.log",
     localrule: True
+    conda:
+        TOOLS_ENV
     shell:
         f"uv run python scripts/checkpoint_scores.py heldout {CACHE} "
         "{wildcards.label} > {log} 2>&1 && touch {output}"
@@ -100,6 +110,8 @@ rule score_germany_forecast:
     log:
         f"{CACHE}/log/germany_forecast-{{label}}.log",
     priority: unit_priority(1)
+    conda:
+        TOOLS_ENV
     threads: UNIT_THREADS
     resources:
         mem_mb=SC["mem_mb"],
@@ -120,6 +132,8 @@ rule score_table:
     log:
         f"{CACHE}/log/score-table.log",
     localrule: True
+    conda:
+        TOOLS_ENV
     params:
         labels=lambda wc: " ".join(checkpoint_labels()),
         evidence=SC["evidence"],
