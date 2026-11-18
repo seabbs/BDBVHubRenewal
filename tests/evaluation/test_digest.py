@@ -74,9 +74,10 @@ def test_backtest_code_never_imports_report_only_modules() -> None:
         if rel in REPORT_ONLY:
             continue
         used = _reporting_imports(path) & report_only
-        # The `report` command, which no backtest runs.
+        # The `report` and `live-checkpoint` commands, which no backtest
+        # runs.
         if rel == "src/bdbvhubrenewal/cli.py":
-            used -= {"report"}
+            used -= {"report", "live_checkpoint_page"}
         assert not used, f"{rel} imports {used}"
 
 
@@ -171,10 +172,13 @@ def test_model_code_keeps_a_skipped_module_its_model_imports() -> None:
             model_code(model, ROOT, STORE_ENTRIES, cli=False, skip=STORE_SKIP)
         )
 
-    # Chronos-2's module imports the zone split, so its key holds it.
-    assert zones in code("fm_chronos_weekly_ragged")
+    # Chronos-2's module imports the zone split, so its key holds it, and
+    # so do the province-level models that split their zones in their own
+    # forecast (`with_zones`, since #299).
+    for model in ("fm_chronos_weekly_ragged", "renewal", "pprandomwalknowcast"):
+        assert zones in code(model)
     # Models whose modules do not import it still leave it out.
-    for model in ("randomwalk", "randomwalknowcast", "renewal"):
+    for model in ("randomwalk", "randomwalknowcast"):
         assert zones not in code(model)
 
 

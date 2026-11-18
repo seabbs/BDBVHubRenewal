@@ -35,6 +35,7 @@ REPORT_ONLY: Final = tuple(
     f"src/bdbvhubrenewal/reporting/{name}.py"
     for name in (
         "germany",
+        "live_checkpoint_page",
         "nowcast_plots",
         "report",
         "scorechart",
