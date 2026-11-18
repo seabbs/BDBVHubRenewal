@@ -543,31 +543,37 @@ def hub_triangle(
         rows["total"]
         if source == "weekly"
         else rows["observed"] + rows["imputed"]
-    )
+    ).to_numpy()
     first = _step(source, str(rows[time_col].min()))
     n_times = (as_date(last_time) - first).days // width + 1
     times = [
         (first + dt.timedelta(days=width * i)).isoformat()
         for i in range(n_times)
     ]
-    place = rows["location"].map({c: i for i, c in enumerate(places)})
-    days = (pd.to_datetime(rows[time_col]) - pd.Timestamp(first)).dt.days
-    step = days.to_numpy() // width
+    place = (
+        rows["location"].map({c: i for i, c in enumerate(places)}).to_numpy()
+    ).astype(int)
+    # Each distinct date and release is parsed once; the rows of a release
+    # are found by sorting, not by comparing every row to it.
+    codes, unique = pd.factorize(rows[time_col])
+    step = (pd.to_datetime(unique) - pd.Timestamp(first)).days.to_numpy()[
+        codes
+    ] // width
+    release_of, releases = pd.factorize(rows["vintage"], sort=True)
+    order = np.argsort(release_of, kind="stable")
+    bounds = np.searchsorted(release_of[order], np.arange(len(releases) + 1))
+    cutoffs = rows["cutoff"].to_numpy()
     lags = MAX_LAG[source] if max_lag is None else max_lag
     partial = np.full((len(places), n_times, lags), np.nan)
     final = np.zeros((len(places), n_times))
     last = 0
-    for release in sorted(set(rows["vintage"])):
-        mine = (rows["vintage"] == release).to_numpy()
-        cutoff = str(rows.loc[mine, "cutoff"].iloc[0])
+    for r in range(len(releases)):
+        mine = order[bounds[r] : bounds[r + 1]]
+        cutoff = str(cutoffs[mine[0]])
         at = (_step(source, cutoff) - first).days // width
         counts = np.zeros((len(places), n_times))
-        keep = mine & (step >= 0) & (step < n_times)
-        np.add.at(
-            counts,
-            (place.to_numpy()[keep].astype(int), step[keep]),
-            value.to_numpy()[keep],
-        )
+        keep = mine[(step[mine] >= 0) & (step[mine] < n_times)]
+        np.add.at(counts, (place[keep], step[keep]), value[keep])
         for d in range(lags):
             if 0 <= at - d < n_times:
                 partial[:, at - d, d] = counts[:, at - d]
