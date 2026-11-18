@@ -132,10 +132,27 @@ def test_code_digest_follows_each_models_own_code(tmp_path: Path) -> None:
     # The CLI is not fit code.
     edit(f"{src}/cli.py")
     assert digests() == before
-    # The store's own code refits every model.
+    # The store's loader and IO code do not key a fit: editing them never
+    # refits.
     edit(f"{src}/evaluation/store.py")
-    after = digests()
-    assert all(after[m] != before[m] for m in models)
+    edit(f"{src}/evaluation/backtest.py")
+    assert digests() == before
+    # The functions a fit runs do, for every model.
+    for rel, func in (
+        ("evaluation/store.py", "def fit("),
+        ("evaluation/backtest.py", "def run_forecasts("),
+    ):
+        path = root / src / rel
+        text = path.read_text()
+        head, body = text.split(func, 1)
+        sig, rest = body.split('"""', 1)
+        doc, rest = rest.split('"""', 1)
+        path.write_text(
+            head + func + sig + '"""' + doc + '"""\n    _EDITED = 1' + rest
+        )
+        after = digests()
+        assert all(after[m] != before[m] for m in models), rel
+        before = after
 
 
 def test_the_zone_split_keys_the_province_models_fits(tmp_path: Path) -> None:
@@ -167,13 +184,47 @@ def test_the_zone_split_keys_the_province_models_fits(tmp_path: Path) -> None:
     assert all(after[m] != before[m] for m in models)
 
 
-def test_fit_code_has_the_store_and_no_other_model() -> None:
+def test_fit_code_is_the_models_code_not_the_store() -> None:
     renewal = set(store.fit_code("renewal", ROOT))
-    assert "src/bdbvhubrenewal/evaluation/store.py" in renewal
     assert "src/bdbvhubrenewal/model/observation.py" in renewal
     walk = set(store.fit_code("randomwalknowcast", ROOT))
     assert "src/bdbvhubrenewal/forecasters/renewal.py" not in walk
-    assert "src/bdbvhubrenewal/evaluation/store.py" in walk
+    # The store and the backtest module are loader and IO code; the
+    # functions of theirs a fit runs are keyed by source (`FIT_FUNCTIONS`).
+    for files in (renewal, walk):
+        assert "src/bdbvhubrenewal/evaluation/store.py" not in files
+        assert "src/bdbvhubrenewal/evaluation/backtest.py" not in files
+
+
+def test_stacked_forecasts_keep_their_values_in_less_memory() -> None:
+    rng = np.random.default_rng(0)
+    frames = [
+        pd.DataFrame(
+            {
+                "model": m,
+                "location": rng.choice(["CD", "CD-IT", "CD-IT-10"], 500),
+                "target_end_date": rng.choice(
+                    ["2026-11-07", "2026-11-14"], 500
+                ),
+                "sample": np.arange(500),
+                "value": rng.poisson(5, 500).astype(float),
+            }
+        )
+        for m in ("renewal", "randomwalk")
+    ]
+    got = store.stack_forecasts(frames)
+    want = pd.concat(frames, ignore_index=True)
+    for col in ("model", "location", "target_end_date"):
+        assert isinstance(got[col].dtype, pd.CategoricalDtype), col
+    pd.testing.assert_frame_equal(
+        got.astype(
+            dict.fromkeys(("model", "location", "target_end_date"), object)
+        ),
+        want,
+    )
+    assert (
+        got.memory_usage(deep=True).sum() < want.memory_usage(deep=True).sum()
+    )
 
 
 def test_fit_time_data_files_key_a_fit(tmp_path: Path) -> None:
@@ -186,8 +237,7 @@ def test_fit_time_data_files_key_a_fit(tmp_path: Path) -> None:
 
 
 def test_report_code_does_not_key_a_fit(tmp_path: Path) -> None:
-    # `fit_code` runs `digest.model_code`, so a change to its import
-    # closure can move a key. Its own source is not hashed (`STORE_SKIP`).
+    # Report code is not in any model's import closure.
     root = _copy_repo(tmp_path)
     models = ("renewal",)
 
