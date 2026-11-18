@@ -1026,3 +1026,17 @@ def test_the_cache_is_emptied_only_above_its_limit(monkeypatch):
     # With no limit, as between chunks and after an evaluation, always.
     fs.free_memory()
     assert emptied == [1, 1]
+
+
+def test_evaluation_cadence_defaults_to_the_recipe_s():
+    import finetune_stream as fs
+
+    args = fs.build_parser().parse_args(["sims", "out"])
+    assert args.eval_every == fs.ft.EVAL_EVERY == 100
+    assert args.by_source_every == fs.BY_SOURCE_EVERY == 200
+    fs.check_cadence(500, 1000)
+    # By source runs with the monitor, so on a multiple of its steps.
+    with pytest.raises(ValueError, match="multiple"):
+        fs.check_cadence(300, 1000)
+    with pytest.raises(ValueError, match="positive"):
+        fs.check_cadence(0, 0)
