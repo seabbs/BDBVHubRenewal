@@ -24,7 +24,7 @@ from pathlib import Path
 from .common import append_summary, set_outputs
 
 TEAM = "seabbs"
-KEYS = {"renewal": "renewal", "rwnowcast": "baseline", "chronos2_ft": "chronos"}
+KEYS = {"renewal": "renewal", "rwnowcast": "baseline", "nowcastfm": "chronos"}
 """Step output name of each hub model's switch."""
 
 
