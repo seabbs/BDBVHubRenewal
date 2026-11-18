@@ -368,7 +368,7 @@ Option (e) is inference only, on the final checkpoint.
 - Key references: [@bosse2022scoringutils; @jordanEvaluatingProbabilisticForecasts2019; @zanetta_scoringrules_2024].
 :::
 
-We score quantiles with WIS, split into dispersion, overprediction and underprediction [@Bracher2021], and samples, where they are the natural form, with the fair CRPS.
+We score quantiles with WIS, split into dispersion, overprediction and underprediction [@bracherEvaluatingEpidemicForecasts2021], and samples, where they are the natural form, with the fair CRPS.
 For a forecast of $m$ samples $x_1, \dots, x_m$ and an observation $y$, the fair CRPS is
 $$
 \mathrm{CRPS}_\mathrm{f}(x, y) = \frac{1}{m}\sum_{i=1}^{m} |x_i - y| - \frac{1}{2m(m-1)}\sum_{i \ne j} |x_i - x_j|.
