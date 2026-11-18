@@ -265,3 +265,13 @@ def test_checkpoint_tables_have_a_column_per_source(tmp_path):
     tables = out.split("<h2>Tables</h2>")[1]
     assert "<th>weekly<th>daily" in tables or "<th>daily<th>weekly" in tables
     assert "<td>0.2000" in tables
+
+
+def test_the_run_size_comes_from_the_config_without_a_trainer(tmp_path):
+    # Under Snakemake there is no trainer command line to read.
+    ctx = _machine(tmp_path)
+    ctx.outbreaks = 8400
+    ctx.prefixes = (250, 500, 1000, 2000, 4000, 8400)
+    out = page.build(ctx)
+    assert "of 8400 simulations trained" in out
+    assert "of 8000" not in out
