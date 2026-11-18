@@ -819,6 +819,6 @@ def build(ctx: Context) -> str:
         "<title>Fine-tuning dashboard</title>"
         f"<style>{_asset('style.css')}</style><script>{info_js}</script>"
         f"<script>{_asset('player.js')}\n{_asset('sel.js')}</script></head>"
-        f"<body>{body}<script>{_asset('mode.js')}\n{_asset('nav.js')}\n"
+        f"<body>{body}<script>{_asset('mode.js')}\n{_asset('nav.js')}\n{_asset('expand.js')}\n"
         f"{'' if ctx.once else _asset('refresh.js')}</script></body></html>"
     )
