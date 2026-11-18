@@ -13,11 +13,15 @@ rule verify_checkpoint:
         adapter=f"{TRAIN}/n{{n}}/finetuned-ckpt/adapter_model.safetensors",
     output:
         f"{TRAIN}/n{{n}}/verified.txt",
-    params:
-        where=f"{TRAIN}/n{{n}}",
+    log:
+        f"{TRAIN}/n{{n}}/verify.log",
     localrule: True
+    conda:
+        TOOLS_ENV
+    params:
+        where=lambda wc, input: Path(input.settings).parent,
     shell:
-        "uv run python scripts/finetune_verify.py {params.where} > {output}"
+        "uv run python scripts/finetune_verify.py {params.where} > {output} 2>{log}"
 
 
 rule publish_checkpoint:
@@ -25,15 +29,20 @@ rule publish_checkpoint:
         rules.verify_checkpoint.output,
     output:
         f"{TRAIN}/n{{n}}/published.json",
-    params:
-        where=f"{TRAIN}/n{{n}}",
+    log:
+        f"{TRAIN}/n{{n}}/publish.log",
     localrule: True
+    conda:
+        TOOLS_ENV
+    params:
+        where=lambda wc, output: Path(output[0]).parent,
     shell:
         """
+        exec >{log} 2>&1
         uv run python workflow/scripts/publish_checkpoint.py {params.where} {output}
         # An optional notification line; it never fails the rule.
         uv run python workflow/scripts/notify.py "checkpoint n{wildcards.n} published:" \
-          "$(cat {output})" || true
+            "$(cat {output})" || true
         """
 
 
