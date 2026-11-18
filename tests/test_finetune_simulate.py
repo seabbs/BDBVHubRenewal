@@ -1134,3 +1134,104 @@ def test_a_batch_past_its_round_s_block_is_refused(tmp_path):
     out = run_index("grid_index(30940, 21L, 1L, 30000L)\n", tmp_path)
     assert out.returncode != 0
     assert "block" in out.stderr
+
+
+# A places outbreak on given weekdays with a non-parametric hazard, so its
+# Stan data hold matrices and four-dimensional arrays.
+STAN_INPUTS = """
+set.seed(5)
+d <- draw_design(7L)
+d$strata <- "places"; d$n_places <- 3L; d$n_ages <- 1L
+d$delay_form <- "both"; d$delay_change <- "walk"
+d$reporting <- "weekdays"; d$report_days <- "Monday;Thursday"
+v <- draw_values(d); v$weeks <- 16L
+inputs <- NULL
+simulate_data <- enw_simulate_data
+enw_simulate_data <- function(data, ...) {
+  inputs <<- list(data = data, ...)
+  simulate_data(data, ...)
+}
+invisible(simulate_outbreak(d, v))
+"""
+
+
+@needs_r
+def test_stan_data_in_slabs_parse_as_cmdstanr_writes_them(tmp_path):
+    out = run_r(
+        STAN_INPUTS
+        + """
+data <- do.call(enw_simulate_data, inputs)$data
+variables <- model$variables()$data
+ours <- write_stan_data(data, tempfile(), variables, min_size = 50,
+  slab = 2e4)
+theirs <- cmdstanr:::process_data(data, list(data = variables))
+a <- jsonlite::fromJSON(ours, simplifyVector = FALSE)
+b <- jsonlite::fromJSON(theirs, simplifyVector = FALSE)
+cat("slabbed", sum(lengths(data) >= 50) > 1,
+  any(lengths(lapply(data, dim)) == 4 & lengths(data) >= 50), "\\n")
+cat("same", setequal(names(a), names(b)), identical(a[names(b)], b), "\\n")
+""",
+        tmp_path,
+    )
+    assert "slabbed TRUE TRUE" in out
+    assert "same TRUE TRUE" in out
+
+
+@needs_r
+def test_json_arrays_have_jsonlite_s_text(tmp_path):
+    # Every shape, slab size and value kind, -0 included.
+    out = run_r(
+        """
+set.seed(2)
+cases <- list(
+  c(-0, runif(20), 0, 1, 1e15, -2.5e-7),
+  matrix(sample(c(0, 1, 0.25, -0, 1 / 3), 35, TRUE), 7, 5),
+  array(sample(0:9, 24, TRUE), dim = c(2, 3, 4)),
+  array(sample(0:9, 120, TRUE), dim = c(3, 2, 4, 5)),
+  array(runif(12), dim = c(2, 1, 3, 2)),
+  matrix(runif(6), 6, 1),
+  matrix(runif(6), 1, 6)
+)
+same <- vapply(cases, function(x) {
+  all(vapply(c(1, 3, 7, 1e6), function(slab) {
+    f <- tempfile()
+    file.create(f)
+    write_json_array(x, f, slab)
+    ours <- gsub("[[:space:]]", "", paste(readLines(f, warn = FALSE),
+      collapse = ""))
+    theirs <- jsonlite::toJSON(x, always_decimal = TRUE, digits = NA)
+    identical(ours, as.character(theirs))
+  }, TRUE))
+}, TRUE)
+cat("same", all(same), "\\n")
+""",
+        tmp_path,
+    )
+    assert "same TRUE" in out
+
+
+@needs_r
+def test_two_step_simulation_draws_what_enw_simulate_draws(tmp_path):
+    # The same draw and the same R random stream after it.
+    out = run_r(
+        STAN_INPUTS
+        + """
+set.seed(11)
+fit <- suppressMessages(do.call(enw_simulate, c(inputs, list(
+  model = model, seed = 99L, draws = 1L, refresh = 0
+))))
+theirs <- as.numeric(fit$fit[[1]]$draws("pp_obs", format = "matrix")[1, ])
+after_theirs <- .Random.seed
+set.seed(11)
+stan <- do.call(enw_simulate_data, inputs)
+stan$file <- write_stan_data(stan$data, tempfile(fileext = ".json"),
+  model$variables()$data, min_size = 50)
+ours <- enw_simulate_draw(stan, model, seed = 99L, refresh = 0)
+cat("same", identical(ours, theirs), identical(.Random.seed, after_theirs),
+  file.exists(stan$file), "\\n")
+cat("cells", identical(stan$cells, fit$new_confirm[[1]]), "\\n")
+""",
+        tmp_path,
+    )
+    assert "same TRUE TRUE FALSE" in out
+    assert "cells TRUE" in out
