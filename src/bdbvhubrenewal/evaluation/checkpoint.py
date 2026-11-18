@@ -64,9 +64,9 @@ BASELINE: Final = "randomwalknowcast"
 REFERENCE: Final = "reference"
 REFERENCE_PIN: Final = "e8a1f5ae338b"
 """The checkpoint the reference pins, which its models never load."""
-ZERO_SHOT: Final = ("fm_chronos_daily_ragged", "fm_chronos_weekly_ragged")
+ZERO_SHOT: Final = ("fm_chronos_daily_ragged",)
 FINETUNED: Final = tuple(f"{m}_ft" for m in ZERO_SHOT)
-COMPLETE: Final = ("fm_chronos_daily_complete", "fm_chronos_weekly_complete")
+COMPLETE: Final = ("fm_chronos_daily_complete",)
 """Zero-shot Chronos-2 given complete data points only, a reference."""
 N_DRAWS: Final = 1000
 SCORED_FROM: Final = "2026-11-21"

@@ -40,12 +40,8 @@ __all__ = [
     "write_stored",
 ]
 
-STORED_MODELS: Final = (
-    "fm_chronos_daily_ragged_ft",
-    "fm_chronos_weekly_ragged_ft",
-)
-"""The models whose German forecasts come from the store, both at the
-same checkpoint."""
+STORED_MODELS: Final = ("fm_chronos_daily_ragged_ft",)
+"""The models whose German forecasts come from the store."""
 
 STORE_BRANCH: Final = "germany-ft-forecasts"
 """The branch that holds the stored forecasts."""

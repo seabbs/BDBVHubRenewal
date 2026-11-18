@@ -2,11 +2,14 @@
 r"""The Chronos-2 foundation model on the hub target's releases.
 
 See the Foundation models methods page for the model.
-Each pair of a source (`SOURCES`) and a layout (`LAYOUTS`) is one
-registered model, `fm_chronos_<source>_<layout>`, and each source's
-ragged model with a fine-tuned checkpoint (`resolve_checkpoint`, the
-latest release unless `config/finetune.toml` pins one) is
-`fm_chronos_<source>_ragged_ft`. For the SI, `fm_chronos_<source>_ragged_real`
+The registered models all take one layout, the one fine-tuned on: the
+daily releases, with each place's weekly totals as a target row the
+weekly target is read from (`week_rows`). Each layout of the releases
+(`LAYOUTS`) is one model, `fm_chronos_daily_<layout>`, and the ragged
+model with a fine-tuned checkpoint (`resolve_checkpoint`, the latest
+release unless `config/finetune.toml` pins one) is
+`fm_chronos_daily_ragged_ft`. `FoundationModel` still takes the weekly
+releases as a source. For the SI, `fm_chronos_<source>_ragged_real`
 is the ragged model with the checkpoint fine-tuned on real data alone
 (the German development half and the public BDBV data to date,
 `scripts/finetune_realdata.py`), pinned in `config/finetune.toml` and
@@ -945,7 +948,8 @@ def _weekly_from_totals(
     """Return weekly draws `[S, L, W]` read from the total rows.
 
     A week whose Saturday is past the context takes its total row's draw
-    there; an earlier week takes its total summed from the daily counts.
+    there, no lower than the daily counts of that week already reported;
+    an earlier week takes its total summed from the daily counts.
     `drawn` is `[S, 2L, horizon]`, the count rows then the total rows.
     """
     n_places = period.totals.shape[0]
@@ -953,7 +957,8 @@ def _weekly_from_totals(
     for week in weeks:
         t = tri.times.index(week)
         if t >= start:
-            out.append(drawn[:, n_places:, t - start])
+            reported = tri.final[:, max(t - 6, 0) : t + 1].sum(axis=1)
+            out.append(np.maximum(drawn[:, n_places:, t - start], reported))
         else:
             total = np.nan_to_num(period.totals[:, t])
             out.append(np.broadcast_to(total, drawn[:, :n_places, 0].shape))
@@ -1297,23 +1302,26 @@ def native_sampler(
     return sample
 
 
-for _source in SOURCES:
-    for _layout in LAYOUTS:
-        _name = f"fm_chronos_{_source}_{_layout}"
-        register_model(
-            _name,
-            partial(FoundationModel, _name, _source, _layout),
-            f"Chronos-2 on the hub target's {_source} releases, {_layout} "
-            "layout, every target in one block.",
-            fitted=True,
-        )
+for _layout in LAYOUTS:
+    # One layout, the one fine-tuned on: the daily releases with each
+    # place's weekly totals as a target row, the weekly target read from it.
+    _name = f"fm_chronos_daily_{_layout}"
     register_model(
-        f"fm_chronos_{_source}_ragged_ft",
-        partial(_finetuned, f"fm_chronos_{_source}_ragged_ft", _source),
-        "Chronos-2 fine-tuned on simulated outbreaks, on the hub target's "
-        f"{_source} releases, ragged layout.",
+        _name,
+        partial(FoundationModel, _name, "daily", _layout, weekly_totals=True),
+        "Chronos-2 on the hub target's daily releases with each place's "
+        f"weekly totals as a target row, {_layout} layout, every target in "
+        "one block.",
         fitted=True,
     )
+register_model(
+    "fm_chronos_daily_ragged_ft",
+    partial(_finetuned, "fm_chronos_daily_ragged_ft", "daily"),
+    "Chronos-2 fine-tuned on simulated outbreaks, on the hub target's daily "
+    "releases with each place's weekly totals as a target row, ragged "
+    "layout.",
+    fitted=True,
+)
 
 
 def realdata_pinned(path: Path | str = FINETUNED_CONFIG) -> bool:
@@ -1337,7 +1345,7 @@ def register_realdata_models() -> None:
     The module registers them only once `realdata_pinned`, so while the
     pin is pending no store plan or backtest resolves their checkpoint.
     """
-    for source in SOURCES:
+    for source in ("daily",):
         name = f"fm_chronos_{source}_ragged_real"
         register_model(
             name,

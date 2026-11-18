@@ -259,30 +259,6 @@ jobs:
             run: >-
               uv run --group chronos bdbvhubrenewal germany-backtest
               --models fm_chronos_daily_complete --chunk 3/4 --out output/parts/germany
-          - cell: germany-fm_chronos_weekly_complete-0
-            model: fm_chronos_weekly_complete
-            germany: true
-            run: >-
-              uv run --group chronos bdbvhubrenewal germany-backtest
-              --models fm_chronos_weekly_complete --chunk 0/4 --out output/parts/germany
-          - cell: germany-fm_chronos_weekly_complete-1
-            model: fm_chronos_weekly_complete
-            germany: true
-            run: >-
-              uv run --group chronos bdbvhubrenewal germany-backtest
-              --models fm_chronos_weekly_complete --chunk 1/4 --out output/parts/germany
-          - cell: germany-fm_chronos_weekly_complete-2
-            model: fm_chronos_weekly_complete
-            germany: true
-            run: >-
-              uv run --group chronos bdbvhubrenewal germany-backtest
-              --models fm_chronos_weekly_complete --chunk 2/4 --out output/parts/germany
-          - cell: germany-fm_chronos_weekly_complete-3
-            model: fm_chronos_weekly_complete
-            germany: true
-            run: >-
-              uv run --group chronos bdbvhubrenewal germany-backtest
-              --models fm_chronos_weekly_complete --chunk 3/4 --out output/parts/germany
           - cell: germany-fm_chronos_daily_ragged-0
             model: fm_chronos_daily_ragged
             germany: true
@@ -307,30 +283,6 @@ jobs:
             run: >-
               uv run --group chronos bdbvhubrenewal germany-backtest
               --models fm_chronos_daily_ragged --chunk 3/4 --out output/parts/germany
-          - cell: germany-fm_chronos_weekly_ragged-0
-            model: fm_chronos_weekly_ragged
-            germany: true
-            run: >-
-              uv run --group chronos bdbvhubrenewal germany-backtest
-              --models fm_chronos_weekly_ragged --chunk 0/4 --out output/parts/germany
-          - cell: germany-fm_chronos_weekly_ragged-1
-            model: fm_chronos_weekly_ragged
-            germany: true
-            run: >-
-              uv run --group chronos bdbvhubrenewal germany-backtest
-              --models fm_chronos_weekly_ragged --chunk 1/4 --out output/parts/germany
-          - cell: germany-fm_chronos_weekly_ragged-2
-            model: fm_chronos_weekly_ragged
-            germany: true
-            run: >-
-              uv run --group chronos bdbvhubrenewal germany-backtest
-              --models fm_chronos_weekly_ragged --chunk 2/4 --out output/parts/germany
-          - cell: germany-fm_chronos_weekly_ragged-3
-            model: fm_chronos_weekly_ragged
-            germany: true
-            run: >-
-              uv run --group chronos bdbvhubrenewal germany-backtest
-              --models fm_chronos_weekly_ragged --chunk 3/4 --out output/parts/germany
           - cell: recovery-randomwalknowcast-0
             model: randomwalknowcast
             run: >-
@@ -516,26 +468,14 @@ jobs:
           - {model: fm_chronos_daily_complete, chunk: 1/4, group: chronos}
           - {model: fm_chronos_daily_complete, chunk: 2/4, group: chronos}
           - {model: fm_chronos_daily_complete, chunk: 3/4, group: chronos}
-          - {model: fm_chronos_weekly_complete, chunk: 0/4, group: chronos}
-          - {model: fm_chronos_weekly_complete, chunk: 1/4, group: chronos}
-          - {model: fm_chronos_weekly_complete, chunk: 2/4, group: chronos}
-          - {model: fm_chronos_weekly_complete, chunk: 3/4, group: chronos}
           - {model: fm_chronos_daily_ragged, chunk: 0/4, group: chronos}
           - {model: fm_chronos_daily_ragged, chunk: 1/4, group: chronos}
           - {model: fm_chronos_daily_ragged, chunk: 2/4, group: chronos}
           - {model: fm_chronos_daily_ragged, chunk: 3/4, group: chronos}
-          - {model: fm_chronos_weekly_ragged, chunk: 0/4, group: chronos}
-          - {model: fm_chronos_weekly_ragged, chunk: 1/4, group: chronos}
-          - {model: fm_chronos_weekly_ragged, chunk: 2/4, group: chronos}
-          - {model: fm_chronos_weekly_ragged, chunk: 3/4, group: chronos}
           - {model: fm_chronos_daily_ragged_ft, chunk: 0/4, group: chronos}
           - {model: fm_chronos_daily_ragged_ft, chunk: 1/4, group: chronos}
           - {model: fm_chronos_daily_ragged_ft, chunk: 2/4, group: chronos}
           - {model: fm_chronos_daily_ragged_ft, chunk: 3/4, group: chronos}
-          - {model: fm_chronos_weekly_ragged_ft, chunk: 0/4, group: chronos}
-          - {model: fm_chronos_weekly_ragged_ft, chunk: 1/4, group: chronos}
-          - {model: fm_chronos_weekly_ragged_ft, chunk: 2/4, group: chronos}
-          - {model: fm_chronos_weekly_ragged_ft, chunk: 3/4, group: chronos}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

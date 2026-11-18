@@ -318,8 +318,8 @@ def cmd_hub_id(args: argparse.Namespace) -> int:
     return 0
 
 
-CHRONOS_FT = ("fm_chronos_daily_ragged_ft", "fm_chronos_weekly_ragged_ft")
-"""The fine-tuned Chronos-2 models of seabbs-nowcastfm."""
+CHRONOS_FT = ("fm_chronos_daily_ragged_ft",)
+"""The fine-tuned Chronos-2 model of seabbs-nowcastfm."""
 
 
 def cmd_nowcast(args: argparse.Namespace) -> int:
