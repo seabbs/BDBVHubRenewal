@@ -97,7 +97,7 @@ Outputs are in `<RUN>/train/n<N>/`.
 
 ## 4. Score (`rules/score.smk`, `rules/followups.smk`)
 
-- `release_list`: the repository's releases, the only rule that reads the network; `task score` reruns it. The checkpoints scored are the slots ones first, then the others, oldest first, from `published_from`, or `score.labels`.
+- `release_list`: the repository's releases, the only rule that reads the network; `task score` and each tick rerun it in a run of its own before scoring, as Snakemake 9 ends a run after a forced checkpoint without the jobs it unlocks. The checkpoints scored are the slots ones first, then the others, oldest first, from `published_from`, or `score.labels`.
 - `bdbv_data`: the hub's data (`bdbvhubrenewal data`), or `task data`. Newer data reruns the BDBV units, which add only the new origins.
 - `score_bdbv`, `score_germany`, `score_heldout`: the units of `scripts/checkpoint_scores.py` for each checkpoint and the references. BDBV units run before German ones. Each caches one file per origin or date and resumes from it.
 - `score_table`: the rows of every checkpoint in `<SCORE_CACHE>/tables/`, keeping other rules' rows of the committed tables.
@@ -145,6 +145,8 @@ The workflow updates itself as results come in. Each machine runs its own target
 
 A tick (`task tick`, `workflow/scripts/tick.py`) runs the pool targets (`simulate`, `push`, `finetune`, `score`, `dashboard`) as one Snakemake run at nice 19 with the default profile and the machine's budget, so a free core or the GPU takes whichever queued job fits.
 When jobs compete, the trainer goes first (priority 20), then simulation (15), then checkpoint scoring (10 and below).
+Before it, the lists the pool plans from (the checkpoint releases, and on a machine without the rounds the batches it can have) are refreshed in a run of their own.
+A failed refresh leaves the last lists, and the pool still runs.
 The outward targets (`land`, `publish`, `release`) follow in their configured order.
 A failed run skips `land` and `release`, so `land` never follows a failed `score`, but `publish` still releases the checkpoints saved.
 A tick's run trains only the next segment (`next_segment_only`), so it ends after one segment and the next run plans afresh.

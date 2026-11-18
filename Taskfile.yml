@@ -270,10 +270,12 @@ tasks:
         vars: {WF_TARGET: publish}
 
   score:
-    desc: Score every released checkpoint (German, BDBV, held-out), then the slots check and aggregation rows
+    desc: Score every released checkpoint (German, BDBV, held-out), then the slots check and aggregation rows; the releases are listed afresh in a run of their own first
     cmds:
       - task: wf
-        vars: {WF_TARGET: "score --forcerun release_list"}
+        vars: {WF_TARGET: "release_list --forcerun release_list"}
+      - task: wf
+        vars: {WF_TARGET: score}
 
   land:
     desc: Commit the checkpoint score tables to evidence/ and push (writes to GitHub)

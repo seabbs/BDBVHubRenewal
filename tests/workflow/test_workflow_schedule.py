@@ -41,14 +41,15 @@ def test_the_pool_targets_are_one_snakemake_run():
         {"SCHEDULE_TARGETS": "simulate finetune score land publish"}
     )
     assert [t for t, _, _ in got] == [
+        "refresh",
         "simulate finetune score",
         "land",
         "publish",
     ]
-    pool = got[0][1]
+    pool = got[1][1]
     assert snakemake_targets(pool) == ["simulate", "finetune", "score"]
     assert pool.count("--workflow-profile") == 1
-    assert "release_list" in pool
+    assert "--forcerun" not in pool
 
 
 def test_the_outward_targets_keep_their_order_after_the_pool():
@@ -164,9 +165,9 @@ def test_the_listings_are_refreshed_in_a_run_of_their_own():
     )
     (name, refresh, _), (_, pool, _) = got[:2]
     assert name == "refresh"
-    assert snakemake_targets(refresh) == ["release_list", "available_batches"]
-    forced = refresh[refresh.index("--forcerun") + 1 :]
-    assert forced[:2] == ["release_list", "available_batches"]
+    lists = {"release_list", "available_batches"}
+    assert set(snakemake_targets(refresh)) == lists
+    assert set(refresh[refresh.index("--forcerun") + 1 :]) == lists
     assert "--forcerun" not in pool
 
 
@@ -203,4 +204,4 @@ def test_a_tick_without_finetune_sets_no_config():
 
 def test_a_step_says_whether_it_is_the_pool():
     got = schedule.plan({"SCHEDULE_TARGETS": "score land publish"})
-    assert [pool for _, _, pool in got] == [True, False, False]
+    assert [pool for _, _, pool in got] == [True, True, False, False]
