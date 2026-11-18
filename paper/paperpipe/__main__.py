@@ -181,7 +181,7 @@ def _figures(a: argparse.Namespace) -> None:
         a.main_dir,
         a.si_dir,
         split=_date(a.split),
-        crps_scores=_read(a.crps_scores),
+        crps_scores=None if a.crps_scores is None else _read(a.crps_scores),
         dummy=read_meta(a.meta)["source"] == "dummy",
         truth=_read(a.truth),
         nowcasts=json.loads(a.config)["nowcasts"],
@@ -250,7 +250,6 @@ def _score_tables(a: argparse.Namespace) -> None:
         a.main_dir,
         a.si_dir,
         split=_date(a.split),
-        crps_scores=_read(a.crps_scores),
         baseline=baseline_of(read_meta(a.meta)),
         after=a.realdata_after,
     )
@@ -334,7 +333,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("figures")
     _outputs(p)
-    p.add_argument("--crps-scores", type=Path, required=True)
+    p.add_argument("--crps-scores", type=Path, default=None)
     p.add_argument("--meta", type=Path, required=True)
     p.add_argument("--truth", type=Path, required=True)
     p.add_argument("--config", required=True, help="Workflow config as JSON.")
