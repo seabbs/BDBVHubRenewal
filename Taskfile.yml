@@ -323,9 +323,14 @@ tasks:
       - uv run --group paper pytest -q tests/workflow
 
   paper:
-    desc: Run the paper workflow (TARGET=development by default, or paper) and render the paper into docs/paper/, as CI does (scripts/paper.sh)
+    desc: Run the paper workflow (TARGET=development by default, or paper) and render the paper into docs/paper/, as CI does (scripts/paper.sh), niced on this machine's cores less its headroom, with start, done or FAILED lines; TARGET=paper waits for the held-out inputs and pins the newest checkpoint first
     cmds:
-      - CORES={{.CORES | default 4}} scripts/paper.sh {{.TARGET | default "development"}}
+      - uv run --group paper python workflow/scripts/paper_run.py {{.TARGET | default "development"}}
+
+  paper:targets:
+    desc: "Run single paper workflow targets the same way: task paper:targets -- TARGET..."
+    cmds:
+      - uv run --group paper python workflow/scripts/paper_run.py --targets {{.CLI_ARGS}}
 
   paper:render:
     desc: Alias of `task paper`

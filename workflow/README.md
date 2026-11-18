@@ -145,7 +145,7 @@ The workflow updates itself as results come in. Each machine runs its own target
 
 A tick (`task tick`, `workflow/scripts/tick.py`) runs the pool targets (`simulate`, `push`, `finetune`, `score`, `dashboard`) as one Snakemake run at nice 19 with the default profile and the machine's budget, so a free core or the GPU takes whichever queued job fits.
 When jobs compete, the trainer goes first (priority 20), then simulation (15), then checkpoint scoring (10 and below).
-The outward targets (`land`, `publish`, `release`) follow in their configured order.
+The outward targets (`land`, `publish`, `release`) follow in their configured order, and so does `paper`, the paper's own workflow (`task paper TARGET=paper`), which waits for its held-out inputs without failing.
 A failed run skips `land` and `release`, so `land` never follows a failed `score`, but `publish` still releases the checkpoints saved.
 Work that appears during a run, such as a new checkpoint or a landed round, waits for the next tick's run, so it waits at most as long as the longest running job.
 Snakemake locks the worktree it runs in, so each machine has one driver worktree.
