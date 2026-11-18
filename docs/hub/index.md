@@ -2,8 +2,9 @@
 
 Each week we submit forecasts to the [BDBV Modeling Hub](https://github.com/InsightNet-US/BDBV-Modeling-Hub).
 We evaluate every model against the random walk and the random walk nowcast on the hub's own releases, and compare them with the other hub teams.
+We submit the random walk nowcast as `seabbs-rwnowcast`, the first renewal model to pass its checks as `seabbs-renewal`, and the fine-tuned foundation model as `seabbs-nowcastfm` once it is opted in ([Submission workflow](../submission/workflow.md)).
 
-![The latest submitted nowcast](../assets/example-submission-nowcast.png)
+![An example submitted nowcast, from the 3 November 2026 dry run.](../assets/example-submission-nowcast.png)
 
 - [Nowcast](../nowcast.md): the current nowcast of every model.
 - [Backtest](../backtest.md): every model scored on past releases.
