@@ -176,3 +176,14 @@ def test_the_paper_is_not_a_tick_target():
     # into docs/, so it is run on purpose (`task paper`), not on a timer.
     with pytest.raises(ValueError, match="paper"):
         schedule.plan({"SCHEDULE_TARGETS": "score paper"})
+
+
+def test_a_tick_trains_one_segment_a_run():
+    got = schedule.plan({"SCHEDULE_TARGETS": "simulate finetune"})
+    pool = got[0][1]
+    assert pool[pool.index("--config") + 1] == "next_segment_only=True"
+
+
+def test_a_tick_without_finetune_sets_no_config():
+    got = schedule.plan({"SCHEDULE_TARGETS": "score"})
+    assert "--config" not in got[0][1]

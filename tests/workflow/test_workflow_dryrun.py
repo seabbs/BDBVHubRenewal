@@ -617,3 +617,16 @@ def test_a_no_bias_control_trains_in_its_own_folder(tmp_path):
     )
     jobs = dry(tmp_path, "finetune", config=NOBIAS)
     assert jobs["train_segment"] == 2
+
+
+def test_a_tick_trains_only_the_next_segment(tmp_path):
+    # So each run ends after one segment and the next run plans afresh:
+    # new rounds, new releases, a checkpoint to score.
+    jobs = dry(tmp_path, "finetune", config={**FT, "next_segment_only": True})
+    assert jobs["train_segment"] == 1
+
+
+def test_a_tick_after_n250_trains_n500(tmp_path):
+    _checkpoint(tmp_path, 250)
+    jobs = dry(tmp_path, "finetune", config={**FT, "next_segment_only": True})
+    assert jobs["train_segment"] == 1
