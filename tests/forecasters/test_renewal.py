@@ -87,6 +87,20 @@ def test_variants_are_registered_as_fitted_models() -> None:
         assert len(model_abbr_for(name)) < 16
 
 
+@pytest.mark.parametrize("name", ["renewal", "renewalbvd"])
+def test_renewal_model_fits_provinces_only_on_their_own(
+    task: ForecastTask, name: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def ran(*_: object) -> rn.RenewalRun:
+        raise AssertionError("fitted")
+
+    monkeypatch.setattr(rn.RenewalModel, "run", ran)
+    # `renewal` and `renewalbvd` fit zones (`ZoneRenewalModel`); the
+    # pooled province fit they replaced is gone.
+    with pytest.raises(ValueError, match="ZoneRenewalModel"):
+        rn.RenewalModel(rn.VARIANTS[name]).forecast_fit(task)
+
+
 def test_model_config_applies_overrides() -> None:
     # renewalsp fits one province's series, so the share at risk is fixed.
     single = rn.model_config(rn.VARIANTS["renewalsp"])
