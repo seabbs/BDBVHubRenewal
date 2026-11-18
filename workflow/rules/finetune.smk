@@ -28,6 +28,12 @@ if LOCAL["SIMS_FROM"]:
     FT["sims_from"] = LOCAL["SIMS_FROM"]
 RUN = LOCAL["RUN"]
 TRAIN = f"{RUN}/train"
+# The no-bias control is another run: it must not train into the slots
+# run's folder (RUN's default).
+if not FT["series_bias"] and Path(RUN) == Path(LOCAL["ROOT"], "checkpoints/slots"):
+    raise ValueError(
+        f"a no-bias run (series_bias false) needs its own RUN, not {RUN}"
+    )
 
 segments.check_chunks(FT["prefixes"], FT["chunk"], FT["outbreaks"])
 PREV = dict((n, p) for p, n in segments.segments(FT["prefixes"]))
