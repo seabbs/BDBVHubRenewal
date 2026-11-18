@@ -8,7 +8,7 @@ The models are named `fm_chronos_<source>_<layout>`, with two sources of the hub
 None is fitted to these data: Chronos-2 forecasts in context, from its pretrained weights or a fine-tuned checkpoint.
 The two `fm_chronos_<source>_ragged_ft` models are the ragged models with Chronos-2 fine-tuned on simulated outbreaks ([Fine-tuning](#fine-tuning)).
 Each is a candidate, not submitted.
-The hub model `seabbs-chronos2_ft` is set up to submit `fm_chronos_daily_ragged_ft` and is off until it is opted in ([Opting in](../submission/opting-in.md)).
+The hub model `seabbs-nowcastfm` is set up to submit `fm_chronos_daily_ragged_ft` and is off until it is opted in ([Opting in](../submission/opting-in.md)).
 
 In brief, each model:
 
