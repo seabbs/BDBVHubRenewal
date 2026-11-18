@@ -109,23 +109,47 @@ def test_cell_scores_equal_scoring_each_cell():
 
 
 def test_zone_truth_is_each_zone_week_in_the_first_release_d_days_on():
+    # CD-IT-10: first onset in the week ending 26 Sep, then the week ending
+    # 3 Oct; CD-IT-11: first onset in the week ending 3 Oct.
     daily_zones = pd.DataFrame(
         {
-            "vintage": ["2026-10-10", "2026-10-17", "2026-10-17"],
-            "location": ["CD-IT-10"] * 3,
-            "onset_date": ["2026-10-01", "2026-10-01", "2026-10-02"],
-            "observed": [1, 1, 1],
-            "imputed": [0, 0, 0],
+            "vintage": ["2026-10-10"] * 2 + ["2026-10-17"] * 4,
+            "location": ["CD-IT-10", "CD-IT-10", "CD-IT-10", "CD-IT-10",
+                         "CD-IT-10", "CD-IT-11"],
+            "onset_date": ["2026-09-22", "2026-10-01", "2026-09-22",
+                           "2026-10-01", "2026-10-02", "2026-10-01"],
+            "observed": [1, 1, 1, 1, 1, 1],
+            "imputed": [0, 0, 0, 0, 0, 0],
         }
-    )
+    )  # fmt: skip
     cutoffs = {"2026-10-10": "2026-10-09", "2026-10-17": "2026-10-16"}
     got = ck.zone_truth(daily_zones, cutoffs, ["CD-IT-10", "CD-IT-11"], 7)
     week = got.set_index(["location", "target_end_date"])
     # The week ending 3 Oct is due on 10 Oct: the 17 Oct release, 2 cases.
     assert week.loc[("CD-IT-10", "2026-10-03"), "truth"] == 2
     assert week.loc[("CD-IT-10", "2026-10-03"), "truth_vintage"] == "2026-10-17"
-    # A forecast zone with no onset in a release counts 0 there.
-    assert week.loc[("CD-IT-11", "2026-10-03"), "truth"] == 0
+    assert week.loc[("CD-IT-11", "2026-10-03"), "truth"] == 1
+    # Weeks before a zone's first report are not scored: no release
+    # reports the zone yet, so a 0 there would score every model as exact.
+    assert ("CD-IT-11", "2026-09-26") not in week.index
+    assert ("CD-IT-10", "2026-09-26") in week.index
+
+
+def test_zone_truth_counts_0_after_a_zones_first_report():
+    # CD-IT-10 reports in the week ending 26 Sep and nothing the week after.
+    daily_zones = pd.DataFrame(
+        {
+            "vintage": ["2026-10-17", "2026-10-17"],
+            "location": ["CD-IT-10", "CD-IT-11"],
+            "onset_date": ["2026-09-22", "2026-10-01"],
+            "observed": [1, 1],
+            "imputed": [0, 0],
+        }
+    )
+    cutoffs = {"2026-10-17": "2026-10-16"}
+    got = ck.zone_truth(daily_zones, cutoffs, ["CD-IT-10", "CD-IT-11"], 7)
+    week = got.set_index(["location", "target_end_date"])
+    assert week.loc[("CD-IT-10", "2026-10-03"), "truth"] == 0
 
 
 def _scores(models, checkpoints, levels, base=1.0):
