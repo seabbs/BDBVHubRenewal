@@ -74,12 +74,12 @@ from bdbvhubrenewal.evaluation.scoring import (
 from bdbvhubrenewal.forecasters.base import (
     ForecastModel,
     ForecastTask,
+    MissingSnapshots,
     ModelUnavailableError,
     add_national,
     get_model,
     list_models,
 )
-from bdbvhubrenewal.forecasters.chain import MissingSnapshots
 from bdbvhubrenewal.forecasters.renewal import DELAY_SUMMARY_FILE
 
 __all__ = [
@@ -744,7 +744,7 @@ class ReleaseForecasts:
 
     def write(self, out: Path | str) -> None:
         """Write the tables to `out` as `release-<table>.csv.gz`."""
-        from bdbvhubrenewal.data.tidy import write_csv
+        from bdbvhubrenewal.data.files import write_csv
 
         Path(out).mkdir(parents=True, exist_ok=True)
         for name in self._NAMES:

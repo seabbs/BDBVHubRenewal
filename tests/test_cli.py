@@ -351,7 +351,7 @@ def test_backtest_runs_only_the_named_scenarios(
 
 
 def test_concat_results_keeps_every_partial(tmp_path: Path) -> None:
-    from bdbvhubrenewal.data.tidy import write_csv
+    from bdbvhubrenewal.data.files import write_csv
 
     parts = [tmp_path / "falling", tmp_path / "flat"]
     for part in parts:
@@ -550,7 +550,7 @@ def test_score_scores_the_complete_target_on_the_truth_delay(
 def test_concat_results_keeps_one_copy_of_shared_tables(
     tmp_path: Path,
 ) -> None:
-    from bdbvhubrenewal.data.tidy import write_csv
+    from bdbvhubrenewal.data.files import write_csv
 
     parts = [tmp_path / "a", tmp_path / "b"]
     for part in parts:
@@ -587,7 +587,7 @@ def test_zone_backtest_of_a_skipped_block_writes_empty_files(
 
 
 def test_concat_results_skips_empty_parts(tmp_path: Path) -> None:
-    from bdbvhubrenewal.data.tidy import write_csv
+    from bdbvhubrenewal.data.files import write_csv
 
     parts = [tmp_path / "a", tmp_path / "b"]
     for part in parts:

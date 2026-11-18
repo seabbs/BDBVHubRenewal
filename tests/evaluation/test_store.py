@@ -21,7 +21,7 @@ from bdbvhubrenewal.evaluation.backtest import (
 )
 from bdbvhubrenewal.forecasters import ForecastTask, get_model
 from bdbvhubrenewal.forecasters.base import NATIONAL, SAMPLE_COLUMNS
-from bdbvhubrenewal.submission.fitting import Forecast
+from bdbvhubrenewal.forecasters.forecast import Forecast
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -89,6 +89,93 @@ def test_code_digest_keeps_its_key_when_modules_move(tmp_path: Path) -> None:
     steps = src / "steps.py"
     steps.write_text(steps.read_text() + "\n\ndef _f():\n    return 2\n")
     assert store.code_digest("randomwalk", root) != moved
+
+
+def _cut_defs(path: Path, names: set[str]) -> str:
+    """Remove top-level functions from a module; return their source."""
+    import ast
+
+    text = path.read_text()
+    lines = text.splitlines(keepends=True)
+    spans = [
+        (min([n.lineno, *(d.lineno for d in n.decorator_list)]), n.end_lineno)
+        for n in ast.parse(text).body
+        if isinstance(n, ast.FunctionDef) and n.name in names
+    ]
+    cut = "".join("".join(lines[a - 1 : b]) + "\n\n" for a, b in spans)
+    for a, b in sorted(spans, reverse=True):
+        del lines[a - 1 : b]
+    path.write_text("".join(lines))
+    return cut
+
+
+def test_code_digest_keeps_its_key_when_a_function_moves(
+    tmp_path: Path,
+) -> None:
+    # Splitting a module (WP2a) moves functions between files, with the
+    # third-party imports they use, so no stored fit refits.
+    root = _copy_repo(tmp_path)
+    src = root / "src/bdbvhubrenewal/forecasters"
+    before = store.code_digest("randomwalknowcast", root)
+    names = {"walk_noise", "walk_variance"}
+    cut = _cut_defs(src / "walk.py", names)
+    (src / "noise.py").write_text(
+        '"""Walk noise."""\n\nimport numpy as np\n\n'
+        '__all__ = ["walk_noise", "walk_variance"]\n\n\n' + cut
+    )
+    walk = src / "walk.py"
+    walk.write_text(
+        walk.read_text().replace('"walk_noise", "walk_variance"', "")
+    )
+    chain = src / "chain.py"
+    chain.write_text(
+        chain.read_text().replace(
+            "bdbvhubrenewal.forecasters.walk import walk_noise",
+            "bdbvhubrenewal.forecasters.noise import walk_noise",
+        )
+    )
+    assert store.code_digest("randomwalknowcast", root) == before
+
+
+def test_code_digest_keeps_its_key_when_a_module_moves_package(
+    tmp_path: Path,
+) -> None:
+    # The packages move (WP2b) puts modules in new packages that re-export
+    # them from `__init__.py`.
+    root = _copy_repo(tmp_path)
+    pkg = root / "src/bdbvhubrenewal"
+    before = store.code_digest("randomwalknowcast", root)
+    (pkg / "walks").mkdir()
+    (pkg / "forecasters/walk.py").rename(pkg / "walks/steps.py")
+    names = ["random_walk", "random_walks", "walk_noise", "walk_variance"]
+    (pkg / "walks/__init__.py").write_text(
+        '"""Random walks."""\n\n'
+        f"from bdbvhubrenewal.walks.steps import {', '.join(names)}\n\n"
+        f"__all__ = {names!r}\n"
+    )
+    for name in ("chain.py", "introductions.py", "randomwalk.py"):
+        path = pkg / "forecasters" / name
+        path.write_text(
+            path.read_text().replace(
+                "bdbvhubrenewal.forecasters.walk import",
+                "bdbvhubrenewal.walks import",
+            )
+        )
+    assert store.code_digest("randomwalknowcast", root) == before
+
+
+def test_code_digest_follows_third_party_imports(tmp_path: Path) -> None:
+    # Only the package's own import lines leave the key: the same names
+    # from another library are other code.
+    root = _copy_repo(tmp_path)
+    walk = root / "src/bdbvhubrenewal/forecasters/walk.py"
+    before = store.code_digest("randomwalknowcast", root)
+    walk.write_text(
+        walk.read_text().replace(
+            "import numpy as np\n", "import jax.numpy as np\n"
+        )
+    )
+    assert store.code_digest("randomwalknowcast", root) != before
 
 
 def test_code_digest_ignores_docstrings_and_comments(tmp_path: Path) -> None:

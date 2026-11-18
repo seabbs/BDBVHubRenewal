@@ -32,19 +32,17 @@ from functools import partial
 from pathlib import Path
 from typing import Any, Final
 
-import pandas as pd
-
 from bdbvhubrenewal.forecasters.base import (
     ForecastTask,
     check_samples,
     get_model,
 )
+from bdbvhubrenewal.forecasters.forecast import Forecast
 
 __all__ = [
     "DIAGNOSTICS_SCHEMA_VERSION",
     "FitConfig",
     "FitResult",
-    "Forecast",
     "get_config",
     "list_configs",
     "no_sampler_diagnostics",
@@ -61,27 +59,6 @@ DIAGNOSTICS_SCHEMA_VERSION: Final = 1
 
 FIT_RECORD: Final = "fit.json"
 """File in the fit directory recording what was fitted."""
-
-
-@dataclass(frozen=True)
-class Forecast:
-    """Samples from a fit, before the hub table is made.
-
-    Attributes
-    ----------
-    samples : pandas.DataFrame
-        Province samples, columns `SAMPLE_COLUMNS`.
-    unassigned : pandas.DataFrame or None
-        A modelled national component not assigned to any province, with
-        columns `target_end_date`, `sample` and `value`, or None.
-    modelled : tuple of str or None
-        The provinces the model reports, for `national.json`. None means
-        every province of the task.
-    """
-
-    samples: pd.DataFrame
-    unassigned: pd.DataFrame | None = None
-    modelled: tuple[str, ...] | None = None
 
 
 FitFn = Callable[[ForecastTask, Mapping[str, Any], Path], dict[str, Any]]

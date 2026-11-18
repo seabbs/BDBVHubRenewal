@@ -65,10 +65,10 @@ from bdbvhubrenewal.data.snapshots import SnapshotArrays, snapshot_arrays
 from bdbvhubrenewal.forecasters.base import (
     SAMPLE_COLUMNS,
     ForecastTask,
+    MissingSnapshots,
     register_model,
 )
 from bdbvhubrenewal.forecasters.chain import (
-    MissingSnapshots,
     NoCompleteWeek,
     Origin,
     Settings,

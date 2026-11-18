@@ -7,12 +7,11 @@ import pandas as pd
 import pytest
 
 from bdbvhubrenewal.data.releases import (
-    ORIGINAL_AS_OF,
     latest_onset_days,
     release_cutoff,
-    release_id,
     release_pairs,
 )
+from bdbvhubrenewal.data.tidy import ORIGINAL_AS_OF, release_id
 
 REWRITTEN = {
     "2026-08-19": "2026-08-18",
