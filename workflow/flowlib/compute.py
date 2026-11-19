@@ -46,13 +46,15 @@ MODES = ("single", "ssh")
 """The modes this module sets the pool of; any other `COMPUTE` names a
 profile, `workflow/profiles/<name>`, whose executor brings its own."""
 
-GROUPS = ("simulate", "train", "publish", "score", "any")
+GROUPS = ("simulate", "train", "evaluate", "publish", "score", "any")
 """The rule groups `WORKER_GROUPS` in the local config can place."""
 
 RULE_GROUPS = {
     "simulate_batch": "simulate",
     "epinowcast_lib": "simulate",
     "train_segment": "train",
+    "evaluate_steps": "evaluate",
+    "evaluate_checkpoint": "evaluate",
     "verify_checkpoint": "publish",
     "publish_checkpoint": "publish",
     "score_germany": "score",
@@ -63,7 +65,9 @@ RULE_GROUPS = {
 }
 """Each placed rule's group; any other rule is in `any`."""
 
-GPU_RULES = frozenset({"train_segment", "score_germany"})
+GPU_RULES = frozenset(
+    {"train_segment", "evaluate_steps", "evaluate_checkpoint", "score_germany"}
+)
 """The rules taking the `gpu` resource. Placed on a worker by their
 group, each also takes that worker's own `gpu_<worker>`, so the pooled
 GPUs are not shared across workers."""

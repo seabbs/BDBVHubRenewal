@@ -27,22 +27,41 @@ def test_history_takes_each_step_s_offloaded_losses(tmp_path):
         {"step": 0, "lr": {"lora": 1e-5}},
         {"step": 200, "loss": 0.5, "lr": {"lora": 9e-6}},
     ]
-    write(train / "evals" / "step-0000000.json", {
-        "step": 0, "held_out_loss": 0.4, "by_source": {"daily": 0.3},
-        "kinds": ["start"], "device": "cuda", "seconds": 1.0,
-    })
-    write(train / "evals" / "step-0000200.json", {
-        "step": 200, "eval_loss": 0.35, "kinds": ["monitor"],
-    })
-    write(train / "evals" / "step-0000400.json", {
-        "step": 400, "eval_loss": 0.3, "kinds": ["monitor"],
-    })
+    write(
+        train / "evals" / "step-0000000.json",
+        {
+            "step": 0,
+            "held_out_loss": 0.4,
+            "by_source": {"daily": 0.3},
+            "kinds": ["start"],
+            "device": "cuda",
+            "seconds": 1.0,
+        },
+    )
+    write(
+        train / "evals" / "step-0000200.json",
+        {
+            "step": 200,
+            "eval_loss": 0.35,
+            "kinds": ["monitor"],
+        },
+    )
+    write(
+        train / "evals" / "step-0000400.json",
+        {
+            "step": 400,
+            "eval_loss": 0.3,
+            "kinds": ["monitor"],
+        },
+    )
     got = evaluations.merged_history(history, train)
     assert got[0]["held_out_loss"] == 0.4
     assert got[0]["by_source"] == {"daily": 0.3}
     assert got[0]["lr"] == {"lora": 1e-5}
-    assert "device" not in got[0] and "kinds" not in got[0]
-    assert got[1]["eval_loss"] == 0.35 and got[1]["loss"] == 0.5
+    assert "device" not in got[0]
+    assert "kinds" not in got[0]
+    assert got[1]["eval_loss"] == 0.35
+    assert got[1]["loss"] == 0.5
     assert got[2] == {"step": 400, "eval_loss": 0.3}
     assert [h["step"] for h in got] == [0, 200, 400]
 
@@ -65,3 +84,14 @@ def test_start_loss_comes_from_step_0_else_an_earlier_checkpoint(tmp_path):
     assert evaluations.start_loss(train) == pytest.approx(0.41)
     write(train / "evals" / "step-0000000.json", {"held_out_loss": 0.40})
     assert evaluations.start_loss(train) == pytest.approx(0.40)
+
+
+def test_the_blocks_file_is_the_trainer_s():
+    import sys
+    from pathlib import Path
+
+    pytest.importorskip("torch")
+    sys.path.insert(0, str(Path(__file__).parents[2] / "scripts"))
+    import finetune_stream as fs
+
+    assert evaluations.HELD_OUT_BLOCKS == fs.HELD_OUT_BLOCKS

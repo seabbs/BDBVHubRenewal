@@ -101,8 +101,10 @@ finetune:
   eval_every: 200
   by_source_every: 200
   # Where the trainer's held-out evaluation runs: `local` (in the trainer)
-  # or `offload` (adapter snapshots for scripts/finetune_evaluate.py; no
-  # rule runs it yet, so offloaded checkpoints have no held-out losses).
+  # or `offload` (the trainer saves adapter snapshots and the `evaluate`
+  # rules score them after each segment, on whichever machine
+  # WORKER_GROUPS gives `evaluate`; rules/evaluate.smk). Training is the
+  # same either way.
   eval: local
   series_bias: true
   # The live r6 run's checkpoints carry this note, and the note is part of

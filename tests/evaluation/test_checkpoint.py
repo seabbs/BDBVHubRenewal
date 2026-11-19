@@ -312,6 +312,7 @@ def test_release_unit_writes_settings_and_release(tmp_path, monkeypatch):
     def fake(cmd, **_kw):
         class Out:
             stdout = json.dumps({"name": "n", "body": "b"})
+            returncode = 0
 
         if "download" in cmd:
             out = cmd[cmd.index("-O") + 1]

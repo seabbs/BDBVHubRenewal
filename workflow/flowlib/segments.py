@@ -57,16 +57,16 @@ def batch_priority(seed: int, base: float, seed_base: int) -> float:
     return base + 1 - (rank + 1) / (BATCH_SPAN + 1)
 
 
-def check_eval(mode: str) -> None:
-    """Raise if the trainer's evaluation is offloaded.
+EVAL_MODES = ("local", "offload")
+"""Where the trainer's held-out evaluation runs: in the trainer, or in the
+`evaluate` rules on whichever machine `WORKER_GROUPS` gives that group."""
 
-    No rule scores an offloaded run's snapshots yet, so its checkpoints
-    would have no held-out losses and could not be published.
-    """
-    if mode != "local":
+
+def check_eval(mode: str) -> None:
+    """Raise if `mode` is not one of `EVAL_MODES`."""
+    if mode not in EVAL_MODES:
         raise ValueError(
-            f"finetune.eval: {mode} needs rules that score the trainer's "
-            "snapshots, which the workflow does not have yet: use local"
+            f"finetune.eval: {mode} is not one of {', '.join(EVAL_MODES)}"
         )
 
 

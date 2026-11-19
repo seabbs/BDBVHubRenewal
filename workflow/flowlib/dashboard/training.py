@@ -16,6 +16,7 @@ from itertools import pairwise
 from pathlib import Path
 from typing import Any
 
+from ..evaluations import merged_history
 from .logs import CACHE, prefixes
 from .runs import Run
 
@@ -271,11 +272,17 @@ def sims_at(
 
 
 def history(run: Run) -> list:
-    """Return a run's logged history (`train/history.json`), if any."""
+    """Return a run's logged history (`train/history.json`), if any.
+
+    An offloaded run's held-out losses are merged in by step from
+    `train/evals/step-<k>.json` (`flowlib.evaluations.merged_history`).
+    """
     if run.folder is None:
         return []
     got = CACHE.get(run.folder / "train" / "history.json")
-    return got if isinstance(got, list) else []
+    return merged_history(
+        got if isinstance(got, list) else [], run.folder / "train"
+    )
 
 
 PARTS = ("nowcast", "forecast")

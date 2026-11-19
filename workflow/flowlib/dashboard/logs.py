@@ -18,6 +18,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from ..evaluations import SIDECAR, checkpoint_settings
+
 STEP = re.compile(
     r"^(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d) \[train\] step (\d+): "
     r"loss ([\d.eE+-]+), held-out \([^)]*\) ([\d.eE+-]+)"
@@ -231,6 +233,8 @@ def checkpoints(folder: Path | str) -> list[tuple[str, dict, float | None]]:
     for d in sorted(Path(folder).glob("train/n*"), key=lambda p: _size(p.name)):
         s = CACHE.get(d / "settings.json")
         if isinstance(s, dict):
+            # An offloaded checkpoint's held-out losses (its sidecar).
+            s = checkpoint_settings(d) if (d / SIDECAR).exists() else s
             try:
                 mtime = (d / "settings.json").stat().st_mtime
             except OSError:

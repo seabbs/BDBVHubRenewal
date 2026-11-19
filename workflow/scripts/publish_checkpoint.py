@@ -5,12 +5,15 @@
 CHECKPOINT is a run's `n<N>/` folder. A checkpoint with the series bias
 is released as `chronos-slots-<hash>`, else `chronos-ft-<hash>`, as
 scripts/finetune_stream.py did with `--publish`. Safe to run again: a
-release whose sums match is left as it is. OUT records the tag.
+release whose sums match is left as it is. An offloaded checkpoint's
+held-out losses (`held-out.json`, rules/evaluate.smk) are uploaded to its
+release beside its settings. OUT records the tag.
 """
 
 from __future__ import annotations
 
 import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -32,6 +35,13 @@ def main() -> None:
     key = settings["hash"]
     spec = f"{SLOTS_PREFIX}{key}" if settings.get("series_bias") else key
     fs.publish(where, spec)
+    sidecar = where / "held-out.json"
+    if sidecar.exists():
+        subprocess.run(
+            ["gh", "release", "upload", release_tag(spec), str(sidecar),
+             "--clobber", "-R", fs.REPO],
+            check=True,
+        )  # fmt: skip
     out.write_text(json.dumps({"tag": release_tag(spec), "hash": key}) + "\n")
 
 

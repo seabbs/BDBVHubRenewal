@@ -362,18 +362,6 @@ def test_publish_releases_slots_checkpoints_apart(tmp_path):
     assert create[3] == "chronos-slots-abc"
 
 
-def test_publish_adds_an_offloaded_checkpoint_s_held_out_losses(tmp_path):
-    from finetune_stream import publish
-
-    where = _checkpoint(tmp_path)
-    (where / "held-out.json").write_text('{"held_out_loss": 0.2}')
-    gh = _Gh()
-    publish(where, "abc", run=gh)
-    assert "held-out.json" in gh.assets
-    sums = (where / "sha256sums.txt").read_text()
-    assert "held-out.json" in sums
-
-
 def test_publish_uploads_only_missing_assets(tmp_path):
     from finetune_stream import publish
 

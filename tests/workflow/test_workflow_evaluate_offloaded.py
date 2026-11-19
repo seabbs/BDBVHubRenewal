@@ -1,4 +1,4 @@
-"""The runner the evaluation rules call (workflow/scripts/evaluate_offloaded.py)."""
+"""The runner of the evaluation rules (evaluate_offloaded.py)."""
 
 import importlib.util
 import json
@@ -63,7 +63,8 @@ def test_steps_scores_each_pending_snapshot_once(tmp_path, fake):
     assert calls["loads"] == 1
     assert len(calls["evals"]) == 2
     got = json.loads((train / "evals" / "step-0000200.json").read_text())
-    assert got["step"] == 200 and got["eval_loss"] == 0.3
+    assert got["step"] == 200
+    assert got["eval_loss"] == 0.3
     mod.main(["steps", str(train), "--device", "cpu"])
     assert len(calls["evals"]) == 2
 
