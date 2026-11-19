@@ -725,6 +725,18 @@ def test_a_fresh_listing_keeps_the_checkpoints_saved(tmp_path):
     assert jobs["train_segment"] == 1
 
 
+def test_each_run_lists_the_batches_afresh(tmp_path):
+    # A list written by an earlier run, when round 2 had 13 batches, must
+    # not cap a later run once the rounds host has the whole round.
+    local = _rounds_host(
+        tmp_path, {1: range(30100, 30140), 2: range(30200, 30240)}
+    )
+    _released(tmp_path, [*range(30100, 30140), *range(30200, 30213)])
+    jobs = dry(tmp_path, "finetune", config=REMOTE)
+    assert local.exists()
+    assert jobs["train_segment"] == 2
+
+
 def test_a_no_bias_config_still_simulates_in_the_default_folder(tmp_path):
     # The guard is the trainer's: other targets run as before.
     jobs = dry(tmp_path, "simulate", config={**NOBIAS, "rounds": [4]})
