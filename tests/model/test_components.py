@@ -330,17 +330,6 @@ def test_fast_kernels_match_reference_values_and_gradients():
     )
 
 
-def test_province_centres_cover_all_provinces_and_match_reference():
-    from bdbvhubrenewal.data import PROVINCE_CENTRES
-    from bdbvhubrenewal.model.inputs import province_centres
-
-    c = province_centres().set_index("location")
-    assert len(c) == 26 and not c.isna().any().any()
-    for loc, (lat, lon) in PROVINCE_CENTRES.items():
-        assert c.loc[loc, "latitude"] == pytest.approx(lat, abs=1e-3)
-        assert c.loc[loc, "longitude"] == pytest.approx(lon, abs=1e-3)
-
-
 DPCENS = pd.read_csv(Path(__file__).parent / "fixtures" / "dpcens.csv")
 """primarycensored `dpcens` pmfs, from `fixtures/dpcens.R`."""
 

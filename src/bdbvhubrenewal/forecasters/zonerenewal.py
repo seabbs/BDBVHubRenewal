@@ -47,6 +47,8 @@ from bdbvhubrenewal.forecasters.renewal import (
     report_cutoffs,
     run_nuts,
     samples_table,
+    task_imputation_delay,
+    task_places,
 )
 
 __all__ = [
@@ -295,7 +297,7 @@ def zone_vintage_inputs(
         The model inputs.
     """
     from bdbvhubrenewal.data.releases import release_pairs
-    from bdbvhubrenewal.model.zones import zone_table, zone_vintage_from_tables
+    from bdbvhubrenewal.model.zones import zone_vintage_from_tables
 
     pairs = None
     if task.delay_history is not None:
@@ -305,13 +307,48 @@ def zone_vintage_inputs(
         task.delays,
         task.vintage,
         tuple(task.locations),
-        zone_table(tuple(task.locations)),
+        _zone_places(task),
         config,
         horizon_weeks(task),
         tuple(task.mask),
         bvd=bvd,
         release_pairs=pairs,
+        imputation_delay=task_imputation_delay(task),
     )
+
+
+def _zone_places(task: ForecastTask) -> pd.DataFrame:
+    """Return the places of a zone task's zones, in its order.
+
+    A zone the task's places lack takes its province's centre and the
+    mean population of the province's zones that have places, or the
+    median zone's where none do.
+    """
+    from bdbvhubrenewal.data.hierarchy import is_zone, province_of
+
+    places = task_places(task).set_index("location")
+    zones = places.loc[places.index.map(is_zone)]
+    missing = [z for z in task.locations if z not in places.index]
+    if missing:
+        parents = [province_of(z) for z in missing]
+        absent = sorted(set(parents) - set(places.index))
+        if absent:
+            raise ValueError(f"No places for provinces {absent}.")
+        by_province = zones.groupby(zones.index.map(province_of))[
+            "population"
+        ].mean()
+        median = zones["population"].median()
+        centres = places.loc[parents, ["latitude", "longitude"]]
+        extra = pd.DataFrame(
+            {
+                "population": [by_province.get(p, median) for p in parents],
+                "latitude": centres["latitude"].to_numpy(),
+                "longitude": centres["longitude"].to_numpy(),
+            },
+            index=pd.Index(missing, name="location"),
+        )
+        places = pd.concat([places, extra])
+    return places.loc[list(task.locations)].reset_index()
 
 
 @dataclass(frozen=True)

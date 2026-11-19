@@ -67,7 +67,12 @@ from bdbvhubrenewal.data.hierarchy import is_zone
 from bdbvhubrenewal.data.releases import cutoff_lags
 from bdbvhubrenewal.data.simulate import SCENARIO_RT_SCALE
 from bdbvhubrenewal.data.snapshots import weekly_counts
-from bdbvhubrenewal.data.zones import ZoneData, hub_zones, load_zone_data
+from bdbvhubrenewal.data.zones import (
+    ZoneData,
+    hub_places,
+    hub_zones,
+    load_zone_data,
+)
 from bdbvhubrenewal.devices import host_devices
 from bdbvhubrenewal.evaluation import backtest as bt
 from bdbvhubrenewal.evaluation import store, store_archive
@@ -745,6 +750,7 @@ def _task(args: argparse.Namespace) -> tuple[ForecastTask, list[str]]:
         args.vintage,
         args.reference_date,
         zones=_zone_data(args.data),
+        places=hub_places(args.data),
     )
 
 
@@ -756,15 +762,17 @@ def _round_task(
     vintage: str | None,
     reference_date: str | None,
     zones: ZoneData | None = None,
+    places: pd.DataFrame | None = None,
 ) -> tuple[ForecastTask, list[str]]:
     """Build a round's task, moved to `reference_date` if one is given.
 
-    `zones` puts the health zones in the task, for models that read them.
+    `zones` puts the health zones in the task, for models that read them,
+    and `places` its places (`ForecastTask.places`).
     """
     real = target.loc[target["kind"] == "real"]
     vintage = _vintage([str(v) for v in real["vintage"].unique()], vintage)
     task, note = bt.vintage_task(
-        target, delays, config, vintage, daily, zones=zones
+        target, delays, config, vintage, daily, zones=zones, places=places
     )
     notes = [note] if note else []
     if reference_date and as_date(reference_date) != task.reference_date:

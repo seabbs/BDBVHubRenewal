@@ -512,6 +512,38 @@ def bvd_record(release: BvdRelease | None) -> dict[str, Any]:
     return record
 
 
+def _required(task: ForecastTask, name: str) -> Any:
+    """Return a task field the renewal models need, or raise."""
+    value = getattr(task, name)
+    if value is None:
+        raise ValueError(f"The task at {task.vintage} carries no {name}.")
+    return value
+
+
+def task_places(task: ForecastTask) -> pd.DataFrame:
+    """Return the task's places (`ForecastTask.places`).
+
+    Raises
+    ------
+    ValueError
+        If the task carries none.
+    """
+    places: pd.DataFrame = _required(task, "places")
+    return places
+
+
+def task_imputation_delay(task: ForecastTask) -> np.ndarray:
+    """Return the task's imputation delay (`ForecastTask.imputation_delay`).
+
+    Raises
+    ------
+    ValueError
+        If the task carries none.
+    """
+    pmf: np.ndarray = _required(task, "imputation_delay")
+    return pmf
+
+
 def vintage_inputs(
     task: ForecastTask,
     config: Any,
@@ -533,8 +565,8 @@ def vintage_inputs(
     config : bdbvhubrenewal.model.ModelConfig
         The model configuration.
     table : pandas.DataFrame, optional
-        The locations table (populations). Defaults to
-        `bdbvhubrenewal.data.load_locations()`.
+        The places (populations and centres). Defaults to the task's
+        (`ForecastTask.places`).
     bvd : pandas.DataFrame, optional
         BVDOutbreakSize rows (`bvd_rows`), for a variant with the BVD
         term. Without them that variant is the main model.
@@ -544,7 +576,6 @@ def vintage_inputs(
     bdbvhubrenewal.model.Vintage
         The model inputs.
     """
-    from bdbvhubrenewal.data import load_locations
     from bdbvhubrenewal.data.releases import release_pairs
     from bdbvhubrenewal.model.inputs import vintage_from_tables
 
@@ -556,12 +587,13 @@ def vintage_inputs(
         task.delays,
         task.vintage,
         tuple(task.locations),
-        load_locations() if table is None else table,
+        task_places(task) if table is None else table,
         config,
         horizon_weeks(task),
         tuple(task.mask),
         bvd=bvd,
         release_pairs=pairs,
+        imputation_delay=task_imputation_delay(task),
     )
 
 
@@ -1175,6 +1207,7 @@ class RenewalModel:
     progress: Path | None = None
     supports_mask: bool = field(init=False, default=True)
     reads_zones: ClassVar[bool] = True
+    reads_places: ClassVar[bool] = True
     name: str = field(init=False)
     fit_diagnostics: list[dict[str, Any]] = field(
         init=False, default_factory=list

@@ -12,6 +12,7 @@ from bdbvhubrenewal.data import (  # noqa: E402
     PROVINCE_CENTRES,
     PROVINCE_POPULATIONS,
 )
+from bdbvhubrenewal.data.delays import hub_delay_pmf  # noqa: E402
 from bdbvhubrenewal.data.simulate import simulate_outbreak  # noqa: E402
 from bdbvhubrenewal.model import MAIN  # noqa: E402
 from bdbvhubrenewal.model.inputs import vintage_from_tables  # noqa: E402
@@ -59,7 +60,12 @@ def sim_vintage(outbreak, sim_tables, table):
     day = VINTAGE_DAYS[-1]
     target, delays = sim_tables[day]
     return vintage_from_tables(
-        target, delays, vintage_date(outbreak, day), SIM_LOCATIONS, table
+        target,
+        delays,
+        vintage_date(outbreak, day),
+        SIM_LOCATIONS,
+        table,
+        imputation_delay=hub_delay_pmf(vintage_date(outbreak, day)),
     )
 
 

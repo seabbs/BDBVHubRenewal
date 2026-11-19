@@ -60,6 +60,7 @@ import pandas as pd
 
 from bdbvhubrenewal.data import load_daily, load_delays, load_target
 from bdbvhubrenewal.data.files import write_csv
+from bdbvhubrenewal.data.hierarchy import is_zone
 from bdbvhubrenewal.data.zones import ZoneData, load_zone_data
 from bdbvhubrenewal.evaluation.backtest import (
     BacktestConfig,
@@ -158,6 +159,10 @@ with no new release is forecast from the last release's stored fit."""
 ZONE_FIELDS: Final = ("zone_history", "zone_daily_history", "zone_codes")
 """Task fields in the fit key of a model only if it reads zones
 (`reads_zones`), so zone data never refits the others."""
+
+PLACE_FIELDS: Final = ("imputation_delay", "places")
+"""Task fields in the fit key of a model only if it reads them
+(`reads_places`)."""
 
 COMMIT_FILE: Final = ".commit"
 """The store branch commit, written by `scripts/fit-store.sh fetch`."""
@@ -393,6 +398,9 @@ def _export(root: str, lock: str) -> str:
             "--no-header",
             "--no-emit-project",
             "--no-emit-workspace",
+            # No `# via <package>` lines, which name the workspace's own
+            # packages and would change every key when modules move.
+            "--no-annotate",
         ],
         cwd=root,
         capture_output=True,
@@ -412,7 +420,8 @@ def code_digest(model: str, root: Path | str = ".") -> str:
     and functions moved between files keep the key. The functions of the store
     and the backtest a fit runs (`FIT_FUNCTIONS`) are hashed the same
     way, read from `root`, with the Python minor version.
-    The dependencies are `uv export --no-dev --all-extras` of `uv.lock`.
+    The dependencies are `uv export --no-dev --all-extras --no-annotate`
+    of `uv.lock`.
 
     Parameters
     ----------
@@ -544,6 +553,7 @@ def fit_key(model: ForecastModel, task: ForecastTask, code: str) -> str:
     """
     digest = hashlib.sha256()
     zones = getattr(model, "reads_zones", False)
+    reads_places = getattr(model, "reads_places", False)
     head = {
         "model": _settings(model),
         "code": code,
@@ -557,7 +567,11 @@ def fit_key(model: ForecastModel, task: ForecastTask, code: str) -> str:
     for f in fields(task):
         if f.name in ZONE_FIELDS and not zones:
             continue
+        if f.name in PLACE_FIELDS and not reads_places:
+            continue
         value = getattr(task, f.name)
+        if f.name == "places" and value is not None and not zones:
+            value = value.loc[~value["location"].map(is_zone)]
         digest.update(f.name.encode())
         if isinstance(value, pd.DataFrame):
             digest.update(value.to_csv(index=False).encode())
