@@ -160,7 +160,12 @@ def test_the_province_model_is_the_zone_model_one_place_a_patch(
     day = VINTAGE_DAYS[-1]
     target, delays = sim_tables[day]
     province = vintage_from_tables(
-        target, delays, vintage_date(outbreak, day), places, table
+        target,
+        delays,
+        vintage_date(outbreak, day),
+        places,
+        table,
+        imputation_delay=hub_delay_pmf(vintage_date(outbreak, day)),
     )
     patched = single_patch(province)
     assert patched.parents.tolist() == list(range(len(places)))
