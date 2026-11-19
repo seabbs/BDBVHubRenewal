@@ -376,8 +376,9 @@ gt <- gt_pmf_r7(v$gt_mean, d$gt_shape)
 run <- r7_onsets(100L, gt, strata, d, v)
 a <- run$values$ascertainment
 cat("range", all(a > 0 & a < 1) && length(a) == 2, "\\n")
+pmfs <- lapply(run$values$incubation_mean, incubation_pmf)
 cat("scaled", isTRUE(all.equal(
-  run$onsets, sweep(run$infections, 2, a, `*`))), "\\n")
+  run$onsets, sweep(convolve_rows(run$infections, pmfs), 2, a, `*`))), "\\n")
 """,
                 tmp_path,
             )
@@ -513,3 +514,31 @@ cat("rep", paste(f$reporting_strata, collapse = ";"), "\\n")
     )
     assert out["obs"] == "shared;pooled;independent"
     assert out["rep"] == "shared;pooled;independent"
+
+
+@needs_rscript
+def test_every_r7_cell_gives_finite_onsets_over_its_whole_range(tmp_path):
+    out = values_of(
+        values(
+            run_r7(
+                """
+set.seed(10)
+bad <- 0L
+for (g in 0:299) {
+  d <- draw_design(g)
+  v <- draw_cell_values(d)
+  strata <- CJ(place = sprintf("P%02d", seq_len(d$n_places)),
+    age = sprintf("A%d", seq_len(d$n_ages)))
+  strata[, .group := .I]
+  gt <- gt_pmf_r7(v$gt_mean, d$gt_shape)
+  n <- 7L * (v$weeks + v$max_delay %/% 7L + 4L) - length(gt)
+  run <- tryCatch(r7_onsets(n, gt, strata, d, v), error = function(e) NULL)
+  if (!is.null(run) && !all(is.finite(run$onsets))) bad <- bad + 1L
+}
+cat("bad", bad, "\\n")
+""",
+                tmp_path,
+            )
+        )
+    )
+    assert out["bad"] == "0"

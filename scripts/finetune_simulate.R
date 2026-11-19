@@ -1643,7 +1643,12 @@ factors_r7 <- c(
     ),
     reporting = c(rep("daily", 7), rep("weekdays", 3)),
     bunching = c(rep("no", 17), rep("yes", 3)),
-    revisions = c(rep("no", 7), rep("yes", 3))
+    revisions = c(rep("no", 7), rep("yes", 3)),
+    # How layer 2's (observation) and layer 4's (reporting system)
+    # per-stratum values vary across places and ages (`stratum_values`).
+    # Layer 3's reporting delays keep r6's `delay_places`.
+    observation_strata = c("shared", "pooled", "independent"),
+    reporting_strata = c("shared", "pooled", "independent")
   )
 )
 
@@ -1725,6 +1730,12 @@ r7_distributions <- list(
   import_at = list("beta", a = 2, b = 2, lower = 0, upper = 1,
     why = "import pulses away from the ends"),
   # Layer 2: observation.
+  incubation_mean = list("lognormal", median = 5, sdlog = 0.5,
+    why = "infection to onset, test or admission in about 2 to 13 days"),
+  pool_z = list("normal", mean = 0, sd = 1,
+    why = "a stratum's deviation from the shared value, scaled by tau"),
+  pool_tau = list("halfnormal", scale = 0.3,
+    why = "pooled strata within about x0.5 to x2 of the shared value"),
   ascertainment = list("beta", a = 1.8, b = 4.2, lower = 0, upper = 1,
     why = "a stratum reports about 5% to 70% of its infections"),
   # Layer 3: reporting delays.
@@ -1783,7 +1794,50 @@ daily_walk <- function(days, walk) {
   x <- days / 7
   w <- floor(x)
   f <- x - w
-  walk[w + 1] * (1 - f) + walk[pmin(w + 2, length(walk))] * f
+  n <- length(walk)
+  walk[pmin(w + 1, n)] * (1 - f) + walk[pmin(w + 2, n)] * f
+}
+
+# Per-stratum values of setting `name` for `n` strata, as `structure`
+# says: shared (one value), pooled (the shared value times
+# LogNormal(0, tau), tau half-normal; on the logit scale for a
+# `probability`) or independent (each its own draw).
+stratum_values <- function(structure, n, name, probability = FALSE) {
+  switch(structure,
+    shared = rep(draw_setting(name), n),
+    pooled = {
+      shared <- draw_setting(name)
+      dev <- draw_setting("pool_tau") * draw_setting("pool_z", n)
+      if (probability) plogis(qlogis(shared) + dev) else shared * exp(dev)
+    },
+    independent = draw_setting(name, n),
+    stop("unknown strata structure ", structure)
+  )
+}
+
+# The infection-to-reference-event delay (incubation, or infection to
+# test or admission) on 0, 1, ... days: a discretised gamma with CV 0.5
+# and mean `mean`, to its 99.9% quantile.
+incubation_pmf <- function(mean) {
+  shape <- 4
+  q <- qgamma(0.999, shape, shape / mean)
+  pmf <- diff(pgamma(0:max(1L, as.integer(ceiling(q))), shape, shape / mean))
+  pmf / sum(pmf)
+}
+
+# Each column of `x` (days by strata) convolved with its own pmf in
+# `pmfs` on delays 0, 1, ...
+convolve_rows <- function(x, pmfs) {
+  out <- matrix(0, nrow(x), ncol(x))
+  for (j in seq_len(ncol(x))) {
+    p <- pmfs[[j]]
+    for (d in seq_along(p) - 1L) {
+      if (d >= nrow(x)) break
+      rows <- (d + 1L):nrow(x)
+      out[rows, j] <- out[rows, j] + p[d + 1L] * x[rows - d, j]
+    }
+  }
+  out
 }
 
 # The continuous settings of a simulation in the grid it runs.
@@ -1813,7 +1867,8 @@ draw_values_r7 <- function(design) {
   v$waves <- 2L + rpois(1, 0.5)
   v$wave_scale <- draw_setting("wave_scale", v$waves + 1L)
   v$flip_days <- draw_setting("flip_days")
-  v$walk_r <- r7_walk(v$weeks + 2L)
+  # Weeks of the series, the longest delay (12 weeks) and the horizon.
+  v$walk_r <- r7_walk(v$weeks + 18L)
   v$control_days <- draw_setting("control_days")
   v$r_drift <- if (!endemic && rbinom(1, 1, 0.3) == 1) {
     draw_setting("r_drift")
@@ -1842,8 +1897,12 @@ draw_values_r7 <- function(design) {
   v$mixing_switch_days <- 7L + rpois(1, 7)
   v$import_at <- sort(draw_setting("import_at", 1L + rpois(1, 1)))
   # Layer 2: observation.
-  v$ascertainment <- draw_setting(
-    "ascertainment", design$n_places * design$n_ages
+  n_s <- design$n_places * design$n_ages
+  v$ascertainment <- stratum_values(
+    design$observation_strata, n_s, "ascertainment", probability = TRUE
+  )
+  v$incubation_mean <- stratum_values(
+    design$observation_strata, n_s, "incubation_mean"
   )
   # Layer 3: reporting delays.
   v$delay_cv <- 1 / sqrt(draw_setting("delay_shape"))
@@ -1866,9 +1925,13 @@ draw_values_r7 <- function(design) {
   v$shock_at <- draw_setting("shock_at", n_shocks)
   v$shock_weeks <- 1L + rpois(n_shocks, 1)
   v$shock_mult <- draw_setting("shock_mult", n_shocks)
-  v$revise_over <- draw_setting("revise_over")
-  v$revise_move <- draw_setting("revise_move")
-  v$revise_keep <- draw_setting("revise_keep")
+  v$revise_over <- stratum_values(
+    design$reporting_strata, n_s, "revise_over", probability = TRUE
+  )
+  v$revise_move <- stratum_values(
+    design$reporting_strata, n_s, "revise_move", probability = TRUE
+  )
+  v$revise_keep <- stratum_values(design$reporting_strata, n_s, "revise_keep")
   v
 }
 
@@ -2078,16 +2141,18 @@ r7_onsets <- function(n, gt, strata, design, v) {
   )
   v$stratum_population <- population
   v$attack <- sum(run$infections[, active]) / sum(population[active])
+  # Layer 2: infections to reference events, then ascertained.
   asc <- v$ascertainment[strata$.group]
+  pmfs <- lapply(v$incubation_mean[strata$.group], incubation_pmf)
   list(
-    onsets = sweep(run$infections, 2, asc, `*`),
+    onsets = sweep(convolve_rows(run$infections, pmfs), 2, asc, `*`),
     infections = run$infections,
     values = v
   )
 }
 
 # Revisions (layer 4) on counts by report date (`mean`, as
-# `simulate_outbreak` builds them): cases reported in error (a Poisson
+# `simulate_outbreak` builds them), with each stratum's rates: cases reported in error (a Poisson
 # share `revise_over` of each count) stay in the releases for
 # `revise_keep` days and are then removed; cases filed under a nearby
 # reference day (a binomial share `revise_move`, 1 + Poisson(1) days
@@ -2098,12 +2163,15 @@ r7_onsets <- function(n, gt, strata, design, v) {
 revise_counts <- function(pp, v) {
   last <- max(pp$report_date)
   first <- min(pp$reference_date)
-  keep <- max(1L, as.integer(round(v$revise_keep)))
+  group <- if (".group" %in% names(pp)) pp[mean > 0, .group] else NULL
   base <- pp[mean > 0, .(draw, location, reference_date, report_date, mean)]
   n <- nrow(base)
+  # Each stratum's rates (`.group`), or the one rate if no strata given.
+  rate <- function(x) if (is.null(group)) rep(x[1], n) else x[group]
+  keep <- pmax(1L, as.integer(round(rate(v$revise_keep))))
   later <- pmin(base$report_date + keep, last)
-  err <- rpois(n, v$revise_over * base$mean)
-  moved <- rbinom(n, base$mean, v$revise_move)
+  err <- rpois(n, rate(v$revise_over) * base$mean)
+  moved <- rbinom(n, base$mean, rate(v$revise_move))
   shift <- (2L * rbinom(n, 1, 0.5) - 1L) * (1L + rpois(n, 1))
   to <- pmin(pmax(base$reference_date + shift, first), base$report_date)
   at <- function(ref, rep, x) {
