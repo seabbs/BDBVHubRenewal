@@ -159,6 +159,8 @@ FT = {
     "finetune": {
         "prefixes": [250, 500],
         "outbreaks": 500,
+        # The fixtures' own chunks, whatever the run's.
+        "chunk": 250,
         "rounds": [2],
         "validation_round": 1,
         "sims_from": "local",

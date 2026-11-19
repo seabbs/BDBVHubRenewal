@@ -64,10 +64,13 @@ simulate:
 
 finetune:
   # The continuous run, one training
-  # segment per prefix (`--until`), in <RUN>/train/n<N>/. It trains on
-  # 8,400 outbreaks, ten of grid r6's balanced blocks of 840.
-  prefixes: [250, 500, 750, 1000, 2000, 4000, 8400]
-  outbreaks: 8400
+  # segment per prefix (`--until`), in <RUN>/train/n<N>/. Every
+  # fine-tuned setting trains on the same 3,200 simulations, so they
+  # compare fairly (about 11.5 hours on the laptop with the loss horizon
+  # and quiet rule below and evaluation offloaded), with checkpoints
+  # doubling from 100.
+  prefixes: [100, 200, 400, 800, 1600, 3200]
+  outbreaks: 3200
   # Training seeds: the rounds' batches in seed order, or a fixed list
   # from `seed_file` (one seed a line, in order). The validation round is
   # one whole grid block, and the ten rounds after it the ten blocks
@@ -97,12 +100,12 @@ finetune:
   # Days after the cut-off a training block's horizon, and so the loss,
   # runs to (null: the whole horizon, to four weeks ahead). Checkpoint
   # scoring covers every horizon either way.
-  loss_horizon_days: null
+  loss_horizon_days: 7
   # Cases a block needs reported across its places in the 28 days up to
   # its cut-off, from what is known at the cut-off, to be trained on
   # (null: keep every block).
-  quiet_min_cases: null
-  chunk: 250
+  quiet_min_cases: 10
+  chunk: 100
   # Steps between the trainer's held-out evaluations: the monitor on the
   # first 100 held-out blocks, and by source (100 blocks a source) on a
   # multiple of it. They only score: the steps trained are the same.
