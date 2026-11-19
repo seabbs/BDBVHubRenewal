@@ -134,9 +134,9 @@ The submission walks a chain of candidates, `renewalbvd`, `renewalsp`, `renewal`
 
 - Fits are slow.
   A zone fit takes 1.5 to 2 times as long as the province fits it replaced, and the time grows with the number of zones fitted.
-- The zone fits need two releases at most 42 days apart, because the silent zones take the random walk's introductions.
-  At the 2026-10-09 origin they could not forecast.
-  Nor could `renewalsp` or the random walks, which need the same pair, so the submission chain has no fallback at such an origin (#365).
+- The silent zones take the random walk's introductions, whose delay is fitted to pairs of releases at most 42 days apart.
+  Where no pair is that close, as at the 2026-10-09 origin, the delay is fitted to the longer pairs instead (#365).
+  A day of every age at the first release of such a pair is final at the second, so the delay is still identified, but from one pair only.
 - The province fits we replaced saturated the maximum tree depth in most draws, which made their convergence slow and fragile (#320).
   The zone fits do not.
   Before #330, `renewalsp` did too in its largest province, which the centred walk fixed there.

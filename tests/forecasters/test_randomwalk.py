@@ -253,12 +253,16 @@ def test_models_raise_without_snapshots_or_a_delay_pair(
         delays,
         BacktestConfig(seed=3),
     )[0]
+    # One release has no pair at all. At 10-09 the only pair is 50 days
+    # apart, so the delay falls back to it and the models forecast (#365).
+    first = _task(target, delays, daily, "2026-08-18")
     early = _task(target, delays, daily, "2026-10-09")
     for name in ("randomwalk", "randomwalknowcast"):
         with pytest.raises(MissingSnapshots):
             get_model(name).forecast(bare)
         with pytest.raises(NoDelayPair):
-            get_model(name).forecast(early)
+            get_model(name).forecast(first)
+        assert not get_model(name).forecast(early).empty
     assert issubclass(NoDelayPair, ModelUnavailableError)
 
 

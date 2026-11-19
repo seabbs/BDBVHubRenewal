@@ -57,7 +57,8 @@ def test_both_baselines_are_scored_at_zone_level(
     assert (scores["location"].str.count("-") == 2).all()
     # Each origin is scored on what every later release reported, and on
     # the latest release's complete weeks.
-    later = vintages[vintages.index("2026-10-17") :]
+    # From 10-09, whose only release pair is 50 days apart (#365).
+    later = vintages[vintages.index("2026-10-09") :]
     latest = pd.Timestamp(later[-1])
     assert set(scores["target"]) == {"reported", "complete"}
     done = scores.loc[scores["target"] == "complete"]

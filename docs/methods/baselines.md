@@ -18,6 +18,7 @@ Both pair their province draws within each week by a Gaussian copula ([Correlate
 
 Both baselines use the daily onsets of each hub release ([Data](data.md#release-snapshots)).
 Only consecutive releases at most $D = 42$ days apart inform the delay, and a pair outside that window keeps its counts in the data.
+Where no pair is that close, the delay at the origin is fitted to the longer pairs instead, as a day of every age at their first release is final at their second.
 
 ## Delay
 

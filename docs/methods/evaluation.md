@@ -98,7 +98,7 @@ It stays in the data of later origins.
 The random walk models forecast from the releases up to the origin only.
 The renewal models' stored forecasts from the origin are scored with them.
 So are hub teams' forecasts for a round, at the latest release serving it.
-A model that cannot forecast from an origin, such as a random walk model with no pair of releases within the delay window, $D = 42$ days, is listed with no forecasts there.
+A model that cannot forecast from an origin, such as a random walk model with only one release, is listed with no forecasts there.
 Two targets are scored.
 
 **Reported.** The count each later release $o'$ shows for every forecast week it reports.
@@ -185,7 +185,7 @@ It runs on every real vintage for the three renewal models.
 `randomwalk` and `randomwalknowcast` are scored at zone level, for every zone with cases at the vintage ([Baseline models](baselines.md#health-zones)).
 A week with no onsets in a zone has a count of 0.
 Each model's zone samples are scored as the model draws them, as in the submitted file.
-Each real vintage before the latest is forecast, and origins with no pair of releases within the delay window are skipped, as for provinces.
+Each real vintage before the latest is forecast, and origins with only one release are skipped, as for provinces.
 Zones are scored on the reported target as for [real releases](#real-releases), with the zone delays fitted at the origin, so a zone count is never scored against a count still being reported.
 Relative CRPS is against `randomwalknowcast`.
 On the Nowcast page every model is shown at zone level: the random walks from their zone runs, and the fitted models from the zone samples of their stored forecasts ([Renewal models](model.md#health-zones)).
