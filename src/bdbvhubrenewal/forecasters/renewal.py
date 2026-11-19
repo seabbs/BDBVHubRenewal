@@ -1172,10 +1172,14 @@ class RenewalModel:
         RenewalRun
             The fit and its draws.
         """
+        # Imported from its module, not the package, so that the fit key
+        # (`evaluation.store.fit_code`) follows the builder.
+        from bdbvhubrenewal.model.zones import build_model
+
         pr = engine()
         config = model_config(self.variant)
         data = vintage_inputs(task, config)
-        model = pr.build_model(data, config)
+        model = build_model(data, config)
         s = self.sampler
         self._log(f"variant={self.name} sampling start")
         start, cpu_start = time.perf_counter(), time.process_time()
