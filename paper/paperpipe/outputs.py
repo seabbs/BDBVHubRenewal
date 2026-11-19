@@ -282,7 +282,8 @@ def _figures(
                 daily_sc,
                 split=split,
                 target=None,
-                **shown,
+                # Hub teams give no daily rows, so the reference model.
+                **{**shown, "baseline": REFERENCE},
             )
             if not daily_fc.empty
             else _pending("Daily-target rows are pending.")
