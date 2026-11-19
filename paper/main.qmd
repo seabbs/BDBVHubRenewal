@@ -127,7 +127,7 @@ Beside it, one place's daily rows carry a weekly total row, missing until the la
   - The workflow simulates outbreaks from the grid's config and writes every summary and figure, so a change to the grid regenerates them.
 - **What the summaries show.**
   - We compare the grid's summary statistics with the German development half and with published ranges for other diseases.
-  - Figure (planned): "The simulation grid against real outbreaks. (A) Summary statistics of the simulated outbreaks against the German development half and published ranges for other diseases: the share of training cut-offs in each epidemic phase, rises, outbreak sizes, growth rates, R, the generation time and reporting delays. (B) A few example simulations: final counts and counts reported by the nowcast date."
+  - Figure (planned): "The simulation grid against real outbreaks. (A) A few example simulations across settings (endemic, early outbreak and established epidemic), each with its final counts and the counts reported by the nowcast date, and strips of R(t) with effective R and of the mean reporting delay. (B) The share of simulated outbreaks with 0, 1 and 2 or more rises. (C) The share of training cut-offs in each epidemic phase (growing, stable, declining and turning). (D) Outbreak sizes. (E) Growth rates. (F) Reporting delays. Panels B to F compare the simulations with the German development half and published ranges for other diseases where values exist."
 - Key references: [@abbottepinowcast; @lison2024; @Park2024; @Ansari2024; @Dooley2023; @Muller2022; @Hollmann2025].
 :::
 
