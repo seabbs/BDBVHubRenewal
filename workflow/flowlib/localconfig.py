@@ -1,17 +1,17 @@
 """Machine settings from `config/local.env`.
 
-The file is the source of truth. The shell scripts read it with
-`scripts/local_config.sh` (with the fine-tuning scripts), and this must
-read it the same way. The file is untracked and holds `KEY=VALUE` lines (see
+The file is untracked and holds `KEY=VALUE` lines (see
 `config/local.env.example`). Blank lines, comments and lines whose key
-is not upper case are skipped. A value may use `$NAME` or `${NAME}` of
-another setting, in any order, or of the environment, and one pair of
-surrounding quotes is dropped. A variable set in the environment wins over the
-file. With no file everything runs on this machine.
+is not upper case are skipped, and one pair of surrounding quotes is
+dropped. A value may use `$NAME` or `${NAME}` of another setting, in any
+order, or of the environment; a line that uses itself (`ROOT=$ROOT/x`)
+takes the environment's value, empty if unset. Nothing else of the
+shell's syntax is read (no `~`, `${X:-y}` or `$(...)`). A variable set in
+the environment wins over the file. With no file everything runs on this
+machine.
 
-Shell scripts without `scripts/local_config.sh` read one setting with
-`python3 workflow/flowlib/localconfig.py KEY`; `--export` prints the
-file's settings as the shell lines `scripts/local_config.sh` runs.
+Shell scripts read one setting with
+`python3 workflow/flowlib/localconfig.py KEY`.
 """
 
 from __future__ import annotations
@@ -127,17 +127,6 @@ def _lines(path: Path) -> list[tuple[str, str]]:
     return out
 
 
-def file_settings(
-    path: Path | str | None = None, environ: Mapping[str, str] | None = None
-) -> dict[str, str]:
-    """Return the settings the file sets, filled in as `read` does."""
-    env = os.environ if environ is None else environ
-    if path is None:
-        path = env.get("LOCAL_CONFIG") or DEFAULT
-    cfg = read(path, env)
-    return {key: cfg[key] for key, _ in _lines(Path(path))}
-
-
 def read(
     path: Path | str | None = None, environ: Mapping[str, str] | None = None
 ) -> dict[str, str]:
@@ -195,6 +184,10 @@ class _Settings(Mapping[str, str]):
             return self.done[key]
         if key not in self.raw:
             return self.env[key]
+        if self.open and self.open[-1] == key:
+            # A line that uses itself, as the shell reads it: the
+            # environment has no value, or it would have won.
+            return self.env.get(key, "")
         if key in self.open:
             loop = " -> ".join([*self.open[self.open.index(key) :], key])
             raise ValueError(f"local config settings use each other: {loop}")
@@ -231,14 +224,8 @@ def expand(value: str, settings: Mapping[str, str] | None = None) -> str:
 
 
 if __name__ == "__main__":
-    import shlex
     import sys
 
-    if sys.argv[1:] == ["--export"]:
-        # For scripts/local_config.sh: the file's settings as shell lines.
-        for key, value in file_settings().items():
-            print(f"export {key}={shlex.quote(value)}")
-        sys.exit()
     cfg = read()
     for key in sys.argv[1:]:
         print(cfg.get(key, ""))

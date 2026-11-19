@@ -1,4 +1,4 @@
-"""The workflow reads machine settings as scripts/local_config.sh does."""
+"""The workflow reads the machine settings from the local config."""
 
 import os
 import subprocess
@@ -8,7 +8,6 @@ import pytest
 from flowlib import localconfig
 
 ROOT = Path(__file__).parents[2]
-SHELL = ROOT / "scripts" / "local_config.sh"
 
 
 def test_with_no_file_everything_is_on_this_machine(tmp_path):
@@ -106,34 +105,6 @@ def test_the_path_comes_from_local_config_when_set(tmp_path):
     path.write_text("ROOT=/elsewhere\n")
     env = {"HOME": str(tmp_path), "LOCAL_CONFIG": str(path)}
     assert localconfig.read(None, env)["ROOT"] == "/elsewhere"
-
-
-@pytest.mark.skipif(not SHELL.exists(), reason="needs scripts/local_config.sh")
-def test_same_values_as_the_shell_loader(tmp_path):
-    path = tmp_path / "local.env"
-    path.write_text(
-        "MAILBOX=$ROOT/m.md\nROOT=$HOME/r\nHOST_NAME=h\nINBOX=i.md\n"
-    )
-    env = {
-        "PATH": os.environ["PATH"],
-        "HOME": str(tmp_path),
-        "LOCAL_CONFIG": str(path),
-    }
-    keys = ("ROOT", "MAILBOX", "HOST_NAME", "INBOX")
-    out = subprocess.run(
-        [
-            "bash",
-            "-c",
-            "set -u; "
-            f'source "{SHELL}"; ' + "; ".join(f'echo "${k}"' for k in keys),
-        ],
-        env=env,
-        capture_output=True,
-        text=True,
-        check=True,
-    ).stdout.split("\n")
-    cfg = localconfig.read(None, env)
-    assert [cfg[k] for k in keys] == out[: len(keys)]
 
 
 def test_paper_logs_default_under_home(tmp_path):
