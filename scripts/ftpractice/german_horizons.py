@@ -9,12 +9,15 @@ own, one checkpoint per process.
 
     python scripts/ftpractice/german_horizons.py LABEL OUT_DIR [N_DATES]
 
-LABEL is `reference` (zero-shot) or a checkpoint label (`slots-<hash>`).
+LABEL is `reference` (zero-shot), a checkpoint label (`slots-<hash>`), or
+`NAME=ADAPTER_DIR` for an unpublished adapter with the series bias, which
+loads from ADAPTER_DIR as checkpoint `slots-NAME` and writes under NAME.
 Writes OUT_DIR/<LABEL>/<date>.csv.gz, resuming from the dates written.
 """
 
 from __future__ import annotations
 
+import hashlib
 import os
 import sys
 import time
@@ -27,12 +30,27 @@ def main() -> None:
     """Forecast every development date at the widened horizons."""
     label, out = sys.argv[1], Path(sys.argv[2])
     from bdbvhubrenewal.data import germany as dg
+    from bdbvhubrenewal.forecasters import foundation as fd
+
+    if "=" in label:
+        label, adapter = label.split("=", 1)
+        local = Path(adapter).expanduser()
+        spec = f"{fd.SLOTS_PREFIX}{label}"
+        sums = tuple(
+            (name, hashlib.sha256((local / name).read_bytes()).hexdigest())
+            for name in fd.ADAPTER_FILES
+        )
+        fd.resolve_checkpoint = lambda *_a, **_k: fd.Checkpoint(spec, sums)
+        fd.finetuned_adapter = lambda _checkpoint: local
+        pin = spec
+    else:
+        pin = None
 
     dg.HORIZONS = HORIZONS
     from bdbvhubrenewal.evaluation import checkpoint as ck
     from bdbvhubrenewal.evaluation import germany as de
 
-    os.environ["BDBV_CHRONOS_FT"] = (
+    os.environ["BDBV_CHRONOS_FT"] = pin or (
         ck.REFERENCE_PIN if label == ck.REFERENCE else label
     )
     models = list(ck.ZERO_SHOT if label == ck.REFERENCE else ck.FINETUNED)
