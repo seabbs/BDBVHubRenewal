@@ -160,7 +160,7 @@ def use_design(grid: str) -> str:
         For a grid with no design, so a typo or a new grid is not
         silently given r5's blocks.
     """
-    global DESIGN, SOURCE_SHARES, CADENCES, WHOLE_SYSTEM
+    global DESIGN, SOURCE_SHARES, CADENCES, WHOLE_SYSTEM, PARENTS
     if grid not in GRID_DESIGNS:
         raise ValueError(
             f"grid {grid!r} has no block design; known: {sorted(GRID_DESIGNS)}"
@@ -168,6 +168,7 @@ def use_design(grid: str) -> str:
     DESIGN = GRID_DESIGNS[grid]
     SOURCE_SHARES = dict(DESIGNS[DESIGN]["source_shares"])
     CADENCES = {k: dict(v) for k, v in DESIGNS[DESIGN]["cadences"].items()}
+    PARENTS = grid_parents(grid)
     WHOLE_SYSTEM = DESIGNS[DESIGN].get("whole_system", False)
     return DESIGN
 
@@ -463,6 +464,42 @@ their sum, more than their sum (cases with no place), or reported through
 a later stream (`finetune.country_counts`). A block of some of the
 places is also not their sum. Parent means belongs to, not sums to."""
 
+GRIDS = Path(__file__).parents[1] / "config" / "finetune" / "grids"
+"""The grid files (`config/finetune/grids/<grid>.yaml`)."""
+
+PARENTS: dict | None = None
+"""The grid's parents, from its file's `aggregation` (`grid_parents`), or
+None for a grid with no file, whose parents are `PARENT_MIX` drawn evenly
+with `finetune.PARENT_DRAWS`."""
+
+
+def grid_parents(grid: str) -> dict | None:
+    """Return a grid's parents from its file, or None if it has none.
+
+    The share of blocks with places whose country is their exact sum,
+    has unallocated cases, or is reported later (`aggregation.parents`,
+    weights), and the named distributions of the unallocated share and
+    the lag (`finetune.country_counts`).
+    """
+    import yaml
+
+    path = GRIDS / f"{grid}.yaml"
+    if not path.exists():
+        return None
+    config = yaml.safe_load(path.read_text())
+    aggregation = config.get("aggregation")
+    if aggregation is None:
+        return None
+    weights = aggregation["parents"]
+    total = sum(weights.values())
+    dists = config["distributions"]
+    return {
+        "shares": {k: w / total for k, w in weights.items()},
+        "unallocated_share": dists[aggregation["unallocated_share"]],
+        "parent_lag_days": dists[aggregation["parent_lag_days"]],
+    }
+
+
 UNIVARIATE_SHARE = 0.2
 """Share of blocks that are one series, the country or one leaf; the rest
 are multivariate, shared evenly among their mixes."""
@@ -668,8 +705,14 @@ def outbreak_blocks(
             # generator, so the other draws are as without it.
             parent_rng, option_rng = rng.spawn(2)
             parent = "exact"
+            parents = PARENTS
             if len(places) > 1 and places[0] == NATIONAL:
-                parent = str(parent_rng.choice(PARENT_MIX))
+                if parents is None:
+                    parent = str(parent_rng.choice(PARENT_MIX))
+                else:
+                    kinds = list(parents["shares"])
+                    shares = list(parents["shares"].values())
+                    parent = str(parent_rng.choice(kinds, p=shares))
             options = block_options(source, option_rng)
             # The releases follow the source's cadence (`CADENCES`), up to
             # the slot's cut.
@@ -683,6 +726,7 @@ def outbreak_blocks(
                 totals=any("-" in p for p in provinces),
                 parent=parent,
                 rng=parent_rng,
+                parent_draws=parents,
                 **options,
             )
             if block is None:
