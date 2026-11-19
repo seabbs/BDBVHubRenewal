@@ -10,17 +10,17 @@ High level, one Taskfile task per target:
 
 | Task | Target | Does | Writes outside this machine |
 |---|---|---|---|
-| `task all` | `all` | simulate, fine-tune and score | no |
-| `task simulate ROUNDS="4 5"` | `simulate` | simulation rounds, with QC and manifests | no |
-| `task release ROUNDS=4` | `release` | each batch to its `sims-r<N>` release | GitHub releases |
-| `task push ROUNDS="19 18"` | `push` | a helping host's batches, pushed to the rounds host | the rounds host |
-| `task finetune` | `finetune` | every checkpoint prefix of the run | no |
-| `task publish` | `publish` | verify and release each checkpoint | GitHub releases |
-| `task score` | `score` | score each released checkpoint, then its follow-ups | no |
-| `task land` | `land` | commit the score tables to `evidence/` and push | git push |
+| `task nowcast-workflow:all` | `all` | simulate, fine-tune and score | no |
+| `task nowcast-foundation:simulate ROUNDS="4 5"` | `simulate` | simulation rounds, with QC and manifests | no |
+| `task nowcast-foundation:release ROUNDS=4` | `release` | each batch to its `sims-r<N>` release | GitHub releases |
+| `task nowcast-foundation:push ROUNDS="19 18"` | `push` | a helping host's batches, pushed to the rounds host | the rounds host |
+| `task nowcast-foundation:finetune` | `finetune` | every checkpoint prefix of the run | no |
+| `task nowcast-foundation:publish` | `publish` | verify and release each checkpoint | GitHub releases |
+| `task nowcast-foundation:score` | `score` | score each released checkpoint, then its follow-ups | no |
+| `task nowcast-foundation:land` | `land` | commit the score tables to `evidence/` and push | git push |
 | `task paper` | (paper workflow) | the paper, as now | no |
 
-Pass Snakemake options after `--`: `task score -- -n` is a dry run, and a file path builds just that output.
+Pass Snakemake options after `--`: `task nowcast-foundation:score -- -n` is a dry run, and a file path builds just that output.
 Low level, any output file, for example:
 
 ```sh
@@ -29,7 +29,7 @@ uv run --group paper snakemake <RUN>/train/n1000/settings.json            # one 
 uv run --group paper snakemake <SCORE_CACHE>/germany-days/slots-<hash>.done    # one checkpoint's German scores
 ```
 
-Helpers: `task dag` draws the rule graph, `task progress` lists what exists and what would run, `task report` writes Snakemake's HTML report, and `task workflow:check` runs the tests and dry runs CI runs.
+Helpers: `task nowcast-workflow:dag` draws the rule graph, `task nowcast-workflow:progress` lists what exists and what would run, `task nowcast-workflow:report` writes Snakemake's HTML report, and `task nowcast-workflow:check` runs the tests and dry runs CI runs.
 
 ## Machine settings
 
@@ -74,7 +74,7 @@ All of them rerun a step only when an input is newer (`rerun-triggers: mtime`), 
 Settings that are the same on every machine are in `workflow/config.yaml`; override them with `--config` or `--configfile`.
 
 Two machines share only GitHub releases: simulation batches (`sims-r<N>`, one asset per batch) and checkpoints (`chronos-slots-<hash>`, `chronos-ft-<hash>`).
-Each machine reruns its task as releases land, in its coordinator run (`task run`).
+Each machine reruns its task as releases land, in its coordinator run (`task nowcast-workflow:run`).
 
 ## 1. Simulate (`rules/simulate.smk`)
 
@@ -119,7 +119,7 @@ Outputs are in `<RUN>/train/n<N>/`.
 
 ## 4. Score (`rules/score.smk`, `rules/followups.smk`)
 
-- `release_list`: the repository's releases, the only rule that reads the network; `task score` and each tick rerun it in a run of its own before scoring, as Snakemake 9 ends a run after a forced checkpoint without the jobs it unlocks. The checkpoints scored are the slots ones first, then the others, oldest first, from `published_from`, or `score.labels`.
+- `release_list`: the repository's releases, the only rule that reads the network; `task nowcast-foundation:score` and each tick rerun it in a run of its own before scoring, as Snakemake 9 ends a run after a forced checkpoint without the jobs it unlocks. The checkpoints scored are the slots ones first, then the others, oldest first, from `published_from`, or `score.labels`.
 - `score_germany`, `score_release`: the units of `bdbvhubrenewal.evaluation.checkpoint` for each checkpoint and the references, newest checkpoint first. Each caches one file per date and resumes from it.
   Units run torch on the machine's device with `SCORE_THREADS` threads and the `gpu` resource.
   BDBV is held out for the paper, so no BDBV unit runs.
@@ -135,8 +135,8 @@ After each slots checkpoint's scores:
 
 ## 5. Dashboard (`workflow/flowlib/dashboard/`)
 
-`task dashboard`, or `uv run --group paper python workflow/scripts/dashboard.py --port 8765`, serves a page for a running fine-tune on 127.0.0.1; it is not a Snakemake job, so it never holds the workflow's lock.
-`task dashboard:static` builds the rule `dashboard`, a static render of the same page in `<RUN>/reports/dashboard.html`.
+`task nowcast-foundation:dashboard`, or `uv run --group paper python workflow/scripts/dashboard.py --port 8765`, serves a page for a running fine-tune on 127.0.0.1; it is not a Snakemake job, so it never holds the workflow's lock.
+`task nowcast-foundation:dashboard-static` builds the rule `dashboard`, a static render of the same page in `<RUN>/reports/dashboard.html`.
 
 The page has a sticky bar (section links, the live run's step, one run and reference selector every chart follows) and sections: Status (tiles), Loss (client-side plots), Attention bias, Performance on real data (scores by study, score, target and source), Nowcasts (every dataset), Recent activity (with a notes file) and Tables. Every chart has an info marker (`page/explain.json`).
 
@@ -165,7 +165,7 @@ The workflow updates itself as results come in. Each machine runs its own target
 | the machine that trains (GPU) | `finetune publish` | trains the next segment once its batches are there, and releases each new checkpoint |
 | a simulating machine | `simulate release` | simulates the configured rounds and releases each batch |
 
-A tick (`task tick`, `workflow/scripts/tick.py`) runs the pool targets (`simulate`, `push`, `finetune`, `score`, `dashboard`) as one Snakemake run at nice 19 with the default profile and the machine's budget, so a free core or the GPU takes whichever queued job fits.
+A tick (`task nowcast-workflow:tick`, `workflow/scripts/tick.py`) runs the pool targets (`simulate`, `push`, `finetune`, `score`, `dashboard`) as one Snakemake run at nice 19 with the default profile and the machine's budget, so a free core or the GPU takes whichever queued job fits.
 When jobs compete, the trainer goes first (priority 20), then simulation (15), then checkpoint scoring (10 and below).
 Before it, the lists the pool plans from (the checkpoint releases, and on a machine without the rounds the batches it can have) are refreshed in a run of their own.
 A failed refresh leaves the last lists, and the pool still runs.
@@ -176,8 +176,8 @@ Work that appears during a run, such as a new checkpoint or a landed round, wait
 Snakemake locks the worktree it runs in, so each machine has one driver worktree.
 A tick is skipped when another tick is still running (a lock in `output/`) or when less than `MIN_FREE_GB` of memory or `MIN_DISK_GB` of disk is free. Its log is `output/workflow-tick.log`.
 
-`task run` (`workflow/scripts/coordinate.py`) is the coordinator run: it runs a tick, and as soon as one ends starts the next, after `COORDINATE_PAUSE` seconds (60), or `COORDINATE_BACKOFF` (600) after a failed tick. No timer runs it: start it once, under nohup or tmux, and stop it with `touch output/coordinator.stop` (it ends after the running tick) or by its pid.
-The timer that ran ticks before is not installed any more; `task schedule` shows an old one (`ACTION=show`) and removes it (`ACTION=uninstall`).
+`task nowcast-workflow:run` (`workflow/scripts/coordinate.py`) is the coordinator run: it runs a tick, and as soon as one ends starts the next, after `COORDINATE_PAUSE` seconds (60), or `COORDINATE_BACKOFF` (600) after a failed tick. No timer runs it: start it once, under nohup or tmux, and stop it with `touch output/coordinator.stop` (it ends after the running tick) or by its pid.
+The timer that ran ticks before is not installed any more; `task nowcast-workflow:schedule` shows an old one (`ACTION=show`) and removes it (`ACTION=uninstall`).
 
 On CI, the site and the paper (`.github/workflows/pages.yml`) rebuild every 6 hours (`43 */6 * * *`, after the fit store's run) and whenever `evidence/` changes on main, so new checkpoint scores reach the docs and the paper without a manual step.
 
@@ -185,7 +185,7 @@ Nothing here needs an agent or a notes file; with `NOTIFY` set, rules still add 
 
 ## Monitor
 
-`task monitor` serves one page of what runs where: each machine's step, its running jobs (rule, wildcards, resources, start) and its recent ones.
+`task nowcast-workflow:monitor` serves one page of what runs where: each machine's step, its running jobs (rule, wildcards, resources, start) and its recent ones.
 Each tick writes its machine's status to `<ROOT>/status/<host>.json` every `STATUS_EVERY` seconds while a step runs, and when it is skipped or ends (`workflow/flowlib/runstatus.py`, read from the run's own Snakemake log).
 With a rounds host (`REMOTE`) the file is copied to its `status/` folder, which the monitor reads, so one page shows every machine.
 A run that stops writing for two intervals, because it was killed or its machine went down, is shown as stale.
@@ -202,7 +202,7 @@ The status files need neither: the machines already reach the rounds host.
 
 | Target | On CI | Why |
 |---|---|---|
-| tests and dry runs of every target (`task workflow:check`) | yes | fast, no network |
+| tests and dry runs of every target (`task nowcast-workflow:check`) | yes | fast, no network |
 | the paper and its figures and tables | yes, as now (Pages) | from stored forecasts and pinned evidence |
 | `score_table` from stored caches | yes, once the paper module lands | cheap |
 | checkpoint forecasts, slots check, aggregation fits | no | hours, needs the checkpoints |

@@ -5,7 +5,8 @@ hospitalisation triangle (Wolffram et al. 2023) and the BDBV hub's data,
 per series: Germany, its states and its age groups, and the DRC and its
 provinces.
 
-Run from the repo root after `task data` and `bdbvhubrenewal germany-fetch`:
+Run from the repo root after `task utils:data` and
+`bdbvhubrenewal germany-fetch`:
 
     uv run python scripts/sim_settings_real.py <out.csv>
 """

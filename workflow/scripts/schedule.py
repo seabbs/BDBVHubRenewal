@@ -2,8 +2,9 @@
 
     python3 workflow/scripts/schedule.py show|uninstall
 
-The persistent coordinator run (`task run`, workflow/scripts/coordinate.py)
-replaces the timer, so `install` is refused.
+The persistent coordinator run (`task workflow:run`,
+workflow/scripts/coordinate.py) replaces the timer, so `install` is
+refused.
 
 The timer runs workflow/scripts/tick.py every `SCHEDULE_EVERY` minutes
 from this checkout: a cron line or a systemd user timer on Linux, a
@@ -32,8 +33,8 @@ def main() -> int:
     if action == "install":
         # The persistent coordinator run replaces the timer.
         print(
-            "no timer is installed any more: run `task run` once (under"
-            " nohup or tmux); `ACTION=uninstall` removes an old timer"
+            "no timer is installed any more: run `task workflow:run` once"
+            " (under nohup or tmux); `ACTION=uninstall` removes an old timer"
         )
         return 2
     cfg = localconfig.read()

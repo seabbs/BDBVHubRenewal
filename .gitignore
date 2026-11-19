@@ -6,16 +6,16 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 _site/
-# Hub data: fetched by `task data` and `task data-bvd`, and by each
+# Hub data: fetched by `task nowcast-utils:data` and `task nowcast-utils:data-bvd`, and by each
 # workflow before use. Tests read the frozen copy in tests/fixtures/data/.
 # Only our own records are committed: what we submitted to the hub and
 # the unsubmitted candidates, which nothing can fetch again.
 data/*
 !data/our-submissions/
 !data/candidate-forecasts.csv.gz
-# Backtest forecasts and other run output: re-created by `task backtest`.
+# Backtest forecasts and other run output: re-created by `task nowcast-eval:backtest`.
 output/
-# Derived results: made by the Pages build (`task results` locally) from
+# Derived results: made by the Pages build (`task nowcast-eval:results` locally) from
 # the code, the data and the fit store. Only these records are committed.
 results/*
 !results/development-log.csv
@@ -33,7 +33,7 @@ tests/results/
 docs/getting-started.ipynb
 docs/assets/getting-started/
 # The rendered paper: copied in from paper/ at docs build time
-# (`task paper:render`).
+# (`task paper`).
 docs/paper/
 # mkdocs-jupyter execution cache.
 .cache/

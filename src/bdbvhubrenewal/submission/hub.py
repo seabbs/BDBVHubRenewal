@@ -13,7 +13,7 @@ samples for each `(reference_date, location, target)`, and each sample
 index covers the same target weeks within a location.
 
 `submission.validate` checks the written files as `hubValidations` does.
-The authoritative check is still `hubValidations` (`task validate-hub`).
+The authoritative check is still `hubValidations` (`task hub:validate`).
 """
 
 from __future__ import annotations

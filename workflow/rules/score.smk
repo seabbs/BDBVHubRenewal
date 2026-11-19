@@ -18,7 +18,7 @@
 
 
 checkpoint release_list:
-    # Lists the releases to score; `task score` reruns it.
+    # Lists the releases to score; `task nowcast-foundation:score` reruns it.
     output:
         f"{CACHE}/releases.json",
     log:

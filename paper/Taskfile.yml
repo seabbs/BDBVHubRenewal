@@ -32,3 +32,8 @@ tasks:
     desc: Dry-run both workflow targets to check the DAG
     cmds:
       - uv run --group paper snakemake -s workflow/Snakefile development paper -n --cores 1
+  targets:
+    desc: "Run single paper workflow targets as `task paper` runs the paper: task paper:targets -- TARGET..."
+    dir: ..
+    cmds:
+      - uv run --group paper python workflow/scripts/paper_run.py --targets {{.CLI_ARGS}}

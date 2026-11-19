@@ -1,0 +1,74 @@
+version: "3"
+
+# Backtests, scores and their reports (nowcast-eval).
+
+tasks:
+
+  backtest:
+    desc: Run the development backtest, the real-release evaluation and the recovery check (simulated), with the fitted models from the fit store
+    cmds:
+      - task: :bdbv-hub:fit-store
+      - uv run bdbvhubrenewal backtest {{.CLI_ARGS}}
+
+
+  score-history:
+    desc: Write results/score-history.csv, the backtest scores of each deploy from main, and print relative CRPS by deploy
+    cmds:
+      - git fetch -q origin gh-pages
+      - uv run python scripts/score_history.py {{.CLI_ARGS}}
+
+
+  # The same commands as the backtest jobs of .github/workflows/pages.yml;
+  # keep the two in step.
+  results:
+    desc: Make every derived file in results/ as the Pages build does (the backtest, zone and scenario runs)
+    cmds:
+      - task: backtest
+      - uv run bdbvhubrenewal zone-backtest
+      - uv run bdbvhubrenewal backtest --scenarios-only
+
+
+  backtest-lopo:
+    desc: Leave one province out on the development vintages, for the variants that take a mask
+    cmds:
+      - uv run bdbvhubrenewal backtest --lopo {{.CLI_ARGS}}
+
+
+  backtest-scenarios:
+    desc: Forecast the simulated scenarios calibrated to the latest real vintage (writes results/scenario-scores.csv.gz)
+    cmds:
+      - uv run bdbvhubrenewal backtest --scenarios-only {{.CLI_ARGS}}
+
+
+  backtest-zones:
+    desc: Score randomwalk and randomwalknowcast at health-zone level (writes results/zone-scores.csv)
+    cmds:
+      - uv run bdbvhubrenewal zone-backtest {{.CLI_ARGS}}
+
+
+  germany:
+    desc: Run and score the German hospitalisation nowcast benchmark and its hub teams (writes results/germany/)
+    cmds:
+      - uv run bdbvhubrenewal germany-fetch
+      - uv run bdbvhubrenewal germany-backtest {{.CLI_ARGS}}
+      - uv run bdbvhubrenewal germany-teams
+      - uv run bdbvhubrenewal germany-asof
+      - uv run bdbvhubrenewal germany-paper
+
+
+  compare-hub:
+    desc: Fetch the hub's weekly-round forecasts and score them with ours
+    cmds:
+      - uv run bdbvhubrenewal compare-hub --fetch
+
+
+  plots:
+    desc: Make the docs figures and tables from the backtest results
+    cmds:
+      - task: :bdbv-hub:fit-store
+      - uv run bdbvhubrenewal compare-hub
+      - uv run bdbvhubrenewal report
+      - >-
+        uv run python scripts/score_history.py --docs docs/generated
+        --figures docs/figures --current docs/figures
+        --out output/score-history.csv

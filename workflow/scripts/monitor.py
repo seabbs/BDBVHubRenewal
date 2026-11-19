@@ -1,4 +1,4 @@
-"""The workflow monitor: what runs where (`task monitor`).
+"""The workflow monitor: what runs where (`task workflow:monitor`).
 
     python3 workflow/scripts/monitor.py
 

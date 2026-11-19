@@ -135,7 +135,7 @@ jobs:
   # that model's jobs. `build` scores every model together each run
   # (`bdbvhubrenewal score`), as the energy scores compare models on the
   # cells they share. The fitted models' forecasts come from the store.
-  # `task results` runs the same backtests in one go; keep them in step.
+  # `task nowcast-eval:results` runs the same backtests in one go; keep them in step.
   backtest:
     name: Forecast (${{ matrix.cell }})
     needs: prep

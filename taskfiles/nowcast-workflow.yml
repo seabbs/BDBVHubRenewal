@@ -1,0 +1,79 @@
+version: "3"
+
+# The workflow itself: its runs, schedule, monitor and checks
+# (nowcast-workflow).
+
+tasks:
+
+  # The top-level workflow (workflow/Snakefile, workflow/README.md). Each
+  # task runs a target; pass more Snakemake options after `--`, such as
+  # `task nowcast-foundation:score -- -n` for a dry run or a file to build one output.
+  # Every target runs with workflow/profiles/default and this machine's
+  # cores and resources less its headroom (flowlib.machine), or with the
+  # untracked profile SNAKEMAKE_PROFILE names (see config/profile.example).
+  wf:
+    internal: true
+    vars:
+      SNAKEMAKE_PROFILE:
+        sh: python3 workflow/flowlib/localconfig.py SNAKEMAKE_PROFILE
+    cmds:
+      - >-
+        {{.SNAKEMAKE}} {{.WF_TARGET}}
+        {{if .SNAKEMAKE_PROFILE}}--workflow-profile {{.SNAKEMAKE_PROFILE}}
+        {{else}}$(python3 workflow/flowlib/compute.py){{end}}
+        {{.CLI_ARGS}}
+
+
+  all:
+    desc: Run every workflow target that writes nothing outside this machine (simulate, finetune, score)
+    cmds:
+      - task: wf
+        vars: {WF_TARGET: all}
+
+
+  monitor:
+    desc: Serve the workflow monitor, each machine's running and recent jobs from the status the ticks write (MONITOR_HOST, MONITOR_PORT, MONITOR_REFRESH in config/local.env)
+    cmds:
+      - python3 workflow/scripts/monitor.py
+
+
+  tick:
+    desc: Run this machine's scheduled workflow targets once (SCHEDULE_TARGETS in config/local.env), with the lock and room checks the coordinator run uses
+    cmds:
+      - python3 workflow/scripts/tick.py
+
+
+  run:
+    desc: The persistent coordinator run, one tick after another until `touch output/coordinator.stop` (run it once, under nohup or tmux)
+    cmds:
+      - python3 workflow/scripts/coordinate.py
+
+
+  schedule:
+    desc: Show or remove the old timer that ran `task nowcast-workflow:tick` (ACTION=show|uninstall); `task nowcast-workflow:run` replaces it
+    cmds:
+      - python3 workflow/scripts/schedule.py {{.ACTION | default "show"}}
+
+
+  dag:
+    desc: Draw the workflow's rule graph (TARGET=all by default) as workflow-dag.svg
+    cmds:
+      - "{{.SNAKEMAKE}} {{.TARGET | default \"all\"}} --rulegraph | dot -Tsvg > workflow-dag.svg"
+
+
+  progress:
+    desc: Show which workflow outputs exist and which would run (TARGET=all by default)
+    cmds:
+      - "{{.SNAKEMAKE}} {{.TARGET | default \"all\"}} --summary"
+
+
+  report:
+    desc: Write Snakemake's browsable HTML report of the workflow (workflow-report.html)
+    cmds:
+      - "{{.SNAKEMAKE}} {{.TARGET | default \"all\"}} --report workflow-report.html"
+
+
+  check:
+    desc: Test the workflow's helpers and dry-run every target, as CI does
+    cmds:
+      - uv run --group paper pytest -q tests/workflow

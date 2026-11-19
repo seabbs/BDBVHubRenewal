@@ -20,7 +20,7 @@
 #
 # Every figure and table below comes from the Python code shown above it, which calls the package's functions directly.
 # [Setup](../setup/) installs the package and shows how to run this code in a REPL, a notebook or a script.
-# `task data` fetches the tidy data into `data/`, and `task fit-store` fetches the stored renewal fit.
+# `task nowcast-utils:data` fetches the tidy data into `data/`, and `task bdbv-hub:fit-store` fetches the stored renewal fit.
 # This page is a notebook, and `task getting-started` runs it again.
 
 # %% [markdown]
@@ -103,7 +103,7 @@ baselines.groupby("model")["sample"].nunique()
 # %% [markdown]
 # ## Load the stored renewal fit
 #
-# `bdbvhubrenewal fit-store load` (`task fit-store`) fetches the store and records the fit it uses for each model and origin in `results/fit-store.json`.
+# `bdbvhubrenewal fit-store load` (`task bdbv-hub:fit-store`) fetches the store and records the fit it uses for each model and origin in `results/fit-store.json`.
 # That is the fit for this code and data, or, until that fit is made, the newest fit of older code.
 # Each stored fit is a gzipped JSON file, which `read_fit` reads into tables.
 # Its `forecasts` table has the same columns as the baselines' forecasts, and its `delays` table holds the fit's modelled delay.

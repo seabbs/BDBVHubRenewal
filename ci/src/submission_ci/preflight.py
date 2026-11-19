@@ -391,7 +391,10 @@ def _top_level(text: str) -> dict[str, str]:
 def check_metadata(metadata_dir: Path, model_id: str) -> Check:
     """`<model_id>.yml` exists and its abbreviations make that id."""
     path = metadata_dir / f"{model_id}.yml"
-    fix = "Write it with `task metadata` and check it with `task validate-hub`."
+    fix = (
+        "Write it with `task hub:metadata` and check it with"
+        " `task hub:validate`."
+    )
     if not path.exists():
         return Check("metadata", "missing", f"no {path}", fix)
     meta = _top_level(path.read_text(encoding="utf-8"))

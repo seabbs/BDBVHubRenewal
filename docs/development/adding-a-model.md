@@ -38,6 +38,6 @@ It names a base `ModelConfig` and the fields it changes.
 Fitted variants are not run by the docs build or the smoke tests.
 The [fit store](cli.md#fit-store) fits them once a variant is on `main`.
 To fit one locally, run `bdbvhubrenewal fit-store fit --model <name> --origin <date> --store output/fit-store` for each origin, then `bdbvhubrenewal fit-store load --store output/fit-store`.
-`task backtest` then scores them with the other models.
+`task nowcast-eval:backtest` then scores them with the other models.
 
 `BDBV_RENEWAL_SAMPLER` sets the NUTS settings of leave-one-province-out fits.

@@ -319,7 +319,7 @@ def test_backtest_of_fitted_models_only_points_to_the_fit_store(
     args = ["backtest", "--data", str(DATA), "--models", "renewal"]
     out = ["--results", str(tmp_path), "--output", str(tmp_path)]
     assert main([*args, *out]) == 1
-    assert "task fit-store" in capsys.readouterr().err
+    assert "task hub:fit-store" in capsys.readouterr().err
 
 
 @pytest.mark.usefixtures("in_root")

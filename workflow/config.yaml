@@ -168,7 +168,7 @@ agg:
   mem_mb: 6144
 
 dashboard:
-  # The fine-tuning dashboard (task dashboard; workflow/flowlib/dashboard).
+  # The fine-tuning dashboard (task nowcast-foundation:dashboard; workflow/flowlib/dashboard).
   # Runs on every machine: release-prefix runs need no paths. Runs with a
   # local folder go in DASHBOARD_RUNS in config/local.env or --run, as
   # name=<folder|prefix>[,label=..][,colour=..][,live][,base=..]
