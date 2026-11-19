@@ -133,7 +133,7 @@ def test_the_task_store_key_covers_the_code_the_tasks_depend_on(
     assert ck.german_tasks_dir(tmp_path, data, 1000, 1) != one
     monkeypatch.setattr(inspect, "getsource", real)
 
-    @dataclasses.dataclass
+    @dataclasses.dataclass(frozen=True)
     class Wider(base.ForecastTask):
         extra: int = 0
 

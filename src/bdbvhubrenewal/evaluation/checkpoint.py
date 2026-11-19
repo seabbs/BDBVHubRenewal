@@ -548,18 +548,26 @@ def german_tasks_dir(
     """Return the store of the German tasks every checkpoint scores.
 
     Keyed on what the tasks are built from: the triangle file's bytes,
-    the task-building code (`data.germany`), and the draws and seed.
+    the task-building code (`data.germany` and the `data.dates` it uses),
+    the fields of the `ForecastTask` they are pickled as, and the draws
+    and seed.
     """
+    import dataclasses
     import hashlib
     import inspect
 
+    from bdbvhubrenewal.data import dates
     from bdbvhubrenewal.data import germany as dg
+    from bdbvhubrenewal.forecasters import base
 
     h = hashlib.sha256()
     with Path(triangle).open("rb") as f:
         for part in iter(lambda: f.read(1 << 24), b""):
             h.update(part)
-    h.update(inspect.getsource(dg).encode())
+    for module in (dg, dates):
+        h.update(inspect.getsource(module).encode())
+    fields = [f.name for f in dataclasses.fields(base.ForecastTask)]
+    h.update(repr(fields).encode())
     h.update(f"{n_samples}-{seed}".encode())
     return Path(cache) / "germany" / f"tasks-{h.hexdigest()[:12]}"
 
