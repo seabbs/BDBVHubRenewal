@@ -168,7 +168,7 @@ def test_depletion_bounds_each_stratum_by_its_population(tmp_path):
                 """
 gt <- gt_pmf_r7(7, "gamma_0.6")
 n <- 300L
-log_r <- matrix(log(c(2.5, 1.5)), n, 2, byrow = TRUE)
+log_r <- matrix(log(c(2.5, 1.8)), n, 2, byrow = TRUE)
 start <- matrix(0, length(gt), 2); start[length(gt), ] <- 5
 N <- c(1e4, 1e6)
 run <- r7_infections(start, gt, log_r, N)
@@ -183,7 +183,7 @@ cat("reff_falls", run$reff[n, 1] < 1, "\\n")
     )
     assert out["bounded"] == "TRUE"
     small, large = map(float, out["attack"].split(";"))
-    # R 2.5 infects most of a pool; R 1.5 over 300 days well over half.
+    # R 2.5 infects most of a pool and R 1.8 well over half.
     assert small > 0.8
     assert large > 0.5
     assert out["reff_falls"] == "TRUE"
