@@ -9,10 +9,12 @@
   cluster-generic executor with `workflow/scripts/remote/`). `WORKERS`
   lists them as `name=host:ROOT:CHECKOUT` (`host` as ssh names it, or
   `local`, which may leave out ROOT and CHECKOUT for this machine's).
-  `WORKER_GROUPS` maps rule groups to a worker (`train=laptop score=archie`);
-  a group left out, or mapped to `any`, runs on the first worker with
-  room. The pool is the sum of the workers' budgets, each read from the
-  worker itself at launch.
+  `WORKER_GROUPS` maps rule groups to a worker
+  (`train=laptop score=archie`); a group left out, or mapped to `any`,
+  runs on the first worker with room. The pool is the sum of the
+  workers' budgets, each read from the worker itself at launch.
+- any other name: its profile, `workflow/profiles/<name>`, alone (a
+  cluster or cloud executor with its own resources; none ships).
 
 A rule names no machine: it declares its threads, memory and GPU, and
 its group is `RULE_GROUPS`'. Local rules always run on the coordinator.
@@ -40,6 +42,8 @@ if __package__ in (None, ""):
 from flowlib import localconfig, machine
 
 MODES = ("single", "ssh")
+"""The modes this module sets the pool of; any other `COMPUTE` names a
+profile, `workflow/profiles/<name>`, whose executor brings its own."""
 
 GROUPS = ("simulate", "train", "publish", "score", "any")
 """The rule groups `WORKER_GROUPS` in the local config can place."""
@@ -122,19 +126,26 @@ class Worker:
         return self.host == "local"
 
 
-def mode(cfg: Mapping[str, str]) -> str:
-    """Return `COMPUTE` (`single` when unset); raise on another value."""
+def mode(
+    cfg: Mapping[str, str], checkout: str | Path = localconfig.ROOT
+) -> str:
+    """Return `COMPUTE` (`single` when unset).
+
+    Raises `ValueError` for a name not in `MODES` without a profile in
+    `workflow/profiles/<name>`.
+    """
     got = cfg.get("COMPUTE") or "single"
-    if got not in MODES:
-        raise ValueError(f"COMPUTE={got} is not one of {MODES}")
+    profile = f"workflow/profiles/{got}"
+    if got not in MODES and not (Path(checkout) / profile).is_dir():
+        raise ValueError(f"COMPUTE={got}: no profile {profile}")
     return got
 
 
 def workers(
     cfg: Mapping[str, str], checkout: str | Path = localconfig.ROOT
 ) -> dict[str, Worker]:
-    """Return the workers of `WORKERS`, in order (none for `single`)."""
-    if mode(cfg) == "single":
+    """Return the workers of `WORKERS`, in order (only for `ssh`)."""
+    if mode(cfg, checkout) != "ssh":
         return {}
     out = {}
     for spec in cfg.get("WORKERS", "").split():
@@ -287,19 +298,23 @@ def args(
     cfg: Mapping[str, str],
     path: str | None = None,
     budgets: Mapping[str, Mapping[str, int]] | None = None,
+    checkout: str | Path = localconfig.ROOT,
 ) -> list[str]:
     """Return the Snakemake options of the profile and its pool.
 
     For `ssh` without `budgets`, each worker's is read from it and kept
-    in `state_dir()/budgets.json` for the submit script.
+    in `state_dir()/budgets.json` for the submit script. Another
+    `COMPUTE` is its profile alone.
     """
-    if mode(cfg) == "single":
+    got = mode(cfg, checkout)
+    if got not in MODES:
+        return ["--workflow-profile", f"workflow/profiles/{got}"]
+    if got == "single":
         return [
             "--workflow-profile",
             "workflow/profiles/default",
             *machine.args(cfg, path=path),
         ]
-    checkout = localconfig.ROOT
     found = workers(cfg, checkout)
     if budgets is None:
         budgets = {}
