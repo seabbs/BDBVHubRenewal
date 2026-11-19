@@ -46,15 +46,17 @@ def test_a_model_that_cannot_forecast_is_listed_with_no_forecasts(
     result,  # type: ignore[no-untyped-def]
 ) -> None:
     o = result.origins
-    # No pair of releases is in the delay window, so neither walk runs.
-    early = o.loc[o["origin"].isin(["2026-08-18", "2026-10-09"])]
+    # The first release has no pair, so neither walk runs. At 10-09 the
+    # only pair is 50 days apart and the delay falls back to it (#365).
+    early = o.loc[o["origin"] == "2026-08-18"]
     assert set(early["status"]) == {"no forecast"}
     assert (early["n_reported"] == 0).all()
     assert (early["n_complete"] == 0).all()
-    ran = o.loc[o["origin"] == "2026-10-17"]
-    assert set(ran["model"]) == {"randomwalk", "randomwalknowcast"}
-    assert (ran["n_complete"] > 0).all()
-    assert (ran["n_reported"] > 0).all()
+    for origin in ("2026-10-09", "2026-10-17"):
+        ran = o.loc[o["origin"] == origin]
+        assert set(ran["model"]) == {"randomwalk", "randomwalknowcast"}
+        assert (ran["n_complete"] > 0).all()
+        assert (ran["n_reported"] > 0).all()
 
 
 def test_every_model_is_scored_on_each_later_release(
@@ -63,12 +65,12 @@ def test_every_model_is_scored_on_each_later_release(
 ) -> None:
     s = result.scores
     # Every release from the first forecast up to the latest is scored.
-    later = vintages[vintages.index("2026-10-17") :]
+    later = vintages[vintages.index("2026-10-09") :]
     assert set(s["target"]) == {"reported", "complete"}
     assert set(s["model"]) == {"randomwalk", "randomwalknowcast"}
     assert set(s["origin"]) == set(later[:-1])
     rep = s.loc[(s["target"] == "reported") & (s["origin"] == "2026-10-17")]
-    assert set(rep["truth_vintage"]) == set(later[1:])
+    assert set(rep["truth_vintage"]) == set(later[2:])
     # Every model is scored on the same forecasts of a target.
     for _, g in summarise(s).groupby("target"):
         assert g["n"].nunique() == 1
