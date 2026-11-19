@@ -21,7 +21,7 @@ def test_the_cli_rates_match_the_workflow_config():
 
 
 def test_the_loss_horizon_enters_the_settings():
-    # Unset, the settings are as before the setting existed.
+    # Unset, only the prediction length is stated.
     full = fs.horizon_settings(None)
     assert "loss_horizon_days" not in full
     assert full["prediction_length"] == (
