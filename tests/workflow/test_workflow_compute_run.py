@@ -174,3 +174,29 @@ def test_a_job_still_running_on_the_worker_is_not_started_twice(setup):
     assert not (wroot / "b.txt").exists()
     logs = "".join(p.read_text() for p in state.glob("*.log"))
     assert "still running" in logs
+
+
+def test_cancel_stops_the_job_on_the_worker(setup, monkeypatch):
+    sys.path.insert(0, str(REPO / "workflow"))
+    sys.path.insert(0, str(SCRIPTS))
+    import cancel
+    from flowlib import compute
+
+    coord, worker, (croot, wroot), state = setup
+    local = coord.parent / "local.env"
+    local.write_text(
+        f"COMPUTE=ssh\nROOT={croot}\nWORKERS=w=local:{wroot}:{worker}\n"
+    )
+    monkeypatch.setenv("LOCAL_CONFIG", str(local))
+    job = {"rule": "b", "wildcards": {}}
+    (state / "7.json").write_text(
+        json.dumps({"job": job, "checkout": str(coord)})
+    )
+    (state / "7.placed").write_text(json.dumps({"worker": "w"}))
+    w = compute.Worker("w", "local", str(wroot), str(worker))
+    pid_file = Path(compute.remote_pid_file(w, job))
+    pid_file.parent.mkdir(parents=True)
+    alive = subprocess.Popen(["sleep", "60"])
+    pid_file.write_text(f"{alive.pid}\n")
+    cancel.stop_remote(state, "7")
+    assert alive.wait(timeout=10) != 0
