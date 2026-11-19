@@ -50,7 +50,7 @@ exclude:
 scores: rounds-host:bdbv-rounds/scores/tables/checkpoint-scores.csv
 datasets:
   - key: germany
-    source: rounds-host:bdbv-rounds/scores/germany/
+    source: rounds-host:bdbv-rounds/scores/germany-days/
   - key: bdbv
     source: rounds-host:bdbv-rounds/scores/bdbv/
     truth_source: data/target.csv

@@ -91,9 +91,9 @@ def test_a_total_row_joins_its_places_bias_group():
     assert list(parent) == [-1, 0, -1, 0, -1, -1, -1, 0, 0, 0]
     torch = pytest.importorskip("torch")
 
-    _, same, up, _ = series_bias.pair_masks(
+    same, up, _ = series_bias.pair_masks(
         torch.as_tensor(place), torch.as_tensor(parent)
-    )
+    ).values()
     # CD's total is the same place as CD's counts and lags, CD-NK's total
     # points up to CD.
     assert bool(same[2, 0])

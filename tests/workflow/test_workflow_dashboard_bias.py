@@ -27,7 +27,7 @@ def _safetensors(path, tensors):
 
 NAMES = {
     k: f"base.model.series_bias.modules_to_save.default.{k}"
-    for k in ("self_", "same", "up", "down")
+    for k in ("same", "up", "down")
 }
 
 
@@ -110,17 +110,18 @@ def test_the_page_payload_lists_each_run_with_bias(tmp_path):
     rs = runs.load_runs([], f"r={folder},live;x=x-", [])
     got = bias.payload(rs, live_step=None)
     assert [r["key"] for r in got["runs"]] == ["r"]
-    # Every relation a run may train; colours from the shared map.
-    assert [p["key"] for p in got["pairs"]] == ["self", "same", "up", "down"]
+    # Only the relations a run holds are listed; colours from the shared
+    # map.
+    assert [p["key"] for p in got["pairs"]] == ["down"]
     from bdbvhubrenewal.evaluation import labels
 
-    assert got["col"] == labels.RELATION_COLOURS
+    assert got["col"] == {"down": labels.RELATION_COLOURS["down"]}
     assert got["runs"][0]["pts"]["down"] == [[250, 1.0, 1.0, 1.0]]
 
 
 LINE = (
     "2026-11-16 16:50:01 [train] step {step}: loss 0.5, held-out (x) 0.4, "
-    "bias self_ {m:+.3f} [{lo:+.3f}, {hi:+.3f}], same {m:+.3f} "
+    "bias down {m:+.3f} [{lo:+.3f}, {hi:+.3f}], same {m:+.3f} "
     "[{lo:+.3f}, {hi:+.3f}], 9 s\n"
 )
 CHUNK = (
@@ -183,7 +184,7 @@ def test_each_run_s_bias_is_its_own_logged_values_over_simulations(tmp_path):
         "r6": [[50, -0.5], [150, -0.7]],
     }
     for key, pts in want.items():
-        for rel in ("self", "same"):
+        for rel in ("down", "same"):
             assert [p[0] for p in by[key][rel]] == [x for x, _ in pts]
             assert [p[1] for p in by[key][rel]] == pytest.approx(
                 [m for _, m in pts]
@@ -191,3 +192,28 @@ def test_each_run_s_bias_is_its_own_logged_values_over_simulations(tmp_path):
             assert [p[2] for p in by[key][rel]] == pytest.approx(
                 [m - 0.1 for _, m in pts]
             )
+
+
+def test_each_run_shows_the_relations_it_logged(tmp_path):
+    # One run logs a relation beyond the trainer's three; it is shown for
+    # that run, with its own name, and the other run shows the three.
+    for key, extra in (("a", True), ("b", False)):
+        (tmp_path / key / "train").mkdir(parents=True)
+        values = [[0.1, 0.2], [0.3, 0.4]]
+        rels = {k: {"values": values} for k in ("same", "up", "down")}
+        if extra:
+            rels["self_"] = {"values": values}
+        (tmp_path / key / "train" / "history.json").write_text(
+            json.dumps([{"step": 100, "bias": rels}])
+        )
+    rs = runs.load_runs([], f"a={tmp_path / 'a'},live;b={tmp_path / 'b'}", [])
+    got = bias.payload(rs, None)
+    held = {
+        r["key"]: {k for k, v in r["pts"].items() if v} for r in got["runs"]
+    }
+    assert held == {
+        "a": {"same", "up", "down", "self"},
+        "b": {"same", "up", "down"},
+    }
+    assert [p["key"] for p in got["pairs"]] == ["same", "up", "down", "self"]
+    assert got["col"]["self"] == bias.OTHER
