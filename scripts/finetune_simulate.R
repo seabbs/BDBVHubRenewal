@@ -79,6 +79,11 @@
 # Run from the repo root:
 #
 #   Rscript scripts/finetune_simulate.R <n> <seed> <out_dir>
+#
+# ENW_CELLS (grid indices, comma separated, one a simulation) makes a
+# top-up batch (workflow/flowlib/topup.py): simulation i is cell i of the
+# list, drawn with this seed's random stream, whatever block the seed's
+# round would give.
 
 epinowcast_sha <- "e084b080"
 # r6: as r5 (NB1 and Poisson only (4:1), 16 to 52 weeks for every strata
@@ -94,6 +99,7 @@ n_outbreaks <- as.integer(args[[1]])
 seed_base <- as.integer(Sys.getenv("ENW_SEED_BASE", "30000"))
 seed <- as.integer(args[[2]])
 out_dir <- args[[3]]
+cells_given <- Sys.getenv("ENW_CELLS")
 lib <- Sys.getenv("ENW_LIB", "output/finetune/rlib")
 .libPaths(c(lib, .libPaths()))
 
@@ -176,7 +182,14 @@ block <- 840L
 # r: its batch at position k holds indices r * block + k * n onwards, and
 # 40 batches of 21 are the whole block. A batch past its round's block
 # is refused, so no two rounds share a block.
-grid_index <- function(seed, n, i, seed_base) {
+grid_index <- function(seed, n, i, seed_base, cells = "") {
+  if (nzchar(cells)) {
+    given <- as.integer(strsplit(cells, ",", fixed = TRUE)[[1]])
+    if (length(given) != n) {
+      stop("ENW_CELLS names ", length(given), " cells for ", n, " simulations")
+    }
+    return(given[[i]])
+  }
   round <- (seed - seed_base) %/% 100L
   at <- ((seed - seed_base) %% 100L) * n + i - 1L
   if (at >= block) {
@@ -1549,7 +1562,9 @@ if (sys.nframe() == 0L) {
   failures <- list()
   for (i in seq_len(n_outbreaks)) {
     id <- sprintf("%d-%04d", seed, i)
-    design <- draw_design(grid_index(seed, n_outbreaks, i, seed_base))
+    design <- draw_design(
+      grid_index(seed, n_outbreaks, i, seed_base, cells_given)
+    )
     t1 <- Sys.time()
     cell_run <- simulate_cell(design, id)
     out <- cell_run$out
