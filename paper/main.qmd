@@ -176,6 +176,7 @@ We also report the energy score [@Gneiting2008], which is proper for joint forec
 ::: {.callout-note title="Plan"}
 Each section has a figure panel.
 Every panel shows the same four models, named Random walk nowcast, Zero-shot (complete data only), Zero-shot (delays) and Fine-tuned (delays) in every figure and table.
+The case studies' score panels also show the hub's baseline, which their scores are relative to.
 All three Chronos-2 models use one layout, daily counts and daily lag series with each place's weekly totals as a target row.
 Every other comparison, and the hub teams beyond the hub's baseline, is in the SI.
 Each panel shows:
@@ -202,7 +203,7 @@ Zero-shot Chronos-2 and the newest scored checkpoint of the fine-tuned model: na
 ### Held-out synthetic data
 
 ::: {.callout-note title="Plan"}
-- We show nowcasts of the candidate models against `randomwalk` and `randomwalknowcast`.
+- We show nowcasts of the candidate models against `randomwalknowcast`.
 - We summarise their scores.
 - The SI gives each checkpoint's scores by the number of simulations it was trained on (Checkpoint curve).
 - The SI describes the held-out set (Synthetic data generation).
@@ -220,7 +221,7 @@ Held-out synthetic data: nowcasts of one held-out outbreak, drawn with the workf
 ::: {#fig-synthetic}
 ![](build/figures/main/synthetic-results.png)
 
-Held-out synthetic data. (A, B) WIS relative to `randomwalknowcast` on the natural and log scales, as stacked dispersion, overprediction and underprediction; (C) bias; (D) 50% and 90% coverage; (E) relative WIS by scenario factor; (F) relative WIS by horizon. {{< meta results.synthetic.label >}} {{< meta results.synthetic.note >}}
+Held-out synthetic data. (A) Nowcasts over time at one place, several origins overlaid, against the truth; (B, C) WIS relative to `randomwalknowcast` on the natural and log scales, as stacked dispersion, overprediction and underprediction; (D) bias; (E) 50% and 90% coverage; (F) relative WIS by scenario factor; (G) relative WIS by horizon. {{< meta results.synthetic.label >}} {{< meta results.synthetic.note >}}
 :::
 
 On the {{< meta results.synthetic.scope >}}, the best model was {{< meta results.synthetic.best_model >}}, with a relative score of {{< meta results.synthetic.best_rel_score >}} and {{< meta results.synthetic.best_rel_log_score >}} on the log scale, against {{< meta results.synthetic.baseline >}}.
@@ -251,7 +252,7 @@ German nowcast hub: national nowcasts, one column per model and one row per orig
 ::: {#fig-germany}
 ![](build/figures/main/germany-results.png)
 
-German nowcast hub. (A, B) WIS relative to `KIT-frozen_baseline` on the natural and log scales, as stacked dispersion, overprediction and underprediction; (C) bias; (D) 50% and 95% coverage; (E) relative WIS by location; (F) by age group; (G) by horizon. {{< meta results.germany.label >}} {{< meta results.germany.note >}}
+German nowcast hub. (A) National nowcasts over time, several origins overlaid, against the truth; (B, C) WIS relative to `KIT-frozen_baseline` on the natural and log scales, as stacked dispersion, overprediction and underprediction; (D) bias; (E) 50% and 95% coverage; (F) relative WIS by location; (G) by age group; (H) by horizon. {{< meta results.germany.label >}} {{< meta results.germany.note >}}
 :::
 
 On the {{< meta results.germany.scope >}}, the best model was {{< meta results.germany.best_model >}}, with a relative score of {{< meta results.germany.best_rel_score >}} and {{< meta results.germany.best_rel_log_score >}} on the log scale, against {{< meta results.germany.baseline >}}, and {{< meta results.germany.best_rel_score_randomwalknowcast >}} against `randomwalknowcast`, as the hub's baseline is a point forecast with no coverage.
@@ -282,7 +283,7 @@ Ebola: national nowcasts, one column per model and one row per origin. Black is 
 ::: {#fig-ebola}
 ![](build/figures/main/ebola-results.png)
 
-Ebola: forecasts of every hub round, all held out, each from the last release before the round closed. (A, B) WIS relative to {{< meta results.ebola.baseline >}} on the natural and log scales, as stacked dispersion, overprediction and underprediction, on the forecasts each model shares with it, with the share of forecasts a model made in its label where it missed some; (C) bias; (D) 50% and 90% coverage; (E) relative WIS by location; (F) by horizon. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
+Ebola: forecasts of every hub round, all held out, each from the last release before the round closed. (A) National nowcasts over time, several origins overlaid, against the truth; (B, C) WIS relative to {{< meta results.ebola.baseline >}} on the natural and log scales, as stacked dispersion, overprediction and underprediction, on the forecasts each model shares with it, with the share of forecasts a model made in its label where it missed some; (D) bias; (E) 50% and 90% coverage; (F) relative WIS by location; (G) by horizon. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
 :::
 
 {{< meta results.ebola.status >}} On the {{< meta results.ebola.scope >}}, the best model was {{< meta results.ebola.best_model >}}, with a relative score of {{< meta results.ebola.best_rel_score >}} and {{< meta results.ebola.best_rel_log_score >}} on the log scale, against {{< meta results.ebola.baseline >}}.
