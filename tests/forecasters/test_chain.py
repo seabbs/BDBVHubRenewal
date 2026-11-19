@@ -429,3 +429,27 @@ def test_a_pair_in_window_is_used_alone(snap24) -> None:
     fit = fit_delay(snap24, len(snap24.releases) - 1, Settings())
     assert fit is not None
     assert fit.pairs.tolist() == [[1, 2], [2, 3]]
+
+
+def test_the_longer_pair_recovers_a_known_delay() -> None:
+    # Two releases 50 days apart, reported with a known daily delay: the
+    # fit at the second recovers it at every age (#365).
+    d = 42
+    g = np.linspace(0.25, 0.0, d)
+    to_final = np.exp(np.cumsum(g[::-1])[::-1])
+    days = pd.date_range("2026-06-01", "2026-10-07")
+    cuts = (pd.Timestamp("2026-08-18"), pd.Timestamp("2026-10-07"))
+    rows = []
+    for cut in cuts:
+        for day in days[days <= cut]:
+            age = (cut - day).days
+            n = 10_000 / to_final[age] if age < d else 10_000
+            rows.append((cut.date().isoformat(), "CD-IT", day, round(n)))
+    daily = pd.DataFrame(
+        rows, columns=["vintage", "location", "onset_date", "observed"]
+    ).assign(imputed=0, cutoff=lambda x: x["vintage"])
+    daily["onset_date"] = daily["onset_date"].dt.date.astype(str)
+    snap = snapshot_arrays(daily, "2026-10-07", ("CD-IT",))
+    origin = build_origin(snap, Settings(), errors=False)
+    loc = snap.locations.index("CD-IT")
+    np.testing.assert_allclose(origin.fit.g[loc], g, atol=2e-3)
