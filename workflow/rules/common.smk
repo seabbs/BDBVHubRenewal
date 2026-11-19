@@ -282,7 +282,7 @@ def checkpoint_labels(wc=None):
 
 ROOM = (
     f"workflow/scripts/wait_for_room.sh {LOCAL['MIN_FREE_GB']} "
-    f"{LOCAL['MIN_DISK_GB']} {CACHE} && "
+    f"{LOCAL['MIN_DISK_GB']} {CACHE} {LOCAL['MAX_LOAD']} && "
 )
 
 

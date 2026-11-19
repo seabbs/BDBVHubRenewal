@@ -97,6 +97,7 @@ MACHINE_KEYS = frozenset(
         "DASHBOARD_RUNS",
         "MIN_FREE_GB",
         "MIN_DISK_GB",
+        "MAX_LOAD",
         "PAPER_LOGS",
         "COMPUTE",
         "WORKERS",
