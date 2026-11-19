@@ -155,3 +155,40 @@ def test_runs_and_references_take_the_shared_display_names(tmp_path):
         "Zero-shot (complete data only)",
         "Random walk nowcast",
     }
+
+
+def test_runs_take_the_shared_name_and_colour_whatever_their_label(tmp_path):
+    # Sam 10:40, 10:45: the live run is plain "Fine-tuned (delays)", earlier
+    # runs "Fine-tuned (delays) - <grid> grid" (else their key), never a
+    # configured label such as "grid r6 (live)".
+    import json
+
+    from flowlib.dashboard import paperstyle, runs
+
+    blue = paperstyle.model_colour(context.RUN_MODEL)
+    one = context.named_runs(
+        [runs.make_run("r6", "/x", label="grid r6 (live)", colour="#db2777")]
+    )
+    assert (one[0].label, one[0].colour) == ("Fine-tuned (delays)", blue)
+    old = tmp_path / "old"
+    (old / "train" / "n250").mkdir(parents=True)
+    (old / "train" / "n250" / "settings.json").write_text(
+        json.dumps({"grid": "r5", "n_outbreaks": 250})
+    )
+    several = context.named_runs(
+        [
+            runs.make_run("a", str(old), label="grid r5"),
+            runs.make_run("slots", "slots-ft-"),
+            runs.make_run("r6", "/y", label="grid r6 (live)", live=True),
+        ]
+    )
+    assert [r.label for r in several] == [
+        "Fine-tuned (delays) - r5 grid",
+        "Fine-tuned (delays) - slots",
+        "Fine-tuned (delays)",
+    ]
+    # The live run is drawn in the model's colour, the others in its
+    # shades, so every run reads as the fine-tuned model.
+    assert several[2].colour == blue
+    assert {several[0].colour, several[1].colour} <= set(context.RUN_SHADES)
+    assert several[0].colour != several[1].colour
