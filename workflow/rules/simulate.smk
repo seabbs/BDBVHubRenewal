@@ -6,7 +6,7 @@
 # Into
 # <ROOT>/rounds/r<r>/sims/. Each batch gets a manifest row, the round's
 # manifest joins them, the sim QC (scripts/sim_qc.py) checks the round
-# against fixed thresholds (simulate.qc),
+# against the grid's thresholds (its `qc`),
 # and `round_ready` writes the seed lists and READY last. Every
 # simulation is kept: QC exclusions are a list (qc/excluded.csv).
 #
@@ -196,7 +196,7 @@ rule sim_qc:
         TOOLS_ENV
     params:
         round_dir=lambda wc, input: Path(input[0]).parent,
-        # The thresholds (simulate.qc). The profiles rerun on mtime only,
+        # The grid's thresholds (its `qc`). The profiles rerun on mtime only,
         # so a round already checked keeps its exclusions.
         limits=SIM_QC_ARGS,
     shell:

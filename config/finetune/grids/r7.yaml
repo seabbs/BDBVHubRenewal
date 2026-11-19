@@ -38,6 +38,15 @@ floors:
   # A draw reporting fewer cases than this (over its draws' mean) is drawn
   # again, as are draws that error.
   min_cases: 10
+# The sim QC's plausibility thresholds: a simulation past one is drawn
+# again in its batch (`qc_reason`), and the round's QC (scripts/sim_qc.py)
+# checks them again. Cases per stratum with cases (draws' median), the
+# largest week-on-week rise in weekly cases by reference date, and the
+# mean reporting delay.
+qc:
+  max_cases_per_stratum: 500000
+  max_weekly_jump: 1000
+  max_mean_delay_days: 35
 shares:
   controlled: 0.5      # early outbreaks brought towards R = 1
   drift: 0.3           # non-endemic settings with a slow drift in R

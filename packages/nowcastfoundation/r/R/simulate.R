@@ -280,8 +280,9 @@ simulate_outbreak <- function(grid, design, v, ctx) {
 }
 
 # Simulate one design: up to five draws of its values, each kept if it
-# runs and reports at least `min_cases` (`redraw_reason`). Returns the
-# outbreak (or NULL) and a failure row per failed try.
+# runs, reports at least `min_cases` (`redraw_reason`) and passes the sim
+# QC (`qc_reason`). Returns the outbreak (or NULL) and a failure row per
+# failed try.
 simulate_cell <- function(grid, design, ctx, id = NA_character_) {
   if (design$strata_link == "independent" &&
       design$n_places * design$n_ages > 1) {
@@ -294,7 +295,9 @@ simulate_cell <- function(grid, design, ctx, id = NA_character_) {
     reason <- if (inherits(res, "error")) {
       conditionMessage(res)
     } else {
-      redraw_reason(sum(res$counts$count) / ctx$draws, grid)
+      first <- res$counts[draw == 1L]
+      reason <- redraw_reason(sum(res$counts$count) / ctx$draws, grid)
+      if (is.na(reason)) qc_reason(first, grid) else reason
     }
     if (is.na(reason)) {
       return(list(out = res, failures = failures))
@@ -392,8 +395,9 @@ simulate_independent <- function(grid, design, ctx, id = NA_character_) {
 #' Each simulation draws its categorical settings (`draw_design`), its
 #' values by layer (`draw_values`), its latent path by renewal
 #' (`latent_onsets`), and its release triangle by epinowcast, observed
-#' with the grid's noise, then revised. A draw that errors or gives no case
-#' is drawn again, up to five times.
+#' with the grid's noise, then revised. A draw that errors, reports fewer
+#' than `min_cases` or fails the sim QC is drawn again, up to five times,
+#' then from a new design, so the batch always holds `n` simulations.
 #'
 #' @param grid A grid (`read_grid`).
 #' @param seed The batch's seed.
@@ -421,12 +425,19 @@ simulate_batch <- function(grid, seed, n, model, draws = 1L, weeks = NULL,
   failures <- list()
   for (i in seq_len(n)) {
     id <- sprintf("%d-%04d", seed, i)
-    design <- draw_design(grid, weeks = weeks)
+    # A design that gives no simulation in five tries is replaced by a new
+    # one, so the batch always holds `n` simulations.
     t1 <- Sys.time()
-    run <- simulate_cell(grid, design, ctx, id)
-    failures <- c(failures, run$failures)
-    out <- run$out
-    if (is.null(out)) next
+    out <- NULL
+    designs <- 0L
+    while (is.null(out)) {
+      designs <- designs + 1L
+      if (designs > 20L) stop("simulation ", id, ": no design in 20 gave one")
+      design <- draw_design(grid, weeks = weeks)
+      run <- simulate_cell(grid, design, ctx, id)
+      failures <- c(failures, run$failures)
+      out <- run$out
+    }
     # Each draw is an outbreak `<seed>-<index>-<draw>`.
     out$counts[, outbreak := paste(id, draw, sep = "-")]
     out$counts[, draw := NULL]
@@ -435,7 +446,7 @@ simulate_batch <- function(grid, seed, n, model, draws = 1L, weeks = NULL,
     settings[[length(settings) + 1L]] <- flat_values(c(
       list(outbreak = id), design, out$values,
       list(
-        draws = draws, tries = length(run$failures) + 1L,
+        draws = draws, tries = length(run$failures) + 1L, designs = designs,
         cases = sum(out$counts$count) / draws,
         seconds = as.numeric(Sys.time() - t1, units = "secs")
       )
@@ -464,4 +475,39 @@ redraw_reason <- function(size, grid) {
   } else {
     NA_character_
   }
+}
+
+#' Why a simulation fails the sim QC, if it does
+#'
+#' The checks of scripts/sim_qc.py on one draw's counts, with the grid's
+#' thresholds (`grid$qc`): cases per stratum with cases, the largest
+#' week-on-week rise in weekly cases by reference date (weeks from
+#' Monday), and the mean reporting delay.
+#'
+#' @param counts One draw's counts: `location`, `reference_date`,
+#'   `report_date` and `count`.
+#' @param grid A grid (`read_grid`).
+#' @return The reason, or `NA` if the simulation passes.
+#' @export
+qc_reason <- function(counts, grid) {
+  q <- grid$qc
+  w <- counts$count
+  per_stratum <- sum(w) / max(1L, data.table::uniqueN(counts$location))
+  if (per_stratum > q$max_cases_per_stratum) {
+    return(sprintf("cases per stratum above %s", q$max_cases_per_stratum))
+  }
+  ref <- counts$reference_date
+  week <- ref - (as.integer(format(ref, "%u")) - 1L)
+  weekly <- tapply(w, week, sum)
+  growth <- diff(log(as.numeric(weekly[order(names(weekly))]) + 1))
+  if (length(growth) && max(growth) > log(q$max_weekly_jump)) {
+    return(sprintf(
+      "weekly cases rise more than %s-fold in one week", q$max_weekly_jump
+    ))
+  }
+  delay <- as.integer(counts$report_date - ref)
+  if (sum(delay * w) / sum(w) > q$max_mean_delay_days) {
+    return(sprintf("mean reporting delay over %s days", q$max_mean_delay_days))
+  }
+  NA_character_
 }
