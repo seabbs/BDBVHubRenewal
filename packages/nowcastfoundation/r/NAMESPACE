@@ -5,11 +5,13 @@ export(draw_count)
 export(draw_design)
 export(draw_setting)
 export(draw_share)
+export(draw_strata)
 export(draw_values)
 export(max_strata)
 export(read_grid)
 export(redraw_reason)
 export(simulate_batch)
+export(system_locations)
 import(data.table)
 importFrom(stats,
   as.formula,

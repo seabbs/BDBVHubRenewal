@@ -18,9 +18,19 @@
 #   cases a simulation may have before it is drawn again.
 name: r7
 epinowcast_sha: e084b080
-# Linked strata cap and independent strata (as r6).
+# The simulator's memory: at most `max_strata` strata (places by ages) up to
+# 28 weeks, fewer in longer series. Independent strata are each a
+# simulation of their own, so at most `max_independent` of them.
 max_strata: 60
 max_independent: 8
+# The trainer's block budget: a block is a whole simulated system (the
+# country, group totals and every leaf), so a system has at most this many
+# locations. A location takes its counts, up to 49 lags and a period total
+# (51 rows) in a block of at most 2,000 series (finetune_chronos
+# MAX_SERIES, MAX_LAGS): 2,000 / 51 = 39, with 6 kept for the regions the
+# trainer may group flat places into.
+max_locations: 39
+regions: 6
 floors:
   seed: 1
   weeks: 4
@@ -50,10 +60,11 @@ counts:
   slow_weeks: {base: 1, mean: 3}
   active_places: {base: 1, mean: 1}
   late_places: {base: 1, mean: 0.5}
-  # Strata: places and ages, capped by the memory budget (max_strata).
+  # Strata: places and ages, drawn again until the system fits the
+  # simulator's memory (max_strata) and the trainer's block (max_locations).
   places_even: {base: 2, mean: 6}
   places_concentrated: {base: 15, mean: 5}
-  places_by_ages: {base: 6, mean: 4}
+  places_by_ages: {base: 4, mean: 2}
   ages: {base: 2, mean: 2}
   ages_by_places: {base: 3, mean: 1}
   report_days: {base: 1, mean: 0.5}

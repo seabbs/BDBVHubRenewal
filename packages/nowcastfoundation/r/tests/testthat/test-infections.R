@@ -63,6 +63,9 @@ for (window in c("early", "established", "endemic")) {
     d$window <- window
     v <- draw_values(grid, d)
     v$quiet_places <- 3L
+    # Variants return immune people to susceptible, so infections can
+    # pass the population; without them they cannot.
+    v$variant_at <- v$variant_escape <- v$variant_r <- v$variant_days <- numeric(0)
     gt <- gt_pmf(v$gt_mean, d$gt_family, v$gt_cv)
     run <- latent_onsets(grid, 100L, gt, strata_of(3), d, v)
     w <- seq_along(gt)

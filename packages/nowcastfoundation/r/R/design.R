@@ -10,6 +10,51 @@ max_strata <- function(grid, weeks) {
   min(grid$max_strata, as.integer(grid$max_strata * 28 / weeks))
 }
 
+#' Draw a system's places and ages from the grid's counts
+#'
+#' @param grid A grid (`read_grid`).
+#' @param cell The simulation's categorical settings (`draw_cell`).
+#' @return Places and ages, two integers.
+#' @export
+draw_strata <- function(grid, cell) {
+  places <- switch(cell$strata,
+    single = 1L, ages = 1L,
+    places = draw_count(
+      grid, if (cell$spread == "concentrated") "places_concentrated" else "places_even"
+    ),
+    places_ages = draw_count(grid, "places_by_ages")
+  )
+  ages <- switch(cell$strata,
+    single = 1L, places = 1L,
+    ages = draw_count(grid, "ages"),
+    places_ages = draw_count(grid, "ages_by_places")
+  )
+  c(places, ages)
+}
+
+#' A system's locations in a whole-system training block
+#'
+#' The country, then for places by ages each place's and each age's total,
+#' for flat places up to `regions` region totals, and every leaf.
+#'
+#' @param places,ages The system's places and ages.
+#' @param regions Most region totals the trainer adds over four or more flat
+#'   places.
+#' @return The number of locations.
+#' @export
+system_locations <- function(places, ages, regions = 6) {
+  leaves <- places * ages
+  if (leaves == 1) return(1)
+  totals <- if (places > 1 && ages > 1) {
+    places + ages
+  } else if (places > 1) {
+    regions
+  } else {
+    0
+  }
+  1 + totals + leaves
+}
+
 #' A simulation's design: its categorical settings and the structure they
 #' imply
 #'
@@ -25,21 +70,17 @@ draw_design <- function(grid, weeks = NULL) {
       as.integer(round(draw_setting(grid, "weeks")))
     )
   }
-  cap <- max_strata(grid, weeks)
-  n_places <- switch(cell$strata,
-    single = 1L, ages = 1L,
-    # Concentrated outbreaks spread over many places, as BDBV's provinces.
-    places = draw_count(
-      grid, if (cell$spread == "concentrated") "places_concentrated" else "places_even"
-    ),
-    # At least three ages each, within the memory budget.
-    places_ages = min(cap %/% 3L, draw_count(grid, "places_by_ages"))
-  )
-  n_ages <- switch(cell$strata,
-    single = 1L, places = 1L,
-    ages = draw_count(grid, "ages"),
-    places_ages = max(3L, min(cap %/% n_places, draw_count(grid, "ages_by_places")))
-  )
+  # The strata, drawn again until the whole system fits the simulator's
+  # memory and the trainer's block (a guard on compute, as Sam allows).
+  for (try in 1:1000) {
+    n <- draw_strata(grid, cell)
+    fits <- n[1] * n[2] <= max_strata(grid, weeks) &&
+      system_locations(n[1], n[2], grid$regions) <= grid$max_locations
+    if (fits) break
+  }
+  if (!fits) stop("no strata draw fits the budget")
+  n_places <- n[1]
+  n_ages <- n[2]
   if (cell$strata_link == "independent") {
     # Each independent stratum is a simulation of its own, so at most
     # `max_independent` strata; concentrated outbreaks keep their many
