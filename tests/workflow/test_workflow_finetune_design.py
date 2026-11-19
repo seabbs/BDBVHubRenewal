@@ -46,17 +46,18 @@ def test_rounds_are_simulated_with_one_draw():
     assert CONFIG["simulate"]["seed_base"] == 30000
 
 
-def test_a_round_is_one_grid_block_of_840():
+def test_a_round_is_800_simulations():
     sim = CONFIG["simulate"]
-    assert sim["batches"] * sim["batch"] == 840
-    assert (sim["batches"], sim["batch"]) == (40, 21)
+    assert (sim["batches"], sim["batch"]) == (40, 20)
     assert "held_batches" not in sim
-    # Ten training rounds, after the held-out round, are the 8,400.
-    # The run's rounds are its grid's.
+    # QC failures are redrawn in their batch, so a round is always 800 and
+    # a grid's training rounds hold the run's outbreaks exactly. The
+    # run's rounds are its grid's.
     assert CONFIG["finetune"]["rounds"] is None
     assert CONFIG["finetune"]["validation_round"] is None
-    for grid in CONFIG["grid_rounds"].values():
-        assert len(grid["rounds"]) * 840 == CONFIG["finetune"]["outbreaks"]
+    for name, grid in CONFIG["grid_rounds"].items():
+        if name == CONFIG["finetune"]["grid"] and name not in ("r5", "r6"):
+            assert len(grid["rounds"]) * 800 == CONFIG["finetune"]["outbreaks"]
         assert grid["validation_round"] not in grid["rounds"]
         assert grid["test_round"] not in (
             *grid["rounds"],

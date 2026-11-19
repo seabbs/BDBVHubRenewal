@@ -1,0 +1,28 @@
+Package: nowcastfoundation
+Title: Simulations to Fine-Tune Time Series Foundation Models for Nowcasting
+Version: 0.0.1
+Authors@R: person("Sam", "Abbott", role = c("aut", "cre"),
+    email = "contact@samabbott.co.uk")
+Description: Simulates outbreaks and their release triangles from a grid
+    config in four layers (infections, observation, reporting delays and
+    the reporting system), to fine-tune a time series foundation model to
+    nowcast. The grid's factors and sampling distributions are read from
+    a YAML file; the engine runs epinowcast's simulation for the reporting
+    delays.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+Imports:
+    data.table,
+    stats,
+    yaml
+Suggests:
+    cmdstanr,
+    epinowcast,
+    jsonlite,
+    testthat (>= 3.0.0),
+    withr
+Remotes:
+    epinowcast/epinowcast@e084b080
+Config/testthat/edition: 3
+Config/roxygen2/version: 8.1.0
