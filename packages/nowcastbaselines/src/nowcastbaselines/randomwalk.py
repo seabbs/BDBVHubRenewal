@@ -60,7 +60,7 @@ import jax.numpy as jnp
 import numpy as np
 import pandas as pd
 
-from bdbvhubrenewal.forecasters.chain import (
+from nowcastbaselines.chain import (
     NoCompleteWeek,
     Origin,
     Settings,
@@ -68,14 +68,10 @@ from bdbvhubrenewal.forecasters.chain import (
     build_origin,
     delay_summary,
 )
-from bdbvhubrenewal.forecasters.copula import (
-    error_scores,
-    estimate_rho,
-    pair_walks,
-)
-from bdbvhubrenewal.forecasters.introductions import silent_trajectories
-from bdbvhubrenewal.forecasters.obs import sample_count
-from bdbvhubrenewal.forecasters.walk import random_walks
+from nowcastbaselines.copula import error_scores, estimate_rho, pair_walks
+from nowcastbaselines.introductions import silent_trajectories
+from nowcastbaselines.obs import sample_count
+from nowcastbaselines.walk import random_walks
 from nowcastutils.base import (
     SAMPLE_COLUMNS,
     ForecastTask,

@@ -3,7 +3,7 @@ r"""Backtest of every model on the real releases.
 
 Every real release with a later release is an origin.
 The random walk models forecast from the releases up to the origin only
-(`bdbvhubrenewal.forecasters.randomwalk`).
+(`nowcastbaselines.randomwalk`).
 Stored forecasts of other models, such as the renewal models and hub
 teams, are scored with them.
 Weeks back $k$ count from the week holding the origin's cut-off, so

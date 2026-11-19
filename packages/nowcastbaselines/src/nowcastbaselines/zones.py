@@ -63,7 +63,7 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
-from bdbvhubrenewal.forecasters.randomwalk import RandomWalk
+from nowcastbaselines.randomwalk import RandomWalk
 from nowcastutils.base import (
     NATIONAL,
     SAMPLE_COLUMNS,

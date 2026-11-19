@@ -150,16 +150,21 @@ def test_model_code_leaves_out_other_models() -> None:
 
     code = set(model_code("randomwalk", ROOT))
     assert "src/bdbvhubrenewal/forecasters/renewal.py" not in code
-    assert "src/bdbvhubrenewal/forecasters/randomwalk.py" in code
+    assert (
+        "packages/nowcastbaselines/src/nowcastbaselines/randomwalk.py" in code
+    )
     renewal = set(model_code("renewal", ROOT))
     # It builds on the random walk module, so that is in its key.
-    assert "src/bdbvhubrenewal/forecasters/randomwalk.py" in renewal
+    assert (
+        "packages/nowcastbaselines/src/nowcastbaselines/randomwalk.py"
+        in renewal
+    )
 
 
 def test_a_fit_key_holds_the_zone_split_only_where_its_model_calls_it() -> None:
     from bdbvhubrenewal.evaluation.store import fit_code
 
-    zones = "src/bdbvhubrenewal/forecasters/zones.py"
+    zones = "packages/nowcastbaselines/src/nowcastbaselines/zones.py"
     # The province-level models split their zones in their own forecast
     # (`with_zones`, since #299), and the zone fits call its zone_task, so
     # their keys hold the split.
@@ -222,17 +227,21 @@ def test_model_code_follows_imports_into_workspace_packages(
         )
     pkg = tmp_path / "packages/walkpkg/src/walkpkg"
     pkg.mkdir(parents=True)
-    old = tmp_path / "src/bdbvhubrenewal/forecasters/walk.py"
+    old = tmp_path / "packages/nowcastbaselines/src/nowcastbaselines/walk.py"
     old.rename(pkg / "steps.py")
     (pkg / "__init__.py").write_text("from walkpkg.steps import random_walks\n")
     for name in ("chain.py", "introductions.py", "randomwalk.py"):
-        path = tmp_path / "src/bdbvhubrenewal/forecasters" / name
+        path = (
+            tmp_path / "packages/nowcastbaselines/src/nowcastbaselines" / name
+        )
         path.write_text(
             path.read_text().replace(
-                "bdbvhubrenewal.forecasters.walk import", "walkpkg import"
+                "nowcastbaselines.walk import", "walkpkg import"
             )
         )
     code = model_code("randomwalk", tmp_path)
     assert "packages/walkpkg/src/walkpkg/steps.py" in code
     assert "packages/walkpkg/src/walkpkg/__init__.py" in code
-    assert "src/bdbvhubrenewal/forecasters/randomwalk.py" in code
+    assert (
+        "packages/nowcastbaselines/src/nowcastbaselines/randomwalk.py" in code
+    )

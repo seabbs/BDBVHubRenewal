@@ -11,7 +11,7 @@ import pytest
 
 from bdbvhubrenewal.data.zones import hub_zones
 from bdbvhubrenewal.forecasters import ForecastTask, get_model
-from bdbvhubrenewal.forecasters.zones import zone_task
+from nowcastbaselines.zones import zone_task
 from nowcasteval.backtest import BacktestConfig, make_tasks
 from nowcastutils.snapshots import weekly_counts
 

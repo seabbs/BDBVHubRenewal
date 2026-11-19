@@ -22,7 +22,7 @@ import jax.numpy as jnp
 import numpy as np
 from scipy import stats
 
-from bdbvhubrenewal.forecasters.walk import random_walks
+from nowcastbaselines.walk import random_walks
 
 __all__ = [
     "introduction_rates",

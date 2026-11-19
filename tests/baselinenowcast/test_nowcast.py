@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 from bnc_helpers import Case, read_vec
 
-from bdbvhubrenewal.baselinenowcast import baselinenowcast
+from nowcastbaselines.baselinenowcast import baselinenowcast
 
 pytestmark = pytest.mark.filterwarnings(
     "ignore:.*reference times available.*:UserWarning"

@@ -11,7 +11,7 @@ import numpy as np
 import pytest
 from bnc_helpers import Case, from_na, read, read_vec
 
-from bdbvhubrenewal.baselinenowcast import (
+from nowcastbaselines.baselinenowcast import (
     estimate_uncertainty,
     estimate_uncertainty_retro,
     fit_by_horizon,
@@ -114,7 +114,7 @@ def test_retro_aborts(small: Case) -> None:
 def test_estimate_uncertainty_skips_failed_nowcasts() -> None:
     v, m = from_na(read("toy", "tri"))
     pre = preprocess_negative_values(v, m)
-    from bdbvhubrenewal.baselinenowcast import (
+    from nowcastbaselines.baselinenowcast import (
         apply_reporting_structure,
         estimate_and_apply_delay,
         get_reporting_structure,
@@ -149,7 +149,7 @@ def _hub_week_inputs(
 ) -> Any:
     import pandas as pd
 
-    from bdbvhubrenewal.baselinenowcast import (
+    from nowcastbaselines.baselinenowcast import (
         estimate_and_apply_delay,
         hub_weeks,
     )

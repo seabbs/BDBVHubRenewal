@@ -7,24 +7,24 @@ Build a model from the registry and forecast a task with it. See [Getting starte
     options:
       members: false
 
-::: bdbvhubrenewal.forecasters.randomwalk
+::: nowcastbaselines.randomwalk
 
-::: bdbvhubrenewal.forecasters.chain
+::: nowcastbaselines.chain
 
-::: bdbvhubrenewal.forecasters.introductions
+::: nowcastbaselines.introductions
 
-::: bdbvhubrenewal.forecasters.pooling
+::: nowcastbaselines.pooling
 
-::: bdbvhubrenewal.forecasters.obs
+::: nowcastbaselines.obs
 
-::: bdbvhubrenewal.forecasters.walk
+::: nowcastbaselines.walk
 
 ::: bdbvhubrenewal.forecasters.renewal
 
 ::: bdbvhubrenewal.forecasters.foundation
 
-::: bdbvhubrenewal.forecasters.copula
+::: nowcastbaselines.copula
 
-::: bdbvhubrenewal.forecasters.zones
+::: nowcastbaselines.zones
 
 ::: bdbvhubrenewal.chronos_ft

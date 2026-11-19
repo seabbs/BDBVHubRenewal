@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from bdbvhubrenewal.forecasters.pooling import pool_matrix, source_index
+from nowcastbaselines.pooling import pool_matrix, source_index
 
 # Nodes: 0 country, 1 and 2 provinces, 3 and 4 zones of province 1.
 PARENT = np.array([-1, 0, 0, 1, 1])

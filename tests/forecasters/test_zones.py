@@ -15,7 +15,9 @@ from bdbvhubrenewal.forecasters import (
     RandomWalk,
     RandomWalkNowcast,
 )
-from bdbvhubrenewal.forecasters.zones import (
+from bdbvhubrenewal.submission.hub import to_hub_table, write_submission
+from bdbvhubrenewal.submission.validate import Hub, validate_submission
+from nowcastbaselines.zones import (
     ZoneAllocator,
     _apportion,
     check_zone_coherence,
@@ -25,8 +27,6 @@ from bdbvhubrenewal.forecasters.zones import (
     zone_task,
     zones_for_model,
 )
-from bdbvhubrenewal.submission.hub import to_hub_table, write_submission
-from bdbvhubrenewal.submission.validate import Hub, validate_submission
 from nowcasteval.backtest import BacktestConfig, make_tasks
 from nowcastutils.hierarchy import province_of
 from nowcastutils.snapshots import weekly_counts

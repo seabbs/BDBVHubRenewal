@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 from bnc_helpers import read, read_ints, read_vec
 
-from bdbvhubrenewal.baselinenowcast import (
+from nowcastbaselines.baselinenowcast import (
     fill_row,
     growth,
     hub_week_matrix,

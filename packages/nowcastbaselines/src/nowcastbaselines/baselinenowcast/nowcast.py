@@ -95,7 +95,7 @@ def baselinenowcast(
     --------
     >>> import jax
     >>> import numpy as np
-    >>> from bdbvhubrenewal.baselinenowcast import baselinenowcast
+    >>> from nowcastbaselines.baselinenowcast import baselinenowcast
     >>> rng = np.random.default_rng(1)
     >>> triangle = rng.poisson(10, size=(20, 4)).astype(float)
     >>> mask = np.add.outer(np.arange(20), np.arange(4)) < 20

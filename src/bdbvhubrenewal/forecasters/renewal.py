@@ -46,7 +46,7 @@ import numpy as np
 import pandas as pd
 from numpy.typing import NDArray
 
-from bdbvhubrenewal.forecasters.zones import with_zones
+from nowcastbaselines.zones import with_zones
 from nowcastutils.base import (
     NATIONAL,
     SAMPLE_COLUMNS,
@@ -654,7 +654,7 @@ def _silent_walk(task: ForecastTask) -> tuple[pd.DataFrame, set[str]]:
     The walk finds the places with no case in its walk window and gives
     them its introduction layer, pooled over all the task's places.
     """
-    from bdbvhubrenewal.forecasters.randomwalk import RandomWalkNowcast
+    from nowcastbaselines.randomwalk import RandomWalkNowcast
 
     walk = RandomWalkNowcast()
     origin = walk.origin_at(task, errors=False)

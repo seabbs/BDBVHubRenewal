@@ -51,7 +51,7 @@ import yaml
 
 from bdbvhubrenewal.data.zones import ZoneData
 from bdbvhubrenewal.forecasters import get_model, list_models
-from bdbvhubrenewal.forecasters.zones import zone_task
+from nowcastbaselines.zones import zone_task
 from nowcasteval.backtest import BacktestConfig, make_tasks, run_forecasts
 from nowcasteval.nowcast import release_backtest
 from nowcasteval.scoring import relative_skill, summarise_scores

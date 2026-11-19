@@ -1,6 +1,6 @@
 # Generate test fixtures from the R package baselinenowcast 0.2.2.
 #
-# The JAX port (src/bdbvhubrenewal/baselinenowcast/) is checked against
+# The JAX port (packages/nowcastbaselines/src/nowcastbaselines/baselinenowcast/) is checked against
 # these fixtures. Run from the repo root:
 #
 #   Rscript scripts/baselinenowcast_fixtures.R

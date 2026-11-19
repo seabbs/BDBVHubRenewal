@@ -11,8 +11,8 @@ on:
   push:
     branches: [main]
     paths:
-      - 'src/bdbvhubrenewal/forecasters/randomwalk.py'
-      - 'src/bdbvhubrenewal/baselinenowcast/**'
+      - 'packages/nowcastbaselines/src/nowcastbaselines/randomwalk.py'
+      - 'packages/nowcastbaselines/src/nowcastbaselines/baselinenowcast/**'
       - 'scripts/baselinenowcast_fixtures.R'
       - 'scripts/snapshot_fixtures.R'
       - 'scripts/check_fixtures.py'
@@ -20,8 +20,8 @@ on:
       - '.github/workflows/baselinenowcast.yml'
   pull_request:
     paths:
-      - 'src/bdbvhubrenewal/forecasters/randomwalk.py'
-      - 'src/bdbvhubrenewal/baselinenowcast/**'
+      - 'packages/nowcastbaselines/src/nowcastbaselines/randomwalk.py'
+      - 'packages/nowcastbaselines/src/nowcastbaselines/baselinenowcast/**'
       - 'scripts/baselinenowcast_fixtures.R'
       - 'scripts/snapshot_fixtures.R'
       - 'scripts/check_fixtures.py'

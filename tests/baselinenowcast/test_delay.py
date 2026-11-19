@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 from bnc_helpers import Case, from_na, read, read_vec
 
-from bdbvhubrenewal.baselinenowcast import (
+from nowcastbaselines.baselinenowcast import (
     apply_delay,
     estimate_and_apply_delay,
     estimate_delay,

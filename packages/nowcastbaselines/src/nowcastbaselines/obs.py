@@ -23,7 +23,7 @@ from __future__ import annotations
 import numpy as np
 from jax import Array
 
-from bdbvhubrenewal.baselinenowcast import fit_by_horizon, sample_nb
+from nowcastbaselines.baselinenowcast import fit_by_horizon, sample_nb
 
 __all__ = ["MAX_SIZE", "PRIOR_SIZE", "fit_sizes", "sample_count"]
 
