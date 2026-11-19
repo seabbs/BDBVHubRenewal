@@ -73,6 +73,17 @@ def test_a_setting_in_the_environment_is_seen_by_the_file(tmp_path):
     assert cfg["SCORE_CACHE"] == "/env/cache"
 
 
+def test_a_line_that_uses_itself_takes_the_environment_s_value(tmp_path):
+    # As the shell reads `ROOT=$ROOT/x`: unset, it is empty; set, the
+    # environment wins over the line.
+    path = tmp_path / "local.env"
+    path.write_text("ROOT=$ROOT/x\nPYTHONPATH=$PYTHONPATH:/x\n")
+    env = {"HOME": str(tmp_path), "PYTHONPATH": "/lib"}
+    cfg = localconfig.read(path, env)
+    assert cfg["ROOT"] == "/x"
+    assert cfg["PYTHONPATH"] == "/lib"
+
+
 def test_settings_that_use_each_other_are_an_error(tmp_path):
     path = tmp_path / "local.env"
     path.write_text("ROOT=$RUN/x\nRUN=$ROOT/y\n")
