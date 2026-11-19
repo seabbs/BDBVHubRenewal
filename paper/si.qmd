@@ -176,6 +176,7 @@ W' = W + \frac{\alpha}{r} B A,
 $$
 where $A \in \mathbb{R}^{r \times d_\text{in}}$ and $B \in \mathbb{R}^{d_\text{out} \times r}$ are trained and $W$ is frozen [@Hu2021].
 - We use rank $r = 8$ and $\alpha = 16$.
+- These are the defaults of Chronos-2's fine-tuning (`Chronos2Pipeline.fit`) and of AutoGluon [@chronos_forecasting; @autogluon].
 - We apply it to the query, key, value and output projections of the time and group attention of all 12 layers, and to the output layer.
 - $B$ starts at zero, so $W' = W$ at the start.
 
@@ -196,7 +197,7 @@ $$
 \eta_t = \eta_0 \left(1 - \frac{s_t}{8{,}400}\right),
 $$
 where $s_t$ is the number of simulations trained by step $t$, interpolated within a chunk by its steps, so the rate reaches zero at the last simulation however the blocks are packed into steps.
-- $\eta_0 = 10^{-5}$ for the LoRA adapter, as in Chronos-2 [@Ansari2025], and $\eta_0 = 10^{-3}$ for the attention biases.
+- $\eta_0 = 10^{-5}$ for the LoRA adapter, the rate Chronos-2's fine-tuning recommends for LoRA and AutoGluon's default [@chronos_forecasting; @autogluon], and $\eta_0 = 10^{-3}$ for the attention biases.
 - We train with AdamW [@Loshchilov2019] in fp32 and clip the gradient norm at 1 [@Pascanu2013].
 - Neither has weight decay or warmup, as in Chronos-2's fine-tuning [@Ansari2025], and the biases follow Moirai and TableFormer in having no weight decay [@Woo2024; @Yang2022].
 
