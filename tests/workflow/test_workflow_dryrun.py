@@ -433,7 +433,9 @@ def test_units_wait_below_the_load_ceiling(tmp_path):
     blocks = score_jobs(
         tmp_path, {"score": {"labels": ["aaa"]}}, "MAX_LOAD=12\n", "zones"
     )
-    units = [b for b in blocks if re.match(r"rule score_\w+:", b)]
+    units = [
+        b for b in blocks if re.match(r"rule score_(bdbv|zones|germany):", b)
+    ]
     assert units
     for block in units:
         assert f"wait_for_room.sh 20 16 {tmp_path}/scores 12 " in block

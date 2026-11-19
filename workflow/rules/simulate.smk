@@ -90,6 +90,7 @@ rule simulate_batch:
         prefix=lambda wc, resources: job_prefix(resources.mem_mb),
         min_free=LOCAL["MIN_FREE_GB"],
         min_disk=LOCAL["MIN_DISK_GB"],
+        max_load=LOCAL["MAX_LOAD"],
     shell:
         # The simulator must be the committed one, as the manifest records
         # the commit. A retry keeps the first attempt's log. R and Stan
@@ -106,7 +107,7 @@ rule simulate_batch:
             exit 1
         fi
         workflow/scripts/wait_for_room.sh {params.min_free} {params.min_disk} \
-            {params.sims}
+            {params.sims} {params.max_load}
         [ -s {log} ] && mv {log} {params.sims}/logs/{wildcards.seed}.first.log
         tmp={params.sims}/tmp/{wildcards.seed}
         rm -rf "$tmp" && mkdir -p "$tmp"
