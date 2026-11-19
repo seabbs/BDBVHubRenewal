@@ -723,6 +723,114 @@ def test_a_loss_horizon_stops_blocks_days_after_the_cut_off(
     assert shorter
 
 
+def _raw(target_past, target_after, lags, places=("P01",)):
+    """A raw block: start 3, nowcast 2, two lag series a place.
+
+    `target_past` and `target_after` are a row a place (or one row for a
+    single place); `lags` are the lag series, place by place, lag 0
+    first, each a step's count as reported at that lag.
+    """
+    past = np.atleast_2d(np.array(target_past, dtype=float))
+    after = np.atleast_2d(np.array(target_after, dtype=float))
+    return {
+        "context": np.concatenate(
+            [np.concatenate([past, after], axis=1), np.array(lags, float)]
+        ),
+        "n_targets": len(places),
+        "n_covariates": 2 * len(places),
+        "places": tuple(places),
+        "start": past.shape[1],
+        "nowcast": 2,
+    }
+
+
+def test_reported_cases_count_what_is_known_at_the_cut_off():
+    from finetune_chronos import reported_cases
+
+    nan = np.nan
+    # Daily steps; the cut-off is step 4 (start 3 + nowcast 2 - 1). The
+    # latest report of step 4 is its lag 0 value, of step 3 its lag 1.
+    lags = [[0, 0, 0, 2, 3, nan, nan], [0, 0, 0, 4, nan, nan, nan]]
+    # Each step once, at its latest report: 4 + 3, not 2 + 3 + 4. Cases
+    # after the cut-off, in the target, do not count.
+    assert reported_cases(_raw([0, 0, 0], [0, 0, 9, 9], lags), 1, 28) == 7
+    # The targets' context counts within the window.
+    assert reported_cases(_raw([5, 0, 1], [0, 0, 0, 0], lags), 1, 28) == 13
+    # But not before it: 3 daily steps reach back to step 2.
+    assert reported_cases(_raw([5, 0, 1], [0, 0, 0, 0], lags), 1, 3) == 8
+    # The window is in days: 21 days of 7-day steps reach back to step 2,
+    # 35 days to step 0.
+    assert reported_cases(_raw([5, 0, 1], [0, 0, 0, 0], lags), 7, 21) == 8
+    assert reported_cases(_raw([5, 0, 1], [0, 0, 0, 0], lags), 7, 35) == 13
+
+
+def test_reported_cases_count_each_case_once_at_the_busiest_level():
+    from finetune_chronos import NATIONAL, reported_cases
+
+    zeros = [[0] * 7] * 6
+    # The country and its two places: the places' cases, not the country's
+    # on top.
+    block = _raw(
+        [[0, 0, 10], [0, 0, 4], [0, 0, 6]],
+        [[0] * 4] * 3,
+        zeros,
+        places=(NATIONAL, "P01", "P02"),
+    )
+    assert reported_cases(block, 1, 28) == 10
+    # A block of some of the places is not their sum: the country's cases
+    # count though the place in the block has none.
+    some = _raw(
+        [[0, 0, 12], [0, 0, 0]],
+        [[0] * 4] * 2,
+        zeros[:4],
+        places=(NATIONAL, "P02"),
+    )
+    assert reported_cases(some, 1, 28) == 12
+    # The country alone counts itself.
+    alone = _raw([0, 0, 10], [0, 0, 0, 0], zeros[:2], places=(NATIONAL,))
+    assert reported_cases(alone, 1, 28) == 10
+
+
+def test_a_block_is_quiet_below_the_threshold_whatever_follows():
+    from finetune_chronos import quiet
+
+    nan = np.nan
+    lags = [[0, 0, 0, 2, 3, nan, nan], [0, 0, 0, 4, nan, nan, nan]]
+    block = _raw([0, 0, 0], [0, 0, 99, 99], lags)
+    assert quiet(block, 1, 8)
+    assert not quiet(block, 1, 7)
+    assert quiet(_raw([0, 0, 0], [9, 9, 9, 9], [[0] * 7] * 2), 1, 1)
+
+
+def test_quiet_cut_offs_are_not_cut_when_set(tmp_path, monkeypatch):
+    import finetune_chronos
+    from finetune_stream import cut
+
+    ids = _sim_dir(tmp_path)
+    full = [b for _, b in cut(tmp_path, ids, 1, 32)]
+    # Unset, `quiet` is not asked.
+    monkeypatch.setattr(finetune_chronos, "quiet", None)
+    assert len([b for _, b in cut(tmp_path, ids, 1, 32)]) == len(full)
+    # Set, exactly the blocks it calls quiet are dropped, with the days
+    # per step of their source; the others are cut as before.
+    asked = []
+
+    def weekly_is_quiet(_block, days_per_step, min_cases):
+        asked.append((days_per_step, min_cases))
+        return days_per_step == 7
+
+    monkeypatch.setattr(finetune_chronos, "quiet", weekly_is_quiet)
+    monkeypatch.setattr(finetune_chronos, "QUIET_MIN_CASES", 10)
+    kept = [b for _, b in cut(tmp_path, ids, 1, 32)]
+    assert {d for d, _ in asked} >= {1, 7}
+    assert {k for _, k in asked} == {10}
+    rest = [b for b in full if b["source"] != "weekly"]
+    assert len(kept) == len(rest) < len(full)
+    for a, b in zip(rest, kept, strict=True):
+        assert (a["source"], a["places"]) == (b["source"], b["places"])
+        np.testing.assert_array_equal(a["context"], b["context"])
+
+
 def test_batches_share_one_prediction_length():
     from finetune_chronos import plan_by_length
 

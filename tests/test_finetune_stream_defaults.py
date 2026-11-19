@@ -21,7 +21,7 @@ def test_the_cli_rates_match_the_workflow_config():
 
 
 def test_the_loss_horizon_enters_the_settings():
-    # Unset, the settings are as before the setting existed.
+    # Unset, only the prediction length is stated.
     full = fs.horizon_settings(None)
     assert "loss_horizon_days" not in full
     assert full["prediction_length"] == (
@@ -37,3 +37,14 @@ def test_the_loss_horizon_defaults_to_the_full_horizon():
     assert fs.build_parser().parse_args(argv).loss_horizon_days is None
     args = fs.build_parser().parse_args([*argv, "--loss-horizon-days", "7"])
     assert args.loss_horizon_days == 7
+
+
+def test_dropping_quiet_cut_offs_is_off_until_set():
+    argv = ["sims", "out", "--held-out-seeds", "1", "2", "--grid", "r6"]
+    assert fs.build_parser().parse_args(argv).quiet_min_cases is None
+    args = fs.build_parser().parse_args([*argv, "--quiet-min-cases", "10"])
+    assert args.quiet_min_cases == 10
+    assert fs.quiet_settings(None) == {}
+    rule = fs.quiet_settings(10)["drop_quiet"]
+    assert "fewer than 10 cases" in rule
+    assert f"{fs.ft.QUIET_WINDOW_DAYS} days" in rule
