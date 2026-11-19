@@ -236,6 +236,63 @@ def test_a_split_batch_starts_from_clear_gradients():
     assert value == 0.5
 
 
+def test_a_block_that_runs_out_once_is_retried_before_it_is_skipped():
+    from finetune_stream import accumulate
+
+    calls: list[list[int]] = []
+    zeroed: list[int] = []
+    skipped: list[int] = []
+
+    def backward(part, _share):
+        calls.append(list(part))
+        # Out of memory the first time only, as when another process
+        # held the memory for a moment.
+        if len(calls) == 1:
+            raise RuntimeError("CUDA out of memory")
+        return 0.5
+
+    value = accumulate([7], backward, lambda: zeroed.append(1), skipped.append)
+    assert value == 0.5
+    assert skipped == []
+    # Memory is freed (`zero`) before the retry.
+    assert calls == [[7], [7]]
+    assert zeroed == [1]
+
+
+def test_a_block_that_never_fits_is_skipped_after_one_retry():
+    from finetune_stream import accumulate
+
+    calls: list[list[int]] = []
+    skipped: list[int] = []
+
+    def backward(part, _share):
+        calls.append(list(part))
+        raise RuntimeError("CUDA out of memory")
+
+    value = accumulate([7], backward, lambda: None, skipped.append)
+    assert np.isnan(value)
+    assert skipped == [7]
+    assert calls == [[7], [7]]
+
+
+def test_blocks_left_after_a_skip_share_the_whole_gradient():
+    from finetune_stream import accumulate
+
+    shares: dict[int, float] = {}
+
+    def backward(part, share):
+        if 9 in part:
+            raise RuntimeError("CUDA out of memory")
+        for i in part:
+            shares[i] = share / len(part)
+        return 0.5
+
+    accumulate([1, 2, 3, 9], backward, shares.clear, print)
+    # The three blocks used weigh a third each, as a batch of three would.
+    assert sorted(shares) == [1, 2, 3]
+    assert sum(shares.values()) == pytest.approx(1.0)
+
+
 def _checkpoint(tmp_path):
     ckpt = tmp_path / "finetuned-ckpt"
     ckpt.mkdir()
