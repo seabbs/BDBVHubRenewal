@@ -394,6 +394,9 @@ def _export(root: str, lock: str) -> str:
             "--no-header",
             "--no-emit-project",
             "--no-emit-workspace",
+            # No `# via <package>` lines, which name the workspace's own
+            # packages and would change every key when modules move.
+            "--no-annotate",
         ],
         cwd=root,
         capture_output=True,
@@ -413,7 +416,8 @@ def code_digest(model: str, root: Path | str = ".") -> str:
     and functions moved between files keep the key. The functions of the store
     and the backtest a fit runs (`FIT_FUNCTIONS`) are hashed the same
     way, read from `root`, with the Python minor version.
-    The dependencies are `uv export --no-dev --all-extras` of `uv.lock`.
+    The dependencies are `uv export --no-dev --all-extras --no-annotate`
+    of `uv.lock`.
 
     Parameters
     ----------
