@@ -289,9 +289,9 @@ def test_the_run_size_comes_from_the_config_without_a_trainer(tmp_path):
     assert st.params["prefixes"][-2:] == [8000, 8400]
 
 
-def test_mean_wis_bars_show_once_the_table_has_components(tmp_path):
+def test_wis_has_no_section_of_its_own(tmp_path):
+    # Sam 11:05: each model's WIS is in the nowcasts' score card only.
     ctx = _machine(tmp_path)
-    assert "<h2>Mean WIS</h2>" not in page.build(ctx)
     table = tmp_path / "scores" / "tables" / "checkpoint-scores.csv"
     with table.open() as f:
         rows = list(csv.DictReader(f))
@@ -301,13 +301,10 @@ def test_mean_wis_bars_show_once_the_table_has_components(tmp_path):
         w = csv.DictWriter(f, [*rows[0]])
         w.writeheader()
         w.writerows(rows)
-    ctx.view["defaults"]["source"] = "daily"
     out = page.build(ctx)
-    assert "<h2>Mean WIS</h2>" in out
-    assert '<a href="#wis">WIS</a>' in out
-    assert "Germany, national" in out
-    assert "my run n250" in out
-    assert "wis" in page.sections(ctx)
+    assert "<h2>Mean WIS</h2>" not in out
+    assert '<a href="#wis">' not in out
+    assert "wis" not in page.sections(ctx)
 
 
 def test_a_segment_s_empty_folder_is_not_a_checkpoint_being_scored(tmp_path):
@@ -384,3 +381,28 @@ def test_the_next_checkpoint_names_its_simulations_and_planned_step(tmp_path):
     assert "of 500 simulations" in tile
     assert "step 2140" in tile
     assert "planned" in tile
+
+
+def test_every_configured_dataset_is_in_the_selector(tmp_path):
+    # Sam 11:05: Germany, BDBV and the held-out simulations, each listed
+    # whether or not it has nowcasts yet.
+    ctx = _machine(tmp_path)
+    ctx.datasets = [
+        *ctx.datasets,
+        {"key": "bdbv", "label": "BDBV", "format": "samples"},
+        {
+            "key": "held_out",
+            "label": "Held-out simulations",
+            "format": "quantiles",
+            "missing": "the scoring workflow writes none yet",
+        },
+    ]
+    sel = page.sections(ctx)["nowcasts"]
+    data = json.loads(sel.split("id=gdata>", 1)[1].split("</script>", 1)[0])
+    got = [
+        (d["key"], d["label"], bool(d.get("empty"))) for d in data["datasets"]
+    ]
+    assert ("bdbv", "BDBV", True) in got
+    assert ("held_out", "Held-out simulations", True) in got
+    held = next(d for d in data["datasets"] if d["key"] == "held_out")
+    assert "the scoring workflow writes none yet" in held["missing"]

@@ -223,3 +223,14 @@ dashboard:
       groups:
         - {name: national, match: "^CD$"}
         - {name: provinces, match: "^CD-[A-Z]{2}$"}
+    # The held-out simulations (Sam 11:05). No scoring unit writes their
+    # nowcasts per checkpoint yet, so the selector lists them as empty
+    # until one fills <SCORE_CACHE>/held_out.
+    - key: held_out
+      label: Held-out simulations
+      format: quantiles
+      metric: WIS
+      truth: the simulation's final counts
+      missing: >-
+        the scoring workflow scores the trainer's held-out loss only, and
+        writes no per-checkpoint nowcasts for these simulations yet

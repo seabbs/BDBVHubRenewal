@@ -15,14 +15,14 @@ var STY=["","6 3","2 3","8 3 2 3"];
 function sw(c,d){return '<svg width=22 height=8 viewBox="0 0 22 8"><line x1=0 x2=22 y1=4 y2=4 stroke="'+c+'" stroke-width=2'+(d?' stroke-dasharray="'+d+'"':"")+' /></svg>'}
 // Every selected run on one plot against simulations trained: colour is
 // the relation, line style the run.
-function lineplot(runs){
- var W=480,H=280,L=44,R=10,T=8,B=28,all=[];
+function lineplot(runs,el){
+ var f=window.ftFull&&window.ftFull(el),W=f?Math.max(480,el.clientWidth-8):480,H=f?Math.max(280,f.clientHeight-140):280,L=44,R=10,T=8,B=28,all=[];
  runs.forEach(function(run){PAIRS.forEach(function(k){(run.pts[k.key]||[]).forEach(function(p){all.push(p)})})});
  if(!all.length)return "";
  var xs=all.map(function(p){return p[0]}),x0=0,x1=Math.max(Math.max.apply(null,xs),1);
  var ys=all.map(function(p){return p[1]}),y0=Math.min.apply(null,ys),y1=Math.max.apply(null,ys),pd=(y1-y0)*0.25||0.01;y0-=pd;y1+=pd;
  var sx=function(x){return L+(x-x0)/(x1-x0)*(W-L-R)},sy=function(y){return T+(1-(y-y0)/(y1-y0))*(H-T-B)};
- var s='<svg viewBox="0 0 '+W+' '+H+'" width="100%">';
+ var s='<svg viewBox="0 0 '+W+' '+H+'" width="100%"'+(f?' height="'+H+'"':'')+'>';
  nice(y0,y1).forEach(function(v){if(v>=y0&&v<=y1)s+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+sy(v)+'" y2="'+sy(v)+'" class=grid /><text x="'+(L-5)+'" y="'+(sy(v)+3)+'" text-anchor=end class=ax>'+(+v.toPrecision(3))+'</text>'});
  nice(x0,x1).forEach(function(v){if(v>=x0&&v<=x1)s+='<text x="'+sx(v)+'" y="'+(H-B+13)+'" text-anchor=middle class=ax>'+v+'</text>'});
  s+='<text x="'+(L+W-R)/2+'" y="'+(H-3)+'" text-anchor=middle class=ax>simulations trained</text>';
@@ -50,9 +50,16 @@ function draw(){
  var tiles=keys.map(function(k){return '<div class=tile4><div class=mut title="'+k.label+'">'+k.key+'</div>'+heat(lat[k.key],k.key,lo,hi)+'</div>'}).join("");
  var tabs=runs.length>1?'<div class=sctl style="margin:0 0 4px"><span class=mut>matrices of</span>'+runs.map(function(r){return '<button class="tog'+(r.key==sel0?" on":"")+'" data-b="'+r.key+'" style="border-left:4px solid '+r.color+'">'+r.label+'</button>'}).join("")+'</div>':"";
  var none=(D.missing||[]).filter(function(r){return on.indexOf(r.key)>=0}).map(function(r){return r.label}),miss=none.length?'<p class=mut>no attention bias logged or saved: '+none.join(", ")+'</p>':"";
- el.innerHTML='<div class="card biasline"><div class=cardinfo>'+ftInfo("biasline")+'</div>'+lineplot(runs)+miss+'</div>'+(tabs?'<div class=biastabs>'+tabs+'</div>':"")+(tiles?'<div><div class=tiles4>'+tiles+'</div><div class=mut>'+ftInfo("biasheat")+ftInfo("relations")+' '+run.label+' at '+Math.round(lat.n)+' simulations, colour scale '+(+lo.toPrecision(3))+' to '+(+hi.toPrecision(3))+', shared; rows layers, columns heads</div></div>':"");
+ // The line card persists across redraws, so it stays open full screen
+ // and keeps its expand button (expand.js).
+ var card=document.getElementById("biaslinecard"),more=document.getElementById("biasmore");
+ if(!card||card.parentNode!==el){el.innerHTML='<div class="card biasline" id=biaslinecard></div><div id=biasmore class=biasmore></div>';card=$("biaslinecard");more=$("biasmore")}
+ var btn=card.querySelector(":scope > .expand");
+ card.innerHTML='<div class=cardinfo>'+ftInfo("biasline")+'</div>'+lineplot(runs,card)+miss;if(btn)card.insertBefore(btn,card.firstChild);
+ more.innerHTML=''+(tabs?'<div class=biastabs>'+tabs+'</div>':"")+(tiles?'<div><div class=tiles4>'+tiles+'</div><div class=mut>'+ftInfo("biasheat")+ftInfo("relations")+' '+run.label+' at '+Math.round(lat.n)+' simulations, colour scale '+(+lo.toPrecision(3))+' to '+(+hi.toPrecision(3))+', shared; rows layers, columns heads</div></div>':"");
  var tb=el.querySelector(".sctl");if(tb)tb.onclick=function(e){var b=e.target.closest("button");if(b){sel0=b.dataset.b;draw()}}}
 window.addEventListener("ftsel",draw);
+var rsz=null;window.addEventListener("resize",function(){clearTimeout(rsz);rsz=setTimeout(draw,120)});
 // New data from the server (live.js): redraw with the same state.
 window.addEventListener("ftdata",function(e){if(e.detail!=="bias")return;D=JSON.parse($("bdata").textContent);draw()});
 draw();

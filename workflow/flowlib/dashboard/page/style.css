@@ -46,7 +46,7 @@ font-size:12px}
 .panels h4{margin:0 0 2px;font-size:12px}#gplot .ax,#gwis .ax{font-size:11px}.plots3{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,290px),1fr));gap:8px}
 .plots3 .leg{font-size:11px;gap:2px 8px}
 .biasrow{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-start}
-.biasdyn{display:contents}
+.biasdyn{display:contents}.biasmore{display:contents}.fs.biasline{max-width:none}
 .biastabs{flex-basis:100%}
 .topbar{position:sticky;top:0;z-index:20;background:var(--bg);padding:6px 0 4px;
 border-bottom:1px solid var(--line);margin-bottom:6px}

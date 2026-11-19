@@ -46,3 +46,20 @@ def test_the_expand_script_is_keyboard_accessible():
         ".focus()",
     ):
         assert needle in js
+
+
+def test_charts_redraw_to_the_full_screen_size_and_keep_their_cards():
+    # Sam 11:10: entering and leaving full screen redraws each chart at
+    # the new size, keeping zoom and selections.
+    expand = (PAGE / "expand.js").read_text()
+    assert "ResizeObserver" in expand
+    assert "fullscreenchange" in expand
+    assert "window.ftFull=" in expand
+    for name, card in (("loss.js", "cards("), ("bias.js", "biaslinecard")):
+        js = (PAGE / name).read_text()
+        assert 'addEventListener("resize"' in js, name
+        assert "ftFull" in js, name
+        # Cards are filled in place, not rebuilt, so the open one stays.
+        assert card in js, name
+    nowcasts = (PAGE / "nowcasts.js").read_text()
+    assert "ftFull" in nowcasts

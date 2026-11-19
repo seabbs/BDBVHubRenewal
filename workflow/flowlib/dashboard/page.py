@@ -24,7 +24,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from . import bias, learning, logs, nowcasts, scores, svg, training, wis
+from . import bias, learning, logs, nowcasts, paperstyle, scores, svg, training
 from .mirror import Source
 from .runs import Reference, Run, split_label
 
@@ -660,11 +660,32 @@ def _caption(ctx: Context, ds: Mapping[str, Any]) -> str:
 def nowcasts_section(
     ctx: Context, sizes: Mapping[str, int], builts: Mapping[str, Any]
 ) -> str:
-    """Return the nowcast panels of every dataset, behind a selector."""
+    """Return the nowcast panels of every dataset, behind a selector.
+
+    Every configured dataset is listed (Germany, BDBV, the held-out
+    simulations); one with no nowcasts yet is listed as empty, with why
+    (its `missing`), so the selector always offers it.
+    """
     datasets, sources = [], set()
     for ds in ctx.datasets:
         built = builts.get(ds["key"])
         if not built or not built["origins"] or not built["locs"]:
+            datasets.append(
+                {
+                    "key": ds["key"],
+                    "label": ds.get("label", ds["key"]),
+                    "metric": ds.get("metric", ""),
+                    "empty": True,
+                    "missing": ds.get("missing", ""),
+                    "truth": "",
+                    "meta": [],
+                    "locs": [],
+                    "origins": [],
+                    "targets": [],
+                    "preload": {},
+                    "groups": [],
+                }
+            )
             continue
         meta = nowcasts.meta(
             built, ctx.runs, ctx.references, sizes, ctx.excluded
@@ -709,7 +730,7 @@ def nowcasts_section(
                 ],
             }
         )
-    if not datasets:
+    if not any(not d.get("empty") for d in datasets):
         return "<p class=mut>No nowcasts yet.</p>"
     defaults = dict((ctx.view or {}).get("defaults") or {})
     data = _json(
@@ -721,7 +742,9 @@ def nowcasts_section(
             ],
             "defaults": defaults,
             # WIS parts in the paper's order, each its share of the colour.
-            "parts": [[p, wis.part_share(p)] for p in wis.PARTS],
+            "parts": [
+                [p, paperstyle.part_share(p)] for p in paperstyle.WIS_PARTS
+            ],
         }
     )
     first = defaults.get("source")
@@ -736,18 +759,6 @@ def nowcasts_section(
         controls + f'<script type="application/json" id=gdata>{data}</script>'
         f"<script>{_asset('nowcasts.js')}</script>"
     )
-
-
-def wis_section(ctx: Context, rows: Sequence[Mapping[str, str]]) -> str:
-    """Return the mean WIS bars by component; none before any are scored.
-
-    Runs' bars are of the view's default source (`dashboard.defaults`).
-    """
-    source = ((ctx.view or {}).get("defaults") or {}).get("source")
-    bars = scores.wis_bars(
-        rows, ctx.runs, ctx.references, ctx.rule, source, ctx.excluded
-    )
-    return wis.section(bars, ctx.view or {}, tip)
 
 
 def mail_section(ctx: Context) -> str:
@@ -924,9 +935,6 @@ def _parts(ctx: Context) -> tuple[Run, str, str, list]:
         ),
         ("nowcasts", "Nowcasts", nowcasts_section(ctx, sizes, builts), True),
     ]
-    bars = wis_section(ctx, score_rows)
-    if bars:
-        parts.append(("wis", "Mean WIS", bars, True))
     if mail:
         parts.append(("mailbox", "Recent activity", mail, True))
     tables = tables_section(ctx, info) + notes_section(ctx)
@@ -939,7 +947,6 @@ NAV = {
     "status": "Status",
     "mailbox": "Activity",
     "learning": "Learning",
-    "wis": "WIS",
 }
 """Short names in the top bar, where they differ from the section titles."""
 
