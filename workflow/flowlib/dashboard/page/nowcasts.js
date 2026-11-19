@@ -88,7 +88,7 @@ function panel(d,loc,ds,eff,small,W){
   var P=function(k){return PP(f,k)};
   h+='<polyline points="'+P(3).join(" ")+'" fill=none stroke="var(--bg)" stroke-width=4 opacity=.85 />';
   h+='<polyline points="'+P(3).join(" ")+'" fill=none stroke="'+c+'" stroke-width=2.2'+dashAttr(e.run=="ref"?0:e.rank)+' />';
-  f.t.forEach(function(d,j){h+=mark(MK[z.di%4],sx(ms(d)),sy(f.q[j][3]),c,id2lab(e.id)+' (nowcast '+z.o+') '+d+' median '+fmt(f.q[j][3])+' (50%: '+fmt(f.q[j][2])+' to '+fmt(f.q[j][4])+'; 95%: '+fmt(f.q[j][0])+' to '+fmt(f.q[j][6])+')',small?2.2:2.8)})});
+  f.t.forEach(function(d,j){h+=mark(MK[z.di%4],sx(ms(d)),sy(f.q[j][3]),c,id2lab(e.id)+' (nowcast '+z.o+') '+d+' median '+fmt(f.q[j][3])+' (50%: '+fmt(f.q[j][2])+' to '+fmt(f.q[j][4])+'; '+(f.band||95)+'%: '+fmt(f.q[j][0])+' to '+fmt(f.q[j][6])+')',small?2.2:2.8)})});
  if(lat.length)h+='<polyline points="'+lat.map(function(p){return sx(p[0])+","+sy(p[1])}).join(" ")+'" fill=none stroke="var(--fg)" stroke-width=1 stroke-dasharray="3 3" opacity=".6"><title>latest release</title></polyline>';
  if(pts.length){h+='<polyline points="'+pts.map(function(p){return sx(p[0])+","+sy(p[1])}).join(" ")+'" fill=none stroke="var(--fg)" stroke-width=1.4 />';
   pts.forEach(function(p){h+='<circle cx="'+sx(p[0])+'" cy="'+sy(p[1])+'" r=1.8 fill="var(--fg)"><title>truth '+new Date(p[0]).toISOString().slice(0,10)+': '+fmt(p[1])+'</title></circle>'})}
@@ -136,7 +136,7 @@ function wisChart(d,eff){
   return '<rect x="'+x+'" y="'+y+'" width="'+g+'" height="'+h+'" fill="#fff" /><rect x="'+x+'" y="'+y+'" width="'+g+'" height="'+h+'" fill="'+c+'" fill-opacity="'+PS[k]+'" stroke="'+c+'" stroke-width=".6"><title>'+PN[k]+' '+fmt(v)+' of '+fmt(tot)+'</title></rect>'}
  function stack(id,y,vals,tot,mx,sc){var x=0,o='';vals.forEach(function(v,k){var w=v/mx*sc;o+=seg(x,y,w,12,colour(id),k,v,tot);x+=w});return o}
  function key(){return PN.map(function(n,k){return '<span class=lg><i style="display:inline-block;width:10px;height:10px;background:var(--fg);opacity:'+PS[k]+'"></i>'+n+'</span>'}).join("")}
- var wis=mean(function(id,o){return W_(id)[o]}),c50=mean(function(id,o){return X_(id)[o][0]}),c95=mean(function(id,o){return X_(id)[o][1]}),bias=mean(function(id,o){return X_(id)[o][2]});
+ var wis=mean(function(id,o){return W_(id)[o]}),c50=mean(function(id,o){return X_(id)[o][0]}),c95=mean(function(id,o){return X_(id)[o][1]}),band=sel.map(function(id){return com.every(function(o){return X_(id)[o][3]==90})?90:95}),bias=mean(function(id,o){return X_(id)[o][2]});
  function shortLab(id){var m=C.meta.find(function(x){return x.id==id});if(!m)return id;var r=RUNS.find(function(r){return r.key==m.run});return r?r.label+" n"+m.n:m.label}
  // Each row's swatch is its plot line (colour and dash); the text stays in text colour.
  var rk={};eff.forEach(function(e){rk[e.id]=e.run=="ref"?0:e.rank});
@@ -151,21 +151,23 @@ function wisChart(d,eff){
  var lg=sel.map(function(id,i){return parts[i]?parts[i][3]:null}),lmx=Math.max.apply(null,lg.filter(function(v){return v!==null}).concat([0]))*1.05,h4='';
  sel.forEach(function(id,i){if(lg[i]===null)return;var y=2+i*RH,w=lg[i]/lmx*(W-48);
   h4+=lab(id,y)+stack(id,y+12,parts[i].slice(4,7),lg[i],lmx,W-48)+'<text x="'+(w+4)+'" y="'+(y+22)+'" class=ax>'+fmt(lg[i])+'</text>'});
- // coverage of the 50% and 95% intervals, nominal lines at 0.5 and 0.95
- var cw=W-36,h2='';
+ // coverage of the 50% and outer intervals: 90% where the forecasts have
+ // 5% and 95% quantiles, else 95% (the German hub's); nominal lines dashed
+ var cw=W-36,h2='',outs=band.filter(function(b,i){return band.indexOf(b)==i}).sort();
  sel.forEach(function(id,i){var y=2+i*RH;
   h2+=lab(id,y)
    +'<rect x="0" y="'+(y+12)+'" width="'+c50[i]*cw+'" height="7" fill="'+colour(id)+'"><title>50% interval: '+c50[i].toFixed(2)+'</title></rect><text x="'+(c50[i]*cw+3)+'" y="'+(y+19)+'" class=ax>'+c50[i].toFixed(2)+'</text>'
-   +'<rect x="0" y="'+(y+20)+'" width="'+c95[i]*cw+'" height="7" fill="'+colour(id)+'" opacity=".55"><title>95% interval: '+c95[i].toFixed(2)+'</title></rect><text x="'+(c95[i]*cw+3)+'" y="'+(y+27)+'" class=ax>'+c95[i].toFixed(2)+'</text>'});
+   +'<rect x="0" y="'+(y+20)+'" width="'+c95[i]*cw+'" height="7" fill="'+colour(id)+'" opacity=".55"><title>'+band[i]+'% interval: '+c95[i].toFixed(2)+'</title></rect><text x="'+(c95[i]*cw+3)+'" y="'+(y+27)+'" class=ax>'+c95[i].toFixed(2)+'</text>'});
  var H2=4+sel.length*RH;
- h2+='<line x1="'+0.5*cw+'" x2="'+0.5*cw+'" y1="0" y2="'+H2+'" class=mark /><line x1="'+0.95*cw+'" x2="'+0.95*cw+'" y1="0" y2="'+H2+'" class=mark />';
+ h2+='<line x1="'+0.5*cw+'" x2="'+0.5*cw+'" y1="0" y2="'+H2+'" class=mark />';
+ outs.forEach(function(b){h2+='<line x1="'+b/100*cw+'" x2="'+b/100*cw+'" y1="0" y2="'+H2+'" class=mark />'});
  // bias, -1 to 1 with 0 marked
  var bw=W,h3='';
  sel.forEach(function(id,i){var y=2+i*RH,x0=bw/2,w=Math.abs(bias[i])*(bw/2-34);
   h3+=lab(id,y)+'<rect x="'+(bias[i]>=0?x0:x0-w)+'" y="'+(y+12)+'" width="'+w+'" height="12" fill="'+colour(id)+'"><title>bias '+bias[i].toFixed(3)+' (positive: forecast above truth)</title></rect><text x="'+(bias[i]>=0?x0+w+3:x0-w-3)+'" y="'+(y+22)+'" text-anchor="'+(bias[i]>=0?"start":"end")+'" class=ax>'+bias[i].toFixed(2)+'</text>'});
  h3+='<line x1="'+bw/2+'" x2="'+bw/2+'" y1="0" y2="'+H2+'" stroke="var(--fg)" stroke-width="1" />';
  var any=parts.some(function(p){return p});
- $("gwis").innerHTML=(any?'<div style="font-size:11px">'+key()+'</div>':'')+rows("mean "+C.metric,h1,H2,"wis")+(any?rows("mean "+C.metric+" on the log scale, log(x + 1)",h4,H2,"logwis"):'')+rows("coverage 50% and 95% (dashed: nominal)",h2,H2,"coverage")+rows("bias (+: forecast above truth)",h3,H2,"biasscore")
+ $("gwis").innerHTML=(any?'<div style="font-size:11px">'+key()+'</div>':'')+rows("mean "+C.metric,h1,H2,"wis")+(any?rows("mean "+C.metric+" on the log scale, log(x + 1)",h4,H2,"logwis"):'')+rows("coverage 50% and "+outs.join("% or ")+"% (dashed: nominal)",h2,H2,"coverage")+rows("bias (+: forecast above truth)",h3,H2,"biasscore")
   +'<div class=mut style="font-size:11px">'+com.length+' common nowcast dates</div>';
 }
 function chips(){var h='';
