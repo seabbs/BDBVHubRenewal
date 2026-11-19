@@ -175,3 +175,56 @@ def test_main_refuses_blocks_that_are_not_the_runs(tmp_path, monkeypatch):
                 str(tmp_path / "result.json"),
             ]
         )
+
+
+@pytest.mark.usefixtures("short_context")
+def test_the_evaluate_rules_runner_gives_the_trainer_s_losses(
+    tmp_path, monkeypatch
+):
+    # WP10 part 2: workflow/scripts/evaluate_offloaded.py, end to end on
+    # CPU with the real evaluator, scores a step snapshot and a checkpoint
+    # exactly as the trainer scores the same adapter.
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "evaluate_offloaded",
+        Path(__file__).parents[1] / "workflow/scripts/evaluate_offloaded.py",
+    )
+    runner = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(runner)
+
+    monkeypatch.setattr(runner.fe, "load_base", lambda _device: tiny_model())
+    model = trained()
+    val = blocks()
+    train = tmp_path / "train"
+    train.mkdir()
+    fs.save_blocks(val, train / fs.HELD_OUT_BLOCKS)
+    request = {"n_validation": len(val), "batch_size": 100}
+    fs.save_snapshot(
+        model,
+        train / "evals" / "step-0000000",
+        {**request, "step": 0, "kinds": ["start"]},
+    )
+    fs.save_snapshot(
+        model,
+        train / "evals" / "step-0000200",
+        {**request, "step": 200, "kinds": ["monitor"]},
+    )
+    where = train / "n500"
+    model.save_pretrained(where / "finetuned-ckpt")
+    (where / "settings.json").write_text(
+        json.dumps({"n_validation": len(val), "batch_size": 100})
+    )
+    runner.main(["steps", str(train), "--device", "cpu"])
+    runner.main(["checkpoint", str(where), "--device", "cpu"])
+    step = json.loads((train / "evals" / "step-0000200.json").read_text())
+    assert step["eval_loss"] == fs.held_out_loss(
+        model, val[: fs.ft.EVAL_BLOCKS], 100
+    )
+    sidecar = json.loads((where / "held-out.json").read_text())
+    assert sidecar["held_out_loss"] == fs.held_out_loss(model, val, 100)
+    assert sidecar["held_out_loss_by_source"] == fs.held_out_by_source(
+        model, val, 100
+    )
+    start = json.loads((train / "evals" / "step-0000000.json").read_text())
+    assert sidecar["held_out_loss_start"] == start["held_out_loss"]
