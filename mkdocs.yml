@@ -51,6 +51,9 @@ nav:
           - Submission log: submission/rounds/index.md
   - Packages:
       - packages/index.md
+      - nowcastutils: packages/nowcastutils.md
+      - nowcasteval: packages/nowcasteval.md
+      - nowcastbaselines: packages/nowcastbaselines.md
       - Setup: setup.md
       - Getting started: getting-started.ipynb
       - Development:
