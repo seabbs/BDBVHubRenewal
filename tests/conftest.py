@@ -236,7 +236,7 @@ class FlatModel:
 @pytest.fixture
 def flat_model(monkeypatch: pytest.MonkeyPatch) -> str:
     """Register `FlatModel` as `flat` for one test and return its name."""
-    from bdbvhubrenewal.forecasters import base
+    from nowcastutils import base
 
     monkeypatch.setitem(
         base._REGISTRY,

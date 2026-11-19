@@ -44,8 +44,8 @@ def test_zone_places_are_the_mapped_zones() -> None:
 
 
 def test_unmapped_zones_take_their_province_place() -> None:
-    from bdbvhubrenewal.forecasters.base import ForecastTask
     from bdbvhubrenewal.forecasters.zonerenewal import _zone_places
+    from nowcastutils.base import ForecastTask
 
     places = pd.DataFrame(
         {

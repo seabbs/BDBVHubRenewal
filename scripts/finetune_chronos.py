@@ -21,9 +21,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from bdbvhubrenewal.data.dates import epiweek_end
 from bdbvhubrenewal.forecasters import foundation
-from bdbvhubrenewal.forecasters.base import NATIONAL
 from bdbvhubrenewal.forecasters.finetune import (
     AHEAD_WEEKS,
     BINNED,
@@ -33,6 +31,8 @@ from bdbvhubrenewal.forecasters.finetune import (
     training_block,
     weekly_cutoffs,
 )
+from nowcastutils.base import NATIONAL
+from nowcastutils.dates import epiweek_end
 
 CONTEXT = 364
 """Steps of context in a block, left-padded with missing values."""

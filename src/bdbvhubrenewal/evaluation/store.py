@@ -59,8 +59,6 @@ from typing import Any, Final
 import pandas as pd
 
 from bdbvhubrenewal.data import load_daily, load_delays, load_target
-from bdbvhubrenewal.data.files import write_csv
-from bdbvhubrenewal.data.hierarchy import is_zone
 from bdbvhubrenewal.data.zones import ZoneData, load_zone_data
 from bdbvhubrenewal.evaluation.backtest import (
     BacktestConfig,
@@ -76,6 +74,8 @@ from bdbvhubrenewal.forecasters import (
     get_model,
     list_models,
 )
+from nowcastutils.files import write_csv
+from nowcastutils.hierarchy import is_zone
 
 __all__ = [
     "FIT_FUNCTIONS",
@@ -261,9 +261,18 @@ def _strip(source: str) -> str:
     return ast.dump(tree)
 
 
-KEY_PACKAGES: Final = ("bdbvhubrenewal",)
-"""The packages whose import lines leave a fit key: their modules are in
-the key themselves (`fit_code`)."""
+KEY_PACKAGES: Final = (
+    "bdbvhubrenewal",
+    "nowcastutils",
+    "nowcasteval",
+    "nowcastbaselines",
+    "nowcastfoundation",
+    "nowcastrenewal",
+    "bdbvhub",
+)
+"""The workspace's packages, whose import lines leave a fit key: their
+modules are in the key themselves (`fit_code`), so a module keeps its
+key when it moves between them."""
 
 
 def _own_import(node: ast.stmt) -> bool:
@@ -1192,7 +1201,7 @@ def command(args: argparse.Namespace) -> int:
     """
     sampler = samplers(args.policy)
     if args.action == "fit":
-        from bdbvhubrenewal.devices import host_devices
+        from nowcastutils.devices import host_devices
 
         # Before anything starts JAX, so the chains run in parallel.
         chains = sampler.get(args.model, {}).get("num_chains", 1)

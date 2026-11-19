@@ -31,14 +31,14 @@ from bdbvhubrenewal.evaluation.scoring import (
     crps_sample,
     energy_sample,
 )
-from bdbvhubrenewal.forecasters.base import (
+from bdbvhubrenewal.forecasters.randomwalk import RandomWalk
+from nowcastutils.base import (
     NATIONAL,
     ForecastTask,
     ModelUnavailableError,
     add_national,
     get_model,
 )
-from bdbvhubrenewal.forecasters.randomwalk import RandomWalk
 
 __all__ = [
     "MODELS",

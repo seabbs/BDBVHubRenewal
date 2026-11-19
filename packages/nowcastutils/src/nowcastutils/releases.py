@@ -21,7 +21,7 @@ import itertools
 import numpy as np
 import pandas as pd
 
-from bdbvhubrenewal.data.dates import as_date
+from nowcastutils.dates import as_date
 
 __all__ = [
     "MAX_PAIR_AGE",

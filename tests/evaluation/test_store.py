@@ -21,8 +21,8 @@ from bdbvhubrenewal.evaluation.backtest import (
     vintage_task,
 )
 from bdbvhubrenewal.forecasters import ForecastTask, get_model
-from bdbvhubrenewal.forecasters.base import NATIONAL, SAMPLE_COLUMNS
-from bdbvhubrenewal.forecasters.forecast import Forecast
+from nowcastutils.base import NATIONAL, SAMPLE_COLUMNS
+from nowcastutils.forecast import Forecast
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -32,7 +32,7 @@ DATA = Path(__file__).resolve().parents[2] / "tests" / "fixtures" / "data"
 @pytest.fixture
 def fitted_flat(flat_model: str, monkeypatch: pytest.MonkeyPatch) -> str:
     """Register the test stand-in as a fitted model, the only one stored."""
-    from bdbvhubrenewal.forecasters import base
+    from nowcastutils import base
 
     factory = base._REGISTRY[flat_model].factory
 
@@ -666,8 +666,9 @@ def test_a_fit_that_raises_is_stored_as_failed(
 @pytest.fixture
 def candidate_flat(fitted_flat: str, monkeypatch: pytest.MonkeyPatch) -> str:
     """Make the stand-in a submission candidate, config `flatcfg`."""
-    from bdbvhubrenewal.forecasters import base, renewal
+    from bdbvhubrenewal.forecasters import renewal
     from bdbvhubrenewal.submission import fitting
+    from nowcastutils import base
 
     spec = base._REGISTRY[fitted_flat]
     make = spec.factory
@@ -971,7 +972,7 @@ class _Hub:
 
 def _plain(fitted_flat: str, monkeypatch: pytest.MonkeyPatch) -> None:
     """Register `plain`, a model the store does not hold."""
-    from bdbvhubrenewal.forecasters import base
+    from nowcastutils import base
 
     factory = base._REGISTRY[fitted_flat].factory
     monkeypatch.setitem(
@@ -1076,7 +1077,7 @@ def test_a_model_that_fails_leaves_the_others_archived(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     from bdbvhubrenewal.evaluation import store_archive
-    from bdbvhubrenewal.forecasters import base
+    from nowcastutils import base
 
     _plain(fitted_flat, monkeypatch)
 

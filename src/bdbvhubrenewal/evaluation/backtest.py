@@ -35,13 +35,7 @@ import numpy as np
 import pandas as pd
 
 from bdbvhubrenewal.data.bvd import MAX_RHAT
-from bdbvhubrenewal.data.dates import (
-    as_date,
-    epiweek_end,
-    reference_date_for_vintage,
-)
 from bdbvhubrenewal.data.delays import hub_delay_pmf
-from bdbvhubrenewal.data.releases import cutoff_lags, release_cutoff
 from bdbvhubrenewal.data.simulate import (
     SCENARIO_RT_SCALE,
     SimulatedOutbreak,
@@ -54,7 +48,7 @@ from bdbvhubrenewal.data.tidy import delays_for_vintage
 from bdbvhubrenewal.data.zones import ZoneData, hub_places
 from bdbvhubrenewal.evaluation.nowcast import TRUTH_LEVEL
 from bdbvhubrenewal.evaluation.scoring import energy_scores, score_forecasts
-from bdbvhubrenewal.forecasters.base import (
+from nowcastutils.base import (
     NATIONAL,
     SAMPLE_COLUMNS,
     ForecastModel,
@@ -64,6 +58,8 @@ from bdbvhubrenewal.forecasters.base import (
     add_national,
     check_samples,
 )
+from nowcastutils.dates import as_date, epiweek_end, reference_date_for_vintage
+from nowcastutils.releases import cutoff_lags, release_cutoff
 
 __all__ = [
     "BacktestConfig",
@@ -1118,7 +1114,7 @@ def recovery_tasks(
         The simulated scenario. Defaults to `turning_point`.
     lags : mapping of int to int, optional
         Days from release to data cut-off by release weekday
-        (`bdbvhubrenewal.data.releases.cutoff_lags`). None for none.
+        (`nowcastutils.releases.cutoff_lags`). None for none.
 
     Returns
     -------
@@ -1286,7 +1282,7 @@ def run_scenarios(
         Weeks after each date for the as-of scores.
     daily : pandas.DataFrame, optional
         Real daily rows, from which the release cut-off lags are taken
-        (`bdbvhubrenewal.data.releases.cutoff_lags`). The simulated
+        (`nowcastutils.releases.cutoff_lags`). The simulated
         releases then carry cut-offs, and tasks their daily releases.
 
     Returns

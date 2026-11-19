@@ -7,7 +7,6 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.data.releases import cutoff_lags
 from bdbvhubrenewal.evaluation.backtest import (
     BacktestConfig,
     development_tasks,
@@ -27,6 +26,7 @@ from bdbvhubrenewal.evaluation.backtest import (
 )
 from bdbvhubrenewal.evaluation.nowcast import resolve_truth_delay
 from bdbvhubrenewal.forecasters import get_model
+from nowcastutils.releases import cutoff_lags
 
 ROOT = Path(__file__).resolve().parents[2]
 DATA = ROOT / "tests" / "fixtures" / "data"
@@ -631,12 +631,12 @@ def test_scenarios_run_by_date_match_one_run(
 def test_recovery_forecast_apart_by_model_scores_as_one_run(
     config: BacktestConfig, tmp_path: Path
 ) -> None:
-    from bdbvhubrenewal.data.files import write_csv
     from bdbvhubrenewal.evaluation.backtest import (
         joint_order,
         recovery_forecasts,
         score_recovery,
     )
+    from nowcastutils.files import write_csv
 
     names = ["randomwalk", "randomwalknowcast"]
     whole = run_recovery([get_model(n) for n in names], config)
@@ -660,12 +660,12 @@ def test_scenarios_forecast_apart_by_model_score_as_one_run(
     tmp_path: Path,
 ) -> None:
     from bdbvhubrenewal.data import load_health_zones
-    from bdbvhubrenewal.data.files import write_csv
     from bdbvhubrenewal.evaluation.backtest import (
         run_scenarios,
         scenario_forecasts,
         score_scenarios,
     )
+    from nowcastutils.files import write_csv
 
     zones = load_health_zones(DATA)
     names = ["flat", "randomwalk"]

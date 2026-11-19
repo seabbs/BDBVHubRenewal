@@ -23,7 +23,7 @@ on:
     paths:
       - 'src/bdbvhubrenewal/__init__.py'
       - 'src/bdbvhubrenewal/cli.py'
-      - 'src/bdbvhubrenewal/devices.py'
+      - 'packages/nowcastutils/**'
       - 'src/bdbvhubrenewal/baselinenowcast/**'
       - 'src/bdbvhubrenewal/data/**'
       - 'src/bdbvhubrenewal/evaluation/__init__.py'
@@ -52,7 +52,7 @@ on:
     paths:
       - 'src/bdbvhubrenewal/__init__.py'
       - 'src/bdbvhubrenewal/cli.py'
-      - 'src/bdbvhubrenewal/devices.py'
+      - 'packages/nowcastutils/**'
       - 'src/bdbvhubrenewal/baselinenowcast/**'
       - 'src/bdbvhubrenewal/data/**'
       - 'src/bdbvhubrenewal/evaluation/__init__.py'

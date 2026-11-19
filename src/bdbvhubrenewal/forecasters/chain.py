@@ -70,8 +70,6 @@ from bdbvhubrenewal.baselinenowcast import (
     preprocess_negative_values,
     window_pairs,
 )
-from bdbvhubrenewal.data.snapshots import SnapshotArrays, week_sum, weekly_sums
-from bdbvhubrenewal.forecasters.base import ModelUnavailableError
 from bdbvhubrenewal.forecasters.introductions import (
     introduction_rates,
     silent_places,
@@ -83,6 +81,8 @@ from bdbvhubrenewal.forecasters.pooling import (
     source_index,
 )
 from bdbvhubrenewal.forecasters.walk import walk_noise, walk_variance
+from nowcastutils.base import ModelUnavailableError
+from nowcastutils.snapshots import SnapshotArrays, week_sum, weekly_sums
 
 __all__ = [
     "DelayFit",
