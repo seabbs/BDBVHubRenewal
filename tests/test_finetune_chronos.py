@@ -1420,3 +1420,47 @@ def test_r7_blocks_are_whole_systems_never_cut(monkeypatch):
         assert any("over the series cap" in e for e in empty)
     finally:
         ft.use_design("r6")
+
+
+def test_parents_come_from_the_grid_file(monkeypatch):
+    import yaml
+    from finetune_chronos import NATIONAL, outbreak_blocks
+
+    grid = yaml.safe_load(
+        (
+            Path(__file__).parents[1] / "config/finetune/grids/r7.yaml"
+        ).read_text()
+    )
+    ft.use_design("r7")
+    try:
+        # The grid's weights of each kind of parent, and its named
+        # distributions of the share and the lag.
+        weights = grid["aggregation"]["parents"]
+        total = sum(weights.values())
+        assert ft.PARENTS["shares"] == {
+            k: w / total for k, w in weights.items()
+        }
+        dists = grid["distributions"]
+        assert ft.PARENTS["unallocated_share"] == dists["unallocated_share"]
+        assert ft.PARENTS["parent_lag_days"] == dists["parent_lag_days"]
+        monkeypatch.setattr(ft, "UNIVARIATE_SHARE", 0.0)
+        monkeypatch.setitem(
+            ft.PARENTS,
+            "shares",
+            {"exact": 0.0, "unallocated": 1.0, "late_parent": 0.0},
+        )
+        places = [f"P{p}-A{a}" for p in range(1, 3) for a in range(1, 3)]
+        counts = _counts_of(places)
+        parents = {
+            b["parent"]
+            for seed in range(3)
+            for b in outbreak_blocks(
+                counts, places, np.random.default_rng(seed), 3
+            )
+            if len(b["places"]) > 1 and b["places"][0] == NATIONAL
+        }
+        assert parents == {"unallocated"}
+    finally:
+        ft.use_design("r6")
+    # A grid with no file keeps its parents drawn evenly with r6's draws.
+    assert ft.PARENTS is None
