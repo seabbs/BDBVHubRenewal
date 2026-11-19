@@ -416,13 +416,21 @@ def test_verify_alone_never_releases(tmp_path):
     assert jobs == {"verify_checkpoint": 1}
 
 
+def test_score_computes_nothing_on_bdbv_held_out_for_the_paper(tmp_path):
+    # BDBV is held out entirely (Sam, 2026-11-19 11:20): no BDBV unit,
+    # zone unit or data refresh is a scoring job, and `zones` is gone.
+    config = {"score": {"labels": ["slots-aaa", "bbb"]}}
+    jobs = dry(tmp_path, "score", config=config)
+    assert not {"score_bdbv", "score_zones", "bdbv_data"} & set(jobs)
+    rules = (ROOT / "workflow" / "rules" / "score.smk").read_text()
+    assert not re.search(
+        r"^rule (zones|score_bdbv|score_zones|bdbv_data):", rules, re.M
+    )
+
+
 def test_score_runs_each_unit_for_a_checkpoint_and_the_reference(tmp_path):
     config = {"score": {"labels": ["slots-aaa", "bbb"]}}
     jobs = dry(tmp_path, "score", config=config)
-    assert jobs["score_bdbv"] == 3
-    # Zones are their own target: the table does not wait about an hour
-    # of CPU per checkpoint for them.
-    assert "score_zones" not in jobs
     assert jobs["score_germany"] == 3
     assert jobs["score_release"] == 2
     assert jobs["score_table"] == 1
@@ -431,43 +439,28 @@ def test_score_runs_each_unit_for_a_checkpoint_and_the_reference(tmp_path):
 
 def test_units_wait_below_the_load_ceiling(tmp_path):
     blocks = score_jobs(
-        tmp_path, {"score": {"labels": ["aaa"]}}, "MAX_LOAD=12\n", "zones"
+        tmp_path, {"score": {"labels": ["aaa"]}}, "MAX_LOAD=12\n"
     )
-    units = [
-        b for b in blocks if re.match(r"rule score_(bdbv|zones|germany):", b)
-    ]
+    units = [b for b in blocks if re.match(r"rule score_germany:", b)]
     assert units
     for block in units:
         assert f"wait_for_room.sh 20 16 {tmp_path}/scores 12 " in block
 
 
 def test_units_run_the_shared_checkpoint_evaluation(tmp_path):
-    blocks = score_jobs(
-        tmp_path, {"score": {"labels": ["aaa"]}}, target="zones"
-    )
+    blocks = score_jobs(tmp_path, {"score": {"labels": ["aaa"]}})
     units = [b for b in blocks if re.match(r"(local)?rule score_\w+:", b)]
     assert units
     for block in units:
         assert "scripts/checkpoint_scores.py" not in block
     shells = "".join(units)
-    assert "-m bdbvhubrenewal.evaluation.checkpoint zones" in shells
+    assert "-m bdbvhubrenewal.evaluation.checkpoint germany" in shells
 
 
 def test_units_make_the_rows_folder_a_worker_brings_back(tmp_path):
-    blocks = score_jobs(
-        tmp_path, {"score": {"labels": ["aaa"]}}, target="zones"
-    )
+    blocks = score_jobs(tmp_path, {"score": {"labels": ["aaa"]}})
     shells = "".join(blocks)
-    for study in ("bdbv", "zones", "germany"):
-        assert f"mkdir -p {tmp_path}/scores/{study}/aaa/" in shells
-
-
-def test_zones_are_their_own_target_and_refresh_the_table(tmp_path):
-    config = {"score": {"labels": ["slots-aaa", "bbb"]}}
-    jobs = dry(tmp_path, "zones", config=config)
-    assert jobs["score_zones"] == 3
-    assert jobs["zones"] == 1
-    assert jobs["score_table"] == 1
+    assert f"mkdir -p {tmp_path}/scores/germany/aaa/" in shells
 
 
 def test_skipped_checkpoints_are_not_scored(tmp_path):
@@ -481,29 +474,15 @@ def test_skipped_checkpoints_are_not_scored(tmp_path):
     )
     jobs = dry(tmp_path, "score", config=config)
     assert jobs["score_release"] == 1
-    assert jobs["score_bdbv"] == 2
-
-
-def test_zone_units_run_on_the_cpu_with_their_own_memory(tmp_path):
-    config = {"score": {"labels": ["aaa"], "zones_mem_mb": 12345}}
-    blocks = score_jobs(tmp_path, config, target="zones")
-    zones = [b for b in blocks if re.match(r"rule score_zones:", b)]
-    assert len(zones) == 2
-    for block in zones:
-        assert "DEVICE=cpu" in block
-        assert "gpu=" not in block
-        assert re.search(r"mem_mb=12345", block)
+    assert jobs["score_germany"] == 2
 
 
 def test_a_checkpoint_released_after_the_tables_is_scored(tmp_path):
     # With mtime triggers alone, a new label's units under tables already
     # built were "missing, no update": every tick did nothing (r5 n4000,
     # 2026-11-19).
-    data = tmp_path / "target.csv"
-    data.write_text("x\n")
     cache = tmp_path / "scores"
     for unit, labels in (
-        ("bdbv", ["reference", "slots-aaa"]),
         ("germany", ["reference", "slots-aaa"]),
         ("heldout", ["slots-aaa"]),
     ):
@@ -518,8 +497,7 @@ def test_a_checkpoint_released_after_the_tables_is_scored(tmp_path):
     (cache / "tables").mkdir()
     for name in ("checkpoint-scores.csv", "checkpoints.csv"):
         (cache / "tables" / name).write_text("x\n")
-    jobs = dry(tmp_path, "score", config={"score": {"data": str(data)}})
-    assert jobs["score_bdbv"] == 1
+    jobs = dry(tmp_path, "score")
     assert jobs["score_germany"] == 1
     assert jobs["score_release"] == 1
 
@@ -537,13 +515,11 @@ def test_score_takes_checkpoints_from_the_release_list(tmp_path):
 
 
 def test_finished_units_are_kept(tmp_path):
-    data = tmp_path / "target.csv"
-    data.write_text("x\n")
-    (tmp_path / "scores" / "bdbv").mkdir(parents=True)
-    (tmp_path / "scores" / "bdbv" / "reference.done").write_text("")
-    config = {"score": {"labels": ["aaa"], "data": str(data)}}
+    (tmp_path / "scores" / "germany").mkdir(parents=True)
+    (tmp_path / "scores" / "germany" / "reference.done").write_text("")
+    config = {"score": {"labels": ["aaa"]}}
     jobs = dry(tmp_path, "score", config=config)
-    assert jobs["score_bdbv"] == 1
+    assert jobs["score_germany"] == 1
 
 
 def test_score_runs_no_follow_ups_by_default(tmp_path):
@@ -600,11 +576,6 @@ def test_where_batches_come_from_is_the_machine_s(tmp_path):
     _local(tmp_path, "SIMS_FROM=release")
     jobs = dry(tmp_path, "finetune", config=FT)
     assert "simulate_batch" not in jobs
-
-
-def test_scores_follow_the_data(tmp_path):
-    jobs = dry(tmp_path, "score", config={"score": {"labels": ["aaa"]}})
-    assert jobs["bdbv_data"] == 1
 
 
 def test_release_carries_each_round_s_exclusions(tmp_path):
@@ -693,15 +664,11 @@ def _scored(tmp_path):
     import os
     import time
 
-    data = tmp_path / "target.csv"
-    data.write_text("x\n")
     cache = tmp_path / "scores"
-    for study in ("bdbv", "germany", "heldout"):
+    for study in ("germany", "heldout"):
         (cache / study).mkdir(parents=True, exist_ok=True)
     stamps = [
-        cache / "bdbv" / "reference.done",
         cache / "germany" / "reference.done",
-        cache / "bdbv" / "aaa.done",
         cache / "germany" / "aaa.done",
         cache / "heldout" / "aaa.done",
     ]
@@ -711,11 +678,10 @@ def _scored(tmp_path):
     for f in ("checkpoint-scores.csv", "checkpoints.csv", "landed"):
         (cache / "tables" / f).write_text("")
     old = time.time() - 3600
-    os.utime(data, (old, old))
     for f in stamps:
         os.utime(f, (old + 60, old + 60))
     return {
-        "score": {"labels": ["aaa"], "data": str(data)},
+        "score": {"labels": ["aaa"]},
         "slots_check": {"run": False},
         "agg": {"run": False},
     }, stamps
@@ -724,7 +690,7 @@ def _scored(tmp_path):
 def test_land_runs_only_when_the_tables_changed(tmp_path):
     config, stamps = _scored(tmp_path)
     assert dry(tmp_path, "land", config=config) == {}
-    stamps[2].write_text("")  # a unit finished again: newer than the table
+    stamps[1].write_text("")  # a unit finished again: newer than the table
     jobs = dry(tmp_path, "land", config=config)
     assert jobs["score_table"] == 1
     assert jobs["land"] == 1
@@ -887,8 +853,8 @@ def score_jobs(tmp_path, config, local_extra="", target="score"):
 def test_score_units_run_torch_on_the_machine_device(tmp_path):
     config = {"score": {"labels": ["aaa", "bbb"]}}
     blocks = score_jobs(tmp_path, config)
-    units = [b for b in blocks if re.match(r"rule score_(bdbv|germany):", b)]
-    assert len(units) == 6
+    units = [b for b in blocks if re.match(r"rule score_germany:", b)]
+    assert len(units) == 3
     for block in units:
         assert "DEVICE=cuda" in block
         assert "OMP_NUM_THREADS=1 " not in block
@@ -902,7 +868,7 @@ def test_score_units_run_torch_on_the_machine_device(tmp_path):
 def test_score_threads_are_a_machine_setting(tmp_path):
     config = {"score": {"labels": ["aaa"]}}
     blocks = score_jobs(tmp_path, config, "SCORE_THREADS=3\n")
-    units = [b for b in blocks if re.match(r"rule score_bdbv:", b)]
+    units = [b for b in blocks if re.match(r"rule score_germany:", b)]
     assert units
     assert all(re.search(r"threads: 3\b", b) for b in units)
 
@@ -912,7 +878,7 @@ def test_newer_checkpoints_are_scored_first(tmp_path):
     blocks = score_jobs(tmp_path, config)
     got = {}
     for block in blocks:
-        rule = re.match(r"rule (score_bdbv):", block)
+        rule = re.match(r"rule (score_germany):", block)
         if rule:
             label = re.search(r"wildcards: label=(\S+)", block)[1]
             got[label] = float(re.search(r"priority: ([\d.]+)", block)[1])
@@ -922,8 +888,8 @@ def test_newer_checkpoints_are_scored_first(tmp_path):
 def test_one_unit_runs_before_the_release_list_exists(tmp_path):
     # A unit's priority reads the list if it is there, else takes its band's
     # base: it never waits on the release_list checkpoint.
-    jobs = dry(tmp_path, str(tmp_path / "scores" / "bdbv" / "aaa.done"))
-    assert jobs["score_bdbv"] == 1
+    jobs = dry(tmp_path, str(tmp_path / "scores" / "germany" / "aaa.done"))
+    assert jobs["score_germany"] == 1
 
 
 # Each grid has its own rounds (flowlib.grids).

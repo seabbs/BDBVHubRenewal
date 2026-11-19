@@ -315,11 +315,6 @@ def unit_env(wc, threads):
     return machine.shell_env(machine.torch_env(LOCAL, threads))
 
 
-def cpu_env(wc, threads):
-    """As `unit_env`, on the CPU."""
-    return machine.shell_env(machine.torch_env(LOCAL, threads, device="cpu"))
-
-
 EVALUATE = "uv run --group chronos python -m bdbvhubrenewal.evaluation.checkpoint"
 
 
@@ -340,7 +335,6 @@ def table_inputs(wc):
     labels = checkpoint_labels()
     every = [*SC["reference"], *labels]
     return {
-        "bdbv": expand(f"{CACHE}/bdbv/{{label}}.done", label=every),
         "germany": expand(f"{CACHE}/germany/{{label}}.done", label=every),
         "release": expand(f"{CACHE}/heldout/{{label}}.done", label=labels),
     }
@@ -350,12 +344,6 @@ def unit_stamps(wc=None):
     """Every unit the tables read, as one list (`rule score` asks for them
     itself, so a new label's units run under tables already built)."""
     return [f for files in table_inputs(wc).values() for f in files]
-
-
-def zone_units(wc=None):
-    """Every label's zone unit."""
-    labels = [*SC["reference"], *checkpoint_labels()]
-    return expand(f"{CACHE}/zones/{{label}}.done", label=labels)
 
 
 # From followups.smk.
@@ -375,7 +363,6 @@ def slots_labels():
 
 def main_scores(wc):
     return [
-        f"{CACHE}/bdbv/{wc.label}.done",
         f"{CACHE}/germany/{wc.label}.done",
     ]
 
