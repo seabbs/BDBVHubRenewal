@@ -18,8 +18,8 @@ from typing import Protocol, runtime_checkable
 import numpy as np
 import pandas as pd
 
-from bdbvhubrenewal.data.dates import as_date
-from bdbvhubrenewal.data.hierarchy import is_zone, province_of
+from nowcastutils.dates import as_date
+from nowcastutils.hierarchy import is_zone, province_of
 
 __all__ = [
     "NATIONAL",
@@ -68,7 +68,7 @@ class ForecastTask:
         `"real"` or `"simulated"`.
     cutoff : str
         The vintage's data cut-off, its latest onset day, ISO format
-        (`bdbvhubrenewal.data.releases.release_cutoff`).
+        (`nowcastutils.releases.release_cutoff`).
     target : pandas.DataFrame
         The target table rows of this vintage only (columns as in
         `bdbvhubrenewal.data.tidy_target`), for the country and

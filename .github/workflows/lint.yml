@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'src/**'
+      - 'packages/**'
       - 'ci/**'
       - 'tests/**'
       - 'workflow/**'
@@ -16,6 +17,7 @@ on:
   pull_request:
     paths:
       - 'src/**'
+      - 'packages/**'
       - 'ci/**'
       - 'tests/**'
       - 'workflow/**'
@@ -44,9 +46,9 @@ jobs:
       - run: uv sync --frozen
       - name: Ruff and mypy
         run: |
-          uv run ruff check src tests workflow scripts
-          uv run ruff format --check src tests workflow scripts
-          uv run mypy src
+          uv run ruff check src packages tests workflow scripts
+          uv run ruff format --check src packages tests workflow scripts
+          uv run mypy src packages/*/src
 
   # Snakemake style and lint of the workflow and the paper's workflow.
   workflow-lint:

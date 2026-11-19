@@ -6,12 +6,12 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.data.releases import (
+from bdbvhubrenewal.data.tidy import ORIGINAL_AS_OF, release_id
+from nowcastutils.releases import (
     latest_onset_days,
     release_cutoff,
     release_pairs,
 )
-from bdbvhubrenewal.data.tidy import ORIGINAL_AS_OF, release_id
 
 REWRITTEN = {
     "2026-08-19": "2026-08-18",

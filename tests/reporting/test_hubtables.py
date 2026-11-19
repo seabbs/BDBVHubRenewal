@@ -7,12 +7,9 @@ import pandas as pd
 import pytest
 
 from bdbvhubrenewal.data import load_daily_zones
-from bdbvhubrenewal.data.hierarchy import is_zone, province_of
-from bdbvhubrenewal.data.snapshots import weekly_counts
 from bdbvhubrenewal.data.zones import hub_zones
 from bdbvhubrenewal.evaluation import backtest as bt
 from bdbvhubrenewal.forecasters import get_model
-from bdbvhubrenewal.forecasters.base import NATIONAL
 from bdbvhubrenewal.forecasters.zones import reconcile_zones
 from bdbvhubrenewal.reporting.hubtables import (
     HUB_QUANTILE_LEVELS,
@@ -20,6 +17,9 @@ from bdbvhubrenewal.reporting.hubtables import (
     hub_tables,
     write_hub_tables,
 )
+from nowcastutils.base import NATIONAL
+from nowcastutils.hierarchy import is_zone, province_of
+from nowcastutils.snapshots import weekly_counts
 
 ROOT = Path(__file__).resolve().parents[2]
 DATA = ROOT / "tests" / "fixtures" / "data"
@@ -208,8 +208,8 @@ def test_a_model_that_forecasts_the_country_keeps_its_national_rows(
     # The Chronos-2 models forecast the country in their joint block, and
     # their national draws are written as they are, not as the sum of the
     # provinces. Other models' national rows are the provinces' sum.
-    from bdbvhubrenewal.forecasters.base import SAMPLE_COLUMNS
     from bdbvhubrenewal.reporting import hubtables
+    from nowcastutils.base import SAMPLE_COLUMNS
 
     real = target.loc[target["kind"] == "real"]
     latest = real["vintage"].max()

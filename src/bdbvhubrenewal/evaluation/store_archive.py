@@ -22,19 +22,15 @@ from typing import Any, Final
 
 import pandas as pd
 
-from bdbvhubrenewal.data.dates import as_date
 from bdbvhubrenewal.data.zones import ZoneData
 from bdbvhubrenewal.evaluation import store
 from bdbvhubrenewal.evaluation.backtest import BacktestConfig, vintage_task
 from bdbvhubrenewal.forecasters import ForecastTask
-from bdbvhubrenewal.forecasters.base import (
-    NATIONAL,
-    SAMPLE_COLUMNS,
-    check_samples,
-)
-from bdbvhubrenewal.forecasters.forecast import Forecast
 from bdbvhubrenewal.forecasters.zonerenewal import ZONES_FILE
 from bdbvhubrenewal.submission.hub import HUB_COLUMNS, own_national
+from nowcastutils.base import NATIONAL, SAMPLE_COLUMNS, check_samples
+from nowcastutils.dates import as_date
+from nowcastutils.forecast import Forecast
 
 __all__ = [
     "COLUMNS",

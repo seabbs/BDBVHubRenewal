@@ -63,10 +63,8 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
-from bdbvhubrenewal.data.dates import as_date
-from bdbvhubrenewal.data.hierarchy import is_zone, province_of
-from bdbvhubrenewal.data.snapshots import weekly_counts
-from bdbvhubrenewal.forecasters.base import (
+from bdbvhubrenewal.forecasters.randomwalk import RandomWalk
+from nowcastutils.base import (
     NATIONAL,
     SAMPLE_COLUMNS,
     ForecastModel,
@@ -74,7 +72,9 @@ from bdbvhubrenewal.forecasters.base import (
     get_model,
     list_models,
 )
-from bdbvhubrenewal.forecasters.randomwalk import RandomWalk
+from nowcastutils.dates import as_date
+from nowcastutils.hierarchy import is_zone, province_of
+from nowcastutils.snapshots import weekly_counts
 
 __all__ = [
     "ZoneAllocator",

@@ -9,8 +9,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.data.releases import release_cutoff
-from bdbvhubrenewal.data.snapshots import snapshot_arrays, weekly_sums
+from nowcastutils.releases import release_cutoff
+from nowcastutils.snapshots import snapshot_arrays, weekly_sums
 
 VINTAGES = ("2026-08-18", "2026-10-09", "2026-10-17", "2026-10-24")
 

@@ -41,8 +41,8 @@ from typing import Final
 import numpy as np
 import pandas as pd
 
-from bdbvhubrenewal.data.dates import as_date, epiweek_end
-from bdbvhubrenewal.forecasters.base import NATIONAL, ForecastTask
+from nowcastutils.base import NATIONAL, ForecastTask
+from nowcastutils.dates import as_date, epiweek_end
 
 __all__ = [
     "AGE_GROUPS",

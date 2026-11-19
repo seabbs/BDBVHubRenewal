@@ -17,7 +17,7 @@ from typing import Any, cast
 import numpy as np
 import pandas as pd
 
-from bdbvhubrenewal.data.releases import release_cutoff
+from nowcastutils.releases import release_cutoff
 
 from .model import (
     MAIN,

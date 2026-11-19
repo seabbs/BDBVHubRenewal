@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from bdbvhubrenewal.trajectories import couple, read_quantiles
+from nowcastutils.trajectories import couple, read_quantiles
 
 LEVELS = np.array([0.025, 0.1, 0.25, 0.5, 0.75, 0.9, 0.975])
 

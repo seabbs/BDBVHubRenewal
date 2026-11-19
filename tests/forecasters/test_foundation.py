@@ -13,9 +13,6 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.data.dates import as_date
-from bdbvhubrenewal.data.hierarchy import is_zone, province_of
-from bdbvhubrenewal.data.snapshots import weekly_counts
 from bdbvhubrenewal.data.zones import ZoneData, hub_zones
 from bdbvhubrenewal.evaluation.backtest import BacktestConfig, make_tasks
 from bdbvhubrenewal.forecasters import (
@@ -24,7 +21,6 @@ from bdbvhubrenewal.forecasters import (
     FoundationModel,
     ModelUnavailableError,
     add_national,
-    base,
     check_samples,
     foundation,
     get_model,
@@ -45,6 +41,10 @@ from bdbvhubrenewal.forecasters.zones import (
     check_zone_coherence,
     zones_for_model,
 )
+from nowcastutils import base
+from nowcastutils.dates import as_date
+from nowcastutils.hierarchy import is_zone, province_of
+from nowcastutils.snapshots import weekly_counts
 
 FINETUNED_MODELS = tuple(f"fm_chronos_{s}_ragged_ft" for s in SOURCES)
 MODELS = (

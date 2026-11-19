@@ -32,12 +32,8 @@ from functools import partial
 from pathlib import Path
 from typing import Any, Final
 
-from bdbvhubrenewal.forecasters.base import (
-    ForecastTask,
-    check_samples,
-    get_model,
-)
-from bdbvhubrenewal.forecasters.forecast import Forecast
+from nowcastutils.base import ForecastTask, check_samples, get_model
+from nowcastutils.forecast import Forecast
 
 __all__ = [
     "DIAGNOSTICS_SCHEMA_VERSION",

@@ -61,16 +61,14 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pandas as pd
 
-from bdbvhubrenewal.data.dates import as_date, epiweek_end
-from bdbvhubrenewal.data.hierarchy import province_of
-from bdbvhubrenewal.data.releases import release_cutoff
 from bdbvhubrenewal.evaluation.scoring import (
     SCORE_COLUMNS,
     energy_scores,
     relative_skill,
     score_forecasts,
 )
-from bdbvhubrenewal.forecasters.base import (
+from bdbvhubrenewal.forecasters.renewal import DELAY_SUMMARY_FILE
+from nowcastutils.base import (
     NATIONAL,
     ForecastModel,
     ForecastTask,
@@ -80,7 +78,9 @@ from bdbvhubrenewal.forecasters.base import (
     get_model,
     list_models,
 )
-from bdbvhubrenewal.forecasters.renewal import DELAY_SUMMARY_FILE
+from nowcastutils.dates import as_date, epiweek_end
+from nowcastutils.hierarchy import province_of
+from nowcastutils.releases import release_cutoff
 
 __all__ = [
     "COMPLETE_GROWTH",
@@ -744,7 +744,7 @@ class ReleaseForecasts:
 
     def write(self, out: Path | str) -> None:
         """Write the tables to `out` as `release-<table>.csv.gz`."""
-        from bdbvhubrenewal.data.files import write_csv
+        from nowcastutils.files import write_csv
 
         Path(out).mkdir(parents=True, exist_ok=True)
         for name in self._NAMES:

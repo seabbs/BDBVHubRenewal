@@ -16,6 +16,7 @@ dependencies = [
   "tabulate>=0.9",
   "tzdata>=2024.1",
   "jax>=0.12.0",
+  "nowcastutils",
 ]
 keywords = [
   "epidemiology",
@@ -98,6 +99,10 @@ explicit = true
 
 [tool.uv.sources]
 torch = [{ index = "pytorch-cu126", marker = "sys_platform == 'linux'" }]
+nowcastutils = { workspace = true }
+
+[tool.uv.workspace]
+members = ["packages/*"]
 
 [tool.uv.build-backend]
 module-name = "bdbvhubrenewal"
@@ -128,6 +133,17 @@ select = [
 ]
 ignore = [
   "PD010", # `unstack` reads more clearly than `pivot_table` here
+]
+
+[tool.ruff.lint.isort]
+known-first-party = [
+  "bdbvhubrenewal",
+  "nowcastutils",
+  "nowcasteval",
+  "nowcastbaselines",
+  "nowcastfoundation",
+  "nowcastrenewal",
+  "bdbvhub",
 ]
 
 [tool.ruff.lint.pydocstyle]

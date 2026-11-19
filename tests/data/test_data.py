@@ -21,7 +21,7 @@ from bdbvhubrenewal.data import (
     tidy_target,
     vintages,
 )
-from bdbvhubrenewal.data.files import write_csv
+from nowcastutils.files import write_csv
 
 DATA = Path(__file__).resolve().parents[1] / "fixtures" / "data"
 
