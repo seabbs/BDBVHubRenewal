@@ -26,6 +26,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import yaml
+from bdbvhubrenewal.evaluation.labels import MODEL_STYLES, model_label
 from bdbvhubrenewal.reporting.live_checkpoint import (
     LIVE_RUN,
     checkpoint_table,
@@ -148,7 +149,7 @@ def aggregation_figure(
                     g["rel"],
                     ls="none",
                     marker=markers[model],
-                    label=model,
+                    label=model_label(model),
                 )
             ax.axhline(1, color="#888888", lw=1)
             ax.set_xticks(
@@ -454,6 +455,12 @@ def checkpoint_figure(scores: pd.DataFrame) -> Figure:
     # One colour per source across panels, so the shared legend holds.
     sources = sorted({_source_of(m) for m in sc["model"]})
     colours = {s: f"C{i}" for i, s in enumerate(sources)}
+    # Models with a shared colour (`evaluation.labels`) keep it.
+    colours |= {
+        _source_of(m): MODEL_STYLES[m][0]
+        for m in sc["model"].unique()
+        if m in MODEL_STYLES
+    }
     panels = list(sc.groupby(["study", "level"], sort=False).groups)
     ncol = min(3, len(panels))
     nrow = int(np.ceil(len(panels) / ncol))
@@ -481,7 +488,7 @@ def checkpoint_figure(scores: pd.DataFrame) -> Figure:
                     marker="o",
                     ms=3,
                     color=colour,
-                    label=f"{model}, fine-tuned",
+                    label=model_label(f"{model}_ft"),
                 )
             complete = "_complete" in model
             for value in g.loc[g["outbreaks"] == 0, "rel_wis"]:
@@ -490,11 +497,7 @@ def checkpoint_figure(scores: pd.DataFrame) -> Figure:
                     color=colour,
                     ls=":" if complete else "--",
                     lw=1.2,
-                    label=(
-                        f"{model}, complete data only"
-                        if complete
-                        else f"{model}, zero-shot"
-                    ),
+                    label=model_label(model),
                 )
         if thin:
             ax.text(
@@ -509,7 +512,8 @@ def checkpoint_figure(scores: pd.DataFrame) -> Figure:
         ax.set_xlim(ticks[0] / 1.5, ticks[-1] * 1.5)
         ax.set_xticks(ticks, [f"{t:,.0f}" for t in ticks], fontsize=7)
         ax.minorticks_off()
-        ax.axhline(1, color="#888888", ls="-", lw=1, label="randomwalknowcast")
+        reference = model_label("randomwalknowcast")
+        ax.axhline(1, color="#888888", ls="-", lw=1, label=reference)
         ax.set_title(f"{study}, {level} (n = {n}{origins})", fontsize=9)
         ax.set_xlabel("Fine-tuning outbreaks")
         ax.set_ylabel("Relative WIS")
@@ -814,7 +818,7 @@ def copula_figure(rows: pd.DataFrame) -> Figure:
                     g["ratio"],
                     ls="none",
                     marker=markers[model],
-                    label=model,
+                    label=model_label(model),
                 )
             ax.axhline(1, color="#888888", lw=1)
             ax.set_xticks(

@@ -220,11 +220,11 @@ def test_checkpoint_models_keep_one_colour_across_panels() -> None:
         (ax.get_title(), line.get_label()): line.get_color()
         for ax in fig.axes
         for line in ax.get_lines()
-        if line.get_label() in {"a, fine-tuned", "b, fine-tuned"}
+        if line.get_label() in {"a_ft", "b_ft"}
     }
     assert (
-        colours[("ebola, national (n = 400)", "b, fine-tuned")]
-        == colours[("germany, national (n = 400)", "b, fine-tuned")]
+        colours[("ebola, national (n = 400)", "b_ft")]
+        == colours[("germany, national (n = 400)", "b_ft")]
     )
 
 
@@ -401,19 +401,19 @@ def test_checkpoint_curves_show_the_untuned_models_as_lines() -> None:
     fig = checkpoint_figure(rows)
     ax = next(a for a in fig.axes if a.get_visible())
     lines = {line.get_label(): line for line in ax.get_lines()}
-    curve = lines["fm_chronos_daily_ragged, fine-tuned"]
+    curve = lines["Fine-tuned (delays)"]
     assert list(curve.get_xdata()) == [1000, 2000]
-    zero = lines["fm_chronos_daily_ragged, zero-shot"]
-    complete = lines["fm_chronos_daily_complete, complete data only"]
+    zero = lines["Zero-shot (delays)"]
+    complete = lines["Zero-shot (complete data only)"]
     assert set(zero.get_ydata()) == {2.0}
     assert set(complete.get_ydata()) == {1.7}
     # One colour per source, the references in other line styles.
     assert zero.get_color() == curve.get_color() == complete.get_color()
     assert len({zero.get_linestyle(), complete.get_linestyle()}) == 2
-    assert set(lines["randomwalknowcast"].get_ydata()) == {1}
+    assert set(lines["Random walk nowcast"].get_ydata()) == {1}
     legend = [t.get_text() for t in fig.legends[0].get_texts()]
-    assert "fm_chronos_daily_complete, complete data only" in legend
-    assert "randomwalknowcast" in legend
+    assert "Zero-shot (complete data only)" in legend
+    assert "Random walk nowcast" in legend
 
 
 def _comparison() -> pd.DataFrame:
