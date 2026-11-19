@@ -292,6 +292,29 @@ def test_from_the_rounds_host_a_round_is_listed_once_its_qc_ran(tmp_path):
     assert jobs["fetch_batch"] == 12 + 1 + 40
 
 
+OFFLOAD = {**FT, "finetune": {**FT["finetune"], "eval": "offload"}}
+
+
+def test_offloaded_evaluation_is_planned_after_each_segment(tmp_path):
+    jobs = dry(tmp_path, "finetune", config=OFFLOAD)
+    assert jobs["train_segment"] == 2
+    assert jobs["evaluate_steps"] == 2
+    assert jobs["evaluate_checkpoint"] == 2
+
+
+def test_local_evaluation_plans_no_evaluation_rules(tmp_path):
+    jobs = dry(tmp_path, "finetune", config=FT)
+    assert not any(k.startswith("evaluate") for k in jobs)
+
+
+def test_an_offloaded_checkpoint_publishes_with_its_held_out_losses(tmp_path):
+    for n in (250, 500):
+        _checkpoint(tmp_path, n)
+    jobs = dry(tmp_path, "publish", config=OFFLOAD)
+    assert jobs["publish_checkpoint"] == 2
+    assert jobs["evaluate_checkpoint"] == 2
+
+
 def test_finetune_never_publishes(tmp_path):
     jobs = dry(tmp_path, "finetune", config=FT)
     assert not any(k.startswith("publish") for k in jobs)
