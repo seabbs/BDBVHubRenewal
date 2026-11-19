@@ -54,19 +54,33 @@ def fake(monkeypatch):
     return mod, calls
 
 
-def test_steps_scores_each_pending_snapshot_once(tmp_path, fake):
+def checkpoint_at(train, n, steps):
+    where = train / f"n{n}"
+    (where / "finetuned-ckpt").mkdir(parents=True)
+    (where / "settings.json").write_text(
+        json.dumps({"n_validation": 2, "n_outbreaks": n, "steps": steps})
+    )
+    return where
+
+
+def test_steps_scores_each_of_its_segment_s_snapshots_once(tmp_path, fake):
     mod, calls = fake
     train = tmp_path / "train"
-    snapshot(train, 0, ["start"])
-    snapshot(train, 200, ["monitor"])
-    mod.main(["steps", str(train), "--device", "cpu"])
+    for step, kinds in ((0, ["start"]), (200, ["monitor"]), (400, ["monitor"])):
+        snapshot(train, step, kinds)
+    first = checkpoint_at(train, 250, 200)
+    second = checkpoint_at(train, 500, 400)
+    mod.main(["steps", str(first), "--device", "cpu"])
     assert calls["loads"] == 1
-    assert len(calls["evals"]) == 2
+    assert [c[1] for c in calls["evals"]] == [["start"], ["monitor"]]
     got = json.loads((train / "evals" / "step-0000200.json").read_text())
     assert got["step"] == 200
     assert got["eval_loss"] == 0.3
-    mod.main(["steps", str(train), "--device", "cpu"])
-    assert len(calls["evals"]) == 2
+    assert not (train / "evals" / "step-0000400.json").exists()
+    mod.main(["steps", str(second), "--prev", str(first), "--device", "cpu"])
+    assert len(calls["evals"]) == 3
+    mod.main(["steps", str(second), "--prev", str(first), "--device", "cpu"])
+    assert len(calls["evals"]) == 3
 
 
 def test_checkpoint_writes_the_sidecar_with_the_start_loss(tmp_path, fake):
@@ -87,3 +101,10 @@ def test_checkpoint_writes_the_sidecar_with_the_start_loss(tmp_path, fake):
     assert got["held_out_loss_start"] == 0.4
     assert calls["evals"][-1][1] == ["checkpoint"]
     assert calls["evals"][-1][0] == train / "n500" / "finetuned-ckpt"
+
+
+def test_a_checkpoint_with_no_base_loss_fails_clearly(tmp_path, fake):
+    mod, _calls = fake
+    where = checkpoint_at(tmp_path / "train", 500, 31)
+    with pytest.raises(SystemExit, match="base Chronos-2 loss"):
+        mod.main(["checkpoint", str(where), "--device", "cpu"])

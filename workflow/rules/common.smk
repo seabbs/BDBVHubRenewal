@@ -134,6 +134,12 @@ def evaluate_real(wc=None):
     return f"--real-validation {real}" if real else ""
 
 
+def evaluate_prev(n):
+    """The settings of the checkpoint before segment n, if any."""
+    prev = PREV[int(n)]
+    return f"{TRAIN}/n{prev}/settings.json" if prev else []
+
+
 def evaluate_inputs_from(n):
     """Files a checkpoint's evaluation reads that no rule declares."""
     return [

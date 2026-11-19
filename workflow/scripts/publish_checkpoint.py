@@ -22,6 +22,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 
 import finetune_stream as fs  # noqa: E402
 
+from bdbvhubrenewal.evaluation.sidecar import SIDECAR  # noqa: E402
 from bdbvhubrenewal.forecasters.foundation import (  # noqa: E402
     SLOTS_PREFIX,
     release_tag,
@@ -35,7 +36,8 @@ def main() -> None:
     key = settings["hash"]
     spec = f"{SLOTS_PREFIX}{key}" if settings.get("series_bias") else key
     fs.publish(where, spec)
-    sidecar = where / "held-out.json"
+    # Uploaded on every run, so a release made before its sidecar gets it.
+    sidecar = where / SIDECAR
     if sidecar.exists():
         subprocess.run(
             ["gh", "release", "upload", release_tag(spec), str(sidecar),

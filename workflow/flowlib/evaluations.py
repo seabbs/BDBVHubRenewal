@@ -3,12 +3,12 @@
 With `finetune.eval: offload` the trainer saves an adapter snapshot and a
 request at step 0 and each evaluation step (`train/evals/step-<k>/`) and
 writes checkpoints without their held-out losses
-(scripts/finetune_stream.py). The `evaluate` rules (rules/evaluate.smk)
-score them elsewhere: each step's result is `train/evals/step-<k>.json`
-and a checkpoint's is the sidecar `n<N>/held-out.json`, beside its
-`settings.json`, which is a protected output of its segment. Readers take
-both through `checkpoint_settings` and `merged_history`, so a run
-evaluated either way reads the same.
+(scripts/finetune_stream.py). The `evaluate` rules (rules/evaluate.smk,
+run by workflow/scripts/evaluate_offloaded.py) score them: each step's
+result is `train/evals/step-<k>.json` and a checkpoint's is the sidecar
+`n<N>/held-out.json`, beside its `settings.json`, which is a protected
+output of its segment. Readers take both through `checkpoint_settings`
+and `merged_history`, so a run evaluated either way reads the same.
 """
 
 from __future__ import annotations
@@ -18,15 +18,22 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
+from bdbvhubrenewal.evaluation.sidecar import RESULT_ONLY, SIDECAR, with_sidecar
+
+__all__ = [
+    "HELD_OUT_BLOCKS",
+    "RESULT_ONLY",
+    "SIDECAR",
+    "checkpoint_settings",
+    "merged_history",
+    "pending",
+    "start_loss",
+    "step_results",
+]
+
 HELD_OUT_BLOCKS = "held-out-blocks.pkl"
 """The held-out blocks an offloaded run saves for its evaluator
 (`finetune_stream.HELD_OUT_BLOCKS`)."""
-
-SIDECAR = "held-out.json"
-"""A checkpoint's offloaded held-out losses, beside its settings."""
-
-RESULT_ONLY = ("kinds", "device", "seconds", "n_outbreaks")
-"""Fields of a step's result that are about the evaluation, not losses."""
 
 
 def _read(path: Path) -> Any:
@@ -37,18 +44,14 @@ def _read(path: Path) -> Any:
 
 
 def checkpoint_settings(where: Path | str) -> dict[str, Any]:
-    """Return a checkpoint's settings with its sidecar's losses added.
-
-    The sidecar only adds fields: one the trainer wrote is kept as it is.
-    """
+    """Return a checkpoint's settings with its sidecar's losses added."""
     where = Path(where)
     settings = _read(where / "settings.json")
-    settings = settings if isinstance(settings, dict) else {}
     sidecar = _read(where / SIDECAR)
-    if not isinstance(sidecar, dict):
-        return settings
-    losses = {k: v for k, v in sidecar.items() if k not in RESULT_ONLY}
-    return {**losses, **settings}
+    return with_sidecar(
+        settings if isinstance(settings, dict) else {},
+        sidecar if isinstance(sidecar, dict) else None,
+    )
 
 
 def step_results(train: Path | str) -> dict[int, dict[str, Any]]:
@@ -83,8 +86,19 @@ def merged_history(
     return sorted(out, key=lambda h: h.get("step", 0))
 
 
-def pending(train: Path | str) -> list[Path]:
-    """Return the step snapshots that have no result yet, in step order."""
+def step_of(snapshot: Path) -> int:
+    """Return a step snapshot's step, from its name `step-<k>`."""
+    return int(snapshot.name.removeprefix("step-").removesuffix(".json"))
+
+
+def pending(
+    train: Path | str, after: int = -1, upto: int | None = None
+) -> list[Path]:
+    """Return the step snapshots with no result yet, in step order.
+
+    Only those with `after` < step <= `upto`: one segment's, so two
+    segments' evaluations never score the same snapshot.
+    """
     evals = Path(train) / "evals"
     return [
         d
@@ -93,15 +107,12 @@ def pending(train: Path | str) -> list[Path]:
         and not d.name.endswith(".tmp")
         and (d / "request.json").exists()
         and not d.with_name(d.name + ".json").exists()
+        and after < step_of(d) <= (upto if upto is not None else step_of(d))
     ]
 
 
 def start_loss(train: Path | str) -> float | None:
-    """Return base Chronos-2's held-out loss for the run, if known.
-
-    From the step-0 snapshot's result, else from a checkpoint the trainer
-    evaluated itself (a run switched to offload at a later segment).
-    """
+    """Return base Chronos-2's held-out loss, step 0's or a checkpoint's."""
     train = Path(train)
     got = _read(train / "evals" / "step-0000000.json")
     if isinstance(got, dict) and "held_out_loss" in got:

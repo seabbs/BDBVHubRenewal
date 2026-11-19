@@ -1,23 +1,14 @@
-# Offloaded held-out evaluation (WP10).
-#
-# With `finetune.eval: offload` the trainer only trains: it saves an
-# adapter snapshot and a request at step 0 and each evaluation step
-# (`train/evals/step-<k>/`), and writes its checkpoints without held-out
-# losses. `evaluate_steps` scores the snapshots once their segment ends
-# (`train/evals/step-<k>.json`); `evaluate_checkpoint` scores a
-# checkpoint's adapter and writes its sidecar `n<N>/held-out.json`, beside
-# the segment's protected settings. Both use the trainer's own loss
-# functions on its saved held-out blocks
-# (workflow/scripts/evaluate_offloaded.py), take the GPU below the
-# trainer's priority and are in the `evaluate` group, so WORKER_GROUPS
-# places them on any machine (`evaluate=archie`). Snapshots and the blocks
-# are no rule's outputs, so they go over to a worker as `copy_in`.
-# Readers merge the results (flowlib.evaluations).
+# Offloaded held-out evaluation (WP10): with `finetune.eval: offload`,
+# score each segment's step snapshots and its checkpoint after it ends, in
+# the `evaluate` group (WORKER_GROUPS places it), on the GPU below the
+# trainer. Files and readers: workflow/flowlib/evaluations.py.
 
 
 rule evaluate_steps:
     input:
         settings=f"{TRAIN}/n{{n}}/settings.json",
+        # Its steps start after the previous checkpoint's.
+        prev=lambda wc: evaluate_prev(wc.n),
     output:
         touch(f"{TRAIN}/evals/n{{n}}.done"),
     log:
@@ -28,7 +19,10 @@ rule evaluate_steps:
     resources:
         gpu=1,
     params:
-        train=lambda wc, input: Path(input.settings).parents[1],
+        where=lambda wc, input: Path(input.settings).parent,
+        prev=lambda wc, input: (
+            f"--prev {Path(input.prev).parent}" if input.prev else ""
+        ),
         real=evaluate_real,
         device=machine.device(LOCAL),
         hf_home=LOCAL.get("HF_HOME", "output/finetune/hf"),
@@ -40,7 +34,8 @@ rule evaluate_steps:
         copy_back=[f"{TRAIN}/evals/"],
     shell:
         "DEVICE={params.device} HF_HOME={params.hf_home} HF_HUB_OFFLINE=1 "
-        f"{EVALUATE_PY} steps {{params.train}} --device {{params.device}} "
+        f"{EVALUATE_PY} steps {{params.where}} {{params.prev}} "
+        "--device {params.device} "
         "{params.real} > {log} 2>&1"
 
 

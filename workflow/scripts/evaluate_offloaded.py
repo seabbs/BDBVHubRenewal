@@ -1,17 +1,12 @@
 """Score an offloaded run's snapshots and checkpoints (rules/evaluate.smk).
 
-    python workflow/scripts/evaluate_offloaded.py steps TRAIN
+    python workflow/scripts/evaluate_offloaded.py steps TRAIN/n<N> \
+        [--prev TRAIN/n<M>]
     python workflow/scripts/evaluate_offloaded.py checkpoint TRAIN/n<N>
 
-`steps` scores every adapter snapshot under TRAIN/evals that has no
-result yet (`flowlib.evaluations.pending`) and writes each one's losses to
-`TRAIN/evals/step-<k>.json`. `checkpoint` scores a checkpoint's adapter as
-the trainer would have at that checkpoint and writes its sidecar,
-`n<N>/held-out.json`, with base Chronos-2's held-out loss
-(`flowlib.evaluations.start_loss`). Both use the trainer's own loss
-functions through scripts/finetune_evaluate.py, on the trainer's saved
-held-out blocks, so the losses are those `--eval local` would log. Base
-Chronos-2 is loaded once and copied for each adapter.
+`steps` scores segment n<N>'s step snapshots, `checkpoint` its adapter, with
+the trainer's own losses (scripts/finetune_evaluate.py); the files are as
+`flowlib.evaluations` says.
 """
 
 from __future__ import annotations
@@ -60,11 +55,22 @@ def score(base, adapter: Path, blocks, kinds, batch_size, real, device):
     return losses, time.perf_counter() - tick
 
 
-def steps(train: Path, device: str, real: Sequence[dict]) -> None:
-    """Score each step snapshot with no result yet."""
-    todo = evaluations.pending(train)
+def steps(where: Path, prev: Path | None, device: str, real) -> None:
+    """Score segment `where`'s step snapshots that have no result yet.
+
+    The segment's steps are those after checkpoint `prev`'s (from step 0
+    for the first) up to its own.
+    """
+    train = where.parent
+    upto = json.loads((where / "settings.json").read_text())["steps"]
+    after = (
+        json.loads((prev / "settings.json").read_text())["steps"]
+        if prev is not None
+        else -1
+    )
+    todo = evaluations.pending(train, after, upto)
     if not todo:
-        fs.log(f"{train}: no step snapshots to score")
+        fs.log(f"{where.name}: no step snapshots to score")
         return
     base = fe.load_base("cpu")
     blocks: dict[Any, list[dict]] = {}
@@ -111,8 +117,13 @@ def checkpoint(where: Path, device: str, real: Sequence[dict]) -> None:
         device,
     )
     start = evaluations.start_loss(train)
+    if start is None:
+        raise SystemExit(
+            f"{where}: no base Chronos-2 loss: neither evals/step-0000000.json "
+            "nor a locally evaluated checkpoint's held_out_loss_start"
+        )
     sidecar = {
-        **({"held_out_loss_start": start} if start is not None else {}),
+        "held_out_loss_start": start,
         **losses,
         "device": device,
         "seconds": seconds,
@@ -126,13 +137,14 @@ def main(argv: Sequence[str] | None = None) -> None:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("what", choices=("steps", "checkpoint"))
     p.add_argument("where", type=Path)
+    p.add_argument("--prev", type=Path)
     p.add_argument("--device", default="auto")
     p.add_argument("--real-validation", type=Path)
     args = p.parse_args(argv)
     device = torch_device(args.device)
     real = fs.load_blocks(args.real_validation) if args.real_validation else []
     if args.what == "steps":
-        steps(args.where, device, real)
+        steps(args.where, args.prev, device, real)
     else:
         checkpoint(args.where, device, real)
 

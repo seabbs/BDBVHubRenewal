@@ -75,6 +75,11 @@ def test_pending_snapshots_are_those_without_results(tmp_path):
     write(evals / "step-0000200.json", {"step": 200})
     got = evaluations.pending(tmp_path / "train")
     assert [p.name for p in got] == ["step-0000000", "step-0000400"]
+    # One segment's steps: after the previous checkpoint's, up to its own.
+    got = evaluations.pending(tmp_path / "train", after=0, upto=400)
+    assert [p.name for p in got] == ["step-0000400"]
+    got = evaluations.pending(tmp_path / "train", after=-1, upto=200)
+    assert [p.name for p in got] == ["step-0000000"]
 
 
 def test_start_loss_comes_from_step_0_else_an_earlier_checkpoint(tmp_path):

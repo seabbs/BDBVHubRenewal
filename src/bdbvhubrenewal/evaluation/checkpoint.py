@@ -55,6 +55,7 @@ import numpy as np
 import pandas as pd
 
 from bdbvhubrenewal.evaluation.scoring import scale_of, score_cells
+from bdbvhubrenewal.evaluation.sidecar import SIDECAR, with_sidecar
 
 RULE: Final = "own-quantile-wis_crps-1000-common"
 """The scoring rule of 2026-11-16."""
@@ -642,31 +643,26 @@ def release_unit(cache: Path, label: str) -> None:
          "-O", out, "--clobber"],
         check=True,
     )  # fmt: skip
-    # An offloaded checkpoint's release has its held-out losses beside its
-    # settings (`held-out.json`); they are added to the settings kept, so
-    # `held_out_rows` reads either kind of release the same.
-    sidecar = root / f"{label}-held-out.json"
-    got = subprocess.run(
-        ["gh", "release", "download", tag_, "-R", REPO, "-p", "held-out.json",
-         "-O", str(sidecar), "--clobber"],
-        capture_output=True,
-        text=True,
-    )  # fmt: skip
-    if got.returncode == 0 and sidecar.exists():
-        settings = json.loads(Path(out).read_text())
-        losses = json.loads(sidecar.read_text())
-        merged = {**losses, **settings}
-        for key in ("device", "seconds"):
-            if key not in settings:
-                merged.pop(key, None)
-        Path(out).write_text(json.dumps(merged, indent=1))
     view = subprocess.run(
-        ["gh", "release", "view", tag_, "-R", REPO, "--json", "name,body"],
+        ["gh", "release", "view", tag_, "-R", REPO, "--json",
+         "name,body,assets"],
         check=True,
         capture_output=True,
         text=True,
-    )
-    (root / f"{label}-release.json").write_text(view.stdout)
+    )  # fmt: skip
+    release = json.loads(view.stdout)
+    # Offloaded checkpoints keep their held-out losses in a sidecar.
+    if SIDECAR in {a["name"] for a in release.pop("assets", [])}:
+        sidecar = root / f"{label}-{SIDECAR}"
+        subprocess.run(
+            ["gh", "release", "download", tag_, "-R", REPO, "-p", SIDECAR,
+             "-O", str(sidecar), "--clobber"],
+            check=True,
+        )  # fmt: skip
+        settings = json.loads(Path(out).read_text())
+        merged = with_sidecar(settings, json.loads(sidecar.read_text()))
+        Path(out).write_text(json.dumps(merged, indent=1))
+    (root / f"{label}-release.json").write_text(json.dumps(release))
 
 
 # Table -----------------------------------------------------------------
