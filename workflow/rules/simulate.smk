@@ -1,11 +1,12 @@
 # Simulation rounds.
 #
 # Round r is the batches of `flowlib.segments.round_seeds`, each
-# scripts/finetune_simulate.R with exactly `draws` observation draws, and
-# is grid block r: 40 batches of 21 are its 840 simulations. Into
+# `batch` simulations of the grid (`simulate.grid_file`, engine
+# packages/nowcastfoundation/r) with exactly `draws` observation draws.
+# Into
 # <ROOT>/rounds/r<r>/sims/. Each batch gets a manifest row, the round's
 # manifest joins them, the sim QC (scripts/sim_qc.py) checks the round
-# against fixed thresholds (simulate.qc),
+# against the grid's thresholds (its `qc`),
 # and `round_ready` writes the seed lists and READY last. Every
 # simulation is kept: QC exclusions are a list (qc/excluded.csv).
 #
@@ -65,6 +66,7 @@ rule simulate_batch:
     output:
         counts=f"{ROUNDS_DIR}/r{{round}}/sims/counts-{{seed}}.csv.gz",
         settings=f"{ROUNDS_DIR}/r{{round}}/sims/settings-{{seed}}.csv",
+        latent=f"{ROUNDS_DIR}/r{{round}}/sims/latent-{{seed}}.csv.gz",
     log:
         f"{ROUNDS_DIR}/r{{round}}/sims/logs/{{seed}}.log",
     # In one pool, after the trainer (20) and before scoring (10 and
@@ -84,18 +86,18 @@ rule simulate_batch:
         sim_slots=1,
     params:
         sims=lambda wc, output: Path(output.counts).parent,
-        # A top-up batch: its planned cells and their number (topup.smk).
-        batch=batch_size,
-        cells=batch_cells,
+        batch=SIM["batch"],
         draws=SIM["draws"],
-        seed_base=SIM["seed_base"],
         lib=ENW_LIB,
+        grid=GRID_FILE,
+        engine=" ".join(simulator.ENGINE),
         prefix=lambda wc, resources: job_prefix(resources.mem_mb),
         min_free=LOCAL["MIN_FREE_GB"],
         min_disk=LOCAL["MIN_DISK_GB"],
         max_load=LOCAL["MAX_LOAD"],
     shell:
-        # The simulator must be the committed one, as the manifest records
+        # The simulator (engine, wrapper and grid) must be the committed one,
+        # as the manifest records
         # the commit. A retry keeps the first attempt's log. R and Stan
         # write temporary files to a folder of the batch's own, removed
         # however the batch ends. Rscript is the one on PATH; the whole job
@@ -105,8 +107,8 @@ rule simulate_batch:
         # from another prefix (such as linuxbrew) fails. Under a conda
         # env's R this also puts the system compilers first.
         """
-        if ! git diff --quiet HEAD -- scripts/finetune_simulate.R; then
-            echo "scripts/finetune_simulate.R differs from HEAD" >{log}
+        if ! git diff --quiet HEAD -- {params.engine} {params.grid}; then
+            echo "the simulator or its grid differs from HEAD" >{log}
             exit 1
         fi
         workflow/scripts/wait_for_room.sh {params.min_free} {params.min_disk} \
@@ -116,11 +118,10 @@ rule simulate_batch:
         rm -rf "$tmp" && mkdir -p "$tmp"
         trap 'rm -rf "$tmp"' EXIT
         rscript=$(command -v Rscript)
-        TMPDIR="$tmp" ENW_DRAWS={params.draws} ENW_CELLS="{params.cells}" \
-            ENW_SEED_BASE={params.seed_base} ENW_LIB={params.lib} \
+        TMPDIR="$tmp" ENW_DRAWS={params.draws} ENW_LIB={params.lib} \
             PATH="$(getconf PATH):$PATH" {params.prefix} \
             workflow/scripts/timed.sh \
-            nice -n 19 "$rscript" scripts/finetune_simulate.R \
+            nice -n 19 "$rscript" workflow/scripts/simulate.R {params.grid} \
             {params.batch} {wildcards.seed} {params.sims} >{log} 2>&1
         gzip -t {output.counts}
         """
@@ -195,7 +196,7 @@ rule sim_qc:
         TOOLS_ENV
     params:
         round_dir=lambda wc, input: Path(input[0]).parent,
-        # The thresholds (simulate.qc). The profiles rerun on mtime only,
+        # The grid's thresholds (its `qc`). The profiles rerun on mtime only,
         # so a round already checked keeps its exclusions.
         limits=SIM_QC_ARGS,
     shell:

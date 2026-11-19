@@ -1,14 +1,14 @@
 # nowcastutils
 
-Read data releases into the arrays the models use: cut-offs, snapshots and the location hierarchy.
+The pieces the other packages build on: releases, snapshots, the location hierarchy, the forecast task and sample trajectories from quantiles.
 { .page-subtitle }
 
-Until the package split, nowcastutils is `bdbvhubrenewal.data` ([Packages](index.md)).
+nowcastutils is the package in `packages/nowcastutils` of the repository ([Packages](index.md)).
 
 ## Install
 
 ```sh
-uv pip install "git+https://github.com/seabbs/bdbv-hub-modelling"
+uv pip install "git+https://github.com/seabbs/bdbv-hub-modelling#subdirectory=packages/nowcastutils"
 ```
 
 ## Getting started
@@ -70,12 +70,41 @@ assert parent("A") is None
 assert depth("A-1-07") == 2
 ```
 
+### Draw sample trajectories from quantile forecasts
+
+A quantile forecast gives each place and week its own quantiles, but says nothing about how the weeks move together.
+`couple` draws trajectories whose weeks each follow their quantiles.
+With `comonotone`, a trajectory takes the same quantile level in every week, so a high week is followed by high weeks.
+
+```python
+import numpy as np
+
+from nowcastutils.trajectories import couple
+
+levels = np.array([0.1, 0.5, 0.9])
+# Two places, three weeks, quantiles at each level.
+quantiles = np.array(
+    [
+        [[8.0, 10.0, 12.0], [9.0, 12.0, 15.0], [10.0, 14.0, 18.0]],
+        [[1.0, 2.0, 3.0], [1.0, 3.0, 5.0], [2.0, 4.0, 6.0]],
+    ]
+)
+draws = couple(quantiles, levels, "comonotone", None, n_samples=500, seed=1)
+assert draws.shape == (500, 2, 3)
+# Each trajectory keeps its rank across the weeks.
+rank = draws[:, 0, :].argsort(axis=0).argsort(axis=0)
+assert (rank[:, 0] == rank[:, 2]).all()
+```
+
+`gaussian` joins the weeks and places with correlations given in `fit` (`rho` between weeks, `s` between places), and `independent` draws every cell on its own.
+
 ## Reference
 
-[Data API](../reference/data.md).
+[nowcastutils API](../reference/nowcastutils.md).
 
 ## How it is used in the workflow
 
 Every model reads its data through these functions, so they all see the same releases, cut-offs and places.
+Each model takes a `ForecastTask` from `nowcastutils.base`, returns a sample table, and is found by name in its registry.
 
 Next: [nowcasteval](nowcasteval.md).
