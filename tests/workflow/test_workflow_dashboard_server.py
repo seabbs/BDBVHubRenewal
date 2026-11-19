@@ -45,7 +45,7 @@ def test_one_location_s_data_is_served(server):
     status, body = get(server + "/data/germany/DE.json")
     assert status == 200
     data = json.loads(body)
-    assert set(data) == {"series", "score", "stats", "truth", "latest"}
+    assert set(data) == {"series", "score", "parts", "stats", "truth", "latest"}
 
 
 def status_of(url):

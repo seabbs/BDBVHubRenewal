@@ -9,6 +9,7 @@ mailbox; `--run` and `--ref` add or replace runs and references.
 
 from __future__ import annotations
 
+import dataclasses
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
@@ -21,6 +22,8 @@ from .mirror import Source
 from .page import Context
 
 ROOT = Path(__file__).parents[3]
+RUN_MODEL = "fm_chronos_daily_ragged_ft"
+"""The model a run's checkpoints are, for their display name and colour."""
 
 
 def build(
@@ -61,10 +64,12 @@ def build(
             "no runs to show: set dashboard.runs, DASHBOARD_RUNS in "
             "config/local.env, or --run name=<folder|prefix>"
         )
-    # A reference may take its colour from the paper figures' model.
+    run_list = named_runs(run_list)
+    # A reference may take its name and colour from the paper's model.
     references = [
         {
             **e,
+            "label": e.get("label") or paperstyle.model_label(e["paper_model"]),
             "colour": e.get("colour")
             or paperstyle.model_colour(e["paper_model"]),
         }
@@ -116,6 +121,30 @@ def build(
         ],
         excluded=excluded,
     )
+
+
+def named_runs(run_list: Sequence[spec.Run]) -> list[spec.Run]:
+    """Name runs with no label of their own as the fine-tuned model.
+
+    One such run also takes the model's colour in the paper; with more,
+    each name ends with the run's key.
+    """
+    unnamed = [r for r in run_list if r.label == r.key]
+    name = paperstyle.model_label(RUN_MODEL)
+    out = []
+    for r in run_list:
+        if r in unnamed:
+            one = len(unnamed) == 1
+            r = dataclasses.replace(
+                r,
+                label=name if one else f"{name}, {r.key}",
+                # The palette's default colour, not one set for the run.
+                colour=paperstyle.model_colour(RUN_MODEL)
+                if one and r.colour in ("", *spec.PALETTE)
+                else r.colour,
+            )
+        out.append(r)
+    return out
 
 
 def merge_datasets(
