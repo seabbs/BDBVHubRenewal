@@ -368,6 +368,10 @@ A manifest records each held-out block's layout and options.
 The held-out simulations are simulation round 9, one whole block of 840 separate from the ten training blocks, and are the paper's test set.
 The trainer monitors its loss on 90 of them, a random sample of the block's cells.
 
+The Ebola case study is held out from model development but not blind.
+We knew the structure of the data and its challenges from submitting other models to the hub, and this shaped the simulation design.
+A few Ebola checkpoint scores were produced in error during development and were not used to choose models or settings.
+
 ### Correlated trajectories
 
 - `randomwalk` and `randomwalknowcast` draw each province on its own, so the country, the per-sample sum of the provinces, is too narrow if the draws are paired at random.
