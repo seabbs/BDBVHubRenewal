@@ -175,7 +175,6 @@ dashboard:
   # levels, and the target, score, source and level shown first.
   studies:
     germany: Germany
-    ebola: BDBV
     held_out: held-out synthetic
   levels: [national, states, age, provinces]
   score_defaults: {target: 7day, metric: wis, source: daily, level: national}
@@ -183,6 +182,14 @@ dashboard:
   exclude: {hashes: []}
   # The checkpoint scores' rule shown.
   rule: own-quantile-wis_crps-1000-common
+  # Held out of model development: BDBV (Ebola) is entirely held out for
+  # the paper, so no panel, selector, table or mailbox line shows its
+  # scores or nowcasts, even if a machine's local file adds them.
+  # Datasets and score studies by key; mailbox lines matching `mail`.
+  held_out:
+    datasets: [bdbv]
+    studies: [ebola]
+    mail: "\\bebola\\b|\\bBDBV\\b(?![-_])"
   # Mailbox lines shown (a regular expression).
   mail_filter: "slots|ckpt-scores|agg-slots|slots-check|fm-finetune|sim round|workflow:"
   # Where scores are mirrored to when REMOTE is set, and how often (s).
@@ -199,7 +206,7 @@ dashboard:
   # truth: the truth line's caption ({delay} is D for samples datasets).
   datasets:
     - key: germany
-      label: Germany
+      label: Germany (development half)
       format: quantiles
       metric: WIS
       truth: latest vintage of the forecast files
@@ -207,18 +214,14 @@ dashboard:
         - {name: national, match: "^DE$"}
         - {name: states, match: "^DE-"}
         - {name: ages, match: "^(\\d\\d-\\d\\d|80\\+)$"}
-    - key: bdbv
-      label: BDBV (Ebola)
-      format: samples
-      metric: CRPS
-      targets: [7day]
-      truth_source: data/target.csv
-      truth_level: 0.98
-      truth_skip: ["2026-08-18"]
-      national: CD
-      truth: >-
-        each week's count in the first release {delay} days or more after
-        it, as scored (dashed: latest release)
-      groups:
-        - {name: national, match: "^CD$"}
-        - {name: provinces, match: "^CD-[A-Z]{2}$"}
+    # The held-out simulations. No scoring unit writes their
+    # nowcasts per checkpoint yet, so the selector lists them as empty
+    # until one fills <SCORE_CACHE>/held_out.
+    - key: held_out
+      label: Held-out simulations
+      format: quantiles
+      metric: WIS
+      truth: the simulation's final counts
+      missing: >-
+        the scoring workflow scores the trainer's held-out loss only, and
+        writes no per-checkpoint nowcasts for these simulations yet
