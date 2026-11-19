@@ -9,6 +9,10 @@ rule evaluate_steps:
         settings=f"{TRAIN}/n{{n}}/settings.json",
         # Its steps start after the previous checkpoint's.
         prev=lambda wc: evaluate_prev(wc.n),
+        # After the previous segment's, so step 0 is scored first.
+        before=lambda wc: (
+            f"{TRAIN}/evals/n{PREV[int(wc.n)]}.done" if PREV[int(wc.n)] else []
+        ),
     output:
         touch(f"{TRAIN}/evals/n{{n}}.done"),
     log:
@@ -43,8 +47,12 @@ rule evaluate_checkpoint:
     input:
         settings=f"{TRAIN}/n{{n}}/settings.json",
         adapter=f"{TRAIN}/n{{n}}/finetuned-ckpt/adapter_model.safetensors",
-        # Step 0's result, base Chronos-2's loss, is scored with the steps.
+        # Its segment's steps, chained back to step 0 (base Chronos-2).
         steps=f"{TRAIN}/evals/n{{n}}.done",
+        # Where a run switched to offload finds base Chronos-2's loss.
+        earlier=lambda wc: [
+            f"{TRAIN}/n{p}/settings.json" for p in FT["prefixes"] if p < int(wc.n)
+        ],
     output:
         f"{TRAIN}/n{{n}}/{SIDECAR}",
     log:
