@@ -109,7 +109,7 @@ Chronos-2's group attention has no notion of which series is which, so on its ow
 
 - We add three learned biases to Chronos-2's group-attention scores (@tbl-attention-biases).
 - They start at zero, so fine-tuning starts from base Chronos-2, as for the relation biases TableFormer adds to a pretrained model [@Yang2022].
-- The biases train at a learning rate of $10^{-3}$ and the LoRA adapter at $10^{-5}$, both falling linearly to zero over the 8,400 simulations.
+- The biases train at a learning rate of $10^{-3}$ and the LoRA adapter at $10^{-5}$, both falling linearly to zero over the 3,200 simulations.
 - We identify places by name within each block, with no limit on the number of places.
 - A place's parent is the nearest prefix of its name in the block, else the country.
 - Training blocks include countries equal to, above or later than the sum of their places, so a place belongs to its parent without summing to it.
@@ -200,7 +200,7 @@ where $m_{n,t}$ is 1 for a target step to forecast and 0 for a missing target or
 
 - The learning rate falls linearly from $\eta_0$ to zero over the simulations [@Devlin2019]:
 $$
-\eta_t = \eta_0 \left(1 - \frac{s_t}{8{,}400}\right),
+\eta_t = \eta_0 \left(1 - \frac{s_t}{3{,}200}\right),
 $$
 where $s_t$ is the number of simulations trained by step $t$, interpolated within a chunk by its steps, so the rate reaches zero at the last simulation however the blocks are packed into steps.
 - $\eta_0 = 10^{-5}$ for the LoRA adapter, the rate Chronos-2's fine-tuning recommends for LoRA and AutoGluon's default [@chronos_forecasting; @autogluon], and $\eta_0 = 10^{-3}$ for the attention biases.
@@ -219,8 +219,9 @@ Of the 3-day and weekly blocks, 20% have missed releases.
 In those blocks each release but the last is missed with chance 0.2.
 Each simulation gives one observation draw, cut at 32 cut-offs, one drawn at random within each of 32 equal stretches of its weekly cut-offs, so one simulation gives up to 32 blocks.
 Each block has up to 364 steps of context, and its prediction length is its nowcast steps and one week ahead, rounded up to whole steps.
-A block with no case reported across its places in the 28 days up to its cut-off is dropped, from what is known at the cut-off.
-We train on 8,400 simulations, 10 balanced blocks of 840, with checkpoints at 250, 500, 750, 1,000, 2,000, 4,000 and 8,400.
+A block with fewer than 10 cases reported across its places in the 28 days up to its cut-off is dropped, from what is known at the cut-off.
+Each day counts once, at its latest report, in the block's busiest level.
+We train on 3,200 simulations drawn from the grid, with checkpoints at 100, 200, 400, 800, 1,600 and 3,200.
 
 ::: {#tbl-block-layouts}
 | Layout | Share of blocks |
@@ -261,15 +262,14 @@ The realised shares of the combinations of layout and options in the training bl
 :::
 
 **Order of the training data.**
-The grid is balanced in blocks of 840 simulations, with each factor's levels shuffled independently within a block, as in a Latin hypercube.
-Training takes the simulations in order, in chunks of 250, so a chunk holds under a third of a block.
-A chunk gives up to 8,000 training blocks, 32 a simulation, which are shuffled and packed into about 1,500 steps, roughly 6 a simulation.
+Each simulation draws its settings, the grid's factors among them, independently from their sampling distributions, seeded per simulation.
+Training takes the simulations in order, in chunks.
+Each simulation gives up to 32 training blocks, which are shuffled within a chunk and packed into roughly 6 steps a simulation.
 Each step is filled until it holds 256 series or more, so one large block can make a step of up to 2,000 series.
-So the checkpoints at 250, 500 and 750 simulations have seen only part of the grid, whole blocks are seen at each 840, and the 8,400 checkpoint has seen ten.
 
 Chronos-2 divides a flat context by a scale of $10^{-5}$, and we apply no floor to that scale at inference.
 A floor of one count at inference only hurts small series, of five counts or fewer, on held-out simulations.
-At 4,000 outbreaks their median loss is {{< meta evidence.scale_floor.sims.n4000.small.median_loss.none >}} without it and {{< meta evidence.scale_floor.sims.n4000.small.median_loss.floor >}} with it, and the share of 99% quantiles over 100 times the truth is {{< meta evidence.scale_floor.sims.n4000.small.q99_over_100x.none >}}% and {{< meta evidence.scale_floor.sims.n4000.small.q99_over_100x.floor >}}%.
+At the largest checkpoint tested their median loss is {{< meta evidence.scale_floor.sims.n4000.small.median_loss.none >}} without it and {{< meta evidence.scale_floor.sims.n4000.small.median_loss.floor >}} with it, and the share of 99% quantiles over 100 times the truth is {{< meta evidence.scale_floor.sims.n4000.small.q99_over_100x.none >}}% and {{< meta evidence.scale_floor.sims.n4000.small.q99_over_100x.floor >}}%.
 Large series are unchanged, with median loss {{< meta evidence.scale_floor.sims.n4000.large.median_loss.none >}} and {{< meta evidence.scale_floor.sims.n4000.large.median_loss.floor >}}.
 Chronos-2's widest interval is from 1% to 99%, as it has no 2.5% or 97.5% quantiles.
 
@@ -303,17 +303,78 @@ The dashboard was built with the help of a large language model.
 ### Synthetic data generation
 
 ::: {.callout-note title="Plan"}
-- We describe the simulation in full, with the epinowcast model it uses.
-- We give the grid in two tables, epidemic and reporting, with six example simulations, and compare the simulations with published disease parameters.
+- We describe the simulation in four layers: infections, observation, reporting delays and the reporting system.
+- Each layer has a subsection with a short description, a figure and a table of its sampling distributions, and a fifth figure combines the layers.
+- Layer 1 is the epidemic setting, and layers 2 to 4 are the delays and surveillance quirks fine-tuning teaches.
+- The workflow simulates outbreaks from the grid's config and writes every table and figure below, so a change to the grid regenerates them.
+- These workflow outputs replace the grid tables, example simulations and comparisons after the layers.
+- The published ranges for other diseases (@tbl-sim-diseases) are replaced by the sourced reference-values table, which the main text's coverage panel reads.
 - Key references: [@abbottepinowcast; @lison2024; @Park2024; @abbottprimarycensored].
 :::
+
+#### Layer 1: infections
+
+::: {.callout-note title="Plan"}
+- We simulate infections in each place and age group by a renewal process with susceptible depletion, and strata infect one another through a mixing matrix.
+- R(t) follows one of the transmission paths (growth, decline, flat, a sharp or gradual rise and fall, a fall and rise, oscillating and several waves), and places share, correlate or lag their paths.
+- We add shifts in R(t) that mostly react to the epidemic, down while effective R is above 1 and up while it is below.
+- In established and endemic settings, immune escape events return part of the immune to the susceptible pool and raise R(t).
+- We draw the generation time mean on a continuous scale covering influenza to Ebola.
+- The window opens either at seeding or on an epidemic already running, with imports and mid-outbreak seeding of places.
+- Figure (planned): "Layer 1, infections. One panel per transmission path: daily infections of one simulated outbreak, with R(t) and effective R below."
+- Table (planned): "Layer 1, sampling distributions of the infection settings, each with its reason."
+:::
+
+#### Layer 2: observation
+
+::: {.callout-note title="Plan"}
+- We turn infections into reference events, such as symptom onsets, tests or admissions, after a delay drawn as a discretised gamma, as in the renewal model.
+- We ascertain a share of the reference events as cases.
+- We add NB1 or Poisson noise, with a drawn dispersion that varies between strata.
+- Figure (planned): "Layer 2, observation. Infections of one simulated outbreak against its expected and observed cases by reference date, for short and long infection-to-reference delays, low and high ascertainment, and Poisson and NB1 noise."
+- Table (planned): "Layer 2, sampling distributions of the observation settings, each with its reason."
+:::
+
+#### Layer 3: reporting delays
+
+::: {.callout-note title="Plan"}
+- We report cases by reference and report date through epinowcast's observation model.
+- The reporting delay has a drawn family and mean, and differs between places and age groups.
+- The delay is static or changes over time by one of the delay changes, among them a drift, a step, a slowdown, a weekly walk interpolated between weeks and a smooth periodic change.
+- Figure (planned): "Layer 3, reporting delays. (A) The mean reporting delay by reference date for each kind of delay change. (B) The delay distributions drawn across the grid."
+- Table (planned): "Layer 3, sampling distributions of the reporting delay settings, each with its reason."
+:::
+
+#### Layer 4: the reporting system
+
+::: {.callout-note title="Plan"}
+- We add report-day effects, and some outbreaks report on weekdays only.
+- Reports can bunch, and reporting shocks add backlogs or outages.
+- Revisions are not part of epinowcast's model but are true of real data, so we apply them to the release triangle afterwards, in a drawn share of simulations.
+- Some cases are reported in error, appear in releases for a time and are then removed, so a release can exceed the final count.
+- Some cases are filed under a nearby reference day and moved later.
+- The target is still the final count, and lag series can then fall from one lag to the next.
+- Releases follow a daily, 3-day or weekly cadence, some with missed releases, as described with the training blocks.
+- Figure (planned): "Layer 4, the reporting system and revisions. One outbreak through each quirk (none, weekdays only, bunching, backlog, outage and revisions): final counts against the counts reported by the nowcast date."
+- Table (planned): "Layer 4, sampling distributions of the reporting system settings, each with its reason."
+:::
+
+#### All layers
+
+::: {.callout-note title="Plan"}
+- We combine the four layers in every simulation.
+- Figure (planned): "All layers combined. Sample simulations across the grid's settings, each with its final counts and counts reported by the nowcast date, and a strip of the mean reporting delay over time."
+- The main text figure compares the grid's summaries with the German development half and other diseases.
+:::
+
+#### Grid settings and checks
 
 {{< include build/tables/si/epinowcast-model.md >}}
 
 ::: {#tbl-grid-epidemic}
 {{< include build/tables/si/grid-epidemic.md >}}
 
-The simulation grid, epidemic and places: each crossed factor's levels and the continuous values drawn within a cell, read from the simulator's code.
+The simulation grid, epidemic and places: each categorical setting's levels and the continuous values drawn, read from the simulator's code.
 :::
 
 ::: {#tbl-grid-reporting}
@@ -323,17 +384,6 @@ The simulation grid, reporting and observation: as @tbl-grid-epidemic.
 :::
 
 We draw every continuous setting from a named sampling distribution of the simulation settings, which states what we believe likely outbreaks look like (@tbl-grid-distributions).
-We checked these distributions by comparing simulated summaries with real data (@tbl-grid-comparison).
-
-- We drew 1,000 settings across the grid's cells and computed, with no model fitted, each one's fastest daily growth, peak and total count per stratum, delay mean and 95th centile, share reported by days 7, 14 and 28, relative noise at large counts and weekday effect (`scripts/sim_settings_check.R`).
-- We computed the same summaries for every series of the German hospitalisation data [@Wolffram2023] and of the BDBV hub's data (`scripts/sim_settings_real.py`).
-- We narrowed a distribution only where its 99th centile went beyond every real series.
-- This truncated the delay median, mean and log sd at 10 days, 21 days and 2, which kept the 95th centile of the delay at most 54 days against 50 for the longest real series.
-- We widened daily growth to 0.2, as BDBV's series grew by up to 0.21 a day (doubling in 3.4 days) early in the outbreak.
-- We set outbreak sizes so the German national series (a peak of 1,748 a day) and BDBV's provinces (a few cases) both fall inside the central 90% of simulated peaks.
-- Simulated noise at large counts is below Germany's, whose measure also holds trend and holiday effects.
-- Half of the simulations have no reporting shock, and a quarter each have backlogs or outages.
-- Published doubling times for Ebola in West Africa, 16 to 30 days [@placeholder], fall inside the simulated range.
 
 ::: {#tbl-grid-distributions}
 {{< include build/tables/si/grid-distributions.md >}}
@@ -341,36 +391,17 @@ We checked these distributions by comparing simulated summaries with real data (
 Sampling distributions of the continuous simulation settings, read from the simulator's code, with the reason for each.
 :::
 
-::: {#tbl-grid-comparison}
-| summary | simulated 1% / 5% / 50% / 95% / 99% | Germany | BDBV |
-| --- | --- | --- | --- |
-| fastest daily growth rate | -0.099 / -0.036 / 0.037 / 0.1 / 0.15 | 0.031 to 0.065 | 0.034 to 0.21 |
-| doubling time at it (days) | 4.7 / 6.6 / 17 / 87 / 286 | 11 to 22 | 3.4 to 20 |
-| peak daily count per series | 0.41 / 1.3 / 53 / 2,217 / 7,792 | 19 to 1,748 | 0 to 84 |
-| total count per series | 30 / 87 / 3,365 / 86,253 / 206,523 | 2,470 to 393,767 | 0 to 11,165 |
-| mean delay (days) | 1.1 / 1.7 / 6 / 15 / 17 | 4.2 to 11 | 6.7 to 15 |
-| 95th centile of the delay (days) | 4 / 6 / 20 / 48 / 54 | 17 to 50 | 18 to 27 |
-| share reported by day 7 | 0.35 / 0.41 / 0.72 / 0.98 / 1 | 0.64 to 0.85 | 0 to 0.73 |
-| share reported by day 14 | 0.55 / 0.63 / 0.9 / 1 / 1 | 0.78 to 0.94 | 0.67 to 0.92 |
-| share reported by day 28 | 0.8 / 0.84 / 0.99 / 1 / 1 | 0.89 to 0.98 | 0.67 to 1 |
-| relative noise at large counts (500 or more a day) | 0.0098 / 0.012 / 0.032 / 0.07 / 0.095 | 0.099 to 0.22 | - |
-| weekday effect, max / min | 1 / 1 / 1 / 3.6 / 5.6 | 2.3 to 10 | - |
-| backlog size (x mean delay) | 2 / 2.4 / 3.7 / 5.5 / 6.3 | - | - |
-
-Simulated summaries (centiles over 1,000 drawn settings) against the range over the series of each real data set.
-:::
 
 ![Six contrasting simulations of the grid, from pilot simulations: the final daily counts (black) and the counts known at releases 40%, 65% and 90% of the way through each outbreak (dashed), summed over strata.](build/figures/si/sim-examples.png){#fig-sim-examples}
 
 Outbreaks run 16 to 52 weeks.
-A simulation that fails, has fewer than 10 cases in the outbreak or has more than $10^6$ cases per stratum is redrawn up to five times, and its grid cell is skipped if every draw fails.
+A simulation that fails or reports fewer than 10 cases is redrawn with a new seed.
 Before training, each round's simulations are checked against fixed thresholds, and the trainer skips those that fail.
 A simulation fails if its cases per stratum pass 500,000, the upper bound of the simulated size, if its weekly cases by reference date rise more than 1,000-fold in one week, or if its mean reporting delay passes 35 days.
 No simulation is deleted.
-Grid cells left missing by the redraws or the check are simulated again with fresh seeds, up to five times, so that training uses ten whole blocks.
+Simulations the check excludes are replaced by simulations with new seeds.
 
-The grid has two limitations.
-Simulated strata are less sparse than BDBV's provinces: the share of stratum-weeks with no cases reaches {{< meta evidence.realism.zero_share.sim_q95 >}} at the 95% point of the simulations, against {{< meta evidence.realism.zero_share.BDBV >}} for BDBV.
+The grid has one known limitation.
 Simulated delays are shorter than the German data's, whose 99% point is {{< meta evidence.realism.delay_q99.Germany_states >}} days against {{< meta evidence.realism.delay_q99.sim_q95 >}} at the 95% point of the simulations.
 
 The simulator works around four limits of epinowcast's simulation mode, each until the linked epinowcast change.
@@ -390,7 +421,7 @@ The simulated outbreaks' ranges against published values for several diseases, t
 {{< include build/tables/si/heldout-set.md >}}
 
 We cut the held-out simulations into blocks as in training, with the same layouts and non-summing parents (@tbl-block-layouts), using a fixed seed.
-We keep two sets of simulations out of training, each one whole block of 840 separate from the ten training blocks.
+We keep two rounds of simulations out of training, separate from the training rounds.
 The validation set is the round on which the trainer monitors its loss, on the first 90 of its simulations by seed.
 The test set is a further round simulated with fresh seeds, and no model is scored on it until the final model is fixed.
 The test set is the paper's held-out synthetic data.
@@ -469,7 +500,7 @@ The copula weight of the walk baselines was set on the Ebola release backtest be
 | Floor on Chronos-2's scale at inference | None, Chronos-2's default | Held-out simulations |
 | Lag cap of the ragged layout | 4 weeks or 28 days | German first half and the BDBV release backtest |
 | Copula shrinkage weight $w$ | 10, the weakest of 0, 10, 30 and 100, which scored within 1% of one another | Ebola release backtest |
-| Realism checks of the simulation grid | Grid ranges | BDBV releases and German data reported by 2022-02-09 |
+| Realism checks of the simulation grid | Grid ranges | German development half and published ranges for other diseases |
 
 Choices tuned on development data, with their values and the data they were set on.
 :::
@@ -509,13 +540,13 @@ On the German development half, level by level is competitive for the daily zero
 
 ### Checkpoint curve
 
-- We compare the final run's checkpoints, fine-tuned on 250, 500, 750, 1,000, 2,000, 4,000 and 8,400 simulations.
+- We compare the final run's checkpoints, fine-tuned on 100, 200, 400, 800, 1,600 and 3,200 simulations.
 - They share the grid, the data order and the recipe, as checkpoints of one run.
 - @fig-finetune-heldout gives the trainer's held-out loss by level, for transparency, not to select a checkpoint.
 - @fig-checkpoint-curve gives German first-half relative scores at each checkpoint, with zero-shot Chronos-2 on the ragged layout and on complete data only as reference lines.
 - @tbl-checkpoints gives the headline scores of each checkpoint.
 - A later checkpoint has also trained for more steps.
-- The learning rate falls linearly to zero over the 8,400 simulations, so the earlier checkpoints are taken at 97% (250) to 52% (4,000) of the starting rate, and only the 8,400 checkpoint is annealed.
+- The learning rate falls linearly to zero over the 3,200 simulations, so the earlier checkpoints are taken at 97% (100) to 50% (1,600) of the starting rate, and only the 3,200 checkpoint is annealed.
 
 ![The trainer's held-out loss of the fine-tune by level (national, intermediate and leaf) against the number of simulated outbreaks it has seen. {{< meta evidence.live.label >}} Development data only.](build/figures/si/finetune-heldout.png){#fig-finetune-heldout}
 
