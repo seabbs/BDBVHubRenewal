@@ -219,7 +219,8 @@ Of the 3-day and weekly blocks, 20% have missed releases.
 In those blocks each release but the last is missed with chance 0.2.
 Each simulation gives one observation draw, cut at 32 cut-offs, one drawn at random within each of 32 equal stretches of its weekly cut-offs, so one simulation gives up to 32 blocks.
 Each block has up to 364 steps of context, and its prediction length is its nowcast steps and one week ahead, rounded up to whole steps.
-A block with fewer than 10 cases reported in the 28 days up to its cut-off is dropped, from what is known at the cut-off, counting each day once at its latest report and taking the busiest level.
+A block with fewer than 10 cases reported in the 28 days up to its cut-off is dropped, from what is known at the cut-off.
+Each day counts once, at its latest report, in the block's busiest level.
 We train on 8,400 simulations, 10 balanced blocks of 840, with checkpoints at 250, 500, 750, 1,000, 2,000, 4,000 and 8,400.
 
 ::: {#tbl-block-layouts}
