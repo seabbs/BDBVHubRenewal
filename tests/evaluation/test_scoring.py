@@ -9,6 +9,7 @@ from bdbvhubrenewal.evaluation.scoring import (
     QUANTILE_LEVELS,
     bias_sample,
     coverage_sample,
+    crps_ensemble,
     crps_sample,
     energy_sample,
     energy_scores,
@@ -383,3 +384,33 @@ def test_same_samples_score_the_same_whoever_made_them() -> None:
     by = energy.set_index("model")
     for col in ("energy", "log_energy"):
         assert by.loc["renewal", col] == pytest.approx(by.loc["teamA-hub", col])
+
+
+def test_wis_is_scoringrules_interval_scores_and_the_median_error() -> None:
+    # Our vectorised WIS and its split: the split sums to the WIS, and the
+    # WIS is half the median's error plus scoringrules' interval scores,
+    # each weighted by alpha / 2.
+    rng = np.random.default_rng(3)
+    y = rng.poisson(20, 40).astype(float)
+    q = np.sort(rng.gamma(4, 5, (40, QUANTILE_LEVELS.size)), axis=1)
+    got = wis_quantile(y, q, QUANTILE_LEVELS)
+    parts = got["dispersion"] + got["overprediction"] + got["underprediction"]
+    np.testing.assert_allclose(parts, got["wis"], rtol=1e-12)
+    tau = QUANTILE_LEVELS
+    lo, hi = q[:, tau < 0.5], q[:, tau > 0.5][:, ::-1]
+    alpha = 2 * tau[tau < 0.5]
+    med = q[:, np.isclose(tau, 0.5)][:, 0]
+    interval = sr.interval_score(y, lo, hi, alpha, backend="numpy")
+    want = (0.5 * np.abs(y - med) + (alpha / 2 * interval).sum(axis=1)) / (
+        alpha.size + 0.5
+    )
+    np.testing.assert_allclose(got["wis"], want, rtol=1e-12)
+
+
+@pytest.mark.parametrize("estimator", ["fair", "nrg"])
+def test_crps_of_many_forecasts_is_scoringrules(estimator: str) -> None:
+    rng = np.random.default_rng(4)
+    y = rng.poisson(10, 30).astype(float)
+    x = rng.poisson(12, (30, 200)).astype(float)
+    want = sr.crps_ensemble(y, x, estimator=estimator, backend="numpy")
+    np.testing.assert_allclose(crps_ensemble(y, x, estimator), want, rtol=1e-10)

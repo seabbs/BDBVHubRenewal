@@ -281,3 +281,15 @@ def test_unseeded_provinces_sample_no_seed_or_deviation(sim_vintage):
     np.testing.assert_allclose(
         rt[:, unseeded], base[:, :1].repeat(unseeded.sum(), 1), rtol=1e-6
     )
+
+
+def test_centred_rt_samples_the_baseline_levels(sim_vintage):
+    plain = trace(build_model(sim_vintage), sim_vintage)
+    assert "log_rt_baseline_z" in plain and "log_rt_baseline_x" not in plain
+    model = build_model(sim_vintage, ModelConfig(centred_rt=True))
+    tr = trace(model, sim_vintage)
+    assert "log_rt_baseline_x" in tr and "log_rt_baseline_z" not in tr
+    assert (
+        tr["log_rt_baseline_x"]["value"].size
+        == plain["log_rt_baseline_z"]["value"].size
+    )

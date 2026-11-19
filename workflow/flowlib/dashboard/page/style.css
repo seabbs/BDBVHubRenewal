@@ -1,8 +1,8 @@
-:root{--bg:#fff;--fg:#1d2127;--mut:#6b7280;--card:#f6f7f9;--line:#d9dde3;
---c1:#2563eb;--c2:#ea580c;--c3:#16a34a;--c4:#9333ea;--bad:#dc2626;--ok:#15803d}
+/* Neutrals only; the accents (--c1 to --c4, --ok, --bad) are written from
+   the shared colour map (labels.UI_COLOURS) by page.ui_colours. */
+:root{--bg:#fff;--fg:#1d2127;--mut:#6b7280;--card:#f6f7f9;--line:#d9dde3}
 @media(prefers-color-scheme:dark){:root{--bg:#14171c;--fg:#e6e8eb;
---mut:#9aa3af;--card:#1d2128;--line:#343a44;--c1:#60a5fa;--c2:#fb923c;
---c3:#4ade80;--c4:#c084fc;--bad:#f87171;--ok:#4ade80}}
+--mut:#9aa3af;--card:#1d2128;--line:#343a44}}
 body{background:var(--bg);color:var(--fg);font:14px system-ui,sans-serif;
 margin:0;padding:16px;max-width:1300px;margin-inline:auto}
 h1{font-size:18px;margin:0 0 4px}h2{font-size:15px;margin:12px 0 6px}
@@ -46,7 +46,7 @@ font-size:12px}
 .panels h4{margin:0 0 2px;font-size:12px}#gplot .ax,#gwis .ax{font-size:11px}.plots3{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,290px),1fr));gap:8px}
 .plots3 .leg{font-size:11px;gap:2px 8px}
 .biasrow{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-start}
-.biasdyn{display:contents}
+.biasdyn{display:contents}.biasmore{display:contents}.fs.biasline{max-width:none}
 .biastabs{flex-basis:100%}
 .topbar{position:sticky;top:0;z-index:20;background:var(--bg);padding:6px 0 4px;
 border-bottom:1px solid var(--line);margin-bottom:6px}

@@ -19,6 +19,7 @@ from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
+from bdbvhubrenewal.evaluation import labels
 from flowlib.dashboard import logs, svg, training
 from flowlib.dashboard.runs import Run
 
@@ -34,8 +35,17 @@ KINDS = {"0": "time attention", "1": "group attention"}
 EXPLAINERS = ("learnlevel", "learnlayer", "learnkind")
 """The explainer keys (`page/explain.json`) of the three panels, in order."""
 
-COLOURS = ("#1b9e77", "#d95f02", "#7570b3", "#e7298a", "#66a61e", "#e6ab02")
-"""Line colours, in order."""
+
+def colour_of(key: str, keys: Sequence[str]) -> str:
+    """Return a key's colour from the shared map.
+
+    A level's or a layout's own colour, else the categorical colour at its
+    position among `keys`.
+    """
+    named = {**labels.LAYOUT_COLOURS, **labels.LEVEL_COLOURS}
+    if key in named:
+        return named[key]
+    return labels.CATEGORICAL[keys.index(key) % len(labels.CATEGORICAL)]
 
 
 def _relative(
@@ -210,9 +220,8 @@ def _legend(keys: Sequence[str], run_list: Sequence[tuple[int, Run]]) -> str:
     """Return one legend: colour by key, then line style by run."""
     esc = html.escape
     out = [
-        f'<span><i style="background:{COLOURS[i % len(COLOURS)]}"></i>'
-        f"{esc(k)}</span>"
-        for i, k in enumerate(keys)
+        f'<span><i style="background:{colour_of(k, keys)}"></i>{esc(k)}</span>'
+        for k in keys
     ]
     if len(run_list) > 1:
         out += [
@@ -233,7 +242,7 @@ def _by_run(
     series = [
         (
             f"{k} ({r.label})",
-            COLOURS[keys.index(k) % len(COLOURS)],
+            colour_of(k, keys),
             list(curves[r.key][k]),
             "pts",
             *_dash(i),

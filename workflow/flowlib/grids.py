@@ -45,6 +45,7 @@ def owner(round_: int, table: Mapping[str, Any]) -> str | None:
             *entry["rounds"],
             entry["validation_round"],
             entry.get("test_round"),
+            entry.get("topup_round"),
         )
         if round_ in own:
             return grid

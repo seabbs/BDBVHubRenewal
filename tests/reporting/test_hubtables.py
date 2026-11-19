@@ -7,12 +7,9 @@ import pandas as pd
 import pytest
 
 from bdbvhubrenewal.data import load_daily_zones
-from bdbvhubrenewal.data.zones import (
-    hub_zones,
-    is_zone,
-    province_of,
-    weekly_zone_counts,
-)
+from bdbvhubrenewal.data.hierarchy import is_zone, province_of
+from bdbvhubrenewal.data.snapshots import weekly_counts
+from bdbvhubrenewal.data.zones import hub_zones
 from bdbvhubrenewal.evaluation import backtest as bt
 from bdbvhubrenewal.forecasters import get_model
 from bdbvhubrenewal.forecasters.base import NATIONAL
@@ -175,7 +172,7 @@ def test_a_models_own_zones_stay_apart_from_its_provinces(
         ones,
         provinces,
         task,
-        weekly_zone_counts(daily_zones, task.vintage),
+        weekly_counts(daily_zones, task.vintage),
         mine,
     )
     own = pd.concat(

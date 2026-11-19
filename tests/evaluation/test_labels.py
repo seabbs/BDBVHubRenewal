@@ -4,7 +4,8 @@ import pytest
 from bdbvhubrenewal.evaluation.labels import (
     MODEL_LABELS,
     MODEL_STYLES,
-    WIS_PART_SHADES,
+    WIS_PART_FILLS,
+    WIS_PART_STACK,
     model_label,
     tint,
 )
@@ -54,14 +55,13 @@ def test_real_data_names_only_models_with_a_variant(model) -> None:
     assert model_label(model) == model
 
 
-def test_wis_parts_are_shades_darkest_first() -> None:
-    shades = list(WIS_PART_SHADES.values())
-    assert list(WIS_PART_SHADES) == [
-        "dispersion",
-        "overprediction",
-        "underprediction",
-    ]
-    assert shades == sorted(shades, reverse=True)
+def test_wis_parts_stack_and_differ_by_fill() -> None:
+    assert WIS_PART_STACK == ("underprediction", "dispersion", "overprediction")
+    assert WIS_PART_FILLS == {
+        "underprediction": "hatch-down",
+        "dispersion": "solid",
+        "overprediction": "hatch-up",
+    }
     assert tint("#2a78d6", 1.0) == "#2a78d6"
     assert tint("#2a78d6", 0.0) == "#ffffff"
 
@@ -150,7 +150,7 @@ def _contrast(a: str, b: str) -> float:
 
 
 def test_zero_shot_is_green_and_complete_data_zero_shot_purple() -> None:
-    # Sam 10:30, 10:35: green as the old dashboard's zero-shot, not pink.
+    # Green as the old dashboard's zero-shot, not pink.
     def hue(colour: str) -> float:
         _, a, b = _lab(_linear(colour))
         return float(np.degrees(np.arctan2(b, a)) % 360)
@@ -178,3 +178,73 @@ def test_main_models_stand_out_on_light_and_dark(theme) -> None:
     for model in MAIN:
         colour = MODEL_STYLES[model][0]
         assert _contrast(colour, _BACKGROUNDS[theme]) >= 3, (model, colour)
+
+
+def _oklab(rgb: np.ndarray) -> np.ndarray:
+    m1 = np.array(
+        [
+            [0.4122214708, 0.5363325363, 0.0514459929],
+            [0.2119034982, 0.6806995451, 0.1073969566],
+            [0.0883024619, 0.2817188376, 0.6299787005],
+        ]
+    )
+    m2 = np.array(
+        [
+            [0.2104542553, 0.7936177850, -0.0040720468],
+            [1.9779984951, -2.4285922050, 0.4505937099],
+            [0.0259040371, 0.7827717662, -0.8086757660],
+        ]
+    )
+    return m2 @ np.cbrt(m1 @ np.clip(rgb, 0, 1))
+
+
+def test_zero_shots_meet_the_palette_validator_against_the_main_models():
+    # Zero-shot (green) and Zero-shot complete data (purple) are
+    # clearly distinct from Fine-tuned (delays) and Random walk nowcast:
+    # the dataviz validator's thresholds, OKLab Delta E x 100 of at least 8
+    # under simulated deuteranopia and protanopia and 15 under normal
+    # vision, for every pair of the four.
+    models = [
+        "fm_chronos_daily_ragged_ft",
+        "randomwalknowcast",
+        "fm_chronos_daily_ragged",
+        "fm_chronos_daily_complete",
+    ]
+    colours = [MODEL_STYLES[m][0] for m in models]
+    for vision, floor in (("normal", 15), ("deutan", 8), ("protan", 8)):
+        lab = [_oklab(np.array(_CVD[vision]) @ _linear(c)) for c in colours]
+        worst = min(
+            100 * float(np.linalg.norm(lab[i] - lab[j]))
+            for i in range(4)
+            for j in range(i + 1, 4)
+        )
+        assert worst >= floor, (vision, worst)
+    # Line styles differ too: complete data dashed, delays dotted.
+    dashes = [MODEL_STYLES[m][1] for m in models[::2]] + [
+        MODEL_STYLES["fm_chronos_daily_complete"][1]
+    ]
+    assert dashes == ["solid", "dotted", "dashed"]
+
+
+def test_dashboard_colour_maps_are_shared_and_distinct() -> None:
+    import sys
+    from pathlib import Path
+
+    from bdbvhubrenewal.evaluation import labels
+
+    # Every relation a run may train; layouts as the trainer's r6 design.
+    assert list(labels.RELATION_COLOURS) == ["self", "same", "up", "down"]
+    sys.path.insert(0, str(Path(__file__).parents[2] / "scripts"))
+    import finetune_chronos as ft
+
+    assert set(labels.LAYOUT_COLOURS) == set(ft.DESIGNS["r6"]["source_shares"])
+    for colours in (
+        labels.RELATION_COLOURS,
+        labels.LAYOUT_COLOURS,
+        labels.LEVEL_COLOURS,
+    ):
+        assert len(set(colours.values())) == len(colours)
+        assert set(colours.values()) <= {*labels.CATEGORICAL, labels.NEUTRAL}
+    # Earlier runs' shades are the fine-tuned model's blues, apart from it.
+    ft_blue = labels.MODEL_STYLES["fm_chronos_daily_ragged_ft"][0]
+    assert ft_blue not in labels.RUN_SHADES

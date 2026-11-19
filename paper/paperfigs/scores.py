@@ -21,7 +21,8 @@ linear sample quantiles at the shared scorer's `QUANTILE_LEVELS`, the 23
 hub levels, as `evaluation.checkpoint` scores them. With `samples="crps"`
 (`metric` is `crps`), for the SI:
 
-- **CRPS** from scoringrules' `crps_ensemble` with the `fair` estimator
+- **CRPS** from the shared scorer's `crps_ensemble` (scoringrules'
+  `crps_ensemble`) with the `fair` estimator
   (Ferro 2014), $\frac{1}{m}\sum_i |x_i - y| -
   \frac{1}{2m(m - 1)}\sum_{i \ne j} |x_i - x_j|$, whose expectation does
   not depend on the number of draws $m$. Hub teams give 100 draws and our
@@ -56,8 +57,11 @@ from typing import Final
 
 import numpy as np
 import pandas as pd
-import scoringrules as sr
-from bdbvhubrenewal.evaluation.scoring import QUANTILE_LEVELS, wis_quantile
+from bdbvhubrenewal.evaluation.scoring import (
+    QUANTILE_LEVELS,
+    crps_ensemble,
+    wis_quantile,
+)
 
 from paperfigs.schema import DEFAULT_STRATUM, FORECAST_KEYS
 
@@ -213,15 +217,6 @@ CRPS_ESTIMATOR = "fair"
 scoringutils'."""
 
 
-def _crps(
-    x: np.ndarray, y: np.ndarray, estimator: str = CRPS_ESTIMATOR
-) -> np.ndarray:
-    return np.asarray(
-        sr.crps_ensemble(y, x, estimator=estimator, backend="numpy"),
-        dtype=float,
-    ).reshape(y.shape)
-
-
 def _bias_sample(x: np.ndarray, y: np.ndarray, counts: bool) -> np.ndarray:
     below = (x < y[:, None]).mean(axis=1)
     equal = (x == y[:, None]).mean(axis=1)
@@ -261,8 +256,8 @@ def _score_sample_block(
             out[name] = value
     else:
         out["metric"] = "crps"
-        out["score"] = _crps(x, y, estimator)
-        out["log_score"] = _crps(np.log1p(x), np.log1p(y), estimator)
+        out["score"] = crps_ensemble(y, x, estimator)
+        out["log_score"] = crps_ensemble(np.log1p(y), np.log1p(x), estimator)
     out["bias"] = _bias_sample(x, y, counts)
     for w in widths:
         out[coverage_column(w)] = _coverage_sample(x, y, w)

@@ -4,7 +4,7 @@ import csv
 import gzip
 import json
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import pytest
 
@@ -13,6 +13,11 @@ pytest.importorskip("matplotlib")
 from flowlib.dashboard import logs, mirror, page, runs
 
 LINE = "2026-11-16 16:{m:02d}:00 [train] step {s}: loss {l}, held-out (x) {h}"
+
+
+def _gdata(section):
+    """Return the nowcasts section's page data (its `gdata` JSON)."""
+    return json.loads(section.split("id=gdata>", 1)[1].split("</script>", 1)[0])
 
 
 def _machine(tmp_path):
@@ -289,9 +294,9 @@ def test_the_run_size_comes_from_the_config_without_a_trainer(tmp_path):
     assert st.params["prefixes"][-2:] == [8000, 8400]
 
 
-def test_mean_wis_bars_show_once_the_table_has_components(tmp_path):
+def test_wis_has_no_section_of_its_own(tmp_path):
+    # Each model's WIS is in the nowcasts' score card only.
     ctx = _machine(tmp_path)
-    assert "<h2>Mean WIS</h2>" not in page.build(ctx)
     table = tmp_path / "scores" / "tables" / "checkpoint-scores.csv"
     with table.open() as f:
         rows = list(csv.DictReader(f))
@@ -301,13 +306,10 @@ def test_mean_wis_bars_show_once_the_table_has_components(tmp_path):
         w = csv.DictWriter(f, [*rows[0]])
         w.writeheader()
         w.writerows(rows)
-    ctx.view["defaults"]["source"] = "daily"
     out = page.build(ctx)
-    assert "<h2>Mean WIS</h2>" in out
-    assert '<a href="#wis">WIS</a>' in out
-    assert "Germany, national" in out
-    assert "my run n250" in out
-    assert "wis" in page.sections(ctx)
+    assert "<h2>Mean WIS</h2>" not in out
+    assert '<a href="#wis">' not in out
+    assert "wis" not in page.sections(ctx)
 
 
 def test_a_segment_s_empty_folder_is_not_a_checkpoint_being_scored(tmp_path):
@@ -384,3 +386,87 @@ def test_the_next_checkpoint_names_its_simulations_and_planned_step(tmp_path):
     assert "of 500 simulations" in tile
     assert "step 2140" in tile
     assert "planned" in tile
+
+
+def test_every_configured_dataset_is_in_the_selector(tmp_path):
+    # Every configured dataset, each listed whether or not it
+    # has nowcasts yet.
+    ctx = _machine(tmp_path)
+    ctx.datasets = [
+        *ctx.datasets,
+        {"key": "other", "label": "Other", "format": "samples"},
+        {
+            "key": "held_out",
+            "label": "Held-out simulations",
+            "format": "quantiles",
+            "missing": "the scoring workflow writes none yet",
+        },
+    ]
+    sel = page.sections(ctx)["nowcasts"]
+    data = _gdata(sel)
+    got = [
+        (d["key"], d["label"], bool(d.get("empty"))) for d in data["datasets"]
+    ]
+    assert ("other", "Other", True) in got
+    assert ("held_out", "Held-out simulations", True) in got
+    held = next(d for d in data["datasets"] if d["key"] == "held_out")
+    assert "the scoring workflow writes none yet" in held["missing"]
+
+
+def test_speed_and_etas_come_from_the_status_file_when_steps_are_sparse(
+    tmp_path,
+):
+    # One logged step in the last 30 minutes (evaluations every 400 steps)
+    # and the trainer's status: a rate, simulations a minute and ETAs.
+    ctx = _machine(tmp_path)
+    folder = ctx.runs[0].folder
+    now = datetime.now().replace(microsecond=0)
+    (folder / "train.log").write_text(
+        LINE.format(m=0, s=800, l=0.5, h=0.45).replace(
+            "2026-11-16 16:00:00",
+            f"{now - timedelta(minutes=40):%Y-%m-%d %H:%M:%S}",
+        )
+        + "\n"
+    )
+    (folder / "train" / "stream-status.json").write_text(
+        json.dumps(
+            {
+                "stage": "training",
+                "step": 1200,
+                "outbreaks": 250,
+                "time": f"{now - timedelta(minutes=1):%Y-%m-%d %H:%M:%S}",
+            }
+        )
+    )
+    out = page.build(ctx)
+    tile = out.split("Steps / s", 1)[1].split("</div></div>", 1)[0]
+    assert "n/a" not in tile
+    assert "simulations/min" in tile
+    eta = out.split("ETA n8000", 1)[1].split("</div></div>", 1)[0]
+    assert "n/a" not in eta
+
+
+def test_the_loss_panel_offers_each_loss_type(tmp_path):
+    out = page.build(_machine(tmp_path))
+    for k in ("total", "nowcast", "forecast", "layout", "level"):
+        assert f"data-lt={k}>" in out
+
+
+def test_checkpoint_tables_have_no_real_data_validation_column(tmp_path):
+    # Its loss is on BDBV pseudo-origins, held out.
+    out = page.build(_machine(tmp_path))
+    assert "real-val" not in out
+
+
+def test_wis_parts_are_told_apart_by_fill_and_stack_in_one_order(tmp_path):
+    # Dispersion solid, over- and underprediction hatched the
+    # two ways, stacked underprediction, dispersion, overprediction.
+    sel = page.sections(_machine(tmp_path))["nowcasts"]
+    data = _gdata(sel)
+    fills = dict(data["parts"])
+    assert fills == {
+        "dispersion": "solid",
+        "overprediction": "hatch-up",
+        "underprediction": "hatch-down",
+    }
+    assert data["stack"] == ["underprediction", "dispersion", "overprediction"]

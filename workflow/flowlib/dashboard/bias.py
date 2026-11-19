@@ -1,9 +1,10 @@
 """Attention bias by relation, for the dashboard's bias row.
 
 A run with series attention bias holds one [layers, heads] tensor per
-relation: `self` (a row with itself), `same` (a place's counts, lags and
-totals), `up` (a place to its country) and `down` (a country to its
-places). The values come from the run's history (`train/history.json`
+relation it trains: `same` (a place's counts, lags and totals), `up` (a
+place to its country), `down` (a country to its places) and, in runs that
+train it, `self` (a row with itself). Only the relations a run logs are
+drawn for it. The values come from the run's history (`train/history.json`
 entries with `bias`), its logged steps' means and ranges, its
 checkpoints' adapters
 (`train/n<N>/finetuned-ckpt/*.safetensors`, read with the standard
@@ -21,6 +22,8 @@ from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
+from bdbvhubrenewal.evaluation import labels
+
 from .logs import CACHE, _size, checkpoints
 from .runs import Run
 
@@ -30,14 +33,11 @@ PAIRS = (
     ("up", "up (child to parent)"),
     ("down", "down (parent to child)"),
 )
-"""The relations and their labels, in the trainer's order."""
+"""The relations and their labels, in the trainer's order; a run that does
+not train `self` has no values for it, so none are drawn."""
 
-COLOURS = {
-    "self": "#6b7280",
-    "same": "#2563eb",
-    "up": "#16a34a",
-    "down": "#ea580c",
-}
+COLOURS = dict(labels.RELATION_COLOURS)
+"""Each relation's colour, from the shared map."""
 
 NAME = re.compile(r"(?:^|[._/])(self_?|same|up|down)$")
 """A relation's tensor, by the end of its name."""
