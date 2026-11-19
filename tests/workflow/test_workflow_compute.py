@@ -185,3 +185,51 @@ def test_the_jobscript_gives_the_job_and_its_snakemake_arguments():
     for gone in ("--snakefile", "--wait-for-files", "--scheduler-solver-path"):
         assert gone not in argv
     assert "/home/me/repo/.snakemake/tmp.1" not in argv
+
+
+BUDGETS = {
+    "archie": {"cores": 12, "mem_mb": 50000, "gpu": 1},
+    "laptop": {"cores": 10, "mem_mb": 24000, "gpu": 1},
+}
+
+
+def test_a_worker_s_gpu_is_its_own_for_the_groups_placed_on_it():
+    # Two pooled GPUs must not let two archie score units start while the
+    # laptop's GPU waits for the trainer.
+    got = compute.args(CFG, budgets=BUDGETS)
+    res = got[got.index("--resources") + 1 :]
+    assert "gpu_laptop=1" in res
+    assert "gpu_archie=1" in res
+    sets = got[got.index("--set-resources") + 1 : got.index("--resources")]
+    assert "train_segment:gpu_laptop=1" in sets
+    assert "score_germany:gpu_archie=1" in sets
+    assert "score_bdbv:gpu_archie=1" in sets
+    assert not any(s.startswith("score_zones:") for s in sets)
+
+
+def test_the_gpu_rules_are_those_that_take_the_gpu():
+    rules = ROOT / "workflow" / "rules"
+    found = set()
+    for smk in rules.glob("*.smk"):
+        rule = None
+        for line in smk.read_text().splitlines():
+            if line.startswith(("rule ", "checkpoint ")):
+                rule = line.split()[1].rstrip(":")
+            elif line.strip() == "gpu=1,":
+                found.add(rule)
+    assert found == compute.GPU_RULES
+
+
+def test_a_worker_that_does_not_answer_is_left_out(tmp_path, monkeypatch):
+    monkeypatch.setenv("REMOTE_STATE", str(tmp_path))
+
+    def budget_of(worker, _checkout, _cfg):
+        if worker.name == "laptop":
+            raise subprocess.CalledProcessError(255, "ssh")
+        return BUDGETS[worker.name]
+
+    monkeypatch.setattr(compute, "budget_of", budget_of)
+    got = compute.args(CFG)
+    assert got[got.index("--jobs") + 1] == "12"
+    saved = json.loads((tmp_path / "budgets.json").read_text())
+    assert list(saved) == ["archie"]
