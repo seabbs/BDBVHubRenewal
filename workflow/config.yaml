@@ -98,10 +98,10 @@ finetune:
   # runs to (null: the whole horizon, to four weeks ahead). Checkpoint
   # scoring covers every horizon either way.
   loss_horizon_days: null
-  # Days up to the cut-off with no case reported across a block's places
-  # that drop the block, from what is known at the cut-off (null: keep
-  # every block).
-  quiet_days: null
+  # Cases a block needs reported across its places in the 28 days up to
+  # its cut-off, from what is known at the cut-off, to be trained on
+  # (null: keep every block).
+  quiet_min_cases: null
   chunk: 250
   # Steps between the trainer's held-out evaluations: the monitor on the
   # first 100 held-out blocks, and by source (100 blocks a source) on a

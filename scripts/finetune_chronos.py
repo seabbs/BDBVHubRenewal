@@ -308,27 +308,52 @@ def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-QUIET_DAYS: int | None = None
-"""Days up to a cut-off with no case reported across a block's places
-that make it quiet, and not trained on (`quiet`); None keeps every
-block."""
+QUIET_WINDOW_DAYS = 28
+"""Days up to a cut-off over which a block's reported cases are counted
+for the quiet rule (`quiet`)."""
+
+QUIET_MIN_CASES: int | None = None
+"""Cases a block needs reported across its places in the
+`QUIET_WINDOW_DAYS` up to its cut-off to be trained on (`quiet`); None
+keeps every block."""
 
 
-def quiet(block: dict, days_per_step: int, days: int) -> bool:
-    """Return whether a block has no case reported in `days` up to its cut-off.
+def reported_cases(block: dict, days_per_step: int, days: int) -> float:
+    """Return a block's cases reported in `days` up to its cut-off.
 
-    Only what is known at the cut-off counts: the targets' counts before
-    `start` and every lag series value up to the cut-off's step, never
-    the counts after it, so dropping quiet blocks does not depend on
-    what follows. `block` is `finetune.training_block`'s, before
-    padding.
+    Only what is known at the cut-off counts, never the counts after it.
+    Each step counts once, at its latest report: before `start`, the
+    targets' counts; from `start` to the cut-off, each lag series'
+    value at the step's lag from the cut-off (lag series hold a step's
+    count as reported at that lag, so summing them would count a case
+    once per lag). The places are summed within each level (national,
+    intermediate, leaf) and the busiest level counts, so a total does
+    not count its places' cases again, and a block of some places with
+    their country counts the country's cases. `block` is
+    `finetune.training_block`'s, before padding.
     """
-    x, t = block["context"], block["n_targets"]
+    x, places = block["context"], block["places"]
+    t, n = block["n_targets"], len(places)
+    lags = block["n_covariates"] // n
     start = block["start"]
     cut = start + block["nowcast"]
     lo = max(cut - -(-days // days_per_step), 0)
-    reported = np.nansum(x[:t, lo:start]) + np.nansum(x[t:, lo:cut])
-    return not reported > 0
+    count = np.nansum(x[:n, lo:start], axis=1)
+    rows = np.arange(n)
+    for step in range(max(lo, start), cut):
+        count += np.nan_to_num(x[t + rows * lags + (cut - 1 - step), step])
+    levels = np.array(target_levels(places))
+    return float(max(count[levels == lv].sum() for lv in set(levels)))
+
+
+def quiet(block: dict, days_per_step: int, min_cases: int) -> bool:
+    """Return whether a block has fewer than `min_cases` reported cases.
+
+    The cases are those reported across its places in the
+    `QUIET_WINDOW_DAYS` up to its cut-off (`reported_cases`), so the
+    rule depends only on what is known at the cut-off.
+    """
+    return reported_cases(block, days_per_step, QUIET_WINDOW_DAYS) < min_cases
 
 
 def _pad(
@@ -583,8 +608,8 @@ def outbreak_blocks(
                 continue
             if block["start"] < 2:
                 continue
-            if QUIET_DAYS is not None and quiet(
-                block, DAYS_PER_STEP[source], QUIET_DAYS
+            if QUIET_MIN_CASES is not None and quiet(
+                block, DAYS_PER_STEP[source], QUIET_MIN_CASES
             ):
                 continue
             padded = _pad(

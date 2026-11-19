@@ -130,8 +130,8 @@ rule train_segment:
             else ""
         ),
         quiet=(
-            f"--quiet-days {FT['quiet_days']}"
-            if FT.get("quiet_days") is not None
+            f"--quiet-min-cases {FT['quiet_min_cases']}"
+            if FT.get("quiet_min_cases") is not None
             else ""
         ),
         note=FT["note"],

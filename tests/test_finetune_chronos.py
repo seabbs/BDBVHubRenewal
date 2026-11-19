@@ -764,7 +764,7 @@ def test_reported_cases_count_what_is_known_at_the_cut_off():
     assert reported_cases(_raw([5, 0, 1], [0, 0, 0, 0], lags), 7, 35) == 13
 
 
-def test_reported_cases_count_the_finest_level_once():
+def test_reported_cases_count_each_case_once_at_the_busiest_level():
     from finetune_chronos import NATIONAL, reported_cases
 
     zeros = [[0] * 7] * 6
@@ -777,6 +777,15 @@ def test_reported_cases_count_the_finest_level_once():
         places=(NATIONAL, "P01", "P02"),
     )
     assert reported_cases(block, 1, 28) == 10
+    # A block of some of the places is not their sum: the country's cases
+    # count though the place in the block has none.
+    some = _raw(
+        [[0, 0, 12], [0, 0, 0]],
+        [[0] * 4] * 2,
+        zeros[:4],
+        places=(NATIONAL, "P02"),
+    )
+    assert reported_cases(some, 1, 28) == 12
     # The country alone counts itself.
     alone = _raw([0, 0, 10], [0, 0, 0, 0], zeros[:2], places=(NATIONAL,))
     assert reported_cases(alone, 1, 28) == 10
