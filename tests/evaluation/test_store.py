@@ -441,9 +441,12 @@ def test_samplers_refuse_two_candidates_for_one_model(
         store.samplers(policy)
 
 
-def test_renewal_key_has_every_model_module() -> None:
-    # `fit_code` does not follow a package's `__init__` imports.
-    renewal = set(store.fit_code("renewal", ROOT))
+@pytest.mark.parametrize("name", ["renewal", "renewalsp", "renewalbvd"])
+def test_renewal_key_has_every_model_module(name: str) -> None:
+    # `fit_code` does not follow a package's `__init__` imports. Every
+    # renewal model builds through `model.zones` (renewalsp one place a
+    # patch), so each key holds every model module.
+    renewal = set(store.fit_code(name, ROOT))
     model = {
         p.relative_to(ROOT).as_posix()
         for p in (ROOT / "src/bdbvhubrenewal/model").glob("*.py")

@@ -9,16 +9,16 @@ missing-onset share are sampled by province and given to the province's
 zones (`ByParent`), and the zones' expected delay cells are summed to
 provinces for the delay-file likelihood (`ZoneOnsetStreams`).
 
-This module only extends the province model (`model.model`), and nothing
-the province model runs imports it, so a province fit's code, and its
-stored fit key, do not depend on it.
+It builds on the parts in `model.model`. It is the one model builder:
+with each place as its own patch (`single_patch`, `build_model`) there
+is no nesting, and fitted to one place at a time it is `renewalsp`.
 """
 
 from __future__ import annotations
 
 import datetime as dt
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from pathlib import Path
 from typing import Any, cast
 
@@ -323,12 +323,22 @@ def _zone_walk(
     ar: bool = False,
     forecast_half_life: float | None = None,
     anchor: bool = True,
+    centred: bool = False,
 ) -> TemporalProcess:
-    """`model._named_walk`, anchored at the mean for `ANCHORED` walks."""
+    """`model._named_walk`, anchored at the mean for `ANCHORED` walks.
+
+    Raises
+    ------
+    ValueError
+        If a centred walk would be anchored.
+    """
     from pyrenew.latent.temporal_processes import WeeklyTemporalProcess
 
-    process = _named_walk(name, sd, n_weeks, ar, forecast_half_life)
-    if not anchor or name not in ANCHORED:
+    anchored_walk = anchor and name in ANCHORED
+    if centred and anchored_walk:
+        raise ValueError(f"{name} is anchored, so it cannot be centred.")
+    process = _named_walk(name, sd, n_weeks, ar, forecast_half_life, centred)
+    if not anchored_walk:
         return process
     inner = process.inner
     anchored = MeanAnchoredWalk(
@@ -921,6 +931,54 @@ def zone_vintage_from_tables(
     )
 
 
+def single_patch(data: Vintage) -> ZoneVintage:
+    """Return a vintage with each place as its own patch.
+
+    Each place is its own parent, so the zone model has no within-parent
+    deviation and its delay and missing-onset share are by place: the
+    province model, or with one place the model fitted to that place
+    alone.
+
+    Parameters
+    ----------
+    data : Vintage
+        The vintage.
+
+    Returns
+    -------
+    ZoneVintage
+        The same data, one place per parent.
+    """
+    shared = {f.name: getattr(data, f.name) for f in fields(Vintage)}
+    return ZoneVintage(
+        **shared,
+        parents=np.arange(len(data.names)),
+        parent_names=list(data.names),
+    )
+
+
+def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
+    """Build the model with each place as its own patch.
+
+    The zone model (`build_zone_model`) on `single_patch(data)`, without
+    anchoring. Fitted to one place, as `renewalsp` is, the place has no
+    pooling with any other.
+
+    Parameters
+    ----------
+    data : Vintage
+        The vintage.
+    config : ModelConfig
+        Structural choices.
+
+    Returns
+    -------
+    MultiSignalModel
+        Model with one observation, `onsets`.
+    """
+    return build_zone_model(single_patch(data), config, anchor=False)
+
+
 def build_zone_model(
     data: ZoneVintage,
     config: ModelConfig = MAIN,
@@ -959,8 +1017,11 @@ def build_zone_model(
         n_weeks: int,
         ar: bool = False,
         forecast_half_life: float | None = None,
+        centred: bool = False,
     ) -> TemporalProcess:
-        return _zone_walk(name, sd, n_weeks, ar, forecast_half_life, anchor)
+        return _zone_walk(
+            name, sd, n_weeks, ar, forecast_half_life, anchor, centred
+        )
 
     if data.parents is None:
         raise ValueError("A zone model needs each zone's province.")
@@ -1028,6 +1089,7 @@ def build_zone_model(
             0.2,
             fit_weeks(data, config),
             forecast_half_life=FORECAST_RT_HALF_LIFE,
+            centred=config.centred_rt,
         ),
         subpop_rt_deviation_process=_zone_walk_a(
             "rt_dev_sd", 0.1, fit_weeks(data, config), ar=True
@@ -1145,7 +1207,9 @@ def build_zone_model(
             missing_fraction_rv=None
             if missing is None
             else by_place(missing, 1),
-            delay_rv=by_place(delay, 0),
+            # The fixed hub delay of a total stream is shared by every
+            # place; a modelled delay is by province.
+            delay_rv=delay if missing is None else by_place(delay, 0),
             delay_groups=parents,
             known_noise=_nb_noise("known"),
             imputed_noise=None if missing is None else _nb_noise("imputed"),

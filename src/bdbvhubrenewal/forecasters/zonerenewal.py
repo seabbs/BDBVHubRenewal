@@ -6,8 +6,8 @@ window in one model, nested in their provinces (`model.zones`), gives
 the silent zones `randomwalknowcast`'s introduction layer, and sums the
 zones to the provinces, sample by sample. National is the sum of the
 provinces. Importing this module registers it as `renewal` and
-`renewalbvd`, in place of the province fits `forecasters.renewal`
-registers, and the package imports it after that module.
+`renewalbvd`; `forecasters.renewal` registers only the per-province
+`renewalsp`.
 """
 
 from __future__ import annotations
@@ -569,5 +569,4 @@ for _name in ZONE_VARIANTS:
         partial(_factory, _variant),
         _variant.description,
         fitted=True,
-        replace=True,
     )

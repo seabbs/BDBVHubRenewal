@@ -221,7 +221,19 @@ def test_zone_inputs_take_the_zone_counts_and_province_delays(
     )
 
 
-def test_zone_code_keys_only_the_zone_fits(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    ("rel", "moved"),
+    [
+        # The zone fits' forecaster keys only them.
+        ("forecasters/zonerenewal.py", ("renewal", "renewalbvd")),
+        # The model builder is every renewal model's, renewalsp one place
+        # a patch.
+        ("model/zones.py", ("renewal", "renewalbvd", "renewalsp")),
+    ],
+)
+def test_zone_code_keys_the_models_that_run_it(
+    tmp_path: Path, rel: str, moved: tuple[str, ...]
+) -> None:
     import shutil
 
     from bdbvhubrenewal.evaluation import store
@@ -233,17 +245,12 @@ def test_zone_code_keys_only_the_zone_fits(tmp_path: Path) -> None:
         tmp_path / "src",
         ignore=shutil.ignore_patterns("__pycache__"),
     )
-    zoned = ("renewal", "renewalbvd")
-    # renewalsp shares the province module, which finds the zone fits
-    # through the registry only.
-    others = ("renewalsp", "randomwalknowcast")
-    before = {m: store.code_digest(m, tmp_path) for m in zoned + others}
-    for rel in ("model/zones.py", "forecasters/zonerenewal.py"):
-        path = tmp_path / "src/bdbvhubrenewal" / rel
-        path.write_text(path.read_text() + "\n_EDITED = 1\n")
-    after = {m: store.code_digest(m, tmp_path) for m in zoned + others}
-    assert all(after[m] != before[m] for m in zoned)
-    assert all(after[m] == before[m] for m in others)
+    models = ("renewal", "renewalbvd", "renewalsp", "randomwalknowcast")
+    before = {m: store.code_digest(m, tmp_path) for m in models}
+    path = tmp_path / "src/bdbvhubrenewal" / rel
+    path.write_text(path.read_text() + "\n_EDITED = 1\n")
+    after = {m: store.code_digest(m, tmp_path) for m in models}
+    assert {m for m in models if after[m] != before[m]} == set(moved)
 
 
 def test_bvd_zone_rt_becomes_one_term_per_fitted_zone(tmp_path: Path) -> None:
@@ -296,3 +303,60 @@ def test_bvd_zone_rt_becomes_one_term_per_fitted_zone(tmp_path: Path) -> None:
         raise OSError("offline")
 
     assert zr.zone_bvd_rows(release, tmp_path / "none", names, fail) is None
+
+
+@pytest.mark.usefixtures("quiet_zones")
+def test_bvd_zone_fit_records_the_release_and_its_rhat(
+    task: ForecastTask, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import json
+    import shutil
+
+    from bdbvhubrenewal.data import bvd
+
+    data = tmp_path / "data"
+    shutil.copytree(ROOT / "tests" / "fixtures" / "data", data)
+    fixtures = ROOT / "tests" / "data" / "bvd"
+    releases = bvd.parse_releases(
+        json.loads((fixtures / "releases.json").read_text())
+    )
+    bvd.save_releases(
+        releases.loc[releases["tag"].isin(["results-3151", "results-3086"])],
+        data / "bvd",
+    )
+    for tag in ("results-3151", "results-3086"):
+        shutil.copytree(fixtures / tag, data / "bvd" / tag)
+    monkeypatch.setenv("BDBV_DATA_DIR", str(data))
+    release = rn.bvd_release(task)
+    assert release is not None
+    assert release.tag == "results-3086"
+
+    def fake(self: zr.ZoneRenewalModel, t: ForecastTask) -> rn.RenewalRun:
+        run = _fake_run(t, self.variant)
+        return replace(run, bvd=rn.bvd_record(rn.bvd_release(t)))
+
+    monkeypatch.setattr(zr.ZoneRenewalModel, "run", fake)
+    record = rn.fit_renewal(
+        task,
+        {"num_chains": 2},
+        tmp_path / "bvd",
+        variant="renewalbvd",
+        config_name="bvd",
+    )
+    assert record["bvd"] == {
+        "tag": "results-3086",
+        "as_of": "2026-10-15",
+        "joint_max_rhat": 1.044,
+        "max_rhat": bvd.MAX_RHAT,
+        "skipped": [],
+    }
+    # No release qualifies: the record says so.
+    assert rn.bvd_record(None) == {"tag": None}
+    plain = rn.fit_renewal(
+        task,
+        {"num_chains": 2},
+        tmp_path / "main",
+        variant="renewal",
+        config_name="main",
+    )
+    assert "bvd" not in plain
