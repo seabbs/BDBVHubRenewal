@@ -70,9 +70,10 @@ def here(seed):
     return hosts.simulates(int(seed), MINE)
 
 
-# The epinowcast the simulator is pinned to (finetune_simulate.R's
-# `epinowcast_sha`), installed once a machine under ROOT.
-ENW_SHA = simulator.epinowcast_sha()
+# The grid the simulator runs (its factors and sampling distributions),
+# and the epinowcast it is pinned to, installed once a machine under ROOT.
+GRID_FILE = SIM["grid_file"]
+ENW_SHA = simulator.epinowcast_sha(GRID_FILE)
 ENW_LIB = f"{LOCAL['ROOT']}/rlib/epinowcast-{ENW_SHA}"
 
 
@@ -105,10 +106,8 @@ def batch_files(wc):
 
 
 def grid_name():
-    """The grid the simulator names (`grid_name <- "..."`), if any."""
-    text = Path("scripts/finetune_simulate.R").read_text()
-    found = re.search(r'^grid_name <- "([^"]*)"', text, re.M)
-    return found.group(1) if found else ""
+    """The grid the simulator runs (its config's `name`)."""
+    return simulator.grid_name(GRID_FILE)
 
 
 # From finetune.smk.

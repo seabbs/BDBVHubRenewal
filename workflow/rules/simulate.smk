@@ -65,6 +65,7 @@ rule simulate_batch:
     output:
         counts=f"{ROUNDS_DIR}/r{{round}}/sims/counts-{{seed}}.csv.gz",
         settings=f"{ROUNDS_DIR}/r{{round}}/sims/settings-{{seed}}.csv",
+        latent=f"{ROUNDS_DIR}/r{{round}}/sims/latent-{{seed}}.csv.gz",
     log:
         f"{ROUNDS_DIR}/r{{round}}/sims/logs/{{seed}}.log",
     # In one pool, after the trainer (20) and before scoring (10 and
@@ -90,12 +91,15 @@ rule simulate_batch:
         draws=SIM["draws"],
         seed_base=SIM["seed_base"],
         lib=ENW_LIB,
+        grid=GRID_FILE,
+        engine=" ".join(simulator.ENGINE),
         prefix=lambda wc, resources: job_prefix(resources.mem_mb),
         min_free=LOCAL["MIN_FREE_GB"],
         min_disk=LOCAL["MIN_DISK_GB"],
         max_load=LOCAL["MAX_LOAD"],
     shell:
-        # The simulator must be the committed one, as the manifest records
+        # The simulator (engine, wrapper and grid) must be the committed one,
+        # as the manifest records
         # the commit. A retry keeps the first attempt's log. R and Stan
         # write temporary files to a folder of the batch's own, removed
         # however the batch ends. Rscript is the one on PATH; the whole job
@@ -105,8 +109,8 @@ rule simulate_batch:
         # from another prefix (such as linuxbrew) fails. Under a conda
         # env's R this also puts the system compilers first.
         """
-        if ! git diff --quiet HEAD -- scripts/finetune_simulate.R; then
-            echo "scripts/finetune_simulate.R differs from HEAD" >{log}
+        if ! git diff --quiet HEAD -- {params.engine} {params.grid}; then
+            echo "the simulator or its grid differs from HEAD" >{log}
             exit 1
         fi
         workflow/scripts/wait_for_room.sh {params.min_free} {params.min_disk} \
@@ -120,7 +124,7 @@ rule simulate_batch:
             ENW_SEED_BASE={params.seed_base} ENW_LIB={params.lib} \
             PATH="$(getconf PATH):$PATH" {params.prefix} \
             workflow/scripts/timed.sh \
-            nice -n 19 "$rscript" scripts/finetune_simulate.R \
+            nice -n 19 "$rscript" workflow/scripts/simulate.R {params.grid} \
             {params.batch} {wildcards.seed} {params.sims} >{log} 2>&1
         gzip -t {output.counts}
         """

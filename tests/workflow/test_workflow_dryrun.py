@@ -98,7 +98,8 @@ def test_batches_already_simulated_are_kept(tmp_path):
 
 def _enw_lib(tmp_path):
     """The pinned epinowcast's library under the machine's ROOT."""
-    return tmp_path / "rlib" / f"epinowcast-{simulator.epinowcast_sha()}"
+    grid = "config/finetune/grids/r7.yaml"
+    return tmp_path / "rlib" / f"epinowcast-{simulator.epinowcast_sha(grid)}"
 
 
 def test_simulate_installs_the_pinned_epinowcast_first(tmp_path):
@@ -1034,7 +1035,7 @@ def test_a_top_up_batch_simulates_its_planned_cells(tmp_path):
     assert len(sims) == 1
     shell = " ".join(sims[0].replace("\\\n", " ").split())
     assert 'ENW_CELLS="3364,3365"' in shell
-    assert "finetune_simulate.R 2 33200" in shell
+    assert "simulate.R config/finetune/grids/r7.yaml 2 33200" in shell
     qc = [b for b in blocks if re.match(r"rule topup_qc:", b)]
     assert len(qc) == 1
     assert "--max-weekly-jump 1000" in qc[0]
@@ -1043,6 +1044,6 @@ def test_a_top_up_batch_simulates_its_planned_cells(tmp_path):
 def test_a_round_s_batch_names_no_cells(tmp_path):
     blocks = score_jobs(tmp_path, {"rounds": [4]}, target="simulate")
     text = " ".join("".join(blocks).replace("\\\n", " ").split())
-    shell = text[text.index("finetune_simulate.R") - 400 :]
+    shell = text[text.index("workflow/scripts/simulate.R") - 400 :]
     assert 'ENW_CELLS=""' in shell
-    assert "finetune_simulate.R 21 " in shell
+    assert "simulate.R config/finetune/grids/r7.yaml 20 " in shell
