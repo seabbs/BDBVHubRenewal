@@ -18,14 +18,16 @@
 
 _local_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 LOCAL_CONFIG=${LOCAL_CONFIG:-$_local_root/config/local.env}
+# workflow/flowlib/localconfig.py reads the file, so a line may use a
+# setting set on a later one, as the workflow reads it.
 if [ -f "$LOCAL_CONFIG" ]; then
-  while IFS= read -r _line || [ -n "$_line" ]; do
-    case $_line in '' | '#'*) continue ;; esac
-    _key=${_line%%=*}
-    [[ $_key =~ ^[A-Z_][A-Z0-9_]*$ ]] || continue
-    [ -n "${!_key+x}" ] && continue
-    eval "export $_line"
-  done < "$LOCAL_CONFIG"
+  _local_export=$(LOCAL_CONFIG=$LOCAL_CONFIG \
+    python3 "$_local_root/workflow/flowlib/localconfig.py" --export) || {
+    echo "cannot read $LOCAL_CONFIG" >&2
+    return 1 2> /dev/null || exit 1
+  }
+  eval "$_local_export"
+  unset _local_export
 fi
 REMOTE=${REMOTE:-}
 HOST_NAME=${HOST_NAME:-$(hostname -s)}

@@ -5,12 +5,13 @@ The file is the source of truth. The shell scripts read it with
 read it the same way. The file is untracked and holds `KEY=VALUE` lines (see
 `config/local.env.example`). Blank lines, comments and lines whose key
 is not upper case are skipped. A value may use `$NAME` or `${NAME}` of
-the environment or of an earlier line, and one pair of surrounding
-quotes is dropped. A variable set in the environment wins over the
+another setting, in any order, or of the environment, and one pair of
+surrounding quotes is dropped. A variable set in the environment wins over the
 file. With no file everything runs on this machine.
 
 Shell scripts without `scripts/local_config.sh` read one setting with
-`python3 workflow/flowlib/localconfig.py KEY`.
+`python3 workflow/flowlib/localconfig.py KEY`; `--export` prints the
+file's settings as the shell lines `scripts/local_config.sh` runs.
 """
 
 from __future__ import annotations
@@ -103,7 +104,7 @@ DEFAULTS = (
     # Logs of the paper's detached jobs (paper/scripts).
     ("PAPER_LOGS", "$HOME/paper-jobs"),
 )
-"""Each setting and its default, in order, as later ones use earlier."""
+"""Each setting and its default."""
 
 
 def _unquote(value: str) -> str:
@@ -112,11 +113,29 @@ def _unquote(value: str) -> str:
     return value
 
 
-def _expand(value: str, names: Mapping[str, str], quoted: bool) -> str:
-    # Single quotes keep a value as written, as the shell does.
-    if quoted:
-        return value
-    return Template(value).safe_substitute(names)
+def _lines(path: Path) -> list[tuple[str, str]]:
+    """Return the file's settings as written, as (key, value) pairs."""
+    if not path.is_file():
+        return []
+    out = []
+    for line in path.read_text().splitlines():
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        key, sep, value = line.partition("=")
+        if sep and KEY.match(key):
+            out.append((key, value))
+    return out
+
+
+def file_settings(
+    path: Path | str | None = None, environ: Mapping[str, str] | None = None
+) -> dict[str, str]:
+    """Return the settings the file sets, filled in as `read` does."""
+    env = os.environ if environ is None else environ
+    if path is None:
+        path = env.get("LOCAL_CONFIG") or DEFAULT
+    cfg = read(path, env)
+    return {key: cfg[key] for key, _ in _lines(Path(path))}
 
 
 def read(
@@ -136,37 +155,65 @@ def read(
     -------
     dict
         Every key of the file and of `DEFAULTS`.
+
+    Raises
+    ------
+    ValueError
+        If settings use each other in a loop.
     """
     env = dict(os.environ if environ is None else environ)
     if path is None:
         path = env.get("LOCAL_CONFIG") or DEFAULT
-    names = dict(env)
-    out: dict[str, str] = {}
-    path = Path(path)
-    if path.is_file():
-        for line in path.read_text().splitlines():
-            if not line.strip() or line.lstrip().startswith("#"):
-                continue
-            key, sep, raw = line.partition("=")
-            if not sep or not KEY.match(key):
-                continue
-            if key in env:
-                out[key] = env[key]
-                continue
-            single = raw.startswith("'") and raw.endswith("'")
-            value = _expand(_unquote(raw), names, single)
-            names[key] = out[key] = value
+    # Each setting as written, and whether it is filled in: the
+    # environment's values and single-quoted ones are kept as they are,
+    # as the shell does.
+    raw: dict[str, tuple[str, bool]] = {}
+    for key, value in _lines(Path(path)):
+        single = value.startswith("'") and value.endswith("'")
+        raw[key] = (_unquote(value), not single)
     for key, default in DEFAULTS:
-        if key in out:
-            continue
+        if key not in raw:
+            if default is None:
+                default = socket.gethostname().split(".")[0]
+            raw[key] = (default, True)
+    for key in raw:
         if key in env:
-            value = env[key]
-        elif default is None:
-            value = socket.gethostname().split(".")[0]
-        else:
-            value = _expand(default, names, quoted=False)
-        names[key] = out[key] = value
-    return out
+            raw[key] = (env[key], False)
+    return _Settings(raw, env).resolve()
+
+
+class _Settings(Mapping[str, str]):
+    """Settings filled in on lookup, so a value may use any other."""
+
+    def __init__(self, raw: dict[str, tuple[str, bool]], env: dict[str, str]):
+        self.raw, self.env = raw, env
+        self.done: dict[str, str] = {}
+        self.open: list[str] = []
+
+    def __getitem__(self, key: str) -> str:
+        if key in self.done:
+            return self.done[key]
+        if key not in self.raw:
+            return self.env[key]
+        if key in self.open:
+            loop = " -> ".join([*self.open[self.open.index(key) :], key])
+            raise ValueError(f"local config settings use each other: {loop}")
+        value, fill = self.raw[key]
+        self.open.append(key)
+        if fill:
+            value = Template(value).safe_substitute(self)
+        self.open.pop()
+        self.done[key] = value
+        return value
+
+    def __iter__(self):
+        return iter(self.raw)
+
+    def __len__(self) -> int:
+        return len(self.raw)
+
+    def resolve(self) -> dict[str, str]:
+        return {key: self[key] for key in self.raw}
 
 
 def expand(value: str, settings: Mapping[str, str] | None = None) -> str:
@@ -184,8 +231,14 @@ def expand(value: str, settings: Mapping[str, str] | None = None) -> str:
 
 
 if __name__ == "__main__":
+    import shlex
     import sys
 
+    if sys.argv[1:] == ["--export"]:
+        # For scripts/local_config.sh: the file's settings as shell lines.
+        for key, value in file_settings().items():
+            print(f"export {key}={shlex.quote(value)}")
+        sys.exit()
     cfg = read()
     for key in sys.argv[1:]:
         print(cfg.get(key, ""))
