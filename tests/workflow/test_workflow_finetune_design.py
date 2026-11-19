@@ -19,7 +19,7 @@ DESIGN = {
     "quiet_min_cases": 10,
     "grid": "r7",
     "draws": 1,
-    "cuts": 32,
+    "cuts": 14,
     "learning_rate": 1e-5,
     "bias_lr": 1e-3,
     "series_bias": True,
@@ -141,7 +141,7 @@ def test_the_trainer_gets_the_agreed_design(tmp_path):
     assert args.loss_horizon_days == 7
     assert args.quiet_min_cases == 10
     assert args.draws_per_simulation == 1
-    assert args.blocks_per_simulation == 32
+    assert args.blocks_per_simulation == DESIGN["cuts"]
     assert args.subset_seed == 1
     assert args.learning_rate == 1e-5
     assert args.series_bias
