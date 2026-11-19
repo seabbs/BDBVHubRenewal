@@ -9,6 +9,7 @@ from numpyro.infer import init_to_median
 from bdbvhubrenewal.model import MAIN, build_model, model_args
 from bdbvhubrenewal.model.inputs import vintage_from_tables
 from bdbvhubrenewal.model.zones import (
+    ZoneInfections,
     build_zone_model,
     nested_basis,
     single_patch,
@@ -158,6 +159,8 @@ def test_the_province_model_is_the_zone_model_one_place_a_patch(
     assert patched.parents.tolist() == list(range(len(places)))
     assert patched.parent_names == list(places)
     p_model = build_model(province)
+    # One model: the province builder is the zone builder.
+    assert isinstance(p_model.latent, ZoneInfections)
     z_model = build_zone_model(patched, anchor=False)
     _, params = _params(p_model, province)
     assert _density(z_model, patched, params) == pytest.approx(
