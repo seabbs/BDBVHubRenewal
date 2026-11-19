@@ -4,6 +4,7 @@ import pytest
 from jax import random
 from numpyro.infer import Predictive, init_to_median
 
+from bdbvhubrenewal.data.delays import hub_delay_pmf
 from bdbvhubrenewal.model import (
     MAIN,
     ModelConfig,
@@ -42,7 +43,12 @@ def test_provinces_with_no_case_are_never_seeded(outbreak, sim_tables, table):
     # never seeded, so their infections come from importation only.
     target, delays = outbreak.vintage(vintage_date(outbreak, 41))
     v = vintage_from_tables(
-        target, delays, vintage_date(outbreak, 41), SIM_LOCATIONS, table
+        target,
+        delays,
+        vintage_date(outbreak, 41),
+        SIM_LOCATIONS,
+        table,
+        imputation_delay=hub_delay_pmf(vintage_date(outbreak, 41)),
     )
     assert v.names == list(SIM_LOCATIONS)
     none = (v.known + v.imputed).sum(axis=0) == 0
@@ -61,7 +67,13 @@ def test_model_sites_and_shapes(outbreak, sim_tables, table, cfg):
     day = VINTAGE_DAYS[-1]
     target, delays = sim_tables[day]
     data = vintage_from_tables(
-        target, delays, vintage_date(outbreak, day), SIM_LOCATIONS, table, cfg
+        target,
+        delays,
+        vintage_date(outbreak, day),
+        SIM_LOCATIONS,
+        table,
+        cfg,
+        imputation_delay=hub_delay_pmf(vintage_date(outbreak, day)),
     )
     model = build_model(data, cfg)
     tr = trace(model, data, forecast=True)
@@ -91,7 +103,13 @@ def test_masked_province_has_no_likelihood(outbreak, sim_tables, table):
     target, delays = sim_tables[day]
     vintage = vintage_date(outbreak, day)
     data = vintage_from_tables(
-        target, delays, vintage, SIM_LOCATIONS, table, masked=("CD-NK",)
+        target,
+        delays,
+        vintage,
+        SIM_LOCATIONS,
+        table,
+        masked=("CD-NK",),
+        imputation_delay=hub_delay_pmf(vintage),
     )
     assert data.fit_mask.tolist() == [True, False, True, True, True, True]
     model = build_model(data)
@@ -174,6 +192,7 @@ def test_real_data_kernels_are_finite(table):
             vintage,
             locations,
             table,
+            imputation_delay=hub_delay_pmf(vintage),
         )
         assert np.all(np.isfinite(data.kernel))
 
@@ -183,7 +202,12 @@ def test_late_provinces_are_seeded_at_their_first_cases(outbreak, table):
     # cases weeks after Ituri, so it starts near empty.
     target, delays = outbreak.vintage(vintage_date(outbreak, 166))
     data = vintage_from_tables(
-        target, delays, vintage_date(outbreak, 166), SIM_LOCATIONS, table
+        target,
+        delays,
+        vintage_date(outbreak, 166),
+        SIM_LOCATIONS,
+        table,
+        imputation_delay=hub_delay_pmf(vintage_date(outbreak, 166)),
     )
     assert data.seed_days[0] == 0 and data.seed_days[1] > 0
     # The seed leads the first case week by the incubation lead.

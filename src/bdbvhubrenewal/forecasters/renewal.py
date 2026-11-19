@@ -471,6 +471,34 @@ def bvd_record(release: BvdRelease | None) -> dict[str, Any]:
     return record
 
 
+def task_places(task: ForecastTask) -> pd.DataFrame:
+    """Return the task's places, which the renewal models need.
+
+    Raises
+    ------
+    ValueError
+        If the task carries none.
+    """
+    if task.places is None:
+        raise ValueError(f"The task at {task.vintage} carries no places.")
+    return task.places
+
+
+def task_imputation_delay(task: ForecastTask) -> np.ndarray:
+    """Return the task's imputation delay, which the renewal models need.
+
+    Raises
+    ------
+    ValueError
+        If the task carries none.
+    """
+    if task.imputation_delay is None:
+        raise ValueError(
+            f"The task at {task.vintage} carries no imputation delay."
+        )
+    return task.imputation_delay
+
+
 def vintage_inputs(
     task: ForecastTask,
     config: Any,
@@ -492,8 +520,8 @@ def vintage_inputs(
     config : bdbvhubrenewal.model.ModelConfig
         The model configuration.
     table : pandas.DataFrame, optional
-        The locations table (populations). Defaults to
-        `bdbvhubrenewal.data.load_locations()`.
+        The places (populations and centres). Defaults to the task's
+        (`ForecastTask.places`).
     bvd : pandas.DataFrame, optional
         BVDOutbreakSize rows (`bvd_rows`), for a variant with the BVD
         term. Without them that variant is the main model.
@@ -503,7 +531,6 @@ def vintage_inputs(
     bdbvhubrenewal.model.Vintage
         The model inputs.
     """
-    from bdbvhubrenewal.data import load_locations
     from bdbvhubrenewal.data.releases import release_pairs
     from bdbvhubrenewal.model.inputs import vintage_from_tables
 
@@ -515,12 +542,13 @@ def vintage_inputs(
         task.delays,
         task.vintage,
         tuple(task.locations),
-        load_locations() if table is None else table,
+        task_places(task) if table is None else table,
         config,
         horizon_weeks(task),
         tuple(task.mask),
         bvd=bvd,
         release_pairs=pairs,
+        imputation_delay=task_imputation_delay(task),
     )
 
 

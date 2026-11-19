@@ -19,7 +19,6 @@ from __future__ import annotations
 import datetime as dt
 from collections.abc import Mapping
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any, cast
 
 import jax
@@ -38,7 +37,6 @@ from pyrenew.metaclass import RandomVariable
 from pyrenew.model import MultiSignalModel, PyrenewBuilder
 from pyrenew.randomvariable import DistributionalVariable, TransformedVariable
 
-from bdbvhubrenewal.data.delays import hub_delay_pmf
 from bdbvhubrenewal.data.releases import release_cutoff
 
 from .censored import CensoredPMF
@@ -51,7 +49,7 @@ from .inputs import (
     _saturday,
     _seed_days,
     bvd_inputs,
-    province_centres,
+    imputation_pmf,
 )
 from .model import (
     ALPHA0,
@@ -86,10 +84,6 @@ from .publication_lag import ReleasePairLikelihood
 from .renewal import Importation, MetapopulationInfections
 from .rt_observation import RtPseudoObservation
 from .temporal import NonCentredRandomWalk
-
-ZONE_CENTRES = Path(__file__).parent.parent / "data" / "zone_centres.csv"
-"""Centroids and WorldPop counts of the hub's health zones (see the file
-header)."""
 
 DECAY_KM = 300.0
 """Distance scale of the zone gravity kernel."""
@@ -623,55 +617,6 @@ class ZoneOnsetStreams(OnsetStreams):
         super()._score_delays(by_province, counts)
 
 
-def zone_table(locations: tuple[str, ...] | None = None) -> pd.DataFrame:
-    """Health zone populations and centres, as a locations table.
-
-    The hub zones the map lacks take their province's centre and the
-    mean WorldPop count of its mapped zones, or the median zone's where
-    none of its zones are mapped.
-
-    Parameters
-    ----------
-    locations : tuple of str, optional
-        Zones to return, in order. Defaults to every zone in the file.
-
-    Returns
-    -------
-    pandas.DataFrame
-        Columns `location`, `population`, `latitude` and `longitude`.
-    """
-    zones = pd.read_csv(ZONE_CENTRES, comment="#").rename(
-        columns={"worldpop": "population"}
-    )
-    zones = zones.loc[:, ["location", "population", "latitude", "longitude"]]
-    if locations is None:
-        return zones
-    return _zone_rows(tuple(locations), zones.set_index("location"))
-
-
-def _zone_rows(locations: tuple[str, ...], zones: pd.DataFrame) -> pd.DataFrame:
-    """Zone table rows for some zones, with the province fallback."""
-    missing = [z for z in locations if z not in zones.index]
-    if missing:
-        provinces = province_centres().set_index("location")
-        by_province = zones.groupby(zones.index.str[:5])["population"].mean()
-        extra = pd.DataFrame(
-            {
-                "population": [
-                    by_province.get(z[:5], zones["population"].median())
-                    for z in missing
-                ],
-                "latitude": [provinces.loc[z[:5], "latitude"] for z in missing],
-                "longitude": [
-                    provinces.loc[z[:5], "longitude"] for z in missing
-                ],
-            },
-            index=pd.Index(missing, name="location"),
-        )
-        zones = pd.concat([zones, extra])
-    return zones.reindex(list(locations)).reset_index()
-
-
 def place_distances(centres: pd.DataFrame) -> np.ndarray:
     """Great-circle distances in km between place centres.
 
@@ -748,7 +693,7 @@ def zone_kernel(
 
     $K_{qz} \propto N_z \exp(-D_{qz} / \text{decay})$ for $q \ne z$, with
     WorldPop counts $N$ from `table` and great-circle distances $D$
-    between zone centroids (`zone_table`).
+    between zone centroids (`ForecastTask.places`).
 
     Returns
     -------
@@ -780,6 +725,8 @@ def zone_vintage_from_tables(
     bvd: pd.DataFrame | None = None,
     release_pairs: dict[str, np.ndarray] | None = None,
     parents: Mapping[str, str] | None = None,
+    *,
+    imputation_delay: np.ndarray,
 ) -> ZoneVintage:
     """Build a `ZoneVintage` from zone rows and province delay rows.
 
@@ -799,7 +746,7 @@ def zone_vintage_from_tables(
     locations : tuple of str
         Zones.
     table : pandas.DataFrame
-        Zone populations (`zone_table`).
+        Zone populations and centres (`ForecastTask.places`).
     config : ModelConfig
         Model configuration.
     horizon_weeks : int
@@ -817,6 +764,9 @@ def zone_vintage_from_tables(
         The province of each zone. Defaults to the code's first five
         characters. The delay counts are by province, `masked` names
         provinces, and a BVD patch holds the zones of its provinces.
+    imputation_delay : numpy.ndarray
+        The daily pmf of the delay the data provider subtracts to impute
+        a missing onset (`ForecastTask.imputation_delay`).
 
     Returns
     -------
@@ -904,7 +854,7 @@ def zone_vintage_from_tables(
         known=known,
         imputed=imputed,
         delay_counts=counts,
-        hub_delay_pmf=hub_delay_pmf(vintage, config.dmax),
+        hub_delay_pmf=imputation_pmf(imputation_delay, config.dmax),
         populations=pops.to_numpy(dtype=float),
         kernel=kernel,
         horizon_weeks=horizon_weeks,

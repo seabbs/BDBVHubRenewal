@@ -1,9 +1,10 @@
 # Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
-"""Model inputs from the tidy hub tables.
+"""Model inputs from the tidy tables of a task.
 
 - `vintage_from_tables` builds the model's `Vintage` for one data vintage.
-- `province_centres`, `province_distances` and `gravity_kernel` give the
-  importation kernel.
+- `imputation_pmf` cuts the data provider's imputation delay to the model.
+- `province_distances` and `gravity_kernel` give the importation kernel
+  from the task's places.
 - `bvd_rows` and `bvd_inputs` turn BVDOutbreakSize estimates into the
   inputs of the BVD term.
 """
@@ -11,13 +12,11 @@
 from __future__ import annotations
 
 import datetime as dt
-from pathlib import Path
 from typing import Any, cast
 
 import numpy as np
 import pandas as pd
 
-from bdbvhubrenewal.data.delays import hub_delay_pmf
 from bdbvhubrenewal.data.releases import release_cutoff
 
 from .model import (
@@ -35,33 +34,43 @@ START_COUNT = 5
 reach this count. Earlier weeks are returned as observed."""
 
 
-CENTRES = Path(__file__).parent.parent / "data" / "province_centres.csv"
-"""Population-weighted centres of all 26 provinces (see the file header)."""
-
-
 def imputation_pmf(pmf: np.ndarray, dmax: int) -> np.ndarray:
-    """Stub."""
-    raise NotImplementedError
+    """Return the data provider's imputation delay on days 0 to `dmax`.
 
+    Truncated at `dmax` and renormalised, or padded with zeros.
 
-def province_centres() -> pd.DataFrame:
-    """Read the province centres shipped with the package.
+    Parameters
+    ----------
+    pmf : numpy.ndarray
+        The daily pmf of the delay the provider subtracts from the
+        report date to impute a missing onset date
+        (`ForecastTask.imputation_delay`).
+    dmax : int
+        Longest delay kept.
 
     Returns
     -------
-    pandas.DataFrame
-        Columns `location`, `latitude`, `longitude`, `worldpop`, `zones`.
+    numpy.ndarray
+        The pmf on days 0 to `dmax`, summing to one.
     """
-    return pd.read_csv(CENTRES, comment="#")
+    out = np.zeros(dmax + 1)
+    kept = np.asarray(pmf, dtype=float)[: dmax + 1]
+    out[: kept.size] = kept
+    return np.asarray(out / out.sum(), dtype=float)
 
 
-def province_distances(locations: tuple[str, ...]) -> np.ndarray:
+def province_distances(
+    locations: tuple[str, ...], places: pd.DataFrame
+) -> np.ndarray:
     """Great-circle distances in km between province centres.
 
     Parameters
     ----------
     locations : tuple of str
         Province codes.
+    places : pandas.DataFrame
+        Locations with `latitude` and `longitude` columns
+        (`ForecastTask.places`).
 
     Returns
     -------
@@ -73,7 +82,7 @@ def province_distances(locations: tuple[str, ...]) -> np.ndarray:
     ValueError
         If a province has no centre.
     """
-    centres = province_centres().set_index("location").reindex(list(locations))
+    centres = places.set_index("location").reindex(list(locations))
     if centres[["latitude", "longitude"]].isna().any().any():
         raise ValueError("Missing province centre.")
     lat = np.radians(centres["latitude"].to_numpy(float))
@@ -93,16 +102,16 @@ def gravity_kernel(
     r"""Row-normalised gravity kernel between provinces.
 
     $K_{qp} \propto N_p \exp(-D_{qp} / \text{decay})$ for $q \ne p$,
-    with populations $N$ from
-    `table` and great-circle distances $D$ between the centres in
-    `province_centres()`, which cover all 26 provinces.
+    with populations $N$ and great-circle distances $D$ between the
+    centres, both from `table`.
 
     Parameters
     ----------
     locations : tuple of str
         Province codes.
     table : pandas.DataFrame
-        Locations with a population column, as from `load_locations`.
+        Locations with `population`, `latitude` and `longitude` columns
+        (`ForecastTask.places`).
     decay_km : float, default 300.0
         Distance scale of the decay.
 
@@ -120,7 +129,7 @@ def gravity_kernel(
     pops = table.set_index("location")["population"].reindex(list(locations))
     if pops.isna().any():
         raise ValueError("Missing province population.")
-    dist = province_distances(locations)
+    dist = province_distances(locations, table)
     k = pops.to_numpy(float)[None, :] * np.exp(-dist / decay_km)
     np.fill_diagonal(k, 0.0)
     k = k / k.sum(axis=1, keepdims=True)
@@ -308,6 +317,8 @@ def vintage_from_tables(
     masked: tuple[str, ...] = (),
     bvd: pd.DataFrame | None = None,
     release_pairs: dict[str, np.ndarray] | None = None,
+    *,
+    imputation_delay: np.ndarray,
 ) -> Vintage:
     """Build a `Vintage` from the target and delay rows of one vintage.
 
@@ -328,7 +339,8 @@ def vintage_from_tables(
     locations : tuple of str
         Provinces.
     table : pandas.DataFrame
-        Locations table (`bdbvhubrenewal.data.load_locations`).
+        Locations with `population`, `latitude` and `longitude`
+        (`ForecastTask.places`).
     config : ModelConfig
         Model configuration.
     horizon_weeks : int
@@ -342,6 +354,9 @@ def vintage_from_tables(
     release_pairs : dict, optional
         Rows of each earlier delay file and how many the file before it
         had (`data.releases.release_pairs`).
+    imputation_delay : numpy.ndarray
+        The daily pmf of the delay the data provider subtracts to impute
+        a missing onset (`ForecastTask.imputation_delay`).
 
     Returns
     -------
@@ -424,7 +439,7 @@ def vintage_from_tables(
         known=known,
         imputed=imputed,
         delay_counts=counts,
-        hub_delay_pmf=hub_delay_pmf(vintage, config.dmax),
+        hub_delay_pmf=imputation_pmf(imputation_delay, config.dmax),
         populations=pops.to_numpy(dtype=float),
         kernel=kernel,
         horizon_weeks=horizon_weeks,

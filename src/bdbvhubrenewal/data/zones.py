@@ -14,17 +14,27 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from importlib.resources import files
 from pathlib import Path
+from typing import Final
 
 import pandas as pd
 
-from bdbvhubrenewal.data.hierarchy import is_zone
-from bdbvhubrenewal.data.tidy import load_daily_zones, load_health_zones
+from bdbvhubrenewal.data.hierarchy import is_zone, province_of
+from bdbvhubrenewal.data.tidy import (
+    PROVINCE_CENTRES,
+    load_daily_zones,
+    load_health_zones,
+    load_locations,
+)
 
 __all__ = [
+    "PLACE_COLUMNS",
     "ZoneData",
+    "hub_places",
     "hub_zones",
     "load_zone_data",
+    "zone_places",
 ]
 
 
@@ -89,6 +99,78 @@ def hub_zones(tasks_json: Path | str) -> tuple[str, ...]:
     return tuple(sorted(c for c in codes if is_zone(c)))
 
 
-def zone_places(zones: tuple[str, ...]) -> pd.DataFrame:
-    """Stub."""
-    raise NotImplementedError
+PLACE_COLUMNS: Final = ("location", "population", "latitude", "longitude")
+"""The columns of a task's places (`ForecastTask.places`)."""
+
+
+def zone_places(zones: tuple[str, ...] | None = None) -> pd.DataFrame:
+    """Health zone populations and centres, as places.
+
+    Centroids and WorldPop counts of the hub's health zones come from
+    `zone_centres.csv` (see its header).
+    The hub zones the map lacks take their province's centre and the
+    mean WorldPop count of its mapped zones, or the median zone's where
+    none of its zones are mapped.
+
+    Parameters
+    ----------
+    zones : tuple of str, optional
+        Zones to return, in order. Defaults to every zone in the file.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Columns `PLACE_COLUMNS`.
+    """
+    path = files("bdbvhubrenewal.data").joinpath("zone_centres.csv")
+    with path.open() as f:
+        table = pd.read_csv(f, comment="#")
+    table = table.rename(columns={"worldpop": "population"})
+    table = table.loc[:, list(PLACE_COLUMNS)]
+    if zones is None:
+        return table
+    known = table.set_index("location")
+    missing = [z for z in zones if z not in known.index]
+    if missing:
+        by_province = known.groupby(known.index.map(province_of))[
+            "population"
+        ].mean()
+        extra = pd.DataFrame(
+            {
+                "population": [
+                    by_province.get(
+                        province_of(z), known["population"].median()
+                    )
+                    for z in missing
+                ],
+                "latitude": [
+                    PROVINCE_CENTRES[province_of(z)][0] for z in missing
+                ],
+                "longitude": [
+                    PROVINCE_CENTRES[province_of(z)][1] for z in missing
+                ],
+            },
+            index=pd.Index(missing, name="location"),
+        )
+        known = pd.concat([known, extra])
+    return known.reindex(list(zones)).reset_index()
+
+
+def hub_places(zones: tuple[str, ...] = ()) -> pd.DataFrame:
+    """Return the places of the hub's tasks: country, provinces and zones.
+
+    Parameters
+    ----------
+    zones : tuple of str
+        Zone codes to add (`zone_places`).
+
+    Returns
+    -------
+    pandas.DataFrame
+        Columns `PLACE_COLUMNS`, the country and provinces
+        (`load_locations`) then the zones.
+    """
+    provinces = load_locations().loc[:, list(PLACE_COLUMNS)]
+    if not zones:
+        return provinces.reset_index(drop=True)
+    return pd.concat([provinces, zone_places(zones)], ignore_index=True)

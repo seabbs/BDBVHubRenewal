@@ -47,6 +47,8 @@ from bdbvhubrenewal.forecasters.renewal import (
     report_cutoffs,
     run_nuts,
     samples_table,
+    task_imputation_delay,
+    task_places,
 )
 
 __all__ = [
@@ -295,7 +297,7 @@ def zone_vintage_inputs(
         The model inputs.
     """
     from bdbvhubrenewal.data.releases import release_pairs
-    from bdbvhubrenewal.model.zones import zone_table, zone_vintage_from_tables
+    from bdbvhubrenewal.model.zones import zone_vintage_from_tables
 
     pairs = None
     if task.delay_history is not None:
@@ -305,13 +307,23 @@ def zone_vintage_inputs(
         task.delays,
         task.vintage,
         tuple(task.locations),
-        zone_table(tuple(task.locations)),
+        _zone_places(task),
         config,
         horizon_weeks(task),
         tuple(task.mask),
         bvd=bvd,
         release_pairs=pairs,
+        imputation_delay=task_imputation_delay(task),
     )
+
+
+def _zone_places(task: ForecastTask) -> pd.DataFrame:
+    """Return the places of a zone task's zones, in its order."""
+    places = task_places(task).set_index("location")
+    missing = [z for z in task.locations if z not in places.index]
+    if missing:
+        raise ValueError(f"No places for zones {missing[:5]}.")
+    return places.loc[list(task.locations)].reset_index()
 
 
 @dataclass(frozen=True)

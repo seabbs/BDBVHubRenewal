@@ -10,6 +10,7 @@ import pandas as pd
 import pytest
 from jax.scipy.stats import norm
 
+from bdbvhubrenewal.data.delays import hub_delay_pmf
 from bdbvhubrenewal.model import BVD, MAIN, build_model, model_args
 from bdbvhubrenewal.model.inputs import (
     bvd_inputs,
@@ -95,6 +96,7 @@ def sim_with_bvd(outbreak, sim_tables, table, release, config):
         table,
         config,
         bvd=rows,
+        imputation_delay=hub_delay_pmf(vintage_date(outbreak, day)),
     )
 
 
@@ -146,7 +148,7 @@ def test_fit_axis_reaches_the_bvd_day(outbreak, sim_tables, table, release):
     rows["as_of"] = vintage_date(outbreak, day + 7)
     data = vintage_from_tables(
         target, delays, vintage_date(outbreak, day), SIM_LOCATIONS, table,
-        BVD, bvd=rows,
+        BVD, bvd=rows, imputation_delay=hub_delay_pmf(vintage_date(outbreak, day))
     )  # fmt: skip
     assert data.bvd["day"] // 7 + 1 > data.n_weeks
     assert fit_weeks(data, BVD) == data.bvd["day"] // 7 + 1

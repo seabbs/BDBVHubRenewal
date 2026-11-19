@@ -11,6 +11,7 @@ import pytest
 from jax import random
 from numpyro.infer import Predictive
 
+from bdbvhubrenewal.data.delays import hub_delay_pmf
 from bdbvhubrenewal.model import MAIN, build_model, model_args
 from bdbvhubrenewal.model.model import (
     MAX_PUBLICATION_LAG,
@@ -262,9 +263,15 @@ def test_negative_and_long_delays_are_clipped_not_dropped(
         vintage_date(outbreak, day),
         SIM_LOCATIONS,
         table,
+        imputation_delay=hub_delay_pmf(vintage_date(outbreak, day)),
     )
     base = vintage_from_tables(
-        target, delays, vintage_date(outbreak, day), SIM_LOCATIONS, table
+        target,
+        delays,
+        vintage_date(outbreak, day),
+        SIM_LOCATIONS,
+        table,
+        imputation_delay=hub_delay_pmf(vintage_date(outbreak, day)),
     )
     extra = both.delay_counts - base.delay_counts
     assert extra.sum() == 2

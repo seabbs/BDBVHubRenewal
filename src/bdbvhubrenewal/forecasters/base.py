@@ -123,6 +123,13 @@ class ForecastTask:
     zone_codes : tuple of str
         The hub's zone codes (`bdbvhubrenewal.data.zones.hub_zones`).
         Keyed as `zone_history`.
+    imputation_delay : numpy.ndarray or None
+        The daily pmf of the delay the data provider subtracts from a
+        report date to impute a missing onset date, on days 0 onward.
+        None where the data impute no onsets.
+    places : pandas.DataFrame or None
+        Each location's `population`, `latitude` and `longitude`, by
+        `location`, covering the task's locations and their zones.
     """
 
     vintage: str
@@ -143,6 +150,8 @@ class ForecastTask:
     zone_history: pd.DataFrame | None = None
     zone_daily_history: pd.DataFrame | None = None
     zone_codes: tuple[str, ...] = ()
+    imputation_delay: np.ndarray | None = None
+    places: pd.DataFrame | None = None
 
     def rng(self, *keys: str) -> np.random.Generator:
         """Return a random generator seeded from the task.

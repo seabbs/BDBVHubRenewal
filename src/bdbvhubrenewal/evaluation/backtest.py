@@ -21,6 +21,7 @@ Every real vintage but the latest is backtested.
 from __future__ import annotations
 
 import datetime as dt
+import functools
 import json
 import logging
 import os
@@ -39,6 +40,7 @@ from bdbvhubrenewal.data.dates import (
     epiweek_end,
     reference_date_for_vintage,
 )
+from bdbvhubrenewal.data.delays import hub_delay_pmf
 from bdbvhubrenewal.data.releases import cutoff_lags, release_cutoff
 from bdbvhubrenewal.data.simulate import (
     SCENARIO_RT_SCALE,
@@ -49,7 +51,7 @@ from bdbvhubrenewal.data.simulate import (
     simulate_outbreak,
 )
 from bdbvhubrenewal.data.tidy import delays_for_vintage
-from bdbvhubrenewal.data.zones import ZoneData
+from bdbvhubrenewal.data.zones import ZoneData, hub_places
 from bdbvhubrenewal.evaluation.nowcast import TRUTH_LEVEL
 from bdbvhubrenewal.evaluation.scoring import energy_scores, score_forecasts
 from bdbvhubrenewal.forecasters.base import (
@@ -407,6 +409,8 @@ def make_tasks(
     """
     tasks = []
     source = target if history is None else history
+    places = functools.cache(hub_places)
+    imputation = functools.cache(hub_delay_pmf)
     for (kind, vintage), rows in target.groupby(["kind", "vintage"]):
         mine = source["kind"] == kind
         past_target = source.loc[mine & (source["vintage"] <= vintage)]
@@ -423,6 +427,7 @@ def make_tasks(
                 same &= delays["kind"] == kind
             past = delays.loc[same]
             history = past if not past.empty else None
+        fields_of_zones = _zone_fields(zones, str(kind), str(vintage))
         tasks.append(
             ForecastTask(
                 vintage=str(vintage),
@@ -434,7 +439,9 @@ def make_tasks(
                 delay_history=history,
                 target_history=past_target if not past_target.empty else None,
                 daily_history=_daily_for(daily, str(kind), str(vintage)),
-                **_zone_fields(zones, str(kind), str(vintage)),
+                **fields_of_zones,
+                imputation_delay=imputation(str(vintage)),
+                places=places(fields_of_zones.get("zone_codes", ())),
                 locations=forecast_locations(rows),
                 target_end_dates=forecast_weeks(ref, config),
                 n_samples=config.n_samples,

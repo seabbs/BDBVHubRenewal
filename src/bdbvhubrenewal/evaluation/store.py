@@ -60,6 +60,7 @@ import pandas as pd
 
 from bdbvhubrenewal.data import load_daily, load_delays, load_target
 from bdbvhubrenewal.data.files import write_csv
+from bdbvhubrenewal.data.hierarchy import is_zone
 from bdbvhubrenewal.data.zones import ZoneData, load_zone_data
 from bdbvhubrenewal.evaluation.backtest import (
     BacktestConfig,
@@ -558,6 +559,8 @@ def fit_key(model: ForecastModel, task: ForecastTask, code: str) -> str:
         if f.name in ZONE_FIELDS and not zones:
             continue
         value = getattr(task, f.name)
+        if f.name == "places" and value is not None and not zones:
+            value = value.loc[~value["location"].map(is_zone)]
         digest.update(f.name.encode())
         if isinstance(value, pd.DataFrame):
             digest.update(value.to_csv(index=False).encode())

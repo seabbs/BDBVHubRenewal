@@ -6,6 +6,7 @@ import pandas as pd
 import pytest
 from numpyro.infer import init_to_median
 
+from bdbvhubrenewal.data.delays import hub_delay_pmf
 from bdbvhubrenewal.model import MAIN, build_model, model_args
 from bdbvhubrenewal.model.inputs import vintage_from_tables
 from bdbvhubrenewal.model.zones import (
@@ -123,7 +124,12 @@ def test_one_zone_per_province_is_the_province_model(
     target, delays = sim_tables[day]
     vintage = vintage_date(outbreak, day)
     province = vintage_from_tables(
-        target, delays, vintage, SIM_LOCATIONS, table
+        target,
+        delays,
+        vintage,
+        SIM_LOCATIONS,
+        table,
+        imputation_delay=hub_delay_pmf(vintage),
     )
     zoned = zone_vintage_from_tables(
         target,
@@ -132,6 +138,7 @@ def test_one_zone_per_province_is_the_province_model(
         SIM_LOCATIONS,
         table,
         parents={p: p for p in SIM_LOCATIONS},
+        imputation_delay=hub_delay_pmf(vintage),
     )
     assert zoned.parent_names == list(SIM_LOCATIONS)
     p_model = build_model(province)
@@ -154,6 +161,7 @@ def zone_vintage(outbreak, sim_tables):
         zones,
         zone_table(),
         parents={z: z[:5] for z in zones},
+        imputation_delay=hub_delay_pmf(vintage_date(outbreak, day)),
     )
 
 
