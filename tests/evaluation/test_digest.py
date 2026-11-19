@@ -214,11 +214,12 @@ def test_model_code_follows_imports_into_workspace_packages(
     # the walk resolves each top-level package to its own source folder.
     from bdbvhubrenewal.evaluation.digest import model_code
 
-    shutil.copytree(
-        ROOT / "src",
-        tmp_path / "src",
-        ignore=shutil.ignore_patterns("__pycache__"),
-    )
+    for folder in ("src", "packages"):
+        shutil.copytree(
+            ROOT / folder,
+            tmp_path / folder,
+            ignore=shutil.ignore_patterns("__pycache__"),
+        )
     pkg = tmp_path / "packages/walkpkg/src/walkpkg"
     pkg.mkdir(parents=True)
     old = tmp_path / "src/bdbvhubrenewal/forecasters/walk.py"

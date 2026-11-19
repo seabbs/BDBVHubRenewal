@@ -62,11 +62,12 @@ def tasks(
 def _copy_repo(tmp_path: Path) -> Path:
     for name in ("pyproject.toml", "uv.lock"):
         shutil.copy(ROOT / name, tmp_path / name)
-    shutil.copytree(
-        ROOT / "src",
-        tmp_path / "src",
-        ignore=shutil.ignore_patterns("__pycache__"),
-    )
+    for folder in ("src", "packages"):
+        shutil.copytree(
+            ROOT / folder,
+            tmp_path / folder,
+            ignore=shutil.ignore_patterns("__pycache__"),
+        )
     return tmp_path
 
 
@@ -226,14 +227,17 @@ def test_code_digest_follows_each_models_own_code(tmp_path: Path) -> None:
     # The store's loader and IO code do not key a fit: editing them never
     # refits.
     edit(f"{src}/evaluation/store.py")
-    edit(f"{src}/evaluation/backtest.py")
+    edit("packages/nowcasteval/src/nowcasteval/backtest.py")
     assert digests() == before
     # The functions a fit runs do, for every model.
     for rel, func in (
-        ("evaluation/store.py", "def fit("),
-        ("evaluation/backtest.py", "def run_forecasts("),
+        (f"{src}/evaluation/store.py", "def fit("),
+        (
+            "packages/nowcasteval/src/nowcasteval/backtest.py",
+            "def run_forecasts(",
+        ),
     ):
-        path = root / src / rel
+        path = root / rel
         text = path.read_text()
         head, body = text.split(func, 1)
         sig, rest = body.split('"""', 1)
@@ -351,8 +355,11 @@ def test_report_code_does_not_key_a_fit(tmp_path: Path) -> None:
         return {m: store.code_digest(m, root) for m in models}
 
     before = digests()
-    for rel in ("evaluation/digest.py", "reporting/plots.py"):
-        path = root / "src/bdbvhubrenewal" / rel
+    for rel in (
+        "src/bdbvhubrenewal/evaluation/digest.py",
+        "packages/nowcasteval/src/nowcasteval/plots.py",
+    ):
+        path = root / rel
         path.write_text(path.read_text() + "\n_EDITED = 1\n")
         assert digests() == before, rel
 

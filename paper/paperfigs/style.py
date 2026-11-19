@@ -1,6 +1,6 @@
 """Colours, dashes and the matplotlib theme for the paper figures.
 
-The ink colours are those of bdbv-hub-modelling's `reporting/plots.py`.
+The ink colours are those of bdbv-hub-modelling's `nowcasteval/plots.py`.
 Each model's colour, dash and display name are the shared ones of
 `nowcasteval.labels`, which the dashboard and site use too.
 The Chronos variants of one family share a colour: fine-tuned on ragged
