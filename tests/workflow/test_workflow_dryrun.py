@@ -258,19 +258,40 @@ def test_from_the_rounds_host_only_listed_batches_are_trained_on(tmp_path):
     assert "simulate_batch" not in jobs
 
 
-def test_from_the_rounds_host_batches_stream_before_the_round_ends(tmp_path):
-    # The workflow writes a round's manifest once the round is whole, so
-    # mid-round only its batch records list what is done.
-    _rounds_host(tmp_path, {1: range(30100, 30140)})
-    records = tmp_path / "host" / "rounds" / "r2" / "records"
+def _records(tmp_path, r, seeds):
+    """Batch records of round `r` on the rounds host, before its manifest."""
+    records = tmp_path / "host" / "rounds" / f"r{r}" / "records"
     records.mkdir(parents=True)
-    for s in range(30200, 30213):
+    for s in seeds:
         (records / f"record-{s}.csv").write_text(
-            f"2,{s},block,r5,c,1,21,a,b,,1,2.0,h,t\n"
+            f"{r},{s},block,r5,c,1,21,a,b,,1,2.0,h,t\n"
         )
+    return records.parent
+
+
+def test_from_the_rounds_host_a_round_is_listed_once_its_qc_ran(tmp_path):
+    # Mid-round only batch records list what is done, but QC runs once the
+    # round is whole: a batch it later excludes must never be trained on.
+    _rounds_host(tmp_path, {1: range(30100, 30140)})
+    r2 = _records(tmp_path, 2, range(30200, 30213))
+    jobs = dry(tmp_path, "finetune", config=REMOTE)
+    assert jobs.get("fetch_batch", 0) <= 40
+    assert "train_segment" not in jobs
+    (r2 / "qc").mkdir()
+    (r2 / "qc" / "excluded.csv").write_text("simulation,reason,evidence\n")
     jobs = dry(tmp_path, "finetune", config=REMOTE)
     assert jobs["train_segment"] == 1
     assert jobs["fetch_batch"] == 12 + 1 + 40
+
+
+def test_from_the_rounds_host_a_failed_records_copy_is_said(tmp_path):
+    _rounds_host(tmp_path, {1: range(30100, 30140)})
+    (tmp_path / "local.env").write_text(
+        f"ROOT={tmp_path}\nHOST_NAME=test-host\n"
+        f"REMOTE_ROOT={tmp_path}/no-such-host\n"
+    )
+    out = dry_run(tmp_path, "finetune", config=REMOTE)
+    assert "records" in out.stderr
 
 
 def test_finetune_never_publishes(tmp_path):
@@ -783,6 +804,9 @@ def _rounds_host(tmp_path, rounds):
             f"{r},{s},block,r5,c,1,21,a,b,,1,2.0,h,t\n" for s in seeds
         )
         (where / "manifest.csv").write_text("header\n" + rows)
+        (where / "qc" / "excluded.csv").write_text(
+            "simulation,reason,evidence\n"
+        )
     local = tmp_path / "local.env"
     local.write_text(
         f"ROOT={tmp_path}\nHOST_NAME=test-host\nREMOTE_ROOT={host}\n"
