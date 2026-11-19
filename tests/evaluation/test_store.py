@@ -1041,6 +1041,32 @@ def test_the_archive_holds_the_fit_the_store_holds_at_record_time(
     assert list(empty.columns) == list(store_archive.COLUMNS)
 
 
+def test_a_stored_fit_with_zones_archives_its_own_zones(
+    fitted_flat: str,
+    tasks: dict[str, ForecastTask],
+    tmp_path: Path,
+) -> None:
+    # A zone fit stores its zones (`ZONES_FILE`). With no candidate config
+    # the archive still gives them to the hub table, beside the stored
+    # samples, so its zones are the ones the model would submit (#366).
+    from bdbvhubrenewal.evaluation import store_archive
+    from bdbvhubrenewal.forecasters.zonerenewal import ZONES_FILE
+
+    root = tmp_path / "store"
+    task = tasks[sorted(tasks)[-1]]
+    fit = store.fit(fitted_flat, task, {}, "c")
+    body = base64.b64encode(b"zones").decode()
+    store.write_fit(root, dataclasses.replace(fit, files={ZONES_FILE: body}))
+    hub = _Hub()
+    store_archive.archive(
+        root, task, task, {fitted_flat: None}, {}, hub, lambda _: "c"
+    )
+    call = hub.calls[fitted_flat]
+    assert call["config"] is None
+    assert call["files"] == [ZONES_FILE]
+    assert call["forecast"] is not None
+
+
 def test_a_model_that_fails_leaves_the_others_archived(
     fitted_flat: str,
     tasks: dict[str, ForecastTask],
