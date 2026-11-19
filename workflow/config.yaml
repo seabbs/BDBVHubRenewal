@@ -133,7 +133,7 @@ finetune:
   # development, and there is no other real-data set yet.
   real_validation: null
   # The checkpoint checked against zero-shot on the held-out simulations.
-  check_at: 1000
+  check_at: 800
 
 score:
   # Checkpoints to score, as labels (`<hash>`, `slots-<hash>`); null takes
