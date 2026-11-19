@@ -1,8 +1,9 @@
 # Simulation rounds.
 #
 # Round r is the batches of `flowlib.segments.round_seeds`, each
-# scripts/finetune_simulate.R with exactly `draws` observation draws, and
-# is grid block r: 40 batches of 21 are its 840 simulations. Into
+# `batch` simulations of the grid (`simulate.grid_file`, engine
+# packages/nowcastfoundation/r) with exactly `draws` observation draws:
+# 40 batches of 20, 800 simulations. Into
 # <ROOT>/rounds/r<r>/sims/. Each batch gets a manifest row, the round's
 # manifest joins them, the sim QC (scripts/sim_qc.py) checks the round
 # against fixed thresholds (simulate.qc),
