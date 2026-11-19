@@ -137,7 +137,7 @@ def release_rounds(n):
 
 
 def held_seeds():
-    return seeds_of(FT["held_round"])
+    return seeds_of(FT["validation_round"])
 
 
 ELSEWHERE = FT["sims_from"] in ("release", "remote")
@@ -150,7 +150,7 @@ def available_seeds():
 
     All of them from this machine's rounds, which the workflow simulates.
     From the rounds host or releases, those before the first batch not
-    yet listed, and none until the held-out round is all listed.
+    yet listed, and none until the validation round is all listed.
     """
     order = training_seeds()
     if not ELSEWHERE:
@@ -456,7 +456,7 @@ def listed_batches():
     exclusions of its rounds are mirrored in MIRROR, and a round counts
     once its QC has run; else the `sims-r<N>` releases' assets. Written to <RUN>/available-batches.txt for the record.
     """
-    rounds = sorted({FT["held_round"], *(round_of(s) for s in training_seeds())})
+    rounds = sorted({FT["validation_round"], *(round_of(s) for s in training_seeds())})
     seeds = set()
     for r in rounds:
         if FT["sims_from"] == "remote":

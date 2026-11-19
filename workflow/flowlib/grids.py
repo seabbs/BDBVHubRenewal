@@ -3,7 +3,7 @@
 A round's number sets its seeds and its release (`sims-r<N>`), so a grid
 that reused another's rounds would draw the same seeds and overwrite its
 published batches. `grid_rounds` in workflow/config.yaml gives each grid
-its training rounds, held-out round and training sources.
+its training rounds, validation and test rounds and training sources.
 """
 
 from __future__ import annotations
@@ -17,14 +17,14 @@ UNMARKED = "r5"
 
 
 def resolve(ft: dict[str, Any], table: Mapping[str, Any]) -> dict[str, Any]:
-    """Fill a run's unset rounds, held-out round and sources from its grid.
+    """Fill a run's unset rounds, validation round and sources from its grid.
 
     Raises
     ------
     ValueError
         If the run's grid has no entry and a setting is unset.
     """
-    keys = ("rounds", "held_round", "sources")
+    keys = ("rounds", "validation_round", "sources")
     unset = [k for k in keys if ft.get(k) is None]
     if not unset:
         return ft
@@ -41,8 +41,13 @@ def resolve(ft: dict[str, Any], table: Mapping[str, Any]) -> dict[str, Any]:
 def owner(round_: int, table: Mapping[str, Any]) -> str | None:
     """Return the grid a round belongs to, or None for an unlisted round."""
     for grid, entry in table.items():
-        own = (entry["held_round"], entry.get("topup_round"))
-        if round_ in own or round_ in entry["rounds"]:
+        own = (
+            *entry["rounds"],
+            entry["validation_round"],
+            entry.get("test_round"),
+            entry.get("topup_round"),
+        )
+        if round_ in own:
             return grid
     return None
 

@@ -6,20 +6,24 @@
 # Simulation rounds to make or read, as round numbers.
 rounds: []
 
-# Each grid's rounds, held-out round and training sources: a run takes
-# its grid's unless `finetune` sets them. A round's number sets its seeds
-# and its release `sims-r<N>`, so no two grids share a round
-# (flowlib.grids): r6 has new rounds, round 20 held out and 21 to 30
-# trained on, and never overwrites r5's.
+# Each grid's rounds, validation and test rounds and training sources: a
+# run takes its grid's unless `finetune` sets them. The trainer monitors
+# the validation round; the test round is fresh seeds, never trained on
+# or monitored, and scored only for the final model. A round's number
+# sets its seeds and its release `sims-r<N>`, so no two grids share a
+# round (flowlib.grids): r6 validates on round 20, trains on 21 to 30 and
+# tests on 31, and never overwrites r5's.
 grid_rounds:
   r5:
     rounds: [10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
-    held_round: 9
+    validation_round: 9
+    test_round: null
     topup_round: null
     sources: [daily, weekly, 3day, daily+weekly, daily+3day]
   r6:
     rounds: [21, 22, 23, 24, 25, 26, 27, 28, 29, 30]
-    held_round: 20
+    validation_round: 20
+    test_round: 31
     # The training rounds' missing cells, simulated again (target `topup`,
     # flowlib.topup), so the final model trains on ten whole blocks.
     topup_round: 32
@@ -62,19 +66,19 @@ simulate:
 finetune:
   # The continuous run, one training
   # segment per prefix (`--until`), in <RUN>/train/n<N>/. It trains on
-  # 8,400 outbreaks, ten of grid r5's balanced blocks of 840.
+  # 8,400 outbreaks, ten of grid r6's balanced blocks of 840.
   prefixes: [250, 500, 750, 1000, 2000, 4000, 8400]
   outbreaks: 8400
   # Training seeds: the rounds' batches in seed order, or a fixed list
-  # from `seed_file` (one seed a line, in order). The held-out round is
+  # from `seed_file` (one seed a line, in order). The validation round is
   # one whole grid block, and the ten rounds after it the ten blocks
   # trained on. The trainer monitors the first `holdout` simulations of
-  # the held-out round; the scoring workflow scores it whole. Unset
-  # (null), the rounds, held-out round and sources are the grid's
+  # the validation round; the scoring workflow scores it whole. Unset
+  # (null), the rounds, validation round and sources are the grid's
   # (grid_rounds).
   rounds: null
   seed_file: null
-  held_round: null
+  validation_round: null
   holdout: 90
   # Where the batches come from: `local` (this machine's rounds),
   # `remote` (the rounds host's, REMOTE in config/local.env) or `release`
@@ -83,7 +87,7 @@ finetune:
   # Chronos-2's recipe: one draw of each simulation cut at `cuts`
   # cut-offs, the learning rate falling linearly to zero over the
   # `outbreaks` simulations, and the series bias at its own rate `bias_lr`.
-  grid: r5
+  grid: r6
   draws: 1
   cuts: 32
   subset_seed: 1
@@ -102,6 +106,8 @@ finetune:
   # rule runs it yet, so offloaded checkpoints have no held-out losses).
   eval: local
   series_bias: true
+  # The live r6 run's checkpoints carry this note, and the note is part of
+  # the settings hash, so it stays as written to reproduce them.
   note: continuous r5
   # Real validation blocks the trainer scores each checkpoint on, or null.
   # Null: BDBV is held out for the paper, so no BDBV blocks are scored in

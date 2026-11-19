@@ -85,7 +85,7 @@ The other fitted models split their provinces across the zones instead ([Health 
 ## Fine-tuning
 
 The `_ft` models load one LoRA checkpoint of Chronos-2, fine-tuned on outbreaks simulated with epinowcast's generative model.
-The simulations, the training and the checkpoints' scores are in the paper's [supporting information](../paper/si.html#foundation-model-setup-and-fine-tuning), and how to load a checkpoint is on [Using the fine-tuned Chronos-2](finetuned-chronos.md).
+The simulations, the training and the checkpoints' scores are in the paper's [supporting information](../paper/si.html#foundation-model-setup-and-fine-tuning), and how to load a checkpoint is on [Using the fine-tuned model](finetuned-chronos.md).
 The simulator is `scripts/finetune_simulate.R`, the training blocks are cut by `forecasters.finetune.training_block`, and the block designs and release cadences of each grid are `DESIGNS` in `scripts/finetune_chronos.py` and `finetune.release_days`; the [workflow README](https://github.com/seabbs/bdbv-hub-modelling/blob/main/workflow/README.md) says how a run picks its grid.
 
 A checkpoint is named by its settings hash, of the blocks, the code and the training settings.
