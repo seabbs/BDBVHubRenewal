@@ -103,7 +103,7 @@ Places below that level are forecast on their own, not summed to their parent.
 **Attention biases.**
 Chronos-2's group attention has no notion of which series is which, so on its own it can link a lag series to its place's counts only by matching their values.
 
-- We add four learned biases to Chronos-2's group-attention scores (@tbl-attention-biases).
+- We add three learned biases to Chronos-2's group-attention scores (@tbl-attention-biases).
 - They start at zero, so fine-tuning starts from base Chronos-2, as for the relation biases TableFormer adds to a pretrained model [@Yang2022].
 - The biases train at a learning rate of $10^{-3}$ and the LoRA adapter at $10^{-5}$, both falling linearly to zero over the 8,400 simulations.
 - We identify places by name within each block, with no limit on the number of places.
@@ -115,7 +115,6 @@ Chronos-2's group attention has no notion of which series is which, so on its ow
 ::: {#tbl-attention-biases}
 | Relation | Pairs of series | Parameters |
 |---|---|---|
-| Self | A series attending to itself | One scalar per layer and head, starting at zero |
 | Same place | A series attending to another series of its place, its count or a lag | One scalar per layer and head, starting at zero |
 | Up | A child place's series attending to its parent's series | One scalar per layer and head, starting at zero |
 | Down | A parent place's series attending to its children's series | One scalar per layer and head, starting at zero |
@@ -136,7 +135,7 @@ where $q_i$ and $k_j$ are the query and key vectors of one head in one layer, an
 
 #### Attention biases
 
-- Our change adds a learned nudge to those weights for each pair of rows, by their relation (same row, same place, child to parent, parent to child), so the model can tell which lags belong to which count.
+- Our change adds a learned nudge to those weights for each pair of rows, by their relation (same place, child to parent, parent to child), so the model can tell which lags belong to which count.
 - Each row $i$ belongs to a place $P(i)$, and each place $p$ has a parent $\pi(p)$ in the block, or none.
 - We add a learned bias for each relation $r$ to the scores:
 $$
@@ -146,7 +145,6 @@ with one scalar $b_r^{(l,h)}$ per relation $r$, layer $l$ and head $h$, and $b_r
 - The relations are the pairs of rows in @tbl-attention-biases:
 $$
 \begin{aligned}
-R_\text{self} &= \{(i, j) : i = j\},\\
 R_\text{same} &= \{(i, j) : i \neq j,\ P(i) = P(j)\},\\
 R_\text{up} &= \{(i, j) : P(j) = \pi(P(i))\},\\
 R_\text{down} &= \{(i, j) : P(i) = \pi(P(j))\}.

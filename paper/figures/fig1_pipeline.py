@@ -585,7 +585,6 @@ def panel_b(g: Svg, oy: float) -> float:
 
 # The attention-bias relations (panel B, lower part), each with its colour.
 RELATIONS = (
-    ("self", "self", ACCENT),
     ("same", "same place", SLOTS[0]),
     ("up", "up (child \u2192 parent)", PARENT_SLOT),
     ("down", "down (parent \u2192 child)", COV),
@@ -596,13 +595,12 @@ RELATIONS = (
 def _relation(row: tuple[str, int], col: tuple[str, int]) -> str:
     """Return the relation of a query row to a key column of the toy block.
 
-    Places A and B are children of the country C.
+    Places A and B are children of the country C. A row and itself are
+    in no relation.
     """
     (p, i), (q, j) = row, col
-    if (p, i) == (q, j):
-        return "self"
     if p == q:
-        return "same"
+        return "same" if i != j else "none"
     if q == "C":
         return "up"
     if p == "C":

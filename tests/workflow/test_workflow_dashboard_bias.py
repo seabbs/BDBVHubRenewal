@@ -27,7 +27,7 @@ def _safetensors(path, tensors):
 
 NAMES = {
     k: f"base.model.series_bias.modules_to_save.default.{k}"
-    for k in ("self_", "same", "up", "down")
+    for k in ("same", "up", "down")
 }
 
 
@@ -110,13 +110,13 @@ def test_the_page_payload_lists_each_run_with_bias(tmp_path):
     rs = runs.load_runs([], f"r={folder},live;x=x-", [])
     got = bias.payload(rs, live_step=None)
     assert [r["key"] for r in got["runs"]] == ["r"]
-    assert [p["key"] for p in got["pairs"]] == ["self", "same", "up", "down"]
+    assert [p["key"] for p in got["pairs"]] == ["same", "up", "down"]
     assert got["runs"][0]["pts"]["down"] == [[250, 1.0, 1.0, 1.0]]
 
 
 LINE = (
     "2026-11-16 16:50:01 [train] step {step}: loss 0.5, held-out (x) 0.4, "
-    "bias self_ {m:+.3f} [{lo:+.3f}, {hi:+.3f}], same {m:+.3f} "
+    "bias down {m:+.3f} [{lo:+.3f}, {hi:+.3f}], same {m:+.3f} "
     "[{lo:+.3f}, {hi:+.3f}], 9 s\n"
 )
 CHUNK = (
@@ -179,7 +179,7 @@ def test_each_run_s_bias_is_its_own_logged_values_over_simulations(tmp_path):
         "r6": [[50, -0.5], [150, -0.7]],
     }
     for key, pts in want.items():
-        for rel in ("self", "same"):
+        for rel in ("down", "same"):
             assert [p[0] for p in by[key][rel]] == [x for x, _ in pts]
             assert [p[1] for p in by[key][rel]] == pytest.approx(
                 [m for _, m in pts]

@@ -6,7 +6,7 @@
  "bysrc": "Held-out loss split by data layout, at each held-out evaluation from step 0 (zero-shot). Colour is the layout and line style is the run.",
  "biasline": "The mean of each relation's 144 values (12 layers x 12 heads) against simulations trained, every selected run on one plot: colour is the relation, line style the run. Each run's values are its own: its history, its logged means and ranges, and its checkpoints' adapters; a run with none is listed as missing. Hover a line to see its min to max range across heads.",
  "biasheat": "One square per layer (row) x head (column). Red means that head attends more than base Chronos-2 to that kind of pair, blue less. A bias of 1 weights those pairs x2.7.",
- "relations": "self = a row with itself. same = a place's counts, lags and totals. up = a place to its country. down = a country to its places.",
+ "relations": "same = a place's counts, lags and totals. up = a place to its country. down = a country to its places.",
  "lr": "Learning rate of each optimiser group. A run whose rate falls over its simulations (every run from r5 on) is drawn against simulations trained: the rate falls linearly to zero at the run's last simulation. Older runs that decayed over steps are drawn against step. The dot marks where the run is now.",
  "perf": "WIS or CRPS relative to randomwalknowcast. Below 1 is better. One line per run across checkpoints, with the zero-shot and randomwalknowcast references.",
  "nowcast": "Median and 50% and 90% bands of each ticked run (95% where the forecasts stop at the 2.5% and 97.5% quantiles, as the German hub's do) for the chosen nowcast date, against the truth. Line style runs from dotted (earliest checkpoint) to solid (latest).",

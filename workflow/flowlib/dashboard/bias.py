@@ -1,11 +1,10 @@
 """Attention bias by relation, for the dashboard's bias row.
 
 A run with series attention bias holds one [layers, heads] tensor per
-relation: `self` (a row with itself), `same` (a place's counts, lags and
-totals), `up` (a place to its country) and `down` (a country to its
-places). The values come from the run's history (`train/history.json`
-entries with `bias`), its logged steps' means and ranges, its
-checkpoints' adapters
+relation: `same` (a place's counts, lags and totals), `up` (a place to
+its country) and `down` (a country to its places). The values come
+from the run's history (`train/history.json` entries with `bias`), its
+logged steps' means and ranges, its checkpoints' adapters
 (`train/n<N>/finetuned-ckpt/*.safetensors`, read with the standard
 library, or `*.pt`, read with torch when installed) and, for the live
 run, its current state (`train/state/`).
@@ -25,7 +24,6 @@ from .logs import CACHE, _size, checkpoints
 from .runs import Run
 
 PAIRS = (
-    ("self", "self"),
     ("same", "same"),
     ("up", "up (child to parent)"),
     ("down", "down (parent to child)"),
@@ -33,13 +31,12 @@ PAIRS = (
 """The relations and their labels, in the trainer's order."""
 
 COLOURS = {
-    "self": "#6b7280",
     "same": "#2563eb",
     "up": "#16a34a",
     "down": "#ea580c",
 }
 
-NAME = re.compile(r"(?:^|[._/])(self_?|same|up|down)$")
+NAME = re.compile(r"(?:^|[._/])(same|up|down)$")
 """A relation's tensor, by the end of its name."""
 
 _SEEN: dict[tuple[str, int], dict[str, list[list[float]]]] = {}

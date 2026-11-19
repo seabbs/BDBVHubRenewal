@@ -159,7 +159,7 @@ def test_steps_are_parsed_with_their_nowcast_and_forecast_parts(tmp_path):
 
 
 BIASED = (
-    ", bias self_ +0.012 [-0.034, +0.051], same -0.200 [-0.410, +0.010], "
+    ", bias down +0.012 [-0.034, +0.051], same -0.200 [-0.410, +0.010], "
     "up +1.000 [+0.500, +1.500], 812 s; 3.1 GB"
 )
 
@@ -180,7 +180,7 @@ def test_a_step_s_bias_means_and_ranges_are_read(tmp_path):
     rows = logs.Log(path).rows()
     assert rows[0]["src"] == {"3day": 0.31, "daily": 0.29, "weekly": 0.12}
     want = {
-        "self": {"mean": 0.012, "min": -0.034, "max": 0.051},
+        "down": {"mean": 0.012, "min": -0.034, "max": 0.051},
         "same": {"mean": -0.2, "min": -0.41, "max": 0.01},
         "up": {"mean": 1.0, "min": 0.5, "max": 1.5},
     }
