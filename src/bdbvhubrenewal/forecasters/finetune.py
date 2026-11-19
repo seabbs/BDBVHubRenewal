@@ -458,7 +458,9 @@ def country_counts(
         return counts, counts
     if parent == "unallocated":
         keep = 1 - draw_named(draws["unallocated_share"], rng)
-        kept = rng.binomial(counts["count"].to_numpy(dtype=int), keep)
+        # Revisions remove reports (negative rows): thin their size too.
+        n = counts["count"].to_numpy(dtype=int)
+        kept = np.sign(n) * rng.binomial(np.abs(n), keep)
         return counts.assign(count=kept), counts
     if parent == "late_parent":
         lag = max(1, int(draw_named(draws["parent_lag_days"], rng)))
