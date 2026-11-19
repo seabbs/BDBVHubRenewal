@@ -157,8 +157,6 @@ def test_only_generic_profiles_ship():
 
 FT = {
     "rounds": [1, 2],
-    # The fixtures' own batches, whatever the run's.
-    "simulate": {"batch": 21},
     "finetune": {
         "prefixes": [250, 500],
         "outbreaks": 500,
