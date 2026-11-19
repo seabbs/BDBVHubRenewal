@@ -9,9 +9,9 @@ missing-onset share are sampled by province and given to the province's
 zones (`ByParent`), and the zones' expected delay cells are summed to
 provinces for the delay-file likelihood (`ZoneOnsetStreams`).
 
-This module only extends the province model (`model.model`), and nothing
-the province model runs imports it, so a province fit's code, and its
-stored fit key, do not depend on it.
+It builds on the parts in `model.model`. It is the one model builder:
+with each place as its own patch (`single_patch`, `build_model`) there
+is no nesting, and fitted to one place at a time it is `renewalsp`.
 """
 
 from __future__ import annotations
@@ -947,6 +947,28 @@ def single_patch(data: Vintage) -> ZoneVintage:
     )
 
 
+def build_model(data: Vintage, config: ModelConfig = MAIN) -> MultiSignalModel:
+    """Build the model with each place as its own patch.
+
+    The zone model (`build_zone_model`) on `single_patch(data)`, without
+    anchoring. Fitted to one place, as `renewalsp` is, the place has no
+    pooling with any other.
+
+    Parameters
+    ----------
+    data : Vintage
+        The vintage.
+    config : ModelConfig
+        Structural choices.
+
+    Returns
+    -------
+    MultiSignalModel
+        Model with one observation, `onsets`.
+    """
+    return build_zone_model(single_patch(data), config, anchor=False)
+
+
 def build_zone_model(
     data: ZoneVintage,
     config: ModelConfig = MAIN,
@@ -1171,7 +1193,9 @@ def build_zone_model(
             missing_fraction_rv=None
             if missing is None
             else by_place(missing, 1),
-            delay_rv=by_place(delay, 0),
+            # The fixed hub delay of a total stream is shared by every
+            # place; a modelled delay is by province.
+            delay_rv=delay if missing is None else by_place(delay, 0),
             delay_groups=parents,
             known_noise=_nb_noise("known"),
             imputed_noise=None if missing is None else _nb_noise("imputed"),

@@ -15,8 +15,9 @@
 - `distributions`: a Dirichlet-multinomial scored on its non-zero cells.
 - `rt_observation`: external Rt estimates as a tempered
   pseudo-observation (the BVDOutbreakSize term).
-- `model`: `ModelConfig`, the configurations, building, fitting and
-  forecasting.
+- `model`: `ModelConfig`, the configurations, fitting and forecasting.
+- `zones`: the model builder, with health zones nested in provinces or
+  each place its own patch (`build_model`).
 - `inputs`: model inputs (`Vintage`) from the tidy hub tables.
 
 The package imports without JAX until this subpackage is imported.
@@ -32,7 +33,6 @@ from .model import (
     MAIN,
     ModelConfig,
     Vintage,
-    build_model,
     fit,
     forecast_trajectories,
     generation_interval,
@@ -53,6 +53,7 @@ from .renewal import (
 )
 from .rt_observation import RtPseudoObservation
 from .temporal import NonCentredRandomWalk
+from .zones import build_model
 
 __all__ = [
     "BVD",
