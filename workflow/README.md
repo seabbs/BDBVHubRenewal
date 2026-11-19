@@ -73,7 +73,7 @@ All of them rerun a step only when an input is newer (`rerun-triggers: mtime`), 
 Settings that are the same on every machine are in `workflow/config.yaml`; override them with `--config` or `--configfile`.
 
 Two machines share only GitHub releases: simulation batches (`sims-r<N>`, one asset per batch) and checkpoints (`chronos-slots-<hash>`, `chronos-ft-<hash>`).
-Each machine reruns its task on a timer as releases land.
+Each machine reruns its task as releases land, in its coordinator run (`task run`).
 
 ## 1. Simulate (`rules/simulate.smk`)
 
@@ -155,7 +155,7 @@ uv run --group paper python workflow/scripts/dashboard.py --port 8765
 
 ## Scheduled runs
 
-The workflow updates itself as results come in. Each machine runs its own targets on a timer; Snakemake reruns only what changed.
+The workflow updates itself as results come in. Each machine runs its own targets in one persistent coordinator run, one tick after another; Snakemake reruns only what changed. With `COMPUTE=ssh` one coordinator runs every machine's jobs.
 
 | Where | `SCHEDULE_TARGETS` | Does, each tick |
 |---|---|---|
@@ -174,7 +174,8 @@ Work that appears during a run, such as a new checkpoint or a landed round, wait
 Snakemake locks the worktree it runs in, so each machine has one driver worktree.
 A tick is skipped when another tick is still running (a lock in `output/`) or when less than `MIN_FREE_GB` of memory or `MIN_DISK_GB` of disk is free. Its log is `output/workflow-tick.log`.
 
-`task schedule ACTION=install` installs a timer that runs the tick every `SCHEDULE_EVERY` minutes (default 60): a systemd user timer on Linux with systemd, else a cron line; a launchd agent on macOS; or the one `SCHEDULE_KIND` names. The unit is written from where the checkout is and the `PATH` it is installed from, so nothing machine-specific is committed. `ACTION=show` prints it, `ACTION=uninstall` removes it.
+`task run` (`workflow/scripts/coordinate.py`) is the coordinator run: it runs a tick, and as soon as one ends starts the next, after `COORDINATE_PAUSE` seconds (60), or `COORDINATE_BACKOFF` (600) after a failed tick. No timer runs it: start it once, under nohup or tmux, and stop it with `touch output/coordinator.stop` (it ends after the running tick) or by its pid.
+The timer that ran ticks before is not installed any more; `task schedule` shows an old one (`ACTION=show`) and removes it (`ACTION=uninstall`).
 
 On CI, the site and the paper (`.github/workflows/pages.yml`) rebuild every 6 hours (`43 */6 * * *`, after the fit store's run) and whenever `evidence/` changes on main, so new checkpoint scores reach the docs and the paper without a manual step.
 

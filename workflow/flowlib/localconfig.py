@@ -77,6 +77,10 @@ DEFAULTS = (
     ("MONITOR_PORT", "8766"),
     ("MONITOR_REFRESH", "30"),
     ("SCHEDULE_EVERY", "60"),
+    # The coordinator run's pause between ticks, and after a failed one
+    # (seconds; workflow/scripts/coordinate.py).
+    ("COORDINATE_PAUSE", "60"),
+    ("COORDINATE_BACKOFF", "600"),
     ("SCHEDULE_KIND", ""),
     # Dashboard runs with a local folder (flowlib.dashboard.runs specs,
     # separated by `;`).
