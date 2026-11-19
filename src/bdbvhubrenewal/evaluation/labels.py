@@ -8,9 +8,11 @@ never by their ids. Data keep the ids; names apply when drawing.
 - `MODEL_STYLES`: each model id's colour and dash (`solid`, `dashed` or
   `dotted`). Bars have no dashes, so the main models each have their
   own colour; the dashes keep fine-tuned solid, zero-shot with delays
-  dashed and zero-shot on complete data dotted in line plots.
+  dotted and zero-shot on complete data dashed in line plots.
 - `WIS_PART_SHADES`: how much of a model's colour each WIS part takes in
   a stacked bar, the rest white, in the order drawn.
+- `WIS_PART_STACK`, `WIS_PART_FILLS`: the order WIS parts stack in and
+  how each fills (solid or hatched), so parts differ by more than shade.
 - `model_label`: the display name of any id, including checkpoints
   (`<id>@<outbreaks>`), models fine-tuned on real data (`<id>_real`) and
   hub teams, which keep their own names.
@@ -23,7 +25,9 @@ from typing import Final
 __all__ = [
     "MODEL_LABELS",
     "MODEL_STYLES",
+    "WIS_PART_FILLS",
     "WIS_PART_SHADES",
+    "WIS_PART_STACK",
     "model_label",
     "tint",
 ]
@@ -45,9 +49,9 @@ MODEL_LABELS: Final[dict[str, str]] = {
 """Display name of each model id."""
 
 _BLUE: Final = "#2a78d6"
-_GREEN: Final = "#15803d"
-_VIOLET: Final = "#8e44ad"
-_TEAL: Final = "#0f9aa8"
+_GREEN: Final = "#2aa769"
+_VIOLET: Final = "#9146a4"
+_BROWN: Final = "#9c5916"
 _PURPLE: Final = "#6250d6"
 _GREY: Final = "#5f5e5a"
 
@@ -56,23 +60,26 @@ MODEL_STYLES: Final[dict[str, tuple[str, str]]] = {
     "BDBVHub-baseline": (_GREY, "solid"),
     "randomwalknowcast": ("#eb6834", "solid"),
     "randomwalk": ("#e34948", "solid"),
-    "fm_chronos_daily_complete": (_VIOLET, "dotted"),
-    "fm_chronos_daily_ragged": (_GREEN, "dashed"),
+    "fm_chronos_daily_complete": (_VIOLET, "dashed"),
+    "fm_chronos_daily_ragged": (_GREEN, "dotted"),
     "fm_chronos_daily_ragged_ft": (_BLUE, "solid"),
-    "fm_chronos_weekly_complete": (_PURPLE, "dotted"),
-    "fm_chronos_weekly_ragged": (_PURPLE, "dashed"),
+    "fm_chronos_weekly_complete": (_PURPLE, "dashed"),
+    "fm_chronos_weekly_ragged": (_PURPLE, "dotted"),
     "fm_chronos_weekly_ragged_ft": (_PURPLE, "solid"),
-    "epinowcast": (_TEAL, "solid"),
+    "epinowcast": (_BROWN, "solid"),
     "hub_ensemble": ("#eda100", "solid"),
 }
 """Colour (hex, light theme) and dash of each model id, in display order:
 baselines, foundation models, others.
 
-Zero-shot with delays is green, as on the first dashboard, and zero-shot
-on complete data only purple (Sam, 19 Nov). Every pair of distinct
-colours differs by a CIEDE2000 of 5 or more under normal vision and
-simulated deuteranopia, protanopia and tritanopia, and the main models'
-colours have a contrast of 3 or more on light and dark backgrounds
+Zero-shot with delays is green and zero-shot on complete data only
+purple (Sam, 19 Nov), chosen with the dataviz palette validator: against
+Fine-tuned (delays) and Random walk nowcast every pair is at least 8 apart
+(OKLab Delta E x 100) under simulated deuteranopia and protanopia and 15
+under normal vision, on light and dark backgrounds. Every pair of
+distinct colours differs by a CIEDE2000 of 5 or more under normal vision
+and the three colour-blindness simulations, and the main models' colours
+have a contrast of 3 or more on light and dark backgrounds
 (tests/evaluation/test_labels.py)."""
 
 WIS_PART_SHADES: Final[dict[str, float]] = {
@@ -82,6 +89,19 @@ WIS_PART_SHADES: Final[dict[str, float]] = {
 }
 """Share of a model's colour in each WIS part's segment, dispersion first
 and darkest, as in Wolffram et al. (2023)."""
+
+WIS_PART_STACK: Final = ("underprediction", "dispersion", "overprediction")
+"""Order of WIS parts in a stacked bar, from the bottom (or left) up."""
+
+WIS_PART_FILLS: Final[dict[str, str]] = {
+    "underprediction": "hatch-down",
+    "dispersion": "solid",
+    "overprediction": "hatch-up",
+}
+"""How each WIS part fills its segment in its model's colour, so parts
+differ by more than shade (Sam, 19 Nov): dispersion solid,
+overprediction hatched rising to the right, underprediction hatched
+falling to the right."""
 
 _CHECKPOINT: Final = "@"
 _REAL: Final = "_real"

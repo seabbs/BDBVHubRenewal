@@ -87,6 +87,7 @@ def build(
             "label": e.get("label") or paperstyle.model_label(e["paper_model"]),
             "colour": e.get("colour")
             or paperstyle.model_colour(e["paper_model"]),
+            "dash": e.get("dash") or paperstyle.model_dash(e["paper_model"]),
         }
         if e.get("paper_model")
         else e

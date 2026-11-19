@@ -797,9 +797,13 @@ def nowcasts_section(
             ],
             "defaults": defaults,
             # WIS parts in the paper's order, each its share of the colour.
+            # WIS parts in the data's order, each with its fill (solid or
+            # hatched, labels.WIS_PART_FILLS), and the order they stack in
+            # (labels.WIS_PART_STACK, from the left).
             "parts": [
-                [p, paperstyle.part_share(p)] for p in paperstyle.WIS_PARTS
+                [p, paperstyle.part_fill(p)] for p in paperstyle.WIS_PARTS
             ],
+            "stack": list(paperstyle.WIS_STACK),
         }
     )
     first = defaults.get("source")

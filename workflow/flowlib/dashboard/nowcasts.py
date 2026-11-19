@@ -431,6 +431,7 @@ def meta(
                     "run": "ref",
                     "n": 0,
                     "color": refs[s].colour,
+                    "dash": refs[s].dash,
                 }
             )
         elif s.startswith("model:"):

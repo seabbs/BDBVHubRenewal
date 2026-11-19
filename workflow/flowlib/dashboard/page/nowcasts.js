@@ -57,6 +57,11 @@ function colour(id){var m=C.meta.find(function(x){return x.id==id});return m?m.c
 function id2lab(id){var m=C.meta.find(function(x){return x.id==id});return m?m.label:id}
 function fmt(v){return v>=1000?Math.round(v).toLocaleString("en-GB"):v==0?"0":(+v).toPrecision(3)}
 function dashAttr(rank){var d=DASH[rank%4];return d?' stroke-dasharray="'+d+'"':""}
+// A reference's line style is its model's in the shared map; a run's
+// checkpoints run from dotted (earliest) to solid (latest).
+var RDASH={solid:"",dashed:"6 3",dotted:"2 3"};
+function lineDash(id,rank){var m=C.meta.find(function(x){return x.id==id});
+ if(m&&m.run=="ref"){var d=RDASH[m.dash||"solid"]||"";return d?' stroke-dasharray="'+d+'"':""}return dashAttr(rank||0)}
 function mark(k,x,y,c,t,r){r=r||3;var s="";
  if(k=="circle")s='<circle cx="'+x+'" cy="'+y+'" r="'+r+'" fill="'+c+'">';
  else if(k=="square")s='<rect x="'+(x-r)+'" y="'+(y-r)+'" width="'+2*r+'" height="'+2*r+'" fill="'+c+'">';
@@ -103,7 +108,7 @@ function panel(d,loc,ds,eff,small,W,FH){
  fs.forEach(function(z){var e=z.e,f=z.f,c=colour(e.id);
   var P=function(k){return PP(f,k)};
   h+='<polyline points="'+P(3).join(" ")+'" fill=none stroke="var(--bg)" stroke-width=4 opacity=.85 />';
-  h+='<polyline points="'+P(3).join(" ")+'" fill=none stroke="'+c+'" stroke-width=2.2'+dashAttr(e.run=="ref"?0:e.rank)+' />';
+  h+='<polyline points="'+P(3).join(" ")+'" fill=none stroke="'+c+'" stroke-width=2.2'+lineDash(e.id,e.rank)+' />';
   f.t.forEach(function(d,j){h+=mark(MK[z.di%4],sx(ms(d)),sy(f.q[j][3]),c,id2lab(e.id)+' (nowcast '+z.o+') '+d+' median '+fmt(f.q[j][3])+' (50%: '+fmt(f.q[j][2])+' to '+fmt(f.q[j][4])+'; '+(f.band||95)+'%: '+fmt(f.q[j][0])+' to '+fmt(f.q[j][6])+')',small?2.2:2.8)})});
  if(lat.length)h+='<polyline points="'+lat.map(function(p){return sx(p[0])+","+sy(p[1])}).join(" ")+'" fill=none stroke="var(--fg)" stroke-width=1 stroke-dasharray="3 3" opacity=".6"><title>latest release</title></polyline>';
  if(pts.length){h+='<polyline points="'+pts.map(function(p){return sx(p[0])+","+sy(p[1])}).join(" ")+'" fill=none stroke="var(--fg)" stroke-width=1.4 />';
@@ -111,13 +116,13 @@ function panel(d,loc,ds,eff,small,W,FH){
  return {svg:h+'</g></svg>',miss:eff.filter(function(e){return !fs.some(function(z){return z.e===e})}).map(function(e){return id2lab(e.id)})};
 }
 function legend(eff,ds){
- function sw(c,rank){return '<svg width=26 height=8 viewBox="0 0 26 8"><line x1=0 x2=26 y1=4 y2=4 stroke="'+c+'" stroke-width=2'+dashAttr(rank)+' /></svg>'}
+ function sw(c,rank,id){return '<svg width=26 height=8 viewBox="0 0 26 8"><line x1=0 x2=26 y1=4 y2=4 stroke="'+c+'" stroke-width=2'+(id?lineDash(id,rank):dashAttr(rank))+' /></svg>'}
  var leg='<div class=lg><b>'+(S.mode==1?'final truth':'truth')+'</b> '+sw("var(--fg)",0)+'</div>';
  if(S.mode!=1&&S.locs.some(function(l){var c=cache[C.key+"/"+l]||(C.preload||{})[l];return c&&c.latest&&c.latest[TGT()]}))leg+='<div class=lg><b>latest release</b> <svg width=26 height=8 viewBox="0 0 26 8"><line x1=0 x2=26 y1=4 y2=4 stroke="var(--fg)" stroke-width=1 stroke-dasharray="3 3" /></svg></div>';
  RUNS.forEach(function(r){var g=eff.filter(function(e){return e.run==r.key});if(!g.length)return;
   leg+='<div class=lg><b>'+r.label+'</b> '+g.map(function(e){return sw(colour(e.id),e.rank)+"n"+C.meta.find(function(x){return x.id==e.id}).n}).join(" ")+'</div>'});
  var rf=eff.filter(function(e){return e.run=="ref"});
- if(rf.length)leg+='<div class=lg><b>reference</b> '+rf.map(function(e){return sw(colour(e.id),0)+id2lab(e.id)}).join(" ")+'</div>';
+ if(rf.length)leg+='<div class=lg><b>reference</b> '+rf.map(function(e){return sw(colour(e.id),0,e.id)+id2lab(e.id)}).join(" ")+'</div>';
  if(ds.length>1)leg+='<div class=lg><b>nowcast date</b> '+ds.map(function(o,i){return '<svg width=12 height=12 viewBox="0 0 12 12">'+mark(MK[i%4],6,6,"var(--fg)","",3)+'</svg>'+o}).join(" ")+'</div>';
  return '<div class=leg2>'+leg+'</div>'}
 function plots(){
@@ -151,17 +156,26 @@ function wisChart(d,eff){
  var P_=function(id){return (((d.parts||{})[id]||{})[TGT()]||{})[S.src]};
  var parts=sel.map(function(id){var p=P_(id);if(!p||!com.every(function(o){return p[o]}))return null;
   return [0,1,2,3,4,5,6].map(function(k){return com.reduce(function(a,o){return a+p[o][k]},0)/com.length})});
- var PN=(D.parts||[]).map(function(p){return p[0]}),PS=(D.parts||[]).map(function(p){return p[1]});
- // A part's segment: white beneath, its row's colour at the part's share on top, so it shades alike in both themes.
+ // WIS parts differ by fill, not only shade: dispersion solid,
+ // overprediction hatched rising, underprediction hatched falling, in the
+ // row's colour; they stack underprediction, dispersion, overprediction
+ // from the left (labels.WIS_PART_FILLS, WIS_PART_STACK).
+ var PN=(D.parts||[]).map(function(p){return p[0]}),PF=(D.parts||[]).map(function(p){return p[1]});
+ var ORDER=(D.stack||PN).map(function(n){return PN.indexOf(n)}).filter(function(k){return k>=0});
+ var PATS={},PID=0;
+ function fill(c,k){if(PF[k]=="solid")return c;var key=c+PF[k];if(!PATS[key])PATS[key]={id:"wp"+(++PID)+"_"+Math.random().toString(36).slice(2,6),c:c,up:PF[k]=="hatch-up"};return "url(#"+PATS[key].id+")"}
+ function defs(){return '<defs>'+Object.keys(PATS).map(function(k){var p=PATS[k];
+  return '<pattern id="'+p.id+'" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate('+(p.up?45:135)+')"><rect width="5" height="5" fill="var(--bg)" /><line x1="0" y1="0" x2="0" y2="5" stroke="'+p.c+'" stroke-width="2.2" /></pattern>'}).join("")+'</defs>'}
  function seg(x,y,w,h,c,k,v,tot){if(w<=0)return "";var g=w>2?w-1:w;
-  return '<rect x="'+x+'" y="'+y+'" width="'+g+'" height="'+h+'" fill="#fff" /><rect x="'+x+'" y="'+y+'" width="'+g+'" height="'+h+'" fill="'+c+'" fill-opacity="'+PS[k]+'" stroke="'+c+'" stroke-width=".6"><title>'+PN[k]+' '+fmt(v)+' of '+fmt(tot)+'</title></rect>'}
- function stack(id,y,vals,tot,mx,sc){var x=0,o='';vals.forEach(function(v,k){var w=v/mx*sc;o+=seg(x,y,w,12,colour(id),k,v,tot);x+=w});return o}
- function key(){return PN.map(function(n,k){return '<span class=lg><i style="display:inline-block;width:10px;height:10px;background:var(--fg);opacity:'+PS[k]+'"></i>'+n+'</span>'}).join("")}
+  return '<rect x="'+x+'" y="'+y+'" width="'+g+'" height="'+h+'" fill="'+fill(c,k)+'" stroke="'+c+'" stroke-width=".8"><title>'+PN[k]+' '+fmt(v)+' of '+fmt(tot)+'</title></rect>'}
+ function stack(id,y,vals,tot,mx,sc){var x=0,o='';ORDER.forEach(function(k){var v=vals[k],w=v/mx*sc;o+=seg(x,y,w,12,colour(id),k,v,tot);x+=w});return o}
+ function key(){var c="var(--fg)";var o=ORDER.map(function(k){return '<span class=lg><svg width=16 height=12 viewBox="0 0 16 12">'+'<rect x=".5" y=".5" width="15" height="11" fill="'+fill(c,k)+'" stroke="'+c+'" stroke-width=".8" /></svg>'+PN[k]+'</span>'}).join("");
+  return '<svg width=0 height=0 style="position:absolute">'+defs()+'</svg>'+o}
  var wis=mean(function(id,o){return W_(id)[o]}),c50=mean(function(id,o){return X_(id)[o][0]}),c95=mean(function(id,o){return X_(id)[o][1]}),band=sel.map(function(id){return com.every(function(o){return X_(id)[o][3]==90})?90:95}),bias=mean(function(id,o){return X_(id)[o][2]});
  function shortLab(id){var m=C.meta.find(function(x){return x.id==id});if(!m)return id;var r=RUNS.find(function(r){return r.key==m.run});return r?r.label+" n"+m.n:m.label}
  // Each row's swatch is its plot line (colour and dash); the text stays in text colour.
  var rk={};eff.forEach(function(e){rk[e.id]=e.run=="ref"?0:e.rank});
- function lab(id,y){return '<line x1="0" x2="22" y1="'+(y+5)+'" y2="'+(y+5)+'" stroke="'+colour(id)+'" stroke-width="2.2"'+dashAttr(rk[id]||0)+' /><text x="28" y="'+(y+9)+'" class=ax>'+shortLab(id)+'</text>'}
+ function lab(id,y){return '<line x1="0" x2="22" y1="'+(y+5)+'" y2="'+(y+5)+'" stroke="'+colour(id)+'" stroke-width="2.2"'+lineDash(id,rk[id]||0)+' /><text x="28" y="'+(y+9)+'" class=ax>'+shortLab(id)+'</text>'}
  var W=Math.max(200,$("gwis").clientWidth),RH=30;
  function rows(title,body,H,k){return '<h3>'+title+ftInfo(k)+'</h3><svg viewBox="0 0 '+W+' '+H+'" width="'+W+'" height="'+H+'">'+body+'</svg>'}
  // mean WIS
@@ -188,7 +202,10 @@ function wisChart(d,eff){
   h3+=lab(id,y)+'<rect x="'+(bias[i]>=0?x0:x0-w)+'" y="'+(y+12)+'" width="'+w+'" height="12" fill="'+colour(id)+'"><title>bias '+bias[i].toFixed(3)+' (positive: forecast above truth)</title></rect><text x="'+(bias[i]>=0?x0+w+3:x0-w-3)+'" y="'+(y+22)+'" text-anchor="'+(bias[i]>=0?"start":"end")+'" class=ax>'+bias[i].toFixed(2)+'</text>'});
  h3+='<line x1="'+bw/2+'" x2="'+bw/2+'" y1="0" y2="'+H2+'" stroke="var(--fg)" stroke-width="1" />';
  var any=parts.some(function(p){return p});
- $("gwis").innerHTML=(any?'<div style="font-size:11px">'+key()+'</div>':'')+rows("mean "+C.metric,h1,H2,"wis")+(any?rows("mean "+C.metric+" on the log scale, log(x + 1)",h4,H2,"logwis"):'')+rows("coverage 50% and "+outs.join("% or ")+"% (dashed: nominal)",h2,H2,"coverage")+rows("bias (+: forecast above truth)",h3,H2,"biasscore")
+ // One legend on top: the three parts' fills, labelled, in stack order;
+ // its hidden defs hold every bar's pattern once.
+ var top=any?'<div style="font-size:11px">'+key()+'</div>':'';
+ $("gwis").innerHTML=top+rows("mean "+C.metric,h1,H2,"wis")+(any?rows("mean "+C.metric+" on the log scale, log(x + 1)",h4,H2,"logwis"):'')+rows("coverage 50% and "+outs.join("% or ")+"% (dashed: nominal)",h2,H2,"coverage")+rows("bias (+: forecast above truth)",h3,H2,"biasscore")
   +'<div class=mut style="font-size:11px">'+com.length+' common nowcast dates</div>';
 }
 function chips(){var h='';
